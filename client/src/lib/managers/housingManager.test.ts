@@ -1,146 +1,114 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { WORLD_MIN_X, WORLD_WIDTH_X } from '../terrain/world-wrap'
-import {
-  TERRAIN_TILE_SIZE,
-  getTerrainChunkFromPosition,
-} from '../components/game-scene/terrain-utils'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { HouseData } from '../types/housing'
+import { worldView, type WorldUpdate } from '../network/worldView'
 
 const removed: string[] = []
-
 vi.mock('../wasm/onlinerpg_shared', () => ({
-  passability_add_house: () => {},
+  world_constants: () => ({ eventDeliveryRadius: 32 }),
+  passability_add_house: vi.fn(),
   passability_remove_house: (id: string) => removed.push(id),
-  passability_update_door: () => {},
+  passability_update_door: vi.fn(),
   passability_is_movement_blocked: () => false,
   passability_is_circle_blocked: () => false,
 }))
+const { HousingManager } = await import('./housingManager')
 
-const { housingManager } = await import('./housingManager')
-
-/** A house whose origin sits in the middle of chunk (cx, cz). */
-function house(id: string, cx: number, cz: number) {
+function house(id: string, x = 0): HouseData {
   return {
     id,
-    origin: {
-      x: cx * TERRAIN_TILE_SIZE + TERRAIN_TILE_SIZE / 2,
-      y: 0,
-      z: cz * TERRAIN_TILE_SIZE + TERRAIN_TILE_SIZE / 2,
-    },
+    origin: { x, y: 0, z: 0 },
     rooms: [],
-    // Non-empty so addToCache skips buildPassability.
     passability: [{ floorLevel: 0, cells: [] }],
-  } as never
+  } as unknown as HouseData
 }
 
-function load(id: string, cx: number, cz: number) {
-  housingManager.handleRemoteHousesBatch([house(id, cx, cz)])
-}
-
-/** World position at the centre of chunk (cx, cz). */
-function at(cx: number, cz: number) {
-  return {
-    x: cx * TERRAIN_TILE_SIZE + TERRAIN_TILE_SIZE / 2,
-    z: cz * TERRAIN_TILE_SIZE + TERRAIN_TILE_SIZE / 2,
-  }
-}
-
-function evictAt(cx: number, cz: number) {
-  const p = at(cx, cz)
-  housingManager.evictDistantChunks(p.x, p.z)
-}
-
-function ids(): string[] {
-  return housingManager
-    .getAllHouses()
-    .map((h) => h.id)
-    .sort()
-}
-
-describe('housingManager.evictDistantChunks', () => {
+describe('house subscriptions', () => {
+  let manager: InstanceType<typeof HousingManager>
+  let generation = 0
+  let snapshot: WorldUpdate
   beforeEach(() => {
-    // Collapse whatever a previous test loaded down to nothing. Z does not
-    // wrap, so anywhere far enough on that axis evicts everything.
-    evictAt(0, 9999)
+    manager = new HousingManager()
     removed.length = 0
+    snapshot = {
+      world_epoch: 'housing-test',
+      generation: ++generation,
+      sequence: 1,
+      position: { x: 0, y: 0, z: 0 },
+      floor_level: 0,
+      ready: true,
+      reset: true,
+      events: [],
+    }
+    worldView.pendingTerrain.clear()
+    worldView.accept(snapshot)
   })
 
-  it('drops chunks beyond the radius and keeps those inside it', () => {
-    load('near', 0, 0)
-    load('edge', 2, -2) // exactly at the evict radius
-    load('far', 3, 0)
-    load('farZ', 0, 5)
-
-    evictAt(0, 0)
-
-    expect(ids()).toEqual(['edge', 'near'])
-    expect(removed.sort()).toEqual(['far', 'farZ'])
+  it('waits for the complete snapshot, including an empty one', async () => {
+    let ready = false
+    const waiting = manager.waitForSnapshot().then(() => {
+      ready = true
+    })
+    await Promise.resolve()
+    expect(ready).toBe(false)
+    manager.completeSnapshot()
+    await waiting
+    expect(manager.isSynchronized(0, 0)).toBe(true)
   })
 
-  it('keeps a chunk adjacent across the wrapped X seam', () => {
-    const westmost = getTerrainChunkFromPosition(
-      { x: WORLD_MIN_X, y: 0, z: 0 },
-      TERRAIN_TILE_SIZE
-    ).x
-    const eastmost = westmost + WORLD_WIDTH_X / TERRAIN_TILE_SIZE - 1
-    load('acrossSeam', westmost, 0)
-
-    // Standing on the east edge: the westmost chunk is one step away going
-    // east, though its raw index differs by the full world width.
-    evictAt(eastmost, 0)
-
-    expect(removed).toEqual([])
-    expect(ids()).toEqual(['acrossSeam'])
+  it('removes rendering and collision together on leave and reset', () => {
+    manager.handleRemoteHousesBatch([house('a'), house('b')])
+    manager.completeSnapshot()
+    manager.handleRemoteHouseRemoved('a')
+    expect(manager.getAllHouses().map((h) => h.id)).toEqual(['b'])
+    expect(removed).toEqual(['a'])
+    manager.resetView()
+    expect(manager.getAllHouses()).toEqual([])
+    expect(removed).toEqual(['a', 'b'])
+    expect(manager.isSynchronized(0, 0)).toBe(false)
   })
 
-  it('lets an evicted chunk be fetched again', async () => {
-    load('gone', 9, 9)
-    evictAt(0, 0)
-    expect(removed).toEqual(['gone'])
+  it('waits for the respawn destination even after the dungeon snapshot completed', () => {
+    worldView.accept({
+      ...snapshot,
+      reset: false,
+      sequence: 2,
+      position: { x: -1088.6, y: -71.05, z: 4273.4 },
+      floor_level: -18,
+    })
+    manager.completeSnapshot()
+    expect(manager.isSynchronized(-1451.5, 4754.05)).toBe(false)
 
-    // The chunk key itself must be gone, not just its houses — otherwise
-    // ensureChunkLoaded treats the chunk as loaded and never refetches.
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      json: async () => [house('gone', 9, 9)],
-    }))
-    vi.stubGlobal('fetch', fetchMock)
-
-    const back = at(9, 9)
-    housingManager.loadChunksAround(back.x, back.z)
-    await housingManager.waitForPending()
-
-    expect(fetchMock).toHaveBeenCalled()
-    expect(ids()).toContain('gone')
-    vi.unstubAllGlobals()
+    manager.handleRemoteHousesBatch([house('inn', -1451.5)])
+    expect(manager.isSynchronized(-1451.5, 4754.05)).toBe(false)
+    worldView.accept({
+      ...snapshot,
+      reset: false,
+      sequence: 3,
+      position: { x: -1451.5, y: 4.4, z: 4754.05 },
+      floor_level: 1,
+    })
+    worldView.pendingTerrain.add('-23,74')
+    expect(manager.isSynchronized(-1451.5, 4754.05)).toBe(false)
+    worldView.pendingTerrain.clear()
+    expect(manager.isSynchronized(-1451.5, 4754.05)).toBe(true)
   })
 
-  it('does not re-remove a chunk already evicted', () => {
-    load('once', 9, 9)
-    evictAt(0, 0)
-    evictAt(0, 0)
-
-    expect(removed).toEqual(['once'])
+  it('does not reuse nearby surface data or an underground snapshot for a teleport', () => {
+    manager.completeSnapshot()
+    expect(manager.isSynchronized(40, 0)).toBe(false)
+    worldView.accept({
+      ...snapshot,
+      reset: false,
+      sequence: 2,
+      floor_level: -1,
+    })
+    expect(manager.isSynchronized(0, 0)).toBe(false)
   })
-})
 
-describe('housingManager.updateStreaming', () => {
-  it('loads the chunks around the player and drops the rest', async () => {
-    evictAt(0, 9999)
-    removed.length = 0
-    load('stale', 40, 40)
-
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      json: async () => [house('here', 0, 0)],
-    }))
-    vi.stubGlobal('fetch', fetchMock)
-
-    const p = at(0, 0)
-    housingManager.updateStreaming(p.x, p.z)
-    await housingManager.waitForPending()
-
-    expect(removed).toEqual(['stale'])
-    expect(ids()).toEqual(['here'])
-    vi.unstubAllGlobals()
+  it('replaces a returning house with the server snapshot', () => {
+    manager.handleRemoteHouseSpawned(house('a', 0))
+    manager.handleRemoteHouseRemoved('a')
+    manager.handleRemoteHouseSpawned(house('a', 90))
+    expect(manager.getHouseById('a')?.origin.x).toBe(90)
   })
 })

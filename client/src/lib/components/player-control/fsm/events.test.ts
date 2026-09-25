@@ -77,19 +77,27 @@ function makeActions() {
     chaseAndAttack: vi.fn(),
     toggleDoor: vi.fn(),
     toggleDungeonDoor: vi.fn(),
-    enterInteraction: vi.fn(),
-    enterPickup: vi.fn(),
-    approachAndPickup: vi.fn(),
+    interactObject: vi.fn(),
+    pickupItem: vi.fn(),
     interactNpc: vi.fn(),
     breakProp: vi.fn(),
     openProp: vi.fn(),
     moveToGround: vi.fn(),
     castFishing: vi.fn(),
+    tipHat: vi.fn(),
+    tradeAtStall: vi.fn(),
+    eatMeal: vi.fn(),
     requestMove: vi.fn(),
     onInteractionFinished: vi.fn(),
     onPickupGrab: vi.fn(),
     onInteractionRejected: vi.fn(),
   } satisfies PlayerControlEventActions
+}
+
+const approach = {
+  spec: { position: { x: 1, y: 2, z: 3 }, range: 2, stopShort: 1 },
+  depth: 0,
+  act: () => {},
 }
 
 describe('dispatchPlayerControlEvent', () => {
@@ -98,22 +106,26 @@ describe('dispatchPlayerControlEvent', () => {
     const event: PlayerControlEvent = {
       type: 'request_move',
       position: { x: 1, y: 2, z: 3 },
-      pickupAfterArrival: 99,
+      approach,
     }
 
-    dispatchPlayerControlEvent(event, actions)
+    dispatchPlayerControlEvent(event, actions, 2)
 
     expect(actions.requestMove).toHaveBeenCalledWith(
       { x: 1, y: 2, z: 3 },
-      { pickupAfterArrival: 99 }
+      { approach }
     )
   })
 
   it('routes animation events', () => {
     const actions = makeActions()
 
-    dispatchPlayerControlEvent({ type: 'anim_pickup_grab' }, actions)
-    dispatchPlayerControlEvent({ type: 'anim_interaction_finished' }, actions)
+    dispatchPlayerControlEvent({ type: 'anim_pickup_grab' }, actions, 2)
+    dispatchPlayerControlEvent(
+      { type: 'anim_interaction_finished' },
+      actions,
+      2
+    )
 
     expect(actions.onPickupGrab).toHaveBeenCalledOnce()
     expect(actions.onInteractionFinished).toHaveBeenCalledOnce()
@@ -124,13 +136,19 @@ describe('dispatchPlayerControlEvent', () => {
     const intent: ClickIntent = {
       type: 'move_to_ground',
       position: { x: 4, y: 5, z: 6 },
+      sprinting: false,
     }
 
     dispatchPlayerControlEvent(
       { type: 'canvas_intent', intent, editorMode: false },
-      actions
+      actions,
+      2
     )
 
-    expect(actions.moveToGround).toHaveBeenCalledWith({ x: 4, y: 5, z: 6 })
+    expect(actions.moveToGround).toHaveBeenCalledWith(
+      { x: 4, y: 5, z: 6 },
+      false,
+      false
+    )
   })
 })

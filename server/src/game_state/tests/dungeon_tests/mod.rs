@@ -2,13 +2,21 @@ use super::*;
 use onlinerpg_shared::dungeon::{cell_center, ENTRANCE_DOOR_ID};
 
 mod chest_tests;
+mod discovery_tests;
 mod door_tests;
+mod monster_tests;
+mod reconnect_tests;
+mod respawn_tests;
+mod skeleton_tests;
 
-fn first_dungeon(game_state: &GameState) -> crate::dungeon_defs::DungeonEntranceDef {
+/// Give `player_id` an empty bag, plus one `item_def_id` when given.
+async fn give_bag(game_state: &GameState, player_id: &PlayerId, item_def_id: Option<&str>) {
     game_state
-        .dungeon_defs
-        .all()
-        .next()
-        .expect("a dungeon def")
-        .clone()
+        .inventories
+        .write()
+        .await
+        .insert(*player_id, Default::default());
+    if let Some(id) = item_def_id {
+        assert!(game_state.give_item(player_id, id).await);
+    }
 }

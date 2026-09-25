@@ -1,5 +1,30 @@
 # Runtime Performance Optimization (60fps)
 
+## Server monster AI metrics (2026-08-25)
+
+뇌가 서버에서 돌기 시작함 ([SERVER_SIDE_MONSTER_AI.md](SERVER_SIDE_MONSTER_AI.md)). 30 s마다 journald에:
+
+```
+monster ai: brains N active N ticks N ticked/tick N pathfinds/s N commands/s N over_budget N worst Nms
+```
+
+- `brains`: 살아있는 뇌 수 (AOI 밖 몬스터 포함) / `active`: 이번 틱에 누군가 보고 있던 몬스터
+- `over_budget`: 40 ms 예산을 넘겨 다음 틱으로 넘긴 횟수 (30 s 창, 최대 150) — 0이 정상
+- `worst`: 창 안 최장 틱 시간
+- `pathfinds/s`: A\* 호출률 — 병목 지표. 코어를 위협하면 SERVER_SIDE_MONSTER_AI §6.1(표적별 경로 공유)로.
+
+A(별도 머신) 판단 기준: 5,000 동접 외삽에서 `over_budget`이 상시 0이 아니거나 `worst`가 100 ms를 넘으면.
+
+## AOI prop maps: no spatial index yet (2026-09-09)
+
+플레이어가 움직일 때마다 `handle_player_moved`가 `stalls`·`tip_hats`·`meals`·`campfires` 네 맵을 **전부 선형으로** 훑어 AOI 진입/이탈을 낸다 (`aoi_diff`, [player.rs](../server/src/game_state/player.rs)).
+
+플레이어 위탁 좌판([ECONOMY.md](ECONOMY.md#플레이어-위탁-좌판-2026-09-09))이 `stalls`를 개위(NPC 몇 개)에서 잠재적으로 수천 개로 키운다. 그래도 **지금은 인덱스를 만들지 않는다**: 같은 상한이 이미 `tip_hats`에 존재한다 — 200 구리·직업 제한 없음·1인 1개의 구매 아이템이고, 2000 구리인 좌판의 보급률은 그보다 낮다. 새 복잡도 계급이 아니라 기존 계급의 구성원이 하나 는 것이다.
+
+- 벽에 부딪히면 답은 **네 맵 공용 격자 인덱스**지, 좌판 전용 우회로가 아니다. 그 가치는 고통받는 맵 수에 비례하므로, 좌판이 늘어난 것은 오히려 공용 인덱스를 더 값지게 만든다.
+- 트리거: 좌판 수 × 이동 패킷률이 `handle_player_moved`의 프로파일에서 유의하게 잡히면. 위 Passability 절과 같은 판단 기준을 쓴다.
+- 인덱스 없이 이미 낸 절약: 목줄 검사는 **이 패스가 이미 잡은 `stalls` 읽기 락**에 얹었고(`tip_hats`와 같은 방식), 봉투 내용(`StallState`)은 AOI 브로드캐스트에 태우지 않고 패널을 연 사람에게만 보낸다.
+
 ## Passability cache: spatial index investigated, not built (2026-07-21)
 
 ### Question
@@ -42,9 +67,15 @@ handful of monsters. The "up to 8,000 cache scans per path query" cost of A\*
 (2,000 nodes × 4 neighbours) lands on individual tabs, never on the server.
 
 **Server cost is small.** `tick_player_movement` runs at 5 Hz
-(`server/src/main.rs`), skips non-moving players, and costs ~2–4 scans of 9
-entries per moving player per tick. 5,000 simultaneous movers ≈ under 1M float
+(`server/src/main.rs`), skips non-moving players, and costs ~3–6 scans of 9
+entries per moving player per tick. 5,000 simultaneous movers ≈ under 2M float
 comparisons/sec total.
+
+`collision_y` (`server/src/game_state/passability.rs`) accounts for one of
+those scans — it derives the Y to collide against rather than trusting the
+client's. It costs a second scan only for a leg that crosses a floor grid,
+i.e. one near a building or solid furniture; anyone walking open ground
+returns early before the stairwell check.
 
 ### Revisit when any of these becomes true
 

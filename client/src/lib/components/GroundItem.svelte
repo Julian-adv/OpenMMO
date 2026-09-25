@@ -1,15 +1,44 @@
+<script lang="ts" module>
+  import * as THREE from 'three'
+  import type { BadgeStyle } from '../utils/textBadge'
+
+  const BADGE_FONT_PX = 64
+  const QTY_BADGE_LIFT = 0.12
+  const QTY_STYLE: BadgeStyle = {
+    id: 'qty',
+    fontPx: BADGE_FONT_PX,
+    pixelsPerUnit: 320,
+    bold: true,
+    color: '#ffe9a8',
+    outlineColor: 'rgba(0,0,0,0.85)',
+    outlineWidth: BADGE_FONT_PX * 0.16,
+  }
+  const NAME_GAP = 0.06
+  const UP = new THREE.Vector3(0, 1, 0)
+  const nameAnchor = new THREE.Vector3()
+  // The label floats above the item purely as feedback: raycasting it would
+  // make it its own hover target, keeping the hover alive under the cursor.
+  const NO_RAYCAST = () => {}
+</script>
+
 <script lang="ts">
+  import { locale } from '../i18n'
   import { T } from '@threlte/core'
   import { onDestroy } from 'svelte'
-  import * as THREE from 'three'
   import { getItemDef } from '../data/itemDefs'
   import { getWeaponModelPath } from '../utils/modelPaths'
   import { loadGLB } from '../utils/gltfCache'
   import { loadIconTexture } from '../utils/iconTextureCache'
   import { createRng } from '../utils/simplex-noise'
   import { localPlayerRightHand } from '../stores/playerHandRegistry'
+  import { hoveredGroundItemId } from '../stores/gameStore'
+  import { billboardScale } from '../utils/billboardScale'
+  import { makeTextBadge, NAME_BADGE_STYLE } from '../utils/textBadge'
+  import { itemDisplayName } from '../data/itemDefs'
   import type { TerrainHeightManager } from '../managers/terrainHeightManager'
   import { entityGroundY } from '../managers/entity-ground'
+  import TargetRing from './TargetRing.svelte'
+  import { playPropSound } from '../managers/sfxManager'
   import {
     evaluateSpawnAnimation,
     type GroundItemData,
@@ -17,23 +46,23 @@
 
   interface Props {
     data: GroundItemData
-    rotation?: number
     animationTimeMs?: number
     heightManager?: TerrainHeightManager
     heightRevision?: number
+    /** Only needed for the hover label's zoom falloff. */
+    camera?: THREE.Camera
   }
 
   let {
     data,
-    rotation = 0,
     animationTimeMs = 0,
     heightManager,
     heightRevision = 0,
+    camera,
   }: Props = $props()
 
   const def = $derived(getItemDef(data.itemDefId))
-  const label = $derived(def?.name ?? data.itemDefId)
-  const UP = new THREE.Vector3(0, 1, 0)
+  const label = $derived(itemDisplayName(data.itemDefId, data.enchant, $locale))
   const TERRAIN_NORMAL_SAMPLE_DISTANCE = 0.75
   const MAX_TERRAIN_Y_DELTA_FOR_TILT = 0.75
 
@@ -59,6 +88,21 @@
   } | null>(null)
   let groundParentRef: THREE.Group | undefined = $state()
   let terrainAlignedRef: THREE.Group | undefined = $state()
+
+  // Lay handheld models flat before measuring their ground clearance.
+  const flatRestRotX = $derived.by(() => {
+    if (def?.category === 'fishing_rod') return -Math.PI / 4
+    if (def?.category === 'timekeeper') return -Math.PI / 2
+    if (def?.equipSlot === 'off_hand' && def?.category === 'armor')
+      return Math.PI / 2
+    return null
+  })
+  let restPose = $state<{ rotX: number; y: number } | null>(null)
+
+  function applyRestPose(obj: THREE.Object3D, pose: typeof restPose) {
+    obj.rotation.set(pose?.rotX ?? 0, 0, 0)
+    obj.position.set(0, pose?.y ?? 0, 0)
+  }
 
   // Self-animating loot (the dungeon coin pile): the GLB ships a spill/settle
   // clip that plays once on spawn, so the pile pours out of the chest and lands
@@ -171,6 +215,7 @@
     selfClipLastMs = 0
     selfAnimated = false
     poured = false
+    restPose = null
     const path = getWeaponModelPath(worldModel)
     loadGLB(path).then((gltf) => {
       if (cancelled) return
@@ -186,6 +231,7 @@
           poured = true
         })
         selfAnimated = true
+        playPropSound('coinSpill')
       }
       // Measure the footprint/volume from the pose things actually sit under. An
       // animated pile is still at frame 0 (pre-spill, tiny) on `scene`, so for
@@ -195,7 +241,16 @@
         measureSource = cloneGroundItemScene(gltf.scene)
         bindClipOnce(measureSource, clip, true)
       }
-      const box = new THREE.Box3().setFromObject(measureSource)
+      const box = new THREE.Box3()
+      if (flatRestRotX != null) {
+        measureSource.rotation.set(flatRestRotX, 0, 0)
+        box.setFromObject(measureSource, true)
+        restPose = { rotX: flatRestRotX, y: -box.min.y }
+        applyRestPose(measureSource, restPose)
+        box.translate(new THREE.Vector3(0, restPose.y, 0))
+      } else {
+        box.setFromObject(measureSource)
+      }
       worldModelBox = {
         min: { x: box.min.x, y: box.min.y, z: box.min.z },
         max: { x: box.max.x, y: box.max.y, z: box.max.z },
@@ -229,25 +284,26 @@
     const scene = worldModelScene
     const ground = groundParentRef
     if (!scene || !ground) return
-    // A spread-out coin pile held up to the face reads as an awkward flat slab,
-    // so self-animating loot is never parented to the hand. Instead it just
-    // vanishes the instant the pickup "grabs" it (data.inHand) — the same moment
-    // a normal item snaps to the hand — rather than lingering on the ground
-    // until the gesture finishes.
+    // A spread-out coin pile held up to the face reads as an awkward flat
+    // slab, so self-animating loot is never parented to the hand; the root
+    // group's inHand visibility gate hides it at the grab instead.
     if (selfAnimated) {
       if (scene.parent !== ground) {
         scene.position.set(0, 0, 0)
         scene.rotation.set(0, 0, 0)
         ground.add(scene)
       }
-      scene.visible = !data.inHand
       return
     }
     const hand = data.inHand ? $localPlayerRightHand : null
     const targetParent = hand ?? ground
     if (scene.parent === targetParent) return
-    scene.position.set(0, hand ? 0.08 : 0, 0)
-    scene.rotation.set(0, 0, 0)
+    if (hand) {
+      scene.position.set(0, 0.08, 0)
+      scene.rotation.set(0, 0, 0)
+    } else {
+      applyRestPose(scene, restPose)
+    }
     targetParent.add(scene)
   })
 
@@ -267,13 +323,56 @@
   }
 
   const nameTexture = $derived(
-    def?.worldModel || worldModelScene ? null : makeNameTexture(label)
+    def?.worldModel || def?.icon ? null : makeNameTexture(label)
+  )
+
+  // Keyed on the text, not `data`, so the manager's copy-on-write item
+  // replacements (in-hand, spawn-animation clear) don't rebuild the texture.
+  const qtyText = $derived(data.quantity > 1 ? `x${data.quantity}` : null)
+  const qtyBadge = $derived(qtyText ? makeTextBadge(qtyText, QTY_STYLE) : null)
+  // Pad sits under the model's visual center and circumscribes its footprint
+  // (radius = half the x/z diagonal, but never under the minimum — a slim
+  // bottle's footprint is a few cm and unclickable); both fall back to
+  // defaults until a model box is known. Derived from the box so there is one
+  // source of truth.
+  const GROUND_PAD_RADIUS = 0.32
+  const GROUND_PAD_MIN_RADIUS = 0.25
+  const worldModelCenter = $derived(
+    worldModelBox
+      ? {
+          x: (worldModelBox.min.x + worldModelBox.max.x) / 2,
+          z: (worldModelBox.min.z + worldModelBox.max.z) / 2,
+        }
+      : { x: 0, z: 0 }
+  )
+  const groundPadRadius = $derived(
+    worldModelBox
+      ? Math.max(
+          GROUND_PAD_MIN_RADIUS,
+          Math.hypot(
+            worldModelBox.max.x - worldModelBox.min.x,
+            worldModelBox.max.z - worldModelBox.min.z
+          ) / 2
+        )
+      : GROUND_PAD_RADIUS
+  )
+  // Hover ring, slightly larger than the footprint it marks.
+  const ringRadius = $derived(groundPadRadius + 0.08)
+
+  // Sits above the model's top, so a spear's badge clears the spear; lifts
+  // further with the ring radius so wide items keep the label clear of it.
+  const qtyBadgeY = $derived(
+    (worldModelBox ? worldModelBox.max.y : 0.3) +
+      QTY_BADGE_LIFT +
+      ringRadius * 0.4
   )
 
   // Icon billboard for items with no world model (fish, jewellery, armor):
   // the inventory icon floats over the spot instead of a placeholder box.
   // Textures come from the shared icon cache — do not dispose them.
   const ICON_SPRITE_SIZE = 0.55
+  const ICON_SHADOW_OFFSET = 0.05
+  const ICON_SHADOW_OPACITY = 0.85
   let iconTexture = $state<THREE.Texture | null>(null)
   $effect(() => {
     const icon = !def?.worldModel && def?.icon ? def.icon : null
@@ -290,6 +389,43 @@
       iconTexture = null
     }
   })
+
+  // Representation tier: 3D model when loaded, else the inventory icon
+  // billboard, else the placeholder box (also shown while either loads).
+  const displayMode = $derived(
+    worldModelScene ? 'model' : iconTexture ? 'icon' : 'box'
+  )
+
+  // Hover name label. The placeholder box already carries a permanent name
+  // sprite, so it is the one mode that skips this.
+  const hoveredName = $derived.by(() => {
+    if ($hoveredGroundItemId !== data.instanceId) return null
+    if (data.inHand || displayMode === 'box') return null
+    return label
+  })
+  const nameBadge = $derived(
+    hoveredName ? makeTextBadge(hoveredName, NAME_BADGE_STYLE) : null
+  )
+  // Same zoom falloff the nametags use, so the label holds a steady on-screen
+  // size. Read only while hovering, so resting items never recompute it.
+  const nameScale = $derived.by(() => {
+    void animationTimeMs
+    if (!camera) return 1
+    return billboardScale(
+      camera.position.distanceTo(
+        nameAnchor.set(displayX, displayY + qtyBadgeY, displayZ)
+      )
+    )
+  })
+  // Stacks above the count badge when a pile carries both.
+  const nameBadgeY = $derived(
+    qtyBadge && nameBadge
+      ? qtyBadgeY +
+          qtyBadge.height / 2 +
+          (nameBadge.height * nameScale) / 2 +
+          NAME_GAP
+      : qtyBadgeY
+  )
 
   onDestroy(() => {
     nameTexture?.dispose()
@@ -310,12 +446,21 @@
       ? evaluateSpawnAnimation(data.spawnAnimation, animationTimeMs)
       : null
   )
+  const spinZ = $derived(spawnTransform?.spinZ ?? 0)
+  // Idle spin for the placeholder box only; models rest and sprites billboard.
+  const BOX_SPIN_SPEED = 1.5
+  const boxSpinY = $derived(
+    displayMode === 'box' && !data.spawnAnimation
+      ? (animationTimeMs / 1000) * BOX_SPIN_SPEED
+      : 0
+  )
   // Items rendered as a 3D world model are authored to sit on their base
   // (origin at the model's bottom), so they rest just above the ground with a
-  // small lift to avoid z-fighting and clipping into minor terrain rises. The
-  // larger +0.3 hover is only for the icon-billboard fallback, which floats
-  // above the spot so the flat sprite reads clearly.
-  const WORLD_MODEL_REST_HOVER = 0.05
+  // small lift to avoid z-fighting and clipping into minor terrain rises
+  // (0.05 read as floating on larger models). The larger +0.3 hover is only
+  // for the icon-billboard fallback, which floats above the spot so the flat
+  // sprite reads clearly.
+  const WORLD_MODEL_REST_HOVER = 0.02
   const restHover = $derived(
     selfAnimated
       ? data.floorLevel < 0
@@ -346,27 +491,7 @@
   // generous click target. It is a child of the root group (so a click on it
   // walks up to `groundItemId`), but counter-offsets the root's hover/spawn-arc
   // lift so it stays planted on the ground with a hair of clearance.
-  const GROUND_PAD_RADIUS = 0.32
   const GROUND_PAD_CLEARANCE = 0.012
-  // Pad sits under the model's visual center and circumscribes its footprint
-  // (radius = half the x/z diagonal); both fall back to defaults until a model
-  // box is known. Derived from the box so there is one source of truth.
-  const worldModelCenter = $derived(
-    worldModelBox
-      ? {
-          x: (worldModelBox.min.x + worldModelBox.max.x) / 2,
-          z: (worldModelBox.min.z + worldModelBox.max.z) / 2,
-        }
-      : { x: 0, z: 0 }
-  )
-  const groundPadRadius = $derived(
-    worldModelBox
-      ? Math.hypot(
-          worldModelBox.max.x - worldModelBox.min.x,
-          worldModelBox.max.z - worldModelBox.min.z
-        ) / 2
-      : GROUND_PAD_RADIUS
-  )
   const groundPadY = $derived(
     GROUND_PAD_CLEARANCE - restHover - (spawnTransform?.offsetY ?? 0)
   )
@@ -460,10 +585,14 @@
   })
 </script>
 
+<!-- The whole subtree hides the moment the pickup grabs the item (inHand);
+     a hand-held model is reparented out of it. Raycasts ignore `visible`, so
+     the pickup pad additionally unmounts via showPad. -->
 <T.Group
   position.x={displayX}
   position.y={displayY}
   position.z={displayZ}
+  visible={!data.inHand}
   userData={{ groundItemId: data.instanceId }}
 >
   {#if showPad}
@@ -507,25 +636,76 @@
     {/each}
   {/if}
 
-  <T.Group bind:ref={terrainAlignedRef}>
-    <T.Group
-      rotation.y={data.restingRotationY +
-        (worldModelScene || data.spawnAnimation ? 0 : rotation)}
-      rotation.z={spawnTransform?.spinZ ?? 0}
+  {#if qtyBadge && !data.inHand}
+    <!-- Count badge for a pile. At the root group so it billboards upright
+         instead of tilting with the terrain or spinning with the model. -->
+    <T.Sprite
+      position.x={groundPadOffset.x}
+      position.y={qtyBadgeY}
+      position.z={groundPadOffset.z}
+      scale={[qtyBadge.width, qtyBadge.height, 1]}
+      renderOrder={3}
     >
+      <T.SpriteMaterial
+        map={qtyBadge.texture}
+        transparent={true}
+        depthWrite={false}
+      />
+    </T.Sprite>
+  {/if}
+
+  {#if nameBadge}
+    <!-- Hover name: billboards at the root group, above the count badge. -->
+    <T.Sprite
+      position.x={groundPadOffset.x}
+      position.y={nameBadgeY}
+      position.z={groundPadOffset.z}
+      scale={[nameBadge.width * nameScale, nameBadge.height * nameScale, 1]}
+      renderOrder={4}
+      raycast={NO_RAYCAST}
+    >
+      <T.SpriteMaterial
+        map={nameBadge.texture}
+        transparent={true}
+        depthWrite={false}
+        depthTest={false}
+      />
+    </T.Sprite>
+  {/if}
+
+  {#if displayMode === 'icon'}
+    <!-- Icon + black-tinted shadow copy. Kept at the root so the shadow's
+         offset doesn't orbit with the spin group; sprites ignore parent
+         rotation, so the spawn-arc spin goes through material rotation. -->
+    <T.Sprite
+      position.x={ICON_SHADOW_OFFSET}
+      position.y={-ICON_SHADOW_OFFSET}
+      scale={[ICON_SPRITE_SIZE, ICON_SPRITE_SIZE, 1]}
+      renderOrder={0}
+    >
+      <T.SpriteMaterial
+        map={iconTexture}
+        color="#000000"
+        transparent={true}
+        opacity={ICON_SHADOW_OPACITY}
+        depthWrite={false}
+        rotation={spinZ}
+      />
+    </T.Sprite>
+    <T.Sprite scale={[ICON_SPRITE_SIZE, ICON_SPRITE_SIZE, 1]} renderOrder={1}>
+      <T.SpriteMaterial map={iconTexture} transparent={true} rotation={spinZ} />
+    </T.Sprite>
+  {/if}
+
+  <T.Group bind:ref={terrainAlignedRef}>
+    <T.Group rotation.y={data.restingRotationY + boxSpinY} rotation.z={spinZ}>
       <T.Group bind:ref={groundParentRef} />
 
-      {#if !worldModelScene}
-        {#if iconTexture}
-          <T.Sprite scale={[ICON_SPRITE_SIZE, ICON_SPRITE_SIZE, 1]}>
-            <T.SpriteMaterial map={iconTexture} transparent={true} />
-          </T.Sprite>
-        {:else}
-          <T.Mesh>
-            <T.BoxGeometry args={[0.3, 0.3, 0.3]} />
-            <T.MeshStandardMaterial color="#f0c040" />
-          </T.Mesh>
-        {/if}
+      {#if displayMode === 'box'}
+        <T.Mesh>
+          <T.BoxGeometry args={[0.3, 0.3, 0.3]} />
+          <T.MeshStandardMaterial color="#f0c040" />
+        </T.Mesh>
 
         {#if nameTexture}
           <T.Sprite position.y={0.5} scale={[label.length * 0.08, 0.2, 1]}>
@@ -536,3 +716,15 @@
     </T.Group>
   </T.Group>
 </T.Group>
+
+{#if $hoveredGroundItemId === data.instanceId && !data.inHand}
+  <TargetRing
+    heightManager={heightManager ?? null}
+    x={displayX + groundPadOffset.x}
+    z={displayZ + groundPadOffset.z}
+    radius={ringRadius}
+    floorLevel={data.floorLevel}
+    fallbackY={baseY}
+    color="#ffd166"
+  />
+{/if}

@@ -1,6 +1,97 @@
 use super::*;
 
 #[tokio::test]
+async fn estate_storage_correction_clears_the_queue_and_allows_a_surface_detour() {
+    let game = make_test_game_state("estate_storage_audit_detour");
+    let origin = Position {
+        x: -1373.8975,
+        y: 0.6809866,
+        z: 4477.1035,
+    };
+    let goal = Position {
+        x: -1382.1764,
+        y: origin.y,
+        z: 4473.573,
+    };
+    let placements: Vec<_> = [
+        (-1374.5, 0.7125015, 4477.5),
+        (-1374.5, 0.6499939, 4476.0),
+        (-1373.0, 0.625, 4475.5),
+        (-1373.0, 0.7000122, 4477.0),
+    ]
+    .into_iter()
+    .enumerate()
+    .map(
+        |(id, (x, y, z))| onlinerpg_shared::furniture::FurniturePlacement {
+            id: id as u32,
+            type_id: "chest_animated".into(),
+            x,
+            y,
+            z,
+            rotation_deg: 90.0,
+            floor_level: 0,
+        },
+    )
+    .collect();
+    game.passability_write().insert(
+        "furniture:estate-storage:-43,139".into(),
+        onlinerpg_shared::furniture::build_furniture_passability_for_placements(&placements)
+            .unwrap(),
+    );
+    let mut player = make_player("estate_walker", origin.x, origin.z);
+    player.position = origin;
+    let id = player.id;
+    game.add_player(player).await;
+    let mut rx = game.register_direct_channel(&id).await;
+
+    let mut command = move_cmd(goal, false);
+    command.sprinting = true;
+    game.update_player_position(&id, command, false).await;
+    game.update_player_position(&id, move_cmd(goal, true), false)
+        .await;
+    game.tick_player_movement(0.2).await;
+
+    let (corrected, _, floor) = first_correction(&mut rx).expect("surface collision is corrected");
+    assert_eq!(corrected, origin);
+    assert_eq!(floor, 0);
+    assert!(!game.movement_intents.read().await.contains_key(&id));
+    game.tick_player_movement(1.0).await;
+    assert_eq!(player_xz(&game, &id).await, (origin.x, origin.z));
+    assert!(!super::super::passability::sealed_in(
+        &game.passability_read(),
+        &origin,
+        0
+    ));
+
+    let path = onlinerpg_shared::pathfinding::find_and_smooth_path(
+        origin.x,
+        origin.z,
+        0,
+        goal.x,
+        goal.z,
+        0,
+        &game.passability_read(),
+        2000,
+    );
+    assert!(path.found);
+    assert!(path.waypoints.len() > 1);
+    for (i, waypoint) in path.waypoints.iter().enumerate() {
+        let position = Position {
+            x: waypoint.x,
+            y: origin.y,
+            z: waypoint.z,
+        };
+        game.update_player_position(&id, move_cmd(position, i > 0), false)
+            .await;
+    }
+    for _ in 0..100 {
+        game.tick_player_movement(0.2).await;
+    }
+    assert_eq!(player_xz(&game, &id).await, (goal.x, goal.z));
+    assert!(first_correction(&mut rx).is_none());
+}
+
+#[tokio::test]
 async fn simulated_movement_is_blocked_by_solid_furniture() {
     let game_state = make_test_game_state("movement_furniture_block");
     let player_id = pid("wallwalker");
@@ -23,7 +114,6 @@ async fn simulated_movement_is_blocked_by_solid_furniture() {
                 false,
             ),
             false,
-            false,
         )
         .await;
     game_state.tick_player_movement(60.0).await;
@@ -42,11 +132,57 @@ async fn simulated_movement_is_blocked_by_solid_furniture() {
                 false,
             ),
             false,
-            false,
         )
         .await;
     game_state.tick_player_movement(60.0).await;
     assert_eq!(player_xz(&game_state, &player_id).await, (3.5, 4.5));
+}
+
+/// A client picks its own Y and the server only ever infers the storey back
+/// from it, so a Y over the table tops used to clear every piece of furniture
+/// on the floor. The forged height has to be banked by a legal step first —
+/// collision reads the Y the mover is standing at, not the one it reports.
+#[tokio::test]
+async fn a_forged_height_cannot_clear_solid_furniture() {
+    let game_state = make_test_game_state("movement_forged_height");
+    let player_id = pid("flyer");
+    game_state.add_player(make_player("flyer", 0.5, 4.5)).await;
+    game_state.sync_region_furniture(0, 0, &[table_placement(0.5, 5.5)]);
+
+    // Away from the table, so the step itself is legal. Nothing validates Y,
+    // so the server stores the 1.5m the client claims (tables are 1m tall).
+    let perch = Position {
+        x: 0.5,
+        y: 1.5,
+        z: 3.5,
+    };
+    game_state
+        .update_player_position(&player_id, move_cmd(perch, false), false)
+        .await;
+    game_state.tick_player_movement(60.0).await;
+    assert_eq!(player_xz(&game_state, &player_id).await, (0.5, 3.5));
+
+    // Straight through the sealed cell from the perch.
+    game_state
+        .update_player_position(
+            &player_id,
+            move_cmd(
+                Position {
+                    x: 0.5,
+                    y: 1.5,
+                    z: 6.5,
+                },
+                false,
+            ),
+            false,
+        )
+        .await;
+    game_state.tick_player_movement(60.0).await;
+    assert_eq!(
+        player_xz(&game_state, &player_id).await,
+        (0.5, 3.5),
+        "a forged height must not walk the player over the table"
+    );
 }
 
 #[tokio::test]
@@ -68,13 +204,156 @@ async fn queued_waypoints_route_around_furniture() {
                 &player_id,
                 move_cmd(Position { x, y: 0.0, z }, append),
                 false,
-                false,
             )
             .await;
     }
 
     game_state.tick_player_movement(60.0).await;
     assert_eq!(player_xz(&game_state, &player_id).await, (0.5, 6.5));
+}
+
+#[tokio::test]
+async fn replacing_a_route_rebuilds_the_furniture_detour() {
+    let game = make_test_game_state("movement_replace_detour");
+    let id = pid("detour_replacement");
+    game.add_player(make_player("detour_replacement", 0.5, 4.5))
+        .await;
+    game.sync_region_furniture(0, 0, &[table_placement(0.5, 5.5)]);
+    let mut rx = game.register_direct_channel(&id).await;
+    game.update_player_position(
+        &id,
+        move_cmd(
+            Position {
+                x: 1.5,
+                y: 0.0,
+                z: 4.5,
+            },
+            false,
+        ),
+        false,
+    )
+    .await;
+    game.update_player_position(
+        &id,
+        move_cmd(
+            Position {
+                x: 0.5,
+                y: 0.0,
+                z: 6.5,
+            },
+            false,
+        ),
+        false,
+    )
+    .await;
+    {
+        let queues = game.movement_intents.read().await;
+        let queue = &queues[&id];
+        assert!(queue.len() > 1);
+        assert_eq!(
+            queue.back().unwrap().request.unwrap().connection_waypoints,
+            queue.len() - 1
+        );
+    }
+    for _ in 0..30 {
+        if !game.movement_intents.read().await.contains_key(&id) {
+            break;
+        }
+        game.tick_player_movement(0.2).await;
+        assert_eq!(game.movement_audit.last_tick(id).unwrap().outcome, "clear");
+    }
+    assert_eq!(player_xz(&game, &id).await, (0.5, 6.5));
+    assert!(!game.movement_intents.read().await.contains_key(&id));
+    assert!(!drain(&mut rx).iter().any(|m| matches!(
+        m,
+        ServerMessage::PositionCorrected { .. } | ServerMessage::MovementResync { .. }
+    )));
+}
+
+#[tokio::test]
+async fn unreachable_replacement_stops_instead_of_following_the_old_route() {
+    let game = make_test_game_state("movement_replace_unreachable");
+    let id = pid("unreachable_replacement");
+    game.add_player(make_player("unreachable_replacement", 0.5, 4.5))
+        .await;
+    game.sync_region_furniture(0, 0, &[table_placement(0.5, 5.5)]);
+    let mut rx = game.register_direct_channel(&id).await;
+    game.update_player_position(
+        &id,
+        move_cmd(
+            Position {
+                x: 1.5,
+                y: 0.0,
+                z: 4.5,
+            },
+            false,
+        ),
+        false,
+    )
+    .await;
+    game.update_player_position(
+        &id,
+        move_cmd(
+            Position {
+                x: 0.5,
+                y: 0.0,
+                z: 5.5,
+            },
+            false,
+        ),
+        false,
+    )
+    .await;
+    assert!(!game.movement_intents.read().await.contains_key(&id));
+    let (position, _, floor) =
+        first_correction(&mut rx).expect("unreachable replacement is corrected");
+    assert_eq!((position.x, position.z, floor), (0.5, 4.5, 0));
+    game.tick_player_movement(1.0).await;
+    assert_eq!(player_xz(&game, &id).await, (0.5, 4.5));
+}
+
+#[tokio::test]
+async fn keyboard_replacement_does_not_add_a_detour() {
+    let game = make_test_game_state("movement_keyboard_replace_direct");
+    let id = pid("keyboard_replacement");
+    game.add_player(make_player("keyboard_replacement", 0.5, 4.5))
+        .await;
+    game.sync_region_furniture(0, 0, &[table_placement(0.5, 5.5)]);
+    let mut rx = game.register_direct_channel(&id).await;
+    game.update_player_position(
+        &id,
+        move_cmd(
+            Position {
+                x: 1.5,
+                y: 0.0,
+                z: 4.5,
+            },
+            false,
+        ),
+        false,
+    )
+    .await;
+    game.update_keyboard_movement(
+        &id,
+        move_cmd(
+            Position {
+                x: 0.5,
+                y: 0.0,
+                z: 6.5,
+            },
+            false,
+        ),
+        1,
+    )
+    .await;
+    assert_eq!(game.movement_intents.read().await[&id].len(), 1);
+    for _ in 0..5 {
+        game.tick_player_movement(0.2).await;
+    }
+    let (x, z) = player_xz(&game, &id).await;
+    assert_eq!(x, 0.5);
+    assert!(z < 5.0);
+    assert!(first_correction(&mut rx).is_some());
 }
 
 #[tokio::test]
@@ -94,7 +373,6 @@ async fn blocked_leg_drops_remaining_queue() {
             .update_player_position(
                 &player_id,
                 move_cmd(Position { x, y: 0.0, z }, append),
-                false,
                 false,
             )
             .await;
@@ -134,11 +412,94 @@ async fn grazing_corner_slides_instead_of_stalling() {
                 false,
             ),
             false,
-            false,
         )
         .await;
     game_state.tick_player_movement(60.0).await;
     assert_eq!(player_xz(&game_state, &player_id).await, (0.5, 4.5));
+}
+
+#[tokio::test]
+async fn sustained_slide_along_a_wall_keeps_making_progress() {
+    let game = make_test_game_state("movement_wall_slide_progress");
+    let id = pid("wall_slider");
+    game.add_player(make_player("wall_slider", 1.001, 4.5))
+        .await;
+    let wall: Vec<_> = (0..17)
+        .map(|z| table_placement(0.5, z as f32 + 0.5))
+        .collect();
+    game.sync_region_furniture(0, 0, &wall);
+    let mut rx = game.register_direct_channel(&id).await;
+    game.update_player_position(
+        &id,
+        move_cmd(
+            Position {
+                x: 0.5,
+                y: 0.0,
+                z: 14.5,
+            },
+            false,
+        ),
+        false,
+    )
+    .await;
+
+    for _ in 0..10 {
+        game.tick_player_movement(0.2).await;
+        assert_eq!(game.movement_audit.last_tick(id).unwrap().outcome, "slid");
+    }
+    let (x, z) = player_xz(&game, &id).await;
+    assert_eq!(x, 1.001);
+    assert!(z > 9.5);
+    assert!(game.movement_intents.read().await.contains_key(&id));
+    assert!(!drain(&mut rx).iter().any(|message| matches!(
+        message,
+        ServerMessage::MovementResync { .. } | ServerMessage::PositionCorrected { .. }
+    )));
+}
+
+#[tokio::test]
+async fn clear_step_resets_a_partial_slide_stall() {
+    let game = make_test_game_state("movement_slide_stall_reset");
+    let id = pid("brief_slider");
+    game.add_player(make_player("brief_slider", 0.99, 0.5))
+        .await;
+    game.sync_region_furniture(0, 0, &[table_placement(1.5, 0.5)]);
+    let mut rx = game.register_direct_channel(&id).await;
+    game.update_player_position(
+        &id,
+        move_cmd(
+            Position {
+                x: 8.0,
+                y: 0.0,
+                z: 0.6,
+            },
+            false,
+        ),
+        false,
+    )
+    .await;
+    for _ in 0..4 {
+        game.tick_player_movement(0.2).await;
+        assert_eq!(game.movement_audit.last_tick(id).unwrap().outcome, "slid");
+    }
+    game.sync_region_furniture(0, 0, &[]);
+    game.tick_player_movement(0.2).await;
+    assert_eq!(game.movement_audit.last_tick(id).unwrap().outcome, "clear");
+
+    game.sync_region_furniture(0, 0, &[table_placement(2.5, 0.5)]);
+    for _ in 0..4 {
+        game.tick_player_movement(0.2).await;
+        assert_eq!(game.movement_audit.last_tick(id).unwrap().outcome, "slid");
+    }
+    assert!(!drain(&mut rx).iter().any(|message| matches!(
+        message,
+        ServerMessage::MovementResync { .. } | ServerMessage::PositionCorrected { .. }
+    )));
+    game.tick_player_movement(0.2).await;
+    assert!(drain(&mut rx)
+        .iter()
+        .any(|message| matches!(message, ServerMessage::MovementResync { .. })));
+    assert!(!game.movement_intents.read().await.contains_key(&id));
 }
 
 #[tokio::test]
@@ -170,7 +531,6 @@ async fn repeated_beeline_past_a_wall_does_not_pin_the_shadow() {
                     },
                     false,
                 ),
-                false,
                 false,
             )
             .await;
@@ -204,7 +564,6 @@ async fn a_refused_step_snaps_the_client_back_to_the_server() {
                 false,
             ),
             false,
-            false,
         )
         .await;
     game_state.tick_player_movement(60.0).await;
@@ -225,7 +584,6 @@ async fn a_refused_step_snaps_the_client_back_to_the_server() {
                 },
                 false,
             ),
-            false,
             false,
         )
         .await;
@@ -255,7 +613,6 @@ async fn a_slid_step_is_not_corrected() {
                 false,
             ),
             false,
-            false,
         )
         .await;
     game_state.tick_player_movement(60.0).await;
@@ -284,12 +641,225 @@ async fn npc_movement_is_exempt_from_collision() {
                 },
                 false,
             ),
-            false,
             true,
         )
         .await;
     game_state.tick_player_movement(60.0).await;
     assert_eq!(player_xz(&game_state, &player_id).await, (0.5, 6.5));
+}
+
+/// One dungeon-shaped entry (never yields to a trapped mover) whose cell
+/// (1, 1) is walled in on all four sides, the way a prop pillar seals its own.
+fn sealed_dungeon_entry() -> onlinerpg_shared::pathfinding::RuntimePassability {
+    use onlinerpg_shared::pathfinding::{RuntimeFloorGrid, RuntimePassability};
+    const N: u8 = 1;
+    const E: u8 = 2;
+    const S: u8 = 4;
+    const W: u8 = 8;
+    let mut cells = vec![0u8; 16];
+    let idx = |x: usize, z: usize| x + z * 4;
+    cells[idx(1, 1)] = N | E | S | W;
+    cells[idx(1, 0)] = S;
+    cells[idx(1, 2)] = N;
+    cells[idx(0, 1)] = E;
+    cells[idx(2, 1)] = W;
+    RuntimePassability {
+        house_origin_x: 0.0,
+        house_origin_z: 0.0,
+        min_x: 0.0,
+        max_x: 4.0,
+        min_z: 0.0,
+        max_z: 4.0,
+        floors: vec![RuntimeFloorGrid {
+            floor_level: 0,
+            origin_x: 0,
+            origin_z: 0,
+            width: 4,
+            depth: 4,
+            y_base: 0.0,
+            wall_height: 3.0,
+            cells,
+        }],
+        stairwells: vec![],
+        yields_to_trapped_mover: false,
+        allows_projectiles: false,
+        is_ground: false,
+    }
+}
+
+/// A restart makes a broken prop solid again under whoever logged out standing
+/// on it, and a dungeon never yields to a trapped mover — so the tick has to
+/// walk the player out instead of pinning them back inside the pillar. The
+/// refusal that found the seal must not also be corrected: that snap carries
+/// the cell they were refused at and would put them straight back in it.
+#[tokio::test]
+async fn a_player_sealed_in_is_walked_out_instead_of_pinned() {
+    let game_state = make_test_game_state("movement_sealed_escape");
+    let player_id = pid("boxed");
+    game_state.add_player(make_player("boxed", 1.5, 1.5)).await;
+    let mut rx = game_state.register_direct_channel(&player_id).await;
+    game_state
+        .passability_write()
+        .insert("dungeon:test".to_string(), sealed_dungeon_entry());
+
+    game_state
+        .update_player_position(
+            &player_id,
+            move_cmd(
+                Position {
+                    x: 1.5,
+                    y: 0.0,
+                    z: 3.5,
+                },
+                false,
+            ),
+            false,
+        )
+        .await;
+    game_state.tick_player_movement(60.0).await;
+
+    let (x, z) = player_xz(&game_state, &player_id).await;
+    assert!(
+        (x - 1.5).abs() <= 1.0 && (z - 1.5).abs() <= 1.0,
+        "moved to an adjoining cell, not across the floor: ({x}, {z})"
+    );
+    assert!(!onlinerpg_shared::pathfinding::is_cell_sealed(
+        &game_state.passability_read(),
+        x,
+        z,
+        0,
+        Some(0.0)
+    ));
+    assert_eq!(
+        first_correction(&mut rx),
+        None,
+        "a rescued player must not be snapped back to the cell they were sealed in"
+    );
+}
+
+/// Furniture parked on a standing player seals their cell in the mask, but
+/// `blocking_entry_for_mover` lets them walk out of it — so pressing into the
+/// one side that is a wall must not read as sealed in and teleport them.
+#[tokio::test]
+async fn furniture_dropped_on_a_player_is_not_a_seal() {
+    let game_state = make_test_game_state("movement_furniture_not_sealed");
+    let player_id = pid("buried");
+    game_state.add_player(make_player("buried", 0.5, 4.5)).await;
+    // Tables on three sides, the room's own wall entry on the fourth.
+    game_state.sync_region_furniture(
+        0,
+        0,
+        &[
+            table_placement(0.5, 5.5),
+            table_placement(1.5, 4.5),
+            table_placement(0.5, 3.5),
+        ],
+    );
+    game_state
+        .passability_write()
+        .insert("dungeon:test".to_string(), sealed_dungeon_entry());
+
+    game_state
+        .update_player_position(
+            &player_id,
+            move_cmd(
+                Position {
+                    x: 0.5,
+                    y: 0.0,
+                    z: 6.5,
+                },
+                false,
+            ),
+            false,
+        )
+        .await;
+    game_state.tick_player_movement(60.0).await;
+
+    assert_eq!(
+        player_xz(&game_state, &player_id).await,
+        (0.5, 4.5),
+        "the player can still walk out from under furniture; nothing should move them"
+    );
+}
+
+/// The escape is only for a mover with no legal step at all: an ordinary bump
+/// into a wall must leave the player where they are.
+#[test]
+fn a_mover_with_a_way_out_is_left_alone() {
+    let mut cache = onlinerpg_shared::pathfinding::PassabilityCache::new();
+    cache.insert("dungeon:test".to_string(), sealed_dungeon_entry());
+    let beside = Position {
+        x: 2.5,
+        y: 0.0,
+        z: 1.5,
+    };
+    assert!(
+        crate::game_state::passability::escape_from_sealed_cell(&cache, &beside, 0, |_, _| true)
+            .is_none()
+    );
+}
+
+const WARRENS_ID: &str = "orc_warrens";
+
+/// The orc warrens with its passability installed, as `init_passability`
+/// does at boot — the runtime alone has no cells.
+async fn warrens_with_passability(tag: &str) -> (GameState, Position) {
+    let game_state = make_test_game_state(tag);
+    game_state.ensure_dungeon_runtime(WARRENS_ID).await;
+    let entrance = game_state
+        .dungeon_defs
+        .get(WARRENS_ID)
+        .expect("orc_warrens def")
+        .position();
+    {
+        let dungeons = game_state.dungeons.read().await;
+        let rt = dungeons.get(WARRENS_ID).expect("warrens runtime");
+        game_state.passability_write().insert(
+            onlinerpg_shared::dungeon::dungeon_cache_key(WARRENS_ID),
+            onlinerpg_shared::dungeon::dungeon_passability(&entrance, &rt.layouts),
+        );
+    }
+    (game_state, entrance)
+}
+
+/// Props cluster in room corners, so the neighbour behind the wall is usually
+/// rock. Every prop of a real dungeon floor, through the same call the
+/// movement tick makes: nothing may land off the carved floor.
+#[tokio::test]
+async fn no_prop_cell_escapes_onto_the_rock_outside_the_maze() {
+    use onlinerpg_shared::dungeon::{cell_center, passability_floor_for_depth, world_to_cell};
+
+    let (game_state, entrance) = warrens_with_passability("movement_escape_stays_carved").await;
+    let depth = 9u8;
+    let props = {
+        let dungeons = game_state.dungeons.read().await;
+        dungeons.get(WARRENS_ID).expect("warrens runtime").layouts[depth as usize - 1]
+            .props
+            .iter()
+            .map(|p| (p.x, p.z))
+            .collect::<Vec<_>>()
+    };
+
+    let mut freed = 0;
+    for (px, pz) in props {
+        let inside = cell_center(&entrance, depth, (px, pz));
+        let Some(out) = game_state
+            .sealed_player_escape(&inside, passability_floor_for_depth(depth))
+            .await
+        else {
+            continue;
+        };
+        freed += 1;
+        let (cx, cz) = world_to_cell(&entrance, out.x, out.z);
+        let dungeons = game_state.dungeons.read().await;
+        let layout =
+            &dungeons.get(WARRENS_ID).expect("warrens runtime").layouts[depth as usize - 1];
+        assert!(
+            layout.is_carved(cx, cz),
+            "prop ({px}, {pz}) escaped onto rock at cell ({cx}, {cz})"
+        );
+    }
+    assert!(freed > 0, "no sealed prop cell on depth {depth} to check");
 }
 
 mod init_passability_boot {
@@ -352,5 +922,61 @@ mod init_passability_boot {
             .await;
         std::fs::remove_dir_all(&terrain_dir).unwrap();
         assert!(result.is_err());
+    }
+}
+
+/// Rock is sealed, not blank: a mover who ends up in it (a floor claimed at a
+/// shaft's margin) cannot roam it, and is not "rescued" into the carved cell
+/// next door — that would be a lift through the wrong floor's walls.
+#[tokio::test]
+async fn rock_is_a_dead_end_with_no_rescue() {
+    use onlinerpg_shared::dungeon::{cell_center, passability_floor_for_depth, GRID};
+
+    let (game_state, entrance) = warrens_with_passability("movement_rock_dead_end").await;
+    let depth = 3u8;
+    let floor = passability_floor_for_depth(depth);
+    let (rock, room, deeper_rock) = {
+        let dungeons = game_state.dungeons.read().await;
+        let layout =
+            &dungeons.get(WARRENS_ID).expect("warrens runtime").layouts[depth as usize - 1];
+        (1..GRID - 1)
+            .flat_map(|z| (1..GRID - 1).map(move |x| (x, z)))
+            .find_map(|(x, z)| {
+                (!layout.is_carved(x, z)
+                    && layout.is_carved(x + 1, z)
+                    && !layout.is_carved(x - 1, z))
+                .then(|| {
+                    (
+                        cell_center(&entrance, depth, (x, z)),
+                        cell_center(&entrance, depth, (x + 1, z)),
+                        cell_center(&entrance, depth, (x - 1, z)),
+                    )
+                })
+            })
+            .expect("rock beside a carved cell")
+    };
+
+    assert!(
+        game_state
+            .sealed_player_escape(&rock, floor)
+            .await
+            .is_none(),
+        "a mover in rock must not be nudged onto the floor"
+    );
+    let cache = game_state.passability_read();
+    for (from, to) in [(rock, room), (room, rock), (rock, deeper_rock)] {
+        assert!(
+            matches!(
+                super::super::passability::resolve_step(
+                    &cache, from.x, from.z, to.x, to.z, floor, from.y
+                ),
+                super::super::passability::StepOutcome::Blocked(_)
+            ),
+            "step ({:.1},{:.1}) -> ({:.1},{:.1}) must be blocked",
+            from.x,
+            from.z,
+            to.x,
+            to.z
+        );
     }
 }

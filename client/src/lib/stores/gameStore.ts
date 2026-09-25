@@ -1,18 +1,39 @@
-import { writable } from 'svelte/store'
+import { manaState } from './manaStore'
+import type { LocalizedMessage } from '../i18n'
+import { resetTeleportEffects } from './teleportEffectStore'
+import { playerHealthDisplay } from './playerHealthDisplay'
+import { derived, get, writable } from 'svelte/store'
 import { SvelteMap } from 'svelte/reactivity'
 import type { Vector3 } from 'three'
-import type { CharacterClass, Gender } from '../network/networkTypes'
+import type { CharacterClass, Gender, MountKind } from '../network/networkTypes'
+import type { HoverTarget } from '../managers/inputHandler'
 import { resetInventoryStore } from './inventoryStore'
+import { resetLandClaimPreview } from './landClaimStore'
 import { resetSkillsStore } from './skillsStore'
+import { resetDaggerSkill } from './daggerSkillStore'
 import { resetPartyStores } from './partyStore'
+import { resetFriendStores } from './friendStore'
+import { clearArrows } from './arrowStore'
 import { resetFishingStore } from './fishingStore'
+import { resetDiscoveredDungeons } from './dungeonStore'
+import { resetHungerStore } from './hungerStore'
+import { resetDebuffStore } from './debuffStore'
+import { resetAbilities } from './abilityStore'
+import { resetInspection } from './inspectionStore'
+import { clearSkillFailure, showSkillFailure } from './skillFailureStore'
+import { resetHousingStore } from './housingStore'
+import { resetInstrumentStore } from './instrumentStore'
+import { stopAllInstrumentAudio } from '../managers/instrumentAudio'
 import { groundItemManager } from '../managers/groundItemManager'
+import { campfireManager } from '../managers/campfireManager'
+import { openStall } from './stallStore'
+import { stallManager } from '../managers/stallManager'
+import { refreshBardZone } from '../managers/bardZone'
 
 export interface PlayerDamageInfo {
   damage: number
   hit: boolean
   trigger: number
-  currentHealth?: number
 }
 
 export interface PlayerGoldInfo {
@@ -29,8 +50,18 @@ interface PlayerBase {
   maxHealth: number
   characterClass: CharacterClass
   gender: Gender
+  mount?: MountKind | null
   torchOn?: boolean
+  radianceOn?: boolean
+  /** Soaked, so nearby clients draw wet footprints (doc/DEBUFF.md). */
+  wet?: boolean
+  /** Shown title id (doc/TITLES.md). */
+  title?: string | null
   mainHand?: string | null
+  back?: string | null
+  /** Dye on that cape, as broadcast with it. */
+  backColor?: string | null
+  backTexture?: string | null
   lastDamageInfo?: PlayerDamageInfo
   lastRegenInfo?: PlayerDamageInfo
   lastGoldInfo?: PlayerGoldInfo
@@ -39,6 +70,9 @@ interface PlayerBase {
 export interface LocalPlayer extends PlayerBase {
   position: Vector3
   rotation: number
+  /** Bumped on each blow that lands, to fire the flinch reaction. Remotes
+   *  keep theirs in remotePlayerManager.hitCounters. */
+  hitCounter?: number
 }
 
 export interface RemotePlayer extends PlayerBase {
@@ -53,13 +87,16 @@ export interface ChatBubble {
   duration: number
 }
 
-export type ChatSender = 'local' | 'remote' | 'system' | 'whisper'
+export type ChatSender = 'local' | 'remote' | 'system' | 'whisper' | 'party'
 
 export interface ChatEntry {
   text: string
   sender: ChatSender
   name?: string
   hit?: boolean
+  whisperDirection?: 'incoming' | 'outgoing'
+  localization?: LocalizedMessage | null
+  autoTranslate?: boolean
 }
 
 /** ChatEntry as stored: `id` is a stable key so the transcript's `{#each}`
@@ -87,16 +124,47 @@ const initialGameState: GameState = {
 }
 
 export const gameStore = writable<GameState>(initialGameState)
+gameStore.subscribe((state) => playerHealthDisplay.sync(state.currentPlayer))
 
-/** World-space anchor + text of the placed object (e.g. signpost) currently
- *  under the cursor, or null when none. Drives the hover speech bubble. */
-export interface HoveredSignpost {
-  x: number
-  y: number
-  z: number
-  text: string
+/** What the cursor is over (texted object, ground item or monster), or null.
+ *  Single source of truth: each hover overlay reads the variant it renders,
+ *  so no two can be showing at once. */
+export const hoverTarget = writable<HoverTarget | null>(null)
+
+/** Placed object (e.g. signpost) under the cursor. Drives the speech bubble. */
+export const hoveredSignpost = derived(hoverTarget, (target) =>
+  target?.kind === 'text' ? target : null
+)
+
+/** Drop a 'name' hover: its target is a positional snapshot, so when the
+ *  entity vanishes under a resting cursor (picked-up tip hat, closed stall)
+ *  the label and ring would freeze in place until the next pointermove. */
+export function clearNameHover() {
+  if (get(hoverTarget)?.kind === 'name') hoverTarget.set(null)
 }
-export const hoveredSignpost = writable<HoveredSignpost | null>(null)
+
+/** Interactable prop under the cursor (tip hat, stall, chest). Drives the
+ *  name label and target ring. */
+export const hoveredNameLabel = derived(hoverTarget, (target) =>
+  target?.kind === 'name' ? target : null
+)
+
+/** Ground item under the cursor. Every ground item subscribes, so this is
+ *  derived to a plain id — a number the store dedupes, rather than an object
+ *  that would wake all of them on any hover change. */
+export const hoveredGroundItemId = derived(hoverTarget, (target) =>
+  target?.kind === 'groundItem' ? target.instanceId : null
+)
+
+/** Monster under the cursor, as a deduped plain id for the same reason. */
+export const hoveredMonsterId = derived(hoverTarget, (target) =>
+  target?.kind === 'monster' ? target.monsterId : null
+)
+
+/** Remote player (NPC or not) under the cursor, deduped like the above. */
+export const hoveredPlayerId = derived(hoverTarget, (target) =>
+  target?.kind === 'player' ? target.playerId : null
+)
 
 /** Set from JoinSuccess; unlocks debug/cheat UI (server re-validates). */
 export const isAdminUser = writable(false)
@@ -105,18 +173,47 @@ export const isAdminUser = writable(false)
  *  `gameStore` so the HUD banner doesn't resubscribe on every game update. */
 export const serverNotice = writable<string | null>(null)
 
+const hasCurrentPlayer = derived(
+  gameStore,
+  (game) => game.currentPlayer !== null
+)
+
+export const visibleMana = derived(
+  [manaState, hasCurrentPlayer],
+  ([mana, visible]) => (visible ? mana : null)
+)
+
 export const resetGameStore = () => {
+  resetTeleportEffects()
+  manaState.set(null)
+  resetDaggerSkill()
+  resetLandClaimPreview()
   gameStore.set({
     ...initialGameState,
     otherPlayers: new SvelteMap(),
     chatBubbles: new Map(),
   })
+  refreshBardZone(new Map())
   isAdminUser.set(false)
   resetInventoryStore()
   resetSkillsStore()
   resetFishingStore()
+  clearArrows()
   resetPartyStores()
+  resetFriendStores()
+  resetDiscoveredDungeons()
+  resetHungerStore()
+  resetDebuffStore()
+  resetAbilities()
+  resetInspection()
+  clearSkillFailure()
+  resetHousingStore()
+  resetInstrumentStore()
+  stopAllInstrumentAudio()
   groundItemManager.reset()
+  campfireManager.reset()
+  stallManager.reset()
+  openStall.set(null)
 }
 
 const MAX_MESSAGES = 100
@@ -165,16 +262,31 @@ export const addChatMessage = (entry: ChatEntry) =>
 export const addCombatMessage = (entry: ChatEntry) =>
   addMessageTo('combatMessages', entry)
 
+export function reportSkillFailure(
+  text: string,
+  channel: 'chat' | 'combat' = 'chat'
+) {
+  if (channel === 'combat') addCombatMessage({ text, sender: 'local' })
+  else addChatMessage({ text, sender: 'system' })
+  showSkillFailure(text)
+}
+
 const MIN_BUBBLE_DURATION = 5000
 const MAX_BUBBLE_DURATION = 10000
 
-export const addChatBubble = (playerId: number, message: string) => {
+export const addChatBubble = (
+  playerId: number,
+  message: string,
+  holdMs?: number
+) => {
   gameStore.update((state) => {
     const newChatBubbles = new Map(state.chatBubbles)
-    const duration = Math.min(
-      MAX_BUBBLE_DURATION,
-      Math.max(MIN_BUBBLE_DURATION, MIN_BUBBLE_DURATION + message.length * 50)
-    )
+    const duration =
+      holdMs ??
+      Math.min(
+        MAX_BUBBLE_DURATION,
+        Math.max(MIN_BUBBLE_DURATION, MIN_BUBBLE_DURATION + message.length * 50)
+      )
     newChatBubbles.set(playerId, {
       playerId,
       message,

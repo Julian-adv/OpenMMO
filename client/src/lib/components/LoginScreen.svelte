@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t } from '../i18n'
+  import { assetUrl } from '../utils/assetUrl'
   import { onMount } from 'svelte'
   import { getDefaultServerUrl } from '../utils/networkUtils'
   import AnnouncementsPanel from './AnnouncementsPanel.svelte'
@@ -26,7 +28,7 @@
       if (existing) {
         existing.addEventListener('load', () => resolve())
         existing.addEventListener('error', () =>
-          reject(new Error('Failed to load Google Sign-In'))
+          reject(new Error($t('login.googleLoad')))
         )
         return
       }
@@ -34,7 +36,7 @@
       script.src = GSI_SRC
       script.async = true
       script.onload = () => resolve()
-      script.onerror = () => reject(new Error('Failed to load Google Sign-In'))
+      script.onerror = () => reject(new Error($t('login.googleLoad')))
       document.head.appendChild(script)
     })
   }
@@ -46,12 +48,12 @@
     try {
       const result = await onLogin(getDefaultServerUrl(), response.credential)
       if (!result.ok) {
-        errorMessage = result.message ?? 'Authentication failed'
+        errorMessage = result.message ?? $t('login.failed')
       }
     } catch (e) {
       // onLogin can reject (e.g. WASM init failure) — without this the button
       // stays disabled with no message.
-      errorMessage = e instanceof Error ? e.message : 'Authentication failed'
+      errorMessage = e instanceof Error ? e.message : $t('login.failed')
     } finally {
       isConnecting = false
     }
@@ -59,8 +61,11 @@
 
   onMount(async () => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
+    // Comparing against the container build's placeholder is not possible here:
+    // Vite inlines this, so the check would fold to a constant and let the
+    // minifier drop the placeholder the entrypoint has to substitute.
     if (!clientId) {
-      errorMessage = 'VITE_GOOGLE_CLIENT_ID is not configured'
+      errorMessage = $t('login.unavailable')
       return
     }
 
@@ -73,7 +78,7 @@
 
     const googleId = window.google?.accounts?.id
     if (!googleId || !buttonContainer) {
-      errorMessage = 'Google Sign-In failed to initialize'
+      errorMessage = $t('login.googleInit')
       return
     }
 
@@ -102,7 +107,7 @@
     href="https://github.com/Julian-adv/OpenMMO"
     target="_blank"
     rel="noopener noreferrer"
-    aria-label="GitHub repository"
+    aria-label={$t('login.repository')}
   >
     <svg viewBox="0 0 16 16" width="28" height="28" fill="currentColor">
       <path
@@ -124,7 +129,11 @@
           width="256"
           height="256"
         >
-          <image href="/textures/flowerx4.png" width="256" height="256" />
+          <image
+            href={assetUrl('/textures/flowerx4.png')}
+            width="256"
+            height="256"
+          />
         </pattern>
       </defs>
       <text stroke="white" stroke-width="3" paint-order="stroke">
@@ -153,7 +162,7 @@
       <div class="google-signin" class:connecting={isConnecting}>
         <div bind:this={buttonContainer}></div>
         {#if isConnecting}
-          <div class="connecting-label">Connecting...</div>
+          <div class="connecting-label">{$t('login.connecting')}</div>
         {/if}
       </div>
     </div>
@@ -270,6 +279,8 @@
     text-align: center;
     font-family:
       -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    user-select: text;
+    -webkit-user-select: text;
   }
 
   .error-message {
@@ -282,6 +293,8 @@
     font-size: 13px;
     font-family:
       -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    user-select: text;
+    -webkit-user-select: text;
   }
 
   @media (max-width: 600px), (max-height: 700px) {

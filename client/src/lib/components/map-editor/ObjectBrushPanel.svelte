@@ -20,14 +20,13 @@
   import { objectManager } from '../../managers/objectManager'
   import { furnitureManager } from '../../managers/furnitureManager'
   import {
+    deleteSelectedPlacement,
+    duplicateSelectedPlacement,
+  } from './object-edit'
+  import {
     rotatedRectAabb,
     type FootprintRect,
   } from '../../utils/objectFootprint'
-  import { removeGrassInRect } from '../../utils/grass-data'
-  import {
-    worldToTileCoord,
-    tileKey,
-  } from '../../managers/terrain-height-types'
   import {
     playerVisualFloorLevel,
     playerInsideHouseId,
@@ -286,65 +285,9 @@
         }
       })
 
-      const gm = grassManager
-      if (!gm) return
-
-      // eslint-disable-next-line svelte/prefer-svelte-reactivity
-      const tileBuckets = new Map<
-        string,
-        { tx: number; tz: number; rects: FootprintRect[] }
-      >()
-      for (const wr of worldRects) {
-        const txMin = worldToTileCoord(wr.minX)
-        const txMax = worldToTileCoord(wr.maxX)
-        const tzMin = worldToTileCoord(wr.minZ)
-        const tzMax = worldToTileCoord(wr.maxZ)
-        for (let tx = txMin; tx <= txMax; tx++) {
-          for (let tz = tzMin; tz <= tzMax; tz++) {
-            const key = tileKey(tx, tz)
-            let bucket = tileBuckets.get(key)
-            if (!bucket) {
-              bucket = { tx, tz, rects: [] }
-              tileBuckets.set(key, bucket)
-            }
-            bucket.rects.push(wr)
-          }
-        }
-      }
-
-      await Promise.all(
-        [...tileBuckets.values()].map(async ({ tx, tz, rects }) => {
-          let data =
-            gm.getCachedGrassData(tx, tz) ?? (await gm.loadGrassData(tx, tz))
-          if (!data) return
-          let changed = false
-          for (const r of rects) {
-            const next = removeGrassInRect(data, r.minX, r.minZ, r.maxX, r.maxZ)
-            if (next) {
-              data = next
-              changed = true
-            }
-          }
-          if (changed) await gm.saveGrassData(tx, tz, data)
-        })
-      )
+      await grassManager?.removeGrassInRects(worldRects)
     } finally {
       flattening = false
-    }
-  }
-
-  async function deletePlacement() {
-    if (selectedPlacementId === null) return
-    const data = get(currentObjectData)
-    const updated: ObjectRegionData = {
-      placements: data.placements.filter((p) => p.id !== selectedPlacementId),
-    }
-    currentObjectData.set(updated)
-    selectedObjectPlacementId.set(null)
-
-    const region = get(currentEditorRegion)
-    if (region) {
-      await objectManager.saveObject(region.rx, region.rz, updated)
     }
   }
 
@@ -418,6 +361,10 @@
           <span class="info-value">{selectedPlacement.type}</span>
         </div>
         <div class="coord-row">
+          <span class="info-label">ID:</span>
+          <span class="info-value">{selectedPlacement.id}</span>
+        </div>
+        <div class="coord-row">
           <span class="info-label">Pos:</span>
           <span class="info-value">{formatPos(selectedPlacement)}</span>
         </div>
@@ -489,6 +436,26 @@
           <span class="info-label">Floor:</span>
           <span class="info-value">{selectedPlacement.floorLevel + 1}F</span>
         </div>
+        {#if selectedDef?.procedural === 'shopSign'}
+          <label class="text-field">
+            <span class="info-label">Style:</span>
+            <select
+              class="text-input"
+              value={selectedPlacement.type}
+              onchange={(e) => {
+                applyPatch({
+                  type: e.currentTarget.value,
+                  text: textDraft.trim() || undefined,
+                })
+                scheduleSave()
+              }}
+            >
+              {#each catalog.filter((item) => item.procedural === 'shopSign') as sign (sign.id)}
+                <option value={sign.id}>{sign.name}</option>
+              {/each}
+            </select>
+          </label>
+        {/if}
         {#if selectedDef?.textLabel}
           <div class="text-field">
             <span class="info-label">Text:</span>
@@ -504,29 +471,22 @@
           </div>
         {/if}
         <button
-          class="flatten-btn"
+          class="panel-btn flatten-btn"
           onclick={flattenTerrain}
           disabled={flattening || !heightManager}
         >
           {flattening ? 'Flattening…' : 'Flatten Terrain'}
         </button>
-        <button class="delete-btn" onclick={deletePlacement}>Delete</button>
+        <button class="panel-btn dup-btn" onclick={duplicateSelectedPlacement}>
+          Duplicate (Ctrl+D)
+        </button>
+        <button class="panel-btn delete-btn" onclick={deleteSelectedPlacement}>
+          Delete
+        </button>
       </div>
     {:else}
       <div class="draw-hint">Click a placed object to select</div>
     {/if}
-  {/if}
-
-  {#if placements.length > 0}
-    <div class="section-label">Placed ({placements.length})</div>
-    <div class="placement-list">
-      {#each placements as p (p.id)}
-        <div class="placement-row" class:active={p.id === selectedPlacementId}>
-          <span class="placement-type">{p.type}</span>
-          <span class="placement-pos">{formatPos(p)}</span>
-        </div>
-      {/each}
-    </div>
   {/if}
 </div>
 
@@ -738,18 +698,22 @@
     color: #666;
   }
 
-  .flatten-btn {
+  .panel-btn {
     margin-top: 4px;
     width: 100%;
     padding: 5px;
-    background: rgba(68, 204, 255, 0.15);
-    border: 1px solid rgba(68, 204, 255, 0.4);
+    border: 1px solid transparent;
     border-radius: 4px;
-    color: #44ccff;
     cursor: pointer;
     font-family: inherit;
     font-size: 11px;
     font-weight: bold;
+  }
+
+  .flatten-btn {
+    background: rgba(68, 204, 255, 0.15);
+    border-color: rgba(68, 204, 255, 0.4);
+    color: #44ccff;
   }
 
   .flatten-btn:hover:not(:disabled) {
@@ -762,56 +726,23 @@
   }
 
   .delete-btn {
-    margin-top: 4px;
-    width: 100%;
-    padding: 5px;
     background: rgba(255, 60, 60, 0.2);
-    border: 1px solid rgba(255, 60, 60, 0.4);
-    border-radius: 4px;
+    border-color: rgba(255, 60, 60, 0.4);
     color: #ff6666;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: 11px;
-    font-weight: bold;
+  }
+
+  .dup-btn {
+    background: rgba(80, 160, 255, 0.2);
+    border-color: rgba(80, 160, 255, 0.4);
+    color: #7fb8ff;
+  }
+
+  .dup-btn:hover {
+    background: rgba(80, 160, 255, 0.35);
   }
 
   .delete-btn:hover {
     background: rgba(255, 60, 60, 0.35);
-  }
-
-  .placement-list {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    max-height: 100px;
-    overflow-y: auto;
-  }
-
-  .placement-row {
-    display: flex;
-    gap: 6px;
-    padding: 3px 6px;
-    border-radius: 3px;
-    font-size: 10px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-  }
-
-  .placement-row.active {
-    background: rgba(68, 204, 255, 0.15);
-    border-color: rgba(68, 204, 255, 0.4);
-  }
-
-  .placement-type {
-    color: #e2b93b;
-    font-weight: bold;
-    width: 50px;
-    flex-shrink: 0;
-  }
-
-  .placement-pos {
-    color: #888;
-    flex: 1;
   }
 
   .draw-hint {

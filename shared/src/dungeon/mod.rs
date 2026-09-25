@@ -32,19 +32,23 @@ mod stairs;
 #[cfg(test)]
 mod tests;
 
-pub use doors::{closed_door_segs, interior_doors, InteriorDoorSpec, ENTRANCE_DOOR_ID};
+pub use doors::{
+    closed_door_segs, door_position, interior_doors, locked_door_ids, InteriorDoorSpec,
+    ENTRANCE_DOOR_ID,
+};
 pub use registry::{entrance, entrance_at, entrances, footprint_contains, DungeonEntranceDef};
 pub use stairs::{
-    entrance_ramp_height_at, floor_height_at, ground_y_for_floor, shaft_run_pos, LANDING_CELLS,
+    entrance_ramp_height_at, floor_height_at, ground_y_for_floor, leg_touches_shaft,
+    on_stair_shaft, shaft_run_pos, FLOOR_CHANGE_LEG_MAX, LANDING_CELLS, SHAFT_CHANGE_MARGIN,
 };
 
 use serde::Serialize;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 
 use crate::pathfinding::{
-    PassabilityCache, RuntimeFloorGrid, RuntimePassability, StairwellInfo, EDGE_E, EDGE_N, EDGE_S,
-    EDGE_W,
+    PassabilityCache, RuntimeFloorGrid, RuntimePassability, StairwellInfo, DIRS, EDGE_E, EDGE_N,
+    EDGE_S, EDGE_W,
 };
 use crate::world::Position;
 
@@ -76,15 +80,51 @@ pub const MAX_DEPTH: u8 = 20;
 pub const SHAFT_W: i32 = 2;
 pub const SHAFT_LEN: i32 = 8;
 
+/// Every `LOCKED_FLOOR_INTERVAL`th floor keeps its stair room shut behind a
+/// door that only that floor's key opens (doc/DUNGEON_REWARD.md).
+pub const LOCKED_FLOOR_INTERVAL: u8 = 5;
+
+pub fn is_locked_depth(depth: u8) -> bool {
+    depth > 0 && depth.is_multiple_of(LOCKED_FLOOR_INTERVAL)
+}
+
+/// Locked depths of a `total`-floor dungeon, shallowest first.
+pub fn locked_depths(total: u8) -> impl Iterator<Item = u8> {
+    (1..=total).filter(|d| is_locked_depth(*d))
+}
+
+/// The deepest locked floor — its key is what the treasure chest takes.
+pub fn last_locked_depth(total: u8) -> Option<u8> {
+    locked_depths(total).last()
+}
+
+/// The locked floor whose key the monsters of `depth` carry: the next locked
+/// floor down, unless `depth` is itself locked (or nothing is locked below).
+pub fn key_depth_for(depth: u8, total: u8) -> Option<u8> {
+    if is_locked_depth(depth) {
+        return None;
+    }
+    locked_depths(total).find(|&l| l > depth)
+}
+
+/// The locked floor that matters on `depth`: itself when locked, else the
+/// next one down.
+pub fn relevant_key_depth(depth: u8, total: u8) -> Option<u8> {
+    if is_locked_depth(depth) {
+        Some(depth)
+    } else {
+        key_depth_for(depth, total)
+    }
+}
+
+/// The floors whose kills and clutter drop `key_depth`'s key.
+pub fn key_drop_floors(key_depth: u8) -> std::ops::RangeInclusive<u8> {
+    key_depth + 1 - LOCKED_FLOOR_INTERVAL..=key_depth - 1
+}
+
 /// Default final-floor boss, used when a dungeons.csv row leaves its `boss`
 /// column blank and by seed-only property tests.
 pub const BOSS_MONSTER_TYPE: &str = "goblin_boss";
-
-/// How far a player's Y may sit from a floor's world Y and still be accepted
-/// as standing on it. Part of the wire contract: a client declaring a dungeon
-/// floor is refused outside this band (`validated_dungeon_floor`), and any
-/// client computing its own Y underground must stay inside it.
-pub const FLOOR_Y_TOLERANCE: f32 = 2.5;
 
 /// A* node budget for long in-dungeon path queries. Maze floors plus the
 /// open-surface leak through the entrance stairwell can exhaust the
@@ -117,7 +157,7 @@ impl Room {
         x >= self.x && x < self.x + self.w && z >= self.z && z < self.z + self.d
     }
 
-    fn expanded(&self, by: i32) -> Room {
+    pub fn expanded(&self, by: i32) -> Room {
         Room {
             x: self.x - by,
             z: self.z - by,
@@ -126,7 +166,7 @@ impl Room {
         }
     }
 
-    fn intersects(&self, other: &Room) -> bool {
+    pub fn intersects(&self, other: &Room) -> bool {
         self.x < other.x + other.w
             && self.x + self.w > other.x
             && self.z < other.z + other.d
@@ -200,16 +240,15 @@ pub struct SpawnSpec {
     pub z: i32,
     pub monster_type: String,
     pub is_boss: bool,
-    /// Proactive (선공형) monster: attacks players on sight instead of only
-    /// retaliating when hit. Designated per entry in [`spawn_table`].
+    /// Attacks on sight, as configured by [`spawn_table_for`].
     pub aggressive: bool,
 }
 
 /// Clutter prop dropped into a room. Every kind but [`PropKind::TorchWall`]
 /// becomes a 1×1 collision pillar in the passability grid (see
 /// [`floor_passability_cells_full`]), so a mover routes around it and a path
-/// can never end on its cell — unlike the treasure chest, which carries no
-/// collision. Breaking a barrel or crate opens its cell again. The string
+/// can never end on its cell (the treasure chest is sealed the same way).
+/// Breaking a barrel or crate opens its cell again. The string
 /// variants match the object-catalog ids (`barrel`/`crate`/`chest`/`torch_wall`)
 /// the client loads the GLB for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -223,6 +262,14 @@ pub enum PropKind {
     TorchWall,
 }
 
+impl PropKind {
+    /// Wall torches hang high on the wall, not on the floor; every other kind
+    /// seals its cell.
+    pub fn is_solid(self) -> bool {
+        !matches!(self, PropKind::TorchWall)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PropSpec {
@@ -231,10 +278,11 @@ pub struct PropSpec {
     pub kind: PropKind,
     /// How many of `kind` are stacked vertically (1 or 2). Chests never stack.
     pub stack: u8,
-    /// Yaw in whole degrees (0..360). Meaning depends on `kind`: for clutter
-    /// (barrel/crate/chest) it's a random jitter for variety; for `TorchWall`
-    /// it's the room-facing direction the client mounts it by (north wall → 0,
-    /// east wall → 270).
+    /// Yaw in whole degrees (0..360). Meaning depends on `kind`: for
+    /// barrel/crate it's a random jitter for variety; for `Chest` it's the
+    /// back-wall yaw the client seats the hinge by (N 0, S 180, W 90, E 270);
+    /// for `TorchWall` it's the room-facing direction the client mounts it by
+    /// (north wall → 0, east wall → 270).
     pub rotation: u16,
 }
 
@@ -250,11 +298,11 @@ pub struct FloorLayout {
     pub up_shaft: StairShaft,
     /// Shaft descending to the next floor; `None` on the final floor.
     pub down_shaft: Option<StairShaft>,
-    /// Treasure chest cell, only on the final floor.
+    /// Treasure chest cell, only on the final floor. A 1×1 collision pillar
+    /// like the clutter props, so players walk up to it instead of through it.
     pub chest: Option<(i32, i32)>,
     pub spawns: Vec<SpawnSpec>,
-    /// Decorative barrels/crates/chests clustered in room corners. Cosmetic
-    /// only (no collision) — see [`PropSpec`].
+    /// Barrels/crates/chests clustered in room corners — see [`PropSpec`].
     pub props: Vec<PropSpec>,
 }
 
@@ -267,6 +315,29 @@ impl FloorLayout {
     /// that no room's rect reaches.
     pub fn room_at(&self, x: i32, z: i32) -> Option<&Room> {
         self.rooms.iter().find(|r| r.contains(x, z))
+    }
+
+    /// Cells a mover can stand in beside `cell` — carved, no solid prop on
+    /// them. Where you wait to open or smash whatever seals `cell`.
+    pub fn approach_cells(&self, cell: (i32, i32)) -> impl Iterator<Item = (i32, i32)> + '_ {
+        DIRS.into_iter()
+            .map(move |(dx, dz)| (cell.0 + dx, cell.1 + dz))
+            .filter(|&(x, z)| {
+                self.is_carved(x, z)
+                    && !self
+                        .props
+                        .iter()
+                        .any(|p| (p.x, p.z) == (x, z) && p.kind.is_solid())
+            })
+    }
+
+    /// Where a mover stands to reach `cell`: the cell itself, unless the chest
+    /// seals it for good — then a neighbour.
+    pub fn stand_cell(&self, cell: (i32, i32)) -> (i32, i32) {
+        if self.chest != Some(cell) {
+            return cell;
+        }
+        self.approach_cells(cell).next().unwrap_or(cell)
     }
 
     /// Pick a walkable world position to drop loot near a monster's death
@@ -331,16 +402,10 @@ impl FloorLayout {
     }
 }
 
-/// FNV-1a 64 over the entrance id. Implemented inline because
-/// `DefaultHasher` is not stable across Rust releases and the seed must
-/// match between independently-built server and client binaries.
+/// FNV-1a 64 over the entrance id — see `crate::fnv` for why not
+/// `DefaultHasher`.
 pub fn dungeon_seed(entrance_id: &str) -> u64 {
-    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for b in entrance_id.as_bytes() {
-        h ^= *b as u64;
-        h = h.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-    h
+    crate::fnv::fnv1a64(crate::fnv::FNV_OFFSET, entrance_id.bytes())
 }
 
 /// Total floor count for a dungeon, 5..=20, derived from the seed.
@@ -349,14 +414,10 @@ pub(crate) fn dungeon_depth(seed: u64) -> u8 {
     gen::dungeon_depth(seed)
 }
 
-/// Generate every floor of the dungeon. Cheap enough (≤20 grids of 56×56
-/// cells) that callers always generate the full dungeon and index into it.
-/// Test-only: real dungeons must go through `generate_dungeon_for` so the
-/// csv floor override applies; this seed-only form exists for property tests
-/// over arbitrary seeds.
+/// Seed-only generation for property tests; real dungeons use the registry.
 #[cfg(test)]
 pub(crate) fn generate_dungeon(seed: u64) -> Vec<FloorLayout> {
-    gen::generate_dungeon_with(seed, None, BOSS_MONSTER_TYPE, None)
+    gen::generate_dungeon_with(seed, None, BOSS_MONSTER_TYPE, None, "")
 }
 
 /// Generate a dungeon by entrance id: seed derived from the id, floor count,
@@ -368,7 +429,8 @@ pub fn generate_dungeon_for(entrance_id: &str) -> Vec<FloorLayout> {
     let floors = def.and_then(|d| d.floors);
     let boss = def.map_or(BOSS_MONSTER_TYPE, |d| d.boss.as_str());
     let dir = def.and_then(|d| d.entrance_dir);
-    gen::generate_dungeon_with(dungeon_seed(entrance_id), floors, boss, dir)
+    let group = def.map_or("", |d| d.spawn_group.as_str());
+    gen::generate_dungeon_with(dungeon_seed(entrance_id), floors, boss, dir, group)
 }
 
 pub fn passability_floor_for_depth(depth: u8) -> u8 {
@@ -441,7 +503,17 @@ pub fn world_to_cell(entrance: &Position, x: f32, z: f32) -> (i32, i32) {
 
 /// Passability cache key for a dungeon (one entry covers every floor).
 pub fn dungeon_cache_key(entrance_id: &str) -> String {
-    format!("dungeon:{entrance_id}")
+    format!("{DUNGEON_KEY_PREFIX}{entrance_id}")
+}
+
+/// Namespace `dungeon_cache_key` builds, so callers can recognise its keys
+/// without re-deriving the prefix.
+pub const DUNGEON_KEY_PREFIX: &str = "dungeon:";
+
+/// Whether a passability block key names a dungeon (rather than furniture or
+/// a house).
+pub fn is_dungeon_cache_key(key: &str) -> bool {
+    key.starts_with(DUNGEON_KEY_PREFIX)
 }
 
 /// One weighted entry in a depth's spawn table. `aggressive` makes that dungeon
@@ -455,23 +527,15 @@ pub struct SpawnEntry {
     pub aggressive: bool,
 }
 
-/// Per-depth spawn tables indexed by depth (`0..=MAX_DEPTH`), built once from
-/// the monster table. The dungeon generator runs in the shared crate on both
-/// native (server) and wasm32 (client), so the data is baked in at compile
-/// time via `include_str!` — runtime file IO would risk desync. We read the
-/// SOURCE csv directly (not the generated `data/monsters.json`) because that
-/// JSON is produced by a build script whose ordering relative to this crate
-/// isn't guaranteed; reading the csv keeps a `cargo build` after a csv edit
-/// self-consistent. Entries stay in csv row order — stable and identical on
-/// both sides — which the weighted pick in `roll_spawns` relies on.
-static SPAWN_TABLES: LazyLock<Vec<Vec<SpawnEntry>>> =
+/// Embedded groups preserve CSV order for identical native/WASM draws.
+static SPAWN_TABLES: LazyLock<HashMap<String, Vec<Vec<SpawnEntry>>>> =
     LazyLock::new(|| build_spawn_tables(include_str!("../../../data-src/monsters.csv")));
 
-fn build_spawn_tables(csv: &str) -> Vec<Vec<SpawnEntry>> {
-    let mut tables: Vec<Vec<SpawnEntry>> = vec![Vec::new(); MAX_DEPTH as usize + 1];
+fn build_spawn_tables(csv: &str) -> HashMap<String, Vec<Vec<SpawnEntry>>> {
+    let mut groups = HashMap::new();
     let mut lines = csv.lines();
     let Some(header) = lines.next() else {
-        return tables;
+        return groups;
     };
     let cols: Vec<&str> = header.split(',').map(str::trim).collect();
     let col = |name: &str| {
@@ -479,12 +543,13 @@ fn build_spawn_tables(csv: &str) -> Vec<Vec<SpawnEntry>> {
             .position(|c| *c == name)
             .unwrap_or_else(|| panic!("monsters.csv missing `{name}` column"))
     };
-    let (id_col, min_col, max_col, weight_col, aggr_col) = (
+    let (id_col, min_col, max_col, weight_col, aggr_col, group_col) = (
         col("id"),
         col("dungeonMinDepth"),
         col("dungeonMaxDepth"),
         col("dungeonWeight"),
         col("dungeonAggressive"),
+        col("dungeonGroup"),
     );
 
     for line in lines {
@@ -510,36 +575,36 @@ fn build_spawn_tables(csv: &str) -> Vec<Vec<SpawnEntry>> {
             weight,
             aggressive: field(aggr_col) == "true",
         };
+        let tables = groups
+            .entry(field(group_col).to_string())
+            .or_insert_with(|| vec![Vec::new(); MAX_DEPTH as usize + 1]);
         for depth in min..=max {
             tables[depth as usize].push(entry.clone());
         }
     }
-    tables
+    groups
 }
 
-/// Weighted monster entries that can spawn at `depth`, in stable csv order, or
-/// an empty slice if none cover it. Tune via the `dungeon*` columns of
-/// monsters.csv.
-pub fn spawn_table(depth: u8) -> &'static [SpawnEntry] {
+/// Weighted entries for a group and depth, in stable CSV order.
+pub fn spawn_table_for(group: &str, depth: u8) -> &'static [SpawnEntry] {
     SPAWN_TABLES
-        .get(depth as usize)
+        .get(group)
+        .and_then(|tables| tables.get(depth as usize))
         .map(Vec::as_slice)
         .unwrap_or(&[])
 }
 
-/// Effective monster level at a given depth. Shallow floors use the
-/// definition level untouched; below depth 4 monsters gain +1 level per
-/// two floors, capped at 20.
+/// Depth bonuses cap at 20 without lowering a monster's base level.
 pub fn monster_level_for_depth(def_level: u8, depth: u8) -> u8 {
     if depth <= 4 {
         def_level
     } else {
-        (def_level as u32 + (depth as u32 - 4) / 2).min(20) as u8
+        ((def_level as u32 + (depth as u32 - 4) / 2).min(20) as u8).max(def_level)
     }
 }
 
-/// All four edge bits set: a fully sealed, impassable cell. Used to turn a
-/// decorative prop's cell into a 1×1 collision pillar (see `roll_props`).
+/// All four edge bits set: a fully sealed, impassable cell — uncarved rock,
+/// or a decorative prop's 1×1 collision pillar (see `roll_props`).
 pub(crate) const EDGE_ALL: u8 = EDGE_N | EDGE_E | EDGE_S | EDGE_W;
 
 /// Edge-bitmask cells for one floor, derived from its carved mask plus walls
@@ -556,7 +621,7 @@ pub fn floor_passability_cells(layout: &FloorLayout) -> Vec<u8> {
 }
 
 /// OR an edge bit into a floor cell, ignoring out-of-grid coordinates. Shared by
-/// the shaft-walling and door-sealing passes, both of which seal grid boundaries.
+/// every sealing pass below (shafts, props, chest, doors).
 fn or_edge_bit(cells: &mut [u8], x: i32, z: i32, bit: u8) {
     if (0..GRID).contains(&x) && (0..GRID).contains(&z) {
         cells[(x + z * GRID) as usize] |= bit;
@@ -589,12 +654,14 @@ fn floor_passability_cells_inner(
 ) -> Vec<u8> {
     let mut cells = vec![0u8; (GRID * GRID) as usize];
 
+    // Rock is sealed on every side, so a mover put there cannot roam it.
     for z in 0..GRID {
         for x in 0..GRID {
+            let idx = (x + z * GRID) as usize;
             if !layout.is_carved(x, z) {
+                cells[idx] = EDGE_ALL;
                 continue;
             }
-            let idx = (x + z * GRID) as usize;
             if !layout.is_carved(x, z - 1) {
                 cells[idx] |= EDGE_N;
             }
@@ -695,17 +762,14 @@ fn floor_passability_cells_inner(
     // their own, so `roll_props` runs a reachability backstop (with each prop's
     // seal applied here) and rejects any prop that would close a route.
     for (i, p) in layout.props.iter().enumerate() {
-        if broken.contains(&(i as u32)) {
-            continue;
+        if p.kind.is_solid() && !broken.contains(&(i as u32)) {
+            or_edge_bit(&mut cells, p.x, p.z, EDGE_ALL);
         }
-        // Wall torches hang high on the wall, not on the floor — they're purely
-        // cosmetic and never block a player or monster.
-        if matches!(p.kind, PropKind::TorchWall) {
-            continue;
-        }
-        if p.x >= 0 && p.x < GRID && p.z >= 0 && p.z < GRID {
-            cells[(p.x + p.z * GRID) as usize] |= EDGE_ALL;
-        }
+    }
+
+    // The chest never breaks open, so its cell stays sealed for good.
+    if let Some((cx, cz)) = layout.chest {
+        or_edge_bit(&mut cells, cx, cz, EDGE_ALL);
     }
 
     // Seal shut interior doors at corridor mouths. The carve pass above leaves a
@@ -717,7 +781,7 @@ fn floor_passability_cells_inner(
     // east-wall door seals EDGE_E / EDGE_W across the two columns. ORing both
     // cells' bits is what `is_*_blocked` checks, so sealing one side suffices,
     // but we seal both for symmetry with the carve pass.
-    for q in closed_door_segs.chunks_exact(4) {
+    for q in closed_door_segs.as_chunks::<4>().0 {
         let (ax, az, bx, bz) = (q[0], q[1], q[2], q[3]);
         if az == bz {
             // North-wall door: opening spans x in [ax, bx) on wall line z = az.
@@ -845,6 +909,8 @@ pub fn dungeon_passability(entrance: &Position, layouts: &[FloorLayout]) -> Runt
         floors,
         stairwells,
         yields_to_trapped_mover: false,
+        allows_projectiles: false,
+        is_ground: false,
     }
 }
 

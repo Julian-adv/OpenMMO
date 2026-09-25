@@ -1,93 +1,156 @@
-//! Movement execution: A*-driven walks, schedule transitions, and the
-//! housing-data prefetch that lets pathfinding avoid buildings before the
-//! NPC starts moving.
+//! Schedule transitions, forced moves, and the housing-data prefetch that
+//! lets pathfinding avoid buildings before the NPC starts moving. The walking
+//! itself belongs to `walk`.
 
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::Duration;
 
 use onlinerpg_shared::furniture::FurniturePlacement;
-use onlinerpg_shared::housing::{HouseData, WallDirection, WallVariant};
-use onlinerpg_shared::pathfinding::{self, PathWaypoint};
-use onlinerpg_shared::ClientMessage;
+use onlinerpg_shared::{ClientMessage, Position};
 use onlinerpg_terrain::coords::{tile_to_region, world_to_tile};
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
+use super::walk;
 use crate::geom::PlanarDelta;
-use crate::orchestrator::ScheduleEntry;
 use crate::state::SharedState;
+use crate::terrain_http::http_client;
+use onlinerpg_shared::schedule::{ScheduleCondition, ScheduleEntry};
 
-use super::prompt::resolve_active_schedule;
+use onlinerpg_shared::schedule::resolve_active_schedule;
 
 pub(super) const MOVE_SPEED: f32 = onlinerpg_shared::PLAYER_MOVE_SPEED;
+
+/// How long a step takes at the speed the server actually moves us: the
+/// hunger/debuff move multiplier the server folds into its step budget, times
+/// the sprint multiplier. Pace faster than the server walks and every step
+/// leaves from a stale position.
+pub(super) fn travel_ms(step_dist: f32, sprinting: bool, move_mult: f32) -> u64 {
+    let speed =
+        MOVE_SPEED * move_mult.max(0.01) * onlinerpg_shared::hunger::sprint_move_mult(sprinting);
+    ((step_dist / speed) * 1000.0) as u64
+}
 
 /// Maximum distance per move step (units). Longer segments are subdivided
 /// so the NPC walks at MOVE_SPEED instead of teleporting.
 pub(super) const MAX_STEP_DIST: f32 = 3.0;
 const SCHEDULE_ARRIVAL_RADIUS: f32 = 2.0;
 
-/// How many shut doors one move may open on its way to the goal. A floor
-/// carries a handful; the cap only stops a pathological loop.
-const MAX_DOORS_PER_MOVE: usize = 6;
-
-/// Wait for the server's door-toggle reply before re-pathing — that message,
-/// not the request, is what reopens the cells for A*.
-const DOOR_TOGGLE_WAIT: Duration = Duration::from_millis(400);
-
-/// How many doors a blocked move probes with A* before giving up. They are
-/// tried nearest-first, so the one in our way is normally the first.
-const MAX_DOOR_PROBES: usize = 6;
-
-/// Ignore doors further away than this: a door across the map is not what
-/// stands between us and the goal, and every probe costs a path search.
-const MAX_DOOR_SEARCH_DIST: f32 = 40.0;
-
-/// Housing chunk size in world units (must match server's CHUNK_SIZE).
-const HOUSING_CHUNK_SIZE: f32 = 64.0;
+/// Forced moves are split into legs under the server's target-distance cap;
+/// the margin absorbs whatever the two sims still disagree by.
+const FORCE_MOVE_LEG_DIST: f32 = onlinerpg_shared::MAX_MOVE_TARGET_DISTANCE * 0.8;
 
 /// Move result for path-following
 pub(super) enum MoveResult {
     Arrived,
     Blocked,
+    Died,
     Error,
 }
 
-/// Check if the active schedule entry changed and execute a move if needed.
-/// Returns the new active schedule index.
+/// Which schedule entry is due at the current game time.
+pub(super) async fn resolve_due_schedule(
+    state: &Arc<Mutex<SharedState>>,
+    schedule: &[ScheduleEntry],
+) -> (Option<usize>, Option<u32>) {
+    let s = state.lock().await;
+    let (period, game_hour, game_minute, dark_day) = s.time_context();
+    let due = resolve_active_schedule(schedule, period, game_hour, game_minute, dark_day);
+    if let Some(entry) = due.0.map(|i| &schedule[i]).filter(|e| e.shelter_from_rain) {
+        if s.weather.rain_at(entry.pos) > 0.02 {
+            if let Some(i) = schedule
+                .iter()
+                .position(|e| e.condition == Some(ScheduleCondition::Rain))
+            {
+                return (Some(i), None);
+            }
+        }
+    }
+    due
+}
+
+/// Execute the move to a newly due schedule entry (from
+/// [`resolve_due_schedule`]). Returns the new active schedule index.
 pub(super) async fn check_schedule_transition(
     state: &Arc<Mutex<SharedState>>,
     schedule: &[ScheduleEntry],
     current: (Option<usize>, Option<u32>),
+    new: (Option<usize>, Option<u32>),
     label: &str,
 ) -> (Option<usize>, Option<u32>) {
-    let (is_night, game_hour, game_minute) = { state.lock().await.time_context() };
-    let new = resolve_active_schedule(schedule, is_night, game_hour, game_minute);
     if new != current {
-        // Stop interaction from previous schedule entry if it had an action
-        if let Some(prev_i) = current.0 {
-            if schedule[prev_i].action.is_some() {
-                let mut s = state.lock().await;
-                if let Err(e) = s.send_command(ClientMessage::StopInteraction).await {
-                    error!("[{label}] Failed to send StopInteraction: {e}");
-                }
-            }
+        let meeting = new
+            .0
+            .map(|i| &schedule[i])
+            .filter(|e| e.condition == Some(ScheduleCondition::Meeting));
+        stop_current_entry(state, schedule, current.0, label).await;
+        if let Some(entry) = meeting {
+            state.lock().await.enter_meeting(entry.host);
         }
-
         if let Some(i) = new.0 {
             let entry = &schedule[i];
             info!(
                 "[{label}] Schedule transition: moving to {}",
                 entry.display_label()
             );
+            // The schedule outranks a follow, and two walkers on one body
+            // would only fight.
+            if let Some(name) = state.lock().await.cancel_follow() {
+                info!("[{label}] Follow of {name} cancelled by a schedule transition");
+            }
             execute_schedule_move(state, entry).await;
+            // Nothing else wakes an NPC at the meeting; the idle poll is an hour away.
+            if meeting.is_some() {
+                state
+                    .lock()
+                    .await
+                    .push_ambient_event(super::prompt::meeting_arrival_event());
+            }
         }
     }
     new
 }
 
-/// Send InteractObject if the schedule entry has an action and object_id.
+/// Leave-taking before any driven walk: stop the current entry's
+/// interaction and pack up placeables. Shared by schedule transitions and
+/// sick-room bedside visits.
+pub(super) async fn stop_current_entry(
+    state: &Arc<Mutex<SharedState>>,
+    schedule: &[ScheduleEntry],
+    current: Option<usize>,
+    label: &str,
+) {
+    let mut s = state.lock().await;
+    if current.is_some_and(|i| schedule[i].is_fishing()) {
+        if let Err(e) = s.send_command(ClientMessage::FishingStop).await {
+            error!("[{label}] Failed to stop scheduled fishing: {e}");
+        }
+    }
+    if current.is_some_and(|i| schedule[i].action.is_some())
+        || s.self_player
+            .as_ref()
+            .is_some_and(|p| p.object_type.as_deref() == Some(crate::state::MUSIC_EMOTE))
+    {
+        if let Err(e) = s.send_command(ClientMessage::StopInteraction).await {
+            error!("[{label}] Failed to send StopInteraction: {e}");
+        }
+    }
+    s.pack_up_placeables(label).await;
+}
+
 async fn send_interact_if_needed(s: &mut SharedState, entry: &ScheduleEntry) {
+    if let Some(position) = entry.fishing_target() {
+        if !s.can_start_scheduled_fishing() {
+            return;
+        }
+        if let Err(e) = s
+            .send_command(ClientMessage::FishingCast { position })
+            .await
+        {
+            error!("Failed to start scheduled fishing: {e}");
+        }
+        return;
+    }
     if let (Some(ref object_type), Some(object_id)) = (&entry.action, entry.object_id) {
         debug!("Sending InteractObject: {object_type} (id={object_id})");
         let cmd = ClientMessage::InteractObject {
@@ -100,9 +163,22 @@ async fn send_interact_if_needed(s: &mut SharedState, entry: &ScheduleEntry) {
     }
 }
 
+pub(super) async fn maintain_scheduled_fishing(
+    state: &Arc<Mutex<SharedState>>,
+    entry: &ScheduleEntry,
+) {
+    let needs_cast = {
+        let s = state.lock().await;
+        s.can_start_scheduled_fishing()
+    };
+    if needs_cast {
+        execute_schedule_move(state, entry).await;
+    }
+}
+
 /// Walk to a schedule entry's position and set the final rotation. If the
 /// entry has waypoints, visits each one in order before going to `pos`.
-async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry: &ScheduleEntry) {
+pub(super) async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry: &ScheduleEntry) {
     // Walk through patrol waypoints first (if any)
     for (i, wp) in entry.waypoints.iter().enumerate() {
         let (wx, wz) = (wp[0], wp[2]);
@@ -113,11 +189,12 @@ async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry: &Schedule
             wx,
             wz
         );
-        match execute_move(state, wx, wz, entry.floor_level).await {
+        match execute_move(state, wx, wz, entry.floor_level, Some(false)).await {
             MoveResult::Arrived => {}
             MoveResult::Blocked => {
                 warn!("Patrol waypoint {i} blocked — skipping ({wx:.1}, {wz:.1})");
             }
+            MoveResult::Died => return,
             MoveResult::Error => {
                 error!("Patrol waypoint {i} error");
             }
@@ -127,34 +204,45 @@ async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry: &Schedule
     // Go to final position
     let (x, y, z) = (entry.pos[0], entry.pos[1], entry.pos[2]);
 
-    // Check if we're already near the target (including floor level)
-    {
-        let mut s = state.lock().await;
-        if let Some(ref p) = s.self_player {
-            let to_target = PlanarDelta::to_xz(&p.position, x, z);
-            let same_floor = s.passability_floor() == entry.floor_level;
-            if same_floor && to_target.dist < SCHEDULE_ARRIVAL_RADIUS {
-                debug!("Already near schedule target — skipping movement");
-                send_interact_if_needed(&mut s, entry).await;
-                return;
-            }
-        }
-    }
+    // Already near the target (same floor)? Skip the walk but still fall
+    // through to the exact-position send — the entry's spot and rotation
+    // apply even without a walk (a maid already standing at the table must
+    // still turn to face the guest).
+    let already_near = {
+        let s = state.lock().await;
+        s.self_player.as_ref().is_some_and(|p| {
+            s.passability_floor() == entry.floor_level
+                && PlanarDelta::to_xz(&p.position, x, z).dist < SCHEDULE_ARRIVAL_RADIUS
+        })
+    };
 
-    let arrived = match execute_move(state, x, z, entry.floor_level).await {
-        MoveResult::Arrived => true,
-        MoveResult::Blocked => {
-            // Force-move to schedule position (e.g. cross-floor moves through
-            // closed doors). NPCs must follow their schedules.
-            warn!(
-                "Schedule move blocked — force-moving to ({x:.1}, {z:.1}) floor {}",
-                entry.floor_level
-            );
-            true
-        }
-        MoveResult::Error => {
-            error!("Schedule move error");
-            false
+    let arrived = if already_near {
+        debug!("Already near schedule target — skipping the walk");
+        true
+    } else {
+        // A pose position may sit on the furniture itself (a bed swallows its
+        // own cells); walk beside it and let the exact-position send below
+        // cross the last metre.
+        let (walk_x, walk_z) = {
+            let s = state.lock().await;
+            s.walkable_near(x, z, entry.floor_level)
+        };
+        match execute_move(state, walk_x, walk_z, entry.floor_level, Some(false)).await {
+            MoveResult::Arrived => true,
+            MoveResult::Blocked => {
+                // Force-move to schedule position (e.g. cross-floor moves through
+                // closed doors). NPCs must follow their schedules.
+                warn!(
+                    "Schedule move blocked — force-moving to ({x:.1}, {z:.1}) floor {}",
+                    entry.floor_level
+                );
+                true
+            }
+            MoveResult::Died => false,
+            MoveResult::Error => {
+                error!("Schedule move error");
+                false
+            }
         }
     };
 
@@ -163,297 +251,71 @@ async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry: &Schedule
         let rot_rad = entry.rotation.to_radians();
         let mut s = state.lock().await;
         // Schedules are authored in housing floors, which the wire and the
-        // passability cache number the same way.
-        s.self_floor_level = entry.floor_level as i8;
-        let cmd = ClientMessage::player_move(
-            onlinerpg_shared::Position { x, y, z },
-            rot_rad,
-            entry.floor_level as i8,
-        );
-        if let Err(e) = s.send_command(cmd).await {
-            error!("Failed to send schedule move: {e}");
+        // passability cache number the same way. adopt_floor_level so a
+        // cross-floor force-move still purges the left floor's monsters.
+        s.adopt_floor_level(entry.floor_level as i8);
+        let target = Position { x, y, z };
+        // A forced move can span the whole map; legs keep every target under
+        // the server's distance cap so none is silently refused.
+        let from = s.self_player.as_ref().map_or(target, |p| p.position);
+        for (i, leg) in force_move_legs(&from, target).into_iter().enumerate() {
+            let cmd = ClientMessage::PlayerMove {
+                position: leg,
+                rotation: rot_rad,
+                floor_level: entry.floor_level as i8,
+                append: i > 0,
+                // Catch-up legs are free: forced moves are routine, not asked
+                // for, and must not price the schedule in satiation.
+                sprinting: false,
+            };
+            if let Err(e) = s.send_command(cmd).await {
+                error!("Failed to send schedule move: {e}");
+                break;
+            }
         }
 
         send_interact_if_needed(&mut s, entry).await;
     }
 }
 
-/// Execute a move to the target position using A* pathfinding, opening any
-/// shut door that seals the route. Most of a dungeon sits behind those doors —
-/// the stairs down included — and a shut front door can leave a resident with
-/// no way out of their own house, so a blocked path is a cue to go unlatch
-/// something, not to give up.
+/// Straight-line legs from `from` to `to`, each under the server's move
+/// target cap. The last leg is exactly `to`.
+fn force_move_legs(from: &Position, to: Position) -> Vec<Position> {
+    let delta = PlanarDelta::between(from, &to);
+    let legs = (delta.dist / FORCE_MOVE_LEG_DIST).ceil().max(1.0) as u32;
+    (1..legs)
+        .map(|i| {
+            let t = i as f32 / legs as f32;
+            Position {
+                x: from.x + delta.dx * t,
+                y: from.y + (to.y - from.y) * t,
+                z: from.z + delta.dz * t,
+            }
+        })
+        .chain(std::iter::once(to))
+        .collect()
+}
+
+/// Walk to a fixed spot on the map. A thin view over [`walk::walk`]: this
+/// caller cares whether its walk finished, not which target it was following.
 pub(super) async fn execute_move(
     state: &Arc<Mutex<SharedState>>,
     goal_x: f32,
     goal_z: f32,
     goal_floor: u8,
+    sprint: Option<bool>,
 ) -> MoveResult {
-    for _ in 0..=MAX_DOORS_PER_MOVE {
-        let before = state.lock().await.position_corrections;
-        match walk_path(state, goal_x, goal_z, goal_floor).await {
-            MoveResult::Blocked => {
-                // A refused step is a disagreement with the server, not a shut
-                // door; hunting for one to open would not help.
-                if state.lock().await.position_corrections != before {
-                    return MoveResult::Blocked;
-                }
-                if !open_blocking_door(state).await {
-                    return MoveResult::Blocked;
-                }
-            }
-            other => return other,
-        }
-    }
-    MoveResult::Blocked
-}
-
-/// One A* path, walked to the end. Subdivides long legs so the NPC walks at
-/// `MOVE_SPEED` instead of teleporting.
-///
-/// A search that cannot reach the goal still returns the leg that gets closest
-/// (`found: false` with waypoints). That leg is worth walking — it carries us to
-/// the wall or door in the way — but it is not an arrival, so it reports
-/// `Blocked`: the caller opens a door and retries, and the agent is never told
-/// it reached a floor it never got to.
-///
-/// Such a leg is only walked as far as it stays on the floor it started on.
-/// With the way down sealed, the closest node A* can reach is the *surface*
-/// above the target — walking that whole leg climbs back out of the dungeon,
-/// and the door standing in the way is then two floors behind us.
-async fn walk_path(
-    state: &Arc<Mutex<SharedState>>,
-    goal_x: f32,
-    goal_z: f32,
-    goal_floor: u8,
-) -> MoveResult {
-    let (path_result, start_floor) = {
-        let s = state.lock().await;
-        (
-            s.find_path_to(goal_x, goal_z, goal_floor),
-            s.passability_floor(),
-        )
+    let to = walk::WalkTo::Place {
+        x: goal_x,
+        z: goal_z,
+        floor: goal_floor,
     };
-
-    if path_result.waypoints.is_empty() {
-        if !path_result.found {
-            return MoveResult::Blocked;
-        }
-        return MoveResult::Arrived;
+    match walk::walk(state, &to, false, sprint).await {
+        walk::Walked::Arrived => MoveResult::Arrived,
+        walk::Walked::Error => MoveResult::Error,
+        walk::Walked::Lost(walk::LostReason::PlayerDied) => MoveResult::Died,
+        walk::Walked::Lost(_) => MoveResult::Blocked,
     }
-
-    let walked: &[_] = if path_result.found {
-        &path_result.waypoints
-    } else {
-        let keep = path_result
-            .waypoints
-            .iter()
-            .position(|wp| wp.floor != start_floor)
-            .unwrap_or(path_result.waypoints.len());
-        &path_result.waypoints[..keep]
-    };
-
-    match walk_waypoints(state, walked).await {
-        MoveResult::Arrived if !path_result.found => MoveResult::Blocked,
-        other => other,
-    }
-}
-
-/// Walk an already-found route, subdividing long legs so the NPC moves at
-/// `MOVE_SPEED` instead of teleporting. Split out so a caller that has just
-/// proved a route (the door probe) can walk it without searching again.
-async fn walk_waypoints(state: &Arc<Mutex<SharedState>>, waypoints: &[PathWaypoint]) -> MoveResult {
-    let corrections = state.lock().await.position_corrections;
-
-    for wp in waypoints {
-        loop {
-            let travel_ms = {
-                let mut s = state.lock().await;
-                // The server snapped us back: this path walks into a step it
-                // refuses, so drop it rather than grind the same wall.
-                if s.position_corrections != corrections {
-                    warn!("Path abandoned after a position correction");
-                    return MoveResult::Blocked;
-                }
-                let player = match &s.self_player {
-                    Some(p) => p,
-                    None => return MoveResult::Error,
-                };
-
-                let to_wp = PlanarDelta::to_xz(&player.position, wp.x, wp.z);
-                if to_wp.dist < 0.1 {
-                    break;
-                }
-
-                let (step_x, step_z, step_dist) = if to_wp.dist <= MAX_STEP_DIST {
-                    (wp.x, wp.z, to_wp.dist)
-                } else {
-                    let ratio = MAX_STEP_DIST / to_wp.dist;
-                    (
-                        player.position.x + to_wp.dx * ratio,
-                        player.position.z + to_wp.dz * ratio,
-                        MAX_STEP_DIST,
-                    )
-                };
-
-                if let Err(e) = s
-                    .send_step(step_x, step_z, wp.floor, to_wp.rotation())
-                    .await
-                {
-                    error!("Failed to send move waypoint: {e}");
-                    return MoveResult::Error;
-                }
-                ((step_dist / MOVE_SPEED) * 1000.0) as u64
-            };
-
-            tokio::time::sleep(Duration::from_millis(travel_ms.max(50))).await;
-        }
-    }
-
-    MoveResult::Arrived
-}
-
-/// A shut door standing between us and where we want to go: how to open it,
-/// and the cell centers on either side — one of them is our side.
-struct DoorCandidate {
-    label: String,
-    toggle: ClientMessage,
-    sides: [(f32, f32); 2],
-}
-
-/// Walk to the nearest shut door on our floor that we can actually reach and
-/// open it. Returns false when no such door exists — then the goal really is
-/// unreachable. Covers dungeon corridor doors and house doors alike: a shut
-/// front door leaves a resident NPC with no route out of their own house just
-/// as surely as a shut crypt door hides the stairs down.
-pub(super) async fn open_blocking_door(state: &Arc<Mutex<SharedState>>) -> bool {
-    let Some((door, route)) = pick_reachable_door(state).await else {
-        return false;
-    };
-
-    // The probe already proved this route; walk the waypoints it found rather
-    // than paying for the same search again.
-    if matches!(walk_waypoints(state, &route).await, MoveResult::Error) {
-        return false;
-    }
-
-    info!("Opening {} to get through", door.label);
-    let mut s = state.lock().await;
-    if let Err(e) = s.send_command(door.toggle).await {
-        error!("Failed to send door toggle: {e}");
-        return false;
-    }
-    drop(s);
-    // The server's reply (DoorToggled / DungeonDoorToggled) is what reopens the
-    // cells for A*; re-pathing before it lands would just find the same wall.
-    tokio::time::sleep(DOOR_TOGGLE_WAIT).await;
-    true
-}
-
-/// The closest shut door on our floor with a side we can path to, and the route
-/// there. Opening it widens the reachable set; if the goal is still walled off,
-/// the next round picks the next one (this one no longer counts as shut).
-///
-/// Each probe is a full path search, so the candidates are filtered by distance
-/// and sorted nearest-first before any of them runs — the door in our way is
-/// normally the first, and the rest are never searched for.
-async fn pick_reachable_door(
-    state: &Arc<Mutex<SharedState>>,
-) -> Option<(DoorCandidate, Vec<PathWaypoint>)> {
-    let s = state.lock().await;
-    let position = s.self_player.as_ref()?.position;
-    let floor = s.passability_floor();
-    let reach = |x: f32, z: f32| PlanarDelta::xz(position.x, position.z, x, z).dist;
-
-    let mut doors = closed_doors_on_our_floor(&s);
-    let mut sides: Vec<(f32, usize, (f32, f32))> = doors
-        .iter()
-        .enumerate()
-        .flat_map(|(i, door)| door.sides.map(|side| (reach(side.0, side.1), i, side)))
-        .filter(|(dist, _, _)| *dist <= MAX_DOOR_SEARCH_DIST)
-        .collect();
-    sides.sort_by(|a, b| a.0.total_cmp(&b.0));
-
-    for (_, index, side) in sides.into_iter().take(MAX_DOOR_PROBES) {
-        let route = s.find_path_to(side.0, side.1, floor);
-        if route.found {
-            return Some((doors.swap_remove(index), route.waypoints));
-        }
-    }
-    None
-}
-
-/// Every shut door on the floor we stand on: dungeon corridor doors when we
-/// are underground, house doors when we are not.
-fn closed_doors_on_our_floor(s: &SharedState) -> Vec<DoorCandidate> {
-    if s.self_floor_level < 0 {
-        let Some(dungeon) = s.dungeon_here() else {
-            return Vec::new();
-        };
-        let depth = s.self_floor_level.unsigned_abs();
-        let open = s
-            .world_cache
-            .read()
-            .unwrap()
-            .open_dungeon_doors(&dungeon.id, depth);
-        return dungeon
-            .closed_doors(depth, &open)
-            .into_iter()
-            .map(|d| DoorCandidate {
-                label: format!("dungeon door {} on floor {depth}", d.door_id),
-                toggle: ClientMessage::ToggleDungeonDoor {
-                    entrance_id: dungeon.id.clone(),
-                    depth,
-                    door_id: d.door_id,
-                },
-                sides: d.sides,
-            })
-            .collect();
-    }
-
-    let floor = s.self_floor_level as u8;
-    let world = s.world_cache.read().unwrap();
-    let mut out = Vec::new();
-    for house in world.houses().values() {
-        // Cells are indexed from the house origin; the floor grid's own origin
-        // cancels out (see `pathfinding::update_door_edge`).
-        let ox = house.origin.x.floor() as i32;
-        let oz = house.origin.z.floor() as i32;
-        for (room_index, room) in house.rooms.iter().enumerate() {
-            if room.floor_level != floor {
-                continue;
-            }
-            for dir in [
-                WallDirection::North,
-                WallDirection::South,
-                WallDirection::East,
-                WallDirection::West,
-            ] {
-                for (seg, wall) in room.wall(dir).iter().enumerate() {
-                    // Windows are openable too, but they are not a way through.
-                    if wall.variant != WallVariant::WithDoor || wall.is_open {
-                        continue;
-                    }
-                    let ((dx, dz, _), (adx, adz, _)) = pathfinding::door_cells(room, dir, seg);
-                    let (rx, rz) = (ox + room.local_x, oz + room.local_z);
-                    out.push(DoorCandidate {
-                        label: format!("{} door (room {room_index}, {dir:?} {seg})", house.id),
-                        toggle: ClientMessage::ToggleDoor {
-                            house_id: house.id.clone(),
-                            room_index: room_index as u32,
-                            wall_dir: dir,
-                            segment_index: seg as u32,
-                        },
-                        sides: [
-                            ((rx + dx) as f32 + 0.5, (rz + dz) as f32 + 0.5),
-                            ((rx + adx) as f32 + 0.5, (rz + adz) as f32 + 0.5),
-                        ],
-                    });
-                }
-            }
-        }
-    }
-    out
 }
 
 /// Raw region object placements, as served by `/api/terrain/objects/{rx}/{rz}`.
@@ -502,8 +364,16 @@ pub(super) async fn fetch_furniture_around(
     for (x, z) in positions {
         insert_region(&mut regions, *x, *z);
     }
+    let epoch = {
+        let world = world_cache.read().unwrap();
+        world.unfetched_furniture_regions(&mut regions);
+        world.world_epoch().to_owned()
+    };
+    if regions.is_empty() {
+        return;
+    }
 
-    let client = reqwest::Client::new();
+    let client = http_client();
     let fetches = regions.iter().map(|&(rx, rz)| {
         let client = &client;
         let url = format!("{api_base_url}/api/terrain/objects/{rx}/{rz}");
@@ -518,10 +388,14 @@ pub(super) async fn fetch_furniture_around(
     let results = futures_util::future::join_all(fetches).await;
 
     let mut world = world_cache.write().unwrap();
+    if !world.is_current_epoch(&epoch) {
+        return;
+    }
     let mut synced_regions = 0usize;
     for (rx, rz, resp) in results {
         let Some(resp) = resp else { continue };
-        world.sync_furniture(rx, rz, &resp.placements);
+        world.sync_furniture(rx, rz, resp.placements);
+        world.mark_furniture_fetched((rx, rz));
         synced_regions += 1;
     }
     if synced_regions > 0 {
@@ -529,69 +403,476 @@ pub(super) async fn fetch_furniture_around(
     }
 }
 
-/// Insert a position's chunk and its 8 neighbors into the set.
-fn insert_chunk_neighbors(chunks: &mut HashSet<(i32, i32)>, x: f32, z: f32) {
-    let cx = (x / HOUSING_CHUNK_SIZE).floor() as i32;
-    let cz = (z / HOUSING_CHUNK_SIZE).floor() as i32;
-    for dx in -1..=1i32 {
-        for dz in -1..=1i32 {
-            chunks.insert((cx + dx, cz + dz));
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::tests::{test_player, test_state};
+    use onlinerpg_shared::fishing::{FishState, FishingAction, FishingOutcome};
+    use onlinerpg_shared::inventory::{EquipSlot, ItemInstance};
+    use onlinerpg_shared::{PlayerId, ServerMessage};
+
+    fn npc_schedule(json: &str) -> Vec<ScheduleEntry> {
+        #[derive(serde::Deserialize)]
+        struct File {
+            schedule: Vec<ScheduleEntry>,
         }
-    }
-}
-
-/// Fetch houses from the HTTP API for every chunk `positions` touches (plus
-/// their neighbors), so pathfinding can avoid buildings.
-pub(super) async fn fetch_houses_around(
-    world_cache: &Arc<std::sync::RwLock<crate::state::WorldCache>>,
-    positions: &[(f32, f32)],
-    api_base_url: &str,
-    label: &str,
-) {
-    let mut chunks = HashSet::new();
-    for (x, z) in positions {
-        insert_chunk_neighbors(&mut chunks, *x, *z);
+        let mut schedule = serde_json::from_str::<File>(json).unwrap().schedule;
+        assert!(onlinerpg_shared::schedule::parse_conditions(&mut schedule).is_empty());
+        schedule
     }
 
-    debug!(
-        "[{label}] Fetching houses for {} chunk(s): {:?}",
-        chunks.len(),
-        chunks
-    );
-    let client = reqwest::Client::new();
-    let fetches = chunks.iter().map(|&(cx, cz)| {
-        let client = &client;
-        let url = format!("{api_base_url}/api/housing/area/{cx}/{cz}");
-        async move {
-            match client.get(&url).send().await {
-                Ok(resp) if resp.status().is_success() => {
-                    resp.json::<Vec<HouseData>>().await.unwrap_or_default()
-                }
-                Ok(resp) => {
-                    warn!(
-                        "[{label}] Housing API returned {} for chunk ({cx},{cz})",
-                        resp.status()
-                    );
-                    Vec::new()
-                }
-                Err(e) => {
-                    warn!("[{label}] Failed to fetch houses for chunk ({cx},{cz}): {e}");
-                    Vec::new()
-                }
+    fn fishing_state(
+        entry: &ScheduleEntry,
+    ) -> (
+        Arc<Mutex<SharedState>>,
+        tokio::sync::mpsc::Receiver<ClientMessage>,
+    ) {
+        let (mut s, mut rx) = test_state();
+        let me = test_player(entry.pos[0], entry.pos[2]);
+        s.self_player_id = Some(me.id);
+        s.self_player = Some(me);
+        s.in_game = true;
+        s.self_equipped.insert(
+            EquipSlot::MainHand,
+            ItemInstance {
+                instance_id: 1,
+                item_def_id: "fishing_rod".into(),
+                quantity: 1,
+                enchant: 0,
+                cape_color: None,
+                cape_texture: None,
+                locked: false,
+            },
+        );
+        assert!(rx.try_recv().is_err());
+        (Arc::new(Mutex::new(s)), rx)
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn scheduled_fishing_hooks_reels_rests_and_sleeps_until_eight() {
+        let schedule = npc_schedule(include_str!("../../data/npcs/tobin/schedule.json"));
+        let entry = &schedule[0];
+        let bed = &schedule[1];
+        assert!(bed.is_sleeping());
+        for (hour, minute, expected) in [
+            (0, 0, 0),
+            (1, 59, 0),
+            (2, 0, 1),
+            (7, 59, 1),
+            (8, 0, 2),
+            (8, 29, 2),
+            (8, 30, 0),
+            (18, 59, 0),
+            (19, 0, 3),
+            (19, 29, 3),
+            (19, 30, 0),
+            (23, 59, 0),
+        ] {
+            assert_eq!(
+                resolve_active_schedule(&schedule, None, Some(hour), Some(minute), None),
+                (Some(expected), None)
+            );
+        }
+        let (state, mut rx) = fishing_state(entry);
+        let player_id = PlayerId::from(1);
+
+        maintain_scheduled_fishing(&state, entry).await;
+        assert!(
+            matches!(rx.try_recv(), Ok(ClientMessage::PlayerMove { position, rotation, .. })
+                if position.x == entry.pos[0] && position.y == entry.pos[1]
+                    && position.z == entry.pos[2] && rotation == entry.rotation.to_radians()
+            )
+        );
+        assert!(
+            matches!(rx.try_recv(), Ok(ClientMessage::FishingCast { position })
+                if (position.x + 1503.8994).abs() < 0.001 && (position.z - 4728.47).abs() < 0.001
+            )
+        );
+
+        state.lock().await.push_event(ServerMessage::FishingCasted {
+            player_id,
+            position: entry.fishing_target().unwrap(),
+            rotation: entry.rotation.to_radians(),
+        });
+        maintain_scheduled_fishing(&state, entry).await;
+        assert!(rx.try_recv().is_err());
+        state
+            .lock()
+            .await
+            .push_event(ServerMessage::FishingBite { player_id });
+        assert!(rx.try_recv().is_err());
+        assert!(matches!(
+            rx.recv().await,
+            Some(ClientMessage::FishingRespond {
+                action: FishingAction::Hook
+            })
+        ));
+        for (fish_state, tension_pct, expected) in [
+            (FishState::Resting, 20, FishingAction::Reel),
+            (FishState::Running, 90, FishingAction::GiveLine),
+        ] {
+            state.lock().await.push_event(ServerMessage::FishingFight {
+                player_id,
+                bobber: entry.fishing_target().unwrap(),
+                fish_state,
+                tension_pct,
+                stamina_pct: 50,
+                trophy: false,
+                stance: FishingAction::Hold,
+            });
+            assert!(matches!(rx.recv().await,
+                Some(ClientMessage::FishingRespond { action }) if action == expected
+            ));
+        }
+
+        state.lock().await.push_event(ServerMessage::FishingEnded {
+            player_id,
+            outcome: FishingOutcome::Caught {
+                item_def_id: "raw_minnow".into(),
+                size_cm: 10,
+                trophy: false,
+            },
+        });
+        assert!(!state.lock().await.self_fishing);
+        maintain_scheduled_fishing(&state, entry).await;
+        assert!(rx.try_recv().is_err());
+        tokio::time::advance(crate::state::FISHING_RECAST_DELAY).await;
+        maintain_scheduled_fishing(&state, entry).await;
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(ClientMessage::PlayerMove { .. })
+        ));
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(ClientMessage::FishingCast { .. })
+        ));
+
+        state.lock().await.push_event(ServerMessage::FishingCasted {
+            player_id,
+            position: entry.fishing_target().unwrap(),
+            rotation: entry.rotation.to_radians(),
+        });
+        state
+            .lock()
+            .await
+            .push_event(ServerMessage::FishingBite { player_id });
+        state.lock().await.self_player.as_mut().unwrap().position = Position {
+            x: bed.pos[0],
+            y: bed.pos[1],
+            z: bed.pos[2],
+        };
+        let active =
+            check_schedule_transition(&state, &schedule, (Some(0), None), (Some(1), None), "Tobin")
+                .await;
+        assert!(!state.lock().await.self_fishing);
+        assert!(matches!(rx.try_recv(), Ok(ClientMessage::FishingStop)));
+        assert!(matches!(rx.try_recv(), Ok(ClientMessage::StopInteraction)));
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(ClientMessage::PlayerMove { .. })
+        ));
+        assert!(
+            matches!(rx.try_recv(), Ok(ClientMessage::InteractObject { object_type, object_id: 111 })
+                if object_type == "rustic_bed"
+            )
+        );
+        state.lock().await.sync_height().await.unwrap();
+        assert!(
+            rx.try_recv().is_err(),
+            "height sync must not wake a sleeping NPC"
+        );
+        tokio::time::advance(crate::state::FISHING_RECAST_DELAY).await;
+        assert!(rx.try_recv().is_err(), "sleeping cancels the pending hook");
+
+        let breakfast = &schedule[2];
+        assert!(breakfast.is_campfire_meal());
+        state.lock().await.self_player.as_mut().unwrap().position = Position {
+            x: breakfast.pos[0],
+            y: breakfast.pos[1],
+            z: breakfast.pos[2],
+        };
+        let active =
+            check_schedule_transition(&state, &schedule, active, (Some(2), None), "Tobin").await;
+        assert!(matches!(rx.try_recv(), Ok(ClientMessage::StopInteraction)));
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(ClientMessage::PlayerMove { .. })
+        ));
+        assert!(rx.try_recv().is_err(), "breakfast must not cast the rod");
+
+        state.lock().await.self_player.as_mut().unwrap().position = Position {
+            x: entry.pos[0],
+            y: entry.pos[1],
+            z: entry.pos[2],
+        };
+        check_schedule_transition(&state, &schedule, active, (Some(0), None), "Tobin").await;
+        assert!(matches!(rx.try_recv(), Ok(ClientMessage::StopInteraction)));
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(ClientMessage::PlayerMove { .. })
+        ));
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(ClientMessage::FishingCast { .. })
+        ));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn scheduled_fishing_waits_for_a_usable_rod_and_backs_off_failed_casts() {
+        let schedule = npc_schedule(include_str!("../../data/npcs/tobin/schedule.json"));
+        let entry = &schedule[0];
+        let (state, mut rx) = fishing_state(entry);
+        let rod = state
+            .lock()
+            .await
+            .self_equipped
+            .remove(&EquipSlot::MainHand)
+            .unwrap();
+        maintain_scheduled_fishing(&state, entry).await;
+        assert!(rx.try_recv().is_err());
+        {
+            let mut s = state.lock().await;
+            s.self_equipped.insert(EquipSlot::MainHand, rod);
+            s.trade_busy = true;
+        }
+        maintain_scheduled_fishing(&state, entry).await;
+        assert!(rx.try_recv().is_err());
+        {
+            let mut s = state.lock().await;
+            s.trade_busy = false;
+            s.self_player.as_mut().unwrap().health = 0;
+        }
+        maintain_scheduled_fishing(&state, entry).await;
+        assert!(rx.try_recv().is_err());
+        state.lock().await.self_player.as_mut().unwrap().health = 10;
+
+        maintain_scheduled_fishing(&state, entry).await;
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(ClientMessage::PlayerMove { .. })
+        ));
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(ClientMessage::FishingCast { .. })
+        ));
+        maintain_scheduled_fishing(&state, entry).await;
+        assert!(rx.try_recv().is_err(), "wait for the cast acknowledgement");
+        tokio::time::advance(crate::state::FISHING_CAST_ACK_TIMEOUT).await;
+        maintain_scheduled_fishing(&state, entry).await;
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(ClientMessage::PlayerMove { .. })
+        ));
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(ClientMessage::FishingCast { .. })
+        ));
+
+        state.lock().await.push_event(ServerMessage::FishingError {
+            message: "Not water".into(),
+        });
+        tokio::time::advance(crate::state::FISHING_CAST_ACK_TIMEOUT).await;
+        maintain_scheduled_fishing(&state, entry).await;
+        assert!(
+            rx.try_recv().is_err(),
+            "a rejected cast needs a longer pause"
+        );
+        tokio::time::advance(crate::state::FISHING_ERROR_RETRY_DELAY).await;
+        maintain_scheduled_fishing(&state, entry).await;
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(ClientMessage::PlayerMove { .. })
+        ));
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(ClientMessage::FishingCast { .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn rain_pauses_only_outdoor_work_and_clear_resumes_the_current_routine() {
+        use onlinerpg_shared::schedule::SchedulePeriod;
+        use onlinerpg_shared::ServerMessage;
+
+        let signe = npc_schedule(include_str!("../../data/npcs/signe/schedule.json"));
+        let wick = npc_schedule(include_str!("../../data/npcs/wick/schedule.json"));
+        let (s, _rx) = test_state();
+        let state = Arc::new(Mutex::new(s));
+        for (schedule, hour, minute, period, dark, wet, dry) in [
+            (&signe, 13, 0, SchedulePeriod::Day, false, 5, 2),
+            (&signe, 5, 0, SchedulePeriod::Day, false, 0, 0),
+            (&signe, 11, 30, SchedulePeriod::Day, false, 1, 1),
+            (&signe, 18, 30, SchedulePeriod::Dinner, false, 3, 3),
+            (&signe, 20, 0, SchedulePeriod::Night, false, 4, 4),
+            (&signe, 2, 0, SchedulePeriod::Night, false, 4, 4),
+            (&wick, 22, 0, SchedulePeriod::Night, false, 5, 2),
+            (&wick, 13, 0, SchedulePeriod::Day, false, 0, 0),
+            (&wick, 18, 30, SchedulePeriod::Dinner, false, 1, 1),
+            (&wick, 5, 30, SchedulePeriod::Breakfast, false, 3, 3),
+            (&wick, 22, 0, SchedulePeriod::Night, true, 4, 4),
+        ] {
+            {
+                let mut s = state.lock().await;
+                s.game_hour = Some(hour);
+                s.game_minute = Some(minute);
+                s.schedule_period = Some(period);
+                s.is_serin_dark_day = Some(dark);
+                s.push_event(ServerMessage::WeatherSync {
+                    seed: 42,
+                    bias: 1.0,
+                    sectors_tag: "test".into(),
+                    rain_override: Some(1.0),
+                });
             }
+            assert_eq!(
+                resolve_due_schedule(&state, schedule).await,
+                (Some(wet), None)
+            );
+            state.lock().await.push_event(ServerMessage::WeatherSync {
+                seed: 42,
+                bias: 1.0,
+                sectors_tag: "test".into(),
+                rain_override: Some(0.0),
+            });
+            assert_eq!(
+                resolve_due_schedule(&state, schedule).await,
+                (Some(dry), None)
+            );
         }
-    });
-    let results = futures_util::future::join_all(fetches).await;
+    }
 
-    let all_houses: Vec<HouseData> = results.into_iter().flatten().collect();
-    if all_houses.is_empty() {
-        info!("[{label}] No houses found in any chunk");
-    } else {
-        let count = all_houses.len();
-        let mut world = world_cache.write().unwrap();
-        for house in all_houses {
-            world.add_house(house);
+    #[tokio::test]
+    async fn shelter_stops_music_seats_the_bard_and_blocks_another_performance() {
+        use onlinerpg_shared::ServerMessage;
+
+        let schedule = npc_schedule(include_str!("../../data/npcs/signe/schedule.json"));
+        let shelter = &schedule[5];
+        let (mut s, mut rx) = test_state();
+        let me = test_player(shelter.pos[0], shelter.pos[2]);
+        s.self_player_id = Some(me.id);
+        s.self_player = Some(me);
+        s.in_game = true;
+        s.push_event(ServerMessage::PlayerInteractionChanged {
+            player_id: s.self_player_id.unwrap(),
+            object_type: Some(crate::state::MUSIC_EMOTE.into()),
+            object_id: None,
+        });
+        s.push_event(ServerMessage::PlayerMusicStarted {
+            player_id: s.self_player_id.unwrap(),
+            track: "Twilight Fields".into(),
+            elapsed_secs: 0.0,
+        });
+        s.begin_recital(&["The rain is coming".into()]).unwrap();
+        let state = Arc::new(Mutex::new(s));
+        let active =
+            check_schedule_transition(&state, &schedule, (Some(2), None), (Some(5), None), "Signe")
+                .await;
+        assert_eq!(active, (Some(5), None));
+        assert!(matches!(rx.try_recv(), Ok(ClientMessage::StopInteraction)));
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(ClientMessage::PlayerMove { .. })
+        ));
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(ClientMessage::InteractObject { object_type, object_id: 39 }) if object_type == "chair"
+        ));
+        let mut s = state.lock().await;
+        assert_eq!(s.own_chair(), Some(39));
+        assert!(s.refuses_play_command("/play_music"));
+        assert!(s.begin_recital(&["An encore".into()]).is_err());
+    }
+
+    /// The pose is adopted when the InteractObject is sent, not on the
+    /// server's echo — a stale LLM response handled in the same tick must
+    /// already find the bed under us, or its /play_music replaces the pose
+    /// and the NPC sleeps standing.
+    #[tokio::test]
+    async fn a_scheduled_pose_is_adopted_on_send_and_refuses_play_music() {
+        let (mut s, mut rx) = test_state();
+        s.self_player = Some(test_player(0.0, 0.0));
+        let entry = ScheduleEntry {
+            action: Some("bed".to_string()),
+            object_id: Some(23),
+            ..Default::default()
+        };
+
+        send_interact_if_needed(&mut s, &entry).await;
+
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(ClientMessage::InteractObject { .. })
+        ));
+        assert_eq!(
+            s.self_player.as_ref().unwrap().object_type.as_deref(),
+            Some("bed")
+        );
+        assert!(s.refuses_play_command("/play_music"));
+    }
+
+    /// Mispaced steps leave from a stale position and get snapped back.
+    #[test]
+    fn a_step_is_paced_by_the_speed_the_server_moves_us() {
+        let walk = travel_ms(MAX_STEP_DIST, false, 1.0);
+        let sprint = travel_ms(MAX_STEP_DIST, true, 1.0);
+        assert_eq!(walk, ((MAX_STEP_DIST / MOVE_SPEED) * 1000.0) as u64);
+        assert_eq!(
+            sprint,
+            (walk as f32 / onlinerpg_shared::hunger::SPRINT_MOVE_MULT) as u64
+        );
+        assert!(sprint < walk);
+        // A Weak walker is slowed server-side; pacing at full speed would
+        // leave every step from a stale position.
+        let weak = travel_ms(
+            MAX_STEP_DIST,
+            false,
+            onlinerpg_shared::hunger::WEAK_MOVE_MULT,
+        );
+        assert_eq!(
+            weak,
+            ((MAX_STEP_DIST / (MOVE_SPEED * onlinerpg_shared::hunger::WEAK_MOVE_MULT)) * 1000.0)
+                as u64
+        );
+        assert!(weak > walk);
+    }
+
+    #[test]
+    fn force_move_legs_stay_under_cap_and_end_exactly() {
+        let from = Position {
+            x: 0.0,
+            y: 1.0,
+            z: 0.0,
+        };
+        let to = Position {
+            x: 90.0,
+            y: 4.0,
+            z: 90.0,
+        };
+        let legs = force_move_legs(&from, to);
+        assert!(legs.len() > 1);
+        let mut prev = from;
+        for leg in &legs {
+            assert!(
+                PlanarDelta::between(&prev, leg).dist < onlinerpg_shared::MAX_MOVE_TARGET_DISTANCE
+            );
+            prev = *leg;
         }
-        info!("[{label}] Loaded {count} house(s) for pathfinding");
+        assert_eq!(*legs.last().unwrap(), to);
+    }
+
+    #[test]
+    fn short_force_move_is_a_single_exact_leg() {
+        let from = Position {
+            x: 10.0,
+            y: 0.0,
+            z: 10.0,
+        };
+        let to = Position {
+            x: 13.0,
+            y: 0.0,
+            z: 14.0,
+        };
+        let legs = force_move_legs(&from, to);
+        assert_eq!(legs, vec![to]);
     }
 }

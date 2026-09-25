@@ -1,5 +1,6 @@
 import type { ClickIntent } from '../../../managers/inputHandler'
 import type { Position } from '../../../utils/movementUtils'
+import type { PendingApproach } from './approach'
 import {
   dispatchCanvasClickIntent,
   type CanvasClickActions,
@@ -47,7 +48,7 @@ export function createCanvasIntentEvent({
 export interface PlayerControlEventActions extends CanvasClickActions {
   requestMove(
     position: Position,
-    options?: { pickupAfterArrival?: number | null }
+    options?: { approach?: PendingApproach | null }
   ): void
   onInteractionFinished(): void
   onPickupGrab(): void
@@ -56,16 +57,22 @@ export interface PlayerControlEventActions extends CanvasClickActions {
 
 export function dispatchPlayerControlEvent(
   event: PlayerControlEvent,
-  actions: PlayerControlEventActions
+  actions: PlayerControlEventActions,
+  attackRange: number
 ) {
   switch (event.type) {
     case 'canvas_intent':
-      dispatchCanvasClickIntent(event.intent, event.editorMode, actions)
+      dispatchCanvasClickIntent(
+        event.intent,
+        event.editorMode,
+        actions,
+        attackRange
+      )
       return
     case 'request_move':
     case 'delayed_request_move':
       actions.requestMove(event.position, {
-        pickupAfterArrival: event.pickupAfterArrival ?? null,
+        approach: event.approach ?? null,
       })
       return
     case 'anim_interaction_finished':

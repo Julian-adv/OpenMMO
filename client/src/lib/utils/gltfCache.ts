@@ -1,14 +1,14 @@
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 
-/**
- * Module-level GLB cache shared across all Threlte contexts.
- * Threlte's useLoader cache is scoped to each <Canvas> — when switching
- * from character select to game scene (separate Canvas), GLBs are re-downloaded.
- * This cache persists across Canvas lifecycles.
- */
+// Share downloads across character selection and game canvases.
 const cache = new Map<string, GLTF>()
 const inflight = new Map<string, Promise<GLTF>>()
-const loader = new GLTFLoader()
+const loader = createGLTFLoader()
+
+export function createGLTFLoader(): GLTFLoader {
+  return new GLTFLoader().setMeshoptDecoder(MeshoptDecoder)
+}
 
 export function loadGLB(url: string): Promise<GLTF> {
   const cached = cache.get(url)

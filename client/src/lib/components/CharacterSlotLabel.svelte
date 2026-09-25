@@ -1,182 +1,134 @@
 <script lang="ts">
-  import { T, useTask } from '@threlte/core'
-  import TextLabel from './TextLabel.svelte'
-  import * as THREE from 'three'
   import type { AccountCharacter } from '../network/socket'
+  import type { CharacterSlotLayout } from '../utils/characterSelectLayout'
+  import { t } from '../i18n'
+  import CharacterSummary from './CharacterSummary.svelte'
 
   interface Props {
     character: AccountCharacter | undefined
     selected: boolean
-    positionX: number
-    positionZ: number
-    camera: THREE.Camera | undefined
+    layout: CharacterSlotLayout
+    availableHeight: number
     onclick: () => void
     ondblclick: () => void
     compact?: boolean
+    disabled?: boolean
   }
 
   let {
     character,
     selected,
-    positionX,
-    positionZ,
-    camera,
+    layout,
+    availableHeight,
     onclick,
     ondblclick,
     compact = false,
+    disabled = false,
   }: Props = $props()
 
-  const PANEL_Y = -0.9
-  const CORNER_RADIUS = 0.08
-
-  let labelGroup = $state<THREE.Group | undefined>(undefined)
-
-  // Panel dimensions depend on content
-  const COMPACT_PANEL = { width: 1.36, height: 0.46 }
-  const CHAR_PANEL = { width: 1.4, height: 0.95 }
-  const EMPTY_PANEL = { width: 0.9, height: 0.4 }
-
-  const panel = $derived(
-    compact ? COMPACT_PANEL : character ? CHAR_PANEL : EMPTY_PANEL
+  let height = $state(0)
+  const top = $derived(
+    Math.max(0, Math.min(layout.y - height / 2, availableHeight - height))
   )
-  const panelWidth = $derived(panel.width)
-  const panelHeight = $derived(panel.height)
+  let press: { x: number; y: number } | undefined
+  let dragged = false
+  let previousDragged = false
 
-  const borderColor = $derived(selected ? '#7cc9ff' : '#53657b')
-  const bgColor = $derived(selected ? '#223552' : '#141e2c')
-  const bgOpacity = $derived(selected ? 0.75 : 0.5)
-  const borderThickness = $derived(selected ? 0.02 : 0.01)
-
-  function createRoundedRectShape(
-    width: number,
-    height: number,
-    radius: number
-  ): THREE.Shape {
-    const shape = new THREE.Shape()
-    const x = -width / 2
-    const y = -height / 2
-
-    shape.moveTo(x + radius, y)
-    shape.lineTo(x + width - radius, y)
-    shape.quadraticCurveTo(x + width, y, x + width, y + radius)
-    shape.lineTo(x + width, y + height - radius)
-    shape.quadraticCurveTo(
-      x + width,
-      y + height,
-      x + width - radius,
-      y + height
+  function handlePointerDown(event: PointerEvent) {
+    if (event.button !== 0) return
+    previousDragged = dragged
+    dragged = false
+    press = { x: event.clientX, y: event.clientY }
+    ;(event.currentTarget as HTMLButtonElement).setPointerCapture(
+      event.pointerId
     )
-    shape.lineTo(x + radius, y + height)
-    shape.quadraticCurveTo(x, y + height, x, y + height - radius)
-    shape.lineTo(x, y + radius)
-    shape.quadraticCurveTo(x, y, x + radius, y)
-
-    return shape
   }
 
-  const panelShape = $derived(
-    createRoundedRectShape(panelWidth, panelHeight, CORNER_RADIUS)
-  )
-  const borderShape = $derived(
-    createRoundedRectShape(
-      panelWidth + borderThickness * 2,
-      panelHeight + borderThickness * 2,
-      CORNER_RADIUS + borderThickness
-    )
-  )
-
-  // Stat layout: 2 columns, 3 rows
-  const STAT_FONT_SIZE = 0.09
-  const STAT_COL_GAP = 0.35
-  const STAT_VALUE_OFFSET = 0.22 // offset from label start to value start
-  const STAT_ROW_GAP = 0.13
-  const STATS_START_Y = $derived(-panelHeight / 2 + 0.15)
-
-  useTask(() => {
-    if (!labelGroup || !camera) return
-    labelGroup.position.set(positionX, PANEL_Y, positionZ)
-    labelGroup.quaternion.copy(camera.quaternion)
-  })
+  function handlePointerMove(event: PointerEvent) {
+    if (!press) return
+    if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > 5) {
+      dragged = true
+    }
+  }
 </script>
 
-<T.Group bind:ref={labelGroup}>
-  <!-- Background (click target) -->
-  <T.Mesh renderOrder={0} {onclick} {ondblclick}>
-    <T.ShapeGeometry args={[panelShape]} />
-    <T.MeshBasicMaterial
-      color={bgColor}
-      opacity={bgOpacity}
-      transparent={true}
-      depthWrite={false}
-    />
-  </T.Mesh>
-
-  <!-- Border (rendered behind background) -->
-  <T.Mesh position={[0, 0, -0.001]} renderOrder={0}>
-    <T.ShapeGeometry args={[borderShape]} />
-    <T.MeshBasicMaterial
-      color={borderColor}
-      opacity={bgOpacity}
-      transparent={true}
-      depthWrite={false}
-    />
-  </T.Mesh>
-
+<button
+  type="button"
+  class="character-slot"
+  class:selected
+  class:compact
+  class:empty={!character}
+  aria-pressed={character ? selected : undefined}
+  {disabled}
+  bind:clientHeight={height}
+  style:left={`${layout.x}px`}
+  style:top={`${top}px`}
+  style:width={`${layout.width}px`}
+  onpointerdown={handlePointerDown}
+  onpointermove={handlePointerMove}
+  onpointerup={() => (press = undefined)}
+  onpointercancel={() => {
+    press = undefined
+    dragged = true
+  }}
+  onclick={(event) => {
+    if (event.detail === 0 || !dragged) onclick()
+  }}
+  ondblclick={() => {
+    if (!dragged && !previousDragged) ondblclick()
+  }}
+>
   {#if character}
-    <TextLabel
-      text={character.name}
-      position={[0, compact ? 0 : panelHeight / 2 - 0.12, 0.02]}
-      fontSize={compact ? 0.19 : 0.13}
-      color="#f7fafc"
-      anchorX="center"
-      anchorY="middle"
-      depthOffset={-1}
-    />
-
-    {#if !compact}
-      <TextLabel
-        text={`Lv. ${character.level}  HP ${character.max_hp}`}
-        position={[0, panelHeight / 2 - 0.27, 0.02]}
-        fontSize={0.1}
-        color="#f0c040"
-        anchorX="center"
-        anchorY="middle"
-        depthOffset={-1}
-      />
-
-      {#each [{ label: 'STR', value: character.attributes.str, col: 0, row: 0 }, { label: 'DEX', value: character.attributes.dex, col: 1, row: 0 }, { label: 'CON', value: character.attributes.con, col: 0, row: 1 }, { label: 'INT', value: character.attributes.int, col: 1, row: 1 }, { label: 'WIS', value: character.attributes.wis, col: 0, row: 2 }, { label: 'CHA', value: character.attributes.cha, col: 1, row: 2 }] as stat (stat.label)}
-        {@const colX = stat.col === 0 ? -STAT_COL_GAP : 0.02}
-        {@const rowY = STATS_START_Y + (2 - stat.row) * STAT_ROW_GAP}
-        <TextLabel
-          text={stat.label}
-          position={[colX, rowY, 0.02]}
-          fontSize={STAT_FONT_SIZE}
-          color="#a7b7ca"
-          anchorX="left"
-          anchorY="middle"
-          depthOffset={-1}
-        />
-        <TextLabel
-          text={String(stat.value)}
-          position={[colX + STAT_VALUE_OFFSET, rowY, 0.02]}
-          fontSize={STAT_FONT_SIZE}
-          color="#a7b7ca"
-          anchorX="left"
-          anchorY="middle"
-          depthOffset={-1}
-        />
-      {/each}
-    {/if}
+    <CharacterSummary {character} {compact} />
   {:else}
-    <!-- Empty slot -->
-    <TextLabel
-      text="+ Create"
-      position={[0, 0, 0.02]}
-      fontSize={compact ? 0.19 : 0.12}
-      color="#9fb0c6"
-      anchorX="center"
-      anchorY="middle"
-      depthOffset={-1}
-    />
+    <span>{$t('characterSelect.create')}</span>
   {/if}
-</T.Group>
+</button>
+
+<style>
+  .character-slot {
+    position: absolute;
+    transform: translateX(-50%);
+    box-sizing: border-box;
+    border: 1px solid #53657b;
+    border-radius: 9px;
+    padding: 12px;
+    background: rgba(20, 30, 44, 0.85);
+    color: #a7b7ca;
+    font: inherit;
+    cursor: pointer;
+    pointer-events: auto;
+    touch-action: manipulation;
+    transition:
+      background 120ms,
+      border-color 120ms;
+  }
+
+  .character-slot.selected {
+    border-color: #7cc9ff;
+    background: rgba(34, 53, 82, 0.92);
+    box-shadow: 0 0 0 1px #7cc9ff;
+  }
+
+  .character-slot:hover:not(:disabled) {
+    border-color: #a0d8ff;
+    background: rgba(34, 53, 82, 0.96);
+  }
+
+  .character-slot:focus-visible {
+    outline: 2px solid #d6edff;
+    outline-offset: 3px;
+  }
+
+  .character-slot:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+
+  .compact,
+  .empty {
+    padding: 10px 8px;
+    font-size: 14px;
+    min-height: 44px;
+  }
+</style>

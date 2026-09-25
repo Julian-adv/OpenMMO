@@ -18,10 +18,17 @@ import {
   type CombatTickOutcome,
 } from './combat'
 import { directPathing } from './pathing.fixture'
+import { CombatController } from '../../../managers/combatController'
+
+vi.mock('../../../managers/bgmManager', () => ({
+  startBattleMusic: vi.fn(),
+  stopBattleMusic: vi.fn(),
+}))
 
 function actions(): CombatOutcomeActions {
   return {
     stopMovingToIdle: vi.fn(),
+    cancelBlockedMovement: vi.fn(),
     prepareReachedAttackRange: vi.fn(),
     beginAttack: vi.fn(),
     setChasingMovement: vi.fn(),
@@ -109,17 +116,14 @@ describe('applyChaseTargetUpdate', () => {
 
     expect(outcome.kind).toBe('updated')
     if (outcome.kind !== 'updated') return
-    // The player heads for the detour corner, not straight at the monster.
     expect(outcome.movementTarget).toEqual({ x: 3, y: 0, z: 0 })
     expect(outcome.pathWaypoints).toHaveLength(2)
     expect(outcome.chaseGoal).toEqual({ x: 3, y: 0, z: 4 })
     expect(outcome.movementState.currentSpeed).toBe(1.25)
-    // append=false: a fresh path replaces the queue rather than detouring
-    // through whatever the server was still walking toward.
     expect(sendPlayerMove).toHaveBeenCalledWith(
       { x: 3, y: 0, z: 0 },
       Math.atan2(3, 0),
-      false
+      0
     )
   })
 
@@ -145,7 +149,7 @@ describe('applyChaseTargetUpdate', () => {
     expect(movementState.totalDistance).toBe(10)
   })
 
-  it('falls back to the monster itself when no path is found', () => {
+  it('rejects an unreachable chase without sending a direct move', () => {
     const sendPlayerMove = vi.fn()
 
     const outcome = applyChaseTargetUpdate({
@@ -158,9 +162,8 @@ describe('applyChaseTargetUpdate', () => {
       sendPlayerMove,
     })
 
-    expect(outcome.kind).toBe('updated')
-    if (outcome.kind !== 'updated') return
-    expect(outcome.pathWaypoints).toEqual([{ x: 3, z: 4, floor: 0 }])
+    expect(outcome.kind).toBe('blocked')
+    expect(sendPlayerMove).not.toHaveBeenCalled()
   })
 })
 
@@ -181,8 +184,10 @@ describe('tickCombat', () => {
       chaseGoal: null,
       movementState: null,
       cooldownMs: 1500,
+      attackRange: 2,
       pathing: directPathing(),
       getMonsterInfo: vi.fn(),
+      attackLineBlocked: () => false,
       findMonsterPosition: vi.fn(),
       sendPlayerMove: vi.fn(),
     })
@@ -208,8 +213,10 @@ describe('tickCombat', () => {
       chaseGoal: null,
       movementState: null,
       cooldownMs: 1500,
+      attackRange: 2,
       pathing: directPathing(),
       getMonsterInfo: vi.fn(() => ({ state: 'idle' })),
+      attackLineBlocked: () => false,
       findMonsterPosition: vi.fn(() => ({ x: 1, y: 0, z: 0 })),
       sendPlayerMove: vi.fn(),
     })
@@ -238,8 +245,10 @@ describe('tickCombat', () => {
       chaseGoal: null,
       movementState: null,
       cooldownMs: 1500,
+      attackRange: 2,
       pathing: directPathing(),
       getMonsterInfo: vi.fn(() => ({ state: 'idle' })),
+      attackLineBlocked: () => false,
       findMonsterPosition: vi.fn(() => ({ x: 3, y: 0, z: 4 })),
       sendPlayerMove,
     })
@@ -248,12 +257,21 @@ describe('tickCombat', () => {
     expect(sendPlayerMove).toHaveBeenCalledWith(
       { x: 3, y: 0, z: 4 },
       Math.atan2(3, 4),
-      false
+      0
     )
   })
 })
 
 describe('applyCombatTickOutcome', () => {
+  it('cancels an unreachable chase instead of retrying from idle', () => {
+    const a = actions()
+    expect(applyCombatTickOutcome({ kind: 'chasing_blocked' }, a)).toEqual({
+      kind: 'handled',
+    })
+    expect(a.cancelBlockedMovement).toHaveBeenCalledOnce()
+    expect(a.setChasingMovement).not.toHaveBeenCalled()
+  })
+
   it('handles idle by stopping movement', () => {
     const a = actions()
 
@@ -361,8 +379,10 @@ describe('runCombatFrame', () => {
         chaseGoal: null,
         movementState: null,
         cooldownMs: 1500,
+        attackRange: 2,
         pathing: directPathing(),
         getMonsterInfo: vi.fn(),
+        attackLineBlocked: () => false,
         findMonsterPosition: vi.fn(),
         sendPlayerMove: vi.fn(),
         actions: a,
@@ -387,8 +407,10 @@ describe('runCombatFrame', () => {
         chaseGoal: null,
         movementState: null,
         cooldownMs: 1500,
+        attackRange: 2,
         pathing: directPathing(),
         getMonsterInfo: vi.fn(),
+        attackLineBlocked: () => false,
         findMonsterPosition: vi.fn(),
         sendPlayerMove: vi.fn(),
         actions: a,
@@ -400,70 +422,84 @@ describe('runCombatFrame', () => {
 })
 
 describe('beginAttack', () => {
-  it('ignores dead targets', () => {
-    const beginCombat = vi.fn()
-
-    const result = beginAttack({
-      monsterId: 'm1',
-      monsterInfo: { state: 'dead' },
-      currentPosition: { x: 1, y: 0, z: 2 },
-      playerRotation: 0,
-      previousPlayerState: playerState,
-      lastSentPosition: null,
-      beginCombat,
+  function runBeginAttack(
+    overrides: Partial<Parameters<typeof beginAttack>[0]>
+  ) {
+    const calls = {
+      beginCombat: vi.fn(() => 1),
       sendPlayerMove: vi.fn(),
       sendPlayerAttack: vi.fn(),
-    })
-
-    expect(result.kind).toBe('ignored_dead_target')
-    expect(beginCombat).not.toHaveBeenCalled()
-  })
-
-  it('starts combat, syncs position, sends attack, and returns attack state', () => {
-    const beginCombat = vi.fn()
-    const sendPlayerMove = vi.fn()
-    const sendPlayerAttack = vi.fn()
-    const currentPosition = { x: 1, y: 0, z: 2 }
-
+    }
     const result = beginAttack({
       monsterId: 'm1',
       monsterInfo: { state: 'idle' },
-      currentPosition,
+      currentPosition: { x: 1, y: 0, z: 2 },
       playerRotation: 0.5,
       previousPlayerState: playerState,
       lastSentPosition: null,
-      beginCombat,
-      sendPlayerMove,
-      sendPlayerAttack,
+      ...calls,
+      ...overrides,
     })
+    return { ...calls, result }
+  }
+
+  it('ignores dead targets', () => {
+    const { beginCombat, result } = runBeginAttack({
+      monsterInfo: { state: 'dead' },
+    })
+
+    expect(result.kind).toBe('ignored_unattackable_target')
+    expect(beginCombat).not.toHaveBeenCalled()
+  })
+
+  it('ignores targets with no local data', () => {
+    const { beginCombat, sendPlayerAttack, result } = runBeginAttack({
+      monsterInfo: undefined,
+    })
+
+    expect(result.kind).toBe('ignored_unattackable_target')
+    expect(beginCombat).not.toHaveBeenCalled()
+    expect(sendPlayerAttack).not.toHaveBeenCalled()
+  })
+
+  it('starts combat, syncs position, sends attack, and returns attack state', () => {
+    const currentPosition = { x: 1, y: 0, z: 2 }
+    const { beginCombat, sendPlayerMove, sendPlayerAttack, result } =
+      runBeginAttack({ currentPosition })
 
     expect(beginCombat).toHaveBeenCalledWith('m1', true)
     expect(sendPlayerMove).toHaveBeenCalledWith(currentPosition, 0.5)
     expect(sendPlayerAttack).toHaveBeenCalledWith('m1')
     expect(result).toEqual({
       kind: 'started',
-      nextPlayerState: { ...playerState, state: 'attack' },
-      pendingPickupAfterMoveInstanceId: null,
+      nextPlayerState: {
+        ...playerState,
+        state: 'attack',
+        rotation: 0.5,
+        attackCounter: 1,
+      },
     })
   })
 
-  it('skips position sync when the last sent x/z position matches', () => {
-    const sendPlayerMove = vi.fn()
-    const currentPosition = { x: 1, y: 10, z: 2 }
-
-    beginAttack({
-      monsterId: 'm1',
-      monsterInfo: { state: 'idle' },
-      currentPosition,
-      playerRotation: 0.5,
-      previousPlayerState: playerState,
+  it('skips position sync when position and facing are unchanged', () => {
+    const { sendPlayerMove } = runBeginAttack({
+      currentPosition: { x: 1, y: 10, z: 2 },
+      playerRotation: playerState.rotation,
       lastSentPosition: { x: 1, y: 0, z: 2 },
-      beginCombat: vi.fn(),
-      sendPlayerMove,
-      sendPlayerAttack: vi.fn(),
     })
 
     expect(sendPlayerMove).not.toHaveBeenCalled()
+  })
+
+  it('syncs the new facing even when the position is unchanged', () => {
+    const currentPosition = { x: 1, y: 10, z: 2 }
+    const { sendPlayerMove } = runBeginAttack({
+      currentPosition,
+      playerRotation: 1.5,
+      lastSentPosition: { x: 1, y: 0, z: 2 },
+    })
+
+    expect(sendPlayerMove).toHaveBeenCalledWith(currentPosition, 1.5)
   })
 })
 
@@ -495,19 +531,114 @@ describe('transitionAttackToIdle', () => {
 
 describe('ensureAttackState', () => {
   it('ignores already attacking states', () => {
-    expect(ensureAttackState({ ...playerState, state: 'attack' }, 1)).toEqual({
+    expect(
+      ensureAttackState({ ...playerState, state: 'attack' }, 1, 3)
+    ).toEqual({
       kind: 'ignored',
     })
   })
 
   it('builds attack state when not already attacking', () => {
-    expect(ensureAttackState(playerState, 1.25)).toEqual({
+    expect(ensureAttackState(playerState, 1.25, 3)).toEqual({
       kind: 'attack',
       nextPlayerState: {
         ...playerState,
         state: 'attack',
         rotation: 1.25,
+        attackCounter: 3,
       },
     })
+  })
+})
+
+// The bow's reach; the server gates the same shot on items.json `range`.
+const BOW_RANGE = 10
+
+/** `tickCombat` over the real controller, with a monster `distance` metres
+ *  away along +x. */
+function tickAtRange({
+  controller,
+  distance,
+  attackRange,
+  isMoving,
+  lineBlocked = false,
+}: {
+  controller: CombatController
+  distance: number
+  attackRange: number
+  isMoving: boolean
+  lineBlocked?: boolean
+}): CombatTickOutcome {
+  return tickCombat({
+    combatController: controller,
+    deltaTime: 5000,
+    playerPos,
+    playerStateName: isMoving ? 'moving' : 'idle',
+    isMoving,
+    currentSpeed: 1,
+    chaseGoal: null,
+    movementState: null,
+    cooldownMs: 1500,
+    attackRange,
+    pathing: directPathing(),
+    getMonsterInfo: () => ({ state: 'idle' }),
+    attackLineBlocked: () => lineBlocked,
+    findMonsterPosition: () => ({ x: distance, y: 0, z: 0 }),
+    sendPlayerMove: vi.fn(),
+  })
+}
+
+describe('tickCombat at the equipped weapon range', () => {
+  it('breaks the chase off at the bow range instead of walking into melee', () => {
+    const controller = new CombatController()
+    controller.beginCombat('m1', false)
+
+    expect(
+      tickAtRange({
+        controller,
+        distance: 9,
+        attackRange: BOW_RANGE,
+        isMoving: true,
+      })
+    ).toEqual({ kind: 'reached_attack_range', monsterId: 'm1' })
+  })
+
+  it('keeps chasing at the same distance with a melee weapon', () => {
+    const controller = new CombatController()
+    controller.beginCombat('m1', false)
+
+    expect(
+      tickAtRange({ controller, distance: 9, attackRange: 2, isMoving: true })
+        .kind
+    ).toBe('chasing_unchanged')
+  })
+
+  it('stands and shoots once stopped inside the bow range', () => {
+    const controller = new CombatController()
+    controller.beginCombat('m1', true)
+
+    expect(
+      tickAtRange({
+        controller,
+        distance: 9,
+        attackRange: BOW_RANGE,
+        isMoving: false,
+      })
+    ).toMatchObject({ kind: 'attack_cycle', monsterId: 'm1' })
+  })
+
+  it('walks at a target the shot cannot clear rather than shooting the wall', () => {
+    const controller = new CombatController()
+    controller.beginCombat('m1', false)
+
+    expect(
+      tickAtRange({
+        controller,
+        distance: 9,
+        attackRange: BOW_RANGE,
+        isMoving: true,
+        lineBlocked: true,
+      }).kind
+    ).toBe('chasing_unchanged')
   })
 })

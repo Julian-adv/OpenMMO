@@ -152,6 +152,7 @@ impl MiniMaxInvoker {
                     reasoning_effort: None,
                     thinking: endpoint.thinking.map(|value| value.as_str().to_string()),
                     reasoning_split: Some(true),
+                    max_messages: crate::openai::DEFAULT_MAX_MESSAGES,
                 },
                 system_prompt,
             )),
@@ -205,6 +206,7 @@ struct ThinkingRequest {
 #[derive(Deserialize)]
 struct AnthropicResponse {
     content: Vec<Value>,
+    stop_reason: Option<String>,
 }
 
 pub struct AnthropicInvoker {
@@ -294,7 +296,13 @@ impl LlmBackend for AnthropicInvoker {
         };
 
         let response = self.complete(&request).await?;
+        if response.stop_reason.as_deref() == Some("max_tokens") {
+            anyhow::bail!("MiniMax response reached the output token limit; increase max_tokens");
+        }
         let result = response_text(&response.content);
+        if result.trim().is_empty() {
+            anyhow::bail!("MiniMax API returned no reply text");
+        }
 
         let mut turn = request.messages;
         turn.push(AnthropicMessage {
@@ -307,6 +315,9 @@ impl LlmBackend for AnthropicInvoker {
         Ok(result)
     }
 }
+
+#[cfg(test)]
+mod http_tests;
 
 #[cfg(test)]
 mod tests {

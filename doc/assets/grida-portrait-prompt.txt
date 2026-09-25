@@ -1,0 +1,10 @@
+Use case: stylized-concept
+Asset type: Transparent character portrait for the OpenMMO NPC Grida's shop window.
+Input image: The provided grida-concept.png is the identity and costume reference. Create a new upper-body portrait of this exact same adult female orc character.
+Primary request: A polished waist-up portrait, with the full head, both pointed ears, shoulders and upper body visible, centered, looking toward the player with a subtly friendly, welcoming expression.
+Subject: Preserve the reference face, youthful adult facial proportions, olive-green skin, amber-brown eyes, dark eyebrows, black hair swept back into two braids, simple dark olive short-sleeved T-shirt and plain brown/taupe work apron with its neck straps and front pocket. Keep her recognizable as the same character; do not add tusks, jewelry, tools or other props.
+Pose: Relaxed natural shopkeeper stance, shoulders relaxed, arms lowered comfortably close to her body rather than the reference's spread-arm model pose. Frame from just above the head to the waist. Entire ears, hair and shoulder silhouette fit within the sides. Her apron and torso reach the bottom canvas edge so the bust sits cleanly on top of a shop panel; do not show legs.
+Style/medium: Match the reference's realistic high-quality fantasy character rendering, detailed but clean skin and fabric, softly lit face readable at small UI sizes, restrained highlights and no theatrical effects.
+Composition/framing: Square canvas, character fills most of the canvas, a small clear margin above the hair and beside the shoulders, front-facing or very slight three-quarter torso with face looking at the viewer.
+Scene/backdrop: GENUINELY TRANSPARENT BACKGROUND with an alpha channel. Isolated character cutout, clean natural hair and clothing edges. No background scene, no white/gray/black backdrop, no rendered checkerboard, no floor or cast shadow, no outline, no halo.
+Constraints: One character only; preserve identity and outfit; no text, logos, border, watermark, furniture, or extra objects. Deliver actual transparent pixels around the character.

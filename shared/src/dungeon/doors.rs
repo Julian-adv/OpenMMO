@@ -9,7 +9,7 @@ use std::collections::HashSet;
 
 use serde::Serialize;
 
-use super::{gen, FloorLayout};
+use super::{gen, is_locked_depth, FloorLayout};
 
 /// Percent chance a qualifying corridor mouth gets a door.
 const INTERIOR_DOOR_PCT: u32 = 30;
@@ -20,6 +20,52 @@ const INTERIOR_DOOR_PCT: u32 = 30;
 /// `door_hash`: it is on the wire, and the client mirrors it in
 /// `dungeonManager.ts`.
 pub const ENTRANCE_DOOR_ID: u32 = 0;
+
+pub fn door_position(
+    entrance: &crate::Position,
+    layouts: &[FloorLayout],
+    depth: u8,
+    door_id: u32,
+) -> Option<crate::Position> {
+    let (ox, oz) = super::dungeon_origin(entrance.x, entrance.z);
+    let (x, z) = if depth == 0 {
+        if door_id != ENTRANCE_DOOR_ID {
+            return None;
+        }
+        let shaft = &layouts.first()?.up_shaft;
+        let run = if shaft.reversed {
+            super::SHAFT_LEN as f32 - super::LANDING_CELLS
+        } else {
+            super::LANDING_CELLS
+        };
+        if shaft.along_z {
+            (
+                shaft.x as f32 + super::SHAFT_W as f32 * 0.5,
+                shaft.z as f32 + run,
+            )
+        } else {
+            (
+                shaft.x as f32 + run,
+                shaft.z as f32 + super::SHAFT_W as f32 * 0.5,
+            )
+        }
+    } else {
+        let door = interior_doors(layouts.get(depth as usize - 1)?)
+            .into_iter()
+            .find(|door| door.door_id == door_id)?;
+        let [ax, az, bx, bz] = door.seg();
+        ((ax + bx) as f32 * 0.5, (az + bz) as f32 * 0.5)
+    };
+    Some(crate::Position {
+        x: crate::wrap_world_x(ox + x),
+        y: if depth == 0 {
+            entrance.y
+        } else {
+            super::floor_world_y(entrance.y, depth)
+        },
+        z: oz + z,
+    })
+}
 
 /// Wall side indices, matching the client's `WALL_N/E/S/W`.
 const WALL_N: u8 = 0;
@@ -41,6 +87,11 @@ pub struct InteriorDoorSpec {
     /// Stable id used by toggle packets and the open-door state maps:
     /// `wall * 0x10000 + lat0 * 0x100 + wall_line` (grid < 256, no overlap).
     pub door_id: u32,
+    /// Index into `layout.rooms` of the room whose wall this is.
+    #[serde(skip)]
+    pub room: usize,
+    /// Only the floor's key works it, and it shuts itself again.
+    pub locked: bool,
 }
 
 impl InteriorDoorSpec {
@@ -81,13 +132,12 @@ fn door_hash(a: i32, b: i32, c: i32, d: i32) -> u32 {
     h % 1000
 }
 
-/// Scan each room's four walls for maximal runs whose outward neighbour is a
-/// corridor cell (a corridor mouth) and give each a door with
-/// `INTERIOR_DOOR_PCT`% chance, hashed from the opening's coordinates so the
-/// list is stable per layout.
-pub fn interior_doors(layout: &FloorLayout) -> Vec<InteriorDoorSpec> {
-    let mut doors = Vec::new();
-    for room in &layout.rooms {
+/// Every corridor mouth on the floor: maximal runs of a room wall whose
+/// outward neighbour is corridor, as door candidates.
+pub(super) fn wall_openings(layout: &FloorLayout) -> Vec<InteriorDoorSpec> {
+    let mut openings = Vec::new();
+    let locked_floor = is_locked_depth(layout.depth);
+    for (room_idx, room) in layout.rooms.iter().enumerate() {
         for wall in [WALL_N, WALL_E, WALL_S, WALL_W] {
             let spans_x = wall == WALL_N || wall == WALL_S;
             let outer_low = wall == WALL_N || wall == WALL_W;
@@ -120,26 +170,46 @@ pub fn interior_doors(layout: &FloorLayout) -> Vec<InteriorDoorSpec> {
                     start = lat;
                 }
                 if !open && start >= 0 {
-                    let (lat0, len) = (start, lat - start);
-                    if door_hash(layout.depth as i32, wall as i32, lat0, wall_line)
-                        < INTERIOR_DOOR_PCT * 10
-                    {
-                        doors.push(InteriorDoorSpec {
-                            wall,
-                            lat0,
-                            len,
-                            wall_line,
-                            door_id: (wall as u32) * 0x10000
-                                + (lat0 as u32) * 0x100
-                                + wall_line as u32,
-                        });
-                    }
+                    openings.push(InteriorDoorSpec {
+                        wall,
+                        lat0: start,
+                        len: lat - start,
+                        wall_line,
+                        door_id: (wall as u32) * 0x10000
+                            + (start as u32) * 0x100
+                            + wall_line as u32,
+                        room: room_idx,
+                        locked: locked_floor && room_idx == 0,
+                    });
                     start = -1;
                 }
             }
         }
     }
-    doors
+    openings
+}
+
+/// Give each corridor mouth a door with `INTERIOR_DOOR_PCT`% chance, hashed
+/// from the opening's coordinates so the list is stable per layout. A locked
+/// floor's stair-room exit always gets one.
+pub fn interior_doors(layout: &FloorLayout) -> Vec<InteriorDoorSpec> {
+    wall_openings(layout)
+        .into_iter()
+        .filter(|d| {
+            d.locked
+                || door_hash(layout.depth as i32, d.wall as i32, d.lat0, d.wall_line)
+                    < INTERIOR_DOOR_PCT * 10
+        })
+        .collect()
+}
+
+/// Ids of the doors on `layout` that need the floor's key.
+pub fn locked_door_ids(layout: &FloorLayout) -> Vec<u32> {
+    wall_openings(layout)
+        .into_iter()
+        .filter(|d| d.locked)
+        .map(|d| d.door_id)
+        .collect()
 }
 
 /// Flat `(ax, az, bx, bz)` quads of every interior door on the floor NOT in
@@ -156,6 +226,45 @@ pub fn closed_door_segs(layout: &FloorLayout, open: Option<&HashSet<u32>>) -> Ve
 #[cfg(test)]
 mod tests {
     use super::door_hash;
+
+    #[test]
+    fn door_delivery_points_match_opening_midpoints() {
+        for entrance in crate::dungeon::entrances() {
+            let position = crate::Position {
+                x: entrance.x,
+                y: entrance.y,
+                z: entrance.z,
+            };
+            let layouts = crate::dungeon::generate_dungeon_for(&entrance.id);
+            let (ox, oz) = crate::dungeon::dungeon_origin(position.x, position.z);
+            for layout in &layouts {
+                for door in super::interior_doors(layout) {
+                    let point =
+                        super::door_position(&position, &layouts, layout.depth, door.door_id)
+                            .unwrap();
+                    let [ax, az, bx, bz] = door.seg();
+                    assert_eq!(point.x, crate::wrap_world_x(ox + (ax + bx) as f32 * 0.5));
+                    assert_eq!(point.z, oz + (az + bz) as f32 * 0.5);
+                }
+            }
+            let point = super::door_position(&position, &layouts, 0, 0).unwrap();
+            let shaft = &layouts[0].up_shaft;
+            let run = if shaft.along_z {
+                point.z - oz - shaft.z as f32
+            } else {
+                crate::shortest_world_delta_x(ox + shaft.x as f32, point.x)
+            };
+            assert_eq!(
+                run,
+                if shaft.reversed {
+                    crate::dungeon::SHAFT_LEN as f32 - crate::dungeon::LANDING_CELLS
+                } else {
+                    crate::dungeon::LANDING_CELLS
+                }
+            );
+            assert!(super::door_position(&position, &layouts, 0, 99).is_none());
+        }
+    }
 
     /// Golden values computed with the original client JS implementation
     /// (`Math.imul(h ^ (v >>> 0), 16777619)`, then `(h >>> 0) % 1000`). A

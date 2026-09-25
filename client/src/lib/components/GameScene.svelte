@@ -3,16 +3,24 @@
   import { OrbitControls } from '@threlte/extras'
   import * as THREE from 'three'
   import { ClippingGroup, type WebGPURenderer } from 'three/webgpu'
+  import {
+    createRainPuddleUniforms,
+    updateRainPuddleLighting,
+  } from '../shaders/rain-puddle-nodes'
+  import { weather_rain_at } from '../wasm/onlinerpg_shared'
   import { onMount } from 'svelte'
   import {
     gameStore,
     resetGameStore,
     hoveredSignpost,
+    hoveredNameLabel,
     type LocalPlayer,
     type RemotePlayer,
     type ChatBubble,
   } from '../stores/gameStore'
   import SignpostBubble from './ChatBubble.svelte'
+  import HoverNameLabel from './HoverNameLabel.svelte'
+  import TargetRing from './TargetRing.svelte'
   import {
     startChatBubbleChecker,
     stopChatBubbleChecker,
@@ -28,17 +36,34 @@
   import GameSceneWaterFieldLayer from './game-scene/GameSceneWaterFieldLayer.svelte'
   import GameSceneRiverRocksLayer from './game-scene/GameSceneRiverRocksLayer.svelte'
   import GameSceneShoreSprayLayer from './game-scene/GameSceneShoreSprayLayer.svelte'
+  import GameSceneFootprintsLayer from './game-scene/GameSceneFootprintsLayer.svelte'
   import GameSceneGrassLayer from './game-scene/GameSceneGrassLayer.svelte'
   import GameSceneTreeLayer from './game-scene/GameSceneTreeLayer.svelte'
   import GameSceneWindParticles from './game-scene/GameSceneWindParticles.svelte'
+  import GameSceneRainLayer from './game-scene/GameSceneRainLayer.svelte'
+  import {
+    getLightningDirection,
+    getLightningStrength,
+    stopRainAmbience,
+    updateRainAmbience,
+  } from '../managers/rainAmbienceManager'
+  import { setRainIntensity } from '../managers/bgmManager'
   import GameSceneHousingLayer from './game-scene/GameSceneHousingLayer.svelte'
+  import GameSceneLandClaimLayer from './game-scene/GameSceneLandClaimLayer.svelte'
+  import GameSceneHousePlacementLayer from './game-scene/GameSceneHousePlacementLayer.svelte'
+  import GameSceneFencesLayer from './game-scene/GameSceneFencesLayer.svelte'
+  import GameSceneLandscapingLayer from './game-scene/GameSceneLandscapingLayer.svelte'
+  import GameSceneEstateChestsLayer from './game-scene/GameSceneEstateChestsLayer.svelte'
+  import GameSceneFurnitureShopLayer from './game-scene/GameSceneFurnitureShopLayer.svelte'
   import GameSceneDungeonLayer from './game-scene/GameSceneDungeonLayer.svelte'
   import { isUnderground } from '../stores/dungeonStore'
+  import { damageTextPool } from '../effects/damage-text-pool'
   import {
     playerFloorOffset,
     playerInsideHouseId,
   } from '../stores/housingStore'
   import { drainTileWork } from '../utils/tileWorkQueue'
+  import { isMounted } from '../utils/mounts'
   import { FRAME_TIME_MS, FRAME_TOLERANCE_MS } from '../utils/frameTiming'
   import { createRenderCadence } from '../utils/renderCadence'
   import { bootstrapSceneAssets } from './game-scene/asset-bootstrap'
@@ -46,8 +71,23 @@
   import GameScenePlayersLayer from './game-scene/GameScenePlayersLayer.svelte'
   import GameSceneMonstersLayer from './game-scene/GameSceneMonstersLayer.svelte'
   import GameSceneGroundItemsLayer from './game-scene/GameSceneGroundItemsLayer.svelte'
+  import GameSceneCampfiresLayer from './game-scene/GameSceneCampfiresLayer.svelte'
+  import GameSceneStallsLayer from './game-scene/GameSceneStallsLayer.svelte'
+  import GameSceneMealsLayer from './game-scene/GameSceneMealsLayer.svelte'
+  import GameSceneTipHatsLayer from './game-scene/GameSceneTipHatsLayer.svelte'
   import FishingBobber from './FishingBobber.svelte'
+  import ArrowFlight from './Arrow.svelte'
+  import { loadGLB } from '../utils/gltfCache'
+  import itemDefs from '../data/itemDefs'
+  import { SvelteMap } from 'svelte/reactivity'
+  import { getObjectModelPath } from '../utils/modelPaths'
   import { fishingBobbers, myFishing } from '../stores/fishingStore'
+  import {
+    arrowsInFlight,
+    launchArrow,
+    takeArrowRequests,
+  } from '../stores/arrowStore'
+  import { instrumentPanelVisible } from '../stores/instrumentStore'
   import MapEditorCursor from './map-editor/MapEditorCursor.svelte'
   import ZoneOverlay from './map-editor/ZoneOverlay.svelte'
   import RoadOverlay from './map-editor/RoadOverlay.svelte'
@@ -57,6 +97,7 @@
   import { type PlayerState } from '../utils/movementUtils'
   import {
     SUN_MAX_INTENSITY,
+    SUN_DAY_DURATION_SECONDS,
     computeSunLightSnapshot,
     type SunLightSnapshot,
     type CalendarDate,
@@ -68,6 +109,13 @@
     sunDebugOffset,
     serverGameTime,
   } from '../stores/timeStore'
+  import {
+    NO_WEATHER,
+    weather,
+    weatherSectorsReady,
+    type LocalWeather,
+  } from '../stores/weatherStore'
+  import { gameMinutesAt, sampleLocalWeather } from '../utils/weatherSample'
   import {
     debugVisible,
     cameraRotationEnabled,
@@ -161,6 +209,9 @@
   let terrainGroup = $state<THREE.Group | undefined>(undefined)
   let syncTileMeshes = $state<() => void>(() => {})
   let terrainGeometry = $state<THREE.BufferGeometry | null>(null)
+  let terrainLayerRef = $state<GameSceneTerrainLayer | undefined>(undefined)
+  const rainPuddleUniforms = createRainPuddleUniforms()
+  let puddlesVisible = true
   let terrainTiles = $state<TerrainTile[]>([])
   let terrainCenterChunk = $state({ x: 0, z: 0 })
   const terrainHeightManager = new TerrainHeightManager()
@@ -172,9 +223,14 @@
     terrainHeightManager
   )
   const waterFieldManager = new WaterFieldManager()
+  const waterSurfaceAt = (x: number, z: number) =>
+    waterFieldManager.surfaceAt(x, z)
+  const hasWaterSurfaceData = (x: number, z: number) =>
+    waterFieldManager.hasSurfaceData(x, z)
   monsterManager.heightManager = terrainHeightManager
-  monsterManager.splatManager = terrainSplatManager
   remotePlayerManager.heightManager = terrainHeightManager
+  remotePlayerManager.waterSurfaceAt = waterSurfaceAt
+  remotePlayerManager.hasWaterSurfaceData = hasWaterSurfaceData
   editorHeightManager.set(terrainHeightManager)
   editorSplatManager.set(terrainSplatManager)
   editorZoneManager.set(new ZoneManager())
@@ -193,22 +249,31 @@
   let waterLayerRef = $state<GameSceneWaterFieldLayer | undefined>(undefined)
   let riverRocksRef = $state<GameSceneRiverRocksLayer | undefined>(undefined)
   let shoreSprayRef = $state<GameSceneShoreSprayLayer | undefined>(undefined)
+  let footprintsRef = $state<GameSceneFootprintsLayer | undefined>(undefined)
   let grassLayerRef = $state<GameSceneGrassLayer | undefined>(undefined)
   let treeLayerRef = $state<GameSceneTreeLayer | undefined>(undefined)
   let windParticlesRef = $state<GameSceneWindParticles | undefined>(undefined)
+  let rainLayerRef = $state<GameSceneRainLayer | undefined>(undefined)
   let housingLayerRef = $state<GameSceneHousingLayer | undefined>(undefined)
   let dungeonLayerRef = $state<GameSceneDungeonLayer | undefined>(undefined)
   let groundItemsLayerRef = $state<GameSceneGroundItemsLayer | undefined>(
     undefined
   )
+  let campfiresLayerRef = $state<GameSceneCampfiresLayer | undefined>(undefined)
+  let tipHatsLayerRef = $state<GameSceneTipHatsLayer | undefined>(undefined)
+  let stallsLayerRef = $state<GameSceneStallsLayer | undefined>(undefined)
+  let mealsLayerRef = $state<GameSceneMealsLayer | undefined>(undefined)
   let objectOverlayRef = $state<ObjectOverlay | undefined>(undefined)
-  let signpostBubbleRef = $state<SignpostBubble | undefined>(undefined)
+  let estateFurnitureRef = $state<GameSceneEstateChestsLayer | undefined>(
+    undefined
+  )
+  let hoverNameLabelRef = $state<HoverNameLabel | undefined>(undefined)
   let signpostBubblePos = $derived(
     $hoveredSignpost
       ? new THREE.Vector3(
-          $hoveredSignpost.x,
-          $hoveredSignpost.y,
-          $hoveredSignpost.z
+          $hoveredSignpost.position.x,
+          $hoveredSignpost.position.y,
+          $hoveredSignpost.position.z
         )
       : new THREE.Vector3()
   )
@@ -330,6 +395,13 @@
     cameraTarget = resetCameraRotationToDefault(camera, currentPlayer.position)
   }
 
+  let prevInstrumentVisible = $state(false)
+  $effect(() => {
+    const visible = $instrumentPanelVisible
+    if (visible && !prevInstrumentVisible) resetCameraToInitialState()
+    prevInstrumentVisible = visible
+  })
+
   // Reset camera and pan offset when entering/leaving map editor mode
   let prevMapEditorMode = $state(false)
   $effect(() => {
@@ -360,12 +432,17 @@
     if (treeGroup) treeGroup.visible = !underground
     const housingGroup = housingLayerRef?.getGroup()
     if (housingGroup) housingGroup.visible = !underground
+    objectOverlayRef?.setVisible(!underground)
     const windGroup = windParticlesRef?.getGroup?.()
     if (windGroup) windGroup.visible = !underground
+    const rainGroup = rainLayerRef?.getGroup()
+    if (rainGroup) rainGroup.visible = !underground
     const riverRocksGroup = riverRocksRef?.getGroup?.()
     if (riverRocksGroup) riverRocksGroup.visible = !underground
     const shoreSprayGroup = shoreSprayRef?.getGroup?.()
     if (shoreSprayGroup) shoreSprayGroup.visible = !underground
+    const footprintsGroup = footprintsRef?.getGroup?.()
+    if (footprintsGroup) footprintsGroup.visible = !underground
     if (underground) {
       // The housing layer's per-frame detection is skipped underground;
       // clear its state so stale floor offsets can't leak into physics.
@@ -412,6 +489,51 @@
 
   // References to PlayerModel components
   let currentPlayerModel = $state<PlayerModel | null>(null)
+
+  // Preload each arrow model; ArrowFlight clones it per shot.
+  const arrowModels = new SvelteMap<string, THREE.Group>()
+  for (const def of Object.values(itemDefs)) {
+    if (def.category !== 'ammo' || !def.ammoKind || !def.worldModel) continue
+    const id = def.id
+    loadGLB(getObjectModelPath(def.worldModel)).then((gltf) => {
+      arrowModels.set(id, gltf.scene as THREE.Group)
+    })
+  }
+
+  /** Launch from the bow at release time; skip unavailable models or targets. */
+  function launchRequestedArrows() {
+    for (const request of takeArrowRequests()) {
+      const isLocal = request.playerId === currentPlayer?.id
+      const index = [...otherPlayers.keys()].indexOf(request.playerId)
+      const bow = isLocal
+        ? (currentPlayerModel?.getBowWorld() ?? null)
+        : (otherPlayerModels[index]?.getBowWorld() ?? null)
+      const monster = monsterManager.monsters.get(request.monsterId)
+      if (!bow || !monster) continue
+      launchArrow(request.playerId, {
+        monsterId: request.monsterId,
+        hit: request.hit,
+        from: { x: bow.x, y: bow.y, z: bow.z },
+        to: aimPointFor(monster),
+        flightMs: request.flightMs,
+        launchedAt: performance.now(),
+        ammoItemDefId: request.ammoItemDefId,
+      })
+    }
+  }
+
+  /** Chest height on the monster, from the same per-monster scale the damage
+   *  number is placed with. */
+  function aimPointFor(monster: {
+    position: { x: number; y: number; z: number }
+    scale?: number
+  }) {
+    return {
+      x: monster.position.x,
+      y: monster.position.y + 1.0 * (monster.scale ?? 1),
+      z: monster.position.z,
+    }
+  }
   let otherPlayerModels = $state<(PlayerModel | undefined)[]>([])
 
   // Reference to PlayerControl and PlayersLayer components
@@ -428,16 +550,19 @@
     currentPlayerState = newState
   }
 
-  const tileManager = createTerrainTileManager({
-    getTiles: () => terrainTiles,
-    setTiles: (tiles) => {
-      terrainTiles = tiles
+  const tileManager = createTerrainTileManager(
+    {
+      getTiles: () => terrainTiles,
+      setTiles: (tiles) => {
+        terrainTiles = tiles
+      },
+      getCenterChunk: () => terrainCenterChunk,
+      setCenterChunk: (chunk) => {
+        terrainCenterChunk = chunk
+      },
     },
-    getCenterChunk: () => terrainCenterChunk,
-    setCenterChunk: (chunk) => {
-      terrainCenterChunk = chunk
-    },
-  })
+    terrainHeightManager
+  )
 
   // Force terrain rebuild when requested (e.g. after region delete/generate)
   let lastRebuildVersion = 0
@@ -512,12 +637,12 @@
       }
       drainTileWork(graphicsPreset.terrainTileWorkPerFrame)
       syncTileMeshes()
-      // Finalize teleport once full 3x3 heightmap grid is loaded.
+      // Finalize teleport once the landing tile's heightmap is loaded.
       // Underground the dungeon owns Y — never snap to terrain height.
       if (
         $teleportLoading &&
         currentPlayer &&
-        terrainHeightManager.hasHeightDataForGrid(
+        terrainHeightManager.hasHeightData(
           currentPlayer.position.x,
           currentPlayer.position.z
         )
@@ -546,30 +671,32 @@
         performance.now() - remoteInterpolationStart
       )
 
-      // Update player model animations
+      // One wind reading per frame, shared by the cape and the wind particles.
+      const windState = grassLayerRef?.getWindState() ?? null
+
+      // Update player model animations (the cape steps inside `update`).
+      const dt = deltaTime / 1000
       const currentPlayerAnimationStart = performance.now()
-      if (currentPlayerModel) {
-        currentPlayerModel.update(deltaTime / 1000)
-      }
+      currentPlayerModel?.update(dt, windState)
       loopProfiler.record(
         'currentPlayerAnimation',
         performance.now() - currentPlayerAnimationStart
       )
 
+      launchRequestedArrows()
+
       // Update other player model animations
       const otherPlayerAnimationStart = performance.now()
       for (const playerModel of otherPlayerModels) {
-        if (playerModel) {
-          playerModel.update(deltaTime / 1000)
-        }
+        playerModel?.update(dt, windState)
       }
       loopProfiler.record(
         'otherPlayerAnimation',
         performance.now() - otherPlayerAnimationStart
       )
 
-      // Keep the signpost hover bubble facing the camera
-      signpostBubbleRef?.update()
+      // Keep the prop hover name label a steady on-screen size
+      hoverNameLabelRef?.update()
 
       // Update unified torch light flickering (single shadow-casting light)
       playersLayer?.updateUnifiedTorchFlicker(deltaTime / 1000)
@@ -633,8 +760,8 @@
       // Update tree occlusion (hide trees that block camera view of player)
       treeLayerRef?.update()
 
-      // Update ground items (spin animation)
-      groundItemsLayerRef?.update(deltaTime)
+      // Advance the ground items' shared animation clock
+      groundItemsLayerRef?.update()
 
       // Update grass wind & trail
       {
@@ -643,18 +770,67 @@
         loopProfiler.record('grassUpdate', performance.now() - grassStart)
       }
 
+      const calDate = calendarSystem.getDate()
+      const localWeather = sampleLocalWeatherNow(calDate)
+
       // Update wind-blown particles (only when grass is visible nearby)
       {
         const windStart = performance.now()
-        const windState = grassLayerRef?.getWindState()
-        const grassCount = grassLayerRef?.getPlayerChunkGrassCount() ?? 0
+        // Petals and seeds stop spawning under rain; the live ones age out.
+        const grassCount =
+          localWeather.rain > 0.2
+            ? 0
+            : (grassLayerRef?.getPlayerChunkGrassCount() ?? 0)
         if (windState)
           windParticlesRef?.update(deltaTime, camera, windState, grassCount)
         loopProfiler.record('windParticles', performance.now() - windStart)
       }
 
+      {
+        const rainStart = performance.now()
+        const rain = localWeather.rain
+        const indoor = $playerInsideHouseId !== null
+        rainLayerRef?.update(deltaTime, camera, indoor ? 0 : rain)
+        updateRainAmbience(rain, indoor, deltaTime / 1000)
+        setRainIntensity(rain)
+        loopProfiler.record('rain', performance.now() - rainStart)
+      }
+
+      if (graphicsPreset.enableRainPuddles) {
+        const puddleStart = performance.now()
+        const weatherNow = $weather
+        const gameMinutes = gameMinutesAt(calDate, calendarSystem.getGameHour())
+        if (
+          weatherNow &&
+          ($weatherSectorsReady || weatherNow.rainOverride !== null)
+        )
+          terrainLayerRef?.updateRainPuddles(
+            realDeltaSeconds,
+            (x, z, secondsAgo) =>
+              weatherNow.rainOverride ??
+              weather_rain_at(
+                weatherNow.seed,
+                weatherNow.bias,
+                gameMinutes - (secondsAgo * 1440) / SUN_DAY_DURATION_SECONDS,
+                x,
+                z
+              ),
+            weatherNow.rainOverride === null
+          )
+        loopProfiler.record('puddles', performance.now() - puddleStart)
+      } else {
+        terrainLayerRef?.pauseRainPuddles(realDeltaSeconds)
+      }
+
       // Update river-rock spray particles + wake scroll
       riverRocksRef?.update(deltaTime, camera)
+
+      // Update campfire flames
+      campfiresLayerRef?.update(deltaTime, camera)
+      objectOverlayRef?.update(deltaTime, camera)
+
+      // Age the local player's wet footprints and stamp new ones
+      footprintsRef?.update(deltaTime)
 
       // Update camera with preserved offset
       const cameraUpdateStart = performance.now()
@@ -662,12 +838,11 @@
       loopProfiler.record('cameraUpdate', performance.now() - cameraUpdateStart)
 
       // Compute sun snapshot once per frame (reused by lighting + water)
-      const calDate = calendarSystem.getDate()
       const sunSnapshot = computeSunLightSnapshot(displayHour, calDate)
 
       // Update directional light to follow player
       const lightUpdateStart = performance.now()
-      updateLightPosition(sunSnapshot, calDate)
+      updateLightPosition(sunSnapshot, calDate, localWeather)
       loopProfiler.record('lightUpdate', performance.now() - lightUpdateStart)
 
       // Update water uniforms — always use real sun direction (not moon)
@@ -691,6 +866,23 @@
         camera.getWorldDirection(waterCamDirTmp)
         waterCamDir = waterCamDirTmp.clone()
       }
+      rainPuddleUniforms.enabled.value =
+        graphicsPreset.enableRainPuddles && !$isUnderground && puddlesVisible
+          ? 1
+          : 0
+      if (
+        rainPuddleUniforms.enabled.value &&
+        graphicsPreset.enablePuddleRipples
+      ) {
+        updateRainPuddleLighting(
+          rainPuddleUniforms,
+          currentTime / 1000,
+          waterSunDirTmp,
+          waterCamDirTmp
+        )
+      } else {
+        rainPuddleUniforms.rippleStrength.value = 0
+      }
 
       runRenderPasses({
         renderer,
@@ -711,6 +903,7 @@
         grassLayerRef,
         treeLayerRef,
         windParticlesRef,
+        rainLayerRef,
         housingLayerRef,
         objectOverlayRef,
         currentPlayerModel,
@@ -737,14 +930,15 @@
       if (isSceneCompiling && initialDataReadyAt > 0) {
         if (rawDeltaTime < SMOOTH_FRAME_TIME_MS) {
           smoothFrameCount++
-          if (smoothFrameCount >= SMOOTH_FRAME_THRESHOLD) {
-            isSceneCompiling = false
-          }
         } else {
           smoothFrameCount = 0
         }
-        if (currentTime - initialDataReadyAt > SMOOTH_FRAME_TIMEOUT_MS) {
+        if (
+          smoothFrameCount >= SMOOTH_FRAME_THRESHOLD ||
+          currentTime - initialDataReadyAt > SMOOTH_FRAME_TIMEOUT_MS
+        ) {
           isSceneCompiling = false
+          networkManager.sendWorldReady()
         }
       }
 
@@ -786,9 +980,12 @@
         y: currentPlayer.position.y,
         z: currentPlayer.position.z + pan.z,
       }
-      // Always use fixed CAMERA_OFFSET in editor mode (OrbitControls is disabled,
-      // so we must not feed back the computed offset which includes the pan).
-      if (camera.zoom < 1) {
+      // Editors pin CAMERA_OFFSET (the pan would feed back into the computed
+      // offset) unless CAM ROT owns the orbit; then only the target follows.
+      if ($cameraRotationEnabled) {
+        camera.lookAt(panPos.x, panPos.y, panPos.z)
+        cameraTarget = [panPos.x, panPos.y, panPos.z]
+      } else if (camera.zoom < 1) {
         const maxBelow = INITIAL_DISTANCE / Math.SQRT2
         const scale = Math.max(
           1,
@@ -817,9 +1014,24 @@
     cameraDistance.set(camera.zoom)
   }
 
+  // Use server game time, excluding the debug display offset.
+  function sampleLocalWeatherNow(calDate: CalendarDate): LocalWeather {
+    if (!$weather || !currentPlayer || $isUnderground) return NO_WEATHER
+    return sampleLocalWeather(
+      $weather.seed,
+      $weather.bias,
+      calDate,
+      calendarSystem.getGameHour(),
+      currentPlayer.position.x,
+      currentPlayer.position.z,
+      $weather.rainOverride
+    )
+  }
+
   function updateLightPosition(
     sunLightSnapshot: SunLightSnapshot,
-    calDate: CalendarDate
+    calDate: CalendarDate,
+    localWeather: LocalWeather
   ) {
     sceneLighting.update({
       currentPlayerPosition: currentPlayer?.position ?? null,
@@ -830,6 +1042,10 @@
       scene,
       sunLightSnapshot,
       eclipseFactor: eclipseState.factor,
+      cloudFactor: localWeather.cloud,
+      rainIntensity: localWeather.rain,
+      lightningStrength: getLightningStrength(),
+      lightningDirection: getLightningDirection(),
       underground: $isUnderground,
     })
   }
@@ -853,6 +1069,7 @@
       setLoopProfileEnabled: (v) => {
         loopProfileEnabled = v
       },
+      togglePuddles: () => (puddlesVisible = !puddlesVisible),
       renderer,
       scene,
       getGrassGroup: () => grassLayerRef?.getGroup(),
@@ -999,10 +1216,14 @@
       unsubscribeServerGameTime()
       unsubscribeSunTimeScale()
       stopGameLoop()
+      stopRainAmbience()
+      setRainIntensity(0)
       stopChatBubbleChecker()
       networkManager.disconnect()
       monsterManager.reset()
       remotePlayerManager.reset()
+      remotePlayerManager.waterSurfaceAt = null
+      remotePlayerManager.hasWaterSurfaceData = null
       playerDebugInfo.set(null)
       terrainHeightManager.destroy()
       terrainSplatManager.destroy()
@@ -1031,15 +1252,15 @@
   zoom={ORTHOGRAPHIC_DEFAULT_ZOOM}
 >
   <OrbitControls
-    enableRotate={$mapEditorMode || $housingEditorMode
-      ? false
-      : $cameraRotationEnabled}
+    enableRotate={!$instrumentPanelVisible && $cameraRotationEnabled}
     enablePan={false}
     enableZoom={!$mapEditorMode &&
       !$housingEditorMode &&
+      !$instrumentPanelVisible &&
       $myFishing.phase !== 'bite' &&
       $myFishing.phase !== 'fight'}
-    enabled={!$mapEditorMode && !$housingEditorMode}
+    enabled={!$instrumentPanelVisible &&
+      ((!$mapEditorMode && !$housingEditorMode) || $cameraRotationEnabled)}
     target={cameraTarget}
     minZoom={$debugSpeedMode ? 0.15 : 1}
     maxZoom={2}
@@ -1083,6 +1304,8 @@
 {/if}
 
 <GameSceneTerrainLayer
+  bind:this={terrainLayerRef}
+  {rainPuddleUniforms}
   {terrainGeometry}
   {terrainTiles}
   bind:terrainMeshes
@@ -1102,8 +1325,41 @@
   />
 {/if}
 
+<GameSceneLandClaimLayer
+  heightManager={terrainHeightManager}
+  playerPosition={currentPlayer?.position ?? null}
+/>
+<GameSceneHousePlacementLayer
+  heightManager={terrainHeightManager}
+  {terrainMeshes}
+  player={currentPlayer ?? null}
+  housingGroup={housingLayerRef?.getGroup() ?? null}
+/>
+<GameSceneFencesLayer
+  heightManager={terrainHeightManager}
+  {terrainMeshes}
+  player={currentPlayer ?? null}
+/>
+<GameSceneLandscapingLayer
+  heightManager={terrainHeightManager}
+  {terrainMeshes}
+  player={currentPlayer ?? null}
+/>
+<GameSceneEstateChestsLayer
+  bind:this={estateFurnitureRef}
+  heightManager={terrainHeightManager}
+  {terrainMeshes}
+  housingGroup={housingLayerRef?.getGroup()}
+  player={currentPlayer ?? null}
+/>
+<GameSceneFurnitureShopLayer
+  player={currentPlayer ?? null}
+  getObjectGroup={() => objectOverlayRef?.getGroup() ?? null}
+/>
+
 <GameSceneDungeonLayer
   bind:this={dungeonLayerRef}
+  animatePuddles={graphicsPreset.enablePuddleRipples}
   onPropReady={(entranceId, depth, propId, x, z) =>
     playerControl?.swingAndBreakProp(entranceId, depth, propId, x, z)}
 />
@@ -1135,6 +1391,16 @@
     playerPosition={currentPlayer?.position ?? null}
   />
 {/if}
+
+{#key `${graphicsPreset.rainParticleLimit}:${graphicsPreset.enableRainSplashes}`}
+  <GameSceneRainLayer
+    bind:this={rainLayerRef}
+    playerPosition={currentPlayer?.position ?? null}
+    heightManager={terrainHeightManager}
+    maxDrops={graphicsPreset.rainParticleLimit}
+    enableSplashes={graphicsPreset.enableRainSplashes}
+  />
+{/key}
 
 {#if graphicsPreset.enableWaterLayer}
   <GameSceneWaterFieldLayer
@@ -1176,7 +1442,20 @@
   />
 {/if}
 
+<GameSceneFootprintsLayer
+  mounted={isMounted(currentPlayer)}
+  bind:this={footprintsRef}
+  playerPosition={currentPlayer?.position ?? null}
+  remotePlayers={remotePlayerManager.players}
+  {otherPlayers}
+  enableRemote={graphicsPreset.enableRemoteFootprints}
+  {waterSurfaceAt}
+/>
+
 <T is={entityClipGroupObj} bind:ref={entityClipGroup}>
+  <!-- Under the clip group so labels are hidden with entities in the water passes -->
+  <T is={damageTextPool.group} />
+  <!-- Hidden surface meshes still raycast, so drop them from the click lists underground -->
   <GameScenePlayersLayer
     bind:this={playersLayer}
     {camera}
@@ -1190,22 +1469,43 @@
     housingGroup={housingLayerRef?.getGroup() ?? null}
     dungeonGroup={dungeonLayerRef?.getFloorGroup() ?? null}
     doorMeshes={[
-      ...(housingLayerRef?.getDoorMeshes() ?? []),
+      ...($isUnderground ? [] : (housingLayerRef?.getDoorMeshes() ?? [])),
       ...(dungeonLayerRef?.getDoorMeshes() ?? []),
     ]}
-    objectMeshes={objectOverlayRef ? [objectOverlayRef.getGroup()] : []}
+    objectMeshes={$isUnderground
+      ? []
+      : [
+          ...(objectOverlayRef ? [objectOverlayRef.getGroup()] : []),
+          ...(estateFurnitureRef ? [estateFurnitureRef.getGroup()] : []),
+        ]}
     propMeshes={dungeonLayerRef?.getPropMeshes() ?? []}
     groundItemMeshes={groundItemsLayerRef?.getGroup()
       ? [groundItemsLayerRef.getGroup()!]
       : []}
+    tipHatMeshes={tipHatsLayerRef?.getGroup()
+      ? [tipHatsLayerRef.getGroup()!]
+      : []}
+    stallMeshes={stallsLayerRef?.getGroup() ? [stallsLayerRef.getGroup()!] : []}
+    mealMeshes={mealsLayerRef?.getGroup() ? [mealsLayerRef.getGroup()!] : []}
     {monsterModels}
     {playerAttackDuration}
     torchEffectsDisabled={!graphicsPreset.enableTorchEffects}
     torchLightCastsShadow={graphicsPreset.enableTorchShadows}
     torchShadowMapSize={graphicsPreset.torchShadowMapSize}
     wallTorchPositions={() => dungeonLayerRef?.getWallTorchPositions() ?? []}
+    hearthFirePositions={() => [
+      ...(objectOverlayRef?.getFirePositions() ?? []),
+      ...(estateFurnitureRef?.getFirePositions() ?? []),
+    ]}
+    houseTorchPositions={() => [
+      ...(objectOverlayRef?.getTorchPositions() ?? []),
+      ...(estateFurnitureRef?.getTorchPositions() ?? []),
+    ]}
     heightManager={terrainHeightManager}
-    waterSurfaceAt={(x, z) => waterFieldManager.surfaceAt(x, z)}
+    {waterSurfaceAt}
+    {hasWaterSurfaceData}
+    waterFoamMap={graphicsPreset.enableWaterEffects ? waterFoamMap : null}
+    waterSunDirection={waterSunDir}
     onStateChange={handlePlayerStateChange}
     onPlayerControlEvent={enqueuePlayerControlEvent}
     onAttackDuration={(duration) => (playerAttackDuration = duration)}
@@ -1218,13 +1518,38 @@
 
   <GameSceneMonstersLayer
     monsters={monsterManager.monsters}
+    {currentPlayer}
+    heightManager={terrainHeightManager}
     bind:monsterModels
   />
 
   <GameSceneGroundItemsLayer
     bind:this={groundItemsLayerRef}
     heightManager={terrainHeightManager}
+    {camera}
   />
+
+  <GameSceneCampfiresLayer bind:this={campfiresLayerRef} />
+  <GameSceneStallsLayer bind:this={stallsLayerRef} />
+  <GameSceneMealsLayer bind:this={mealsLayerRef} />
+  <GameSceneTipHatsLayer bind:this={tipHatsLayerRef} />
+
+  <!-- Keyed per flight, not per shooter: the same key would have Svelte reuse
+       the component for the next shot, and its launch point is read once at
+       creation — every arrow after the first would leave the first one's bow. -->
+  {#each [...$arrowsInFlight] as [shooterId, shot] (`${shooterId}:${shot.launchedAt}`)}
+    <ArrowFlight
+      {shot}
+      playerId={shooterId}
+      model={shot.ammoItemDefId
+        ? arrowModels.get(shot.ammoItemDefId)
+        : undefined}
+      targetOf={() => {
+        const target = monsterManager.monsters.get(shot.monsterId)
+        return target && target.state !== 'dead' ? aimPointFor(target) : null
+      }}
+    />
+  {/each}
 
   {#each [...$fishingBobbers] as [playerId, bobber] (playerId)}
     <!-- Both position objects are mutated in place upstream, so the line
@@ -1261,10 +1586,29 @@
 
 {#if $hoveredSignpost && camera}
   <SignpostBubble
-    bind:this={signpostBubbleRef}
     position={signpostBubblePos}
     {camera}
     message={$hoveredSignpost.text}
+  />
+{/if}
+
+{#if $hoveredNameLabel && camera}
+  <HoverNameLabel
+    bind:this={hoverNameLabelRef}
+    text={$hoveredNameLabel.text}
+    position={$hoveredNameLabel.position}
+    labelY={$hoveredNameLabel.labelY}
+    {camera}
+  />
+  <TargetRing
+    heightManager={terrainHeightManager}
+    x={$hoveredNameLabel.position.x}
+    z={$hoveredNameLabel.position.z}
+    radius={$hoveredNameLabel.ringRadius}
+    floorLevel={$hoveredNameLabel.floorLevel}
+    fallbackY={$hoveredNameLabel.position.y}
+    drape={$hoveredNameLabel.drape}
+    color="#ffd166"
   />
 {/if}
 

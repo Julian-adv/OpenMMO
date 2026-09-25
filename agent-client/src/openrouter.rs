@@ -55,6 +55,7 @@ pub fn invoker(config: &OpenRouterConfig, system_prompt: String) -> anyhow::Resu
             reasoning_effort: None,
             thinking: None,
             reasoning_split: None,
+            max_messages: crate::openai::DEFAULT_MAX_MESSAGES,
         },
         system_prompt,
     ))

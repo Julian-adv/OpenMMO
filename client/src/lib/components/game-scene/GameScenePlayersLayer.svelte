@@ -4,6 +4,13 @@
   import { get } from 'svelte/store'
   import { SvelteMap } from 'svelte/reactivity'
   import PlayerModel from '../PlayerModel.svelte'
+  import GameSceneAbilitiesLayer from './GameSceneAbilitiesLayer.svelte'
+  import GameSceneEnchantSuccessLayer from './GameSceneEnchantSuccessLayer.svelte'
+  import GameSceneTeleportLayer from './GameSceneTeleportLayer.svelte'
+  import { teleportHiddenPlayers } from '../../stores/teleportEffectStore'
+  import type { EnchantSuccess } from '../../stores/enchantSuccessStore'
+  import type { EnchantEffectAnchor } from '../../utils/playerEffectAnchors'
+  import { applyEnchantLight } from '../../utils/enchantLight'
   import PlayerControl from '../PlayerControl.svelte'
   import type { PlayerControlEvent } from '../player-control/events'
   import type {
@@ -18,6 +25,7 @@
 
   import {
     applyTorchFlickerWorld,
+    TORCH_BASE_INTENSITY,
     TORCH_BASE_DISTANCE,
     TORCH_BASE_DECAY,
     TORCH_BASE_POSITION,
@@ -30,10 +38,14 @@
     playerInsideHouseId,
   } from '../../stores/housingStore'
   import { currentDungeonDepth } from '../../stores/dungeonStore'
-  import { myFishing } from '../../stores/fishingStore'
+  import {
+    myFishing,
+    fishingCatches,
+    removeFishingCatch,
+  } from '../../stores/fishingStore'
   import { FishingAnimationName } from '../../types/animations'
-  import { dungeonManager } from '../../managers/dungeonManager'
   import { housingManager } from '../../managers/housingManager'
+  import { campfireManager } from '../../managers/campfireManager'
   import {
     shortestWrappedDeltaX,
     unwrapWorldXNear,
@@ -41,6 +53,7 @@
   import { OFFSCREEN_Y } from '../../utils/house-geo-utils'
   import { torchLightEnabled } from '../../stores/debugStore'
   import { localTorchEquipped } from '../../stores/inventoryStore'
+  import { LIGHT_WAKE, LIGHT_FADE } from '../../effects/radiance'
 
   const TORCH_OFFSET = new THREE.Vector3(
     TORCH_BASE_POSITION.x,
@@ -64,11 +77,17 @@
     objectMeshes: THREE.Object3D[]
     propMeshes: THREE.Object3D[]
     groundItemMeshes: THREE.Object3D[]
+    tipHatMeshes: THREE.Object3D[]
+    stallMeshes: THREE.Object3D[]
+    mealMeshes: THREE.Object3D[]
     monsterModels: (Monster | undefined)[]
     playerAttackDuration: number
     heightManager: TerrainHeightManager
     /** Baked water surface height at a world XZ (for fishing cast detection). */
     waterSurfaceAt?: (x: number, z: number) => number
+    waterFoamMap?: THREE.Texture | null
+    waterSunDirection?: THREE.Vector3 | null
+    hasWaterSurfaceData?: (x: number, z: number) => boolean
     onStateChange: (newState: PlayerState) => void
     onPlayerControlEvent?: (event: PlayerControlEvent) => void
     onAttackDuration: (duration: number) => void
@@ -84,6 +103,10 @@
      *  world-positions (empty when not underground). Pulled fresh each frame —
      *  the array is swapped on floor rebuild, so it must not be cached. */
     wallTorchPositions?: () => THREE.Vector3[]
+    /** World positions of burning hearth flames (placed furniture). */
+    hearthFirePositions?: () => THREE.Vector3[]
+    /** Flame world-positions of wall torches placed in houses. */
+    houseTorchPositions?: () => THREE.Vector3[]
   }
 
   let {
@@ -101,10 +124,16 @@
     objectMeshes,
     propMeshes,
     groundItemMeshes,
+    tipHatMeshes,
+    stallMeshes,
+    mealMeshes,
     monsterModels,
     playerAttackDuration,
     heightManager,
     waterSurfaceAt,
+    waterFoamMap = null,
+    waterSunDirection = null,
+    hasWaterSurfaceData,
     onStateChange,
     onPlayerControlEvent,
     onAttackDuration,
@@ -117,6 +146,8 @@
     torchLightCastsShadow = true,
     torchShadowMapSize = TORCH_SHADOW_MAP_SIZE,
     wallTorchPositions,
+    hearthFirePositions,
+    houseTorchPositions,
   }: Props = $props()
 
   // Sync attack animation duration to remote player manager
@@ -130,8 +161,24 @@
   $effect(() => {
     if ($myFishing.phase === 'casting') fishingCastDone = false
   })
+  const localCatch = $derived(
+    currentPlayer ? $fishingCatches.get(currentPlayer.id) : undefined
+  )
+  $effect(() => {
+    for (const [id] of $fishingCatches) {
+      const local = id === currentPlayer?.id
+      const state = local ? currentPlayerState : remotePlayers.get(id)
+      const health = local
+        ? currentPlayer?.health
+        : otherPlayers.get(id)?.health
+      if (!state || state.state !== 'idle' || !health || health <= 0) {
+        removeFishingCatch(id)
+      }
+    }
+  })
   const fishingOverrideActive = $derived(
-    $myFishing.phase !== 'idle' && currentPlayerState.state === 'idle'
+    ($myFishing.phase !== 'idle' || localCatch !== undefined) &&
+      currentPlayerState.state === 'idle'
   )
   const effectivePlayerState = $derived(
     fishingOverrideActive ? 'interact' : currentPlayerState.state
@@ -142,6 +189,9 @@
         ? FishingAnimationName.CAST
         : FishingAnimationName.IDLE
       : currentPlayerState.interactionAnim
+  )
+  const effectiveInteractionCounter = $derived(
+    fishingOverrideActive ? undefined : currentPlayerState.interactionCounter
   )
 
   // Visual floor: matches what remotes report, so a player on the stairs isn't
@@ -182,15 +232,57 @@
     return map
   })
 
-  // Unified torch: exactly one PointLight for the entire scene.
-  // Priority: local player's torch (if ON) > closest visible remote player
-  // with torchOn. When no candidate, intensity drops to 0. Keeping the
-  // PointLight count at a constant 1 avoids WebGPU pipeline recompile stalls.
-  //
-  // Position/intensity are driven imperatively from the game loop (not a
-  // $derived) because currentPlayer.position is a mutated plain object that
-  // Svelte reactivity cannot track. The game loop runs every frame anyway,
-  // so recomputing the target here has no extra cost.
+  let remoteModels = $derived(
+    new SvelteMap(
+      [...otherPlayers.keys()].map((id, index) => [
+        id,
+        otherPlayerModels[index],
+      ])
+    )
+  )
+
+  function getAbilityAnchor(
+    id: number,
+    shield: boolean,
+    target: THREE.Vector3
+  ) {
+    const local = id === currentPlayer?.id
+    if (
+      local
+        ? !currentPlayer || currentPlayer.health <= 0
+        : !remoteVisibility.get(id) || (otherPlayers.get(id)?.health ?? 0) <= 0
+    )
+      return false
+    const model = local ? currentPlayerModel : remoteModels.get(id)
+    if (!model) return false
+    if (shield) return model.getShieldAnchor(target)
+    const root = model.getModelGroup()
+    if (!root) return false
+    root.getWorldPosition(target)
+    return true
+  }
+
+  function getEnchantAnchor(
+    event: EnchantSuccess,
+    target: EnchantEffectAnchor
+  ) {
+    const local = event.playerId === currentPlayer?.id
+    if (!local && !remoteVisibility.get(event.playerId)) return false
+    const model = local ? currentPlayerModel : remoteModels.get(event.playerId)
+    return model?.getEnchantAnchor(event.weapon, target) ?? false
+  }
+
+  function setEnchantPose(playerId: number, until: number, weapon: boolean) {
+    const model =
+      playerId === currentPlayer?.id
+        ? currentPlayerModel
+        : remoteModels.get(playerId)
+    model?.setEnchantPoseUntil(until, weapon)
+  }
+
+  let enchantLayer: GameSceneEnchantSuccessLayer | undefined
+  let teleportLayer: GameSceneTeleportLayer | undefined
+  // One shadow light: enchantment, fire, local light, then nearby light.
   let unifiedTorchLight = $state<THREE.PointLight | undefined>(undefined)
 
   // mapSize is only read when the cube map is allocated, so a quality switch
@@ -204,26 +296,30 @@
   })
 
   let unifiedTorchFlickerTime = 0
+  const radianceStrengths = new SvelteMap<number, number>()
+
+  function updateRadianceStrength(
+    player: LocalPlayer | RemotePlayer,
+    dt: number
+  ) {
+    const previous = radianceStrengths.get(player.id) ?? 0
+    const next =
+      player.health <= 0
+        ? 0
+        : player.radianceOn
+          ? Math.min(1, previous + dt / LIGHT_WAKE)
+          : Math.max(0, previous - dt / LIGHT_FADE)
+    if (next > 0) radianceStrengths.set(player.id, next)
+    else radianceStrengths.delete(player.id)
+  }
   const _unifiedTorchTmp = new THREE.Vector3()
   const _torchOffsetTmp = new THREE.Vector3()
 
-  // Wall-torch light pool: a *fixed* set of non-shadow PointLights, each parked
-  // on one of the N nearest dungeon wall torches so the floor glows even with no
-  // lit player torch around. Mounted only while underground (below), so the
-  // scene's PointLight count steps 1->1+N on dungeon entry and back on exit.
-  // That deviates from the unified light's "always-mounted, constant 1" rule on
-  // purpose: the unified light stays constant because remote torch-bearers come
-  // and go *mid-play* (a recompile stall there is visible), whereas this pool's
-  // count only changes on a dungeon enter/exit — a hard scene transition that
-  // already loads/unloads all the floor geometry, so its one-time (then cached)
-  // pipeline recompile is masked. Always-mounting these N everywhere instead
-  // would tax the whole overworld with N dead point lights it never needs.
-  // Within the dungeon the count is fixed (unused slots idle at intensity 0), so
-  // moving between rooms/floors never churns the pipeline. Shadow casting stays
-  // on the *single* unified light (below): when no player torch is lit it
-  // relocates to the nearest wall torch and casts its shadow there, matching how
-  // a remote player's torch is treated; that torch is then skipped here so it
-  // isn't double-lit.
+  // Wall-torch light pool: N shadowless PointLights parked on the nearest wall
+  // torches (dungeon floors, house interiors). Always mounted so the scene's
+  // PointLight count never changes — mounting on house entry caused a visible
+  // pipeline-recompile stall. Unused slots idle at intensity 0. Shadows stay on
+  // the single unified light, which skips the torch it already occupies.
   const WALL_TORCH_POOL_SIZE = 6
   /** Wall torches glow a touch dimmer than a held/player torch. */
   const WALL_TORCH_INTENSITY_SCALE = 0.65
@@ -236,17 +332,15 @@
   const wallTorchFlickerTimes = wallTorchSlots.map((_, i) => i * 0.7)
   /** Scratch reused each frame to rank wall torches by distance to the player. */
   const _wallTorchRanking: { idx: number; dist: number }[] = []
+  let wallTorchPoolIdle = false
 
+  // The bearer's y already resolves house/dungeon floors, so don't resample terrain
   function setTorchTargetFromPose(
     x: number,
     z: number,
-    fallbackY: number,
+    y: number,
     rotation: number
   ): THREE.Vector3 {
-    const y =
-      dungeonManager.sampleHeightAt(x, z) ??
-      heightManager.getHeightAtWorldPosition(x, z) ??
-      fallbackY
     _torchOffsetTmp.copy(TORCH_OFFSET).applyAxisAngle(Y_AXIS, rotation)
     return _unifiedTorchTmp.set(
       x + _torchOffsetTmp.x,
@@ -255,18 +349,88 @@
     )
   }
 
-  /** Pick the unified shadow light's target. Returns the world position plus, when
-   *  it landed on a wall torch, that torch's index (so the pool can skip it). */
-  function computeUnifiedTorchTarget(
-    wallPositions: THREE.Vector3[]
-  ): { target: THREE.Vector3; wallIdx: number } | null {
+  /** Height above the fire bed where the campfire's light sits. */
+  const CAMPFIRE_LIGHT_HEIGHT = 1.0
+  /** A campfire further than this is left to the torches. */
+  const CAMPFIRE_LIGHT_RANGE = 14
+  const CAMPFIRE_LIGHT_RANGE_SQ = CAMPFIRE_LIGHT_RANGE * CAMPFIRE_LIGHT_RANGE
+  /** A fire throws more light than a torch in hand. */
+  const CAMPFIRE_INTENSITY_SCALE = 1.25
+  /** A hearth's log bed sits inside the arch; its light hovers a little above
+   *  and in front of the bed so the shadow light isn't buried in stone. */
+  const HEARTH_LIGHT_HEIGHT = 0.4
+  const _fireLightTmp = new THREE.Vector3()
+
+  /** Light position of the closest burning fire (campfire or hearth) within
+   *  range. Surface only — the campfire layer hides underground. */
+  function nearestFireLight(playerPos: {
+    x: number
+    z: number
+  }): THREE.Vector3 | null {
+    if (isUnderground) return null
+    let bestDist = CAMPFIRE_LIGHT_RANGE_SQ
+    let found = false
+    for (const fire of campfireManager.fires.values()) {
+      const dx = shortestWrappedDeltaX(playerPos.x, fire.x)
+      const dz = fire.z - playerPos.z
+      const dist = dx * dx + dz * dz
+      if (dist < bestDist) {
+        bestDist = dist
+        found = true
+        _fireLightTmp.set(fire.x, fire.y + CAMPFIRE_LIGHT_HEIGHT, fire.z)
+      }
+    }
+    for (const fire of hearthFirePositions?.() ?? []) {
+      const dx = shortestWrappedDeltaX(playerPos.x, fire.x)
+      const dz = fire.z - playerPos.z
+      const dist = dx * dx + dz * dz
+      if (dist < bestDist) {
+        bestDist = dist
+        found = true
+        _fireLightTmp.set(fire.x, fire.y + HEARTH_LIGHT_HEIGHT, fire.z)
+      }
+    }
+    return found ? _fireLightTmp : null
+  }
+
+  /** Pick the unified shadow light's target. Returns the world position, the
+   *  intensity it should burn at, and — when it landed on a wall torch — that
+   *  torch's index (so the pool can skip it). */
+  function computeUnifiedTorchTarget(wallPositions: THREE.Vector3[]): {
+    target: THREE.Vector3
+    wallIdx: number
+    scale: number
+    radiance?: boolean
+  } | null {
     if (torchEffectsDisabled) return null
     if (!currentPlayer) return null
-    if (get(localTorchEquipped) || get(torchLightEnabled)) {
-      const p = currentPlayer.position
+    // A campfire outshines any torch, held or not: the one light goes to the
+    // fire while the player is near it.
+    const fire = nearestFireLight(currentPlayer.position)
+    if (fire) {
       return {
-        target: setTorchTargetFromPose(p.x, p.z, p.y, currentPlayer.rotation),
+        target: _unifiedTorchTmp.set(
+          unwrapWorldXNear(currentPlayer.position.x, fire.x),
+          fire.y,
+          fire.z
+        ),
         wallIdx: -1,
+        scale: CAMPFIRE_INTENSITY_SCALE,
+      }
+    }
+    const localTorch = get(localTorchEquipped) || get(torchLightEnabled)
+    const localRadiance = radianceStrengths.get(currentPlayer.id) ?? 0
+    if (localTorch || localRadiance > 0) {
+      const p = currentPlayer.position
+      const radiance =
+        !!currentPlayer.radianceOn || (!localTorch && localRadiance > 0)
+      return {
+        target: radiance
+          ? _unifiedTorchTmp.set(p.x, p.y + TORCH_BASE_POSITION.y, p.z)
+          : setTorchTargetFromPose(p.x, p.z, p.y, currentPlayer.rotation),
+        wallIdx: -1,
+        scale: localTorch ? 1 : localRadiance,
+        radiance,
       }
     }
     // No lit player torch: the nearest lit source — remote torch or wall torch,
@@ -275,9 +439,17 @@
     let bestDist = Infinity
     let bestRp: PlayerState | null = null
     let bestWallIdx = -1
+    let bestRadiance = false
+    let bestScale = 1
     for (const [id, player] of otherPlayers) {
       const rp = remotePlayers.get(id)
-      if (!player.torchOn || !rp || !remoteVisibility.get(id)) continue
+      const radiance = radianceStrengths.get(id) ?? 0
+      if (
+        (!player.torchOn && radiance <= 0) ||
+        !rp ||
+        !remoteVisibility.get(id)
+      )
+        continue
       const dx = shortestWrappedDeltaX(playerPos.x, rp.position.x)
       const dz = rp.position.z - playerPos.z
       const dist = dx * dx + dz * dz
@@ -285,6 +457,8 @@
         bestDist = dist
         bestRp = rp
         bestWallIdx = -1
+        bestRadiance = !!player.radianceOn || (!player.torchOn && radiance > 0)
+        bestScale = player.torchOn ? 1 : radiance
       }
     }
     for (let i = 0; i < wallPositions.length; i++) {
@@ -302,18 +476,27 @@
       return {
         target: _unifiedTorchTmp.copy(wallPositions[bestWallIdx]),
         wallIdx: bestWallIdx,
+        scale: WALL_TORCH_INTENSITY_SCALE,
       }
     }
     if (bestRp) {
       const displayX = unwrapWorldXNear(playerPos.x, bestRp.position.x)
       return {
-        target: setTorchTargetFromPose(
-          displayX,
-          bestRp.position.z,
-          bestRp.position.y,
-          bestRp.rotation
-        ),
+        target: bestRadiance
+          ? _unifiedTorchTmp.set(
+              displayX,
+              bestRp.position.y + TORCH_BASE_POSITION.y,
+              bestRp.position.z
+            )
+          : setTorchTargetFromPose(
+              displayX,
+              bestRp.position.z,
+              bestRp.position.y,
+              bestRp.rotation
+            ),
         wallIdx: -1,
+        scale: bestScale,
+        radiance: bestRadiance,
       }
     }
     return null
@@ -327,6 +510,8 @@
     occupiedIdx: number
   ) {
     if (wallTorchLights.length === 0) return
+    if (wallPositions.length === 0 && wallTorchPoolIdle) return
+    wallTorchPoolIdle = wallPositions.length === 0
     const playerPos = currentPlayer?.position
     _wallTorchRanking.length = 0
     if (playerPos) {
@@ -363,14 +548,28 @@
   }
 
   export function updateUnifiedTorchFlicker(deltaTime: number) {
-    const wallPositions =
-      isUnderground && !torchEffectsDisabled
-        ? (wallTorchPositions?.() ?? [])
-        : []
+    teleportLayer?.update()
+    enchantLayer?.update()
+    if (currentPlayer) updateRadianceStrength(currentPlayer, deltaTime)
+    for (const player of otherPlayers.values())
+      updateRadianceStrength(player, deltaTime)
+    for (const id of radianceStrengths.keys())
+      if (id !== currentPlayer?.id && !otherPlayers.has(id))
+        radianceStrengths.delete(id)
+    const torchSource = isUnderground
+      ? wallTorchPositions
+      : localHouseId != null
+        ? houseTorchPositions
+        : undefined
+    const wallPositions = torchEffectsDisabled ? [] : (torchSource?.() ?? [])
     let occupiedWallIdx = -1
-    if (unifiedTorchLight) {
+    if (
+      unifiedTorchLight &&
+      !applyEnchantLight(unifiedTorchLight, enchantLayer?.getLight() ?? null)
+    ) {
       const result = computeUnifiedTorchTarget(wallPositions)
       if (result) {
+        unifiedTorchLight.color.set(result.radiance ? '#fff2cd' : '#ffcc66')
         occupiedWallIdx = result.wallIdx
         unifiedTorchFlickerTime = applyTorchFlickerWorld(
           unifiedTorchLight,
@@ -379,8 +578,13 @@
           result.target.x,
           result.target.y,
           result.target.z,
-          occupiedWallIdx >= 0 ? WALL_TORCH_INTENSITY_SCALE : 1
+          result.scale
         )
+        if (result.radiance)
+          unifiedTorchLight.intensity =
+            TORCH_BASE_INTENSITY *
+            result.scale *
+            (1 + Math.sin(unifiedTorchFlickerTime * 2.3) * 0.014)
       } else {
         unifiedTorchLight.intensity = 0
       }
@@ -393,10 +597,28 @@
   }
 </script>
 
+<GameSceneTeleportLayer bind:this={teleportLayer} {currentPlayer} />
+<GameSceneEnchantSuccessLayer
+  bind:this={enchantLayer}
+  {currentPlayer}
+  getAnchor={getEnchantAnchor}
+  setPose={setEnchantPose}
+/>
+<GameSceneAbilitiesLayer
+  {currentPlayer}
+  floorLevel={localFloorLevel}
+  getAnchor={getAbilityAnchor}
+  getRotation={(id) =>
+    id === currentPlayer?.id
+      ? currentPlayer.rotation
+      : (remotePlayers.get(id)?.rotation ?? 0)}
+/>
+
 {#if camera && currentPlayer}
   <PlayerControl
     bind:this={playerControl}
     {waterSurfaceAt}
+    {hasWaterSurfaceData}
     {onStateChange}
     {camera}
     {heightManager}
@@ -411,16 +633,28 @@
     monsterMeshes={monsterModels
       .map((model) => model?.getMeshGroup())
       .filter((group) => group !== undefined) as THREE.Group[]}
+    monsterHoverMeshes={monsterModels
+      .map((model) => model?.getHoverMeshGroup())
+      .filter((group) => group !== undefined) as THREE.Group[]}
     npcMeshes={(otherPlayerModels ?? [])
       .map((model) => model?.getModelGroup())
       .filter(
         (group): group is THREE.Group =>
           group !== undefined && group.userData.npcPlayerId != null
       )}
+    playerMeshes={(otherPlayerModels ?? [])
+      .map((model) => model?.getModelGroup())
+      .filter((group): group is THREE.Group => group !== undefined)}
+    playerHoverMeshes={(otherPlayerModels ?? [])
+      .map((model) => model?.getHoverMeshGroup())
+      .filter((group): group is THREE.Group => group !== undefined)}
     {doorMeshes}
     {objectMeshes}
     {propMeshes}
     {groundItemMeshes}
+    {tipHatMeshes}
+    {stallMeshes}
+    {mealMeshes}
     attackCooldown={playerAttackDuration}
   />
 {/if}
@@ -428,18 +662,25 @@
 {#if currentPlayer && cameraInitialized && camera}
   <PlayerModel
     bind:this={currentPlayerModel}
+    teleportHidden={$teleportHiddenPlayers.has(currentPlayer.id)}
     position={currentPlayer.position}
+    mount={currentPlayer.mount}
     name={currentPlayer.name}
+    title={currentPlayer.title}
     isCurrentPlayer={true}
     playerState={effectivePlayerState}
+    catchPresentation={localCatch}
     interactionAnim={effectiveInteractionAnim}
+    interactionCounter={effectiveInteractionCounter}
     interactOffsetY={currentPlayerState.interactOffsetY}
     attackCounter={currentPlayerState.attackCounter}
+    hitCounter={currentPlayer.hitCounter}
     speed={currentPlayerState.speed}
     rotation={currentPlayerState.rotation}
     movementMode={currentPlayerState.movementMode}
     {camera}
     chatBubble={chatBubbles.get(currentPlayer.id)?.message}
+    chatBubbleAt={chatBubbles.get(currentPlayer.id)?.timestamp}
     characterClass={currentPlayer.characterClass}
     gender={currentPlayer.gender}
     health={currentPlayer.health}
@@ -459,6 +700,10 @@
     lastDamageInfo={currentPlayer.lastDamageInfo}
     lastRegenInfo={currentPlayer.lastRegenInfo}
     lastGoldInfo={currentPlayer.lastGoldInfo}
+    {heightManager}
+    {waterSurfaceAt}
+    {waterFoamMap}
+    {waterSunDirection}
     {torchEffectsDisabled}
   />
 {/if}
@@ -473,42 +718,60 @@
         : remotePlayer.position.x}
       <!-- position.y is ground-resampled per tick by remotePlayerManager -->
       {@const baseY = remotePlayer.position.y}
+      {@const caught = $fishingCatches.get(player.id)}
+      {@const showingCatch =
+        caught !== undefined && remotePlayer.state === 'idle'}
       <PlayerModel
         bind:this={otherPlayerModels[index]}
+        teleportHidden={$teleportHiddenPlayers.has(player.id)}
         position={new THREE.Vector3(
           displayX,
           visible ? baseY : OFFSCREEN_Y,
           remotePlayer.position.z
         )}
         name={player.name}
+        title={player.title}
         isCurrentPlayer={false}
-        playerState={remotePlayer.state}
-        interactionAnim={remotePlayer.interactionAnim}
+        playerState={showingCatch ? 'interact' : remotePlayer.state}
+        interactionAnim={showingCatch
+          ? FishingAnimationName.IDLE
+          : remotePlayer.interactionAnim}
+        catchPresentation={visible ? caught : undefined}
+        interactionCounter={remotePlayer.interactionCounter}
         interactOffsetY={remotePlayer.interactOffsetY}
         attackCounter={remotePlayer.attackCounter}
+        hitCounter={remotePlayerManager.hitCounters.get(player.id)}
         speed={remotePlayer.speed}
         rotation={remotePlayer.rotation}
         movementMode={remotePlayer.movementMode}
         {camera}
         chatBubble={chatBubbles.get(player.id)?.message}
+        chatBubbleAt={chatBubbles.get(player.id)?.timestamp}
         characterClass={player.characterClass}
         gender={player.gender}
         health={player.health}
         maxHealth={player.maxHealth}
         torchOn={player.torchOn}
+        mount={player.mount}
         mainHand={player.mainHand}
+        back={player.back}
+        backColor={player.backColor}
+        backTexture={player.backTexture}
         {torchEffectsDisabled}
         npcPlayerId={player.isOfficialNpc ? player.id : undefined}
+        remotePlayerId={player.id}
+        floorLevel={player.floorLevel}
+        {heightManager}
+        {waterSurfaceAt}
+        {waterFoamMap}
+        {waterSunDirection}
         onInteractionFinished={() =>
           remotePlayerManager.handleInteractionFinished(player.id)}
       />
     {/if}
   {/each}
 
-  <!-- Unified point light. Mounted exactly once, priority:
-       local torch > closest visible remote torch. Shadow mode is fixed by the
-       effective graphics preset (mobile keeps the light but skips shadow maps).
-       Position/intensity are driven from the game loop. -->
+  <!-- Enchantment takes priority on the existing shadow light. -->
   {#if !torchEffectsDisabled}
     <T.PointLight
       bind:ref={unifiedTorchLight}
@@ -528,21 +791,18 @@
     />
 
     <!-- Wall-torch glow pool: a fixed N of shadowless point lights, parked on the
-         nearest wall torches each frame (see updateWallTorchPool). Mounted only
-         underground; the slot count is constant so the light count never churns
-         mid-floor. -->
-    {#if isUnderground}
-      {#each wallTorchSlots as _slot, i (i)}
-        <T.PointLight
-          bind:ref={wallTorchLights[i]}
-          position={[0, 0, 0]}
-          color="#ffcc66"
-          intensity={0}
-          distance={TORCH_BASE_DISTANCE}
-          decay={TORCH_BASE_DECAY}
-          castShadow={false}
-        />
-      {/each}
-    {/if}
+         nearest wall torches each frame (see updateWallTorchPool). Always
+         mounted so the light count never churns. -->
+    {#each wallTorchSlots as _slot, i (i)}
+      <T.PointLight
+        bind:ref={wallTorchLights[i]}
+        position={[0, 0, 0]}
+        color="#ffcc66"
+        intensity={0}
+        distance={TORCH_BASE_DISTANCE}
+        decay={TORCH_BASE_DECAY}
+        castShadow={false}
+      />
+    {/each}
   {/if}
 {/if}

@@ -1,0 +1,20 @@
+{
+  "tool": "OpenAI Codex built-in ImageGen",
+  "tier": "workspace-provided tier; exact tier not exposed",
+  "generated": "2026-09-17",
+  "status": "[미사용] Original red-brick and pale-tile versions, replaced by dungeon-weathering-prompts.json on 2026-09-18.",
+  "license": "Project-owned generated output; OpenAI output terms apply, no separate CC license.",
+  "encoding": "Generated PNG resized to 1024 x 1024 WebP quality 88 using ffmpeg; no visual edits.",
+  "assets": [
+    {
+      "id": "cave-masonry-wall",
+      "prompt": "Use case: stylized-concept\nAsset type: seamlessly tileable wall albedo texture for a medieval underground dungeon in an isometric RPG.\nPrimary request: one square edge-to-edge material swatch of deliberately built old brick masonry. Broad, clearly rectangular fired-clay bricks laid in offset horizontal running-bond courses, deep narrow pale grey mortar seams, chipped corners and worn uneven faces. Read unmistakably as human-built brickwork, distinct from natural cave rock.\nPalette: desaturated burnt terracotta and dusty dark red brick with cool grey-beige mortar. Moderate midtone brightness; restrained aged soot and occasional light mineral bloom, no moss or greenery.\nComposition: orthographic straight-on flat surface, roughly four horizontal brick courses and three brick lengths across a 1024x1024 square. Bricks continue seamlessly across both image edges, consistent brick size and mortar thickness.\nStyle: tactile semi-realistic fantasy game material, broad shapes readable at game distance.\nLighting: uniform diffuse albedo, no directional shadows or specular highlights, no baked torch illumination.\nAvoid: scene, archway, perspective, rubble pile, natural boulders, text, borders, vignette, framing, decorative symbols, panels. One opaque RGB tile.",
+      "file": "client/public/textures/dungeon/cave-masonry-wall.webp"
+    },
+    {
+      "id": "cave-masonry-floor",
+      "prompt": "Use case: stylized-concept\nAsset type: seamlessly tileable floor albedo texture paired with old red-brick dungeon walls in an isometric fantasy RPG.\nPrimary request: one square edge-to-edge material swatch of an intentionally laid medieval stone tile floor. Clearly manufactured square limestone paving tiles arranged in a regular grid of four tiles across and four tiles down. Narrow recessed dusty mortar joints, subtly chipped corners, a few fine cracks and wear on the flat stone faces. Read unmistakably as laid tiles, not natural rock or cobblestones.\nPalette: pale warm grey and muted beige limestone, darker grey-brown mortar; enough tonal separation to see the square tile pattern. Lightly soiled old underground walkway, restrained mineral deposits, no moss or greenery.\nComposition: strictly overhead orthographic, seamless wrap horizontally and vertically, 1024x1024 square, uniform tile scale and brightness. Grid continues to neighboring repeats without a double border.\nStyle: tactile semi-realistic fantasy game material, clear broad tile pattern.\nLighting: flat diffuse albedo without directional shadows, highlights, vignette or baked lighting.\nAvoid: scene, perspective, water, plants, gravel covering the pattern, brick walls, large broken holes, text, borders, panels. One opaque RGB tile.",
+      "file": "client/public/textures/dungeon/cave-masonry-floor.webp"
+    }
+  ]
+}

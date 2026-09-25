@@ -17,6 +17,338 @@ applies — never construct `Audio` elements elsewhere.
 Everything below the cast sound is CC0 as credited. All six are trimmed,
 peak-normalized to ≈ −3 dB, with a short tail fade.
 
+## Dungeon
+
+- dungeon-drip.ogg, dungeon-drip-2.ogg — [오콘스 — 물방울 떨어지는 소리, Water dripping sound](https://www.youtube.com/watch?v=6gEs_tJpkIY).
+  영상 설명에서 연결한 [공식 블로그의 원본 MP3](https://blog.naver.com/ocons_sound/224177366898)에서
+  각각 158.556~158.796초(2분 38.56초 부근), 68.932~69.332초(1분 8.93초 부근)를
+  직접 추출해 2026-09-18 적용. 물방울이 떨어질 때마다 두 음원 중 하나를 50:50 확률로 선택.
+  라이선스: 제작자의 무료 편집·사용 허가. 공식 블로그는 출처 표기를 권장하며
+  음원 단독 재배포·판매를 금지함. 2026-09-18 설명·블로그 확인, CC0로 취급하지 않음.
+  출처 표기: Music provided by 오콘스 - 오디오 콘텐츠 스튜디오 — 물방울 떨어지는 소리, Water dripping sound.
+  AI 생성·유료 도구 사용 없음. 추출 원음과 출처·가공 메타데이터는
+  `assets/sfx/dungeon-drip-ocons-2026-09-18/`의
+  `ocons_6gEs_tJpkIY_158.556-158.796.wav`, `ocons_6gEs_tJpkIY_68.932-69.332.wav`
+  및 각각 같은 이름의 `.json`에 보관.
+  `node tools/gen-dungeon-drip.mjs`로 두 음원을 재생성. 모노 변환, 시작 1 ms와
+  끝 페이드(첫 음원 40 ms, 둘째 음원 80 ms)를 적용.
+  첫 120 ms RMS를 −21 dB로 정규화하되 인코딩 전 피크는 0.75 이하로 제한.
+  실제 디코딩 피크는 각각 −3.05 dB·−4.60 dB, 첫 120 ms RMS는 −21.14 dB·−21.04 dB.
+  EQ·압축·인공 리버브 없이 원래 물소리의 음색과 감쇠를 보존.
+  각각 0.24초·0.4초, 44.1 kHz 모노 Ogg Vorbis q5, 게임 재생 볼륨 0.7.
+  두 음원을 미리 로드하며, 플레이어와의 거리에 따라 감쇠하고 10 m 밖에서는 재생하지 않음.
+  던전 이탈 시 두 음원의 재생을 모두 중지.
+- **[미사용]** 로컬 후보 폴더 `sfx-candidates/dungeon-drip-reference-2026-09-18/`의
+  `terre-asmr_HWFv0Jr6s28_15.896-16.156.wav` —
+  [Terre ASMR 영상](https://www.youtube.com/watch?v=HWFv0Jr6s28)에서 2026-09-18 추출한 이전 후보.
+  재사용 라이선스 미확인. 허가가 명시된 오콘스 음원으로 교체했으며 HF에 동기화하지 않음.
+- **[미사용]** `assets/sfx/dungeon-drips-2026-09-18/`의
+  `dungeon-drip-wet-stone_take1`~`take4` — 이전 AI 생성 후보·사용 원본.
+  [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) API로 2026-09-18 생성,
+  Starter 유료 플랜(API 구독 조회로 확인),
+  [유료 플랜 상업 이용 라이선스](https://help.elevenlabs.io/hc/en-us/articles/13313564601361-Can-I-publish-the-content-I-generate-on-the-platform) 적용.
+  `eleven_text_to_sound_v2`, 1초, 총 40크레딧. take 1·2는 `prompt_influence=0.7`,
+  take 3·4는 0.6. 각 프롬프트와 take 4의 이전 가공 정보는 동명 `.json`에 기록.
+- **[미사용]** 같은 폴더의 `dungeon-drip-stone_take1`~`take4` 및
+  `unused-percussive-drip.ogg` — 타격음이 강했던 이전 후보·게임용 음원.
+  위와 동일한 ElevenLabs Starter 라이선스·생성일 적용. 0.7초, 총 28크레딧.
+  take 1·2는 `prompt_influence=0.85`, take 3·4는 0.75. 원본 및 가공 정보는 동명 `.json`에 기록.
+- **[미사용]** `assets/sfx/dungeon-drips-2026-09-17/`의
+  `dungeon-drip_take1_2026-09-17.mp3` 및 `dungeon-drip_take2_2026-09-17.mp3` —
+  이전 물웅덩이 낙수음 후보와 사용 원본. ElevenLabs Starter 유료 플랜으로
+  2026-09-17 생성, 위 유료 플랜 상업 이용 라이선스 적용.
+  `eleven_text_to_sound_v2`, 0.7초, `prompt_influence=0.75`, 총 14크레딧.
+  기포 꼬리음을 포함한 기존 프롬프트는 동명 `.json`에 보관.
+- **[미사용]** 2026-09-17 폴더의 `unused-procedural-drip.ogg` 및
+  `unused-procedural-generator.mjs` — 2026-09-17 직접 절차적 합성한 이전 버전.
+  외부 샘플·생성 API 없음(유료 도구/플랜 해당 없음), [프로젝트 라이선스](../../LICENSE) 적용.
+
+## Weather
+
+- rain-drops-loop.ogg — 약한 비와 비가 시작할 때 사용하는 독립 빗방울 레이어.
+  [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) API로 2026-09-13 직접 생성.
+  Starter 유료 플랜(API 구독 조회로 확인),
+  [유료 플랜 상업 이용 라이선스](https://help.elevenlabs.io/hc/en-us/articles/13313564601361-Can-I-publish-the-content-I-generate-on-the-platform) 적용.
+  `eleven_text_to_sound_v2`, 24초, `prompt_influence=0.65`, `loop=true`, 1테이크.
+  `tools/gen-death-sfx.py --takes 1 --duration 24 --influence 0.65 --loop rain_drops`로 생성.
+  원본과 생성 메타데이터는 `~/assets_original/sfx/rain-drops-loop_take1_2026-09-13.mp3`
+  및 같은 이름의 `.json`에 보관. 44.1 kHz 스테레오 Ogg Vorbis q5로 변환,
+  +2.443669 dB로 인코딩 전 피크 −3 dB 정규화, 양끝 5 ms 페이드로 반복 경계 클릭 방지.
+  프롬프트: "Very light rain beginning: sparse tiny raindrops softly tapping leaves
+  and dry earth. Delicate irregular ticks and pits, distinct individual
+  droplet impacts with quiet gaps. Natural close-up foley, steady sparse
+  density, seamless loop, otherwise silent background. No flowing water,
+  stream, trickling, runoff, gurgling, puddle splashes, continuous wash
+  or hiss, heavy rain, wind, thunder, birds, voices, music or metallic taps."
+- rain-loop.ogg — the calmest stretch (505–545 s) of [AMB Rain Loop 2](https://opengameart.org/content/amb-rain-loop-2) by Kresiek The Furry (CC0), an outdoor GoPro rain recording; made seamlessly loopable with a 3 s self-crossfade (37 s loop). Used only for stronger rain, blending in above intensity 0.45.
+- thunder-distant.ogg — `sfx100v2_thunder_01` from [100 CC0 SFX #2](https://opengameart.org/content/100-cc0-sfx-2) by rubberduck (CC0), unmodified; variety comes from a randomized playback rate, low-pass cutoff, and volume
+
+All weather sounds route through `rainAmbienceManager.ts` (WebAudio loops
+and thunder scheduling), following the SFX volume/mute settings. At intensity
+≤ 0.45, only the droplet loop contributes to the rain ambience. Above 0.45,
+a smoothstep crossfade gradually replaces it with the original recording,
+reaching the original rain volume at intensity 1. Both layers fade with weather
+changes and are attenuated indoors.
+
 ## Combat
 
-- sword-*.ogg — predate this file; provenance not recorded here.
+- armored-bone-hit.ogg — 일반 스켈레톤·Forgotten Dead의 묵직한 피격음 (`metal` / `wood` → `bone`).
+  [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) API로 2026-09-15 직접 생성.
+  Starter 유료 플랜(API 구독 조회로 확인),
+  [유료 플랜 상업 이용 라이선스](https://help.elevenlabs.io/hc/en-us/articles/13313564601361-Can-I-publish-the-content-I-generate-on-the-platform) 적용.
+  `eleven_text_to_sound_v2`, 0.7초, `prompt_influence=0.75`, 첫 생성의 1번 후보 사용.
+  두 프롬프트로 총 4개 후보를 생성했으며 38크레딧 사용.
+  선택한 프롬프트는 `tools/gen-death-sfx.py`의 `armored_bone_hit`에 기록.
+  원본과 생성·가공 메타데이터는 `assets/sfx/skeleton-hits-2026-09-15/`의
+  `armored-bone-hit_candidate1_2026-09-15.mp3` 및 같은 이름의 `.json`에 보관.
+  **[미사용]** 후보는 같은 폴더의 `candidate2`~`candidate4`로 보관.
+  클리핑 없이 float PCM으로 가공하며 재생 속도·피치를 0.88배로 낮추고,
+  55 Hz 하이패스·250 Hz 저음 +4 dB·1.8 kHz 고음 −5 dB·3.8 kHz 로우패스를 적용.
+  0.5초, 시작 2 ms·끝 70 ms 페이드, 인코딩 전 피크 −3 dB, 44.1 kHz 모노 Ogg Vorbis q5.
+- metal-hit.ogg — **[미사용]** 기존 금속 갑옷 피격음. 2026-09-15 `bone-hit-heavy.ogg`로 교체.
+  ElevenLabs Sound Effects API, Starter 유료 플랜으로 2026-09-12 직접 생성.
+  유료 플랜 상업 이용 라이선스 적용. `tools/gen-death-sfx.py`의 `metal_hit`,
+  0.7초·prompt_influence 0.6·1테이크. 원본은 `assets/skeleton_warrior/sfx/metal-hit.mp3`에 보관.
+  44.1 kHz 모노 Ogg q5, 피크 −3 dB, 100 ms 테일 페이드로 가공.
+- bone-hit-heavy.ogg — 해골 워리어·나이트의 갑옷 피격음 (`metal` / `wood` → `metal`).
+  [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) API로 2026-09-15 직접 생성.
+  Starter 유료 플랜(API 구독 조회로 확인),
+  [유료 플랜 상업 이용 라이선스](https://help.elevenlabs.io/hc/en-us/articles/13313564601361-Can-I-publish-the-content-I-generate-on-the-platform) 적용.
+  `eleven_text_to_sound_v2`, 0.7초, `prompt_influence=0.7`, 2개 후보 중 1번 사용, 총 14크레딧.
+  프롬프트는 `tools/gen-death-sfx.py`의 `bone_hit_heavy`에 기록.
+  원본과 생성·가공 메타데이터는 `assets/sfx/skeleton-hits-2026-09-15/`의
+  `bone-hit-heavy_take1_2026-09-15.mp3` 및 같은 이름의 `.json`에 보관.
+  **[미사용]** 후보는 같은 폴더의 `take2`로 보관.
+  float PCM으로 가공하며 재생 속도·피치를 0.9배로 낮추고, 65 Hz 하이패스·220 Hz 저음 +3.5 dB·
+  2.2 kHz 고음 −3 dB·5 kHz 로우패스를 적용. 첫 100 ms RMS를 기존보다 5 dB 높게 맞춤.
+  0.42초, 시작 2 ms·끝 65 ms 페이드, 44.1 kHz 모노 Ogg Vorbis q5, 디코딩 피크 −6.09 dB.
+- bone-hit.ogg — **[미사용]** 기존 뼈 피격음. 2026-09-15 `armored-bone-hit.ogg`로 교체.
+  [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) API로 2026-09-12 생성
+  (Starter 유료 플랜, 직접 생성; [유료 플랜 상업 이용 라이선스](https://help.elevenlabs.io/hc/en-us/articles/13313564601361-Can-I-publish-the-content-I-generate-on-the-platform)).
+  `tools/gen-death-sfx.py`의 `bone_hit`, 0.7초·prompt_influence 0.6·2테이크 중 2번 사용.
+  원본은 `~/assets_original/sfx/bone-hit_take2_2026-09-12.mp3`에 보관.
+  디코딩 피크 초과를 막기 위해 float PCM에 −7 dB를 먼저 적용한 뒤 `tools/trim-sfx.py`로
+  0.24초·60 ms 테일 페이드·피크 −3 dB·44.1 kHz 모노 Ogg q5로 가공.
+  프롬프트: "A single close-up impact on a dry skeleton ribcage: a hard hollow bone clack
+  followed immediately by a very short brittle rattle of loose bones knocking together.
+  Tight, dry, crisp game combat hit, under one second. One strike only, no music, no voice,
+  no flesh, no metal ringing, no reverb."
+- sword-leather.ogg, sword-miss3.ogg — predate this file; provenance not
+  recorded here. Mapped in `data/material-impact-sounds.json`.
+- sword-flesh4.ogg — sword cutting into a fleshy monster (`metal` → `flesh`:
+  ogre, troll, scp939), generated with [ElevenLabs Sound
+  Effects](https://elevenlabs.io/sound-effects) via the API on 2026-08-22
+  (Starter tier, own generation; original
+  `sword-flesh4.ogg_take5_2026-08-22.mp3` kept in `~/assets_original/sfx/` on
+  pc5090; prompt: "A sword blade cutting deep into a huge fleshy monster: a
+  heavy wet meaty thud with a thick tearing of flesh. Impact only, no voice,
+  no music."). Take 5 of a 0.7 s request, kept full length with a 100 ms tail
+  fade, peak-normalized to −3 dB, 44.1 kHz mono.
+  2026-08-24 오거 타격음이 너무 커서 게인 ×0.9 (−0.9 dB, peak −2.5 dB) — flesh 재질 전부에 걸린다.
+- sword-stone.ogg — sword striking a stone golem (`metal` → `stone`),
+  generated with [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects)
+  via the API on 2026-08-22 (Starter tier, own generation; original
+  `sword-stone.ogg_take9_2026-08-22.mp3` kept in `~/assets_original/sfx/` on
+  pc5090; prompt: "A steel sword blade striking a stone golem: a hard metallic
+  clang ringing off solid rock with a short spray of stone chips and grit.
+  Impact only, no voice, no music."). Take 9 of a 0.7 s request, kept full
+  length with a 100 ms tail fade, peak-normalized to −3 dB, 44.1 kHz mono.
+
+- sword-flesh.ogg, sword-flesh2.ogg, sword-miss.ogg, sword-miss2.ogg —
+  **[미사용]** earlier takes, removed 2026-08-19.
+- sword-flesh3.ogg — **[미사용]** replaced by sword-flesh4.ogg on 2026-08-22.
+
+## Monsters
+
+- skeleton-death.ogg — 스켈레톤 사망 시 뼈가 파사삭 부서져 바닥에 흩어지는 소리.
+  [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) API로 2026-09-12 생성
+  (Starter 유료 플랜, 직접 생성; [유료 플랜 상업 이용 라이선스](https://help.elevenlabs.io/hc/en-us/articles/13313564601361-Can-I-publish-the-content-I-generate-on-the-platform)).
+  `tools/gen-death-sfx.py`의 `skeleton_death`, 1.5초·prompt_influence 0.6·2테이크 중 2번 사용.
+  원본은 `~/assets_original/sfx/skeleton-death_take2_2026-09-12.mp3`에 보관.
+  디코딩 피크 초과를 막기 위해 float PCM에 −7 dB를 먼저 적용한 뒤 `tools/trim-sfx.py`로
+  1.25초·100 ms 테일 페이드·피크 −3 dB·44.1 kHz 모노 Ogg q5로 가공.
+  프롬프트: "A dry skeleton suddenly crumbling into a loose pile of bones: an immediate brittle
+  crack followed by a fast cascading clatter of many small hollow bone fragments,
+  a crisp papery crunch and skittering rattle as the pieces scatter and settle on
+  a stone floor. One short continuous collapse, starting immediately and fading
+  naturally to silence. Close, dry game sound effect, no voice, no music, no flesh,
+  no metal, no glass, no explosion, no reverb."
+
+- kobold-death.ogg — kobold death groan, generated with
+  [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) on
+  2026-08-22 (free tier, own generation; original
+  `The_short_groan_a_ko_#4-1787326141343.mp3` kept in `~/assets_original/sfx/`
+  on pc5090; prompt: "The short groan a kobold makes when it dies"). The
+  original holds two takes; only the first (0.60–1.05 s) is kept, with a
+  150 ms tail fade, peak-normalized to −3 dB, resampled 48→44.1 kHz.
+
+- goblin-death.ogg — goblin death cry (used by both goblin and goblin_boss),
+  generated with [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects)
+  on 2026-08-22 (free tier, own generation; original
+  `The_sound_of_a_gobli_#2-1787399405795.mp3` kept in `~/assets_original/sfx/`
+  on pc5090; prompt: "The sound of a goblin dying from an opponent's sword
+  during battle"). Trimmed to 0.62 s (trailing silence) with a 90 ms tail fade,
+  peak-normalized to ≈ −3 dB, resampled 48→44.1 kHz.
+
+The eleven cries below were generated with [ElevenLabs Sound
+Effects](https://elevenlabs.io/sound-effects) via the API on 2026-08-22
+(Starter tier, own generations). Each original mp3 is kept on pc5090 as
+`~/assets_original/sfx/<ogg name>_take<N>_2026-08-22.mp3`; each ogg is cut
+to the length given with a 100 ms tail fade, peak-normalized to −3 dB, 44.1
+kHz mono.
+
+- orc-death.ogg — orc. Take 9, 1.0 s request trimmed to 0.55 s. "The short,
+  guttural death roar of an orc warrior cut down by a sword in battle"
+- orc-female-death.ogg — female orc. **2026-08-24 재생성** — 첫 버전(take 1, "The short
+  death cry of a female orc warrior struck down by a sword in battle")이 남자
+  오크와 거의 같은 음높이였다. 오크 묘사를 넣으면 계속 남성 톤이 나와서 프롬프트를
+  "A woman's very short, sharp, high-pitched death scream, a single shrill
+  feminine cry less than half a second long, cut off instantly as a sword
+  strikes her down. Clearly a female human-like voice, high soprano pitch, no
+  growl, no male voice, no music."로 바꾸고 0.6 s·prompt_influence 0.6으로
+  5테이크 뽑아 take 5 채택 (스펙트럼 중심 3.6 kHz, 이전 1.8 kHz). 0.5 s에서
+  100 ms 테일 페이드. 원본 `orc-female-death_take5hi2_2026-08-24.mp3`.
+  2026-09-15 재생 음량 조정: 조정 전 파일 기준 −10 dB (게인 약 ×0.3162).
+- hobgoblin-death.ogg — hobgoblin. **2026-08-24 재생성** — 첫 버전("harsh,
+  barking death cry")이 개 짖는 소리처럼 들려서 "The harsh, guttural death cry
+  of a hobgoblin soldier felled by a sword: a rough snarling humanoid war-cry
+  choking off as he falls. Voice only, no dog, no barking, no animal, no
+  music."(0.8 s·influence 0.6)으로 4테이크 뽑아 take 2 채택, 0.7 s에서 100 ms
+  테일 페이드. 원본 `hobgoblin-death_take2_2026-08-24.mp3`
+- gnoll-death.ogg — gnoll. Take 1, 1.0 s request trimmed to 0.85 s. "The
+  yelping, hyena-like death howl of a gnoll cut down in battle"
+- bugbear-death.ogg — bugbear. Take 2, 1.0 s request trimmed to 0.70 s. "A big
+  shaggy bear-like goblin monster's death cry: a snarling guttural growl
+  breaking into a pained yelp as it is cut down. Animal voice only, no drums,
+  no percussion, no music."
+- ogre-death.ogg — ogre. Take 4, 1.0 s request trimmed to 0.90 s. "A huge
+  brutish ogre monster's deep guttural death groan, a hoarse animal voice
+  choking off as it collapses from a sword wound. Voice only, no horns, no
+  music." 2026-08-24 너무 커서 게인 ×0.9 (−0.9 dB, peak −3.4 dB).
+  2026-09-15 재생 음량 조정: 조정 전 파일 기준 −10 dB (게인 약 ×0.3162).
+- troll-death.ogg — troll. Take 6, 0.6 s request trimmed to 0.50 s. "The
+  drawn-out, rasping death roar of a troll dying from a deep sword wound"
+- stone-golem-death.ogg — stone golem. Take 1, 1.0 s request trimmed to 0.65
+  s. "A stone golem crumbling apart, grinding rock and falling rubble as it
+  dies"
+- orc-boss-death.ogg — orc chieftain (orc_boss). Take 2, 1.0 s request trimmed
+  to 0.70 s. "The furious, booming death roar of a massive orc chieftain
+  falling in battle"
+- ogre-boss-death.ogg — ogre warlord (ogre_boss). Take 9, 0.6 s request
+  trimmed to 0.55 s. "A giant ogre warlord monster's deep roaring death cry, a
+  massive hoarse beast voice breaking into a groan as it falls. Voice only, no
+  horns, no music."
+- scp939-death.ogg — scp939. Take 4, 0.6 s request trimmed to 0.45 s. "The
+  wet, distorted death shriek of a fleshy eyeless monster, unnatural and
+  wrong"
+
+The two below were generated in the [ElevenLabs Sound
+Effects](https://elevenlabs.io/sound-effects) web UI on 2026-08-25 (free tier,
+own generations), each a single take of a 1.0 s request. Both were folded to
+mono, resampled 48→44.1 kHz, given a 100 ms tail fade and peak-normalized to
+−3 dB. The originals are `~/Downloads/cyclop_death.mp3` and
+`lizardfolk_death.mp3` on the mac — not yet filed under `~/assets_original/sfx/`
+like the rest.
+
+- cyclop-death.ogg — cyclop. Trimmed to 0.70 s (the cry stops at 0.68 s).
+  "Deep growl, Voice only, no horns, no music."
+- lizardfolk-death.ogg — lizardfolk. Trimmed to 0.90 s (the cry stops at
+  0.89 s). "small dragon growl with a little snake sound, Voice only, no
+  horns, no music."
+
+- **[미사용]** `ogre-death-original-then-half.ogg`, `orc-female-death-original-then-half.ogg`
+  — 위 오거·여자 오크 원음의 임시 비교본. 원음과 동일한 출처·라이선스·생성 정보를
+  적용하며 새 AI 생성 없이 편집했다. 2026-09-15 청취 비교 후 삭제.
+
+## Players
+
+- player-hurt-female.ogg — female character's cry when a hit lands on her (any
+  class), generated with
+  [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) on
+  2026-08-22 (free tier, own generation; original
+  `A_female_warrior_let_#1-1787398743608.mp3` kept in `~/assets_original/sfx/`
+  on pc5090; prompt: "A female warrior lets out a short groan after being
+  struck by an opponent's sword during battle"). Trimmed to 0.24 s (trailing
+  silence) with a 70 ms tail fade, peak-normalized to −3 dB, resampled
+  48→44.1 kHz.
+
+- player-hurt-male.ogg — male counterpart, same generator and date (original
+  `A_male_warrior_lets__#3-1787399204599.mp3` kept alongside; same prompt with
+  "female" → "male"). Trimmed to 0.50 s (trailing silence) with an 80 ms tail
+  fade, peak-normalized to ≈ −3 dB, resampled 48→44.1 kHz.
+
+- player-death-female.ogg — the cry a female character lets out as she is
+  struck down; every player nearby hears it. Take 5, 0.7 s request trimmed to
+  0.68 s. "A young female warrior's short agonized death scream as a sword
+  strikes her down, a single piercing cry cut off abruptly as she falls. Human
+  voice only, no music, no reverb."
+- player-death-male.ogg — male counterpart. Take 4, 1.2 s request trimmed to
+  1.00 s. "A young male warrior's short agonized death scream as a sword
+  strikes him down, a single hoarse cry cut off abruptly as he falls. Human
+  voice only, no music, no reverb."
+
+Both were generated and processed exactly like the monster cries above.
+
+## Props
+
+- crate-break.ogg — sword hitting a wooden crate, generated with
+  [Verse8](https://create.verse8.io/?chat=jksong3%2F3d-sword-box-interaction)
+  on 2026-08-19 ([original ogg](https://agent8-games.verse8.io/0x11e0427b8e50fcb8deda5fde7395c208018a7b89/mcp-uploads/static-assets/audio-548d2c36-7909-4673-ac67-e6d509b3ab33.ogg),
+  own generation, paid credits). The original has two hits; only the second
+  (1.70–2.60 s) is kept, with a 150 ms tail fade and −3 dB gain to match
+  sword-leather's impact level.
+- chest-open.ogg — wooden chest lid opening, generated with
+  [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) on
+  2026-08-19 (free tier, own generation; original
+  `The_sound_of_an_old__#3-1787144916360.mp3` kept in `~/assets_original/sfx/`
+  on pc5090; prompt: "The sound of an old treasure chest slowly creaking as it
+  opens"). Trimmed to 0.95 s (trailing silence) with a 150 ms tail fade,
+  −3 dB gain, resampled 48→44.1 kHz. Replaces a Verse8 take from the same day.
+- coin-spill.ogg — gold coins pouring out of the chest, generated with
+  [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) on
+  2026-08-19 (free tier, own generation; original
+  `The_sound_of_hundred_#2-1787144560968.mp3` kept in `~/assets_original/sfx/`
+  on pc5090; prompt: "The sound of hundreds of gold coins slithering out of a
+  treasure chest"). Trimmed to 1.8 s (trailing silence) with a 150 ms tail fade,
+  −1.5 dB gain, resampled 48→44.1 kHz.
+
+## World
+
+- dungeon-roar.ogg — the roar that wakes far below when sunset resets the
+  dungeons, generated with
+  [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) on
+  2026-08-21 (free tier, own generation; original
+  `The_sound_of_monster_#3-1787310281519.mp3` kept in `~/assets_original/sfx/`
+  on pc5090; prompt: "The sound of monsters waking up and howling deep within
+  the dungeon"). Trimmed to 4.64 s with a 150 ms tail fade, −3 dB gain,
+  resampled 48→44.1 kHz.
+
+## Bow
+
+- bow-draw.ogg, bow-release.ogg — 활 시위를 당기는 소리와 화살이 떠나는 소리, generated with
+  [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) on 2026-09-04
+  (free tier, own generation; 원본 `bow-draw.mp3`·`bow-release.mp3`를
+  `~/assets_original/sfx/`에 보관, 48 kHz 스테레오 mp3 각 1.0초).
+  `tools/trim-sfx.py` 규격으로 가공: 모노 44.1 kHz, 80 ms 테일 페이드, 피크 ≈ −3 dB, ogg q5.
+  draw는 원본을 0.52초에서 자른 뒤(0.59초·0.72초의 짧은 transient 두 개는 별도 release 파일과 겹친다)
+  draw는 0.52초, release는 0.35초(감쇠 끝까지, +5.0 dB 정규화).
+  draw를 늘이지 않고 **늦게 튼다** — `player_ranged_draw`(460 ms)에 시작해 시위를 놓는
+  순간(`player_ranged_impact` 780 ms)에는 아직 울리는 중이고 그 직후 잦아든다.
+  길이를 맞추려고 `atempo`로 늘여 봤지만
+  0.55배는 시간축을 뭉개서 음이 둔해진다. 소리를 늘이지 말고 시작을 미룰 것.
+  `sfxManager.ts`의 `BOW_SOUNDS`가 참조한다: draw는 스윙 시작, release는 화살이 떠나는 프레임.
+
+## Abilities
+
+- guardian-ward.ogg — Guardian Ward 방패 버프 발동음. 사용자가 제공한
+  `Heavy_shield_buff_ca_#4-1789246371152.mp3`를 사용한다. 출처·생성일·요금제는
+  사용자 확인: ElevenLabs Sound Effects, Starter, 2026-09-13.
+  라이선스는 생성 당시 ElevenLabs Starter 플랜의 생성물 이용 약관을 따른다.
+  원본은 사용자 PC의 Downloads에 보관한다.
+- 원본 48 kHz 스테레오 MP3의 전체 1.00초를 유지하고 모노 44.1 kHz, OGG Vorbis q5로 변환했다.
+  마지막 80 ms를 페이드아웃했다. float PCM 기준 디코딩 피크가 +3.674 dB여서,
+  정수 PCM으로 잘리기 전에 −6.674 dB를 적용해 약 −3 dB 피크로 정규화했다.
+- `sfxManager.ts`의 공용 오디오 풀·SFX 볼륨·음소거를 사용한다.
+  서버 `AbilityUsed` 이벤트로 게임 VFX가 시작될 때 시전당 한 번 재생한다.
+  같은 층에서 시전자 20 m 이내의 클라이언트가 듣는다. 파티원 수만큼 중복 재생하지 않으며,
+  장착 조건·쿨타임으로 거절된 사용 요청이나 버프 타이머 갱신만으로 재생하지 않는다.

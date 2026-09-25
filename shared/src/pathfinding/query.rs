@@ -4,10 +4,11 @@
 //! continuous player movement, plus floor-level lookups that translate a
 //! `(x, z, y)` world position to the floor it belongs to.
 
-use super::stair::stair_step;
+use super::stair::{stair_dims, stair_step};
 use super::{
     PassabilityCache, RuntimeFloorGrid, RuntimePassability, EDGE_E, EDGE_N, EDGE_S, EDGE_W,
 };
+use crate::housing::{FLOOR_OVERHANG_PER_LEVEL, MAX_FLOOR_LEVEL};
 
 /// Check if a cardinal (1-cell) move is blocked on a specific floor level.
 /// Matches by `floor_level` only — no Y-range check, no proximity buffer.
@@ -131,44 +132,71 @@ fn blocking_entries<'a>(
     floor_level: u8,
     y: Option<f32>,
 ) -> impl Iterator<Item = (&'a super::RuntimePassability, BlockInfo<'a>)> {
-    let min_x = from_x.min(to_x);
-    let max_x = from_x.max(to_x);
-    let min_z = from_z.min(to_z);
-    let max_z = from_z.max(to_z);
-
     cache.iter().filter_map(move |(key, rp)| {
-        if max_x < rp.min_x || min_x > rp.max_x || max_z < rp.min_z || min_z > rp.max_z {
-            return None;
-        }
+        entry_blocks(key, rp, from_x, from_z, to_x, to_z, floor_level, y).map(|info| (rp, info))
+    })
+}
 
-        let stair_mask = stairwell_floor_mask(rp, min_x, max_x, min_z, max_z, floor_level);
-        if stair_mask != 0 {
-            let consulted = stairwell_consult(rp, stair_mask, |f| {
-                move_blocked_on_floor(rp, f, from_x, from_z, to_x, to_z)
-            })?;
-            let info = BlockInfo {
-                key,
-                stairwell: true,
-                consulted,
-            };
-            return Some((rp, info));
-        }
+/// One cache entry's verdict on a move.
+#[allow(clippy::too_many_arguments)]
+fn entry_blocks<'a>(
+    key: &'a str,
+    rp: &'a super::RuntimePassability,
+    from_x: f32,
+    from_z: f32,
+    to_x: f32,
+    to_z: f32,
+    floor_level: u8,
+    y: Option<f32>,
+) -> Option<BlockInfo<'a>> {
+    let (min_x, max_x) = (from_x.min(to_x), from_x.max(to_x));
+    let (min_z, max_z) = (from_z.min(to_z), from_z.max(to_z));
+    if max_x < rp.min_x || min_x > rp.max_x || max_z < rp.min_z || min_z > rp.max_z {
+        return None;
+    }
 
-        rp.floors
-            .iter()
-            .find(|floor| {
-                floor.floor_level == floor_level
-                    && obstacle_reaches_y(floor, y)
-                    && move_blocked_on_floor(rp, floor, from_x, from_z, to_x, to_z)
-            })
-            .map(|_| {
-                let info = BlockInfo {
-                    key,
-                    stairwell: false,
-                    consulted: 1,
-                };
-                (rp, info)
-            })
+    let stair_mask = stairwell_floor_mask_at(rp, from_x, from_z, floor_level);
+    if stair_mask != 0 {
+        let consulted = stairwell_consult(rp, stair_mask, |f| {
+            move_blocked_on_floor(rp, f, from_x, from_z, to_x, to_z)
+        })?;
+        return Some(BlockInfo {
+            key,
+            stairwell: true,
+            consulted,
+        });
+    }
+
+    rp.floors
+        .iter()
+        .find(|floor| {
+            floor.floor_level == floor_level
+                && obstacle_reaches_y(floor, y)
+                && move_blocked_on_floor(rp, floor, from_x, from_z, to_x, to_z)
+        })
+        .map(|_| BlockInfo {
+            key,
+            stairwell: false,
+            consulted: 1,
+        })
+}
+
+/// [`attack_line_blocked`] against one named cache entry instead of the
+/// whole cache — for dungeon sight checks, where the floor's own grid is the
+/// only entry that can stand in the way and the check runs per monster per
+/// tick.
+pub fn attack_line_blocked_in(
+    cache: &PassabilityCache,
+    key: &str,
+    from_x: f32,
+    from_z: f32,
+    to_x: f32,
+    to_z: f32,
+    floor_level: u8,
+) -> bool {
+    let to_x = from_x + crate::world::shortest_world_delta_x(from_x, to_x);
+    cache.get(key).is_some_and(|rp| {
+        entry_blocks(key, rp, from_x, from_z, to_x, to_z, floor_level, None).is_some()
     })
 }
 
@@ -197,6 +225,34 @@ pub fn is_cell_sealed(
             floor_level,
             y,
         )
+    })
+}
+
+/// Melee collision, without movement escape rules or client-reported heights.
+pub fn attack_line_blocked(
+    cache: &PassabilityCache,
+    from_x: f32,
+    from_z: f32,
+    to_x: f32,
+    to_z: f32,
+    floor_level: u8,
+) -> bool {
+    let to_x = from_x + crate::world::shortest_world_delta_x(from_x, to_x);
+    is_movement_blocked(cache, from_x, from_z, to_x, to_z, floor_level, None)
+}
+
+pub fn ranged_attack_line_blocked(
+    cache: &PassabilityCache,
+    from_x: f32,
+    from_z: f32,
+    to_x: f32,
+    to_z: f32,
+    floor_level: u8,
+) -> bool {
+    let to_x = from_x + crate::world::shortest_world_delta_x(from_x, to_x);
+    cache.iter().any(|(key, rp)| {
+        !rp.allows_projectiles
+            && entry_blocks(key, rp, from_x, from_z, to_x, to_z, floor_level, None).is_some()
     })
 }
 
@@ -282,8 +338,9 @@ fn obstacle_reaches_y(floor: &RuntimeFloorGrid, y: Option<f32>) -> bool {
 
 /// Run the stairwell two-floor consult: block only when every connected floor
 /// refuses. Returns how many floors were consulted, or `None` if any allowed
-/// the move. Both the edge check and the body-radius check route through here
-/// so the rule cannot be fixed in one and left stale in the other.
+/// the move. Both the edge check and the body-radius check route through here,
+/// so the rule itself lives in one place — they differ only in how they decide
+/// a stairwell applies (`stairwell_floor_mask_at` vs `stairwell_floor_mask`).
 ///
 /// Deliberately no `obstacle_reaches_y` filter: it is a *height* test, and
 /// dropping either partner leaves the survivor — the grid sealing the end
@@ -356,10 +413,13 @@ pub(super) fn segment_obstacles(
     }
 }
 
-/// Bitmask of floor levels connected by a stairwell this move touches that the
-/// mover is actually keyed to, or 0 otherwise. Touching (rather than
-/// containment) is what matters: stepping off a landing into the adjoining room
-/// is exactly the move the other floor's grid seals.
+/// Bitmask of floor levels connected by a stairwell whose footprint the box
+/// `[min, max]` touches and that the mover is keyed to, or 0 otherwise.
+///
+/// Touch, not containment, for the two callers that only know proximity: the
+/// smoothing classifier must fall back to A* on any contact, and the
+/// body-radius test must not seal a landing off from the floor whose mover
+/// stands with their radius over the other floor's seal.
 fn stairwell_floor_mask(
     rp: &super::RuntimePassability,
     min_x: f32,
@@ -367,6 +427,31 @@ fn stairwell_floor_mask(
     min_z: f32,
     max_z: f32,
     floor_level: u8,
+) -> u32 {
+    stairwell_mask_by(rp, floor_level, |sx0, sx1, sz0, sz1| {
+        max_x >= sx0 && min_x <= sx1 && max_z >= sz0 && min_z <= sz1
+    })
+}
+
+/// Bitmask of floor levels connected by a stairwell whose footprint *holds*
+/// `(x, z)`, or 0. What the move check keys the consult on: only a mover
+/// already standing on the run has an ambiguous floor.
+///
+/// The asymmetry is the point. Stepping *onto* a shaft is decided by the
+/// mover's own grid, so the landing each floor seals — the one belonging to
+/// the other floor — stays a wall rather than a side door onto a storey drop.
+/// Stepping *off* one still gets the consult, so nobody is trapped on a
+/// landing they could never have reached from the wrong side anyway.
+fn stairwell_floor_mask_at(rp: &super::RuntimePassability, x: f32, z: f32, floor_level: u8) -> u32 {
+    stairwell_mask_by(rp, floor_level, |sx0, sx1, sz0, sz1| {
+        x >= sx0 && x < sx1 && z >= sz0 && z < sz1
+    })
+}
+
+fn stairwell_mask_by(
+    rp: &super::RuntimePassability,
+    floor_level: u8,
+    mut hits: impl FnMut(f32, f32, f32, f32) -> bool,
 ) -> u32 {
     if rp.stairwells.is_empty() {
         return 0;
@@ -380,7 +465,7 @@ fn stairwell_floor_mask(
         let sx1 = rp.house_origin_x + stair.local_max_x as f32;
         let sz0 = rp.house_origin_z + stair.local_min_z as f32;
         let sz1 = rp.house_origin_z + stair.local_max_z as f32;
-        if max_x >= sx0 && min_x <= sx1 && max_z >= sz0 && min_z <= sz1 {
+        if hits(sx0, sx1, sz0, sz1) {
             mask |= floor_bit(stair.lower_floor) | floor_bit(stair.upper_floor);
         }
     }
@@ -418,10 +503,7 @@ fn move_blocked_on_floor(
     )
 }
 
-/// Check if a circle of radius `r` at `(x, z)` overlaps any blocking wall edge
-/// on `floor_level`. Enforces player thickness so the character stops short of
-/// walls instead of embedding into them, and lets path smoothing reject
-/// diagonals whose interior would clip a corner the body radius can't clear.
+/// Whether a circle overlaps a blocking edge on the given floor.
 pub fn is_circle_blocked_on_floor(
     cache: &PassabilityCache,
     x: f32,
@@ -430,15 +512,23 @@ pub fn is_circle_blocked_on_floor(
     floor_level: u8,
     y: Option<f32>,
 ) -> bool {
-    for rp in cache.values() {
+    is_circle_blocked_by_passability(cache.values(), x, z, r, floor_level, y)
+}
+
+pub fn is_circle_blocked_by_passability<'a>(
+    entries: impl IntoIterator<Item = &'a RuntimePassability>,
+    x: f32,
+    z: f32,
+    r: f32,
+    floor_level: u8,
+    y: Option<f32>,
+) -> bool {
+    for rp in entries {
         if x + r < rp.min_x || x - r > rp.max_x || z + r < rp.min_z || z - r > rp.max_z {
             continue;
         }
 
-        // Same two-floor rule the edge check uses. Each floor's grid seals the
-        // stairwell end it does not own, and the body radius sits right on that
-        // seal whenever the mover reaches that end — so a landing would wall
-        // itself off from the floor keyed to the far end.
+        // Consult both floors so the far landing's seal does not block the mover.
         let stair_mask = stairwell_floor_mask(rp, x - r, x + r, z - r, z + r, floor_level);
         if stair_mask != 0 {
             if stairwell_consult(rp, stair_mask, |f| circle_blocked_on_grid(rp, f, x, z, r))
@@ -594,58 +684,115 @@ fn edge_blocks_axis(
 /// grid contains the cell — handles mid-stairwell clicks and overlapping
 /// floor ranges at stairwell landings.
 pub fn get_floor_at_position(cache: &PassabilityCache, x: f32, z: f32, y: f32) -> u8 {
-    let cx = x.floor() as i32;
-    let cz = z.floor() as i32;
-    let mut best_floor: u8 = 0;
-    let mut best_dist = f32::INFINITY;
-    let mut found = false;
-
+    let mut exact: Option<(f32, u8)> = None;
+    let mut near: Option<(f32, u8)> = None;
     for rp in cache.values() {
-        if x < rp.min_x || x > rp.max_x || z < rp.min_z || z > rp.max_z {
+        if !within(x, rp.min_x, rp.max_x, GRID_EDGE_MARGIN)
+            || !within(z, rp.min_z, rp.max_z, GRID_EDGE_MARGIN)
+        {
             continue;
         }
-        let house_ox = rp.house_origin_x.floor() as i32;
-        let house_oz = rp.house_origin_z.floor() as i32;
         for floor in &rp.floors {
-            let gx = cx - house_ox - floor.origin_x;
-            let gz = cz - house_oz - floor.origin_z;
-            if gx < 0 || gx >= floor.width as i32 || gz < 0 || gz >= floor.depth as i32 {
+            let b = grid_world_bounds(rp, floor);
+            if !b.contains(x, z, GRID_EDGE_MARGIN) {
                 continue;
             }
-            // Cell is inside this floor's grid — pick the closest y_base
             let dist = (y - floor.y_base).abs();
-            if dist < best_dist {
-                best_dist = dist;
-                best_floor = floor.floor_level;
-                found = true;
+            let slot = if b.contains(x, z, 0.0) {
+                &mut exact
+            } else {
+                &mut near
+            };
+            if slot.is_none_or(|(d, _)| dist < d) {
+                *slot = Some((dist, floor.floor_level));
             }
         }
     }
+    exact.or(near).map_or(0, |(_, f)| f)
+}
 
-    if found {
-        best_floor
-    } else {
-        0
+/// How far past a floor grid a point still counts as that floor: the widest
+/// jetty overhang, so a click on the drawn strip beyond an upper storey's grid
+/// does not fall through to floor 0 and route the player downstairs.
+const GRID_EDGE_MARGIN: f32 = FLOOR_OVERHANG_PER_LEVEL * MAX_FLOOR_LEVEL as f32;
+/// Snapped goals stop this far inside the grid edge.
+const GRID_EDGE_INSET: f32 = 0.25;
+
+fn within(v: f32, min: f32, max: f32, margin: f32) -> bool {
+    v >= min - margin && v < max + margin
+}
+
+/// World-space bounds of a floor grid, [min, max) on each axis.
+struct GridBounds {
+    min_x: f32,
+    max_x: f32,
+    min_z: f32,
+    max_z: f32,
+}
+
+impl GridBounds {
+    fn contains(&self, x: f32, z: f32, margin: f32) -> bool {
+        within(x, self.min_x, self.max_x, margin) && within(z, self.min_z, self.max_z, margin)
     }
+}
+
+fn grid_world_bounds(rp: &RuntimePassability, floor: &RuntimeFloorGrid) -> GridBounds {
+    let min_x = (rp.house_origin_x.floor() as i32 + floor.origin_x) as f32;
+    let min_z = (rp.house_origin_z.floor() as i32 + floor.origin_z) as f32;
+    GridBounds {
+        min_x,
+        max_x: min_x + floor.width as f32,
+        min_z,
+        max_z: min_z + floor.depth as f32,
+    }
+}
+
+/// Clamp an upper-floor goal in the overhang strip onto its grid so A* has a
+/// reachable cell. On-grid goals and floor 0 (open terrain) are unchanged.
+pub fn snap_goal_into_floor(
+    cache: &PassabilityCache,
+    x: f32,
+    z: f32,
+    floor_level: u8,
+) -> (f32, f32) {
+    if floor_level == 0 {
+        return (x, z);
+    }
+    let mut nearest: Option<(f32, (f32, f32))> = None;
+    for rp in cache.values() {
+        if !within(x, rp.min_x, rp.max_x, GRID_EDGE_MARGIN)
+            || !within(z, rp.min_z, rp.max_z, GRID_EDGE_MARGIN)
+        {
+            continue;
+        }
+        for floor in rp.floors.iter().filter(|f| f.floor_level == floor_level) {
+            let b = grid_world_bounds(rp, floor);
+            if !b.contains(x, z, GRID_EDGE_MARGIN) {
+                continue;
+            }
+            if b.contains(x, z, 0.0) {
+                return (x, z);
+            }
+            let sx = x.clamp(b.min_x + GRID_EDGE_INSET, b.max_x - GRID_EDGE_INSET);
+            let sz = z.clamp(b.min_z + GRID_EDGE_INSET, b.max_z - GRID_EDGE_INSET);
+            let d = (sx - x).abs() + (sz - z).abs();
+            if nearest.is_none_or(|(nd, _)| d < nd) {
+                nearest = Some((d, (sx, sz)));
+            }
+        }
+    }
+    nearest.map_or((x, z), |(_, p)| p)
 }
 
 /// Get the yBase for a given floor level at a world position.
 pub fn get_floor_y_base(cache: &PassabilityCache, x: f32, z: f32, floor_level: u8) -> Option<f32> {
-    let cx = x.floor() as i32;
-    let cz = z.floor() as i32;
     for rp in cache.values() {
         if x < rp.min_x || x > rp.max_x || z < rp.min_z || z > rp.max_z {
             continue;
         }
-        let house_ox = rp.house_origin_x.floor() as i32;
-        let house_oz = rp.house_origin_z.floor() as i32;
         for floor in &rp.floors {
-            if floor.floor_level != floor_level {
-                continue;
-            }
-            let gx = cx - house_ox - floor.origin_x;
-            let gz = cz - house_oz - floor.origin_z;
-            if gx >= 0 && gx < floor.width as i32 && gz >= 0 && gz < floor.depth as i32 {
+            if floor.floor_level == floor_level && grid_world_bounds(rp, floor).contains(x, z, 0.0)
+            {
                 return Some(floor.y_base);
             }
         }
@@ -666,6 +813,249 @@ fn floor_y_base_of(rp: &RuntimePassability, floor_level: u8) -> Option<f32> {
 /// ends — it must stay well under `DUNGEON_FLOOR_HEIGHT` (4m) or a shaft
 /// could recapture movers standing on the storey above or below it.
 const STAIR_SPAN_Y_TOLERANCE: f32 = 1.0;
+
+/// Floor height supporting a mover at `y` anywhere in the swept box, on the
+/// floor it is keyed to: of the grids the box crosses, the `y_base` nearest
+/// `y`. `None` when the box crosses no floor at that level.
+///
+/// The box, not the endpoints: an obstacle sits mid-leg as often as at either
+/// end, and a caller deriving a mover's height needs the height of the storey
+/// the obstacle stands on. Nearest rather than highest or lowest, mirroring
+/// [`get_floor_at_position`] — one leg can cross terrain-following furniture
+/// whose bases differ by the height of the hill.
+pub fn supporting_floor_y(
+    cache: &PassabilityCache,
+    from_x: f32,
+    from_z: f32,
+    to_x: f32,
+    to_z: f32,
+    floor_level: u8,
+    y: f32,
+) -> Option<f32> {
+    let (min_x, max_x) = (from_x.min(to_x), from_x.max(to_x));
+    let (min_z, max_z) = (from_z.min(to_z), from_z.max(to_z));
+    let mut best: Option<(f32, f32)> = None;
+    for rp in cache.values() {
+        if max_x < rp.min_x || min_x > rp.max_x || max_z < rp.min_z || min_z > rp.max_z {
+            continue;
+        }
+        let ox = rp.house_origin_x.floor() as i32;
+        let oz = rp.house_origin_z.floor() as i32;
+        for floor in rp.floors.iter().filter(|f| f.floor_level == floor_level) {
+            let cell_min_x = (ox + floor.origin_x) as f32;
+            let cell_min_z = (oz + floor.origin_z) as f32;
+            if max_x < cell_min_x
+                || min_x > cell_min_x + floor.width as f32
+                || max_z < cell_min_z
+                || min_z > cell_min_z + floor.depth as f32
+            {
+                continue;
+            }
+            let dist = (y - floor.y_base).abs();
+            if best.is_none_or(|(best_dist, _)| dist < best_dist) {
+                best = Some((dist, floor.y_base));
+            }
+        }
+    }
+    best.map(|(_, y_base)| y_base)
+}
+
+/// The flight's two floor heights, if `y` lies within its span.
+fn stair_span_containing(
+    rp: &super::RuntimePassability,
+    stair: &super::StairwellInfo,
+    y: f32,
+) -> Option<(f32, f32)> {
+    let lower_y = floor_y_base_of(rp, stair.lower_floor)?;
+    let upper_y = floor_y_base_of(rp, stair.upper_floor)?;
+    (y >= lower_y.min(upper_y) - STAIR_SPAN_Y_TOLERANCE
+        && y <= lower_y.max(upper_y) + STAIR_SPAN_Y_TOLERANCE)
+        .then_some((lower_y, upper_y))
+}
+
+/// Whether `(x, z, y)` sits inside some stairwell's vertical span — a mover
+/// mid-flight, interpolating between two floor heights rather than standing on
+/// either.
+///
+/// A caller deriving a mover's height from the cache (rather than trusting the
+/// one it reported) must leave these alone: a climber is legitimately metres
+/// above the floor it is keyed to, and pulling it down to that floor is what
+/// makes the tables underneath the stairs block it.
+pub fn in_stairwell_span(cache: &PassabilityCache, x: f32, z: f32, y: f32) -> bool {
+    let cx = x.floor() as i32;
+    let cz = z.floor() as i32;
+    cache.values().any(|rp| {
+        if x < rp.min_x || x > rp.max_x || z < rp.min_z || z > rp.max_z {
+            return false;
+        }
+        let ox = rp.house_origin_x.floor() as i32;
+        let oz = rp.house_origin_z.floor() as i32;
+        rp.stairwells.iter().any(|stair| {
+            stair_step(stair, cx - ox, cz - oz).is_some()
+                && stair_span_containing(rp, stair, y).is_some()
+        })
+    })
+}
+
+/// Slab clip of a 2D segment against an axis-aligned box.
+pub(crate) fn segment_touches_box(
+    (min_x, max_x): (f32, f32),
+    (min_z, max_z): (f32, f32),
+    (x0, z0): (f32, f32),
+    (x1, z1): (f32, f32),
+) -> bool {
+    let (mut t0, mut t1) = (0.0f32, 1.0f32);
+    for (p0, p1, lo, hi) in [(x0, x1, min_x, max_x), (z0, z1, min_z, max_z)] {
+        let d = p1 - p0;
+        if d.abs() <= f32::EPSILON {
+            if p0 < lo || p0 > hi {
+                return false;
+            }
+            continue;
+        }
+        let (ta, tb) = ((lo - p0) / d, (hi - p0) / d);
+        t0 = t0.max(ta.min(tb));
+        t1 = t1.min(ta.max(tb));
+        if t0 > t1 {
+            return false;
+        }
+    }
+    true
+}
+
+/// Flat landing at each end of a stairwell's run, in metres. Mirrors the
+/// client's `LANDING_DEPTH` (`house-geo-utils.ts`).
+const STAIR_LANDING_DEPTH: f32 = 0.5;
+
+/// Cells of slack around a stairwell footprint within which a storey change
+/// is accepted: the server sim trails the client that flipped its floor.
+const STAIR_CHANGE_MARGIN: i32 = 1;
+
+/// Fraction climbed at run position `t` of a flight `len` long with flat
+/// landings of `landing` at both ends.
+pub(crate) fn ramp_fraction(t: f32, len: f32, landing: f32) -> f32 {
+    ((t - landing) / (len - 2.0 * landing).max(f32::EPSILON)).clamp(0.0, 1.0)
+}
+
+/// Height of a stairwell's walking surface at world `(x, z)`: the client's
+/// `getStairwellYOffset`, minus the half floor thickness it adds everywhere.
+fn stair_surface_y(
+    rp: &RuntimePassability,
+    stair: &super::StairwellInfo,
+    x: f32,
+    z: f32,
+) -> Option<f32> {
+    let lower_y = floor_y_base_of(rp, stair.lower_floor)?;
+    let upper_y = floor_y_base_of(rp, stair.upper_floor)?;
+    let len = stair_dims(stair).0 as f32;
+    let (start, along) = if stair.along_z {
+        (rp.house_origin_z + stair.local_min_z as f32, z)
+    } else {
+        (rp.house_origin_x + stair.local_min_x as f32, x)
+    };
+    let mut t = along - start;
+    if stair.reversed {
+        t = len - t;
+    }
+    let f = ramp_fraction(t.clamp(0.0, len), len, STAIR_LANDING_DEPTH);
+    Some(lower_y + (upper_y - lower_y) * f)
+}
+
+/// Ground height of house storey `floor` at `(x, z)`: a stairwell ramp
+/// touching that storey, else that storey's grid `y_base`. `None` on open
+/// terrain. `hint` only breaks ties between candidates (stacked stairwells,
+/// several grids on one level), so the reported Y is safe to pass.
+pub fn storey_ground_y(
+    cache: &PassabilityCache,
+    floor: u8,
+    x: f32,
+    z: f32,
+    hint: f32,
+) -> Option<f32> {
+    let cx = x.floor() as i32;
+    let cz = z.floor() as i32;
+    let mut stair_best: Option<(f32, f32)> = None;
+    let mut grid_best: Option<(f32, f32)> = None;
+    for rp in cache.values() {
+        if !rp.is_ground || x < rp.min_x || x > rp.max_x || z < rp.min_z || z > rp.max_z {
+            continue;
+        }
+        let ox = rp.house_origin_x.floor() as i32;
+        let oz = rp.house_origin_z.floor() as i32;
+        for stair in &rp.stairwells {
+            if (stair.lower_floor != floor && stair.upper_floor != floor)
+                || stair_step(stair, cx - ox, cz - oz).is_none()
+            {
+                continue;
+            }
+            if let Some(y) = stair_surface_y(rp, stair, x, z) {
+                let dist = (y - hint).abs();
+                if stair_best.is_none_or(|(d, _)| dist < d) {
+                    stair_best = Some((dist, y));
+                }
+            }
+        }
+        for grid in rp.floors.iter().filter(|f| f.floor_level == floor) {
+            let gx = cx - ox - grid.origin_x;
+            let gz = cz - oz - grid.origin_z;
+            if gx < 0 || gx >= grid.width as i32 || gz < 0 || gz >= grid.depth as i32 {
+                continue;
+            }
+            let dist = (grid.y_base - hint).abs();
+            if grid_best.is_none_or(|(d, _)| dist < d) {
+                grid_best = Some((dist, grid.y_base));
+            }
+        }
+    }
+    stair_best.or(grid_best).map(|(_, y)| y)
+}
+
+/// Whether the XZ leg `from`→`to` may carry a storey change between `lower`
+/// and `upper`: it touches a stairwell joining the two (±`STAIR_CHANGE_MARGIN`
+/// cells) and is no longer than twice that stairwell's run — a longer leg
+/// merely clipping the stairs would arrive on the other storey far from it.
+pub fn leg_touches_stairwell(
+    cache: &PassabilityCache,
+    lower: u8,
+    upper: u8,
+    from: (f32, f32),
+    to: (f32, f32),
+) -> bool {
+    let leg_sq = (to.0 - from.0).powi(2) + (to.1 - from.1).powi(2);
+    let m = STAIR_CHANGE_MARGIN as f32;
+    let (min_x, max_x) = (from.0.min(to.0) - m, from.0.max(to.0) + m);
+    let (min_z, max_z) = (from.1.min(to.1) - m, from.1.max(to.1) + m);
+    cache.values().any(|rp| {
+        if !rp.is_ground
+            || rp.stairwells.is_empty()
+            || max_x < rp.min_x
+            || min_x > rp.max_x
+            || max_z < rp.min_z
+            || min_z > rp.max_z
+        {
+            return false;
+        }
+        let ox = rp.house_origin_x.floor();
+        let oz = rp.house_origin_z.floor();
+        rp.stairwells.iter().any(|stair| {
+            stair.lower_floor == lower
+                && stair.upper_floor == upper
+                && leg_sq <= (2.0 * stair_dims(stair).0 as f32).powi(2)
+                && segment_touches_box(
+                    (
+                        ox + stair.local_min_x as f32 - m,
+                        ox + stair.local_max_x as f32 + m,
+                    ),
+                    (
+                        oz + stair.local_min_z as f32 - m,
+                        oz + stair.local_max_z as f32 + m,
+                    ),
+                    from,
+                    to,
+                )
+        })
+    })
+}
 
 /// Passability floor an A* endpoint at (x, z, y) must be keyed to.
 ///
@@ -703,17 +1093,9 @@ pub fn start_floor_at(cache: &PassabilityCache, x: f32, z: f32, y: f32) -> u8 {
             if step == 0 || step == n - 1 {
                 continue;
             }
-            let (Some(lower_y), Some(upper_y)) = (
-                floor_y_base_of(rp, stair.lower_floor),
-                floor_y_base_of(rp, stair.upper_floor),
-            ) else {
+            let Some((lower_y, upper_y)) = stair_span_containing(rp, stair, y) else {
                 continue;
             };
-            if y < lower_y.min(upper_y) - STAIR_SPAN_Y_TOLERANCE
-                || y > lower_y.max(upper_y) + STAIR_SPAN_Y_TOLERANCE
-            {
-                continue;
-            }
             let f = step as f32 / (n - 1) as f32;
             let dist = (y - (lower_y + (upper_y - lower_y) * f)).abs();
             if best.is_none_or(|(best_dist, _)| dist < best_dist) {

@@ -8,6 +8,9 @@ export const VERTS_PER_SIDE = TILE_DIM + 1 // 65
 export const SPLAT_PADDED_DIM = TILE_DIM + 2 // 66
 export const REGION_SIZE = 16
 export const REGION_CELLS = REGION_SIZE * TILE_DIM // 1024
+/** Land plot = tile quadrant. Tiles are centered on multiples of TILE_DIM, so
+ *  plot edges fall on multiples of LAND_PLOT_SIZE (LAND_SYSTEM.md). */
+export const LAND_PLOT_SIZE = TILE_DIM / 2
 
 /** Height threshold at/above which water is considered shallow sea (upper bound of sea) */
 export const SHALLOW_WATER_THRESHOLD = -0.1
@@ -27,6 +30,20 @@ export function tileToRegion(tile: number): number {
   return Math.floor(tile / REGION_SIZE)
 }
 
+export function regionKey(rx: number, rz: number): string {
+  return `${rx},${rz}`
+}
+
+/** True when (ax, az) is within the 3×3 block of regions around (bx, bz). */
+export function isNeighbourRegion(
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number
+): boolean {
+  return Math.abs(ax - bx) <= 1 && Math.abs(az - bz) <= 1
+}
+
 export function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t
 }
@@ -34,4 +51,8 @@ export function lerp(a: number, b: number, t: number): number {
 export function smoothstep(edge0: number, edge1: number, x: number): number {
   const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)))
   return t * t * (3 - 2 * t)
+}
+
+export function brushInnerRadius(radius: number): number {
+  return Math.max(radius * 0.3, Math.min(Math.SQRT1_2, radius * 0.75))
 }

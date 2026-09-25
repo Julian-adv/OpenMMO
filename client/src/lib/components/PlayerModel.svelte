@@ -1,8 +1,22 @@
 <script module lang="ts">
   import * as THREE from 'three'
+  import { HOVER_SCALE_IDLE, stickyHoverScale } from '../utils/stickyHover'
 
   const HEALTH_BAR_WIDTH = 1.0
   const HEALTH_BAR_HEIGHT = 0.08
+  const LOCAL_NAMETAG_RENDER_ORDER = 1000
+  const LOCAL_NAMETAG_OFFSET_PX = 8
+
+  // Fixed character-sized hover box; every player shares the skeleton, so the
+  // never-rendered proxy geometry/material are shared across instances too.
+  const HOVER_BOX = { x: 0.9, y: 1.9, z: 0.9 }
+  const HOVER_GEOMETRY = new THREE.BoxGeometry(
+    HOVER_BOX.x,
+    HOVER_BOX.y,
+    HOVER_BOX.z
+  )
+  const HOVER_MATERIAL = new THREE.MeshBasicMaterial()
+  const HOVER_SCALE_STICKY = stickyHoverScale(HOVER_BOX)
 
   // Shared across all PlayerModel instances — the fill geometry never changes.
   // Left-anchored via translate so the mesh only needs scale.x to grow/shrink.
@@ -11,67 +25,179 @@
     HEALTH_BAR_HEIGHT
   )
   healthBarFillGeometry.translate(HEALTH_BAR_WIDTH / 2, 0, 0)
+
+  // Retargeted clips are shared per character profile, so the additive
+  // rebuild runs once per source clip instead of once per player.
+  const additiveClipCache = new WeakMap<
+    THREE.AnimationClip,
+    THREE.AnimationClip
+  >()
+
+  function additiveUpperBodyClip(clip: THREE.AnimationClip) {
+    const cached = additiveClipCache.get(clip)
+    if (cached) return cached
+    const additive = clip.clone()
+    // Dropping position keeps the recoil in the body instead of shoving it.
+    additive.tracks = additive.tracks.filter(
+      (track) => !track.name.endsWith('.position')
+    )
+    THREE.AnimationUtils.makeClipAdditive(additive)
+    additiveClipCache.set(clip, additive)
+    return additive
+  }
 </script>
 
 <script lang="ts">
-  import { T } from '@threlte/core'
+  import { translate } from '../i18n'
+  import { visibleMana } from '../stores/gameStore'
+  import { playerHealthDisplay } from '../stores/playerHealthDisplay'
+  import { RiderMotion } from '../utils/riderMotion'
+  import { FishingReel } from '../utils/fishingReel'
+  import { fishingReelStance, type FishingCatch } from '../stores/fishingStore'
+  import {
+    ENCHANT_WEAPON_ANIMATION,
+    ENCHANT_LEFT_WEAPON_ANIMATION,
+    ENCHANT_ARMOR_ANIMATION,
+    ENCHANT_LEFT_ARMOR_ANIMATION,
+    EnchantWeaponGrip,
+    getArmorEnchantHold,
+    isArmorEnchantHold,
+    loadEnchantAnimations,
+  } from '../utils/enchantAnimation'
+  import { HorseReins } from '../utils/horseReins'
+  import {
+    HorseMount,
+    HORSE_MODEL_PATH,
+    RIDING_ANIMATION_PATH,
+  } from '../utils/horseMount'
+  import { titleName } from '../data/titleDefs'
+  import { T, useThrelte } from '@threlte/core'
   import TextLabel from './TextLabel.svelte'
   import type { Vector3 } from 'three'
   import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
-  import { onMount } from 'svelte'
+  import { onDestroy, onMount, untrack } from 'svelte'
+  import { BoatMount, ROWBOAT_MODEL_PATH } from '../utils/boatMount'
+  import { BoatWaterEffects } from '../effects/boat-water'
+  import { seatedFishingClip } from '../utils/seatedFishing'
+  import type { MountKind } from '../network/networkTypes'
   import { SvelteMap } from 'svelte/reactivity'
   import { get } from 'svelte/store'
   import { timeScale } from '../stores/timeStore'
   import {
     AnimationIndex,
     AnimationName,
+    CLASS_IDLE_CLIP_NAMES,
     FishingAnimationName,
     OffhandAnimationName,
+    RangedAnimationName,
+    SIT_TALK_CHANCE,
+    SitAnimationName,
     TORCH_IDLE_CLIP_NAMES,
   } from '../types/animations'
   import {
     computeSoleGroundOffset,
     createCharacterModelRoot,
+    findBoneByName,
     getGltfAnimations,
     retargetOrderedCharacterAnimationsForModel,
+    retargetAnimationsForCharacterModel,
     selectOrderedCharacterAnimations,
   } from '../utils/characterAnimationUtils'
   import {
+    FALLBACK_TORCH_TIP_LOCAL_OFFSET,
+    MANDOLIN_ITEM_DEF_ID,
+    forearmLength,
+    mainHandBoneFor,
+    poseMainHandProp,
+    poseOffHandProp,
+    resolveTipNode,
+  } from '../utils/handProps'
+  import {
     CHARACTER_ANIMATION_PACK_PATHS,
     getCharacterModelPath,
-    getDefaultWeaponModel,
+    getNpcModelPath,
     getWeaponModelPath,
   } from '../utils/modelPaths'
   import { loadGLB } from '../utils/gltfCache'
+  import { getDaggerComboClip } from '../utils/daggerSkillAnimation'
+  import { DaggerBladeTrail } from '../effects/dagger-blade-trail'
+  import { DAGGER_SKILL } from '../data/daggerSkill'
+  import { daggerSkillCasts } from '../stores/daggerSkillStore'
+  import { gameStore } from '../stores/gameStore'
   import { pickRandom } from '../utils/randomUtils'
-  import { inventoryStore } from '../stores/inventoryStore'
-  import { getItemDef } from '../data/itemDefs'
-  import { torchLightEnabled } from '../stores/debugStore'
+  import { inventoryStore, isTorchItemDefId } from '../stores/inventoryStore'
+  import { capeColorOf, getItemDef, isRangedWeapon } from '../data/itemDefs'
+  import {
+    getWeaponAnimation,
+    weaponAnimationClipName,
+  } from '../data/weaponAnimationDefs'
+  import { loadWeaponAnimations } from '../utils/weaponAnimations'
+  import {
+    createTwoHandedGrip,
+    type TwoHandedGrip,
+  } from '../utils/twoHandedGrip'
+  import { capeDyePreview } from '../stores/capeDyeStore'
+  import { capeTexturePreview } from '../stores/capeTextureStore'
+  import { capeTextureUrl } from '../utils/networkUtils'
+  import {
+    capeCollarBiasOverride,
+    capeEnabled,
+    torchLightEnabled,
+  } from '../stores/debugStore'
   import { localPlayerRightHand } from '../stores/playerHandRegistry'
+  import {
+    PlayerEffectAnchors,
+    type EnchantEffectAnchor,
+  } from '../utils/playerEffectAnchors'
+  import type { WindState } from '../shaders/grass-material'
+  import {
+    attachCapeFit,
+    capeCollarTuningFor,
+    DEFAULT_CAPE_COLOR,
+    fitCapeToSkeleton,
+    type CapeRig,
+  } from '../effects/cape-rig'
+  import { OFFSCREEN_Y } from '../utils/house-geo-utils'
 
   import type { CharacterClass, Gender } from '../network/networkTypes'
   import {
     type MovementMode,
     type PlayerStateName,
   } from '../utils/movementUtils'
-  import { TorchFireParticles } from '../effects/torch-fire-particles'
+  import { TorchFireParticles } from '../effects/fire-particles'
   import ChatBubble from './ChatBubble.svelte'
-  import DamageText from './DamageText.svelte'
+  import { DamageTextEmitter } from '../effects/damage-text-pool'
   import type { PlayerDamageInfo, PlayerGoldInfo } from '../stores/gameStore'
+  import { addChatMessage, hoveredPlayerId } from '../stores/gameStore'
+  import type { TerrainHeightManager } from '../managers/terrainHeightManager'
+  import TargetRing from './TargetRing.svelte'
+  import {
+    DEBUG_ANIM_NAMES,
+    HELD_EMOTE_ANIMS,
+    isSelfEndingEmote,
+    MUSIC_EMOTE_ANIM,
+  } from '../stores/emoteStore'
+  import { billboardScale, billboardZoomT } from '../utils/billboardScale'
 
   interface Props {
+    teleportHidden?: boolean
     position: Vector3
     name: string
     isCurrentPlayer: boolean
     playerState: PlayerStateName
     interactionAnim?: string
+    catchPresentation?: FishingCatch
+    interactionCounter?: number
+    mount?: MountKind | null
     interactOffsetY?: number
     attackCounter?: number
+    hitCounter?: number
     speed: number
     rotation: number
     movementMode?: MovementMode
     camera: THREE.Camera | undefined
     chatBubble?: string
+    chatBubbleAt?: number
     characterClass: CharacterClass
     gender: Gender
     health: number
@@ -88,25 +214,49 @@
     /** Remote players' broadcast main-hand item def id; the local player
      *  renders from inventory instead. */
     mainHand?: string | null
+    /** Dye on that cape, as broadcast with it. */
+    backColor?: string | null
+    /** Content hash of the print on that cape, as broadcast with it. */
+    backTexture?: string | null
+    /** Remote players' broadcast back item def id; the local player renders
+     *  from inventory instead. */
+    back?: string | null
     torchEffectsDisabled?: boolean
     /** Set for NPC remote players so canvas clicks can resolve this model
      *  back to its player id (read from userData by the input raycast). */
     npcPlayerId?: number
+    /** Set for every remote player, NPC or not. Only the right-click menu
+     *  reads it, so tagging everyone leaves left-click behaviour alone. */
+    remotePlayerId?: number
+    /** Shown title id, drawn in smaller text above the name. */
+    title?: string | null
+    /** Remote player's floor (negative = dungeon depth), for the hover ring. */
+    floorLevel?: number
+    heightManager?: TerrainHeightManager | null
+    waterSurfaceAt?: (x: number, z: number) => number
+    waterFoamMap?: THREE.Texture | null
+    waterSunDirection?: THREE.Vector3 | null
   }
 
   let {
+    teleportHidden = false,
     position,
     name,
     isCurrentPlayer,
     playerState,
     interactionAnim,
+    catchPresentation,
+    interactionCounter,
+    mount = null,
     interactOffsetY = 0,
     attackCounter,
+    hitCounter,
     speed: _speed,
     rotation,
     movementMode,
     camera,
     chatBubble,
+    chatBubbleAt,
     characterClass,
     gender,
     health,
@@ -121,8 +271,18 @@
     lastGoldInfo,
     torchOn = false,
     mainHand = null,
+    back = null,
+    backColor = null,
+    backTexture = null,
     torchEffectsDisabled = false,
     npcPlayerId,
+    remotePlayerId,
+    title = null,
+    floorLevel = 0,
+    heightManager = null,
+    waterSurfaceAt,
+    waterFoamMap = null,
+    waterSunDirection = null,
   }: Props = $props()
 
   const DEFAULT_IDLE_INDICES = [
@@ -136,31 +296,16 @@
   let nametagScale = $state(1)
   let nametagHeight = $state(2.7)
   let nametagGroup = $state<THREE.Group | undefined>(undefined)
-  let chatBubbleInstance = $state<ChatBubble | null>(null)
+  const { size } = useThrelte()
   let animDebugInfo = $state('')
 
-  // Floating damage text
-  let damageTextRef = $state<ReturnType<typeof DamageText>>()
+  const damageText = new DamageTextEmitter()
+  onDestroy(() => damageText.dispose())
 
-  // svelte-ignore state_referenced_locally
-  let displayedHealth = $state(health)
-
-  // Heals (and remote players) update the bar immediately; it never drops here.
-  $effect(() => {
-    if (!isCurrentPlayer || health >= displayedHealth) {
-      displayedHealth = health
-    }
-  })
-
-  // Damage drops the bar only when a new damage event arrives, keeping it in
-  // sync with the floating damage text (emitted on the same delay). A fresh
-  // lastDamageInfo object fires this once per hit; health is not a dependency,
-  // so a server health update alone won't drop the bar early.
-  $effect(() => {
-    if (isCurrentPlayer && lastDamageInfo) {
-      displayedHealth = lastDamageInfo.currentHealth ?? health
-    }
-  })
+  const displayedPlayerHealth = playerHealthDisplay.displayed
+  const displayedHealth = $derived(
+    isCurrentPlayer ? ($displayedPlayerHealth ?? health) : health
+  )
 
   let displayedHealthRatio = $derived(
     Math.max(0, Math.min(1, displayedHealth / (maxHealth || 1)))
@@ -172,12 +317,11 @@
   let activeGltfData = $state<GLTF | null>(null)
   let locomotionGltfData = $state<GLTF | null>(null)
   let combatMeleeGltfData = $state<GLTF | null>(null)
-  let weaponGltfData = $state<GLTF | null>(null)
 
   // svelte-ignore state_referenced_locally
-  const defaultWeaponModel = getDefaultWeaponModel(characterClass)
-  // svelte-ignore state_referenced_locally
-  const modelPath = getCharacterModelPath(characterClass, gender)
+  const modelPath =
+    (npcPlayerId !== undefined ? getNpcModelPath(name) : undefined) ??
+    getCharacterModelPath(characterClass, gender)
   const modelPromise = loadGLB(modelPath).then((g) => {
     activeGltfData = g
   })
@@ -191,69 +335,170 @@
   ).then((g) => {
     combatMeleeGltfData = g
   })
-  const weaponPromise = defaultWeaponModel
-    ? loadGLB(getWeaponModelPath(defaultWeaponModel)).then((g) => {
-        weaponGltfData = g
-      })
-    : Promise.resolve()
   const glbReady = Promise.all([
     modelPromise,
     locomotionPromise,
     combatMeleePromise,
-    weaponPromise,
   ])
 
   // Animation system - following gpt-all-in-one.html approach
   let mixer = $state<THREE.AnimationMixer | null>(null)
   let currentAction = $state<THREE.AnimationAction | null>(null)
   let modelRoot = $state<THREE.Group | null>(null)
+  let horseMount = $state<HorseMount | null>(null)
+  let boatMount = $state<BoatMount | null>(null)
+  let boatWater = $state<BoatWaterEffects | null>(null)
+  let riderGroup = $state<THREE.Group | undefined>()
+  let ridingClip: THREE.AnimationClip | null = null
+  let riderMotion: RiderMotion | null = null
+  let rowingMotion: RiderMotion | null = null
+  let horseReins: HorseReins | null = null
+  const seatPosition = new THREE.Vector3()
+  // Boats remain visible during combat and interactions.
+  const riding = $derived(
+    mount === 'horse' &&
+      health > 0 &&
+      playerState !== 'attack' &&
+      playerState !== 'interact'
+  )
+  const boating = $derived(mount === 'rowboat' && health > 0)
+  const canRow = $derived(
+    playerState !== 'attack' && playerState !== 'interact'
+  )
+  const rowing = $derived(boating && playerState === 'moving')
+  const fishingInteraction = $derived(
+    playerState === 'interact' &&
+      (interactionAnim === FishingAnimationName.CAST ||
+        interactionAnim === FishingAnimationName.IDLE)
+  )
+
+  $effect(() => {
+    if (!boatMount || !waterFoamMap || !waterSurfaceAt) return
+    const sampleSurface = waterSurfaceAt
+    const terrain = heightManager
+    const effects = new BoatWaterEffects(boatMount, waterFoamMap, (x, z) => {
+      const y = sampleSurface(x, z)
+      return terrain && terrain.getHeightAtWorldPosition(x, z) >= y ? null : y
+    })
+    boatWater = effects
+    return () => {
+      effects.dispose()
+      boatWater = null
+    }
+  })
+
+  $effect(() => {
+    const root = modelRoot
+    if (!boating || !root) return
+    let cancelled = false
+    // Load the seated pose before choosing the boat's first animation.
+    void Promise.all([loadGLB(ROWBOAT_MODEL_PATH), loadSocialAnimations()])
+      .then(([gltf]) => {
+        if (cancelled) return
+        boatMount = new BoatMount(gltf)
+        rowingMotion = new RiderMotion(root)
+        lastAnimKey = undefined
+        playAnimationForState()
+      })
+      .catch((error) => console.error('Failed to load rowboat mount', error))
+    return () => {
+      cancelled = true
+      rowingMotion?.restore()
+      rowingMotion = null
+      boatMount = null
+      if (riderGroup) {
+        riderGroup.position.set(0, 0, 0)
+        riderGroup.quaternion.identity()
+      }
+      lastAnimKey = undefined
+    }
+  })
+
+  $effect(() => {
+    const root = modelRoot
+    if (!riding || !root) return
+    let cancelled = false
+    let mount: HorseMount | null = null
+    void Promise.all([
+      loadGLB(HORSE_MODEL_PATH),
+      loadGLB(RIDING_ANIMATION_PATH),
+    ])
+      .then(async ([horse, rider]) => {
+        const clips = await retargetAnimationsForCharacterModel(
+          root,
+          rider.scene,
+          getGltfAnimations(rider)
+        )
+        if (cancelled) return
+        mount = new HorseMount(horse)
+        horseMount = mount
+        riderMotion = new RiderMotion(root)
+        horseReins = new HorseReins(mount.root, root)
+        ridingClip = clips.find((clip) => clip.name === 'ride') ?? null
+        playAnimationForState()
+      })
+      .catch((error) => console.error('Failed to load horse mount', error))
+    return () => {
+      cancelled = true
+      mount?.dispose()
+      horseReins?.dispose()
+      horseReins = null
+      riderMotion?.restore()
+      riderMotion = null
+      horseMount = null
+      ridingClip = null
+      if (riderGroup) riderGroup.position.set(0, 0, 0)
+      lastAnimKey = undefined
+    }
+  })
   let modelGroup = $state<THREE.Group | undefined>(undefined)
 
+  let hoverProxyGroup = $state<THREE.Group | undefined>(undefined)
+  const isHoveredPlayer = $derived(
+    remotePlayerId !== undefined && $hoveredPlayerId === remotePlayerId
+  )
+  // Remote positions are mutated in place (see updatePose), so the ring
+  // position is republished from the frame loop while hovered.
+  let ringPos = $state<{ x: number; y: number; z: number } | null>(null)
+
   let clonedScene: THREE.Object3D | null = null
+  let effectAnchors: PlayerEffectAnchors | null = null
   let validAnimations = $state<THREE.AnimationClip[]>([])
+  const validAnimationsByName = $derived(
+    new Map<string, THREE.AnimationClip>(
+      validAnimations.map((c) => [c.name, c])
+    )
+  )
   let offhandClips = new SvelteMap<string, THREE.AnimationClip>()
+  let rangedClips = new SvelteMap<string, THREE.AnimationClip>()
+  let weaponClips = new Map<string, THREE.AnimationClip>()
   let socialClipsByName = new SvelteMap<string, THREE.AnimationClip>()
-  let socialLoading = false
-  let lastPlayerState = $state<PlayerStateName | undefined>(undefined)
-  let lastAttackCounter = $state(0)
+  let socialLoadPromise: Promise<void> | null = null
+  let lastAnimKey: string | undefined
+  let hitAction: THREE.AnimationAction | null = null
+  let sitIdleLastTime = 0
+  // Avoid using the fallback slash animation as a hit reaction.
+  let hitClipLoaded = false
+  let combatIdleClipLoaded = false
+  let lastHitCounter = untrack(() => hitCounter)
+  // After all packs load, an unknown `/anim` name is a typo.
+  let debugPacksSearched = false
   let dyingFinishedNotified = $state(false)
   let interactionFinishedNotified = $state(false)
   let pickupGrabNotified = $state(false)
-  let currentMovementAnimationIndex = $state<number | undefined>(undefined) // Locked animation for current movement
-  let weaponAttached = $state(false)
   let weaponObject: THREE.Object3D | null = null
+  let weaponGrip: TwoHandedGrip | null = null
+  let fishingReel: FishingReel | null = null
+  onDestroy(() => fishingReel?.dispose())
+  let enchantGrip: EnchantWeaponGrip | null = null
+  let enchantClips = new Map<string, THREE.AnimationClip>()
+  let enchantAction: THREE.AnimationAction | null = null
+  let armorEnchantAction: THREE.AnimationAction | null = null
+  let enchantPoseUntil = 0
+  let enchantWeapon = true
   const OVERLAP_BEFORE_END = 0.3 // Start next animation overlap 0.3 seconds before current ends
   const _nametagPos = new THREE.Vector3()
-
-  function findPrimarySkinnedMesh(
-    root: THREE.Object3D
-  ): THREE.SkinnedMesh | undefined {
-    let primarySkinnedMesh: THREE.SkinnedMesh | undefined
-    root.traverse((obj) => {
-      if (!(obj instanceof THREE.SkinnedMesh) || !obj.skeleton) return
-      if (
-        !primarySkinnedMesh ||
-        obj.skeleton.bones.length > primarySkinnedMesh.skeleton.bones.length
-      ) {
-        primarySkinnedMesh = obj
-      }
-    })
-    return primarySkinnedMesh
-  }
-
-  function findBoneByName(
-    root: THREE.Object3D,
-    name: string
-  ): THREE.Bone | undefined {
-    const primarySkinnedMesh = findPrimarySkinnedMesh(root)
-    if (!primarySkinnedMesh) return undefined
-    return primarySkinnedMesh.skeleton.bones.find((bone) => bone.name === name)
-  }
-
-  // In the fishing stance the hand bone's y-z plane runs forward-down to
-  // sideways, so a pure x pitch only swings the rod sideways; this euler
-  // points it forward and ~25° up (about 60° bent off the forearm).
-  const FISHING_ROD_ROTATION = new THREE.Euler(0, -Math.PI / 6, -Math.PI / 3)
+  const _nametagUp = new THREE.Vector3()
 
   // The source cast clip keeps rod-jerking flourishes after the swing; cut
   // where the pose meets the idle stance.
@@ -262,48 +507,44 @@
   function attachWeaponModel(
     gltfScene: THREE.Object3D,
     characterRoot: THREE.Object3D,
-    itemDefId?: string | null
-  ): boolean {
-    const rightHandBone = findBoneByName(characterRoot, 'RightHand')
-    if (!rightHandBone) {
-      console.warn('Could not find right hand bone for weapon attachment')
-      return false
+    itemDefId: string
+  ): void {
+    const boneName = mainHandBoneFor(itemDefId)
+    const handBone = findBoneByName(characterRoot, boneName)
+    if (!handBone) {
+      console.warn(`Could not find ${boneName} bone for weapon attachment`)
+      return
     }
 
     weaponObject = gltfScene.clone()
-    // Offset from wrist bone toward palm so weapon looks gripped
-    weaponObject.position.set(0, 0.08, 0)
+    poseMainHandProp(
+      weaponObject,
+      itemDefId,
+      boneName === 'LeftHand'
+        ? forearmLength(characterRoot, boneName, `${modelPath}:${boneName}`)
+        : undefined
+    )
     if (itemDefId === 'fishing_rod') {
-      weaponObject.rotation.copy(FISHING_ROD_ROTATION)
       rodTipNode = resolveTipNode(
         weaponObject,
         'rod_tip',
         FALLBACK_ROD_TIP_LOCAL_OFFSET
       )
     }
-    rightHandBone.add(weaponObject)
-    weaponAttached = true
-    return true
+    handBone.add(weaponObject)
+    if (itemDefId === 'fishing_rod') {
+      fishingReel = new FishingReel(characterRoot, weaponObject)
+    }
+    enchantGrip = new EnchantWeaponGrip(weaponObject)
+    const gripReach = getWeaponAnimation(itemDefId)?.offHandGripReach
+    weaponGrip = gripReach
+      ? createTwoHandedGrip(characterRoot, weaponObject, gripReach)
+      : null
   }
 
   let rodTipNode: THREE.Object3D | null = null
   const FALLBACK_ROD_TIP_LOCAL_OFFSET = new THREE.Vector3(-0.051, 2.117, -2.128)
   const rodTipScratch = new THREE.Vector3()
-
-  /** Named tip empty baked into a prop GLB, or a fallback child at the given
-   *  local offset — either way it rides the bone chain. */
-  function resolveTipNode(
-    prop: THREE.Object3D,
-    name: string,
-    fallbackOffset: THREE.Vector3
-  ): THREE.Object3D {
-    const found = prop.getObjectByName(name)
-    if (found) return found
-    const node = new THREE.Object3D()
-    node.position.copy(fallbackOffset)
-    prop.add(node)
-    return node
-  }
 
   /** World position of the equipped fishing rod's tip, or null when no rod
    *  is attached — the fishing line's anchor. */
@@ -311,23 +552,31 @@
     return rodTipNode?.getWorldPosition(rodTipScratch) ?? null
   }
 
-  function tryAttachWeapon(characterRoot: THREE.Object3D): boolean {
-    if (!defaultWeaponModel || weaponAttached || !weaponGltfData) return false
-    return attachWeaponModel(weaponGltfData.scene, characterRoot)
+  const bowScratch = new THREE.Vector3()
+
+  /** Where an arrow leaves: the grip of the held bow, which is the model's
+   *  origin. Null when the hand is empty or holds something else, so the
+   *  caller can fall back rather than spawn an arrow out of thin air. */
+  export function getBowWorld(): THREE.Vector3 | null {
+    if (!weaponObject || !isRangedWeapon(attachedWeaponItemId)) return null
+    return weaponObject.getWorldPosition(bowScratch)
   }
 
   function detachWeapon() {
+    fishingReel?.dispose()
+    fishingReel = null
+    enchantGrip?.update(0)
+    enchantGrip = null
+    weaponGrip = null
     if (weaponObject && weaponObject.parent) {
       weaponObject.parent.remove(weaponObject)
     }
     weaponObject = null
     rodTipNode = null
-    weaponAttached = false
   }
 
   let offhandObject: THREE.Object3D | null = null
   let torchTipNode: THREE.Object3D | null = null
-  const FALLBACK_TORCH_TIP_LOCAL_OFFSET = new THREE.Vector3(0.6, 0, 0)
 
   function attachOffhandModel(
     gltfScene: THREE.Object3D,
@@ -340,8 +589,7 @@
     }
 
     offhandObject = gltfScene.clone()
-    offhandObject.position.set(0, 0.08, 0)
-    offhandObject.rotation.y = Math.PI
+    poseOffHandProp(offhandObject)
     leftHandBone.add(offhandObject)
     torchTipNode = resolveTipNode(
       offhandObject,
@@ -365,9 +613,63 @@
       : mainHand
   )
 
-  // undefined = nothing applied yet; null = "no equipped item" applied
-  // (bare hands locally, class default weapon for remotes).
-  let attachedWeaponItemId: string | null | undefined = undefined
+  let attachedWeaponItemId: string | null = null
+  let daggerClip: THREE.AnimationClip | undefined
+  let daggerTrail: DaggerBladeTrail | undefined
+  function daggerCastAt() {
+    const id = isCurrentPlayer
+      ? get(gameStore).currentPlayer?.id
+      : remotePlayerId
+    return id === undefined ? undefined : get(daggerSkillCasts).get(id)
+  }
+  $effect(() => {
+    const root = modelRoot
+    if (
+      !root ||
+      getItemDef(equippedMainHandItemId ?? '')?.weaponType !==
+        DAGGER_SKILL.weaponType
+    )
+      return
+    let cancelled = false
+    void loadWeaponAnimations(modelPath, root, {
+      id: DAGGER_SKILL.weaponType,
+      pack: DAGGER_SKILL.pack,
+    })
+      .then((clips) => {
+        const inward = clips.get('dagger_inward')
+        const outward = clips.get('dagger_outward')
+        if (cancelled || !inward || !outward) return
+        daggerClip = getDaggerComboClip(inward, outward)
+        daggerTrail ??= new DaggerBladeTrail()
+        root.add(daggerTrail.group)
+        lastAnimKey = undefined
+      })
+      .catch((error) => console.error('Failed to load Double Slash', error))
+    return () => {
+      cancelled = true
+    }
+  })
+  const weaponAnimationProfile = $derived(
+    getWeaponAnimation(equippedMainHandItemId)
+  )
+  $effect(() => {
+    const root = modelRoot
+    const profile = weaponAnimationProfile
+    if (!root || !profile) return
+    let cancelled = false
+    void loadWeaponAnimations(modelPath, root, profile)
+      .then((clips) => {
+        if (cancelled) return
+        weaponClips = clips
+        playAnimationForState()
+      })
+      .catch((error) =>
+        console.error('Failed to load weapon animations', error)
+      )
+    return () => {
+      cancelled = true
+    }
+  })
   let weaponAttachGeneration = 0
 
   $effect(() => {
@@ -379,14 +681,11 @@
     if (itemDefId === attachedWeaponItemId) return
 
     detachWeapon()
-    attachedWeaponItemId = undefined
+    attachedWeaponItemId = null
 
-    if (!itemDefId) {
-      if (isCurrentPlayer || tryAttachWeapon(clonedScene)) {
-        attachedWeaponItemId = null
-      }
-      return
-    }
+    if (!itemDefId) return
+
+    if (isRangedWeapon(itemDefId)) loadRangedAnimations()
 
     const itemDef = getItemDef(itemDefId)
     if (!itemDef?.worldModel) return
@@ -427,7 +726,7 @@
     detachOffhand()
     detachTorchFire()
     attachedOffhandItemId = null
-    if (mixer) playAnimationForState()
+    replayForOffhand()
 
     if (!itemDefId) return
 
@@ -441,12 +740,155 @@
 
       attachOffhandModel(gltf.scene, clonedScene)
       attachedOffhandItemId = itemDefId
-      if (itemDefId === 'torch') {
+      if (isTorchItemDefId(itemDefId)) {
         attachTorchFire()
         await loadOffhandAnimations()
         if (gen !== offhandAttachGeneration) return
-        if (mixer) playAnimationForState()
+        replayForOffhand()
       }
+    })
+  })
+
+  /** Only idle and movement clips have torch variants; restarting anything
+   *  else (a seat, an emote, a swing) would snap the player back to its start. */
+  function replayForOffhand() {
+    if (!mixer) return
+    if (playerState === 'idle' || playerState === 'moving')
+      playAnimationForState()
+  }
+
+  // ── Back cape ───────────────────────────────────────────
+  let capeRig: CapeRig | null = null
+
+  const capeCollarTuning = $derived.by(() => {
+    const tuning = capeCollarTuningFor(modelPath)
+    const override = $capeCollarBiasOverride
+    return override === null ? tuning : { ...tuning, bias: override }
+  })
+
+  const equippedBackItemId = $derived(
+    isCurrentPlayer
+      ? ($inventoryStore.equipped.back?.item_def_id ?? null)
+      : back
+  )
+
+  /** The dye on that cape: the picker's live try-on first, then the worn
+   *  instance's own colour — remote wearers carry theirs on the broadcast. */
+  const equippedBackDye = $derived(
+    isCurrentPlayer
+      ? ($capeDyePreview ?? $inventoryStore.equipped.back?.cape_color ?? null)
+      : backColor
+  )
+
+  /** The wearer's cloth colour, or null for no cape. `/cape` forces the
+   *  default sheet on with no item, for fitting work. */
+  const capeColor = $derived(
+    capeColorOf(equippedBackItemId, equippedBackDye) ??
+      (isCurrentPlayer && $capeEnabled ? DEFAULT_CAPE_COLOR : null)
+  )
+
+  /** The print on that cape, as a URL the cloth can load: the picker's local
+   *  file first, then the stored hash the server broadcast. */
+  const capePrint = $derived(
+    isCurrentPlayer
+      ? ($capeTexturePreview ??
+          capeTextureUrl($inventoryStore.equipped.back?.cape_texture))
+      : capeTextureUrl(backTexture)
+  )
+
+  function detachCape() {
+    capeRig?.dispose()
+    capeRig = null
+  }
+
+  // The teardown owns the cape's lifetime: putting one on or off, or a bias
+  // change (so /cape_depth can be dialled in live), re-fits it, and a rebuilt
+  // model — `modelRoot` is fresh then — drops the cape left on the discarded
+  // skeleton. The colour is deliberately not a dependency: it is read once
+  // here and swapped in place afterwards.
+  $effect(() => {
+    const wearing = capeColor !== null
+    const tuning = capeCollarTuning
+    const root = modelRoot
+    if (!wearing || !root || !clonedScene) return
+
+    // Only cache the measurement for the model's own bias: /cape_depth dials
+    // arbitrary floats, and every one would leave a permanent cache entry.
+    const cacheable = $capeCollarBiasOverride === null
+    const fit = fitCapeToSkeleton(
+      clonedScene,
+      tuning,
+      cacheable ? modelPath : undefined
+    )
+    if (!fit) {
+      console.warn('Could not fit a cape to this rig')
+      return
+    }
+    capeRig = attachCapeFit(fit, {
+      color: untrack(() => capeColor) ?? DEFAULT_CAPE_COLOR,
+      texture: untrack(() => capePrint),
+    })
+    return detachCape
+  })
+
+  // Re-dyeing or re-printing swaps the material on the sheet that is already
+  // hanging. The picker drags a colour continuously, and rebuilding the cloth
+  // per drag frame would rebuild the skeleton and drop it to its rest pose.
+  $effect(() => {
+    const color = capeColor
+    const texture = capePrint
+    if (color !== null) capeRig?.setSkin({ color, texture })
+  })
+
+  /** Steps the cape cloth, after the mixer so the sheet follows the pose this
+   *  frame renders. A parked remote player sits at OFFSCREEN_Y; skip the solve
+   *  and the draws rather than simulating cloth nobody can see. */
+  function updateCape(deltaTime: number, wind: WindState | null) {
+    if (!capeRig) return
+    const onScreen = position.y > OFFSCREEN_Y / 2
+    capeRig.root.visible = onScreen
+    if (onScreen) capeRig.update(deltaTime, wind)
+  }
+
+  // ── Music emote prop ────────────────────────────────────
+  // The server requires an instrument in the performer's inventory, but the
+  // prop rides the emote rather than the equip slot and is deliberately one
+  // fixed model. It keys off `interactionAnim`, which the server broadcasts
+  // for /play_music — remote players see the instrument too, and the equipped
+  // weapon is already hidden for the duration by `playAnimationForState`.
+  let musicPropObject: THREE.Object3D | null = null
+  let musicPropAttached = false
+  let musicPropGeneration = 0
+
+  function detachMusicProp() {
+    musicPropObject?.parent?.remove(musicPropObject)
+    musicPropObject = null
+  }
+
+  $effect(() => {
+    const wanted =
+      playerState === 'interact' && interactionAnim === MUSIC_EMOTE_ANIM
+    // Read modelRoot so the effect re-runs once the model finishes loading
+    const root = modelRoot
+    if (!root || !clonedScene) return
+    if (wanted === musicPropAttached) return
+
+    const gen = ++musicPropGeneration
+    musicPropAttached = wanted
+    if (!wanted) {
+      detachMusicProp()
+      return
+    }
+
+    const itemDef = getItemDef(MANDOLIN_ITEM_DEF_ID)
+    if (!itemDef?.worldModel) return
+    loadGLB(getWeaponModelPath(itemDef.worldModel)).then((gltf) => {
+      if (gen !== musicPropGeneration || !clonedScene) return
+      const rightHandBone = findBoneByName(clonedScene, 'RightHand')
+      if (!rightHandBone) return
+      musicPropObject = gltf.scene.clone()
+      poseMainHandProp(musicPropObject, MANDOLIN_ITEM_DEF_ID)
+      rightHandBone.add(musicPropObject)
     })
   })
 
@@ -478,10 +920,9 @@
     return AnimationIndex.JOG // Default fallback
   }
 
-  async function loadSocialAnimations() {
-    if (socialLoading || socialClipsByName.size > 0) return
-    socialLoading = true
-    try {
+  function loadSocialAnimations(): Promise<void> {
+    if (socialLoadPromise) return socialLoadPromise
+    socialLoadPromise = (async () => {
       // Interaction-state clips come from two packs; both land in the same
       // by-name map since interactionAnim is resolved purely by clip name.
       const [socialGltf, fishingGltf] = await Promise.all([
@@ -501,10 +942,64 @@
         }
         socialClipsByName.set(clip.name, clip)
       }
-    } finally {
-      socialLoading = false
+      if (mixer && playerState === 'interact') playAnimationForState()
+    })()
+    return socialLoadPromise
+  }
+
+  const clipsNamed = (
+    resolve: (name: string) => THREE.AnimationClip | undefined,
+    names: readonly string[]
+  ) =>
+    names.map(resolve).filter((c): c is THREE.AnimationClip => c !== undefined)
+
+  const resolveSocialClip = (name: string) =>
+    enchantClips.get(name) ?? socialClipsByName.get(name)
+
+  /** One clip-name lookup across every loaded pack. */
+  const resolveClipByName = (name: string) =>
+    resolveSocialClip(name) ??
+    validAnimationsByName.get(name) ??
+    offhandClips.get(name) ??
+    rangedClips.get(name)
+
+  let classIdleClips: THREE.AnimationClip[] = []
+  let classIdleClipsResolved = false
+
+  /** Random per-class idle, avoiding an immediate repeat — two static poses
+   *  in a row read as a 12s freeze. Names may span packs; until the social
+   *  pack lands, whatever already resolved (or the default idles) fills in. */
+  function pickClassIdleClip(): THREE.AnimationClip | undefined {
+    const names = CLASS_IDLE_CLIP_NAMES[characterClass]
+    if (!names) return undefined
+    if (!classIdleClipsResolved) {
+      classIdleClips = clipsNamed(resolveClipByName, names)
+      // A loaded social pack that still leaves gaps means missing names,
+      // not a pending load — stop rebuilding.
+      classIdleClipsResolved =
+        classIdleClips.length === names.length || socialClipsByName.size > 0
+      if (!classIdleClipsResolved) loadSocialAnimations()
+      if (classIdleClips.length === 0) return undefined
     }
-    if (mixer && playerState === 'interact') playAnimationForState()
+    const current = currentAction?.getClip()
+    const pool = classIdleClips.filter((c) => c !== current)
+    return pickRandom(pool.length > 0 ? pool : classIdleClips)
+  }
+
+  let rangedLoadPromise: Promise<void> | null = null
+
+  /** The ranged pack is optional: without it the shot falls back to the melee
+   *  slash, so a missing GLB must not break the swing. */
+  function loadRangedAnimations(): Promise<void> {
+    if (rangedLoadPromise) return rangedLoadPromise
+    rangedLoadPromise = loadGLB(CHARACTER_ANIMATION_PACK_PATHS.combatRanged)
+      .then((gltf) => {
+        for (const clip of getGltfAnimations(gltf))
+          rangedClips.set(clip.name, clip)
+        if (mixer && playerState === 'attack') playAnimationForState()
+      })
+      .catch(() => {})
+    return rangedLoadPromise
   }
 
   let offhandLoadPromise: Promise<void> | null = null
@@ -520,31 +1015,82 @@
     return offhandLoadPromise
   }
 
+  // Additive, so a blow never cuts a swing or a stride short.
+  function playHitReaction() {
+    if (!mixer || !hitClipLoaded) return
+    if (!hitAction) {
+      const clip = validAnimations[AnimationIndex.HIT]
+      if (!clip) return
+      hitAction = mixer.clipAction(additiveUpperBodyClip(clip))
+      hitAction.blendMode = THREE.AdditiveAnimationBlendMode
+      hitAction.loop = THREE.LoopOnce
+    }
+    hitAction.stop()
+    hitAction.play()
+  }
+
+  function activeEnchantClip() {
+    if (
+      playerState !== 'idle' ||
+      riding ||
+      (enchantWeapon && !weaponObject?.visible) ||
+      Date.now() >= enchantPoseUntil
+    )
+      return undefined
+    return enchantClips.get(
+      enchantWeapon
+        ? mainHandBoneFor(equippedMainHandItemId) === 'LeftHand'
+          ? ENCHANT_LEFT_WEAPON_ANIMATION
+          : ENCHANT_WEAPON_ANIMATION
+        : mainHandBoneFor(equippedMainHandItemId) === 'LeftHand'
+          ? ENCHANT_LEFT_ARMOR_ANIMATION
+          : ENCHANT_ARMOR_ANIMATION
+    )
+  }
+
+  function activeArmorEnchant() {
+    return (
+      !enchantWeapon &&
+      playerState === 'idle' &&
+      !riding &&
+      Date.now() < enchantPoseUntil
+    )
+  }
+
   function playAnimationForState() {
-    // Check if mixer and animations are available
     if (!mixer || validAnimations.length === 0) return
+    if (
+      playerState === 'idle' &&
+      daggerClip &&
+      currentAction?.getClip() === daggerClip &&
+      currentAction.time < daggerClip.duration - 0.001 &&
+      daggerCastAt() !== undefined &&
+      health > 0 &&
+      !riding &&
+      getItemDef(equippedMainHandItemId ?? '')?.weaponType ===
+        DAGGER_SKILL.weaponType
+    )
+      return
 
-    // Hide weapons during interact animations — except fishing, where the
-    // held rod IS the point of the stance.
-    const fishingInteraction =
-      interactionAnim === FishingAnimationName.CAST ||
-      interactionAnim === FishingAnimationName.IDLE
-    if (weaponObject) {
-      weaponObject.visible = playerState !== 'interact' || fishingInteraction
-    }
-    if (offhandObject) {
-      offhandObject.visible = playerState !== 'interact'
-    }
-    if (torchFireGroup) {
-      torchFireGroup.visible = playerState !== 'interact'
+    updateHeldPropVisibility()
+    if (riding && ridingClip) {
+      startAction(ridingClip, false)
+      return
     }
 
-    const hasTorch = attachedOffhandItemId === 'torch'
+    // Skip chair entry; attacks and interactions keep their animations.
+    if (boating && canRow) {
+      const seated = socialClipsByName.get(SitAnimationName.IDLE)
+      if (seated) {
+        startAction(seated, true)
+        return
+      }
+    }
+
+    const hasTorch = isTorchItemDefId(attachedOffhandItemId)
     const torchIdle = hasTorch
       ? pickRandom(
-          TORCH_IDLE_CLIP_NAMES.map((name) => offhandClips.get(name)).filter(
-            (c): c is THREE.AnimationClip => c !== undefined
-          )
+          clipsNamed((n) => offhandClips.get(n), TORCH_IDLE_CLIP_NAMES)
         )
       : undefined
     const torchWalk = hasTorch
@@ -554,41 +1100,93 @@
       ? offhandClips.get(OffhandAnimationName.TORCH_RUN)
       : undefined
     let clip: THREE.AnimationClip | undefined
+    const weaponClipName = weaponAnimationClipName(
+      weaponAnimationProfile,
+      playerState,
+      movementMode
+    )
+    const weaponClip = weaponClipName
+      ? weaponClips.get(weaponClipName)
+      : undefined
+    const enchantClip = activeEnchantClip()
+    const armorEnchant = activeArmorEnchant()
     if (playerState === 'idle') {
-      currentMovementAnimationIndex = undefined
       clip =
+        enchantClip ??
+        weaponClip ??
         torchIdle ??
+        pickClassIdleClip() ??
         pickRandom(DEFAULT_IDLE_INDICES.map((i) => validAnimations[i]))
+      if (armorEnchant && !enchantClip && clip) clip = getArmorEnchantHold(clip)
     } else if (playerState === 'moving') {
-      if (currentMovementAnimationIndex === undefined) {
-        currentMovementAnimationIndex = selectMovementAnimation(movementMode)
-      }
-      const torchMoveClip = movementMode === 'walk' ? torchWalk : torchRun
-      clip = torchMoveClip ?? validAnimations[currentMovementAnimationIndex]
+      const torchMoveClip = movementMode === 'run' ? torchRun : torchWalk
+      clip =
+        weaponClip ??
+        torchMoveClip ??
+        validAnimations[selectMovementAnimation(movementMode)]
     } else if (playerState === 'attack') {
-      // Use slash1 animation
-      currentMovementAnimationIndex = undefined
-      // Find index for slash1 or fallback
-      // Assuming AnimationIndex.SLASH1 exists and maps correctly
-      clip = validAnimations[AnimationIndex.SLASH1]
+      clip =
+        (daggerCastAt() !== undefined &&
+        getItemDef(equippedMainHandItemId ?? '')?.weaponType ===
+          DAGGER_SKILL.weaponType
+          ? daggerClip
+          : undefined) ??
+        weaponClip ??
+        (isRangedWeapon(equippedMainHandItemId)
+          ? rangedClips.get(RangedAnimationName.SHOOT)
+          : undefined) ??
+        validAnimations[AnimationIndex.SLASH1]
     } else if (playerState === 'jump') {
       // One-shot feedback when slope is too steep to climb. After the clip
       // finishes, PlayerControl flips the state back to idle/moving and we
       // crossfade to the next animation naturally.
-      currentMovementAnimationIndex = undefined
       clip = validAnimations[AnimationIndex.JUMP]
     } else if (playerState === 'dead') {
-      currentMovementAnimationIndex = undefined
       dyingFinishedNotified = false
       clip = validAnimations[AnimationIndex.DYING]
     } else if (playerState === 'interact') {
-      currentMovementAnimationIndex = undefined
       interactionFinishedNotified = false
-      clip = interactionAnim
-        ? socialClipsByName.get(interactionAnim)
-        : undefined
+      pickupGrabNotified = false
+      const clipName =
+        interactionAnim === SitAnimationName.SIT
+          ? SitAnimationName.STAND_TO_SIT
+          : interactionAnim
+      clip = clipName ? resolveSocialClip(clipName) : undefined
+      // Hold the seated lower body while casting.
+      if (clip && boating && fishingInteraction) {
+        const seated = socialClipsByName.get(SitAnimationName.IDLE)
+        if (seated) clip = seatedFishingClip(clip, seated)
+      }
+      // `/anim` may name a clip from any pack.
+      if (!clip && clipName && DEBUG_ANIM_NAMES.has(clipName)) {
+        clip = resolveClipByName(clipName)
+        if (!clip) {
+          if (debugPacksSearched) {
+            // Every pack is loaded and none answers to the name: exit the
+            // interact state instead of holding the pose forever.
+            addChatMessage({
+              text: translate('command.animMissing', { name: clipName }),
+              sender: 'system',
+            })
+            interactionFinishedNotified = true
+            onInteractionFinished?.()
+            return
+          }
+          void Promise.all([
+            loadSocialAnimations(),
+            loadOffhandAnimations(),
+          ]).then(() => {
+            debugPacksSearched = true
+            if (mixer && playerState === 'interact') playAnimationForState()
+          })
+          return
+        }
+      }
       if (!clip) {
         loadSocialAnimations()
+        // While the packs load, keep the change pending so the frame loop
+        // retries; a name missing from loaded packs stays consumed.
+        if (socialClipsByName.size === 0) lastAnimKey = undefined
         return
       }
     } else {
@@ -597,37 +1195,95 @@
 
     if (!clip) return
 
-    const newAction = mixer.clipAction(clip)
-
-    // The fishing idle is a stance held for the whole wait, not a one-shot
-    // gesture like pickup — it loops until the fishing session ends.
     const playOnce =
-      playerState !== 'moving' && interactionAnim !== FishingAnimationName.IDLE
+      playerState !== 'moving' &&
+      !(
+        playerState === 'idle' &&
+        (clip === weaponClip || clip === enchantClip || armorEnchant)
+      ) &&
+      interactionAnim !== FishingAnimationName.IDLE &&
+      !HELD_EMOTE_ANIMS.has(interactionAnim ?? '')
+    startAction(clip, playOnce)
+    if (clip === enchantClip) {
+      if (armorEnchant) armorEnchantAction = currentAction
+      else enchantAction = currentAction
+    }
+    if (clip === daggerClip && currentAction) {
+      currentAction.time = Math.min(
+        clip.duration,
+        Math.max(0, (Date.now() - (daggerCastAt() ?? Date.now())) / 1000)
+      )
+    }
+  }
+
+  function startAction(clip: THREE.AnimationClip, playOnce: boolean) {
+    if (!mixer) return
+    const newAction = mixer.clipAction(clip)
     newAction.reset()
     newAction.loop = playOnce ? THREE.LoopOnce : THREE.LoopRepeat
     newAction.clampWhenFinished = playOnce
     newAction.paused = false
 
-    // If there's a current action and it's different, crossfade to the new one
     if (currentAction && newAction !== currentAction) {
-      const crossfadeDuration = 0.3 // 300ms crossfade
-
-      // Use THREE.js built-in crossfade. warp=false: do NOT time-scale the
-      // incoming clip to match the outgoing clip's length — that made a long
-      // idle ("look around") whip past at several-times speed when blending in
-      // from a short walk/attack clip.
-      newAction.crossFadeFrom(currentAction, crossfadeDuration, false)
+      newAction.crossFadeFrom(
+        currentAction,
+        clip === daggerClip ? 0.065 : 0.3,
+        false
+      )
     }
 
-    // Play the new action
     newAction.play()
     currentAction = newAction
+  }
+
+  function switchSitClip(name: string, loop: boolean) {
+    const clip = resolveSocialClip(name)
+    if (!clip) return
+    startAction(clip, !loop)
+    sitIdleLastTime = 0
+  }
+
+  /** A new chat message while seated plays the talk clip right away. */
+  $effect(() => {
+    if (chatBubbleAt === undefined) return
+    untrack(() => {
+      if (
+        playerState !== 'interact' ||
+        interactionAnim !== SitAnimationName.SIT
+      )
+        return
+      if (currentAction?.getClip().name !== SitAnimationName.IDLE) return
+      switchSitClip(SitAnimationName.TALK, false)
+    })
+  })
+
+  /** Seated sequence: sit down → idle loop, each loop occasionally handing
+   *  off to the talk clip once. Runs off the frame loop since the anim key
+   *  doesn't change while the player stays seated. */
+  function advanceSitSequence() {
+    if (!currentAction) return
+    const clip = currentAction.getClip()
+    const finished = currentAction.time >= clip.duration - 0.001
+    if (clip.name === SitAnimationName.IDLE) {
+      const wrapped = currentAction.time < sitIdleLastTime
+      sitIdleLastTime = currentAction.time
+      if (wrapped && Math.random() < SIT_TALK_CHANCE) {
+        switchSitClip(SitAnimationName.TALK, false)
+      }
+    } else if (finished) {
+      switchSitClip(SitAnimationName.IDLE, true)
+    }
   }
 
   async function setupRealAnimation() {
     const activeGltf = activeGltfData
     if (activeGltf && !mixer && !modelRoot) {
       console.log('Setting up real animation system')
+      hitAction = null
+      enchantAction = null
+      armorEnchantAction = null
+      enchantPoseUntil = 0
+      hitClipLoaded = false
 
       const { clonedScene: cloned, modelRoot: newModelRoot } =
         createCharacterModelRoot(activeGltf.scene)
@@ -690,6 +1346,14 @@
           console.log(`✅ Found animation: ${selection.name} (${source})`)
         }
 
+        if (selection.name === AnimationName.HIT) {
+          hitClipLoaded = !selection.fromFallback
+        }
+
+        if (selection.name === AnimationName.COMBAT_IDLE) {
+          combatIdleClipLoaded = !selection.fromFallback
+        }
+
         if (selection.name === AnimationName.SLASH1 && onAttackDuration) {
           onAttackDuration(selection.clip.duration)
         }
@@ -745,6 +1409,16 @@
 
       clonedScene = cloned
       modelRoot = newModelRoot
+      effectAnchors = new PlayerEffectAnchors(cloned)
+      void loadEnchantAnimations(modelPath, newModelRoot)
+        .then((clips) => {
+          if (modelRoot !== newModelRoot) return
+          enchantClips = clips
+          if (activeEnchantClip()) lastAnimKey = undefined
+        })
+        .catch((error) =>
+          console.warn('Failed to load enchantment animation', error)
+        )
 
       if (isCurrentPlayer) {
         const rightHand = findBoneByName(cloned, 'RightHand')
@@ -764,17 +1438,22 @@
 
     // Cleanup on unmount
     return () => {
+      daggerTrail?.dispose()
+      daggerTrail = undefined
       if (mixer) {
         mixer.stopAllAction()
         mixer = null
       }
+      hitAction = null
       if (modelRoot) {
         modelRoot = null
       }
       clonedScene = null
-      weaponAttached = false
+      effectAnchors = null
       attachedWeaponItemId = null
       attachedOffhandItemId = null
+      musicPropObject = null
+      musicPropAttached = false
       detachTorchFire()
       if (isCurrentPlayer) localPlayerRightHand.set(null)
     }
@@ -788,72 +1467,211 @@
     return modelGroup
   }
 
+  export function getShieldAnchor(target: THREE.Vector3) {
+    return effectAnchors?.getWorldPosition(true, 'LeftHand', target) ?? false
+  }
+
+  export function getEnchantAnchor(
+    weapon: boolean,
+    target: EnchantEffectAnchor
+  ) {
+    target.weapon = weapon ? weaponObject : null
+    if (weapon && !target.weapon?.visible) return false
+    return (
+      effectAnchors?.getWorldPosition(
+        weapon,
+        mainHandBoneFor(equippedMainHandItemId),
+        target.position
+      ) ?? false
+    )
+  }
+
+  export function setEnchantPoseUntil(until: number, weapon: boolean) {
+    enchantPoseUntil = until
+    enchantWeapon = weapon
+  }
+
+  export function getHoverMeshGroup() {
+    return hoverProxyGroup
+  }
+
+  function updateHeldPropVisibility() {
+    const handsOnOars =
+      boating && canRow && (rowing || (boatMount?.rowingWeight ?? 0) >= 0.001)
+    if (weaponObject) {
+      weaponObject.visible =
+        !riding &&
+        !handsOnOars &&
+        (playerState !== 'interact' || fishingInteraction)
+    }
+    const offhandVisible = !riding && !handsOnOars && playerState !== 'interact'
+    if (offhandObject) offhandObject.visible = offhandVisible
+    if (torchFireGroup) torchFireGroup.visible = offhandVisible
+  }
+
   // Tag the model group so the click raycast can resolve NPC models
   // back to their player id.
   $effect(() => {
     if (modelGroup && npcPlayerId) {
       modelGroup.userData.npcPlayerId = npcPlayerId
     }
+    if (modelGroup && remotePlayerId) {
+      modelGroup.userData.remotePlayerId = remotePlayerId
+    }
   })
 
-  // Function to update mixer and animation state and nametag - called from GameScene gameLoop
-  export function update(deltaTime: number) {
+  // Step the cape after the mixer and pose corrections.
+  export function update(deltaTime: number, wind: WindState | null = null) {
+    fishingReel?.restore()
+    enchantGrip?.update(0)
+    riderMotion?.restore()
+    rowingMotion?.restore()
+    updatePose(deltaTime)
+    if (boatWater && camera) {
+      boatWater.update(deltaTime, camera, rowing, waterSunDirection?.y ?? 1)
+    }
+    updateHeldPropVisibility()
+    if (
+      daggerTrail &&
+      modelRoot &&
+      weaponObject &&
+      (playerState === 'attack' || playerState === 'idle') &&
+      currentAction &&
+      currentAction.getClip() === daggerClip &&
+      !riding
+    ) {
+      modelRoot.updateWorldMatrix(true, true)
+      daggerTrail.update(weaponObject, modelRoot, currentAction.time)
+    } else daggerTrail?.clear()
+    if (riding && horseMount) {
+      riderMotion?.apply(
+        horseMount.riderHipLift,
+        horseMount.riderHandLift,
+        horseMount.riderIdleWeight,
+        horseMount.riderFacingYaw
+      )
+      horseReins?.update()
+    }
+    if (boating && boatMount && canRow) {
+      rowingMotion?.applyRowing(
+        boatMount.grips,
+        boatMount.riderLean,
+        boatMount.rowingWeight
+      )
+    }
+    const currentClip = currentAction?.getClip()
+    const weaponIdle = weaponClips.get(weaponAnimationProfile?.idle ?? '')
+    const armorEnchantWeight = armorEnchantAction?.getEffectiveWeight() ?? 0
+    weaponGrip?.update(
+      !riding &&
+        !enchantAction?.getEffectiveWeight() &&
+        !armorEnchantWeight &&
+        (weaponClips.has(currentClip?.name ?? '') ||
+          (!!weaponIdle && isArmorEnchantHold(currentClip, weaponIdle)))
+    )
+    const enchantWeight = enchantAction?.getEffectiveWeight() ?? 0
+    if (armorEnchantWeight > 0) enchantGrip?.update(armorEnchantWeight, true)
+    else if (enchantWeight > 0) enchantGrip?.update(enchantWeight)
+    fishingReel?.update(
+      deltaTime,
+      fishingReelStance(isCurrentPlayer ? undefined : remotePlayerId),
+      playerState === 'interact' &&
+        interactionAnim === FishingAnimationName.IDLE &&
+        !riding,
+      catchPresentation
+    )
+    updateCape(deltaTime, wind)
+  }
+
+  // Function to update mixer and animation state and nametag
+  function updatePose(deltaTime: number) {
     // Sync Three.js group position directly from the Vector3 prop
     // (Svelte cannot track mutations on THREE.Vector3 objects)
     if (modelGroup) {
       const yOffset = playerState === 'interact' ? interactOffsetY : 0
       modelGroup.position.set(position.x, position.y + yOffset, position.z)
     }
+    if (hoverProxyGroup) {
+      hoverProxyGroup.position.set(position.x, position.y, position.z)
+    }
+    if (isHoveredPlayer) {
+      if (
+        !ringPos ||
+        ringPos.x !== position.x ||
+        ringPos.y !== position.y ||
+        ringPos.z !== position.z
+      ) {
+        ringPos = { x: position.x, y: position.y, z: position.z }
+      }
+    } else if (ringPos) {
+      ringPos = null
+    }
 
-    // Update nametag logic (formerly in useTask)
     if (camera && nametagGroup) {
       _nametagPos.set(position.x, position.y + 2.2, position.z)
       const dist = camera.position.distanceTo(_nametagPos)
 
-      // Min distance (zoom in) = 5
-      // Max distance (zoom out) = 20
-      const minDist = 5
-      const maxDist = 20
+      const mountHeight = riding ? 0.9 : 0
+      const minHeight = 2.0 + mountHeight
+      const maxHeight = 2.5 + mountHeight
 
-      // Scale: 0.5 to 1.0
-      const minScale = 0.5
-      const maxScale = 1.0
+      nametagScale = billboardScale(dist)
+      nametagHeight = minHeight + billboardZoomT(dist) * (maxHeight - minHeight)
 
-      // Height: 2.3 to 2.7
-      const minHeight = 2.0
-      const maxHeight = 2.5
-
-      let t = (dist - minDist) / (maxDist - minDist)
-      t = Math.max(0, Math.min(1, t)) // Clamp between 0 and 1
-
-      nametagScale = minScale + t * (maxScale - minScale)
-      nametagHeight = minHeight + t * (maxHeight - minHeight)
-
-      // Update nametag group transform
       nametagGroup.position.set(
         position.x,
         position.y + nametagHeight,
         position.z
       )
+      if (isCurrentPlayer && size.current.height > 0) {
+        const pxPerUnit =
+          (camera.projectionMatrix.elements[5] * size.current.height) / 2
+        _nametagUp.setFromMatrixColumn(camera.matrixWorld, 1)
+        nametagGroup.position.addScaledVector(
+          _nametagUp,
+          LOCAL_NAMETAG_OFFSET_PX / pxPerUnit
+        )
+      }
       nametagGroup.scale.set(nametagScale, nametagScale, nametagScale)
       nametagGroup.quaternion.copy(camera.quaternion)
     }
 
-    // Update floating damage texts
-    if (camera) {
-      damageTextRef?.update(
+    if (camera && isCurrentPlayer) {
+      damageText.update(
         deltaTime,
         position.x,
         position.y,
         position.z,
-        camera
+        camera,
+        { damage: lastDamageInfo, regen: lastRegenInfo, gold: lastGoldInfo },
+        nametagHeight + 0.04
       )
     }
 
-    if (chatBubbleInstance) {
-      chatBubbleInstance.update()
+    if (boatMount && riderGroup && modelGroup) {
+      boatMount.update(deltaTime, playerState === 'moving' ? _speed : 0, canRow)
+      boatMount.seat.getWorldPosition(seatPosition)
+      riderGroup.position.copy(modelGroup.worldToLocal(seatPosition))
+      riderGroup.position.y += boatMount.riderBaseOffsetY
+      riderGroup.quaternion.copy(boatMount.root.quaternion)
+      if (canRow || fishingInteraction) {
+        riderGroup.quaternion.multiply(boatMount.seat.quaternion)
+      }
+    } else if (horseMount && riderGroup && modelGroup) {
+      horseMount.update(
+        deltaTime,
+        playerState === 'moving' ? _speed : 0,
+        rotation,
+        position
+      )
+      horseMount.seat.getWorldPosition(seatPosition)
+      riderGroup.position.copy(modelGroup.worldToLocal(seatPosition))
+      riderGroup.position.y += horseMount.riderBaseOffsetY
+      riderGroup.quaternion.identity()
+    } else if (riderGroup) {
+      riderGroup.position.set(0, 0, 0)
+      riderGroup.quaternion.identity()
     }
-
     if (!mixer) return
 
     // Update debug info for slow mode
@@ -875,11 +1693,49 @@
       if (clip && clip.duration > 0) {
         // Calculate remaining time (without modulo)
         const remainingTime = clip.duration - currentAction.time
+        if (clip === daggerClip && remainingTime <= 0.001) {
+          if (playerState === 'idle') {
+            playAnimationForState()
+            return
+          } else if (playerState === 'attack' && combatIdleClipLoaded) {
+            startAction(validAnimations[AnimationIndex.COMBAT_IDLE], false)
+            return
+          }
+        }
 
         // Trigger next animation once when conditions are met (0.3 seconds remaining)
-        if (remainingTime <= OVERLAP_BEFORE_END && playerState === 'idle') {
+        if (
+          remainingTime <= OVERLAP_BEFORE_END &&
+          currentAction.loop === THREE.LoopOnce &&
+          playerState === 'idle' &&
+          !riding
+        ) {
           playAnimationForState()
           return // Early return to prevent duplicate calls below
+        }
+
+        // A finished swing used to park on its last frame for the rest of
+        // the cooldown; breathe with combat_idle instead. The next attack
+        // cycle's animKey change crossfades back into the slash.
+        if (
+          playerState === 'attack' &&
+          remainingTime <= 0.05 &&
+          clip.name === weaponAnimationProfile?.attack
+        ) {
+          const idle = weaponAnimationProfile?.idle
+            ? weaponClips.get(weaponAnimationProfile.idle)
+            : undefined
+          if (idle) startAction(idle, false)
+        }
+        if (
+          playerState === 'attack' &&
+          remainingTime <= OVERLAP_BEFORE_END &&
+          clip.name === AnimationName.SLASH1 &&
+          // When the pack lacked the clip the ordered array substituted a
+          // fallback there — clamping is better than looping a swing.
+          combatIdleClipLoaded
+        ) {
+          startAction(validAnimations[AnimationIndex.COMBAT_IDLE], false)
         }
       }
     }
@@ -905,16 +1761,22 @@
     if (playerState !== 'interact') {
       interactionFinishedNotified = false
       pickupGrabNotified = false
+    } else if (interactionAnim === SitAnimationName.SIT) {
+      advanceSitSequence()
     } else if (
       currentAction &&
       interactionAnim &&
-      // Pickup and the fishing cast are interactions remote players end on
-      // their own (no StopInteraction follows the clip), so the finish
-      // callback must fire for remotes too. Held poses (bench, forge) keep
-      // waiting for their StopInteraction.
+      // Pickup, the fishing cast, and one-shot emotes are interactions
+      // remote players end on their own rather than waiting a round-trip for
+      // StopInteraction, so the finish callback must fire for remotes too.
+      // Held poses (bench, forge) and held emotes keep waiting for their
+      // StopInteraction — a looping clip never "finishes".
+      !HELD_EMOTE_ANIMS.has(interactionAnim) &&
       (isCurrentPlayer ||
         interactionAnim === 'pickup' ||
-        interactionAnim === FishingAnimationName.CAST)
+        interactionAnim === FishingAnimationName.CAST ||
+        interactionAnim === SitAnimationName.SIT_TO_STAND ||
+        isSelfEndingEmote(interactionAnim))
     ) {
       const clip = currentAction.getClip()
       if (clip.name === interactionAnim) {
@@ -938,16 +1800,32 @@
       }
     }
 
+    if (lastHitCounter !== hitCounter) {
+      lastHitCounter = hitCounter
+      if (hitCounter !== undefined && playerState !== 'dead') playHitReaction()
+    }
+
     // Update animation state
     if (validAnimations.length > 0) {
-      // Only update animation if the player state has changed or attack counter increased
-      // Note: idle transitions are handled above by OVERLAP_BEFORE_END logic
-      if (
-        lastPlayerState !== playerState ||
-        (playerState === 'attack' && lastAttackCounter !== attackCounter)
-      ) {
-        lastPlayerState = playerState
-        if (attackCounter !== undefined) lastAttackCounter = attackCounter
+      const stateKey =
+        boating && canRow
+          ? 'boating'
+          : riding && ridingClip
+            ? 'riding'
+            : playerState === 'interact'
+              ? `interact:${interactionAnim}:${interactionCounter}`
+              : playerState === 'moving'
+                ? `moving:${movementMode}`
+                : playerState === 'attack'
+                  ? `attack:${attackCounter}:${daggerCastAt() ?? ''}`
+                  : activeArmorEnchant()
+                    ? 'enchant-armor'
+                    : activeEnchantClip()
+                      ? 'enchant-weapon'
+                      : playerState
+      const animKey = `${equippedMainHandItemId ?? ''}:${stateKey}`
+      if (lastAnimKey !== animKey) {
+        lastAnimKey = animKey
         playAnimationForState()
       }
     }
@@ -955,90 +1833,162 @@
     // Update torch fire particles
     if (torchFire && torchTipNode) {
       torchTipNode.getWorldPosition(_torchTipWorld)
-      torchFire.setTipPosition(_torchTipWorld)
+      torchFire.setOrigin(_torchTipWorld)
       torchFire.update(deltaTime, camera)
     }
   }
 </script>
 
-<!-- Character Model -->
-{#if modelRoot}
-  <T.Group
-    bind:ref={modelGroup}
-    position={[position.x, position.y, position.z]}
-    rotation={[0, rotation, 0]}
-  >
-    <!-- 3D Character Model with real animations -->
-    <T is={modelRoot} />
-  </T.Group>
-{/if}
-
-<!-- Torch fire particles (world space) -->
-{#if torchFireGroup}
-  <T is={torchFireGroup} />
-{/if}
-
-<!-- Name tag (separate from character to avoid rotation inheritance) -->
-<T.Group bind:ref={nametagGroup}>
-  <TextLabel
-    text={name}
-    fontSize={0.3}
-    color={isCurrentPlayer ? '#4299e1' : '#ffffff'}
-    outlineColor="#000000"
-    outlineWidth={7}
-    anchorX="center"
-    anchorY="middle"
-  />
-
-  <!-- Health Bar -->
-  {#if isCurrentPlayer}
-    <T.Group position.y={-0.3}>
-      <!-- Background (black) -->
-      <T.Mesh>
-        <T.PlaneGeometry args={[HEALTH_BAR_WIDTH, HEALTH_BAR_HEIGHT]} />
-        <T.MeshBasicMaterial color="#000000" transparent opacity={0.5} />
-      </T.Mesh>
-      <!-- Foreground (red) -->
-      <T.Mesh
-        position.x={-HEALTH_BAR_WIDTH / 2}
-        position.z={0.001}
-        scale.x={Math.max(0.001, displayedHealthRatio)}
-      >
-        <T is={healthBarFillGeometry} />
-        <T.MeshBasicMaterial color="#ff0000" />
-      </T.Mesh>
+<T.Group visible={!teleportHidden}>
+  <!-- Character Model -->
+  {#if boatWater}
+    <T is={boatWater.group} />
+  {/if}
+  {#if modelRoot}
+    <T.Group
+      bind:ref={modelGroup}
+      position={[position.x, position.y, position.z]}
+      rotation={[0, rotation, 0]}
+    >
+      <!-- 3D Character Model with real animations -->
+      {#if horseMount}
+        <T is={horseMount.root} />
+      {/if}
+      {#if boatMount}
+        <T is={boatMount.root} />
+      {/if}
+      <T.Group bind:ref={riderGroup}>
+        <T is={modelRoot} />
+      </T.Group>
     </T.Group>
   {/if}
 
-  {#if animDebugInfo}
+  {#if !isCurrentPlayer && remotePlayerId !== undefined}
+    <!-- Invisible box the 20 Hz hover raycast tests; kept out of the model
+       group so clicks still hit the actual silhouette. -->
+    <T.Group
+      bind:ref={hoverProxyGroup}
+      position={[position.x, position.y, position.z]}
+      userData={{ remotePlayerId }}
+    >
+      <T.Mesh
+        visible={false}
+        geometry={HOVER_GEOMETRY}
+        material={HOVER_MATERIAL}
+        position={[0, HOVER_BOX.y / 2, 0]}
+        scale={isHoveredPlayer ? HOVER_SCALE_STICKY : HOVER_SCALE_IDLE}
+      />
+    </T.Group>
+
+    {#if isHoveredPlayer && ringPos && health > 0}
+      <TargetRing
+        {heightManager}
+        x={ringPos.x}
+        z={ringPos.z}
+        radius={0.55}
+        {floorLevel}
+        fallbackY={ringPos.y}
+        color="#4da6ff"
+      />
+    {/if}
+  {/if}
+
+  <!-- Torch fire particles (world space) -->
+  {#if torchFireGroup}
+    <T is={torchFireGroup} />
+  {/if}
+
+  {#snippet resourceBar(y: number, ratio: number, color: string)}
+    <T.Group position.y={y} renderOrder={LOCAL_NAMETAG_RENDER_ORDER}>
+      <T.Mesh>
+        <T.PlaneGeometry args={[HEALTH_BAR_WIDTH, HEALTH_BAR_HEIGHT]} />
+        <T.MeshBasicMaterial
+          color="#000000"
+          transparent
+          opacity={0.5}
+          depthTest={false}
+          depthWrite={false}
+        />
+      </T.Mesh>
+      {#if ratio > 0}
+        <T.Mesh
+          position.x={-HEALTH_BAR_WIDTH / 2}
+          position.z={0.001}
+          scale.x={ratio}
+          renderOrder={1}
+        >
+          <T is={healthBarFillGeometry} />
+          <T.MeshBasicMaterial
+            {color}
+            transparent
+            depthTest={false}
+            depthWrite={false}
+          />
+        </T.Mesh>
+      {/if}
+    </T.Group>
+  {/snippet}
+
+  <!-- Name tag (separate from character to avoid rotation inheritance) -->
+  <T.Group
+    bind:ref={nametagGroup}
+    renderOrder={isCurrentPlayer ? LOCAL_NAMETAG_RENDER_ORDER : 0}
+  >
+    {#if title}
+      <TextLabel
+        text={$titleName(title)}
+        fontSize={0.17}
+        color="#d6bcfa"
+        outlineColor="#000000"
+        outlineWidth={7}
+        anchorX="center"
+        anchorY="middle"
+        position={[0, isCurrentPlayer ? 0.26 : 0.3, 0]}
+        depthTest={!isCurrentPlayer}
+      />
+    {/if}
     <TextLabel
-      text={animDebugInfo}
-      fontSize={0.2}
-      color="#ffff00"
-      position={[0, 0.4, 0]}
+      text={name}
+      position={[0, isCurrentPlayer ? -0.04 : 0, 0]}
+      fontSize={0.3}
+      color={isCurrentPlayer ? '#4299e1' : '#ffffff'}
+      outlineColor="#000000"
+      outlineWidth={7}
       anchorX="center"
       anchorY="middle"
+      depthTest={!isCurrentPlayer}
     />
+
+    {#if isCurrentPlayer}
+      {@render resourceBar(
+        -0.42 + HEALTH_BAR_HEIGHT,
+        Math.max(0.001, displayedHealthRatio),
+        '#ff0000'
+      )}
+      {#if $visibleMana}
+        {@render resourceBar(
+          -0.42,
+          $visibleMana.mana / $visibleMana.max_mana,
+          '#4299e1'
+        )}
+      {/if}
+    {/if}
+
+    {#if animDebugInfo}
+      <TextLabel
+        text={animDebugInfo}
+        fontSize={0.2}
+        color="#ffff00"
+        position={[0, 0.4, 0]}
+        anchorX="center"
+        anchorY="middle"
+        depthTest={!isCurrentPlayer}
+      />
+    {/if}
+  </T.Group>
+
+  <!-- Chat bubble (appears above player when they send a message) -->
+  {#if chatBubble}
+    <ChatBubble {position} {camera} message={chatBubble} />
   {/if}
 </T.Group>
-
-<!-- Chat bubble (appears above player when they send a message) -->
-{#if chatBubble}
-  <ChatBubble
-    bind:this={chatBubbleInstance}
-    {position}
-    {camera}
-    message={chatBubble}
-  />
-{/if}
-
-<!-- Floating Damage Text -->
-{#if isCurrentPlayer}
-  <DamageText
-    bind:this={damageTextRef}
-    {lastDamageInfo}
-    {lastRegenInfo}
-    {lastGoldInfo}
-    startYOffset={nametagHeight + 0.04}
-  />
-{/if}

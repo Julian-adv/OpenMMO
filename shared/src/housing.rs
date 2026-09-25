@@ -10,6 +10,10 @@ use crate::Position;
 /// automatically.
 pub const MAX_FLOOR_LEVEL: u8 = 3;
 
+/// Jetty overhang of an upper storey's drawn floor past its grid, per level.
+/// Mirrored in client `house-geo-utils.ts` FLOOR_OVERHANG_PER_LEVEL.
+pub const FLOOR_OVERHANG_PER_LEVEL: f32 = 0.15;
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum RoomType {
     #[serde(rename = "normal")]
@@ -53,6 +57,15 @@ pub enum WallDirection {
     West,
 }
 
+impl WallDirection {
+    pub const ALL: [WallDirection; 4] = [
+        WallDirection::North,
+        WallDirection::South,
+        WallDirection::East,
+        WallDirection::West,
+    ];
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum WallVariant {
     #[serde(rename = "solid")]
@@ -63,13 +76,117 @@ pub enum WallVariant {
     WithWindow,
     #[serde(rename = "open")]
     Open,
+    #[serde(rename = "double-door")]
+    WithDoubleDoor,
 }
 
 impl WallVariant {
     /// Segments players can toggle open/closed (doors and window shutters).
     pub fn is_openable(self) -> bool {
-        matches!(self, WallVariant::WithDoor | WallVariant::WithWindow)
+        matches!(
+            self,
+            WallVariant::WithDoor | WallVariant::WithDoubleDoor | WallVariant::WithWindow
+        )
     }
+
+    pub fn is_door(self) -> bool {
+        matches!(self, WallVariant::WithDoor | WallVariant::WithDoubleDoor)
+    }
+}
+
+/// Partner of a double-door half: consecutive halves pair from the run start;
+/// a trailing odd one has none.
+pub fn double_door_partner(segs: &[WallConfig], i: usize) -> Option<usize> {
+    if segs.get(i)?.variant != WallVariant::WithDoubleDoor {
+        return None;
+    }
+    let mut r = i;
+    while r > 0 && segs[r - 1].variant == WallVariant::WithDoubleDoor {
+        r -= 1;
+    }
+    let partner = if (i - r).is_multiple_of(2) {
+        i + 1
+    } else {
+        i - 1
+    };
+    (segs.get(partner)?.variant == WallVariant::WithDoubleDoor).then_some(partner)
+}
+
+/// The other half of a double door as `(room_index, segment_index)`: same wall, else adjacent room.
+pub fn door_partner(
+    rooms: &[RoomData],
+    room_index: usize,
+    dir: WallDirection,
+    i: usize,
+) -> Option<(usize, usize)> {
+    double_door_partner(rooms.get(room_index)?.wall(dir), i)
+        .map(|p| (room_index, p))
+        .or_else(|| cross_room_door_partner(rooms, room_index, dir, i))
+}
+
+fn wall_line_coord(room: &RoomData, dir: WallDirection) -> i32 {
+    match dir {
+        WallDirection::North => room.local_z,
+        WallDirection::South => room.local_z + room.size_z as i32,
+        WallDirection::East => room.local_x + room.size_x as i32,
+        WallDirection::West => room.local_x,
+    }
+}
+
+/// Cross-room partner `(room_index, segment_index)` of a lone double-door
+/// half at a wall end: the adjacent same-floor room's collinear wall segment
+/// touching it, when that one is a lone double-door half too.
+pub fn cross_room_door_partner(
+    rooms: &[RoomData],
+    room_index: usize,
+    dir: WallDirection,
+    i: usize,
+) -> Option<(usize, usize)> {
+    let room = rooms.get(room_index)?;
+    let segs = room.wall(dir);
+    let is_lone = |segs: &[WallConfig], i: usize| {
+        segs.get(i).map(|s| s.variant) == Some(WallVariant::WithDoubleDoor)
+            && double_door_partner(segs, i).is_none()
+    };
+    if segs.is_empty() || !is_lone(segs, i) || (i != 0 && i != segs.len() - 1) {
+        return None;
+    }
+    let is_ns = matches!(dir, WallDirection::North | WallDirection::South);
+    let (a0, a_len) = if is_ns {
+        (room.local_x, room.size_x as i32)
+    } else {
+        (room.local_z, room.size_z as i32)
+    };
+    let edge = if i == 0 { a0 } else { a0 + a_len };
+    let line = wall_line_coord(room, dir);
+    for (ri, o) in rooms.iter().enumerate() {
+        if ri == room_index
+            || o.floor_level != room.floor_level
+            || o.room_type == RoomType::Stairwell
+        {
+            continue;
+        }
+        if wall_line_coord(o, dir) != line {
+            continue;
+        }
+        let (oa0, oa_len) = if is_ns {
+            (o.local_x, o.size_x as i32)
+        } else {
+            (o.local_z, o.size_z as i32)
+        };
+        if (if i == 0 { oa0 + oa_len } else { oa0 }) != edge {
+            continue;
+        }
+        let o_segs = o.wall(dir);
+        if o_segs.is_empty() {
+            continue;
+        }
+        let oi = if i == 0 { o_segs.len() - 1 } else { 0 };
+        if is_lone(o_segs, oi) {
+            return Some((ri, oi));
+        }
+    }
+    None
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -112,6 +229,18 @@ pub struct RoomData {
 }
 
 impl RoomData {
+    /// A stairwell is walked on from both the floor it sits on and the one above.
+    pub fn spans_floor(&self, floor: u8) -> bool {
+        self.floor_level == floor
+            || (self.room_type == RoomType::Stairwell && self.floor_level + 1 == floor)
+    }
+
+    pub fn contains_xz(&self, origin: &Position, x: f32, z: f32) -> bool {
+        let rx = origin.x + self.local_x as f32;
+        let rz = origin.z + self.local_z as f32;
+        x >= rx && x <= rx + self.size_x as f32 && z >= rz && z <= rz + self.size_z as f32
+    }
+
     pub fn wall(&self, dir: WallDirection) -> &[WallConfig] {
         match dir {
             WallDirection::North => &self.wall_north,
@@ -148,8 +277,18 @@ pub struct PassabilityGrid {
 pub struct HouseData {
     pub id: String,
     pub owner_id: String,
+    #[serde(default)]
+    pub source_scroll_id: Option<String>,
     pub origin: Position,
     pub rooms: Vec<RoomData>,
     #[serde(default)]
     pub passability: Vec<PassabilityGrid>,
+}
+
+impl HouseData {
+    pub fn room_at(&self, x: f32, z: f32, floor: u8) -> Option<&RoomData> {
+        self.rooms
+            .iter()
+            .find(|r| r.spans_floor(floor) && r.contains_xz(&self.origin, x, z))
+    }
 }

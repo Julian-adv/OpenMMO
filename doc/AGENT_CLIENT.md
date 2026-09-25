@@ -35,10 +35,11 @@ OnlineRPG/
 │   ├── src/
 │   │   ├── ws.rs              # WebSocket 통신
 │   │   ├── orchestrator.rs    # 다중 NPC 세션 관리
-│   │   ├── state.rs           # 월드 상태 관리
+│   │   ├── state/             # 월드 상태 관리 (이벤트, 인벤토리, 음악 등)
 │   │   ├── dungeon.rs         # 던전 레이아웃/계단 Y/문 (shared 생성기 사용)
 │   │   ├── driver/            # LLM 드라이버 (프롬프트, 행동, 이동, 전투)
 │   │   ├── llm_scheduler.rs   # 우선순위 큐 + 동시 호출 제한
+│   │   ├── transcript.rs      # LLM 턴 요약 로그 + 전문 파일 기록
 │   │   └── watch.rs           # 로컬 관전 패널 (읽기 전용)
 │   └── Cargo.toml
 ├── server/               # 게임 서버
@@ -183,18 +184,17 @@ LLM이 매 프레임 좌표를 결정하는 것은 비현실적이고 비용이 
 
 이 모듈이 직접 갖는 건 두 가지다:
 
-- **Y 모델** — 층 높이와 계단 램프 보간. 서버는 우리가 보낸 Y로 충돌 층을 정하고
-  (`get_floor_at_position`) 선언한 층을 그 Y로 검증하므로(`validated_dungeon_floor`,
-  허용 오차 2.5m / 층 간격 4m), 지상 Y를 유지한 채 층만 선언하면 즉시 되돌려진다.
-  선언 층은 항상 Y에 가장 가까운 층으로 계산해 둘이 어긋나지 않게 한다.
+- **Y 모델** — 층 높이와 계단 램프 보간. 서버는 선언한 층을 그 Y로 검증하고
+  (`validated_dungeon_floor`, 허용 오차 2.5m / 층 간격 4m) 층 변경은 두 층을 잇는
+  계단통(±1셀) 위에서만 받아주며, 저장하는 Y는 우리가 보낸 값이 아니라 서버가 그 층에서
+  계산한 지면 높이다. 지상 Y를 유지한 채 층만 선언하거나 계단 밖에서 층을 바꾸면 즉시
+  되돌려진다. 선언 층은 항상 Y에 가장 가까운 층으로 계산해 둘이 어긋나지 않게 한다.
 - **문** — 인테리어 문은 기본 닫힘이고 실제로 하강 계단을 막는다(old_crypt 기준 5층 중
   3개 층). 경로가 막히면 mover가 갈 수 있는 가장 가까운 닫힌 문으로 걸어가
   `ToggleDungeonDoor`를 보내고 다시 경로를 찾는다. 서버의 문/소품 상태는
   `DungeonDoorsState`/`DungeonPropsState`로 받아 해당 층 셀을 재계산한다.
 
-에이전트가 던전 층의 몬스터 AI를 위임받으면(`MonsterAssigned`) 그 몬스터의 Y도 지형이 아닌
-층 높이로 스냅하고 `path_floor`를 층 인덱스로 세팅한다 — 안 그러면 몬스터 무리가 지표로
-끌려 올라온다.
+몬스터 AI와 던전 지면 계산은 서버가 담당한다. 에이전트는 수신한 몬스터 위치를 관찰하며, 몬스터 이동·공격을 서버에 전송하지 않는다.
 
 ## LLM 연동 방향 (MCP에서 선회)
 
@@ -227,13 +227,87 @@ openrouter와 openai는 같은 chat completions 호출부를 쓴다. `openai.rs`
 - `reasoning_effort` 기본값은 `"none"`이다. 같은 라우터에서도 모델마다 수용 여부가
   달라(opencode.ai Zen의 deepseek-v4-pro는 거절, minimax-m3는 허용) `""`로 두면
   필드 자체를 생략한다.
+- `max_messages`(기본 41 = system + 20쌍)는 매 호출에 실어 보내는 히스토리 길이다.
+  넘치면 system 프롬프트와 최근 턴만 남긴다. 3 미만은 3으로 올려 받는다 — 그 아래면
+  트림이 system이나 지금 보내는 턴을 잘라내고 usize 언더플로로 패닉한다. 이 설정은
+  `openai` 백엔드 전용이고, openrouter는 기본값 고정이다.
+
+### Codex app-server (`codex.rs`)
+
+agent-client 프로세스 안의 모든 Codex NPC가 `codex app-server` 자식 프로세스 하나를
+공유한다. stdio는 newline-delimited JSON이고, request ID로 RPC 응답을, thread ID로
+동시에 실행 중인 NPC 턴의 알림을 나눈다. app-server가 종료되거나 pipe가 끊기면 진행
+중인 호출을 모두 실패시키고 다음 호출에서 새 프로세스를 띄운다.
+
+대화 상태는 공유하지 않는다. 매 LLM 호출마다 `thread/start`를 `ephemeral = false`,
+`sandbox = "read-only"`, `approvalPolicy = "never"`로 보내고 그 thread에서 정확히 한
+`turn/start`만 실행한 뒤 `thread/delete`로 지운다. ephemeral thread는 지울 수 없고
+app-server가 thread당 ~12 MB를 붙들어 4시간마다 OOM으로 죽었다(2026-09-03). 기존과 같이 system prompt와 이번 이벤트를 전부 그 한 턴에
+실으며, CWD도 NPC별 빈 임시 디렉터리라 저장소의 `AGENTS.md`나 파일을 보지 않는다.
+따라서 프로세스 기동·초기화 비용만 공유하고 NPC의 단기 기억 범위와 격리는 그대로다.
+
+### LLM 트랜스크립트 (`transcript_dir`, `transcript_keep_days`)
+
+프롬프트·응답 전문은 저널에 찍지 않는다. `transcript.rs`의 `TranscriptBackend`가
+`build_llm_backend()`에서 모든 백엔드를 감싸(`TimeoutBackend` 바깥, `WatchedBackend`
+안쪽) 호출마다 저널에 한 줄만 남기고
+(`llm turn npc=Rica prompt=3211B reply=210B wait=0.0s latency=1.83s`, 실패는 `error`),
+전문은 `transcript_dir`(기본 `logs/transcripts`, CWD 기준) 아래
+`<npc>/<YYYY-MM-DD>.log`에 UTC 일자별로 이어 쓴다. `transcript_keep_days`(기본 3)보다
+오래된 파일은 한 시간에 한 번 지운다. 플레이어 채팅이 그대로 담기므로 보관 기간은
+짧게 둔다. `transcript_dir = ""`이면 끈다.
+
+전문을 저널에서 바로 보고 싶으면 백엔드 타깃만 debug로 올린다(`agent_client=debug`는
+스케줄러 잡음까지 켠다):
+
+```
+RUST_LOG=info,agent_client::codex=debug,agent_client::claude=debug
+```
+
+prod 유닛은 `/etc/openmmo/agent-client.env`를 읽으므로 거기에 넣고
+`systemctl restart openmmo-agent-client`.
+
+### 채팅 맥락과 LLM 호출
+
+활동·비활동 전환과 대기·실행 흐름은 [NPC 상태 전환 다이어그램](NPC_MONSTER_AI.md#npc-상태-전환과-호출-흐름)을 참고한다.
+
+주변 유저의 일반 채팅은 NPC가 들을 수 있는 범위에서 기록하고 Routine으로 깨운다.
+비활동 중에도 대화가 시작되면 활동 상태로 돌아가고, 이후 발언마다 30초 활동 타이머를
+갱신한다. 발언은 일반 호출 간격에 맞춰 모아서 전달한다.
+플레이어가 NPC 이름이나 별칭을 언급하면 Urgent로 처리한다. 영문 이름은 대소문자를
+구분하지 않고 단어 경계를 확인한다. 한글 별칭은 `data-src/npcs.csv`의 `chatAliases`에
+세미콜론으로 나열한다. 이름을 생략한 후속 발언도 기록되어 다음 호출의 맥락으로 전달된다.
+귓속말·거래·피격 등 기존 긴급 이벤트는 유지하며, NPC 간 일반 대화는 맥락으로만 보관한다.
+NPC 회의 중의 대화는 기존처럼 Urgent다.
+같은 층 10m 이내의 새 접근을 알리는 `[PlayerNearby]`는 Routine으로 깨운다.
+활동 타이머를 갱신하고 일반 호출 간격을 적용하며, 상인은 이때 인사할 수 있다.
+
+프롬프트에는 이전 대화 최대 30줄(`RECENT CONVERSATION`), 아직 전달하지 않은 대화
+최대 30줄(`NEW CONVERSATION`), 이번 응답 계기인 `[Urgent]` 이벤트가 함께 들어간다.
+일과·주변 상황에 따른 Routine 호출도 유지한다. 처리한 발언은 이전 맥락으로 옮겨
+중복 응답을 피하도록 지시한다.
+
+긴급 이벤트나 새 이벤트가 없어도 정기 호출하며, 모인 일반 채팅도 이때 전달한다.
+기본 주기는 최근 활동 중 5초(`min_interval_secs`), 비활동 시 3600초
+(`idle_interval_secs`)이며 비활동 호출의 큐 우선순위는 Idle이다. 수면 중에는 호출을
+생략한다. 주변 플레이어가 없는 운영 NPC도 생략하되 `always_active` 설정은 예외다.
+
+요청을 대기열에 넣을 때는 프롬프트를 만들지 않는다. 실행 슬롯을 얻은 뒤 최신 상태와
+그동안 쌓인 대화를 읽어 만든다. 대기 중 새 긴급 이벤트가 들어오면 같은 요청을 Urgent로
+승급하며, 같은 우선순위 안에서는 기존 제출 순서를 유지한다. 실행 중인 호출은 중단하지
+않고 이후에 도착한 이벤트를 다음 호출로 남긴다. 큐 등록·실행 로그에 NPC와 우선순위를 기록한다.
+
+스케줄러는 빈 슬롯마다 `10초 이상 대기한 Routine → Urgent → 나머지 Routine → Idle`
+순서로 선택하고, 같은 그룹에서는 먼저 제출한 요청을 처리한다. 대기 시간은 최초 제출
+시점부터 계산하며 Idle에서 Routine으로 승급해도 유지한다. Idle은 시간만으로 우선 처리하지 않는다.
+10초는 다음 빈 슬롯에서 우선 선택하는 기준이며, 실행 중인 호출을 중단하거나 응답 시간을
+보장하지 않는다. 실행 로그의 `routine_overdue=true`로 기준 충족 여부를 확인할 수 있다.
 
 ### 호출 타임아웃 (`request_timeout_secs`, 기본 120)
 
-백엔드별 설정이 아니라 스케줄러 설정이다(`max_concurrent` 옆, 루트 레벨). 지키는
-대상이 특정 provider가 아니라 **슬롯**이기 때문이다: 응답 없는 엔드포인트든 먹통이
-된 CLI 자식 프로세스든, 하나가 `max_concurrent`(기본 2) 중 하나를 영구히 잡으면 두
-개만 물려도 모든 NPC가 멈춘다.
+백엔드별 설정이 아니라 스케줄러 설정이다(`max_concurrent` 옆, 루트 레벨).
+`max_concurrent`의 기본값은 4다. 응답 없는 호출이 슬롯을 계속 점유해 모든 NPC를
+멈추지 않도록 호출마다 시간 제한을 둔다. 대기열에서 기다린 시간은 포함하지 않는다.
 
 `llm_scheduler.rs`의 `TimeoutBackend`가 모든 백엔드를 감싼다. 백엔드는
 `build_llm_backend()` 한 곳에서만 만들어지므로 claude / codex / openrouter / openai가
@@ -241,10 +315,19 @@ openrouter와 openai는 같은 chat completions 호출부를 쓴다. `openai.rs`
 에러로 올라와 패널에 `llm-error`로 남는다.
 
 시간이 지나면 안쪽 future를 drop하는 것으로 일이 실제로 멈춘다. reqwest는 요청을
-취소하고, stdio 백엔드(`claude.rs` / `codex.rs`)는 `kill_on_drop(true)`로 CLI를 띄우므로
-자식 프로세스가 살아남지 않는다. 다만 CLI가 또 띄운 손자 프로세스까지는 죽이지
-않는다(프로세스 그룹 kill이 아니다). `0`은 타임아웃 해제 — 디버거로 백엔드를
-따라갈 때 쓴다.
+취소하고, Claude stdio 백엔드는 `kill_on_drop(true)`와 unix 프로세스 그룹으로 해당
+호출의 CLI를 손자 프로세스까지 종료한다. 공유 Codex app-server는 프로세스를 죽이지
+않고 그 thread의 `turn/interrupt`만 보내므로 다른 NPC의 동시 호출은 계속된다. app-server
+자체가 끊기면 진행 중인 Codex 호출을 모두 실패시키고 다음 호출에서 재기동한다.
+`process_group.rs`는 agent-client 종료 시 app-server의 npm/node 자식까지 남지 않게 한다.
+`0`은 타임아웃 해제 — 디버거로 백엔드를 따라갈 때 쓴다.
+
+### codex 추론 강도 (`[codex] reasoning_effort`, 기본 "low")
+
+Codex app-server도 사용자의 `~/.codex/config.toml`을 상속하지만 각 `turn/start`에
+`effort`를 명시해 전역값을 덮는다. `xhigh`면 NPC 한 턴이 200초를 넘겨 타임아웃만
+반복할 수 있다(2026-08-27 실측: 같은 상인 프롬프트가 xhigh 200초+, medium 11초,
+low 10초). 회의 대사처럼 짧은 롤플레이에는 low로 충분하다.
 
 ## 구현 우선순위
 
@@ -258,7 +341,7 @@ openrouter와 openai는 같은 chat completions 호출부를 쓴다. `openai.rs`
 
 NPC가 *누구인지*는 git 추적되는 게임 데이터가 단일 진실 소스다 (2026-06-12 통일):
 
-- **`data-src/npcs.csv`** — 전체 NPC 레지스트리. `id`, `npcName`, `class`(역할 = 프롬프트 템플릿 + 캐릭터 클래스), 선택적 거래 필드(`wishlist`, `wishlistRatePercent`, `salaryPerDay`, `walletCap`). 서버(`npc_defs.rs`), agent-client(`shop_info.rs`), 웹 클라이언트(`traderDefs.ts`)가 같은 생성물 `data/npcs.json`을 읽는다.
+- **`data-src/npcs.csv`** — 전체 NPC 레지스트리. `id`, `npcName`, `class`(역할 = 프롬프트 템플릿 + 캐릭터 클래스), 선택적 거래 필드(`wishlist`, `wishlistRatePercent`, `salaryPerDay`, `walletCap`, `keepsakes`), 선택적 `loadout`(접속 시마다 부족분을 지급·장착하는 지급 장비 — 스타터 킷 대체, 어느 방향으로도 판매 불가). 스탯은 플레이어와 같은 롤 프로토콜을 쓴다: 레지스트리 NPC는 클래스 휴리스틱으로 만족할 때까지 리롤(`orchestrator.rs::roll_fits_class`), 서버가 별도 수치를 주지 않는다. 서버(`npc_defs.rs`), agent-client(`shop_info.rs`), 웹 클라이언트(`traderDefs.ts`)가 같은 생성물 `data/npcs.json`을 읽는다.
 - **`agent-client/data/npcs/{id}/`** — 개체 디렉터리 컨벤션: `instance.txt`(개성), `memory.txt`(런타임 누적, gitignore), `schedule.json`(선택).
 - **`agent-client/data/templates/{class}.txt`** — 역할별 행동 규칙.
 
@@ -271,11 +354,13 @@ NPC가 *누구인지*는 git 추적되는 게임 데이터가 단일 진실 소�
   - `src/driver/prompt.rs` — `format_event`의 서버 이벤트 표현 문구, "What do you do?" 등 프롬프트 골격
   - 분리 위치는 기존 `data/templates/` 아래가 자연스럽다 (예: `data/templates/sections/`, `data/templates/events/`). 페르소나 튜닝이 코드 빌드 없이 텍스트 편집만으로 가능해지는 것이 목표. 단, 원격 watcher가 템플릿 변경에도 재시작하므로 핫리로드까지는 불필요.
 
-## Fishing
+## 낚시
 
-Agents fish through the same protocol as humans (`doc/FISHING.md`). The
-client handles the reflexes (auto-hook on a bite, `auto_stance` fight play)
-in `src/state.rs`; the LLM only decides to start or stop:
+Agent는 인간과 동일한 프로토콜로 낚시한다(`doc/FISHING.md`). 반사 동작(입질
+시 자동 후킹, `auto_stance` 파이팅)은 클라이언트가 `src/state/events.rs`에서
+처리하고, LLM은 시작과 중단만 결정한다. 응답에는 사람의 반응 시간
+(`HOOK_REACTION_MS`, `STANCE_REACTION_MS`)만큼 지연이 붙고 한 번에 하나만
+날아가므로, 반응 중에 온 비트는 사람처럼 놓친다:
 
 ```json
 {"type": "fish", "x": 10.0, "z": -5.0}
@@ -283,6 +368,6 @@ in `src/state.rs`; the LLM only decides to start or stop:
 {"type": "stop_fishing"}
 ```
 
-A fishing rod must be worn in the main hand (`{"type": "use", "item":
-"fishing_rod"}`). Outcomes arrive as `[Fishing]` events; refusals (no rod,
-not water, too far) as `[FishingError]`.
+낚싯대를 주 손에 장착해야 한다(`{"type": "use", "item":
+"fishing_rod"}`). 결과는 `[Fishing]` 이벤트로 도착하고, 거부(낚싯대 없음,
+물이 아님, 너무 멂)는 `[FishingError]`로 도착한다.

@@ -34,9 +34,7 @@ async fn dropping_the_equipped_rod_aborts_the_session() {
     );
 }
 
-/// A deliberate reel-in mid-struggle ends Aborted and forfeits everything:
-/// no consolation XP, no item, no coins — abandoning a hooked fish is the
-/// one outcome that pays nothing.
+/// Stopping mid-fight awards no items or coins.
 #[tokio::test(start_paused = true)]
 async fn stopping_mid_struggle_forfeits_everything() {
     let game_state = make_test_game_state("fishing_stop");
@@ -59,11 +57,7 @@ async fn stopping_mid_struggle_forfeits_everything() {
         )),
         "stop mid-struggle ends Aborted"
     );
-    assert!(
-        msgs.iter()
-            .all(|m| !matches!(m, ServerMessage::SkillXpGained { .. })),
-        "abandoning a hooked fish pays no consolation XP"
-    );
+    assert!(!game_state.dirty_skills.read().await.contains(&id));
     assert!(
         msgs.iter()
             .all(|m| !matches!(m, ServerMessage::InventoryUpdated { .. })
@@ -72,11 +66,9 @@ async fn stopping_mid_struggle_forfeits_everything() {
     );
 }
 
-/// Hooking after the window plus grace has passed is TooLate: the fish
-/// escapes with the consolation XP. Locks the three-tier lag contract
-/// (in time → hooked; past grace → escaped; the tick reaper only at 2×grace).
+/// The hook handler rejects late responses before the tick reaper runs.
 #[tokio::test(start_paused = true)]
-async fn a_late_hook_escapes_with_consolation_xp() {
+async fn a_late_hook_escapes_without_changing_skills() {
     let game_state = make_test_game_state("fishing_late_hook");
     let (id, mut rx) = make_angler(&game_state, "angler_asleep").await;
 
@@ -101,12 +93,7 @@ async fn a_late_hook_escapes_with_consolation_xp() {
         )),
         "a hook past the grace window is TooLate → Escaped"
     );
-    assert!(
-    msgs.iter().any(
-        |m| matches!(m, ServerMessage::SkillXpGained { xp_amount, .. } if *xp_amount == ESCAPE_XP)
-    ),
-    "the late angler still gets the {ESCAPE_XP} XP consolation"
-);
+    assert!(!game_state.dirty_skills.read().await.contains(&id));
 }
 
 /// One line per angler: casting again while a session is live is refused

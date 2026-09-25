@@ -3,49 +3,46 @@
 //! string suitable for sending to an LLM. Also resolves which schedule
 //! entry should currently be active based on game time.
 
+use onlinerpg_shared::pricing::{PricingNotice, Trend};
 use onlinerpg_shared::{PlayerId, ServerMessage};
 
-use crate::orchestrator::ScheduleEntry;
-use crate::state::{SharedState, NPC_SIGHT_RADIUS};
+use crate::state::{storey_name, SharedState, FLOOR_ZERO_HINT};
+use onlinerpg_shared::schedule::ScheduleEntry;
 
-fn within_event_range(state: &SharedState, x: f32, z: f32) -> bool {
-    let Some(self_p) = state.self_player.as_ref() else {
-        return true;
-    };
-    crate::geom::PlanarDelta::xz(self_p.position.x, self_p.position.z, x, z).dist
-        <= NPC_SIGHT_RADIUS
+pub(crate) fn player_within_event_range(state: &SharedState, player_id: &PlayerId) -> bool {
+    state.self_player_id.as_ref() == Some(player_id) || state.nearby_players.contains_key(player_id)
 }
 
-fn player_within_event_range(state: &SharedState, player_id: &PlayerId) -> bool {
-    if state.self_player_id.as_ref() == Some(player_id) {
-        return true;
-    }
-    let Some(p) = state.nearby_players.get(player_id) else {
-        return true;
-    };
-    within_event_range(state, p.position.x, p.position.z)
-}
-
-fn monster_within_event_range(state: &SharedState, monster_id: &str) -> bool {
-    let Some(m) = state.nearby_monsters.get(monster_id) else {
-        return true;
-    };
-    within_event_range(state, m.position.x, m.position.z)
-}
-
-/// Build a prompt string from current state and events.
+/// Build a prompt string from current state and events. `memory` is the
+/// tail of the NPC's memory file, re-read per prompt so notes written this
+/// session reach a stateless backend without a restart; `terrain` is
+/// the surface summary a `TerrainSummaryJob` rendered outside the state lock.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn build_prompt(
     state: &SharedState,
     events: &[ServerMessage],
     agent_events: &[String],
     schedule: &[ScheduleEntry],
     active_schedule_idx: Option<usize>,
+    memory: Option<&str>,
+    terrain: Option<&str>,
+    tale: Option<String>,
 ) -> String {
     let mut prompt = String::new();
 
     prompt.push_str("=== CURRENT STATE ===\n");
     prompt.push_str(&state.format_world_state());
-    prompt.push('\n');
+    prompt.push_str("\nUse player names without titles in actions and favor updates.\n");
+    if let Some(terrain) = terrain {
+        prompt.push_str(terrain.trim_end());
+        prompt.push('\n');
+    }
+
+    if let Some(memory) = memory {
+        prompt.push_str("\n=== YOUR MEMORIES (notes you wrote in past turns) ===\n");
+        prompt.push_str(memory);
+        prompt.push('\n');
+    }
 
     // A customer is mid-trade: stay put and keep helping them. Movement is
     // suppressed server-side regardless, but telling the LLM keeps its
@@ -65,24 +62,35 @@ pub(super) fn build_prompt(
         );
     }
 
-    // Resident-trader wishlist, rebuilt every turn from the live bag:
-    // owned items drop out, and a fully satisfied wishlist removes the
-    // section (and with it the urge to trade) entirely. It is also
-    // suppressed for a cooldown after each successful purchase, and
-    // whenever no human player is in sight — only players can sell to the
-    // NPC, so without one around the desire would only produce futile
-    // NPC-to-NPC pestering.
+    // Resident-trader Personal Trading section, rebuilt every turn from
+    // the live bag and the favor ledger. It needs a regular in sight —
+    // favor past the trade threshold, outside the decline cooldown — and
+    // its buy-list half additionally sits out the post-purchase
+    // satiation. Strangers hear small talk and cost no section tokens.
     let satiated = state
         .trade_satiated_until
         .is_some_and(|until| std::time::Instant::now() < until);
-    if !satiated && state.has_nearby_human_players() {
-        if let Some(p) = state.self_player.as_ref() {
-            if let Some(section) =
-                crate::shop_info::resident_trade_prompt_for(&p.name, &state.self_bag)
-            {
-                prompt.push('\n');
-                prompt.push_str(&section);
-            }
+    if let Some(p) = state.self_player.as_ref() {
+        let audience = state.trade_worthy_players();
+        if let Some(section) = crate::shop_info::resident_trade_prompt_for(
+            &p.name,
+            &state.self_bag,
+            !satiated,
+            &audience,
+        ) {
+            prompt.push('\n');
+            prompt.push_str(&section);
+        }
+    }
+
+    if let (Some(info), Some(p)) = (state.pricing.as_ref(), state.self_player.as_ref()) {
+        if crate::shop_info::merchant_shop(&p.name).is_some() {
+            let at_meeting = active_schedule_idx.is_some_and(|i| {
+                schedule[i].condition
+                    == Some(onlinerpg_shared::schedule::ScheduleCondition::Meeting)
+            });
+            prompt.push('\n');
+            prompt.push_str(&market_prompt(info, at_meeting));
         }
     }
 
@@ -91,11 +99,37 @@ pub(super) fn build_prompt(
         prompt.push('\n');
     }
 
+    if let Some(tale) = tale {
+        prompt.push_str(&tale);
+    }
+
+    if !state.chat_history().is_empty() {
+        prompt.push_str(
+            "\n=== RECENT CONVERSATION (background only; do not answer old lines again) ===\n",
+        );
+        for line in state.chat_history() {
+            prompt.push_str(line);
+            prompt.push('\n');
+        }
+    }
+
+    if !state.pending_chat().is_empty() {
+        prompt
+            .push_str("\n=== NEW CONVERSATION (reply when a response fits naturally, even without your name; do not reply to every line) ===\n");
+        for line in state.pending_chat() {
+            prompt.push_str(line);
+            prompt.push('\n');
+        }
+    }
+
     let has_server_events = events.iter().any(|e| format_event(state, e).is_some());
     if has_server_events || !agent_events.is_empty() {
-        prompt.push_str("\n=== EVENTS ===\n");
+        prompt.push_str("\n=== EVENTS ===\nRespond to [Urgent] triggers using the conversation above; other events inform your routine.\n");
         for event in events {
             if let Some(line) = format_event(state, event) {
+                if state.classify_event(event) == crate::state::EventUrgency::Urgent {
+                    prompt.push_str("[Urgent] ");
+                }
                 prompt.push_str(&line);
                 prompt.push('\n');
             }
@@ -152,11 +186,13 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
         ServerMessage::ChatMessage {
             player_id, message, ..
         } => {
-            if !player_within_event_range(state, player_id) {
-                return None;
-            }
+            let is_npc = state
+                .nearby_players
+                .get(player_id)
+                .is_some_and(|p| p.is_official_npc);
+            let tag = if is_npc { "[NpcChat]" } else { "[Chat]" };
             Some(format!(
-                "[Chat] {}: {message}",
+                "{tag} {}: {message}",
                 player_name(state, player_id)
             ))
         }
@@ -168,7 +204,15 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             }
             Some(format!("[Whisper] {from}: {message}"))
         }
-        ServerMessage::SystemMessage { message } => Some(format!("[System] {message}")),
+        ServerMessage::PartyChatMessage { from, message } => {
+            // Skip the echo of our own outgoing party line.
+            let self_name = state.self_player.as_ref().map(|p| p.name.as_str());
+            if Some(from.as_str()) == self_name {
+                return None;
+            }
+            Some(format!("[Party] {from}: {message}"))
+        }
+        ServerMessage::SystemMessage { message, .. } => Some(format!("[System] {message}")),
         ServerMessage::InteractionRejected { reason } => {
             Some(format!("[InteractionRejected] {reason}"))
         }
@@ -183,10 +227,15 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             } else {
                 player_name(state, player_id)
             };
-            Some(format!(
-                "[Chest] {who} opened the treasure chest: {} + {gold} gold.",
-                item_def_ids.join(", ")
-            ))
+            let tail = if item_def_ids.is_empty() && *gold == 0 {
+                "it was empty (it refills at nightfall).".to_string()
+            } else {
+                format!(
+                    "{} burst out onto the ground nearby; the gold ({gold}) went to the opener.",
+                    item_def_ids.join(", ")
+                )
+            };
+            Some(format!("[Chest] {who} opened the treasure chest — {tail}"))
         }
         ServerMessage::DungeonPropBroken { depth, prop_id, .. } => Some(format!(
             "[Prop] Prop {prop_id} on floor {depth} was smashed — its cell is now walkable."
@@ -224,22 +273,30 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
                 list.join(", ")
             ))
         }
-        ServerMessage::PlayerJoined { player } => {
-            if !within_event_range(state, player.position.x, player.position.z) {
-                return None;
-            }
-            Some(format!("[PlayerJoined] {}", player.name))
-        }
-        ServerMessage::PlayerAppeared { player } => {
-            if !within_event_range(state, player.position.x, player.position.z) {
-                return None;
-            }
-            Some(format!("[PlayerAppeared] {}", player.name))
-        }
-        ServerMessage::PlayerLeft { player_id } => {
+        ServerMessage::PlayerMusicStarted {
+            player_id, track, ..
+        } => {
             if !player_within_event_range(state, player_id) {
                 return None;
             }
+            let who = if state.self_player_id.as_ref() == Some(player_id) {
+                "You".to_string()
+            } else {
+                player_name(state, player_id)
+            };
+            // Everyone in earshot hears the same tune; it plays until the
+            // performer moves or the track runs out.
+            Some(format!("[PlayMusic] {who} started playing \"{track}\"."))
+        }
+        ServerMessage::TitleEarned { title } => Some(format!(
+            "[TitleEarned] You earned the title \"{}\".",
+            crate::title_defs::title_name(title)
+        )),
+        ServerMessage::PlayerJoined { player } => Some(format!("[PlayerJoined] {}", player.name)),
+        ServerMessage::PlayerAppeared { player } => {
+            Some(format!("[PlayerAppeared] {}", player.name))
+        }
+        ServerMessage::PlayerLeft { player_id } => {
             Some(format!("[PlayerLeft] {}", player_name(state, player_id)))
         }
         ServerMessage::PlayerDisappeared { player_id } => Some(format!(
@@ -258,7 +315,7 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             let floor = match *floor_level {
                 0 => "the surface".to_string(),
                 f if f < 0 => format!("dungeon floor {}", f.unsigned_abs()),
-                f => format!("floor {f}"),
+                f => format!("the {}", storey_name(f as u8)),
             };
             Some(format!(
                 "[Teleported] You were teleported to ({:.0}, {:.0}) on {floor}. Your old \
@@ -270,31 +327,18 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             player_id,
             position,
             ..
-        } => {
-            if !within_event_range(state, position.x, position.z) {
-                return None;
-            }
-            Some(format!(
-                "[Move] {} -> ({:.1}, {:.1}, {:.1})",
-                player_name(state, player_id),
-                position.x,
-                position.y,
-                position.z
-            ))
-        }
-        ServerMessage::MonsterSpawned { monster } => {
-            if !within_event_range(state, monster.position.x, monster.position.z) {
-                return None;
-            }
-            Some(format!(
-                "[MonsterSpawned] {} ({})",
-                monster.id, monster.monster_type
-            ))
-        }
+        } => Some(format!(
+            "[Move] {} -> ({:.1}, {:.1}, {:.1})",
+            player_name(state, player_id),
+            position.x,
+            position.y,
+            position.z
+        )),
+        ServerMessage::MonsterSpawned { monster } => Some(format!(
+            "[MonsterSpawned] {} ({})",
+            monster.id, monster.monster_type
+        )),
         ServerMessage::MonsterDead { monster_id, .. } => {
-            if !monster_within_event_range(state, monster_id) {
-                return None;
-            }
             Some(format!("[MonsterDead] {monster_id}"))
         }
         ServerMessage::PlayerAttacked {
@@ -303,16 +347,10 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             hit,
             damage,
             ..
-        } => {
-            let is_self = state.self_player_id.as_ref() == Some(player_id);
-            if !is_self && !monster_within_event_range(state, monster_id) {
-                return None;
-            }
-            Some(format!(
-                "[Attack] {} -> {monster_id}: hit={hit} dmg={damage}",
-                player_name(state, player_id)
-            ))
-        }
+        } => Some(format!(
+            "[Attack] {} -> {monster_id}: hit={hit} dmg={damage}",
+            player_name(state, player_id)
+        )),
         ServerMessage::PlayerAttackRejected { monster_id, reason } => {
             Some(format!("[AttackRejected] {monster_id}: {reason}"))
         }
@@ -323,30 +361,35 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             damage,
             current_health,
             ..
-        } => {
-            let is_self = state.self_player_id.as_ref() == Some(player_id);
-            if !is_self && !monster_within_event_range(state, monster_id) {
-                return None;
-            }
-            Some(format!(
-                "[MonsterAttack] {monster_id} -> {}: hit={hit} dmg={damage} hp={current_health}",
-                player_name(state, player_id)
-            ))
-        }
+        } => Some(format!(
+            "[MonsterAttack] {monster_id} -> {}: hit={hit} dmg={damage} hp={current_health}",
+            player_name(state, player_id)
+        )),
         ServerMessage::PlayerDead { player_id } => {
-            if !player_within_event_range(state, player_id) {
-                return None;
-            }
             Some(format!("[PlayerDead] {}", player_name(state, player_id)))
         }
         ServerMessage::PlayerRespawned { player } => {
             let is_self = state.self_player_id.as_ref() == Some(&player.id);
-            if !is_self && !within_event_range(state, player.position.x, player.position.z) {
-                return None;
+            if !is_self {
+                return Some(format!(
+                    "[Respawn] {} HP {}/{}",
+                    player.name, player.health, player.max_health
+                ));
             }
+            let (x, z) = (player.position.x, player.position.z);
+            let place = match state.storey_at(x, z, player.floor_level) {
+                Some(storey) if player.floor_level > 0 => format!(
+                    "in a sick-room bed on the {storey} of a building at ({x:.0}, {z:.0}) — \
+                     {FLOOR_ZERO_HINT}"
+                ),
+                Some(storey) => {
+                    format!("in a bed on the {storey} of a building at ({x:.0}, {z:.0})")
+                }
+                None => format!("at ({x:.0}, {z:.0}) on the surface"),
+            };
             Some(format!(
-                "[Respawn] {} HP {}/{}",
-                player.name, player.health, player.max_health
+                "[Respawn] You died and woke {place}. HP {}/{}.",
+                player.health, player.max_health
             ))
         }
         ServerMessage::XpGained {
@@ -382,15 +425,10 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             position,
             state: monster_state,
             ..
-        } => {
-            if !within_event_range(state, position.x, position.z) {
-                return None;
-            }
-            Some(format!(
-                "[MonsterMoved] {monster_id} -> ({:.1}, {:.1}, {:.1}) state={monster_state}",
-                position.x, position.y, position.z
-            ))
-        }
+        } => Some(format!(
+            "[MonsterMoved] {monster_id} -> ({:.1}, {:.1}, {:.1}) state={monster_state}",
+            position.x, position.y, position.z
+        )),
         ServerMessage::Kicked { reason, .. } => Some(format!("[Kicked] {reason}")),
         ServerMessage::DealResult {
             target_player_name,
@@ -405,6 +443,30 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
              at {applied_modifier_pct}% — {message}",
             if *accepted { "GRANTED" } else { "REJECTED" }
         )),
+        ServerMessage::FurnitureSelectionNotice {
+            player_id,
+            player_name,
+            item_def_id,
+        } => {
+            if !player_within_event_range(state, player_id) {
+                return None;
+            }
+            use onlinerpg_shared::furniture_shop::FurnitureTip;
+            let advice = match FurnitureTip::for_item(item_def_id)? {
+                FurnitureTip::StorageChest =>
+                    "The Wooden Storage Chest must be placed on the customer's own estate \
+                     before it can be used; it holds up to 50 kg.",
+                FurnitureTip::Bed =>
+                    "Sleeping in a bed for a full 16 seconds doubles natural HP and mana recovery. \
+                     Normal recovery restrictions still apply; the bed must be placed on the customer's own estate.",
+            };
+            Some(format!(
+                "[FurnitureSelection] {player_name} added {item_def_id} from a display to their \
+                 unpaid basket. Briefly explain this tip in one friendly sentence, addressing \
+                 that customer in their language: {advice} This is not a completed purchase. \
+                 Do not open a trade window or repeat the checkout instructions."
+            ))
+        }
         ServerMessage::TradeNotice {
             player_name,
             item_def_id,
@@ -421,12 +483,21 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             crate::shop_info::format_price(*price),
             crate::shop_info::format_price(*npc_gold),
         )),
-        ServerMessage::TradeError { message } => Some(format!("[TradeError] {message}")),
+        ServerMessage::TradeError { message, .. } => Some(format!("[TradeError] {message}")),
+        ServerMessage::TradeDeclined { player_name, .. } => Some(format!(
+            "[TradeDeclined] {player_name} waved off your trade window — let \
+             trading rest with them for a good while and just talk. Trade \
+             pushes at them are blocked meanwhile."
+        )),
         ServerMessage::PartyInviteReceived { inviter_name, .. } => Some(format!(
             "[PartyInvite] {inviter_name} invited you to their party. Accept with \
              {{\"type\":\"party_accept\"}} or decline with party_decline."
         )),
         ServerMessage::PartyInviteResult { message, .. } => Some(format!("[Party] {message}")),
+        ServerMessage::PartySummonReceived { caster_name, .. } => Some(format!(
+            "[PartySummon] {caster_name} calls you to their side (summoning scroll). Accept \
+             with {{\"type\":\"summon_accept\"}} or decline with summon_decline."
+        )),
         ServerMessage::PartyState { members, .. } => Some(if members.is_empty() {
             "[Party] You are no longer in a party.".to_string()
         } else {
@@ -460,6 +531,52 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             })
         }
         ServerMessage::FishingError { message } => Some(format!("[FishingError] {message}")),
+        // Hunger transitions arrive direct (owner-only), a few per game day.
+        ServerMessage::HungerUpdate {
+            satiation, state, ..
+        } => {
+            use onlinerpg_shared::hunger::{can_sprint, HungerState};
+            let line = match state {
+                HungerState::Normal if can_sprint(*satiation) => format!(
+                    "[Hunger] You are adequately fed ({satiation}/1000) and can sprint."
+                ),
+                HungerState::Normal => format!(
+                    "[Hunger] You are adequately fed ({satiation}/1000) but too low to sprint — your moves walk until you eat."
+                ),
+                HungerState::Hungry => format!(
+                    "[Hunger] You are getting hungry ({satiation}/1000): sprinting is unavailable and natural healing is slower."
+                ),
+                HungerState::Weak => format!(
+                    "[Hunger] You are weak from hunger ({satiation}/1000): slower movement and attacks, less carry weight, and no natural healing. Eat something."
+                ),
+            };
+            Some(line)
+        }
+        ServerMessage::DebuffUpdate { debuffs } => Some(if debuffs.is_empty() {
+            "[Debuff] You are free of ailments.".to_string()
+        } else {
+            let list: Vec<String> = debuffs
+                .iter()
+                .map(|d| match d.id.as_str() {
+                    "food_poisoning" => format!(
+                        "food poisoning for {} more minutes (heavy penalties — cooked food next time)",
+                        d.remaining_ms.div_ceil(60_000)
+                    ),
+                    "bleed" => format!(
+                        "bleeding for {} more seconds (losing HP each second, no natural healing)",
+                        d.remaining_ms.div_ceil(1_000)
+                    ),
+                    other => format!("{other} for {} more seconds", d.remaining_ms.div_ceil(1_000)),
+                })
+                .collect();
+            format!("[Debuff] Afflicted: {}.", list.join("; "))
+        }),
+        ServerMessage::GrillEnded {
+            grilled_item_def_id,
+        } => Some(match grilled_item_def_id {
+            Some(id) => format!("[Grill] Your fish is done: {id} is in your bag."),
+            None => "[Grill] Your grilling was interrupted.".to_string(),
+        }),
         // Skip unknown/unhandled event types
         _ => None,
     }
@@ -486,78 +603,105 @@ fn caught_line(item_def_id: &str, size_cm: u16, trophy: bool) -> String {
 /// Resolve a player_id to a display name using SharedState.
 /// Falls back to the raw ID if the player is not found.
 pub(super) fn player_name(state: &SharedState, player_id: &PlayerId) -> String {
-    if state.self_player_id.as_ref() == Some(player_id) {
-        if let Some(ref p) = state.self_player {
-            return p.name.clone();
-        }
-    }
-    if let Some(p) = state.nearby_players.get(player_id) {
-        return p.name.clone();
-    }
-    player_id.to_string()
-}
-
-/// Resolve which schedule entry is currently active based on game time.
-/// Returns `(entry_index, game_hour)` — the hour component ensures recurring
-/// entries re-trigger each hour even though the index stays the same.
-/// Conditions are pre-validated at load time via `ScheduleEntry::parse_condition`.
-pub(super) fn resolve_active_schedule(
-    schedule: &[ScheduleEntry],
-    is_night: Option<bool>,
-    game_hour: Option<u32>,
-    game_minute: Option<u32>,
-) -> (Option<usize>, Option<u32>) {
-    use crate::orchestrator::ScheduleCondition;
-
-    let mut best: Option<usize> = None;
-
-    for (i, entry) in schedule.iter().enumerate() {
-        let condition = match entry.condition.as_ref() {
-            Some(c) => c,
-            None => continue,
-        };
-        let matched = match condition {
-            ScheduleCondition::Day => is_night == Some(false),
-            ScheduleCondition::Night => is_night == Some(true),
-            ScheduleCondition::Time {
-                hour: eh,
-                minute: em,
-            } => match (game_hour, game_minute) {
-                (Some(gh), Some(gm)) => gh * 60 + gm >= eh * 60 + em,
-                _ => false,
-            },
-            ScheduleCondition::Recurring { minute: em } => match (game_hour, game_minute) {
-                (Some(_), Some(gm)) => gm >= *em,
-                _ => false,
-            },
-        };
-
-        if matched {
-            best = Some(i);
-        }
-    }
-
-    let hour_for_recurring = best.and_then(|i| {
-        if matches!(
-            schedule[i].condition,
-            Some(ScheduleCondition::Recurring { .. })
-        ) {
-            game_hour
-        } else {
-            None
-        }
-    });
-    (best, hour_for_recurring)
+    state.player_display_name(player_id)
 }
 
 /// Format current schedule context for inclusion in LLM prompts.
+/// Per-turn merchant market section (doc/PRICING.md 연출).
+fn market_prompt(info: &PricingNotice, at_meeting: bool) -> String {
+    let mut s = format!(
+        "## Market\nConsumable prices (potions, food, scrolls, oil) are at {}% of base right now",
+        info.index_percent
+    );
+    match info.last_change_pct {
+        0 => s.push_str(".\n"),
+        d => s.push_str(&format!(
+            "; the merchants' guild {} at the last meeting.\n",
+            price_change_phrase(d, true)
+        )),
+    }
+    let hint = match info.trend {
+        Trend::Rising => "Gold has been piling up in adventurers' purses, so you expect the guild to raise prices next time",
+        Trend::Falling => "Gold has been scarce lately, so you expect the guild to lower prices next time",
+        Trend::Steady => "Gold has been flowing about as expected, so you expect prices to hold next time",
+    };
+    if at_meeting {
+        s.push_str(&format!(
+            "{hint} — and the meeting is happening right now. Stay focused on it: talk prices \
+             and the market with the other merchants only. No selling, no shop talk to \
+             passers-by, no stall, no wandering off until the guild head closes the meeting.\n"
+        ));
+    } else {
+        s.push_str(&format!(
+            "{hint}. The guild meets on the evening Serin goes dark, {}. \
+             You may drop hints about it, but never promise a price — it is only your hunch.\n",
+            match info.meeting_in_days {
+                0 => "tonight".to_string(),
+                1 => "tomorrow evening".to_string(),
+                n => format!("in {n} days"),
+            }
+        ));
+    }
+    s
+}
+
+/// "raised them 4%" / "lower consumable prices by 4%" / "hold …".
+fn price_change_phrase(pct: i32, past: bool) -> String {
+    match (pct.signum(), past) {
+        (0, true) => "held them".to_string(),
+        (0, false) => "hold consumable prices where they are".to_string(),
+        (1, true) => format!("raised them {pct}%"),
+        (1, false) => format!("raise consumable prices by {pct}%"),
+        (_, true) => format!("lowered them {}%", -pct),
+        (_, false) => format!("lower consumable prices by {}%", -pct),
+    }
+}
+
+pub(super) fn dining_arrival_event(label: &str, serves_self: bool) -> String {
+    let order = if serves_self {
+        "your own meal, once every guest has theirs. The kitchen is yours: serve yourself one \
+         dish and one drink with your own name as the player"
+    } else {
+        "call your order to the inn maid in your own words — one dish and one drink from the \
+         kitchen"
+    };
+    format!(
+        "[Schedule] You have sat down for {label} — {order} ({}). The house feeds its \
+         regulars: no coins, no haggling, nothing from your own bag. Stay seated; the plate \
+         is eaten by itself once it lands.",
+        crate::item_defs::menu_line()
+    )
+}
+
+pub(super) fn meeting_arrival_event() -> String {
+    "[Schedule] You have arrived at the merchants' price meeting. Greet the other \
+     merchants and open the talk about where prices should go."
+        .to_string()
+}
+
+/// The server already decided at sunset; the host reads it out, the rest
+/// say goodbye.
+pub(super) fn meeting_closing_event(host: bool, last_change_pct: i32) -> String {
+    if !host {
+        return "[Schedule] The price meeting is wrapping up. Thank the guild head, say your \
+                goodbyes, and head back to your business."
+            .to_string();
+    }
+    format!(
+        "[Schedule] As head of the merchants' guild, close the meeting now: announce that the \
+         guild has decided to {}, thank everyone, and send them home.",
+        price_change_phrase(last_change_pct, false)
+    )
+}
+
 fn format_schedule_context(
     schedule: &[ScheduleEntry],
     active_idx: Option<usize>,
 ) -> Option<String> {
     let entry = &schedule[active_idx?];
     let mut line = format!(
-        "Schedule: go to {} at ({:.1}, {:.1}, {:.1})",
+        "Schedule (automatic): {} at ({:.1}, {:.1}, {:.1}). Travel and scheduled \
+         interactions are automatic; do not issue move actions to follow this schedule.",
         entry.display_label(),
         entry.pos[0],
         entry.pos[1],
@@ -566,12 +710,250 @@ fn format_schedule_context(
     if let Some(ref action) = entry.action {
         line.push_str(&format!(" — using {action} (DO NOT move, you are resting)"));
     }
+    if entry.condition == Some(onlinerpg_shared::schedule::ScheduleCondition::Rain) {
+        line.push_str(
+            " Rain has paused your outdoor work. Rest quietly in the inn, chat or listen to \
+             the rain. Keep your stall and instruments packed away until your schedule resumes.",
+        );
+    }
     Some(line)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::caught_line;
+    use super::{build_prompt, caught_line, format_event};
+
+    #[test]
+    fn the_dining_cue_names_the_meal_and_the_menu() {
+        let cue = super::dining_arrival_event("eating dinner on the inn's ground floor", false);
+        assert!(cue.contains("sat down for eating dinner"), "{cue}");
+        assert!(
+            cue.contains("chicken_curry") && cue.contains("beer"),
+            "{cue}"
+        );
+        assert!(cue.contains("inn maid"), "{cue}");
+        let own = super::dining_arrival_event("eating dinner on the inn's ground floor", true);
+        assert!(own.contains("your own name"), "{own}");
+    }
+
+    #[test]
+    fn the_host_closes_with_the_servers_decision() {
+        assert!(super::meeting_closing_event(true, -4).contains("lower consumable prices by 4%"));
+        assert!(super::meeting_closing_event(true, 0).contains("hold consumable prices"));
+        assert!(super::meeting_closing_event(false, 3).contains("say your goodbyes"));
+    }
+    use crate::state::tests::{test_player, test_state};
+    use crate::state::EVENT_DELIVERY_RADIUS;
+    use onlinerpg_shared::{PlayerId, ServerMessage};
+
+    #[test]
+    fn furniture_selections_prompt_advice_without_claiming_a_purchase() {
+        let (mut state, _rx) = test_state();
+        let shopper = test_player(2.0, 0.0);
+        let id = shopper.id;
+        state.nearby_players.insert(id, shopper);
+        for (item, expected) in [
+            ("storage_chest", "own estate"),
+            ("furniture_bed", "doubles natural HP and mana recovery"),
+            (
+                "furniture_rustic_bed",
+                "doubles natural HP and mana recovery",
+            ),
+        ] {
+            let event = ServerMessage::FurnitureSelectionNotice {
+                player_id: id,
+                player_name: "Shopper".into(),
+                item_def_id: item.into(),
+            };
+            assert_eq!(
+                state.push_event(event.clone()),
+                crate::state::EventUrgency::Urgent
+            );
+            let text = format_event(&state, &event).unwrap();
+            assert!(
+                text.contains(expected) && text.contains("unpaid basket"),
+                "{text}"
+            );
+            assert!(text.contains("not a completed purchase"), "{text}");
+            state.nearby_players.remove(&id);
+            assert!(format_event(&state, &event).is_none());
+            state.nearby_players.insert(id, test_player(2.0, 0.0));
+        }
+    }
+
+    /// Drained conversation returns as RECENT CONVERSATION in the next
+    /// prompt — replayed as context, while transient events (a death, a
+    /// move) stay out of it. Memory notes render under YOUR MEMORIES.
+    #[test]
+    fn drained_chat_returns_as_history() {
+        let (mut state, _rx) = test_state();
+        let me = test_player(0.0, 0.0);
+        state.self_player_id = Some(me.id);
+        state.self_player = Some(me);
+
+        let mut jake = test_player(2.0, 0.0);
+        jake.id = PlayerId::from(2);
+        jake.name = "jake1".to_string();
+        state.nearby_players.insert(jake.id, jake);
+
+        let heard = vec![
+            ServerMessage::ChatMessage {
+                player_id: PlayerId::from(2),
+                message: "first song please".to_string(),
+            },
+            ServerMessage::PlayerDead {
+                player_id: PlayerId::from(2),
+            },
+        ];
+        for event in heard {
+            state.push_event(event);
+        }
+        state.drain_events();
+        state.finish_conversation();
+
+        let prompt = build_prompt(&state, &[], &[], &[], None, None, None, None);
+        assert!(prompt.contains("RECENT CONVERSATION"), "{prompt}");
+        assert!(
+            prompt.contains("[Chat] jake1: first song please"),
+            "{prompt}"
+        );
+        assert!(
+            !prompt.contains("[PlayerDead]"),
+            "combat noise is not conversation: {prompt}"
+        );
+        assert!(
+            !prompt.contains("=== YOUR MEMORIES"),
+            "no memories, no section: {prompt}"
+        );
+
+        let prompt = build_prompt(
+            &state,
+            &[],
+            &[],
+            &[],
+            None,
+            Some("jake1 tips well"),
+            None,
+            None,
+        );
+        assert!(prompt.contains("=== YOUR MEMORIES"), "{prompt}");
+        assert!(prompt.contains("jake1 tips well"), "{prompt}");
+    }
+
+    /// The current deed rides in as its own section; with none handed
+    /// over there is no section to sing from.
+    #[test]
+    fn a_tale_is_a_section_of_its_own() {
+        let (state, _rx) = test_state();
+        let deed = crate::tales::Deed::parse(
+            "2026-09-02 | Alder | Alder slew the Ogre Warlord. Celebrate the victory.",
+        )
+        .unwrap();
+        let section = crate::tales::prompt_section(&deed, crate::tales::Lang::Korean, true);
+        let prompt = build_prompt(&state, &[], &[], &[], None, None, None, Some(section));
+        assert!(prompt.contains("=== CURRENT TALE"), "{prompt}");
+        assert!(prompt.contains("Automatic rotation: DUE"), "{prompt}");
+        assert!(prompt.contains("Alder slew the Ogre Warlord"), "{prompt}");
+        assert!(prompt.contains("Hero: Alder"), "{prompt}");
+        assert!(prompt.contains("Language: Korean"), "{prompt}");
+        let prompt = build_prompt(&state, &[], &[], &[], None, None, None, None);
+        assert!(!prompt.contains("CURRENT TALE"), "{prompt}");
+    }
+
+    /// Waking in the inn's sick room is a change of place the LLM cannot see
+    /// from a bare HP line: it must know it is upstairs and indoors before
+    /// it aims at the hunting ground it died in.
+    #[test]
+    fn a_self_respawn_says_where_and_on_which_floor() {
+        use crate::state::tests::{house, room};
+        use onlinerpg_shared::housing::RoomType;
+        use onlinerpg_shared::Position;
+
+        let (mut state, _rx) = test_state();
+        let mut me = test_player(0.0, 0.0);
+        me.id = PlayerId::from(1);
+        state.self_player_id = Some(me.id);
+        state.self_player = Some(me.clone());
+        let inn = house(
+            "inn",
+            Position {
+                x: -1448.0,
+                y: 0.0,
+                z: 4753.0,
+            },
+            vec![room(0, 1, RoomType::Normal)],
+        );
+        state.world_cache.write().unwrap().add_house(inn);
+
+        me.position = Position {
+            x: -1446.7,
+            y: 4.4,
+            z: 4754.9,
+        };
+        me.floor_level = 1;
+        let line = format_event(
+            &state,
+            &ServerMessage::PlayerRespawned { player: me.clone() },
+        )
+        .expect("own respawn is always reported");
+        assert!(line.contains("sick-room bed on the 2nd floor"), "{line}");
+        assert!(line.contains(crate::state::FLOOR_ZERO_HINT), "{line}");
+
+        me.position = Position {
+            x: 10.0,
+            y: 0.0,
+            z: 10.0,
+        };
+        me.floor_level = 0;
+        let line = format_event(
+            &state,
+            &ServerMessage::PlayerRespawned { player: me.clone() },
+        )
+        .unwrap();
+        assert!(line.contains("on the surface"), "{line}");
+
+        let mut other = test_player(3.0, 0.0);
+        other.id = PlayerId::from(2);
+        other.name = "Brann".to_string();
+        let line = format_event(&state, &ServerMessage::PlayerRespawned { player: other }).unwrap();
+        assert!(line.starts_with("[Respawn] Brann HP"), "{line}");
+    }
+
+    /// A tune someone strikes up nearby is worth a prompt line — the title is
+    /// what makes it something an NPC can talk about. Out of earshot it is
+    /// not our business.
+    #[test]
+    fn music_from_an_active_performer_reaches_the_llm() {
+        let (mut state, _rx) = test_state();
+        let me = test_player(0.0, 0.0);
+        state.self_player_id = Some(me.id);
+        state.self_player = Some(me);
+
+        let mut bard = test_player(5.0, 0.0);
+        bard.id = PlayerId::from(2);
+        bard.name = "Rica".to_string();
+        state.nearby_players.insert(bard.id, bard);
+
+        let music = |player_id| ServerMessage::PlayerMusicStarted {
+            player_id,
+            track: "Twilight Fields".to_string(),
+            elapsed_secs: 0.0,
+        };
+
+        let line = format_event(&state, &music(PlayerId::from(2))).expect("bard is in earshot");
+        assert!(line.contains("Rica"), "{line}");
+        assert!(line.contains("Twilight Fields"), "{line}");
+
+        state
+            .nearby_players
+            .get_mut(&PlayerId::from(2))
+            .unwrap()
+            .position
+            .x = EVENT_DELIVERY_RADIUS + 10.0;
+        assert!(format_event(&state, &music(PlayerId::from(2))).is_some());
+        state.nearby_players.remove(&PlayerId::from(2));
+        assert_eq!(format_event(&state, &music(PlayerId::from(2))), None);
+    }
 
     // The wording contract with the LLM: each catch category tells the model
     // what it can actually do next (against the real embedded item defs).

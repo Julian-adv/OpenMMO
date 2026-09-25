@@ -8,6 +8,7 @@
 //!
 //! Phases are built up incrementally: Phase 1 covers the continent/sea mask.
 
+pub mod climate;
 pub mod coasts;
 pub mod config;
 pub mod continent;
@@ -24,6 +25,7 @@ pub mod settlements;
 pub mod tile_bake;
 pub mod vector_features;
 pub mod vegetation;
+pub mod weather_sectors;
 
 pub use config::WorldGenConfig;
 pub use global_map::GlobalMap;

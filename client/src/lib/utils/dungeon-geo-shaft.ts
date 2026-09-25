@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import type { GeoEntry } from './house-geo-utils'
 import type { DungeonShaft } from '../managers/dungeonManager'
-import { addBox } from './dungeon-geo-primitives'
+import { addBox, quadMeshBuilder } from './dungeon-geo-primitives'
 import {
   SLAB_THICKNESS,
   LANDING_CELLS,
@@ -143,43 +143,7 @@ export function collectShaftStairs(
         : new THREE.Vector3(run, y, latCenter + latOff)
     }
 
-    const positions: number[] = []
-    const normals: number[] = []
-    const uvs: number[] = []
-    const indices: number[] = []
-    // Quad in CCW order around its rectangle; winding is corrected against the
-    // outward normal, and UVs use the same axis-projection as addBox (scaled).
-    const addQuad = (
-      c0: THREE.Vector3,
-      c1: THREE.Vector3,
-      c2: THREE.Vector3,
-      c3: THREE.Vector3,
-      n: THREE.Vector3
-    ) => {
-      const base = positions.length / 3
-      const gn = c1.clone().sub(c0).cross(c2.clone().sub(c0))
-      const verts = gn.dot(n) < 0 ? [c0, c3, c2, c1] : [c0, c1, c2, c3]
-      const ax = Math.abs(n.x)
-      const ay = Math.abs(n.y)
-      const az = Math.abs(n.z)
-      for (const c of verts) {
-        positions.push(c.x, c.y, c.z)
-        normals.push(n.x, n.y, n.z)
-        let u: number, v: number
-        if (ax >= ay && ax >= az) {
-          u = c.z
-          v = c.y
-        } else if (ay >= ax && ay >= az) {
-          u = c.x
-          v = c.z
-        } else {
-          u = c.x
-          v = c.y
-        }
-        uvs.push(u * DUNGEON_FLOOR_UV_SCALE, v * DUNGEON_FLOOR_UV_SCALE)
-      }
-      indices.push(base, base + 1, base + 2, base, base + 2, base + 3)
-    }
+    const { addQuad, finish } = quadMeshBuilder(DUNGEON_FLOOR_UV_SCALE)
 
     // Run-axis world direction (+t) and lateral axis, accounting for reversed.
     const sgn = shaft.reversed ? -1 : 1
@@ -250,12 +214,7 @@ export function collectShaftStairs(
       runDir
     )
 
-    const geo = new THREE.BufferGeometry()
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-    geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
-    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
-    geo.setIndex(indices)
-    entries.push({ geo, textureIndex: DUNGEON_FLOOR_TEXTURE_IDX })
+    finish(entries, DUNGEON_FLOOR_TEXTURE_IDX)
   }
 
   if (includeBottomLanding) {
@@ -269,13 +228,15 @@ export function collectShaftStairs(
 
   // Shaft side walls (back-facing side only, camera rule as for walls):
   // along-Z shafts keep the east side (faces west), along-X the north
-  // side (faces south). Vertical span runs from this floor's slab (topY)
-  // straight down to the floor below (bottomY) — it does NOT rise to the
-  // current floor's wall/ceiling height. Skipped for the surface entrance,
-  // which supplies its own non-protruding pit walls.
+  // side (faces south). Vertical span runs from the slab underside
+  // (topY − SLAB_THICKNESS; the wall sits inside the flanking cell's slab
+  // footprint, so reaching topY would z-fight the slab) down to the floor
+  // below (bottomY) — it does NOT rise to the current floor's wall/ceiling
+  // height. Skipped for the surface entrance, which supplies its own
+  // non-protruding pit walls.
   if (includeWall) {
     const wallTex = DUNGEON_WALL_TEXTURE_IDX
-    const wallH = topY - bottomY
+    const wallH = topY - SLAB_THICKNESS - bottomY
     const wallCy = bottomY + wallH / 2
     if (shaft.alongZ) {
       addBox(

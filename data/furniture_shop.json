@@ -1,0 +1,203 @@
+{
+  "name": "ORKEA",
+  "clerkNpcName": "Grida",
+  "houseId": "r-23_+74_5",
+  "region": [
+    -2,
+    4
+  ],
+  "bounds": [
+    -1454,
+    4772,
+    -1442,
+    4784
+  ],
+  "products": [
+    {
+      "objectType": "bed",
+      "itemDefId": "furniture_bed",
+      "price": 4000,
+      "displayIds": [
+        85
+      ]
+    },
+    {
+      "objectType": "signpost",
+      "itemDefId": "furniture_signpost",
+      "price": 800,
+      "displayIds": [
+        86
+      ]
+    },
+    {
+      "objectType": "signpost_mirrored",
+      "itemDefId": "furniture_signpost_mirrored",
+      "price": 800,
+      "displayIds": [
+        87
+      ]
+    },
+    {
+      "objectType": "shop_sign",
+      "itemDefId": "furniture_shop_sign",
+      "price": 800,
+      "displayIds": [
+        88
+      ]
+    },
+    {
+      "objectType": "shop_sign_plank",
+      "itemDefId": "furniture_shop_sign_plank",
+      "price": 800,
+      "displayIds": [
+        89
+      ]
+    },
+    {
+      "objectType": "shop_sign_oval",
+      "itemDefId": "furniture_shop_sign_oval",
+      "price": 800,
+      "displayIds": [
+        90
+      ]
+    },
+    {
+      "objectType": "barrel",
+      "itemDefId": "furniture_barrel",
+      "price": 600,
+      "displayIds": [
+        92
+      ]
+    },
+    {
+      "objectType": "crate",
+      "itemDefId": "furniture_crate",
+      "price": 500,
+      "displayIds": [
+        93
+      ]
+    },
+    {
+      "objectType": "chest_animated",
+      "itemDefId": "storage_chest",
+      "price": 1200,
+      "displayIds": [
+        94
+      ]
+    },
+    {
+      "objectType": "chair",
+      "itemDefId": "furniture_chair",
+      "price": 800,
+      "displayIds": [
+        95,
+        96
+      ]
+    },
+    {
+      "objectType": "table",
+      "itemDefId": "furniture_table",
+      "price": 3000,
+      "displayIds": [
+        97,
+        109
+      ]
+    },
+    {
+      "objectType": "rustic_bed",
+      "itemDefId": "furniture_rustic_bed",
+      "price": 4000,
+      "displayIds": [
+        98
+      ]
+    },
+    {
+      "objectType": "stone_hearth",
+      "itemDefId": "furniture_stone_hearth",
+      "price": 12000,
+      "displayIds": [
+        99
+      ]
+    },
+    {
+      "objectType": "torch_wall",
+      "itemDefId": "furniture_torch_wall",
+      "price": 300,
+      "displayIds": [
+        100
+      ]
+    },
+    {
+      "objectType": "health_potion",
+      "itemDefId": "furniture_health_potion",
+      "price": 200,
+      "displayIds": [
+        101
+      ]
+    },
+    {
+      "objectType": "healing_potion",
+      "itemDefId": "furniture_healing_potion",
+      "price": 200,
+      "displayIds": [
+        102
+      ]
+    },
+    {
+      "objectType": "scroll",
+      "itemDefId": "furniture_scroll",
+      "price": 200,
+      "displayIds": [
+        103
+      ]
+    },
+    {
+      "objectType": "scroll_enchant",
+      "itemDefId": "furniture_scroll_enchant",
+      "price": 200,
+      "displayIds": [
+        104
+      ]
+    },
+    {
+      "objectType": "scroll_enchant_armor",
+      "itemDefId": "furniture_scroll_enchant_armor",
+      "price": 200,
+      "displayIds": [
+        105
+      ]
+    },
+    {
+      "objectType": "iron_sword",
+      "itemDefId": "furniture_iron_sword",
+      "price": 200,
+      "displayIds": [
+        106
+      ]
+    },
+    {
+      "objectType": "goblin_sword",
+      "itemDefId": "furniture_goblin_sword",
+      "price": 200,
+      "displayIds": [
+        107
+      ]
+    },
+    {
+      "objectType": "small_sword",
+      "itemDefId": "furniture_small_sword",
+      "price": 200,
+      "displayIds": [
+        108
+      ]
+    },
+    {
+      "objectType": "shop_sign_weathered",
+      "itemDefId": "furniture_shop_sign_weathered",
+      "price": 800,
+      "displayIds": [
+        110
+      ]
+    }
+  ]
+}

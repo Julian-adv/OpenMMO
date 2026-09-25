@@ -3,6 +3,7 @@
   import {
     ROOM_TEMPLATES,
     STAIR_TEMPLATES,
+    INTERIOR_VARIANT_OPTIONS,
     selectedRoomTemplate,
     placementRotation,
     placementFloorLevel,
@@ -18,10 +19,19 @@
     deleteSelectedRoom,
     flattenSelectedRoomTerrain,
     reinstallSelectedHouse,
+    moveSelectedHouse,
     WALL_VARIANT_OPTIONS,
     type RoomTemplate,
     type HousingEditorTool,
   } from '../../stores/housingEditorStore'
+  import {
+    clearDoorPair,
+    facingSegmentRef,
+    getWallByDir,
+    oppositeDir,
+    pairDoubleDoor,
+  } from '../../managers/housing-passability'
+  import type { WallDirection } from '../../utils/house-geometry'
   import type {
     HouseData,
     RoofRidgeDir,
@@ -70,16 +80,17 @@
   let editHouseId = $state<string | null>(null)
   let editRoomIdx = $state<number | null>(null)
   let editVersion = $state(0)
-  let reinstalling = $state(false)
+  let houseAction = $state<'reinstall' | 'move' | null>(null)
+  let moveError = $state(false)
 
   // Derived: the room being edited (editVersion forces recompute after local edits)
-  let editRoom = $derived.by(() => {
+  let editHouse = $derived.by(() => {
     void editVersion
-    if (editHouseId == null || editRoomIdx == null) return null
-    const house = housingManager.getHouseById(editHouseId)
-    if (!house || editRoomIdx >= house.rooms.length) return null
-    return house.rooms[editRoomIdx]
+    return editHouseId == null ? null : housingManager.getHouseById(editHouseId)
   })
+  let editRoom = $derived(
+    editRoomIdx == null ? null : (editHouse?.rooms[editRoomIdx] ?? null)
+  )
 
   const unsubs = [
     placementRotation.subscribe((v) => (rotation = v)),
@@ -92,7 +103,10 @@
     housingEditorTool.subscribe((v) => (tool = v)),
     placementFloorLevel.subscribe((v) => (floorLvl = v)),
     placementRoomType.subscribe((v) => (roomType = v)),
-    selectedHouseId.subscribe((v) => (editHouseId = v)),
+    selectedHouseId.subscribe((v) => {
+      editHouseId = v
+      moveError = false
+    }),
     selectedRoomIndex.subscribe((v) => (editRoomIdx = v)),
   ]
   function onWindowClick(e: MouseEvent) {
@@ -124,6 +138,7 @@
   const VARIANT_LABELS: Record<string, string> = {
     solid: '⬜',
     door: '🚪',
+    'double-door': '⛩',
     window: '⊞',
   }
 
@@ -132,14 +147,16 @@
   let editSaveTimer: ReturnType<typeof setTimeout> | null = null
   let pendingHouse: HouseData | null = null
 
-  function applyRoomEdit(mutateFn: (room: RoomData) => void) {
+  function applyRoomEdit(
+    mutateFn: (room: RoomData, house: HouseData, roomIndex: number) => void
+  ) {
     if (editHouseId == null || editRoomIdx == null) return
 
     const house = housingManager.getHouseById(editHouseId)
     if (!house || editRoomIdx >= house.rooms.length) return
 
     const updatedHouse: HouseData = structuredClone(house)
-    mutateFn(updatedHouse.rooms[editRoomIdx])
+    mutateFn(updatedHouse.rooms[editRoomIdx], updatedHouse, editRoomIdx)
 
     // Instant local update for visual feedback
     housingManager.updateLocalCache(updatedHouse)
@@ -149,29 +166,55 @@
     pendingHouse = updatedHouse
     if (editSaveTimer) clearTimeout(editSaveTimer)
     editSaveTimer = setTimeout(async () => {
-      if (pendingHouse) {
-        await housingManager.updateHouse(pendingHouse)
-        pendingHouse = null
-      }
+      await flushPendingHouseEdit()
     }, 300)
   }
 
-  type WallDirKey = 'wallNorth' | 'wallSouth' | 'wallEast' | 'wallWest'
+  async function flushPendingHouseEdit() {
+    if (editSaveTimer) {
+      clearTimeout(editSaveTimer)
+      editSaveTimer = null
+    }
+    if (!pendingHouse) return
+    const house = pendingHouse
+    pendingHouse = null
+    await housingManager.updateHouse(house)
+  }
 
-  const WALL_DIRS: { label: string; wallKey: WallDirKey }[] = [
-    { label: 'N', wallKey: 'wallNorth' },
-    { label: 'S', wallKey: 'wallSouth' },
-    { label: 'E', wallKey: 'wallEast' },
-    { label: 'W', wallKey: 'wallWest' },
+  const WALL_DIRS: { label: string; dir: WallDirection }[] = [
+    { label: 'N', dir: 'north' },
+    { label: 'S', dir: 'south' },
+    { label: 'E', dir: 'east' },
+    { label: 'W', dir: 'west' },
   ]
 
-  function cycleSegmentVariant(wallKey: WallDirKey, segIdx: number) {
-    applyRoomEdit((room) => {
-      const seg = room[wallKey][segIdx]
-      if (seg.variant === 'open') return
-      const idx = WALL_VARIANT_OPTIONS.indexOf(seg.variant)
-      const next = WALL_VARIANT_OPTIONS[(idx + 1) % WALL_VARIANT_OPTIONS.length]
-      room[wallKey][segIdx] = { ...seg, variant: next }
+  function cycleSegmentVariant(dir: WallDirection, segIdx: number) {
+    applyRoomEdit((room, house, roomIndex) => {
+      const segs = getWallByDir(room, dir)
+      const seg = segs[segIdx]
+      const facing = facingSegmentRef(house.rooms, roomIndex, dir, segIdx)
+      const options = facing ? INTERIOR_VARIANT_OPTIONS : WALL_VARIANT_OPTIONS
+      const idx = options.indexOf(seg.variant)
+      if (idx < 0 && !facing) return
+      let next = options[(idx + 1) % options.length]
+      clearDoorPair(house.rooms, roomIndex, dir, segIdx)
+      if (
+        next === 'double-door' &&
+        !pairDoubleDoor(house.rooms, roomIndex, dir, segIdx)
+      )
+        next = 'window'
+      segs[segIdx] = { ...seg, variant: next }
+      if (facing) {
+        // Interior wall: this side owns it, the far side stays open
+        const far = getWallByDir(
+          house.rooms[facing.roomIndex],
+          oppositeDir(dir)
+        )
+        far[facing.segmentIndex] = {
+          ...far[facing.segmentIndex],
+          variant: 'open',
+        }
+      }
     })
   }
 
@@ -185,8 +228,8 @@
     store.set(idx)
     applyRoomEdit((room) => {
       if (kind === 'wall') {
-        for (const { wallKey } of WALL_DIRS) {
-          for (const seg of room[wallKey]) {
+        for (const { dir } of WALL_DIRS) {
+          for (const seg of getWallByDir(room, dir)) {
             if (seg.variant !== 'open') seg.texture = idx
           }
         }
@@ -199,12 +242,28 @@
   }
 
   async function onReinstallHouse() {
-    if (!reinstallSelectedHouse || reinstalling) return
-    reinstalling = true
+    if (!reinstallSelectedHouse || houseAction) return
+    houseAction = 'reinstall'
     try {
+      await flushPendingHouseEdit()
       await reinstallSelectedHouse()
     } finally {
-      reinstalling = false
+      houseAction = null
+    }
+  }
+
+  async function onMoveHouse(deltaX: number, deltaZ: number) {
+    if (!moveSelectedHouse || houseAction) return
+    houseAction = 'move'
+    moveError = false
+    try {
+      await flushPendingHouseEdit()
+      moveError = !(await moveSelectedHouse(deltaX, deltaZ))
+    } catch (error) {
+      console.error('Failed to move house:', error)
+      moveError = true
+    } finally {
+      houseAction = null
     }
   }
 </script>
@@ -244,8 +303,10 @@
         <button
           class="tool-btn tool-reinstall"
           onclick={onReinstallHouse}
-          disabled={reinstalling}
-          >{reinstalling ? 'Reinstalling...' : 'Reinstall'}</button
+          disabled={houseAction !== null}
+          >{houseAction === 'reinstall'
+            ? 'Reinstalling...'
+            : 'Reinstall'}</button
         >
         <button
           class="tool-btn tool-delete"
@@ -253,6 +314,42 @@
         >
       {/if}
     </div>
+
+    {#if tool === 'select' && editHouseId != null && editRoomIdx != null}
+      <div class="section-title">
+        Move House <span class="hint">(1 tile)</span>
+      </div>
+      <div class="move-grid">
+        <button
+          class="move-btn move-up"
+          disabled={houseAction !== null}
+          title="Move house north (-Z)"
+          onclick={() => onMoveHouse(0, -1)}>↑</button
+        >
+        <button
+          class="move-btn move-left"
+          disabled={houseAction !== null}
+          title="Move house west (-X)"
+          onclick={() => onMoveHouse(-1, 0)}>←</button
+        >
+        <span class="move-center">{houseAction === 'move' ? '…' : '⌂'}</span>
+        <button
+          class="move-btn move-right"
+          disabled={houseAction !== null}
+          title="Move house east (+X)"
+          onclick={() => onMoveHouse(1, 0)}>→</button
+        >
+        <button
+          class="move-btn move-down"
+          disabled={houseAction !== null}
+          title="Move house south (+Z)"
+          onclick={() => onMoveHouse(0, 1)}>↓</button
+        >
+      </div>
+      {#if moveError}
+        <div class="move-error">Cannot move there</div>
+      {/if}
+    {/if}
 
     {#snippet texSwatch(texIdx: number)}
       {#if texPreviews[texIdx]}
@@ -397,21 +494,27 @@
       </div>
     {/if}
 
-    {#if tool === 'select' && editRoom && editRoomIdx != null}
+    {#if tool === 'select' && editHouse && editRoom && editRoomIdx != null}
       <div class="section-title">
         Editing Room {editRoomIdx + 1} ({editRoom.sizeX}×{editRoom.sizeZ})
       </div>
 
-      {#each WALL_DIRS as dir (dir.wallKey)}
-        {@const wall = editRoom[dir.wallKey]}
+      {#each WALL_DIRS as dir (dir.dir)}
+        {@const wall = getWallByDir(editRoom, dir.dir)}
         <div class="section-title">{dir.label} Wall ({wall.length} seg)</div>
         <div class="segment-row">
           {#each wall as seg, segIdx (segIdx)}
             <button
               class="variant-btn"
-              disabled={seg.variant === 'open'}
+              disabled={seg.variant === 'open' &&
+                !facingSegmentRef(
+                  editHouse.rooms,
+                  editRoomIdx,
+                  dir.dir,
+                  segIdx
+                )}
               title="Seg {segIdx + 1}: {seg.variant}"
-              onclick={() => cycleSegmentVariant(dir.wallKey, segIdx)}
+              onclick={() => cycleSegmentVariant(dir.dir, segIdx)}
               >{seg.variant === 'open'
                 ? '−'
                 : VARIANT_LABELS[seg.variant]}</button
@@ -561,6 +664,67 @@
 
   .tool-delete:hover {
     background: rgba(255, 80, 80, 0.3);
+  }
+
+  .move-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 30px);
+    grid-template-rows: repeat(3, 26px);
+    justify-content: center;
+    gap: 2px;
+  }
+
+  .move-btn {
+    border: 1px solid rgba(68, 170, 255, 0.45);
+    border-radius: 4px;
+    background: rgba(68, 170, 255, 0.12);
+    color: #7fc4ff;
+    cursor: pointer;
+    font-size: 15px;
+  }
+
+  .move-btn:hover:not(:disabled) {
+    background: rgba(68, 170, 255, 0.28);
+  }
+
+  .move-btn:disabled {
+    cursor: wait;
+    opacity: 0.5;
+  }
+
+  .move-up {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .move-left {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .move-center {
+    grid-column: 2;
+    grid-row: 2;
+    align-content: center;
+    color: #888;
+    text-align: center;
+  }
+
+  .move-right {
+    grid-column: 3;
+    grid-row: 2;
+  }
+
+  .move-down {
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  .move-error {
+    margin-top: 4px;
+    color: #ff7777;
+    font-size: 10px;
+    text-align: center;
   }
 
   .info-text {

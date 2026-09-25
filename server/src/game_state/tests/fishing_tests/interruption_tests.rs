@@ -9,7 +9,6 @@ use super::*;
 async fn a_lethal_blow_reels_in_the_line() {
     let game_state = make_test_game_state("fishing_combat_death");
     let (id, mut rx) = make_angler(&game_state, "angler_mauled").await;
-    let handler = pid("beast_handler");
     game_state
         .add_player(make_player("beast_handler", -99.0, 50.0))
         .await;
@@ -26,7 +25,7 @@ async fn a_lethal_blow_reels_in_the_line() {
         let mut monsters = game_state.monsters.write().await;
         for i in 0..20 {
             let mid = format!("killer_{i}");
-            let mut monster = make_monster(
+            let monster = make_monster(
                 &mid,
                 Position {
                     x: -99.0,
@@ -35,7 +34,7 @@ async fn a_lethal_blow_reels_in_the_line() {
                 },
                 0,
             );
-            monster.owner_id = Some(handler);
+
             monsters.insert(mid, monster);
         }
     }
@@ -44,9 +43,7 @@ async fn a_lethal_blow_reels_in_the_line() {
     advance_with_ticks(&game_state, u64::from(CAST_MS) + 250).await;
 
     for i in 0..20 {
-        game_state
-            .broadcast_monster_attack(&handler, &format!("killer_{i}"), &id)
-            .await;
+        game_state.monster_attack(&format!("killer_{i}"), &id).await;
         if game_state.players.read().await.get(&id).unwrap().health == 0 {
             break;
         }
@@ -77,7 +74,7 @@ async fn death_reels_in_the_line() {
 
     game_state.start_fishing(&id, water_target()).await;
     advance_with_ticks(&game_state, u64::from(CAST_MS) + 250).await;
-    game_state.on_player_died(&id).await;
+    game_state.on_player_died(&id, "test").await;
 
     assert!(
         drain(&mut rx).iter().any(|m| matches!(

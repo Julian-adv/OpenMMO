@@ -1,0 +1,4 @@
+interface:
+  display_name: "Deploy OpenMMO"
+  short_description: "Deploy OpenMMO with complete village data checks"
+  default_prompt: "Use $deploy-prod to deploy OpenMMO and verify public village changes while preserving production player data."

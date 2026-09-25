@@ -76,6 +76,10 @@
 
 지형 편집기는 클라이언트 내부에 "에디터 모드"로 구현하여 실시간 피드백을 극대화한다.
 
+플레이어에게 Splat·Road를 개방하는 영지 꾸미기는 [영지 설계 §4](LAND_SYSTEM.md#4-영지-꾸미기-조경사의-도구함)를
+따른다 (2026-09-06 설계, 미구현). 조경사의 도구함으로 바닥·길·울타리 탭을 열며,
+바닥·길 변경은 서버가 자기 영지 범위와 해금 재질을 검증한다.
+
 1.  **지형 높이 조절 (Height Painter):**
     *   마우스 클릭/드래그로 지형의 높낮이(Y축)를 조절.
     *   브러시 크기 및 강도(Falloff) 지원.
@@ -215,8 +219,8 @@ TS 기반 `GenerateTerrainDialog` (6-Phase 인-게임 절차 생성) 는 Rust �
 
 세계 거시 배치를 손으로 그려 가이드한 리퍼런스 이미지:
 
-- ![map1.png](images/map1.png) — 손으로 그린 세계 지형 초안
-- ![map2.png](images/map2.png) — Gemini 가 자연스럽게 변환한 버전
+- ![map1.png](images/maps/map1.png) — 손으로 그린 세계 지형 초안
+- ![map2.png](images/maps/map2.png) — Gemini 가 자연스럽게 변환한 버전
 
 현재 베이크된 월드(seed 42)는 이 이미지를 직접 입력으로 쓰지 않고, Rust
 파이프라인의 `elevation_hotspots` / `river_carve_paths` (`WorldGenConfig`)

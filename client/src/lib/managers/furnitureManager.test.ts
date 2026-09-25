@@ -38,6 +38,14 @@ describe('furnitureManager.evictDistant', () => {
     expect(removed.sort()).toEqual(['furniture:0,3', 'furniture:5,5'])
   })
 
+  it('clears every registered collision region on a world reset', () => {
+    load(0, 0)
+    load(1, 0)
+    furnitureManager.reset()
+    expect(removed.sort()).toEqual(['furniture:0,0', 'furniture:1,0'])
+    expect(furnitureManager.getDebugPieces()).toEqual([])
+  })
+
   it('keeps furniture across a region boundary the player just crossed', () => {
     // The reason neighbours survive: standing just inside region 1, furniture a
     // metre back in region 0 must still collide, or the client would predict

@@ -38,12 +38,25 @@ if (!existsSync(MONSTERS_PATH)) {
   process.exit(1)
 }
 
+// Monsters rigged on the character skeleton swing a clip from the shared packs,
+// not one of their own, so those packs are measured alongside the models.
+const SHARED_PACKS = ['animations/locomotion.glb', 'animations/combat_melee.glb']
+
 const modelPath = (m) => resolve(MODELS_DIR, m.model)
 const monsters = Object.values(
   JSON.parse(readFileSync(MONSTERS_PATH, 'utf8'))
 ).filter((m) => m.id && m.model)
+const sharedPackPaths = monsters.some((m) => m.sharedAnims)
+  ? SHARED_PACKS.map((p) => resolve(MODELS_DIR, p))
+  : []
 
-if (upToDate(OUT_PATH, [MONSTERS_PATH, ...monsters.map(modelPath)])) {
+if (
+  upToDate(OUT_PATH, [
+    MONSTERS_PATH,
+    ...monsters.map(modelPath),
+    ...sharedPackPaths,
+  ])
+) {
   console.log(
     'monster attack clips up to date — skipping (use --force to regenerate)'
   )
@@ -58,20 +71,21 @@ const isGlb = (p) => {
   return buf.readUInt32LE(0) === 0x46546c67
 }
 
-// A checkout without LFS content (CI does a plain checkout to stay off the
-// LFS bandwidth quota) has pointer text files instead of GLBs — keep the
-// committed clips rather than measure garbage, mirroring how
-// measure-furniture-footprints.mjs handles missing tool deps.
-const models = [...new Set(monsters.map(modelPath))].filter(existsSync)
-if (!models.every(isGlb)) {
+// Any model we can't measure means an incomplete result, so bail rather than
+// clobber the committed clips: a checkout without LFS content (CI does a plain
+// checkout to stay off the LFS bandwidth quota) has pointer text files instead
+// of GLBs, and one that never ran fetch-assets.sh has no monster models at all.
+// Mirrors how measure-furniture-footprints.mjs handles missing tool deps.
+const models = [...new Set([...monsters.map(modelPath), ...sharedPackPaths])]
+if (!models.every((p) => existsSync(p) && isGlb(p))) {
   if (existsSync(OUT_PATH)) {
     console.warn(
-      'models are git-lfs pointers, not GLBs — keeping committed attack clips'
+      'monster models missing or git-lfs pointers — keeping committed attack clips'
     )
     process.exit(0)
   }
   console.error(
-    'models are git-lfs pointers and no committed data/monster_attack_clips.json to fall back on'
+    'monster models missing or git-lfs pointers, and no committed data/monster_attack_clips.json to fall back on'
   )
   process.exit(1)
 }
@@ -79,6 +93,11 @@ if (!models.every(isGlb)) {
 // Bosses reuse their base type's model, so measure each GLB once.
 const durationsByModel = new Map()
 const clips = {}
+
+const sharedDurations = Object.assign(
+  {},
+  ...sharedPackPaths.map((p) => extractDurations(p))
+)
 
 for (const m of monsters) {
   if (!existsSync(modelPath(m))) {
@@ -88,13 +107,20 @@ for (const m of monsters) {
   if (!durationsByModel.has(m.model)) {
     durationsByModel.set(m.model, extractDurations(modelPath(m)))
   }
-  const clipName = m.animAttack ?? 'Attack'
-  const seconds = durationsByModel.get(m.model)[clipName]
-  if (seconds == null) {
-    console.warn(`⚠ ${m.id}: ${m.model} has no clip "${clipName}"`)
+  // `animAttack` may list several `|`-separated clips the client picks from at
+  // random; the swing holds for the longest of them.
+  const clipNames = (m.animAttack ?? 'Attack').split('|').filter(Boolean)
+  const durations = clipNames.map(
+    (clipName) =>
+      durationsByModel.get(m.model)[clipName] ??
+      (m.sharedAnims ? sharedDurations[clipName] : undefined)
+  )
+  const missing = clipNames.filter((_, i) => durations[i] == null)
+  if (missing.length > 0) {
+    console.warn(`⚠ ${m.id}: ${m.model} has no clip "${missing.join('", "')}"`)
     continue
   }
-  clips[m.id] = Math.round(seconds * 1000)
+  clips[m.id] = Math.round(Math.max(...durations) * 1000)
 }
 
 const sorted = Object.fromEntries(

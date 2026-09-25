@@ -4,7 +4,11 @@ import {
   initMovementState,
   type Position,
 } from '../../../utils/movementUtils'
-import { stepMovementSubstrate, type PathWaypoint } from './movement-substrate'
+import {
+  routeFirstLeg,
+  stepMovementSubstrate,
+  type PathWaypoint,
+} from './movement-substrate'
 
 function makeBaseInput(
   currentPos: Position,
@@ -28,6 +32,32 @@ function makeBaseInput(
     sendPlayerMove: vi.fn(),
   }
 }
+
+describe('routeFirstLeg', () => {
+  it('sends the first waypoint with its floor', () => {
+    const sendPlayerMove = vi.fn()
+
+    routeFirstLeg(
+      { x: 0, y: 3, z: 0 },
+      { x: 1, y: 0, z: 0 },
+      {
+        currentFloor: 1,
+        getFloorAt: vi.fn(() => 0),
+        findPath: vi.fn(() => ({
+          waypoints: [{ x: 1, z: 0, floor: 0 }],
+        })),
+        waypointHeight: vi.fn(() => 0),
+      },
+      sendPlayerMove
+    )
+
+    expect(sendPlayerMove).toHaveBeenCalledExactlyOnceWith(
+      { x: 1, y: 0, z: 0 },
+      expect.any(Number),
+      0
+    )
+  })
+})
 
 describe('stepMovementSubstrate', () => {
   it('continues movement and writes the interpolated position', () => {
@@ -54,13 +84,16 @@ describe('stepMovementSubstrate', () => {
 
     expect(outcome.kind).toBe('arrived')
     expect(input.setFloorLevel).not.toHaveBeenCalled()
+    // The arrival send carries the freshly sampled Y, not the leg-start one.
+    const arrived = { x: 1, y: 1, z: 0 }
     expect(input.writePlayerPosition).toHaveBeenCalledWith(
-      { x: 1, y: 1, z: 0 },
+      arrived,
       expect.any(Number)
     )
     expect(input.sendPlayerMove).toHaveBeenCalledWith(
-      target,
+      arrived,
       expect.any(Number),
+      2,
       true
     )
   })
@@ -84,11 +117,50 @@ describe('stepMovementSubstrate', () => {
     expect(input.sendPlayerMove).toHaveBeenCalledWith(
       { x: 2, y: 2, z: 0 },
       expect.any(Number),
+      3,
       true
     )
-    // Keyed to the waypoint's own floor: the walker's floor lags a stairwell
-    // climb, and the server trusts this Y for collision height.
+    // Collision height must use the waypoint's floor.
     expect(input.waypointHeight).toHaveBeenCalledWith(3, 2, 0)
+  })
+
+  it('finishes a mounted route at the actual stop position without resending it', () => {
+    const currentPos = { x: 0.4, y: 0.4, z: 0 }
+    const input = {
+      ...makeBaseInput(currentPos, { x: 1, y: 0, z: 0 }),
+      config: { ...DEFAULT_MOVEMENT_CONFIG, maxSpeed: 9, mountRotation: 0 },
+    }
+    expect(stepMovementSubstrate(input).kind).toBe('arrived')
+    expect(input.writePlayerPosition).toHaveBeenCalledExactlyOnceWith(
+      currentPos,
+      0
+    )
+    expect(input.sendPlayerMove).not.toHaveBeenCalled()
+  })
+
+  it('starts the next mounted leg from the actual position without snapping', () => {
+    const currentPos = { x: 0.4, y: 0.4, z: 0 }
+    const input = {
+      ...makeBaseInput(currentPos, { x: 1, y: 0, z: 0 }, [
+        { x: 1, z: 0, floor: 0 },
+        { x: 3, z: 2, floor: 0 },
+      ]),
+      config: { ...DEFAULT_MOVEMENT_CONFIG, maxSpeed: 9, mountRotation: 0 },
+    }
+    const outcome = stepMovementSubstrate(input)
+    expect(outcome.kind).toBe('next_waypoint')
+    if (outcome.kind !== 'next_waypoint') return
+    expect(outcome.movementState.startPos).toEqual(currentPos)
+    expect(input.writePlayerPosition).toHaveBeenCalledExactlyOnceWith(
+      currentPos,
+      0
+    )
+    expect(input.sendPlayerMove).toHaveBeenCalledExactlyOnceWith(
+      { x: 3, y: 5, z: 2 },
+      Math.atan2(2.6, 2),
+      0,
+      true
+    )
   })
 
   it('sends the stop position as a replace when a step is blocked', () => {
@@ -102,7 +174,8 @@ describe('stepMovementSubstrate', () => {
     expect(input.writePlayerPosition).not.toHaveBeenCalled()
     expect(input.sendPlayerMove).toHaveBeenCalledExactlyOnceWith(
       currentPos,
-      expect.any(Number)
+      expect.any(Number),
+      0
     )
   })
 
@@ -117,7 +190,8 @@ describe('stepMovementSubstrate', () => {
     expect(outcome.kind).toBe('blocked')
     expect(input.sendPlayerMove).toHaveBeenCalledExactlyOnceWith(
       currentPos,
-      expect.any(Number)
+      expect.any(Number),
+      0
     )
   })
 
@@ -131,7 +205,8 @@ describe('stepMovementSubstrate', () => {
     expect(outcome.kind).toBe('slope_blocked')
     expect(input.sendPlayerMove).toHaveBeenCalledExactlyOnceWith(
       currentPos,
-      expect.any(Number)
+      expect.any(Number),
+      0
     )
   })
 })

@@ -49,6 +49,7 @@ export interface ChaseMovement extends RoutedLeg {
 
 export type ChaseTargetOutcome =
   | { kind: 'unchanged' }
+  | { kind: 'blocked' }
   | ({ kind: 'updated' } & ChaseMovement)
 
 export function applyChaseTargetUpdate({
@@ -72,6 +73,7 @@ export function applyChaseTargetUpdate({
   }
 
   const leg = routeFirstLeg(currentPos, newTarget, pathing, sendPlayerMove)
+  if (!leg) return { kind: 'blocked' }
 
   // Unlike a click, chase retargets a live integrator rather than starting one.
   const start = { x: currentPos.x, y: currentPos.y, z: currentPos.z }
@@ -106,9 +108,28 @@ export interface CombatControllerLike {
     monsterObjPos: Position | undefined,
     isMoving: boolean,
     cooldownMs: number,
-    currentPlayerState: string
+    currentPlayerState: string,
+    lineBlocked: boolean,
+    attackRange: number
   ): CombatUpdateResult
 }
+
+function withinAttackRange(
+  from: Position,
+  to: Position,
+  attackRange: number
+): boolean {
+  const dx = shortestWrappedDeltaX(from.x, to.x)
+  const dz = to.z - from.z
+  return dx * dx + dz * dz <= attackRange ** 2
+}
+
+/** Whether a wall stands between the two points on `floor`. */
+export type AttackLineBlocked = (
+  from: Position,
+  to: Position,
+  floor: number
+) => boolean
 
 export interface TickCombatInput {
   combatController: CombatControllerLike
@@ -120,15 +141,20 @@ export interface TickCombatInput {
   chaseGoal: Position | null
   movementState: MovementState | null
   cooldownMs: number
+  /** Reach of the equipped weapon (`weaponRangeMeters`), which the server
+   *  gates on too. */
+  attackRange: number
   pathing: Pathing
   getMonsterInfo: (monsterId: string) => MonsterInfo | undefined
   findMonsterPosition: (monsterId: string) => Position | undefined
+  attackLineBlocked: AttackLineBlocked
   sendPlayerMove: SendPlayerMove
 }
 
 export type CombatTickOutcome =
   | { kind: 'none' }
   | { kind: 'idle' }
+  | { kind: 'chasing_blocked' }
   | { kind: 'reached_attack_range'; monsterId: string }
   | { kind: 'chasing_unchanged' }
   | ({ kind: 'chasing_updated' } & ChaseMovement)
@@ -149,22 +175,33 @@ export function tickCombat({
   chaseGoal,
   movementState,
   cooldownMs,
+  attackRange,
   pathing,
   getMonsterInfo,
   findMonsterPosition,
+  attackLineBlocked,
   sendPlayerMove,
 }: TickCombatInput): CombatTickOutcome {
   const targetId = combatController.targetMonsterId
   if (!targetId) return { kind: 'none' }
 
+  // Only a target already within reach can be walled off in a way the swing
+  // decision reads — the wasm-side wall scan stays off the approach frames.
+  const monsterPos = findMonsterPosition(targetId)
+  const lineBlocked =
+    !!monsterPos &&
+    withinAttackRange(playerPos, monsterPos, attackRange) &&
+    attackLineBlocked(playerPos, monsterPos, pathing.currentFloor)
   const result = combatController.update(
     deltaTime,
     playerPos,
     getMonsterInfo(targetId),
-    findMonsterPosition(targetId),
+    monsterPos,
     isMoving,
     cooldownMs,
-    playerStateName
+    playerStateName,
+    lineBlocked,
+    attackRange
   )
 
   switch (result.action) {
@@ -186,6 +223,7 @@ export function tickCombat({
       })
 
       if (chase.kind === 'unchanged') return { kind: 'chasing_unchanged' }
+      if (chase.kind === 'blocked') return { kind: 'chasing_blocked' }
       return { ...chase, kind: 'chasing_updated' }
     }
     case 'attacking':
@@ -213,6 +251,7 @@ export type CombatOutcomeApplication =
 
 export interface CombatOutcomeActions {
   stopMovingToIdle: () => void
+  cancelBlockedMovement: () => void
   prepareReachedAttackRange: () => void
   beginAttack: (monsterId: string) => void
   setChasingMovement: (chase: ChaseMovement) => void
@@ -225,6 +264,10 @@ export function applyCombatTickOutcome(
   actions: CombatOutcomeActions
 ): CombatOutcomeApplication {
   switch (outcome.kind) {
+    case 'chasing_blocked':
+      actions.cancelBlockedMovement()
+      return { kind: 'handled' }
+
     case 'idle':
       actions.stopMovingToIdle()
       return { kind: 'handled' }
@@ -280,9 +323,11 @@ interface RunCombatFrameInput {
   chaseGoal: Position | null
   movementState: MovementState | null
   cooldownMs: number
+  attackRange: number
   pathing: Pathing
   getMonsterInfo: (monsterId: string) => MonsterInfo | undefined
   findMonsterPosition: (monsterId: string) => Position | undefined
+  attackLineBlocked: AttackLineBlocked
   sendPlayerMove: SendPlayerMove
   actions: CombatOutcomeActions
 }
@@ -298,9 +343,11 @@ export function runCombatFrame({
   chaseGoal,
   movementState,
   cooldownMs,
+  attackRange,
   pathing,
   getMonsterInfo,
   findMonsterPosition,
+  attackLineBlocked,
   sendPlayerMove,
   actions,
 }: RunCombatFrameInput): CombatOutcomeApplication {
@@ -320,9 +367,11 @@ export function runCombatFrame({
     chaseGoal,
     movementState,
     cooldownMs,
+    attackRange,
     pathing,
     getMonsterInfo,
     findMonsterPosition,
+    attackLineBlocked,
     sendPlayerMove,
   })
 
@@ -345,17 +394,17 @@ interface BeginAttackInput {
   playerRotation: number
   previousPlayerState: PlayerState
   lastSentPosition: Position | null
-  beginCombat: (monsterId: string, inRange: boolean) => void
+  /** Starts combat and returns the counter for this swing. */
+  beginCombat: (monsterId: string, inRange: boolean) => number
   sendPlayerMove: (position: Position, rotation: number) => void
   sendPlayerAttack: (monsterId: string) => void
 }
 
 export type BeginAttackOutcome =
-  | { kind: 'ignored_dead_target' }
+  | { kind: 'ignored_unattackable_target' }
   | {
       kind: 'started'
       nextPlayerState: PlayerState
-      pendingPickupAfterMoveInstanceId: null
     }
 
 export function beginAttack({
@@ -369,17 +418,24 @@ export function beginAttack({
   sendPlayerMove,
   sendPlayerAttack,
 }: BeginAttackInput): BeginAttackOutcome {
-  if (monsterInfo?.state === 'dead' || monsterInfo?.isDeadPending) {
-    return { kind: 'ignored_dead_target' }
+  // No local data means the monster is gone (removed/desynced): a swing at it
+  // can only be rejected, so treat it like a dead target.
+  if (
+    !monsterInfo ||
+    monsterInfo.state === 'dead' ||
+    monsterInfo.isDeadPending
+  ) {
+    return { kind: 'ignored_unattackable_target' }
   }
 
-  beginCombat(monsterId, true)
+  const attackCounter = beginCombat(monsterId, true)
 
   if (currentPosition) {
     const shouldSendMove =
       !lastSentPosition ||
       Math.abs(currentPosition.x - lastSentPosition.x) > 0.01 ||
-      Math.abs(currentPosition.z - lastSentPosition.z) > 0.01
+      Math.abs(currentPosition.z - lastSentPosition.z) > 0.01 ||
+      Math.abs(playerRotation - previousPlayerState.rotation) > 0.01
 
     if (shouldSendMove) {
       sendPlayerMove(currentPosition, playerRotation)
@@ -390,8 +446,11 @@ export function beginAttack({
 
   return {
     kind: 'started',
-    nextPlayerState: buildAttackState(previousPlayerState),
-    pendingPickupAfterMoveInstanceId: null,
+    nextPlayerState: buildAttackState(
+      previousPlayerState,
+      playerRotation,
+      attackCounter
+    ),
   }
 }
 
@@ -415,11 +474,16 @@ export type EnsureAttackStateOutcome =
 
 export function ensureAttackState(
   previousPlayerState: PlayerState,
-  playerRotation: number
+  playerRotation: number,
+  attackCounter: number
 ): EnsureAttackStateOutcome {
   if (previousPlayerState.state === 'attack') return { kind: 'ignored' }
   return {
     kind: 'attack',
-    nextPlayerState: buildAttackState(previousPlayerState, playerRotation),
+    nextPlayerState: buildAttackState(
+      previousPlayerState,
+      playerRotation,
+      attackCounter
+    ),
   }
 }

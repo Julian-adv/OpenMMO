@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use tokio::fs;
 use tracing::info;
 
-const MIN_ROOM_SIZE: u8 = 3;
+const MIN_ROOM_SIZE: u8 = 1;
 const MAX_ROOM_SIZE: u8 = 6;
 const MAX_ROOMS: usize = 32;
 /// Max room distance from house origin. Kept near `CHUNK_SIZE` so a validated
@@ -335,6 +335,23 @@ impl HousingIO {
         Ok(())
     }
 
+    /// Save an updated house and remove its old chunk file when its origin
+    /// crossed a chunk boundary.
+    pub async fn replace_house(
+        &self,
+        previous: &HouseData,
+        house: &HouseData,
+    ) -> std::io::Result<()> {
+        self.write_house(house).await?;
+        let old_chunk = world_to_chunk(previous.origin.x, previous.origin.z);
+        let new_chunk = world_to_chunk(house.origin.x, house.origin.z);
+        if old_chunk != new_chunk {
+            self.delete_house(&house.id, old_chunk.0, old_chunk.1)
+                .await?;
+        }
+        Ok(())
+    }
+
     /// Delete a house from disk. Returns true if the file existed.
     pub async fn delete_house(&self, house_id: &str, cx: i32, cz: i32) -> std::io::Result<bool> {
         let path = self.house_path(cx, cz, house_id)?;
@@ -348,8 +365,12 @@ impl HousingIO {
         }
     }
 
-    /// Find and read a house by ID. Parses chunk coords from the ID for O(1) lookup.
+    /// Find and read a house by ID. The ID gives the original chunk, so houses
+    /// moved across chunk boundaries fall back to a directory scan.
     pub async fn find_house(&self, house_id: &str) -> std::io::Result<Option<HouseData>> {
+        if !is_valid_house_id(house_id) {
+            return Ok(None);
+        }
         if let Some((cx, cz)) = parse_chunk_from_id(house_id) {
             let path = self.house_path(cx, cz, house_id)?;
             match Self::read_house_file(&path).await {
@@ -358,7 +379,11 @@ impl HousingIO {
                 Err(e) => return Err(e),
             }
         }
-        Ok(None)
+        Ok(self
+            .read_all_houses()
+            .await?
+            .into_iter()
+            .find(|house| house.id == house_id))
     }
 }
 
@@ -403,6 +428,7 @@ pub(crate) mod test_fixtures {
         HouseData {
             id: "r+00_+00_1".into(),
             owner_id: "test".into(),
+            source_scroll_id: None,
             origin: Position { x, y: 0.0, z },
             rooms,
             passability: vec![],
@@ -480,6 +506,28 @@ mod tests {
         let stored = io.find_house(&house.id).await.unwrap().unwrap();
         assert_eq!(stored.id, house.id);
         assert_eq!(stored.rooms.len(), 1);
+        let _ = tokio::fs::remove_dir_all(&dir).await;
+    }
+
+    #[tokio::test]
+    async fn replace_house_moves_file_across_chunks_without_changing_id() {
+        let dir = unique_temp_dir("housing_move");
+        let io = HousingIO::new(dir.clone());
+        let house = house_at(63.0, 10.0, vec![room_at(0, 0)]);
+        io.write_house(&house).await.unwrap();
+
+        let mut moved = house.clone();
+        moved.origin.x += 1.0;
+        io.replace_house(&house, &moved).await.unwrap();
+
+        assert!(io.read_chunk(0, 0).await.unwrap().is_empty());
+        let moved_chunk = io.read_chunk(1, 0).await.unwrap();
+        assert_eq!(moved_chunk.len(), 1);
+        assert_eq!(moved_chunk[0].id, moved.id);
+        assert_eq!(moved_chunk[0].origin.x, 64.0);
+        let found = io.find_house(&house.id).await.unwrap().unwrap();
+        assert_eq!(found.id, moved.id);
+        assert_eq!(found.origin.x, moved.origin.x);
         let _ = tokio::fs::remove_dir_all(&dir).await;
     }
 

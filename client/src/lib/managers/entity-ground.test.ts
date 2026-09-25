@@ -3,13 +3,14 @@ import { bridgeManager } from './bridgeManager'
 import { TerrainHeightManager } from './terrainHeightManager'
 import { VERTS_PER_SIDE, encodeHeight } from './terrain-height-types'
 import { entityGroundY } from './entity-ground'
+import * as terrainFiles from '../network/terrainFileSource'
 
 function fakeHeightManager(
   loaded: boolean,
   height: number
 ): TerrainHeightManager {
   return {
-    hasHeightDataForGrid: vi.fn(() => loaded),
+    hasHeightData: vi.fn(() => loaded),
     getHeightAtWorldPosition: vi.fn(() => height),
   } as unknown as TerrainHeightManager
 }
@@ -24,7 +25,7 @@ describe('entityGroundY', () => {
     const manager = fakeHeightManager(true, 8.5)
 
     expect(entityGroundY(manager, 0, 12, 20, 3)).toBe(8.5)
-    expect(manager.hasHeightDataForGrid).toHaveBeenCalledWith(12, 20)
+    expect(manager.hasHeightData).toHaveBeenCalledWith(12, 20)
     expect(manager.getHeightAtWorldPosition).toHaveBeenCalledWith(12, 20)
   })
 
@@ -39,7 +40,7 @@ describe('entityGroundY', () => {
     const manager = fakeHeightManager(true, 8.5)
 
     expect(entityGroundY(manager, -1, 12, 20, 3)).toBe(3)
-    expect(manager.hasHeightDataForGrid).not.toHaveBeenCalled()
+    expect(manager.hasHeightData).not.toHaveBeenCalled()
   })
 
   it('passes the reference Y through to the bridge deck query', () => {
@@ -57,6 +58,10 @@ describe('entityGroundY', () => {
     const heightmap = new Uint16Array(VERTS_PER_SIDE ** 2).fill(
       encodeHeight(8.5)
     )
+    vi.spyOn(terrainFiles, 'loadTerrainFile').mockImplementation(async () => ({
+      bytes: new Uint8Array(heightmap.buffer.slice(0)),
+      cleared: new Uint8Array(512),
+    }))
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({

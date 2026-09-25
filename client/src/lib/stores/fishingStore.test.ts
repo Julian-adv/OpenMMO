@@ -1,12 +1,18 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { get } from 'svelte/store'
 import {
   applyFightUpdate,
   fishingBobbers,
+  fishingCatches,
+  FISHING_CATCH_DURATION,
+  landFishingCatch,
+  removeFishingCatch,
+  fishingReelStance,
   markBobberBite,
   myFishing,
   removeBobber,
   resetFishingStore,
+  setLocalFishingAction,
   updateBobberFight,
   upsertBobber,
   type FightStatus,
@@ -14,11 +20,63 @@ import {
 
 const ID = 7
 
+describe('catch presentation', () => {
+  const fish = { item_def_id: 'raw_trout', size_cm: 42, trophy: false }
+  beforeEach(() => {
+    vi.useFakeTimers()
+    resetFishingStore()
+  })
+  afterEach(() => {
+    resetFishingStore()
+    vi.useRealTimers()
+  })
+
+  it('replaces the water bobber with a bounded catch and keeps late beats from reviving it', () => {
+    upsertBobber(ID, { x: 1, y: 2, z: 3 })
+    landFishingCatch(ID, fish)
+    expect(get(fishingBobbers).has(ID)).toBe(false)
+    expect(get(fishingCatches).get(ID)).toMatchObject({
+      fish,
+      waterPosition: { x: 1, y: 2, z: 3 },
+    })
+    updateBobberFight(ID, { x: 4, y: 2, z: 3 }, 'running', 50)
+    expect(get(fishingBobbers).has(ID)).toBe(false)
+    vi.advanceTimersByTime(FISHING_CATCH_DURATION * 1000)
+    expect(get(fishingCatches).size).toBe(0)
+  })
+
+  it('cancels a prior expiry when a new cast lands another fish', () => {
+    upsertBobber(ID, { x: 1, y: 2, z: 3 })
+    landFishingCatch(ID, fish)
+    vi.advanceTimersByTime(2000)
+    upsertBobber(ID, { x: 4, y: 2, z: 3 })
+    expect(get(fishingCatches).size).toBe(0)
+    landFishingCatch(ID, fish)
+    vi.advanceTimersByTime(2000)
+    expect(get(fishingCatches).has(ID)).toBe(true)
+    removeFishingCatch(ID)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('clears catches and timers when the angler leaves or the game resets', () => {
+    for (const id of [ID, ID + 1]) {
+      upsertBobber(id, { x: 1, y: 2, z: 3 })
+      landFishingCatch(id, fish)
+    }
+    removeBobber(ID)
+    expect(get(fishingCatches).has(ID)).toBe(false)
+    resetFishingStore()
+    expect(get(fishingCatches).size).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+})
+
 function fight(overrides: Partial<FightStatus> = {}): FightStatus {
   return {
     fishState: 'running',
     tension: 50,
     stamina: 80,
+    trophy: false,
     ...overrides,
   }
 }
@@ -39,7 +97,21 @@ describe('myFishing transitions', () => {
 
     expect(get(myFishing)).toEqual({
       phase: 'fight',
-      fight: { fishState: 'running', tension: 20, stamina: 100 },
+      fight: { fishState: 'running', tension: 20, stamina: 100, trophy: false },
+    })
+  })
+
+  it('keeps the pre-rolled trophy flag through exhaustion', () => {
+    myFishing.set({ phase: 'bite' })
+    applyFightUpdate('running', 30, 100, true)
+    expect(get(myFishing)).toEqual({
+      phase: 'fight',
+      fight: { fishState: 'running', tension: 30, stamina: 100, trophy: true },
+    })
+    applyFightUpdate('exhausted', 50, 0, true)
+    expect(get(myFishing)).toEqual({
+      phase: 'fight',
+      fight: { fishState: 'exhausted', tension: 50, stamina: 0, trophy: true },
     })
   })
 
@@ -50,7 +122,7 @@ describe('myFishing transitions', () => {
 
     expect(get(myFishing)).toEqual({
       phase: 'fight',
-      fight: { fishState: 'exhausted', tension: 30, stamina: 0 },
+      fight: { fishState: 'exhausted', tension: 30, stamina: 0, trophy: false },
     })
   })
 
@@ -126,7 +198,7 @@ describe('fishingBobbers', () => {
       position: { x: 3, y: 0, z: 5 },
       landsInMs: 0,
       bite: false,
-      fight: { fishState: 'running', stamina: 70 },
+      fight: { fishState: 'running', stamina: 70, stance: 'hold' },
     })
   })
 
@@ -157,5 +229,37 @@ describe('fishingBobbers', () => {
 
     expect(get(myFishing)).toEqual({ phase: 'idle' })
     expect(get(fishingBobbers).size).toBe(0)
+  })
+
+  it('animates local input immediately without an older beat overriding it', () => {
+    myFishing.set({ phase: 'bite' })
+    setLocalFishingAction('reel')
+    expect(fishingReelStance()).toBeNull()
+    applyFightUpdate('running', 20, 100)
+    expect(fishingReelStance()).toBe('hold')
+    setLocalFishingAction('reel')
+    applyFightUpdate('running', 25, 90)
+    expect(fishingReelStance()).toBe('reel')
+    setLocalFishingAction('giveline')
+    expect(fishingReelStance()).toBe('giveline')
+    setLocalFishingAction('hold')
+    expect(fishingReelStance()).toBe('hold')
+    myFishing.set({ phase: 'idle' })
+    expect(fishingReelStance()).toBeNull()
+    myFishing.set({ phase: 'bite' })
+    applyFightUpdate('running', 20, 100)
+    expect(fishingReelStance()).toBe('hold')
+  })
+
+  it('follows remote stance changes and clears them with the bobber', () => {
+    upsertBobber(ID, { x: 1, y: 0, z: 2 })
+    for (const stance of ['reel', 'giveline', 'hold'] as const) {
+      updateBobberFight(ID, { x: 1, y: 0, z: 2 }, 'running', 70, stance)
+      expect(fishingReelStance(ID)).toBe(stance)
+    }
+    removeBobber(ID)
+    expect(fishingReelStance(ID)).toBeNull()
+    updateBobberFight(ID, { x: 1, y: 0, z: 2 }, 'running', 70, 'reel')
+    expect(fishingReelStance(ID)).toBeNull()
   })
 })

@@ -4,9 +4,12 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "build:wasm": "npm run generate:csv && npm run generate:footprints && npm run generate:monster-clips && npm run generate:animations && rm -rf src/lib/wasm && cd ../shared && wasm-pack build --target web --out-dir ../client/src/lib/wasm",
+    "build:wasm": "bash scripts/build-wasm.sh",
     "dev": "npm run build:wasm && vite",
-    "build": "npm run build:wasm && vite build",
+    "build": "npm run build:wasm && vite build && npm run keep:asset-times && npm run hash:assets && npm run compress:assets",
+    "hash:assets": "node scripts/hash-assets.mjs",
+    "compress:assets": "node scripts/compress-assets.mjs",
+    "keep:asset-times": "cp -a public/. dist/",
     "preview": "vite preview",
     "check": "npm run generate:csv && svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
     "format": "prettier --write .",
@@ -44,6 +47,7 @@
     "@threlte/core": "^8.5.16",
     "@threlte/extras": "^9.21.0",
     "@types/three": "^0.185.1",
+    "i18next": "^26.4.2",
     "three": "^0.185.1"
   }
 }

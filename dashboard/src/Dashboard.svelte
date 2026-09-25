@@ -1,0 +1,245 @@
+<script lang="ts">
+  import ConcurrentChart from './lib/ConcurrentChart.svelte'
+  import ConnectionBreakdown from './lib/ConnectionBreakdown.svelte'
+  import HistoryChart from './lib/HistoryChart.svelte'
+  import GoldPanel from './lib/GoldPanel.svelte'
+  import PerAccountGoldPanel from './lib/PerAccountGoldPanel.svelte'
+  import PriceIndexPanel from './lib/PriceIndexPanel.svelte'
+  import ItemGoldSourcesPanel from './lib/ItemGoldSourcesPanel.svelte'
+  import { parseItemGoldSources } from './lib/itemGoldSources'
+  import GoldSinksPanel from './lib/GoldSinksPanel.svelte'
+  import { parseGoldSinks } from './lib/goldSinks'
+  import LeaderboardSection from './lib/LeaderboardSection.svelte'
+  import WeaponEnchantFailuresPanel from './lib/WeaponEnchantFailuresPanel.svelte'
+  import { parseWeaponEnchantFailures } from './lib/weaponEnchantFailures'
+  import HeroicTalesPanel from './lib/HeroicTalesPanel.svelte'
+  import { parseHeroicTales } from './lib/heroicTales'
+  import CombatAuditTargetsPanel from './lib/CombatAuditTargetsPanel.svelte'
+  import CountryPanel from './lib/CountryPanel.svelte'
+  import { parseCountryStats } from './lib/countries'
+  import { parseCombatAuditTargets } from './lib/combatAuditTargets'
+  import MetricsError from './lib/MetricsError.svelte'
+  import NetworkPanel from './lib/NetworkPanel.svelte'
+  import HardwarePanel from './lib/HardwarePanel.svelte'
+  import { parseHardwareStatus } from './lib/hardware'
+  import AssetTrafficPanel from './lib/AssetTrafficPanel.svelte'
+  import { parseNetworkHistory, parseAssetTraffic, type TrafficHours } from './lib/traffic'
+  import PeriodFilter from './lib/PeriodFilter.svelte'
+  import { createMetricsResource } from './lib/metricsResource.svelte'
+  import { useDashboardAuth } from './lib/auth.svelte'
+  import { formatDateTime, formatTime, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseLevelLeaderboard, parseGoldLeaderboard, parseWeaponEnchantLeaderboard, parseArmorEnchantLeaderboard, parseLandLeaderboard, parsePriceIndexHistory, parseServerStarts, parseUniqueHistory, periods, uniquePeriods, summarize, deployMarkers, type GoldHours, type Hours, type LeaderboardHours, type UniqueHours } from './lib/metrics'
+
+  const auth = useDashboardAuth()
+  let hours = $state<Hours>(24)
+  let period = $derived(periods.find((period) => period.hours === hours)!)
+  let uniqueHours = $state<UniqueHours>(24)
+  let uniquePeriod = $derived(uniquePeriods.find((period) => period.hours === uniqueHours)!)
+  const concurrent = createMetricsResource(() => hours, 'concurrent', parseHistory, '접속 현황', () => ({}), 60000)
+  const hardware = createMetricsResource(() => undefined, 'hardware', parseHardwareStatus, '서버 하드웨어 상태', () => ({}), 60000)
+  let networkHours = $state<TrafficHours>(24)
+  let assetTrafficHours = $state<TrafficHours>(24)
+  const network = createMetricsResource(() => networkHours, 'network', parseNetworkHistory, '네트워크 현황', () => ({}), 60000)
+  const assetTraffic = createMetricsResource(() => assetTrafficHours, 'asset-traffic', parseAssetTraffic, '정적 파일 전송량', () => ({}), 600000)
+  const unique = createMetricsResource(() => uniqueHours, 'unique', parseUniqueHistory)
+  let goldHours = $state<GoldHours>(24)
+  const gold = createMetricsResource(() => goldHours, 'gold', parseGoldHistory, '골드 현황')
+  let activeHours = $state<UniqueHours>(24)
+  const perAccountGold = createMetricsResource(() => goldHours, 'gold-per-account',
+    (value, hours, query) => parsePerAccountGoldHistory(value, hours, Number(query.active_hours) as UniqueHours),
+    '1인당 골드 현황', () => ({ active_hours: String(activeHours) }))
+  let priceIndexHours = $state<LeaderboardHours>(168)
+  const priceIndex = createMetricsResource(() => priceIndexHours, 'price-index', parsePriceIndexHistory, '물가 지수 현황')
+  let levelHours = $state<LeaderboardHours>(168)
+  let itemGoldHours = $state<GoldHours>(24)
+  const itemGoldSources = createMetricsResource(() => itemGoldHours, 'item-gold-sources', parseItemGoldSources, '골드 생산 현황')
+  let goldSinkHours = $state<GoldHours>(24)
+  const goldSinks = createMetricsResource(() => goldSinkHours, 'gold-sinks', parseGoldSinks, '골드 소모 현황')
+  const leaderboard = createMetricsResource(() => levelHours, 'level-leaderboard', parseLevelLeaderboard, '레벨 순위 정보')
+  let goldLeaderboardHours = $state<LeaderboardHours>(168)
+  const goldLeaderboard = createMetricsResource(() => goldLeaderboardHours, 'gold-leaderboard', parseGoldLeaderboard, '골드 순위 정보')
+  let weaponEnchantHours = $state<LeaderboardHours>(168)
+  const weaponEnchantLeaderboard = createMetricsResource(() => weaponEnchantHours, 'weapon-enchant-leaderboard', parseWeaponEnchantLeaderboard, '무기 인챈트 순위 정보')
+  const weaponEnchantFailures = createMetricsResource(() => 8760, 'weapon-enchant-failures', parseWeaponEnchantFailures, '무기 인챈트 실패 내역')
+  let armorEnchantHours = $state<LeaderboardHours>(168)
+  const armorEnchantLeaderboard = createMetricsResource(() => armorEnchantHours, 'armor-enchant-leaderboard', parseArmorEnchantLeaderboard, '방어구 인챈트 순위 정보')
+  let landHours = $state<LeaderboardHours>(168)
+  const landLeaderboard = createMetricsResource(() => landHours, 'land-leaderboard', parseLandLeaderboard, '영지 보유 현황')
+  const serverStarts = createMetricsResource(() => 8760, 'server-starts', parseServerStarts, '배포 기록')
+  const heroicTales = createMetricsResource(() => undefined, 'heroic-tales', parseHeroicTales, '영웅담 원장')
+  let countryHours = $state<UniqueHours>(24)
+  const countries = createMetricsResource(() => countryHours, 'countries', parseCountryStats, '국가별 접속 계정', () => ({}), 300000)
+  const combatAuditTargets = createMetricsResource(() => undefined, 'combat-audit-targets', parseCombatAuditTargets, '전투 기록 추적 대상', () => ({}), 60000)
+  let markers = $derived(deployMarkers(serverStarts.history?.starts ?? []))
+  const resources = [concurrent, hardware, network, assetTraffic, unique, gold, perAccountGold, priceIndex, serverStarts, itemGoldSources, goldSinks, leaderboard, goldLeaderboard, weaponEnchantLeaderboard, weaponEnchantFailures, armorEnchantLeaderboard, landLeaderboard, heroicTales, combatAuditTargets, countries]
+  let history = $derived(concurrent.history)
+  let refreshing = $derived(resources.some((resource) => resource.refreshing))
+  let anyError = $derived(resources.some((resource) => resource.error))
+  let anyLoading = $derived(resources.some((resource) => resource.loading))
+  let error = $derived(concurrent.error)
+  let loading = $derived(concurrent.loading)
+  let uniqueLatest = $derived(unique.history?.samples.at(-1))
+  let uniquePeak = $derived(unique.history?.samples.length ? Math.max(...unique.history.samples.map((sample) => sample.accounts)) : null)
+  let summary = $derived(summarize(history?.samples ?? []))
+  const count = (value: number | null | undefined) => value == null ? '—' : value.toLocaleString('ko-KR')
+  const refresh = () => { resources.forEach((resource) => resource.refresh()) }
+</script>
+
+<svelte:head>
+  <title>월드 현황 · OpenMMO Pulse</title>
+</svelte:head>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="brand" href={import.meta.env.BASE_URL} aria-label="OpenMMO Pulse 홈">
+      <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 12h5l3-7 3 14 3-7h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></span>
+      <span>OpenMMO <span class="brand-sub">Pulse</span></span>
+    </a>
+    <nav aria-label="대시보드"><a class="nav-current" href={import.meta.env.BASE_URL} aria-current="page">월드 현황</a></nav>
+    <button class="logout-button" onclick={() => auth.signOut()}>로그아웃</button>
+  </div>
+</header>
+
+<main>
+  <div class="page-heading">
+    <div>
+      <div class="eyebrow"><span></span> WORLD ACTIVITY</div>
+      <h1>월드 현황<span>.</span></h1>
+    </div>
+    <div class="update-controls">
+      <div class:unavailable={anyError} class="update-status" role="status">
+        <span class="status-dot"></span>
+        {#if anyError}연결 확인 필요{:else if anyLoading}연결 중{:else}접속·하드웨어·네트워크·추적 대상 1분 · 파일 전송 10분 · 그 외 1시간{/if}
+      </div>
+      <button class="refresh-button" onclick={() => refresh()} disabled={refreshing} aria-label="월드 현황 새로고침" title="새로고침">
+        <svg viewBox="0 0 24 24" fill="none" class:spinning={refreshing} aria-hidden="true"><path d="M20 11a8 8 0 1 0-2 6M20 4v7h-7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg>
+      </button>
+    </div>
+  </div>
+
+  <MetricsError {error} until={history?.until} {refreshing} {refresh} />
+
+  <section class="stat-grid" aria-label="접속 요약" aria-busy={loading}>
+    <article class="stat-card current-card">
+      <div class="stat-label">{error && history ? '마지막 확인 접속' : '현재 접속'}<span class="live-tag">{error ? '갱신 중단' : loading ? '연결 중' : '1분 갱신'}</span></div>
+      <div class="stat-value">{count(history?.current.accounts)}<span>계정</span></div>
+      <div class="stat-detail"><span class="tiny-dot"></span>{history ? `${formatTime(history.until)} KST 기준` : '월드에 입장한 계정 기준'}</div>
+      {#if history}<ConnectionBreakdown sample={history.current} />{/if}
+    </article>
+    <article class="stat-card">
+      <div class="stat-label">기간 최고 접속<span class="stat-icon" aria-hidden="true">↗</span></div>
+      <div class="stat-value">{count(summary.peak)}<span>계정</span></div>
+      <div class="stat-detail">{summary.peakAt !== null ? `${formatDateTime(summary.peakAt)} KST` : `최근 ${period.label} · 기록 대기 중`}</div>
+    </article>
+    <article class="stat-card">
+      <div class="stat-label">기간 평균 접속<span class="stat-icon average-icon" aria-hidden="true">≈</span></div>
+      <div class="stat-value">{summary.average === null ? '—' : summary.average.toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}<span>계정</span></div>
+      <div class="stat-detail">최근 {period.label} · 수집된 기록 기준</div>
+    </article>
+  </section>
+
+  <section class="chart-panel" aria-labelledby="chart-title" aria-busy={loading}>
+    <div class="chart-heading">
+      <div>
+        <h2 id="chart-title">동시 접속 추이</h2>
+      </div>
+      <PeriodFilter bind:hours options={periods.filter((period) => period.hours >= 24)} label="조회 기간" />
+    </div>
+    <div class="chart-meta"><span>접속 계정 수</span><span>{period.intervalLabel}</span></div>
+    {#if history && history.samples.length > 0}
+      <ConcurrentChart {history} peak={summary.peak} {markers} />
+    {:else}
+      <div class="chart-empty" role="status">
+        <div class="empty-illustration" aria-hidden="true"><svg viewBox="0 0 64 48" fill="none"><path d="M4 42h56M4 24h56M4 6h56" stroke="currentColor" stroke-opacity=".18" /><path d="M6 34h13l9-16 10 11 10-19 10 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg></div>
+        <strong>{loading ? '월드의 기록을 불러오고 있어요' : error ? '기록에 연결할 수 없어요' : '첫 번째 기록을 기다리고 있어요'}</strong>
+        <p>{loading ? '잠시만 기다려 주세요.' : error ? '연결이 복구되면 그래프가 자동으로 갱신됩니다.' : '이 기간에 수집된 기록이 아직 없습니다. 새 기록은 1분마다 쌓입니다.'}</p>
+      </div>
+    {/if}
+    <div class="chart-footer">
+      <span>{history ? `${formatDateTime(history.from)} — ${formatDateTime(history.until)}` : `최근 ${period.label}`} <span class="timezone">KST</span></span>
+      <span>{history ? `${summary.sampleCount.toLocaleString('ko-KR')}개 기록` : '기록 확인 중'}</span>
+    </div>
+  </section>
+
+  <HardwarePanel resource={hardware} />
+  <NetworkPanel bind:hours={networkHours} resource={network} />
+  <AssetTrafficPanel bind:hours={assetTrafficHours} resource={assetTraffic} />
+
+  <section class="chart-panel" aria-labelledby="unique-chart-title" aria-busy={unique.loading}>
+    <div class="chart-heading">
+      <div>
+        <h2 id="unique-chart-title">유니크 접속 계정 추이</h2>
+        <p>매일 자정 기준, 직전 {uniquePeriod.label} 동안 게임에 접속한 계정 수</p>
+      </div>
+      <PeriodFilter bind:hours={uniqueHours} options={uniquePeriods} label="유니크 계정 집계 기간" />
+    </div>
+    <MetricsError error={unique.error} until={unique.history?.until} refreshing={unique.refreshing} refresh={() => unique.refresh()} />
+    <div class="metric-summary">
+      <span>마지막 일별 집계 · 직전 {uniquePeriod.label}</span>
+      <strong>{count(uniqueLatest?.accounts)}<small>계정</small></strong>
+      <p>{unique.history?.last_aggregated_at != null ? `마지막 집계 기준: ${formatDateTime(unique.history.last_aggregated_at)} KST` : '첫 일별 집계를 기다리고 있어요'}</p>
+    </div>
+    {#if unique.history?.last_aggregated_at != null && unique.history.collection_started_at > unique.history.from - unique.history.window_seconds}
+      <p class="chart-notice">{formatDateTime(unique.history.collection_started_at)} KST부터 수집한 기록입니다. 일부 시점은 수집 시작 이후의 접속만 포함합니다.</p>
+    {/if}
+    <div class="chart-meta"><span>유니크 계정 수</span><span>하루 한 번 집계</span></div>
+    {#if unique.history && unique.history.samples.length > 0}
+      <HistoryChart history={unique.history} peak={uniquePeak} {markers} value={(sample) => sample.accounts} legend={`직전 ${uniquePeriod.label} 유니크 계정`} valueLabel="유니크 계정" peakLabel="그래프 최고">
+        {#snippet detail(selected)}
+          <span>집계 시작: {formatDateTime(selected.timestamp - uniqueHours * 3600)}</span>
+          <span>자정 기준 일별 집계 · 직전 {uniquePeriod.label}</span>
+          {#if unique.history && selected.timestamp - unique.history.window_seconds < unique.history.collection_started_at}
+            <span>수집 시작 이후의 접속만 포함</span>
+          {/if}
+        {/snippet}
+      </HistoryChart>
+    {:else}
+      <div class="chart-empty" role="status">
+        <strong>{unique.loading ? '일별 유니크 계정 기록을 불러오고 있어요' : unique.error ? '기록에 연결할 수 없어요' : unique.history?.last_aggregated_at == null ? '첫 일별 집계를 기다리고 있어요' : '이 기간의 일별 집계 기록이 없어요'}</strong>
+        <p>{unique.loading ? '잠시만 기다려 주세요.' : unique.error ? '연결이 복구되면 그래프가 자동으로 갱신됩니다.' : `매일 한국 시간 자정 이후 집계합니다.${unique.history ? ` 다음 집계 기준: ${formatDateTime(unique.history.until + 86400)} KST` : ''}`}</p>
+      </div>
+    {/if}
+    <div class="chart-footer">
+      <span>{unique.history ? `${formatDateTime(unique.history.from)} — ${formatDateTime(unique.history.until)}` : `최근 ${uniquePeriod.label}`} <span class="timezone">KST</span></span>
+      <span>{unique.history ? `${unique.history.samples.length.toLocaleString('ko-KR')}개 시점` : '기록 확인 중'}</span>
+    </div>
+  </section>
+
+  <CountryPanel bind:hours={countryHours} resource={countries} />
+
+  <GoldPanel bind:hours={goldHours} resource={gold} {markers} />
+
+  <PerAccountGoldPanel bind:hours={goldHours} bind:activeHours resource={perAccountGold} {markers} />
+
+  <PriceIndexPanel bind:hours={priceIndexHours} resource={priceIndex} />
+
+  <ItemGoldSourcesPanel bind:hours={itemGoldHours} resource={itemGoldSources} />
+  <GoldSinksPanel bind:hours={goldSinkHours} resource={goldSinks} />
+
+  <LeaderboardSection metric="level" bind:hours={levelHours} resource={leaderboard} />
+
+  <LeaderboardSection metric="gold" bind:hours={goldLeaderboardHours} resource={goldLeaderboard} />
+
+  <LeaderboardSection metric="weapon_enchant" bind:hours={weaponEnchantHours} resource={weaponEnchantLeaderboard} />
+
+  <WeaponEnchantFailuresPanel resource={weaponEnchantFailures} />
+
+  <LeaderboardSection metric="armor_enchant" bind:hours={armorEnchantHours} resource={armorEnchantLeaderboard} />
+
+  <LeaderboardSection metric="land_plots" bind:hours={landHours} resource={landLeaderboard} />
+
+  <HeroicTalesPanel resource={heroicTales} />
+
+  <CombatAuditTargetsPanel resource={combatAuditTargets} />
+
+  <section class="notes-grid" aria-label="지표 안내">
+    <div class="metric-note">
+      <span class="note-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3" stroke="currentColor" stroke-width="1.5" /><path d="M3 20v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 4v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg></span>
+      <div><h3>게임에 입장한 계정 기준</h3><p>게임에 입장한 계정을 한 번씩 세며, 공식 NPC는 제외합니다. 접속 프로그램에 따라 웹 접속과 외부 에이전트를 구분합니다. 구분 정보가 없는 과거 기록과 기타 클라이언트는 기타·미분류로 표시합니다.</p></div>
+    </div>
+    <div class="metric-note">
+      <span class="note-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5" /><path d="M12 7v5l3 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg></span>
+      <div><h3>분별 기록을 보관합니다</h3><p>접속 수는 매분 수집하며, 최근 1일은 분별 관측값과 정상 종료 시의 0명을 표시합니다. 긴 기간은 구간 평균으로 표시하고, 기간 최고는 별도로 보존합니다. 분별 원본은 계속 보관하며 기록이 없는 구간은 평균에서 제외합니다. 총 골드는 매시간 수집하며, 1개월·6개월·1년은 최근 30일·180일·365일 기준입니다.</p></div>
+    </div>
+  </section>
+  <footer class="site-footer"><span>OpenMMO <strong>Pulse</strong></span><span>작은 순간들이 모여, 하나의 월드가 됩니다.</span></footer>
+</main>

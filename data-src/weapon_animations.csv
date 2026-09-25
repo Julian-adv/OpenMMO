@@ -1,0 +1,2 @@
+id,pack,idle,walk,run,attack,attackImpactMs,gripRotationRadians,offHandGripReach
+great_sword,animations/great_sword.glb,great_sword_idle,great_sword_walk,great_sword_run,great_sword_slash,625,-1.907|-0.475|0.139,0.3

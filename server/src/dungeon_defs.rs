@@ -11,7 +11,10 @@
 use tracing::info;
 
 pub use onlinerpg_shared::dungeon::DungeonEntranceDef;
-use onlinerpg_shared::dungeon::{entrance, entrance_at, entrances};
+use onlinerpg_shared::dungeon::{
+    entrance, entrance_at, entrances, generate_dungeon_for, locked_depths, spawn_table_for,
+};
+use onlinerpg_shared::Position;
 
 #[derive(Debug, Clone)]
 pub struct DungeonDefs;
@@ -52,6 +55,33 @@ impl DungeonDefs {
                 def.id,
                 def.boss
             );
+            // Generated depth: a dead-end floor can cut a dungeon short.
+            let total = generate_dungeon_for(&def.id).len() as u8;
+            for depth in 1..=total {
+                let table = spawn_table_for(&def.spawn_group, depth);
+                assert!(
+                    !table.is_empty(),
+                    "dungeon '{}' has no spawn group '{}' entries at depth {depth}",
+                    def.id,
+                    def.spawn_group
+                );
+                for spawn in table {
+                    assert!(
+                        monster_defs.get(&spawn.monster_type).is_some(),
+                        "dungeon '{}' spawns unknown monster '{}'",
+                        def.id,
+                        spawn.monster_type
+                    );
+                }
+            }
+            for depth in locked_depths(total) {
+                assert!(
+                    item_defs.get(&def.key_item_id(depth)).is_some(),
+                    "dungeon '{}' locks floor {depth} but has no key item '{}'",
+                    def.id,
+                    def.key_item_id(depth)
+                );
+            }
         }
 
         // An opted-in item at or below the deepest built dungeon must drop
@@ -90,4 +120,19 @@ impl DungeonDefs {
     pub fn entrance_at(&self, x: f32, z: f32) -> Option<&'static DungeonEntranceDef> {
         entrance_at(x, z)
     }
+}
+
+/// Where a position is, for log lines: the dungeon and depth underground, the
+/// house floor above ground level, or the open surface.
+pub fn place_label(position: &Position, floor_level: i8) -> String {
+    if floor_level < 0 {
+        return match entrance_at(position.x, position.z) {
+            Some(entrance) => format!("dungeon '{}' depth {}", entrance.id, -floor_level),
+            None => format!("dungeon floor {floor_level}"),
+        };
+    }
+    if floor_level > 0 {
+        return format!("floor {floor_level}");
+    }
+    "surface".to_string()
 }

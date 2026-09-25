@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 use tracing::info;
 
@@ -13,7 +13,7 @@ pub struct MerchantDefinition {
     #[serde(rename = "sellRatePercent")]
     pub sell_rate_percent: u32,
     /// Item def ids the merchant sells (unlimited stock).
-    #[serde(deserialize_with = "crate::semicolon_list::deserialize")]
+    #[serde(default, deserialize_with = "crate::semicolon_list::deserialize")]
     pub catalog: Vec<String>,
 }
 
@@ -27,6 +27,7 @@ impl MerchantDefinition {
 /// so the stable identity the server sees is the character name.
 pub struct MerchantDefs {
     by_npc_name: HashMap<String, MerchantDefinition>,
+    stocked: HashSet<String>,
 }
 
 impl MerchantDefs {
@@ -35,8 +36,8 @@ impl MerchantDefs {
         let by_id: HashMap<String, MerchantDefinition> =
             serde_json::from_str(data).expect("Failed to parse merchants.json");
 
-        // Money-pump invariant: even with maximum haggling in both
-        // directions, buying must always cost more than selling pays.
+        // The advertised flat sell rate must hold at index 100; lower
+        // indexes are covered by the payout cap.
         for def in by_id.values() {
             assert!(
                 crate::game_state::band_invariant_holds(def.sell_rate_percent),
@@ -47,16 +48,28 @@ impl MerchantDefs {
         }
 
         info!("Loaded {} merchant definition(s)", by_id.len());
+        let stocked = by_id
+            .values()
+            .flat_map(|m| m.catalog.iter().cloned())
+            .collect();
         let by_npc_name = by_id
             .into_values()
             .map(|def| (def.npc_name.clone(), def))
             .collect();
 
-        Self { by_npc_name }
+        Self {
+            by_npc_name,
+            stocked,
+        }
     }
 
     pub fn get_by_npc_name(&self, npc_name: &str) -> Option<&MerchantDefinition> {
         self.by_npc_name.get(npc_name)
+    }
+
+    /// Whether any merchant shelf carries the item.
+    pub fn stocked(&self, item_def_id: &str) -> bool {
+        self.stocked.contains(item_def_id)
     }
 }
 
@@ -79,5 +92,41 @@ mod tests {
             defs.by_npc_name.values().any(|m| m.sells("fishing_rod")),
             "no merchant sells fishing_rod — the rod would be unobtainable"
         );
+    }
+
+    /// A merchant lives in two CSVs — the shop in `merchants.csv`, the NPC
+    /// identity in `npcs.csv` — and adding only one of them leaves a shop no
+    /// agent can ever run.
+    #[test]
+    fn every_merchant_has_an_npc_registry_entry() {
+        let registry: serde_json::Value =
+            serde_json::from_str(include_str!("../../data/npcs.json")).unwrap();
+        for name in MerchantDefs::load().by_npc_name.keys() {
+            assert!(
+                registry
+                    .as_object()
+                    .unwrap()
+                    .values()
+                    .any(|npc| npc["npcName"] == name.as_str()),
+                "merchant {name} has no entry in npcs.csv"
+            );
+        }
+    }
+
+    /// Rica sleeps at night, so trade would stop with the town asleep unless
+    /// someone else keeps a counter open (see doc/TODO.md).
+    #[test]
+    fn a_merchant_stocks_night_essentials() {
+        let defs = MerchantDefs::load();
+        let night = defs
+            .by_npc_name
+            .get("Wick")
+            .expect("the night merchant is missing from merchants.csv");
+        for essential in ["torch", "healing_potion", "bread"] {
+            assert!(
+                night.sells(essential),
+                "the night merchant does not stock {essential}"
+            );
+        }
     }
 }

@@ -32,6 +32,13 @@ export interface GraphicsPreset {
   treeInstanceLimit: number
   treeCastsShadow: boolean
   enableWindParticles: boolean
+  rainParticleLimit: number
+  enableRainSplashes: boolean
+  enableRainPuddles: boolean
+  enablePuddleRipples: boolean
+  /** Footprints behind *other* soaked players. The local player's always
+   *  draw; the fan-out is what costs, so only `high` takes it. */
+  enableRemoteFootprints: boolean
   enableHousingLayer: boolean
   enableTorchEffects: boolean
   enableTorchShadows: boolean
@@ -63,7 +70,7 @@ const FULL_RENDER_SETTINGS = {
   initialTerrainQueueDrainCount: Infinity,
   initialTileWorkDrainCount: Infinity,
   warmupScenePipelines: true,
-  worldMapDefaultZoomSpan: 8,
+  worldMapDefaultZoomSpan: 16,
   worldMapMaxZoomSpan: 32,
 } satisfies Omit<
   GraphicsPreset,
@@ -80,6 +87,11 @@ const FULL_RENDER_SETTINGS = {
   | 'treeInstanceLimit'
   | 'treeCastsShadow'
   | 'enableWindParticles'
+  | 'rainParticleLimit'
+  | 'enableRainSplashes'
+  | 'enableRainPuddles'
+  | 'enablePuddleRipples'
+  | 'enableRemoteFootprints'
   | 'worldMapImageCacheLimit'
 >
 
@@ -99,7 +111,12 @@ const PRESETS: Record<QualityLevel, GraphicsPreset> = {
     treeInstanceLimit: 1024,
     treeCastsShadow: true,
     enableWindParticles: true,
-    worldMapImageCacheLimit: Infinity,
+    rainParticleLimit: 1100,
+    enableRainSplashes: true,
+    enableRainPuddles: true,
+    enablePuddleRipples: true,
+    enableRemoteFootprints: true,
+    worldMapImageCacheLimit: 256,
   },
   medium: {
     ...FULL_RENDER_SETTINGS,
@@ -116,6 +133,11 @@ const PRESETS: Record<QualityLevel, GraphicsPreset> = {
     treeInstanceLimit: 768,
     treeCastsShadow: true,
     enableWindParticles: true,
+    rainParticleLimit: 1100,
+    enableRainSplashes: true,
+    enableRainPuddles: true,
+    enablePuddleRipples: false,
+    enableRemoteFootprints: false,
     worldMapImageCacheLimit: 256,
   },
   low: {
@@ -133,6 +155,11 @@ const PRESETS: Record<QualityLevel, GraphicsPreset> = {
     treeInstanceLimit: 512,
     treeCastsShadow: false,
     enableWindParticles: false,
+    rainParticleLimit: 300,
+    enableRainSplashes: false,
+    enableRainPuddles: false,
+    enablePuddleRipples: false,
+    enableRemoteFootprints: false,
     worldMapImageCacheLimit: 128,
   },
 }
@@ -209,6 +236,11 @@ function getMobileSafePreset(preset: GraphicsPreset): GraphicsPreset {
     treeInstanceLimit: 384,
     treeCastsShadow: false,
     enableWindParticles: false,
+    rainParticleLimit: 300,
+    enableRainSplashes: false,
+    enableRainPuddles: false,
+    enablePuddleRipples: false,
+    enableRemoteFootprints: false,
     enableHousingLayer: true,
     enableTorchEffects: true,
     enableTorchShadows: false,

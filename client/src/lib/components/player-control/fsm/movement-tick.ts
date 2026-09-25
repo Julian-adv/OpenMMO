@@ -7,6 +7,7 @@ import type {
 } from '../../../utils/movementUtils'
 import {
   runCombatFrame,
+  type AttackLineBlocked,
   type CombatControllerLike,
   type CombatOutcomeActions,
 } from './combat'
@@ -31,21 +32,23 @@ interface TerrainSyncPlayer {
 }
 
 interface SyncTerrainHeightInput {
-  playerStateName: PlayerStateName
   player: TerrainSyncPlayer | null
   hasHeightData: (x: number, z: number) => boolean
   sampleHeight: (x: number, z: number) => number
   epsilon?: number
 }
 
+/** `position.y` is always the ground (furniture height rides
+ *  `interactOffsetY`), so a pose follows the house floor offset too — the
+ *  housing layer derives the floor from `y - offset`, and a stale y there
+ *  spirals it onto the wrong storey. */
 export function syncPlayerTerrainHeight({
-  playerStateName,
   player,
   hasHeightData,
   sampleHeight,
   epsilon = 0.001,
 }: SyncTerrainHeightInput): boolean {
-  if (playerStateName === 'interact' || !player) return false
+  if (!player) return false
 
   const { x, y, z } = player.position
   if (!hasHeightData(x, z)) return false
@@ -171,6 +174,7 @@ interface MovementTickPlayer {
 }
 
 interface RunPlayerMovementTickInput {
+  canAdvance?: () => boolean
   deltaTime: number
   currentPlayer: MovementTickPlayer | null
   playerStateName: PlayerStateName
@@ -185,9 +189,12 @@ interface RunPlayerMovementTickInput {
   isInCombat: boolean
   combatController: CombatControllerLike
   cooldownMs: number
+  /** Equipped weapon's reach; the chase breaks off here. */
+  attackRange: number
   chasePathing: Pathing
   getMonsterInfo: (monsterId: string) => MonsterInfo | undefined
   findMonsterPosition: (monsterId: string) => Position | undefined
+  attackLineBlocked: AttackLineBlocked
   sampleHeight: (x: number, z: number) => number
   waypointHeight: (floor: number, x: number, z: number) => number
   hasHeightData: (x: number, z: number) => boolean
@@ -218,6 +225,7 @@ interface RunPlayerMovementTickInput {
 }
 
 export function runPlayerMovementTick({
+  canAdvance,
   deltaTime,
   currentPlayer,
   playerStateName,
@@ -232,9 +240,11 @@ export function runPlayerMovementTick({
   isInCombat,
   combatController,
   cooldownMs,
+  attackRange,
   chasePathing,
   getMonsterInfo,
   findMonsterPosition,
+  attackLineBlocked,
   sampleHeight,
   waypointHeight,
   hasHeightData,
@@ -255,11 +265,12 @@ export function runPlayerMovementTick({
   }
 
   syncPlayerTerrainHeight({
-    playerStateName,
     player: currentPlayer,
     hasHeightData,
     sampleHeight,
   })
+
+  if (canAdvance && !canAdvance()) return
 
   const combatApplication = runCombatFrame({
     isInCombat,
@@ -272,9 +283,11 @@ export function runPlayerMovementTick({
     chaseGoal,
     movementState,
     cooldownMs,
+    attackRange,
     pathing: chasePathing,
     getMonsterInfo,
     findMonsterPosition,
+    attackLineBlocked,
     sendPlayerMove,
     actions: actions.combat,
   })
@@ -283,12 +296,15 @@ export function runPlayerMovementTick({
   // destructured above are now stale, so let the next frame walk the new one.
   if (combatApplication.kind === 'handled') return
 
-  if (!isMoving || !movementTarget || !currentPlayer || !movementState) {
+  if (!isMoving || !currentPlayer) {
     if (currentSpeed > 0) {
       actions.resetStoppedSpeed()
     }
     return
   }
+
+  // Keyboard movement has speed but no click path.
+  if (!movementTarget || !movementState) return
 
   runMovementFrame({
     currentPos: {

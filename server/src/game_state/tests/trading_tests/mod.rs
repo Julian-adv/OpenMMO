@@ -1,6 +1,9 @@
 use super::*;
 
+mod batch_tests;
 mod buyback_tests;
+mod gold_sinks_tests;
+mod item_sales_tests;
 mod merchant_tests;
 mod resident_tests;
 
@@ -13,6 +16,16 @@ fn make_npc(id: &str, name: &str, x: f32, z: f32) -> Player {
     p
 }
 
+/// The next direct message must be a `TradeError` mentioning `expected`.
+fn expect_trade_error(rx: &mut DirectRx, expected: &str) {
+    match rx.try_recv() {
+        Ok(ServerMessage::TradeError { message, .. }) => {
+            assert!(message.contains(expected), "got: {message}");
+        }
+        other => panic!("Expected a {expected:?} TradeError, got {other:?}"),
+    }
+}
+
 async fn set_floor(game_state: &GameState, name: &str, floor: i8) {
     game_state
         .players
@@ -23,24 +36,111 @@ async fn set_floor(game_state: &GameState, name: &str, floor: i8) {
         .floor_level = floor;
 }
 
+/// One always-active schedule entry (`at: "0:00"`) with the given action.
+fn schedule_entry(action: &str) -> onlinerpg_shared::schedule::ScheduleEntry {
+    schedule_entry_at("0:00", Some(action))
+}
+
+fn schedule_entry_at(at: &str, action: Option<&str>) -> onlinerpg_shared::schedule::ScheduleEntry {
+    onlinerpg_shared::schedule::ScheduleEntry {
+        at: at.to_string(),
+        action: action.map(str::to_string),
+        ..Default::default()
+    }
+}
+
+/// Schedule the NPC into bed right now; the server resolves sleep from its
+/// own schedule copy and clock.
+fn put_in_bed(game_state: &GameState, npc_name: &str) {
+    game_state.set_npc_schedule(
+        npc_name,
+        vec![schedule_entry(onlinerpg_shared::schedule::BED_OBJECT_TYPE)],
+    );
+}
+
 /// Spawn a merchant NPC and a buyer with the given CHA/gold next to each
 /// other, returning the buyer's direct-message receiver and the NPC's.
-async fn setup_haggle(
-    game_state: &GameState,
-    cha: u8,
-    gold: i64,
-) -> (
-    UnboundedReceiver<ServerMessage>,
-    UnboundedReceiver<ServerMessage>,
-) {
+async fn setup_haggle(game_state: &GameState, cha: u8, gold: i64) -> (DirectRx, DirectRx) {
     game_state
         .add_player(make_npc("npc_rica", "Rica", 0.0, 0.0))
         .await;
     game_state.add_player(make_player("buyer", 1.0, 0.0)).await;
     game_state
-        .register_player_character(&pid("buyer"), 1, 0, attrs_with_cha(cha), gold)
+        .register_player_character(&pid("buyer"), 1, 0, attrs_with_cha(cha), gold, None)
         .await;
     let buyer_rx = game_state.register_direct_channel(&pid("buyer")).await;
     let npc_rx = game_state.register_direct_channel(&pid("npc_rica")).await;
     (buyer_rx, npc_rx)
+}
+
+/// Spawn the resident trader Karl (wishlist: torch, dagger @120%) next to a
+/// seller. Karl's wallet and bag are set explicitly; the seller starts with
+/// the given bag and no gold.
+async fn setup_resident_trade(
+    game_state: &GameState,
+    npc_gold: i64,
+    npc_bag: Vec<ItemInstance>,
+    seller_bag: Vec<ItemInstance>,
+) {
+    game_state
+        .add_player(make_npc("npc_karl", "Karl", 0.0, 0.0))
+        .await;
+    game_state.add_player(make_player("seller", 1.0, 0.0)).await;
+    game_state
+        .register_player_character(&pid("seller"), 1, 0, attrs_with_cha(10), 0, None)
+        .await;
+    game_state
+        .register_player_character(&pid("npc_karl"), 2, 0, attrs_with_cha(10), npc_gold, None)
+        .await;
+    let mut inventories = game_state.inventories.write().await;
+    inventories.insert(
+        pid("npc_karl"),
+        PlayerInventory {
+            bag: npc_bag,
+            ..Default::default()
+        },
+    );
+    inventories.insert(
+        pid("seller"),
+        PlayerInventory {
+            bag: seller_bag,
+            ..Default::default()
+        },
+    );
+}
+
+/// Spawn the bard Signe (keepsake: mandolin, no wishlist) next to a buyer
+/// with the given gold. Signe's bag is set explicitly.
+async fn setup_keepsake_trade(game_state: &GameState, npc_bag: Vec<ItemInstance>, buyer_gold: i64) {
+    game_state
+        .add_player(make_npc("npc_signe", "Signe", 0.0, 0.0))
+        .await;
+    game_state.add_player(make_player("buyer", 1.0, 0.0)).await;
+    game_state
+        .register_player_character(&pid("buyer"), 1, 0, attrs_with_cha(10), buyer_gold, None)
+        .await;
+    game_state
+        .register_player_character(&pid("npc_signe"), 2, 0, attrs_with_cha(10), 0, None)
+        .await;
+    let mut inventories = game_state.inventories.write().await;
+    inventories.insert(
+        pid("npc_signe"),
+        PlayerInventory {
+            bag: npc_bag,
+            ..Default::default()
+        },
+    );
+    inventories.insert(pid("buyer"), PlayerInventory::default());
+}
+
+fn enchanted_bag_item(
+    instance_id: u64,
+    item_def_id: &str,
+    quantity: u32,
+    enchant: i32,
+) -> ItemInstance {
+    ItemInstance {
+        enchant,
+        ..bag_item(instance_id, item_def_id, quantity)
+    }
 }

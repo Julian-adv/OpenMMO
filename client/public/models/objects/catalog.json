@@ -126,6 +126,30 @@
     "defaultY": 4.16
   },
   {
+    "id": "shop_sign_plank",
+    "name": "Shop Sign (Plank)",
+    "procedural": "shopSign",
+    "shopSignStyle": "plank",
+    "textLabel": true,
+    "defaultY": 4.16
+  },
+  {
+    "id": "shop_sign_oval",
+    "name": "Shop Sign (Dark Oval)",
+    "procedural": "shopSign",
+    "shopSignStyle": "oval",
+    "textLabel": true,
+    "defaultY": 4.16
+  },
+  {
+    "id": "shop_sign_weathered",
+    "name": "Shop Sign (Weathered Arch)",
+    "procedural": "shopSign",
+    "shopSignStyle": "weathered",
+    "textLabel": true,
+    "defaultY": 4.16
+  },
+  {
     "id": "barrel",
     "name": "Barrel",
     "model": "objects/barrel.glb",
@@ -163,12 +187,35 @@
     "id": "chair",
     "name": "Chair",
     "model": "objects/chair.glb",
+    "interaction": "sit",
+    "interactOffset": { "x": 0, "y": 0.08, "z": 0 },
     "solid": true
   },
   {
     "id": "table",
     "name": "Table",
     "model": "objects/table.glb",
+    "solid": true
+  },
+  {
+    "id": "wooden_fence",
+    "name": "Wooden Fence",
+    "model": "objects/wooden_fence.glb",
+    "solid": true
+  },
+  {
+    "id": "rustic_bed",
+    "name": "Rustic Bed",
+    "model": "objects/rustic_bed.glb",
+    "interaction": "sleep",
+    "interactOffset": { "x": 0, "y": 0.56, "z": 0 },
+    "solid": true
+  },
+  {
+    "id": "stone_hearth",
+    "name": "Stone Hearth",
+    "model": "objects/stone_hearth.glb",
+    "fire": { "x": 0, "y": 0.3, "z": -0.02 },
     "solid": true
   },
   {
@@ -191,12 +238,19 @@
   {
     "id": "torch_wall",
     "name": "Wall Torch",
-    "model": "objects/torch_wall.glb"
+    "model": "objects/torch_wall.glb",
+    "fire": { "x": 0, "y": 0.6, "z": 0.25 },
+    "fireKind": "torch"
   },
   {
     "id": "health_potion",
-    "name": "Health Potion",
-    "model": "objects/health_potion.glb"
+    "name": "Greater Healing Potion",
+    "model": "objects/greater_healing_potion.glb"
+  },
+  {
+    "id": "healing_potion",
+    "name": "Healing Potion",
+    "model": "objects/healing_potion.glb"
   },
   {
     "id": "scroll",
@@ -207,6 +261,11 @@
     "id": "scroll_enchant",
     "name": "Enchant Scroll",
     "model": "objects/scroll_enchant.glb"
+  },
+  {
+    "id": "scroll_enchant_armor",
+    "name": "Enchant Armor Scroll",
+    "model": "objects/scroll_enchant_armor.glb"
   },
   {
     "id": "coin_pile",

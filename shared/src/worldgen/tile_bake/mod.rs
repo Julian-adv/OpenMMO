@@ -38,8 +38,9 @@ use super::vector_features::{
 };
 
 pub use constants::{
-    HEIGHT_BIAS, HEIGHT_STEP, PAL_CLIFF, PAL_DIRT, PAL_GROUND, PAL_RIVER_BED, PAL_ROAD, PAL_SAND,
-    PAL_SNOW, RIVER_MAX_WIDTH_M, RIVER_MIN_WIDTH_M, TILE_DIM, VERTS_PER_SIDE,
+    HEIGHT_BIAS, HEIGHT_STEP, PAL_CLIFF, PAL_DIRT, PAL_GROUND, PAL_PAVING, PAL_RIVER_BED, PAL_ROAD,
+    PAL_SAND, PAL_SNOW, PAL_STONE_PATH, RIVER_MAX_WIDTH_M, RIVER_MIN_WIDTH_M, TILE_DIM,
+    VERTS_PER_SIDE,
 };
 pub use context::BakeContext;
 pub use river_field::bake_river_field;
@@ -323,7 +324,7 @@ mod tests {
         let tile_edge = world_size / (TILE_DIM as i32) / 2 - 1;
         let baked = bake_tile(&map, &ctx, tile_edge, tile_edge);
         let mut any_below = false;
-        for chunk in baked.heightmap.chunks_exact(2) {
+        for chunk in baked.heightmap.as_chunks::<2>().0 {
             let v = u16::from_le_bytes([chunk[0], chunk[1]]);
             let meters = v as f32 * HEIGHT_STEP - HEIGHT_BIAS;
             if meters < 0.0 {
@@ -394,7 +395,7 @@ mod tests {
     fn splat_bytes_reference_valid_palette_slots() {
         let (map, ctx) = build_context();
         let baked = bake_tile(&map, &ctx, 0, 0);
-        for chunk in baked.splatmap.chunks_exact(4) {
+        for chunk in baked.splatmap.as_chunks::<4>().0 {
             let primary = (chunk[0] >> 4) & 0x0F;
             let secondary = chunk[0] & 0x0F;
             assert!(

@@ -8,6 +8,7 @@ import type GameSceneShoreSprayLayer from './GameSceneShoreSprayLayer.svelte'
 import type GameSceneGrassLayer from './GameSceneGrassLayer.svelte'
 import type GameSceneTreeLayer from './GameSceneTreeLayer.svelte'
 import type GameSceneWindParticles from './GameSceneWindParticles.svelte'
+import type GameSceneRainLayer from './GameSceneRainLayer.svelte'
 import type GameSceneHousingLayer from './GameSceneHousingLayer.svelte'
 import type ObjectOverlay from '../map-editor/ObjectOverlay.svelte'
 import type { RefractionRenderManager } from '../../managers/refractionRenderManager'
@@ -35,6 +36,7 @@ export interface RenderPassesContext {
   grassLayerRef: GameSceneGrassLayer | undefined
   treeLayerRef: GameSceneTreeLayer | undefined
   windParticlesRef: GameSceneWindParticles | undefined
+  rainLayerRef: GameSceneRainLayer | undefined
   housingLayerRef: GameSceneHousingLayer | undefined
   objectOverlayRef: ObjectOverlay | undefined
   currentPlayerModel: PlayerModel | null
@@ -65,18 +67,7 @@ export function runRenderPasses(ctx: RenderPassesContext): void {
         hasWater: ctx.hasWater,
         waterGroup: ctx.waterGroup,
         terrainMeshes: ctx.terrainMeshes,
-        hiddenGroups: [
-          ctx.entityClipGroup,
-          ctx.grassLayerRef?.getGroup(),
-          ctx.treeLayerRef?.getGroup(),
-          ctx.windParticlesRef?.getGroup(),
-          // Rocks straddle the surface — leaving them in paints a ghost
-          // "sunken rock" into the refracted bed image.
-          ctx.riverRocksRef?.getGroup(),
-          // Spray droplets are above-surface billboards; keep them out of
-          // the refracted bed and the mirror.
-          ctx.shoreSprayRef?.getGroup(),
-        ],
+        hiddenGroups: aboveWaterGroups(ctx),
       },
       ctx.loopProfiler
     )
@@ -92,21 +83,29 @@ export function runRenderPasses(ctx: RenderPassesContext): void {
         waterGroup: ctx.waterGroup,
         terrainGroup: ctx.terrainGroup,
         housingGroup: ctx.housingLayerRef?.getGroup(),
-        hiddenGroups: [
-          ctx.grassLayerRef?.getGroup(),
-          ctx.treeLayerRef?.getGroup(),
-          ctx.windParticlesRef?.getGroup(),
-          ctx.objectOverlayRef?.getGroup(),
-          ctx.entityClipGroup,
-          // Same policy as trees: no rock mirror image on the water.
-          ctx.riverRocksRef?.getGroup(),
-          ctx.shoreSprayRef?.getGroup(),
-        ],
+        hiddenGroups: aboveWaterGroups(ctx),
         getNametagGroups: () => collectNametagGroups(ctx),
       },
       ctx.loopProfiler
     )
   })
+}
+
+/** Everything above the water surface: neither refracted into the bed image
+ *  nor mirrored, and every group left in costs a pipeline per material. */
+function aboveWaterGroups(
+  ctx: RenderPassesContext
+): (THREE.Group | undefined)[] {
+  return [
+    ctx.entityClipGroup,
+    ctx.grassLayerRef?.getGroup(),
+    ctx.treeLayerRef?.getGroup(),
+    ctx.windParticlesRef?.getGroup(),
+    ctx.rainLayerRef?.getGroup(),
+    ctx.objectOverlayRef?.getGroup(),
+    ctx.riverRocksRef?.getGroup(),
+    ctx.shoreSprayRef?.getGroup(),
+  ]
 }
 
 function collectNametagGroups(ctx: RenderPassesContext): THREE.Group[] {

@@ -6,9 +6,20 @@
     Gender,
     RollCharacterStatsResult,
   } from '../network/socket'
+  import { t } from '../i18n'
   import { getAvailableGenders } from '../utils/modelPaths'
 
   const MAX_CHARACTER_SLOTS = 3
+  const CHARACTER_CLASSES = [
+    'knight',
+    'barbarian',
+    'rogue',
+    'caveman',
+    'valkyrie',
+    'ranger',
+    'priest',
+    'bard',
+  ] as const satisfies readonly CharacterClass[]
 
   interface Props {
     accountName: string
@@ -79,7 +90,9 @@
   async function handleRoll() {
     if (isBusy()) return
     if (atSlotLimit()) {
-      errorMessage = 'A maximum of 3 characters can be created.'
+      errorMessage = $t('characterCreate.slotLimit', {
+        max: MAX_CHARACTER_SLOTS,
+      })
       return
     }
 
@@ -101,17 +114,19 @@
     if (isBusy()) return
 
     if (atSlotLimit()) {
-      errorMessage = 'A maximum of 3 characters can be created.'
+      errorMessage = $t('characterCreate.slotLimit', {
+        max: MAX_CHARACTER_SLOTS,
+      })
       return
     }
 
     const characterName = createCharacterName.trim()
     if (!characterName) {
-      errorMessage = 'Please enter character name'
+      errorMessage = $t('characterCreate.nameRequired')
       return
     }
     if (!rolledStats) {
-      errorMessage = 'Roll attributes first'
+      errorMessage = $t('characterCreate.rollRequired')
       return
     }
 
@@ -125,12 +140,12 @@
     isCreating = false
 
     if (!result.ok) {
-      errorMessage = result.message ?? 'Failed to create character'
+      errorMessage = result.message ?? $t('characterCreate.createFailed')
       return
     }
 
     if (!result.character) {
-      errorMessage = 'Character created but no character data returned'
+      errorMessage = $t('characterCreate.missingCharacterData')
       return
     }
 
@@ -140,79 +155,31 @@
   }
 </script>
 
-<!-- UI overlay only — the 3D scene is rendered in the shared Canvas in App.svelte -->
+<!-- The shared Canvas renders the 3D scene. -->
 <div class="character-create-overlay">
   <div class="top-bar">
-    <h1 class="title">Create Character</h1>
-    <p class="account-name">Account: {accountName}</p>
+    <h1 class="title">{$t('characterCreate.title')}</h1>
+    <p class="account-name">{$t('characterSelect.account')}: {accountName}</p>
   </div>
 
   <form class="create-form" onsubmit={submitCreateCharacter}>
     <div class="class-column">
-      <span class="field-label">Class</span>
-      <button
-        type="button"
-        class="class-btn"
-        class:class-selected={selectedClass === 'knight'}
-        disabled={isBusy()}
-        onclick={() => selectClass('knight')}
-      >
-        Knight
-      </button>
-      <button
-        type="button"
-        class="class-btn"
-        class:class-selected={selectedClass === 'barbarian'}
-        disabled={isBusy()}
-        onclick={() => selectClass('barbarian')}
-      >
-        Barbarian
-      </button>
-      <button
-        type="button"
-        class="class-btn"
-        class:class-selected={selectedClass === 'rogue'}
-        disabled={isBusy()}
-        onclick={() => selectClass('rogue')}
-      >
-        Rogue
-      </button>
-      <button
-        type="button"
-        class="class-btn"
-        class:class-selected={selectedClass === 'caveman'}
-        disabled={isBusy()}
-        onclick={() => selectClass('caveman')}
-      >
-        {selectedGender === 'female' ? 'Cavewoman' : 'Caveman'}
-      </button>
-      <button
-        type="button"
-        class="class-btn"
-        class:class-selected={selectedClass === 'valkyrie'}
-        disabled={isBusy()}
-        onclick={() => selectClass('valkyrie')}
-      >
-        Valkyrie
-      </button>
-      <button
-        type="button"
-        class="class-btn"
-        class:class-selected={selectedClass === 'ranger'}
-        disabled={isBusy()}
-        onclick={() => selectClass('ranger')}
-      >
-        Ranger
-      </button>
-      <button
-        type="button"
-        class="class-btn"
-        class:class-selected={selectedClass === 'priest'}
-        disabled={isBusy()}
-        onclick={() => selectClass('priest')}
-      >
-        Priest
-      </button>
+      <span class="field-label">{$t('characterCreate.class')}</span>
+      {#each CHARACTER_CLASSES as cls (cls)}
+        <button
+          type="button"
+          class="class-btn"
+          class:class-selected={selectedClass === cls}
+          disabled={isBusy()}
+          onclick={() => selectClass(cls)}
+        >
+          {$t(
+            cls === 'caveman' && selectedGender === 'female'
+              ? 'class.cavewoman'
+              : `class.${cls}`
+          )}
+        </button>
+      {/each}
     </div>
 
     <div class="bottom-bar">
@@ -222,7 +189,7 @@
 
       <div class="bottom-row">
         <div class="gender-field">
-          <span class="field-label">Gender</span>
+          <span class="field-label">{$t('characterCreate.gender')}</span>
           <div class="gender-buttons">
             <button
               type="button"
@@ -231,7 +198,7 @@
               disabled={isBusy() || !availableGenders.includes('male')}
               onclick={() => selectGender('male')}
             >
-              Male
+              {$t('characterCreate.male')}
             </button>
             <button
               type="button"
@@ -240,19 +207,19 @@
               disabled={isBusy() || !availableGenders.includes('female')}
               onclick={() => selectGender('female')}
             >
-              Female
+              {$t('characterCreate.female')}
             </button>
           </div>
         </div>
 
         <label class="name-field" for="characterName">
-          <span class="field-label">Name</span>
+          <span class="field-label">{$t('characterCreate.name')}</span>
           <input
             id="characterName"
             type="text"
             bind:value={createCharacterName}
             maxlength={24}
-            placeholder="Enter character name"
+            placeholder={$t('characterCreate.namePlaceholder')}
             disabled={isBusy()}
           />
         </label>
@@ -267,16 +234,34 @@
           }}
         >
           {#if rolledStats}
-            <div class="attr">STR {rolledStats.attributes.str}</div>
-            <div class="attr">DEX {rolledStats.attributes.dex}</div>
-            <div class="attr">CON {rolledStats.attributes.con}</div>
-            <div class="attr">INT {rolledStats.attributes.int}</div>
-            <div class="attr">WIS {rolledStats.attributes.wis}</div>
-            <div class="attr">CHA {rolledStats.attributes.cha}</div>
-            <div class="attr">HP {rolledStats.maxHp}</div>
+            <div class="attr">
+              {$t('stat.str')}
+              {rolledStats.attributes.str}
+            </div>
+            <div class="attr">
+              {$t('stat.dex')}
+              {rolledStats.attributes.dex}
+            </div>
+            <div class="attr">
+              {$t('stat.con')}
+              {rolledStats.attributes.con}
+            </div>
+            <div class="attr">
+              {$t('stat.int')}
+              {rolledStats.attributes.int}
+            </div>
+            <div class="attr">
+              {$t('stat.wis')}
+              {rolledStats.attributes.wis}
+            </div>
+            <div class="attr">
+              {$t('stat.cha')}
+              {rolledStats.attributes.cha}
+            </div>
+            <div class="attr">{$t('stat.hp')} {rolledStats.maxHp}</div>
           {:else}
             <div class="roll-hint">
-              Roll to generate attributes (4d6 drop lowest, total 72)
+              {$t('characterCreate.rollHint')}
             </div>
           {/if}
         </div>
@@ -288,14 +273,18 @@
             disabled={isBusy()}
             onclick={handleRoll}
           >
-            {isRolling ? 'Rolling...' : 'Roll'}
+            {isRolling
+              ? $t('characterCreate.rolling')
+              : $t('characterCreate.roll')}
           </button>
           <button
             type="submit"
             class="primary"
             disabled={isBusy() || !rolledStats || atSlotLimit()}
           >
-            {isCreating ? 'Creating...' : 'Create'}
+            {isCreating
+              ? $t('characterCreate.creating')
+              : $t('characterCreate.create')}
           </button>
           <button
             type="button"
@@ -303,7 +292,7 @@
             disabled={isBusy()}
             onclick={onCancel}
           >
-            Cancel
+            {$t('common.cancel')}
           </button>
         </div>
       </div>
@@ -327,7 +316,6 @@
     justify-content: space-between;
     color: #edf2f7;
     pointer-events: none;
-    /* No background — the gradient is rendered behind the shared Canvas in App.svelte */
   }
 
   .top-bar {
@@ -480,12 +468,13 @@
   }
 
   .create-actions button {
-    flex: 1;
+    flex: 1 0 auto;
     border-radius: 7px;
     height: 34px;
     padding: 6px 12px;
     font-size: 14px;
     line-height: 1.2;
+    white-space: nowrap;
     cursor: pointer;
   }
 

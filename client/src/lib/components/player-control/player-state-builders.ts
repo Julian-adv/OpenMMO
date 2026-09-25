@@ -21,11 +21,14 @@ export function buildIdleAfterInteract(prev: PlayerState): PlayerState {
   }
 }
 
+/** Every swing is keyed by its counter — the renderer re-triggers the slash
+ *  clip on a counter change, so an attack state without one cannot be built. */
 export function buildAttackState(
   prev: PlayerState,
-  rotation?: number
+  rotation: number,
+  attackCounter: number
 ): PlayerState {
-  return { ...prev, state: 'attack', rotation: rotation ?? prev.rotation }
+  return { ...prev, state: 'attack', rotation, attackCounter }
 }
 
 export function buildIdleAfterAttack(prev: PlayerState): PlayerState {
@@ -71,16 +74,12 @@ export function buildInteractState(
     rotation,
     position,
     interactionAnim: anim,
+    // Bump so repeating the same anim still re-triggers (see attackCounter).
+    interactionCounter: (prev.interactionCounter ?? 0) + 1,
     interactOffsetY: offsetY,
   }
 }
 
 export function buildPickupState(prev: PlayerState): PlayerState {
-  return {
-    ...prev,
-    state: 'interact',
-    speed: 0,
-    interactionAnim: 'pickup',
-    interactOffsetY: 0,
-  }
+  return buildInteractState(prev, prev.position, prev.rotation, 'pickup', 0)
 }

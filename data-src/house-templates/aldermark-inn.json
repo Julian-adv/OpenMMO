@@ -1,0 +1,1643 @@
+{
+  "id": "r-23_+74_2",
+  "ownerId": "local",
+  "origin": {
+    "x": -1454.0,
+    "y": 1.2661458,
+    "z": 4748.0
+  },
+  "rooms": [
+    {
+      "roomType": "normal",
+      "roofType": "steep",
+      "roofRidgeDir": "auto",
+      "stairReversed": false,
+      "localX": 0,
+      "localZ": 0,
+      "sizeX": 6,
+      "sizeZ": 4,
+      "floorLevel": 0,
+      "floorTexture": 5,
+      "roofTexture": 10,
+      "wallHeight": 3.0,
+      "wallNorth": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "window",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "window",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "window",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallSouth": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallEast": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallWest": [
+        {
+          "variant": "window",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "double-door",
+          "texture": 18,
+          "isOpen": true
+        }
+      ]
+    },
+    {
+      "roomType": "normal",
+      "roofType": "steep",
+      "roofRidgeDir": "auto",
+      "stairReversed": false,
+      "localX": 0,
+      "localZ": 4,
+      "sizeX": 6,
+      "sizeZ": 4,
+      "floorLevel": 0,
+      "floorTexture": 5,
+      "roofTexture": 10,
+      "wallHeight": 3.0,
+      "wallNorth": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallSouth": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "window",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "window",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "window",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallEast": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallWest": [
+        {
+          "variant": "double-door",
+          "texture": 18,
+          "isOpen": true
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "window",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ]
+    },
+    {
+      "roomType": "normal",
+      "roofType": "steep",
+      "roofRidgeDir": "auto",
+      "stairReversed": false,
+      "localX": 6,
+      "localZ": 4,
+      "sizeX": 6,
+      "sizeZ": 4,
+      "floorLevel": 0,
+      "floorTexture": 5,
+      "roofTexture": 10,
+      "wallHeight": 3.0,
+      "wallNorth": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallSouth": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "window",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "window",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "window",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallEast": [
+        {
+          "variant": "window",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "window",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallWest": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ]
+    },
+    {
+      "roomType": "normal",
+      "roofType": "steep",
+      "roofRidgeDir": "auto",
+      "stairReversed": false,
+      "localX": 6,
+      "localZ": 0,
+      "sizeX": 6,
+      "sizeZ": 4,
+      "floorLevel": 0,
+      "floorTexture": 5,
+      "roofTexture": 10,
+      "wallHeight": 3.0,
+      "wallNorth": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "window",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "window",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallSouth": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallEast": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallWest": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ]
+    },
+    {
+      "roomType": "stairwell",
+      "roofType": "steep",
+      "roofRidgeDir": "auto",
+      "stairReversed": true,
+      "localX": 11,
+      "localZ": 0,
+      "sizeX": 1,
+      "sizeZ": 4,
+      "floorLevel": 0,
+      "floorTexture": 5,
+      "roofTexture": 10,
+      "wallHeight": 3.0,
+      "wallNorth": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallSouth": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallEast": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallWest": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ]
+    },
+    {
+      "roomType": "normal",
+      "roofType": "steep",
+      "roofRidgeDir": "auto",
+      "stairReversed": false,
+      "localX": 0,
+      "localZ": 0,
+      "sizeX": 3,
+      "sizeZ": 3,
+      "floorLevel": 1,
+      "floorTexture": 5,
+      "roofTexture": 10,
+      "wallHeight": 3.0,
+      "wallNorth": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "window",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallSouth": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallEast": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallWest": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ]
+    },
+    {
+      "roomType": "normal",
+      "roofType": "steep",
+      "roofRidgeDir": "auto",
+      "stairReversed": false,
+      "localX": 3,
+      "localZ": 0,
+      "sizeX": 3,
+      "sizeZ": 3,
+      "floorLevel": 1,
+      "floorTexture": 5,
+      "roofTexture": 10,
+      "wallHeight": 3.0,
+      "wallNorth": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "window",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallSouth": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallEast": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallWest": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ]
+    },
+    {
+      "roomType": "normal",
+      "roofType": "steep",
+      "roofRidgeDir": "auto",
+      "stairReversed": false,
+      "localX": 0,
+      "localZ": 3,
+      "sizeX": 6,
+      "sizeZ": 2,
+      "floorLevel": 1,
+      "floorTexture": 5,
+      "roofTexture": 10,
+      "wallHeight": 3.0,
+      "wallNorth": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "door",
+          "texture": 18,
+          "isOpen": true
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "door",
+          "texture": 18,
+          "isOpen": true
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallSouth": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallEast": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallWest": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ]
+    },
+    {
+      "roomType": "normal",
+      "roofType": "steep",
+      "roofRidgeDir": "auto",
+      "stairReversed": false,
+      "localX": 0,
+      "localZ": 5,
+      "sizeX": 3,
+      "sizeZ": 3,
+      "floorLevel": 1,
+      "floorTexture": 5,
+      "roofTexture": 10,
+      "wallHeight": 3.0,
+      "wallNorth": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "door",
+          "texture": 18,
+          "isOpen": true
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallSouth": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "window",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallEast": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallWest": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ]
+    },
+    {
+      "roomType": "normal",
+      "roofType": "steep",
+      "roofRidgeDir": "auto",
+      "stairReversed": false,
+      "localX": 3,
+      "localZ": 5,
+      "sizeX": 3,
+      "sizeZ": 3,
+      "floorLevel": 1,
+      "floorTexture": 5,
+      "roofTexture": 10,
+      "wallHeight": 3.0,
+      "wallNorth": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallSouth": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "window",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallEast": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallWest": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ]
+    },
+    {
+      "roomType": "normal",
+      "roofType": "steep",
+      "roofRidgeDir": "auto",
+      "stairReversed": false,
+      "localX": 6,
+      "localZ": 5,
+      "sizeX": 3,
+      "sizeZ": 3,
+      "floorLevel": 1,
+      "floorTexture": 5,
+      "roofTexture": 10,
+      "wallHeight": 3.0,
+      "wallNorth": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "door",
+          "texture": 18,
+          "isOpen": true
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallSouth": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "window",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallEast": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallWest": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ]
+    },
+    {
+      "roomType": "normal",
+      "roofType": "steep",
+      "roofRidgeDir": "auto",
+      "stairReversed": false,
+      "localX": 9,
+      "localZ": 5,
+      "sizeX": 3,
+      "sizeZ": 3,
+      "floorLevel": 1,
+      "floorTexture": 5,
+      "roofTexture": 10,
+      "wallHeight": 3.0,
+      "wallNorth": [
+        {
+          "variant": "door",
+          "texture": 18,
+          "isOpen": true
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallSouth": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "window",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallEast": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "window",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallWest": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ]
+    },
+    {
+      "roomType": "normal",
+      "roofType": "steep",
+      "roofRidgeDir": "auto",
+      "stairReversed": false,
+      "localX": 6,
+      "localZ": 3,
+      "sizeX": 6,
+      "sizeZ": 2,
+      "floorLevel": 1,
+      "floorTexture": 5,
+      "roofTexture": 10,
+      "wallHeight": 3.0,
+      "wallNorth": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "door",
+          "texture": 18,
+          "isOpen": true
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallSouth": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallEast": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallWest": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ]
+    },
+    {
+      "roomType": "normal",
+      "roofType": "steep",
+      "roofRidgeDir": "auto",
+      "stairReversed": false,
+      "localX": 6,
+      "localZ": 0,
+      "sizeX": 3,
+      "sizeZ": 3,
+      "floorLevel": 1,
+      "floorTexture": 5,
+      "roofTexture": 10,
+      "wallHeight": 3.0,
+      "wallNorth": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "window",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallSouth": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallEast": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallWest": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ]
+    },
+    {
+      "roomType": "normal",
+      "roofType": "steep",
+      "roofRidgeDir": "auto",
+      "stairReversed": false,
+      "localX": 9,
+      "localZ": 0,
+      "sizeX": 3,
+      "sizeZ": 3,
+      "floorLevel": 1,
+      "floorTexture": 5,
+      "roofTexture": 10,
+      "wallHeight": 3.0,
+      "wallNorth": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallSouth": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallEast": [
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "solid",
+          "texture": 18,
+          "isOpen": false
+        }
+      ],
+      "wallWest": [
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        },
+        {
+          "variant": "open",
+          "texture": 18,
+          "isOpen": false
+        }
+      ]
+    }
+  ],
+  "passability": [
+    {
+      "floorLevel": 0,
+      "originX": 0,
+      "originZ": 0,
+      "width": 12,
+      "depth": 8,
+      "cells": [
+        9,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        3,
+        11,
+        8,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        10,
+        8,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        10,
+        8,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        8,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        8,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        8,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        12,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        6
+      ]
+    },
+    {
+      "floorLevel": 1,
+      "originX": 0,
+      "originZ": 0,
+      "width": 12,
+      "depth": 8,
+      "cells": [
+        9,
+        1,
+        3,
+        9,
+        1,
+        3,
+        9,
+        1,
+        3,
+        9,
+        1,
+        3,
+        8,
+        0,
+        2,
+        8,
+        0,
+        2,
+        8,
+        0,
+        2,
+        8,
+        2,
+        10,
+        12,
+        4,
+        6,
+        12,
+        4,
+        6,
+        12,
+        4,
+        6,
+        8,
+        2,
+        10,
+        9,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        0,
+        2,
+        14,
+        12,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        7,
+        9,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        3,
+        9,
+        1,
+        3,
+        8,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        8,
+        0,
+        2,
+        12,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        6,
+        12,
+        4,
+        6
+      ]
+    }
+  ]
+}

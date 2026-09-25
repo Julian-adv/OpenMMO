@@ -6,6 +6,12 @@ use std::path::{Path, PathBuf};
 pub const WORLD_TILES_X: i32 = 512;
 pub const WORLD_MIN_TILE_X: i32 = -256;
 pub const WORLD_MAX_TILE_X: i32 = WORLD_MIN_TILE_X + WORLD_TILES_X;
+pub const FANTASY_MINIMAP_DIR: &str = "minimap-fantasy";
+pub const MINIMAP_DIR: &str = "minimap";
+/// Full-resolution region tile edge, in pixels.
+pub const MINIMAP_BASE_SIZE: u32 = 1024;
+/// Downscaled tiles baked below the base size, coarsest first.
+pub const MINIMAP_LOD_SIZES: [u32; 3] = [128, 256, 512];
 
 /// Normalize a render/data tile X into the canonical baked file range.
 #[inline]
@@ -60,6 +66,16 @@ pub fn splat_region_dir(base: &Path, rx: i32, rz: i32) -> PathBuf {
     base.join("splat").join(region_dir_name(rx, rz))
 }
 
+pub fn landscaping_region_dir(base: &Path, rx: i32, rz: i32) -> PathBuf {
+    base.join("landscaping").join(region_dir_name(rx, rz))
+}
+
+pub fn landscaping_path(base: &Path, tx: i32, tz: i32) -> PathBuf {
+    let tx = wrap_tile_x(tx);
+    landscaping_region_dir(base, tile_to_region(tx), tile_to_region(tz))
+        .join(format!("l_{tx:+05}_{tz:+05}.bin"))
+}
+
 /// Build filesystem path for a grass placement data file.
 pub fn grass_path(base: &Path, tx: i32, tz: i32) -> PathBuf {
     let tx = wrap_tile_x(tx);
@@ -102,6 +118,23 @@ pub fn zone_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
         .join(format!("r{:+03}_{:+03}.json", rx, rz))
 }
 
+/// Build filesystem path for a region land-grade file (one byte per plot).
+pub fn land_grade_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
+    base.join("land-grades")
+        .join(format!("r{:+03}_{:+03}.bin", rx, rz))
+}
+
+/// Build filesystem path for a region climate file (one zone byte per plot).
+pub fn climate_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
+    base.join("climate")
+        .join(format!("r{:+03}_{:+03}.bin", rx, rz))
+}
+
+/// Build filesystem path for the world-wide rain-cell sector list.
+pub fn weather_sectors_path(base: &Path) -> PathBuf {
+    base.join("weather-sectors.json")
+}
+
 /// Build filesystem path for a region object JSON file.
 pub fn object_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
     base.join("objects")
@@ -120,11 +153,76 @@ pub fn tree_region_dir(base: &Path, rx: i32, rz: i32) -> PathBuf {
     base.join("trees").join(region_dir_name(rx, rz))
 }
 
+/// The two parallel minimap tile families. Everything that differs between
+/// them — directory, extension, MIME type — lives here so the rest of the
+/// codebase never re-derives it (and never sniffs magic bytes for it).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MinimapFamily {
+    /// Painterly world-map tiles, baked by `terrain-gen render-map-world`.
+    Fantasy,
+    /// Semantic splat-colored tiles written by the editor and the bake.
+    Legacy,
+}
+
+impl MinimapFamily {
+    pub fn dir(self) -> &'static str {
+        match self {
+            Self::Fantasy => FANTASY_MINIMAP_DIR,
+            Self::Legacy => MINIMAP_DIR,
+        }
+    }
+
+    pub fn ext(self) -> &'static str {
+        match self {
+            Self::Fantasy => "webp",
+            Self::Legacy => "png",
+        }
+    }
+
+    pub fn content_type(self) -> &'static str {
+        match self {
+            Self::Fantasy => "image/webp",
+            Self::Legacy => "image/png",
+        }
+    }
+
+    pub fn base_path(self, base: &Path, rx: i32, rz: i32) -> PathBuf {
+        base.join(self.dir())
+            .join(region_tile_name(rx, rz, self.ext()))
+    }
+
+    pub fn lod_path(self, base: &Path, rx: i32, rz: i32, size: u32) -> PathBuf {
+        if size >= MINIMAP_BASE_SIZE {
+            return self.base_path(base, rx, rz);
+        }
+        base.join(self.dir())
+            .join(size.to_string())
+            .join(region_tile_name(rx, rz, self.ext()))
+    }
+}
+
+/// Filename a region tile takes in any family root, e.g. `r-02_+04.webp`.
+pub fn region_tile_name(rx: i32, rz: i32, ext: &str) -> String {
+    let rx = wrap_region_x(rx);
+    format!("r{rx:+03}_{rz:+03}.{ext}")
+}
+
 /// Build filesystem path for a region minimap PNG file.
 pub fn minimap_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
-    let rx = wrap_region_x(rx);
-    base.join("minimap")
-        .join(format!("r{:+03}_{:+03}.png", rx, rz))
+    MinimapFamily::Legacy.base_path(base, rx, rz)
+}
+
+/// Fantasy world-map tiles are baked as lossy WebP; the gameplay minimap stays PNG.
+pub fn fantasy_minimap_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
+    MinimapFamily::Fantasy.base_path(base, rx, rz)
+}
+
+pub fn minimap_lod_path(base: &Path, rx: i32, rz: i32, size: u32) -> PathBuf {
+    MinimapFamily::Legacy.lod_path(base, rx, rz, size)
+}
+
+pub fn fantasy_minimap_lod_path(base: &Path, rx: i32, rz: i32, size: u32) -> PathBuf {
+    MinimapFamily::Fantasy.lod_path(base, rx, rz, size)
 }
 
 /// Build filesystem path for the per-tile river-field binary (RFD1) —

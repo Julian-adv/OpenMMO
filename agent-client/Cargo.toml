@@ -1,7 +1,8 @@
 [package]
 name = "agent-client"
-version = "0.1.0"
+version = "0.57.0"
 edition = "2021"
+repository = "https://github.com/Julian-adv/OpenMMO"
 
 [dependencies]
 onlinerpg-shared = { path = "../shared" }
@@ -22,5 +23,17 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 async-trait = "0.1"
 axum = "0.8"
 
+[dev-dependencies]
+# test-util: paused clock in tests.
+tokio = { version = "1.0", features = ["test-util"] }
+
 [build-dependencies]
 serde_json = "1.0"
+
+[target."cfg(unix)".dependencies]
+flate2 = "1.1.9"
+libc = "0.2"
+tar = "0.4.46"
+
+[target."cfg(windows)".dependencies]
+zip = { version = "8.6.0", default-features = false, features = ["deflate"] }

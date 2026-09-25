@@ -1,12 +1,66 @@
 use onlinerpg_shared::inventory::EquipSlot;
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use tracing::info;
 
 /// Chest roll chance for items whose home tier is below the dungeon's
 /// (doc/ITEM_TIERS.md "하위 티어 이월템").
 const CHEST_CARRYOVER_CHANCE: f32 = 0.10;
+
+/// One token of the items.csv `effects` column. Special effects live here
+/// rather than in a column apiece; dense core stats (`guard`) keep theirs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ItemEffect {
+    /// CHA bonus, added to the base attribute wherever CHA is read
+    /// (haggling bands, doc/ITEM_TIERS.md).
+    Cha(i32),
+    /// Slows satiation drain while equipped (doc/HUNGER.md).
+    Sustenance,
+}
+
+impl ItemEffect {
+    fn parse(token: &str) -> Option<Self> {
+        if let Some(amount) = token.strip_prefix("cha") {
+            return amount.parse().ok().map(ItemEffect::Cha);
+        }
+        match token {
+            "sustenance" => Some(ItemEffect::Sustenance),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WeaponType {
+    Sword,
+    GreatSword,
+    Dagger,
+    Axe,
+    Staff,
+    Spear,
+    Mace,
+    Club,
+    Bow,
+    Crossbow,
+    Torch,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ArmorType {
+    Shield,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AuthenticatedUseAction {
+    EstateStorage,
+    EstateFence,
+    LandClaim,
+    EstateReturn,
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[allow(dead_code)]
@@ -26,8 +80,11 @@ pub struct ItemDefinition {
     /// currency).
     #[serde(default)]
     pub category: Option<String>,
-    /// Dice notation (e.g. "1d8", "6d4") whose meaning depends on `category`.
-    /// Read it through `damage_dice()` / `heal_dice()` rather than directly.
+    #[serde(rename = "weaponType", default)]
+    pub weapon_type: Option<WeaponType>,
+    #[serde(rename = "armorType", default)]
+    pub armor_type: Option<ArmorType>,
+    /// Dice notation whose meaning depends on `category`.
     #[serde(default)]
     pub dice: Option<String>,
     #[serde(default)]
@@ -40,17 +97,23 @@ pub struct ItemDefinition {
     /// equipped items and added to the wearer's base guard when attacked.
     #[serde(default)]
     pub guard: Option<i32>,
-    /// Fish only — rarity tier 1 (common) … 5 (legendary). Drives catch
-    /// weighting and skill XP (doc/FISHING.md).
+    /// Special effects granted while equipped. Resolved into `effects` at
+    /// load; an unknown token fails the boot.
+    #[serde(
+        rename = "effects",
+        default,
+        deserialize_with = "crate::semicolon_list::deserialize"
+    )]
+    effect_tokens: Vec<String>,
+    #[serde(skip)]
+    effects: Vec<ItemEffect>,
+    /// Fish rarity 1–5 controls fight difficulty; flotsam uses 0.
     #[serde(rename = "rarityTier", default)]
     pub rarity_tier: Option<u32>,
-    /// Fish only — relative weight in the catch table at fishing level 0.
+    /// Relative weight within the fish or flotsam catch pool.
     #[serde(rename = "catchWeight", default)]
     pub catch_weight: Option<u32>,
-    /// Fish only — the fishing level a catch is locked behind. Absent or 0
-    /// means available from the first cast.
-    #[serde(rename = "minFishingLevel", default)]
-    pub min_fishing_level: Option<u32>,
+
     /// Fish only — dice notation for rolled length in centimeters.
     #[serde(rename = "sizeDice", default)]
     pub size_dice: Option<String>,
@@ -65,24 +128,164 @@ pub struct ItemDefinition {
     /// (signature drops are guaranteed via dungeons.csv `chestDrops` instead).
     #[serde(rename = "chestChance", default)]
     pub chest_chance: Option<f32>,
+    /// Usable from the bag. The clients read this flag; `load()` fails the
+    /// boot if it ever disagrees with the `use_effect` dispatch.
+    #[serde(default)]
+    pub consumable: bool,
+    #[serde(rename = "useAction", default)]
+    pub authenticated_use_action: Option<AuthenticatedUseAction>,
+    /// Satiation restored when eaten (doc/HUNGER.md). Present on food and fish.
+    #[serde(default)]
+    pub nutrition: Option<u32>,
+    /// Fish only — the item def this grills into at a campfire.
+    #[serde(rename = "grillsInto", default)]
+    pub grills_into: Option<String>,
+    /// Debuff id rolled when eaten (raw fish → food poisoning, doc/DEBUFF.md).
+    #[serde(rename = "useDebuff", default)]
+    pub use_debuff: Option<String>,
+    /// Drinks only — how many units count toward the tipsy/drunk/wasted
+    /// stages (doc/DEBUFF.md 취기). Absent or 0: no effect.
+    #[serde(default)]
+    pub alcohol: Option<u32>,
+    /// Blocks player-to-player trading (doc/TRADE.md).
+    #[serde(default)]
+    pub untradeable: bool,
+    /// Cape only — the cloth colour of the procedural sheet. Its presence is
+    /// what makes a back-slot item a cape (doc/CAPE_CUSTOMIZATION.md).
+    #[serde(rename = "capeColor", default)]
+    pub cape_color: Option<String>,
+    /// Phoenix talisman only — max-HP percentage restored by a revive.
+    #[serde(rename = "reviveHpPercent", default)]
+    pub revive_hp_percent: Option<u32>,
+    /// Weapon reach in meters. Absent means melee: the hardcoded reach in
+    /// `validate_player_attack` (doc/COMBAT.md 원거리 전투).
+    #[serde(default)]
+    pub range: Option<f32>,
+    /// Ability whose modifier drives a ranged weapon's hit and damage rolls
+    /// instead of STR.
+    #[serde(rename = "rangedAbility", default)]
+    ranged_ability: Option<String>,
+    /// Hands the weapon occupies. Absent = 1; 2 locks the off-hand slot.
+    #[serde(default)]
+    pub hands: Option<u8>,
+    /// What a ranged weapon spends, and what a piece of ammunition feeds.
+    /// Both sides name the same kind ("arrow"), so a crossbow can want bolts
+    /// without either knowing about the other. Absent on a weapon means it
+    /// costs nothing to fire.
+    #[serde(rename = "ammoKind", default)]
+    pub ammo_kind: Option<String>,
+}
+
+/// The attribute a weapon's attack and damage bonus is read from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ability {
+    Str,
+    Dex,
+    Con,
+    Int,
+    Wis,
+    Cha,
+}
+
+impl Ability {
+    fn parse(token: &str) -> Option<Self> {
+        match token {
+            "str" => Some(Ability::Str),
+            "dex" => Some(Ability::Dex),
+            "con" => Some(Ability::Con),
+            "int" => Some(Ability::Int),
+            "wis" => Some(Ability::Wis),
+            "cha" => Some(Ability::Cha),
+            _ => None,
+        }
+    }
+
+    pub fn score(&self, attrs: &onlinerpg_shared::character::CharacterAttributes) -> u8 {
+        match self {
+            Ability::Str => attrs.r#str,
+            Ability::Dex => attrs.dex,
+            Ability::Con => attrs.con,
+            Ability::Int => attrs.int,
+            Ability::Wis => attrs.wis,
+            Ability::Cha => attrs.cha,
+        }
+    }
+}
+
+/// Eating food or fish: what it feeds, whether it grills first, and what
+/// it may inflict (doc/HUNGER.md, doc/DEBUFF.md).
+#[derive(Debug, Clone, PartialEq)]
+pub struct EatEffect {
+    pub nutrition: u32,
+    pub raw_fish: bool,
+    pub debuff: Option<String>,
+    pub alcohol: Option<u32>,
 }
 
 /// The effect produced by consuming a usable item via `use_item`, decided by
 /// the item's `category`. One place to extend when a new consumable lands.
 pub enum UseEffect {
+    /// Board or leave the mount this item carries.
+    ToggleMount(onlinerpg_shared::mount::MountKind),
     /// Restore HP by rolling the given dice notation.
     Heal(String),
+    /// Restore satiation and regenerate HP from nutrition; `debuff` is
+    /// rolled afterwards. Raw fish grills instead near a campfire.
+    Eat(EatEffect),
+    /// Light a campfire near the user.
+    PlaceCampfire,
     /// Teleport the user back to the town spawn point.
     TeleportTown,
+    TeleportRandom,
     /// Add +1 enchantment to the wielded weapon (NetHack style).
     EnchantWeapon,
+    /// Add +1 enchantment to one random worn armor piece.
+    EnchantArmor,
+    /// Ask every party member to teleport to the reader's side.
+    SummonParty,
     /// Open a fished-up coin pouch: roll the given dice for its copper.
     OpenCoinPouch(String),
+    /// Set a tip hat down in front of the user, or pick theirs back up.
+    ToggleTipHat,
+    /// Lay the user's stall out in front of them, or fold it back up.
+    ToggleStall,
+    /// Ask the client to open the colour picker. Consumes nothing — the
+    /// chosen colour comes back as `DyeCape`.
+    PromptCapeDye,
+    /// Ask the client to open the image picker. Consumes nothing — the
+    /// uploaded picture's hash comes back as `ApplyCapeTexture`.
+    PromptCapeTexture,
+    /// Bring a defeated user back where they fell with this percentage of
+    /// their max HP (phoenix talisman).
+    ReviveInPlace(u32),
+    /// Open placement mode for one of the fixed house scrolls.
+    PlaceHouse,
 }
 
 impl ItemDefinition {
+    pub fn cha_bonus(&self) -> Option<i32> {
+        Some(
+            self.effects
+                .iter()
+                .filter_map(|e| match e {
+                    ItemEffect::Cha(amount) => Some(*amount),
+                    _ => None,
+                })
+                .sum(),
+        )
+    }
+
+    pub fn has_sustenance(&self) -> bool {
+        self.effects.contains(&ItemEffect::Sustenance)
+    }
+
     pub fn is_weapon(&self) -> bool {
         self.category.as_deref() == Some("weapon")
+    }
+
+    /// Worn protection — what an enchant-armor scroll can target.
+    pub fn is_armor(&self) -> bool {
+        self.category.as_deref() == Some("armor")
     }
 
     /// Main-hand tool that enables casting (`ClientMessage::FishingCast`).
@@ -96,10 +299,21 @@ impl ItemDefinition {
         self.category.as_deref() == Some("fish")
     }
 
+    /// A back-slot item that renders as the procedural cloth sheet, and so
+    /// can be dyed.
+    pub fn is_cape(&self) -> bool {
+        self.cape_color.is_some()
+    }
+
+    /// What `/play_music` requires the performer to carry.
+    pub fn is_instrument(&self) -> bool {
+        self.category.as_deref() == Some("instrument")
+    }
+
     /// A catch that lands in the bag sealed and pays out coins when opened
     /// (`use_item`). Its `dice` column is the copper roll (the
-    /// category-decides-meaning pattern: weapon → damage, fish/potion →
-    /// heal, coin_catch → gold). Production code dispatches through
+    /// category-decides-meaning pattern: weapon → damage, potion → heal,
+    /// coin_catch → gold). Production code dispatches through
     /// `use_effect`; the tests keep this named predicate for the economy
     /// guardrail.
     #[cfg(test)]
@@ -107,12 +321,10 @@ impl ItemDefinition {
         self.category.as_deref() == Some("coin_catch")
     }
 
-    /// Whether a catch of this item at `size_cm` is a trophy. Trophies are
-    /// a fish concept — a nat-20 Old Boot is still just a (very large) boot —
-    /// and fire on the natural-20 quality roll or on meeting `trophyCm`.
-    pub fn trophy_at(&self, size_cm: u16, nat_twenty: bool) -> bool {
+    /// Only fish become trophies, from the trophy roll or the size threshold.
+    pub fn trophy_at(&self, size_cm: u16, trophy_roll: bool) -> bool {
         self.is_fish()
-            && (nat_twenty
+            && (trophy_roll
                 || self
                     .trophy_cm
                     .is_some_and(|threshold| u32::from(size_cm) >= threshold))
@@ -127,16 +339,87 @@ impl ItemDefinition {
         }
     }
 
+    /// Reach in meters if this weapon declares one, else `None` (melee).
+    pub fn weapon_range(&self) -> Option<f32> {
+        if self.is_weapon() {
+            self.range.filter(|r| r.is_finite() && *r > 0.0)
+        } else {
+            None
+        }
+    }
+
+    /// The ability a ranged weapon rolls with; `None` for melee weapons, which
+    /// keep STR. An unknown token fails the boot in `load()`.
+    pub fn ranged_ability(&self) -> Option<Ability> {
+        if self.is_weapon() {
+            self.ranged_ability.as_deref().and_then(Ability::parse)
+        } else {
+            None
+        }
+    }
+
+    /// Occupies both hands, so the off-hand slot must stay empty.
+    pub fn is_two_handed(&self) -> bool {
+        self.hands.unwrap_or(1) >= 2
+    }
+
+    pub fn is_ammo(&self) -> bool {
+        self.category.as_deref() == Some("ammo")
+    }
+
+    /// Mean roll of this item's `dice`, for ranking ammunition. Ranked from
+    /// the dice rather than a tier column so the order can never disagree
+    /// with the damage it stands for.
+    pub fn average_damage(&self) -> f32 {
+        let Some(dice) = self.dice.as_deref() else {
+            return 0.0;
+        };
+        let (count, sides) = dice.split_once('d').unwrap_or(("1", "6"));
+        let count: f32 = count.parse().unwrap_or(1.0);
+        let sides: f32 = sides.parse().unwrap_or(6.0);
+        count * (sides + 1.0) / 2.0
+    }
+
     /// The effect of using this item from the bag, or `None` if it isn't a
     /// consumable.
     pub fn use_effect(&self) -> Option<UseEffect> {
         match self.category.as_deref()? {
             "healing_potion" => self.dice.clone().map(UseEffect::Heal),
-            // Eating a fish heals by its dice — same plumbing as potions.
-            "fish" => self.dice.clone().map(UseEffect::Heal),
+            "fish" => Some(UseEffect::Eat(EatEffect {
+                nutrition: self
+                    .nutrition
+                    .unwrap_or(onlinerpg_shared::hunger::RAW_FISH_NUTRITION),
+                raw_fish: true,
+                debuff: self.use_debuff.clone(),
+                alcohol: None,
+            })),
+            "food" | "drink" => self.nutrition.map(|nutrition| {
+                UseEffect::Eat(EatEffect {
+                    nutrition,
+                    raw_fish: false,
+                    debuff: self.use_debuff.clone(),
+                    alcohol: self.alcohol,
+                })
+            }),
+            "campfire_kit" => Some(UseEffect::PlaceCampfire),
             "return_scroll" => Some(UseEffect::TeleportTown),
+            "teleport_scroll" => Some(UseEffect::TeleportRandom),
+            "horse_reins" => Some(UseEffect::ToggleMount(
+                onlinerpg_shared::mount::MountKind::Horse,
+            )),
+            "rowboat" => Some(UseEffect::ToggleMount(
+                onlinerpg_shared::mount::MountKind::Rowboat,
+            )),
             "enchant_scroll" => Some(UseEffect::EnchantWeapon),
+            "enchant_armor_scroll" => Some(UseEffect::EnchantArmor),
+            "party_summon_scroll" => Some(UseEffect::SummonParty),
             "coin_catch" => self.dice.clone().map(UseEffect::OpenCoinPouch),
+            "tip_hat" => Some(UseEffect::ToggleTipHat),
+            "peddler_stall" => Some(UseEffect::ToggleStall),
+            "cape_dye" => Some(UseEffect::PromptCapeDye),
+            "cape_texture" => Some(UseEffect::PromptCapeTexture),
+            "phoenix_talisman" => self.revive_hp_percent.map(UseEffect::ReviveInPlace),
+            "house_scroll" => Some(UseEffect::PlaceHouse),
             _ => None,
         }
     }
@@ -150,11 +433,60 @@ pub struct ItemDefs {
     catch_table: Arc<Vec<crate::game_state::fishing::CatchCandidate>>,
 }
 
+/// Process-wide shared instance; `load()` remains for isolated tests.
+pub fn item_defs() -> &'static ItemDefs {
+    static DEFS: OnceLock<ItemDefs> = OnceLock::new();
+    DEFS.get_or_init(ItemDefs::load)
+}
+
 impl ItemDefs {
     pub fn load() -> Self {
         let data = include_str!("../../data/items.json");
-        let defs: HashMap<String, ItemDefinition> =
+        let mut defs: HashMap<String, ItemDefinition> =
             serde_json::from_str(data).expect("Failed to parse items.json");
+
+        for storage in onlinerpg_shared::estate_storage::estate_storage_defs().values() {
+            let item = defs.get(&storage.id).unwrap_or_else(|| {
+                panic!("estate storage '{}' has no item definition", storage.id)
+            });
+            assert_eq!(
+                item.category.as_deref(),
+                Some("furniture"),
+                "estate storage '{}' must be furniture",
+                storage.id
+            );
+            assert!(
+                item.consumable,
+                "estate storage '{}' must be usable from the bag",
+                storage.id
+            );
+            assert_eq!(
+                item.authenticated_use_action,
+                Some(AuthenticatedUseAction::EstateStorage),
+                "estate storage '{}' must use the estate_storage action",
+                storage.id
+            );
+        }
+
+        // A typo in `effects` would silently strip an item's whole point, so
+        // resolve the tokens up front and fail the boot on an unknown one.
+        for def in defs.values_mut() {
+            let effects: Vec<_> = def
+                .effect_tokens
+                .iter()
+                .map(|token| {
+                    ItemEffect::parse(token)
+                        .unwrap_or_else(|| panic!("item '{}': unknown effect '{token}'", def.id))
+                })
+                .collect();
+            def.effects = effects;
+        }
+
+        for def in defs.values() {
+            if let Some(id) = &def.use_debuff {
+                crate::debuff_defs::assert_debuff_exists(id, &format!("item '{}'", def.id));
+            }
+        }
 
         // A chestTier opt-in on a non-equippable or a fishing rod (bought
         // tool, doc/FISHING.md) is a data error — fail the boot, don't
@@ -165,6 +497,61 @@ impl ItemDefs {
                 "item '{}' has a chestTier but is not chest-eligible equipment",
                 def.id
             );
+            let authenticated_use = def.authenticated_use_action.is_some();
+            assert!(
+                def.consumable
+                    == (def.use_effect().is_some()
+                        || authenticated_use
+                        || onlinerpg_shared::landscaping::is_landscaping_item(&def.id)),
+                "item '{}': consumable flag out of step with its use handler",
+                def.id
+            );
+            if def.authenticated_use_action == Some(AuthenticatedUseAction::EstateStorage) {
+                assert!(
+                    onlinerpg_shared::estate_storage::is_estate_storage_item(&def.id),
+                    "item '{}': estate_storage action needs an estate storage definition",
+                    def.id
+                );
+            }
+            // `equip_item` moves a whole bag entry into the slot and equipped
+            // rows save as quantity 1, so the rest of a stack would vanish.
+            assert!(
+                !(def.stackable && def.equip_slot.is_some()),
+                "item '{}' is both stackable and equippable",
+                def.id
+            );
+            // A typo would silently drop the shot back onto STR.
+            assert!(
+                def.ranged_ability.is_none() || def.ranged_ability().is_some(),
+                "item '{}': unknown rangedAbility '{}'",
+                def.id,
+                def.ranged_ability.as_deref().unwrap_or_default()
+            );
+            assert!(
+                def.hands.is_none_or(|hands| (1..=2).contains(&hands)),
+                "item '{}': hands must be 1 or 2",
+                def.id
+            );
+            // Ammunition is spent a unit at a time out of the bag and rolls
+            // its own damage die, so a piece missing either is inert.
+            assert!(
+                !def.is_ammo() || (def.stackable && def.dice.is_some() && def.ammo_kind.is_some()),
+                "item '{}': ammo must be stackable with dice and an ammoKind",
+                def.id
+            );
+            assert_eq!(
+                def.is_weapon(),
+                def.weapon_type.is_some(),
+                "item '{}': category weapon and weaponType must be set together",
+                def.id
+            );
+            if def.armor_type == Some(ArmorType::Shield) {
+                assert!(
+                    def.is_armor() && def.equip_slot == Some(EquipSlot::OffHand),
+                    "item '{}': armorType shield requires off-hand armor",
+                    def.id
+                );
+            }
         }
 
         info!("Loaded {} item definitions", defs.len());
@@ -182,7 +569,6 @@ impl ItemDefs {
                     item_def_id: def.id.clone(),
                     rarity: def.rarity_tier.unwrap_or(1),
                     catch_weight: def.catch_weight?,
-                    min_fishing_level: def.min_fishing_level.unwrap_or(0),
                 })
             })
             .collect();
@@ -255,12 +641,34 @@ impl ItemDefs {
     }
 
     pub fn weight(&self, item_def_id: &str) -> f32 {
-        self.defs.get(item_def_id).map(|d| d.weight).unwrap_or(1.0)
+        self.weight_with(item_def_id, 1.0)
     }
 
-    /// The fishing catch table: every item def with a `catchWeight` — fish,
-    /// junk flotsam (rarityTier 0 → no skill XP), and coin catches alike.
-    /// Sorted by id for a deterministic cumulative walk.
+    /// Weight with the carrier's armour factor applied (doc/DEBUFF.md). Every
+    /// weight that meets a carry cap goes through here, so a soaked total and
+    /// the item being added to it are always measured the same way.
+    pub fn weight_with(&self, item_def_id: &str, armor_mult: f32) -> f32 {
+        match self.defs.get(item_def_id) {
+            Some(def) if def.is_armor() => def.weight * armor_mult,
+            Some(def) => def.weight,
+            None => 1.0,
+        }
+    }
+
+    pub fn stackable(&self, item_def_id: &str) -> bool {
+        self.defs.get(item_def_id).is_some_and(|d| d.stackable)
+    }
+
+    /// Unknown ids count as untradeable: a def that isn't loaded can't be
+    /// weighed or priced, so it has no business crossing between players.
+    pub fn untradeable(&self, item_def_id: &str) -> bool {
+        self.defs
+            .get(item_def_id)
+            .map(|d| d.untradeable)
+            .unwrap_or(true)
+    }
+
+    /// All fish and flotsam with a `catchWeight`, sorted by item ID.
     pub fn catch_table(&self) -> &[crate::game_state::fishing::CatchCandidate] {
         &self.catch_table
     }
@@ -269,13 +677,46 @@ impl ItemDefs {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use onlinerpg_shared::skills::SKILL_LEVEL_CAP;
 
     fn table_ids(defs: &ItemDefs, tier: u8) -> Vec<String> {
         defs.chest_roll_table(tier)
             .into_iter()
             .map(|(id, _)| id)
             .collect()
+    }
+
+    /// The three ranged columns come off items.csv, and an empty `range`
+    /// leaves a weapon melee — the backward-compatible default.
+    #[test]
+    fn ranged_columns_parse_and_default_to_melee() {
+        let defs = ItemDefs::load();
+
+        let bow = defs.get("bow").expect("bow item def");
+        assert_eq!(bow.weapon_range(), Some(10.0));
+        assert_eq!(bow.ranged_ability(), Some(Ability::Dex));
+        assert!(bow.is_two_handed());
+
+        let sword = defs.get("iron_sword").expect("iron_sword item def");
+        assert_eq!(sword.weapon_range(), None);
+        assert_eq!(sword.ranged_ability(), None);
+        assert!(!sword.is_two_handed());
+    }
+
+    #[test]
+    fn authenticated_item_use_is_data_driven() {
+        let defs = ItemDefs::load();
+        assert_eq!(
+            defs.get("storage_chest").unwrap().authenticated_use_action,
+            Some(AuthenticatedUseAction::EstateStorage)
+        );
+        assert_eq!(
+            defs.get("wooden_fence").unwrap().authenticated_use_action,
+            Some(AuthenticatedUseAction::EstateFence)
+        );
+        assert_eq!(
+            defs.get("land_deed").unwrap().authenticated_use_action,
+            Some(AuthenticatedUseAction::LandClaim)
+        );
     }
 
     #[test]
@@ -295,31 +736,52 @@ mod tests {
         );
     }
 
-    /// Chest pools are exactly the doc/ITEM_TIERS.md placement: leather set
-    /// split over tiers 1–2, chain/plate cores reserved for the unbuilt
-    /// tier-3/4 dungeons, everything else (weapons, valuables) opted out.
+    /// Pool membership and chances are laws derived from the defs, so adding
+    /// an item can't stale this test. The doc/ITEM_TIERS.md placement is
+    /// pinned only by the debut anchors, which move when the design does.
     #[test]
     fn chest_tiers_gate_endgame_loot_by_dungeon() {
         let defs = ItemDefs::load();
-        let [t1, t2, t3, t4] = [1, 2, 3, 4].map(|t| table_ids(&defs, t));
+        let max_tier = defs.all().filter_map(|d| d.chest_tier).max().unwrap();
 
-        assert_eq!(t1, ["leather_belt", "leather_helmet", "leather_pants"]);
-        assert_eq!(
-            t2,
-            [
-                "iron_boots",
-                "leather_armor",
-                "leather_belt",
-                "leather_gloves",
-                "leather_helmet",
-                "leather_pants",
-                "raven_shield",
-            ]
-        );
-        let t3_new: Vec<_> = t3.iter().filter(|id| !t2.contains(id)).collect();
-        assert_eq!(t3_new, ["chain_mail"]);
-        let t4_new: Vec<_> = t4.iter().filter(|id| !t3.contains(id)).collect();
-        assert_eq!(t4_new, ["breastplate"]);
+        for tier in 1..=max_tier {
+            let mut expected: Vec<String> = defs
+                .all()
+                .filter(|def| def.chest_tier.is_some_and(|home| home <= tier))
+                .map(|def| def.id.clone())
+                .collect();
+            expected.sort();
+            assert_eq!(table_ids(&defs, tier), expected, "tier {tier} pool");
+
+            for (id, chance) in defs.chest_roll_table(tier) {
+                let def = defs.get(&id).unwrap();
+                let want = if def.chest_tier == Some(tier) {
+                    def.chest_chance.unwrap_or(0.0)
+                } else {
+                    CHEST_CARRYOVER_CHANCE
+                };
+                assert_eq!(chance, want, "{id} chance at tier {tier}");
+            }
+        }
+
+        // Each set's core debuts one dungeon above its opener.
+        let debut = |id: &str| defs.get(id).unwrap().chest_tier;
+        assert_eq!(debut("leather_helmet"), Some(1));
+        assert_eq!(debut("leather_armor"), Some(2));
+        assert_eq!(debut("chain_mail"), Some(3));
+        assert_eq!(debut("breastplate"), Some(4));
+        assert_eq!(debut("ring_of_protection"), Some(5));
+        assert_eq!(debut("gold_ring"), Some(3));
+        assert_eq!(debut("wool_cape"), Some(3));
+        // Accessories fill the low tiers' empty neck/ring lanes.
+        assert_eq!(debut("silver_necklace"), Some(2));
+        // Boss weapons are chest signatures; other weapons and consumables stay out.
+        assert_eq!(debut("goblin_sword"), Some(1));
+        assert_eq!(debut("iron_sword"), Some(2));
+        assert_eq!(debut("steel_longsword"), Some(3));
+        for id in ["small_sword", "healing_potion"] {
+            assert_eq!(debut(id), None, "{id} must stay out of chest pools");
+        }
     }
 
     /// The doc's farming target: completing a tier's new set pieces takes
@@ -349,12 +811,12 @@ mod tests {
             expectation
         }
 
-        // Old Crypt (tier 1): signature leather_helmet is guaranteed; the
-        // remaining set pieces must land in ~5 runs.
+        // Old Crypt (tier 1): signatures are guaranteed; the remaining set
+        // pieces must land in ~5 runs.
         let t1: Vec<f32> = defs
             .chest_roll_table(1)
             .into_iter()
-            .filter(|(id, _)| id != "leather_helmet")
+            .filter(|(id, _)| id != "leather_helmet" && id != "goblin_sword")
             .map(|(_, chance)| chance)
             .collect();
         let opens = expected_opens_to_collect(&t1);
@@ -368,12 +830,35 @@ mod tests {
         let t2: std::collections::HashMap<String, f32> =
             defs.chest_roll_table(2).into_iter().collect();
         assert_eq!(t2["iron_boots"], 0.37);
+        assert_eq!(t2["iron_helmet"], 0.37);
         assert_eq!(t2["leather_gloves"], 0.37);
+        assert_eq!(t2["leather_boots"], 0.37);
         assert_eq!(t2["raven_shield"], 0.2);
         assert_eq!(t2["leather_armor"], 0.0, "signature rolls only as itself");
         for id in ["leather_helmet", "leather_pants", "leather_belt"] {
             assert_eq!(t2[id], CHEST_CARRYOVER_CHANCE, "{id} carries over at 10%");
         }
+
+        // Ogre Stronghold (tier 3): signature chain_mail plus four K=4 pieces
+        // — the cape rolls alongside the gauntlets and plate legs.
+        let t3: std::collections::HashMap<String, f32> =
+            defs.chest_roll_table(3).into_iter().collect();
+        let t3_set = [
+            "iron_gauntlets",
+            "plate_greaves",
+            "plate_boots",
+            "wool_cape",
+        ];
+        for id in t3_set {
+            assert_eq!(t3[id], 0.37, "{id} rolls at the K=4 constant");
+        }
+        assert_eq!(t3["gold_ring"], 0.1);
+        assert_eq!(t3["chain_mail"], 0.0, "signature rolls only as itself");
+        let opens = expected_opens_to_collect(&t3_set.map(|id| t3[id]));
+        assert!(
+            (4.0..=6.0).contains(&opens),
+            "ogre_stronghold set completion expects ~5 opens, got {opens:.2}"
+        );
     }
 
     #[test]
@@ -393,25 +878,38 @@ mod tests {
                 "{expected} missing from catch table"
             );
         }
-        // Junk and coin catches are rarity 0: the XP formula (10·rarity²)
-        // grants nothing for them, and only fish carry tiers ≥ 1.
+        // Only fish carry rarity tiers above zero.
         for c in table {
             let def = defs.get(&c.item_def_id).unwrap();
             if def.is_fish() {
                 assert!(c.rarity >= 1, "{} fish tier", c.item_def_id);
             } else {
-                assert_eq!(c.rarity, 0, "{} must be tier 0 (no XP)", c.item_def_id);
+                assert_eq!(c.rarity, 0, "{} must be tier 0", c.item_def_id);
             }
         }
     }
 
-    /// The economy guardrail as a contract test: the expected *sell* value of
-    /// one catch must stay at coin-pile magnitude (the game's repeatable gold
-    /// faucet is 1–10c piles; a catch should be worth a couple of piles, not
-    /// a wage) — and it must hold at every fishing level, not just at level 0.
-    /// Averaging over raw `catchWeight` would only ever measure a beginner.
     #[test]
-    fn expected_catch_value_stays_in_the_coin_pile_economy_at_every_level() {
+    fn learned_fishing_can_roll_every_current_species() {
+        let defs = ItemDefs::load();
+        let table = defs.catch_table();
+        let weights = crate::game_state::fishing::effective_weights(table);
+        for id in [
+            "raw_minnow",
+            "raw_perch",
+            "raw_trout",
+            "river_salmon",
+            "golden_sturgeon",
+        ] {
+            let index = table.iter().position(|c| c.item_def_id == id).unwrap();
+            assert!(weights[index] > 0, "{id} is available immediately");
+            assert!(defs.get(&format!("trophy_{id}")).is_some());
+        }
+    }
+
+    /// Ordinary catches stay within the existing economy band.
+    #[test]
+    fn expected_catch_value_stays_in_the_coin_pile_economy() {
         fn dice_avg(notation: &str) -> f64 {
             let (n, m) = notation.split_once('d').expect("NdM");
             let n: f64 = n.parse().unwrap();
@@ -420,8 +918,13 @@ mod tests {
         }
         let defs = ItemDefs::load();
         let table = defs.catch_table();
-        let ev_at = |level: u32| -> f64 {
-            let weights = crate::game_state::fishing::effective_weights(table, level);
+        let sell_rate = crate::merchant_defs::merchant_defs()
+            .get_by_npc_name("Rica")
+            .expect("Rica has a merchant definition")
+            .sell_rate_percent as f64
+            / 100.0;
+        let expected_value = {
+            let weights = crate::game_state::fishing::effective_weights(table);
             let total: f64 = weights.iter().map(|w| *w as f64).sum();
             weights
                 .iter()
@@ -432,8 +935,8 @@ mod tests {
                         // Coins arrive at face value.
                         def.dice.as_deref().map_or(0.0, dice_avg)
                     } else {
-                        // Items sell at the merchant rate (Rica: 40%).
-                        def.base_price.unwrap_or(0) as f64 * 0.4
+                        // Items sell at Rica's merchant rate.
+                        def.base_price.unwrap_or(0) as f64 * sell_rate
                     };
                     *weight as f64 * value
                 })
@@ -441,26 +944,9 @@ mod tests {
                 / total
         };
 
-        let evs: Vec<f64> = (0..=SKILL_LEVEL_CAP).map(ev_at).collect();
-        for (level, ev) in evs.iter().enumerate() {
-            assert!(
-                (5.0..=25.0).contains(ev),
-                "expected sell value per catch at level {level} is {ev:.1}c — outside \
-                 the 5–25c coin-pile band"
-            );
-        }
         assert!(
-            evs.windows(2).all(|w| w[1] >= w[0]),
-            "skill should never make an angler poorer"
-        );
-        // Mastery pays a better wage, not a different economy. Without this
-        // the old additive weighting reached 10x and no test noticed.
-        assert!(
-            evs[evs.len() - 1] <= 4.0 * evs[0],
-            "level {SKILL_LEVEL_CAP} earns {:.1}c vs {:.1}c at level 0 — that is a \
-             different economy, not a better wage",
-            evs[evs.len() - 1],
-            evs[0]
+            (5.0..=25.0).contains(&expected_value),
+            "expected sell value {expected_value:.1}c is outside the 5–25c band"
         );
     }
 
@@ -487,8 +973,7 @@ mod tests {
         );
     }
 
-    /// Trophies are gated to fish: junk never celebrates, a natural 20 always
-    /// does on a fish, and the size threshold is an exact boundary.
+    /// Junk never becomes a trophy, even on a successful trophy roll.
     #[test]
     fn trophies_are_a_fish_concept() {
         let defs = ItemDefs::load();
@@ -500,7 +985,7 @@ mod tests {
         let minnow = defs.get("raw_minnow").unwrap();
         assert!(
             minnow.trophy_at(1, true),
-            "a natural 20 is always a trophy on a fish"
+            "a successful trophy roll always makes a fish a trophy"
         );
         let trout = defs.get("raw_trout").unwrap();
         let threshold = trout.trophy_cm.unwrap() as u16;
@@ -514,5 +999,68 @@ mod tests {
         let rod = defs.get("fishing_rod").expect("fishing_rod def");
         assert!(rod.is_fishing_rod());
         assert!(!rod.is_weapon(), "the rod must not deal weapon damage");
+    }
+
+    #[test]
+    fn weapon_types_cover_the_current_arsenal() {
+        let defs = ItemDefs::load();
+        let expected = [
+            ("iron_sword", WeaponType::Sword),
+            ("worn_iron_sword", WeaponType::Sword),
+            ("notched_iron_sword", WeaponType::Sword),
+            ("steel_longsword", WeaponType::Sword),
+            ("great_sword", WeaponType::GreatSword),
+            ("goblin_sword", WeaponType::Sword),
+            ("small_sword", WeaponType::Sword),
+            ("dagger", WeaponType::Dagger),
+            ("morningstar", WeaponType::Mace),
+            ("greatclub", WeaponType::Club),
+            ("spear", WeaponType::Spear),
+            ("torch", WeaponType::Torch),
+            ("worn_torch", WeaponType::Torch),
+        ];
+
+        for (id, weapon_type) in expected {
+            assert_eq!(defs.get(id).unwrap().weapon_type, Some(weapon_type), "{id}");
+        }
+    }
+
+    #[test]
+    fn weapon_type_wire_names_are_snake_case() {
+        let cases = [
+            ("sword", WeaponType::Sword),
+            ("great_sword", WeaponType::GreatSword),
+            ("dagger", WeaponType::Dagger),
+            ("axe", WeaponType::Axe),
+            ("staff", WeaponType::Staff),
+            ("spear", WeaponType::Spear),
+            ("mace", WeaponType::Mace),
+            ("club", WeaponType::Club),
+            ("bow", WeaponType::Bow),
+            ("crossbow", WeaponType::Crossbow),
+            ("torch", WeaponType::Torch),
+        ];
+
+        for (wire, expected) in cases {
+            let json = format!("\"{wire}\"");
+            assert_eq!(serde_json::from_str::<WeaponType>(&json).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn shields_have_an_explicit_armor_type_and_keep_their_guard() {
+        let defs = ItemDefs::load();
+        for (id, guard) in [("wooden_shield", 1), ("raven_shield", 2)] {
+            let def = defs.get(id).unwrap();
+            assert_eq!(def.armor_type, Some(ArmorType::Shield), "{id}");
+            assert_eq!(def.equip_slot, Some(EquipSlot::OffHand), "{id}");
+            assert!(def.is_armor(), "{id}");
+            assert!(!def.is_weapon(), "{id}");
+            assert_eq!(def.weapon_type, None, "{id}");
+            assert_eq!(def.guard, Some(guard), "{id}");
+        }
+        for id in ["torch", "worn_torch", "iron_helmet", "ring_of_protection"] {
+            assert_eq!(defs.get(id).unwrap().armor_type, None, "{id}");
+        }
     }
 }

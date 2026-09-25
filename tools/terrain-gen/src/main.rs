@@ -16,8 +16,11 @@
 mod apply_houses;
 mod bake;
 mod inspect;
+mod map_color;
+mod map_tile;
 mod preview;
 mod prune_house_trees;
+mod world_map;
 
 use anyhow::Result;
 use apply_houses::ApplyOptions;
@@ -241,6 +244,12 @@ enum Cmd {
         /// so the water field matches the original bake's terrain.
         #[arg(long)]
         water_field_only: bool,
+
+        /// Only (re)write `climate/` zone grids from the macro world; leave
+        /// every other artifact untouched. Safe against a live world for the
+        /// same reason as `--water-field-only`.
+        #[arg(long, conflicts_with = "water_field_only")]
+        climate_only: bool,
     },
 
     /// Dump river segment data influencing a single tile.
@@ -268,6 +277,64 @@ enum Cmd {
             allow_hyphen_values = true
         )]
         at: Vec<String>,
+    },
+
+    /// Render one region map from existing baked height and splat tiles.
+    RenderMapRegion {
+        #[arg(long, default_value = "data/terrain")]
+        terrain: PathBuf,
+
+        #[arg(long, allow_hyphen_values = true)]
+        region_x: i32,
+
+        #[arg(long, allow_hyphen_values = true)]
+        region_z: i32,
+
+        #[arg(long)]
+        out: PathBuf,
+    },
+
+    /// Render one region and its 128/256/512/1024 map pyramid.
+    RenderMapPyramid {
+        #[arg(long, default_value = "data/terrain")]
+        terrain: PathBuf,
+
+        #[arg(long, default_value = "data/terrain")]
+        out: PathBuf,
+
+        #[arg(long, allow_hyphen_values = true)]
+        region_x: i32,
+
+        #[arg(long, allow_hyphen_values = true)]
+        region_z: i32,
+    },
+
+    /// Render a lightweight full-world fantasy map from the macro world and
+    /// existing 1 m minimap semantics without baking gameplay terrain.
+    RenderMapWorld {
+        #[command(flatten)]
+        gen: GenArgs,
+
+        #[arg(long, default_value = "data/terrain/minimap")]
+        legacy_source: PathBuf,
+
+        #[arg(long, default_value = "data/terrain")]
+        terrain: PathBuf,
+
+        #[arg(long, default_value = "data/terrain/minimap-fantasy")]
+        out: PathBuf,
+
+        #[arg(long, default_value_t = -16, allow_hyphen_values = true)]
+        region_x_min: i32,
+
+        #[arg(long, default_value_t = 15, allow_hyphen_values = true)]
+        region_x_max: i32,
+
+        #[arg(long, default_value_t = -16, allow_hyphen_values = true)]
+        region_z_min: i32,
+
+        #[arg(long, default_value_t = 15, allow_hyphen_values = true)]
+        region_z_max: i32,
     },
 
     /// Remove baked tree instances that overlap persisted house footprints.
@@ -356,6 +423,7 @@ fn main() -> Result<()> {
             region_z_min,
             region_z_max,
             water_field_only,
+            climate_only,
         } => {
             if region_x_max < region_x_min || region_z_max < region_z_min {
                 anyhow::bail!(
@@ -373,6 +441,7 @@ fn main() -> Result<()> {
                 (region_x_min, region_z_min),
                 (region_x_max, region_z_max),
                 water_field_only,
+                climate_only,
             )
         }
         Cmd::InspectTile {
@@ -396,6 +465,47 @@ fn main() -> Result<()> {
                 points.push((x, z));
             }
             inspect::probe(&cfg, &points)
+        }
+        Cmd::RenderMapRegion {
+            terrain,
+            region_x,
+            region_z,
+            out,
+        } => map_tile::render_region_to_path(&terrain, region_x, region_z, &out),
+        Cmd::RenderMapPyramid {
+            terrain,
+            out,
+            region_x,
+            region_z,
+        } => map_tile::render_region_pyramid(&terrain, &out, region_x, region_z, None),
+        Cmd::RenderMapWorld {
+            gen,
+            legacy_source,
+            terrain,
+            out,
+            region_x_min,
+            region_x_max,
+            region_z_min,
+            region_z_max,
+        } => {
+            if region_x_max < region_x_min || region_z_max < region_z_min {
+                anyhow::bail!(
+                    "invalid region range: x[{},{}] z[{},{}]",
+                    region_x_min,
+                    region_x_max,
+                    region_z_min,
+                    region_z_max,
+                );
+            }
+            let cfg = gen.into_config();
+            world_map::run(
+                &cfg,
+                &legacy_source,
+                &terrain,
+                &out,
+                (region_x_min, region_z_min),
+                (region_x_max, region_z_max),
+            )
         }
         Cmd::PruneHouseTrees {
             terrain,

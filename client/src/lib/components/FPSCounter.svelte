@@ -47,6 +47,7 @@
     cameraRotationEnabled,
     calendarVisible,
     celestialDebugVisible,
+    weatherRadarVisible,
     playerDebugInfo,
     mapEditorMode,
     housingEditorMode,
@@ -63,6 +64,9 @@
   } from '../stores/debugStore'
   import { isAdminUser } from '../stores/gameStore'
   import { closeTopOverlay } from '../stores/overlayStack'
+  import { friendPanelVisible } from '../stores/friendStore'
+  import { emotePanelVisible, emoteStopRequest } from '../stores/emoteStore'
+  import { instrumentPanelVisible } from '../stores/instrumentStore'
 
   function toDegrees(radians: number) {
     const degrees = (radians * 180) / Math.PI
@@ -76,19 +80,23 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    // Debug shortcuts follow the panel; Escape and M/I/C below are ordinary
-    // gameplay keys, which is why this component still renders for non-admins.
+    if ($instrumentPanelVisible && event.key !== 'Escape') return
+    // Escape and M/I/C/F are gameplay keys, so this renders for non-admins too.
     if ($isAdminUser && event.ctrlKey && event.key === 'd') {
       event.preventDefault()
       debugVisible.update((v) => !v)
     }
-    if ($isAdminUser && event.ctrlKey && event.key === 'm') {
-      event.preventDefault()
-      mapEditorMode.update((v) => !v)
-    }
-    // Claim Escape only when it actually closed an overlay.
-    if (event.key === 'Escape' && isGameKey(event) && closeTopOverlay()) {
-      event.preventDefault()
+    // Claim Escape only when it actually closed an overlay. With nothing
+    // open at all, Escape ends a running emote performance instead (dance,
+    // tune); PlayerControl ignores the request unless one is playing. A
+    // blocked overlay (loading) swallows Escape entirely.
+    if (event.key === 'Escape' && isGameKey(event)) {
+      const closed = closeTopOverlay()
+      if (closed === 'closed') {
+        event.preventDefault()
+      } else if (closed === 'none') {
+        emoteStopRequest.set(true)
+      }
     }
     if ((event.key === 'm' || event.key === 'M') && isGameKey(event)) {
       event.preventDefault()
@@ -101,6 +109,14 @@
     if ((event.key === 'c' || event.key === 'C') && isGameKey(event)) {
       event.preventDefault()
       characterPanelVisible.update((v) => !v)
+    }
+    if ((event.key === 'f' || event.key === 'F') && isGameKey(event)) {
+      event.preventDefault()
+      friendPanelVisible.update((v) => !v)
+    }
+    if ((event.key === 'g' || event.key === 'G') && isGameKey(event)) {
+      event.preventDefault()
+      emotePanelVisible.update((v) => !v)
     }
   }
 
@@ -143,6 +159,10 @@
 
   function toggleCelestialDebug() {
     celestialDebugVisible.update((v: boolean) => !v)
+  }
+
+  function toggleWeatherRadar() {
+    weatherRadarVisible.update((v: boolean) => !v)
   }
 
   function toggleGrid() {
@@ -313,6 +333,15 @@
             ORBITS
           </button>
 
+          <button
+            class="action-btn radar-btn"
+            class:active={$weatherRadarVisible}
+            onclick={toggleWeatherRadar}
+            title="Toggle Weather Radar Debug"
+          >
+            RADAR
+          </button>
+
           {#if !$mapEditorMode}
             <button
               class="action-btn grid-btn"
@@ -328,7 +357,7 @@
             class="action-btn map-editor-btn"
             class:active={$mapEditorMode}
             onclick={toggleMapEditor}
-            title="Toggle Map Editor (Ctrl+M)"
+            title="Toggle Map Editor"
           >
             MAP EDIT
           </button>
@@ -396,10 +425,6 @@
 
 <style>
   .debug-toggle-btn {
-    position: fixed;
-    top: 9px;
-    left: 9px;
-    z-index: 1000;
     background: rgba(0, 0, 0, 0.6);
     color: rgba(255, 255, 255, 0.5);
     border: 1px solid rgba(255, 255, 255, 0.15);
@@ -419,10 +444,6 @@
   }
 
   .hud-container {
-    position: fixed;
-    top: 9px;
-    left: 9px;
-    z-index: 1000;
     pointer-events: none;
   }
 

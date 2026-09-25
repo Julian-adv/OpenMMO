@@ -20,13 +20,25 @@ struct Jwks {
     keys: Vec<Jwk>,
 }
 
-/// `sub` identifies the account. Email is parsed only to match against the
-/// REST-write admin allowlist; neither is stored.
+/// Google identity and verified email for the admin allowlist.
 #[derive(Debug, Deserialize)]
 pub struct GoogleClaims {
     pub sub: String,
     pub email: Option<String>,
     pub email_verified: Option<bool>,
+}
+
+#[cfg(test)]
+pub(crate) fn test_verifier() -> (GoogleAuthVerifier, jsonwebtoken::EncodingKey) {
+    let jwk = serde_json::from_str(include_str!("../tests/fixtures/google-test-public.json"))
+        .expect("test public key");
+    let mut verifier = GoogleAuthVerifier::new(vec!["test-client".into()]);
+    verifier.jwks = RwLock::new(Some((Instant::now(), Jwks { keys: vec![jwk] })));
+    let key = jsonwebtoken::EncodingKey::from_rsa_pem(include_bytes!(
+        "../tests/fixtures/google-test-private.pem"
+    ))
+    .expect("test-only private key");
+    (verifier, key)
 }
 
 pub struct GoogleAuthVerifier {

@@ -32,16 +32,15 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
-use onlinerpg_shared::{
-    housing::{HouseData, RoomData},
-    worldgen::{
-        tile_bake::{HEIGHT_BIAS, HEIGHT_STEP},
-        vegetation::{GRASS_V3_BYTES_PER_INSTANCE, GRASS_V3_HEADER_BYTES, GRASS_V3_MAGIC},
-    },
-};
+#[cfg(test)]
+use onlinerpg_shared::grass_format::{GRASS_FILE_BYTES, GRASS_V3_MAGIC, GRASS_V4_MAGIC};
+use onlinerpg_shared::housing::{HouseData, RoomData};
+#[cfg(test)]
+use onlinerpg_terrain::defaults::TILE_DIM;
+#[cfg(test)]
+use onlinerpg_terrain::height::{decode_height, encode_height};
 use onlinerpg_terrain::{
-    coords,
-    defaults::{HEIGHTMAP_SIZE, TILE_DIM, VERTS_PER_SIDE},
+    coords, defaults::HEIGHTMAP_SIZE, grass::filter_grass_in_rects, height::flatten_heightmap_tile,
     trees::TreeExclusionRect,
 };
 
@@ -76,22 +75,6 @@ pub struct ApplyOptions {
 /// World-space AABB: `[min_x, min_z, max_x, max_z]`.
 type Rect = [f32; 4];
 
-/// Half a tile in world units — a tile `t` covers `[t*TILE - HALF, t*TILE + HALF)`.
-const TILE_HALF: f32 = TILE_DIM as f32 / 2.0;
-
-/// Decode a uint16 heightmap sample to meters (inverse of `encode_height`).
-fn decode_height(v: u16) -> f32 {
-    v as f32 * HEIGHT_STEP - HEIGHT_BIAS
-}
-
-/// Encode meters to a clamped uint16 heightmap sample, matching the baker's
-/// `encode_heightmap` and the client's `encodeHeight`.
-fn encode_height(m: f32) -> u16 {
-    ((m + HEIGHT_BIAS) / HEIGHT_STEP)
-        .round()
-        .clamp(0.0, 65535.0) as u16
-}
-
 /// World-space rect of a ground-floor room (no margin).
 fn room_rect(house: &HouseData, room: &RoomData) -> Rect {
     let min_x = house.origin.x + room.local_x as f32;
@@ -102,18 +85,6 @@ fn room_rect(house: &HouseData, room: &RoomData) -> Rect {
         min_x + room.size_x as f32,
         min_z + room.size_z as f32,
     ]
-}
-
-fn point_in_rect([min_x, min_z, max_x, max_z]: Rect, x: f32, z: f32) -> bool {
-    x >= min_x && x <= max_x && z >= min_z && z <= max_z
-}
-
-fn point_in_any(rects: &[Rect], x: f32, z: f32) -> bool {
-    rects.iter().any(|&r| point_in_rect(r, x, z))
-}
-
-fn tile_min_world(t: i32) -> f32 {
-    t as f32 * TILE_DIM as f32 - TILE_HALF
 }
 
 // ===================================================================
@@ -170,16 +141,16 @@ impl<'a> HeightEditor<'a> {
             );
         }
         let heights: Vec<u16> = bytes
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|c| u16::from_le_bytes([c[0], c[1]]))
             .collect();
         self.cache.insert(key, heights);
         Ok(true)
     }
 
-    /// Flatten one room rect to `target`, with a smoothstep blend skirt of
-    /// `blend` metres, skipping cells inside any `protected` rect. Ported
-    /// vertex-for-vertex from `flattenArea` in `terrain-height-brushes.ts`.
+    /// Flatten one room rect to `target`, skipping protected cells.
     fn flatten_room(
         &mut self,
         rect: Rect,
@@ -198,55 +169,13 @@ impl<'a> HeightEditor<'a> {
         let min_tz = coords::world_to_tile(exp_min_z);
         let max_tz = coords::world_to_tile(exp_max_z);
 
-        let target_encoded = encode_height(target);
-        let verts = VERTS_PER_SIDE as i32;
-
         for tz in min_tz..=max_tz {
             for tx in min_tx..=max_tx {
                 if !self.load(tx, tz)? {
                     continue;
                 }
-                let tile_min_x = tile_min_world(tx);
-                let tile_min_z = tile_min_world(tz);
-
-                let start_cx = ((exp_min_x - tile_min_x).floor() as i32).max(0);
-                let end_cx = ((exp_max_x - tile_min_x).floor() as i32).min(verts - 1);
-                let start_cz = ((exp_min_z - tile_min_z).floor() as i32).max(0);
-                let end_cz = ((exp_max_z - tile_min_z).floor() as i32).min(verts - 1);
-
                 let data = self.cache.get_mut(&(tx, tz)).expect("tile loaded above");
-                let mut touched = false;
-
-                for cz in start_cz..=end_cz {
-                    for cx in start_cx..=end_cx {
-                        let world_cx = tile_min_x + cx as f32;
-                        let world_cz = tile_min_z + cz as f32;
-
-                        if point_in_any(protected, world_cx, world_cz) {
-                            continue;
-                        }
-
-                        // Distance from the rect edges (0 inside).
-                        let dx = (min_x - world_cx).max(0.0).max(world_cx - max_x);
-                        let dz = (min_z - world_cz).max(0.0).max(world_cz - max_z);
-                        let dist = (dx * dx + dz * dz).sqrt();
-
-                        let idx = cz as usize * VERTS_PER_SIDE + cx as usize;
-
-                        if dist <= 0.0 {
-                            data[idx] = target_encoded;
-                            touched = true;
-                        } else if dist < blend {
-                            let t = dist / blend;
-                            let b = 1.0 - t * t * (3.0 - 2.0 * t);
-                            let cur = decode_height(data[idx]);
-                            data[idx] = encode_height(cur + (target - cur) * b);
-                            touched = true;
-                        }
-                    }
-                }
-
-                if touched {
+                if flatten_heightmap_tile(data, tx, tz, rect, target, blend, protected) {
                     self.dirty.insert((tx, tz));
                 }
             }
@@ -319,6 +248,7 @@ fn flatten_houses(
 // Grass clear
 // ===================================================================
 
+#[cfg(test)]
 fn read_u32_le(data: &[u8], offset: usize) -> u32 {
     u32::from_le_bytes([
         data[offset],
@@ -326,74 +256,6 @@ fn read_u32_le(data: &[u8], offset: usize) -> u32 {
         data[offset + 2],
         data[offset + 3],
     ])
-}
-
-/// Drop V3 grass instances whose world position falls inside any `rects`.
-/// Returns the rewritten buffer and the number of blades removed.
-fn filter_grass_v3_in_rects(
-    tx: i32,
-    tz: i32,
-    data: &[u8],
-    rects: &[Rect],
-) -> Result<(Vec<u8>, usize)> {
-    if data.len() < GRASS_V3_HEADER_BYTES {
-        bail!("grass data header is truncated");
-    }
-    let magic = read_u32_le(data, 0);
-    if magic != GRASS_V3_MAGIC {
-        bail!("unsupported grass data magic 0x{magic:08x}");
-    }
-    let counts = [
-        read_u32_le(data, 4) as usize,
-        read_u32_le(data, 8) as usize,
-        read_u32_le(data, 12) as usize,
-    ];
-    let total: usize = counts.iter().sum();
-    let expected = GRASS_V3_HEADER_BYTES + total * GRASS_V3_BYTES_PER_INSTANCE;
-    if data.len() != expected {
-        bail!(
-            "grass data length {} != expected {} (counts {:?})",
-            data.len(),
-            expected,
-            counts
-        );
-    }
-
-    let tile_min_x = tile_min_world(tx);
-    let tile_min_z = tile_min_world(tz);
-    // Inverse of `encode_grass_v3`'s `pos_scale = 65535 / TILE_DIM`.
-    let inv_pos_scale = TILE_DIM as f32 / 65535.0;
-
-    let mut kept_counts = [0u32; 3];
-    let mut body: Vec<u8> = Vec::with_capacity(data.len() - GRASS_V3_HEADER_BYTES);
-    let mut removed = 0usize;
-    let mut offset = GRASS_V3_HEADER_BYTES;
-
-    for (bucket, &count) in counts.iter().enumerate() {
-        for _ in 0..count {
-            let inst = &data[offset..offset + GRASS_V3_BYTES_PER_INSTANCE];
-            offset += GRASS_V3_BYTES_PER_INSTANCE;
-            let px = u16::from_le_bytes([inst[0], inst[1]]) as f32;
-            let pz = u16::from_le_bytes([inst[2], inst[3]]) as f32;
-            let world_x = tile_min_x + px * inv_pos_scale;
-            let world_z = tile_min_z + pz * inv_pos_scale;
-
-            if point_in_any(rects, world_x, world_z) {
-                removed += 1;
-            } else {
-                kept_counts[bucket] += 1;
-                body.extend_from_slice(inst);
-            }
-        }
-    }
-
-    let mut out = Vec::with_capacity(GRASS_V3_HEADER_BYTES + body.len());
-    out.extend_from_slice(&GRASS_V3_MAGIC.to_le_bytes());
-    for c in kept_counts {
-        out.extend_from_slice(&c.to_le_bytes());
-    }
-    out.extend_from_slice(&body);
-    Ok((out, removed))
 }
 
 /// World-space grass rect of a ground-floor room, expanded by `margin` on all
@@ -435,11 +297,11 @@ fn clear_grass(
             Err(err) => return Err(err).with_context(|| format!("read {}", path.display())),
         };
 
-        let (filtered, removed) = filter_grass_v3_in_rects(tx, tz, &data, &rects)
-            .with_context(|| format!("filter {}", path.display()))?;
-        if removed == 0 {
+        let Some((filtered, removed)) = filter_grass_in_rects(tx, tz, &data, &rects)
+            .with_context(|| format!("filter {}", path.display()))?
+        else {
             continue;
-        }
+        };
 
         if !dry_run {
             let orig_path = coords::original_grass_path(terrain, tx, tz);
@@ -447,8 +309,11 @@ fn clear_grass(
                 if let Some(parent) = orig_path.parent() {
                     fs::create_dir_all(parent)?;
                 }
-                fs::write(&orig_path, &data)
-                    .with_context(|| format!("write {}", orig_path.display()))?;
+                fs::write(
+                    &orig_path,
+                    onlinerpg_shared::grass_format::grass_density(&data)?,
+                )
+                .with_context(|| format!("write {}", orig_path.display()))?;
             }
             fs::write(&path, &filtered).with_context(|| format!("write {}", path.display()))?;
         }
@@ -545,8 +410,7 @@ pub fn run(options: ApplyOptions) -> Result<()> {
 mod tests {
     use super::*;
 
-    /// Build a V3 grass buffer from per-bucket instance positions (local
-    /// tile-space metres), mirroring `encode_grass_v3`'s quantization.
+    /// Legacy placements in tile-local meters.
     fn encode_grass(buckets: [&[(f32, f32)]; 3]) -> Vec<u8> {
         let pos_scale = 65535.0 / TILE_DIM as f32;
         let mut out = Vec::new();
@@ -576,24 +440,18 @@ mod tests {
 
     #[test]
     fn grass_filter_removes_only_instances_inside_rect() {
-        // Tile (0,0) covers world x/z in [-32, 32). Local 32m → world ~0.
-        // Instance A at local (32,32) ≈ world (0,0)   → inside rect
-        // Instance B at local (52,32) ≈ world (20,0)  → outside rect
-        let data = encode_grass([&[(32.0, 32.0)], &[(52.0, 32.0)], &[]]);
+        let data = encode_grass([&[(32.0, 32.0)], &[(52.5, 32.0)], &[]]);
         let rect: Rect = [-5.0, -5.0, 5.0, 5.0];
 
-        let (out, removed) = filter_grass_v3_in_rects(0, 0, &data, &[rect]).unwrap();
+        let (out, removed) = filter_grass_in_rects(0, 0, &data, &[rect])
+            .unwrap()
+            .unwrap();
         assert_eq!(removed, 1);
 
-        // Header counts: short dropped to 0, tall kept 1, flower 0.
-        assert_eq!(read_u32_le(&out, 0), GRASS_V3_MAGIC);
-        assert_eq!(read_u32_le(&out, 4), 0);
-        assert_eq!(read_u32_le(&out, 8), 1);
-        assert_eq!(read_u32_le(&out, 12), 0);
-        assert_eq!(
-            out.len(),
-            GRASS_V3_HEADER_BYTES + GRASS_V3_BYTES_PER_INSTANCE
-        );
+        assert_eq!(read_u32_le(&out, 0), GRASS_V4_MAGIC);
+        assert_eq!(out.len(), GRASS_FILE_BYTES);
+        assert_eq!(out[4..].iter().map(|&n| n as usize).sum::<usize>(), 1);
+        assert_eq!(out[4 + (32 * TILE_DIM + 52) * 3 + 1], 1);
     }
 
     #[test]
@@ -601,15 +459,15 @@ mod tests {
         let data = encode_grass([&[(10.0, 10.0)], &[], &[]]);
         // Rect far from the single blade at world ~(-22,-22).
         let rect: Rect = [100.0, 100.0, 110.0, 110.0];
-        let (out, removed) = filter_grass_v3_in_rects(0, 0, &data, &[rect]).unwrap();
-        assert_eq!(removed, 0);
-        assert_eq!(out, data);
+        assert!(filter_grass_in_rects(0, 0, &data, &[rect])
+            .unwrap()
+            .is_none());
     }
 
     #[test]
     fn grass_filter_rejects_bad_magic() {
         let mut data = encode_grass([&[(1.0, 1.0)], &[], &[]]);
         data[0] = 0xff;
-        assert!(filter_grass_v3_in_rects(0, 0, &data, &[[0.0, 0.0, 1.0, 1.0]]).is_err());
+        assert!(filter_grass_in_rects(0, 0, &data, &[[0.0, 0.0, 1.0, 1.0]]).is_err());
     }
 }

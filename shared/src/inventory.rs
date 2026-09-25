@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::Position;
+use crate::{PlayerId, Position};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -82,16 +82,33 @@ pub struct ItemInstance {
     pub instance_id: u64,
     pub item_def_id: String,
     pub quantity: u32,
-    /// Weapon enchantment level (+N to attack and damage rolls). Zero for
-    /// everything but enchanted weapons; `default` keeps old payloads valid.
+    /// Enchantment level: +N to attack and damage rolls on a weapon, +N guard
+    /// on armor. Zero elsewhere; `default` keeps old payloads valid.
     #[serde(default)]
     pub enchant: i32,
+    /// Dye on this cape (`#rrggbb`), overriding the def's `capeColor`.
+    /// `None` everywhere else (doc/CAPE_CUSTOMIZATION.md).
+    #[serde(default)]
+    pub cape_color: Option<String>,
+    /// Content hash of the texture applied to this cape, served from
+    /// `/api/cape-texture/<hash>`.
+    #[serde(default)]
+    pub cape_texture: Option<String>,
+    #[serde(default)]
+    pub locked: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PlayerInventory {
     pub bag: Vec<ItemInstance>,
     pub equipped: HashMap<EquipSlot, ItemInstance>,
+    /// Which ammunition the next shot spends. Stackable items cannot sit in
+    /// an equip slot — a slot persists one unit and the rest of the stack
+    /// would be lost — so the quiver stays in the bag and this names the pile
+    /// to draw from. `None` picks the strongest of the weapon's kind and
+    /// records it here (doc/COMBAT.md 원거리 전투).
+    #[serde(default)]
+    pub active_ammo: Option<String>,
 }
 
 impl PlayerInventory {
@@ -108,11 +125,42 @@ impl PlayerInventory {
             .is_some_and(|item| TORCH_ITEM_IDS.contains(&item.item_def_id.as_str()))
     }
 
-    /// Equipped main-hand item def id, as broadcast to nearby players.
-    pub fn main_hand_def_id(&self) -> Option<String> {
+    /// Item def id worn in `slot`, as broadcast to nearby players.
+    pub fn equipped_def_id(&self, slot: EquipSlot) -> Option<String> {
         self.equipped
-            .get(&EquipSlot::MainHand)
+            .get(&slot)
             .map(|item| item.item_def_id.clone())
+    }
+
+    /// Dye on the worn cape, as broadcast alongside the back slot's def id.
+    pub fn equipped_cape_color(&self) -> Option<String> {
+        self.equipped
+            .get(&EquipSlot::Back)
+            .and_then(|item| item.cape_color.clone())
+    }
+
+    /// Texture hash on the worn cape, broadcast the same way.
+    pub fn equipped_cape_texture(&self) -> Option<String> {
+        self.equipped
+            .get(&EquipSlot::Back)
+            .and_then(|item| item.cape_texture.clone())
+    }
+
+    /// Everything the player carries: bag and worn gear alike.
+    /// The chosen stack, if the bag still holds one — the choice outlives an
+    /// empty quiver so refilling the same kind resumes it.
+    pub fn active_ammo_stack(&self) -> Option<&ItemInstance> {
+        let chosen = self.active_ammo.as_deref()?;
+        self.bag.iter().find(|item| item.item_def_id == chosen)
+    }
+
+    pub fn items(&self) -> impl Iterator<Item = &ItemInstance> {
+        self.bag.iter().chain(self.equipped.values())
+    }
+
+    /// Whether the player carries the item anywhere, bag or worn.
+    pub fn has_item(&self, item_def_id: &str) -> bool {
+        self.items().any(|item| item.item_def_id == item_def_id)
     }
 }
 
@@ -125,10 +173,24 @@ pub struct GroundItem {
     pub item_def_id: String,
     pub position: Position,
     pub floor_level: i8,
-    /// Carries a dropped weapon's enchantment so picking it back up
+    /// Units in this pile; only a stackable def ever exceeds 1.
+    pub quantity: u32,
+    /// Carries a dropped item's enchantment so picking it back up
     /// doesn't wipe it.
     #[serde(default)]
     pub enchant: i32,
+    /// Same for a dyed cape's colour.
+    #[serde(default)]
+    pub cape_color: Option<String>,
+    /// And for its texture hash.
+    #[serde(default)]
+    pub cape_texture: Option<String>,
+    /// The player who put it there, if one did — loot and world drops carry
+    /// `None`. On the item rather than the spawn message so attribution
+    /// survives AOI churn and rejoins: a busker's uncollected tip is still
+    /// its tip after a reconnect.
+    #[serde(default)]
+    pub dropped_by: Option<PlayerId>,
 }
 
 #[cfg(test)]

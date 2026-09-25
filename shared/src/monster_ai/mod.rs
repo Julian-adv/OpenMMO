@@ -1,8 +1,4 @@
-//! Shared monster AI behavior tree runtime — used by both WASM (client) and native Rust (agent-client).
-//!
-//! The runtime is stateful per-monster via [`MonsterBrain`]. Each tick receives
-//! external inputs (delta time, nearby players) and returns a list of
-//! [`AiCommand`]s that the caller translates into network messages.
+//! Monster behavior trees, ticked and applied by the server.
 //!
 //! The module is split into:
 //! - [`tree`] — behavior tree data model and JSON loading
@@ -25,7 +21,7 @@ mod tree;
 mod tests;
 
 pub use brain::MonsterBrain;
-pub use command::{AiCommand, AiState, NearbyPlayer, TickResult};
+pub use command::{AiCommand, AiState, ChaseAim, NearbyMonster, NearbyPlayer};
 pub use path::{CachePathProvider, PathProvider};
 pub use tree::{behavior_tree_for, load_behavior_trees, BehaviorNode, BehaviorTree};
 
@@ -76,17 +72,86 @@ const DEFAULT_TARGET_MOVE_THRESHOLD: f32 = 3.0;
 /// decisions, which has nothing to do with the monster's reach. Well inside the
 /// server's own (also absolute) reach slack.
 const ATTACK_RELEASE_MARGIN_METERS: f32 = 0.5;
-/// Least time between network position syncs while a monster is continuously
-/// moving (chase/return/flee). The brain simulates every frame but only emits a
-/// `Move` this often, cutting ~60/s of packets to ~2/s; remote clients
-/// interpolate toward `target_position` in between, and state changes still sync
-/// immediately. Server-authoritative movement (F-006) absorbs the coarser rate.
+/// Movement sync interval; state changes and path bends sync immediately.
 const NETWORK_SYNC_INTERVAL_MS: f32 = 500.0;
+/// See `MonsterBrain::chase_stop_range`.
+const ENGAGE_INSET_METERS: f32 = 0.05;
+/// How far inside the engage circle `follow_path_engaging` lands the step that
+/// enters it. See the clamp there.
+const ENGAGE_CLAMP_INSET: f32 = 0.01;
+/// Fraction of the attack range a chase closes to before it stops and swings.
+/// See `engage_limit` and doc/MONSTER_SEPARATION.md 접근 거리.
+const ENGAGE_FRACTION: f32 = 0.6;
 pub const DEFAULT_BEHAVIOR: &str = "brave";
 /// Behavior tree used by proactive (선공형) monsters that acquire and attack
 /// targets on sight. Selected when `Monster::aggressive` is set, overriding the
 /// monster type's configured behavior.
 pub const AGGRESSIVE_BEHAVIOR: &str = "aggressive";
+
+/// Slack inside `attack_range` when picking a standing cell, so the cell
+/// center still passes `bt_attack_target`'s range check. Must stay small:
+/// with a 2m reach the diagonal front cell (~1.8m) has to remain valid, or a
+/// 2-wide corridor can only ever seat one attacker.
+const CHASE_CELL_RANGE_MARGIN: f32 = 0.15;
+/// A sidestep is a local flow around a blocker — refuse one whose path is a
+/// long detour.
+const SIDESTEP_MAX_PATH_METERS: f32 = 3.0;
+/// A held chaser may back out and round the queue instead of waiting, but
+/// only by a local detour — not a trek across the map.
+const DETOUR_MAX_PATH_METERS: f32 = 12.0;
+/// Small budget: the common hold (a sealed corridor) has no detour to find.
+const DETOUR_MAX_NODES: usize = 300;
+/// Standing-cell candidates path-tested per repath, nearest first. Bounds the
+/// pathfinding cost when the nearest candidates are unreachable (corridor
+/// walls).
+const MAX_SLOT_PATH_TRIES: usize = 6;
+/// A partial path toward an unreachable target is worth walking only while it
+/// still covers ground; below this it has degenerated to "where we already
+/// stand" and the chase waits instead.
+const MIN_PARTIAL_PROGRESS_METERS: f32 = 0.5;
+
+/// Separation cell for the 1m grid (doc/MONSTER_SEPARATION.md) — one standing
+/// monster per cell, NetHack-style.
+pub(crate) fn cell_of(x: f32, z: f32) -> (i32, i32) {
+    (
+        crate::world::wrap_world_x(x).floor() as i32,
+        z.floor() as i32,
+    )
+}
+
+fn cell_center(cell: (i32, i32)) -> (f32, f32) {
+    (
+        crate::world::wrap_world_x(cell.0 as f32 + 0.5),
+        cell.1 as f32 + 0.5,
+    )
+}
+
+/// Total XZ length of a waypoint path starting from `(x, z)`.
+fn path_len(x: f32, z: f32, waypoints: &[crate::pathfinding::PathWaypoint]) -> f32 {
+    let (mut px, mut pz, mut len) = (x, z, 0.0);
+    for wp in waypoints {
+        let dx = crate::world::shortest_world_delta_x(px, wp.x);
+        let dz = wp.z - pz;
+        len += (dx * dx + dz * dz).sqrt();
+        (px, pz) = (wp.x, wp.z);
+    }
+    len
+}
+
+/// Whether walking `waypoints` from `(x, z)` enters any cell in `occupied`.
+fn leg_crosses_occupied(
+    x: f32,
+    z: f32,
+    waypoints: &[crate::pathfinding::PathWaypoint],
+    occupied: &[(i32, i32)],
+) -> bool {
+    let (mut px, mut pz) = (x, z);
+    waypoints.iter().any(|wp| {
+        let hit = crate::pathfinding::segment_enters_cells(px, pz, wp.x, wp.z, occupied);
+        (px, pz) = (wp.x, wp.z);
+        hit
+    })
+}
 
 fn param(params: &HashMap<String, f32>, name: &str, default: f32) -> f32 {
     params.get(name).copied().unwrap_or(default)

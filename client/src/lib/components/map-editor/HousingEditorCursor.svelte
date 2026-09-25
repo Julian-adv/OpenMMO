@@ -3,6 +3,7 @@
   import * as THREE from 'three'
   import { onDestroy } from 'svelte'
   import { get } from 'svelte/store'
+  import { cameraRotationEnabled } from '../../stores/debugStore'
   import {
     selectedRoomTemplate,
     placementRotation,
@@ -19,6 +20,7 @@
     setDeleteSelectedRoom,
     setFlattenSelectedRoomTerrain,
     setReinstallSelectedHouse,
+    setMoveSelectedHouse,
     populateEditStoresFromRoom,
     wallVariants,
     type RoomTemplate,
@@ -33,6 +35,7 @@
     WallVariant,
   } from '../../types/housing'
   import { housingManager } from '../../managers/housingManager'
+  import { objectManager } from '../../managers/objectManager'
   import {
     buildHouseGroup,
     disposeHouseGroup,
@@ -45,11 +48,8 @@
   import { ORTHOGRAPHIC_FRUSTUM_HEIGHT } from '../game-scene/camera-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { TerrainGrassDataManager } from '../../managers/terrainGrassDataManager'
-  import { removeGrassInRect } from '../../utils/grass-data'
-  import {
-    TERRAIN_TILE_SIZE,
-    worldRectToTileBounds,
-  } from '../game-scene/terrain-utils'
+  import { worldRectToTileBounds } from '../game-scene/terrain-utils'
+  import { isTypingTarget } from '../../utils/dom'
 
   interface Props {
     camera: THREE.OrthographicCamera | undefined
@@ -141,8 +141,12 @@
   }
 
   function isInAnyRect(rects: Rect[], wx: number, wz: number): boolean {
-    return rects.some(
-      (r) => wx >= r.minX && wx <= r.maxX && wz >= r.minZ && wz <= r.maxZ
+    return rects.some((rect) => isInRect(rect, wx, wz))
+  }
+
+  function isInRect(rect: Rect, wx: number, wz: number): boolean {
+    return (
+      wx >= rect.minX && wx <= rect.maxX && wz >= rect.minZ && wz <= rect.maxZ
     )
   }
 
@@ -255,6 +259,7 @@
   setDeleteSelectedRoom(() => deleteSelectedRoom())
   setFlattenSelectedRoomTerrain(() => flattenSelectedRoomTerrain())
   setReinstallSelectedHouse(() => reinstallSelectedHouse())
+  setMoveSelectedHouse((deltaX, deltaZ) => moveSelectedHouseBy(deltaX, deltaZ))
 
   function updateRaycaster(event: MouseEvent) {
     if (!camera) return false
@@ -418,7 +423,7 @@
       lastPanY = event.clientY
       return
     }
-    if (event.button !== 0) return
+    if (event.button !== 0 || get(cameraRotationEnabled)) return
     event.preventDefault()
 
     if (currentTool === 'select') {
@@ -431,6 +436,7 @@
   }
 
   function handleKeyDown(event: KeyboardEvent) {
+    if (isTypingTarget(event.target)) return
     if (event.key === 'r' || event.key === 'R') {
       placementRotation.set((currentRotation + 90) % 360)
     }
@@ -546,124 +552,12 @@
       await housingManager.updateHouse(updatedHouse)
     }
 
-    // Restore terrain and grass for 1F non-stairwell rooms
     if (
       deletedRoom.floorLevel === 0 &&
       deletedRoom.roomType !== 'stairwell' &&
       heightManager
     ) {
-      const roomWorldX = house.origin.x + deletedRoom.localX
-      const roomWorldZ = house.origin.z + deletedRoom.localZ
-      const roomMaxX = roomWorldX + deletedRoom.sizeX
-      const roomMaxZ = roomWorldZ + deletedRoom.sizeZ
-
-      // 1. Restore heightmap from original (footprint + blend radius)
-      const restoreMinX = roomWorldX - BLEND_RADIUS
-      const restoreMinZ = roomWorldZ - BLEND_RADIUS
-      const restoreMaxX = roomMaxX + BLEND_RADIUS
-      const restoreMaxZ = roomMaxZ + BLEND_RADIUS
-      heightManager.restoreFromOriginal(
-        restoreMinX,
-        restoreMinZ,
-        restoreMaxX,
-        restoreMaxZ
-      )
-
-      // 2. Re-flatten for all remaining nearby 1F rooms
-      for (const h of housingManager.getAllHouses()) {
-        for (const room of h.rooms) {
-          if (room.floorLevel !== 0 || room.roomType === 'stairwell') continue
-          const rx = h.origin.x + room.localX
-          const rz = h.origin.z + room.localZ
-          const rmx = rx + room.sizeX
-          const rmz = rz + room.sizeZ
-          // Check if this room's flatten zone overlaps the restored area
-          if (
-            rx - BLEND_RADIUS > restoreMaxX ||
-            rmx + BLEND_RADIUS < restoreMinX ||
-            rz - BLEND_RADIUS > restoreMaxZ ||
-            rmz + BLEND_RADIUS < restoreMinZ
-          )
-            continue
-          const protectedRects = buildGroundFloorRects(
-            (ph, pr) => pr === room && ph.id === h.id
-          )
-          heightManager.flattenArea(
-            rx,
-            rz,
-            rmx,
-            rmz,
-            h.origin.y,
-            BLEND_RADIUS,
-            (wx, wz) => isInAnyRect(protectedRects, wx, wz)
-          )
-        }
-      }
-      heightManager.saveAllDirty()
-
-      // 3. Restore grass from original, then re-remove for remaining houses
-      if (grassDataManager) {
-        const grassMinX = roomWorldX - GRASS_MARGIN
-        const grassMinZ = roomWorldZ - GRASS_MARGIN
-        const grassMaxX = roomMaxX + GRASS_MARGIN
-        const grassMaxZ = roomMaxZ + GRASS_MARGIN
-
-        const tileMinX = Math.floor(
-          (grassMinX + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
-        )
-        const tileMaxX = Math.floor(
-          (grassMaxX + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
-        )
-        const tileMinZ = Math.floor(
-          (grassMinZ + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
-        )
-        const tileMaxZ = Math.floor(
-          (grassMaxZ + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
-        )
-
-        // Restore original grass for affected tiles
-        const restorePromises: Promise<boolean>[] = []
-        for (let tz = tileMinZ; tz <= tileMaxZ; tz++) {
-          for (let tx = tileMinX; tx <= tileMaxX; tx++) {
-            restorePromises.push(grassDataManager.restoreFromOriginal(tx, tz))
-          }
-        }
-        await Promise.all(restorePromises)
-
-        // Re-remove grass under remaining 1F rooms
-        for (const h of housingManager.getAllHouses()) {
-          for (const room of groundFloorRooms(h)) {
-            const {
-              minX: rMinX,
-              minZ: rMinZ,
-              maxX: rMaxX,
-              maxZ: rMaxZ,
-            } = roomGrassRect(h, room)
-            // Only process if overlapping the restored grass area
-            if (
-              rMinX > grassMaxX ||
-              rMaxX < grassMinX ||
-              rMinZ > grassMaxZ ||
-              rMaxZ < grassMinZ
-            )
-              continue
-            for (let tz = tileMinZ; tz <= tileMaxZ; tz++) {
-              for (let tx = tileMinX; tx <= tileMaxX; tx++) {
-                const cached = grassDataManager.getCachedGrassData(tx, tz)
-                if (!cached) continue
-                const filtered = removeGrassInRect(
-                  cached,
-                  rMinX,
-                  rMinZ,
-                  rMaxX,
-                  rMaxZ
-                )
-                if (filtered) grassDataManager.saveGrassData(tx, tz, filtered)
-              }
-            }
-          }
-        }
-      }
+      await restoreGroundAfterRemoval([roomRect(house, deletedRoom)])
     }
   }
 
@@ -703,69 +597,134 @@
   }
 
   function roomGrassRect(house: HouseData, room: RoomData): Rect {
-    const minX = house.origin.x + room.localX - GRASS_MARGIN
-    const minZ = house.origin.z + room.localZ - GRASS_MARGIN
+    return roomRect(house, room, GRASS_MARGIN)
+  }
+
+  function roomRect(house: HouseData, room: RoomData, margin = 0): Rect {
+    const minX = house.origin.x + room.localX - margin
+    const minZ = house.origin.z + room.localZ - margin
     return {
       minX,
       minZ,
-      maxX: minX + room.sizeX + GRASS_MARGIN * 2,
-      maxZ: minZ + room.sizeZ + GRASS_MARGIN * 2,
+      maxX: minX + room.sizeX + margin * 2,
+      maxZ: minZ + room.sizeZ + margin * 2,
     }
   }
 
-  async function removeGrassInRects(rects: Rect[]) {
-    const gm = grassDataManager
-    if (!gm || rects.length === 0) return
+  async function restoreGroundAfterRemoval(
+    removedRooms: Rect[],
+    includeHouseId?: string
+  ) {
+    const heights = heightManager
+    if (!heights || removedRooms.length === 0) return
 
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity
-    const tileBuckets = new Map<
-      string,
-      { tx: number; tz: number; rects: Rect[] }
-    >()
-    for (const rect of rects) {
-      const { tileMinX, tileMaxX, tileMinZ, tileMaxZ } = worldRectToTileBounds(
-        rect.minX,
-        rect.minZ,
-        rect.maxX,
-        rect.maxZ
+    const restoreBounds: Rect = {
+      minX: Infinity,
+      minZ: Infinity,
+      maxX: -Infinity,
+      maxZ: -Infinity,
+    }
+    for (const room of removedRooms) {
+      const restore = {
+        minX: room.minX - BLEND_RADIUS,
+        minZ: room.minZ - BLEND_RADIUS,
+        maxX: room.maxX + BLEND_RADIUS,
+        maxZ: room.maxZ + BLEND_RADIUS,
+      }
+      restoreBounds.minX = Math.min(restoreBounds.minX, restore.minX)
+      restoreBounds.minZ = Math.min(restoreBounds.minZ, restore.minZ)
+      restoreBounds.maxX = Math.max(restoreBounds.maxX, restore.maxX)
+      restoreBounds.maxZ = Math.max(restoreBounds.maxZ, restore.maxZ)
+      heights.restoreFromOriginal(
+        restore.minX,
+        restore.minZ,
+        restore.maxX,
+        restore.maxZ
       )
-      for (let tz = tileMinZ; tz <= tileMaxZ; tz++) {
-        for (let tx = tileMinX; tx <= tileMaxX; tx++) {
-          const key = `${tx},${tz}`
-          let bucket = tileBuckets.get(key)
-          if (!bucket) {
-            bucket = { tx, tz, rects: [] }
-            tileBuckets.set(key, bucket)
-          }
-          bucket.rects.push(rect)
-        }
+    }
+
+    const currentRooms: { house: HouseData; rect: Rect }[] = []
+    for (const house of housingManager.getAllHouses()) {
+      for (const room of groundFloorRooms(house)) {
+        currentRooms.push({ house, rect: roomRect(house, room) })
       }
     }
 
-    await Promise.all(
-      [...tileBuckets.values()].map(async ({ tx, tz, rects }) => {
-        let data =
-          gm.getCachedGrassData(tx, tz) ?? (await gm.loadGrassData(tx, tz))
-        if (!data) return
+    for (const current of currentRooms) {
+      const nearRestore =
+        current.rect.minX - BLEND_RADIUS <= restoreBounds.maxX &&
+        current.rect.maxX + BLEND_RADIUS >= restoreBounds.minX &&
+        current.rect.minZ - BLEND_RADIUS <= restoreBounds.maxZ &&
+        current.rect.maxZ + BLEND_RADIUS >= restoreBounds.minZ
+      if (current.house.id !== includeHouseId && !nearRestore) continue
 
-        gm.ensureOriginalGrass(tx, tz)
-        let changed = false
-        for (const rect of rects) {
-          const filtered = removeGrassInRect(
-            data,
-            rect.minX,
-            rect.minZ,
-            rect.maxX,
-            rect.maxZ
+      heights.flattenArea(
+        current.rect.minX,
+        current.rect.minZ,
+        current.rect.maxX,
+        current.rect.maxZ,
+        current.house.origin.y,
+        BLEND_RADIUS,
+        (wx, wz) =>
+          currentRooms.some(
+            (other) => other !== current && isInRect(other.rect, wx, wz)
           )
-          if (filtered) {
-            data = filtered
-            changed = true
+      )
+    }
+    await heights.saveAllDirty()
+
+    const grass = grassDataManager
+    if (!grass) return
+
+    const affectedTiles: { x: number; z: number }[] = []
+    for (const room of removedRooms) {
+      const grassRect = {
+        minX: room.minX - GRASS_MARGIN,
+        minZ: room.minZ - GRASS_MARGIN,
+        maxX: room.maxX + GRASS_MARGIN,
+        maxZ: room.maxZ + GRASS_MARGIN,
+      }
+      const bounds = worldRectToTileBounds(
+        grassRect.minX,
+        grassRect.minZ,
+        grassRect.maxX,
+        grassRect.maxZ
+      )
+      for (let z = bounds.tileMinZ; z <= bounds.tileMaxZ; z++) {
+        for (let x = bounds.tileMinX; x <= bounds.tileMaxX; x++) {
+          if (!affectedTiles.some((tile) => tile.x === x && tile.z === z)) {
+            affectedTiles.push({ x, z })
           }
         }
-        if (changed) await gm.saveGrassData(tx, tz, data)
-      })
+      }
+    }
+    await Promise.all(
+      affectedTiles.map(({ x, z }) => grass.restoreFromOriginal(x, z))
     )
+
+    const recarveRects = currentRooms
+      .map(({ rect }) => ({
+        minX: rect.minX - GRASS_MARGIN,
+        minZ: rect.minZ - GRASS_MARGIN,
+        maxX: rect.maxX + GRASS_MARGIN,
+        maxZ: rect.maxZ + GRASS_MARGIN,
+      }))
+      .filter((rect) => {
+        const bounds = worldRectToTileBounds(
+          rect.minX,
+          rect.minZ,
+          rect.maxX,
+          rect.maxZ
+        )
+        return affectedTiles.some(
+          ({ x, z }) =>
+            x >= bounds.tileMinX &&
+            x <= bounds.tileMaxX &&
+            z >= bounds.tileMinZ &&
+            z <= bounds.tileMaxZ
+        )
+      })
+    await grass.removeGrassInRects(recarveRects)
   }
 
   async function reinstallSelectedHouse() {
@@ -795,13 +754,58 @@
     // Height tiles and grass tiles are disjoint files — persist both in parallel.
     await Promise.all([
       heightManager.saveAllDirty(),
-      removeGrassInRects(rooms.map((room) => roomGrassRect(house, room))),
+      grassDataManager?.removeGrassInRects(
+        rooms.map((room) => roomGrassRect(house, room))
+      ),
     ])
 
     const saved = await housingManager.updateHouse(house)
     if (!saved) {
       console.warn(`Failed to reinstall house ${house.id}`)
     }
+  }
+
+  async function moveSelectedHouseBy(
+    deltaX: number,
+    deltaZ: number
+  ): Promise<boolean> {
+    const houseId = get(selectedHouseId)
+    if (houseId == null || !heightManager) return false
+
+    const house = housingManager.getHouseById(houseId)
+    if (!house) return false
+
+    const previous = structuredClone(house)
+    const moved = structuredClone(house)
+    moved.origin.x += deltaX
+    moved.origin.z += deltaZ
+
+    const saved = await housingManager.updateHouse(moved)
+    if (!saved) return false
+
+    const movedObjects = await objectManager
+      .moveHouseContents(previous, deltaX, deltaZ)
+      .catch((error) => {
+        console.error('Failed to load house contents:', error)
+        return false
+      })
+    if (!movedObjects) {
+      const rolledBack = await housingManager.updateHouse(previous)
+      if (!rolledBack) {
+        console.error(`Failed to roll back house ${house.id} after object move`)
+      }
+      scheduleUpdateHighlight()
+      return false
+    }
+
+    const oldRooms = groundFloorRooms(previous)
+    await restoreGroundAfterRemoval(
+      oldRooms.map((room) => roomRect(previous, room)),
+      houseId
+    )
+
+    scheduleUpdateHighlight()
+    return true
   }
 
   function applyRoomSelection(
@@ -941,8 +945,7 @@
       newRoom.localZ = pos.z - targetHouse.origin.z
 
       const updatedRooms = [...targetHouse.rooms, newRoom]
-      // Only set shared walls open for same-floor rooms
-      setSharedWallsOpen(updatedRooms)
+      setSharedWallsOpen(updatedRooms, newRoom)
 
       const updatedHouse: HouseData = {
         ...targetHouse,
@@ -979,29 +982,14 @@
 
       // Remove grass under the house footprint (+ 1m margin)
       if (grassDataManager) {
-        const rectMinX = pos.x - GRASS_MARGIN
-        const rectMinZ = pos.z - GRASS_MARGIN
-        const rectMaxX = pos.x + sx + GRASS_MARGIN
-        const rectMaxZ = pos.z + sz + GRASS_MARGIN
-
-        const { tileMinX, tileMaxX, tileMinZ, tileMaxZ } =
-          worldRectToTileBounds(rectMinX, rectMinZ, rectMaxX, rectMaxZ)
-
-        for (let tz = tileMinZ; tz <= tileMaxZ; tz++) {
-          for (let tx = tileMinX; tx <= tileMaxX; tx++) {
-            grassDataManager.ensureOriginalGrass(tx, tz)
-            const cached = grassDataManager.getCachedGrassData(tx, tz)
-            if (!cached) continue
-            const filtered = removeGrassInRect(
-              cached,
-              rectMinX,
-              rectMinZ,
-              rectMaxX,
-              rectMaxZ
-            )
-            if (filtered) grassDataManager.saveGrassData(tx, tz, filtered)
-          }
-        }
+        await grassDataManager.removeGrassInRects([
+          {
+            minX: pos.x - GRASS_MARGIN,
+            minZ: pos.z - GRASS_MARGIN,
+            maxX: pos.x + sx + GRASS_MARGIN,
+            maxZ: pos.z + sz + GRASS_MARGIN,
+          },
+        ])
       }
     }
   }
@@ -1017,7 +1005,10 @@
       variant: base,
       texture,
     }))
-    if (variant === 'door' || variant === 'window') {
+    if (variant === 'door' && count % 2 === 0 && count >= 2) {
+      segs[count / 2 - 1] = { variant: 'double-door', texture }
+      segs[count / 2] = { variant: 'double-door', texture }
+    } else if (variant === 'door' || variant === 'window') {
       segs[Math.floor(count / 2)] = { variant, texture }
     }
     return segs
@@ -1051,40 +1042,28 @@
   }
 
   /**
-   * Auto-set overlapping 1m wall segments to 'open' where two rooms touch.
-   * e.g. 6x4 + 3x3 on its south wall: 3 of the 6 south segments → open,
-   *      and all 3 of the 3x3's north segments → open.
+   * Auto-set overlapping 1m wall segments to 'open' where `added` touches
+   * another room. Only pairs involving the new room are touched so interior
+   * walls edited on existing rooms survive later placements.
    */
-  function setSharedWallsOpen(rooms: RoomData[]) {
-    for (let i = 0; i < rooms.length; i++) {
-      const a = rooms[i]
-      for (let j = i + 1; j < rooms.length; j++) {
-        const b = rooms[j]
-        // Open walls between rooms on the same floor,
-        // AND between stairwells and rooms on the floor above
-        const sameFloor = a.floorLevel === b.floorLevel
-        const stairwellCrossFloor =
-          (a.roomType === 'stairwell' && b.floorLevel === a.floorLevel + 1) ||
-          (b.roomType === 'stairwell' && a.floorLevel === b.floorLevel + 1)
-        if (!sameFloor && !stairwellCrossFloor) continue
+  function setSharedWallsOpen(rooms: RoomData[], a: RoomData) {
+    for (const b of rooms) {
+      if (b === a) continue
+      // Same floor, or a stairwell and the room on the floor above it
+      const sameFloor = a.floorLevel === b.floorLevel
+      const stairwellCrossFloor =
+        (a.roomType === 'stairwell' && b.floorLevel === a.floorLevel + 1) ||
+        (b.roomType === 'stairwell' && a.floorLevel === b.floorLevel + 1)
+      if (!sameFloor && !stairwellCrossFloor) continue
 
-        // N/S: a's south touches b's north
-        if (a.localZ + a.sizeZ === b.localZ) {
-          openOverlappingSegments(a, 'wallSouth', b, 'wallNorth', 'x')
-        }
-        // N/S: b's south touches a's north
-        if (b.localZ + b.sizeZ === a.localZ) {
-          openOverlappingSegments(b, 'wallSouth', a, 'wallNorth', 'x')
-        }
-        // E/W: a's east touches b's west
-        if (a.localX + a.sizeX === b.localX) {
-          openOverlappingSegments(a, 'wallEast', b, 'wallWest', 'z')
-        }
-        // E/W: b's east touches a's west
-        if (b.localX + b.sizeX === a.localX) {
-          openOverlappingSegments(b, 'wallEast', a, 'wallWest', 'z')
-        }
-      }
+      if (a.localZ + a.sizeZ === b.localZ)
+        openOverlappingSegments(a, 'wallSouth', b, 'wallNorth', 'x')
+      if (b.localZ + b.sizeZ === a.localZ)
+        openOverlappingSegments(b, 'wallSouth', a, 'wallNorth', 'x')
+      if (a.localX + a.sizeX === b.localX)
+        openOverlappingSegments(a, 'wallEast', b, 'wallWest', 'z')
+      if (b.localX + b.sizeX === a.localX)
+        openOverlappingSegments(b, 'wallEast', a, 'wallWest', 'z')
     }
   }
 
@@ -1145,6 +1124,7 @@
     setDeleteSelectedRoom(null)
     setFlattenSelectedRoomTerrain(null)
     setReinstallSelectedHouse(null)
+    setMoveSelectedHouse(null)
     placementPreview.set(null)
     previewMatValid.dispose()
     previewMatInvalid.dispose()

@@ -3,40 +3,9 @@ import { RenderTarget, type WebGPURenderer } from 'three/webgpu'
 
 type Color4 = THREE.Color & { a: number }
 
-/**
- * Renders the scene (entities only) with the camera mirrored across the water
- * plane so the water shader can sample it as a planar reflection texture.
- *
- * Below-water entity fragments are clipped via a ClippingGroup that wraps the
- * entity hierarchy.  The group's `enabled` flag is toggled on only during the
- * reflection render so normal rendering is unaffected.
- */
-
-const WATER_Y = 0
-
-// Reflection matrix that mirrors across Y = WATER_Y.
-// For WATER_Y = 0 this is simply diag(1, -1, 1, 1).
-const _reflectionMatrix = /* @__PURE__ */ new THREE.Matrix4().set(
-  1,
-  0,
-  0,
-  0,
-  0,
-  -1,
-  0,
-  2 * WATER_Y,
-  0,
-  0,
-  1,
-  0,
-  0,
-  0,
-  0,
-  1
-)
-
 export class ReflectionRenderManager {
   readonly target: RenderTarget
+  private readonly reflectionMatrix = new THREE.Matrix4().makeScale(1, -1, 1)
   private renderer: WebGPURenderer
   private scene: THREE.Scene
   private camera: THREE.Camera | null = null
@@ -104,9 +73,10 @@ export class ReflectionRenderManager {
   render() {
     if (!this.camera || !this.renderer.hasInitialized()) return
 
-    // --- build reflected camera (avoid copy() which resets auto-update flags) ---
+    // Preserve the reflected camera's manual-update flags.
     const cam = this.camera as THREE.OrthographicCamera
     const rc = this.reflCam
+    cam.updateWorldMatrix(true, false)
 
     // Sync orthographic frustum
     rc.left = cam.left
@@ -118,7 +88,7 @@ export class ReflectionRenderManager {
     rc.layers.mask = cam.layers.mask
 
     // W' = R · W  (reflection applied to the camera's world matrix)
-    rc.matrixWorld.copy(cam.matrixWorld).premultiply(_reflectionMatrix)
+    rc.matrixWorld.copy(cam.matrixWorld).premultiply(this.reflectionMatrix)
     rc.matrixWorldInverse.copy(rc.matrixWorld).invert()
     rc.matrixWorldNeedsUpdate = false
 
@@ -126,7 +96,7 @@ export class ReflectionRenderManager {
     rc.projectionMatrix.copy(cam.projectionMatrix)
     rc.projectionMatrixInverse.copy(cam.projectionMatrixInverse)
 
-    // --- hide non-entity objects ---
+    // Hide surfaces sampled by the reflection.
     const savedTerrain = this.terrainGroup?.visible
     if (this.terrainGroup) this.terrainGroup.visible = false
     const savedWater = this.waterGroup?.visible
@@ -137,24 +107,24 @@ export class ReflectionRenderManager {
     // --- enable clipping to discard below-water fragments ---
     if (this.entityClipGroup) this.entityClipGroup.enabled = true
 
-    // --- render with transparent background ---
     this.renderer.getClearColor(this._savedClearColor)
     const savedClearAlpha = this.renderer.getClearAlpha()
-
-    this.renderer.setClearColor(0x000000, 0)
-
+    const savedBackground = this.scene.background
     const prev = this.renderer.getRenderTarget()
-    this.renderer.setRenderTarget(this.target)
-    this.renderer.render(this.scene, this.reflCam)
-    this.renderer.setRenderTarget(prev)
-
-    this.renderer.setClearColor(this._savedClearColor, savedClearAlpha)
-
-    // --- restore ---
-    if (this.entityClipGroup) this.entityClipGroup.enabled = false
-    if (this.terrainGroup) this.terrainGroup.visible = savedTerrain ?? true
-    if (this.waterGroup) this.waterGroup.visible = savedWater ?? true
-    if (this.housingGroup) this.housingGroup.visible = savedHousing ?? true
+    try {
+      this.scene.background = null
+      this.renderer.setClearColor(0x000000, 0)
+      this.renderer.setRenderTarget(this.target)
+      this.renderer.render(this.scene, this.reflCam)
+    } finally {
+      this.renderer.setRenderTarget(prev)
+      this.renderer.setClearColor(this._savedClearColor, savedClearAlpha)
+      this.scene.background = savedBackground
+      if (this.entityClipGroup) this.entityClipGroup.enabled = false
+      if (this.terrainGroup) this.terrainGroup.visible = savedTerrain ?? true
+      if (this.waterGroup) this.waterGroup.visible = savedWater ?? true
+      if (this.housingGroup) this.housingGroup.visible = savedHousing ?? true
+    }
   }
 
   /** Clear the reflection target to transparent black. */

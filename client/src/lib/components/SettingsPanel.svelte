@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t, languagePreference, languages } from '../i18n'
+  import type { Writable } from 'svelte/store'
   import { bgmVolume, bgmMuted } from '../managers/bgmManager'
   import { sfxVolume, sfxMuted } from '../managers/sfxManager'
   import {
@@ -8,7 +10,13 @@
     type QualityLevel,
   } from '../stores/graphicsSettings'
   import VolumeControl from './VolumeControl.svelte'
+  import { minimapEnabled } from '../stores/minimapStore'
+  import { alwaysRun, keyboardMovementMode } from '../stores/movementSettings'
+  import { lightningEnabled } from '../stores/effectSettings'
+  import ToggleSwitch from './ToggleSwitch.svelte'
+  import { friendOnlineNoticeEnabled } from '../stores/friendStore'
   import { mountOverlay } from '../stores/overlayStack'
+  import { resetPanelLayout } from '../stores/panelLayout'
 
   interface Props {
     onClose: () => void
@@ -16,63 +24,147 @@
 
   let { onClose }: Props = $props()
 
-  // Escape closes via the overlay stack, same as the close button.
   $effect(() => mountOverlay('settings', onClose))
 
-  const qualityOptions: { value: QualityLevel; label: string }[] = [
-    { value: 'high', label: 'High' },
-    { value: 'medium', label: 'Medium' },
-    { value: 'low', label: 'Low' },
-  ]
+  const qualityOptions: QualityLevel[] = ['high', 'medium', 'low']
 </script>
+
+{#snippet toggleRow(
+  label: string,
+  checked: Writable<boolean>,
+  hint?: string,
+  hintId?: string
+)}
+  <div class="setting-row" class:has-hint={!!hint}>
+    <span class="setting-label">{label}</span>
+    <ToggleSwitch {checked} {label} describedBy={hint ? hintId : undefined} />
+    {#if hint}
+      <span class="setting-tooltip" id={hintId} role="tooltip">{hint}</span>
+    {/if}
+  </div>
+{/snippet}
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="overlay" onclick={onClose}>
   <div class="panel" onclick={(e) => e.stopPropagation()}>
     <div class="header">
-      <h2>Settings</h2>
-      <button class="close-btn" onclick={onClose}>&times;</button>
+      <h2>{$t('settings.title')}</h2>
+      <button
+        class="close-btn"
+        aria-label={$t('common.close')}
+        onclick={onClose}>&times;</button
+      >
     </div>
 
     <div class="setting-row">
-      <span class="setting-label">Graphics Quality</span>
+      <label class="setting-label" for="game-language"
+        >{$t('settings.language')}</label
+      >
+      <select id="game-language" bind:value={$languagePreference}>
+        <option value="auto">{$t('settings.languageAuto')}</option>
+        {#each languages as language (language.value)}
+          <option value={language.value}>{language.label}</option>
+        {/each}
+      </select>
+    </div>
+    {@render toggleRow($t('settings.minimap'), minimapEnabled)}
+    {@render toggleRow(
+      $t('settings.alwaysRun'),
+      alwaysRun,
+      $alwaysRun ? $t('settings.shiftWalk') : $t('settings.shiftRun'),
+      'settings-run-hint'
+    )}
+    <div class="setting-row has-hint">
+      <span class="setting-label">{$t('settings.movement')}</span>
+      <div
+        class="quality-row"
+        role="group"
+        aria-label={$t('settings.movementMode')}
+      >
+        <button
+          class="quality-btn"
+          class:active={$keyboardMovementMode === 'world'}
+          aria-pressed={$keyboardMovementMode === 'world'}
+          aria-describedby="settings-movement-hint"
+          onclick={() => keyboardMovementMode.set('world')}
+          >{$t('settings.fixed')}</button
+        >
+        <button
+          class="quality-btn"
+          class:active={$keyboardMovementMode === 'character'}
+          aria-pressed={$keyboardMovementMode === 'character'}
+          aria-describedby="settings-movement-hint"
+          onclick={() => keyboardMovementMode.set('character')}
+          >{$t('settings.relative')}</button
+        >
+      </div>
+      <span class="setting-tooltip" id="settings-movement-hint" role="tooltip">
+        {$t('settings.movementKeys')}<br />
+        {$keyboardMovementMode === 'world'
+          ? $t('settings.worldHint')
+          : $t('settings.relativeHint')}
+      </span>
+    </div>
+    {@render toggleRow($t('settings.friendNotice'), friendOnlineNoticeEnabled)}
+    {@render toggleRow(
+      $t('settings.lightning'),
+      lightningEnabled,
+      $t('settings.lightningHint'),
+      'settings-lightning-hint'
+    )}
+
+    <div class="setting-row">
+      <span class="setting-label">{$t('settings.graphics')}</span>
       <div class="quality-row">
-        {#each qualityOptions as opt (opt.value)}
+        {#each qualityOptions as opt (opt)}
           <button
             class="quality-btn"
-            class:active={$graphicsQuality === opt.value}
-            onclick={() => setQualityManual(opt.value)}
+            class:active={$graphicsQuality === opt}
+            onclick={() => setQualityManual(opt)}
           >
-            {opt.label}
+            {$t(`settings.${opt}`)}
           </button>
         {/each}
       </div>
-      {#if $reloadNeeded}
-        <div class="reload-notice">
-          <span>Antialiasing changes require restart</span>
-          <button class="reload-btn" onclick={() => location.reload()}
-            >Restart</button
-          >
-        </div>
-      {/if}
+    </div>
+    {#if $reloadNeeded}
+      <div class="reload-notice">
+        <span>{$t('settings.restartHint')}</span>
+        <button class="action-btn" onclick={() => location.reload()}
+          >{$t('settings.restart')}</button
+        >
+      </div>
+    {/if}
+
+    <div class="setting-row has-hint">
+      <span class="setting-label">{$t('settings.layout')}</span>
+      <button
+        class="action-btn"
+        aria-describedby="settings-layout-hint"
+        onclick={resetPanelLayout}>{$t('common.reset')}</button
+      >
+      <span class="setting-tooltip" id="settings-layout-hint" role="tooltip"
+        >{$t('settings.layoutHint')}</span
+      >
     </div>
 
     <div class="divider"></div>
 
-    <div class="setting-row">
+    <div class="volume-row">
       <VolumeControl
         id="bgm-volume"
-        label="BGM Volume"
+        label={$t('settings.bgm')}
         volume={bgmVolume}
         muted={bgmMuted}
+        shortcut="Ctrl+M"
       />
     </div>
 
-    <div class="setting-row sfx-row">
+    <div class="volume-row sfx-row">
       <VolumeControl
         id="sfx-volume"
-        label="Sound Effects"
+        label={$t('settings.sfx')}
         volume={sfxVolume}
         muted={sfxMuted}
       />
@@ -96,7 +188,10 @@
     border: 1px solid #4a5568;
     border-radius: 10px;
     padding: 24px;
-    width: 320px;
+    width: min(420px, calc(100vw - 32px));
+    box-sizing: border-box;
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
   }
 
@@ -130,6 +225,20 @@
   }
 
   .setting-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 30px;
+  }
+
+  .setting-row + .setting-row,
+  .reload-notice + .setting-row {
+    margin-top: 12px;
+  }
+
+  .volume-row {
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -153,20 +262,68 @@
       -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
+  .has-hint .setting-label {
+    cursor: help;
+    text-decoration: underline dotted #718096;
+    text-underline-offset: 4px;
+  }
+
+  .setting-tooltip {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 1;
+    padding: 8px 10px;
+    border: 1px solid #4a5568;
+    border-radius: 6px;
+    background: #111827;
+    color: #edf2f7;
+    font:
+      12px/1.5 'Noto Sans KR',
+      sans-serif;
+    overflow-wrap: anywhere;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .has-hint:hover .setting-tooltip,
+  .has-hint:focus-within .setting-tooltip {
+    opacity: 1;
+    visibility: visible;
+  }
+
   .quality-row {
-    display: flex;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
     gap: 0;
     border-radius: 6px;
     overflow: hidden;
     border: 1px solid #4a5568;
   }
 
+  select {
+    min-width: 0;
+    max-width: 65%;
+    padding: 6px;
+    background: #2d3748;
+    color: #edf2f7;
+    border: 1px solid #4a5568;
+    border-radius: 4px;
+    font: inherit;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 13px;
+  }
+
   .quality-btn {
-    flex: 1;
-    padding: 7px 0;
+    padding: 5px 12px;
     background: #2d3748;
     color: #a0aec0;
     border: none;
+    border-radius: 0;
     font-size: 13px;
     font-weight: 500;
     font-family:
@@ -179,6 +336,15 @@
 
   .quality-btn:not(:last-child) {
     border-right: 1px solid #4a5568;
+  }
+
+  .quality-btn:focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  .quality-btn:focus-visible {
+    outline: 2px solid #bee3f8;
+    outline-offset: -2px;
   }
 
   .quality-btn:hover {
@@ -206,7 +372,7 @@
       -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
-  .reload-btn {
+  .action-btn {
     background: #4a5568;
     color: #edf2f7;
     border: none;
@@ -220,7 +386,7 @@
     flex-shrink: 0;
   }
 
-  .reload-btn:hover {
+  .action-btn:hover {
     background: #718096;
   }
 </style>

@@ -16,12 +16,14 @@
     ObjectDef,
     ObjectPlacement,
   } from '../../stores/editorStore'
+  import type { Position } from '../../network/networkTypes'
   import { playerDebugInfo } from '../../stores/debugStore'
   import type { PlayerDebugInfo } from '../../stores/debugStore'
   import { mapEditorMode } from '../../stores/debugStore'
   import { tileToRegion } from '../../terrain/terrain-constants'
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
   import { objectManager } from '../../managers/objectManager'
+  import { worldView } from '../../network/worldView'
   import { bridgeManager } from '../../managers/bridgeManager'
   import { furnitureManager } from '../../managers/furnitureManager'
   import {
@@ -30,15 +32,22 @@
   } from '../../stores/housingStore'
   import { housingManager } from '../../managers/housingManager'
   import { loadGLB } from '../../utils/gltfCache'
+  import {
+    CampfireFireParticles,
+    TorchFireParticles,
+    type FireParticles,
+  } from '../../effects/fire-particles'
   import { getObjectModelPath } from '../../utils/modelPaths'
-  import { buildShopSignBoard, buildShopSignText } from '../../utils/shop-sign'
+  import { createSelectionBox } from '../../utils/objectSelectionBox'
+  import {
+    buildShopSignBoard,
+    buildShopSignText,
+    getShopSignStyle,
+  } from '../../utils/shop-sign'
   import type { Unsubscriber } from 'svelte/store'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
 
-  const HIGHLIGHT_COLOR = new THREE.Color(0x44ccff)
   const PREVIEW_OPACITY = 0.5
-  const SELECTION_OPACITY = 0.9
-  const SELECTION_RENDER_ORDER = 999
   const GHOST_OPACITY = 0.3
 
   let tool = $state<EditorTool>('height')
@@ -55,24 +64,22 @@
   let catalogById = new Map<string, ObjectDef>()
 
   let lastLoadedRegion = { rx: NaN, rz: NaN }
+  let regionLoadGeneration = 0
+  let regionRetry: ReturnType<typeof setTimeout> | undefined
 
   const unsubs: Unsubscriber[] = [
     editorTool.subscribe((v) => (tool = v)),
     currentObjectData.subscribe((v) => {
       placements = v.placements
       // Re-sync bridge + furniture collision so newly placed/edited objects
-      // take effect immediately. Guard for the initial empty-state fire before
-      // catalog loads (and before any region has been loaded).
+      // take effect immediately. Skip the initial empty-state fire before any
+      // region has been loaded.
+      const { rx, rz } = lastLoadedRegion
+      if (Number.isNaN(rx)) return
       if (catalogById.size > 0) {
-        bridgeManager.syncRegion(v.placements, catalogById)
+        bridgeManager.syncRegion(rx, rz, v.placements, catalogById)
       }
-      if (!Number.isNaN(lastLoadedRegion.rx)) {
-        furnitureManager.syncRegion(
-          lastLoadedRegion.rx,
-          lastLoadedRegion.rz,
-          v.placements
-        )
-      }
+      furnitureManager.syncRegion(rx, rz, v.placements)
     }),
     objectCatalog.subscribe((v) => {
       // Keep catalogById in sync with whoever populated the store
@@ -87,32 +94,55 @@
     mapEditorMode.subscribe((v) => (isEditorMode = v)),
     playerVisualFloorLevel.subscribe((v) => (currentFloor = v)),
     playerInsideHouseId.subscribe((v) => (currentHouseId = v)),
+    objectManager.onRegionChanged(({ rx, rz, data }) => {
+      if (rx === lastLoadedRegion.rx && rz === lastLoadedRegion.rz) {
+        currentObjectData.set(data)
+      }
+    }),
+    objectManager.onWorldReset(() => {
+      const { rx, rz } = lastLoadedRegion
+      regionLoadGeneration++
+      clearTimeout(regionRetry)
+      lastLoadedRegion = { rx: NaN, rz: NaN }
+      furnitureManager.reset()
+      bridgeManager.reset()
+      currentObjectData.set({ placements: [] })
+      if (Number.isFinite(rx)) void loadRegionObject(rx, rz)
+    }),
   ]
-  onDestroy(() => unsubs.forEach((u) => u()))
+  onDestroy(() => {
+    regionLoadGeneration++
+    clearTimeout(regionRetry)
+    unsubs.forEach((u) => u())
+  })
 
   async function loadRegionObject(rx: number, rz: number) {
     if (rx === lastLoadedRegion.rx && rz === lastLoadedRegion.rz) return
     lastLoadedRegion = { rx, rz }
-
-    if (catalogById.size === 0) {
-      const cat = await objectManager.fetchCatalog()
-      objectCatalog.set(cat)
+    const generation = ++regionLoadGeneration
+    clearTimeout(regionRetry)
+    worldView.staticReady = false
+    try {
+      if (catalogById.size === 0) {
+        const cat = await objectManager.fetchCatalog()
+        if (generation !== regionLoadGeneration) return
+        objectCatalog.set(cat)
+      }
+      const data = await objectManager.fetchObject(rx, rz)
+      if (generation !== regionLoadGeneration) return
+      currentObjectData.set(data)
+      furnitureManager.evictDistant(rx, rz)
+      bridgeManager.evictDistant(rx, rz)
+      worldView.staticReady = true
+    } catch (error) {
+      if (generation !== regionLoadGeneration) return
+      console.error('Object region remains pending', error)
+      regionRetry = setTimeout(() => {
+        if (generation !== regionLoadGeneration) return
+        lastLoadedRegion = { rx: NaN, rz: NaN }
+        void loadRegionObject(rx, rz)
+      }, 1000)
     }
-
-    const data = await objectManager.fetchObject(rx, rz)
-    // A newer region load may have superseded this one while awaiting (fast
-    // region crossing with out-of-order fetch resolution). If so, drop this
-    // stale result: otherwise currentObjectData.set fires the subscription,
-    // which syncs furniture for the *current* lastLoadedRegion — mis-keying
-    // this region's cells under the wrong region — and shows stale objects.
-    if (rx !== lastLoadedRegion.rx || rz !== lastLoadedRegion.rz) return
-    // currentObjectData.set fires the subscription above synchronously, which
-    // syncs furniture for lastLoadedRegion (== rx,rz here) — no direct call needed.
-    currentObjectData.set(data)
-    bridgeManager.syncRegion(data.placements, catalogById)
-    // Sync first, evict after: the new region is in place before its distant
-    // neighbours go, so collision is never momentarily absent underfoot.
-    furnitureManager.evictDistant(rx, rz)
   }
 
   $effect(() => {
@@ -131,27 +161,22 @@
   >()
   const loadingModels = new SvelteSet<string>()
 
-  /** Build a procedural object template (text-less; text is added per instance
-   *  in rebuild). Returns null for unknown builder ids. */
-  function buildProceduralModel(kind: string): THREE.Group | null {
-    if (kind === 'shopSign') return buildShopSignBoard()
+  function buildProceduralModel(def: ObjectDef): THREE.Group | null {
+    if (def.procedural === 'shopSign') {
+      return buildShopSignBoard(getShopSignStyle(def.shopSignStyle).board)
+    }
     return null
   }
 
-  /** Cache of baked sign-text meshes keyed by `type\0text`. buildShopSignText
-   *  allocates a CanvasTexture + node material + geometry that the disposer must
-   *  skip (WebGPU sampler crash on dispose), so building one per rebuild would
-   *  leak GPU memory on every editor interaction (dragging the Rot slider fires
-   *  rebuild() dozens of times/sec). Build once per unique text and hand out
-   *  clones — a Mesh clone shares geometry/material/texture, so no new GPU
-   *  resources are allocated. */
+  // Share GPU resources across rebuilds; disposing sign text breaks WebGPU samplers.
   const signTextCache = new SvelteMap<string, THREE.Mesh>()
 
   function getSignText(type: string, text: string): THREE.Object3D {
     const key = `${type}\u0000${text}`
     let base = signTextCache.get(key)
     if (!base) {
-      base = buildShopSignText(text)
+      const style = getShopSignStyle(catalogById.get(type)?.shopSignStyle)
+      base = buildShopSignText(text, style.board, style.text)
       signTextCache.set(key, base)
     }
     // Clone shares the cached geometry/material/texture; a Mesh can only have
@@ -170,28 +195,23 @@
     try {
       let model: THREE.Group | null
       if (def.procedural) {
-        // Procedural objects (e.g. shop signs) build their geometry in code and
-        // register it into the same template cache the GLB path uses, so
-        // cloning, preview, selection box and per-instance text all work
-        // unchanged. Defer past any in-progress rebuild() before mutating the
-        // cache and re-running it, exactly as the GLB path's `await loadGLB`
-        // does — otherwise a synchronous rebuild() call from inside rebuild()'s
-        // own loop would re-enter and duplicate placements.
+        // Defer to avoid re-entering rebuild() and duplicating placements.
         await Promise.resolve()
-        model = buildProceduralModel(def.procedural)
+        model = buildProceduralModel(def)
       } else {
         if (!def.model) return null
         const gltf = await loadGLB(getObjectModelPath(def.model))
-        // Bridges ray-cast against the cached, untransformed scene at runtime
-        // so the player Y tracks the actual deck curve precisely.
-        if (def.kind === 'bridge') {
-          bridgeManager.registerBridgeMesh(objectId, gltf.scene)
+        if (def.kind === 'bridge' && def.bridge) {
+          bridgeManager.registerBridgeMesh(objectId, gltf.scene, def.bridge)
+          buildGhostMaterials(gltf.scene)
         }
         model = gltf.scene.clone()
         model.traverse((child) => {
           if (child instanceof THREE.Mesh) {
-            child.castShadow = true
-            child.receiveShadow = true
+            // The alpha=0 collision plane sits on the deck and would shadow it
+            const shadows = !isCollisionMaterial(child.material)
+            child.castShadow = shadows
+            child.receiveShadow = shadows
           }
         })
       }
@@ -204,10 +224,6 @@
       box.getSize(size)
       modelBounds.set(objectId, { center, size })
       modelCache.set(objectId, model)
-      // Force a full rebuild (not the transform-only fast path) so the newly
-      // loaded template actually gets cloned into the scene.
-      lastBuildKey = ''
-      lastStructKey = ''
       rebuild()
       // If the user is currently previewing this object, build the preview now —
       // otherwise the cursor stays empty until the mouse moves again.
@@ -231,8 +247,10 @@
       // shop-sign.ts). The board reuses the shared housing door material, which
       // other houses depend on. Leave both for GC / shared ownership.
       if (child.userData?.isSignText || child.userData?.isSignBoard) return
-      if (child instanceof THREE.Mesh && child.material) {
-        child.material.dispose()
+      // Plain clones share the cached template's materials — disposing those
+      // would force every placement to re-upload textures on the next draw.
+      if (child instanceof THREE.Mesh && child.userData.ownsMaterial) {
+        ;(child.material as THREE.Material).dispose()
       } else if (child instanceof THREE.LineSegments) {
         child.geometry.dispose()
         ;(child.material as THREE.Material).dispose()
@@ -240,42 +258,112 @@
     })
   }
 
-  function createSelectionBox(
-    center: THREE.Vector3,
-    size: THREE.Vector3
-  ): THREE.LineSegments {
-    const box = new THREE.BoxGeometry(size.x, size.y, size.z)
-    const geo = new THREE.EdgesGeometry(box)
-    box.dispose()
-    const mat = new THREE.LineBasicMaterial({
-      color: HIGHLIGHT_COLOR,
-      depthTest: false,
-      transparent: true,
-      opacity: SELECTION_OPACITY,
-    })
-    const lines = new THREE.LineSegments(geo, mat)
-    lines.position.copy(center)
-    lines.renderOrder = SELECTION_RENDER_ORDER
-    return lines
+  function translucentClone(m: THREE.Material, opacity: number) {
+    const t = m.clone()
+    t.transparent = true
+    t.opacity = opacity
+    t.depthWrite = false
+    return t
   }
 
   function setPreviewMaterial(obj: THREE.Object3D, opacity: number) {
     obj.traverse((child) => {
       if (child instanceof THREE.Mesh) {
-        child.material = (child.material as THREE.Material).clone()
-        ;(child.material as THREE.Material).transparent = true
-        ;(child.material as THREE.Material).opacity = opacity
-        ;(child.material as THREE.Material).depthWrite = false
+        child.material = translucentClone(
+          child.material as THREE.Material,
+          opacity
+        )
+        child.userData.ownsMaterial = true
       }
     })
   }
 
-  let lastBuildKey = ''
-  let lastStructKey = ''
   /** objectId → its placement clone in `group`, so the transform-only fast path
    *  can move an existing clone instead of tearing the whole region down. */
   const cloneById = new SvelteMap<number, THREE.Object3D>()
   const isEditing = () => isEditorMode && tool === 'object'
+
+  // Keep shared fire materials outside the model group's rebuild/disposal sweep.
+  const Y_AXIS = new THREE.Vector3(0, 1, 0)
+  const fireRoot = new THREE.Group()
+  fireRoot.name = 'objectFires'
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const fireSystems = new Map<
+    number,
+    { system: FireParticles; pos: THREE.Vector3 }
+  >()
+  /** Currently visible fire systems, refreshed by syncFires(); update() only
+   *  ticks these so paused (detached) systems cost nothing per frame. */
+  const _activeFires: FireParticles[] = []
+  /** World positions of visible flames, refreshed by syncFires(): log-bed
+   *  fires (hearths) take the unified light, torches feed the glow pool. */
+  const firePositions: THREE.Vector3[] = []
+  const torchPositions: THREE.Vector3[] = []
+  const _placementPos = new THREE.Vector3()
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const _seenFires = new Set<number>()
+
+  function fireWorldPos(
+    p: ObjectPlacement,
+    local: Position,
+    out: THREE.Vector3
+  ) {
+    out.set(local.x, local.y, local.z)
+    out.applyAxisAngle(Y_AXIS, (p.rotation * Math.PI) / 180)
+    return out.add(_placementPos.set(p.x, p.y, p.z))
+  }
+
+  /** Sync fire systems to the visible placements. Systems whose placement is
+   *  merely filtered out (other floor/house, per `_idShown`) are detached and
+   *  paused, not disposed — tearing them down and re-creating them on every
+   *  house entry churned garbage and GPU buffers, hitching the entry frame. */
+  function syncFires(visible: ObjectPlacement[]) {
+    firePositions.length = 0
+    torchPositions.length = 0
+    _activeFires.length = 0
+    _seenFires.clear()
+    for (const p of visible) {
+      const def = catalogById.get(p.type)
+      const fire = def?.fire
+      if (!fire) continue
+      const isTorch = def?.fireKind === 'torch'
+      _seenFires.add(p.id)
+      let entry = fireSystems.get(p.id)
+      if (!entry) {
+        const system = isTorch
+          ? new TorchFireParticles()
+          : new CampfireFireParticles()
+        entry = { system, pos: new THREE.Vector3() }
+        fireSystems.set(p.id, entry)
+      }
+      if (!entry.system.group.parent) fireRoot.add(entry.system.group)
+      entry.system.setOrigin(fireWorldPos(p, fire, entry.pos))
+      _activeFires.push(entry.system)
+      ;(isTorch ? torchPositions : firePositions).push(entry.pos)
+    }
+    for (const [id, entry] of fireSystems) {
+      if (_seenFires.has(id)) continue
+      if (_idShown.has(id)) {
+        fireRoot.remove(entry.system.group)
+        continue
+      }
+      entry.system.dispose()
+      fireSystems.delete(id)
+    }
+  }
+
+  export function update(deltaTime: number, camera: THREE.Camera | undefined) {
+    if (!fireRoot.visible) return
+    for (const s of _activeFires) s.update(deltaTime, camera)
+  }
+
+  export function getFirePositions(): THREE.Vector3[] {
+    return firePositions
+  }
+
+  export function getTorchPositions(): THREE.Vector3[] {
+    return torchPositions
+  }
 
   /** Apply a placement's position + rotation (yaw + pitch) to its clone. Single
    *  source of transform threading for both the full rebuild and fast path. */
@@ -297,93 +385,105 @@
     })
   }
 
+  /** Everything that decides how a placement's clone is built (vs. merely
+   *  where it sits). A changed key means teardown + re-clone of that one. */
+  function structKeyOf(p: ObjectPlacement): string {
+    const sel = isEditing() && p.id === selectedId ? 'S' : ''
+    return `${p.type}:${p.text ?? ''}:${sel}`
+  }
+
+  function buildClone(
+    p: ObjectPlacement,
+    template: THREE.Group,
+    structKey: string
+  ) {
+    const clone = template.clone()
+    applyPlacementTransform(clone, p)
+    if (isEditing() && p.id === selectedId) {
+      const bounds = modelBounds.get(p.type)
+      if (bounds) clone.add(createSelectionBox(bounds.center, bounds.size))
+    }
+    clone.userData.objectId = p.id
+    clone.userData.objectType = p.type
+    clone.userData.structKey = structKey
+    const catDef = catalogById.get(p.type)
+    if (p.text) {
+      if (catDef?.procedural === 'shopSign') {
+        // Persistent baked sign face — no hover bubble (so we skip objectText).
+        // Reuse a cached (undisposable) text mesh via clone so repeated
+        // rebuilds don't leak a fresh CanvasTexture each time.
+        clone.add(getSignText(p.type, p.text))
+      } else {
+        clone.userData.objectText = p.text
+      }
+    }
+    if (catDef?.interaction) {
+      clone.userData.objectInteraction = catDef.interaction
+      clone.userData.objectInteractOffset = catDef.interactOffset
+    }
+    if (catDef?.kind) clone.userData.objectKind = catDef.kind
+    return clone
+  }
+
+  /** id → currently shown, over every loaded placement. `has()` answers
+   *  "still loaded", `get()` answers "passes the floor/house filter". */
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const _idShown = new Map<number, boolean>()
+
+  /** Incremental sync of clones to the loaded placements. Every placement gets
+   *  a clone up front; ones filtered out (other floor/house) are detached from
+   *  the scene graph but kept in cloneById with their geometry, materials and
+   *  compiled GPU state alive — destroy/re-create on house entry churned
+   *  garbage and GPU bind groups, hitching the entry frame. Detached clones
+   *  cost no render traversal and no raycasts. Teardown only when the
+   *  placement is gone or its struct key changes. */
   function rebuild() {
+    _idShown.clear()
+    for (const p of placements) _idShown.set(p.id, false)
     const visible = visiblePlacements(currentFloor)
-    // Split the change signature: `structKey` is everything that changes WHICH
-    // clones exist (id/type/text set, selection, floor, house); `transformKey`
-    // is just each clone's position/rotation. When only transforms changed we
-    // move the existing clones in place instead of teardown + re-clone — crucial
-    // on WebGPU, where re-instantiating meshes/materials rebuilds pipelines and
-    // bind groups and tanks FPS during a slider/wheel drag.
-    const structKey =
-      visible.map((p) => `${p.id}:${p.type}:${p.text ?? ''}`).join('|') +
-      `|sel:${isEditing() ? selectedId : ''}|fl:${currentFloor}|h:${currentHouseId ?? ''}`
-    const transformKey = visible
-      .map(
-        (p) => `${p.id}:${p.x}:${p.y}:${p.z}:${p.rotation}:${p.rotationX ?? 0}`
-      )
-      .join('|')
-    const key = structKey + '||' + transformKey
-    if (key === lastBuildKey) return
-    const structUnchanged = structKey === lastStructKey && lastStructKey !== ''
-    lastBuildKey = key
-    lastStructKey = structKey
+    for (const p of visible) _idShown.set(p.id, true)
+    syncFires(visible)
 
-    if (structUnchanged) {
-      for (const p of visible) {
-        const clone = cloneById.get(p.id)
-        if (clone) applyPlacementTransform(clone, p)
-      }
-      return
+    for (const [id, clone] of cloneById) {
+      if (_idShown.has(id)) continue
+      disposeClonedMaterials(clone)
+      group.remove(clone)
+      cloneById.delete(id)
     }
 
-    cloneById.clear()
-    for (let i = group.children.length - 1; i >= 0; i--) {
-      const child = group.children[i]
-      if (child !== previewGroup) {
-        disposeClonedMaterials(child)
-        group.remove(child)
+    let attached = false
+    for (const p of placements) {
+      const show = _idShown.get(p.id)
+      let clone = cloneById.get(p.id)
+      if (clone && show && clone.userData.structKey !== structKeyOf(p)) {
+        disposeClonedMaterials(clone)
+        group.remove(clone)
+        cloneById.delete(p.id)
+        clone = undefined
       }
-    }
-
-    for (const p of visible) {
-      const template = modelCache.get(p.type)
-      if (!template) {
-        getModel(p.type)
-        continue
-      }
-      const clone = template.clone()
-      applyPlacementTransform(clone, p)
-      if (isEditing() && p.id === selectedId) {
-        const bounds = modelBounds.get(p.type)
-        if (bounds) {
-          clone.add(createSelectionBox(bounds.center, bounds.size))
+      if (!clone) {
+        const template = modelCache.get(p.type)
+        if (!template) {
+          getModel(p.type)
+          continue
         }
+        clone = buildClone(p, template, structKeyOf(p))
+        cloneById.set(p.id, clone)
+      } else if (show) {
+        applyPlacementTransform(clone, p)
       }
-      clone.userData.objectId = p.id
-      clone.userData.objectType = p.type
-      const catDef = catalogById.get(p.type)
-      if (p.text) {
-        if (catDef?.procedural === 'shopSign') {
-          // Persistent baked sign face — no hover bubble (so we skip objectText).
-          // Reuse a cached (undisposable) text mesh via clone so repeated
-          // rebuilds don't leak a fresh CanvasTexture each time.
-          clone.add(getSignText(p.type, p.text))
-        } else {
-          clone.userData.objectText = p.text
+      if (show) {
+        if (!clone.parent) {
+          group.add(clone)
+          attached = true
         }
+      } else if (clone.parent) {
+        group.remove(clone)
       }
-      if (catDef?.interaction) {
-        clone.userData.objectInteraction = catDef.interaction
-        clone.userData.objectInteractOffset = catDef.interactOffset
-      }
-      if (catDef?.kind) {
-        clone.userData.objectKind = catDef.kind
-      }
-      // Per-instance material clone so the ghost toggle doesn't leak across placements.
-      if (catDef?.kind === 'bridge') {
-        clone.traverse((o) => {
-          if (o instanceof THREE.Mesh && o.material) {
-            o.material = (o.material as THREE.Material).clone()
-          }
-        })
-      }
-      cloneById.set(p.id, clone)
-      group.add(clone)
     }
-    // Fresh clones start opaque; the $effect will re-apply ghost next frame
-    // if the player is still under a bridge.
-    ghostBridgeId = null
+    // Freshly attached clones start opaque; the $effect will re-apply ghost
+    // next frame if the player is still under a bridge.
+    if (attached) ghostBridgeId = null
   }
 
   function updatePreview() {
@@ -443,28 +543,42 @@
 
   let ghostBridgeId: number | null = null
 
+  /** Ghost twins of each bridge model's materials, built once per model so
+   *  every placement shares the same two material sets and the ghost toggle
+   *  is a reference swap — no per-placement clones, no needsUpdate recompiles. */
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const ghostOf = new Map<THREE.Material, THREE.Material>()
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const solidOf = new Map<THREE.Material, THREE.Material>()
+
+  /** Alpha=0 planes baked into bridge GLBs to fill deck holes for collision. */
+  function isCollisionMaterial(m: THREE.Material | THREE.Material[]) {
+    return !Array.isArray(m) && m.name?.startsWith('DeckCollisionInvisible')
+  }
+
+  function buildGhostMaterials(scene: THREE.Object3D) {
+    scene.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return
+      const m = o.material as THREE.Material
+      if (ghostOf.has(m) || isCollisionMaterial(m)) return
+      const g = translucentClone(m, GHOST_OPACITY)
+      ghostOf.set(m, g)
+      solidOf.set(g, m)
+    })
+  }
+
   function applyBridgeGhost(placementId: number, ghost: boolean) {
-    for (const child of group.children) {
-      if (child.userData.objectId !== placementId) continue
-      child.traverse((o) => {
-        if (!(o instanceof THREE.Mesh)) return
-        const m = o.material as THREE.Material
-        // Skip collision-only materials baked into a bridge GLB to fill deck
-        // holes — they're authored alpha=0 and must stay invisible even when
-        // ghost mode ends (otherwise the un-ghost restore turns them into a
-        // visible white plane on the deck).
-        if (m.name?.startsWith('DeckCollisionInvisible')) return
-        m.transparent = ghost
-        m.opacity = ghost ? GHOST_OPACITY : 1
-        m.depthWrite = !ghost
-        // Toggling `transparent` changes blend state — without needsUpdate
-        // the shader isn't recompiled and opacity is silently ignored.
-        m.needsUpdate = true
-        // Draw after the river ribbon (renderOrder=1) so alpha-blended deck
-        // sorts above water consistently.
-        o.renderOrder = ghost ? 2 : 0
-      })
-    }
+    cloneById.get(placementId)?.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return
+      const swapped = (ghost ? ghostOf : solidOf).get(
+        o.material as THREE.Material
+      )
+      if (!swapped) return
+      o.material = swapped
+      // Draw after the river ribbon (renderOrder=1) so alpha-blended deck
+      // sorts above water consistently.
+      o.renderOrder = ghost ? 2 : 0
+    })
   }
 
   $effect(() => {
@@ -484,13 +598,24 @@
     return group
   }
 
+  export function setVisible(visible: boolean) {
+    group.visible = visible
+    fireRoot.visible = visible
+  }
+
   onDestroy(() => {
+    for (const e of fireSystems.values()) e.system.dispose()
+    fireSystems.clear()
     for (const child of [...group.children]) {
       disposeClonedMaterials(child)
     }
     group.clear()
     modelCache.clear()
+    for (const g of ghostOf.values()) g.dispose()
+    ghostOf.clear()
+    solidOf.clear()
   })
 </script>
 
 <T is={group} />
+<T is={fireRoot} />

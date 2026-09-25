@@ -28,6 +28,7 @@ pub struct Dungeon {
     pub name: String,
     pub entrance: Position,
     layouts: Vec<FloorLayout>,
+    def: DungeonEntranceDef,
 }
 
 /// A shut interior door standing between the agent and where it wants to go,
@@ -35,6 +36,8 @@ pub struct Dungeon {
 pub struct DoorApproach {
     pub door_id: u32,
     pub sides: [(f32, f32); 2],
+    /// Opens only with the floor's key (`Dungeon::key_item_id`).
+    pub locked: bool,
 }
 
 /// Which chest a sighting is. The two render differently, so the agent is
@@ -79,7 +82,12 @@ impl Dungeon {
             name: def.name.clone(),
             entrance: def.position(),
             layouts: generate_dungeon_for(&def.id),
+            def: def.clone(),
         }
+    }
+
+    pub fn key_item_id(&self, depth: u8) -> String {
+        self.def.key_item_id(depth)
     }
 
     /// Deepest floor of this dungeon (1-based).
@@ -164,12 +172,7 @@ impl Dungeon {
             )
             .filter_map(|(kind, cell)| {
                 let position = cell_center(&self.entrance, depth, cell);
-                let approach = match kind {
-                    ChestKind::Treasure => position,
-                    ChestKind::Prop(_) => {
-                        self.approach_cell(layout, depth, cell, pos, &walkable)?
-                    }
-                };
+                let approach = self.approach_cell(layout, depth, cell, pos, &walkable)?;
                 Some(ChestSighting {
                     kind,
                     position,
@@ -229,8 +232,8 @@ impl Dungeon {
         Some((layout, layout.room_at(px, pz)?))
     }
 
-    /// Props are 1×1 collision pillars, so A* can never route onto one: stand
-    /// in the open cell beside it, the one nearest `pos`.
+    /// Chests and props are 1×1 collision pillars, so A* can never route onto
+    /// one: stand in the open cell beside it, the one nearest `pos`.
     fn approach_cell(
         &self,
         layout: &FloorLayout,
@@ -239,10 +242,8 @@ impl Dungeon {
         pos: &Position,
         walkable: &impl Fn(&Position) -> bool,
     ) -> Option<Position> {
-        [(-1, 0), (1, 0), (0, -1), (0, 1)]
-            .into_iter()
-            .map(|(dx, dz)| (cell.0 + dx, cell.1 + dz))
-            .filter(|c| layout.is_carved(c.0, c.1))
+        layout
+            .approach_cells(cell)
             .map(|c| cell_center(&self.entrance, depth, c))
             .filter(|p| walkable(p))
             .min_by(|a, b| {
@@ -276,6 +277,7 @@ impl Dungeon {
             .map(|d| DoorApproach {
                 door_id: d.door_id,
                 sides: self.door_sides(d),
+                locked: d.locked,
             })
             .collect()
     }
@@ -293,7 +295,7 @@ pub fn build_all() -> Vec<Dungeon> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     fn crypt() -> Dungeon {
@@ -301,6 +303,22 @@ mod tests {
             .into_iter()
             .find(|d| d.id == "old_crypt")
             .expect("old_crypt is in the shared entrance registry")
+    }
+
+    #[test]
+    fn locked_floors_expose_their_door_and_key() {
+        let d = crypt();
+        let depth = d.max_depth();
+        let doors = d.closed_doors(depth, &HashSet::new());
+        assert!(
+            doors.iter().any(|door| door.locked),
+            "floor {depth} has a locked door"
+        );
+        assert!(!d
+            .closed_doors(1, &HashSet::new())
+            .iter()
+            .any(|door| door.locked));
+        assert_eq!(d.key_item_id(depth), format!("crypt_key_{depth}"));
     }
 
     /// Every floor above the last has stairs down, and they start shut behind
@@ -323,6 +341,30 @@ mod tests {
 
     /// The deepest floor of old_crypt: its treasure chest cell, the room that
     /// holds it, and a spot at that room's center to look from.
+    /// A dungeon whose chest room holds a clutter chest and a breakable.
+    /// Which one that is depends on the generated layouts; the tests that
+    /// need both look it up rather than assuming old_crypt has them.
+    pub(crate) fn cluttered_chest_room_dungeon() -> Dungeon {
+        build_all()
+            .into_iter()
+            .find(|d| {
+                let last = d.layouts().last().unwrap();
+                let cell = last.chest.unwrap();
+                let room = last.room_at(cell.0, cell.1).unwrap();
+                let kinds: Vec<PropKind> = last
+                    .props
+                    .iter()
+                    .filter(|p| room.contains(p.x, p.z))
+                    .map(|p| p.kind)
+                    .collect();
+                kinds.contains(&PropKind::Chest)
+                    && kinds
+                        .iter()
+                        .any(|k| matches!(k, PropKind::Barrel | PropKind::Crate))
+            })
+            .expect("a registry dungeon with clutter in its chest room")
+    }
+
     fn chest_room(d: &Dungeon) -> (u8, (i32, i32), Room, Position) {
         let depth = d.max_depth();
         let layout = d.layouts().last().expect("old_crypt has floors");
@@ -426,7 +468,7 @@ mod tests {
     /// and drop out of sight once opened.
     #[test]
     fn clutter_chests_are_sighted_like_the_treasure_and_hidden_once_opened() {
-        let d = crypt();
+        let d = cluttered_chest_room_dungeon();
         let (depth, _, room, stand) = chest_room(&d);
         let prop = d
             .layouts()
@@ -437,7 +479,7 @@ mod tests {
             .enumerate()
             .find(|(_, p)| matches!(p.kind, PropKind::Chest) && room.contains(p.x, p.z))
             .map(|(i, _)| i as u32)
-            .expect("old_crypt's chest room also holds a clutter chest");
+            .expect("the chest room holds a clutter chest");
 
         let sighted = d.chests_in_room_of(depth, &stand, &HashSet::new(), carved_only(&d, depth));
         assert!(sighted.iter().any(|c| c.kind == ChestKind::Prop(prop)));
@@ -455,11 +497,10 @@ mod tests {
             .any(|c| c.kind == ChestKind::Prop(prop)));
     }
 
-    /// Every prop is a 1×1 collision pillar, so a clutter chest is opened from
-    /// a cell beside it — pathing at the chest's own cell never arrives. The
-    /// treasure chest carries no collision and is walked onto directly.
+    /// Every chest is a 1×1 collision pillar, so it is opened from a cell
+    /// beside it — pathing at the chest's own cell never arrives.
     #[test]
-    fn clutter_chests_are_approached_from_a_walkable_neighbour() {
+    fn chests_are_approached_from_a_walkable_neighbour() {
         let d = crypt();
         let (depth, _, _, stand) = chest_room(&d);
         let walkable = carved_only(&d, depth);
@@ -471,15 +512,13 @@ mod tests {
                 "{:?} is approached from an unwalkable cell",
                 sighting.kind
             );
-            match sighting.kind {
-                ChestKind::Treasure => assert_eq!(sighting.approach, sighting.position),
-                ChestKind::Prop(_) => {
-                    let gap =
-                        crate::geom::PlanarDelta::between(&sighting.approach, &sighting.position)
-                            .dist;
-                    assert!(gap > 0.0 && gap <= 1.5, "approach cell is {gap}m from it");
-                }
-            }
+            let gap =
+                crate::geom::PlanarDelta::between(&sighting.approach, &sighting.position).dist;
+            assert!(
+                gap > 0.0 && gap <= 1.5,
+                "{:?} is approached from {gap}m away",
+                sighting.kind
+            );
         }
     }
 }

@@ -13,6 +13,7 @@ export interface PlayerStateProjectionInput {
   hasTorch: boolean
   isInCombat: boolean
   attackCounter: number
+  isSprinting: boolean
 }
 
 export function projectPlayerState({
@@ -24,14 +25,12 @@ export function projectPlayerState({
   hasTorch,
   isInCombat,
   attackCounter,
+  isSprinting,
 }: PlayerStateProjectionInput): PlayerState {
-  const movementMode = (() => {
-    if (!isMoving) return undefined
-    if (isInCombat) return 'run'
-    if (totalDistance !== undefined)
-      return getMovementMode(totalDistance, hasTorch)
-    return hasTorch ? 'walk' : 'jog'
-  })()
+  isMoving &&= currentSpeed > 0
+  const movementMode = isMoving
+    ? getMovementMode(totalDistance, hasTorch, isSprinting, isInCombat)
+    : undefined
 
   return {
     state: isMoving ? 'moving' : 'idle',

@@ -1,30 +1,74 @@
 import { get, writable, type Readable } from 'svelte/store'
-import { characterPanelVisible, inventoryVisible } from './debugStore'
+import {
+  characterPanelVisible,
+  inventoryVisible,
+  weatherRadarVisible,
+} from './debugStore'
+import { friendPanelVisible } from './friendStore'
+import { emotePanelVisible } from './emoteStore'
 import { shopSession } from './tradeStore'
+import { closeStallPanel } from './stallStore'
 
 /** HUD overlays Escape interacts with. */
 export type OverlayId =
   | 'worldMap'
   | 'character'
+  | 'friends'
+  | 'emotes'
+  | 'instrument'
   | 'inventory'
   | 'trade'
+  | 'playerTrade'
+  | 'stall'
   | 'settings'
   | 'loading'
   | 'respawn'
+  | 'tipHat'
+  | 'capeDye'
+  | 'landClaim'
+  | 'houseDemolition'
+  | 'capeTexture'
+  | 'chatChannelMenu'
+  | 'socialMenu'
+  | 'itemUnlock'
+  | 'inspection'
+  | 'inspectionTarget'
+  | 'fishingTarget'
+  | 'weatherRadar'
 
 /** `layer` is paint order, not raw z-index: `.game-hud`'s z-index:1 stacking
- *  context traps the panels' 40/45 below the root-level dialogs (each 30,
- *  ranked by DOM order) and settings (10000).
+ *  context traps the panel band (see panelLayout) below the root-level dialogs
+ *  (each 30, ranked by DOM order) and settings (10000).
  *  Store-backed panels close here; dialogs register their closer via
  *  mountOverlay, and one that registers none (loading) blocks Escape. */
 const OVERLAYS: Record<OverlayId, { layer: number; close?: () => void }> = {
   character: { layer: 0, close: () => characterPanelVisible.set(false) },
+  weatherRadar: { layer: 0, close: () => weatherRadarVisible.set(false) },
   inventory: { layer: 0, close: () => inventoryVisible.set(false) },
+  friends: { layer: 0, close: () => friendPanelVisible.set(false) },
+  emotes: { layer: 0, close: () => emotePanelVisible.set(false) },
+  instrument: { layer: 1 },
   trade: { layer: 1, close: () => shopSession.set(null) },
+  // Closer registered by the window: once a side is locked Escape
+  // must not throw the negotiation away.
+  playerTrade: { layer: 1 },
+  stall: { layer: 1, close: () => closeStallPanel() },
   loading: { layer: 2 },
   respawn: { layer: 3 },
+  tipHat: { layer: 3 },
+  capeDye: { layer: 3 },
+  landClaim: { layer: 3 },
+  houseDemolition: { layer: 3 },
+  capeTexture: { layer: 3 },
   worldMap: { layer: 4 },
   settings: { layer: 5 },
+  // Transient popups: whenever one is open, Escape must hit it first.
+  chatChannelMenu: { layer: 6 },
+  socialMenu: { layer: 6 },
+  itemUnlock: { layer: 7 },
+  inspection: { layer: 0 },
+  inspectionTarget: { layer: 7 },
+  fishingTarget: { layer: 7 },
 }
 
 const stack = writable<OverlayId[]>([])
@@ -45,6 +89,8 @@ function track(id: OverlayId, open: boolean) {
 // Every open/close path writes these stores, so no call site can forget to report.
 characterPanelVisible.subscribe((open) => track('character', open))
 inventoryVisible.subscribe((open) => track('inventory', open))
+friendPanelVisible.subscribe((open) => track('friends', open))
+emotePanelVisible.subscribe((open) => track('emotes', open))
 shopSession.subscribe((session) => track('trade', session !== null))
 
 const overlayClosers: Partial<Record<OverlayId, () => void>> = {}
@@ -69,14 +115,14 @@ export function topOverlay(open: OverlayId[]): OverlayId | undefined {
   return top
 }
 
-/** Returns false when nothing was open — leaving Escape free for other uses —
- *  or when the top overlay cannot be closed. */
-export function closeTopOverlay(): boolean {
+/** 'none' leaves Escape free for other uses; 'blocked' means the top overlay
+ *  refuses to close (loading) and Escape must not fall through it. */
+export function closeTopOverlay(): 'closed' | 'blocked' | 'none' {
   const top = topOverlay(get(stack))
-  if (top === undefined) return false
+  if (top === undefined) return 'none'
 
   const close = overlayClosers[top] ?? OVERLAYS[top].close
-  if (!close) return false
+  if (!close) return 'blocked'
   close()
-  return true
+  return 'closed'
 }

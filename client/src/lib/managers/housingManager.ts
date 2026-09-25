@@ -1,16 +1,15 @@
 import { apiFetch, getTerrainApiUrl } from '../utils/networkUtils'
-import {
-  TERRAIN_TILE_SIZE,
-  getTerrainChunkFromPosition,
-} from '../components/game-scene/terrain-utils'
 import type { HouseData } from '../types/housing'
 import type { WallDirection } from '../utils/house-geometry'
-import { shortestWrappedDeltaX } from '../terrain/world-wrap'
+import { setHouseMapFootprints } from '../stores/housingMapStore'
+import { worldView } from '../network/worldView'
 import {
   ALL_WALL_DIRS,
   buildPassability,
   buildRuntimePassability,
+  doorPartnerRef,
   getWallByDir,
+  isDoorVariant,
   updateDoorEdge,
   type RuntimePassability,
 } from './housing-passability'
@@ -19,43 +18,39 @@ import {
   passability_remove_house,
   passability_update_door,
   passability_is_movement_blocked,
+  passability_attack_line_blocked,
   passability_is_circle_blocked,
 } from '../wasm/onlinerpg_shared'
 import {
+  assistStairMovementDirection,
   checkOverlap,
   collectRoomAABBsInRegion,
   findAdjacentHouse,
   findAllRoomsAtPoint,
+  findClosedDoorOnSegment,
+  findClosedDoorOnPath,
   findHouseAtPoint,
   findNearestDoor,
   findRoomAtPoint,
   findSupportingHouse,
   hasFloorSupport,
   houseFloorHeightAt,
+  isHouseWallBlockingSegment,
   isPointUnderHouseXZ,
+  stairLandingTargetAt,
+  stopPathAtHouseEntrance,
   type RoomAABB,
+  type ClosedHouseDoor,
 } from './housing-queries'
 
 // Re-export for external consumers
 export { getWallByDir } from './housing-passability'
 
-function chunkKey(cx: number, cz: number): string {
-  return `${cx},${cz}`
-}
-
-/** Chunks loaded around the player, as a Chebyshev radius (so 1 = a 3x3 block). */
-const LOAD_RADIUS = 1
-/** Wider than `LOAD_RADIUS` so loitering on a chunk boundary can't thrash a
- *  chunk in and out. Also keeps the house a player stands in safe without a
- *  special case: houses reach ~14 m from their origin against a 64 m chunk, so
- *  the one you are inside is always within a chunk of you. */
-const EVICT_RADIUS = 2
-
 export class HousingManager {
   private apiUrl: string
-  private chunkCache = new Map<string, HouseData[]>()
   private housesById = new Map<string, HouseData>()
-  private inflight = new Map<string, Promise<void>>()
+  private synchronized = false
+  private pending: (() => void)[] = []
 
   private housesChangedListeners: ((houses: HouseData[]) => void)[] = []
 
@@ -73,98 +68,46 @@ export class HousingManager {
     this.apiUrl = getTerrainApiUrl()
   }
 
-  /** Bring the streamed set in line with the player's position. Owns the
-   *  load-then-evict ordering so collision is never momentarily absent. */
-  updateStreaming(wx: number, wz: number) {
-    this.loadChunksAround(wx, wz)
-    this.evictDistantChunks(wx, wz)
-  }
-
-  /** Load houses for chunks around a world position. */
-  loadChunksAround(wx: number, wz: number, radius: number = LOAD_RADIUS) {
-    const { x: ccx, z: ccz } = getTerrainChunkFromPosition(
-      { x: wx, y: 0, z: wz },
-      TERRAIN_TILE_SIZE
+  isSynchronized(x: number, z: number) {
+    return (
+      this.synchronized && worldView.floorLevel >= 0 && worldView.covers(x, z)
     )
-    for (let dx = -radius; dx <= radius; dx++) {
-      for (let dz = -radius; dz <= radius; dz++) {
-        this.ensureChunkLoaded(ccx + dx, ccz + dz)
-      }
-    }
   }
 
-  /**
-   * Drop chunks beyond `EVICT_RADIUS` of (wx, wz), undoing `loadChunksAround`.
-   * Without this the cache grows by one chunk per chunk walked and never
-   * shrinks. See `doc/RUNTIME_PERFORMANCE.md` for why the radius is what it is.
-   */
-  evictDistantChunks(wx: number, wz: number) {
-    const { x: ccx, z: ccz } = getTerrainChunkFromPosition(
-      { x: wx, y: 0, z: wz },
-      TERRAIN_TILE_SIZE
+  resetView() {
+    for (const id of this.housesById.keys()) passability_remove_house(id)
+    this.housesById.clear()
+    this.synchronized = false
+    this.notifyChanged()
+  }
+
+  completeSnapshot() {
+    this.synchronized = true
+    for (const resolve of this.pending.splice(0)) resolve()
+    this.notifyChanged()
+  }
+
+  waitForSnapshot(): Promise<void> {
+    return this.synchronized
+      ? Promise.resolve()
+      : new Promise((resolve) => this.pending.push(resolve))
+  }
+
+  stopPathAtHouseEntrance(
+    current: { x: number; y: number; z: number },
+    currentFloor: number,
+    target: { x: number; y: number; z: number },
+    waypoints: { x: number; z: number; floor: number }[]
+  ): { x: number; z: number; floor: number }[] {
+    return stopPathAtHouseEntrance(
+      this.housesById,
+      current,
+      currentFloor,
+      target,
+      waypoints
     )
-    const centreX = ccx * TERRAIN_TILE_SIZE
-    const reach = EVICT_RADIUS * TERRAIN_TILE_SIZE
-
-    let removed = false
-    for (const [key, houses] of this.chunkCache) {
-      const [cx, cz] = key.split(',').map(Number)
-      // X wraps: the world is a cylinder, so a chunk can be adjacent across
-      // the seam despite a large index difference.
-      const dx = shortestWrappedDeltaX(cx * TERRAIN_TILE_SIZE, centreX)
-      if (Math.abs(dx) <= reach && Math.abs(cz - ccz) <= EVICT_RADIUS) continue
-
-      for (const house of houses) {
-        this.housesById.delete(house.id)
-        passability_remove_house(house.id)
-      }
-      // Drop the key itself, not just its houses: `ensureChunkLoaded` treats a
-      // present key as "already loaded" and would never refetch the chunk.
-      this.chunkCache.delete(key)
-      removed = true
-    }
-    if (removed) this.notifyChanged()
   }
-
-  private chunkOf(house: HouseData): string {
-    const { x, z } = getTerrainChunkFromPosition(
-      house.origin,
-      TERRAIN_TILE_SIZE
-    )
-    return chunkKey(x, z)
-  }
-
-  private ensureChunkLoaded(cx: number, cz: number) {
-    const key = chunkKey(cx, cz)
-    if (this.chunkCache.has(key) || this.inflight.has(key)) return
-
-    this.inflight.set(key, this.fetchChunk(cx, cz, key))
-  }
-
-  /** Wait for all currently in-flight chunk fetches to complete. */
-  async waitForPending(): Promise<void> {
-    if (this.inflight.size === 0) return
-    await Promise.all(this.inflight.values())
-  }
-
-  private async fetchChunk(cx: number, cz: number, key: string) {
-    try {
-      const resp = await fetch(`${this.apiUrl}/api/housing/area/${cx}/${cz}`)
-      if (!resp.ok) {
-        this.chunkCache.set(key, []) // Cache as empty to prevent retry storm
-        return
-      }
-      const houses: HouseData[] = await resp.json()
-      for (const h of houses) this.addToCache(h)
-      this.notifyChanged()
-    } catch {
-      this.chunkCache.set(key, []) // Cache as empty to prevent retry storm
-    } finally {
-      this.inflight.delete(key)
-    }
-  }
-
-  /** Create a house on the server (ID assigned by server) and add to local cache. */
+  /** Create a house; its active state arrives through the world stream. */
   async saveHouse(house: HouseData): Promise<HouseData | null> {
     return this.sendHouse('POST', `${this.apiUrl}/api/housing`, house)
   }
@@ -193,8 +136,6 @@ export class HousingManager {
       if (!resp.ok) return null
 
       const saved: HouseData = await resp.json()
-      this.addToCache(saved)
-      this.notifyChanged()
       return saved
     } catch {
       return null
@@ -209,8 +150,6 @@ export class HousingManager {
       })
       if (!resp.ok) return false
 
-      this.removeFromCache(houseId)
-      this.notifyChanged()
       return true
     } catch {
       return false
@@ -251,17 +190,132 @@ export class HousingManager {
     const wall = getWallByDir(room, wallDir)
     if (!wall[segmentIndex]) return
 
-    wall[segmentIndex].isOpen = isOpen
-    // Only update passability for doors (windows remain blocking when open)
-    if (wall[segmentIndex].variant === 'door') {
-      passability_update_door(houseId, room, wallDir, segmentIndex, isOpen)
+    const refs = [{ roomIndex, segmentIndex }]
+    const partner = doorPartnerRef(
+      house.rooms,
+      roomIndex,
+      wallDir,
+      segmentIndex
+    )
+    if (partner) refs.push(partner)
+    for (const ref of refs) {
+      const r = house.rooms[ref.roomIndex]
+      const seg = getWallByDir(r, wallDir)[ref.segmentIndex]
+      seg.isOpen = isOpen
+      // Windows stay blocking when open
+      if (isDoorVariant(seg.variant)) {
+        passability_update_door(houseId, r, wallDir, ref.segmentIndex, isOpen)
+      }
     }
-    this.notifyChanged()
+    this.notifyChanged(false)
   }
 
   /** Find the nearest door segment within maxDist of (x, z). */
   findNearestDoor(x: number, z: number, y: number, maxDist: number) {
     return findNearestDoor(this.housesById, x, z, y, maxDist)
+  }
+
+  findClosedDoorOnSegment(
+    fromX: number,
+    fromZ: number,
+    toX: number,
+    toZ: number,
+    floorLevel: number
+  ): ClosedHouseDoor | null {
+    return findClosedDoorOnSegment(
+      this.housesById,
+      fromX,
+      fromZ,
+      toX,
+      toZ,
+      floorLevel
+    )
+  }
+
+  findClosedDoorOnPath(
+    fromX: number,
+    fromZ: number,
+    waypoints: readonly { x: number; z: number }[],
+    floorLevel: number
+  ): ClosedHouseDoor | null {
+    return findClosedDoorOnPath(
+      this.housesById,
+      fromX,
+      fromZ,
+      waypoints,
+      floorLevel
+    )
+  }
+
+  withClosedDoorsOpen<T>(floorLevel: number, fn: () => T): T {
+    const closed: {
+      houseId: string
+      room: HouseData['rooms'][number]
+      wallDir: WallDirection
+      segmentIndex: number
+    }[] = []
+
+    try {
+      for (const house of this.housesById.values()) {
+        for (const room of house.rooms) {
+          if (room.floorLevel !== floorLevel) continue
+          for (const wallDir of ALL_WALL_DIRS) {
+            const wall = getWallByDir(room, wallDir)
+            for (
+              let segmentIndex = 0;
+              segmentIndex < wall.length;
+              segmentIndex++
+            ) {
+              const segment = wall[segmentIndex]
+              if (!isDoorVariant(segment.variant) || segment.isOpen) continue
+              closed.push({ houseId: house.id, room, wallDir, segmentIndex })
+              passability_update_door(
+                house.id,
+                room,
+                wallDir,
+                segmentIndex,
+                true
+              )
+            }
+          }
+        }
+      }
+      return fn()
+    } finally {
+      for (const door of closed) {
+        passability_update_door(
+          door.houseId,
+          door.room,
+          door.wallDir,
+          door.segmentIndex,
+          false
+        )
+      }
+    }
+  }
+
+  isDoorOpen(door: ClosedHouseDoor): boolean {
+    const room = this.housesById.get(door.houseId)?.rooms[door.roomIndex]
+    return (
+      !!room && !!getWallByDir(room, door.wallDir)[door.segmentIndex]?.isOpen
+    )
+  }
+
+  isHouseWallBlockingSegment(
+    fromX: number,
+    fromZ: number,
+    toX: number,
+    toZ: number,
+    floorLevel: number
+  ): boolean {
+    return isHouseWallBlockingSegment(
+      this.housesById,
+      fromX,
+      fromZ,
+      toX,
+      toZ,
+      floorLevel
+    )
   }
 
   /** Get all currently loaded houses. */
@@ -309,6 +363,36 @@ export class HousingManager {
     return houseFloorHeightAt(this.housesById, floorLevel, x, z)
   }
 
+  assistStairMovementDirection(
+    floorLevel: number,
+    position: { x: number; y: number; z: number },
+    direction: { x: number; z: number }
+  ) {
+    return assistStairMovementDirection(
+      this.housesById,
+      floorLevel,
+      position,
+      direction
+    )
+  }
+
+  stairLandingTargetAt(
+    floorLevel: number,
+    x: number,
+    y: number,
+    z: number,
+    stairFloor?: number
+  ) {
+    return stairLandingTargetAt(
+      this.housesById,
+      floorLevel,
+      x,
+      y,
+      z,
+      stairFloor
+    )
+  }
+
   /**
    * Check if movement from→to crosses any blocked cell edge. `floorLevel` is
    * the passability floor index (see `dungeonManager.passabilityFloor`), not
@@ -330,6 +414,25 @@ export class HousingManager {
       toZ,
       floorLevel,
       y
+    )
+  }
+
+  /** Attack collision on the passability floor, matching the server. */
+  attackLineBlocked(
+    fromX: number,
+    fromZ: number,
+    toX: number,
+    toZ: number,
+    floorLevel: number,
+    ranged = false
+  ): boolean {
+    return passability_attack_line_blocked(
+      fromX,
+      fromZ,
+      toX,
+      toZ,
+      floorLevel,
+      ranged
     )
   }
 
@@ -359,7 +462,7 @@ export class HousingManager {
         for (const dir of ALL_WALL_DIRS) {
           const segs = getWallByDir(room, dir)
           for (let i = 0; i < segs.length; i++) {
-            if (segs[i].variant === 'door' && segs[i].isOpen) {
+            if (isDoorVariant(segs[i].variant) && segs[i].isOpen) {
               updateDoorEdge(map, house.id, room, dir, i, true)
             }
           }
@@ -439,18 +542,6 @@ export class HousingManager {
 
   private addToCache(house: HouseData) {
     this.housesById.set(house.id, house)
-    const key = this.chunkOf(house)
-    const chunk = this.chunkCache.get(key)
-    if (chunk) {
-      const idx = chunk.findIndex((h) => h.id === house.id)
-      if (idx >= 0) {
-        chunk[idx] = house
-      } else {
-        chunk.push(house)
-      }
-    } else {
-      this.chunkCache.set(key, [house])
-    }
 
     // Ensure passability grids exist (compute from room data if missing)
     if (!house.passability?.length) {
@@ -464,15 +555,11 @@ export class HousingManager {
     if (!house) return
     this.housesById.delete(houseId)
     passability_remove_house(houseId)
-    const chunk = this.chunkCache.get(this.chunkOf(house))
-    if (chunk) {
-      const idx = chunk.findIndex((h) => h.id === houseId)
-      if (idx >= 0) chunk.splice(idx, 1)
-    }
   }
 
-  private notifyChanged() {
+  private notifyChanged(updateMap = true) {
     const all = this.getAllHouses()
+    if (updateMap) setHouseMapFootprints(all)
     for (const cb of this.housesChangedListeners) cb(all)
   }
 }

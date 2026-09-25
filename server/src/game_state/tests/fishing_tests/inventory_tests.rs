@@ -47,10 +47,8 @@ async fn a_full_bag_spills_the_catch_on_the_ground() {
     );
 }
 
-/// `category "fish"` rides the same heal path as potions: eating a trout
-/// restores its dice and consumes the fish.
 #[tokio::test]
-async fn eating_a_fish_heals_like_a_potion() {
+async fn eating_a_fish_regenerates_hp_from_its_nutrition() {
     let game_state = make_test_game_state("fishing_eat");
     let (id, mut rx) = make_angler(&game_state, "angler_hungry").await;
     game_state
@@ -70,12 +68,13 @@ async fn eating_a_fish_heals_like_a_potion() {
         .health = 2;
 
     game_state.use_item(&id, 800).await;
+    assert_eq!(game_state.players.read().await[&id].health, 2);
+    for _ in 0..10 {
+        game_state.tick_food_regeneration().await;
+    }
 
     let health = game_state.players.read().await.get(&id).unwrap().health;
-    assert!(
-        (4..=10).contains(&health),
-        "2d4 heal from 2 HP lands in 4..=10 (capped), got {health}"
-    );
+    assert_eq!(health, 4, "nutrition 40 restores 2 HP over ten ticks");
     assert!(
         game_state
             .inventories
@@ -91,63 +90,104 @@ async fn eating_a_fish_heals_like_a_potion() {
     let _ = drain(&mut rx);
 }
 
-/// The pure catch-table math: every roll in range maps to a candidate, the
-/// boundaries are exact, and skill shifts weight toward rare fish while
-/// never boosting rarity-0 junk.
+async fn bag_of(game_state: &GameState, id: &PlayerId) -> Vec<(String, u32)> {
+    let mut bag: Vec<(String, u32)> = game_state
+        .get_player_inventory(id)
+        .await
+        .unwrap()
+        .bag
+        .into_iter()
+        .map(|item| (item.item_def_id, item.quantity))
+        .collect();
+    bag.sort();
+    bag
+}
+
+// Direct awards avoid random species rolls.
+#[tokio::test]
+async fn catches_stack_per_species() {
+    let game_state = make_test_game_state("fishing_stack_species");
+    let (id, _rx) = make_angler(&game_state, "angler_sorter").await;
+
+    for _ in 0..3 {
+        game_state.award_item(&id, "raw_trout").await;
+    }
+    game_state.award_item(&id, "raw_minnow").await;
+
+    assert_eq!(
+        bag_of(&game_state, &id).await,
+        vec![("raw_minnow".to_string(), 1), ("raw_trout".to_string(), 3)]
+    );
+}
+
+// Joining a stack preserves its instance ID.
+#[tokio::test]
+async fn a_catch_joins_the_existing_pile() {
+    let game_state = make_test_game_state("fishing_stack_join");
+    let (id, _rx) = make_angler(&game_state, "angler_joiner").await;
+    game_state
+        .inventories
+        .write()
+        .await
+        .get_mut(&id)
+        .unwrap()
+        .bag
+        .push(bag_item(900, "raw_perch", 2));
+
+    game_state.award_item(&id, "raw_perch").await;
+
+    let inv = game_state.get_player_inventory(&id).await.unwrap();
+    assert_eq!(inv.bag, vec![bag_item(900, "raw_perch", 3)]);
+}
+
+#[tokio::test]
+async fn eating_one_fish_from_a_pile_leaves_the_rest() {
+    let game_state = make_test_game_state("fishing_stack_eat");
+    let (id, _rx) = make_angler(&game_state, "angler_snacker").await;
+    game_state
+        .inventories
+        .write()
+        .await
+        .get_mut(&id)
+        .unwrap()
+        .bag
+        .push(bag_item(910, "raw_trout", 3));
+
+    game_state.use_item(&id, 910).await;
+
+    assert_eq!(
+        bag_of(&game_state, &id).await,
+        vec![("raw_trout".to_string(), 2)]
+    );
+}
+
 #[test]
-fn pick_catch_maps_every_roll_and_skill_keeps_the_table_ordered() {
+fn pick_catch_maps_every_roll_and_preserves_species_and_flotsam_weights() {
     use crate::game_state::fishing::{effective_weights, pick_catch, CatchCandidate};
     use onlinerpg_shared::fishing::FLOTSAM_SHARE_PCT;
-    use onlinerpg_shared::skills::SKILL_LEVEL_CAP;
 
-    let candidate = |id: &str, rarity, catch_weight, min_fishing_level| CatchCandidate {
+    let candidate = |id: &str, rarity, catch_weight| CatchCandidate {
         item_def_id: id.into(),
         rarity,
         catch_weight,
-        min_fishing_level,
     };
     let candidates = vec![
-        candidate("common", 1, 50, 0),
-        candidate("rare", 5, 2, 0),
-        candidate("junk", 0, 8, 0),
+        candidate("common", 1, 130),
+        candidate("rare", 5, 5),
+        candidate("junk", 0, 8),
     ];
-
-    let weights = effective_weights(&candidates, 0);
+    let weights = effective_weights(&candidates);
     let total: u64 = weights.iter().sum();
     for roll in 0..total {
-        let idx = pick_catch(&weights, roll).expect("every in-range roll lands");
-        assert!(idx < candidates.len());
+        assert!(pick_catch(&weights, roll).unwrap() < candidates.len());
     }
-    assert!(
-        pick_catch(&weights, total).is_none(),
-        "an out-of-range roll picks nothing"
-    );
-    // Exact boundaries of the cumulative walk.
+    assert_eq!(pick_catch(&weights, total), None);
     assert_eq!(pick_catch(&weights, 0), Some(0));
     assert_eq!(pick_catch(&weights, weights[0] - 1), Some(0));
     assert_eq!(pick_catch(&weights, weights[0]), Some(1));
     assert_eq!(pick_catch(&weights, weights[0] + weights[1]), Some(2));
-
-    // Skill lifts rare fish toward the common without ever passing it, and
-    // junk keeps its fixed share instead of thinning out.
-    for level in 0..=SKILL_LEVEL_CAP {
-        let w = effective_weights(&candidates, level);
-        let total: u64 = w.iter().sum();
-        assert!(
-            w[0] > w[1],
-            "the rarer fish overtook the common at level {level}"
-        );
-        assert_eq!(
-            w[2] * 100,
-            total * FLOTSAM_SHARE_PCT,
-            "junk share drifted at level {level}"
-        );
-    }
-    let gap = |level| {
-        let w = effective_weights(&candidates, level);
-        w[0] as f64 / w[1] as f64
-    };
-    assert!(gap(SKILL_LEVEL_CAP) < gap(0), "skill should close the gap");
+    assert_eq!(weights[0], weights[1] * 26);
+    assert_eq!(weights[2] * 100, total * FLOTSAM_SHARE_PCT);
 }
 
 /// Every drop landed on the player's exact position, so a bagful of fish

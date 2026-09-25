@@ -1,6 +1,10 @@
-// Common movement calculation utilities shared between local and remote players
+import { moveHorse } from './horseMovement'
 
-import { shortestWrappedDeltaX, unwrapWorldXNear } from '../terrain/world-wrap'
+import {
+  shortestWrappedDeltaX,
+  unwrapWorldXNear,
+  wrapWorldX,
+} from '../terrain/world-wrap'
 
 export type MovementMode = 'walk' | 'jog' | 'run'
 
@@ -10,7 +14,28 @@ export interface Position {
   z: number
 }
 
+export function positionShortOfTarget(
+  from: Pick<Position, 'x' | 'z'>,
+  target: Position,
+  stopDistance: number
+): Position {
+  const dx = shortestWrappedDeltaX(from.x, target.x)
+  const dz = target.z - from.z
+  const distance = Math.hypot(dx, dz)
+  const fraction =
+    distance > 0 ? 1 - Math.min(stopDistance, distance) / distance : 0
+  return {
+    x: wrapWorldX(from.x + dx * fraction),
+    y: target.y,
+    z: from.z + dz * fraction,
+  }
+}
+
 export interface MovementConfig {
+  mountRotation?: number
+  /** Arc radius of the mount being predicted. Absent means the horse's, so
+   *  existing callers and tests keep their behaviour. */
+  mountTurnRadius?: number
   maxSpeed: number
   acceleration: number
   deceleration: number
@@ -25,6 +50,7 @@ export interface MovementState {
 }
 
 export interface MovementResult {
+  mountSteps?: { position: Position; rotation: number }[]
   newPos: Position
   newSpeed: number
   rotation: number
@@ -39,6 +65,8 @@ export type PlayerStateName =
   | 'interact'
   | 'jump'
 
+/** Rebuilt from scratch each frame by the remote movement loop, so every
+ *  field must belong to the current state — nothing that has to survive a move. */
 export interface PlayerState {
   position: Position
   state: PlayerStateName
@@ -47,6 +75,7 @@ export interface PlayerState {
   movementMode?: MovementMode
   attackCounter?: number
   interactionAnim?: string
+  interactionCounter?: number
   interactOffsetY?: number
 }
 
@@ -85,24 +114,28 @@ export function isSlopeTooSteepUphill(
 }
 
 /**
- * Determine movement mode based on distance.
- * When `hasTorch` is true, jog is skipped (no torch_jog animation exists);
- * short distances use walk and longer distances use run.
+ * Movement-mode policy: sprint runs, torch walks, combat chase runs,
+ * otherwise short distances walk and the rest (unknown distance too) jog.
  */
 export function getMovementMode(
-  distance: number,
-  hasTorch = false
+  distance?: number,
+  hasTorch = false,
+  sprinting = false,
+  inCombat = false
 ): MovementMode {
-  if (hasTorch) {
-    return distance <= 3 ? 'walk' : 'run'
-  }
-  if (distance <= 3) {
-    return 'walk'
-  } else if (distance <= 8) {
-    return 'jog'
-  } else {
+  if (sprinting) {
     return 'run'
   }
+  if (hasTorch) {
+    return 'walk'
+  }
+  if (inCombat) {
+    return 'run'
+  }
+  if (distance !== undefined && distance <= 3) {
+    return 'walk'
+  }
+  return 'jog'
 }
 
 // Default movement configuration
@@ -111,6 +144,21 @@ export const DEFAULT_MOVEMENT_CONFIG: MovementConfig = {
   acceleration: 6, // units per second squared
   deceleration: 6, // units per second squared
   arrivalThreshold: 0.05,
+}
+
+// Mirrors shared/src/hunger.rs SPRINT_MOVE_MULT.
+export const SPRINT_SPEED_MULT = 1.5
+
+export function scaleMovementConfig(
+  config: MovementConfig,
+  mult: number
+): MovementConfig {
+  return {
+    ...config,
+    maxSpeed: config.maxSpeed * mult,
+    acceleration: config.acceleration * mult,
+    deceleration: config.deceleration * mult,
+  }
 }
 
 // Calculate acceleration and deceleration distances based on config
@@ -137,6 +185,16 @@ export function calculateMovementStep(
   config: MovementConfig,
   deltaTimeSeconds: number
 ): MovementResult {
+  if (config.mountRotation !== undefined) {
+    return moveHorse(
+      currentPos,
+      config.mountRotation,
+      config.maxSpeed,
+      deltaTimeSeconds,
+      movement.targetPos,
+      config.mountTurnRadius
+    )
+  }
   const { targetPos, totalDistance } = movement
   const accelDistance = getAccelDistance(config)
   const decelDistance = getDecelDistance(config)

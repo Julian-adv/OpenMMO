@@ -32,16 +32,13 @@ run_npm_checks() {
   )
 }
 
-run_server_checks() {
-  local abs_dir="$REPO_ROOT/server"
-
-  echo "[check] server: cargo fmt"
-  (
-    cd "$abs_dir"
-    cargo fmt
-    echo "[check] server: cargo check"
-    cargo check
-  )
+run_rust_checks() {
+  echo "[check] workspace: cargo fmt --all"
+  cargo fmt --all
+  echo "[check] workspace: cargo check --workspace --locked"
+  cargo check --workspace --locked
+  echo "[check] workspace: cargo clippy --workspace --all-targets --locked -- -D warnings"
+  cargo clippy --workspace --all-targets --locked -- -D warnings
 }
 
 changed_files="$(collect_changed_files)"
@@ -51,17 +48,19 @@ if [[ -z "${changed_files}" ]]; then
 fi
 
 client_changed=0
-server_changed=0
+rust_changed=0
 declare -A changed_tools=()
 
 while IFS= read -r file; do
   [[ -z "$file" ]] && continue
   case "$file" in
+    server/*|shared/*|terrain/*|agent-client/*|tools/terrain-gen/*|data-src/*|.cargo/*|*.rs|Cargo.toml|Cargo.lock|*/Cargo.toml|*/Cargo.lock|rust-toolchain|rust-toolchain.toml|*/rust-toolchain|*/rust-toolchain.toml)
+      rust_changed=1
+      ;;
+  esac
+  case "$file" in
     client/*)
       client_changed=1
-      ;;
-    server/*)
-      server_changed=1
       ;;
     tools/*/*)
       tool_dir="$(cut -d/ -f1-2 <<< "$file")"
@@ -81,8 +80,8 @@ if [[ "${#changed_tools[@]}" -gt 0 ]]; then
   done < <(printf '%s\n' "${!changed_tools[@]}" | sort)
 fi
 
-if [[ "$server_changed" -eq 1 ]]; then
-  run_server_checks
+if [[ "$rust_changed" -eq 1 ]]; then
+  run_rust_checks
 fi
 
 echo "[ok] All required checks passed"

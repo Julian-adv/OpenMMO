@@ -8,11 +8,11 @@
 
   interface Props {
     heightManager?: TerrainHeightManager
+    camera?: THREE.Camera
   }
 
-  let { heightManager }: Props = $props()
+  let { heightManager, camera }: Props = $props()
 
-  let spinAngle = $state(0)
   let animationTimeMs = $state(nowMs())
   let group = $state<THREE.Group | undefined>(undefined)
 
@@ -37,8 +37,7 @@
     )
   )
 
-  export function update(deltaTime: number) {
-    spinAngle += deltaTime * 1.5
+  export function update() {
     animationTimeMs = nowMs()
   }
 
@@ -51,10 +50,10 @@
   {#each itemEntries as [id, data] (id)}
     <GroundItem
       {data}
-      rotation={spinAngle}
       {animationTimeMs}
       {heightManager}
       {heightRevision}
+      {camera}
     />
   {/each}
 </T.Group>

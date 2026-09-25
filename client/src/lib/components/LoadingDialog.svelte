@@ -34,6 +34,7 @@
   }
 
   .loading-dialog {
+    font-family: 'Noto Sans KR', sans-serif;
     width: min(380px, calc(100vw - 32px));
     padding: 20px;
     border-radius: 12px;

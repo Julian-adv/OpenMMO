@@ -1,3 +1,18 @@
+<script lang="ts" module>
+  import type { Box3 } from 'three'
+
+  // Bind-pose bounding box per model file, shared across instances. Sizes the
+  // nameplate height and the invisible hover proxy. Deliberately non-reactive.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const bindPoseBoxByModel = new Map<string, Box3>()
+
+  // Raw corpse ground offset per monster type (die-clip final pose is
+  // type-invariant), so the per-vertex scan runs once per type, not per
+  // corpse. Deliberately non-reactive.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const corpseGroundOffsetByType = new Map<string, number>()
+</script>
+
 <script lang="ts">
   import { T, useLoader } from '@threlte/core'
   import TextLabel from './TextLabel.svelte'
@@ -5,22 +20,38 @@
   import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
   import * as THREE from 'three'
   import { get } from 'svelte/store'
-  import { untrack } from 'svelte'
+  import { onDestroy, untrack } from 'svelte'
   import { timeScale } from '../stores/timeStore'
-  import DamageText from './DamageText.svelte'
+  import { DamageTextEmitter } from '../effects/damage-text-pool'
 
   import type { MonsterData } from '../types/Monster'
-  import { getMonsterDef } from '../data/monsterDefs'
+  import {
+    attackClipNames,
+    getMonsterDef,
+    parseWeaponRotation,
+    splitClipNames,
+  } from '../data/monsterDefs'
   import { getItemDef } from '../data/itemDefs'
-  import { computeCorpseGroundOffset } from '../utils/characterAnimationUtils'
+  import {
+    computeCorpseGroundOffset,
+    loadSharedPackClipsForModel,
+  } from '../utils/characterAnimationUtils'
+  import { billboardScale } from '../utils/billboardScale'
+  import { hoveredMonsterId } from '../stores/gameStore'
+  import { HOVER_SCALE_IDLE, stickyHoverScale } from '../utils/stickyHover'
+  import type { TerrainHeightManager } from '../managers/terrainHeightManager'
+  import TargetRing from './TargetRing.svelte'
 
   interface Props {
     position: { x: number; y: number; z: number }
     rotation: number
     monsterState: MonsterData['state']
     attackCounter?: number
+    hitCounter?: number
     id: string
     type: string
+    floorLevel?: number
+    heightManager?: TerrainHeightManager | null
     lastDamageInfo?: MonsterData['lastDamageInfo']
     droppedWeaponItemDefId?: string
     onHitFinished?: () => void
@@ -31,20 +62,47 @@
     rotation,
     monsterState,
     attackCounter,
+    hitCounter,
     id,
     type,
+    floorLevel = 0,
+    heightManager = null,
     lastDamageInfo,
     droppedWeaponItemDefId,
     onHitFinished,
   }: Props = $props()
 
   const def = $derived(getMonsterDef(type))
+  const attackClips = $derived(attackClipNames(def))
+  // Re-rolled from `attackClips` at the start of every swing, so this is only
+  // a seed — `untrack` says that out loud, the way the model resolution below
+  // does, instead of leaving a reactive read that never re-runs.
+  let attackClip = untrack(() => attackClips[0])
 
   // Monster type is fixed for the component's lifetime, so the model and any
   // hand weapon are resolved once at init from the initial type, not reactively.
   const initialDef = untrack(() => getMonsterDef(type))
   const initialModel = initialDef?.model ?? 'monsters/scp939.glb'
+  const initialScale = initialDef?.scale ?? 1
+  const isBoss = initialDef?.boss === true
   const gltf = useLoader(GLTFLoader).load(`/models/${initialModel}`)
+
+  // Monsters rigged on the character skeleton borrow the player's animation
+  // packs, which every client already has cached, instead of shipping clips.
+  let sharedClips: THREE.AnimationClip[] = []
+
+  // Every anim* field of the def, so only the clips this monster plays are
+  // retargeted — the packs carry three times as many.
+  const usedClipNames = Object.entries(initialDef ?? {})
+    .filter(([key, value]) => key.startsWith('anim') && !!value)
+    .flatMap(([, value]) => splitClipNames(value as string))
+
+  function findClip(name: string): THREE.AnimationClip | undefined {
+    return (
+      $gltf?.animations.find((c) => c.name === name) ??
+      sharedClips.find((c) => c.name === name)
+    )
+  }
 
   // Optional hand weapon, attached to a skeleton bone.
   const initialWeapon = initialDef?.weapon
@@ -56,9 +114,18 @@
     ? useLoader(GLTFLoader).load(`/models/${initialWeaponModel}`)
     : undefined
 
-  // Weapon grip transform relative to the attach bone, tuned by eye.
-  const WEAPON_OFFSET = new THREE.Vector3(0, 0, 0)
-  const WEAPON_ROTATION = new THREE.Euler(0, 0, 0)
+  // Weapon grip transform relative to the attach bone. The bone sits at the
+  // wrist, so weaponOffset slides the grip out to the palm; x/z and the
+  // rotation settle it into the fist on rigs whose hand bone is not aligned
+  // with the grip. Fitted per rig against the real weapon model.
+  const WEAPON_OFFSET = new THREE.Vector3(
+    initialDef?.weaponOffsetX ?? 0,
+    initialDef?.weaponOffset ?? 0,
+    initialDef?.weaponOffsetZ ?? 0
+  )
+  const WEAPON_ROTATION = new THREE.Euler(
+    ...parseWeaponRotation(initialDef?.weaponRotation)
+  )
   const WEAPON_SCALE = 1
   let weaponAttached = false
   let weaponObject: THREE.Object3D | undefined
@@ -68,19 +135,53 @@
   let model: THREE.Group | undefined = $state(undefined)
   let group = $state<THREE.Group>()
   let nametagGroup = $state<THREE.Group | undefined>(undefined)
+  let nametagHeight = $state(2.5)
+  let hoverBox = $state<Box3 | null>(null)
+  let hoverProxyGroup = $state<THREE.Group | undefined>(undefined)
+  // Hover hysteresis: the hovered monster's proxy inflates so the pointer
+  // must drift further out before the target drops.
+  const stickyScale = $derived.by(() => {
+    if (!hoverBox || $hoveredMonsterId !== id) return HOVER_SCALE_IDLE
+    return stickyHoverScale(
+      {
+        x: hoverBox.max.x - hoverBox.min.x,
+        y: hoverBox.max.y - hoverBox.min.y,
+        z: hoverBox.max.z - hoverBox.min.z,
+      },
+      initialScale
+    )
+  })
+  // Target ring sized to the bind-pose footprint.
+  const ringRadius = $derived(
+    hoverBox
+      ? Math.max(
+          0.4,
+          (Math.max(
+            hoverBox.max.x - hoverBox.min.x,
+            hoverBox.max.z - hoverBox.min.z
+          ) /
+            2) *
+            initialScale
+        )
+      : 0
+  )
   let animDebugInfo = $state('')
-  let isDeadAnimationFinished = $state(false)
+  // Starts true for a monster that is already a corpse on spawn (AOI
+  // re-entry), so the dead-pose clip plays instead of the fall.
+  let isDeadAnimationFinished = $state(untrack(() => monsterState) === 'dead')
   let isAttackAnimationFinished = $state(true)
   let lastMonsterState = $state<MonsterData['state'] | undefined>(undefined)
   let lastDeadAnimFinished = $state(false)
   let lastAttackAnimFinished = $state(true)
   let lastAttackCounter = $state<number | undefined>(undefined)
-  let damageTextRef = $state<ReturnType<typeof DamageText>>()
+  let lastHitCounter = $state<number | undefined>(undefined)
+  const damageText = new DamageTextEmitter()
+  onDestroy(() => damageText.dispose())
   let lastAppliedOpacity = 1
   let materialsCloned = false
   let deadGroundApplied = false
   let corpseTimer = 0
-  const CORPSE_FADE_START = 25
+  const CORPSE_FADE_START = 55
   const CORPSE_FADE_DURATION = 5
 
   function cloneMaterials() {
@@ -117,8 +218,44 @@
     })
   }
 
+  // The death clip clamps with the body still raised, so settle the
+  // corpse onto the ground — unless its clip was already grounded on
+  // load, where settling again would just show as a jump, or the
+  // type opts out because its clip ends at ground level as authored.
+  // Pose-dependent: only call with the corpse pose applied to the skeleton.
+  function applyCorpseGround() {
+    if (
+      model &&
+      !deadGroundApplied &&
+      !initialDef?.sharedAnims &&
+      initialDef?.corpseAutoGround !== false
+    ) {
+      deadGroundApplied = true
+      let offset = corpseGroundOffsetByType.get(type)
+      if (offset === undefined) {
+        offset = computeCorpseGroundOffset(model)
+        corpseGroundOffsetByType.set(type, offset)
+      }
+      // corpseGroundOffset is authored in world metres; de-scale it
+      // since model.position lives inside the scaled group.
+      model.position.y += offset + (def?.corpseGroundOffset ?? 0) / initialScale
+    }
+  }
+
+  function settleCorpse() {
+    isDeadAnimationFinished = true
+    applyCorpseGround()
+  }
+
   function playAnimation(forceRestart = false) {
     if (!mixer || !$gltf) return
+
+    // Monsters without a hit clip: keep what is playing and end the flinch
+    // right away.
+    if (monsterState === 'hit' && !def?.animHit) {
+      onHitFinished?.()
+      return
+    }
 
     let clipName = def?.animIdle ?? 'Idle'
     if (monsterState === 'walk') clipName = def?.animWalk ?? 'Walk'
@@ -126,7 +263,7 @@
     if (monsterState === 'attack') {
       clipName = isAttackAnimationFinished
         ? (def?.animAttackIdle ?? def?.animIdle ?? 'Idle')
-        : (def?.animAttack ?? 'Attack')
+        : attackClip
     }
     if (monsterState === 'hit') clipName = def?.animHit ?? 'Hit'
     if (monsterState === 'dead') {
@@ -135,7 +272,7 @@
         : (def?.animDie ?? 'Die')
     }
 
-    const clip = $gltf.animations.find((c) => c.name === clipName)
+    const clip = findClip(clipName)
 
     if (clip) {
       const newAction = mixer.clipAction(clip)
@@ -163,10 +300,7 @@
         } else if (monsterState === 'hit') {
           newAction.setLoop(THREE.LoopOnce, 1)
           newAction.clampWhenFinished = true
-        } else if (
-          monsterState === 'attack' &&
-          clipName === (def?.animAttack ?? 'Attack')
-        ) {
+        } else if (monsterState === 'attack' && clipName === attackClip) {
           newAction.setLoop(THREE.LoopOnce, 1)
           newAction.clampWhenFinished = true
         } else {
@@ -175,8 +309,19 @@
           isDeadAnimationFinished = false
         }
 
-        newAction.reset().fadeIn(fadeDuration).play()
-
+        newAction.reset()
+        if (monsterState === 'dead' && !currentAction) {
+          // Already dead on our very first play (AOI re-entry corpse): every
+          // def reuses the die clip as the dead pose, so jump to its final
+          // frame instead of replaying the fall, then evaluate so the ground
+          // offset measures the lying body.
+          newAction.play()
+          newAction.time = Math.max(0, clip.duration - 1e-4)
+          mixer.update(0)
+          settleCorpse()
+        } else {
+          newAction.fadeIn(fadeDuration).play()
+        }
         currentAction = newAction
       }
     } else {
@@ -186,8 +331,8 @@
       if (monsterState === 'hit') {
         onHitFinished?.()
       }
-      if (!currentAction && $gltf.animations.length > 0) {
-        const firstClip = $gltf.animations[0]
+      const firstClip = $gltf.animations[0] ?? sharedClips[0]
+      if (!currentAction && firstClip) {
         const newAction = mixer.clipAction(firstClip)
         newAction.play()
         currentAction = newAction
@@ -203,6 +348,10 @@
       group.position.set(position.x, position.y, position.z)
       group.rotation.y = rotation
     }
+    if (hoverProxyGroup) {
+      hoverProxyGroup.position.set(position.x, position.y, position.z)
+      hoverProxyGroup.rotation.y = rotation
+    }
 
     // 1. Sync animation with state
     if (monsterState !== 'attack') {
@@ -210,29 +359,41 @@
     }
     if (
       lastAttackCounter !== attackCounter ||
+      lastHitCounter !== hitCounter ||
       lastMonsterState !== monsterState ||
       lastDeadAnimFinished !== isDeadAnimationFinished ||
       lastAttackAnimFinished !== isAttackAnimationFinished
     ) {
       const attackCounterChanged = lastAttackCounter !== attackCounter
+      // A repeat hit re-lands while the clip is clamped on its last frame; the
+      // restart also re-arms the 'finished' event a pending death waits on.
+      const hitCounterChanged = lastHitCounter !== hitCounter
       if (attackCounterChanged && monsterState === 'attack') {
         isAttackAnimationFinished = false
+        attackClip = attackClips[Math.floor(Math.random() * attackClips.length)]
       }
       lastAttackCounter = attackCounter
+      lastHitCounter = hitCounter
       lastMonsterState = monsterState
       lastDeadAnimFinished = isDeadAnimationFinished
       lastAttackAnimFinished = isAttackAnimationFinished
-      playAnimation(attackCounterChanged && monsterState === 'attack')
+      playAnimation(
+        (attackCounterChanged && monsterState === 'attack') ||
+          (hitCounterChanged && monsterState === 'hit')
+      )
     }
 
-    // 2. Update damage texts
+    // 2. Update damage texts; bosses spawn them above the nameplate so the
+    // number isn't drawn behind the name (both are transparent billboards).
     if (camera) {
-      damageTextRef?.update(
+      damageText.update(
         deltaTime,
         position.x,
         position.y,
         position.z,
-        camera
+        camera,
+        { damage: lastDamageInfo },
+        isBoss ? nametagHeight + 0.3 : 1.8 * initialScale
       )
     }
 
@@ -266,7 +427,15 @@
 
     // Update nametag to face camera
     if (camera && nametagGroup) {
-      nametagGroup.position.set(position.x, position.y + 2.5, position.z)
+      nametagGroup.position.set(
+        position.x,
+        position.y + nametagHeight,
+        position.z
+      )
+      const s = billboardScale(
+        camera.position.distanceTo(nametagGroup.position)
+      )
+      nametagGroup.scale.set(s, s, s)
       nametagGroup.quaternion.copy(camera.quaternion)
     }
   }
@@ -287,6 +456,27 @@
           }
         })
 
+        let box = bindPoseBoxByModel.get(initialModel)
+        if (!box) {
+          box = new THREE.Box3().setFromObject(clonedScene)
+          // A bind pose with spread arms overstates the footprint; the def
+          // override clamps the XZ extents (model space) around the centre,
+          // shrinking the ring, sticky scale, and hover proxy together.
+          const radius = def?.hoverRadius
+          if (radius !== undefined) {
+            const half = radius / initialScale
+            for (const axis of ['x', 'z'] as const) {
+              const center = (box.min[axis] + box.max[axis]) / 2
+              box.min[axis] = Math.max(box.min[axis], center - half)
+              box.max[axis] = Math.min(box.max[axis], center + half)
+            }
+          }
+          bindPoseBoxByModel.set(initialModel, box)
+        }
+        // Hang the nameplate just above the scaled bind-pose head.
+        nametagHeight = box.max.y * initialScale + 0.4
+        hoverBox = box
+
         model = clonedScene
         // Setup mixer on the cloned scene
         mixer = new THREE.AnimationMixer(clonedScene)
@@ -296,22 +486,30 @@
           if (finishedClipName === (def?.animHit ?? 'Hit')) {
             onHitFinished?.()
           }
-          if (finishedClipName === (def?.animAttack ?? 'Attack')) {
+          if (attackClips.includes(finishedClipName)) {
             isAttackAnimationFinished = true
           }
           if (finishedClipName === (def?.animDie ?? 'Die')) {
-            isDeadAnimationFinished = true
-            // The death clip clamps with the body still raised, so settle the
-            // corpse onto the ground.
-            if (model && !deadGroundApplied) {
-              deadGroundApplied = true
-              model.position.y +=
-                computeCorpseGroundOffset(model) +
-                (def?.corpseGroundOffset ?? 0)
-            }
+            settleCorpse()
           }
         })
-        playAnimation()
+
+        if (initialDef?.sharedAnims) {
+          loadSharedPackClipsForModel(
+            initialModel,
+            $gltf.scene,
+            usedClipNames,
+            {
+              restClip: initialDef.animDie,
+              restOffset: (initialDef.corpseGroundOffset ?? 0) / initialScale,
+            }
+          ).then((clips) => {
+            sharedClips = clips
+            playAnimation()
+          })
+        } else {
+          playAnimation()
+        }
       }
     }
   })
@@ -375,8 +573,19 @@
     return group
   }
 
+  export function getMarkAnchor(target: THREE.Vector3) {
+    if (!group) return false
+    group.getWorldPosition(target)
+    target.y += nametagHeight + 0.15
+    return true
+  }
+
   export function getNametagGroup() {
     return nametagGroup
+  }
+
+  export function getHoverMeshGroup() {
+    return hoverProxyGroup
   }
 </script>
 
@@ -385,14 +594,77 @@
     bind:ref={group}
     position={[position.x, position.y, position.z]}
     rotation={[0, rotation, 0]}
-    scale={[1, 1, 1]}
+    scale={[initialScale, initialScale, initialScale]}
   >
     <T is={model} castShadow receiveShadow />
   </T.Group>
 {/if}
 
+{#if model && hoverBox}
+  <!-- Invisible bind-pose box the 20 Hz hover raycast tests instead of the
+       skinned triangles. Raycasts ignore `visible`, so it never renders. Kept
+       out of the model group so clicks still hit the actual silhouette. -->
+  <T.Group
+    bind:ref={hoverProxyGroup}
+    position={[position.x, position.y, position.z]}
+    rotation={[0, rotation, 0]}
+    scale={[initialScale, initialScale, initialScale]}
+    userData={{ monsterId: id }}
+  >
+    <T.Mesh
+      visible={false}
+      scale={stickyScale}
+      position={[
+        (hoverBox.min.x + hoverBox.max.x) / 2,
+        (hoverBox.min.y + hoverBox.max.y) / 2,
+        (hoverBox.min.z + hoverBox.max.z) / 2,
+      ]}
+    >
+      <T.BoxGeometry
+        args={[
+          hoverBox.max.x - hoverBox.min.x,
+          hoverBox.max.y - hoverBox.min.y,
+          hoverBox.max.z - hoverBox.min.z,
+        ]}
+      />
+      <T.MeshBasicMaterial />
+    </T.Mesh>
+  </T.Group>
+{/if}
+
+{#if monsterState !== 'dead' && $hoveredMonsterId === id && ringRadius > 0}
+  <TargetRing
+    {heightManager}
+    x={position.x}
+    z={position.z}
+    radius={ringRadius}
+    {floorLevel}
+    fallbackY={position.y}
+  />
+{/if}
+
 <!-- Name tag / Debug info -->
 <T.Group bind:ref={nametagGroup}>
+  {#if monsterState !== 'dead' && (isBoss || $hoveredMonsterId === id)}
+    <!-- Boss: permanent gold nameplate. Others: hover-only name, sized to
+         match the ground-item hover label. -->
+    <TextLabel
+      text={initialDef?.name ?? type}
+      outlineWidth={5}
+      position={[0, 0, 0]}
+      anchorX="center"
+      anchorY="bottom"
+      {...isBoss
+        ? { fontSize: 0.3, color: '#ffd166', outlineColor: '#422d00' }
+        : {
+            fontSize: 0.22,
+            color: '#ffffff',
+            outlineColor: '#000000',
+            depthTest: false,
+            renderOrder: 4,
+          }}
+    />
+  {/if}
   {#if animDebugInfo}
     <TextLabel
       text={id}
@@ -412,6 +684,3 @@
     />
   {/if}
 </T.Group>
-
-<!-- Floating Damage Text -->
-<DamageText bind:this={damageTextRef} {lastDamageInfo} />

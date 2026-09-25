@@ -5,32 +5,36 @@
     "z": 4741.6,
     "rotation": 158.8
   },
-  "maxMonstersTotal": 1000,
+  "respawn": {
+    "x": -1446.7,
+    "y": 4.4,
+    "z": 4754.9,
+    "rotationDeg": 180,
+    "floorLevel": 1,
+    "bedIds": [52, 53, 54, 55]
+  },
+  "maxNearbyMonsters": 8,
+  "pricing": {
+    "activeDays": 30,
+    "targetDailyGrowth": 0.002,
+    "gain": 0.5,
+    "maxStepPerMeeting": 0.1,
+    "indexMin": 0.5,
+    "indexMax": 2.0
+  },
   "ambientSpawns": [
-    {
-      "monsterType": "scp939",
-      "maxPerPlayer": 8,
-      "maxDistance": 60
-    },
-    {
-      "monsterType": "kobold",
-      "maxPerPlayer": 6,
-      "maxDistance": 60
-    },
-    {
-      "monsterType": "goblin",
-      "maxPerPlayer": 5,
-      "maxDistance": 60
-    },
-    {
-      "monsterType": "orc",
-      "maxPerPlayer": 4,
-      "maxDistance": 60
-    },
-    {
-      "monsterType": "orc_female",
-      "maxPerPlayer": 4,
-      "maxDistance": 60
-    }
+    { "monsterType": "scp939" },
+    { "monsterType": "kobold" },
+    { "monsterType": "goblin" },
+    { "monsterType": "orc" },
+    { "monsterType": "orc_female" },
+    { "monsterType": "hobgoblin" },
+    { "monsterType": "gnoll" },
+    { "monsterType": "bugbear" },
+    { "monsterType": "ogre" },
+    { "monsterType": "troll" },
+    { "monsterType": "stone_golem" },
+    { "monsterType": "lizardfolk" },
+    { "monsterType": "cyclop" }
   ]
 }

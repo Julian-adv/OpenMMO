@@ -1,18 +1,6 @@
-/**
- * Grass placement data: binary encode/decode and placement computation.
- *
- * Binary format v3 (quantized):
- *   [u32 magic=0x47523033] [u32 shortCount] [u32 tallCount] [u32 flowerCount]
- *   [N × { u16 localX, u16 localZ, u8 rotation, u8 scale }]
- *   16-byte header + 6 bytes per instance.
- *
- * In-memory representation (GrassPlacementData.buffer) uses the v2 layout:
- *   [u32 shortCount] [u32 tallCount] [u32 flowerCount]
- *   [N × { f32 x, f32 y, f32 z, f32 rotation, f32 scale }]
- *   12-byte header + 20 bytes per instance.
- *
- * v2 data on disk is treated as stale and decoded as empty (needs regeneration).
- */
+import { filterVegetationInstances } from './vegetation-instances'
+
+// V4 stores [short, tall, flower] counts per 1m cell; placements exist only in memory.
 
 import {
   SHORT_GRASS_R_MIN,
@@ -24,6 +12,7 @@ import { getTreeInstanceData, type TreePlacementData } from './tree-data'
 import { TERRAIN_TILE_SIZE } from '../components/game-scene/terrain-utils'
 import { TILE_DIM, sampleHeight } from '../managers/terrain-height-types'
 import { createRng } from './simplex-noise'
+import { wrapTileX } from '../terrain/world-wrap'
 import type { TerrainHeightManager } from '../managers/terrainHeightManager'
 import { getCurrentPreset } from '../stores/graphicsSettings'
 import {
@@ -38,6 +27,10 @@ import {
 
 const CHANNELS = 4
 const FLOATS_PER_INSTANCE = 5 // x, y, z, rotation, scale
+
+const V4_MAGIC = 0x47523034
+const V4_HEADER_BYTES = 4
+const V4_FILE_BYTES = V4_HEADER_BYTES + TILE_DIM * TILE_DIM * 3
 
 const V3_MAGIC = 0x47523033 // "GR03"
 const V3_HEADER_BYTES = 16 // magic + 3 × u32
@@ -68,8 +61,8 @@ interface VegParams {
   bladesPerAxis: number
 }
 
-const SHORT_BLADES_PER_AXIS = 12
-const TALL_BLADES_PER_AXIS = 10
+const SHORT_BLADES_PER_AXIS = 8
+const TALL_BLADES_PER_AXIS = 6
 const BOUNDARY_BLEND_RATIO = 0.3
 
 const SHORT_PARAMS: VegParams = {
@@ -381,32 +374,13 @@ export function filterGrassData(
   data: GrassPlacementData,
   shouldRemove: (x: number, z: number) => boolean
 ): GrassPlacementData | null {
-  function filterInstances(raw: Float32Array): Float32Array {
-    const count = raw.length / FLOATS_PER_INSTANCE
-    let kept = 0
-    for (let i = 0; i < count; i++) {
-      const base = i * FLOATS_PER_INSTANCE
-      if (!shouldRemove(raw[base], raw[base + 2])) kept++
-    }
-    if (kept === count) return raw
-    const out = new Float32Array(kept * FLOATS_PER_INSTANCE)
-    let offset = 0
-    for (let i = 0; i < count; i++) {
-      const base = i * FLOATS_PER_INSTANCE
-      if (shouldRemove(raw[base], raw[base + 2])) continue
-      out.set(raw.subarray(base, base + FLOATS_PER_INSTANCE), offset)
-      offset += FLOATS_PER_INSTANCE
-    }
-    return out
-  }
-
   const shortRaw = getInstanceData(data, 'short')
   const tallRaw = getInstanceData(data, 'tall')
   const flowerRaw = getInstanceData(data, 'flower')
 
-  const shortFiltered = filterInstances(shortRaw)
-  const tallFiltered = filterInstances(tallRaw)
-  const flowerFiltered = filterInstances(flowerRaw)
+  const shortFiltered = filterVegetationInstances(shortRaw, shouldRemove)
+  const tallFiltered = filterVegetationInstances(tallRaw, shouldRemove)
+  const flowerFiltered = filterVegetationInstances(flowerRaw, shouldRemove)
 
   if (
     shortFiltered === shortRaw &&
@@ -456,10 +430,7 @@ export function removeGrassNearTrees(
   })
 }
 
-/**
- * Remove grass instances that fall within a world-space rectangle.
- * Returns null if no instances were removed (caller can skip saving).
- */
+/** Clear cells overlapping a world-space rectangle. */
 export function removeGrassInRect(
   data: GrassPlacementData,
   minX: number,
@@ -469,149 +440,137 @@ export function removeGrassInRect(
 ): GrassPlacementData | null {
   return filterGrassData(
     data,
-    (x, z) => x >= minX && x <= maxX && z >= minZ && z <= maxZ
+    (x, z) =>
+      Math.floor(x) <= maxX &&
+      Math.floor(x) + 1 > minX &&
+      Math.floor(z) <= maxZ &&
+      Math.floor(z) + 1 > minZ
   )
 }
 
-/**
- * Encode GrassPlacementData (in-memory v2 layout) to v3 quantized binary for storage.
- */
 export function encodeGrassBuffer(
   data: GrassPlacementData,
   tileX: number,
   tileZ: number
 ): ArrayBuffer {
-  const tileMinX = tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-  const tileMinZ = tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-  const totalInstances = data.shortCount + data.tallCount + data.flowerCount
-  const buf = new ArrayBuffer(
-    V3_HEADER_BYTES + totalInstances * V3_BYTES_PER_INSTANCE
-  )
-
-  const header = new Uint32Array(buf, 0, 4)
-  header[0] = V3_MAGIC
-  header[1] = data.shortCount
-  header[2] = data.tallCount
-  header[3] = data.flowerCount
-
-  const view = new DataView(buf)
-  const types: ('short' | 'tall' | 'flower')[] = ['short', 'tall', 'flower']
-  let writeOffset = V3_HEADER_BYTES
-
-  for (let t = 0; t < 3; t++) {
-    const raw = getInstanceData(data, types[t])
-    const [scaleMin, scaleRange] = TYPE_SCALE[t]
-    const n = raw.length / FLOATS_PER_INSTANCE
-    const posScale = 65535 / TILE_DIM
-    const rotScale = 255 / (Math.PI * 2)
-    const scaleScale = 255 / scaleRange
-
-    for (let i = 0; i < n; i++) {
-      const base = i * FLOATS_PER_INSTANCE
-      const localX = raw[base] - tileMinX
-      const localZ = raw[base + 2] - tileMinZ
-
-      view.setUint16(writeOffset, Math.round(localX * posScale), true)
-      view.setUint16(writeOffset + 2, Math.round(localZ * posScale), true)
-      view.setUint8(
-        writeOffset + 4,
-        Math.round(raw[base + 3] * rotScale) & 0xff
+  const bytes = new Uint8Array(V4_FILE_BYTES)
+  new DataView(bytes.buffer).setUint32(0, V4_MAGIC, true)
+  const originX = tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+  const originZ = tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+  const types = ['short', 'tall', 'flower'] as const
+  for (let type = 0; type < types.length; type++) {
+    const raw = getInstanceData(data, types[type])
+    for (let i = 0; i < raw.length; i += FLOATS_PER_INSTANCE) {
+      const x = Math.min(
+        TILE_DIM - 1,
+        Math.max(0, Math.floor(raw[i] - originX))
       )
-      view.setUint8(
-        writeOffset + 5,
-        Math.min(
-          255,
-          Math.max(0, Math.round((raw[base + 4] - scaleMin) * scaleScale))
-        )
+      const z = Math.min(
+        TILE_DIM - 1,
+        Math.max(0, Math.floor(raw[i + 2] - originZ))
       )
-      writeOffset += V3_BYTES_PER_INSTANCE
+      const index = V4_HEADER_BYTES + (z * TILE_DIM + x) * 3 + type
+      bytes[index] = Math.min(255, bytes[index] + 1)
     }
   }
-
-  return buf
+  return bytes.buffer
 }
 
-function emptyGrass(): GrassPlacementData {
-  return packGrassBuffer(
-    new Float32Array(0),
-    new Float32Array(0),
-    new Float32Array(0)
-  )
+function readGrassDensity(buffer: ArrayBuffer): Uint8Array {
+  const view = new DataView(buffer)
+  if (buffer.byteLength < 4) throw new Error('Invalid grass tile')
+  const magic = view.getUint32(0, true)
+  if (magic === V4_MAGIC && buffer.byteLength === V4_FILE_BYTES)
+    return new Uint8Array(buffer, V4_HEADER_BYTES)
+  if (magic !== V3_MAGIC || buffer.byteLength < V3_HEADER_BYTES)
+    throw new Error('Invalid grass tile')
+  const counts = [4, 8, 12].map((offset) => view.getUint32(offset, true))
+  const total = counts.reduce((sum, count) => sum + count, 0)
+  if (buffer.byteLength !== V3_HEADER_BYTES + total * V3_BYTES_PER_INSTANCE)
+    throw new Error('Invalid grass tile length')
+  const density = new Uint8Array(TILE_DIM * TILE_DIM * 3)
+  let offset = V3_HEADER_BYTES
+  for (let type = 0; type < counts.length; type++) {
+    for (let i = 0; i < counts[type]; i++, offset += V3_BYTES_PER_INSTANCE) {
+      const x = Math.min(
+        TILE_DIM - 1,
+        Math.floor((view.getUint16(offset, true) * TILE_DIM) / 65535)
+      )
+      const z = Math.min(
+        TILE_DIM - 1,
+        Math.floor((view.getUint16(offset + 2, true) * TILE_DIM) / 65535)
+      )
+      const index = (z * TILE_DIM + x) * 3 + type
+      density[index] = Math.min(255, density[index] + 1)
+    }
+  }
+  return density
 }
 
-/**
- * Decode binary grass data. v3 (quantized) is expanded to in-memory v2 layout.
- * v2 (legacy) returns empty data — tile needs regeneration.
- */
 export function decodeGrassData(
   buffer: ArrayBuffer,
   tileX: number,
   tileZ: number,
-  heightmap: Uint16Array | null
+  heightmap: Uint16Array | null,
+  cleared?: Uint8Array
 ): GrassPlacementData {
-  if (buffer.byteLength < 4) return emptyGrass()
-
-  const magic = new Uint32Array(buffer, 0, 1)[0]
-  if (magic !== V3_MAGIC) {
-    // v2 legacy format — return empty so tile gets regenerated
-    return emptyGrass()
-  }
-
-  const header = new Uint32Array(buffer, 0, 4)
-  const shortCount = header[1]
-  const tallCount = header[2]
-  const flowerCount = header[3]
-  const totalInstances = shortCount + tallCount + flowerCount
-
-  if (totalInstances === 0) return emptyGrass()
-
-  const tileMinX = tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-  const tileMinZ = tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-
-  // Expand to v2 in-memory layout
-  const outBuf = new ArrayBuffer(
-    HEADER_BYTES + totalInstances * FLOATS_PER_INSTANCE * 4
-  )
-  const outHeader = new Uint32Array(outBuf, 0, 3)
-  outHeader[0] = shortCount
-  outHeader[1] = tallCount
-  outHeader[2] = flowerCount
-
-  const outFloats = new Float32Array(outBuf, HEADER_BYTES)
-  const view = new DataView(buffer)
-  const counts = [shortCount, tallCount, flowerCount]
-  let readOffset = V3_HEADER_BYTES
-  let writeIdx = 0
-
-  for (let t = 0; t < 3; t++) {
-    const [scaleMin, scaleRange] = TYPE_SCALE[t]
-    const n = counts[t]
-
-    const posScale = TILE_DIM / 65535
-    const rotScale = (Math.PI * 2) / 255
-    const scaleScale = scaleRange / 255
-
-    for (let i = 0; i < n; i++) {
-      const localX = view.getUint16(readOffset, true) * posScale
-      const localZ = view.getUint16(readOffset + 2, true) * posScale
-      const rotation = view.getUint8(readOffset + 4) * rotScale
-      const scale = scaleMin + view.getUint8(readOffset + 5) * scaleScale
-
-      const worldX = tileMinX + localX
-      const worldZ = tileMinZ + localZ
-      const worldY = heightmap ? sampleHeight(heightmap, localX, localZ) : 0
-
-      outFloats[writeIdx] = worldX
-      outFloats[writeIdx + 1] = worldY
-      outFloats[writeIdx + 2] = worldZ
-      outFloats[writeIdx + 3] = rotation
-      outFloats[writeIdx + 4] = scale
-      writeIdx += FLOATS_PER_INSTANCE
-      readOffset += V3_BYTES_PER_INSTANCE
+  let density = readGrassDensity(buffer)
+  if (cleared) {
+    density = density.slice()
+    for (let cell = 0; cell < TILE_DIM * TILE_DIM; cell++) {
+      if ((cleared[cell >> 3] & (1 << (cell & 7))) !== 0)
+        density.fill(0, cell * 3, cell * 3 + 3)
     }
   }
-
-  return { shortCount, tallCount, flowerCount, buffer: outBuf }
+  const total = density.reduce((sum, count) => sum + count, 0)
+  const output = new ArrayBuffer(HEADER_BYTES + total * FLOATS_PER_INSTANCE * 4)
+  const header = new Uint32Array(output, 0, 3)
+  const placements = new Float32Array(output, HEADER_BYTES)
+  let offset = 0
+  const originX = tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+  const originZ = tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+  const seed = tileSeed(wrapTileX(tileX), tileZ)
+  for (let type = 0; type < 3; type++) {
+    const start = offset
+    const [scaleMin, scaleRange] = TYPE_SCALE[type]
+    for (let cell = 0; cell < TILE_DIM * TILE_DIM; cell++) {
+      const count = density[cell * 3 + type]
+      if (count === 0) continue
+      const rand = createRng(
+        seed ^ Math.imul(cell + 1, 0x45d9f3b) ^ Math.imul(type + 1, 0x119de1f3)
+      )
+      const columns = Math.ceil(Math.sqrt(count))
+      const rows = Math.ceil(count / columns)
+      for (let i = 0; i < count; i++) {
+        // Keep Float32 world coordinates inside their source cell.
+        const localX =
+          (cell % TILE_DIM) + 0.02 + 0.96 * (((i % columns) + rand()) / columns)
+        const localZ =
+          Math.floor(cell / TILE_DIM) +
+          0.02 +
+          0.96 * ((Math.floor(i / columns) + rand()) / rows)
+        const rotation = rand() * Math.PI * 2
+        const scale = scaleMin + rand() * scaleRange
+        const y = heightmap ? sampleHeight(heightmap, localX, localZ) : 0
+        if (heightmap && y < 0.05) continue
+        placements[offset++] = originX + localX
+        placements[offset++] = y
+        placements[offset++] = originZ + localZ
+        placements[offset++] = rotation
+        placements[offset++] = scale
+      }
+    }
+    header[type] = (offset - start) / FLOATS_PER_INSTANCE
+  }
+  return {
+    shortCount: header[0],
+    tallCount: header[1],
+    flowerCount: header[2],
+    buffer:
+      offset === placements.length
+        ? output
+        : output.slice(0, HEADER_BYTES + offset * 4),
+  }
 }
 
 /** Deterministically thin a Float32Array of instances by keeping only a fraction. */

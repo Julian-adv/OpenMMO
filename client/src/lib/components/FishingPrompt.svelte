@@ -1,19 +1,64 @@
 <script lang="ts">
-  // Local player's fishing HUD. Bite: SPACE, a canvas click, or a wheel
-  // flick hooks. Fight: hold a stance — REEL (SPACE, wheel down, hold
-  // button) vs GIVE LINE (S, wheel up, hold button) — and read the tension
-  // gauge; the server simulates the fish and judges everything. ESC reels
-  // in/gives up. (Camera wheel-zoom is disabled by GameScene's OrbitControls
-  // gating during bite/fight, so the wheel is ours here.)
-  import { myFishing } from '../stores/fishingStore'
+  import {
+    myFishing,
+    fishingTargeting,
+    cancelFishingTargeting,
+  } from '../stores/fishingStore'
+  import { FISHING, abilityEquipmentAllowed } from '../data/abilities'
+  import { gameStore } from '../stores/gameStore'
+  import { inventoryStore } from '../stores/inventoryStore'
+  import { skillsStore } from '../stores/skillsStore'
+  import { currentDungeonDepth } from '../stores/dungeonStore'
+  import { playerVisualFloorLevel } from '../stores/housingStore'
+  import {
+    teleportLoading,
+    mapEditorMode,
+    housingEditorMode,
+  } from '../stores/debugStore'
+  import { landscapingMode } from '../stores/landscapingStore'
+  import { estateFurnitureEditorActive } from '../stores/estateFurniturePlacementStore'
+  import { mountOverlay } from '../stores/overlayStack'
+  import SkillTargetHint from './SkillTargetHint.svelte'
   import type { FishingAction } from '../network/networkTypes'
   import { networkManager } from '../network/socket'
   import { playFishingSound } from '../managers/sfxManager'
   import { isTypingTarget } from '../utils/dom'
+  import {
+    fishing_trophy_min_tension,
+    max_cast_distance_m,
+  } from '../wasm/onlinerpg_shared'
+
+  $effect(() => {
+    if (!$fishingTargeting) return
+    const player = $gameStore.currentPlayer
+    if (
+      !player ||
+      !$gameStore.isConnected ||
+      player.health <= 0 ||
+      (player.mount != null && player.mount !== 'rowboat') ||
+      !$skillsStore.learned.includes(FISHING.id) ||
+      !abilityEquipmentAllowed(FISHING.id, $inventoryStore.equipped) ||
+      $myFishing.phase !== 'idle' ||
+      $currentDungeonDepth > 0 ||
+      $playerVisualFloorLevel !== 0 ||
+      $teleportLoading ||
+      $mapEditorMode ||
+      $housingEditorMode ||
+      $landscapingMode ||
+      $estateFurnitureEditorActive
+    )
+      cancelFishingTargeting()
+  })
+
+  $effect(() => {
+    if ($fishingTargeting)
+      return mountOverlay('fishingTarget', cancelFishingTargeting)
+  })
 
   type FightStance = Exclude<FishingAction, 'hook'>
 
   const WHEEL_BURST_MS = 350
+  const TROPHY_MIN_TENSION = fishing_trophy_min_tension()
 
   const STANCE_BUTTONS = [
     { stance: 'reel', label: 'REEL IN', hint: 'hold · SPACE · wheel ↓' },
@@ -131,6 +176,14 @@
 
 <svelte:window onkeydown={onKeydown} onkeyup={onKeyup} />
 
+{#if $fishingTargeting}
+  <SkillTargetHint
+    icon={FISHING.icon}
+    message={`Left-click water within ${max_cast_distance_m()} m. Esc to cancel.`}
+    onCancel={cancelFishingTargeting}
+  />
+{/if}
+
 {#if $myFishing.phase === 'bite'}
   <button
     class="bite"
@@ -140,8 +193,17 @@
   </button>
 {:else if $myFishing.phase === 'fight'}
   {@const f = $myFishing.fight}
+  {@const bold =
+    f.trophy && f.fishState === 'running' && f.tension >= TROPHY_MIN_TENSION}
   <div class="fight-panel">
-    {#if f.fishState === 'running'}
+    {#if f.trophy}<div class="trophy-label">TROPHY FISH</div>{/if}
+    {#if bold}
+      <div class="fish-state bold">Good tension — the trophy is tiring!</div>
+    {:else if f.trophy && f.fishState === 'running'}
+      <div class="fish-state running">
+        Reel back to {TROPHY_MIN_TENSION}+ — a loose line can lose the hook!
+      </div>
+    {:else if f.fishState === 'running'}
       <div class="fish-state running">The fish runs — watch the tension!</div>
     {:else if f.fishState === 'resting'}
       <div class="fish-state resting">The fish holds steady.</div>
@@ -159,11 +221,21 @@
     >
       <span
         class="tension-fill"
-        class:tension-warn={f.tension >= 60 && f.tension < 85}
+        class:tension-warn={f.tension >= 60 && f.tension < 85 && !bold}
+        class:tension-bold={bold}
         class:tension-high={f.tension >= 85}
         style={`width: ${Math.min(100, f.tension)}%`}
       ></span>
+      {#if f.trophy}
+        <span
+          class="bold-mark"
+          class:lit={bold}
+          style={`left: ${TROPHY_MIN_TENSION}%`}
+          title="Trophy fish only tire above this line while running"
+        ></span>
+      {/if}
     </div>
+    <div class="stamina-label">Stamina: {f.stamina}%</div>
     <div class="stance-row">
       {#each STANCE_BUTTONS as b (b.stance)}
         <button
@@ -242,6 +314,21 @@
     animation: state-pulse 0.4s ease-in-out infinite alternate;
   }
 
+  .trophy-label {
+    color: #ffd766;
+    font-weight: bold;
+  }
+  .stamina-label {
+    color: #b9dfc6;
+    font-size: 12px;
+  }
+
+  .fish-state.bold {
+    color: #ffd766;
+    text-shadow: 0 0 8px rgba(255, 215, 102, 0.6);
+    animation: state-pulse 0.4s ease-in-out infinite alternate;
+  }
+
   .fish-state.exhausted {
     color: #6fd598;
     animation: state-pulse 0.6s ease-in-out infinite alternate;
@@ -274,8 +361,38 @@
       background 0.2s;
   }
 
+  .bold-mark {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: rgba(255, 255, 255, 0.7);
+    transform: translateX(-1px);
+    transition: background 0.2s;
+  }
+
+  .bold-mark.lit {
+    background: #fff3b0;
+    box-shadow: 0 0 6px 2px rgba(255, 220, 120, 0.9);
+  }
+
   .tension-fill.tension-warn {
     background: #e8c34f;
+  }
+
+  .tension-fill.tension-bold {
+    background: linear-gradient(90deg, #e8c34f, #ffd766);
+    box-shadow: 0 0 10px 2px rgba(255, 215, 102, 0.75);
+    animation: fishing-bold-shimmer 0.5s ease-in-out infinite alternate;
+  }
+
+  @keyframes fishing-bold-shimmer {
+    from {
+      filter: brightness(1);
+    }
+    to {
+      filter: brightness(1.3);
+    }
   }
 
   .tension-fill.tension-high {

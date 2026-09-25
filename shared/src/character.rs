@@ -44,10 +44,14 @@ pub enum CharacterClass {
     Wizard,
     #[serde(rename = "tourist")]
     Tourist,
+    #[serde(rename = "bard")]
+    Bard,
     #[serde(rename = "merchant")]
     Merchant,
     #[serde(rename = "guard")]
     Guard,
+    #[serde(rename = "maid")]
+    Maid,
 }
 
 impl CharacterClass {
@@ -66,18 +70,24 @@ impl CharacterClass {
             CharacterClass::Rogue => "rogue",
             CharacterClass::Wizard => "wizard",
             CharacterClass::Tourist => "tourist",
+            CharacterClass::Bard => "bard",
             CharacterClass::Merchant => "merchant",
             CharacterClass::Guard => "guard",
+            CharacterClass::Maid => "maid",
         }
     }
 
-    /// Whether a player may create a character of this class. Merchant and
-    /// Guard belong to operator-run NPCs: Merchant's CHA +3 widens the
-    /// haggling band and Guard is a d10 hit die with STR/CON +2, so both are
-    /// balance decisions rather than security ones — the same rule applies to
-    /// human and agent players alike (`doc/REMOTE_AGENT_CLIENT.md`).
+    /// Whether a player may create a character of this class. Merchant,
+    /// Guard and Maid belong to operator-run NPCs: Merchant's CHA +3 widens
+    /// the haggling band, Guard is a d10 hit die with STR/CON +2, and Maid is
+    /// a town-role class with no player niche — balance decisions rather than
+    /// security ones; the same rule applies to human and agent players alike
+    /// (`doc/REMOTE_AGENT_CLIENT.md`).
     pub fn is_player_selectable(&self) -> bool {
-        !matches!(self, CharacterClass::Merchant | CharacterClass::Guard)
+        !matches!(
+            self,
+            CharacterClass::Merchant | CharacterClass::Guard | CharacterClass::Maid
+        )
     }
 
     pub fn hit_die(&self) -> u8 {
@@ -93,8 +103,9 @@ impl CharacterClass {
             CharacterClass::Archaeologist
             | CharacterClass::Healer
             | CharacterClass::Rogue
-            | CharacterClass::Wizard => 6,
-            CharacterClass::Tourist | CharacterClass::Merchant => 4,
+            | CharacterClass::Wizard
+            | CharacterClass::Bard => 6,
+            CharacterClass::Tourist | CharacterClass::Merchant | CharacterClass::Maid => 4,
             CharacterClass::Guard => 10,
         }
     }
@@ -120,8 +131,10 @@ impl CharacterClass {
             (CharacterClass::Healer, _) => [-2, -1, 1, 1, 2, -1],
             (CharacterClass::Wizard, _) => [-2, 0, -1, 3, 2, -2],
             (CharacterClass::Tourist, _) => [-1, 0, -1, 1, -1, 2],
+            (CharacterClass::Bard, _) => [-2, 2, -1, 0, -1, 2],
             (CharacterClass::Merchant, _) => [-2, 0, -1, 1, -1, 3],
             (CharacterClass::Guard, _) => [2, 0, 2, -2, -1, -1],
+            (CharacterClass::Maid, _) => [-2, 1, -1, -1, 1, 2],
         }
     }
 }
@@ -144,8 +157,10 @@ impl std::str::FromStr for CharacterClass {
             "rogue" => Ok(CharacterClass::Rogue),
             "wizard" => Ok(CharacterClass::Wizard),
             "tourist" => Ok(CharacterClass::Tourist),
+            "bard" => Ok(CharacterClass::Bard),
             "merchant" => Ok(CharacterClass::Merchant),
             "guard" => Ok(CharacterClass::Guard),
+            "maid" => Ok(CharacterClass::Maid),
             _ => Err(()),
         }
     }
@@ -162,6 +177,20 @@ pub struct CharacterAttributes {
     pub guard: u8,
 }
 
+/// The equipped item def ids that show on a character-select preview.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct VisibleEquipment {
+    pub main_hand: Option<String>,
+    pub off_hand: Option<String>,
+    pub back: Option<String>,
+    /// Dye on the worn cape, so a dyed cape looks dyed at character select.
+    #[serde(default)]
+    pub back_color: Option<String>,
+    /// Texture hash on the worn cape, for the same reason.
+    #[serde(default)]
+    pub back_texture: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Character {
     pub id: i64,
@@ -174,4 +203,11 @@ pub struct Character {
     pub class: CharacterClass,
     #[serde(default)]
     pub gender: Gender,
+    #[serde(default)]
+    pub equipment: VisibleEquipment,
+    /// Earned title ids, in definition order (doc/TITLES.md).
+    #[serde(default)]
+    pub titles: Vec<String>,
+    #[serde(default)]
+    pub active_title: Option<String>,
 }

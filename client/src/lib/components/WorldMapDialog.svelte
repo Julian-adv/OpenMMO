@@ -1,122 +1,132 @@
 <script module lang="ts">
-  import mapLabelsJson from '../../../../data/map_labels.json'
+  import {
+    MAP_LABELS as MAP_LABEL_DEFS,
+    type MapLabelDef,
+    type MapLabelKind,
+  } from '../data/mapLabels'
+  import { RegionImageCache } from '../terrain/regionImageCache'
+  import {
+    estimateMapLabelTextSize,
+    getMapFrameCornerReservedBounds,
+    isFixedMapLabel,
+    layoutMapLabels,
+    type ScreenRect,
+  } from '../utils/worldMapLabelLayout'
+  import { pickMinimapSourceSize } from '../terrain/regionMinimapGenerator'
+  import {
+    persistWorldMapView,
+    resolveWorldMapView,
+  } from '../utils/worldMapViewState'
 
   const REGION_SIZE = 16
   const TILE_DIM = 64
   const REGION_PX = REGION_SIZE * TILE_DIM // 1024
+  const ATLAS_PADDING_PX = 2
+  /** Floor on the image-cache size for LODs small enough to keep many of. */
+  const COARSE_CACHE_LIMIT: Record<number, number> = { 128: 1024, 256: 512 }
+  // Average deep-sea color of the baked fantasy tiles, shown past the world edge
+  const OUT_OF_WORLD_OCEAN = '#01294e'
 
   const MIN_ZOOM = 1
-  const DEFAULT_ZOOM = 8
+  const DEFAULT_ZOOM = 16
+  const MOBILE_AREA_ZOOM_REFERENCE = 8
 
-  // Party member marker poll cadence; above the server's 2s clamp.
-  const PARTY_POLL_MS = 3000
-
-  // A poll answer can outlive the dialog that requested it (nothing polls
-  // while the map is closed); older data than this never renders.
-  const PARTY_POSITIONS_MAX_AGE_MS = 10000
-
-  // --- Shared place-name labels (generated from data-src/map_labels.csv) ---
-  type LabelKind = 'continent' | 'capital' | 'city' | 'town' | 'sea' | 'island'
-  interface MapLabel {
-    name: string
-    kind: LabelKind
-    x: number // world meters
-    z: number
+  // --- Place-name labels, plus the player's discovered dungeon entrances ---
+  type LabelKind = MapLabelKind
+  interface MapLabel extends MapLabelDef {
+    /** Stable each-key, unique across kinds (names may repeat between them). */
+    key: string
   }
-  const MAP_LABELS: MapLabel[] = Object.values(
-    mapLabelsJson as unknown as Record<string, MapLabel>
-  )
-
-  // Per-kind zoom visibility: shown when min <= zoomSpan <= max (zoomSpan = regions
-  // across; larger = zoomed out). Continents/seas appear when zoomed out, settlements
-  // when zoomed in.
-  // Settlements (capital/city/town) share the same max so they all appear together
-  // at the zoom where the capital is visible.
-  const LABEL_ZOOM: Record<LabelKind, { min: number; max: number }> = {
-    continent: { min: 8, max: Infinity },
-    sea: { min: 4, max: Infinity },
-    capital: { min: 1, max: 24 },
-    city: { min: 1, max: 24 },
-    town: { min: 1, max: 24 },
-    island: { min: 1, max: 16 },
-  }
+  const MAP_LABELS: MapLabel[] = MAP_LABEL_DEFS.map((label) => ({
+    ...label,
+    key: `${label.kind}:${label.id}`,
+  }))
 
   // Matches the canvas's -45deg map rotation, applied to label screen positions.
-  const ROTATE_ANGLE = -Math.PI / 4
-  const COS_R = Math.cos(ROTATE_ANGLE)
-  const SIN_R = Math.sin(ROTATE_ANGLE)
+  const COS_R = Math.cos(MAP_ROTATE_ANGLE)
+  const SIN_R = Math.sin(MAP_ROTATE_ANGLE)
 
-  // --- Image cache (module-level, persists across component lifecycle) ---
-  // Intentionally non-reactive: image loads should not re-run the render effect.
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity
-  const imageCache = new Map<string, HTMLImageElement | null>()
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity
-  const pendingLoads = new Map<string, Promise<HTMLImageElement | null>>()
-
-  function trimImageCache(limit: number) {
-    if (!Number.isFinite(limit) || imageCache.size <= limit) return
-    for (const key of imageCache.keys()) {
-      imageCache.delete(key)
-      if (imageCache.size <= limit) break
-    }
+  // Undo the map rotation for a screen-space delta.
+  function screenDeltaToWorld(dx: number, dz: number) {
+    return { x: dx * COS_R + dz * SIN_R, z: -dx * SIN_R + dz * COS_R }
   }
+
+  // Module-level: images persist across dialog open/close.
+  const regionImages = new RegionImageCache()
 
   // --- Persisted view state (survives dialog close/reopen) ---
   let savedCamX: number | null = null
   let savedCamZ: number | null = null
   let savedZoom: number | null = null
+  let followPlayerOnOpen = true
+  let useDefaultZoomOnOpen = true
 </script>
 
 <script lang="ts">
-  import { gameStore, isAdminUser } from '../stores/gameStore'
+  import { locale, t, translate } from '../i18n'
+  import { placeName } from '../i18n/places'
+  import { SvelteMap } from 'svelte/reactivity'
+  import { assetUrl } from '../utils/assetUrl'
+  import { gameStore, isAdminUser, addChatMessage } from '../stores/gameStore'
+  import { partyRoster, partyPositions } from '../stores/partyStore'
+  import { worldMapVisible, landPlotsVisible } from '../stores/debugStore'
   import {
-    partyRoster,
-    partyPositions,
-    resetPartyPositions,
-  } from '../stores/partyStore'
-  import { worldMapVisible, teleportLoading } from '../stores/debugStore'
+    discoveredDungeonIds,
+    currentDungeonDepth,
+  } from '../stores/dungeonStore'
+  import {
+    playerInsideHouseId,
+    playerVisualFloorLevel,
+  } from '../stores/housingStore'
+  import { travelDestination } from '../stores/travelStore'
+  import { isTravelDestinationValid, travelDistance } from '../utils/autoTravel'
+  import { houseMapFootprints } from '../stores/housingMapStore'
+  import { DUNGEON_ENTRANCES } from '../data/dungeonDefs'
   import { minimapVersion } from '../stores/editorStore'
-  import { regionMinimapServerUrl } from '../terrain/regionMinimapGenerator'
   import { networkManager } from '../network/socket'
   import {
     graphicsQuality,
     getEffectivePreset,
   } from '../stores/graphicsSettings'
-  import { wrapWorldX, unwrapWorldXNear } from '../terrain/world-wrap'
+  import {
+    wrapWorldX,
+    wrapRegionX,
+    unwrapWorldXNear,
+    WORLD_MIN_REGION_Z,
+    WORLD_MAX_REGION_Z,
+  } from '../terrain/world-wrap'
   import { mountOverlay } from '../stores/overlayStack'
+  import {
+    MAP_ROTATE_ANGLE,
+    drawHouseMapFootprints,
+    drawLandPlotCells,
+    drawLandPlotGrid,
+    plotsLegible,
+    type LandGradeRegion,
+    headingToMapAngle,
+  } from '../utils/map-structures'
+  import { teleportLocalPlayer } from '../utils/teleport'
+  import {
+    getCachedLandGrades,
+    landGradeVersion,
+    requestLandGrades,
+    setLandGrade,
+  } from '../stores/landGradeStore'
+  import {
+    nextGrade,
+    plotAddress,
+    type OwnedLandPlot,
+  } from '../terrain/landPlots'
+  import { regionKey } from '../terrain/terrain-constants'
+  import { buildLandOwnerColors } from '../utils/landPlotColors'
+  import { getTerrainApiUrl } from '../utils/networkUtils'
+  import SelfMarker from './SelfMarker.svelte'
 
   const graphicsPreset = $derived(getEffectivePreset($graphicsQuality))
   const mobileMapBudget = $derived(graphicsPreset.renderBudget === 'mobile')
   const defaultZoomSpan = $derived(graphicsPreset.worldMapDefaultZoomSpan)
   const maxZoomSpan = $derived(graphicsPreset.worldMapMaxZoomSpan)
   const imageCacheLimit = $derived(graphicsPreset.worldMapImageCacheLimit)
-
-  function loadRegionImage(
-    rx: number,
-    rz: number
-  ): Promise<HTMLImageElement | null> {
-    const key = `${rx},${rz}`
-    if (imageCache.has(key)) return Promise.resolve(imageCache.get(key)!)
-    if (pendingLoads.has(key)) return pendingLoads.get(key)!
-
-    const promise = new Promise<HTMLImageElement | null>((resolve) => {
-      const img = new Image()
-      img.onload = () => {
-        imageCache.set(key, img)
-        trimImageCache(imageCacheLimit)
-        pendingLoads.delete(key)
-        resolve(img)
-      }
-      img.onerror = () => {
-        imageCache.set(key, null)
-        pendingLoads.delete(key)
-        resolve(null)
-      }
-      img.src = regionMinimapServerUrl(rx, rz)
-    })
-    pendingLoads.set(key, promise)
-    return promise
-  }
 
   // --- Component state ---
   let containerEl = $state<HTMLDivElement>()
@@ -126,6 +136,8 @@
 
   let playerX = $derived(wrapWorldX($gameStore.currentPlayer?.position.x ?? 0))
   let playerZ = $derived($gameStore.currentPlayer?.position.z ?? 0)
+  let playerHeading = $derived($gameStore.currentPlayer?.rotation ?? 0)
+  const currentPlayerName = $derived($gameStore.currentPlayer?.name ?? null)
 
   // --- Camera state (world coordinates of view center) ---
   let camX = $state(0)
@@ -133,95 +145,183 @@
 
   // --- Zoom state (in regions/km) ---
   let zoomSpan = $state(DEFAULT_ZOOM)
-  let teleportMode = $state(false)
+  let initializedForOpen = $state(false)
+  let selectingDestination = $state(false)
+  const canTravel = $derived(
+    $gameStore.isConnected &&
+      !!$gameStore.currentPlayer &&
+      $gameStore.currentPlayer.health > 0 &&
+      $currentDungeonDepth === 0 &&
+      $playerVisualFloorLevel === 0 &&
+      $playerInsideHouseId === null
+  )
+  const travelTooltip = $derived.by(() => {
+    if (selectingDestination) {
+      return $t('map.travelSelectionHint')
+    }
+    if ($travelDestination) {
+      const distance = travelDistance(
+        { x: playerX, z: playerZ },
+        $travelDestination
+      )
+      const label =
+        distance >= 1000
+          ? `${(distance / 1000).toFixed(1)} km`
+          : `${Math.ceil(distance)} m`
+      return $t('map.travelRemainingHint', { distance: label })
+    }
+    return canTravel ? $t('map.travelStartHint') : $t('map.travelOutdoorsHint')
+  })
+  let ownedPlots = $state<OwnedLandPlot[]>([])
+  const landOwnerColors = $derived(buildLandOwnerColors(ownedPlots))
+  const ownersByRegion = $derived.by(() => {
+    const regions = new SvelteMap<string, Map<number, string>>()
+    for (const plot of ownedPlots) {
+      const key = regionKey(plot.rx, plot.rz)
+      let owners = regions.get(key)
+      if (!owners) regions.set(key, (owners = new SvelteMap()))
+      owners.set(plot.index, plot.ownerName)
+    }
+    return regions
+  })
 
-  // Restore saved view state or center on player when dialog opens
   $effect(() => {
-    if ($worldMapVisible) {
-      if (savedCamX !== null && savedCamZ !== null) {
-        camX = savedCamX
-        camZ = savedCamZ
-      } else {
-        camX = playerX
-        camZ = playerZ
+    if (!$worldMapVisible || !$landPlotsVisible) return
+    const controller = new AbortController()
+    let timer: ReturnType<typeof setTimeout>
+    let reportedError = false
+    async function refreshOwnership() {
+      try {
+        const response = await fetch(
+          `${getTerrainApiUrl()}/api/terrain/land-ownership`,
+          {
+            signal: controller.signal,
+            cache: 'no-store',
+          }
+        )
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const plots: OwnedLandPlot[] = await response.json()
+        if (!controller.signal.aborted) ownedPlots = plots
+      } catch {
+        if (!controller.signal.aborted && !reportedError) {
+          reportedError = true
+          addChatMessage({
+            text: translate('system.landLoadFailed'),
+            sender: 'system',
+          })
+        }
+      } finally {
+        if (!controller.signal.aborted)
+          timer = setTimeout(refreshOwnership, 30_000)
       }
-      if (savedZoom !== null) {
-        zoomSpan = Math.min(savedZoom, maxZoomSpan)
-      } else {
-        zoomSpan = defaultZoomSpan
-      }
+    }
+    void refreshOwnership()
+    return () => {
+      controller.abort()
+      clearTimeout(timer)
     }
   })
 
-  // Party existence only: roster churn must not reset the poll cadence (the
-  // immediate re-poll would just be eaten by the server's clamp).
+  // Restore saved view state or center on player when dialog opens
+  $effect(() => {
+    if (!$worldMapVisible) {
+      initializedForOpen = false
+      return
+    }
+    if (initializedForOpen) return
+    initializedForOpen = true
+
+    const restored = resolveWorldMapView(
+      { camX: savedCamX, camZ: savedCamZ, zoomSpan: savedZoom },
+      { followPlayerOnOpen, useDefaultZoomOnOpen },
+      { camX: playerX, camZ: playerZ, zoomSpan: defaultZoomSpan },
+      maxZoomSpan
+    )
+    camX = restored.camX
+    camZ = restored.camZ
+    zoomSpan = restored.zoomSpan
+  })
+
+  // Membership changes already trigger server pushes.
   let inParty = $derived($partyRoster !== null)
 
-  // Poll party positions only while the dialog lives (it mounts with
-  // worldMapVisible) and a party exists — closed map means a silent channel.
+  // Request a snapshot on open or when joining a party.
   $effect(() => {
     if (!inParty) return
     networkManager.sendRequestPartyPositions()
-    const timer = setInterval(
-      () => networkManager.sendRequestPartyPositions(),
-      PARTY_POLL_MS
-    )
-    return () => clearInterval(timer)
-  })
-
-  // The render-time age gate only runs when something recomputes; this makes
-  // expiry certain on an untouched map (same pattern as PartyInviteToast).
-  $effect(() => {
-    const at = $partyPositions.at
-    if (at === 0) return
-    const timer = setTimeout(
-      resetPartyPositions,
-      Math.max(0, at + PARTY_POSITIONS_MAX_AGE_MS - Date.now())
-    )
-    return () => clearTimeout(timer)
   })
 
   // --- Drag state ---
   let isDragging = $state(false)
   let suppressNextClick = false
-  // Squared pixel distance a pointer must travel before a drag suppresses the
-  // click that would otherwise fire on pointerup.
+  // Suppress clicks after dragging this squared pixel distance.
   const DRAG_THRESHOLD_PX2 = 9
   let dragStartMouseX = 0
   let dragStartMouseZ = 0
   let dragStartCamX = 0
   let dragStartCamZ = 0
 
-  // --- Minimap version tracking: flush cache when minimaps are regenerated ---
-  $effect(() => {
-    const _ver = $minimapVersion // track dependency
-    imageCache.clear()
-    pendingLoads.clear()
-  })
-
   // --- Canvas rendering ---
+  interface RenderedView {
+    camX: number
+    camZ: number
+    zoomSpan: number
+    width: number
+    height: number
+  }
+
   let renderGeneration = 0
+  let renderAtlas: HTMLCanvasElement | null = null
+  let renderedView = $state<RenderedView | null>(null)
+  const destinationMarker = $derived(
+    $travelDestination && renderedView
+      ? worldToScreen($travelDestination.x, $travelDestination.z, renderedView)
+      : null
+  )
 
   $effect(() => {
     if (!canvasEl || containerW <= 0 || containerH <= 0) return
 
-    const _mmVer = $minimapVersion // re-render when minimaps change
+    const mmVer = $minimapVersion // re-render when minimaps change
     const span = zoomSpan
     const cx = camX
     const cz = camZ
-    const px = playerX
-    const pz = playerZ
+    const houses = $houseMapFootprints
+    const landGrid = $landPlotsVisible
+    const ownership = ownersByRegion
+    const ownerColors = landOwnerColors
+    const playerName = currentPlayerName
+    void $landGradeVersion
     const cw = containerW
     const ch = containerH
+    const dpr = Math.min(
+      window.devicePixelRatio || 1,
+      graphicsPreset.pixelRatioCap
+    )
     const gen = ++renderGeneration
 
+    const backingW = Math.max(1, Math.round(cw * dpr))
+    const backingH = Math.max(1, Math.round(ch * dpr))
+    if (canvasEl.width !== backingW || canvasEl.height !== backingH) {
+      canvasEl.width = backingW
+      canvasEl.height = backingH
+      renderedView = null
+    }
     const ctx = canvasEl.getContext('2d')!
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
 
-    // Scale: how many canvas pixels per world unit
-    // At current zoom, we show `span` regions across the shorter dimension
+    // Show `span` regions across the shorter dimension.
     const viewSize = span * REGION_PX // world units visible along shorter axis
     const canvasSize = Math.min(cw, ch)
     const scale = canvasSize / viewSize
+    const projectedRegionPx = REGION_PX * scale * dpr
+    const sourceSize = pickMinimapSourceSize(projectedRegionPx)
+    // Coarse tiles allow a larger image cache.
+    regionImages.limit = mobileMapBudget
+      ? imageCacheLimit
+      : Math.max(imageCacheLimit, COARSE_CACHE_LIMIT[sourceSize] ?? 0)
 
     // World-space extents of the viewport
     const viewWorldW = cw / scale
@@ -231,110 +331,172 @@
     const viewLeft = cx - viewWorldW / 2
     const viewTop = cz - viewWorldH / 2
 
-    // Clear to black
-    ctx.clearRect(0, 0, cw, ch)
-    ctx.fillStyle = '#000'
-    ctx.fillRect(0, 0, cw, ch)
-
-    // 45-degree rotation: expand visible region to cover rotated corners
-    const expand = Math.SQRT2 // rotated square needs ~1.41x coverage
-
-    const expandedViewWorldW = viewWorldW * expand
-    const expandedViewWorldH = viewWorldH * expand
-    const expandedViewLeft = cx - expandedViewWorldW / 2
-    const expandedViewTop = cz - expandedViewWorldH / 2
+    // Bounding square of the viewport after undoing its 45-degree rotation.
+    const expandedViewWorldSize = (viewWorldW + viewWorldH) / Math.SQRT2
+    const expandedViewLeft = cx - expandedViewWorldSize / 2
+    const expandedViewTop = cz - expandedViewWorldSize / 2
 
     const expRegionMinRx = Math.floor(
       (expandedViewLeft + TILE_DIM / 2) / REGION_PX
     )
     const expRegionMaxRx = Math.floor(
-      (expandedViewLeft + expandedViewWorldW + TILE_DIM / 2) / REGION_PX
+      (expandedViewLeft + expandedViewWorldSize + TILE_DIM / 2) / REGION_PX
     )
     const expRegionMinRz = Math.floor(
       (expandedViewTop + TILE_DIM / 2) / REGION_PX
     )
     const expRegionMaxRz = Math.floor(
-      (expandedViewTop + expandedViewWorldH + TILE_DIM / 2) / REGION_PX
+      (expandedViewTop + expandedViewWorldSize + TILE_DIM / 2) / REGION_PX
     )
 
-    const promises: Promise<void>[] = []
+    interface LoadedRegion {
+      image: HTMLImageElement
+      worldX: number
+      worldZ: number
+    }
+
+    const promises: Promise<LoadedRegion | null>[] = []
+    const gradeRegions: LandGradeRegion[] = []
+    const wantGrades = landGrid && plotsLegible(scale)
     for (let rz = expRegionMinRz; rz <= expRegionMaxRz; rz++) {
+      if (rz < WORLD_MIN_REGION_Z || rz > WORLD_MAX_REGION_Z) continue
       for (let rx = expRegionMinRx; rx <= expRegionMaxRx; rx++) {
-        // Region world origin
         const regionWorldX = rx * REGION_PX - TILE_DIM / 2
         const regionWorldZ = rz * REGION_PX - TILE_DIM / 2
 
-        // Canvas position (before rotation, relative to view center)
-        const drawX = Math.floor((regionWorldX - viewLeft) * scale)
-        const drawY = Math.floor((regionWorldZ - viewTop) * scale)
-        const drawSize = Math.ceil(REGION_PX * scale)
-
         promises.push(
-          loadRegionImage(rx, rz).then((img) => {
-            if (gen !== renderGeneration) return
-            if (img) {
-              ctx.save()
-              ctx.translate(cw / 2, ch / 2)
-              ctx.rotate(ROTATE_ANGLE)
-              ctx.translate(-cw / 2, -ch / 2)
-              ctx.drawImage(img, drawX, drawY, drawSize, drawSize)
-              ctx.restore()
+          regionImages.load(rx, rz, mmVer, sourceSize).then((img) => {
+            if (!img || gen !== renderGeneration) return null
+            return {
+              image: img,
+              worldX: regionWorldX,
+              worldZ: regionWorldZ,
             }
           })
         )
+        if (wantGrades) {
+          const grades = getCachedLandGrades(rx, rz)
+          const owners = ownership.get(regionKey(wrapRegionX(rx), rz))
+          gradeRegions.push({ rx, rz, grades, owners })
+          if (!grades) requestLandGrades(rx, rz)
+        }
       }
     }
 
-    Promise.all(promises).then(() => {
+    Promise.all(promises).then((regions) => {
       if (gen !== renderGeneration) return
 
-      // Player marker (also rotated with the map)
-      const playerCanvasX = (px - viewLeft) * scale
-      const playerCanvasZ = (pz - viewTop) * scale
+      const atlas = (renderAtlas ??= document.createElement('canvas'))
+      const atlasWidth =
+        Math.max(1, Math.ceil(expandedViewWorldSize * scale * dpr)) +
+        ATLAS_PADDING_PX * 2
+      const atlasHeight =
+        Math.max(1, Math.ceil(expandedViewWorldSize * scale * dpr)) +
+        ATLAS_PADDING_PX * 2
+      if (atlas.width !== atlasWidth) atlas.width = atlasWidth
+      if (atlas.height !== atlasHeight) atlas.height = atlasHeight
+      const atlasCtx = atlas.getContext('2d')!
+      atlasCtx.setTransform(1, 0, 0, 1, 0, 0)
+      atlasCtx.clearRect(0, 0, atlas.width, atlas.height)
+      atlasCtx.imageSmoothingEnabled = true
+      atlasCtx.imageSmoothingQuality = 'high'
 
+      for (const region of regions) {
+        if (!region) continue
+        const x0 =
+          ATLAS_PADDING_PX +
+          Math.round((region.worldX - expandedViewLeft) * scale * dpr)
+        const y0 =
+          ATLAS_PADDING_PX +
+          Math.round((region.worldZ - expandedViewTop) * scale * dpr)
+        const x1 =
+          ATLAS_PADDING_PX +
+          Math.round(
+            (region.worldX + REGION_PX - expandedViewLeft) * scale * dpr
+          )
+        const y1 =
+          ATLAS_PADDING_PX +
+          Math.round(
+            (region.worldZ + REGION_PX - expandedViewTop) * scale * dpr
+          )
+
+        atlasCtx.save()
+        atlasCtx.beginPath()
+        atlasCtx.rect(x0, y0, x1 - x0, y1 - y0)
+        atlasCtx.clip()
+        atlasCtx.drawImage(region.image, x0, y0, x1 - x0, y1 - y0)
+        atlasCtx.restore()
+      }
+
+      atlasCtx.setTransform(dpr, 0, 0, dpr, ATLAS_PADDING_PX, ATLAS_PADDING_PX)
+      const atlasTransform = {
+        centerX: cx,
+        viewLeft: expandedViewLeft,
+        viewTop: expandedViewTop,
+        scale,
+      }
+      if (landGrid) {
+        drawLandPlotCells(
+          atlasCtx,
+          gradeRegions,
+          atlasTransform,
+          ownerColors,
+          playerName
+        )
+        drawLandPlotGrid(atlasCtx, expandedViewWorldSize, atlasTransform)
+      }
+      drawHouseMapFootprints(atlasCtx, houses, atlasTransform)
+
+      ctx.clearRect(0, 0, cw, ch)
+      ctx.fillStyle = OUT_OF_WORLD_OCEAN
+      ctx.fillRect(0, 0, cw, ch)
       ctx.save()
       ctx.translate(cw / 2, ch / 2)
-      ctx.rotate(ROTATE_ANGLE)
+      ctx.rotate(MAP_ROTATE_ANGLE)
       ctx.translate(-cw / 2, -ch / 2)
-      ctx.beginPath()
-      ctx.arc(playerCanvasX, playerCanvasZ, 6, 0, Math.PI * 2)
-      ctx.fillStyle = '#ff3333'
-      ctx.fill()
-      ctx.lineWidth = 2
-      ctx.strokeStyle = '#ffffff'
-      ctx.stroke()
-      ctx.shadowColor = 'rgba(255, 50, 50, 0.8)'
-      ctx.shadowBlur = 6
-      ctx.beginPath()
-      ctx.arc(playerCanvasX, playerCanvasZ, 6, 0, Math.PI * 2)
-      ctx.fillStyle = '#ff3333'
-      ctx.fill()
+      ctx.drawImage(
+        atlas,
+        (expandedViewLeft - viewLeft) * scale - ATLAS_PADDING_PX / dpr,
+        (expandedViewTop - viewTop) * scale - ATLAS_PADDING_PX / dpr,
+        atlas.width / dpr,
+        atlas.height / dpr
+      )
       ctx.restore()
+      renderedView = {
+        camX: cx,
+        camZ: cz,
+        zoomSpan: span,
+        width: cw,
+        height: ch,
+      }
     })
   })
 
   // --- Place-name label overlay (HTML layer, not burned into the canvas) ---
   interface PlacedLabel {
+    key: string
     name: string
     kind: LabelKind
     left: number
     top: number
+    area: boolean
+    textOffsetX: number
+    textOffsetY: number
+    textVisible: boolean
   }
 
-  // World → overlay coords: unwrap x toward the camera (a point just across
-  // the world seam renders near the edge instead of a full wrap away), scale
-  // around the view center, then the same -45° rotation the canvas applies
-  // (ctx.rotate(ROTATE_ANGLE)).
-  function worldToScreen(x: number, z: number, cw: number, ch: number) {
-    x = unwrapWorldXNear(camX, x)
-    const scale = Math.min(cw, ch) / (zoomSpan * REGION_PX)
-    const lx = (x - (camX - cw / scale / 2)) * scale
-    const ly = (z - (camZ - ch / scale / 2)) * scale
-    const ox = lx - cw / 2
-    const oy = ly - ch / 2
+  // Unwrap toward the camera, then apply the canvas scale and rotation.
+  function worldToScreen(x: number, z: number, view: RenderedView) {
+    x = unwrapWorldXNear(view.camX, x)
+    const scale =
+      Math.min(view.width, view.height) / (view.zoomSpan * REGION_PX)
+    const lx = (x - (view.camX - view.width / scale / 2)) * scale
+    const ly = (z - (view.camZ - view.height / scale / 2)) * scale
+    const ox = lx - view.width / 2
+    const oy = ly - view.height / 2
     return {
-      left: ox * COS_R - oy * SIN_R + cw / 2,
-      top: ox * SIN_R + oy * COS_R + ch / 2,
+      left: ox * COS_R - oy * SIN_R + view.width / 2,
+      top: ox * SIN_R + oy * COS_R + view.height / 2,
     }
   }
 
@@ -352,30 +514,24 @@
     )
   }
 
-  let visibleLabels = $derived.by<PlacedLabel[]>(() => {
-    const cw = containerW
-    const ch = containerH
-    if (cw <= 0 || ch <= 0) return []
-
-    const margin = 80 // keep labels whose anchor is just off-edge
-    const out: PlacedLabel[] = []
-    for (const label of MAP_LABELS) {
-      const tier = LABEL_ZOOM[label.kind]
-      if (zoomSpan < tier.min || zoomSpan > tier.max) continue
-      const p = worldToScreen(label.x, label.z, cw, ch)
-      if (!onScreen(p, cw, ch, margin)) continue
-      out.push({ name: label.name, kind: label.kind, left: p.left, top: p.top })
-    }
-    return out
-  })
-
-  // --- Self marker pulse (HTML layer over the canvas dot) ---
-  let selfPulse = $derived.by<{ left: number; top: number } | null>(() => {
-    const cw = containerW
-    const ch = containerH
-    if (cw <= 0 || ch <= 0) return null
-    const p = worldToScreen(playerX, playerZ, cw, ch)
-    return onScreen(p, cw, ch, 20) ? p : null
+  // Localize before layout so collisions use the displayed names.
+  let mapLabels = $derived.by<MapLabel[]>(() => {
+    const known = $discoveredDungeonIds
+    const language = $locale
+    const dungeons = DUNGEON_ENTRANCES.filter((e) => known.has(e.id)).map(
+      (e) => ({
+        id: e.id,
+        key: `dungeon:${e.id}`,
+        name: e.name,
+        kind: 'dungeon' as const,
+        x: e.x,
+        z: e.z,
+      })
+    )
+    return [...MAP_LABELS, ...dungeons].map((label) => ({
+      ...label,
+      name: placeName(label.id, label.name, language),
+    }))
   })
 
   // --- Party member markers (HTML layer, same transform as the labels) ---
@@ -384,54 +540,144 @@
     name: string
     left: number
     top: number
-    floor: number
   }
 
   let partyMarkers = $derived.by<PartyMarker[]>(() => {
     const roster = $partyRoster
     const positions = $partyPositions
-    const cw = containerW
-    const ch = containerH
-    if (!roster || cw <= 0 || ch <= 0) return []
-    if (Date.now() - positions.at > PARTY_POSITIONS_MAX_AGE_MS) return []
+    const view = renderedView
+    if (!roster || !view) return []
 
-    // Join against the roster: a member who left since the last poll (or an
-    // id the roster never knew) must not draw a ghost.
+    // Ignore positions for players who have left the party.
     const names = new Map(roster.members.map((m) => [m.id, m.name]))
     const out: PartyMarker[] = []
-    for (const pos of positions.members) {
+    for (const pos of positions) {
       const name = names.get(pos.id)
       if (!name) continue
-      const p = worldToScreen(pos.x, pos.z, cw, ch)
-      if (!onScreen(p, cw, ch, 40)) continue
+      const p = worldToScreen(pos.x, pos.z, view)
+      if (!onScreen(p, view.width, view.height, 40)) continue
       out.push({
         id: pos.id,
-        name,
+        name:
+          pos.floor_level < 0
+            ? `${name} ${$t('map.undergroundFloor', { floor: -pos.floor_level })}`
+            : name,
         left: p.left,
         top: p.top,
-        floor: pos.floor_level,
       })
     }
     return out
   })
 
+  let visibleLabels = $derived.by<PlacedLabel[]>(() => {
+    const view = renderedView
+    if (!view) return []
+    const cw = view.width
+    const ch = view.height
+
+    const margin = 80 // keep labels whose anchor is just off-edge
+    const inputs: { label: MapLabel; anchor: { x: number; y: number } }[] = []
+    for (const label of mapLabels) {
+      const p = worldToScreen(label.x, label.z, view)
+      if (!onScreen(p, cw, ch, margin)) continue
+      inputs.push({
+        label,
+        anchor: { x: p.left, y: p.top },
+      })
+    }
+
+    const viewport = { left: 0, top: 0, right: cw, bottom: ch }
+    const reservedBounds: ScreenRect[] =
+      getMapFrameCornerReservedBounds(viewport)
+    const player = worldToScreen(playerX, playerZ, view)
+    if (onScreen(player, cw, ch, 20)) {
+      reservedBounds.push({
+        left: player.left - 12,
+        top: player.top - 12,
+        right: player.left + 12,
+        bottom: player.top + 12,
+      })
+    }
+
+    for (const marker of partyMarkers) {
+      reservedBounds.push({
+        left: marker.left - 9,
+        top: marker.top - 13,
+        right:
+          marker.left +
+          16 +
+          estimateMapLabelTextSize(marker.name, 'dungeon').width,
+        bottom: marker.top + 13,
+      })
+    }
+
+    return layoutMapLabels(inputs, {
+      zoomSpan: view.zoomSpan,
+      areaZoomSpan: mobileMapBudget
+        ? (view.zoomSpan * MOBILE_AREA_ZOOM_REFERENCE) / maxZoomSpan
+        : view.zoomSpan,
+      viewport,
+      reservedBounds,
+      collisionPadding: 5,
+      edgePadding: 16,
+      markerGap: 11,
+    }).map(({ label, anchor, textOffset, textVisible }) => ({
+      key: label.key,
+      name: label.name,
+      kind: label.kind,
+      left: anchor.x,
+      top: anchor.y,
+      area: isFixedMapLabel(label.kind),
+      textOffsetX: textOffset.x,
+      textOffsetY: textOffset.y,
+      textVisible,
+    }))
+  })
+
+  let selfMarker = $derived.by<{
+    left: number
+    top: number
+    angle: number
+  } | null>(() => {
+    const view = renderedView
+    if (!view) return null
+    const p = worldToScreen(playerX, playerZ, view)
+    if (!onScreen(p, view.width, view.height, 20)) return null
+    return {
+      ...p,
+      angle: headingToMapAngle(playerHeading),
+    }
+  })
+
   // --- Zoom controls ---
+  function toggleLandPlots() {
+    $landPlotsVisible = !$landPlotsVisible
+    if ($landPlotsVisible) {
+      useDefaultZoomOnOpen = false
+      zoomSpan = MIN_ZOOM
+    }
+  }
+
   function zoomIn() {
+    useDefaultZoomOnOpen = false
     zoomSpan = Math.max(MIN_ZOOM, zoomSpan - 1)
   }
 
   function zoomOut() {
+    useDefaultZoomOnOpen = false
     zoomSpan = Math.min(maxZoomSpan, zoomSpan + 1)
   }
 
   function zoomReset() {
     zoomSpan = defaultZoomSpan
+    useDefaultZoomOnOpen = true
     savedZoom = null
   }
 
   function resetCamera() {
     camX = playerX
     camZ = playerZ
+    followPlayerOnOpen = true
     savedCamX = null
     savedCamZ = null
   }
@@ -479,18 +725,36 @@
       rawDx * rawDx + rawDz * rawDz > DRAG_THRESHOLD_PX2
     ) {
       suppressNextClick = true
+      followPlayerOnOpen = false
     }
-    const dx = rawDx / scale
-    const dz = rawDz / scale
-    const angle = Math.PI / 4
-    const cosA = Math.cos(angle)
-    const sinA = Math.sin(angle)
-    camX = dragStartCamX - (dx * cosA - dz * sinA)
-    camZ = dragStartCamZ - (dx * sinA + dz * cosA)
+    const delta = screenDeltaToWorld(rawDx / scale, rawDz / scale)
+    camX = dragStartCamX - delta.x
+    camZ = dragStartCamZ - delta.z
   }
 
   function handlePointerUp() {
     isDragging = false
+  }
+
+  let hoverPointer = $state<{ x: number; y: number } | null>(null)
+  const hoveredOwner = $derived.by(() => {
+    if (!$landPlotsVisible || isDragging || !hoverPointer) return null
+    const p = screenToWorld(hoverPointer.x, hoverPointer.y)
+    if (!p || !plotsLegible(p.scale)) return null
+    const addr = plotAddress(p.x, p.z)
+    const name = ownersByRegion
+      .get(regionKey(addr.rx, addr.rz))
+      ?.get(addr.index)
+    if (!name) return null
+    return {
+      name,
+      left: Math.max(0, Math.min(p.pixelX + 12, containerW - 180)),
+      top: Math.max(0, Math.min(p.pixelY + 16, containerH - 40)),
+    }
+  })
+
+  function handleMapHover(event: PointerEvent) {
+    hoverPointer = { x: event.clientX, y: event.clientY }
   }
 
   $effect(() => {
@@ -510,9 +774,13 @@
   // Save view state on component destroy (covers all close paths)
   $effect(() => {
     return () => {
-      savedCamX = camX
-      savedCamZ = camZ
-      savedZoom = zoomSpan
+      const saved = persistWorldMapView(
+        { camX, camZ, zoomSpan },
+        { followPlayerOnOpen, useDefaultZoomOnOpen }
+      )
+      savedCamX = saved.camX
+      savedCamZ = saved.camZ
+      savedZoom = saved.zoomSpan
     }
   })
 
@@ -520,10 +788,8 @@
   function close() {
     if (mobileMapBudget) {
       renderGeneration++
-      imageCache.clear()
-      pendingLoads.clear()
+      regionImages.flush()
     }
-    teleportMode = false
     worldMapVisible.set(false)
   }
 
@@ -543,53 +809,93 @@
       event.stopPropagation()
       return
     }
-    const teleportRequested = (event.ctrlKey || teleportMode) && $isAdminUser
-    if (!teleportRequested) return
-    event.preventDefault()
-    event.stopPropagation()
-    teleportAt(event.clientX, event.clientY)
+    if (selectingDestination) {
+      event.preventDefault()
+      event.stopPropagation()
+      if (!canTravel) return
+      const point = screenToWorld(event.clientX, event.clientY)
+      if (!point) return
+      if (!isTravelDestinationValid(point)) {
+        addChatMessage({
+          text: translate('system.travelDestination'),
+          sender: 'system',
+        })
+        return
+      }
+      travelDestination.set({ x: wrapWorldX(point.x), z: point.z })
+      selectingDestination = false
+      return
+    }
+    if (!$isAdminUser) return
+    if (event.ctrlKey) {
+      event.preventDefault()
+      event.stopPropagation()
+      teleportAt(event.clientX, event.clientY)
+    } else if ($landPlotsVisible) {
+      event.preventDefault()
+      event.stopPropagation()
+      cyclePlotAt(event.clientX, event.clientY)
+    }
   }
 
-  // macOS turns Ctrl+click into a contextmenu event (no click fires at all),
-  // so the teleport shortcut must be caught here too.
+  function cyclePlotAt(clientX: number, clientY: number) {
+    const p = screenToWorld(clientX, clientY)
+    if (!p || !plotsLegible(p.scale)) return
+    const addr = plotAddress(p.x, p.z)
+    const grades = getCachedLandGrades(addr.rx, addr.rz)
+    if (!grades) return
+    const next = nextGrade(grades[addr.index])
+    setLandGrade(addr.rx, addr.rz, addr.index, next).catch((e: Error) => {
+      addChatMessage({
+        text: translate('system.landSaveFailed', { error: e.message }),
+        sender: 'system',
+      })
+    })
+  }
+
+  // macOS sends Ctrl+click as a contextmenu event.
   function handleMapContextMenu(event: MouseEvent) {
+    if (selectingDestination) {
+      event.preventDefault()
+      return
+    }
     if (!event.ctrlKey || !$isAdminUser) return
     event.preventDefault()
     event.stopPropagation()
     teleportAt(event.clientX, event.clientY)
   }
 
-  function teleportAt(clientX: number, clientY: number) {
-    if (!$isAdminUser) return
-    if (!containerEl || containerW <= 0 || containerH <= 0) return
+  // Resolve clicks against the rendered view while pan/zoom is loading.
+  function screenToWorld(clientX: number, clientY: number) {
+    const view = renderedView
+    if (!containerEl || !view) return null
 
     const rect = containerEl.getBoundingClientRect()
     const pixelX = clientX - rect.left
     const pixelY = clientY - rect.top
 
-    const viewSize = zoomSpan * REGION_PX
-    const canvasSize = Math.min(containerW, containerH)
+    const viewSize = view.zoomSpan * REGION_PX
+    const canvasSize = Math.min(view.width, view.height)
     const scale = canvasSize / viewSize
 
-    // Screen offset from center, then rotate by +45 degrees to undo canvas rotation
-    const sx = (pixelX - containerW / 2) / scale
-    const sz = (pixelY - containerH / 2) / scale
-    const angle = Math.PI / 4
-    const cosA = Math.cos(angle)
-    const sinA = Math.sin(angle)
-    const worldX = wrapWorldX(camX + (sx * cosA - sz * sinA))
-    const worldZ = camZ + (sx * sinA + sz * cosA)
+    const delta = screenDeltaToWorld(
+      (pixelX - view.width / 2) / scale,
+      (pixelY - view.height / 2) / scale
+    )
+    return {
+      x: view.camX + delta.x,
+      z: view.camZ + delta.z,
+      scale,
+      pixelX,
+      pixelY,
+    }
+  }
 
-    const position = { x: worldX, y: 0, z: worldZ }
-
-    gameStore.update((state) => {
-      if (!state.currentPlayer) return state
-      state.currentPlayer.position.set(worldX, 0, worldZ)
-      return state
-    })
-
-    networkManager.sendDebugTeleport(position)
-    teleportLoading.set(true)
+  function teleportAt(clientX: number, clientY: number) {
+    if (!$isAdminUser) return
+    const p = screenToWorld(clientX, clientY)
+    if (!p) return
+    teleportLocalPlayer(p.x, 0, p.z)
     close()
   }
 
@@ -614,178 +920,427 @@
   <div
     class="dialog"
     class:mobile-map-budget={mobileMapBudget}
+    style="--wm-frame: url({assetUrl(
+      '/textures/ui/world-map/ornate-frame.webp'
+    )}); --wm-wood: url({assetUrl('/textures/ui/world-map/dark-wood.webp')})"
     role="dialog"
     aria-modal="true"
+    aria-labelledby="world-map-title"
+    tabindex="-1"
   >
     <div class="header">
-      <h2>World Map</h2>
+      <h2 id="world-map-title">{$t('map.title')}</h2>
       <div class="controls">
-        <button class="ctrl-btn" onclick={zoomIn} title="Zoom In">+</button>
-        <button class="ctrl-btn" onclick={zoomOut} title="Zoom Out"
-          >&minus;</button
+        <button
+          type="button"
+          class="ctrl-btn center-btn"
+          class:active={selectingDestination || $travelDestination !== null}
+          disabled={!canTravel && !$travelDestination && !selectingDestination}
+          title={travelTooltip}
+          aria-label={selectingDestination
+            ? $t('map.cancelDestinationSelection')
+            : $travelDestination
+              ? $t('map.stopTravel')
+              : $t('map.setDestination')}
+          aria-pressed={selectingDestination || $travelDestination !== null}
+          onclick={() => {
+            if ($travelDestination && !selectingDestination) {
+              travelDestination.set(null)
+            } else {
+              selectingDestination = !selectingDestination
+            }
+          }}
         >
-        <button class="ctrl-btn" onclick={zoomReset} title="Reset Zoom"
-          >Reset</button
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            {#if $travelDestination && !selectingDestination}
+              <rect x="5" y="5" width="14" height="14" rx="1"></rect>
+            {:else}
+              <path d="M5 21V3M5 3h15l-4 5 4 5H5"></path>
+            {/if}
+          </svg></button
         >
-        <button class="ctrl-btn" onclick={resetCamera} title="Center on Player"
-          >&#8982;</button
+        <button
+          type="button"
+          class="ctrl-btn symbol-btn"
+          onclick={zoomIn}
+          title={$t('map.zoomIn')}
+          aria-label={$t('map.zoomIn')}>+</button
         >
-        {#if $isAdminUser}
-          <button
-            class="ctrl-btn"
-            class:active={teleportMode}
-            onclick={() => (teleportMode = !teleportMode)}
-            title="Teleport Mode">TP</button
-          >
-        {/if}
+        <button
+          type="button"
+          class="ctrl-btn symbol-btn"
+          onclick={zoomOut}
+          title={$t('map.zoomOut')}
+          aria-label={$t('map.zoomOut')}>&minus;</button
+        >
+        <button
+          type="button"
+          class="ctrl-btn reset-btn"
+          onclick={zoomReset}
+          title={$t('map.resetZoom')}
+          aria-label={$t('map.resetZoom')}>{$t('common.reset')}</button
+        >
+        <button
+          type="button"
+          class="ctrl-btn center-btn"
+          onclick={resetCamera}
+          title={$t('map.centerOnPlayer')}
+          aria-label={$t('map.centerOnPlayer')}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="6.5"></circle>
+            <path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4"></path>
+            <circle cx="12" cy="12" r="1.5" class="center-dot"></circle>
+          </svg></button
+        >
+        <button
+          type="button"
+          class="ctrl-btn center-btn"
+          class:active={$landPlotsVisible}
+          onclick={toggleLandPlots}
+          title={$t('map.toggleLandPlots')}
+          aria-label={$t('map.toggleLandPlots')}
+          aria-pressed={$landPlotsVisible}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3.5" y="3.5" width="17" height="17" rx="1"></rect>
+            <path d="M12 3.5v17M3.5 12h17"></path>
+          </svg></button
+        >
       </div>
-      <button class="close-btn" onclick={close}>&times;</button>
+      <button
+        type="button"
+        class="close-btn"
+        onclick={close}
+        title={$t('common.close')}
+        aria-label={$t('map.close')}>&times;</button
+      >
     </div>
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class="map-container"
       class:dragging={isDragging}
+      class:editing={selectingDestination ||
+        ($landPlotsVisible && $isAdminUser)}
       bind:this={containerEl}
       onpointerdown={handlePointerDown}
+      onpointermove={handleMapHover}
+      onpointerleave={() => (hoverPointer = null)}
       onclick={handleMapClick}
       oncontextmenu={handleMapContextMenu}
     >
-      <canvas
-        bind:this={canvasEl}
-        width={containerW}
-        height={containerH}
-        class="map-canvas"
-      ></canvas>
+      <canvas bind:this={canvasEl} class="map-canvas"></canvas>
       <div class="label-layer">
-        {#each visibleLabels as label (label.name)}
+        {#if destinationMarker}
+          <div
+            class="destination-marker"
+            style="left: {destinationMarker.left}px; top: {destinationMarker.top}px;"
+          >
+            <svg viewBox="0 0 24 32" aria-hidden="true">
+              <path d="M5 30V3M5 3h15l-4 6 4 6H5"></path>
+            </svg>
+            <span>{$t('map.destination')}</span>
+          </div>
+        {/if}
+        {#each visibleLabels as label (label.key)}
           <div
             class="map-label {label.kind}"
-            class:area={label.kind === 'continent' ||
-              label.kind === 'sea' ||
-              label.kind === 'island'}
-            style="left: {label.left}px; top: {label.top}px;"
+            class:area={label.area}
+            style="left: {label.left}px; top: {label.top}px; --label-text-x: {label.textOffsetX}px; --label-text-y: {label.textOffsetY}px;"
           >
-            {#if label.kind !== 'continent' && label.kind !== 'sea' && label.kind !== 'island'}
+            {#if label.kind === 'capital' || label.kind === 'city' || label.kind === 'town'}
+              <svg
+                class="marker crest-marker"
+                viewBox="0 0 18 24"
+                aria-hidden="true"
+              >
+                <path
+                  class="crest-shield"
+                  d="M2.25 2.25h13.5v9.2c0 5.15-2.95 8.45-6.75 10.3-3.8-1.85-6.75-5.15-6.75-10.3z"
+                ></path>
+                <path
+                  class="crest-sigil"
+                  d="M5.3 7.1h7.4M6.4 7.1v4.25h5.2V7.1M7.2 11.35v3.9M10.8 11.35v3.9M5.8 15.25h6.4"
+                ></path>
+              </svg>
+            {:else if !label.area}
               <span class="marker"></span>
             {/if}
-            <span class="text">{label.name}</span>
+            {#if label.textVisible}
+              <span class="text">{label.name}</span>
+            {/if}
           </div>
         {/each}
-        {#if selfPulse}
-          <span
-            class="self-pulse"
-            style="left: {selfPulse.left}px; top: {selfPulse.top}px;"
-          ></span>
-        {/if}
         {#each partyMarkers as marker (marker.id)}
           <div
             class="party-marker"
             style="left: {marker.left}px; top: {marker.top}px;"
           >
             <span class="dot"></span>
-            <span class="text"
-              >{marker.name}{marker.floor < 0 ? ` B${-marker.floor}` : ''}</span
-            >
+            <span class="text">{marker.name}</span>
           </div>
         {/each}
+        {#if selfMarker}
+          <SelfMarker
+            left={selfMarker.left}
+            top={selfMarker.top}
+            angle={selfMarker.angle}
+          />
+        {/if}
       </div>
+      {#if hoveredOwner}
+        <div
+          class="plot-owner-tooltip"
+          role="tooltip"
+          style="left: {hoveredOwner.left}px; top: {hoveredOwner.top}px;"
+        >
+          {hoveredOwner.name}
+        </div>
+      {/if}
     </div>
   </div>
 </div>
 
 <style>
+  .ctrl-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .destination-marker {
+    position: absolute;
+    z-index: 2;
+    color: #ffdb75;
+    filter: drop-shadow(0 1px 2px #000);
+  }
+
+  .destination-marker svg {
+    position: absolute;
+    width: 24px;
+    height: 32px;
+    left: -5px;
+    bottom: -2px;
+    fill: #923d24;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linejoin: round;
+  }
+
+  .destination-marker span {
+    position: absolute;
+    left: 22px;
+    bottom: 6px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .plot-owner-tooltip {
+    position: absolute;
+    z-index: 5;
+    max-width: 160px;
+    padding: 6px 9px;
+    border: 1px solid var(--wm-gold);
+    border-radius: 4px;
+    background: rgba(8, 11, 9, 0.95);
+    color: var(--wm-paper);
+    font-size: 13px;
+    overflow-wrap: anywhere;
+    pointer-events: none;
+  }
+
   .backdrop {
     position: absolute;
     inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.6);
+    background:
+      radial-gradient(
+        circle at 50% 42%,
+        rgba(35, 47, 38, 0.16),
+        transparent 58%
+      ),
+      rgba(2, 4, 3, 0.74);
+    backdrop-filter: blur(3px);
     z-index: 30;
   }
 
   .dialog {
-    width: min(80vw, 800px);
-    height: min(80vh, 800px);
+    --wm-night: #080b09;
+    --wm-paper: #eee2c1;
+    --wm-gold: #c49b4b;
+    --wm-gold-hi: #f0ce78;
+    --wm-brass: #76572b;
+    position: relative;
+    isolation: isolate;
+    width: min(80vw, 80dvh, 800px);
+    height: min(80vw, 80dvh, 800px);
     display: flex;
     flex-direction: column;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    background: rgba(16, 16, 16, 0.95);
-    color: #f4f4f4;
+    border: 1px solid #38270e;
+    border-radius: 5px;
+    background: var(--wm-night);
+    color: var(--wm-paper);
+    font-family: 'Noto Sans KR', sans-serif;
+    box-shadow:
+      0 26px 80px rgba(0, 0, 0, 0.72),
+      0 0 0 1px #160f07,
+      0 0 18px rgba(196, 155, 75, 0.18);
     overflow: hidden;
   }
 
+  .dialog::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    background: var(--wm-frame) center / 100% 100% no-repeat;
+    pointer-events: none;
+  }
+
   .dialog.mobile-map-budget {
-    width: calc(
-      100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right)
-    );
-    height: min(
+    width: min(
+      calc(
+        100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right)
+      ),
       calc(
         100dvh - 96px - env(safe-area-inset-top) - env(safe-area-inset-bottom)
       ),
-      calc(
-        100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right)
-      )
+      440px
     );
-    max-width: 440px;
-    max-height: 440px;
+    height: auto;
+    aspect-ratio: 1;
   }
 
   .header {
-    display: flex;
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    column-gap: 8px;
     align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    flex: 0 0 52px;
+    /* Offset the header below the ornate frame. */
+    padding: calc(18 / 1254 * 100%) max(30px, 8%) 0;
+    border-bottom: 1px solid var(--wm-brass);
+    background:
+      linear-gradient(180deg, rgba(55, 38, 20, 0.2), rgba(7, 7, 5, 0.72)),
+      var(--wm-wood) center 44% / cover;
+    box-shadow:
+      inset 0 -1px rgba(240, 206, 120, 0.22),
+      0 3px 12px rgba(0, 0, 0, 0.38);
+  }
+
+  .header h2,
+  .controls,
+  .close-btn {
+    position: relative;
+    z-index: 11;
   }
 
   .header h2 {
+    min-width: 0;
     margin: 0;
-    font-size: 16px;
-    font-weight: 600;
+    overflow: hidden;
+    color: var(--wm-paper);
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    line-height: 1;
+    text-overflow: ellipsis;
+    text-shadow: 0 2px 3px #080604;
+    white-space: nowrap;
   }
 
   .controls {
+    grid-column: 2;
     display: flex;
-    gap: 4px;
+    gap: 6px;
   }
 
   .ctrl-btn {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    min-width: 34px;
+    height: 34px;
+    padding: 0 9px;
+    border: 1px solid var(--wm-brass);
     border-radius: 4px;
-    color: #ccc;
-    font-size: 14px;
+    background:
+      linear-gradient(180deg, rgba(57, 48, 31, 0.68), rgba(13, 13, 10, 0.9)),
+      var(--wm-wood) center / 220px 220px;
+    box-shadow:
+      inset 0 0 0 1px rgba(240, 206, 120, 0.12),
+      0 2px 4px rgba(0, 0, 0, 0.36);
+    color: #d8ccb0;
+    font-family: inherit;
+    font-size: 15px;
     cursor: pointer;
-    padding: 2px 8px;
-    line-height: 1.4;
+    line-height: 1;
+    transition:
+      border-color 120ms ease,
+      background 120ms ease,
+      color 120ms ease;
   }
 
   .ctrl-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
-    color: #fff;
+    border-color: var(--wm-gold-hi);
+    background:
+      linear-gradient(180deg, rgba(96, 74, 39, 0.62), rgba(27, 22, 14, 0.92)),
+      var(--wm-wood) center / 220px 220px;
+    color: #fff0c8;
+  }
+
+  .ctrl-btn.symbol-btn {
+    padding: 0;
+    font-size: 22px;
+    font-weight: 400;
+  }
+
+  .ctrl-btn.center-btn {
+    display: grid;
+    place-items: center;
+    padding: 0;
   }
 
   .ctrl-btn.active {
-    border-color: rgba(240, 192, 64, 0.65);
-    background: rgba(240, 192, 64, 0.2);
-    color: #ffe08a;
+    border-color: #f0ce78;
+    color: #f0ce78;
+  }
+
+  .center-btn svg {
+    width: 19px;
+    height: 19px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-width: 1.5;
+  }
+
+  .center-btn .center-dot {
+    fill: currentColor;
+    stroke: none;
   }
 
   .close-btn {
+    grid-column: 3;
+    justify-self: end;
     background: none;
     border: none;
-    color: #aaa;
-    font-size: 22px;
+    color: #c7a866;
+    font-family: inherit;
+    font-size: 27px;
     cursor: pointer;
     padding: 0 4px;
     line-height: 1;
   }
 
   .close-btn:hover {
-    color: #fff;
+    color: #ffe8ad;
+  }
+
+  .ctrl-btn:focus-visible,
+  .close-btn:focus-visible {
+    outline: 2px solid var(--wm-gold-hi);
+    outline-offset: 2px;
   }
 
   .map-container {
@@ -798,26 +1353,56 @@
     user-select: none;
   }
 
+  .map-container::before,
+  .map-container::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .map-container::before {
+    z-index: 3;
+    box-shadow: inset 0 0 0 1px rgba(240, 206, 120, 0.18);
+  }
+
+  .map-container::after {
+    z-index: 4;
+    background: radial-gradient(
+      ellipse at center,
+      transparent 67%,
+      rgba(7, 8, 5, 0.07) 83%,
+      rgba(5, 6, 4, 0.22) 100%
+    );
+    box-shadow: inset 0 0 32px rgba(5, 6, 4, 0.18);
+  }
+
   .map-container.dragging {
     cursor: grabbing;
+  }
+
+  .map-container.editing {
+    cursor: default;
   }
 
   .map-canvas {
     position: absolute;
     inset: 0;
     display: block;
+    width: 100%;
+    height: 100%;
+    background: #0a1417;
   }
 
-  /* Place-name labels: HTML overlay above the canvas, clicks pass through. */
   .label-layer {
     position: absolute;
     inset: 0;
     overflow: hidden;
     pointer-events: none;
-    /* dark halo for readability over varied terrain */
+    z-index: 2;
     --label-halo:
-      0 0 2px #000, 1px 1px 1px #000, -1px 1px 1px #000, 1px -1px 1px #000,
-      -1px -1px 1px #000;
+      0 1px 1px rgba(24, 14, 6, 0.98), 0 0 3px rgba(12, 8, 4, 0.9),
+      0 2px 6px rgba(0, 0, 0, 0.66);
   }
 
   .map-label {
@@ -839,107 +1424,133 @@
     left: 0;
     top: 0;
     white-space: nowrap;
-    font-family: Georgia, 'Times New Roman', serif;
+    transform: translate(
+      calc(-50% + var(--label-text-x)),
+      calc(-50% + var(--label-text-y))
+    );
     text-shadow: var(--label-halo);
   }
 
-  /* point kinds (capital/city/town): marker centered on anchor, text to the right */
-  .map-label:not(.area) .text {
-    transform: translate(11px, -50%);
-  }
-
-  /* area kinds (continent/sea): centered label, no marker */
   .map-label.area .text {
-    transform: translate(-50%, -50%);
     text-align: center;
   }
 
   .map-label.continent .text {
-    font-size: 22px;
-    font-weight: 700;
-    letter-spacing: 3px;
-    color: #f6f0e2;
+    font-size: 32px;
+    font-weight: 600;
+    letter-spacing: 8px;
+    color: #f0dfb6;
+    text-shadow:
+      0 1px 0 #5b3d19,
+      0 0 3px rgba(8, 6, 3, 0.96),
+      0 3px 7px rgba(0, 0, 0, 0.78);
   }
 
   .map-label.sea .text {
-    font-size: 16px;
+    font-size: 21px;
     font-style: italic;
-    letter-spacing: 1px;
-    color: #7ec8f0;
+    font-weight: 600;
+    letter-spacing: 3px;
+    color: #abcbd5;
+    text-shadow:
+      0 1px 0 rgba(133, 179, 194, 0.24),
+      0 0 3px rgba(3, 19, 30, 0.96),
+      0 3px 7px rgba(0, 0, 0, 0.78);
   }
 
   .map-label.island .text {
-    font-size: 13px;
+    font-size: 16px;
     font-weight: 600;
-    color: #d6e6cf;
+    font-style: italic;
+    letter-spacing: 0.6px;
+    color: #ddd7bc;
   }
 
   .map-label.capital .text {
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 700;
-    color: #fffcf4;
+    letter-spacing: 0.3px;
+    color: #fff0c8;
   }
 
   .map-label.city .text {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 700;
-    color: #fffcf4;
+    letter-spacing: 0.2px;
+    color: #efe5c9;
   }
 
   .map-label.town .text {
-    font-size: 14px;
-    font-weight: 700;
-    color: #fff6dc;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    color: #ddd2b1;
   }
 
-  .map-label.capital .marker {
-    width: 13px;
-    height: 13px;
-    background: #fad746;
-    border: 2px solid #19120a;
-    box-shadow: 0 0 0 3px rgba(25, 18, 10, 0.55);
+  .map-label .crest-marker {
+    overflow: visible;
+    border-radius: 0;
+    filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.82));
   }
 
-  .map-label.city .marker {
-    width: 10px;
-    height: 10px;
-    background: #f5d250;
-    border: 2px solid #19120a;
+  .map-label.capital .crest-marker {
+    width: 15px;
+    height: 20px;
   }
 
-  .map-label.town .marker {
-    width: 11px;
-    height: 11px;
-    background: #f5d250;
-    border: 2px solid #287832;
-  }
-
-  /* Breathing ring over the canvas-drawn player dot: the one marker that
-     never moves shouldn't look dead. */
-  .self-pulse {
-    position: absolute;
+  .map-label.city .crest-marker {
     width: 14px;
-    height: 14px;
-    margin: -7px 0 0 -7px;
-    border-radius: 50%;
-    border: 2px solid rgba(255, 80, 80, 0.9);
-    animation: self-pulse 2s ease-out infinite;
+    height: 19px;
   }
 
-  /* The identical 70%/100% stops hold the ring invisible between pulses. */
-  @keyframes self-pulse {
-    0% {
-      transform: scale(0.6);
-      opacity: 0.9;
-    }
-    70% {
-      transform: scale(2.4);
-      opacity: 0;
-    }
-    100% {
-      transform: scale(2.4);
-      opacity: 0;
-    }
+  .map-label.town .crest-marker {
+    width: 13px;
+    height: 18px;
+  }
+
+  .crest-shield {
+    fill: #17170f;
+    stroke: #d4a536;
+    stroke-linejoin: round;
+    stroke-width: 1.6;
+  }
+
+  .crest-sigil {
+    fill: none;
+    stroke: #f2ca62;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.25;
+  }
+
+  .map-label.city .crest-shield {
+    stroke: #c59632;
+  }
+
+  .map-label.town .crest-shield {
+    fill: #1b2117;
+    stroke: #bd9132;
+  }
+
+  .map-label.town .crest-sigil {
+    stroke: #dfb84d;
+  }
+
+  .map-label.dungeon .text {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    color: #d7b3a5;
+  }
+
+  .map-label.dungeon .marker {
+    width: 9px;
+    height: 9px;
+    border-radius: 0;
+    transform: translate(-50%, -50%) rotate(45deg);
+    background: #29272c;
+    border: 2px solid #985246;
+    box-shadow: 0 1px 3px rgba(62, 22, 18, 0.68);
   }
 
   .party-marker {
@@ -971,5 +1582,42 @@
     font-weight: 700;
     color: #bfe0ff;
     text-shadow: var(--label-halo);
+  }
+
+  @media (max-width: 520px) {
+    .dialog {
+      width: calc(100vw - 12px);
+      height: min(calc(100dvh - 72px), calc(100vw - 12px));
+    }
+
+    .dialog::before {
+      background-size: 100% 100%;
+    }
+
+    .header {
+      flex-basis: 48px;
+      padding: 0 max(24px, 8%);
+    }
+
+    .header h2 {
+      font-size: 15px;
+      letter-spacing: 0.07em;
+    }
+
+    .controls {
+      gap: 3px;
+    }
+
+    .ctrl-btn {
+      min-width: 29px;
+      height: 31px;
+      padding: 0 6px;
+      font-size: 13px;
+    }
+
+    .close-btn {
+      font-size: 20px;
+      padding-right: 1px;
+    }
   }
 </style>

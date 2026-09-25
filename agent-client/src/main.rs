@@ -1,3 +1,4 @@
+mod bgm_defs;
 mod claude;
 mod codex;
 mod driver;
@@ -7,14 +8,21 @@ mod google_auth;
 mod item_defs;
 mod llm_scheduler;
 mod minimax;
-mod monster_ai;
 mod openai;
 mod openrouter;
 mod orchestrator;
+mod process_group;
 mod shop_info;
+mod splat;
 mod state;
+mod tales;
 mod terrain_http;
+mod terrain_snapshots;
+mod title_defs;
+mod transcript;
+mod update;
 mod watch;
+mod weather;
 mod ws;
 
 use std::sync::Arc;
@@ -69,7 +77,7 @@ struct Config {
     #[serde(default)]
     npcs: Vec<NpcConfig>,
 
-    /// Maximum number of concurrent LLM calls across all NPCs (default: 2)
+    /// Maximum concurrent LLM calls across all NPCs (min 1, default 4).
     #[serde(default = "default_max_concurrent")]
     max_concurrent: usize,
 
@@ -82,6 +90,16 @@ struct Config {
     /// Spectator panel port on 127.0.0.1 (default: 0, off)
     #[serde(default)]
     watch_port: u16,
+
+    /// Check GitHub releases at startup and self-update (default on).
+    #[serde(default = "default_true")]
+    auto_update: bool,
+
+    /// Full prompt/response transcripts, one file per NPC per day ("" = off).
+    #[serde(default = "default_transcript_dir")]
+    transcript_dir: String,
+    #[serde(default = "default_transcript_keep_days")]
+    transcript_keep_days: u64,
 
     /// Claude CLI integration config (shared across NPCs that don't override)
     #[serde(default)]
@@ -141,8 +159,12 @@ pub fn default_urgent_min_interval_secs() -> u64 {
     2
 }
 
+// No debounce by default: the pacing floors already batch a stream of
+// events (and an in-flight call batches whatever lands during it), so a
+// leading debounce only delayed the first response. Set debounce_secs per
+// NPC to re-merge sub-second bursts if an NPC ever needs it.
 pub fn default_debounce_secs() -> u64 {
-    2
+    0
 }
 
 pub fn default_idle_interval_secs() -> u64 {
@@ -154,11 +176,23 @@ pub fn default_activity_window_secs() -> u64 {
 }
 
 fn default_max_concurrent() -> usize {
-    2
+    4
 }
 
 fn default_request_timeout_secs() -> u64 {
     120
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_transcript_dir() -> String {
+    "logs/transcripts".into()
+}
+
+fn default_transcript_keep_days() -> u64 {
+    3
 }
 
 const CONFIG_PATH: &str = "data/config.toml";
@@ -167,8 +201,9 @@ fn resolve_npc_token(config_value: Option<String>) -> anyhow::Result<String> {
     if let Some(token) = config_value {
         return Ok(token);
     }
-    // Server writes the token at the repo root; our cwd is one level down.
-    let path = format!("../{}", onlinerpg_shared::NPC_TOKEN_PATH_FROM_ROOT);
+    // Server writes the token under its default state dir at the repo root;
+    // our cwd is one level down.
+    let path = format!("../data/{}", onlinerpg_shared::NPC_TOKEN_FILENAME);
     let token = std::fs::read_to_string(&path)
         .map_err(|e| {
             anyhow::anyhow!(
@@ -198,12 +233,20 @@ async fn main() -> anyhow::Result<()> {
     let config: Config = toml::from_str(&config_text)
         .map_err(|e| anyhow::anyhow!("Failed to parse {CONFIG_PATH}: {e}"))?;
 
+    if config.max_concurrent == 0 {
+        anyhow::bail!("max_concurrent in {CONFIG_PATH} must be at least 1");
+    }
     if config.npcs.is_empty() {
         anyhow::bail!("No [[npcs]] configured in {CONFIG_PATH}");
     }
 
     if config.auth.mode == AuthMode::Google {
         check_google_mode_config(&config.npcs)?;
+    }
+
+    update::cleanup_old_binary();
+    if config.auto_update {
+        update::check().await;
     }
 
     // NPCs inherit root-level backend configs when they don't override them
@@ -227,16 +270,11 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let behavior_trees = monster_ai::MonsterAiManager::load_behavior_trees_from_json(include_str!(
-        "../../data-src/behavior_trees.json"
-    ));
-    let (type_mapping, movement_speeds) =
-        monster_ai::MonsterAiManager::load_monster_data(include_str!("../../data/monsters.json"));
-
     let height_sampler = Arc::new(create_height_sampler(
         &config.terrain,
         &config.terrain_cache,
     ));
+    let splat_sampler = Arc::new(create_splat_sampler(&config.terrain, &config.terrain_cache));
 
     // NPC patrols keep loading tiles; sweep idle ones like the server does.
     let height_sampler_for_sweep = Arc::clone(&height_sampler);
@@ -267,15 +305,29 @@ async fn main() -> anyhow::Result<()> {
         Arc::new(std::sync::RwLock::new(cache))
     };
 
+    let maid_names = npcs
+        .iter()
+        .filter(|n| n.serve_tables.unwrap_or(false))
+        .filter_map(|n| n.character_name.clone())
+        .collect();
     let shared = Arc::new(SharedResources {
+        maid_names,
+        terrain_snapshots: Arc::new(terrain_snapshots::TerrainSnapshots::new(
+            &config.terrain,
+            &config.terrain_cache,
+        )),
         height_sampler,
+        splat_sampler,
         world_cache,
-        behavior_trees: Arc::new(behavior_trees),
-        type_mapping: Arc::new(type_mapping),
-        movement_speeds: Arc::new(movement_speeds),
         scheduler: llm_scheduler::LlmScheduler::new(
             config.max_concurrent,
             Duration::from_secs(config.request_timeout_secs),
+        ),
+        codex_app_server: codex::CodexAppServer::new(),
+        claims: Arc::default(),
+        transcript: transcript::Transcript::start(
+            &config.transcript_dir,
+            config.transcript_keep_days,
         ),
         auth: match config.auth.mode {
             AuthMode::NpcToken => AuthSource::NpcToken(resolve_npc_token(config.npc_token)?),
@@ -334,6 +386,16 @@ fn create_height_sampler(terrain: &str, cache_dir: &str) -> HeightSampler {
     HeightSampler::new(TerrainIO::new(std::path::PathBuf::from(terrain)))
 }
 
+fn create_splat_sampler(terrain: &str, cache_dir: &str) -> splat::SplatSampler {
+    if is_http_source(terrain) {
+        return splat::SplatSampler::new(splat::HttpSplatTiles::new(
+            terrain,
+            std::path::PathBuf::from(cache_dir),
+        ));
+    }
+    splat::SplatSampler::new(TerrainIO::new(std::path::PathBuf::from(terrain)))
+}
+
 /// Fill an `[[npcs]]` entry from the game-data registry (`data-src/npcs.csv`,
 /// the single source of truth for who an NPC is). `id` selects the registry
 /// row; the character name and class come from it, and the prompt/schedule
@@ -366,13 +428,22 @@ fn resolve_from_registry(npc: &mut NpcConfig) -> anyhow::Result<()> {
         .get_or_insert_with(|| format!("data/npcs/{id}/instance.txt"));
     npc.memory_file
         .get_or_insert_with(|| format!("data/npcs/{id}/memory.txt"));
+    npc.favor_file
+        .get_or_insert_with(|| format!("data/npcs/{id}/favor.json"));
+    // These files are optional, and a missing path is logged as an error
+    // downstream — only derive one when the conventional file exists.
+    let data_file = |name: &str| {
+        let path = format!("data/npcs/{id}/{name}");
+        std::path::Path::new(&path).exists().then_some(path)
+    };
     if npc.schedule_file.is_none() {
-        // Schedules are optional, and a missing path is logged as an error
-        // downstream — only derive it when the conventional file exists.
-        let path = format!("data/npcs/{id}/schedule.json");
-        if std::path::Path::new(&path).exists() {
-            npc.schedule_file = Some(path);
-        }
+        npc.schedule_file = data_file("schedule.json");
+    }
+    if npc.sickroom_file.is_none() {
+        npc.sickroom_file = data_file("sickroom.json");
+    }
+    if npc.tables_file.is_none() {
+        npc.tables_file = data_file("tables.json");
     }
     Ok(())
 }
@@ -380,6 +451,11 @@ fn resolve_from_registry(npc: &mut NpcConfig) -> anyhow::Result<()> {
 pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
     use onlinerpg_shared::ServerMessage;
     match msg {
+        ServerMessage::DungeonDoorState { .. } => "DungeonDoorState",
+        ServerMessage::DungeonPropState { .. } => "DungeonPropState",
+        ServerMessage::TerrainTileVersion { .. } => "TerrainTileVersion",
+        ServerMessage::WorldUpdate { .. } => "WorldUpdate",
+        ServerMessage::EquipmentEnchantSucceeded { .. } => "EquipmentEnchantSucceeded",
         ServerMessage::AuthSuccess { .. } => "AuthSuccess",
         ServerMessage::AuthError { .. } => "AuthError",
         ServerMessage::JoinSuccess { .. } => "JoinSuccess",
@@ -393,32 +469,41 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::PlayerDisappeared { .. } => "PlayerDisappeared",
         ServerMessage::PlayerMoved { .. } => "PlayerMoved",
         ServerMessage::PlayerTeleported { .. } => "PlayerTeleported",
+        ServerMessage::PlayerTeleportEffect { .. } => "PlayerTeleportEffect",
+        ServerMessage::MountRecovery { .. } => "MountRecovery",
         ServerMessage::PositionCorrected { .. } => "PositionCorrected",
+        ServerMessage::MovementResync { .. } => "MovementResync",
         ServerMessage::DungeonChestOpened { .. } => "DungeonChestOpened",
         ServerMessage::DungeonPropBroken { .. } => "DungeonPropBroken",
         ServerMessage::DungeonPropOpened { .. } => "DungeonPropOpened",
         ServerMessage::DungeonPropsState { .. } => "DungeonPropsState",
         ServerMessage::DungeonDoorToggled { .. } => "DungeonDoorToggled",
         ServerMessage::DungeonDoorsState { .. } => "DungeonDoorsState",
+        ServerMessage::DungeonDiscoveries { .. } => "DungeonDiscoveries",
         ServerMessage::ChatMessage { .. } => "ChatMessage",
+        ServerMessage::Recital { .. } => "Recital",
         ServerMessage::WhisperMessage { .. } => "WhisperMessage",
+        ServerMessage::PartyChatMessage { .. } => "PartyChatMessage",
         ServerMessage::SystemMessage { .. } => "SystemMessage",
         ServerMessage::GameState { .. } => "GameState",
         ServerMessage::GameTimeSync { .. } => "GameTimeSync",
+        ServerMessage::WeatherSync { .. } => "WeatherSync",
+        ServerMessage::PricingNotice(_) => "PricingNotice",
         ServerMessage::MonsterSpawned { .. } => "MonsterSpawned",
         ServerMessage::MonsterMoved { .. } => "MonsterMoved",
         ServerMessage::MonsterRemoved { .. } => "MonsterRemoved",
         ServerMessage::MonsterDead { .. } => "MonsterDead",
         ServerMessage::PlayerAttacked { .. } => "PlayerAttacked",
+        ServerMessage::DaggerDoubleSlashStarted { .. } => "DaggerDoubleSlashStarted",
+        ServerMessage::DaggerDoubleSlashRejected { .. } => "DaggerDoubleSlashRejected",
+        ServerMessage::DaggerDoubleSlashSkipped { .. } => "DaggerDoubleSlashSkipped",
         ServerMessage::PlayerAttackRejected { .. } => "PlayerAttackRejected",
-        ServerMessage::MonsterProvoked { .. } => "MonsterProvoked",
         ServerMessage::MonsterAttackedPlayer { .. } => "MonsterAttackedPlayer",
         ServerMessage::PlayerDead { .. } => "PlayerDead",
         ServerMessage::PlayerRespawned { .. } => "PlayerRespawned",
         ServerMessage::PlayerHealthUpdate { .. } => "PlayerHealthUpdate",
         ServerMessage::XpGained { .. } => "XpGained",
         ServerMessage::SkillsUpdate { .. } => "SkillsUpdate",
-        ServerMessage::SkillXpGained { .. } => "SkillXpGained",
         ServerMessage::FishingCasted { .. } => "FishingCasted",
         ServerMessage::FishingBite { .. } => "FishingBite",
         ServerMessage::FishingFight { .. } => "FishingFight",
@@ -427,37 +512,110 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::Kicked { .. } => "Kicked",
         ServerMessage::ServerNotice { .. } => "ServerNotice",
         ServerMessage::PlayerTorchToggled { .. } => "PlayerTorchToggled",
+        ServerMessage::PlayerMountChanged { .. } => "PlayerMountChanged",
+        ServerMessage::PlayerWetToggled { .. } => "PlayerWetToggled",
+        ServerMessage::PlayerTitleChanged { .. } => "PlayerTitleChanged",
+        ServerMessage::TitleEarned { .. } => "TitleEarned",
+        ServerMessage::PlayerTitles { .. } => "PlayerTitles",
         ServerMessage::PlayerMainHandChanged { .. } => "PlayerMainHandChanged",
+        ServerMessage::PlayerBackChanged { .. } => "PlayerBackChanged",
+        ServerMessage::CapeDyePrompt { .. } => "CapeDyePrompt",
+        ServerMessage::LandClaimPrompt { .. } => "LandClaimPrompt",
+        ServerMessage::LandscapingMode { .. } => "LandscapingMode",
+        ServerMessage::LandscapingPaletteUnlocked { .. } => "LandscapingPaletteUnlocked",
+        ServerMessage::LandscapeChanged { .. } => "LandscapeChanged",
+        ServerMessage::LandscapeInvalidated { .. } => "LandscapeInvalidated",
+        ServerMessage::LandscapeEditResult { .. } => "LandscapeEditResult",
+        ServerMessage::FenceVisibility { .. } => "FenceVisibility",
+        ServerMessage::FenceEditResult { .. } => "FenceEditResult",
+        ServerMessage::LandClaimed { .. } => "LandClaimed",
+        ServerMessage::LandRejected { .. } => "LandRejected",
+        ServerMessage::LandAccountState { .. } => "LandAccountState",
+        ServerMessage::CapeTexturePrompt { .. } => "CapeTexturePrompt",
         ServerMessage::HouseSpawned { .. } => "HouseSpawned",
+        ServerMessage::HousePlacementStarted { .. } => "HousePlacementStarted",
+        ServerMessage::HousePlacementResult { .. } => "HousePlacementResult",
+        ServerMessage::HouseDemolitionResult { .. } => "HouseDemolitionResult",
         ServerMessage::HouseUpdated { .. } => "HouseUpdated",
+        ServerMessage::HeightTilesInvalidated { .. } => "HeightTilesInvalidated",
         ServerMessage::TreeTilesInvalidated { .. } => "TreeTilesInvalidated",
+        ServerMessage::GrassTilesInvalidated { .. } => "GrassTilesInvalidated",
         ServerMessage::HouseRemoved { .. } => "HouseRemoved",
         ServerMessage::HousesInArea { .. } => "HousesInArea",
         ServerMessage::DoorToggled { .. } => "DoorToggled",
-        ServerMessage::MonsterAssigned { .. } => "MonsterAssigned",
-        ServerMessage::SpawnMonsterRequest { .. } => "SpawnMonsterRequest",
-        ServerMessage::NoSpawnZones { .. } => "NoSpawnZones",
         ServerMessage::PlayerInteractionChanged { .. } => "PlayerInteractionChanged",
+        ServerMessage::PlayerMusicStarted { .. } => "PlayerMusicStarted",
+        ServerMessage::PlayerInstrumentStarted { .. } => "PlayerInstrumentStarted",
+        ServerMessage::PlayerInstrumentNotes { .. } => "PlayerInstrumentNotes",
         ServerMessage::InteractionRejected { .. } => "InteractionRejected",
         ServerMessage::InventoryState { .. } => "InventoryState",
         ServerMessage::InventoryUpdated { .. } => "InventoryUpdated",
         ServerMessage::GroundItemSpawned { .. } => "GroundItemSpawned",
         ServerMessage::GroundItemAppeared { .. } => "GroundItemAppeared",
         ServerMessage::GroundItemRemoved { .. } => "GroundItemRemoved",
+        ServerMessage::GroundItemQuantityChanged { .. } => "GroundItemQuantityChanged",
         ServerMessage::ShopState { .. } => "ShopState",
         ServerMessage::GoldUpdate { .. } => "GoldUpdate",
-        ServerMessage::GuardUpdated { .. } => "GuardUpdated",
+        ServerMessage::EffectiveStatsUpdated { .. } => "EffectiveStatsUpdated",
         ServerMessage::GoldGained { .. } => "GoldGained",
         ServerMessage::TradeError { .. } => "TradeError",
         ServerMessage::DealUpdated { .. } => "DealUpdated",
         ServerMessage::BuybackUpdated { .. } => "BuybackUpdated",
         ServerMessage::DealResult { .. } => "DealResult",
         ServerMessage::TradeNotice { .. } => "TradeNotice",
+        ServerMessage::TradeDeclined { .. } => "TradeDeclined",
         ServerMessage::TradeBusy { .. } => "TradeBusy",
         ServerMessage::PartyInviteReceived { .. } => "PartyInviteReceived",
         ServerMessage::PartyInviteResult { .. } => "PartyInviteResult",
+        ServerMessage::PartySummonReceived { .. } => "PartySummonReceived",
         ServerMessage::PartyState { .. } => "PartyState",
         ServerMessage::PartyPositions { .. } => "PartyPositions",
+        ServerMessage::PartyVitals { .. } => "PartyVitals",
+        ServerMessage::FriendList { .. } => "FriendList",
+        ServerMessage::FriendsOnline { .. } => "FriendsOnline",
+        ServerMessage::FriendRequestReceived { .. } => "FriendRequestReceived",
+        ServerMessage::HungerUpdate { .. } => "HungerUpdate",
+        ServerMessage::ManaUpdate { .. } => "ManaUpdate",
+        ServerMessage::DebuffUpdate { .. } => "DebuffUpdate",
+        ServerMessage::AbilityCooldowns { .. } => "AbilityCooldowns",
+        ServerMessage::BuffUpdate { .. } => "BuffUpdate",
+        ServerMessage::PlayerRadianceToggled { .. } => "PlayerRadianceToggled",
+        ServerMessage::BowMarkUpdate { .. } => "BowMarkUpdate",
+        ServerMessage::InspectionResult { .. } => "InspectionResult",
+        ServerMessage::AbilityRejected { .. } => "AbilityRejected",
+        ServerMessage::AbilityUsed { .. } => "AbilityUsed",
+        ServerMessage::CampfireSpawned { .. } => "CampfireSpawned",
+        ServerMessage::CampfireAppeared { .. } => "CampfireAppeared",
+        ServerMessage::CampfireRemoved { .. } => "CampfireRemoved",
+        ServerMessage::StallPlaced { .. } => "StallPlaced",
+        ServerMessage::StallAppeared { .. } => "StallAppeared",
+        ServerMessage::StallRemoved { .. } => "StallRemoved",
+        ServerMessage::StallState { .. } => "StallState",
+        ServerMessage::StallSignChanged { .. } => "StallSignChanged",
+        ServerMessage::TipHatPlaced { .. } => "TipHatPlaced",
+        ServerMessage::TipHatAppeared { .. } => "TipHatAppeared",
+        ServerMessage::TipHatRemoved { .. } => "TipHatRemoved",
+        ServerMessage::MealPlaced { .. } => "MealPlaced",
+        ServerMessage::MealAppeared { .. } => "MealAppeared",
+        ServerMessage::MealEaten { .. } => "MealEaten",
+        ServerMessage::MealRemoved { .. } => "MealRemoved",
+        ServerMessage::GrillStarted => "GrillStarted",
+        ServerMessage::GrillEnded { .. } => "GrillEnded",
+        ServerMessage::PlayerTradeRequested { .. } => "PlayerTradeRequested",
+        ServerMessage::PlayerTradeRequestResult { .. } => "PlayerTradeRequestResult",
+        ServerMessage::PlayerTradeUpdate { .. } => "PlayerTradeUpdate",
+        ServerMessage::PlayerTradeEnded { .. } => "PlayerTradeEnded",
+        ServerMessage::PlayerTradeError { .. } => "PlayerTradeError",
+        ServerMessage::DungeonReset => "DungeonReset",
+        ServerMessage::CharacterRenameRequired { .. } => "CharacterRenameRequired",
+        ServerMessage::CharacterRenamed { .. } => "CharacterRenamed",
+        ServerMessage::EstateChestMode { .. } => "EstateChestMode",
+        ServerMessage::EstateFurnitureMoveMode { .. } => "EstateFurnitureMoveMode",
+        ServerMessage::EstateChestVisibility { .. } => "EstateChestVisibility",
+        ServerMessage::EstateChestEditResult { .. } => "EstateChestEditResult",
+        ServerMessage::EstateChestState { .. } => "EstateChestState",
+        ServerMessage::FurniturePurchaseResult { .. } => "FurniturePurchaseResult",
+        ServerMessage::FurnitureSelectionNotice { .. } => "FurnitureSelectionNotice",
     }
 }
 
@@ -474,6 +632,14 @@ server = "wss://example.test/ws"
 [auth]
 mode = "google"
 "#;
+
+    #[test]
+    fn max_concurrent_defaults_to_four() {
+        assert_eq!(
+            parse("server = \"ws://127.0.0.1:10006\"\n").max_concurrent,
+            4
+        );
+    }
 
     /// Who pays decides the default: an agent someone runs for themselves
     /// spends their own LLM quota, so it keeps thinking with nobody watching.
@@ -501,6 +667,67 @@ always_active = true
         assert!(!config.npcs[0].always_active(), "registry NPC");
         assert!(config.npcs[1].always_active(), "player-run agent");
         assert!(config.npcs[2].always_active(), "explicit override wins");
+    }
+
+    /// Player-run agents sprint by default; hunger-exempt registry NPCs
+    /// walk unless the config says otherwise.
+    #[test]
+    fn agents_sprint_unless_the_config_says_otherwise() {
+        let config = parse(
+            r#"
+server = "ws://127.0.0.1:10006"
+
+[[npcs]]
+account = "npc_runner"
+
+[[npcs]]
+account = "npc_walker"
+always_sprint = false
+
+[[npcs]]
+id = "karl"
+
+[[npcs]]
+id = "rica"
+always_sprint = true
+"#,
+        );
+        assert!(config.npcs[0].always_sprint(), "default");
+        assert!(!config.npcs[1].always_sprint(), "explicit override wins");
+        assert!(!config.npcs[2].always_sprint(), "registry NPC walks");
+        assert!(config.npcs[3].always_sprint(), "registry override wins");
+    }
+
+    /// Registry NPCs must resolve to existing prompt files.
+    #[test]
+    fn registry_npcs_resolve_to_prompt_files_that_exist() {
+        for id in [
+            "karl",
+            "rica",
+            "signe",
+            "wick",
+            "miriel",
+            "cocoly",
+            "steward",
+            "estate_architect",
+            "grida",
+            "tobin",
+        ] {
+            let config = parse(&format!(
+                "server = \"ws://127.0.0.1:10006\"\n\n[[npcs]]\nid = \"{id}\"\n"
+            ));
+            let mut npc = config.npcs.into_iter().next().expect("one npc");
+            resolve_from_registry(&mut npc).expect("registry row");
+            for path in [
+                npc.template_prompt.expect("class template"),
+                npc.instance_prompt.expect("instance prompt"),
+            ] {
+                assert!(
+                    std::path::Path::new(&path).exists(),
+                    "{id}: {path} is missing"
+                );
+            }
+        }
     }
 
     #[test]

@@ -5,19 +5,17 @@
 
 use super::tree::BehaviorStatus;
 use super::{
-    AiCommand, AiState, BehaviorTree, NearbyPlayer, PathProvider, TickResult, DEFAULT_ATTACK_RANGE,
-    DEFAULT_CHASE_RANGE, DEFAULT_HIT_STAGGER_MS, DEFAULT_MAX_MOVE_DIST, DEFAULT_MIN_MOVE_DIST,
-    NETWORK_SYNC_INTERVAL_MS,
+    cell_of, AiCommand, AiState, BehaviorTree, ChaseAim, NearbyMonster, NearbyPlayer, PathProvider,
+    DEFAULT_ATTACK_RANGE, DEFAULT_CHASE_RANGE, DEFAULT_HIT_STAGGER_MS, DEFAULT_MAX_MOVE_DIST,
+    DEFAULT_MIN_MOVE_DIST, NETWORK_SYNC_INTERVAL_MS,
 };
 use crate::pathfinding::PathWaypoint;
 use crate::{MonsterState, PlayerId, Position};
 use rand::Rng;
-use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct MonsterBrain {
     pub monster_id: String,
-    pub monster_type: String,
     pub behavior: String,
     pub position: Position,
     pub rotation: f32,
@@ -36,43 +34,51 @@ pub struct MonsterBrain {
     pub(super) waypoints: Vec<PathWaypoint>,
     pub(super) current_waypoint_idx: usize,
     pub(super) path_elapsed_ms: f32,
+    pub(super) return_retry_left_ms: f32,
     pub(super) last_known_target_pos: Option<Position>,
     pub(super) spawn_position: Position,
     /// Passability floor for path queries. 0 = overworld/house ground;
     /// dungeon monsters use their depth's passability floor index.
-    #[serde(default)]
     pub path_floor: u8,
     /// Time accumulated toward the next throttled network position sync while
     /// continuously moving. See [`Self::should_sync_move`].
-    #[serde(default)]
     pub(super) sync_elapsed_ms: f32,
     /// Movement state at the last emitted sync, so entering a new one syncs at
     /// once instead of waiting out the interval.
-    #[serde(default)]
     pub(super) last_synced_state: AiState,
     /// A path bend the next sync must not be allowed to cut across.
-    #[serde(default)]
     pub(super) pending_bend_sync: bool,
     /// Time left before the next swing, kept apart from `state_timer_ms` so
     /// that leaving and re-entering Attack cannot re-arm the cooldown. Zero is
     /// ready: the first swing on contact does not wait one out.
-    #[serde(default)]
     pub(super) attack_cooldown_left_ms: f32,
     /// How long this type's swing animation runs. The attack holds the state
     /// this long so a swing it started finishes; 0 releases as soon as the
     /// target steps out.
-    #[serde(default)]
     pub(super) swing_commit_ms: f32,
     /// Time left in the swing currently being delivered.
-    #[serde(default)]
     pub(super) swing_left_ms: f32,
+    /// The free cell near the target the chase is heading to; kept while it
+    /// stays free so re-slotting doesn't oscillate.
+    pub(super) chase_goal_cell: Option<(i32, i32)>,
+    /// Cells occupied by standing nearby monsters, rebuilt each tick.
+    pub(super) occupied_cells: Vec<(i32, i32)>,
+    /// A standing monster with a smaller id shares our cell this tick — we
+    /// are the one who moves aside. Rebuilt each tick.
+    pub(super) cell_yield: bool,
+    /// Walking off a shared cell to a slot of our own after a yield. Attack
+    /// entry stays refused until arrival, or the yielder would stop at the
+    /// first cell boundary, still overlapped.
+    pub(super) reslotting: bool,
+    /// Detour goal; repaths keep avoiding standers until arrival.
+    pub(super) detour_goal: Option<(f32, f32)>,
 }
 
 impl MonsterBrain {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         monster_id: String,
-        monster_type: String,
+        monster_type: &str,
         behavior: String,
         position: Position,
         health: u32,
@@ -83,10 +89,9 @@ impl MonsterBrain {
         chase_range: f32,
         attack_cooldown_ms: f32,
     ) -> Self {
-        let swing_commit_ms = super::attack_clip_ms(&monster_type);
+        let swing_commit_ms = super::attack_clip_ms(monster_type);
         Self {
             monster_id,
-            monster_type,
             behavior,
             rotation: 0.0,
             health,
@@ -112,6 +117,7 @@ impl MonsterBrain {
             waypoints: Vec::new(),
             current_waypoint_idx: 0,
             path_elapsed_ms: 0.0,
+            return_retry_left_ms: 0.0,
             last_known_target_pos: None,
             spawn_position: position,
             position,
@@ -122,6 +128,11 @@ impl MonsterBrain {
             attack_cooldown_left_ms: 0.0,
             swing_commit_ms,
             swing_left_ms: 0.0,
+            chase_goal_cell: None,
+            occupied_cells: Vec::new(),
+            cell_yield: false,
+            reslotting: false,
+            detour_goal: None,
         }
     }
 
@@ -138,35 +149,18 @@ impl MonsterBrain {
         self.pending_bend_sync = true;
     }
 
-    /// Consume a pending bend without disturbing the sync timer, for states
-    /// that report only at bends rather than on an interval.
-    pub(super) fn take_path_bend(&mut self) -> bool {
-        std::mem::take(&mut self.pending_bend_sync)
-    }
-
-    /// Drop a pending bend for a caller that emits this pose itself, so the
-    /// bend isn't reported twice.
-    pub(super) fn clear_path_bend(&mut self) {
-        self.pending_bend_sync = false;
+    /// A sync the step must not precede: a new movement state or a path bend,
+    /// where a post-step pose would put the server's chord across the corner.
+    pub(super) fn sync_due_before_step(&self) -> bool {
+        self.pending_bend_sync || self.state != self.last_synced_state
     }
 
     /// Gate for the per-tick position emits of continuously-moving states
-    /// (chase/return/flee): true on entering a new movement state, on a path
-    /// bend, or once `NETWORK_SYNC_INTERVAL_MS` has elapsed. Resets the timer
-    /// when it fires so the brain simulates every frame but only syncs a couple
-    /// of times a second. Remote clients interpolate toward `target_position`
-    /// between syncs.
-    pub(super) fn should_sync_move(&mut self) -> bool {
-        if self.take_path_bend()
-            || self.state != self.last_synced_state
-            || self.sync_elapsed_ms >= NETWORK_SYNC_INTERVAL_MS
-        {
-            self.sync_elapsed_ms = 0.0;
-            self.last_synced_state = self.state;
-            true
-        } else {
-            false
-        }
+    /// (chase/return/flee): a state change, a bend, or `NETWORK_SYNC_INTERVAL_MS`
+    /// elapsed. Remote clients interpolate toward the command's
+    /// `target_position` between syncs — see [`Self::current_leg_target`].
+    pub(super) fn should_sync_move(&self) -> bool {
+        self.sync_due_before_step() || self.sync_elapsed_ms >= NETWORK_SYNC_INTERVAL_MS
     }
 
     /// Snap to the position the server settled on and drop the current path, so
@@ -180,7 +174,7 @@ impl MonsterBrain {
         self.position = position;
         self.waypoints.clear();
         self.current_waypoint_idx = 0;
-        self.clear_path_bend();
+        self.pending_bend_sync = false;
     }
 
     pub fn state(&self) -> AiState {
@@ -199,38 +193,57 @@ impl MonsterBrain {
     // Main tick
     // =========================================================================
 
-    /// Build a `TickResult` snapshot of the brain's current pose plus `commands`.
-    fn tick_result(&self, commands: Vec<AiCommand>) -> TickResult {
-        TickResult {
-            commands,
-            position: self.position,
-            rotation: self.rotation,
-            state: self.state.to_monster_state(),
-        }
+    pub(super) fn advance_timers(&mut self, delta_ms: f32) {
+        self.state_timer_ms += delta_ms;
+        self.path_elapsed_ms += delta_ms;
+        self.return_retry_left_ms = (self.return_retry_left_ms - delta_ms).max(0.0);
+        self.sync_elapsed_ms += delta_ms;
+        self.attack_cooldown_left_ms = (self.attack_cooldown_left_ms - delta_ms).max(0.0);
+        self.swing_left_ms = (self.swing_left_ms - delta_ms).max(0.0);
     }
 
     pub fn tick_with_behavior_tree(
         &mut self,
         delta_ms: f32,
         nearby_players: &[NearbyPlayer],
+        nearby_monsters: &[NearbyMonster],
         behavior_tree: &BehaviorTree,
         path_provider: &dyn PathProvider,
         rng: &mut impl Rng,
-    ) -> TickResult {
+    ) -> Vec<AiCommand> {
         if self.state == AiState::Dead || self.health == 0 {
-            return self.tick_result(vec![]);
+            return vec![];
         }
 
-        self.state_timer_ms += delta_ms;
-        self.path_elapsed_ms += delta_ms;
-        self.sync_elapsed_ms += delta_ms;
-        self.attack_cooldown_left_ms = (self.attack_cooldown_left_ms - delta_ms).max(0.0);
-        self.swing_left_ms = (self.swing_left_ms - delta_ms).max(0.0);
+        self.occupied_cells.clear();
+        self.cell_yield = false;
+        let my_cell = cell_of(self.position.x, self.position.z);
+        for m in nearby_monsters {
+            if !m.state.is_stationary()
+                || m.path_floor != self.path_floor
+                || m.id == self.monster_id
+            {
+                continue;
+            }
+            let cell = cell_of(m.position.x, m.position.z);
+            self.occupied_cells.push(cell);
+            // Sharing a cell with a smaller-id stander: we are the one who
+            // yields (see bt_attack_target / the door-wait spread).
+            if cell == my_cell && m.id.as_str() < self.monster_id.as_str() {
+                self.cell_yield = true;
+            }
+        }
+        if !self.state.is_engaged() {
+            self.reslotting = false;
+            self.detour_goal = None;
+        }
+
+        self.advance_timers(delta_ms);
         let mut commands = Vec::new();
 
         if self.state == AiState::Hit {
             if self.state_timer_ms < DEFAULT_HIT_STAGGER_MS {
-                return self.tick_result(commands);
+                return commands;
             }
             self.state = AiState::Idle;
             self.state_timer_ms = 0.0;
@@ -253,7 +266,7 @@ impl MonsterBrain {
             }
         }
 
-        self.tick_result(commands)
+        commands
     }
 
     // =========================================================================
@@ -286,6 +299,7 @@ impl MonsterBrain {
         hit: bool,
         damage: u32,
     ) -> Vec<AiCommand> {
+        let previous_target = self.target_player_id;
         if !self.apply_hit(attacker_id, hit, damage) {
             return vec![];
         }
@@ -293,8 +307,15 @@ impl MonsterBrain {
         if hit {
             self.state = AiState::Hit;
             self.state_timer_ms = 0.0;
-            self.clear_path_bend();
             vec![self.make_move_cmd()]
+        } else if self.state.is_engaged() {
+            // Already engaged: idling here stopped a charging monster and
+            // slid it back to the last tick's pose on every missed swing.
+            // A new attacker only needs the next repath aimed at them.
+            if previous_target != self.target_player_id {
+                self.last_known_target_pos = None;
+            }
+            vec![]
         } else {
             // A miss (and the server's out-of-range provoke event) still
             // acquires the attacker. Cancel any in-progress wander so the
@@ -304,6 +325,10 @@ impl MonsterBrain {
             self.transition_to_idle(&mut commands);
             commands
         }
+    }
+
+    pub fn target_player_id(&self) -> Option<PlayerId> {
+        self.target_player_id
     }
 
     pub fn handle_death(&mut self) {
@@ -338,7 +363,7 @@ impl MonsterBrain {
                     rng,
                 );
             }
-        } else if self.take_path_bend() {
+        } else if self.pending_bend_sync {
             // A wander leg is otherwise reported only at its ends, so the
             // server would see one chord across every corner of it. Bends alone
             // are enough — no interval sync, since a straight run between two
@@ -347,15 +372,35 @@ impl MonsterBrain {
         }
     }
 
-    /// Build a `Move` command from the brain's current pose, defaulting the
-    /// target position to the current position when none is set.
-    pub(super) fn make_move_cmd(&self) -> AiCommand {
+    /// The one `Move` literal, and the one place a sync is recorded: a later
+    /// state change syncs at once even when it returns to the state synced
+    /// before this one, and the bend this pose reports is consumed.
+    pub(super) fn move_cmd_to(&mut self, target_position: Position) -> AiCommand {
+        self.sync_elapsed_ms = 0.0;
+        self.last_synced_state = self.state;
+        self.pending_bend_sync = false;
+        // Derived here, not threaded in: every chase leg carries its live aim.
+        // Standing-cell legs end near the ring too, so the sync correction
+        // absorbs the cell-vs-ring difference.
+        let chasing = if self.state == AiState::Chase {
+            self.target_player_id.map(|player_id| ChaseAim {
+                player_id,
+                stop_range: self.engage_stop_range(),
+            })
+        } else {
+            None
+        };
         AiCommand::Move {
-            monster_id: self.monster_id.clone(),
             position: self.position,
             rotation: self.rotation,
             state: self.state.to_monster_state(),
-            target_position: self.target_position.unwrap_or(self.position),
+            target_position,
+            chasing,
         }
+    }
+
+    pub(super) fn make_move_cmd(&mut self) -> AiCommand {
+        let aim = self.current_leg_target();
+        self.move_cmd_to(aim)
     }
 }

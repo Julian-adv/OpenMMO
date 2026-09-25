@@ -213,9 +213,12 @@ impl WatchHub {
 struct AppState {
     hub: Arc<WatchHub>,
     minimap: MinimapSource,
+    /// Changes on every process start; the page reloads itself when it
+    /// sees a new value, so a redeploy never needs a manual refresh.
+    boot_id: u64,
 }
 
-/// Where the panel reads baked region minimaps from. These are the same PNGs
+/// Where the panel reads baked region minimaps from. These are the same tiles
 /// the web client's world map draws, so the spectator view cannot drift from
 /// the game's own colours the way a second elevation ramp would.
 pub enum MinimapSource {
@@ -240,16 +243,31 @@ impl MinimapSource {
         }
     }
 
-    async fn read(&self, rx: i32, rz: i32) -> anyhow::Result<Option<Vec<u8>>> {
+    /// Returns the tile bytes and the Content-Type to serve them under.
+    async fn read(&self, rx: i32, rz: i32) -> anyhow::Result<Option<(Vec<u8>, String)>> {
         match self {
-            Self::Local(io) => Ok(io.read_minimap(rx, rz).await?),
+            Self::Local(io) => {
+                let size = onlinerpg_terrain::coords::MINIMAP_BASE_SIZE;
+                let Some((tile, _)) = io.stat_minimap_lod(rx, rz, size).await? else {
+                    return Ok(None);
+                };
+                let bytes = tokio::fs::read(&tile.path).await?;
+                Ok(Some((bytes, tile.family.content_type().to_string())))
+            }
             Self::Http { base_url, http } => {
                 let url = format!("{base_url}/api/terrain/minimap/{rx}/{rz}");
                 let response = http.get(&url).send().await?;
                 if response.status() == reqwest::StatusCode::NOT_FOUND {
                     return Ok(None);
                 }
-                Ok(Some(response.error_for_status()?.bytes().await?.to_vec()))
+                let response = response.error_for_status()?;
+                let content_type = response
+                    .headers()
+                    .get(header::CONTENT_TYPE)
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or("image/png")
+                    .to_string();
+                Ok(Some((response.bytes().await?.to_vec(), content_type)))
             }
         }
     }
@@ -285,12 +303,20 @@ async fn guard_host(req: Request, next: Next) -> Response {
 }
 
 pub async fn serve(hub: Arc<WatchHub>, minimap: MinimapSource, port: u16) {
-    let app_state = Arc::new(AppState { hub, minimap });
+    let boot_id = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(1);
+    let app_state = Arc::new(AppState {
+        hub,
+        minimap,
+        boot_id,
+    });
     let app = Router::new()
         .route("/", get(page))
         .route("/api/npcs", get(npcs))
         .route("/api/state", get(state_snapshot))
-        .route("/api/minimap/{rx}/{rz}", get(minimap_png))
+        .route("/api/minimap/{rx}/{rz}", get(minimap_tile))
         .layer(middleware::from_fn(guard_host))
         .with_state(app_state);
 
@@ -344,31 +370,107 @@ async fn state_snapshot(State(app): State<Arc<AppState>>, Query(q): Query<NpcQue
         let s = state_arc.lock().await;
         let houses: Vec<serde_json::Value> = {
             let wc = s.world_cache.read().unwrap();
-            wc.houses()
-                .values()
-                .map(|h| {
-                    let rooms: Vec<serde_json::Value> = h
-                        .rooms
-                        .iter()
-                        .map(|r| {
-                            json!({
-                                "x": h.origin.x + r.local_x as f32,
-                                "z": h.origin.z + r.local_z as f32,
-                                "w": r.size_x, "d": r.size_z, "floor": r.floor_level,
-                            })
+            wc.houses_for(
+                s.self_player_id
+                    .unwrap_or_else(|| onlinerpg_shared::PlayerId::from(0)),
+            )
+            .map(|h| {
+                let rooms: Vec<serde_json::Value> = h
+                    .rooms
+                    .iter()
+                    .map(|r| {
+                        json!({
+                            "x": h.origin.x + r.local_x as f32,
+                            "z": h.origin.z + r.local_z as f32,
+                            "w": r.size_x, "d": r.size_z, "floor": r.floor_level,
+                        })
+                    })
+                    .collect();
+                json!({ "id": h.id, "rooms": rooms })
+            })
+            .collect()
+        };
+
+        // Underground: ship the real floor layout so the map can draw rock,
+        // rooms and stairs instead of the surface terrain.
+        let dungeon = if s.self_floor_level < 0 {
+            s.dungeon_here().and_then(|d| {
+                use onlinerpg_shared::dungeon::{cell_center, dungeon_origin, GRID};
+                let depth = s.self_floor_level.unsigned_abs();
+                d.layouts().get(depth as usize - 1).map(|layout| {
+                    let (ox, oz) = dungeon_origin(d.entrance.x, d.entrance.z);
+                    let rows: Vec<String> = (0..GRID)
+                        .map(|z| {
+                            (0..GRID)
+                                .map(|x| {
+                                    if layout.carved[(x + z * GRID) as usize] {
+                                        '.'
+                                    } else {
+                                        '#'
+                                    }
+                                })
+                                .collect()
                         })
                         .collect();
-                    json!({ "id": h.id, "rooms": rooms })
+                    let up =
+                        cell_center(&d.entrance, depth, (layout.up_shaft.x, layout.up_shaft.z));
+                    let down = layout.down_shaft.as_ref().map(|sh| {
+                        let p = cell_center(&d.entrance, depth, (sh.x, sh.z));
+                        json!({ "x": p.x, "z": p.z })
+                    });
+                    json!({
+                        "name": d.name,
+                        "origin": { "x": ox, "z": oz },
+                        "grid": GRID,
+                        "rows": rows,
+                        "stairs_up": { "x": up.x, "z": up.z },
+                        "stairs_down": down,
+                    })
+                })
+            })
+        } else {
+            None
+        };
+
+        let dungeon_entrances: Vec<serde_json::Value> = {
+            let wc = s.world_cache.read().unwrap();
+            wc.all_dungeons()
+                .iter()
+                .map(|d| {
+                    json!({
+                        "name": d.name,
+                        "x": d.entrance.x,
+                        "z": d.entrance.z,
+                        "floors": d.max_depth(),
+                    })
                 })
                 .collect()
         };
+        let ground_items: Vec<serde_json::Value> = s
+            .ground_items_in_sight()
+            .into_iter()
+            .map(|(_, i)| {
+                json!({
+                    "x": i.position.x,
+                    "z": i.position.z,
+                    "item": i.item_def_id,
+                    "floor": i.floor_level,
+                })
+            })
+            .collect();
 
         json!({
             "npc": label,
+            "boot": app.boot_id,
+            "sight": onlinerpg_shared::EVENT_DELIVERY_RADIUS,
             "connected": connected && s.in_game,
             "self": s.self_player,
+            "fishing": s.self_fishing,
             "gold": s.self_gold,
             "floor": s.self_floor_level,
+            "dungeon": dungeon,
+            "dungeon_entrances": dungeon_entrances,
+            "ground_items": ground_items,
             "bag": s.self_bag,
             "time": { "hour": s.game_hour, "minute": s.game_minute, "night": s.is_night },
             "players": s.nearby_players.values().collect::<Vec<_>>(),
@@ -380,21 +482,23 @@ async fn state_snapshot(State(app): State<Arc<AppState>>, Query(q): Query<NpcQue
     Json(body).into_response()
 }
 
-/// Serve one baked region PNG, straight through from the terrain source.
-async fn minimap_png(
+/// Serve one baked region tile, straight through from the terrain source.
+async fn minimap_tile(
     State(app): State<Arc<AppState>>,
     axum::extract::Path((rx, rz)): axum::extract::Path<(i32, i32)>,
 ) -> Response {
     match app.minimap.read(rx, rz).await {
-        Ok(Some(png)) => (
-            [
-                (header::CONTENT_TYPE, "image/png"),
-                // Baked data; only a re-bake changes it.
-                (header::CACHE_CONTROL, "max-age=300"),
-            ],
-            png,
-        )
-            .into_response(),
+        Ok(Some((tile, content_type))) => {
+            (
+                [
+                    (header::CONTENT_TYPE, content_type),
+                    // Baked data; only a re-bake changes it.
+                    (header::CACHE_CONTROL, "max-age=300".to_string()),
+                ],
+                tile,
+            )
+                .into_response()
+        }
         // Outside the baked area — the page just leaves that region blank.
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(e) => {
@@ -409,7 +513,7 @@ async fn minimap_png(
 pub fn feed_kind(msg: &onlinerpg_shared::ServerMessage) -> Option<&'static str> {
     use onlinerpg_shared::ServerMessage as M;
     Some(match msg {
-        M::ChatMessage { .. } => "chat",
+        M::ChatMessage { .. } | M::PartyChatMessage { .. } | M::PlayerMusicStarted { .. } => "chat",
         M::PlayerAttacked { .. }
         | M::MonsterAttackedPlayer { .. }
         | M::MonsterDead { .. }
@@ -491,6 +595,7 @@ mod tests {
                 },
                 rotation: 0.0,
                 floor_level: 0,
+                sprinting: false,
             }),
             None
         );

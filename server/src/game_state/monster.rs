@@ -1,23 +1,120 @@
-use crate::types::{MonsterState, PlayerId, Position, ServerMessage};
-use std::collections::HashSet;
-use tracing::{debug, warn};
+use crate::types::{MonsterLifecycle, MonsterState, Position, ServerMessage};
+use tracing::{debug, info};
 
-/// Keep spawns this many meters clear of every no-spawn zone (towns), so the
-/// area *around* a town stays empty too. Mirrors the client's TOWN_MARGIN.
-const NO_SPAWN_MARGIN: f32 = 30.0;
+pub(super) const NO_SPAWN_MARGIN: f32 = 30.0;
+const AMBIENT_SPAWN_METERS_PER_LEVEL: f32 = 70.0;
+const DESPAWN_SCAN_CHUNK: usize = 4_000;
 
-/// Headroom over a monster's run speed at which its move token bucket refills,
-/// absorbing jitter between the owner's simulation clock and packet arrival.
-const MONSTER_MOVE_SPEED_SLACK: f32 = 1.2;
-/// Capacity of a monster's move token bucket (meters). Bounds the jump an idle
-/// monster could bank up — set just above the ~10m longest legitimate wander
-/// leg (`DEFAULT_MAX_MOVE_DIST`) — while still absorbing a burst of frames that
-/// the network delivered bunched together.
-const MONSTER_MOVE_BUDGET_CAP_METERS: f32 = 12.0;
-/// Run speed assumed for a monster whose type has no definition (only test /
-/// misconfigured types). Kept just above the player's own speed so an unknown
-/// type stays tightly bounded rather than inheriting a fast monster's leeway.
-const DEFAULT_MONSTER_RUN_SPEED: f32 = 3.5;
+#[derive(Default)]
+pub(crate) struct MonsterRegistry {
+    monsters: std::collections::HashMap<String, crate::types::Monster>,
+    /// Canonical X positions keep queries correct across the world seam.
+    cells: super::SpatialIndex<String>,
+}
+
+impl MonsterRegistry {
+    /// Nearby candidates; callers check exact distance.
+    pub(crate) fn near<'a>(
+        &'a self,
+        position: &'a Position,
+    ) -> impl Iterator<Item = &'a crate::types::Monster> {
+        self.cells
+            .keys_near(position, super::EVENT_DELIVERY_RADIUS)
+            .filter_map(|id| self.monsters.get(id.as_str()))
+    }
+
+    pub(crate) fn insert(
+        &mut self,
+        id: String,
+        monster: crate::types::Monster,
+    ) -> Option<crate::types::Monster> {
+        // Remove the old index entry before replacing the monster.
+        let replaced = self.remove(&id);
+        let position = monster.position;
+        self.monsters.insert(id.clone(), monster);
+        self.cells.insert(id, &position);
+        replaced
+    }
+
+    pub(crate) fn remove(&mut self, id: &str) -> Option<crate::types::Monster> {
+        let removed = self.monsters.remove(id);
+        if let Some(monster) = &removed {
+            self.cells.remove(id, &monster.position);
+        }
+        removed
+    }
+
+    pub(crate) fn get(&self, id: &str) -> Option<&crate::types::Monster> {
+        self.monsters.get(id)
+    }
+
+    pub(crate) fn get_mut(&mut self, id: &str) -> Option<&mut crate::types::Monster> {
+        self.monsters.get_mut(id)
+    }
+
+    pub(crate) fn values(
+        &self,
+    ) -> std::collections::hash_map::Values<'_, String, crate::types::Monster> {
+        self.monsters.values()
+    }
+
+    /// Monsters on the server, corpses included.
+    pub(crate) fn len(&self) -> usize {
+        self.monsters.len()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.monsters.is_empty()
+    }
+
+    pub(crate) fn alive_near(&self, position: &Position, floor: i8) -> usize {
+        self.near(position)
+            .filter(|monster| {
+                monster.floor_level == floor
+                    && monster.state != MonsterState::Dead
+                    && monster.position.dist_xz_sq(position) <= super::EVENT_DELIVERY_RADIUS.powi(2)
+            })
+            .count()
+    }
+
+    pub(crate) fn mark_dead(&mut self, id: &str) {
+        if let Some(monster) = self.monsters.get_mut(id) {
+            monster.state = MonsterState::Dead;
+        }
+    }
+
+    /// Move the monster and its spatial index entry together.
+    pub(crate) fn set_position(
+        &mut self,
+        id: &str,
+        position: Position,
+    ) -> Option<&crate::types::Monster> {
+        let monster = self.monsters.get_mut(id)?;
+        let old_position = monster.position;
+        monster.position = position;
+        self.cells.moved(id, &old_position, &position);
+        Some(monster)
+    }
+
+    /// Verify the spatial index against the registry.
+    #[cfg(test)]
+    pub(crate) fn cell_index_matches_map(&self) -> bool {
+        let mut expected = super::SpatialIndex::default();
+        for (id, monster) in &self.monsters {
+            expected.insert(id.clone(), &monster.position);
+        }
+        self.cells.matches(&expected)
+    }
+}
+
+impl std::ops::Index<&str> for MonsterRegistry {
+    type Output = crate::types::Monster;
+
+    fn index(&self, id: &str) -> &Self::Output {
+        &self.monsters[id]
+    }
+}
 
 impl super::GameState {
     fn find_ambient_rule(
@@ -29,462 +126,198 @@ impl super::GameState {
             .find(|r| r.monster_type == monster_type)
     }
 
-    /// Create a monster, notify nearby players, and return it (or None if limit reached).
-    /// `floor_level` < 0 marks dungeon monsters; `level_override` applies
-    /// depth scaling (health here, combat stats in combat.rs). Dungeon
-    /// spawns skip the ambient per-player cap — their spawn slots are the cap.
+    /// Spawn and publish a monster; dungeon slots have their own population limit.
     #[allow(clippy::too_many_arguments)]
     pub async fn spawn_monster(
         &self,
         monster_type: String,
         position: Position,
         rotation: f32,
-        owner_id: Option<PlayerId>,
         floor_level: i8,
+        lifecycle: MonsterLifecycle,
         level_override: Option<u8>,
         aggressive: bool,
     ) -> Option<crate::types::Monster> {
-        let max_total = crate::world_config::world_config().max_monsters_total as usize;
-        let max_per_player = if floor_level < 0 {
-            None
-        } else {
-            Self::find_ambient_rule(&monster_type).map(|r| r.max_per_player as usize)
-        };
-
-        // Read lock: single-pass check of both global and per-player limits
-        {
-            let monsters = self.monsters.read().await;
-            let mut alive_count = 0usize;
-            let mut owned_alive = 0usize;
-            for m in monsters.values() {
-                if m.state != MonsterState::Dead {
-                    alive_count += 1;
-                    if let Some(ref owner) = owner_id {
-                        if m.owner_id.as_ref() == Some(owner) && m.monster_type == monster_type {
-                            owned_alive += 1;
-                        }
-                    }
-                }
-            }
-            if alive_count >= max_total {
-                warn!("Monster spawn rejected: limit reached ({})", alive_count);
-                return None;
-            }
-            if let Some(max) = max_per_player {
-                if owned_alive >= max {
-                    warn!(
-                        "Monster spawn rejected: player {:?} already owns {} alive {}",
-                        owner_id, owned_alive, monster_type
-                    );
-                    return None;
-                }
-            }
-        }
-
-        let owner_number = match owner_id.as_ref() {
-            Some(owner_id) => self.get_or_assign_player_number(owner_id).await,
-            None => 0,
-        };
-        let spawn_count = {
-            let mut id_state = self.id_state.write().await;
-            let counter = id_state.owner_spawn_counts.entry(owner_number).or_insert(0);
-            *counter = counter.saturating_add(1);
-            *counter
-        };
-        let id = format!("m{}_{}", owner_number, spawn_count);
-
         let def = self.monster_defs.get(&monster_type);
         let base_health = def.map(|d| d.max_health()).unwrap_or(10);
-        // Depth scaling never weakens a monster below its definition
-        // health (bosses have a hand-tuned health larger than their
-        // level's formula value).
+        // Depth scaling preserves any higher authored health, including bosses.
         let health = match level_override {
             Some(level) => {
                 base_health.max(crate::game::combat::monster_max_health_for_level(level))
             }
             None => base_health,
         };
+        let id = {
+            let mut ids = self.id_state.write().await;
+            ids.next_monster_number += 1;
+            format!("m{}", ids.next_monster_number)
+        };
         let monster = crate::types::Monster {
-            id: id.clone(),
+            id,
             monster_type: monster_type.clone(),
             position,
             rotation,
             state: MonsterState::Idle,
-            owner_id,
             health,
             max_health: health,
             floor_level,
             level_override,
             aggressive,
+            lifecycle,
             last_attack_at: 0,
-            last_move_at: Self::now_ms(),
-            // Starts empty: the monster spawns beside its owner and its first
-            // reported position is the spawn point, so nothing legitimate needs
-            // budget yet. The bucket then fills as real time passes.
-            move_budget: 0.0,
         };
 
         let mut monsters = self.monsters.write().await;
+        if lifecycle == MonsterLifecycle::Ambient
+            && Self::find_ambient_rule(&monster_type).is_some()
+            && monsters.alive_near(&position, floor_level)
+                >= crate::world_config::world_config().max_nearby_monsters as usize
+        {
+            return None;
+        }
+        let id = monster.id.clone();
         monsters.insert(id.clone(), monster.clone());
-        let alive = monsters
-            .values()
-            .filter(|m| m.state != MonsterState::Dead)
-            .count();
-        debug!(
-            "Spawned monster {} [owner #{}, spawn #{}] (Alive: {})",
-            id, owner_number, spawn_count, alive
+        let total = monsters.len();
+        info!(
+            "Spawned {} {} at ({:.1},{:.1}) (total: {})",
+            monster_type, id, position.x, position.z, total
         );
 
-        self.send_direct_message_to_players_within_position(
-            &monster.position,
-            monster.floor_level,
-            super::EVENT_DELIVERY_RADIUS,
-            ServerMessage::MonsterSpawned {
-                monster: monster.clone(),
-            },
-            None,
-        )
-        .await;
+        self.publish_subject_change(ServerMessage::MonsterSpawned {
+            monster: monster.clone(),
+        });
         Some(monster)
     }
 
-    /// The owner applies its moves optimistically and the normal fanout skips
-    /// it, so a silent reject would desync it until reconnect. Echoes the
-    /// authoritative state back to the mover instead.
-    fn move_correction(monster_id: String, monster: &crate::types::Monster) -> ServerMessage {
-        ServerMessage::MonsterMoved {
-            monster_id,
-            position: monster.position,
-            rotation: monster.rotation,
-            state: monster.state,
-            target_position: monster.position,
-            owner_id: monster.owner_id,
+    /// Apply the terrain delta while preserving any spawn height offset.
+    pub(super) async fn expected_monster_move_y(
+        &self,
+        floor_level: i8,
+        from: Position,
+        to: Position,
+    ) -> Option<f32> {
+        // Attack cadence reports plenty of unchanged positions.
+        if from.x == to.x && from.z == to.z {
+            return Some(from.y);
         }
-    }
-
-    pub async fn update_monster_position(
-        &self,
-        mover_id: &PlayerId,
-        monster_id: String,
-        new_position: Position,
-        rotation: f32,
-        state: MonsterState,
-        target_position: Position,
-    ) {
-        let now = Self::now_ms();
-        let (old_position, owner_id, monster) = {
-            let mut monsters = self.monsters.write().await;
-
-            let Some(monster) = monsters.get_mut(&monster_id) else {
-                return;
-            };
-            if !monster.is_controllable_by(mover_id) {
-                return;
+        let (from_ground, to_ground) = if floor_level < 0 {
+            let from_entrance = self.dungeon_defs.entrance_at(from.x, from.z)?;
+            let to_entrance = self.dungeon_defs.entrance_at(to.x, to.z)?;
+            if from_entrance.id != to_entrance.id {
+                return None;
             }
-            if !new_position.is_finite() || !rotation.is_finite() || !target_position.is_finite() {
-                let correction = Self::move_correction(monster_id, monster);
-                drop(monsters);
-                self.send_direct_message(mover_id, correction).await;
-                return;
-            }
-            // Rate-limit client-reported movement with a token bucket that
-            // refills at the monster's run speed. Movement is simulated by the
-            // owning client, so without this an owner could teleport the monster
-            // onto any player and use it as an unlimited-range weapon
-            // (broadcast_monster_attack's reach check only sees the post-move
-            // position). The bucket lets a legit burst of frames the network
-            // delivered bunched together spend banked allowance, while its cap
-            // bounds the jump an idle monster can bank, and its refill rate the
-            // sustained speed.
-            let run_speed = self
-                .monster_defs
-                .get(&monster.monster_type)
-                .map(|d| d.run_speed)
-                .unwrap_or(DEFAULT_MONSTER_RUN_SPEED);
-            let elapsed_s = now.saturating_sub(monster.last_move_at) as f32 / 1000.0;
-            let budget = (monster.move_budget + run_speed * MONSTER_MOVE_SPEED_SLACK * elapsed_s)
-                .min(MONSTER_MOVE_BUDGET_CAP_METERS);
-            monster.last_move_at = now;
-            let dist = monster.position.dist_xz_sq(&new_position).sqrt();
-            if dist > budget {
-                // Bank the refill so the budget keeps recovering, but don't
-                // spend it: the move stays where it was and isn't fanned out.
-                monster.move_budget = budget;
-                debug!(
-                    "Rejected monster move {:.0}m (budget {:.1}m): monster {} by {}",
-                    dist, budget, monster_id, mover_id
-                );
-                let correction = Self::move_correction(monster_id, monster);
-                drop(monsters);
-                self.send_direct_message(mover_id, correction).await;
-                return;
-            }
-            // A move that reports an unchanged position can't cross anything,
-            // and attack cadence reports plenty of them.
-            let blocked = dist > 0.0 && {
-                let cache = self.passability_read();
-                let floor = super::passability::authoritative_floor(&cache, &monster.position);
-                // Sweep in unwrapped X so a seam-crossing move stays the short
-                // local segment `dist` measured.
-                let to_x = monster.position.x
-                    + onlinerpg_shared::shortest_world_delta_x(monster.position.x, new_position.x);
-                super::passability::wrapped_block_info(
-                    &cache,
-                    monster.position.x,
-                    monster.position.z,
-                    to_x,
-                    new_position.z,
-                    floor,
-                    monster.position.y,
-                )
-                .is_some()
-            };
-            if blocked {
-                monster.move_budget = budget;
-                debug!("Rejected monster move through blocked terrain: {monster_id} by {mover_id}");
-                let correction = Self::move_correction(monster_id, monster);
-                drop(monsters);
-                self.send_direct_message(mover_id, correction).await;
-                return;
-            }
-            monster.move_budget = budget - dist;
-            let old_position = monster.position;
-            monster.position = new_position;
-            monster.rotation = rotation;
-            monster.state = state;
-            (old_position, monster.owner_id, monster.clone())
+            self.ensure_dungeon_runtime(&from_entrance.id).await;
+            let dungeons = self.dungeons.read().await;
+            let layouts = &dungeons.get(&from_entrance.id)?.layouts;
+            let origin = from_entrance.position();
+            let depth = floor_level.unsigned_abs();
+            let height_at =
+                |x, z| onlinerpg_shared::dungeon::floor_height_at(&origin, layouts, depth, x, z);
+            (height_at(from.x, from.z)?, height_at(to.x, to.z)?)
+        } else {
+            (
+                self.height_sampler
+                    .sample_height(from.x, from.z)
+                    .await
+                    .ok()?,
+                self.height_sampler.sample_height(to.x, to.z).await.ok()?,
+            )
         };
-
-        self.fanout_monster_position_update(
-            &monster,
-            old_position,
-            ServerMessage::MonsterMoved {
-                monster_id,
-                position: new_position,
-                rotation,
-                state,
-                target_position,
-                owner_id,
-            },
-            owner_id.as_ref(),
-        )
-        .await;
+        Some(from.y + to_ground - from_ground)
     }
 
-    async fn fanout_monster_position_update(
-        &self,
-        monster: &crate::types::Monster,
-        old_position: Position,
-        update_msg: ServerMessage,
-        skip_player_id: Option<&PlayerId>,
-    ) {
-        // Monsters never change floor mid-life (dungeon monsters are confined
-        // to their floor), so both the old and new visibility sets gate on the
-        // monster's own floor.
-        let old_visible: HashSet<_> = self
-            .player_ids_within_position(
-                &old_position,
-                monster.floor_level,
-                super::EVENT_DELIVERY_RADIUS,
-            )
-            .await
-            .into_iter()
-            .filter(|id| skip_player_id != Some(id))
-            .collect();
-        let new_visible: HashSet<_> = self
-            .player_ids_within_position(
-                &monster.position,
-                monster.floor_level,
-                super::EVENT_DELIVERY_RADIUS,
-            )
-            .await
-            .into_iter()
-            .filter(|id| skip_player_id != Some(id))
-            .collect();
-
-        let left: Vec<_> = old_visible.difference(&new_visible).cloned().collect();
-        let entered: Vec<_> = new_visible.difference(&old_visible).cloned().collect();
-        let stayed: Vec<_> = new_visible.intersection(&old_visible).cloned().collect();
-
-        self.send_direct_message_to_players(
-            &left,
-            ServerMessage::MonsterRemoved {
-                monster_id: monster.id.clone(),
-            },
-        )
-        .await;
-        self.send_direct_message_to_players(
-            &entered,
-            ServerMessage::MonsterSpawned {
-                monster: monster.clone(),
-            },
-        )
-        .await;
-        self.send_direct_message_to_players(&stayed, update_msg)
-            .await;
+    /// Minimum town distance for an ambient type, derived from its level.
+    pub(crate) fn min_ambient_town_distance(&self, monster_type: &str) -> f32 {
+        self.monster_defs.get(monster_type).map_or(0.0, |def| {
+            f32::from(def.level.saturating_sub(1)) * AMBIENT_SPAWN_METERS_PER_LEVEL
+        })
     }
 
-    pub async fn remove_monsters_by_owner(&self, owner_id: &PlayerId) {
-        let removed_monsters = {
+    pub(super) async fn despawn_monsters_near(&self, position: &Position) {
+        let candidates = self
+            .monsters
+            .read()
+            .await
+            .near(position)
+            .filter(|monster| monster.lifecycle.despawns_when_unattended())
+            .map(|monster| monster.id.clone())
+            .collect::<Vec<_>>();
+        self.despawn_unwatched_monsters(&candidates).await;
+    }
+
+    pub(super) async fn despawn_unwatched_monsters(&self, candidates: &[String]) {
+        if candidates.is_empty() {
+            return;
+        }
+        let removed = {
+            let players = self.players.read().await;
+            let spatial = self.player_spatial_cells.read().await;
             let mut monsters = self.monsters.write().await;
-            let owned_ids: Vec<String> = monsters
+            let expired = candidates
                 .iter()
-                .filter(|(_, m)| m.owner_id.as_ref() == Some(owner_id))
-                .map(|(id, _)| id.clone())
-                .collect();
-
-            owned_ids
+                .filter(|id| {
+                    monsters.get(id).is_some_and(|monster| {
+                        monster.lifecycle.despawns_when_unattended()
+                            && !spatial
+                                .keys_near(&monster.position, super::EVENT_DELIVERY_RADIUS)
+                                .filter_map(|id| players.get(id))
+                                .any(|player| Self::watches(player, monster))
+                    })
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            expired
                 .into_iter()
-                .filter_map(|monster_id| monsters.remove(&monster_id))
+                .filter_map(|id| {
+                    let monster = monsters.remove(&id)?;
+                    self.publish_subject_change(ServerMessage::MonsterRemoved {
+                        monster_id: id.clone(),
+                    });
+                    debug!("Despawned unattended monster {}", monster.id);
+                    Some(id)
+                })
                 .collect::<Vec<_>>()
         };
-
-        for monster in removed_monsters {
-            debug!(
-                "Removed monster {} (owner {} disconnected)",
-                monster.id, owner_id
-            );
-            self.send_direct_message_to_players_within_position(
-                &monster.position,
-                monster.floor_level,
-                super::EVENT_DELIVERY_RADIUS,
-                ServerMessage::MonsterRemoved {
-                    monster_id: monster.id,
-                },
-                None,
-            )
-            .await;
+        for id in removed {
+            self.brain_death(&id).await;
         }
     }
 
-    /// Server-driven monster spawn tick. For each ambient spawn type and each
-    /// player below their cap, sends a SpawnMonsterRequest so the client can
-    /// pick a valid position near itself (grassland, not water, away from towns).
-    pub async fn tick_monster_spawns(&self) {
-        let ambient_spawns = &crate::world_config::world_config().ambient_spawns;
-        if ambient_spawns.is_empty() {
-            return;
+    pub(super) fn watches(player: &crate::types::Player, monster: &crate::types::Monster) -> bool {
+        player.floor_level == monster.floor_level
+            && monster.position.dist_xz_sq(&player.position) <= super::EVENT_DELIVERY_RADIUS.powi(2)
+    }
+
+    pub async fn tick_monster_despawns(&self) {
+        let candidates = self
+            .monsters
+            .read()
+            .await
+            .values()
+            .filter(|monster| monster.lifecycle.despawns_when_unattended())
+            .map(|monster| monster.id.clone())
+            .collect::<Vec<_>>();
+        for chunk in candidates.chunks(DESPAWN_SCAN_CHUNK) {
+            self.despawn_unwatched_monsters(chunk).await;
         }
+    }
 
-        let max_total = crate::world_config::world_config().max_monsters_total as usize;
-
-        // Players eligible for ambient spawns this tick. NPC players only
-        // qualify when a human is within sight range (no point spawning monsters
-        // around an agent nobody is watching); humans always qualify. Computed
-        // once under a single read lock so the per-rule loop below needs none.
-        let player_ids: Vec<PlayerId> = {
-            let players = self.players.read().await;
-            let radius_sq = super::EVENT_DELIVERY_RADIUS * super::EVENT_DELIVERY_RADIUS;
-            let human_positions: Vec<_> = players
-                .values()
-                .filter(|p| !p.is_official_npc)
-                .map(|p| p.position)
-                .collect();
-            players
-                .iter()
-                .filter(|(_, player)| {
-                    // Dungeon players get slot-based spawns, not ambient
-                    // ones (spawn validation is XZ-only and would place
-                    // surface monsters right above the dungeon).
-                    player.floor_level >= 0
-                        && (!player.is_official_npc
-                            || human_positions
-                                .iter()
-                                .any(|hp| player.position.dist_xz_sq(hp) <= radius_sq))
+    pub(super) async fn despawn_monsters(&self, expired: Vec<String>) {
+        let removed = {
+            let mut monsters = self.monsters.write().await;
+            expired
+                .into_iter()
+                .filter_map(|id| {
+                    monsters.remove(&id)?;
+                    self.publish_subject_change(ServerMessage::MonsterRemoved {
+                        monster_id: id.clone(),
+                    });
+                    Some(id)
                 })
-                .map(|(id, _)| *id)
-                .collect()
+                .collect::<Vec<_>>()
         };
-        if player_ids.is_empty() {
-            return;
+        for id in removed {
+            self.brain_death(&id).await;
         }
-
-        // Single lock: count alive monsters per (owner, type) and total
-        let (owner_type_counts, total_alive) = {
-            let monsters = self.monsters.read().await;
-            let mut counts = std::collections::HashMap::new();
-            let mut alive = 0usize;
-            for m in monsters.values() {
-                if m.state != MonsterState::Dead {
-                    alive += 1;
-                    if let Some(ref owner) = m.owner_id {
-                        *counts.entry((*owner, m.monster_type.clone())).or_insert(0) += 1;
-                    }
-                }
-            }
-            (counts, alive)
-        };
-
-        let mut requested_this_tick = 0usize;
-
-        for rule in ambient_spawns {
-            for player_id in &player_ids {
-                if total_alive + requested_this_tick >= max_total {
-                    return;
-                }
-
-                let owned = owner_type_counts
-                    .get(&(*player_id, rule.monster_type.clone()))
-                    .copied()
-                    .unwrap_or(0);
-
-                if owned >= rule.max_per_player {
-                    continue;
-                }
-
-                // Ask the client to find a valid position near itself and spawn
-                self.send_direct_message(
-                    player_id,
-                    ServerMessage::SpawnMonsterRequest {
-                        monster_type: rule.monster_type.clone(),
-                    },
-                )
-                .await;
-
-                requested_this_tick += 1;
-            }
-        }
-    }
-
-    /// Validate a client-requested spawn: it must carry finite values, be a
-    /// configured ambient type, sit outside every no-spawn zone, and be within
-    /// range of the requesting player. Terrain checks (grassland, water) are
-    /// the client's responsibility — the server has no terrain data.
-    pub async fn validate_spawn_request(
-        &self,
-        player_id: &PlayerId,
-        monster_type: &str,
-        position: &Position,
-        rotation: f32,
-    ) -> bool {
-        // The range check below only reads x/z, so without this a non-finite y
-        // or rotation would reach MonsterSpawned.
-        if !position.is_finite() || !rotation.is_finite() {
-            return false;
-        }
-        let rule = match Self::find_ambient_rule(monster_type) {
-            Some(r) => r,
-            None => return false,
-        };
-
-        // Reject if inside any no-spawn zone (towns, safe areas) + margin
-        for zone in &self.no_spawn_zones {
-            if zone.contains_with_margin(position.x, position.z, NO_SPAWN_MARGIN) {
-                return false;
-            }
-        }
-
-        // Must be reasonably close to the requesting player (anti-cheat sanity)
-        let player_pos = {
-            let players = self.players.read().await;
-            match players.get(player_id) {
-                Some(p) => p.position,
-                None => return false,
-            }
-        };
-        let dx = onlinerpg_shared::shortest_world_delta_x(player_pos.x, position.x);
-        let dz = position.z - player_pos.z;
-        let max = rule.max_distance + 10.0; // tolerance
-        dx * dx + dz * dz <= max * max
     }
 }

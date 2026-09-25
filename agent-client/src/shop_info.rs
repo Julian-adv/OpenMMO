@@ -15,6 +15,7 @@ struct MerchantRow {
     npc_name: String,
     #[serde(rename = "sellRatePercent")]
     sell_rate_percent: u32,
+    #[serde(default)]
     catalog: String,
 }
 
@@ -24,6 +25,8 @@ struct MerchantRow {
 pub struct NpcRow {
     #[serde(rename = "npcName")]
     pub npc_name: String,
+    #[serde(rename = "chatAliases", default)]
+    chat_aliases: String,
     /// Role class: picks the prompt template and the auto-created
     /// character's class (e.g. "guard", "merchant").
     #[serde(default)]
@@ -36,12 +39,44 @@ pub struct NpcRow {
     salary_per_day: i64,
     #[serde(rename = "walletCap", default)]
     wallet_cap: i64,
+    #[serde(default)]
+    keepsakes: String,
+}
+
+impl NpcRow {
+    /// Keepsakes this NPC could actually offer: the listed ids that carry a
+    /// base price. `keepsake_section` never offers an unpriced one, so an
+    /// unpriced entry (a worn instrument, say) is fair game to wear out.
+    pub fn offerable_keepsake_ids(&self) -> impl Iterator<Item = &str> {
+        id_list(&self.keepsakes)
+            .filter(|id| crate::item_defs::get(id).is_some_and(|d| d.base_price.is_some()))
+    }
 }
 
 /// Registry lookup by NPC id, for resolving `[[npcs]]` config entries that
 /// reference the registry instead of spelling every field out.
 pub fn npc_by_id(id: &str) -> Option<&'static NpcRow> {
     npcs().get(id)
+}
+
+pub fn chat_mentions(npc_name: &str, message: &str) -> bool {
+    let message = message.to_lowercase();
+    let matches = |name: &str| {
+        let name = name.to_lowercase();
+        !name.is_empty()
+            && message.match_indices(&name).any(|(start, _)| {
+                let before = message[..start].chars().next_back();
+                let after = message[start + name.len()..].chars().next();
+                let word_char = |c: char| c.is_ascii_alphanumeric() || c == '_';
+                !before.is_some_and(|c| c.is_alphanumeric() || c == '_')
+                    && !after.is_some_and(word_char)
+            })
+    };
+    matches(npc_name)
+        || npcs()
+            .values()
+            .find(|npc| npc.npc_name.eq_ignore_ascii_case(npc_name))
+            .is_some_and(|npc| npc.chat_aliases.split(';').any(matches))
 }
 
 // The embedded game data is immutable at runtime, and the resident section
@@ -102,12 +137,13 @@ fn id_list(field: &str) -> impl Iterator<Item = &str> {
 /// What a customer standing near a merchant sees: the shelf, with prices, and
 /// the rate they buy at. Without it the LLM has to guess item ids for `buy`,
 /// since a shop window is something only the web client opens.
-pub fn shop_line_for(npc_name: &str) -> Option<String> {
+pub fn shop_line_for(npc_name: &str, index_percent: u32) -> Option<String> {
     let (catalog, sell_rate_percent) = merchant_shop(npc_name)?;
     let stock: Vec<String> = catalog
         .iter()
         .filter_map(|id| {
-            let price = crate::item_defs::get(id)?.base_price?;
+            let def = crate::item_defs::get(id)?;
+            let price = indexed_price(def, index_percent)?;
             Some(format!("{id} {}", format_price(price)))
         })
         .collect();
@@ -120,12 +156,24 @@ pub fn shop_line_for(npc_name: &str) -> Option<String> {
     ))
 }
 
+/// Merchant shelf price, the server's formula (doc/PRICING.md).
+pub fn indexed_price(def: &crate::item_defs::ItemDef, index_percent: u32) -> Option<i64> {
+    Some(onlinerpg_shared::pricing::indexed_base_price(
+        def.base_price?,
+        def.is_consumable(),
+        index_percent,
+    ))
+}
+
 /// Build the static "Your Shop" system-prompt section for a merchant NPC,
 /// or `None` if the character is not a merchant. Non-merchant traders get
 /// a per-turn section instead (`resident_trade_prompt_for`) so it can
 /// disappear once their needs are met.
 pub fn merchant_prompt_for(npc_name: &str) -> Option<String> {
     let (catalog, sell_rate_percent) = merchant_shop(npc_name)?;
+    if catalog.is_empty() {
+        return None;
+    }
 
     let mut section = String::from("## Your Shop\nItems you sell, with base prices:\n");
     for item_id in catalog {
@@ -136,7 +184,9 @@ pub fn merchant_prompt_for(npc_name: &str) -> Option<String> {
         section.push_str(&format!("- {item_id} ({}): {price}\n", item.name));
     }
     section.push_str(&format!(
-        "You also buy any item that has a base price from players, paying {sell_rate_percent}% \
+        "Consumable prices move with the market index in the \"Market\" section; the other \
+         prices are fixed.\n\
+         You also buy any item that has a base price from players, paying {sell_rate_percent}% \
          of its base price.\n\
          Use the \"open_trade\" action to put your shop window on a nearby player's screen \
          when the conversation turns to trading.\n"
@@ -144,58 +194,118 @@ pub fn merchant_prompt_for(npc_name: &str) -> Option<String> {
     Some(section)
 }
 
-/// Build the per-turn "Your Personal Trading" section for a non-merchant
-/// trader. Prompt steering alone cannot stop an LLM from chasing its
-/// wishlist forever, so satiation is structural: items already in the
-/// NPC's bag are omitted, and once every wish is satisfied the section —
-/// the temptation itself — vanishes from the prompt entirely. The bag is
-/// server-persisted, so the desire only returns if the item leaves it.
+/// Build the per-turn "## Personal Trading" section for a non-merchant
+/// trader: what it wants to buy (its wishlist) and what it might part
+/// with (its keepsakes), as one personal-business section for the same
+/// trusted audience. Both halves are structural, not prompt steering:
+/// wishlist items already in the bag drop out (and `include_wishlist`
+/// carries the post-purchase satiation), keepsakes are offered only while
+/// still in the bag, and an empty `audience` — the nearby regulars past
+/// the trade favor threshold — omits the whole section. The server hides
+/// keepsakes from walk-in stock and only sells to a player holding the
+/// NPC's own `offer_deal`; unpriced ones (a bard's worn instrument) can
+/// never sell and are left out.
 pub fn resident_trade_prompt_for(
     npc_name: &str,
     bag: &[onlinerpg_shared::inventory::ItemInstance],
+    include_wishlist: bool,
+    audience: &[String],
 ) -> Option<String> {
+    if audience.is_empty() {
+        return None;
+    }
     let trader = npcs()
         .values()
         .find(|t| t.npc_name.eq_ignore_ascii_case(npc_name))?;
 
-    let wanted: Vec<&str> = id_list(&trader.wishlist)
-        .filter(|id| !bag.iter().any(|item| item.item_def_id == *id))
+    let wanted: Vec<&str> = if include_wishlist {
+        id_list(&trader.wishlist)
+            .filter(|id| !bag.iter().any(|item| item.item_def_id == *id))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let held: Vec<(&str, &str, i64)> = trader
+        .offerable_keepsake_ids()
+        .filter(|id| bag.iter().any(|item| item.item_def_id == *id))
+        .filter_map(|id| {
+            let item = crate::item_defs::get(id)?;
+            Some((id, item.name.as_str(), item.base_price?))
+        })
         .collect();
-    if wanted.is_empty() {
+    if wanted.is_empty() && held.is_empty() {
         return None;
     }
 
-    let mut section = String::from(
-        "## Your Personal Trading\n\
-         You are not a shopkeeper, but you personally want to buy a few things \
-         you need — from passing players only; other NPCs are not your suppliers:\n",
+    let mut section = format!(
+        "## Personal Trading\n\
+         You are not a shopkeeper; this is personal business, and only \
+         these travelers have earned your trust for it: {}. Never \
+         advertise it, never trade personally with anyone not named here, \
+         and never with another NPC. When talk turns that way, put your \
+         trade window on their screen:\n\
+         {{\"type\": \"open_trade\", \"player\": \"PlayerName\"}}\n",
+        audience.join(", "),
     );
-    for item_id in wanted {
-        let Some(item) = crate::item_defs::get(item_id) else {
-            continue;
-        };
-        let base = item.base_price.unwrap_or(0);
+
+    if !wanted.is_empty() {
         section.push_str(&format!(
-            "- {item_id} ({}): you pay {} ({}% of the {} base price)\n",
-            item.name,
-            format_price(base * i64::from(trader.wishlist_rate_percent) / 100),
-            trader.wishlist_rate_percent,
-            format_price(base),
+            "Things you want to buy — your wallet is your own money \
+             (salary {} per game day, capped at {}); check \"Your gold\" \
+             first and say so in character if you cannot afford it. You \
+             keep what you buy, never reselling it:\n",
+            format_price(trader.salary_per_day),
+            format_price(trader.wallet_cap),
+        ));
+        for item_id in &wanted {
+            let Some(item) = crate::item_defs::get(item_id) else {
+                continue;
+            };
+            let base = item.base_price.unwrap_or(0);
+            section.push_str(&format!(
+                "- {item_id} ({}): you pay {} ({}% of the {} base price)\n",
+                item.name,
+                format_price(base * i64::from(trader.wishlist_rate_percent) / 100),
+                trader.wishlist_rate_percent,
+                format_price(base),
+            ));
+        }
+        section.push_str(&format!(
+            "To pay a bonus for something you need right now:\n\
+             {{\"type\": \"offer_deal\", \"player\": \"PlayerName\", \"item\": \
+             \"{}\", \"kind\": \"sell\", \"modifier_pct\": 10, \"reason\": \
+             \"I need it today\"}}\n",
+            wanted[0],
         ));
     }
-    section.push_str(&format!(
-        "Your wallet is your own money — salary {} per game day, and it stops \
-         accumulating at {}. Check \"Your gold\" in the world state before promising \
-         to buy anything; if you can't afford it, say so in character.\n\
-         You keep what you buy (you need it; you never resell wishlist items), but \
-         players may buy other items out of your bag at base price.\n\
-         When a conversation turns to trading, use the \"open_trade\" action to put \
-         your trade window on the player's screen. Use \"offer_deal\" with kind \
-         \"sell\" and a positive modifier_pct to pay a bonus for something you \
-         really need right now.\n",
-        format_price(trader.salary_per_day),
-        format_price(trader.wallet_cap),
-    ));
+
+    if let Some((first, ..)) = held.first().copied() {
+        section.push_str(
+            "Things you might part with — personal belongings in your bag, \
+             not stock; nobody can buy one unless you offer it first, and \
+             offering is a choice, not a duty — only when the moment feels \
+             right, each person asked at most once. Keep them in your bag, \
+             not worn:\n",
+        );
+        for (item_id, name, price) in &held {
+            section.push_str(&format!(
+                "- {item_id} ({name}): base price {}\n",
+                format_price(*price)
+            ));
+        }
+        section.push_str(&format!(
+            "To offer one, pair a \"say\" naming the thing and its price \
+             with an unlock (modifier_pct 0 sells at base price, negative \
+             is a friend's discount; it lasts a few minutes), then the \
+             trade window:\n\
+             {{\"type\": \"offer_deal\", \"player\": \"PlayerName\", \"item\": \
+             \"{first}\", \"kind\": \"buy\", \"modifier_pct\": 0, \"reason\": \
+             \"a regular who has earned it\"}}\n\
+             {{\"type\": \"open_trade\", \"player\": \"PlayerName\"}}\n",
+        ));
+    }
+
+    section.push_str("Players may also buy other items out of your bag at base price.\n");
     Some(section)
 }
 
@@ -216,10 +326,13 @@ mod tests {
         ids.iter()
             .enumerate()
             .map(|(i, id)| onlinerpg_shared::inventory::ItemInstance {
+                locked: false,
                 instance_id: i as u64 + 1,
                 item_def_id: (*id).to_string(),
                 quantity: 1,
                 enchant: 0,
+                cape_color: None,
+                cape_texture: None,
             })
             .collect()
     }
@@ -236,38 +349,62 @@ mod tests {
     }
 
     #[test]
+    fn showroom_clerk_has_no_standard_catalog_prompt() {
+        assert_eq!(merchant_shop("Grida"), Some((Vec::new(), 40)));
+        assert!(merchant_prompt_for("Grida").is_none());
+    }
+
+    #[test]
     fn rica_has_a_shop_section() {
         let section = merchant_prompt_for("Rica").expect("Rica is a merchant");
-        assert!(section.contains("iron_sword"));
-        assert!(section.contains("1g"));
+        assert!(section.contains("dagger"));
+        assert!(section.contains("25s"));
         assert!(section.contains("40%"));
         assert!(section.contains("open_trade"));
         assert!(merchant_prompt_for("Karl").is_none());
+    }
+
+    #[test]
+    fn shelf_prices_carry_the_index_on_consumables_only() {
+        let base = |id: &str| crate::item_defs::get(id).unwrap().base_price.unwrap();
+        let line = shop_line_for("Rica", 150).unwrap();
+        let potion = format_price(base("healing_potion") * 3 / 2);
+        assert!(line.contains(&format!("healing_potion {potion}")), "{line}");
+        assert!(line.contains("dagger 25s"), "{line}");
     }
 
     /// A customer sees the same shelf the shopkeeper does, with prices, so a
     /// `buy` action can name something real instead of a guessed item id.
     #[test]
     fn a_customer_sees_ricas_shelf_and_her_rate() {
-        let line = shop_line_for("rica").expect("case does not matter");
-        assert!(line.contains("iron_sword 1g"), "{line}");
+        let line = shop_line_for("rica", 100).expect("case does not matter");
+        assert!(line.contains("dagger 25s"), "{line}");
         assert!(line.contains("healing_potion"), "{line}");
         assert!(line.contains("40%"), "{line}");
-        assert!(shop_line_for("Karl").is_none(), "a resident keeps no shelf");
+        assert!(
+            shop_line_for("Karl", 100).is_none(),
+            "a resident keeps no shelf"
+        );
 
         let (catalog, rate) = merchant_shop("Rica").expect("Rica is a merchant");
         assert_eq!(rate, 40);
-        assert!(catalog.contains(&"iron_sword"));
+        assert!(catalog.contains(&"dagger"));
         assert!(
-            !catalog.contains(&"goblin_sword"),
-            "loot she does not stock stays off the shelf, so a buy cannot resolve to it"
+            !catalog.contains(&"iron_sword"),
+            "tier-2+ weapons are dungeon loot, not shelf stock, so a buy cannot resolve to them"
         );
+    }
+
+    fn regulars(names: &[&str]) -> Vec<String> {
+        names.iter().map(|n| n.to_string()).collect()
     }
 
     #[test]
     fn karl_wishlist_satiates_per_owned_item() {
-        let section =
-            resident_trade_prompt_for("Karl", &bag(&[])).expect("Karl wants torch and dagger");
+        let section = resident_trade_prompt_for("Karl", &bag(&[]), true, &regulars(&["jake1"]))
+            .expect("Karl wants torch and dagger");
+        assert!(section.contains("Personal Trading"));
+        assert!(section.contains("jake1"), "the section names its audience");
         assert!(section.contains("torch"));
         assert!(section.contains("dagger"));
         assert!(section.contains("120%"));
@@ -277,12 +414,81 @@ mod tests {
         // Owning a torch removes it from the wants; owning both removes the
         // whole section — the temptation disappears from the prompt.
         let section =
-            resident_trade_prompt_for("Karl", &bag(&["torch"])).expect("Karl still wants a dagger");
+            resident_trade_prompt_for("Karl", &bag(&["torch"]), true, &regulars(&["jake1"]))
+                .expect("Karl still wants a dagger");
         assert!(!section.contains("torch ("));
         assert!(section.contains("dagger"));
-        assert!(resident_trade_prompt_for("Karl", &bag(&["torch", "dagger"])).is_none());
+        assert!(resident_trade_prompt_for(
+            "Karl",
+            &bag(&["torch", "dagger"]),
+            true,
+            &regulars(&["jake1"])
+        )
+        .is_none());
 
-        assert!(resident_trade_prompt_for("Nobody", &bag(&[])).is_none());
-        assert!(resident_trade_prompt_for("Rica", &bag(&[])).is_none());
+        // Post-purchase satiation empties Karl's buy half, and he has no
+        // keepsakes — nothing is emitted. Nor without a regular in sight.
+        assert!(
+            resident_trade_prompt_for("Karl", &bag(&[]), false, &regulars(&["jake1"])).is_none()
+        );
+        assert!(resident_trade_prompt_for("Karl", &bag(&[]), true, &[]).is_none());
+
+        assert!(
+            resident_trade_prompt_for("Nobody", &bag(&[]), true, &regulars(&["jake1"])).is_none()
+        );
+        assert!(
+            resident_trade_prompt_for("Rica", &bag(&[]), true, &regulars(&["jake1"])).is_none()
+        );
+    }
+
+    /// Signe's keepsake mandolin: the offer exists only while it is in her
+    /// bag — the inverse of wishlist satiation — and only while a player
+    /// who has earned it stands nearby. Her own worn mandolin has no
+    /// price, so it never shows up as something to offer.
+    #[test]
+    fn signe_offers_her_spare_mandolin_only_while_she_still_has_it() {
+        let section = resident_trade_prompt_for(
+            "Signe",
+            &bag(&["mandolin", "worn_mandolin"]),
+            true,
+            &regulars(&["jake1"]),
+        )
+        .expect("mandolin in bag and a regular nearby");
+        assert!(section.contains("Personal Trading"));
+        assert!(section.contains("- mandolin"));
+        assert!(section.contains("40s"), "base 4000 formats as 40s");
+        assert!(section.contains("jake1"), "the offer names who earned it");
+        assert!(section.contains("offer_deal"));
+        assert!(section.contains("open_trade"));
+        assert!(
+            !section.contains("worn_mandolin"),
+            "her own instrument is not for sale"
+        );
+        assert!(
+            !section.contains("want to buy"),
+            "no wishlist, no buying urge"
+        );
+
+        assert!(
+            resident_trade_prompt_for(
+                "Signe",
+                &bag(&["worn_mandolin", "clump_of_kelp"]),
+                true,
+                &regulars(&["jake1"])
+            )
+            .is_none(),
+            "spare sold: only the unsellable worn instrument is left"
+        );
+    }
+
+    /// The whole keepsake temptation stays out of the prompt until someone
+    /// nearby has actually earned it — favor is the gate, not LLM judgement.
+    #[test]
+    fn keepsakes_stay_hidden_from_strangers() {
+        assert!(
+            resident_trade_prompt_for("Signe", &bag(&["mandolin", "worn_mandolin"]), true, &[])
+                .is_none(),
+            "no favored player nearby: no keepsake section at all"
+        );
     }
 }

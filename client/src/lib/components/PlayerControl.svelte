@@ -1,53 +1,148 @@
 <script lang="ts">
+  import { translate } from '../i18n'
   import { onMount } from 'svelte'
+  import { localTeleportActive } from '../stores/teleportEffectStore'
+  import {
+    inspectionTargeting,
+    cancelInspection,
+    takeInspectionTarget,
+  } from '../stores/inspectionStore'
+  import {
+    fishingTargeting,
+    cancelFishingTargeting,
+  } from '../stores/fishingStore'
+  import { landscapingMode } from '../stores/landscapingStore'
+  import {
+    estateFurnitureEditorActive,
+    estateFurniturePlacementMode,
+    estateFurnitureSelectionMode,
+  } from '../stores/estateFurniturePlacementStore'
   import { useThrelte } from '@threlte/core'
   import * as THREE from 'three'
   import {
     gameStore,
-    hoveredSignpost,
+    hoverTarget,
+    addChatMessage,
+    reportSkillFailure,
     type LocalPlayer,
   } from '../stores/gameStore'
+  import { travelDestination } from '../stores/travelStore'
+  import {
+    planTravelLeg,
+    travelDistance,
+    TRAVEL_ARRIVAL_DISTANCE,
+    type TravelDestination,
+  } from '../utils/autoTravel'
   import { networkManager } from '../network/socket'
-  import type { PositionCorrection } from '../network/networkTypes'
+  import type {
+    PositionCorrection,
+    MountRecovery,
+  } from '../network/networkTypes'
   import { monsterManager } from '../managers/monsterManager'
+  import { remotePlayerManager } from '../managers/remotePlayerManager'
   import { groundItemManager } from '../managers/groundItemManager'
   import { combatController } from '../managers/combatController'
   import {
+    consumeDaggerSkill,
+    daggerSkillState,
+    daggerSkillCasts,
+    playDaggerSkill,
+    clearDaggerCast,
+  } from '../stores/daggerSkillStore'
+  import { DAGGER_SKILL } from '../data/daggerSkill'
+  import {
+    abilityEquipmentAllowed,
+    AUSCULTATION,
+    FISHING,
+    isAbilityAvailable,
+  } from '../data/abilities'
+  import {
+    playPropSound,
     preloadFishingSounds,
+    preloadBowSounds,
+    preloadPropSounds,
+    preloadMonsterDeathSounds,
+    preloadPlayerDeathSounds,
+    preloadPlayerHurtSounds,
     preloadSwordHitSound,
     preloadSwordMissSound,
   } from '../managers/sfxManager'
-  import { inputHandler, type ClickIntent } from '../managers/inputHandler'
+  import {
+    inputHandler,
+    hoverTargetKey,
+    type ClickIntent,
+    type HoverTarget,
+  } from '../managers/inputHandler'
   import { getNpcCapabilities } from '../data/traderDefs'
-  import { NPC_TRADE_RANGE_METERS } from '../data/tradeConstants'
+  import { tipHatManager } from '../managers/tipHatManager'
+  import { mealManager } from '../managers/mealManager'
+  import { activeDebuffs } from '../stores/debuffStore'
+  import { staggerRadius, staggerTarget } from './player-control/stagger'
+  import { tipHatDialog } from '../stores/tipHatStore'
   import { npcContextMenu, requestChatFocus } from '../stores/npcMenuStore'
   import {
     mapEditorMode,
     housingEditorMode,
     debugSpeedMode,
     torchLightEnabled,
+    cameraRotationEnabled,
+    teleportLoading,
   } from '../stores/debugStore'
   import { localTorchEquipped, inventoryStore } from '../stores/inventoryStore'
-  import { getItemDef } from '../data/itemDefs'
+  import { hungerState, SPRINT_MIN_SATIATION } from '../stores/hungerStore'
+  import { isRangedWeapon, weaponRangeMeters } from '../data/itemDefs'
   import {
     DEFAULT_MOVEMENT_CONFIG,
+    SPRINT_SPEED_MULT,
+    scaleMovementConfig,
     type Position,
     type MovementState,
     type MovementConfig,
     type PlayerState,
   } from '../utils/movementUtils'
+  import {
+    isMounted,
+    mountFloats,
+    mountSpeedMult,
+    mountTurnRadius,
+  } from '../utils/mounts'
   import type { TerrainHeightManager } from '../managers/terrainHeightManager'
+  import { floatingSurfaceY } from '../utils/floatingSurface'
   import {
     playerFloorOffset,
+    playerInsideHouseId,
     playerVisualFloorLevel,
   } from '../stores/housingStore'
   import { currentDungeonDepth } from '../stores/dungeonStore'
   import { dungeonManager } from '../managers/dungeonManager'
   import { housingManager } from '../managers/housingManager'
+  import {
+    shouldIgnoreImplicitHouseFloorChange,
+    wallApproachPositions,
+    type ClosedHouseDoor,
+  } from '../managers/housing-queries'
   import { findPath } from '../managers/pathfinding'
   import { PROP_SWING_IMPACT_MS } from '../data/combatTiming'
-  import { passability_get_floor_at } from '../wasm/onlinerpg_shared'
-  import { get } from 'svelte/store'
+  import {
+    DUNGEON_DOOR_APPROACH,
+    HOUSE_DOOR_APPROACH,
+    NPC_TRADE_APPROACH,
+    approachForInteraction,
+    PICKUP_APPROACH,
+    PROP_APPROACH,
+    STALL_TRADE_APPROACH,
+    TIP_HAT_APPROACH,
+  } from '../data/approachRanges'
+  import {
+    fishing_is_stern_cast,
+    max_cast_distance_m,
+    passability_get_floor_at,
+  } from '../wasm/onlinerpg_shared'
+  import { derived, get } from 'svelte/store'
+  import {
+    sprintRequested,
+    keyboardMovementMode,
+  } from '../stores/movementSettings'
   import { createPlayerPhysics } from './player-control/player-physics'
   import { subscribePlayerNetworkEvents } from './player-control/player-network-events'
   import type {
@@ -65,14 +160,15 @@
   import {
     createKeyboardMoveSender,
     createKeyboardSpeedRamp,
-    createKeyboardTapTracker,
     runKeyboardFrame,
   } from './player-control/fsm/keyboard'
+  import { BACKWARD_SPEED } from '../utils/horseMovement'
   import {
     dispatchPlayerControlEvent as dispatchQueuedPlayerControlEvent,
     createCanvasIntentEvent,
     type PlayerControlEventActions,
   } from './player-control/fsm/events'
+  import { worldView } from '../network/worldView'
   import { runPlayerMovementTick } from './player-control/fsm/movement-tick'
   import {
     beginJumpFeedback,
@@ -83,9 +179,8 @@
   import {
     exitPickupInteraction as buildExitPickupInteraction,
     handlePickupGrab,
-    decidePickupApproach,
     applyObjectInteractionPosition,
-    getObjectInteractionExitPosition,
+    pickObjectExitPosition,
     beginPickupInteraction,
     beginObjectInteraction,
     exitObjectInteraction as buildExitObjectInteraction,
@@ -93,20 +188,42 @@
     getInteractionExitKind,
   } from './player-control/fsm/interaction'
   import {
+    planApproach,
+    resolveApproach,
+    type ApproachSpec,
+    type PendingApproach,
+    type RouteQuality,
+  } from './player-control/fsm/approach'
+
+  import {
     beginAttack,
     ensureAttackState,
     transitionAttackToIdle,
     type ChaseMovement,
   } from './player-control/fsm/combat'
   import type { Pathing } from './player-control/fsm/movement-substrate'
-  import { buildAttackState } from './player-control/player-state-builders'
+  import {
+    buildAttackState,
+    buildInteractState,
+  } from './player-control/player-state-builders'
   import type {
     MovingControlState,
     PickingUpControlState,
     PlayerControlStateName,
   } from './player-control/fsm/control-state'
   import { createLocalPlayerControlMachine } from './player-control/fsm/state-definitions'
-  import { wrapWorldX } from '../terrain/world-wrap'
+  import { shortestWrappedDeltaX, wrapWorldX } from '../terrain/world-wrap'
+  import {
+    emoteRequest,
+    emoteStopRequest,
+    localEmoteAnim,
+    HELD_EMOTE_ANIMS,
+    isEmoteAnim,
+    isSelfEndingEmote,
+  } from '../stores/emoteStore'
+  import { respawnPoseRequest } from '../stores/respawnPoseStore'
+  import { objectManager } from '../managers/objectManager'
+  import { SitAnimationName } from '../types/animations'
 
   interface Props {
     onStateChange: (state: PlayerState) => void
@@ -114,14 +231,24 @@
     heightManager: TerrainHeightManager
     groundMeshes: THREE.Object3D[]
     groundItemMeshes: THREE.Object3D[]
+    tipHatMeshes: THREE.Object3D[]
+    stallMeshes: THREE.Object3D[]
+    mealMeshes: THREE.Object3D[]
     monsterMeshes: THREE.Group[]
+    /** Invisible bind-pose boxes, one per monster — the 20 Hz hover raycast
+     *  tests these instead of the skinned triangles. */
+    monsterHoverMeshes: THREE.Group[]
     npcMeshes?: THREE.Object3D[]
+    playerMeshes?: THREE.Object3D[]
+    /** Invisible boxes, one per remote player, for the hover raycast. */
+    playerHoverMeshes?: THREE.Object3D[]
     doorMeshes: THREE.Object3D[]
     objectMeshes: THREE.Object3D[]
     propMeshes: THREE.Object3D[]
     attackCooldown?: number
     /** Baked water surface height at a world XZ (for fishing cast detection). */
     waterSurfaceAt?: (x: number, z: number) => number
+    hasWaterSurfaceData?: (x: number, z: number) => boolean
   }
 
   let {
@@ -130,19 +257,21 @@
     heightManager,
     groundMeshes,
     groundItemMeshes,
+    tipHatMeshes,
+    stallMeshes,
+    mealMeshes,
     monsterMeshes,
+    monsterHoverMeshes,
     npcMeshes = [],
+    playerMeshes = [],
+    playerHoverMeshes = [],
     doorMeshes,
     objectMeshes,
     propMeshes,
     attackCooldown,
     waterSurfaceAt,
+    hasWaterSurfaceData,
   }: Props = $props()
-
-  /** How far from a clicked barrel/crate the player stops while walking up to
-   *  break it — comfortably inside the layer's break trigger and the server's
-   *  range, and clear of the prop's solid cell. */
-  const PROP_APPROACH_STOP = 1.6
 
   let floorOffset = 0
   playerFloorOffset.subscribe((v) => (floorOffset = v))
@@ -150,7 +279,10 @@
   let currentPlayer = $state<LocalPlayer | null>(null)
 
   /** Floor as broadcast to others. See `playerVisualFloorLevel`. */
-  function wireFloorLevel(): number {
+  function wireFloorLevel(passabilityFloor?: number): number {
+    if (passabilityFloor !== undefined) {
+      return dungeonManager.floorLevelForPassability(passabilityFloor)
+    }
     const depth = get(currentDungeonDepth)
     return depth >= 1 ? -depth : get(playerVisualFloorLevel)
   }
@@ -176,7 +308,20 @@
     getCurrentPlayerY: () => currentPlayer?.position.y ?? null,
     getFloorOffset: () => floorOffset,
     getPassabilityFloor: currentPassabilityFloor,
+    getFloatSurfaceY: (x, z) => floatSurfaceY(x, z),
   })
+
+  function floatSurfaceY(x: number, z: number): number | null {
+    if (!mountFloats(currentPlayer?.mount)) return null
+    return floatingSurfaceY({
+      x,
+      z,
+      fallbackY: currentPlayer?.position.y ?? 0,
+      heightManager,
+      waterSurfaceAt,
+      hasWaterSurfaceData,
+    })
+  }
   const { sampleHeight, waypointHeight, isMovementBlocked, isUphillTooSteep } =
     physics
 
@@ -185,16 +330,224 @@
   // state drops that data, so there are no movement flags to reset here.
   // lastSentPosition is kinematic (send dedup), not state-membership data.
   let lastSentPosition = $state<Position | null>(null)
+  let lastMovementSampleAt = 0
+  let mountRecoveryId = 0
+  let mountRecoveryAttempted = false
+  let mountRecovery: {
+    id: number
+    movement: MovingControlState
+    goal: Position
+    approach: PendingApproach | null
+    startedAt: number
+  } | null = null
 
-  // Use the same movement config as remote players, with debug speed multiplier
-  let MOVEMENT_CONFIG = $derived<MovementConfig>({
-    ...DEFAULT_MOVEMENT_CONFIG,
-    maxSpeed: DEFAULT_MOVEMENT_CONFIG.maxSpeed * ($debugSpeedMode ? 10 : 1),
-    acceleration:
-      DEFAULT_MOVEMENT_CONFIG.acceleration * ($debugSpeedMode ? 10 : 1),
-    deceleration:
-      DEFAULT_MOVEMENT_CONFIG.deceleration * ($debugSpeedMode ? 10 : 1),
-  })
+  function cancelMountRecovery() {
+    if (!mountRecovery) return
+    mountRecovery = null
+    networkManager.sendPlayerMountTurn(playerRotation, true)
+  }
+
+  function startMountRecovery(): boolean {
+    const m = movingState()
+    const goal = m?.waypoints.at(-1)
+    if (
+      !isMounted(currentPlayer) ||
+      currentPlayer.health <= 0 ||
+      !m ||
+      !goal ||
+      mountRecoveryAttempted ||
+      combatController.isInCombat
+    )
+      return false
+    mountRecoveryAttempted = true
+    mountRecovery = {
+      id: ++mountRecoveryId,
+      movement: m,
+      goal: {
+        x: goal.x,
+        y: waypointHeight(goal.floor, goal.x, goal.z),
+        z: goal.z,
+      },
+      approach: m.approach,
+      startedAt: performance.now(),
+    }
+    currentSpeed = 0
+    networkManager.sendPlayerMountRecover(mountRecovery.id, mountRecovery.goal)
+    return true
+  }
+
+  function applyMountRecovery(update: MountRecovery) {
+    const pending = mountRecovery
+    if (!pending || pending.id !== update.request_id) return
+    if (
+      !isMounted(currentPlayer) ||
+      currentPlayer.health <= 0 ||
+      movingState() !== pending.movement
+    ) {
+      cancelMountRecovery()
+      return
+    }
+    playerRotation = update.rotation
+    writePlayerPosition(update.position, update.rotation)
+    currentSpeed = update.done ? 0 : 1.5 * ($hungerState?.moveMult ?? 1)
+    updatePlayerState()
+    if (!update.done) return
+    mountRecovery = null
+    if (update.success) {
+      lastSentPosition = null
+      handleClickToMove(pending.goal, {
+        approach: pending.approach,
+        sprinting: false,
+        recovering: true,
+      })
+    } else {
+      pending.movement.approach = null
+      stopMovement()
+      cancelAutoTravel(translate('travel.noRoom'))
+    }
+  }
+
+  // Use the same movement config as remote players, with debug speed multiplier.
+  // The hunger multiplier mirrors the server's own movement sim (doc/HUNGER.md)
+  // so prediction and authority agree.
+  let speedMult = $derived(
+    ($debugSpeedMode ? 10 : 1) *
+      ($hungerState?.moveMult ?? 1) *
+      mountSpeedMult(currentPlayer?.mount)
+  )
+  let clickSprinting = false
+  let startingClickMovement = false
+  let autoTravelTarget: TravelDestination | null = null
+  let travelPlayerId: number | null = null
+  let travelProgressPosition: TravelDestination | null = null
+  let travelStalledMs = 0
+  let travelPlanCooldownMs = 0
+
+  function cancelAutoTravel(message?: string) {
+    if (!autoTravelTarget) return
+    travelDestination.set(null)
+    if (message) addChatMessage({ text: message, sender: 'system' })
+  }
+
+  function updateAutoTravel(deltaTime: number) {
+    if (!autoTravelTarget) return
+    if (
+      !currentPlayer ||
+      currentPlayer.health <= 0 ||
+      $currentDungeonDepth > 0 ||
+      $playerVisualFloorLevel > 0 ||
+      $playerInsideHouseId !== null ||
+      inputHandler.hasKeysPressed
+    ) {
+      cancelAutoTravel()
+      return
+    }
+    if (getInteractionExitKind(playerState) !== 'none') return
+    travelPlanCooldownMs = Math.max(0, travelPlanCooldownMs - deltaTime)
+    const position = currentPlayer.position
+    if (
+      !travelProgressPosition ||
+      travelDistance(travelProgressPosition, position) > 0.5
+    ) {
+      travelProgressPosition = { x: position.x, z: position.z }
+      travelStalledMs = 0
+    } else {
+      travelStalledMs += Math.min(deltaTime, 100)
+    }
+    if (travelStalledMs > 15_000) {
+      cancelAutoTravel(translate('travel.unavailable'))
+      return
+    }
+    const moving = movingState()
+    if (
+      moving &&
+      (moving.waypointIndex < moving.waypoints.length - 1 ||
+        travelDistance(position, moving.target) > 12 ||
+        travelDistance(moving.target, autoTravelTarget) <=
+          TRAVEL_ARRIVAL_DISTANCE)
+    )
+      return
+    if (travelPlanCooldownMs > 0) return
+    travelPlanCooldownMs = 500
+    const leg = planTravelLeg(
+      position,
+      autoTravelTarget,
+      (x, z) => heightManager.hasHeightData(x, z),
+      (target) => findPath(position.x, position.z, 0, target.x, target.z, 0)
+    )
+    if (moving && leg.kind !== 'move') return
+    if (leg.kind === 'waiting') return
+    if (leg.kind === 'arrived') {
+      cancelAutoTravel(translate('travel.arrived'))
+      return
+    }
+    if (leg.kind === 'blocked') {
+      cancelAutoTravel(translate('travel.noRoute'))
+      return
+    }
+    const target = {
+      ...leg.target,
+      y: sampleHeight(leg.target.x, leg.target.z),
+    }
+    clickSprinting = true
+    startingClickMovement = true
+    runMoveRequest({
+      clickPosition: target,
+      currentPlayer,
+      interactionExit: 'none',
+      isMoving: moving !== null,
+      hasKeyboardInput: false,
+      currentFloor: 0,
+      getFloorAt: () => 0,
+      findPath: () => ({ waypoints: leg.waypoints }),
+      waypointHeight,
+      sendPlayerMove,
+      startSpeed: currentSpeed,
+      actions: createMoveRequestActions(target, {}),
+    })
+    startingClickMovement = false
+  }
+
+  function sprintAvailable(): boolean {
+    return ($hungerState?.satiation ?? 0) > SPRINT_MIN_SATIATION
+  }
+
+  function isSprintingNow(): boolean {
+    if (!sprintAvailable()) return false
+    const moving = playerControlMachine?.stateName === 'moving'
+    // Combat chase runs (see getMovementMode) — at sprint speed, or a fleeing
+    // monster outruns the player. Same satiation gate and cost as sprint.
+    if (combatController.isInCombat && moving) return true
+    if (clickSprinting && (startingClickMovement || moving)) return true
+    const input = inputHandler.getMovementInput()
+    return (
+      inputHandler.isSprintRequested &&
+      input !== null &&
+      ($keyboardMovementMode === 'world' ||
+        !isMounted(currentPlayer) ||
+        input.forward === 1)
+    )
+  }
+
+  // Called per frame — cache the scaled config so steady movement reuses one
+  // object instead of allocating twice a frame.
+  let cachedMoveMult = 1
+  let cachedMoveConfig: MovementConfig = DEFAULT_MOVEMENT_CONFIG
+
+  function movementConfig(): MovementConfig {
+    const mult = speedMult * (isSprintingNow() ? SPRINT_SPEED_MULT : 1)
+    if (mult !== cachedMoveMult) {
+      cachedMoveMult = mult
+      cachedMoveConfig = scaleMovementConfig(DEFAULT_MOVEMENT_CONFIG, mult)
+    }
+    return isMounted(currentPlayer)
+      ? {
+          ...cachedMoveConfig,
+          mountRotation: playerRotation,
+          mountTurnRadius: mountTurnRadius(currentPlayer.mount),
+        }
+      : cachedMoveConfig
+  }
 
   // Character rotation and current speed
   let playerRotation = $state(0)
@@ -208,6 +561,13 @@
     clearTimeout(standUpTimer)
     standUpTimer = null
   }
+
+  /** A seat exit waiting on the stand-up clip: where the player is heading
+   *  (steers which side of the seat to step to) and what to do afterwards. */
+  let pendingExit: {
+    toward: Position | null
+    then: (() => void) | null
+  } | null = null
 
   const JUMP_FEEDBACK_DURATION_MS = 1500
   const JUMP_FEEDBACK_COOLDOWN_MS = 1000
@@ -227,6 +587,13 @@
   let propSwingCounter = 0
   let propBreakTimer: ReturnType<typeof setTimeout> | null = null
   let propSwingIdleTimer: ReturnType<typeof setTimeout> | null = null
+  let doorInteractionRetryTimer: ReturnType<typeof setTimeout> | null = null
+
+  function clearDoorInteractionRetry() {
+    if (!doorInteractionRetryTimer) return
+    clearTimeout(doorInteractionRetryTimer)
+    doorInteractionRetryTimer = null
+  }
 
   function clearPropSwingTimers() {
     if (propBreakTimer) {
@@ -293,7 +660,21 @@
   }
 
   function onInteractionFinished() {
-    exitPickupInteraction()
+    // A one-shot emote ends itself; notify so the server drops the stored
+    // pose and remotes clear it. Held poses (bench, forge) stay until the
+    // player moves, and pickup has its own exit below.
+    if (playerState.state !== 'interact') return exitPickupInteraction()
+    const anim = playerState.interactionAnim ?? ''
+    if (isSelfEndingEmote(anim)) {
+      exitObjectInteraction()
+    } else if (anim === SitAnimationName.SIT_TO_STAND) {
+      const exit = pendingExit
+      pendingExit = null
+      completeObjectExit(false, exit?.toward ?? undefined)
+      exit?.then?.()
+    } else {
+      exitPickupInteraction()
+    }
   }
 
   function onPickupGrab() {
@@ -306,17 +687,59 @@
     })
   }
 
-  function exitObjectInteraction(notify = true) {
-    if (currentPlayer) {
+  /** Leave the current object/emote. A seated player first plays the
+   *  stand-up clip; the real exit (and `then`) runs from
+   *  onInteractionFinished when it ends. A rejected sit (notify=false) never
+   *  sat, so it skips straight out. */
+  function exitObjectInteraction(
+    notify = true,
+    then?: () => void,
+    toward?: Position
+  ) {
+    const anim =
+      playerState.state === 'interact' ? playerState.interactionAnim : undefined
+    if (anim === SitAnimationName.SIT_TO_STAND) {
+      pendingExit = { toward: toward ?? null, then: then ?? null }
+      return
+    }
+    if (notify && anim === SitAnimationName.SIT) {
+      setPlayerState(
+        buildInteractState(
+          playerState,
+          playerState.position,
+          playerState.rotation,
+          SitAnimationName.SIT_TO_STAND,
+          playerState.interactOffsetY ?? 0
+        )
+      )
+      networkManager.sendStopInteraction()
+      pendingExit = { toward: toward ?? null, then: then ?? null }
+      return
+    }
+    completeObjectExit(notify, toward)
+    then?.()
+  }
+
+  function completeObjectExit(notify: boolean, toward?: Position) {
+    // Stepping out walks the player off the seat they were using. An emote
+    // claims no object — it plays where the player stands — so every exit
+    // path leaves an emote in place.
+    const stepOut =
+      playerState.state !== 'interact' ||
+      !isEmoteAnim(playerState.interactionAnim ?? '')
+    if (stepOut && currentPlayer) {
+      const seat = {
+        x: currentPlayer.position.x,
+        y: currentPlayer.position.y,
+        z: currentPlayer.position.z,
+      }
       applyObjectInteractionPosition(
         currentPlayer,
-        getObjectInteractionExitPosition(
-          {
-            x: currentPlayer.position.x,
-            y: currentPlayer.position.y,
-            z: currentPlayer.position.z,
-          },
-          playerRotation
+        pickObjectExitPosition(
+          seat,
+          playerRotation,
+          (x, z) => isMovementBlocked(seat.x, seat.z, x, z, seat.y),
+          toward
         ),
         {
           hasHeightData: (x, z) => heightManager.hasHeightData(x, z),
@@ -334,14 +757,31 @@
   }
 
   function stopMovement() {
+    const approach = movingState()?.approach ?? null
     clearStandUpTimer()
     currentSpeed = 0
+    clickSprinting = false
     // Settle into idle BEFORE emitting: the projection derives 'moving' vs
     // 'idle' from the machine's owned state, so the transition must precede the
-    // emit. Leaving the moving state also drops its target/movementState/path —
-    // nothing to reset. arrive() overrides idle with pickup/attack right after.
+    // emit. Leaving the moving state also drops its target/movementState/path/
+    // approach — nothing to reset. The walk-up action (or arrive()'s attack)
+    // overrides idle right after.
     transitionTo('idle')
     updatePlayerState()
+    // Every way a click-walk ends — arrival, a wall, a slope — lands here, so
+    // this is the one place the walk-up action has to be resolved.
+    if (
+      approach &&
+      currentPlayer &&
+      currentPlayer.health > 0 &&
+      resolveApproach(
+        approach,
+        currentPlayer.position,
+        get(currentDungeonDepth)
+      )
+    ) {
+      approach.act()
+    }
   }
 
   // Explicitly drive the machine's owned state to a data-less state. The machine
@@ -350,6 +790,7 @@
   function transitionTo(
     name: Exclude<PlayerControlStateName, 'moving' | 'picking_up'>
   ) {
+    cancelMountRecovery()
     playerControlMachine.transition({ name })
   }
 
@@ -377,17 +818,49 @@
   function sendPlayerMove(
     position: Position,
     rotation: number,
-    append = false
+    passabilityFloor?: number,
+    append = false,
+    keyboardForward?: number
   ) {
+    if ($localTeleportActive) return
+    cancelMountRecovery()
     const wrappedPosition = { ...position, x: wrapWorldX(position.x) }
+    const floorLevel = wireFloorLevel(passabilityFloor)
+    // The server checks the declared dungeon floor against Y: send the Y of
+    // the floor we claim, whatever the caller sampled.
+    if (floorLevel < 0) {
+      const y = dungeonManager.floorHeightAt(
+        -floorLevel,
+        wrappedPosition.x,
+        wrappedPosition.z
+      )
+      if (y !== null) wrappedPosition.y = y
+    }
     lastSentPosition = wrappedPosition
-    const floorLevel = wireFloorLevel()
     lastSentFloorLevel = floorLevel
-    networkManager.sendPlayerMove(wrappedPosition, rotation, floorLevel, append)
+    if (keyboardForward !== undefined) {
+      networkManager.sendPlayerKeyboardMove(
+        wrappedPosition,
+        rotation,
+        floorLevel,
+        keyboardForward,
+        isSprintingNow() && keyboardForward > 0
+      )
+      return
+    }
+    networkManager.sendPlayerMove(
+      wrappedPosition,
+      rotation,
+      floorLevel,
+      append,
+      isSprintingNow()
+    )
   }
 
-  const keyboardMoveSender = createKeyboardMoveSender(sendPlayerMove)
-  const keyboardTapTracker = createKeyboardTapTracker()
+  const keyboardMoveSender = createKeyboardMoveSender(
+    (position, rotation, forward) =>
+      sendPlayerMove(position, rotation, undefined, false, forward)
+  )
   const keyboardSpeedRamp = createKeyboardSpeedRamp()
 
   function writePlayerPosition(position: Position, rotation: number) {
@@ -401,18 +874,68 @@
     })
   }
 
-  // The server refused a step, so we are somewhere it cannot follow. Snap to
-  // its copy and drop the path that walked us out of sync — keeping it would
-  // just march us back into the same refusal. Combat is left alone on purpose:
-  // dropping the moving state drops the chase goal with it, so the next tick
-  // re-routes from where we now actually are.
   function applyPositionCorrection(correction: PositionCorrection) {
-    stopMovement()
+    if (correction.resyncId !== undefined) {
+      const moving = movingState()
+      const goal = moving?.waypoints.at(-1)
+      const destination = goal
+        ? {
+            x: goal.x,
+            y: waypointHeight(goal.floor, goal.x, goal.z),
+            z: goal.z,
+          }
+        : null
+      const approach = moving?.approach
+      const sprinting = clickSprinting
+      mountRecovery = null
+      mountRecoveryAttempted = false
+      keyboardMoveSender.reset()
+      keyboardSpeedRamp.reset()
+      lastSentPosition = null
+      lastSentFloorLevel = null
+      lastMovementSampleAt = 0
+      currentSpeed = 0
+      clearStandUpTimer()
+      playerRotation = correction.rotation
+      writePlayerPosition(correction, correction.rotation)
+      transitionTo('idle')
+      updatePlayerState()
+      networkManager.acknowledgeMovementResync(correction.resyncId)
+      if (autoTravelTarget) {
+        travelPlanCooldownMs = 0
+        travelStalledMs = 0
+        travelProgressPosition = null
+      } else if (destination && !combatController.isInCombat) {
+        handleClickToMove(destination, {
+          approach,
+          sprinting,
+          recovering: true,
+        })
+      }
+      return
+    }
+    if (mountRecovery) return
+    keyboardMoveSender.reset()
+    keyboardSpeedRamp.reset()
+    lastSentPosition = null
     playerRotation = correction.rotation
-    writePlayerPosition(
-      { x: correction.x, y: correction.y, z: correction.z },
-      correction.rotation
-    )
+    writePlayerPosition(correction, correction.rotation)
+    if (startMountRecovery()) return
+    cancelBlockedMovement()
+  }
+
+  function cancelBlockedMovement(sendStop = true) {
+    const m = movingState()
+    if (m) m.approach = null
+    combatController.cancelCombat()
+    clearDoorInteractionRetry()
+    dungeonManager.clearPendingBreak()
+    dungeonManager.clearPendingOpen()
+    stopMovement()
+    if (sendStop && currentPlayer) {
+      sendPlayerMove(currentPlayer.position, playerRotation)
+    }
+    cancelAutoTravel(translate('travel.blocked'))
   }
 
   // Current player state
@@ -423,20 +946,58 @@
     position: { x: 0, y: 0, z: 0 },
   })
 
+  /** Turn to face a world point (rotation only; nothing is emitted). */
+  function faceTowards(x: number, z: number) {
+    cancelMountRecovery()
+    if (!currentPlayer) return
+    const dx = shortestWrappedDeltaX(currentPlayer.position.x, x)
+    const dz = z - currentPlayer.position.z
+    if (dx !== 0 || dz !== 0) playerRotation = Math.atan2(dx, dz)
+  }
+
+  // The panel highlight is a projection of the real state, not a flag set on
+  // enter/exit: death, attacks, fishing, and bench-sitting all leave an emote
+  // without passing any single exit function.
+  let lastEmoteSync: string | null = null
+  function syncLocalEmote(next: PlayerState) {
+    const anim =
+      next.state === 'interact' && isEmoteAnim(next.interactionAnim ?? '')
+        ? (next.interactionAnim ?? null)
+        : null
+    if (anim === lastEmoteSync) return
+    lastEmoteSync = anim
+    localEmoteAnim.set(anim)
+  }
+
   function setPlayerState(next: PlayerState) {
     playerState = next
     onStateChange(next)
+    syncLocalEmote(next)
   }
 
   gameStore.subscribe((state) => {
+    const previousPlayerId = currentPlayer?.id ?? null
     currentPlayer = state.currentPlayer
-    if (currentPlayer) {
-      playerState.position = {
-        x: currentPlayer.position.x,
-        y: currentPlayer.position.y,
-        z: currentPlayer.position.z,
-      }
+    if (!currentPlayer) return
+
+    const position = {
+      x: currentPlayer.position.x,
+      y: currentPlayer.position.y,
+      z: currentPlayer.position.z,
     }
+    if (currentPlayer.id === previousPlayerId) {
+      playerState.position = position
+      return
+    }
+
+    playerRotation = currentPlayer.rotation
+    currentSpeed = 0
+    setPlayerState({
+      state: currentPlayer.health > 0 ? 'idle' : 'dead',
+      speed: 0,
+      rotation: currentPlayer.rotation,
+      position,
+    })
   })
 
   // Update player state and notify parent
@@ -458,22 +1019,86 @@
       hasTorch: $localTorchEquipped || $torchLightEnabled,
       isInCombat: combatController.isInCombat,
       attackCounter: combatController.attackCounter,
+      isSprinting: isSprintingNow(),
     })
 
     // Only update if state actually changed
     if (shouldEmitProjectedPlayerState(playerState, newState)) {
       playerState = newState
       onStateChange(newState)
+      syncLocalEmote(newState)
+    }
+  }
+
+  /** Reach of the wielded weapon. The server gates on the same items.json
+   *  column, so click-to-attack, the chase break-off and the rejection all
+   *  agree on one distance. */
+  function equippedAttackRange(): number {
+    return weaponRangeMeters($inventoryStore.equipped.main_hand?.item_def_id)
+  }
+
+  /** Shared by click attacks and the chase tick. */
+  function attackLineBlocked(from: Position, to: Position, floor: number) {
+    return housingManager.attackLineBlocked(
+      from.x,
+      from.z,
+      to.x,
+      to.z,
+      floor,
+      isRangedWeapon($inventoryStore.equipped.main_hand?.item_def_id)
+    )
+  }
+
+  /** Take the monster as a target and walk at it, attacking on arrival. */
+  function chaseAndAttack(monsterId: string, goal: Position) {
+    combatController.beginCombat(monsterId, false)
+    handleClickToMove(goal)
+  }
+
+  function sendCombatAttack(monsterId: string) {
+    const canUseDaggerSkill =
+      isAbilityAvailable(DAGGER_SKILL.clip, currentPlayer?.characterClass) &&
+      abilityEquipmentAllowed(DAGGER_SKILL.clip, $inventoryStore.equipped)
+    if (canUseDaggerSkill && currentPlayer && consumeDaggerSkill()) {
+      playDaggerSkill(currentPlayer.id)
+      networkManager.sendDaggerDoubleSlash(monsterId)
+    } else {
+      if (!canUseDaggerSkill)
+        daggerSkillState.update((state) => ({ ...state, queued: false }))
+      if (currentPlayer) clearDaggerCast(currentPlayer.id)
+      networkManager.sendPlayerAttack(monsterId)
     }
   }
 
   // Initiate attack on a monster
   function initiateAttack(monsterId: string) {
+    cancelAutoTravel()
     if (getInteractionExitKind(playerState) === 'pickup') {
       finishPendingPickup()
     }
 
     const monsterInfo = monsterManager.monsters.get(monsterId)
+
+    // A wall between us refuses the blow server-side, so walk at the monster
+    // instead of swinging into a rejection.
+    if (
+      monsterInfo &&
+      currentPlayer &&
+      attackLineBlocked(
+        currentPlayer.position,
+        monsterInfo.position,
+        currentPassabilityFloor()
+      )
+    ) {
+      chaseAndAttack(monsterId, monsterInfo.position)
+      return
+    }
+
+    // Without this the first swing keeps the old facing until the next cycle.
+    if (monsterInfo) {
+      faceTowards(monsterInfo.position.x, monsterInfo.position.z)
+    }
+
     const result = beginAttack({
       monsterId,
       monsterInfo,
@@ -489,10 +1114,10 @@
       lastSentPosition,
       beginCombat: (id, inRange) => combatController.beginCombat(id, inRange),
       sendPlayerMove,
-      sendPlayerAttack: (id) => networkManager.sendPlayerAttack(id),
+      sendPlayerAttack: sendCombatAttack,
     })
 
-    if (result.kind === 'ignored_dead_target') return
+    if (result.kind === 'ignored_unattackable_target') return
 
     // Entering attacking drops any moving-state data (the chase that brought us
     // here), so there is nothing else to reset.
@@ -509,6 +1134,7 @@
   }
 
   function transitionToDead() {
+    cancelAutoTravel()
     const transition = transitionToDeadState(playerState)
     if (transition.kind === 'ignored_already_dead') return
 
@@ -524,6 +1150,7 @@
   }
 
   function transitionToRespawned() {
+    cancelAutoTravel()
     if (!currentPlayer) return
 
     const transition = transitionToRespawnedState(playerState, {
@@ -534,6 +1161,7 @@
     combatController.cancelCombat()
     inputHandler.clearTransientInput()
     clearStandUpTimer()
+    pendingExit = null
     clearJumpFeedbackTimer()
     clearPropSwingTimers()
     currentSpeed = transition.runtime.currentSpeed
@@ -548,7 +1176,11 @@
   function checkInteraction() {
     handleInteractKey({
       currentPlayer,
-      consumeInteract: () => inputHandler.consumeInteract(),
+      consumeInteract: () => {
+        const consumed = inputHandler.consumeInteract()
+        if (consumed) cancelAutoTravel()
+        return consumed
+      },
       findNearestDoor: (x, z, y, range) =>
         housingManager.findNearestDoor(x, z, y, range),
       sendToggleDoor: (houseId, roomIndex, wallDir, segmentIndex) =>
@@ -565,6 +1197,7 @@
   // They only read live `$state` inside their closures, so building them once
   // avoids reallocating ~20 closures per frame on the render hot path.
   const combatTickActions = {
+    cancelBlockedMovement,
     stopMovingToIdle: () => {
       if (isMovingNow()) {
         // Leaving the moving state drops its target/movementState. Transition
@@ -606,21 +1239,33 @@
           waypoints: chase.pathWaypoints,
           waypointIndex: 0,
           chaseGoal: chase.chaseGoal,
-          pendingPickupAfterMove: null,
+          approach: null,
         })
       }
     },
     showAttackState: (nextRotation: number) => {
       playerRotation = nextRotation
-      const transition = ensureAttackState(playerState, nextRotation)
+      const transition = ensureAttackState(
+        playerState,
+        nextRotation,
+        combatController.attackCounter
+      )
       if (transition.kind === 'ignored') return
       setPlayerState(transition.nextPlayerState)
       transitionTo('attacking')
     },
     sendAttackCycle: (monsterId: string, nextRotation: number) => {
       playerRotation = nextRotation
-      networkManager.sendPlayerAttack(monsterId)
-      updatePlayerState()
+      sendCombatAttack(monsterId)
+      // Emit the attack state directly: the projection only knows idle/moving,
+      // so it reported idle between swings.
+      setPlayerState(
+        buildAttackState(
+          playerState,
+          nextRotation,
+          combatController.attackCounter
+        )
+      )
       transitionTo('attacking')
     },
   }
@@ -637,7 +1282,10 @@
   }
 
   const movementTickActions = {
-    stopMovement,
+    stopMovement: () => {
+      if (startMountRecovery()) return
+      cancelBlockedMovement(false)
+    },
     triggerJumpFeedback,
     setNextWaypoint: (
       nextCurrentSpeed: number,
@@ -658,15 +1306,10 @@
     arrive: (nextCurrentSpeed: number, nextPlayerRotation: number) => {
       currentSpeed = nextCurrentSpeed
       playerRotation = nextPlayerRotation
-      const pickupAfterArrival = movingState()?.pendingPickupAfterMove ?? null
-      // stopMovement() settles to idle (and emits); the pickup/attack branches
-      // below override that state when arrival hands off to them.
+      // stopMovement() settles to idle (and emits) and runs any armed walk-up
+      // action; the chase branch below overrides idle when arrival hands off to
+      // an attack instead. A walk-up cancels combat, so only one can apply.
       stopMovement()
-
-      if (pickupAfterArrival !== null) {
-        enterPickup(pickupAfterArrival)
-        return
-      }
 
       if (combatController.isInCombat) {
         initiateAttack(combatController.targetMonsterId!)
@@ -687,9 +1330,12 @@
     exitPickupInteraction,
     exitObjectInteraction,
     clearClickMovement: () => {
-      // No-op: keyboard always transitions to keyboard_moving (markMoving),
-      // idle (setKeyboardIdleRuntime), or via stopMovement this same frame, and
-      // leaving the moving state drops its target/movementState/pendingPickup.
+      // Keyboard is taking the walk over, so the click's queued interaction is
+      // off. The rest of the moving state needs no reset: keyboard transitions
+      // to keyboard_moving (markMoving), idle (setKeyboardIdleRuntime), or via
+      // stopMovement this same frame, all of which leave the moving state.
+      const m = movingState()
+      if (m) m.approach = null
     },
     cancelCombat: () => combatController.cancelCombat(),
     markMoving: () => {
@@ -700,7 +1346,13 @@
       transitionTo('idle')
     },
     emitKeyboardPlayerState: () => {
-      updatePlayerState(isMovingNow() ? 100 : undefined)
+      updatePlayerState(
+        isMounted(currentPlayer) &&
+          $keyboardMovementMode === 'character' &&
+          inputHandler.getMovementInput()?.forward === -1
+          ? 0
+          : 100
+      )
     },
     stopMovement,
     triggerJumpFeedback,
@@ -708,16 +1360,29 @@
       currentSpeed = nextCurrentSpeed
       playerRotation = nextPlayerRotation
     },
-    requestMove: (target: { x: number; z: number }) => {
-      const tx = wrapWorldX(target.x)
-      handleClickToMove({ x: tx, y: sampleHeight(tx, target.z), z: target.z })
-    },
   }
 
   // Update player movement (click-to-move) with acceleration/deceleration
   function updatePlayerMovement(deltaTime: number) {
+    if (mountRecovery) {
+      if (
+        performance.now() - mountRecovery.startedAt > 10000 ||
+        !isMounted(currentPlayer) ||
+        currentPlayer.health <= 0
+      ) {
+        const m = movingState()
+        if (m) m.approach = null
+        stopMovement()
+        cancelAutoTravel(translate('travel.recovery'))
+      }
+      return
+    }
+    updateAutoTravel(deltaTime)
     const m = movingState()
     runPlayerMovementTick({
+      canAdvance: () =>
+        !!currentPlayer &&
+        worldView.covers(currentPlayer.position.x, currentPlayer.position.z),
       deltaTime,
       currentPlayer,
       playerStateName: playerState.state,
@@ -728,10 +1393,13 @@
       pathWaypoints: m?.waypoints ?? [],
       currentWaypointIndex: m?.waypointIndex ?? 0,
       chaseGoal: m?.chaseGoal ?? null,
-      config: MOVEMENT_CONFIG,
+      config: movementConfig(),
       isInCombat: combatController.isInCombat,
       combatController,
-      cooldownMs: attackCooldown ? attackCooldown * 1000 : 1500,
+      cooldownMs:
+        (attackCooldown ? attackCooldown * 1000 : 1500) /
+        ($hungerState?.attackMult ?? 1),
+      attackRange: equippedAttackRange(),
       chasePathing,
       getMonsterInfo: (monsterId) => {
         const monsterData = monsterManager.monsters.get(monsterId)
@@ -744,6 +1412,7 @@
       },
       findMonsterPosition: (monsterId) =>
         monsterManager.findMeshPosition(monsterId, monsterMeshes),
+      attackLineBlocked,
       sampleHeight,
       waypointHeight,
       hasHeightData: (x, z) => heightManager.hasHeightData(x, z),
@@ -760,7 +1429,11 @@
         transitionToRespawned,
         resetStoppedSpeed: () => {
           currentSpeed = 0
-          updatePlayerState()
+          // The projection can only say idle/moving: emitting it over a
+          // fresh interact/attack state would wipe that state.
+          if (playerState.state === 'idle' || playerState.state === 'moving') {
+            updatePlayerState()
+          }
         },
         combat: combatTickActions,
         movement: movementTickActions,
@@ -769,22 +1442,39 @@
   }
 
   function updateKeyboardMovement(deltaTime: number) {
+    const input = inputHandler.getMovementInput()
+    if (mountRecovery && !input) return
+    if (input) {
+      cancelMountRecovery()
+      cancelAutoTravel()
+      clearDoorInteractionRetry()
+    }
+    if (!currentPlayer) {
+      keyboardMoveSender.reset()
+      return
+    }
+    if (!worldView.covers(currentPlayer.position.x, currentPlayer.position.z)) {
+      keyboardMoveSender.flush(currentPlayer.position, playerRotation)
+      if (!input) keyboardMoveSender.reset()
+      return
+    }
     runKeyboardFrame({
       currentPlayer,
-      hasKeysPressed: inputHandler.hasKeysPressed,
       isKeyboardMoving: playerControlMachine.stateName === 'keyboard_moving',
       interactionExit: getInteractionExitKind(playerState),
       hasMovementTarget: movingState() !== null,
       isInCombat: combatController.isInCombat,
-      direction: inputHandler.getMovementDirection(),
-      config: MOVEMENT_CONFIG,
+      input,
+      movementMode: $keyboardMovementMode,
+      rotation: playerRotation,
+      backwardSpeed: BACKWARD_SPEED * ($hungerState?.moveMult ?? 1),
+      config: movementConfig(),
       deltaTimeSeconds: deltaTime / 1000,
       sampleHeight,
       isMovementBlocked,
       isUphillTooSteep,
       writePlayerPosition,
       moveSender: keyboardMoveSender,
-      tapTracker: keyboardTapTracker,
       speedRamp: keyboardSpeedRamp,
       actions: keyboardFrameActions,
     })
@@ -792,33 +1482,33 @@
 
   function createMoveRequestActions(
     clickPosition: Position,
-    pickupAfterArrival: number | null,
-    options: { pickupAfterArrival?: number | null }
+    options: { approach?: PendingApproach | null }
   ): MoveRequestActions {
     return {
-      clearPendingPickupAfterMove: () => {
-        const m = movingState()
-        if (m) m.pendingPickupAfterMove = null
-      },
+      cancelBlockedMovement,
       exitPickupAndRetry: () => {
         exitPickupInteraction()
         handleClickToMove(clickPosition, options)
       },
       exitObjectAndDelay: () => {
-        exitObjectInteraction()
-
-        clearStandUpTimer()
-        standUpTimer = setTimeout(() => {
-          standUpTimer = null
-          enqueuePlayerControlEvent({
-            type: 'delayed_request_move',
-            position: { ...clickPosition },
-            pickupAfterArrival,
-          })
-        }, STAND_UP_DURATION)
+        exitObjectInteraction(
+          true,
+          () => {
+            clearStandUpTimer()
+            standUpTimer = setTimeout(() => {
+              standUpTimer = null
+              enqueuePlayerControlEvent({
+                type: 'delayed_request_move',
+                position: { ...clickPosition },
+                approach: options.approach ?? null,
+              })
+            }, STAND_UP_DURATION)
+          },
+          clickPosition
+        )
       },
       applyStartedMovement: (started) => {
-        playerRotation = started.playerRotation
+        if (!isMounted(currentPlayer)) playerRotation = started.playerRotation
         // The moving state OWNS the path data. Transition before emit: the
         // projection derives 'moving' from the machine's owned state.
         playerControlMachine.transition({
@@ -829,7 +1519,9 @@
           waypoints: started.pathWaypoints,
           waypointIndex: started.currentWaypointIndex,
           chaseGoal: null,
-          pendingPickupAfterMove: started.pendingPickupAfterMoveInstanceId,
+          // Armed only now: a refused request (dead, keyboard held) must not
+          // leave an action waiting to fire on some later, unrelated stop.
+          approach: options.approach ?? null,
         })
         updatePlayerState(started.movementState.totalDistance)
       },
@@ -904,7 +1596,7 @@
     // heuristic so the player isn't routed back down into the dungeon.
     const inDungeonView = depth >= 1 || dungeonManager.isOnEntranceShaft(x, z)
     if (inDungeonView) return floor
-    const depthOfFloor = floor - fib + 1
+    const depthOfFloor = -dungeonManager.floorLevelForPassability(floor)
     const surfaceDist = Math.abs(y - ent.y)
     const floorDist = Math.abs(y - dungeonManager.floorY(depthOfFloor))
     return surfaceDist <= floorDist ? 0 : floor
@@ -912,44 +1604,100 @@
 
   function handleClickToMove(
     clickPosition: Position,
-    options: { pickupAfterArrival?: number | null } = {}
+    options: {
+      approach?: PendingApproach | null
+      sprinting?: boolean
+      stopAtHouseEntrance?: boolean
+      recovering?: boolean
+    } = {}
   ) {
+    if (!options.recovering) {
+      cancelMountRecovery()
+      mountRecoveryAttempted = false
+      cancelAutoTravel()
+    }
     // Any fresh movement cancels a pending prop break/open (breakProp/openProp
     // re-arm it after their own walk-up call below).
     dungeonManager.clearPendingBreak()
     dungeonManager.clearPendingOpen()
-    const pickupAfterArrival = options.pickupAfterArrival ?? null
-
+    // Approach moves (chase, walk-up) carry no modifier: follow the preference.
+    clickSprinting =
+      (options.sprinting ?? sprintRequested(false)) && sprintAvailable()
+    // A drunk walker weaves on free moves only; a walk-up still has to
+    // arrive where its target is.
+    if (!options.approach && !options.recovering) {
+      const radius = staggerRadius(get(activeDebuffs), Date.now())
+      if (radius > 0) clickPosition = staggerTarget(clickPosition, radius)
+    }
+    const routePath = options.stopAtHouseEntrance
+      ? (
+          startX: number,
+          startZ: number,
+          startFloor: number,
+          goalX: number,
+          goalZ: number,
+          goalFloor: number
+        ) => {
+          const result = findPath(
+            startX,
+            startZ,
+            startFloor,
+            goalX,
+            goalZ,
+            goalFloor
+          )
+          return {
+            ...result,
+            waypoints: currentPlayer
+              ? housingManager.stopPathAtHouseEntrance(
+                  currentPlayer.position,
+                  startFloor,
+                  clickPosition,
+                  result.waypoints
+                )
+              : result.waypoints,
+          }
+        }
+      : findPath
     // Start A* from the player's current passability floor — on a stair shaft
     // that is the shaft's keyed (lower) floor (see currentPassabilityFloor /
     // dungeonManager.startFloorAt), which differs from the clicked room's floor, so
     // the search traverses the stairs instead of being confined to one floor.
+    startingClickMovement = true
     runMoveRequest({
       clickPosition,
-      pickupAfterArrival,
       currentPlayer,
       interactionExit: getInteractionExitKind(playerState),
       isMoving: isMovingNow(),
       hasKeyboardInput: inputHandler.hasKeysPressed,
       currentFloor: currentPassabilityFloor(),
       getFloorAt: getFloorAtForClick,
-      findPath,
+      findPath: routePath,
       waypointHeight,
       sendPlayerMove,
-      actions: createMoveRequestActions(
-        clickPosition,
-        pickupAfterArrival,
-        options
-      ),
+      startSpeed: currentSpeed,
+      actions: createMoveRequestActions(clickPosition, options),
     })
+    startingClickMovement = false
+    if (playerControlMachine.stateName !== 'moving') clickSprinting = false
   }
 
+  /** `claim` is false when the server already holds the object for us. */
   function enterInteraction(
-    intent: Extract<ClickIntent, { type: 'interact_object' }>
+    intent: Extract<ClickIntent, { type: 'interact_object' }>,
+    claim = true
   ) {
+    cancelAutoTravel()
     if (getInteractionExitKind(playerState) === 'pickup') {
       finishPendingPickup()
     }
+
+    // An in-range click mid-walk acts immediately; the pose starts from rest.
+    currentSpeed = 0
+    // Re-sitting mid stand-up must not let the old exit's continuation fire,
+    // and an armed stand-up move must not un-sit us right after.
+    pendingExit = null
+    clearStandUpTimer()
 
     const result = beginObjectInteraction({
       intent,
@@ -969,14 +1717,108 @@
       })
     }
 
-    networkManager.sendInteractObject(intent.objectType, intent.objectId)
+    if (claim) {
+      networkManager.sendInteractObject(intent.objectType, intent.objectId)
+    }
   }
 
+  /** Lie down on the bed the server respawned us on. */
+  async function enterRespawnPose(objectType: string) {
+    cancelAutoTravel()
+    if (!currentPlayer) return
+    const { x, z } = currentPlayer.position
+    const { anim, interactOffset, placement, rotation } =
+      await objectManager.resolvePose(objectType, x, z)
+    if (!placement || rotation === undefined || !currentPlayer) return
+    enterInteraction(
+      {
+        type: 'interact_object',
+        objectId: placement.id,
+        objectType,
+        interaction: anim,
+        position: { x: placement.x, y: placement.y, z: placement.z },
+        rotation,
+        interactOffset,
+      },
+      false
+    )
+  }
+
+  /** Enter an emote clip in place. Unlike enterInteraction there is no object
+   *  to face, snap to, or claim, and the server already heard about it through
+   *  the chat command — so no sendInteractObject here. */
+  function startEmote(anim: string) {
+    cancelAutoTravel()
+    if (!currentPlayer) return
+    if (getInteractionExitKind(playerState) === 'pickup') {
+      finishPendingPickup()
+    }
+
+    // Leftover deceleration would let the movement tick's resetStoppedSpeed
+    // project the fresh interact state back to idle one frame later.
+    currentSpeed = 0
+    pendingExit = null
+
+    const result = beginObjectInteraction({
+      intent: {
+        type: 'interact_object',
+        objectId: 0,
+        objectType: anim,
+        interaction: anim,
+        position: {
+          x: currentPlayer.position.x,
+          y: currentPlayer.position.y,
+          z: currentPlayer.position.z,
+        },
+        rotation: playerRotation,
+      },
+      previousPlayerState: playerState,
+      cancelCombat: () => combatController.cancelCombat(),
+    })
+
+    setPlayerState(result.nextPlayerState)
+    transitionTo('object_interacting')
+  }
+
+  $effect(() => {
+    const anim = $emoteRequest
+    if (!anim) return
+    emoteRequest.set(null)
+    startEmote(anim)
+  })
+
+  $effect(() => {
+    const objectType = $respawnPoseRequest
+    if (!objectType) return
+    respawnPoseRequest.set(null)
+    void enterRespawnPose(objectType)
+  })
+
+  $effect(() => {
+    if (!$emoteStopRequest) return
+    emoteStopRequest.set(false)
+    // Only a performance ends here — the tune running out or Escape. By now
+    // the player may have sat down on something, and that pose is not ours
+    // to cancel.
+    if (
+      playerState.state === 'interact' &&
+      HELD_EMOTE_ANIMS.has(playerState.interactionAnim ?? '')
+    ) {
+      exitObjectInteraction()
+    }
+  })
+
   function enterPickup(instanceId: number) {
+    cancelAutoTravel()
+    // Face the item: an in-reach click never walks, and a blocked walk-up
+    // stops facing its travel direction.
+    const item = groundItemManager.items.get(instanceId)
+    if (item) faceTowards(item.position.x, item.position.z)
+
     const result = beginPickupInteraction({
       instanceId,
-      previousPlayerState: playerState,
-      hasGroundItem: (id) => groundItemManager.items.has(id),
+      previousPlayerState: { ...playerState, rotation: playerRotation },
+      hasGroundItem: () => item !== undefined,
       beginPickup: (id) => groundItemManager.beginPickup(id),
       cancelCombat: () => combatController.cancelCombat(),
     })
@@ -986,6 +1828,7 @@
     // The picking_up state OWNS the instance id being grabbed; entering it drops
     // any moving data (the far-pickup approach that led here).
     currentSpeed = 0
+    if (currentPlayer) sendPlayerMove(currentPlayer.position, playerRotation) // others see the facing
     networkManager.sendPickupStarted()
     setPlayerState(result.nextPlayerState)
     playerControlMachine.transition({
@@ -994,48 +1837,302 @@
     })
   }
 
-  function approachAndPickup(
-    intent: Extract<ClickIntent, { type: 'pickup_ground_item' }>
-  ) {
-    const decision = decidePickupApproach({
-      playerState,
-      intent,
-      getGroundItem: (instanceId) => groundItemManager.items.get(instanceId),
-    })
-    if (decision.kind === 'ignored_dead') return
-
-    combatController.cancelCombat()
-    handleClickToMove(decision.target, {
-      pickupAfterArrival: decision.pickupAfterArrival,
-    })
+  /** How A* rates a walk-up goal, so the plan can pick a goal the player can
+   *  actually get to. Deliberately re-runs the search the move itself will make
+   *  — same start, same floors — so the two agree on what is reachable; a click
+   *  is a rare enough event to pay for it twice. */
+  function routeQuality(target: Position): RouteQuality {
+    if (!currentPlayer) return 'none'
+    const result = findPath(
+      currentPlayer.position.x,
+      currentPlayer.position.z,
+      currentPassabilityFloor(),
+      target.x,
+      target.z,
+      getFloorAtForClick(target.x, target.z, target.y)
+    )
+    if (result.found) return 'found'
+    return result.waypoints.length > 0 ? 'partial' : 'none'
   }
 
-  /** Open a trading NPC's window, walking into range first if needed. */
-  function approachAndTrade(
-    intent: Extract<ClickIntent, { type: 'interact_npc' }>
+  /** `canActNow` is false while an interaction animation still has to be
+   *  exited — the walk-up runs the exit, then fires the action on arrival. */
+  function approachAndAct(
+    spec: ApproachSpec,
+    act: () => void,
+    canActNow = true,
+    canAct?: PendingApproach['canAct']
   ) {
-    if (intent.distance <= NPC_TRADE_RANGE_METERS) {
-      networkManager.sendOpenShop(intent.playerId)
+    if (!currentPlayer || currentPlayer.health <= 0) return 'ignored'
+
+    const plan = planApproach(
+      currentPlayer.position,
+      spec,
+      routeQuality,
+      canActNow,
+      canAct
+    )
+    if (plan.kind === 'unreachable') return 'unreachable'
+    if (plan.kind === 'act_now') {
+      act()
+      return 'act_now'
+    }
+
+    combatController.cancelCombat()
+    handleClickToMove(plan.target, {
+      approach: { spec, depth: get(currentDungeonDepth), canAct, act },
+    })
+    return 'walk'
+  }
+
+  function pickupItem(
+    intent: Extract<ClickIntent, { type: 'pickup_ground_item' }>
+  ) {
+    if (playerState.state === 'dead') return
+    const item = groundItemManager.items.get(intent.instanceId)
+    // Never pick up straight from an interaction: re-entering picking_up would
+    // overwrite the owned id and strand the grabbed item on the hand bone
+    // (finishPickup never runs). The walk-up settles the interaction first.
+    approachAndAct(
+      { position: item?.position ?? intent.position, ...PICKUP_APPROACH },
+      () => enterPickup(intent.instanceId),
+      getInteractionExitKind(playerState) === 'none'
+    )
+  }
+
+  function openDoorThenRetry(door: ClosedHouseDoor, retryAction: () => void) {
+    clearDoorInteractionRetry()
+    networkManager.sendToggleDoor(
+      door.houseId,
+      door.roomIndex,
+      door.wallDir,
+      door.segmentIndex
+    )
+
+    let attempts = 0
+    const retry = () => {
+      doorInteractionRetryTimer = null
+      if (housingManager.isDoorOpen(door)) {
+        retryAction()
+        return
+      }
+      attempts++
+      if (attempts < 20) doorInteractionRetryTimer = setTimeout(retry, 100)
+    }
+    doorInteractionRetryTimer = setTimeout(retry, 100)
+  }
+
+  function approachDoorThenRetry(
+    door: ClosedHouseDoor,
+    retryAction: () => void
+  ) {
+    if (!currentPlayer) return
+    approachAndAct(
+      {
+        position: { ...door.position, y: currentPlayer.position.y },
+        ...HOUSE_DOOR_APPROACH,
+      },
+      () => openDoorThenRetry(door, retryAction)
+    )
+  }
+
+  function interactObject(
+    intent: Extract<ClickIntent, { type: 'interact_object' }>,
+    forceWalk = false
+  ) {
+    if (!currentPlayer) return
+    const player = currentPlayer
+    const floor = currentPassabilityFloor()
+    const door = housingManager.findClosedDoorOnSegment(
+      player.position.x,
+      player.position.z,
+      intent.position.x,
+      intent.position.z,
+      floor
+    )
+    if (door) {
+      approachDoorThenRetry(door, () => interactObject(intent, true))
       return
     }
 
-    // Too far: walk toward the trader, stopping just short.
-    if (!currentPlayer) return
-    combatController.cancelCombat()
-    const dx = currentPlayer.position.x - intent.position.x
-    const dz = currentPlayer.position.z - intent.position.z
-    const dist = Math.sqrt(dx * dx + dz * dz) || 1
-    const stopShort = Math.min(NPC_TRADE_RANGE_METERS - 1, dist)
-    handleClickToMove({
-      x: intent.position.x + (dx / dist) * stopShort,
-      y: intent.position.y,
-      z: intent.position.z + (dz / dist) * stopShort,
+    const canAct = (position: Pick<Position, 'x' | 'z'>) =>
+      !housingManager.isHouseWallBlockingSegment(
+        position.x,
+        position.z,
+        intent.position.x,
+        intent.position.z,
+        floor
+      )
+    const spec = {
+      position: intent.position,
+      ...approachForInteraction(intent.interaction),
+    }
+    const approach = approachAndAct(
+      spec,
+      () => enterInteraction(intent),
+      !forceWalk && canAct(player.position),
+      canAct
+    )
+    if (approach !== 'unreachable') return
+
+    const openRoute = housingManager.withClosedDoorsOpen(floor, () => {
+      const routeWithOpenDoors = (target: Position) => {
+        const result = findPath(
+          player.position.x,
+          player.position.z,
+          floor,
+          target.x,
+          target.z,
+          floor
+        )
+        if (result.found) return 'found'
+        return result.waypoints.length > 0 ? 'partial' : 'none'
+      }
+      const plan = planApproach(
+        player.position,
+        spec,
+        routeWithOpenDoors,
+        false,
+        canAct
+      )
+      if (plan.kind !== 'walk') return []
+      const result = findPath(
+        player.position.x,
+        player.position.z,
+        floor,
+        plan.target.x,
+        plan.target.z,
+        floor
+      )
+      return result.found ? result.waypoints : []
+    })
+
+    const routeDoor = housingManager.findClosedDoorOnPath(
+      player.position.x,
+      player.position.z,
+      openRoute,
+      floor
+    )
+    if (!routeDoor) return
+    approachDoorThenRetry(routeDoor, () => interactObject(intent, true))
+  }
+
+  function toggleDoor(intent: Extract<ClickIntent, { type: 'toggle_door' }>) {
+    const toggle = () =>
+      networkManager.sendToggleDoor(
+        intent.houseId,
+        intent.roomIndex,
+        intent.wallDir,
+        intent.segmentIndex
+      )
+    if (intent.isWindow && currentPlayer) {
+      const player = currentPlayer
+      const floor = currentPassabilityFloor()
+      const dx = shortestWrappedDeltaX(player.position.x, intent.position.x)
+      const dz = intent.position.z - player.position.z
+      if (
+        Math.hypot(dx, dz) <= HOUSE_DOOR_APPROACH.range &&
+        !housingManager.isHouseWallBlockingSegment(
+          player.position.x,
+          player.position.z,
+          intent.position.x,
+          intent.position.z,
+          floor
+        )
+      ) {
+        toggle()
+        return
+      }
+      const targets = wallApproachPositions(
+        intent.position,
+        player.position,
+        intent.wallDir,
+        HOUSE_DOOR_APPROACH.stopShort
+      )
+      for (const target of targets) {
+        const position = { ...target, y: player.position.y }
+        if (routeQuality(position) !== 'found') continue
+        approachAndAct({ position, range: 0.35, stopShort: 0 }, toggle)
+        return
+      }
+
+      const openRoute = housingManager.withClosedDoorsOpen(floor, () => {
+        for (const target of targets) {
+          const result = findPath(
+            player.position.x,
+            player.position.z,
+            floor,
+            target.x,
+            target.z,
+            floor
+          )
+          if (result.found) return result.waypoints
+        }
+        return []
+      })
+      const routeDoor = housingManager.findClosedDoorOnPath(
+        player.position.x,
+        player.position.z,
+        openRoute,
+        floor
+      )
+      if (routeDoor) {
+        approachDoorThenRetry(routeDoor, () => toggleDoor(intent))
+      }
+      return
+    }
+    approachAndAct(
+      { position: intent.position, ...HOUSE_DOOR_APPROACH },
+      toggle
+    )
+  }
+
+  function toggleDungeonDoor(
+    intent: Extract<ClickIntent, { type: 'toggle_dungeon_door' }>
+  ) {
+    approachAndAct(
+      { position: intent.position, ...DUNGEON_DOOR_APPROACH },
+      () => {
+        const id = dungeonManager.dungeonId
+        if (id) {
+          networkManager.sendToggleDungeonDoor(id, intent.depth, intent.doorId)
+        }
+      }
+    )
+  }
+
+  function tradeWithNpc(
+    intent: Extract<ClickIntent, { type: 'interact_npc' }>
+  ) {
+    approachAndAct({ position: intent.position, ...NPC_TRADE_APPROACH }, () =>
+      networkManager.sendOpenShop(intent.playerId)
+    )
+  }
+
+  function tipHat(intent: Extract<ClickIntent, { type: 'tip_hat' }>) {
+    approachAndAct({ position: intent.position, ...TIP_HAT_APPROACH }, () => {
+      const hat = tipHatManager.hats.get(intent.hatId)
+      if (hat) tipHatDialog.set({ hatId: hat.id, ownerName: hat.owner_name })
     })
   }
 
-  /** Shared walk-up for a clicked interactive prop: cancel combat, move to
-   *  within reach if needed (it's a solid pillar, so stop just short), then arm
-   *  `setPending` so the dungeon layer fires the break/open on arrival. */
+  /** No walk-up: the server checks that we sit at the plate's chair. */
+  function eatMeal(intent: Extract<ClickIntent, { type: 'meal' }>) {
+    if (mealManager.meals.get(intent.mealId)?.eaten === false) {
+      networkManager.sendEatMeal(intent.mealId)
+    }
+  }
+
+  /** Step up to the table; the server decides shop front or stall panel. */
+  function tradeAtStall(intent: Extract<ClickIntent, { type: 'stall' }>) {
+    approachAndAct({ position: intent.position, ...STALL_TRADE_APPROACH }, () =>
+      networkManager.sendOpenStall(intent.stallId)
+    )
+  }
+
+  /** Shared walk-up for a clicked interactive prop: move to within reach if
+   *  needed (it's a solid pillar, so stop just short), then arm `setPending` so
+   *  the dungeon layer fires the break/open once the player is in range. */
   function approachProp(
     intent: { depth: number; propId: number; position: Position },
     setPending: (p: {
@@ -1046,17 +2143,15 @@
     }) => void
   ) {
     if (!currentPlayer) return
-    combatController.cancelCombat()
-    const dx = currentPlayer.position.x - intent.position.x
-    const dz = currentPlayer.position.z - intent.position.z
-    const dist = Math.sqrt(dx * dx + dz * dz)
-    if (dist > PROP_APPROACH_STOP) {
-      const d = dist || 1
-      handleClickToMove({
-        x: intent.position.x + (dx / d) * PROP_APPROACH_STOP,
-        y: intent.position.y,
-        z: intent.position.z + (dz / d) * PROP_APPROACH_STOP,
-      })
+    const plan = planApproach(
+      currentPlayer.position,
+      { position: intent.position, ...PROP_APPROACH },
+      routeQuality
+    )
+    if (plan.kind === 'unreachable') return
+    if (plan.kind === 'walk') {
+      combatController.cancelCombat()
+      handleClickToMove(plan.target)
     }
     setPending({
       depth: intent.depth,
@@ -1101,20 +2196,19 @@
     // clip; a changed attackCounter re-triggers it (our own counter since this
     // swing isn't combat-driven). currentSpeed 0 keeps the movement tick from
     // projecting the state back to idle while we hold the swing.
-    const dx = x - currentPlayer.position.x
-    const dz = z - currentPlayer.position.z
-    if (dx !== 0 || dz !== 0) playerRotation = Math.atan2(dx, dz)
+    faceTowards(x, z)
     currentSpeed = 0
     propSwingCounter += 1
-    setPlayerState({
-      ...buildAttackState(playerState, playerRotation),
-      attackCounter: propSwingCounter,
-    })
+    setPlayerState(
+      buildAttackState(playerState, playerRotation, propSwingCounter)
+    )
     transitionTo('attacking')
     sendPlayerMove(currentPlayer.position, playerRotation) // others see the facing
 
     propBreakTimer = setTimeout(() => {
       propBreakTimer = null
+      playPropSound('break')
+      dungeonManager.noteSelfBreak(depth, propId)
       networkManager.sendBreakDungeonProp(entranceId, depth, propId)
     }, PROP_SWING_IMPACT_MS)
     propSwingIdleTimer = setTimeout(() => {
@@ -1123,57 +2217,186 @@
     }, PROP_SWING_RETURN_MS)
   }
 
-  function processClickIntent(event: MouseEvent): ClickIntent {
-    return inputHandler.processCanvasClick(event, {
-      camera,
-      monsterMeshes,
-      npcMeshes,
-      doorMeshes,
-      objectMeshes,
-      propMeshes,
-      groundItemMeshes,
-      groundMeshes,
-      playerPosition: {
-        x: currentPlayer!.position.x,
-        y: currentPlayer!.position.y,
-        z: currentPlayer!.position.z,
+  // Sticky hover keeps the target ring up while the pointer sits in the
+  // hovered monster's margin; a click there should attack, not walk, even
+  // though the ray misses the actual silhouette.
+  function hoveredMonsterAttackIntent(): ClickIntent | null {
+    const hover = get(hoverTarget)
+    if (hover?.kind !== 'monster' || isMonsterDead(hover.monsterId)) return null
+    const monster = monsterManager.monsters.get(hover.monsterId)
+    if (!monster || !currentPlayer) return null
+    const p = currentPlayer.position
+    const dx = shortestWrappedDeltaX(p.x, monster.position.x)
+    const dz = monster.position.z - p.z
+    return {
+      type: 'attack_monster',
+      monsterId: hover.monsterId,
+      hitPoint: { x: p.x + dx, y: monster.position.y, z: monster.position.z },
+      distance: Math.sqrt(dx * dx + dz * dz),
+    }
+  }
+
+  // Same coherence for NPCs: a click in the sticky margin interacts instead
+  // of walking. Non-NPC players stay left-click inert by design, so hovering
+  // one never overrides a click.
+  function hoveredNpcInteractIntent(): ClickIntent | null {
+    const hover = get(hoverTarget)
+    if (hover?.kind !== 'player' || !currentPlayer) return null
+    if (!get(gameStore).otherPlayers.get(hover.playerId)?.isOfficialNpc)
+      return null
+    const npcPos = remotePlayerManager.players.get(hover.playerId)?.position
+    if (!npcPos) return null
+    const p = currentPlayer.position
+    return {
+      type: 'interact_npc',
+      playerId: hover.playerId,
+      position: {
+        x: p.x + shortestWrappedDeltaX(p.x, npcPos.x),
+        y: npcPos.y,
+        z: npcPos.z,
       },
-      playerVisualFloorLevel: get(playerVisualFloorLevel),
-      isMonsterDead: (id) => {
-        const m = monsterManager.monsters.get(id)
-        return m?.state === 'dead' || false
+    }
+  }
+
+  function processClickIntent(
+    event: MouseEvent,
+    movementOnly = false
+  ): ClickIntent {
+    const groundOnly =
+      get(landscapingMode) !== null || get(estateFurnitureEditorActive)
+    const targetingWater = get(fishingTargeting)
+    const intent = inputHandler.processCanvasClick(
+      event,
+      {
+        groundOnly,
+        movementOnly,
+        fishingTargeting: targetingWater,
+        camera,
+        monsterMeshes,
+        npcMeshes,
+        doorMeshes,
+        objectMeshes,
+        propMeshes,
+        groundItemMeshes,
+        tipHatMeshes,
+        stallMeshes,
+        mealMeshes,
+        groundMeshes,
+        playerPosition: {
+          x: currentPlayer!.position.x,
+          y: currentPlayer!.position.y,
+          z: currentPlayer!.position.z,
+        },
+        playerVisualFloorLevel: get(playerVisualFloorLevel),
+        resolveHousingStairTarget: (floorLevel, x, y, z, stairFloor) =>
+          housingManager.stairLandingTargetAt(floorLevel, x, y, z, stairFloor),
+        isMonsterDead,
+        canCastFishing:
+          !movementOnly &&
+          abilityEquipmentAllowed(FISHING.id, get(inventoryStore).equipped) &&
+          currentPassabilityFloor() === 0,
+        waterSurfaceAt,
       },
-      canCastFishing:
-        getItemDef(get(inventoryStore).equipped.main_hand?.item_def_id ?? '')
-          ?.category === 'fishing_rod' && currentPassabilityFloor() === 0,
-      waterSurfaceAt,
-    })
+      renderer.domElement.getBoundingClientRect()
+    )
+    if (
+      !movementOnly &&
+      !groundOnly &&
+      !targetingWater &&
+      (intent.type === 'move_to_ground' || intent.type === 'none')
+    ) {
+      return (
+        hoveredMonsterAttackIntent() ?? hoveredNpcInteractIntent() ?? intent
+      )
+    }
+    return intent
   }
 
   /** Right-click on an NPC: open the context menu with the interactions the
-   *  NPC's data supports (doc/ECONOMY.md "거래 진입 UI"). */
+   *  NPC's data supports (doc/ECONOMY.md "거래 진입 UI"). Right-click on a
+   *  player offers to report the picture on their cape, which is the only
+   *  brake on what people print (doc/CAPE_CUSTOMIZATION.md). */
   function handleNpcContextMenu(event: MouseEvent) {
     if (!currentPlayer || currentPlayer.health <= 0) return
     const intent = processClickIntent(event)
-    if (intent.type !== 'interact_npc') return
-    const npc = get(gameStore).otherPlayers.get(intent.playerId)
-    if (!npc?.isOfficialNpc) return
-
-    const caps = getNpcCapabilities(npc.name)
-    const entries = [{ label: 'Talk', action: () => requestChatFocus() }]
-    if (caps.trade) {
-      entries.push({ label: 'Trade', action: () => approachAndTrade(intent) })
+    if (intent.type === 'interact_npc') {
+      const npc = get(gameStore).otherPlayers.get(intent.playerId)
+      if (npc?.isOfficialNpc) {
+        const caps = getNpcCapabilities(npc.name)
+        const entries = [{ label: 'Talk', action: () => requestChatFocus() }]
+        if (caps.trade) {
+          entries.push({
+            label: 'Trade',
+            action: () => tradeWithNpc(intent),
+          })
+        }
+        npcContextMenu.set({
+          npcName: npc.name,
+          screenX: event.clientX,
+          screenY: event.clientY,
+          entries,
+        })
+        return
+      }
     }
+
+    const playerId = inputHandler.pickPlayer(event, camera, playerMeshes)
+    if (playerId === null) return
+    const player = get(gameStore).otherPlayers.get(playerId)
+    if (!player || player.isOfficialNpc || !player.backTexture) return
     npcContextMenu.set({
-      npcName: npc.name,
+      npcName: player.name,
       screenX: event.clientX,
       screenY: event.clientY,
-      entries,
+      entries: [
+        {
+          label: 'Report cape',
+          action: () => networkManager.sendReportCapeTexture(playerId),
+        },
+      ],
     })
   }
 
   function handleCanvasClickIntent(event: MouseEvent) {
-    const editorMode = $mapEditorMode || $housingEditorMode
+    if ($localTeleportActive) return
+    if (get(inspectionTargeting)) {
+      if (event.button !== 0) return
+      const hover = inputHandler.processHover(event, {
+        camera,
+        objectMeshes: [],
+        tipHatMeshes: [],
+        stallMeshes: [],
+        mealMeshes: [],
+        propMeshes: [],
+        groundItemMeshes: [],
+        monsterMeshes: monsterHoverMeshes,
+        playerMeshes: playerHoverMeshes,
+        isHoverable,
+        ownerName,
+      })
+      const target = takeInspectionTarget(
+        hover?.kind === 'monster'
+          ? { kind: 'monster', monster_id: hover.monsterId }
+          : hover?.kind === 'player'
+            ? { kind: 'player', player_id: hover.playerId }
+            : null,
+        get(inventoryStore).equipped
+      )
+      if (target)
+        networkManager.sendUseAbility(
+          AUSCULTATION.id,
+          target.kind === 'monster' ? target.monster_id : null,
+          target.kind === 'player' ? target.player_id : null
+        )
+      return
+    }
+    if (event.button === 0 && $cameraRotationEnabled && !get(fishingTargeting))
+      return
+    const editorMode =
+      $mapEditorMode ||
+      $housingEditorMode ||
+      get(landscapingMode) !== null ||
+      get(estateFurnitureEditorActive)
     if (event.button === 2 && !editorMode) {
       handleNpcContextMenu(event)
       return
@@ -1185,8 +2408,48 @@
       processIntent: () => processClickIntent(event),
     })
     if (!playerControlEvent) return
+    if (
+      get(fishingTargeting) &&
+      playerControlEvent.type === 'canvas_intent' &&
+      playerControlEvent.intent.type === 'none'
+    ) {
+      reportSkillFailure(
+        translate('fishing.clickWater', { distance: max_cast_distance_m() })
+      )
+      return
+    }
 
     enqueuePlayerControlEvent(playerControlEvent)
+    return (
+      !editorMode &&
+      playerControlEvent.type === 'canvas_intent' &&
+      playerControlEvent.intent.type === 'move_to_ground'
+    )
+  }
+
+  function handleCanvasDragMove(event: MouseEvent) {
+    if (
+      $localTeleportActive ||
+      !currentPlayer ||
+      currentPlayer.health <= 0 ||
+      $cameraRotationEnabled ||
+      $mapEditorMode ||
+      $housingEditorMode ||
+      get(landscapingMode) !== null ||
+      get(estateFurnitureEditorActive) ||
+      get(inspectionTargeting) ||
+      get(fishingTargeting) ||
+      inputHandler.hasKeysPressed
+    )
+      return
+    const intent = processClickIntent(event, true)
+    if (intent.type === 'move_to_ground') {
+      enqueuePlayerControlEvent({
+        type: 'canvas_intent',
+        intent,
+        editorMode: false,
+      })
+    }
   }
 
   function createPlayerControlEventActions(): PlayerControlEventActions {
@@ -1196,35 +2459,11 @@
         // (no separate runtime reset needed).
         initiateAttack(monsterId)
       },
-      chaseAndAttack: (monsterId, hitPoint) => {
-        combatController.beginCombat(monsterId, false)
-        handleClickToMove(hitPoint)
-      },
-      toggleDoor: (houseId, roomIndex, wallDir, segmentIndex) => {
-        const m = movingState()
-        if (m) m.pendingPickupAfterMove = null
-        networkManager.sendToggleDoor(houseId, roomIndex, wallDir, segmentIndex)
-      },
-      toggleDungeonDoor: (depth, doorId) => {
-        // Server flips and broadcasts the new state; the DungeonDoorToggled
-        // handler applies it (entrance store + interior door map), so the swing
-        // syncs to everyone nearby.
-        const id = dungeonManager.dungeonId
-        if (id) networkManager.sendToggleDungeonDoor(id, depth, doorId)
-      },
-      enterInteraction,
-      enterPickup: (intent) => {
-        // Mid-interaction (pickup or object anim), re-entering picking_up would
-        // overwrite the owned id and strand the grabbed item on the hand bone
-        // (finishPickup never runs) — approach instead, which settles the
-        // interaction and re-enters the pickup on arrival.
-        if (getInteractionExitKind(playerState) !== 'none') {
-          approachAndPickup(intent)
-          return
-        }
-        enterPickup(intent.instanceId)
-      },
-      approachAndPickup,
+      chaseAndAttack,
+      toggleDoor,
+      toggleDungeonDoor,
+      interactObject,
+      pickupItem,
       interactNpc: (intent) => {
         const npc = get(gameStore).otherPlayers.get(intent.playerId)
         if (!npc?.isOfficialNpc) return
@@ -1232,33 +2471,66 @@
         // else starts a conversation. Right-click offers both explicitly.
         const caps = getNpcCapabilities(npc.name)
         if (caps.defaultAction === 'trade') {
-          approachAndTrade(intent)
+          tradeWithNpc(intent)
         } else {
           requestChatFocus()
         }
       },
+      tipHat,
+      tradeAtStall,
+      eatMeal,
       breakProp,
       openProp,
-      moveToGround: (position) => {
+      moveToGround: (position, sprinting, viaHousingStair) => {
         combatController.cancelCombat()
-        handleClickToMove(position)
+        const snapped = dungeonManager.snapDescentWallClick(
+          position.x,
+          position.z,
+          position.y
+        )
+        const target = snapped ?? position
+        const currentFloor = currentPassabilityFloor()
+        const targetFloor = getFloorAtForClick(target.x, target.z, target.y)
+        if (
+          shouldIgnoreImplicitHouseFloorChange(
+            get(playerInsideHouseId),
+            currentFloor,
+            targetFloor,
+            viaHousingStair
+          )
+        ) {
+          return
+        }
+        handleClickToMove(target, {
+          sprinting,
+          stopAtHouseEntrance: true,
+        })
       },
       castFishing: (intent) => {
         if (!currentPlayer || currentPlayer.health <= 0) return
-        // Stop and face the water before the cast — the server aborts a
-        // session on any movement, so a cast while pathing would cancel
-        // itself on the next waypoint send.
+        const boating = currentPlayer.mount === 'rowboat'
+        if (
+          boating &&
+          !fishing_is_stern_cast(
+            shortestWrappedDeltaX(currentPlayer.position.x, intent.position.x),
+            intent.position.z - currentPlayer.position.z,
+            playerRotation
+          )
+        ) {
+          addChatMessage({
+            text: translate('fishing.behindBoat'),
+            sender: 'system',
+          })
+          return
+        }
+        cancelFishingTargeting()
+        // Movement would cancel the cast on the next waypoint send.
         combatController.cancelCombat()
         stopMovement()
-        const dx = intent.position.x - currentPlayer.position.x
-        const dz = intent.position.z - currentPlayer.position.z
-        if (dx !== 0 || dz !== 0) {
-          playerRotation = Math.atan2(dx, dz)
-          // Commit the facing to the rendered state too, or the model keeps
-          // its old rotation and casts over its shoulder.
-          setPlayerState({ ...playerState, rotation: playerRotation })
-        }
-        sendPlayerMove(currentPlayer.position, playerRotation) // others see the facing
+        if (!boating) faceTowards(intent.position.x, intent.position.z)
+        setPlayerState({ ...playerState, rotation: playerRotation })
+        // Sync heading before the server validates the cast direction.
+        sendPlayerMove(currentPlayer.position, playerRotation)
         networkManager.sendFishingCast(intent.position)
       },
       requestMove: handleClickToMove,
@@ -1271,7 +2543,21 @@
   }
 
   function dispatchPlayerControlEvent(event: PlayerControlEvent) {
-    dispatchQueuedPlayerControlEvent(event, createPlayerControlEventActions())
+    if ($localTeleportActive && event.type === 'canvas_intent') return
+    // A fresh click supersedes the armed walk-up action, even one that starts
+    // no movement of its own (a cast, an in-reach interaction). A click that
+    // hit nothing at all shouldn't cancel the walk the player is already on.
+    if (event.type === 'canvas_intent' && event.intent.type !== 'none') {
+      cancelAutoTravel()
+      clearDoorInteractionRetry()
+      const m = movingState()
+      if (m) m.approach = null
+    }
+    dispatchQueuedPlayerControlEvent(
+      event,
+      createPlayerControlEventActions(),
+      equippedAttackRange()
+    )
   }
 
   const playerControlMachine = createLocalPlayerControlMachine({
@@ -1293,35 +2579,112 @@
     deltaTime: number,
     options: PlayerControlUpdateOptions
   ) {
+    if ($localTeleportActive) return
+    if (options.editorMode) {
+      cancelAutoTravel()
+      if (currentPlayer) {
+        keyboardMoveSender.flush(currentPlayer.position, playerRotation)
+      }
+      keyboardMoveSender.reset()
+    }
+    const skillState = get(daggerSkillState)
+    const hasDagger = abilityEquipmentAllowed(
+      DAGGER_SKILL.clip,
+      $inventoryStore.equipped
+    )
+    if (
+      options.editorMode ||
+      !currentPlayer ||
+      !isAbilityAvailable(DAGGER_SKILL.clip, currentPlayer.characterClass) ||
+      currentPlayer.health <= 0 ||
+      !hasDagger ||
+      isMounted(currentPlayer)
+    ) {
+      if (skillState.queued)
+        daggerSkillState.update((state) => ({ ...state, queued: false }))
+      if (currentPlayer && get(daggerSkillCasts).has(currentPlayer.id))
+        clearDaggerCast(currentPlayer.id)
+    }
+    if (skillState.pending && Date.now() - skillState.requestAt > 4000) {
+      daggerSkillState.update((state) => ({ ...state, pending: false }))
+      if (currentPlayer) clearDaggerCast(currentPlayer.id)
+    }
     playerControlMachine.update(deltaTime, options)
+    const now = performance.now()
+    if (
+      !options.editorMode &&
+      currentPlayer &&
+      currentPlayer.health > 0 &&
+      now - lastMovementSampleAt >= 200
+    ) {
+      lastMovementSampleAt = now
+      networkManager.sendMovementSample(
+        currentPlayer.position,
+        playerRotation,
+        wireFloorLevel()
+      )
+    }
   }
 
-  // Hover speech bubble for placed objects that carry text (e.g. signposts).
+  // Hover overlays: signpost speech bubble, ground-item, prop and monster names.
   // Driven by pointermove (event-based, not per-frame) and raycast only against
-  // the object overlay group, throttled to ~20 Hz — negligible cost.
+  // those groups, throttled to ~20 Hz — negligible cost.
   let lastHoverRaycast = 0
   let lastHoverKey: string | null = null
   let hoverTrailing: ReturnType<typeof setTimeout> | null = null
   let pendingHoverEvent: MouseEvent | null = null
 
+  const isMonsterDead = (id: string) =>
+    monsterManager.monsters.get(id)?.state === 'dead'
+
+  // An item being picked up is hidden through its parent's `visible`, which
+  // raycasts ignore — so a hit on one that is gone or already in hand doesn't
+  // count. A corpse likewise names nothing; both let the ray look past them.
+  function isHoverable(target: HoverTarget): boolean {
+    if (target.kind === 'groundItem') {
+      const item = groundItemManager.items.get(target.instanceId)
+      return !!item && !item.inHand
+    }
+    if (target.kind === 'monster') return !isMonsterDead(target.monsterId)
+    if (target.kind === 'player') {
+      const player = get(gameStore).otherPlayers.get(target.playerId)
+      return !!player && player.health > 0
+    }
+    return true
+  }
+
+  /** Display name for a player id (stall owner labels), self included. */
+  function ownerName(playerId: number): string | null {
+    const state = get(gameStore)
+    if (state.currentPlayer?.id === playerId) {
+      return state.currentPlayer.name ?? null
+    }
+    return state.otherPlayers.get(playerId)?.name ?? null
+  }
+
   function runHover(event: MouseEvent) {
+    if (get(landscapingMode) || get(estateFurnitureEditorActive)) {
+      clearHover()
+      return
+    }
     lastHoverRaycast = performance.now()
-    const hit = inputHandler.processHover(event, camera, objectMeshes)
-    const key = hit
-      ? `${hit.text}@${hit.position.x.toFixed(1)},${hit.position.z.toFixed(1)}`
-      : null
+    const target = inputHandler.processHover(event, {
+      camera,
+      objectMeshes,
+      tipHatMeshes,
+      stallMeshes,
+      mealMeshes,
+      propMeshes,
+      groundItemMeshes,
+      monsterMeshes: monsterHoverMeshes,
+      playerMeshes: playerHoverMeshes,
+      isHoverable,
+      ownerName,
+    })
+    const key = hoverTargetKey(target)
     if (key === lastHoverKey) return
     lastHoverKey = key
-    hoveredSignpost.set(
-      hit
-        ? {
-            x: hit.position.x,
-            y: hit.position.y,
-            z: hit.position.z,
-            text: hit.text,
-          }
-        : null
-    )
+    hoverTarget.set(target)
   }
 
   function handlePointerHover(event: MouseEvent) {
@@ -1351,23 +2714,132 @@
     }
     if (lastHoverKey === null) return
     lastHoverKey = null
-    hoveredSignpost.set(null)
+    hoverTarget.set(null)
   }
 
+  // Crossing a dungeon boundary swaps the visible entity layers wholesale;
+  // a resting cursor would otherwise keep a stale snapshot hover. Subscribed
+  // below the hover state it clears: subscribe fires its callback right here,
+  // and the `let`s above are TDZ until their declarations run.
+  currentDungeonDepth.subscribe(() => clearHover())
+
   onMount(() => {
+    const unsubscribeTeleportEffect = localTeleportActive.subscribe(
+      (active) => {
+        if (!active) return
+        cancelMountRecovery()
+        cancelAutoTravel()
+        combatController.cancelCombat()
+        clearStandUpTimer()
+        clearPropSwingTimers()
+        clearDoorInteractionRetry()
+        keyboardMoveSender.reset()
+        keyboardSpeedRamp.reset()
+        inputHandler.clearTransientInput()
+        currentSpeed = 0
+        clickSprinting = false
+        transitionTo('idle')
+        updatePlayerState()
+      }
+    )
+    const canvasCursor = renderer.domElement.style.cursor
+    const unsubscribeTargeting = derived(
+      [inspectionTargeting, fishingTargeting],
+      (states) => states.some(Boolean)
+    ).subscribe((active) => {
+      renderer.domElement.style.cursor = active ? 'crosshair' : canvasCursor
+      if (!active || !currentPlayer) return
+      cancelAutoTravel()
+      combatController.cancelCombat()
+      clearPropSwingTimers()
+      const movement = movingState()
+      if (movement) movement.approach = null
+      stopMovement()
+      sendPlayerMove(currentPlayer.position, playerRotation)
+    })
+    const unsubscribeTravel = travelDestination.subscribe((destination) => {
+      const wasTravelling = autoTravelTarget !== null
+      autoTravelTarget = destination
+      travelPlayerId = destination ? (currentPlayer?.id ?? null) : null
+      travelProgressPosition = null
+      travelStalledMs = 0
+      travelPlanCooldownMs = 0
+      if (wasTravelling || (destination && isMovingNow())) {
+        const m = movingState()
+        if (m) m.approach = null
+        stopMovement()
+        if (currentPlayer && currentPlayer.health > 0 && !get(teleportLoading))
+          sendPlayerMove(currentPlayer.position, playerRotation)
+      }
+      if (!destination) return
+      combatController.cancelCombat()
+      clearStandUpTimer()
+      clearPropSwingTimers()
+      clearDoorInteractionRetry()
+      dungeonManager.clearPendingBreak()
+      dungeonManager.clearPendingOpen()
+      const interaction = getInteractionExitKind(playerState)
+      if (interaction === 'pickup') exitPickupInteraction()
+      if (interaction === 'object') exitObjectInteraction()
+    })
+    const unsubscribeTeleport = teleportLoading.subscribe((loading) => {
+      if (loading) {
+        cancelMountRecovery()
+        cancelAutoTravel()
+      }
+    })
+    const unsubscribeTravelPlayer = gameStore.subscribe((state) => {
+      if (
+        !state.isConnected ||
+        !state.currentPlayer ||
+        state.currentPlayer.id !== travelPlayerId ||
+        state.currentPlayer.health <= 0
+      )
+        cancelAutoTravel()
+    })
+    const enterPlacementMode = (mode: unknown) => {
+      if (!mode) return
+      cancelAutoTravel()
+      clearStandUpTimer()
+      clearPropSwingTimers()
+      currentSpeed = 0
+      clickSprinting = false
+      transitionTo('idle')
+      updatePlayerState()
+    }
+    const unsubscribeLandscapingMode =
+      landscapingMode.subscribe(enterPlacementMode)
+    const unsubscribeFurnitureMode =
+      estateFurniturePlacementMode.subscribe(enterPlacementMode)
+    const unsubscribeFurnitureSelection =
+      estateFurnitureSelectionMode.subscribe(enterPlacementMode)
     preloadSwordHitSound()
     preloadSwordMissSound()
+    preloadMonsterDeathSounds()
+    preloadPlayerHurtSounds()
+    preloadPlayerDeathSounds()
+    preloadPropSounds()
+    preloadBowSounds()
     preloadFishingSounds()
 
     const removeInputListeners = inputHandler.setupEventListeners(
       renderer.domElement,
-      handleCanvasClickIntent
+      handleCanvasClickIntent,
+      handleCanvasDragMove
     )
 
     const canvas = renderer.domElement
+    // Ignore pointerleave caused by OrbitControls capturing on the wrapper.
+    const handlePointerLeave = (e: PointerEvent) => {
+      if (e.relatedTarget instanceof Node && e.relatedTarget.contains(canvas))
+        return
+      clearHover()
+    }
     canvas.addEventListener('pointermove', handlePointerHover)
-    canvas.addEventListener('pointerleave', clearHover)
+    canvas.addEventListener('pointerleave', handlePointerLeave)
 
+    const unsubscribeMountRecovery =
+      networkManager.mountRecovery.on(applyMountRecovery)
     const unsubscribeNetworkEvents = subscribePlayerNetworkEvents({
       isCurrentPlayerEligibleForRespawn: () =>
         !!currentPlayer && currentPlayer.health <= 0,
@@ -1380,15 +2852,33 @@
     })
 
     return () => {
+      unsubscribeTargeting()
+      cancelInspection()
+      cancelFishingTargeting()
+      renderer.domElement.style.cursor = canvasCursor
+      unsubscribeTravel()
+      unsubscribeTeleport()
+      unsubscribeTeleportEffect()
+      unsubscribeTravelPlayer()
+      travelDestination.set(null)
       removeInputListeners()
+      unsubscribeLandscapingMode()
+      unsubscribeFurnitureMode()
+      unsubscribeFurnitureSelection()
       canvas.removeEventListener('pointermove', handlePointerHover)
-      canvas.removeEventListener('pointerleave', clearHover)
+      canvas.removeEventListener('pointerleave', handlePointerLeave)
       clearHover()
+      cancelMountRecovery()
+      unsubscribeMountRecovery()
       unsubscribeNetworkEvents()
       playerControlMachine.dispose()
       clearStandUpTimer()
       clearJumpFeedbackTimer()
       clearPropSwingTimers()
+      clearDoorInteractionRetry()
+      // The store outlives this component (character select, logout).
+      lastEmoteSync = null
+      localEmoteAnim.set(null)
     }
   })
 </script>

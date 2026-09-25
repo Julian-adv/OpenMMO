@@ -1,0 +1,408 @@
+use super::*;
+
+#[test]
+fn fence_visibility_is_shared_without_one_npc_removing_anothers_collision() {
+    use onlinerpg_shared::fence::{Fence, FenceAxis, FenceEdge};
+    use onlinerpg_shared::pathfinding::is_movement_blocked;
+    let mut world = WorldCache::new();
+    let edge = FenceEdge {
+        x: 2,
+        z: 1,
+        axis: FenceAxis::Z,
+    };
+    let fence = Fence {
+        edge,
+        y: 0.0,
+        owner_id: 1,
+    };
+    world.update_fences(1.into(), std::slice::from_ref(&fence), &[]);
+    world.update_fences(2.into(), &[fence], &[]);
+    world.update_fences(1.into(), &[], &[edge]);
+    assert!(is_movement_blocked(
+        world.passability_cache(),
+        1.5,
+        1.5,
+        2.5,
+        1.5,
+        0,
+        Some(0.05)
+    ));
+    world.remove_fence_view(2.into());
+    assert!(!is_movement_blocked(
+        world.passability_cache(),
+        1.5,
+        1.5,
+        2.5,
+        1.5,
+        0,
+        Some(0.05)
+    ));
+}
+
+/// A schedule pose authored on the bed itself must not reach A* as the
+/// goal — the bed seals its own cells and the search could never enter
+/// them. The walk goal steps to the nearest open neighbour; open ground
+/// passes through untouched.
+#[test]
+fn walkable_near_steps_off_sealed_furniture() {
+    let (s, _rx) = test_state();
+    let bed = onlinerpg_shared::furniture::FurniturePlacement {
+        id: 0,
+        type_id: "bed".to_string(),
+        x: 10.5,
+        y: 0.0,
+        z: 10.5,
+        rotation_deg: 0.0,
+        floor_level: 0,
+    };
+    s.world_cache
+        .write()
+        .unwrap()
+        .sync_furniture(0, 0, vec![bed]);
+
+    let (x, z) = s.walkable_near(10.5, 10.5, 0);
+    assert_ne!((x, z), (10.5, 10.5), "the on-bed goal must be nudged");
+    assert!((x - 10.5).abs() <= 1.5 && (z - 10.5).abs() <= 1.5);
+    let world = s.world_cache.read().unwrap();
+    assert!(!pathfinding::is_cell_sealed(
+        world.passability_cache(),
+        x,
+        z,
+        0,
+        None
+    ));
+    drop(world);
+
+    assert_eq!(s.walkable_near(0.5, 0.5, 0), (0.5, 0.5));
+}
+
+/// Our own performances land in the recent-song list, oldest first and
+/// capped; the world state shows the list only to an agent that busks,
+/// and never counts someone else's tune as ours.
+#[test]
+fn recent_songs_render_for_the_busker_only() {
+    let (mut s, _rx) = test_state();
+    let me = test_player(0.0, 0.0);
+    s.self_player_id = Some(me.id);
+    s.self_player = Some(me);
+    s.plays_music = true;
+
+    s.push_event(ServerMessage::PlayerMusicStarted {
+        player_id: PlayerId::from(2),
+        track: "Someone Else's Tune".to_string(),
+        elapsed_secs: 0.0,
+    });
+    for i in 0..10 {
+        s.push_event(ServerMessage::PlayerMusicStarted {
+            player_id: PlayerId::from(1),
+            track: format!("Song {i}"),
+            elapsed_secs: 0.0,
+        });
+    }
+
+    let world = s.format_world_state();
+    assert!(
+        world.contains("Songs you played recently, oldest first: Song 2,"),
+        "capped at MAX_RECENT_SONGS, oldest dropped: {world}"
+    );
+    assert!(world.contains("Song 9"), "{world}");
+    assert!(!world.contains("Someone Else's Tune"), "{world}");
+
+    s.plays_music = false;
+    assert!(!s.format_world_state().contains("Songs you played recently"));
+}
+
+/// The world state lists reachable ground items closest first, and
+/// leaves out other floors and anything out of sight.
+#[test]
+fn world_state_lists_nearby_ground_items() {
+    let (mut s, _rx) = test_state();
+    s.self_player = Some(test_player(0.0, 0.0));
+    for item in [
+        ground_item(1, "small_sword", 5.0, 0.0, 0),
+        ground_item(2, "wooden_shield", 2.0, 0.0, 0),
+        ground_item(3, "coin_pile", 1.0, 0.0, 0),
+        ground_item(4, "iron_sword", 0.0, EVENT_DELIVERY_RADIUS + 5.0, 0),
+        ground_item(5, "healing_potion", 3.0, 0.0, 1),
+    ] {
+        s.remember_ground_item(item);
+    }
+
+    let lines: Vec<String> = s
+        .format_world_state()
+        .lines()
+        .filter(|l| l.starts_with("Item on ground:"))
+        .map(str::to_string)
+        .collect();
+
+    assert_eq!(
+        lines,
+        vec![
+            "Item on ground: coin_pile (1.0m away) [id 3]",
+            "Item on ground: wooden_shield (2.0m away) [id 2]",
+            "Item on ground: small_sword (5.0m away) [id 1]",
+            "Item on ground: iron_sword (37.0m away) [id 4]",
+        ]
+    );
+}
+
+/// An announced item is loot the agent may go for right away — the
+/// server does any withholding.
+#[test]
+fn an_announced_drop_is_actionable_at_once() {
+    let (mut s, _rx) = test_state();
+    s.self_player = Some(test_player(0.0, 0.0));
+
+    s.push_event(ServerMessage::GroundItemSpawned {
+        item: ground_item(1, "goblin_sword", 2.0, 0.0, 0),
+    });
+    s.push_event(ServerMessage::GroundItemAppeared {
+        item: ground_item(2, "small_sword", 3.0, 0.0, 0),
+    });
+
+    let ids: Vec<u64> = s
+        .ground_items_in_sight()
+        .iter()
+        .map(|(_, i)| i.instance_id)
+        .collect();
+    assert_eq!(ids, vec![1, 2]);
+    assert!(s.ground_item(1).is_some());
+    assert!(s.format_world_state().contains("goblin_sword"));
+}
+
+/// A field strewn with drops is summarised, not listed line by line.
+#[test]
+fn world_state_caps_the_ground_item_list() {
+    let (mut s, _rx) = test_state();
+    s.self_player = Some(test_player(0.0, 0.0));
+    for id in 1..=(MAX_LISTED_GROUND_ITEMS as u64 + 3) {
+        let item = ground_item(id, "small_sword", id as f32 * 0.5, 0.0, 0);
+        s.remember_ground_item(item);
+    }
+
+    let world = s.format_world_state();
+    let listed = world
+        .lines()
+        .filter(|l| l.starts_with("Item on ground:"))
+        .count();
+
+    assert_eq!(listed, MAX_LISTED_GROUND_ITEMS);
+    assert!(world.contains("(and 3 more items further away)"), "{world}");
+}
+
+/// A `DoorToggled` must land on both faces of the door: the passability
+/// edge A* walks and the `HouseData` wall the door hunt reads. With only
+/// the edge updated, `closed_doors_on_our_floor` kept re-listing a door
+/// that was already open and the agent toggled it shut again.
+#[test]
+fn door_toggle_keeps_house_walls_in_step_with_the_edges() {
+    use onlinerpg_shared::housing::{
+        PassabilityGrid, RoomType, WallConfig, WallDirection, WallVariant,
+    };
+
+    let wall = |variant| WallConfig {
+        variant,
+        texture: 0,
+        is_open: false,
+    };
+    let room = RoomData {
+        size_x: 1,
+        size_z: 1,
+        wall_north: vec![wall(WallVariant::WithDoor)],
+        wall_south: vec![wall(WallVariant::Solid)],
+        wall_east: vec![wall(WallVariant::Solid)],
+        wall_west: vec![wall(WallVariant::Solid)],
+        ..room(0, 0, RoomType::default())
+    };
+    let mut house = house("h", p(10.0, 0.0, 10.0), vec![room]);
+    house.passability = vec![PassabilityGrid {
+        floor_level: 0,
+        origin_x: 0,
+        origin_z: 0,
+        width: 1,
+        depth: 1,
+        // All four edges walled (N=1, E=2, S=4, W=8), door shut.
+        cells: vec![1 | 2 | 4 | 8],
+    }];
+
+    let mut world = WorldCache::new();
+    world.add_house(house);
+
+    let door_blocked = |world: &WorldCache| {
+        pathfinding::is_movement_blocked(world.passability_cache(), 10.5, 10.5, 10.5, 9.5, 0, None)
+    };
+    assert!(door_blocked(&world), "the north door starts shut");
+
+    world.update_door("h", 0, WallDirection::North, 0, true);
+    assert!(
+        world.houses()["h"].rooms[0].wall_north[0].is_open,
+        "HouseData must track the open"
+    );
+    assert!(!door_blocked(&world), "the edge must open with the door");
+
+    world.update_door("h", 0, WallDirection::North, 0, false);
+    assert!(!world.houses()["h"].rooms[0].wall_north[0].is_open);
+    assert!(door_blocked(&world), "the edge must seal again");
+}
+
+/// Splat tiles that paint one road cell and one river cell near origin,
+/// so the summary test can assert distance and bearing against known
+/// world coordinates.
+struct PaintedSplat;
+
+#[async_trait::async_trait]
+impl crate::splat::SplatTiles for PaintedSplat {
+    async fn read_splat(&self, tx: i32, tz: i32) -> std::io::Result<Vec<u8>> {
+        let mut data = vec![0u8; onlinerpg_terrain::defaults::SPLATMAP_SIZE];
+        if (tx, tz) == (0, 0) {
+            let mut paint = |wx: f32, wz: f32, pal: u8| {
+                let cx = (wx + 32.0).floor() as usize;
+                let cz = (wz + 32.0).floor() as usize;
+                data[(cz * 64 + cx) * 4] = pal << 4;
+            };
+            paint(6.0, 0.0, crate::splat::PAL_ROAD);
+            paint(-6.0, -6.0, crate::splat::PAL_RIVER_BED);
+        }
+        Ok(data)
+    }
+}
+
+#[tokio::test]
+async fn terrain_summary_names_nearest_features_with_bearing() {
+    let (mut s, _rx) = test_state();
+    s.splat_sampler = Arc::new(crate::splat::SplatSampler::new(PaintedSplat));
+    s.self_player = Some(test_player(0.0, 0.0));
+    let line = s
+        .terrain_summary_job()
+        .expect("on the surface")
+        .render()
+        .await;
+
+    assert!(line.starts_with("Terrain within 32m: "), "{line}");
+    // Road cell (6, 0): 6m due east. River cell (-6, -6): 8m northwest.
+    assert!(line.contains("road 6m east"), "{line}");
+    assert!(line.contains("water 8m northwest"), "{line}");
+    assert!(!line.contains("open ground"), "{line}");
+    assert_eq!(
+        line.trim_end().lines().count(),
+        1,
+        "one line, no map rows: {line}"
+    );
+}
+
+#[test]
+fn terrain_summary_is_absent_underground() {
+    let (mut s, _rx) = test_state();
+    s.self_player = Some(test_player(0.0, 0.0));
+    s.self_floor_level = -1;
+    assert!(s.terrain_summary_job().is_none());
+}
+
+/// Agents can discover every dungeon entrance from above ground.
+#[test]
+fn world_state_names_the_dungeon_entrances() {
+    let (mut s, _rx) = test_state();
+    s.self_player = Some(test_player(-1450.0, 4720.0));
+    s.world_cache.write().unwrap().register_dungeons();
+
+    let lines: Vec<String> = s
+        .format_world_state()
+        .lines()
+        .filter(|l| l.starts_with("Dungeon:"))
+        .map(str::to_string)
+        .collect();
+
+    // Include distant entrances, ordered nearest first.
+    assert_eq!(lines.len(), 4, "{lines:?}");
+    assert!(lines[0].contains("Old Crypt"), "{lines:?}");
+    assert!(lines[1].contains("Orc Warrens"), "{lines:?}");
+    assert!(lines[2].contains("Ogre Stronghold"), "{lines:?}");
+    assert!(lines[3].contains("Skeleton Crypt"), "{lines:?}");
+}
+
+/// The prompt names the storey only while we stand inside a room's
+/// footprint on our own floor; outdoors and underground say nothing.
+#[test]
+fn world_state_names_the_storey_when_indoors() {
+    use onlinerpg_shared::housing::RoomType;
+
+    let (mut s, _rx) = test_state();
+    s.world_cache.write().unwrap().add_house(house(
+        "inn",
+        p(100.0, 0.0, 100.0),
+        vec![
+            room(0, 0, RoomType::default()),
+            room(0, 1, RoomType::default()),
+            room(4, 0, RoomType::Stairwell),
+        ],
+    ));
+
+    s.self_player = Some(test_player(102.0, 102.0));
+    assert!(s
+        .format_world_state()
+        .contains("You are indoors (ground floor)"));
+
+    s.self_floor_level = 1;
+    assert!(s
+        .format_world_state()
+        .contains("You are indoors (2nd floor)"));
+
+    s.self_player = Some(test_player(106.0, 102.0));
+    assert!(
+        s.format_world_state()
+            .contains("You are indoors (2nd floor)"),
+        "a stairwell holds the floor above it"
+    );
+
+    s.self_floor_level = 0;
+    s.self_player = Some(test_player(120.0, 120.0));
+    assert!(!s.format_world_state().contains("indoors"));
+
+    s.self_player = Some(test_player(102.0, 102.0));
+    s.self_floor_level = -1;
+    assert!(!s.format_world_state().contains("indoors"));
+}
+
+/// A coordinate move walks on the storey the LLM names, else the floor we
+/// stand on — and is refused up front when no such spot is on that floor.
+#[test]
+fn a_coordinate_off_the_floor_it_would_walk_on_is_refused_before_any_walk() {
+    use onlinerpg_shared::housing::RoomType;
+    use onlinerpg_shared::Position;
+
+    let (mut s, _rx) = test_state();
+    let inn = house(
+        "inn",
+        Position {
+            x: -1448.0,
+            y: 0.0,
+            z: 4753.0,
+        },
+        vec![room(0, 1, RoomType::Normal)],
+    );
+    s.world_cache.write().unwrap().add_house(inn);
+    let mut me = test_player(-1446.7, 4754.9);
+    me.floor_level = 1;
+    s.self_player = Some(me);
+    s.self_floor_level = 1;
+
+    let outside = (-1450.0, 4720.0);
+    let refused = s
+        .resolve_goal_floor(outside.0, outside.1, None)
+        .unwrap_err();
+    assert!(refused.contains("not on the 2nd floor"), "{refused}");
+    assert_eq!(s.resolve_goal_floor(outside.0, outside.1, Some(0)), Ok(0));
+    assert_eq!(
+        s.resolve_goal_floor(-1445.5, 4755.5, None),
+        Ok(1),
+        "same room"
+    );
+    let refused = s
+        .resolve_goal_floor(outside.0, outside.1, Some(1))
+        .unwrap_err();
+    assert!(refused.contains("no 2nd floor at that spot"), "{refused}");
+    assert!(s.resolve_goal_floor(-1445.5, 4755.5, Some(-1)).is_err());
+
+    s.self_floor_level = 0;
+    assert_eq!(s.resolve_goal_floor(outside.0, outside.1, None), Ok(0));
+}

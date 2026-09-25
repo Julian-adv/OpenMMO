@@ -18,11 +18,24 @@ export const RANGER_CHARACTER_MODEL_PATH = '/models/characters/ranger.glb'
 export const PRIEST_CHARACTER_MODEL_PATH = '/models/characters/priest.glb'
 export const FEMALE_PRIEST_CHARACTER_MODEL_PATH =
   '/models/characters/female_priest.glb'
+export const FEMALE_BARD_CHARACTER_MODEL_PATH =
+  '/models/characters/female_bard.glb'
+export const NIGHT_MERCHANT_CHARACTER_MODEL_PATH =
+  '/models/characters/night_merchant.glb'
+export const MAID_CHARACTER_MODEL_PATH = '/models/characters/maid.glb'
+export const PINK_MAID_CHARACTER_MODEL_PATH = '/models/characters/pink_maid.glb'
+export const STEWARD_CHARACTER_MODEL_PATH = '/models/characters/steward.glb'
+export const ESTATE_ARCHITECT_CHARACTER_MODEL_PATH =
+  '/models/characters/estate_architect.glb'
+export const GRIDA_CHARACTER_MODEL_PATH = '/models/characters/grida.glb'
+export const TOBIN_CHARACTER_MODEL_PATH = '/models/characters/tobin.glb'
 
 export const CHARACTER_ANIMATION_PACK_PATHS = {
   locomotion: '/models/animations/locomotion.glb',
   combatMelee: '/models/animations/combat_melee.glb',
+  combatRanged: '/models/animations/combat_ranged.glb',
   social: '/models/animations/social.glb',
+  enchantArmor: '/models/animations/enchant_armor.glb',
   offhand: '/models/animations/offhand.glb',
   fishing: '/models/animations/fishing.glb',
 } as const
@@ -31,10 +44,7 @@ export function getWeaponModelPath(worldModel: string): string {
   return `/models/${worldModel}`
 }
 
-/** URL for an object-catalog GLB. `model` is the catalog `ObjectDef.model`,
- *  already relative to /models/ (e.g. "objects/bed.glb", "weapons/sword.glb").
- *  All object-model loaders route through here so the base path lives in one
- *  place. */
+/** Object catalog paths are relative to /models/. */
 export function getObjectModelPath(model: string): string {
   return `/models/${model}`
 }
@@ -64,9 +74,30 @@ const CLASS_GENDER_MODELS: Partial<
     male: PRIEST_CHARACTER_MODEL_PATH,
     female: FEMALE_PRIEST_CHARACTER_MODEL_PATH,
   },
+  bard: { female: FEMALE_BARD_CHARACTER_MODEL_PATH },
   merchant: { female: MERCHANT_CHARACTER_MODEL_PATH },
   guard: { male: GUARD_CHARACTER_MODEL_PATH },
+  maid: { female: MAID_CHARACTER_MODEL_PATH },
 }
+
+/** Named NPC models override their class model. */
+const NPC_MODEL_OVERRIDES: Record<string, string> = {
+  Wick: NIGHT_MERCHANT_CHARACTER_MODEL_PATH,
+  Cocoly: PINK_MAID_CHARACTER_MODEL_PATH,
+  Aldwin: STEWARD_CHARACTER_MODEL_PATH,
+  Rowan: ESTATE_ARCHITECT_CHARACTER_MODEL_PATH,
+  Grida: GRIDA_CHARACTER_MODEL_PATH,
+  Tobin: TOBIN_CHARACTER_MODEL_PATH,
+}
+
+export function getNpcModelPath(npcName: string): string | undefined {
+  return NPC_MODEL_OVERRIDES[npcName]
+}
+
+const NPC_CLASSES: CharacterClass[] = ['merchant', 'guard', 'maid']
+export const PLAYER_CLASSES = (
+  Object.keys(CLASS_GENDER_MODELS) as CharacterClass[]
+).filter((cls) => !NPC_CLASSES.includes(cls))
 
 export function getAvailableGenders(characterClass: CharacterClass): Gender[] {
   const genders = CLASS_GENDER_MODELS[characterClass]
@@ -84,17 +115,4 @@ export function getCharacterModelPath(
     return Object.values(genders)[0]
   }
   return KNIGHT_CHARACTER_MODEL_PATH
-}
-
-export function getDefaultWeaponModel(
-  characterClass: CharacterClass
-): string | null {
-  switch (characterClass) {
-    case 'merchant':
-      return null
-    case 'guard':
-      return 'weapons/spear.glb'
-    default:
-      return 'weapons/sword.glb'
-  }
 }

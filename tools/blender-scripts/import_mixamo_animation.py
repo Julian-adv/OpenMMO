@@ -18,7 +18,9 @@ T-pose 타겟 Armature로 retargeting bake한 뒤 정리까지 자동화하는 �
   2. fix_mixamo_transforms 실행 (rotation/scale apply, 발 지면 정렬)
   3. Armature.XXX (A-pose) → TARGET_ARMATURE (T-pose) retarget bake
      - 본별 rotation_quaternion을 rest-pose 차이만큼 보정해 다시 keyframe
-     - Hips location은 스케일/좌표계 이슈로 bake하지 않음 (idle/walk in-place 용도)
+     - Hips location도 bake (rest 대비 월드 변위를 두 리그의 Hips rest 높이 비로
+       스케일). 체중 이동처럼 골반이 움직이는 클립에 필요하다.
+       bake_root_location=False로 끄면 rest에 고정된다.
   4. 액션 이름 rename + 슬롯 식별자를 TARGET_ARMATURE에 맞춤
   5. 임시로 들어온 Armature.XXX와 mesh, 중간 액션 제거
   6. .blend 파일 저장
@@ -26,7 +28,8 @@ T-pose 타겟 Armature로 retargeting bake한 뒤 정리까지 자동화하는 �
 주의:
   - Mixamo에서 FBX 다운로드시 "Without Skin" 권장 (스켈레톤만 필요)
   - 30 FPS, Keyframe Reduction: none 권장
-  - Hips가 움직이는 애니메이션(in-place가 아닌 것)은 location bake 로직 추가 필요
+  - 실제로 이동하는 클립은 Hips location이 그대로 bake되므로 캐릭터가 제자리를
+    벗어난다. 이동 계열은 Mixamo에서 "In Place"를 켜고 받을 것.
 """
 
 import importlib.util
@@ -64,11 +67,17 @@ def _retarget_bake(
     source_action,
     target_arm,
     out_action_name: str,
+    bake_root_location: bool = True,
+    bone_aliases: dict | None = None,
 ) -> bpy.types.Action:
     """source_arm의 pose를 target_arm에 맞춰 retarget하여 새 액션 생성.
 
-    공식: target_basis = target_rest_local.inv() × source_rest_local × source_basis
-    (본-부모 상대 rest 차이로 인한 회전 보정. Hips 위치는 bake 안 함.)
+    회전: target_basis = target_rest_local.inv() × source_rest_local × source_basis
+    (본-부모 상대 rest 차이 보정)
+
+    루트 본(Hips) 위치: rest로부터의 월드 변위를 두 리그의 Hips rest 높이 비로
+    스케일해 target에 옮긴다. bake_root_location=False면 rest에 고정한다
+    (제자리 클립에서 미세한 드리프트를 없애고 싶을 때).
     """
     # Source action을 source armature에 할당 (frame_set이 pose를 평가할 수 있도록)
     if not source_arm.animation_data:
@@ -85,6 +94,14 @@ def _retarget_bake(
     src_name_by_stripped = {
         prefix_pat.sub("", b.name): b.name for b in source_arm.pose.bones
     }
+    # Mixamo 이름을 벗어난 리그를 위한 수동 매핑(source 본 -> target 본). 이름이
+    # 아니라 계층 위치로 짝지어야 하는 경우가 있다 — 척추 순서가 뒤집힌 리그를
+    # 이름만 보고 맞추면 상체가 비틀린다.
+    for src_bone, tgt_bone in (bone_aliases or {}).items():
+        if src_bone in source_arm.pose.bones:
+            src_name_by_stripped[tgt_bone] = src_bone
+        else:
+            print(f"  WARNING: alias source bone '{src_bone}' not in this rig")
     shared = [
         (tb.name, src_name_by_stripped[tb.name])
         for tb in target_arm.pose.bones
@@ -121,6 +138,27 @@ def _retarget_bake(
         except Exception as e:
             print(f"  WARNING: failed to set slot identifier: {e}")
 
+    # 루트 본(Hips) 위치 bake 준비: 두 리그의 Hips rest 높이 비로 변위를 스케일
+    root_pair = None
+    root_scale = 1.0
+    if bake_root_location:
+        root_tgt = next((b.name for b in target_arm.data.bones if b.parent is None), None)
+        root_src = next((sn for tn, sn in shared if tn == root_tgt), None)
+        if root_tgt is None or root_src is None:
+            print("  WARNING: 루트 본 매칭 실패 — location bake 생략")
+        elif source_arm.data.bones[root_src].parent is not None:
+            print(f"  WARNING: source '{root_src}'가 루트가 아님 — location bake 생략")
+        else:
+            root_pair = (root_tgt, root_src)
+            src_rest_z = (source_arm.matrix_world @ source_arm.data.bones[root_src].head_local).z
+            tgt_rest_z = (target_arm.matrix_world @ target_arm.data.bones[root_tgt].head_local).z
+            if abs(src_rest_z) > 1e-6:
+                root_scale = tgt_rest_z / src_rest_z
+            print(
+                f"  Root location bake: {root_src} -> {root_tgt}, "
+                f"rest z {src_rest_z:.4f} -> {tgt_rest_z:.4f} (×{root_scale:.4f})"
+            )
+
     frame_start = int(source_action.frame_range[0])
     frame_end = int(source_action.frame_range[1])
     print(f"  Baking frames {frame_start}..{frame_end}")
@@ -139,15 +177,30 @@ def _retarget_bake(
                 @ source_basis_q
             )
             target_arm.pose.bones[tgt_name].rotation_quaternion = target_basis_q
+
+        if root_pair:
+            root_tgt, root_src = root_pair
+            src_bone = source_arm.data.bones[root_src]
+            tgt_bone = target_arm.data.bones[root_tgt]
+            src_rest_w = source_arm.matrix_world @ src_bone.head_local
+            src_posed_w = source_arm.matrix_world @ source_arm.pose.bones[root_src].head
+            tgt_rest_w = target_arm.matrix_world @ tgt_bone.head_local
+            desired_w = tgt_rest_w + (src_posed_w - src_rest_w) * root_scale
+            desired_arm = target_arm.matrix_world.inverted() @ desired_w
+            target_arm.pose.bones[root_tgt].location = (
+                tgt_bone.matrix_local.inverted() @ desired_arm
+            )
+
         # keyframe 삽입
         bpy.context.view_layer.update()
         for tgt_name, _ in shared:
             target_arm.pose.bones[tgt_name].keyframe_insert(
                 "rotation_quaternion", frame=frame
             )
+        if root_pair:
+            target_arm.pose.bones[root_pair[0]].keyframe_insert("location", frame=frame)
 
-    # Hips location은 rest로 리셋 (bake 안 한 채널)
-    if "Hips" in target_arm.pose.bones:
+    if not root_pair and "Hips" in target_arm.pose.bones:
         target_arm.pose.bones["Hips"].location = (0, 0, 0)
 
     return new_action
@@ -175,6 +228,8 @@ def import_mixamo_animation(
     action_name: str,
     target_armature_name: str = TARGET_ARMATURE_NAME,
     save: bool = True,
+    bake_root_location: bool = True,
+    bone_aliases: dict | None = None,
 ) -> None:
     """Mixamo FBX를 import하여 target armature용 action으로 변환.
 
@@ -183,6 +238,8 @@ def import_mixamo_animation(
         action_name: 생성할 action 이름 (예: "torch_walk")
         target_armature_name: 타겟 T-pose armature (기본: "Armature")
         save: 완료 후 .blend 파일 저장 여부
+        bake_root_location: Hips location을 bake할지 (기본 True)
+        bone_aliases: Mixamo 이름이 아닌 리그용 {source 본: target 본} 매핑
 
     """
     if not os.path.isfile(fbx_path):
@@ -219,7 +276,12 @@ def import_mixamo_animation(
         raise RuntimeError("FBX import did not create an armature")
     if not new_actions:
         raise RuntimeError("FBX import did not create any animation action")
-    imported_action_name = sorted(new_actions)[0]
+    # 한 FBX에 액션이 여러 개 들어오기도 한다(1프레임 baselayer 더미 등).
+    # 알파벳순 첫 번째는 임의라, 프레임 폭이 가장 넓은 것을 실제 클립으로 본다.
+    imported_action_name = max(
+        new_actions,
+        key=lambda n: bpy.data.actions[n].frame_range[1] - bpy.data.actions[n].frame_range[0],
+    )
     print(f"  Imported: armature='{imported_arm_name}', action='{imported_action_name}'")
 
     # --- Step 2: Normalize transforms (X-90° rotation, 0.01 scale, ground-align feet) ---
@@ -230,7 +292,10 @@ def import_mixamo_animation(
     print("\n[Step 3] Retargeting to T-pose skeleton...")
     source_arm = bpy.data.objects[imported_arm_name]
     source_action = bpy.data.actions[imported_action_name]
-    _retarget_bake(source_arm, source_action, target_arm, action_name)
+    _retarget_bake(
+        source_arm, source_action, target_arm, action_name, bake_root_location,
+        bone_aliases
+    )
 
     # --- Step 4: Cleanup ---
     print("\n[Step 4] Cleaning up...")

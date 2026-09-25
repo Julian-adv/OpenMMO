@@ -8,35 +8,54 @@ use tracing::info;
 pub struct WorldConfig {
     #[serde(rename = "spawnPosition")]
     pub spawn_position: SpawnPosition,
-    #[serde(rename = "maxMonstersTotal", default = "default_max_monsters_total")]
-    pub max_monsters_total: u32,
+    /// Where death returns a player: the inn's sick room. `bed_ids` are the
+    /// room's beds in the region-object file covering `(x, z)`; a free one is
+    /// taken lying down, otherwise the player stands at `(x, y, z)`.
+    pub respawn: RespawnConfig,
+    /// Live monsters allowed within one spawn's visibility radius.
+    #[serde(rename = "maxNearbyMonsters")]
+    pub max_nearby_monsters: u32,
     /// Monster types that spawn dynamically around players (no fixed zones).
     #[serde(rename = "ambientSpawns", default)]
     pub ambient_spawns: Vec<AmbientSpawnRule>,
+    #[serde(default)]
+    pub pricing: PricingConfig,
 }
 
-fn default_max_monsters_total() -> u32 {
-    1000
+/// doc/PRICING.md.
+#[derive(Debug, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct PricingConfig {
+    /// A character seen within this many real days counts as active.
+    pub active_days: u32,
+    /// Wanted growth of per-active-character gold, per game day.
+    pub target_daily_growth: f64,
+    pub gain: f64,
+    pub max_step_per_meeting: f64,
+    pub index_min: f64,
+    pub index_max: f64,
 }
 
-fn default_max_distance() -> f32 {
-    60.0
+impl Default for PricingConfig {
+    fn default() -> Self {
+        Self {
+            active_days: 30,
+            target_daily_growth: 0.002,
+            gain: 0.5,
+            max_step_per_meeting: 0.1,
+            index_min: 0.9,
+            index_max: 2.0,
+        }
+    }
 }
 
 /// A monster type that spawns dynamically near players, instead of within a
-/// hand-authored rectangle. The client picks the actual position (grassland,
-/// not water, away from towns); the server only enforces caps and validates.
+/// hand-authored rectangle. The server picks the position, keyed to distance
+/// walked (`ambient_spawn.rs`).
 #[derive(Debug, Clone, Deserialize)]
 pub struct AmbientSpawnRule {
     #[serde(rename = "monsterType")]
     pub monster_type: String,
-    /// Max alive monsters of this type each player may own at once.
-    #[serde(rename = "maxPerPlayer")]
-    pub max_per_player: u32,
-    /// Server-side sanity bound: a requested spawn must be within this many
-    /// meters of the requesting player.
-    #[serde(rename = "maxDistance", default = "default_max_distance")]
-    pub max_distance: f32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -56,6 +75,37 @@ impl SpawnPosition {
             y: self.y,
             z: self.z,
         }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RespawnConfig {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub rotation_deg: f32,
+    pub floor_level: i8,
+    #[serde(default)]
+    pub bed_ids: Vec<u32>,
+}
+
+impl RespawnConfig {
+    pub fn position(&self) -> crate::types::Position {
+        crate::types::Position {
+            x: self.x,
+            y: self.y,
+            z: self.z,
+        }
+    }
+
+    /// Region-object file holding the beds.
+    pub fn region(&self) -> (i32, i32) {
+        use onlinerpg_terrain::coords::{tile_to_region, world_to_tile};
+        (
+            tile_to_region(world_to_tile(self.x)),
+            tile_to_region(world_to_tile(self.z)),
+        )
     }
 }
 

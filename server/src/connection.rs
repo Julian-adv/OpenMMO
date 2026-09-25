@@ -2,15 +2,22 @@ use crate::auth::AuthService;
 use crate::conn_limit::{resolve_client_ip, ConnectLimiter};
 use crate::game::character_attributes::roll_character_attributes;
 use crate::game::character_hp::{level_one_max_hp, DEFAULT_CHARACTER_RACE};
-use crate::game_state::{parse_notice_command, restored_floor_level, GameState};
+use crate::game_state::{
+    encode_server_msg, parse_admin_command, parse_notice_command, restored_floor_level,
+    EstateFurnitureMove, GameState, KickNotice,
+};
 use crate::google_auth::GoogleAuthVerifier;
+use crate::item_defs::AuthenticatedUseAction;
 use crate::types::{
     new_player, Character, CharacterAttributes, CharacterClass, ClientKind, ClientMessage,
     PlayerId, Position, ServerMessage,
 };
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
-use onlinerpg_shared::{deserialize_client_msg, serialize_server_msg};
+use onlinerpg_shared::deserialize_client_msg;
+use onlinerpg_shared::furniture_shop::{FurnitureTip, SHOP};
+use onlinerpg_shared::inventory::EquipSlot;
+use onlinerpg_shared::VisibleEquipment;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -34,13 +41,12 @@ pub struct AuthContext {
     /// logins are rejected until it is configured.
     pub google: Option<GoogleAuthVerifier>,
     pub npc_token: String,
-    /// Google account emails allowed to call REST write endpoints.
+    /// Google account emails allowed to administer the game and view metrics.
     pub admin_emails: Vec<String>,
 }
 
 impl AuthContext {
-    /// Verified-email allowlist check shared by REST writes and in-game
-    /// debug/cheat commands.
+    /// Verified-email allowlist for admin APIs and game commands.
     pub fn is_admin(&self, claims: &crate::google_auth::GoogleClaims) -> bool {
         claims.email_verified == Some(true)
             && claims.email.as_deref().is_some_and(|email| {
@@ -78,6 +84,8 @@ const WS_READ_BUFFER_BYTES: usize = 16 * 1024;
 /// Tighter caps until auth succeeds; legit pre-auth traffic is just auth attempts.
 const UNAUTH_MAX_MESSAGE_BYTES: usize = 8 * 1024;
 const UNAUTH_MAX_MESSAGES: u32 = 30;
+const INSTRUMENT_BATCHES_PER_SEC: f32 = 4.0;
+const INSTRUMENT_BATCH_BURST: f32 = 4.0;
 
 /// A refused client retries, so one stale build can bury the log in identical
 /// lines. Log the first of each window in full and fold the rest into its tail.
@@ -86,6 +94,36 @@ const REFUSAL_LOG_WINDOW: Duration = Duration::from_secs(60);
 struct LogWindow {
     started: Instant,
     suppressed: u32,
+}
+
+struct InstrumentBatchLimiter {
+    tokens: f32,
+    last: Instant,
+}
+
+impl InstrumentBatchLimiter {
+    fn new() -> Self {
+        Self {
+            tokens: INSTRUMENT_BATCH_BURST,
+            last: Instant::now(),
+        }
+    }
+
+    fn allow(&mut self) -> bool {
+        self.allow_at(Instant::now())
+    }
+
+    fn allow_at(&mut self, now: Instant) -> bool {
+        let elapsed = now.saturating_duration_since(self.last).as_secs_f32();
+        self.tokens =
+            (self.tokens + elapsed * INSTRUMENT_BATCHES_PER_SEC).min(INSTRUMENT_BATCH_BURST);
+        self.last = now;
+        if self.tokens < 1.0 {
+            return false;
+        }
+        self.tokens -= 1.0;
+        true
+    }
 }
 
 /// One throttle per reason, so a flood of one kind can't hide the first
@@ -136,18 +174,22 @@ fn close_frame(code: u16, reason: &'static str) -> Message {
 struct ConnectionState {
     /// Address the client is held accountable for; see `resolve_client_ip`.
     client_ip: IpAddr,
+    country: String,
     /// Client program reported in `ClientInfo`. `None` until the handshake
     /// arrives, which is what gates every other message.
     client_kind: Option<ClientKind>,
+    reported_client_version: String,
     /// Set when the connection must be dropped right after its pending
     /// responses are flushed (protocol mismatch).
     must_close: bool,
     account_name: Option<String>,
+    account_session_id: Option<u64>,
+    account_rx: Option<mpsc::UnboundedReceiver<KickNotice>>,
     player_id: Option<PlayerId>,
     /// Entered character's name, kept here so disconnect-path logs can name the
     /// player after `GameState` has already dropped the record.
     character_name: Option<String>,
-    direct_rx: Option<mpsc::UnboundedReceiver<ServerMessage>>,
+    direct_rx: Option<mpsc::UnboundedReceiver<Bytes>>,
     pending_character_attributes: Option<CharacterAttributes>,
     connected_at: std::time::Instant,
     last_heartbeat: std::time::Instant,
@@ -158,21 +200,51 @@ struct ConnectionState {
     is_admin: bool,
     /// Last answered positions poll (spam clamp); dies with the connection.
     last_party_positions_poll: Option<Instant>,
+    /// Last answered friend-presence poll (spam clamp).
+    last_friends_online_poll: Option<Instant>,
+    last_furniture_tip: std::collections::HashMap<FurnitureTip, Instant>,
     /// An `EnvReport` was already logged; later ones are dropped (spam clamp).
     env_reported: bool,
+    /// Credential this connection uploads cape textures with. Lives exactly
+    /// as long as the connection, which is what saves the store from having
+    /// to expire anything.
+    cape_upload_token: Option<String>,
+    instrument_batch_limiter: InstrumentBatchLimiter,
 }
 
-/// Positions polls inside this window are dropped; the web map polls every
-/// 3s, leaving a 1s margin so its own cadence never races the clamp.
+/// Positions snapshot requests inside this window are dropped. Steady-state
+/// data rides the push tick; a client only asks on map open, so this is
+/// purely a spam brake.
 const PARTY_POSITIONS_MIN_INTERVAL: Duration = Duration::from_secs(2);
+
+/// Friend-presence polls inside this window are dropped. The web client polls
+/// every 15s with its panel open and every 60s without; this only bounds what
+/// a rewritten client can ask for.
+const FRIENDS_ONLINE_MIN_INTERVAL: Duration = Duration::from_secs(5);
+const FURNITURE_TIP_INTERVAL: Duration = Duration::from_secs(300);
+
+/// True at most once per clamp window; a clamped poll does not refresh the
+/// window, so spam cannot starve refreshes.
+fn poll_due(last_poll: &mut Option<Instant>, min_interval: Duration) -> bool {
+    let now = Instant::now();
+    if last_poll.is_some_and(|last| now.duration_since(last) < min_interval) {
+        return false;
+    }
+    *last_poll = Some(now);
+    true
+}
 
 impl ConnectionState {
     fn new(client_ip: IpAddr) -> Self {
         Self {
             client_ip,
+            country: crate::geoip::UNKNOWN_COUNTRY.to_owned(),
             client_kind: None,
+            reported_client_version: String::new(),
             must_close: false,
             account_name: None,
+            account_session_id: None,
+            account_rx: None,
             player_id: None,
             character_name: None,
             direct_rx: None,
@@ -183,29 +255,42 @@ impl ConnectionState {
             admin_eligible: false,
             is_admin: false,
             last_party_positions_poll: None,
+            last_friends_online_poll: None,
+            last_furniture_tip: Default::default(),
             env_reported: false,
+            cape_upload_token: None,
+            instrument_batch_limiter: InstrumentBatchLimiter::new(),
         }
     }
 
-    /// True at most once per clamp window; a clamped poll does not refresh
-    /// the window, so spam cannot starve refreshes.
     fn party_positions_poll_due(&mut self) -> bool {
-        let now = Instant::now();
-        if self
-            .last_party_positions_poll
-            .is_some_and(|last| now.duration_since(last) < PARTY_POSITIONS_MIN_INTERVAL)
-        {
-            return false;
-        }
-        self.last_party_positions_poll = Some(now);
-        true
+        poll_due(
+            &mut self.last_party_positions_poll,
+            PARTY_POSITIONS_MIN_INTERVAL,
+        )
+    }
+
+    fn furniture_tip_due(&self, tip: FurnitureTip) -> bool {
+        self.last_furniture_tip
+            .get(&tip)
+            .is_none_or(|last| last.elapsed() >= FURNITURE_TIP_INTERVAL)
+    }
+
+    fn friends_online_poll_due(&mut self) -> bool {
+        poll_due(
+            &mut self.last_friends_online_poll,
+            FRIENDS_ONLINE_MIN_INTERVAL,
+        )
     }
 
     fn require_auth(&self, action: &str) -> Result<String, Vec<ServerMessage>> {
         match &self.account_name {
             Some(name) => Ok(name.clone()),
             None => {
-                warn!("{} requested by unauthenticated client", action);
+                warn!(
+                    "{} requested by unauthenticated client ip={}",
+                    action, self.client_ip
+                );
                 Err(vec![ServerMessage::CharacterError {
                     message: "Authenticate first".to_string(),
                 }])
@@ -244,6 +329,7 @@ impl ConnectionState {
 /// Per-server services every connection needs, bundled so the accept loop
 /// clones one `Arc` per connection instead of four.
 pub struct ServerContext {
+    pub geoip: crate::geoip::GeoIp,
     pub game_state: Arc<GameState>,
     pub auth_service: Arc<AuthService>,
     pub auth_ctx: Arc<AuthContext>,
@@ -261,6 +347,7 @@ pub async fn handle_connection(
     mut shutdown: watch::Receiver<()>,
 ) {
     let ServerContext {
+        geoip,
         game_state,
         auth_service,
         auth_ctx,
@@ -326,6 +413,7 @@ pub async fn handle_connection(
 
     let mut game_receiver = game_state.subscribe();
     let mut state = ConnectionState::new(client_ip);
+    state.country = geoip.country(client_ip);
 
     let mut heartbeat_check = tokio::time::interval(std::time::Duration::from_secs(10));
     let mut unauth_message_count: u32 = 0;
@@ -346,12 +434,33 @@ pub async fn handle_connection(
                 break;
             }
 
+            // A replacement login wins over buffered traffic from the stale socket.
+            account_msg = async {
+                match state.account_rx.as_mut() {
+                    Some(rx) => rx.recv().await,
+                    None => std::future::pending().await,
+                }
+            } => {
+                if let Some(notice) = account_msg {
+                    if let Some(bytes) = encode_server_msg(&notice.message) {
+                        let _ = ws_sender.send(Message::Binary(bytes)).await;
+                    }
+                    // A code the client acts on (reload, stop reconnecting)
+                    // rather than a bare close it can only guess at.
+                    if let Some(code) = notice.close_code {
+                        let _ = ws_sender.send(close_frame(code, "client desync")).await;
+                    }
+                    info!("Account {:?} session ended by the server", state.account_name);
+                    break;
+                }
+            }
+
             // Periodic timeout checks: unauth grace period, in-game heartbeat
             _ = heartbeat_check.tick() => {
                 if state.account_name.is_none()
                     && state.connected_at.elapsed().as_secs() > UNAUTH_TIMEOUT_SECS
                 {
-                    warn!("Dropping connection: unauthenticated after {}s", UNAUTH_TIMEOUT_SECS);
+                    warn!("Dropping connection: unauthenticated after {}s ip={}", UNAUTH_TIMEOUT_SECS, state.client_ip);
                     let _ = ws_sender.send(close_frame(
                         onlinerpg_shared::CLOSE_CODE_IDLE_TIMEOUT,
                         "login did not complete in time",
@@ -388,9 +497,10 @@ pub async fn handle_connection(
                             || unauth_message_count > UNAUTH_MAX_MESSAGES
                         {
                             warn!(
-                                "Dropping unauthenticated connection: pre-auth limits exceeded ({} bytes, message #{})",
+                                "Dropping unauthenticated connection: pre-auth limits exceeded ({} bytes, message #{}) ip={}",
                                 m.len(),
-                                unauth_message_count
+                                unauth_message_count,
+                                state.client_ip
                             );
                             break;
                         }
@@ -410,16 +520,11 @@ pub async fn handle_connection(
                             Ok(responses) => {
                                 // Send all direct responses to this client
                                 for response in responses {
-                                    match serialize_server_msg(&response) {
-                                        Ok(bytes) => {
-                                            if let Err(e) = ws_sender.send(Message::Binary(Bytes::from(bytes))).await {
-                                                error!(
-                                                    "Failed to send direct response to client: {}",
-                                                    e
-                                                );
-                                            }
-                                        }
-                                        Err(e) => error!("Serialization failed: {}", e),
+                                    let Some(bytes) = encode_server_msg(&response) else {
+                                        continue;
+                                    };
+                                    if let Err(e) = ws_sender.send(Message::Binary(bytes)).await {
+                                        error!("Failed to send direct response to client: {}", e);
                                     }
                                 }
                                 if state.must_close {
@@ -484,36 +589,27 @@ pub async fn handle_connection(
                     None => std::future::pending().await,
                 }
             } => {
-                if let Some(msg) = direct_msg {
-                    let is_kicked = matches!(msg, ServerMessage::Kicked { .. });
-                    match serialize_server_msg(&msg) {
-                        Ok(bytes) => {
-                            let _ = ws_sender.send(Message::Binary(Bytes::from(bytes))).await;
-                        }
-                        Err(e) => error!("Serialization failed: {}", e),
-                    }
-                    if is_kicked {
-                        info!("Player {:?} kicked", state.character_name);
-                        break;
-                    }
+                if let Some(bytes) = direct_msg {
+                    let _ = ws_sender.send(Message::Binary(bytes)).await;
                 }
             }
         }
     }
 
     // Once the drain starts, `persist_shutdown_snapshot` owns persistence for
-    // every connected player — and needs these maps left populated to see them.
-    // A kick already flushed and detached the replaced session, so this is a
-    // no-op for that player id.
+    // every connected player and needs these maps left populated to see them.
     if !shutdown_started.has_changed().unwrap_or(true) {
-        if let Some(ref id) = state.player_id {
-            game_state.cancel_fishing_if_active(id).await;
-            game_state.persist_and_detach_player(id, auth_service).await;
-
-            game_state.unregister_direct_channel(id).await;
-            game_state.unregister_player_character(id).await;
-            game_state.remove_player(id).await;
+        if let (Some(account_name), Some(session_id)) =
+            (state.account_name.as_deref(), state.account_session_id)
+        {
+            game_state
+                .end_account_session(account_name, session_id, auth_service)
+                .await;
         }
+    }
+
+    if let Some(token) = state.cape_upload_token.take() {
+        game_state.cape_textures().close_session(&token).await;
     }
 
     match &state.character_name {
@@ -522,16 +618,68 @@ pub async fn handle_connection(
     }
 }
 
-/// Shared tail of both auth paths: load characters, mark the connection
-/// authenticated, and build the AuthSuccess reply.
-fn finish_auth(
+/// Shared tail of both auth paths: replace any account session, load
+/// characters, and build the AuthSuccess reply.
+async fn finish_auth(
+    game_state: &GameState,
     auth_service: &AuthService,
     state: &mut ConnectionState,
     account_name: String,
     is_official_npc: bool,
 ) -> Vec<ServerMessage> {
-    let character_records = match auth_service.list_characters(&account_name) {
-        Ok(characters) => characters,
+    let (kick_tx, kick_rx) = mpsc::unbounded_channel();
+
+    // The single gate both login paths pass through: a ban stops the session
+    // here, not at character select, because the account carries it. Checked
+    // and registered under the one lock `/ban` also takes, so a ban landing
+    // in between cannot admit a session it can no longer see to evict.
+    let account_session_id = {
+        let _sessions = game_state.lock_character_sessions().await;
+        let ban = {
+            let auth = auth_service.clone();
+            let account = account_name.clone();
+            crate::game_state::auth_db(move || auth.active_ban(&account)).await
+        };
+        match ban {
+            Ok(Some(ban)) => {
+                info!("Rejected banned account '{}'", account_name);
+                return vec![ServerMessage::AuthError {
+                    message: ban.message(),
+                }];
+            }
+            Ok(None) => {}
+            Err(err) => {
+                // Fail closed: an unreadable ban table must not become a way in.
+                error!("Ban check failed for '{}': {}", account_name, err);
+                return vec![ServerMessage::AuthError {
+                    message: "Could not verify the account. Try again shortly.".to_string(),
+                }];
+            }
+        }
+        game_state
+            .register_account_session_locked(&account_name, kick_tx, auth_service)
+            .await
+    };
+
+    state.account_name = Some(account_name.clone());
+    state.account_session_id = Some(account_session_id);
+    state.account_rx = Some(kick_rx);
+    state.is_official_npc = is_official_npc;
+    state.pending_character_attributes = None;
+
+    // Read only after the session gate: replacing an account's previous
+    // session persists that player first, so returning to character select
+    // from the game shows the gear and level the character just had.
+    let listed = {
+        let auth = auth_service.clone();
+        let account = account_name.clone();
+        crate::game_state::auth_db(move || auth.list_characters_with_equipment(&account)).await
+    };
+    let characters = match listed {
+        Ok(records) => records
+            .into_iter()
+            .map(character_listing_to_shared)
+            .collect::<Vec<Character>>(),
         Err(err) => {
             warn!(
                 "Failed to load character list for account '{}': {}",
@@ -543,23 +691,23 @@ fn finish_auth(
         }
     };
 
-    let characters = character_records
-        .into_iter()
-        .map(character_record_to_shared)
-        .collect::<Vec<Character>>();
-
-    state.account_name = Some(account_name.clone());
-    state.is_official_npc = is_official_npc;
-    state.pending_character_attributes = None;
-
     info!(
         "Account '{}' authenticated successfully with {} character(s)",
         account_name,
         characters.len()
     );
+    // Replaces any token an earlier auth on this connection handed out, so
+    // the store never holds two for one socket.
+    if let Some(previous) = state.cape_upload_token.take() {
+        game_state.cape_textures().close_session(&previous).await;
+    }
+    let cape_upload_token = game_state.cape_textures().open_session(&account_name).await;
+    state.cape_upload_token = Some(cape_upload_token.clone());
+
     vec![ServerMessage::AuthSuccess {
         account_name,
         characters,
+        cape_upload_token,
     }]
 }
 
@@ -572,7 +720,7 @@ fn requires_admin(msg: &ClientMessage) -> bool {
         | ClientMessage::DebugSetTime { .. }
         | ClientMessage::DebugResetDungeonProps { .. } => true,
         ClientMessage::ChatMessage { message } => {
-            message.starts_with("/give ") || parse_notice_command(message).is_some()
+            parse_notice_command(message).is_some() || parse_admin_command(message).is_some()
         }
         _ => false,
     }
@@ -627,6 +775,24 @@ fn handle_handshake(
                 ),
             }]);
         }
+        // Same refusal path, for the break the protocol version cannot see:
+        // a stale dungeon generator (see `LAYOUT_VERSION`).
+        if !onlinerpg_shared::layout_version_matches(client_version) {
+            if let Some(tail) = PROTOCOL_REFUSAL_LOG.claim() {
+                warn!(
+                    "Refusing client: dungeon layout {} (server built {}) ip={} kind={client_kind} version={client_version}{tail}",
+                    onlinerpg_shared::layout_version_of(client_version).unwrap_or("unstamped"),
+                    onlinerpg_shared::LAYOUT_VERSION,
+                    state.client_ip,
+                );
+            }
+            state.must_close = true;
+            return Some(vec![ServerMessage::AuthError {
+                message: format!(
+                    "This build's dungeon layouts differ from the server's — {CLIENT_UPDATE_HINT}"
+                ),
+            }]);
+        }
         let kind = ClientKind::from_reported(client_kind);
         info!(
             "Client handshake: kind={} version={client_version} ip={}",
@@ -634,6 +800,7 @@ fn handle_handshake(
             state.client_ip
         );
         state.client_kind = Some(kind);
+        state.reported_client_version = client_version.chars().take(128).collect();
         return Some(vec![]);
     }
 
@@ -681,10 +848,26 @@ async fn handle_client_message(
         );
         return Ok(match &state.player_id {
             Some(_) => vec![ServerMessage::SystemMessage {
+                localization: None,
                 message: "Admin only".to_string(),
             }],
             None => vec![],
         });
+    }
+
+    if matches!(
+        client_msg,
+        ClientMessage::PlayerMove { .. }
+            | ClientMessage::PlayerKeyboardMove { .. }
+            | ClientMessage::PlayerMountTurn { .. }
+            | ClientMessage::PlayerMountRecover { .. }
+            | ClientMessage::PlayerFloorChanged { .. }
+            | ClientMessage::PlayerMovementSample { .. }
+    ) && state
+        .player_id
+        .is_some_and(|id| game_state.movement_resync_pending(&id))
+    {
+        return Ok(vec![]);
     }
 
     match client_msg {
@@ -718,7 +901,7 @@ async fn handle_client_message(
             info!("Google sub '{}' -> account '{}'", claims.sub, account_name);
 
             state.admin_eligible = auth_ctx.is_admin(&claims);
-            return Ok(finish_auth(auth_service, state, account_name, false));
+            return Ok(finish_auth(game_state, auth_service, state, account_name, false).await);
         }
 
         ClientMessage::AuthenticateNpc {
@@ -742,7 +925,7 @@ async fn handle_client_message(
                 }
             };
 
-            return Ok(finish_auth(auth_service, state, account_name, true));
+            return Ok(finish_auth(game_state, auth_service, state, account_name, true).await);
         }
 
         ClientMessage::CreateCharacter {
@@ -786,8 +969,11 @@ async fn handle_client_message(
                         "Character '{}' created for account '{}'",
                         character.name, authed_account_name
                     );
+                    let worn = visible_equipment_of(auth_service, character.id).await;
                     return Ok(vec![ServerMessage::CharacterCreated {
-                        character: character_record_to_shared(character),
+                        character: character_listing_to_shared(
+                            crate::auth::CharacterListing::fresh(character, worn),
+                        ),
                     }]);
                 }
                 Err(err) => {
@@ -810,18 +996,60 @@ async fn handle_client_message(
                 Ok(name) => name,
                 Err(responses) => return Ok(responses),
             };
-
-            match auth_service.delete_character(&authed_account_name, character_id) {
-                Ok(()) => {
+            match game_state
+                .delete_character_if_inactive(auth_service, &authed_account_name, character_id)
+                .await
+            {
+                Ok(true) => {
                     info!(
                         "Character id={} deleted for account '{}'",
                         character_id, authed_account_name
                     );
                     return Ok(vec![ServerMessage::CharacterDeleted { character_id }]);
                 }
+                Ok(false) => {
+                    warn!(
+                        "Character delete rejected for account '{}': id={} is active",
+                        authed_account_name, character_id
+                    );
+                    return Ok(vec![ServerMessage::CharacterError {
+                        message: "Cannot delete a character while it is in game".to_string(),
+                    }]);
+                }
                 Err(err) => {
                     warn!(
                         "Character delete failed for account '{}': {}",
+                        authed_account_name, err
+                    );
+                    return Ok(vec![ServerMessage::CharacterError {
+                        message: err.client_message().to_string(),
+                    }]);
+                }
+            }
+        }
+
+        ClientMessage::RenameCharacter {
+            character_id,
+            new_name,
+        } => {
+            if let Err(responses) = state.require_not_in_game("RenameCharacter") {
+                return Ok(responses);
+            }
+            let authed_account_name = match state.require_auth("RenameCharacter") {
+                Ok(name) => name,
+                Err(responses) => return Ok(responses),
+            };
+            match auth_service.rename_character(&authed_account_name, character_id, &new_name) {
+                Ok(name) => {
+                    info!(
+                        "Character id={} renamed to '{}' for account '{}'",
+                        character_id, name, authed_account_name
+                    );
+                    return Ok(vec![ServerMessage::CharacterRenamed { character_id, name }]);
+                }
+                Err(err) => {
+                    warn!(
+                        "Character rename failed for account '{}': {}",
                         authed_account_name, err
                     );
                     return Ok(vec![ServerMessage::CharacterError {
@@ -864,6 +1092,16 @@ async fn handle_client_message(
                 Ok(name) => name,
                 Err(responses) => return Ok(responses),
             };
+            let character_sessions = game_state.lock_character_sessions().await;
+            let Some(account_session_id) = state.account_session_id else {
+                return Ok(vec![]);
+            };
+            if !game_state
+                .is_current_account_session(&authed_account_name, account_session_id)
+                .await
+            {
+                return Ok(vec![]);
+            }
 
             let selected_character =
                 match auth_service.get_character_for_account(&authed_account_name, character_id) {
@@ -879,6 +1117,18 @@ async fn handle_client_message(
                     }
                 };
 
+            // A name banned after the character was made stops it here, not
+            // at login: the client answers with RenameCharacter and retries.
+            if auth_service.is_name_banned_for(&authed_account_name, &selected_character.name) {
+                info!(
+                    "Refusing entry for banned character name '{}'",
+                    selected_character.name
+                );
+                return Ok(vec![ServerMessage::CharacterRenameRequired {
+                    character_id,
+                }]);
+            }
+
             state.is_admin = state.admin_eligible && selected_character.admin_role > 0;
             if state.is_admin {
                 info!(
@@ -887,16 +1137,24 @@ async fn handle_client_message(
                 );
             }
 
-            // Trained skills load before any registration: a failed read must
-            // refuse the session, or the next save would overwrite real
-            // progress with an empty state.
-            let skill_rows = {
+            // Skills and dungeon history load before any registration: a failed
+            // read must refuse the session, or an empty fallback would overwrite
+            // trained skills on save and re-grant already-opened chest rewards.
+            let (skill_rows, chest_opens, discovered_dungeons, titles) = {
                 let auth = Arc::clone(auth_service);
-                match crate::game_state::auth_db(move || auth.load_skills(character_id)).await {
-                    Ok(rows) => rows,
+                let loaded = crate::game_state::auth_db(move || {
+                    Ok((
+                        auth.load_skills(character_id)?,
+                        auth.load_dungeon_history(character_id)?,
+                        auth.load_titles(character_id)?,
+                    ))
+                })
+                .await;
+                match loaded {
+                    Ok((rows, (opens, ids), titles)) => (rows, opens, ids, titles),
                     Err(err) => {
                         warn!(
-                            "Failed to load skills for character {}: {} — refusing session",
+                            "Failed to load required state for character {}: {} — refusing session",
                             character_id, err
                         );
                         return Ok(vec![ServerMessage::CharacterError {
@@ -905,11 +1163,6 @@ async fn handle_client_message(
                     }
                 }
             };
-
-            // Enforced unique character names allow name-based session replacement.
-            game_state
-                .kick_player_by_name(&selected_character.name, auth_service)
-                .await;
 
             let max_hp = selected_character.max_hp;
             let character_xp = selected_character.xp;
@@ -929,6 +1182,7 @@ async fn handle_client_message(
                 state.is_official_npc,
                 state.client_kind.unwrap_or_default(),
             );
+            player.title = titles.1.clone();
 
             // Restore saved health (if available) and floor_level from DB
             if let Some(saved_health) = selected_character.health {
@@ -945,13 +1199,12 @@ async fn handle_client_message(
                     saved_floor, selected_character.name
                 );
             }
-            // A negative floor means the player logged out inside a
-            // dungeon: re-prime that dungeon's runtime, or fall back to
-            // the world spawn if the entrance no longer exists.
+            let mut dungeon_reset_on_login = false;
             if player.floor_level < 0 {
                 let ok = game_state
-                    .rehydrate_dungeon_player(&player.id, &player.position, player.floor_level)
+                    .rehydrate_dungeon_player(&mut player, selected_character.dungeon_epoch)
                     .await;
+                dungeon_reset_on_login = ok && player.floor_level == 0;
                 if !ok {
                     let spawn = &crate::world_config::world_config().spawn_position;
                     player.position = spawn.position();
@@ -959,9 +1212,20 @@ async fn handle_client_message(
                     player.floor_level = 0;
                 }
             }
+            // The stored Y was the client's word at logout; re-ground it.
+            if player.floor_level >= 0 {
+                player.position.y = game_state
+                    .surface_ground_y(
+                        player.floor_level as u8,
+                        &player.position,
+                        player.position.y,
+                        player.mount,
+                    )
+                    .await;
+            }
             let id = player.id;
 
-            state.direct_rx = Some(game_state.register_direct_channel(&id).await);
+            state.direct_rx = Some(game_state.register_connection_channel(&id).await);
             game_state
                 .register_player_character(
                     &id,
@@ -969,32 +1233,53 @@ async fn handle_client_message(
                     character_xp,
                     selected_character.attributes.clone(),
                     selected_character.gold,
+                    (!state.is_official_npc).then_some(selected_character.satiation),
                 )
                 .await;
-
-            match auth_service.load_blocked_names(character_id) {
-                Ok(blocked) => game_state.set_player_blocks(&id, blocked).await,
-                Err(err) => warn!(
-                    "Failed to load block list for character {}: {}",
-                    character_id, err
-                ),
-            }
-
-            let auth = Arc::clone(auth_service);
-            match crate::game_state::auth_db(move || auth.load_dungeon_chest_opens(character_id))
+            if !game_state
+                .attach_player_to_account_session(&authed_account_name, account_session_id, id)
                 .await
             {
-                Ok(opens) => game_state.set_chest_opens(character_id, opens).await,
+                warn!(
+                    "Account session changed during game admission for '{}'",
+                    authed_account_name
+                );
+                return Ok(vec![]);
+            }
+            let auth = Arc::clone(auth_service);
+            match crate::game_state::auth_db(move || {
+                Ok((
+                    auth.load_blocked_names(character_id)?,
+                    auth.load_friends(character_id)?,
+                ))
+            })
+            .await
+            {
+                Ok((blocked, friends)) => {
+                    game_state.set_player_blocks(&id, blocked).await;
+                    game_state.set_player_friends(&id, friends).await;
+                }
                 Err(err) => warn!(
-                    "Failed to load chest history for character {}: {}",
+                    "Failed to load block/friend lists for character {}: {}",
                     character_id, err
                 ),
             }
+
+            game_state.set_chest_opens(character_id, chest_opens).await;
+            game_state.set_player_titles(&id, titles.0).await;
+            game_state.send_player_titles(&id).await;
+            game_state
+                .set_dungeon_discoveries(&id, discovered_dungeons.clone())
+                .await;
 
             // Load inventory from DB
             game_state
                 .load_player_inventory(&id, character_id, auth_service)
                 .await;
+            if state.is_official_npc {
+                game_state.seed_npc_loadout(&id, &player.name).await;
+                game_state.seed_npc_keepsakes(&id, &player.name).await;
+            }
 
             // Missing rows = never trained.
             let skills = crate::game_state::skills_from_rows(&skill_rows);
@@ -1004,31 +1289,48 @@ async fn handle_client_message(
             // Resolve it before add_player builds the late-join GameState snapshot.
             let inventory = game_state.get_player_inventory(&id).await;
             player.torch_on = inventory.as_ref().is_some_and(|inv| inv.is_torch_lit());
-            player.main_hand = inventory.as_ref().and_then(|inv| inv.main_hand_def_id());
+            player.main_hand = inventory
+                .as_ref()
+                .and_then(|inv| inv.equipped_def_id(EquipSlot::MainHand));
+            player.back = inventory
+                .as_ref()
+                .and_then(|inv| inv.equipped_def_id(EquipSlot::Back));
+            player.back_color = inventory.as_ref().and_then(|inv| inv.equipped_cape_color());
+            player.back_texture = inventory
+                .as_ref()
+                .and_then(|inv| inv.equipped_cape_texture());
 
             let mut responses = vec![ServerMessage::JoinSuccess {
                 player: player.clone(),
                 is_admin: state.is_admin,
             }];
+            if let Some(message) = game_state
+                .register_mana(
+                    &player,
+                    selected_character.attributes.wis,
+                    selected_character.mana,
+                )
+                .await
+            {
+                responses.push(message);
+            }
             let datetime = game_state.current_game_datetime();
             responses.push(ServerMessage::GameTimeSync {
                 is_night: GameState::is_night(&datetime),
                 datetime,
             });
-
-            // Send no-spawn zones so client can validate spawn positions
-            responses.push(ServerMessage::NoSpawnZones {
-                zones: game_state.no_spawn_zones().to_vec(),
-            });
+            if let Some(weather) = game_state.weather_sync_message() {
+                responses.push(weather);
+            }
 
             // Send inventory state
             if let Some(inv) = inventory {
                 responses.push(ServerMessage::InventoryState { inventory: inv });
             }
 
-            responses.push(ServerMessage::GuardUpdated {
-                guard: game_state.effective_guard(&id).await,
-            });
+            responses.push(game_state.effective_stats(&id).await.into());
+            responses.push(game_state.ability_cooldown_message(&id).await);
+            responses.push(ServerMessage::BuffUpdate { buffs: vec![] });
 
             responses.push(ServerMessage::GoldUpdate {
                 gold: selected_character.gold,
@@ -1036,27 +1338,63 @@ async fn handle_client_message(
 
             responses.push(ServerMessage::SkillsUpdate { skills });
 
+            responses.push(ServerMessage::DungeonDiscoveries {
+                entrance_ids: discovered_dungeons,
+            });
+
+            if !state.is_official_npc {
+                responses.push(crate::game_state::hunger::hunger_update_msg(
+                    selected_character.satiation,
+                    (1.0, 1.0, 1.0),
+                ));
+            }
+
             if let Some(notice) = game_state.server_notice().await {
                 responses.push(ServerMessage::ServerNotice {
                     message: Some(notice),
                 });
             }
+            if state.is_official_npc {
+                responses.push(game_state.pricing_notice(auth_service).await);
+            }
 
             let rejoin_floor = player.floor_level;
             let rejoin_pos = player.position;
-            if let Some(game_state_msg) = game_state.add_player(player).await {
-                responses.push(game_state_msg);
+            info!(target: "movement_audit",
+                player_id = %id, character_id, account_session_id,
+                client_kind = ?state.client_kind,
+                reported_version = ?state.reported_client_version,
+                position = ?player.position, rotation = player.rotation, floor = player.floor_level,
+                "Movement session joined");
+            game_state.add_player(player).await;
+            // Stamps last_seen_at at the next flush.
+            game_state.mark_dirty(&id).await;
+
+            // After the snapshot on purpose: the client treats `GameState` as
+            // the start of a session and clears its friend stores there.
+            responses.push(game_state.friend_list_message(&id).await);
+            if dungeon_reset_on_login {
+                responses.push(ServerMessage::SystemMessage {
+                    localization: Some(onlinerpg_shared::messages::LocalizedMessage::new(
+                        "server.dungeonReset",
+                    )),
+                    message: "The dungeon has reset. You return to its entrance.".to_string(),
+                });
             }
             if rejoin_floor < 0 {
-                // Rejoining inside a dungeon: enter its floor (occupancy
-                // + lazy monster spawn with this player as AI owner).
+                // Restore floor occupancy and populate empty monster slots.
                 game_state
                     .handle_player_floor_change(&id, 0, rejoin_floor, &rejoin_pos, &rejoin_pos)
                     .await;
             }
 
             state.player_id = Some(id);
+            state.last_furniture_tip.clear();
             state.character_name = Some(selected_character.name.clone());
+            game_state
+                .begin_account_activity(id, &authed_account_name, &state.country, auth_service)
+                .await;
+            drop(character_sessions);
 
             info!(
                 "Account '{}' entered game as character '{}' with player ID {:?}",
@@ -1065,11 +1403,72 @@ async fn handle_client_message(
             return Ok(responses);
         }
 
+        ClientMessage::PlayerMovementSample {
+            position,
+            rotation,
+            floor_level,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .record_movement_sample(id, position, rotation, floor_level)
+                    .await;
+            }
+        }
+        ClientMessage::MovementResyncAck { resync_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.acknowledge_movement_resync(id, resync_id);
+            }
+        }
+        ClientMessage::PlayerMountRecover { request_id, goal } => {
+            if let Some(id) = &state.player_id {
+                game_state.recover_horse(id, request_id, goal).await;
+            }
+        }
+
+        ClientMessage::PlayerMountTurn {
+            rotation,
+            stop,
+            sprinting,
+        } => {
+            if let Some(id) = &state.player_id {
+                if stop {
+                    game_state.stop_horse(id).await;
+                } else {
+                    game_state.turn_horse(id, rotation, sprinting).await;
+                }
+            }
+        }
+
+        ClientMessage::PlayerKeyboardMove {
+            position,
+            rotation,
+            floor_level,
+            forward,
+            sprinting,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .update_keyboard_movement(
+                        id,
+                        crate::game_state::MoveCommand {
+                            position,
+                            rotation,
+                            floor_level,
+                            append: false,
+                            sprinting,
+                        },
+                        forward,
+                    )
+                    .await;
+            }
+        }
+
         ClientMessage::PlayerMove {
             position,
             rotation,
             floor_level,
             append,
+            sprinting,
         } => {
             if let Some(id) = &state.player_id {
                 game_state
@@ -1080,8 +1479,8 @@ async fn handle_client_message(
                             rotation,
                             floor_level,
                             append,
+                            sprinting,
                         },
-                        state.is_admin,
                         state.is_official_npc,
                     )
                     .await;
@@ -1098,6 +1497,19 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::ResyncWorld => {
+            if let Some(id) = &state.player_id {
+                game_state.reset_world_view(id).await;
+            }
+        }
+        ClientMessage::WorldReady => {
+            if let Some(id) = &state.player_id {
+                game_state.mark_world_ready(id).await;
+            } else {
+                warn!("Received world ready from client that is not in game");
+            }
+        }
+
         ClientMessage::ChatMessage { message } => {
             if let Some(id) = &state.player_id {
                 game_state
@@ -1108,61 +1520,34 @@ async fn handle_client_message(
             }
         }
 
-        ClientMessage::RequestSpawnMonster {
-            monster_type,
-            position,
-            rotation,
-        } => {
-            if let Some(id) = &state.player_id {
-                if !game_state
-                    .validate_spawn_request(id, &monster_type, &position, rotation)
-                    .await
-                {
-                    warn!(
-                        "Spawn request rejected: position ({:.1}, {:.1}) rotation {:.1} invalid for {}",
-                        position.x, position.z, rotation, monster_type
-                    );
-                } else if let Some(monster) = game_state
-                    .spawn_monster(monster_type, position, rotation, Some(*id), 0, None, false)
-                    .await
-                {
-                    game_state
-                        .send_direct_message(id, ServerMessage::MonsterAssigned { monster })
-                        .await;
-                }
-            } else {
-                warn!("Received spawn request from client that is not in game");
-            }
-        }
-
-        ClientMessage::MonsterMove {
+        ClientMessage::UseAbility {
+            ability,
             monster_id,
-            position,
-            rotation,
-            state: monster_state,
-            target_position,
+            target_player_id,
         } => {
             if let Some(id) = &state.player_id {
                 game_state
-                    .update_monster_position(
-                        id,
-                        monster_id,
-                        position,
-                        rotation,
-                        monster_state,
-                        target_position,
-                    )
+                    .use_targeted_ability(id, ability, monster_id.as_deref(), target_player_id)
+                    .await;
+            }
+        }
+        ClientMessage::PlayerAttack { monster_id } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .player_attack(id, monster_id, Some(auth_service))
                     .await;
             } else {
-                warn!("Received monster move from client that is not in game");
+                warn!("Received attack from client that is not in game");
             }
         }
 
-        ClientMessage::PlayerAttack { monster_id } => {
-            if let Some(id) = &state.player_id {
-                game_state.broadcast_player_attack(id, monster_id).await;
-            } else {
-                warn!("Received attack from client that is not in game");
+        ClientMessage::DaggerDoubleSlash { monster_id } => {
+            if let Some(id) = state.player_id {
+                let game = Arc::clone(game_state);
+                let auth = Arc::clone(auth_service);
+                tokio::spawn(async move {
+                    game.dagger_double_slash(&id, monster_id, Some(&auth)).await;
+                });
             }
         }
 
@@ -1187,19 +1572,6 @@ async fn handle_client_message(
                 game_state.stop_fishing(id).await;
             } else {
                 warn!("Received fishing stop from client that is not in game");
-            }
-        }
-
-        ClientMessage::MonsterAttack {
-            monster_id,
-            target_player_id,
-        } => {
-            if let Some(id) = &state.player_id {
-                game_state
-                    .broadcast_monster_attack(id, &monster_id, &target_player_id)
-                    .await;
-            } else {
-                warn!("Received monster attack from client that is not in game");
             }
         }
 
@@ -1255,26 +1627,15 @@ async fn handle_client_message(
             door_id,
         } => {
             if let Some(id) = &state.player_id {
-                if let Some(is_open) = game_state
+                game_state
                     .toggle_dungeon_door(id, &entrance_id, depth, door_id)
-                    .await
-                {
-                    game_state
-                        .publish_dungeon_door_toggle(id, entrance_id, depth, door_id, is_open)
-                        .await;
-                }
+                    .await;
             }
         }
 
-        ClientMessage::RequestDungeonDoors { entrance_id } => {
+        ClientMessage::RequestDungeonDoors { .. } => {
             if let Some(id) = &state.player_id {
-                let doors = game_state.dungeon_open_doors(&entrance_id).await;
-                game_state
-                    .send_direct_message(
-                        id,
-                        ServerMessage::DungeonDoorsState { entrance_id, doors },
-                    )
-                    .await;
+                game_state.reset_world_view(id).await;
             }
         }
 
@@ -1342,6 +1703,24 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::StartInstrument => {
+            if let Some(id) = state.player_id {
+                game_state.start_live_instrument(&id).await;
+            } else {
+                warn!("Received instrument start from client that is not in game");
+            }
+        }
+
+        ClientMessage::InstrumentNotes { events } => {
+            if let Some(id) = state.player_id {
+                if state.instrument_batch_limiter.allow() {
+                    game_state.play_live_instrument_notes(&id, events).await;
+                }
+            } else {
+                warn!("Received instrument notes from client that is not in game");
+            }
+        }
+
         ClientMessage::StopInteraction => {
             if let Some(id) = &state.player_id {
                 game_state.set_player_interaction(id, None, None).await;
@@ -1387,16 +1766,26 @@ async fn handle_client_message(
             );
         }
 
-        ClientMessage::PlaceHouse { .. } => {
-            warn!("Ignoring client-side PlaceHouse broadcast request; use the housing REST API");
+        ClientMessage::PlaceHouse {
+            instance_id,
+            origin,
+            quarter_turns,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .place_house(id, instance_id, origin, quarter_turns, auth_service)
+                    .await;
+            }
         }
 
         ClientMessage::ModifyRoom { .. } => {
             // TODO: room modification broadcast
         }
 
-        ClientMessage::RemoveHouse { .. } => {
-            warn!("Ignoring client-side RemoveHouse broadcast request; use the housing REST API");
+        ClientMessage::RemoveHouse { house_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.demolish_house(id, house_id, auth_service).await;
+            }
         }
 
         ClientMessage::ToggleDoor {
@@ -1405,35 +1794,18 @@ async fn handle_client_message(
             wall_dir,
             segment_index,
         } => {
-            // Toggle door is_open and broadcast to all players
             if let Some(ref pid) = state.player_id {
-                let toggled = game_state
+                game_state
                     .toggle_door(pid, &house_id, room_index, wall_dir, segment_index)
                     .await;
-                if let Some(is_open) = toggled {
-                    if let Some((position, _, floor_level)) =
-                        game_state.get_player_position(pid).await
-                    {
-                        game_state
-                            .send_direct_message_to_players_within_position(
-                                &position,
-                                floor_level,
-                                crate::game_state::EVENT_DELIVERY_RADIUS,
-                                ServerMessage::DoorToggled {
-                                    house_id,
-                                    room_index,
-                                    wall_dir,
-                                    segment_index,
-                                    is_open,
-                                },
-                                None,
-                            )
-                            .await;
-                    }
-                }
             }
         }
 
+        ClientMessage::SelectAmmo { item_def_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.select_ammo(id, item_def_id).await;
+            }
+        }
         ClientMessage::EquipItem { instance_id } => {
             if let Some(id) = &state.player_id {
                 game_state.equip_item(id, instance_id).await;
@@ -1446,9 +1818,24 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::SetItemLocked {
+            instance_id,
+            locked,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state.set_item_locked(id, instance_id, locked).await;
+            }
+        }
+
         ClientMessage::DropItem { instance_id } => {
             if let Some(id) = &state.player_id {
                 game_state.drop_item(id, instance_id).await;
+            }
+        }
+
+        ClientMessage::DropItems { items } => {
+            if let Some(id) = &state.player_id {
+                game_state.drop_items(id, items).await;
             }
         }
 
@@ -1464,9 +1851,306 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::UseTeleportScroll { instance_id } => {
+            if let Some(id) = &state.player_id {
+                if game_state.authenticated_use_action(id, instance_id).await
+                    == Some(AuthenticatedUseAction::EstateReturn)
+                {
+                    game_state
+                        .use_estate_return_scroll(id, instance_id, auth_service)
+                        .await;
+                } else {
+                    game_state.use_teleport_scroll(id, instance_id).await;
+                }
+            }
+        }
+
         ClientMessage::UseItem { instance_id } => {
             if let Some(id) = &state.player_id {
-                game_state.use_item(id, instance_id).await;
+                match game_state.authenticated_use_action(id, instance_id).await {
+                    Some(AuthenticatedUseAction::EstateReturn) => {
+                        game_state
+                            .use_estate_return_scroll(id, instance_id, auth_service)
+                            .await;
+                    }
+                    Some(AuthenticatedUseAction::EstateStorage) => {
+                        game_state
+                            .try_start_estate_chest_mode(id, instance_id, auth_service)
+                            .await;
+                    }
+                    Some(AuthenticatedUseAction::EstateFence) => {
+                        game_state
+                            .try_start_fence_mode(id, instance_id, auth_service)
+                            .await;
+                    }
+                    Some(AuthenticatedUseAction::LandClaim) => {
+                        game_state
+                            .try_preview_land_claim(id, instance_id, auth_service)
+                            .await;
+                    }
+                    None => {
+                        if !game_state
+                            .try_start_house_placement(id, instance_id, auth_service)
+                            .await
+                            && !game_state
+                                .try_use_landscaping_item(
+                                    id,
+                                    instance_id,
+                                    auth_service,
+                                    state.is_admin,
+                                )
+                                .await
+                        {
+                            game_state.use_item(id, instance_id).await;
+                        }
+                    }
+                }
+            }
+        }
+
+        ClientMessage::DyeCape { instance_id, color } => {
+            if let Some(id) = &state.player_id {
+                game_state.dye_cape(id, instance_id, &color).await;
+            }
+        }
+
+        ClientMessage::UseLandDocument {
+            instance_id,
+            tile_x,
+            tile_z,
+            quadrant,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .claim_land(id, instance_id, (tile_x, tile_z, quadrant), auth_service)
+                    .await;
+            }
+        }
+        ClientMessage::EditFence { edge, place } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .edit_fence(id, edge, place, auth_service, state.is_admin)
+                    .await;
+            }
+        }
+        ClientMessage::StartLandscapingMode { tool } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .start_landscaping_mode(id, auth_service, tool, state.is_admin)
+                    .await;
+            }
+        }
+        ClientMessage::SelectFurnitureDisplay { display_id } => {
+            let tip = SHOP
+                .products
+                .iter()
+                .find(|product| product.display_ids.contains(&display_id))
+                .and_then(|product| FurnitureTip::for_item(&product.item_def_id));
+            if let (Some(id), Some(tip)) = (state.player_id, tip) {
+                if state.furniture_tip_due(tip)
+                    && game_state.notify_furniture_selection(&id, display_id).await
+                {
+                    state.last_furniture_tip.insert(tip, Instant::now());
+                }
+            }
+        }
+        ClientMessage::CheckoutFurniture {
+            items,
+            expected_gold,
+            expected_total,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .checkout_furniture(id, items, expected_gold, expected_total, auth_service)
+                    .await;
+            }
+        }
+        ClientMessage::SetEstateFurnitureText { furniture_id, text } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .set_estate_furniture_text(id, furniture_id, text, auth_service)
+                    .await;
+            }
+        }
+        ClientMessage::PlaceEstateChest {
+            instance_id,
+            position,
+            rotation_deg,
+            floor_level,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .place_estate_chest(
+                        id,
+                        instance_id,
+                        position,
+                        rotation_deg,
+                        floor_level,
+                        auth_service,
+                    )
+                    .await;
+            }
+        }
+        ClientMessage::EditLandscape { stroke } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .edit_landscape(id, stroke, auth_service, state.is_admin)
+                    .await;
+            }
+        }
+        ClientMessage::OpenEstateChest { chest_id } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .open_estate_chest(id, chest_id, auth_service)
+                    .await;
+            }
+        }
+        ClientMessage::StartEstateFurnitureMove { furniture_id } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .start_estate_furniture_move(id, furniture_id, auth_service)
+                    .await;
+            }
+        }
+        ClientMessage::MoveEstateFurniture {
+            furniture_id,
+            expected_revision,
+            position,
+            rotation_deg,
+            floor_level,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .move_estate_furniture(
+                        id,
+                        EstateFurnitureMove {
+                            furniture_id,
+                            expected_revision,
+                            position,
+                            rotation_deg,
+                            floor_level,
+                        },
+                        auth_service,
+                    )
+                    .await;
+            }
+        }
+        ClientMessage::TransferEstateItems {
+            chest_id,
+            deposits,
+            withdrawals,
+            expected_revision,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .transfer_estate_items(
+                        id,
+                        chest_id,
+                        deposits,
+                        withdrawals,
+                        expected_revision,
+                        auth_service,
+                    )
+                    .await;
+            }
+        }
+        ClientMessage::RecoverEstateChest { chest_id } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .recover_estate_chest(id, chest_id, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::LandAccount { merchant_player_id } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .land_account_action(id, &merchant_player_id, None, auth_service)
+                    .await;
+            }
+        }
+        ClientMessage::LandDeposit {
+            merchant_player_id,
+            amount,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .land_account_action(
+                        id,
+                        &merchant_player_id,
+                        Some((amount, true)),
+                        auth_service,
+                    )
+                    .await;
+            }
+        }
+        ClientMessage::LandWithdraw {
+            merchant_player_id,
+            amount,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .land_account_action(
+                        id,
+                        &merchant_player_id,
+                        Some((amount, false)),
+                        auth_service,
+                    )
+                    .await;
+            }
+        }
+
+        ClientMessage::ApplyCapeTexture {
+            instance_id,
+            texture,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .apply_cape_texture(id, instance_id, &texture)
+                    .await;
+            }
+        }
+
+        ClientMessage::ReportCapeTexture { player_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.report_cape_texture(id, &player_id).await;
+            }
+        }
+
+        ClientMessage::TipHat { hat_id, amount } => {
+            if let Some(id) = &state.player_id {
+                game_state.tip_hat_tip(id, hat_id, amount).await;
+            }
+        }
+
+        ClientMessage::ServeMeal {
+            chair_object_id,
+            item_def_id,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .serve_meal(id, chair_object_id, &item_def_id)
+                    .await;
+            }
+        }
+
+        ClientMessage::EatMeal { meal_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.eat_meal(id, meal_id).await;
+            }
+        }
+
+        ClientMessage::ClearMeal { meal_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.clear_meal(id, meal_id).await;
+            }
+        }
+
+        ClientMessage::SetActiveTitle { title } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .set_active_title(id, title, Some(auth_service))
+                    .await;
             }
         }
 
@@ -1496,9 +2180,155 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::PlayerTradeRequest { target_name } => {
+            if let Some(id) = &state.player_id {
+                game_state.request_player_trade(id, &target_name).await;
+            }
+        }
+
+        ClientMessage::OpenStall { stall_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.open_stall(id, stall_id).await;
+            }
+        }
+
+        ClientMessage::CloseStall => {
+            if let Some(id) = &state.player_id {
+                game_state.close_stall(id).await;
+            }
+        }
+
+        ClientMessage::SetStallSign { sign } => {
+            if let Some(id) = &state.player_id {
+                game_state.set_stall_sign(id, sign).await;
+            }
+        }
+
+        ClientMessage::ListStallItem {
+            instance_id,
+            quantity,
+            unit_price,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .list_stall_item(id, instance_id, quantity, unit_price)
+                    .await;
+            }
+        }
+
+        ClientMessage::UnlistStallItem { instance_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.unlist_stall_item(id, instance_id).await;
+            }
+        }
+
+        ClientMessage::BuyFromStall { stall_id, lines } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .buy_from_stall(id, stall_id, lines, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::PlayerTradeRespond {
+            requester_id,
+            accept,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .respond_player_trade(id, &requester_id, accept)
+                    .await;
+            }
+        }
+
+        ClientMessage::PlayerTradeSetOffer { items, copper } => {
+            if let Some(id) = &state.player_id {
+                game_state.set_player_trade_offer(id, items, copper).await;
+            }
+        }
+
+        ClientMessage::PlayerTradeLock { revision } => {
+            if let Some(id) = &state.player_id {
+                game_state.lock_player_trade(id, revision).await;
+            }
+        }
+
+        ClientMessage::PlayerTradeUnlock => {
+            if let Some(id) = &state.player_id {
+                game_state.unlock_player_trade(id).await;
+            }
+        }
+
+        ClientMessage::PlayerTradeConfirm { revision } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .confirm_player_trade(id, revision, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::PlayerTradeCancel => {
+            if let Some(id) = &state.player_id {
+                game_state.cancel_player_trade(id).await;
+            }
+        }
+
+        ClientMessage::PartySummonRespond { caster_id, accept } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .respond_to_party_summon(id, &caster_id, accept)
+                    .await;
+            }
+        }
+
         ClientMessage::PartyLeave => {
             if let Some(id) = &state.player_id {
                 game_state.leave_party(id).await;
+            }
+        }
+
+        ClientMessage::PartyKick { target_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.kick_from_party(id, &target_id).await;
+            }
+        }
+
+        ClientMessage::PartyPromote { target_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.promote_party_leader(id, &target_id).await;
+            }
+        }
+
+        ClientMessage::PartyChat { message } => {
+            if let Some(id) = &state.player_id {
+                game_state.send_party_chat(id, message).await;
+            }
+        }
+
+        ClientMessage::FriendRespond {
+            requester_id,
+            accept,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .respond_to_friend_request(id, &requester_id, accept, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::FriendRemove { name } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .remove_friend_by_name(id, &name, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::RequestFriendsOnline => {
+            if let Some(id) = state.player_id {
+                if state.friends_online_poll_due() {
+                    game_state.send_friends_online(&id).await;
+                }
             }
         }
 
@@ -1543,6 +2373,35 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::BuyItems {
+            merchant_player_id,
+            items,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state.buy_items(id, &merchant_player_id, items).await;
+            }
+        }
+
+        ClientMessage::SellItems {
+            merchant_player_id,
+            items,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state.sell_items(id, &merchant_player_id, items).await;
+            }
+        }
+
+        ClientMessage::BuybackItems {
+            merchant_player_id,
+            entry_ids,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .buyback_items(id, &merchant_player_id, entry_ids)
+                    .await;
+            }
+        }
+
         ClientMessage::OfferDeal {
             target_player_id,
             item_def_id,
@@ -1570,6 +2429,12 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::DeclineTrade { merchant_player_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.decline_trade(id, &merchant_player_id).await;
+            }
+        }
+
         // Consumed by `handle_handshake` above; a repeat never reaches here.
         ClientMessage::ClientInfo { .. } => {}
     }
@@ -1577,7 +2442,13 @@ async fn handle_client_message(
     Ok(vec![])
 }
 
-fn character_record_to_shared(record: crate::auth::CharacterRecord) -> Character {
+fn character_listing_to_shared(listing: crate::auth::CharacterListing) -> Character {
+    let crate::auth::CharacterListing {
+        record,
+        worn,
+        titles,
+        active_title,
+    } = listing;
     Character {
         id: record.id,
         name: record.name,
@@ -1588,7 +2459,22 @@ fn character_record_to_shared(record: crate::auth::CharacterRecord) -> Character
         attributes: record.attributes,
         class: record.class,
         gender: record.gender,
+        equipment: worn,
+        titles,
+        active_title,
     }
+}
+
+/// Preview gear for one character. A failed lookup only costs the select
+/// screen its weapons, so it logs and yields nothing worn.
+async fn visible_equipment_of(auth_service: &AuthService, character_id: i64) -> VisibleEquipment {
+    let auth = auth_service.clone();
+    crate::game_state::auth_db(move || auth.load_character_equipment(character_id))
+        .await
+        .unwrap_or_else(|err| {
+            warn!("Failed to load equipped items for character select: {err}");
+            VisibleEquipment::default()
+        })
 }
 
 fn default_character_max_hp(
@@ -1615,12 +2501,204 @@ mod tests {
     use super::*;
     use std::net::Ipv4Addr;
 
+    #[tokio::test]
+    async fn enter_game_restores_only_current_dungeon_visits() {
+        use onlinerpg_shared::dungeon::{cell_center, entrance, generate_dungeon_for};
+
+        for expired in [false, true] {
+            let label = format!("enter_dungeon_{expired}");
+            let game = Arc::new(crate::game_state::tests::make_test_game_state(&label));
+            let auth = Arc::new(crate::game_state::tests::make_test_auth(&label));
+            let account = auth.login_npc("npc_enter_dungeon").unwrap();
+            let character = auth
+                .create_character(
+                    &account,
+                    "Delver",
+                    &CharacterAttributes {
+                        r#str: 12,
+                        dex: 12,
+                        con: 12,
+                        int: 12,
+                        wis: 12,
+                        cha: 12,
+                        guard: 10,
+                    },
+                    16,
+                    CharacterClass::Knight,
+                    crate::types::Gender::Male,
+                )
+                .unwrap();
+            let entrance = entrance("skeleton_crypt").unwrap().position();
+            let chest = generate_dungeon_for("skeleton_crypt")[19].chest.unwrap();
+            let position = cell_center(&entrance, 20, chest);
+            let epoch = GameState::night_epoch(game.current_total_game_seconds());
+            auth.save_batch(
+                &[crate::auth::CharacterSaveData {
+                    character_id: character.id,
+                    x: position.x,
+                    y: position.y,
+                    z: position.z,
+                    rotation: 0.0,
+                    xp: 0,
+                    level: 1,
+                    max_hp: 16,
+                    health: 7,
+                    mana: None,
+                    floor_level: -20,
+                    dungeon_epoch: Some(epoch - i64::from(expired)),
+                    gold: 123,
+                    satiation: character.satiation,
+                    active_ammo: None,
+                }],
+                &[],
+                &[],
+                &[],
+                None,
+            )
+            .unwrap();
+            let mut inventory = auth.load_inventory(character.id).unwrap();
+            inventory.sort_by(|a, b| a.item_def_id.cmp(&b.item_def_id));
+            let mut state = ConnectionState::new(Ipv4Addr::LOCALHOST.into());
+            handle_handshake(
+                &client_info(onlinerpg_shared::PROTOCOL_VERSION, "web"),
+                &mut state,
+            );
+            finish_auth(&game, &auth, &mut state, account.clone(), false).await;
+            let auth_ctx = Arc::new(AuthContext {
+                google: None,
+                npc_token: String::new(),
+                admin_emails: vec![],
+            });
+            let request = onlinerpg_shared::serialize_client_msg(&ClientMessage::EnterGame {
+                character_id: character.id,
+            })
+            .unwrap();
+            let responses = handle_client_message(&request, &game, &auth, &auth_ctx, &mut state)
+                .await
+                .unwrap();
+            let player = responses
+                .iter()
+                .find_map(|message| match message {
+                    ServerMessage::JoinSuccess { player, .. } => Some(player),
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("expected game entry, got {responses:?}"));
+            assert_eq!(player.floor_level, if expired { 0 } else { -20 });
+            let expected = if expired { entrance } else { position };
+            assert!(player.position.dist_xz_sq(&expected) < 0.01);
+            assert_eq!(player.health, 7);
+            assert_eq!(
+                responses.iter().any(|message| matches!(message,
+                    ServerMessage::SystemMessage { message, .. } if message.contains("dungeon has reset")
+                )),
+                expired
+            );
+
+            game.end_account_session(&account, state.account_session_id.unwrap(), &auth)
+                .await;
+            let saved = auth
+                .get_character_for_account(&account, character.id)
+                .unwrap();
+            assert_eq!(saved.floor_level, player.floor_level);
+            assert_eq!(saved.dungeon_epoch, (!expired).then_some(epoch));
+            assert_eq!(saved.gold, 123);
+            let mut saved_inventory = auth.load_inventory(character.id).unwrap();
+            saved_inventory.sort_by(|a, b| a.item_def_id.cmp(&b.item_def_id));
+            assert_eq!(saved_inventory, inventory);
+        }
+    }
+
     #[test]
     fn token_matches_requires_exact_token() {
         assert!(token_matches("secret-token", "secret-token"));
         assert!(!token_matches("secret-token", "secret-tokeN"));
         assert!(!token_matches("secret", "secret-token"));
         assert!(!token_matches("", "secret-token"));
+    }
+
+    /// The gate both login paths share: a banned account must not reach the
+    /// character list, and lifting the ban must let it back in.
+    #[tokio::test]
+    async fn finish_auth_refuses_a_banned_account() {
+        let game_state = crate::game_state::tests::make_test_game_state("auth_ban_gate");
+        let auth = crate::game_state::tests::make_test_auth("auth_ban_gate");
+        let account = auth.login_npc("npc_ban_gate").unwrap();
+
+        let mut state = ConnectionState::new(Ipv4Addr::LOCALHOST.into());
+        let ok = finish_auth(&game_state, &auth, &mut state, account.clone(), true).await;
+        assert!(
+            matches!(ok.as_slice(), [ServerMessage::AuthSuccess { .. }]),
+            "unbanned account authenticates: {ok:?}"
+        );
+
+        auth.ban_account(&account, Some("testing"), None).unwrap();
+        let mut state = ConnectionState::new(Ipv4Addr::LOCALHOST.into());
+        let refused = finish_auth(&game_state, &auth, &mut state, account.clone(), true).await;
+        match refused.as_slice() {
+            [ServerMessage::AuthError { message }] => {
+                assert!(
+                    message.contains("testing"),
+                    "reason reaches the client: {message}"
+                )
+            }
+            other => panic!("expected an auth error, got {other:?}"),
+        }
+        assert!(
+            state.account_name.is_none(),
+            "a refused session must not be left holding the account"
+        );
+
+        auth.unban_account(&account).unwrap();
+        let mut state = ConnectionState::new(Ipv4Addr::LOCALHOST.into());
+        let ok = finish_auth(&game_state, &auth, &mut state, account, true).await;
+        assert!(
+            matches!(ok.as_slice(), [ServerMessage::AuthSuccess { .. }]),
+            "lifting the ban restores access: {ok:?}"
+        );
+    }
+
+    /// The upload credential a player's own REST calls carry: issued with
+    /// `AuthSuccess`, good while the connection lives, gone when it ends.
+    #[tokio::test]
+    async fn finish_auth_issues_an_upload_token_that_dies_with_the_connection() {
+        let game_state = crate::game_state::tests::make_test_game_state("auth_upload_token");
+        let auth = crate::game_state::tests::make_test_auth("auth_upload_token");
+        let account = auth.login_npc("npc_upload_token").unwrap();
+
+        let mut state = ConnectionState::new(Ipv4Addr::LOCALHOST.into());
+        let ok = finish_auth(&game_state, &auth, &mut state, account, true).await;
+        let [ServerMessage::AuthSuccess {
+            cape_upload_token, ..
+        }] = ok.as_slice()
+        else {
+            panic!("expected an auth success, got {ok:?}");
+        };
+        assert_eq!(
+            state.cape_upload_token.as_deref(),
+            Some(cape_upload_token.as_str()),
+            "the connection keeps the token it handed out"
+        );
+
+        let png = crate::test_util::test_png(8, [200, 40, 40, 255]);
+        let hash = game_state
+            .cape_textures()
+            .store(cape_upload_token, png.clone().into())
+            .await
+            .expect("the token uploads");
+        assert!(game_state.cape_textures().is_wearable(&hash).await);
+
+        game_state
+            .cape_textures()
+            .close_session(cape_upload_token)
+            .await;
+        assert!(
+            game_state
+                .cape_textures()
+                .store(cape_upload_token, png.clone().into())
+                .await
+                .is_err(),
+            "the token dies with the connection"
+        );
     }
 
     #[test]
@@ -1632,11 +2710,29 @@ mod tests {
         }
     }
 
+    #[test]
+    fn instrument_batch_limiter_allows_four_per_second_with_a_four_batch_burst() {
+        let start = Instant::now();
+        let mut limiter = InstrumentBatchLimiter {
+            tokens: INSTRUMENT_BATCH_BURST,
+            last: start,
+        };
+
+        for _ in 0..4 {
+            assert!(limiter.allow_at(start));
+        }
+        assert!(!limiter.allow_at(start));
+        assert!(!limiter.allow_at(start + Duration::from_millis(249)));
+        assert!(limiter.allow_at(start + Duration::from_millis(250)));
+        assert!(!limiter.allow_at(start + Duration::from_millis(250)));
+        assert!(limiter.allow_at(start + Duration::from_millis(500)));
+    }
+
     fn client_info(protocol_version: u32, kind: &str) -> ClientMessage {
         ClientMessage::ClientInfo {
             protocol_version,
             client_kind: kind.to_string(),
-            client_version: "test".to_string(),
+            client_version: onlinerpg_shared::stamp_layout_version("test"),
         }
     }
 
@@ -1660,6 +2756,31 @@ mod tests {
         assert!(!state.must_close);
         // Later messages pass through once the handshake is done.
         assert!(handle_handshake(&ClientMessage::Heartbeat, &mut state).is_none());
+    }
+
+    #[test]
+    fn handshake_refuses_a_stale_dungeon_layout() {
+        // Both shapes a mismatch takes: a build stamped with someone else's
+        // generator, and one predating the stamp entirely.
+        for version in [
+            onlinerpg_shared::stamp_layout_version("test")
+                .replace(onlinerpg_shared::LAYOUT_VERSION, "0000000000000000"),
+            "0.1.0".to_string(),
+        ] {
+            let mut state = ConnectionState::new(Ipv4Addr::LOCALHOST.into());
+            let responses = handle_handshake(
+                &ClientMessage::ClientInfo {
+                    protocol_version: onlinerpg_shared::PROTOCOL_VERSION,
+                    client_kind: "cli".to_string(),
+                    client_version: version.clone(),
+                },
+                &mut state,
+            );
+
+            assert!(is_auth_error(&responses), "{version} should be refused");
+            assert!(state.must_close);
+            assert!(state.client_kind.is_none());
+        }
     }
 
     #[test]
@@ -1703,6 +2824,28 @@ mod tests {
     }
 
     #[test]
+    fn furniture_tips_are_limited_per_customer_and_item_kind() {
+        let mut state = ConnectionState::new(Ipv4Addr::LOCALHOST.into());
+        assert!(state.furniture_tip_due(FurnitureTip::StorageChest));
+        state
+            .last_furniture_tip
+            .insert(FurnitureTip::StorageChest, Instant::now());
+        assert!(!state.furniture_tip_due(FurnitureTip::StorageChest));
+        assert!(state.furniture_tip_due(FurnitureTip::Bed));
+        assert_eq!(
+            FurnitureTip::for_item("furniture_bed"),
+            FurnitureTip::for_item("furniture_rustic_bed")
+        );
+        let other = ConnectionState::new(Ipv4Addr::LOCALHOST.into());
+        assert!(other.furniture_tip_due(FurnitureTip::StorageChest));
+        state.last_furniture_tip.insert(
+            FurnitureTip::StorageChest,
+            Instant::now() - FURNITURE_TIP_INTERVAL,
+        );
+        assert!(state.furniture_tip_due(FurnitureTip::StorageChest));
+    }
+
+    #[test]
     fn handshake_buckets_unknown_client_kinds() {
         let mut state = ConnectionState::new(Ipv4Addr::LOCALHOST.into());
         handle_handshake(
@@ -1721,6 +2864,9 @@ mod tests {
             .is_err());
         assert!(state
             .require_selectable_class(&CharacterClass::Guard)
+            .is_err());
+        assert!(state
+            .require_selectable_class(&CharacterClass::Maid)
             .is_err());
         assert!(state
             .require_selectable_class(&CharacterClass::Ranger)
@@ -1751,9 +2897,42 @@ mod tests {
         assert!(requires_admin(&ClientMessage::ChatMessage {
             message: "/notice".into()
         }));
+        for admin_command in [
+            "/give",
+            "/give iron_arrow 100",
+            "  /give iron_arrow 100  ",
+            "/kick Abuser",
+            "/mute Abuser 5",
+            "/unmute Abuser",
+            "/summon Abuser",
+            "/goto Abuser",
+            "/spawnmob kobold",
+            "/weather",
+            "/weather rain",
+            "  /weather rain 0.4  ",
+            "/weather clear",
+            "/weather auto",
+            "/weather invalid",
+        ] {
+            assert!(
+                requires_admin(&ClientMessage::ChatMessage {
+                    message: admin_command.into()
+                }),
+                "{admin_command} must be admin-gated"
+            );
+        }
         assert!(!requires_admin(&ClientMessage::ChatMessage {
             message: "hello".into()
         }));
+        assert!(!requires_admin(&ClientMessage::ChatMessage {
+            message: "/who".into()
+        }));
+        assert!(!requires_admin(&ClientMessage::ChatMessage {
+            message: "/giveaway".into()
+        }));
         assert!(!requires_admin(&ClientMessage::Heartbeat));
+        assert!(!requires_admin(&ClientMessage::ChatMessage {
+            message: "/weathering".into()
+        }));
     }
 }

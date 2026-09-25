@@ -13,6 +13,10 @@ client/.env.local
 client/.env.production
 client/*.tsbuildinfo
 client/vite.config.d.ts
+dashboard/dist/
+dashboard/*.tsbuildinfo
+dashboard/test-results/
+dashboard/playwright-report/
 tools/glb-editor/vite.config.d.ts
 
 # Rust (workspace)
@@ -35,13 +39,13 @@ Thumbs.db
 *.log
 logs/
 
+# Operator deployment notes live in ~/work/notes/
+/doc/DEPLOY_NOTES.md
+
 # Runtime
 *.pid
 *.seed
 *.pid.lock
-
-# Docker
-.dockerignore
 
 # Temporary files
 *.tmp
@@ -54,6 +58,8 @@ logs/
 *.mp3
 *.m4a
 *.blend
+# Raw source drops (Meshy obj zips, Mixamo fbx) — synced via HF too
+/assets/
 
 # Blender backup files
 *.blend1
@@ -65,29 +71,45 @@ __pycache__/
 
 # Generated data files
 data/*.db
+data/network_metrics.db-shm
+data/network_metrics.db-wal
 data/npc_token
+data/bgm.json
+data/debuffs.json
 data/dungeons.json
+data/estate_storage.json
 data/items.json
+data/weapon_animations.json
 data/map_labels.json
 data/merchants.json
 data/monsters.json
 data/npcs.json
 data/player_anim_timing.json
+data/titles.json
 data/world_drop.json
 data/terrain/
+data/geoip/
 data/housing/
+data/cape-textures/
 server/data/game_data.db
 
 # User announcements: operator-authored content; only the format doc is tracked
 data/announcements/*.md
 !data/announcements/_README.md
 
+# Banned character names: contains real names, kept out of the public repo
+data/banned_names.txt
+data/combat-audit.txt
+data/land-ownership-preview.json
+
 # Terrain generator preview output
 preview_out/
 preview_out*/
 agent-client/data/config.toml
-agent-client/data/prompts/memory/
 agent-client/data/npcs/**/memory.txt
+agent-client/data/npcs/**/favor.json
+# Heroic-tale ledger (doc/HEROIC_TALES.md): real player names, lives on prod
+agent-client/data/tales/
 # Heightmap tiles fetched from the server (regenerable cache)
 agent-client/data/cache/
 # agent-client release archives (tools/package-agent-client.sh, .ps1)
@@ -97,9 +119,13 @@ agent-client/data/cache/
 .claude/*
 !.claude/agents/
 !.claude/commands/
+!.claude/skills/
 
 # Codex
 .codex/*
 !.codex/config.toml
 !.codex/skills/
 !.codex/skills/**
+
+# ElevenLabs SFX audition candidates (originals live in ~/assets_original/sfx/)
+sfx-candidates/

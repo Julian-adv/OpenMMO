@@ -6,13 +6,28 @@ use std::{
     path::{Path, PathBuf},
 };
 
-fn main() {
-    if let Err(err) = generate_data_json() {
-        panic!("failed to generate data JSON from CSV: {err}");
+/// Refresh the commit hash on every release build.
+pub fn git_hash() {
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=../tools/cargo-build-data.rs");
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .args(args)
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+    };
+    if env::var("PROFILE").as_deref() == Ok("release") {
+        if let Some(reflog) = git(&["rev-parse", "--git-path", "logs/HEAD"]) {
+            println!("cargo:rerun-if-changed={reflog}");
+        }
     }
+    let hash = git(&["rev-parse", "--short", "HEAD"]).unwrap_or_else(|| "unknown".into());
+    println!("cargo:rustc-env=GIT_HASH={hash}");
 }
 
-fn generate_data_json() -> Result<(), Box<dyn Error>> {
+pub fn generate_data_json() -> Result<(), Box<dyn Error>> {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
     let repo_root = manifest_dir
         .parent()
@@ -56,14 +71,21 @@ fn convert_csv_file(csv_path: &Path, data_dir: &Path) -> Result<(), Box<dyn Erro
         }
 
         let values = line.split(',').collect::<Vec<_>>();
+        if values.len() != headers.len() {
+            return Err(format!(
+                "{} line {} has {} fields but the header has {}",
+                csv_path.display(),
+                line_index + 2,
+                values.len(),
+                headers.len()
+            )
+            .into());
+        }
         let mut fields = Vec::new();
         let mut id = None;
 
         for (column_index, key) in headers.iter().enumerate() {
-            let raw = values
-                .get(column_index)
-                .map(|value| value.trim())
-                .unwrap_or_default();
+            let raw = values[column_index].trim();
             if raw.is_empty() {
                 continue;
             }

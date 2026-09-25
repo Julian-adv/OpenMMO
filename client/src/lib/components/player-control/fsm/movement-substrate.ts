@@ -1,3 +1,4 @@
+import { resolveHorseSteps } from '../../../utils/horseMovement'
 import {
   calculateMovementStep,
   initMovementState,
@@ -13,11 +14,11 @@ export interface PathWaypoint {
   floor: number
 }
 
-/** Network move sender: omitted/false `append` replaces the server's waypoint
- *  queue, true extends it (see PlayerMove in shared messages). */
+/** Sends a move with the waypoint's passability floor. */
 export type SendPlayerMove = (
   position: Position,
   rotation: number,
+  passabilityFloor?: number,
   append?: boolean
 ) => void
 
@@ -42,21 +43,13 @@ export interface RoutedLeg {
   playerRotation: number
 }
 
-/**
- * Route to `goal` and hand the first leg to the server, replacing its queue.
- *
- * The single place a fresh path is built. The server replays every leg it is
- * sent as a straight line, so a goal it cannot walk to directly strands its copy
- * of the player behind geometry the client walked around — routing here, rather
- * than beelining at the goal, is what keeps the two simulations together. The
- * substrate appends the remaining waypoints as each is reached.
- */
+/** Route to the goal and replace the server queue with the first leg. */
 export function routeFirstLeg(
   currentPos: Position,
   goal: Position,
   pathing: Pathing,
   sendPlayerMove: SendPlayerMove
-): RoutedLeg {
+): RoutedLeg | null {
   const goalFloor = pathing.getFloorAt(goal.x, goal.z, goal.y)
   const result = pathing.findPath(
     currentPos.x,
@@ -66,10 +59,8 @@ export function routeFirstLeg(
     goal.z,
     goalFloor
   )
-  const pathWaypoints =
-    result.waypoints.length > 0
-      ? result.waypoints
-      : [{ x: goal.x, z: goal.z, floor: goalFloor }]
+  const pathWaypoints = result.waypoints
+  if (pathWaypoints.length === 0) return null
 
   const firstWp = pathWaypoints[0]
   const movementTarget: Position = {
@@ -81,7 +72,7 @@ export function routeFirstLeg(
     shortestWrappedDeltaX(currentPos.x, movementTarget.x),
     movementTarget.z - currentPos.z
   )
-  sendPlayerMove(movementTarget, playerRotation, false)
+  sendPlayerMove(movementTarget, playerRotation, firstWp.floor)
 
   return { pathWaypoints, movementTarget, playerRotation }
 }
@@ -115,15 +106,7 @@ interface MovementSubstrateInput {
   sendPlayerMove: SendPlayerMove
 }
 
-/**
- * When a diagonal step is blocked (typically grazing a convex wall corner the
- * 0.3m body radius can't clear), try to keep moving along whichever single axis
- * is still clear. This lets the player slide around corners instead of getting
- * permanently stuck — the pathfinder smooths paths using cell-edge walls only
- * (no radius buffer), so smoothed diagonals can clip corners that continuous
- * collision refuses to cross. Returns the slid position, or null if both axes
- * are blocked (a genuine dead-end).
- */
+/** Slide along a clear axis when a smoothed path clips a wall corner. */
 function resolveWallSlide(
   from: Position,
   to: Position,
@@ -187,6 +170,7 @@ export function stepMovementSubstrate({
   writePlayerPosition,
   sendPlayerMove,
 }: MovementSubstrateInput): MovementSubstrateOutcome {
+  const currentWaypointFloor = pathWaypoints[currentWaypointIndex]?.floor
   const result = calculateMovementStep(
     currentPos,
     movementState,
@@ -194,12 +178,27 @@ export function stepMovementSubstrate({
     deltaTimeSeconds
   )
 
+  if (result.mountSteps) {
+    const path = resolveHorseSteps(
+      result.mountSteps,
+      currentPos,
+      config.mountRotation ?? result.rotation,
+      { sampleHeight, isMovementBlocked, isUphillTooSteep }
+    )
+    if (path.blocked) {
+      writePlayerPosition(path.position, path.rotation)
+      sendPlayerMove(path.position, path.rotation, currentWaypointFloor)
+      return { kind: path.blocked }
+    }
+  }
+
   movementState.currentSpeed = result.newSpeed
   const currentSpeed = result.newSpeed
   const playerRotation = result.rotation
 
   if (result.arrived) {
     if (
+      !result.mountSteps &&
       isMovementBlocked(
         currentPos.x,
         currentPos.z,
@@ -210,18 +209,17 @@ export function stepMovementSubstrate({
     ) {
       // Blocked stops replace the server's queue with the stop point so it
       // doesn't keep walking to an already-sent waypoint.
-      sendPlayerMove(currentPos, playerRotation)
+      sendPlayerMove(currentPos, playerRotation, currentWaypointFloor)
       return { kind: 'blocked' }
     }
 
-    writePlayerPosition(
-      {
-        x: movementTarget.x,
-        y: sampleHeight(movementTarget.x, movementTarget.z),
-        z: movementTarget.z,
-      },
-      playerRotation
-    )
+    const stopPos = result.mountSteps ? result.newPos : movementTarget
+    const arrivedPos: Position = {
+      x: stopPos.x,
+      y: sampleHeight(stopPos.x, stopPos.z),
+      z: stopPos.z,
+    }
+    writePlayerPosition(arrivedPos, playerRotation)
 
     const nextWaypointIndex = currentWaypointIndex + 1
     if (nextWaypointIndex < pathWaypoints.length) {
@@ -235,33 +233,37 @@ export function stepMovementSubstrate({
         z: nextWp.z,
       }
 
-      const ndx = shortestWrappedDeltaX(movementTarget.x, wpPos.x)
-      const ndz = wpPos.z - movementTarget.z
+      const ndx = shortestWrappedDeltaX(arrivedPos.x, wpPos.x)
+      const ndz = wpPos.z - arrivedPos.z
       const nextRotation = Math.atan2(ndx, ndz)
       const nextMovementState = initMovementState(
-        movementTarget,
+        arrivedPos,
         wpPos,
         movementState.currentSpeed
       )
 
-      sendPlayerMove(wpPos, nextRotation, true)
+      sendPlayerMove(wpPos, nextRotation, nextWp.floor, true)
 
       return {
         kind: 'next_waypoint',
         currentSpeed: nextMovementState.currentSpeed,
-        playerRotation: nextRotation,
+        playerRotation:
+          config.mountRotation === undefined ? nextRotation : playerRotation,
         movementTarget: wpPos,
         movementState: nextMovementState,
         currentWaypointIndex: nextWaypointIndex,
       }
     }
 
-    sendPlayerMove(movementTarget, playerRotation, true)
+    if (!result.mountSteps) {
+      sendPlayerMove(arrivedPos, playerRotation, currentWaypointFloor, true)
+    }
     return { kind: 'arrived', currentSpeed, playerRotation }
   }
 
   let stepPos = result.newPos
   if (
+    !result.mountSteps &&
     isMovementBlocked(
       currentPos.x,
       currentPos.z,
@@ -272,7 +274,7 @@ export function stepMovementSubstrate({
   ) {
     const slid = resolveWallSlide(currentPos, stepPos, isMovementBlocked)
     if (!slid) {
-      sendPlayerMove(currentPos, playerRotation)
+      sendPlayerMove(currentPos, playerRotation, currentWaypointFloor)
       return { kind: 'blocked' }
     }
     stepPos = slid
@@ -280,15 +282,20 @@ export function stepMovementSubstrate({
 
   const dirX = Math.sin(result.rotation)
   const dirZ = Math.cos(result.rotation)
-  if (isUphillTooSteep(currentPos.x, currentPos.z, currentPos.y, dirX, dirZ)) {
-    sendPlayerMove(currentPos, playerRotation)
+  if (
+    !result.mountSteps &&
+    isUphillTooSteep(currentPos.x, currentPos.z, currentPos.y, dirX, dirZ)
+  ) {
+    sendPlayerMove(currentPos, playerRotation, currentWaypointFloor)
     return { kind: 'slope_blocked' }
   }
 
   writePlayerPosition(
     {
       x: stepPos.x,
-      y: sampleHeight(stepPos.x, stepPos.z),
+      y: result.mountSteps?.length
+        ? stepPos.y
+        : sampleHeight(stepPos.x, stepPos.z),
       z: stepPos.z,
     },
     playerRotation

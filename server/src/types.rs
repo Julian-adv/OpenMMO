@@ -1,7 +1,9 @@
 pub use onlinerpg_shared::entity::ClientKind;
+use onlinerpg_shared::entity::WORLD_LOADING_GRACE_MS;
 pub use onlinerpg_shared::{
     AttackRejectReason, Character, CharacterAttributes, CharacterClass, ClientMessage,
-    GameDateTime, Gender, Monster, MonsterState, Player, PlayerId, Position, ServerMessage,
+    GameDateTime, Gender, Monster, MonsterLifecycle, MonsterState, Player, PlayerId, Position,
+    ServerMessage,
 };
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -42,11 +44,19 @@ pub fn new_player(
         gender,
         is_official_npc,
         torch_on: false,
+        radiance_on: false,
+        wet: false,
+        title: None,
         floor_level: 0,
         object_type: None,
         main_hand: None,
+        back: None,
+        back_texture: None,
         object_id: None,
         last_combat_at: 0,
         client_kind,
+        back_color: None,
+        mount: None,
+        ready_at: crate::game_state::GameState::now_ms() + WORLD_LOADING_GRACE_MS,
     }
 }

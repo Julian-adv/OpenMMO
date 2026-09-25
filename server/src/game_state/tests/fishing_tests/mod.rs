@@ -1,11 +1,11 @@
 // ---- Fishing (doc/FISHING.md) ----------------------------------------------
 // Paused-time tests: tokio's clock is frozen, `time::advance` moves it, and
-// `tick_fishing()` is driven by hand — the state machine runs deterministically.
+// `tick_fishing` is driven by hand — the state machine runs deterministically.
 
 use super::*;
 use onlinerpg_shared::fishing::{
-    auto_stance, FishState, FishingAction, FishingOutcome, BITE_WINDOW_MS, CAST_MS, ESCAPE_XP,
-    FIGHT_TIMEOUT_MS, LATENCY_GRACE_MS, WAIT_MAX_MS, WAIT_MIN_MS,
+    auto_stance, FishState, FishingAction, FishingOutcome, BITE_WINDOW_MS, CAST_MS,
+    FIGHT_TIMEOUT_MS, LATENCY_GRACE_MS, WAIT_MAX_MS,
 };
 use tokio::time::{advance, Duration};
 
@@ -13,14 +13,14 @@ mod economy_tests;
 mod flow_tests;
 mod interruption_tests;
 mod inventory_tests;
+mod learning_tests;
+mod scheduled_tests;
 mod session_tests;
+mod trophy_fight_tests;
 
 /// Player on the shore of the test world's western sea (negative x is
 /// 5 m underwater in `SplitWorldTiles`), rod equipped, ready to cast.
-async fn make_angler(
-    game_state: &GameState,
-    name: &str,
-) -> (PlayerId, UnboundedReceiver<ServerMessage>) {
+async fn make_angler(game_state: &GameState, name: &str) -> (PlayerId, DirectRx) {
     let id = pid(name);
     game_state.add_player(make_player(name, -100.0, 50.0)).await;
     let mut equipped = std::collections::HashMap::new();
@@ -28,16 +28,17 @@ async fn make_angler(
     game_state.inventories.write().await.insert(
         id,
         PlayerInventory {
+            active_ammo: None,
             bag: vec![],
             equipped,
         },
     );
     game_state
-        .register_player_character(&id, 1, 0, attrs_with_cha(10), 0)
+        .register_player_character(&id, 1, 0, attrs_with_cha(10), 0, None)
         .await;
-    game_state
-        .register_player_skills(&id, Default::default())
-        .await;
+    let mut skills = onlinerpg_shared::skills::Skills::default();
+    skills.learn(onlinerpg_shared::skills::SkillId::Fishing);
+    game_state.register_player_skills(&id, skills).await;
     let rx = game_state.register_direct_channel(&id).await;
     (id, rx)
 }
@@ -99,7 +100,7 @@ async fn advance_with_ticks(game_state: &GameState, total_ms: u64) {
     while remaining > 0 {
         let step = remaining.min(250);
         advance(Duration::from_millis(step)).await;
-        game_state.tick_fishing().await;
+        game_state.tick_fishing(None).await;
         remaining -= step;
     }
 }
@@ -108,12 +109,12 @@ async fn advance_with_ticks(game_state: &GameState, total_ms: u64) {
 /// blindly advancing the full range would blow through the bite window
 /// whenever the roll came up short). Panics if no bite arrives within
 /// the cast plus the maximum wait.
-async fn advance_until_bite(game_state: &GameState, rx: &mut UnboundedReceiver<ServerMessage>) {
+async fn advance_until_bite(game_state: &GameState, rx: &mut DirectRx) {
     let budget_ms = u64::from(CAST_MS) + u64::from(WAIT_MAX_MS) + 500;
     let mut elapsed = 0;
     while elapsed < budget_ms {
         advance(Duration::from_millis(250)).await;
-        game_state.tick_fishing().await;
+        game_state.tick_fishing(None).await;
         elapsed += 250;
         if drain(rx)
             .iter()

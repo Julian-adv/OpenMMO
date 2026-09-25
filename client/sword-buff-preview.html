@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>검의 수호 · Sword / Mace Buff VFX</title>
+    <style>
+      :root {
+        font:
+          14px/1.6 system-ui,
+          sans-serif;
+        color: #e7e6df;
+        background: #0e1214;
+        --accent: #dfc99a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+      }
+      button,
+      select,
+      input {
+        font: inherit;
+      }
+      button,
+      select {
+        border: 1px solid #3c4547;
+        background: #20282b;
+        color: #e7e6df;
+        border-radius: 6px;
+        padding: 8px 13px;
+        cursor: pointer;
+      }
+      button:hover,
+      select:hover {
+        background: #303a3d;
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: wait;
+      }
+      button:focus-visible,
+      select:focus-visible,
+      input:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 4px;
+      }
+      input {
+        accent-color: var(--accent);
+      }
+      main {
+        max-width: 1512px;
+        margin: auto;
+        padding: 28px 32px 20px;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        margin-bottom: 23px;
+      }
+      .eyebrow {
+        margin: 0 0 5px;
+        color: var(--accent);
+        letter-spacing: 0.2em;
+        font-size: 10px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 29px;
+        font-weight: 550;
+        letter-spacing: -0.04em;
+      }
+      .subtitle {
+        margin: 5px 0 0;
+        color: #91a0a5;
+      }
+      .preview-badge {
+        border: 1px solid #3c4547;
+        border-radius: 20px;
+        padding: 5px 13px;
+        color: #acb5b7;
+        white-space: nowrap;
+        font-size: 12px;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 274px;
+        border: 1px solid #333d40;
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .stage {
+        position: relative;
+        background: #172024;
+        min-width: 0;
+      }
+      #view {
+        height: clamp(470px, 62vh, 690px);
+        position: relative;
+        overflow: hidden;
+        touch-action: none;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      .stage-heading {
+        pointer-events: none;
+        position: absolute;
+        z-index: 1;
+        top: 20px;
+        left: 22px;
+      }
+      .stage-heading strong {
+        display: block;
+        font-size: 12px;
+        color: #d4d9d7;
+        font-weight: 500;
+      }
+      .stage-heading span {
+        font-size: 11px;
+        color: #7e929b;
+      }
+      #phase {
+        position: absolute;
+        bottom: 22px;
+        left: 22px;
+        padding-left: 12px;
+        border-left: 2px solid var(--accent);
+        color: var(--accent);
+        pointer-events: none;
+        font-size: 13px;
+      }
+      #labels {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        pointer-events: none;
+      }
+      .actor-label {
+        position: absolute;
+        left: 0;
+        top: 0;
+        text-align: center;
+        white-space: nowrap;
+        font-size: 10px;
+        color: #a9b6ba;
+        text-shadow: 0 1px 5px #000;
+      }
+      .actor-label span {
+        display: block;
+        font-size: 11px;
+        color: #d8ddd9;
+      }
+      .actor-label[data-buffed='true'] span {
+        color: #fff0c5;
+      }
+      aside {
+        border-left: 1px solid #333d40;
+        background: #141b1e;
+        padding: 23px 21px;
+      }
+      .section-label {
+        font-size: 10px;
+        letter-spacing: 0.15em;
+        color: #819298;
+        margin: 0 0 12px;
+      }
+      .defense {
+        display: flex;
+        gap: 13px;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+      .shield-symbol {
+        width: 37px;
+        height: 42px;
+        color: var(--accent);
+      }
+      .defense strong {
+        font-weight: 450;
+        font-size: 33px;
+        line-height: 1.1;
+        color: var(--accent);
+      }
+      .defense small {
+        display: block;
+        font-size: 11px;
+        color: #a4b0b3;
+      }
+      .requirements {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap;
+      }
+      .requirements span {
+        border: 1px solid #3c4547;
+        border-radius: 4px;
+        font-size: 11px;
+        padding: 3px 9px;
+        color: #bfc6c5;
+      }
+      .hint {
+        color: #83959d;
+        font-size: 11px;
+        margin: 10px 0 0;
+      }
+      .divider {
+        border-top: 1px solid #2c373a;
+        margin: 22px 0;
+      }
+      #party {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+      #party li {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 8px 0;
+        font-size: 12px;
+      }
+      #party small {
+        display: block;
+        font-size: 10px;
+        color: #7c929d;
+      }
+      .party-state {
+        color: #80949d;
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+      }
+      .party-state[data-buffed='true'] {
+        color: var(--accent);
+      }
+      .setting {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin: 11px 0;
+        font-size: 12px;
+        color: #adb8bc;
+      }
+      .setting select {
+        padding: 5px 8px;
+        font-size: 12px;
+        max-width: 135px;
+      }
+      #radius {
+        width: 100%;
+        margin: 2px 0;
+      }
+      #radius-value {
+        color: var(--accent);
+        font-variant-numeric: tabular-nums;
+      }
+      .controls {
+        padding: 16px 20px;
+        border-top: 1px solid #333d40;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      #replay {
+        background: var(--accent);
+        color: #1c2527;
+        border-color: var(--accent);
+        font-weight: 600;
+      }
+      .controls label {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        color: #94a6af;
+        font-size: 12px;
+      }
+      #speed {
+        font-size: 12px;
+      }
+      .timeline {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 0 20px 15px;
+      }
+      #scrub {
+        flex: 1;
+        min-width: 40px;
+      }
+      #time {
+        color: #94a6af;
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+        min-width: 70px;
+      }
+      .beats {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 28px;
+        margin-top: 22px;
+      }
+      .beats div {
+        border-top: 1px solid #303c40;
+        padding-top: 12px;
+      }
+      .beats span {
+        color: var(--accent);
+        font-size: 10px;
+        margin-right: 8px;
+      }
+      .beats strong {
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .beats p {
+        color: #83969e;
+        font-size: 12px;
+        margin: 5px 0 0;
+      }
+      footer {
+        margin-top: 20px;
+        font-size: 11px;
+        color: #738993;
+        display: flex;
+        justify-content: space-between;
+        gap: 15px;
+      }
+      #status[data-error] {
+        color: #ffa994;
+      }
+      @media (max-width: 850px) {
+        main {
+          padding: 20px 14px;
+        }
+        .layout {
+          grid-template-columns: 1fr;
+        }
+        aside {
+          border-left: 0;
+          border-top: 1px solid #333d40;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 20px;
+        }
+        aside .divider {
+          display: none;
+        }
+        #view {
+          height: 520px;
+        }
+        .preview-badge {
+          display: none;
+        }
+      }
+      @media (max-width: 500px) {
+        h1 {
+          font-size: 25px;
+        }
+        .subtitle {
+          font-size: 12px;
+        }
+        #view {
+          height: 430px;
+        }
+        .stage-heading {
+          left: 14px;
+          top: 13px;
+        }
+        aside {
+          grid-template-columns: 1fr;
+        }
+        .beats {
+          gap: 13px;
+        }
+        footer {
+          flex-direction: column;
+          gap: 4px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">SWORD · MACE + SHIELD / PARTY BUFF</p>
+          <h1>
+            검의 수호 <span style="font-size: 12px; color: #819298">가칭</span>
+          </h1>
+          <p class="subtitle">
+            타격음과 함께 방패 문양이 맺히는, 파티 방어력 +10% 버프.
+          </p>
+        </div>
+        <span class="preview-badge">VFX CONCEPT · 01</span>
+      </header>
+      <div class="layout">
+        <section
+          class="stage"
+          aria-label="검·메이스와 방패 파티 버프 3D 프리뷰"
+        >
+          <div id="view">
+            <div class="stage-heading">
+              <strong>PARTY GUARD</strong><span>드래그로 회전 · 휠로 확대</span>
+            </div>
+            <div id="labels"></div>
+            <div id="phase">연출 준비 중</div>
+          </div>
+          <div class="controls">
+            <button id="replay" disabled>버프 시전</button>
+            <button id="pause" disabled>일시정지</button>
+            <select id="speed" aria-label="재생 속도">
+              <option value="1">1× 실제 속도</option>
+              <option value="0.5">0.5× 느리게</option>
+              <option value="0.25">0.25×</option>
+            </select>
+            <label><input id="loop" type="checkbox" checked />반복</label>
+            <label><input id="vfx" type="checkbox" checked />VFX</label>
+          </div>
+          <div class="timeline">
+            <span id="time">0.00 / 2.5s</span
+            ><input
+              id="scrub"
+              type="range"
+              min="0"
+              max="2.5"
+              step="0.01"
+              value="0"
+              aria-label="연출 시간"
+            />
+          </div>
+        </section>
+        <aside>
+          <div>
+            <p class="section-label">EFFECT</p>
+            <div class="defense">
+              <svg
+                class="shield-symbol"
+                viewBox="0 0 40 46"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="M20 3L35 9V24C34 32 28 37 20 43C12 37 6 32 5 24V9Z"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                />
+                <path
+                  d="M20 11V32M12 20H28"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                />
+              </svg>
+              <div>
+                <strong>+10%</strong><small>범위 내 파티원 방어력 증가</small>
+              </div>
+            </div>
+            <div class="requirements">
+              <span>Sword 또는 Mace</span><span>방패 장착</span>
+            </div>
+            <p class="hint">
+              두 장비를 함께 착용해야 사용 가능 · 반경 20 m · 지속 60초 · 재사용
+              45초
+            </p>
+            <div class="divider"></div>
+            <p class="section-label">PARTY / PREVIEW</p>
+            <ul id="party"></ul>
+            <p class="hint">시전자 포함 예시 · 범위 밖 대상은 효과 없음</p>
+          </div>
+          <div>
+            <div class="divider"></div>
+            <p class="section-label">LOOK & RANGE</p>
+            <label class="setting"
+              >빛의 색<select id="palette">
+                <option value="gold">옅은 금빛</option>
+                <option value="silver">은백색</option>
+              </select></label
+            >
+            <label class="setting"
+              >시점<select id="camera">
+                <option value="party">파티 전체</option>
+                <option value="game">게임 시점</option>
+                <option value="detail">시전자 가까이</option>
+              </select></label
+            >
+            <label class="setting" for="radius"
+              >연출 확인 반경 <span id="radius-value">5.0 m</span></label
+            >
+            <input
+              id="radius"
+              type="range"
+              min="3"
+              max="7"
+              step="0.5"
+              value="5"
+            />
+            <label class="setting"
+              ><span>범위 가이드</span><input id="guide" type="checkbox"
+            /></label>
+            <p class="hint">
+              발동 연출은 1초, 반복 간격은 2.5초입니다. 실제 속도에서 ‘버프
+              시전’을 누르면 효과음도 함께 재생됩니다. 게임에서는 반경 20 m,
+              지속 60초, 재사용 45초로 적용됩니다.
+            </p>
+          </div>
+        </aside>
+      </div>
+      <div class="beats">
+        <div>
+          <span>01</span><strong>발동</strong>
+          <p>첫 타격음에 맞춰 범위 내 대상의 방패가 동시에 나타납니다.</p>
+        </div>
+        <div>
+          <span>02</span><strong>강조</strong>
+          <p>약 0.15초에 문양과 섬광이 한 번 더 짧게 강조됩니다.</p>
+        </div>
+        <div>
+          <span>03</span><strong>수호</strong>
+          <p>소리의 여운에 맞춰 1초 안에 문양과 잔광이 사라집니다.</p>
+        </div>
+      </div>
+      <footer>
+        <span id="status" role="status">기존 캐릭터와 장비를 불러오는 중…</span
+        ><span>발동 연출 시연 · 실제 능력치 변경 없음</span>
+      </footer>
+    </main>
+    <script type="module" src="/src/previews/sword-buff.ts"></script>
+  </body>
+</html>

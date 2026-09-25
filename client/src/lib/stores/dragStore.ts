@@ -1,16 +1,27 @@
 import { writable } from 'svelte/store'
 import type { EquipSlot } from '../network/networkTypes'
-import { assignQuickslot } from './quickslotStore'
+import { assignQuickslot, type QuickslotEntry } from './quickslotStore'
 
 export const FALLBACK_ICON = 'icon_frame.png'
 
-export type DragMeta = {
+export type ItemDragMeta = {
   instanceId: number
   defId: string
+  enchant: number
   equipSlot: EquipSlot | null
   source: { type: 'bag' } | { type: 'equipped'; slot: EquipSlot }
   icon: string
+  /** Icons and quantities for a multi-item selection. */
+  groupItems?: { icon: string; quantity: number }[]
 }
+
+export type SkillDragMeta = {
+  skill: Extract<QuickslotEntry, { skill: string }>['skill']
+  source: { type: 'skill' }
+  icon: string
+}
+
+export type DragMeta = ItemDragMeta | SkillDragMeta
 
 export const dragMeta = writable<DragMeta | null>(null)
 export const dragPos = writable({ x: 0, y: 0 })
@@ -34,12 +45,7 @@ export function inflateRect(r: DOMRect, m: number): DOMRect {
   return new DOMRect(r.x - m, r.y - m, r.width + 2 * m, r.height + 2 * m)
 }
 
-/**
- * The quickslot index under the pointer, or -1. Treats the whole bar (incl.
- * gaps, with a little slack) as one drop zone and snaps to the nearest slot by
- * 2D distance — so a multi-row bar targets the right row, not just the right
- * column. Shared by the drag highlight and the drop handler so they agree.
- */
+/** Nearest quickslot within the bar's forgiving drop zone, or -1. */
 export function quickslotAt(x: number, y: number): number {
   // Rect-test the bar before listing the slots: this runs on every pointermove
   // and usually misses.
@@ -78,16 +84,20 @@ const DRAG_THRESHOLD_SQ = 64
 export function startDrag(
   e: PointerEvent,
   meta: DragMeta,
-  onDrop: (x: number, y: number) => void
+  onDrop?: (x: number, y: number) => void,
+  /** Click below the drag threshold; do not also bind a native click handler. */
+  onClick?: () => void
 ) {
   const target = e.currentTarget as HTMLElement
   target.setPointerCapture(e.pointerId)
   const startX = e.clientX
   const startY = e.clientY
   let started = false
+  let ended = false
   const pos = { x: 0, y: 0 }
 
   function onMove(me: PointerEvent) {
+    if (me.pointerId !== e.pointerId) return
     me.preventDefault()
     const dx = me.clientX - startX
     const dy = me.clientY - startY
@@ -106,31 +116,54 @@ export function startDrag(
     target.removeEventListener('pointerup', onEnd)
     target.removeEventListener('pointercancel', onEnd)
     target.removeEventListener('lostpointercapture', onLostCapture)
+    window.removeEventListener('blur', onLostCapture)
+    window.removeEventListener('keydown', onKeydown)
   }
 
   function onEnd(ue: PointerEvent) {
+    if (ue.pointerId !== e.pointerId) return
+    ended = true
     removeListeners()
     if (target.hasPointerCapture(ue.pointerId)) {
       target.releasePointerCapture(ue.pointerId)
     }
-    if (started && ue.type !== 'pointercancel') {
-      // Quickslot drops work from every drag source and win over the source's
-      // own targets, so resolve them here — the bar's highlight uses the same
-      // test, and no call site can implement (or forget) it differently.
-      const qsIndex = quickslotAt(ue.clientX, ue.clientY)
-      if (qsIndex >= 0) assignQuickslot(qsIndex, meta.defId)
-      else onDrop(ue.clientX, ue.clientY)
+    if (ue.type !== 'pointercancel') {
+      if (started) {
+        // Quickslots take priority over source-specific drop targets.
+        const qsIndex = quickslotAt(ue.clientX, ue.clientY)
+        if (qsIndex < 0) {
+          onDrop?.(ue.clientX, ue.clientY)
+        } else if ('skill' in meta) {
+          assignQuickslot(qsIndex, { skill: meta.skill })
+        } else if (meta.groupItems === undefined) {
+          assignQuickslot(qsIndex, { defId: meta.defId, enchant: meta.enchant })
+        }
+      } else {
+        onClick?.()
+      }
     }
     dragMeta.set(null)
   }
 
   function onLostCapture() {
+    if (ended) return
+    ended = true
     removeListeners()
+    if (target.hasPointerCapture(e.pointerId)) {
+      target.releasePointerCapture(e.pointerId)
+    }
     dragMeta.set(null)
+  }
+
+  function onKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') onLostCapture()
   }
 
   target.addEventListener('pointermove', onMove)
   target.addEventListener('pointerup', onEnd)
   target.addEventListener('pointercancel', onEnd)
   target.addEventListener('lostpointercapture', onLostCapture)
+  window.addEventListener('blur', onLostCapture)
+  window.addEventListener('keydown', onKeydown)
+  return onLostCapture
 }

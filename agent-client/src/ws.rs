@@ -57,9 +57,9 @@ pub async fn connect_ws(
     }
 }
 
-/// Server refused the connection (bad protocol version, bad token, unusable
-/// account). Retrying cannot fix any of those, so the session loop gives up
-/// instead of reconnecting forever.
+/// The server refused something only a config or client change can fix
+/// (protocol version, token, account, character name). The session loop
+/// gives up instead of reconnecting forever.
 #[derive(Debug)]
 pub struct AuthRejected(pub String);
 
@@ -80,7 +80,7 @@ pub async fn send_client_info(tx: &mut WsTx) -> anyhow::Result<()> {
         &ClientMessage::ClientInfo {
             protocol_version: onlinerpg_shared::PROTOCOL_VERSION,
             client_kind: "cli".to_string(),
-            client_version: env!("CARGO_PKG_VERSION").to_string(),
+            client_version: onlinerpg_shared::stamp_layout_version(env!("CARGO_PKG_VERSION")),
         },
     )
     .await
@@ -153,6 +153,12 @@ pub async fn send(tx: &mut WsTx, msg: &ClientMessage) -> anyhow::Result<()> {
 /// already spreads out the reconnects.
 const READ_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// In-game uptime below which a session's end must not reset the retry
+/// backoff (enforced in `run_npc_loop`). Kept above `READ_IDLE_TIMEOUT`:
+/// a half-open death is only noticed after that long, and the detection
+/// lag alone must not count as a healthy session.
+pub const HEALTHY_SESSION: Duration = Duration::from_secs(READ_IDLE_TIMEOUT.as_secs() + 30);
+
 pub async fn recv(rx: &mut WsRx) -> anyhow::Result<ServerMessage> {
     loop {
         let frame = tokio::time::timeout(READ_IDLE_TIMEOUT, rx.next())
@@ -170,8 +176,15 @@ pub async fn recv(rx: &mut WsRx) -> anyhow::Result<ServerMessage> {
             Some(Ok(Message::Ping(_))) | Some(Ok(Message::Pong(_))) => continue,
             // A refusal can outrun its own AuthError; then the close code is
             // the only reason left, and this build must not retry it forever.
+            // A desync close means the same thing one step later: this build
+            // and the server disagree about the world, so the next connection
+            // lands in the same place. Both are for a new binary to fix.
             Some(Ok(Message::Close(Some(f))))
-                if u16::from(f.code) == onlinerpg_shared::CLOSE_CODE_PROTOCOL_MISMATCH =>
+                if matches!(
+                    u16::from(f.code),
+                    onlinerpg_shared::CLOSE_CODE_PROTOCOL_MISMATCH
+                        | onlinerpg_shared::CLOSE_CODE_CLIENT_DESYNC
+                ) =>
             {
                 return Err(AuthRejected(format!(
                     "Server refused this build: {} — update agent-client",

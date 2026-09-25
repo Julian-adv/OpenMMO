@@ -1,6 +1,8 @@
 import * as THREE from 'three'
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { AnimationName } from '../types/animations'
+import { loadGLB } from './gltfCache'
+import { CHARACTER_ANIMATION_PACK_PATHS } from './modelPaths'
 
 type AnimationSource = 'base' | 'locomotion' | 'combat_melee'
 
@@ -31,12 +33,13 @@ const ANIMATION_SOURCE_BY_NAME: Record<AnimationName, AnimationSource> = {
   [AnimationName.SLASH2]: 'combat_melee',
   [AnimationName.SLASH3]: 'combat_melee',
   [AnimationName.SLASH4]: 'combat_melee',
-  [AnimationName.SLASH5]: 'combat_melee',
   [AnimationName.ATTACK1]: 'combat_melee',
   [AnimationName.ATTACK2]: 'combat_melee',
   [AnimationName.ATTACK3]: 'combat_melee',
   [AnimationName.ATTACK4]: 'combat_melee',
   [AnimationName.DYING]: 'combat_melee',
+  [AnimationName.HIT]: 'combat_melee',
+  [AnimationName.COMBAT_IDLE]: 'combat_melee',
 }
 
 const RETARGET_TRACK_NAME_PATTERN = /^\.bones\[(.+?)\]\.(position|quaternion)$/
@@ -151,8 +154,13 @@ const CORPSE_GROUND_CLEARANCE = 0.01
  * rigs have no foot/toe bones to key off. A monster whose lowest vertex is a
  * dangling appendage ends up hovering on its body — nudge it with
  * corpseGroundOffset in monsters.csv. Returns 0 with no skinned geometry.
+ *
+ * `stride` samples every nth vertex, for callers measuring many poses.
  */
-export function computeCorpseGroundOffset(model: THREE.Object3D): number {
+export function computeCorpseGroundOffset(
+  model: THREE.Object3D,
+  stride = 1
+): number {
   model.updateMatrixWorld(true)
   let lowest = Infinity
   const v = new THREE.Vector3()
@@ -162,7 +170,7 @@ export function computeCorpseGroundOffset(model: THREE.Object3D): number {
     const position = child.geometry.getAttribute('position')
     if (!position) return
 
-    for (let i = 0; i < position.count; i++) {
+    for (let i = 0; i < position.count; i += stride) {
       v.fromBufferAttribute(position, i)
       child.applyBoneTransform(i, v) // skinned position in the current pose
       child.localToWorld(v)
@@ -190,6 +198,15 @@ function findPrimarySkinnedMesh(
   })
 
   return bestMatch
+}
+
+/** Named bone on the rig a character model is skinned to. */
+export function findBoneByName(
+  root: THREE.Object3D,
+  name: string
+): THREE.Bone | undefined {
+  const skinnedMesh = findPrimarySkinnedMesh(root)
+  return skinnedMesh?.skeleton.bones.find((bone) => bone.name === name)
 }
 
 function quaternionDistance(a: THREE.Quaternion, b: THREE.Quaternion): number {
@@ -331,6 +348,14 @@ function getHipBoneRestY(
   return hipBone ? hipBone.position.y : null
 }
 
+/**
+ * The hip correction assumes the clip stands on its legs, so it scales with the
+ * gap between the two rigs' hip heights. A body that ends up lying down is held
+ * off the floor by its own thickness instead, and the correction only floats it
+ * — a tall character's corpse hovered 10cm up while the hobgoblin's sank.
+ */
+const CLIPS_KEEPING_SOURCE_HIP_HEIGHT = new Set<string>([AnimationName.DYING])
+
 function correctHipHeightInClip(
   clip: THREE.AnimationClip,
   hipBoneName: string,
@@ -354,9 +379,14 @@ export async function retargetAnimationsForCharacterModel(
   if (!ENABLE_RUNTIME_BONE_RETARGETING) return clips
   if (clips.length === 0 || !retargetSourceScene) return clips
 
-  // Fast path: check batch cache using clip names (avoids expensive cloning).
-  // The same character class retargeted in character select can be reused in game.
-  const batchKey = clips.map((c) => c.name).join(',')
+  // Fast path: check the batch cache before the expensive cloning. Clones share
+  // their source's geometry, so the two uuids identify the skeleton pair across
+  // every clone of the same GLB — another model gets its own entry.
+  const batchKey = [
+    findPrimarySkinnedMesh(targetScene)?.geometry.uuid,
+    findPrimarySkinnedMesh(retargetSourceScene)?.geometry.uuid,
+    clips.map((c) => c.name).join(','),
+  ].join('::')
   const cachedBatch = retargetBatchCache.get(batchKey)
   if (cachedBatch) return cachedBatch
 
@@ -377,8 +407,9 @@ export async function retargetAnimationsForCharacterModel(
 
   targetSkinnedMesh.skeleton.pose()
   sourceSkinnedMesh.skeleton.pose()
-  targetSkinnedMesh.updateMatrixWorld(true)
-  sourceSkinnedMesh.updateMatrixWorld(true)
+  // Rebuild detached ancestors too; cached world transforms may include the player's position.
+  targetSceneClone.updateMatrixWorld(true)
+  retargetSourceClone.updateMatrixWorld(true)
 
   if (hasEquivalentSkeletonRestPose(targetSkinnedMesh, sourceSkinnedMesh)) {
     return clips
@@ -407,7 +438,7 @@ export async function retargetAnimationsForCharacterModel(
 
     try {
       targetSkinnedMesh.skeleton.pose()
-      targetSkinnedMesh.updateMatrixWorld(true)
+      targetSceneClone.updateMatrixWorld(true)
 
       const retargetedClip = SkeletonUtils.retargetClip(
         targetSkinnedMesh,
@@ -429,7 +460,10 @@ export async function retargetAnimationsForCharacterModel(
         retargetedClips.push(clip)
         continue
       }
-      if (Math.abs(hipYDelta) > 0.001) {
+      if (
+        Math.abs(hipYDelta) > 0.001 &&
+        !CLIPS_KEEPING_SOURCE_HIP_HEIGHT.has(clip.name)
+      ) {
         correctHipHeightInClip(normalizedClip, hipBoneName, hipYDelta)
       }
       retargetedClipCache.set(cacheKey, normalizedClip)
@@ -585,4 +619,146 @@ export function selectOrderedCharacterAnimations(
   }
 
   return orderedSelections
+}
+
+/** Poses sampled per clip, and the vertex stride each pose is measured at. */
+const GROUND_SAMPLE_POSES = 24
+const GROUND_SAMPLE_STRIDE = 8
+
+/**
+ * Ease the hip track from a flush start to `restOffset` at the last key, then
+ * lift any key still below the floor. The ease keeps the standing frames where
+ * they are; the clamp stops the body passing through the floor as it falls.
+ *
+ * The floor eases along with the body — held at 0 it would push every key but
+ * the last back up, leaving the whole rest offset to drop in the final key.
+ */
+function groundClipToRest(
+  hipTrack: THREE.KeyframeTrack,
+  lowestAt: (time: number) => number,
+  restOffset: number
+): void {
+  const times = hipTrack.times
+  const last = times.length - 1
+  const startLift = -lowestAt(times[0])
+  const endLift = -lowestAt(times[last]) + restOffset
+  const smoothstep = (x: number) => x * x * (3 - 2 * x)
+
+  for (let i = 0; i <= last; i++) {
+    const weight = smoothstep(times[i] / times[last])
+    hipTrack.values[i * 3 + 1] += startLift + weight * (endLift - startLift)
+  }
+  for (let i = 0; i <= last; i++) {
+    const floor = smoothstep(times[i] / times[last]) * restOffset
+    hipTrack.values[i * 3 + 1] += Math.max(0, floor - lowestAt(times[i]))
+  }
+}
+
+export interface GroundClipsOptions {
+  /** Clip that ends with the body at rest — grounded key by key so it lands on
+   *  the floor instead of being corrected after it clamps. */
+  restClip?: string
+  /** Where that clip's last pose belongs, relative to its lowest vertex. A body
+   *  lying on an outstretched limb has to sink for its torso to touch. */
+  restOffset?: number
+}
+
+/**
+ * Retargeting anchors the hips from the source rig, so a model built to other
+ * proportions plays buried in the floor — the death clip ended underground and
+ * the corpse popped up once it was settled. Shift each clip's hip track so it
+ * plays on the floor, leaving the motion itself alone.
+ */
+export async function groundRetargetedClips(
+  targetScene: THREE.Object3D,
+  clips: THREE.AnimationClip[],
+  options: GroundClipsOptions = {}
+): Promise<THREE.AnimationClip[]> {
+  const scene = SkeletonUtils.clone(targetScene) as THREE.Object3D
+  const mixer = new THREE.AnimationMixer(scene)
+  const grounded: THREE.AnimationClip[] = []
+
+  for (const clip of clips) {
+    const shifted = clip.clone()
+    const hipTrack = shifted.tracks.find((track) =>
+      HIP_BONE_CANDIDATES.some((hip) => track.name === `${hip}.position`)
+    )
+    if (!hipTrack || shifted.duration <= 0) {
+      grounded.push(clip)
+      continue
+    }
+
+    const action = mixer.clipAction(shifted)
+    action.play()
+    const lowestAt = (time: number) => {
+      mixer.setTime(Math.min(time, shifted.duration - 1e-4))
+      return (
+        CORPSE_GROUND_CLEARANCE -
+        computeCorpseGroundOffset(scene, GROUND_SAMPLE_STRIDE)
+      )
+    }
+
+    if (clip.name === options.restClip) {
+      groundClipToRest(hipTrack, lowestAt, options.restOffset ?? 0)
+    } else {
+      let lift = 0
+      for (let i = 0; i <= GROUND_SAMPLE_POSES; i++) {
+        lift = Math.max(
+          lift,
+          -lowestAt((i * shifted.duration) / GROUND_SAMPLE_POSES)
+        )
+      }
+      for (let i = 1; i < hipTrack.values.length; i += 3) {
+        hipTrack.values[i] += lift
+      }
+    }
+    action.stop()
+    mixer.uncacheClip(shifted)
+
+    grounded.push(shifted)
+    await new Promise((r) => setTimeout(r, 0))
+  }
+
+  return grounded
+}
+
+const sharedPackClipsByModel = new Map<string, Promise<THREE.AnimationClip[]>>()
+
+/**
+ * The named locomotion + melee clips retargeted onto a model rigged on the
+ * character bone names but with its own bone offsets (monsters with
+ * `sharedAnims`) — played unretargeted, combat_melee's clips stretch it.
+ * Cached per model, so a crowd of one monster type retargets once.
+ */
+export function loadSharedPackClipsForModel(
+  modelPath: string,
+  targetScene: THREE.Object3D,
+  clipNames: string[],
+  grounding: GroundClipsOptions = {}
+): Promise<THREE.AnimationClip[]> {
+  const wanted = new Set(clipNames)
+  const cacheKey = `${modelPath}::${[...wanted].sort().join(',')}::${grounding.restClip ?? ''}:${grounding.restOffset ?? 0}`
+  const cached = sharedPackClipsByModel.get(cacheKey)
+  if (cached) return cached
+
+  const clips = Promise.all([
+    loadGLB(CHARACTER_ANIMATION_PACK_PATHS.locomotion),
+    loadGLB(CHARACTER_ANIMATION_PACK_PATHS.combatMelee),
+  ])
+    .then((packs) =>
+      Promise.all(
+        packs.map((pack) =>
+          retargetAnimationsForCharacterModel(
+            targetScene,
+            pack.scene,
+            pack.animations.filter((clip) => wanted.has(clip.name))
+          )
+        )
+      )
+    )
+    .then((packs) =>
+      groundRetargetedClips(targetScene, packs.flat(), grounding)
+    )
+  sharedPackClipsByModel.set(cacheKey, clips)
+  return clips
 }

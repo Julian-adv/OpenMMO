@@ -7,6 +7,7 @@ OnlineRPG 클라이언트의 캐릭터 애니메이션 로딩/매핑 규칙 문�
 - 캐릭터 베이스 모델: `client/src/lib/utils/modelPaths.ts`의 `getCharacterModelPath(...)`가 반환하는 모델
 - 이동 전용 클립: `client/public/models/animations/locomotion.glb`
 - 근접 전투 클립: `client/public/models/animations/combat_melee.glb`
+- 원거리 전투 클립: `client/public/models/animations/combat_ranged.glb` ([COMBAT.md](COMBAT.md) 원거리 전투)
 - 애니메이션 이름/순서 정의: `client/src/lib/types/animations.ts`
 - 공통 유틸: `client/src/lib/utils/characterAnimationUtils.ts`
 - 런타임 캐릭터: `client/src/lib/components/PlayerModel.svelte`
@@ -23,8 +24,15 @@ OnlineRPG 클라이언트의 캐릭터 애니메이션 로딩/매핑 규칙 문�
 | Attack | `slash1`, `slash2`, `slash3`, `slash4`, `slash5` | `combat_melee` |
 | Attack alt | `attack1`, `attack2`, `attack3`, `attack4` | `combat_melee` |
 | Death | `dying` | `combat_melee` |
+| Attack idle | `combat_idle` | `combat_melee` (몬스터 `animAttackIdle` + 플레이어 스윙 사이 쿨다운) |
+| Claw attack | `claw1`, `claw2` | `combat_melee` (몬스터 `animAttack` 전용, 플레이어 미사용) |
+| Ranged attack | `bow_shoot` | `combat_ranged` (원거리 무기를 들었을 때만 로드, 없으면 `slash1`로 폴백) |
 
 순서 기준은 `AnimationName` enum 선언 순서(`client/src/lib/types/animations.ts`)를 따른다.
+
+몬스터 `animAttack`(monsters.csv)은 `claw1|claw2`처럼 `|`로 여러 클립을 나열할 수 있다 — 클라이언트가
+스윙마다 하나를 랜덤으로 고르고, 서버의 스윙 홀드 시간(`data/monster_attack_clips.json`,
+`tools/measure-monster-attack-clips.mjs`)은 그중 가장 긴 클립을 따른다.
 
 ## 2-1. 본 구조 (Mixamo)
 
@@ -35,9 +43,9 @@ OnlineRPG 클라이언트의 캐릭터 애니메이션 로딩/매핑 규칙 문�
 
 ## 2-2. 본 계층 구조 (부모-자식)
 
-![locomotion bone hierarchy](./images/animation-bone-hierarchy.svg)
+![locomotion bone hierarchy](./images/diagrams/animation-bone-hierarchy.svg)
 
-- 파일: `doc/images/animation-bone-hierarchy.svg`
+- 파일: `doc/images/diagrams/animation-bone-hierarchy.svg`
 - `locomotion.glb`에서 추출한 65개 본의 부모-자식 구조를 시각화한 이미지
 
 ## 3. 현재 매핑 정책
@@ -84,7 +92,13 @@ OnlineRPG 클라이언트의 캐릭터 애니메이션 로딩/매핑 규칙 문�
 
 1. `glb-editor`에서 `본 이름 표준화` 버튼을 눌러 본 이름을 정리한다.
 2. `애니메이션 추출` 버튼을 눌러 애니메이션을 추출한다.
-3. 추출한 클립을 애니메이션 팩 중 하나(`locomotion`, `combat_melee`, `social`, `offhand`)에 넣는다.
+3. 추출한 클립을 애니메이션 팩 중 하나(`locomotion`, `combat_melee`, `combat_ranged`, `social`, `offhand`, `fishing`)에 넣는다.
+   - 배포 중인 팩에 넣을 때는 `python tools/graft-glb-clip.py 팩.glb 도너.glb 클립이름 출력.glb`. 기존 클립과 스켈레톤을 바이트 단위로 보존한다.
+   - `export_animations.py`로 팩을 통째로 다시 뽑아도 된다(2026-08-13 검증: 5팩 전부 배포본과 채널 단위 일치, 최대 오차 1.4e-5). 단 새 클립을 `all_animation.blend`에 먼저 넣어야 하고, glTF를 임포트해 넣었다면 키를 정수 프레임으로 스냅할 것 — 마지막 키가 `125.99999`로 들어오면 export에서 1프레임이 깎인다.
+   - 액션에 **fake user를 켜야 한다** — 안 켜면 저장 시 사라지고, export가 "missing" 으로 abort한다.
+   - 한 FBX에 액션이 여러 개(1프레임 baselayer 더미 등) 들어올 수 있다. `import_mixamo_animation`은 프레임 폭이 가장 넓은 것을 고른다.
+   - Mixamo 이름이 아닌 리그는 `bone_aliases`로 손수 짝지어야 한다. 이름이 아니라 **계층 위치**로 맞출 것 — `bow_shoot.fbx`는 척추가 `Hips→Spine02→Spine01→Spine` 순서라 이름만 보고 맞추면 상체가 뒤집힌다.
+   - `combat_melee`만 69본 `Armature_combat`(손가락·눈·소매 본)에서 뽑는다. 33본 `Armature`로 뽑으면 채널 절반이 사라지고 rest 포즈가 어긋난다. 요청한 액션이 하나라도 없으면 스크립트가 해당 팩을 abort하고 기존 GLB를 건드리지 않는다.
 4. 클립 이름을 `AnimationName`에 추가
 5. `AnimationIndex` 동기화
 6. 필요한 경우 `selectOrderedCharacterAnimations` 우선순위 반영
@@ -93,11 +107,13 @@ OnlineRPG 클라이언트의 캐릭터 애니메이션 로딩/매핑 규칙 문�
 9. 실행 검증
    - `cd client && npm run lint`
    - `cd client && npm run check`
+   - 게임 내에서 `/anim <클립이름>` (admin 전용, 클라이언트 로컬)으로 클립 단독 재생 확인
 
 ## 7. 버전 로그
 
+- `v0.9` (2026-08-31): 클립 검증용 admin 명령 `/anim <클립이름>` 추가 (기존 `/emote` 숨김 디버그 클립 대체)
 - `v0.8` (2026-02-21): 표준 클립 표에 `Animation Pack` 컬럼 추가
-- `v0.7` (2026-02-21): 본 계층 구조 표를 SVG 이미지 첨부 방식으로 변경 (`doc/images/animation-bone-hierarchy.svg`)
+- `v0.7` (2026-02-21): 본 계층 구조 표를 SVG 이미지 첨부 방식으로 변경 (`doc/images/diagrams/animation-bone-hierarchy.svg`)
 - `v0.6` (2026-02-21): VSCode 프리뷰 가독성을 위해 본 계층 구조를 Mermaid에서 테이블+인덴트 형식으로 변경
 - `v0.5` (2026-02-21): 본 계층 구조를 텍스트 트리에서 Mermaid 다이어그램으로 변경
 - `v0.4` (2026-02-21): `locomotion.glb` 본 계층 구조(`부모 ㄴ 자식`) 섹션 추가

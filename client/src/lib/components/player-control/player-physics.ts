@@ -18,6 +18,8 @@ export interface PlayerPhysicsDeps {
   /** Live read — passability floor index the player is keyed to. Housing and
    *  dungeon collision select their grid by this, not by Y. */
   getPassabilityFloor: () => number
+  /** Surface Y while afloat, retaining the previous Y while tiles load. */
+  getFloatSurfaceY?: (x: number, z: number) => number | null
 }
 
 export interface PlayerPhysics {
@@ -49,6 +51,10 @@ export interface PlayerPhysics {
 export function createPlayerPhysics(deps: PlayerPhysicsDeps): PlayerPhysics {
   function sampleHeight(x: number, z: number): number {
     x = wrapWorldX(x)
+    if (deps.getPassabilityFloor() === 0) {
+      const floatY = deps.getFloatSurfaceY?.(x, z)
+      if (floatY != null) return floatY
+    }
     // Dungeon floors and stair-shaft ramps replace terrain entirely while
     // underground (and on the surface entrance ramp).
     const dungeonY = dungeonManager.sampleHeightAt(x, z)
@@ -66,6 +72,10 @@ export function createPlayerPhysics(deps: PlayerPhysicsDeps): PlayerPhysics {
 
   function waypointHeight(floor: number, x: number, z: number): number {
     x = wrapWorldX(x)
+    if (floor === 0) {
+      const floatY = deps.getFloatSurfaceY?.(x, z)
+      if (floatY != null) return floatY
+    }
     const dungeonY = dungeonManager.sampleHeightAt(x, z)
     if (dungeonY !== null) return dungeonY
     // Floor-keyed, so the stairwell ramp resolves per position instead of

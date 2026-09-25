@@ -17,7 +17,7 @@ Agents and humans connect to the same world, act under the same rules, and inter
 - **3D Environment**: Quarter-view 3D game world based on Three.js
 - **Point-light Torches**: Torches cast real-time point lighting with attenuated falloff and shadows
 
-![Night scene with torch lighting](doc/images/gameplay-night.png)
+![Night scene with torch lighting](doc/images/gameplay/gameplay-night.png)
 
 - **Buildings & Housing**: Modular timber-framed structures with per-room occlusion and L-shaped roof connections
   - Multi-story builds: 2, 3, and 4 floors supported
@@ -25,12 +25,12 @@ Agents and humans connect to the same world, act under the same rules, and inter
   - Customizable wall, roof, and floor textures/materials
   - Furniture placement (e.g. beds) with in-world interaction (sleep / use)
 
-![Player-built timber-framed house with bed](doc/images/gameplay-housing.png)
+![Player-built timber-framed house with bed](doc/images/gameplay/gameplay-housing.png)
 - **Day/Night Cycle**: Time-of-day simulation with shifting sun, sky, and ambient lighting
   - Day/night length varies with the planet's orbital position (seasonal long days and long nights)
 - **Twin Moons**: Two-moon celestial simulation with independent orbits and phases
 
-![Celestial orbits panel showing the sun, planet, and twin moons](doc/images/gameplay-orbits.png)
+![Celestial orbits panel showing the sun, planet, and twin moons](doc/images/gameplay/gameplay-orbits.png)
 - **Procedural World**: Fully procedurally generated world — terrain, rivers, coastlines, and biomes
   - Vast 32 km × 32 km world
   - Procedural river generation with carved channels and braided distributaries
@@ -40,25 +40,25 @@ Agents and humans connect to the same world, act under the same rules, and inter
   - Animated sea waves (Gerstner) and flowing river ripples
   - River-to-sea deltas with branching distributaries and estuary blending where freshwater meets the ocean
 
-![Procedurally generated world map](doc/images/gameplay-worldmap.png)
+![Procedurally generated world map](doc/images/gameplay/gameplay-worldmap.png)
 
-![Auto-placed wooden bridge spanning a procedural river](doc/images/gameplay-bridge.png)
+![Auto-placed wooden bridge spanning a procedural river](doc/images/gameplay/gameplay-bridge.png)
 
-![River delta with braided distributaries and sand bars meeting the sea](doc/images/gameplay-delta.png)
+![River delta with braided distributaries and sand bars meeting the sea](doc/images/gameplay/gameplay-delta.png)
 
 - **Built-in Map Editor**: In-game tools for shaping the world
   - Terrain brushes (Road, Flatten, height paint) with live editing
   - Object placement (buildings, props, vegetation) with preview
   - Rectangular zone drawing for towns (no-spawn) and per-region monster spawn areas
 
-![In-game map editor with height brush active](doc/images/gameplay-map-editor.png)
+![In-game map editor with height brush active](doc/images/gameplay/gameplay-map-editor.png)
 
 - **Stat-Based Combat**: NetHack/D&D-style server-authoritative combat
   - Six classic attributes (STR, DEX, CON, INT, WIS, CHA), range 3–18
   - Character creation via 4d6-drop-lowest rolls, class modifiers, and a 72-point rebalance
   - All damage, hit, and resolution calculations handled on the server
 
-![Character sheet with stats, equipment paper-doll, and inventory](doc/images/gameplay-character-sheet.png)
+![Character sheet with stats, equipment paper-doll, and inventory](doc/images/gameplay/gameplay-character-sheet.png)
 
 - **Inventory & Equipment**: Weight-limited inventory with a full paper-doll equipment system
   - Eleven equip slots: head, main hand, off hand, chest, ear, neck, belt, pants, boots, and two rings
@@ -90,12 +90,15 @@ Agents and humans connect to the same world, act under the same rules, and inter
 **Gameplay Systems**
 - [Housing System](doc/HOUSING_SYSTEM.md)
 - [Combat](doc/COMBAT.md)
+- [Enchant](doc/ENCHANT.md)
 - [NPC & Monster AI](doc/NPC_MONSTER_AI.md)
 - [Animation](doc/ANIMATION.md)
 
 **Engine & Performance**
 - [Runtime Performance](doc/RUNTIME_PERFORMANCE.md)
 - [Loading Optimization](doc/LOADING_OPTIMIZATION.md)
+- [Metrics & Concurrent Accounts](doc/METRICS.md)
+- [Pulse Dashboard](dashboard/README.md)
 
 **Assets & Agents**
 - [Assets](doc/ASSETS.md)
@@ -105,6 +108,7 @@ Agents and humans connect to the same world, act under the same rules, and inter
 
 - **Client**: Svelte component-based UI + Three.js integration through Threlte
 - **Server**: Rust async server with game state management via broadcast channels
+- **Dashboard**: Admin-only Svelte app in `dashboard/` for world metrics and rankings; see [setup](dashboard/README.md)
 - **Communication**: Real-time bidirectional communication through WebSocket
 
 ## Tech Stack
@@ -132,6 +136,7 @@ Agents and humans connect to the same world, act under the same rules, and inter
 
 - **Rust & Cargo**: [Install Rust](https://rustup.rs/)
 - **Node.js & npm**: [Install Node.js](https://nodejs.org/)
+- **flock**: Required to serialize WASM builds (provided by `util-linux` on Linux).
 - **(Recommended) cargo-watch**: For automatic server restarts on code changes.
   ```bash
   cargo install cargo-watch
@@ -145,12 +150,25 @@ Agents and humans connect to the same world, act under the same rules, and inter
 | 10005 | GLB Editor                       |
 | 10006 | Server WebSocket (binds 127.0.0.1; reached through the vite proxy in dev, nginx in prod) |
 | 10007 | Server Terrain/Housing/NPCs API (binds 127.0.0.1; writes require auth) |
+| 10008 | Pulse dashboard (Vite dev)       |
 
 > Both server ports are loopback-only by default (`--bind` / `--api-bind`). Pass `--bind 0.0.0.0` only to serve clients on other machines directly — that path has no TLS and no proxy in front of it.
 
 > **Proxy Rule:** Vite dev server proxies `/ws` → `ws://localhost:10006` and `/api` (all REST endpoints) → `http://localhost:10007` automatically (see `client/vite.config.ts`).
 
-### 3. Running the Server
+### 3. Generating Terrain Data
+
+World terrain (heightmaps, splatmaps, minimaps, water fields) is baked locally — it is not in git or the asset dataset. Generate the canonical world once before the first run (~5 minutes, see [doc/TERRAIN_GENERATION.md](doc/TERRAIN_GENERATION.md)):
+
+```bash
+cargo run -p terrain-gen --release -- bake --seed 42
+```
+
+> **Disk space:** A full-world bake writes 262,144 tiles and currently produces about 73 GB under `data/terrain`. Check available space before running it.
+
+Without this step the server's terrain API returns 404s and the world renders black.
+
+### 4. Running the Server
 
 This project is organized as a **Cargo Workspace**. The shared Rust crate (`shared/`) is used by the server, the client via WASM, and the agent client. Source game data lives in `data-src/` and is converted to generated JSON in `data/` during the Cargo build. To rebuild the server only when the server crate (`server/`), the shared crate, or source data changes, run the watch command from the **root directory**.
 
@@ -158,13 +176,13 @@ This project is organized as a **Cargo Workspace**. The shared Rust crate (`shar
 cargo watch -w server -w shared -w data-src -x "run -p onlinerpg-server"
 ```
 
-The server listens on port 10006 by default. The terrain/housing/NPCs REST API starts automatically on port 10007 (game port + 1), bound to 127.0.0.1 (`--api-bind` to override). Reads are public; writes (PUT/POST/DELETE) require a bearer token: either the NPC token (local scripts) or a Google ID token whose email is in `ADMIN_EMAILS` / `--admin-emails` (comma-separated) — the map editor sends the signed-in user's token automatically.
+The server listens on port 10006 by default. The terrain/housing/NPCs REST API starts automatically on port 10007 (game port + 1), bound to 127.0.0.1 (`--api-bind` to override). Game reads are public; writes (PUT/POST/DELETE) require a bearer token: either the NPC token (local scripts) or a Google ID token whose email is in `ADMIN_EMAILS` / `--admin-emails` (comma-separated) — the map editor sends the signed-in user's token automatically. All `/api/metrics/` reads require a verified Google admin; NPC and game session tokens are not accepted there.
 
 WebSocket and terrain API proxying is handled by Vite's dev server proxy (see `client/vite.config.ts`), so no separate socat or SSL proxy is needed.
 
 **Google sign-in**: browser login uses Google OAuth. Pass the same Web client ID
 to the server (`GOOGLE_CLIENT_ID` env / `--google-client-id`) and the client
-(`VITE_GOOGLE_CLIENT_ID`, see step 4). Without it the server runs but rejects
+(`VITE_GOOGLE_CLIENT_ID`, see step 5). Without it the server runs but rejects
 browser logins. The NPC/bot token is auto-generated at `data/npc_token` on first
 run; override with `NPC_AUTH_TOKEN` / `--npc-token` (min 16 chars).
 
@@ -175,7 +193,7 @@ ID as `GOOGLE_CLI_CLIENT_ID` / `--google-cli-client-id`; the server accepts
 tokens from either client. See [doc/REMOTE_AGENT_CLIENT.md](doc/REMOTE_AGENT_CLIENT.md).
 
 
-### 4. Running the Client
+### 5. Running the Client
 
 Binary assets (3D models, music, sounds) are hosted on Hugging Face, not in git.
 Fetch them once from the repo root (re-run after `assets.lock` changes):
@@ -191,16 +209,16 @@ npm install
 npm run dev -- --port 10004
 ```
 
-### 5. Running the Agent Client
+### 6. Running the Agent Client
 
 Edit `agent-client/data/config.toml` to set the correct port numbers, then run:
 
 ```bash
 cd agent-client
-cargo watch -i "data/prompts/memory/" -x run
+cargo watch -i "data/npcs/**/memory.txt" -i "data/npcs/**/favor.json" -x run
 ```
 
-### 6. Automatic WASM Rebuild on Shared Code Changes (Recommended)
+### 7. Automatic WASM Rebuild on Shared Code Changes (Recommended)
 To have Rust code changes in the `shared` library reflected in the browser immediately during client development, run the following command in a separate terminal:
 
 ```bash
@@ -208,7 +226,11 @@ To have Rust code changes in the `shared` library reflected in the browser immed
 cargo watch -w shared -s "npm run build:wasm --prefix client"
 ```
 
-### 7. Running the GLB Editor
+`build:wasm` serializes data generation, output cleanup, and packaging with a
+per-checkout lock. Manual builds and the watcher can run together; a second build
+waits for the first to finish before touching the generated files.
+
+### 8. Running the GLB Editor
 
 ```bash
 cd tools/glb-editor
@@ -225,11 +247,17 @@ Prod runs both binaries as systemd units (`tools/systemd/`), with the client bun
 | `openmmo-server` | `onlinerpg-server` | `openmmo` |
 | `openmmo-agent-client` | `agent-client` | `openmmo-agent` |
 
-Deploy by running `tools/deploy-prod.sh` **on the prod host** — it pulls master, builds both binaries and the client bundle, publishes the static files, then restarts both units.
+Deploy by running `tools/deploy-prod.sh` **on the prod host** — it pulls master, builds both binaries and the client bundle, prepares terrain snapshot files, publishes the static files, then restarts both units. It also builds and publishes the dashboard on first deployment or when its source, build environment, or Node.js version changes. Unchanged dashboard builds are skipped. The default dashboard location is `/var/www/openmmo-dashboard`, served at `/dashboard/`; see [dashboard deployment](dashboard/README.md#배포-스크립트로-자동-게시).
+
+There is no host-setup script. nginx on prod is a hand-maintained `/etc/nginx/sites-available/openmmo`; keep it in step with `docker/nginx.conf.template`, which is the reference for the cache rules. In particular `/models/` must be served with `Cache-Control: no-cache` — the object catalog and GLBs are fetched by fixed path, and a time-based expiry lets a stale `catalog.json` hide newly added furniture with no error.
+
+Terrain snapshots are served directly from `TERRAIN_DIR/snapshots/` by nginx. Add the snapshot locations from `docker/nginx.conf.template` to the host configuration with the host's absolute terrain path, and allow the nginx worker to read that directory. The deployment script prepares changed snapshots before publication; the server validates and caches each tile index on first subscription, without scanning or generating the whole world at startup. Initial preparation needs additional disk space and time. See [terrain static serving](doc/TERRAIN_STATIC_SERVING.md) for setup and validation.
 
 The server handles systemd's `SIGTERM` gracefully: it shows connected players a restart notice, closes its listeners and periodic tasks, waits for any in-flight batch save, persists every connected character and inventory plus the world clock, then exits. `systemctl restart` waits for that drain before starting the new binary.
 
 Admin characters can use `/notice <message>` to raise the same banner by hand (this is the live in-game banner, not the login-screen announcements served from `data/announcements/`). `/notice` with no message clears it; players who enter while one is active receive it on join.
+
+Admins also have moderation and movement commands: `/kick <name>` disconnects a player, `/mute <name> [minutes]` silences their chat and whispers (default 10 minutes, survives a relog, cleared by `/unmute <name>` or a server restart), `/summon <name>` teleports them to your side, `/goto <name>` teleports you to theirs, and `/ban <name> [minutes]` blocks the account behind that character from logging in at all — permanently without minutes, and `/unban <name>` lifts it. A ban keys on the account, so deleting and recreating characters does not shed it, and it survives a server restart (unlike a mute).
 
 Over SSH, detach it from the session so a dropped connection cannot kill the build midway:
 
@@ -266,6 +294,6 @@ The movement warnings (rejected move target, waypoint queue full, blocked move) 
 
 ## Contributing
 
-Contributions are welcome! When you open your first pull request, a bot will ask you to sign the [Contributor License Agreement](CLA.md) by leaving a comment on the PR. Signing the CLA is required before your contribution can be merged.
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for how to pick work, the checks CI runs, and PR conventions. When you open your first pull request, a bot will ask you to sign the [Contributor License Agreement](CLA.md) by leaving a comment on the PR. Signing the CLA is required before your contribution can be merged.
 
 To contribute binary assets (3D models, music, sounds), see [doc/ASSETS.md](doc/ASSETS.md) — they go through a Hugging Face dataset PR rather than git.

@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 
 use onlinerpg_shared::messages::{ActiveDeal, DealKind};
-use onlinerpg_shared::NPC_SIGHT_RADIUS;
+const DEAL_OFFER_MAX_DISTANCE: f32 = 27.0;
 use tracing::info;
 
 use crate::types::{PlayerId, ServerMessage};
@@ -40,28 +40,24 @@ const MERCHANT_DAILY_DISCOUNT_BUDGET: i64 = 10_000;
 /// Total discount value a player may receive per game day across merchants.
 const PLAYER_DAILY_DISCOUNT_CAP: i64 = 4_000;
 
-/// Money-pump invariant: even at maximum band width, the cheapest possible
-/// buy must still cost more than the best possible sell pays out, so no
-/// sequence of LLM decisions can make buy→sell profitable.
+/// At index 100 the max-haggled sell must stay under the max-haggled buy, so
+/// the advertised flat sell rate is honest whenever the index is normal
+/// (below that, `cheapest_buy` caps the payout).
 pub(crate) fn band_invariant_holds(sell_rate_percent: u32) -> bool {
-    let min_buy_pct_of_base = i64::from(100 - DEAL_MAX_HALF_BAND_PCT) * 100;
-    let max_sell_pct_of_base =
-        i64::from(sell_rate_percent) * i64::from(100 + DEAL_MAX_HALF_BAND_PCT);
-    min_buy_pct_of_base > max_sell_pct_of_base
+    (100 - DEAL_MAX_HALF_BAND_PCT) * 100 > sell_rate_percent as i32 * (100 + DEAL_MAX_HALF_BAND_PCT)
 }
 
 /// Half-width of the price band for a player with the given CHA. Higher
 /// CHA lets the LLM swing prices further in either direction (NetHack's
 /// charisma pricing, band edition).
-pub(crate) fn deal_half_band_pct(cha: u8) -> i32 {
-    (DEAL_BASE_HALF_BAND_PCT + 2 * (i32::from(cha) - 10))
-        .clamp(DEAL_MIN_HALF_BAND_PCT, DEAL_MAX_HALF_BAND_PCT)
+pub(crate) fn deal_half_band_pct(cha: i32) -> i32 {
+    (DEAL_BASE_HALF_BAND_PCT + 2 * (cha - 10)).clamp(DEAL_MIN_HALF_BAND_PCT, DEAL_MAX_HALF_BAND_PCT)
 }
 
 /// Resident band half-width: twice the merchant width before clamping, so
 /// "정말 필요한 물건엔 프리미엄 허용" while CHA still matters.
-pub(crate) fn resident_half_band_pct(cha: u8) -> i32 {
-    (2 * (DEAL_BASE_HALF_BAND_PCT + 2 * (i32::from(cha) - 10)))
+pub(crate) fn resident_half_band_pct(cha: i32) -> i32 {
+    (2 * (DEAL_BASE_HALF_BAND_PCT + 2 * (cha - 10)))
         .clamp(RESIDENT_MIN_HALF_BAND_PCT, RESIDENT_MAX_HALF_BAND_PCT)
 }
 
@@ -70,20 +66,43 @@ pub(crate) fn buy_price(base_price: i64, modifier_pct: i32) -> i64 {
     (base_price * (100 + i64::from(modifier_pct)) / 100).max(1)
 }
 
-/// Unit payout a player receives when selling at `modifier_pct`.
-pub(crate) fn sell_payout(base_price: i64, sell_rate_percent: u32, modifier_pct: i32) -> i64 {
-    (base_price * i64::from(sell_rate_percent) * (100 + i64::from(modifier_pct)) / 10_000).max(1)
+/// Max-haggled buy; the ceiling on merchant payouts.
+pub(crate) fn cheapest_buy(buy_base: i64) -> i64 {
+    buy_price(buy_base, -DEAL_MAX_HALF_BAND_PCT)
 }
 
-/// What a deal costs the merchant relative to undiscounted prices. Markups
-/// (buy modifier > 0) and lowball sell offers cost nothing.
-fn deal_cost(base_price: i64, sell_rate_percent: u32, kind: DealKind, modifier_pct: i32) -> i64 {
-    match kind {
-        DealKind::Buy => (base_price - buy_price(base_price, modifier_pct)).max(0),
-        DealKind::Sell => (sell_payout(base_price, sell_rate_percent, modifier_pct)
-            - sell_payout(base_price, sell_rate_percent, 0))
-        .max(0),
-    }
+/// Unit payout a player receives when selling at `modifier_pct`.
+pub(crate) fn sell_payout(
+    base_price: i64,
+    sell_rate_percent: u32,
+    modifier_pct: i32,
+    cap: i64,
+) -> i64 {
+    (base_price * i64::from(sell_rate_percent) * (100 + i64::from(modifier_pct)) / 10_000)
+        .min(cap)
+        .max(1)
+}
+
+/// A granted deal in words. Which sign favors the player flips with the
+/// side, so the wording is derived here rather than from the raw percentage.
+pub(crate) fn deal_notice(
+    merchant_name: &str,
+    item_name: &str,
+    kind: DealKind,
+    modifier_pct: i32,
+    ttl_ms: u64,
+) -> String {
+    let pct = modifier_pct.abs();
+    let mins = (ttl_ms / 60_000).max(1);
+    let offer = match kind {
+        DealKind::Buy if modifier_pct < 0 => format!("{pct}% off {item_name}"),
+        DealKind::Buy => format!("{item_name} at {pct}% above the usual price"),
+        DealKind::Sell if modifier_pct > 0 => {
+            format!("{pct}% over the usual price for your {item_name}")
+        }
+        DealKind::Sell => format!("{pct}% under the usual price for your {item_name}"),
+    };
+    format!("{merchant_name} offers you {offer} ({mins} min).")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -92,6 +111,20 @@ pub(crate) struct DealKey {
     pub merchant_name: String,
     pub item_def_id: String,
     pub kind: DealKind,
+}
+
+fn deal_key(
+    player_id: &PlayerId,
+    merchant_name: &str,
+    item_def_id: &str,
+    kind: DealKind,
+) -> DealKey {
+    DealKey {
+        player_id: *player_id,
+        merchant_name: merchant_name.to_string(),
+        item_def_id: item_def_id.to_string(),
+        kind,
+    }
 }
 
 /// A granted, not-yet-redeemed deal. Single-use: redeeming one unit
@@ -187,7 +220,7 @@ impl super::GameState {
                 npc.floor_level,
             ) {
                 None => Some("player is on another floor"),
-                Some(d) if d > NPC_SIGHT_RADIUS * NPC_SIGHT_RADIUS => {
+                Some(d) if d > DEAL_OFFER_MAX_DISTANCE * DEAL_OFFER_MAX_DISTANCE => {
                     Some("player is too far away")
                 }
                 Some(_) => None,
@@ -224,31 +257,39 @@ impl super::GameState {
             )
         };
 
+        if self.is_npc_asleep(&merchant_name) {
+            return reject("you cannot haggle while asleep").await;
+        }
         let Some(def) = trader_def_by_name(&merchant_name) else {
             return reject("you have nothing to trade with").await;
         };
-        let Some(base_price) = self
+        let index_pct = self.price_index_percent().await;
+        let Some((base_price, buy_base)) = self
             .item_defs
             .get(item_def_id)
             .and_then(|item| item.base_price)
+            .zip(self.trade_base_price(&def, item_def_id, index_pct))
         else {
             return reject("that item has no price").await;
         };
 
         // Clamp the requested modifier to the target's CHA-derived band.
-        let cha = {
-            let chars = self.player_characters.read().await;
-            chars
-                .get(target_player_id)
-                .map(|(_, _, attrs)| attrs.cha)
-                .unwrap_or(10)
-        };
+        let cha = self.effective_cha(target_player_id).await;
         let (rate, half_band) = match def.haggle_params(kind, item_def_id, cha) {
             Ok(params) => params,
             Err(why) => return reject(why).await,
         };
         let applied = modifier_pct.clamp(-half_band, half_band);
-        let cost = deal_cost(base_price, rate, kind, applied);
+        // What the deal costs the merchant against undiscounted prices;
+        // markups and lowball sell offers cost nothing.
+        let cost = match kind {
+            DealKind::Buy => buy_base - buy_price(buy_base, applied),
+            DealKind::Sell => {
+                let cap = self.sell_cap(&def, item_def_id, index_pct);
+                sell_payout(base_price, rate, applied, cap) - sell_payout(base_price, rate, 0, cap)
+            }
+        }
+        .max(0);
 
         let now_ms = Self::now_ms();
         let game_day = self.current_game_day();
@@ -296,12 +337,7 @@ impl super::GameState {
             let mut deals = self.deals.write().await;
             deals.retain(|_, entry| entry.expires_at_ms > now_ms);
             deals.insert(
-                DealKey {
-                    player_id: *target_player_id,
-                    merchant_name: merchant_name.clone(),
-                    item_def_id: item_def_id.to_string(),
-                    kind,
-                },
+                deal_key(target_player_id, &merchant_name, item_def_id, kind),
                 DealEntry {
                     modifier_pct: applied,
                     expires_at_ms,
@@ -326,6 +362,20 @@ impl super::GameState {
             },
         )
         .await;
+        // The modifier is only drawn inside the trade window, which the player
+        // may never open — say it in chat too. A 0% grant is a keepsake
+        // unlock, not a price: it has nothing to announce.
+        if applied != 0 {
+            let item_name = self
+                .item_defs
+                .get(item_def_id)
+                .map_or(item_def_id, |def| def.name.as_str());
+            self.send_system_message(
+                target_player_id,
+                deal_notice(&merchant_name, item_name, kind, applied, DEAL_TTL_MS),
+            )
+            .await;
+        }
         self.send_direct_message(
             npc_player_id,
             ServerMessage::DealResult {
@@ -387,14 +437,53 @@ impl super::GameState {
         item_def_id: &str,
         kind: DealKind,
     ) -> Option<DealEntry> {
-        let key = DealKey {
-            player_id: *player_id,
-            merchant_name: merchant_name.to_string(),
-            item_def_id: item_def_id.to_string(),
-            kind,
-        };
-        let entry = self.deals.write().await.remove(&key)?;
-        (entry.expires_at_ms > Self::now_ms()).then_some(entry)
+        self.take_deals(player_id, merchant_name, kind, &[item_def_id])
+            .await
+            .pop()
+            .flatten()
+    }
+
+    /// Redeem the deals for a batch's lines, in order under one lock: a deal
+    /// is single-use, so only the first line touching a def gets one. An
+    /// expired entry is consumed rather than restored.
+    pub(crate) async fn take_deals(
+        &self,
+        player_id: &PlayerId,
+        merchant_name: &str,
+        kind: DealKind,
+        item_def_ids: &[&str],
+    ) -> Vec<Option<DealEntry>> {
+        let now_ms = Self::now_ms();
+        let mut deals = self.deals.write().await;
+        item_def_ids
+            .iter()
+            .map(|item_def_id| {
+                deals
+                    .remove(&deal_key(player_id, merchant_name, item_def_id, kind))
+                    .filter(|entry| entry.expires_at_ms > now_ms)
+            })
+            .collect()
+    }
+
+    /// Put back every deal a failed batch took, in one lock acquisition.
+    /// A batch that took none never touches the lock.
+    pub(crate) async fn restore_deals(
+        &self,
+        player_id: &PlayerId,
+        merchant_name: &str,
+        kind: DealKind,
+        taken: &[(&str, DealEntry)],
+    ) {
+        if taken.is_empty() {
+            return;
+        }
+        let mut deals = self.deals.write().await;
+        for (item_def_id, entry) in taken {
+            deals.insert(
+                deal_key(player_id, merchant_name, item_def_id, kind),
+                entry.clone(),
+            );
+        }
     }
 
     /// Put back a deal taken by `take_deal` after a failed trade.
@@ -408,13 +497,8 @@ impl super::GameState {
         entry: Option<DealEntry>,
     ) {
         let Some(entry) = entry else { return };
-        let key = DealKey {
-            player_id: *player_id,
-            merchant_name: merchant_name.to_string(),
-            item_def_id: item_def_id.to_string(),
-            kind,
-        };
-        self.deals.write().await.insert(key, entry);
+        self.restore_deals(player_id, merchant_name, kind, &[(item_def_id, entry)])
+            .await
     }
 
     /// Notify a player that a deal was consumed (or cleared).
@@ -443,6 +527,27 @@ impl super::GameState {
     #[cfg(test)]
     pub(crate) async fn clear_deal_cooldowns_for_test(&self) {
         self.deal_ledgers.write().await.last_accepted_offer.clear();
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn deal_ledger_state_for_test(
+        &self,
+        merchant_name: &str,
+        player_name: &str,
+    ) -> (i64, i64, Option<u64>) {
+        let ledgers = self.deal_ledgers.read().await;
+        (
+            ledgers.npc_granted.get(merchant_name).copied().unwrap_or(0),
+            ledgers
+                .player_received
+                .get(player_name)
+                .copied()
+                .unwrap_or(0),
+            ledgers
+                .last_accepted_offer
+                .get(&(merchant_name.to_string(), player_name.to_string()))
+                .copied(),
+        )
     }
 
     /// The player's live deals with one merchant, for `ShopState`.

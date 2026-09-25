@@ -19,22 +19,33 @@ describe('getMovementMode', () => {
     expect(getMovementMode(3)).toBe('walk')
   })
 
-  it('returns jog for medium distance without torch', () => {
+  it('returns jog for every non-short distance without torch', () => {
     expect(getMovementMode(3.01)).toBe('jog')
     expect(getMovementMode(5)).toBe('jog')
     expect(getMovementMode(8)).toBe('jog')
+    expect(getMovementMode(8.01)).toBe('jog')
+    expect(getMovementMode(100)).toBe('jog')
   })
 
-  it('returns run for long distance without torch', () => {
-    expect(getMovementMode(8.01)).toBe('run')
-    expect(getMovementMode(100)).toBe('run')
-  })
-
-  it('skips jog when carrying a torch', () => {
+  it('returns walk at every distance when carrying a torch', () => {
     expect(getMovementMode(3, true)).toBe('walk')
-    expect(getMovementMode(5, true)).toBe('run')
-    expect(getMovementMode(8, true)).toBe('run')
-    expect(getMovementMode(100, true)).toBe('run')
+    expect(getMovementMode(5, true)).toBe('walk')
+    expect(getMovementMode(8, true)).toBe('walk')
+    expect(getMovementMode(100, true)).toBe('walk')
+  })
+
+  it('returns run when sprinting with a torch', () => {
+    expect(getMovementMode(100, true, true)).toBe('run')
+  })
+
+  it('returns run in combat unless carrying a torch', () => {
+    expect(getMovementMode(2, false, false, true)).toBe('run')
+    expect(getMovementMode(2, true, false, true)).toBe('walk')
+  })
+
+  it('returns jog when distance is unknown', () => {
+    expect(getMovementMode()).toBe('jog')
+    expect(getMovementMode(undefined, true)).toBe('walk')
   })
 })
 

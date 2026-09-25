@@ -3,6 +3,7 @@ use std::sync::LazyLock;
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tokio::sync::Mutex;
 use tracing::{debug, info, warn};
 
@@ -29,7 +30,15 @@ pub struct OpenAiConfig {
     /// budget goes to the reply; "" omits the field for models that reject an
     /// unrecognized value.
     pub reasoning_effort: String,
+    /// Conversation history carried per call, system prompt included.
+    pub max_messages: usize,
 }
+
+/// System prompt plus 20 user/assistant pairs. OpenRouter still uses it.
+pub const DEFAULT_MAX_MESSAGES: usize = 41;
+
+/// Below this the trim would drop the system prompt or the turn being sent.
+const MIN_MAX_MESSAGES: usize = 3;
 
 impl Default for OpenAiConfig {
     fn default() -> Self {
@@ -41,6 +50,7 @@ impl Default for OpenAiConfig {
             max_tokens: 1024,
             temperature: 0.7,
             reasoning_effort: "none".to_string(),
+            max_messages: DEFAULT_MAX_MESSAGES,
         }
     }
 }
@@ -77,6 +87,7 @@ impl OpenAiConfig {
                 .then(|| self.reasoning_effort.clone()),
             thinking: None,
             reasoning_split: None,
+            max_messages: self.max_messages.max(MIN_MAX_MESSAGES),
         })
     }
 }
@@ -94,6 +105,7 @@ pub struct Endpoint {
     pub reasoning_effort: Option<String>,
     pub thinking: Option<String>,
     pub reasoning_split: Option<bool>,
+    pub max_messages: usize,
 }
 
 #[derive(Serialize)]
@@ -123,6 +135,10 @@ struct ThinkingRequest {
 struct ChatMessage {
     role: String,
     content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning_content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning_details: Option<Value>,
 }
 
 #[derive(Deserialize)]
@@ -133,11 +149,14 @@ struct ChatResponse {
 #[derive(Deserialize)]
 struct ChatChoice {
     message: ChatMessageResponse,
+    finish_reason: Option<String>,
 }
 
 #[derive(Deserialize)]
 struct ChatMessageResponse {
     content: Option<String>,
+    reasoning_content: Option<String>,
+    reasoning_details: Option<Value>,
 }
 
 /// Invokes any OpenAI-compatible chat completions endpoint over HTTP.
@@ -168,7 +187,7 @@ impl OpenAiInvoker {
     }
 
     /// One round trip.
-    async fn complete(&self, request: &ChatRequest) -> anyhow::Result<String> {
+    async fn complete(&self, request: &ChatRequest) -> anyhow::Result<ChatMessage> {
         let name = self.endpoint.name;
         let mut req = HTTP.post(&self.endpoint.url).json(request);
         if !self.endpoint.api_key.is_empty() {
@@ -193,12 +212,26 @@ impl OpenAiInvoker {
         let chat_response: ChatResponse = serde_json::from_str(&body)
             .map_err(|e| anyhow::anyhow!("Failed to parse {name} response: {e}\nRaw: {body}"))?;
 
-        Ok(chat_response
+        let choice = chat_response
             .choices
             .into_iter()
             .next()
-            .and_then(|c| c.message.content)
-            .unwrap_or_default())
+            .ok_or_else(|| anyhow::anyhow!("{name} API returned no choices"))?;
+        if choice.finish_reason.as_deref() == Some("length") {
+            anyhow::bail!("{name} response reached the output token limit; increase max_tokens");
+        }
+        let content = choice
+            .message
+            .content
+            .filter(|text| !text.trim().is_empty())
+            .ok_or_else(|| anyhow::anyhow!("{name} API returned no reply text"))?;
+
+        Ok(ChatMessage {
+            role: "assistant".to_string(),
+            content,
+            reasoning_content: choice.message.reasoning_content,
+            reasoning_details: choice.message.reasoning_details,
+        })
     }
 }
 
@@ -214,24 +247,25 @@ impl LlmBackend for OpenAiInvoker {
             messages.push(ChatMessage {
                 role: "system".to_string(),
                 content: self.system_prompt.clone(),
+                reasoning_content: None,
+                reasoning_details: None,
             });
         }
 
-        // Built aside and committed only once the call comes back. Undoing the
-        // user turn in an error arm instead would miss a cancelled call — the
-        // scheduler's timeout drops this future — and leave two user messages
-        // in a row, which stricter chat templates reject.
+        // Commit only after success so errors and cancellation preserve history.
         let mut turn = messages.clone();
         turn.push(ChatMessage {
             role: "user".to_string(),
             content: content.to_string(),
+            reasoning_content: None,
+            reasoning_details: None,
         });
 
-        // Trim conversation history if it gets too long (keep system + last 20 turns)
-        const MAX_MESSAGES: usize = 41; // system + 20 user/assistant pairs
-        if turn.len() > MAX_MESSAGES {
+        // Keep the system prompt plus the most recent turns, up to the cap.
+        let max_messages = self.endpoint.max_messages.max(MIN_MAX_MESSAGES);
+        if turn.len() > max_messages {
             let system = turn[0].clone();
-            let keep_from = turn.len() - (MAX_MESSAGES - 1);
+            let keep_from = turn.len() - (max_messages - 1);
             turn = std::iter::once(system)
                 .chain(turn[keep_from..].iter().cloned())
                 .collect();
@@ -256,13 +290,11 @@ impl LlmBackend for OpenAiInvoker {
             reasoning_split: self.endpoint.reasoning_split,
         };
 
-        let result = self.complete(&request).await?;
+        let response = self.complete(&request).await?;
+        let result = response.content.clone();
 
         let mut turn = request.messages;
-        turn.push(ChatMessage {
-            role: "assistant".to_string(),
-            content: result.clone(),
-        });
+        turn.push(response);
         *messages = turn;
 
         debug!("<<< FROM {name} ({} bytes):\n{result}", result.len());
@@ -299,6 +331,20 @@ mod tests {
         }
         .endpoint()
         .is_err());
+    }
+
+    /// The trim subtracts `max_messages - 1` from a Vec length: under 3 that
+    /// underflows a usize and panics mid-turn.
+    #[test]
+    fn max_messages_never_resolves_below_the_trim_floor() {
+        let mut cfg = config("http://host/v1");
+        assert_eq!(cfg.endpoint().unwrap().max_messages, DEFAULT_MAX_MESSAGES);
+        for asked in [0, 1, 2] {
+            cfg.max_messages = asked;
+            assert_eq!(cfg.endpoint().unwrap().max_messages, MIN_MAX_MESSAGES);
+        }
+        cfg.max_messages = 9;
+        assert_eq!(cfg.endpoint().unwrap().max_messages, 9);
     }
 
     #[test]

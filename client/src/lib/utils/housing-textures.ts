@@ -1,18 +1,20 @@
-/**
- * housing-textures.ts — Texture catalog and material management for the housing system.
- *
- * Loads PBR textures from GLB files (reusing the splatLayerLoader pipeline)
- * and provides per-texture MeshStandardMaterial instances shared across all houses.
- */
+// Shared housing/dungeon materials, loaded from GLB maps or standalone textures.
 import * as THREE from 'three'
 import { loadSplatLayer } from './splatLayerLoader'
 
 export interface HousingTextureEntry {
   label: string
   glb: string
+  mapUrl?: string
+  bumpScale?: number
+  roughness?: number
+  vertexColors?: boolean
+  ghostOpacity?: number
   fallbackColor: number
   /** UV scale multiplier — smaller = larger tiles. Default 1.0 */
   uvScale?: number
+  /** UV offset in texture space (0..1 = one image), e.g. to centre a grid. */
+  uvOffset?: [number, number]
   /** UI display order — lower values appear first. Defaults to array index. */
   sortOrder?: number
   /** Map UV 0→1 per wall segment (no tiling). Default false. */
@@ -21,6 +23,7 @@ export interface HousingTextureEntry {
   internal?: boolean
   /** Enable standard alpha-blend transparency (transparent + depthWrite off). */
   transparent?: boolean
+  decal?: boolean
 }
 
 /** Shared texture catalog for walls, floors, and roofs. */
@@ -192,16 +195,61 @@ export const HOUSING_TEXTURES: HousingTextureEntry[] = [
     internal: true,
   },
   {
-    // Rock wall 10 — underground dungeon corridor walls
-    // (DUNGEON_CORRIDOR_WALL_TEXTURE_IDX). Dungeon-only, kept out of the picker.
+    // Keyed dungeon door (DUNGEON_LOCKED_DOOR_TEXTURE_IDX). Door UVs run 0→1
+    // across the opening; >1 tightens the grid so the bars read as bars.
+    label: 'Rusty Metal Grid',
+    glb: 'dungeon/rusty_metal_grid_1k',
+    fallbackColor: 0x4a4038,
+    uvScale: 1.5,
+    uvOffset: [0, 0.16],
+    internal: true,
+  },
+  {
+    // Legacy slot retained so persisted texture indices stay stable.
     label: 'Rock Wall 10',
     glb: 'dungeon/rock_wall_10_1k',
     fallbackColor: 0x7d756a,
-    // <1 enlarges the rock grain (fewer repeats per metre) so the corridor
-    // reads as bigger stones rather than fine gravel.
     uvScale: 0.8,
     internal: true,
   },
+  ...[
+    { id: 'limestone', color: 0x89867d, roughness: 0.94 },
+    { id: 'moss', color: 0x6c7362, roughness: 0.88 },
+    { id: 'masonry', color: 0x626763, roughness: 0.93 },
+  ].flatMap(({ id, color, roughness }) =>
+    ['wall', 'floor'].map((surface) => {
+      const masonryWall = id === 'masonry' && surface === 'wall'
+      return {
+        label: `Cave ${id} ${surface}`,
+        glb: '',
+        mapUrl: `/textures/dungeon/cave-${id}-${surface}.webp`,
+        uvScale: masonryWall ? 2 : 1,
+        fallbackColor: color,
+        roughness,
+        vertexColors: masonryWall,
+        ghostOpacity: masonryWall ? 0.22 : undefined,
+        bumpScale: masonryWall
+          ? 0.012
+          : surface === 'wall'
+            ? 0.09
+            : id === 'masonry'
+              ? 0
+              : 0.035,
+        internal: true,
+      }
+    })
+  ),
+  ...['wall-weathering-decals', 'wall-cracks-cobwebs'].map((id) => ({
+    label: `Dungeon ${id}`,
+    glb: '',
+    mapUrl: `/textures/dungeon/${id}.webp`,
+    fallbackColor: 0xffffff,
+    roughness: 1,
+    vertexColors: true,
+    transparent: true,
+    decal: true,
+    internal: true,
+  })),
 ]
 
 /** Per-texture-index material cache (module-level singleton). */
@@ -210,11 +258,7 @@ const materialCache = new Map<number, THREE.MeshStandardMaterial>()
 /** Semi-transparent ghost material cache — created on demand, synced with base materials. */
 const ghostMaterialCache = new Map<number, THREE.MeshStandardMaterial>()
 
-/**
- * Get or create a MeshStandardMaterial for the given texture index.
- * Before textures are loaded, uses fallback color. After loading,
- * the material is updated in-place with PBR maps.
- */
+/** Cached materials use a fallback color until their textures load. */
 export function getHousingMaterial(
   textureIndex: number
 ): THREE.MeshStandardMaterial {
@@ -225,19 +269,31 @@ export function getHousingMaterial(
     mat = new THREE.MeshStandardMaterial({
       color: entry.fallbackColor,
       side: THREE.FrontSide,
-      roughness: 0.85,
+      roughness: entry.roughness ?? 0.85,
+      vertexColors: entry.vertexColors ?? false,
       metalness: 0.0,
       ...(entry.transparent && { transparent: true, depthWrite: false }),
+      ...(entry.decal && {
+        visible: false,
+        alphaTest: 0.015,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -2,
+      }),
     })
     materialCache.set(idx, mat)
   }
   return mat
 }
 
-/**
- * Get or create a semi-transparent ghost material for the given texture index.
- * Used when doors/windows should appear semi-transparent inside a house.
- */
+/** Swap between opaque and ghost materials using the mesh's texture index. */
+export function setMeshGhost(mesh: THREE.Mesh, ghost: boolean) {
+  const idx = mesh.userData.textureIndex
+  if (typeof idx !== 'number') return
+  mesh.material = ghost ? getGhostHousingMaterial(idx) : getHousingMaterial(idx)
+}
+
+/** Shared semi-transparent material for an occluding surface. */
 export function getGhostHousingMaterial(
   textureIndex: number
 ): THREE.MeshStandardMaterial {
@@ -248,7 +304,8 @@ export function getGhostHousingMaterial(
     ghost = base.clone()
     ghost.transparent = true
     ghost.depthWrite = false
-    ghost.opacity = base.transparent ? 0.4 : 0.5
+    ghost.opacity =
+      HOUSING_TEXTURES[idx].ghostOpacity ?? (base.transparent ? 0.4 : 0.5)
     ghostMaterialCache.set(idx, ghost)
   }
   return ghost
@@ -256,56 +313,72 @@ export function getGhostHousingMaterial(
 
 let _initPromise: Promise<void> | null = null
 
-/**
- * Load all housing textures from GLB files and apply them to cached materials.
- * Safe to call multiple times — subsequent calls return the same promise.
- */
+/** Load textures once and update shared materials in place. */
 export function initHousingTextures(): Promise<void> {
   if (_initPromise) return _initPromise
 
   _initPromise = (async () => {
     const promises = HOUSING_TEXTURES.map(async (entry, idx) => {
-      if (!entry.glb) return // color-only entries (e.g. Void)
+      if (!entry.glb && !entry.mapUrl) return
       try {
-        const layer = await loadSplatLayer(entry.glb, 1.0)
+        const layer = entry.mapUrl
+          ? { map: await new THREE.TextureLoader().loadAsync(entry.mapUrl) }
+          : await loadSplatLayer(entry.glb, 1.0)
         const mat = getHousingMaterial(idx)
 
         const scale = entry.uvScale ?? 1.0
         const applyWrap = (tex: THREE.Texture) => {
           if (scale !== 1.0) tex.repeat.set(scale, scale)
-          if (entry.fitSegment) {
-            tex.wrapS = THREE.ClampToEdgeWrapping
-            tex.wrapT = THREE.ClampToEdgeWrapping
-            tex.needsUpdate = true
-          }
+          if (entry.uvOffset) tex.offset.set(...entry.uvOffset)
+          // Set both ways: the loader caches textures, so an entry edited
+          // under HMR must not inherit the wrap it had before.
+          const wrap = entry.fitSegment
+            ? THREE.ClampToEdgeWrapping
+            : THREE.RepeatWrapping
+          tex.wrapS = wrap
+          tex.wrapT = wrap
+          tex.needsUpdate = true
         }
 
         mat.map = layer.map
+        layer.map.colorSpace = THREE.SRGBColorSpace
+        layer.map.anisotropy = 8
         applyWrap(layer.map)
-        if (layer.normalMap) {
+        if ('normalMap' in layer && layer.normalMap) {
           mat.normalMap = layer.normalMap
           applyWrap(layer.normalMap)
         }
-        if (layer.orm) {
+        if ('orm' in layer && layer.orm) {
           // ORM packed: R=AO, G=roughness, B=metallic
           mat.roughnessMap = layer.orm
           mat.metalnessMap = layer.orm
           mat.aoMap = layer.orm
           applyWrap(layer.orm)
         }
+        if (entry.bumpScale) {
+          mat.bumpMap = layer.map
+          mat.bumpScale = entry.bumpScale
+        }
 
         // Switch from fallback color to texture-driven color
         mat.color.set(0xffffff)
+        mat.visible = true
         mat.needsUpdate = true
 
-        // Invalidate ghost material so it gets re-cloned on next access
         const oldGhost = ghostMaterialCache.get(idx)
         if (oldGhost) {
-          oldGhost.dispose()
-          ghostMaterialCache.delete(idx)
+          const opacity = oldGhost.opacity
+          oldGhost.copy(mat)
+          oldGhost.transparent = true
+          oldGhost.depthWrite = false
+          oldGhost.opacity = opacity
+          oldGhost.needsUpdate = true
         }
       } catch (e) {
-        console.warn(`[housing] Failed to load texture "${entry.glb}":`, e)
+        console.warn(
+          `[housing] Failed to load texture "${entry.mapUrl ?? entry.glb}":`,
+          e
+        )
         // Material keeps its fallback color
       }
     })
@@ -337,7 +410,8 @@ export function getTexturePreviewUrls(): (string | null)[] {
 
 /** Dispose all cached housing materials. Call on layer teardown. */
 export function disposeHousingMaterials() {
-  for (const mat of materialCache.values()) {
+  for (const [idx, mat] of materialCache) {
+    if (HOUSING_TEXTURES[idx].mapUrl) mat.map?.dispose()
     mat.dispose()
   }
   materialCache.clear()

@@ -1,0 +1,127 @@
+<script lang="ts" generics="T extends TimestampSample">
+  import type { Snippet } from 'svelte'
+  import { createChartSelection } from './chartSelection.svelte'
+  import { axisRange, axisStep, formatAxisTime, formatCount, formatDateTime, formatPeriod, nearestSample, splitSegments, type ChartMarker, type TimestampSample, type ChartHistory } from './metrics'
+
+  let { history, peak, value, legend, legendLabel = legend, valueLabel, unit = '계정', peakLabel = '기간 최고 접속', axisWidth: left = 42, formatValue = formatCount, fitAxis = false, markers = [], amount, layers, detail, legends }: {
+    history: ChartHistory<T>
+    peak: number | null
+    value: (sample: T) => number
+    legend: string
+    legendLabel?: string
+    valueLabel: string
+    unit?: string
+    peakLabel?: string
+    axisWidth?: number
+    formatValue?: (value: number) => string
+    fitAxis?: boolean
+    markers?: ChartMarker[]
+    amount?: Snippet<[number, boolean]>
+    layers?: Snippet<[T[], (timestamp: number) => number, (amount: number) => number]>
+    detail?: Snippet<[T]>
+    legends?: Snippet
+  } = $props()
+  let container: HTMLDivElement
+  let width = $state(1000)
+  const selection = createChartSelection(timeAtPointer, () => history.samples.at(-1)?.timestamp ?? null, () => `${hours}:${history.sample_interval_seconds}`)
+  let height = $derived(width < 600 ? 260 : 320)
+  let hours = $derived((history.until - history.from) / 3600)
+  let daily = $derived(history.sample_interval_seconds >= 86400)
+  let axisTicks = $derived(daily && hours <= 24 ? [0, 6] : width >= 600 ? [0, 1, 2, 3, 4, 5, 6] : hours > 24 && hours <= 4320 ? [0, 3, 6] : [0, 2, 4, 6])
+  const right = 18
+  const top = 24
+  const bottom = 38
+  let plotWidth = $derived(Math.max(1, width - left - right))
+  let plotHeight = $derived(height - top - bottom)
+  let { floor, ceiling, ticks } = $derived.by(() => {
+    if (!fitAxis) {
+      const step = axisStep(peak ?? Math.max(0, ...history.samples.map(value)))
+      return { floor: 0, ceiling: step * 4, ticks: [0, 1, 2, 3, 4].map((tick) => tick * step) }
+    }
+    const values = history.samples.map(value)
+    if (peak !== null) values.push(peak)
+    const minimum = Math.min(...values)
+    const maximum = Math.max(...values)
+    return axisRange(minimum, maximum, Math.max(1, (maximum - minimum) * .05))
+  })
+  let segments = $derived(splitSegments(history.samples, history.sample_interval_seconds))
+  let visibleMarkers = $derived(markers.filter((marker) => marker.timestamp >= history.from && marker.timestamp <= history.until))
+  let showMarkerLabels = $derived(visibleMarkers.length <= 8)
+  let selectedIndex = $derived(selection.time === null ? null : nearestSample(history.samples, selection.time))
+  let selected = $derived(selectedIndex !== null && history.samples[selectedIndex].timestamp === selection.time ? history.samples[selectedIndex] : null)
+  const x = (timestamp: number) => left + (timestamp - history.from) / (history.until - history.from) * plotWidth
+  const y = (amount: number) => top + plotHeight * (1 - (amount - floor) / (ceiling - floor))
+  let tooltipLeft = $derived(selected ? Math.max(8, Math.min(width - 244, x(selected.timestamp) - 118)) : 0)
+
+  function line(samples: T[]) {
+    return samples.map((sample, index) => `${index === 0 ? 'M' : 'L'}${x(sample.timestamp)},${y(value(sample))}`).join(' ')
+  }
+
+  function timeAtPointer(event: MouseEvent) {
+    const fraction = Math.max(0, Math.min(1, (event.clientX - container.getBoundingClientRect().left - left) / plotWidth))
+    const timestamp = history.from + fraction * (history.until - history.from)
+    const index = nearestSample(history.samples, timestamp)
+    return index !== null && Math.abs(history.samples[index].timestamp - timestamp) <= Math.max(history.sample_interval_seconds, (history.until - history.from) * 12 / plotWidth)
+      ? history.samples[index].timestamp : null
+  }
+</script>
+
+<div class="chart-canvas" bind:this={container} bind:contentRect={null, (rect: DOMRectReadOnly | null | undefined) => { if (rect) width = rect.width }}>
+  <svg viewBox={`0 0 ${width} ${height}`} role="button" tabindex="0" aria-pressed={selection.pinned} aria-label={`최근 ${formatPeriod(hours)} ${legend} 그래프. ${history.samples.length}개 지점.${peak === null ? '' : ` 가로 점선은 ${peakLabel} ${formatValue(peak)}${unit} 기준입니다.`} 클릭 또는 Enter로 시점 고정, 다시 클릭 또는 Esc로 해제.`}
+    {...selection.handlers}>
+    {#each ticks as tick (tick)}
+      <line x1={left} x2={width - right} y1={y(tick)} y2={y(tick)} class="grid-line" />
+      <text x={left - 14} y={y(tick) + 4} text-anchor="end" class="axis-label">{#if amount}{@render amount(tick, true)}{:else}{tick}{/if}</text>
+    {/each}
+    {#each axisTicks as tick (tick)}
+      <text x={left + plotWidth * tick / 6} y={height - 10} text-anchor={tick === 0 ? 'start' : tick === 6 ? 'end' : 'middle'} class="axis-label">
+        {formatAxisTime(history.from + (history.until - history.from) * tick / 6, hours, daily)}
+      </text>
+    {/each}
+    {#each segments as segment (segment[0].timestamp)}
+      {@const path = segment.length > 1 ? line(segment) : ''}
+      {#if layers}
+        {@render layers(segment, x, y)}
+      {:else if segment.length > 1}
+        <path d={`${path} L${x(segment[segment.length - 1].timestamp)},${y(floor)} L${x(segment[0].timestamp)},${y(floor)} Z`} fill="#168878" fill-opacity="0.25" />
+      {/if}
+      {#if segment.length > 1}
+        <path d={path} fill="none" stroke="#31594f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+      {:else}
+        <circle cx={x(segment[0].timestamp)} cy={y(value(segment[0]))} r="3.5" fill="#31594f" />
+      {/if}
+    {/each}
+    {#each visibleMarkers as marker (marker.timestamp)}
+      <line x1={x(marker.timestamp)} x2={x(marker.timestamp)} y1={top} y2={y(floor)} class="marker-line" />
+      {#if showMarkerLabels}
+        <text x={x(marker.timestamp)} y={top - 8} text-anchor="middle" class="marker-label">{marker.label}</text>
+      {/if}
+    {/each}
+    {#if peak !== null}
+      <line x1={left} x2={width - right} y1={y(peak)} y2={y(peak)} class="peak-line" />
+      <text x={width - right} y={y(peak) - 8} text-anchor="end" class="peak-label">{peakLabel} {#if amount}{@render amount(peak, true)}{:else}{formatValue(peak)}{/if}{unit}</text>
+    {/if}
+    {#if selected}
+      <line x1={x(selected.timestamp)} x2={x(selected.timestamp)} y1={top} y2={y(floor)} stroke="#83b7ac" stroke-dasharray="4 4" />
+      <circle cx={x(selected.timestamp)} cy={y(value(selected))} r="5" fill="#31594f" stroke="white" stroke-width="2.5" />
+    {/if}
+  </svg>
+  {#if selected}
+    <div class="chart-tooltip" style:left={`${tooltipLeft}px`}>
+      <span>{formatDateTime(selected.timestamp)}</span>
+      <strong>{#if amount}{@render amount(value(selected), false)}{:else}{formatValue(value(selected))}{/if} <small>{valueLabel}</small></strong>
+      {@render detail?.(selected)}
+      <span>{selection.hint}</span>
+    </div>
+  {/if}
+</div>
+<div class="chart-legend" aria-label="그래프 범례">
+  <span class="legend"><i class="total-line"></i>{legendLabel}</span>
+  {@render legends?.()}
+  {#if peak !== null}
+    <span class="legend"><i class="peak-line"></i>{peakLabel}</span>
+  {/if}
+  {#if visibleMarkers.length > 0}
+    <span class="legend"><i class="marker-line"></i>배포</span>
+  {/if}
+</div>

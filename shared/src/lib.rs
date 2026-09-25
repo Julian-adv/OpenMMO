@@ -4,25 +4,51 @@
 //! using flat `onlinerpg_shared::Position` paths regardless of where the
 //! type now lives.
 
+pub mod ability;
+pub mod bridge;
+pub mod celestial;
 pub mod character;
+pub mod debuff;
 pub mod dungeon;
 pub mod entity;
+pub mod estate_storage;
+pub mod fence;
 pub mod fishing;
+pub mod fnv;
 pub mod furniture;
+pub mod furniture_shop;
+pub mod grass_format;
 pub mod housing;
+pub mod hunger;
+pub mod interest;
 pub mod inventory;
+pub mod landscaping;
+pub mod mana;
+pub mod meal;
 pub mod messages;
 pub mod monster_ai;
+pub mod moon;
+pub mod mount;
+pub mod mount_movement;
 pub mod pathfinding;
+pub mod pricing;
+pub mod schedule;
 pub mod skills;
+pub mod stall;
+pub mod tales;
+pub mod terrain_files;
+pub mod tip_hat;
 pub mod tree_format;
+pub mod weather;
 pub mod world;
 pub mod worldgen;
 pub mod xp;
 
-/// Repo-root-relative path of the NPC auth token file: written by the server
-/// on first run, read by agent-client (whose cwd is one level down).
-pub const NPC_TOKEN_PATH_FROM_ROOT: &str = "data/npc_token";
+/// File name of the NPC auth token inside the server's `--state-dir`
+/// (default `data/`). agent-client reads `../data/<this>` as its zero-config
+/// fallback; a deploy that moves `--state-dir` must hand agent-client the
+/// token explicitly via `npc_token` in config.toml.
+pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 
 /// Wire protocol version, sent in `ClientMessage::ClientInfo` and checked for
 /// exact equality by the server. Bump it whenever a message shape or its
@@ -38,7 +64,164 @@ pub const NPC_TOKEN_PATH_FROM_ROOT: &str = "data/npc_token";
 /// v11: party positions poll (RequestPartyPositions → PartyPositions) for
 ///      world-map member markers.
 /// v12: equip slots hands/back/shirt (doc/ITEM_TIERS.md 선행 작업 #1).
-pub const PROTOCOL_VERSION: u32 = 12;
+/// v13: party summoning scroll (PartySummonReceived → PartySummonRespond).
+/// v14: a monster's loot spawns when the killing blow lands, so
+///      GroundItemSpawned no longer carries source_monster_id.
+/// v15: DungeonDiscoveries snapshot for per-character world-map markers.
+/// v16: hunger (HungerUpdate) + campfires (Campfire* / Grill*) — doc/HUNGER.md.
+/// v17: PartyPositions pushed server-side on relocation (was a poll answer)
+///      and now includes the recipient; clients filter themselves.
+/// v18: party chat (PartyChat → PartyChatMessage).
+/// v20: `/play_music` picks a BGM track and nearby clients play it along
+///      (PlayerMusicStarted).
+/// v21: PlayerMusicStarted carries `elapsed_secs` and is re-sent to players
+///      entering earshot of a running performance.
+/// v22: GroundItem carries `dropped_by` and GroundItemRemoved
+///      `picked_up_by`, so a busker knows who left the coins at its feet —
+///      and who took them.
+/// v23: friends (FriendRespond/FriendRemove/RequestFriendsOnline →
+///      FriendList/FriendsOnline/FriendRequestReceived); FriendList is
+///      pushed at login, so older builds must not connect.
+/// v24: merchant stalls (`/lay_stall`/`/pack_stall` →
+///      StallPlaced/StallAppeared/StallRemoved); GameState carries `stalls`.
+/// v25: declined trade offers (DeclineTrade → TradeDeclined), so an NPC
+///      stops pushing trade windows at a player who waved one off.
+/// v26: PartyMember carries hp/max_hp/class, PartyVitals pushes member
+///      health, and PartyKick/PartyPromote (leader kick + handover).
+/// v27: GroundItem carries `quantity`, so a dropped stack lands as one pile,
+///      and GroundItemQuantityChanged reports a pile someone took part of.
+/// v28: tip hats (the `tip_hat` item → TipHatPlaced/TipHatAppeared/
+///      TipHatRemoved, ClientMessage::TipHat); GameState carries `tip_hats`.
+/// v29: debuffs (DebuffUpdate) replace HungerUpdate's `poisoned_ms` —
+///      doc/DEBUFF.md.
+/// v30: player-to-player trading (doc/TRADE.md) — PlayerTradeRequest/
+///      AtStall/Respond/SetOffer/Lock/Unlock/Confirm/Cancel and
+///      PlayerTradeRequested/RequestResult/Update/Ended/Error.
+/// v31: `Player.back` + PlayerBackChanged, so nearby clients render a
+///      wearer's cape.
+/// v32: `Character.equipment`, so character select renders each character's
+///      weapon, off-hand and cape.
+/// v35: DungeonReset, sent before the sunset reset puts each occupant out so
+///      the client can play the roar.
+/// v36: `XpGained.monster_id` names the kill the XP came from, so the client
+///      can hold the gain until that monster starts going down.
+/// v37: SpawnMonsterRequest/RequestSpawnMonster are gone — the server places
+///      ambient monsters itself, keyed to distance walked
+///      (doc/REPEAT_FARMING.md).
+/// v38: RenameCharacter + CharacterRenameRequired/CharacterRenamed, so a
+///      character whose name later lands on the banned list is renamed at
+///      character select instead of being let in.
+/// v39: level thresholds moved to the doc/LEVEL_CURVE.md table. No message
+///      changed; a stale bundle would draw XP gauges on the old curve.
+/// v40: `Player.wet` + PlayerWetToggled, so nearby clients can draw wet
+///      footprints behind a soaked player (doc/DEBUFF.md).
+/// v41: `ShopState.price_index_percent`, the merchant price index on
+///      consumable buy prices (doc/PRICING.md).
+/// v42: `PricingNotice` for NPC clients (price index, trend, next meeting)
+///      and the `"meeting"` schedule condition.
+/// v43: `FriendEntry.class`, so the friend panel can draw class icons.
+/// v44: `WallVariant::WithDoubleDoor` ("double-door"); stale clients cannot
+///      decode houses that use it.
+/// v45: `ClientMessage::WorldReady` ends the entry grace that shields a
+///      player until their scene is drawn; an older server cannot decode it.
+/// v46: titles — `Player.title`, `Character.titles`/`active_title`,
+///      `ClientMessage::SetActiveTitle`; an older server cannot decode it.
+/// v47: `Player.object_id` rides the wire (bed occupied on respawn, for the
+///      inn maid's bedside visit); the array grew, so older builds cannot
+///      decode `Player`.
+/// v48: `PlayerInteractionChanged.object_id` — which chair/bed was taken,
+///      so the maid's table spots key on the placement id; the array grew,
+///      so older builds cannot decode it.
+/// v50: `ServerMessage::Recital` (`/recite` verses shown as a bubble only,
+///      doc/HEROIC_TALES.md); an older client cannot decode it.
+/// v51: table meals — `Meal`, `ServeMeal`/`EatMeal`/`ClearMeal`,
+///      `MealPlaced/Appeared/Eaten/Removed`, `GameState.meals` (doc/HUNGER.md);
+///      an older client cannot decode a served plate.
+/// v52: live instrument performance (`StartInstrument`/`InstrumentNotes` and
+///      the corresponding nearby-player start/note broadcasts).
+/// v53: `PlayerAttacked.ammo_item_def_id` — which round a ranged shot spent,
+///      so the arrow drawn in flight is the one that left the quiver.
+/// v54: Land Deed preview, confirmed claims, and registration results.
+/// v55: Land claim previews include the reason a plot cannot be claimed.
+/// v56: Land tax account state, deposits, and withdrawals.
+/// v57: persistent cell-edge fences, placement mode and inventory recovery.
+/// v58: estate landscaping tools, permanent palettes and terrain updates.
+/// v59: fractional landscaping radii for one-cell brush widths.
+/// v60: player house-scroll placement preview and authoritative placement.
+/// v61: persistent estate storage chests with atomic, weight-limited transfers.
+/// v62: estate editor tabs can request an authenticated landscaping mode.
+/// v63: horse mounting state and mount changes.
+/// v64: mounted steering and PlayerMountTurn cancels travel at the server position.
+/// v65: mounted arc movement and explicit mount steering cancellation.
+/// v66: bold fishing bonus chance and second-fish outcome.
+/// v67: pre-rolled trophy fights replace the second-fish bonus.
+/// v68: consignment stalls replace the stall entry to player trades.
+/// v69: persistent item locks and SetItemLocked.
+/// v70: mounted reverse recovery and authoritative recovery progress;
+///      `ServerMessage::WeatherSync` (seed, bias and sector tag for the
+///      regional rain cells, doc/WEATHER_SYSTEM.md); an older client cannot
+///      decode it.
+/// v71: Guardian Ward ability, cooldowns, buff snapshots and VFX events.
+/// v72: per-strike damage rolls and skipped dagger strikes.
+/// v74: Radiance toggle and visible-player lighting state.
+/// v75: targeted abilities and private True Aim mark updates.
+/// v76: distinct out-of-range ability rejection.
+/// v77: Double Slash cooldown snapshots on login.
+/// v78: server-wide rain overrides in WeatherSync.
+/// v79: owner-only ManaUpdate and Guardian Ward's MP cost.
+/// v80: revisioned world subscriptions, full terrain snapshots and resync.
+/// v82: Grass payloads store per-cell counts (GR04).
+/// v83: terrain file manifests and direct binary downloads.
+/// v84: mounts carry a kind instead of a bool.
+/// v85: server-only monster AI; remove ownership and client control messages.
+/// v86: relative keyboard travel, stationary turns and backward movement.
+/// v87: ORKEA checkout and editable estate decorations.
+/// v88: moving placed estate furniture.
+/// v89: showroom selections notify the furniture clerk.
+/// v90: movement samples and acknowledged authoritative movement resync.
+/// v91: targeted Auscultation and private inspection results.
+/// v92: FishingFight carries the angler's stance for reel animation.
+/// v93: permanent learned skills replace skill XP and levels.
+/// v94: teleport departure and arrival effects.
+/// v95: teleport scroll requests follow the client's departure animation.
+/// v96: system and trade messages include optional localization metadata.
+pub const PROTOCOL_VERSION: u32 = 96;
+
+/// Fingerprint of the dungeon layout generator this build compiled, stamped by
+/// `build.rs`. Layouts never travel the wire — both sides generate them from
+/// the entrance id — so a stale generator desyncs without changing any message
+/// shape, which `PROTOCOL_VERSION` cannot see. See the layout fingerprint
+/// section of doc/REMOTE_AGENT_CLIENT.md.
+pub const LAYOUT_VERSION: &str = env!("LAYOUT_VERSION");
+
+/// Marks the fingerprint inside a client version string. Riding the string
+/// rather than a new `ClientInfo` field is deliberate: rmp_serde encodes
+/// structs as positional arrays, so a 4th field makes the server fail to
+/// decode an older client's `ClientInfo` at all — and that path only logs,
+/// leaving the client refused in silence instead of told to update.
+const LAYOUT_TAG: &str = "+layout.";
+
+/// Client version string with this build's fingerprint appended, e.g.
+/// `0.1.0+layout.1f3c...`.
+pub fn stamp_layout_version(client_version: &str) -> String {
+    format!("{client_version}{LAYOUT_TAG}{LAYOUT_VERSION}")
+}
+
+/// The fingerprint a client stamped, or `None` from a build predating the
+/// stamp — itself a mismatch worth refusing. Stops at the next `+` so the
+/// suffix stays a tag list a sibling fingerprint could join.
+pub fn layout_version_of(client_version: &str) -> Option<&str> {
+    client_version
+        .rsplit_once(LAYOUT_TAG)
+        .and_then(|(_, tail)| tail.split('+').next())
+}
+
+/// Whether a client reported this build's fingerprint. Self-reported like the
+/// rest of `ClientInfo`, and that is fine: lying only buys the liar the desync
+/// this gate prevents.
+pub fn layout_version_matches(client_version: &str) -> bool {
+    layout_version_of(client_version) == Some(LAYOUT_VERSION)
+}
 
 /// WebSocket close code sent when the handshake is refused (wrong protocol
 /// version, or traffic before `ClientInfo`). Lives outside the serialized
@@ -52,6 +235,13 @@ pub const CLOSE_CODE_PROTOCOL_MISMATCH: u16 = 4001;
 /// clients should keep retrying on their normal backoff.
 pub const CLOSE_CODE_RATE_LIMITED: u16 = 4002;
 
+/// WebSocket close code sent when a session ends because the client's world
+/// disagrees with the server's — today, grinding dungeon walls only its own
+/// build generated. Unlike a protocol refusal this is found mid-session, and
+/// clients should reload rather than reconnect: the same build lands in the
+/// same disagreement.
+pub const CLOSE_CODE_CLIENT_DESYNC: u16 = 4004;
+
 /// WebSocket close code sent when the server drops a connection for going
 /// quiet — no login inside the unauth grace period, or no heartbeat in game.
 /// Transient like a rate limit, so clients retry on their normal backoff; the
@@ -62,15 +252,16 @@ pub const CLOSE_CODE_IDLE_TIMEOUT: u16 = 4003;
 #[cfg(target_arch = "wasm32")]
 mod wasm_api;
 
-pub use character::{Character, CharacterAttributes, CharacterClass, Gender};
-pub use entity::{Monster, MonsterState, Player, PlayerId};
+pub use character::{Character, CharacterAttributes, CharacterClass, Gender, VisibleEquipment};
+pub use entity::{Monster, MonsterLifecycle, MonsterState, Player, PlayerId};
 pub use messages::{
     deserialize_client_msg, deserialize_server_msg, serialize_client_msg, serialize_server_msg,
-    ActiveDeal, AttackRejectReason, ClientMessage, DealKind, ServerMessage,
+    ActiveDeal, AttackRejectReason, ClientMessage, DealKind, InstrumentNoteEvent, ServerMessage,
+    TeleportPhase, INSTRUMENT_BATCH_MS, INSTRUMENT_MAX_EVENTS_PER_BATCH, INSTRUMENT_NOTE_COUNT,
 };
 pub use world::{
     shortest_world_delta_x, wrap_world_x, GameDateTime, NoSpawnZone, Position,
-    EVENT_DELIVERY_RADIUS, NPC_SIGHT_RADIUS, PLAYER_MOVE_SPEED, WORLD_MAX_X, WORLD_MIN_X,
+    EVENT_DELIVERY_RADIUS, MAX_MOVE_TARGET_DISTANCE, PLAYER_MOVE_SPEED, WORLD_MAX_X, WORLD_MIN_X,
     WORLD_WIDTH_X,
 };
 
@@ -90,6 +281,7 @@ mod tests {
             rotation: 1.5,
             floor_level: 1,
             append: false,
+            sprinting: false,
         };
         let bytes = serialize_client_msg(&msg).unwrap();
         let decoded = deserialize_client_msg(&bytes).unwrap();
@@ -119,6 +311,129 @@ mod tests {
     }
 
     #[test]
+    fn roundtrip_dagger_skill_messages() {
+        let request = ClientMessage::DaggerDoubleSlash {
+            monster_id: "m1".to_string(),
+        };
+        let bytes = serialize_client_msg(&request).unwrap();
+        assert!(matches!(deserialize_client_msg(&bytes).unwrap(),
+            ClientMessage::DaggerDoubleSlash { monster_id } if monster_id == "m1"));
+        for message in [
+            ServerMessage::AbilityCooldowns {
+                cooldowns: vec![crate::ability::AbilityTimer {
+                    ability: crate::ability::AbilityId::DaggerDoubleSlash,
+                    remaining_ms: 7000,
+                }],
+            },
+            ServerMessage::DaggerDoubleSlashStarted {
+                player_id: 1.into(),
+                monster_id: "m1".to_string(),
+                cooldown_ms: 10000,
+            },
+            ServerMessage::DaggerDoubleSlashRejected {
+                monster_id: "m1".to_string(),
+                reason: "dagger_required".to_string(),
+                cooldown_ms: 0,
+            },
+            ServerMessage::DaggerDoubleSlashSkipped {
+                player_id: 1.into(),
+                monster_id: "m1".to_string(),
+                strike: 2,
+                reason: "target_defeated".to_string(),
+            },
+            ServerMessage::PlayerAttacked {
+                player_id: 1.into(),
+                monster_id: "m1".to_string(),
+                hit: true,
+                roll: 20,
+                damage: 17,
+                ammo_item_def_id: None,
+                dagger_strike: Some(1),
+            },
+        ] {
+            let bytes = serialize_server_msg(&message).unwrap();
+            let decoded = deserialize_server_msg(&bytes).unwrap();
+            assert_eq!(format!("{decoded:?}"), format!("{message:?}"));
+        }
+    }
+
+    #[test]
+    fn roundtrip_weather_sync() {
+        for rain_override in [None, Some(0.0), Some(0.4), Some(1.0)] {
+            let bytes = serialize_server_msg(&ServerMessage::WeatherSync {
+                seed: 42,
+                bias: 1.0,
+                sectors_tag: "0123456789abcdef".into(),
+                rain_override,
+            })
+            .unwrap();
+            match deserialize_server_msg(&bytes).unwrap() {
+                ServerMessage::WeatherSync {
+                    seed,
+                    bias,
+                    sectors_tag,
+                    rain_override: decoded_override,
+                } => {
+                    assert_eq!(seed, 42);
+                    assert_eq!(bias, 1.0);
+                    assert_eq!(sectors_tag, "0123456789abcdef");
+                    assert_eq!(decoded_override, rain_override);
+                }
+                other => panic!("Wrong variant: {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn roundtrip_live_instrument_messages() {
+        let events = vec![
+            InstrumentNoteEvent {
+                note: 0,
+                offset_ms: 0,
+            },
+            InstrumentNoteEvent {
+                note: 21,
+                offset_ms: 249,
+            },
+        ];
+
+        let bytes = serialize_client_msg(&ClientMessage::InstrumentNotes {
+            events: events.clone(),
+        })
+        .unwrap();
+        match deserialize_client_msg(&bytes).unwrap() {
+            ClientMessage::InstrumentNotes { events: decoded } => assert_eq!(decoded, events),
+            other => panic!("Wrong variant: {other:?}"),
+        }
+
+        let bytes = serialize_server_msg(&ServerMessage::PlayerInstrumentNotes {
+            player_id: PlayerId::from(7),
+            position: Position {
+                x: 1.0,
+                y: 2.0,
+                z: 3.0,
+            },
+            floor_level: -2,
+            events: events.clone(),
+        })
+        .unwrap();
+        match deserialize_server_msg(&bytes).unwrap() {
+            ServerMessage::PlayerInstrumentNotes {
+                player_id,
+                position,
+                floor_level,
+                events: decoded,
+            } => {
+                assert_eq!(player_id, PlayerId::from(7));
+                assert_eq!((position.x, position.y, position.z), (1.0, 2.0, 3.0));
+                assert_eq!(floor_level, -2);
+                assert_eq!(decoded, events);
+            }
+            other => panic!("Wrong variant: {other:?}"),
+        }
+    }
+
+    #[test]
     fn roundtrip_server_message_with_hashmap() {
         let players = vec![Player {
             id: 1.into(),
@@ -136,12 +451,20 @@ mod tests {
             gender: Gender::default(),
             is_official_npc: false,
             torch_on: false,
+            radiance_on: false,
             floor_level: 0,
             object_type: None,
             main_hand: None,
+            back: None,
             object_id: None,
             last_combat_at: 0,
             client_kind: Default::default(),
+            mount: None,
+            ready_at: 0,
+            back_color: None,
+            back_texture: None,
+            wet: false,
+            title: None,
         }];
         // A monster with every Option None guards the wire format itself:
         // rmp_serde encodes structs as positional arrays, so any field that
@@ -160,21 +483,23 @@ mod tests {
                 },
                 rotation: 0.0,
                 state: MonsterState::Idle,
-                owner_id: None,
                 health: 8,
                 max_health: 8,
                 floor_level: 0,
                 level_override: None,
                 aggressive: true,
+                lifecycle: MonsterLifecycle::Ambient,
                 last_attack_at: 0,
-                last_move_at: 0,
-                move_budget: 0.0,
             },
         );
         let msg = ServerMessage::GameState {
             players,
             monsters,
             ground_items: Vec::new(),
+            campfires: Vec::new(),
+            stalls: Vec::new(),
+            tip_hats: Vec::new(),
+            meals: Vec::new(),
         };
         let bytes = serialize_server_msg(&msg).unwrap();
         let decoded = deserialize_server_msg(&bytes).unwrap();
@@ -206,8 +531,10 @@ mod tests {
         CharacterClass::Rogue,
         CharacterClass::Wizard,
         CharacterClass::Tourist,
+        CharacterClass::Bard,
         CharacterClass::Merchant,
         CharacterClass::Guard,
+        CharacterClass::Maid,
     ];
 
     #[test]
@@ -229,7 +556,10 @@ mod tests {
     #[test]
     fn only_operator_classes_are_unselectable() {
         for class in ALL_CLASSES {
-            let expected = !matches!(class, CharacterClass::Merchant | CharacterClass::Guard);
+            let expected = !matches!(
+                class,
+                CharacterClass::Merchant | CharacterClass::Guard | CharacterClass::Maid
+            );
             assert_eq!(
                 class.is_player_selectable(),
                 expected,
@@ -350,10 +680,8 @@ mod tests {
                 hit: true,
                 roll: 18,
                 damage: 5,
-            },
-            ServerMessage::MonsterProvoked {
-                player_id: 1.into(),
-                monster_id: "m1".to_string(),
+                ammo_item_def_id: None,
+                dagger_strike: None,
             },
             ServerMessage::Kicked {
                 player_id: 1.into(),
@@ -369,6 +697,21 @@ mod tests {
             let decoded = deserialize_server_msg(&bytes).unwrap();
             // Just verify it roundtrips without error
             assert!(!format!("{:?}", decoded).is_empty());
+        }
+    }
+
+    #[test]
+    fn retired_monster_control_requests_are_rejected() {
+        for message in [
+            serde_json::json!({"MonsterMove": {
+                "monster_id": "m1", "position": {"x": 0, "y": 0, "z": 0},
+                "rotation": 0, "state": "idle", "target_position": {"x": 0, "y": 0, "z": 0}
+            }}),
+            serde_json::json!({"MonsterAttack": {"monster_id": "m1", "target_player_id": 1}}),
+        ] {
+            let bytes = rmp_serde::to_vec(&message).unwrap();
+            let error = deserialize_client_msg(&bytes).unwrap_err();
+            assert!(error.to_string().contains("unknown variant"), "{error}");
         }
     }
 }

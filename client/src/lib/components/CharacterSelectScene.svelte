@@ -4,15 +4,21 @@
   import { PMREMGenerator, type WebGPURenderer } from 'three/webgpu'
   import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
   import { onMount } from 'svelte'
-  import { interactivity } from '@threlte/extras'
+  import { interactivity, type IntersectionEvent } from '@threlte/extras'
   import type { AccountCharacter } from '../network/socket'
   import CharacterPreview from './CharacterPreview.svelte'
-  import CharacterSlotLabel from './CharacterSlotLabel.svelte'
+  import {
+    projectCharacterSlots,
+    type CharacterSlotLayout,
+  } from '../utils/characterSelectLayout'
   import { loadSplatLayers } from '../utils/splatLayerLoader'
   import { loadGLB } from '../utils/gltfCache'
   import { getWeaponModelPath } from '../utils/modelPaths'
 
-  interactivity()
+  // Keep rotation drags from selecting or starting a character.
+  const DRAG_CLICK_SLOP_PX = 5
+
+  interactivity({ clickDistanceThreshold: DRAG_CLICK_SLOP_PX })
 
   // Preload assets needed by game scene so they're cached when it mounts
   loadSplatLayers()
@@ -25,6 +31,7 @@
     selectedCharacterId: number | null
     onSlotClick: (slotIndex: number) => void
     onSlotDoubleClick: (slotIndex: number) => void
+    onSlotLayout: (layout: CharacterSlotLayout[]) => void
   }
 
   let {
@@ -32,6 +39,7 @@
     selectedCharacterId,
     onSlotClick,
     onSlotDoubleClick,
+    onSlotLayout,
   }: Props = $props()
 
   const SLOT_SPACING = 1.8
@@ -65,14 +73,13 @@
   const AMBIENT_INTENSITY = 0.12
   const KEY_LIGHT_INTENSITY = 0.05
   const FILL_LIGHT_INTENSITY = 0.48
+  /** Same feel as the create screen's drag-to-spin. */
+  const DRAG_RADIANS_PER_PIXEL = 0.01
 
   const { size, renderer: _renderer, scene } = useThrelte()
-  // Cast renderer — Threlte types it as WebGLRenderer but we use WebGPURenderer via createRenderer
+  // createRenderer supplies WebGPURenderer.
   const renderer = _renderer as unknown as WebGPURenderer
   let viewportSize = $state({ width: 1, height: 1 })
-  let useCompactSlotLabels = $derived(
-    viewportSize.width <= 600 || viewportSize.height <= 700
-  )
   let cameraPositionZ = $state(8)
 
   let cameraRef = $state<THREE.PerspectiveCamera | undefined>(undefined)
@@ -108,9 +115,59 @@
 
   let spotlightsAdded = false
 
+  // Preserve each slot's rotation across selection changes.
+  let slotRotations = $state([0, 0, 0])
+  let dragSlot: number | null = null
+  let dragLastX = 0
+  let dragTravel = 0
+  let previousDragTravel = 0
+
+  function startSlotDrag(
+    slotIndex: number,
+    event: IntersectionEvent<PointerEvent>
+  ) {
+    // Ignore right-clicks, whose release can be swallowed by the context menu.
+    if (event.nativeEvent.button !== 0 || !characters[slotIndex]) return
+    dragSlot = slotIndex
+    // Keep the floor from also handling this drag.
+    event.stopPropagation()
+  }
+
+  // Dragging the floor rotates the selected character.
+  function startSelectedDrag(event: IntersectionEvent<PointerEvent>) {
+    startSlotDrag(getSelectedSlotIndex(), event)
+  }
+
+  function handleWindowPointerDown(event: PointerEvent) {
+    previousDragTravel = dragTravel
+    dragLastX = event.clientX
+    dragTravel = 0
+  }
+
+  function handleWindowPointerMove(event: PointerEvent) {
+    if (dragSlot === null) return
+    const dx = event.clientX - dragLastX
+    dragLastX = event.clientX
+    dragTravel += Math.abs(dx)
+    slotRotations[dragSlot] += dx * DRAG_RADIANS_PER_PIXEL
+  }
+
+  function endSlotDrag() {
+    dragSlot = null
+  }
+
+  // A drag followed by a click must not start the character.
+  function precededByDrag(): boolean {
+    return previousDragTravel > DRAG_CLICK_SLOP_PX
+  }
+
+  function getSelectedSlotIndex(): number {
+    if (selectedCharacterId === null) return -1
+    return characters.findIndex((c) => c.id === selectedCharacterId)
+  }
+
   function getSelectedSlotX(): number | null {
-    if (selectedCharacterId === null) return null
-    const idx = characters.findIndex((c) => c.id === selectedCharacterId)
+    const idx = getSelectedSlotIndex()
     return idx >= 0 ? SLOT_POSITIONS[idx] : null
   }
 
@@ -118,6 +175,12 @@
     const unsubscribe = size.subscribe((nextSize) => {
       viewportSize = nextSize
     })
+
+    // Continue drags outside the canvas until release.
+    window.addEventListener('pointerdown', handleWindowPointerDown)
+    window.addEventListener('pointermove', handleWindowPointerMove)
+    window.addEventListener('pointerup', endSlotDrag)
+    window.addEventListener('pointercancel', endSlotDrag)
 
     // Set scene background to match the character select gradient
     scene.background = new THREE.Color('#1a2a40')
@@ -138,6 +201,10 @@
     })
 
     return () => {
+      window.removeEventListener('pointerdown', handleWindowPointerDown)
+      window.removeEventListener('pointermove', handleWindowPointerMove)
+      window.removeEventListener('pointerup', endSlotDrag)
+      window.removeEventListener('pointercancel', endSlotDrag)
       scene.background = null
       scene.environment?.dispose()
       scene.environment = null
@@ -174,8 +241,20 @@
       viewportSize.height
     )
 
-    if (cameraRef) {
+    if (cameraRef && viewportSize.width > 0 && viewportSize.height > 0) {
+      cameraRef.position.z = cameraPositionZ
+      cameraRef.aspect = viewportSize.width / viewportSize.height
+      cameraRef.updateProjectionMatrix()
       cameraRef.lookAt(0, CAMERA_LOOK_AT_Y, SLOT_DEPTH)
+      cameraRef.updateMatrixWorld()
+      onSlotLayout(
+        projectCharacterSlots(
+          cameraRef,
+          SLOT_POSITIONS,
+          SLOT_DEPTH,
+          viewportSize
+        )
+      )
     }
   })
 
@@ -245,6 +324,7 @@
   rotation.x={-Math.PI / 2}
   position={[0, -0.01, PLATFORM_CENTER_Z]}
   receiveShadow
+  onpointerdown={startSelectedDrag}
 >
   <T.PlaneGeometry args={[PLATFORM_WIDTH, PLATFORM_DEPTH]} />
   <T.MeshStandardMaterial
@@ -261,8 +341,10 @@
   <T.Mesh
     position={[SLOT_POSITIONS[slotIndex], SLOT_DISC_Y, SLOT_DEPTH]}
     receiveShadow
+    onpointerdown={(e: IntersectionEvent<PointerEvent>) =>
+      startSlotDrag(slotIndex, e)}
     onclick={() => onSlotClick(slotIndex)}
-    ondblclick={() => onSlotDoubleClick(slotIndex)}
+    ondblclick={() => !precededByDrag() && onSlotDoubleClick(slotIndex)}
   >
     <T.CylinderGeometry
       args={[SLOT_DISC_RADIUS, SLOT_DISC_RADIUS, SLOT_DISC_THICKNESS, 40]}
@@ -277,8 +359,10 @@
 
   <T.Mesh
     position={[SLOT_POSITIONS[slotIndex], SLOT_HITBOX_HEIGHT / 2, SLOT_DEPTH]}
+    onpointerdown={(e: IntersectionEvent<PointerEvent>) =>
+      startSlotDrag(slotIndex, e)}
     onclick={() => onSlotClick(slotIndex)}
-    ondblclick={() => onSlotDoubleClick(slotIndex)}
+    ondblclick={() => !precededByDrag() && onSlotDoubleClick(slotIndex)}
   >
     <T.BoxGeometry
       args={[SLOT_HITBOX_WIDTH, SLOT_HITBOX_HEIGHT, SLOT_HITBOX_DEPTH]}
@@ -298,21 +382,13 @@
         positionX={SLOT_POSITIONS[slotIndex]}
         positionY={CHARACTER_Y_OFFSET}
         positionZ={SLOT_DEPTH}
+        rotationY={slotRotations[slotIndex]}
         selected={character.id === selectedCharacterId}
         characterClass={character.class}
         gender={character.gender}
+        equipment={character.equipment}
+        camera={cameraRef}
       />
     {/key}
   {/if}
-
-  <CharacterSlotLabel
-    {character}
-    selected={character?.id === selectedCharacterId}
-    positionX={SLOT_POSITIONS[slotIndex]}
-    positionZ={SLOT_DEPTH}
-    camera={cameraRef}
-    onclick={() => onSlotClick(slotIndex)}
-    ondblclick={() => onSlotDoubleClick(slotIndex)}
-    compact={useCompactSlotLabels}
-  />
 {/each}

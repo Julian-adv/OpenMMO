@@ -3,13 +3,18 @@ import {
   MOON_LIGHT_COLOR_HEX,
   SUN_DAY_COLOR_HEX,
   SUN_TWILIGHT_COLOR_HEX,
+  SUN_MAX_INTENSITY,
+  SUN_LIGHT_DISTANCE,
   type CalendarDate,
   type SunLightSnapshot,
   computeCelestialLightState,
 } from '../../utils/celestialSimulation'
+import { setDirectionalShadowIntensity } from './renderer-quality'
 
 export const AMBIENT_DAY_INTENSITY = 0.35
 export const AMBIENT_NIGHT_INTENSITY = 0.3
+const RAIN_SHADOW_FADE_END = 0.2
+const RAIN_SHADOW_INTENSITY = 0.03
 
 export interface Vector3Like {
   x: number
@@ -26,6 +31,11 @@ export interface SceneLightingUpdateParams {
   scene: THREE.Scene
   sunLightSnapshot: SunLightSnapshot
   eclipseFactor: number
+  /** Overcast 0..1 at the player. */
+  cloudFactor?: number
+  rainIntensity?: number
+  lightningStrength?: number
+  lightningDirection?: Vector3Like
   /** Dungeon render mode: no sun/moon, dim cold ambient, dark background. */
   underground?: boolean
 }
@@ -40,16 +50,14 @@ export function createSceneLightingController(): SceneLightingController {
   const sunTwilightColor = new THREE.Color(SUN_TWILIGHT_COLOR_HEX)
   const sunDirectionalColor = new THREE.Color()
   const moonLightColor = new THREE.Color(MOON_LIGHT_COLOR_HEX)
+  const lightningColor = new THREE.Color('#ffffff')
+  const lightningPosition = new THREE.Vector3()
   const ambientDayColor = new THREE.Color('#fff8f0')
   const ambientTwilightColor = new THREE.Color('#ffb080')
   const ambientNightColor = new THREE.Color('#8ea8ff')
   const ambientColor = new THREE.Color()
 
-  // Quantize shadow light direction to prevent shadow map flickering.
-  // Tiny per-frame direction changes rotate the shadow texel grid, causing
-  // boundary pixels to oscillate. Snapping to discrete angular steps keeps
-  // the grid stable between updates. Comparison uses squared values to
-  // avoid per-frame sqrt calls.
+  // Snap light direction to stabilize shadow edges.
   const SHADOW_DIR_SNAP_SQ = 0.0005 * 0.0005
   const SUN_SHADOW_ELEVATION_MIN = 0.08
   let snappedOffset: { x: number; y: number; z: number } | null = null
@@ -81,13 +89,7 @@ export function createSceneLightingController(): SceneLightingController {
   let savedBackground: THREE.Scene['background'] = null
   let wasUnderground = false
 
-  /**
-   * Underground branch: celestial lighting is fully overridden every
-   * frame anyway, so we just write different values — ambient-only cave
-   * light, directional off (shadow toggle goes through the same latch),
-   * near-black background. The unified torch PointLight is untouched and
-   * becomes the main light source.
-   */
+  /** Use dim ambient lighting underground. */
   function updateUnderground(params: SceneLightingUpdateParams) {
     if (!wasUnderground) {
       savedBackground = params.scene.background
@@ -130,6 +132,7 @@ export function createSceneLightingController(): SceneLightingController {
     )
 
     const eclipse = params.eclipseFactor
+    const cloud = params.cloudFactor ?? 0
 
     if (params.ambientLight) {
       const twilightBlend = celestialLightState.directional.sunColorBlendFactor
@@ -140,21 +143,25 @@ export function createSceneLightingController(): SceneLightingController {
 
       params.ambientLight.color.copy(ambientColor)
       params.ambientLight.intensity =
-        celestialLightState.ambientIntensity * (1 - eclipse * 0.5)
+        celestialLightState.ambientIntensity *
+        (1 - eclipse * 0.5) *
+        (1 - cloud * 0.25)
     }
 
     // Scale IBL environment intensity with day/night cycle
     const envDayIntensity = 0.2
     const envNightIntensity = 0.03
     params.scene.environmentIntensity =
-      envDayIntensity +
-      (envNightIntensity - envDayIntensity) *
-        celestialLightState.ambientNightFactor
+      (envDayIntensity +
+        (envNightIntensity - envDayIntensity) *
+          celestialLightState.ambientNightFactor) *
+      (1 - cloud * 0.25)
 
     if (!params.directionalLight) return
 
     const directionalLightState = celestialLightState.directional
     const playerPos = params.currentPlayerPosition
+    const lightning = THREE.MathUtils.clamp(params.lightningStrength ?? 0, 0, 1)
 
     const shadowOffset = snapShadowDirection(
       directionalLightState.positionOffset
@@ -164,14 +171,29 @@ export function createSceneLightingController(): SceneLightingController {
       playerPos.y + shadowOffset.y,
       playerPos.z + shadowOffset.z
     )
-    params.directionalLight.intensity =
-      directionalLightState.intensity * (1 - eclipse * 0.95)
+    const baseIntensity =
+      directionalLightState.intensity * (1 - eclipse * 0.95) * (1 - cloud * 0.5)
+    params.directionalLight.intensity = THREE.MathUtils.lerp(
+      baseIntensity,
+      SUN_MAX_INTENSITY,
+      lightning
+    )
+
+    const rainShadowFade = THREE.MathUtils.smoothstep(
+      params.rainIntensity ?? 0,
+      0,
+      RAIN_SHADOW_FADE_END
+    )
+    setDirectionalShadowIntensity(
+      params.directionalLight,
+      THREE.MathUtils.lerp(1, RAIN_SHADOW_INTENSITY, rainShadowFade)
+    )
 
     const shouldCastSunShadow =
       params.directionalShadowsEnabled &&
       !directionalLightState.useMoonLight &&
       sunLightState.direction.y >= SUN_SHADOW_ELEVATION_MIN &&
-      params.directionalLight.intensity > 0.1
+      baseIntensity > 0.1
     if (lastDirectionalCastShadow !== shouldCastSunShadow) {
       params.directionalLight.castShadow = shouldCastSunShadow
       if (shouldCastSunShadow) params.directionalLight.shadow.needsUpdate = true
@@ -185,6 +207,19 @@ export function createSceneLightingController(): SceneLightingController {
         .copy(sunDayColor)
         .lerp(sunTwilightColor, directionalLightState.sunColorBlendFactor)
       params.directionalLight.color.copy(sunDirectionalColor)
+    }
+
+    if (lightning > 0) {
+      const blend =
+        (SUN_MAX_INTENSITY * lightning) / params.directionalLight.intensity
+      const direction = params.lightningDirection
+      lightningPosition.set(
+        playerPos.x + (direction?.x ?? 0) * SUN_LIGHT_DISTANCE,
+        playerPos.y + (direction?.y ?? 1) * SUN_LIGHT_DISTANCE,
+        playerPos.z + (direction?.z ?? 0) * SUN_LIGHT_DISTANCE
+      )
+      params.directionalLight.position.lerp(lightningPosition, blend)
+      params.directionalLight.color.lerp(lightningColor, blend)
     }
 
     if (params.directionalLight.target) {

@@ -21,7 +21,7 @@ pub async fn atomic_write(path: &Path, data: &[u8]) -> std::io::Result<()> {
         .map_err(std::io::Error::other)?
 }
 
-fn atomic_write_sync(path: &Path, data: &[u8]) -> std::io::Result<()> {
+pub(crate) fn atomic_write_sync(path: &Path, data: &[u8]) -> std::io::Result<()> {
     let existing_permissions = match std::fs::metadata(path) {
         Ok(metadata) => Some(metadata.permissions()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
@@ -102,20 +102,42 @@ pub(crate) fn atomic_write_with_injected_failure(
     commit_or_cleanup(&temp_path, path, write_result)
 }
 
-async fn write_terrain_file(path: &Path, data: &[u8]) -> std::io::Result<()> {
+pub(crate) async fn write_terrain_file(path: &Path, data: &[u8]) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).await?;
     }
     atomic_write(path, data).await
 }
 
+async fn remove_files(paths: &[PathBuf]) -> std::io::Result<()> {
+    for path in paths {
+        match fs::remove_file(path).await {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(())
+}
+
+/// A minimap file the read/stat path selected, with the family it came from.
+pub struct MinimapCandidate {
+    pub path: PathBuf,
+    pub family: coords::MinimapFamily,
+}
+
 pub struct TerrainIO {
     base_dir: PathBuf,
+    pub(crate) manifests:
+        tokio::sync::Mutex<std::collections::HashMap<(i32, i32), crate::manifest::ManifestEntry>>,
 }
 
 impl TerrainIO {
     pub fn new(base_dir: PathBuf) -> Self {
-        Self { base_dir }
+        Self {
+            base_dir,
+            manifests: Default::default(),
+        }
     }
 
     pub fn base_dir(&self) -> &PathBuf {
@@ -156,6 +178,9 @@ impl TerrainIO {
     }
 
     pub async fn read_splatmap(&self, tx: i32, tz: i32) -> std::io::Result<Vec<u8>> {
+        if let Some(tile) = self.read_landscaping_tile(tx, tz).await? {
+            return Ok(tile.splat);
+        }
         let path = coords::splatmap_path(&self.base_dir, tx, tz);
         match fs::read(&path).await {
             Ok(data) if data.len() == defaults::SPLATMAP_SIZE => Ok(data),
@@ -184,39 +209,125 @@ impl TerrainIO {
                 ),
             ));
         }
+        if let Some(mut tile) = self.read_landscaping_tile(tx, tz).await? {
+            tile.splat = data.to_vec();
+            return self.write_landscaping_tile(&tile).await;
+        }
         let path = coords::splatmap_path(&self.base_dir, tx, tz);
         write_terrain_file(&path, data).await
     }
 
-    pub async fn read_minimap(&self, rx: i32, rz: i32) -> std::io::Result<Option<Vec<u8>>> {
-        let path = coords::minimap_path(&self.base_dir, rx, rz);
-        match fs::read(&path).await {
-            Ok(data) => Ok(Some(data)),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(e),
+    /// Candidate files for a minimap request, in preference order: the baked
+    /// fantasy tile first, then the legacy PNG, then coarser fallbacks.
+    fn minimap_candidates(&self, rx: i32, rz: i32, size: u32) -> Vec<MinimapCandidate> {
+        use coords::MinimapFamily::{Fantasy, Legacy};
+        let at = |family: coords::MinimapFamily, size: u32| MinimapCandidate {
+            path: family.lod_path(&self.base_dir, rx, rz, size),
+            family,
+        };
+        if size >= coords::MINIMAP_BASE_SIZE {
+            return vec![at(Fantasy, size), at(Legacy, size)];
         }
+        vec![
+            at(Fantasy, size),
+            at(Legacy, size),
+            at(Fantasy, coords::MINIMAP_BASE_SIZE),
+            at(Legacy, coords::MINIMAP_BASE_SIZE),
+        ]
+    }
+
+    /// Every minimap file a region owns, in both families.
+    fn all_minimap_files(&self, rx: i32, rz: i32) -> Vec<PathBuf> {
+        use coords::MinimapFamily::{Fantasy, Legacy};
+        [Fantasy, Legacy]
+            .into_iter()
+            .flat_map(|family| {
+                std::iter::once(family.base_path(&self.base_dir, rx, rz)).chain(
+                    coords::MINIMAP_LOD_SIZES
+                        .iter()
+                        .map(move |&size| family.lod_path(&self.base_dir, rx, rz, size)),
+                )
+            })
+            .collect()
+    }
+
+    pub async fn read_minimap(&self, rx: i32, rz: i32) -> std::io::Result<Option<Vec<u8>>> {
+        self.read_minimap_lod(rx, rz, coords::MINIMAP_BASE_SIZE)
+            .await
+    }
+
+    pub async fn read_minimap_lod(
+        &self,
+        rx: i32,
+        rz: i32,
+        size: u32,
+    ) -> std::io::Result<Option<Vec<u8>>> {
+        for candidate in self.minimap_candidates(rx, rz, size) {
+            match fs::read(&candidate.path).await {
+                Ok(data) => return Ok(Some(data)),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(None)
+    }
+
+    /// Resolve which file a minimap request would serve, with its family and
+    /// metadata, without reading the body — lets callers build a cache tag and
+    /// pick a Content-Type cheaply.
+    pub async fn stat_minimap_lod(
+        &self,
+        rx: i32,
+        rz: i32,
+        size: u32,
+    ) -> std::io::Result<Option<(MinimapCandidate, std::fs::Metadata)>> {
+        for candidate in self.minimap_candidates(rx, rz, size) {
+            match fs::metadata(&candidate.path).await {
+                Ok(meta) => return Ok(Some((candidate, meta))),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(None)
     }
 
     pub async fn write_minimap(&self, rx: i32, rz: i32, data: &[u8]) -> std::io::Result<()> {
         let path = coords::minimap_path(&self.base_dir, rx, rz);
-        write_terrain_file(&path, data).await
+        write_terrain_file(&path, data).await?;
+        // The freshly written PNG only reaches players once the stale fantasy
+        // tile and both LOD sets are gone; the region falls back to legacy art
+        // until the next `render-map-world` bake.
+        let stale: Vec<PathBuf> = self
+            .all_minimap_files(rx, rz)
+            .into_iter()
+            .filter(|p| *p != path)
+            .collect();
+        remove_files(&stale).await
     }
 
-    /// Read pre-computed grass placement data (variable-length binary).
-    /// Returns None if the file does not exist.
+    /// Read grass cell counts, upgrading legacy placements in memory.
     pub async fn read_grass(&self, tx: i32, tz: i32) -> std::io::Result<Option<Vec<u8>>> {
         let path = coords::grass_path(&self.base_dir, tx, tz);
         match fs::read(&path).await {
-            Ok(data) => Ok(Some(data)),
+            Ok(data) => {
+                let data = onlinerpg_shared::grass_format::into_grass_density(data)?;
+                match self.read_landscaping_tile(tx, tz).await? {
+                    Some(tile) => {
+                        crate::landscaping::filter_vegetation(data, &tile.cleared).map(Some)
+                    }
+                    None => Ok(Some(data)),
+                }
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(e) => Err(e),
         }
     }
 
-    /// Write pre-computed grass placement data (variable-length binary).
+    /// Store grass cell counts.
     pub async fn write_grass(&self, tx: i32, tz: i32, data: &[u8]) -> std::io::Result<()> {
         let path = coords::grass_path(&self.base_dir, tx, tz);
-        write_terrain_file(&path, data).await
+        let data = onlinerpg_shared::grass_format::grass_density(data)?;
+        write_terrain_file(&path, &data).await
     }
 
     /// Read original (pre-housing) heightmap. Returns None if not found.
@@ -268,7 +379,10 @@ impl TerrainIO {
     pub async fn read_trees(&self, tx: i32, tz: i32) -> std::io::Result<Option<Vec<u8>>> {
         let path = coords::tree_path(&self.base_dir, tx, tz);
         match fs::read(&path).await {
-            Ok(data) => Ok(Some(data)),
+            Ok(data) => match self.read_landscaping_tile(tx, tz).await? {
+                Some(tile) => crate::landscaping::filter_vegetation(data, &tile.cleared).map(Some),
+                None => Ok(Some(data)),
+            },
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(e) => Err(e),
         }
@@ -311,7 +425,9 @@ impl TerrainIO {
     pub async fn read_original_grass(&self, tx: i32, tz: i32) -> std::io::Result<Option<Vec<u8>>> {
         let path = coords::original_grass_path(&self.base_dir, tx, tz);
         match fs::read(&path).await {
-            Ok(data) => Ok(Some(data)),
+            Ok(data) => Ok(Some(onlinerpg_shared::grass_format::into_grass_density(
+                data,
+            )?)),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(e) => Err(e),
         }
@@ -320,7 +436,8 @@ impl TerrainIO {
     /// Write original (pre-housing) grass placement data.
     pub async fn write_original_grass(&self, tx: i32, tz: i32, data: &[u8]) -> std::io::Result<()> {
         let path = coords::original_grass_path(&self.base_dir, tx, tz);
-        write_terrain_file(&path, data).await
+        let data = onlinerpg_shared::grass_format::grass_density(data)?;
+        write_terrain_file(&path, &data).await
     }
 
     /// Copy current heightmap → original heightmap if original doesn't exist yet.
@@ -357,15 +474,17 @@ impl TerrainIO {
     pub async fn delete_region(&self, rx: i32, rz: i32) -> std::io::Result<()> {
         let height_dir = coords::height_region_dir(&self.base_dir, rx, rz);
         let splat_dir = coords::splat_region_dir(&self.base_dir, rx, rz);
+        let landscaping_dir = coords::landscaping_region_dir(&self.base_dir, rx, rz);
         let grass_dir = coords::grass_region_dir(&self.base_dir, rx, rz);
         let tree_dir = coords::tree_region_dir(&self.base_dir, rx, rz);
         let orig_height_dir = coords::original_height_region_dir(&self.base_dir, rx, rz);
         let orig_grass_dir = coords::original_grass_region_dir(&self.base_dir, rx, rz);
-        let minimap_file = coords::minimap_path(&self.base_dir, rx, rz);
+        let minimap_files = self.all_minimap_files(rx, rz);
 
         for dir in [
             &height_dir,
             &splat_dir,
+            &landscaping_dir,
             &grass_dir,
             &tree_dir,
             &orig_height_dir,
@@ -377,12 +496,7 @@ impl TerrainIO {
                 Err(e) => return Err(e),
             }
         }
-        match fs::remove_file(&minimap_file).await {
-            Ok(()) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(e),
-        }
-        Ok(())
+        remove_files(&minimap_files).await
     }
 
     /// List region coordinates with a `r{rx}_{rz}.json` file under `subdir`.
@@ -459,6 +573,40 @@ impl TerrainIO {
         let json_str = serde_json::to_string_pretty(json)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         write_terrain_file(&path, json_str.as_bytes()).await
+    }
+
+    pub async fn read_land_grades(&self, rx: i32, rz: i32) -> std::io::Result<Option<Vec<u8>>> {
+        match fs::read(coords::land_grade_path(&self.base_dir, rx, rz)).await {
+            Ok(data) if data.len() == crate::land::REGION_PLOTS => Ok(Some(data)),
+            Ok(_) => Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("land grades ({rx}, {rz}): wrong size"),
+            )),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub async fn write_land_grades(&self, rx: i32, rz: i32, data: &[u8]) -> std::io::Result<()> {
+        if data.len() != crate::land::REGION_PLOTS
+            || data
+                .iter()
+                .any(|&g| crate::land::LandGrade::try_from(g).is_err())
+        {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "land grades: expected one valid grade byte per plot",
+            ));
+        }
+        write_terrain_file(&coords::land_grade_path(&self.base_dir, rx, rz), data).await
+    }
+
+    pub async fn read_weather_sectors_bytes(&self) -> std::io::Result<Option<Vec<u8>>> {
+        match fs::read(coords::weather_sectors_path(&self.base_dir)).await {
+            Ok(data) => Ok(Some(data)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 
     /// Read object data for a region. Returns empty JSON object if file not found.

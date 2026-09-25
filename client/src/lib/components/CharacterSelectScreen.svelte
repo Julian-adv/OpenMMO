@@ -1,13 +1,19 @@
 <script lang="ts">
   import type { AccountCharacter } from '../network/socket'
+  import { t } from '../i18n'
+  import type { CharacterSlotLayout } from '../utils/characterSelectLayout'
+  import CharacterSlotLabel from './CharacterSlotLabel.svelte'
+  import CharacterSummary from './CharacterSummary.svelte'
 
   interface Props {
     accountName: string
     characters: AccountCharacter[]
     selectedCharacterId: number | null
+    slotLayout: CharacterSlotLayout[]
+    onSlotClick: (slotIndex: number) => void
     onStartGame: (
       characterId: number
-    ) => Promise<{ ok: boolean; message?: string }>
+    ) => Promise<{ ok: boolean; message?: string; renameRequired?: boolean }>
     onDeleteCharacter: (
       characterId: number
     ) => Promise<{ ok: boolean; message?: string }>
@@ -18,6 +24,8 @@
     accountName,
     characters,
     selectedCharacterId,
+    slotLayout,
+    onSlotClick,
     onStartGame,
     onDeleteCharacter,
     onLogout,
@@ -29,6 +37,11 @@
   let selectedCharacter = $derived(
     characters.find((character) => character.id === selectedCharacterId)
   )
+  let viewportWidth = $state(0)
+  let viewportHeight = $state(0)
+  let cardsHeight = $state(0)
+  let detailsHeight = $state(0)
+  const compact = $derived(viewportWidth <= 600 || viewportHeight <= 700)
 
   function isBusy() {
     return isStarting || isDeleting
@@ -43,8 +56,9 @@
     const result = await onStartGame(id)
     isStarting = false
 
-    if (!result.ok) {
-      errorMessage = result.message ?? 'Failed to enter game'
+    // A rename-required refusal opens App's dialog instead.
+    if (!result.ok && !result.renameRequired) {
+      errorMessage = result.message ?? $t('characterSelect.enterFailed')
     }
   }
 
@@ -55,7 +69,7 @@
     if (!character) return
 
     const confirmed = confirm(
-      `Are you sure you want to delete "${character.name}"? This cannot be undone.`
+      $t('characterSelect.deleteConfirm', { name: character.name })
     )
     if (!confirmed) return
 
@@ -65,40 +79,42 @@
     isDeleting = false
 
     if (!result.ok) {
-      errorMessage = result.message ?? 'Failed to delete character'
+      errorMessage = result.message ?? $t('characterSelect.deleteFailed')
     }
-  }
-
-  function formatCharacterClass(value: string) {
-    return value.charAt(0).toUpperCase() + value.slice(1)
   }
 </script>
 
-<!-- UI overlay only — the 3D scene is rendered in the shared Canvas in App.svelte -->
-<div class="character-select-overlay">
+<!-- The shared Canvas renders the 3D scene. -->
+<div
+  class="character-select-overlay"
+  bind:clientWidth={viewportWidth}
+  bind:clientHeight={viewportHeight}
+  style:--details-height={`${selectedCharacter ? detailsHeight : 0}px`}
+>
   <div class="top-bar">
-    <h1 class="title">Character Select</h1>
-    <p class="account-name">Account: {accountName}</p>
+    <h1 class="title">{$t('characterSelect.title')}</h1>
+    <p class="account-name">{$t('characterSelect.account')}: {accountName}</p>
+  </div>
+
+  <div class="character-slots" bind:clientHeight={cardsHeight}>
+    {#each slotLayout as layout, index (index)}
+      {@const character = characters[index]}
+      <CharacterSlotLabel
+        {character}
+        {layout}
+        {compact}
+        availableHeight={cardsHeight}
+        selected={character?.id === selectedCharacterId}
+        disabled={isBusy()}
+        onclick={() => onSlotClick(index)}
+        ondblclick={() => character && handleStart(character.id)}
+      />
+    {/each}
   </div>
 
   {#if selectedCharacter}
-    <div class="mobile-character-info">
-      <div class="info-main">
-        <span class="info-name">{selectedCharacter.name}</span>
-        <span class="info-meta">
-          Lv. {selectedCharacter.level}
-          {formatCharacterClass(selectedCharacter.class)} · HP {selectedCharacter.max_hp}
-        </span>
-      </div>
-
-      <div class="info-stats">
-        {#each [['STR', selectedCharacter.attributes.str], ['DEX', selectedCharacter.attributes.dex], ['CON', selectedCharacter.attributes.con], ['INT', selectedCharacter.attributes.int], ['WIS', selectedCharacter.attributes.wis], ['CHA', selectedCharacter.attributes.cha]] as stat (stat[0])}
-          <div class="info-stat">
-            <span>{stat[0]}</span>
-            <strong>{stat[1]}</strong>
-          </div>
-        {/each}
-      </div>
+    <div class="mobile-character-info" bind:clientHeight={detailsHeight}>
+      <CharacterSummary character={selectedCharacter} />
     </div>
   {/if}
 
@@ -109,7 +125,7 @@
       onclick={onLogout}
       disabled={isBusy()}
     >
-      Back
+      {$t('characterSelect.back')}
     </button>
     <button
       type="button"
@@ -117,7 +133,9 @@
       onclick={() => handleStart()}
       disabled={!selectedCharacterId || isBusy()}
     >
-      {isStarting ? 'Starting...' : 'Start'}
+      {isStarting
+        ? $t('characterSelect.starting')
+        : $t('characterSelect.start')}
     </button>
     <button
       type="button"
@@ -125,7 +143,9 @@
       onclick={handleDelete}
       disabled={!selectedCharacterId || isBusy()}
     >
-      {isDeleting ? 'Deleting...' : 'Delete'}
+      {isDeleting
+        ? $t('characterSelect.deleting')
+        : $t('characterSelect.delete')}
     </button>
     {#if errorMessage}
       <div class="error-message">{errorMessage}</div>
@@ -135,6 +155,7 @@
 
 <style>
   .character-select-overlay {
+    font-family: 'Noto Sans KR', sans-serif;
     position: fixed;
     inset: 0;
     box-sizing: border-box;
@@ -149,7 +170,7 @@
     justify-content: space-between;
     pointer-events: none;
     color: #edf2f7;
-    /* No background — the gradient is rendered behind the shared Canvas in App.svelte */
+    /* The shared Canvas supplies the background. */
   }
 
   .top-bar {
@@ -168,6 +189,12 @@
     color: #9fb0c6;
     font-size: 13px;
     text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  }
+
+  .character-slots {
+    position: absolute;
+    inset: 0 0 64px;
+    pointer-events: none;
   }
 
   .mobile-character-info {
@@ -263,6 +290,10 @@
       font-size: 13px;
     }
 
+    .character-slots {
+      bottom: calc(80px + var(--details-height));
+    }
+
     .mobile-character-info {
       position: fixed;
       left: 60px;
@@ -278,55 +309,6 @@
       box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
       pointer-events: auto;
       backdrop-filter: blur(4px);
-    }
-
-    .info-main {
-      min-width: 0;
-      display: grid;
-      gap: 2px;
-      text-align: center;
-    }
-
-    .info-name {
-      overflow: hidden;
-      color: #f7fafc;
-      font-size: 15px;
-      font-weight: 700;
-      line-height: 1.2;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .info-meta {
-      color: #f0c040;
-      font-size: 12px;
-      line-height: 1.25;
-    }
-
-    .info-stats {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 5px;
-    }
-
-    .info-stat {
-      min-width: 0;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 4px;
-      padding: 4px 6px;
-      border: 1px solid rgba(83, 101, 123, 0.75);
-      border-radius: 6px;
-      background: rgba(34, 53, 82, 0.72);
-      color: #a7b7ca;
-      font-size: 11px;
-      line-height: 1.2;
-    }
-
-    .info-stat strong {
-      color: #e4ecf5;
-      font-size: 12px;
     }
   }
 </style>

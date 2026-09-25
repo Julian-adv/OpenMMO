@@ -1,3 +1,4 @@
+import { steerHorse } from '../utils/horseMovement'
 import { SvelteMap } from 'svelte/reactivity'
 import { get } from 'svelte/store'
 import { hmrSingleton } from '../utils/hmr'
@@ -8,19 +9,46 @@ import {
   getMovementMode,
   hasTargetChanged,
   DEFAULT_MOVEMENT_CONFIG,
+  SPRINT_SPEED_MULT,
+  scaleMovementConfig,
   type Position,
   type MovementState,
   type MovementConfig,
   type PlayerState,
 } from '../utils/movementUtils'
 import { entityGroundY } from './entity-ground'
-import { FishingAnimationName } from '../types/animations'
+import { FishingAnimationName, SitAnimationName } from '../types/animations'
 import { shortestWrappedDeltaX } from '../terrain/world-wrap'
 import type { TerrainHeightManager } from './terrainHeightManager'
+import { mountFloats, mountSpeedMult } from '../utils/mounts'
+import type { MountKind } from '../network/networkTypes'
+import { floatingSurfaceY } from '../utils/floatingSurface'
 
 // Use the same movement config as local player
 const MOVEMENT_CONFIG: MovementConfig = {
   ...DEFAULT_MOVEMENT_CONFIG,
+}
+const SPRINT_MOVEMENT_CONFIG = scaleMovementConfig(
+  MOVEMENT_CONFIG,
+  SPRINT_SPEED_MULT
+)
+
+/** Built once per mount kind the session actually sees. */
+const mountedConfigs = new Map<string, MovementConfig>()
+
+function movementConfigFor(
+  mount: MountKind | null | undefined,
+  sprinting: boolean
+): MovementConfig {
+  const base = sprinting ? SPRINT_MOVEMENT_CONFIG : MOVEMENT_CONFIG
+  if (!mount) return base
+  const key = `${mount}:${sprinting}`
+  let config = mountedConfigs.get(key)
+  if (!config) {
+    config = scaleMovementConfig(base, mountSpeedMult(mount))
+    mountedConfigs.set(key, config)
+  }
+  return config
 }
 
 /// Far enough that the player went somewhere, rather than the resting flush
@@ -38,6 +66,32 @@ class PlayerStateManager {
 
   heightManager: TerrainHeightManager | null = null
 
+  isInterpolating(playerId: number): boolean {
+    const position = this.players.get(playerId)?.position
+    const target = this.targetPositions.get(playerId)
+    return !!position && !!target && movedFar(position, target)
+  }
+
+  waterSurfaceAt: ((x: number, z: number) => number) | null = null
+  hasWaterSurfaceData: ((x: number, z: number) => boolean) | null = null
+
+  floatSurfaceY(
+    mount: MountKind | null,
+    x: number,
+    z: number,
+    fallbackY: number
+  ): number | null {
+    if (!mountFloats(mount)) return null
+    return floatingSurfaceY({
+      x,
+      z,
+      fallbackY,
+      heightManager: this.heightManager,
+      waterSurfaceAt: this.waterSurfaceAt,
+      hasWaterSurfaceData: this.hasWaterSurfaceData,
+    })
+  }
+
   // Attack animation duration in seconds (updated from actual animation data)
   attackAnimationDuration = 1.0
 
@@ -49,15 +103,21 @@ class PlayerStateManager {
 
   // Server-authoritative target rotation for each remote player.
   private targetRotations = new SvelteMap<number, number>()
+  // Only read inside the update loop — no reactivity needed.
+  private targetSprinting = new Map<number, boolean>()
 
   // Queue for pending attacks when player is still moving
   private attackQueue = new SvelteMap<number, string[]>()
+
+  /** Flinch counters, kept apart from the player entries the movement loop
+   *  rebuilds each frame. */
+  hitCounters = new SvelteMap<number, number>()
 
   // Buffered position/rotation received during attack animation (1-slot queue).
   // Applied when the attack ends.
   private pendingMove = new Map<
     number,
-    { position: Position; rotation: number }
+    { position: Position; rotation: number; sprinting: boolean }
   >()
 
   // Timestamp (performance.now()) when each player's attack animation started
@@ -85,6 +145,7 @@ class PlayerStateManager {
         // Apply buffered position/rotation from move received during attack
         this.targetPositions.set(playerId, pending.position)
         this.targetRotations.set(playerId, pending.rotation)
+        this.targetSprinting.set(playerId, pending.sprinting)
         this.players.set(playerId, {
           ...p,
           state: 'idle',
@@ -136,24 +197,46 @@ class PlayerStateManager {
       if (!movement) return
 
       // Calculate movement step
+      const sprinting = this.targetSprinting.get(playerId) ?? false
+      const mount = otherPlayers.get(playerId)?.mount ?? null
+      const mounted = mount !== null
+      const movementConfig = movementConfigFor(mount, sprinting)
       const result = calculateMovementStep(
         currentPos,
         movement,
-        MOVEMENT_CONFIG,
+        movementConfig,
         dt
       )
+
+      if (mounted) {
+        result.rotation = steerHorse(
+          currentPlayer.rotation,
+          this.targetRotations.get(playerId) ?? result.rotation,
+          dt
+        ).rotation
+      }
 
       // calculateMovementStep only advances XZ and carries Y over, and the
       // move protocol has no per-waypoint Y, so the ground has to be
       // resampled here. Without it a remote keeps the Y it entered the floor
       // with, which reads as sinking through dungeon and house stairs.
-      result.newPos.y = entityGroundY(
-        this.heightManager,
-        otherPlayers.get(playerId)?.floorLevel ?? 0,
-        result.newPos.x,
-        result.newPos.z,
-        currentPos.y
-      )
+      const floor = otherPlayers.get(playerId)?.floorLevel ?? 0
+      result.newPos.y =
+        (floor === 0
+          ? this.floatSurfaceY(
+              mount,
+              result.newPos.x,
+              result.newPos.z,
+              currentPos.y
+            )
+          : null) ??
+        entityGroundY(
+          this.heightManager,
+          floor,
+          result.newPos.x,
+          result.newPos.z,
+          currentPos.y
+        )
 
       // Update movement state
       movement.currentSpeed = result.newSpeed
@@ -171,8 +254,9 @@ class PlayerStateManager {
           position: result.newPos,
           state: currentState,
           speed: 0,
-          rotation:
-            targetRotation ?? currentPlayer?.rotation ?? result.rotation,
+          rotation: mounted
+            ? result.rotation
+            : (targetRotation ?? currentPlayer?.rotation ?? result.rotation),
           movementMode: undefined,
         })
 
@@ -191,9 +275,12 @@ class PlayerStateManager {
           this.executeAttack(playerId)
         }
       } else {
-        // Torch has no jog animation, so skip the jog tier for torch-holders.
         const hasTorch = otherPlayers.get(playerId)?.torchOn ?? false
-        const movementMode = getMovementMode(movement.totalDistance, hasTorch)
+        const movementMode = getMovementMode(
+          movement.totalDistance,
+          hasTorch,
+          sprinting
+        )
 
         this.players.set(playerId, {
           position: result.newPos,
@@ -209,6 +296,8 @@ class PlayerStateManager {
   // Initialize remote player state with position and rotation
   initPlayer(playerId: number, position: Position, rotation: number) {
     this.targetPositions.set(playerId, { ...position })
+    this.targetSprinting.delete(playerId)
+    this.seedHitCounter(playerId)
     this.players.set(playerId, {
       position: { ...position },
       state: 'idle',
@@ -223,9 +312,11 @@ class PlayerStateManager {
     this.movementData.delete(playerId)
     this.targetPositions.delete(playerId)
     this.targetRotations.delete(playerId)
+    this.targetSprinting.delete(playerId)
     this.attackQueue.delete(playerId)
     this.pendingMove.delete(playerId)
     this.attackStartTimes.delete(playerId)
+    this.hitCounters.delete(playerId)
   }
 
   // Reset all data
@@ -234,9 +325,23 @@ class PlayerStateManager {
     this.movementData.clear()
     this.targetPositions.clear()
     this.targetRotations.clear()
+    this.targetSprinting.clear()
     this.attackQueue.clear()
     this.pendingMove.clear()
     this.attackStartTimes.clear()
+    this.hitCounters.clear()
+  }
+
+  /** Seed the key so per-player reads never fall back to the map-wide signal.
+   *  Never overwrites: a reset count would read as a hit and fire the flinch. */
+  private seedHitCounter(playerId: number) {
+    if (!this.hitCounters.has(playerId)) this.hitCounters.set(playerId, 0)
+  }
+
+  /** Bump the flinch counter for a remote taking a blow. */
+  handleHit(playerId: number) {
+    if (!this.players.has(playerId)) return
+    this.hitCounters.set(playerId, (this.hitCounters.get(playerId) ?? 0) + 1)
   }
 
   handleDead(playerId: number) {
@@ -256,6 +361,7 @@ class PlayerStateManager {
     this.attackQueue.delete(playerId)
     this.attackStartTimes.delete(playerId)
     this.targetPositions.set(playerId, { ...position })
+    this.targetSprinting.delete(playerId)
     this.players.set(playerId, {
       position: { ...position },
       state: 'idle',
@@ -266,6 +372,8 @@ class PlayerStateManager {
 
   teleportPlayer(playerId: number, position: Position, rotation: number) {
     this.targetPositions.set(playerId, { ...position })
+    this.seedHitCounter(playerId)
+    this.targetSprinting.delete(playerId)
     this.movementData.delete(playerId)
     this.players.set(playerId, {
       position: { ...position },
@@ -290,6 +398,7 @@ class PlayerStateManager {
       state: 'interact',
       speed: 0,
       interactionAnim: anim,
+      interactionCounter: (player.interactionCounter ?? 0) + 1,
       interactOffsetY: offsetY,
     }
     if (position) {
@@ -318,6 +427,16 @@ class PlayerStateManager {
   handleStopInteraction(playerId: number) {
     const player = this.players.get(playerId)
     if (!player || player.state !== 'interact') return
+
+    // A seated player stands up first; that clip's finish lands back here.
+    if (player.interactionAnim === SitAnimationName.SIT) {
+      this.handleInteraction(
+        playerId,
+        SitAnimationName.SIT_TO_STAND,
+        player.interactOffsetY ?? 0
+      )
+      return
+    }
 
     this.players.set(playerId, {
       ...player,
@@ -349,7 +468,8 @@ class PlayerStateManager {
   setTargetPosition(
     playerId: number,
     targetPosition: Position,
-    rotation: number
+    rotation: number,
+    sprinting = false
   ) {
     const player = this.players.get(playerId)
 
@@ -358,6 +478,7 @@ class PlayerStateManager {
       this.pendingMove.set(playerId, {
         position: { ...targetPosition },
         rotation,
+        sprinting,
       })
       return
     }
@@ -377,6 +498,7 @@ class PlayerStateManager {
 
     this.targetPositions.set(playerId, { ...targetPosition })
     this.targetRotations.set(playerId, rotation)
+    this.targetSprinting.set(playerId, sprinting)
   }
 
   private executeAttack(playerId: number) {

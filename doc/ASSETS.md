@@ -44,6 +44,7 @@ contributors receive the asset on their next `fetch-assets.sh`.
 
 - [Environment](./assets/environment.md)
 - [Characters](./assets/characters.md)
+- [Animals and Mounts](./assets/animals.md)
 - [Monsters](./assets/monsters.md)
 - [Items](./assets/items.md)
 - [Props and Buildings](./assets/props.md)

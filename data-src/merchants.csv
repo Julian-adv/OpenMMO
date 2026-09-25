@@ -1,2 +1,9 @@
 id,npcName,sellRatePercent,catalog
-rica,Rica,40,torch;dagger;spear;fishing_rod;wooden_shield;leather_helmet;leather_belt;leather_pants;iron_boots;iron_sword;healing_potion;scroll_of_return
+grida,Grida,40,
+rica,Rica,40,horse_reins;rowboat;torch;dagger;spear;bow;iron_arrow;steel_arrow;wooden_shield;leather_belt;leather_pants;healing_potion;greater_healing_potion;scroll_of_return;scroll_of_estate_return;scroll_of_party_summon;whetstone_oil;apple;bread;cheese;jerky;lembas_wafer;campfire_kit;tip_hat;peddler_stall;cape_dye;cape_transfer_kit;phoenix_talisman;celestial_timekeeper
+tobin,Tobin,40,fishing_rod
+wick,Wick,30,torch;healing_potion;campfire_kit;bread;jerky;scroll_of_return;scroll_of_estate_return
+miriel,Miriel,35,apple;bread;cheese;jerky;lembas_wafer;grilled_minnow;grilled_perch;grilled_trout
+cocoly,Cocoly,35,apple;bread;cheese;jerky;lembas_wafer;grilled_minnow;grilled_perch;grilled_trout
+steward,Aldwin,40,land_deed
+estate_architect,Rowan,40,wooden_fence;landscaping_toolbox;landscaping_palette_sand;landscaping_palette_red_soil;landscaping_palette_gravel;landscaping_palette_pebbles;landscaping_palette_stone_path;landscaping_palette_paving;scroll_of_medium_two_story_house;scroll_of_small_house;scroll_of_small_two_story_house;scroll_of_large_two_story_house;scroll_of_medium_house

@@ -1,4 +1,5 @@
 import type { ObjectPlacement } from '../stores/editorStore'
+import { isNeighbourRegion } from '../terrain/terrain-constants'
 import {
   passability_set_furniture,
   passability_remove_furniture,
@@ -6,10 +7,12 @@ import {
 } from '../wasm/onlinerpg_shared'
 
 /** One sealed furniture piece, as returned by the wasm setter for the debug
- *  overlay: the world grid cells it occupies and the floor Y it sits on. */
+ *  overlay: the world grid cells it occupies, the floor Y it sits on, and
+ *  its floor level (the overlay draws only the player's floor). */
 export interface FurnitureDebugPiece {
   cells: [number, number][]
   yBase: number
+  floorLevel: number
 }
 
 /**
@@ -31,6 +34,12 @@ class FurnitureManager {
     { rx: number; rz: number; pieces: FurnitureDebugPiece[] }
   >()
   private changeListeners: (() => void)[] = []
+
+  reset(): void {
+    for (const key of this.regions.keys()) passability_remove_furniture(key)
+    this.regions.clear()
+    this.notifyChanged()
+  }
 
   private cacheKey(rx: number, rz: number): string {
     return `furniture:${rx},${rz}`
@@ -83,8 +92,7 @@ class FurnitureManager {
   evictDistant(rx: number, rz: number): void {
     let removed = false
     for (const [key, region] of this.regions) {
-      if (Math.abs(region.rx - rx) <= 1 && Math.abs(region.rz - rz) <= 1)
-        continue
+      if (isNeighbourRegion(region.rx, region.rz, rx, rz)) continue
       passability_remove_furniture(key)
       this.regions.delete(key)
       removed = true

@@ -42,6 +42,28 @@ export function getObjectInteractionExitPosition(
   }
 }
 
+/** Where to stand after leaving an object: one cell to the side (the side
+ *  nearer `toward`, the click destination, first), then one cell ahead — a
+ *  chair usually faces a table, and stepping out into its solid cell left
+ *  the player wedged on the passability grid. Straight ahead when every
+ *  candidate is blocked. */
+export function pickObjectExitPosition(
+  currentPosition: Position,
+  rotation: number,
+  isBlocked: (x: number, z: number) => boolean,
+  toward?: Pick<Position, 'x' | 'z'>
+): Pick<Position, 'x' | 'z'> {
+  const at = (r: number) =>
+    getObjectInteractionExitPosition(currentPosition, r, 1.0)
+  const left = at(rotation + Math.PI / 2)
+  const right = at(rotation - Math.PI / 2)
+  const forward = at(rotation)
+  const dist2 = (p: Pick<Position, 'x' | 'z'>) =>
+    toward ? (toward.x - p.x) ** 2 + (toward.z - p.z) ** 2 : 0
+  const sides = dist2(left) <= dist2(right) ? [left, right] : [right, left]
+  return [...sides, forward].find((c) => !isBlocked(c.x, c.z)) ?? forward
+}
+
 interface ObjectInteractionPlayer {
   position: Position
 }
@@ -74,7 +96,6 @@ interface BeginObjectInteractionInput {
 }
 
 export interface BeginObjectInteractionOutcome {
-  pendingPickupAfterMoveInstanceId: null
   isMoving: false
   movementTarget: Position | null
   playerRotation: number
@@ -90,7 +111,6 @@ export function beginObjectInteraction({
   cancelCombat()
 
   return {
-    pendingPickupAfterMoveInstanceId: null,
     isMoving: false,
     movementTarget: null,
     playerRotation: intent.rotation,
@@ -115,47 +135,6 @@ export function exitObjectInteraction(
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// Pickup approach decision (far pickup → walk to item, then pick up on arrival)
-// ───────────────────────────────────────────────────────────────────────────
-
-export interface PickupApproachIntent {
-  instanceId: number
-  position: Position
-}
-
-interface GroundItemLike {
-  position: Position
-}
-
-export type PickupApproachDecision =
-  | { kind: 'ignored_dead' }
-  | {
-      kind: 'approach'
-      target: Position
-      pickupAfterArrival: number
-    }
-
-interface DecidePickupApproachInput {
-  playerState: PlayerState
-  intent: PickupApproachIntent
-  getGroundItem: (instanceId: number) => GroundItemLike | undefined
-}
-
-export function decidePickupApproach({
-  playerState,
-  intent,
-  getGroundItem,
-}: DecidePickupApproachInput): PickupApproachDecision {
-  if (playerState.state === 'dead') return { kind: 'ignored_dead' }
-
-  return {
-    kind: 'approach',
-    target: getGroundItem(intent.instanceId)?.position ?? intent.position,
-    pickupAfterArrival: intent.instanceId,
-  }
-}
-
-// ───────────────────────────────────────────────────────────────────────────
 // Pickup enter transition
 // ───────────────────────────────────────────────────────────────────────────
 
@@ -171,7 +150,6 @@ export type BeginPickupOutcome =
   | { kind: 'ignored' }
   | {
       kind: 'started'
-      pendingPickupAfterMoveInstanceId: null
       pendingPickupInstanceId: number
       isMoving: false
       movementTarget: Position | null
@@ -195,7 +173,6 @@ export function beginPickupInteraction({
 
   return {
     kind: 'started',
-    pendingPickupAfterMoveInstanceId: null,
     pendingPickupInstanceId: instanceId,
     isMoving: false,
     movementTarget: null,

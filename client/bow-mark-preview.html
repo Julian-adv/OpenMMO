@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bow · 조준 표식 프리뷰</title>
+    <link rel="stylesheet" href="/src/previews/bow-mark.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">ABILITY STUDY / 04</p>
+          <h1>Bow <span>조준 표식</span></h1>
+          <p class="intro">
+            5초 동안, 표식 대상에게 자신의 공격이 모두 명중합니다.
+          </p>
+        </div>
+        <span class="badge">BOW ONLY · VFX 프리뷰</span>
+      </header>
+      <div class="layout">
+        <section class="stage" aria-label="활 조준 표식 3D 프리뷰">
+          <div id="view">
+            <div class="overlay scene-title">
+              THE HUNTING GROUND<small
+                >몬스터 클릭으로 대상 지정 · 드래그로 회전 · 휠로 확대</small
+              >
+            </div>
+            <div id="loading" class="overlay" role="status">
+              기존 모델과 애니메이션을 불러오고 있습니다…
+            </div>
+            <div id="caster-label" class="actor-label">
+              RANGER<span>BOW</span>
+            </div>
+            <div id="orc-label" class="actor-label">
+              ORC<span>지정 대상</span>
+            </div>
+            <div id="goblin-label" class="actor-label">
+              GOBLIN<span>표식 없음</span>
+            </div>
+            <div id="phase" class="overlay">대상을 지정합니다</div>
+            <div class="overlay target-readout">
+              <small>TARGET</small><strong id="target-name">ORC</strong
+              ><span id="mark-state">ACQUIRING</span>
+            </div>
+          </div>
+          <div class="transport">
+            <div class="buttons">
+              <button id="cast" class="primary" disabled>표식 시전</button>
+              <button id="pause" disabled>일시정지</button>
+              <button id="expiry" disabled>해제 보기</button>
+              <span id="clock">0.00 / 6.62 s</span>
+            </div>
+            <label class="timeline"
+              ><span>재생 위치</span
+              ><input
+                id="scrub"
+                type="range"
+                min="0"
+                max="6.62"
+                step="0.01"
+                value="0"
+                aria-label="프리뷰 재생 위치"
+            /></label>
+          </div>
+        </section>
+        <aside>
+          <p class="section">TARGET MARK</p>
+          <div class="feature">
+            <svg
+              viewBox="0 0 48 48"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+              aria-hidden="true"
+            >
+              <circle cx="24" cy="24" r="12" />
+              <path d="M24 3v13m0 16v13M3 24h13m16 0h13" />
+              <path d="m24 21 3 3-3 3-3-3Z" fill="currentColor" />
+            </svg>
+            <div>
+              <strong>명중 보장</strong
+              ><small>표식 대상에 대한 본인 공격</small>
+            </div>
+          </div>
+          <dl class="facts">
+            <div>
+              <dt>사용 무기</dt>
+              <dd>Bow</dd>
+            </div>
+            <div>
+              <dt>효과 · 표식 표시</dt>
+              <dd>본인만</dd>
+            </div>
+            <div>
+              <dt>지속시간</dt>
+              <dd>5초</dd>
+            </div>
+            <div>
+              <dt>재사용 대기</dt>
+              <dd>10초</dd>
+            </div>
+          </dl>
+          <div class="divider"></div>
+          <label class="control"
+            ><span>대상</span
+            ><select id="target">
+              <option value="orc">Orc</option>
+              <option value="goblin">Goblin</option>
+            </select></label
+          >
+          <label class="control"
+            ><span>카메라</span
+            ><select id="camera">
+              <option value="game">게임 시점</option>
+              <option value="detail">표식 가까이</option>
+              <option value="scene">전체 구도</option>
+            </select></label
+          >
+          <label class="control"
+            ><span>문양 색상</span
+            ><select id="palette">
+              <option value="#f5dfa8">옅은 금빛</option>
+              <option value="#e6edff">은백색</option>
+              <option value="#ed9984" selected>옅은 붉은빛</option>
+            </select></label
+          >
+          <label class="control"
+            ><span>문양 크기 <output id="size-value">75%</output></span
+            ><input
+              id="size"
+              type="range"
+              min="60"
+              max="140"
+              value="75"
+              step="5"
+          /></label>
+          <div class="divider"></div>
+          <div class="checks">
+            <label><input id="movement" type="checkbox" />대상 이동</label
+            ><label><input id="slow" type="checkbox" />0.25배 느리게</label
+            ><label><input id="loop" type="checkbox" checked />반복 재생</label
+            ><label><input id="vfx" type="checkbox" checked />본인 시점</label>
+          </div>
+          <p class="hint">
+            본인 시점을 끄면 다른 플레이어에게 보이는 모습입니다.<br />명중
+            판정·피해 계산은 연결하지 않았습니다.
+          </p>
+        </aside>
+      </div>
+      <section class="sequence" aria-label="연출 순서">
+        <article>
+          <small>01 / ACQUIRE · 0.42s</small
+          ><strong>조준점이 모이며 고정</strong>
+          <p>네 방향의 문양이 머리 위에 모이고, 짧게 빛납니다.</p>
+        </article>
+        <article>
+          <small>02 / MARKED · 5s</small
+          ><strong>천천히 커졌다 작아지는 표식</strong>
+          <p>작은 문양이 대상을 따라가며, 1.2초 주기로 부드럽게 맥동합니다.</p>
+        </article>
+        <article>
+          <small>03 / RELEASE · 0.4s</small
+          ><strong>제자리에서 잦아드는 빛</strong>
+          <p>표식이 부드럽게 사라지며 효과가 끝났음을 알립니다.</p>
+        </article>
+      </section>
+      <footer>
+        연출 검토용 독립 페이지 · 기존 Ranger / Orc / Goblin 모델과 활
+        애니메이션 사용
+      </footer>
+    </main>
+    <script type="module" src="/src/previews/bow-mark.ts"></script>
+  </body>
+</html>

@@ -92,7 +92,7 @@ llm = "codex"
 - 터레인은 HTTP 소스 강제
 - 캐릭터 삭제 금지 → 계정은 사람의 것이고 웹 클라이언트로 키우는 캐릭터가 같이 산다. `character_name`이 일치하는 캐릭터만 이 에이전트 것으로 보고, 나머지는 건드리지 않는다 (npc_token 전용 계정만 불일치 캐릭터를 정리한다)
 
-`[[npcs]]` 개수에 인위적 상한은 두지 않는다. 서버가 이미 자연스럽게 제한한다 — 계정당 캐릭터는 3개까지이고, 게임 입장 시 같은 이름의 기존 세션을 끊으므로([`connection.rs`](../server/src/connection.rs) `kick_player_by_name`) 캐릭터 하나당 살아 있는 세션은 하나다. 이건 인간 플레이어에게도 똑같이 적용되는 제약이라 원칙에 어긋나지 않는다.
+`[[npcs]]` 개수에 인위적 상한은 두지 않는다. 서버가 이미 자연스럽게 제한한다 — 계정당 캐릭터는 3개까지이고, 같은 계정으로 다시 인증하면 기존 세션을 끊으므로 계정 하나당 살아 있는 세션은 하나다. 이건 인간 플레이어에게도 똑같이 적용되는 제약이라 원칙에 어긋나지 않는다.
 
 `[[npcs]]`라는 이름 자체는 이제 어색하다 (사용자 에이전트는 NPC가 아니다). 구현할 때 `[[agents]]` 등으로 바꾸고 기존 키를 별칭으로 남기는 편이 좋다.
 
@@ -166,7 +166,7 @@ agent-client                     구글                      사용자
 | 플레이어 화면에 거래창을 **밀어넣기** | [`trading.rs`](../server/src/game_state/trading.rs) `open_trade` | 위에 종속 |
 | 급여 수령 (골드 파우셋) | [`salary.rs`](../server/src/game_state/salary.rs) | 절대 아님 |
 | 이동 시 충돌 검사 면제 | [`player.rs`](../server/src/game_state/player.rs) `check_collision: !is_npc` | 아님 (치트다) |
-| 주변 몬스터 앰비언트 스폰 대상에서 제외 | [`monster.rs`](../server/src/game_state/monster.rs) | 아님 — 인간과 같은 규칙을 받아야 사냥으로 성장한다 |
+| 주변 몬스터 앰비언트 스폰 대상에서 제외 | [`ambient_spawn.rs`](../server/src/game_state/ambient_spawn.rs) | 아님 — 인간과 같은 규칙을 받아야 사냥으로 성장한다 |
 | 클라이언트 UI에서 NPC 취급 (클릭 → 대화/거래) | [`PlayerControl.svelte`](../client/src/lib/components/PlayerControl.svelte) | 아님 — 공식 NPC로 오인시키면 안 된다 |
 | `/who` 집계에서 NPC로 분류 | [`chat.rs`](../server/src/game_state/chat.rs) | 아님 — 클라이언트 종류로 다시 센다 (아래) |
 
@@ -196,7 +196,7 @@ Online: 12 (9 web, 1 cli, 2 npc)
 
 설계 제약 셋:
 
-1. **집계 전용이다.** 클라이언트 종류는 브로드캐스트되는 `Player` 데이터에 넣지 않는다 (`#[serde(skip)]`). 넣는 순간 다른 클라이언트가 개인을 분류할 수 있게 되고, 그건 위 원칙 위반이다
+1. **서버의 집계에 사용한다.** 지형 본문은 프로토콜 81부터 WebSocket 버전 알림 후 HTTP로 받으며, 에이전트는 높이·지표 재질만 담은 `ground` 프로필을 요청한다. 클라이언트 종류는 브로드캐스트되는 `Player` 데이터에 넣지 않는다 (`#[serde(skip)]`). 다른 클라이언트가 개인을 분류하거나 권한을 구분하는 용도로 쓰지 않는다.
 2. **자기 신고값이고, 그래도 괜찮다.** 클라이언트가 스스로 "나는 web/cli"라고 밝히는 값이라 거짓말이 가능하다. 하지만 이 값은 카운터 말고 아무것에도 쓰이지 않으므로 속일 동기가 없다. 반대로 말하면 **여기에 어떤 정책도 걸면 안 된다** — 거는 순간 거짓 신고 동기가 생긴다
 3. **버전 handshake에 얹어 보낸다.** 아래 프로토콜 버전 절의 `ClientInfo { protocol_version, client_kind, client_version }` 한 메시지로 끝난다 — 종류 표시를 위해 따로 만들 것이 없다
 
@@ -226,6 +226,19 @@ Online: 12 (9 web, 1 cli, 2 npc)
 6. 메시지 내용에 **무엇을 해야 하는지**를 담는다: `"Protocol v7 required (you sent v5). Update: <다운로드 URL 또는 명령>"`
 7. agent-client는 이 에러를 받으면 **재접속하지 않고 종료한다.** 세션 실패를 전부 재접속으로 처리하는 구조라([`orchestrator.rs`](../agent-client/src/orchestrator.rs) `run_npc_loop`) 그냥 두면 버전 불일치도 무한 루프가 된다. 고칠 수 없는 실패는 즉시 죽어야 사용자가 알아챈다. (프로드 유닛은 `Restart=always`라 그래도 10초 뒤 재시작되지만, 프로드는 두 바이너리를 함께 배포하므로 불일치 자체가 나지 않는다)
 8. 거절은 `AuthError`에 이어 **close code `CLOSE_CODE_PROTOCOL_MISMATCH`(4001)** 로도 닫는다. close code는 직렬화된 메시지 바깥이라 `PROTOCOL_VERSION`을 또 올리지 않고도 전달되고, 메시지를 못 읽는 클라이언트에게도 "재시도해도 소용없다"가 닿는 유일한 신호다. 단 close reason은 123바이트 제한이 있으니 안내 문구는 `AuthError`에 싣고 reason은 짧게 둔다
+
+### 던전 레이아웃 지문
+
+프로토콜 버전이 잡지 못하는 불일치가 하나 있다: **던전 레이아웃은 네트워크로 오가지 않는다.** 양쪽이 `shared`의 생성기를 각자 컴파일해 입구 id에서 같은 미로를 만들어내므로, 생성기가 바뀌면 메시지 모양은 그대로인 채 **구버전 클라만 다른 미로를 그린다.** 자기에게만 있는 벽을 계속 밀고, 서버는 계속 되돌려 놓는다 (2026-08-19 배포 후 실제로 발생).
+
+- `shared/build.rs`가 `src/dungeon/`의 `.rs`(테스트 제외 — 테스트 수정으로 전체가 리로드될 이유는 없다)와 `data-src/dungeons.csv`를 해시해 `LAYOUT_VERSION`을 박는다. 디렉터리를 훑으므로 생성기 파일이 새로 생겨도 자동으로 포함된다. 상수를 손으로 올릴 필요가 없다
+  - 다만 지문 밖의 변경은 여전히 조용하다: `housing`/`pathfinding`처럼 생성기가 참조하는 다른 모듈, 그리고 `rand`/`rand_chacha` 버전 범프(RNG 스트림이 바뀌면 미로가 전부 바뀐다). 그런 변경을 할 때는 프로토콜 범프처럼 취급한다
+- 해시는 FNV-1a를 직접 쓴다. `DefaultHasher`는 러스트 릴리스 간 안정성이 보장되지 않아 서버(리눅스)와 agent-client(윈도우) 빌드가 같은 소스로 갈라진다. CR도 걸러 CRLF 체크아웃을 흡수한다
+- 클라이언트는 `client_version` 문자열 끝에 `+layout.<hash>`로 얹어 보낸다(`stamp_layout_version`). **`ClientInfo`에 필드를 더하지 않는 것이 요점이다** — rmp_serde는 구조체를 위치 배열로 인코딩하므로 필드를 하나 더하면 **새 서버가 구버전의 `ClientInfo`를 아예 디코드하지 못한다.** 그 실패는 `error!` 로그로만 끝나서 `AuthError`도 close 4001도 나가지 않고, 구버전은 이유도 모른 채 백오프로 재시도만 반복한다. 태그는 문자열이라 `+`로 이어 붙는 목록이며, 나중에 다른 지문(가구·주택 등)이 생기면 그 자리에 함께 실으면 된다
+- 불일치(또는 지문 없음)는 **프로토콜 불일치와 똑같은 경로**로 거절한다: `AuthError` + close 4001. 웹은 안내를 띄우고 세션당 한 번 자동 새로고침하며, agent-client는 재접속하지 않고 종료한다
+- 공식 NPC(`is_official_npc`)는 이 킥에서 제외한다. 서버와 함께 빌드·배포되므로 레이아웃이 어긋날 수가 없고, 그래도 걸렸다면 낡은 빌드가 아니라 **우리 쪽 버그**라는 뜻이다. 스트릭은 그대로 세되 경고만 남긴다 — 끊어봐야 agent-client가 재시작 루프에 빠지고 마을에서 상인이 사라진다
+- 게이트를 통과한 뒤에야 어긋나는 경우(같은 벽을 계속 미는 클라이언트)는 서버가 세션을 끊으면서 **close `CLOSE_CODE_CLIENT_DESYNC`(4004)** 를 실어 보낸다. 웹은 4001과 같은 처리를 하고(안내 + 1회 자동 새로고침 + 재접속 중단), agent-client도 재접속하지 않고 종료한다 — 같은 빌드로 다시 붙어봐야 같은 자리에 선다. 운영자 `/kick`이나 중복 로그인은 코드 없이 평범하게 닫으므로 새로고침이 걸리지 않는다
+- 따라서 **생성기를 바꾸는 배포는 agent-client 사용자를 잠근다.** 프로토콜 범프와 같은 급의 변경으로 취급하고, 릴리스 바이너리를 함께 올린다
 
 ### 못
 
@@ -264,6 +277,7 @@ Online: 12 (9 web, 1 cli, 2 npc)
 공식 NPC 플래그를 안 주면 클래스는 사실상 스탯 블록과 프롬프트 템플릿 선택일 뿐이다. 그런데도 막는 이유는 보안이 아니라 밸런스이고, **인간·에이전트 구분 없이 똑같이 적용된다**.
 
 - **Merchant**: CHA +3 ([`character.rs`](../shared/src/character.rs)). CHA는 흥정 밴드 폭을 직접 넓힌다 — 진짜 Rica에게서 최대 할인을 상시로 받는 셈. ECONOMY.md가 "히든 클래스"라 부르는 이유다
+- **Maid**: CHA +2 — 여관 접객 NPC용 마을 역할 클래스. 플레이어에게 줄 니치가 없어 함께 잠가 둔다.
 - **Guard**: STR +2 / CON +2에 히트다이스 d10 — 전 클래스 최고 사양. 웹 클라이언트가 7종(knight/barbarian/caveman/valkyrie/ranger/rogue/priest)만 노출하는 것도 같은 이유다
 
 **현재 구멍**: 서버 `CreateCharacter`는 클래스를 검증하지 않는다 ([`connection.rs`](../server/src/connection.rs)). 웹 UI가 버튼을 안 보여줄 뿐, 직접 만든 클라이언트는 지금도 merchant/guard 캐릭터를 만들 수 있다.
@@ -337,7 +351,9 @@ pwsh -NoProfile -Command "cd <repo>; $env:GOOGLE_CLI_CLIENT_SECRET=...; .\tools\
 
 실행 정책도 둘이 저장소가 따로다. 한쪽에서 `Set-ExecutionPolicy`를 해도 다른 쪽은 `Restricted`로 읽고 스크립트 로드를 거부한다.
 
-`PROTOCOL_VERSION`([`shared/src/lib.rs`](../shared/src/lib.rs))이 올라가면 기존 배포본은 `Protocol vN required`로 거절되므로, 서버 배포와 함께 새 릴리스를 올리고 인게임 공지에 재다운로드 안내를 넣는다.
+`PROTOCOL_VERSION`([`shared/src/lib.rs`](../shared/src/lib.rs))이 올라가면 기존 배포본은 `Protocol vN required`로 거절되므로, 서버 배포와 함께 새 릴리스를 올리고 인게임 공지에 재다운로드 안내를 넣는다. v0.35.0부터는 클라이언트가 시작할 때 GitHub 릴리스를 확인해 스스로 업데이트한다(`agent-client/src/update.rs`): 새 버전이 있으면 업데이트 여부를 물어보고, 승낙하면 설치 후 "다시 실행하세요"를 안내하고 종료한다 (터미널이 아니면 건너뛴다). 바이너리와 패키지 소유 파일(`data/system_prompt.txt`, `animation_durations.json`, `user_prompts/`, `README.md`)만 교체하고 `config.toml`·`user_prompt.txt`·메모리·캐시는 건드리지 않는다. `config.toml`의 `auto_update = false`로 끈다.
+
+**릴리스 절차**: `agent-client/Cargo.toml`의 version을 올리고(자동 업데이트가 이 값과 최신 태그를 비교한다 — 안 올리면 구버전들이 새 릴리스를 영원히 다시 받는다), 두 패키징 스크립트가 만든 `agent-client-v<version>-<platform>` 자산을 태그 `agent-client-v<version>`으로 `gh release create` 한다. 자산 이름의 플랫폼 접미사(`windows-msvc.zip`, `glibc*.tar.gz`)는 업데이터가 매칭하는 규약이므로 바꾸지 않는다.
 
 ## 운영·보안 고려사항
 
@@ -351,3 +367,11 @@ pwsh -NoProfile -Command "cd <repo>; $env:GOOGLE_CLI_CLIENT_SECRET=...; .\tools\
 - **폭주 대응 수단**: 지금은 킥만 있어([`Kicked`](../shared/src/messages.rs)) 재접속 루프를 도는 클라이언트에는 소용이 없다. 계정 단위 일시 차단이 필요하다 — 에이전트 전용이 아니라 공용 운영 수단으로
 - **레이트 리밋 값**: 사람의 정상 플레이를 막지 않으면서 폭주를 잡는 지점이 어디인가. 실제 트래픽을 보고 정해야 한다
 - ~~프로드 리버스 프록시가 `/api/terrain`을 외부에 노출하는지~~ — 확인 완료 (2026-07-22): `https://<host>/api/terrain/height/0/0`이 8450바이트를 정상 반환한다. WebSocket은 `/ws` 경로에서만 업그레이드되고 루트는 게임 페이지를 서빙하므로, 원격 config의 `server`에는 반드시 `/ws`가 붙어야 한다
+
+### 지형 원본 파일 캐시 (프로토콜 83)
+
+`TerrainTileVersion.files`의 경로·SHA-256으로 `/api/terrain/files/{path}`에서 원본 바이너리를 받는다. 높이·스플랫만 필요하며 조경 파일이 있으면 그 안의 수정된 스플랫을 추출한다. 나무·풀 파일은 내려받지 않는다. 구독 전에 필요한 샘플은 `/api/terrain/manifest/{tile_x}/{tile_z}`에서 파일 목록을 조회한 뒤 같은 원본 로더를 사용한다.
+
+`terrain_cache/files/{hash}.bin`에 검증한 원본을 원자적으로 저장한다. 같은 내용은 서버·에이전트 재시작 후에도 재사용하고 동시 다운로드를 공유한다. 로컬 terrain 경로에서도 디스크 원본을 읽고 같은 해시를 검증한다. HTTP는 WebSocket 수신과 AI 상태 잠금 밖에서 실행하며 필요한 타일이 적용될 때까지 이동을 대기한다. 늦은 응답은 현재 구독·세대·revision을 검사한다. 404·해시 불일치는 최신 목록 재동기화, 일시적 오류는 재시도한다.
+
+서버·웹 WASM·agent-client를 프로토콜 83으로 함께 갱신한다. nginx는 원본 파일을 직접 제공하며 별도 묶음 파일을 만들지 않는다. 자세한 계약은 [WORLD_EVENT_DELIVERY.md §3.6](WORLD_EVENT_DELIVERY.md#36-조경지형-타일)과 [TERRAIN_STATIC_SERVING.md](TERRAIN_STATIC_SERVING.md)를 따른다.

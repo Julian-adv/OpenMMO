@@ -5,7 +5,7 @@ export interface MerchantDefinition {
   npcName: string
   sellRatePercent: number
   /** Semicolon-separated item def ids. */
-  catalog: string
+  catalog?: string
 }
 
 const merchantDefs = merchantsJson as Record<string, MerchantDefinition>
@@ -21,6 +21,20 @@ export function getMerchantByNpcName(
   npcName: string
 ): MerchantDefinition | undefined {
   return byNpcName.get(npcName)
+}
+
+const stocked = new Set(
+  Object.values(merchantDefs).flatMap((def) =>
+    (def.catalog ?? '')
+      .split(';')
+      .map((id) => id.trim())
+      .filter(Boolean)
+  )
+)
+
+/** Whether any merchant shelf carries the item. */
+export function isStockedByAnyMerchant(itemDefId: string): boolean {
+  return stocked.has(itemDefId)
 }
 
 export default merchantDefs

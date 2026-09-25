@@ -1,5 +1,36 @@
 import itemsJson from '../../../../data/items.json'
 import type { EquipSlot } from '../network/networkTypes'
+import { PLAYER_ATTACK_RANGE_METERS } from './combatTiming'
+import { translate, type Locale } from '../i18n'
+import { itemText } from '../i18n/items'
+
+export const WEAPON_TYPE_LABELS = {
+  sword: 'Sword',
+  great_sword: 'Great Sword',
+  dagger: 'Dagger',
+  axe: 'Axe',
+  staff: 'Staff',
+  spear: 'Spear',
+  mace: 'Mace',
+  club: 'Club',
+  bow: 'Bow',
+  crossbow: 'Crossbow',
+  torch: 'Torch',
+} as const
+
+export type WeaponType = keyof typeof WEAPON_TYPE_LABELS
+
+export const ARMOR_TYPE_LABELS = {
+  shield: 'Shield',
+} as const
+
+export type ArmorType = keyof typeof ARMOR_TYPE_LABELS
+
+export type AuthenticatedUseAction =
+  | 'estate_storage'
+  | 'estate_fence'
+  | 'land_claim'
+  | 'estate_return'
 
 export interface ItemDefinition {
   id: string
@@ -13,6 +44,8 @@ export interface ItemDefinition {
   worldModel?: string
   /** Item kind that decides how `dice` is read: "weapon" → damage, "consumable" → healing. */
   category?: string
+  weaponType?: WeaponType
+  armorType?: ArmorType
   /** Dice notation (e.g. "1d8", "6d4") whose meaning depends on `category`. */
   dice?: string
   material?: string
@@ -20,6 +53,32 @@ export interface ItemDefinition {
   basePrice?: number
   /** Guard (AC) bonus granted while equipped. Summed across equipped items. */
   guard?: number
+  /** Special effects while equipped: `;`-separated tokens (`cha+1`, `sustenance`). */
+  effects?: string
+  /** Usable from the bag — the items.csv flag, which the server validates
+   * against its `use_effect` dispatch at boot. */
+  consumable?: boolean
+  /** Server-authoritative workflow started when this item is used. */
+  useAction?: AuthenticatedUseAction
+  /** Blocks player trade and estate storage. */
+  untradeable?: boolean
+  /** Satiation restored when eaten (doc/HUNGER.md). */
+  nutrition?: number
+  /** Phoenix talisman: max-HP percentage restored by a revive. */
+  reviveHpPercent?: number
+  /** Cloth colour of the procedural cape, e.g. `#6d1720`. Its presence is what
+   *  makes a back-slot item a cape rather than, say, a quiver. */
+  capeColor?: string
+  /** Weapon reach in meters. Absent means melee — see `weaponRangeMeters`. */
+  range?: number
+  /** Ability whose modifier the server rolls a ranged weapon's hit and damage
+   *  with (`dex` for the bow). Its presence is what makes a weapon ranged. */
+  rangedAbility?: string
+  /** Hands the weapon occupies. Absent = 1; 2 seals the off-hand slot. */
+  hands?: number
+  /** What a ranged weapon spends, and what a round feeds. Both name the same
+   *  kind; absent on a weapon means firing is free. */
+  ammoKind?: string
 }
 
 const itemDefs = itemsJson as Record<string, ItemDefinition>
@@ -28,19 +87,189 @@ export function getItemDef(itemDefId: string): ItemDefinition | undefined {
   return itemDefs[itemDefId]
 }
 
-/** Categories that can be drunk/used from the bag. Extend as potions are added.
- * Keep in sync with the server's `use_effect` dispatch (server/src/item_defs.rs):
- * eating a fish heals by its dice, opening a coin pouch pays out its copper. */
-const CONSUMABLE_CATEGORIES = new Set([
-  'healing_potion',
-  'return_scroll',
-  'enchant_scroll',
-  'fish',
-  'coin_catch',
-])
+export function weaponTypeLabel(
+  weaponType: WeaponType,
+  language?: Locale
+): string {
+  return translate(`weapon.${weaponType}`, {}, language)
+}
 
-export function isConsumable(def: ItemDefinition): boolean {
-  return def.category !== undefined && CONSUMABLE_CATEGORIES.has(def.category)
+export function armorTypeLabel(
+  armorType: ArmorType,
+  language?: Locale
+): string {
+  return translate(`armor.${armorType}`, {}, language)
+}
+
+/** Cloth colour to render the cape in, or undefined when the back-slot item
+ *  is not a cape — `capeColor` is the whole test, so a future quiver sits in
+ *  the slot without becoming a sheet. A `dye` (the instance's own colour,
+ *  doc/CAPE_CUSTOMIZATION.md) overrides the def's, but never makes a cape of
+ *  something that isn't one. */
+export function capeColorOf(
+  itemDefId: string | null | undefined,
+  dye?: string | null
+): string | undefined {
+  const cloth = itemDefId ? getItemDef(itemDefId)?.capeColor : undefined
+  return cloth ? (dye ?? cloth) : undefined
+}
+
+/** Include enchantment in every displayed item name. */
+export function itemDisplayName(
+  itemDefId: string,
+  enchant = 0,
+  language?: Locale
+): string {
+  const def = getItemDef(itemDefId)
+  return def ? displayName(def, enchant, language) : itemDefId
+}
+
+export function displayName(
+  def: ItemDefinition,
+  enchant = 0,
+  language?: Locale
+): string {
+  const name = itemText(def.id, 'name', def.name, language)
+  return enchant !== 0 ? `+${enchant} ${name}` : name
+}
+
+export function itemDescription(
+  def: ItemDefinition,
+  language?: Locale
+): string {
+  return itemText(def.id, 'description', def.description, language)
+}
+
+/** Guard while equipped, with the armor enchant folded in as combat resolves it. */
+export function effectiveGuard(def: ItemDefinition, enchant = 0): number {
+  return (def.guard ?? 0) + (def.category === 'armor' ? enchant : 0)
+}
+
+/** Reach of the weapon in `itemDefId`: its declared `range`, else the melee
+ *  reach. The server gates every swing on the same items.json column, so
+ *  click-to-attack, the chase break-off and the rejection all agree with it. */
+export function weaponRangeMeters(
+  itemDefId: string | null | undefined
+): number {
+  const def = itemDefId ? getItemDef(itemDefId) : undefined
+  const range = def?.category === 'weapon' ? def.range : undefined
+  return range && range > 0 ? range : PLAYER_ATTACK_RANGE_METERS
+}
+
+/** A weapon that resolves on an ability instead of STR — the `rangedAbility`
+ *  column is what makes it ranged, on the client as on the server. */
+export function isRangedWeapon(itemDefId: string | null | undefined): boolean {
+  const def = itemDefId ? getItemDef(itemDefId) : undefined
+  return def?.category === 'weapon' && !!def.rangedAbility
+}
+
+/** A weapon that claims both hands: no off-hand item alongside it. */
+export function isTwoHanded(itemDefId: string | null | undefined): boolean {
+  return (itemDefId ? getItemDef(itemDefId)?.hands : undefined) === 2
+}
+
+/** Mean roll of a round's die; 0 for anything that is not ammunition. The
+ *  server ranks the quiver the same way (`ItemDefinition::average_damage`) —
+ *  from the dice rather than a tier column, so an order can never disagree
+ *  with the damage it stands for. */
+export function ammoAverageDamage(def: ItemDefinition): number {
+  return def.category === 'ammo' ? meanRoll(def.dice) : 0
+}
+
+/** Mean roll of a dice notation, or 0 when there isn't one. */
+function meanRoll(dice: string | undefined): number {
+  const m = dice?.match(/^(\d+)d(\d+)$/)
+  return m ? (Number(m[1]) * (Number(m[2]) + 1)) / 2 : 0
+}
+
+/** Mean damage roll (dice + enchant); 0 for non-weapons.
+ *
+ *  A ranged weapon is only half the roll — the round adds the other die, and
+ *  the bow's own die is a token 1d1. Quoting the bow alone would read as
+ *  worthless beside any blade, so `ammo` (the def of the chosen round) is
+ *  folded in. Ammunition never carries an enchant: it cannot be equipped, so
+ *  no scroll can reach it. */
+export function averageDamage(
+  def: ItemDefinition,
+  enchant = 0,
+  ammo?: ItemDefinition
+): number {
+  if (def.category !== 'weapon') return 0
+  const round =
+    def.ammoKind && ammo?.ammoKind === def.ammoKind ? ammo : undefined
+  return meanRoll(def.dice) + meanRoll(round?.dice) + enchant
+}
+
+/** Tooltip effects, including armor enchantment. */
+export function statLabels(
+  def: ItemDefinition,
+  enchant = 0,
+  language?: Locale
+): string[] {
+  const guard = effectiveGuard(def, enchant)
+  const lines = guard
+    ? [translate('item.guard', { value: guard }, language)]
+    : []
+  for (const raw of def.effects?.split(';') ?? []) {
+    const token = raw.trim()
+    if (!token) continue
+    const cha = token.match(/^cha([+-]\d+)$/)
+    if (cha) lines.push(translate('item.charisma', { value: cha[1] }, language))
+    else if (token === 'sustenance')
+      lines.push(translate('item.sustenance', {}, language))
+    else lines.push(token)
+  }
+  return lines
+}
+
+export interface StatDelta {
+  label: string
+  /** Candidate minus equipped, in the stat's own unit. */
+  delta: number
+  better: boolean
+}
+
+/** Differences that matter when swapping `def` in for the equipped item:
+ *  weight, damage, guard. Equal stats are dropped. */
+export function compareStats(
+  def: ItemDefinition,
+  enchant: number,
+  equipped: ItemDefinition,
+  equippedEnchant: number,
+  /** The chosen round, so a bow is compared with what it actually fires. */
+  ammo?: ItemDefinition,
+  language?: Locale
+): StatDelta[] {
+  const out: StatDelta[] = []
+  const push = (label: string, delta: number, lowerIsBetter = false) => {
+    if (Math.abs(delta) < 0.05) return
+    out.push({ label, delta, better: lowerIsBetter ? delta < 0 : delta > 0 })
+  }
+  push(
+    translate('stat.weight', {}, language),
+    def.weight - equipped.weight,
+    true
+  )
+  push(
+    translate('stat.damage', {}, language),
+    averageDamage(def, enchant, ammo) -
+      averageDamage(equipped, equippedEnchant, ammo)
+  )
+  push(
+    translate('stat.guard', {}, language),
+    effectiveGuard(def, enchant) - effectiveGuard(equipped, equippedEnchant)
+  )
+  return out
+}
+
+export function isConsumable(def: Pick<ItemDefinition, 'consumable'>): boolean {
+  return def.consumable === true
+}
+
+export function isUsable(
+  def: Pick<ItemDefinition, 'consumable' | 'useAction'>
+): boolean {
+  return def.consumable === true || def.useAction !== undefined
 }
 
 export default itemDefs

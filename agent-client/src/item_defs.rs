@@ -18,16 +18,45 @@ pub struct ItemDef {
     pub equip_slot: Option<EquipSlot>,
     #[serde(default)]
     pub category: Option<String>,
+    /// Usable straight from the bag — the items.csv flag, which the server
+    /// validates against its `use_effect` dispatch at boot.
+    #[serde(default)]
+    pub consumable: bool,
+    #[serde(rename = "worldModel", default)]
+    pub world_model: Option<String>,
+    #[serde(default)]
+    pub nutrition: Option<u32>,
+    #[serde(rename = "grillsInto", default)]
+    pub grills_into: Option<String>,
 }
 
 impl ItemDef {
-    /// Usable straight from the bag. Mirrors the server's `use_effect`
-    /// categories — extend both when a new consumable lands.
     pub fn is_consumable(&self) -> bool {
-        matches!(
+        self.consumable
+    }
+
+    /// Food an inn maid can set on a table (the server's `meal::is_servable`).
+    pub fn is_dish(&self) -> bool {
+        onlinerpg_shared::meal::is_servable(
             self.category.as_deref(),
-            Some("healing_potion" | "return_scroll" | "enchant_scroll" | "fish")
+            self.world_model.as_deref(),
+            self.nutrition,
         )
+    }
+
+    /// What `/play_music` requires the performer to carry.
+    pub fn is_instrument(&self) -> bool {
+        self.category.as_deref() == Some("instrument")
+    }
+
+    /// Using it sets a tip hat down or picks it back up (server's toggle).
+    pub fn is_tip_hat(&self) -> bool {
+        self.category.as_deref() == Some("tip_hat")
+    }
+
+    /// A dungeon floor key (doc/DUNGEON_REWARD.md): worth grabbing on sight.
+    pub fn is_dungeon_key(&self) -> bool {
+        self.category.as_deref() == Some("dungeon_key")
     }
 }
 
@@ -44,6 +73,26 @@ pub fn all_ids() -> Vec<&'static str> {
 
 pub fn get(item_def_id: &str) -> Option<&'static ItemDef> {
     defs().get(item_def_id)
+}
+
+/// Everything an inn maid may set on a table.
+pub fn dish_ids() -> Vec<&'static str> {
+    let mut ids: Vec<&str> = defs()
+        .iter()
+        .filter(|(_, d)| d.is_dish())
+        .map(|(id, _)| id.as_str())
+        .collect();
+    ids.sort_unstable();
+    ids
+}
+
+pub fn menu_line() -> String {
+    dish_ids().join(", ")
+}
+
+/// The dish id an LLM named — by id or display name — among servable food.
+pub fn resolve_dish(asked: &str) -> Option<&'static str> {
+    resolve_named(&dish_ids(), asked)
 }
 
 /// Pick the item the agent meant out of a candidate list — what it carries,
@@ -85,6 +134,14 @@ mod tests {
         let def = get("healing_potion").expect("healing potion is defined");
         assert!(def.is_consumable());
         assert!(def.equip_slot.is_none());
+    }
+
+    /// The hand-kept category list this flag replaced had drifted — it
+    /// missed coin_catch. The data flag covers it.
+    #[test]
+    fn coin_catches_are_consumable() {
+        let def = get("sunken_coin_pouch").expect("coin pouch is defined");
+        assert!(def.is_consumable());
     }
 
     #[test]

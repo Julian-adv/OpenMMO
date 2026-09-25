@@ -1,13 +1,36 @@
+import type { AbilityId } from '../data/abilities'
+import { setLocalFishingAction } from '../stores/fishingStore'
 import type {
+  BagLineItem,
   FishingAction,
   Position,
   PositionCorrection,
+  MountRecovery,
+  StallBuyLine,
+  TradeLineItem,
 } from './networkTypes'
 import { hmrSingleton } from '../utils/hmr'
-import type { MonsterData } from '../types/Monster'
 import type { WallDirection } from '../utils/house-geometry'
 import { gameStore, resetGameStore, serverNotice } from '../stores/gameStore'
+import { get } from 'svelte/store'
+import { inventoryStore } from '../stores/inventoryStore'
+import { getItemDef } from '../data/itemDefs'
+import { currentDungeonDepth } from '../stores/dungeonStore'
+import { playerVisualFloorLevel } from '../stores/housingStore'
+import {
+  beginLocalTeleport,
+  localTeleportActive,
+  resetTeleportEffects,
+} from '../stores/teleportEffectStore'
 import { resetPartyStores } from '../stores/partyStore'
+import { resetFriendStores } from '../stores/friendStore'
+import { resetPlayerTrade } from '../stores/playerTradeStore'
+import { resetLandClaimPreview, type LandClaim } from '../stores/landClaimStore'
+import { resetFences } from '../stores/fenceStore'
+import { resetHousePlacement } from '../stores/housePlacementStore'
+import { resetEstateStorage } from '../stores/estateStorageStore'
+import type { FenceEdge } from '../terrain/fenceEdges'
+import type { LandscapingTool } from '../terrain/landscaping'
 import { remotePlayerManager } from '../managers/remotePlayerManager'
 import { monsterManager } from '../managers/monsterManager'
 import {
@@ -16,15 +39,19 @@ import {
   setApiAuthToken,
 } from '../utils/networkUtils'
 import { clearServerGameTime } from '../stores/timeStore'
+import { clearWeather } from '../stores/weatherStore'
 import { markShopRequested, shopSession } from '../stores/tradeStore'
 import initWasm, {
   serialize_client_message,
   deserialize_server_message,
   protocol_version,
+  stamp_layout_version,
   close_code_protocol_mismatch,
+  close_code_client_desync,
 } from '../wasm/onlinerpg_shared'
 import { createEvent } from './networkEvents'
-import { handleServerMessage } from './messageHandlers'
+import { handleServerMessage, resetTerrainDownloads } from './messageHandlers'
+import { worldView } from './worldView'
 import type {
   AccountCharacter,
   CharacterClass,
@@ -35,6 +62,7 @@ import type {
   RollCharacterStatsResult,
 } from './networkTypes'
 import type { ClientEnvReport } from '../utils/clientEnvReport'
+import type { InstrumentNoteEvent } from '../managers/instrumentInput'
 
 export type {
   AccountCharacter,
@@ -63,6 +91,28 @@ const MAX_RECONNECT_ATTEMPTS = 10
 /// TCP connect closes with 1006), so it stays null until then — and a refusal
 /// can only reach a client that already sent a wasm-serialized message.
 let protocolMismatchCloseCode: number | null = null
+let clientDesyncCloseCode: number | null = null
+
+/** Survives the reload it triggers, so a cache still serving the stale bundle
+ *  shows the notice instead of reloading forever. */
+const STALE_RELOAD_FLAG = 'openmmo:stale-build-reloaded'
+
+/** Long enough to read why the page is reloading. */
+const RELOAD_NOTICE_MS = 2500
+
+/** Only a new bundle fixes a refused build, so fetch it for them — once per
+ *  tab, since a stale cache would otherwise loop. */
+function reloadOnceForStaleBuild() {
+  if (typeof window === 'undefined') return
+  try {
+    if (window.sessionStorage.getItem(STALE_RELOAD_FLAG)) return
+    window.sessionStorage.setItem(STALE_RELOAD_FLAG, '1')
+  } catch {
+    // Storage disabled: skip the reload rather than loop.
+    return
+  }
+  window.setTimeout(() => window.location.reload(), RELOAD_NOTICE_MS)
+}
 
 class NetworkManager {
   private socket: WebSocket | null = null
@@ -79,6 +129,7 @@ class NetworkManager {
   /// Reset per socket, like `handshakeSent`: the reason belongs to the
   /// connection that was refused, not to the session.
   private lastAuthErrorMessage: string | null = null
+  private lastKickReason: string | null = null
 
   // Events
   readonly respawnRequested = createEvent<() => void>()
@@ -94,9 +145,14 @@ class NetworkManager {
   readonly characterStatsRolled =
     createEvent<(result: CharacterRollResult) => void>()
   readonly characterDeleted = createEvent<(characterId: number) => void>()
+  readonly characterRenameRequired =
+    createEvent<(characterId: number) => void>()
+  readonly characterRenamed =
+    createEvent<(payload: { characterId: number; name: string }) => void>()
   readonly characterError = createEvent<(message: string) => void>()
   readonly kicked = createEvent<(reason: string) => void>()
   readonly interactionRejected = createEvent<(reason: string) => void>()
+  readonly mountRecovery = createEvent<(update: MountRecovery) => void>()
   readonly positionCorrected = createEvent<(c: PositionCorrection) => void>()
 
   constructor() {
@@ -104,9 +160,21 @@ class NetworkManager {
     // merely opened proves nothing, since refusals arrive after the open.
     this.authSuccess.on(() => {
       this.reconnectAttempts = 0
+      this.lastKickReason = null
+      // This build is current, so a later refusal deserves its own reload.
+      try {
+        window.sessionStorage.removeItem(STALE_RELOAD_FLAG)
+      } catch {
+        // Nothing to clear when storage is unavailable.
+      }
     })
     this.authError.on((message) => {
       this.lastAuthErrorMessage = message
+    })
+    // The reason arrives as a message just before the close frame that says
+    // what to do about it, so hold it for the handler that has the code.
+    this.kicked.on((reason) => {
+      this.lastKickReason = reason
     })
   }
 
@@ -118,11 +186,14 @@ class NetworkManager {
       characterCreated: this.characterCreated,
       characterStatsRolled: this.characterStatsRolled,
       characterDeleted: this.characterDeleted,
+      characterRenameRequired: this.characterRenameRequired,
+      characterRenamed: this.characterRenamed,
       characterError: this.characterError,
       kicked: this.kicked,
       playerRespawned: this.playerRespawned,
       interactionRejected: this.interactionRejected,
       positionCorrected: this.positionCorrected,
+      mountRecovery: this.mountRecovery,
     }
   }
 
@@ -130,6 +201,7 @@ class NetworkManager {
     if (!this.wasmReady) {
       await initWasm()
       protocolMismatchCloseCode = close_code_protocol_mismatch()
+      clientDesyncCloseCode = close_code_client_desync()
       this.wasmReady = true
     }
   }
@@ -182,21 +254,32 @@ class NetworkManager {
     }
 
     this.socket.onclose = (event) => {
+      resetTeleportEffects()
+      worldView.synchronized = false
+      resetTerrainDownloads()
+      resetFences()
+      resetHousePlacement()
+      resetEstateStorage()
+      resetLandClaimPreview()
       console.log('Disconnected from server', event.code, event.reason)
       gameStore.update((state) => ({ ...state, isConnected: false }))
 
       // The refusal's own AuthError carries the full "how to fix it" hint;
       // the close frame only has room for a short reason.
-      if (event.code === protocolMismatchCloseCode) {
+      // Two ways the server says "a new build, not another attempt": refused
+      // at the handshake, or ended mid-session once the sims disagreed.
+      const desynced = event.code === clientDesyncCloseCode
+      if (event.code === protocolMismatchCloseCode || desynced) {
         this.refusedPermanently = true
         if (this.reconnectTimer) {
           clearTimeout(this.reconnectTimer)
           this.reconnectTimer = null
         }
         serverNotice.set(
-          this.lastAuthErrorMessage ??
+          (desynced ? this.lastKickReason : this.lastAuthErrorMessage) ??
             'This client is out of date. Please reload the page.'
         )
+        reloadOnceForStaleBuild()
         return
       }
 
@@ -214,8 +297,11 @@ class NetworkManager {
       try {
         const bytes = new Uint8Array(event.data as ArrayBuffer)
         const message = deserialize_server_message(bytes)
-        handleServerMessage(message, this.messageEvents, () =>
-          this.disconnect()
+        handleServerMessage(
+          message,
+          this.messageEvents,
+          () => this.disconnect(),
+          () => this.sendMessage('ResyncWorld')
         )
         // Respond to time sync with heartbeat so the server knows we're alive
         if (
@@ -258,40 +344,41 @@ class NetworkManager {
       this.reconnectTimer = null
       monsterManager.reset()
       remotePlayerManager.reset()
-      // The old connection's party died with it server-side (disconnect =
-      // leave); a rejoin into an empty area sends no GameState snapshot.
+      // Disconnect leaves the party; an empty area may send no new snapshot.
       resetPartyStores()
+      // Refresh the friend roster and presence after rejoining.
+      resetFriendStores()
+      // Disconnect cancels any open trade.
+      resetPlayerTrade()
       this.connect()
       const googleIdToken = getApiAuthToken()
-      if (googleIdToken && this.lastCharacterId) {
-        const opened = await this.waitForSocketOpen(5000)
-        if (opened) {
-          this.authenticateWithGoogle(googleIdToken)
-          let unsubSuccess = () => {}
-          let unsubError = () => {}
-          const cleanup = () => {
-            unsubSuccess()
-            unsubError()
-          }
-          unsubSuccess = this.authSuccess.on(() => {
-            cleanup()
-            if (this.lastCharacterId) {
-              this.sendAndSerialize({
-                EnterGame: { character_id: this.lastCharacterId },
-              })
-            }
-          })
-          // A cached Google ID token expires ~1h after login, so a reconnect
-          // past that point fails re-auth. Surface it instead of leaving the
-          // player silently stuck on an authenticated-but-empty socket.
-          unsubError = this.authError.on((message) => {
-            cleanup()
-            console.warn('Reconnect auth failed:', message)
-            this.disconnect()
-            this.kicked.emit('Your session expired. Please sign in again.')
+      if (!googleIdToken) return
+
+      const opened = await this.waitForSocketOpen(5000)
+      if (!opened) return
+
+      this.authenticateWithGoogle(googleIdToken)
+      let unsubSuccess = () => {}
+      let unsubError = () => {}
+      const cleanup = () => {
+        unsubSuccess()
+        unsubError()
+      }
+      unsubSuccess = this.authSuccess.on(() => {
+        cleanup()
+        if (this.lastCharacterId) {
+          this.sendAndSerialize({
+            EnterGame: { character_id: this.lastCharacterId },
           })
         }
-      }
+      })
+      // Prompt for sign-in when the cached token is no longer valid.
+      unsubError = this.authError.on((message) => {
+        cleanup()
+        console.warn('Reconnect auth failed:', message)
+        this.disconnect()
+        this.kicked.emit('Your session expired. Please sign in again.')
+      })
     }, delay)
   }
 
@@ -383,17 +470,30 @@ class NetworkManager {
 
   // --- Public send methods ---
 
-  sendPlayerAttack(monsterId: string) {
-    this.sendMessage({ PlayerAttack: { monster_id: monsterId } })
+  sendWorldReady() {
+    this.sendMessage('WorldReady')
   }
 
-  sendMonsterAttack(monsterId: string, targetPlayerId: number) {
+  sendUseAbility(
+    ability: AbilityId,
+    monsterId: string | null = null,
+    targetPlayerId: number | null = null
+  ) {
     this.sendMessage({
-      MonsterAttack: {
+      UseAbility: {
+        ability,
         monster_id: monsterId,
         target_player_id: targetPlayerId,
       },
     })
+  }
+
+  sendPlayerAttack(monsterId: string) {
+    this.sendMessage({ PlayerAttack: { monster_id: monsterId } })
+  }
+
+  sendDaggerDoubleSlash(monsterId: string) {
+    this.sendMessage({ DaggerDoubleSlash: { monster_id: monsterId } })
   }
 
   requestRespawn() {
@@ -402,38 +502,63 @@ class NetworkManager {
     }
   }
 
+  sendPlayerMountRecover(requestId: number, goal: Position) {
+    this.sendMessage({ PlayerMountRecover: { request_id: requestId, goal } })
+  }
+
+  sendMovementSample(position: Position, rotation: number, floorLevel: number) {
+    this.sendMessage({
+      PlayerMovementSample: { position, rotation, floor_level: floorLevel },
+    })
+  }
+
+  acknowledgeMovementResync(resyncId: number) {
+    this.sendMessage({ MovementResyncAck: { resync_id: resyncId } })
+  }
+
+  sendPlayerMountTurn(rotation: number, stop = false, sprinting = false) {
+    this.sendMessage({ PlayerMountTurn: { rotation, stop, sprinting } })
+  }
+
   sendPlayerMove(
     position: { x: number; y: number; z: number },
     rotation: number,
     floorLevel: number,
-    append = false
+    append = false,
+    sprinting = false
   ) {
     this.sendMessage({
-      PlayerMove: { position, rotation, floor_level: floorLevel, append },
+      PlayerMove: {
+        position,
+        rotation,
+        floor_level: floorLevel,
+        append,
+        sprinting,
+      },
+    })
+  }
+
+  sendPlayerKeyboardMove(
+    position: Position,
+    rotation: number,
+    floorLevel: number,
+    forward: number,
+    sprinting: boolean
+  ) {
+    this.sendMessage({
+      PlayerKeyboardMove: {
+        position,
+        rotation,
+        floor_level: floorLevel,
+        forward,
+        sprinting,
+      },
     })
   }
 
   /** Floor change between waypoints — see ClientMessage::PlayerFloorChanged. */
   sendPlayerFloor(floorLevel: number) {
     this.sendMessage({ PlayerFloorChanged: { floor_level: floorLevel } })
-  }
-
-  sendMonsterMove(
-    monsterId: string,
-    position: { x: number; y: number; z: number },
-    rotation: number,
-    state: MonsterData['state'],
-    targetPosition: { x: number; y: number; z: number }
-  ) {
-    this.sendMessage({
-      MonsterMove: {
-        monster_id: monsterId,
-        position,
-        rotation,
-        state,
-        target_position: targetPosition,
-      },
-    })
   }
 
   sendDebugTeleport(position: Position) {
@@ -449,11 +574,28 @@ class NetworkManager {
   }
 
   sendFishingRespond(action: FishingAction) {
+    setLocalFishingAction(action)
     this.sendMessage({ FishingRespond: { action } })
   }
 
   sendFishingStop() {
     this.sendMessage('FishingStop')
+  }
+
+  sendStartInstrument() {
+    this.sendMessage('StartInstrument')
+  }
+
+  sendInstrumentNotes(events: readonly InstrumentNoteEvent[]) {
+    if (events.length === 0) return
+    this.sendMessage({
+      InstrumentNotes: {
+        events: events.map((event) => ({
+          note: event.note,
+          offset_ms: event.offsetMs,
+        })),
+      },
+    })
   }
 
   sendBreakDungeonProp(entranceId: string, depth: number, propId: number) {
@@ -498,6 +640,10 @@ class NetworkManager {
     this.sendMessage({ TorchToggle: { enabled } })
   }
 
+  sendSetActiveTitle(title: string | null) {
+    this.sendMessage({ SetActiveTitle: { title } })
+  }
+
   /** Returns whether the report actually went out, so the caller only
    *  records a send that happened. */
   sendEnvReport(report: ClientEnvReport): boolean {
@@ -521,16 +667,6 @@ class NetworkManager {
     this.sendMessage({ ChatMessage: { message } })
   }
 
-  requestSpawnMonster(
-    type: string,
-    position: { x: number; y: number; z: number },
-    rotation: number
-  ) {
-    this.sendMessage({
-      RequestSpawnMonster: { monster_type: type, position, rotation },
-    })
-  }
-
   sendToggleDoor(
     houseId: string,
     roomIndex: number,
@@ -547,6 +683,11 @@ class NetworkManager {
     })
   }
 
+  /** Draw from this pile from now on; `null` goes back to the strongest. */
+  sendSelectAmmo(itemDefId: string | null) {
+    this.sendMessage({ SelectAmmo: { item_def_id: itemDefId } })
+  }
+
   sendEquipItem(instanceId: number) {
     if (!this.isNetworkableInstanceId(instanceId, 'equip')) return
     this.sendMessage({ EquipItem: { instance_id: instanceId } })
@@ -554,6 +695,11 @@ class NetworkManager {
 
   sendUnequipItem(slot: EquipSlot) {
     this.sendMessage({ UnequipItem: { slot } })
+  }
+
+  sendSetItemLocked(instanceId: number, locked: boolean) {
+    if (!this.isNetworkableInstanceId(instanceId, 'lock')) return
+    this.sendMessage({ SetItemLocked: { instance_id: instanceId, locked } })
   }
 
   sendDebugDropItem(itemDefId: string) {
@@ -589,6 +735,14 @@ class NetworkManager {
     this.sendMessage({ DropItem: { instance_id: instanceId } })
   }
 
+  sendDropItems(items: BagLineItem[]) {
+    const valid = items.filter((i) =>
+      this.isNetworkableInstanceId(i.instance_id, 'drop')
+    )
+    if (valid.length === 0) return
+    this.sendMessage({ DropItems: { items: valid } })
+  }
+
   /// Sent at the pickup clip's first frame so nearby players see the crouch
   /// from the top; `sendPickupItem` follows at the grab moment.
   sendPickupStarted() {
@@ -602,7 +756,220 @@ class NetworkManager {
 
   sendUseItem(instanceId: number) {
     if (!this.isNetworkableInstanceId(instanceId, 'use')) return
+    if (get(localTeleportActive)) return
+    const item = get(inventoryStore).bag.find(
+      (entry) => entry.instance_id === instanceId
+    )
+    const category = item && getItemDef(item.item_def_id)?.category
+    if (
+      category === 'teleport_scroll' ||
+      category === 'return_scroll' ||
+      category === 'estate_return_scroll'
+    ) {
+      this.sendAfterTeleportDeparture({
+        UseTeleportScroll: { instance_id: instanceId },
+      })
+      return
+    }
     this.sendMessage({ UseItem: { instance_id: instanceId } })
+  }
+
+  private sendAfterTeleportDeparture(message: ClientMessage) {
+    if (get(localTeleportActive)) return
+    const player = get(gameStore).currentPlayer
+    if (!player || player.health <= 0 || !this.isConnected()) return
+    const position = {
+      x: player.position.x,
+      y: player.position.y,
+      z: player.position.z,
+    }
+    const depth = get(currentDungeonDepth)
+    const floorLevel =
+      depth > 0 ? -depth : Math.max(0, get(playerVisualFloorLevel))
+    this.sendPlayerMove(position, player.rotation, floorLevel)
+    beginLocalTeleport({ playerId: player.id, position, floorLevel }, () => {
+      const current = get(gameStore).currentPlayer
+      if (
+        !current ||
+        current.id !== player.id ||
+        current.health <= 0 ||
+        Math.hypot(
+          current.position.x - position.x,
+          current.position.z - position.z
+        ) > 0.1
+      )
+        return false
+      return this.sendAndSerialize(message)
+    })
+  }
+
+  sendPlaceHouse(instanceId: number, origin: Position, quarterTurns: number) {
+    if (!this.isNetworkableInstanceId(instanceId, 'place house')) return
+    this.sendMessage({
+      PlaceHouse: {
+        instance_id: instanceId,
+        origin,
+        quarter_turns: quarterTurns,
+      },
+    })
+  }
+
+  sendRemoveHouse(houseId: string) {
+    this.sendMessage({ RemoveHouse: { house_id: houseId } })
+  }
+
+  sendLandClaim(claim: LandClaim) {
+    const { instance_id, tile_x, tile_z, quadrant } = claim
+    this.sendMessage({
+      UseLandDocument: { instance_id, tile_x, tile_z, quadrant },
+    })
+  }
+
+  sendEditFence(edge: FenceEdge, place: boolean) {
+    this.sendMessage({ EditFence: { edge, place } })
+  }
+
+  sendStartLandscapingMode(tool: LandscapingTool) {
+    this.sendMessage({ StartLandscapingMode: { tool } })
+  }
+
+  sendEditLandscape(
+    stroke: import('../terrain/landscaping').LandscapingStroke
+  ) {
+    this.sendMessage({ EditLandscape: { stroke } })
+  }
+
+  sendPlaceEstateChest(
+    instanceId: number,
+    position: Position,
+    rotationDeg: number,
+    floorLevel: number
+  ) {
+    this.sendMessage({
+      PlaceEstateChest: {
+        instance_id: instanceId,
+        position,
+        rotation_deg: rotationDeg,
+        floor_level: floorLevel,
+      },
+    })
+  }
+
+  sendOpenEstateChest(chestId: number) {
+    this.sendMessage({ OpenEstateChest: { chest_id: chestId } })
+  }
+
+  sendStartEstateFurnitureMove(furnitureId: number) {
+    this.sendMessage({
+      StartEstateFurnitureMove: { furniture_id: furnitureId },
+    })
+  }
+
+  sendMoveEstateFurniture(
+    furnitureId: number,
+    expectedRevision: number,
+    position: Position,
+    rotationDeg: number,
+    floorLevel: number
+  ) {
+    this.sendMessage({
+      MoveEstateFurniture: {
+        furniture_id: furnitureId,
+        expected_revision: expectedRevision,
+        position,
+        rotation_deg: rotationDeg,
+        floor_level: floorLevel,
+      },
+    })
+  }
+
+  sendSelectFurnitureDisplay(displayId: number) {
+    this.sendMessage({ SelectFurnitureDisplay: { display_id: displayId } })
+  }
+
+  sendCheckoutFurniture(
+    items: { display_id: number; quantity: number }[],
+    expectedGold: number,
+    expectedTotal: number
+  ) {
+    this.sendMessage({
+      CheckoutFurniture: {
+        items,
+        expected_gold: expectedGold,
+        expected_total: expectedTotal,
+      },
+    })
+  }
+
+  sendSetEstateFurnitureText(furnitureId: number, text: string) {
+    this.sendMessage({
+      SetEstateFurnitureText: { furniture_id: furnitureId, text },
+    })
+  }
+
+  sendTransferEstateItems(
+    chestId: number,
+    deposits: BagLineItem[],
+    withdrawals: BagLineItem[],
+    revision: number
+  ) {
+    const validDeposits = deposits.filter((item) =>
+      this.isNetworkableInstanceId(item.instance_id, 'store')
+    )
+    const validWithdrawals = withdrawals.filter((item) =>
+      this.isNetworkableInstanceId(item.instance_id, 'take')
+    )
+    if (validDeposits.length === 0 && validWithdrawals.length === 0) return
+    this.sendMessage({
+      TransferEstateItems: {
+        chest_id: chestId,
+        deposits: validDeposits,
+        withdrawals: validWithdrawals,
+        expected_revision: revision,
+      },
+    })
+  }
+
+  sendRecoverEstateChest(chestId: number) {
+    this.sendMessage({ RecoverEstateChest: { chest_id: chestId } })
+  }
+
+  sendLandAccount(merchantPlayerId: number) {
+    this.sendMessage({ LandAccount: { merchant_player_id: merchantPlayerId } })
+  }
+
+  sendLandTransfer(merchantPlayerId: number, amount: number, deposit: boolean) {
+    const transfer = { merchant_player_id: merchantPlayerId, amount }
+    this.sendMessage(
+      deposit ? { LandDeposit: transfer } : { LandWithdraw: transfer }
+    )
+  }
+
+  /** Spend the dye at `instanceId` on the worn cape. */
+  sendDyeCape(instanceId: number, color: string) {
+    if (!this.isNetworkableInstanceId(instanceId, 'dye')) return
+    this.sendMessage({ DyeCape: { instance_id: instanceId, color } })
+  }
+
+  /** Spend the transfer kit at `instanceId`, printing the already-uploaded
+   *  `texture` (a content hash) onto the worn cape. */
+  sendApplyCapeTexture(instanceId: number, texture: string) {
+    if (!this.isNetworkableInstanceId(instanceId, 'print')) return
+    this.sendMessage({ ApplyCapeTexture: { instance_id: instanceId, texture } })
+  }
+
+  /** Report the print another player is wearing. */
+  sendReportCapeTexture(playerId: number) {
+    this.sendMessage({ ReportCapeTexture: { player_id: playerId } })
+  }
+
+  /** Drop copper into a nearby performer's tip hat. */
+  sendTipHat(hatId: number, amount: number) {
+    this.sendMessage({ TipHat: { hat_id: hatId, amount } })
+  }
+
+  sendEatMeal(mealId: number) {
+    this.sendMessage({ EatMeal: { meal_id: mealId } })
   }
 
   sendOpenShop(merchantPlayerId: number) {
@@ -616,18 +983,135 @@ class NetworkManager {
     this.sendMessage({ CloseShop: { merchant_player_id: merchantPlayerId } })
   }
 
+  /** Tell the merchant NPC its pushed trade offer was waved off ("Not now",
+   *  or the toast expired), so its agent stops offering for a while. */
+  sendDeclineTrade(merchantPlayerId: number) {
+    this.sendMessage({ DeclineTrade: { merchant_player_id: merchantPlayerId } })
+  }
+
+  /** Ask a nearby player to trade (`/trade <name>`). */
+  sendPlayerTradeRequest(targetName: string) {
+    this.sendMessage({ PlayerTradeRequest: { target_name: targetName } })
+  }
+
+  /** Step up to a stall: an NPC's opens their shop, a player's the panel. */
+  sendOpenStall(stallId: number) {
+    this.sendMessage({ OpenStall: { stall_id: stallId } })
+  }
+
+  sendCloseStall() {
+    this.sendMessage('CloseStall')
+  }
+
+  sendSetStallSign(sign: string) {
+    this.sendMessage({ SetStallSign: { sign } })
+  }
+
+  sendListStallItem(instanceId: number, quantity: number, unitPrice: number) {
+    this.sendMessage({
+      ListStallItem: {
+        instance_id: instanceId,
+        quantity,
+        unit_price: unitPrice,
+      },
+    })
+  }
+
+  sendUnlistStallItem(instanceId: number) {
+    this.sendMessage({ UnlistStallItem: { instance_id: instanceId } })
+  }
+
+  /** All-or-nothing over every line, like `sendBuyItems`. */
+  sendBuyFromStall(stallId: number, lines: StallBuyLine[]) {
+    if (lines.length === 0) return
+    this.sendMessage({ BuyFromStall: { stall_id: stallId, lines } })
+  }
+
+  sendPlayerTradeRespond(requesterId: number, accept: boolean) {
+    this.sendMessage({
+      PlayerTradeRespond: { requester_id: requesterId, accept },
+    })
+  }
+
+  /** Replace our whole side of the table — never a delta. */
+  sendPlayerTradeSetOffer(
+    items: { instance_id: number; quantity: number }[],
+    copper: number
+  ) {
+    this.sendMessage({ PlayerTradeSetOffer: { items, copper } })
+  }
+
+  sendPlayerTradeLock(revision: number) {
+    this.sendMessage({ PlayerTradeLock: { revision } })
+  }
+
+  sendPlayerTradeUnlock() {
+    this.sendMessage('PlayerTradeUnlock')
+  }
+
+  sendPlayerTradeConfirm(revision: number) {
+    this.sendMessage({ PlayerTradeConfirm: { revision } })
+  }
+
+  sendPlayerTradeCancel() {
+    this.sendMessage('PlayerTradeCancel')
+  }
+
+  /** Invite a player to the party by name (the friend panel's button; typed
+   *  invites go through `/party <name>` as ordinary chat). */
+  sendPartyInvite(targetName: string) {
+    this.sendMessage({ PartyInvite: { target_name: targetName } })
+  }
+
   /** Answer a party invite (ServerMessage::PartyInviteReceived). */
   sendPartyRespond(inviterId: number, accept: boolean) {
     this.sendMessage({ PartyRespond: { inviter_id: inviterId, accept } })
+  }
+
+  /** Answer a party summon (ServerMessage::PartySummonReceived). */
+  sendPartySummonRespond(casterId: number, accept: boolean) {
+    const message = { PartySummonRespond: { caster_id: casterId, accept } }
+    if (accept) this.sendAfterTeleportDeparture(message)
+    else this.sendMessage(message)
   }
 
   sendPartyLeave() {
     this.sendMessage('PartyLeave')
   }
 
-  /** Poll party member positions for the world map. */
+  /** Leader-only: remove a member from the party. */
+  sendPartyKick(targetId: number) {
+    this.sendMessage({ PartyKick: { target_id: targetId } })
+  }
+
+  /** Leader-only: hand the lead to another member. */
+  sendPartyPromote(targetId: number) {
+    this.sendMessage({ PartyPromote: { target_id: targetId } })
+  }
+
+  /** Say something to the whole party, wherever its members are. */
+  sendPartyChat(message: string) {
+    this.sendMessage({ PartyChat: { message } })
+  }
+
+  /** One-shot party-position snapshot for a just-opened map. */
   sendRequestPartyPositions() {
     this.sendMessage('RequestPartyPositions')
+  }
+
+  /** Answer a friend request (ServerMessage::FriendRequestReceived). */
+  sendFriendRespond(requesterId: number, accept: boolean) {
+    this.sendMessage({ FriendRespond: { requester_id: requesterId, accept } })
+  }
+
+  /** Drop a friendship, both directions. */
+  sendFriendRemove(name: string) {
+    this.sendMessage({ FriendRemove: { name } })
+  }
+
+  /** Poll which friends are online; there is no presence push. */
+  sendRequestFriendsOnline() {
+    this.sendMessage('RequestFriendsOnline')
   }
 
   sendBuyItem(merchantPlayerId: number, itemDefId: string) {
@@ -652,6 +1136,33 @@ class NetworkManager {
     })
   }
 
+  sendBuyItems(merchantPlayerId: number, items: TradeLineItem[]) {
+    if (items.length === 0) return
+    this.sendMessage({
+      BuyItems: { merchant_player_id: merchantPlayerId, items },
+    })
+  }
+
+  sendSellItems(merchantPlayerId: number, items: BagLineItem[]) {
+    const valid = items.filter((i) =>
+      this.isNetworkableInstanceId(i.instance_id, 'sell')
+    )
+    if (valid.length === 0) return
+    this.sendMessage({
+      SellItems: { merchant_player_id: merchantPlayerId, items: valid },
+    })
+  }
+
+  sendBuybackItems(merchantPlayerId: number, entryIds: number[]) {
+    if (entryIds.length === 0) return
+    this.sendMessage({
+      BuybackItems: {
+        merchant_player_id: merchantPlayerId,
+        entry_ids: entryIds,
+      },
+    })
+  }
+
   // --- Auth & character request methods ---
 
   /// The server refuses every message that arrives before ClientInfo, so this
@@ -665,7 +1176,7 @@ class NetworkManager {
       ClientInfo: {
         protocol_version: protocol_version(),
         client_kind: 'web',
-        client_version: __APP_VERSION__,
+        client_version: stamp_layout_version(__APP_VERSION__),
       },
     })
     this.socket!.send(bytes)
@@ -853,9 +1364,51 @@ class NetworkManager {
     )
   }
 
+  async requestRenameCharacter(
+    characterId: number,
+    newName: string
+  ): Promise<{ ok: boolean; message?: string; name?: string }> {
+    await this.ensureWasm()
+    if (!this.isConnected()) {
+      return { ok: false, message: 'Socket is not connected' }
+    }
+
+    return this.requestWithTimeout(
+      8000,
+      'Character rename timed out',
+      (settle, onCleanup) => {
+        onCleanup(
+          this.characterRenamed.on(({ name }) => {
+            settle({ ok: true, name })
+          })
+        )
+        onCleanup(
+          this.characterError.on((message) => {
+            settle({ ok: false, message })
+          })
+        )
+        onCleanup(
+          this.authError.on((message) => {
+            settle({ ok: false, message })
+          })
+        )
+        return {
+          send: () =>
+            this.sendAndSerialize({
+              RenameCharacter: {
+                character_id: characterId,
+                new_name: newName,
+              },
+            }),
+          notSentResult: { ok: false, message: 'Socket is not connected' },
+        }
+      }
+    )
+  }
+
   async requestEnterGame(
     characterId: number
-  ): Promise<{ ok: boolean; message?: string }> {
+  ): Promise<{ ok: boolean; message?: string; renameRequired?: boolean }> {
     await this.ensureWasm()
     if (!this.isConnected()) {
       return { ok: false, message: 'Socket is not connected' }
@@ -869,6 +1422,11 @@ class NetworkManager {
         onCleanup(
           this.joinSuccess.on(() => {
             settle({ ok: true })
+          })
+        )
+        onCleanup(
+          this.characterRenameRequired.on(() => {
+            settle({ ok: false, renameRequired: true })
           })
         )
         onCleanup(
@@ -895,11 +1453,15 @@ class NetworkManager {
   // --- Connection management ---
 
   disconnect() {
+    resetTeleportEffects()
+    worldView.synchronized = false
+    resetTerrainDownloads()
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
     }
     clearServerGameTime()
+    clearWeather()
     if (this.socket) {
       this.socket.onopen = null
       this.socket.onclose = null

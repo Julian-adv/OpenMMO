@@ -9,6 +9,7 @@
     disposeHouseGroup,
     applyDoorGhostMaterials,
     resetDoorGhostMaterials,
+    applyInteriorGhosts,
     DEFAULT_WALL_HEIGHT,
     FLOOR_THICKNESS,
     MAX_FLOOR_LEVEL,
@@ -32,11 +33,11 @@
   } from '../../utils/house-geo-utils'
   import { getWallByDir } from '../../managers/housingManager'
   import { housingManager } from '../../managers/housingManager'
-  import { furnitureManager } from '../../managers/furnitureManager'
   import {
-    TERRAIN_TILE_SIZE,
-    getTerrainChunkFromPosition,
-  } from './terrain-utils'
+    resolveStairFloor,
+    roomContainsXZ,
+  } from '../../managers/housing-queries'
+  import { furnitureManager } from '../../managers/furnitureManager'
   import {
     playerFloorOffset,
     playerVisualFloorLevel,
@@ -44,6 +45,7 @@
   } from '../../stores/housingStore'
   import {
     debugVisible,
+    housingEditorMode,
     passabilityDebugVisible,
   } from '../../stores/debugStore'
   import { pushPassabilityEdges } from '../../utils/passability-wireframe'
@@ -62,12 +64,12 @@
   let currentInsideHouseId: string | null = null
   let playerInsideFloor = 0
   let lastFloorOffset = 0
+  /** Whether last frame resolved onto a stairwell (acquire/release hysteresis). */
+  let wasOnStairs = false
   // Preallocated for per-frame room detection (avoid GC)
   const _allRooms: { house: HouseData; roomIndex: number }[] = []
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const _seenRooms = new Set<string>()
-  let lastChunkX = NaN
-  let lastChunkZ = NaN
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const occludedHouseIds = new Set<string>()
 
@@ -83,6 +85,16 @@
     color: 0xffaa00,
   })
   let debugPassDirty = false
+
+  // Server floor syncs (join/teleport/correction) also write the store; follow
+  // them so stacked rooms resolve to that storey.
+  const unsubFloor = playerVisualFloorLevel.subscribe((v) => {
+    if (playerInsideFloor !== v && debugPassGroup.visible) {
+      // The overlay draws only the player's floor; redraw on floor change.
+      debugPassDirty = true
+    }
+    playerInsideFloor = v
+  })
 
   const unsubPassDebug = passabilityDebugVisible.subscribe((v) => {
     debugPassGroup.visible = v
@@ -122,7 +134,10 @@
 
       const vertices: number[] = []
 
+      // Only the player's floor: drawing every storey at once stacks the
+      // grids into an unreadable tangle.
       for (const floor of rp.floors) {
+        if (floor.floorLevel !== playerInsideFloor) continue
         pushPassabilityEdges(
           vertices,
           floor.cells,
@@ -142,6 +157,7 @@
     const EDGE_ALL = 15
     const furnitureVerts: number[] = []
     for (const piece of furnitureManager.getDebugPieces()) {
+      if (piece.floorLevel !== playerInsideFloor) continue
       for (const [cellX, cellZ] of piece.cells) {
         pushPassabilityEdges(
           furnitureVerts,
@@ -177,8 +193,18 @@
     if (debugPassGroup.visible) debugPassDirty = true
   })
 
+  // Roofs hide the interior while editing; the flag is part of the house
+  // hash so the toggle flows through the normal rebuild path.
+  let roofs = true
+  const unsubEditor = housingEditorMode.subscribe((v) => {
+    roofs = !v
+    syncHouses(housingManager.getAllHouses())
+  })
+
   onDestroy(() => {
+    unsubFloor()
     unsubHouses()
+    unsubEditor()
     unsubPassDebug()
     unsubFurniture()
     for (const [, result] of houses) {
@@ -206,7 +232,11 @@
     // Add or rebuild changed houses
     for (const data of allHouses) {
       const existing = houses.get(data.id)
-      const newHash = JSON.stringify(data.rooms)
+      const newHash = JSON.stringify({
+        roofs,
+        origin: data.origin,
+        rooms: data.rooms,
+      })
 
       // Fast path: if only door isOpen changed, sync door states without rebuild
       if (existing && existing.roomsHash === newHash) continue
@@ -216,7 +246,7 @@
         housingGroup.remove(existing.houseGroup)
         disposeHouseGroup(existing.houseGroup)
       }
-      const result = buildHouseGroup(data, newHash)
+      const result = buildHouseGroup(data, newHash, { roofs })
       houses.set(data.id, result)
       housingGroup.add(result.houseGroup)
 
@@ -263,23 +293,19 @@
 
   const DOOR_SWING_SPEED = Math.PI // radians per second (~0.5s for 90°)
 
-  /** Called from game loop — loads chunks + checks player inside state */
+  // How far inside the shaft footprint the player must be to acquire the
+  // stairs; release uses the full footprint.
+  const STAIR_ACQUIRE_MARGIN = 0.1
+
+  /** Update indoor visibility once the destination's world data is ready. */
   export function update(_deltaTime: number) {
     if (!playerPosition) return
 
     // Rebuild passability debug lines if needed
     if (debugPassDirty && debugPassGroup.visible) rebuildPassabilityDebug()
 
-    // Load housing chunks around player when chunk changes
-    const { x: cx, z: cz } = getTerrainChunkFromPosition(
-      playerPosition,
-      TERRAIN_TILE_SIZE
-    )
-    if (cx !== lastChunkX || cz !== lastChunkZ) {
-      lastChunkX = cx
-      lastChunkZ = cz
-      housingManager.updateStreaming(playerPosition.x, playerPosition.z)
-    }
+    if (!housingManager.isSynchronized(playerPosition.x, playerPosition.z))
+      return
 
     // Player-inside detection (per-room, floor-aware)
     // Use ground-level Y for AABB check, then try multiple floor levels
@@ -288,6 +314,7 @@
     let insideId: string | null = null
     let newOffset = 0
     let effectiveFloor = 0
+    let onStairsNow = false
 
     for (const [id, result] of houses) {
       // XZ-only broad-phase: player.y is forced to terrainY each frame
@@ -341,6 +368,18 @@
               playerInsideFloor < room.floorLevel)
           )
             continue
+          // Require an inset only when acquiring stairs to prevent edge snaps.
+          if (
+            !wasOnStairs &&
+            !roomContainsXZ(
+              roomResult.house,
+              room,
+              playerPosition.x,
+              playerPosition.z,
+              STAIR_ACQUIRE_MARGIN
+            )
+          )
+            continue
           const offset = getStairwellYOffset(
             room,
             roomResult.house.origin.x,
@@ -349,6 +388,9 @@
             playerPosition.z
           )
           const dist = Math.abs(offset - lastFloorOffset)
+          // Reject half-storey entry snaps while already inside a house.
+          const maxEntryRise = (room.wallHeight + FLOOR_THICKNESS) / 2
+          if (currentInsideHouseId !== null && dist > maxEntryRise) continue
           if (dist < bestStairDist) {
             bestStairDist = dist
             bestStairOffset = offset
@@ -369,21 +411,24 @@
       if (stairResult) {
         const room = stairResult.house.rooms[stairResult.roomIndex]
         insideId = id
+        onStairsNow = true
         newOffset = terrainComp + bestStairOffset
         const entryFloor = room.floorLevel
         const exitFloor = room.floorLevel + 1
         const entryFloorY =
-          terrainComp + floorYBase(entryFloor, room.wallHeight)
-        // Hysteresis: transition at 95% of stairwell rise to avoid flickering
-        const exitThreshold =
-          entryFloorY +
-          (terrainComp + floorYBase(exitFloor, room.wallHeight) - entryFloorY) *
-            0.95
-        if (playerInsideFloor <= entryFloor) {
-          effectiveFloor = newOffset >= exitThreshold ? exitFloor : entryFloor
-        } else {
-          effectiveFloor = newOffset <= exitThreshold ? entryFloor : exitFloor
-        }
+          terrainComp +
+          floorYBase(entryFloor, room.wallHeight) +
+          FLOOR_THICKNESS / 2
+        const exitFloorY =
+          terrainComp +
+          floorYBase(exitFloor, room.wallHeight) +
+          FLOOR_THICKNESS / 2
+        const progress = (newOffset - entryFloorY) / (exitFloorY - entryFloorY)
+        effectiveFloor = resolveStairFloor(
+          entryFloor,
+          playerInsideFloor,
+          progress
+        )
       } else if (floorResult) {
         const room = floorResult.house.rooms[floorResult.roomIndex]
         insideId = id
@@ -395,6 +440,7 @@
       }
       if (insideId) break
     }
+    wasOnStairs = onStairsNow
 
     // Update visibility when house or floor changes
     if (
@@ -426,6 +472,19 @@
     if (newOffset !== lastFloorOffset) {
       lastFloorOffset = newOffset
       playerFloorOffset.set(newOffset)
+    }
+
+    if (currentInsideHouseId) {
+      const curr = houses.get(currentInsideHouseId)
+      if (curr) {
+        const o = curr.houseGroup.position
+        applyInteriorGhosts(
+          curr,
+          playerInsideFloor,
+          playerPosition.x - o.x,
+          playerPosition.z - o.z
+        )
+      }
     }
 
     // Animate door pivots
@@ -482,6 +541,7 @@
         groups.front.position.y = OFFSCREEN_Y
         groups.back.position.y = OFFSCREEN_Y
         groups.floor.position.y = OFFSCREEN_Y
+        for (const w of groups.interior) w.group.position.y = OFFSCREEN_Y
       }
     }
     applyDoorGhostMaterials(result, floor)
@@ -493,12 +553,14 @@
       groups.back.position.y = 0
       groups.floor.position.y = 0
       groups.stair.position.y = 0
+      for (const w of groups.interior) w.group.position.y = 0
     }
   }
 
   function resetFloorVisibility(result: HouseGroupResult) {
     resetAllFloorGroupPositions(result)
     resetDoorGhostMaterials(result)
+    applyInteriorGhosts(result, null)
   }
 
   /**
@@ -566,6 +628,7 @@
       groups.front.visible = false
       groups.back.visible = false
       groups.stair.visible = false
+      for (const w of groups.interior) w.group.visible = false
       if (fl !== 0) {
         groups.floor.visible = false
       }
@@ -582,6 +645,7 @@
       groups.back.visible = true
       groups.floor.visible = true
       groups.stair.visible = true
+      for (const w of groups.interior) w.group.visible = true
     }
     for (const door of result.doors) {
       door.pivot.visible = true
@@ -589,12 +653,9 @@
     setGroupRaycast(result.houseGroup, true)
   }
 
-  /** Pre-load housing chunks around the player so geometry is ready before
-   *  the loading screen is dismissed. Without this, chunk data arrives during
-   *  gameplay and the first render of each house stalls WebGPU. */
-  export async function preloadChunks(px: number, pz: number) {
-    housingManager.updateStreaming(px, pz)
-    await housingManager.waitForPending()
+  /** Wait for the authoritative housing snapshot before warming the scene. */
+  export async function preloadChunks(_px: number, _pz: number) {
+    await housingManager.waitForSnapshot()
   }
 
   export function warmupHousingPipelines() {
@@ -643,7 +704,10 @@
   export function getDoorMeshes(): THREE.Object3D[] {
     const result: THREE.Object3D[] = []
     for (const h of houses.values()) {
-      for (const door of h.doors) result.push(door.pivot)
+      for (const door of h.doors) {
+        result.push(door.pivot)
+        if (door.clickTarget) result.push(door.clickTarget)
+      }
     }
     return result
   }

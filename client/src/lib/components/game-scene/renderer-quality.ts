@@ -17,6 +17,20 @@ export function setupCsmShadow(light: THREE.DirectionalLight): void {
   light.shadow.shadowNode = csm
 }
 
+export function setDirectionalShadowIntensity(
+  light: THREE.DirectionalLight,
+  intensity: number
+): void {
+  light.shadow.intensity = intensity
+  const csm = light.shadow.shadowNode
+  if (csm instanceof CSMShadowNode) {
+    // CSM keeps a separate shadow for each cascade.
+    for (const cascade of csm.lights) {
+      if (cascade.shadow) cascade.shadow.intensity = intensity
+    }
+  }
+}
+
 const _tmpVec2 = new THREE.Vector2()
 
 export function applyGraphicsPreset(

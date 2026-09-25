@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import { computeCorpseGroundOffset } from './characterAnimationUtils'
+import {
+  computeCorpseGroundOffset,
+  groundRetargetedClips,
+  retargetAnimationsForCharacterModel,
+} from './characterAnimationUtils'
 
 // A one-bone skinned mesh whose vertices sit at the given local Ys, all fully
 // weighted to the bone. `posedBoneY` moves the bone AFTER bind, standing in for
@@ -61,5 +65,228 @@ describe('computeCorpseGroundOffset', () => {
       new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial())
     )
     expect(computeCorpseGroundOffset(root)).toBe(0)
+  })
+})
+
+// A rig whose bone offsets are all `scale` times the 1 m reference. The
+// animation packs are authored on a 10x rig under an Armature scaled 0.1, so
+// their raw bone positions are 10x anything rigged at 1:1 — playing them
+// unretargeted stretches the limbs to that size.
+function makeRig(scale: number, hipY = 1.0): THREE.Group {
+  const hips = new THREE.Bone()
+  hips.name = 'Hips'
+  hips.position.set(0, hipY * scale, 0)
+  const arm = new THREE.Bone()
+  arm.name = 'LeftArm'
+  arm.position.set(0, 0.25 * scale, 0)
+  const hand = new THREE.Bone()
+  hand.name = 'LeftHand'
+  hand.position.set(0, 0.3 * scale, 0)
+  hips.add(arm)
+  arm.add(hand)
+
+  const bones = [hips, arm, hand]
+  const positions = new Float32Array(bones.length * 3)
+  const skinIndex = new Uint16Array(bones.length * 4)
+  const skinWeight = new Float32Array(bones.length * 4)
+  for (let i = 0; i < bones.length; i++) {
+    positions[i * 3 + 1] = i * 0.25 * scale
+    skinIndex[i * 4] = i
+    skinWeight[i * 4] = 1
+  }
+  const geom = new THREE.BufferGeometry()
+  geom.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  geom.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(skinIndex, 4))
+  geom.setAttribute(
+    'skinWeight',
+    new THREE.Float32BufferAttribute(skinWeight, 4)
+  )
+
+  const mesh = new THREE.SkinnedMesh(geom, new THREE.MeshBasicMaterial())
+  mesh.add(hips)
+  mesh.bind(new THREE.Skeleton(bones))
+
+  const root = new THREE.Group()
+  root.add(mesh)
+  root.updateMatrixWorld(true)
+  return root
+}
+
+function packLikeSource(): THREE.Group {
+  const root = makeRig(10)
+  root.scale.setScalar(0.1)
+  root.updateMatrixWorld(true)
+  return root
+}
+
+function packClip(name: string): THREE.AnimationClip {
+  return new THREE.AnimationClip(name, 1, [
+    new THREE.VectorKeyframeTrack(
+      'Hips.position',
+      [0, 1],
+      [0, 10, 0, 0, 11, 0]
+    ),
+    new THREE.VectorKeyframeTrack(
+      'LeftArm.position',
+      [0, 1],
+      [0, 2.5, 0, 0, 2.5, 0]
+    ),
+    new THREE.VectorKeyframeTrack(
+      'LeftHand.position',
+      [0, 1],
+      [0, 3, 0, 0, 3, 0]
+    ),
+    new THREE.QuaternionKeyframeTrack(
+      'LeftArm.quaternion',
+      [0, 1],
+      [0, 0, 0, 1, 0, 0, 0, 1]
+    ),
+  ])
+}
+
+describe('retargetAnimationsForCharacterModel', () => {
+  it.each([0, Math.PI / 2])(
+    'keeps a mounted character at its world position with rotation %s',
+    async (rotation) => {
+      const target = makeRig(1, 1.1)
+      const hips = target.getObjectByName('Hips')!
+      // GLB bones can be siblings of the skinned mesh.
+      target.add(hips)
+      const parent = new THREE.Group()
+      parent.position.set(1200, 50, 2300)
+      parent.rotation.y = rotation
+      parent.add(target)
+      parent.updateMatrixWorld(true)
+      const before = hips.getWorldPosition(new THREE.Vector3())
+      const source = makeRig(1)
+      const [clip] = await retargetAnimationsForCharacterModel(target, source, [
+        new THREE.AnimationClip(`ride-world-${rotation}`, 1, [
+          new THREE.VectorKeyframeTrack(
+            'Hips.position',
+            [0, 1],
+            [0, 0, 0, 0, 0, 0]
+          ),
+        ]),
+      ])
+      expect(hips.getWorldPosition(new THREE.Vector3())).toEqual(before)
+      const mixer = new THREE.AnimationMixer(target)
+      mixer.clipAction(clip).play()
+      mixer.update(0.1)
+      parent.updateMatrixWorld(true)
+      const mountedPosition = hips.getWorldPosition(new THREE.Vector3())
+      expect(mountedPosition.x).toBeCloseTo(1200, 5)
+      expect(mountedPosition.y).toBeCloseTo(50.1, 5)
+      expect(mountedPosition.z).toBeCloseTo(2300, 5)
+    }
+  )
+
+  it('drops the source rig bone positions that stretch the limbs', async () => {
+    const [clip] = await retargetAnimationsForCharacterModel(
+      makeRig(1),
+      packLikeSource(),
+      [packClip('slash1')]
+    )
+
+    const positionTracks = clip.tracks
+      .filter((track) => track.name.endsWith('.position'))
+      .map((track) => track.name)
+    expect(positionTracks).toEqual(['Hips.position'])
+    expect(clip.tracks.length).toBeGreaterThan(1)
+  })
+
+  it('keeps each target model on its own retarget', async () => {
+    const source = packLikeSource()
+    const [tall] = await retargetAnimationsForCharacterModel(
+      makeRig(1, 1.2),
+      source,
+      [packClip('slash2')]
+    )
+    const [short] = await retargetAnimationsForCharacterModel(
+      makeRig(1, 0.8),
+      source,
+      [packClip('slash2')]
+    )
+
+    const hipY = (clip: THREE.AnimationClip) =>
+      clip.tracks.find((track) => track.name === 'Hips.position')?.values[1]
+    expect(hipY(tall)).not.toBeCloseTo(hipY(short) as number, 3)
+  })
+})
+
+describe('groundRetargetedClips', () => {
+  const sunkClip = () =>
+    new THREE.AnimationClip('dying', 1, [
+      new THREE.VectorKeyframeTrack(
+        'Hips.position',
+        [0, 1],
+        [0, -0.5, 0, 0, -0.4, 0]
+      ),
+    ])
+
+  it('lifts a clip that plays below the floor', async () => {
+    const rig = makeRig(1)
+    const [grounded] = await groundRetargetedClips(rig, [sunkClip()])
+    const hips = grounded.tracks.find((t) => t.name === 'Hips.position')!
+    const raw = sunkClip().tracks[0].values
+
+    const lift = hips.values[1] - raw[1]
+    expect(lift).toBeGreaterThan(0)
+    // A constant shift: the motion inside the clip is untouched.
+    expect(hips.values[4] - raw[4]).toBeCloseTo(lift, 5)
+  })
+
+  it('leaves an already grounded clip alone', async () => {
+    const rig = makeRig(1)
+    const [once] = await groundRetargetedClips(rig, [sunkClip()])
+    const [twice] = await groundRetargetedClips(rig, [once])
+    const hipsOnce = once.tracks.find((t) => t.name === 'Hips.position')!
+    const hipsTwice = twice.tracks.find((t) => t.name === 'Hips.position')!
+    expect(hipsTwice.values[1]).toBeCloseTo(hipsOnce.values[1], 5)
+  })
+})
+
+describe('groundRetargetedClips rest clip', () => {
+  const fallingClip = () =>
+    new THREE.AnimationClip('dying', 1, [
+      new THREE.VectorKeyframeTrack(
+        'Hips.position',
+        [0, 0.5, 1],
+        [0, 1, 0, 0, 0.2, 0, 0, -0.4, 0]
+      ),
+    ])
+
+  async function lowestAtEnd(clip: THREE.AnimationClip, rig: THREE.Group) {
+    const mesh = rig.children[0] as THREE.SkinnedMesh
+    const mixer = new THREE.AnimationMixer(rig)
+    mixer.clipAction(clip).play()
+    mixer.setTime(clip.duration - 1e-4)
+    rig.updateMatrixWorld(true)
+    const v = new THREE.Vector3()
+    let lowest = Infinity
+    const position = mesh.geometry.getAttribute('position')
+    for (let i = 0; i < position.count; i++) {
+      v.fromBufferAttribute(position, i)
+      mesh.applyBoneTransform(i, v)
+      mesh.localToWorld(v)
+      lowest = Math.min(lowest, v.y)
+    }
+    return lowest
+  }
+
+  it('lands the last pose on the floor', async () => {
+    const rig = makeRig(1)
+    const [grounded] = await groundRetargetedClips(rig, [fallingClip()], {
+      restClip: 'dying',
+    })
+    expect(await lowestAtEnd(grounded, makeRig(1))).toBeCloseTo(0, 2)
+  })
+
+  it('sinks the last pose by the rest offset', async () => {
+    const rig = makeRig(1)
+    const [grounded] = await groundRetargetedClips(rig, [fallingClip()], {
+      restClip: 'dying',
+      restOffset: -0.05,
+    })
+    expect(await lowestAtEnd(grounded, makeRig(1))).toBeCloseTo(-0.05, 2)
   })
 })

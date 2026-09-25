@@ -1,9 +1,252 @@
 use super::*;
 
+#[tokio::test]
+async fn grida_buys_player_items_at_ricas_rate_and_supports_buyback() {
+    let game = make_test_game_state("grida_checkout_shop");
+    let (mut rx, _npc_rx) = setup_haggle(&game, 10, 0).await;
+    let buyer = pid("buyer");
+    let clerk = pid("npc_grida");
+    game.add_player(make_npc("npc_grida", "Grida", 0.0, 0.0))
+        .await;
+    game.inventories.write().await.insert(
+        buyer,
+        PlayerInventory {
+            bag: vec![
+                bag_item(11, "iron_sword", 1),
+                bag_item(12, "message_in_a_bottle", 2),
+                bag_item(13, "apple", 2),
+                bag_item(14, "furniture_chair", 1),
+            ],
+            ..Default::default()
+        },
+    );
+    game.open_shop(&buyer, &clerk, true).await;
+    assert!(drain(&mut rx).iter().any(|message| matches!(message,
+        ServerMessage::ShopState { merchant_name, catalog, sell_rate_percent, .. }
+        if merchant_name == "Grida" && catalog.is_empty() && *sell_rate_percent == 40
+    )));
+    game.sell_item(&buyer, &clerk, 11).await;
+    assert_eq!(game.get_player_gold(&buyer).await, 4000);
+    game.sell_items(
+        &buyer,
+        &clerk,
+        vec![
+            onlinerpg_shared::messages::BagLineItem {
+                instance_id: 12,
+                qty: 2,
+            },
+            onlinerpg_shared::messages::BagLineItem {
+                instance_id: 13,
+                qty: 2,
+            },
+            onlinerpg_shared::messages::BagLineItem {
+                instance_id: 14,
+                qty: 1,
+            },
+        ],
+    )
+    .await;
+    assert_eq!(game.get_player_gold(&buyer).await, 4334);
+    assert!(game.inventories.read().await[&buyer].bag.is_empty());
+    let buybacks = game.buybacks.read().await[&(1, "Grida".to_string())]
+        .iter()
+        .map(|entry| entry.entry.entry_id)
+        .collect();
+    game.buyback_items(&buyer, &clerk, buybacks).await;
+    assert_eq!(game.get_player_gold(&buyer).await, 0);
+    let inventory = game.get_player_inventory(&buyer).await.unwrap();
+    for (item, expected) in [
+        ("iron_sword", 1),
+        ("message_in_a_bottle", 2),
+        ("apple", 2),
+        ("furniture_chair", 1),
+    ] {
+        assert_eq!(
+            inventory
+                .bag
+                .iter()
+                .filter(|i| i.item_def_id == item)
+                .map(|i| i.quantity)
+                .sum::<u32>(),
+            expected
+        );
+    }
+    assert!(!drain(&mut rx)
+        .iter()
+        .any(|message| matches!(message, ServerMessage::TradeError { .. })));
+}
+
+#[tokio::test]
+async fn item_lock_blocks_single_sales_and_mixed_batch_sales() {
+    let game = make_test_game_state("item_lock_shop");
+    let (mut rx, _npc_rx) = setup_haggle(&game, 12, 0).await;
+    let id = pid("buyer");
+    game.inventories.write().await.insert(
+        id,
+        PlayerInventory {
+            bag: vec![
+                bag_item(11, "iron_sword", 1),
+                bag_item(12, "steel_longsword", 1),
+            ],
+            ..Default::default()
+        },
+    );
+    game.set_item_locked(&id, 12, true).await;
+    drain(&mut rx);
+    game.sell_item(&id, &pid("npc_rica"), 12).await;
+    expect_trade_error(&mut rx, "locked");
+    game.sell_items(
+        &id,
+        &pid("npc_rica"),
+        vec![
+            onlinerpg_shared::messages::BagLineItem {
+                instance_id: 11,
+                qty: 1,
+            },
+            onlinerpg_shared::messages::BagLineItem {
+                instance_id: 12,
+                qty: 1,
+            },
+        ],
+    )
+    .await;
+    expect_trade_error(&mut rx, "Unlock");
+    assert_eq!(game.get_player_inventory(&id).await.unwrap().bag.len(), 2);
+    assert_eq!(game.player_gold.read().await[&id], 0);
+    game.set_item_locked(&id, 12, false).await;
+    game.sell_item(&id, &pid("npc_rica"), 12).await;
+    assert_eq!(game.get_player_inventory(&id).await.unwrap().bag.len(), 1);
+    assert!(game.player_gold.read().await[&id] > 0);
+}
+
+#[tokio::test]
+async fn steward_sells_land_deeds_and_burns_the_purchase_gold() {
+    let game_state = make_test_game_state("steward_land_deed");
+    let buyer = pid("buyer");
+    let steward = pid("npc_steward");
+    game_state
+        .add_player(make_npc("npc_steward", "Aldwin", 0.0, 0.0))
+        .await;
+    game_state.add_player(make_player("buyer", 1.0, 0.0)).await;
+    for (player, character_id, gold) in [(&buyer, 1, 50_000), (&steward, 2, 0)] {
+        game_state
+            .register_player_character(player, character_id, 0, attrs_with_cha(10), gold, None)
+            .await;
+    }
+    game_state
+        .inventories
+        .write()
+        .await
+        .insert(buyer, PlayerInventory::default());
+    let mut buyer_rx = game_state.register_direct_channel(&buyer).await;
+    game_state.open_shop(&buyer, &steward, true).await;
+    match buyer_rx.try_recv().unwrap() {
+        ServerMessage::ShopState { catalog, .. } => {
+            assert_eq!(catalog, vec!["land_deed"]);
+        }
+        other => panic!("Expected Aldwin's shop, got {other:?}"),
+    }
+
+    game_state.buy_item(&buyer, &steward, "land_deed").await;
+    assert_eq!(game_state.player_gold.read().await[&buyer], 0);
+    assert_eq!(game_state.player_gold.read().await[&steward], 0);
+    {
+        let inventories = game_state.inventories.read().await;
+        let bag = &inventories[&buyer].bag;
+        assert_eq!(bag.len(), 1);
+        assert_eq!(bag[0].item_def_id, "land_deed");
+        assert_eq!(bag[0].quantity, 1);
+    }
+
+    while buyer_rx.try_recv().is_ok() {}
+    game_state.buy_item(&buyer, &steward, "land_deed").await;
+    expect_trade_error(&mut buyer_rx, "gold");
+    assert_eq!(
+        game_state.inventories.read().await[&buyer].bag[0].quantity,
+        1
+    );
+    assert_eq!(game_state.player_gold.read().await[&buyer], 0);
+}
+
+#[tokio::test]
+async fn estate_architect_sells_landscaping_supplies() {
+    let game = make_test_game_state("estate_architect_shop");
+    let buyer = pid("buyer");
+    let architect = pid("npc_estate_architect");
+    game.add_player(make_npc("npc_estate_architect", "Rowan", 0.0, 0.0))
+        .await;
+    game.add_player(make_player("buyer", 1.0, 0.0)).await;
+    game.register_player_character(&buyer, 1, 0, attrs_with_cha(10), 2_000_000, None)
+        .await;
+    game.inventories
+        .write()
+        .await
+        .insert(buyer, PlayerInventory::default());
+    let mut rx = game.register_direct_channel(&buyer).await;
+    game.open_shop(&buyer, &architect, true).await;
+    let mut supplies = vec!["wooden_fence", onlinerpg_shared::landscaping::TOOLBOX_ITEM];
+    supplies.extend(onlinerpg_shared::landscaping::PALETTE_ITEMS.map(|(_, id)| id));
+    supplies.extend([
+        "scroll_of_medium_two_story_house",
+        "scroll_of_small_house",
+        "scroll_of_small_two_story_house",
+        "scroll_of_large_two_story_house",
+        "scroll_of_medium_house",
+    ]);
+    match rx.try_recv().unwrap() {
+        ServerMessage::ShopState { catalog, .. } => {
+            assert_eq!(catalog.len(), supplies.len());
+            for id in &supplies {
+                assert!(catalog.iter().any(|item| item == id));
+            }
+            assert!(!catalog.iter().any(|item| item == "land_deed"));
+        }
+        other => panic!("Expected Rowan's shop, got {other:?}"),
+    }
+    for id in supplies {
+        game.buy_item(&buyer, &architect, id).await;
+        assert!(game.inventories.read().await[&buyer]
+            .bag
+            .iter()
+            .any(|item| item.item_def_id == id && item.quantity == 1));
+    }
+}
+
+#[tokio::test]
+async fn steward_rejects_single_and_batch_item_sales() {
+    let game = make_test_game_state("steward_no_sales");
+    let buyer = pid("buyer");
+    let steward = pid("npc_steward");
+    game.add_player(make_npc("npc_steward", "Aldwin", 0.0, 0.0))
+        .await;
+    game.add_player(make_player("buyer", 1.0, 0.0)).await;
+    game.inventories.write().await.insert(
+        buyer,
+        PlayerInventory {
+            bag: vec![bag_item(1, "land_deed", 1)],
+            ..Default::default()
+        },
+    );
+    let mut rx = game.register_direct_channel(&buyer).await;
+    game.sell_item(&buyer, &steward, 1).await;
+    expect_trade_error(&mut rx, "does not buy");
+    game.sell_items(
+        &buyer,
+        &steward,
+        vec![onlinerpg_shared::messages::BagLineItem {
+            instance_id: 1,
+            qty: 1,
+        }],
+    )
+    .await;
+    expect_trade_error(&mut rx, "does not buy");
+    assert_eq!(game.inventories.read().await[&buyer].bag.len(), 1);
+}
+
 #[test]
 fn haggling_band_invariant_boundary() {
-    // Rica's actual rate must satisfy the invariant; 60% is the first rate
-    // where max haggled sell (60% * 1.25) meets min haggled buy (75%).
+    // 60% is the first rate where max haggled sell (60% * 1.25) meets min
+    // haggled buy (75%).
     assert!(deals::band_invariant_holds(40));
     assert!(deals::band_invariant_holds(59));
     assert!(!deals::band_invariant_holds(60));
@@ -18,6 +261,27 @@ fn haggling_band_widens_with_cha_within_limits() {
     assert_eq!(deals::deal_half_band_pct(255), 25);
 }
 
+#[test]
+fn the_deal_notice_reads_the_sign_against_the_side() {
+    let notice = |kind, pct| deals::deal_notice("Wick", "Bread", kind, pct, 300_000);
+    assert_eq!(
+        notice(DealKind::Buy, -10),
+        "Wick offers you 10% off Bread (5 min)."
+    );
+    assert_eq!(
+        notice(DealKind::Buy, 10),
+        "Wick offers you Bread at 10% above the usual price (5 min)."
+    );
+    assert_eq!(
+        notice(DealKind::Sell, 10),
+        "Wick offers you 10% over the usual price for your Bread (5 min)."
+    );
+    assert_eq!(
+        notice(DealKind::Sell, -10),
+        "Wick offers you 10% under the usual price for your Bread (5 min)."
+    );
+}
+
 #[tokio::test]
 async fn offer_deal_clamps_modifier_to_cha_band() {
     let game_state = make_test_game_state("offer_clamp");
@@ -27,7 +291,7 @@ async fn offer_deal_clamps_modifier_to_cha_band() {
         .offer_deal(
             &pid("npc_rica"),
             &pid("buyer"),
-            "iron_sword",
+            "wooden_shield",
             DealKind::Buy,
             -50,
             "loyal customer",
@@ -41,7 +305,7 @@ async fn offer_deal_clamps_modifier_to_cha_band() {
             modifier_pct,
             ..
         }) => {
-            assert_eq!(item_def_id, "iron_sword");
+            assert_eq!(item_def_id, "wooden_shield");
             assert_eq!(kind, DealKind::Buy);
             assert_eq!(modifier_pct, -10, "CHA 10 band is ±10");
         }
@@ -61,16 +325,171 @@ async fn offer_deal_clamps_modifier_to_cha_band() {
 }
 
 #[tokio::test]
-async fn cross_floor_offer_deal_is_rejected() {
-    let game_state = make_test_game_state("cross_floor_offer");
-    let (mut buyer_rx, mut npc_rx) = setup_haggle(&game_state, 10, 0).await;
-    set_floor(&game_state, "buyer", 1).await;
+async fn equipped_gold_ring_widens_the_haggle_band() {
+    let game_state = make_test_game_state("offer_clamp_cha_ring");
+    let (mut buyer_rx, _npc_rx) = setup_haggle(&game_state, 10, 0).await;
+    {
+        let mut inventories = game_state.inventories.write().await;
+        let inv = inventories.entry(pid("buyer")).or_default();
+        inv.equipped
+            .insert(EquipSlot::Ring, bag_item(1, "gold_ring", 1));
+    }
 
     game_state
         .offer_deal(
             &pid("npc_rica"),
             &pid("buyer"),
-            "iron_sword",
+            "wooden_shield",
+            DealKind::Buy,
+            -50,
+            "loyal customer",
+        )
+        .await;
+
+    match buyer_rx.try_recv() {
+        Ok(ServerMessage::DealUpdated { modifier_pct, .. }) => {
+            assert_eq!(modifier_pct, -12, "CHA 10 plus the ring's +1 is a ±12 band");
+        }
+        other => panic!("Expected DealUpdated for buyer, got {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn a_sleeping_merchant_refuses_to_open_shop() {
+    let game_state = make_test_game_state("sleeping_merchant_shop");
+    let (mut buyer_rx, _npc_rx) = setup_haggle(&game_state, 10, 100).await;
+    put_in_bed(&game_state, "Rica");
+
+    game_state
+        .open_shop(&pid("buyer"), &pid("npc_rica"), true)
+        .await;
+
+    assert!(
+        drain(&mut buyer_rx).iter().any(|m| matches!(
+            m,
+            ServerMessage::TradeError { message, .. } if message.contains("asleep")
+        )),
+        "opening a sleeping merchant's shop must be refused"
+    );
+}
+
+/// The check sits in the shared validation, so a window opened before bedtime
+/// stops transacting too rather than trading with a sleeping merchant.
+#[tokio::test]
+async fn falling_asleep_stops_an_open_shop_from_selling() {
+    let game_state = make_test_game_state("sleeping_merchant_buy");
+    let (mut buyer_rx, _npc_rx) = setup_haggle(&game_state, 10, 1000).await;
+    game_state
+        .open_shop(&pid("buyer"), &pid("npc_rica"), true)
+        .await;
+    drain(&mut buyer_rx);
+
+    put_in_bed(&game_state, "Rica");
+    game_state
+        .buy_item(&pid("buyer"), &pid("npc_rica"), "wooden_shield")
+        .await;
+
+    assert!(
+        drain(&mut buyer_rx).iter().any(|m| matches!(
+            m,
+            ServerMessage::TradeError { message, .. } if message.contains("asleep")
+        )),
+        "buying from a sleeping merchant must be refused"
+    );
+    assert_eq!(
+        game_state.get_player_gold(&pid("buyer")).await,
+        1000,
+        "and must not charge the buyer"
+    );
+}
+
+#[tokio::test]
+async fn a_merchant_on_a_chair_still_trades() {
+    let game_state = make_test_game_state("chair_merchant");
+    let (mut buyer_rx, _npc_rx) = setup_haggle(&game_state, 10, 100).await;
+    game_state.set_npc_schedule("Rica", vec![schedule_entry("chair")]);
+
+    game_state
+        .open_shop(&pid("buyer"), &pid("npc_rica"), true)
+        .await;
+
+    assert!(
+        drain(&mut buyer_rx)
+            .iter()
+            .any(|m| matches!(m, ServerMessage::ShopState { .. })),
+        "a seated merchant must still open the shop"
+    );
+}
+
+/// The haggle path must refuse too: a deal granted in sleep could never be
+/// redeemed, yet would burn the daily ledgers.
+#[tokio::test]
+async fn a_sleeping_merchant_refuses_to_offer_deals() {
+    let game_state = make_test_game_state("sleeping_merchant_offer");
+    let (mut buyer_rx, mut npc_rx) = setup_haggle(&game_state, 10, 0).await;
+    put_in_bed(&game_state, "Rica");
+    let ledger_before = game_state.deal_ledger_state_for_test("Rica", "buyer").await;
+
+    game_state
+        .offer_deal(
+            &pid("npc_rica"),
+            &pid("buyer"),
+            "wooden_shield",
+            DealKind::Buy,
+            -10,
+            "loyal customer",
+        )
+        .await;
+
+    assert!(matches!(buyer_rx.try_recv(), Err(MpscTryRecvError::Empty)));
+    match npc_rx.try_recv() {
+        Ok(ServerMessage::DealResult {
+            accepted, message, ..
+        }) => {
+            assert!(!accepted);
+            assert!(message.contains("asleep"), "got: {message}");
+        }
+        other => panic!("Expected DealResult rejection for NPC, got {other:?}"),
+    }
+    assert_eq!(
+        game_state.deal_ledger_state_for_test("Rica", "buyer").await,
+        ledger_before,
+        "the refused offer must not consume budgets or the cooldown"
+    );
+}
+
+/// An NPC-pushed window refused for sleep must report to the NPC, not to the
+/// target player who never asked for it.
+#[tokio::test]
+async fn a_sleeping_merchant_cannot_push_a_trade_window() {
+    let game_state = make_test_game_state("sleeping_merchant_push");
+    let (mut buyer_rx, mut npc_rx) = setup_haggle(&game_state, 10, 100).await;
+    put_in_bed(&game_state, "Rica");
+
+    game_state.open_trade(&pid("npc_rica"), &pid("buyer")).await;
+
+    assert!(
+        matches!(buyer_rx.try_recv(), Err(MpscTryRecvError::Empty)),
+        "the refusal must not reach the target player"
+    );
+    assert!(drain(&mut npc_rx).iter().any(|m| matches!(
+        m,
+        ServerMessage::TradeError { message, .. } if message.contains("asleep")
+    )));
+}
+
+#[tokio::test]
+async fn cross_floor_offer_deal_is_rejected_without_consuming_ledger() {
+    let game_state = make_test_game_state("cross_floor_offer");
+    let (mut buyer_rx, mut npc_rx) = setup_haggle(&game_state, 18, 0).await;
+    set_floor(&game_state, "buyer", 1).await;
+    let ledger_before = game_state.deal_ledger_state_for_test("Rica", "buyer").await;
+
+    game_state
+        .offer_deal(
+            &pid("npc_rica"),
+            &pid("buyer"),
+            "wooden_shield",
             DealKind::Buy,
             -50,
             "loyal customer",
@@ -87,6 +506,51 @@ async fn cross_floor_offer_deal_is_rejected() {
         }
         other => panic!("Expected DealResult rejection for NPC, got {other:?}"),
     }
+    assert_eq!(
+        game_state.deal_ledger_state_for_test("Rica", "buyer").await,
+        ledger_before,
+        "rejection must preserve NPC budget, player cap, and cooldown"
+    );
+    assert!(game_state
+        .active_deals_for(&pid("buyer"), "Rica")
+        .await
+        .is_empty());
+
+    // CHA 18 clamps this to -25%, a 625 discount. The immediate retry proves
+    // the rejection did not consume the cooldown; the ledger snapshot above
+    // directly proves that it did not consume the player's daily budget.
+    set_floor(&game_state, "buyer", 0).await;
+    game_state
+        .offer_deal(
+            &pid("npc_rica"),
+            &pid("buyer"),
+            "wooden_shield",
+            DealKind::Buy,
+            -50,
+            "loyal customer",
+        )
+        .await;
+
+    match buyer_rx.try_recv() {
+        Ok(ServerMessage::DealUpdated { modifier_pct, .. }) => {
+            assert_eq!(modifier_pct, -25);
+        }
+        other => panic!("Expected DealUpdated after same-floor retry, got {other:?}"),
+    }
+    match npc_rx.try_recv() {
+        Ok(ServerMessage::DealResult {
+            accepted,
+            applied_modifier_pct,
+            ..
+        }) => {
+            assert!(accepted);
+            assert_eq!(applied_modifier_pct, -25);
+        }
+        other => panic!("Expected accepted DealResult after retry, got {other:?}"),
+    }
+    let active = game_state.active_deals_for(&pid("buyer"), "Rica").await;
+    assert_eq!(active.len(), 1);
+    assert_eq!(active[0].modifier_pct, -25);
 }
 
 #[tokio::test]
@@ -94,12 +558,12 @@ async fn offer_deal_enforces_cooldown_and_player_budget() {
     let game_state = make_test_game_state("offer_limits");
     let (_buyer_rx, mut npc_rx) = setup_haggle(&game_state, 18, 0).await;
 
-    // First offer: accepted (CHA 18 → band ±25, cost 2500 on iron_sword).
+    // First offer: accepted (CHA 18 → band ±25, cost 625 on wooden_shield).
     game_state
         .offer_deal(
             &pid("npc_rica"),
             &pid("buyer"),
-            "iron_sword",
+            "wooden_shield",
             DealKind::Buy,
             -25,
             "first",
@@ -131,17 +595,34 @@ async fn offer_deal_enforces_cooldown_and_player_budget() {
         other => panic!("Expected cooldown rejection, got {:?}", other),
     }
 
-    // Cooldown lifted: the player's daily discount cap (4000) now rejects a
-    // second 2500-cost discount.
+    // Cooldown lifted: five more 625-cost discounts fill the player's
+    // daily cap (4000: 6 × 625 = 3750), then the next offer is rejected.
+    for _ in 0..5 {
+        game_state.clear_deal_cooldowns_for_test().await;
+        game_state
+            .offer_deal(
+                &pid("npc_rica"),
+                &pid("buyer"),
+                "wooden_shield",
+                DealKind::Buy,
+                -25,
+                "refill",
+            )
+            .await;
+        match npc_rx.try_recv() {
+            Ok(ServerMessage::DealResult { accepted, .. }) => assert!(accepted),
+            other => panic!("Expected accepted DealResult, got {:?}", other),
+        }
+    }
     game_state.clear_deal_cooldowns_for_test().await;
     game_state
         .offer_deal(
             &pid("npc_rica"),
             &pid("buyer"),
-            "iron_sword",
+            "wooden_shield",
             DealKind::Buy,
             -25,
-            "third",
+            "over cap",
         )
         .await;
     match npc_rx.try_recv() {
@@ -168,24 +649,51 @@ async fn buy_item_applies_deal_once() {
         .offer_deal(
             &pid("npc_rica"),
             &pid("buyer"),
-            "iron_sword",
+            "wooden_shield",
             DealKind::Buy,
             -10,
             "deal",
         )
         .await;
 
-    // First buy uses the -10% deal: 10000 → 9000.
+    // First buy uses the -10% deal: 2500 → 2250.
     game_state
-        .buy_item(&pid("buyer"), &pid("npc_rica"), "iron_sword")
+        .buy_item(&pid("buyer"), &pid("npc_rica"), "wooden_shield")
         .await;
-    assert_eq!(game_state.get_player_gold(&pid("buyer")).await, 21_000);
+    assert_eq!(game_state.get_player_gold(&pid("buyer")).await, 27_750);
 
     // The deal is single-use: the second buy pays full price.
     game_state
-        .buy_item(&pid("buyer"), &pid("npc_rica"), "iron_sword")
+        .buy_item(&pid("buyer"), &pid("npc_rica"), "wooden_shield")
         .await;
-    assert_eq!(game_state.get_player_gold(&pid("buyer")).await, 11_000);
+    assert_eq!(game_state.get_player_gold(&pid("buyer")).await, 25_250);
+}
+
+#[tokio::test]
+async fn bought_stackables_merge_into_one_bag_entry() {
+    let game_state = make_test_game_state("buy_stacks");
+    let (_buyer_rx, _npc_rx) = setup_haggle(&game_state, 10, 1_000).await;
+    {
+        let mut inventories = game_state.inventories.write().await;
+        inventories.insert(pid("buyer"), Default::default());
+    }
+
+    for _ in 0..2 {
+        game_state
+            .buy_item(&pid("buyer"), &pid("npc_rica"), "apple")
+            .await;
+        game_state
+            .buy_item(&pid("buyer"), &pid("npc_rica"), "torch")
+            .await;
+    }
+
+    let inventories = game_state.inventories.read().await;
+    let bag = &inventories[&pid("buyer")].bag;
+    let apples: Vec<_> = bag.iter().filter(|i| i.item_def_id == "apple").collect();
+    assert_eq!(apples.len(), 1, "stackable purchases must share one entry");
+    assert_eq!(apples[0].quantity, 2);
+    let torches: Vec<_> = bag.iter().filter(|i| i.item_def_id == "torch").collect();
+    assert_eq!(torches.len(), 2, "non-stackables keep their own slots");
 }
 
 #[tokio::test]
@@ -196,10 +704,13 @@ async fn sell_item_applies_deal_bonus() {
         let mut inventories = game_state.inventories.write().await;
         let mut inv: onlinerpg_shared::inventory::PlayerInventory = Default::default();
         inv.bag.push(onlinerpg_shared::inventory::ItemInstance {
+            locked: false,
             instance_id: 7,
             item_def_id: "iron_sword".to_string(),
             quantity: 1,
             enchant: 0,
+            cape_color: None,
+            cape_texture: None,
         });
         inventories.insert(pid("buyer"), inv);
     }
@@ -220,6 +731,13 @@ async fn sell_item_applies_deal_bonus() {
         .sell_item(&pid("buyer"), &pid("npc_rica"), 7)
         .await;
     assert_eq!(game_state.get_player_gold(&pid("buyer")).await, 5_000);
+    let pending = game_state.pending_gold_sources.read().await;
+    assert_eq!(pending.len(), 1);
+    let sale = pending.values().next().unwrap();
+    assert_eq!(
+        (sale.source.storage_key().1, sale.quantity, sale.gold),
+        ("iron_sword", 1, 5000)
+    );
 }
 
 #[tokio::test]
@@ -278,10 +796,105 @@ async fn cross_floor_shop_actions_leave_economy_state_unchanged() {
     );
     for _ in 0..4 {
         match buyer_rx.try_recv() {
-            Ok(ServerMessage::TradeError { message }) => {
+            Ok(ServerMessage::TradeError { message, .. }) => {
                 assert!(message.contains("another floor"), "got: {message}")
             }
             other => panic!("Expected cross-floor TradeError, got {other:?}"),
         }
     }
+}
+
+#[tokio::test]
+async fn the_price_index_scales_shelf_consumable_buys_and_only_caps_sells() {
+    let game_state = make_test_game_state("price_index_buys");
+    let (mut buyer_rx, _npc_rx) = setup_haggle(&game_state, 10, 1_000_000).await;
+    game_state
+        .inventories
+        .write()
+        .await
+        .insert(pid("buyer"), Default::default());
+    game_state.set_price_index_percent(150).await;
+    let base = |id: &str| game_state.item_defs.get(id).unwrap().base_price.unwrap();
+
+    game_state
+        .buy_item(&pid("buyer"), &pid("npc_rica"), "healing_potion")
+        .await;
+    let msgs = drain(&mut buyer_rx);
+    assert!(
+        !msgs
+            .iter()
+            .any(|m| matches!(m, ServerMessage::TradeError { .. })),
+        "{msgs:?}"
+    );
+    let after_potion = game_state.get_player_gold(&pid("buyer")).await;
+    assert_eq!(1_000_000 - after_potion, base("healing_potion") * 150 / 100);
+
+    game_state
+        .buy_item(&pid("buyer"), &pid("npc_rica"), "wooden_shield")
+        .await;
+    drain(&mut buyer_rx);
+    let after_shield = game_state.get_player_gold(&pid("buyer")).await;
+    assert_eq!(after_potion - after_shield, base("wooden_shield"));
+
+    // Selling stays off the index: 40% of the plain base at index 150 for
+    // a shelf consumable, a durable and a raw fish alike ...
+    let sold = [
+        (1, "healing_potion"),
+        (2, "wooden_shield"),
+        (3, "raw_trout"),
+    ];
+    {
+        let mut inventories = game_state.inventories.write().await;
+        let inv = inventories.get_mut(&pid("buyer")).unwrap();
+        for (instance_id, id) in sold.into_iter().chain([(4, "healing_potion")]) {
+            inv.bag.push(bag_item(instance_id, id, 1));
+        }
+    }
+    let mut gold = game_state.get_player_gold(&pid("buyer")).await;
+    for (instance_id, id) in sold {
+        game_state
+            .sell_item(&pid("buyer"), &pid("npc_rica"), instance_id)
+            .await;
+        drain(&mut buyer_rx);
+        let now = game_state.get_player_gold(&pid("buyer")).await;
+        assert_eq!(now - gold, base(id) * 40 / 100, "{id}");
+        gold = now;
+    }
+
+    // ... but never above the cheapest possible buy: at the 50% floor a
+    // potion's max-haggled buy is base * 50% * 75%, under the 40% payout.
+    game_state.set_price_index_percent(50).await;
+    game_state
+        .sell_item(&pid("buyer"), &pid("npc_rica"), 4)
+        .await;
+    drain(&mut buyer_rx);
+    let now = game_state.get_player_gold(&pid("buyer")).await;
+    assert_eq!(now - gold, base("healing_potion") * 50 / 100 * 75 / 100);
+}
+
+/// On the meeting night the meeting entry outranks the bed entry, so the
+/// server must not refuse trades as "asleep" while Rica hosts it.
+#[test]
+fn the_meeting_entry_keeps_the_merchant_out_of_bed() {
+    let game_state = make_test_game_state("meeting_awake");
+    game_state.set_npc_schedule(
+        "Rica",
+        vec![
+            schedule_entry_at("night", Some(onlinerpg_shared::schedule::BED_OBJECT_TYPE)),
+            schedule_entry_at("meeting", None),
+        ],
+    );
+    let at = |day| crate::types::GameDateTime {
+        year: 217,
+        month: 1,
+        day,
+        hour: 22,
+        minute: 0,
+    };
+
+    // Day index 14 (Jan 15) is Serin's dark day.
+    game_state.debug_set_datetime(&at(15));
+    assert!(!game_state.is_npc_asleep("Rica"));
+    game_state.debug_set_datetime(&at(16));
+    assert!(game_state.is_npc_asleep("Rica"));
 }

@@ -27,7 +27,15 @@ export interface WallVariants {
   west: WallVariant
 }
 
-export const WALL_VARIANT_OPTIONS: WallVariant[] = ['solid', 'door', 'window']
+export const WALL_VARIANT_OPTIONS: WallVariant[] = [
+  'solid',
+  'door',
+  'double-door',
+  'window',
+]
+
+/** Cycle for a wall shared with a neighbouring room. */
+export const INTERIOR_VARIANT_OPTIONS: WallVariant[] = ['open', 'solid', 'door']
 
 export const STAIR_TEMPLATES: RoomTemplate[] = [
   {
@@ -86,6 +94,24 @@ export const ROOM_TEMPLATES: RoomTemplate[] = [
     wallSouthVariant: 'door',
     wallEastVariant: 'solid',
     wallWestVariant: 'window',
+  },
+  {
+    label: 'Corridor (6×1)',
+    sizeX: 6,
+    sizeZ: 1,
+    wallNorthVariant: 'solid',
+    wallSouthVariant: 'solid',
+    wallEastVariant: 'solid',
+    wallWestVariant: 'solid',
+  },
+  {
+    label: 'Corridor (6×2)',
+    sizeX: 6,
+    sizeZ: 2,
+    wallNorthVariant: 'solid',
+    wallSouthVariant: 'solid',
+    wallEastVariant: 'solid',
+    wallWestVariant: 'solid',
   },
 ]
 
@@ -153,6 +179,15 @@ export function setReinstallSelectedHouse(
   fn: (() => void | Promise<void>) | null
 ) {
   reinstallSelectedHouse = fn
+}
+
+export let moveSelectedHouse:
+  | ((deltaX: number, deltaZ: number) => Promise<boolean>)
+  | null = null
+export function setMoveSelectedHouse(
+  fn: ((deltaX: number, deltaZ: number) => Promise<boolean>) | null
+) {
+  moveSelectedHouse = fn
 }
 
 // Selection state for edit mode

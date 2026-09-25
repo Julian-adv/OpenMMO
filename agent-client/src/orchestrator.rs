@@ -3,13 +3,14 @@
 //! Each NPC gets its own WebSocket connection and session loop, but they share
 //! terrain data (HeightSampler) and world cache (PassabilityCache + houses).
 
-use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use futures_util::StreamExt;
-use onlinerpg_shared::monster_ai::BehaviorTree;
-use onlinerpg_shared::{Character, CharacterClass, ClientMessage, Gender, ServerMessage};
+use onlinerpg_shared::{
+    Character, CharacterAttributes, CharacterClass, ClientMessage, Gender, ServerMessage,
+};
 use onlinerpg_terrain::height::HeightSampler;
 use serde::Deserialize;
 use tokio::sync::{mpsc, Mutex};
@@ -27,90 +28,38 @@ use crate::state::{SharedState, WorldCache};
 use crate::ws;
 use crate::LlmType;
 
-/// Parsed schedule condition (validated at load time).
-#[derive(Debug, Clone, PartialEq)]
-pub enum ScheduleCondition {
-    Day,
-    Night,
-    Time {
-        hour: u32,
-        minute: u32,
-    },
-    /// Recurring: fires every hour at the given minute (e.g. `"*:00"`).
-    Recurring {
-        minute: u32,
-    },
-}
-
-/// A single schedule entry: go to a position at a specific time condition.
-#[derive(Debug, Clone, Deserialize)]
-pub struct ScheduleEntry {
-    /// When to activate: "day", "night", or "H:MM" / "HH:MM" (game time).
-    pub at: String,
-    /// Target position [x, y, z] (final/rest position).
-    pub pos: [f32; 3],
-    /// Facing rotation in degrees.
-    #[serde(default)]
-    pub rotation: f32,
-    /// Floor level (0 = ground, 1 = 2nd floor, etc.).
-    #[serde(default)]
-    pub floor_level: u8,
-    /// Human-readable label for LLM prompt context.
-    pub label: Option<String>,
-    /// Object type to interact with after arriving (e.g. "bed").
-    pub action: Option<String>,
-    /// Object placement ID to interact with.
-    pub object_id: Option<u32>,
-    /// Optional patrol route: list of [x, y, z] waypoints to visit before going to `pos`.
-    #[serde(default)]
-    pub waypoints: Vec<[f32; 3]>,
-    /// Parsed condition (set after deserialization).
-    #[serde(skip)]
-    pub condition: Option<ScheduleCondition>,
-}
-
-impl ScheduleEntry {
-    pub fn is_sleeping(&self) -> bool {
-        self.action.as_deref() == Some("bed")
-    }
-
-    pub fn display_label(&self) -> &str {
-        self.label.as_deref().unwrap_or("schedule position")
-    }
-
-    /// Parse the `at` field into a `ScheduleCondition`. Returns error for invalid formats.
-    /// Supports: `"day"`, `"night"`, `"H:MM"` / `"HH:MM"`, or `"*:MM"` (recurring every hour).
-    pub fn parse_condition(&mut self) -> Result<(), String> {
-        self.condition = Some(match self.at.as_str() {
-            "day" => ScheduleCondition::Day,
-            "night" => ScheduleCondition::Night,
-            time_str => {
-                let (h, m) = time_str
-                    .split_once(':')
-                    .ok_or_else(|| format!("invalid schedule condition: {time_str}"))?;
-                let minute = m
-                    .trim()
-                    .parse::<u32>()
-                    .map_err(|_| format!("invalid minute in: {time_str}"))?;
-                if h.trim() == "*" {
-                    ScheduleCondition::Recurring { minute }
-                } else {
-                    let hour = h
-                        .trim()
-                        .parse::<u32>()
-                        .map_err(|_| format!("invalid hour in: {time_str}"))?;
-                    ScheduleCondition::Time { hour, minute }
-                }
-            }
-        });
-        Ok(())
-    }
-}
+use onlinerpg_shared::schedule::{parse_conditions, ScheduleEntry};
 
 /// Wrapper for deserializing a schedule file.
 #[derive(Debug, Deserialize)]
 struct ScheduleFile {
     schedule: Vec<ScheduleEntry>,
+}
+
+/// Wrapper for deserializing a visit-spot file (sickroom.json, tables.json).
+#[derive(Debug, Deserialize)]
+struct SpotsFile {
+    spots: Vec<driver::VisitSpot>,
+}
+
+/// Read and parse one optional JSON data file. A missing path yields None
+/// silently; an unreadable or malformed file logs and yields None, so the
+/// NPC still runs without it.
+fn load_json_file<T: serde::de::DeserializeOwned>(path: Option<&str>, label: &str) -> Option<T> {
+    let path = path?;
+    match std::fs::read_to_string(path) {
+        Ok(content) => match serde_json::from_str::<T>(&content) {
+            Ok(v) => Some(v),
+            Err(e) => {
+                error!("[{label}] Failed to parse {path}: {e}");
+                None
+            }
+        },
+        Err(e) => {
+            error!("[{label}] Failed to read {path}: {e}");
+            None
+        }
+    }
 }
 
 /// Per-NPC configuration. Deployment-only values (account, llm backend,
@@ -148,6 +97,12 @@ pub struct NpcConfig {
     /// default to off: they run on the operator's budget, and an NPC nobody
     /// can see has no one to act for. See `always_active()`.
     pub always_active: Option<bool>,
+    /// Sprint on every walk while well fed. Off makes the agent walk
+    /// everywhere, which costs it far less satiation. Registry NPCs
+    /// (`id = "..."`) default to off: they are hunger-exempt, so nothing
+    /// would ever price or gate their sprinting, and the whole town would
+    /// visibly run everywhere for free. See `always_sprint()`.
+    pub always_sprint: Option<bool>,
     #[serde(default)]
     pub claude: ClaudeConfig,
     #[serde(default)]
@@ -175,8 +130,17 @@ pub struct NpcConfig {
     pub instance_prompt: Option<String>,
     /// Path to memory file (accumulated experiences, auto-updated by LLM).
     pub memory_file: Option<String>,
+    /// Path to favor file (per-player accumulated favor, auto-updated by LLM).
+    pub favor_file: Option<String>,
     /// Path to schedule file (time-based positioning).
     pub schedule_file: Option<String>,
+    /// Path to sick-room file (bedside spots for respawn greetings).
+    pub sickroom_file: Option<String>,
+    /// Walk over to guests who sit down on a nearby chair and take their
+    /// order (the inn maid). Defaults to false.
+    pub serve_tables: Option<bool>,
+    /// Path to tables file (curated order-taking spots per chair).
+    pub tables_file: Option<String>,
 }
 
 impl NpcConfig {
@@ -186,6 +150,12 @@ impl NpcConfig {
         self.always_active.unwrap_or(self.id.is_none())
     }
 
+    /// Whether walks sprint by default. True for anything but a registry
+    /// NPC — see the field doc.
+    pub fn always_sprint(&self) -> bool {
+        self.always_sprint.unwrap_or(self.id.is_none())
+    }
+
     /// Log label: the account when there is one, else the character it plays.
     pub fn label(&self) -> &str {
         self.account
@@ -193,16 +163,35 @@ impl NpcConfig {
             .or(self.character_name.as_deref())
             .unwrap_or("agent")
     }
+
+    /// Whether this agent busks. The one gate for everything bard: the
+    /// songbook and tip prompt sections, and the `[Tip]` events in state —
+    /// so an agent is never instructed about tips it will not receive.
+    pub fn plays_music(&self) -> bool {
+        self.character_class.as_deref() == Some("bard")
+            || self
+                .template_prompt
+                .as_deref()
+                .is_some_and(|path| path.ends_with("bard.txt"))
+    }
 }
 
 /// Resources shared across all NPC connections.
 pub struct SharedResources {
+    pub terrain_snapshots: Arc<crate::terrain_snapshots::TerrainSnapshots>,
     pub height_sampler: Arc<HeightSampler>,
+    pub splat_sampler: Arc<crate::splat::SplatSampler>,
     pub world_cache: Arc<std::sync::RwLock<WorldCache>>,
-    pub behavior_trees: Arc<HashMap<String, BehaviorTree>>,
-    pub type_mapping: Arc<HashMap<String, String>>,
-    pub movement_speeds: Arc<HashMap<String, crate::monster_ai::MonsterMovement>>,
     pub scheduler: LlmScheduler,
+    pub codex_app_server: codex::CodexAppServer,
+    /// One claim board for the process, so co-located NPCs (the two inn
+    /// maids) don't both answer the same bedside or table call.
+    pub claims: Arc<driver::VisitClaims>,
+    /// Character names of the NPCs that wait tables: staff feed themselves,
+    /// so they never count as anyone's guest.
+    pub maid_names: HashSet<String>,
+    /// `None` when `transcript_dir` is empty; the summary line is logged either way.
+    pub transcript: Option<Arc<crate::transcript::Transcript>>,
     pub auth: AuthSource,
     /// `None` when the spectator panel is off, so nothing is recorded for it.
     pub watch: Option<Arc<crate::watch::WatchHub>>,
@@ -272,6 +261,24 @@ impl Desired {
     }
 }
 
+/// A refused create needs a config change, not a retry: the name is taken
+/// server-wide, and the account's own characters are the usual fix.
+fn create_refused(wanted: &str, reason: &str, owned: &[Character]) -> ws::AuthRejected {
+    let hint = if owned.is_empty() {
+        String::new()
+    } else {
+        let names: Vec<&str> = owned.iter().map(|c| c.name.as_str()).collect();
+        format!(
+            " — this account already has {}; set character_name to one of them, \
+             or leave it empty to enter the first",
+            names.join(", ")
+        )
+    };
+    ws::AuthRejected(format!(
+        "Could not create character '{wanted}': {reason}{hint}"
+    ))
+}
+
 /// Run the orchestrator: spawn all NPC sessions in parallel.
 pub async fn run_orchestrator(
     server_url: String,
@@ -309,10 +316,13 @@ async fn run_npc_loop(server_url: &str, index: usize, npc: &NpcConfig, shared: &
     let mut attempt = 0u32;
     loop {
         match run_npc_session(server_url, npc, shared, watch.as_ref()).await {
-            Ok(()) => {
-                // A session that ran to completion proves the server healthy,
-                // so the next retry starts over at the base delay.
-                attempt = 0;
+            Ok(uptime) => {
+                // A kicked session (duplicate login) ends "cleanly" seconds
+                // after entry; resetting on it pins the delay at the base and
+                // two clients on one account kick each other forever.
+                if uptime >= ws::HEALTHY_SESSION {
+                    attempt = 0;
+                }
                 info!("[{label}] Session ended cleanly.");
             }
             Err(e) => {
@@ -344,13 +354,15 @@ async fn run_npc_loop(server_url: &str, index: usize, npc: &NpcConfig, shared: &
     }
 }
 
-/// Run a single game session for one NPC: connect, authenticate, enter game, run until disconnected.
+/// Run a single game session for one NPC: connect, authenticate, enter game,
+/// run until disconnected. Returns the in-game uptime — time spent connecting
+/// or authenticating (with their own retries) doesn't count as session health.
 async fn run_npc_session(
     server_url: &str,
     npc: &NpcConfig,
     shared: &SharedResources,
     watch: Option<&Arc<crate::watch::NpcWatch>>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Duration> {
     let label = npc.label();
     let watch = watch.cloned();
     let ws_stream = ws::connect_ws(server_url, label).await;
@@ -390,7 +402,7 @@ async fn run_npc_session(
     let may_delete = shared.auth.may_delete_mismatches();
     let (mut characters, others) = desired.partition(may_delete, characters);
 
-    if may_delete {
+    let others = if may_delete {
         for c in &others {
             info!(
                 "[{}] Deleting character '{}' (id={}, {:?}, {:?}) — mismatch (want name={:?}, class={:?}, gender={:?})",
@@ -409,6 +421,7 @@ async fn run_npc_session(
             })
             .await?;
         }
+        Vec::new()
     } else {
         if !others.is_empty() {
             info!(
@@ -426,7 +439,8 @@ async fn run_npc_session(
                 label, c.name, c.class, c.gender, desired.class, desired.gender
             );
         }
-    }
+        others
+    };
 
     // --- Auto-create character if needed ---
     if characters.is_empty() {
@@ -439,13 +453,14 @@ async fn run_npc_session(
                 label, char_name, class, gender
             );
 
-            // Registry NPCs are fixtures of the town with a fixed post; they
-            // take the roll they are given. Only a user's own character
-            // shops around for a better one.
+            // Registry NPCs reroll by a fixed class heuristic instead of
+            // asking their LLM; only a user's own character shops around
+            // by taste. Either way it is the same reroll button a player
+            // gets — the server never hands out custom numbers.
             let agent = npc
                 .id
                 .is_none()
-                .then(|| build_llm_backend(npc, watch.clone(), shared.scheduler.request_timeout()))
+                .then(|| build_llm_backend(npc, watch.clone(), shared))
                 .flatten();
             roll_stats_with_agent(
                 &mut ws_tx,
@@ -484,7 +499,7 @@ async fn run_npc_session(
                     characters.push(character);
                 }
                 ServerMessage::CharacterError { message } => {
-                    anyhow::bail!("[{}] Failed to create character: {message}", label);
+                    return Err(create_refused(char_name, &message, &others).into());
                 }
                 _ => unreachable!(),
             }
@@ -492,31 +507,47 @@ async fn run_npc_session(
     }
 
     let llm_enabled = npc.llm != LlmType::None;
-    let enter_char_id = if llm_enabled {
-        characters.first().map(|c| c.id)
-    } else {
-        None
+    let entering = llm_enabled
+        .then(|| characters.first())
+        .flatten()
+        .map(|c| (c.id, c.name.clone()));
+
+    let buffered = match entering {
+        Some((char_id, name)) => {
+            enter_game(
+                &mut ws_tx,
+                &mut ws_rx,
+                label,
+                char_id,
+                &name,
+                npc.character_name.as_deref(),
+            )
+            .await?
+        }
+        None => Vec::new(),
     };
 
-    if let Some(char_id) = enter_char_id {
-        ws::send(
-            &mut ws_tx,
-            &ClientMessage::EnterGame {
-                character_id: char_id,
-            },
-        )
-        .await?;
-        info!("[{}] Entering game with character {char_id}...", label);
-    }
-
+    let entered = Instant::now();
     let (cmd_tx, mut cmd_rx) = mpsc::channel::<ClientMessage>(32);
     let state = Arc::new(Mutex::new(SharedState::new(
         characters,
         cmd_tx,
         Arc::clone(&shared.height_sampler),
+        Arc::clone(&shared.splat_sampler),
         Arc::clone(&shared.world_cache),
         watch.clone(),
     )));
+    {
+        let mut s = state.lock().await;
+        s.always_sprint = npc.always_sprint();
+        s.plays_music = npc.plays_music();
+        s.keepsake_ids = npc
+            .id
+            .as_deref()
+            .and_then(crate::shop_info::npc_by_id)
+            .map(|row| row.offerable_keepsake_ids().map(String::from).collect())
+            .unwrap_or_default();
+    }
     if let Some(w) = &watch {
         w.set_state(Arc::clone(&state));
         w.push("system", "Session connected".to_string());
@@ -535,43 +566,12 @@ async fn run_npc_session(
     let state_for_rx = Arc::clone(&state);
     let account_for_rx = label.to_string();
     let rx_task = tokio::spawn(async move {
+        for msg in buffered {
+            handle_incoming(&state_for_rx, &account_for_rx, msg).await;
+        }
         loop {
             match ws::recv(&mut ws_rx).await {
-                Ok(msg) => {
-                    if matches!(msg, onlinerpg_shared::ServerMessage::GameTimeSync { .. }) {
-                        let mut s = state_for_rx.lock().await;
-                        let _ = s.send_command(ClientMessage::Heartbeat).await;
-                        s.push_event(msg);
-                        continue;
-                    }
-
-                    let mut s = state_for_rx.lock().await;
-
-                    // Relocations land on a configured Y, not the terrain's.
-                    // Asked before `push_event`, which is where `JoinSuccess`
-                    // sets `self_player_id`.
-                    let needs_height_sync = match &msg {
-                        ServerMessage::JoinSuccess { .. } => true,
-                        ServerMessage::PlayerRespawned { player } => {
-                            s.self_player_id == Some(player.id)
-                        }
-                        ServerMessage::PlayerTeleported { player_id, .. } => {
-                            s.self_player_id == Some(*player_id)
-                        }
-                        _ => false,
-                    };
-
-                    s.push_event(msg);
-
-                    if needs_height_sync {
-                        if let Err(e) = s.sync_height().await {
-                            warn!(
-                                "[{}] Failed to sync height after relocation: {e}",
-                                account_for_rx
-                            );
-                        }
-                    }
-                }
+                Ok(msg) => handle_incoming(&state_for_rx, &account_for_rx, msg).await,
                 Err(e) => {
                     error!("[{}] Connection lost: {e}", account_for_rx);
                     break;
@@ -580,51 +580,40 @@ async fn run_npc_session(
         }
     });
 
-    let llm_task = spawn_llm_task(npc, &state, &shared.scheduler, server_url, watch.clone());
-
-    // Monster AI tick task (1Hz)
-    let state_for_ai = Arc::clone(&state);
-    let trees_for_ai = Arc::clone(&shared.behavior_trees);
-    let mapping_for_ai = Arc::clone(&shared.type_mapping);
-    let movement_for_ai = Arc::clone(&shared.movement_speeds);
-    let ai_task = tokio::spawn(async move {
-        let tick_interval = Duration::from_secs(1);
-        let mut interval = tokio::time::interval(tick_interval);
-        let delta_ms = 1000.0_f32;
-
-        {
-            let mut s = state_for_ai.lock().await;
-            s.monster_ai.set_behavior_trees((*trees_for_ai).clone());
-            s.monster_ai.set_type_mapping((*mapping_for_ai).clone());
-            s.monster_ai.set_movement_speeds((*movement_for_ai).clone());
+    let terrain_state = Arc::clone(&state);
+    let terrain_source = Arc::clone(&shared.terrain_snapshots);
+    let terrain_notify = Arc::clone(&state.lock().await.terrain_notify);
+    let terrain_task = tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                _ = terrain_notify.notified() => {},
+                _ = tokio::time::sleep(Duration::from_secs(1)) => {},
+            }
+            apply_pending_terrain(&terrain_state, &terrain_source).await;
         }
+    });
 
+    let llm_task = spawn_llm_task(npc, &state, shared, server_url, watch.clone());
+
+    let maintenance_state = Arc::clone(&state);
+    let maintenance_task = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
         loop {
             interval.tick().await;
-            let mut s = state_for_ai.lock().await;
-            if !s.in_game {
+            let mut state = maintenance_state.lock().await;
+            if !state.in_game {
                 continue;
             }
-
-            // Clone Arc to avoid borrow conflict: world_cache (immutable) vs monster_ai (mutable).
-            // Must drop the RwLockReadGuard before any .await (not Send).
-            let (commands, pending) = {
-                let wc = Arc::clone(&s.world_cache);
-                let world = wc.read().unwrap();
-                let SharedState {
-                    ref nearby_players,
-                    ref mut monster_ai,
-                    ..
-                } = *s;
-                let cmds = monster_ai.tick_all(delta_ms, nearby_players, world.passability_cache());
-                drop(world);
-                let pending = s.drain_pending_commands();
-                (cmds, pending)
-            };
-
-            for cmd in commands.into_iter().chain(pending) {
-                if let Err(e) = s.send_command(cmd).await {
-                    tracing::warn!("Monster AI command failed: {e}");
+            if !state.world_view.synchronized {
+                let _ = state
+                    .send_background_command(ClientMessage::ResyncWorld)
+                    .await;
+                continue;
+            }
+            state.check_music_finished();
+            for command in state.drain_pending_commands() {
+                if let Err(error) = state.send_background_command(command).await {
+                    tracing::warn!("Pending command failed: {error}");
                     break;
                 }
             }
@@ -641,7 +630,8 @@ async fn run_npc_session(
     let _ = rx_task.await;
 
     tx_task.abort();
-    ai_task.abort();
+    maintenance_task.abort();
+    terrain_task.abort();
     if let Some(t) = llm_task {
         t.abort();
     }
@@ -649,7 +639,200 @@ async fn run_npc_session(
         w.set_disconnected();
     }
 
-    Ok(())
+    Ok(entered.elapsed())
+}
+
+/// One server message into shared state. The entry handshake reads a few
+/// before the reader task starts, so both paths go through here.
+async fn handle_incoming(state: &Arc<Mutex<SharedState>>, label: &str, msg: ServerMessage) {
+    let mut s = state.lock().await;
+    if let ServerMessage::LandscapeChanged { tiles } = &msg {
+        for tile in tiles {
+            s.splat_sampler
+                .update_tile(tile.tile_x, tile.tile_z, &tile.splat)
+                .await;
+        }
+        return;
+    }
+    if let ServerMessage::LandscapeInvalidated { tiles } = &msg {
+        for &(tx, tz) in tiles {
+            s.splat_sampler.invalidate_tile(tx, tz).await;
+        }
+        return;
+    }
+    if matches!(msg, ServerMessage::GameTimeSync { .. }) {
+        let _ = s.send_background_command(ClientMessage::Heartbeat).await;
+        s.push_event(msg);
+        return;
+    }
+
+    // Relocations land on a configured Y, not the terrain's. Asked before
+    // `push_event`, which is where `JoinSuccess` sets `self_player_id`.
+    let needs_height_sync = match &msg {
+        ServerMessage::JoinSuccess { .. } => true,
+        ServerMessage::PlayerRespawned { player } => s.self_player_id == Some(player.id),
+        ServerMessage::PlayerTeleported { player_id, .. } => s.self_player_id == Some(*player_id),
+        ServerMessage::WorldUpdate { events, .. } => events
+            .iter()
+            .flat_map(|event| &event.messages)
+            .any(|message| match message {
+                ServerMessage::PlayerTeleported { player_id, .. } => {
+                    s.self_player_id == Some(*player_id)
+                }
+                ServerMessage::PlayerRespawned { player } => s.self_player_id == Some(player.id),
+                _ => false,
+            }),
+        _ => false,
+    };
+
+    s.push_event(msg);
+
+    if needs_height_sync {
+        if let Err(e) = s.sync_height().await {
+            warn!("[{label}] Failed to sync height after relocation: {e}");
+        }
+    }
+}
+
+async fn apply_pending_terrain(
+    state: &Arc<Mutex<SharedState>>,
+    source: &crate::terrain_snapshots::TerrainSnapshots,
+) {
+    let pending = state.lock().await.pending_terrain.clone();
+    for tile in pending {
+        let message = match source.load(&tile).await {
+            Ok(message) => message,
+            Err(error) => {
+                warn!(%error, x = tile.x, z = tile.z, "Terrain snapshot remains pending");
+                if error.is::<crate::terrain_snapshots::TerrainChanged>()
+                    || matches!(
+                        error
+                            .downcast_ref::<reqwest::Error>()
+                            .and_then(|error| error.status()),
+                        Some(reqwest::StatusCode::NOT_FOUND | reqwest::StatusCode::CONFLICT)
+                    )
+                {
+                    let mut s = state.lock().await;
+                    if s.pending_terrain.contains(&tile) {
+                        s.world_view.synchronized = false;
+                        let _ = s.send_background_command(ClientMessage::ResyncWorld).await;
+                    }
+                }
+                continue;
+            }
+        };
+        let mut s = state.lock().await;
+        if !s.pending_terrain.contains(&tile)
+            || s.world_view.world_epoch != tile.epoch
+            || s.world_view.generation != tile.generation
+            || s.world_view
+                .subjects
+                .get(&format!("terrain:{},{}", tile.x, tile.z))
+                != Some(&tile.revision)
+            || !s.world_cache.read().unwrap().is_current_epoch(&tile.epoch)
+        {
+            continue;
+        }
+        let mut applied = source.applied.lock().await;
+        if !s.world_cache.read().unwrap().is_current_epoch(&tile.epoch) {
+            continue;
+        }
+        if applied.epoch != tile.epoch {
+            s.height_sampler.clear().await;
+            s.splat_sampler.clear().await;
+            applied.revisions.clear();
+            applied.epoch = tile.epoch.clone();
+        }
+        if !applied
+            .revisions
+            .get(&(tile.x, tile.z))
+            .is_some_and(|revision| *revision > tile.revision)
+        {
+            let crate::terrain_snapshots::GroundTerrain { height, splat } = message;
+            if let Err(error) = s.height_sampler.update_tile(tile.x, tile.z, &height).await {
+                warn!(%error, "Could not apply terrain snapshot");
+                continue;
+            }
+            s.splat_sampler.update_tile(tile.x, tile.z, &splat).await;
+            applied.revisions.insert((tile.x, tile.z), tile.revision);
+        }
+        s.pending_terrain.retain(|pending| pending != &tile);
+    }
+}
+
+/// The name to answer a rename demand with. Deriving one from the refused name
+/// would only be a way around the ban, so the operator's configured
+/// `character_name` is the only answer — and None means there is none.
+fn rename_target<'a>(current: &str, configured: Option<&'a str>) -> Option<&'a str> {
+    configured.filter(|name| !name.eq_ignore_ascii_case(current))
+}
+
+/// Enter the game and settle what the server answers with: `JoinSuccess`, or a
+/// demand to rename a banned character first. Anything else that lands
+/// meanwhile belongs to the session, so it comes back buffered for the reader
+/// to replay in order rather than being dropped.
+async fn enter_game(
+    ws_tx: &mut ws::WsTx,
+    ws_rx: &mut ws::WsRx,
+    label: &str,
+    char_id: i64,
+    current_name: &str,
+    configured_name: Option<&str>,
+) -> anyhow::Result<Vec<ServerMessage>> {
+    let enter = ClientMessage::EnterGame {
+        character_id: char_id,
+    };
+    ws::send(ws_tx, &enter).await?;
+    info!("[{label}] Entering game with character {char_id}...");
+
+    let mut buffered = Vec::new();
+    let mut renamed = false;
+    loop {
+        let msg = ws::recv(ws_rx).await?;
+        match msg {
+            ServerMessage::JoinSuccess { .. } => {
+                // No scene to compile here, so the entry grace ends at once.
+                ws::send(ws_tx, &ClientMessage::WorldReady).await?;
+                buffered.push(msg);
+                return Ok(buffered);
+            }
+            ServerMessage::CharacterRenameRequired { character_id } => {
+                if renamed {
+                    // One rename per connection: a second demand means the new
+                    // name is refused too, and asking again would spin.
+                    return Err(ws::AuthRejected(
+                        "renamed the character, but entry was refused again".to_string(),
+                    )
+                    .into());
+                }
+                let Some(new_name) = rename_target(current_name, configured_name) else {
+                    return Err(ws::AuthRejected(format!(
+                        "'{current_name}' cannot be used on this server; set a different \
+                         character_name in config.toml and restart"
+                    ))
+                    .into());
+                };
+                warn!("[{label}] Entry refused as '{current_name}' — renaming to '{new_name}'");
+                ws::send(
+                    ws_tx,
+                    &ClientMessage::RenameCharacter {
+                        character_id,
+                        new_name: new_name.to_string(),
+                    },
+                )
+                .await?;
+                renamed = true;
+            }
+            ServerMessage::CharacterRenamed { name, .. } => {
+                info!("[{label}] Renamed to '{name}'");
+                ws::send(ws_tx, &enter).await?;
+            }
+            ServerMessage::CharacterError { message } => {
+                return Err(ws::AuthRejected(format!("entry refused: {message}")).into());
+            }
+            other => buffered.push(other),
+        }
+    }
 }
 
 impl NpcConfig {
@@ -674,7 +857,7 @@ const MAX_STAT_ROLLS: u32 = 20;
 /// Roll starting stats, letting the agent accept or reroll each result the
 /// way a human works the web client's reroll button. Whatever is on the table
 /// when it accepts — or when the rolls run out — is what it plays. Without an
-/// LLM the first roll stands, as before.
+/// LLM a fixed class heuristic does the accepting instead.
 ///
 /// The decisions go through the scheduler like any other call, so a fleet
 /// starting up with fresh accounts still honours `max_concurrent`.
@@ -713,8 +896,12 @@ async fn roll_stats_with_agent(
             a.r#str, a.dex, a.con, a.int, a.wis, a.cha, a.guard
         );
 
+        // Agentless: the loop bound keeps the last roll if none ever fits.
         let Some(agent) = agent else {
-            return Ok(());
+            if roll_fits_class(&a, class, gender) {
+                return Ok(());
+            }
+            continue;
         };
         let left = MAX_STAT_ROLLS - attempt;
         if left == 0 {
@@ -748,10 +935,36 @@ async fn roll_stats_with_agent(
     Ok(())
 }
 
+/// The agentless acceptance bar: every attribute the class favours (positive
+/// stat adjustment) reached 14. A guard rerolls until STR and CON can carry
+/// a fight; a class with no favourites takes the first roll.
+fn roll_fits_class(a: &CharacterAttributes, class: &CharacterClass, gender: Gender) -> bool {
+    const KEY_STAT_MIN: u8 = 14;
+    let values = [a.r#str, a.dex, a.con, a.int, a.wis, a.cha];
+    class
+        .stat_adjustments(gender)
+        .iter()
+        .zip(values)
+        .filter(|(adj, _)| **adj > 0)
+        .all(|(_, value)| value >= KEY_STAT_MIN)
+}
+
 /// Role prompt for agents with no class template — the plain player agent's
 /// own layer, mirroring `data/templates/{class}.txt` for registry NPCs.
 /// Optional: agents run fine on the shared prompt alone.
 const USER_PROMPT_FILE: &str = "data/user_prompt.txt";
+
+/// The songs a bard may call up, straight from the registry so the prompt
+/// cannot drift from what `/play_music` will resolve.
+fn songbook_prompt() -> String {
+    let mut section = String::from(
+        "## Your Songbook\nEvery tune you know. Use a title exactly as written here:\n",
+    );
+    for title in crate::bgm_defs::songbook() {
+        section.push_str(&format!("- {title}\n"));
+    }
+    section
+}
 
 /// Build the system prompt for an NPC by layering, outermost first.
 ///
@@ -787,17 +1000,14 @@ fn build_system_prompt(npc: &NpcConfig) -> anyhow::Result<String> {
     {
         parts.push(shop);
     }
-    if let Some(ref memory_path) = npc.memory_file {
-        match std::fs::read_to_string(memory_path) {
-            Ok(content) if !content.trim().is_empty() => {
-                parts.push(format!("=== YOUR MEMORIES ===\n{content}"));
-            }
-            Ok(_) => {}
-            Err(_) => {
-                let _ = std::fs::write(memory_path, "");
-            }
-        }
+    // A bard announces the song before playing it, so it needs the titles in
+    // front of it — both to pick one and to match a listener's request.
+    if npc.plays_music() {
+        parts.push(songbook_prompt());
     }
+    // Memories are deliberately NOT baked in here: the driver re-reads the
+    // memory file into every prompt (load_memory_tail), so notes written
+    // mid-session reach even a stateless backend.
 
     info!("[{}] Prompt layers: {}", npc.label(), files.join(" + "));
     Ok(parts.join("\n\n"))
@@ -809,7 +1019,7 @@ fn build_system_prompt(npc: &NpcConfig) -> anyhow::Result<String> {
 fn build_llm_backend(
     npc: &NpcConfig,
     watch: Option<Arc<crate::watch::NpcWatch>>,
-    request_timeout: Duration,
+    shared: &SharedResources,
 ) -> Option<Arc<dyn driver::LlmBackend>> {
     let label = npc.label();
     let system_prompt = match build_system_prompt(npc) {
@@ -834,9 +1044,9 @@ fn build_llm_backend(
                 .map(|i| Arc::new(i) as Arc<dyn driver::LlmBackend>),
         ),
         LlmType::Codex => (
-            "Codex CLI",
+            "Codex app-server",
             &npc.codex.model,
-            codex::CodexInvoker::new(&npc.codex, system_prompt)
+            codex::CodexInvoker::new(&npc.codex, system_prompt, shared.codex_app_server.clone())
                 .map(|i| Arc::new(i) as Arc<dyn driver::LlmBackend>),
         ),
         LlmType::Openai => (
@@ -861,7 +1071,9 @@ fn build_llm_backend(
             info!("[{label}] {provider} integration enabled (model={model})");
             // Timeout under the watcher, so a giving-up call still lands on the
             // panel as an error instead of a prompt with no answer.
-            let inv = TimeoutBackend::wrap(inv, request_timeout);
+            let inv = TimeoutBackend::wrap(inv, shared.scheduler.request_timeout());
+            let inv =
+                crate::transcript::TranscriptBackend::wrap(inv, shared.transcript.clone(), label);
             Some(crate::watch::WatchedBackend::wrap(inv, watch))
         }
         Err(e) => {
@@ -890,10 +1102,11 @@ fn api_base_url(server_url: &str) -> String {
 fn spawn_llm_task(
     npc: &NpcConfig,
     state: &Arc<Mutex<SharedState>>,
-    scheduler: &LlmScheduler,
+    shared: &SharedResources,
     server_url: &str,
     watch: Option<Arc<crate::watch::NpcWatch>>,
 ) -> Option<tokio::task::JoinHandle<()>> {
+    let scheduler = &shared.scheduler;
     let label = npc.label();
     let min_interval = Duration::from_secs(npc.min_interval_secs);
     let urgent_min_interval = Duration::from_secs(npc.urgent_min_interval_secs);
@@ -901,52 +1114,39 @@ fn spawn_llm_task(
     let idle_interval = Duration::from_secs(npc.idle_interval_secs);
     let activity_window = Duration::from_secs(npc.activity_window_secs);
 
-    let invoker = build_llm_backend(npc, watch, scheduler.request_timeout())?;
+    let invoker = build_llm_backend(npc, watch, shared)?;
 
     let state = Arc::clone(state);
     let scheduler = scheduler.clone();
-    let schedule = if let Some(ref path) = npc.schedule_file {
-        match std::fs::read_to_string(path) {
-            Ok(content) => match serde_json::from_str::<ScheduleFile>(&content) {
-                Ok(mut f) => {
-                    // Validate all conditions at load time
-                    let mut valid = true;
-                    for entry in &mut f.schedule {
-                        if let Err(e) = entry.parse_condition() {
-                            error!("[{}] Schedule entry error: {e}", label);
-                            valid = false;
-                        }
-                    }
-                    if valid {
-                        info!(
-                            "[{}] Loaded {} schedule entries from {path}",
-                            label,
-                            f.schedule.len()
-                        );
-                        f.schedule
-                    } else {
-                        Vec::new()
-                    }
-                }
-                Err(e) => {
-                    error!("[{}] Failed to parse schedule file {path}: {e}", label);
-                    Vec::new()
-                }
-            },
-            Err(e) => {
-                error!("[{}] Failed to read schedule file {path}: {e}", label);
+    let schedule = load_json_file::<ScheduleFile>(npc.schedule_file.as_deref(), label)
+        .map(|mut f| {
+            let errors = parse_conditions(&mut f.schedule);
+            for e in &errors {
+                error!("[{label}] Schedule entry error: {e}");
+            }
+            if errors.is_empty() {
+                info!("[{label}] Loaded {} schedule entries", f.schedule.len());
+                f.schedule
+            } else {
                 Vec::new()
             }
-        }
-    } else {
-        Vec::new()
-    };
+        })
+        .unwrap_or_default();
+
+    let sickroom = load_json_file::<SpotsFile>(npc.sickroom_file.as_deref(), label)
+        .map(|f| f.spots)
+        .unwrap_or_default();
+
+    let tables = load_json_file::<SpotsFile>(npc.tables_file.as_deref(), label)
+        .map(|f| f.spots)
+        .unwrap_or_default();
 
     let api_base_url = api_base_url(server_url);
 
     let driver_config = driver::DriverConfig {
         label: label.to_string(),
         memory_file: npc.memory_file.clone(),
+        favor_file: npc.favor_file.clone(),
         min_interval,
         urgent_min_interval,
         debounce,
@@ -954,6 +1154,11 @@ fn spawn_llm_task(
         activity_window,
         always_active: npc.always_active(),
         schedule,
+        sickroom,
+        serve_tables: npc.serve_tables.unwrap_or(false),
+        maid_names: shared.maid_names.clone(),
+        tables,
+        claims: Arc::clone(&shared.claims),
         api_base_url,
     };
     Some(tokio::spawn(async move {
@@ -965,6 +1170,148 @@ fn spawn_llm_task(
 mod tests {
     use super::*;
     use onlinerpg_shared::CharacterAttributes;
+
+    #[tokio::test]
+    async fn a_world_snapshot_does_not_send_a_move_that_can_cancel_a_new_pose() {
+        let (mut s, mut rx) = crate::state::tests::test_state();
+        let player = crate::state::tests::test_player(0.0, 0.0);
+        let position = player.position;
+        s.self_player_id = Some(player.id);
+        s.self_player = Some(player);
+        let state = Arc::new(Mutex::new(s));
+        handle_incoming(
+            &state,
+            "Tobin",
+            ServerMessage::WorldUpdate {
+                world_epoch: "snapshot-test".into(),
+                generation: 1,
+                sequence: 1,
+                position,
+                floor_level: 0,
+                reset: true,
+                ready: true,
+                events: vec![],
+            },
+        )
+        .await;
+        assert!(state.lock().await.world_view.synchronized);
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn terrain_http_does_not_lock_state_and_old_responses_cannot_apply() {
+        use crate::terrain_snapshots::{PendingTerrain, TerrainSnapshots};
+        use onlinerpg_terrain::io::TerrainIO;
+        let dir = std::env::temp_dir().join(format!("terrain_async_{}", rand::random::<u64>()));
+        let terrain = TerrainIO::new(dir.clone());
+        let bytes = onlinerpg_terrain::defaults::default_heightmap();
+        terrain.write_heightmap(0, 0, &bytes).await.unwrap();
+        let ServerMessage::TerrainTileVersion { files, .. } =
+            terrain.tile_manifest(0, 0).await.unwrap()
+        else {
+            panic!()
+        };
+        let started = Arc::new(tokio::sync::Notify::new());
+        let release = Arc::new(tokio::sync::Notify::new());
+        let request_started = started.clone();
+        let request_release = release.clone();
+        let app = axum::Router::new().route(
+            "/api/terrain/files/{kind}/{region}/{file}",
+            axum::routing::get(move || {
+                let bytes = bytes.clone();
+                let started = request_started.clone();
+                let release = request_release.clone();
+                async move {
+                    started.notify_one();
+                    release.notified().await;
+                    bytes
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let origin = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let source = Arc::new(TerrainSnapshots::new(&origin, dir.to_str().unwrap()));
+        let (mut s, _rx) = crate::state::tests::test_state();
+        s.world_view.world_epoch = "world".into();
+        s.world_view.generation = 1;
+        s.world_view.subjects.insert("terrain:0,0".into(), 1);
+        s.world_cache.write().unwrap().ensure_world_epoch("world");
+        let tile = PendingTerrain {
+            epoch: "world".into(),
+            generation: 1,
+            revision: 1,
+            x: 0,
+            z: 0,
+            files,
+        };
+        s.pending_terrain.push(tile.clone());
+        let state = Arc::new(Mutex::new(s));
+        let worker_state = state.clone();
+        let worker_source = source.clone();
+        let worker =
+            tokio::spawn(async move { apply_pending_terrain(&worker_state, &worker_source).await });
+        tokio::time::timeout(Duration::from_secs(2), started.notified())
+            .await
+            .unwrap();
+        {
+            let mut s = tokio::time::timeout(Duration::from_secs(2), state.lock())
+                .await
+                .expect("HTTP must not hold shared state");
+            assert_eq!(s.pending_terrain.len(), 1);
+            s.world_view.generation = 2;
+            s.pending_terrain[0].generation = 2;
+        }
+        release.notify_one();
+        worker.await.unwrap();
+        assert!(source.applied.lock().await.revisions.is_empty());
+        assert_eq!(state.lock().await.pending_terrain.len(), 1);
+        apply_pending_terrain(&state, &source).await;
+        assert!(state.lock().await.pending_terrain.is_empty());
+        assert_eq!(source.applied.lock().await.revisions.get(&(0, 0)), Some(&1));
+        server.abort();
+        tokio::fs::remove_dir_all(dir).await.unwrap();
+    }
+
+    fn schedule(at: &str) -> ScheduleEntry {
+        ScheduleEntry {
+            at: at.to_string(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn schedule_times_stay_within_clock_bounds() {
+        for value in ["0:00", "23:59", "*:00", "*:59", "day", "night"] {
+            let mut entry = schedule(value);
+            assert!(entry.parse_condition().is_ok(), "{value} should be valid");
+            assert!(entry.condition.is_some());
+        }
+
+        for value in ["24:00", "25:30", "12:60", "*:60", "*:99"] {
+            let mut entry = schedule(value);
+            assert!(
+                entry.parse_condition().is_err(),
+                "{value} should be rejected"
+            );
+            assert!(entry.condition.is_none());
+        }
+    }
+
+    #[test]
+    fn create_refused_names_the_owned_characters_and_the_fix() {
+        let owned = [character("안녕", CharacterClass::Knight, Gender::default())];
+        let msg = create_refused("안녕2", "Character name already exists", &owned).to_string();
+        assert!(msg.contains("'안녕2'"));
+        assert!(msg.contains("already has 안녕;"));
+        assert!(msg.contains("character_name"));
+    }
+
+    #[test]
+    fn create_refused_stays_terse_without_owned_characters() {
+        let msg = create_refused("x", "reason", &[]).to_string();
+        assert_eq!(msg, "Could not create character 'x': reason");
+    }
 
     fn character(name: &str, class: CharacterClass, gender: Gender) -> Character {
         Character {
@@ -985,6 +1332,9 @@ mod tests {
             },
             class,
             gender,
+            equipment: Default::default(),
+            titles: Vec::new(),
+            active_title: None,
         }
     }
 
@@ -994,6 +1344,23 @@ mod tests {
             class: Some(class),
             gender: None,
         }
+    }
+
+    #[test]
+    fn a_guard_rerolls_until_str_and_con_carry_a_fight() {
+        let attrs = |str_: u8, con: u8| CharacterAttributes {
+            r#str: str_,
+            dex: 10,
+            con,
+            int: 10,
+            wis: 10,
+            cha: 10,
+            guard: 10,
+        };
+        let class = CharacterClass::Guard;
+        assert!(roll_fits_class(&attrs(14, 14), &class, Gender::Male));
+        assert!(!roll_fits_class(&attrs(15, 13), &class, Gender::Male));
+        assert!(!roll_fits_class(&attrs(11, 16), &class, Gender::Male));
     }
 
     #[test]
@@ -1068,5 +1435,18 @@ mod tests {
             api_base_url("wss://openmmo.example:10006/ws"),
             "https://openmmo.example:10007"
         );
+    }
+
+    #[test]
+    fn a_rename_demand_is_answered_from_the_configured_name() {
+        assert_eq!(rename_target("시스템", Some("인공지능")), Some("인공지능"));
+    }
+
+    #[test]
+    fn a_config_that_cannot_answer_has_no_target() {
+        // Offering the refused name back — in any case — is refused again.
+        assert_eq!(rename_target("시스템", None), None);
+        assert_eq!(rename_target("시스템", Some("시스템")), None);
+        assert_eq!(rename_target("SYSTEM", Some("system")), None);
     }
 }

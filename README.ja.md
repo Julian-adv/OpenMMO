@@ -17,7 +17,7 @@ AI エージェントと人間のプレイヤーを対等に扱う MMORPG です
 - **3D 環境**：Three.js を基盤としたクォータービューの 3D ゲーム世界
 - **点光源の松明**：距離減衰と影を備えたリアルタイムの点光源を松明が投射
 
-![松明で照らされた夜の風景](doc/images/gameplay-night.png)
+![松明で照らされた夜の風景](doc/images/gameplay/gameplay-night.png)
 
 - **建築とハウジング**：部屋単位のオクルージョンと L 字型の屋根接続に対応した、モジュール式の木骨建築
   - 2、3、4 階建てに対応
@@ -25,12 +25,12 @@ AI エージェントと人間のプレイヤーを対等に扱う MMORPG です
   - 壁、屋根、床のテクスチャやマテリアルをカスタマイズ可能
   - ベッドなどの家具を配置し、ゲーム世界内で操作（睡眠／使用）可能
 
-![ベッドを備えたプレイヤー建築の木骨住宅](doc/images/gameplay-housing.png)
+![ベッドを備えたプレイヤー建築の木骨住宅](doc/images/gameplay/gameplay-housing.png)
 - **昼夜サイクル**：太陽、空、環境光が変化する時刻シミュレーション
   - 昼夜の長さは惑星の公転位置に応じて変化（季節による長い昼と長い夜）
 - **双子の月**：独立した軌道と満ち欠けを持つ 2 つの月をシミュレーション
 
-![太陽、惑星、2 つの月を示す天体軌道パネル](doc/images/gameplay-orbits.png)
+![太陽、惑星、2 つの月を示す天体軌道パネル](doc/images/gameplay/gameplay-orbits.png)
 - **手続き型の世界**：地形、河川、海岸線、バイオームを完全に手続き型で生成
   - 32 km × 32 km の広大な世界
   - 浸食された流路と網状分流を備えた河川を手続き型で生成
@@ -40,25 +40,25 @@ AI エージェントと人間のプレイヤーを対等に扱う MMORPG です
   - アニメーションする海の波（Gerstner）と流れる川面のさざ波
   - 淡水と海水が混ざる河口に、分岐した分流と遷移表現を備えた三角州を形成
 
-![手続き型で生成されたワールドマップ](doc/images/gameplay-worldmap.png)
+![手続き型で生成されたワールドマップ](doc/images/gameplay/gameplay-worldmap.png)
 
-![手続き型の河川に自動配置された木橋](doc/images/gameplay-bridge.png)
+![手続き型の河川に自動配置された木橋](doc/images/gameplay/gameplay-bridge.png)
 
-![網状分流と砂州が海へ続く河川デルタ](doc/images/gameplay-delta.png)
+![網状分流と砂州が海へ続く河川デルタ](doc/images/gameplay/gameplay-delta.png)
 
 - **内蔵マップエディター**：ゲーム世界を形作るためのゲーム内ツール
   - 道路、平坦化、高さペイントなどの地形ブラシによるリアルタイム編集
   - 建物、小物、植物などをプレビューしながら配置
   - 矩形領域を描画し、町（スポーン禁止）やリージョンごとのモンスター出現区域を設定
 
-![高さブラシを有効にしたゲーム内マップエディター](doc/images/gameplay-map-editor.png)
+![高さブラシを有効にしたゲーム内マップエディター](doc/images/gameplay/gameplay-map-editor.png)
 
 - **能力値ベースの戦闘**：NetHack／D&D 風のサーバー権威型戦闘
   - 6 つの標準能力値（STR、DEX、CON、INT、WIS、CHA）、範囲は 3～18
   - キャラクター作成では 4d6 の最低値を除外するロール、クラス補正、72 ポイントの再調整を使用
   - ダメージ、命中、結果判定はすべてサーバーで処理
 
-![能力値、ペーパードール式装備、インベントリを備えたキャラクターシート](doc/images/gameplay-character-sheet.png)
+![能力値、ペーパードール式装備、インベントリを備えたキャラクターシート](doc/images/gameplay/gameplay-character-sheet.png)
 
 - **インベントリと装備**：重量制限付きインベントリと完全なペーパードール式装備システム
   - 11 の装備スロット：頭、メインハンド、オフハンド、胴、耳、首、ベルト、ズボン、ブーツ、指輪 2 枠
@@ -182,7 +182,7 @@ npm run dev -- --port 10004
 
 ```bash
 cd agent-client
-cargo watch -i "data/prompts/memory/" -x run
+cargo watch -i "data/npcs/**/memory.txt" -i "data/npcs/**/favor.json" -x run
 ```
 
 ### 6. 共有コード変更時の WASM 自動再ビルド（推奨）
@@ -211,6 +211,8 @@ npm run dev -- --port 10005
 | `openmmo-agent-client` | `agent-client` | `openmmo-agent` |
 
 本番ホスト上で `tools/deploy-prod.sh` を実行してデプロイします。このスクリプトは master をプルし、両方のバイナリとクライアントバンドルをビルドし、静的ファイルを公開してから両方のユニットを再起動します。
+
+ホストのセットアップスクリプトはありません。本番の nginx は手動管理の `/etc/nginx/sites-available/openmmo` で、キャッシュ規則の基準である `docker/nginx.conf.template` と揃えて保守します。特に `/models/` は `Cache-Control: no-cache` で配信する必要があります — オブジェクトカタログと GLB は固定パスで取得されるため、時間ベースの有効期限では古い `catalog.json` が新しい家具をエラーなしに隠してしまいます。
 
 サーバーは systemd の `SIGTERM` を適切に処理します。接続中のプレイヤーへ再起動通知を表示し、リスナーと定期タスクを停止し、進行中の一括保存を待機して、接続中の全キャラクター、インベントリ、ワールド時計を永続化してから終了します。`systemctl restart` はこの終了処理を待ってから新しいバイナリを起動します。
 
@@ -251,6 +253,6 @@ sudo systemctl restart openmmo-server
 
 ## コントリビューション
 
-コントリビューションを歓迎します！初めてプルリクエストを開くと、ボットが PR 上のコメントで [Contributor License Agreement](CLA.md) への署名を求めます。コントリビューションをマージするには CLA への署名が必要です。
+コントリビューションを歓迎します！作業の選び方、CI が実行するチェック、PR の慣例については [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。初めてプルリクエストを開くと、ボットが PR 上のコメントで [Contributor License Agreement](CLA.md) への署名を求めます。コントリビューションをマージするには CLA への署名が必要です。
 
 バイナリアセット（3D モデル・音楽・効果音）のコントリビューションは [doc/ASSETS.md](doc/ASSETS.md) を参照してください — git ではなく Hugging Face データセットへの PR で行います。

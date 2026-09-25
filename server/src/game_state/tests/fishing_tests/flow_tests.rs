@@ -4,11 +4,21 @@ use super::*;
 /// returning the outcome (plus every message seen on the way). The
 /// policy sees each `FishingFight` beat's state and tension — exactly
 /// what a real client (human gauge or agent reflex) gets.
-async fn fight_to_the_end(
+pub(super) async fn fight_to_the_end(
     game_state: &GameState,
     id: &PlayerId,
-    rx: &mut UnboundedReceiver<ServerMessage>,
-    policy: impl Fn(FishState, u32) -> FishingAction,
+    rx: &mut DirectRx,
+    policy: impl Fn(FishState, u32, bool) -> FishingAction,
+) -> (FishingOutcome, Vec<ServerMessage>) {
+    fight_to_the_end_with_auth(game_state, id, rx, policy, None).await
+}
+
+async fn fight_to_the_end_with_auth(
+    game_state: &GameState,
+    id: &PlayerId,
+    rx: &mut DirectRx,
+    policy: impl Fn(FishState, u32, bool) -> FishingAction,
+    auth: Option<&crate::auth::AuthService>,
 ) -> (FishingOutcome, Vec<ServerMessage>) {
     let mut seen = Vec::new();
     // Budget: the fight timeout plus slack, in 250 ms ticks.
@@ -19,9 +29,10 @@ async fn fight_to_the_end(
                     player_id,
                     fish_state,
                     tension_pct,
+                    trophy,
                     ..
                 } if player_id == id => {
-                    let action = policy(*fish_state, *tension_pct);
+                    let action = policy(*fish_state, *tension_pct, *trophy);
                     seen.push(msg.clone());
                     game_state.respond_fishing(id, action).await;
                 }
@@ -33,39 +44,32 @@ async fn fight_to_the_end(
             }
         }
         advance(Duration::from_millis(250)).await;
-        game_state.tick_fishing().await;
+        game_state.tick_fishing(auth).await;
     }
     panic!("the fight never ended");
 }
 
-/// The wait roll is pure given an RNG: level 0 spans the shared range,
-/// skill shortens it 2% per level, and the floor holds at half the minimum.
-#[test]
-fn wait_roll_shortens_with_skill_and_respects_the_floor() {
-    use crate::game_state::fishing::roll_wait_ms;
-    use rand::rngs::StdRng;
-    use rand::SeedableRng;
-
-    for seed in 0..50u64 {
-        let mut rng = StdRng::seed_from_u64(seed);
-        let base = roll_wait_ms(0, &mut rng);
-        assert!(
-            (u64::from(WAIT_MIN_MS)..=u64::from(WAIT_MAX_MS)).contains(&base),
-            "level 0 wait {base} outside the shared range"
-        );
-
-        let mut rng = StdRng::seed_from_u64(seed);
-        let skilled = roll_wait_ms(20, &mut rng);
-        // Same seed → same base draw, shortened to exactly 60%.
-        assert_eq!(skilled, base * 60 / 100, "level 20 = 40% shorter");
-
-        let mut rng = StdRng::seed_from_u64(seed);
-        assert_eq!(
-            roll_wait_ms(50, &mut rng),
-            u64::from(WAIT_MIN_MS) / 2,
-            "an absurd level bottoms out at half the minimum wait"
-        );
+async fn hook_forced_fish(
+    game_state: &GameState,
+    id: &PlayerId,
+    rx: &mut DirectRx,
+    item_def_id: &str,
+) {
+    game_state.start_fishing(id, water_target()).await;
+    advance_until_bite(game_state, rx).await;
+    {
+        let mut sessions = game_state.fishing_sessions.write().await;
+        let fish = sessions.get_mut(id).unwrap().rolled_fish.as_mut().unwrap();
+        fish.item_def_id = item_def_id.to_string();
+        fish.rarity = game_state
+            .item_defs
+            .get(item_def_id)
+            .unwrap()
+            .rarity_tier
+            .unwrap_or(0);
+        fish.trophy = false;
     }
+    game_state.respond_fishing(id, FishingAction::Hook).await;
 }
 
 #[tokio::test(start_paused = true)]
@@ -109,6 +113,7 @@ async fn cast_requires_rod_water_and_range() {
     game_state.inventories.write().await.insert(
         bare,
         PlayerInventory {
+            active_ammo: None,
             bag: vec![],
             equipped: Default::default(),
         },
@@ -124,6 +129,77 @@ async fn cast_requires_rod_water_and_range() {
     assert!(drain(&mut rx)
         .iter()
         .any(|m| matches!(m, ServerMessage::FishingCasted { .. })));
+}
+
+// Bystanders take the facing from the broadcast (FishingCasted's rotation doc).
+#[tokio::test(start_paused = true)]
+async fn cast_broadcast_faces_the_water() {
+    let game_state = make_test_game_state("fishing_cast_facing");
+    let (id, mut rx) = make_angler(&game_state, "angler_facing").await;
+
+    game_state.start_fishing(&id, water_target()).await;
+    let rotation = drain(&mut rx)
+        .iter()
+        .find_map(|m| match m {
+            ServerMessage::FishingCasted { rotation, .. } => Some(*rotation),
+            _ => None,
+        })
+        .expect("cast should be accepted");
+    // Angler at (-100, 50), water at (-103, 50): facing is atan2(-3, 0).
+    let expected = (-3.0f32).atan2(0.0);
+    assert!(
+        (rotation - expected).abs() < 1e-6,
+        "expected rotation {expected}, got {rotation}"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn rowboat_casts_only_astern_without_turning() {
+    let game_state = make_test_game_state("fishing_rowboat_facing");
+    let (id, mut rx) = make_angler(&game_state, "angler_rowboat").await;
+    {
+        let mut players = game_state.players.write().await;
+        let player = players.get_mut(&id).unwrap();
+        player.mount = Some(onlinerpg_shared::mount::MountKind::Rowboat);
+        player.rotation = 0.0;
+    }
+
+    for (x, z) in [
+        (-100.0, 54.0),
+        (-104.0, 50.0),
+        (-104.0, 49.0),
+        (-100.0, 50.0),
+    ] {
+        game_state
+            .start_fishing(&id, Position { x, y: 0.0, z })
+            .await;
+        assert!(drain(&mut rx).iter().any(|message| matches!(
+            message,
+            ServerMessage::FishingError { message }
+                if message == "Cast into the water behind the boat."
+        )));
+        assert!(!game_state.fishing_sessions.read().await.contains_key(&id));
+    }
+
+    let target = Position {
+        x: -98.0,
+        y: 0.0,
+        z: 46.0,
+    };
+    game_state.start_fishing(&id, target).await;
+    let (position, rotation) = drain(&mut rx)
+        .into_iter()
+        .find_map(|message| match message {
+            ServerMessage::FishingCasted {
+                position, rotation, ..
+            } => Some((position, rotation)),
+            _ => None,
+        })
+        .expect("stern cast should be accepted");
+    assert_eq!(position.x, target.x);
+    assert_eq!(position.z, target.z);
+    assert_eq!(rotation, 0.0, "bystanders must keep the boat's heading");
+    assert_eq!(game_state.players.read().await[&id].rotation, 0.0);
 }
 
 // The regression this PR fixes: a river's bed sits ABOVE sea level (its
@@ -162,7 +238,54 @@ async fn fishing_works_in_a_river_above_sea_level() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn full_catch_flow_awards_fish_and_skill_xp() {
+async fn landing_a_golden_sturgeon_earns_the_angler_title() {
+    let game_state = make_test_game_state("fishing_title_flow");
+    let (id, mut rx) = make_angler(&game_state, "angler_title").await;
+    game_state.set_player_titles(&id, Vec::new()).await;
+
+    hook_forced_fish(&game_state, &id, &mut rx, "golden_sturgeon").await;
+    let (outcome, msgs) = fight_to_the_end(&game_state, &id, &mut rx, auto_stance).await;
+    assert!(matches!(outcome, FishingOutcome::Caught { .. }));
+
+    let titles = game_state
+        .player_titles
+        .read()
+        .await
+        .get(&id)
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(titles, ["sturgeon_angler"]);
+    assert!(msgs
+        .iter()
+        .any(|m| matches!(m, ServerMessage::TitleEarned { title } if title == "sturgeon_angler")));
+}
+
+#[tokio::test(start_paused = true)]
+async fn golden_sturgeon_title_is_persisted_before_disconnect() {
+    let auth = make_test_auth("fishing_title_disconnect");
+    let account = auth.login_npc("npc_fishing_title_disconnect").unwrap();
+    let character = create_test_character(&auth, &account, "Sturgeon");
+    let game_state = make_test_game_state("fishing_title_disconnect");
+    let (id, mut rx) = make_angler(&game_state, "Sturgeon").await;
+    game_state
+        .register_player_character(&id, character.id, 0, attrs_with_cha(10), 0, None)
+        .await;
+    game_state.set_player_titles(&id, Vec::new()).await;
+
+    hook_forced_fish(&game_state, &id, &mut rx, "golden_sturgeon").await;
+    let (outcome, _) =
+        fight_to_the_end_with_auth(&game_state, &id, &mut rx, auto_stance, Some(&auth)).await;
+    assert!(matches!(outcome, FishingOutcome::Caught { .. }));
+
+    game_state.unregister_player_character(&id).await;
+    assert_eq!(
+        auth.load_titles(character.id).unwrap().0,
+        ["sturgeon_angler"]
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn full_catch_flow_awards_fish_without_changing_skills() {
     let game_state = make_test_game_state("fishing_catch_flow");
     let (id, mut rx) = make_angler(&game_state, "angler_catch").await;
 
@@ -193,10 +316,7 @@ async fn full_catch_flow_awards_fish_and_skill_xp() {
         }
     )));
     assert!(size_cm > 0);
-    // Every catch — fish, junk, and sealed coin pouches alike — lands in
-    // the bag; only rarity ≥ 1 (fish) grants XP.
-    let defs = ItemDefs::load();
-    let def = defs.get(&fish_id).expect("caught def");
+    // All catches arrive as inventory items.
     let inv = game_state.get_player_inventory(&id).await.unwrap();
     assert!(inv
         .bag
@@ -205,18 +325,7 @@ async fn full_catch_flow_awards_fish_and_skill_xp() {
     assert!(msgs
         .iter()
         .any(|m| matches!(m, ServerMessage::InventoryUpdated { .. })));
-    let rarity = def.rarity_tier.unwrap_or(1);
-    let got_xp = msgs.iter().any(|m| {
-        matches!(
-            m,
-            ServerMessage::SkillXpGained { xp_amount, .. } if *xp_amount >= 10
-        )
-    });
-    assert_eq!(
-        got_xp,
-        rarity >= 1,
-        "fish grant XP, junk and coins do not (caught {fish_id}, rarity {rarity})"
-    );
+    assert!(!game_state.dirty_skills.read().await.contains(&id));
     // Session is gone: a second hook is an error, not a double catch.
     game_state.respond_fishing(&id, FishingAction::Hook).await;
     assert!(drain(&mut rx)
@@ -225,7 +334,7 @@ async fn full_catch_flow_awards_fish_and_skill_xp() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn ignored_bite_escapes_with_consolation_xp() {
+async fn ignored_bite_escapes_without_changing_skills() {
     let game_state = make_test_game_state("fishing_bite_timeout");
     let (id, mut rx) = make_angler(&game_state, "angler_afk").await;
 
@@ -246,14 +355,11 @@ async fn ignored_bite_escapes_with_consolation_xp() {
             ..
         }
     )));
-    assert!(msgs.iter().any(|m| matches!(
-        m,
-        ServerMessage::SkillXpGained { xp_amount, .. } if *xp_amount == 2
-    )));
+    assert!(!game_state.dirty_skills.read().await.contains(&id));
 }
 
 #[tokio::test(start_paused = true)]
-async fn hooking_early_scares_the_fish_off_without_xp() {
+async fn hooking_early_scares_the_fish_off() {
     let game_state = make_test_game_state("fishing_early_hook");
     let (id, mut rx) = make_angler(&game_state, "angler_eager").await;
 
@@ -270,9 +376,7 @@ async fn hooking_early_scares_the_fish_off_without_xp() {
             ..
         }
     )));
-    assert!(!msgs
-        .iter()
-        .any(|m| matches!(m, ServerMessage::SkillXpGained { .. })));
+    assert!(!game_state.dirty_skills.read().await.contains(&id));
 }
 
 #[tokio::test(start_paused = true)]
@@ -297,10 +401,10 @@ async fn moving_aborts_the_session() {
                 },
                 false,
             ),
-            true,
             false,
         )
         .await;
+    game_state.tick_player_movement(1.0).await;
     assert!(drain(&mut rx).iter().any(|m| matches!(
         m,
         ServerMessage::FishingEnded {
@@ -340,39 +444,53 @@ async fn duplicate_hook_during_the_fight_is_ignored() {
     assert!(matches!(outcome, FishingOutcome::Caught { .. }));
 }
 
-/// Neither fish nor junk stack, so every bagged catch is its own slot even
-/// when two of them are the same species — the bag reads as a catch log.
 #[tokio::test(start_paused = true)]
-async fn caught_fish_take_one_bag_slot_each() {
-    let game_state = make_test_game_state("fishing_stacks");
-    let (id, mut rx) = make_angler(&game_state, "angler_stacker").await;
+async fn fight_broadcasts_the_current_reel_stance() {
+    let game_state = make_test_game_state("fishing_reel_stance");
+    let (id, mut rx) = make_angler(&game_state, "angler_reel_stance").await;
+    game_state.start_fishing(&id, water_target()).await;
+    advance_until_bite(&game_state, &mut rx).await;
+    game_state.respond_fishing(&id, FishingAction::Hook).await;
+    assert!(drain(&mut rx).iter().any(|msg| matches!(
+        msg,
+        ServerMessage::FishingFight {
+            stance: FishingAction::Hold,
+            ..
+        }
+    )));
+    for expected in [
+        FishingAction::Reel,
+        FishingAction::GiveLine,
+        FishingAction::Hold,
+    ] {
+        game_state.respond_fishing(&id, expected).await;
+        advance(Duration::from_millis(250)).await;
+        game_state.tick_fishing(None).await;
+        assert!(drain(&mut rx).iter().any(|msg| matches!(msg,
+            ServerMessage::FishingFight { stance, .. } if *stance == expected
+        )));
+    }
+}
 
-    let mut bagged_catches = 0u32;
+// Species stacking is tested with deterministic awards in inventory_tests.
+#[tokio::test(start_paused = true)]
+async fn every_catch_lands_in_the_bag() {
+    let game_state = make_test_game_state("fishing_catches_bagged");
+    let (id, mut rx) = make_angler(&game_state, "angler_bagger").await;
+
     for _ in 0..3 {
         game_state.start_fishing(&id, water_target()).await;
         advance_until_bite(&game_state, &mut rx).await;
         game_state.respond_fishing(&id, FishingAction::Hook).await;
         let (outcome, _) = fight_to_the_end(&game_state, &id, &mut rx, auto_stance).await;
-        let FishingOutcome::Caught { .. } = outcome else {
-            panic!("perfect play must catch");
-        };
-        // Every species takes a slot — even a coin pouch arrives sealed.
-        bagged_catches += 1;
+        assert!(
+            matches!(outcome, FishingOutcome::Caught { .. }),
+            "perfect play must catch"
+        );
     }
     let inv = game_state.get_player_inventory(&id).await.unwrap();
-    let total_fish: u32 = inv.bag.iter().map(|item| item.quantity).sum();
-    assert_eq!(total_fish, bagged_catches);
-    // Fish and junk are both non-stackable, so this holds no matter which
-    // species the rolls produced.
-    assert_eq!(
-        inv.bag.len() as u32,
-        bagged_catches,
-        "each fish should occupy its own bag slot"
-    );
-    assert!(
-        inv.bag.iter().all(|item| item.quantity == 1),
-        "no fish entry should carry a quantity above one"
-    );
+    let total: u32 = inv.bag.iter().map(|item| item.quantity).sum();
+    assert_eq!(total, 3);
 }
 
 // The fight: cranking the reel against a running fish pumps tension
@@ -387,7 +505,7 @@ async fn reeling_against_every_run_snaps_the_line() {
     game_state.respond_fishing(&id, FishingAction::Hook).await;
 
     let (outcome, msgs) =
-        fight_to_the_end(&game_state, &id, &mut rx, |_, _| FishingAction::Reel).await;
+        fight_to_the_end(&game_state, &id, &mut rx, |_, _, _| FishingAction::Reel).await;
     assert_eq!(outcome, FishingOutcome::Escaped);
     // The snap came from tension, not the timeout: the fight died young.
     let beats = msgs
@@ -400,9 +518,7 @@ async fn reeling_against_every_run_snaps_the_line() {
     );
 }
 
-/// Never touching the rod can't land a fish: the line snaps or the fish
-/// throws the hook at the timeout — either way it escapes (with the
-/// consolation XP, since it was hooked).
+/// Ignoring a hooked fish eventually loses it.
 #[tokio::test(start_paused = true)]
 async fn ignoring_the_fight_escapes_the_fish() {
     let game_state = make_test_game_state("fishing_fight_afk");
@@ -424,20 +540,15 @@ async fn ignoring_the_fight_escapes_the_fish() {
             msgs.push(msg);
         }
         advance(Duration::from_millis(250)).await;
-        game_state.tick_fishing().await;
+        game_state.tick_fishing(None).await;
     }
     assert_eq!(outcome, Some(FishingOutcome::Escaped));
-    assert!(msgs.iter().any(|m| matches!(
-        m,
-        ServerMessage::SkillXpGained { xp_amount, .. } if *xp_amount == ESCAPE_XP
-    )));
+    assert!(!game_state.dirty_skills.read().await.contains(&id));
 }
 
 // ---- PR9 hardening: concurrency, radius, aborts, overflow, consumption ----
 
-/// Two sessions live in the same map at once; each angler's bites and rounds
-/// are answered only by their owner, and both land their own catch with
-/// their own XP. Locks the per-player session isolation.
+/// Two anglers control separate sessions and receive their own catches.
 #[tokio::test(start_paused = true)]
 async fn two_anglers_fish_independently() {
     let game_state = make_test_game_state("fishing_two_anglers");
@@ -448,7 +559,6 @@ async fn two_anglers_fish_independently() {
     game_state.start_fishing(&b, water_target()).await;
 
     let mut ended: std::collections::HashMap<PlayerId, FishingOutcome> = Default::default();
-    let mut xp: std::collections::HashMap<PlayerId, u64> = Default::default();
     let mut caught: std::collections::HashMap<PlayerId, String> = Default::default();
     for _ in 0..400 {
         if ended.len() == 2 {
@@ -464,14 +574,12 @@ async fn two_anglers_fish_independently() {
                         player_id,
                         fish_state,
                         tension_pct,
+                        trophy,
                         ..
                     } if player_id == me => {
                         game_state
-                            .respond_fishing(&me, auto_stance(fish_state, tension_pct))
+                            .respond_fishing(&me, auto_stance(fish_state, tension_pct, trophy))
                             .await;
-                    }
-                    ServerMessage::SkillXpGained { xp_amount, .. } => {
-                        *xp.entry(me).or_default() += xp_amount;
                     }
                     ServerMessage::FishingEnded { player_id, outcome } if player_id == me => {
                         if let FishingOutcome::Caught {
@@ -487,7 +595,7 @@ async fn two_anglers_fish_independently() {
             }
         }
         advance(Duration::from_millis(250)).await;
-        game_state.tick_fishing().await;
+        game_state.tick_fishing(None).await;
     }
 
     assert_eq!(ended.len(), 2, "both anglers must finish their sessions");
@@ -496,19 +604,10 @@ async fn two_anglers_fish_independently() {
             matches!(outcome, FishingOutcome::Caught { .. }),
             "correct play must land the catch for {me}: {outcome:?}"
         );
-        // XP mirrors the species each angler independently drew: fish grant
-        // it, rarity-0 flotsam does not.
-        let is_fish = game_state
-            .item_defs
-            .get(caught.get(me).expect("caught id"))
-            .expect("caught def")
-            .is_fish();
-        assert_eq!(
-            xp.get(me).copied().unwrap_or(0) > 0,
-            is_fish,
-            "skill XP must match what {me} caught ({:?})",
-            caught.get(me)
-        );
+        let inv = game_state.get_player_inventory(me).await.unwrap();
+        let caught_id = caught.get(me).expect("caught id");
+        assert!(inv.bag.iter().any(|item| &item.item_def_id == caught_id));
+        assert!(!game_state.dirty_skills.read().await.contains(me));
     }
 }
 

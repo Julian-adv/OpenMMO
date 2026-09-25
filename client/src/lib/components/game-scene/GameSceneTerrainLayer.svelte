@@ -35,6 +35,8 @@
   import { enqueueTileWork } from '../../utils/tileWorkQueue'
   import { currentDungeonId } from '../../stores/dungeonStore'
   import { dungeonManager } from '../../managers/dungeonManager'
+  import type { RainPuddleUniforms } from '../../shaders/rain-puddle-nodes'
+  import { RainPuddleTracker, type RainSampler } from '../../utils/rainPuddles'
 
   interface Props {
     terrainGeometry: THREE.BufferGeometry | null
@@ -47,6 +49,7 @@
     terrainMaterialPrecompilePoolSize?: number
     renderer?: WebGPURenderer | null
     camera?: THREE.Camera | null
+    rainPuddleUniforms?: RainPuddleUniforms
   }
 
   let {
@@ -60,6 +63,7 @@
     terrainMaterialPrecompilePoolSize = 8,
     renderer = null,
     camera = null,
+    rainPuddleUniforms,
   }: Props = $props()
 
   // ── Default resources (created once) ──────────────────
@@ -88,6 +92,41 @@
   // terrain material so a single sync opens the hole on whichever tile
   // covers the entrance.
   const holeUniforms: SplatHoleUniforms = createSplatHoleUniforms()
+  const puddleTracker = new RainPuddleTracker()
+  const puddleTarget = new THREE.Vector4()
+
+  export function pauseRainPuddles(seconds: number) {
+    puddleTracker.pause(seconds)
+  }
+
+  export function updateRainPuddles(
+    seconds: number,
+    sampleRain: RainSampler,
+    restoreHistory: boolean
+  ) {
+    const samples = puddleTracker.update(seconds, sampleRain, restoreHistory)
+    const blend = -Math.expm1(-Math.max(0, seconds) / 0.35)
+    for (const tile of terrainTiles) {
+      const uniforms = materialMap.get(tile.id)?.userData.rainPuddles
+      if (!uniforms) continue
+      const x = tile.position[0] - TERRAIN_TILE_SIZE / 2
+      const z = tile.position[2] - TERRAIN_TILE_SIZE / 2
+      const a = puddleTracker.sample(x, z, restoreHistory)
+      const b = puddleTracker.sample(x + TERRAIN_TILE_SIZE, z, restoreHistory)
+      const c = puddleTracker.sample(x, z + TERRAIN_TILE_SIZE, restoreHistory)
+      const d = puddleTracker.sample(
+        x + TERRAIN_TILE_SIZE,
+        z + TERRAIN_TILE_SIZE,
+        restoreHistory
+      )
+      uniforms.origin.value.set(x, z)
+      puddleTarget.set(a.wetness, b.wetness, c.wetness, d.wetness)
+      uniforms.wetness.value.lerp(puddleTarget, blend)
+      puddleTarget.set(a.rain, b.rain, c.rain, d.rain)
+      uniforms.rain.value.lerp(puddleTarget, blend)
+    }
+    return samples
+  }
 
   // Open/close the entrance hole as dungeons register near the player. The
   // shader holes a single rect, which matches the one-dungeon-at-a-time
@@ -207,6 +246,7 @@
       sharedBrushUniforms: brushUniforms,
       sharedHoleUniforms: holeUniforms,
       includeEditorOverlay: editorOverlayCompiled,
+      rainPuddleUniforms,
     })
     return mat
   }
@@ -226,6 +266,13 @@
       const newMat = createDefaultMaterial()
       const oldU = oldMat.userData.uniforms
       const newU = newMat.userData.uniforms
+      const oldPuddles = oldMat.userData.rainPuddles
+      const newPuddles = newMat.userData.rainPuddles
+      if (oldPuddles && newPuddles) {
+        newPuddles.wetness.value.copy(oldPuddles.wetness.value)
+        newPuddles.rain.value.copy(oldPuddles.rain.value)
+        newPuddles.origin.value.copy(oldPuddles.origin.value)
+      }
       for (const k of Object.keys(oldU)) {
         if (k in newU && oldU[k]?.value !== undefined) {
           newU[k].value = oldU[k].value
@@ -283,8 +330,9 @@
     return terrainGeometry!.clone()
   }
 
-  /** Return a geometry to the pool for reuse. */
-  function releaseGeometry(geo: THREE.BufferGeometry) {
+  function releaseGeometry(tileId: string, geo: THREE.BufferGeometry) {
+    const [tileX, tileZ] = tileId.split('_').map(Number)
+    heightManager?.unregisterGeometry(tileX, tileZ)
     geometryPool.push(geo)
   }
 
@@ -303,6 +351,8 @@
     }
     u.uTileScales.array = padTileScales(_defaultLayers.map((l) => l.tile))
     u.uTileSwapUvs.array = padTileSwapUvs(_defaultLayers.map((l) => l.swapUv))
+    splatMat.userData.rainPuddles?.wetness.value.set(0, 0, 0, 0)
+    splatMat.userData.rainPuddles?.rain.value.set(0, 0, 0, 0)
   }
 
   // ── Brush sync (updates shared uniform nodes → affects all materials) ──
@@ -370,6 +420,9 @@
     brushUnsubs.forEach((u) => u())
     brushUnsubs = []
     holeUnsub()
+    for (const [id, geo] of geoMap) releaseGeometry(id, geo)
+    geoMap.clear()
+    materialMap.clear()
   })
 
   // ── Geometry management (SvelteMap, needed for template) ──────
@@ -377,6 +430,12 @@
 
   // ── Per-tile materials (SvelteMap for template reactivity) ──
   const materialMap = new SvelteMap<string, THREE.Material>()
+
+  // Keyed by tile id: an index-bound array drifts when streaming evicts tiles
+  const meshById = $state<Record<string, THREE.Mesh | undefined>>({})
+  $effect(() => {
+    terrainMeshes = terrainTiles.map((t) => meshById[t.id])
+  })
 
   function getTileCoords(tile: TerrainTile): {
     tileX: number
@@ -433,8 +492,9 @@
     // Remove data for tiles no longer in the list, return to pools
     for (const [id, geo] of geoMap) {
       if (!currentTileIds.has(id)) {
-        releaseGeometry(geo)
+        releaseGeometry(id, geo)
         geoMap.delete(id)
+        delete meshById[id]
         const mat = materialMap.get(id)
         if (mat) releaseMaterial(mat)
         materialMap.delete(id)
@@ -494,7 +554,7 @@
 
 {#if terrainGeometry && materialsReady}
   <T.Group bind:ref={terrainGroup}>
-    {#each terrainTiles as tile, index (tile.id)}
+    {#each terrainTiles as tile (tile.id)}
       {@const geo = geoMap.get(tile.id) ?? null}
       {@const tileMat = materialMap.get(tile.id) ?? null}
       {#if geo && tileMat}
@@ -503,7 +563,7 @@
           material={tileMat}
           tileId={tile.id}
           position={tile.position}
-          bind:mesh={terrainMeshes[index]}
+          bind:mesh={meshById[tile.id]}
         />
       {/if}
     {/each}

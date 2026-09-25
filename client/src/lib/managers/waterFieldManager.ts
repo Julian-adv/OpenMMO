@@ -60,6 +60,13 @@ export class WaterFieldManager {
     return promise
   }
 
+  /** Distinguish unloaded tiles from the sea-level fallback in `surfaceAt`. */
+  hasSurfaceData(worldX: number, worldZ: number): boolean {
+    return this.cache.has(
+      tileKey(worldToTileCoord(worldX), worldToTileCoord(worldZ))
+    )
+  }
+
   /** Baked water surface height at a world XZ (bilinear, cached tiles only;
    *  sea level when absent). Synchronous — never fetches on the click path.
    *  The server re-validates every cast. */

@@ -4,8 +4,33 @@
   "hitSounds": [
     {
       "attackerMaterial": "metal",
+      "targetMaterial": "metal",
+      "sound": "/sounds/bone-hit-heavy.ogg"
+    },
+    {
+      "attackerMaterial": "wood",
+      "targetMaterial": "metal",
+      "sound": "/sounds/bone-hit-heavy.ogg"
+    },
+    {
+      "attackerMaterial": "metal",
       "targetMaterial": "flesh",
-      "sound": "/sounds/sword-flesh3.ogg"
+      "sound": "/sounds/sword-flesh4.ogg"
+    },
+    {
+      "attackerMaterial": "metal",
+      "targetMaterial": "stone",
+      "sound": "/sounds/sword-stone.ogg"
+    },
+    {
+      "attackerMaterial": "metal",
+      "targetMaterial": "bone",
+      "sound": "/sounds/armored-bone-hit.ogg"
+    },
+    {
+      "attackerMaterial": "wood",
+      "targetMaterial": "bone",
+      "sound": "/sounds/armored-bone-hit.ogg"
     }
   ],
   "missSounds": [

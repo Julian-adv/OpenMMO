@@ -1,12 +1,4 @@
-//! `wasm-bindgen` exports consumed by the web client. Wraps three
-//! crate-internal subsystems behind a JS-friendly surface:
-//! - the passability cache (per-house geometry + door state),
-//! - A* pathfinding queries against that cache, and
-//! - the monster-AI brain registry that drives in-browser NPCs.
-//!
-//! State lives in `thread_local!` cells so each WASM worker has its own
-//! cache; JS-facing functions are named `passability_*` / `ai_*` so the
-//! TypeScript wrappers can group them by subsystem.
+//! WASM bindings for protocol serialization and pathfinding.
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -18,7 +10,6 @@ use wasm_bindgen::prelude::*;
 use crate::furniture;
 use crate::housing;
 use crate::messages::{deserialize_server_msg, serialize_client_msg, ClientMessage};
-use crate::monster_ai::{self, BehaviorTree, MonsterBrain, NearbyPlayer};
 use crate::pathfinding::{self, PassabilityCache};
 use crate::world::Position;
 
@@ -51,6 +42,35 @@ pub fn protocol_version() -> u32 {
     crate::PROTOCOL_VERSION
 }
 
+#[wasm_bindgen]
+pub fn ability_mana_cost(ability: JsValue) -> Result<u32, JsError> {
+    let ability: crate::ability::AbilityId = serde_wasm_bindgen::from_value(ability)
+        .map_err(|e| JsError::new(&format!("Invalid ability: {e}")))?;
+    Ok(ability.mana_cost())
+}
+
+#[wasm_bindgen]
+pub fn character_max_mana(class: JsValue, wis: u8, level: u32) -> Result<u32, JsError> {
+    let class: crate::CharacterClass = serde_wasm_bindgen::from_value(class)
+        .map_err(|e| JsError::new(&format!("Invalid character class: {e}")))?;
+    Ok(crate::mana::max_mana(&class, wis, level))
+}
+
+/// Close code the server ends a desynced session with. Cached client-side like
+/// the refusal code: `onclose` can fire before wasm is loaded.
+#[wasm_bindgen]
+pub fn close_code_client_desync() -> u16 {
+    crate::CLOSE_CODE_CLIENT_DESYNC
+}
+
+/// `client_version` with this build's layout fingerprint appended, so a cached
+/// bundle whose dungeon generator predates the server's is refused at the
+/// handshake instead of drawing a maze the server does not have.
+#[wasm_bindgen]
+pub fn stamp_layout_version(client_version: &str) -> String {
+    crate::stamp_layout_version(client_version)
+}
+
 /// Close code the server refuses a stale build with. Exported so the web
 /// client compares against the same number the server sends; callers must
 /// cache it while wasm is loaded, since `onclose` also fires before that.
@@ -68,25 +88,52 @@ pub fn xp_for_level(level: u32) -> f64 {
     xp.min(MAX_SAFE) as f64
 }
 
-/// Cumulative XP threshold for a trained-skill level (fishing etc.), so the
-/// client's progress bars use the exact server curve. Skill XP tops out far
-/// below safe-integer range, so no saturation is needed.
-#[wasm_bindgen]
-pub fn skill_xp_for_level(level: u32) -> f64 {
-    crate::skills::skill_xp_for_level(level) as f64
-}
-
-/// The shared skill level cap (`SKILL_LEVEL_CAP`), for capped-out displays.
-#[wasm_bindgen]
-pub fn skill_level_cap() -> u32 {
-    crate::skills::SKILL_LEVEL_CAP
-}
-
 /// How long a cast is airborne (`CAST_MS`), so the client can line the splash
 /// up with the bobber landing instead of the swing that threw it.
 #[wasm_bindgen]
 pub fn fishing_cast_ms() -> u32 {
     crate::fishing::CAST_MS
+}
+
+#[wasm_bindgen]
+pub fn fishing_is_stern_cast(dx: f32, dz: f32, boat_rotation: f32) -> bool {
+    crate::fishing::is_stern_cast(dx, dz, boat_rotation)
+}
+
+/// Minimum running tension that tires a trophy fish.
+#[wasm_bindgen]
+pub fn fishing_trophy_min_tension() -> f32 {
+    crate::fishing::TROPHY_MIN_TENSION
+}
+
+/// Mount tuning by wire kind (`shared/src/mount.rs`). The client predicts
+/// movement with these, so it reads the server's table rather than keeping
+/// a copy that can drift. An unknown kind answers as "on foot".
+#[wasm_bindgen]
+pub fn mount_speed_mult(kind: &str) -> f32 {
+    crate::mount::MountKind::from_wire(kind).map_or(1.0, |k| k.speed_mult())
+}
+
+#[wasm_bindgen]
+pub fn mount_turn_radius(kind: &str) -> f32 {
+    crate::mount::MountKind::from_wire(kind).map_or(0.0, |k| k.turn_radius())
+}
+
+#[wasm_bindgen]
+pub fn mount_floats(kind: &str) -> bool {
+    crate::mount::MountKind::from_wire(kind).is_some_and(|k| k.floats())
+}
+
+/// Live instrument batch window, so the client flushes on the server's clock.
+#[wasm_bindgen]
+pub fn instrument_batch_ms() -> u32 {
+    u32::from(crate::messages::INSTRUMENT_BATCH_MS)
+}
+
+/// Notes per batch the server accepts; the client flushes early at this size.
+#[wasm_bindgen]
+pub fn instrument_max_events_per_batch() -> u32 {
+    crate::messages::INSTRUMENT_MAX_EVENTS_PER_BATCH as u32
 }
 
 /// Cast-vs-walk depth threshold (`MIN_FISHABLE_DEPTH_M`), so the client's
@@ -140,6 +187,7 @@ pub fn passability_remove_house(house_id: &str) {
 struct FurnitureDebugPieceJs {
     cells: Vec<(i32, i32)>,
     y_base: f32,
+    floor_level: u8,
 }
 
 /// Region object placements (the client's `ObjectPlacement[]`) → the shared
@@ -166,6 +214,7 @@ pub fn passability_set_furniture(key: &str, val: JsValue) -> Result<JsValue, JsE
         .map(|p| FurnitureDebugPieceJs {
             cells: p.cells.clone(),
             y_base: p.y_base,
+            floor_level: p.floor_level,
         })
         .collect();
     with_cache_mut(
@@ -193,6 +242,14 @@ pub fn passability_remove_furniture(key: &str) {
 #[wasm_bindgen]
 pub fn furniture_is_solid(type_id: &str) -> bool {
     furniture::is_solid(type_id)
+}
+
+#[wasm_bindgen]
+pub fn passability_set_fences(val: JsValue) -> Result<(), JsError> {
+    let fences: Vec<crate::fence::Fence> = serde_wasm_bindgen::from_value(val)
+        .map_err(|e| JsError::new(&format!("Invalid fences: {e}")))?;
+    with_cache_mut(|cache| crate::fence::sync_passability(cache, "player-fences", &fences));
+    Ok(())
 }
 
 #[wasm_bindgen]
@@ -280,6 +337,24 @@ pub fn passability_is_movement_blocked(
     })
 }
 
+/// Match the server's attack collision for the equipped weapon.
+#[wasm_bindgen]
+pub fn passability_attack_line_blocked(
+    from_x: f32,
+    from_z: f32,
+    to_x: f32,
+    to_z: f32,
+    floor_level: u8,
+    ranged: bool,
+) -> bool {
+    let blocked = if ranged {
+        pathfinding::ranged_attack_line_blocked
+    } else {
+        pathfinding::attack_line_blocked
+    };
+    with_cache(|c| blocked(c, from_x, from_z, to_x, to_z, floor_level))
+}
+
 #[wasm_bindgen]
 pub fn passability_is_circle_blocked(x: f32, z: f32, r: f32, floor_level: u8, y: f32) -> bool {
     with_cache(|c| pathfinding::is_circle_blocked_on_floor(c, x, z, r, floor_level, Some(y)))
@@ -314,7 +389,106 @@ pub fn passability_get_floor_y_base(x: f32, z: f32, floor_level: u8) -> f32 {
     with_cache(|c| pathfinding::get_floor_y_base(c, x, z, floor_level).unwrap_or(f32::NAN))
 }
 
+// --- Weather (doc/WEATHER_SYSTEM.md) ---
+
+thread_local! {
+    static WEATHER_SECTORS: RefCell<Vec<crate::weather::Sector>> = RefCell::new(Vec::new());
+}
+
+/// Parses `weather-sectors.json` once; the per-frame exports below run
+/// against the cached list.
+#[wasm_bindgen]
+pub fn weather_set_sectors(json: &str) -> Result<(), JsError> {
+    let parsed: crate::weather::WeatherSectors = serde_json::from_str(json)
+        .map_err(|e| JsError::new(&format!("Invalid weather sectors: {e}")))?;
+    if parsed.version != crate::weather::WEATHER_SECTORS_VERSION {
+        return Err(JsError::new(&format!(
+            "weather sectors version {} (expected {})",
+            parsed.version,
+            crate::weather::WEATHER_SECTORS_VERSION
+        )));
+    }
+    WEATHER_SECTORS.with(|s| *s.borrow_mut() = parsed.sectors);
+    Ok(())
+}
+
+/// Game minutes at the start of a calendar day — computed here rather than in
+/// TS so the client's `t` cannot drift a day from the server's.
+#[wasm_bindgen]
+pub fn weather_day_start_minutes(year: u32, month: u8, day: u8) -> f64 {
+    crate::weather::game_minutes(&crate::world::GameDateTime {
+        year,
+        month,
+        day,
+        hour: 0,
+        minute: 0,
+    })
+}
+
+/// Seeds ride the wire as JS numbers, so they are taken as `f64` here.
+#[wasm_bindgen]
+pub fn weather_rain_at(seed: f64, bias: f64, t_min: f64, x: f32, z: f32) -> f32 {
+    WEATHER_SECTORS.with(|s| {
+        let cells = crate::weather::cells_at(&s.borrow(), seed as u64, bias, t_min);
+        crate::weather::rain_at(&cells, x, z)
+    })
+}
+
+#[wasm_bindgen]
+pub fn weather_cloud_factor(rain: f32) -> f32 {
+    crate::weather::cloud_factor(rain)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WeatherCellJs {
+    sector: usize,
+    zone: u8,
+    x: f32,
+    z: f32,
+    radius_m: f32,
+    env: f32,
+    progress: f32,
+    /// Game minutes until the cell dies.
+    remain_min: f32,
+    stage: &'static str,
+}
+
+/// Every live cell at `t_min`, for the debug radar overlay. The per-frame
+/// sampling path uses `weather_rain_at`; this one allocates, so keep it off
+/// the render loop.
+#[wasm_bindgen]
+pub fn weather_cells_at(seed: f64, bias: f64, t_min: f64) -> Result<JsValue, JsError> {
+    let cells: Vec<WeatherCellJs> = WEATHER_SECTORS.with(|s| {
+        let sectors = s.borrow();
+        crate::weather::cells_at(&sectors, seed as u64, bias, t_min)
+            .into_iter()
+            .map(|c| WeatherCellJs {
+                sector: c.sector,
+                zone: sectors.get(c.sector).map_or(0, |s| s.zone),
+                x: c.x,
+                z: c.z,
+                radius_m: c.radius_m,
+                env: c.env,
+                progress: c.progress,
+                remain_min: c.remain_min,
+                stage: match c.stage() {
+                    crate::weather::CellStage::Forming => "forming",
+                    crate::weather::CellStage::Raining => "raining",
+                    crate::weather::CellStage::Clearing => "clearing",
+                },
+            })
+            .collect()
+    });
+    to_js(&cells)
+}
+
 // --- Dungeon (procedural, seed-deterministic) ---
+
+#[wasm_bindgen]
+pub fn dungeon_floor_level_for_passability(floor: u8) -> i8 {
+    crate::dungeon::floor_level_for_passability(floor)
+}
 
 thread_local! {
     static DUNGEON_LAYOUTS: RefCell<HashMap<String, Rc<Vec<crate::dungeon::FloorLayout>>>> =
@@ -361,7 +535,19 @@ pub fn dungeon_interior_doors(entrance_id: &str, depth: u8) -> Result<JsValue, J
     to_js(&doors)
 }
 
-/// Shared dungeon constants so the TS side never hardcodes them.
+#[wasm_bindgen]
+pub fn world_constants() -> Result<JsValue, JsError> {
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct WorldConstants {
+        event_delivery_radius: f32,
+    }
+    to_js(&WorldConstants {
+        event_delivery_radius: crate::EVENT_DELIVERY_RADIUS,
+    })
+}
+
+/// Shared dungeon constants.
 #[wasm_bindgen]
 pub fn dungeon_constants() -> Result<JsValue, JsError> {
     #[derive(Serialize)]
@@ -376,7 +562,6 @@ pub fn dungeon_constants() -> Result<JsValue, JsError> {
         landing_cells: f32,
         max_depth: u8,
         path_max_nodes: u32,
-        event_delivery_radius: f32,
     }
     to_js(&DungeonConstants {
         grid: crate::dungeon::GRID,
@@ -388,7 +573,6 @@ pub fn dungeon_constants() -> Result<JsValue, JsError> {
         landing_cells: crate::dungeon::LANDING_CELLS,
         max_depth: crate::dungeon::MAX_DEPTH,
         path_max_nodes: crate::dungeon::DUNGEON_PATH_MAX_NODES as u32,
-        event_delivery_radius: crate::EVENT_DELIVERY_RADIUS,
     })
 }
 
@@ -597,168 +781,4 @@ struct WaypointJs {
 struct PathResultJs {
     waypoints: Vec<WaypointJs>,
     found: bool,
-}
-
-// --- Monster AI WASM bindings ---
-
-thread_local! {
-    static MONSTER_BRAINS: RefCell<HashMap<String, MonsterBrain>> = RefCell::new(HashMap::new());
-    static AI_BEHAVIOR_TREES: RefCell<HashMap<String, BehaviorTree>> = RefCell::new(HashMap::new());
-}
-
-struct WasmPathProvider;
-impl monster_ai::PathProvider for WasmPathProvider {
-    fn find_path(
-        &self,
-        start_x: f32,
-        start_z: f32,
-        start_floor: u8,
-        goal_x: f32,
-        goal_z: f32,
-        goal_floor: u8,
-    ) -> pathfinding::PathResult {
-        with_cache(|c| {
-            pathfinding::find_and_smooth_path(
-                start_x,
-                start_z,
-                start_floor,
-                goal_x,
-                goal_z,
-                goal_floor,
-                c,
-                pathfinding::DEFAULT_MAX_NODES,
-            )
-        })
-    }
-}
-
-#[wasm_bindgen]
-pub fn ai_load_behavior_trees(json: &str) -> Result<(), JsError> {
-    let trees = monster_ai::load_behavior_trees(json)
-        .map_err(|e| JsError::new(&format!("Failed to parse behavior trees: {e}")))?;
-    AI_BEHAVIOR_TREES.with(|t| *t.borrow_mut() = trees);
-    Ok(())
-}
-
-#[wasm_bindgen]
-pub fn ai_create_brain(val: JsValue) -> Result<(), JsError> {
-    #[derive(serde::Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    struct CreateBrainArgs {
-        monster_id: String,
-        monster_type: String,
-        position: Position,
-        health: u32,
-        max_health: u32,
-        walk_speed: f32,
-        run_speed: f32,
-        attack_range: f32,
-        chase_range: f32,
-        attack_cooldown: f32,
-        behavior: String,
-        /// Passability floor for path queries (dungeon monsters use their
-        /// depth's floor index; defaults to overworld).
-        #[serde(default)]
-        path_floor: u8,
-    }
-
-    let args: CreateBrainArgs = serde_wasm_bindgen::from_value(val)
-        .map_err(|e| JsError::new(&format!("Invalid brain args: {e}")))?;
-
-    let mut brain = MonsterBrain::new(
-        args.monster_id.clone(),
-        args.monster_type,
-        args.behavior,
-        args.position,
-        args.health,
-        args.max_health,
-        args.walk_speed,
-        args.run_speed,
-        args.attack_range,
-        args.chase_range,
-        args.attack_cooldown,
-    );
-    brain.path_floor = args.path_floor;
-
-    MONSTER_BRAINS.with(|b| b.borrow_mut().insert(args.monster_id, brain));
-    Ok(())
-}
-
-#[wasm_bindgen]
-pub fn ai_remove_brain(monster_id: &str) {
-    MONSTER_BRAINS.with(|b| b.borrow_mut().remove(monster_id));
-}
-
-#[wasm_bindgen]
-pub fn ai_tick_brain(
-    monster_id: &str,
-    delta_ms: f32,
-    nearby_players: JsValue,
-) -> Result<JsValue, JsError> {
-    let players: Vec<NearbyPlayer> = serde_wasm_bindgen::from_value(nearby_players)
-        .map_err(|e| JsError::new(&format!("Invalid nearby_players: {e}")))?;
-
-    let result = MONSTER_BRAINS.with(|brains| {
-        let mut brains = brains.borrow_mut();
-        let brain = match brains.get_mut(monster_id) {
-            Some(b) => b,
-            None => return None,
-        };
-
-        let mut rng = rand::thread_rng();
-        AI_BEHAVIOR_TREES.with(|trees| {
-            let trees = trees.borrow();
-            monster_ai::behavior_tree_for(&trees, &brain.behavior).map(|tree| {
-                brain.tick_with_behavior_tree(delta_ms, &players, tree, &WasmPathProvider, &mut rng)
-            })
-        })
-    });
-
-    match result {
-        Some(r) => to_js(&r),
-        None => to_js(&serde_json::Value::Null),
-    }
-}
-
-/// `attacker_id` is `f64`, not `u64`: wasm-bindgen maps `u64` to a JS BigInt,
-/// and the client holds player ids as plain numbers. Exact by `PlayerId`'s
-/// below-2^53 invariant.
-#[wasm_bindgen]
-pub fn ai_handle_hit(
-    monster_id: &str,
-    attacker_id: f64,
-    hit: bool,
-    damage: u32,
-) -> Result<JsValue, JsError> {
-    let attacker_id = crate::PlayerId::from(attacker_id as u64);
-    let commands = MONSTER_BRAINS.with(|brains| {
-        let mut brains = brains.borrow_mut();
-        let brain = match brains.get_mut(monster_id) {
-            Some(b) => b,
-            None => return vec![],
-        };
-
-        brain.handle_hit_with_behavior_tree(&attacker_id, hit, damage)
-    });
-
-    to_js(&commands)
-}
-
-/// Re-sync an owned monster's brain to the server's position after a refused move.
-#[wasm_bindgen]
-pub fn ai_apply_authoritative_position(monster_id: &str, x: f32, y: f32, z: f32) {
-    MONSTER_BRAINS.with(|brains| {
-        if let Some(brain) = brains.borrow_mut().get_mut(monster_id) {
-            brain.apply_authoritative_position(Position { x, y, z });
-        }
-    });
-}
-
-#[wasm_bindgen]
-pub fn ai_handle_death(monster_id: &str) {
-    MONSTER_BRAINS.with(|brains| {
-        if let Some(brain) = brains.borrow_mut().get_mut(monster_id) {
-            brain.handle_death();
-        }
-    });
 }

@@ -1,0 +1,18 @@
+Initial adaptation of the existing Tobin concept:
+
+Use case: background-extraction.
+Asset type: Transparent NPC shop portrait for the OpenMMO game.
+Input image: The existing tobin-concept.png is the EDIT TARGET and the authoritative character artwork, not a loose style reference.
+Primary request: Adapt this existing Tobin artwork into a clean upper-body UI portrait. Preserve the SAME face, expression, cap, hair, beard, skin tone, clothing, textures and realistic rendering of the original image. This is an adaptation of an already approved character, not a character redesign.
+Composition/framing: Square canvas. Crop and reframe the existing artwork from just above the cap to the middle of the torso, above the waist belt. The entire cap, ears and both shoulders must remain visible. Keep the head large enough to read at a final display width of 160 pixels. Keep the exact frontal view and original body proportions. The torso and upper arms should meet the bottom edge naturally, with no hands or legs visible. Leave only a small transparent margin above the cap and beside the upper silhouette.
+Subject invariants: A friendly sun-tanned middle-aged human fisherman with the original kind eyes, slight closed-mouth smile, short salt-and-pepper beard and moustache, graying hair, soft brimless brown wool cap, oatmeal collarless linen tunic with a narrow tied neck slit, and worn russet-brown sleeveless leather jerkin with leather ties.
+Scene/backdrop: Remove the existing gray studio background completely. Deliver a GENUINELY TRANSPARENT alpha-channel background with clean natural cap, hair, ear and clothing edges. No baked checkerboard, no opaque backdrop, no floor, no shadow outside the character, no outline or halo.
+Constraints: Use the existing artwork and preserve its identity and clothing faithfully. One character only. No fishing rod, fish, tools, text, logos, watermark, border or extra objects. Do not add or redesign facial features, costume or headwear.
+
+Final edge-cleanup edit of the generated portrait:
+
+Use case: precise-object-edit.
+Edit target: The provided transparent Tobin NPC portrait.
+Make a very small technical cleanup to this exact portrait. Preserve the same face, facial features, expression, gaze, skin, cap, hair, beard, tunic, leather vest, framing, size and pose.
+Remove ALL stray bright red, pink, yellow and gray extraction artifacts outside the natural silhouette, especially the bright red specks around the top and sides of the wool cap, ears and shoulders. Clean up the blocky matte fragments outside the silhouette, retaining natural fine gray hair detail. No colored outline, no red fringe, no rectangular fragments.
+Keep the character's interior opaque. Keep a genuinely transparent alpha background outside the natural character silhouette and preserve smooth antialiased edges. No checkerboard or opaque background. Do not repaint or redesign the character; only repair the edge extraction artifacts. Deliver this same square portrait with clean transparency.

@@ -11,6 +11,11 @@
 
 ## Terrain Textures
 
+`client/public/textures/**/*.glb`는 배포본이다: 원본(Poly Haven 1k GLB)은 `assets/textures-src/`(HF 동기화)에 두고
+`python3 tools/repack-material-glbs.py`로 재생성한다 — 샘플 메시·specular 제거, 모든 맵 WebP q90(노멀맵 포함; 렌더 A/B에서 무손실 대비 0.3/255 이내),
+palette 전용 레이어는 아틀라스 크기인 512로 축소. 270 MB → 31 MB (2026-09-05).
+white-cloud.jpg도 같은 폴더의 원본(5964px)을 2048px q85로 줄인 것.
+
 - 자갈: https://polyhaven.com/a/gravel_floor — **[미사용]** 도로는 gravel_road 사용 (palette.json), 참조 없음
 - 잔디: https://polyhaven.com/a/rocky_terrain_02
 - 눈: https://polyhaven.com/a/snow_02
@@ -20,7 +25,7 @@
 - 절벽: https://polyhaven.com/a/rocky_trail
 - 강바닥: https://polyhaven.com/a/ganges_river_pebbles
 - 해안 모래: https://sketchfab.com/3d-models/fine-sand-material-6e54464d405a4c1e8bdb0f81e8d74db2 — **[미사용]** 참조 없음
-- https://polyhaven.com/a/cobblestone_color — **[미사용]** 참조 없음
+- https://polyhaven.com/a/cobblestone_color — Radiance / Bow 조준 표식 프리뷰의 바닥에 사용
 - https://polyhaven.com/a/grey_stone_path
 - https://polyhaven.com/a/stone_pathway
 - https://polyhaven.com/a/pavement_02 — **[미사용]** 참조 없음 (patterned_paving_02 사용)
@@ -35,10 +40,18 @@
 
 - <a href="https://kr.freepik.com/free-photo/white-cloud_3816314.htm#fromView=keyword&page=1&position=8&uuid=159badd4-6cbe-4767-aec8-8a40d2789230&query=Sky+cloud">작가 lifeforstock 출처 Freepik</a>
 
+## Rain Puddle Reflections
+
+- `client/public/textures/puddle-light-streak.png` — **[미사용]** 물웅덩이 반사광용 흑백 마스크 (1254×1254 PNG). 지그재그 무늬가 부자연스러워 셰이더에서 제거하고 텍스처·프롬프트 파일도 삭제함.
+  - 출처: OpenAI 내장 `image_gen`으로 생성, 2026-09-14 (KST).
+  - 생성 도구/티어: Codex 내장 이미지 생성; 계정 요금제와 서비스 티어는 도구에서 미노출.
+  - 라이선스: OpenAI 생성 출력물에 적용되는 서비스 약관. 별도 제3자 stock/CC 에셋을 사용하지 않음.
+  - 원본: `exec-dc34119b-bd15-42fc-a47f-08d30de51617.png`.
+
 ## Sea
 
 - sea https://www.filterforge.com/filters/4141.html — **[미사용]** 물 표면은 절차적 렌더 + waternormals(three.js examples); 4141 사용 흔적 없음
-- sea foam https://www.filterforge.com/filters/13843.html — 폼 텍스처로 사용 중 (`textures/13843.png`, water-foam-gen.ts)
+- sea foam https://www.filterforge.com/filters/13843.html — 수면 및 나룻배의 항적·노 물보라에 사용 (`textures/13843.png`, water-foam-gen.ts, effects/boat-water.ts)
 - waternormals (Three.js examples) https://github.com/mrdoob/three.js/tree/dev/examples/textures — 물 표면 노멀맵으로 사용 중 (`textures/waternormals.jpg`, scene-init.ts)
 
 ## References

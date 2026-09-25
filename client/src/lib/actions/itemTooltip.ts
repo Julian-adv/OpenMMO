@@ -2,7 +2,8 @@ import { mount, unmount } from 'svelte'
 import { get } from 'svelte/store'
 import ItemTooltip from '../components/ItemTooltip.svelte'
 import { dragMeta } from '../stores/dragStore'
-import type { ItemDefinition } from '../data/itemDefs'
+import { displacedByEquip } from '../stores/inventoryStore'
+import { getItemDef, type ItemDefinition } from '../data/itemDefs'
 import type { ItemInstance } from '../network/networkTypes'
 
 export interface ItemTooltipParams {
@@ -10,6 +11,9 @@ export interface ItemTooltipParams {
   /** The hovered instance, when one exists — supplies per-instance display
    * data such as the +N enchant. Omit for def-only surfaces (shop catalog). */
   item?: ItemInstance
+  /** Enchant to show when no instance backs the surface (e.g. a quickslot
+   * whose bound item is depleted). Ignored when `item` is present. */
+  enchant?: number
   side?: 'left' | 'right'
 }
 
@@ -31,11 +35,17 @@ export function itemTooltip(
 
   function show() {
     if (!params || instance || get(dragMeta)) return
+    const displaced = displacedByEquip(params.def, params.item)
+    const displacedDef = displaced && getItemDef(displaced.item_def_id)
     instance = mount(ItemTooltip, {
       target: document.body,
       props: {
         def: params.def,
-        enchant: params.item?.enchant,
+        enchant: params.item?.enchant ?? params.enchant,
+        locked: params.item?.locked,
+        compare: displacedDef
+          ? { def: displacedDef, enchant: displaced.enchant }
+          : undefined,
         side: params.side,
         anchor: node.getBoundingClientRect(),
       },
@@ -63,6 +73,7 @@ export function itemTooltip(
 
   return {
     update(next: ItemTooltipParams | null) {
+      if (next?.item?.locked !== params?.item?.locked) hide()
       params = next
       if (!next) hide()
     },

@@ -8,37 +8,51 @@
 //!   `ClientMessage`.
 //! - `prompt`: format server events and the active schedule context into
 //!   the prompt string sent to the LLM.
-//! - `combat`: chase a monster (A* + repath on monster shift), face it,
-//!   send the attack tick.
-//! - `movement`: A*-driven walks, schedule transitions, and the
-//!   housing-data prefetch that lets pathfinding avoid buildings.
+//! - `combat`: face the monster and send the attack tick.
+//! - `walk`: the one walker — A* to a place or a moving target, doors,
+//!   position corrections, and the step pacing they all share.
+//! - `movement`: schedule transitions and the housing-data prefetch that
+//!   lets pathfinding avoid buildings.
 //! - `execute`: parse a response and run each action; returns the
 //!   monster_id of the final attack so the loop can take over chasing it.
 
 mod action;
+mod backoff;
+#[cfg(test)]
+mod backoff_tests;
+mod campfire_meal;
 mod combat;
+#[cfg(test)]
+mod combat_timing_tests;
 mod execute;
 mod movement;
+mod outcome;
 mod prompt;
+mod walk;
 
-pub(crate) use prompt::format_event;
+pub(crate) use prompt::{format_event, player_within_event_range};
 
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use tokio::sync::Mutex;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
-use crate::llm_scheduler::{LlmPriority, LlmScheduler};
-use crate::orchestrator::ScheduleEntry;
+use crate::llm_scheduler::{LlmPriority, LlmScheduler, RequestPriority};
+use crate::state::ServeRequest;
 use crate::state::SharedState;
+use onlinerpg_shared::schedule::ScheduleEntry;
+use onlinerpg_shared::ClientMessage;
 
 pub(crate) use action::wants_reroll;
+use backoff::PromptBackoff;
 use combat::{load_attack_cooldown, tick_combat};
-use execute::handle_response;
+use execute::{append_memory, handle_response};
 use movement::{
-    check_schedule_transition, coverage_positions, fetch_furniture_around, fetch_houses_around,
+    check_schedule_transition, coverage_positions, fetch_furniture_around,
+    maintain_scheduled_fishing, resolve_due_schedule,
 };
 use prompt::build_prompt;
 
@@ -48,10 +62,25 @@ pub trait LlmBackend: Send + Sync {
     async fn send_message(&self, content: &str) -> anyhow::Result<String>;
 }
 
-/// Load system prompt from file.
+/// Load a system prompt layer from file. A `{{ACTIONS}}` slot is filled with
+/// the action reference rendered from the parser's own spec table
+/// (`action::ACTION_SPECS`), so the documented actions cannot drift from what
+/// the parser accepts.
 pub fn load_system_prompt(path: &str) -> anyhow::Result<String> {
-    std::fs::read_to_string(path)
-        .map_err(|e| anyhow::anyhow!("Failed to read system prompt from {path}: {e}"))
+    let text = std::fs::read_to_string(path)
+        .map_err(|e| anyhow::anyhow!("Failed to read system prompt from {path}: {e}"))?;
+    Ok(text.replace("{{ACTIONS}}", &action::action_reference()))
+}
+
+/// Render the surface-terrain summary without holding the state lock: a tile
+/// cache miss hits disk or HTTP, and the lock also gates the NPC's
+/// message-processing loop. The brief relock only snapshots the inputs.
+async fn rendered_terrain_summary(state: &Arc<Mutex<SharedState>>) -> Option<String> {
+    let job = state.lock().await.terrain_summary_job();
+    match job {
+        Some(job) => Some(job.render().await),
+        None => None,
+    }
 }
 
 /// Empty working directory for CLI backends — prompts are untrusted, so the
@@ -81,10 +110,76 @@ impl Drop for RunDir {
     }
 }
 
+/// A curated standing spot beside one furniture piece — a sick-room bed, a
+/// dining chair — keyed by the piece's placement id (arrives as `object_id`
+/// on the respawn / sitting broadcast).
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct VisitSpot {
+    #[serde(alias = "bed_object_id", alias = "chair_object_id")]
+    pub object_id: u32,
+    pub pos: [f32; 3],
+    #[serde(default)]
+    pub rotation: f32,
+    #[serde(default)]
+    pub floor_level: u8,
+}
+
+/// One answerable call: a sick-room bed or a seated guest.
+#[derive(PartialEq, Eq, Hash)]
+pub enum ClaimKey {
+    Bed(u32),
+    Guest(onlinerpg_shared::PlayerId),
+    Meal(u64),
+}
+
+/// Process-wide claim board so two maids sharing an inn don't answer the
+/// same call — the first to claim a bedside or a seated guest wins, the
+/// other falls through to the next pending event. Best effort: a lost
+/// race sending both is acceptable.
+#[derive(Default)]
+pub struct VisitClaims(std::sync::Mutex<std::collections::HashMap<ClaimKey, (String, Instant)>>);
+
+impl VisitClaims {
+    /// True when `who` may hold `key` for `ttl`: unclaimed, expired, or
+    /// already theirs (which refreshes the hold).
+    pub fn try_claim(&self, key: ClaimKey, who: &str, ttl: Duration) -> bool {
+        let now = Instant::now();
+        let mut m = self.0.lock().unwrap();
+        m.retain(|_, (_, until)| now < *until);
+        match m.get(&key) {
+            Some((owner, _)) if owner != who => false,
+            _ => {
+                m.insert(key, (who.to_string(), now + ttl));
+                true
+            }
+        }
+    }
+
+    /// Give `key` up if `who` holds it, so the next call can go elsewhere.
+    pub fn release(&self, key: &ClaimKey, who: &str) {
+        let mut m = self.0.lock().unwrap();
+        if m.get(key).is_some_and(|(owner, _)| owner == who) {
+            m.remove(key);
+        }
+    }
+
+    /// Honours the TTL, unlike `release`, so an expired hold reads as free.
+    pub fn holder(&self, key: &ClaimKey) -> Option<String> {
+        let now = Instant::now();
+        let m = self.0.lock().unwrap();
+        m.get(key)
+            .filter(|(_, until)| now < *until)
+            .map(|(owner, _)| owner.clone())
+    }
+}
+
 /// Configuration for the LLM driver loop.
 pub struct DriverConfig {
     pub label: String,
     pub memory_file: Option<String>,
+    /// JSON map of player name -> accumulated favor, loaded at startup and
+    /// rewritten whenever the LLM's `favor` deltas change it.
+    pub favor_file: Option<String>,
     pub min_interval: Duration,
     /// Floor between prompts once an urgent event is pending — a player
     /// talking to us shouldn't wait out the routine cadence.
@@ -96,8 +191,197 @@ pub struct DriverConfig {
     /// NPCs, whose LLM calls come out of the project's budget.
     pub always_active: bool,
     pub schedule: Vec<ScheduleEntry>,
+    /// Bedside spots in the inn's sick room; a respawn in one of these beds
+    /// sends the NPC to stand at the matching spot and greet the woken.
+    pub sickroom: Vec<VisitSpot>,
+    /// Walk over to guests who sit down on a chair nearby and take their
+    /// order. For NPCs that wait tables (the inn maid).
+    pub serve_tables: bool,
+    /// Character names of every table-waiting NPC: never anyone's guest.
+    pub maid_names: HashSet<String>,
+    /// Curated order-taking spots for known chairs.
+    pub tables: Vec<VisitSpot>,
+    /// Shared with the process's other NPCs so only one answers each call.
+    pub claims: Arc<VisitClaims>,
     /// HTTP base URL for the game server API (e.g. "http://127.0.0.1:10007").
     pub api_base_url: String,
+}
+
+/// Synthetic schedule entry for a visit — reuses the schedule walk
+/// (waypointless, exact final rotation, cross-floor force move).
+fn visit_entry(spot: &VisitSpot, label: &str) -> ScheduleEntry {
+    ScheduleEntry {
+        pos: spot.pos,
+        rotation: spot.rotation,
+        floor_level: spot.floor_level,
+        label: Some(label.to_string()),
+        ..Default::default()
+    }
+}
+
+fn is_staff(
+    s: &SharedState,
+    pid: &onlinerpg_shared::PlayerId,
+    maid_names: &HashSet<String>,
+) -> bool {
+    s.nearby_players
+        .get(pid)
+        .is_some_and(|p| maid_names.contains(&p.name))
+}
+
+/// A meal seat just reached needs a cue: nothing else wakes an NPC at the
+/// table, and the idle poll is an hour away.
+async fn announce_seat(
+    state: &Arc<Mutex<SharedState>>,
+    schedule: &[ScheduleEntry],
+    active: Option<usize>,
+    serve_tables: bool,
+) {
+    let Some(entry) = active.map(|i| &schedule[i]) else {
+        return;
+    };
+    if entry.action.as_deref() != Some(crate::state::SIT_OBJECT_TYPE) {
+        return;
+    }
+    if entry.condition == Some(onlinerpg_shared::schedule::ScheduleCondition::Rain) {
+        state.lock().await.push_ambient_event(
+            "[Schedule] You are resting inside the inn until the rain clears. Relax, listen to \
+             the rain, or chat quietly; keep your stall and instruments packed away."
+                .to_string(),
+        );
+        return;
+    }
+    state
+        .lock()
+        .await
+        .push_ambient_event(prompt::dining_arrival_event(
+            entry.display_label(),
+            serve_tables,
+        ));
+}
+
+/// The seated guest's name and a schedule entry standing beside them,
+/// facing the seat. `None` when the guest is gone, off their chair, on
+/// another floor, or beyond serving range.
+fn table_entry(
+    s: &SharedState,
+    guest_id: &onlinerpg_shared::PlayerId,
+    tables: &[VisitSpot],
+) -> Option<(String, ScheduleEntry)> {
+    let me = s.self_player.as_ref()?;
+    let p = s.nearby_players.get(guest_id)?;
+    if p.object_type.as_deref() != Some(crate::state::SIT_OBJECT_TYPE)
+        || p.floor_level != me.floor_level
+        || p.floor_level < 0
+    {
+        return None;
+    }
+    // The broadcast position is where the guest stood when they clicked the
+    // chair (the sit never re-sends a move), so the chair itself comes from
+    // the placement.
+    let (seat_x, seat_z) = p
+        .object_id
+        .and_then(|id| {
+            s.furniture_position(
+                crate::state::SIT_OBJECT_TYPE,
+                id,
+                p.position.x,
+                p.position.z,
+            )
+        })
+        .unwrap_or((p.position.x, p.position.z));
+    let to_seat = crate::geom::PlanarDelta::to_xz(&me.position, seat_x, seat_z);
+    if to_seat.dist > TABLE_SERVICE_RADIUS {
+        return None;
+    }
+    let label = "the guest's table";
+    // A curated spot for this chair wins over the computed one.
+    if let Some(t) = tables.iter().find(|t| p.object_id == Some(t.object_id)) {
+        return Some((p.name.clone(), visit_entry(t, label)));
+    }
+    let entry = chair_flank_entry(s, seat_x, seat_z, p.floor_level as u8, p.position.y, label);
+    Some((p.name.clone(), entry))
+}
+
+/// A standing spot beside the chair at `(seat_x, seat_z)`, facing it: the
+/// nearest open cell of the four flanking it — solid neighbours (the table,
+/// sibling chairs) are sealed and drop out.
+fn chair_flank_entry(
+    s: &SharedState,
+    seat_x: f32,
+    seat_z: f32,
+    floor: u8,
+    y: f32,
+    label: &str,
+) -> ScheduleEntry {
+    let (mx, mz) = s
+        .self_player
+        .as_ref()
+        .map_or((seat_x, seat_z), |p| (p.position.x, p.position.z));
+    let (ccx, ccz) = (seat_x.floor() + 0.5, seat_z.floor() + 0.5);
+    let d2 = |(x, z): (f32, f32)| (x - mx).powi(2) + (z - mz).powi(2);
+    let (x, z) = onlinerpg_shared::pathfinding::DIRS
+        .iter()
+        .map(|&(dx, dz)| (ccx + dx as f32, ccz + dz as f32))
+        .filter(|&(x, z)| s.cell_open(x, z, floor))
+        .min_by(|&a, &b| d2(a).total_cmp(&d2(b)))
+        // Every flank is solid: the nearest open neighbour of the seat.
+        .unwrap_or_else(|| s.walkable_near(seat_x, seat_z, floor));
+    let rotation = crate::geom::PlanarDelta::xz(x, z, seat_x, seat_z)
+        .rotation()
+        .to_degrees();
+    ScheduleEntry {
+        pos: [x, y, z],
+        rotation,
+        floor_level: floor,
+        label: Some(label.to_string()),
+        ..Default::default()
+    }
+}
+
+/// Plates within serving range whose guest is no longer on the chair they
+/// were served to (stood up, walked off, or logged out). Our own plate is
+/// never ours to clear.
+fn abandoned_plates(s: &SharedState) -> Vec<&onlinerpg_shared::meal::Meal> {
+    let Some(me) = s.self_player.as_ref() else {
+        return Vec::new();
+    };
+    s.meals
+        .values()
+        .filter(|m| m.floor_level == me.floor_level && Some(m.for_player) != s.self_player_id)
+        .filter(|m| {
+            crate::geom::PlanarDelta::to_xz(&me.position, m.position.x, m.position.z).dist
+                <= TABLE_SERVICE_RADIUS
+        })
+        .filter(|m| {
+            s.nearby_players.get(&m.for_player).is_none_or(|p| {
+                p.object_type.as_deref() != Some(crate::state::SIT_OBJECT_TYPE)
+                    || p.object_id != Some(m.chair_object_id)
+            })
+        })
+        .collect()
+}
+
+/// The standing spot to clear `meal` from: beside its chair.
+fn clear_entry(s: &SharedState, meal: &onlinerpg_shared::meal::Meal) -> Option<ScheduleEntry> {
+    let me = s.self_player.as_ref()?;
+    let floor = u8::try_from(me.floor_level).ok()?;
+    let (sx, sz) = s
+        .furniture_position(
+            crate::state::SIT_OBJECT_TYPE,
+            meal.chair_object_id,
+            meal.position.x,
+            meal.position.z,
+        )
+        .unwrap_or((meal.position.x, meal.position.z));
+    Some(chair_flank_entry(
+        s,
+        sx,
+        sz,
+        floor,
+        me.position.y,
+        "the emptied table",
+    ))
 }
 
 /// The main LLM agent driver loop. Runs as a tokio task.
@@ -114,6 +398,7 @@ pub async fn llm_driver(
     let DriverConfig {
         label,
         memory_file,
+        favor_file,
         min_interval,
         urgent_min_interval,
         debounce,
@@ -121,6 +406,11 @@ pub async fn llm_driver(
         activity_window,
         always_active,
         schedule,
+        sickroom,
+        serve_tables,
+        maid_names,
+        tables,
+        claims,
         api_base_url,
     } = config;
     let urgent_notify = {
@@ -140,8 +430,36 @@ pub async fn llm_driver(
     }
 
     info!("[{label}] LLM driver: in game, ready.");
+    let shelters_from_rain = schedule.iter().any(|e| e.shelter_from_rain);
 
-    let attack_cooldown = load_attack_cooldown();
+    // Operator announcements — what a web player reads once on the login
+    // screen. Delivered as one-shot events for the same reason: the next
+    // prompt carries them, then they drain away instead of riding every
+    // world state.
+    {
+        let notices = fetch_announcements(&api_base_url).await;
+        if !notices.is_empty() {
+            info!("[{label}] {} server announcement(s) loaded", notices.len());
+            let mut s = state.lock().await;
+            for notice in notices {
+                s.push_agent_event_quiet(format!("[Notice] {notice}"));
+            }
+        }
+    }
+
+    // Favor persists across sessions; the map feeds prompt rendering and
+    // the keepsake gate from the first turn.
+    if let Some(path) = &favor_file {
+        match std::fs::read_to_string(path) {
+            Ok(txt) if !txt.trim().is_empty() => match serde_json::from_str(&txt) {
+                Ok(map) => state.lock().await.favor = map,
+                Err(e) => warn!("[{label}] Ignoring unreadable favor file {path}: {e}"),
+            },
+            _ => {}
+        }
+    }
+
+    state.lock().await.attack_cooldown = load_attack_cooldown();
 
     // Stagger idle polls: random offset so NPCs don't all poll at the same time
     let idle_stagger = {
@@ -150,8 +468,8 @@ pub async fn llm_driver(
         Duration::from_secs(rand::thread_rng().gen_range(0..secs))
     };
     let mut last_prompt_at = Instant::now() - idle_stagger;
-    let mut attack_target: Option<String> = None;
-    let mut last_attack_at = Instant::now() - attack_cooldown;
+    let mut prompt_backoff = PromptBackoff::default();
+    let mut attack_target: Option<(String, Option<bool>)> = None;
     let mut llm_in_flight: Option<tokio::task::JoinHandle<anyhow::Result<String>>> = None;
     let mut prompt_pending_since: Option<Instant> = None;
     // Track last chat/combat activity to decide polling interval
@@ -159,13 +477,43 @@ pub async fn llm_driver(
     // Track the highest urgency since the last prompt
     let mut pending_urgency = LlmPriority::Idle;
     let mut active_schedule: (Option<usize>, Option<u32>) = (None, None);
+    let mut last_fishing_check = Instant::now();
+    let mut campfire_meal: Option<(usize, campfire_meal::CampfireMeal)> = None;
+    let mut tales = crate::tales::SetTales::default();
+    // Our song count when the pending prompt offered a tale, so the gap is
+    // measured from the offer rather than from whenever the reply lands.
+    let mut tale_offered_at: Option<usize> = None;
+    // Deadline for the LLM's wrap-up turn before a due schedule move; the
+    // bool marks that a prompt containing the wrap-up notice was submitted.
+    let mut wrapup: Option<(Instant, bool)> = None;
+    let mut dead_since: Option<Instant> = None;
+    // Visit (bedside or guest's table) in progress: when to give the spot
+    // up and resume the schedule.
+    let mut visit_until: Option<Instant> = None;
+    // Guest prompts bypass debounce, normal pacing and audience checks, but honor error backoff.
+    let mut force_prompt = false;
+    // A table walk runs as a background task so the [Guest] prompt's LLM
+    // round trip overlaps the walk instead of waiting for arrival.
+    let mut visit_walk: Option<tokio::task::JoinHandle<()>> = None;
+    // When each abandoned plate was first seen, so the maid gives the guest
+    // a moment before clearing; plates served to us and when we ate them.
+    let mut abandoned_since: std::collections::HashMap<u64, Instant> =
+        std::collections::HashMap::new();
+    // Plates served to us: `Some(since)` while waiting to eat, `None` once
+    // the eat is sent and the `MealEaten` echo is awaited.
+    let mut my_plates: std::collections::HashMap<u64, Option<Instant>> =
+        std::collections::HashMap::new();
+    // Guests this maid holds the claim on; released the moment they leave
+    // the chair so a returning guest can be anyone's.
+    let mut my_guests: std::collections::HashSet<onlinerpg_shared::PlayerId> =
+        std::collections::HashSet::new();
 
     // Fetch housing + furniture data so pathfinding avoids buildings and solid
     // props the same way the browser client does. An agent without a schedule
     // (a plain player agent) has no route to prefetch along, so cover where it
     // stands — otherwise its A* knows of no buildings at all and it walks
     // straight through the town it spawned in.
-    {
+    let mut world_data_at: Option<(f32, f32)> = {
         let (world_cache, around) = {
             let s = state.lock().await;
             (
@@ -176,25 +524,29 @@ pub async fn llm_driver(
         let area = coverage_positions(&schedule, around);
         // Different endpoints, disjoint data — no reason to wait for one before
         // asking for the other.
-        tokio::join!(
-            fetch_houses_around(&world_cache, &area, &api_base_url, &label),
-            fetch_furniture_around(&world_cache, &area, &api_base_url, &label),
-        );
-    }
+        fetch_furniture_around(&world_cache, &area, &api_base_url, &label).await;
+        around.map(|p| (p.x, p.z))
+    };
 
     // Execute initial schedule move (go to correct position for current time)
     if !schedule.is_empty() {
         // Wait for first GameTimeSync to arrive (up to 10s)
         for _ in 0..20 {
-            let has_time = { state.lock().await.is_night.is_some() };
+            let has_time = { state.lock().await.schedule_period.is_some() };
             if has_time {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
 
+        if shelters_from_rain {
+            crate::weather::refresh_sectors(&state, &api_base_url, &label).await;
+        }
+        let due = resolve_due_schedule(&state, &schedule).await;
         active_schedule =
-            check_schedule_transition(&state, &schedule, active_schedule, &label).await;
+            check_schedule_transition(&state, &schedule, active_schedule, due, &label).await;
+        sync_tales(&mut tales, &schedule, active_schedule.0, &label);
+        announce_seat(&state, &schedule, active_schedule.0, serve_tables).await;
     }
 
     // Send initial world state unless the NPC is asleep, or it only thinks
@@ -203,23 +555,40 @@ pub async fn llm_driver(
     {
         let mut s = state.lock().await;
         if is_sleeping {
-            s.drain_events();
-            s.drain_agent_events();
+            discard_turn(&mut s);
             info!("[{label}] LLM driver: NPC is sleeping, skipping initial prompt");
         } else if always_active || s.has_nearby_human_players() {
-            let agent_events = s.drain_agent_events();
-            let initial_prompt = build_prompt(&s, &[], &agent_events, &schedule, active_schedule.0);
             drop(s);
-            info!("[{label}] LLM driver: sending initial world state");
-            match scheduler
-                .submit(
-                    &label,
-                    LlmPriority::Routine,
-                    initial_prompt,
-                    Arc::clone(&invoker),
+            let priority = RequestPriority::new(LlmPriority::Routine);
+            let tale = {
+                let mut s = state.lock().await;
+                s.queued_llm_priority = Some(priority.clone());
+                tale_for(
+                    &tales,
+                    &schedule,
+                    active_schedule.0,
+                    &s,
+                    &mut tale_offered_at,
                 )
-                .await
-            {
+            };
+            info!("[{label}] LLM driver: queuing initial world state");
+            let result = scheduler
+                .submit_deferred(
+                    &label,
+                    priority,
+                    run_prompt(
+                        Arc::clone(&state),
+                        Arc::clone(&invoker),
+                        schedule.clone(),
+                        active_schedule.0,
+                        memory_file.clone(),
+                        tale,
+                        label.clone(),
+                    ),
+                )
+                .await;
+            prompt_backoff.record_result(&result, &label);
+            match result {
                 Ok(response) => {
                     let has_action = active_schedule
                         .0
@@ -228,34 +597,73 @@ pub async fn llm_driver(
                         let s = state.lock().await;
                         has_action || s.trade_busy || s.self_fishing
                     };
-                    attack_target =
-                        handle_response(&state, &response, &memory_file, skip_movement).await;
-                    last_prompt_at = Instant::now();
+                    attack_target = handle_response(
+                        &state,
+                        &response,
+                        &memory_file,
+                        &favor_file,
+                        skip_movement,
+                    )
+                    .await;
+                    advance_tale_if_sung(&state, &mut tales, &mut tale_offered_at).await;
                 }
                 Err(e) => {
                     error!("[{label}] LLM initial prompt failed: {e}");
                 }
             }
+            last_prompt_at = Instant::now();
         } else {
-            s.drain_events();
-            s.drain_agent_events();
+            discard_turn(&mut s);
             info!("[{label}] LLM driver: no human players nearby, skipping initial prompt");
         }
     }
 
     loop {
-        // Tick interval: ATTACK_COOLDOWN when in combat, otherwise 1s (responsive to events)
+        decline_lapsed_trade(&state, &label).await;
+        if shelters_from_rain {
+            crate::weather::refresh_sectors(&state, &api_base_url, &label).await;
+        }
+
+        // Housing data was fetched around the start position; the initial
+        // prefetch covers ±96m (the chunk and its neighbors). An exploring
+        // agent walks out of that in minutes, after which buildings vanish
+        // from pathfinding, the terrain map and the watch page — so refetch
+        // around the new position whenever we've moved a chunk away. Moving is
+        // only the trigger; the world cache decides what is actually asked for.
+        {
+            let (world_cache, pos) = {
+                let s = state.lock().await;
+                (
+                    Arc::clone(&s.world_cache),
+                    s.self_player.as_ref().map(|p| p.position),
+                )
+            };
+            if let Some(p) = pos {
+                let moved_a_chunk = world_data_at.is_none_or(|(x, z)| {
+                    let (dx, dz) = (p.x - x, p.z - z);
+                    dx * dx + dz * dz > 64.0 * 64.0
+                });
+                if moved_a_chunk {
+                    let area = [(p.x, p.z)];
+                    fetch_furniture_around(&world_cache, &area, &api_base_url, &label).await;
+                    world_data_at = Some((p.x, p.z));
+                }
+            }
+        }
+
         let tick_duration = if attack_target.is_some() {
-            attack_cooldown.saturating_sub(last_attack_at.elapsed())
+            state.lock().await.player_attack_wait()
         } else {
             Duration::from_secs(1)
         };
 
         tokio::select! {
             _ = urgent_notify.notified() => {
-                debug!("[{label}] LLM driver: urgent event received");
+                // Sets both the rate-limit floor below and the queue priority.
+                let woken_by = LlmPriority::from(state.lock().await.take_wake_urgency());
+                debug!("[{label}] LLM driver: woken by a {woken_by:?} event");
                 last_activity_at = Instant::now();
-                pending_urgency = LlmPriority::Urgent;
+                pending_urgency = pending_urgency.min(woken_by);
                 // Start the debounce window now, even mid-call: it then runs
                 // alongside the in-flight prompt instead of only starting once
                 // that one lands. Double-submission is already ruled out below.
@@ -266,33 +674,470 @@ pub async fn llm_driver(
             _ = tokio::time::sleep(tick_duration) => {}
         }
 
+        // === Auto-respawn ===
+        // Respawn as an LLM action needs a turn, and turns are skipped with
+        // no audience — a dead NPC would otherwise stay dead forever. The
+        // driver revives itself after a short delay.
+        let self_dead = {
+            let s = state.lock().await;
+            s.in_game && s.self_player.as_ref().is_some_and(|p| p.health == 0)
+        };
+        if self_dead && dead_since.is_none() {
+            info!(
+                "[{label}] LLM driver: agent is dead, auto-respawn in {}s",
+                RESPAWN_DELAY.as_secs()
+            );
+        }
+        if respawn_due(self_dead, &mut dead_since, Instant::now()) {
+            request_respawn(&state, &memory_file, &label).await;
+        }
+        if self_dead {
+            attack_target = None;
+            continue;
+        }
+
         // === Combat tick ===
-        if attack_target.is_some() && last_attack_at.elapsed() >= attack_cooldown {
-            attack_target = tick_combat(&state, attack_target.unwrap()).await;
-            last_attack_at = Instant::now();
+        if let Some((monster_id, sprint)) = attack_target.clone() {
+            let attack_ready = state.lock().await.player_attack_wait().is_zero();
+            if attack_ready && !tick_combat(&state, &monster_id, sprint).await {
+                attack_target = None;
+            }
+        }
+
+        let sleeping_now = active_schedule.0.is_some_and(|i| schedule[i].is_sleeping());
+
+        // === Visits: sick-room bedsides and guest tables ===
+        // Both queue the same shape: the ambient event goes out before the
+        // walk, the walk runs in the background, and the prompt is forced
+        // out at once — the LLM round trip overlaps the walk, so the
+        // greeting lands around arrival instead of a full round trip after.
+        let mut visit: Option<(String, ScheduleEntry)> = None;
+        if !sickroom.is_empty() && attack_target.is_none() {
+            // Drain even while asleep so stale respawns don't pile up.
+            let respawns = { state.lock().await.drain_recent_respawns() };
+            // Claiming while asleep would leave the bed unanswered.
+            let woken = if sleeping_now {
+                None
+            } else {
+                respawns.into_iter().rev().find_map(|(name, bed_id)| {
+                    sickroom
+                        .iter()
+                        .find(|s| s.object_id == bed_id)
+                        .filter(|_| claims.try_claim(ClaimKey::Bed(bed_id), &label, VISIT_DWELL))
+                        .map(|s| (name, s.clone()))
+                })
+            };
+            if let Some((name, spot)) = woken {
+                info!("[{label}] {name} woke in the sick room — going to the bedside");
+                visit = Some((
+                    format!(
+                        "[SickRoom] {name} just came back to their senses in the \
+                         sick room — they fell out there and were carried up. You \
+                         are on your way to their bedside; no move action needed. \
+                         Welcome them back with warm relief in your own words and \
+                         offer something hot to eat. If they have already left \
+                         the room, let them go — don't shout after them."
+                    ),
+                    visit_entry(&spot, "the sick-room bedside"),
+                ));
+            }
+        }
+        if serve_tables && attack_target.is_none() {
+            // Drain every tick so stale seatings don't pile up. A bedside
+            // visit outranks table service; an ongoing visit keeps its spot.
+            let seated = {
+                let mut s = state.lock().await;
+                let seatings = s.drain_recent_seatings();
+                if visit.is_some() || sleeping_now || visit_until.is_some() {
+                    None
+                } else {
+                    let mut won = None;
+                    for pid in seatings.into_iter().rev() {
+                        if is_staff(&s, &pid, &maid_names) {
+                            continue;
+                        }
+                        let Some((name, entry)) = table_entry(&s, &pid, &tables) else {
+                            continue;
+                        };
+                        if claims.try_claim(ClaimKey::Guest(pid), &label, GUEST_CLAIM_TTL) {
+                            my_guests.insert(pid);
+                            won = Some((name, entry));
+                            break;
+                        }
+                        // The other maid has them: hearing the order later must
+                        // not turn into a second greeting and a second plate.
+                        if let Some(holder) = claims.holder(&ClaimKey::Guest(pid)) {
+                            s.push_ambient_event_quiet(format!(
+                                "[Guest] {name} took a seat, but {holder} is looking after \
+                                 them — leave their table and their orders to her; don't \
+                                 answer what they ask her for."
+                            ));
+                        }
+                    }
+                    won
+                }
+            };
+            if let Some((name, entry)) = seated {
+                info!("[{label}] {name} took a seat nearby — going over for the order");
+                visit = Some((
+                    format!(
+                        "[Guest] {name} just took a seat at one of your tables and \
+                         you are on your way over — no move action needed. Greet \
+                         them in your own words and take their order; if they have \
+                         already called it out, skip the asking and bring it. A dish \
+                         they ask for, you bring with the serve action; other goods \
+                         they buy by clicking you to open your shop. If they have \
+                         already left the seat, let it go."
+                    ),
+                    entry,
+                ));
+            }
+        }
+        if let Some((event, entry)) = visit {
+            // A visit walk still in flight would fight this one for the body.
+            if let Some(h) = visit_walk.take() {
+                h.abort();
+            }
+            // The same leave-taking a schedule transition does: a visit
+            // must not walk off mid-follow or leave a stall behind.
+            movement::stop_current_entry(&state, &schedule, active_schedule.0, &label).await;
+            state.lock().await.push_ambient_event_quiet(event);
+            // One event, not a burst: no debounce, no pacing floor.
+            prompt_pending_since = Some(Instant::now());
+            pending_urgency = LlmPriority::Urgent;
+            force_prompt = true;
+            last_activity_at = Instant::now();
+            let walk_state = Arc::clone(&state);
+            visit_walk = Some(tokio::spawn(async move {
+                movement::execute_schedule_move(&walk_state, &entry).await;
+            }));
+            visit_until = Some(Instant::now() + VISIT_DWELL);
+        }
+
+        // === Serving: taken orders, walked as one kitchen round trip ===
+        // Drained whoever we are, so a non-maid's stray `serve` is answered
+        // instead of sitting queued behind a gate that never opens.
+        if attack_target.is_none() {
+            let mut own_plates: Vec<(u32, Vec<String>)> = Vec::new();
+            let trips: Vec<(ServeRequest, ScheduleEntry)> = {
+                let mut s = state.lock().await;
+                let pending = std::mem::take(&mut s.pending_serve);
+                let mut trips = Vec::new();
+                for req in pending {
+                    let order = req.dishes.join(" and ");
+                    let own = s.self_player_id == Some(req.guest_id);
+                    if !serve_tables {
+                        s.push_agent_event(format!(
+                            "[ServeFailed] You don't serve tables here — {} will have to buy \
+                             the {order} or ask the inn staff.",
+                            req.guest_name
+                        ));
+                    } else if own {
+                        // Already at the table: the plate lands where we sit.
+                        match s.own_chair() {
+                            Some(chair) => own_plates.push((chair, req.dishes)),
+                            None => s.push_agent_event(
+                                "[ServeFailed] Sit down at a table first, then serve yourself."
+                                    .to_string(),
+                            ),
+                        }
+                    } else if is_staff(&s, &req.guest_id, &maid_names) {
+                        s.push_agent_event(format!(
+                            "[ServeFailed] {} is staff, not a guest — she feeds herself.",
+                            req.guest_name
+                        ));
+                    } else if !claims.try_claim(
+                        ClaimKey::Guest(req.guest_id),
+                        &label,
+                        GUEST_CLAIM_TTL,
+                    ) {
+                        let holder = claims
+                            .holder(&ClaimKey::Guest(req.guest_id))
+                            .unwrap_or_else(|| "the other maid".to_string());
+                        s.push_agent_event(format!(
+                            "[ServeFailed] {} is {holder}'s guest — she brings their order. \
+                             Stay out of it; nothing was served.",
+                            req.guest_name
+                        ));
+                    } else if let Some((_, entry)) = table_entry(&s, &req.guest_id, &tables) {
+                        my_guests.insert(req.guest_id);
+                        trips.push((req, entry));
+                    } else {
+                        s.push_agent_event(format!(
+                            "[ServeFailed] {} left the seat before the {order} was ready.",
+                            req.guest_name
+                        ));
+                    }
+                }
+                trips
+            };
+            if !own_plates.is_empty() {
+                let mut s = state.lock().await;
+                for (chair_object_id, dishes) in own_plates {
+                    for dish in dishes {
+                        let cmd = onlinerpg_shared::ClientMessage::ServeMeal {
+                            chair_object_id,
+                            item_def_id: dish,
+                        };
+                        if let Err(e) = s.send_command(cmd).await {
+                            error!("Failed to send serve: {e}");
+                        }
+                    }
+                }
+            }
+            if !trips.is_empty() {
+                // The kitchen is the regular post; a due sit or sleep entry
+                // is no kitchen, so the plates then come straight over.
+                let due = movement::resolve_due_schedule(&state, &schedule).await;
+                let kitchen = due
+                    .0
+                    .map(|i| &schedule[i])
+                    .filter(|e| e.action.is_none())
+                    .cloned();
+                if let Some(h) = visit_walk.take() {
+                    h.abort();
+                }
+                movement::stop_current_entry(&state, &schedule, active_schedule.0, &label).await;
+                let walk_state = Arc::clone(&state);
+                let log_label = label.clone();
+                visit_walk = Some(tokio::spawn(async move {
+                    if let Some(kitchen) = kitchen {
+                        movement::execute_schedule_move(&walk_state, &kitchen).await;
+                    }
+                    for (req, table) in trips {
+                        let order = req.dishes.join(" and ");
+                        info!("[{log_label}] bringing {order} to {}", req.guest_name);
+                        movement::execute_schedule_move(&walk_state, &table).await;
+                        let mut s = walk_state.lock().await;
+                        for dish in &req.dishes {
+                            let cmd = onlinerpg_shared::ClientMessage::ServeMeal {
+                                chair_object_id: req.chair_object_id,
+                                item_def_id: dish.clone(),
+                            };
+                            if let Err(e) = s.send_command(cmd).await {
+                                error!("Failed to send serve: {e}");
+                            }
+                        }
+                        s.push_ambient_event(format!(
+                            "[Served] You set the {order} down in front of {}. A word to them \
+                             in your own voice, then leave them to eat.",
+                            req.guest_name
+                        ));
+                    }
+                }));
+                visit_until = Some(Instant::now() + SERVE_DWELL);
+            }
+        }
+
+        // === Guests who left their chair are nobody's now ===
+        if !my_guests.is_empty() {
+            let s = state.lock().await;
+            my_guests.retain(|pid| {
+                let seated = s.nearby_players.get(pid).is_some_and(|p| {
+                    p.object_type.as_deref() == Some(crate::state::SIT_OBJECT_TYPE)
+                });
+                if !seated {
+                    claims.release(&ClaimKey::Guest(*pid), &label);
+                }
+                seated
+            });
+        }
+
+        // === Clearing: a plate whose guest has left, after a moment ===
+        if serve_tables && attack_target.is_none() && visit_until.is_none() && !sleeping_now {
+            let now = Instant::now();
+            let clear = {
+                let s = state.lock().await;
+                let plates = abandoned_plates(&s);
+                abandoned_since.retain(|id, _| plates.iter().any(|m| m.id == *id));
+                plates.into_iter().find_map(|m| {
+                    let since = *abandoned_since.entry(m.id).or_insert(now);
+                    (now.duration_since(since) >= CLEAR_DELAY
+                        && claims.try_claim(ClaimKey::Meal(m.id), &label, CLEAR_DWELL))
+                    .then(|| clear_entry(&s, m).map(|e| (m.id, m.item_def_id.clone(), e)))
+                    .flatten()
+                })
+            };
+            if let Some((meal_id, dish, entry)) = clear {
+                info!("[{label}] clearing the {dish} plate {meal_id}");
+                if let Some(h) = visit_walk.take() {
+                    h.abort();
+                }
+                movement::stop_current_entry(&state, &schedule, active_schedule.0, &label).await;
+                let walk_state = Arc::clone(&state);
+                visit_walk = Some(tokio::spawn(async move {
+                    movement::execute_schedule_move(&walk_state, &entry).await;
+                    let mut s = walk_state.lock().await;
+                    let cmd = onlinerpg_shared::ClientMessage::ClearMeal { meal_id };
+                    if let Err(e) = s.send_command(cmd).await {
+                        error!("Failed to send clear: {e}");
+                    }
+                    s.push_ambient_event_quiet(format!(
+                        "[Cleared] You took the {dish} plate away."
+                    ));
+                }));
+                visit_until = Some(Instant::now() + CLEAR_DWELL);
+            }
+        }
+
+        // === A plate served to us: eat it once settled in the chair ===
+        {
+            let mut s = state.lock().await;
+            let mine = s.own_chair().and_then(|chair| {
+                s.meals
+                    .values()
+                    .find(|m| {
+                        Some(m.for_player) == s.self_player_id
+                            && m.chair_object_id == chair
+                            && !m.eaten
+                    })
+                    .map(|m| (m.id, m.item_def_id.clone()))
+            });
+            my_plates.retain(|id, _| s.meals.contains_key(id));
+            if let Some((meal_id, dish)) = mine {
+                match my_plates.get(&meal_id) {
+                    None => {
+                        // The second plate of one order needs no second thank-you.
+                        let first = my_plates.is_empty();
+                        my_plates.insert(meal_id, Some(Instant::now()));
+                        if first {
+                            s.push_ambient_event(format!(
+                                "[Meal] A plate of {dish} was set in front of you; you eat it by \
+                                 yourself in a moment — no action needed. If someone brought \
+                                 it, thank them in your own words."
+                            ));
+                        } else {
+                            s.push_ambient_event_quiet(format!(
+                                "[Meal] A plate of {dish} joins it — no action needed."
+                            ));
+                        }
+                    }
+                    Some(Some(since)) if since.elapsed() >= EAT_DELAY => {
+                        my_plates.insert(meal_id, None);
+                        let cmd = onlinerpg_shared::ClientMessage::EatMeal { meal_id };
+                        if let Err(e) = s.send_command(cmd).await {
+                            error!("Failed to send eat: {e}");
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        if visit_until.is_some_and(|until| Instant::now() >= until) {
+            // Visit over: forget the active entry so the schedule walks
+            // us back to our regular post.
+            visit_until = None;
+            if let Some(h) = visit_walk.take() {
+                h.abort();
+            }
+            active_schedule = (None, None);
         }
 
         // === Check schedule transitions ===
-        if !schedule.is_empty() && attack_target.is_none() {
-            active_schedule =
-                check_schedule_transition(&state, &schedule, active_schedule, &label).await;
+        if !schedule.is_empty() && attack_target.is_none() && visit_until.is_none() {
+            let due = resolve_due_schedule(&state, &schedule).await;
+            if due == active_schedule {
+                wrapup = None;
+            } else {
+                // Allow one wrap-up turn before departure; recurring entries move immediately.
+                let transition_now = match (wrapup, due.0) {
+                    _ if due.0 == active_schedule.0 => true,
+                    (_, None) => true,
+                    (_, Some(i)) if schedule[i].is_campfire_meal() => true,
+                    (Some((deadline, prompted)), _) => {
+                        (prompted && llm_in_flight.is_none()) || Instant::now() >= deadline
+                    }
+                    (None, Some(i)) => {
+                        let automatic_departure = active_schedule.0.is_some_and(|j| {
+                            schedule[j].is_sleeping() || schedule[j].is_campfire_meal()
+                        });
+                        let mut start_now = true;
+                        if !automatic_departure {
+                            let mut s = state.lock().await;
+                            if always_active || s.has_nearby_human_players() {
+                                s.push_ambient_event(format!(
+                                    "[Schedule] Your next routine is {}. Travel and scheduled \
+                                     interactions are automatic; do not issue move actions for \
+                                     this transition. Only wrap up what you are doing now \
+                                     (pack up, finish your tune, say goodbye).",
+                                    schedule[i].display_label()
+                                ));
+                                wrapup = Some((Instant::now() + SCHEDULE_WRAPUP_GRACE, false));
+                                start_now = false;
+                            }
+                        }
+                        start_now
+                    }
+                };
+                if transition_now {
+                    wrapup = None;
+                    active_schedule =
+                        check_schedule_transition(&state, &schedule, active_schedule, due, &label)
+                            .await;
+                    sync_tales(&mut tales, &schedule, active_schedule.0, &label);
+                    announce_seat(&state, &schedule, active_schedule.0, serve_tables).await;
+                }
+            }
         }
         let is_sleeping = active_schedule.0.is_some_and(|i| schedule[i].is_sleeping());
         let has_scheduled_action = active_schedule
             .0
             .is_some_and(|i| schedule[i].action.is_some());
 
+        let meal_entry = active_schedule
+            .0
+            .filter(|&i| schedule[i].is_campfire_meal());
+        if meal_entry != campfire_meal.as_ref().map(|(i, _)| *i) {
+            campfire_meal = meal_entry.map(|i| (i, campfire_meal::CampfireMeal::default()));
+        }
+        if attack_target.is_none() && visit_until.is_none() {
+            if let Some((i, meal)) = &mut campfire_meal {
+                let mut s = state.lock().await;
+                if let Err(error) = meal.tick(&mut s, &schedule[*i]).await {
+                    warn!("[{label}] Campfire meal failed: {error}");
+                }
+            }
+        }
+
+        if attack_target.is_none()
+            && visit_until.is_none()
+            && last_fishing_check.elapsed() >= Duration::from_secs(5)
+        {
+            last_fishing_check = Instant::now();
+            if let Some(entry) = active_schedule
+                .0
+                .map(|i| &schedule[i])
+                .filter(|entry| entry.is_fishing())
+            {
+                maintain_scheduled_fishing(&state, entry).await;
+            }
+        }
+
         // === Check if LLM response arrived ===
         if llm_in_flight.as_ref().is_some_and(|h| h.is_finished()) {
             let handle = llm_in_flight.take().unwrap();
             last_prompt_at = Instant::now();
-            if let Some(response) = await_llm_response(handle, &label).await {
+            {
+                let mut s = state.lock().await;
+                pending_urgency = s
+                    .pending_event_urgency()
+                    .map(LlmPriority::from)
+                    .unwrap_or(LlmPriority::Idle)
+                    .min(s.take_wake_urgency().into());
+            }
+            if let Some(response) = await_llm_response(handle, &label, &mut prompt_backoff).await {
+                // A live visit walk owns the body; the LLM turn it triggered
+                // may talk but not move.
+                let walking_to_visit = visit_walk.as_ref().is_some_and(|h| !h.is_finished());
                 let skip_movement = {
                     let s = state.lock().await;
-                    has_scheduled_action || s.trade_busy || s.self_fishing
+                    has_scheduled_action || s.trade_busy || s.self_fishing || walking_to_visit
                 };
                 let new_target =
-                    handle_response(&state, &response, &memory_file, skip_movement).await;
+                    handle_response(&state, &response, &memory_file, &favor_file, skip_movement)
+                        .await;
+                advance_tale_if_sung(&state, &mut tales, &mut tale_offered_at).await;
                 if new_target.is_some() {
                     attack_target = new_target;
                 }
@@ -301,6 +1146,13 @@ pub async fn llm_driver(
 
         // === Maybe start a new LLM prompt ===
         if llm_in_flight.is_some() {
+            if let Some(priority) = &state.lock().await.queued_llm_priority {
+                priority.promote(pending_urgency);
+            }
+            continue;
+        }
+
+        if !prompt_backoff.ready() {
             continue;
         }
 
@@ -314,7 +1166,8 @@ pub async fn llm_driver(
             min_interval
         };
         let effective_interval = if active { floor } else { idle_interval };
-        if prompt_pending_since.is_none() && last_prompt_at.elapsed() >= effective_interval {
+        let periodic_due = last_prompt_at.elapsed() >= effective_interval;
+        if prompt_pending_since.is_none() && periodic_due {
             prompt_pending_since = Some(Instant::now());
             if pending_urgency == LlmPriority::Idle && active {
                 pending_urgency = LlmPriority::Routine;
@@ -322,82 +1175,818 @@ pub async fn llm_driver(
         }
 
         // Debounce: wait at least `debounce` after the trigger before actually prompting
-        let ready_to_prompt = prompt_pending_since.is_some_and(|t| t.elapsed() >= debounce);
+        let ready_to_prompt =
+            prompt_pending_since.is_some_and(|t| force_prompt || t.elapsed() >= debounce);
 
         if !ready_to_prompt {
             continue;
         }
 
         // Also ensure the floor since last prompt (keep pending state so we retry next tick)
-        if last_prompt_at.elapsed() < floor {
+        if !force_prompt && last_prompt_at.elapsed() < floor {
             continue;
         }
         prompt_pending_since = None;
+        let forced = std::mem::take(&mut force_prompt);
 
-        // Drain events and build prompt, determine priority from events
-        let (prompt, has_events, priority) = {
+        let (priority, tale) = {
             let mut s = state.lock().await;
-
-            // Skip the LLM while asleep, and — for an operator-run NPC — while
-            // nobody is around to see it. Events still drain so they can't pile
-            // up unbounded.
-            if is_sleeping || !(always_active || s.has_nearby_human_players()) {
-                s.drain_events();
-                s.drain_agent_events();
+            if is_sleeping || !(always_active || forced || s.has_nearby_human_players()) {
+                discard_turn(&mut s);
                 pending_urgency = LlmPriority::Idle;
                 continue;
             }
-
-            let events = s.drain_events();
-            let agent_events = s.drain_agent_events();
-            let has_events = !events.is_empty() || !agent_events.is_empty();
-
-            // Determine priority from the most urgent event (lower = more urgent)
-            let max_urgency = events
-                .iter()
-                .map(|e| LlmPriority::from(s.classify_event(e)))
-                .fold(pending_urgency, std::cmp::min);
-
-            let prompt = build_prompt(&s, &events, &agent_events, &schedule, active_schedule.0);
-            (prompt, has_events, max_urgency)
+            let event_urgency = s.pending_event_urgency();
+            if event_urgency.is_none() && !periodic_due {
+                pending_urgency = LlmPriority::Idle;
+                continue;
+            }
+            let priority = RequestPriority::new(
+                pending_urgency.min(
+                    event_urgency
+                        .map(LlmPriority::from)
+                        .unwrap_or(LlmPriority::Idle),
+                ),
+            );
+            s.queued_llm_priority = Some(priority.clone());
+            let tale = tale_for(
+                &tales,
+                &schedule,
+                active_schedule.0,
+                &s,
+                &mut tale_offered_at,
+            );
+            (priority, tale)
         };
-        pending_urgency = LlmPriority::Idle; // reset for next cycle
+        pending_urgency = LlmPriority::Idle;
 
-        if !has_events {
-            continue;
-        }
-
-        // Submit to scheduler as background task (doesn't block combat ticks)
-        info!(
-            "[{label}] LLM driver: submitting {:?} prompt ({} chars)",
-            priority,
-            prompt.len()
-        );
         let sched = scheduler.clone();
-        let inv = Arc::clone(&invoker);
+        let run = run_prompt(
+            Arc::clone(&state),
+            Arc::clone(&invoker),
+            schedule.clone(),
+            active_schedule.0,
+            memory_file.clone(),
+            tale,
+            label.clone(),
+        );
         let lbl = label.clone();
         llm_in_flight = Some(tokio::spawn(async move {
-            sched.submit(&lbl, priority, prompt, inv).await
+            sched.submit_deferred(&lbl, priority, run).await
         }));
+        if let Some((_, prompted)) = &mut wrapup {
+            *prompted = true;
+        }
     }
 }
 
-/// Await a finished LLM submission and unwrap the join/scheduler result.
-/// Logs the failure and returns `None` for both join panics and scheduler
-/// errors so the caller can collapse three error arms into one branch.
+async fn run_prompt(
+    state: Arc<Mutex<SharedState>>,
+    invoker: Arc<dyn LlmBackend>,
+    schedule: Vec<ScheduleEntry>,
+    active_schedule: Option<usize>,
+    memory_file: Option<String>,
+    tale: Option<String>,
+    label: String,
+) -> anyhow::Result<String> {
+    let terrain = rendered_terrain_summary(&state).await;
+    let memory = load_memory_tail(&memory_file);
+    let prompt = {
+        let mut s = state.lock().await;
+        s.queued_llm_priority = None;
+        s.take_wake_urgency();
+        let events = s.drain_events();
+        let mut agent_events = s.drain_agent_events();
+        if s.meeting_turn() {
+            agent_events.push(prompt::meeting_closing_event(
+                s.meeting_host,
+                s.pricing.as_ref().map_or(0, |p| p.last_change_pct),
+            ));
+        }
+        let prompt = build_prompt(
+            &s,
+            &events,
+            &agent_events,
+            &schedule,
+            active_schedule,
+            memory.as_deref(),
+            terrain.as_deref(),
+            tale,
+        );
+        s.finish_conversation();
+        prompt
+    };
+    info!(
+        "[{label}] LLM driver: sending current prompt ({} bytes)",
+        prompt.len()
+    );
+    invoker.send_message(&prompt).await
+}
+
+/// Keep the tale set in step with the schedule: draw it when a `tales`
+/// entry begins, keep it through visits (no entry), drop it on any other
+/// entry so the next performance draws afresh. An agent restarted mid-set
+/// draws on its first transition, like any other.
+fn sync_tales(
+    tales: &mut crate::tales::SetTales,
+    schedule: &[ScheduleEntry],
+    active: Option<usize>,
+    label: &str,
+) {
+    let Some(i) = active else {
+        return;
+    };
+    if !schedule[i].tales {
+        *tales = crate::tales::SetTales::default();
+        return;
+    }
+    if tales.current().is_some() {
+        return;
+    }
+    let ledger = crate::tales::load_ledger(crate::tales::LEDGER_PATH);
+    *tales = crate::tales::SetTales::draw(
+        &ledger,
+        crate::tales::PICKS_PER_SET,
+        &mut rand::thread_rng(),
+    );
+    info!(
+        "[{label}] Performance tales: {} of {} ledger lines",
+        tales.len(),
+        ledger.len()
+    );
+}
+
+/// Hand the LLM the current deed throughout a performance so a direct request
+/// can override the automatic two-song gap.
+fn tale_for(
+    tales: &crate::tales::SetTales,
+    schedule: &[ScheduleEntry],
+    active: Option<usize>,
+    state: &SharedState,
+    offered_at: &mut Option<usize>,
+) -> Option<String> {
+    *offered_at = None;
+    let deed = tales.current()?;
+    active.filter(|&i| schedule[i].tales)?;
+    *offered_at = Some(state.self_songs_started);
+    let self_name = state.self_player.as_ref().map_or("", |p| p.name.as_str());
+    let room = crate::tales::audience_lang(state.chat_history(), self_name);
+    let lang = crate::tales::tale_lang(room, tales.sung());
+    let automatic_due = tales.is_due(state.self_songs_started);
+    Some(crate::tales::prompt_section(deed, lang, automatic_due))
+}
+
+/// A recital in the turn that offered a tale is it being sung: move on.
+async fn advance_tale_if_sung(
+    state: &Arc<Mutex<SharedState>>,
+    tales: &mut crate::tales::SetTales,
+    offered_at: &mut Option<usize>,
+) {
+    let recited = std::mem::take(&mut state.lock().await.recited_this_turn);
+    if let Some(at) = offered_at.take().filter(|_| recited) {
+        tales.advance(at);
+    }
+}
+
+/// Grace period between noticing our own death and requesting respawn.
+const RESPAWN_DELAY: Duration = Duration::from_secs(5);
+
+/// How long a due schedule move waits for the LLM's wrap-up turn. Covers the
+/// prompt debounce plus one LLM round trip; the move starts as soon as that
+/// turn lands, so the full grace is only spent when the LLM stays silent.
+/// 30 real seconds ≈ 4 game minutes.
+const SCHEDULE_WRAPUP_GRACE: Duration = Duration::from_secs(30);
+
+/// How long a visit (sick-room bedside, guest's table) holds the NPC there
+/// before the regular schedule pulls it back.
+const VISIT_DWELL: Duration = Duration::from_secs(90);
+
+/// A guest sitting down within this range of the NPC counts as one of its
+/// tables. Same floor only.
+const TABLE_SERVICE_RADIUS: f32 = 10.0;
+
+/// One maid keeps a guest — greeting, order, plate — while they stay seated
+/// (released when they stand); this is only the fallback expiry.
+const GUEST_CLAIM_TTL: Duration = Duration::from_secs(5 * 60);
+/// How long a serving keeps the maid at the table after the round trip
+/// before the schedule pulls her back to her post.
+const SERVE_DWELL: Duration = Duration::from_secs(60);
+/// The moment a guest gets after standing before their plate is cleared.
+const CLEAR_DELAY: Duration = Duration::from_secs(8);
+/// How long clearing holds the maid off her post (also the claim's TTL).
+const CLEAR_DWELL: Duration = Duration::from_secs(30);
+/// A seated NPC guest eats its plate this long after it lands.
+const EAT_DELAY: Duration = Duration::from_secs(6);
+
+/// Death watch: fires once `dead` has held for RESPAWN_DELAY, then re-arms
+/// so a lost request is retried after another delay. Revival clears it.
+fn respawn_due(dead: bool, dead_since: &mut Option<Instant>, now: Instant) -> bool {
+    if !dead {
+        *dead_since = None;
+        return false;
+    }
+    match *dead_since {
+        None => {
+            *dead_since = Some(now);
+            false
+        }
+        Some(t) if now.duration_since(t) >= RESPAWN_DELAY => {
+            *dead_since = None;
+            true
+        }
+        Some(_) => false,
+    }
+}
+
+/// Ask the server to revive us (heal + teleport to spawn + hunger reset)
+/// and note the death in memory so the LLM learns it died even though it
+/// never got a turn while dead.
+async fn request_respawn(
+    state: &Arc<Mutex<SharedState>>,
+    memory_file: &Option<String>,
+    label: &str,
+) {
+    info!("[{label}] LLM driver: requesting respawn");
+    if let Some(path) = memory_file {
+        append_memory(path, "I was killed and woke up back at the spawn point.");
+    }
+    let mut s = state.lock().await;
+    if let Err(e) = s.send_command(ClientMessage::RequestRespawn).await {
+        error!("[{label}] Respawn request failed: {e}");
+    }
+}
+
+/// Wave off a trade offer nobody answered, like the web client's toast timing
+/// out, so the merchant stops pushing windows at us.
+async fn decline_lapsed_trade(state: &Arc<Mutex<SharedState>>, label: &str) {
+    let mut s = state.lock().await;
+    if let Some(offer) = s.pushed_trade.take_if(|t| !t.is_live()) {
+        let cmd = ClientMessage::DeclineTrade {
+            merchant_player_id: offer.merchant_id,
+        };
+        if let Err(e) = s.send_command(cmd).await {
+            error!("[{label}] Failed to decline a lapsed trade offer: {e}");
+        }
+    }
+}
+
+/// Drop a turn without prompting: events drain (so they cannot pile up)
+/// but what was said still lands in the conversation history.
+fn discard_turn(s: &mut SharedState) {
+    s.drain_events();
+    s.finish_conversation();
+    s.drain_agent_events();
+}
+
+/// Cap on memory.txt and on the per-prompt MEMORIES tail: `append_memory`
+/// rewrites the file to its newest lines, and `load_memory_tail` guards
+/// against legacy files still longer than the cap.
+const MEMORY_LINES: usize = 50;
+
+/// Tail of the NPC's memory file. Re-read per prompt — the file is tiny —
+/// so notes written this session reach a stateless backend without a
+/// restart (the file used to be baked into the system prompt at startup).
+fn load_memory_tail(memory_file: &Option<String>) -> Option<String> {
+    let path = memory_file.as_ref()?;
+    let content = std::fs::read_to_string(path).ok()?;
+    let lines: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
+    if lines.is_empty() {
+        return None;
+    }
+    let start = lines.len().saturating_sub(MEMORY_LINES);
+    Some(lines[start..].join("\n"))
+}
+
+/// Record the finished request and apply backoff on backend or task errors.
 async fn await_llm_response(
     handle: tokio::task::JoinHandle<anyhow::Result<String>>,
     label: &str,
+    backoff: &mut PromptBackoff,
 ) -> Option<String> {
-    match handle.await {
-        Ok(Ok(response)) => Some(response),
-        Ok(Err(e)) => {
+    let result = handle.await.map_err(anyhow::Error::from).and_then(|r| r);
+    backoff.record_result(&result, label);
+    match result {
+        Ok(response) => Some(response),
+        Err(e) => {
             error!("[{label}] LLM prompt failed: {e}");
             None
         }
-        Err(e) => {
-            error!("[{label}] LLM task panicked: {e}");
-            None
+    }
+}
+
+/// Fetch the operator announcements a web player reads on the login screen.
+/// Best-effort: served notices are login-screen content, so a failure means
+/// an empty list, not an error the driver should stall on.
+async fn fetch_announcements(api_base_url: &str) -> Vec<String> {
+    let url = format!("{api_base_url}/api/announcements");
+    let client = match reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+    {
+        Ok(client) => client,
+        Err(_) => return Vec::new(),
+    };
+    let resp = match client.get(&url).send().await {
+        Ok(resp) if resp.status().is_success() => resp,
+        _ => return Vec::new(),
+    };
+    let Ok(list) = resp.json::<Vec<serde_json::Value>>().await else {
+        return Vec::new();
+    };
+    list.iter()
+        .take(3)
+        .filter_map(|a| {
+            let date = a.get("date").and_then(|d| d.as_str()).unwrap_or("");
+            let translations = a.get("translations")?;
+            // Prefer Korean (the server's default locale), fall back to any.
+            let t = translations
+                .get("ko")
+                .or_else(|| translations.as_object()?.values().next())?;
+            let title = t.get("title").and_then(|s| s.as_str())?;
+            let body = t.get("body").and_then(|s| s.as_str()).unwrap_or("");
+            let mut line = format!("[{date}] {title}");
+            let body = body.trim();
+            if !body.is_empty() {
+                let short: String = body.chars().take(200).collect();
+                line.push_str(" — ");
+                line.push_str(&short);
+                if body.chars().count() > 200 {
+                    line.push('…');
+                }
+            }
+            Some(line)
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use crate::state::tests::{test_player, test_state};
+
+    #[tokio::test]
+    async fn a_rain_seat_invites_rest_instead_of_ordering_a_meal() {
+        let (s, _rx) = test_state();
+        let state = Arc::new(Mutex::new(s));
+        let mut entry = ScheduleEntry {
+            at: "rain".into(),
+            action: Some("chair".into()),
+            ..Default::default()
+        };
+        entry.parse_condition().unwrap();
+        announce_seat(&state, &[entry], Some(0), false).await;
+        let events = state.lock().await.drain_agent_events();
+        assert!(events.iter().any(|e| e.contains("resting inside the inn")));
+        assert!(!events
+            .iter()
+            .any(|e| e.contains("menu") || e.contains("maid")));
+    }
+
+    #[test]
+    fn a_tale_stays_available_during_the_automatic_song_gap() {
+        use rand::{rngs::StdRng, SeedableRng};
+
+        let ledger = crate::tales::parse_ledger(
+            "2026-09-02 | Alder | Alder slew the Ogre Warlord. Celebrate the victory.",
+        );
+        let mut tales = crate::tales::SetTales::draw(
+            &ledger,
+            crate::tales::PICKS_PER_SET,
+            &mut StdRng::seed_from_u64(1),
+        );
+        let schedule = vec![ScheduleEntry {
+            tales: true,
+            ..Default::default()
+        }];
+        let (mut state, _rx) = test_state();
+        let mut offered_at = None;
+
+        let due = tale_for(&tales, &schedule, Some(0), &state, &mut offered_at).unwrap();
+        assert!(due.contains("Automatic rotation: DUE"), "{due}");
+
+        tales.advance(0);
+        state.self_songs_started = 1;
+        let waiting = tale_for(&tales, &schedule, Some(0), &state, &mut offered_at).unwrap();
+        assert!(waiting.contains("Automatic rotation: WAITING"), "{waiting}");
+    }
+
+    /// A visit forces its prompt out at once, so the driver consumes the
+    /// ambient event into a real prompt — the backend captures prompts for
+    /// the tests to scan.
+    struct Capture(Arc<std::sync::Mutex<Vec<String>>>);
+    #[async_trait]
+    impl LlmBackend for Capture {
+        async fn send_message(&self, p: &str) -> anyhow::Result<String> {
+            self.0.lock().unwrap().push(p.to_string());
+            Ok("{}".to_string())
         }
+    }
+
+    #[tokio::test]
+    async fn a_queued_prompt_uses_new_chat_and_marks_only_the_response_trigger() {
+        use onlinerpg_shared::{PlayerId, ServerMessage};
+
+        let (mut s, _rx) = test_state();
+        let mut me = test_player(0.0, 0.0);
+        me.name = "Miriel".into();
+        s.self_player_id = Some(me.id);
+        s.self_player = Some(me);
+        let mut guest = test_player(2.0, 0.0);
+        guest.id = PlayerId::from(2);
+        guest.name = "Guest".into();
+        s.nearby_players.insert(guest.id, guest);
+        let chat = |message: &str| ServerMessage::ChatMessage {
+            player_id: PlayerId::from(2),
+            message: message.into(),
+        };
+        s.push_event(chat("Where can I buy food?"));
+        let priority = RequestPriority::new(LlmPriority::Routine);
+        s.queued_llm_priority = Some(priority.clone());
+        let state = Arc::new(Mutex::new(s));
+        let prompts = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let backend: Arc<dyn LlmBackend> = Arc::new(Capture(Arc::clone(&prompts)));
+        let scheduler = LlmScheduler::new(1, Duration::from_secs(120));
+        let call = scheduler.submit_deferred(
+            "Miriel",
+            priority,
+            run_prompt(
+                Arc::clone(&state),
+                Arc::clone(&backend),
+                Vec::new(),
+                None,
+                None,
+                None,
+                "Miriel".into(),
+            ),
+        );
+        tokio::pin!(call);
+        assert!(futures_util::poll!(&mut call).is_pending());
+        assert!(prompts.lock().unwrap().is_empty());
+        {
+            let mut s = state.lock().await;
+            s.push_event(chat("미리엘, 빵 두 개 주세요"));
+            s.push_event(chat("Actually, three please"));
+        }
+        call.await.unwrap();
+        let first = prompts.lock().unwrap()[0].clone();
+        assert!(first.contains("Where can I buy food?"));
+        assert!(first.contains("Actually, three please"));
+        assert!(first.contains("[Urgent] [Chat] Guest: 미리엘, 빵 두 개 주세요"));
+        assert!(!first.contains("[Urgent] [Chat] Guest: Where"));
+        assert!(state.lock().await.pending_chat().is_empty());
+        assert_eq!(
+            state.lock().await.take_wake_urgency(),
+            crate::state::EventUrgency::Noise
+        );
+        state.lock().await.push_event(chat("Miriel, thank you"));
+        run_prompt(
+            Arc::clone(&state),
+            backend,
+            Vec::new(),
+            None,
+            None,
+            None,
+            "Miriel".into(),
+        )
+        .await
+        .unwrap();
+        let second = prompts.lock().unwrap()[1].clone();
+        let events = second.split("=== EVENTS ===").nth(1).unwrap();
+        assert!(second.contains("Where can I buy food?"));
+        assert!(!events.contains("빵 두 개"));
+        assert!(events.contains("Miriel, thank you"));
+    }
+
+    /// Wait until `marker` shows up in a captured prompt — or in the event
+    /// queue, covering the race where this loop drains the event before the
+    /// driver does.
+    async fn await_marker(
+        state: &Arc<Mutex<SharedState>>,
+        prompts: &Arc<std::sync::Mutex<Vec<String>>>,
+        marker: &str,
+    ) {
+        tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                let drained = state.lock().await.drain_agent_events();
+                if drained.iter().any(|e| e.contains(marker))
+                    || prompts.lock().unwrap().iter().any(|p| p.contains(marker))
+                {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await
+        .unwrap_or_else(|_| panic!("the visit never surfaced the {marker} event"));
+    }
+
+    #[test]
+    fn respawn_fires_only_after_the_delay_and_rearms_while_still_dead() {
+        let mut since = None;
+        let t0 = Instant::now();
+        assert!(!respawn_due(true, &mut since, t0));
+        assert!(!respawn_due(true, &mut since, t0 + RESPAWN_DELAY / 2));
+        assert!(respawn_due(true, &mut since, t0 + RESPAWN_DELAY));
+        assert!(!respawn_due(true, &mut since, t0 + RESPAWN_DELAY));
+        assert!(respawn_due(true, &mut since, t0 + RESPAWN_DELAY * 2));
+        assert!(!respawn_due(false, &mut since, t0 + RESPAWN_DELAY * 2));
+        assert!(since.is_none());
+    }
+
+    #[tokio::test]
+    async fn request_respawn_sends_the_request_and_notes_the_death() {
+        let (mut s, mut rx) = test_state();
+        let mut me = test_player(0.0, 0.0);
+        me.health = 0;
+        s.self_player = Some(me);
+        let state = Arc::new(Mutex::new(s));
+        let dir = RunDir::create().unwrap();
+        let memory = dir.path().join("memory.txt").to_str().unwrap().to_string();
+
+        request_respawn(&state, &Some(memory.clone()), "test").await;
+
+        assert!(matches!(rx.try_recv(), Ok(ClientMessage::RequestRespawn)));
+        assert!(std::fs::read_to_string(&memory)
+            .unwrap()
+            .contains("I was killed"));
+    }
+
+    #[tokio::test]
+    async fn idle_poll_calls_the_llm_without_new_events() {
+        check_idle_driver(false).await;
+    }
+
+    #[tokio::test]
+    async fn ordinary_chat_wakes_an_idle_driver_without_a_name_mention() {
+        check_idle_driver(true).await;
+    }
+
+    async fn check_idle_driver(send_chat: bool) {
+        let (mut s, _rx) = test_state();
+        let me = test_player(0.0, 0.0);
+        s.in_game = true;
+        s.self_player_id = Some(me.id);
+        s.self_player = Some(me);
+        let state = Arc::new(Mutex::new(s));
+        let prompts: Arc<std::sync::Mutex<Vec<String>>> = Arc::default();
+        let config = DriverConfig {
+            label: "idle_test".into(),
+            memory_file: None,
+            favor_file: None,
+            min_interval: Duration::from_secs(1),
+            urgent_min_interval: Duration::from_secs(1),
+            debounce: Duration::ZERO,
+            idle_interval: Duration::from_secs(if send_chat { 3600 } else { 1 }),
+            activity_window: Duration::from_secs(if send_chat { 30 } else { 0 }),
+            always_active: true,
+            schedule: Vec::new(),
+            sickroom: Vec::new(),
+            serve_tables: false,
+            maid_names: HashSet::new(),
+            tables: Vec::new(),
+            claims: Arc::default(),
+            api_base_url: "http://127.0.0.1:9".into(),
+        };
+        let driver = tokio::spawn(llm_driver(
+            Arc::clone(&state),
+            Arc::new(Capture(Arc::clone(&prompts))),
+            LlmScheduler::new(1, Duration::from_secs(5)),
+            config,
+        ));
+        let result = tokio::time::timeout(Duration::from_secs(5), async {
+            if send_chat {
+                while prompts.lock().unwrap().is_empty() {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+                let mut s = state.lock().await;
+                let mut guest = test_player(2.0, 0.0);
+                guest.id = onlinerpg_shared::PlayerId::from(2);
+                guest.name = "Guest".into();
+                s.nearby_players.insert(guest.id, guest);
+                s.push_event(onlinerpg_shared::ServerMessage::ChatMessage {
+                    player_id: onlinerpg_shared::PlayerId::from(2),
+                    message: "Can I buy some bread?".into(),
+                });
+            }
+            while prompts.lock().unwrap().len() < 2 {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+        driver.abort();
+        result.expect("the idle driver must make a second call");
+        if send_chat {
+            let captured = prompts.lock().unwrap();
+            assert!(captured[1].contains("[Chat] Guest: Can I buy some bread?"));
+            assert!(!captured[1].contains("[Urgent] [Chat] Guest:"));
+        }
+        assert!(state.lock().await.pending_event_urgency().is_none());
+    }
+
+    #[tokio::test]
+    async fn a_sickroom_respawn_sends_the_npc_to_the_bedside() {
+        let (mut s, mut rx) = test_state();
+        let me = test_player(-1443.9, 4748.9);
+        s.in_game = true;
+        s.is_night = Some(true);
+        s.schedule_period = Some(onlinerpg_shared::schedule::SchedulePeriod::Night);
+        s.self_player_id = Some(me.id);
+        s.self_player = Some(me);
+
+        // Queued before the driver starts: the respawn buffer must survive
+        // startup and be picked up by the loop's first drain.
+        let mut woken = test_player(-1451.5, 4754.05);
+        woken.id = onlinerpg_shared::PlayerId::from(7);
+        woken.object_id = Some(52);
+        s.push_event(onlinerpg_shared::ServerMessage::PlayerRespawned { player: woken });
+
+        let state = Arc::new(Mutex::new(s));
+
+        // Keep the outgoing command channel drained so walking can't block.
+        tokio::spawn(async move { while rx.recv().await.is_some() {} });
+
+        let prompts: Arc<std::sync::Mutex<Vec<String>>> = Arc::default();
+
+        // One live entry on the NPC's serving spot, so the visit leaves a
+        // real active schedule the way Miriel's does.
+        let mut entry = ScheduleEntry {
+            at: "night".to_string(),
+            pos: [-1443.9, 1.3, 4748.9],
+            rotation: -40.9,
+            floor_level: 0,
+            label: Some("serving tables".to_string()),
+            ..Default::default()
+        };
+        entry.parse_condition().unwrap();
+
+        let never = Duration::from_secs(3600);
+        let config = DriverConfig {
+            label: "test_maid".to_string(),
+            memory_file: None,
+            favor_file: None,
+            min_interval: never,
+            urgent_min_interval: never,
+            debounce: never,
+            idle_interval: never,
+            activity_window: never,
+            always_active: false,
+            schedule: vec![entry],
+            sickroom: vec![VisitSpot {
+                object_id: 52,
+                pos: [-1450.3, 4.4, 4754.7],
+                rotation: -104.6,
+                floor_level: 1,
+            }],
+            serve_tables: false,
+            maid_names: HashSet::new(),
+            tables: Vec::new(),
+            claims: Arc::default(),
+            api_base_url: "http://127.0.0.1:9".to_string(),
+        };
+        let scheduler = LlmScheduler::new(1, Duration::from_secs(5));
+        let driver = tokio::spawn(llm_driver(
+            Arc::clone(&state),
+            Arc::new(Capture(Arc::clone(&prompts))),
+            scheduler,
+            config,
+        ));
+
+        await_marker(&state, &prompts, "[SickRoom]").await;
+        driver.abort();
+    }
+
+    #[test]
+    fn first_claimant_holds_a_visit_claim() {
+        let c = VisitClaims::default();
+        assert!(c.try_claim(ClaimKey::Bed(52), "miriel", VISIT_DWELL));
+        assert!(!c.try_claim(ClaimKey::Bed(52), "cocoly", VISIT_DWELL));
+        assert!(c.try_claim(ClaimKey::Bed(52), "miriel", VISIT_DWELL));
+        assert!(c.try_claim(ClaimKey::Bed(53), "cocoly", VISIT_DWELL));
+    }
+
+    #[tokio::test]
+    async fn a_seated_guest_sends_the_npc_to_the_table() {
+        let (mut s, mut rx) = test_state();
+        let me = test_player(-1443.9, 4748.9);
+        s.in_game = true;
+        s.is_night = Some(true);
+        s.schedule_period = Some(onlinerpg_shared::schedule::SchedulePeriod::Night);
+        s.self_player_id = Some(me.id);
+        s.self_player = Some(me);
+
+        // A guest in sight sits down before the driver starts: the seating
+        // buffer must survive startup like the respawn one does.
+        let mut guest = test_player(-1447.0, 4750.5);
+        guest.id = onlinerpg_shared::PlayerId::from(8);
+        guest.name = "Jake".to_string();
+        let guest_id = guest.id;
+        s.nearby_players.insert(guest_id, guest);
+        s.push_event(onlinerpg_shared::ServerMessage::PlayerInteractionChanged {
+            player_id: guest_id,
+            object_type: Some(crate::state::SIT_OBJECT_TYPE.to_string()),
+            object_id: Some(46),
+        });
+
+        let state = Arc::new(Mutex::new(s));
+        tokio::spawn(async move { while rx.recv().await.is_some() {} });
+
+        let prompts: Arc<std::sync::Mutex<Vec<String>>> = Arc::default();
+
+        let never = Duration::from_secs(3600);
+        let config = DriverConfig {
+            label: "test_maid".to_string(),
+            memory_file: None,
+            favor_file: None,
+            min_interval: never,
+            urgent_min_interval: never,
+            debounce: never,
+            idle_interval: never,
+            activity_window: never,
+            always_active: false,
+            schedule: Vec::new(),
+            sickroom: Vec::new(),
+            serve_tables: true,
+            maid_names: HashSet::new(),
+            tables: Vec::new(),
+            claims: Arc::default(),
+            api_base_url: "http://127.0.0.1:9".to_string(),
+        };
+        let scheduler = LlmScheduler::new(1, Duration::from_secs(5));
+        let driver = tokio::spawn(llm_driver(
+            Arc::clone(&state),
+            Arc::new(Capture(Arc::clone(&prompts))),
+            scheduler,
+            config,
+        ));
+
+        await_marker(&state, &prompts, "[Guest] Jake").await;
+        driver.abort();
+    }
+
+    #[tokio::test]
+    async fn a_curated_table_spot_wins_over_the_computed_one() {
+        let (mut s, _rx) = test_state();
+        let me = test_player(-1443.9, 4748.9);
+        s.self_player_id = Some(me.id);
+        s.self_player = Some(me);
+
+        let mut guest = test_player(-1446.75, 4751.75);
+        guest.id = onlinerpg_shared::PlayerId::from(8);
+        guest.object_type = Some(crate::state::SIT_OBJECT_TYPE.to_string());
+        guest.object_id = Some(46);
+        let guest_id = guest.id;
+        s.nearby_players.insert(guest_id, guest);
+
+        let tables = vec![VisitSpot {
+            object_id: 46,
+            pos: [-1446.4, 1.3, 4752.5],
+            rotation: 145.9,
+            floor_level: 0,
+        }];
+        let (name, entry) = table_entry(&s, &guest_id, &tables).expect("guest is seated in range");
+        assert_eq!(name, "Me");
+        assert_eq!(entry.pos, [-1446.4, 1.3, 4752.5]);
+        assert_eq!(entry.rotation, 145.9);
+
+        // A seat away from every curated chair falls back to a computed spot.
+        let (_, entry) = table_entry(&s, &guest_id, &[]).expect("fallback still serves");
+        assert_ne!(entry.pos, [-1446.4, 1.3, 4752.5]);
+    }
+
+    #[tokio::test]
+    async fn the_computed_spot_flanks_the_chair_placement_not_the_stale_position() {
+        let (mut s, _rx) = test_state();
+        let me = test_player(-1443.9, 4748.9);
+        s.self_player_id = Some(me.id);
+        s.self_player = Some(me);
+
+        // The guest's broadcast position is where they stood when they
+        // clicked the chair — one cell east of it.
+        let mut guest = test_player(-1449.3, 4749.4);
+        guest.id = onlinerpg_shared::PlayerId::from(8);
+        guest.object_type = Some(crate::state::SIT_OBJECT_TYPE.to_string());
+        guest.object_id = Some(39);
+        let guest_id = guest.id;
+        s.nearby_players.insert(guest_id, guest);
+
+        let chair = onlinerpg_shared::furniture::FurniturePlacement {
+            id: 39,
+            type_id: "chair".to_string(),
+            x: -1450.3,
+            y: 1.3,
+            z: 4749.05,
+            rotation_deg: 0.0,
+            floor_level: 0,
+        };
+        s.world_cache
+            .write()
+            .unwrap()
+            .sync_furniture(-2, 4, vec![chair]);
+
+        let (_, entry) = table_entry(&s, &guest_id, &[]).expect("guest is seated in range");
+        // The chair cell's east flank — not the standing cell's.
+        assert_eq!(entry.pos[0], -1449.5);
+        assert_eq!(entry.pos[2], 4749.5);
     }
 }

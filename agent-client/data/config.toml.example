@@ -38,7 +38,7 @@ llm = "none"
 # LLM timing (seconds)
 min_interval_secs = 5                       # Minimum seconds between prompts (active mode)
 urgent_min_interval_secs = 2                # Same floor while an urgent event waits (player chat, being hit)
-debounce_secs = 2                           # Extra wait to batch events after trigger
+debounce_secs = 0                           # Extra wait to batch events after trigger (0 = respond at once)
 idle_interval_secs = 3600                   # Interval when no chat/combat activity (idle mode)
 activity_window_secs = 30                   # How long after last activity to stay in active mode
 
@@ -49,10 +49,22 @@ activity_window_secs = 30                   # How long after last activity to st
 # and an NPC nobody can see has no one to act for. Set per NPC to override.
 # always_active = true
 
+# Sprint on every walk while well fed. Defaults to true for the agent you run
+# yourself; registry NPCs (`id = "..."`) are hunger-exempt and default to
+# false so the whole town does not run everywhere for free. Walking actions
+# can opt per action with "sprint": false / true; schedule walks and follow
+# catch-ups always walk.
+# always_sprint = true
+
 # LLM Scheduler: controls concurrent LLM calls across all NPCs
-max_concurrent = 2                          # Max simultaneous LLM calls (default: 2)
+max_concurrent = 4                          # Max simultaneous LLM calls (min 1, default 4)
 request_timeout_secs = 120                  # Give up on one call (0 = never); applies to every
                                             # backend, so a hung CLI or endpoint cannot hold a slot
+
+# Full LLM prompt/response text goes to <transcript_dir>/<npc>/<YYYY-MM-DD>.log
+# instead of the journal (which keeps one "llm turn" summary line per call).
+# transcript_dir = "logs/transcripts"       # "" turns transcripts off
+# transcript_keep_days = 3                  # older daily files are deleted
 
 # How this client authenticates to the game server.
 #   npc_token — shared secret from the server's data/npc_token (default)
@@ -96,8 +108,9 @@ temperature = 0.7
 # Codex CLI settings (used when llm = "codex")
 # Requires `codex` CLI installed (npm i -g @openai/codex) and OPENAI_API_KEY set.
 [codex]
-model = "gpt-5.4-mini"                                # Any OpenAI model ID
+model = "gpt-5.6-luna"                                # Any OpenAI model ID
 system_prompt_file = "data/system_prompt.txt"
+# reasoning_effort = "medium"                        # low ignores conditional rules (torch off by day / indoors); medium follows them
 
 # Generic OpenAI-compatible endpoint settings (used when llm = "openai")
 # Any self-hosted or third-party gateway that speaks the OpenAI chat
@@ -110,6 +123,7 @@ system_prompt_file = "data/system_prompt.txt"
 max_tokens = 1024                              # Max response tokens
 temperature = 0.7
 reasoning_effort = "none"                      # "none"/"low"/"medium"/"high"; "" omits it for models that reject it
+max_messages = 41                              # History per call incl. system prompt; values under 3 are raised to 3
 
 # --- Multi-NPC Orchestrator Mode ---
 # When [[npcs]] is present, legacy single-NPC fields above are ignored.
@@ -124,6 +138,7 @@ reasoning_effort = "none"                      # "none"/"low"/"medium"/"high"; "
 #   template_prompt = data/templates/{class}.txt
 #   instance_prompt = data/npcs/{id}/instance.txt
 #   memory_file     = data/npcs/{id}/memory.txt
+#   favor_file      = data/npcs/{id}/favor.json
 #   schedule_file   = data/npcs/{id}/schedule.json (when the file exists)
 # gender = "female"  # optional; new characters default to male
 # Any of them can still be set explicitly to override the convention, and an
@@ -132,7 +147,9 @@ reasoning_effort = "none"                      # "none"/"low"/"medium"/"high"; "
 # --- Prompt layering ---
 # Every agent starts from system_prompt_file above: the JSON schema and the
 # action types they all share. Its role file is appended on top and may add
-# further actions, then instance_prompt and memory_file.
+# further actions, then instance_prompt. memory_file and favor_file are not
+# baked in: the driver re-reads them into every prompt, so notes and favor
+# written mid-session take effect without a restart.
 #
 # An agent with no `id` has no class template, so pick its role yourself.
 # Two are shipped, or point at your own file:
@@ -154,7 +171,7 @@ llm = "codex"
 # Per-NPC timing overrides (optional, defaults shown above)
 # min_interval_secs = 5
 # urgent_min_interval_secs = 2
-# debounce_secs = 2
+# debounce_secs = 0
 # idle_interval_secs = 3600
 # activity_window_secs = 30
 # always_active = false                      # registry NPCs default to this
@@ -162,4 +179,58 @@ llm = "codex"
 [[npcs]]
 id = "rica"
 account = "npc_merchant"
+llm = "codex"
+
+# The square's busker. Like the other registry NPCs she only thinks when
+# someone is in sight — a song nobody can hear is an LLM call for nothing.
+[[npcs]]
+id = "signe"
+account = "npc_bard"
+llm = "codex"
+
+# Night merchant. Opens the stall after dark and sells only what a night
+# traveller needs; off duty in the day, when Rica is awake to sell the rest.
+# Would run on the schedule alone with llm = "none" (no chat or haggling).
+[[npcs]]
+id = "wick"
+account = "npc_night_merchant"
+llm = "codex"
+
+# Inn maid. Serves food and drink on the inn's ground floor, and looks in on
+# the sick room upstairs. With data/npcs/miriel/sickroom.json present (bedside
+# spots keyed by bed placement id), she walks up to greet whoever respawns
+# there. serve_tables makes her walk over to guests who sit down on a chair
+# nearby and take their order.
+[[npcs]]
+id = "miriel"
+account = "npc_inn_maid"
+gender = "female"
+llm = "codex"
+serve_tables = true
+
+# Land registrar works at his desk by day and sleeps upstairs at night.
+[[npcs]]
+id = "steward"
+account = "npc_steward"
+gender = "male"
+llm = "codex"
+
+# Estate architect sells landscaping supplies by day and sleeps in bed 71 at night.
+[[npcs]]
+id = "estate_architect"
+account = "npc_estate_architect"
+gender = "male"
+llm = "codex"
+
+# ORKEA furniture shop clerk.
+[[npcs]]
+id = "grida"
+account = "npc_grida"
+gender = "female"
+llm = "codex"
+
+[[npcs]]
+id = "tobin"
+account = "npc_tobin"
+gender = "male"
 llm = "codex"

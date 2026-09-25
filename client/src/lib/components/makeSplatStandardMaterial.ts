@@ -7,6 +7,10 @@
 import * as THREE from 'three'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
 import {
+  applyRainPuddles,
+  type RainPuddleUniforms,
+} from '../shaders/rain-puddle-nodes'
+import {
   Fn,
   Discard,
   uniform,
@@ -41,7 +45,12 @@ import {
   type SplatAtlasSet,
 } from '../utils/splatLayerLoader'
 import { MAX_PALETTE } from '../terrain/splat-encoding'
-import { SPLAT_PADDED_DIM, TILE_DIM } from '../terrain/terrain-constants'
+import {
+  LAND_PLOT_SIZE,
+  REGION_CELLS,
+  SPLAT_PADDED_DIM,
+  TILE_DIM,
+} from '../terrain/terrain-constants'
 
 export type SplatLayer = {
   map: THREE.Texture // Albedo (sRGB)
@@ -67,6 +76,7 @@ export type SplatParams = {
   sharedHoleUniforms?: SplatHoleUniforms
   /** Include grid/brush editor overlay in the shader. Default false. */
   includeEditorOverlay?: boolean
+  rainPuddleUniforms?: RainPuddleUniforms
 }
 
 export interface SplatBrushUniforms {
@@ -140,6 +150,7 @@ export function makeSplatStandardMaterial({
   sharedBrushUniforms,
   sharedHoleUniforms,
   includeEditorOverlay = false,
+  rainPuddleUniforms,
 }: SplatParams) {
   // Splat bytes are integer indices — must NOT be bilinearly interpolated.
   splatMap.minFilter = THREE.NearestFilter
@@ -181,20 +192,14 @@ export function makeSplatStandardMaterial({
 
   const vertexNode = Fn(() => {
     const localUv = uv()
-    vUvSplat.assign(localUv.mul(uSplatScale))
+    vUvSplat.assign(vec2(localUv.x, localUv.y.oneMinus()).mul(uSplatScale))
     const worldPos4 = modelWorldMatrix.mul(vec4(positionLocal, 1.0))
     vWorldXZ.assign(worldPos4.xz)
     return positionLocal
   })()
 
-  // Splat pixel = cell corner (grid vertex); see `doc/SPLATMAP_V2.md`
-  // §6. Bilerp-of-resolved-corners smooths palette-pair boundaries (e.g.
-  // (SAND,GROUND) ↔ (GROUND,DIRT)) that a nearest-cell approach snapped
-  // at a half-cell seam.
-  //
-  // Texture is SPLAT_PADDED_DIM²; the tile's 64×64 data lives at
-  // interior [1..TILE_DIM]. The +1.5 texel shift lands cell 0 on
-  // interior pixel 1 instead of padding pixel 0.
+  // Resolve grid corners in +X/+Z order, then interpolate their palette weights.
+  // +1.5 addresses texel centers after the one-pixel border.
   const SPLAT_TEXEL = 1.0 / SPLAT_PADDED_DIM
 
   const cellPos = vUvSplat.mul(float(TILE_DIM))
@@ -327,23 +332,19 @@ export function makeSplatStandardMaterial({
     const b = blended.toVar()
     const gridActive = smoothstep(float(0.49), float(0.51), brush.gridVisible)
 
-    const gridCoords = fLocalUv.mul(64.0)
-    const grid1 = abs(fract(gridCoords.sub(0.5)).sub(0.5)).div(
-      fwidth(gridCoords)
-    )
-    const line1 = float(1).sub(min(min(grid1.x, grid1.y), float(1)))
-    const grid64 = abs(fract(fLocalUv.sub(0.5)).sub(0.5)).div(fwidth(fLocalUv))
-    const line64 = float(1).sub(min(min(grid64.x, grid64.y), float(1)))
-    const regionCoords = vWorldXZ.add(32.0).div(1024.0)
-    const gridRegion = abs(fract(regionCoords.sub(0.5)).sub(0.5)).div(
-      fwidth(regionCoords)
-    )
-    const lineRegion = float(1).sub(
-      min(min(gridRegion.x, gridRegion.y), float(1))
-    )
+    // Antialiased 1-px line where coords cross an integer
+    const gridLine = (coords: Node<'vec2'>) => {
+      const g = abs(fract(coords.sub(0.5)).sub(0.5)).div(fwidth(coords))
+      return float(1).sub(min(min(g.x, g.y), float(1)))
+    }
+    const line1 = gridLine(fLocalUv.mul(TILE_DIM))
+    const line64 = gridLine(fLocalUv)
+    const linePlot = gridLine(vWorldXZ.div(LAND_PLOT_SIZE))
+    const lineRegion = gridLine(vWorldXZ.add(TILE_DIM / 2).div(REGION_CELLS))
 
-    b.assign(mix(b, mix(b, vec3(0, 0, 0), line1.mul(0.3)), gridActive))
-    b.assign(mix(b, mix(b, vec3(1, 0, 0), line64), gridActive))
+    b.assign(mix(b, vec3(0, 0, 0), line1.mul(0.3).mul(gridActive)))
+    b.assign(mix(b, vec3(1, 1, 1), linePlot.mul(0.7).mul(gridActive)))
+    b.assign(mix(b, vec3(1, 0, 0), line64.mul(gridActive)))
     b.assign(mix(b, vec3(0.886, 0.725, 0.231), lineRegion.mul(gridActive)))
 
     const bDist = distance(vWorldXZ, vec2(brush.center))
@@ -462,6 +463,14 @@ export function makeSplatStandardMaterial({
           gridVisible: brush.gridVisible,
         }
       : {}),
+  }
+
+  if (rainPuddleUniforms) {
+    applyRainPuddles(
+      mat,
+      rainPuddleUniforms,
+      brush ? max(brush.active, brush.gridVisible) : undefined
+    )
   }
 
   return mat

@@ -1,0 +1,18 @@
+Use case: precise-object-edit
+Asset type: a single fantasy RPG skill icon displayed at only 34–38 pixels inside a 40px hotbar slot.
+Input image: the attached image is BOTH the edit target and the style reference.
+Primary request: improve small-size readability of this Double Slash dagger icon while preserving its ivory-white luminous brushstroke character on black.
+
+Preserve: black square background, monochrome silver-white / pale ivory palette, sharp slightly irregular brush edges, a short subtle soft light bleed, simple old-school MMORPG skill-art feeling. Keep a dagger and EXACTLY TWO main slash gestures. No realistic metal materials or modeled shadow faces.
+
+Change the visual hierarchy for a TINY hotbar icon:
+- Reduce the fine scratch lines drastically. Keep two strong, coherent tapered slash shapes with only a few rough brush-edge breaks.
+- Separate the two primary slash gestures with generous black negative space. Arrange two sweeping slanted cuts as a clearly readable pair, with only a small overlap if needed. Avoid a crowded white knot at the center.
+- Each main slash should retain a solid luminous core at thumbnail size, with thickness around 8–12% of the icon width at its broadest point, tapering to a pointed end.
+- Make the single dagger below them larger and simpler: an unmistakable pointed blade, short crossguard and grip. It should read as a dagger at 36px, not a tiny third scratch.
+- Enlarge the overall emblem to fill the square with about 5–7% breathing room, preserving the glow from clipping.
+- Prefer three clearly legible groups: slash one, slash two, dagger. Remove little detached scratches and cloudy surface texture. Keep just a restrained hand-painted edge and slight luminous fringe.
+- The bright cores must stay crisp. Glow stays narrow and subtle; do not blur the entire icon.
+
+Avoid: text, numbers, x2, ×2, UI badges, frame, watermark, realistic metal, bevels, glossy plastic 3D shading, dark panels on blades or trails, thick smooth ribbon surfaces, broad bloom, particle clutter, oversaturated yellow or gold, blue, artificial pixel grid.
+Output one standalone square icon only, not a comparison sheet or UI mockup. Prioritize its silhouette at 36px over decorative detail at large size.

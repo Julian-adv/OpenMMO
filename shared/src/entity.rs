@@ -8,14 +8,11 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::character::{CharacterClass, Gender};
+use crate::mount::MountKind;
 use crate::world::Position;
 
-/// A live player's session handle. Minted fresh on every login and dropped on
-/// disconnect — it is never persisted, so it is not a durable identity (the
-/// unique character name is). It is a newtype rather than a bare `String` so
-/// the compiler can keep it apart from the other id-shaped strings it travels
-/// with, above all monster ids: `Monster::is_controllable_by` is an
-/// authorization gate, and before this the two were the same type there.
+/// A player's session handle, minted on login and never persisted.
+/// The newtype keeps player identities distinct from other entity ids.
 ///
 /// `#[serde(transparent)]` puts a bare integer on the wire. Two invariants
 /// follow from that, and this is the one place they are stated:
@@ -76,8 +73,32 @@ pub struct Player {
     /// Equipped main-hand item def id; `None` renders the class default.
     #[serde(default)]
     pub main_hand: Option<String>,
-    #[serde(skip)]
+    /// Equipped back item def id; `None` renders no cape.
+    #[serde(default)]
+    pub back: Option<String>,
+    /// Dye on that cape (`#rrggbb`); `None` uses the def's own colour.
+    #[serde(default)]
+    pub back_color: Option<String>,
+    /// Texture hash on that cape; `None` leaves the cloth plain.
+    #[serde(default)]
+    pub back_texture: Option<String>,
+    /// Carrying the `wet` soaking (doc/DEBUFF.md). Only the flag travels, not
+    /// the remaining time: it exists so nearby clients can draw wet
+    /// footprints, and the owner's own countdown rides `DebuffUpdate`.
+    #[serde(default)]
+    pub wet: bool,
+    /// Active title id (doc/TITLES.md); the clients look the text up.
+    #[serde(default)]
+    pub title: Option<String>,
+    /// Id half of the `(object_type, object_id)` interaction pair: the
+    /// furniture placement the player occupies. Consumers include the inn
+    /// maid's bedside match on respawn.
+    #[serde(default)]
     pub object_id: Option<u32>,
+    #[serde(default)]
+    pub mount: Option<MountKind>,
+    #[serde(default)]
+    pub radiance_on: bool,
     #[serde(skip)]
     pub last_combat_at: u64,
     /// Which program drives this player, from the `ClientInfo` handshake.
@@ -85,11 +106,30 @@ pub struct Player {
     /// broadcasting it would let clients label individual players.
     #[serde(skip)]
     pub client_kind: ClientKind,
+    /// Unix ms until which the player is still loading the world and cannot be
+    /// damaged; `WorldReady` zeroes it early. 0 = ready.
+    #[serde(skip)]
+    pub ready_at: u64,
 }
 
-/// Client program on the other end of a connection. Self-reported, so it may
-/// only ever inform counts — never permissions, or clients would have a
-/// reason to lie (`doc/REMOTE_AGENT_CLIENT.md`).
+/// Backstop for a client that never sends `WorldReady`.
+pub const WORLD_LOADING_GRACE_MS: u64 = 30_000;
+
+impl Player {
+    pub fn is_ready(&self, now_ms: u64) -> bool {
+        now_ms >= self.ready_at
+    }
+
+    pub fn is_damageable(&self, now_ms: u64) -> bool {
+        self.health > 0 && self.is_ready(now_ms)
+    }
+
+    pub fn is_mounted(&self) -> bool {
+        self.mount.is_some()
+    }
+}
+
+/// Self-reported client kind for metrics, never permissions.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ClientKind {
     /// Never sent a handshake (only reachable for players created in tests).
@@ -139,6 +179,14 @@ pub enum MonsterState {
     Dead,
 }
 
+impl MonsterState {
+    /// States in which a monster stands still — the ones that occupy a
+    /// separation cell (doc/MONSTER_SEPARATION.md).
+    pub fn is_stationary(self) -> bool {
+        matches!(self, Self::Idle | Self::Attack | Self::Hit)
+    }
+}
+
 impl fmt::Display for MonsterState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -152,6 +200,26 @@ impl fmt::Display for MonsterState {
     }
 }
 
+/// Who owns a monster's removal, decided at spawn time. New spawn kinds
+/// (events, bosses, quests) add variants here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MonsterLifecycle {
+    /// Ambient spawn: visibility events and a periodic sweep despawn it
+    /// once no player is near.
+    #[default]
+    Ambient,
+    /// A dungeon floor slot owns its removal (floor exit, slot respawn).
+    DungeonSlot,
+}
+
+impl MonsterLifecycle {
+    /// Whether abandonment despawns this monster when nobody is inside its
+    /// AOI, or leaves it for its own lifecycle to remove.
+    pub fn despawns_when_unattended(self) -> bool {
+        matches!(self, Self::Ambient)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Monster {
     pub id: String,
@@ -159,7 +227,6 @@ pub struct Monster {
     pub position: Position,
     pub rotation: f32,
     pub state: MonsterState,
-    pub owner_id: Option<PlayerId>,
     pub health: u32,
     pub max_health: u32,
     /// 0 = overworld, 1..3 housing floors, negative = dungeon depth.
@@ -174,27 +241,14 @@ pub struct Monster {
     #[serde(default)]
     pub level_override: Option<u8>,
     /// Proactive (선공형) monster: attacks players on sight rather than only
-    /// retaliating when hit. Drives behavior-tree selection on the agent-client.
+    /// retaliating when hit. Selects the server behavior tree.
     #[serde(default)]
     pub aggressive: bool,
+    /// Server-only; never on the wire.
+    #[serde(skip)]
+    pub lifecycle: MonsterLifecycle,
     #[serde(skip)]
     pub last_attack_at: u64,
-    /// Server timestamp (ms) the movement budget was last refilled. Paired with
-    /// `move_budget` to rate-limit client-driven moves so an owned monster can't
-    /// be teleported onto a distant victim.
-    #[serde(skip)]
-    pub last_move_at: u64,
-    /// Remaining movement allowance (meters) in the monster's move token bucket,
-    /// refilled at its run speed. A move costing more than this is refused.
-    #[serde(skip)]
-    pub move_budget: f32,
-}
-
-impl Monster {
-    /// Gate for client-driven mutations (move/attack): alive and owned by the requester.
-    pub fn is_controllable_by(&self, player_id: &PlayerId) -> bool {
-        self.state != MonsterState::Dead && self.owner_id.as_ref() == Some(player_id)
-    }
 }
 
 #[cfg(test)]
@@ -218,15 +272,13 @@ mod tests {
             },
             rotation: 0.5,
             state: MonsterState::Walk,
-            owner_id: None,
             health: 10,
             max_health: 12,
             floor_level: 0,
             level_override: None,
             aggressive: true,
+            lifecycle: MonsterLifecycle::Ambient,
             last_attack_at: 0,
-            last_move_at: 0,
-            move_budget: 0.0,
         };
         let bytes = rmp_serde::to_vec(&monster).unwrap();
         let decoded: Monster = rmp_serde::from_slice(&bytes).unwrap();
@@ -257,17 +309,27 @@ mod tests {
             gender: Gender::default(),
             is_official_npc: false,
             torch_on: false,
+            radiance_on: false,
             floor_level: 0,
             object_type: None,
             main_hand: None,
+            back: None,
             object_id: None,
             last_combat_at: 0,
             client_kind: ClientKind::default(),
+            mount: None,
+            ready_at: 0,
+            back_color: None,
+            back_texture: None,
+            wet: false,
+            title: None,
         };
         // rmp_serde writes the struct as a positional array, so `id` is the
         // first element — and 42 fits msgpack's single-byte positive fixint.
+        // The array header is one byte up to 15 fields and three beyond it.
         let bytes = rmp_serde::to_vec(&player).unwrap();
-        assert_eq!(bytes[1], 42, "id must encode as a bare msgpack integer");
+        let id_at = if bytes[0] & 0xf0 == 0x90 { 1 } else { 3 };
+        assert_eq!(bytes[id_at], 42, "id must encode as a bare msgpack integer");
 
         // Standalone too, so bare id fields are covered.
         let id_bytes = rmp_serde::to_vec(&PlayerId::from(7)).unwrap();
@@ -293,16 +355,28 @@ mod tests {
             gender: Gender::default(),
             is_official_npc: false,
             torch_on: true,
+            radiance_on: true,
             floor_level: 0,
             object_type: None,
             main_hand: None,
-            object_id: None,
+            back: None,
+            object_id: Some(52),
             last_combat_at: 0,
             client_kind: ClientKind::default(),
+            mount: None,
+            ready_at: 0,
+            back_color: None,
+            back_texture: None,
+            wet: false,
+            title: None,
         };
         let bytes = rmp_serde::to_vec(&player).unwrap();
         let decoded: Player = rmp_serde::from_slice(&bytes).unwrap();
         assert_eq!(decoded.object_type, None);
         assert!(decoded.torch_on);
+        assert!(decoded.radiance_on);
+        // The occupied bed must survive the wire: a `#[serde(skip)]` here
+        // once silently broke the maid's bedside visits.
+        assert_eq!(decoded.object_id, Some(52));
     }
 }

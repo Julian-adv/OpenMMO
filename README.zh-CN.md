@@ -17,7 +17,7 @@
 - **3D 环境**：基于 Three.js 的斜俯视 3D 游戏世界
 - **点光源火把**：火把投射具有衰减效果和阴影的实时点光源
 
-![带有火把照明的夜间场景](doc/images/gameplay-night.png)
+![带有火把照明的夜间场景](doc/images/gameplay/gameplay-night.png)
 
 - **建筑与住宅**：模块化木框架建筑，支持逐房间遮挡和 L 形屋顶连接
   - 支持 2 层、3 层和 4 层的多层建筑
@@ -25,12 +25,12 @@
   - 可自定义墙壁、屋顶和地板的纹理/材质
   - 可摆放家具（例如床），并可在游戏世界中互动（睡觉/使用）
 
-![带床的玩家自建木框架房屋](doc/images/gameplay-housing.png)
+![带床的玩家自建木框架房屋](doc/images/gameplay/gameplay-housing.png)
 - **昼夜循环**：模拟日照时间变化，包括太阳、天空和环境光照的动态变化
   - 昼夜长度随行星轨道位置变化（季节性的长昼与长夜）
 - **双月系统**：两个卫星拥有各自独立的轨道和月相模拟
 
-![展示太阳、行星和双月的天体轨道面板](doc/images/gameplay-orbits.png)
+![展示太阳、行星和双月的天体轨道面板](doc/images/gameplay/gameplay-orbits.png)
 - **程序化世界**：地形、河流、海岸线和生物群系均完全由程序生成
   - 广阔的 32 公里 × 32 公里世界
   - 程序化生成河流，包含冲刷形成的河道与辫状分流
@@ -40,25 +40,25 @@
   - 带动画效果的海浪（Gerstner）与流动河面波纹
   - 河流入海处形成具有分支分流和河口淡咸水交融效果的三角洲
 
-![程序化生成的世界地图](doc/images/gameplay-worldmap.png)
+![程序化生成的世界地图](doc/images/gameplay/gameplay-worldmap.png)
 
-![自动放置在程序化河流上的木桥](doc/images/gameplay-bridge.png)
+![自动放置在程序化河流上的木桥](doc/images/gameplay/gameplay-bridge.png)
 
-![带有辫状分流和沙洲的入海河流三角洲](doc/images/gameplay-delta.png)
+![带有辫状分流和沙洲的入海河流三角洲](doc/images/gameplay/gameplay-delta.png)
 
 - **内置地图编辑器**：用于塑造游戏世界的内置工具
   - 地形笔刷（道路、平整、高度绘制），支持实时编辑
   - 放置建筑、道具和植被等对象，并提供预览
   - 通过矩形区域绘制城镇（禁止生成）和每个区域的怪物生成区
 
-![启用高度笔刷的游戏内地图编辑器](doc/images/gameplay-map-editor.png)
+![启用高度笔刷的游戏内地图编辑器](doc/images/gameplay/gameplay-map-editor.png)
 
 - **基于属性的战斗系统**：采用 NetHack/D&D 风格，由服务器权威判定战斗结果
   - 六项经典属性（STR、DEX、CON、INT、WIS、CHA），取值范围为 3–18
   - 创建角色时采用 4d6 去掉最低值的掷骰方式，并包含职业修正和 72 点重新分配
   - 所有伤害、命中和结果判定均由服务器处理
 
-![包含属性、纸娃娃式装备和物品栏的角色面板](doc/images/gameplay-character-sheet.png)
+![包含属性、纸娃娃式装备和物品栏的角色面板](doc/images/gameplay/gameplay-character-sheet.png)
 
 - **物品栏与装备**：受负重限制的物品栏，以及完整的纸娃娃式装备系统
   - 十一个装备槽：头部、主手、副手、胸部、耳部、颈部、腰带、裤子、靴子和两个戒指槽
@@ -182,7 +182,7 @@ npm run dev -- --port 10004
 
 ```bash
 cd agent-client
-cargo watch -i "data/prompts/memory/" -x run
+cargo watch -i "data/npcs/**/memory.txt" -i "data/npcs/**/favor.json" -x run
 ```
 
 ### 6. 共享代码变化时自动重新构建 WASM（推荐）
@@ -211,6 +211,8 @@ npm run dev -- --port 10005
 | `openmmo-agent-client` | `agent-client` | `openmmo-agent` |
 
 请在生产主机上运行 `tools/deploy-prod.sh` 进行部署。该脚本会拉取 master、构建两个二进制文件和客户端包、发布静态文件，然后重启两个单元。
+
+没有主机初始化脚本。生产环境的 nginx 是手工维护的 `/etc/nginx/sites-available/openmmo`，需与作为缓存规则参考的 `docker/nginx.conf.template` 保持一致。尤其是 `/models/` 必须以 `Cache-Control: no-cache` 提供 — 对象目录和 GLB 按固定路径获取，基于时间的过期会让过期的 `catalog.json` 无声地隐藏新增家具。
 
 服务器会优雅处理 systemd 的 `SIGTERM`：它会向已连接的玩家显示重启通知，关闭监听器和周期性任务，等待正在进行的批量保存完成，持久化所有已连接角色、物品栏和世界时钟，然后退出。`systemctl restart` 会等待该排空过程完成，再启动新的二进制文件。
 
@@ -251,6 +253,6 @@ sudo systemctl restart openmmo-server
 
 ## 贡献
 
-欢迎贡献！当你首次提交 Pull Request 时，机器人会要求你在 PR 中留言签署[贡献者许可协议](CLA.md)。签署 CLA 后你的贡献才能被合并。
+欢迎贡献！关于如何选择任务、CI 运行的检查项以及 PR 约定，请参阅 [CONTRIBUTING.md](CONTRIBUTING.md)。当你首次提交 Pull Request 时，机器人会要求你在 PR 中留言签署[贡献者许可协议](CLA.md)。签署 CLA 后你的贡献才能被合并。
 
 如需贡献二进制资产（3D 模型、音乐、音效），请参阅 [doc/ASSETS.md](doc/ASSETS.md) — 它们通过 Hugging Face 数据集 PR 提交，而不是 git。

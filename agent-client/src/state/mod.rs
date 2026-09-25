@@ -1,0 +1,548 @@
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+
+/// Turns a merchant spends at the price meeting, the last one closing it.
+pub const MEETING_TURNS: u32 = 5;
+
+impl Drop for SharedState {
+    fn drop(&mut self) {
+        if let Some(reaction) = self.fishing_reaction.take() {
+            reaction.abort();
+        }
+        if let Some(id) = self.self_player_id {
+            if let Ok(mut world) = self.world_cache.write() {
+                world.remove_fence_view(id);
+                world.remove_estate_chest_view(id);
+                world.remove_house_view(id);
+                world.remove_dungeon_view(id);
+            }
+        }
+    }
+}
+
+impl SharedState {
+    pub fn enter_meeting(&mut self, host: bool) {
+        self.meeting_turns = Some(0);
+        self.meeting_host = host;
+    }
+
+    /// Still talking: before the closing turn.
+    pub fn in_meeting_scene(&self) -> bool {
+        self.meeting_turns.is_some_and(|t| t + 1 < MEETING_TURNS)
+    }
+
+    /// Scene played out; the meeting entry stops resolving.
+    pub fn meeting_done(&self) -> bool {
+        self.meeting_turns.is_some_and(|t| t >= MEETING_TURNS)
+    }
+
+    /// Counts an LLM turn at the meeting; true when this turn must close it.
+    pub fn meeting_turn(&mut self) -> bool {
+        let Some(t) = self.meeting_turns.as_mut() else {
+            return false;
+        };
+        *t += 1;
+        *t + 1 == MEETING_TURNS
+    }
+}
+
+use crate::dungeon::Dungeon;
+use onlinerpg_shared::dungeon::{
+    cell_center, dungeon_cache_key, floor_cells, floor_level_for_passability,
+    passability_floor_for_level, path_max_nodes, set_floor_cells, world_to_cell,
+};
+use onlinerpg_shared::furniture::{self, FurniturePlacement};
+use onlinerpg_shared::housing::{HouseData, WallDirection};
+use onlinerpg_shared::inventory::GroundItem;
+use onlinerpg_shared::pathfinding::{self, PassabilityCache, PathResult};
+use onlinerpg_shared::Position;
+use onlinerpg_shared::{
+    Character, ClientMessage, Monster, MonsterState, Player, PlayerId, ServerMessage,
+};
+use onlinerpg_terrain::height::HeightSampler;
+use rand::Rng;
+use std::sync::Arc;
+use tokio::sync::{mpsc, Notify};
+
+pub(crate) use onlinerpg_shared::messages::MUSIC_EMOTE;
+
+pub(crate) const DEFAULT_ATTACK_COOLDOWN: std::time::Duration =
+    std::time::Duration::from_millis(1500);
+pub(crate) const FISHING_RECAST_DELAY: std::time::Duration = std::time::Duration::from_secs(5);
+pub(crate) const FISHING_CAST_ACK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+pub(crate) const FISHING_ERROR_RETRY_DELAY: std::time::Duration =
+    std::time::Duration::from_secs(30);
+
+const MAX_EVENTS: usize = 200;
+/// Separate caps for previous context and newly heard conversation.
+const MAX_CHAT_HISTORY: usize = 30;
+/// How many of our own recent song titles the world state lists, so a bard
+/// can favor tunes it has not played lately.
+const MAX_RECENT_SONGS: usize = 8;
+const MAX_RECENT_RESPAWNS: usize = 8;
+const MAX_RECENT_SEATINGS: usize = 8;
+/// The one furniture type the object catalog marks `interaction: "sit"`.
+/// Emotes ride the same interaction field, hence the exact match.
+pub(crate) const SIT_OBJECT_TYPE: &str = "chair";
+/// Accumulated favor a player can hold with this NPC, in either direction.
+const FAVOR_MIN: i32 = -5;
+const FAVOR_MAX: i32 = 5;
+/// Favor at which a player counts as a regular: resident traders bring up
+/// their wishlist, and keepsake offers, only around such players —
+/// strangers get small talk, not personal business.
+const TRADE_FAVOR_THRESHOLD: i32 = 3;
+
+/// An order the LLM accepted: who gets what, at which chair. A meal and a
+/// drink ordered together merge into one request and ride one trip.
+#[derive(Debug, Clone)]
+pub struct ServeRequest {
+    pub guest_id: PlayerId,
+    pub guest_name: String,
+    pub chair_object_id: u32,
+    pub dishes: Vec<String>,
+}
+
+/// Push onto a capped ring: the oldest entry falls off past `cap`.
+fn push_capped<T>(q: &mut VecDeque<T>, item: T, cap: usize) {
+    q.push_back(item);
+    if q.len() > cap {
+        q.pop_front();
+    }
+}
+/// How far we may drift before our own performance counts as abandoned.
+const MUSIC_STAY_PUT_RADIUS: f32 = 1.5;
+/// Quiet spell between our own songs, so a busker is not one unbroken stream.
+/// The web client's playlist rests 0-60s between tracks; this is the same
+/// idea with a floor under it, since a performance is something people watch.
+const MUSIC_REST_MIN_SECS: u64 = 15;
+const MUSIC_REST_MAX_SECS: u64 = 45;
+/// How close to us an item has to land to be a tip for the music — forgiving,
+/// since a shy listener tosses their coins from the edge of the crowd.
+const TIP_RADIUS: f32 = 6.0;
+/// Cap on tips noticed per song, so a floor strewn with junk — dropped by
+/// someone bored or malicious — can't grow the prompt without bound.
+const MAX_TIPS_PER_SONG: usize = 5;
+/// Distance threshold for "player appeared nearby" agent events (in game units).
+/// How many ground items the world state lists before summarising the rest.
+const MAX_LISTED_GROUND_ITEMS: usize = 10;
+/// Real-time cooldown on the wishlist prompt section after the NPC buys
+/// a wishlist item (see `trade_satiated_until`).
+const WISHLIST_TRADE_COOLDOWN: std::time::Duration = std::time::Duration::from_secs(30 * 60);
+/// How long trade pushes (open_trade/offer_deal) at a player stay blocked
+/// after they wave off our trade window (`TradeDeclined`).
+const TRADE_DECLINE_COOLDOWN: std::time::Duration = std::time::Duration::from_secs(10 * 60);
+/// Cap on remembered party invites, matching the web client's toast queue.
+const MAX_PENDING_PARTY_INVITES: usize = 3;
+/// Same cap for friend requests. The server caps them per requester, not per
+/// target, so without this any number of strangers can grow the prompt.
+const MAX_PENDING_FRIEND_REQUESTS: usize = 3;
+/// How long an NPC-pushed trade window stays answerable, mirroring the web
+/// client's offer toast (`OFFER_TTL_MS` in `TradeOfferToast.svelte`). Both
+/// wave the offer off once it lapses.
+const TRADE_OFFER_TTL: std::time::Duration = std::time::Duration::from_secs(30);
+/// From the shared crate so the server's invite TTL and the agent's pruning
+/// are guaranteed equal.
+use onlinerpg_shared::messages::{PARTY_INVITE_TTL, PARTY_SUMMON_TTL};
+/// NPC sight distance for deciding which nearby human and monster activity
+/// matters. Re-exported from the shared crate so the server's event-delivery
+/// radius and the agent's perception radius are guaranteed equal.
+pub(crate) use onlinerpg_shared::EVENT_DELIVERY_RADIUS;
+
+/// Eight-way compass word for an offset from the player. North is -z, east
+/// is +x; the diagonal band covers ±22.5° around each diagonal.
+fn compass(dx: f32, dz: f32) -> &'static str {
+    let ns = if dz < 0.0 { "north" } else { "south" };
+    let ew = if dx < 0.0 { "west" } else { "east" };
+    let (adx, adz) = (dx.abs(), dz.abs());
+    // tan(67.5°) ≈ 2.414: beyond that the offset reads as a straight
+    // cardinal, inside it as a diagonal.
+    if adz > 2.414 * adx {
+        ns
+    } else if adx > 2.414 * adz {
+        ew
+    } else {
+        match (dz < 0.0, dx < 0.0) {
+            (true, false) => "northeast",
+            (true, true) => "northwest",
+            (false, false) => "southeast",
+            (false, true) => "southwest",
+        }
+    }
+}
+
+mod commands;
+mod dungeon;
+mod events;
+mod inventory;
+mod movement;
+mod music;
+mod perception;
+mod social;
+mod terrain_summary;
+#[cfg(test)]
+pub(crate) mod tests;
+mod world_cache;
+mod world_state;
+
+pub use commands::ActionProgress;
+pub use events::EventUrgency;
+pub use inventory::{Carried, CarriedBagCopies};
+pub use movement::{MoveTarget, MoveTargetError};
+pub use social::{PendingFriendRequest, PendingPartyInvite, PendingPartySummon, PushedTrade};
+pub use world_cache::WorldCache;
+pub(crate) use world_state::{storey_name, FLOOR_ZERO_HINT};
+
+/// Shared state between WebSocket reader and Claude driver tasks.
+/// Our own `/play_music` performance in flight. We have no audio to end it
+/// for us, so the track's length from the registry is the clock, and walking
+/// off the starting spot abandons it — as it does for a human player.
+struct SelfPerformance {
+    ends_at: std::time::Instant,
+    from: Position,
+}
+
+/// Verses going out one `/recite` at a time. `until` starts as a short
+/// grace (the recite lands before the song does) and follows the song's
+/// clock once one is playing.
+pub struct Recital {
+    lines: Vec<String>,
+    /// Verses sent so far: picks the next line, and the first time through
+    /// (`sent < lines.len()`) goes to the chat log.
+    sent: usize,
+    next_at: std::time::Instant,
+    until: std::time::Instant,
+}
+
+pub struct SharedState {
+    pub characters: Vec<Character>,
+    pub in_game: bool,
+    /// Our own player ID (set on JoinSuccess)
+    pub self_player_id: Option<PlayerId>,
+    /// Our own player state (updated from JoinSuccess, GameState, health updates, etc.)
+    pub self_player: Option<Player>,
+    /// Our own gold in the smallest unit (from GoldUpdate). NPC traders'
+    /// wallets are real server-side gold (economy phase 3).
+    pub self_gold: Option<i64>,
+    pub self_mana: Option<(u32, u32)>,
+    /// Earned title ids (doc/TITLES.md); the shown one rides `self_player.title`.
+    pub self_titles: Vec<String>,
+    /// Our own hunger (satiation, band) from `HungerUpdate`; stays None for
+    /// exempt NPCs.
+    pub self_hunger: Option<(u32, onlinerpg_shared::hunger::HungerState)>,
+    /// Our effective move multiplier from `HungerUpdate` (band x debuffs);
+    /// 1.0 until one arrives. The server folds it into its step budget, so
+    /// walks are paced by it too.
+    pub self_move_mult: f32,
+    /// Our own active debuff ids from `DebuffUpdate` (doc/DEBUFF.md).
+    pub self_debuffs: Vec<String>,
+    /// Burning campfires in our AOI, for the grill-your-catch decision.
+    pub campfires: HashMap<u64, onlinerpg_shared::hunger::Campfire>,
+    /// Laid-out stalls in our AOI, so a merchant knows its own is out.
+    pub stalls: HashMap<u64, onlinerpg_shared::stall::Stall>,
+    /// Our own bag (from InventoryState/InventoryUpdated), so a trading
+    /// NPC knows what it carries.
+    pub self_bag: Vec<onlinerpg_shared::inventory::ItemInstance>,
+    /// What we are wearing, so `use` knows whether to equip or take off.
+    pub self_equipped:
+        HashMap<onlinerpg_shared::inventory::EquipSlot, onlinerpg_shared::inventory::ItemInstance>,
+    /// Until when the wishlist prompt section stays suppressed after a
+    /// successful purchase — a satisfied shopper stops shopping for a
+    /// while even if other wishes remain.
+    pub trade_satiated_until: Option<std::time::Instant>,
+    /// True while at least one player has our trade window open (server
+    /// `TradeBusy`). We stay put and keep serving them — the LLM's movement
+    /// actions are suppressed — until the trade ends.
+    pub trade_busy: bool,
+    /// Until when trade pushes at each player stay blocked after they waved
+    /// off our trade window (`TradeDeclined` → `TRADE_DECLINE_COOLDOWN`).
+    trade_declined_until: HashMap<PlayerId, std::time::Instant>,
+    /// True between our own FishingCasted and FishingEnded. Suppresses LLM
+    /// movement (like `trade_busy`) and adds a stay-put prompt line;
+    /// `stop_fishing` stays the deliberate exit.
+    pub self_fishing: bool,
+    /// Pending cast acknowledgement or a pause between attempts.
+    fishing_retry_at: Option<tokio::time::Instant>,
+    /// A recital began this turn; the driver takes it to move tonight's
+    /// tale along.
+    pub recited_this_turn: bool,
+    /// Last stance the fight reflex committed to, so each `FishingFight` beat
+    /// only reacts on change.
+    fishing_stance: Option<onlinerpg_shared::fishing::FishingAction>,
+    /// The in-flight reaction; one answer at a time, so beats arriving while
+    /// it runs are missed exactly as a person misses them.
+    fishing_reaction: Option<tokio::task::JoinHandle<()>>,
+    /// Unanswered party invites, oldest first (capped; a flood can't swap
+    /// the invite out from under an in-flight `party_accept`). Expired
+    /// invites are pruned on mutation and skipped on read, so a dead invite
+    /// stops prompting the model.
+    pub pending_party_invites: Vec<PendingPartyInvite>,
+    /// Unanswered summons, same queue discipline as invites.
+    pub pending_party_summons: Vec<PendingPartySummon>,
+    /// Unanswered friend requests, same queue discipline as invites.
+    pub pending_friend_requests: Vec<PendingFriendRequest>,
+    /// Friend roster from `FriendList`, re-sent by the server on any change.
+    /// Maps the character ids in `FriendsOnline` back to names.
+    pub friends: Vec<onlinerpg_shared::messages::FriendEntry>,
+    /// Tip hats in our AOI, so the agent can drop coins in one.
+    pub tip_hats: HashMap<u64, onlinerpg_shared::tip_hat::TipHat>,
+    /// Served plates in our AOI: ours to eat when seated, or to clear.
+    pub meals: HashMap<u64, onlinerpg_shared::meal::Meal>,
+    /// `serve` actions waiting for the driver's kitchen round trip — a meal
+    /// and a drink ordered together ride one trip.
+    pub pending_serve: Vec<ServeRequest>,
+    /// An NPC-pushed trade window not yet acted on (`ShopState` arrives
+    /// unrequested — the agent never sends `OpenShop`). `decline_trade`
+    /// answers it, buying or selling clears it, and an untouched one lapses
+    /// after `TRADE_OFFER_TTL` so a new offer still reads as new.
+    pub pushed_trade: Option<PushedTrade>,
+    /// Current party roster from `PartyState`; empty = not in a party.
+    pub party_members: Vec<onlinerpg_shared::messages::PartyMember>,
+    pub party_leader: Option<PlayerId>,
+    /// Known nearby players
+    pub nearby_players: HashMap<PlayerId, Player>,
+    /// Per-merchant list of units we sold this session, repurchasable at the
+    /// recorded payout (fed by BuybackUpdated/ShopState).
+    pub merchant_buyback: HashMap<PlayerId, Vec<onlinerpg_shared::messages::BuybackEntry>>,
+    /// Known nearby monsters
+    pub nearby_monsters: HashMap<String, Monster>,
+    /// Items lying on the ground, keyed by instance id (from the join
+    /// snapshot plus GroundItemSpawned/Appeared/Removed).
+    ground_items: HashMap<u64, GroundItem>,
+    /// From `NpcConfig::always_sprint`; the hunger gate still applies —
+    /// see [`Self::sprint_allowed`].
+    pub always_sprint: bool,
+    /// Whether this agent busks, from `NpcConfig::plays_music` — the same
+    /// gate that put the songbook and tip rules into its prompt, so it is
+    /// never instructed about tips it will not receive.
+    pub plays_music: bool,
+    /// Def ids this NPC could offer as keepsakes (`NpcRow::
+    /// offerable_keepsake_ids`) — what `take_up_instrument` keeps out of
+    /// its hands, since an offer only reaches items in the bag.
+    pub keepsake_ids: Vec<String>,
+    events: Vec<ServerMessage>,
+    /// Previously consumed conversation context.
+    chat_history: VecDeque<String>,
+    pending_chat: VecDeque<String>,
+    pub queued_llm_priority: Option<crate::llm_scheduler::RequestPriority>,
+    /// Titles of our own recent performances, oldest first (`MAX_RECENT_SONGS`).
+    recent_songs: VecDeque<String>,
+    /// Accumulated per-player favor, keyed by canonical display name. Fed by
+    /// the LLM's `favor` response field, clamped to FAVOR_MIN..=FAVOR_MAX,
+    /// persisted to the NPC's favor file. Gates keepsake offers structurally.
+    pub favor: BTreeMap<String, i32>,
+    /// Latest position per monster -- deduplicates high-frequency MonsterMoved events
+    latest_monster_moves: HashMap<String, ServerMessage>,
+    /// Latest position per player -- deduplicates high-frequency PlayerMoved events
+    latest_player_moves: HashMap<PlayerId, ServerMessage>,
+    /// Players seen respawning nearby: (name, bed object id). Drained by the
+    /// driver's sick-room visits; capped so NPCs without one never grow it.
+    recent_respawns: VecDeque<(String, u32)>,
+    /// Players seen sitting down on a chair nearby. Drained by the driver's
+    /// table-service visits; capped like respawns. Ids only — unlike a
+    /// respawn, a seating only matters while the player is still nearby,
+    /// so the name is looked up at drain time.
+    recent_seatings: VecDeque<PlayerId>,
+    /// Latest game time -- only the most recent matters
+    latest_time: Option<ServerMessage>,
+    /// Players we've already seen within NEARBY_PLAYER_RADIUS -- prevents duplicate events
+    seen_nearby_players: HashSet<PlayerId>,
+    /// Who is playing what right now, so the end of a tune is an event too.
+    music_performers: HashMap<PlayerId, String>,
+    /// Our own running performance (`check_music_finished` is its clock).
+    self_performance: Option<SelfPerformance>,
+    /// Songs we have started this session; paces the tales.
+    pub self_songs_started: usize,
+    recital: Option<Recital>,
+    /// Until when the square stays quiet after our own song (`MUSIC_REST_*`).
+    self_music_rest_until: Option<std::time::Instant>,
+    /// Tips left while we were still playing, as (instance id, event line).
+    /// Held until the song ends: the thanks belong in the quiet spell, and
+    /// walking over mid-song would abandon the performance.
+    pending_tips: Vec<(u64, String)>,
+    /// Tips noticed since the current song started (`MAX_TIPS_PER_SONG`).
+    tips_noticed: usize,
+    /// An invented song title already woke the driver; the next one waits for
+    /// the ordinary prompt, so a model that keeps guessing cannot spin.
+    bad_song_title_refused: bool,
+    /// POIs currently inside EVENT_DELIVERY_RADIUS (monsters, loot, dungeon
+    /// entrances), keyed by a typed id. Entry fires a [Sighted] event so the
+    /// LLM reacts mid-walk instead of at the next scheduled turn.
+    sighted_pois: HashSet<String>,
+    /// Synthetic agent-side events (e.g. "player appeared nearby")
+    agent_events: Vec<String>,
+    /// Commands an agent action put on the wire, ever. Read only as a
+    /// difference, so background traffic must stay out of it — see
+    /// [`Self::send_background_command`].
+    action_commands_sent: u64,
+    /// Agent events an action's own handler pushed, ever. Read only as a
+    /// difference; ambient pushes (clock ticks, sightings, tips) stay out —
+    /// see [`Self::push_ambient_event`].
+    action_events_pushed: u64,
+    /// Terrain height sampler (shared across NPC connections)
+    pub height_sampler: Arc<HeightSampler>,
+    pub splat_sampler: Arc<crate::splat::SplatSampler>,
+    /// Shared world cache: passability + houses (shared across NPC connections)
+    pub world_cache: Arc<std::sync::RwLock<WorldCache>>,
+    pub world_view: onlinerpg_shared::interest::WorldView,
+    pub pending_terrain: Vec<crate::terrain_snapshots::PendingTerrain>,
+    pub terrain_notify: Arc<tokio::sync::Notify>,
+    /// Current game time: is_night flag from server
+    pub is_night: Option<bool>,
+    pub schedule_period: Option<onlinerpg_shared::schedule::SchedulePeriod>,
+    pub weather: crate::weather::Weather,
+    /// Serin's dark day (the merchants' meeting night), from the game date.
+    pub is_serin_dark_day: Option<bool>,
+    /// LLM turns taken at the price meeting; None when not attending.
+    pub meeting_turns: Option<u32>,
+    /// We chair the meeting and announce the decision at its close.
+    pub meeting_host: bool,
+    /// Latest market picture (doc/PRICING.md), merchants' roleplay context.
+    pub pricing: Option<onlinerpg_shared::pricing::PricingNotice>,
+    /// Current game hour (0-23)
+    pub game_hour: Option<u32>,
+    /// Current game minute (0-59)
+    pub game_minute: Option<u32>,
+    /// Our own wire `floor_level`: 0 = overworld, 1..3 housing floors,
+    /// negative = dungeon depth. Kept in the protocol's encoding rather than
+    /// the passability cache's so it can be put straight into move packets;
+    /// `passability_floor()` converts for path queries.
+    pub self_floor_level: i8,
+    /// Bumped every time the server snaps us back with `PositionCorrected`.
+    /// A path that produced a refused step will produce it again, so movers
+    /// watch this and abandon the path instead of grinding the same wall.
+    pub position_corrections: u32,
+    pending_movement_ack: Option<u64>,
+    pub last_correction_at: Option<std::time::Instant>,
+    pub mount_recovery_id: u32,
+    pub mount_recovery_result: Option<bool>,
+    /// The chest we last asked the server to open, until it answers. Opening a
+    /// clutter prop is recorded before the answer arrives (an already-claimed
+    /// prop is a silent no-op, and without the record we would target it
+    /// forever), so a rejection has to take that record back.
+    pending_chest_open: Option<(String, u8, crate::dungeon::ChestKind)>,
+    /// Dungeons whose treasure chest we have already emptied. The server
+    /// refuses the next open until nightfall, so the world state says so
+    /// rather than sending us back to a chest that has nothing for us.
+    treasure_chests_spent: HashSet<String>,
+    cmd_tx: mpsc::Sender<ClientMessage>,
+    pub attack_cooldown: std::time::Duration,
+    last_player_attack_at: Option<tokio::time::Instant>,
+    /// Notified when an urgent event arrives
+    pub urgent_notify: Arc<Notify>,
+    /// Commands queued while processing server events.
+    pending_commands: Vec<ClientMessage>,
+    /// Spectator panel handle; feeds it chat/combat/system lines
+    watch: Option<Arc<crate::watch::NpcWatch>>,
+    /// Running follow loop: (target name, task handle). Anything that takes
+    /// the body over aborts it; losing the target ends it with an event.
+    pub follow_task: Option<(String, tokio::task::JoinHandle<()>)>,
+    /// Most urgent reason the driver has been woken for since it last looked.
+    wake_urgency: EventUrgency,
+}
+
+impl SharedState {
+    pub fn new(
+        characters: Vec<Character>,
+        cmd_tx: mpsc::Sender<ClientMessage>,
+        height_sampler: Arc<HeightSampler>,
+        splat_sampler: Arc<crate::splat::SplatSampler>,
+        world_cache: Arc<std::sync::RwLock<WorldCache>>,
+        watch: Option<Arc<crate::watch::NpcWatch>>,
+    ) -> Self {
+        Self {
+            characters,
+            in_game: false,
+            self_player_id: None,
+            self_player: None,
+            self_gold: None,
+            self_mana: None,
+            self_titles: Vec::new(),
+            self_hunger: None,
+            self_move_mult: 1.0,
+            self_debuffs: Vec::new(),
+            campfires: HashMap::new(),
+            stalls: HashMap::new(),
+            self_bag: Vec::new(),
+            self_equipped: HashMap::new(),
+            trade_satiated_until: None,
+            trade_busy: false,
+            trade_declined_until: HashMap::new(),
+            self_fishing: false,
+            fishing_retry_at: None,
+            recited_this_turn: false,
+            fishing_stance: None,
+            fishing_reaction: None,
+            pending_party_invites: Vec::new(),
+            pending_party_summons: Vec::new(),
+            pending_friend_requests: Vec::new(),
+            friends: Vec::new(),
+            tip_hats: HashMap::new(),
+            meals: HashMap::new(),
+            pending_serve: Vec::new(),
+            pushed_trade: None,
+            party_members: Vec::new(),
+            party_leader: None,
+            nearby_players: HashMap::new(),
+            merchant_buyback: HashMap::new(),
+            nearby_monsters: HashMap::new(),
+            ground_items: HashMap::new(),
+            always_sprint: true,
+            plays_music: false,
+            keepsake_ids: Vec::new(),
+            events: Vec::new(),
+            chat_history: VecDeque::new(),
+            pending_chat: VecDeque::new(),
+            queued_llm_priority: None,
+            recent_songs: VecDeque::new(),
+            favor: BTreeMap::new(),
+            latest_monster_moves: HashMap::new(),
+            latest_player_moves: HashMap::new(),
+            recent_respawns: VecDeque::new(),
+            recent_seatings: VecDeque::new(),
+            latest_time: None,
+            seen_nearby_players: HashSet::new(),
+            music_performers: HashMap::new(),
+            self_performance: None,
+            self_songs_started: 0,
+            recital: None,
+            self_music_rest_until: None,
+            pending_tips: Vec::new(),
+            tips_noticed: 0,
+            bad_song_title_refused: false,
+            sighted_pois: HashSet::new(),
+            agent_events: Vec::new(),
+            action_commands_sent: 0,
+            action_events_pushed: 0,
+            height_sampler,
+            splat_sampler,
+            world_cache,
+            world_view: Default::default(),
+            pending_terrain: Vec::new(),
+            terrain_notify: Arc::default(),
+            is_night: None,
+            schedule_period: None,
+            weather: crate::weather::Weather::default(),
+            is_serin_dark_day: None,
+            meeting_turns: None,
+            meeting_host: false,
+            pricing: None,
+            game_hour: None,
+            game_minute: None,
+            self_floor_level: 0,
+            position_corrections: 0,
+            pending_movement_ack: None,
+            last_correction_at: None,
+            mount_recovery_id: 0,
+            mount_recovery_result: None,
+            pending_chest_open: None,
+            treasure_chests_spent: HashSet::new(),
+            cmd_tx,
+            attack_cooldown: DEFAULT_ATTACK_COOLDOWN,
+            last_player_attack_at: None,
+            urgent_notify: Arc::new(Notify::new()),
+            pending_commands: Vec::new(),
+            watch,
+            follow_task: None,
+            wake_urgency: EventUrgency::Noise,
+        }
+    }
+}

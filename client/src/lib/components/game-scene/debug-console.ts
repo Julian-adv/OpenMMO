@@ -10,6 +10,7 @@ export interface DebugConsoleDeps {
   loopProfiler: LoopProfiler
   getLoopProfileEnabled: () => boolean
   setLoopProfileEnabled: (enabled: boolean) => void
+  togglePuddles: () => boolean
   renderer: WebGPURenderer
   scene: THREE.Scene
   getGrassGroup: () => THREE.Group | undefined
@@ -29,6 +30,7 @@ const DEBUG_KEYS = [
   '__toggleRefraction',
   '__toggleReflection',
   '__toggleTerrain',
+  '__togglePuddles',
   '__countMeshes',
   '__inspectSplat',
 ] as const
@@ -66,6 +68,10 @@ export function registerDebugConsole(
       g.visible = !g.visible
       console.log(`[Toggle] grass visible=${g.visible}`)
     }
+  }
+
+  w.__togglePuddles = () => {
+    console.log(`[Toggle] puddles visible=${getDeps().togglePuddles()}`)
   }
 
   w.__toggleHousing = () => {

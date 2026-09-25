@@ -1,0 +1,41 @@
+{
+  "schedule": [
+    {
+      "at": "08:30-02:00",
+      "pos": [-1499.9, 0.6, 4728.4],
+      "rotation": -89.0,
+      "floor_level": 0,
+      "label": "fishing at the riverbank and answering nearby visitors",
+      "action": "fishing",
+      "waypoints": []
+    },
+    {
+      "at": "02:00-08:00",
+      "pos": [-1496.4515, 0.6, 4722.6916],
+      "rotation": 270.0,
+      "floor_level": 0,
+      "label": "sleeping in bed 111 near the riverbank until 08:00",
+      "action": "rustic_bed",
+      "object_id": 111,
+      "waypoints": []
+    },
+    {
+      "at": "08:00-08:30",
+      "pos": [-1497.7, 0.6, 4728.4],
+      "rotation": 90.0,
+      "floor_level": 0,
+      "label": "lighting a campfire, grilling a caught fish, and eating breakfast by the river until 08:30",
+      "action": "campfire_meal",
+      "waypoints": []
+    },
+    {
+      "at": "19:00-19:30",
+      "pos": [-1497.7, 0.6, 4728.4],
+      "rotation": 90.0,
+      "floor_level": 0,
+      "label": "lighting a campfire, grilling a caught fish, and eating dinner by the river until 19:30",
+      "action": "campfire_meal",
+      "waypoints": []
+    }
+  ]
+}

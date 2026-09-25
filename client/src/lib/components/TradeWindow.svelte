@@ -1,5 +1,9 @@
 <script lang="ts">
+  import { locale } from '../i18n'
+  import { SvelteMap } from 'svelte/reactivity'
+  import './tradePanel.css'
   import { get } from 'svelte/store'
+  import { assetUrl } from '../utils/assetUrl'
   import {
     shopSession,
     shopDeals,
@@ -7,50 +11,128 @@
     type BuybackEntry,
     type DealKind,
   } from '../stores/tradeStore'
+  import {
+    furnitureShop,
+    furnitureBasket,
+    furnitureBasketTotal,
+    furnitureCart,
+    furniturePurchasePending,
+    furnitureShopError,
+    furnitureProduct,
+    addFurnitureItemToBasket,
+    removeFurnitureItemFromBasket,
+  } from '../stores/furnitureShopStore'
   import { gameStore } from '../stores/gameStore'
   import { remotePlayerManager } from '../managers/remotePlayerManager'
   import { inventoryStore, playerGold } from '../stores/inventoryStore'
-  import type { ItemInstance } from '../stores/inventoryStore'
-  import { getItemDef, type ItemDefinition } from '../data/itemDefs'
+  import {
+    displayName,
+    getItemDef,
+    type ItemDefinition,
+  } from '../data/itemDefs'
   import { getNpcCapabilities } from '../data/traderDefs'
-  import { MAX_TRADE_DISTANCE_METERS } from '../data/tradeConstants'
+  import { isStockedByAnyMerchant } from '../data/merchantDefs'
+  import {
+    DEAL_MAX_HALF_BAND_PCT,
+    MAX_TRADE_DISTANCE_METERS,
+  } from '../data/tradeConstants'
   import GoldAmount from './GoldAmount.svelte'
+  import LandTaxDetails from './LandTaxDetails.svelte'
+  import LandGoldDialog from './LandGoldDialog.svelte'
+  import {
+    landAccount,
+    landAccountError,
+    landTransferPending,
+  } from '../stores/landAccountStore'
   import { itemTooltip } from '../actions/itemTooltip'
+  import { draggablePanel } from '../actions/draggablePanel'
   import { networkManager } from '../network/socket'
+  import QuantityPopup from './QuantityPopup.svelte'
+  import {
+    groupBagForSelection,
+    createGroupAllocator,
+    type SelectableGroup,
+  } from './inventoryGroups'
 
   const session = $derived($shopSession)
+  const isFurnitureShop = $derived(
+    session?.merchantName === furnitureShop.clerkNpcName
+  )
+  const furnitureCheckoutPending = $derived(
+    isFurnitureShop && $furniturePurchasePending
+  )
+  const buyCatalog = $derived(
+    isFurnitureShop
+      ? furnitureShop.products.map((product) => product.itemDefId)
+      : (session?.catalog ?? [])
+  )
+  const isRegistrar = $derived(
+    session !== null &&
+      getNpcCapabilities(session.merchantName).traderId === 'steward'
+  )
+  let transfer = $state<'deposit' | 'withdraw' | null>(null)
+
+  $effect(() => {
+    const merchantId = isRegistrar ? session?.merchantPlayerId : undefined
+    landAccount.set(null)
+    landAccountError.set(null)
+    landTransferPending.set(false)
+    transfer = null
+    if (merchantId === undefined) return
+    networkManager.sendLandAccount(merchantId)
+    const timer = setInterval(() => {
+      if (!get(landTransferPending)) networkManager.sendLandAccount(merchantId)
+    }, 8000)
+    return () => clearInterval(timer)
+  })
+
+  function confirmTransfer(amount: number) {
+    if (!session || !transfer || $landTransferPending) return
+    landTransferPending.set(true)
+    landAccountError.set(null)
+    networkManager.sendLandTransfer(
+      session.merchantPlayerId,
+      amount,
+      transfer === 'deposit'
+    )
+    transfer = null
+  }
 
   interface CartEntry {
     kind: 'buy' | 'sell' | 'buyback'
     itemDefId: string
-    /** Bag instance backing a sell entry; absent for buy entries. */
-    instanceId?: number
-    /** Buyback entry backing a buyback entry; absent otherwise. */
+    groupKey?: string
     entryId?: number
     qty: number
-    /** Per-unit price, fixed when the entry is added (prices cannot change
-     *  within a shop session). */
     unitPrice: number
-    /** Haggled modifier baked into unitPrice. Deal entries are single-use
-     *  (the server consumes the deal on the first traded unit), so they
-     *  stay at qty 1. */
     dealPct?: number
   }
 
+  interface PendingAdd {
+    kind: 'buy' | 'sell'
+    itemDefId: string
+    groupKey?: string
+    def: ItemDefinition
+    max: number
+    defaultQty?: number
+    unitPrice: number
+  }
+
   let cart = $state<CartEntry[]>([])
+  const cartEntries: CartEntry[] = $derived(
+    isFurnitureShop ? [...$furnitureCart, ...cart] : cart
+  )
+  let pendingAdd = $state<PendingAdd | null>(null)
   let portraitFailed = $state(false)
   let now = $state(Date.now())
 
-  // Reset the cart only when the merchant actually changes (a different shop
-  // opens, or the window closes) — NOT on every ShopState refresh for the same
-  // merchant. An NPC can push a refresh via its own dialogue/actions/deals, and
-  // that must not wipe the items the player has staged to sell.
   let lastMerchantId: number | null = null
   $effect(() => {
     const id = session?.merchantPlayerId ?? null
     if (id !== lastMerchantId) {
       lastMerchantId = id
       cart = []
+      pendingAdd = null
       portraitFailed = false
     }
   })
@@ -58,16 +140,11 @@
   const portraitSrc = $derived.by(() => {
     if (!session) return null
     const traderId = getNpcCapabilities(session.merchantName).traderId
-    return traderId ? `/portraits/${traderId}.png` : null
+    return traderId ? assetUrl(`/portraits/${traderId}.webp`) : null
   })
 
-  /** Resident traders (wishlist, real stock) vs merchants (catalog). */
   const isResident = $derived(session !== null && session.wishlist.length > 0)
 
-  // The server rejects trades beyond MAX_TRADE_DISTANCE_METERS; close the
-  // window at the same range so the player isn't left with a shop that only
-  // errors. A trading NPC is held in place server-side (TradeBusy) while its
-  // window is open, so this only triggers when the *player* walks away.
   $effect(() => {
     if (!session) return
     const merchantId = session.merchantPlayerId
@@ -88,67 +165,107 @@
     return () => clearInterval(timer)
   })
 
-  // Residents only buy their wishlist; merchants buy anything priced.
-  const sellEntries = $derived.by(() => {
-    if (!session) return []
+  const sellEntries = $derived.by((): SelectableGroup[] => {
+    if (!session || isRegistrar) return []
     const wishlist = session.wishlist
-    return $inventoryStore.bag
-      .map((item) => ({ item, def: getItemDef(item.item_def_id) }))
-      .filter(
-        (entry): entry is { item: ItemInstance; def: ItemDefinition } =>
-          (entry.def?.basePrice ?? 0) > 0 &&
-          (wishlist.length === 0 || wishlist.includes(entry.item.item_def_id))
+    return groupBagForSelection(
+      $inventoryStore.bag.filter((item) => !item.locked)
+    ).filter((group) => {
+      const basePrice = getItemDef(group.itemDefId)?.basePrice ?? 0
+      return (
+        basePrice > 0 &&
+        (wishlist.length === 0 || wishlist.includes(group.itemDefId))
       )
+    })
   })
 
-  /** Live haggled modifier for an item, 0 when none (or expired). */
+  $effect(() => {
+    const remaining = new SvelteMap(
+      sellEntries.map((group) => [group.key, group.totalQty])
+    )
+    const next = cart.flatMap((entry) => {
+      if (entry.kind !== 'sell') return [entry]
+      const key = entry.groupKey ?? ''
+      const available = remaining.get(key) ?? 0
+      const qty = Math.min(entry.qty, available)
+      remaining.set(key, available - qty)
+      return qty > 0 ? [qty === entry.qty ? entry : { ...entry, qty }] : []
+    })
+    if (
+      next.length !== cart.length ||
+      next.some((entry, index) => entry !== cart[index])
+    )
+      cart = next
+    if (
+      pendingAdd?.kind === 'sell' &&
+      !remaining.has(pendingAdd.groupKey ?? '')
+    )
+      pendingAdd = null
+  })
+
   function dealPct(itemDefId: string, kind: DealKind): number {
-    if (!session) return 0
+    if (!session || (isFurnitureShop && kind === 'buy')) return 0
     const deal = $shopDeals[dealKey(session.merchantPlayerId, itemDefId, kind)]
     if (!deal || deal.expiresAt <= now) return 0
     return deal.modifierPct
   }
 
-  /** True when a modifier works against the player (red badge):
-   *  paying more on a buy, or being paid less on a sell. */
   function isMarkup(kind: DealKind, pct: number): boolean {
     return kind === 'buy' ? pct > 0 : pct < 0
   }
 
-  // Mirrors the server's integer price math (deals.rs).
+  // Mirrors the server's integer price math (deals.rs / trade_base_price).
+  function indexedBase(def: ItemDefinition): number {
+    const base = def.basePrice ?? 0
+    if (!session || !def.consumable || !isStockedByAnyMerchant(def.id))
+      return base
+    return Math.max(1, Math.floor((base * session.priceIndexPercent) / 100))
+  }
+
   function buyPrice(def: ItemDefinition, pct: number): number {
-    return Math.max(1, Math.floor(((def.basePrice ?? 0) * (100 + pct)) / 100))
+    return Math.max(1, Math.floor((indexedBase(def) * (100 + pct)) / 100))
   }
 
   function sellPrice(def: ItemDefinition, pct: number): number {
     if (!session) return 0
-    return Math.max(
-      1,
-      Math.floor(
-        ((def.basePrice ?? 0) * session.sellRatePercent * (100 + pct)) / 10000
-      )
+    const payout = Math.floor(
+      ((def.basePrice ?? 0) * session.sellRatePercent * (100 + pct)) / 10000
     )
+    // Merchants never pay above the cheapest possible buy (server sell_cap).
+    const cap = isResident ? Infinity : buyPrice(def, -DEAL_MAX_HALF_BAND_PCT)
+    return Math.max(1, Math.min(payout, cap))
   }
 
   const buyTotal = $derived(
-    cart.reduce(
+    cartEntries.reduce(
       (sum, e) => (e.kind !== 'sell' ? sum + e.unitPrice * e.qty : sum),
       0
     )
   )
   const sellTotal = $derived(
-    cart.reduce(
+    cartEntries.reduce(
       (sum, e) => (e.kind === 'sell' ? sum + e.unitPrice * e.qty : sum),
       0
     )
   )
-  /** Net gold the player must pay; negative means the player earns gold.
-   *  Residents pay sells out of a finite hidden wallet — the server rejects
-   *  the trade ("They cannot afford that right now") when it runs dry. */
   const netCost = $derived(buyTotal - sellTotal)
-  const canConfirm = $derived(cart.length > 0 && netCost <= $playerGold)
+  const canConfirm = $derived(
+    cartEntries.length > 0 &&
+      netCost <= $playerGold &&
+      !furnitureCheckoutPending
+  )
 
-  function addBuy(itemDefId: string, def: ItemDefinition) {
+  const DEFAULT_BUY_QTY = 10
+
+  function affordableQty(unitPrice: number): number {
+    return Math.max(1, Math.floor($playerGold / Math.max(1, unitPrice)))
+  }
+
+  function addBuy(itemDefId: string, def: ItemDefinition, stockMax?: number) {
+    if (isFurnitureShop) {
+      addFurnitureItemToBasket(itemDefId)
+      return
+    }
     // The first added unit carries any haggled deal (single-use server-side).
     const pct = dealPct(itemDefId, 'buy')
     const hasDealEntry = cart.some(
@@ -164,52 +281,98 @@
       })
       return
     }
+    const unitPrice = indexedBase(def)
+    const max =
+      stockMax !== undefined
+        ? Math.max(1, stockMax - reservedBuyQty(itemDefId))
+        : affordableQty(unitPrice)
+    if (!def.stackable || max <= 1) {
+      addBuyUnits(itemDefId, unitPrice, 1)
+      return
+    }
+    pendingAdd = {
+      kind: 'buy',
+      itemDefId,
+      def,
+      max,
+      defaultQty: Math.min(max, DEFAULT_BUY_QTY, affordableQty(unitPrice)),
+      unitPrice,
+    }
+  }
+
+  function addBuyUnits(itemDefId: string, unitPrice: number, qty: number) {
     const existing = cart.find(
       (e) => e.kind === 'buy' && e.itemDefId === itemDefId && !e.dealPct
     )
     if (existing) {
-      existing.qty += 1
+      existing.qty += qty
     } else {
-      cart.push({
-        kind: 'buy',
-        itemDefId,
-        qty: 1,
-        unitPrice: def.basePrice ?? 0,
-      })
+      cart.push({ kind: 'buy', itemDefId, qty, unitPrice })
     }
   }
 
-  function addSell(item: ItemInstance, def: ItemDefinition) {
-    const pct = dealPct(item.item_def_id, 'sell')
+  function addSell(group: SelectableGroup, def: ItemDefinition) {
+    const pct = dealPct(group.itemDefId, 'sell')
     const hasDealEntry = cart.some(
-      (e) => e.kind === 'sell' && e.itemDefId === item.item_def_id && e.dealPct
+      (e) => e.kind === 'sell' && e.itemDefId === group.itemDefId && e.dealPct
     )
     if (pct !== 0 && !hasDealEntry) {
       cart.push({
         kind: 'sell',
-        itemDefId: item.item_def_id,
-        instanceId: item.instance_id,
+        itemDefId: group.itemDefId,
+        groupKey: group.key,
         qty: 1,
         unitPrice: sellPrice(def, pct),
         dealPct: pct,
       })
       return
     }
+    const max = group.totalQty - reservedQty(group.key)
+    if (max <= 0) return
+    const unitPrice = sellPrice(def, 0)
+    if (max <= 1) {
+      addSellUnits(group.itemDefId, group.key, unitPrice, 1)
+      return
+    }
+    pendingAdd = {
+      kind: 'sell',
+      itemDefId: group.itemDefId,
+      groupKey: group.key,
+      def,
+      max,
+      unitPrice,
+    }
+  }
+
+  function addSellUnits(
+    itemDefId: string,
+    groupKey: string,
+    unitPrice: number,
+    qty: number
+  ) {
     const existing = cart.find(
-      (e) =>
-        e.kind === 'sell' && e.instanceId === item.instance_id && !e.dealPct
+      (e) => e.kind === 'sell' && e.groupKey === groupKey && !e.dealPct
     )
     if (existing) {
-      if (reservedQty(item.instance_id) < item.quantity) existing.qty += 1
-    } else if (reservedQty(item.instance_id) < item.quantity) {
-      cart.push({
-        kind: 'sell',
-        itemDefId: item.item_def_id,
-        instanceId: item.instance_id,
-        qty: 1,
-        unitPrice: sellPrice(def, 0),
-      })
+      existing.qty += qty
+    } else {
+      cart.push({ kind: 'sell', itemDefId, groupKey, qty, unitPrice })
     }
+  }
+
+  function confirmPendingAdd(qty: number) {
+    if (!pendingAdd) return
+    const { kind, itemDefId, groupKey, unitPrice } = pendingAdd
+    if (kind === 'buy') {
+      addBuyUnits(itemDefId, unitPrice, qty)
+    } else if (groupKey !== undefined) {
+      addSellUnits(itemDefId, groupKey, unitPrice, qty)
+    }
+    pendingAdd = null
+  }
+
+  function cancelPendingAdd() {
+    pendingAdd = null
   }
 
   function addBuyback(entry: BuybackEntry) {
@@ -223,65 +386,94 @@
     })
   }
 
-  /** Each buyback entry is one unit; it can only be staged once. */
   function inCartBuyback(entryId: number): boolean {
     return cart.some((e) => e.kind === 'buyback' && e.entryId === entryId)
   }
 
   function removeOne(entry: CartEntry) {
+    if (isFurnitureShop && entry.kind === 'buy') {
+      removeFurnitureItemFromBasket(entry.itemDefId)
+      return
+    }
     entry.qty -= 1
     if (entry.qty <= 0) {
       cart = cart.filter((e) => e !== entry)
     }
   }
 
-  /** Units of this bag item already reserved in the cart. */
-  function reservedQty(instanceId: number): number {
+  function reservedQty(groupKey: string): number {
     return cart
-      .filter((e) => e.kind === 'sell' && e.instanceId === instanceId)
+      .filter((e) => e.kind === 'sell' && e.groupKey === groupKey)
       .reduce((sum, e) => sum + e.qty, 0)
   }
 
-  /** Buy units of this def already in the cart (caps resident stock buys). */
   function reservedBuyQty(itemDefId: string): number {
     return cart
       .filter((e) => e.kind === 'buy' && e.itemDefId === itemDefId)
       .reduce((sum, e) => sum + e.qty, 0)
   }
 
-  function onConfirm() {
-    if (!session || !canConfirm) return
-    // Deal entries go first so the server applies the single-use modifier
-    // to the unit the cart priced with it.
-    const ordered = [...cart].sort(
+  function dealsFirst(entries: CartEntry[]): CartEntry[] {
+    return [...entries].sort(
       (a, b) => Number(Boolean(b.dealPct)) - Number(Boolean(a.dealPct))
     )
-    // Sells go first so their proceeds can fund the buys.
-    for (const entry of ordered) {
-      if (entry.kind !== 'sell' || entry.instanceId === undefined) continue
-      const owned = $inventoryStore.bag.find(
-        (i) => i.instance_id === entry.instanceId
-      )
-      const qty = Math.min(entry.qty, owned?.quantity ?? 0)
-      for (let i = 0; i < qty; i++) {
-        networkManager.sendSellItem(session.merchantPlayerId, entry.instanceId)
-      }
+  }
+
+  function onConfirm() {
+    if (!session || !canConfirm) return
+    pendingAdd = null
+    const allocator = createGroupAllocator()
+    const sellItems = dealsFirst(cart.filter((e) => e.kind === 'sell'))
+      .filter((e) => e.groupKey !== undefined)
+      .flatMap((e) => {
+        const group = sellEntries.find((g) => g.key === e.groupKey)
+        if (!group) return []
+        return allocator
+          .take(group, e.qty)
+          .map((l) => ({ instance_id: l.instanceId, qty: l.qty }))
+      })
+    const buyItems = dealsFirst(cart.filter((e) => e.kind === 'buy')).map(
+      (e) => ({ item_def_id: e.itemDefId, qty: e.qty })
+    )
+    const buybackIds = cart
+      .filter((e) => e.kind === 'buyback' && e.entryId !== undefined)
+      .map((e) => e.entryId!)
+
+    // Sell first so the proceeds can fund purchases.
+    if (sellItems.length > 0) {
+      networkManager.sendSellItems(session.merchantPlayerId, sellItems)
     }
-    for (const entry of ordered) {
-      if (entry.kind === 'buy') {
-        for (let i = 0; i < entry.qty; i++) {
-          networkManager.sendBuyItem(session.merchantPlayerId, entry.itemDefId)
-        }
-      } else if (entry.kind === 'buyback' && entry.entryId !== undefined) {
-        networkManager.sendBuybackItem(session.merchantPlayerId, entry.entryId)
-      }
+    if (isFurnitureShop && $furnitureBasket.length > 0) {
+      furniturePurchasePending.set(true)
+      furnitureShopError.set(null)
+      networkManager.sendCheckoutFurniture(
+        $furnitureBasket.map((line) => ({
+          display_id: line.displayId,
+          quantity: line.quantity,
+        })),
+        $playerGold + sellTotal,
+        $furnitureBasketTotal
+      )
+    }
+    if (buyItems.length > 0) {
+      networkManager.sendBuyItems(session.merchantPlayerId, buyItems)
+    }
+    if (buybackIds.length > 0) {
+      networkManager.sendBuybackItems(session.merchantPlayerId, buybackIds)
     }
     cart = []
   }
 </script>
 
 {#if session}
-  <div class="trade-window" role="dialog" aria-label="Trade" data-panel="trade">
+  <div
+    class="trade-window"
+    class:estate-window={isRegistrar}
+    role="dialog"
+    aria-label={isRegistrar ? 'Real estate' : 'Trade'}
+    data-panel="trade"
+    use:draggablePanel={'trade'}
+  >
     {#if portraitSrc && !portraitFailed}
       <img
         class="merchant-portrait"
@@ -291,11 +483,13 @@
         onerror={() => (portraitFailed = true)}
       />
     {/if}
-    <div class="panel-header">
+    <div class="panel-header" data-drag-handle>
       <span class="panel-title">
-        {isResident
-          ? `Trade with ${session.merchantName}`
-          : `${session.merchantName}'s Shop`}
+        {isRegistrar
+          ? `${session.merchantName} · Real Estate`
+          : isResident
+            ? `Trade with ${session.merchantName}`
+            : `${session.merchantName}'s Shop`}
       </span>
       <button class="close-btn" onclick={() => shopSession.set(null)}
         >&times;</button
@@ -304,14 +498,17 @@
 
     <div class="trade-columns">
       <div class="trade-column">
-        <div class="column-title">Buy</div>
+        <div class="column-title">
+          {isRegistrar ? 'Estate supplies' : 'Buy'}
+        </div>
         <div class="item-list">
-          {#each session.catalog as itemDefId (itemDefId)}
+          {#each buyCatalog as itemDefId (itemDefId)}
             {@const def = getItemDef(itemDefId)}
             {#if def}
               {@const pct = dealPct(itemDefId, 'buy')}
               <button
                 class="item-row"
+                disabled={furnitureCheckoutPending}
                 onclick={() => addBuy(itemDefId, def)}
                 use:itemTooltip={{ def, side: 'left' }}
               >
@@ -321,14 +518,18 @@
                   alt=""
                   draggable="false"
                 />
-                <span class="item-name">{def.name}</span>
+                <span class="item-name">{displayName(def, 0, $locale)}</span>
                 {#if pct !== 0}
                   <span class="deal-badge" class:markup={isMarkup('buy', pct)}
                     >{pct > 0 ? '+' : ''}{pct}%</span
                   >
                 {/if}
                 <span class="item-price"
-                  ><GoldAmount copper={buyPrice(def, pct)} /></span
+                  ><GoldAmount
+                    copper={isFurnitureShop
+                      ? (furnitureProduct(itemDefId)?.price ?? 0)
+                      : buyPrice(def, pct)}
+                  /></span
                 >
               </button>
             {/if}
@@ -340,7 +541,7 @@
               <button
                 class="item-row"
                 disabled={reservedBuyQty(entry.itemDefId) >= entry.quantity}
-                onclick={() => addBuy(entry.itemDefId, def)}
+                onclick={() => addBuy(entry.itemDefId, def, entry.quantity)}
                 use:itemTooltip={{ def, side: 'left' }}
               >
                 <img
@@ -350,7 +551,9 @@
                   draggable="false"
                 />
                 <span class="item-name">
-                  {def.name}{entry.quantity > 1 ? ` ×${entry.quantity}` : ''}
+                  {displayName(def, 0, $locale)}{entry.quantity > 1
+                    ? ` ×${entry.quantity}`
+                    : ''}
                 </span>
                 {#if pct !== 0}
                   <span class="deal-badge" class:markup={isMarkup('buy', pct)}
@@ -367,14 +570,15 @@
               <div class="empty-note">Nothing for sale</div>
             {/if}
           {/each}
-          {#if session.buyback.length > 0}
+          {#if !isRegistrar && session.buyback.length > 0}
             <div class="column-title buyback-title">Buy back</div>
             {#each session.buyback as entry (entry.entryId)}
               {@const def = getItemDef(entry.itemDefId)}
               {#if def}
                 <button
                   class="item-row"
-                  disabled={inCartBuyback(entry.entryId)}
+                  disabled={inCartBuyback(entry.entryId) ||
+                    furnitureCheckoutPending}
                   onclick={() => addBuyback(entry)}
                   use:itemTooltip={{ def, side: 'left' }}
                 >
@@ -385,7 +589,11 @@
                     draggable="false"
                   />
                   <span class="item-name">
-                    {entry.enchant > 0 ? `+${entry.enchant} ` : ''}{def.name}
+                    {displayName(
+                      def,
+                      entry.enchant > 0 ? entry.enchant : 0,
+                      $locale
+                    )}
                   </span>
                   <span class="item-price"
                     ><GoldAmount copper={entry.price} /></span
@@ -395,20 +603,38 @@
             {/each}
           {/if}
         </div>
+        {#if isRegistrar}<LandTaxDetails
+            onwithdraw={() => (transfer = 'withdraw')}
+          />{/if}
       </div>
 
       <div class="trade-column cart-column">
-        <div class="cart-line cart-current">
-          <span class="cart-label">Current</span>
-          <GoldAmount copper={$playerGold} />
-        </div>
-        <div class="column-title">Cart</div>
+        {#if isRegistrar}
+          <button
+            class="wallet-button"
+            disabled={!$landAccount?.plots ||
+              $playerGold <= 0 ||
+              $landTransferPending}
+            onclick={() => (transfer = 'deposit')}
+            title="Deposit gold into your tax account"
+          >
+            <span>Your gold</span><GoldAmount copper={$playerGold} />
+          </button>
+          <p class="deposit-hint">Click your gold to deposit.</p>
+        {:else}
+          <div class="cart-line cart-current">
+            <span class="cart-label">Current</span>
+            <GoldAmount copper={$playerGold} />
+          </div>
+        {/if}
+        <div class="column-title">{isRegistrar ? 'Purchase' : 'Cart'}</div>
         <div class="item-list">
-          {#each cart as entry (entry.kind + ':' + (entry.instanceId ?? entry.entryId ?? entry.itemDefId) + (entry.dealPct ? ':deal' : ''))}
+          {#each cartEntries as entry (entry.kind + ':' + (entry.groupKey ?? entry.entryId ?? entry.itemDefId) + (entry.dealPct ? ':deal' : ''))}
             {@const def = getItemDef(entry.itemDefId)}
             {#if def}
               <button
                 class="item-row"
+                disabled={furnitureCheckoutPending}
                 onclick={() => removeOne(entry)}
                 use:itemTooltip={{ def, side: 'left' }}
               >
@@ -422,7 +648,9 @@
                   draggable="false"
                 />
                 <span class="item-name">
-                  {def.name}{entry.qty > 1 ? ` ×${entry.qty}` : ''}
+                  {displayName(def, 0, $locale)}{entry.qty > 1
+                    ? ` ×${entry.qty}`
+                    : ''}
                 </span>
                 {#if entry.dealPct}
                   <span
@@ -447,6 +675,9 @@
           {/each}
         </div>
         <div class="cart-footer">
+          {#if isFurnitureShop && $furnitureShopError}
+            <p class="checkout-error" role="status">{$furnitureShopError}</p>
+          {/if}
           <div class="cart-line">
             <span class="cart-label">Total</span>
             <span class="cart-total" class:earn={netCost < 0}>
@@ -464,70 +695,144 @@
             disabled={!canConfirm}
             onclick={onConfirm}
           >
-            Confirm
+            {furnitureCheckoutPending ? 'Paying…' : 'Confirm'}
           </button>
         </div>
       </div>
 
-      <div class="trade-column">
-        <div class="column-title">Sell ({session.sellRatePercent}%)</div>
-        <div class="item-list">
-          {#each sellEntries as { item, def } (item.instance_id)}
-            {@const reserved = reservedQty(item.instance_id)}
-            {@const pct = dealPct(item.item_def_id, 'sell')}
-            <button
-              class="item-row"
-              disabled={reserved >= item.quantity}
-              onclick={() => addSell(item, def)}
-              use:itemTooltip={{ def, item, side: 'right' }}
-            >
-              <img
-                class="item-icon"
-                src="/items/{def.icon}"
-                alt=""
-                draggable="false"
-              />
-              <span class="item-name">
-                {def.name}{item.quantity > 1 ? ` ×${item.quantity}` : ''}
-              </span>
-              {#if pct !== 0}
-                <span class="deal-badge" class:markup={isMarkup('sell', pct)}
-                  >{pct > 0 ? '+' : ''}{pct}%</span
+      {#if !isRegistrar}
+        <div class="trade-column">
+          <div class="column-title">
+            Sell ({session.sellRatePercent}%)
+          </div>
+          <div class="item-list">
+            {#each sellEntries as group (group.key)}
+              {@const def = getItemDef(group.itemDefId)}
+              {#if def}
+                {@const reserved = reservedQty(group.key)}
+                {@const pct = dealPct(group.itemDefId, 'sell')}
+                <button
+                  class="item-row"
+                  disabled={reserved >= group.totalQty ||
+                    furnitureCheckoutPending}
+                  onclick={() => addSell(group, def)}
+                  use:itemTooltip={{
+                    def,
+                    item: {
+                      instance_id: group.instances[0].instanceId,
+                      item_def_id: group.itemDefId,
+                      quantity: group.totalQty,
+                      enchant: group.enchant,
+                    },
+                    side: 'right',
+                  }}
                 >
+                  <img
+                    class="item-icon"
+                    src="/items/{def.icon}"
+                    alt=""
+                    draggable="false"
+                  />
+                  <span class="item-name">
+                    {displayName(def, 0, $locale)}{group.totalQty > 1
+                      ? ` ×${group.totalQty}`
+                      : ''}
+                  </span>
+                  {#if pct !== 0}
+                    <span
+                      class="deal-badge"
+                      class:markup={isMarkup('sell', pct)}
+                      >{pct > 0 ? '+' : ''}{pct}%</span
+                    >
+                  {/if}
+                  <span class="item-price"
+                    ><GoldAmount copper={sellPrice(def, pct)} /></span
+                  >
+                </button>
               {/if}
-              <span class="item-price"
-                ><GoldAmount copper={sellPrice(def, pct)} /></span
-              >
-            </button>
-          {:else}
-            <div class="empty-note">Nothing to sell</div>
-          {/each}
+            {:else}
+              <div class="empty-note">Nothing to sell</div>
+            {/each}
+          </div>
         </div>
-      </div>
+      {/if}
     </div>
   </div>
 {/if}
 
+{#if session && isRegistrar && transfer}
+  <LandGoldDialog
+    deposit={transfer === 'deposit'}
+    max={transfer === 'deposit' ? $playerGold : ($landAccount?.treasury ?? 0)}
+    onconfirm={confirmTransfer}
+    oncancel={() => (transfer = null)}
+  />
+{/if}
+
+<QuantityPopup
+  visible={pendingAdd !== null}
+  itemName={pendingAdd ? displayName(pendingAdd.def, 0, $locale) : ''}
+  icon={pendingAdd?.def.icon ?? ''}
+  max={pendingAdd?.max ?? 1}
+  defaultQty={pendingAdd?.defaultQty}
+  stepSize={pendingAdd?.kind === 'buy' ? 10 : 1}
+  onConfirm={confirmPendingAdd}
+  onCancel={cancelPendingAdd}
+/>
+
 <style>
-  .trade-window {
-    position: fixed;
-    left: 50%;
-    top: 45%;
-    transform: translate(-50%, -50%);
-    z-index: 45;
+  .checkout-error {
+    color: #f0b8b8;
+  }
+  .estate-window .trade-column {
+    width: 260px;
+  }
+  .estate-window .trade-columns {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .estate-window .item-list {
+    flex-shrink: 0;
+  }
+  .estate-window .cart-column {
+    width: 240px;
+  }
+  .wallet-button {
     display: flex;
-    flex-direction: column;
-    backdrop-filter: blur(4px);
-    padding: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 10px;
-    background: rgba(6, 10, 14, 0.88);
-    color: #e6edf3;
-    font-family: 'Courier New', monospace;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    padding: 9px;
+    font: inherit;
+    color: #e7d7ae;
+    border: 1px solid #cbb77855;
+    border-radius: 4px;
+    background: #cbb77812;
+    cursor: pointer;
+  }
+  .wallet-button:hover:not(:disabled) {
+    background: #cbb77825;
+  }
+  .wallet-button:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+  .deposit-hint {
+    color: #8999a7;
     font-size: 12px;
-    pointer-events: auto;
-    max-width: calc(100vw - 32px);
-    max-height: 70vh;
+    margin: 6px 0 12px;
+  }
+  @media (max-width: 600px) {
+    .estate-window .trade-columns {
+      flex-direction: column;
+    }
+    .estate-window .trade-column,
+    .estate-window .cart-column {
+      width: min(280px, 75vw);
+      padding: 0;
+      border: 0;
+    }
   }
 
   .merchant-portrait {
@@ -540,49 +845,6 @@
     filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
   }
 
-  .panel-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-    margin-bottom: 8px;
-  }
-
-  .panel-title {
-    font-size: 14px;
-    font-weight: 700;
-    color: #f0c040;
-  }
-
-  .close-btn {
-    background: none;
-    border: none;
-    color: #9fb2c3;
-    font-size: 18px;
-    cursor: pointer;
-    padding: 0 2px;
-    line-height: 1;
-  }
-
-  .close-btn:hover {
-    color: #fff;
-  }
-
-  .trade-columns {
-    display: flex;
-    gap: 16px;
-    overflow: hidden;
-  }
-
-  .trade-column {
-    display: flex;
-    flex-direction: column;
-    width: 230px;
-    min-width: 0;
-  }
-
   .cart-column {
     width: 210px;
     padding: 0 10px;
@@ -590,74 +852,10 @@
     border-right: 1px solid rgba(255, 255, 255, 0.12);
   }
 
-  .column-title {
-    font-size: 12px;
-    font-weight: 700;
-    color: #9fb2c3;
-    padding-bottom: 4px;
-  }
-
   .buyback-title {
     margin-top: 8px;
     padding-top: 6px;
     border-top: 1px solid rgba(255, 255, 255, 0.15);
-  }
-
-  .item-list {
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    max-height: 50vh;
-    scrollbar-width: none;
-  }
-
-  .item-list::-webkit-scrollbar {
-    display: none;
-  }
-
-  .item-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 3px 4px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 4px;
-    background: none;
-    color: inherit;
-    font-family: inherit;
-    font-size: inherit;
-    text-align: left;
-    cursor: pointer;
-    flex-shrink: 0;
-    transition:
-      background 150ms ease,
-      border-color 150ms ease;
-  }
-
-  .item-row:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.3);
-  }
-
-  .item-row:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
-
-  .item-icon {
-    width: 28px;
-    height: 28px;
-    image-rendering: pixelated;
-    flex-shrink: 0;
-  }
-
-  .item-name {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .item-price {
@@ -741,53 +939,9 @@
     color: #8ae29a;
   }
 
-  .confirm-btn {
-    margin-top: 4px;
-    background: rgba(60, 90, 60, 0.85);
-    color: #d6f0d6;
-    border: 1px solid rgba(140, 220, 140, 0.35);
-    border-radius: 4px;
-    padding: 4px 14px;
-    font-family: inherit;
-    font-size: 12px;
-    font-weight: 700;
-    cursor: pointer;
-    transition:
-      background 150ms ease,
-      color 150ms ease;
-  }
-
-  .confirm-btn:hover:not(:disabled) {
-    background: rgba(80, 120, 80, 0.95);
-    color: #fff;
-  }
-
-  .confirm-btn:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
-
-  .empty-note {
-    color: #6b7d8d;
-    padding: 6px 4px;
-  }
-
   @media (max-width: 600px), (pointer: coarse) {
-    .trade-window {
-      top: 40%;
-      max-height: 60vh;
-    }
-
     .merchant-portrait {
       display: none;
-    }
-
-    .trade-columns {
-      gap: 10px;
-    }
-
-    .trade-column {
-      width: 170px;
     }
 
     .cart-column {
@@ -795,18 +949,8 @@
       padding: 0 6px;
     }
 
-    .item-row {
-      min-height: 36px;
-    }
-
     .confirm-btn {
       min-height: 30px;
-    }
-
-    .close-btn {
-      min-width: 32px;
-      min-height: 32px;
-      font-size: 22px;
     }
   }
 </style>

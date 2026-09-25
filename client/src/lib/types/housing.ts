@@ -1,6 +1,6 @@
 export type RoomType = 'normal' | 'stairwell'
 
-export type WallVariant = 'solid' | 'door' | 'window' | 'open'
+export type WallVariant = 'solid' | 'door' | 'double-door' | 'window' | 'open'
 
 export interface WallConfig {
   variant: WallVariant
@@ -48,7 +48,13 @@ export interface PassabilityGrid {
 export interface HouseData {
   id: string
   ownerId: string
+  sourceScrollId?: string | null
   origin: { x: number; y: number; z: number }
   rooms: RoomData[]
   passability?: PassabilityGrid[]
+}
+
+export interface HouseMapFootprint {
+  /** Absolute world X/Z followed by width/depth. */
+  rects: [number, number, number, number][]
 }

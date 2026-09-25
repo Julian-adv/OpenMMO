@@ -20,17 +20,31 @@ export interface MonsterDefinition {
   animIdle: string
   animWalk: string
   animRun: string
+  /** One clip, or several `|`-separated to pick from at random per swing. */
   animAttack: string
   animAttackIdle?: string
-  animHit: string
+  /** Empty for monsters on the shared packs — those have no hit reaction. */
+  animHit?: string
   animDie: string
   animDead: string
   /**
-   * Extra metres applied after the corpse is auto-grounded on its lowest
-   * vertex; negative sinks it. Only needed when a dangling appendage pegs the
-   * offset and leaves the body hovering, as the kobold's tail does.
+   * Extra world metres (independent of `scale`) applied after the corpse is
+   * auto-grounded on its lowest vertex; negative sinks it. Only needed when a
+   * dangling appendage pegs the offset and leaves the body hovering, as the
+   * kobold's tail does.
    */
   corpseGroundOffset?: number
+  /**
+   * When false, skip the corpse auto-grounding entirely: the death clip is
+   * authored to end at ground level (stone_golem).
+   */
+  corpseAutoGround?: boolean
+  /**
+   * World-metre footprint radius for the hover ring and proxy, overriding the
+   * bind-pose box. Needed when the bind pose spreads the arms and the box
+   * overstates the body (stone_golem).
+   */
+  hoverRadius?: number
   material?: string
   /**
    * When true (default), a killing blow plays the hit reaction before the death
@@ -44,18 +58,76 @@ export interface MonsterDefinition {
    * (e.g. scp939's 939_Sleeping).
    */
   deathFadeSeconds?: number
+  /** Visual scale multiplier (default 1). Purely cosmetic — server-side
+   * ranges and collision are unaffected. */
+  scale?: number
+  /** Dungeon boss: shows a nameplate on the client. */
+  boss?: boolean
   /** Optional weapon item id, or legacy model path relative to /models/. */
   weapon?: string
   /** Chance from 0-1 that the weapon is dropped on death. */
   weaponDropChance?: number
   /** Skeleton bone name the weapon is parented to (e.g. 'RightHand'). */
   weaponBone?: string
+  /** Metres along the weapon bone's local +Y — wrist toward fingers. The hand
+   * bone sits at the wrist, so without it the weapon hangs off the wrist.
+   * Aim for the knuckle line, as the player's own 0.08 does; measure where the
+   * hand's finger bases sit in bone space rather than trusting the finger
+   * joint, which auto-rigs misplace (the ogre's is 0.24). */
+  weaponOffset?: number
+  /** Sideways and forward nudge along the weapon bone's local X and Z, in
+   * metres. A palm is not on the bone axis, so a grip that reads right from the
+   * front can still float beside the hand from above. */
+  weaponOffsetX?: number
+  weaponOffsetZ?: number
+  /** Grip rotation as `rx|ry|rz` in degrees, about the weapon bone's local
+   * axes. Weapons are modelled pointing +Y; a rig whose hand bone runs a
+   * different way needs turning to sit in the fist. */
+  weaponRotation?: string | number
+  /** Death cry, played on the killing blow (path under /sounds). */
+  deathSound?: string
+  /** Play the shared character packs; only for models rigged on the character
+   * skeleton, which then ship no clips of their own. */
+  sharedAnims?: boolean
+}
+
+const DEGREES_TO_RADIANS = Math.PI / 180
+
+/**
+ * Read a `rx|ry|rz` grip rotation into radians.
+ *
+ * A single number reaches this as a number rather than a string, because the
+ * CSV converter coerces anything numeric — so `90` means 90 degrees about x.
+ */
+export function parseWeaponRotation(
+  value: string | number | undefined
+): [number, number, number] {
+  if (value === undefined || value === '') return [0, 0, 0]
+
+  const parts = String(value)
+    .split('|')
+    .map((part) => Number(part.trim()))
+  const angles: [number, number, number] = [0, 0, 0]
+  for (let axis = 0; axis < 3; axis++) {
+    const angle = parts[axis]
+    angles[axis] = Number.isFinite(angle) ? angle * DEGREES_TO_RADIANS : 0
+  }
+  return angles
 }
 
 const monsterDefs = monstersJson as Record<string, MonsterDefinition>
 
 export function getMonsterDef(type: string): MonsterDefinition | undefined {
   return monsterDefs[type]
+}
+
+export function splitClipNames(value: string | undefined): string[] {
+  return value ? value.split('|').filter(Boolean) : []
+}
+
+export function attackClipNames(def: MonsterDefinition | undefined): string[] {
+  const names = splitClipNames(def?.animAttack)
+  return names.length > 0 ? names : ['Attack']
 }
 
 export default monsterDefs

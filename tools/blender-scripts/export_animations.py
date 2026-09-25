@@ -3,14 +3,16 @@ Blender script to selectively export animations from all_animation.blend
 into separate GLB files by category.
 
 Usage (from project root):
-  blender ~/assets_original/all_animation.blend --background --python tools/blender-scripts/export_animations.py
+  blender assets/all_animation.blend --background --python tools/blender-scripts/export_animations.py
 
 Or run from Blender's Text Editor for interactive use.
 """
 
 import bpy
+import importlib.util
 import os
 import re
+import sys
 
 # ---------------------------------------------------------------------------
 # Configuration: define which actions go into which GLB file.
@@ -34,16 +36,30 @@ EXPORT_PACKS = {
         "slash2",
         "slash3",
         "slash4",
-        "slash5",
-        "attack1",
-        "attack2",
-        "attack3",
-        "attack4",
         "dying",
+        "combat_idle",
+        "claw1",
+        "claw2",
+        "hit",
     ],
     "social": [
         "sleep",
         "pickup",
+        "guitar_playing",
+        "excited",
+        "clap",
+        "twist",
+        "macarena",
+        "chicken",
+        "sit_idle",
+        "sit_talk",
+        "stand_to_sit",
+        "sit_to_stand",
+        "stand_pose2",
+        "stand_pose3",
+        "stand_pose4",
+        "weight_shift",
+        "yawn",
     ],
     "offhand": [
         "torch_idle1",
@@ -55,11 +71,21 @@ EXPORT_PACKS = {
         "fishing_cast",
         "fishing_idle",
     ],
+    "combat_ranged": [
+        "bow_shoot",
+    ],
 }
 
 # The primary armature name whose mesh and skeleton should be exported.
 # Other armatures (e.g. "Armature.001") will be excluded.
 EXPORT_ARMATURE_NAME = "Armature"
+
+# combat_melee was authored on a 69-bone rig (fingers, eyes, sleeve bones) that
+# does not match the 33-bone `Armature`; exporting it from the wrong one silently
+# drops half the channels and moves the rest pose.
+PACK_ARMATURE = {
+    "combat_melee": "Armature_combat",
+}
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "client", "public", "models", "animations")
 
@@ -67,15 +93,11 @@ OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "client", "publ
 # Helpers
 # ---------------------------------------------------------------------------
 
-def get_armature():
-    """Find the armature to export by EXPORT_ARMATURE_NAME."""
-    arm = bpy.data.objects.get(EXPORT_ARMATURE_NAME)
+def get_armature(name=EXPORT_ARMATURE_NAME):
+    """Find the armature to export by name."""
+    arm = bpy.data.objects.get(name)
     if arm and arm.type == "ARMATURE":
         return arm
-    # Fallback: first armature in the scene
-    for obj in bpy.data.objects:
-        if obj.type == "ARMATURE":
-            return obj
     return None
 
 
@@ -201,6 +223,15 @@ def select_export_objects(armature):
             print(f"  Including mesh: {obj.name}")
 
 
+def load_mesh_stripper():
+    """`tools/strip-animation-pack-mesh.py`, imported despite the hyphens."""
+    path = os.path.join(os.path.dirname(__file__), "..", "strip-animation-pack-mesh.py")
+    spec = importlib.util.spec_from_file_location("strip_animation_pack_mesh", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.strip
+
+
 def export_glb(filepath):
     """Export selected objects as GLB with skeleton data."""
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -214,44 +245,68 @@ def export_glb(filepath):
         export_nla_strips_merged_animation_name="",
         export_animation_mode="NLA_TRACKS",
     )
+    # The character mesh is never rendered from a pack — drop it so the shipped
+    # file stays small and carries no Mixamo geometry.
+    strip = load_mesh_stripper()
+    strip(filepath, filepath + ".tmp")
+    os.replace(filepath + ".tmp", filepath)
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
+def requested_packs():
+    """Pack names after `-- --packs a,b`, or every pack when unrestricted.
+
+    Re-exporting a pack rewrites a shipped GLB, so touching only the pack that
+    changed keeps the others' bytes (and their assets.lock hashes) stable.
+    """
+    argv = sys.argv
+    if "--packs" not in argv:
+        return list(EXPORT_PACKS)
+    names = [n for n in argv[argv.index("--packs") + 1].split(",") if n]
+    unknown = [n for n in names if n not in EXPORT_PACKS]
+    if unknown:
+        raise SystemExit(f"Unknown pack(s): {unknown}. Known: {list(EXPORT_PACKS)}")
+    return names
+
+
 def main():
-    armature = get_armature()
-    if armature is None:
-        print("ERROR: No armature found in the scene.")
-        return
-
-    print(f"Using armature: '{armature.name}'")
-
-    # Standardize bone names before export
-    strip_bone_name_prefixes(armature)
-    # Ensure every layered-action slot targets the export armature; actions
-    # authored on sibling armatures (e.g. Armature.001) would otherwise bind
-    # to nothing and export as T-pose.
-    rebind_action_slots_to_target(armature)
-
     all_actions = collect_all_actions()
     print(f"Found {len(all_actions)} actions: {list(all_actions.keys())}")
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
+    failed = []
 
-    for pack_name, action_names in EXPORT_PACKS.items():
+    for pack_name in requested_packs():
+        action_names = EXPORT_PACKS[pack_name]
         print(f"\n--- Exporting pack: {pack_name} ---")
 
-        # Validate that all requested actions exist
+        # A partial export overwrites the shipped pack with fewer clips, so
+        # anything missing aborts this pack and leaves the existing file alone.
         missing = [name for name in action_names if name not in all_actions]
         if missing:
-            print(f"WARNING: Missing actions for {pack_name}: {missing}")
-
-        actions_to_export = [all_actions[name] for name in action_names if name in all_actions]
-        if not actions_to_export:
-            print(f"SKIPPED: No actions found for {pack_name}")
+            print(f"ABORTED: {pack_name} is missing {missing} — existing GLB left untouched")
+            failed.append(pack_name)
             continue
+
+        armature_name = PACK_ARMATURE.get(pack_name, EXPORT_ARMATURE_NAME)
+        armature = get_armature(armature_name)
+        if armature is None:
+            print(f"ABORTED: {pack_name} needs armature '{armature_name}', which is not in this file")
+            failed.append(pack_name)
+            continue
+        print(f"Using armature: '{armature.name}' ({len(armature.data.bones)} bones)")
+
+        # Standardize bone names before export
+        strip_bone_name_prefixes(armature)
+        # Ensure every layered-action slot targets the export armature; actions
+        # authored on sibling armatures (e.g. Armature.001) would otherwise bind
+        # to nothing and export as T-pose.
+        rebind_action_slots_to_target(armature)
+
+        actions_to_export = [all_actions[name] for name in action_names]
 
         # Set up NLA tracks with only the desired actions
         clear_nla_tracks(armature)
@@ -269,11 +324,13 @@ def main():
             print(f"  - {action.name} ({int(action.frame_range[1] - action.frame_range[0])} frames)")
 
         export_glb(output_path)
+        clear_nla_tracks(armature)
         print(f"Done: {output_path}")
 
-    # Clean up
-    clear_nla_tracks(armature)
-    print("\nAll packs exported successfully.")
+    if failed:
+        print(f"\nExported all packs except: {failed}")
+    else:
+        print("\nAll packs exported successfully.")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n'
   import type { Writable } from 'svelte/store'
 
   interface Props {
@@ -6,9 +7,14 @@
     label: string
     volume: Writable<number>
     muted: Writable<boolean>
+    shortcut?: string
   }
 
-  let { id, label, volume, muted }: Props = $props()
+  let { id, label, volume, muted, shortcut }: Props = $props()
+  const muteTitle = $derived(
+    ($muted ? $t('audio.unmute') : $t('audio.mute')) +
+      (shortcut ? ` (${shortcut})` : '')
+  )
 
   function handleChange(e: Event) {
     const target = e.target as HTMLInputElement
@@ -30,7 +36,7 @@
     class="mute-btn"
     class:muted={$muted}
     onclick={() => muted.update((m) => !m)}
-    title={$muted ? 'Unmute' : 'Mute'}
+    title={muteTitle}
   >
     {#if $muted}
       <svg
@@ -68,7 +74,7 @@
     disabled={$muted}
   />
   <span class="volume-value"
-    >{$muted ? 'MUTE' : `${Math.round($volume * 100)}%`}</span
+    >{$muted ? $t('audio.muted') : `${Math.round($volume * 100)}%`}</span
   >
 </div>
 
@@ -77,8 +83,7 @@
     color: #a0aec0;
     font-size: 13px;
     font-weight: 500;
-    font-family:
-      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Noto Sans KR', sans-serif;
   }
 
   .slider-row {
@@ -122,7 +127,8 @@
   .volume-value {
     color: #edf2f7;
     font-size: 13px;
-    font-family: 'Courier New', monospace;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-variant-numeric: tabular-nums;
     min-width: 36px;
     text-align: right;
   }

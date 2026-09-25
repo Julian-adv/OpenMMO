@@ -5,17 +5,18 @@ import {
   applyObjectInteractionPosition,
   beginObjectInteraction,
   beginPickupInteraction,
-  decidePickupApproach,
   exitObjectInteraction,
   exitPickupInteraction,
   finishPendingPickup,
   getInteractionExitKind,
   getObjectInteractionEntryPosition,
   getObjectInteractionExitPosition,
+  pickObjectExitPosition,
   handleInteractKey,
   handlePickupGrab,
   shouldFinishPendingPickup,
 } from './interaction'
+import { buildInteractState, buildPickupState } from '../player-state-builders'
 
 describe('getObjectInteractionEntryPosition', () => {
   it('applies x/z interaction offsets', () => {
@@ -44,6 +45,42 @@ describe('getObjectInteractionExitPosition', () => {
 
     expect(result.x).toBeCloseTo(1.7)
     expect(result.z).toBeCloseTo(2)
+  })
+})
+
+describe('pickObjectExitPosition', () => {
+  const seat = { x: 0, y: 0, z: 0 }
+
+  it('prefers the cell beside the seat', () => {
+    const result = pickObjectExitPosition(seat, 0, () => false)
+
+    expect(result.x).toBeCloseTo(1)
+    expect(result.z).toBeCloseTo(0)
+  })
+
+  it('starts with the side nearer the click destination', () => {
+    const result = pickObjectExitPosition(seat, 0, () => false, {
+      x: -5,
+      z: 2,
+    })
+
+    expect(result.x).toBeCloseTo(-1)
+  })
+
+  it('tries the other side, then the front, skipping blocked cells', () => {
+    const blocked = (x: number) => x > 0.5
+    const result = pickObjectExitPosition(seat, 0, blocked)
+    expect(result.x).toBeCloseTo(-1)
+
+    const front = pickObjectExitPosition(seat, 0, (x) => Math.abs(x) > 0.5)
+    expect(front.z).toBeCloseTo(1)
+  })
+
+  it('falls back to the front when everything is blocked', () => {
+    const result = pickObjectExitPosition(seat, 0, () => true)
+
+    expect(result.x).toBeCloseTo(0)
+    expect(result.z).toBeCloseTo(1)
   })
 })
 
@@ -107,7 +144,6 @@ describe('beginObjectInteraction', () => {
     })
 
     expect(cancelCombat).toHaveBeenCalledOnce()
-    expect(result.pendingPickupAfterMoveInstanceId).toBeNull()
     expect(result.isMoving).toBe(false)
     expect(result.movementTarget).toBeNull()
     expect(result.playerRotation).toBe(1.5)
@@ -119,6 +155,7 @@ describe('beginObjectInteraction', () => {
       rotation: 1.5,
       position: { x: 10, y: 2, z: 20 },
       interactionAnim: 'sit',
+      interactionCounter: 1,
       interactOffsetY: 0.5,
     })
   })
@@ -144,50 +181,19 @@ describe('exitObjectInteraction', () => {
   })
 })
 
-const approachIdleState: PlayerState = {
-  state: 'idle',
-  speed: 0,
-  rotation: 0,
-  position: { x: 0, y: 0, z: 0 },
-}
+describe('interactionCounter', () => {
+  it('increments on every build so a repeated anim still re-triggers', () => {
+    const first = buildPickupState(previousPlayerState)
+    const second = buildInteractState(
+      first,
+      { x: 0, y: 0, z: 0 },
+      0,
+      'pickup',
+      0
+    )
 
-describe('decidePickupApproach', () => {
-  it('ignores pickup approach while dead', () => {
-    expect(
-      decidePickupApproach({
-        playerState: { ...approachIdleState, state: 'dead' },
-        intent: { instanceId: 1, position: { x: 1, y: 0, z: 2 } },
-        getGroundItem: () => undefined,
-      })
-    ).toEqual({ kind: 'ignored_dead' })
-  })
-
-  it('uses live ground item position when available', () => {
-    expect(
-      decidePickupApproach({
-        playerState: approachIdleState,
-        intent: { instanceId: 1, position: { x: 1, y: 0, z: 2 } },
-        getGroundItem: () => ({ position: { x: 3, y: 0, z: 4 } }),
-      })
-    ).toEqual({
-      kind: 'approach',
-      target: { x: 3, y: 0, z: 4 },
-      pickupAfterArrival: 1,
-    })
-  })
-
-  it('falls back to intent position when the item is missing locally', () => {
-    expect(
-      decidePickupApproach({
-        playerState: approachIdleState,
-        intent: { instanceId: 1, position: { x: 1, y: 0, z: 2 } },
-        getGroundItem: () => undefined,
-      })
-    ).toEqual({
-      kind: 'approach',
-      target: { x: 1, y: 0, z: 2 },
-      pickupAfterArrival: 1,
-    })
+    expect(first.interactionCounter).toBe(1)
+    expect(second.interactionCounter).toBe(2)
   })
 })
 
@@ -246,7 +252,6 @@ describe('beginPickupInteraction', () => {
     if (result.kind !== 'started') return
     expect(beginPickup).toHaveBeenCalledWith(42)
     expect(cancelCombat).toHaveBeenCalledOnce()
-    expect(result.pendingPickupAfterMoveInstanceId).toBeNull()
     expect(result.pendingPickupInstanceId).toBe(42)
     expect(result.isMoving).toBe(false)
     expect(result.movementTarget).toBeNull()
@@ -257,6 +262,7 @@ describe('beginPickupInteraction', () => {
       state: 'interact',
       speed: 0,
       interactionAnim: 'pickup',
+      interactionCounter: 1,
       interactOffsetY: 0,
     })
   })

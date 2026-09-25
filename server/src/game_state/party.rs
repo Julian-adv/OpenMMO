@@ -1,14 +1,20 @@
-use crate::types::{PlayerId, ServerMessage};
-use onlinerpg_shared::messages::{PartyMember, PartyMemberPosition, PARTY_INVITE_TTL};
-use std::collections::HashMap;
+use super::consent::{answer_consent, PendingConsent};
+use crate::types::{Player, PlayerId, ServerMessage};
+use onlinerpg_shared::messages::LocalizedMessage;
+use onlinerpg_shared::messages::{
+    PartyMember, PartyMemberPosition, PartyMemberVitals, PARTY_INVITE_TTL, PARTY_SUMMON_TTL,
+};
+use onlinerpg_shared::xp;
+use std::collections::{HashMap, HashSet};
 use std::time::Instant;
-use tracing::info;
+use tokio::sync::RwLock;
+use tracing::{info, warn};
 
-pub(crate) const PARTY_MAX_MEMBERS: usize = 8;
+pub(crate) const PARTY_MAX_MEMBERS: usize = 5;
 
 /// Mirrors auth's character-name cap; anything longer cannot be a real name,
 /// and rejecting it early keeps oversized input out of the echoed failure.
-const MAX_TARGET_NAME_CHARS: usize = 32;
+pub(super) const MAX_TARGET_NAME_CHARS: usize = 32;
 
 /// Outstanding invites one player may have pending at once (spam brake).
 const PARTY_PENDING_INVITE_CAP: usize = 5;
@@ -29,22 +35,30 @@ pub(crate) struct Parties {
     member_of: HashMap<PlayerId, u64>,
     /// (inviter, invitee) → pending invite. Swept lazily on the invite paths
     /// and purged with the player, so it stays tiny without its own tick.
-    invites: HashMap<(PlayerId, PlayerId), PendingInvite>,
-}
-
-pub(crate) struct PendingInvite {
-    expires_at: Instant,
-    /// A declined invite stays here (answered) until it expires: removing it
-    /// would hand the spam brake back to the inviter on every decline.
-    answered: bool,
+    invites: HashMap<(PlayerId, PlayerId), PendingConsent>,
+    /// (caster, member) → summon expiry, same lifecycle as `invites`. No
+    /// pending cap: the consumed scroll is the spam brake.
+    summons: HashMap<(PlayerId, PlayerId), Instant>,
 }
 
 impl Parties {
-    fn party_of(&self, player_id: &PlayerId) -> Option<&Party> {
+    pub(super) fn party_of(&self, player_id: &PlayerId) -> Option<&Party> {
         self.member_of
             .get(player_id)
             .and_then(|id| self.parties.get(id))
     }
+
+    fn sweep_expired_summons(&mut self) {
+        let now = Instant::now();
+        self.summons.retain(|_, expires_at| *expires_at > now);
+    }
+}
+
+/// What reading a summoning scroll did; only `Called` consumes the scroll.
+pub(crate) enum SummonCast {
+    Called,
+    NoMembers,
+    CallStillOut,
 }
 
 /// What became of a member's removal, computed under the lock and delivered
@@ -58,6 +72,43 @@ enum Removal {
     Disbanded {
         last: PlayerId,
     },
+}
+
+/// Every member's location, the recipient included — the client filters
+/// itself out, so one payload serves the whole party.
+fn member_positions(
+    players: &HashMap<PlayerId, Player>,
+    member_ids: &[PlayerId],
+) -> Vec<PartyMemberPosition> {
+    member_ids
+        .iter()
+        .filter_map(|id| {
+            players.get(id).map(|p| PartyMemberPosition {
+                id: *id,
+                x: p.position.x,
+                z: p.position.z,
+                floor_level: p.floor_level,
+            })
+        })
+        .collect()
+}
+
+/// Every member's health; one payload serves the whole party, like
+/// `member_positions`.
+fn member_vitals(
+    players: &HashMap<PlayerId, Player>,
+    member_ids: &[PlayerId],
+) -> Vec<PartyMemberVitals> {
+    member_ids
+        .iter()
+        .filter_map(|id| {
+            players.get(id).map(|p| PartyMemberVitals {
+                id: *id,
+                hp: p.health,
+                max_hp: p.max_health,
+            })
+        })
+        .collect()
 }
 
 impl super::GameState {
@@ -184,10 +235,7 @@ impl super::GameState {
                     None => {
                         parties.invites.insert(
                             (*inviter_id, target_id),
-                            PendingInvite {
-                                expires_at: now + PARTY_INVITE_TTL,
-                                answered: false,
-                            },
+                            PendingConsent::new(PARTY_INVITE_TTL),
                         );
                         Outcome::Deliver
                     }
@@ -240,22 +288,7 @@ impl super::GameState {
     ) {
         let valid = {
             let mut parties = self.parties.write().await;
-            let key = (*inviter_id, *invitee_id);
-            let now = Instant::now();
-            let usable = parties
-                .invites
-                .get(&key)
-                .is_some_and(|invite| !invite.answered && invite.expires_at > now);
-            if usable {
-                if accept {
-                    parties.invites.remove(&key);
-                } else if let Some(invite) = parties.invites.get_mut(&key) {
-                    // Keep the declined entry until it expires: the spam
-                    // brake must not reset on the victim's own click.
-                    invite.answered = true;
-                }
-            }
-            usable
+            answer_consent(&mut parties.invites, (*inviter_id, *invitee_id), accept)
         };
         if !valid {
             self.send_system_message(invitee_id, "Party: that invite has expired.")
@@ -368,6 +401,301 @@ impl super::GameState {
         }
     }
 
+    /// Party members other than `player_id`, online or not.
+    async fn other_party_member_ids(&self, player_id: &PlayerId) -> Vec<PlayerId> {
+        let parties = self.parties.read().await;
+        parties
+            .party_of(player_id)
+            .map(|party| {
+                party
+                    .members
+                    .iter()
+                    .filter(|id| *id != player_id)
+                    .copied()
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Other party members who are still online.
+    pub(crate) async fn other_party_members(&self, player_id: &PlayerId) -> Vec<PlayerId> {
+        let ids = self.other_party_member_ids(player_id).await;
+        if ids.is_empty() {
+            return ids;
+        }
+        let players = self.players.read().await;
+        ids.into_iter()
+            .filter(|id| players.contains_key(id))
+            .collect()
+    }
+
+    /// Party members who share a kill at `position`/`floor_level`: online,
+    /// alive, same floor, within the XP share radius. Killer excluded; empty
+    /// when the killer is partyless.
+    pub(crate) async fn party_members_sharing_kill(
+        &self,
+        killer_id: &PlayerId,
+        position: onlinerpg_shared::Position,
+        floor_level: i8,
+    ) -> Vec<PlayerId> {
+        let ids = self.other_party_member_ids(killer_id).await;
+        if ids.is_empty() {
+            return ids;
+        }
+        // One `players` guard covers online, alive, floor and distance.
+        let radius_sq = xp::PARTY_XP_SHARE_RADIUS * xp::PARTY_XP_SHARE_RADIUS;
+        let players = self.players.read().await;
+        ids.into_iter()
+            .filter(|id| {
+                players.get(id).is_some_and(|p| {
+                    p.health > 0
+                        && super::combat::reachable_dist_sq(
+                            position,
+                            floor_level,
+                            p.position,
+                            p.floor_level,
+                        )
+                        .is_some_and(|dist_sq| dist_sq <= radius_sq)
+                })
+            })
+            .collect()
+    }
+
+    /// Teleport hook: the mover can no longer answer the summons aimed at
+    /// them, and a lingering entry would block a re-call until it expires.
+    pub(crate) async fn void_summons_aimed_at(&self, player_id: &PlayerId) {
+        // Summons are rare; skip the write lock while the map is empty.
+        if self.parties.read().await.summons.is_empty() {
+            return;
+        }
+        self.parties
+            .write()
+            .await
+            .summons
+            .retain(|(_, to), _| to != player_id);
+    }
+
+    /// Fan a summoning scroll out as consent requests to every online member
+    /// without a live call from this caster — re-reading while one is out
+    /// must neither refresh nor re-pop it (the invites' ack-only rule). Like
+    /// invites, a block changes only the delivery: a suppressed member still
+    /// gets an entry, they just never see the toast.
+    pub(crate) async fn try_cast_party_summon(&self, caster_id: &PlayerId) -> SummonCast {
+        let members = self.other_party_members(caster_id).await;
+        if members.is_empty() {
+            return SummonCast::NoMembers;
+        }
+        let caster_name = self.player_name_of(caster_id).await;
+        let suppressed: HashSet<PlayerId> = {
+            let blocked = self.blocked_names.read().await;
+            members
+                .iter()
+                .filter(|id| {
+                    blocked
+                        .get(id)
+                        .is_some_and(|names| names.contains(&caster_name))
+                })
+                .copied()
+                .collect()
+        };
+        let callable: Vec<PlayerId> = {
+            let mut parties = self.parties.write().await;
+            parties.sweep_expired_summons();
+            let expires_at = Instant::now() + PARTY_SUMMON_TTL;
+            let callable: Vec<PlayerId> = members
+                .into_iter()
+                .filter(|member| !parties.summons.contains_key(&(*caster_id, *member)))
+                .collect();
+            for member in &callable {
+                parties.summons.insert((*caster_id, *member), expires_at);
+            }
+            callable
+        };
+        if callable.is_empty() {
+            return SummonCast::CallStillOut;
+        }
+        let recipients: Vec<PlayerId> = callable
+            .iter()
+            .filter(|m| !suppressed.contains(m))
+            .copied()
+            .collect();
+        self.send_direct_message_to_players(
+            &recipients,
+            ServerMessage::PartySummonReceived {
+                caster_id: *caster_id,
+                caster_name,
+            },
+        )
+        .await;
+        self.send_system_message(
+            caster_id,
+            format!("Summon: calling {} party member(s).", callable.len()),
+        )
+        .await;
+        SummonCast::Called
+    }
+
+    pub async fn respond_to_party_summon(
+        &self,
+        member_id: &PlayerId,
+        caster_id: &PlayerId,
+        accept: bool,
+    ) {
+        if !self
+            .try_respond_to_party_summon(member_id, caster_id, accept)
+            .await
+            && accept
+        {
+            self.cancel_teleport_effect(member_id).await;
+        }
+    }
+
+    async fn try_respond_to_party_summon(
+        &self,
+        member_id: &PlayerId,
+        caster_id: &PlayerId,
+        accept: bool,
+    ) -> bool {
+        let key = (*caster_id, *member_id);
+        let usable = {
+            let mut parties = self.parties.write().await;
+            parties.sweep_expired_summons();
+            parties.summons.contains_key(&key)
+        };
+        if !usable {
+            self.send_system_message(member_id, "Summon: that summons has expired.")
+                .await;
+            return false;
+        }
+        if !accept {
+            let member_name = self.player_name_of(member_id).await;
+            self.parties.write().await.summons.remove(&key);
+            self.send_system_message(caster_id, format!("Summon: {member_name} declined."))
+                .await;
+            return true;
+        }
+        // Keep refused calls available for a retry until they expire.
+        let (member_name, refusal) = {
+            let players = self.players.read().await;
+            let Some(member) = players.get(member_id) else {
+                return false;
+            };
+            let refusal = if member.health == 0 {
+                Some("not while defeated.")
+            } else if Self::in_combat(member) {
+                Some("not while in combat.")
+            } else {
+                None
+            };
+            (member.name.clone(), refusal)
+        };
+        if let Some(reason) = refusal {
+            self.send_system_message(member_id, format!("Summon: {reason}"))
+                .await;
+            return false;
+        }
+        // Recheck the caster's party membership, health, and combat state.
+        let destination = {
+            let players = self.players.read().await;
+            let parties = self.parties.read().await;
+            let same_party = parties.member_of.contains_key(caster_id)
+                && parties.member_of.get(caster_id) == parties.member_of.get(member_id);
+            players.get(caster_id).filter(|_| same_party).map(|caster| {
+                let refusal = if caster.health == 0 {
+                    Some(format!("Summon: {} has fallen.", caster.name))
+                } else if Self::in_combat(caster) {
+                    Some(format!("Summon: {} is in combat.", caster.name))
+                } else {
+                    None
+                };
+                (
+                    caster.position,
+                    caster.rotation,
+                    caster.floor_level,
+                    caster.name.clone(),
+                    refusal,
+                )
+            })
+        };
+        let Some((center, rotation, floor, caster_name, caster_refusal)) = destination else {
+            self.parties.write().await.summons.remove(&key);
+            self.send_system_message(member_id, "Summon: that summons has faded.")
+                .await;
+            return false;
+        };
+        if let Some(message) = caster_refusal {
+            self.send_system_message(member_id, message).await;
+            return false;
+        }
+        // Teleporting clears every summons aimed at the mover.
+        let arrival = self.arrival_beside(member_id, &center);
+        info!(member = %member_name, caster = %caster_name, "party summon accepted");
+        self.teleport_player_with_effects(member_id, arrival, rotation, floor)
+            .await;
+        self.send_system_message(
+            member_id,
+            format!("Summon: you answer {caster_name}'s call."),
+        )
+        .await;
+        self.send_system_message(caster_id, format!("Summon: {member_name} is at your side."))
+            .await;
+        true
+    }
+
+    /// Deliver a party-channel line to every online member, the sender's echo
+    /// included — one payload, like `PartyPositions`. Members who blocked the
+    /// sender are skipped; the echo still arrives, so the block stays
+    /// invisible (the whisper rule).
+    pub async fn send_party_chat(&self, player_id: &PlayerId, message: String) {
+        if message.trim().is_empty() {
+            return;
+        }
+        let Some(sender_name) = ({
+            let players = self.players.read().await;
+            players.get(player_id).map(|p| p.name.clone())
+        }) else {
+            warn!("Party chat from non-existent player: {}", player_id);
+            return;
+        };
+        if self.refuse_if_muted(player_id, &sender_name, "chat").await {
+            return;
+        }
+        let member_ids = {
+            let parties = self.parties.read().await;
+            parties
+                .party_of(player_id)
+                .map(|party| party.members.clone())
+                .unwrap_or_default()
+        };
+        if member_ids.is_empty() {
+            self.send_system_message(player_id, "Party: you are not in a party.")
+                .await;
+            return;
+        }
+        let recipients: Vec<PlayerId> = {
+            let blocked = self.blocked_names.read().await;
+            member_ids
+                .into_iter()
+                .filter(|id| {
+                    id == player_id
+                        || !blocked
+                            .get(id)
+                            .is_some_and(|names| names.contains(&sender_name))
+                })
+                .collect()
+        };
+        // Content stays out of logs like local chat (privacy, F-012).
+        info!(from = %sender_name, len = message.len(), "party chat");
+        self.send_direct_message_to_players(
+            &recipients,
+            ServerMessage::PartyChatMessage {
+                from: sender_name,
+                message,
+            },
+        )
+        .await;
+    }
+
     pub async fn leave_party(&self, player_id: &PlayerId) {
         if self.remove_party_member(player_id).await {
             self.send_system_message(player_id, "Party: you left the party.")
@@ -393,10 +721,14 @@ impl super::GameState {
     /// Remove a player from its party — promoting the earliest remaining
     /// member if it led, disbanding when one member would remain. Pending
     /// invites are untouched (leaving a party shouldn't void one you
-    /// received); returns false when the player was in no party.
+    /// received); pending summons are voided, matching the clients' roster
+    /// pruning. Returns false when the player was in no party.
     async fn remove_party_member(&self, player_id: &PlayerId) -> bool {
         let removal = {
             let mut parties = self.parties.write().await;
+            parties
+                .summons
+                .retain(|(from, to), _| from != player_id && to != player_id);
             match parties.member_of.remove(player_id) {
                 None => Removal::NotInParty,
                 Some(party_id) => {
@@ -463,8 +795,9 @@ impl super::GameState {
         format!("Party: {}", names.join(", "))
     }
 
-    /// Answer a positions poll: where the sender's other members are.
-    /// Rate-limited per connection before this is called.
+    /// Answer a map-open snapshot request: where the sender's party is now.
+    /// Steady-state updates ride `tick_party_positions`; rate-limited per
+    /// connection before this is called.
     pub async fn send_party_positions(&self, player_id: &PlayerId) {
         let member_ids = {
             let parties = self.parties.read().await;
@@ -473,23 +806,198 @@ impl super::GameState {
                 .map(|party| party.members.clone())
                 .unwrap_or_default()
         };
-        let members: Vec<PartyMemberPosition> = {
+        let members = {
             let players = self.players.read().await;
-            member_ids
-                .iter()
-                .filter(|id| *id != player_id)
-                .filter_map(|id| {
-                    players.get(id).map(|p| PartyMemberPosition {
-                        id: *id,
-                        x: p.position.x,
-                        z: p.position.z,
-                        floor_level: p.floor_level,
-                    })
-                })
-                .collect()
+            member_positions(&players, &member_ids)
         };
         self.send_direct_message(player_id, ServerMessage::PartyPositions { members })
             .await;
+    }
+
+    /// Queue `player_id` for the next party-position push. Called on every
+    /// relocation; partyless entries are dropped by the tick.
+    pub(crate) async fn mark_party_position_dirty(&self, player_id: &PlayerId) {
+        self.party_position_dirty.write().await.insert(*player_id);
+    }
+
+    /// Push fresh positions to every party a queued player belongs to.
+    pub async fn tick_party_positions(&self) {
+        self.tick_party_push(&self.party_position_dirty, member_positions, |members| {
+            ServerMessage::PartyPositions { members }
+        })
+        .await;
+    }
+
+    /// Drain a dirty set and push one freshly-built payload per affected
+    /// party: one message per party, serialized once for all members. Parties
+    /// with no queued change send nothing, and lock traffic is per tick, not
+    /// per client (one dirty drain, one `parties` read, one `players` read).
+    async fn tick_party_push<T>(
+        &self,
+        dirty: &RwLock<HashSet<PlayerId>>,
+        build: impl Fn(&HashMap<PlayerId, Player>, &[PlayerId]) -> Vec<T>,
+        msg: impl Fn(Vec<T>) -> ServerMessage,
+    ) {
+        let changed: Vec<PlayerId> = {
+            let mut dirty = dirty.write().await;
+            if dirty.is_empty() {
+                return;
+            }
+            dirty.drain().collect()
+        };
+        let rosters: Vec<Vec<PlayerId>> = {
+            let parties = self.parties.read().await;
+            let party_ids: HashSet<u64> = changed
+                .iter()
+                .filter_map(|id| parties.member_of.get(id).copied())
+                .collect();
+            party_ids
+                .iter()
+                .filter_map(|id| parties.parties.get(id).map(|p| p.members.clone()))
+                .collect()
+        };
+        if rosters.is_empty() {
+            return;
+        }
+        let payloads: Vec<(Vec<PlayerId>, Vec<T>)> = {
+            let players = self.players.read().await;
+            rosters
+                .into_iter()
+                .map(|ids| {
+                    let members = build(&players, &ids);
+                    (ids, members)
+                })
+                .collect()
+        };
+        for (member_ids, members) in payloads {
+            self.send_direct_message_to_players(&member_ids, msg(members))
+                .await;
+        }
+    }
+
+    /// Queue `player_id` for the next party-vitals push. Called on every
+    /// health change; partyless entries are dropped by the tick.
+    pub(crate) async fn mark_party_vitals_dirty(&self, player_id: &PlayerId) {
+        self.party_vitals_dirty.write().await.insert(*player_id);
+    }
+
+    /// Push fresh health to every party a queued player belongs to.
+    pub async fn tick_party_vitals(&self) {
+        self.tick_party_push(&self.party_vitals_dirty, member_vitals, |members| {
+            ServerMessage::PartyVitals { members }
+        })
+        .await;
+    }
+
+    /// Leader-only removal of another member. The removal itself is
+    /// `remove_party_member`, so succession and disband behave exactly like a
+    /// voluntary leave; only the messaging differs.
+    pub async fn kick_from_party(&self, kicker_id: &PlayerId, target_id: &PlayerId) {
+        let verdict = {
+            let parties = self.parties.read().await;
+            match parties.party_of(kicker_id) {
+                None => Err("you are not in a party."),
+                Some(party) if party.leader != *kicker_id => Err("only the party leader can kick."),
+                Some(_) if target_id == kicker_id => Err("that's you — /party leave to step out."),
+                Some(party) if !party.members.contains(target_id) => {
+                    Err("they are not in your party.")
+                }
+                Some(_) => Ok(()),
+            }
+        };
+        if let Err(reason) = verdict {
+            self.send_system_message(kicker_id, format!("Party: {reason}"))
+                .await;
+            return;
+        }
+        let target_name = self.player_name_of(target_id).await;
+        // The verdict was read-locked, so the target may have left in the
+        // gap; the removal returning false is that race, not a bug.
+        if !self.remove_party_member(target_id).await {
+            self.send_system_message(
+                kicker_id,
+                format!("Party: {target_name} is no longer in your party."),
+            )
+            .await;
+            return;
+        }
+        info!(target = %target_name, "party kick");
+        self.send_system_message(target_id, "Party: you were removed from the party.")
+            .await;
+        // After the removal the kicker's roster is the remaining party;
+        // disbanded means the kicker is partyless and still gets the line.
+        let mut remaining = self.other_party_members(kicker_id).await;
+        remaining.push(*kicker_id);
+        self.send_direct_message_to_players(
+            &remaining,
+            ServerMessage::SystemMessage {
+                localization: Some(
+                    LocalizedMessage::new("server.partyRemoved").with_param("name", &target_name),
+                ),
+                message: format!("Party: {target_name} was removed."),
+            },
+        )
+        .await;
+    }
+
+    /// Leader-only leadership handover. The roster is untouched, so no
+    /// removal path applies; the new leader is announced to the whole party.
+    pub async fn promote_party_leader(&self, leader_id: &PlayerId, target_id: &PlayerId) {
+        let result = {
+            let mut parties = self.parties.write().await;
+            let party_id = parties.member_of.get(leader_id).copied();
+            match party_id.and_then(|id| parties.parties.get_mut(&id)) {
+                None => Err("you are not in a party."),
+                Some(party) if party.leader != *leader_id => {
+                    Err("only the party leader can hand over the lead.")
+                }
+                Some(_) if target_id == leader_id => Err("you already lead this party."),
+                Some(party) if !party.members.contains(target_id) => {
+                    Err("they are not in your party.")
+                }
+                Some(party) => {
+                    party.leader = *target_id;
+                    Ok((party.leader, party.members.clone()))
+                }
+            }
+        };
+        match result {
+            Err(reason) => {
+                self.send_system_message(leader_id, format!("Party: {reason}"))
+                    .await;
+            }
+            Ok((leader, members)) => {
+                let target_name = self.player_name_of(target_id).await;
+                info!(target = %target_name, "party promote");
+                self.broadcast_party_state(leader, &members).await;
+                self.send_direct_message_to_players(
+                    &members,
+                    ServerMessage::SystemMessage {
+                        localization: Some(
+                            LocalizedMessage::new("server.partyLeader")
+                                .with_param("name", &target_name),
+                        ),
+                        message: format!("Party: {target_name} is now the party leader."),
+                    },
+                )
+                .await;
+            }
+        }
+    }
+
+    /// Resolve a `/party kick|leader <name>` target among online players.
+    pub async fn party_target_by_name(&self, sender_id: &PlayerId, name: &str) -> Option<PlayerId> {
+        match self.player_id_by_name(name).await {
+            Some(id) => Some(id),
+            None => {
+                self.send_system_message(
+                    sender_id,
+                    format!("Party: no one called {name} is online."),
+                )
+                .await;
+                None
+            }
+        }
     }
 
     async fn broadcast_party_state(&self, leader_id: PlayerId, member_ids: &[PlayerId]) {
@@ -501,14 +1009,20 @@ impl super::GameState {
                     players.get(id).map(|p| PartyMember {
                         id: *id,
                         name: p.name.clone(),
+                        hp: p.health,
+                        max_hp: p.max_health,
+                        class: p.class.clone(),
                     })
                 })
                 .collect()
         };
         let msg = ServerMessage::PartyState { leader_id, members };
-        for id in member_ids {
-            self.send_direct_message(id, msg.clone()).await;
-        }
+        self.send_direct_message_to_players(member_ids, msg).await;
+        // A reshaped party should not wait a relocation for fresh markers.
+        self.party_position_dirty
+            .write()
+            .await
+            .extend(member_ids.iter().copied());
     }
 
     async fn send_party_cleared(&self, player_id: &PlayerId) {

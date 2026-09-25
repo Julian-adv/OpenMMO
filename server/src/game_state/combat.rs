@@ -1,23 +1,90 @@
+use super::combat_audit::PlayerAttackWindow;
 use crate::game::{character_hp, combat};
-use crate::types::{AttackRejectReason, MonsterState, PlayerId, Position, ServerMessage};
-use onlinerpg_shared::inventory::{EquipSlot, GroundItem, PlayerInventory};
+
+#[derive(Debug, Clone, Copy)]
+pub struct EffectiveStats {
+    pub guard: i32,
+    pub cha: i32,
+}
+
+impl From<EffectiveStats> for ServerMessage {
+    fn from(s: EffectiveStats) -> Self {
+        ServerMessage::EffectiveStatsUpdated {
+            guard: s.guard,
+            cha: s.cha,
+        }
+    }
+}
+use crate::types::{
+    AttackRejectReason, CharacterClass, MonsterState, PlayerId, Position, ServerMessage,
+};
+use onlinerpg_shared::inventory::{EquipSlot, GroundItem, ItemInstance, PlayerInventory};
 use onlinerpg_shared::xp;
 use rand::Rng;
 use std::f32::consts::TAU;
+use std::sync::LazyLock;
+use std::time::Duration;
 use tracing::{debug, info, warn};
 
 const WEAPON_DROP_OFFSET_METERS: f32 = 2.0;
 // Mirrors the web and agent clients' 2m melee reach. This server-side check is
 // authoritative: clients may request an attack directly without chasing.
 const PLAYER_MELEE_ATTACK_RANGE_METERS: f32 = 2.0;
+// The server walks the player at client speed and so trails it by the network
+// lag; a blow thrown on arrival must not be refused for that. It belongs to
+// every reach, not just the melee one — a bow that stops at its own 10m and
+// looses would otherwise be refused for the same trailing metre.
+const PLAYER_RANGE_TOLERANCE_METERS: f32 = 1.0;
 // Out-of-range swings may still pull aggro when the monster is plausibly
 // nearby, but farther requests are ignored to prevent remote provocation.
 pub(super) const PLAYER_ATTACK_PROVOKE_RANGE_METERS: f32 = 10.0;
-// Slack added to a monster's own attack_range when validating an owner-reported
-// hit. Monster movement is simulated by the owning client, so its position and
-// the target's can both lag the server's view by a round-trip; this absorbs that
-// drift without leaving the reach unbounded.
+// Allow for positions changing between the brain tick and attack resolution.
 const MONSTER_ATTACK_RANGE_TOLERANCE_METERS: f32 = 4.0;
+// Authored timing data the clients also import (data-src/player_anim_timing.csv),
+// so server delays can never drift from the animations.
+static PLAYER_ANIM_TIMING: LazyLock<serde_json::Value> = LazyLock::new(|| {
+    serde_json::from_str(include_str!("../../../data/player_anim_timing.json"))
+        .expect("player_anim_timing.json parses")
+});
+
+fn anim_delay_ms(id: &str) -> u64 {
+    PLAYER_ANIM_TIMING[id]["delayMs"]
+        .as_u64()
+        .unwrap_or_else(|| panic!("{id}.delayMs is a number"))
+}
+
+fn dagger_cooldown_remaining(last: Option<&u64>, now: u64) -> u64 {
+    last.map_or(0, |last| {
+        anim_delay_ms("dagger_skill_cooldown").saturating_sub(now.saturating_sub(*last))
+    })
+}
+
+// How long into the swing the blade lands.
+pub(super) static PLAYER_ATTACK_IMPACT_DELAY: LazyLock<Duration> =
+    LazyLock::new(|| Duration::from_millis(anim_delay_ms("player_attack_impact")));
+
+// How long into the shot the arrow leaves, plus how long it then flies. A bow
+// looses much later in its clip than a blade lands, and the arrow the clients
+// draw takes a further moment to arrive, so loot must not fall while the
+// archer is still drawing or the shaft is still in the air. The flight is the
+// allowance at full range: the clients scale theirs by the actual distance,
+// and loot landing up to that much later than a close shot's arrow is not
+// something anyone can see.
+pub(super) static PLAYER_RANGED_IMPACT_DELAY: LazyLock<Duration> = LazyLock::new(|| {
+    Duration::from_millis(
+        anim_delay_ms("player_ranged_impact") + anim_delay_ms("player_ranged_flight"),
+    )
+});
+
+// Slash1 cadence (clip lasts 1,533ms) minus a server-arrival jitter allowance.
+pub(super) static PLAYER_ATTACK_INTERVAL_MS: LazyLock<u64> =
+    LazyLock::new(|| anim_delay_ms("player_attack_interval"));
+
+// Hand-measured length of the ChestOpen clip in chest_animated.glb (re-measure
+// if the GLB is re-exported): how long treasure-chest loot is withheld before
+// bursting out, so the lid is open by the time the drops exist.
+pub(super) static CHEST_LOOT_EJECT_DELAY: LazyLock<Duration> =
+    LazyLock::new(|| Duration::from_millis(anim_delay_ms("chest_loot_eject")));
 
 fn dropped_weapon_position(monster_position: Position) -> Position {
     let angle = rand::thread_rng().gen_range(0.0..TAU);
@@ -37,6 +104,29 @@ pub(super) fn reachable_dist_sq(a: Position, a_floor: i8, b: Position, b_floor: 
     dist_sq.is_finite().then_some(dist_sq)
 }
 
+/// Attack collision against a wire floor level.
+pub(super) fn wall_between(
+    cache: &onlinerpg_shared::pathfinding::PassabilityCache,
+    from: Position,
+    to: Position,
+    floor_level: i8,
+    ranged: bool,
+) -> bool {
+    let blocked = if ranged {
+        onlinerpg_shared::pathfinding::ranged_attack_line_blocked
+    } else {
+        onlinerpg_shared::pathfinding::attack_line_blocked
+    };
+    blocked(
+        cache,
+        from.x,
+        from.z,
+        to.x,
+        to.z,
+        onlinerpg_shared::dungeon::passability_floor_for_level(floor_level),
+    )
+}
+
 pub(super) fn offset_position_at_angle(origin: Position, angle: f32, distance: f32) -> Position {
     Position {
         x: origin.x + angle.cos() * distance,
@@ -54,145 +144,430 @@ struct PlayerAttackContext {
     monster_level_override: Option<u8>,
     player_name: String,
     player_level: u32,
+    weapon: EquippedWeapon,
+    /// The round this shot spends, for weapons that spend one.
+    ammo: Option<LoadedAmmo>,
+}
+
+/// The wielded main-hand weapon as combat reads it. Resolved once per request,
+/// under the one `inventories` read the range gate already needs.
+struct EquippedWeapon {
+    dagger_instance: Option<u64>,
+    /// Unarmed falls back to D&D 5e improvised 1d2.
+    dice: String,
+    /// An enchanted weapon (+N) adds its enchant to attack and damage rolls.
+    enchant: i32,
+    /// Reach in meters, or `None` for melee.
+    range: Option<f32>,
+    /// Ability the hit and damage bonus read, or `None` to keep STR.
+    ability: Option<crate::item_defs::Ability>,
+    /// What this weapon spends per shot, or `None` when firing is free.
+    ammo_kind: Option<String>,
+}
+
+/// The round a ranged shot spends: the bag stack it comes out of, and the
+/// die it adds. Ammunition carries no enchant — it never sits in a slot, so
+/// no scroll can reach it.
+struct LoadedAmmo {
+    instance_id: u64,
+    item_def_id: String,
+    dice: String,
+}
+
+impl Default for EquippedWeapon {
+    fn default() -> Self {
+        Self {
+            dagger_instance: None,
+            dice: "1d2".to_string(),
+            enchant: 0,
+            range: None,
+            ability: None,
+            ammo_kind: None,
+        }
+    }
+}
+
+struct PlayerAttackTarget {
+    state: MonsterState,
+    monster_type: String,
+    position: Position,
+    floor_level: i8,
+    level_override: Option<u8>,
 }
 
 impl super::GameState {
-    /// Sum of the guard bonuses from every equipped item — the single place
-    /// that maps equipped gear to a guard number. Pure over the loaded item
-    /// definitions; `effective_guard` adds it to the base attribute.
-    fn equipped_guard_bonus(&self, inv: &PlayerInventory) -> i32 {
+    /// Put a kill's loot — the weapon drop and any rare world drops — on the
+    /// ground once the killing blow lands. The wait lives server-side: a
+    /// ground item is pickable the moment it exists, so a client that skips
+    /// the animation must not reach it early.
+    pub(super) fn spawn_kill_loot_after_impact(
+        &self,
+        weapon_drop: Option<GroundItem>,
+        monster_drops: Vec<String>,
+        origin: Position,
+        floor_level: i8,
+        monster_level: Option<u8>,
+        impact_delay: Duration,
+    ) {
+        let game_state = self.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(impact_delay).await;
+            if let Some(item) = weapon_drop {
+                game_state.spawn_ground_item(item).await;
+            }
+            game_state
+                .spawn_world_drops(origin, floor_level, monster_level, monster_drops)
+                .await;
+        });
+    }
+
+    async fn claim_player_attack_window(&self, player_id: &PlayerId) -> PlayerAttackWindow {
+        let now = Self::now_ms();
+        // Hunger only lengthens the interval, so an attack still inside the
+        // base window never needs the hunger lookup — spam-clicks stay cheap.
+        if let Some(last) = self
+            .last_player_attacks
+            .read()
+            .await
+            .get(player_id)
+            .copied()
+            .filter(|last| now.saturating_sub(*last) < *PLAYER_ATTACK_INTERVAL_MS)
+        {
+            return PlayerAttackWindow {
+                checked_at_ms: now,
+                since_accepted_ms: Some(now.saturating_sub(last)),
+                checked_interval_ms: *PLAYER_ATTACK_INTERVAL_MS,
+                accepted: false,
+            };
+        }
+        let attack_mult = self.hunger_attack_mult(player_id).await.max(f32::EPSILON);
+        let required_interval = (*PLAYER_ATTACK_INTERVAL_MS as f32 / attack_mult).ceil() as u64;
+        let mut last_attacks = self.last_player_attacks.write().await;
+        let last = last_attacks.entry(*player_id).or_insert(0);
+        let result = PlayerAttackWindow {
+            checked_at_ms: now,
+            since_accepted_ms: (*last != 0).then(|| now.saturating_sub(*last)),
+            checked_interval_ms: required_interval,
+            accepted: now.saturating_sub(*last) >= required_interval,
+        };
+        if result.accepted {
+            *last = now;
+        }
+        result
+    }
+
+    /// A player's worn gear paired with its defs — the single place that
+    /// resolves equipped items to their definitions.
+    fn equipped_pairs<'a>(
+        &'a self,
+        inv: &'a PlayerInventory,
+    ) -> impl Iterator<Item = (&'a ItemInstance, &'a crate::item_defs::ItemDefinition)> {
         inv.equipped
             .values()
-            .filter_map(|item| self.item_defs.get(&item.item_def_id))
-            .filter_map(|def| def.guard)
+            .filter_map(|item| Some((item, self.item_defs.get(&item.item_def_id)?)))
+    }
+
+    /// The defs behind a player's worn gear, for callers that don't need the
+    /// instance (and so its enchant).
+    pub(super) fn equipped_defs<'a>(
+        &'a self,
+        inv: &'a PlayerInventory,
+    ) -> impl Iterator<Item = &'a crate::item_defs::ItemDefinition> {
+        self.equipped_pairs(inv).map(|(_, def)| def)
+    }
+
+    /// Sum of one def stat over every equipped item.
+    pub(super) fn equipped_bonus(
+        &self,
+        inv: &PlayerInventory,
+        stat: fn(&crate::item_defs::ItemDefinition) -> Option<i32>,
+    ) -> i32 {
+        self.equipped_defs(inv).filter_map(stat).sum()
+    }
+
+    /// Equipped `guard` plus worn-armor enchant levels. A weapon's enchant
+    /// stays on attack and damage rolls and never protects.
+    pub(super) fn equipped_guard(&self, inv: &PlayerInventory) -> i32 {
+        self.equipped_pairs(inv)
+            .map(|(item, def)| {
+                def.guard.unwrap_or(0) + if def.is_armor() { item.enchant } else { 0 }
+            })
             .sum()
     }
 
-    /// A player's effective guard: base attribute plus equipped-gear bonuses.
-    /// This is exactly the target number an attacker must beat to land a hit,
-    /// and the value reported to the client so it never has to recompute the
-    /// formula itself.
-    pub async fn effective_guard(&self, player_id: &PlayerId) -> i32 {
-        let base = {
+    /// A player's effective stats (base attribute plus equipped-gear bonuses),
+    /// read under one pass of each lock. Guard is the target number an
+    /// attacker must beat; CHA drives haggling bands. Reported to the client
+    /// so it never recomputes the formula itself.
+    pub async fn effective_stats(&self, player_id: &PlayerId) -> EffectiveStats {
+        let (guard, cha) = {
             let chars = self.player_characters.read().await;
             chars
                 .get(player_id)
-                .map(|(_, _, attrs)| i32::from(attrs.guard))
-                .unwrap_or(10)
+                .map(|(_, _, a)| (i32::from(a.guard), i32::from(a.cha)))
+                .unwrap_or((10, 10))
         };
-        let bonus = {
-            let inventories = self.inventories.read().await;
-            inventories
-                .get(player_id)
-                .map(|inv| self.equipped_guard_bonus(inv))
-                .unwrap_or(0)
+        let inventories = self.inventories.read().await;
+        let (guard_bonus, cha_bonus) = inventories
+            .get(player_id)
+            .map(|inv| {
+                (
+                    self.equipped_guard(inv),
+                    self.equipped_bonus(inv, |d| d.cha_bonus()),
+                )
+            })
+            .unwrap_or((0, 0));
+        drop(inventories);
+        let guard = self
+            .abilities
+            .read()
+            .await
+            .guard(player_id, guard + guard_bonus);
+        EffectiveStats {
+            guard,
+            cha: cha + cha_bonus,
+        }
+    }
+
+    pub async fn effective_guard(&self, player_id: &PlayerId) -> i32 {
+        self.effective_stats(player_id).await.guard
+    }
+
+    pub(super) async fn effective_cha(&self, player_id: &PlayerId) -> i32 {
+        self.effective_stats(player_id).await.cha
+    }
+
+    async fn equipped_weapon(&self, player_id: &PlayerId) -> EquippedWeapon {
+        let inventories = self.inventories.read().await;
+        inventories
+            .get(player_id)
+            .and_then(|inv| inv.equipped.get(&EquipSlot::MainHand))
+            .and_then(|item| {
+                self.item_defs.get(&item.item_def_id).and_then(|def| {
+                    def.damage_dice().map(|dice| EquippedWeapon {
+                        dagger_instance: (def.weapon_type
+                            == Some(crate::item_defs::WeaponType::Dagger))
+                        .then_some(item.instance_id),
+                        dice: dice.to_string(),
+                        enchant: item.enchant,
+                        range: def.weapon_range(),
+                        ability: def.ranged_ability(),
+                        ammo_kind: def.ammo_kind.clone(),
+                    })
+                })
+            })
+            .unwrap_or_default()
+    }
+
+    /// Use the chosen stack, or select and remember the strongest matching ammo.
+    async fn loaded_ammo(&self, player_id: &PlayerId, kind: &str) -> Option<LoadedAmmo> {
+        let mut inventories = self.inventories.write().await;
+        let inv = inventories.get_mut(player_id)?;
+
+        let of_kind = |item: &ItemInstance| {
+            self.item_defs
+                .get(&item.item_def_id)
+                .filter(|def| def.is_ammo() && def.ammo_kind.as_deref() == Some(kind))
         };
-        base + bonus
+        let round = |item: &ItemInstance| {
+            of_kind(item).map(|def| LoadedAmmo {
+                instance_id: item.instance_id,
+                item_def_id: item.item_def_id.clone(),
+                dice: def.dice.clone().unwrap_or_default(),
+            })
+        };
+
+        if let Some(chosen) = inv.active_ammo_stack().and_then(round) {
+            return Some(chosen);
+        }
+
+        let best = self.best_ammo_in_bag(inv, kind).and_then(round)?;
+        inv.active_ammo = Some(best.item_def_id.clone());
+        Some(best)
     }
 
     /// Runs every gate on a `PlayerAttack` request. `Err` is the coarse reason
-    /// acked back to the attacker at the single call site, so a new gate can
-    /// never silently drop a request. Side effect: an out-of-range swing
-    /// within provoke range still aggros the monster onto the attacker.
+    /// acked back to the attacker plus the gate detail the single call site
+    /// logs, so a new gate can never silently drop a request. Side effect: an
+    /// out-of-range swing within provoke range still aggros the monster onto
+    /// the attacker.
     async fn validate_player_attack(
         &self,
         player_id: &PlayerId,
         monster_id: &str,
-    ) -> Result<PlayerAttackContext, AttackRejectReason> {
-        let monster_snapshot = {
+    ) -> Result<PlayerAttackContext, (AttackRejectReason, String)> {
+        let monster = {
             let monsters = self.monsters.read().await;
-            monsters
-                .get(monster_id)
-                .filter(|m| m.state != MonsterState::Dead)
-                .map(|m| {
-                    (
-                        m.monster_type.clone(),
-                        m.position,
-                        m.floor_level,
-                        m.level_override,
-                        m.owner_id,
-                    )
-                })
+            monsters.get(monster_id).map(|monster| PlayerAttackTarget {
+                state: monster.state,
+                monster_type: monster.monster_type.clone(),
+                position: monster.position,
+                floor_level: monster.floor_level,
+                level_override: monster.level_override,
+            })
         };
-        let Some((
-            monster_type,
-            monster_position,
-            monster_floor_level,
-            monster_level_override,
-            monster_owner_id,
-        )) = monster_snapshot
-        else {
-            return Err(AttackRejectReason::InvalidTarget);
+        let Some(monster) = monster else {
+            return Err((
+                AttackRejectReason::InvalidTarget,
+                "absent from registry".into(),
+            ));
         };
-
+        if monster.state == MonsterState::Dead {
+            return Err((
+                AttackRejectReason::InvalidTarget,
+                format!(
+                    "corpse ({}, floor {})",
+                    monster.monster_type, monster.floor_level
+                ),
+            ));
+        }
+        let now = Self::now_ms();
         let player_snapshot = {
             let players = self.players.read().await;
             players
                 .get(player_id)
+                .filter(|p| p.is_ready(now))
                 .map(|p| (p.name.clone(), p.level, p.floor_level, p.position, p.health))
         };
         let Some((player_name, player_level, player_floor, player_position, player_health)) =
             player_snapshot
         else {
-            warn!("Attack from non-existent player: {}", player_id);
-            return Err(AttackRejectReason::NotInGame);
+            return Err((
+                AttackRejectReason::NotInGame,
+                "not in game or still loading".into(),
+            ));
         };
 
         // A dead attacker deals no damage. The monster-attack path already
         // gates on the target's HP; mirror it here so a 0-HP player can't
         // keep swinging while awaiting respawn.
         if player_health == 0 {
-            return Err(AttackRejectReason::AttackerDead);
+            return Err((AttackRejectReason::AttackerDead, "attacker hp 0".into()));
         }
         // Delivery filtering keeps a player from ever learning about
         // monsters on another floor, but gate here too so a stale monster
         // id can't drive a cross-floor hit (the original bug: a surface
         // guard striking a monster on the dungeon floor beneath it).
-        let Some(distance_sq) = reachable_dist_sq(
-            player_position,
-            player_floor,
-            monster_position,
-            monster_floor_level,
-        ) else {
-            return Err(AttackRejectReason::InvalidTarget);
+        // A weapon that declares a `range` (items.csv) shoots that far; the
+        // clients gate on the same column, so the two never drift. The lag
+        // allowance rides on top of whichever reach is in play rather than
+        // being folded into the melee one, which `max` would swallow whole.
+        let weapon = self.equipped_weapon(player_id).await;
+        let attack_range = PLAYER_MELEE_ATTACK_RANGE_METERS.max(weapon.range.unwrap_or(0.0))
+            + PLAYER_RANGE_TOLERANCE_METERS;
+        let reach = |target: Position| {
+            reachable_dist_sq(player_position, player_floor, target, monster.floor_level)
         };
-        if distance_sq > PLAYER_MELEE_ATTACK_RANGE_METERS.powi(2) {
-            if distance_sq <= PLAYER_ATTACK_PROVOKE_RANGE_METERS.powi(2) {
-                if let Some(owner_id) = monster_owner_id {
-                    self.send_direct_message(
-                        &owner_id,
-                        ServerMessage::MonsterProvoked {
-                            player_id: *player_id,
-                            monster_id: monster_id.to_string(),
-                        },
-                    )
-                    .await;
-                }
+        let unreachable_detail = |label: &str, target: Position| {
+            format!(
+                "{} alive but unreachable ({label}): player floor {player_floor} at ({:.1},{:.1}), monster floor {} at ({:.1},{:.1})",
+                monster.monster_type, player_position.x, player_position.z, monster.floor_level, target.x, target.z
+            )
+        };
+        let Some(mut distance_sq) = reach(monster.position) else {
+            return Err((
+                AttackRejectReason::InvalidTarget,
+                unreachable_detail("registry", monster.position),
+            ));
+        };
+        // The registry trails a running monster by up to a sync interval, so
+        // a swing it refuses is re-judged where the brain has the monster.
+        let mut gate_position = monster.position;
+        if distance_sq > attack_range.powi(2) {
+            if let Some(now) = self.brain_position_now(monster_id).await {
+                let Some(d) = reach(now) else {
+                    return Err((
+                        AttackRejectReason::InvalidTarget,
+                        unreachable_detail("brain", now),
+                    ));
+                };
+                gate_position = now;
+                distance_sq = d;
             }
-            return Err(AttackRejectReason::OutOfRange);
+        }
+        let walled_off = || {
+            wall_between(
+                &self.passability_read(),
+                player_position,
+                gate_position,
+                player_floor,
+                weapon.ability.is_some(),
+            )
+        };
+        if distance_sq > attack_range.powi(2) {
+            // A swing at a monster behind a shut door must not reach it as
+            // aggro either.
+            if distance_sq <= PLAYER_ATTACK_PROVOKE_RANGE_METERS.powi(2) && !walled_off() {
+                self.brain_hit(monster_id, player_id, false, 0).await;
+            }
+            return Err((
+                AttackRejectReason::OutOfRange,
+                format!("dist {:.1}m > {:.1}m", distance_sq.sqrt(), attack_range),
+            ));
+        }
+        if walled_off() {
+            return Err((AttackRejectReason::OutOfRange, "walled off".into()));
         }
 
+        // Report target restrictions before checking ammunition.
+        let ammo = if let Some(kind) = weapon.ammo_kind.as_deref() {
+            let round = self.loaded_ammo(player_id, kind).await.ok_or_else(|| {
+                (
+                    AttackRejectReason::OutOfAmmo,
+                    format!("no {kind} in the bag"),
+                )
+            })?;
+            if self
+                .reject_if_trade_reserved(player_id, round.instance_id, "use")
+                .await
+            {
+                return Err((
+                    AttackRejectReason::OutOfAmmo,
+                    "ammunition is reserved for trade".into(),
+                ));
+            }
+            Some(round)
+        } else {
+            None
+        };
+
         Ok(PlayerAttackContext {
-            monster_type,
-            monster_position,
-            monster_floor_level,
-            monster_level_override,
+            monster_type: monster.monster_type,
+            monster_position: monster.position,
+            monster_floor_level: monster.floor_level,
+            monster_level_override: monster.level_override,
             player_name,
             player_level,
+            weapon,
+            ammo,
         })
     }
 
+    #[cfg(test)]
     pub async fn broadcast_player_attack(&self, player_id: &PlayerId, monster_id: String) {
-        let PlayerAttackContext {
-            monster_type,
-            monster_position,
-            monster_floor_level,
-            monster_level_override,
-            player_name,
-            player_level,
-        } = match self.validate_player_attack(player_id, &monster_id).await {
+        self.player_attack(player_id, monster_id, None).await;
+    }
+
+    /// `auth` persists boss-kill titles; tests pass None and keep them in
+    /// memory.
+    pub async fn player_attack(
+        &self,
+        player_id: &PlayerId,
+        monster_id: String,
+        auth: Option<&crate::auth::AuthService>,
+    ) {
+        self.stop_bed_rest(player_id).await;
+        let audit = self.combat_audit.player_attack(*player_id, &monster_id);
+        let context = match self.validate_player_attack(player_id, &monster_id).await {
             Ok(ctx) => ctx,
-            Err(reason) => {
+            Err((reason, detail)) => {
+                warn!(
+                    "Rejected player attack: {} -> {} ({:?}: {})",
+                    player_id, monster_id, reason, detail
+                );
+                if let Some(audit) = audit {
+                    audit.finish(reason.to_string(), Some(detail), None);
+                }
                 self.send_direct_message(
                     player_id,
                     ServerMessage::PlayerAttackRejected { monster_id, reason },
@@ -201,43 +576,280 @@ impl super::GameState {
                 return;
             }
         };
-        // A landed attack (not a rejected one) breaks fishing concentration.
-        self.cancel_fishing_if_active(player_id).await;
+        let timing = self.claim_player_attack_window(player_id).await;
+        let accepted = timing.accepted;
+        if let Some(audit) = audit {
+            audit.finish(
+                if accepted { "accepted" } else { "cooldown" }.into(),
+                None,
+                Some(timing),
+            );
+        }
+        if !accepted {
+            return;
+        }
+        self.resolve_player_attack(player_id, monster_id, context, auth, None)
+            .await;
+    }
+
+    pub(super) async fn dagger_skill_cooldown_ms(&self, character_id: i64) -> u64 {
+        let cooldowns = self.last_dagger_skills.read().await;
+        dagger_cooldown_remaining(cooldowns.get(&character_id), Self::now_ms())
+    }
+
+    async fn reject_dagger_skill(
+        &self,
+        player_id: &PlayerId,
+        monster_id: String,
+        reason: &str,
+        cooldown_ms: u64,
+    ) {
+        self.send_direct_message(
+            player_id,
+            ServerMessage::DaggerDoubleSlashRejected {
+                monster_id,
+                reason: reason.to_string(),
+                cooldown_ms,
+            },
+        )
+        .await;
+    }
+
+    pub async fn dagger_double_slash(
+        &self,
+        player_id: &PlayerId,
+        monster_id: String,
+        auth: Option<&crate::auth::AuthService>,
+    ) {
+        self.stop_bed_rest(player_id).await;
+        let character_id = self
+            .player_characters
+            .read()
+            .await
+            .get(player_id)
+            .map(|entry| entry.0);
+        let Some(character_id) = character_id else {
+            self.reject_dagger_skill(player_id, monster_id, "not_in_game", 0)
+                .await;
+            return;
+        };
+        if !self
+            .players
+            .read()
+            .await
+            .get(player_id)
+            .is_some_and(|player| player.class == CharacterClass::Rogue)
+        {
+            self.reject_dagger_skill(player_id, monster_id, "rogue_required", 0)
+                .await;
+            return;
+        }
+        let context = match self.validate_player_attack(player_id, &monster_id).await {
+            Ok(context) => context,
+            Err((reason, _)) => {
+                self.reject_dagger_skill(player_id, monster_id, &reason.to_string(), 0)
+                    .await;
+                return;
+            }
+        };
+        let Some(weapon_instance) = context.weapon.dagger_instance else {
+            self.reject_dagger_skill(player_id, monster_id, "dagger_required", 0)
+                .await;
+            return;
+        };
+        let origin = self
+            .players
+            .read()
+            .await
+            .get(player_id)
+            .filter(|p| !p.is_mounted() && p.object_type.is_none())
+            .map(|p| (p.position, p.floor_level));
+        let Some((origin, floor)) = origin else {
+            self.reject_dagger_skill(player_id, monster_id, "busy", 0)
+                .await;
+            return;
+        };
+        let movement_version = self
+            .player_movement_versions
+            .read()
+            .await
+            .get(player_id)
+            .copied()
+            .unwrap_or(0);
+        let mut cooldowns = self.last_dagger_skills.write().await;
+        let now = Self::now_ms();
+        let cooldown_ms = anim_delay_ms("dagger_skill_cooldown");
+        let remaining = dagger_cooldown_remaining(cooldowns.get(&character_id), now);
+        if remaining > 0 {
+            drop(cooldowns);
+            self.reject_dagger_skill(player_id, monster_id, "cooldown", remaining)
+                .await;
+            return;
+        }
+        if !self.claim_player_attack_window(player_id).await.accepted {
+            drop(cooldowns);
+            self.reject_dagger_skill(player_id, monster_id, "attack_cooldown", 0)
+                .await;
+            return;
+        }
+        cooldowns.insert(character_id, now);
+        drop(cooldowns);
+        self.cancel_concentration_if_active(player_id).await;
+        self.publish_nearby(
+            &origin,
+            floor,
+            ServerMessage::DaggerDoubleSlashStarted {
+                player_id: *player_id,
+                monster_id: monster_id.clone(),
+                cooldown_ms,
+            },
+            None,
+        )
+        .await;
+
+        let started = tokio::time::Instant::now();
+        let mut interrupted = false;
+        for (index, impact) in ["dagger_skill_first_hit", "dagger_skill_second_hit"]
+            .into_iter()
+            .enumerate()
+        {
+            let strike = index as u8 + 1;
+            tokio::time::sleep_until(started + Duration::from_millis(anim_delay_ms(impact))).await;
+            if self
+                .player_characters
+                .read()
+                .await
+                .get(player_id)
+                .map(|entry| entry.0)
+                != Some(character_id)
+            {
+                break;
+            }
+            let ready = self.players.read().await.get(player_id).is_some_and(|p| {
+                p.health > 0 && !p.is_mounted() && p.object_type.is_none() && p.floor_level == floor
+            });
+            let moved = self
+                .player_movement_versions
+                .read()
+                .await
+                .get(player_id)
+                .copied()
+                .unwrap_or(0)
+                != movement_version;
+            interrupted |= !ready || moved;
+            let target_dead = self
+                .monsters
+                .read()
+                .await
+                .get(&monster_id)
+                .is_some_and(|m| m.state == MonsterState::Dead);
+            let skip = if interrupted {
+                Some("interrupted")
+            } else if self.equipped_weapon(player_id).await.dagger_instance != Some(weapon_instance)
+            {
+                interrupted = true;
+                Some("weapon_changed")
+            } else if target_dead {
+                Some("target_defeated")
+            } else {
+                match self.validate_player_attack(player_id, &monster_id).await {
+                    Ok(context) if context.weapon.dagger_instance == Some(weapon_instance) => {
+                        self.resolve_player_attack(
+                            player_id,
+                            monster_id.clone(),
+                            context,
+                            auth,
+                            Some(strike),
+                        )
+                        .await;
+                        None
+                    }
+                    Err((AttackRejectReason::OutOfRange, _)) => Some("out_of_range"),
+                    _ => Some("invalid_target"),
+                }
+            };
+            if let Some(reason) = skip {
+                self.publish_nearby(
+                    &origin,
+                    floor,
+                    ServerMessage::DaggerDoubleSlashSkipped {
+                        player_id: *player_id,
+                        monster_id: monster_id.clone(),
+                        strike,
+                        reason: reason.into(),
+                    },
+                    None,
+                )
+                .await;
+            }
+        }
+    }
+
+    async fn resolve_player_attack(
+        &self,
+        player_id: &PlayerId,
+        monster_id: String,
+        context: PlayerAttackContext,
+        auth: Option<&crate::auth::AuthService>,
+        dagger_strike: Option<u8>,
+    ) {
+        let PlayerAttackContext {
+            monster_type,
+            monster_position,
+            monster_floor_level,
+            monster_level_override,
+            player_name,
+            player_level,
+            weapon,
+            ammo,
+        } = context;
+        // Spent once the swing is committed, so a shot refused by any gate
+        // above — or one thrown inside the cooldown — costs nothing.
+        if let Some(round) = &ammo {
+            self.consume_one_and_sync(player_id, round.instance_id)
+                .await;
+        }
+        // A landed attack (not a rejected one) breaks concentration.
+        self.cancel_concentration_if_active(player_id).await;
         debug!("Player {} attacking monster {}", player_name, monster_id);
 
-        // Unarmed falls back to D&D 5e improvised 1d2. An enchanted
-        // weapon (+N) adds its enchant to attack and damage rolls.
-        let (weapon_dice, weapon_enchant): (String, i32) = {
-            let inventories = self.inventories.read().await;
-            inventories
-                .get(player_id)
-                .and_then(|inv| inv.equipped.get(&EquipSlot::MainHand))
-                .and_then(|item| {
-                    self.item_defs
-                        .get(&item.item_def_id)
-                        .and_then(|def| def.damage_dice())
-                        .map(|dice| (dice.to_string(), item.enchant))
-                })
-                .unwrap_or_else(|| ("1d2".to_string(), 0))
-        };
-
-        let str_mod = {
+        // A ranged weapon rolls on the ability it declares (DEX for the bow);
+        // everything else keeps STR.
+        let ability_mod = {
             let chars = self.player_characters.read().await;
             chars
                 .get(player_id)
-                .map(|(_, _, attrs)| combat::ability_modifier(attrs.r#str))
+                .map(|(_, _, attrs)| {
+                    combat::ability_modifier(match weapon.ability {
+                        Some(ability) => ability.score(attrs),
+                        None => attrs.r#str,
+                    })
+                })
                 .unwrap_or(0)
         };
+
+        let hit_mod = self.hunger_hit_mod(player_id).await;
+        let guaranteed = self
+            .abilities
+            .read()
+            .await
+            .marks_target(player_id, &monster_id);
 
         let (result_hit, result_roll, result_damage) = {
             let def = self.monster_defs.get(&monster_type);
             let target_guard = def.map(|d| i32::from(d.guard)).unwrap_or(10);
-            let attack_bonus = combat::level_attack_bonus(player_level) + str_mod + weapon_enchant;
-            let result = combat::roll_attack(
+            let attack_bonus =
+                combat::level_attack_bonus(player_level) + ability_mod + weapon.enchant + hit_mod;
+            // The round rolls its own die on top of the weapon's, as a
+            // monster's wielded weapon does on top of its own damage. The bow
+            // is deliberately a token 1d1: the arrow is what decides the hurt.
+            let result = combat::roll_attack_with_accuracy(
                 attack_bonus,
                 target_guard,
-                &weapon_dice,
-                str_mod + weapon_enchant,
+                &weapon.dice,
+                ammo.as_ref().map(|round| round.dice.as_str()),
+                ability_mod + weapon.enchant,
+                guaranteed,
             );
             (result.hit, result.roll, result.damage)
         };
@@ -256,46 +868,76 @@ impl super::GameState {
         }
 
         // Send attack result
-        self.send_direct_message_to_players_within_position(
+        self.publish_nearby(
             &monster_position,
             monster_floor_level,
-            super::EVENT_DELIVERY_RADIUS,
             ServerMessage::PlayerAttacked {
                 player_id: *player_id,
                 monster_id: monster_id.clone(),
                 hit: result_hit,
                 roll: result_roll,
                 damage: result_damage,
+                ammo_item_def_id: ammo.map(|round| round.item_def_id),
+                dagger_strike,
             },
             None,
         )
         .await;
 
-        if result_hit {
-            let mut monsters = self.monsters.write().await;
-            let mut is_dead = false;
+        if !result_hit {
+            self.brain_hit(&monster_id, player_id, false, 0).await;
+        } else {
+            // Damage and the kill claim share one guard, so a second attacker
+            // landing at the same instant sees Dead and stops.
+            let mut dealt = 0;
+            let is_dead = {
+                let mut monsters = self.monsters.write().await;
+                let mut died = false;
 
-            if let Some(monster) = monsters.get_mut(&monster_id) {
-                if monster.state == MonsterState::Dead {
-                    return; // Already dead
+                if let Some(monster) = monsters.get_mut(&monster_id) {
+                    if monster.state == MonsterState::Dead {
+                        return; // Already dead
+                    }
+
+                    dealt = result_damage.min(monster.health);
+                    monster.health = monster.health.saturating_sub(result_damage);
+                    self.interest_lock().refresh_monster(monster);
+                    debug!(
+                        "Monster {} HP: {}/{}",
+                        monster_id, monster.health, monster.max_health
+                    );
+
+                    died = monster.health == 0;
                 }
-
-                monster.health = monster.health.saturating_sub(result_damage);
-                debug!(
-                    "Monster {} HP: {}/{}",
-                    monster_id, monster.health, monster.max_health
-                );
-
-                if monster.health == 0 {
-                    monster.state = MonsterState::Dead;
-                    is_dead = true;
+                if died {
+                    self.combat_audit
+                        .kill(player_id, &monster_id, &monster_type);
+                    // Through the registry so the kill frees its spawn slot now,
+                    // not when the corpse is swept 60s later.
+                    monsters.mark_dead(&monster_id);
                 }
+                died
+            };
+            if monster_floor_level < 0 {
+                self.record_boss_damage(&monster_id, player_id, dealt).await;
             }
-
-            if is_dead {
-                let dropped_weapon_item_def_id = self
-                    .monster_defs
-                    .get(&monster_type)
+            if !is_dead {
+                self.brain_hit(&monster_id, player_id, true, result_damage)
+                    .await;
+            } else {
+                // Loot lands where the monster fell, which is not where the
+                // registry has it: that only advances on the brain's tick, and
+                // a bow kills a monster mid-charge, metres along from its last
+                // sync. Read the brain before `brain_death` drops it.
+                let corpse_position = self
+                    .brain_position_now(&monster_id)
+                    .await
+                    .unwrap_or(monster_position);
+                self.brain_death(&monster_id).await;
+                let def = self.monster_defs.get(&monster_type);
+                // Depth-scaled dungeon monsters count as their effective level.
+                let effective_level = monster_level_override.or(def.map(|d| d.level));
+                let dropped_weapon_item_def_id = def
                     .filter(|def| {
                         def.weapon_drop_chance >= 1.0
                             || rand::thread_rng().gen::<f32>() < def.weapon_drop_chance
@@ -303,11 +945,19 @@ impl super::GameState {
                     .and_then(|def| def.weapon.as_deref())
                     .and_then(|weapon| self.item_defs.item_def_id_for_weapon_ref(weapon));
 
-                debug!("Monster {} died, broadcasting dead state", monster_id);
-                self.send_direct_message_to_players_within_position(
+                info!(
+                    "Player {} killed {} (lvl {}) at ({:.1},{:.1}) {}; weapon drop: {}",
+                    player_name,
+                    monster_type,
+                    effective_level.unwrap_or(0),
+                    corpse_position.x,
+                    corpse_position.z,
+                    crate::dungeon_defs::place_label(&corpse_position, monster_floor_level),
+                    dropped_weapon_item_def_id.as_deref().unwrap_or("none")
+                );
+                self.publish_nearby(
                     &monster_position,
                     monster_floor_level,
-                    super::EVENT_DELIVERY_RADIUS,
                     ServerMessage::MonsterDead {
                         monster_id: monster_id.clone(),
                         dropped_weapon_item_def_id: dropped_weapon_item_def_id.clone(),
@@ -316,203 +966,248 @@ impl super::GameState {
                 )
                 .await;
 
-                if let Some(item_def_id) = dropped_weapon_item_def_id {
+                let weapon_drop = if let Some(item_def_id) = dropped_weapon_item_def_id {
                     let instance_id = self.next_instance_id().await;
-                    // Scatter the drop a couple meters off the corpse,
-                    // then clamp it onto walkable floor inside a dungeon
-                    // so it can't land behind a wall (pickup is a pure
-                    // proximity check, so a walled-off item is lost).
+                    // Scatter off the corpse, then clamp onto walkable dungeon
+                    // floor: pickup is a pure proximity check, so an item
+                    // behind a wall would be lost.
                     let drop_position = self
                         .loot_drop_position(
+                            corpse_position,
+                            monster_floor_level,
+                            dropped_weapon_position(corpse_position),
+                        )
+                        .await;
+                    Some(GroundItem {
+                        instance_id,
+                        item_def_id,
+                        position: drop_position,
+                        floor_level: monster_floor_level,
+                        quantity: 1,
+                        enchant: 0,
+                        dropped_by: None,
+                        cape_color: None,
+                        cape_texture: None,
+                    })
+                } else {
+                    None
+                };
+                let mut monster_drops = def.map_or_else(Vec::new, |def| {
+                    crate::world_drop_defs::roll_independent(
+                        def.drop_entries().iter().map(|(id, c)| (id.as_str(), *c)),
+                        &mut rand::thread_rng(),
+                    )
+                });
+                monster_drops.extend(
+                    self.on_dungeon_monster_dead(&monster_id, player_id, auth)
+                        .await,
+                );
+                // All kill loot waits for the blow to land.
+                self.spawn_kill_loot_after_impact(
+                    weapon_drop,
+                    monster_drops,
+                    corpse_position,
+                    monster_floor_level,
+                    effective_level,
+                    if dagger_strike.is_some() {
+                        Duration::ZERO
+                    } else if weapon.ability.is_some() {
+                        *PLAYER_RANGED_IMPACT_DELAY
+                    } else {
+                        *PLAYER_ATTACK_IMPACT_DELAY
+                    },
+                );
+
+                self.drain_hunger_for_kill(player_id).await;
+                if let (Some(def), Some(effective_level)) = (def, effective_level) {
+                    let base_xp = xp::monster_xp(effective_level, def.guard);
+                    let sharers = self
+                        .party_members_sharing_kill(
+                            player_id,
                             monster_position,
                             monster_floor_level,
-                            dropped_weapon_position(monster_position),
                         )
                         .await;
-                    // Drops inherit the monster's floor: dungeon kills
-                    // stay on their floor, surface kills on floor 0.
-                    // (-1 used to mean "any floor"; that wildcard is
-                    // gone now that negative floors are dungeon depths.)
-                    self.spawn_ground_item(
-                        GroundItem {
-                            instance_id,
-                            item_def_id,
-                            position: drop_position,
-                            floor_level: monster_floor_level,
-                            enchant: 0,
-                        },
-                        Some(monster_id.clone()),
-                    )
-                    .await;
-                }
-
-                // Rare bonus world drops, independent of the weapon roll.
-                self.spawn_world_drops(monster_position, monster_floor_level)
-                    .await;
-
-                // Dungeon monsters: free their spawn slot for respawn.
-                self.on_dungeon_monster_dead(&monster_id).await;
-
-                // Award XP to the player who killed the monster.
-                // Depth-scaled dungeon monsters yield XP for their
-                // effective level, not the base definition level.
-                let xp_def = self.monster_defs.get(&monster_type);
-                if let Some(def) = xp_def {
-                    let effective_level = monster_level_override.unwrap_or(def.level);
-                    let xp_amount = xp::monster_xp(effective_level, def.guard);
-                    let player_char = {
-                        let map = self.player_characters.read().await;
-                        map.get(player_id).cloned()
-                    };
-                    if let Some((_, old_xp, attributes)) = player_char {
-                        let new_xp = old_xp + xp_amount as u64;
-                        let old_level = xp::level_from_xp(old_xp);
-                        let new_level = xp::level_from_xp(new_xp);
-                        let leveled_up = new_level > old_level;
-                        let levels_gained = new_level.saturating_sub(old_level);
-
-                        // Update in-memory XP
-                        {
-                            let mut map = self.player_characters.write().await;
-                            if let Some(entry) = map.get_mut(player_id) {
-                                entry.1 = new_xp;
-                            }
-                        }
-
-                        // Update level/max HP in player map if leveled up
-                        let mut new_max_hp = None;
-                        let mut new_current_hp = None;
-                        if leveled_up {
-                            let mut players_write = self.players.write().await;
-                            if let Some(p) = players_write.get_mut(player_id) {
-                                p.level = new_level;
-                                let mut updated_max_hp = p.max_health;
-                                for _ in 0..levels_gained {
-                                    match character_hp::level_up_max_hp(
-                                        updated_max_hp,
-                                        &p.class,
-                                        attributes.con,
-                                    ) {
-                                        Ok(next_max_hp) => {
-                                            updated_max_hp = next_max_hp;
-                                        }
-                                        Err(err) => {
-                                            warn!(
-                                                "Failed to roll level-up HP for player {}: {}",
-                                                player_name, err
-                                            );
-                                            break;
-                                        }
-                                    }
-                                }
-
-                                if updated_max_hp != p.max_health {
-                                    p.max_health = updated_max_hp;
-                                    new_max_hp = Some(updated_max_hp);
-                                }
-
-                                // Level-up always fully restores current HP to max HP.
-                                p.health = p.max_health;
-                                new_current_hp = Some(p.health);
-                            }
-                        }
-
-                        // Mark dirty for periodic batch save
-                        self.mark_dirty(player_id).await;
-
-                        // Notify the player directly
-                        let max_hp_for_msg = if let Some(max_hp) = new_max_hp {
-                            max_hp
-                        } else {
-                            self.players
-                                .read()
-                                .await
-                                .get(player_id)
-                                .map(|p| p.max_health)
-                                .unwrap_or(0)
-                        };
-                        let current_hp_for_msg = if let Some(current_hp) = new_current_hp {
-                            current_hp
-                        } else {
-                            self.players
-                                .read()
-                                .await
-                                .get(player_id)
-                                .map(|p| p.health)
-                                .unwrap_or(0)
-                        };
-                        self.send_direct_message(
-                            player_id,
-                            ServerMessage::XpGained {
-                                player_id: *player_id,
-                                xp_amount,
-                                xp_lost: 0,
-                                total_xp: new_xp,
-                                new_level,
-                                leveled_up,
-                                max_hp: max_hp_for_msg,
-                                current_hp: current_hp_for_msg,
-                            },
-                        )
+                    let share = xp::party_xp_share(base_xp, sharers.len() as u32 + 1);
+                    let mut recipients = Vec::with_capacity(sharers.len() + 1);
+                    recipients.push(*player_id);
+                    recipients.extend(sharers);
+                    self.grant_monster_kill_xp(&recipients, share, &monster_id)
                         .await;
-
-                        debug!(
-                            "Player {} gained {} XP (total: {}, level: {}{})",
-                            player_name,
-                            xp_amount,
-                            new_xp,
-                            new_level,
-                            if leveled_up { " LEVEL UP!" } else { "" }
-                        );
-                    }
                 }
 
-                // Schedule removal after 30 seconds
+                // Remove the corpse after 60 seconds.
                 let game_state = self.clone();
                 let id_to_remove = monster_id.clone();
                 tokio::spawn(async move {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
-                    let mut monsters = game_state.monsters.write().await;
-                    if let Some(monster) = monsters.get(&id_to_remove) {
-                        if monster.state == MonsterState::Dead {
-                            let monster_position = monster.position;
-                            let monster_floor = monster.floor_level;
-                            monsters.remove(&id_to_remove);
-                            drop(monsters);
-                            debug!("Monster {} removed after 30s corpse time", id_to_remove);
-                            game_state
-                                .send_direct_message_to_players_within_position(
-                                    &monster_position,
-                                    monster_floor,
-                                    super::EVENT_DELIVERY_RADIUS,
-                                    ServerMessage::MonsterRemoved {
-                                        monster_id: id_to_remove,
-                                    },
-                                    None,
-                                )
-                                .await;
-                        }
+                    tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+                    let still_dead = game_state
+                        .monsters
+                        .read()
+                        .await
+                        .get(&id_to_remove)
+                        .is_some_and(|monster| monster.state == MonsterState::Dead);
+                    if still_dead {
+                        debug!("Monster {} removed after 60s corpse time", id_to_remove);
+                        game_state.despawn_monsters(vec![id_to_remove]).await;
                     }
                 });
             }
         }
     }
 
-    pub async fn broadcast_monster_attack(
+    /// Credit every sharer of a monster kill: cumulative XP, any level-ups
+    /// (HP rolls plus the full heal), dirty marks, and the direct XpGained
+    /// notice. A zero share (tiny monster split) sends nothing. Batched over
+    /// the whole party so one kill takes each lock once.
+    async fn grant_monster_kill_xp(
         &self,
-        attacker_player_id: &PlayerId,
+        recipients: &[PlayerId],
+        xp_amount: u32,
         monster_id: &str,
-        target_player_id: &PlayerId,
     ) {
-        // 1. Check if monster exists, is alive, and is owned by the requester.
-        // Also check server-side cooldown guard.
+        if xp_amount == 0 {
+            return;
+        }
+        // Read-modify-write under one lock: a member can receive two kills'
+        // shares concurrently, and a split read/write would lose one.
+        let mut grants = Vec::with_capacity(recipients.len());
+        {
+            let mut map = self.player_characters.write().await;
+            for player_id in recipients {
+                if let Some(entry) = map.get_mut(player_id) {
+                    let old_xp = entry.1;
+                    entry.1 += u64::from(xp_amount);
+                    grants.push((*player_id, old_xp, entry.1, entry.2.clone()));
+                }
+            }
+        }
+        if grants.is_empty() {
+            return;
+        }
+
+        // One `players` guard for the level-up rolls and the HP the notices
+        // carry. Taken after `player_characters` is released — the regen tick
+        // takes the two in the opposite order.
+        let mut notices = Vec::with_capacity(grants.len());
+        let mut leveled = Vec::new();
+        {
+            let mut players = self.players.write().await;
+            for (player_id, old_xp, new_xp, attributes) in &grants {
+                let old_level = xp::level_from_xp(*old_xp);
+                let new_level = xp::level_from_xp(*new_xp);
+                let leveled_up = new_level > old_level;
+                let Some(p) = players.get_mut(player_id) else {
+                    continue;
+                };
+                if leveled_up {
+                    // Concurrent grants may reach this lock out of XP order;
+                    // the HP rolls cover disjoint level spans either way, but
+                    // the level itself must never move backwards. This guards
+                    // authoritative state only — the client clamps the notices,
+                    // which can be sent out of order after the lock is dropped.
+                    if new_level > p.level {
+                        p.level = new_level;
+                    }
+                    let mut updated_max_hp = p.max_health;
+                    for _ in 0..new_level.saturating_sub(old_level) {
+                        match character_hp::level_up_max_hp(
+                            updated_max_hp,
+                            &p.class,
+                            attributes.con,
+                        ) {
+                            Ok(next_max_hp) => updated_max_hp = next_max_hp,
+                            Err(err) => {
+                                warn!("Failed to roll level-up HP for player {}: {}", p.name, err);
+                                break;
+                            }
+                        }
+                    }
+                    p.max_health = updated_max_hp;
+                    let old_health = p.health;
+                    p.health = p.max_health;
+                    self.combat_audit.health(old_health, p, "level_up");
+                    leveled.push(*player_id);
+                }
+                self.interest_lock().refresh_player(p);
+                notices.push((
+                    *player_id,
+                    p.name.clone(),
+                    *new_xp,
+                    new_level,
+                    leveled_up,
+                    p.max_health,
+                    p.health,
+                ));
+            }
+        }
+
+        self.dirty_players
+            .write()
+            .await
+            .extend(grants.iter().map(|(id, ..)| *id));
+        for id in &leveled {
+            self.refresh_player_mana(id).await;
+        }
+        if !leveled.is_empty() {
+            self.party_vitals_dirty.write().await.extend(leveled);
+        }
+
+        for (player_id, name, new_xp, new_level, leveled_up, max_hp, current_hp) in notices {
+            self.publish_subject_change(ServerMessage::PlayerHealthUpdate {
+                player_id,
+                health: current_hp,
+                max_health: max_hp,
+            });
+            self.send_direct_message(
+                &player_id,
+                ServerMessage::XpGained {
+                    player_id,
+                    xp_amount,
+                    xp_lost: 0,
+                    total_xp: new_xp,
+                    new_level,
+                    leveled_up,
+                    max_hp,
+                    current_hp,
+                    monster_id: Some(monster_id.to_string()),
+                },
+            )
+            .await;
+
+            if leveled_up {
+                info!("Player {} reached level {}", name, new_level);
+            } else {
+                debug!(
+                    "Player {} gained {} XP (total: {}, level: {})",
+                    name, xp_amount, new_xp, new_level
+                );
+            }
+        }
+    }
+
+    pub(super) async fn monster_attack(&self, monster_id: &str, target_player_id: &PlayerId) {
+        struct MonsterAttackSnapshot {
+            attack_bonus: i32,
+            damage_roll: String,
+            weapon_damage_roll: Option<String>,
+            position: Position,
+            floor_level: i8,
+            attack_range: f32,
+            hit_debuff: Option<String>,
+            monster_type: String,
+        }
         let now = Self::now_ms();
         let mut monster_data = None;
+        let mut audit = self.combat_audit.attack(*target_player_id);
 
         {
             let mut monsters = self.monsters.write().await;
             if let Some(monster) = monsters.get_mut(monster_id) {
-                if monster.is_controllable_by(attacker_player_id) {
+                audit.monster(monster_id, &monster.monster_type);
+                audit.reason = "dead";
+                if monster.state != MonsterState::Dead {
+                    audit.reason = "cooldown";
                     let def = self.monster_defs.get(&monster.monster_type);
                     let attack_cooldown_ms =
                         def.map(|d| u64::from(d.attack_cooldown)).unwrap_or(1500);
@@ -526,48 +1221,56 @@ impl super::GameState {
                         // effective level (bonus + damage dice).
                         let (attack_bonus, damage_roll) = match monster.level_override {
                             Some(level) => (
-                                combat::level_attack_bonus(u32::from(level)),
+                                def.map_or_else(
+                                    || combat::monster_attack_bonus(level),
+                                    |d| d.attack_bonus_at(level),
+                                ),
                                 combat::monster_damage_roll_for_level(level).to_string(),
                             ),
                             None => (
                                 def.map(|d| d.attack_bonus())
-                                    .unwrap_or_else(|| combat::level_attack_bonus(1)),
+                                    .unwrap_or_else(|| combat::monster_attack_bonus(1)),
                                 def.map(|d| d.damage_roll())
                                     .unwrap_or_else(|| "1d6".to_string()),
                             ),
                         };
-                        monster_data = Some((
+                        monster_data = Some(MonsterAttackSnapshot {
                             attack_bonus,
                             damage_roll,
                             weapon_damage_roll,
-                            monster.position,
-                            monster.floor_level,
-                            def.map(|d| d.attack_range)
+                            position: monster.position,
+                            floor_level: monster.floor_level,
+                            attack_range: def
+                                .map(|d| d.attack_range)
                                 .unwrap_or(onlinerpg_shared::monster_ai::DEFAULT_ATTACK_RANGE),
-                        ));
+                            hit_debuff: def.and_then(|d| d.hit_debuff.clone()),
+                            monster_type: monster.monster_type.clone(),
+                        });
                     }
                 }
             }
         }
 
-        let (
+        let Some(MonsterAttackSnapshot {
             attack_bonus,
             damage_roll,
             weapon_damage_roll,
-            monster_position,
-            monster_floor_level,
-            monster_attack_range,
-        ) = match monster_data {
-            Some(data) => data,
-            None => return,
+            position: monster_position,
+            floor_level: monster_floor_level,
+            attack_range: monster_attack_range,
+            hit_debuff,
+            monster_type,
+        }) = monster_data
+        else {
+            return;
         };
 
-        // 2. Check if target player exists and is alive
+        audit.reason = "target_not_damageable";
         let (target_player_name, target_position, target_floor_level);
         {
             let players = self.players.read().await;
             match players.get(target_player_id) {
-                Some(player) if player.health > 0 => {
+                Some(player) if player.is_damageable(now) => {
                     target_player_name = player.name.clone();
                     target_position = player.position;
                     target_floor_level = player.floor_level;
@@ -576,11 +1279,7 @@ impl super::GameState {
             }
         }
 
-        // 3. The monster must actually be able to reach the target. Ownership
-        // alone is not enough: any player can spawn a monster next to themselves
-        // and become its owner, so without this the pair (monster_id, arbitrary
-        // target_player_id) would deal real damage at unlimited range to anyone
-        // whose id the attacker can name.
+        audit.reason = "unreachable_floor";
         let Some(distance_sq) = reachable_dist_sq(
             monster_position,
             monster_floor_level,
@@ -591,6 +1290,7 @@ impl super::GameState {
         };
         let max_range = monster_attack_range + MONSTER_ATTACK_RANGE_TOLERANCE_METERS;
         if distance_sq > max_range.powi(2) {
+            audit.reason = "out_of_range";
             debug!(
                 "Rejected monster attack {:.0}m away: monster {} -> player {}",
                 distance_sq.sqrt(),
@@ -599,10 +1299,26 @@ impl super::GameState {
             );
             return;
         }
+        if wall_between(
+            &self.passability_read(),
+            monster_position,
+            target_position,
+            monster_floor_level,
+            false,
+        ) {
+            audit.reason = "wall";
+            debug!(
+                "Rejected monster attack through a wall: monster {} -> player {}",
+                monster_id, target_player_name
+            );
+            return;
+        }
         let target_guard = self.effective_guard(target_player_id).await;
+        let place_bonus =
+            combat::place_attack_bonus(monster_floor_level, self.town_distance(&monster_position));
 
         let result = combat::roll_attack_with_extra_damage_roll(
-            attack_bonus,
+            attack_bonus + place_bonus,
             target_guard,
             &damage_roll,
             weapon_damage_roll.as_deref(),
@@ -618,6 +1334,7 @@ impl super::GameState {
         let mut did_die = false;
         let mut current_health = 0;
         let mut target_loc: Option<(Position, i8)> = None;
+        audit.reason = "target_disappeared_or_dead";
 
         {
             let mut players = self.players.write().await;
@@ -627,6 +1344,7 @@ impl super::GameState {
                 }
 
                 player.last_combat_at = now;
+                let old_health = player.health;
 
                 if result.hit {
                     player.health = player.health.saturating_sub(result.damage);
@@ -635,12 +1353,18 @@ impl super::GameState {
                     }
                 }
                 current_health = player.health;
+                audit.resolved(old_health, player, result.hit);
                 target_loc = Some((player.position, player.floor_level));
             }
         }
 
+        self.stop_bed_rest(target_player_id).await;
         if result.hit {
+            self.cancel_live_instrument_if_active(target_player_id)
+                .await;
+            self.cancel_food_regeneration(target_player_id).await;
             self.mark_dirty(target_player_id).await;
+            self.mark_party_vitals_dirty(target_player_id).await;
         }
 
         // Send attack result after server-side HP update.
@@ -653,37 +1377,60 @@ impl super::GameState {
             current_health,
         };
         if let Some((target_position, target_floor)) = target_loc {
-            self.send_direct_message_to_players_within_position(
-                &target_position,
-                target_floor,
-                super::EVENT_DELIVERY_RADIUS,
-                attack_msg,
-                None,
-            )
-            .await;
+            if let Some(player) = self.players.read().await.get(target_player_id) {
+                self.publish_subject_change(ServerMessage::PlayerHealthUpdate {
+                    player_id: *target_player_id,
+                    health: player.health,
+                    max_health: player.max_health,
+                });
+            }
+            self.publish_nearby(&target_position, target_floor, attack_msg, None)
+                .await;
         } else {
             self.send_direct_message(target_player_id, attack_msg).await;
         }
 
-        if did_die {
-            let dead_player_id = *target_player_id;
-            self.on_player_died(&dead_player_id).await;
-            if let Some((target_position, target_floor)) = target_loc {
-                self.send_direct_message_to_players_within_position(
-                    &target_position,
-                    target_floor,
-                    super::EVENT_DELIVERY_RADIUS,
-                    ServerMessage::PlayerDead {
-                        player_id: dead_player_id,
-                    },
-                    None,
-                )
-                .await;
+        if result.hit && !did_die {
+            if let Some(debuff_id) = hit_debuff {
+                self.inflict_debuff(target_player_id, &debuff_id, None)
+                    .await;
             }
+        }
+
+        if let (true, Some((target_position, target_floor))) = (did_die, target_loc) {
+            self.announce_player_death(
+                target_player_id,
+                target_position,
+                target_floor,
+                &monster_type,
+            )
+            .await;
         }
     }
 
+    /// Run the death chokepoint and tell the area.
+    pub(super) async fn announce_player_death(
+        &self,
+        player_id: &PlayerId,
+        position: Position,
+        floor_level: i8,
+        cause: &str,
+    ) {
+        self.on_player_died(player_id, cause).await;
+        self.publish_nearby(
+            &position,
+            floor_level,
+            ServerMessage::PlayerDead {
+                player_id: *player_id,
+            },
+            None,
+        )
+        .await;
+    }
+
     pub async fn tick_regeneration(&self) {
+        self.end_invalid_bed_rests().await;
+        self.tick_mana_regeneration().await;
         let mut updates = Vec::new();
 
         {
@@ -692,12 +1439,10 @@ impl super::GameState {
             let now = Self::now_ms();
 
             for (player_id, player) in players.iter() {
-                // Only regenerate if alive and wounded
-                if player.health > 0 && player.health < player.max_health {
+                if player.is_damageable(now) && player.health < player.max_health {
                     if now.saturating_sub(player.last_combat_at) < super::OUT_OF_COMBAT_MS {
                         continue;
                     }
-
                     let con = player_chars
                         .get(player_id)
                         .map(|(_, _, attrs)| attrs.con)
@@ -715,15 +1460,36 @@ impl super::GameState {
             return;
         }
 
+        let candidates: Vec<PlayerId> = updates.iter().map(|(pid, _)| *pid).collect();
+        let include_hungry = self
+            .regen_ticks
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            % 2
+            == 1;
+        let regen_ready = self.hunger_regen_ready(&candidates, include_hungry).await;
+        updates.retain(|(pid, _)| regen_ready.contains(pid));
+        if updates.is_empty() {
+            return;
+        }
+
         let mut regen_dirty: Vec<PlayerId> = Vec::new();
         let mut regen_messages = Vec::new();
         {
             let mut players = self.players.write().await;
             for (player_id, amount) in updates {
                 if let Some(player) = players.get_mut(&player_id) {
-                    if player.health > 0 && player.health < player.max_health {
+                    if player.is_damageable(Self::now_ms())
+                        && player.health < player.max_health
+                        && Self::now_ms().saturating_sub(player.last_combat_at)
+                            >= super::OUT_OF_COMBAT_MS
+                    {
                         let old_health = player.health;
-                        player.health = (player.health + amount).min(player.max_health);
+                        let multiplier = self.bed_rest_multiplier(player).await;
+                        player.health = player
+                            .health
+                            .saturating_add(amount * multiplier)
+                            .min(player.max_health);
+                        self.combat_audit.health(old_health, player, "natural");
 
                         if player.health != old_health {
                             regen_dirty.push(player_id);
@@ -744,17 +1510,11 @@ impl super::GameState {
             }
         }
         for (position, floor_level, msg) in regen_messages {
-            self.send_direct_message_to_players_within_position(
-                &position,
-                floor_level,
-                super::EVENT_DELIVERY_RADIUS,
-                msg,
-                None,
-            )
-            .await;
+            self.publish_nearby(&position, floor_level, msg, None).await;
         }
-        for pid in regen_dirty {
-            self.mark_dirty(&pid).await;
+        if !regen_dirty.is_empty() {
+            self.dirty_players.write().await.extend(regen_dirty.iter());
+            self.party_vitals_dirty.write().await.extend(regen_dirty);
         }
     }
 
@@ -762,36 +1522,48 @@ impl super::GameState {
     /// fishing session (a dead angler can't keep a line wet — doc/FISHING.md),
     /// then the XP penalty. One chokepoint so future death sources can't
     /// forget a side effect.
-    pub(super) async fn on_player_died(&self, player_id: &PlayerId) {
-        self.movement_intents.write().await.remove(player_id);
-        self.cancel_fishing_if_active(player_id).await;
+    pub(super) async fn on_player_died(&self, player_id: &PlayerId, cause: &str) {
+        self.stop_bed_rest(player_id).await;
+        self.combat_audit.death(player_id);
+        if let Some((position, _, floor_level, name)) = self.player_pose(player_id).await {
+            let place = crate::dungeon_defs::place_label(&position, floor_level);
+            info!(
+                "Player {name} died to {cause} at ({:.1},{:.1}) {place}",
+                position.x, position.z
+            );
+        }
+        self.clear_player_movement(player_id, "death").await;
+        self.cancel_concentration_if_active(player_id).await;
+        self.cancel_food_regeneration(player_id).await;
+        self.clear_debuffs(player_id).await;
+        self.clear_buffs(player_id).await;
+        self.drop_player_trade(player_id, "They were defeated.")
+            .await;
         self.apply_player_death_penalty(player_id).await;
     }
 
     async fn apply_player_death_penalty(&self, player_id: &PlayerId) {
-        let (_, old_xp, attributes) = {
-            let map = self.player_characters.read().await;
-            match map.get(player_id).cloned() {
-                Some(entry) => entry,
-                None => return,
-            }
+        // Read-modify-write under one lock, like the kill-XP grant: a shared
+        // kill can land while the penalty is computed, and a split read/write
+        // would drop it.
+        let applied = {
+            let mut map = self.player_characters.write().await;
+            map.get_mut(player_id).and_then(|entry| {
+                let penalty = xp::apply_death_penalty(entry.1);
+                let progression_changed =
+                    penalty.new_xp != penalty.old_xp || penalty.new_level != penalty.old_level;
+                if !progression_changed {
+                    return None;
+                }
+                entry.1 = penalty.new_xp;
+                Some((penalty, entry.2.clone()))
+            })
+        };
+        let Some((penalty, attributes)) = applied else {
+            return;
         };
 
         let player_name = self.player_name_of(player_id).await;
-
-        let penalty = xp::apply_death_penalty(old_xp);
-        let progression_changed =
-            penalty.new_xp != penalty.old_xp || penalty.new_level != penalty.old_level;
-        if !progression_changed {
-            return;
-        }
-
-        {
-            let mut map = self.player_characters.write().await;
-            if let Some(entry) = map.get_mut(player_id) {
-                entry.1 = penalty.new_xp;
-            }
-        }
 
         let mut current_hp_for_msg = 0;
         let mut max_hp_for_msg = 0;
@@ -839,9 +1611,12 @@ impl super::GameState {
                     }
                 }
 
+                let old_health = player.health;
                 if player.health > player.max_health {
                     player.health = player.max_health;
                 }
+                self.combat_audit
+                    .health(old_health, player, "death_penalty");
 
                 current_hp_for_msg = player.health;
                 max_hp_for_msg = player.max_health;
@@ -849,8 +1624,9 @@ impl super::GameState {
             }
         }
 
-        // Mark dirty for periodic batch save
+        self.refresh_player_mana(player_id).await;
         self.mark_dirty(player_id).await;
+        self.mark_party_vitals_dirty(player_id).await;
 
         self.send_direct_message(
             player_id,
@@ -863,6 +1639,7 @@ impl super::GameState {
                 leveled_up: false,
                 max_hp: max_hp_for_msg,
                 current_hp: current_hp_for_msg,
+                monster_id: None,
             },
         )
         .await;

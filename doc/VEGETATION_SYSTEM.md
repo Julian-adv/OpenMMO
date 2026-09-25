@@ -1,10 +1,10 @@
 # Vegetation System
 
-terrain의 splat map R 채널을 기반으로 풀(grass), 나무(tree), 꽃(flower)을 절차적으로 배치하는 시스템.
+terrain의 splatmap vegMeta(바이트 3)를 기반으로 풀(grass), 나무(tree), 꽃(flower)을 절차적으로 배치하는 시스템.
 
-## Splat Map R 채널 인코딩
+## Splatmap vegMeta 인코딩
 
-R 채널 값이 vegetation 타입과 밀도를 동시에 인코딩한다.
+vegMeta 값이 vegetation 타입과 밀도를 동시에 인코딩한다.
 
 | R 값 | 타입 | 밀도 |
 |-------|------|------|
@@ -17,18 +17,13 @@ R 채널 값이 vegetation 타입과 밀도를 동시에 인코딩한다.
 
 ## Grass 배치
 
-핵심 파일: `client/src/lib/utils/grass-data.ts`
+서버는 1m × 1m 셀마다 짧은 풀·긴 풀·꽃의 개수를 저장한다. 각각 0~255 범위의 1바이트이며 개별 위치·회전·크기는 저장하지 않는다.
 
-### 배치 로직 (`computeInstances`)
+베이크(`shared/src/worldgen/vegetation.rs`)는 vegMeta 밀도에 따라 짧은 풀 최대 64개/셀, 긴 풀 최대 36개/셀을 계산한다. 셀 중심이 수면 아래면 비운다. 클라이언트 에디터의 재생성도 같은 최대 밀도를 사용한다.
 
-각 terrain 타일(64×64 셀)을 순회하며:
+클라이언트의 `decodeGrassData`는 개수만큼 셀 안에 지터 그리드로 배치하고 높이맵을 샘플링한다. 타일·셀·종류별 시드로 위치·회전·크기를 만들므로 재로드와 인접 셀 변경에도 배치가 안정적이며 월드 X 경계에서도 같은 패턴을 사용한다. 수면 아래의 개체는 표시하지 않는다.
 
-1. **R값 필터** — 해당 타입 범위(short: 230~239, tall: 240~249)인 셀만 처리
-2. **밀도 계산** — `density = (rVal - rMin) / (rMax - rMin)` (0~1)
-3. **셀 내 그리드 분포** — 균일 그리드에서 각 위치마다 `rand() < density` 체크로 솎아냄
-   - Short grass: 12×12 = 최대 144개/셀
-   - Tall grass: 10×10 = 최대 100개/셀
-4. **높이 필터** — `worldY < 0.05`이면 제외 (수면 아래)
+조경으로 지운 셀은 세 개수를 모두 0으로 만든다. 건물 제거 영역과 일부라도 겹치는 셀도 비워서 재생성 후 건물 안에 풀이 생기지 않게 한다. 건물 철거용 `grass-original`도 같은 밀도 포맷을 사용한다.
 
 ### 스케일
 
@@ -39,18 +34,11 @@ R 채널 값이 vegetation 타입과 밀도를 동시에 인코딩한다.
 
 ### 경계 블렌딩
 
-인접 셀이 다른 풀 타입인 경우, 30%(`BOUNDARY_BLEND_RATIO`) 확률로 상대 타입의 스케일을 적용한다. 변환된 인스턴스는 상대 타입 배열에 합쳐진다:
-
-```
-shortInstances = short.own + tall.converted
-tallInstances  = tall.own  + short.converted
-```
-
-이를 통해 short/tall grass 영역 간 자연스러운 전환이 이루어진다.
+인접 셀이 다른 풀 타입이면 약 30%를 상대 종류의 개수로 옮긴다.
 
 ### 전역 밀도 조절
 
-`GRASS_DENSITY_SCALE` (0~1) 상수로 로드 시점에 인스턴스를 확률적으로 솎아낸다(thinning). 꽃에는 적용되지 않는다.
+그래픽 프리셋의 `grassDensity`로 표시할 풀을 솎아낸다. 저장된 개수는 바뀌지 않으며 꽃에는 적용하지 않는다.
 
 ## Flower 배치
 
@@ -118,14 +106,24 @@ Material: `FLOWER_CONFIG` — baseColor 진녹, windStrength 0.04 (뻣뻣한 줄
 
 ## 바이너리 포맷
 
-### Grass (v3 — "GR03")
+### Grass (v4 — GR04)
 
 ```
-[u32 magic=0x47523033] [u32 shortCount] [u32 tallCount] [u32 flowerCount]
-[N × { u16 localX, u16 localZ, u8 rotation, u8 scale }]
+[u32 little-endian magic=0x47523034]
+[64 × 64 × { u8 shortCount, u8 tallCount, u8 flowerCount }]
 ```
 
-16바이트 헤더 + 인스턴스당 6바이트
+셀 순서는 `z * 64 + x`. 헤더 4바이트 + 12,288바이트 = 타일당 **12,292바이트**다. 기존 V3 목록은 셀별로 집계하고 종류별 개수를 255로 제한한다.
+
+### 기존 파일 변환
+
+서버를 중지한 상태에서 실행한다. 재실행할 수 있으며 이미 V4인 파일은 건너뛴다.
+
+```bash
+cargo run --release -p onlinerpg-terrain --bin terrain-grass-migrate -- data/terrain
+```
+
+`grass/`와 `grass-original/` 파일을 각각 임시 파일 + rename으로 교체한다. 서버·클라이언트는 전환 중 남아 있는 V3 파일도 셀별 개수로 읽으며 새로 저장하는 파일은 V4다. 변환 후 `terrain-manifests`로 원본 파일 해시 목록을 준비하고 서버를 재시작해 메모리의 타일 버전을 갱신한다. 해시 목록 준비는 원본 파일을 수정하거나 전송용 본문을 복제하지 않는다.
 
 ### Tree (v1 — "TR01")
 
@@ -153,7 +151,7 @@ splat map 생성 (terrain-splat-gen.ts)
     ↓
 computeGrassPlacement() / computeTreePlacement()
     ↓
-바이너리 인코딩 (GR03 / TR01)
+셀별 개수 인코딩 (GR04) / 나무 배치 인코딩 (TR01)
     ↓
 서버 저장 (API: /api/terrain/grass/{x}/{z}, /api/terrain/trees/{x}/{z})
     ↓

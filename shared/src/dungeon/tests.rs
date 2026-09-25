@@ -70,8 +70,8 @@ fn golden_layout_hash() {
 
 /// The registry's per-dungeon `boss`, `floors` and `entranceDir` columns
 /// drive generation: orc_warrens is 10 floors deep, its chest is guarded by
-/// orc_boss and its entrance door opens south (+z), while old_crypt keeps
-/// goblin_boss.
+/// orc_boss and its entrance door opens south (+z), ogre_stronghold reaches
+/// 15 under ogre_boss, while old_crypt keeps goblin_boss.
 #[test]
 fn per_dungeon_boss_floors_and_entrance_dir() {
     fn final_boss(floors: &[FloorLayout]) -> &SpawnSpec {
@@ -91,10 +91,63 @@ fn per_dungeon_boss_floors_and_entrance_dir() {
         "entranceDir=s: entry landing at the +z end, door facing south"
     );
     assert_eq!(final_boss(&floors).monster_type, "orc_boss");
+
+    let floors = generate_dungeon_for("ogre_stronghold");
+    assert_eq!(floors.len(), 15, "a deep dungeon must not dead-end early");
+    assert_eq!(final_boss(&floors).monster_type, "ogre_boss");
+
     assert_eq!(
         final_boss(&generate_dungeon_for("old_crypt")).monster_type,
         BOSS_MONSTER_TYPE
     );
+}
+
+#[test]
+fn skeleton_crypt_has_twenty_floors_and_its_own_monsters() {
+    let floors = generate_dungeon_for("skeleton_crypt");
+    assert_eq!(floors.len(), 20);
+    assert!(!floors[0].up_shaft.along_z && !floors[0].up_shaft.reversed);
+    assert_eq!(
+        locked_depths(floors.len() as u8).collect::<Vec<_>>(),
+        [5, 10, 15, 20]
+    );
+    assert_eq!(
+        floors.iter().filter(|floor| floor.chest.is_some()).count(),
+        1
+    );
+    let mut bosses = Vec::new();
+    for floor in &floors {
+        let mut regular = 0;
+        for spawn in &floor.spawns {
+            assert!(spawn.aggressive);
+            if spawn.is_boss {
+                bosses.push((floor.depth, spawn.monster_type.as_str()));
+                continue;
+            }
+            regular += 1;
+            match floor.depth {
+                1..=5 => assert_eq!(spawn.monster_type, "skeleton_weak"),
+                6..=10 => assert_eq!(spawn.monster_type, "skeleton"),
+                11..=15 => assert!(matches!(
+                    spawn.monster_type.as_str(),
+                    "skeleton" | "skeleton_warrior"
+                )),
+                _ => assert_eq!(spawn.monster_type, "skeleton_warrior"),
+            }
+        }
+        assert!(regular > 0, "empty floor {}", floor.depth);
+    }
+    assert_eq!(bosses, [(20, "skeleton_knight")]);
+    assert_eq!(
+        layout_hash(&floors),
+        layout_hash(&generate_dungeon_for("skeleton_crypt"))
+    );
+    for id in ["old_crypt", "orc_warrens", "ogre_stronghold"] {
+        assert!(generate_dungeon_for(id)
+            .iter()
+            .flat_map(|floor| &floor.spawns)
+            .all(|spawn| !spawn.monster_type.starts_with("skeleton")));
+    }
 }
 
 // Captured from the first blessed run; see golden_layout_hash. Re-blessed when
@@ -115,7 +168,14 @@ fn per_dungeon_boss_floors_and_entrance_dir() {
 // when old_crypt was capped to 5 floors via the dungeons.csv `floors` column
 // (the hash now covers the override path, `generate_dungeon_for`) and the
 // boss became `goblin_boss` (the type string is part of the hashed layout).
-const GOLDEN_OLD_CRYPT_HASH: u64 = 0x3cee_b5b1_9cd7_a3df;
+// Re-blessed when floors whose corridors hug a room wall (a mouth wider than
+// `CORRIDOR_MOUTH_MAX`) started being rejected and redrawn: the first
+// re-bless that moves rooms, corridors and shafts, not just spawns/props.
+// Re-blessed for dungeon keys (doc/DUNGEON_REWARD.md): stair rooms no longer
+// host spawns (the 3-cell exit clearance became a whole-room exclusion), and
+// every 5th floor's stair room keeps a single, always-doored exit — corridors
+// there route around it and floors that can't are redrawn.
+const GOLDEN_OLD_CRYPT_HASH: u64 = 0xf2b4_1519_88a6_a4ba;
 
 #[test]
 fn structure_invariants_many_seeds() {
@@ -200,6 +260,59 @@ fn structure_invariants_many_seeds() {
     }
 }
 
+/// Locked floors (every 5th) keep their stair room behind exactly one door
+/// that only the key works; no other floor has a locked door, and no floor
+/// spawns monsters in a room with stairs. A fallback floor is one room, so
+/// it has no exit to lock and is skipped.
+#[test]
+fn locked_floors_have_one_keyed_exit_and_stair_rooms_stay_quiet() {
+    for seed in 0..200u64 {
+        for f in generate_dungeon(seed) {
+            for s in f.spawns.iter().filter(|s| !s.is_boss) {
+                assert!(
+                    !gen::cell_in_stair_room(&f, s.x, s.z),
+                    "seed {seed} depth {}: spawn in a stair room",
+                    f.depth
+                );
+            }
+            let locked = locked_door_ids(&f);
+            if !is_locked_depth(f.depth) || f.rooms.len() == 1 {
+                assert!(locked.is_empty(), "seed {seed} depth {}", f.depth);
+                continue;
+            }
+            assert_eq!(locked.len(), 1, "seed {seed} depth {}", f.depth);
+            let doors = interior_doors(&f);
+            let door = doors
+                .iter()
+                .find(|d| d.door_id == locked[0])
+                .expect("the locked exit is always doored");
+            assert!(door.locked && door.room == 0);
+            assert_eq!(
+                doors.iter().filter(|d| d.room == 0).count(),
+                1,
+                "seed {seed} depth {}: the stair room has a second exit",
+                f.depth
+            );
+        }
+    }
+}
+
+#[test]
+fn key_depths_follow_the_locked_floors() {
+    assert_eq!(locked_depths(15).collect::<Vec<_>>(), [5, 10, 15]);
+    assert_eq!(locked_depths(7).collect::<Vec<_>>(), [5]);
+    assert_eq!(last_locked_depth(10), Some(10));
+    assert_eq!(last_locked_depth(4), None);
+    assert_eq!(key_depth_for(1, 5), Some(5));
+    assert_eq!(key_depth_for(4, 5), Some(5));
+    assert_eq!(key_depth_for(5, 10), None, "a locked floor drops no key");
+    assert_eq!(key_depth_for(6, 10), Some(10));
+    assert_eq!(key_depth_for(11, 12), None, "nothing locked below");
+    assert_eq!(relevant_key_depth(5, 10), Some(5));
+    assert_eq!(relevant_key_depth(6, 10), Some(10));
+    assert_eq!(key_drop_floors(10), 6..=9);
+}
+
 fn shaft_footprint(s: &StairShaft) -> Vec<(i32, i32)> {
     let r = s.rect();
     let mut cells = Vec::new();
@@ -225,13 +338,98 @@ fn passability_with_doors_open(entrance: &Position, floors: &[FloorLayout]) -> R
     rp
 }
 
-/// End-to-end pathfinding through the real passability machinery: from
-/// the surface entrance, walk down every floor to the chest.
+/// The runtime twin of `shaft_opens_to_room_only_at_its_landing`: the rule has
+/// to survive the stairwell consult, which lets a move through when *either*
+/// connected floor allows it. A shaft's far landing is open on the other
+/// floor's grid by design, so an unconditional consult turned those cells into
+/// a side door out of the room and onto a one-storey drop.
 #[test]
-fn full_descent_path_through_passability() {
+fn a_room_cell_never_opens_onto_a_shaft_cell_of_another_floor() {
     let entrance = test_entrance();
     for seed in 0..40u64 {
         let floors = generate_dungeon(seed);
+        let mut cache = PassabilityCache::new();
+        cache.insert(
+            dungeon_cache_key("t"),
+            passability_with_doors_open(&entrance, &floors),
+        );
+
+        for layout in &floors {
+            let floor = passability_floor_for_depth(layout.depth);
+            let y = floor_world_y(entrance.y, layout.depth);
+            let blocked = |a: (i32, i32), b: (i32, i32)| {
+                let from = cell_center(&entrance, layout.depth, a);
+                let to = cell_center(&entrance, layout.depth, b);
+                crate::pathfinding::is_movement_blocked(
+                    &cache,
+                    from.x,
+                    from.z,
+                    to.x,
+                    to.z,
+                    floor,
+                    Some(y),
+                )
+            };
+
+            let mut shafts = vec![(&layout.up_shaft, SHAFT_LEN - 1)];
+            if let Some(ref d) = layout.down_shaft {
+                shafts.push((d, 0));
+            }
+
+            for (shaft, own_step) in shafts {
+                // The landing row this floor stands on, SHAFT_W wide.
+                let own: Vec<_> = (0..SHAFT_W).map(|w| shaft.step_cell(own_step, w)).collect();
+                let footprint = shaft_footprint(shaft);
+                let mut reachable = false;
+
+                for &(x, z) in &footprint {
+                    for (dx, dz) in DIRS {
+                        let (nx, nz) = (x + dx, z + dz);
+                        if !layout.is_carved(nx, nz) || shaft.contains(nx, nz) {
+                            continue;
+                        }
+                        if own.contains(&(x, z)) {
+                            reachable |= !blocked((nx, nz), (x, z)) && !blocked((x, z), (nx, nz));
+                            continue;
+                        }
+                        assert!(
+                            blocked((nx, nz), (x, z)),
+                            "seed {seed} depth {}: room ({nx},{nz}) opens onto \
+                             shaft cell ({x},{z}) that belongs to another floor",
+                            layout.depth
+                        );
+                    }
+                }
+
+                assert!(
+                    reachable,
+                    "seed {seed} depth {}: shaft {shaft:?} landing sealed off from its own floor",
+                    layout.depth
+                );
+            }
+        }
+    }
+}
+
+/// Verify the descent from the surface to the chest with real passability.
+#[test]
+fn full_descent_path_through_passability() {
+    let cases = (0..40u64)
+        .map(|seed| {
+            (
+                format!("seed {seed}"),
+                test_entrance(),
+                generate_dungeon(seed),
+            )
+        })
+        .chain(entrances().iter().map(|def| {
+            (
+                def.id.clone(),
+                def.position(),
+                generate_dungeon_for(&def.id),
+            )
+        }));
+    for (case, entrance, floors) in cases {
         let rp = passability_with_doors_open(&entrance, &floors);
         let mut cache = PassabilityCache::new();
         cache.insert(dungeon_cache_key("t"), rp);
@@ -249,14 +447,14 @@ fn full_descent_path_through_passability() {
             &cache,
             DUNGEON_PATH_MAX_NODES,
         );
-        assert!(res.found, "seed {seed}: surface → depth 1 path not found");
+        assert!(res.found, "{case}: surface → depth 1 path not found");
 
         for f in &floors {
             let from = cell_center(&entrance, f.depth, f.up_shaft.exit_cell());
             let floor = passability_floor_for_depth(f.depth);
             let goal_cell = match f.down_shaft {
                 Some(ref d) => d.entry_cell(),
-                None => f.chest.unwrap(),
+                None => f.stand_cell(f.chest.unwrap()),
             };
             let goal = cell_center(&entrance, f.depth, goal_cell);
             let res = find_and_smooth_path(
@@ -271,7 +469,7 @@ fn full_descent_path_through_passability() {
             );
             assert!(
                 res.found,
-                "seed {seed} depth {}: arrival → {} unreachable",
+                "{case} depth {}: arrival → {} unreachable",
                 f.depth,
                 if f.down_shaft.is_some() {
                     "down stairs"
@@ -279,6 +477,24 @@ fn full_descent_path_through_passability() {
                     "chest"
                 }
             );
+        }
+    }
+}
+
+/// Uncarved rock is impassable in every direction: a mover put there by a
+/// floor change at a shaft's margin cannot roam it.
+#[test]
+fn rock_is_sealed_on_every_side() {
+    for seed in 0..20u64 {
+        for layout in &generate_dungeon(seed) {
+            let cells = floor_passability_cells(layout);
+            for z in 0..GRID {
+                for x in 0..GRID {
+                    if !layout.is_carved(x, z) {
+                        assert_eq!(cells[(x + z * GRID) as usize], super::EDGE_ALL);
+                    }
+                }
+            }
         }
     }
 }
@@ -362,6 +578,52 @@ fn shaft_opens_to_room_only_at_its_landing() {
             assert!(
                 !blocked(exit.0, exit.1, leave, step.0, step.1, enter),
                 "seed {seed} depth {}: up-shaft exit landing sealed off from its steps",
+                layout.depth
+            );
+        }
+    }
+}
+
+/// A blow must not cross a stair shaft's side wall either. Shaft cells belong
+/// to both adjacent floors, so the query's stairwell consult ("block only when
+/// every connected floor refuses") is what has to hold here — a plain wall test
+/// would not prove it.
+#[test]
+fn attacks_refuse_to_cross_a_shaft_side_wall() {
+    use crate::pathfinding::attack_line_blocked;
+    let entrance = test_entrance();
+    for seed in 0..20u64 {
+        let floors = generate_dungeon(seed);
+        let mut cache = PassabilityCache::new();
+        cache.insert(
+            "dungeon".to_string(),
+            dungeon_passability(&entrance, &floors),
+        );
+
+        for layout in &floors {
+            let shaft = &layout.up_shaft;
+            // Midway along the run: never a landing, so both flanks are walled.
+            let step = shaft.step_cell(SHAFT_LEN / 2, 0);
+            let (dx, dz) = if shaft.along_z { (-1, 0) } else { (0, -1) };
+            let beside = (step.0 + dx, step.1 + dz);
+            if !(0..GRID).contains(&beside.0) || !(0..GRID).contains(&beside.1) {
+                continue;
+            }
+            let inside = cell_center(&entrance, layout.depth, step);
+            let outside = cell_center(&entrance, layout.depth, beside);
+            let floor = passability_floor_for_depth(layout.depth);
+            assert!(
+                attack_line_blocked(&cache, inside.x, inside.z, outside.x, outside.z, floor),
+                "seed {seed} depth {}: a blow crossed the shaft side wall at {step:?}",
+                layout.depth
+            );
+            // The same reach along the run stays open, so the assert above is
+            // the wall talking and not the shaft as a whole.
+            let along = shaft.step_cell(SHAFT_LEN / 2 + 1, 0);
+            let along_pos = cell_center(&entrance, layout.depth, along);
+            assert!(
+                !attack_line_blocked(&cache, inside.x, inside.z, along_pos.x, along_pos.z, floor),
+                "seed {seed} depth {}: the shaft run itself must stay clear",
                 layout.depth
             );
         }
@@ -468,6 +730,26 @@ fn entrance_door_id_is_not_an_interior_door() {
     }
 }
 
+/// A corridor running alongside a room wall would tear the wall open along
+/// its length.
+#[test]
+fn corridors_never_hug_a_room_wall() {
+    let registry = entrances().iter().flat_map(|e| generate_dungeon_for(&e.id));
+    let seeds = (0..100u64).flat_map(generate_dungeon);
+    for layout in registry.chain(seeds) {
+        for o in doors::wall_openings(&layout) {
+            assert!(
+                o.len <= gen::CORRIDOR_MOUTH_MAX,
+                "depth {} wall {} opening at {} is {} cells wide",
+                layout.depth,
+                o.wall,
+                o.lat0,
+                o.len
+            );
+        }
+    }
+}
+
 #[test]
 fn passability_floor_mapping() {
     assert_eq!(passability_floor_for_depth(1), DUNGEON_FLOOR_INDEX_BASE);
@@ -504,8 +786,10 @@ fn monster_level_scaling() {
     assert_eq!(monster_level_for_depth(2, 6), 3);
     assert_eq!(monster_level_for_depth(4, 20), 12);
     assert_eq!(monster_level_for_depth(19, 20), 20); // cap
+    assert_eq!(monster_level_for_depth(25, 20), 25);
+    assert_eq!(monster_level_for_depth(25, 5), 25);
     for depth in 1..=MAX_DEPTH {
-        assert!(!spawn_table(depth).is_empty());
+        assert!(!spawn_table_for("", depth).is_empty());
     }
 }
 
@@ -576,6 +860,12 @@ fn walkable_drop_never_lands_in_a_wall() {
 /// and with sane stack/rotation values.
 #[test]
 fn props_are_well_placed() {
+    let solid_at = |layout: &FloorLayout, x: i32, z: i32| {
+        layout
+            .props
+            .iter()
+            .any(|p| (p.x, p.z) == (x, z) && p.kind.is_solid())
+    };
     let in_room = |layout: &FloorLayout, x: i32, z: i32| {
         layout
             .rooms
@@ -651,6 +941,28 @@ fn props_are_well_placed() {
                 );
                 if matches!(p.kind, PropKind::Chest) {
                     assert_eq!(p.stack, 1, "seed {seed}: chest must not stack");
+                    let back = gen::chest_back_delta(layout, p.x, p.z);
+                    assert_eq!(
+                        p.rotation,
+                        gen::chest_yaw(back),
+                        "seed {seed}: chest rotation is not its back-wall yaw"
+                    );
+                    // Loot spilled from the opening must not roll down stairs.
+                    assert!(
+                        !gen::cell_in_any_shaft(layout, p.x - back.0, p.z - back.1),
+                        "seed {seed}: chest ({},{}) opens into a shaft",
+                        p.x,
+                        p.z
+                    );
+                    // The overflowing body keeps its flanks clear.
+                    for (fx, fz) in gen::flank_cells(p.x, p.z, back) {
+                        assert!(
+                            !solid_at(layout, fx, fz),
+                            "seed {seed}: solid prop on chest ({},{}) flank ({fx},{fz})",
+                            p.x,
+                            p.z
+                        );
+                    }
                 }
                 assert!(p.rotation < 360, "seed {seed}: rotation out of range");
 
@@ -661,6 +973,16 @@ fn props_are_well_placed() {
                         "seed {seed}: two props share cell ({},{})",
                         p.x,
                         p.z
+                    );
+                }
+            }
+
+            // The treasure chest (rendered yaw 0) keeps its x±1 flanks clear.
+            if let Some((cx, cz)) = layout.chest {
+                for (fx, fz) in gen::flank_cells(cx, cz, (0, -1)) {
+                    assert!(
+                        !solid_at(layout, fx, fz),
+                        "seed {seed}: solid prop on treasure chest flank ({fx},{fz})"
                     );
                 }
             }
@@ -689,7 +1011,7 @@ fn props_keep_rooms_reachable() {
             let floor = passability_floor_for_depth(f.depth);
             let from = cell_center(&entrance, f.depth, f.up_shaft.exit_cell());
             for room in &f.rooms {
-                let goal = cell_center(&entrance, f.depth, room.center());
+                let goal = cell_center(&entrance, f.depth, f.stand_cell(room.center()));
                 let res = find_and_smooth_path(
                     from.x,
                     from.z,
@@ -710,6 +1032,22 @@ fn props_keep_rooms_reachable() {
         }
     }
     assert!(total_props > 0, "test never exercised a sealed prop");
+}
+
+/// The chest cell is sealed on every edge, like a clutter prop.
+#[test]
+fn chest_cell_is_sealed() {
+    for seed in 0..40u64 {
+        let floors = generate_dungeon(seed);
+        let last = floors.last().unwrap();
+        let (cx, cz) = last.chest.expect("final floor has a chest");
+        let cells = floor_passability_cells(last);
+        assert_eq!(
+            cells[(cx + cz * GRID) as usize] & EDGE_ALL,
+            EDGE_ALL,
+            "seed {seed}: chest cell not sealed"
+        );
+    }
 }
 
 #[test]

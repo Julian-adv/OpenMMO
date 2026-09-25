@@ -1,11 +1,31 @@
 use crate::types::{CharacterAttributes, GameDateTime};
+#[path = "auth_enchant_failures.rs"]
+mod enchant_failures;
+#[path = "auth_estate_storage.rs"]
+mod estate_storage;
+pub(crate) use estate_storage::EstateDeposit;
+#[path = "auth_fence.rs"]
+mod fence;
+#[path = "auth_gold_sinks.rs"]
+mod gold_sinks;
+#[path = "auth_land.rs"]
+mod land;
+#[path = "auth_landscaping.rs"]
+mod landscaping;
+#[path = "auth_metrics.rs"]
+mod metrics;
 use crate::world_config::world_config;
-use onlinerpg_shared::{CharacterClass, Gender};
+pub use land::{LandAccount, OwnedLandPlot};
+use onlinerpg_shared::inventory::EquipSlot;
+use onlinerpg_shared::messages::FriendEntry;
+use onlinerpg_shared::xp;
+use onlinerpg_shared::{CharacterClass, Gender, VisibleEquipment};
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{params, Connection, OptionalExtension};
-use std::collections::HashSet;
+use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
+use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// New characters start with no gold: anything redeemable granted at creation
 /// would let abusers mint wealth by recycling characters (see doc/ECONOMY.md).
@@ -16,6 +36,16 @@ const STARTER_ITEMS: &[(&str, u32, Option<&str>)] = &[
     ("worn_torch", 1, None),
 ];
 
+/// Class additions to the starter kit, under the same no-basePrice rule.
+fn class_starter_items(
+    class: &CharacterClass,
+) -> &'static [(&'static str, u32, Option<&'static str>)] {
+    match class {
+        CharacterClass::Bard => &[("worn_mandolin", 1, None)],
+        _ => &[],
+    }
+}
+
 /// Item defs renamed after release, applied to stored inventories at startup.
 /// (old_id, new_id) — new_id must exist in items.csv.
 const RENAMED_ITEM_IDS: &[(&str, &str)] = &[
@@ -24,6 +54,34 @@ const RENAMED_ITEM_IDS: &[(&str, &str)] = &[
 ];
 
 /// Reserved account-name prefix for headless NPC/bot accounts.
+/// The level curve before doc/LEVEL_CURVE.md: 20 * 2^(n-2). Kept only for
+/// `migrate_level_curve`.
+fn legacy_xp_for_level(level: u32) -> u64 {
+    if level <= 1 {
+        return 0;
+    }
+    let shift = level - 2;
+    if shift >= 64 {
+        return u64::MAX;
+    }
+    20u64.saturating_mul(1u64 << shift)
+}
+
+/// Same level, same progress through the level band, on the new curve.
+fn migrate_legacy_xp(old_xp: u64) -> u64 {
+    let level = if old_xp < 20 {
+        1
+    } else {
+        ((old_xp / 20).ilog2() + 2).min(61)
+    };
+    let old_start = legacy_xp_for_level(level);
+    let old_band = legacy_xp_for_level(level + 1) - old_start;
+    let new_start = xp::xp_for_level(level);
+    let new_band = xp::xp_for_level(level + 1) - new_start;
+    let into = u128::from(old_xp - old_start);
+    new_start + (into * u128::from(new_band) / u128::from(old_band)) as u64
+}
+
 pub const NPC_ACCOUNT_PREFIX: &str = "npc_";
 
 const MAX_NAME_CHARS: usize = 32;
@@ -43,30 +101,129 @@ fn valid_name(name: &str) -> bool {
     !name.is_empty() && name.chars().count() <= MAX_NAME_CHARS && name.chars().all(valid_name_char)
 }
 
+/// Character names must also start with a letter; digit/underscore-leading
+/// names created before this rule are grandfathered.
+fn valid_character_name(name: &str) -> bool {
+    valid_name(name)
+        && name
+            .chars()
+            .next()
+            .is_some_and(|c| !matches!(c, '0'..='9' | '_'))
+}
+
 /// One persisted inventory row: a bag stack (`equip_slot: None`) or an
 /// equipped item.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ItemRow {
+    pub locked: bool,
     pub item_def_id: String,
     pub quantity: u32,
     pub equip_slot: Option<String>,
     pub enchant: i32,
+    /// Dye on a cape (doc/CAPE_CUSTOMIZATION.md); `None` on everything else.
+    pub cape_color: Option<String>,
+    /// Texture hash on a cape; `None` on everything else.
+    pub cape_texture: Option<String>,
 }
 
-/// One trained skill as stored in `character_skills`. The skill id is kept as
-/// its wire string (`SkillId::as_str`) so rows written by a newer server
-/// survive a rollback: unknown ids load as rows, get skipped at the
-/// `Skills` conversion, and are preserved on the next save.
+/// A permanently learned skill.
 #[derive(Debug, Clone)]
 pub struct SkillRow {
     pub skill_id: String,
-    pub level: u32,
-    pub xp: u64,
+}
+
+/// A ban in force on an account. `until_unix` is `None` for a permanent ban.
+#[derive(Debug, Clone)]
+pub struct AccountBan {
+    pub reason: Option<String>,
+    pub until_unix: Option<i64>,
+}
+
+impl AccountBan {
+    pub fn message(&self) -> String {
+        ban_message(self.reason.as_deref(), self.until_unix)
+    }
+}
+
+pub const DEFAULT_BAN_REASON: &str = "Banned by an operator";
+
+/// Client-facing text, so a kicked player learns why and for how long.
+pub fn ban_message(reason: Option<&str>, until_unix: Option<i64>) -> String {
+    let reason = reason.unwrap_or(DEFAULT_BAN_REASON);
+    match until_unix {
+        None => reason.to_string(),
+        Some(until) => {
+            let minutes = ((until - unix_now()).max(0) as u64).div_ceil(60);
+            format!("{reason} ({minutes} minute(s) remaining)")
+        }
+    }
+}
+
+/// doc/PRICING.md; `m_prev` is the reading at the last meeting.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PricingState {
+    pub index_percent: u32,
+    pub last_meeting_day: Option<i64>,
+    pub m_prev: Option<f64>,
+}
+
+impl Default for PricingState {
+    fn default() -> Self {
+        Self {
+            index_percent: 100,
+            last_meeting_day: None,
+            m_prev: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct PricingMeeting {
+    pub game_day: i64,
+    pub m_prev: f64,
+    pub m_now: f64,
+    pub growth: f64,
+    pub index_before: u32,
+    pub index_after: u32,
+}
+
+fn active_cutoff(now: i64, active_days: u32) -> i64 {
+    now - i64::from(active_days) * 86_400
+}
+
+pub(crate) fn unix_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
 }
 
 #[derive(Debug, Clone)]
 pub struct AuthService {
     pool: r2d2::Pool<SqliteConnectionManager>,
+    /// Arc so cloning the service stays a handle copy: callers move clones
+    /// into blocking tasks all over the server.
+    banned_names: Arc<HashSet<String>>,
+}
+
+/// One character-select row: the record plus what the preview shows.
+pub struct CharacterListing {
+    pub record: CharacterRecord,
+    pub worn: VisibleEquipment,
+    pub titles: Vec<String>,
+    pub active_title: Option<String>,
+}
+
+impl CharacterListing {
+    /// A character with nothing earned yet — the one just created.
+    pub fn fresh(record: CharacterRecord, worn: VisibleEquipment) -> Self {
+        Self {
+            record,
+            worn,
+            titles: Vec::new(),
+            active_title: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -85,10 +242,13 @@ pub struct CharacterRecord {
     pub last_z: f32,
     pub last_rotation: f32,
     pub health: Option<u32>,
+    pub mana: Option<u32>,
     pub floor_level: i8,
+    pub dungeon_epoch: Option<i64>,
     pub gold: i64,
     /// Nonzero unlocks admin for ADMIN_EMAILS-allowlisted accounts (tiers reserved).
     pub admin_role: i64,
+    pub satiation: u32,
 }
 
 pub struct CharacterSaveData {
@@ -101,12 +261,43 @@ pub struct CharacterSaveData {
     pub level: u32,
     pub max_hp: u32,
     pub health: u32,
+    pub mana: Option<u32>,
     pub floor_level: i8,
+    pub dungeon_epoch: Option<i64>,
     pub gold: i64,
+    pub satiation: u32,
+    /// The archer's chosen pile; rides the periodic save so a relog resumes
+    /// the same arrows (doc/COMBAT.md 원거리 전투).
+    pub active_ammo: Option<String>,
+}
+
+/// One row of the player-trade ledger. `*_items` are JSON arrays of
+/// `{def, qty, ench}` — never `instance_id`, which is minted per session and
+/// means nothing once the session ends.
+pub struct TradeLedgerEntry {
+    pub a_character_id: i64,
+    pub b_character_id: i64,
+    pub a_gold_before: i64,
+    pub a_gold_after: i64,
+    pub b_gold_before: i64,
+    pub b_gold_after: i64,
+    pub a_items: String,
+    pub b_items: String,
 }
 
 /// Column list shared between queries that return full CharacterRecord rows.
-const CHARACTER_COLUMNS: &str = "id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation, health, floor_level, gender, gold, admin_role";
+const CHARACTER_COLUMNS: &str = "id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation, health, floor_level, gender, gold, admin_role, satiation, mana, dungeon_epoch";
+
+fn class_from_row(row: &rusqlite::Row<'_>, idx: usize) -> rusqlite::Result<CharacterClass> {
+    let class_str: String = row.get(idx)?;
+    class_str.parse::<CharacterClass>().map_err(|_| {
+        rusqlite::Error::FromSqlConversionFailure(
+            idx,
+            rusqlite::types::Type::Text,
+            format!("unknown character class: {class_str}").into(),
+        )
+    })
+}
 
 fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterRecord> {
     Ok(CharacterRecord {
@@ -125,16 +316,7 @@ fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterR
             cha: row.get(11)?,
             guard: row.get(12)?,
         },
-        class: {
-            let class_str: String = row.get(13)?;
-            class_str.parse::<CharacterClass>().map_err(|_| {
-                rusqlite::Error::FromSqlConversionFailure(
-                    13,
-                    rusqlite::types::Type::Text,
-                    format!("unknown character class: {class_str}").into(),
-                )
-            })?
-        },
+        class: class_from_row(row, 13)?,
         last_x: row.get::<_, f64>(14).unwrap_or(0.0) as f32,
         last_y: row.get::<_, f64>(15).unwrap_or(0.0) as f32,
         last_z: row.get::<_, f64>(16).unwrap_or(0.0) as f32,
@@ -155,7 +337,137 @@ fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterR
         },
         gold: row.get::<_, i64>(21).unwrap_or(0),
         admin_role: row.get::<_, i64>(22).unwrap_or(0),
+        satiation: row
+            .get::<_, i64>(23)
+            .unwrap_or(i64::from(onlinerpg_shared::hunger::SATIATION_START))
+            .clamp(0, i64::from(onlinerpg_shared::hunger::SATIATION_MAX)) as u32,
+        mana: row
+            .get::<_, Option<i64>>(24)?
+            .map(|v| v.clamp(0, i64::from(u32::MAX)) as u32),
+        dungeon_epoch: row.get(25)?,
     })
+}
+
+fn read_characters(
+    conn: &Connection,
+    account_name: &str,
+) -> Result<Vec<CharacterRecord>, AuthError> {
+    let account_name = account_name.trim();
+    if account_name.is_empty() {
+        return Err(AuthError::InvalidInput("Account name is required"));
+    }
+
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {}
+         FROM characters
+         WHERE account_name = ?1
+         ORDER BY created_at ASC, id ASC",
+        CHARACTER_COLUMNS
+    ))?;
+
+    let characters = stmt
+        .query_map(params![account_name], character_record_from_row)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(characters)
+}
+
+/// Slots the character-select preview draws.
+const PREVIEW_EQUIP_SLOTS: [EquipSlot; 3] =
+    [EquipSlot::MainHand, EquipSlot::OffHand, EquipSlot::Back];
+
+/// The preview's gear for a whole account in one query rather than one per
+/// character.
+/// A character's earned title ids and the shown one (doc/TITLES.md).
+pub type TitleSet = (Vec<String>, Option<String>);
+
+/// Earned titles (in definition order) and the shown one, per character.
+fn read_titles(
+    conn: &Connection,
+    character_ids: &[i64],
+) -> Result<HashMap<i64, TitleSet>, AuthError> {
+    if character_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let placeholders = vec!["?"; character_ids.len()].join(",");
+    let mut out: HashMap<i64, TitleSet> = HashMap::new();
+
+    let mut stmt = conn.prepare(&format!(
+        "SELECT character_id, title_id FROM character_titles \
+         WHERE character_id IN ({placeholders})"
+    ))?;
+    let rows = stmt.query_map(params_from_iter(character_ids), |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+    })?;
+    for row in rows {
+        let (character_id, title) = row?;
+        out.entry(character_id).or_default().0.push(title);
+    }
+    for (titles, _) in out.values_mut() {
+        crate::title_defs::sort_ids(titles);
+    }
+
+    let mut stmt = conn.prepare(&format!(
+        "SELECT id, active_title FROM characters \
+         WHERE id IN ({placeholders}) AND active_title IS NOT NULL"
+    ))?;
+    let rows = stmt.query_map(params_from_iter(character_ids), |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+    })?;
+    for row in rows {
+        let (character_id, active) = row?;
+        let entry = out.entry(character_id).or_default();
+        // A stale pick (title row gone) shows nothing rather than a ghost.
+        if entry.0.contains(&active) {
+            entry.1 = Some(active);
+        }
+    }
+    Ok(out)
+}
+
+fn read_visible_equipment(
+    conn: &Connection,
+    character_ids: &[i64],
+) -> Result<HashMap<i64, VisibleEquipment>, AuthError> {
+    if character_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let slots = PREVIEW_EQUIP_SLOTS.map(|slot| format!("'{}'", slot.as_str()));
+    let mut stmt = conn.prepare(&format!(
+        "SELECT character_id, equip_slot, item_def_id, cape_color, cape_texture
+         FROM character_items
+         WHERE character_id IN ({})
+           AND equip_slot IN ({})",
+        vec!["?"; character_ids.len()].join(","),
+        slots.join(",")
+    ))?;
+
+    let rows = stmt.query_map(params_from_iter(character_ids), |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, Option<String>>(3)?,
+            row.get::<_, Option<String>>(4)?,
+        ))
+    })?;
+
+    let mut equipment: HashMap<i64, VisibleEquipment> = HashMap::new();
+    for row in rows {
+        let (character_id, slot, item_def_id, cape_color, cape_texture) = row?;
+        let entry = equipment.entry(character_id).or_default();
+        match slot.parse() {
+            Ok(EquipSlot::MainHand) => entry.main_hand = Some(item_def_id),
+            Ok(EquipSlot::OffHand) => entry.off_hand = Some(item_def_id),
+            Ok(EquipSlot::Back) => {
+                entry.back = Some(item_def_id);
+                entry.back_color = cape_color;
+                entry.back_texture = cape_texture;
+            }
+            _ => {}
+        }
+    }
+    Ok(equipment)
 }
 
 #[derive(Debug)]
@@ -165,6 +477,7 @@ pub enum AuthError {
     InvalidCharacterName,
     CharacterLimitReached,
     CharacterNameAlreadyExists,
+    BannedCharacterName,
     CharacterNotFound,
     Database(String),
 }
@@ -175,12 +488,13 @@ impl AuthError {
             AuthError::InvalidInput(message) => message,
             AuthError::AccountNotFound => "Account not found",
             AuthError::InvalidCharacterName => {
-                "Character name is empty, too long, or contains invalid characters"
+                "Character name must start with a letter and contain only letters, digits, or _"
             }
             AuthError::CharacterLimitReached => {
                 "A maximum of 3 characters can be created per account"
             }
             AuthError::CharacterNameAlreadyExists => "Character name already exists",
+            AuthError::BannedCharacterName => "That name cannot be used. Please choose another",
             AuthError::CharacterNotFound => "Character not found",
             AuthError::Database(_) => "Server auth database error",
         }
@@ -211,8 +525,11 @@ impl AuthService {
     ) -> Result<(), rusqlite::Error> {
         let mut stmt = conn.prepare(
             "UPDATE characters SET last_x = ?1, last_y = ?2, last_z = ?3, last_rotation = ?4, \
-             xp = ?5, level = ?6, max_hp = ?7, health = ?8, floor_level = ?9, gold = ?10 WHERE id = ?11",
+             xp = ?5, level = ?6, max_hp = ?7, health = ?8, floor_level = ?9, gold = ?10, \
+             satiation = ?11, last_seen_at = ?12, active_ammo = ?14, mana = ?15, \
+             dungeon_epoch = ?16 WHERE id = ?13",
         )?;
+        let now = unix_now();
         for d in data {
             stmt.execute(params![
                 f64::from(d.x),
@@ -225,7 +542,12 @@ impl AuthService {
                 i64::from(d.health),
                 i64::from(d.floor_level),
                 d.gold,
+                i64::from(d.satiation),
+                now,
                 d.character_id,
+                d.active_ammo.as_deref(),
+                d.mana.map(i64::from),
+                d.dungeon_epoch,
             ])?;
         }
         Ok(())
@@ -259,9 +581,15 @@ impl AuthService {
     ) -> Result<(), rusqlite::Error> {
         let mut delete = conn.prepare("DELETE FROM character_items WHERE character_id = ?1")?;
         let mut insert = conn.prepare(
-            "INSERT INTO character_items (character_id, item_def_id, quantity, equip_slot, enchant) \
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO character_items \
+             (character_id, item_def_id, quantity, equip_slot, enchant, cape_color, \
+              cape_texture, locked) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         )?;
+        let mut update_enchant = conn.prepare(
+            "UPDATE characters SET weapon_enchant = ?2, armor_enchant = ?3 WHERE id = ?1",
+        )?;
+        let defs = crate::item_defs::item_defs();
 
         for (character_id, items) in inventories {
             delete.execute(params![character_id])?;
@@ -271,43 +599,53 @@ impl AuthService {
                     item.item_def_id,
                     item.quantity,
                     item.equip_slot,
-                    item.enchant
+                    item.enchant,
+                    item.cape_color,
+                    item.cape_texture,
+                    item.locked
                 ])?;
             }
+            let mut weapon_enchant = 0;
+            let mut armor_slots = HashMap::new();
+            for item in items.iter().filter(|item| item.quantity > 0) {
+                let Some(def) = defs.get(&item.item_def_id) else {
+                    continue;
+                };
+                if def.is_weapon() {
+                    weapon_enchant = weapon_enchant.max(item.enchant);
+                } else if def.is_armor() {
+                    if let Some(slot) = def.equip_slot {
+                        let enchant = armor_slots.entry(slot).or_insert(0);
+                        *enchant = (*enchant).max(item.enchant);
+                    }
+                }
+            }
+            let armor_enchant: i64 = armor_slots
+                .values()
+                .map(|enchant| i64::from(*enchant))
+                .sum();
+            update_enchant.execute(params![character_id, weapon_enchant, armor_enchant])?;
         }
         Ok(())
     }
 
-    /// Upsert, not delete+insert like inventories: skills are only ever added
-    /// or advanced, and an upsert leaves rows a newer server wrote (unknown
-    /// skill ids) untouched across a rollback.
+    /// Add learned skills without deleting unknown skill IDs.
     fn upsert_skills<'a>(
         conn: &Connection,
         skills: impl IntoIterator<Item = (i64, &'a [SkillRow])>,
     ) -> Result<(), rusqlite::Error> {
         let mut upsert = conn.prepare(
-            "INSERT INTO character_skills (character_id, skill_id, level, xp) \
-             VALUES (?1, ?2, ?3, ?4) \
-             ON CONFLICT(character_id, skill_id) DO UPDATE SET
-                level = excluded.level,
-                xp = excluded.xp",
+            "INSERT INTO character_skills (character_id, skill_id) \
+             VALUES (?1, ?2) \
+             ON CONFLICT(character_id, skill_id) DO NOTHING",
         )?;
 
         for (character_id, rows) in skills {
             for row in rows {
-                upsert.execute(params![
-                    character_id,
-                    row.skill_id,
-                    row.level,
-                    row.xp as i64
-                ])?;
+                upsert.execute(params![character_id, row.skill_id])?;
             }
         }
         Ok(())
-    }
-
-    pub fn default_db_path() -> PathBuf {
-        PathBuf::from("data/game_data.db")
     }
 
     pub fn new(db_path: PathBuf) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
@@ -332,12 +670,82 @@ impl AuthService {
         Self::ensure_accounts_columns(&conn)?;
         Self::ensure_characters_schema(&conn)?;
         Self::migrate_item_definition_ids(&conn)?;
+        Self::strip_npc_starter_weapons(&conn)?;
         Self::ensure_blocks_schema(&conn)?;
+        Self::ensure_friends_schema(&conn)?;
+        Self::ensure_bans_schema(&conn)?;
         Self::ensure_character_skills_schema(&conn)?;
         Self::ensure_world_time_schema(&conn)?;
         Self::ensure_dungeon_chest_schema(&conn)?;
+        Self::ensure_dungeon_discovery_schema(&conn)?;
+        Self::ensure_titles_schema(&conn)?;
+        Self::ensure_trade_ledger_schema(&conn)?;
+        Self::ensure_gold_snapshots_schema(&conn)?;
+        Self::ensure_server_starts_schema(&conn)?;
+        Self::ensure_item_sales_schema(&conn)?;
+        Self::ensure_gold_sinks_schema(&conn)?;
+        Self::ensure_concurrent_samples_schema(&conn)?;
+        Self::ensure_account_activity_schema(&conn)?;
+        Self::ensure_pricing_schema(&conn)?;
+        Self::ensure_migrations_schema(&conn)?;
+        Self::migrate_level_curve(&conn)?;
+        Self::ensure_level_history_schema(&conn)?;
+        Self::ensure_gold_history_schema(&conn)?;
+        Self::ensure_weapon_enchant_history_schema(&conn)?;
+        Self::ensure_weapon_enchant_failures_schema(&conn)?;
+        Self::ensure_armor_enchant_history_schema(&conn)?;
+        Self::ensure_land_history_schema(&conn)?;
 
-        Ok(Self { pool })
+        Ok(Self {
+            pool,
+            banned_names: Arc::new(HashSet::new()),
+        })
+    }
+
+    pub fn with_banned_names(mut self, names: HashSet<String>) -> Self {
+        self.banned_names = Arc::new(names);
+        self
+    }
+
+    /// Whether an account is barred from using this name. Operator-run NPC
+    /// accounts are exempt: headless bots cannot answer a rename prompt.
+    pub fn is_name_banned_for(&self, account_name: &str, name: &str) -> bool {
+        !account_name.starts_with(NPC_ACCOUNT_PREFIX)
+            && self
+                .banned_names
+                .contains(&crate::banned_names::normalize(name))
+    }
+
+    /// The gate every new character name passes. `current_name` is the name
+    /// being replaced, so a rename that only changes case is not a conflict
+    /// with itself.
+    fn check_new_character_name(
+        &self,
+        conn: &Connection,
+        account_name: &str,
+        name: &str,
+        current_name: Option<&str>,
+    ) -> Result<(), AuthError> {
+        if !valid_character_name(name) {
+            return Err(AuthError::InvalidCharacterName);
+        }
+        if self.is_name_banned_for(account_name, name) {
+            return Err(AuthError::BannedCharacterName);
+        }
+        if current_name.is_some_and(|current| current.eq_ignore_ascii_case(name)) {
+            return Ok(());
+        }
+        let taken: Option<i64> = conn
+            .query_row(
+                "SELECT id FROM characters WHERE character_name = ?1 COLLATE NOCASE",
+                params![name],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if taken.is_some() {
+            return Err(AuthError::CharacterNameAlreadyExists);
+        }
+        Ok(())
     }
 
     /// Migrate pre-Google-auth databases: the FNV password hashes are dropped
@@ -384,6 +792,16 @@ impl AuthService {
             "CREATE INDEX IF NOT EXISTS idx_characters_account_name ON characters(account_name)",
             [],
         )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_characters_level_ranking
+             ON characters(level DESC, xp DESC, id ASC)",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_characters_gold_ranking
+             ON characters(gold DESC, id ASC)",
+            [],
+        )?;
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS character_items (
@@ -393,11 +811,17 @@ impl AuthService {
                 quantity INTEGER NOT NULL DEFAULT 1,
                 equip_slot TEXT,
                 enchant INTEGER NOT NULL DEFAULT 0,
+                cape_color TEXT,
+                cape_texture TEXT,
                 FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
             )",
             [],
         )?;
         Self::ensure_character_item_columns(conn)?;
+        Self::ensure_land_schema(conn)?;
+        Self::ensure_fence_schema(conn)?;
+        Self::ensure_landscaping_schema(conn)?;
+        Self::ensure_estate_storage_schema(conn)?;
 
         // Every inventory read and every save's DELETE filters on character_id;
         // without this SQLite full-scans the table once per character.
@@ -407,6 +831,31 @@ impl AuthService {
             [],
         )?;
 
+        Ok(())
+    }
+
+    /// Friendships, one row per direction. Ids rather than names (unlike
+    /// `character_blocks`): deleting a character must take its friendships
+    /// with it, which both cascades give for free, and a name would leave a
+    /// permanently-offline ghost on every friend's list.
+    fn ensure_friends_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS character_friends (
+                character_id INTEGER NOT NULL,
+                friend_id INTEGER NOT NULL,
+                PRIMARY KEY (character_id, friend_id),
+                FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE,
+                FOREIGN KEY (friend_id) REFERENCES characters(id) ON DELETE CASCADE
+            )",
+            [],
+        )?;
+        // The reverse-direction cascade needs it, and so does nothing else:
+        // every read is by `character_id`, which the primary key covers.
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_character_friends_friend_id \
+             ON character_friends(friend_id)",
+            [],
+        )?;
         Ok(())
     }
 
@@ -449,13 +898,71 @@ impl AuthService {
     /// Columns added to character_items after release; mirrors
     /// `ensure_character_attribute_columns` for the characters table.
     fn ensure_character_item_columns(conn: &Connection) -> Result<(), rusqlite::Error> {
-        if !Self::table_columns(conn, "character_items")?.contains("enchant") {
+        let columns = Self::table_columns(conn, "character_items")?;
+        if !columns.contains("locked") {
+            conn.execute(
+                "ALTER TABLE character_items ADD COLUMN locked INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
+        if !columns.contains("enchant") {
             conn.execute(
                 "ALTER TABLE character_items ADD COLUMN enchant INTEGER NOT NULL DEFAULT 0",
                 [],
             )?;
         }
+        if !columns.contains("cape_color") {
+            conn.execute("ALTER TABLE character_items ADD COLUMN cape_color TEXT", [])?;
+        }
+        if !columns.contains("cape_texture") {
+            conn.execute(
+                "ALTER TABLE character_items ADD COLUMN cape_texture TEXT",
+                [],
+            )?;
+        }
 
+        Ok(())
+    }
+
+    /// One-off data migrations that must not run twice, keyed by name.
+    fn ensure_migrations_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS migrations (
+                name TEXT PRIMARY KEY,
+                applied_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+            )",
+            [],
+        )?;
+        Ok(())
+    }
+
+    /// Moves stored XP from the 20 * 2^(n-2) curve onto doc/LEVEL_CURVE.md,
+    /// keeping every character's level and progress through its level band.
+    /// `level` is left alone: it already agrees with the XP.
+    fn migrate_level_curve(conn: &Connection) -> Result<(), rusqlite::Error> {
+        const NAME: &str = "level_curve_2026_08";
+        let done: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM migrations WHERE name = ?1)",
+            params![NAME],
+            |row| row.get(0),
+        )?;
+        if done {
+            return Ok(());
+        }
+        let tx = conn.unchecked_transaction()?;
+        let mut update = tx.prepare("UPDATE characters SET xp = ?1 WHERE id = ?2")?;
+        let mut migrated = 0;
+        for row in tx
+            .prepare("SELECT id, xp FROM characters WHERE xp > 0")?
+            .query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, u64>(1)?)))?
+        {
+            let (id, old_xp) = row?;
+            migrated += update.execute(params![migrate_legacy_xp(old_xp) as i64, id])?;
+        }
+        drop(update);
+        tx.execute("INSERT INTO migrations (name) VALUES (?1)", params![NAME])?;
+        tx.commit()?;
+        tracing::info!(migrated, "Migrated character XP to the new level curve");
         Ok(())
     }
 
@@ -468,6 +975,29 @@ impl AuthService {
         }
         if migrated > 0 {
             tracing::info!(migrated, "Migrated legacy item definition ids");
+        }
+        Ok(())
+    }
+
+    /// Registry NPCs created before they skipped the starter kit still carry
+    /// its worn sword (some equipped, in plain sight). Drop it; the torch
+    /// stays — it is harmless in the bag and useful at night. Scoped to the
+    /// registry, the same predicate as the skip: a free `npc_` agent account
+    /// keeps its starter weapon.
+    fn strip_npc_starter_weapons(conn: &Connection) -> Result<(), rusqlite::Error> {
+        let mut stmt = conn.prepare(
+            "DELETE FROM character_items WHERE item_def_id = 'worn_iron_sword' \
+             AND character_id IN \
+             (SELECT id FROM characters WHERE character_name = ?1 \
+              AND account_name GLOB ?2)",
+        )?;
+        let pattern = format!("{NPC_ACCOUNT_PREFIX}*");
+        let mut stripped = 0;
+        for name in crate::npc_defs::npc_defs().npc_names() {
+            stripped += stmt.execute(params![name, pattern])?;
+        }
+        if stripped > 0 {
+            tracing::info!(stripped, "Removed starter swords from NPC characters");
         }
         Ok(())
     }
@@ -491,19 +1021,339 @@ impl AuthService {
         Ok(())
     }
 
-    fn ensure_character_skills_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+    fn ensure_titles_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS character_skills (
+            "CREATE TABLE IF NOT EXISTS character_titles (
                 character_id INTEGER NOT NULL,
-                skill_id TEXT NOT NULL,
-                level INTEGER NOT NULL DEFAULT 0,
-                xp INTEGER NOT NULL DEFAULT 0,
-                PRIMARY KEY (character_id, skill_id),
+                title_id TEXT NOT NULL,
+                earned_at INTEGER NOT NULL,
+                PRIMARY KEY (character_id, title_id),
                 FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
             )",
             [],
         )?;
         Ok(())
+    }
+
+    /// Earned title ids (in definition order) and the shown one (doc/TITLES.md).
+    pub fn load_titles(
+        &self,
+        character_id: i64,
+    ) -> Result<(Vec<String>, Option<String>), AuthError> {
+        let conn = self.open_connection()?;
+        Ok(read_titles(&conn, &[character_id])?
+            .remove(&character_id)
+            .unwrap_or_default())
+    }
+
+    /// Record a title; false when the character already had it.
+    pub fn grant_title(&self, character_id: i64, title_id: &str) -> Result<bool, AuthError> {
+        let conn = self.open_connection()?;
+        let inserted = conn.execute(
+            "INSERT OR IGNORE INTO character_titles (character_id, title_id, earned_at) \
+             VALUES (?1, ?2, ?3)",
+            params![character_id, title_id, unix_now()],
+        )?;
+        Ok(inserted == 1)
+    }
+
+    /// The archer's saved ammo choice, or `None` when never chosen.
+    pub fn active_ammo(&self, character_id: i64) -> Result<Option<String>, AuthError> {
+        let conn = self.open_connection()?;
+        let value = conn
+            .query_row(
+                "SELECT active_ammo FROM characters WHERE id = ?1",
+                params![character_id],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()?
+            .flatten();
+        Ok(value)
+    }
+
+    /// Set the shown title. `Some` must be an earned title; otherwise the
+    /// row is left alone and false comes back.
+    pub fn set_active_title(
+        &self,
+        character_id: i64,
+        title_id: Option<&str>,
+    ) -> Result<bool, AuthError> {
+        let conn = self.open_connection()?;
+        let changed = match title_id {
+            None => conn.execute(
+                "UPDATE characters SET active_title = NULL WHERE id = ?1",
+                params![character_id],
+            )?,
+            Some(title) => conn.execute(
+                "UPDATE characters SET active_title = ?2 WHERE id = ?1 AND EXISTS (\
+                     SELECT 1 FROM character_titles \
+                     WHERE character_id = ?1 AND title_id = ?2)",
+                params![character_id, title],
+            )?,
+        };
+        Ok(changed == 1)
+    }
+
+    /// Bans key on the account, not the character: a banned player can delete
+    /// and recreate characters, but the Google subject stays put. `until_unix`
+    /// is NULL for a permanent ban and an epoch second for a timed one —
+    /// wall-clock, because a monotonic `Instant` cannot survive a restart.
+    fn ensure_bans_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS account_bans (
+                account_name TEXT PRIMARY KEY,
+                reason TEXT,
+                until_unix INTEGER,
+                banned_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                FOREIGN KEY (account_name) REFERENCES accounts(player_name) ON DELETE CASCADE
+            )",
+            [],
+        )?;
+        Ok(())
+    }
+
+    /// Dungeon entrances each character has discovered (world-map markers).
+    /// Row presence is the whole fact — losing one only means rediscovering
+    /// by walking near the entrance again.
+    fn ensure_dungeon_discovery_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS character_dungeon_discoveries (
+                character_id INTEGER NOT NULL,
+                entrance_id TEXT NOT NULL,
+                PRIMARY KEY (character_id, entrance_id),
+                FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
+            )",
+            [],
+        )?;
+        Ok(())
+    }
+
+    fn ensure_character_skills_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        let tx = conn.unchecked_transaction()?;
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS character_skills (
+                character_id INTEGER NOT NULL,
+                skill_id TEXT NOT NULL,
+                PRIMARY KEY (character_id, skill_id),
+                FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
+            )",
+            [],
+        )?;
+        let columns = Self::table_columns(&tx, "character_skills")?;
+        for column in ["level", "xp"] {
+            if columns.contains(column) {
+                tx.execute(
+                    &format!("ALTER TABLE character_skills DROP COLUMN {column}"),
+                    [],
+                )?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Player-trade ledger (doc/TRADE.md). Written in the same transaction as
+    /// the trade itself, so it can never disagree with what happened. Gold
+    /// before and after both sides is what makes coin appearing from nowhere
+    /// detectable. No foreign key: a deleted character must not erase the
+    /// record of what they traded away.
+    fn ensure_trade_ledger_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS player_trades (
+                id INTEGER PRIMARY KEY,
+                traded_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                a_character_id INTEGER NOT NULL,
+                b_character_id INTEGER NOT NULL,
+                a_gold_before INTEGER NOT NULL,
+                a_gold_after INTEGER NOT NULL,
+                b_gold_before INTEGER NOT NULL,
+                b_gold_after INTEGER NOT NULL,
+                a_items TEXT NOT NULL,
+                b_items TEXT NOT NULL
+            )",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_player_trades_a ON player_trades(a_character_id)",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_player_trades_b ON player_trades(b_character_id)",
+            [],
+        )?;
+        Ok(())
+    }
+
+    /// Hourly gold supply readings (doc/PRICING.md); `ts` is hour-aligned.
+    fn ensure_gold_snapshots_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS gold_snapshots (
+                ts INTEGER PRIMARY KEY,
+                total_gold INTEGER NOT NULL,
+                characters INTEGER NOT NULL,
+                npc_gold INTEGER NOT NULL,
+                active_gold INTEGER NOT NULL,
+                active_characters INTEGER NOT NULL
+            )",
+            [],
+        )?;
+        Ok(())
+    }
+
+    fn ensure_server_starts_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS server_starts (
+                ts INTEGER PRIMARY KEY,
+                build TEXT NOT NULL
+            )",
+            [],
+        )?;
+        Ok(())
+    }
+
+    pub fn record_server_start(&self, now: i64, build: &str) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        conn.execute(
+            "INSERT OR REPLACE INTO server_starts (ts, build) VALUES (?1, ?2)",
+            params![now, build],
+        )?;
+        Ok(())
+    }
+
+    fn ensure_pricing_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS pricing_state (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                index_percent INTEGER NOT NULL,
+                last_meeting_day INTEGER,
+                m_prev REAL
+            );
+            CREATE TABLE IF NOT EXISTS pricing_history (
+                ts INTEGER NOT NULL,
+                game_day INTEGER NOT NULL,
+                m_prev REAL NOT NULL,
+                m_now REAL NOT NULL,
+                growth REAL NOT NULL,
+                index_before INTEGER NOT NULL,
+                index_after INTEGER NOT NULL
+            );",
+        )
+    }
+
+    pub fn load_pricing_state(&self) -> Result<PricingState, AuthError> {
+        let conn = self.open_connection()?;
+        Ok(conn
+            .query_row(
+                "SELECT index_percent, last_meeting_day, m_prev FROM pricing_state WHERE id = 1",
+                [],
+                |row| {
+                    Ok(PricingState {
+                        index_percent: row.get(0)?,
+                        last_meeting_day: row.get(1)?,
+                        m_prev: row.get(2)?,
+                    })
+                },
+            )
+            .optional()?
+            .unwrap_or_default())
+    }
+
+    /// Persists the state and, for a meeting that moved the index, its
+    /// history row, atomically.
+    pub fn save_pricing_state(
+        &self,
+        state: &PricingState,
+        meeting: Option<&PricingMeeting>,
+    ) -> Result<(), AuthError> {
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction()?;
+        tx.execute(
+            "INSERT OR REPLACE INTO pricing_state (id, index_percent, last_meeting_day, m_prev) \
+             VALUES (1, ?1, ?2, ?3)",
+            params![state.index_percent, state.last_meeting_day, state.m_prev],
+        )?;
+        if let Some(m) = meeting {
+            tx.execute(
+                "INSERT INTO pricing_history \
+                 (ts, game_day, m_prev, m_now, growth, index_before, index_after) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![
+                    unix_now(),
+                    m.game_day,
+                    m.m_prev,
+                    m.m_now,
+                    m.growth,
+                    m.index_before,
+                    m.index_after
+                ],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Notice inputs: last meeting's index change (points) and gold per
+    /// active character from the latest hourly snapshot.
+    pub fn pricing_notice_inputs(&self) -> Result<(i32, Option<f64>), AuthError> {
+        let conn = self.open_connection()?;
+        let change = conn
+            .query_row(
+                "SELECT index_after - index_before FROM pricing_history ORDER BY ts DESC LIMIT 1",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()?
+            .unwrap_or(0) as i32;
+        let reading = conn
+            .query_row(
+                "SELECT active_gold, active_characters FROM gold_snapshots ORDER BY ts DESC LIMIT 1",
+                [],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+            )
+            .optional()?
+            .and_then(|(gold, count)| (count > 0).then(|| gold as f64 / count as f64));
+        Ok((change, reading))
+    }
+
+    /// Gold per active character, or None with no active characters.
+    pub fn active_gold_per_character(
+        &self,
+        now: i64,
+        active_days: u32,
+    ) -> Result<Option<f64>, AuthError> {
+        let cutoff = active_cutoff(now, active_days);
+        let conn = self.open_connection()?;
+        let (gold, count): (i64, i64) = conn.query_row(
+            "SELECT COALESCE(SUM(gold), 0), COUNT(*) FROM characters WHERE last_seen_at >= ?1",
+            params![cutoff],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        Ok((count > 0).then(|| gold as f64 / count as f64))
+    }
+
+    /// Inserts this hour's gold totals; returns the hour, or None if it
+    /// already had a row. Active = seen within `active_days`. Estate
+    /// treasuries count toward the total only: they are escrowed, so the
+    /// per-active-character reading that drives pricing leaves them out.
+    pub fn record_gold_snapshot(
+        &self,
+        now: i64,
+        active_days: u32,
+    ) -> Result<Option<i64>, AuthError> {
+        let ts = now - now.rem_euclid(3600);
+        let cutoff = active_cutoff(now, active_days);
+        let conn = self.open_connection()?;
+        let written = conn.execute(
+            "INSERT OR IGNORE INTO gold_snapshots \
+             (ts, total_gold, characters, npc_gold, active_gold, active_characters) \
+             SELECT ?1, COALESCE(SUM(gold), 0) + (SELECT COALESCE(SUM(treasury), 0) FROM land_estates), COUNT(*), \
+                COALESCE(SUM(CASE WHEN account_name LIKE ?3 THEN gold END), 0), \
+                COALESCE(SUM(CASE WHEN last_seen_at >= ?2 THEN gold END), 0), \
+                COUNT(CASE WHEN last_seen_at >= ?2 THEN 1 END) \
+             FROM characters",
+            params![ts, cutoff, format!("{NPC_ACCOUNT_PREFIX}%")],
+        )?;
+        Ok((written > 0).then_some(ts))
     }
 
     fn ensure_world_time_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
@@ -546,10 +1396,26 @@ impl AuthService {
                 format!("REAL NOT NULL DEFAULT {}", spawn.rotation),
             ),
             ("health", "INTEGER".into()),
+            ("mana", "INTEGER".into()),
             ("floor_level", "INTEGER NOT NULL DEFAULT 0".into()),
+            ("dungeon_epoch", "INTEGER".into()),
             ("gender", "TEXT NOT NULL DEFAULT 'male'".into()),
             ("gold", "INTEGER NOT NULL DEFAULT 0".into()),
             ("admin_role", "INTEGER NOT NULL DEFAULT 0".into()),
+            // Unix seconds, NULL until first seen since the column shipped.
+            ("last_seen_at", "INTEGER".into()),
+            // Shown title id, NULL for none (doc/TITLES.md).
+            ("active_title", "TEXT".into()),
+            // Ammunition the next shot draws from, NULL to take the strongest
+            // of the kind (doc/COMBAT.md 원거리 전투).
+            ("active_ammo", "TEXT".into()),
+            (
+                "satiation",
+                format!(
+                    "INTEGER NOT NULL DEFAULT {}",
+                    onlinerpg_shared::hunger::SATIATION_START
+                ),
+            ),
         ];
 
         for (column_name, column_def) in &expected_columns {
@@ -665,42 +1531,123 @@ impl AuthService {
         }
     }
 
-    pub fn list_characters(&self, account_name: &str) -> Result<Vec<CharacterRecord>, AuthError> {
-        let account_name = account_name.trim();
-        if account_name.is_empty() {
-            return Err(AuthError::InvalidInput("Account name is required"));
-        }
-
+    /// The character list plus the gear its preview draws. Both reads share one
+    /// connection: this runs on every login, so it costs one checkout, not two.
+    pub fn list_characters_with_equipment(
+        &self,
+        account_name: &str,
+    ) -> Result<Vec<CharacterListing>, AuthError> {
         let conn = self.open_connection()?;
-        let mut stmt = conn.prepare(&format!(
-            "SELECT {}
-             FROM characters
-             WHERE account_name = ?1
-             ORDER BY created_at ASC, id ASC",
-            CHARACTER_COLUMNS
-        ))?;
-
-        let characters = stmt
-            .query_map(params![account_name], character_record_from_row)?
-            .collect::<Result<Vec<_>, _>>()?;
-
-        Ok(characters)
+        let characters = read_characters(&conn, account_name)?;
+        let ids = characters.iter().map(|c| c.id).collect::<Vec<_>>();
+        let mut equipment = read_visible_equipment(&conn, &ids)?;
+        let mut titles = read_titles(&conn, &ids)?;
+        Ok(characters
+            .into_iter()
+            .map(|record| {
+                let worn = equipment.remove(&record.id).unwrap_or_default();
+                let (titles, active_title) = titles.remove(&record.id).unwrap_or_default();
+                CharacterListing {
+                    record,
+                    worn,
+                    titles,
+                    active_title,
+                }
+            })
+            .collect())
     }
 
-    /// Canonical spelling of an existing character name, matched ignoring
-    /// ASCII case (the in-memory `match_name` rule in SQL — SQLite NOCASE is
-    /// ASCII-only, like `eq_ignore_ascii_case`).
-    pub fn resolve_character_name(&self, name: &str) -> Result<Option<String>, AuthError> {
+    /// The preview's gear for one character — the freshly created one.
+    pub fn load_character_equipment(
+        &self,
+        character_id: i64,
+    ) -> Result<VisibleEquipment, AuthError> {
+        let conn = self.open_connection()?;
+        Ok(read_visible_equipment(&conn, &[character_id])?
+            .remove(&character_id)
+            .unwrap_or_default())
+    }
+
+    pub fn character_names(
+        &self,
+        character_ids: &[i64],
+    ) -> Result<HashMap<i64, String>, AuthError> {
+        if character_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let conn = self.open_connection()?;
+        let placeholders = vec!["?"; character_ids.len()].join(",");
+        let mut statement = conn.prepare(&format!(
+            "SELECT id, character_name FROM characters WHERE id IN ({placeholders})"
+        ))?;
+        let rows = statement.query_map(params_from_iter(character_ids), |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    /// Match a character name ignoring ASCII case.
+    pub fn resolve_character_brief(&self, name: &str) -> Result<Option<(i64, String)>, AuthError> {
         let conn = self.open_connection()?;
         let found = conn
             .query_row(
-                "SELECT character_name FROM characters
+                "SELECT id, character_name FROM characters
                  WHERE character_name = ?1 COLLATE NOCASE",
                 params![name],
-                |row| row.get(0),
+                |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .optional()?;
         Ok(found)
+    }
+
+    /// One character's friends as (id, name, level). The join is what makes
+    /// storing ids affordable: offline friends still have a name to show.
+    pub fn load_friends(&self, character_id: i64) -> Result<Vec<FriendEntry>, AuthError> {
+        let conn = self.open_connection()?;
+        let mut stmt = conn.prepare(
+            "SELECT c.id, c.character_name, c.level, c.class
+             FROM character_friends f
+             JOIN characters c ON c.id = f.friend_id
+             WHERE f.character_id = ?1",
+        )?;
+        let friends = stmt
+            .query_map(params![character_id], |row| {
+                Ok(FriendEntry {
+                    character_id: row.get(0)?,
+                    name: row.get(1)?,
+                    level: row.get(2)?,
+                    class: class_from_row(row, 3)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(friends)
+    }
+
+    /// Both directions in one transaction, so no crash can leave a one-sided
+    /// friendship the callers never expect to see.
+    pub fn add_friend(&self, character_id: i64, friend_id: i64) -> Result<(), AuthError> {
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction()?;
+        for (a, b) in [(character_id, friend_id), (friend_id, character_id)] {
+            tx.execute(
+                "INSERT OR IGNORE INTO character_friends (character_id, friend_id) \
+                 VALUES (?1, ?2)",
+                params![a, b],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn remove_friend(&self, character_id: i64, friend_id: i64) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        conn.execute(
+            "DELETE FROM character_friends \
+             WHERE (character_id = ?1 AND friend_id = ?2) \
+                OR (character_id = ?2 AND friend_id = ?1)",
+            params![character_id, friend_id],
+        )?;
+        Ok(())
     }
 
     pub fn load_blocked_names(&self, character_id: i64) -> Result<Vec<String>, AuthError> {
@@ -731,13 +1678,89 @@ impl AuthService {
         Ok(())
     }
 
-    /// Every dungeon chest this character has opened, as (entrance id, world
-    /// clock seconds). Read once at login into `GameState`.
-    pub fn load_dungeon_chest_opens(
+    /// Canonical name and owning account for a character, matched ignoring
+    /// ASCII case like the other name lookups. `None` when no such character
+    /// exists.
+    pub fn account_of_character(
         &self,
-        character_id: i64,
-    ) -> Result<Vec<(String, i64)>, AuthError> {
+        character_name: &str,
+    ) -> Result<Option<(String, String)>, AuthError> {
         let conn = self.open_connection()?;
+        let found = conn
+            .query_row(
+                "SELECT character_name, account_name FROM characters
+                 WHERE character_name = ?1 COLLATE NOCASE",
+                params![character_name],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?;
+        Ok(found)
+    }
+
+    /// Ban an account, replacing any existing ban so a re-ban can extend or
+    /// shorten it. `until_unix` is `None` for a permanent ban.
+    pub fn ban_account(
+        &self,
+        account_name: &str,
+        reason: Option<&str>,
+        until_unix: Option<i64>,
+    ) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        conn.execute(
+            "INSERT INTO account_bans (account_name, reason, until_unix)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(account_name) DO UPDATE SET
+                reason = excluded.reason,
+                until_unix = excluded.until_unix,
+                banned_at = strftime('%s', 'now')",
+            params![account_name, reason, until_unix],
+        )?;
+        Ok(())
+    }
+
+    pub fn unban_account(&self, account_name: &str) -> Result<bool, AuthError> {
+        let conn = self.open_connection()?;
+        let removed = conn.execute(
+            "DELETE FROM account_bans WHERE account_name = ?1",
+            params![account_name],
+        )?;
+        Ok(removed > 0)
+    }
+
+    /// The ban in force on an account right now, or `None`. An expired row is
+    /// deleted on read so the table does not accumulate dead bans.
+    pub fn active_ban(&self, account_name: &str) -> Result<Option<AccountBan>, AuthError> {
+        let conn = self.open_connection()?;
+        let row: Option<(Option<String>, Option<i64>)> = conn
+            .query_row(
+                "SELECT reason, until_unix FROM account_bans WHERE account_name = ?1",
+                params![account_name],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?;
+        let Some((reason, until_unix)) = row else {
+            return Ok(None);
+        };
+        if let Some(until) = until_unix {
+            if until <= unix_now() {
+                // Scoped to the deadline just read: a re-ban landing between
+                // the select and this delete carries a different `until_unix`
+                // (or NULL) and must survive.
+                conn.execute(
+                    "DELETE FROM account_bans
+                     WHERE account_name = ?1 AND until_unix = ?2",
+                    params![account_name, until],
+                )?;
+                return Ok(None);
+            }
+        }
+        Ok(Some(AccountBan { reason, until_unix }))
+    }
+
+    fn dungeon_chest_opens_on(
+        conn: &Connection,
+        character_id: i64,
+    ) -> Result<Vec<(String, i64)>, rusqlite::Error> {
         let mut stmt = conn.prepare(
             "SELECT entrance_id, opened_game_seconds FROM character_dungeon_chests \
              WHERE character_id = ?1",
@@ -746,6 +1769,34 @@ impl AuthService {
             .query_map(params![character_id], |row| Ok((row.get(0)?, row.get(1)?)))?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(opens)
+    }
+
+    fn dungeon_discoveries_on(
+        conn: &Connection,
+        character_id: i64,
+    ) -> Result<Vec<String>, rusqlite::Error> {
+        let mut stmt = conn.prepare(
+            "SELECT entrance_id FROM character_dungeon_discoveries WHERE character_id = ?1",
+        )?;
+        let ids = stmt
+            .query_map(params![character_id], |row| row.get(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(ids)
+    }
+
+    /// Chest opens and discovered entrances together, as ((entrance id,
+    /// world clock seconds) pairs, entrance ids), sharing one connection.
+    /// Read once at login into `GameState`.
+    #[allow(clippy::type_complexity)]
+    pub fn load_dungeon_history(
+        &self,
+        character_id: i64,
+    ) -> Result<(Vec<(String, i64)>, Vec<String>), AuthError> {
+        let conn = self.open_connection()?;
+        Ok((
+            Self::dungeon_chest_opens_on(&conn, character_id)?,
+            Self::dungeon_discoveries_on(&conn, character_id)?,
+        ))
     }
 
     pub fn record_dungeon_chest_open(
@@ -766,6 +1817,26 @@ impl AuthService {
         Ok(())
     }
 
+    fn insert_dungeon_discoveries(
+        conn: &Connection,
+        rows: &[(i64, String)],
+    ) -> Result<(), rusqlite::Error> {
+        if rows.is_empty() {
+            return Ok(());
+        }
+        // OR IGNORE does not cover FOREIGN KEY violations: a row queued for a
+        // since-deleted character must not fail the whole batch, so skip it.
+        let mut insert = conn.prepare(
+            "INSERT OR IGNORE INTO character_dungeon_discoveries \
+                 (character_id, entrance_id) \
+                 SELECT ?1, ?2 WHERE EXISTS (SELECT 1 FROM characters WHERE id = ?1)",
+        )?;
+        for (character_id, entrance_id) in rows {
+            insert.execute(params![character_id, entrance_id])?;
+        }
+        Ok(())
+    }
+
     pub fn create_character(
         &self,
         account_name: &str,
@@ -780,10 +1851,6 @@ impl AuthService {
 
         if account_name.is_empty() {
             return Err(AuthError::InvalidInput("Account name is required"));
-        }
-
-        if !valid_name(character_name) {
-            return Err(AuthError::InvalidCharacterName);
         }
 
         let conn = self.open_connection()?;
@@ -808,17 +1875,7 @@ impl AuthService {
             return Err(AuthError::CharacterLimitReached);
         }
 
-        let existing_character_name: Option<String> = conn
-            .query_row(
-                "SELECT character_name FROM characters \
-                 WHERE character_name = ?1 COLLATE NOCASE",
-                params![character_name],
-                |row| row.get(0),
-            )
-            .optional()?;
-        if existing_character_name.is_some() {
-            return Err(AuthError::CharacterNameAlreadyExists);
-        }
+        self.check_new_character_name(&conn, account_name, character_name, None)?;
 
         let gender_str = match gender {
             Gender::Male => "male",
@@ -869,12 +1926,22 @@ impl AuthService {
 
         let id = conn.last_insert_rowid();
 
-        {
+        // Registry NPCs skip the starter kit: town residents are not
+        // adventurers, and the worn sword would sit visibly in main_hand.
+        // Working gear comes from the registry loadout instead, granted and
+        // worn by `seed_npc_loadout` on every join.
+        let registry_npc = account_name.starts_with(NPC_ACCOUNT_PREFIX)
+            && crate::npc_defs::npc_defs()
+                .get_by_npc_name(character_name)
+                .is_some();
+        if !registry_npc {
             let mut stmt = conn.prepare(
                 "INSERT INTO character_items (character_id, item_def_id, quantity, equip_slot) \
                  VALUES (?1, ?2, ?3, ?4)",
             )?;
-            for (item_def_id, quantity, equip_slot) in STARTER_ITEMS {
+            for (item_def_id, quantity, equip_slot) in
+                STARTER_ITEMS.iter().chain(class_starter_items(&class))
+            {
                 stmt.execute(params![id, item_def_id, quantity, equip_slot])?;
             }
         }
@@ -899,10 +1966,59 @@ impl AuthService {
             last_z: world_config().spawn_position.z,
             last_rotation: world_config().spawn_position.rotation,
             health: None,
+            mana: None,
             floor_level: 0,
+            dungeon_epoch: None,
             gold: 0,
             admin_role: 0,
+            satiation: onlinerpg_shared::hunger::SATIATION_START,
         })
+    }
+
+    /// Give one of an account's characters a new name — how a player whose
+    /// name later lands on the banned list gets back in.
+    pub fn rename_character(
+        &self,
+        account_name: &str,
+        character_id: i64,
+        new_name: &str,
+    ) -> Result<String, AuthError> {
+        let account_name = account_name.trim();
+        let new_name = new_name.trim();
+
+        if account_name.is_empty() {
+            return Err(AuthError::InvalidInput("Account name is required"));
+        }
+        if character_id <= 0 {
+            return Err(AuthError::CharacterNotFound);
+        }
+
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction()?;
+
+        let old_name: String = tx
+            .query_row(
+                "SELECT character_name FROM characters WHERE id = ?1 AND account_name = ?2",
+                params![character_id, account_name],
+                |row| row.get(0),
+            )
+            .optional()?
+            .ok_or(AuthError::CharacterNotFound)?;
+
+        self.check_new_character_name(&tx, account_name, new_name, Some(&old_name))?;
+
+        tx.execute(
+            "UPDATE characters SET character_name = ?1 WHERE id = ?2",
+            params![new_name, character_id],
+        )?;
+        // `/block` lists key on the name, so carry them across the rename.
+        tx.execute(
+            "UPDATE character_blocks SET blocked_name = ?1 WHERE blocked_name = ?2 COLLATE NOCASE",
+            params![new_name, old_name],
+        )?;
+        tx.commit()?;
+
+        Ok(new_name.to_string())
     }
 
     pub fn delete_character(&self, account_name: &str, character_id: i64) -> Result<(), AuthError> {
@@ -957,19 +2073,19 @@ impl AuthService {
         character.ok_or(AuthError::CharacterNotFound)
     }
 
-    /// The one write path for game state: the periodic flush, a single player's
-    /// logout and the shutdown snapshot all land here. Everything goes in one
-    /// transaction, so a save costs one commit no matter how much it covers.
+    /// Save game state in one transaction.
     pub fn save_batch(
         &self,
         characters: &[CharacterSaveData],
         inventories: &[(i64, Vec<ItemRow>)],
         skills: &[(i64, Vec<SkillRow>)],
+        discoveries: &[(i64, String)],
         world_time: Option<&GameDateTime>,
     ) -> Result<(), AuthError> {
         if characters.is_empty()
             && inventories.is_empty()
             && skills.is_empty()
+            && discoveries.is_empty()
             && world_time.is_none()
         {
             return Ok(());
@@ -984,9 +2100,50 @@ impl AuthService {
                 .map(|(id, items)| (*id, items.as_slice())),
         )?;
         Self::upsert_skills(&tx, skills.iter().map(|(id, rows)| (*id, rows.as_slice())))?;
+        Self::insert_dungeon_discoveries(&tx, discoveries)?;
         if let Some(datetime) = world_time {
             Self::write_world_time(&tx, datetime)?;
         }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// A completed player trade: both sides' state, both inventories and the
+    /// ledger row in one commit. Separate from `save_batch` because the trade
+    /// must be durable before either client is told it succeeded, and because
+    /// the ledger row has to share the transaction to stay truthful.
+    pub fn commit_trade(
+        &self,
+        characters: &[CharacterSaveData],
+        inventories: &[(i64, Vec<ItemRow>)],
+        ledger: &TradeLedgerEntry,
+    ) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        let tx = conn.unchecked_transaction()?;
+        Self::write_character_states(&tx, characters)?;
+        Self::replace_inventories(
+            &tx,
+            inventories
+                .iter()
+                .map(|(id, items)| (*id, items.as_slice())),
+        )?;
+        tx.execute(
+            "INSERT INTO player_trades (
+                a_character_id, b_character_id,
+                a_gold_before, a_gold_after, b_gold_before, b_gold_after,
+                a_items, b_items
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                ledger.a_character_id,
+                ledger.b_character_id,
+                ledger.a_gold_before,
+                ledger.a_gold_after,
+                ledger.b_gold_before,
+                ledger.b_gold_after,
+                ledger.a_items,
+                ledger.b_items,
+            ],
+        )?;
         tx.commit()?;
         Ok(())
     }
@@ -1020,32 +2177,34 @@ impl AuthService {
     pub fn load_inventory(&self, character_id: i64) -> Result<Vec<ItemRow>, AuthError> {
         let conn = self.open_connection()?;
         let mut stmt = conn.prepare(
-            "SELECT item_def_id, quantity, equip_slot, enchant FROM character_items WHERE character_id = ?1",
+            "SELECT item_def_id, quantity, equip_slot, enchant, cape_color, cape_texture, locked \
+             FROM character_items WHERE character_id = ?1",
         )?;
         let rows = stmt
             .query_map(params![character_id], |row| {
                 Ok(ItemRow {
+                    locked: row.get(6)?,
                     item_def_id: row.get(0)?,
                     quantity: row.get(1)?,
                     equip_slot: row.get(2)?,
                     enchant: row.get(3)?,
+                    cape_color: row.get(4)?,
+                    cape_texture: row.get(5)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
     }
 
-    /// Load all trained skills for a character. Missing rows mean level 0.
+    /// Load learned skills; an absent row means the skill is not learned.
     pub fn load_skills(&self, character_id: i64) -> Result<Vec<SkillRow>, AuthError> {
         let conn = self.open_connection()?;
-        let mut stmt = conn
-            .prepare("SELECT skill_id, level, xp FROM character_skills WHERE character_id = ?1")?;
+        let mut stmt =
+            conn.prepare("SELECT skill_id FROM character_skills WHERE character_id = ?1")?;
         let rows = stmt
             .query_map(params![character_id], |row| {
                 Ok(SkillRow {
                     skill_id: row.get(0)?,
-                    level: row.get(1)?,
-                    xp: row.get::<_, i64>(2)? as u64,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -1056,6 +2215,379 @@ impl AuthService {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gold_snapshot_adds_treasuries_to_total_and_splits_npc_and_active_gold() {
+        let db_path =
+            std::env::temp_dir().join(format!("onlinerpg_auth_snap_{}.db", uuid::Uuid::new_v4()));
+        let auth = AuthService::new(db_path).unwrap();
+        let player = auth.login_google("sub-snap").unwrap();
+        let npc = auth.login_npc("npc_snap").unwrap();
+        let active = create(&auth, &player, "Active").unwrap().id;
+        let idle = create(&auth, &player, "Idle").unwrap().id;
+        let rica = create(&auth, &npc, "Rica").unwrap().id;
+
+        let now = 1_700_000_000;
+        let conn = auth.open_connection().unwrap();
+        for (id, gold, seen) in [
+            (active, 100, now - 3600),
+            (idle, 50, now - 40 * 86_400),
+            (rica, 7, now),
+        ] {
+            conn.execute(
+                "UPDATE characters SET gold = ?1, last_seen_at = ?2 WHERE id = ?3",
+                params![gold, seen, id],
+            )
+            .unwrap();
+        }
+
+        conn.execute(
+            "INSERT INTO land_estates (owner_id, account_name, grade, treasury, created_at) \
+             SELECT id, account_name, 1, 40, ?2 FROM characters WHERE id = ?1",
+            params![idle, now],
+        )
+        .unwrap();
+
+        let ts = auth.record_gold_snapshot(now, 30).unwrap().unwrap();
+        assert_eq!(ts, now - now % 3600);
+        let row: (i64, i64, i64, i64, i64) = conn
+            .query_row(
+                "SELECT total_gold, characters, npc_gold, active_gold, active_characters \
+                 FROM gold_snapshots WHERE ts = ?1",
+                params![ts],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+            )
+            .unwrap();
+        assert_eq!(row, (197, 3, 7, 107, 2));
+
+        assert_eq!(auth.record_gold_snapshot(now + 60, 30).unwrap(), None);
+        assert_eq!(auth.active_gold_per_character(now, 30).unwrap(), Some(53.5));
+    }
+
+    #[test]
+    fn titles_persist_and_only_an_earned_one_can_be_shown() {
+        let db_path =
+            std::env::temp_dir().join(format!("onlinerpg_auth_titles_{}.db", uuid::Uuid::new_v4()));
+        let auth = AuthService::new(db_path).unwrap();
+        let player = auth.login_google("sub-titles").unwrap();
+        let id = create(&auth, &player, "Slayer").unwrap().id;
+
+        assert_eq!(auth.load_titles(id).unwrap(), (vec![], None));
+        assert!(auth.grant_title(id, "orc_slayer").unwrap());
+        assert!(!auth.grant_title(id, "orc_slayer").unwrap(), "already held");
+        assert!(auth.grant_title(id, "goblin_slayer").unwrap());
+
+        assert!(!auth.set_active_title(id, Some("ogre_slayer")).unwrap());
+        assert_eq!(auth.load_titles(id).unwrap().1, None);
+        assert!(auth.set_active_title(id, Some("orc_slayer")).unwrap());
+        assert_eq!(
+            auth.load_titles(id).unwrap(),
+            (
+                vec!["goblin_slayer".into(), "orc_slayer".into()],
+                Some("orc_slayer".into())
+            )
+        );
+        assert!(auth.set_active_title(id, None).unwrap());
+        assert_eq!(auth.load_titles(id).unwrap().1, None);
+
+        let listed = auth.list_characters_with_equipment(&player).unwrap();
+        assert_eq!(listed[0].titles.len(), 2);
+        assert_eq!(listed[0].active_title, None);
+    }
+
+    #[test]
+    fn save_batch_skips_discovery_rows_for_deleted_characters() {
+        let db_path =
+            std::env::temp_dir().join(format!("onlinerpg_auth_disc_{}.db", uuid::Uuid::new_v4()));
+        let auth = AuthService::new(db_path).unwrap();
+        let player = auth.login_google("sub-disc").unwrap();
+        let kept = create(&auth, &player, "Kept").unwrap().id;
+        let deleted = create(&auth, &player, "Doomed").unwrap().id;
+        auth.delete_character(&player, deleted).unwrap();
+
+        let discoveries = vec![
+            (deleted, "old_crypt".to_string()),
+            (kept, "old_crypt".to_string()),
+        ];
+        auth.save_batch(&[], &[], &[], &discoveries, None).unwrap();
+
+        let conn = auth.open_connection().unwrap();
+        let rows: Vec<i64> = conn
+            .prepare("SELECT character_id FROM character_dungeon_discoveries")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(rows, vec![kept]);
+    }
+
+    #[test]
+    fn pricing_state_round_trips_with_its_meeting_row() {
+        let db_path =
+            std::env::temp_dir().join(format!("onlinerpg_auth_price_{}.db", uuid::Uuid::new_v4()));
+        let auth = AuthService::new(db_path).unwrap();
+        assert_eq!(auth.load_pricing_state().unwrap(), PricingState::default());
+
+        let state = PricingState {
+            index_percent: 104,
+            last_meeting_day: Some(34),
+            m_prev: Some(120.5),
+        };
+        let meeting = PricingMeeting {
+            game_day: 34,
+            m_prev: 100.0,
+            m_now: 120.5,
+            growth: 0.205,
+            index_before: 100,
+            index_after: 104,
+        };
+        auth.save_pricing_state(&state, Some(&meeting)).unwrap();
+        assert_eq!(auth.load_pricing_state().unwrap(), state);
+        let rows: i64 = auth
+            .open_connection()
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM pricing_history", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(rows, 1);
+    }
+
+    #[test]
+    fn a_bard_starts_with_a_worn_mandolin_on_top_of_the_common_kit() {
+        let db_path =
+            std::env::temp_dir().join(format!("onlinerpg_auth_bard_{}.db", uuid::Uuid::new_v4()));
+        let auth = AuthService::new(db_path).unwrap();
+        let account = auth.login_google("sub-bard").unwrap();
+        let attributes = CharacterAttributes {
+            r#str: 10,
+            dex: 12,
+            con: 10,
+            int: 10,
+            wis: 10,
+            cha: 14,
+            guard: 0,
+        };
+
+        let bard = auth
+            .create_character(
+                &account,
+                "Lark",
+                &attributes,
+                12,
+                CharacterClass::Bard,
+                Gender::Female,
+            )
+            .unwrap();
+        let items = auth.load_inventory(bard.id).unwrap();
+        assert!(items.iter().any(|r| r.item_def_id == "worn_mandolin"));
+        assert!(items.iter().any(|r| r.item_def_id == "worn_iron_sword"));
+
+        let knight = auth
+            .create_character(
+                &account,
+                "Tass",
+                &attributes,
+                16,
+                CharacterClass::Knight,
+                Gender::Male,
+            )
+            .unwrap();
+        let items = auth.load_inventory(knight.id).unwrap();
+        assert!(items.iter().all(|r| r.item_def_id != "worn_mandolin"));
+    }
+
+    #[test]
+    fn a_registry_npc_starts_bare_and_loses_a_legacy_starter_sword() {
+        let db_path =
+            std::env::temp_dir().join(format!("onlinerpg_auth_npc_{}.db", uuid::Uuid::new_v4()));
+        let auth = AuthService::new(db_path.clone()).unwrap();
+        let account = auth.login_npc("npc_merchant").unwrap();
+        let rica = auth
+            .create_character(
+                &account,
+                "Rica",
+                &plain_attributes(),
+                10,
+                CharacterClass::Merchant,
+                Gender::Female,
+            )
+            .unwrap();
+        assert!(
+            auth.load_inventory(rica.id).unwrap().is_empty(),
+            "registry NPCs must not receive the starter kit"
+        );
+
+        // A sword from before the skip is stripped on the next boot.
+        auth.open_connection()
+            .unwrap()
+            .execute(
+                "INSERT INTO character_items (character_id, item_def_id, quantity, equip_slot) \
+                 VALUES (?1, 'worn_iron_sword', 1, 'main_hand')",
+                params![rica.id],
+            )
+            .unwrap();
+        drop(auth);
+        let auth = AuthService::new(db_path).unwrap();
+        assert!(auth.load_inventory(rica.id).unwrap().is_empty());
+    }
+
+    fn banned_name_auth(tag: &str) -> AuthService {
+        let db_path = std::env::temp_dir().join(format!(
+            "onlinerpg_auth_{}_{}.db",
+            tag,
+            uuid::Uuid::new_v4()
+        ));
+        AuthService::new(db_path).unwrap().with_banned_names(
+            ["gm".to_string(), "운영자".to_string()]
+                .into_iter()
+                .collect(),
+        )
+    }
+
+    fn plain_attributes() -> CharacterAttributes {
+        CharacterAttributes {
+            r#str: 10,
+            dex: 10,
+            con: 10,
+            int: 10,
+            wis: 10,
+            cha: 10,
+            guard: 10,
+        }
+    }
+
+    fn create(auth: &AuthService, account: &str, name: &str) -> Result<CharacterRecord, AuthError> {
+        auth.create_character(
+            account,
+            name,
+            &plain_attributes(),
+            10,
+            CharacterClass::Knight,
+            Gender::Male,
+        )
+    }
+
+    #[test]
+    fn dungeon_epoch_migration_preserves_legacy_character_state() {
+        let db_path = std::env::temp_dir().join(format!(
+            "onlinerpg_dungeon_epoch_migration_{}.db",
+            uuid::Uuid::new_v4()
+        ));
+        let auth = AuthService::new(db_path.clone()).unwrap();
+        let account = auth.login_npc("npc_legacy_dungeon").unwrap();
+        let character = create(&auth, &account, "Delver").unwrap();
+        drop(auth);
+        let connection = Connection::open(&db_path).unwrap();
+        connection
+            .execute_batch(
+                "ALTER TABLE characters DROP COLUMN dungeon_epoch;
+                 UPDATE characters SET floor_level = -20, health = 7, gold = 123;",
+            )
+            .unwrap();
+        drop(connection);
+
+        let migrated = AuthService::new(db_path).unwrap();
+        let saved = migrated
+            .get_character_for_account(&account, character.id)
+            .unwrap();
+        assert_eq!(saved.dungeon_epoch, None);
+        assert_eq!(saved.floor_level, -20);
+        assert_eq!(saved.health, Some(7));
+        assert_eq!(saved.gold, 123);
+    }
+
+    #[test]
+    fn banned_names_are_refused_at_creation_but_not_for_npcs() {
+        let auth = banned_name_auth("banned_create");
+        let account = auth.login_google("sub-banned").unwrap();
+
+        assert!(matches!(
+            create(&auth, &account, "GM"),
+            Err(AuthError::BannedCharacterName)
+        ));
+        assert!(matches!(
+            create(&auth, &account, " 운영자 "),
+            Err(AuthError::BannedCharacterName)
+        ));
+        // Only exact matches are banned; "gm" inside a name is fine.
+        assert!(create(&auth, &account, "Sigmund").is_ok());
+
+        let npc = auth.login_npc("npc_banned_test").unwrap();
+        assert!(create(&auth, &npc, "gm").is_ok());
+    }
+
+    #[test]
+    fn renaming_runs_the_same_gate_as_creation_and_persists() {
+        let auth = banned_name_auth("banned_rename");
+        let account = auth.login_google("sub-rename").unwrap();
+        let character = create(&auth, &account, "Oldname").unwrap();
+        create(&auth, &account, "Taken").unwrap();
+
+        assert!(matches!(
+            auth.rename_character(&account, character.id, "gm"),
+            Err(AuthError::BannedCharacterName)
+        ));
+        assert!(matches!(
+            auth.rename_character(&account, character.id, "Taken"),
+            Err(AuthError::CharacterNameAlreadyExists)
+        ));
+        assert!(matches!(
+            auth.rename_character(&account, character.id, "9lives"),
+            Err(AuthError::InvalidCharacterName)
+        ));
+        assert!(matches!(
+            auth.rename_character("someone_else", character.id, "Newname"),
+            Err(AuthError::CharacterNotFound)
+        ));
+
+        auth.rename_character(&account, character.id, " Newname ")
+            .unwrap();
+        let reloaded = auth
+            .get_character_for_account(&account, character.id)
+            .unwrap();
+        assert_eq!(reloaded.name, "Newname");
+        assert!(create(&auth, &account, "Oldname").is_ok());
+    }
+
+    #[test]
+    fn a_registry_npc_with_a_loadout_skips_the_starter_kit() {
+        let db_path = std::env::temp_dir().join(format!(
+            "onlinerpg_auth_loadout_{}.db",
+            uuid::Uuid::new_v4()
+        ));
+        let auth = AuthService::new(db_path).unwrap();
+        let account = auth.login_npc("npc_loadout_test").unwrap();
+        let def = crate::npc_defs::npc_defs().get_by_npc_name("Karl").unwrap();
+        assert!(
+            !def.loadout.is_empty(),
+            "Karl's registry row carries a loadout"
+        );
+        let attributes = CharacterAttributes {
+            r#str: 15,
+            dex: 13,
+            con: 14,
+            int: 9,
+            wis: 11,
+            cha: 10,
+            guard: 11,
+        };
+
+        let karl = auth
+            .create_character(
+                &account,
+                "Karl",
+                &attributes,
+                20,
+                CharacterClass::Guard,
+                Gender::Male,
+            )
+            .unwrap();
+        let items = auth.load_inventory(karl.id).unwrap();
+        assert!(
+            items.is_empty(),
+            "issued gear comes from join-time seeding, not creation: {items:?}"
+        );
+    }
 
     #[test]
     fn npc_login_enforces_prefix_and_google_separation() {
@@ -1078,6 +2610,157 @@ mod tests {
         )
         .unwrap();
         assert!(auth.login_npc("npc_bob").is_err());
+    }
+
+    #[test]
+    fn a_ban_survives_recreating_the_character_and_expires_on_its_own() {
+        let db_path =
+            std::env::temp_dir().join(format!("onlinerpg_auth_ban_{}.db", uuid::Uuid::new_v4()));
+        let auth = AuthService::new(db_path).unwrap();
+        let account = auth.login_google("sub-ban").unwrap();
+        let attributes = CharacterAttributes {
+            r#str: 12,
+            dex: 12,
+            con: 12,
+            int: 12,
+            wis: 12,
+            cha: 12,
+            guard: 10,
+        };
+        let record = auth
+            .create_character(
+                &account,
+                "Ruffian",
+                &attributes,
+                16,
+                CharacterClass::Knight,
+                Gender::Male,
+            )
+            .unwrap();
+
+        // An operator types a character name; the ban lands on the account.
+        assert_eq!(
+            auth.account_of_character("ruffian").unwrap(),
+            Some(("Ruffian".to_string(), account.clone())),
+            "resolved ignoring case, like every other name lookup"
+        );
+        assert!(auth.active_ban(&account).unwrap().is_none());
+
+        auth.ban_account(&account, Some("griefing"), None).unwrap();
+        let ban = auth.active_ban(&account).unwrap().expect("ban in force");
+        assert_eq!(ban.reason.as_deref(), Some("griefing"));
+        assert_eq!(ban.until_unix, None, "no minutes means permanent");
+
+        // Deleting the character does not shed the ban — the account carries it.
+        auth.delete_character(&account, record.id).unwrap();
+        assert!(auth.active_ban(&account).unwrap().is_some());
+        assert_eq!(
+            auth.login_google("sub-ban").unwrap(),
+            account,
+            "the same Google subject still resolves to the banned account"
+        );
+
+        // Re-banning replaces the row, so a permanent ban can be shortened.
+        let until = unix_now() + 600;
+        auth.ban_account(&account, Some("cooling off"), Some(until))
+            .unwrap();
+        let ban = auth.active_ban(&account).unwrap().expect("timed ban");
+        assert_eq!(ban.until_unix, Some(until));
+        assert!(ban.message().contains("10 minute"), "{}", ban.message());
+
+        // A ban whose deadline has passed reads as absent and is swept.
+        auth.ban_account(&account, None, Some(unix_now() - 1))
+            .unwrap();
+        assert!(auth.active_ban(&account).unwrap().is_none());
+        assert!(
+            !auth.unban_account(&account).unwrap(),
+            "the expired row was cleared on read, so there is nothing left to lift"
+        );
+
+        // Lifting a live ban reports that it did something, once.
+        auth.ban_account(&account, None, None).unwrap();
+        assert!(auth.unban_account(&account).unwrap());
+        assert!(!auth.unban_account(&account).unwrap());
+        assert!(auth.active_ban(&account).unwrap().is_none());
+    }
+
+    /// The expiry path cleans up after itself, and a fresh ban placed after an
+    /// expiry is honoured rather than swallowed by the cleanup.
+    #[test]
+    fn an_expired_ban_is_swept_and_a_later_ban_still_applies() {
+        let db_path = std::env::temp_dir().join(format!(
+            "onlinerpg_auth_ban_sweep_{}.db",
+            uuid::Uuid::new_v4()
+        ));
+        let auth = AuthService::new(db_path).unwrap();
+        let account = auth.login_npc("npc_ban_sweep").unwrap();
+
+        auth.ban_account(&account, None, Some(unix_now() - 1))
+            .unwrap();
+        assert!(
+            auth.active_ban(&account).unwrap().is_none(),
+            "an expired ban stops applying"
+        );
+        assert!(
+            !auth.unban_account(&account).unwrap(),
+            "and the row is gone, so there is nothing left to lift"
+        );
+
+        auth.ban_account(&account, Some("re-banned"), None).unwrap();
+        let ban = auth
+            .active_ban(&account)
+            .unwrap()
+            .expect("the new ban applies");
+        assert_eq!(ban.reason.as_deref(), Some("re-banned"));
+    }
+
+    /// A ban outlives its characters, so `/unban` has to be able to name the
+    /// account directly — otherwise deleting the last character strands it.
+    #[test]
+    fn an_account_can_be_unbanned_after_its_last_character_is_gone() {
+        let db_path = std::env::temp_dir().join(format!(
+            "onlinerpg_auth_ban_orphan_{}.db",
+            uuid::Uuid::new_v4()
+        ));
+        let auth = AuthService::new(db_path).unwrap();
+        let account = auth.login_npc("npc_ban_orphan").unwrap();
+        let record = auth
+            .create_character(
+                &account,
+                "Lonely",
+                &CharacterAttributes {
+                    r#str: 12,
+                    dex: 12,
+                    con: 12,
+                    int: 12,
+                    wis: 12,
+                    cha: 12,
+                    guard: 10,
+                },
+                16,
+                CharacterClass::Knight,
+                Gender::Male,
+            )
+            .unwrap();
+        auth.ban_account(&account, None, None).unwrap();
+        auth.delete_character(&account, record.id).unwrap();
+
+        // The character route is gone...
+        assert!(auth.account_of_character("Lonely").unwrap().is_none());
+        // ...but the ban is still there, and the account name still lifts it.
+        assert!(auth.active_ban(&account).unwrap().is_some());
+        assert!(auth.unban_account(&account).unwrap());
+        assert!(auth.active_ban(&account).unwrap().is_none());
+    }
+
+    #[test]
+    fn banning_an_unknown_character_finds_no_account() {
+        let db_path = std::env::temp_dir().join(format!(
+            "onlinerpg_auth_ban_miss_{}.db",
+            uuid::Uuid::new_v4()
+        ));
+        let auth = AuthService::new(db_path).unwrap();
+        assert!(auth.account_of_character("nobody").unwrap().is_none());
     }
 
     #[test]
@@ -1117,6 +2800,61 @@ mod tests {
         }
     }
 
+    #[test]
+    fn legacy_xp_migrates_to_the_same_level_and_band_progress() {
+        assert_eq!(migrate_legacy_xp(0), 0);
+        // Lv1 halfway: 10/20 -> 8/17.
+        assert_eq!(migrate_legacy_xp(10), 8);
+        assert_eq!(migrate_legacy_xp(20), xp::xp_for_level(2));
+        // Lv10 halfway: 5120 + 2560 -> 9956 + 3600.
+        assert_eq!(migrate_legacy_xp(7680), 13556);
+        let mut prev = 0;
+        for old in (0u64..1 << 20)
+            .step_by(7)
+            .chain([1 << 30, 1 << 40, 1 << 50, 1 << 60])
+        {
+            let level = if old < 20 { 1 } else { (old / 20).ilog2() + 2 };
+            let new = migrate_legacy_xp(old);
+            assert_eq!(xp::level_from_xp(new), level, "old xp {old}");
+            assert!(new >= prev, "old xp {old}");
+            prev = new;
+        }
+    }
+
+    /// The curve migration runs once: a second startup must not re-map XP
+    /// that is already on the new table.
+    #[test]
+    fn startup_migrates_xp_to_the_new_curve_once() {
+        let db_path = std::env::temp_dir().join(format!(
+            "onlinerpg_auth_level_curve_{}.db",
+            uuid::Uuid::new_v4()
+        ));
+        drop(AuthService::new(db_path.clone()).unwrap());
+
+        let conn = Connection::open(&db_path).unwrap();
+        conn.execute_batch(
+            "DELETE FROM migrations;
+             INSERT INTO accounts (player_name) VALUES ('legacy');
+             INSERT INTO characters (id, account_name, character_name, level, xp)
+             VALUES (1, 'legacy', 'Halfway', 10, 7680);",
+        )
+        .unwrap();
+        drop(conn);
+
+        let read_xp = || {
+            Connection::open(&db_path)
+                .unwrap()
+                .query_row("SELECT xp FROM characters WHERE id = 1", [], |r| {
+                    r.get::<_, i64>(0)
+                })
+                .unwrap()
+        };
+        drop(AuthService::new(db_path.clone()).unwrap());
+        assert_eq!(read_xp(), 13556);
+        drop(AuthService::new(db_path.clone()).unwrap());
+        assert_eq!(read_xp(), 13556);
+    }
+
     /// A typo'd rename target would silently hand players a ghost item:
     /// unknown ids survive inventory load and fall back to the raw id string.
     #[test]
@@ -1153,10 +2891,8 @@ mod tests {
             )
             .unwrap();
 
-        // Fresh character: no rows.
         assert!(auth.load_skills(record.id).unwrap().is_empty());
 
-        // A row a "newer server" wrote must survive our saves (upsert, no delete).
         auth.save_batch(
             &[],
             &[],
@@ -1164,59 +2900,160 @@ mod tests {
                 record.id,
                 vec![SkillRow {
                     skill_id: "underwater_basketweaving".to_string(),
-                    level: 7,
-                    xp: 999,
                 }],
             )],
+            &[],
             None,
         )
         .unwrap();
 
+        for _ in 0..2 {
+            auth.save_batch(
+                &[],
+                &[],
+                &[(
+                    record.id,
+                    vec![SkillRow {
+                        skill_id: "fishing".to_string(),
+                    }],
+                )],
+                &[],
+                None,
+            )
+            .unwrap();
+            let mut rows = auth.load_skills(record.id).unwrap();
+            rows.sort_by(|a, b| a.skill_id.cmp(&b.skill_id));
+            assert_eq!(rows.len(), 2);
+            assert_eq!(rows[0].skill_id, "fishing");
+            assert_eq!(rows[1].skill_id, "underwater_basketweaving");
+        }
+        let beginner = auth
+            .create_character(
+                &account,
+                "Beginner",
+                &attributes,
+                16,
+                CharacterClass::Ranger,
+                Gender::Female,
+            )
+            .unwrap();
         auth.save_batch(
             &[],
             &[],
             &[(
-                record.id,
+                beginner.id,
                 vec![SkillRow {
-                    skill_id: "fishing".to_string(),
-                    level: 2,
-                    xp: 500,
+                    skill_id: "fishing".into(),
                 }],
             )],
+            &[],
             None,
         )
         .unwrap();
-
-        let mut rows = auth.load_skills(record.id).unwrap();
-        rows.sort_by(|a, b| a.skill_id.cmp(&b.skill_id));
-        assert_eq!(rows.len(), 2);
+        let rows = auth.load_skills(beginner.id).unwrap();
+        assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].skill_id, "fishing");
-        assert_eq!(rows[0].level, 2);
-        assert_eq!(rows[0].xp, 500);
-        assert_eq!(rows[1].skill_id, "underwater_basketweaving");
-        assert_eq!(rows[1].xp, 999);
+        let conn = auth.open_connection().unwrap();
+        assert_eq!(
+            AuthService::table_columns(&conn, "character_skills").unwrap(),
+            HashSet::from(["character_id".into(), "skill_id".into()])
+        );
+    }
 
-        // Advancing a skill updates in place rather than duplicating the row.
-        auth.save_batch(
-            &[],
-            &[],
-            &[(
-                record.id,
-                vec![SkillRow {
-                    skill_id: "fishing".to_string(),
-                    level: 3,
-                    xp: 1400,
-                }],
-            )],
-            None,
+    #[test]
+    fn startup_removes_skill_progress_and_preserves_learned_skills() {
+        let db_path = crate::test_util::unique_temp_dir("skill_progress_migration").join("game.db");
+        drop(AuthService::new(db_path.clone()).unwrap());
+        let conn = Connection::open(&db_path).unwrap();
+        conn.execute_batch(
+            "PRAGMA foreign_keys = ON;
+             ALTER TABLE character_skills ADD COLUMN level INTEGER NOT NULL DEFAULT 0;
+             ALTER TABLE character_skills ADD COLUMN xp INTEGER NOT NULL DEFAULT 0;
+             INSERT INTO accounts (player_name) VALUES ('skill_migration');
+             INSERT INTO characters (id, account_name, character_name, level, xp) VALUES
+                (1, 'skill_migration', 'Novice', 1, 0),
+                (2, 'skill_migration', 'Angler', 10, 1234),
+                (3, 'skill_migration', 'Master', 30, 50000);
+             INSERT INTO character_skills (character_id, skill_id, level, xp) VALUES
+                (1, 'fishing', 0, 0),
+                (2, 'fishing', 0, 10),
+                (3, 'fishing', 30, 945500),
+                (2, 'unknown_skill', 5, 999);",
         )
         .unwrap();
-        let rows = auth.load_skills(record.id).unwrap();
-        assert_eq!(rows.len(), 2);
-        assert_eq!(
-            rows.iter().find(|r| r.skill_id == "fishing").unwrap().xp,
-            1400
-        );
+
+        for _ in 0..2 {
+            let auth = AuthService::new(db_path.clone()).unwrap();
+            assert_eq!(
+                AuthService::table_columns(&conn, "character_skills").unwrap(),
+                HashSet::from(["character_id".into(), "skill_id".into()])
+            );
+            for character_id in 1..=3 {
+                let rows = auth.load_skills(character_id).unwrap();
+                assert!(crate::game_state::skills_from_rows(&rows)
+                    .has(onlinerpg_shared::skills::SkillId::Fishing));
+                assert_eq!(rows.len(), if character_id == 2 { 2 } else { 1 });
+            }
+            assert!(auth
+                .load_skills(2)
+                .unwrap()
+                .iter()
+                .any(|row| row.skill_id == "unknown_skill"));
+            assert_eq!(
+                conn.query_row("SELECT level, xp FROM characters WHERE id = 2", [], |row| {
+                    Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+                })
+                .unwrap(),
+                (10, 1234)
+            );
+        }
+
+        assert!(conn
+            .execute(
+                "INSERT INTO character_skills (character_id, skill_id) VALUES (1, 'fishing')",
+                []
+            )
+            .is_err());
+        assert!(conn
+            .execute(
+                "INSERT INTO character_skills (character_id, skill_id) VALUES (99, 'fishing')",
+                []
+            )
+            .is_err());
+        conn.execute("DELETE FROM characters WHERE id = 2", [])
+            .unwrap();
+        let remaining: i64 = conn
+            .query_row("SELECT COUNT(*) FROM character_skills", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(remaining, 2);
+    }
+
+    /// EnterGame refuses the session when this load errs, so a missing table
+    /// must surface as an error — never as a valid empty history.
+    #[test]
+    fn dungeon_history_load_fails_when_storage_is_unavailable() {
+        let db_path = std::env::temp_dir().join(format!(
+            "onlinerpg_auth_dungeon_history_{}.db",
+            uuid::Uuid::new_v4()
+        ));
+        let auth = AuthService::new(db_path).unwrap();
+        let (opens, discoveries) = auth.load_dungeon_history(1).unwrap();
+        assert!(opens.is_empty());
+        assert!(discoveries.is_empty());
+
+        for table in ["character_dungeon_chests", "character_dungeon_discoveries"] {
+            let db_path = std::env::temp_dir().join(format!(
+                "onlinerpg_auth_dungeon_history_{}.db",
+                uuid::Uuid::new_v4()
+            ));
+            let auth = AuthService::new(db_path.clone()).unwrap();
+            let conn = Connection::open(db_path).unwrap();
+            conn.execute(&format!("DROP TABLE {table}"), []).unwrap();
+
+            assert!(auth.load_dungeon_history(1).is_err());
+        }
     }
 
     #[test]
@@ -1248,8 +3085,17 @@ mod tests {
             )
         };
         assert!(create("Bad\nName").is_err());
+        assert!(create("30000").is_err());
+        assert!(create("_Player").is_err());
         assert!(create("김철수").is_ok());
         assert!(create("ㅇㅇ_Player1").is_ok());
+        assert!(create("Player1").is_ok());
+
+        assert!(!valid_character_name("30000"));
+        assert!(!valid_character_name("9lives"));
+        assert!(!valid_character_name("_x"));
+        assert!(valid_character_name("x_9"));
+        assert!(valid_character_name("가9"));
 
         assert!(!valid_name(""));
         assert!(!valid_name("Bad\u{1b}[31mName"));

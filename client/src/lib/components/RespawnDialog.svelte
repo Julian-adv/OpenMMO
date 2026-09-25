@@ -1,5 +1,9 @@
 <script lang="ts">
+  import { t, locale } from '../i18n'
+  import { itemDisplayName } from '../data/itemDefs'
   import { mountOverlay } from '../stores/overlayStack'
+  import { reviveItem } from '../stores/inventoryStore'
+  import { networkManager } from '../network/socket'
 
   interface Props {
     onRespawn: () => void
@@ -8,17 +12,34 @@
 
   let { onRespawn, onLater }: Props = $props()
 
+  function useReviveItem(instanceId: number) {
+    networkManager.sendUseItem(instanceId)
+    onLater()
+  }
+
   // Escape defers the dialog exactly like the Later button.
   $effect(() => mountOverlay('respawn', onLater))
 </script>
 
 <div class="respawn-backdrop">
   <div class="respawn-dialog" role="dialog" aria-modal="true">
-    <h2>You Died</h2>
-    <p>Would you like to revive?</p>
+    <h2>{$t('respawn.title')}</h2>
+    <p>{$t('respawn.prompt')}</p>
     <div class="respawn-actions">
-      <button class="primary" onclick={onRespawn}>Revive</button>
-      <button class="secondary" onclick={onLater}>Later</button>
+      {#if $reviveItem}
+        <button
+          class="talisman"
+          onclick={() => useReviveItem($reviveItem.item.instance_id)}
+        >
+          {$t('respawn.useItem', {
+            item: itemDisplayName($reviveItem.def.id, 0, $locale),
+            health: $reviveItem.def.reviveHpPercent ?? 0,
+            count: $reviveItem.item.quantity,
+          })}
+        </button>
+      {/if}
+      <button class="primary" onclick={onRespawn}>{$t('respawn.town')}</button>
+      <button class="secondary" onclick={onLater}>{$t('respawn.later')}</button>
     </div>
   </div>
 </div>
@@ -56,6 +77,7 @@
 
   .respawn-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
     justify-content: center;
   }
@@ -77,5 +99,11 @@
   .respawn-actions .secondary {
     background: #3d3d3d;
     color: #f0f0f0;
+  }
+
+  .respawn-actions .talisman {
+    background: #c9632a;
+    color: #fff4e6;
+    font-weight: 700;
   }
 </style>

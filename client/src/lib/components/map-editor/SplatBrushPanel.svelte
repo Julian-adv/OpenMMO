@@ -10,20 +10,19 @@
   interface Props {
     title?: string
     hint?: string
+    availableLayers?: number[]
+    sizeLabel?: string
   }
-  let { title = 'Splat Brush', hint = '(click to select slot)' }: Props =
-    $props()
+  let {
+    title = 'Splat Brush',
+    hint = '(click to select slot)',
+    availableLayers,
+    sizeLabel = 'Size',
+  }: Props = $props()
 
   const THUMB_SIZE = 64
 
-  let size = $state(3)
-  let strength = $state(8)
-  let layer = $state(0)
   let thumbnails = $state<Record<string, string>>({})
-
-  brushSize.subscribe((v) => (size = v))
-  brushStrength.subscribe((v) => (strength = v))
-  splatLayer.subscribe((v) => (layer = v))
 
   async function loadThumbnails() {
     const canvas = document.createElement('canvas')
@@ -51,7 +50,7 @@
 
   function onSizeChange(event: Event) {
     const value = parseInt((event.target as HTMLInputElement).value)
-    brushSize.set(value)
+    brushSize.set(value / 2)
   }
 
   function onStrengthChange(event: Event) {
@@ -74,9 +73,12 @@
       {@const swatch = `rgb(${cfg.minimapColor[0]}, ${cfg.minimapColor[1]}, ${cfg.minimapColor[2]})`}
       <button
         class="grid-item"
-        class:selected={layer === i}
+        class:selected={$splatLayer === i}
+        disabled={availableLayers !== undefined && !availableLayers.includes(i)}
         onclick={() => selectLayer(i)}
-        title={label}
+        title={availableLayers !== undefined && !availableLayers.includes(i)
+          ? `${label} · Learn its sample book from Rowan`
+          : label}
       >
         {#if thumbnails[cfg.texture]}
           <img class="grid-thumb" src={thumbnails[cfg.texture]} alt="" />
@@ -89,17 +91,18 @@
   </div>
 
   <div class="control-row">
-    <label for="splat-brush-size">Size</label>
+    <label for="splat-brush-size">{sizeLabel}</label>
     <input
       id="splat-brush-size"
       type="range"
       min="1"
-      max="10"
+      max="20"
       step="1"
-      value={size}
+      value={$brushSize * 2}
+      title="Full width in cells (1 cell = 1 metre)"
       oninput={onSizeChange}
     />
-    <span class="value">{size}</span>
+    <span class="value">{$brushSize * 2}</span>
   </div>
 
   <div class="control-row">
@@ -110,10 +113,10 @@
       min="1"
       max="10"
       step="1"
-      value={strength}
+      value={$brushStrength}
       oninput={onStrengthChange}
     />
-    <span class="value">{strength.toFixed(1)}</span>
+    <span class="value">{$brushStrength.toFixed(1)}</span>
   </div>
 </div>
 
@@ -186,6 +189,11 @@
 
   .grid-item.selected {
     border-color: #e2b93b;
+  }
+
+  .grid-item:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
   }
 
   .grid-thumb {

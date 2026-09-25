@@ -1,10 +1,10 @@
 import type { Position } from '../utils/movementUtils'
 import { startBattleMusic, stopBattleMusic } from './bgmManager'
-import { PLAYER_ATTACK_RANGE_METERS } from '../data/combatTiming'
 
 export interface MonsterInfo {
   state?: string
   isDeadPending?: boolean
+  health?: number
 }
 
 export type CombatUpdateResult =
@@ -33,7 +33,26 @@ export class CombatController {
     return this._targetMonsterId !== null
   }
 
-  beginCombat(monsterId: string, inRange: boolean) {
+  getAbilityTarget(
+    hoveredMonsterId: string | null,
+    getMonster: (id: string) => MonsterInfo | undefined
+  ): string | null {
+    for (const id of [hoveredMonsterId, this._targetMonsterId]) {
+      if (!id) continue
+      const monster = getMonster(id)
+      if (
+        monster &&
+        monster.state !== 'dead' &&
+        !monster.isDeadPending &&
+        (monster.health === undefined || monster.health > 0)
+      )
+        return id
+    }
+    return null
+  }
+
+  /** Returns the counter the opening swing carries. */
+  beginCombat(monsterId: string, inRange: boolean): number {
     const wasInCombat = this._targetMonsterId !== null
     this._targetMonsterId = monsterId
     this._attackTimer = 0
@@ -44,6 +63,7 @@ export class CombatController {
       this._lastChaseUpdate = Date.now()
     }
     if (!wasInCombat) startBattleMusic()
+    return this._attackCounter
   }
 
   cancelCombat() {
@@ -69,6 +89,10 @@ export class CombatController {
     }
   }
 
+  /** A `lineBlocked` target counts as out of range: the server refuses a blow
+   *  through a wall, so keep chasing rather than swing into rejections.
+   *  `attackRange` is the equipped weapon's reach, so a bow stops the chase at
+   *  its own distance and shoots from there. */
   update(
     deltaTime: number,
     playerPos: Position,
@@ -76,7 +100,9 @@ export class CombatController {
     monsterObjPos: Position | undefined,
     isMoving: boolean,
     cooldownMs: number,
-    currentPlayerState: string
+    currentPlayerState: string,
+    lineBlocked: boolean,
+    attackRange: number
   ): CombatUpdateResult {
     if (!this._targetMonsterId) return { action: 'none' }
 
@@ -98,10 +124,11 @@ export class CombatController {
     const dx = monsterObjPos.x - playerPos.x
     const dz = monsterObjPos.z - playerPos.z
     const dist = Math.sqrt(dx * dx + dz * dz)
+    const inRange = dist <= attackRange && !lineBlocked
 
     if (isMoving) {
       // CHASING phase
-      if (dist <= PLAYER_ATTACK_RANGE_METERS) {
+      if (inRange) {
         return { action: 'reached_attack_range' }
       }
 
@@ -114,7 +141,7 @@ export class CombatController {
     }
 
     // COMBAT phase (in range)
-    if (dist > PLAYER_ATTACK_RANGE_METERS && !isFinishingAttack) {
+    if (!inRange && !isFinishingAttack) {
       return this.startChase(monsterObjPos)
     }
 
@@ -129,7 +156,7 @@ export class CombatController {
       // A new attack cycle is about to fire: unlike the break check above this
       // applies even mid-finish, so a target that fled during the swing ends
       // the current swing and re-approaches instead of attacking out of range.
-      if (dist > PLAYER_ATTACK_RANGE_METERS) {
+      if (!inRange) {
         return this.startChase(monsterObjPos)
       }
 

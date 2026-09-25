@@ -1,9 +1,4 @@
-/**
- * Dungeon entrance registry, embedded at build time from data/dungeons.json
- * (generated from data-src/dungeons.csv). The server embeds the same file,
- * so entrances never travel over the network; the entrance id seeds the
- * deterministic layout generator on both sides.
- */
+/** Entrance metadata; shared WASM generates layouts from the source CSV. */
 import dungeonsJson from '../../../../data/dungeons.json'
 
 export interface DungeonEntranceDef {
@@ -12,18 +7,15 @@ export interface DungeonEntranceDef {
   x: number
   y: number
   z: number
-  /** Semicolon-separated item ids the final-floor chest always yields; server-side only. */
+  /** Semicolon-separated guaranteed chest drops. */
   chestDrops?: string
-  /** Fixed floor count override; blank = seed-derived 5..=20. INERT here: the
-   *  shared generator reads data-src/dungeons.csv at compile time — editing
-   *  this JSON field changes nothing. Listed only to document the schema. */
+  /** Layout settings are embedded separately in shared WASM. */
   floors?: number
-  /** Final-floor boss monster type; blank = goblin_boss. INERT here, like `floors`. */
   boss?: string
-  /** Random chest-loot ceiling (items.csv `chestTier`); blank = 1. Server-side only. */
   chestTier?: number
-  /** Entrance door side (n/s/e/w); blank = seed-derived. INERT here, like `floors`. */
   entranceDir?: string
+  keyPrefix?: string
+  spawnGroup?: string
 }
 
 export const DUNGEON_ENTRANCES: DungeonEntranceDef[] = Object.values(

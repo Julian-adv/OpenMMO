@@ -66,7 +66,7 @@ impl ClaudeInvoker {
 #[async_trait]
 impl LlmBackend for ClaudeInvoker {
     async fn send_message(&self, content: &str) -> anyhow::Result<String> {
-        info!(">>> TO CLAUDE ({} bytes):\n{}", content.len(), content);
+        debug!(">>> TO CLAUDE ({} bytes):\n{}", content.len(), content);
 
         let session_id = self.session_id.lock().await.clone();
 
@@ -95,12 +95,8 @@ impl LlmBackend for ClaudeInvoker {
             .env_remove("CLAUDECODE")
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .kill_on_drop(true);
-
-        let mut child = cmd
-            .spawn()
-            .map_err(|e| anyhow::anyhow!("Failed to spawn claude CLI: {e}"))?;
+            .stderr(std::process::Stdio::piped());
+        let (mut child, mut group) = crate::process_group::spawn_in_group(&mut cmd, "claude")?;
 
         let stdout = child
             .stdout
@@ -127,6 +123,7 @@ impl LlmBackend for ClaudeInvoker {
 
         // Wait for process to finish
         let status = child.wait().await?;
+        group.disarm();
         if !status.success() {
             warn!("Claude process exited with status: {status}");
         }
@@ -146,7 +143,7 @@ impl LlmBackend for ClaudeInvoker {
             }
         }
 
-        info!(
+        debug!(
             "<<< FROM CLAUDE ({} bytes):\n{}",
             full_text.len(),
             full_text

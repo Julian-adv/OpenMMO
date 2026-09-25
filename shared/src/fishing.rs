@@ -4,6 +4,7 @@
 //! The server owns every timer and roll — clients only render and respond.
 
 use serde::{Deserialize, Serialize};
+use std::ops::RangeInclusive;
 
 /// A response to the fish, sent via `ClientMessage::FishingRespond`.
 /// `Hook` answers a bite; the other three set the angler's *stance* during
@@ -25,7 +26,7 @@ pub enum FishingAction {
 /// Broadcast to everyone near the bobber — the "skill" is managing tension
 /// against a visible state, not guessing hidden information, which keeps
 /// humans (reading gauge and splash) and agent-clients (running
-/// `auto_stance`) on equal footing.
+/// `auto_stance` on a human reaction delay) on equal footing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum FishState {
@@ -46,7 +47,7 @@ pub enum FishingOutcome {
         /// Rolled length in centimeters — announced, not stored on the item,
         /// so fish stay stackable commodities.
         size_cm: u16,
-        /// Natural 20 on the quality roll, or at/over the species' trophyCm.
+        /// Successful trophy roll, or at/over the species' trophyCm.
         trophy: bool,
     },
     /// Hooked too early, too late, or not at all.
@@ -58,6 +59,13 @@ pub enum FishingOutcome {
 /// How far from the player a cast may land (XZ meters).
 pub const MAX_CAST_DISTANCE_METERS: f32 = 8.0;
 
+/// Within 45 degrees of the stern; `dx` uses the shortest world-wrapped delta.
+pub fn is_stern_cast(dx: f32, dz: f32, boat_rotation: f32) -> bool {
+    let distance = dx.hypot(dz);
+    let astern = -dx * boat_rotation.sin() - dz * boat_rotation.cos();
+    distance.is_finite() && distance > 0.0 && astern >= distance * std::f32::consts::FRAC_1_SQRT_2
+}
+
 /// Minimum surface−bed depth (meters) for a cast target — skips the paper-thin
 /// shoreline fringe. Shared so the client's cast-vs-walk click test cannot
 /// drift from the server's water test.
@@ -66,34 +74,33 @@ pub const MIN_FISHABLE_DEPTH_M: f32 = 0.1;
 /// Casting animation time before the bobber starts waiting.
 pub const CAST_MS: u32 = 1_000;
 
-/// Bite wait is uniform in this range, shortened ~2% per fishing level
-/// (floored at `WAIT_MIN_MS / 2`).
-pub const WAIT_MIN_MS: u32 = 4_000;
-pub const WAIT_MAX_MS: u32 = 12_000;
+/// Shared bite wait for all anglers.
+pub const WAIT_MIN_MS: u32 = 3_200;
+pub const WAIT_MAX_MS: u32 = 9_600;
 
 /// How long the bite window stays open. Generous by design: it must fit both
-/// human reflexes and an agent-client's network round trip (agent parity).
+/// human reflexes and an agent-client's network round trip — and the agent
+/// deliberately spends `HOOK_REACTION_MS` of it (agent parity).
 pub const BITE_WINDOW_MS: u32 = 2_500;
+
+/// How long a person takes to answer the rod, and so how long the
+/// agent-client's reflex waits before responding — no edge over a player at
+/// the same rod. Both ceilings are load-bearing: the hook must still land
+/// inside `BITE_WINDOW_MS + LATENCY_GRACE_MS`, and the stance inside what the
+/// fight absorbs (`the_stance_policy_survives_a_human_reaction_delay`).
+pub const HOOK_REACTION_MS: RangeInclusive<u64> = 300..=800;
+pub const STANCE_REACTION_MS: RangeInclusive<u64> = 250..=350;
 
 /// Slack added server-side to every response deadline so a laggy but
 /// in-time click is never punished. Timers live on the server; this is the
 /// server forgiving the wire, not trusting the client.
 pub const LATENCY_GRACE_MS: u32 = 500;
 
-/// Flotsam's fixed share of the catch table, percent. Skill makes you a
-/// better angler, not a tidier river, so junk never thins out with level.
+/// Flotsam's fixed share of the catch table, percent.
 pub const FLOTSAM_SHARE_PCT: u64 = 20;
 
-/// Percent catch-weight growth per fishing level per rarity tier.
-/// Multiplicative, so the table's order can never invert.
-pub const RARITY_SKILL_BONUS_PCT: u64 = 3;
-
-/// Skill XP for a catch: `CATCH_XP_PER_RARITY_SQ · rarity²` (rarity 1–5).
-pub const CATCH_XP_PER_RARITY_SQ: u64 = 10;
-
-/// Consolation skill XP when a fish escapes — hooked and lost, or a bite
-/// left to expire.
-pub const ESCAPE_XP: u64 = 2;
+/// Trophy roll among fish; with 20% flotsam this gives 16% of all bites.
+pub const TROPHY_ROLL_CHANCE_PCT: u32 = 20;
 
 // --- The fight (after the hook) ----------------------------------------------
 // A continuous tug-of-war on the 250 ms server tick. All rates are per
@@ -107,12 +114,13 @@ pub const ESCAPE_XP: u64 = 2;
 pub const TENSION_MAX: f32 = 100.0;
 /// Tension the hook-set itself puts on the line — the fight opens live.
 pub const TENSION_INITIAL: f32 = 30.0;
-/// Fish pull while Running: `(BASE + PER_RARITY·rarity) · distance factor`,
-/// reduced by skill (`SKILL_PULL_RELIEF_PCT`). Deliberately hot: an
-/// unmanaged run leaves the safe range in about a second and snaps the line
-/// in a few — the gauge demands answers.
-pub const TENSION_PULL_BASE_PS: f32 = 20.0;
-pub const TENSION_PULL_PER_RARITY_PS: f32 = 2.0;
+/// Trophy fish only tire above this line while running.
+pub const TROPHY_MIN_TENSION: f32 = 80.0;
+/// Scale both tension gain and relief to allow reactions near the limit.
+pub const TROPHY_TENSION_RATE: f32 = 0.4;
+/// Fish pull while Running, scaled by rarity and line distance.
+pub const TENSION_PULL_BASE_PS: f32 = 18.0;
+pub const TENSION_PULL_PER_RARITY_PS: f32 = 1.8;
 /// Distance factor `clamp(0.8 + 0.04·distance_m, MIN, MAX)`: a far fish has
 /// more line out and pulls harder, a close one barely loads the rod. The MAX
 /// clamp guarantees `TENSION_GIVE_RELIEF_PS` always outmuscles the strongest
@@ -134,10 +142,10 @@ pub const RUN_SPEED_BASE_MPS: f32 = 1.0;
 pub const RUN_SPEED_PER_RARITY_MPS: f32 = 0.1;
 /// Extra line a Running fish takes while you give it.
 pub const GIVE_LINE_EXTRA_MPS: f32 = 0.6;
-/// Reel speed against each fish state, before the skill bonus.
-pub const REEL_RESTING_MPS: f32 = 1.6;
-pub const REEL_RUNNING_MPS: f32 = 0.6;
-pub const REEL_EXHAUSTED_MPS: f32 = 2.5;
+/// Reel speed against each fish state.
+pub const REEL_RESTING_MPS: f32 = 1.76;
+pub const REEL_RUNNING_MPS: f32 = 0.66;
+pub const REEL_EXHAUSTED_MPS: f32 = 2.75;
 /// The fish can never be reeled closer than its session's *line floor*: the
 /// waterline measured along the cast ray at cast time (plus this margin), or
 /// the rod's own reach when the water starts at the angler's feet — the
@@ -181,14 +189,13 @@ pub const RUN_MAX_PER_RARITY_MS: u32 = 150;
 pub const REST_MIN_MS: u32 = 800;
 pub const REST_MAX_MS: u32 = 2_000;
 
-/// Skill: drag control. Tension gained from the fish's pull drops this
-/// percent per fishing level (capped), and reel speed gains the same.
-pub const SKILL_PULL_RELIEF_PCT: f32 = 1.0;
-pub const SKILL_PULL_RELIEF_CAP_PCT: f32 = 30.0;
-pub const SKILL_REEL_BONUS_PCT: f32 = 1.0;
-
 /// A fight that outlives this throws the hook (`Escaped`).
 pub const FIGHT_TIMEOUT_MS: u32 = 60_000;
+/// Trophies give less time to recover from lost pressure.
+pub const TROPHY_FIGHT_TIMEOUT_MS: u32 = 40_000;
+pub const TROPHY_HOOK_CHECK_MS: f32 = 1_000.0;
+/// One roll per loose second gives a mean escape time of three seconds.
+pub const TROPHY_HOOK_SLIP_CHANCE: f32 = 1.0 / 3.0;
 
 /// Stamina pool for a rarity tier.
 pub fn stamina_max(rarity: u32) -> f32 {
@@ -196,12 +203,10 @@ pub fn stamina_max(rarity: u32) -> f32 {
 }
 
 /// Tension per second the fish adds while Running.
-pub fn fish_pull_ps(rarity: u32, distance_m: f32, skill_level: u32) -> f32 {
+pub fn fish_pull_ps(rarity: u32, distance_m: f32) -> f32 {
     let factor = (TENSION_DISTANCE_FACTOR_MIN + TENSION_DISTANCE_FACTOR_PER_M * distance_m)
         .clamp(TENSION_DISTANCE_FACTOR_MIN, TENSION_DISTANCE_FACTOR_MAX);
-    let relief =
-        1.0 - (SKILL_PULL_RELIEF_PCT * skill_level as f32).min(SKILL_PULL_RELIEF_CAP_PCT) / 100.0;
-    (TENSION_PULL_BASE_PS + TENSION_PULL_PER_RARITY_PS * rarity.max(1) as f32) * factor * relief
+    (TENSION_PULL_BASE_PS + TENSION_PULL_PER_RARITY_PS * rarity.max(1) as f32) * factor
 }
 
 /// Stamina per second the drag burns while the fish runs under tension.
@@ -211,21 +216,30 @@ pub fn stamina_drain_ps(tension: f32) -> f32 {
 }
 
 /// Meters per second a reeling angler takes back against this fish state.
-pub fn reel_speed_mps(state: FishState, skill_level: u32) -> f32 {
-    let base = match state {
+pub fn reel_speed_mps(state: FishState) -> f32 {
+    match state {
         FishState::Running => REEL_RUNNING_MPS,
         FishState::Resting => REEL_RESTING_MPS,
         FishState::Exhausted => REEL_EXHAUSTED_MPS,
-    };
-    base * (1.0 + SKILL_REEL_BONUS_PCT * skill_level as f32 / 100.0)
+    }
 }
 
-/// The sound tension-management policy, shared so the agent-client's reflex
-/// and the server tests play the same game a practiced human does: reel an
-/// exhausted fish, shed tension when it's high, take line when it's safe.
-pub fn auto_stance(state: FishState, tension_pct: u32) -> FishingAction {
+/// Agent reflex with the same visible state and reaction delay as a human.
+/// Trophies need high tension; ordinary fish use the safer middle band.
+pub fn auto_stance(state: FishState, tension_pct: u32, trophy: bool) -> FishingAction {
+    if trophy {
+        return match state {
+            FishState::Exhausted => FishingAction::Reel,
+            _ if tension_pct >= 83 => FishingAction::GiveLine,
+            FishState::Running => FishingAction::Hold,
+            _ if tension_pct < 50 => FishingAction::Reel,
+            _ => FishingAction::Hold,
+        };
+    }
     match state {
         FishState::Exhausted => FishingAction::Reel,
+        FishState::Running if tension_pct >= 45 => FishingAction::GiveLine,
+        FishState::Running => FishingAction::Hold,
         _ if tension_pct >= 75 => FishingAction::GiveLine,
         _ if tension_pct <= 45 => FishingAction::Reel,
         _ => FishingAction::Hold,
@@ -237,9 +251,30 @@ mod tests {
     use super::*;
 
     #[test]
+    fn rowboat_casts_stay_in_the_stern_cone() {
+        for heading in [0.0, 0.7, -1.9, std::f32::consts::PI] {
+            for offset in [-44.0_f32, 0.0, 44.0] {
+                let angle = heading + std::f32::consts::PI + offset.to_radians();
+                assert!(is_stern_cast(angle.sin() * 4.0, angle.cos() * 4.0, heading));
+            }
+            for offset in [-135.0_f32, -90.0, -46.0, 46.0, 90.0, 135.0, 180.0] {
+                let angle = heading + std::f32::consts::PI + offset.to_radians();
+                assert!(!is_stern_cast(
+                    angle.sin() * 4.0,
+                    angle.cos() * 4.0,
+                    heading
+                ));
+            }
+        }
+        assert!(!is_stern_cast(0.0, 0.0, 0.0));
+        assert!(!is_stern_cast(f32::NAN, -4.0, 0.0));
+        assert!(!is_stern_cast(0.0, f32::NEG_INFINITY, 0.0));
+    }
+
+    #[test]
     fn giving_line_always_beats_the_strongest_pull() {
-        // Rarity 5, max distance factor, no skill relief: the worst case.
-        let worst = fish_pull_ps(5, 1_000.0, 0);
+        // Rarity 5 at maximum line distance.
+        let worst = fish_pull_ps(5, 1_000.0);
         assert!(
             worst < TENSION_GIVE_RELIEF_PS,
             "give-line must always shed tension, worst pull {worst}"
@@ -247,25 +282,44 @@ mod tests {
     }
 
     #[test]
-    fn pull_scales_with_rarity_distance_and_skill() {
-        assert!(fish_pull_ps(5, 5.0, 0) > fish_pull_ps(1, 5.0, 0));
-        assert!(fish_pull_ps(1, 12.0, 0) > fish_pull_ps(1, 1.0, 0));
-        assert!(fish_pull_ps(1, 5.0, 30) < fish_pull_ps(1, 5.0, 0));
+    fn pull_scales_with_rarity_and_distance() {
+        assert!(fish_pull_ps(5, 5.0) > fish_pull_ps(1, 5.0));
+        assert!(fish_pull_ps(1, 12.0) > fish_pull_ps(1, 1.0));
         // Junk fights like a common fish.
-        assert_eq!(fish_pull_ps(0, 5.0, 0), fish_pull_ps(1, 5.0, 0));
+        assert_eq!(fish_pull_ps(0, 5.0), fish_pull_ps(1, 5.0));
         assert_eq!(stamina_max(0), stamina_max(1));
     }
 
     #[test]
     fn auto_stance_manages_the_band() {
         assert_eq!(
-            auto_stance(FishState::Exhausted, 90),
+            auto_stance(FishState::Exhausted, 90, false),
             FishingAction::Reel,
             "an exhausted fish is reeled no matter the tension"
         );
-        assert_eq!(auto_stance(FishState::Running, 80), FishingAction::GiveLine);
-        assert_eq!(auto_stance(FishState::Resting, 10), FishingAction::Reel);
-        assert_eq!(auto_stance(FishState::Running, 50), FishingAction::Hold);
+        assert_eq!(
+            auto_stance(FishState::Running, 80, false),
+            FishingAction::GiveLine
+        );
+        assert_eq!(
+            auto_stance(FishState::Resting, 10, false),
+            FishingAction::Reel
+        );
+        assert_eq!(
+            auto_stance(FishState::Running, 50, false),
+            FishingAction::GiveLine,
+            "a run is answered with line, not held to the top of the band"
+        );
+        assert_eq!(
+            auto_stance(FishState::Running, 20, false),
+            FishingAction::Hold,
+            "a slack line during a run needs nothing"
+        );
+        assert_eq!(
+            auto_stance(FishState::Resting, 60, false),
+            FishingAction::Hold,
+            "a resting fish sheds tension on its own"
+        );
     }
 
     // Constant on purpose: this test locks the tuning invariant.
@@ -287,8 +341,7 @@ mod tests {
 
     #[test]
     fn reeling_is_fastest_against_an_exhausted_fish() {
-        assert!(reel_speed_mps(FishState::Exhausted, 0) > reel_speed_mps(FishState::Resting, 0));
-        assert!(reel_speed_mps(FishState::Resting, 0) > reel_speed_mps(FishState::Running, 0));
-        assert!(reel_speed_mps(FishState::Resting, 10) > reel_speed_mps(FishState::Resting, 0));
+        assert!(reel_speed_mps(FishState::Exhausted) > reel_speed_mps(FishState::Resting));
+        assert!(reel_speed_mps(FishState::Resting) > reel_speed_mps(FishState::Running));
     }
 }

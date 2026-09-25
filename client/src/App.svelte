@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from './lib/i18n'
   import { onMount } from 'svelte'
   import { Canvas } from '@threlte/core'
   import GameScene from './lib/components/GameScene.svelte'
@@ -6,8 +7,10 @@
   import LoginScreen from './lib/components/LoginScreen.svelte'
   import CharacterSelectScreen from './lib/components/CharacterSelectScreen.svelte'
   import CharacterSelectScene from './lib/components/CharacterSelectScene.svelte'
+  import type { CharacterSlotLayout } from './lib/utils/characterSelectLayout'
   import CharacterCreateScreen from './lib/components/CharacterCreateScreen.svelte'
   import CharacterCreateScene from './lib/components/CharacterCreateScene.svelte'
+  import RenameCharacterDialog from './lib/components/RenameCharacterDialog.svelte'
   import RenderFrameLimiter from './lib/components/RenderFrameLimiter.svelte'
   import { gameStore } from './lib/stores/gameStore'
   import { createWebGPURenderer } from './lib/utils/renderer'
@@ -17,7 +20,7 @@
     type CharacterClass,
     type Gender,
   } from './lib/network/socket'
-  import { startBgm } from './lib/managers/bgmManager'
+  import { bgmMuted, startBgm } from './lib/managers/bgmManager'
   import SettingsPanel from './lib/components/SettingsPanel.svelte'
   import { runGpuBenchmark } from './lib/utils/gpuBenchmark'
   import {
@@ -25,6 +28,7 @@
     qualityForOutcome,
     applyAutoQuality,
   } from './lib/stores/graphicsSettings'
+  import { instrumentPanelVisible } from './lib/stores/instrumentStore'
 
   let showSettings = $state(false)
 
@@ -39,6 +43,7 @@
   let accountName = $state('')
   let accountCharacters = $state<AccountCharacter[]>([])
   let selectedCharacterId = $state<number | null>(null)
+  let characterSlotLayout = $state<CharacterSlotLayout[]>([])
   let selectedCharacter = $derived<AccountCharacter | null>(
     accountCharacters.find(
       (character) => character.id === selectedCharacterId
@@ -63,6 +68,10 @@
   let isSceneCompiling = $state(true)
   let kickedMessage = $state('')
 
+  // Owned here, not by the select screen: entry starts both from its Start
+  // button and from a slot double-click on the Canvas.
+  let renameCharacterId = $state<number | null>(null)
+
   // Character create screen state
   let createSelectedClass = $state<CharacterClass>('knight')
   let createSelectedGender = $state<Gender>('male')
@@ -78,6 +87,17 @@
   // applied and would raise "restart required" on a first launch. The probe
   // caps itself at 3s and normally finishes long before login completes.
   let showCanvas = $derived(screen !== 'login' && !gpuProbePending)
+
+  // Bound here so it works on the login and character screens too, ahead of
+  // Edge's own Ctrl+M tab mute. `code` keeps it working under the Korean IME;
+  // Shift is excluded so the browser keeps Ctrl+Shift+M (profile menu).
+  function handleKeydown(event: KeyboardEvent) {
+    if ($instrumentPanelVisible) return
+    if (event.ctrlKey && !event.shiftKey && event.code === 'KeyM') {
+      event.preventDefault()
+      bgmMuted.update((m) => !m)
+    }
+  }
 
   onMount(() => {
     if (!gpuProbePending) return
@@ -166,9 +186,28 @@
     return networkManager.requestRollCharacterStats(cls, gender)
   }
 
+  async function handleRenameCharacter(newName: string) {
+    const characterId = renameCharacterId
+    if (characterId === null) return { ok: false, message: 'No character' }
+
+    const result = await networkManager.requestRenameCharacter(
+      characterId,
+      newName
+    )
+    if (!result.ok || !result.name) return result
+
+    const renamed = result.name
+    accountCharacters = accountCharacters.map((character) =>
+      character.id === characterId ? { ...character, name: renamed } : character
+    )
+    renameCharacterId = null
+    await handleStartGame(characterId)
+    return result
+  }
+
   async function handleStartGame(
     characterId: number
-  ): Promise<{ ok: boolean; message?: string }> {
+  ): Promise<{ ok: boolean; message?: string; renameRequired?: boolean }> {
     const result = await networkManager.requestEnterGame(characterId)
     if (result.ok) {
       // Fresh death tracking for the new session so an already-dead character
@@ -179,6 +218,10 @@
       hasObservedCurrentPlayerAlive = false
       isSceneCompiling = true
       screen = 'game'
+      return result
+    }
+    if (result.renameRequired) {
+      renameCharacterId = characterId
     }
     return result
   }
@@ -199,6 +242,12 @@
 
   function handleSelectCharacter(characterId: number) {
     selectedCharacterId = characterId
+  }
+
+  function handleCharacterSlotClick(index: number) {
+    const character = accountCharacters[index]
+    if (character) handleSelectCharacter(character.id)
+    else handleOpenCreateCharacterScreen()
   }
 
   async function handleBackToCharacterSelect() {
@@ -296,6 +345,8 @@
   })
 </script>
 
+<svelte:window onkeydown={handleKeydown} />
+
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <main onclick={startBgm}>
@@ -315,14 +366,8 @@
           <CharacterSelectScene
             characters={accountCharacters}
             {selectedCharacterId}
-            onSlotClick={(i) => {
-              const c = accountCharacters[i]
-              if (c) {
-                handleSelectCharacter(c.id)
-              } else {
-                handleOpenCreateCharacterScreen()
-              }
-            }}
+            onSlotClick={handleCharacterSlotClick}
+            onSlotLayout={(layout) => (characterSlotLayout = layout)}
             onSlotDoubleClick={(i) => {
               const c = accountCharacters[i]
               if (c) {
@@ -371,10 +416,18 @@
       {accountName}
       characters={accountCharacters}
       {selectedCharacterId}
+      slotLayout={characterSlotLayout}
+      onSlotClick={handleCharacterSlotClick}
       onStartGame={handleStartGame}
       onDeleteCharacter={handleDeleteCharacter}
       onLogout={handleLogoutToLogin}
     />
+    {#if renameCharacterId !== null}
+      <RenameCharacterDialog
+        onRename={handleRenameCharacter}
+        onCancel={() => (renameCharacterId = null)}
+      />
+    {/if}
   {:else if screen === 'character-create'}
     <CharacterCreateScreen
       {accountName}
@@ -401,7 +454,7 @@
       class="settings-btn-corner"
       class:raised={screen === 'character-create'}
       onclick={() => (showSettings = true)}
-      title="Settings"
+      title={$t('settings.title')}
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -436,6 +489,15 @@
     height: 100dvh;
     overflow: hidden;
     position: relative;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* Text entry stays selectable despite the app-wide user-select: none */
+  main :global(input),
+  main :global(textarea) {
+    user-select: text;
+    -webkit-user-select: text;
   }
 
   .canvas-layer {

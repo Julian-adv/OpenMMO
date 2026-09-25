@@ -1,22 +1,16 @@
-/**
- * Sample deck-top Y at uniform t along each bridge model's deckAxis and
- * write the result back into client/public/models/objects/catalog.json as
- * `bridge.deckYSamples` (array of N+1 numbers, t=0..1).
- *
- * The runtime (bridgeManager) interpolates linearly between samples instead
- * of using the parabolic crown→end approximation, which is up to ~0.9m off
- * mid-arc on the current models.
- *
- * Usage: node tools/sample-bridge-decks.mjs
- */
+// Sample bridge deck heights into the catalog; --dry-run only prints samples.
 import { NodeIO } from '@gltf-transform/core'
+import { EXTMeshoptCompression, KHRMaterialsUnlit, KHRMeshQuantization } from '@gltf-transform/extensions'
+import { MeshoptDecoder } from '../client/node_modules/three/examples/jsm/libs/meshopt_decoder.module.js'
 import { readFile, writeFile } from 'fs/promises'
 
 const SAMPLES = 11 // t=0, 0.1, …, 1.0
 const CATALOG_PATH = 'client/public/models/objects/catalog.json'
-const MODELS_DIR = 'client/public/models/objects'
+const MODELS_DIR = 'client/public/models'
 
 const io = new NodeIO()
+  .registerExtensions([EXTMeshoptCompression, KHRMaterialsUnlit, KHRMeshQuantization])
+  .registerDependencies({ 'meshopt.decoder': MeshoptDecoder })
 
 function multiply(a, b) {
   const out = new Array(16)
@@ -29,10 +23,11 @@ function multiply(a, b) {
   return out
 }
 
-function applyTransform(arr, mat) {
-  const out = new Float32Array(arr.length)
-  for (let i = 0; i < arr.length; i += 3) {
-    const x = arr[i], y = arr[i + 1], z = arr[i + 2]
+function applyTransform(accessor, mat) {
+  const out = new Float32Array(accessor.getCount() * 3)
+  const element = []
+  for (let i = 0; i < out.length; i += 3) {
+    const [x, y, z] = accessor.getElement(i / 3, element)
     out[i]     = mat[0] * x + mat[4] * y + mat[8]  * z + mat[12]
     out[i + 1] = mat[1] * x + mat[5] * y + mat[9]  * z + mat[13]
     out[i + 2] = mat[2] * x + mat[6] * y + mat[10] * z + mat[14]
@@ -79,7 +74,7 @@ async function loadTriangles(path) {
       const pos = prim.getAttribute('POSITION')
       if (!pos) continue
       const idx = prim.getIndices()
-      const positions = applyTransform(pos.getArray(), world)
+      const positions = applyTransform(pos, world)
       const indexArr = idx ? idx.getArray() : null
       const count = indexArr ? indexArr.length : positions.length / 3
       for (let i = 0; i < count; i += 3) {
@@ -136,5 +131,7 @@ for (const def of catalog) {
   console.log(`  ${def.id}: ${samples.map((v) => v.toFixed(2)).join(' ')}`)
 }
 
-await writeFile(CATALOG_PATH, JSON.stringify(catalog, null, 2) + '\n', 'utf8')
-console.log(`wrote ${CATALOG_PATH}`)
+if (!process.argv.includes('--dry-run')) {
+  await writeFile(CATALOG_PATH, JSON.stringify(catalog, null, 2) + '\n', 'utf8')
+  console.log(`wrote ${CATALOG_PATH}`)
+}

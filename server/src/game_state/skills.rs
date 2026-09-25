@@ -1,32 +1,19 @@
-//! Trained-skill state: the per-player `Skills` map, its dirty tracking, and
-//! XP grants. Mirrors the gold/inventory pattern — skills live outside the
-//! broadcast `Player` struct (private to their owner), are registered on
-//! EnterGame, flushed through the same dirty-set saves, and detached on
-//! logout. Nothing grants skill XP yet; the first caller is the fishing
-//! system (doc/FISHING.md).
+//! Private skill acquisition and persistence.
 
-use onlinerpg_shared::skills::{SkillId, SkillXpResult, Skills};
+use onlinerpg_shared::skills::{SkillId, Skills};
 use tracing::warn;
 
 use super::GameState;
 use crate::auth::SkillRow;
 use crate::types::{PlayerId, ServerMessage};
 
-/// Convert DB rows to the in-memory map. Unknown skill ids (rows written by
-/// a newer server) are skipped here but survive on disk: saves go through an
-/// upsert that never deletes rows.
+/// Load known skills; unknown IDs stay untouched on disk.
 pub(crate) fn skills_from_rows(rows: &[SkillRow]) -> Skills {
     let mut skills = Skills::default();
     for row in rows {
         match row.skill_id.parse::<SkillId>() {
             Ok(id) => {
-                skills.map.insert(
-                    id,
-                    onlinerpg_shared::skills::SkillProgress {
-                        level: row.level,
-                        xp: row.xp,
-                    },
-                );
+                skills.learn(id);
             }
             Err(()) => warn!(
                 "Ignoring unknown skill id '{}' (newer server?)",
@@ -39,12 +26,10 @@ pub(crate) fn skills_from_rows(rows: &[SkillRow]) -> Skills {
 
 fn skills_to_rows(skills: &Skills) -> Vec<SkillRow> {
     let mut rows: Vec<SkillRow> = skills
-        .map
+        .learned
         .iter()
-        .map(|(id, progress)| SkillRow {
+        .map(|id| SkillRow {
             skill_id: id.as_str().to_string(),
-            level: progress.level,
-            xp: progress.xp,
         })
         .collect();
     rows.sort_by(|a, b| a.skill_id.cmp(&b.skill_id));
@@ -52,46 +37,34 @@ fn skills_to_rows(skills: &Skills) -> Vec<SkillRow> {
 }
 
 impl GameState {
+    pub(super) async fn has_skill(&self, player_id: &PlayerId, skill: SkillId) -> bool {
+        self.player_skills
+            .read()
+            .await
+            .get(player_id)
+            .is_some_and(|skills| skills.has(skill))
+    }
+
+    pub(super) async fn learn_skill(&self, player_id: &PlayerId, skill: SkillId) -> bool {
+        let skills = {
+            let mut map = self.player_skills.write().await;
+            let Some(skills) = map.get_mut(player_id) else {
+                return false;
+            };
+            if !skills.learn(skill) {
+                return false;
+            }
+            skills.clone()
+        };
+        self.dirty_skills.write().await.insert(*player_id);
+        self.send_direct_message(player_id, ServerMessage::SkillsUpdate { skills })
+            .await;
+        true
+    }
+
     pub async fn register_player_skills(&self, player_id: &PlayerId, skills: Skills) {
         let mut map = self.player_skills.write().await;
         map.insert(*player_id, skills);
-    }
-
-    /// One skill's level, without cloning the whole map entry.
-    pub async fn skill_level(&self, player_id: &PlayerId, skill: SkillId) -> u32 {
-        let map = self.player_skills.read().await;
-        map.get(player_id).map_or(0, |s| s.get(skill).level)
-    }
-
-    /// Grant skill XP: updates the map, marks the player dirty for the next
-    /// periodic save, and tells the owner via `SkillXpGained`. Returns what
-    /// `Skills::add_xp` reported (`None` = capped, nothing happened).
-    pub async fn add_skill_xp(
-        &self,
-        player_id: &PlayerId,
-        skill: SkillId,
-        amount: u64,
-    ) -> Option<SkillXpResult> {
-        let result = {
-            let mut map = self.player_skills.write().await;
-            map.get_mut(player_id)?.add_xp(skill, amount)?
-        };
-        {
-            let mut dirty = self.dirty_skills.write().await;
-            dirty.insert(*player_id);
-        }
-        self.send_direct_message(
-            player_id,
-            ServerMessage::SkillXpGained {
-                skill,
-                xp_amount: result.xp_amount,
-                total_xp: result.total_xp,
-                new_level: result.new_level,
-                leveled_up: result.leveled_up,
-            },
-        )
-        .await;
-        Some(result)
     }
 
     /// Snapshot a player's skills as save rows and drop the in-memory entry.

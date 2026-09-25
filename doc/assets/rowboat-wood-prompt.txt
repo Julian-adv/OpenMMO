@@ -1,0 +1,7 @@
+Use case: stylized-concept
+Asset type: seamless tileable 1024x1024 base-color texture for a small wooden rowboat in a grounded medieval fantasy 3D game.
+Primary request: draw warm, moderately weathered oak planking. Five long horizontal wooden boards of equal height, running continuously from left edge to right edge with NO vertical joins. Restrained honey and walnut brown tones, clearly readable elongated wood grain, subtle pores, a few small elongated knots, slight natural variation between boards. Narrow dark join lines, with clean tightly fitted planks rather than large black gaps.
+Style: realistic hand-painted game material, detailed but calm, matte aged wood maintained for use on water, no glossy varnish. Natural grain should remain legible when seen at game-camera distance.
+Composition: a flat orthographic material swatch filling every pixel; grain strictly horizontal; seamless repetition both left-to-right and top-to-bottom. All planks have similar brightness; no big distinctive features at edges.
+Lighting: pure diffuse albedo, completely even neutral illumination; no baked directional shading, ambient occlusion, reflections, highlights, shadows or vignette.
+Avoid: boat illustration, props, nails, ropes, metal, moss, water, text, logos, borders, perspective, cracks through the board, vertical plank ends, checkerboard, normal-map colors.

@@ -26,6 +26,8 @@ export interface ShopSession {
   merchantName: string
   catalog: string[]
   sellRatePercent: number
+  /** Scales consumable buy prices; 100 = base (doc/PRICING.md). */
+  priceIndexPercent: number
   /** Non-merchants only buy these item defs; empty = buys anything priced. */
   wishlist: string[]
   /** Non-merchant real-inventory stock; merchants use `catalog`. */
@@ -141,4 +143,19 @@ export function setMerchantDeals(
     }
     return next
   })
+}
+
+/** Whether this merchant is holding a live haggled price for the player.
+ *  The amounts belong to the trade window's badges and the server's chat
+ *  notice; this only marks that one is waiting. */
+export function hasLiveDeal(
+  deals: Record<string, ShopDeal>,
+  merchantPlayerId: number
+): boolean {
+  const prefix = `${merchantPlayerId}|`
+  const now = Date.now()
+  return Object.entries(deals).some(
+    ([key, deal]) =>
+      key.startsWith(prefix) && deal.modifierPct !== 0 && deal.expiresAt > now
+  )
 }

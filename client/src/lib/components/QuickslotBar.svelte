@@ -1,18 +1,51 @@
 <script lang="ts">
+  import { manaState } from '../stores/manaStore'
+  import {
+    DOUBLE_SLASH,
+    AUSCULTATION,
+    FISHING,
+    getAbility,
+    isAbilityAvailable,
+    abilityEquipmentAllowed,
+  } from '../data/abilities'
+  import {
+    daggerSkillState,
+    daggerSkillClock,
+  } from '../stores/daggerSkillStore'
+  import { gameStore } from '../stores/gameStore'
+  import { useAbility } from '../utils/useAbility'
+  import {
+    abilityCooldowns,
+    abilityPending,
+    abilityClock,
+    activeBuffs,
+  } from '../stores/abilityStore'
+  import { skillTooltip } from '../actions/skillTooltip'
   import { inventoryStore } from '../stores/inventoryStore'
-  import { getItemDef, isConsumable } from '../data/itemDefs'
+  import { getItemDef } from '../data/itemDefs'
   import { networkManager } from '../network/socket'
   import {
     quickslots,
     QUICKSLOT_COUNT,
     loadQuickslots,
     clearQuickslot,
+    resolveQuickslot,
+    quickslotAction,
   } from '../stores/quickslotStore'
   import { dragMeta, dragPos, quickslotAt } from '../stores/dragStore'
   import { itemTooltip } from '../actions/itemTooltip'
+  import { instrumentPanelVisible } from '../stores/instrumentStore'
+  import { skillsStore } from '../stores/skillsStore'
+  import {
+    fishingTargeting,
+    cancelFishingTargeting,
+  } from '../stores/fishingStore'
+  import {
+    inspectionTargeting,
+    cancelInspection,
+  } from '../stores/inspectionStore'
 
   interface Props {
-    /** Active character id — used to load that character's saved quickslots. */
     characterId: number | null
   }
 
@@ -22,56 +55,67 @@
     if (characterId != null) loadQuickslots(characterId)
   })
 
-  /** Total quantity of an item def currently sitting in the bag. */
-  function bagQuantity(defId: string): number {
-    let total = 0
-    for (const item of $inventoryStore.bag) {
-      if (item.item_def_id === defId) total += item.quantity
-    }
-    return total
-  }
+  const characterClass = $derived($gameStore.currentPlayer?.characterClass)
 
-  const slots = $derived(
-    $quickslots.map((defId) => {
-      if (!defId) return null
-      const def = getItemDef(defId)
+  const slots = $derived.by(() => {
+    const { bag, equipped } = $inventoryStore
+    return $quickslots.map((entry) => {
+      if (!entry) return null
+      if ('skill' in entry) {
+        if (
+          !isAbilityAvailable(entry.skill, characterClass, $skillsStore.learned)
+        )
+          return null
+        const ability = getAbility(entry.skill)
+        return ability ? { kind: 'ability' as const, skill: ability } : null
+      }
+      const def = getItemDef(entry.defId)
       if (!def) return null
-      return { defId, def, qty: bagQuantity(defId) }
+      return {
+        kind: 'item' as const,
+        def,
+        ...resolveQuickslot(entry, def, equipped, bag),
+      }
     })
-  )
+  })
 
-  // While an item is dragged, the slot it would drop into (-1 otherwise).
-  // Uses the same snap logic as the drop handler so highlight and drop agree.
+  // Match the drop handler's target.
   const dropIndex = $derived(
-    $dragMeta ? quickslotAt($dragPos.x, $dragPos.y) : -1
+    $dragMeta && ('skill' in $dragMeta || $dragMeta.groupItems === undefined)
+      ? quickslotAt($dragPos.x, $dragPos.y)
+      : -1
   )
 
-  /**
-   * Use the item bound to a quickslot: for equippables, toggle equip/unequip
-   * (pressing again unequips the same item — e.g. a torch turns its light off);
-   * for consumables, use one from the bag.
-   */
   function useSlot(index: number) {
     const entry = slots[index]
     if (!entry) return
-    const slot = entry.def.equipSlot
-    // Already wearing this exact item in its slot → unequip (toggle off).
-    if (slot && $inventoryStore.equipped[slot]?.item_def_id === entry.defId) {
-      networkManager.sendUnequipItem(slot)
+    if (entry.kind === 'ability') {
+      useAbility(entry.skill.id)
       return
     }
-    const inst = $inventoryStore.bag.find((b) => b.item_def_id === entry.defId)
-    if (!inst) return // none left in bag
-    if (slot) networkManager.sendEquipItem(inst.instance_id)
-    else if (isConsumable(entry.def))
-      networkManager.sendUseItem(inst.instance_id)
+    cancelInspection()
+    cancelFishingTargeting()
+    const action = quickslotAction(entry.def, entry)
+    if (!action) return
+    if (action.kind === 'unequip') networkManager.sendUnequipItem(action.slot)
+    else if (action.kind === 'equip')
+      networkManager.sendEquipItem(action.instanceId)
+    else networkManager.sendUseItem(action.instanceId)
   }
 
   // Digit1..Digit9 → slots 0..8, Digit0 → slot 9.
   function handleKeydown(event: KeyboardEvent) {
+    if (event.repeat || $instrumentPanelVisible) return
     if (event.ctrlKey || event.altKey || event.metaKey) return
     const tag = (document.activeElement?.tagName ?? '').toLowerCase()
-    if (tag === 'input' || tag === 'textarea') return
+    if (
+      tag === 'input' ||
+      tag === 'textarea' ||
+      tag === 'select' ||
+      (document.activeElement instanceof HTMLElement &&
+        document.activeElement.isContentEditable)
+    )
+      return
     const match = /^Digit(\d)$/.exec(event.code)
     if (!match) return
     const digit = Number(match[1])
@@ -97,8 +141,19 @@
       class="quickslot"
       class:empty={!entry}
       class:drop-target={i === dropIndex}
+      class:skill-queued={entry?.kind === 'ability' &&
+        ((entry.skill.id === DOUBLE_SLASH.id && $daggerSkillState.queued) ||
+          (entry.skill.id === AUSCULTATION.id && $inspectionTargeting) ||
+          (entry.skill.id === FISHING.id && $fishingTargeting))}
+      class:skill-active={entry?.kind === 'ability' &&
+        entry.skill.id !== DOUBLE_SLASH.id &&
+        entry.skill.id !== FISHING.id &&
+        ($activeBuffs[entry.skill.id] ?? 0) > $abilityClock}
       data-quickslot={i}
-      use:itemTooltip={entry ? { def: entry.def, side: 'right' } : null}
+      use:skillTooltip={entry && entry.kind === 'ability' ? entry.skill : null}
+      use:itemTooltip={entry && !(entry.kind === 'ability')
+        ? { def: entry.def, enchant: entry.enchant ?? undefined, side: 'right' }
+        : null}
       onclick={() => useSlot(i)}
       oncontextmenu={(e) => {
         e.preventDefault()
@@ -106,7 +161,39 @@
       }}
     >
       <span class="key-label">{keyLabel(i)}</span>
-      {#if entry}
+      {#if entry && entry.kind === 'ability'}
+        {@const remaining = Math.max(
+          0,
+          entry.skill.id === DOUBLE_SLASH.id
+            ? $daggerSkillState.cooldownUntil - $daggerSkillClock
+            : entry.skill.id === FISHING.id
+              ? 0
+              : ($abilityCooldowns[entry.skill.id] ?? 0) - $abilityClock
+        )}
+        {@const pending =
+          entry.skill.id === DOUBLE_SLASH.id
+            ? $daggerSkillState.pending
+            : entry.skill.id !== FISHING.id &&
+              ($abilityPending[entry.skill.id] ?? 0) > $abilityClock}
+        <img
+          class="item-icon skill-icon"
+          class:depleted={!abilityEquipmentAllowed(
+            entry.skill.id,
+            $inventoryStore.equipped
+          ) ||
+            remaining > 0 ||
+            entry.skill.manaCost > ($manaState?.mana ?? 0)}
+          src={entry.skill.icon}
+          alt={entry.skill.name}
+          draggable="false"
+        />
+        {#if remaining > 0}<span class="skill-cooldown"
+            >{remaining < 1000
+              ? (Math.ceil(remaining / 100) / 10).toFixed(1)
+              : Math.ceil(remaining / 1000)}</span
+          >
+        {:else if pending}<span class="skill-cooldown">…</span>{/if}
+      {:else if entry}
         <img
           class="item-icon"
           class:depleted={entry.qty === 0}
@@ -114,6 +201,9 @@
           alt=""
           draggable="false"
         />
+        {#if entry.enchant !== null && entry.enchant > 0}
+          <span class="item-enchant">+{entry.enchant}</span>
+        {/if}
         {#if entry.qty !== 1}
           <span class="item-qty" class:zero={entry.qty === 0}>{entry.qty}</span>
         {/if}
@@ -123,16 +213,35 @@
 </div>
 
 <style>
+  .quickslot.skill-queued,
+  .quickslot.skill-active {
+    border-color: #a3f0d2;
+    box-shadow: 0 0 8px #89d8b960;
+  }
+  .skill-cooldown {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: #0006;
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+    pointer-events: none;
+  }
+  .item-icon.skill-icon {
+    width: 100%;
+    height: 100%;
+    border-radius: 3px;
+    image-rendering: auto;
+  }
   .quickslot-bar {
-    /* Wide-screen single-row slot size (~70% of the original 56px). The
-       wrap/phone media queries below shrink it for narrow viewports. */
+    /* Media queries shrink slots on narrow screens. */
     --quickslot-size: 40px;
     --quickslot-gap: 4px;
     display: flex;
     flex-direction: row;
     gap: var(--quickslot-gap);
-    /* No padding or border: the bar's box is exactly the slots, so its bottom
-       edge lines up with the chat panel and menu buttons. */
     border-radius: 10px;
     font-family: 'Courier New', monospace;
     pointer-events: auto;
@@ -162,6 +271,7 @@
   }
 
   .key-label {
+    z-index: 1;
     position: absolute;
     top: 2px;
     left: 4px;
@@ -173,8 +283,7 @@
   }
 
   .item-icon {
-    /* Slightly inset and centred so edge-to-edge icons (sword, spear) stay
-       inside the slot's border instead of spilling over it. */
+    /* Keep icons inside the slot border. */
     position: absolute;
     inset: 0;
     margin: auto;
@@ -198,21 +307,22 @@
     text-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
   }
 
+  /* Top-right: the key label owns the top-left corner. */
+  .item-enchant {
+    right: 4px;
+  }
+
   .item-qty.zero {
     color: #e06c6c;
   }
 
-  /* Very narrow (<1000px): wrap the 10 slots into exactly two rows of five.
-     The width is pinned to five slots wide and the action cluster is rigid
-     (flex-shrink:0 in GameHud), so the bar can never be squeezed into a third
-     or fourth row — the chat panel takes all the shrinking instead. */
+  /* Keep narrow screens at two rows of five slots. */
   @media (max-width: 999.98px) {
     .quickslot-bar {
       flex-wrap: wrap;
       justify-content: center;
       --quickslot-size: 40px;
-      /* Exactly five slots + four gaps per row (+1px guards against rounding
-         bumping the fifth slot to a new row). */
+      /* Include 1px for rounding. */
       width: calc(5 * var(--quickslot-size) + 4 * var(--quickslot-gap) + 1px);
       max-width: calc(100vw - 18px);
     }

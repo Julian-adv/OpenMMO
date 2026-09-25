@@ -1,0 +1,1440 @@
+use super::*;
+
+/// How urgently an event needs LLM attention. Ordered most urgent first, so
+/// `min` picks the one that decides a batch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum EventUrgency {
+    /// Must be processed immediately (combat damage to self, death, direct chat, kicked)
+    Urgent,
+    /// Can wait and be batched with next prompt (world state changes, xp, spawns)
+    Routine,
+    /// Does not trigger a turn (background conversation or state-only updates).
+    Noise,
+}
+
+use onlinerpg_shared::fishing::{auto_stance, FishingAction, HOOK_REACTION_MS, STANCE_REACTION_MS};
+use std::ops::RangeInclusive;
+use std::time::Duration;
+
+impl SharedState {
+    /// Hand the queued sick-room respawns to the driver, emptying the queue.
+    pub fn drain_recent_respawns(&mut self) -> Vec<(String, u32)> {
+        self.recent_respawns.drain(..).collect()
+    }
+
+    /// Hand the queued chair seatings to the driver, emptying the queue.
+    pub fn drain_recent_seatings(&mut self) -> Vec<PlayerId> {
+        self.recent_seatings.drain(..).collect()
+    }
+
+    /// Classify how urgent a server event is for LLM processing.
+    pub fn classify_event(&self, msg: &ServerMessage) -> EventUrgency {
+        let self_id = self.self_player_id.as_ref();
+        match msg {
+            // Urgent: we are being attacked or we died
+            ServerMessage::MonsterAttackedPlayer { player_id, .. } => {
+                if self_id == Some(player_id) {
+                    EventUrgency::Urgent
+                } else {
+                    EventUrgency::Routine
+                }
+            }
+            ServerMessage::PlayerDead { player_id } => {
+                if self_id == Some(player_id) {
+                    EventUrgency::Urgent
+                } else {
+                    EventUrgency::Routine
+                }
+            }
+            ServerMessage::ChatMessage { player_id, message } => {
+                if self_id == Some(player_id) {
+                    EventUrgency::Noise
+                } else if self
+                    .nearby_players
+                    .get(player_id)
+                    .is_some_and(|p| p.is_official_npc)
+                {
+                    if self.in_meeting_scene() {
+                        EventUrgency::Urgent
+                    } else {
+                        EventUrgency::Noise
+                    }
+                } else if crate::driver::player_within_event_range(self, player_id) {
+                    if self.self_player.as_ref().is_some_and(|p| {
+                        crate::shop_info::chat_mentions(&p.name, message)
+                    }) {
+                        EventUrgency::Urgent
+                    } else {
+                        EventUrgency::Routine
+                    }
+                } else {
+                    EventUrgency::Noise
+                }
+            }
+            // Urgent: a whisper is always addressed to us; the echo of our
+            // own outgoing whisper is the Noise case.
+            ServerMessage::WhisperMessage { from, .. } => {
+                let self_name = self.self_player.as_ref().map(|p| p.name.as_str());
+                if Some(from.as_str()) == self_name {
+                    EventUrgency::Noise
+                } else {
+                    EventUrgency::Urgent
+                }
+            }
+            // Party chat is addressed to our group, so it wakes us like a
+            // whisper; the own-echo Noise rule is the same.
+            ServerMessage::PartyChatMessage { from, .. } => {
+                let self_name = self.self_player.as_ref().map(|p| p.name.as_str());
+                if Some(from.as_str()) == self_name {
+                    EventUrgency::Noise
+                } else {
+                    EventUrgency::Urgent
+                }
+            }
+            // Routine: feedback on our own command (/who output, whisper
+            // errors) — worth seeing, not worth an immediate wakeup.
+            ServerMessage::SystemMessage { .. } => EventUrgency::Routine,
+            // Urgent: an invite to answer while it is live, or the verdict
+            // on our own invite.
+            ServerMessage::PartyInviteReceived { .. }
+            | ServerMessage::PartyInviteResult { .. }
+            | ServerMessage::PartySummonReceived { .. } => EventUrgency::Urgent,
+            // Urgent: a friend request to answer while it is live, and the
+            // answer to our own friends_online ask.
+            ServerMessage::FriendRequestReceived { .. } | ServerMessage::FriendsOnline { .. } => {
+                EventUrgency::Urgent
+            }
+            // Urgent: someone opened their trade window on us — a person is
+            // standing there waiting for an answer.
+            ServerMessage::ShopState { .. } => EventUrgency::Urgent,
+            ServerMessage::PartyState { .. } => EventUrgency::Routine,
+            // Urgent: kicked
+            ServerMessage::Kicked { .. } => EventUrgency::Urgent,
+
+            // Urgent: verdict on our haggling offer — the NPC should follow
+            // up in the ongoing conversation (e.g. correct a clamped price).
+            ServerMessage::DealResult { .. } => EventUrgency::Urgent,
+
+            // Urgent: a player traded with us, or our trade request failed —
+            // both deserve an in-character reaction.
+            ServerMessage::TradeNotice { .. }
+            | ServerMessage::FurnitureSelectionNotice { .. }
+            | ServerMessage::TradeError { .. } => EventUrgency::Urgent,
+
+            // State-only: tracked on SharedState, shown in the world state.
+            ServerMessage::GoldUpdate { .. }
+            | ServerMessage::ManaUpdate { .. }
+            | ServerMessage::GoldGained { .. }
+            | ServerMessage::InventoryState { .. }
+            | ServerMessage::InventoryUpdated { .. }
+            | ServerMessage::GroundItemSpawned { .. }
+            | ServerMessage::GroundItemAppeared { .. }
+            | ServerMessage::GroundItemRemoved { .. }
+            | ServerMessage::GroundItemQuantityChanged { .. }
+            | ServerMessage::TradeBusy { .. } => EventUrgency::Noise,
+            ServerMessage::FenceVisibility { .. }
+            | ServerMessage::EstateChestVisibility { .. } => EventUrgency::Noise,
+
+            // Urgent: another player attacks a monster (so we can join in)
+            ServerMessage::PlayerAttacked { player_id, .. } => {
+                if self_id != Some(player_id) {
+                    EventUrgency::Urgent
+                } else {
+                    EventUrgency::Routine
+                }
+            }
+
+            // Routine: world state changes
+            ServerMessage::JoinSuccess { .. }
+            | ServerMessage::GameState { .. }
+            | ServerMessage::PlayerJoined { .. }
+            | ServerMessage::PlayerLeft { .. }
+            | ServerMessage::PlayerAppeared { .. }
+            | ServerMessage::PlayerDisappeared { .. }
+            | ServerMessage::MonsterSpawned { .. }
+            | ServerMessage::MonsterDead { .. }
+            | ServerMessage::MonsterRemoved { .. }
+            | ServerMessage::XpGained { .. }
+            | ServerMessage::PlayerHealthUpdate { .. }
+            | ServerMessage::PlayerTorchToggled { .. }
+            | ServerMessage::PlayerMainHandChanged { .. }
+            | ServerMessage::PlayerBackChanged { .. }
+            | ServerMessage::PlayerMountChanged { .. }
+            | ServerMessage::PlayerTitleChanged { .. }
+            | ServerMessage::TitleEarned { .. }
+            | ServerMessage::PlayerTitles { .. } => EventUrgency::Routine,
+
+            // Being relocated invalidates our walk targets and floor
+            // assumptions; someone else being relocated does not.
+            ServerMessage::PlayerTeleported { player_id, .. } => {
+                if self_id == Some(player_id) {
+                    EventUrgency::Urgent
+                } else {
+                    EventUrgency::Noise
+                }
+            }
+            ServerMessage::PlayerRespawned { player } => {
+                if self_id == Some(&player.id) {
+                    EventUrgency::Urgent
+                } else {
+                    EventUrgency::Routine
+                }
+            }
+
+            // Fishing: only our own outcome is worth an LLM look — recast, eat
+            // the catch, or give up. In-flight events are reflex-handled, and
+            // another player's ending renders no prompt line (driver/prompt.rs),
+            // so both are noise.
+            ServerMessage::FishingEnded { player_id, .. } => {
+                if self_id == Some(player_id) {
+                    EventUrgency::Urgent
+                } else {
+                    EventUrgency::Noise
+                }
+            }
+            ServerMessage::FishingError { .. } => EventUrgency::Urgent,
+            ServerMessage::FishingCasted { .. }
+            | ServerMessage::FishingBite { .. }
+            | ServerMessage::FishingFight { .. } => EventUrgency::Noise,
+
+            // Noise: high-frequency, irrelevant, or housing updates
+            ServerMessage::PlayerMoved { .. }
+            | ServerMessage::MonsterMoved { .. }
+            | ServerMessage::PartyPositions { .. }
+            | ServerMessage::GameTimeSync { .. }
+            | ServerMessage::WeatherSync { .. }
+            | ServerMessage::PricingNotice(_)
+            | ServerMessage::HouseSpawned { .. }
+            | ServerMessage::HousesInArea { .. }
+            | ServerMessage::HouseUpdated { .. }
+            | ServerMessage::HouseRemoved { .. }
+            | ServerMessage::DoorToggled { .. } => EventUrgency::Noise,
+
+            // A refused interaction should reach the LLM at poll priority, not
+            // sink to the idle queue behind everything else.
+            ServerMessage::InteractionRejected { .. }
+            | ServerMessage::PlayerAttackRejected { .. } => EventUrgency::Routine,
+
+            // Campfire churn and the grill-cast start are world-state, not
+            // events; the outcome (`GrillEnded`) rides the Routine catch-all.
+            ServerMessage::CampfireSpawned { .. }
+            | ServerMessage::CampfireAppeared { .. }
+            | ServerMessage::CampfireRemoved { .. }
+            | ServerMessage::StallPlaced { .. }
+            | ServerMessage::StallAppeared { .. }
+            | ServerMessage::StallRemoved { .. }
+            | ServerMessage::MealPlaced { .. }
+            | ServerMessage::MealAppeared { .. }
+            | ServerMessage::MealEaten { .. }
+            | ServerMessage::MealRemoved { .. }
+            | ServerMessage::GrillStarted
+            // Cosmetic: only the browser's footprint trail reads it.
+            | ServerMessage::PlayerWetToggled { .. }
+            // NPCs are refused player-to-player trades server-side, so these
+            // should never arrive; classified rather than left to the default.
+            | ServerMessage::PlayerTradeRequested { .. }
+            | ServerMessage::PlayerTradeRequestResult { .. }
+            | ServerMessage::PlayerTradeUpdate { .. }
+            | ServerMessage::PlayerTradeEnded { .. }
+            | ServerMessage::PlayerTradeError { .. } => EventUrgency::Noise,
+
+            // Auth/character events: routine (handled before game entry)
+            _ => EventUrgency::Routine,
+        }
+    }
+
+    /// Schedule one delayed reflex; skip beats while an answer is pending.
+    fn react_fishing(&mut self, action: FishingAction, delay_ms: RangeInclusive<u64>) -> bool {
+        if self
+            .fishing_reaction
+            .as_ref()
+            .is_some_and(|h| !h.is_finished())
+        {
+            return false;
+        }
+        let delay = Duration::from_millis(rand::thread_rng().gen_range(delay_ms));
+        let tx = self.cmd_tx.clone();
+        self.fishing_reaction = Some(tokio::spawn(async move {
+            tokio::time::sleep(delay).await;
+            let _ = tx.send(ClientMessage::FishingRespond { action }).await;
+        }));
+        true
+    }
+
+    /// Cancel reactions that could arrive in the next session.
+    pub(super) fn set_self_fishing(&mut self, fishing: bool) {
+        self.self_fishing = fishing;
+        self.fishing_stance = None;
+        if let Some(h) = self.fishing_reaction.take() {
+            h.abort();
+        }
+    }
+
+    pub fn can_start_scheduled_fishing(&self) -> bool {
+        self.in_game
+            && !self.self_fishing
+            && !self.trade_busy
+            && self
+                .fishing_retry_at
+                .is_none_or(|at| tokio::time::Instant::now() >= at)
+            && self.self_floor_level == 0
+            && self
+                .self_player
+                .as_ref()
+                .is_some_and(|p| p.health > 0 && p.object_type.is_none())
+            && self
+                .self_equipped
+                .get(&onlinerpg_shared::inventory::EquipSlot::MainHand)
+                .and_then(|item| crate::item_defs::get(&item.item_def_id))
+                .is_some_and(|item| item.category.as_deref() == Some("fishing_rod"))
+    }
+
+    /// Push an event and update tracked state. Returns the urgency of the event.
+    /// Mirror a player's health into both local copies — `self_player` and
+    /// the `nearby_players` entry — whichever exist.
+    fn set_player_health(&mut self, player_id: &PlayerId, health: u32) {
+        if self.self_player_id.as_ref() == Some(player_id) {
+            if let Some(p) = self.self_player.as_mut() {
+                p.health = health;
+            }
+        }
+        if let Some(p) = self.nearby_players.get_mut(player_id) {
+            p.health = health;
+        }
+    }
+
+    pub fn push_event(&mut self, msg: ServerMessage) -> EventUrgency {
+        if let ServerMessage::WorldUpdate {
+            world_epoch,
+            generation,
+            sequence,
+            position,
+            floor_level,
+            reset,
+            ready,
+            events,
+        } = &msg
+        {
+            if !self
+                .world_view
+                .accept(world_epoch, *generation, *sequence, *reset, events)
+            {
+                if !self.world_view.synchronized
+                    && !self
+                        .pending_commands
+                        .iter()
+                        .any(|msg| matches!(msg, ClientMessage::ResyncWorld))
+                {
+                    self.pending_commands.push(ClientMessage::ResyncWorld);
+                }
+                return EventUrgency::Noise;
+            }
+            if !self
+                .world_cache
+                .write()
+                .unwrap()
+                .ensure_world_epoch(world_epoch)
+            {
+                self.world_view.synchronized = false;
+                self.pending_commands.push(ClientMessage::ResyncWorld);
+                return EventUrgency::Noise;
+            }
+            self.world_view.synchronized = *ready;
+            self.world_view.position = Some(*position);
+            self.world_view.floor_level = *floor_level;
+            let mut urgency = EventUrgency::Noise;
+            if let Some(viewer) = self.self_player_id {
+                if *reset {
+                    let mut world = self.world_cache.write().unwrap();
+                    world.remove_house_view(viewer);
+                    world.remove_dungeon_view(viewer);
+                    world.remove_fence_view(viewer);
+                    world.remove_estate_chest_view(viewer);
+                    drop(world);
+                    self.nearby_players.clear();
+                    self.nearby_monsters.clear();
+                    self.ground_items.clear();
+                    self.campfires.clear();
+                    self.stalls.clear();
+                    self.tip_hats.clear();
+                    self.meals.clear();
+                    self.sighted_pois.clear();
+                    self.seen_nearby_players.clear();
+                    self.pending_terrain.clear();
+                    crate::terrain_http::set_world_epoch(world_epoch);
+                }
+                for event in events {
+                    if (event.subject.starts_with("door:") || event.subject.starts_with("prop:"))
+                        && !self
+                            .world_cache
+                            .write()
+                            .unwrap()
+                            .apply_dungeon_event(viewer, event)
+                    {
+                        continue;
+                    }
+                    if event.subject.starts_with("terrain:") {
+                        self.pending_terrain.retain(|tile| {
+                            format!("terrain:{},{}", tile.x, tile.z) != event.subject
+                        });
+                        for message in &event.messages {
+                            if let ServerMessage::TerrainTileVersion {
+                                tile_x,
+                                tile_z,
+                                files,
+                                ..
+                            } = message
+                            {
+                                self.pending_terrain.push(
+                                    crate::terrain_snapshots::PendingTerrain {
+                                        epoch: world_epoch.clone(),
+                                        generation: *generation,
+                                        revision: event.revision,
+                                        x: *tile_x,
+                                        z: *tile_z,
+                                        files: files.clone(),
+                                    },
+                                );
+                            }
+                        }
+                        self.terrain_notify.notify_one();
+                        continue;
+                    }
+                    if event.subject.starts_with("chest:") {
+                        self.world_cache
+                            .write()
+                            .unwrap()
+                            .apply_estate_chest_event(viewer, event);
+                        continue;
+                    }
+                    if event.subject.starts_with("fence:") {
+                        self.world_cache
+                            .write()
+                            .unwrap()
+                            .apply_fence_event(viewer, event);
+                        continue;
+                    }
+                    if event.subject.starts_with("house:") {
+                        self.world_cache.write().unwrap().apply_house_event(
+                            viewer,
+                            world_epoch,
+                            event,
+                        );
+                    } else {
+                        for message in &event.messages {
+                            urgency = urgency.min(self.push_event(message.clone()));
+                        }
+                    }
+                }
+                if !self
+                    .world_cache
+                    .read()
+                    .unwrap()
+                    .view_complete(viewer, &self.world_view)
+                {
+                    self.world_view.synchronized = false;
+                    if !self
+                        .pending_commands
+                        .iter()
+                        .any(|msg| matches!(msg, ClientMessage::ResyncWorld))
+                    {
+                        self.pending_commands.push(ClientMessage::ResyncWorld);
+                    }
+                }
+            }
+            return urgency;
+        }
+        // Feed the spectator panel before mutating, while names still resolve
+        if let Some(watch) = self.watch.clone() {
+            if let Some(kind) = crate::watch::feed_kind(&msg) {
+                let line = crate::watch::feed_fallback(&msg)
+                    .or_else(|| crate::driver::format_event(self, &msg));
+                if let Some(line) = line {
+                    watch.push(kind, line);
+                }
+            }
+        }
+
+        // Update tracked state from certain messages
+        match &msg {
+            ServerMessage::JoinSuccess { player, .. } => {
+                if let Some(id) = self.self_player_id {
+                    let mut world = self.world_cache.write().unwrap();
+                    world.remove_fence_view(id);
+                    world.remove_estate_chest_view(id);
+                }
+                self.in_game = true;
+                self.self_player_id = Some(player.id);
+                self.self_player = Some(player.clone());
+                self.self_mana = None;
+                self.set_self_fishing(false);
+                self.fishing_retry_at = None;
+                // A character saved underground rejoins there (the server
+                // rehydrates it), so adopt the floor instead of assuming 0.
+                self.adopt_floor_level(player.floor_level);
+            }
+            ServerMessage::MountRecovery {
+                request_id,
+                position,
+                rotation,
+                floor_level,
+                done,
+                success,
+            } => {
+                if *request_id == self.mount_recovery_id {
+                    self.relocate_self(*position, *rotation, *floor_level);
+                    if *done {
+                        self.mount_recovery_result = Some(*success);
+                    }
+                }
+                return EventUrgency::Noise;
+            }
+            ServerMessage::MovementResync {
+                resync_id,
+                position,
+                rotation,
+                floor_level,
+            } => {
+                self.relocate_self(*position, *rotation, *floor_level);
+                self.cancel_mount_recovery();
+                self.pending_movement_ack = Some(*resync_id);
+                self.pending_commands.retain(|message| {
+                    !matches!(
+                        message,
+                        ClientMessage::PlayerMove { .. }
+                            | ClientMessage::PlayerKeyboardMove { .. }
+                            | ClientMessage::PlayerMountTurn { .. }
+                            | ClientMessage::PlayerMountRecover { .. }
+                            | ClientMessage::PlayerFloorChanged { .. }
+                    )
+                });
+            }
+            ServerMessage::PositionCorrected {
+                position,
+                rotation,
+                floor_level,
+            } => {
+                if self
+                    .last_correction_at
+                    .is_some_and(|at| at.elapsed().as_secs() < 3)
+                {
+                    self.world_view.synchronized = false;
+                    self.pending_commands.push(ClientMessage::ResyncWorld);
+                }
+                self.last_correction_at = Some(std::time::Instant::now());
+                self.relocate_self(*position, *rotation, *floor_level);
+            }
+            ServerMessage::PlayerTeleported {
+                player_id,
+                position,
+                rotation,
+                floor_level,
+            } => {
+                if self.self_player_id.as_ref() == Some(player_id) {
+                    self.relocate_self(*position, *rotation, *floor_level);
+                    self.cancel_mount_recovery();
+                    // Any teleport settles the pending summons.
+                    self.pending_party_summons.clear();
+                }
+                self.apply_player_pose(player_id, *position, *rotation, *floor_level);
+            }
+            ServerMessage::PlayerRespawned { player } => {
+                if self.self_player_id.as_ref() == Some(&player.id) {
+                    self.self_player = Some(player.clone());
+                    self.relocate_self(player.position, player.rotation, player.floor_level);
+                } else {
+                    // The server delivers respawns across floors; who is in
+                    // sight stays the AOI's call (PlayerAppeared/Left), so
+                    // only note the woken sleeper for the sick-room visit.
+                    if !player.is_official_npc {
+                        if let Some(bed_id) = player.object_id {
+                            push_capped(
+                                &mut self.recent_respawns,
+                                (player.name.clone(), bed_id),
+                                MAX_RECENT_RESPAWNS,
+                            );
+                        }
+                    }
+                    if let Some(p) = self.nearby_players.get_mut(&player.id) {
+                        *p = player.clone();
+                    }
+                }
+                self.latest_player_moves.remove(&player.id);
+            }
+            ServerMessage::DungeonDoorsState {
+                ref entrance_id,
+                ref doors,
+            } => {
+                self.world_cache
+                    .write()
+                    .unwrap()
+                    .set_dungeon_doors(entrance_id, doors);
+            }
+            ServerMessage::DungeonDoorState {
+                entrance_id,
+                depth,
+                door_id,
+                is_open,
+            } => {
+                self.world_cache.write().unwrap().set_dungeon_door(
+                    entrance_id,
+                    *depth,
+                    *door_id,
+                    is_open.unwrap_or(false),
+                );
+            }
+            ServerMessage::DungeonPropState {
+                entrance_id,
+                depth,
+                prop_id,
+                active,
+                broken,
+                opened,
+            } => {
+                self.world_cache.write().unwrap().set_dungeon_prop(
+                    entrance_id,
+                    *depth,
+                    *prop_id,
+                    *active && *broken,
+                    *active && *opened,
+                );
+            }
+            ServerMessage::DungeonDoorToggled {
+                ref entrance_id,
+                depth,
+                door_id,
+                is_open,
+            } => {
+                self.world_cache.write().unwrap().set_dungeon_door(
+                    entrance_id,
+                    *depth,
+                    *door_id,
+                    *is_open,
+                );
+            }
+            ServerMessage::DungeonPropsState {
+                ref entrance_id,
+                depth,
+                ref broken,
+                ref opened,
+            } => {
+                let mut cache = self.world_cache.write().unwrap();
+                cache.set_dungeon_broken_props(entrance_id, *depth, broken.clone());
+                cache.set_dungeon_opened_props(entrance_id, *depth, opened.clone());
+            }
+            ServerMessage::DungeonPropOpened {
+                ref entrance_id,
+                depth,
+                prop_id,
+            } => {
+                self.world_cache.write().unwrap().add_dungeon_opened_prop(
+                    entrance_id,
+                    *depth,
+                    *prop_id,
+                );
+                self.pending_chest_open = None;
+            }
+            // Our own open landed: the chest owes us nothing until nightfall.
+            ServerMessage::DungeonChestOpened {
+                ref entrance_id,
+                player_id,
+                ..
+            } if self.self_player_id.as_ref() == Some(player_id) => {
+                self.treasure_chests_spent.insert(entrance_id.clone());
+                self.pending_chest_open = None;
+            }
+            // A rejection means the interaction we recorded never happened:
+            // a pending chest open, or a schedule pose adopted on send
+            // (occupied bed) that must revert to standing.
+            ServerMessage::InteractionRejected { ref reason } => {
+                if let Some((entrance_id, depth, kind)) = self.pending_chest_open.take() {
+                    match kind {
+                        crate::dungeon::ChestKind::Prop(prop_id) => {
+                            self.world_cache
+                                .write()
+                                .unwrap()
+                                .remove_dungeon_opened_prop(&entrance_id, depth, prop_id);
+                        }
+                        // "The chest is empty (it refills at nightfall)" — the
+                        // other refusals (boss alive, too far) are ours to fix.
+                        crate::dungeon::ChestKind::Treasure if reason.contains("empty") => {
+                            self.treasure_chests_spent.insert(entrance_id);
+                        }
+                        crate::dungeon::ChestKind::Treasure => {}
+                    }
+                } else if self.held_pose().is_some() {
+                    self.set_self_pose(None, None);
+                }
+            }
+            ServerMessage::DungeonPropBroken {
+                ref entrance_id,
+                depth,
+                prop_id,
+                ..
+            } => {
+                self.world_cache.write().unwrap().add_dungeon_broken_prop(
+                    entrance_id,
+                    *depth,
+                    *prop_id,
+                );
+            }
+            ServerMessage::BuybackUpdated {
+                merchant_player_id,
+                ref buyback,
+            } => {
+                self.merchant_buyback
+                    .insert(*merchant_player_id, buyback.clone());
+            }
+            ServerMessage::ShopState {
+                merchant_player_id,
+                ref merchant_name,
+                ref buyback,
+                ..
+            } => {
+                self.merchant_buyback
+                    .insert(*merchant_player_id, buyback.clone());
+                // The agent never sends OpenShop, so a ShopState is always a
+                // trade window pushed at us by an NPC's OpenTrade — the offer
+                // toast a web player would see. A re-send from the same
+                // merchant (a deal changed mid-trade) is not a new offer, but
+                // one arriving after the last offer lapsed is.
+                let repeat = self
+                    .pushed_trade
+                    .as_ref()
+                    .is_some_and(|t| t.merchant_id == *merchant_player_id && t.is_live());
+                self.pushed_trade = Some(PushedTrade {
+                    merchant_id: *merchant_player_id,
+                    merchant_name: merchant_name.clone(),
+                    expires_at: std::time::Instant::now() + TRADE_OFFER_TTL,
+                });
+                if !repeat {
+                    self.push_agent_event(format!(
+                        "[TradeOffer] {merchant_name} opened their trade window on you — buy or \
+                         sell with them, or wave it off with decline_trade."
+                    ));
+                }
+            }
+            ServerMessage::GameState {
+                players,
+                monsters,
+                ground_items,
+                campfires,
+                stalls,
+                tip_hats,
+                meals,
+            } => {
+                self.nearby_players = players.iter().map(|p| (p.id, p.clone())).collect();
+                self.nearby_monsters = monsters.clone();
+                self.ground_items.clear();
+                for item in ground_items {
+                    self.remember_ground_item(item.clone());
+                }
+                self.campfires.clear();
+                for campfire in campfires {
+                    self.campfires.insert(campfire.id, campfire.clone());
+                }
+                self.stalls.clear();
+                for stall in stalls {
+                    self.stalls.insert(stall.id, stall.clone());
+                }
+                self.tip_hats.clear();
+                for hat in tip_hats {
+                    self.tip_hats.insert(hat.id, hat.clone());
+                }
+                self.meals.clear();
+                for meal in meals {
+                    self.meals.insert(meal.id, meal.clone());
+                }
+                // Update self_player from game state
+                if let Some(self_id) = self.self_player_id {
+                    if let Some(p) = self.nearby_players.get(&self_id).cloned() {
+                        self.self_player = Some(p);
+                    }
+                }
+            }
+            ServerMessage::PlayerHealthUpdate {
+                player_id,
+                health,
+                max_health,
+            } if self.self_player_id.as_ref() == Some(player_id) => {
+                if let Some(p) = self.self_player.as_mut() {
+                    p.health = *health;
+                    p.max_health = *max_health;
+                }
+            }
+            // Monster damage arrives only through these two, so without them
+            // `self_player.health` never drops and everything gated on it
+            // (auto-respawn, own-monster targeting) reads a live body.
+            ServerMessage::MonsterAttackedPlayer {
+                player_id,
+                current_health,
+                ..
+            } => {
+                self.set_player_health(player_id, *current_health);
+            }
+            ServerMessage::PlayerDead { player_id } => {
+                self.set_player_health(player_id, 0);
+            }
+            // Only ever sent direct to the player who earned (or lost) the XP,
+            // so this never describes anyone in `nearby_players`.
+            ServerMessage::XpGained {
+                player_id,
+                new_level,
+                max_hp,
+                current_hp,
+                ..
+            } if self.self_player_id.as_ref() == Some(player_id) => {
+                if let Some(ref mut p) = self.self_player {
+                    p.level = *new_level;
+                    p.health = *current_hp;
+                    p.max_health = *max_hp;
+                }
+            }
+            ServerMessage::PlayerJoined { player } | ServerMessage::PlayerAppeared { player } => {
+                if self.self_player_id == Some(player.id) {
+                    self.self_player = Some(player.clone());
+                } else {
+                    self.nearby_players.insert(player.id, player.clone());
+                }
+            }
+            ServerMessage::PlayerMountChanged { player_id, mount } => {
+                if let Some(p) = self.nearby_players.get_mut(player_id) {
+                    p.mount = *mount;
+                }
+                if let Some(me) = self.self_player.as_mut().filter(|me| me.id == *player_id) {
+                    me.mount = *mount;
+                }
+            }
+            ServerMessage::PlayerTitleChanged { player_id, title } => {
+                if let Some(p) = self.nearby_players.get_mut(player_id) {
+                    p.title = title.clone();
+                }
+                if let Some(me) = self.self_player.as_mut().filter(|me| me.id == *player_id) {
+                    me.title = title.clone();
+                }
+            }
+            ServerMessage::PlayerTitles { titles, active } => {
+                self.self_titles = titles.clone();
+                if let Some(me) = self.self_player.as_mut() {
+                    me.title = active.clone();
+                }
+            }
+            ServerMessage::PlayerLeft { player_id }
+            | ServerMessage::PlayerDisappeared { player_id } => {
+                self.nearby_players.remove(player_id);
+                self.seen_nearby_players.remove(player_id);
+                // Out of earshot: the tune is gone, and [PlayerLeft] already
+                // says why — no second line about it.
+                self.music_performers.remove(player_id);
+            }
+            ServerMessage::PlayerMusicStarted {
+                player_id, track, ..
+            } => {
+                self.music_performers.insert(*player_id, track.clone());
+                if self.self_player_id.as_ref() == Some(player_id) {
+                    self.bad_song_title_refused = false;
+                    self.tips_noticed = 0;
+                    push_capped(&mut self.recent_songs, track.clone(), MAX_RECENT_SONGS);
+                    self.self_songs_started += 1;
+                    self.self_performance = self.self_player.as_ref().map(|me| SelfPerformance {
+                        ends_at: std::time::Instant::now() + crate::bgm_defs::duration(track),
+                        from: me.position,
+                    });
+                }
+            }
+            ServerMessage::TradeDeclined { player_id, .. } => {
+                // Prune on insert so the map cannot grow one dead entry per
+                // decliner over a long session.
+                let now = std::time::Instant::now();
+                self.trade_declined_until.retain(|_, until| now < *until);
+                self.trade_declined_until
+                    .insert(*player_id, now + TRADE_DECLINE_COOLDOWN);
+            }
+            ServerMessage::PlayerInteractionChanged {
+                player_id,
+                object_type,
+                object_id,
+            } => {
+                if self.self_player_id.as_ref() == Some(player_id) {
+                    self.set_self_pose(object_type.clone(), *object_id);
+                } else if let Some(p) = self.nearby_players.get_mut(player_id) {
+                    // Emotes ride this field too, so only the exact chair
+                    // type counts as taking a seat — and only on the
+                    // transition, so a re-broadcast can't re-summon the maid.
+                    let was_seated = p.object_type.as_deref() == Some(SIT_OBJECT_TYPE);
+                    p.object_type = object_type.clone();
+                    p.object_id = *object_id;
+                    if !was_seated && object_type.as_deref() == Some(SIT_OBJECT_TYPE) {
+                        push_capped(&mut self.recent_seatings, *player_id, MAX_RECENT_SEATINGS);
+                    }
+                }
+                if object_type.as_deref() != Some(MUSIC_EMOTE) {
+                    self.finish_music(player_id);
+                }
+            }
+            ServerMessage::MonsterSpawned { monster } => {
+                self.nearby_monsters
+                    .insert(monster.id.clone(), monster.clone());
+            }
+            ServerMessage::MonsterDead { monster_id, .. } => {
+                if let Some(monster) = self.nearby_monsters.get_mut(monster_id) {
+                    monster.health = 0;
+                    monster.state = MonsterState::Dead;
+                }
+            }
+            ServerMessage::MonsterRemoved { monster_id } => {
+                self.forget_monster(monster_id);
+            }
+            // The server just said this monster does not exist: its
+            // MonsterDead/MonsterRemoved never reached us. Silently drop the
+            // ghost — the [AttackRejected] event already tells the agent the
+            // swing failed, and the next CURRENT STATE no longer lists it.
+            ServerMessage::PlayerAttackRejected {
+                monster_id,
+                reason: onlinerpg_shared::AttackRejectReason::InvalidTarget,
+            } => {
+                self.forget_monster(monster_id);
+            }
+
+            ServerMessage::GroundItemSpawned { item } => {
+                self.note_tip(item);
+                self.remember_ground_item(item.clone());
+            }
+            // Not a fresh drop, just an item coming into view — never a tip.
+            ServerMessage::GroundItemAppeared { item } => {
+                self.remember_ground_item(item.clone());
+            }
+            ServerMessage::GroundItemRemoved {
+                instance_id,
+                picked_up_by,
+            } => {
+                let removed = self.ground_items.remove(instance_id);
+                self.pending_tips.retain(|(id, _)| id != instance_id);
+                // Only player-dropped items are worth a line — see note_pickup.
+                if let Some(item) = removed.filter(|item| item.dropped_by.is_some()) {
+                    if let Some(picker) = picked_up_by.filter(|id| self.self_player_id != Some(*id))
+                    {
+                        self.note_pickup(&item, &picker);
+                    }
+                }
+            }
+            ServerMessage::GroundItemQuantityChanged {
+                instance_id,
+                quantity,
+                ..
+            } => {
+                if let Some(item) = self.ground_items.get_mut(instance_id) {
+                    item.quantity = *quantity;
+                }
+            }
+            ServerMessage::CharacterCreated { ref character } => {
+                self.characters.push(character.clone());
+            }
+            ServerMessage::GoldUpdate { gold } => {
+                self.self_gold = Some(*gold);
+            }
+            ServerMessage::ManaUpdate { mana, max_mana } => {
+                self.self_mana = Some((*mana, *max_mana));
+            }
+            ServerMessage::HungerUpdate {
+                satiation,
+                state,
+                move_mult,
+                ..
+            } => {
+                self.self_hunger = Some((*satiation, *state));
+                self.self_move_mult = *move_mult;
+            }
+            ServerMessage::DebuffUpdate { ref debuffs } => {
+                self.self_debuffs = debuffs.iter().map(|d| d.id.clone()).collect();
+            }
+            ServerMessage::CampfireSpawned { ref campfire }
+            | ServerMessage::CampfireAppeared { ref campfire } => {
+                self.campfires.insert(campfire.id, campfire.clone());
+            }
+            ServerMessage::CampfireRemoved { campfire_id } => {
+                self.campfires.remove(campfire_id);
+            }
+            ServerMessage::StallPlaced { ref stall }
+            | ServerMessage::StallAppeared { ref stall } => {
+                self.stalls.insert(stall.id, stall.clone());
+            }
+            ServerMessage::StallRemoved { stall_id } => {
+                self.stalls.remove(stall_id);
+            }
+            ServerMessage::FenceVisibility { added, removed } => {
+                if let Some(id) = self.self_player_id {
+                    self.world_cache
+                        .write()
+                        .unwrap()
+                        .update_fences(id, added, removed);
+                }
+            }
+            ServerMessage::EstateChestVisibility { added, removed } => {
+                if let Some(id) = self.self_player_id {
+                    self.world_cache
+                        .write()
+                        .unwrap()
+                        .update_estate_chests(id, added, removed);
+                }
+            }
+            ServerMessage::TradeBusy { busy } => {
+                self.trade_busy = *busy;
+            }
+            ServerMessage::PartyInviteReceived {
+                inviter_id,
+                ref inviter_name,
+            } => {
+                self.prune_expired_party_invites();
+                let queue = &mut self.pending_party_invites;
+                if queue.len() < MAX_PENDING_PARTY_INVITES
+                    && !queue.iter().any(|i| i.inviter_id == *inviter_id)
+                {
+                    queue.push(PendingPartyInvite {
+                        inviter_id: *inviter_id,
+                        inviter_name: inviter_name.clone(),
+                        expires_at: std::time::Instant::now() + PARTY_INVITE_TTL,
+                    });
+                }
+            }
+            ServerMessage::PartySummonReceived {
+                caster_id,
+                ref caster_name,
+            } => {
+                self.prune_expired_party_summons();
+                // Replace any same-caster entry (always stale: the ack-only
+                // cast never re-sends for a live one). No cap — distinct
+                // casters bound the queue at the party size.
+                let queue = &mut self.pending_party_summons;
+                queue.retain(|s| s.caster_id != *caster_id);
+                queue.push(PendingPartySummon {
+                    caster_id: *caster_id,
+                    caster_name: caster_name.clone(),
+                    expires_at: std::time::Instant::now() + PARTY_SUMMON_TTL,
+                });
+            }
+            ServerMessage::FriendRequestReceived {
+                requester_id,
+                ref requester_name,
+            } => {
+                self.prune_expired_friend_requests();
+                let queue = &mut self.pending_friend_requests;
+                if queue.len() < MAX_PENDING_FRIEND_REQUESTS
+                    && !queue.iter().any(|r| r.requester_id == *requester_id)
+                {
+                    queue.push(PendingFriendRequest {
+                        requester_id: *requester_id,
+                        requester_name: requester_name.clone(),
+                        expires_at: std::time::Instant::now()
+                            + onlinerpg_shared::messages::FRIEND_REQUEST_TTL,
+                    });
+                }
+            }
+            ServerMessage::FriendList { ref friends } => {
+                // Answering a request settles it; the roster names the verdict.
+                self.pending_friend_requests
+                    .retain(|r| !friends.iter().any(|f| f.name == r.requester_name));
+                self.friends = friends.clone();
+            }
+            ServerMessage::FriendsOnline { ref friends } => {
+                // The answer to our own friends_online ask. Ids map to names
+                // through the roster; an id off the roster shows as is.
+                if friends.is_empty() {
+                    self.push_agent_event(
+                        "[FriendsOnline] None of your friends are online right now.".to_string(),
+                    );
+                } else {
+                    let names: Vec<String> = friends
+                        .iter()
+                        .map(|f| {
+                            let name = self
+                                .friends
+                                .iter()
+                                .find(|e| e.character_id == f.character_id)
+                                .map(|e| e.name.as_str())
+                                .unwrap_or("(unknown)");
+                            format!("{name} (Lv.{})", f.level)
+                        })
+                        .collect();
+                    self.push_agent_event(format!(
+                        "[FriendsOnline] Online now: {}.",
+                        names.join(", ")
+                    ));
+                }
+            }
+            ServerMessage::TipHatPlaced { ref tip_hat }
+            | ServerMessage::TipHatAppeared { ref tip_hat } => {
+                self.tip_hats.insert(tip_hat.id, tip_hat.clone());
+            }
+            ServerMessage::TipHatRemoved { tip_hat_id } => {
+                self.tip_hats.remove(tip_hat_id);
+            }
+            ServerMessage::MealPlaced { ref meal } | ServerMessage::MealAppeared { ref meal } => {
+                self.meals.insert(meal.id, meal.clone());
+            }
+            ServerMessage::MealEaten { meal_id } => {
+                if let Some(m) = self.meals.get_mut(meal_id) {
+                    m.eaten = true;
+                }
+            }
+            ServerMessage::MealRemoved { meal_id } => {
+                self.meals.remove(meal_id);
+            }
+            ServerMessage::PartyState {
+                leader_id,
+                ref members,
+            } => {
+                self.party_leader = (!members.is_empty()).then_some(*leader_id);
+                self.party_members = members.clone();
+                // Joining a party settles whichever invite led to it.
+                if !members.is_empty() {
+                    self.pending_party_invites.clear();
+                }
+                // A summons only lives while its caster shares the roster.
+                self.pending_party_summons
+                    .retain(|s| members.iter().any(|m| m.id == s.caster_id));
+            }
+            ServerMessage::InventoryState { ref inventory }
+            | ServerMessage::InventoryUpdated { ref inventory } => {
+                self.self_bag = inventory.bag.clone();
+                self.self_equipped = inventory.equipped.clone();
+                // The join snapshot only — mid-session hands are the agent's.
+                if matches!(msg, ServerMessage::InventoryState { .. }) {
+                    self.take_up_instrument();
+                }
+            }
+            // A player sold to us = we bought a wishlist item (the server
+            // only lets residents buy their wishlist): shopping mood
+            // satisfied for a while.
+            ServerMessage::TradeNotice {
+                kind: onlinerpg_shared::messages::DealKind::Sell,
+                ..
+            } => {
+                self.trade_satiated_until =
+                    Some(std::time::Instant::now() + WISHLIST_TRADE_COOLDOWN);
+            }
+            ServerMessage::PlayerMoved {
+                player_id,
+                position,
+                ..
+            } => {
+                // Update tracked position for self and nearby players
+                if self.self_player_id.as_ref() == Some(player_id) {
+                    if let Some(ref mut p) = self.self_player {
+                        p.position = *position;
+                    }
+                }
+                if let Some(p) = self.nearby_players.get_mut(player_id) {
+                    p.position = *position;
+                }
+            }
+            ServerMessage::MonsterMoved {
+                monster_id,
+                position,
+                rotation,
+                state,
+                ..
+            } => {
+                self.apply_monster_pose(monster_id, *position, *rotation, *state);
+            }
+            ServerMessage::HouseSpawned { ref house } => {
+                self.world_cache.write().unwrap().add_house(house.clone());
+            }
+            ServerMessage::HousesInArea { ref houses } => {
+                let mut world = self.world_cache.write().unwrap();
+                for house in houses {
+                    world.add_house(house.clone());
+                }
+            }
+            ServerMessage::HouseUpdated { ref house } => {
+                self.world_cache.write().unwrap().add_house(house.clone());
+            }
+            ServerMessage::HouseRemoved { ref house_id } => {
+                self.world_cache.write().unwrap().remove_house(house_id);
+            }
+            ServerMessage::DoorToggled {
+                ref house_id,
+                room_index,
+                ref wall_dir,
+                segment_index,
+                is_open,
+            } => {
+                self.world_cache.write().unwrap().update_door(
+                    house_id,
+                    *room_index,
+                    *wall_dir,
+                    *segment_index as usize,
+                    *is_open,
+                );
+            }
+            // Fishing reflexes use the same reaction delays as human players.
+            ServerMessage::FishingCasted { player_id, .. }
+                if self.self_player_id.as_ref() == Some(player_id) =>
+            {
+                self.set_self_fishing(true);
+                self.fishing_retry_at = None;
+            }
+            ServerMessage::FishingEnded { player_id, .. }
+                if self.self_player_id.as_ref() == Some(player_id) =>
+            {
+                self.set_self_fishing(false);
+                self.fishing_retry_at = Some(tokio::time::Instant::now() + FISHING_RECAST_DELAY);
+            }
+            ServerMessage::FishingError { .. } if !self.self_fishing => {
+                self.fishing_retry_at =
+                    Some(tokio::time::Instant::now() + FISHING_ERROR_RETRY_DELAY);
+            }
+            ServerMessage::FishingBite { player_id }
+                if self.self_player_id.as_ref() == Some(player_id) =>
+            {
+                self.react_fishing(FishingAction::Hook, HOOK_REACTION_MS);
+            }
+            ServerMessage::FishingFight {
+                player_id,
+                fish_state,
+                tension_pct,
+                trophy,
+                ..
+            } if self.self_player_id.as_ref() == Some(player_id) => {
+                // Same policy a practiced human plays from the gauge; answered
+                // only on change — a stance holds until replaced.
+                let stance = auto_stance(*fish_state, *tension_pct, *trophy);
+                if self.fishing_stance != Some(stance)
+                    && self.react_fishing(stance, STANCE_REACTION_MS)
+                {
+                    self.fishing_stance = Some(stance);
+                }
+            }
+            _ => {}
+        }
+
+        // Check if any player just entered the nearby radius
+        match &msg {
+            ServerMessage::GameState { .. }
+            | ServerMessage::PlayerJoined { .. }
+            | ServerMessage::PlayerAppeared { .. }
+            | ServerMessage::PlayerMoved { .. } => {
+                self.check_nearby_player_proximity();
+            }
+            _ => {}
+        }
+
+        // Check if any POI just entered sight. Only our own relocations
+        // matter on the player side — walking (echoed as PlayerMoved),
+        // teleports, server corrections; other players never affect what
+        // we can see.
+        match &msg {
+            ServerMessage::GameState { .. }
+            | ServerMessage::MonsterSpawned { .. }
+            | ServerMessage::MonsterMoved { .. }
+            | ServerMessage::GroundItemSpawned { .. }
+            | ServerMessage::GroundItemAppeared { .. }
+            | ServerMessage::PositionCorrected { .. }
+            | ServerMessage::MovementResync { .. } => {
+                self.check_sightings();
+            }
+            ServerMessage::PlayerMoved { player_id, .. }
+            | ServerMessage::PlayerTeleported { player_id, .. }
+                if self.self_player_id.as_ref() == Some(player_id) =>
+            {
+                self.check_sightings();
+            }
+            _ => {}
+        }
+
+        let urgency = self.classify_event(&msg);
+        self.remember_conversation(&msg);
+        if matches!(msg, ServerMessage::ChatMessage { .. }) && urgency == EventUrgency::Noise {
+            return urgency;
+        }
+
+        // Deduplicate high-frequency movement events: keep only latest per entity
+        match &msg {
+            ServerMessage::MonsterMoved { monster_id, .. } => {
+                self.latest_monster_moves.insert(monster_id.clone(), msg);
+                return urgency;
+            }
+            ServerMessage::PlayerMoved { player_id, .. } => {
+                self.latest_player_moves.insert(*player_id, msg);
+                return urgency;
+            }
+            // A pure state flag; it changes movement gating but is not an LLM
+            // event in its own right.
+            ServerMessage::TradeBusy { .. } => return urgency,
+            ServerMessage::PartyPositions { .. } => return urgency,
+            // In-flight fishing beats: the reflex layer above already
+            // answered them; the LLM only needs the FishingEnded outcome.
+            ServerMessage::FishingCasted { .. }
+            | ServerMessage::FishingBite { .. }
+            | ServerMessage::FishingFight { .. } => return urgency,
+            // Another player's ending renders no prompt line, so buffering it
+            // would turn an otherwise-skipped poll into a blank LLM call.
+            ServerMessage::FishingEnded { player_id, .. }
+                if self.self_player_id.as_ref() != Some(player_id) =>
+            {
+                return urgency;
+            }
+            // Ground items churn in and out of the AOI as everyone moves;
+            // the world state lists what is nearby each turn instead.
+            ServerMessage::GroundItemSpawned { .. }
+            | ServerMessage::GroundItemAppeared { .. }
+            | ServerMessage::GroundItemRemoved { .. }
+            | ServerMessage::GroundItemQuantityChanged { .. } => return urgency,
+            // Campfires likewise live in the world state, and the grill start
+            // is answered by GrillEnded a few seconds later.
+            ServerMessage::CampfireSpawned { .. }
+            | ServerMessage::CampfireAppeared { .. }
+            | ServerMessage::CampfireRemoved { .. }
+            | ServerMessage::GrillStarted => return urgency,
+            ServerMessage::PricingNotice(notice) => {
+                self.pricing = Some(notice.clone());
+                return urgency;
+            }
+            ServerMessage::WeatherSync {
+                seed,
+                bias,
+                sectors_tag,
+                rain_override,
+            } => {
+                self.weather.sync(*seed, *bias, sectors_tag, *rain_override);
+                return urgency;
+            }
+            ServerMessage::GameTimeSync { datetime, is_night } => {
+                let dark = onlinerpg_shared::moon::is_serin_dark_day(
+                    onlinerpg_shared::moon::game_day_index(datetime),
+                );
+                if !dark {
+                    self.meeting_turns = None;
+                }
+                self.is_serin_dark_day = Some(dark);
+                let prev_night = self.is_night;
+                let prev_hour = self.game_hour;
+                let hour = datetime.hour as u32;
+                let minute = datetime.minute as u32;
+                let night = *is_night;
+                self.is_night = Some(night);
+                self.schedule_period = Some(onlinerpg_shared::schedule::schedule_period(datetime));
+                self.game_hour = Some(hour);
+                self.game_minute = Some(minute);
+                self.weather.update_time(datetime);
+                self.latest_time = Some(msg);
+                // Detect day/night transition or hour change → wake driver
+                if (prev_night.is_some() && prev_night != self.is_night)
+                    || (prev_hour.is_some() && prev_hour != self.game_hour)
+                {
+                    self.push_ambient_event(format!(
+                        "[TimeChange] It is now {hour:02}:{minute:02} ({}).",
+                        if night { "night" } else { "day" }
+                    ));
+                }
+                return urgency;
+            }
+            _ => {}
+        }
+
+        if urgency == EventUrgency::Urgent
+            || (urgency == EventUrgency::Routine
+                && matches!(msg, ServerMessage::ChatMessage { .. }))
+        {
+            self.wake(urgency);
+        }
+        self.events.push(msg);
+
+        // Cap buffer size: drop oldest events
+        if self.events.len() > MAX_EVENTS {
+            let overflow = self.events.len() - MAX_EVENTS;
+            self.events.drain(..overflow);
+        }
+
+        urgency
+    }
+
+    pub fn drain_events(&mut self) -> Vec<ServerMessage> {
+        let mut events = std::mem::take(&mut self.events);
+
+        // Append latest snapshots
+        if let Some(time) = self.latest_time.take() {
+            events.push(time);
+        }
+        events.extend(self.latest_monster_moves.drain().map(|(_, v)| v));
+        events.extend(self.latest_player_moves.drain().map(|(_, v)| v));
+
+        events
+    }
+
+    pub fn pending_event_urgency(&self) -> Option<EventUrgency> {
+        self.events
+            .iter()
+            .map(|event| self.classify_event(event))
+            .chain((!self.agent_events.is_empty()).then_some(EventUrgency::Routine))
+            .min()
+    }
+
+    /// Drain synthetic agent-side events (e.g. player proximity alerts).
+    pub fn drain_agent_events(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.agent_events)
+    }
+
+    /// Agent events pushed since a mark taken from [`Self::action_progress`].
+    pub fn agent_events_from(&self, from: usize) -> &[String] {
+        self.agent_events.get(from..).unwrap_or(&[])
+    }
+
+    /// Push a synthetic agent event visible to the LLM. Synthetic events are
+    /// feedback on the agent's own actions (arrival, a failed move, a kill),
+    /// so they wake the LLM driver instead of waiting out the idle interval.
+    /// They wake it at `Routine` though: an agent's own arrival note must
+    /// never outrank a human talking to some other NPC in the LLM queue.
+    /// Counts as the running action's result — anything no action caused
+    /// belongs in [`Self::push_ambient_event`] instead.
+    pub fn push_agent_event(&mut self, event: String) {
+        self.push_agent_event_inner(event, true, false);
+    }
+
+    /// Same, but without waking the driver: the event rides along with
+    /// whatever prompt happens next (scenery noted in passing, not danger).
+    pub fn push_agent_event_quiet(&mut self, event: String) {
+        self.push_agent_event_inner(event, false, false);
+    }
+
+    /// An event no action of the agent caused — a clock tick, a sighting, a
+    /// tip. Kept out of `action_events_pushed`, or `settle_action` would read
+    /// it as the concurrent action's result and rob a dud of its [NoResult].
+    pub fn push_ambient_event(&mut self, event: String) {
+        self.push_agent_event_inner(event, true, true);
+    }
+
+    /// Ambient and quiet: rides along with the next prompt.
+    pub fn push_ambient_event_quiet(&mut self, event: String) {
+        self.push_agent_event_inner(event, false, true);
+    }
+
+    fn push_agent_event_inner(&mut self, event: String, wake: bool, ambient: bool) {
+        if let Some(watch) = &self.watch {
+            watch.push("agent", event.clone());
+        }
+        self.agent_events.push(event);
+        if !ambient {
+            self.action_events_pushed += 1;
+        }
+        if wake {
+            self.wake(EventUrgency::Routine);
+        }
+    }
+
+    /// Wake the LLM driver, remembering how urgent the reason was. The driver
+    /// takes the urgency at wake-up to pick its rate-limit floor and the
+    /// prompt's scheduler priority.
+    pub(super) fn wake(&mut self, urgency: EventUrgency) {
+        self.wake_urgency = self.wake_urgency.min(urgency);
+        if let Some(priority) = &self.queued_llm_priority {
+            priority.promote(urgency.into());
+        }
+        self.urgent_notify.notify_one();
+    }
+
+    /// Take the urgency accumulated since the last wake-up, resetting it.
+    pub fn take_wake_urgency(&mut self) -> EventUrgency {
+        std::mem::replace(&mut self.wake_urgency, EventUrgency::Noise)
+    }
+}

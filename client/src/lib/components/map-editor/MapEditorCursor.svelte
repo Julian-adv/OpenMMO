@@ -1,5 +1,6 @@
 <script lang="ts">
   import * as THREE from 'three'
+  import { snapBrushCoordinate } from '../../terrain/landscaping'
   import { onMount } from 'svelte'
   import {
     hoveredCell,
@@ -41,19 +42,26 @@
     EditorTool,
     ZoneSubTool,
     ObjectSubTool,
-    ObjectRegionData,
   } from '../../stores/editorStore'
   import { NpcScheduleManager } from '../../managers/npcScheduleManager'
   import type { NpcScheduleData } from '../../managers/npcScheduleManager'
   import { objectManager } from '../../managers/objectManager'
   import { furnitureManager } from '../../managers/furnitureManager'
+  import {
+    commitPlacements,
+    deleteSelectedPlacement,
+    duplicateSelectedPlacement,
+    nextPlacementId,
+  } from './object-edit'
   import { findAncestorWithUserData } from '../../managers/inputHandler'
   import { housingManager } from '../../managers/housingManager'
   import { playerVisualFloorLevel } from '../../stores/housingStore'
   import { floorYBase, DEFAULT_WALL_HEIGHT } from '../../utils/house-geo-utils'
+  import { isTypingTarget } from '../../utils/dom'
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
   import { ORTHOGRAPHIC_FRUSTUM_HEIGHT } from '../game-scene/camera-utils'
   import { get } from 'svelte/store'
+  import { cameraRotationEnabled } from '../../stores/debugStore'
   import type { TerrainTile } from '../game-scene/terrain-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { TerrainSplatManager } from '../../managers/terrainSplatManager'
@@ -248,13 +256,17 @@
 
     hoveredCell.set({ tileX, tileZ, cellX, cellZ, worldX, worldZ })
     lastWorldPos = { x: hit.point.x, z: hit.point.z }
+    if (currentTool === 'splat' || currentTool === 'road') {
+      lastWorldPos.x = snapBrushCoordinate(lastWorldPos.x, currentBrushSize)
+      lastWorldPos.z = snapBrushCoordinate(lastWorldPos.z, currentBrushSize)
+    }
     // Only show brush overlay for height/splat tools
     if (
       currentTool === 'height' ||
       currentTool === 'splat' ||
       currentTool === 'road'
     ) {
-      brushWorldPos.set({ x: hit.point.x, z: hit.point.z })
+      brushWorldPos.set(lastWorldPos)
     } else {
       brushWorldPos.set(null)
     }
@@ -623,9 +635,8 @@
         : 0
       const y = objectSpawnY(currentObjectType, terrainY, currentPlayerFloor)
       const data = get(currentObjectData)
-      const maxId = data.placements.reduce((max, p) => Math.max(max, p.id), 0)
       const placement = {
-        id: maxId + 1,
+        id: nextPlacementId(data),
         type: currentObjectType,
         x: snapped.x,
         y,
@@ -636,15 +647,7 @@
         ),
         floorLevel: currentPlayerFloor,
       }
-      const updated: ObjectRegionData = {
-        placements: [...data.placements, placement],
-      }
-      currentObjectData.set(updated)
-
-      const region = get(currentEditorRegion)
-      if (region) {
-        await objectManager.saveObject(region.rx, region.rz, updated)
-      }
+      await commitPlacements([...data.placements, placement])
     } else {
       // Precise pick first: cast a ray at the actual object meshes so clicking
       // a small prop on top of a larger one selects the prop (and re-clicking
@@ -694,6 +697,8 @@
   }
 
   function handleRoadClick(worldX: number, worldZ: number) {
+    worldX = snapBrushCoordinate(worldX, currentBrushSize)
+    worldZ = snapBrushCoordinate(worldZ, currentBrushSize)
     if (!currentRoadDrawStart) {
       roadDrawStart.set({ x: worldX, z: worldZ })
       return
@@ -798,7 +803,7 @@
       lastPanY = event.clientY
       return
     }
-    if (event.button !== 0) return
+    if (event.button !== 0 || get(cameraRotationEnabled)) return
     event.preventDefault()
     const hit = raycastTerrain(event)
     if (!hit) return
@@ -846,23 +851,8 @@
     flushVegetationRemoval()
   }
 
-  async function handleObjectDelete() {
-    const placementId = get(selectedObjectPlacementId)
-    if (placementId === null) return
-    const data = get(currentObjectData)
-    const updated: ObjectRegionData = {
-      placements: data.placements.filter((p) => p.id !== placementId),
-    }
-    currentObjectData.set(updated)
-    selectedObjectPlacementId.set(null)
-
-    const region = get(currentEditorRegion)
-    if (region) {
-      await objectManager.saveObject(region.rx, region.rz, updated)
-    }
-  }
-
   function handleKeyDown(event: KeyboardEvent) {
+    if (isTypingTarget(event.target)) return
     if (event.key === 'Shift') {
       shiftHeld = true
       syncBrushMode()
@@ -882,7 +872,11 @@
         objectRotation.update((r) => (r + step) % 360)
       }
       if (event.key === 'Delete' || event.key === 'Backspace') {
-        handleObjectDelete()
+        deleteSelectedPlacement()
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key === 'd') {
+        event.preventDefault()
+        duplicateSelectedPlacement()
       }
     }
     if (
@@ -909,7 +903,11 @@
     if (event.ctrlKey) {
       event.preventDefault()
       const delta = event.deltaY > 0 ? -1 : 1
-      const newSize = Math.max(1, Math.min(10, currentBrushSize + delta))
+      const step = currentTool === 'splat' || currentTool === 'road' ? 0.5 : 1
+      const newSize = Math.max(
+        step,
+        Math.min(10, currentBrushSize + delta * step)
+      )
       brushSize.set(newSize)
     } else {
       if (!camera) return

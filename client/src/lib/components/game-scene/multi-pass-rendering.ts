@@ -178,8 +178,11 @@ export function renderWithHiddenGroups(
   for (const g of groups) {
     if (g) g.visible = false
   }
-  renderFn()
-  for (let i = 0; i < groups.length; i++) {
-    if (groups[i]) groups[i]!.visible = saved[i] ?? true
+  try {
+    renderFn()
+  } finally {
+    for (let i = 0; i < groups.length; i++) {
+      if (groups[i]) groups[i]!.visible = saved[i] ?? true
+    }
   }
 }

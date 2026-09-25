@@ -32,6 +32,7 @@ import {
   ensureOriginalHeightmap as doEnsureOriginal,
   saveDirtyTiles,
 } from './terrain-height-persistence'
+import { wrapTileX } from '../terrain/world-wrap'
 
 export type { AffectedTile, HeightChangedCallback }
 
@@ -45,6 +46,7 @@ export class TerrainHeightManager {
     dirtyOriginalTiles: new Set(),
   }
   private inflightHeightmaps = new Map<string, Promise<Uint16Array>>()
+  private geometryTiles = new WeakMap<THREE.BufferGeometry, string>()
   private saveTimer: ReturnType<typeof setTimeout> | null = null
   private terrainApiUrl: string
   private heightChangedListeners = new Set<HeightChangedCallback>()
@@ -95,6 +97,20 @@ export class TerrainHeightManager {
     )
   }
 
+  /** Cache a heightmap for ground sampling only. Skips the original fetch and
+   *  the height-changed notify: listeners exist for edits, and a warm-up that
+   *  woke them would build layers for tiles that never render. */
+  async warmHeightmap(tileX: number, tileZ: number): Promise<void> {
+    await doLoad(
+      this.state,
+      this.inflightHeightmaps,
+      this.terrainApiUrl,
+      tileX,
+      tileZ,
+      () => {}
+    )
+  }
+
   async loadOriginalHeightmap(
     tileX: number,
     tileZ: number
@@ -121,45 +137,44 @@ export class TerrainHeightManager {
     return getHeightAtCell(this.state, tileX, tileZ, cellX, cellZ)
   }
 
+  // The one centered tile getHeightAtWorldPosition reads: its bilinear cells
+  // stay in [0, TILE_DIM], so no neighbour tile is ever touched.
   hasHeightData(worldX: number, worldZ: number): boolean {
     return this.state.heightmaps.has(
       tileKey(worldToTileCoord(worldX), worldToTileCoord(worldZ))
     )
   }
 
-  hasHeightDataForGrid(worldX: number, worldZ: number): boolean {
-    const floorX = Math.floor(worldX / TERRAIN_TILE_SIZE)
-    const floorZ = Math.floor(worldZ / TERRAIN_TILE_SIZE)
-    for (let dz = 0; dz <= 1; dz++) {
-      for (let dx = 0; dx <= 1; dx++) {
-        if (!this.state.heightmaps.has(tileKey(floorX + dx, floorZ + dz))) {
-          return false
-        }
-      }
-    }
-    return true
-  }
-
-  getHeightAtWorldPosition(worldX: number, worldZ: number): number {
+  /** Ground height, or null when the tile isn't streamed in. Reads the one
+   *  centered tile directly: the bilinear cells stay in [0, TILE_DIM], so a
+   *  single lookup replaces `hasHeightData` plus four `getHeightAtCell`s on
+   *  the per-frame entity grounding path. */
+  groundYOrNull(worldX: number, worldZ: number): number | null {
     const tileX = worldToTileCoord(worldX)
     const tileZ = worldToTileCoord(worldZ)
-    const tileMinX = tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-    const tileMinZ = tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-    const localX = worldX - tileMinX
-    const localZ = worldZ - tileMinZ
+    const data = this.state.heightmaps.get(tileKey(tileX, tileZ))
+    if (!data) return null
+
+    const localX = worldX - (tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2)
+    const localZ = worldZ - (tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2)
     const cellX = Math.floor(localX)
     const cellZ = Math.floor(localZ)
     const fracX = localX - cellX
     const fracZ = localZ - cellZ
 
-    const h00 = getHeightAtCell(this.state, tileX, tileZ, cellX, cellZ)
-    const h10 = getHeightAtCell(this.state, tileX, tileZ, cellX + 1, cellZ)
-    const h01 = getHeightAtCell(this.state, tileX, tileZ, cellX, cellZ + 1)
-    const h11 = getHeightAtCell(this.state, tileX, tileZ, cellX + 1, cellZ + 1)
+    const row = cellZ * VERTS_PER_SIDE + cellX
+    const h00 = decodeHeight(data[row])
+    const h10 = decodeHeight(data[row + 1])
+    const h01 = decodeHeight(data[row + VERTS_PER_SIDE])
+    const h11 = decodeHeight(data[row + VERTS_PER_SIDE + 1])
 
     const h0 = h00 + (h10 - h00) * fracX
     const h1 = h01 + (h11 - h01) * fracX
     return h0 + (h1 - h0) * fracZ
+  }
+
+  getHeightAtWorldPosition(worldX: number, worldZ: number): number {
+    return this.groundYOrNull(worldX, worldZ) ?? 0
   }
 
   hasWater(tileX: number, tileZ: number): boolean {
@@ -178,11 +193,19 @@ export class TerrainHeightManager {
     tileZ: number,
     geometry: THREE.BufferGeometry
   ) {
-    this.state.geometries.set(tileKey(tileX, tileZ), geometry)
+    const key = tileKey(tileX, tileZ)
+    const previousKey = this.geometryTiles.get(geometry)
+    if (previousKey !== undefined) this.state.geometries.delete(previousKey)
+    this.unregisterGeometry(tileX, tileZ)
+    this.state.geometries.set(key, geometry)
+    this.geometryTiles.set(geometry, key)
   }
 
   unregisterGeometry(tileX: number, tileZ: number) {
-    this.state.geometries.delete(tileKey(tileX, tileZ))
+    const key = tileKey(tileX, tileZ)
+    const geometry = this.state.geometries.get(key)
+    if (geometry) this.geometryTiles.delete(geometry)
+    this.state.geometries.delete(key)
   }
 
   applyHeightToGeometry(
@@ -190,6 +213,7 @@ export class TerrainHeightManager {
     tileZ: number,
     geometry: THREE.BufferGeometry
   ) {
+    if (this.state.geometries.get(tileKey(tileX, tileZ)) !== geometry) return
     applyHeightToGeo(this.state, tileX, tileZ, geometry)
   }
 
@@ -370,6 +394,76 @@ export class TerrainHeightManager {
 
   // --- Data management ---
 
+  async refreshTiles(
+    tiles: readonly (readonly [number, number])[]
+  ): Promise<void> {
+    const requested = new Set(
+      tiles.map(([tileX, tileZ]) => tileKey(wrapTileX(tileX), tileZ))
+    )
+    const aliases = new Map<string, [number, number]>()
+    for (const key of [
+      ...this.state.heightmaps.keys(),
+      ...this.state.geometries.keys(),
+    ]) {
+      const [tileX, tileZ] = key.split(',').map(Number)
+      if (requested.has(tileKey(wrapTileX(tileX), tileZ))) {
+        aliases.set(key, [tileX, tileZ])
+      }
+    }
+    const covered = new Set(
+      [...aliases.values()].map(([tileX, tileZ]) =>
+        tileKey(wrapTileX(tileX), tileZ)
+      )
+    )
+    for (const [tileX, tileZ] of tiles) {
+      const canonicalKey = tileKey(wrapTileX(tileX), tileZ)
+      if (covered.has(canonicalKey)) continue
+      aliases.set(tileKey(tileX, tileZ), [tileX, tileZ])
+      covered.add(canonicalKey)
+    }
+
+    await Promise.all(
+      [...aliases.values()].map(async ([tileX, tileZ]) => {
+        const key = tileKey(tileX, tileZ)
+        if (this.state.dirtyTiles.has(key)) return
+        const inflight = this.inflightHeightmaps.get(key)
+        if (inflight) await inflight.catch(() => {})
+        this.state.heightmaps.delete(key)
+        this.state.originalHeightmaps.delete(key)
+        this.state.missingOriginalTiles.delete(key)
+        await this.loadHeightmap(tileX, tileZ)
+        this.refreshTileGeometry(tileX, tileZ)
+        this.refreshAdjacentTileEdges(tileX, tileZ)
+      })
+    )
+  }
+
+  applySnapshot(
+    tileX: number,
+    tileZ: number,
+    bytes: number[] | Uint8Array
+  ): void {
+    if (bytes.length !== VERTS_PER_SIDE * VERTS_PER_SIDE * 2)
+      throw new Error('Invalid terrain height snapshot')
+    const data = new Uint16Array(new Uint8Array(bytes).buffer)
+    const keys = new Set([tileKey(tileX, tileZ)])
+    for (const key of [
+      ...this.state.heightmaps.keys(),
+      ...this.state.geometries.keys(),
+    ]) {
+      const [x, z] = key.split(',').map(Number)
+      if (wrapTileX(x) === wrapTileX(tileX) && z === tileZ) keys.add(key)
+    }
+    for (const key of keys) {
+      if (this.state.dirtyTiles.has(key)) continue
+      const [x, z] = key.split(',').map(Number)
+      this.inflightHeightmaps.delete(key)
+      this.state.heightmaps.set(key, data)
+      this.refreshTileGeometry(x, z)
+      this.refreshAdjacentTileEdges(x, z)
+    }
+  }
+
   setHeightmap(tileX: number, tileZ: number, data: Uint16Array): void {
     this.state.heightmaps.set(tileKey(tileX, tileZ), data)
   }
@@ -390,7 +484,7 @@ export class TerrainHeightManager {
     const key = tileKey(tileX, tileZ)
     this.state.heightmaps.delete(key)
     this.state.originalHeightmaps.delete(key)
-    this.state.geometries.delete(key)
+    this.unregisterGeometry(tileX, tileZ)
   }
 
   evictCachedData(tileX: number, tileZ: number) {

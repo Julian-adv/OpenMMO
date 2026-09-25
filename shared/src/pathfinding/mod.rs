@@ -22,22 +22,25 @@ mod query;
 mod smooth;
 mod stair;
 
-pub use astar::{find_path, DEFAULT_MAX_NODES};
+pub use astar::{find_path, segment_enters_cells, DEFAULT_MAX_NODES};
 pub use cache::{
     apply_door_overlays, build_furniture_passability, build_runtime_passability, door_cells,
     update_door_edge, FurniturePiece,
 };
 pub use query::{
-    blocking_entry_for_mover, get_floor_at_position, get_floor_y_base, is_cardinal_move_blocked,
-    is_cell_sealed, is_circle_blocked_on_floor, is_movement_blocked, is_movement_blocked_for_mover,
-    start_floor_at, BlockInfo,
+    attack_line_blocked, attack_line_blocked_in, blocking_entry_for_mover, get_floor_at_position,
+    get_floor_y_base, in_stairwell_span, is_cardinal_move_blocked, is_cell_sealed,
+    is_circle_blocked_by_passability, is_circle_blocked_on_floor, is_movement_blocked,
+    is_movement_blocked_for_mover, leg_touches_stairwell, ranged_attack_line_blocked,
+    snap_goal_into_floor, start_floor_at, storey_ground_y, supporting_floor_y, BlockInfo,
 };
-pub use smooth::find_and_smooth_path;
+pub(crate) use query::{ramp_fraction, segment_touches_box};
+pub use smooth::{find_and_smooth_path, find_and_smooth_path_avoiding};
 
 use std::collections::HashMap;
 
 /// The four cardinal neighbours.
-pub(super) const DIRS: [(i32, i32); 4] = [(1, 0), (-1, 0), (0, 1), (0, -1)];
+pub const DIRS: [(i32, i32); 4] = [(1, 0), (-1, 0), (0, 1), (0, -1)];
 
 // Edge bitmask constants (matches TypeScript EDGE_N/E/S/W)
 pub(super) const EDGE_N: u8 = 1; // -Z edge
@@ -83,6 +86,11 @@ pub struct RuntimePassability {
     /// only for furniture, the one kind that can land on a standing player.
     /// See `query::blocking_entry_for_mover`.
     pub yields_to_trapped_mover: bool,
+    pub allows_projectiles: bool,
+    /// Whether its grids are storeys a mover stands on (a house). False for
+    /// furniture and for a dungeon, whose surface shell is one flat grid over
+    /// the whole footprint — a collision hull, not ground.
+    pub is_ground: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -150,12 +158,47 @@ mod tests {
             }],
             stairwells: vec![],
             yields_to_trapped_mover: false,
+            allows_projectiles: false,
+            is_ground: true,
         };
         ("house".to_string(), rp)
     }
 
     fn make_simple_house() -> (String, RuntimePassability) {
         make_rect_room(3, 3)
+    }
+
+    /// Two-storey house: the 2F grid matches the 1F one, 3.15m up.
+    fn make_two_storey_house() -> (String, RuntimePassability) {
+        let (id, mut rp) = make_rect_room(6, 8);
+        let mut upper = rp.floors[0].clone();
+        upper.floor_level = 1;
+        upper.y_base = 3.15;
+        rp.floors.push(upper);
+        (id, rp)
+    }
+
+    #[test]
+    fn click_on_upper_floor_jetty_overhang_stays_on_that_floor() {
+        let (id, rp) = make_two_storey_house();
+        let mut cache = PassabilityCache::new();
+        cache.insert(id, rp);
+        // Grid spans z∈[10,18); the drawn 2F floor extends 0.15 past it.
+        assert_eq!(get_floor_at_position(&cache, 13.3, 18.1, 3.2), 1);
+        assert_eq!(get_floor_at_position(&cache, 13.3, 17.8, 3.2), 1);
+        // Ground next to the house is still outdoors.
+        assert_eq!(get_floor_at_position(&cache, 13.3, 18.1, 0.0), 0);
+        assert_eq!(get_floor_at_position(&cache, 13.3, 19.0, 3.2), 0);
+
+        let result = find_path(13.3, 15.8, 1, 13.3, 18.1, 1, &cache, 10_000);
+        assert!(result.found);
+        let last = result.waypoints.last().unwrap();
+        assert_eq!(last.floor, 1);
+        assert!(
+            last.z < 18.0,
+            "goal snapped inside the grid, got z={}",
+            last.z
+        );
     }
 
     /// 8×5 room with a short interior wall stub jutting from the interior: an
@@ -228,6 +271,20 @@ mod tests {
             is_line_passable(&end_from, &end_to, &cache),
             "a near-wall endpoint must not block smoothing"
         );
+    }
+
+    #[test]
+    fn attacks_refuse_to_cross_a_wall() {
+        let (id, rp) = make_room_with_wall_stub();
+        let mut cache = PassabilityCache::new();
+        cache.insert(id, rp);
+
+        for blocked in [attack_line_blocked, ranged_attack_line_blocked] {
+            assert!(blocked(&cache, 13.5, 11.5, 13.5, 12.5, 0));
+            assert!(!blocked(&cache, 11.5, 11.5, 11.5, 12.5, 0));
+            assert!(!blocked(&cache, 11.5, 12.2, 16.5, 12.2, 0));
+            assert!(!blocked(&cache, 13.5, 11.5, 13.5, 12.5, 1));
+        }
     }
 
     #[test]
@@ -619,8 +676,152 @@ mod tests {
                 reversed: false,
             }],
             yields_to_trapped_mover: false,
+            allows_projectiles: false,
+            is_ground: true,
         };
         ("two_floor".to_string(), rp)
+    }
+
+    /// Pins the span a climber may report a height within.
+    #[test]
+    fn stairwell_span_covers_the_flight_but_not_a_forged_height() {
+        let (id, rp) = make_two_floor_stairwell();
+        let mut cache = PassabilityCache::new();
+        cache.insert(id, rp);
+
+        // Mid-flight between the two y_bases (0.0 and 3.1).
+        assert!(query::in_stairwell_span(&cache, 0.5, 1.5, 2.0));
+        // Just past either end — the step-height jitter the tolerance absorbs.
+        assert!(query::in_stairwell_span(&cache, 0.5, 1.5, -0.5));
+        assert!(query::in_stairwell_span(&cache, 0.5, 1.5, 3.6));
+        // Above the flight entirely: no flight to be on.
+        assert!(!query::in_stairwell_span(&cache, 0.5, 1.5, 10.0));
+        // Off the stairwell's footprint, at a height it would have allowed.
+        assert!(!query::in_stairwell_span(&cache, 2.5, 1.5, 2.0));
+    }
+
+    /// The height a server stores for a mover instead of the reported one:
+    /// landings and ramp on the stairs, the storey's `y_base` on its grid,
+    /// nothing on open terrain.
+    #[test]
+    fn storey_ground_y_follows_the_stairs_and_the_grid() {
+        let (id, rp) = make_two_floor_stairwell();
+        let mut cache = PassabilityCache::new();
+        cache.insert(id, rp);
+        // Stairwell x 0..1, z 0..4: entry landing, half-way up the 3m run
+        // between the 0.5m landings, exit landing — whichever storey the
+        // mover is keyed to, whatever it claims; then each storey's own grid.
+        for (floor, x, z, hint, want) in [
+            (0, 0.5, 0.25, 1000.0, Some(0.0)),
+            (0, 0.5, 2.0, 1000.0, Some(1.55)),
+            (1, 0.5, 2.0, -1000.0, Some(1.55)),
+            (0, 0.5, 3.75, 1000.0, Some(3.1)),
+            (0, 1.5, 0.5, 1000.0, Some(0.0)),
+            (1, 1.5, 3.5, -5.0, Some(3.1)),
+            (1, 1.5, 0.5, 0.0, None),
+            (0, 50.0, 50.0, 7.0, None),
+        ] {
+            let got = query::storey_ground_y(&cache, floor, x, z, hint);
+            let close = match (got, want) {
+                (Some(a), Some(b)) => (a - b).abs() < 1e-4,
+                (None, None) => true,
+                _ => false,
+            };
+            assert!(
+                close,
+                "floor {floor} at ({x}, {z}): got {got:?}, want {want:?}"
+            );
+        }
+    }
+
+    /// A dungeon's surface shell (or furniture) is a collision hull, not
+    /// ground: it must not flatten the stored Y of everyone walking near it.
+    #[test]
+    fn storey_ground_y_ignores_non_ground_entries() {
+        let (id, mut rp) = make_two_floor_stairwell();
+        rp.is_ground = false;
+        let mut cache = PassabilityCache::new();
+        cache.insert(id, rp);
+        assert_eq!(query::storey_ground_y(&cache, 0, 1.5, 0.5, 1000.0), None);
+        assert!(!query::leg_touches_stairwell(
+            &cache,
+            0,
+            1,
+            (0.5, 0.5),
+            (0.5, 1.5)
+        ));
+    }
+
+    /// Only a short leg touching the stairwell (±1 cell) may change storey.
+    #[test]
+    fn leg_touches_stairwell_bounds_where_a_storey_changes() {
+        let (id, rp) = make_two_floor_stairwell();
+        let mut cache = PassabilityCache::new();
+        cache.insert(id, rp);
+        let touches = |from, to| query::leg_touches_stairwell(&cache, 0, 1, from, to);
+
+        assert!(touches((0.5, 0.5), (0.5, 3.5)));
+        // A standalone change from the stairs, and from the margin cell.
+        assert!(touches((0.5, 2.5), (0.5, 2.5)));
+        assert!(touches((1.5, 2.5), (1.5, 2.5)));
+        // Two cells off the flight, and a leg clipping the margin but eight
+        // cells long (the run is four).
+        assert!(!touches((2.5, 2.5), (2.5, 2.5)));
+        assert!(!touches((1.5, -3.0), (1.5, 6.0)));
+        // Not the storeys this stairwell joins.
+        assert!(!query::leg_touches_stairwell(
+            &cache,
+            1,
+            2,
+            (0.5, 0.5),
+            (0.5, 3.5)
+        ));
+    }
+
+    /// A leg crosses obstacles mid-span as often as at its ends, so the
+    /// supporting height is looked up over the whole swept box.
+    #[test]
+    fn supporting_floor_y_reads_the_storey_the_leg_crosses() {
+        let (id, rp) = make_two_floor_stairwell();
+        let mut cache = PassabilityCache::new();
+        cache.insert(id, rp);
+
+        // Floor 0's grid spans z 0..1; a leg from z=-2 to z=2 crosses it
+        // without either end landing on it.
+        assert_eq!(
+            query::supporting_floor_y(&cache, 0.5, -2.0, 0.5, 2.0, 0, 9.0),
+            Some(0.0)
+        );
+        // Keyed to floor 1, the box over that storey reports it instead.
+        assert_eq!(
+            query::supporting_floor_y(&cache, 0.5, 2.5, 0.5, 3.5, 1, 9.0),
+            Some(3.1)
+        );
+        // Nothing at that level under the box.
+        assert_eq!(
+            query::supporting_floor_y(&cache, 0.5, 50.0, 0.5, 51.0, 0, 0.0),
+            None
+        );
+    }
+
+    /// One leg can cross furniture standing on ground of different heights, so
+    /// two grids at the same level are resolved by nearest `y_base` — not by
+    /// whichever the cache happens to yield first.
+    #[test]
+    fn supporting_floor_y_picks_the_nearest_of_two_grids_on_one_level() {
+        let (id, rp) = make_two_floor_stairwell();
+        let mut cache = PassabilityCache::new();
+        cache.insert(id, rp);
+        // A second floor-0 grid over the same cells, ten metres up a hill.
+        let mut hill = make_two_floor_stairwell().1;
+        hill.floors.retain(|f| f.floor_level == 0);
+        hill.floors[0].y_base = 10.0;
+        hill.stairwells.clear();
+        cache.insert("hill".to_string(), hill);
+
+        let leg = |y| query::supporting_floor_y(&cache, 0.5, -2.0, 0.5, 2.0, 0, y);
+        assert_eq!(leg(0.4), Some(0.0));
+        assert_eq!(leg(9.6), Some(10.0));
     }
 
     #[test]
@@ -781,6 +982,8 @@ mod tests {
                 reversed: false,
             }],
             yields_to_trapped_mover: false,
+            allows_projectiles: false,
+            is_ground: true,
         };
         ("house".to_string(), rp)
     }
@@ -812,6 +1015,27 @@ mod tests {
         );
     }
 
+    /// Bounds the `in_stairwell_span` exemption. A caller that trusts a mover's
+    /// reported Y inside a stairwell is not handing it the house: the two-floor
+    /// consult is deliberately Y-blind, so no claimed height unseals a walled
+    /// exit. The exemption reaches only the low obstacles under the stairs,
+    /// which is what it is for.
+    #[test]
+    fn no_claimed_height_unseals_a_walled_stairwell_exit() {
+        let (id, rp) = make_stairwell_house(true, true);
+        let mut cache = PassabilityCache::new();
+        cache.insert(id, rp);
+
+        // 4.2 clears the lower floor's walls (y_base 0 + wall_height 3.0) and
+        // sits inside the flight's span, so the exemption would keep it.
+        for y in [Some(2.0), Some(4.2), Some(1000.0)] {
+            assert!(
+                query::is_movement_blocked(&cache, 1.5, 1.5, 1.5, 2.5, 1, y),
+                "a walled stairwell exit must block at y={y:?}"
+            );
+        }
+    }
+
     /// The relaxation is scoped to stairwell footprints: an ordinary wall one
     /// column over is keyed to the mover's floor alone and still blocks.
     #[test]
@@ -828,6 +1052,118 @@ mod tests {
         assert!(
             !query::is_movement_blocked(&cache, 0.5, 1.5, 0.5, 2.5, 0, None),
             "...and must not reach the floor below it"
+        );
+    }
+
+    /// A bed placed over a standing mover seals its whole footprint. The
+    /// movement validator waives one step out of a sealed cell across
+    /// furniture (`blocking_entry_for_mover`); A* must plan that same step,
+    /// or a mover woken on a bed paths nowhere and callers fall back to
+    /// teleporting it through walls.
+    #[test]
+    fn astar_escapes_a_furniture_sealed_start() {
+        let cache = furniture_cache(vec![(5, 5), (5, 6)]);
+        let result = find_path(5.5, 5.5, 0, 8.5, 5.5, 0, &cache, 500);
+        assert!(
+            result.found,
+            "a mover sealed onto a bed must still path out"
+        );
+    }
+
+    /// The waiver is furniture-only: sealed in by something that does not
+    /// yield, A* must still plan nothing.
+    #[test]
+    fn astar_grants_no_escape_from_a_wall_sealed_start() {
+        let (id, rp) = make_rect_room(1, 1);
+        let mut cache = PassabilityCache::new();
+        cache.insert(id, rp);
+
+        let result = find_path(10.5, 10.5, 0, 13.5, 10.5, 0, &cache, 500);
+        assert!(
+            !result.found,
+            "walls never yield, even to a sealed-in mover"
+        );
+        assert!(result.waypoints.is_empty());
+    }
+
+    /// Furniture sealed against a wall: the furniture sides open, the wall
+    /// side stays solid, so the escape goes around the wall — never through.
+    #[test]
+    fn sealed_start_escape_respects_walls() {
+        let mut cache = furniture_cache(vec![(5, 5)]);
+        // A wall along the east edge of x=5 for z in 4..=6.
+        cache.insert(
+            "house".to_string(),
+            RuntimePassability {
+                house_origin_x: 5.0,
+                house_origin_z: 4.0,
+                min_x: 5.0,
+                max_x: 6.0,
+                min_z: 4.0,
+                max_z: 7.0,
+                floors: vec![RuntimeFloorGrid {
+                    floor_level: 0,
+                    origin_x: 0,
+                    origin_z: 0,
+                    width: 1,
+                    depth: 3,
+                    y_base: 0.0,
+                    wall_height: 3.0,
+                    cells: vec![EDGE_E; 3],
+                }],
+                stairwells: vec![],
+                yields_to_trapped_mover: false,
+                allows_projectiles: false,
+                is_ground: true,
+            },
+        );
+
+        let result = find_path(5.5, 5.5, 0, 8.5, 5.5, 0, &cache, 500);
+        assert!(result.found, "a detour around the wall exists");
+        let first = &result.waypoints[0];
+        assert!(
+            !(first.x.floor() as i32 == 6 && first.z.floor() as i32 == 5),
+            "the escape step must not cross the wall side: {:?}",
+            result.waypoints
+        );
+    }
+
+    /// A blocked cell (a standing monster) is avoided by the search and by
+    /// smoothing alike: a wall-only line check would cut the detour straight
+    /// back through the cell it was routed around.
+    #[test]
+    fn find_and_smooth_path_avoiding_keeps_out_of_blocked_cells() {
+        let (id, rp) = make_rect_room(5, 5);
+        let mut cache = PassabilityCache::new();
+        cache.insert(id, rp);
+        let blocked = [(12, 12)];
+
+        let plain = find_and_smooth_path(10.5, 12.5, 0, 14.5, 12.5, 0, &cache, 500);
+        assert!(
+            plain.found && plain.waypoints.len() == 1,
+            "open room: straight line"
+        );
+
+        let result =
+            find_and_smooth_path_avoiding(10.5, 12.5, 0, 14.5, 12.5, 0, &cache, 500, &blocked);
+        assert!(result.found);
+        let last = result.waypoints.last().unwrap();
+        assert!((last.x - 14.5).abs() < 0.01 && (last.z - 12.5).abs() < 0.01);
+        let (mut px, mut pz) = (10.5_f32, 12.5_f32);
+        for wp in &result.waypoints {
+            assert!(
+                !segment_enters_cells(px, pz, wp.x, wp.z, &blocked),
+                "path crosses the blocked cell: {:?}",
+                result.waypoints
+            );
+            (px, pz) = (wp.x, wp.z);
+        }
+
+        let same = find_and_smooth_path_avoiding(10.5, 12.5, 0, 14.5, 12.5, 0, &cache, 500, &[]);
+        assert_eq!(
+            same.waypoints.len(),
+            plain.waypoints.len(),
+            "empty set = plain"
         );
     }
 }
@@ -879,6 +1215,8 @@ mod real_house_repro {
                 reversed: true,
             }],
             yields_to_trapped_mover: false,
+            allows_projectiles: false,
+            is_ground: true,
         };
         ("r-23_+73_1".to_string(), rp)
     }
@@ -962,6 +1300,8 @@ mod real_house_repro {
                 reversed: false,
             }],
             yields_to_trapped_mover: false,
+            allows_projectiles: false,
+            is_ground: true,
         };
         ("dungeon:old_crypt".to_string(), rp)
     }

@@ -16,25 +16,12 @@ import {
 // ───────────────────────────────────────────────────────────────────────────
 
 export type MoveRequestDecision =
-  | {
-      kind: 'ignored'
-      clearPendingPickupAfterMove: boolean
-    }
-  | {
-      kind: 'exit_pickup_and_retry'
-      clearPendingPickupAfterMove: boolean
-    }
-  | {
-      kind: 'exit_object_and_delay'
-      clearPendingPickupAfterMove: boolean
-    }
-  | {
-      kind: 'start'
-      clearPendingPickupAfterMove: boolean
-    }
+  | { kind: 'ignored' }
+  | { kind: 'exit_pickup_and_retry' }
+  | { kind: 'exit_object_and_delay' }
+  | { kind: 'start' }
 
 interface DecideMoveRequestInput {
-  pickupAfterArrival: number | null
   currentPlayerHealth: number | null
   interactionExit: InteractionExitKind
   hasCurrentPlayer: boolean
@@ -43,35 +30,27 @@ interface DecideMoveRequestInput {
 }
 
 export function decideMoveRequest({
-  pickupAfterArrival,
   currentPlayerHealth,
   interactionExit,
   hasCurrentPlayer,
   isMoving,
   hasKeyboardInput,
 }: DecideMoveRequestInput): MoveRequestDecision {
-  const clearPendingPickupAfterMove = pickupAfterArrival === null
-
   if (currentPlayerHealth !== null && currentPlayerHealth <= 0) {
-    return { kind: 'ignored', clearPendingPickupAfterMove }
+    return { kind: 'ignored' }
   }
 
-  if (interactionExit === 'pickup') {
-    return { kind: 'exit_pickup_and_retry', clearPendingPickupAfterMove }
-  }
-
-  if (interactionExit === 'object') {
-    return { kind: 'exit_object_and_delay', clearPendingPickupAfterMove }
-  }
+  if (interactionExit === 'pickup') return { kind: 'exit_pickup_and_retry' }
+  if (interactionExit === 'object') return { kind: 'exit_object_and_delay' }
 
   if (!hasCurrentPlayer || isMoving || hasKeyboardInput) {
     if (hasCurrentPlayer && isMoving && !hasKeyboardInput) {
-      return { kind: 'start', clearPendingPickupAfterMove }
+      return { kind: 'start' }
     }
-    return { kind: 'ignored', clearPendingPickupAfterMove }
+    return { kind: 'ignored' }
   }
 
-  return { kind: 'start', clearPendingPickupAfterMove }
+  return { kind: 'start' }
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -81,8 +60,9 @@ export function decideMoveRequest({
 interface StartClickMovementInput extends Pathing {
   currentPos: Position
   clickPosition: Position
-  pickupAfterArrival: number | null
   sendPlayerMove: SendPlayerMove
+  /** Carry the current speed so a mid-run redirect doesn't restart at 0. */
+  startSpeed: number
 }
 
 export interface StartedClickMovement {
@@ -91,22 +71,25 @@ export interface StartedClickMovement {
   movementState: MovementState
   movementTarget: Position
   playerRotation: number
-  pendingPickupAfterMoveInstanceId: number | null
 }
 
 export function startClickMovement({
   currentPos,
   clickPosition,
-  pickupAfterArrival,
   sendPlayerMove,
+  startSpeed,
   ...pathing
-}: StartClickMovementInput): StartedClickMovement {
+}: StartClickMovementInput): StartedClickMovement | null {
   const leg = routeFirstLeg(currentPos, clickPosition, pathing, sendPlayerMove)
+  if (!leg) return null
   return {
     ...leg,
     currentWaypointIndex: 0,
-    movementState: initMovementState(currentPos, leg.movementTarget, 0),
-    pendingPickupAfterMoveInstanceId: pickupAfterArrival,
+    movementState: initMovementState(
+      currentPos,
+      leg.movementTarget,
+      startSpeed
+    ),
   }
 }
 
@@ -120,26 +103,25 @@ interface MoveRequestPlayer {
 }
 
 export interface MoveRequestActions {
-  clearPendingPickupAfterMove: () => void
   exitPickupAndRetry: () => void
   exitObjectAndDelay: () => void
+  cancelBlockedMovement: () => void
   applyStartedMovement: (started: StartedClickMovement) => void
 }
 
 interface RunMoveRequestInput extends Pathing {
   clickPosition: Position
-  pickupAfterArrival: number | null
   currentPlayer: MoveRequestPlayer | null
   interactionExit: InteractionExitKind
   isMoving: boolean
   hasKeyboardInput: boolean
   sendPlayerMove: SendPlayerMove
+  startSpeed: number
   actions: MoveRequestActions
 }
 
 export function runMoveRequest({
   clickPosition,
-  pickupAfterArrival,
   currentPlayer,
   interactionExit,
   isMoving,
@@ -149,20 +131,16 @@ export function runMoveRequest({
   findPath,
   waypointHeight,
   sendPlayerMove,
+  startSpeed,
   actions,
 }: RunMoveRequestInput) {
   const decision = decideMoveRequest({
-    pickupAfterArrival,
     currentPlayerHealth: currentPlayer?.health ?? null,
     interactionExit,
     hasCurrentPlayer: currentPlayer !== null,
     isMoving,
     hasKeyboardInput,
   })
-
-  if (decision.clearPendingPickupAfterMove) {
-    actions.clearPendingPickupAfterMove()
-  }
 
   switch (decision.kind) {
     case 'ignored':
@@ -179,20 +157,20 @@ export function runMoveRequest({
 
   if (!currentPlayer) return
 
-  actions.applyStartedMovement(
-    startClickMovement({
-      currentPos: {
-        x: currentPlayer.position.x,
-        y: currentPlayer.position.y,
-        z: currentPlayer.position.z,
-      },
-      clickPosition,
-      pickupAfterArrival,
-      currentFloor,
-      getFloorAt,
-      findPath,
-      waypointHeight,
-      sendPlayerMove,
-    })
-  )
+  const started = startClickMovement({
+    currentPos: {
+      x: currentPlayer.position.x,
+      y: currentPlayer.position.y,
+      z: currentPlayer.position.z,
+    },
+    clickPosition,
+    currentFloor,
+    getFloorAt,
+    findPath,
+    waypointHeight,
+    sendPlayerMove,
+    startSpeed,
+  })
+  if (started) actions.applyStartedMovement(started)
+  else actions.cancelBlockedMovement()
 }

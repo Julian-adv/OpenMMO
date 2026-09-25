@@ -1,6 +1,7 @@
 use super::*;
 
-/// First registry dungeon plus its shallowest floor holding an interior door.
+/// First registry dungeon plus its shallowest floor holding a plain
+/// (unlocked) interior door.
 fn first_dungeon_door(
     game_state: &GameState,
 ) -> (
@@ -12,9 +13,35 @@ fn first_dungeon_door(
     let entrance = first_dungeon(game_state);
     let (depth, door) = generate_dungeon_for(&entrance.id)
         .iter()
-        .find_map(|l| interior_doors(l).first().copied().map(|d| (l.depth, d)))
+        .find_map(|l| {
+            interior_doors(l)
+                .into_iter()
+                .find(|d| !d.locked)
+                .map(|d| (l.depth, d))
+        })
         .expect("a floor with an interior door");
     (entrance, depth, door)
+}
+
+/// The Old Crypt's locked stair-room exit (its deepest floor) and the key.
+fn crypt_locked_door(
+    game_state: &GameState,
+) -> (
+    crate::dungeon_defs::DungeonEntranceDef,
+    u8,
+    onlinerpg_shared::dungeon::InteriorDoorSpec,
+    String,
+) {
+    use onlinerpg_shared::dungeon::{generate_dungeon_for, interior_doors};
+    let entrance = game_state.dungeon_defs.get("old_crypt").expect("old_crypt");
+    let layouts = generate_dungeon_for(&entrance.id);
+    let layout = layouts.last().unwrap();
+    let door = interior_doors(layout)
+        .into_iter()
+        .find(|d| d.locked)
+        .expect("the deepest crypt floor is locked");
+    let key = entrance.key_item_id(layout.depth);
+    (entrance.clone(), layout.depth, door, key)
 }
 
 /// Cell centers either side of `door`, at the low end of the opening or (with
@@ -81,17 +108,6 @@ async fn cross_floor_dungeon_door_toggle_is_rejected() {
     let result = game_state
         .toggle_dungeon_door(&griefer_id, &entrance.id, depth, door.door_id)
         .await;
-    if let Some(is_open) = result {
-        game_state
-            .publish_dungeon_door_toggle(
-                &griefer_id,
-                entrance.id.clone(),
-                depth,
-                door.door_id,
-                is_open,
-            )
-            .await;
-    }
 
     assert_eq!(result, None, "a player on another floor must be rejected");
     assert_eq!(
@@ -117,7 +133,6 @@ async fn cross_floor_dungeon_door_toggle_is_rejected() {
                 floor_level: -(depth as i8),
                 ..move_cmd(to, false)
             },
-            false,
             false,
         )
         .await;
@@ -231,6 +246,7 @@ async fn wide_dungeon_door_toggles_from_its_far_end() {
     let (depth, door) = generate_dungeon_for(&entrance.id)
         .iter()
         .flat_map(|l| interior_doors(l).into_iter().map(|d| (l.depth, d)))
+        .filter(|(_, d)| !d.locked)
         .max_by_key(|(_, d)| d.len)
         .expect("a widest interior door");
 
@@ -320,99 +336,55 @@ async fn surface_entrance_door_toggle_gates_on_the_entrance() {
 }
 
 #[tokio::test]
-async fn dungeon_door_toggle_delivery_gates_radius_and_floor() {
-    let game_state = make_test_game_state("dungeon_door_delivery");
-    let entrance = first_dungeon(&game_state);
-    let ep = entrance.position();
-    let toggler = pid("door_toggler");
-    let near_surface = pid("near_surface");
-    let far_surface = pid("far_surface");
-    let near_underground = pid("near_underground");
-    game_state
-        .add_player(make_player("door_toggler", ep.x, ep.z))
-        .await;
-    game_state
-        .add_player(make_player("near_surface", ep.x + 30.0, ep.z))
-        .await;
-    game_state
-        .add_player(make_player("far_surface", ep.x + 100.0, ep.z))
-        .await;
-    let mut delver = make_player("near_underground", ep.x + 10.0, ep.z);
-    delver.floor_level = -1;
-    game_state.add_player(delver).await;
-
-    let mut toggler_rx = game_state.register_direct_channel(&toggler).await;
-    let mut near_rx = game_state.register_direct_channel(&near_surface).await;
-    let mut far_rx = game_state.register_direct_channel(&far_surface).await;
-    let mut under_rx = game_state.register_direct_channel(&near_underground).await;
-    let mut broadcast_rx = game_state.subscribe();
-
-    game_state
-        .publish_dungeon_door_toggle(&toggler, entrance.id.clone(), 0, 0, true)
-        .await;
-
-    // Surface door: never global; surface players within EVENT_DELIVERY_RADIUS
-    // only. Underground players wait for the floor-entry snapshot; players
-    // farther out re-pull the snapshot when they cross into range.
-    assert!(matches!(broadcast_rx.try_recv(), Err(TryRecvError::Empty)));
-    for rx in [&mut toggler_rx, &mut near_rx] {
-        assert!(matches!(
-            rx.try_recv(),
-            Ok(ServerMessage::DungeonDoorToggled {
-                entrance_id,
-                depth: 0,
-                door_id: 0,
-                is_open: true,
-            }) if entrance_id == entrance.id
-        ));
+async fn dungeon_door_toggle_delivery_uses_actual_door_positions_and_spaces() {
+    use onlinerpg_shared::dungeon::{door_position, generate_dungeon_for};
+    let game = make_test_game_state("dungeon_door_delivery");
+    let (entrance, depth, door) = first_dungeon_door(&game);
+    game.ensure_dungeon_runtime(&entrance.id).await;
+    let layouts = generate_dungeon_for(&entrance.id);
+    let surface = door_position(&entrance.position(), &layouts, 0, 0).unwrap();
+    let interior = door_position(&entrance.position(), &layouts, depth, door.door_id).unwrap();
+    for (name, x, z, floor) in [
+        ("near", surface.x + EVENT_DELIVERY_RADIUS, surface.z, 0),
+        ("far", surface.x + EVENT_DELIVERY_RADIUS + 0.1, surface.z, 0),
+        ("delver", interior.x, interior.z, -(depth as i8)),
+    ] {
+        let mut player = make_player(name, x, z);
+        player.floor_level = floor;
+        game.add_player(player).await;
     }
-    assert!(matches!(far_rx.try_recv(), Err(MpscTryRecvError::Empty)));
-    assert!(matches!(under_rx.try_recv(), Err(MpscTryRecvError::Empty)));
-
-    game_state
-        .publish_dungeon_door_toggle(&near_underground, entrance.id.clone(), 1, 123, false)
-        .await;
-
-    // Interior door: gated to the door's floor, so nearby surface players
-    // hear nothing.
-    assert!(matches!(broadcast_rx.try_recv(), Err(TryRecvError::Empty)));
+    let mut near = game.register_direct_channel(&pid("near")).await;
+    let mut far = game.register_direct_channel(&pid("far")).await;
+    let mut delver = game.register_direct_channel(&pid("delver")).await;
+    game.publish_subject_change(ServerMessage::DungeonDoorToggled {
+        entrance_id: entrance.id.clone(),
+        depth: 0,
+        door_id: 0,
+        is_open: true,
+    });
     assert!(matches!(
-        under_rx.try_recv(),
+        near.try_recv(),
         Ok(ServerMessage::DungeonDoorToggled {
-            entrance_id,
-            depth: 1,
-            door_id: 123,
-            is_open: false,
-        }) if entrance_id == entrance.id
+            depth: 0,
+            is_open: true,
+            ..
+        })
     ));
-    assert!(matches!(
-        toggler_rx.try_recv(),
-        Err(MpscTryRecvError::Empty)
-    ));
-    assert!(matches!(near_rx.try_recv(), Err(MpscTryRecvError::Empty)));
-
-    // Delivery never depends on where the toggler's own floor tracking sits:
-    // they hear their toggle regardless, and the surface circle is unaffected.
-    // (`toggle_dungeon_door` only lets a floor-0 player reach depth 0, so this
-    // is a property of the delivery, not a reachable production case.)
-    game_state
-        .publish_dungeon_door_toggle(&near_underground, entrance.id.clone(), 0, 0, false)
-        .await;
-    for rx in [&mut under_rx, &mut toggler_rx, &mut near_rx] {
-        assert!(matches!(
-            rx.try_recv(),
-            Ok(ServerMessage::DungeonDoorToggled {
-                depth: 0,
-                is_open: false,
-                ..
-            })
-        ));
-    }
-    assert!(matches!(far_rx.try_recv(), Err(MpscTryRecvError::Empty)));
+    assert!(far.try_recv().is_err());
+    assert!(delver.try_recv().is_err());
+    game.publish_subject_change(ServerMessage::DungeonDoorToggled {
+        entrance_id: entrance.id.clone(),
+        depth,
+        door_id: door.door_id,
+        is_open: true,
+    });
+    assert!(
+        matches!(delver.try_recv(), Ok(ServerMessage::DungeonDoorToggled { depth: d, is_open: true, .. }) if d == depth)
+    );
+    assert!(near.try_recv().is_err());
+    assert!(far.try_recv().is_err());
 }
 
-/// A shut interior dungeon door must block server-simulated movement across
-/// its corridor mouth from boot (doors default shut); toggling it open lets
 /// the move through, toggling again reseals it.
 #[tokio::test]
 async fn dungeon_door_blocks_movement_until_opened() {
@@ -434,7 +406,7 @@ async fn dungeon_door_blocks_movement_until_opened() {
 
     // Shut (boot default): the crossing is sealed.
     game_state
-        .update_player_position(&player_id, go(to), false, false)
+        .update_player_position(&player_id, go(to), false)
         .await;
     game_state.tick_player_movement(60.0).await;
     assert_eq!(player_xz(&game_state, &player_id).await, (from.x, from.z));
@@ -447,7 +419,7 @@ async fn dungeon_door_blocks_movement_until_opened() {
         Some(true)
     );
     game_state
-        .update_player_position(&player_id, go(to), false, false)
+        .update_player_position(&player_id, go(to), false)
         .await;
     game_state.tick_player_movement(60.0).await;
     assert_eq!(player_xz(&game_state, &player_id).await, (to.x, to.z));
@@ -460,7 +432,7 @@ async fn dungeon_door_blocks_movement_until_opened() {
         Some(false)
     );
     game_state
-        .update_player_position(&player_id, go(from), false, false)
+        .update_player_position(&player_id, go(from), false)
         .await;
     game_state.tick_player_movement(60.0).await;
     assert_eq!(player_xz(&game_state, &player_id).await, (to.x, to.z));
@@ -491,26 +463,95 @@ async fn floor_entry_pushes_open_door_snapshot() {
         .await;
     let mut direct_rx = game_state.register_direct_channel(&player_id).await;
 
-    let inside = Position {
-        x: entrance.x,
-        y: entrance.y - 4.0,
-        z: entrance.z,
-    };
     game_state
-        .handle_player_floor_change(&player_id, 0, -(depth as i8), &inside, &inside)
+        .teleport_player(&player_id, at_door, 0.0, -(depth as i8))
         .await;
+    assert!(drain(&mut direct_rx).iter().any(|message| matches!(message,
+        ServerMessage::DungeonDoorState { entrance_id, depth: d, door_id, is_open: Some(true) }
+        if entrance_id == &entrance.id && *d == depth && *door_id == door.door_id)));
+}
 
-    let mut doors_state = None;
-    for msg in drain(&mut direct_rx) {
-        if let ServerMessage::DungeonDoorsState { entrance_id, doors } = msg {
-            assert_eq!(entrance_id, entrance.id);
-            doors_state = Some(doors);
+/// Blows obey the same seal movement does: neither side of a shut door can
+/// reach the other, and opening it restores both directions. One monster per
+/// half — a monster's swing consumes its cooldown whether or not it lands.
+#[tokio::test]
+async fn dungeon_door_blocks_attacks_until_opened() {
+    let game_state = make_test_game_state("dungeon_door_block_attacks");
+    let (entrance, depth, door) = first_dungeon_door(&game_state);
+    game_state
+        .init_passability(&crate::terrain::io::TerrainIO::new(
+            "nonexistent_terrain_dir".into(),
+        ))
+        .await
+        .expect("init passability");
+
+    let (from, to) = door_side_positions(&entrance, depth, &door, false);
+    let player_id = add_delver(&game_state, "delver", from, depth).await;
+    let mut delver_rx = game_state.register_direct_channel(&player_id).await;
+    {
+        let mut monsters = game_state.monsters.write().await;
+        for id in ["shut_door_monster", "open_door_monster"] {
+            let monster = make_monster(id, to, -(depth as i8));
+
+            monsters.insert(id.to_string(), monster);
         }
     }
-    let doors = doors_state.expect("floor entry should push DungeonDoorsState");
-    assert!(
-        doors.contains(&(depth, door.door_id)),
-        "snapshot should list the door A opened, got {doors:?}"
+
+    game_state
+        .broadcast_player_attack(&player_id, "shut_door_monster".to_string())
+        .await;
+    assert_eq!(
+        game_state.monsters.read().await["shut_door_monster"].health,
+        10,
+        "a swing through a shut door must not damage the monster"
+    );
+    expect_attack_rejected(
+        &mut delver_rx,
+        "shut_door_monster",
+        AttackRejectReason::OutOfRange,
+    );
+
+    game_state
+        .monster_attack("shut_door_monster", &player_id)
+        .await;
+    assert_eq!(
+        game_state.players.read().await[&player_id].last_combat_at,
+        0,
+        "a monster behind a shut door must not reach the player"
+    );
+
+    assert_eq!(
+        game_state
+            .toggle_dungeon_door(&player_id, &entrance.id, depth, door.door_id)
+            .await,
+        Some(true)
+    );
+
+    game_state
+        .monster_attack("open_door_monster", &player_id)
+        .await;
+    assert_ne!(
+        game_state.players.read().await[&player_id].last_combat_at,
+        0,
+        "an open doorway must let the monster strike back"
+    );
+
+    // Both attack paths stamp `last_combat_at`; clear it so the player's own
+    // swing is what the next assertion reads.
+    game_state
+        .players
+        .write()
+        .await
+        .get_mut(&player_id)
+        .expect("the delver is on the floor")
+        .last_combat_at = 0;
+    game_state
+        .broadcast_player_attack(&player_id, "open_door_monster".to_string())
+        .await;
+    assert_ne!(
+        game_state.players.read().await[&player_id].last_combat_at,
+        0,
+        "an open doorway must let the swing through"
     );
 }
 
@@ -537,9 +578,229 @@ async fn furniture_removal_reopens_blocked_cells() {
                 false,
             ),
             false,
-            false,
         )
         .await;
     game_state.tick_player_movement(60.0).await;
     assert_eq!(player_xz(&game_state, &player_id).await, (0.5, 6.5));
+}
+
+/// A locked door wants the floor's key from either side, and does not spend
+/// it; without one the toggle is refused with a reason the player sees.
+#[tokio::test]
+async fn locked_door_needs_the_floor_key_and_keeps_it() {
+    let game_state = make_test_game_state("locked_door_key");
+    let (entrance, depth, door, key) = crypt_locked_door(&game_state);
+    let (outside, inside) = door_side_positions(&entrance, depth, &door, false);
+    let keyless = add_delver(&game_state, "keyless", inside, depth).await;
+    give_bag(&game_state, &keyless, None).await;
+    game_state.ensure_dungeon_runtime(&entrance.id).await;
+    let mut keyless_rx = game_state.register_direct_channel(&keyless).await;
+
+    assert_eq!(
+        game_state
+            .toggle_dungeon_door(&keyless, &entrance.id, depth, door.door_id)
+            .await,
+        None
+    );
+    match keyless_rx.try_recv() {
+        Ok(ServerMessage::InteractionRejected { reason }) => {
+            assert!(reason.contains("locked"), "got {reason}")
+        }
+        other => panic!("expected a rejection, got {other:?}"),
+    }
+    assert!(game_state.dungeon_open_doors(&entrance.id).await.is_empty());
+
+    let holder = add_delver(&game_state, "holder", outside, depth).await;
+    give_bag(&game_state, &holder, Some(&key)).await;
+    let mut holder_rx = game_state.register_direct_channel(&holder).await;
+    assert_eq!(
+        game_state
+            .toggle_dungeon_door(&holder, &entrance.id, depth, door.door_id)
+            .await,
+        Some(true)
+    );
+    assert!(
+        drain(&mut holder_rx).iter().any(|m| matches!(
+            m,
+            ServerMessage::SystemMessage { message, .. } if message.contains("unlock the door with your Crypt Key")
+        )),
+        "the opener is told which key they used"
+    );
+    assert!(
+        game_state.inventories.read().await[&holder]
+            .bag
+            .iter()
+            .any(|i| i.item_def_id == key),
+        "the door does not eat the key"
+    );
+    // Shutting it early wants the key too.
+    assert_eq!(
+        game_state
+            .toggle_dungeon_door(&keyless, &entrance.id, depth, door.door_id)
+            .await,
+        None
+    );
+    assert_eq!(
+        game_state
+            .toggle_dungeon_door(&holder, &entrance.id, depth, door.door_id)
+            .await,
+        Some(false)
+    );
+}
+
+/// A door opened with a key shuts itself after `LOCKED_DOOR_OPEN_DURATION`,
+/// telling the floor; a reopen restarts the clock rather than being cut
+/// short by the first opening's timer.
+#[tokio::test(start_paused = true)]
+async fn locked_door_shuts_itself_again() {
+    use crate::game_state::dungeon::LOCKED_DOOR_OPEN_DURATION;
+    let game_state = make_test_game_state("locked_door_timer");
+    game_state
+        .init_passability(&crate::terrain::io::TerrainIO::new(
+            "nonexistent_terrain_dir".into(),
+        ))
+        .await
+        .expect("init passability");
+    let (entrance, depth, door, key) = crypt_locked_door(&game_state);
+    let (outside, _) = door_side_positions(&entrance, depth, &door, false);
+    let holder = add_delver(&game_state, "holder", outside, depth).await;
+    give_bag(&game_state, &holder, Some(&key)).await;
+    game_state
+        .handle_player_floor_change(&holder, 0, -(depth as i8), &outside, &outside)
+        .await;
+    let mut rx = game_state.register_direct_channel(&holder).await;
+
+    let is_open = |gs: &GameState| {
+        let entrance_id = entrance.id.clone();
+        let gs = gs.clone();
+        async move {
+            gs.dungeon_open_doors(&entrance_id)
+                .await
+                .contains(&(depth, door.door_id))
+        }
+    };
+
+    assert_eq!(
+        game_state
+            .toggle_dungeon_door(&holder, &entrance.id, depth, door.door_id)
+            .await,
+        Some(true)
+    );
+    // Let the close task arm its timer before the clock moves.
+    tokio::task::yield_now().await;
+    tokio::time::advance(LOCKED_DOOR_OPEN_DURATION / 2).await;
+    assert!(is_open(&game_state).await, "half way: still open");
+
+    // Shut and reopen: the first timer must not close this second opening.
+    game_state
+        .toggle_dungeon_door(&holder, &entrance.id, depth, door.door_id)
+        .await;
+    game_state
+        .toggle_dungeon_door(&holder, &entrance.id, depth, door.door_id)
+        .await;
+    tokio::task::yield_now().await;
+    tokio::time::advance(LOCKED_DOOR_OPEN_DURATION / 2 + std::time::Duration::from_millis(1)).await;
+    assert!(is_open(&game_state).await, "the reopen has its own clock");
+
+    tokio::time::advance(LOCKED_DOOR_OPEN_DURATION / 2).await;
+    for _ in 0..20 {
+        tokio::task::yield_now().await;
+    }
+    assert!(!is_open(&game_state).await, "it locks itself again");
+    assert!(
+        drain(&mut rx).iter().any(|m| matches!(
+            m,
+            ServerMessage::DungeonDoorToggled { is_open: false, door_id: id, .. } if *id == door.door_id
+        )),
+        "the floor hears it shut"
+    );
+}
+
+/// A monster on the far side of a shut door cannot see a player beyond
+/// scent range, so it neither acquires nor keeps them as a target; the open
+/// doorway lets it.
+#[tokio::test]
+async fn monster_brains_do_not_see_through_a_shut_door() {
+    let game_state = make_test_game_state("dungeon_door_blocks_sight");
+    let (entrance, depth, door) = first_dungeon_door(&game_state);
+    game_state
+        .init_passability(&crate::terrain::io::TerrainIO::new(
+            "nonexistent_terrain_dir".into(),
+        ))
+        .await
+        .expect("init passability");
+
+    let (by_door, outside) = door_side_positions(&entrance, depth, &door, false);
+    // Six cells into the room, past `SENSE_RANGE`, where only sight applies.
+    let deep = Position {
+        x: by_door.x + (by_door.x - outside.x) * 6.0,
+        z: by_door.z + (by_door.z - outside.z) * 6.0,
+        ..by_door
+    };
+    let player_id = add_delver(&game_state, "delver", deep, depth).await;
+    // The door is worked from beside it, then the delver steps back deep.
+    let toggle = |gs: &GameState| {
+        let gs = gs.clone();
+        let entrance_id = entrance.id.clone();
+        async move {
+            gs.players
+                .write()
+                .await
+                .get_mut(&player_id)
+                .unwrap()
+                .position = by_door;
+            let r = gs
+                .toggle_dungeon_door(&player_id, &entrance_id, depth, door.door_id)
+                .await;
+            gs.players
+                .write()
+                .await
+                .get_mut(&player_id)
+                .unwrap()
+                .position = deep;
+            r
+        }
+    };
+    let monster = game_state
+        .spawn_monster(
+            "goblin".to_string(),
+            outside,
+            0.0,
+            -(depth as i8),
+            MonsterLifecycle::Ambient,
+            None,
+            true,
+        )
+        .await
+        .expect("goblin spawns")
+        .id;
+
+    for _ in 0..10 {
+        game_state.tick_monster_ai_by(200.0).await;
+    }
+    assert_eq!(
+        game_state.brain_target(&monster).await,
+        None,
+        "a shut door hides the player"
+    );
+
+    assert_eq!(toggle(&game_state).await, Some(true));
+    for _ in 0..10 {
+        game_state.tick_monster_ai_by(200.0).await;
+    }
+    assert_eq!(
+        game_state.brain_target(&monster).await,
+        Some(player_id),
+        "the open doorway shows the player"
+    );
+
+    // Shut again: a target seen moments ago is remembered, so a wall clipping
+    // the sight line for a tick does not end the chase.
+    assert_eq!(toggle(&game_state).await, Some(false));
+    game_state.tick_monster_ai_by(200.0).await;
+    assert_eq!(
+        game_state.brain_target(&monster).await,
+        Some(player_id),
+        "a just-seen target survives a blocked tick"
+    );
 }

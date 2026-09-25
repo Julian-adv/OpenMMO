@@ -1,0 +1,144 @@
+# Serves the client and proxies both backend ports.
+# The entrypoint substitutes defined environment variables only.
+# Validate changes with tools/check-nginx-conf.sh.
+
+# Uploaded cape prints are content-addressed, so a cached copy can never be
+# wrong. Without this every client in a crowd pulls every print off the game
+# process's disk (doc/CAPE_CUSTOMIZATION.md).
+proxy_cache_path /var/cache/nginx/cape-textures levels=1:2
+                 keys_zone=cape_textures:1m max_size=512m inactive=30d
+                 use_temp_path=off;
+
+# Request Cache-Control tells hard reloads (no-cache) apart from cache
+# eviction when immutable assets show up as repeat 200s.
+log_format combined_cc '$remote_addr - $remote_user [$time_local] "$request" '
+    '$status $body_bytes_sent "$http_referer" "$http_user_agent" '
+    'cc="$http_cache_control"';
+
+server {
+    access_log /dev/stdout combined_cc;
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+
+    gzip on;
+    gzip_static on;
+    gzip_comp_level 6;
+    gzip_min_length 1024;
+    gzip_vary on;
+    gzip_types text/css application/javascript text/javascript application/wasm;
+
+    # Exported from /etc/resolv.conf by the base image (see
+    # NGINX_ENTRYPOINT_LOCAL_RESOLVERS in client.Dockerfile). Hardcoding
+    # Docker's 127.0.0.11 would break on any non-default network mode.
+    resolver ${NGINX_LOCAL_RESOLVERS} valid=10s ipv6=off;
+
+    # Resolving the upstream through a variable defers DNS to request time, so
+    # nginx starts even while the server container is still coming up. A
+    # literal proxy_pass host is resolved once at config load and would abort.
+    set $backend server;
+
+    client_max_body_size 32m;
+
+    # Longer prefix than /api/, so it wins the match. Only GET and HEAD are
+    # cached by default, which leaves the upload and the admin block alone.
+    location /api/cape-texture/ {
+        proxy_cache cape_textures;
+        # Only a floor for responses that carry no freshness of their own; the
+        # upstream's own max-age wins, and it is what bounds how long a blocked
+        # print keeps being served.
+        proxy_cache_valid 200 1h;
+        # One upstream read per print when a crowd arrives together.
+        proxy_cache_lock on;
+        add_header X-Cache-Status $upstream_cache_status;
+        proxy_pass http://$backend:10007;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location ~ "^/api/terrain/files/((?:height|splat|trees|grass|landscaping)/r[+-][0-9]+_[+-][0-9]+/[hstgl]_[+-][0-9]+_[+-][0-9]+\.bin)$" {
+        alias /terrain/$1;
+        default_type application/octet-stream;
+        sendfile on;
+        etag off;
+        if_modified_since off;
+        open_file_cache off;
+        add_header Cache-Control "no-store" always;
+    }
+
+    location /api/terrain/files/ {
+        add_header Cache-Control "no-store" always;
+        return 404;
+    }
+
+    location /api/ {
+        proxy_pass http://$backend:10007;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location = /ws {
+        proxy_pass http://$backend:10006;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        # Idle players must not be disconnected by the proxy.
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    # Hashed filenames, so the bundle and its assets can be cached hard.
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # /models/ is fetched by fixed path (objects/catalog.json and the GLBs it
+    # names). A time-based expiry let a stale catalog silently hide new
+    # furniture (2026-08-29), so revalidate every request; ETag keeps it cheap.
+    # `^~` so the media regex below does not claim the GLBs here.
+    location ^~ /models/ {
+        add_header Cache-Control "no-cache";
+        try_files $uri =404;
+
+        # Hashed copies (client scripts/hash-assets.mjs) are immutable; the
+        # prefix match above would otherwise hide the regex block below.
+        location ~* "\.[0-9a-f]{8}\.(glb|png|jpe?g|webp|mp3|m4a|ogg)$" {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+    }
+
+    # Content-hashed runtime assets (textures, bgm, sounds, portraits): the
+    # name changes with the bytes, so a cached copy can never be stale.
+    location ~* "\.[0-9a-f]{8}\.(glb|png|jpe?g|webp|mp3|m4a|ogg)$" {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Unhashed media. The name never changes, so expiry is time-based and the
+    # ETag settles the refetch after it — which only works while the build
+    # preserves public/ mtimes (client `keep:asset-times`).
+    location ~* \.(glb|mp3|m4a|ogg|wasm|png|jpg|webp|svg|woff2)$ {
+        expires 30d;
+        add_header Cache-Control "public";
+    }
+
+    # index.html carries the current asset hashes, so it must never be cached.
+    location = /index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+    }
+
+    # The client has no client-side routing, so an unknown path is a typo or a
+    # scanner. Falling back to index.html answered credential sweeps with 200.
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}

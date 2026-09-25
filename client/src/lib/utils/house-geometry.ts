@@ -12,20 +12,22 @@ import type { HouseData, RoomData } from '../types/housing'
 import {
   addMergedMeshes,
   collectFootprints,
-  computeHouseAABB,
   computeRoomAABBs,
+  roofSpanByRoom,
+  type RoofSpan,
   getOrCreateFloorEntries,
   OFFSCREEN_Y,
   WALL_DIR_INFO,
-  WOOD_TEXTURE_IDX,
-  SHUTTER_PANEL_TEXTURE_IDX,
   type DoorMeshInfo,
   type FloorEntries,
-  type GeoEntry,
   type HouseGroupResult,
+  type InteriorWall,
+  type InteriorWallGroup,
+  interiorWallOccludes,
   type RoomFootprint,
 } from './house-geo-utils'
-import { getHousingMaterial, getGhostHousingMaterial } from './housing-textures'
+import { ALL_WALL_DIRS, getWallByDir } from '../managers/housing-passability'
+import { setMeshGhost } from './housing-textures'
 import { collectFloorGeometry } from './house-geo-floor'
 import { collectRoofGeometry, shouldSuppressRoof } from './house-geo-roof'
 import { collectStairwellGeometries } from './house-geo-stairwell'
@@ -49,11 +51,13 @@ export { getStairwellYOffset } from './house-geo-stairwell'
 
 export function buildHouseGroup(
   house: HouseData,
-  roomsHash?: string
+  roomsHash?: string,
+  opts?: { roofs?: boolean }
 ): HouseGroupResult {
   const houseGroup = new THREE.Group()
   houseGroup.position.set(house.origin.x, house.origin.y, house.origin.z)
   houseGroup.name = `house_${house.id}`
+  houseGroup.userData.housingPlacementHouseId = house.id
 
   const stairwellFootprints = collectFootprints(
     house.rooms,
@@ -71,6 +75,16 @@ export function buildHouseGroup(
     }
   }
 
+  const suppressed = new Set(
+    opts?.roofs === false
+      ? house.rooms
+      : house.rooms.filter((r) =>
+          shouldSuppressRoof(r, footprintsByFloor.get(r.floorLevel + 1) ?? [])
+        )
+  )
+  const allSpans = roofSpanByRoom(house.rooms)
+  const spanByRoom = roofSpanByRoom(house.rooms, (r) => suppressed.has(r))
+
   const perFloor = new Map<number, FloorEntries>()
 
   for (let ri = 0; ri < house.rooms.length; ri++) {
@@ -81,26 +95,15 @@ export function buildHouseGroup(
     collectRoomGeometries(
       room,
       ri,
-      entries.front,
-      entries.back,
-      entries.floor,
-      entries.stair,
-      entries.doors,
-      shouldSuppressRoof(room, footprintsByFloor.get(fl + 1) ?? []),
+      entries,
+      suppressed.has(room),
+      spanByRoom.get(room),
       house.rooms,
       stairwellFootprints
     )
   }
 
-  const floorGroups = new Map<
-    number,
-    {
-      front: THREE.Group
-      back: THREE.Group
-      floor: THREE.Group
-      stair: THREE.Group
-    }
-  >()
+  const floorGroups: HouseGroupResult['floorGroups'] = new Map()
 
   let mergedMeshCount = 0
   const allDoors: DoorMeshInfo[] = []
@@ -115,13 +118,24 @@ export function buildHouseGroup(
     const floor = new THREE.Group()
     floor.name = `floor_f${fl}`
     floor.userData.housingSurface = 'floor'
+    floor.userData.housingPlacementFloorLevel = fl
     const stair = new THREE.Group()
     stair.name = `stair_f${fl}`
     stair.userData.housingSurface = 'floor'
+    stair.userData.housingStairFloor = fl
     mergedMeshCount += addMergedMeshes(front, entries.front)
     mergedMeshCount += addMergedMeshes(back, entries.back)
     mergedMeshCount += addMergedMeshes(floor, entries.floor)
     mergedMeshCount += addMergedMeshes(stair, entries.stair)
+    const interior: InteriorWallGroup[] = []
+    for (const { wall, entries: wallEntries } of entries.interior.values()) {
+      const group = new THREE.Group()
+      group.name = `interior_f${fl}_${wall.isNS ? 'z' : 'x'}${wall.line}`
+      group.userData.housingSurface = 'wall'
+      mergedMeshCount += addMergedMeshes(group, wallEntries)
+      houseGroup.add(group)
+      interior.push({ wall, group, ghost: false })
+    }
 
     for (const door of entries.doors) {
       allDoors.push(door)
@@ -131,25 +145,36 @@ export function buildHouseGroup(
     houseGroup.add(back)
     houseGroup.add(floor)
     houseGroup.add(stair)
-    floorGroups.set(fl, { front, back, floor, stair })
+    floorGroups.set(fl, { front, back, floor, stair, interior })
   }
 
   for (const door of allDoors) {
-    door.pivot.userData = {
+    const userData = {
       doorHouseId: house.id,
       doorRoomIndex: door.roomIndex,
       doorWallDir: door.wallDir,
       doorSegmentIndex: door.segmentIndex,
       doorFloorLevel: door.floorLevel,
+      doorInteractionPosition: {
+        x: house.origin.x + door.interactionPosition.x,
+        z: house.origin.z + door.interactionPosition.z,
+      },
+      doorIsWindow: door.isWindow,
+    }
+    door.pivot.userData = userData
+    if (door.clickTarget) {
+      door.clickTarget.userData = { ...userData, housingSurface: 'wall' }
+      houseGroup.add(door.clickTarget)
     }
     houseGroup.add(door.pivot)
   }
 
+  const roomAABBs = computeRoomAABBs(house, allSpans)
   return {
     houseGroup,
     floorGroups,
-    aabb: computeHouseAABB(house),
-    roomAABBs: computeRoomAABBs(house),
+    aabb: roomAABBs.reduce((b, r) => b.union(r), new THREE.Box3()),
+    roomAABBs,
     roomsHash: roomsHash ?? JSON.stringify(house.rooms),
     mergedMeshCount,
     doors: allDoors,
@@ -159,60 +184,30 @@ export function buildHouseGroup(
 function collectRoomGeometries(
   room: RoomData,
   roomIndex: number,
-  frontEntries: GeoEntry[],
-  backEntries: GeoEntry[],
-  floorEntries: GeoEntry[],
-  stairEntries: GeoEntry[],
-  doors: DoorMeshInfo[],
+  entries: FloorEntries,
   suppressRoof: boolean,
+  roofSpan: RoofSpan | undefined,
   allRooms: RoomData[],
   stairwellFootprints: RoomFootprint[]
 ) {
   if (room.roomType === 'stairwell') {
-    collectStairwellGeometries(room, stairEntries, allRooms)
+    collectStairwellGeometries(room, entries.stair, allRooms)
     return
   }
 
-  collectFloorGeometry(room, floorEntries, stairwellFootprints)
+  collectFloorGeometry(room, entries.floor, stairwellFootprints)
   if (!suppressRoof)
-    collectRoofGeometry(room, frontEntries, backEntries, allRooms)
+    collectRoofGeometry(room, roofSpan, entries.front, entries.back, allRooms)
 
-  collectWallSegments(
-    room.wallNorth,
-    'north',
-    room,
-    roomIndex,
-    frontEntries,
-    backEntries,
-    doors
-  )
-  collectWallSegments(
-    room.wallSouth,
-    'south',
-    room,
-    roomIndex,
-    frontEntries,
-    backEntries,
-    doors
-  )
-  collectWallSegments(
-    room.wallEast,
-    'east',
-    room,
-    roomIndex,
-    frontEntries,
-    backEntries,
-    doors
-  )
-  collectWallSegments(
-    room.wallWest,
-    'west',
-    room,
-    roomIndex,
-    frontEntries,
-    backEntries,
-    doors
-  )
+  for (const dir of ALL_WALL_DIRS)
+    collectWallSegments(
+      getWallByDir(room, dir),
+      dir,
+      room,
+      roomIndex,
+      entries,
+      allRooms
+    )
 }
 
 /** Swap door/window materials to semi-transparent ghost versions for interior view. */
@@ -220,9 +215,6 @@ export function applyDoorGhostMaterials(
   result: HouseGroupResult,
   floor: number
 ) {
-  const doorMat = getHousingMaterial(WOOD_TEXTURE_IDX)
-  const shutterMat = getHousingMaterial(SHUTTER_PANEL_TEXTURE_IDX)
-
   for (const door of result.doors) {
     const isFront = WALL_DIR_INFO[door.wallDir].isFront
     if (door.floorLevel > floor) {
@@ -231,16 +223,45 @@ export function applyDoorGhostMaterials(
         door.pivot.userData.originalPosY = door.pivot.position.y
       }
       door.pivot.position.y = OFFSCREEN_Y
-    } else if (door.floorLevel === floor && isFront) {
-      const mesh = door.pivot.children[0] as THREE.Mesh
-      if (mesh.userData.originalMaterial) continue
-      mesh.userData.originalMaterial = mesh.material
-      if (mesh.material === doorMat) {
-        mesh.material = getGhostHousingMaterial(WOOD_TEXTURE_IDX)
-      } else if (mesh.material === shutterMat) {
-        mesh.material = getGhostHousingMaterial(SHUTTER_PANEL_TEXTURE_IDX)
-      }
+    } else if (door.floorLevel === floor && isFront && !door.interior) {
+      setMeshGhost(door.pivot.children[0] as THREE.Mesh, true)
     }
+  }
+}
+
+function setWallGhost(w: InteriorWallGroup, ghost: boolean) {
+  if (w.ghost === ghost) return
+  w.ghost = ghost
+  for (const mesh of w.group.children) {
+    if (!(mesh instanceof THREE.Mesh)) continue
+    if (mesh.userData.decor) mesh.visible = !ghost
+    else setMeshGhost(mesh, ghost)
+  }
+}
+
+/** Fade the shared walls (and their doors) that hide a player at room-local
+ *  (px, pz) on `floor` from the camera; their timber trim is hidden outright
+ *  so the faded panel stays readable. `floor = null` clears everything. */
+export function applyInteriorGhosts(
+  result: HouseGroupResult,
+  floor: number | null,
+  px = 0,
+  pz = 0
+) {
+  const ghosted = new Set<InteriorWall>()
+  for (const [fl, groups] of result.floorGroups) {
+    for (const w of groups.interior) {
+      const ghost = fl === floor && interiorWallOccludes(w.wall, px, pz)
+      if (ghost) ghosted.add(w.wall)
+      setWallGhost(w, ghost)
+    }
+  }
+  for (const door of result.doors) {
+    if (door.interior)
+      setMeshGhost(
+        door.pivot.children[0] as THREE.Mesh,
+        ghosted.has(door.interior)
+      )
   }
 }
 
@@ -251,11 +272,8 @@ export function resetDoorGhostMaterials(result: HouseGroupResult) {
       door.pivot.position.y = door.pivot.userData.originalPosY
       delete door.pivot.userData.originalPosY
     }
-    const mesh = door.pivot.children[0] as THREE.Mesh
-    if (mesh.userData.originalMaterial) {
-      mesh.material = mesh.userData.originalMaterial
-      delete mesh.userData.originalMaterial
-    }
+    if (!door.interior)
+      setMeshGhost(door.pivot.children[0] as THREE.Mesh, false)
   }
 }
 
