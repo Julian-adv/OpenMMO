@@ -7,6 +7,7 @@ mod geom;
 mod google_auth;
 mod item_defs;
 mod llm_scheduler;
+mod minimax;
 mod openai;
 mod openrouter;
 mod orchestrator;
@@ -48,6 +49,8 @@ pub enum LlmType {
     Codex,
     /// Any OpenAI-compatible chat completions endpoint (HTTP)
     Openai,
+    /// MiniMax API (HTTP)
+    Minimax,
 }
 
 /// Config parsed from TOML. Uses `[[npcs]]` array for multi-NPC orchestrator.
@@ -110,6 +113,9 @@ struct Config {
     /// Generic OpenAI-compatible endpoint config
     #[serde(default)]
     openai: openai::OpenAiConfig,
+    /// MiniMax API integration config
+    #[serde(default)]
+    minimax: minimax::MiniMaxConfig,
 }
 
 /// How the client proves who it is to the game server.
@@ -258,6 +264,9 @@ async fn main() -> anyhow::Result<()> {
         }
         if npc.openai == openai::OpenAiConfig::default() {
             npc.openai = config.openai.clone();
+        }
+        if npc.minimax == minimax::MiniMaxConfig::default() {
+            npc.minimax = config.minimax.clone();
         }
     }
 
@@ -726,6 +735,19 @@ always_sprint = true
         assert_eq!(config.auth.mode, AuthMode::NpcToken);
         assert_eq!(config.auth.google.client_id, google_auth::DEFAULT_CLIENT_ID);
         assert_eq!(config.terrain, default_terrain());
+    }
+
+    #[test]
+    fn minimax_backend_parses() {
+        let config = parse(
+            r#"
+server = "ws://127.0.0.1:10006"
+
+[[npcs]]
+llm = "minimax"
+"#,
+        );
+        assert_eq!(config.npcs[0].llm, LlmType::Minimax);
     }
 
     #[test]

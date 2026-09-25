@@ -3,6 +3,7 @@ use std::sync::LazyLock;
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tokio::sync::Mutex;
 use tracing::{debug, info, warn};
 
@@ -79,11 +80,13 @@ impl OpenAiConfig {
             url: format!("{}/chat/completions", self.base_url.trim_end_matches('/')),
             api_key: resolve_api_key(&self.api_key, "OPENAI_COMPAT_API_KEY"),
             model: self.model.clone(),
-            max_tokens: self.max_tokens,
+            max_tokens: Some(self.max_tokens),
+            max_completion_tokens: None,
             temperature: self.temperature,
             reasoning_effort: (!self.reasoning_effort.is_empty())
                 .then(|| self.reasoning_effort.clone()),
-            // Clamped, not rejected: a bad value should still start.
+            thinking: None,
+            reasoning_split: None,
             max_messages: self.max_messages.max(MIN_MAX_MESSAGES),
         })
     }
@@ -96,9 +99,12 @@ pub struct Endpoint {
     pub url: String,
     pub api_key: String,
     pub model: String,
-    pub max_tokens: u32,
+    pub max_tokens: Option<u32>,
+    pub max_completion_tokens: Option<u32>,
     pub temperature: f32,
     pub reasoning_effort: Option<String>,
+    pub thinking: Option<String>,
+    pub reasoning_split: Option<bool>,
     pub max_messages: usize,
 }
 
@@ -106,16 +112,33 @@ pub struct Endpoint {
 struct ChatRequest {
     model: String,
     messages: Vec<ChatMessage>,
-    max_tokens: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_completion_tokens: Option<u32>,
     temperature: f32,
     #[serde(skip_serializing_if = "Option::is_none")]
     reasoning_effort: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    thinking: Option<ThinkingRequest>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning_split: Option<bool>,
+}
+
+#[derive(Serialize)]
+struct ThinkingRequest {
+    #[serde(rename = "type")]
+    kind: String,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 struct ChatMessage {
     role: String,
     content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning_content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning_details: Option<Value>,
 }
 
 #[derive(Deserialize)]
@@ -126,11 +149,14 @@ struct ChatResponse {
 #[derive(Deserialize)]
 struct ChatChoice {
     message: ChatMessageResponse,
+    finish_reason: Option<String>,
 }
 
 #[derive(Deserialize)]
 struct ChatMessageResponse {
     content: Option<String>,
+    reasoning_content: Option<String>,
+    reasoning_details: Option<Value>,
 }
 
 /// Invokes any OpenAI-compatible chat completions endpoint over HTTP.
@@ -161,7 +187,7 @@ impl OpenAiInvoker {
     }
 
     /// One round trip.
-    async fn complete(&self, request: &ChatRequest) -> anyhow::Result<String> {
+    async fn complete(&self, request: &ChatRequest) -> anyhow::Result<ChatMessage> {
         let name = self.endpoint.name;
         let mut req = HTTP.post(&self.endpoint.url).json(request);
         if !self.endpoint.api_key.is_empty() {
@@ -186,12 +212,26 @@ impl OpenAiInvoker {
         let chat_response: ChatResponse = serde_json::from_str(&body)
             .map_err(|e| anyhow::anyhow!("Failed to parse {name} response: {e}\nRaw: {body}"))?;
 
-        Ok(chat_response
+        let choice = chat_response
             .choices
             .into_iter()
             .next()
-            .and_then(|c| c.message.content)
-            .unwrap_or_default())
+            .ok_or_else(|| anyhow::anyhow!("{name} API returned no choices"))?;
+        if choice.finish_reason.as_deref() == Some("length") {
+            anyhow::bail!("{name} response reached the output token limit; increase max_tokens");
+        }
+        let content = choice
+            .message
+            .content
+            .filter(|text| !text.trim().is_empty())
+            .ok_or_else(|| anyhow::anyhow!("{name} API returned no reply text"))?;
+
+        Ok(ChatMessage {
+            role: "assistant".to_string(),
+            content,
+            reasoning_content: choice.message.reasoning_content,
+            reasoning_details: choice.message.reasoning_details,
+        })
     }
 }
 
@@ -207,17 +247,18 @@ impl LlmBackend for OpenAiInvoker {
             messages.push(ChatMessage {
                 role: "system".to_string(),
                 content: self.system_prompt.clone(),
+                reasoning_content: None,
+                reasoning_details: None,
             });
         }
 
-        // Built aside and committed only once the call comes back. Undoing the
-        // user turn in an error arm instead would miss a cancelled call — the
-        // scheduler's timeout drops this future — and leave two user messages
-        // in a row, which stricter chat templates reject.
+        // Commit only after success so errors and cancellation preserve history.
         let mut turn = messages.clone();
         turn.push(ChatMessage {
             role: "user".to_string(),
             content: content.to_string(),
+            reasoning_content: None,
+            reasoning_details: None,
         });
 
         // Keep the system prompt plus the most recent turns, up to the cap.
@@ -238,17 +279,22 @@ impl LlmBackend for OpenAiInvoker {
             model: self.endpoint.model.clone(),
             messages: turn,
             max_tokens: self.endpoint.max_tokens,
+            max_completion_tokens: self.endpoint.max_completion_tokens,
             temperature: self.endpoint.temperature,
             reasoning_effort: self.endpoint.reasoning_effort.clone(),
+            thinking: self
+                .endpoint
+                .thinking
+                .clone()
+                .map(|kind| ThinkingRequest { kind }),
+            reasoning_split: self.endpoint.reasoning_split,
         };
 
-        let result = self.complete(&request).await?;
+        let response = self.complete(&request).await?;
+        let result = response.content.clone();
 
         let mut turn = request.messages;
-        turn.push(ChatMessage {
-            role: "assistant".to_string(),
-            content: result.clone(),
-        });
+        turn.push(response);
         *messages = turn;
 
         debug!("<<< FROM {name} ({} bytes):\n{result}", result.len());
@@ -310,5 +356,26 @@ mod tests {
         );
         cfg.reasoning_effort = String::new();
         assert!(cfg.endpoint().unwrap().reasoning_effort.is_none());
+    }
+
+    #[test]
+    fn provider_specific_completion_options_are_serialized() {
+        let request = ChatRequest {
+            model: "some-model".to_string(),
+            messages: Vec::new(),
+            max_tokens: None,
+            max_completion_tokens: Some(2048),
+            temperature: 0.7,
+            reasoning_effort: None,
+            thinking: Some(ThinkingRequest {
+                kind: "adaptive".to_string(),
+            }),
+            reasoning_split: Some(true),
+        };
+        let value = serde_json::to_value(request).unwrap();
+        assert_eq!(value["max_completion_tokens"], 2048);
+        assert_eq!(value["thinking"]["type"], "adaptive");
+        assert_eq!(value["reasoning_split"], true);
+        assert!(value.get("max_tokens").is_none());
     }
 }
