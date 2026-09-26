@@ -1,6 +1,7 @@
-//! Temporary stalls trade goods while their owners stay nearby.
+//! Stalls support unattended trading after logout.
 
 mod buy_orders;
+mod offline;
 
 use onlinerpg_shared::character::CharacterClass;
 use onlinerpg_shared::messages::StallBuyLine;
@@ -8,15 +9,14 @@ use onlinerpg_shared::stall::{
     stall_tax, Stall, StallBuyOrder, StallListing, STALL_MAX_LISTINGS, STALL_MAX_SIGN_CHARS,
 };
 use onlinerpg_shared::{PlayerId, ServerMessage};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use tracing::{error, info};
 
 use super::combat::reachable_dist_sq;
 use super::inventory::{serialize_inventory, stack_into_bag, BagInsert};
-use super::player::build_save_data;
 use super::player_trade::{format_copper, take_from_bag};
 use super::trading::MAX_TRADE_DISTANCE;
-use super::GameState;
+use super::{auth_db, GameState};
 use crate::auth::{AuthService, TradeLedgerEntry};
 
 /// Shown instead of a refusal whenever the owner has the customer blocked, so
@@ -31,7 +31,7 @@ pub(super) struct StallEntry {
     pub placed_with: u64,
     pub listings: Vec<StallListing>,
     pub buy_orders: Vec<StallBuyOrder>,
-    pub pending_buy_orders: HashMap<u64, u32>,
+    offline_owner: Option<offline::OfflineStallOwner>,
     /// Who has the panel open. All of them get the whole state on any change.
     pub viewers: HashSet<PlayerId>,
 }
@@ -119,7 +119,7 @@ impl GameState {
                 placed_with,
                 listings: Vec::new(),
                 buy_orders: Vec::new(),
-                pending_buy_orders: HashMap::new(),
+                offline_owner: None,
                 viewers: HashSet::new(),
             },
         );
@@ -263,7 +263,7 @@ impl GameState {
             return;
         };
         match owner_is_npc {
-            None => {
+            None if !self.stall_owner_is_offline(&owner).await => {
                 self.send_system_message(player_id, "That stall is gone.")
                     .await;
                 return;
@@ -274,7 +274,7 @@ impl GameState {
                 self.open_shop(player_id, &owner, true).await;
                 return;
             }
-            Some(false) => {}
+            Some(false) | None => {}
         }
         if owner != *player_id {
             if customer_is_npc {
@@ -287,7 +287,7 @@ impl GameState {
                     .await;
                 return;
             }
-            if self.has_blocked(&owner, &customer_name).await {
+            if self.stall_owner_has_blocked(&owner, &customer_name).await {
                 self.send_system_message(player_id, BUSY).await;
                 return;
             }
@@ -476,6 +476,7 @@ impl GameState {
         lines: Vec<StallBuyLine>,
         auth: &AuthService,
     ) {
+        let _persistence = self.persistence_lock.lock().await;
         let lines: Vec<StallBuyLine> = lines.into_iter().filter(|l| l.quantity > 0).collect();
         if lines.is_empty() || lines.len() > STALL_MAX_LISTINGS {
             return;
@@ -514,7 +515,7 @@ impl GameState {
                 .await;
             return;
         }
-        if self.has_blocked(&owner, &customer_name).await {
+        if self.stall_owner_has_blocked(&owner, &customer_name).await {
             self.send_system_message(player_id, BUSY).await;
             return;
         }
@@ -591,7 +592,7 @@ impl GameState {
         self.push_stall_state(&owner, None).await;
     }
 
-    /// Revalidate, swap and persist both sides under the persistence lock.
+    /// Called with the persistence lock held by the purchase or sale.
     async fn settle_stall_sale(
         &self,
         buyer: &PlayerId,
@@ -607,217 +608,151 @@ impl GameState {
                 if self.item_defs.stackable(&listing.item_def_id) {
                     1
                 } else {
-                    *qty as u64
+                    u64::from(*qty)
                 }
             })
             .sum();
-        let reserved_ids = self.reserve_instance_ids(units).await;
-        let capacity = self.max_carry_weight(buyer).await;
-        let armor_mult = self.armor_weight_mult(buyer).await;
+        let mut next_id = self.reserve_instance_ids(units).await;
+        let offline_capacity = self
+            .stalls
+            .read()
+            .await
+            .get(buyer)
+            .and_then(|entry| entry.offline_owner.as_ref())
+            .map(|owner| owner.carry_capacity);
+        let (capacity, armor_mult) = match offline_capacity {
+            Some(capacity) => (capacity, 1.0),
+            None => (
+                self.max_carry_weight(buyer).await,
+                self.armor_weight_mult(buyer).await,
+            ),
+        };
         let incoming_weight: f32 = sold
             .iter()
             .map(|(listing, qty)| {
                 self.item_defs.weight_with(&listing.item_def_id, armor_mult) * *qty as f32
             })
             .sum();
-        let characters = {
-            let chars = self.player_characters.read().await;
-            match (chars.get(buyer), chars.get(seller)) {
-                (Some((b_char, b_xp, _)), Some((s_char, s_xp, _))) => {
-                    Some((*b_char, *b_xp, *s_char, *s_xp))
-                }
-                _ => None,
+        let mut buyer_save = self
+            .stall_trader_save_data(buyer)
+            .await
+            .ok_or("The sale could not be completed.")?;
+        let mut seller_save = self
+            .stall_trader_save_data(seller)
+            .await
+            .ok_or("The sale could not be completed.")?;
+
+        let mut stalls = self.stalls.write().await;
+        let mut gold = self.player_gold.write().await;
+        let mut inventories = self.inventories.write().await;
+        let snapshot = |id: &PlayerId| {
+            if let Some(owner) = stalls
+                .get(id)
+                .and_then(|entry| entry.offline_owner.as_ref())
+            {
+                Some((owner.character.gold, owner.inventory.clone()))
+            } else {
+                Some((*gold.get(id)?, inventories.get(id)?.clone()))
             }
         };
-        let Some((buyer_character_id, buyer_xp, seller_character_id, seller_xp)) = characters
-        else {
-            return Err("The sale could not be completed.");
-        };
-
-        let persistence = self.persistence_lock.lock().await;
-        let outcome = 'swap: {
-            let mut gold = self.player_gold.write().await;
-            let mut inventories = self.inventories.write().await;
-
-            let buyer_gold_before = gold.get(buyer).copied().unwrap_or(0);
-            let seller_gold_before = gold.get(seller).copied().unwrap_or(0);
-            if buyer_gold_before < total {
-                break 'swap Err("The buyer can't afford that.");
-            }
-            let buyer_gold_after = buyer_gold_before - total;
-            let Some(seller_gold_after) = seller_gold_before.checked_add(total - tax) else {
-                break 'swap Err("The seller can't hold that much gold.");
-            };
-            let items: Option<Vec<_>> = sold
+        let (buyer_gold_before, mut buyer_inv) =
+            snapshot(buyer).ok_or("The sale could not be completed.")?;
+        let (seller_gold_before, mut seller_inv) =
+            snapshot(seller).ok_or("The sale could not be completed.")?;
+        if buyer_gold_before < total {
+            return Err("The buyer can't afford that.");
+        }
+        buyer_save.gold = buyer_gold_before - total;
+        seller_save.gold = seller_gold_before
+            .checked_add(total - tax)
+            .ok_or("The seller can't hold that much gold.")?;
+        if self.calc_total_weight(&buyer_inv, armor_mult) + incoming_weight > capacity {
+            return Err("The buyer can't carry that much.");
+        }
+        for (listing, qty) in sold {
+            let item = seller_inv
+                .bag
                 .iter()
-                .map(|(listing, qty)| {
-                    inventories
-                        .get(seller)?
-                        .bag
-                        .iter()
-                        .find(|item| {
-                            item.instance_id == listing.instance_id
-                                && !item.locked
-                                && item.item_def_id == listing.item_def_id
-                                && item.enchant == listing.enchant
-                                && item.quantity >= *qty
-                        })
-                        .cloned()
+                .find(|item| {
+                    item.instance_id == listing.instance_id
+                        && !item.locked
+                        && item.item_def_id == listing.item_def_id
+                        && item.enchant == listing.enchant
+                        && item.quantity >= *qty
                 })
-                .collect();
-            let Some(items) = items else {
-                break 'swap Err("The seller no longer has that.");
-            };
-            let Some(buyer_inv) = inventories.get(buyer) else {
-                break 'swap Err("The sale could not be completed.");
-            };
-            if self.calc_total_weight(buyer_inv, armor_mult) + incoming_weight > capacity {
-                break 'swap Err("The buyer can't carry that much.");
+                .cloned()
+                .ok_or("The seller no longer has that.")?;
+            if !take_from_bag(&mut seller_inv, listing.instance_id, *qty) {
+                return Err("The seller no longer has that.");
             }
+            next_id += stack_into_bag(
+                &mut buyer_inv.bag,
+                BagInsert {
+                    locked: false,
+                    stackable: self.item_defs.stackable(&listing.item_def_id),
+                    item_def_id: &listing.item_def_id,
+                    enchant: listing.enchant,
+                    cape_color: item.cape_color,
+                    cape_texture: item.cape_texture,
+                    first_instance_id: next_id,
+                    quantity: *qty,
+                },
+            )
+            .ids_used;
+        }
 
-            let mut next_id = reserved_ids;
-            for ((listing, qty), item) in sold.iter().zip(items) {
-                let taken = inventories
-                    .get_mut(seller)
-                    .is_some_and(|inv| take_from_bag(inv, listing.instance_id, *qty));
-                // Cannot happen after revalidation; crediting anyway would mint.
-                if !taken {
-                    error!(
-                        "stall sale: {seller} lost {} x{qty} between revalidation and take",
-                        listing.item_def_id
-                    );
-                    continue;
-                }
-                if let Some(inv) = inventories.get_mut(buyer) {
-                    next_id += stack_into_bag(
-                        &mut inv.bag,
-                        BagInsert {
-                            locked: false,
-                            stackable: self.item_defs.stackable(&listing.item_def_id),
-                            item_def_id: &listing.item_def_id,
-                            enchant: listing.enchant,
-                            cape_color: item.cape_color,
-                            cape_texture: item.cape_texture,
-                            first_instance_id: next_id,
-                            quantity: *qty,
-                        },
-                    )
-                    .ids_used;
-                }
-            }
-            gold.insert(*buyer, buyer_gold_after);
-            gold.insert(*seller, seller_gold_after);
-            Ok((
-                buyer_gold_before,
-                buyer_gold_after,
-                seller_gold_before,
-                seller_gold_after,
-                serialize_inventory(&inventories[buyer]),
-                serialize_inventory(&inventories[seller]),
-            ))
+        let ledger = TradeLedgerEntry {
+            a_character_id: buyer_save.character_id,
+            b_character_id: seller_save.character_id,
+            a_gold_before: buyer_gold_before,
+            a_gold_after: buyer_save.gold,
+            b_gold_before: seller_gold_before,
+            b_gold_after: seller_save.gold,
+            a_items: "[]".to_string(),
+            b_items: serde_json::Value::Array(
+                sold.iter()
+                    .map(|(listing, qty)| {
+                        serde_json::json!({
+                            "def": listing.item_def_id,
+                            "qty": qty,
+                            "ench": listing.enchant,
+                        })
+                    })
+                    .collect(),
+            )
+            .to_string(),
         };
-        let (
-            buyer_gold_before,
-            buyer_gold_after,
-            seller_gold_before,
-            seller_gold_after,
-            buyer_rows,
-            seller_rows,
-        ) = outcome?;
-
+        let rows = vec![
+            (buyer_save.character_id, serialize_inventory(&buyer_inv)),
+            (seller_save.character_id, serialize_inventory(&seller_inv)),
+        ];
+        let characters = vec![buyer_save.clone(), seller_save.clone()];
+        let auth = auth.clone();
+        if let Err(error) = auth_db(move || auth.commit_trade(&characters, &rows, &ledger)).await {
+            error!("Stall sale commit failed: {error}");
+            return Err("The sale could not be completed.");
+        }
+        for (id, character, inventory) in [
+            (buyer, buyer_save, buyer_inv),
+            (seller, seller_save, seller_inv),
+        ] {
+            if let Some(owner) = stalls
+                .get_mut(id)
+                .and_then(|entry| entry.offline_owner.as_mut())
+            {
+                owner.character = character;
+                owner.inventory = inventory;
+                owner.dirty = false;
+            } else {
+                gold.insert(*id, character.gold);
+                inventories.insert(*id, inventory);
+            }
+        }
+        drop(inventories);
+        drop(gold);
+        drop(stalls);
         self.record_gold_sink(crate::metrics::GoldSink::StallTax, 1, tax)
             .await;
-
-        let save_data = {
-            let players = self.players.read().await;
-            let dungeon_epoch = self.dungeon_save_epoch().await;
-            let hunger = self.hunger.read().await;
-            let inventories = self.inventories.read().await;
-            let mana = self.mana.read().await;
-            let ammo_of = |id| inventories.get(id).and_then(|inv| inv.active_ammo.clone());
-            match (players.get(buyer), players.get(seller)) {
-                (Some(b), Some(s)) => Some(vec![
-                    build_save_data(
-                        b,
-                        buyer_character_id,
-                        buyer_xp,
-                        buyer_gold_after,
-                        super::hunger::satiation_for_save(&hunger, buyer),
-                        ammo_of(buyer),
-                        mana.get(buyer).map(|data| data.mana),
-                        dungeon_epoch,
-                    ),
-                    build_save_data(
-                        s,
-                        seller_character_id,
-                        seller_xp,
-                        seller_gold_after,
-                        super::hunger::satiation_for_save(&hunger, seller),
-                        ammo_of(seller),
-                        mana.get(seller).map(|data| data.mana),
-                        dungeon_epoch,
-                    ),
-                ]),
-                _ => None,
-            }
-        };
-        let committed = match save_data {
-            Some(characters) => {
-                let ledger = TradeLedgerEntry {
-                    a_character_id: buyer_character_id,
-                    b_character_id: seller_character_id,
-                    a_gold_before: buyer_gold_before,
-                    a_gold_after: buyer_gold_after,
-                    b_gold_before: seller_gold_before,
-                    b_gold_after: seller_gold_after,
-                    a_items: "[]".to_string(),
-                    b_items: serde_json::Value::Array(
-                        sold.iter()
-                            .map(|(listing, qty)| {
-                                serde_json::json!({
-                                    "def": listing.item_def_id,
-                                    "qty": qty,
-                                    "ench": listing.enchant,
-                                })
-                            })
-                            .collect(),
-                    )
-                    .to_string(),
-                };
-                let inventories = vec![
-                    (buyer_character_id, buyer_rows),
-                    (seller_character_id, seller_rows),
-                ];
-                let auth = auth.clone();
-                match tokio::task::spawn_blocking(move || {
-                    auth.commit_trade(&characters, &inventories, &ledger)
-                })
-                .await
-                {
-                    Ok(Ok(())) => true,
-                    Ok(Err(err)) => {
-                        error!("stall sale commit failed, left to the periodic flush: {err}");
-                        false
-                    }
-                    Err(err) => {
-                        error!("stall sale commit task failed: {err}");
-                        false
-                    }
-                }
-            }
-            None => {
-                error!("stall sale between {buyer} and {seller} swapped but a side is gone");
-                false
-            }
-        };
-        if !committed {
-            self.mark_dirty(buyer).await;
-            self.mark_dirty(seller).await;
-            self.mark_inventory_dirty(buyer).await;
-            self.mark_inventory_dirty(seller).await;
-        }
-        drop(persistence);
-
         self.send_gold_update(buyer).await;
         self.send_gold_update(seller).await;
         self.push_inventory_update(buyer).await;
@@ -854,14 +789,10 @@ impl GameState {
             .map(|(listing, qty)| describe(listing, *qty))
             .collect::<Vec<_>>()
             .join(", ");
-        let names = {
-            let players = self.players.read().await;
-            (
-                players.get(buyer).map(|p| p.name.clone()),
-                players.get(seller).map(|p| p.name.clone()),
-            )
-        };
-        let (Some(buyer_name), Some(seller_name)) = names else {
+        let (Some(buyer_name), Some(seller_name)) = (
+            self.stall_trader_name(buyer).await,
+            self.stall_trader_name(seller).await,
+        ) else {
             return;
         };
         self.send_system_message(
@@ -903,7 +834,7 @@ impl GameState {
             .map(|entry| entry.stall.owner)
     }
 
-    /// Check that the owner is online and the customer is within table range.
+    /// Check the customer's distance from the table.
     async fn customer_at_stall(&self, customer: &PlayerId, owner: &PlayerId) -> bool {
         let table = self
             .stalls
@@ -915,9 +846,6 @@ impl GameState {
             return false;
         };
         let players = self.players.read().await;
-        if !players.contains_key(owner) {
-            return false;
-        }
         players.get(customer).is_some_and(|p| {
             reachable_dist_sq(p.position, p.floor_level, position, floor_level)
                 .is_some_and(|dist_sq| dist_sq <= MAX_TRADE_DISTANCE * MAX_TRADE_DISTANCE)

@@ -105,6 +105,7 @@ impl GameState {
         quantity: u32,
         auth: &AuthService,
     ) {
+        let _persistence = self.persistence_lock.lock().await;
         if quantity == 0 {
             return;
         }
@@ -120,9 +121,12 @@ impl GameState {
         }
         let customer_name = {
             let players = self.players.read().await;
-            match (players.get(player_id), players.get(&owner)) {
-                (Some(customer), Some(owner))
-                    if !customer.is_official_npc && !owner.is_official_npc =>
+            match players.get(player_id) {
+                Some(customer)
+                    if !customer.is_official_npc
+                        && players
+                            .get(&owner)
+                            .is_none_or(|owner| !owner.is_official_npc) =>
                 {
                     customer.name.clone()
                 }
@@ -139,7 +143,7 @@ impl GameState {
                 .await;
             return;
         }
-        if self.has_blocked(&owner, &customer_name).await {
+        if self.stall_owner_has_blocked(&owner, &customer_name).await {
             self.send_system_message(player_id, BUSY).await;
             return;
         }
@@ -202,7 +206,6 @@ impl GameState {
                     unit_price: order.unit_price,
                 };
                 order.quantity -= quantity;
-                *entry.pending_buy_orders.entry(order_id).or_default() += 1;
                 Ok((listing, total))
             })()
         };
@@ -232,15 +235,9 @@ impl GameState {
                         order.quantity += quantity;
                     }
                 }
-                if let Some(pending) = entry.pending_buy_orders.get_mut(&order_id) {
-                    *pending -= 1;
-                    if *pending == 0 {
-                        entry.pending_buy_orders.remove(&order_id);
-                        entry
-                            .buy_orders
-                            .retain(|order| order.order_id != order_id || order.quantity > 0);
-                    }
-                }
+                entry
+                    .buy_orders
+                    .retain(|order| order.order_id != order_id || order.quantity > 0);
             }
         }
         if let Err(reason) = result {

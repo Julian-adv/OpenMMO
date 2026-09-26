@@ -6,6 +6,7 @@ use onlinerpg_shared::messages::StallBuyLine;
 use onlinerpg_shared::stall::STALL_LEASH_M;
 
 mod buy_orders;
+mod offline;
 
 #[tokio::test]
 async fn only_a_merchant_lays_a_stall_and_only_one_at_a_time() {
@@ -49,12 +50,13 @@ async fn only_a_merchant_lays_a_stall_and_only_one_at_a_time() {
 }
 
 #[tokio::test]
-async fn pack_stall_and_logout_both_fold_the_table() {
+async fn pack_stall_and_npc_logout_both_fold_the_table() {
     let game_state = make_test_game_state("stall_pack");
     let auth = make_test_auth("stall_pack");
     let merchant_id = pid("npc_wick");
     let mut merchant = make_player("npc_wick", 100.0, 50.0);
     merchant.class = CharacterClass::Merchant;
+    merchant.is_official_npc = true;
     game_state.add_player(merchant).await;
 
     game_state

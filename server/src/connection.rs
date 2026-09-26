@@ -1082,6 +1082,7 @@ async fn handle_client_message(
                 Err(responses) => return Ok(responses),
             };
             let character_sessions = game_state.lock_character_sessions().await;
+            let player_persistence = game_state.lock_player_persistence().await;
             let Some(account_session_id) = state.account_session_id else {
                 return Ok(vec![]);
             };
@@ -1261,10 +1262,14 @@ async fn handle_client_message(
                 .set_dungeon_discoveries(&id, discovered_dungeons.clone())
                 .await;
 
-            // Load inventory from DB
-            game_state
-                .load_player_inventory(&id, character_id, auth_service)
-                .await;
+            if !game_state
+                .reconnect_stall_owner(&player, character_id)
+                .await
+            {
+                game_state
+                    .load_player_inventory(&id, character_id, auth_service)
+                    .await;
+            }
             if state.is_official_npc {
                 game_state.seed_npc_loadout(&id, &player.name).await;
                 game_state.seed_npc_keepsakes(&id, &player.name).await;
@@ -1322,7 +1327,7 @@ async fn handle_client_message(
             responses.push(ServerMessage::BuffUpdate { buffs: vec![] });
 
             responses.push(ServerMessage::GoldUpdate {
-                gold: selected_character.gold,
+                gold: game_state.get_player_gold(&id).await,
             });
 
             responses.push(ServerMessage::SkillsUpdate { skills });
@@ -1355,6 +1360,7 @@ async fn handle_client_message(
                 reported_version = ?state.reported_client_version,
                 position = ?player.position, rotation = player.rotation, floor = player.floor_level,
                 "Movement session joined");
+            drop(player_persistence);
             game_state.add_player(player).await;
             // Stamps last_seen_at at the next flush.
             game_state.mark_dirty(&id).await;

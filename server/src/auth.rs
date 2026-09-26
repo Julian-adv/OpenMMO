@@ -251,6 +251,7 @@ pub struct CharacterRecord {
     pub satiation: u32,
 }
 
+#[derive(Clone)]
 pub struct CharacterSaveData {
     pub character_id: i64,
     pub x: f32,

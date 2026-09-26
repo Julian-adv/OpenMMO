@@ -1,6 +1,12 @@
 use super::*;
 
-async fn setup(name: &str, gold: i64, item: &str, quantity: u32, price: i64) -> (Market, u64, u64) {
+pub(super) async fn setup(
+    name: &str,
+    gold: i64,
+    item: &str,
+    quantity: u32,
+    price: i64,
+) -> (Market, u64, u64) {
     let market = make_market(name, gold, 0).await;
     let g = &market.game_state;
     give(g, &market.owner, bag_item(1, "peddler_stall", 1)).await;
@@ -152,7 +158,6 @@ async fn insufficient_funds_weight_and_wallet_overflow_restore_orders() {
         assert_eq!(g.inventories.read().await[&m.customer].bag[0].quantity, 2);
         let stalls = g.stalls.read().await;
         assert_eq!(stalls[&m.owner].buy_orders[0].quantity, 2);
-        assert!(stalls[&m.owner].pending_buy_orders.is_empty());
         assert!(g.pending_gold_sinks.read().await.is_empty());
     }
 }
@@ -187,30 +192,16 @@ async fn concurrent_sellers_cannot_overfill_the_last_unit() {
 }
 
 #[tokio::test]
-async fn a_failed_pending_sale_restores_demand_after_another_sale_succeeds() {
+async fn a_failed_concurrent_sale_preserves_demand_after_another_sale_succeeds() {
     let (m, id, order) = setup("stall_orders_pending", 1000, "apple", 2, 100).await;
     let g = &m.game_state;
     give(g, &m.customer, bag_item(2, "apple", 1)).await;
     give(g, &m.customer, bag_item(3, "apple", 1)).await;
     assert!(g.spend_copper(&m.owner, 900).await);
-    let persistence = g.persistence_lock.lock().await;
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
         tokio::join!(
             g.sell_to_stall(&m.customer, id, order, 2, 1, &m.auth),
             g.sell_to_stall(&m.customer, id, order, 3, 1, &m.auth),
-            async {
-                loop {
-                    if g.stalls.read().await[&m.owner]
-                        .pending_buy_orders
-                        .get(&order)
-                        == Some(&2)
-                    {
-                        break;
-                    }
-                    tokio::task::yield_now().await;
-                }
-                drop(persistence);
-            },
         );
     })
     .await
@@ -219,7 +210,6 @@ async fn a_failed_pending_sale_restores_demand_after_another_sale_succeeds() {
     assert_eq!(g.get_player_gold(&m.customer).await, 95);
     let stalls = g.stalls.read().await;
     assert_eq!(stalls[&m.owner].buy_orders[0].quantity, 1);
-    assert!(stalls[&m.owner].pending_buy_orders.is_empty());
 }
 
 #[tokio::test]

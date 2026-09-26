@@ -368,7 +368,9 @@ impl super::GameState {
         {
             return Ok(false);
         }
+        let _persistence = self.persistence_lock.lock().await;
         auth.delete_character(account_name, character_id)?;
+        self.remove_character_stall(character_id).await;
         self.discard_pending_discovery_saves(character_id).await;
         Ok(true)
     }
@@ -487,37 +489,41 @@ impl super::GameState {
         }
     }
 
-    /// Synchronously write a player's character row and inventory to the DB,
-    /// detaching the in-memory inventory. Shared by the disconnect path and by
-    /// session replacement (kick), which relies on the inventory being flushed
-    /// before the replacement login loads from the DB (F-015).
-    ///
-    /// Must run *before* `unregister_player_character`: both the character-state
-    /// and inventory snapshots resolve the character id through
-    /// `player_characters`, so unregistering first would silently skip both
-    /// saves while still detaching the inventory.
+    /// Save before unregistering; a deployed stall retains its owner's inventory.
     pub async fn persist_and_detach_player(&self, player_id: &PlayerId, auth: &AuthService) {
         let _persistence = self.persistence_lock.lock().await;
 
         let mut characters = Vec::new();
+        let mut stall_inventory = None;
         if let Some(save_data) = self.get_player_save_data(player_id).await {
+            stall_inventory = self.detach_stall_owner(player_id, &save_data).await;
             self.remove_dirty(player_id).await;
             characters.push(save_data);
         }
-        let inventories = Vec::from_iter(self.take_player_inventory(player_id).await);
+        let inventories = Vec::from_iter(match stall_inventory {
+            Some(inventory) => Some(inventory),
+            None => self.take_player_inventory(player_id).await,
+        });
         let skills = Vec::from_iter(self.take_player_skills(player_id).await);
         let auth = auth.clone();
-        flush_save(
+        if flush_save(
             move || auth.save_batch(&characters, &inventories, &skills, &[], None),
             "player state",
         )
-        .await;
+        .await
+        {
+            self.mark_stall_owner_saved(player_id).await;
+        }
     }
 
     /// Persist every connected player plus the world clock in one transaction.
     /// Used by the shutdown drain, where connections skip their own teardown so
     /// 5,000 logouts don't become 5,000 commits.
     pub async fn persist_shutdown_snapshot(&self, auth: &AuthService) {
+        {
+            let _persistence = self.persistence_lock.lock().await;
+            self.flush_offline_stall_owners(auth).await;
+        }
         let (characters, inventories) = self.collect_shutdown_snapshot().await;
         let skills = self.collect_all_skill_states().await;
         let discoveries = self.take_pending_discovery_saves().await;
@@ -598,6 +604,7 @@ impl super::GameState {
     /// logout's save.
     pub async fn flush_dirty_saves(&self, auth: &AuthService) {
         let _persistence = self.persistence_lock.lock().await;
+        self.flush_offline_stall_owners(auth).await;
         self.flush_weapon_enchant_failures(auth).await;
 
         let (dirty_player_ids, dirty_states) = self.collect_dirty_character_states().await;
@@ -688,7 +695,9 @@ impl super::GameState {
             .remove(player_id);
         self.music_performances.write().await.remove(player_id);
         self.remove_live_instrument(player_id).await;
-        self.remove_player_stall(player_id).await;
+        if !self.stall_owner_is_offline(player_id).await {
+            self.remove_player_stall(player_id).await;
+        }
         self.close_stall(player_id).await;
         self.remove_player_tip_hat(player_id).await;
         self.drop_player_trade(player_id, "They left.").await;
