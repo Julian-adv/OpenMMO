@@ -108,6 +108,7 @@ mod tests {
             sectors: vec![Sector {
                 zone: Climate::Temperate as u8,
                 spots: vec![[-1470.0, 4750.9]],
+                ..Default::default()
             }],
         }
     }

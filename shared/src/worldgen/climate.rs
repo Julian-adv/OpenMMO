@@ -2,10 +2,9 @@
 //! 32 m land plot, derived from the baked elevation and land mask so no zone
 //! is hand-authored.
 
-use std::collections::VecDeque;
-
 use super::grid::bfs_distance_from;
 use super::GlobalMap;
+use crate::weather::heading_dir;
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -13,8 +12,7 @@ pub enum Climate {
     Sea = 0,
     WetCoast = 1,
     Temperate = 2,
-    RainShadow = 3,
-    Alpine = 4,
+    Alpine = 3,
 }
 
 impl TryFrom<u8> for Climate {
@@ -25,8 +23,7 @@ impl TryFrom<u8> for Climate {
             0 => Ok(Self::Sea),
             1 => Ok(Self::WetCoast),
             2 => Ok(Self::Temperate),
-            3 => Ok(Self::RainShadow),
-            4 => Ok(Self::Alpine),
+            3 => Ok(Self::Alpine),
             other => Err(other),
         }
     }
@@ -34,15 +31,13 @@ impl TryFrom<u8> for Climate {
 
 pub const COAST_BAND_M: f32 = 1000.0;
 pub const COAST_MAX_ELEVATION_M: f32 = 900.0;
-/// Prevailing wind is westerly: a ridge this high within the lookback to the
-/// west leaves the lowland east of it in a rain shadow. Set above the coastal
-/// ranges (about 1,000 m on seed 42) so only the central massif casts one.
-pub const SHADOW_RIDGE_M: f32 = 1200.0;
-pub const SHADOW_LOOKBACK_M: f32 = 14_000.0;
-/// The ridge must span this much north-south to block: a single spur casts
-/// no shadow, so the zone stays a band instead of one-cell-high streaks.
-pub const SHADOW_RIDGE_SPAN_M: f32 = 1000.0;
-pub const SHADOW_MAX_ELEVATION_M: f32 = 700.0;
+/// How far upwind a sector looks for a ridge, and the across-wind span a
+/// ridge needs to block: a single spur casts no shadow.
+pub const LEE_LOOKBACK_M: f32 = 14_000.0;
+pub const LEE_RIDGE_SPAN_M: f32 = 1000.0;
+pub const LEE_DIRECTIONS: usize = 16;
+/// Open water this wide ends an upwind scan; inlets and lagoons do not.
+pub const LEE_SEA_RESET_M: f32 = 1000.0;
 /// Below the generator's permanent-snow line (1,800 m) so the zone covers the
 /// whole summit block, not just the painted snow.
 pub const ALPINE_M: f32 = 1500.0;
@@ -51,20 +46,14 @@ pub const ALPINE_M: f32 = 1500.0;
 pub struct ClimateFields {
     res: usize,
     coast_dist: Vec<u16>,
-    upwind_max: Vec<f32>,
 }
 
 impl ClimateFields {
     pub fn new(map: &GlobalMap) -> Self {
         let res = map.config.global_res as usize;
-        let mpc = map.config.meters_per_cell();
-        let window = (SHADOW_LOOKBACK_M / mpc).round() as usize;
-        let half_span = (SHADOW_RIDGE_SPAN_M * 0.5 / mpc).round() as usize;
-        let upwind = upwind_max(&map.elevation_m, &map.land_mask, res, window);
         Self {
             res,
             coast_dist: bfs_distance_from(&map.land_mask, res, 0, None),
-            upwind_max: vertical_min(&upwind, res, half_span),
         }
     }
 
@@ -81,15 +70,12 @@ impl ClimateFields {
         if f32::from(self.coast_dist[i]) <= coast_cells && elev < COAST_MAX_ELEVATION_M {
             return Climate::WetCoast;
         }
-        if self.upwind_max[i] >= SHADOW_RIDGE_M && elev < SHADOW_MAX_ELEVATION_M {
-            return Climate::RainShadow;
-        }
         Climate::Temperate
     }
 
     /// X wraps around the cylinder; Z is clamped to the map.
     pub fn climate_at_world(&self, map: &GlobalMap, x_m: f32, z_m: f32) -> Climate {
-        let (x, y) = self.cell_of(map, x_m, z_m);
+        let (x, y) = cell_of(map, x_m, z_m);
         self.climate_at_cell(map, x, y)
     }
 
@@ -98,8 +84,8 @@ impl ClimateFields {
     pub fn climate_of_square(&self, map: &GlobalMap, x_m: f32, z_m: f32, size_m: f32) -> Climate {
         let mpc = map.config.meters_per_cell();
         let n = (size_m / mpc).round().max(1.0) as u32;
-        let (x0, y0) = self.cell_of(map, x_m + mpc * 0.5, z_m + mpc * 0.5);
-        let mut counts = [0u32; 5];
+        let (x0, y0) = cell_of(map, x_m + mpc * 0.5, z_m + mpc * 0.5);
+        let mut counts = [0u32; 4];
         for dy in 0..n {
             for dx in 0..n {
                 let x = (x0 + dx) % self.res as u32;
@@ -118,72 +104,66 @@ impl ClimateFields {
             .unwrap_or(0);
         Climate::try_from(land).unwrap_or(Climate::Temperate)
     }
-
-    fn cell_of(&self, map: &GlobalMap, x_m: f32, z_m: f32) -> (u32, u32) {
-        let (cx, cy) = map.config.world_m_to_cell(x_m, z_m);
-        let res = self.res as i64;
-        let x = (cx.floor() as i64).rem_euclid(res) as u32;
-        let y = (cy.floor() as i64).clamp(0, res - 1) as u32;
-        (x, y)
-    }
 }
 
-/// Per cell, the highest land elevation in the `window` cells to its west
-/// (excluding itself), wrapping in X. Sea resets the scan: moisture picked up
-/// over open water is not blocked by a ridge further upwind. Sliding-window
-/// maximum per row.
-fn upwind_max(elev: &[f32], land: &[u8], res: usize, window: usize) -> Vec<f32> {
-    let mut out = vec![0.0f32; elev.len()];
-    let mut deque: VecDeque<(usize, f32)> = VecDeque::new();
-    for y in 0..res {
-        let row = &elev[y * res..(y + 1) * res];
-        let row_land = &land[y * res..(y + 1) * res];
-        deque.clear();
-        for p in 0..2 * res {
-            if p >= res {
-                while deque.front().is_some_and(|&(pos, _)| pos + window < p) {
-                    deque.pop_front();
+/// Highest land elevation within `LEE_LOOKBACK_M` of (`x_m`, `z_m`) in each
+/// of `LEE_DIRECTIONS` headings, counter-clockwise from east (north = -Z).
+/// `LEE_SEA_RESET_M` of sea on the centre ray ends the scan: moisture picked
+/// up over open water is not blocked by a ridge further out. Each heading
+/// takes the lowest of three parallel rays `LEE_RIDGE_SPAN_M` wide over that
+/// distance.
+pub fn upwind_ridges(map: &GlobalMap, x_m: f32, z_m: f32) -> Vec<u16> {
+    let step = map.config.meters_per_cell().max(32.0);
+    let steps = (LEE_LOOKBACK_M / step) as usize;
+    let half = LEE_RIDGE_SPAN_M * 0.5;
+    let sea_steps = (LEE_SEA_RESET_M / step).ceil() as usize;
+    (0..LEE_DIRECTIONS)
+        .map(|d| {
+            let (dx, dz) = heading_dir(d as f32 * std::f32::consts::TAU / LEE_DIRECTIONS as f32);
+            let at = |off: f32, k: usize| {
+                let r = step * k as f32;
+                land_elevation(map, x_m - dz * off + dx * r, z_m + dx * off + dz * r)
+            };
+            let mut reach = steps;
+            let mut sea_run = 0;
+            for k in 1..=steps {
+                sea_run = if at(0.0, k).is_some() { 0 } else { sea_run + 1 };
+                if sea_run >= sea_steps {
+                    reach = k - sea_run;
+                    break;
                 }
-                out[y * res + p - res] = deque.front().map_or(0.0, |&(_, v)| v);
             }
-            if row_land[p % res] == 0 {
-                deque.clear();
-                continue;
-            }
-            let v = row[p % res];
-            while deque.back().is_some_and(|&(_, back)| back <= v) {
-                deque.pop_back();
-            }
-            deque.push_back((p, v));
-        }
-    }
-    out
+            let ridge = [-half, 0.0, half]
+                .into_iter()
+                .map(|off| (1..=reach).filter_map(|k| at(off, k)).fold(0.0, f32::max))
+                .fold(f32::MAX, f32::min);
+            metres_u16(ridge)
+        })
+        .collect()
 }
 
-/// Per cell, the lowest value within `half` rows above and below (clamped at
-/// the map edge). Sliding-window minimum per column.
-fn vertical_min(field: &[f32], res: usize, half: usize) -> Vec<f32> {
-    let mut out = vec![0.0f32; field.len()];
-    let mut deque: VecDeque<(usize, f32)> = VecDeque::new();
-    for x in 0..res {
-        deque.clear();
-        let mut fed = 0;
-        for y in 0..res {
-            while fed < res && fed <= y + half {
-                let v = field[fed * res + x];
-                while deque.back().is_some_and(|&(_, back)| back >= v) {
-                    deque.pop_back();
-                }
-                deque.push_back((fed, v));
-                fed += 1;
-            }
-            while deque.front().is_some_and(|&(pos, _)| pos + half < y) {
-                deque.pop_front();
-            }
-            out[y * res + x] = deque.front().map_or(0.0, |&(_, v)| v);
-        }
-    }
-    out
+/// Land elevation at a world position, 0 over sea.
+pub fn elevation_at(map: &GlobalMap, x_m: f32, z_m: f32) -> u16 {
+    metres_u16(land_elevation(map, x_m, z_m).unwrap_or(0.0))
+}
+
+fn metres_u16(m: f32) -> u16 {
+    m.round().clamp(0.0, u16::MAX as f32) as u16
+}
+
+fn land_elevation(map: &GlobalMap, x_m: f32, z_m: f32) -> Option<f32> {
+    let (x, y) = cell_of(map, x_m, z_m);
+    let i = map.idx(x, y);
+    (map.land_mask[i] != 0).then_some(map.elevation_m[i])
+}
+
+/// X wraps around the cylinder; Z is clamped to the map.
+fn cell_of(map: &GlobalMap, x_m: f32, z_m: f32) -> (u32, u32) {
+    let (cx, cy) = map.config.world_m_to_cell(x_m, z_m);
+    let res = map.config.global_res as i64;
+    let x = (cx.floor() as i64).rem_euclid(res) as u32;
+    let y = (cy.floor() as i64).clamp(0, res - 1) as u32;
+    (x, y)
 }
 
 #[cfg(test)]
@@ -209,46 +189,61 @@ mod tests {
     }
 
     #[test]
-    fn upwind_max_looks_west_and_wraps() {
-        let row = [0.0, 5.0, 0.0, 0.0, 9.0, 0.0, 0.0, 0.0];
-        let grid: Vec<f32> = row.iter().cycle().take(64).copied().collect();
-        let land = vec![1u8; 64];
-        let out = upwind_max(&grid, &land, 8, 2);
-        assert_eq!(out[..8], [0.0, 0.0, 5.0, 5.0, 0.0, 9.0, 9.0, 0.0]);
-        assert_eq!(out[56..], out[..8]);
-        let wide = upwind_max(&grid, &land, 8, 5);
-        assert_eq!(wide[0], 9.0);
-        assert_eq!(wide[1], 9.0);
-        assert_eq!(wide[2], 5.0);
-    }
-
-    #[test]
-    fn sea_between_ridge_and_cell_clears_the_shadow() {
-        let row = [0.0, 9.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
-        let grid: Vec<f32> = row.iter().cycle().take(64).copied().collect();
-        let mut land = vec![1u8; 64];
-        for y in 0..8 {
-            land[y * 8 + 3] = 0;
+    fn upwind_ridges_need_span_and_stop_at_the_sea() {
+        // 512 cells * 64 m; a 1,300 m north-south ridge 3.2 km east of x = 256.
+        let res = 512;
+        let mut m = map(res);
+        for y in 0..res {
+            let i = m.idx(306, y);
+            m.elevation_m[i] = 1300.0;
         }
-        let out = upwind_max(&grid, &land, 8, 6);
-        assert_eq!(out[2], 9.0);
-        assert_eq!(out[3], 9.0);
-        assert_eq!(out[4], 0.0);
-        assert_eq!(out[7], 0.0);
+        // a lone 2,000 m peak 3.2 km north is a spur, not a ridge
+        let i = m.idx(256, 206);
+        m.elevation_m[i] = 2000.0;
+        let ridges = upwind_ridges(&m, 32.0, 32.0);
+        assert_eq!(ridges.len(), LEE_DIRECTIONS);
+        assert_eq!(ridges[0], 1300, "east");
+        assert_eq!(ridges[4], 0, "north");
+        assert_eq!(ridges[8], 0, "west");
+        // a bay beside the start blocks only a side ray, not the scan
+        for y in 246..=250 {
+            for x in 250..270 {
+                let i = m.idx(x, y);
+                m.land_mask[i] = 0;
+            }
+        }
+        assert_eq!(upwind_ridges(&m, 32.0, 32.0)[0], 1300);
+        // a narrow channel does not reset the scan, open sea does
+        for y in 0..res {
+            let i = m.idx(280, y);
+            m.land_mask[i] = 0;
+        }
+        assert_eq!(upwind_ridges(&m, 32.0, 32.0)[0], 1300);
+        for y in 0..res {
+            for x in 280..=296 {
+                let i = m.idx(x, y);
+                m.land_mask[i] = 0;
+            }
+        }
+        assert_eq!(upwind_ridges(&m, 32.0, 32.0)[0], 0);
+        assert_eq!(elevation_at(&m, 24.0 * 64.0 + 32.0, 32.0), 0);
     }
 
     #[test]
-    fn vertical_min_needs_the_ridge_on_neighbouring_rows_too() {
-        // one column, 8 rows: a single tall row is erased by half = 1,
-        // a three-row block keeps its middle row
-        let col = [0.0, 9.0, 0.0, 0.0, 7.0, 7.0, 7.0, 0.0];
-        let grid: Vec<f32> = col.iter().flat_map(|&v| [v; 8]).collect();
-        let out = vertical_min(&grid, 8, 1);
-        let column: Vec<f32> = (0..8).map(|y| out[y * 8]).collect();
-        assert_eq!(column, [0.0, 0.0, 0.0, 0.0, 0.0, 7.0, 0.0, 0.0]);
-        // half = 0 is the identity
-        let same = vertical_min(&grid, 8, 0);
-        assert_eq!(same, grid);
+    fn a_baked_ridge_shadows_cells_blowing_over_it() {
+        let res = 512;
+        let mut m = map(res);
+        for y in 0..res {
+            let i = m.idx(306, y);
+            m.elevation_m[i] = 1600.0;
+        }
+        let sector = crate::weather::Sector {
+            upwind_ridge_m: upwind_ridges(&m, 32.0, 32.0),
+            ..Default::default()
+        };
+        let west = std::f32::consts::PI;
+        assert!(crate::weather::lee(&sector, west) > 0.99);
+        assert_eq!(crate::weather::lee(&sector, 0.0), 0.0);
     }
 
     #[test]
@@ -286,10 +281,7 @@ mod tests {
                 m.land_mask[i] = 0;
             }
         }
-        // a 1,300 m ridge at x = 200 shadows the lowland east of it
         for y in 0..res {
-            let i = m.idx(200, y);
-            m.elevation_m[i] = 1300.0;
             let i = m.idx(300, y);
             m.elevation_m[i] = 1600.0;
         }
@@ -298,10 +290,7 @@ mod tests {
         assert_eq!(fields.climate_at_cell(&m, 45, 10), Climate::WetCoast);
         assert_eq!(fields.climate_at_cell(&m, 100, 10), Climate::Temperate);
         assert_eq!(fields.climate_at_cell(&m, 190, 10), Climate::Temperate);
-        assert_eq!(fields.climate_at_cell(&m, 210, 10), Climate::RainShadow);
         assert_eq!(fields.climate_at_cell(&m, 300, 10), Climate::Alpine);
-        // the ridge itself is above the shadow ceiling
-        assert_eq!(fields.climate_at_cell(&m, 200, 10), Climate::Temperate);
     }
 
     #[test]
@@ -327,9 +316,10 @@ mod tests {
 
     #[test]
     fn byte_round_trip() {
-        for b in 0..5u8 {
+        for b in 0..4u8 {
             assert_eq!(Climate::try_from(b).unwrap() as u8, b);
         }
+        assert_eq!(Climate::try_from(4), Err(4));
         assert_eq!(Climate::try_from(5), Err(5));
     }
 }

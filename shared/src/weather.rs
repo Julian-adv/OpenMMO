@@ -5,18 +5,22 @@ mod seasonal;
 use serde::{Deserialize, Serialize};
 
 use crate::moon::game_day_index;
-use crate::world::{shortest_world_delta_x, GameDateTime};
+use crate::world::{shortest_world_delta_x, wrap_world_x, GameDateTime};
 use crate::worldgen::climate::Climate;
 use crate::worldgen::noise::smoothstep;
 
 pub const GAME_MINUTES_PER_DAY: i64 = 24 * 60;
 
 /// Baked rain-cell spawn spots; each sector hosts at most one cell.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Sector {
     pub zone: u8,
     /// World metres.
     pub spots: Vec<[f32; 2]>,
+    /// Ground elevation at the first spot, metres.
+    pub elevation_m: u16,
+    /// Highest upwind ridge per heading (`climate::upwind_ridges`); empty = none.
+    pub upwind_ridge_m: Vec<u16>,
 }
 
 /// Sectors and the world seed used to place them.
@@ -27,7 +31,7 @@ pub struct WeatherSectors {
     pub sectors: Vec<Sector>,
 }
 
-pub const WEATHER_SECTORS_VERSION: u32 = 1;
+pub const WEATHER_SECTORS_VERSION: u32 = 2;
 
 /// Regional cadence in game minutes and kilometres; events last 15–30 real minutes.
 #[derive(Debug, Clone, Copy)]
@@ -38,6 +42,9 @@ pub struct ZoneSchedule {
     pub chance: f64,
     pub radius_min_km: f32,
     pub radius_var_km: f32,
+    /// Drift speed in metres per game minute; players (3 m/s) outrun it.
+    pub drift_min_mpm: f32,
+    pub drift_var_mpm: f32,
 }
 
 const NO_RAIN: ZoneSchedule = ZoneSchedule {
@@ -47,47 +54,43 @@ const NO_RAIN: ZoneSchedule = ZoneSchedule {
     chance: 0.0,
     radius_min_km: 0.0,
     radius_var_km: 0.0,
+    drift_min_mpm: 0.0,
+    drift_var_mpm: 0.0,
 };
 
-pub const SCHEDULE: [ZoneSchedule; 5] = [
-    NO_RAIN,
-    // wet coast: small showers hanging over the shoreline
-    ZoneSchedule {
-        period: 560.0,
-        life_min: 165.0,
-        life_var: 75.0,
-        chance: 0.9,
-        radius_min_km: 1.6,
-        radius_var_km: 1.0,
-    },
-    // temperate
-    ZoneSchedule {
-        period: 2000.0,
-        life_min: 120.0,
-        life_var: 120.0,
-        chance: 0.8,
-        radius_min_km: 3.5,
-        radius_var_km: 1.9,
-    },
-    // rain shadow
-    ZoneSchedule {
-        period: 6800.0,
-        life_min: 120.0,
-        life_var: 60.0,
-        chance: 0.6,
-        radius_min_km: 3.0,
-        radius_var_km: 1.6,
-    },
-    // alpine
-    ZoneSchedule {
-        period: 1100.0,
-        life_min: 180.0,
-        life_var: 60.0,
-        chance: 0.9,
-        radius_min_km: 3.3,
-        radius_var_km: 1.9,
-    },
-];
+/// Small showers hanging over the shoreline.
+const WET_COAST: ZoneSchedule = ZoneSchedule {
+    period: 560.0,
+    life_min: 165.0,
+    life_var: 75.0,
+    chance: 0.45,
+    radius_min_km: 1.6,
+    radius_var_km: 1.0,
+    drift_min_mpm: 5.0,
+    drift_var_mpm: 4.0,
+};
+
+const TEMPERATE: ZoneSchedule = ZoneSchedule {
+    period: 2000.0,
+    life_min: 120.0,
+    life_var: 120.0,
+    chance: 0.4,
+    radius_min_km: 3.5,
+    radius_var_km: 1.9,
+    drift_min_mpm: 8.0,
+    drift_var_mpm: 6.0,
+};
+
+const ALPINE: ZoneSchedule = ZoneSchedule {
+    period: 1100.0,
+    life_min: 180.0,
+    life_var: 60.0,
+    chance: 0.45,
+    radius_min_km: 3.3,
+    radius_var_km: 1.9,
+    drift_min_mpm: 6.0,
+    drift_var_mpm: 6.0,
+};
 
 /// A cell's lifetime never exceeds this share of its period, so a sector is
 /// guaranteed a dry gap between cells.
@@ -98,12 +101,30 @@ pub const MAX_LIFE_SHARE: f64 = 0.9;
 const ENVELOPE_RISE_END: f32 = 0.25;
 const ENVELOPE_FALL_START: f32 = 0.7;
 
+/// Drift heading spread around the seasonal wind, in radians.
+const DRIFT_HEADING_SPREAD: f64 = 0.44;
+/// Death-to-birth radius ratio range, drawn log-uniformly so growing and
+/// shrinking cells are equally likely.
+const GROWTH_MIN: f32 = 0.6;
+const GROWTH_MAX: f32 = 1.6;
+
+/// A ridge this high upwind shadows a sector; coastal ranges (about 1,000 m on
+/// seed 42) stay below it, the central massifs above it.
+const LEE_RIDGE_M: (f32, f32) = (1000.0, 1400.0);
+/// Sectors this high catch their own rain, so the lee fades out over it.
+const LEE_ELEVATION_M: (f32, f32) = (700.0, 1200.0);
+/// Rain chance left in a full lee.
+const LEE_CHANCE: f64 = 0.11;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Cell {
     pub sector: usize,
     pub x: f32,
     pub z: f32,
     pub radius_m: f32,
+    /// Drift velocity in metres per game minute.
+    pub vx: f32,
+    pub vz: f32,
     /// 0..1 rain envelope: ramps up while forming, down while clearing.
     pub env: f32,
     /// 0..1 progress through the cell's life.
@@ -134,8 +155,10 @@ impl Cell {
 
 pub fn zone_schedule(zone: u8) -> ZoneSchedule {
     match Climate::try_from(zone) {
-        Ok(c) => SCHEDULE[c as usize],
-        Err(_) => NO_RAIN,
+        Ok(Climate::WetCoast) => WET_COAST,
+        Ok(Climate::Temperate) => TEMPERATE,
+        Ok(Climate::Alpine) => ALPINE,
+        Ok(Climate::Sea) | Err(_) => NO_RAIN,
     }
 }
 
@@ -193,25 +216,64 @@ pub fn sector_cell(
     if age < 0.0 || age > life {
         return None;
     }
-    let spot = sector.spots[(hash01(seed, id, k, 4) * sector.spots.len() as f64) as usize];
-    // Freeze the seasonal chance at birth so accepted rain finishes naturally.
-    if draw >= chance * seasonal::chance_multiplier(spot, birth) {
+    let heading = (seasonal::drift_heading(birth)
+        + (hash01(seed, id, k, 8) * 2.0 - 1.0) * DRIFT_HEADING_SPREAD) as f32;
+    // Fixed at birth so accepted rain finishes naturally.
+    if draw >= chance * (1.0 - (1.0 - LEE_CHANCE) * f64::from(lee(sector, heading))) {
         return None;
     }
+    let spot = sector.spots[(hash01(seed, id, k, 4) * sector.spots.len() as f64) as usize];
     let progress = (age / life) as f32;
     let env = smoothstep(0.0, ENVELOPE_RISE_END, progress)
         * (1.0 - smoothstep(ENVELOPE_FALL_START, 1.0, progress));
+    let ln_growth =
+        GROWTH_MIN.ln() + (GROWTH_MAX / GROWTH_MIN).ln() * hash01(seed, id, k, 6) as f32;
     let radius_km = (sched.radius_min_km + sched.radius_var_km * hash01(seed, id, k, 5) as f32)
+        * (ln_growth * progress).exp()
         * (0.6 + 0.4 * env);
+    let speed = sched.drift_min_mpm + sched.drift_var_mpm * hash01(seed, id, k, 7) as f32;
+    let (dx, dz) = heading_dir(heading);
+    let (vx, vz) = (speed * dx, speed * dz);
     Some(Cell {
         sector: index,
-        x: spot[0],
-        z: spot[1],
+        x: wrap_world_x(spot[0] + vx * age as f32),
+        z: spot[1] + vz * age as f32,
         radius_m: radius_km * 1000.0,
+        vx,
+        vz,
         env,
         progress,
         remain_min: (life - age) as f32,
     })
+}
+
+/// Unit ground vector for a heading in radians counter-clockwise from east;
+/// north is -Z.
+pub fn heading_dir(heading: f32) -> (f32, f32) {
+    let (sin, cos) = heading.sin_cos();
+    (cos, -sin)
+}
+
+/// 0..1 rain shadow for a cell heading `heading` (radians counter-clockwise
+/// from east, north = -Z): the ridge it came over, faded out on high ground.
+pub(crate) fn lee(sector: &Sector, heading: f32) -> f32 {
+    let ridges = &sector.upwind_ridge_m;
+    if ridges.is_empty() {
+        return 0.0;
+    }
+    let n = ridges.len();
+    let upwind = (heading + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU)
+        / std::f32::consts::TAU
+        * n as f32;
+    let i = upwind as usize % n;
+    let f = upwind.fract();
+    let ridge = f32::from(ridges[i]) * (1.0 - f) + f32::from(ridges[(i + 1) % n]) * f;
+    let high = smoothstep(
+        LEE_ELEVATION_M.0,
+        LEE_ELEVATION_M.1,
+        f32::from(sector.elevation_m),
+    );
+    smoothstep(LEE_RIDGE_M.0, LEE_RIDGE_M.1, ridge) * (1.0 - high)
 }
 
 pub fn cells_at(sectors: &[Sector], seed: u64, bias: f64, t_min: f64) -> Vec<Cell> {
@@ -252,24 +314,26 @@ pub fn cloud_factor(rain: f32) -> f32 {
 mod tests {
     use super::*;
 
+    fn sector(zone: Climate, spots: Vec<[f32; 2]>) -> Sector {
+        Sector {
+            zone: zone as u8,
+            spots,
+            ..Default::default()
+        }
+    }
+
     fn sectors() -> Vec<Sector> {
         vec![
-            Sector {
-                zone: Climate::WetCoast as u8,
-                spots: vec![[0.0, 0.0], [500.0, 0.0], [0.0, 500.0]],
-            },
-            Sector {
-                zone: Climate::Temperate as u8,
-                spots: vec![[10_000.0, 2_000.0]],
-            },
-            Sector {
-                zone: Climate::RainShadow as u8,
-                spots: vec![[-8_000.0, -3_000.0]],
-            },
-            Sector {
-                zone: Climate::Alpine as u8,
-                spots: vec![[4_000.0, 9_000.0], [4_500.0, 9_000.0]],
-            },
+            sector(
+                Climate::WetCoast,
+                vec![[0.0, 0.0], [500.0, 0.0], [0.0, 500.0]],
+            ),
+            sector(Climate::Temperate, vec![[10_000.0, 2_000.0]]),
+            sector(Climate::Temperate, vec![[-8_000.0, -3_000.0]]),
+            sector(
+                Climate::Alpine,
+                vec![[4_000.0, 9_000.0], [4_500.0, 9_000.0]],
+            ),
         ]
     }
 
@@ -307,45 +371,53 @@ mod tests {
     }
 
     #[test]
-    fn seasonal_rain_keeps_complete_events_and_their_original_strength() {
-        let regional = vec![Sector {
-            zone: Climate::WetCoast as u8,
-            spots: vec![[-1475.2, 4741.6]],
+    fn a_ridge_upwind_dries_the_lee_by_season_and_keeps_accepted_events_whole() {
+        // A massif to the east-southeast: windward in winter, lee in summer.
+        let mut ridges = vec![0u16; 16];
+        ridges[..2].fill(2000);
+        ridges[14..].fill(2000);
+        let shadowed = vec![Sector {
+            upwind_ridge_m: ridges,
+            ..sector(Climate::Temperate, vec![[0.0, 0.0]])
         }];
-        let unseasonal = vec![Sector {
-            zone: Climate::WetCoast as u8,
-            spots: vec![[14000.0, -14000.0]],
-        }];
-        let sched = zone_schedule(regional[0].zone);
-        let seed = 42;
-        let mut accepted = 0;
-        let mut skipped = 0;
-        for k in 0..20_000 {
-            let life = sched.life_min + hash01(seed, 0, k, 2) * sched.life_var;
-            let birth = k as f64 * sched.period + hash01(seed, 0, k, 3) * (sched.period - life);
-            let middle = birth + life * 0.5;
-            if sector_cell(&unseasonal, 0, seed, 1.0, middle).is_none() {
-                continue;
-            }
-            let rains = sector_cell(&regional, 0, seed, 1.0, middle).is_some();
-            if rains {
-                accepted += 1;
-            } else {
-                skipped += 1;
-            }
-            for fraction in [0.001, 0.1, 0.25, 0.5, 0.7, 0.9, 0.999] {
-                let t = birth + life * fraction;
-                let cell = sector_cell(&regional, 0, seed, 1.0, t);
-                assert_eq!(cell.is_some(), rains, "cycle {k}, progress {fraction}");
-                if let Some(cell) = cell {
-                    let baseline = sector_cell(&unseasonal, 0, seed, 1.0, t).unwrap();
-                    assert_eq!(cell.env, baseline.env);
-                    assert_eq!(cell.radius_m, baseline.radius_m);
-                    assert_eq!(cell.progress, baseline.progress);
+        let open = vec![sector(Climate::Temperate, vec![[0.0, 0.0]])];
+        let day = GAME_MINUTES_PER_DAY as f64;
+        let count = |s: &[Sector], from_day: f64| {
+            let t0 = from_day * day;
+            let mut n = 0;
+            let mut t = t0;
+            while t < t0 + 60.0 * day {
+                if let Some(c) = sector_cell(s, 0, 42, 1.0, t) {
+                    n += 1;
+                    let base = sector_cell(&open, 0, 42, 1.0, t).expect("lee only removes cells");
+                    assert_eq!(
+                        (c.env, c.radius_m, c.progress),
+                        (base.env, base.radius_m, base.progress)
+                    );
                 }
+                t += 5.0;
             }
-        }
-        assert!(accepted > 0 && skipped > 0);
+            n
+        };
+        let (winter, summer) = (count(&shadowed, 10.0), count(&shadowed, 190.0));
+        let (open_winter, open_summer) = (count(&open, 10.0), count(&open, 190.0));
+        assert_eq!(winter, open_winter, "windward keeps its rain");
+        assert!(
+            summer * 10 < open_summer * 3,
+            "lee {summer} vs open {open_summer}"
+        );
+
+        let high = Sector {
+            elevation_m: 1500,
+            ..shadowed[0].clone()
+        };
+        assert_eq!(
+            lee(&high, std::f32::consts::PI),
+            0.0,
+            "high ground catches its own rain"
+        );
+        assert!(lee(&shadowed[0], std::f32::consts::PI) > 0.99);
+        assert_eq!(lee(&shadowed[0], 0.0), 0.0);
     }
 
     #[test]
@@ -353,6 +425,8 @@ mod tests {
         let s = sectors();
         for (i, sector) in s.iter().enumerate() {
             let sched = zone_schedule(sector.zone);
+            let max_drift = (sched.drift_min_mpm + sched.drift_var_mpm) as f64
+                * (sched.life_min + sched.life_var);
             let mut saw_rain = false;
             let mut saw_gap = false;
             let mut t = 0.0;
@@ -362,7 +436,14 @@ mod tests {
                     Some(c) => {
                         saw_rain = true;
                         assert!((0.0..=1.0).contains(&c.env));
-                        assert!(sector.spots.contains(&[c.x, c.z]));
+                        assert!(
+                            sector.spots.iter().any(|s| {
+                                let dx = shortest_world_delta_x(s[0], c.x) as f64;
+                                let dz = (c.z - s[1]) as f64;
+                                (dx * dx + dz * dz).sqrt() <= max_drift + 1.0
+                            }),
+                            "sector {i} cell at t={t} drifted off its spots"
+                        );
                     }
                     None => saw_gap = true,
                 }
@@ -420,12 +501,51 @@ mod tests {
     }
 
     #[test]
+    fn cells_drift_with_the_season_and_grow_or_shrink_over_a_life() {
+        let s = sectors();
+        let (mut grew, mut shrank) = (false, false);
+        // Cells born and dying inside winter, then inside summer.
+        for (start_day, eastward) in [(5.0, true), (185.0, false)] {
+            let t0 = start_day * GAME_MINUTES_PER_DAY as f64;
+            for i in 0..s.len() {
+                let sched = zone_schedule(s[i].zone);
+                let mut prev: Option<Cell> = None;
+                let mut t = t0;
+                while t < t0 + 75.0 * GAME_MINUTES_PER_DAY as f64 {
+                    let cur = sector_cell(&s, i, 11, 1.0, t);
+                    if let (Some(p), Some(c)) = (prev, cur) {
+                        if c.progress > p.progress {
+                            assert_eq!((c.vx, c.vz), (p.vx, p.vz));
+                            assert_eq!(c.vx > 0.0, eastward, "sector {i} at t={t}");
+                            let dx = shortest_world_delta_x(p.x, c.x);
+                            assert_eq!(dx > 0.0, eastward, "sector {i} moved against vx");
+                            let speed = c.vx.hypot(c.vz);
+                            assert!(speed >= sched.drift_min_mpm - 1e-3);
+                            assert!(speed <= sched.drift_min_mpm + sched.drift_var_mpm + 1e-3);
+                            // Same envelope on both sides of the hold: only growth differs.
+                            if p.progress > 0.3 && c.progress < 0.65 {
+                                grew |= c.radius_m > p.radius_m;
+                                shrank |= c.radius_m < p.radius_m;
+                            }
+                        }
+                    }
+                    prev = cur;
+                    t += 5.0;
+                }
+            }
+        }
+        assert!(grew && shrank, "grew {grew}, shrank {shrank}");
+    }
+
+    #[test]
     fn stage_follows_the_envelope_ramps() {
         let at = |progress: f32| Cell {
             sector: 0,
             x: 0.0,
             z: 0.0,
             radius_m: 1.0,
+            vx: 0.0,
+            vz: 0.0,
             env: 0.0,
             progress,
             remain_min: 0.0,
@@ -445,6 +565,8 @@ mod tests {
             x: -16_400.0,
             z: 0.0,
             radius_m: 3_000.0,
+            vx: 0.0,
+            vz: 0.0,
             env: 1.0,
             progress: 0.5,
             remain_min: 0.0,

@@ -9,19 +9,16 @@ export interface RadarCell {
   x: number
   z: number
   radiusM: number
+  /** Drift in metres per game minute. */
+  vx: number
+  vz: number
   env: number
   progress: number
   remainMin: number
   stage: 'forming' | 'raining' | 'clearing'
 }
 
-export const ZONE_NAMES = [
-  'Sea',
-  'Wet coast',
-  'Temperate',
-  'Rain shadow',
-  'Alpine',
-] as const
+export const ZONE_NAMES = ['Sea', 'Wet coast', 'Temperate', 'Alpine'] as const
 
 export function zoneName(zone: number): string {
   return ZONE_NAMES[zone] ?? `Zone ${zone}`

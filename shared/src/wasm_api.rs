@@ -447,6 +447,8 @@ struct WeatherCellJs {
     x: f32,
     z: f32,
     radius_m: f32,
+    vx: f32,
+    vz: f32,
     env: f32,
     progress: f32,
     /// Game minutes until the cell dies.
@@ -469,6 +471,8 @@ pub fn weather_cells_at(seed: f64, bias: f64, t_min: f64) -> Result<JsValue, JsE
                 x: c.x,
                 z: c.z,
                 radius_m: c.radius_m,
+                vx: c.vx,
+                vz: c.vz,
                 env: c.env,
                 progress: c.progress,
                 remain_min: c.remain_min,

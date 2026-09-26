@@ -10,14 +10,18 @@ const read = (path) => fs.readFileSync(new URL(path, root));
 const years = Number(process.argv[2] ?? 20);
 if (!Number.isInteger(years) || years < 1) {
   throw new Error(
-    "Usage: node tools/measure-weather.mjs [positive integer years]",
+    "Usage: node tools/measure-weather.mjs [positive integer years] [x z]",
   );
 }
 
 initSync({ module: read("client/src/lib/wasm/onlinerpg_shared_bg.wasm") });
 const sectorsJson = read("data/terrain/weather-sectors.json").toString();
 const { seed } = JSON.parse(sectorsJson);
-const { x, z } = JSON.parse(read("data-src/world.json")).spawnPosition;
+const spawn = JSON.parse(read("data-src/world.json")).spawnPosition;
+const [x, z] =
+  process.argv.length >= 5
+    ? [Number(process.argv[3]), Number(process.argv[4])]
+    : [spawn.x, spawn.z];
 weather_set_sectors(sectorsJson);
 
 const stepGameMinutes = 5;

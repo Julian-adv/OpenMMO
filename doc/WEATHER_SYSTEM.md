@@ -6,7 +6,8 @@ Shipped with PR #173 (2026-09-12). Supersedes the moving-cloud draft of
 ## Goal
 
 Regional weather. Each part of the world has a climate; rain forms over a
-region, falls for a while, and clears. Only the ground under a rain cell gets
+region, drifts slowly with the seasonal wind while growing or shrinking,
+and clears. Only the ground under a rain cell gets
 dimmed light, rain and sound. Tone: subtle, cozy rain that fits the warm
 quarter-view look — not a gray realism filter. Because every cell is a pure
 function of time, a map forecast can be added later without touching the
@@ -15,20 +16,22 @@ model; the world map is left as it is for now.
 Non-goals: snow, weather-dependent
 fishing, sky dome (quarter view — the sky is never on screen).
 
-## Why stationary cells, not travelling clouds
+## Why slow drifting cells
 
-The first draft moved a noise field with the wind. Two problems:
+The first draft moved a noise field with the wind; on the ground it read as a
+rain border sweeping through the village. The shipped model then kept cells
+fixed at their spawn spot, which looked like rain switching on and off in
+place.
 
-- In a quarter view the only place a moving cloud is legible is the map; on
-  the ground it reads as a rain border sweeping through the village.
-- No shipped MMO does it. FFXIV keys weather to zones from a deterministic
-  timestamp hash (which is what makes its fishing forecasts possible); Black
-  Desert triggers rain per region from temperature/humidity thresholds; Sea of
-  Thieves has one roaming storm. What makes weather feel alive is that it is
-  visible, predictable and avoidable — not physics.
-
-Stationary regional cells give that, and they extend to climates later (a wet
-coast, a rain shadow, a snowy range) the way FFXIV's per-zone tables do.
+Cells now keep their spawn schedule but drift at 5–14 m per game minute,
+0.7–1.9 m/s in real time, within ±25° of the seasonal heading below, and end their life at 0.6–1.6× their birth
+radius. The fade band (30 % of the radius) takes about 5 real minutes to cross
+a fixed point for the smallest, fastest coastal shower and up to 30 for large
+slow cells, so the edge never sweeps visibly, and a player walking at
+3 m/s can still outrun a cell. What makes weather feel alive is that it is
+visible, predictable and avoidable (FFXIV keys weather to zones from a
+deterministic timestamp hash, which makes its forecasts possible); the drift
+stays a pure function of time, so that holds.
 
 ## Model
 
@@ -41,22 +44,25 @@ grade grid (`terrain/src/land.rs`, `/api/terrain/land-grades/{rx}/{rz}`,
 | Zone | Rule (seed 42 measurements) |
 |---|---|
 | Wet coast | ≤ 1 km from the sea and below 900 m |
-| Rain shadow | a ≥ 1,200 m ridge spanning ≥ 1 km north–south within 14 km upwind (west), no sea in between, and below 700 m |
 | Alpine | ≥ 1,500 m (worldgen paints permanent snow from 1,800 m) |
 | Temperate | everything else on land |
 
-Sea plots carry zone 0 and never host a cell.
+Sea plots carry zone 0 and never host a cell. A static westerly rain-shadow
+zone was replaced by the seasonal lee (see Orographic rain); Alpine is byte 3.
 
 ### Sectors (baked)
 
 The bake gives each zone one sector per `SECTOR_KM2` of area (wet coast 4,
-temperate 7, rain shadow 36, alpine 12 km²), spread through the zone by
+temperate 7, alpine 12 km²), spread through the zone by
 farthest-point sampling; a sector's spots are the 16 plots around its centre.
 Inland spots sit as far from the zone border as the zone allows; wet-coast
 spots hug the shoreline (within 128 m of the sea) so coastal showers spill
 seaward instead of soaking the zones behind them. Written world-wide to `data/terrain/weather-sectors.json`
-(`shared/src/worldgen/weather_sectors.rs`), a few hundred sectors, so clients
-never analyse the climate grid themselves.
+(`shared/src/worldgen/weather_sectors.rs`), 117 sectors on seed 42, so clients
+never analyse the climate grid themselves. Each sector also carries its
+ground elevation and the highest upwind ridge in 16 headings
+(`climate::upwind_ridges`), since clients have no elevation data. File
+version 2.
 
 ### Cells (derived, never stored)
 
@@ -67,8 +73,11 @@ lifetime range `[L0, L0 + Lv]`, cycle `k` yields
 h1, h2, h3 = hash(seed, s, k)
 life     = min(L0 + h2 * Lv, 0.9 * P)
 birth    = k * P + h3 * (P - life)         // the cell fits inside its cycle
-active   = h1 < chance * bias * seasonalMultiplier(spawnSpot, birth)
+heading  = seasonal heading(birth) ± 25°
+active   = h1 < chance * bias * (1 - 0.89 * lee(sector, heading))
 envelope = ramp-up 25 % of life → full → ramp-down 30 % of life
+centre   = spawnSpot + v * age            // v along heading, zone speed range
+radius   = r0 * g^progress * (0.6 + 0.4 * envelope)   // g in [0.6, 1.6], log-uniform
 falloff(d) = 1 - smoothstep(0.7, 1.0, d)   // flat top, short edge, 0 at the radius
 rain(x, z, t) = min(1, sum over cells of envelope(t) * falloff(dist / radius))
 ```
@@ -77,10 +86,9 @@ The falloff is flat to 70 % of the radius and fades to zero at the radius, so
 the disc on the map is exactly where it rains and a cell never soaks the
 next zone from beyond its own edge. A Gaussian was tried first: it still held
 37 % at the radius and drizzled out to twice it, which made the map
-over-promise and let coastal cells wet the rain shadow.
+over-promise and let coastal cells wet the zones behind them.
 
-Everything is a pure function of `(seed, sectors, t)` and the compiled
-seasonal region settings — `shared/src/weather.rs`.
+Everything is a pure function of `(seed, sectors, t)` — `shared/src/weather.rs`.
 `t` is game minutes since the calendar epoch (`weather::game_minutes`, on top
 of `moon::game_day_index`), already synced by `GameTimeSync`. Only cycle `k`
 can be live at `t`, so the runtime checks one cycle per sector. Anyone who
@@ -88,14 +96,30 @@ knows the seed can evaluate any time — that is the forecast.
 
 ### Schedule (game minutes; a game day is 3 real hours)
 
-These are the base schedules, before regional seasonal multipliers.
+These are the base schedules, before the lee.
 
-| Zone | km² per sector | Period | Lifetime | Chance | Radius | Real-time feel |
-|---|---|---|---|---|---|---|
-| Wet coast | 4 | 560 (9.3 h) | 165–240 | 0.9 | 1.6–2.6 km | 21–30 min of rain every ~1.2 h |
-| Temperate | 7 | 2,000 (~1.4 d) | 120–240 | 0.8 | 3.5–5.4 km | 15–30 min every ~4 h |
-| Rain shadow | 36 | 6,800 (~5 d) | 120–180 | 0.6 | 3.0–4.6 km | 15–22 min every ~14 h |
-| Alpine | 12 | 1,100 (18 h) | 180–240 | 0.9 | 3.3–5.2 km | 22–30 min every ~2.3 h |
+| Zone | km² per sector | Period | Lifetime | Chance | Birth radius | Drift (m/game min) | Real-time feel |
+|---|---|---|---|---|---|---|---|
+| Wet coast | 4 | 560 (9.3 h) | 165–240 | 0.45 | 1.6–2.6 km | 5–9 | 21–30 min of rain every ~2.6 h |
+| Temperate | 7 | 2,000 (~1.4 d) | 120–240 | 0.4 | 3.5–5.4 km | 8–14 | 15–30 min every ~10 h |
+| Alpine | 12 | 1,100 (18 h) | 180–240 | 0.45 | 3.3–5.2 km | 6–12 | 22–30 min every ~5 h |
+
+Chances were halved on 2026-09-26: at 0.8–0.9 the wettest places were under
+rain nearly 40 % of a season, too much to play in.
+
+Wet-coast showers drift slowest so they stay near the shore they formed on.
+
+The heading follows the rain-season calendar world-wide and is fixed at birth,
+so each cell moves in a straight line. Winter and summer are not opposite:
+the summer wind comes from the east-southeast so it crosses the central
+Valdran massif before reaching Aldermark.
+
+| Season | Drift heading |
+|---|---|
+| Winter | east-northeast (22.5° north of east) |
+| Spring | turns through north |
+| Summer | west-northwest (22.5° north of west) |
+| Autumn | turns through south |
 
 A rain event must be felt inside a play session: 15–30 real minutes. Games
 with compressed clocks converge on 10–25 real minutes per event regardless
@@ -104,59 +128,58 @@ min), Black Desert's 40–60 min draws "30 is enough" complaints, and Red
 Dead Online's 1–2 min reads as broken, so the floor stays at 15 and the cap
 is 30. Dryness is expressed by the gap between events,
 not by shorter events. Measured share of time a plot is wet (30 game days,
-seed 42, Valdran: 22 coastal, 15 temperate, 1 shadow, 1 alpine sector):
-wet coast 25 %, temperate 18 %, alpine 19 %, rain shadow 14 %. Cells reach
-3–5 km, so the rain shadow is "the least rainy place", never bone dry — most
-of its rain is spill from the zones around it.
+seed 42, current bake), winter / summer wind: wet coast 12.5 / 11.9 %,
+temperate 10.0 / 10.4 %, alpine 11.4 / 11.4 %. Zone averages barely move with
+the season; the lee moves rain from one side of a massif to the other.
 
 Two lessons from tuning on the real bake: sector count must follow zone
 area (a grid-bucket cut gave the 1 km coastal band ten times too many
 sectors), and 3–5 km coastal cells centred in that band soaked every zone
 behind it — hence the small shoreline showers. The ignored test
 `weather_zone_shares_from_bake` in `terrain/src/tests.rs` re-measures this
-from baked climate files in under a second.
+from the baked climate files and sector list in seconds, for winter and
+summer wind.
 
-### Seasonal rain in western Valdran
+### Orographic rain
 
-`data-src/weather.json` defines a winter-wet, summer-dry region around
-Aldermark at `(-1475.2, 4741.6)`. The multiplier applies fully to cell birth
-positions within 6 km and fades to the base schedule between 6 and 8 km.
-Cells outside the region retain their original schedules. This includes
-all nearby coastal and inland cells that can reach the village.
+A cell born downwind of a ridge has little moisture left. At birth, the
+sector's ridge profile is read in the upwind direction (the cell's heading
++ 180°, interpolated between the 16 baked headings):
 
-The calendar follows the existing solstices and equinoxes:
+- The profile holds the highest land within 14 km upwind, the lowest of three
+  parallel rays 1 km apart, so a lone spur casts no shadow. 1 km of open sea
+  on the centre ray ends the scan; inlets do not.
+- `lee = smoothstep(1000, 1400, ridge) * (1 - smoothstep(700, 1200, elevation))`.
+  Coastal ranges (about 1,000 m on seed 42) stay under the threshold; sectors
+  on high ground catch their own rain.
+- A full lee leaves 11 % of the chance. The windward side keeps the base
+  schedule; nothing is boosted.
 
-| Season | Dates | Chance multiplier in the region core | Village wet-time target |
-|---|---|---|---|
-| Winter | 12/30–3/29 | 1.0 | about 37% |
-| Spring | 3/30–6/29 | smoothly decreases from 1.0 to 0.11 | about 21% on average |
-| Summer | 6/30–9/29 | 0.11 | about 5% |
-| Autumn | 9/30–12/29 | smoothly increases from 0.11 to 1.0 | about 21% on average |
+The check uses the birth heading, so an accepted event keeps its duration,
+strength and fade across season changes. `WEATHER_BIAS` still multiplies the
+final chance. Thresholds live in `weather.rs`, so retuning needs no re-bake.
 
-The targets describe time spent under rain at the village, not the chance
-of a single sector producing a cell. Overlapping cells make those different
-quantities. Spring and autumn use smoothstep interpolation; winter and summer
-hold their values. The multiplier is evaluated at the cell's scheduled birth,
-so an accepted event keeps its original duration, strength and fade even
-across season boundaries. `WEATHER_BIAS` still multiplies the final chance.
+With the seasonal wind, western Valdran is wet in winter and drier in summer,
+and the lowlands east of the central massif flip. `node tools/measure-weather.mjs
+20 [x z]` samples 20 game years (bias 1, rain above 0.01, 5-minute step) at the
+spawn or a given point. Seed 42, winter / spring / summer / autumn:
 
-The configuration is compiled into both native Rust and client WASM. No
-terrain re-bake or sector-file migration is needed. After rebuilding WASM,
-run `node tools/measure-weather.mjs 20` from the repository root to sample
-20 game years at the configured player spawn, with `bias=1`, rain intensity
-above 0.01, and a five-game-minute step.
+| Point | Wet time |
+|---|---|
+| Aldermark (-1475, 4741), NW tip of the massif | 20.3 / 11.3 / 2.9 / 14.5 % |
+| East lowland (10000, 9000) | 6.9 / 16.2 / 20.1 / 15.8 % |
+| Southwest plain (-2500, 11000) | 12.9 / 8.9 / 4.3 / 10.5 % |
+| Southeast (6000, 16000) | 4.4 / 14.1 / 22.9 / 12.8 % |
 
-With the current seed-42 bake (104 sectors), that sample gives winter 36.8%,
-spring 21.6%, summer 4.8%, autumn 20.7%, and an annual mean of 21.0%.
-The same sample before seasonality averaged 36.7%, so yearly wet time drops
-by about 43%. These are long-run shares; individual years and nearby
-positions vary.
+Annual means are 9–15 %. Spring turns the wind through north, putting the
+massif south of Aldermark upwind; autumn turns through south and brings sea
+air.
 
 Derived values: `rainIntensity = rain(x, z, t)`; `cloudFactor =
 smoothstep(0.35, 0.80, rain)`. There is no separate background cloud layer:
-in a quarter view the sky is never on screen, so a drifting shadow pattern
-would only bring back the sweeping border this model exists to avoid. A cell's
-ramp-up is what darkens the ground before rain.
+in a quarter view the sky is never on screen, and a fast shadow pattern would
+bring back the sweeping border. A cell's ramp-up is what darkens the ground
+before rain.
 
 ### Where the function lives
 
@@ -186,7 +209,9 @@ implementation, no drift.
   tree files. The sector list at `/api/terrain/weather-sectors?v=<tag>` is
   served from memory as immutable; the tag in the URL is the cache key.
 - `PROTOCOL_VERSION` 69 → 70; agent-client 0.50.0 lists `WeatherSync` as
-  noise so it never wakes the LLM. Version 78 adds `rain_override`.
+  noise so it never wakes the LLM. Version 78 adds `rain_override`. Version
+  102 makes cells drift; the wire is unchanged, but an older build would place
+  rain elsewhere than the server.
 - One weather broadcast per 30 s. Rain exposure evaluates the active cells
   once per second and shares them across player samples, using cached sectors
   and room footprints without terrain IO.
@@ -287,8 +312,8 @@ gameplay reason for players to read the weather ahead.
 ### Weather radar (debug overlay)
 
 RADAR in the debug panel opens the tool used while tuning the schedule: every
-live cell over the baked region minimaps, coloured by stage, with the radius
-and the time left; the rain at the player and when the next one reaches them;
+live cell over the baked region minimaps, coloured by stage, with the radius,
+the time left and a line to where its centre will be when it dies; the rain at the player and when the next one reaches them;
 and a scrub that evaluates the same function up to half a game day ahead,
 with a fast-forward. It reads the server clock, never the sun-debug display
 hour, and samples on its own 250 ms timer rather than the render loop, so the
@@ -372,7 +397,7 @@ times. Rain entries never activate from the clock alone.
 - Unit: determinism (fixed seed → golden cells), one-cell-per-sector invariant
   (`life ≤ 0.9·P`, cells never overlap in a sector), zone wet-time shares within
   ±5 pp of the table over 30 game days, X-wrap of sectors at the seam, envelope
-  monotone up/down.
+  monotone up/down, seasonal drift heading within the zone speed range.
 - Bake: every settlement in `data/map_labels.json` lands on a land zone;
   sea plots are zone 0.
 - Protocol: `WeatherSync` round-trip through the codec.

@@ -18,8 +18,8 @@ pub struct ClimatePlotGrid {
 }
 
 /// Ground area per sector by zone; tuned so the wet coast hosts several cells
-/// at once while the rain shadow rarely hosts one.
-pub const SECTOR_KM2: [f32; 5] = [0.0, 4.0, 7.0, 36.0, 12.0];
+/// at once.
+pub const SECTOR_KM2: [f32; 4] = [0.0, 4.0, 7.0, 12.0];
 pub const MAX_SPOTS_PER_SECTOR: usize = 16;
 /// Spots sit this far inside their zone so a cell's core stays in its own
 /// climate; a thin zone falls back to a smaller margin.
@@ -89,14 +89,19 @@ fn pick_hash(seed: u64, zone: u8, plot: usize) -> u64 {
     )
 }
 
-pub fn place_sectors(grid: &ClimatePlotGrid, seed: u64) -> WeatherSectors {
+/// `terrain` gives a spot's ground elevation and upwind ridge profile.
+pub fn place_sectors(
+    grid: &ClimatePlotGrid,
+    seed: u64,
+    terrain: impl Fn([f32; 2]) -> (u16, Vec<u16>),
+) -> WeatherSectors {
     // WeatherSync crosses to JS as a Number; keep the seed exact there.
     let seed = seed & ((1u64 << 53) - 1);
     let dist = grid.border_distance();
     let sea = grid.sea_distance();
     let plot_km2 = (grid.plot_m / 1000.0).powi(2);
     let mut sectors = Vec::new();
-    for zone in 1u8..=4 {
+    for zone in 1u8..=3 {
         let plots: Vec<usize> = (0..grid.zones.len())
             .filter(|&i| grid.zones[i] == zone)
             .collect();
@@ -161,7 +166,7 @@ pub fn place_sectors(grid: &ClimatePlotGrid, seed: u64) -> WeatherSectors {
             let mut near: Vec<usize> = candidates.clone();
             near.sort_by(|&a, &b| dist2(a, c).total_cmp(&dist2(b, c)).then(a.cmp(&b)));
             near.truncate(MAX_SPOTS_PER_SECTOR);
-            let spots = near
+            let spots: Vec<[f32; 2]> = near
                 .iter()
                 .map(|&i| {
                     let (x, z) = xz(i);
@@ -171,7 +176,13 @@ pub fn place_sectors(grid: &ClimatePlotGrid, seed: u64) -> WeatherSectors {
                     ]
                 })
                 .collect();
-            sectors.push(Sector { zone, spots });
+            let (elevation_m, upwind_ridge_m) = terrain(spots[0]);
+            sectors.push(Sector {
+                zone,
+                spots,
+                elevation_m,
+                upwind_ridge_m,
+            });
         }
     }
     WeatherSectors {
@@ -187,6 +198,10 @@ mod tests {
 
     /// 256 × 256 plots of 32 m (8.2 km square): sea ring, wet coast band,
     /// temperate interior.
+    fn flat(_: [f32; 2]) -> (u16, Vec<u16>) {
+        (0, Vec::new())
+    }
+
     fn grid() -> ClimatePlotGrid {
         let n = 256;
         let mut zones = vec![0u8; n * n];
@@ -221,7 +236,7 @@ mod tests {
         let g = grid();
         let dist = g.border_distance();
         let sea = g.sea_distance();
-        let ws = place_sectors(&g, 42);
+        let ws = place_sectors(&g, 42, flat);
         assert!(!ws.sectors.is_empty());
         for s in &ws.sectors {
             assert!((1..=MAX_SPOTS_PER_SECTOR).contains(&s.spots.len()));
@@ -244,7 +259,7 @@ mod tests {
     #[test]
     fn sector_count_follows_zone_area() {
         let g = grid();
-        let ws = place_sectors(&g, 42);
+        let ws = place_sectors(&g, 42, flat);
         let wet = ws.sectors.iter().filter(|s| s.zone == 1).count();
         let temperate = ws.sectors.iter().filter(|s| s.zone == 2).count();
         // wet band: 240² − 176² plots; interior: 176² plots
@@ -261,9 +276,9 @@ mod tests {
     #[test]
     fn placement_is_deterministic_per_seed() {
         let g = grid();
-        assert_eq!(place_sectors(&g, 42), place_sectors(&g, 42));
-        let a = place_sectors(&g, 42);
-        let b = place_sectors(&g, 43);
+        assert_eq!(place_sectors(&g, 42, flat), place_sectors(&g, 42, flat));
+        let a = place_sectors(&g, 42, flat);
+        let b = place_sectors(&g, 43, flat);
         assert_eq!(a.sectors.len(), b.sectors.len());
         assert_eq!((a.seed, b.seed), (42, 43));
         assert_ne!(
@@ -286,7 +301,7 @@ mod tests {
                 };
             }
         }
-        let ws = place_sectors(&g, 1);
+        let ws = place_sectors(&g, 1, flat);
         assert!(ws.sectors.iter().any(|s| s.zone == 1));
     }
 }

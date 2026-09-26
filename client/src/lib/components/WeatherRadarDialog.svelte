@@ -139,6 +139,12 @@
     ctx.lineWidth = 1
     ctx.beginPath()
     ctx.arc(at.x, at.y, r, 0, Math.PI * 2)
+    // Where the centre will be when the cell dies.
+    ctx.moveTo(at.x, at.y)
+    ctx.lineTo(
+      at.x + cell.vx * cell.remainMin * SCALE,
+      at.y + cell.vz * cell.remainMin * SCALE
+    )
     ctx.stroke()
   }
 

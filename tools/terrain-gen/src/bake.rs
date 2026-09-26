@@ -12,7 +12,7 @@ use crate::map_tile::{render_region_pyramid, TILES_PER_REGION};
 use anyhow::{Context, Result};
 use onlinerpg_shared::world::WORLD_MIN_X;
 use onlinerpg_shared::worldgen::{
-    climate::ClimateFields,
+    climate::{elevation_at, upwind_ridges, ClimateFields},
     coasts, continent, elevation, erosion, rivers, roads, settlements,
     tile_bake::{self, bridges},
     vegetation,
@@ -742,7 +742,9 @@ fn write_climate_regions(
         z0: WORLD_MIN_X,
         zones,
     };
-    let sectors = place_sectors(&grid, map.config.seed);
+    let sectors = place_sectors(&grid, map.config.seed, |[x, z]| {
+        (elevation_at(map, x, z), upwind_ridges(map, x, z))
+    });
     let path = coords::weather_sectors_path(out);
     std::fs::write(&path, serde_json::to_vec(&sectors)?)
         .with_context(|| format!("write {}", path.display()))?;

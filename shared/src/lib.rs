@@ -190,7 +190,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v99: authoritative furniture interaction positions.
 /// v100: player stalls accept buy orders alongside sale listings.
 /// v101: tip hats accept optional song requests delivered to the performer.
-pub const PROTOCOL_VERSION: u32 = 101;
+/// v102: rain cells drift with the seasonal wind, change size and dry in the lee of ridges.
+pub const PROTOCOL_VERSION: u32 = 102;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

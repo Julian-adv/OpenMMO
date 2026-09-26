@@ -251,6 +251,7 @@ mod rain {
             sectors: vec![Sector {
                 zone: 1,
                 spots: vec![[100.0, 50.0]],
+                ..Default::default()
             }],
         };
         let minute = (0..1440)
