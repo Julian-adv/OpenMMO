@@ -158,11 +158,15 @@ export class ServerMovement {
     this.anchorAt = at
   }
 
-  acceptStopped(progress: MoveProgress, displayed = this.lastPose): boolean {
+  acceptStopped(
+    progress: MoveProgress,
+    displayed = this.lastPose,
+    blendPosition = false
+  ): boolean {
     if (progress.request_id !== this.stopId || progress.status !== 'stopped')
       return false
     this.stopId = null
-    if (this.directionInput) {
+    if (this.directionInput || blendPosition) {
       this.clear(false)
       if (displayed) {
         this.stopBlend = {

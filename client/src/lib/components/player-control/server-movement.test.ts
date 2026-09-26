@@ -240,6 +240,70 @@ describe('keyboard release', () => {
   })
 })
 
+describe('combat stop', () => {
+  it.each([20, 150, 500])(
+    'blends a stop reply delayed by %ims without interrupting the opening swing',
+    (delay) => {
+      const { movement, stop } = setup()
+      movement.request(3, 3, false)
+      movement.acceptPath(path())
+      vi.advanceTimersByTime(100)
+      const moving = movement.sample(() => false)!
+      let attack = buildAttackState(
+        { ...moving, state: 'moving', movementMode: 'run' },
+        1,
+        1
+      )
+      expect(attack.speed).toBe(0)
+      expect(attack.movementMode).toBeUndefined()
+      movement.clear()
+      expect(stop).toHaveBeenCalledExactlyOnceWith(2)
+
+      vi.advanceTimersByTime(delay)
+      expect(movement.sample(() => false)).toBeNull()
+      const progress = stopped(2, 100 + delay)
+      expect(movement.acceptStopped(progress, attack, true)).toBe(true)
+      expect(movement.sample(() => false)?.position).toEqual(moving.position)
+
+      let previousX = moving.position.x
+      for (let elapsed = 20; elapsed <= 120; elapsed += 20) {
+        vi.advanceTimersByTime(20)
+        const pose = movement.sample(() => false)!
+        attack = projectStoppedPlayerState(attack, pose.position, pose.rotation)
+        expect(attack.state).toBe('attack')
+        expect(attack.attackCounter).toBe(1)
+        expect(attack.rotation).toBe(1)
+        expect(attack.speed).toBe(0)
+        expect(attack.position.x).toBeGreaterThan(previousX)
+        expect(attack.position.x).toBeLessThanOrEqual(progress.position.x)
+        previousX = attack.position.x
+      }
+      expect(attack.position).toEqual(progress.position)
+      expect(movement.stopping).toBe(false)
+      expect(movement.sample(() => false)).toBeNull()
+      expect(movement.acceptStopped(progress, attack, true)).toBe(false)
+    }
+  )
+
+  it('discards a combat stop correction when a new move begins', () => {
+    const { movement } = setup()
+    movement.request(3, 3, false)
+    movement.clear()
+    const progress = stopped(2, 150)
+    movement.acceptStopped(
+      progress,
+      { position: { x: 0, y: 0, z: 0 }, rotation: 1, speed: 0 },
+      true
+    )
+    expect(movement.stopping).toBe(true)
+    movement.request(6, 0, false)
+    expect(movement.stopping).toBe(false)
+    vi.advanceTimersByTime(120)
+    expect(movement.sample(() => false)).toBeNull()
+    expect(movement.acceptStopped(progress)).toBe(false)
+  })
+})
+
 describe('server approved movement', () => {
   it.each([20, 150, 250])(
     'keeps dragging continuous with %ims RTT and jittery replies',

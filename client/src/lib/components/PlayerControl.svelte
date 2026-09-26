@@ -567,6 +567,14 @@
     syncLocalEmote(next)
   }
 
+  function applyStoppedPlayerPosition(position: Position, rotation: number) {
+    const nextState = projectStoppedPlayerState(playerState, position, rotation)
+    playerRotation = nextState.rotation
+    currentSpeed = 0
+    writePlayerPosition(position, playerRotation)
+    setPlayerState(nextState)
+  }
+
   gameStore.subscribe((state) => {
     const previousPlayerId = currentPlayer?.id ?? null
     currentPlayer = state.currentPlayer
@@ -717,8 +725,7 @@
 
     if (result.kind === 'ignored_unattackable_target') return
 
-    // Entering attacking drops any moving-state data (the chase that brought us
-    // here), so there is nothing else to reset.
+    currentSpeed = 0
     setPlayerState(result.nextPlayerState)
     transitionTo('attacking')
   }
@@ -807,16 +814,20 @@
       isMovementBlocked(from.x, from.z, to.x, to.z, from.y)
     )
     if (pose) {
-      playerRotation = pose.rotation
-      currentSpeed = pose.speed
-      writePlayerPosition(pose.position, pose.rotation)
-      if (
-        !serverMovement.active &&
-        !serverMovement.stopping &&
-        playerControlMachine.stateName === 'keyboard_moving'
-      )
-        transitionTo('idle')
-      updatePlayerState()
+      if (playerControlMachine.stateName === 'attacking') {
+        applyStoppedPlayerPosition(pose.position, pose.rotation)
+      } else {
+        playerRotation = pose.rotation
+        currentSpeed = pose.speed
+        writePlayerPosition(pose.position, pose.rotation)
+        if (
+          !serverMovement.active &&
+          !serverMovement.stopping &&
+          playerControlMachine.stateName === 'keyboard_moving'
+        )
+          transitionTo('idle')
+        updatePlayerState()
+      }
     }
     const targetId = combatController.targetMonsterId
     if (!targetId || !officialPosition) return
@@ -844,7 +855,6 @@
         transitionToIdle()
         break
       case 'reached_attack_range':
-        serverMovement.clear()
         initiateAttack(targetId)
         break
       case 'chasing':
@@ -2181,11 +2191,15 @@
           return
         }
         if (
-          serverMovement.acceptStopped(progress, {
-            position: currentPlayer.position,
-            rotation: playerRotation,
-            speed: currentSpeed,
-          })
+          serverMovement.acceptStopped(
+            progress,
+            {
+              position: currentPlayer.position,
+              rotation: playerRotation,
+              speed: currentSpeed,
+            },
+            playerControlMachine.stateName === 'attacking'
+          )
         ) {
           officialPosition = { ...progress.position }
           if (
@@ -2198,15 +2212,7 @@
               progress.position.z
             )
             if (serverMovement.stopping) return
-            const stoppedState = projectStoppedPlayerState(
-              playerState,
-              progress.position,
-              progress.rotation
-            )
-            playerRotation = stoppedState.rotation
-            currentSpeed = 0
-            writePlayerPosition(progress.position, playerRotation)
-            setPlayerState(stoppedState)
+            applyStoppedPlayerPosition(progress.position, progress.rotation)
           }
           return
         }
