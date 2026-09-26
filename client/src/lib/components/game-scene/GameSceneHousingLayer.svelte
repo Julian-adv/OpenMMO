@@ -549,6 +549,15 @@
       addDummy(getHousingMaterial(i))
     for (const idx of [WOOD_TEXTURE_IDX, SHUTTER_PANEL_TEXTURE_IDX])
       addDummy(getGhostHousingMaterial(idx))
+    // Roofs take a separate snowy material; warm the textures houses use.
+    const roofTextures = new Set(
+      housingManager
+        .getAllHouses()
+        .flatMap((h) =>
+          h.rooms.map((r) => r.roofTexture % HOUSING_TEXTURES.length)
+        )
+    )
+    for (const idx of roofTextures) addDummy(getHousingMaterial(idx, true))
 
     housingGroup.add(warmupGroup)
 

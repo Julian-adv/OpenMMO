@@ -425,13 +425,31 @@ pub fn weather_day_start_minutes(year: u32, month: u8, day: u8) -> f64 {
     })
 }
 
-/// Seeds ride the wire as JS numbers, so they are taken as `f64` here.
+/// `[rain, snow]` at a point; their sum is the total precipitation. Seeds
+/// ride the wire as JS numbers, so they are taken as `f64` here.
+#[wasm_bindgen]
+pub fn weather_precip_at(seed: f64, bias: f64, t_min: f64, x: f32, z: f32) -> Vec<f32> {
+    WEATHER_SECTORS.with(|s| {
+        let cells = crate::weather::cells_at(&s.borrow(), seed as u64, bias, t_min);
+        let p = crate::weather::precip_at(&cells, x, z);
+        vec![p.rain, p.snow]
+    })
+}
+
+/// Rain and snow together, for the radar and tools.
 #[wasm_bindgen]
 pub fn weather_rain_at(seed: f64, bias: f64, t_min: f64, x: f32, z: f32) -> f32 {
     WEATHER_SECTORS.with(|s| {
         let cells = crate::weather::cells_at(&s.borrow(), seed as u64, bias, t_min);
         crate::weather::rain_at(&cells, x, z)
     })
+}
+
+/// 0..1 snow lying on the ground.
+#[wasm_bindgen]
+pub fn weather_snow_cover_at(seed: f64, bias: f64, t_min: f64, x: f32, z: f32) -> f32 {
+    WEATHER_SECTORS
+        .with(|s| crate::weather::snow_cover_at(&s.borrow(), seed as u64, bias, x, z, t_min))
 }
 
 #[wasm_bindgen]
@@ -454,6 +472,7 @@ struct WeatherCellJs {
     /// Game minutes until the cell dies.
     remain_min: f32,
     stage: &'static str,
+    snow: bool,
 }
 
 /// Every live cell at `t_min`, for the debug radar overlay. The per-frame
@@ -481,6 +500,7 @@ pub fn weather_cells_at(seed: f64, bias: f64, t_min: f64) -> Result<JsValue, JsE
                     crate::weather::CellStage::Raining => "raining",
                     crate::weather::CellStage::Clearing => "clearing",
                 },
+                snow: c.snow,
             })
             .collect()
     });

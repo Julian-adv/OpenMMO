@@ -122,9 +122,10 @@
     // Matches rain_falloff: flat to 70 % of the radius, then a short fade.
     const gradient = ctx.createRadialGradient(at.x, at.y, 0, at.x, at.y, r)
     const peak = 0.12 + 0.5 * cell.env
-    gradient.addColorStop(0, `rgba(90, 169, 230, ${peak})`)
-    gradient.addColorStop(0.7, `rgba(90, 169, 230, ${peak})`)
-    gradient.addColorStop(1, 'rgba(90, 169, 230, 0)')
+    const rgb = cell.snow ? '235, 240, 250' : '90, 169, 230'
+    gradient.addColorStop(0, `rgba(${rgb}, ${peak})`)
+    gradient.addColorStop(0.7, `rgba(${rgb}, ${peak})`)
+    gradient.addColorStop(1, `rgba(${rgb}, 0)`)
     ctx.fillStyle = gradient
     ctx.beginPath()
     ctx.arc(at.x, at.y, r, 0, Math.PI * 2)
@@ -405,7 +406,7 @@
           <tbody>
             {#each cells as cell (cell.sector)}
               <tr>
-                <td>{zoneName(cell.zone)}</td>
+                <td>{zoneName(cell.zone)}{cell.snow ? ' · snow' : ''}</td>
                 <td><span class="chip {cell.stage}">{cell.stage}</span></td>
                 <td class="num">{(cell.radiusM / 1000).toFixed(1)} km</td>
                 <td class="num">{formatGameMinutes(cell.remainMin)}</td>

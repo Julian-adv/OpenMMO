@@ -1,9 +1,14 @@
 import {
   weather_cloud_factor,
   weather_day_start_minutes,
-  weather_rain_at,
+  weather_precip_at,
 } from '../wasm/onlinerpg_shared'
-import type { LocalWeather } from '../stores/weatherStore'
+import {
+  forcedPrecip,
+  type LocalWeather,
+  type Precip,
+  type ServerWeather,
+} from '../stores/weatherStore'
 import type { CalendarDate } from './celestialSimulation'
 
 /** Game minutes since the epoch, using the shared calendar. */
@@ -13,17 +18,27 @@ export function gameMinutesAt(date: CalendarDate, gameHour: number): number {
   )
 }
 
+/** Rain and snow at a point and time, honouring the admin override. */
+export function precipAt(
+  w: ServerWeather,
+  tMin: number,
+  x: number,
+  z: number
+): Precip {
+  const forced = forcedPrecip(w)
+  if (forced) return forced
+  const [rain, snow] = weather_precip_at(w.seed, w.bias, tMin, x, z)
+  return { rain, snow }
+}
+
 export function sampleLocalWeather(
-  seed: number,
-  bias: number,
+  w: ServerWeather,
   date: CalendarDate,
   gameHour: number,
   x: number,
-  z: number,
-  rainOverride: number | null = null
+  z: number
 ): LocalWeather {
-  const rain =
-    rainOverride ??
-    weather_rain_at(seed, bias, gameMinutesAt(date, gameHour), x, z)
-  return { rain, cloud: weather_cloud_factor(rain) }
+  const { rain, snow } = precipAt(w, gameMinutesAt(date, gameHour), x, z)
+  const precip = rain + snow
+  return { rain, snow, precip, cloud: weather_cloud_factor(precip) }
 }

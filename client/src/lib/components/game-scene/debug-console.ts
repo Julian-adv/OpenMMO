@@ -11,6 +11,7 @@ export interface DebugConsoleDeps {
   getLoopProfileEnabled: () => boolean
   setLoopProfileEnabled: (enabled: boolean) => void
   togglePuddles: () => boolean
+  forceSnowCover: (cover: number | null) => void
   renderer: WebGPURenderer
   scene: THREE.Scene
   getGrassGroup: () => THREE.Group | undefined
@@ -31,6 +32,7 @@ const DEBUG_KEYS = [
   '__toggleReflection',
   '__toggleTerrain',
   '__togglePuddles',
+  '__snowCover',
   '__countMeshes',
   '__inspectSplat',
 ] as const
@@ -72,6 +74,14 @@ export function registerDebugConsole(
 
   w.__togglePuddles = () => {
     console.log(`[Toggle] puddles visible=${getDeps().togglePuddles()}`)
+  }
+
+  // Pins the ground snow cover (0..1) for look tuning; no argument releases it.
+  w.__snowCover = (cover?: number) => {
+    const pinned =
+      typeof cover === 'number' ? Math.max(0, Math.min(1, cover)) : null
+    getDeps().forceSnowCover(pinned)
+    console.log(`[Snow] cover ${pinned === null ? 'follows weather' : pinned}`)
   }
 
   w.__toggleHousing = () => {

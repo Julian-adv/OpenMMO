@@ -154,6 +154,7 @@ function collectFlatRoof(room: RoomData, target: GeoEntry[]) {
       totalD
     ),
     textureIndex: roofIdx,
+    outdoor: true,
   })
 }
 
@@ -242,7 +243,7 @@ function collectGabledRoof(
     _roofMatrix.makeTranslation(tx, yCenter, tz)
     geo.applyMatrix4(_roofMatrix)
 
-    frontTarget.push({ geo, textureIndex: roofIdx })
+    frontTarget.push({ geo, textureIndex: roofIdx, outdoor: true })
   }
 
   // Gable window fit check (same for both ends)

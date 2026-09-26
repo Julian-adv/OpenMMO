@@ -1353,6 +1353,7 @@ impl SharedState {
                 bias,
                 sectors_tag,
                 rain_override,
+                ..
             } => {
                 self.weather.sync(*seed, *bias, sectors_tag, *rain_override);
                 return urgency;

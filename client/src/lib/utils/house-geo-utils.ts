@@ -111,6 +111,8 @@ export interface GeoEntry {
   textureIndex: number
   /** Timber trim (pillars, beams, braces) — hidden when the wall is ghosted */
   decor?: boolean
+  /** Open to the sky, so lying snow settles on it. */
+  outdoor?: boolean
 }
 
 export interface RoomFootprint {
@@ -234,7 +236,7 @@ export function addMergedMeshes(
 
   const byTex = new Map<number, THREE.BufferGeometry[]>()
   for (const e of entries) {
-    const key = e.textureIndex * 2 + (e.decor ? 1 : 0)
+    const key = e.textureIndex * 4 + (e.decor ? 1 : 0) + (e.outdoor ? 2 : 0)
     const list = byTex.get(key)
     if (list) {
       list.push(e.geo)
@@ -245,18 +247,20 @@ export function addMergedMeshes(
 
   let count = 0
   for (const [key, geos] of byTex) {
-    const texIdx = key >> 1
+    const texIdx = key >> 2
     const decor = (key & 1) === 1
+    const outdoor = (key & 2) === 2
     const merged = mergeGeometries(geos, false)
     for (const g of geos) g.dispose()
     if (merged) {
-      const mesh = new THREE.Mesh(merged, getHousingMaterial(texIdx))
+      const mesh = new THREE.Mesh(merged, getHousingMaterial(texIdx, outdoor))
       mesh.castShadow = true
       mesh.receiveShadow = true
       // Record the source texture index so any caller can look up a matching
       // material variant for this mesh (e.g. a ghost material for fading).
       mesh.userData.textureIndex = texIdx
       mesh.userData.decor = decor
+      mesh.userData.outdoor = outdoor
       group.add(mesh)
       count++
     }

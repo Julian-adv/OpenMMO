@@ -1,6 +1,8 @@
 // Shared housing/dungeon materials, loaded from GLB maps or standalone textures.
 import * as THREE from 'three'
+import type { MeshStandardNodeMaterial } from 'three/webgpu'
 import { loadSplatLayer } from './splatLayerLoader'
+import { snowyStandardMaterial } from '../shaders/snow-cover-nodes'
 
 export interface HousingTextureEntry {
   label: string
@@ -258,11 +260,23 @@ const materialCache = new Map<number, THREE.MeshStandardMaterial>()
 /** Semi-transparent ghost material cache — created on demand, synced with base materials. */
 const ghostMaterialCache = new Map<number, THREE.MeshStandardMaterial>()
 
+/** Roof variants that gather lying snow, kept in step with the base material. */
+const outdoorMaterialCache = new Map<number, MeshStandardNodeMaterial>()
+
 /** Cached materials use a fallback color until their textures load. */
 export function getHousingMaterial(
-  textureIndex: number
+  textureIndex: number,
+  outdoor = false
 ): THREE.MeshStandardMaterial {
   const idx = textureIndex % HOUSING_TEXTURES.length
+  if (outdoor) {
+    let snowy = outdoorMaterialCache.get(idx)
+    if (!snowy) {
+      snowy = snowyStandardMaterial(getHousingMaterial(idx))
+      outdoorMaterialCache.set(idx, snowy)
+    }
+    return snowy as unknown as THREE.MeshStandardMaterial
+  }
   let mat = materialCache.get(idx)
   if (!mat) {
     const entry = HOUSING_TEXTURES[idx]
@@ -290,7 +304,9 @@ export function getHousingMaterial(
 export function setMeshGhost(mesh: THREE.Mesh, ghost: boolean) {
   const idx = mesh.userData.textureIndex
   if (typeof idx !== 'number') return
-  mesh.material = ghost ? getGhostHousingMaterial(idx) : getHousingMaterial(idx)
+  mesh.material = ghost
+    ? getGhostHousingMaterial(idx)
+    : getHousingMaterial(idx, mesh.userData.outdoor === true)
 }
 
 /** Shared semi-transparent material for an occluding surface. */
@@ -365,6 +381,12 @@ export function initHousingTextures(): Promise<void> {
         mat.visible = true
         mat.needsUpdate = true
 
+        const snowy = outdoorMaterialCache.get(idx)
+        if (snowy) {
+          snowy.copy(mat)
+          snowy.needsUpdate = true
+        }
+
         const oldGhost = ghostMaterialCache.get(idx)
         if (oldGhost) {
           const opacity = oldGhost.opacity
@@ -419,5 +441,7 @@ export function disposeHousingMaterials() {
     mat.dispose()
   }
   ghostMaterialCache.clear()
+  for (const mat of outdoorMaterialCache.values()) mat.dispose()
+  outdoorMaterialCache.clear()
   _initPromise = null
 }

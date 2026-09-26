@@ -1291,6 +1291,7 @@ export function handleServerMessage(
         bias: data.bias,
         sectorsTag: data.sectors_tag,
         rainOverride: data.rain_override ?? null,
+        snowOverride: data.snow_override ?? false,
       })
       break
     }

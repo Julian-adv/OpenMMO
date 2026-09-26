@@ -7,7 +7,7 @@
     createRainPuddleUniforms,
     updateRainPuddleLighting,
   } from '../shaders/rain-puddle-nodes'
-  import { weather_rain_at } from '../wasm/onlinerpg_shared'
+  import { weather_snow_cover_at } from '../wasm/onlinerpg_shared'
   import { onMount } from 'svelte'
   import {
     gameStore,
@@ -41,6 +41,9 @@
   import GameSceneTreeLayer from './game-scene/GameSceneTreeLayer.svelte'
   import GameSceneWindParticles from './game-scene/GameSceneWindParticles.svelte'
   import GameSceneRainLayer from './game-scene/GameSceneRainLayer.svelte'
+  import GameSceneSnowLayer from './game-scene/GameSceneSnowLayer.svelte'
+  import { snowCover } from '../shaders/snow-cover-nodes'
+  import { SnowCoverTracker } from '../utils/snowCover'
   import {
     getLightningDirection,
     getLightningStrength,
@@ -108,11 +111,16 @@
   } from '../stores/timeStore'
   import {
     NO_WEATHER,
+    forcedPrecip,
     weather,
     weatherSectorsReady,
     type LocalWeather,
   } from '../stores/weatherStore'
-  import { gameMinutesAt, sampleLocalWeather } from '../utils/weatherSample'
+  import {
+    gameMinutesAt,
+    precipAt,
+    sampleLocalWeather,
+  } from '../utils/weatherSample'
   import {
     debugVisible,
     cameraRotationEnabled,
@@ -210,6 +218,8 @@
   let terrainLayerRef = $state<GameSceneTerrainLayer | undefined>(undefined)
   const rainPuddleUniforms = createRainPuddleUniforms()
   let puddlesVisible = true
+  const snowCoverTracker = new SnowCoverTracker()
+  let pinnedSnowCover: number | null = null
   let terrainTiles = $state<TerrainTile[]>([])
   let terrainCenterChunk = $state({ x: 0, z: 0 })
   const terrainHeightManager = new TerrainHeightManager()
@@ -252,6 +262,7 @@
   let treeLayerRef = $state<GameSceneTreeLayer | undefined>(undefined)
   let windParticlesRef = $state<GameSceneWindParticles | undefined>(undefined)
   let rainLayerRef = $state<GameSceneRainLayer | undefined>(undefined)
+  let snowLayerRef = $state<GameSceneSnowLayer | undefined>(undefined)
   let housingLayerRef = $state<GameSceneHousingLayer | undefined>(undefined)
   let dungeonLayerRef = $state<GameSceneDungeonLayer | undefined>(undefined)
   let groundItemsLayerRef = $state<GameSceneGroundItemsLayer | undefined>(
@@ -435,6 +446,8 @@
     if (windGroup) windGroup.visible = !underground
     const rainGroup = rainLayerRef?.getGroup()
     if (rainGroup) rainGroup.visible = !underground
+    const snowGroup = snowLayerRef?.getGroup()
+    if (snowGroup) snowGroup.visible = !underground
     const riverRocksGroup = riverRocksRef?.getGroup?.()
     if (riverRocksGroup) riverRocksGroup.visible = !underground
     const shoreSprayGroup = shoreSprayRef?.getGroup?.()
@@ -774,7 +787,7 @@
         const windStart = performance.now()
         // Petals and seeds stop spawning under rain; the live ones age out.
         const grassCount =
-          localWeather.rain > 0.2
+          localWeather.precip > 0.2
             ? 0
             : (grassLayerRef?.getPlayerChunkGrassCount() ?? 0)
         if (windState)
@@ -782,21 +795,47 @@
         loopProfiler.record('windParticles', performance.now() - windStart)
       }
 
+      const weatherNow = $weather
+      const gameMinutes = gameMinutesAt(calDate, calendarSystem.getGameHour())
       {
         const rainStart = performance.now()
         const rain = localWeather.rain
         const indoor = $playerInsideHouseId !== null
         rainLayerRef?.update(deltaTime, camera, indoor ? 0 : rain, windState)
+        snowLayerRef?.update(
+          deltaTime,
+          camera,
+          indoor ? 0 : localWeather.snow,
+          windState
+        )
         updateRainAmbience(rain, indoor, deltaTime / 1000)
         setRainIntensity(rain)
-        setSkyRain(rain)
+        setSkyRain(localWeather.precip)
         loopProfiler.record('rain', performance.now() - rainStart)
+      }
+
+      {
+        const snowStart = performance.now()
+        const cover = snowCoverTracker.update(
+          realDeltaSeconds,
+          () =>
+            weatherNow && $weatherSectorsReady && currentPlayer
+              ? weather_snow_cover_at(
+                  weatherNow.seed,
+                  weatherNow.bias,
+                  gameMinutes,
+                  currentPlayer.position.x,
+                  currentPlayer.position.z
+                )
+              : null,
+          weatherNow ? (forcedPrecip(weatherNow)?.snow ?? null) : null
+        )
+        snowCover.value = $isUnderground ? 0 : (pinnedSnowCover ?? cover)
+        loopProfiler.record('snow', performance.now() - snowStart)
       }
 
       if (graphicsPreset.enableRainPuddles) {
         const puddleStart = performance.now()
-        const weatherNow = $weather
-        const gameMinutes = gameMinutesAt(calDate, calendarSystem.getGameHour())
         if (
           weatherNow &&
           ($weatherSectorsReady || weatherNow.rainOverride !== null)
@@ -804,14 +843,12 @@
           terrainLayerRef?.updateRainPuddles(
             realDeltaSeconds,
             (x, z, secondsAgo) =>
-              weatherNow.rainOverride ??
-              weather_rain_at(
-                weatherNow.seed,
-                weatherNow.bias,
+              precipAt(
+                weatherNow,
                 gameMinutes - (secondsAgo * 1440) / SUN_DAY_DURATION_SECONDS,
                 x,
                 z
-              ),
+              ).rain,
             weatherNow.rainOverride === null
           )
         loopProfiler.record('puddles', performance.now() - puddleStart)
@@ -827,7 +864,7 @@
       objectOverlayRef?.update(deltaTime, camera)
 
       // Age the local player's wet footprints and stamp new ones
-      footprintsRef?.update(deltaTime)
+      footprintsRef?.update(deltaTime, snowCover.value)
 
       // Update camera with preserved offset
       const cameraUpdateStart = performance.now()
@@ -901,6 +938,7 @@
         treeLayerRef,
         windParticlesRef,
         rainLayerRef,
+        snowLayerRef,
         housingLayerRef,
         objectOverlayRef,
         currentPlayerModel,
@@ -1015,13 +1053,11 @@
   function sampleLocalWeatherNow(calDate: CalendarDate): LocalWeather {
     if (!$weather || !currentPlayer || $isUnderground) return NO_WEATHER
     return sampleLocalWeather(
-      $weather.seed,
-      $weather.bias,
+      $weather,
       calDate,
       calendarSystem.getGameHour(),
       currentPlayer.position.x,
-      currentPlayer.position.z,
-      $weather.rainOverride
+      currentPlayer.position.z
     )
   }
 
@@ -1040,7 +1076,7 @@
       sunLightSnapshot,
       eclipseFactor: eclipseState.factor,
       cloudFactor: localWeather.cloud,
-      rainIntensity: localWeather.rain,
+      rainIntensity: localWeather.precip,
       lightningStrength: getLightningStrength(),
       lightningDirection: getLightningDirection(),
       underground: $isUnderground,
@@ -1067,6 +1103,7 @@
         loopProfileEnabled = v
       },
       togglePuddles: () => (puddlesVisible = !puddlesVisible),
+      forceSnowCover: (cover) => (pinnedSnowCover = cover),
       renderer,
       scene,
       getGrassGroup: () => grassLayerRef?.getGroup(),
@@ -1400,6 +1437,15 @@
   />
 {/key}
 
+{#key graphicsPreset.rainParticleLimit}
+  <GameSceneSnowLayer
+    bind:this={snowLayerRef}
+    playerPosition={currentPlayer?.position ?? null}
+    heightManager={terrainHeightManager}
+    maxFlakes={Math.round(graphicsPreset.rainParticleLimit * 2.2)}
+  />
+{/key}
+
 {#if graphicsPreset.enableWaterLayer}
   <GameSceneWaterFieldLayer
     bind:this={waterLayerRef}
@@ -1448,6 +1494,7 @@
   {otherPlayers}
   enableRemote={graphicsPreset.enableRemoteFootprints}
   {waterSurfaceAt}
+  groundHeightAt={(x, z) => terrainHeightManager.groundYOrNull(x, z)}
 />
 
 <T is={entityClipGroupObj} bind:ref={entityClipGroup}>

@@ -203,7 +203,7 @@ pub(crate) mod fishing;
 pub(crate) use deals::band_invariant_holds;
 /// Only the tests name the id from outside; the logic lives in debuff.rs.
 #[cfg(test)]
-pub(crate) use debuff::WET_DEBUFF_ID;
+pub(crate) use debuff::{COLD_DEBUFF_ID, WET_DEBUFF_ID};
 mod abilities;
 mod dungeon;
 mod estate_return;

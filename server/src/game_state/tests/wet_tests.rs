@@ -8,6 +8,7 @@ use crate::game_state::ambient_spawn::MoveStep;
 use onlinerpg_shared::hunger::SATIATION_START;
 use tokio::time::{advance, Duration};
 
+use crate::game_state::COLD_DEBUFF_ID;
 use crate::game_state::WET_DEBUFF_ID as WET;
 
 /// One round per water-check bucket, so the mover is sampled whatever their
@@ -42,15 +43,19 @@ async fn soak(game_state: &GameState, steps: &[MoveStep]) {
     }
 }
 
-async fn wet_remaining(game_state: &GameState, id: &PlayerId) -> Option<Duration> {
+async fn debuff_remaining(game_state: &GameState, id: &PlayerId, debuff: &str) -> Option<Duration> {
     let now = tokio::time::Instant::now();
     let hunger = game_state.hunger.read().await;
     hunger
         .get(id)?
         .debuffs
         .iter()
-        .find(|d| d.def.id == WET)
+        .find(|d| d.def.id == debuff)
         .map(|d| d.until.saturating_duration_since(now))
+}
+
+async fn wet_remaining(game_state: &GameState, id: &PlayerId) -> Option<Duration> {
+    debuff_remaining(game_state, id, WET).await
 }
 
 async fn move_mult(game_state: &GameState, id: &PlayerId) -> f32 {
@@ -70,10 +75,134 @@ mod rain {
     };
 
     fn set_rain(game: &GameState, intensity: f32) {
+        set_override(game, intensity, false);
+    }
+
+    fn set_snow(game: &GameState, intensity: f32) {
+        set_override(game, intensity, true);
+    }
+
+    fn set_override(game: &GameState, intensity: f32, snow: bool) {
         let json = br#"{"version":1,"seed":42,"sectors":[]}"#.to_vec();
         let mut weather = WeatherState::new(serde_json::from_slice(&json).unwrap(), 1.0, json);
         weather.rain_override = Some(intensity);
+        weather.snow_override = snow;
         game.set_weather(weather);
+    }
+
+    async fn cold_remaining(game: &GameState, id: &PlayerId) -> Option<Duration> {
+        debuff_remaining(game, id, COLD_DEBUFF_ID).await
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn snow_chills_after_twenty_game_minutes_and_never_soaks() {
+        let game = make_test_game_state("cold_snow_threshold");
+        let (id, mut rx) = make_wader(&game, "snow_walker").await;
+        set_snow(&game, 1.0);
+        rain_for(&game, 149).await;
+        assert_eq!(cold_remaining(&game, &id).await, None);
+        assert!(drain(&mut rx).is_empty());
+
+        rain_for(&game, 1).await;
+        assert_eq!(
+            cold_remaining(&game, &id).await,
+            Some(Duration::from_secs(450))
+        );
+        assert_eq!(wet_remaining(&game, &id).await, None);
+        assert!(!broadcast_wet_flag(&game, &id).await);
+        assert!((move_mult(&game, &id).await - 0.9).abs() < 1e-6);
+        assert!(drain(&mut rx)
+            .iter()
+            .any(|msg| matches!(msg, ServerMessage::DebuffUpdate { .. })));
+
+        rain_for(&game, 150).await;
+        assert_eq!(
+            cold_remaining(&game, &id).await,
+            Some(Duration::from_secs(300))
+        );
+        rain_for(&game, 1).await;
+        assert_eq!(
+            cold_remaining(&game, &id).await,
+            Some(Duration::from_secs(450))
+        );
+        assert_eq!(wet_remaining(&game, &id).await, None);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn rain_soaks_without_chilling() {
+        let game = make_test_game_state("cold_rain_only_wet");
+        let (id, _rx) = make_wader(&game, "rain_only").await;
+        set_rain(&game, 1.0);
+        rain_for(&game, 300).await;
+        assert!(wet_remaining(&game, &id).await.is_some());
+        assert_eq!(cold_remaining(&game, &id).await, None);
+        assert_eq!(game.hunger.read().await[&id].cold_exposure_secs, 0.0);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn shelter_and_death_reset_snow_exposure() {
+        let game = make_test_game_state("cold_snow_shelter");
+        let (id, _rx) = make_wader(&game, "snow_shelter").await;
+        set_snow(&game, 1.0);
+        rain_for(&game, 149).await;
+
+        let house = house_at(100.0, 49.0, vec![room_at(0, 0)]);
+        game.passability_add_house(&house).await;
+        rain_for(&game, 150).await;
+        assert_eq!(cold_remaining(&game, &id).await, None);
+
+        game.passability_remove_house(&house.id).await;
+        rain_for(&game, 149).await;
+        game.clear_debuffs(&id).await;
+        rain_for(&game, 1).await;
+        assert_eq!(cold_remaining(&game, &id).await, None);
+        rain_for(&game, 149).await;
+        assert!(cold_remaining(&game, &id).await.is_some());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_campfire_warms_off_cold_and_wet_together() {
+        let game = make_test_game_state("cold_campfire");
+        let (id, mut rx) = make_wader(&game, "shivering").await;
+        game.inflict_debuff(&id, WET, Some(true)).await;
+        game.inflict_debuff(&id, COLD_DEBUFF_ID, Some(true)).await;
+        light_fire_at(&game, 100.0, 0).await;
+        drain(&mut rx);
+
+        game.tick_campfire_drying(Duration::from_secs(1)).await;
+        assert_eq!(
+            cold_remaining(&game, &id).await,
+            Some(Duration::from_secs(441))
+        );
+        assert_eq!(
+            wet_remaining(&game, &id).await,
+            Some(Duration::from_secs(441))
+        );
+        assert!(matches!(
+            drain(&mut rx).as_slice(),
+            [ServerMessage::DebuffUpdate { debuffs }] if debuffs.len() == 2
+        ));
+
+        for _ in 0..49 {
+            game.tick_campfire_drying(Duration::from_secs(1)).await;
+        }
+        game.tick_debuffs().await;
+        assert_eq!(cold_remaining(&game, &id).await, None);
+        assert_eq!(wet_remaining(&game, &id).await, None);
+        assert_eq!(move_mult(&game, &id).await, 1.0);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_campfire_warms_a_player_who_is_only_cold() {
+        let game = make_test_game_state("cold_campfire_only");
+        let (id, _rx) = make_wader(&game, "only_cold").await;
+        game.inflict_debuff(&id, COLD_DEBUFF_ID, Some(true)).await;
+        light_fire_at(&game, 100.0, 0).await;
+        game.tick_campfire_drying(Duration::from_secs(1)).await;
+        assert_eq!(
+            cold_remaining(&game, &id).await,
+            Some(Duration::from_secs(441))
+        );
     }
 
     async fn rain_for(game: &GameState, seconds: u64) {

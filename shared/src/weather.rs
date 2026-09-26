@@ -1,13 +1,19 @@
 //! Deterministic regional rain cells; see doc/WEATHER_SYSTEM.md.
 
 mod seasonal;
+mod snow;
+
+pub use snow::snow_cover_at;
 
 use serde::{Deserialize, Serialize};
+
+use std::borrow::Borrow;
 
 use crate::moon::game_day_index;
 use crate::world::{shortest_world_delta_x, wrap_world_x, GameDateTime};
 use crate::worldgen::climate::Climate;
 use crate::worldgen::noise::smoothstep;
+use crate::worldgen::vector_features::project_point_to_segment;
 
 pub const GAME_MINUTES_PER_DAY: i64 = 24 * 60;
 
@@ -131,6 +137,8 @@ pub struct Cell {
     pub progress: f32,
     /// Game minutes left before the cell dies.
     pub remain_min: f32,
+    /// Falls as snow for its whole life; decided at birth.
+    pub snow: bool,
 }
 
 /// Which part of the envelope a cell is in, for the debug radar.
@@ -186,23 +194,75 @@ fn hash01(seed: u64, sector: u64, cycle: i64, salt: u64) -> f64 {
     (x >> 11) as f64 / (1u64 << 53) as f64
 }
 
-/// The current cycle's cell. `bias` scales the seasonal rain chance.
-pub fn sector_cell(
+/// A cell's parameters, drawn once per sector cycle.
+#[derive(Debug, Clone, Copy)]
+struct Event {
+    sector: usize,
+    birth: f64,
+    life: f64,
+    spot: [f32; 2],
+    vx: f32,
+    vz: f32,
+    birth_radius_km: f32,
+    ln_growth: f32,
+    snow: bool,
+}
+
+impl Event {
+    fn cell_at(&self, t_min: f64) -> Option<Cell> {
+        let age = t_min - self.birth;
+        if age < 0.0 || age > self.life {
+            return None;
+        }
+        let progress = (age / self.life) as f32;
+        let env = smoothstep(0.0, ENVELOPE_RISE_END, progress)
+            * (1.0 - smoothstep(ENVELOPE_FALL_START, 1.0, progress));
+        let radius_km =
+            self.birth_radius_km * (self.ln_growth * progress).exp() * (0.6 + 0.4 * env);
+        Some(Cell {
+            sector: self.sector,
+            x: wrap_world_x(self.spot[0] + self.vx * age as f32),
+            z: self.spot[1] + self.vz * age as f32,
+            radius_m: radius_km * 1000.0,
+            vx: self.vx,
+            vz: self.vz,
+            env,
+            progress,
+            remain_min: (self.life - age) as f32,
+            snow: self.snow,
+        })
+    }
+
+    /// Whether the cell's disc ever covers `(x, z)` along its straight path.
+    fn reaches(&self, x: f32, z: f32) -> bool {
+        let life = self.life as f32;
+        let (d2, _) = project_point_to_segment(
+            shortest_world_delta_x(self.spot[0], x),
+            z - self.spot[1],
+            0.0,
+            0.0,
+            self.vx * life,
+            self.vz * life,
+        );
+        let reach = self.birth_radius_km * 1000.0 * self.ln_growth.max(0.0).exp();
+        d2 < reach * reach
+    }
+}
+
+/// `wanted(birth, life)` rejects by time before the costlier draws.
+fn sector_event(
     sectors: &[Sector],
     index: usize,
     seed: u64,
     bias: f64,
-    t_min: f64,
-) -> Option<Cell> {
+    k: i64,
+    wanted: impl Fn(f64, f64) -> bool,
+) -> Option<Event> {
     let sector = &sectors[index];
     if sector.spots.is_empty() {
         return None;
     }
     let sched = zone_schedule(sector.zone);
-    if sched.chance <= 0.0 {
-        return None;
-    }
-    let k = (t_min / sched.period).floor() as i64;
     let id = index as u64;
     let draw = hash01(seed, id, k, 1);
     let chance = sched.chance * bias;
@@ -212,8 +272,7 @@ pub fn sector_cell(
     let life = (sched.life_min + hash01(seed, id, k, 2) * sched.life_var)
         .min(sched.period * MAX_LIFE_SHARE);
     let birth = k as f64 * sched.period + hash01(seed, id, k, 3) * (sched.period - life);
-    let age = t_min - birth;
-    if age < 0.0 || age > life {
+    if !wanted(birth, life) {
         return None;
     }
     let heading = (seasonal::drift_heading(birth)
@@ -223,28 +282,40 @@ pub fn sector_cell(
         return None;
     }
     let spot = sector.spots[(hash01(seed, id, k, 4) * sector.spots.len() as f64) as usize];
-    let progress = (age / life) as f32;
-    let env = smoothstep(0.0, ENVELOPE_RISE_END, progress)
-        * (1.0 - smoothstep(ENVELOPE_FALL_START, 1.0, progress));
     let ln_growth =
         GROWTH_MIN.ln() + (GROWTH_MAX / GROWTH_MIN).ln() * hash01(seed, id, k, 6) as f32;
-    let radius_km = (sched.radius_min_km + sched.radius_var_km * hash01(seed, id, k, 5) as f32)
-        * (ln_growth * progress).exp()
-        * (0.6 + 0.4 * env);
     let speed = sched.drift_min_mpm + sched.drift_var_mpm * hash01(seed, id, k, 7) as f32;
     let (dx, dz) = heading_dir(heading);
-    let (vx, vz) = (speed * dx, speed * dz);
-    Some(Cell {
+    Some(Event {
         sector: index,
-        x: wrap_world_x(spot[0] + vx * age as f32),
-        z: spot[1] + vz * age as f32,
-        radius_m: radius_km * 1000.0,
-        vx,
-        vz,
-        env,
-        progress,
-        remain_min: (life - age) as f32,
+        birth,
+        life,
+        spot,
+        vx: speed * dx,
+        vz: speed * dz,
+        birth_radius_km: sched.radius_min_km + sched.radius_var_km * hash01(seed, id, k, 5) as f32,
+        ln_growth,
+        snow: hash01(seed, id, k, 9) < snow::snow_chance(birth, spot[1], sector.elevation_m),
     })
+}
+
+/// The current cycle's cell. `bias` scales the seasonal rain chance.
+pub fn sector_cell(
+    sectors: &[Sector],
+    index: usize,
+    seed: u64,
+    bias: f64,
+    t_min: f64,
+) -> Option<Cell> {
+    let sched = zone_schedule(sectors[index].zone);
+    if sched.chance <= 0.0 {
+        return None;
+    }
+    let k = (t_min / sched.period).floor() as i64;
+    sector_event(sectors, index, seed, bias, k, |birth, life| {
+        (birth..=birth + life).contains(&t_min)
+    })?
+    .cell_at(t_min)
 }
 
 /// Unit ground vector for a heading in radians counter-clockwise from east;
@@ -282,19 +353,53 @@ pub fn cells_at(sectors: &[Sector], seed: u64, bias: f64, t_min: f64) -> Vec<Cel
         .collect()
 }
 
-/// Rain intensity 0..1 at a world position: the cell falloffs summed and
-/// clamped. Nothing falls outside a cell's radius.
-pub fn rain_at(cells: &[Cell], x: f32, z: f32) -> f32 {
-    let mut sum = 0.0f32;
+/// Precipitation 0..1 at a point, split into its rain and snow parts.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Precip {
+    pub rain: f32,
+    pub snow: f32,
+}
+
+impl Precip {
+    pub fn total(self) -> f32 {
+        self.rain + self.snow
+    }
+}
+
+/// The cell falloffs summed, then scaled together so the total stays within
+/// 1. Nothing falls outside a cell's radius.
+pub fn precip_at<C: Borrow<Cell>>(cells: impl IntoIterator<Item = C>, x: f32, z: f32) -> Precip {
+    let (mut rain, mut snow) = (0.0f32, 0.0f32);
     for c in cells {
-        let dx = shortest_world_delta_x(c.x, x);
-        let dz = z - c.z;
-        let d2 = dx * dx + dz * dz;
-        if d2 < c.radius_m * c.radius_m {
-            sum += c.env * rain_falloff(d2.sqrt() / c.radius_m);
+        let c = c.borrow();
+        let f = c.env * falloff_at(c, x, z);
+        if c.snow {
+            snow += f;
+        } else {
+            rain += f;
         }
     }
-    sum.min(1.0)
+    let scale = 1.0 / (rain + snow).max(1.0);
+    Precip {
+        rain: rain * scale,
+        snow: snow * scale,
+    }
+}
+
+/// Rain and snow together; shelter and cloud treat both alike.
+pub fn rain_at(cells: &[Cell], x: f32, z: f32) -> f32 {
+    precip_at(cells, x, z).total()
+}
+
+fn falloff_at(c: &Cell, x: f32, z: f32) -> f32 {
+    let dx = shortest_world_delta_x(c.x, x);
+    let dz = z - c.z;
+    let d2 = dx * dx + dz * dz;
+    if d2 < c.radius_m * c.radius_m {
+        rain_falloff(d2.sqrt() / c.radius_m)
+    } else {
+        0.0
+    }
 }
 
 /// Share of the radius that rains at full strength; the rest is the fade.
@@ -549,6 +654,7 @@ mod tests {
             env: 0.0,
             progress,
             remain_min: 0.0,
+            snow: false,
         };
         assert_eq!(at(0.0).stage(), CellStage::Forming);
         assert_eq!(at(ENVELOPE_RISE_END - 0.01).stage(), CellStage::Forming);
@@ -570,6 +676,7 @@ mod tests {
             env: 1.0,
             progress: 0.5,
             remain_min: 0.0,
+            snow: false,
         };
         let cells = [cell];
         assert!((rain_at(&cells, -16_400.0, 0.0) - 1.0).abs() < 1e-6);

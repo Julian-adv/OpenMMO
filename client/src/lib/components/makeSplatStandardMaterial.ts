@@ -10,6 +10,7 @@ import {
   applyRainPuddles,
   type RainPuddleUniforms,
 } from '../shaders/rain-puddle-nodes'
+import { applySnowCover } from '../shaders/snow-cover-nodes'
 import {
   Fn,
   Discard,
@@ -36,6 +37,7 @@ import {
   dFdx,
   dFdy,
   TBNViewMatrix,
+  convert,
 } from 'three/tsl'
 import type { Node, TextureNode, UniformNode } from 'three/webgpu'
 import {
@@ -140,6 +142,8 @@ const ATLAS_PX = SLOT_PX * ATLAS_GRID
 const SUBTEX_NORM = ATLAS_SLOT_SIZE / ATLAS_PX
 const BORDER_NORM = ATLAS_BORDER / ATLAS_PX
 const GRID_INV = 1.0 / ATLAS_GRID
+/** `PAL_SNOW` in shared/src/worldgen/tile_bake/constants.rs. */
+const SNOW_SLOT = 3
 
 export function makeSplatStandardMaterial({
   atlas,
@@ -327,54 +331,7 @@ export function makeSplatStandardMaterial({
       neighborDiffuse(n11)
     )
 
-    if (!brush) return vec4(blended, 1.0)
-
-    const b = blended.toVar()
-    const gridActive = smoothstep(float(0.49), float(0.51), brush.gridVisible)
-
-    // Antialiased 1-px line where coords cross an integer
-    const gridLine = (coords: Node<'vec2'>) => {
-      const g = abs(fract(coords.sub(0.5)).sub(0.5)).div(fwidth(coords))
-      return float(1).sub(min(min(g.x, g.y), float(1)))
-    }
-    const line1 = gridLine(fLocalUv.mul(TILE_DIM))
-    const line64 = gridLine(fLocalUv)
-    const linePlot = gridLine(vWorldXZ.div(LAND_PLOT_SIZE))
-    const lineRegion = gridLine(vWorldXZ.add(TILE_DIM / 2).div(REGION_CELLS))
-
-    b.assign(mix(b, vec3(0, 0, 0), line1.mul(0.3).mul(gridActive)))
-    b.assign(mix(b, vec3(1, 1, 1), linePlot.mul(0.7).mul(gridActive)))
-    b.assign(mix(b, vec3(1, 0, 0), line64.mul(gridActive)))
-    b.assign(mix(b, vec3(0.886, 0.725, 0.231), lineRegion.mul(gridActive)))
-
-    const bDist = distance(vWorldXZ, vec2(brush.center))
-    const ringWidth = max(float(0.5), float(brush.radius).mul(0.1))
-    const innerRadius = float(brush.radius).sub(ringWidth)
-    const inRing = smoothstep(innerRadius.sub(0.1), innerRadius, bDist).mul(
-      float(1).sub(
-        smoothstep(float(brush.radius), float(brush.radius).add(0.1), bDist)
-      )
-    )
-    const heightColor = mix(
-      vec3(1.0, 0.3, 0.3),
-      mix(
-        vec3(0.3, 1.0, 0.3),
-        vec3(0.3, 0.6, 1.0),
-        smoothstep(float(1.49), float(1.51), brush.raise)
-      ),
-      smoothstep(float(0.49), float(0.51), brush.raise)
-    )
-    const brushColor = mix(
-      heightColor,
-      vec3(1.0, 0.7, 0.2),
-      smoothstep(float(0.49), float(0.51), brush.toolMode)
-    )
-    const brushAlpha = inRing
-      .mul(0.35)
-      .mul(smoothstep(float(0.49), float(0.51), brush.active))
-    b.assign(mix(b, brushColor, brushAlpha))
-
-    return vec4(b, 1.0)
+    return vec4(blended, 1.0)
   })()
 
   // ─── Normal node ────────────────────────────────────────
@@ -432,6 +389,28 @@ export function makeSplatStandardMaterial({
   const metalnessNode = ormBlended ? ormBlended.b : undefined
   const aoNode = ormBlended ? ormBlended.r : undefined
 
+  // Slot of the alpine snow texture, the same one fallen snow uses.
+  function snowSurface() {
+    const slot = slotUv(
+      float(SNOW_SLOT),
+      uTileScales.element(int(SNOW_SLOT)),
+      float(0)
+    )
+    const orm = ormAtlasTex ? sampleAtlasAt(ormAtlasTex, slot).rgb : null
+    return {
+      color: sampleAtlasAt(diffAtlasTex, slot).rgb,
+      normal: normAtlasTex
+        ? (
+            tbn.mul(
+              sampleAtlasAt(normAtlasTex, slot).xyz.mul(2.0).sub(1.0)
+            ) as unknown as Node<'vec3'>
+          ).normalize()
+        : undefined,
+      roughness: orm?.g,
+      ao: orm?.r,
+    }
+  }
+
   const mat = new MeshStandardNodeMaterial()
   mat.roughness = 1.0
   mat.metalness = 0.0
@@ -465,12 +444,71 @@ export function makeSplatStandardMaterial({
       : {}),
   }
 
+  const editorActive = brush ? max(brush.active, brush.gridVisible) : undefined
+  const snowMask = applySnowCover(
+    mat,
+    snowSurface(),
+    // Hidden while brushing so painted splats stay readable.
+    brush ? float(1).sub(brush.active.clamp(0, 1)) : undefined
+  )
   if (rainPuddleUniforms) {
-    applyRainPuddles(
-      mat,
-      rainPuddleUniforms,
-      brush ? max(brush.active, brush.gridVisible) : undefined
-    )
+    applyRainPuddles(mat, rainPuddleUniforms, editorActive, snowMask)
+  }
+
+  // Drawn last so grid lines and the brush ring stay on top of snow.
+  if (brush) {
+    const surface = mat.colorNode!
+    mat.colorNode = Fn(() => {
+      const color = (convert(surface, 'vec4') as Node<'vec4'>).toVar()
+
+      const b = color.rgb.toVar()
+      const gridActive = smoothstep(float(0.49), float(0.51), brush.gridVisible)
+
+      // Antialiased 1-px line where coords cross an integer
+      const gridLine = (coords: Node<'vec2'>) => {
+        const g = abs(fract(coords.sub(0.5)).sub(0.5)).div(fwidth(coords))
+        return float(1).sub(min(min(g.x, g.y), float(1)))
+      }
+      const line1 = gridLine(fLocalUv.mul(TILE_DIM))
+      const line64 = gridLine(fLocalUv)
+      const linePlot = gridLine(vWorldXZ.div(LAND_PLOT_SIZE))
+      const lineRegion = gridLine(vWorldXZ.add(TILE_DIM / 2).div(REGION_CELLS))
+
+      b.assign(mix(b, vec3(0, 0, 0), line1.mul(0.3).mul(gridActive)))
+      b.assign(mix(b, vec3(1, 1, 1), linePlot.mul(0.7).mul(gridActive)))
+      b.assign(mix(b, vec3(1, 0, 0), line64.mul(gridActive)))
+      b.assign(mix(b, vec3(0.886, 0.725, 0.231), lineRegion.mul(gridActive)))
+
+      const bDist = distance(vWorldXZ, vec2(brush.center))
+      const ringWidth = max(float(0.5), float(brush.radius).mul(0.1))
+      const innerRadius = float(brush.radius).sub(ringWidth)
+      const inRing = smoothstep(innerRadius.sub(0.1), innerRadius, bDist).mul(
+        float(1).sub(
+          smoothstep(float(brush.radius), float(brush.radius).add(0.1), bDist)
+        )
+      )
+      const heightColor = mix(
+        vec3(1.0, 0.3, 0.3),
+        mix(
+          vec3(0.3, 1.0, 0.3),
+          vec3(0.3, 0.6, 1.0),
+          smoothstep(float(1.49), float(1.51), brush.raise)
+        ),
+        smoothstep(float(0.49), float(0.51), brush.raise)
+      )
+      const brushColor = mix(
+        heightColor,
+        vec3(1.0, 0.7, 0.2),
+        smoothstep(float(0.49), float(0.51), brush.toolMode)
+      )
+      const brushAlpha = inRing
+        .mul(0.35)
+        .mul(smoothstep(float(0.49), float(0.51), brush.active))
+      b.assign(mix(b, brushColor, brushAlpha))
+
+      color.rgb.assign(b)
+      return color
+    })()
   }
 
   return mat

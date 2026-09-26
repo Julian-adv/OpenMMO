@@ -9,6 +9,7 @@
     type TreePlacementData,
   } from '../../utils/tree-data'
   import { loadGLB } from '../../utils/gltfCache'
+  import { snowyStandardMaterial } from '../../shaders/snow-cover-nodes'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
 
   interface Props {
@@ -90,8 +91,7 @@
             const geo = mesh.geometry.clone()
             geo.applyMatrix4(localMatrix)
 
-            // Use GLB material directly (clone for independence)
-            const mat = srcMat.clone()
+            const mat = snowyStandardMaterial(srcMat)
             // GLB meshes: "Tw"/"Tw.001" = trunk, "Fronds"/"Fronds.001" = leaves
             const isTrunk = mesh.name.startsWith('Tw')
             if (isTrunk) mat.side = THREE.FrontSide

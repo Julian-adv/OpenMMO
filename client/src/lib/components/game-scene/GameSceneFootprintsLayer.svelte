@@ -4,6 +4,7 @@
   import { onDestroy } from 'svelte'
   import { activeDebuffs } from '../../stores/debuffStore'
   import { isMounted } from '../../utils/mounts'
+  import { housingManager } from '../../managers/housingManager'
   import { debuffDurationMs } from '../../data/debuffPresentation'
   import { WetFootprints, STRIDE_M } from '../../effects/wet-footprints'
   import {
@@ -31,6 +32,8 @@
     enableRemote?: boolean
     /** Baked water surface height at a world XZ (sea level where none). */
     waterSurfaceAt?: (x: number, z: number) => number
+    /** Terrain height, so prints in snow stay off house floors and bridges. */
+    groundHeightAt?: (x: number, z: number) => number | null
   }
 
   let {
@@ -40,6 +43,7 @@
     otherPlayers = undefined,
     enableRemote = false,
     waterSurfaceAt = undefined,
+    groundHeightAt = undefined,
   }: Props = $props()
 
   const WET_DURATION_MS = debuffDurationMs('wet')
@@ -49,6 +53,9 @@
   const REMOTE_STRENGTH = 0.7
   /** Feet this far under the water surface leave nothing to see. */
   const SUBMERGED_M = 0.02
+  /** Lying snow deep enough to take a print. */
+  const SNOW_PRINT_MIN_COVER = 0.12
+  const SNOW_PRINT_GROUND_M = 0.15
 
   const system = new WetFootprints()
 
@@ -81,7 +88,8 @@
     x: number,
     y: number,
     z: number,
-    strength: number
+    strength: number,
+    snow = false
   ): Stride {
     if (!last) return { x, z, walked: 0, side: 1 }
     const dx = shortestWrappedDeltaX(last.x, x)
@@ -101,28 +109,41 @@
     // Wading leaves no visible trail — the print would sit on the riverbed,
     // under the water surface.
     if ((waterSurfaceAt?.(x, z) ?? -Infinity) - y > SUBMERGED_M) return last
-    system.emit(x, y, z, dx, dz, last.side, strength)
+    system.emit(x, y, z, dx, dz, last.side, strength, snow)
     last.side = -last.side
     return last
   }
 
-  /** Called from GameScene's game loop each frame (deltaTime in ms). */
-  export function update(deltaTime: number) {
-    system.update(deltaTime / 1000)
+  /** Open ground under lying snow: on the terrain and not inside a house. */
+  function onSnow(x: number, y: number, z: number, snowCover: number) {
+    if (snowCover < SNOW_PRINT_MIN_COVER) return false
+    const ground = groundHeightAt?.(x, z)
+    return (
+      ground != null &&
+      Math.abs(y - ground) < SNOW_PRINT_GROUND_M &&
+      !housingManager.findHouseAtPoint(x, y, z)
+    )
+  }
 
-    // Checked at emit time, so the trail stops the instant the soaking
-    // expires even between the server's sweeps.
-    const remaining = wetUntil - Date.now()
-    if (playerPosition && remaining > 0 && !mounted) {
-      // The last of the water leaves fainter prints.
-      const strength = 0.45 + 0.45 * Math.min(remaining / WET_DURATION_MS, 1)
-      localStride = trail(
-        localStride,
-        playerPosition.x,
-        playerPosition.y,
-        playerPosition.z,
-        strength
-      )
+  /** Called from GameScene's game loop each frame (deltaTime in ms). */
+  export function update(deltaTime: number, snowCover = 0) {
+    system.update(deltaTime / 1000)
+    const snowStrength = 0.35 + 0.45 * Math.min(snowCover, 1)
+
+    if (playerPosition && !mounted) {
+      const { x, y, z } = playerPosition
+      const snow = onSnow(x, y, z, snowCover)
+      // Checked at emit time, so the trail stops the instant the soaking
+      // expires even between the server's sweeps. The last of the water
+      // leaves fainter prints.
+      const remaining = wetUntil - Date.now()
+      const strength = snow
+        ? snowStrength
+        : remaining > 0
+          ? 0.45 + 0.45 * Math.min(remaining / WET_DURATION_MS, 1)
+          : 0
+      localStride =
+        strength > 0 ? trail(localStride, x, y, z, strength, snow) : null
     } else {
       localStride = null
     }
@@ -132,21 +153,25 @@
       return
     }
     for (const [id, pose] of remotePlayers) {
-      if (!otherPlayers.get(id)?.wet || isMounted(otherPlayers.get(id))) {
-        remoteStrides.delete(id)
-        continue
-      }
+      const other = otherPlayers.get(id)
       // Their model is drawn unwrapped near the viewer; the prints have to
       // land under it, not a world width away.
       const x = unwrapWorldXNear(playerPosition.x, pose.position.x)
+      const { y, z } = pose.position
+      const snow = !!other && !isMounted(other) && onSnow(x, y, z, snowCover)
+      if (!snow && (!other?.wet || isMounted(other))) {
+        remoteStrides.delete(id)
+        continue
+      }
       remoteStrides.set(
         id,
         trail(
           remoteStrides.get(id) ?? null,
           x,
-          pose.position.y,
-          pose.position.z,
-          REMOTE_STRENGTH
+          y,
+          z,
+          snow ? snowStrength : REMOTE_STRENGTH,
+          snow
         )
       )
     }

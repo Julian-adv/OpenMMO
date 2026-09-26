@@ -1,4 +1,5 @@
-//! Timed debuffs on players (doc/DEBUFF.md): food poisoning, bleeding, wet.
+//! Timed debuffs on players (doc/DEBUFF.md): food poisoning, bleeding, wet,
+//! cold, alcohol.
 //!
 //! Active debuffs ride in `HungerData` so one lock answers "what multipliers
 //! apply to this player" and official NPCs stay exempt for free. Rolls,
@@ -8,6 +9,7 @@
 use crate::debuff_defs::{debuff_def, DebuffDef};
 use futures_util::{stream, StreamExt};
 use onlinerpg_shared::debuff::ActiveDebuffState;
+use onlinerpg_shared::weather::{precip_at, Precip};
 use onlinerpg_shared::{PlayerId, Position, ServerMessage};
 use rand::Rng;
 use std::time::Duration;
@@ -16,6 +18,7 @@ use tokio::time::Instant;
 use super::hunger::HungerData;
 
 pub(crate) const WET_DEBUFF_ID: &str = "wet";
+pub(crate) const COLD_DEBUFF_ID: &str = "cold";
 /// Drinks within this window count together toward the next stage.
 const ALCOHOL_WINDOW: Duration = Duration::from_secs(10 * 60);
 /// One unit lifts, two slow, three and beyond stagger — a beer is one unit,
@@ -24,12 +27,15 @@ const ALCOHOL_STAGES: [&str; 3] = ["tipsy", "drunk", "wasted"];
 /// Water this deep at a step's end soaks the walker: ankle-deep puddles and
 /// the shallowest river margins don't count.
 const WET_DEPTH_M: f32 = 0.4;
-/// A soaked mover is only re-sampled once their remaining time drops below
-/// this, so wading costs one terrain sample per player per refresh window
-/// instead of one per movement tick.
-const WET_REFRESH_BELOW: Duration = Duration::from_secs(300);
+/// Wet or cold is only refreshed once its remaining time drops below this, so
+/// wading costs one terrain sample per player per refresh window instead of
+/// one per movement tick.
+const REFRESH_BELOW: Duration = Duration::from_secs(300);
 const RAIN_SOAK_SECS: f32 = 10.0 * 60.0 / super::time::GAME_SECONDS_PER_REAL_SECOND as f32;
-const SOAKING_RAIN_MIN: f32 = 0.02;
+const COLD_SOAK_SECS: f32 = 2.0 * RAIN_SOAK_SECS;
+const EXPOSURE_MIN: f32 = 0.02;
+/// Debuffs a lit campfire dries or warms off.
+const CAMPFIRE_CLEARS: [&str; 2] = [WET_DEBUFF_ID, COLD_DEBUFF_ID];
 /// Movement ticks (200 ms) per water-check round: every mover is checked on
 /// one of them, so an unsoaked crowd samples terrain at ~1 Hz each.
 const WATER_CHECK_TICKS: u64 = 5;
@@ -37,8 +43,8 @@ const WATER_CHECK_TICKS: u64 = 5;
 /// this only matters on a cold cache — where it turns a reconnect wave's
 /// first-touch tile reads from a serial stall into a bounded fan-out.
 const WATER_CHECK_CONCURRENCY: usize = 16;
-/// Seconds burned off the soaking per second spent by a lit campfire, drying
-/// a full soaking (450 s) in 45 s of sitting.
+/// Seconds burned off the soaking (or chill) per second spent by a lit
+/// campfire, clearing a full 450 s in 45 s of sitting.
 const CAMPFIRE_DRY_SECS_PER_SEC: u32 = 10;
 
 pub(crate) struct ActiveDebuff {
@@ -201,6 +207,7 @@ impl super::GameState {
                 return;
             };
             data.rain_exposure_secs = 0.0;
+            data.cold_exposure_secs = 0.0;
             if data.debuffs.is_empty() {
                 return;
             }
@@ -301,7 +308,7 @@ impl super::GameState {
                 .filter(|s| {
                     hunger
                         .get(&s.player_id)
-                        .is_some_and(|d| d.remaining(WET_DEBUFF_ID, now) < WET_REFRESH_BELOW)
+                        .is_some_and(|d| d.remaining(WET_DEBUFF_ID, now) < REFRESH_BELOW)
                 })
                 // The mover's Y is server-derived, so it says whether they
                 // are on the deck above or in the river beneath it.
@@ -408,6 +415,7 @@ impl super::GameState {
         .await;
     }
 
+    /// Rain feeds `wet` and snow feeds `cold`, each through its own exposure.
     pub async fn tick_rain_soaking(&self, elapsed: Duration) {
         let candidates: Vec<PlayerId> = self.hunger.read().await.keys().copied().collect();
         if candidates.is_empty() {
@@ -415,7 +423,7 @@ impl super::GameState {
         }
         let (rain_override, cells) = self.current_rain_cells();
         let now_ms = Self::now_ms();
-        let exposure: Vec<(PlayerId, f32)> = {
+        let exposure: Vec<(PlayerId, Precip)> = {
             let players = self.players.read().await;
             let shelters = self.rain_shelters.read().unwrap_or_else(|e| e.into_inner());
             candidates
@@ -423,60 +431,74 @@ impl super::GameState {
                 .filter_map(|id| players.get(id))
                 .map(|player| {
                     let Position { x, z, .. } = player.position;
-                    let mut rain = if player.floor_level == 0 && player.is_damageable(now_ms) {
-                        rain_override
-                            .unwrap_or_else(|| onlinerpg_shared::weather::rain_at(&cells, x, z))
-                    } else {
-                        0.0
-                    };
-                    if rain > SOAKING_RAIN_MIN
+                    if player.floor_level != 0 || !player.is_damageable(now_ms) {
+                        return (player.id, Precip::default());
+                    }
+                    let precip = rain_override.unwrap_or_else(|| precip_at(&cells, x, z));
+                    if precip.total() > EXPOSURE_MIN
                         && shelters.values().flatten().any(|s| s.contains(x, z))
                     {
-                        rain = 0.0;
+                        return (player.id, Precip::default());
                     }
-                    (player.id, rain)
+                    (player.id, precip)
                 })
                 .collect()
         };
         let now = Instant::now();
+        let seconds = elapsed.as_secs_f32();
         let mut soaked = Vec::new();
+        let mut chilled = Vec::new();
         {
             let mut hunger = self.hunger.write().await;
-            for (id, rain) in exposure {
+            for (id, precip) in exposure {
                 let Some(data) = hunger.get_mut(&id) else {
                     continue;
                 };
-                if rain <= SOAKING_RAIN_MIN {
-                    data.rain_exposure_secs = 0.0;
-                    continue;
-                }
-                data.rain_exposure_secs =
-                    (data.rain_exposure_secs + elapsed.as_secs_f32() * rain).min(RAIN_SOAK_SECS);
-                let remaining = data.remaining(WET_DEBUFF_ID, now);
-                if (data.rain_exposure_secs >= RAIN_SOAK_SECS || !remaining.is_zero())
-                    && remaining < WET_REFRESH_BELOW
-                {
+                let (wet_left, cold_left) = (
+                    data.remaining(WET_DEBUFF_ID, now),
+                    data.remaining(COLD_DEBUFF_ID, now),
+                );
+                if expose(
+                    &mut data.rain_exposure_secs,
+                    precip.rain,
+                    seconds,
+                    RAIN_SOAK_SECS,
+                    wet_left,
+                ) {
                     soaked.push(id);
+                }
+                if expose(
+                    &mut data.cold_exposure_secs,
+                    precip.snow,
+                    seconds,
+                    COLD_SOAK_SECS,
+                    cold_left,
+                ) {
+                    chilled.push(id);
                 }
             }
         }
         for id in soaked {
             self.inflict_debuff(&id, WET_DEBUFF_ID, None).await;
         }
+        for id in chilled {
+            self.inflict_debuff(&id, COLD_DEBUFF_ID, None).await;
+        }
     }
 
-    /// Accelerate drying by a lit campfire; `tick_debuffs` handles expiry.
+    /// Accelerate drying and warming by a lit campfire; `tick_debuffs`
+    /// handles expiry.
     pub async fn tick_campfire_drying(&self, elapsed: Duration) {
         let now = Instant::now();
-        let wet: Vec<PlayerId> = {
+        let affected: Vec<PlayerId> = {
             let hunger = self.hunger.read().await;
             hunger
                 .iter()
-                .filter(|(_, d)| d.carries(WET_DEBUFF_ID, now))
+                .filter(|(_, d)| CAMPFIRE_CLEARS.iter().any(|id| d.carries(id, now)))
                 .map(|(pid, _)| *pid)
                 .collect()
         };
-        if wet.is_empty() {
+        if affected.is_empty() {
             return;
         }
         let fires: Vec<(onlinerpg_shared::Position, i8)> = {
@@ -490,9 +512,10 @@ impl super::GameState {
             return;
         }
         let radius_sq = onlinerpg_shared::hunger::CAMPFIRE_GRILL_RADIUS.powi(2);
-        let drying: Vec<PlayerId> = {
+        let by_fire: Vec<PlayerId> = {
             let players = self.players.read().await;
-            wet.into_iter()
+            affected
+                .into_iter()
                 .filter(|pid| {
                     players.get(pid).is_some_and(|p| {
                         fires.iter().any(|(pos, floor)| {
@@ -502,7 +525,7 @@ impl super::GameState {
                 })
                 .collect()
         };
-        if drying.is_empty() {
+        if by_fire.is_empty() {
             return;
         }
         // The countdown the owner is watching just sped up, so it has to be
@@ -510,16 +533,20 @@ impl super::GameState {
         let pulled = elapsed * (CAMPFIRE_DRY_SECS_PER_SEC - 1);
         let updates: Vec<(PlayerId, ServerMessage)> = {
             let mut hunger = self.hunger.write().await;
-            drying
+            by_fire
                 .into_iter()
                 .filter_map(|pid| {
                     let data = hunger.get_mut(&pid)?;
-                    let active = data
+                    let mut any = false;
+                    for active in data
                         .debuffs
                         .iter_mut()
-                        .find(|d| d.def.id == WET_DEBUFF_ID)?;
-                    active.until = active.until.checked_sub(pulled).unwrap_or(now);
-                    Some((pid, data.debuff_msg(now)))
+                        .filter(|d| CAMPFIRE_CLEARS.contains(&d.def.id.as_str()))
+                    {
+                        active.until = active.until.checked_sub(pulled).unwrap_or(now);
+                        any = true;
+                    }
+                    any.then(|| (pid, data.debuff_msg(now)))
                 })
                 .collect()
         };
@@ -586,4 +613,21 @@ impl super::GameState {
             }
         }
     }
+}
+
+/// Accumulate one kind of exposure; true when its debuff should be applied or
+/// refreshed. Light precipitation resets the build-up.
+fn expose(
+    exposure_secs: &mut f32,
+    amount: f32,
+    seconds: f32,
+    soak_secs: f32,
+    remaining: Duration,
+) -> bool {
+    if amount <= EXPOSURE_MIN {
+        *exposure_secs = 0.0;
+        return false;
+    }
+    *exposure_secs = (*exposure_secs + seconds * amount).min(soak_secs);
+    (*exposure_secs >= soak_secs || !remaining.is_zero()) && remaining < REFRESH_BELOW
 }

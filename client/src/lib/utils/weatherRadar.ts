@@ -16,6 +16,7 @@ export interface RadarCell {
   progress: number
   remainMin: number
   stage: 'forming' | 'raining' | 'clearing'
+  snow: boolean
 }
 
 export const ZONE_NAMES = ['Sea', 'Wet coast', 'Temperate', 'Alpine'] as const

@@ -2906,6 +2906,7 @@ mod tests {
             "/weather",
             "/weather rain",
             "  /weather rain 0.4  ",
+            "/weather snow",
             "/weather clear",
             "/weather auto",
             "/weather invalid",

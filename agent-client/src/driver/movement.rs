@@ -656,6 +656,7 @@ mod tests {
                     bias: 1.0,
                     sectors_tag: "test".into(),
                     rain_override: Some(1.0),
+                    snow_override: false,
                 });
             }
             assert_eq!(
@@ -667,6 +668,7 @@ mod tests {
                 bias: 1.0,
                 sectors_tag: "test".into(),
                 rain_override: Some(0.0),
+                snow_override: false,
             });
             assert_eq!(
                 resolve_due_schedule(&state, schedule).await,

@@ -22,9 +22,11 @@ import {
   instancedArray,
   deltaTime,
   cameraViewMatrix,
+  varying,
 } from 'three/tsl'
 import { PI, TAU } from './gerstner'
 import type { GrassMaterialConfig } from './grass-material'
+import { snowBurial, snowCover } from './snow-cover-nodes'
 import {
   type N,
   iHash,
@@ -372,7 +374,15 @@ export function createBladeMaterial(
     texSample.rgb,
     uUseTexture
   )
-  mat.colorNode = blendedColor.mul(brightness).mul(rootAO)
+  const grassColor = blendedColor.mul(brightness).mul(rootAO)
+  // Blades inside a snow patch sink into it; the rest frost at the tips.
+  const burial = snowBurial(vec2(instanceWorldX, instanceWorldZ))
+  const frost = snowCover
+    .mul(0.45)
+    .add(varying(burial).mul(0.55))
+    .mul(smoothstep(0.35, 1.0, uvY))
+    .clamp(0, 1)
+  mat.colorNode = mix(grassColor, vec3(0.62, 0.65, 0.7), frost)
 
   // ── Opacity: unified base-fade / texture-alpha ──────────
   const baseFade = smoothstep(float(0.0), float(0.08), uvY)
@@ -380,7 +390,7 @@ export function createBladeMaterial(
 
   // ── Per-instance shape variation ───────────────────────
   const widthScale = computeWidthScale(wsMin, wsExt)
-  const heightScale = instanceScale
+  const heightScale = instanceScale.mul(float(1).sub(burial))
 
   // ── Vertex displacement ────────────────────────────────
   const rawPos = positionLocal.toVar()

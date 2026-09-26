@@ -9,6 +9,7 @@ import type GameSceneGrassLayer from './GameSceneGrassLayer.svelte'
 import type GameSceneTreeLayer from './GameSceneTreeLayer.svelte'
 import type GameSceneWindParticles from './GameSceneWindParticles.svelte'
 import type GameSceneRainLayer from './GameSceneRainLayer.svelte'
+import type GameSceneSnowLayer from './GameSceneSnowLayer.svelte'
 import type GameSceneHousingLayer from './GameSceneHousingLayer.svelte'
 import type ObjectOverlay from '../map-editor/ObjectOverlay.svelte'
 import type { RefractionRenderManager } from '../../managers/refractionRenderManager'
@@ -37,6 +38,7 @@ export interface RenderPassesContext {
   treeLayerRef: GameSceneTreeLayer | undefined
   windParticlesRef: GameSceneWindParticles | undefined
   rainLayerRef: GameSceneRainLayer | undefined
+  snowLayerRef: GameSceneSnowLayer | undefined
   housingLayerRef: GameSceneHousingLayer | undefined
   objectOverlayRef: ObjectOverlay | undefined
   currentPlayerModel: PlayerModel | null
@@ -102,6 +104,7 @@ function aboveWaterGroups(
     ctx.treeLayerRef?.getGroup(),
     ctx.windParticlesRef?.getGroup(),
     ctx.rainLayerRef?.getGroup(),
+    ctx.snowLayerRef?.getGroup(),
     ctx.objectOverlayRef?.getGroup(),
     ctx.riverRocksRef?.getGroup(),
     ctx.shoreSprayRef?.getGroup(),

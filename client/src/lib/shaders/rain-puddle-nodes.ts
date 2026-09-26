@@ -61,7 +61,8 @@ export function updateRainPuddleLighting(
 export function applyRainPuddles(
   material: MeshStandardNodeMaterial,
   shared: RainPuddleUniforms,
-  editorActive?: Node<'float'>
+  editorActive?: Node<'float'>,
+  snowMask?: Node<'float'>
 ) {
   const wetness = uniform(new THREE.Vector4())
   const rain = uniform(new THREE.Vector4())
@@ -75,7 +76,11 @@ export function applyRainPuddles(
   const editorGate = editorActive
     ? float(1).sub(editorActive.clamp(0, 1))
     : float(1)
-  const moisture = interpolate(wetness).mul(shared.enabled).mul(editorGate)
+  const snowGate = snowMask ? float(1).sub(snowMask) : float(1)
+  const moisture = interpolate(wetness)
+    .mul(shared.enabled)
+    .mul(editorGate)
+    .mul(snowGate)
   const puddleSurface = Fn(() => {
     const surface = vec2(0).toVar()
 

@@ -13,8 +13,8 @@ quarter-view look — not a gray realism filter. Because every cell is a pure
 function of time, a map forecast can be added later without touching the
 model; the world map is left as it is for now.
 
-Non-goals: snow, weather-dependent
-fishing, sky dome (quarter view — the sky is never on screen).
+Winter cells fall as snow (see Snow). Non-goals: weather-dependent fishing,
+sky dome (quarter view — the sky is never on screen).
 
 ## Why slow drifting cells
 
@@ -181,6 +181,45 @@ in a quarter view the sky is never on screen, and a fast shadow pattern would
 bring back the sweeping border. A cell's ramp-up is what darkens the ground
 before rain.
 
+### Snow
+
+Each cell draws once at birth whether it falls as snow, so a cell keeps its
+kind for its whole life:
+
+```
+snow chance = winter_depth(birth) * max(latitude share(spot z), high(elevation))
+```
+
+- `winter_depth` is 1 from day 15 to day 75 of winter and eases to 0 half a
+  month into autumn and spring.
+- The latitude share is 0.95 up to z 5,500 (Aldermark is at z 4,742) and
+  eases to 0.5 by z 8,500, so the southern lowlands still get winter rain
+  half the time. Sectors above 600–1,200 m snow whatever their latitude.
+- `rain_at` stays the total precipitation, so shelter, cloud factor and NPC
+  shelter treat snow like rain. `precip_at` splits it into rain and snow
+  (one pass; wasm `weather_precip_at`).
+
+Lying snow (`snow_cover_at`) is also a pure function of time: it replays the
+cells that crossed the point in the last 2,000 / 0.6 + 300 game minutes in
+5-minute steps. Full snowfall covers the ground in 90 game minutes (11 real
+minutes). A full cover melts in 180 game minutes on the mildest winter spot
+and 1,000 on the coldest, 0.6× as fast at night and 1.5× at noon; full rain
+alone clears it in 150. It costs about 25 µs in wasm. Seed 42, midwinter
+(winter days 15–75, 10 years):
+
+| Point | Snowfall | Any snow on the ground | Cover over half |
+|---|---|---|---|
+| Aldermark (-1475, 4741) | 18.7 % | 75 % | 55 % |
+| Garasden (1929, 2746) | 9.1 % | 46 % | 27 % |
+| Riftmark (-2704, 10328) | 7.7 % (7.1 % rain) | 24 % | 12 % |
+| Southeast (6000, 16000) | 3.5 % | 10 % | 5 % |
+
+Snow sets off the `cold` debuff instead of `wet` ([DEBUFF.md](DEBUFF.md)).
+`/weather snow [intensity]` forces snowfall; the client builds and melts the
+forced cover locally at the midwinter pace, since the override has no
+history. Protocol 103: cells now fall as snow and `WeatherSync` carries
+`snow_override`.
+
 ### Where the function lives
 
 `shared/` crate, exported through `wasm_api` next to the message codec — the
@@ -303,6 +342,29 @@ day from the server's. Per-frame local sample drives:
    Dry weather, dungeons, and leaving the game cancel pending strikes.
    Settings → Lightning Flashes disables current and future flashes without
    changing rain or thunder audio. It defaults to on and is saved per browser.
+
+5. **Snow** — `GameSceneSnowLayer.svelte` drifts round flakes (about 6 s to
+   fall) with the wind, gusts and per-flake sway; the pool is 2.2× the
+   rain pool of the preset. Rain streaks, splashes, rain audio, lightning and
+   the BGM quiet follow only the rain part; the overcast sky and dim light
+   follow both.
+6. **Lying snow** — one `cover` uniform (`snow-cover-nodes.ts`), sampled at
+   the player every 2 s and eased over 3 s, drives every snowy surface; a
+   cell's edge is hundreds of metres wide, so one value covers the view.
+   Flat ground, Perlin hollows and crevices (low bed AO, e.g. paving grout)
+   whiten first, slopes need a deeper cover and
+   cliffs stay bare; specks just outside the patches read as a dusting. The
+   terrain blends to the alpine snow texture (palette slot 3) with its normal,
+   roughness and AO, zero metalness, and no puddles under it. Grass blades
+   inside a patch sink to 15 % of their height and the rest frost at the tips.
+   Trees and roof slopes (`GeoEntry.outdoor`, a separate cached material per
+   roof texture) whiten on faces pointing up. Walkers on snowy ground leave
+   cool-tinted prints that last 120 s, masked to the white patches. Every
+   preset shows lying snow; bare ground skips the noise and snow-texture
+   samples.
+   The editor grid and brush ring draw on top of snow; snow hides only
+   while a brush is active.
+   `__snowCover(v)` pins the cover for look-dev; no argument releases it.
 
 The world map is deliberately untouched. A forecast layer (cells as soft
 discs in the atlas pass, a slider that evaluates the same function at a later

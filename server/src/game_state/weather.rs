@@ -3,7 +3,9 @@
 use bytes::Bytes;
 use onlinerpg_shared::housing::HouseData;
 use onlinerpg_shared::messages::ServerMessage;
-use onlinerpg_shared::weather::{cells_at, Cell, Sector, WeatherSectors, WEATHER_SECTORS_VERSION};
+use onlinerpg_shared::weather::{
+    cells_at, Cell, Precip, Sector, WeatherSectors, WEATHER_SECTORS_VERSION,
+};
 use onlinerpg_shared::PlayerId;
 use sha2::Digest;
 use std::collections::HashMap;
@@ -18,6 +20,8 @@ pub struct WeatherState {
     /// Multiplier on every zone's rain chance; 1.0 is the baked schedule.
     pub bias: f32,
     pub rain_override: Option<f32>,
+    /// The forced `rain_override` falls as snow.
+    pub snow_override: bool,
     /// Sector bytes loaded at boot and served to clients.
     pub sectors_json: Bytes,
     /// Content hash of `sectors_json`; clients re-fetch only when it changes.
@@ -32,6 +36,7 @@ impl WeatherState {
             seed: data.seed,
             bias,
             rain_override: None,
+            snow_override: false,
             sectors_json: Bytes::from(sectors_json),
             sectors_tag,
             sectors: data.sectors,
@@ -78,13 +83,25 @@ impl GameState {
             .insert(house.id.clone(), shelters);
     }
 
-    pub(super) fn current_rain_cells(&self) -> (Option<f32>, Vec<Cell>) {
+    /// The override as (intensity, falls as snow), or the live cells.
+    pub(super) fn current_rain_cells(&self) -> (Option<Precip>, Vec<Cell>) {
         let weather = self.weather.read().expect("weather lock poisoned");
         let Some(weather) = weather.as_ref() else {
-            return (Some(0.0), Vec::new());
+            return (Some(Precip::default()), Vec::new());
         };
-        if weather.rain_override.is_some() {
-            return (weather.rain_override, Vec::new());
+        if let Some(amount) = weather.rain_override {
+            let forced = if weather.snow_override {
+                Precip {
+                    rain: 0.0,
+                    snow: amount,
+                }
+            } else {
+                Precip {
+                    rain: amount,
+                    snow: 0.0,
+                }
+            };
+            return (Some(forced), Vec::new());
         }
         let minutes = self.current_total_game_seconds() as f64 / 60.0;
         (
@@ -143,6 +160,7 @@ impl GameState {
                 bias: w.bias,
                 sectors_tag: w.sectors_tag.clone(),
                 rain_override: w.rain_override,
+                snow_override: w.snow_override,
             })
     }
 
@@ -166,29 +184,35 @@ impl GameState {
         args: &str,
     ) -> Result<String, String> {
         let mut args = args.split_whitespace();
-        let rain_override = match (args.next(), args.next(), args.next()) {
-            (Some("rain"), raw, None) => Some(parse_bounded(
-                raw.unwrap_or("1"),
-                0.0..=1.0,
-                "Weather: intensity",
-            )?),
-            (Some("clear"), None, None) => Some(0.0),
-            (Some("auto"), None, None) => None,
-            _ => return Err("Weather: /weather rain [0..1], /weather clear, /weather auto".into()),
+        let (rain_override, snow_override) = match (args.next(), args.next(), args.next()) {
+            (Some(kind @ ("rain" | "snow")), raw, None) => {
+                let amount = parse_bounded(raw.unwrap_or("1"), 0.0..=1.0, "Weather: intensity")?;
+                (Some(amount), kind == "snow" && amount > 0.0)
+            }
+            (Some("clear"), None, None) => (Some(0.0), false),
+            (Some("auto"), None, None) => (None, false),
+            _ => {
+                return Err(
+                    "Weather: /weather rain [0..1], /weather snow [0..1], /weather clear, /weather auto"
+                        .into(),
+                )
+            }
         };
         {
             let mut weather = self.weather.write().expect("weather lock poisoned");
-            weather
+            let weather = weather
                 .as_mut()
-                .ok_or("Weather: weather data is not loaded.")?
-                .rain_override = rain_override;
+                .ok_or("Weather: weather data is not loaded.")?;
+            weather.rain_override = rain_override;
+            weather.snow_override = snow_override;
         }
-        info!(admin = ?admin_id, ?rain_override, "admin weather override");
+        info!(admin = ?admin_id, ?rain_override, snow_override, "admin weather override");
         self.broadcast_weather();
+        let kind = if snow_override { "snow" } else { "rain" };
         Ok(match rain_override {
             None => "Weather: automatic regional weather restored server-wide.".into(),
             Some(0.0) => "Weather: clear skies server-wide. /weather auto restores automatic weather.".into(),
-            Some(rain) => format!("Weather: rain intensity {rain} server-wide. /weather auto restores automatic weather."),
+            Some(amount) => format!("Weather: {kind} intensity {amount} server-wide. /weather auto restores automatic weather."),
         })
     }
 }

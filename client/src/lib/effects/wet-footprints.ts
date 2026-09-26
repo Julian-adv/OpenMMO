@@ -1,11 +1,13 @@
 import * as THREE from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
-import { attribute, texture, vec3 } from 'three/tsl'
+import { attribute, float, mix, texture, vec3 } from 'three/tsl'
+import { snowMask } from '../shaders/snow-cover-nodes'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type N = any
 
 const FOOTPRINT_OPACITY_ATTR = 'aFootprintOpacity'
+const FOOTPRINT_SNOW_ATTR = 'aFootprintSnow'
 
 /** Pool size, shared by every walker on screen — one ring, one draw call.
  *  A sprinter lays ~6 prints/s, so this holds a couple of full-length trails
@@ -20,6 +22,9 @@ export const STRIDE_M = 0.75
 const FOOT_OFFSET_M = 0.11
 /** How long a print takes to dry out. */
 const PRINT_LIFETIME_S = 30
+/** Prints pressed into lying snow stay until the next stride of snowfall
+ *  would have covered them. */
+const SNOW_PRINT_LIFETIME_S = 120
 /** Fraction of that spent at full strength before it starts evaporating. */
 const PRINT_HOLD = 0.5
 /** Hover above the feet so the quad wins the depth test on flat ground. */
@@ -27,6 +32,7 @@ const GROUND_LIFT_M = 0.03
 
 interface Footprint {
   age: number
+  life: number
   /** Opacity at birth — a nearly-dry player leaves fainter prints. */
   strength: number
 }
@@ -61,6 +67,8 @@ function printTexture(): THREE.Texture {
 
 /** How dark the ground goes under a full-strength print (multiply factor). */
 const WET_TINT: [number, number, number] = [0.36, 0.4, 0.44]
+/** A dent in snow reads as cool shadow, lighter than a wet print. */
+const SNOW_TINT: [number, number, number] = [0.62, 0.68, 0.8]
 
 /**
  * Multiply blending, not alpha: a wet patch darkens whatever ground it is on.
@@ -89,8 +97,11 @@ function printMaterial(): MeshBasicNodeMaterial {
 
   const texNode: N = texture(printTexture())
   const opacity: N = attribute(FOOTPRINT_OPACITY_ATTR, 'float')
-  const mask: N = texNode.a.mul(opacity)
-  mat.colorNode = vec3(...WET_TINT).mul(mask)
+  const snowy: N = attribute(FOOTPRINT_SNOW_ATTR, 'float')
+  // Snow prints show only where the ground itself is white.
+  const onSnow: N = mix(float(1), snowMask(float(1)), snowy)
+  const mask: N = texNode.a.mul(opacity).mul(onSnow)
+  mat.colorNode = mix(vec3(...WET_TINT), vec3(...SNOW_TINT), snowy).mul(mask)
   mat.opacityNode = mask
 
   sharedPrintMaterial = mat
@@ -112,6 +123,7 @@ export class WetFootprints {
   private pool: Footprint[]
   private mesh: THREE.InstancedMesh
   private opacityAttr: THREE.InstancedBufferAttribute
+  private snowAttr: THREE.InstancedBufferAttribute
   private next = 0
   /** Live prints, so a client that never gets wet draws nothing at all. */
   private live = 0
@@ -126,6 +138,7 @@ export class WetFootprints {
     this.group.name = 'wetFootprints'
     this.pool = Array.from({ length: MAX_FOOTPRINTS }, () => ({
       age: PRINT_LIFETIME_S,
+      life: PRINT_LIFETIME_S,
       strength: 0,
     }))
 
@@ -135,6 +148,11 @@ export class WetFootprints {
       1
     )
     geom.setAttribute(FOOTPRINT_OPACITY_ATTR, this.opacityAttr)
+    this.snowAttr = new THREE.InstancedBufferAttribute(
+      new Float32Array(MAX_FOOTPRINTS),
+      1
+    )
+    geom.setAttribute(FOOTPRINT_SNOW_ATTR, this.snowAttr)
 
     this.mesh = new THREE.InstancedMesh(geom, printMaterial(), MAX_FOOTPRINTS)
     this.mesh.count = 0
@@ -159,7 +177,8 @@ export class WetFootprints {
     dirX: number,
     dirZ: number,
     side: number,
-    strength: number
+    strength: number,
+    snow = false
   ) {
     const len = Math.hypot(dirX, dirZ)
     if (len < 1e-4) return
@@ -180,12 +199,15 @@ export class WetFootprints {
     const slot = this.next
     this.next = (this.next + 1) % MAX_FOOTPRINTS
     const print = this.pool[slot]
-    if (print.age >= PRINT_LIFETIME_S) this.live++
+    if (print.age >= print.life) this.live++
     // The ring only grows the drawn range; a full lap keeps the whole pool
     // drawn until the last print in it has dried.
     this.mesh.count = Math.max(this.mesh.count, slot + 1)
     print.age = 0
+    print.life = snow ? SNOW_PRINT_LIFETIME_S : PRINT_LIFETIME_S
     print.strength = strength
+    ;(this.snowAttr.array as Float32Array)[slot] = snow ? 1 : 0
+    this.snowAttr.needsUpdate = true
     // A print never moves again, so the matrix is written once here and the
     // per-frame loop only touches opacity.
     this.matrix.makeBasis(this.right, this.forward, this.up)
@@ -205,10 +227,10 @@ export class WetFootprints {
 
     for (let i = 0; i < this.pool.length; i++) {
       const print = this.pool[i]
-      if (print.age >= PRINT_LIFETIME_S) continue
+      if (print.age >= print.life) continue
       print.age += dt
       dirty = true
-      if (print.age >= PRINT_LIFETIME_S) {
+      if (print.age >= print.life) {
         opacityArr[i] = 0
         this.mesh.setMatrixAt(i, this.zeroMatrix)
         matricesDirty = true
@@ -216,7 +238,7 @@ export class WetFootprints {
         continue
       }
       // Damp at full strength for a while, then evaporate.
-      const t = print.age / PRINT_LIFETIME_S
+      const t = print.age / print.life
       const fade = t < PRINT_HOLD ? 1 : (1 - t) / (1 - PRINT_HOLD)
       opacityArr[i] = print.strength * fade * fade
     }

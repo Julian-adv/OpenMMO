@@ -29,11 +29,29 @@ describe('weatherStore', () => {
     const fetchMock = vi.fn(async () => okList)
     vi.stubGlobal('fetch', fetchMock)
 
-    setWeather({ seed: 42, bias: 1, sectorsTag: 'aa', rainOverride: null })
+    setWeather({
+      seed: 42,
+      bias: 1,
+      sectorsTag: 'aa',
+      rainOverride: null,
+      snowOverride: false,
+    })
     expect(get(weatherSectorsReady)).toBe(false)
-    setWeather({ seed: 42, bias: 0.5, sectorsTag: 'aa', rainOverride: null })
+    setWeather({
+      seed: 42,
+      bias: 0.5,
+      sectorsTag: 'aa',
+      rainOverride: null,
+      snowOverride: false,
+    })
     await flush()
-    setWeather({ seed: 42, bias: 0.5, sectorsTag: 'aa', rainOverride: null })
+    setWeather({
+      seed: 42,
+      bias: 0.5,
+      sectorsTag: 'aa',
+      rainOverride: null,
+      snowOverride: false,
+    })
     await flush()
 
     expect(get(weather)).toEqual({
@@ -41,6 +59,7 @@ describe('weatherStore', () => {
       bias: 0.5,
       sectorsTag: 'aa',
       rainOverride: null,
+      snowOverride: false,
     })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock).toHaveBeenCalledWith(
@@ -62,12 +81,24 @@ describe('weatherStore', () => {
     vi.stubGlobal('fetch', fetchMock)
     vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    setWeather({ seed: 1, bias: 1, sectorsTag: 'aa', rainOverride: null })
+    setWeather({
+      seed: 1,
+      bias: 1,
+      sectorsTag: 'aa',
+      rainOverride: null,
+      snowOverride: false,
+    })
     await flush()
     expect(weather_set_sectors).not.toHaveBeenCalled()
     expect(get(weatherSectorsReady)).toBe(false)
 
-    setWeather({ seed: 1, bias: 1, sectorsTag: 'aa', rainOverride: null })
+    setWeather({
+      seed: 1,
+      bias: 1,
+      sectorsTag: 'aa',
+      rainOverride: null,
+      snowOverride: false,
+    })
     await flush()
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(weather_set_sectors).toHaveBeenCalledTimes(1)
@@ -77,7 +108,13 @@ describe('weatherStore', () => {
     const fetchMock = vi.fn(async () => okList)
     vi.stubGlobal('fetch', fetchMock)
     for (const rainOverride of [null, 1, 0.4, 0, null]) {
-      setWeather({ seed: 42, bias: 1, sectorsTag: 'aa', rainOverride })
+      setWeather({
+        seed: 42,
+        bias: 1,
+        sectorsTag: 'aa',
+        rainOverride,
+        snowOverride: false,
+      })
       await flush()
       expect(get(weather)?.rainOverride).toBe(rainOverride)
     }
@@ -89,13 +126,31 @@ describe('weatherStore', () => {
     const fetchMock = vi.fn(async () => okList)
     vi.stubGlobal('fetch', fetchMock)
 
-    setWeather({ seed: 42, bias: 1, sectorsTag: 'aa', rainOverride: null })
+    setWeather({
+      seed: 42,
+      bias: 1,
+      sectorsTag: 'aa',
+      rainOverride: null,
+      snowOverride: false,
+    })
     await flush()
-    setWeather({ seed: 42, bias: 1, sectorsTag: 'aa', rainOverride: null })
+    setWeather({
+      seed: 42,
+      bias: 1,
+      sectorsTag: 'aa',
+      rainOverride: null,
+      snowOverride: false,
+    })
     await flush()
     expect(fetchMock).toHaveBeenCalledTimes(1)
 
-    setWeather({ seed: 42, bias: 1, sectorsTag: 'bb', rainOverride: null })
+    setWeather({
+      seed: 42,
+      bias: 1,
+      sectorsTag: 'bb',
+      rainOverride: null,
+      snowOverride: false,
+    })
     await flush()
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(fetchMock).toHaveBeenLastCalledWith(expect.stringMatching(/\?v=bb$/))
@@ -111,8 +166,20 @@ describe('weatherStore', () => {
       .mockResolvedValueOnce(okList)
     vi.stubGlobal('fetch', fetchMock)
 
-    setWeather({ seed: 1, bias: 1, sectorsTag: 'old', rainOverride: null })
-    setWeather({ seed: 1, bias: 1, sectorsTag: 'new', rainOverride: null })
+    setWeather({
+      seed: 1,
+      bias: 1,
+      sectorsTag: 'old',
+      rainOverride: null,
+      snowOverride: false,
+    })
+    setWeather({
+      seed: 1,
+      bias: 1,
+      sectorsTag: 'new',
+      rainOverride: null,
+      snowOverride: false,
+    })
     await flush()
     expect(weather_set_sectors).toHaveBeenCalledTimes(1)
 

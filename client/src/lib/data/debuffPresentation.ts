@@ -56,6 +56,13 @@ const PRESENTATION: Record<
     applied: 'You are soaked through — heavy going until you dry off.',
     expired: 'Your clothes are dry again.',
   },
+  cold: {
+    labelKey: 'debuff.cold.name',
+    noteKey: 'debuff.cold.note',
+    icon: '🥶',
+    applied: 'The cold has got into your bones — find a fire to warm up.',
+    expired: 'The chill leaves you.',
+  },
   tipsy: {
     labelKey: 'debuff.tipsy.name',
     noteKey: 'debuff.tipsy.note',

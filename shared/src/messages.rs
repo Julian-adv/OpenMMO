@@ -1245,6 +1245,8 @@ pub enum ServerMessage {
         bias: f32,
         sectors_tag: String,
         rain_override: Option<f32>,
+        /// The forced `rain_override` falls as snow.
+        snow_override: bool,
     },
     /// NPC clients only (doc/PRICING.md).
     PricingNotice(crate::pricing::PricingNotice),

@@ -191,7 +191,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v100: player stalls accept buy orders alongside sale listings.
 /// v101: tip hats accept optional song requests delivered to the performer.
 /// v102: rain cells drift with the seasonal wind, change size and dry in the lee of ridges.
-pub const PROTOCOL_VERSION: u32 = 102;
+/// v103: winter cells fall as snow, and WeatherSync can force snow.
+pub const PROTOCOL_VERSION: u32 = 103;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from
@@ -402,12 +403,19 @@ mod tests {
 
     #[test]
     fn roundtrip_weather_sync() {
-        for rain_override in [None, Some(0.0), Some(0.4), Some(1.0)] {
+        for (rain_override, snow_override) in [
+            (None, false),
+            (Some(0.0), false),
+            (Some(0.4), false),
+            (Some(1.0), false),
+            (Some(0.6), true),
+        ] {
             let bytes = serialize_server_msg(&ServerMessage::WeatherSync {
                 seed: 42,
                 bias: 1.0,
                 sectors_tag: "0123456789abcdef".into(),
                 rain_override,
+                snow_override,
             })
             .unwrap();
             match deserialize_server_msg(&bytes).unwrap() {
@@ -416,11 +424,13 @@ mod tests {
                     bias,
                     sectors_tag,
                     rain_override: decoded_override,
+                    snow_override: decoded_snow,
                 } => {
                     assert_eq!(seed, 42);
                     assert_eq!(bias, 1.0);
                     assert_eq!(sectors_tag, "0123456789abcdef");
                     assert_eq!(decoded_override, rain_override);
+                    assert_eq!(decoded_snow, snow_override);
                 }
                 other => panic!("Wrong variant: {other:?}"),
             }
