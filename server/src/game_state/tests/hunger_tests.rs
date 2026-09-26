@@ -358,6 +358,7 @@ async fn server_applies_sprint_speed_and_rejects_it_without_fuel() {
             .await;
     }
 
+    tokio::time::pause();
     game_state.advance_test_movement(1.0).await;
 
     let walk_step = onlinerpg_shared::PLAYER_MOVE_SPEED;
