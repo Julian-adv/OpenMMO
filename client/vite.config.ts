@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import fs from 'node:fs'
 import { Agent } from 'node:https'
 import { execSync } from 'node:child_process'
@@ -131,5 +132,6 @@ export default defineConfig(({ mode }) => {
     },
     build: { target: 'esnext' },
     optimizeDeps: { esbuildOptions: { target: 'esnext' } },
+    test: { setupFiles: ['./src/test-setup.ts'] },
   }
 })
