@@ -450,6 +450,12 @@ struct HistoryQuery {
 }
 
 #[derive(Deserialize)]
+struct UniqueHistoryQuery {
+    hours: Option<u32>,
+    window_hours: Option<u32>,
+}
+
+#[derive(Deserialize)]
 struct PerAccountGoldQuery {
     hours: Option<u32>,
     active_hours: Option<u32>,
@@ -708,13 +714,21 @@ async fn leaderboard_response<T: Serialize + Send + 'static>(
 
 async fn unique_history(
     State(state): State<MetricsState>,
-    Query(query): Query<HistoryQuery>,
+    Query(query): Query<UniqueHistoryQuery>,
 ) -> Response {
-    let Some(days) = unique_period_days(query.hours) else {
+    let Some(range_days) = unique_period_days(query.hours) else {
         return invalid_unique_hours("hours");
     };
+    let Some(window_days) = unique_period_days(query.window_hours.or(query.hours)) else {
+        return invalid_unique_hours("window_hours");
+    };
     metrics_response(
-        auth_db(move || state.auth.unique_account_history(unix_now(), days)).await,
+        auth_db(move || {
+            state
+                .auth
+                .unique_account_history(unix_now(), range_days, window_days)
+        })
+        .await,
         "Unique account history",
     )
 }
@@ -2336,7 +2350,7 @@ mod tests {
             },
         ])
         .unwrap();
-        let pending = auth.unique_account_history(now, 1).unwrap();
+        let pending = auth.unique_account_history(now, 1, 1).unwrap();
         assert!(pending.samples.is_empty());
         assert_eq!(pending.last_aggregated_at, None);
         assert!(auth.aggregate_daily_unique_accounts(now).unwrap());
@@ -2400,6 +2414,25 @@ mod tests {
             assert_eq!(body.samples.last().unwrap().timestamp, body.until);
             assert!(body.samples.len() <= days as usize + 1);
         }
+        let split: UniqueHistory = client
+            .get(format!("{unique_url}?hours=720&window_hours=168"))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(split.until - split.from, 720 * 3600);
+        assert_eq!(split.window_seconds, 168 * 3600);
+        assert_eq!(
+            client
+                .get(format!("{unique_url}?hours=168&window_hours=6"))
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
         for hours in [
             "0",
             "1",

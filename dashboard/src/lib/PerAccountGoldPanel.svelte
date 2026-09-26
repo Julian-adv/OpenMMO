@@ -28,7 +28,7 @@
     </div>
     <PeriodFilter bind:hours options={goldPeriods} label="1인당 골드 조회 기간" />
   </div>
-  <div class="active-period-filter">
+  <div class="secondary-period-filter">
     <span>나눌 활성 유저 기준</span>
     <PeriodFilter bind:hours={activeHours} options={uniquePeriods} label="골드를 나눌 활성 유저 집계 기간" />
   </div>
@@ -72,8 +72,3 @@
     <span>{history ? `${sampleCount.toLocaleString('ko-KR')}개 기록` : '기록 확인 중'}</span>
   </div>
 </section>
-
-<style>
-  .active-period-filter { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; }
-  .active-period-filter > span { color: #60796c; font-size: 11px; }
-</style>

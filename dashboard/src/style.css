@@ -87,6 +87,8 @@ h1 > span { color: #168878; margin-left: 2px; }
 .chart-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
 h2 { font-size: 16px; font-weight: 600; letter-spacing: -.5px; margin: 0; }
 .chart-heading p { margin: 6px 0 0; color: #8a9891; font-size: 11px; }
+.secondary-period-filter { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; }
+.secondary-period-filter > span { color: #60796c; font-size: 11px; }
 .period-filter { display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; background: #f3f6f4; border: 1px solid #edf1ee; border-radius: 9px; }
 .period-filter button { background: transparent; border: 0; border-radius: 6px; color: #84938b; font-size: 11px; padding: 6px 12px; white-space: nowrap; }
 .period-filter button.active { background: white; color: #237963; font-weight: 600; box-shadow: 0 1px 4px #2b433510; }

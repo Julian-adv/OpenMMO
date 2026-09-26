@@ -32,7 +32,7 @@ async fn unique_activity_records_short_visits_and_excludes_official_npcs() {
     let now = crate::auth::unix_now();
     let midnight = crate::metrics::kst_day_start(now) + crate::metrics::DAY_SECONDS;
     auth.aggregate_daily_unique_accounts(midnight).unwrap();
-    let history = auth.unique_account_history(midnight, 1).unwrap();
+    let history = auth.unique_account_history(midnight, 1, 1).unwrap();
     assert_eq!(history.samples.last().unwrap().accounts, 1);
 }
 

@@ -198,6 +198,7 @@ export const uniquePeriods = [
   { hours: 8760, label: '1년' },
 ] as const
 export type UniqueHours = typeof uniquePeriods[number]['hours']
+export const uniqueRangePeriods = uniquePeriods.filter((period) => period.hours > 24)
 export const formatPeriod = (hours: number) => periods.find((period) => period.hours === hours)?.label ?? `${hours}시간`
 
 export function connectionParts(sample: Sample) {
@@ -260,13 +261,13 @@ export function summarize(samples: HistorySample[]) {
   return { peak: peak.peak_accounts, average: total / sampleCount, peakAt: peak.peak_timestamp, sampleCount }
 }
 
-export function parseUniqueHistory(value: unknown, hours: UniqueHours): UniqueHistory {
+export function parseUniqueHistory(value: unknown, hours: UniqueHours, windowHours: UniqueHours = hours): UniqueHistory {
   if (!value || typeof value !== 'object') throw new Error('Invalid unique metrics response')
   const data = value as UniqueHistory
   const day = 86400
   const last = data.last_aggregated_at
   if (!Number.isSafeInteger(data.from) || !Number.isSafeInteger(data.until) ||
-    data.until - data.from !== hours * 3600 || data.window_seconds !== hours * 3600 ||
+    data.until - data.from !== hours * 3600 || data.window_seconds !== windowHours * 3600 ||
     (data.until + 9 * 3600) % day !== 0 || data.sample_interval_seconds !== day ||
     !Number.isSafeInteger(data.collection_started_at) || data.collection_started_at < 0 ||
     (last !== null && (!Number.isSafeInteger(last) || last > data.until || last <= data.collection_started_at || (last + 9 * 3600) % day !== 0)) ||

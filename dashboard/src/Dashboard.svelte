@@ -27,20 +27,23 @@
   import PeriodFilter from './lib/PeriodFilter.svelte'
   import { createMetricsResource } from './lib/metricsResource.svelte'
   import { useDashboardAuth } from './lib/auth.svelte'
-  import { formatDateTime, formatTime, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseLevelLeaderboard, parseGoldLeaderboard, parseWeaponEnchantLeaderboard, parseArmorEnchantLeaderboard, parseLandLeaderboard, parsePriceIndexHistory, parseServerStarts, parseUniqueHistory, periods, uniquePeriods, summarize, deployMarkers, type GoldHours, type Hours, type LeaderboardHours, type UniqueHours } from './lib/metrics'
+  import { formatDateTime, formatTime, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseLevelLeaderboard, parseGoldLeaderboard, parseWeaponEnchantLeaderboard, parseArmorEnchantLeaderboard, parseLandLeaderboard, parsePriceIndexHistory, parseServerStarts, parseUniqueHistory, periods, uniquePeriods, uniqueRangePeriods, summarize, deployMarkers, type GoldHours, type Hours, type LeaderboardHours, type UniqueHours } from './lib/metrics'
 
   const auth = useDashboardAuth()
   let hours = $state<Hours>(24)
   let period = $derived(periods.find((period) => period.hours === hours)!)
-  let uniqueHours = $state<UniqueHours>(24)
-  let uniquePeriod = $derived(uniquePeriods.find((period) => period.hours === uniqueHours)!)
+  let uniqueHours = $state<UniqueHours>(168)
+  let uniqueWindowHours = $state<UniqueHours>(24)
+  let uniqueWindow = $derived(uniquePeriods.find((period) => period.hours === uniqueWindowHours)!)
   const concurrent = createMetricsResource(() => hours, 'concurrent', parseHistory, '접속 현황', () => ({}), 60000)
   const hardware = createMetricsResource(() => undefined, 'hardware', parseHardwareStatus, '서버 하드웨어 상태', () => ({}), 60000)
   let networkHours = $state<TrafficHours>(24)
   let assetTrafficHours = $state<TrafficHours>(24)
   const network = createMetricsResource(() => networkHours, 'network', parseNetworkHistory, '네트워크 현황', () => ({}), 60000)
   const assetTraffic = createMetricsResource(() => assetTrafficHours, 'asset-traffic', parseAssetTraffic, '정적 파일 전송량', () => ({}), 600000)
-  const unique = createMetricsResource(() => uniqueHours, 'unique', parseUniqueHistory)
+  const unique = createMetricsResource(() => uniqueHours, 'unique',
+    (value, hours, query) => parseUniqueHistory(value, hours, Number(query.window_hours) as UniqueHours),
+    '유니크 계정 현황', () => ({ window_hours: String(uniqueWindowHours) }))
   let goldHours = $state<GoldHours>(24)
   const gold = createMetricsResource(() => goldHours, 'gold', parseGoldHistory, '골드 현황')
   let activeHours = $state<UniqueHours>(24)
@@ -168,13 +171,17 @@
     <div class="chart-heading">
       <div>
         <h2 id="unique-chart-title">유니크 접속 계정 추이</h2>
-        <p>매일 자정 기준, 직전 {uniquePeriod.label} 동안 게임에 접속한 계정 수</p>
+        <p>매일 자정 기준, 직전 {uniqueWindow.label} 동안 게임에 접속한 계정 수</p>
       </div>
-      <PeriodFilter bind:hours={uniqueHours} options={uniquePeriods} label="유니크 계정 집계 기간" />
+      <PeriodFilter bind:hours={uniqueHours} options={uniqueRangePeriods} label="유니크 계정 조회 기간" />
+    </div>
+    <div class="secondary-period-filter">
+      <span>유니크 계정 집계 기간</span>
+      <PeriodFilter bind:hours={uniqueWindowHours} options={uniquePeriods} label="유니크 계정 집계 기간" />
     </div>
     <MetricsError error={unique.error} until={unique.history?.until} refreshing={unique.refreshing} refresh={() => unique.refresh()} />
     <div class="metric-summary">
-      <span>마지막 일별 집계 · 직전 {uniquePeriod.label}</span>
+      <span>마지막 일별 집계 · 직전 {uniqueWindow.label}</span>
       <strong>{count(uniqueLatest?.accounts)}<small>계정</small></strong>
       <p>{unique.history?.last_aggregated_at != null ? `마지막 집계 기준: ${formatDateTime(unique.history.last_aggregated_at)} KST` : '첫 일별 집계를 기다리고 있어요'}</p>
     </div>
@@ -183,10 +190,10 @@
     {/if}
     <div class="chart-meta"><span>유니크 계정 수</span><span>하루 한 번 집계</span></div>
     {#if unique.history && unique.history.samples.length > 0}
-      <HistoryChart history={unique.history} peak={uniquePeak} {markers} value={(sample) => sample.accounts} legend={`직전 ${uniquePeriod.label} 유니크 계정`} valueLabel="유니크 계정" peakLabel="그래프 최고">
+      <HistoryChart history={unique.history} peak={uniquePeak} {markers} value={(sample) => sample.accounts} legend={`직전 ${uniqueWindow.label} 유니크 계정`} valueLabel="유니크 계정" peakLabel="그래프 최고">
         {#snippet detail(selected)}
-          <span>집계 시작: {formatDateTime(selected.timestamp - uniqueHours * 3600)}</span>
-          <span>자정 기준 일별 집계 · 직전 {uniquePeriod.label}</span>
+          <span>집계 시작: {formatDateTime(selected.timestamp - unique.history!.window_seconds)}</span>
+          <span>자정 기준 일별 집계 · 직전 {uniqueWindow.label}</span>
           {#if unique.history && selected.timestamp - unique.history.window_seconds < unique.history.collection_started_at}
             <span>수집 시작 이후의 접속만 포함</span>
           {/if}
@@ -199,7 +206,7 @@
       </div>
     {/if}
     <div class="chart-footer">
-      <span>{unique.history ? `${formatDateTime(unique.history.from)} — ${formatDateTime(unique.history.until)}` : `최근 ${uniquePeriod.label}`} <span class="timezone">KST</span></span>
+      <span>{unique.history ? `${formatDateTime(unique.history.from)} — ${formatDateTime(unique.history.until)}` : `최근 ${uniqueRangePeriods.find((period) => period.hours === uniqueHours)!.label}`} <span class="timezone">KST</span></span>
       <span>{unique.history ? `${unique.history.samples.length.toLocaleString('ko-KR')}개 시점` : '기록 확인 중'}</span>
     </div>
   </section>

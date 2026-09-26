@@ -1016,10 +1016,15 @@ impl AuthService {
         Ok(true)
     }
 
-    pub fn unique_account_history(&self, now: i64, days: u32) -> Result<UniqueHistory, AuthError> {
+    pub fn unique_account_history(
+        &self,
+        now: i64,
+        range_days: u32,
+        window_days: u32,
+    ) -> Result<UniqueHistory, AuthError> {
         let until = kst_day_start(now);
-        let window = i64::from(days) * DAY_SECONDS;
-        let from = until - window;
+        let window = i64::from(window_days) * DAY_SECONDS;
+        let from = until - i64::from(range_days) * DAY_SECONDS;
         let mut conn = self.open_connection()?;
         let transaction = conn.transaction()?;
         let collection_started_at = unique_collection_started_at(&transaction)?;
@@ -1037,7 +1042,7 @@ impl AuthService {
              WHERE timestamp >= ?1 AND timestamp <= ?2 ORDER BY timestamp",
         )?;
         let samples = statement
-            .query_map(params![from, until, days], |row| {
+            .query_map(params![from, until, window_days], |row| {
                 Ok(UniqueSample {
                     timestamp: row.get(0)?,
                     accounts: row.get(1)?,
@@ -2473,7 +2478,7 @@ mod tests {
         .unwrap();
         assert!(auth.aggregate_daily_unique_accounts(end + 30).unwrap());
         for (days, accounts) in [(1, 3), (7, 4), (30, 5), (180, 6), (365, 7)] {
-            let history = auth.unique_account_history(end + 123, days).unwrap();
+            let history = auth.unique_account_history(end + 123, days, days).unwrap();
             assert_eq!(
                 history.samples,
                 vec![UniqueSample {
@@ -2489,7 +2494,7 @@ mod tests {
             .aggregate_daily_unique_accounts(end + DAY_SECONDS)
             .unwrap());
         assert_eq!(
-            auth.unique_account_history(end + DAY_SECONDS, 1)
+            auth.unique_account_history(end + DAY_SECONDS, 1, 1)
                 .unwrap()
                 .samples
                 .last()
@@ -2516,7 +2521,7 @@ mod tests {
             .execute("DROP TABLE account_activity_sessions", [])
             .unwrap();
         assert!(!auth.aggregate_daily_unique_accounts(end + 7200).unwrap());
-        let history = auth.unique_account_history(end + 7200, 1).unwrap();
+        let history = auth.unique_account_history(end + 7200, 1, 1).unwrap();
         assert_eq!(
             history.samples,
             vec![UniqueSample {
@@ -2536,7 +2541,7 @@ mod tests {
             0
         );
         assert!(auth
-            .unique_account_history(midnight + 7200, 365)
+            .unique_account_history(midnight + 7200, 365, 365)
             .unwrap()
             .samples
             .is_empty());
@@ -2564,7 +2569,7 @@ mod tests {
         for (offset, accounts) in [2, 1, 2, 0].into_iter().enumerate() {
             let timestamp = first + offset as i64 * DAY_SECONDS;
             assert_eq!(
-                auth.unique_account_history(timestamp, 1)
+                auth.unique_account_history(timestamp, 1, 1)
                     .unwrap()
                     .samples
                     .last(),
@@ -2574,8 +2579,22 @@ mod tests {
                 })
             );
         }
+        let daily_over_week = auth.unique_account_history(now, 7, 1).unwrap();
+        assert_eq!(
+            daily_over_week.until - daily_over_week.from,
+            7 * DAY_SECONDS
+        );
+        assert_eq!(daily_over_week.window_seconds, DAY_SECONDS);
+        assert_eq!(
+            daily_over_week
+                .samples
+                .iter()
+                .map(|sample| sample.accounts)
+                .collect::<Vec<_>>(),
+            [2, 1, 2, 0]
+        );
         for days in [7, 30, 180, 365] {
-            let history = auth.unique_account_history(now, days).unwrap();
+            let history = auth.unique_account_history(now, days, days).unwrap();
             assert_eq!(
                 history.samples,
                 (0..4)
@@ -2588,7 +2607,7 @@ mod tests {
         }
         assert_eq!(auth.backfill_daily_unique_accounts(now + 1).unwrap(), 1);
         assert_eq!(
-            auth.unique_account_history(now + 1, 7)
+            auth.unique_account_history(now + 1, 7, 7)
                 .unwrap()
                 .samples
                 .last()
@@ -2615,7 +2634,7 @@ mod tests {
         let auth = AuthService::new(path).unwrap();
         let now = first + 5 * DAY_SECONDS + 3600;
         assert_eq!(auth.backfill_daily_unique_accounts(now).unwrap(), 4);
-        let history = auth.unique_account_history(now, 7).unwrap();
+        let history = auth.unique_account_history(now, 7, 7).unwrap();
         assert_eq!(
             history.samples,
             [1, 2, 1, 2, 2, 2]
@@ -2629,7 +2648,7 @@ mod tests {
         );
         assert_eq!(history.last_aggregated_at, Some(first + 5 * DAY_SECONDS));
         assert!(auth
-            .unique_account_history(now, 1)
+            .unique_account_history(now, 1, 1)
             .unwrap()
             .samples
             .iter()
@@ -2640,7 +2659,7 @@ mod tests {
             .unwrap();
         assert_eq!(auth.backfill_daily_unique_accounts(now).unwrap(), 0);
         assert_eq!(
-            auth.unique_account_history(now, 7).unwrap().samples,
+            auth.unique_account_history(now, 7, 7).unwrap().samples,
             history.samples
         );
     }
@@ -2661,7 +2680,7 @@ mod tests {
         let now = first + 2 * DAY_SECONDS;
         assert!(auth.backfill_daily_unique_accounts(now).is_err());
         assert_eq!(
-            auth.unique_account_history(now, 7).unwrap().samples,
+            auth.unique_account_history(now, 7, 7).unwrap().samples,
             vec![UniqueSample {
                 timestamp: first,
                 accounts: 0,
@@ -2676,7 +2695,10 @@ mod tests {
         let auth = AuthService::new(path).unwrap();
         assert_eq!(auth.backfill_daily_unique_accounts(now).unwrap(), 2);
         assert_eq!(
-            auth.unique_account_history(now, 7).unwrap().samples.len(),
+            auth.unique_account_history(now, 7, 7)
+                .unwrap()
+                .samples
+                .len(),
             3
         );
         assert_eq!(auth.backfill_daily_unique_accounts(now).unwrap(), 0);
@@ -2689,7 +2711,7 @@ mod tests {
         assert!(!auth
             .aggregate_daily_unique_accounts(midnight + 7200)
             .unwrap());
-        let pending = auth.unique_account_history(midnight + 7200, 1).unwrap();
+        let pending = auth.unique_account_history(midnight + 7200, 1, 1).unwrap();
         assert!(pending.samples.is_empty());
         assert_eq!(pending.last_aggregated_at, None);
         let first = midnight + DAY_SECONDS;
@@ -2698,7 +2720,7 @@ mod tests {
             .aggregate_daily_unique_accounts(first + 3 * DAY_SECONDS)
             .unwrap());
         let history = auth
-            .unique_account_history(first + 3 * DAY_SECONDS, 7)
+            .unique_account_history(first + 3 * DAY_SECONDS, 7, 7)
             .unwrap();
         assert_eq!(
             history.samples,
@@ -2715,7 +2737,7 @@ mod tests {
         );
         assert_eq!(history.last_aggregated_at, Some(first + 3 * DAY_SECONDS));
         assert_eq!(
-            auth.unique_account_history(first + 6 * DAY_SECONDS, 1)
+            auth.unique_account_history(first + 6 * DAY_SECONDS, 1, 1)
                 .unwrap()
                 .last_aggregated_at,
             history.last_aggregated_at
@@ -2740,7 +2762,7 @@ mod tests {
         .unwrap();
         auth.aggregate_daily_unique_accounts(end).unwrap();
         assert_eq!(
-            auth.unique_account_history(end, 1)
+            auth.unique_account_history(end, 1, 1)
                 .unwrap()
                 .samples
                 .last()

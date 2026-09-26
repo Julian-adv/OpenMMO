@@ -239,6 +239,15 @@ describe('daily unique account history', () => {
     expect(() => parseUniqueHistory({ ...data, sample_interval_seconds: 60 }, hours)).toThrow()
   })
 
+  it('shows a shorter counting window over a longer range', () => {
+    const data = { from: midnight - 30 * day, until: midnight, window_seconds: 7 * day,
+      sample_interval_seconds: day, collection_started_at: 0, last_aggregated_at: midnight,
+      samples: Array.from({ length: 31 }, (_, index) => ({ timestamp: midnight - (30 - index) * day, accounts: index })) }
+    expect(parseUniqueHistory(data, 720, 168)).toEqual(data)
+    expect(() => parseUniqueHistory(data, 720, 24)).toThrow()
+    expect(() => parseUniqueHistory(data, 168, 168)).toThrow()
+  })
+
   it('keeps pending aggregation distinct from a saved zero count', () => {
     const data = { from: midnight - day, until: midnight, window_seconds: day, sample_interval_seconds: day,
       collection_started_at: midnight - 3600, last_aggregated_at: null, samples: [] }
