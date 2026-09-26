@@ -140,6 +140,7 @@ impl Collector {
         self.disks
             .refresh_specifics(true, DiskRefreshKind::nothing().with_storage());
 
+        let cpu_count = self.system.cpus().len();
         let processes: Vec<_> = self
             .system
             .processes()
@@ -152,7 +153,7 @@ impl Collector {
                         .exe()
                         .and_then(|path| path.file_name())
                         .is_some_and(is_agent),
-                cpu_percent: process.cpu_usage(),
+                cpu_percent: process.cpu_usage() / cpu_count.max(1) as f32,
                 memory_bytes: process.memory(),
             })
             .collect();
@@ -171,12 +172,12 @@ impl Collector {
         let cpu_ready = self.primed;
         self.primed = true;
         let total = self.system.total_memory();
-        if total == 0 || self.system.cpus().is_empty() {
+        if total == 0 || cpu_count == 0 {
             return None;
         }
         Some(Snapshot {
             timestamp: unix_now(),
-            cpu_count: self.system.cpus().len(),
+            cpu_count,
             cpu_percent: cpu_ready.then(|| self.system.global_cpu_usage()),
             load_average: cfg!(unix).then(|| {
                 let load = System::load_average();

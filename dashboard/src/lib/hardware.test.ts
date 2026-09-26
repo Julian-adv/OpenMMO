@@ -15,7 +15,7 @@ const fixture = (): HardwareStatus => ({
     memory_total_bytes: 8 * 1024 ** 3,
     memory_used_bytes: 3 * 1024 ** 3,
     disks: [{ mount: '/', total_bytes: 100 * 1024 ** 3, available_bytes: 20 * 1024 ** 3 }],
-    agent: { instances: 1, process_count: 3, cpu_percent: 150, memory_bytes: 256 * 1024 ** 2 },
+    agent: { instances: 1, process_count: 3, cpu_percent: 12.5, memory_bytes: 256 * 1024 ** 2 },
   },
 })
 
@@ -24,11 +24,11 @@ const panel = (history: HardwareStatus, error = '') => render(HardwarePanel, {
 }).body
 
 describe('hardware metrics', () => {
-  it('accepts multi-core process CPU and displays all requested metrics with units', () => {
+  it('displays all requested metrics with units', () => {
     const data = fixture()
     expect(parseHardwareStatus(data)).toEqual(data)
     const html = panel(data)
-    for (const text of ['37.5%', '150%', '3 GiB / 8 GiB', '256 MiB', '20 GiB', '100 GiB', '1분', '5분', '15분']) {
+    for (const text of ['37.5%', '12.5%', '3 GiB / 8 GiB', '256 MiB', '20 GiB', '100 GiB', '1분', '5분', '15분']) {
       expect(html).toContain(text)
     }
     expect(html).toContain('자식 포함 3개 프로세스')

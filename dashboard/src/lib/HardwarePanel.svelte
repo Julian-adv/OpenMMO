@@ -9,6 +9,7 @@
   let { history, loading, refreshing, error, refresh } = $derived(resource)
   let latest = $derived(history?.latest)
   let agent = $derived(latest && latest.agent.instances > 0 ? latest.agent : null)
+  let coreBasis = $derived(latest ? `${latest.cpu_count}개 논리 코어 전체 기준` : null)
   let memoryPercent = $derived(latest ? usagePercent(latest.memory_used_bytes, latest.memory_total_bytes) : null)
   const load = (value: number) => value.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 </script>
@@ -24,10 +25,10 @@
   {/if}
   <div class="hardware-summary">
     <div>
-      <span>서버 CPU 사용률</span>
+      <span>머신 전체 CPU 사용률</span>
       <strong>{formatPercent(latest?.cpu_percent)}</strong>
-      <small>{latest ? `${latest.cpu_count}개 논리 코어 전체 기준` : '수집 대기 중'}</small>
-      {#if latest?.cpu_percent != null}<meter min="0" max="100" value={latest.cpu_percent} aria-label="서버 CPU 사용률"></meter>{/if}
+      <small>{coreBasis ?? '수집 대기 중'}</small>
+      {#if latest?.cpu_percent != null}<meter min="0" max="100" value={latest.cpu_percent} aria-label="머신 전체 CPU 사용률"></meter>{/if}
     </div>
     <div>
       <span>서버 메모리 사용률</span>
@@ -38,7 +39,8 @@
     <div>
       <span>agent-client CPU</span>
       <strong>{formatPercent(agent?.cpu_percent)}</strong>
-      <small>자식 프로세스 포함 · 코어 1개 = 100%</small>
+      <small>{coreBasis ? `자식 프로세스 포함 · ${coreBasis}` : '수집 대기 중'}</small>
+      {#if agent?.cpu_percent != null}<meter min="0" max="100" value={agent.cpu_percent} aria-label="agent-client CPU 사용률"></meter>{/if}
     </div>
     <div>
       <span>agent-client 메모리</span>
