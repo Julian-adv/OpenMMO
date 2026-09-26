@@ -141,6 +141,7 @@
     eclipseState,
     setGameDate,
     setGameHour,
+    setSkyRain,
   } from './GameTimeWidget.svelte'
   import {
     DEFAULT_CAMERA_OFFSET,
@@ -788,6 +789,7 @@
         rainLayerRef?.update(deltaTime, camera, indoor ? 0 : rain)
         updateRainAmbience(rain, indoor, deltaTime / 1000)
         setRainIntensity(rain)
+        setSkyRain(rain)
         loopProfiler.record('rain', performance.now() - rainStart)
       }
 
@@ -1213,6 +1215,7 @@
       stopGameLoop()
       stopRainAmbience()
       setRainIntensity(0)
+      setSkyRain(0)
       stopChatBubbleChecker()
       networkManager.disconnect()
       monsterManager.reset()

@@ -7,6 +7,12 @@
 
   export const eclipseState = $state({ factor: 0 })
 
+  let skyRain = $state(0)
+
+  export function setSkyRain(rain: number) {
+    skyRain = rain
+  }
+
   export function setGameHour(displayHour: number, serverHour: number) {
     gameTimeState.hour = ((displayHour % 24) + 24) % 24
     gameTimeState.serverHour = ((serverHour % 24) + 24) % 24
@@ -22,6 +28,7 @@
 </script>
 
 <script lang="ts">
+  import { MathUtils } from 'three'
   import { t } from '../i18n'
   import { MONTH_NAME_KEYS } from '../data/gameCalendar'
   import { calendarShown } from '../stores/inventoryStore'
@@ -59,6 +66,13 @@
   const ECLIPSE_NEW_MOON_THRESHOLD = 0.15
   const ECLIPSE_ANGLE_THRESHOLD_RAD = 0.2 // ~11.5°
   const ECLIPSE_X_OVERLAP_THRESHOLD_PERCENT = 15
+  // Drops render from any rain > 0; the widget sky is fully overcast well
+  // before the scene's cloud dimming peaks at 0.8.
+  const OVERCAST_FULL_RAIN = 0.5
+  const OVERCAST_DAY_RGB = [138, 146, 156]
+  const OVERCAST_TWILIGHT_RGB = [120, 104, 110]
+  const OVERCAST_NIGHT_RGB = [26, 30, 40]
+  const OVERCAST_SUN_GLOW_ALPHA = 0.4
 
   interface MoonVisualDefinition extends MoonDefinition {
     sizePx: number
@@ -271,6 +285,21 @@
   )
   const twilightBlend = $derived(getTwilightBlendFactor(sunElevation))
   const dayFactor = $derived(getDayFactor(sunElevation))
+  const overcast = $derived(
+    MathUtils.smoothstep(skyRain, 0, OVERCAST_FULL_RAIN)
+  )
+  const overcastSunGlow = $derived(
+    sunVisual.isDaylight ? OVERCAST_SUN_GLOW_ALPHA * dayFactor : 0
+  )
+  const overcastColor = $derived.by(() => {
+    const day = OVERCAST_DAY_RGB.map((c, i) =>
+      MathUtils.lerp(c, OVERCAST_TWILIGHT_RGB[i], twilightBlend)
+    )
+    const rgb = OVERCAST_NIGHT_RGB.map((c, i) =>
+      Math.round(MathUtils.lerp(c, day[i], dayFactor))
+    )
+    return `rgb(${rgb.join(',')})`
+  })
   const absoluteDayIndex = $derived(getGameCalendarDayIndex(gameTimeState.date))
   const nightSkyOffsetPx = $derived(() => {
     const { month, day } = gameTimeState.date
@@ -354,6 +383,12 @@
           style={`--moon-x:${moon.xPercent}%; --moon-y:${moon.yPercent}%; --moon-size:${moon.sizePx}px; --moon-opacity:${moon.opacity}; --moon-hue:${moon.hueRotateDeg}deg; --moon-saturation:${moon.saturation}; --moon-glow:${getMoonGlowFilter(moon, sunVisual.isDaylight)};`}
         ></canvas>
       {/each}
+      {#if overcast > 0}
+        <div
+          class="overcast"
+          style="--overcast-color: {overcastColor}; opacity: {overcast}; --glow-x: {sunVisual.xPercent}%; --glow-y: {sunVisual.yPercent}%; --glow-alpha: {overcastSunGlow}"
+        ></div>
+      {/if}
       <img
         class="horizon-front"
         src="/icons/horizon-night-front.png"
@@ -493,6 +528,44 @@
     filter: saturate(var(--moon-saturation)) hue-rotate(var(--moon-hue))
       var(--moon-glow);
     z-index: 2;
+  }
+
+  .overcast {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    background:
+      radial-gradient(
+        ellipse 36px 28px at var(--glow-x) var(--glow-y),
+        rgba(255, 248, 225, var(--glow-alpha)),
+        transparent
+      ),
+      radial-gradient(
+        ellipse 22% 55% at 14% 30%,
+        rgba(255, 255, 255, 0.14),
+        transparent 70%
+      ),
+      radial-gradient(
+        ellipse 26% 60% at 46% 22%,
+        rgba(255, 255, 255, 0.12),
+        transparent 70%
+      ),
+      radial-gradient(
+        ellipse 24% 55% at 80% 34%,
+        rgba(255, 255, 255, 0.13),
+        transparent 70%
+      ),
+      radial-gradient(
+        ellipse 30% 45% at 30% 75%,
+        rgba(0, 0, 0, 0.16),
+        transparent 70%
+      ),
+      radial-gradient(
+        ellipse 30% 45% at 68% 70%,
+        rgba(0, 0, 0, 0.14),
+        transparent 70%
+      ),
+      var(--overcast-color);
   }
 
   .horizon-front {
