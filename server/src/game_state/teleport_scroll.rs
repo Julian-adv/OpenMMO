@@ -1,5 +1,5 @@
 use super::{inventory::consume_one, GameState};
-use crate::{item_defs::UseEffect, types::PlayerId};
+use crate::{dungeon_defs::place_label, item_defs::UseEffect, types::PlayerId};
 use onlinerpg_shared::{
     dungeon::{
         dungeon_cache_key, floor_level_for_passability, passability_floor_for_level, world_to_cell,
@@ -9,6 +9,7 @@ use onlinerpg_shared::{
     wrap_world_x, Position, ServerMessage, TeleportPhase,
 };
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use tracing::info;
 
 const MIN_DISTANCE: f32 = 32.0;
 const MAX_DISTANCE: f32 = 2_000.0;
@@ -129,7 +130,7 @@ impl GameState {
         {
             return false;
         }
-        let Some((origin, rotation, _)) = self.get_player_position(player_id).await else {
+        let Some((origin, rotation, origin_floor, name)) = self.player_pose(player_id).await else {
             return false;
         };
         let Some((destination, floor_level)) = self.random_teleport_destination(&origin, rng).await
@@ -164,18 +165,24 @@ impl GameState {
             inventories
                 .get_mut(player_id)
                 .filter(|inv| valid_scroll(inv))
-                .map(|inv| {
-                    consume_one(inv, instance_id);
-                    inv.clone()
-                })
+                .and_then(|inv| consume_one(inv, instance_id).map(|def_id| (def_id, inv.clone())))
         };
-        let Some(snapshot) = snapshot else {
+        let Some((def_id, snapshot)) = snapshot else {
             return false;
         };
         self.mark_inventory_dirty(player_id).await;
         self.send_inventory_snapshot(player_id, snapshot).await;
         self.teleport_player_with_effects(player_id, destination, rotation, floor_level)
             .await;
+        info!(
+            "{name} consumed {def_id} at {} ({:.1},{:.1}), arrived at {} ({:.1},{:.1})",
+            place_label(&origin, origin_floor),
+            origin.x,
+            origin.z,
+            place_label(&destination, floor_level),
+            destination.x,
+            destination.z
+        );
         if self
             .players
             .read()

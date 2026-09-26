@@ -7,10 +7,15 @@ const PIVOT_TURN_RATE: f32 = std::f32::consts::FRAC_PI_2;
 const MIN_PIVOT_SECONDS: f32 = 0.5;
 const PIVOT_LOOKAHEAD: usize = 8;
 const MIN_PIVOT_ANGLE: f32 = 10_f32.to_radians();
+const MAX_MOUNT_SAMPLES: usize = 8192;
 
-fn line_points(from: Position, dx: f32, dz: f32) -> impl Iterator<Item = Position> {
+pub(super) fn line_points(
+    from: Position,
+    dx: f32,
+    dz: f32,
+) -> impl ExactSizeIterator<Item = Position> {
     let steps = dx.hypot(dz).ceil().max(1.0) as usize;
-    (1..=steps).map(move |step| {
+    (1..steps + 1).map(move |step| {
         let t = step as f32 / steps as f32;
         Position {
             x: wrap_world_x(from.x + dx * t),
@@ -163,7 +168,12 @@ impl GameState {
                     travel_seconds: Some((turn.abs() / PIVOT_TURN_RATE).max(MIN_PIVOT_SECONDS)),
                 });
             }
-            for mut sample in line_points(position, dx, dz) {
+            let samples = line_points(position, dx, dz);
+            if points.len() + samples.len() > MAX_MOUNT_SAMPLES {
+                return (points, Some(PathTermination::NodeLimit));
+            }
+            let step_seconds = distance / samples.len() as f32 / speed;
+            for mut sample in samples {
                 sample.y = self
                     .surface_ground_y(0, &sample, position.y, Some(mount))
                     .await;
@@ -171,10 +181,7 @@ impl GameState {
                     position: sample,
                     floor_level: 0,
                     rotation: Some(rotation),
-                    travel_seconds: Some(
-                        shortest_world_delta_x(position.x, sample.x).hypot(sample.z - position.z)
-                            / speed,
-                    ),
+                    travel_seconds: Some(step_seconds),
                 });
                 position = sample;
             }
@@ -204,7 +211,7 @@ impl GameState {
                 if distance < 0.02 {
                     break;
                 }
-                if points.len() >= 8192 {
+                if points.len() >= MAX_MOUNT_SAMPLES {
                     return (points, Some(PathTermination::NodeLimit));
                 }
                 let seconds = STEP_SECONDS.min(distance / speed);
@@ -215,6 +222,9 @@ impl GameState {
                     seconds,
                     mount.turn_radius().min(distance / 4.0),
                 );
+                if swept_blocked(&self.passability_read(), position, ax, az, 0) {
+                    return (points, Some(PathTermination::Unreachable));
+                }
                 let mut next = Position {
                     x: wrap_world_x(position.x + ax),
                     y: position.y,
@@ -223,9 +233,6 @@ impl GameState {
                 next.y = self
                     .surface_ground_y(0, &next, position.y, Some(mount))
                     .await;
-                if swept_blocked(&self.passability_read(), position, ax, az, 0) {
-                    return (points, Some(PathTermination::Unreachable));
-                }
                 points.push(MoveWaypoint {
                     position: next,
                     floor_level: 0,

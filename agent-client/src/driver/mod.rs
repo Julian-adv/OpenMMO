@@ -387,6 +387,10 @@ fn clear_entry(s: &SharedState, meal: &onlinerpg_shared::meal::Meal) -> Option<S
     ))
 }
 
+fn running(handle: &Option<tokio::task::JoinHandle<()>>) -> bool {
+    handle.as_ref().is_some_and(|h| !h.is_finished())
+}
+
 /// The main LLM agent driver loop. Runs as a tokio task.
 ///
 /// Ticks every ATTACK_COOLDOWN to send attack packets when there's an active
@@ -1119,19 +1123,17 @@ pub async fn llm_driver(
                 .map(|i| &schedule[i])
                 .filter(|entry| entry.is_fishing())
             {
-                let trip_live = unload_trip.as_ref().is_some_and(|h| !h.is_finished());
-                if !trip_live {
-                    if unload_retry_at.is_none_or(|at| Instant::now() >= at)
-                        && unload_catch::is_due(&*state.lock().await)
-                    {
-                        unload_retry_at = Some(Instant::now() + unload_catch::RETRY);
-                        unload_trip = Some(tokio::spawn(unload_catch::run(
-                            Arc::clone(&state),
-                            label.to_string(),
-                        )));
-                    } else {
-                        maintain_scheduled_fishing(&state, entry).await;
-                    }
+                if running(&unload_trip) {
+                } else if unload_retry_at.is_none_or(|at| Instant::now() >= at)
+                    && unload_catch::is_due(&*state.lock().await)
+                {
+                    unload_retry_at = Some(Instant::now() + unload_catch::RETRY);
+                    unload_trip = Some(tokio::spawn(unload_catch::run(
+                        Arc::clone(&state),
+                        label.to_string(),
+                    )));
+                } else {
+                    maintain_scheduled_fishing(&state, entry).await;
                 }
             }
         }
@@ -1151,8 +1153,7 @@ pub async fn llm_driver(
             if let Some(response) = await_llm_response(handle, &label, &mut prompt_backoff).await {
                 // A live visit walk or catch trip owns the body; the LLM turn
                 // may talk but not move.
-                let routine_walk = visit_walk.as_ref().is_some_and(|h| !h.is_finished())
-                    || unload_trip.as_ref().is_some_and(|h| !h.is_finished());
+                let routine_walk = running(&visit_walk) || running(&unload_trip);
                 let skip_movement = {
                     let s = state.lock().await;
                     has_scheduled_action || s.trade_busy || s.self_fishing || routine_walk

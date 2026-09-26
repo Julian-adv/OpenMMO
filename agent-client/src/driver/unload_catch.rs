@@ -38,7 +38,7 @@ struct Plan {
 
 fn plan(bag: &[ItemInstance]) -> Plan {
     let mut plan = Plan::default();
-    let mut fish: Vec<(&ItemInstance, bool, i64)> = Vec::new();
+    let mut sellable: Vec<(&ItemInstance, bool, i64)> = Vec::new();
     for item in bag.iter().filter(|i| i.quantity > 0 && !i.locked) {
         let Some(def) = item_defs::get(&item.item_def_id) else {
             continue;
@@ -50,14 +50,14 @@ fn plan(bag: &[ItemInstance]) -> Plan {
         match (def.category.as_deref(), def.base_price) {
             (Some("coin_catch"), _) => plan.open.push(item.instance_id),
             (Some("junk"), None) => plan.drop.push(line),
-            (Some("junk"), Some(price)) => fish.push((item, false, price)),
-            (Some("fish"), Some(price)) => fish.push((item, def.grills_into.is_some(), price)),
+            (Some("junk"), Some(price)) => sellable.push((item, false, price)),
+            (Some("fish"), Some(price)) => sellable.push((item, def.grills_into.is_some(), price)),
             _ => {}
         }
     }
-    fish.sort_by_key(|(_, grillable, price)| (!grillable, *price));
+    sellable.sort_by_key(|(_, grillable, price)| (!grillable, *price));
     let mut keep = MEAL_FISH_KEPT;
-    for (item, grillable, _) in fish {
+    for (item, grillable, _) in sellable {
         let kept = if grillable {
             keep.min(item.quantity)
         } else {
@@ -92,22 +92,19 @@ pub(super) async fn run(state: Arc<Mutex<SharedState>>, label: String) {
             }
         }
     };
-    let plan = {
+    let sell = {
         let mut s = state.lock().await;
-        let plan = plan(&s.self_bag);
+        let Plan { open, drop, sell } = plan(&s.self_bag);
         let mut commands: Vec<ClientMessage> = Vec::new();
         if s.self_fishing {
             commands.push(ClientMessage::FishingStop);
         }
         commands.extend(
-            plan.open
-                .iter()
-                .map(|&instance_id| ClientMessage::UseItem { instance_id }),
+            open.into_iter()
+                .map(|instance_id| ClientMessage::UseItem { instance_id }),
         );
-        if !plan.drop.is_empty() {
-            commands.push(ClientMessage::DropItems {
-                items: plan.drop.clone(),
-            });
+        if !drop.is_empty() {
+            commands.push(ClientMessage::DropItems { items: drop });
         }
         for command in commands {
             if let Err(e) = s.send_background_command(command).await {
@@ -116,9 +113,9 @@ pub(super) async fn run(state: Arc<Mutex<SharedState>>, label: String) {
             }
         }
         s.catch_slipped = false;
-        plan
+        sell
     };
-    if plan.sell.is_empty() {
+    if sell.is_empty() {
         return;
     }
 
@@ -132,7 +129,7 @@ pub(super) async fn run(state: Arc<Mutex<SharedState>>, label: String) {
     }
     let mut s = state.lock().await;
     let mut sold = Vec::new();
-    for (def_id, items) in plan.sell {
+    for (def_id, items) in sell {
         let units: u32 = items.iter().map(|l| l.qty).sum();
         let command = ClientMessage::SellItems {
             merchant_player_id: buyer,

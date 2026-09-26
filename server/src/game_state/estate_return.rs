@@ -81,7 +81,7 @@ impl GameState {
         {
             return false;
         }
-        let snapshot = {
+        let (def_id, snapshot) = {
             let mut inventories = self.inventories.write().await;
             let Some(inv) = inventories.get_mut(player_id) else {
                 return false;
@@ -95,9 +95,11 @@ impl GameState {
             }) {
                 return false;
             }
-            consume_one(inv, instance_id);
-            inv.clone()
+            (consume_one(inv, instance_id), inv.clone())
         };
+        if let Some(def_id) = def_id {
+            self.log_consumed(player_id, &def_id).await;
+        }
         self.mark_inventory_dirty(player_id).await;
         self.send_inventory_snapshot(player_id, snapshot).await;
         self.teleport_player_with_effects(player_id, position, 0.0, 0)

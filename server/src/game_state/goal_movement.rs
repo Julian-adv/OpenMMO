@@ -472,18 +472,11 @@ impl GameState {
         for point in &path.waypoints {
             let dx = shortest_world_delta_x(previous.x, point.x);
             let dz = point.z - previous.z;
-            let count = dx.hypot(dz).ceil().max(1.0) as usize;
-            if waypoints.len() + count > MAX_ROUTE_SAMPLES {
+            let samples = route::line_points(previous, dx, dz);
+            if waypoints.len() + samples.len() > MAX_ROUTE_SAMPLES {
                 return Err(MoveStatus::NodeLimit);
             }
-            let from = previous;
-            for step in 1..=count {
-                let fraction = step as f32 / count as f32;
-                let mut position = Position {
-                    x: wrap_world_x(from.x + dx * fraction),
-                    y: previous.y,
-                    z: from.z + dz * fraction,
-                };
+            for mut position in samples {
                 position.y = self
                     .goal_ground_y(point.floor, position)
                     .await

@@ -1675,13 +1675,9 @@ impl super::GameState {
 
         let name = actor.name;
         info!("{name} {enchant_log}");
-        // Reagents bypass consume_one_and_sync, so log their consumption here.
-        if let Some((position, _, floor_level, _)) = self.player_pose(player_id).await {
-            let place = crate::dungeon_defs::place_label(&position, floor_level);
-            info!("{name} consumed {WHETSTONE_OIL_ITEM_ID} at {place}");
-            if let Some(scroll_def) = scroll_def {
-                info!("{name} consumed {scroll_def} at {place}");
-            }
+        self.log_consumed(player_id, WHETSTONE_OIL_ITEM_ID).await;
+        if let Some(scroll_def) = scroll_def {
+            self.log_consumed(player_id, &scroll_def).await;
         }
         self.mark_inventory_dirty(player_id).await;
         self.send_inventory_snapshot(player_id, snapshot).await;
@@ -1722,6 +1718,15 @@ impl super::GameState {
             .is_some_and(|inv| inv.has_item(item_def_id))
     }
 
+    /// The `consumed` line log audits count; callers that spend items under
+    /// their own inventory lock call this after `consume_one`.
+    pub(super) async fn log_consumed(&self, player_id: &PlayerId, def_id: &str) {
+        if let Some((position, _, floor_level, name)) = self.player_pose(player_id).await {
+            let place = crate::dungeon_defs::place_label(&position, floor_level);
+            info!("{name} consumed {def_id} at {place}");
+        }
+    }
+
     pub(super) async fn consume_one_and_sync(&self, player_id: &PlayerId, instance_id: u64) {
         let (snapshot, item_def_id) = {
             let mut inventories = self.inventories.write().await;
@@ -1734,10 +1739,7 @@ impl super::GameState {
         };
 
         if let Some(def_id) = item_def_id {
-            if let Some((position, _, floor_level, name)) = self.player_pose(player_id).await {
-                let place = crate::dungeon_defs::place_label(&position, floor_level);
-                info!("{name} consumed {def_id} at {place}");
-            }
+            self.log_consumed(player_id, &def_id).await;
         }
 
         self.mark_dirty(player_id).await;
