@@ -98,7 +98,7 @@ impl GameState {
             (consume_one(inv, instance_id), inv.clone())
         };
         if let Some(def_id) = def_id {
-            self.log_consumed(player_id, &[&def_id]).await;
+            self.log_consumed(player_id, [def_id.as_str()]).await;
         }
         self.mark_inventory_dirty(player_id).await;
         self.send_inventory_snapshot(player_id, snapshot).await;

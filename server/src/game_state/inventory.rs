@@ -1675,13 +1675,8 @@ impl super::GameState {
 
         let name = actor.name;
         info!("{name} {enchant_log}");
-        match scroll_def.as_deref() {
-            Some(scroll) => {
-                self.log_consumed(player_id, &[WHETSTONE_OIL_ITEM_ID, scroll])
-                    .await
-            }
-            None => self.log_consumed(player_id, &[WHETSTONE_OIL_ITEM_ID]).await,
-        }
+        let reagents = std::iter::once(WHETSTONE_OIL_ITEM_ID).chain(scroll_def.as_deref());
+        self.log_consumed(player_id, reagents).await;
         self.mark_inventory_dirty(player_id).await;
         self.send_inventory_snapshot(player_id, snapshot).await;
         self.send_system_message(player_id, message).await;
@@ -1723,7 +1718,11 @@ impl super::GameState {
 
     /// The `consumed` line log audits count; callers that spend items under
     /// their own inventory lock call this after `consume_one`.
-    pub(super) async fn log_consumed(&self, player_id: &PlayerId, def_ids: &[&str]) {
+    pub(super) async fn log_consumed<'a>(
+        &self,
+        player_id: &PlayerId,
+        def_ids: impl IntoIterator<Item = &'a str>,
+    ) {
         if let Some((position, _, floor_level, name)) = self.player_pose(player_id).await {
             let place = crate::dungeon_defs::place_label(&position, floor_level);
             for def_id in def_ids {
@@ -1744,7 +1743,7 @@ impl super::GameState {
         };
 
         if let Some(def_id) = item_def_id {
-            self.log_consumed(player_id, &[&def_id]).await;
+            self.log_consumed(player_id, [def_id.as_str()]).await;
         }
 
         self.mark_dirty(player_id).await;
