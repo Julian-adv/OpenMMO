@@ -107,7 +107,6 @@ async function main() {
   renderer.setClearColor('#172024')
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.PCFShadowMap
   host.prepend(renderer.domElement)
   const scene = new THREE.Scene()
   scene.fog = new THREE.Fog('#172024', 26, 53)

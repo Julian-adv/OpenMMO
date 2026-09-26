@@ -2,6 +2,7 @@
   import { t } from './lib/i18n'
   import { onMount } from 'svelte'
   import { Canvas } from '@threlte/core'
+  import { PCFShadowMap } from 'three'
   import GameScene from './lib/components/GameScene.svelte'
   import GameHud from './lib/components/GameHud.svelte'
   import LoginScreen from './lib/components/LoginScreen.svelte'
@@ -356,7 +357,11 @@
     <div class="canvas-layer" class:dead={screen === 'game' && isPlayerDead}>
       <!-- "manual", not "on-demand": the character scenes' useTask callbacks
            auto-invalidate every frame, which would defeat the render cap. -->
-      <Canvas renderMode="manual" shadows createRenderer={createWebGPURenderer}>
+      <Canvas
+        renderMode="manual"
+        shadows={PCFShadowMap}
+        createRenderer={createWebGPURenderer}
+      >
         <!-- Manual mode draws nothing until something invalidates. GameScene
              does that from its simulation step; every other screen needs this. -->
         {#if screen !== 'game'}

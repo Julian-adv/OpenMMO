@@ -130,7 +130,6 @@ async function main() {
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = 1.05
   renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.PCFShadowMap
   renderer.setClearColor('#080e17')
   host.prepend(renderer.domElement)
   const scene = new THREE.Scene()

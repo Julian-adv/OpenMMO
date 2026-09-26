@@ -55,7 +55,6 @@ async function main() {
     renderer.setClearColor('#111d26')
     renderer.toneMapping = THREE.ACESFilmicToneMapping
     renderer.shadowMap.enabled = true
-    renderer.shadowMap.type = THREE.PCFShadowMap
     host.append(renderer.domElement)
     const scene = new THREE.Scene()
     scene.add(new THREE.HemisphereLight('#d1e7f0', '#47565a', 2.5))
