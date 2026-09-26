@@ -119,6 +119,7 @@
     getWeaponModelPath,
   } from '../utils/modelPaths'
   import { loadGLB } from '../utils/gltfCache'
+  import { warmupPipelines } from '../utils/pipelineWarmup'
   import { getDaggerComboClip } from '../utils/daggerSkillAnimation'
   import { DaggerBladeTrail } from '../effects/dagger-blade-trail'
   import { DAGGER_SKILL } from '../data/daggerSkill'
@@ -296,7 +297,14 @@
   let nametagScale = $state(1)
   let nametagHeight = $state(2.7)
   let nametagGroup = $state<THREE.Group | undefined>(undefined)
-  const { size } = useThrelte()
+  const threlte = useThrelte()
+  const { size } = threlte
+
+  async function loadWarmGLB(path: string): Promise<GLTF> {
+    const gltf = await loadGLB(path)
+    await warmupPipelines(threlte, `glb:${path}`, gltf.scene)
+    return gltf
+  }
   let animDebugInfo = $state('')
 
   const damageText = new DamageTextEmitter()
@@ -393,9 +401,12 @@
     let cancelled = false
     // Load the seated pose before choosing the boat's first animation.
     void Promise.all([loadGLB(ROWBOAT_MODEL_PATH), loadSocialAnimations()])
-      .then(([gltf]) => {
+      .then(async ([gltf]) => {
         if (cancelled) return
-        boatMount = new BoatMount(gltf)
+        const boat = new BoatMount(gltf)
+        await warmupPipelines(threlte, 'mount:rowboat', boat.root)
+        if (cancelled) return
+        boatMount = boat
         rowingMotion = new RiderMotion(root)
         lastAnimKey = undefined
         playAnimationForState()
@@ -431,6 +442,8 @@
         )
         if (cancelled) return
         mount = new HorseMount(horse)
+        await warmupPipelines(threlte, 'mount:horse', mount.root)
+        if (cancelled) return
         horseMount = mount
         riderMotion = new RiderMotion(root)
         horseReins = new HorseReins(mount.root, root)
@@ -692,7 +705,7 @@
 
     const gen = ++weaponAttachGeneration
     const weaponModelPath = getWeaponModelPath(itemDef.worldModel)
-    loadGLB(weaponModelPath).then((gltf) => {
+    loadWarmGLB(weaponModelPath).then((gltf) => {
       if (gen !== weaponAttachGeneration || !clonedScene) return
 
       attachWeaponModel(gltf.scene, clonedScene, itemDefId)
@@ -735,7 +748,7 @@
 
     const gen = ++offhandAttachGeneration
     const offhandModelPath = getWeaponModelPath(itemDef.worldModel)
-    loadGLB(offhandModelPath).then(async (gltf) => {
+    loadWarmGLB(offhandModelPath).then(async (gltf) => {
       if (gen !== offhandAttachGeneration || !clonedScene) return
 
       attachOffhandModel(gltf.scene, clonedScene)
@@ -882,7 +895,7 @@
 
     const itemDef = getItemDef(MANDOLIN_ITEM_DEF_ID)
     if (!itemDef?.worldModel) return
-    loadGLB(getWeaponModelPath(itemDef.worldModel)).then((gltf) => {
+    loadWarmGLB(getWeaponModelPath(itemDef.worldModel)).then((gltf) => {
       if (gen !== musicPropGeneration || !clonedScene) return
       const rightHandBone = findBoneByName(clonedScene, 'RightHand')
       if (!rightHandBone) return
@@ -1294,6 +1307,12 @@
       // the lift differed every session and the character floated above flat
       // dungeon floors after a restart.
       cloned.position.y = computeSoleGroundOffset(newModelRoot)
+      // Compiles alongside the retargeting below; awaited before mounting.
+      const warmed = warmupPipelines(
+        threlte,
+        `character:${modelPath}`,
+        newModelRoot
+      )
 
       const baseAnimations = getGltfAnimations(activeGltf)
       const locomotionAnimations = getGltfAnimations(locomotionGltfData)
@@ -1407,6 +1426,8 @@
         }
       }
 
+      await warmed
+      if (destroyed) return
       clonedScene = cloned
       modelRoot = newModelRoot
       effectAnchors = new PlayerEffectAnchors(cloned)
@@ -1427,6 +1448,8 @@
     }
   }
 
+  let destroyed = false
+
   onMount(() => {
     // Wait for all GLTFs (character model + animation packs) to load
     isLoading = true
@@ -1438,6 +1461,7 @@
 
     // Cleanup on unmount
     return () => {
+      destroyed = true
       daggerTrail?.dispose()
       daggerTrail = undefined
       if (mixer) {

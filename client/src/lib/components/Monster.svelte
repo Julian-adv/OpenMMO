@@ -14,7 +14,7 @@
 </script>
 
 <script lang="ts">
-  import { T, useLoader } from '@threlte/core'
+  import { T, useLoader, useThrelte } from '@threlte/core'
   import TextLabel from './TextLabel.svelte'
   import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
   import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
@@ -41,6 +41,7 @@
   import { HOVER_SCALE_IDLE, stickyHoverScale } from '../utils/stickyHover'
   import type { TerrainHeightManager } from '../managers/terrainHeightManager'
   import TargetRing from './TargetRing.svelte'
+  import { warmupPipelines } from '../utils/pipelineWarmup'
 
   interface Props {
     position: { x: number; y: number; z: number }
@@ -133,6 +134,8 @@
   let mixer = $state<THREE.AnimationMixer | undefined>(undefined)
   let currentAction = $state<THREE.AnimationAction | undefined>(undefined)
   let model: THREE.Group | undefined = $state(undefined)
+  let modelReady = $state(false)
+  const threlte = useThrelte()
   let group = $state<THREE.Group>()
   let nametagGroup = $state<THREE.Group | undefined>(undefined)
   let nametagHeight = $state(2.5)
@@ -478,6 +481,13 @@
         hoverBox = box
 
         model = clonedScene
+        void warmupPipelines(
+          threlte,
+          `monster:${initialModel}`,
+          clonedScene
+        ).then(() => {
+          modelReady = true
+        })
         // Setup mixer on the cloned scene
         mixer = new THREE.AnimationMixer(clonedScene)
 
@@ -547,7 +557,8 @@
       return
     }
 
-    weaponObject = $weaponGltf.scene.clone(true)
+    const weapon = $weaponGltf.scene.clone(true)
+    weaponObject = weapon
     weaponObject.position.copy(WEAPON_OFFSET)
     weaponObject.rotation.copy(WEAPON_ROTATION)
     weaponObject.scale.setScalar(WEAPON_SCALE)
@@ -564,8 +575,15 @@
         child.userData.monsterId = id
       }
     })
-    bone.add(weaponObject)
     weaponAttached = true
+    const attachBone = bone
+    void warmupPipelines(
+      threlte,
+      `monster-weapon:${initialWeaponModel}`,
+      weapon
+    ).then(() => {
+      if (weaponObject === weapon) attachBone.add(weapon)
+    })
   })
 
   // Export the model group for raycasting from parent
@@ -589,7 +607,7 @@
   }
 </script>
 
-{#if model}
+{#if model && modelReady}
   <T.Group
     bind:ref={group}
     position={[position.x, position.y, position.z]}

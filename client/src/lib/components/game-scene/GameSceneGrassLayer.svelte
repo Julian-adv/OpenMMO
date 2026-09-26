@@ -236,6 +236,12 @@
     mesh.castShadow = grassCastsShadow
     mesh.receiveShadow = false
     mesh.frustumCulled = true
+    // The shadow pass swaps in its own depth material, which still splits
+    // transparent double-sided casters into two passes. Depth comes out the
+    // same either way, and the split doubled every grass shadow draw.
+    mesh.onBeforeShadow = (_r, _s, _c, _sc, _g, depthMaterial) => {
+      depthMaterial.forceSinglePass = true
+    }
     return { mesh, ctx, capacity }
   }
 

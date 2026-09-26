@@ -168,6 +168,10 @@
   import { createLoopProfiler } from './game-scene/loop-profiler'
   import { createRenderProfiler } from './game-scene/render-profiler'
   import {
+    installAsyncPipelines,
+    type AsyncPipelines,
+  } from './game-scene/async-pipelines'
+  import {
     setupCsmShadow,
     applyGraphicsPreset,
   } from './game-scene/renderer-quality'
@@ -490,6 +494,7 @@
   const loopProfiler = createLoopProfiler(() => loopProfileEnabled)
 
   const renderProfiler = createRenderProfiler(() => loopProfileEnabled)
+  let asyncPipelines: AsyncPipelines | null = null
 
   // Player state from PlayerControl
   let currentPlayerState = $state<PlayerState>({
@@ -968,7 +973,11 @@
       // Detect when pipeline compilation is done: once data is ready,
       // wait for a few consecutive smooth frames before hiding the loading dialog.
       if (isSceneCompiling && initialDataReadyAt > 0) {
-        if (rawDeltaTime < SMOOTH_FRAME_TIME_MS) {
+        // Objects whose pipelines are still compiling aren't drawn yet.
+        if (
+          rawDeltaTime < SMOOTH_FRAME_TIME_MS &&
+          asyncPipelines?.pendingCount() === 0
+        ) {
           smoothFrameCount++
         } else {
           smoothFrameCount = 0
@@ -1100,6 +1109,7 @@
     loopProfileEnabled = false
     loopProfiler.resetWindow(performance.now())
     renderProfiler.wrap(renderer)
+    asyncPipelines = installAsyncPipelines(renderer, scene)
 
     const cleanupDebugConsole = registerDebugConsole(() => ({
       loopProfiler,
@@ -1249,6 +1259,7 @@
 
     return () => {
       cleanupDebugConsole()
+      asyncPipelines?.dispose()
       scene.environment?.dispose()
       scene.environment = null
       unsubscribeViewportSize()

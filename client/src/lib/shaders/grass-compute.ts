@@ -318,6 +318,9 @@ export function createBladeMaterial(
   mat.side = THREE.DoubleSide
   mat.metalness = 0.0
   mat.transparent = true
+  // A flat strip never overlaps itself, so three.js's back-then-front split
+  // for transparent double-sided materials would only double the draws.
+  mat.forceSinglePass = true
   mat.alphaTest = 0.1
   mat.envMapIntensity = 0.1
 

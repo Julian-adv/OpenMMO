@@ -53,11 +53,13 @@ export function createRenderProfiler(isEnabled: () => boolean): RenderProfiler {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const r = renderer as any
       const origRender = r.render.bind(r)
+      // Shadow maps render from inside the main render; only the outermost
+      // call records time and draws, or the nested ones would count twice.
+      let depth = 0
       r.render = (scene: THREE.Scene, cam: THREE.Camera) => {
-        if (!isEnabled()) {
-          origRender(scene, cam)
-          return
-        }
+        const enabled = isEnabled()
+        if (enabled) renderCalls[currentTag] += 1
+        const measure = enabled && depth === 0
         // `info.render.drawCalls` accumulates per rAF frame (reset by Animation
         // auto-reset), so take a delta around this single render() call to get
         // the per-call draw count. `info.render.calls` is cumulative since app
@@ -66,14 +68,16 @@ export function createRenderProfiler(isEnabled: () => boolean): RenderProfiler {
         const drawsBefore = infoRender?.drawCalls ?? 0
         const trisBefore = infoRender?.triangles ?? 0
         const start = performance.now()
-        origRender(scene, cam)
-        const elapsed = performance.now() - start
-        const drawsAfter = infoRender?.drawCalls ?? 0
-        const trisAfter = infoRender?.triangles ?? 0
-        ms[currentTag] += elapsed
-        renderCalls[currentTag] += 1
-        drawCalls[currentTag] += drawsAfter - drawsBefore
-        triangles[currentTag] += trisAfter - trisBefore
+        depth++
+        try {
+          origRender(scene, cam)
+        } finally {
+          depth--
+        }
+        if (!measure) return
+        ms[currentTag] += performance.now() - start
+        drawCalls[currentTag] += (infoRender?.drawCalls ?? 0) - drawsBefore
+        triangles[currentTag] += (infoRender?.triangles ?? 0) - trisBefore
       }
     },
     resetFrame() {

@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { AnimationName } from '../types/animations'
+import { createFrameYielder, yieldTask } from './frameYield'
 import { loadGLB } from './gltfCache'
 import { CHARACTER_ANIMATION_PACK_PATHS } from './modelPaths'
 
@@ -390,6 +391,10 @@ export async function retargetAnimationsForCharacterModel(
   const cachedBatch = retargetBatchCache.get(batchKey)
   if (cachedBatch) return cachedBatch
 
+  // Start in a task of our own; the clones below would otherwise land on the
+  // frame that spawned the model.
+  await yieldTask()
+
   // Operate on clones only. Both target and source scenes can come from shared
   // loader instances, and retarget internals mutate skeleton transforms.
   const targetSceneClone = SkeletonUtils.clone(targetScene) as THREE.Object3D
@@ -474,7 +479,7 @@ export async function retargetAnimationsForCharacterModel(
     }
 
     // Yield to the browser after each clip so the render loop keeps running
-    await new Promise((r) => setTimeout(r, 0))
+    await yieldTask()
   }
 
   retargetBatchCache.set(batchKey, retargetedClips)
@@ -633,15 +638,15 @@ const GROUND_SAMPLE_STRIDE = 8
  * The floor eases along with the body — held at 0 it would push every key but
  * the last back up, leaving the whole rest offset to drop in the final key.
  */
-function groundClipToRest(
+async function groundClipToRest(
   hipTrack: THREE.KeyframeTrack,
-  lowestAt: (time: number) => number,
+  lowestAt: (time: number) => Promise<number>,
   restOffset: number
-): void {
+): Promise<void> {
   const times = hipTrack.times
   const last = times.length - 1
-  const startLift = -lowestAt(times[0])
-  const endLift = -lowestAt(times[last]) + restOffset
+  const startLift = -(await lowestAt(times[0]))
+  const endLift = -(await lowestAt(times[last])) + restOffset
   const smoothstep = (x: number) => x * x * (3 - 2 * x)
 
   for (let i = 0; i <= last; i++) {
@@ -650,7 +655,10 @@ function groundClipToRest(
   }
   for (let i = 0; i <= last; i++) {
     const floor = smoothstep(times[i] / times[last]) * restOffset
-    hipTrack.values[i * 3 + 1] += Math.max(0, floor - lowestAt(times[i]))
+    hipTrack.values[i * 3 + 1] += Math.max(
+      0,
+      floor - (await lowestAt(times[i]))
+    )
   }
 }
 
@@ -677,6 +685,7 @@ export async function groundRetargetedClips(
   const scene = SkeletonUtils.clone(targetScene) as THREE.Object3D
   const mixer = new THREE.AnimationMixer(scene)
   const grounded: THREE.AnimationClip[] = []
+  const yieldIfDue = createFrameYielder()
 
   for (const clip of clips) {
     const shifted = clip.clone()
@@ -690,7 +699,8 @@ export async function groundRetargetedClips(
 
     const action = mixer.clipAction(shifted)
     action.play()
-    const lowestAt = (time: number) => {
+    const lowestAt = async (time: number) => {
+      await yieldIfDue()
       mixer.setTime(Math.min(time, shifted.duration - 1e-4))
       return (
         CORPSE_GROUND_CLEARANCE -
@@ -699,13 +709,13 @@ export async function groundRetargetedClips(
     }
 
     if (clip.name === options.restClip) {
-      groundClipToRest(hipTrack, lowestAt, options.restOffset ?? 0)
+      await groundClipToRest(hipTrack, lowestAt, options.restOffset ?? 0)
     } else {
       let lift = 0
       for (let i = 0; i <= GROUND_SAMPLE_POSES; i++) {
         lift = Math.max(
           lift,
-          -lowestAt((i * shifted.duration) / GROUND_SAMPLE_POSES)
+          -(await lowestAt((i * shifted.duration) / GROUND_SAMPLE_POSES))
         )
       }
       for (let i = 1; i < hipTrack.values.length; i += 3) {
@@ -716,7 +726,6 @@ export async function groundRetargetedClips(
     mixer.uncacheClip(shifted)
 
     grounded.push(shifted)
-    await new Promise((r) => setTimeout(r, 0))
   }
 
   return grounded
@@ -745,17 +754,20 @@ export function loadSharedPackClipsForModel(
     loadGLB(CHARACTER_ANIMATION_PACK_PATHS.locomotion),
     loadGLB(CHARACTER_ANIMATION_PACK_PATHS.combatMelee),
   ])
-    .then((packs) =>
-      Promise.all(
-        packs.map((pack) =>
-          retargetAnimationsForCharacterModel(
+    .then(async (packs) => {
+      // One pack at a time, so their per-clip slices don't pile into a frame.
+      const retargeted: THREE.AnimationClip[][] = []
+      for (const pack of packs) {
+        retargeted.push(
+          await retargetAnimationsForCharacterModel(
             targetScene,
             pack.scene,
             pack.animations.filter((clip) => wanted.has(clip.name))
           )
         )
-      )
-    )
+      }
+      return retargeted
+    })
     .then((packs) =>
       groundRetargetedClips(targetScene, packs.flat(), grounding)
     )
