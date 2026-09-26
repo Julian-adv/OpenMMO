@@ -8,6 +8,7 @@
   } from '../../shaders/wind-particle-material'
   import { createRainParticleMaterial } from '../../shaders/rain-particle-material'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
+  import type { WindSample } from '../../shaders/grass-material'
 
   interface Props {
     playerPosition?: THREE.Vector3 | null
@@ -34,8 +35,8 @@
   const FALL_SPEED_MIN = 9
   const FALL_SPEED_MAX = 13
   const SPLASH_LIFE = 0.28
-  const WIND_DRIFT_X = 0.4
-  const WIND_DRIFT_Z = 0.2
+  // Horizontal speed at full wind strength; ~20° tilt against FALL_SPEED.
+  const WIND_SPEED_AT_FULL = 4
 
   interface Drop {
     alive: boolean
@@ -193,9 +194,13 @@
   }
 
   const tmpMatrix = new THREE.Matrix4()
-  const tmpQuat = new THREE.Quaternion()
   const tmpPos = new THREE.Vector3()
   const tmpScale = new THREE.Vector3()
+  const camRight = new THREE.Vector3()
+  const camUp = new THREE.Vector3()
+  const camBack = new THREE.Vector3()
+  const streakRight = new THREE.Vector3()
+  const streakUp = new THREE.Vector3()
   const zeroMatrix = new THREE.Matrix4().makeScale(0, 0, 0)
   const flatQuat = new THREE.Quaternion().setFromEuler(
     new THREE.Euler(-Math.PI / 2, 0, 0)
@@ -208,7 +213,13 @@
     return fallback
   }
 
-  function spawnDrop(px: number, py: number, pz: number) {
+  function spawnDrop(
+    px: number,
+    py: number,
+    pz: number,
+    windVX: number,
+    windVZ: number
+  ) {
     const angle = Math.random() * Math.PI * 2
     const dist = Math.sqrt(Math.random()) * SPAWN_RADIUS
     const x = px + Math.cos(angle) * dist
@@ -218,14 +229,15 @@
     dropCursor = (dropCursor + 1) % dropLimit
     if (d.alive) return
 
-    d.x = x
-    d.z = z
-    d.groundY = groundHeightAt(x, z, py)
-    d.y =
-      d.groundY +
-      SPAWN_HEIGHT_MIN +
-      Math.random() * (SPAWN_HEIGHT_MAX - SPAWN_HEIGHT_MIN)
+    // Pick the landing point, then start upwind so the splash lands there.
+    const fallHeight =
+      SPAWN_HEIGHT_MIN + Math.random() * (SPAWN_HEIGHT_MAX - SPAWN_HEIGHT_MIN)
     d.vy = -(FALL_SPEED_MIN + Math.random() * (FALL_SPEED_MAX - FALL_SPEED_MIN))
+    const fallTime = fallHeight / -d.vy
+    d.x = x - windVX * fallTime
+    d.z = z - windVZ * fallTime
+    d.groundY = groundHeightAt(x, z, py)
+    d.y = d.groundY + fallHeight
     d.age = 0
     d.baseOpacity = 0.3 + Math.random() * 0.28
     d.scale = 0.85 + Math.random() * 0.4
@@ -248,7 +260,8 @@
   export function update(
     deltaTime: number,
     camera: THREE.Camera | undefined,
-    intensity: number
+    intensity: number,
+    wind: WindSample | null
   ) {
     if (!camera) return
     if (intensity <= 0 && dropsAlive === 0 && splashesAlive === 0) {
@@ -258,14 +271,25 @@
     init()
 
     const dt = Math.min(deltaTime / 1000, 0.1)
-    tmpQuat.copy(camera.quaternion)
+    const windSpeed = (wind?.windStrength ?? 0) * WIND_SPEED_AT_FULL
+    const windVX = (wind?.windDirX ?? 0) * windSpeed
+    const windVZ = (wind?.windDirZ ?? 0) * windSpeed
+    camera.matrixWorld.extractBasis(camRight, camUp, camBack)
+    const windRight = windVX * camRight.x + windVZ * camRight.z
+    const windUp = windVX * camUp.x + windVZ * camUp.z
 
     if (intensity > 0 && playerPosition) {
       spawnAccumulator += dt
       const spawnInterval = 1.0 / (SPAWN_RATE_AT_FULL * intensity)
       while (spawnAccumulator >= spawnInterval) {
         spawnAccumulator -= spawnInterval
-        spawnDrop(playerPosition.x, playerPosition.y, playerPosition.z)
+        spawnDrop(
+          playerPosition.x,
+          playerPosition.y,
+          playerPosition.z,
+          windVX,
+          windVZ
+        )
       }
     } else {
       spawnAccumulator = 0
@@ -282,8 +306,8 @@
 
       d.age += dt
       d.y += d.vy * dt
-      d.x += WIND_DRIFT_X * dt
-      d.z += WIND_DRIFT_Z * dt
+      d.x += windVX * dt
+      d.z += windVZ * dt
 
       if (d.y <= d.groundY || d.age > 3) {
         d.alive = false
@@ -296,9 +320,18 @@
 
       streakArr[i] =
         d.age < 0.06 ? d.baseOpacity * (d.age / 0.06) : d.baseOpacity
-      tmpPos.set(d.x, d.y, d.z)
-      tmpScale.set(1, d.scale, 1)
-      tmpMatrix.compose(tmpPos, tmpQuat, tmpScale)
+      // Camera-facing streak rolled to its on-screen direction of travel.
+      const sx = -(windRight + d.vy * camRight.y)
+      const sy = -(windUp + d.vy * camUp.y)
+      const len = Math.sqrt(sx * sx + sy * sy)
+      const ux = len > 1e-6 ? sx / len : 0
+      const uy = len > 1e-6 ? sy / len : 1
+      streakRight.copy(camRight).multiplyScalar(uy).addScaledVector(camUp, -ux)
+      streakUp.copy(camRight).multiplyScalar(ux).addScaledVector(camUp, uy)
+      streakUp.multiplyScalar(d.scale)
+      tmpMatrix
+        .makeBasis(streakRight, streakUp, camBack)
+        .setPosition(d.x, d.y, d.z)
       streakMesh!.setMatrixAt(i, tmpMatrix)
     }
 

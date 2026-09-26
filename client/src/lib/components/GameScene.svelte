@@ -667,7 +667,7 @@
         performance.now() - remoteInterpolationStart
       )
 
-      // One wind reading per frame, shared by the cape and the wind particles.
+      // One wind reading per frame, shared by the cape, wind particles and rain.
       const windState = grassLayerRef?.getWindState() ?? null
 
       // Update player model animations (the cape steps inside `update`).
@@ -786,7 +786,7 @@
         const rainStart = performance.now()
         const rain = localWeather.rain
         const indoor = $playerInsideHouseId !== null
-        rainLayerRef?.update(deltaTime, camera, indoor ? 0 : rain)
+        rainLayerRef?.update(deltaTime, camera, indoor ? 0 : rain, windState)
         updateRainAmbience(rain, indoor, deltaTime / 1000)
         setRainIntensity(rain)
         setSkyRain(rain)

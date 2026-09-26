@@ -24,6 +24,12 @@ export interface WindState {
   time: number
 }
 
+/** The part of `WindState` that wind-driven effects read. */
+export type WindSample = Pick<
+  WindState,
+  'windDirX' | 'windDirZ' | 'windStrength'
+>
+
 // ── Grass material configuration ─────────────────────────
 export interface GrassMaterialConfig {
   baseColor?: [number, number, number]

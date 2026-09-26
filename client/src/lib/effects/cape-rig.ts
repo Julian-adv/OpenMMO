@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
 import { color, float, frontFacing, mix, texture } from 'three/tsl'
-import type { WindState } from '../shaders/grass-material'
+import type { WindSample } from '../shaders/grass-material'
 import {
   BARBARIAN_CHARACTER_MODEL_PATH,
   CAVEMAN_CHARACTER_MODEL_PATH,
@@ -53,15 +53,11 @@ export interface CapeSkin {
   texture?: string | null
 }
 
-/** The part of the world's wind the cloth cares about — a `WindState` from the
- *  grass layer satisfies it as is. */
-export type CapeWind = Pick<WindState, 'windDirX' | 'windDirZ' | 'windStrength'>
-
 export interface CapeRig {
   /** Attach to the spine bone. Local frame: +x right, +y up, +z away from back. */
   root: THREE.Group
   mesh: THREE.SkinnedMesh
-  update(dt: number, wind: CapeWind | null): void
+  update(dt: number, wind: WindSample | null): void
   /** Re-dye or re-print the hanging cloth. Nothing else in the rig depends on
    *  how it looks, so the pickers swap materials instead of rebuilding the
    *  sheet on every drag of the colour wheel. */
@@ -487,7 +483,7 @@ export function createCapeRig(options: CapeRigOptions): CapeRig {
     initialized = true
   }
 
-  function integrate(dt: number, wind: CapeWind | null): void {
+  function integrate(dt: number, wind: WindSample | null): void {
     const dt2 = dt * dt
     const speedBoost = Math.min(
       smoothedSpeed * FLUTTER_SPEED_SCALE,
@@ -587,7 +583,7 @@ export function createCapeRig(options: CapeRigOptions): CapeRig {
     }
   }
 
-  function update(dt: number, wind: CapeWind | null): void {
+  function update(dt: number, wind: WindSample | null): void {
     if (!initialized) {
       resetToRest()
       driveBones()
