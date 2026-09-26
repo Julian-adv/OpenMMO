@@ -108,6 +108,12 @@ seamless loop, game BGM
   High-intensity medieval battle score, 160+ BPM, Explosive percussive stabs into rolling war drums, aggressive lute ostinatos, piercing recorder lead, and bright harp arpeggios weaving countermelodies, Constant layered tension, tight looping eight-bar structure with evolving drum accents and heroic yet desperate harmonic shifts; mix is upfront and dry for maximum impact in combat, piercing, medieval, harp
   ```
 
+  Blood and Bronze는 2026-09-26 원본 인트로 4마디(0.02–6.02 s)에 54.02–126.02 s
+  (160 BPM 48마디)를 이어 붙인 52마디(78 s) 루프다. 끝은 원곡이 조용해지며 인트로와
+  닮아지는 지점이라 처음으로 자연스럽게 돌아간다. 이음매는 20 ms 크로스페이드,
+  libmp3lame `-q:a 2`로 재인코딩했다. 원본(8분, 12.5 MB)은
+  `~/assets_original/bgm/`와 HF 이력(sha256 `a87bec0d…`)에 있다.
+
 ### Google Flow Music BGM (.m4a)
 
 아래 .m4a 파일들은 [Google Flow Music](https://www.flowmusic.app/)으로 생성했다.
