@@ -55,6 +55,21 @@ impl SharedState {
         }
     }
 
+    /// Carried weight and carry limit, mirroring the server's
+    /// `calc_total_weight` / `max_carry_weight` minus the wet-armour drag.
+    pub fn carry_load(&self) -> Option<(f32, f32)> {
+        let str = self.characters.first()?.attributes.r#str;
+        let carried = self
+            .self_bag
+            .iter()
+            .chain(self.self_equipped.values())
+            .map(|i| {
+                crate::item_defs::get(&i.item_def_id).map_or(0.0, |d| d.weight) * i.quantity as f32
+            })
+            .sum();
+        Some((carried, f32::from(str) * 15.0 * self.self_carry_mult))
+    }
+
     /// Whether we carry `item_def_id`, bag or worn — the server's own test.
     pub fn holds_item(&self, item_def_id: &str) -> bool {
         self.self_bag

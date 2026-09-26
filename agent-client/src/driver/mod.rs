@@ -28,7 +28,10 @@ mod execute;
 mod movement;
 mod outcome;
 mod prompt;
+mod unload_catch;
 mod walk;
+
+pub(crate) use unload_catch::BUYER as CATCH_BUYER;
 
 pub(crate) use prompt::{format_event, player_within_event_range};
 
@@ -479,6 +482,9 @@ pub async fn llm_driver(
     let mut active_schedule: (Option<usize>, Option<u32>) = (None, None);
     let mut last_fishing_check = Instant::now();
     let mut campfire_meal: Option<(usize, campfire_meal::CampfireMeal)> = None;
+    // A trip to sell the catch; it owns the body until it finishes.
+    let mut unload_trip: Option<tokio::task::JoinHandle<()>> = None;
+    let mut unload_retry_at: Option<Instant> = None;
     let mut tales = crate::tales::SetTales::default();
     // Our song count when the pending prompt offered a tale, so the gap is
     // measured from the offer rather than from whenever the reply lands.
@@ -1072,6 +1078,9 @@ pub async fn llm_driver(
                 };
                 if transition_now {
                     wrapup = None;
+                    if let Some(h) = unload_trip.take() {
+                        h.abort();
+                    }
                     active_schedule =
                         check_schedule_transition(&state, &schedule, active_schedule, due, &label)
                             .await;
@@ -1110,7 +1119,20 @@ pub async fn llm_driver(
                 .map(|i| &schedule[i])
                 .filter(|entry| entry.is_fishing())
             {
-                maintain_scheduled_fishing(&state, entry).await;
+                let trip_live = unload_trip.as_ref().is_some_and(|h| !h.is_finished());
+                if !trip_live {
+                    if unload_retry_at.is_none_or(|at| Instant::now() >= at)
+                        && unload_catch::is_due(&*state.lock().await)
+                    {
+                        unload_retry_at = Some(Instant::now() + unload_catch::RETRY);
+                        unload_trip = Some(tokio::spawn(unload_catch::run(
+                            Arc::clone(&state),
+                            label.to_string(),
+                        )));
+                    } else {
+                        maintain_scheduled_fishing(&state, entry).await;
+                    }
+                }
             }
         }
 
@@ -1127,12 +1149,13 @@ pub async fn llm_driver(
                     .min(s.take_wake_urgency().into());
             }
             if let Some(response) = await_llm_response(handle, &label, &mut prompt_backoff).await {
-                // A live visit walk owns the body; the LLM turn it triggered
+                // A live visit walk or catch trip owns the body; the LLM turn
                 // may talk but not move.
-                let walking_to_visit = visit_walk.as_ref().is_some_and(|h| !h.is_finished());
+                let routine_walk = visit_walk.as_ref().is_some_and(|h| !h.is_finished())
+                    || unload_trip.as_ref().is_some_and(|h| !h.is_finished());
                 let skip_movement = {
                     let s = state.lock().await;
-                    has_scheduled_action || s.trade_busy || s.self_fishing || walking_to_visit
+                    has_scheduled_action || s.trade_busy || s.self_fishing || routine_walk
                 };
                 let new_target =
                     handle_response(&state, &response, &memory_file, &favor_file, skip_movement)

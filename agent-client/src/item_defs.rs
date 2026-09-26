@@ -28,6 +28,8 @@ pub struct ItemDef {
     pub nutrition: Option<u32>,
     #[serde(rename = "grillsInto", default)]
     pub grills_into: Option<String>,
+    #[serde(default)]
+    pub weight: f32,
 }
 
 impl ItemDef {

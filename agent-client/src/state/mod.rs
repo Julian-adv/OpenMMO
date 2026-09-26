@@ -229,6 +229,12 @@ pub struct SharedState {
     /// Our own hunger (satiation, band) from `HungerUpdate`; stays None for
     /// exempt NPCs.
     pub self_hunger: Option<(u32, onlinerpg_shared::hunger::HungerState)>,
+    /// Hunger's carry-limit multiplier from `HungerUpdate`.
+    pub self_carry_mult: f32,
+    /// What we dropped at our feet mid-cast: a catch too heavy for the bag.
+    slipped_award: Option<String>,
+    /// A catch slipped to the ground since the bag was last unloaded.
+    pub catch_slipped: bool,
     /// Our own active debuff ids from `DebuffUpdate` (doc/DEBUFF.md).
     pub self_debuffs: Vec<String>,
     /// Burning campfires in our AOI, for the grill-your-catch decision.
@@ -453,6 +459,9 @@ impl SharedState {
             self_mana: None,
             self_titles: Vec::new(),
             self_hunger: None,
+            self_carry_mult: 1.0,
+            slipped_award: None,
+            catch_slipped: false,
             self_debuffs: Vec::new(),
             campfires: HashMap::new(),
             stalls: HashMap::new(),

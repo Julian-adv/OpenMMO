@@ -118,6 +118,58 @@ fn fishing_ended_wakes_llm_only_for_own_outcome() {
     assert_eq!(s.classify_event(&ended(2)), EventUrgency::Noise);
 }
 
+/// A catch past the carry limit lands at our feet; the prompt must not
+/// claim it is in the bag, or the model tries to `use` a pouch it lacks.
+#[test]
+fn a_catch_that_slipped_to_the_ground_is_not_reported_as_bagged() {
+    use onlinerpg_shared::fishing::FishingOutcome;
+    let (mut s, _rx) = test_state();
+    s.self_player_id = Some(PlayerId::from(1));
+    let caught = || ServerMessage::FishingEnded {
+        player_id: PlayerId::from(1),
+        outcome: FishingOutcome::Caught {
+            item_def_id: "sunken_coin_pouch".into(),
+            size_cm: 12,
+            trophy: false,
+        },
+    };
+
+    s.push_event(caught());
+    assert!(!s.catch_slipped);
+    assert!(s
+        .drain_events()
+        .iter()
+        .any(|m| matches!(m, ServerMessage::FishingEnded { .. })));
+
+    s.set_self_fishing(true);
+    s.push_event(ServerMessage::GroundItemSpawned {
+        item: onlinerpg_shared::inventory::GroundItem {
+            instance_id: 9,
+            item_def_id: "sunken_coin_pouch".into(),
+            position: p(0.0, 0.0, 0.0),
+            floor_level: 0,
+            quantity: 1,
+            enchant: 0,
+            dropped_by: Some(PlayerId::from(1)),
+            cape_color: None,
+            cape_texture: None,
+        },
+    });
+    s.push_event(caught());
+    assert!(s.catch_slipped);
+    assert!(!s
+        .drain_events()
+        .iter()
+        .any(|m| matches!(m, ServerMessage::FishingEnded { .. })));
+    let notes = s.drain_agent_events();
+    assert!(
+        notes
+            .iter()
+            .any(|n| n.contains("sunken_coin_pouch") && n.contains("slipped to the ground")),
+        "{notes:?}"
+    );
+}
+
 /// The agent must not out-reflex a player at the same rod: the hook goes out
 /// a human reaction later, not on the packet that carried the bite.
 #[tokio::test(start_paused = true)]

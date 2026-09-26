@@ -12,7 +12,9 @@ pub enum EventUrgency {
     Noise,
 }
 
-use onlinerpg_shared::fishing::{auto_stance, FishingAction, HOOK_REACTION_MS, STANCE_REACTION_MS};
+use onlinerpg_shared::fishing::{
+    auto_stance, FishingAction, FishingOutcome, HOOK_REACTION_MS, STANCE_REACTION_MS,
+};
 use std::ops::RangeInclusive;
 use std::time::Duration;
 
@@ -457,6 +459,7 @@ impl SharedState {
         }
 
         // Update tracked state from certain messages
+        let mut slipped = false;
         match &msg {
             ServerMessage::JoinSuccess { player, .. } => {
                 if let Some(id) = self.self_player_id {
@@ -880,6 +883,9 @@ impl SharedState {
             }
 
             ServerMessage::GroundItemSpawned { item } => {
+                if self.self_fishing && item.dropped_by == self.self_player_id {
+                    self.slipped_award = Some(item.item_def_id.clone());
+                }
                 self.note_tip(item);
                 self.remember_ground_item(item.clone());
             }
@@ -920,9 +926,13 @@ impl SharedState {
                 self.self_mana = Some((*mana, *max_mana));
             }
             ServerMessage::HungerUpdate {
-                satiation, state, ..
+                satiation,
+                state,
+                carry_mult,
+                ..
             } => {
                 self.self_hunger = Some((*satiation, *state));
+                self.self_carry_mult = *carry_mult;
             }
             ServerMessage::DebuffUpdate { ref debuffs } => {
                 self.self_debuffs = debuffs.iter().map(|d| d.id.clone()).collect();
@@ -1185,9 +1195,14 @@ impl SharedState {
                 self.set_self_fishing(true);
                 self.fishing_retry_at = None;
             }
-            ServerMessage::FishingEnded { player_id, .. }
+            ServerMessage::FishingEnded { player_id, outcome }
                 if self.self_player_id.as_ref() == Some(player_id) =>
             {
+                let dropped = self.slipped_award.take();
+                if let FishingOutcome::Caught { item_def_id, .. } = outcome {
+                    slipped = dropped.as_ref() == Some(item_def_id);
+                    self.catch_slipped |= slipped;
+                }
                 self.set_self_fishing(false);
                 self.fishing_retry_at = Some(tokio::time::Instant::now() + FISHING_RECAST_DELAY);
             }
@@ -1281,6 +1296,18 @@ impl SharedState {
             ServerMessage::FishingEnded { player_id, .. }
                 if self.self_player_id.as_ref() != Some(player_id) =>
             {
+                return urgency;
+            }
+            ServerMessage::FishingEnded {
+                outcome: FishingOutcome::Caught { item_def_id, .. },
+                ..
+            } if slipped => {
+                self.push_ambient_event(format!(
+                    "[Fishing] You hauled up a {item_def_id}, but your bag is too heavy — it \
+                     slipped to the ground at your feet. Your routine takes the catch to {} \
+                     to sell once the bag is nearly full.",
+                    crate::driver::CATCH_BUYER
+                ));
                 return urgency;
             }
             // Ground items churn in and out of the AOI as everyone moves;
