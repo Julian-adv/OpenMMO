@@ -23,9 +23,11 @@ import en from './locales/en.json'
 import ko from './locales/ko.json'
 import ja from './locales/ja.json'
 import zhHans from './locales/zh-Hans.json'
+import zhHant from './locales/zh-Hant.json'
 import koItems from './locales/ko.items.json'
 import jaItems from './locales/ja.items.json'
 import zhItems from './locales/zh-Hans.items.json'
+import zhHantItems from './locales/zh-Hant.items.json'
 import items from '../../../../data/items.json'
 
 afterEach(() => {
@@ -43,9 +45,11 @@ describe('language selection', () => {
     [['zh-SG'], 'zh-Hans'],
     [['zh-Hans'], 'zh-Hans'],
     [['zh'], 'zh-Hans'],
-    [['zh-TW', 'ja'], 'ja'],
-    [['zh-Hant'], 'en'],
-    [['zh-HK'], 'en'],
+    [['zh-TW', 'ja'], 'zh-Hant'],
+    [['zh-Hant'], 'zh-Hant'],
+    [['zh-Hant-TW'], 'zh-Hant'],
+    [['zh-HK'], 'zh-Hant'],
+    [['zh_MO'], 'zh-Hant'],
     [['fr-FR', 'ko'], 'ko'],
     [[], 'en'],
   ])('resolves %j to %s', (preferences, expected) => {
@@ -96,6 +100,7 @@ describe('catalog integrity', () => {
     ['ko', ko],
     ['ja', ja],
     ['zh-Hans', zhHans],
+    ['zh-Hant', zhHant],
   ] as const)(
     '%s has every message and preserves its variables',
     (_language, messages) => {
@@ -111,6 +116,7 @@ describe('catalog integrity', () => {
     ['ko', koItems],
     ['ja', jaItems],
     ['zh-Hans', zhItems],
+    ['zh-Hant', zhHantItems],
   ] as const)(
     '%s covers every current item without changing the game data',
     (language, messages) => {
@@ -141,7 +147,13 @@ describe('message rendering', () => {
       labels.push(name('goblin_slayer'))
     )
     try {
-      for (const language of ['ko', 'ja', 'zh-Hans', 'en'] as const) {
+      for (const language of [
+        'ko',
+        'ja',
+        'zh-Hans',
+        'zh-Hant',
+        'en',
+      ] as const) {
         languagePreference.set(language)
         expect(titleNameNow('goblin_slayer')).toBe(labels.at(-1))
         expect(titleNameNow('future_title')).toBe('future_title')
@@ -151,6 +163,7 @@ describe('message rendering', () => {
         '고블린 족장을 쓰러뜨린 자',
         'ゴブリンの族長を討ちし者',
         '哥布林酋长讨伐者',
+        '哥布林酋長討伐者',
         'Slayer of the Goblin Chief',
       ])
     } finally {
@@ -239,6 +252,8 @@ describe('message rendering', () => {
         label: '食物中毒',
         remaining: '1分钟',
       })
+      languagePreference.set('zh-Hant')
+      expect(get(visibleDebuffs)[0].remaining).toBe('1分鐘')
       expect(get(activeDebuffs)).toEqual([
         { id: 'food_poisoning', until: 62_000 },
       ])
@@ -260,6 +275,7 @@ describe('message rendering', () => {
     expect(formatRemaining(1, 'ko')).toBe('1초')
     expect(formatRemaining(59_000, 'ja')).toBe('59秒')
     expect(formatRemaining(60_000, 'zh-Hans')).toBe('1分钟')
+    expect(formatRemaining(60_000, 'zh-Hant')).toBe('1分鐘')
     expect(formatRemaining(60_001, 'en')).toBe('2m')
   })
 

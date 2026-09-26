@@ -6,6 +6,7 @@ export const languages = [
   { value: 'ko', label: '한국어' },
   { value: 'ja', label: '日本語' },
   { value: 'zh-Hans', label: '简体中文' },
+  { value: 'zh-Hant', label: '繁體中文' },
 ] as const
 
 export type Locale = (typeof languages)[number]['value']
@@ -25,8 +26,8 @@ export function browserLocale(preferences: readonly string[]): Locale {
     const language = tag.split('-')[0]
     if (language === 'en' || language === 'ko' || language === 'ja')
       return language
-    if (language === 'zh' && !/-(hant|tw|hk|mo)(-|$)/.test(tag))
-      return 'zh-Hans'
+    if (language === 'zh')
+      return /-(hant|tw|hk|mo)(-|$)/.test(tag) ? 'zh-Hant' : 'zh-Hans'
   }
   return 'en'
 }

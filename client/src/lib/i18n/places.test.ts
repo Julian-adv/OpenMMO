@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { MAP_LABELS } from '../data/mapLabels'
 import { DUNGEON_ENTRANCES } from '../data/dungeonDefs'
-import { languagePreference } from './locale'
+import { languagePreference, languages } from './locale'
 import { placeName } from './places'
 import ko from './locales/ko.places.json'
 import ja from './locales/ja.places.json'
 import zhHans from './locales/zh-Hans.places.json'
+import zhHant from './locales/zh-Hant.places.json'
 
 afterEach(() => languagePreference.set('en'))
 
@@ -16,6 +17,7 @@ describe('localized map places', () => {
     ['ko', ko],
     ['ja', ja],
     ['zh-Hans', zhHans],
+    ['zh-Hant', zhHant],
   ] as const)(
     '%s covers every place and discoverable dungeon',
     (language, names) => {
@@ -40,13 +42,15 @@ describe('localized map places', () => {
     expect(placeName(island.id, island.name)).toBe('アッシュアイル')
     languagePreference.set('zh-Hans')
     expect(placeName(island.id, island.name)).toBe('阿什艾尔')
+    languagePreference.set('zh-Hant')
+    expect(placeName(island.id, island.name)).toBe('阿什艾爾')
     languagePreference.set('en')
     expect(placeName(island.id, island.name)).toBe('Ashisle')
     expect(island.name).toBe('Ashisle')
   })
 
   it('retains the original name for places added before their translations', () => {
-    for (const language of ['en', 'ko', 'ja', 'zh-Hans'] as const) {
+    for (const { value: language } of languages) {
       expect(placeName('future_place', 'New Haven', language)).toBe('New Haven')
     }
   })

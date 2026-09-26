@@ -1,9 +1,13 @@
 # Localization
 
 The browser client uses i18next with a Svelte store. Supported languages are
-English (`en`), Korean (`ko`), Japanese (`ja`), and Simplified Chinese (`zh-Hans`).
-Traditional Chinese is not yet provided; `zh-TW`, `zh-HK`, `zh-MO`, and `zh-Hant`
-fall through to the next supported browser language or English.
+English (`en`), Korean (`ko`), Japanese (`ja`), Simplified Chinese (`zh-Hans`),
+and Traditional Chinese (`zh-Hant`). Auto maps `zh-TW`, `zh-HK`, `zh-MO`, and
+`zh-Hant` to `zh-Hant`, and other `zh` tags to `zh-Hans`.
+
+The `zh-Hant` catalogs were generated from `zh-Hans` with OpenCC `s2twp` (Taiwan
+vocabulary), then corrected by hand (e.g. 密語, 封鎖, 「」 quotes). Edit them
+directly; do not regenerate over manual fixes.
 
 ## Language selection
 
@@ -76,7 +80,7 @@ In the server, pass `localized(code, english).with_param(name, value)` to
 `send_system_message()` or `send_trade_error()`. Supply the code at the action
 that produced the message; do not infer it by matching English text. Plain
 strings remain supported for incremental migration. Add the code and its
-translations to all four UI catalogs.
+translations to every UI catalog.
 
 The browser uses the code and variables, falling back to `message` for unknown
 codes or absent metadata. The agent client continues to consume the English

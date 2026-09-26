@@ -61,7 +61,7 @@ describe('localized emote labels', () => {
     loops: true,
   }
 
-  it.each(['ko', 'ja', 'zh-Hans'] as const)(
+  it.each(['ko', 'ja', 'zh-Hans', 'zh-Hant'] as const)(
     '%s translates every supported emote and instrument preview',
     (language) => {
       for (const emote of [...EMOTE_LIST, instrument]) {

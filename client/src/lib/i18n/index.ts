@@ -4,6 +4,7 @@ import en from './locales/en.json'
 import ko from './locales/ko.json'
 import ja from './locales/ja.json'
 import zhHans from './locales/zh-Hans.json'
+import zhHant from './locales/zh-Hant.json'
 import { locale, type Locale } from './locale'
 import { resolveKoreanParticles } from './koreanParticles'
 
@@ -25,6 +26,7 @@ void i18n.init({
     ko: { translation: ko },
     ja: { translation: ja },
     'zh-Hans': { translation: zhHans },
+    'zh-Hant': { translation: zhHant },
   },
 })
 
