@@ -44,6 +44,8 @@
   import GameSceneSnowLayer from './game-scene/GameSceneSnowLayer.svelte'
   import { snowCover } from '../shaders/snow-cover-nodes'
   import { SnowCoverTracker } from '../utils/snowCover'
+  import { leavesLeft, setFoliageDay } from '../shaders/foliage-season-nodes'
+  import { winterDay } from '../utils/foliageSeason'
   import {
     getLightningDirection,
     getLightningStrength,
@@ -220,6 +222,7 @@
   let puddlesVisible = true
   const snowCoverTracker = new SnowCoverTracker()
   let pinnedSnowCover: number | null = null
+  let pinnedWinterDay: number | null = null
   let terrainTiles = $state<TerrainTile[]>([])
   let terrainCenterChunk = $state({ x: 0, z: 0 })
   const terrainHeightManager = new TerrainHeightManager()
@@ -797,6 +800,8 @@
 
       const weatherNow = $weather
       const gameMinutes = gameMinutesAt(calDate, calendarSystem.getGameHour())
+      setFoliageDay(pinnedWinterDay ?? winterDay(gameMinutes))
+      treeLayerRef?.setLeavesShown(leavesLeft())
       {
         const rainStart = performance.now()
         const rain = localWeather.rain
@@ -1104,6 +1109,7 @@
       },
       togglePuddles: () => (puddlesVisible = !puddlesVisible),
       forceSnowCover: (cover) => (pinnedSnowCover = cover),
+      forceWinterDay: (day) => (pinnedWinterDay = day),
       renderer,
       scene,
       getGrassGroup: () => grassLayerRef?.getGroup(),

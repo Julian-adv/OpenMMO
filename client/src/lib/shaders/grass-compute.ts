@@ -27,6 +27,7 @@ import {
 import { PI, TAU } from './gerstner'
 import type { GrassMaterialConfig } from './grass-material'
 import { snowBurial, snowCover } from './snow-cover-nodes'
+import { grassDry } from './foliage-season-nodes'
 import {
   type N,
   iHash,
@@ -363,9 +364,13 @@ export function createBladeMaterial(
   const baseColor = vec3(bc[0], bc[1], bc[2])
   const tipColor = vec3(tc[0], tc[1], tc[2])
 
+  // A few blades stay green into the dry season.
+  const dryness = varying(
+    grassDry.mul(1.3).sub(iHash(0.61, 5.9).mul(0.3)).clamp(0, 1)
+  )
   const { gradientColor, rootAO, brightness, hueShift } = computeGrassColor(
-    baseColor,
-    tipColor,
+    mix(baseColor, vec3(0.05, 0.035, 0.012), dryness),
+    mix(tipColor, vec3(0.24, 0.17, 0.05), dryness),
     uvY
   )
   // Blade (useTexture=0): gradient * hueShift; Flower (useTexture=1): texture color
@@ -390,7 +395,10 @@ export function createBladeMaterial(
 
   // ── Per-instance shape variation ───────────────────────
   const widthScale = computeWidthScale(wsMin, wsExt)
-  const heightScale = instanceScale.mul(float(1).sub(burial))
+  // Flowers wither away while the grass is dry.
+  const heightScale = instanceScale
+    .mul(float(1).sub(burial))
+    .mul(float(1).sub(grassDry.mul(uUseTexture)))
 
   // ── Vertex displacement ────────────────────────────────
   const rawPos = positionLocal.toVar()

@@ -10,6 +10,7 @@
   } from '../../utils/tree-data'
   import { loadGLB } from '../../utils/gltfCache'
   import { snowyStandardMaterial } from '../../shaders/snow-cover-nodes'
+  import { leafSeason } from '../../shaders/foliage-season-nodes'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
 
   interface Props {
@@ -45,9 +46,19 @@
     /** Semi-transparent mesh shown when tree occludes the player. */
     ghostMesh: THREE.InstancedMesh
     typeIdx: number
+    leaves: boolean
   }
 
   const GHOST_OPACITY = 0.15
+
+  /** Bare canopies skip their draw and shadow passes. */
+  export function setLeavesShown(shown: boolean) {
+    for (const slot of globalSlots) {
+      if (!slot.leaves) continue
+      slot.mesh.visible = shown
+      slot.ghostMesh.visible = shown
+    }
+  }
 
   const globalSlots: GlobalSlot[] = []
   let modelsReady = false
@@ -91,9 +102,12 @@
             const geo = mesh.geometry.clone()
             geo.applyMatrix4(localMatrix)
 
-            const mat = snowyStandardMaterial(srcMat)
             // GLB meshes: "Tw"/"Tw.001" = trunk, "Fronds"/"Fronds.001" = leaves
             const isTrunk = mesh.name.startsWith('Tw')
+            const mat = snowyStandardMaterial(
+              srcMat,
+              isTrunk ? undefined : leafSeason
+            )
             if (isTrunk) mat.side = THREE.FrontSide
 
             const im = new THREE.InstancedMesh(geo, mat, getMaxInstances())
@@ -123,7 +137,12 @@
               treeGroup.add(m)
             }
 
-            globalSlots.push({ mesh: im, ghostMesh: ghostIm, typeIdx: t })
+            globalSlots.push({
+              mesh: im,
+              ghostMesh: ghostIm,
+              typeIdx: t,
+              leaves: !isTrunk,
+            })
           })
         }
 

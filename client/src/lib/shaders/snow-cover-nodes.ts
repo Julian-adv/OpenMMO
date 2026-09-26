@@ -35,7 +35,7 @@ interface SnowSurface {
 
 /** Perlin in [0, 1], turned per octave so no lattice line runs along a world
  *  axis. Procedural because value-noise.jpg does not tile. */
-function perlin(
+export function perlin(
   xz: Node<'vec2'>,
   scale: number,
   angle: number,
@@ -159,19 +159,28 @@ export function applySnowCover(
 
 const OBJECT_SNOW = vec3(0.86, 0.88, 0.92)
 
+/** copy() skips the node slots a plain material lacks, so recopying after the
+ *  source changes keeps the snow. It also skips alphaTest, a Material setter. */
+class SnowyStandardMaterial extends MeshStandardNodeMaterial {
+  copy(source: THREE.Material) {
+    super.copy(source as MeshStandardNodeMaterial)
+    this.alphaTest = source.alphaTest
+    return this
+  }
+}
+
 /** Node copy of a GLB material whose upward faces gather the lying snow;
- *  vertex normals keep rounded canopies white on top only. */
+ *  vertex normals keep rounded canopies white on top only. `tint` recolours
+ *  the bare surface beneath the snow. */
 export function snowyStandardMaterial(
-  source: THREE.MeshStandardMaterial
+  source: THREE.MeshStandardMaterial,
+  tint?: (base: Node<'vec4'>) => Node<'vec4'>
 ): MeshStandardNodeMaterial {
-  // copy() skips the node slots a plain material lacks, so recopying after
-  // the source changes keeps the snow.
-  const material = new MeshStandardNodeMaterial().copy(
-    source
-  ) as MeshStandardNodeMaterial
+  const material = new SnowyStandardMaterial().copy(source)
   const mask = snowMask(normalWorld.y)
   // The map's alpha rides in materialColor, so cut-out leaves keep it.
-  const base = convert(materialColor, 'vec4') as Node<'vec4'>
+  const color = convert(materialColor, 'vec4') as Node<'vec4'>
+  const base = tint ? tint(color) : color
   material.colorNode = vec4(mix(base.rgb, OBJECT_SNOW, mask), base.a)
   material.roughnessNode = mix(materialRoughness, float(0.85), mask)
   return material

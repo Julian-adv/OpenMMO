@@ -12,6 +12,7 @@ export interface DebugConsoleDeps {
   setLoopProfileEnabled: (enabled: boolean) => void
   togglePuddles: () => boolean
   forceSnowCover: (cover: number | null) => void
+  forceWinterDay: (day: number | null) => void
   renderer: WebGPURenderer
   scene: THREE.Scene
   getGrassGroup: () => THREE.Group | undefined
@@ -33,6 +34,7 @@ const DEBUG_KEYS = [
   '__toggleTerrain',
   '__togglePuddles',
   '__snowCover',
+  '__season',
   '__countMeshes',
   '__inspectSplat',
 ] as const
@@ -82,6 +84,15 @@ export function registerDebugConsole(
       typeof cover === 'number' ? Math.max(0, Math.min(1, cover)) : null
     getDeps().forceSnowCover(pinned)
     console.log(`[Snow] cover ${pinned === null ? 'follows weather' : pinned}`)
+  }
+
+  // Pins the foliage season to a day counted from 12/30; no argument releases it.
+  w.__season = (day?: number) => {
+    const pinned = typeof day === 'number' ? day : null
+    getDeps().forceWinterDay(pinned)
+    console.log(
+      `[Season] ${pinned === null ? 'follows calendar' : `day ${pinned}`}`
+    )
   }
 
   w.__toggleHousing = () => {
