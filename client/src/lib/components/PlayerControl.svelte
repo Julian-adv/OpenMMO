@@ -627,6 +627,13 @@
       isSprinting: serverMovement.stopping
         ? playerState.movementMode === 'run'
         : isSprintingNow(),
+      previousState: playerState,
+      searchElapsedMs:
+        playerControlMachine.stateName === 'moving' &&
+        currentPlayer &&
+        !isMounted(currentPlayer)
+          ? serverMovement.searchElapsedMs
+          : null,
     })
 
     // Only update if state actually changed

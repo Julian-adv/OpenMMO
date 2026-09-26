@@ -14,6 +14,52 @@ const idleState: PlayerState = {
 }
 
 describe('projectPlayerState', () => {
+  it.each([
+    { searchElapsedMs: 0, expectedState: 'moving' },
+    { searchElapsedMs: 119, expectedState: 'moving' },
+    { searchElapsedMs: 120, expectedState: 'idle' },
+    { searchElapsedMs: 500, expectedState: 'idle' },
+    { searchElapsedMs: null, expectedState: 'idle' },
+  ])(
+    'preserves running only during a short search ($searchElapsedMs ms)',
+    ({ searchElapsedMs, expectedState }) => {
+      const state = projectPlayerState({
+        currentPosition: idleState.position,
+        isMoving: false,
+        currentSpeed: 0,
+        playerRotation: 0,
+        hasTorch: false,
+        isInCombat: false,
+        attackCounter: 0,
+        isSprinting: true,
+        previousState: { ...idleState, state: 'moving', movementMode: 'run' },
+        searchElapsedMs,
+      })
+      expect(state.state).toBe(expectedState)
+      expect(state.speed).toBe(0)
+      expect(state.movementMode).toBe(
+        expectedState === 'moving' ? 'run' : undefined
+      )
+    }
+  )
+
+  it('does not start a running animation while the first path is pending', () => {
+    const state = projectPlayerState({
+      currentPosition: idleState.position,
+      isMoving: false,
+      currentSpeed: 0,
+      playerRotation: 0,
+      hasTorch: false,
+      isInCombat: false,
+      attackCounter: 0,
+      isSprinting: true,
+      previousState: idleState,
+      searchElapsedMs: 0,
+    })
+    expect(state.state).toBe('idle')
+    expect(state.movementMode).toBeUndefined()
+  })
+
   it('keeps stationary keyboard steering idle while publishing the new facing', () => {
     const state = projectPlayerState({
       currentPosition: idleState.position,

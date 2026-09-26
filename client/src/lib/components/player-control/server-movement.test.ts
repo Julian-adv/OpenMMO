@@ -5,6 +5,7 @@ import { WORLD_MAX_X, WORLD_MIN_X } from '../../terrain/world-wrap'
 import { projectPlayerState, projectStoppedPlayerState } from './fsm/projection'
 import { buildAttackState } from './player-state-builders'
 import { transitionAttackToIdle } from './fsm/combat'
+import type { PlayerState } from '../../utils/movementUtils'
 
 function setup() {
   let id = 0
@@ -305,6 +306,68 @@ describe('combat stop', () => {
 })
 
 describe('server approved movement', () => {
+  it.each([
+    { sprinting: false, speed: 3, mode: 'jog' },
+    { sprinting: true, speed: 4.5, mode: 'run' },
+  ])(
+    'keeps the $mode animation through a brief drag path search',
+    ({ sprinting, speed, mode }) => {
+      const { movement } = setup()
+      let state: PlayerState = {
+        state: 'idle',
+        position: { x: 0, y: 0, z: 0 },
+        rotation: 0,
+        speed: 0,
+      }
+      const frame = () => {
+        const pose = movement.sample(() => false)!
+        state = projectPlayerState({
+          currentPosition: pose.position,
+          isMoving: pose.speed > 0,
+          currentSpeed: pose.speed,
+          playerRotation: pose.rotation,
+          hasTorch: false,
+          isInCombat: false,
+          attackCounter: 0,
+          isSprinting: sprinting,
+          previousState: state,
+          searchElapsedMs: movement.searchElapsedMs,
+        })
+        return state
+      }
+      movement.request(3, 0, sprinting)
+      movement.acceptPath({ ...path(), speed })
+      vi.advanceTimersByTime(200)
+      expect(frame()).toMatchObject({ state: 'moving', movementMode: mode })
+      movement.request(3, 3, sprinting)
+      const searchPosition = { ...state.position }
+      movement.acceptProgress({
+        ...path(2),
+        server_time_ms: 200,
+        position: searchPosition,
+        next_waypoint: 0,
+        speed: 0,
+        status: 'searching',
+      })
+      for (let elapsed = 0; elapsed < 15; elapsed += 5) {
+        expect(frame()).toMatchObject({
+          state: 'moving',
+          movementMode: mode,
+          position: searchPosition,
+          speed: 0,
+        })
+        vi.advanceTimersByTime(5)
+      }
+      movement.acceptPath({
+        ...path(2),
+        server_time_ms: 215,
+        position: searchPosition,
+        speed,
+      })
+      expect(frame()).toMatchObject({ state: 'moving', movementMode: mode })
+    }
+  )
+
   it.each([20, 150, 250])(
     'keeps dragging continuous with %ims RTT and jittery replies',
     (rtt) => {

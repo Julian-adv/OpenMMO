@@ -58,6 +58,12 @@ export class ServerMovement {
     )
   }
 
+  get searchElapsedMs(): number | null {
+    return this.anchor?.status === 'searching'
+      ? performance.now() - this.anchorAt
+      : null
+  }
+
   isCurrentRequest(requestId: number) {
     return requestId === this.requestId
   }

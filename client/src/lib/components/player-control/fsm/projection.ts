@@ -4,6 +4,8 @@ import {
   type Position,
 } from '../../../utils/movementUtils'
 
+const SEARCH_ANIMATION_GRACE_MS = 120
+
 export interface PlayerStateProjectionInput {
   currentPosition: Position
   isMoving: boolean
@@ -14,6 +16,8 @@ export interface PlayerStateProjectionInput {
   isInCombat: boolean
   attackCounter: number
   isSprinting: boolean
+  previousState?: PlayerState
+  searchElapsedMs?: number | null
 }
 
 export function projectPlayerState({
@@ -26,14 +30,24 @@ export function projectPlayerState({
   isInCombat,
   attackCounter,
   isSprinting,
+  previousState,
+  searchElapsedMs,
 }: PlayerStateProjectionInput): PlayerState {
-  isMoving &&= currentSpeed > 0
-  const movementMode = isMoving
-    ? getMovementMode(totalDistance, hasTorch, isSprinting, isInCombat)
-    : undefined
+  const searchMovementMode =
+    currentSpeed === 0 &&
+    searchElapsedMs != null &&
+    searchElapsedMs >= 0 &&
+    searchElapsedMs < SEARCH_ANIMATION_GRACE_MS &&
+    previousState?.state === 'moving'
+      ? previousState.movementMode
+      : undefined
+  const movementMode =
+    isMoving && currentSpeed > 0
+      ? getMovementMode(totalDistance, hasTorch, isSprinting, isInCombat)
+      : searchMovementMode
 
   return {
-    state: isMoving ? 'moving' : 'idle',
+    state: movementMode !== undefined ? 'moving' : 'idle',
     speed: currentSpeed,
     rotation: playerRotation,
     position: currentPosition,
