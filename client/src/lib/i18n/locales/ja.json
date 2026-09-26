@@ -83,6 +83,8 @@
   "settings.layout": "UI配置",
   "settings.layoutHint": "パネルの位置",
   "settings.bgm": "BGM音量",
+  "settings.battleMusic": "戦闘音楽",
+  "settings.battleMusicHint": "オフにすると戦闘中もBGMが流れ続けます",
   "settings.sfx": "効果音",
   "audio.mute": "ミュート",
   "audio.unmute": "ミュート解除",

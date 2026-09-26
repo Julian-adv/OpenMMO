@@ -1,6 +1,7 @@
 import { get, writable } from 'svelte/store'
 import { BGM_TRACKS, bgmFileFor } from '../data/bgmTracks'
 import { assetUrl } from '../utils/assetUrl'
+import { persistedBoolean } from '../stores/persisted'
 
 const bgmSrc = (file: string) => assetUrl(`/bgm/${file}`)
 
@@ -107,6 +108,10 @@ export const currentBgmTrack = writable<string>('')
 export const bgmVolume = writable<number>(loadVolume())
 export const bgmMuted = writable<boolean>(
   storageGet(STORAGE_KEY_MUTED) === 'true'
+)
+export const battleMusicEnabled = persistedBoolean(
+  'onlinerpg_battleMusic',
+  true
 )
 
 /** What owns the speakers right now. Battle music outranks a `/play_music`
@@ -240,9 +245,26 @@ export function startBgm() {
 let battleLingerTimer: ReturnType<typeof setTimeout> | undefined
 let battleFadeTimer: ReturnType<typeof setInterval> | undefined
 let battleQuietTimer: ReturnType<typeof setTimeout> | undefined
+/** Tracked apart from `mode` so the setting can switch battle music on mid-fight. */
+let inCombat = false
 
 export function startBattleMusic() {
-  if (disposed || mode === 'battle') return
+  if (disposed) return
+  inCombat = true
+  if (!get(battleMusicEnabled) && performanceEnded) {
+    dropPerformance()?.()
+    resumeNormalBgm()
+  }
+  syncBattleMusic()
+}
+
+function syncBattleMusic(lingerMs = 0) {
+  if (inCombat && get(battleMusicEnabled)) enterBattle()
+  else leaveBattle(lingerMs)
+}
+
+function enterBattle() {
+  if (mode === 'battle') return
   mode = 'battle'
   // Combat ends our performance and pauses a nearby performer's track.
   let endedCallback: (() => void) | null = null
@@ -297,6 +319,11 @@ function resumeBattleMusic() {
 }
 
 export function stopBattleMusic() {
+  inCombat = false
+  syncBattleMusic(BATTLE_LINGER_MS)
+}
+
+function leaveBattle(lingerMs: number) {
   if (mode !== 'battle') return
   mode = 'normal'
 
@@ -305,9 +332,8 @@ export function stopBattleMusic() {
     return
   }
 
-  // Wait a bit before fading out
   clearTimeout(battleLingerTimer)
-  battleLingerTimer = setTimeout(fadeOutBattleMusic, BATTLE_LINGER_MS)
+  battleLingerTimer = setTimeout(fadeOutBattleMusic, lingerMs)
 }
 
 function fadeOutBattleMusic() {
@@ -326,7 +352,8 @@ function fadeOutBattleMusic() {
       el.pause()
       el.volume = startVol
       currentBgmTrack.set('')
-      scheduleNormalBgmResume()
+      if (inCombat) resumeNormalBgm()
+      else scheduleNormalBgmResume()
     }
   )
 }
@@ -693,12 +720,18 @@ const unsubscribeMuted = bgmMuted.subscribe((m) => {
   }
 })
 
+const unsubscribeBattleEnabled = battleMusicEnabled.subscribe(() =>
+  syncBattleMusic()
+)
+
 export function disposeBgm() {
   disposed = true
   battleFile = null
   started = false
+  inCombat = false
   unsubscribeVolume()
   unsubscribeMuted()
+  unsubscribeBattleEnabled()
   clearTimeout(volumeSaveTimer)
   clearTimeout(quietTimer)
   clearTimeout(battleLingerTimer)

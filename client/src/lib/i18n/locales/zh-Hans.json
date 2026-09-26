@@ -83,6 +83,8 @@
   "settings.layout": "界面布局",
   "settings.layoutHint": "面板位置",
   "settings.bgm": "背景音乐音量",
+  "settings.battleMusic": "战斗音乐",
+  "settings.battleMusicHint": "关闭后战斗中也会继续播放背景音乐",
   "settings.sfx": "音效",
   "audio.mute": "静音",
   "audio.unmute": "取消静音",

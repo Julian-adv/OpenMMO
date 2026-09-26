@@ -83,6 +83,8 @@
   "settings.layout": "UI Layout",
   "settings.layoutHint": "Panel positions",
   "settings.bgm": "BGM Volume",
+  "settings.battleMusic": "Battle Music",
+  "settings.battleMusicHint": "When off, background music keeps playing during combat",
   "settings.sfx": "Sound Effects",
   "audio.mute": "Mute",
   "audio.unmute": "Unmute",

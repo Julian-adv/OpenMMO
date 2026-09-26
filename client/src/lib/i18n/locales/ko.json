@@ -83,6 +83,8 @@
   "settings.layout": "UI 배치",
   "settings.layoutHint": "창 위치",
   "settings.bgm": "배경 음악 음량",
+  "settings.battleMusic": "전투 음악",
+  "settings.battleMusicHint": "끄면 전투 중에도 배경 음악이 이어집니다",
   "settings.sfx": "효과음",
   "audio.mute": "음소거",
   "audio.unmute": "음소거 해제",

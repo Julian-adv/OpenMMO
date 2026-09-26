@@ -1,7 +1,11 @@
 <script lang="ts">
   import { t, languagePreference, languages } from '../i18n'
   import type { Writable } from 'svelte/store'
-  import { bgmVolume, bgmMuted } from '../managers/bgmManager'
+  import {
+    bgmVolume,
+    bgmMuted,
+    battleMusicEnabled,
+  } from '../managers/bgmManager'
   import { sfxVolume, sfxMuted } from '../managers/sfxManager'
   import {
     graphicsQuality,
@@ -160,6 +164,12 @@
         shortcut="Ctrl+M"
       />
     </div>
+    {@render toggleRow(
+      $t('settings.battleMusic'),
+      battleMusicEnabled,
+      $t('settings.battleMusicHint'),
+      'settings-battle-music-hint'
+    )}
 
     <div class="volume-row sfx-row">
       <VolumeControl
@@ -234,7 +244,8 @@
   }
 
   .setting-row + .setting-row,
-  .reload-notice + .setting-row {
+  .reload-notice + .setting-row,
+  .volume-row + .setting-row {
     margin-top: 12px;
   }
 

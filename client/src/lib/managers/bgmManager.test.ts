@@ -302,3 +302,68 @@ describe('bgmManager fetches tracks whole and plays them from a blob', () => {
     )
   })
 })
+
+describe('battle music setting', () => {
+  it('keeps the playlist and a nearby performance playing through combat when off', async () => {
+    bgm.battleMusicEnabled.set(false)
+    bgm.startBgm()
+    await flush()
+    const playlist = FakeAudio.created[0]
+    bgm.playPerformance(BGM_TRACKS[0])
+    await flush()
+    const performance = FakeAudio.created[1]
+
+    bgm.startBattleMusic()
+    await flush()
+
+    expect(FakeAudio.created.some((el) => el.loop)).toBe(false)
+    expect(performance.paused).toBe(false)
+    expect(playlist.pause).toHaveBeenCalledTimes(1)
+  })
+
+  it('still ends our own performance when combat starts with it off', async () => {
+    bgm.battleMusicEnabled.set(false)
+    const onEnded = vi.fn()
+    bgm.playPerformance(BGM_TRACKS[0], onEnded)
+    await flush()
+
+    bgm.startBattleMusic()
+    expect(onEnded).toHaveBeenCalledTimes(1)
+  })
+
+  it('switching it off mid-fight fades battle music and resumes the playlist', async () => {
+    bgm.startBgm()
+    await flush()
+    const playlist = FakeAudio.created[0]
+    bgm.startBattleMusic()
+    await flush()
+    const battle = FakeAudio.created.find((el) => el.loop)!
+    vi.useFakeTimers()
+
+    bgm.battleMusicEnabled.set(false)
+    await vi.advanceTimersByTimeAsync(3500)
+
+    expect(battle.paused).toBe(true)
+    expect(playlist.paused).toBe(false)
+  })
+
+  it('switching it on mid-fight starts battle music', async () => {
+    bgm.battleMusicEnabled.set(false)
+    bgm.startBattleMusic()
+    bgm.battleMusicEnabled.set(true)
+    await flush()
+
+    const battle = FakeAudio.created.find((el) => el.loop)!
+    expect(battle.play).toHaveBeenCalledTimes(1)
+  })
+
+  it('switching it on outside combat plays nothing new', async () => {
+    bgm.battleMusicEnabled.set(false)
+    bgm.startBattleMusic()
+    bgm.stopBattleMusic()
+    bgm.battleMusicEnabled.set(true)
+    await flush()
+
+    expect(FakeAudio.created.some((el) => el.loop)).toBe(false)
+  })
+})
