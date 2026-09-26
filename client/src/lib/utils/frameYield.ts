@@ -1,16 +1,34 @@
-/** Resolve in a later task so long-running work lets frames render. */
+const waiting: (() => void)[] = []
+let scheduled = false
+
+function scheduleNext() {
+  if (scheduled || waiting.length === 0) return
+  scheduled = true
+  const afterFrame = () => {
+    setTimeout(() => {
+      scheduled = false
+      waiting.shift()?.()
+      scheduleNext()
+    }, 0)
+  }
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(afterFrame)
+  } else {
+    afterFrame()
+  }
+}
+
+/** Resume one preparation task after each paint, even when many models load. */
 export function yieldTask(): Promise<void> {
-  const scheduler = (
-    globalThis as { scheduler?: { yield?: () => Promise<void> } }
-  ).scheduler
-  // setTimeout is clamped to 4 ms once nested; scheduler.yield is not.
-  if (scheduler?.yield) return scheduler.yield()
-  return new Promise((r) => setTimeout(r, 0))
+  return new Promise((resolve) => {
+    waiting.push(resolve)
+    scheduleNext()
+  })
 }
 
 /** Resolves at once until `budgetMs` of work has run since the last yield,
  *  then yields a task. */
-export function createFrameYielder(budgetMs = 6): () => Promise<void> {
+export function createFrameYielder(budgetMs = 4): () => Promise<void> {
   let sliceStart = performance.now()
   return async () => {
     if (performance.now() - sliceStart < budgetMs) return

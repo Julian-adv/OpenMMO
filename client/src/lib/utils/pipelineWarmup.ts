@@ -1,5 +1,6 @@
 import type * as THREE from 'three'
 import type { WebGPURenderer } from 'three/webgpu'
+import { yieldTask } from './frameYield'
 
 /** The parts of Threlte's context a warmup renders with. */
 export interface WarmupContext {
@@ -9,12 +10,9 @@ export interface WarmupContext {
 }
 
 const warmedByRenderer = new WeakMap<object, Map<string, Promise<void>>>()
+const compilationByRenderer = new WeakMap<object, Promise<void>>()
 
-/**
- * Build `object`'s shaders and pipelines in yielding chunks before it joins
- * the scene, instead of in one blocking go on its first draw. Shared per
- * `key`, so later instances of the same model resolve at once.
- */
+/** Prepare models one at a time and share the result across instances. */
 export function warmupPipelines(
   ctx: WarmupContext,
   key: string,
@@ -28,14 +26,17 @@ export function warmupPipelines(
   }
   let promise = warmed.get(key)
   if (!promise) {
-    promise = compileDetached(
-      renderer,
-      object,
-      ctx.camera.current,
-      ctx.scene
-    ).catch((error: unknown) =>
-      console.warn(`Pipeline warmup failed for ${key}`, error)
-    )
+    const previous = compilationByRenderer.get(renderer) ?? Promise.resolve()
+    promise = previous
+      .then(async () => {
+        await renderer.init()
+        await yieldTask()
+        return compileDetached(renderer, object, ctx.camera.current, ctx.scene)
+      })
+      .catch((error: unknown) =>
+        console.warn(`Pipeline warmup failed for ${key}`, error)
+      )
+    compilationByRenderer.set(renderer, promise)
     warmed.set(key, promise)
   }
   return promise
@@ -47,9 +48,7 @@ function compileDetached(
   camera: THREE.Camera,
   scene: THREE.Scene
 ): Promise<void> {
-  // A detached model sits at the origin, usually outside the view frustum.
-  // compileAsync gathers its draw list synchronously, so the flags can be
-  // restored as soon as it returns.
+  // Initialized renderers collect detached meshes before compileAsync yields.
   const culled: THREE.Object3D[] = []
   object.traverse((child) => {
     if (child.frustumCulled) {

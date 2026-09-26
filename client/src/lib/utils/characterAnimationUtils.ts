@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { AnimationName } from '../types/animations'
 import { createFrameYielder, yieldTask } from './frameYield'
+import { retargetClipAsync } from './retargetClipAsync'
 import { loadGLB } from './gltfCache'
 import { CHARACTER_ANIMATION_PACK_PATHS } from './modelPaths'
 
@@ -54,9 +55,8 @@ const HIP_BONE_CANDIDATES = [
   'mixamorigHips',
 ] as const
 const retargetedClipCache = new Map<string, THREE.AnimationClip>()
-/** Top-level cache: source scene UUIDs + clip names → full result array.
- *  Avoids expensive SkeletonUtils.clone() when the same retarget was already done
- *  (e.g. character select → game scene for the same class). */
+const pendingRetargets = new Map<string, Promise<THREE.AnimationClip>>()
+// Reuse complete batches before cloning skeletons.
 const retargetBatchCache = new Map<string, THREE.AnimationClip[]>()
 const ENABLE_RUNTIME_BONE_RETARGETING = true
 
@@ -442,36 +442,44 @@ export async function retargetAnimationsForCharacterModel(
     }
 
     try {
-      targetSkinnedMesh.skeleton.pose()
-      targetSceneClone.updateMatrixWorld(true)
-
-      const retargetedClip = SkeletonUtils.retargetClip(
-        targetSkinnedMesh,
-        sourceSkinnedMesh,
-        clip,
-        {
-          names: boneNameMap,
-          hip: hipBoneName,
-          preserveBoneMatrix: true,
-          useTargetMatrix: false,
-          useFirstFramePosition: false,
-        }
-      )
-      const normalizedClip = normalizeRetargetedClipTrackNames(
-        retargetedClip,
-        clip.name
-      )
+      let pending = pendingRetargets.get(cacheKey)
+      if (!pending) {
+        targetSkinnedMesh.skeleton.pose()
+        targetSceneClone.updateMatrixWorld(true)
+        pending = retargetClipAsync(
+          targetSkinnedMesh,
+          sourceSkinnedMesh,
+          clip,
+          {
+            names: boneNameMap,
+            hip: hipBoneName,
+            preserveBoneMatrix: true,
+            useTargetMatrix: false,
+          }
+        )
+          .then((retargetedClip) => {
+            const normalized = normalizeRetargetedClipTrackNames(
+              retargetedClip,
+              clip.name
+            )
+            if (normalized.tracks.length === 0) return normalized
+            if (
+              Math.abs(hipYDelta) > 0.001 &&
+              !CLIPS_KEEPING_SOURCE_HIP_HEIGHT.has(clip.name)
+            ) {
+              correctHipHeightInClip(normalized, hipBoneName, hipYDelta)
+            }
+            retargetedClipCache.set(cacheKey, normalized)
+            return normalized
+          })
+          .finally(() => pendingRetargets.delete(cacheKey))
+        pendingRetargets.set(cacheKey, pending)
+      }
+      const normalizedClip = await pending
       if (normalizedClip.tracks.length === 0) {
         retargetedClips.push(clip)
         continue
       }
-      if (
-        Math.abs(hipYDelta) > 0.001 &&
-        !CLIPS_KEEPING_SOURCE_HIP_HEIGHT.has(clip.name)
-      ) {
-        correctHipHeightInClip(normalizedClip, hipBoneName, hipYDelta)
-      }
-      retargetedClipCache.set(cacheKey, normalizedClip)
       retargetedClips.push(normalizedClip)
     } catch (error) {
       console.warn(`Failed to retarget animation clip "${clip.name}"`, error)

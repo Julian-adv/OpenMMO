@@ -1,5 +1,7 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import * as THREE from 'three'
+import * as retargeting from './retargetClipAsync'
+import { yieldTask } from './frameYield'
 import {
   computeCorpseGroundOffset,
   groundRetargetedClips,
@@ -145,6 +147,34 @@ function packClip(name: string): THREE.AnimationClip {
 }
 
 describe('retargetAnimationsForCharacterModel', () => {
+  it('shares an in-flight clip conversion across identical skeletons', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const original = retargeting.retargetClipAsync
+    const convert = vi
+      .spyOn(retargeting, 'retargetClipAsync')
+      .mockImplementation(async (...args) => {
+        await gate
+        return original(...args)
+      })
+    try {
+      const source = packLikeSource()
+      const clips = [packClip('concurrent-retarget')]
+      const requests = [1, 2].map(() =>
+        retargetAnimationsForCharacterModel(makeRig(1), source, clips)
+      )
+      await yieldTask()
+      expect(convert).toHaveBeenCalledOnce()
+      release()
+      const [first, second] = await Promise.all(requests)
+      expect(first[0]).toBe(second[0])
+    } finally {
+      release()
+      convert.mockRestore()
+    }
+  })
   it.each([0, Math.PI / 2])(
     'keeps a mounted character at its world position with rotation %s',
     async (rotation) => {

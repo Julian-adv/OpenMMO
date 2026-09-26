@@ -610,6 +610,7 @@
 
     // Throttle to 60fps
     if (shouldRunFrame) {
+      asyncPipelines?.beginFrame()
       const unclampedSteps = Math.max(
         1,
         Math.floor((rawDeltaTime + FRAME_TOLERANCE_MS) / FRAME_TIME_MS)
