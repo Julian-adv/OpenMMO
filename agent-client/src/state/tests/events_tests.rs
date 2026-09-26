@@ -143,17 +143,7 @@ fn a_catch_that_slipped_to_the_ground_is_not_reported_as_bagged() {
 
     s.set_self_fishing(true);
     s.push_event(ServerMessage::GroundItemSpawned {
-        item: onlinerpg_shared::inventory::GroundItem {
-            instance_id: 9,
-            item_def_id: "sunken_coin_pouch".into(),
-            position: p(0.0, 0.0, 0.0),
-            floor_level: 0,
-            quantity: 1,
-            enchant: 0,
-            dropped_by: Some(PlayerId::from(1)),
-            cape_color: None,
-            cape_texture: None,
-        },
+        item: dropped_item(9, "sunken_coin_pouch", 0.0, 0.0, PlayerId::from(1)),
     });
     s.push_event(caught());
     assert!(s.catch_slipped);

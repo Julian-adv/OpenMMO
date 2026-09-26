@@ -43,13 +43,12 @@ fn plan(bag: &[ItemInstance]) -> Plan {
         let Some(def) = item_defs::get(&item.item_def_id) else {
             continue;
         };
-        let line = BagLineItem {
-            instance_id: item.instance_id,
-            qty: item.quantity,
-        };
         match (def.category.as_deref(), def.base_price) {
             (Some("coin_catch"), _) => plan.open.push(item.instance_id),
-            (Some("junk"), None) => plan.drop.push(line),
+            (Some("junk"), None) => plan.drop.push(BagLineItem {
+                instance_id: item.instance_id,
+                qty: item.quantity,
+            }),
             (Some("junk"), Some(price)) => sellable.push((item, false, price)),
             (Some("fish"), Some(price)) => sellable.push((item, def.grills_into.is_some(), price)),
             _ => {}
@@ -79,21 +78,18 @@ fn plan(bag: &[ItemInstance]) -> Plan {
 
 /// One trip; the schedule walks us back to the riverbank afterwards.
 pub(super) async fn run(state: Arc<Mutex<SharedState>>, label: String) {
-    let buyer = {
-        let s = state.lock().await;
+    let (buyer, sell) = {
+        let mut s = state.lock().await;
         if s.trade_busy {
             return;
         }
-        match s.resolve_nearby_player(BUYER) {
+        let buyer = match s.resolve_nearby_player(BUYER) {
             Some((id, true)) => id,
             _ => {
                 info!("[{label}] Bag nearly full but {BUYER} is not nearby — fishing on");
                 return;
             }
-        }
-    };
-    let sell = {
-        let mut s = state.lock().await;
+        };
         let Plan { open, drop, sell } = plan(&s.self_bag);
         let mut commands: Vec<ClientMessage> = Vec::new();
         if s.self_fishing {
@@ -113,7 +109,7 @@ pub(super) async fn run(state: Arc<Mutex<SharedState>>, label: String) {
             }
         }
         s.catch_slipped = false;
-        sell
+        (buyer, sell)
     };
     if sell.is_empty() {
         return;
@@ -136,7 +132,10 @@ pub(super) async fn run(state: Arc<Mutex<SharedState>>, label: String) {
             items,
         };
         match s.send_background_command(command).await {
-            Ok(()) => sold.push(format!("{units}x {def_id}")),
+            Ok(()) => {
+                s.clear_pushed_trade(&buyer);
+                sold.push(format!("{units}x {def_id}"));
+            }
             Err(e) => error!("[{label}] Failed to sell {def_id}: {e}"),
         }
     }

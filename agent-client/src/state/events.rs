@@ -459,7 +459,7 @@ impl SharedState {
         }
 
         // Update tracked state from certain messages
-        let mut slipped = false;
+        let mut slipped: Option<String> = None;
         match &msg {
             ServerMessage::JoinSuccess { player, .. } => {
                 if let Some(id) = self.self_player_id {
@@ -1200,8 +1200,8 @@ impl SharedState {
             {
                 let dropped = self.slipped_award.take();
                 if let FishingOutcome::Caught { item_def_id, .. } = outcome {
-                    slipped = dropped.as_ref() == Some(item_def_id);
-                    self.catch_slipped |= slipped;
+                    slipped = dropped.filter(|id| id == item_def_id);
+                    self.catch_slipped |= slipped.is_some();
                 }
                 self.set_self_fishing(false);
                 self.fishing_retry_at = Some(tokio::time::Instant::now() + FISHING_RECAST_DELAY);
@@ -1298,10 +1298,8 @@ impl SharedState {
             {
                 return urgency;
             }
-            ServerMessage::FishingEnded {
-                outcome: FishingOutcome::Caught { item_def_id, .. },
-                ..
-            } if slipped => {
+            ServerMessage::FishingEnded { .. } if slipped.is_some() => {
+                let item_def_id = slipped.unwrap_or_default();
                 self.push_ambient_event(format!(
                     "[Fishing] You hauled up a {item_def_id}, but your bag is too heavy — it \
                      slipped to the ground at your feet. Your routine takes the catch to {} \

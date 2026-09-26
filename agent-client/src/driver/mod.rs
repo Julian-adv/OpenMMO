@@ -391,6 +391,12 @@ fn running(handle: &Option<tokio::task::JoinHandle<()>>) -> bool {
     handle.as_ref().is_some_and(|h| !h.is_finished())
 }
 
+fn stop(handle: &mut Option<tokio::task::JoinHandle<()>>) {
+    if let Some(h) = handle.take() {
+        h.abort();
+    }
+}
+
 /// The main LLM agent driver loop. Runs as a tokio task.
 ///
 /// Ticks every ATTACK_COOLDOWN to send attack packets when there's an active
@@ -804,10 +810,9 @@ pub async fn llm_driver(
             }
         }
         if let Some((event, entry)) = visit {
-            // A visit walk still in flight would fight this one for the body.
-            if let Some(h) = visit_walk.take() {
-                h.abort();
-            }
+            // Any routine walk still in flight would fight this one for the body.
+            stop(&mut visit_walk);
+            stop(&mut unload_trip);
             // The same leave-taking a schedule transition does: a visit
             // must not walk off mid-follow or leave a stall behind.
             movement::stop_current_entry(&state, &schedule, active_schedule.0, &label).await;
@@ -904,9 +909,8 @@ pub async fn llm_driver(
                     .map(|i| &schedule[i])
                     .filter(|e| e.action.is_none())
                     .cloned();
-                if let Some(h) = visit_walk.take() {
-                    h.abort();
-                }
+                stop(&mut visit_walk);
+                stop(&mut unload_trip);
                 movement::stop_current_entry(&state, &schedule, active_schedule.0, &label).await;
                 let walk_state = Arc::clone(&state);
                 let log_label = label.clone();
@@ -970,9 +974,8 @@ pub async fn llm_driver(
             };
             if let Some((meal_id, dish, entry)) = clear {
                 info!("[{label}] clearing the {dish} plate {meal_id}");
-                if let Some(h) = visit_walk.take() {
-                    h.abort();
-                }
+                stop(&mut visit_walk);
+                stop(&mut unload_trip);
                 movement::stop_current_entry(&state, &schedule, active_schedule.0, &label).await;
                 let walk_state = Arc::clone(&state);
                 visit_walk = Some(tokio::spawn(async move {
@@ -1038,9 +1041,7 @@ pub async fn llm_driver(
             // Visit over: forget the active entry so the schedule walks
             // us back to our regular post.
             visit_until = None;
-            if let Some(h) = visit_walk.take() {
-                h.abort();
-            }
+            stop(&mut visit_walk);
             active_schedule = (None, None);
         }
 
@@ -1082,9 +1083,7 @@ pub async fn llm_driver(
                 };
                 if transition_now {
                     wrapup = None;
-                    if let Some(h) = unload_trip.take() {
-                        h.abort();
-                    }
+                    stop(&mut unload_trip);
                     active_schedule =
                         check_schedule_transition(&state, &schedule, active_schedule, due, &label)
                             .await;
@@ -1123,17 +1122,18 @@ pub async fn llm_driver(
                 .map(|i| &schedule[i])
                 .filter(|entry| entry.is_fishing())
             {
-                if running(&unload_trip) {
-                } else if unload_retry_at.is_none_or(|at| Instant::now() >= at)
-                    && unload_catch::is_due(&*state.lock().await)
-                {
-                    unload_retry_at = Some(Instant::now() + unload_catch::RETRY);
-                    unload_trip = Some(tokio::spawn(unload_catch::run(
-                        Arc::clone(&state),
-                        label.to_string(),
-                    )));
-                } else {
-                    maintain_scheduled_fishing(&state, entry).await;
+                if !running(&unload_trip) {
+                    if unload_retry_at.is_none_or(|at| Instant::now() >= at)
+                        && unload_catch::is_due(&*state.lock().await)
+                    {
+                        unload_retry_at = Some(Instant::now() + unload_catch::RETRY);
+                        unload_trip = Some(tokio::spawn(unload_catch::run(
+                            Arc::clone(&state),
+                            label.to_string(),
+                        )));
+                    } else {
+                        maintain_scheduled_fishing(&state, entry).await;
+                    }
                 }
             }
         }
