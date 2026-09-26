@@ -906,6 +906,17 @@ pub enum ClientMessage {
         #[serde(default)]
         target_player_id: Option<PlayerId>,
     },
+    /// Round-trip probe, answered ahead of any queued work so it measures the
+    /// link rather than the server's load. `client_time_ms` rides back in
+    /// `ServerMessage::Pong` so the client needs neither clock to be trusted.
+    /// Subject to the pre-auth message budget like any other frame.
+    ///
+    /// Appended rather than placed beside `Heartbeat`: MessagePack encodes
+    /// these variants by index, so a new one belongs at the end.
+    Ping {
+        seq: u32,
+        client_time_ms: u64,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1884,6 +1895,16 @@ pub enum ServerMessage {
         monster_id: Option<String>,
         remaining_ms: u64,
     },
+    /// Answer to `ClientMessage::Ping`, sent straight down the same socket.
+    /// `server_time_ms` lets the client estimate its clock offset; that offset
+    /// only ever dates a probe, it never places the player.
+    ///
+    /// Appended for the same reason as `ClientMessage::Ping`.
+    Pong {
+        seq: u32,
+        client_time_ms: u64,
+        server_time_ms: u64,
+    },
 }
 
 pub use crate::entity::PlayerId;
@@ -2092,7 +2113,7 @@ impl ServerMessage {
             Self::GameTimeSync { .. } | Self::WeatherSync { .. } | Self::ServerNotice { .. } => {
                 DeliveryClass::Global
             }
-            Self::WorldUpdate { .. } => DeliveryClass::Control,
+            Self::WorldUpdate { .. } | Self::Pong { .. } => DeliveryClass::Control,
         }
     }
 }

@@ -244,7 +244,8 @@
     () => networkManager.nextMoveRequestId(),
     (goal) => networkManager.sendMoveGoal(goal),
     (requestId) => networkManager.sendMoveStop(requestId),
-    (input) => networkManager.sendMoveDirection(input)
+    (input) => networkManager.sendMoveDirection(input),
+    () => networkManager.measuredOneWayMs()
   )
 
   const { renderer } = useThrelte()

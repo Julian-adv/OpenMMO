@@ -251,6 +251,7 @@ export type ClientMessage =
   | { InteractObject: { object_type: string; object_id: number } }
   | 'StopInteraction'
   | 'Heartbeat'
+  | { Ping: { seq: number; client_time_ms: number } }
   | 'ResyncWorld'
   | { EquipItem: { instance_id: number } }
   | { SelectAmmo: { item_def_id: string | null } }

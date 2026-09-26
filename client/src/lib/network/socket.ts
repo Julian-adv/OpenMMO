@@ -55,6 +55,7 @@ import initWasm, {
 import { createEvent } from './networkEvents'
 import { handleServerMessage, resetTerrainDownloads } from './messageHandlers'
 import { worldView } from './worldView'
+import { LinkLatency } from './linkLatency'
 import type {
   AccountCharacter,
   CharacterClass,
@@ -124,6 +125,10 @@ class NetworkManager {
   private lastServerUrl: string = ''
   private lastCharacterId: number | null = null
   private wasmReady = false
+  /// Measured link cost. Movement playback dates its anchor off this, so a
+  /// player on another continent renders the server's present rather than its
+  /// past. Per connection: a new socket is a new route.
+  readonly link = new LinkLatency()
   /// Reset per socket: the handshake is per connection, not per session.
   private handshakeSent = false
   /// Server refused this build at the handshake. Reconnecting cannot fix a
@@ -243,6 +248,7 @@ class NetworkManager {
     console.log('Attempting to connect to:', targetUrl)
     this.handshakeSent = false
     this.lastAuthErrorMessage = null
+    this.link.reset()
     this.socket = new WebSocket(targetUrl)
     this.socket.binaryType = 'arraybuffer'
 
@@ -252,7 +258,10 @@ class NetworkManager {
       // send path calls ensureHandshake() too, so a first message that races
       // this callback still goes out second.
       void this.ensureWasm().then(() => {
-        if (this.socket?.readyState === WebSocket.OPEN) this.ensureHandshake()
+        if (this.socket?.readyState === WebSocket.OPEN) {
+          this.ensureHandshake()
+          this.pumpProbe()
+        }
       })
       gameStore.update((state) => ({ ...state, isConnected: true }))
       serverNotice.set(null)
@@ -307,6 +316,11 @@ class NetworkManager {
       try {
         const bytes = new Uint8Array(event.data as ArrayBuffer)
         const message = deserialize_server_message(bytes)
+        // Traffic is the clock a busy client runs on, so every inbound frame
+        // is a chance to keep the probe going. Without this an idle player
+        // would only ever measure the one link sample taken at connect.
+        this.pumpProbe()
+        if (this.acceptPong(message)) return
         handleServerMessage(
           message,
           this.messageEvents,
@@ -325,6 +339,24 @@ class NetworkManager {
         console.error('Error deserializing server message:', error)
       }
     }
+  }
+
+  /// Keeps the round-trip estimate current. Cheap: one message per interval,
+  /// and only while the socket is actually open.
+  private pumpProbe() {
+    this.link.due(performance.now(), (seq, clientTimeMs) => {
+      this.sendMessage({ Ping: { seq, client_time_ms: clientTimeMs } })
+    })
+  }
+
+  private acceptPong(message: unknown): boolean {
+    if (!message || typeof message !== 'object' || !('Pong' in message))
+      return false
+    const { seq, client_time_ms } = (
+      message as { Pong: { seq: number; client_time_ms: number } }
+    ).Pong
+    this.link.accept(seq, client_time_ms, performance.now())
+    return true
   }
 
   /// Full jitter: half the capped delay plus a random half, so clients that
@@ -402,6 +434,11 @@ class NetworkManager {
 
   private isConnected(): boolean {
     return this.socket?.readyState === WebSocket.OPEN && this.wasmReady
+  }
+
+  /// Half the measured round trip, in ms. 0 until the first probe answers.
+  measuredOneWayMs(): number {
+    return this.link.oneWayMs
   }
 
   private sendAndSerialize(msg: ClientMessage): boolean {

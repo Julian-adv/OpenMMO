@@ -7,12 +7,18 @@ import { buildAttackState } from './player-state-builders'
 import { transitionAttackToIdle } from './fsm/combat'
 import type { PlayerState } from '../../utils/movementUtils'
 
-function setup() {
+function setup(oneWayMs = 0) {
   let id = 0
   const goal = vi.fn()
   const stop = vi.fn()
   const direction = vi.fn()
-  const movement = new ServerMovement(() => ++id, goal, stop, direction)
+  const movement = new ServerMovement(
+    () => ++id,
+    goal,
+    stop,
+    direction,
+    () => oneWayMs
+  )
   return { movement, goal, stop, direction }
 }
 
@@ -138,12 +144,31 @@ describe('keyboard release', () => {
       expect(direction.mock.lastCall?.[0].request_id).toBe(3)
       expect(movement.stopping).toBe(false)
       expect(movement.acceptStopped(stopped(2, 150))).toBe(false)
+      // The restart never stands still when the server still holds a route:
+      // with the stop unacknowledged that route is the truth, and it must not
+      // run past what was approved. With the stop acknowledged the server has
+      // already halted the avatar, so there is nothing left to retain.
       vi.advanceTimersByTime(200)
-      expect(movement.sample(() => false)).toBeNull()
+      const pose = movement.sample(() => false)
+      if (acknowledged) {
+        expect(pose).toBeNull()
+      } else {
+        expect(pose!.position.x).toBeLessThanOrEqual(1.5)
+        expect(pose!.position.x).toBeGreaterThan(0)
+      }
       expect(
         movement.acceptPath({ ...directionPath(200), request_id: 3 })
       ).toBe(true)
-      expect(movement.sample(() => false)?.position.x).toBeCloseTo(0.6, 5)
+      if (acknowledged) {
+        // Nothing was retained, so the new approval opens a fresh clock and
+        // the pose is the one the server stamped.
+        expect(movement.sample(() => false)?.position.x).toBeCloseTo(0.6, 5)
+      } else {
+        // The replacement joins the retained route's playback clock, so the
+        // avatar carries on from where it already was instead of snapping
+        // back to the instant the server stamped.
+        expect(movement.sample(() => false)?.position.x).toBeCloseTo(0.9, 5)
+      }
     }
   )
 
@@ -553,7 +578,7 @@ describe('server approved movement', () => {
     expect(movement.sample(() => false)?.position.x).toBeCloseTo(0.45)
   })
 
-  it.each(['stop', 'direction', 'finish', 'relocate'])(
+  it.each(['stop', 'finish', 'relocate'])(
     'discards queued drag updates and in-flight replies after %s',
     (action) => {
       const { movement, goal } = setup()
@@ -565,14 +590,7 @@ describe('server approved movement', () => {
       movement.request(9, 3, false)
       if (action === 'stop') movement.clear()
       else if (action === 'relocate') movement.clear(false)
-      else if (action === 'finish') movement.finish()
-      else
-        movement.direction({
-          rotation: 0,
-          forward: 1,
-          turn: 0,
-          sprinting: false,
-        })
+      else movement.finish()
       vi.advanceTimersByTime(200)
       expect(movement.sample(() => false)).toBeNull()
       expect(goal).toHaveBeenCalledTimes(2)
@@ -584,6 +602,24 @@ describe('server approved movement', () => {
       )
     }
   )
+
+  it('keeps the approved drag route but rejects its replies after direction', () => {
+    const { movement } = setup()
+    movement.request(3, 3, false)
+    vi.advanceTimersByTime(250)
+    movement.acceptPath(path())
+    movement.request(6, 3, false)
+    movement.acceptPath({ ...path(2), server_time_ms: 100 })
+    movement.request(9, 3, false)
+    movement.direction({ rotation: 0, forward: 1, turn: 0, sprinting: false })
+    // The server still holds the approved route until the new input lands, so
+    // playback continues rather than stalling. What must not come back is a
+    // stale reply resurrecting the path the player just replaced.
+    vi.advanceTimersByTime(200)
+    expect(movement.sample(() => false)).not.toBeNull()
+    expect(movement.acceptPath({ ...path(2), server_time_ms: 200 })).toBe(false)
+    expect(movement.acceptPath({ ...path(3), server_time_ms: 300 })).toBe(false)
+  })
 
   it.each([20, 75, 125])(
     'keeps keyboard motion continuous with %ims initial latency and jitter',
@@ -703,7 +739,7 @@ describe('server approved movement', () => {
     expect(movement.sample(() => false)?.position.x).toBeCloseTo(1.5, 5)
   })
 
-  it.each(['stop', 'click', 'direction', 'finish'])(
+  it.each(['stop', 'click', 'finish'])(
     'discards queued keyboard paths after %s',
     (action) => {
       const { movement } = setup()
@@ -714,19 +750,27 @@ describe('server approved movement', () => {
       movement.acceptPath(directionPath(100))
       if (action === 'stop') movement.clear()
       else if (action === 'click') movement.request(3, 0, false)
-      else if (action === 'finish') movement.finish()
-      else
-        movement.direction({
-          rotation: 1,
-          forward: 1,
-          turn: 0,
-          sprinting: false,
-        })
+      else movement.finish()
       vi.advanceTimersByTime(150)
       expect(movement.sample(() => false)).toBeNull()
       expect(movement.acceptPath(directionPath(200))).toBe(false)
     }
   )
+
+  it('keeps playing the approved route after a direction change', () => {
+    const { movement } = setup()
+    movement.direction({ rotation: 0, forward: 1, turn: 0, sprinting: false })
+    vi.advanceTimersByTime(250)
+    movement.acceptPath(directionPath(0))
+    vi.advanceTimersByTime(50)
+    movement.acceptPath(directionPath(100))
+    movement.direction({ rotation: 1, forward: 1, turn: 0, sprinting: false })
+    vi.advanceTimersByTime(150)
+    // The server has not seen the new heading yet, so the route it still
+    // holds is the truthful position to show — and its replies stay rejected.
+    expect(movement.sample(() => false)).not.toBeNull()
+    expect(movement.acceptPath(directionPath(200))).toBe(false)
+  })
 
   it('rejects samples older than a queued keyboard path', () => {
     const { movement } = setup()
@@ -1024,4 +1068,148 @@ it('displays approved turn timing even when position does not change', () => {
   const pose = movement.sample(() => false)
   expect(pose?.position).toEqual(approved.position)
   expect(pose?.rotation).toBeCloseTo(Math.PI / 4)
+})
+
+describe('link compensation', () => {
+  // One coherent timeline: the client and server clocks share an origin, the
+  // request leaves at local 0, the server stamps the reply at local rtt/2, and
+  // the reply lands at local rtt. The avatar should then sit exactly where
+  // the server is at any later local time — not one round trip behind it.
+  function replyInFlight(rtt: number) {
+    const { movement } = setup(rtt / 2)
+    movement.direction({ rotation: 0, forward: 1, turn: 0, sprinting: false })
+    vi.advanceTimersByTime(rtt)
+    movement.acceptPath(directionPath(rtt / 2))
+    return movement
+  }
+
+  it.each([20, 150, 250])(
+    'renders the server present, not its past, at %ims RTT',
+    (rtt) => {
+      const movement = replyInFlight(rtt)
+      expect(movement.sample(() => false)?.position.x).toBeCloseTo(
+        rtt * 0.003,
+        4
+      )
+      vi.advanceTimersByTime(100)
+      expect(movement.sample(() => false)?.position.x).toBeCloseTo(
+        (rtt + 100) * 0.003,
+        4
+      )
+    }
+  )
+
+  it('closes exactly the one-way gap the shift used to leave', () => {
+    // Both clients see the same reply at the same instant. The one that
+    // measured its link shows where the server is; the one that could not
+    // shows where the server was one way trip ago — at 3 m/s, 0.375 m over
+    // a 125ms half of the 250ms round trip.
+    const { movement: measured } = setup(125)
+    const { movement: blind } = setup(0)
+    const input = { rotation: 0, forward: 1, turn: 0, sprinting: false }
+    measured.direction(input)
+    blind.direction(input)
+    vi.advanceTimersByTime(250)
+    measured.acceptPath(directionPath(125))
+    blind.acceptPath(directionPath(125))
+
+    const shown = measured.sample(() => false)!.position.x
+    const stale = blind.sample(() => false)!.position.x
+    expect(shown).toBeCloseTo(0.75, 4)
+    expect(stale).toBeCloseTo(0.375, 4)
+    expect(shown - stale).toBeCloseTo(0.375, 4)
+  })
+
+  it('leaves a link that measured nothing anchored on arrival', () => {
+    const { movement } = setup(0)
+    movement.direction({ rotation: 0, forward: 1, turn: 0, sprinting: false })
+    vi.advanceTimersByTime(20)
+    movement.acceptPath(directionPath(20))
+    expect(movement.sample(() => false)?.position.x).toBeCloseTo(0.06, 4)
+  })
+
+  it('refuses to shift further than the approved path reaches', () => {
+    // A pathological probe must not extrapolate past the approved route.
+    const { movement } = setup(5000)
+    movement.direction({ rotation: 0, forward: 1, turn: 0, sprinting: false })
+    const approved = directionPath(1000)
+    approved.waypoints = [
+      {
+        position: { x: 4, y: 0, z: 0 },
+        floor_level: 0,
+        rotation: Math.PI / 2,
+        travel_seconds: 1,
+      },
+    ]
+    movement.acceptPath(approved)
+    vi.advanceTimersByTime(10_000)
+    const pose = movement.sample(() => false)
+    expect(pose?.position.x).toBeLessThanOrEqual(4)
+    expect(pose?.speed).toBe(0)
+  })
+
+  // Before this, a direction change nulled the anchor, so the character stood
+  // motionless for a full round trip. The retained route is not a prediction:
+  // the server still holds that route until the new input lands, so showing
+  // it is simply showing the truth a moment longer.
+  it.each([150, 250, 400])(
+    'keeps moving through an input change at %ims RTT',
+    (rtt) => {
+      const { movement, direction } = setup(rtt / 2)
+      movement.direction({ rotation: 0, forward: 1, turn: 0, sprinting: false })
+      movement.acceptPath(directionPath(1000))
+      vi.advanceTimersByTime(100)
+      const before = movement.sample(() => false)
+      expect(before?.position.x).toBeGreaterThan(0)
+
+      // Turn: a new request leaves, but the replacement has not come back.
+      movement.direction({ rotation: 0, forward: 0, turn: 1, sprinting: false })
+      expect(direction).toHaveBeenCalledTimes(2)
+      vi.advanceTimersByTime(rtt / 2)
+      const during = movement.sample(() => false)
+      expect(during).not.toBeNull()
+      expect(during?.position.x).toBeGreaterThanOrEqual(before!.position.x)
+      expect(movement.active).toBe(true)
+    }
+  )
+
+  it('still starts from a standstill when no path is approved yet', () => {
+    const { movement } = setup(125)
+    movement.direction({ rotation: 0, forward: 1, turn: 0, sprinting: false })
+    expect(movement.sample(() => false)).toBeNull()
+    movement.direction({ rotation: 0, forward: 1, turn: -1, sprinting: false })
+    expect(movement.sample(() => false)).toBeNull()
+  })
+
+  it('drops the retained route when the caller stops outright', () => {
+    const { movement } = setup(125)
+    movement.direction({ rotation: 0, forward: 1, turn: 0, sprinting: false })
+    movement.acceptPath(directionPath(1000))
+    vi.advanceTimersByTime(100)
+    movement.clear()
+    expect(movement.sample(() => false)).toBeNull()
+  })
+
+  it('re-anchors on the replacement path once it is approved', () => {
+    const { movement } = setup(125)
+    movement.direction({ rotation: 0, forward: 1, turn: 0, sprinting: false })
+    movement.acceptPath(directionPath(1000))
+    vi.advanceTimersByTime(100)
+    movement.direction({ rotation: 0, forward: 0, turn: 1, sprinting: false })
+    expect(movement.sample(() => false)).not.toBeNull()
+    // The approval for the new request takes over from the retained route.
+    expect(movement.acceptPath({ ...directionPath(1350), request_id: 2 })).toBe(
+      true
+    )
+    expect(movement.isCurrentRequest(2)).toBe(true)
+  })
+
+  it('ignores a replacement path for the request it already replaced', () => {
+    const { movement } = setup(125)
+    movement.direction({ rotation: 0, forward: 1, turn: 0, sprinting: false })
+    movement.acceptPath(directionPath(1000))
+    movement.direction({ rotation: 0, forward: 0, turn: 1, sprinting: false })
+    // An approval for the pre-turn request must not resurrect the old route.
+    expect(movement.acceptPath(directionPath(1200))).toBe(false)
+  })
 })

@@ -1691,6 +1691,17 @@ async fn handle_client_message(
             state.last_heartbeat = std::time::Instant::now();
         }
 
+        ClientMessage::Ping {
+            seq,
+            client_time_ms,
+        } => {
+            return Ok(vec![ServerMessage::Pong {
+                seq,
+                client_time_ms,
+                server_time_ms: GameState::now_ms(),
+            }]);
+        }
+
         ClientMessage::EnvReport(r) => {
             if state.env_reported {
                 return Ok(vec![]);

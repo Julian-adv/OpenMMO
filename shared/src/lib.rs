@@ -192,7 +192,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v101: tip hats accept optional song requests delivered to the performer.
 /// v102: rain cells drift with the seasonal wind, change size and dry in the lee of ridges.
 /// v103: winter cells fall as snow, and WeatherSync can force snow.
-pub const PROTOCOL_VERSION: u32 = 103;
+/// v104: a Ping/Pong round-trip probe, so a client far from the region can
+/// measure its own link instead of guessing at playback lag.
+pub const PROTOCOL_VERSION: u32 = 104;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

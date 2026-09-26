@@ -11,6 +11,9 @@ import { shortestWrappedDeltaX, wrapWorldX } from '../../terrain/world-wrap'
 const SEND_INTERVAL_MS = 200
 const MAX_EXTRAPOLATION_MS = 500
 const STOP_BLEND_MS = 120
+/// Cap on the anchor shift. A probe that reports a pathological round trip
+/// should leave the character slow and trailing, never teleported.
+const MAX_SHIFT_MS = 250
 
 type Pose = {
   position: Position
@@ -44,7 +47,8 @@ export class ServerMovement {
     private readonly nextId: () => number,
     private readonly sendGoal: (goal: MoveGoal) => void,
     private readonly sendStop: (requestId: number) => void,
-    private readonly sendDirection: (input: MoveDirection) => void = () => {}
+    private readonly sendDirection: (input: MoveDirection) => void = () => {},
+    private readonly oneWayMs: () => number = () => 0
   ) {}
 
   get active() {
@@ -95,11 +99,35 @@ export class ServerMovement {
       previous.turn !== input.turn ||
       previous.sprinting !== input.sprinting
     ) {
-      this.clear(false)
+      this.linger()
       this.requestId = this.nextId()
       this.directionInput = { ...input, request_id: this.requestId }
     }
     this.sendDirection(this.directionInput!)
+  }
+
+  /**
+   * Input changed under a live approved path. Everything about the request
+   * is stale, but the path itself is not: keeping it playing means a distant
+   * client sees the new heading arrive late instead of stopping dead for a
+   * full round trip. Only a client with no approved path yet starts still.
+   */
+  private linger() {
+    if (this.timer !== null) clearTimeout(this.timer)
+    this.timer = null
+    this.pending = null
+    this.stopBlend = null
+    this.requestId = null
+    this.directionInput = null
+    this.sentGoalIds = []
+    this.blockedPose = null
+    // A fresh direction supersedes a stop still in flight, so its reply must
+    // not be allowed to blend the avatar to a halt mid-stride.
+    this.stopId = null
+    if (!this.anchor) {
+      this.waypoints = []
+      this.queuedUpdates = []
+    }
   }
 
   stopDirection() {
@@ -136,10 +164,15 @@ export class ServerMovement {
       return false
     if (goalIndex >= 0) this.sentGoalIds.splice(0, goalIndex)
     const now = performance.now()
-    // Retargets and progress share the approved path's playback clock.
+    // Retargets and progress share the approved path's playback clock. The
+    // first anchor is dated back by the measured one-way delay: the pose in
+    // the message describes where the player was when the server stamped it,
+    // and anchoring on arrival would trail the authoritative position by a
+    // full one-way trip for as long as the walk lasts. Later updates inherit
+    // the same offset through their server-time delta.
     const at = this.anchor
       ? this.anchorAt + (progress.server_time_ms - this.anchor.server_time_ms)
-      : now
+      : now - this.shiftMs()
     const update = { progress, waypoints, at }
     if (at > now) this.queuedUpdates.push(update)
     else {
@@ -147,6 +180,13 @@ export class ServerMovement {
       this.applyUpdate(update)
     }
     return true
+  }
+
+  private shiftMs(): number {
+    const measured = this.oneWayMs()
+    return Number.isFinite(measured)
+      ? Math.min(Math.max(measured, 0), MAX_SHIFT_MS)
+      : 0
   }
 
   private get latestServerTime() {

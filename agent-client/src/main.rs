@@ -616,6 +616,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::EstateChestState { .. } => "EstateChestState",
         ServerMessage::FurniturePurchaseResult { .. } => "FurniturePurchaseResult",
         ServerMessage::FurnitureSelectionNotice { .. } => "FurnitureSelectionNotice",
+        ServerMessage::Pong { .. } => "Pong",
     }
 }
 
