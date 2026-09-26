@@ -66,13 +66,40 @@
   const ECLIPSE_NEW_MOON_THRESHOLD = 0.15
   const ECLIPSE_ANGLE_THRESHOLD_RAD = 0.2 // ~11.5°
   const ECLIPSE_X_OVERLAP_THRESHOLD_PERCENT = 15
-  // Drops render from any rain > 0; the widget sky is fully overcast well
-  // before the scene's cloud dimming peaks at 0.8.
+  // Drops render from any rain > 0, so the widget clouds over earlier than the
+  // scene's cloud_factor dimming.
   const OVERCAST_FULL_RAIN = 0.5
   const OVERCAST_DAY_RGB = [138, 146, 156]
   const OVERCAST_TWILIGHT_RGB = [120, 104, 110]
   const OVERCAST_NIGHT_RGB = [26, 30, 40]
   const OVERCAST_SUN_GLOW_ALPHA = 0.4
+  const OVERCAST_MOON_GLOW_ALPHA = 0.3
+  const OVERCAST_DAY_CLOUD_LIGHT = 0.13
+  const OVERCAST_NIGHT_CLOUD_LIGHT = 0.07
+  // [width%, height%, x%, y%, alpha]
+  const CLOUD_LIGHT_PUFFS = [
+    [16, 50, 7, 22, 1],
+    [11, 38, 24, 58, 0.7],
+    [24, 55, 41, 16, 0.9],
+    [9, 34, 60, 50, 0.6],
+    [19, 48, 76, 26, 1],
+    [12, 40, 94, 62, 0.8],
+  ]
+  const CLOUD_SHADE_PUFFS = [
+    [22, 45, 16, 82, 0.18],
+    [12, 35, 33, 34, 0.12],
+    [18, 42, 53, 78, 0.16],
+    [26, 45, 72, 86, 0.14],
+    [10, 32, 86, 30, 0.1],
+  ]
+  const cloudPuff = ([w, h, x, y]: number[], color: string) =>
+    `radial-gradient(ellipse ${w}% ${h}% at ${x}% ${y}%, ${color}, transparent 70%)`
+  const CLOUD_TEXTURE = [
+    ...CLOUD_LIGHT_PUFFS.map((p) =>
+      cloudPuff(p, `rgba(255, 255, 255, calc(var(--cloud-light) * ${p[4]}))`)
+    ),
+    ...CLOUD_SHADE_PUFFS.map((p) => cloudPuff(p, `rgba(0, 0, 0, ${p[4]})`)),
+  ].join(', ')
 
   interface MoonVisualDefinition extends MoonDefinition {
     sizePx: number
@@ -288,8 +315,12 @@
   const overcast = $derived(
     MathUtils.smoothstep(skyRain, 0, OVERCAST_FULL_RAIN)
   )
-  const overcastSunGlow = $derived(
-    sunVisual.isDaylight ? OVERCAST_SUN_GLOW_ALPHA * dayFactor : 0
+  const overcastCloudLight = $derived(
+    MathUtils.lerp(
+      OVERCAST_NIGHT_CLOUD_LIGHT,
+      OVERCAST_DAY_CLOUD_LIGHT,
+      dayFactor
+    )
   )
   const overcastColor = $derived.by(() => {
     const day = OVERCAST_DAY_RGB.map((c, i) =>
@@ -386,8 +417,25 @@
       {#if overcast > 0}
         <div
           class="overcast"
-          style="--overcast-color: {overcastColor}; opacity: {overcast}; --glow-x: {sunVisual.xPercent}%; --glow-y: {sunVisual.yPercent}%; --glow-alpha: {overcastSunGlow}"
-        ></div>
+          style="background-color: {overcastColor}; background-image: {CLOUD_TEXTURE}; opacity: {overcast}; --cloud-light: {overcastCloudLight}"
+        >
+          {#if sunVisual.isDaylight}
+            <div
+              class="overcast-glow sun-glow"
+              style="left: {sunVisual.xPercent}%; top: {sunVisual.yPercent}%; opacity: {OVERCAST_SUN_GLOW_ALPHA *
+                dayFactor}"
+            ></div>
+          {/if}
+          {#each moonVisuals as moon (moon.id)}
+            <div
+              class="overcast-glow moon-glow"
+              style="left: {moon.xPercent}%; top: {moon.yPercent}%; --glow-size: {moon.sizePx}px; opacity: {OVERCAST_MOON_GLOW_ALPHA *
+                moon.illumination *
+                moon.opacity *
+                (1 - dayFactor)}"
+            ></div>
+          {/each}
+        </div>
       {/if}
       <img
         class="horizon-front"
@@ -534,38 +582,23 @@
     position: absolute;
     inset: 0;
     z-index: 2;
-    background:
-      radial-gradient(
-        ellipse 36px 28px at var(--glow-x) var(--glow-y),
-        rgba(255, 248, 225, var(--glow-alpha)),
-        transparent
-      ),
-      radial-gradient(
-        ellipse 22% 55% at 14% 30%,
-        rgba(255, 255, 255, 0.14),
-        transparent 70%
-      ),
-      radial-gradient(
-        ellipse 26% 60% at 46% 22%,
-        rgba(255, 255, 255, 0.12),
-        transparent 70%
-      ),
-      radial-gradient(
-        ellipse 24% 55% at 80% 34%,
-        rgba(255, 255, 255, 0.13),
-        transparent 70%
-      ),
-      radial-gradient(
-        ellipse 30% 45% at 30% 75%,
-        rgba(0, 0, 0, 0.16),
-        transparent 70%
-      ),
-      radial-gradient(
-        ellipse 30% 45% at 68% 70%,
-        rgba(0, 0, 0, 0.14),
-        transparent 70%
-      ),
-      var(--overcast-color);
+  }
+
+  .overcast-glow {
+    position: absolute;
+    transform: translate(-50%, -50%);
+  }
+
+  .sun-glow {
+    width: 72px;
+    height: 56px;
+    background: radial-gradient(closest-side, rgb(255, 248, 225), transparent);
+  }
+
+  .moon-glow {
+    width: calc(var(--glow-size) * 3.6);
+    height: calc(var(--glow-size) * 2.8);
+    background: radial-gradient(closest-side, rgb(215, 228, 255), transparent);
   }
 
   .horizon-front {
