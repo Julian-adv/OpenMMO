@@ -46,8 +46,8 @@
   "dependencies": {
     "@threlte/core": "^8.5.16",
     "@threlte/extras": "^9.21.0",
-    "@types/three": "^0.185.1",
+    "@types/three": "^0.186.0",
     "i18next": "^26.4.2",
-    "three": "^0.185.1"
+    "three": "^0.186.1"
   }
 }

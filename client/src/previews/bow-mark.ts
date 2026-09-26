@@ -114,7 +114,7 @@ async function main() {
   renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75))
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  renderer.shadowMap.type = THREE.PCFShadowMap
   renderer.setClearColor('#141d20')
   host.prepend(renderer.domElement)
   const scene = new THREE.Scene()

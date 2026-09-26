@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { NodeMaterial, WebGPURenderer } from 'three/webgpu'
+import { NodeMaterial, WebGPURenderer, type TextureNode } from 'three/webgpu'
 import {
   Fn,
   texture,
@@ -25,8 +25,8 @@ const DECAY_RATE = 0.92
 // whenever the player walked into a new region with fresh water tiles.
 let sharedDecayScene: THREE.Scene | undefined
 let sharedDecayCamera: THREE.OrthographicCamera | undefined
-let sharedCaptureTexNode: ReturnType<typeof texture> | undefined
-let sharedPrevWetnessNode: ReturnType<typeof texture> | undefined
+let sharedCaptureTexNode: TextureNode | undefined
+let sharedPrevWetnessNode: TextureNode | undefined
 const sharedUDeltaTime = uniform(0.016)
 
 function ensureSharedDecayPass() {

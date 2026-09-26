@@ -26,14 +26,14 @@ export function createWebGPURenderer(canvas: HTMLCanvasElement) {
   renderer.setPixelRatio(
     Math.min(window.devicePixelRatio, preset.pixelRatioCap)
   )
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  renderer.shadowMap.type = THREE.PCFShadowMap
 
   // Guard renderer.dispose() — Threlte calls it on Canvas unmount,
   // but WebGPU backend.info may not exist if init() hasn't completed.
   const _origDispose = renderer.dispose.bind(renderer)
-  renderer.dispose = () => {
+  renderer.dispose = async () => {
     try {
-      _origDispose()
+      await _origDispose()
     } catch {
       // backend not yet initialized — safe to ignore
     }
@@ -54,12 +54,11 @@ export function createPreviewWebGPURenderer(canvas: HTMLCanvasElement) {
   })
 
   const _origDispose = renderer.dispose.bind(renderer)
-  renderer.dispose = () => {
+  renderer.dispose = () =>
     renderer
       .init()
       .then(() => _origDispose())
       .catch(() => {})
-  }
 
   return renderer
 }
