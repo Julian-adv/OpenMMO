@@ -1,5 +1,164 @@
 use super::*;
 
+fn requesting_bard() -> SharedState {
+    let (mut s, _rx) = test_state();
+    let me = test_player(0.0, 0.0);
+    s.self_player_id = Some(me.id);
+    s.tip_hats.insert(
+        900,
+        onlinerpg_shared::tip_hat::TipHat {
+            id: 900,
+            owner: me.id,
+            owner_name: me.name.clone(),
+            position: me.position,
+            rotation: 0.0,
+            floor_level: 0,
+            accepts_song_requests: true,
+        },
+    );
+    s.self_player = Some(me);
+    s.in_game = true;
+    s.plays_music = true;
+    s.self_bag.push(onlinerpg_shared::inventory::ItemInstance {
+        instance_id: 1,
+        item_def_id: "worn_mandolin".to_string(),
+        quantity: 1,
+        enchant: 0,
+        locked: false,
+        cape_color: None,
+        cape_texture: None,
+    });
+    s
+}
+
+fn request_song(s: &mut SharedState, name: &str, track: &str) {
+    s.push_event(ServerMessage::SongRequested {
+        requester_name: name.to_string(),
+        track: track.to_string(),
+    });
+}
+
+fn end_requested_song(s: &mut SharedState) {
+    s.self_performance.as_mut().unwrap().ends_at = std::time::Instant::now();
+    s.check_music_finished();
+    assert!(matches!(
+        s.drain_pending_commands().as_slice(),
+        [ClientMessage::StopInteraction]
+    ));
+    s.check_music_finished();
+    assert!(
+        s.drain_pending_commands().is_empty(),
+        "wait for the stop acknowledgement"
+    );
+    s.push_event(ServerMessage::PlayerInteractionChanged {
+        player_id: s.self_player_id.unwrap(),
+        position: s.self_player.as_ref().unwrap().position,
+        rotation: 0.0,
+        floor_level: 0,
+        object_type: None,
+        object_id: None,
+    });
+}
+
+#[test]
+fn paid_requests_play_in_order_after_the_song_and_break_without_llm_choices() {
+    let mut s = requesting_bard();
+    s.push_event(ServerMessage::PlayerMusicStarted {
+        player_id: s.self_player_id.unwrap(),
+        track: "Twilight Fields".to_string(),
+        elapsed_secs: 0.0,
+    });
+    request_song(&mut s, "First fan", "Beyond the Horizon");
+    request_song(&mut s, "Second fan", "First Light Waltz");
+    s.check_music_finished();
+    assert!(s.drain_pending_commands().is_empty());
+    assert!(s.format_world_state().contains("2 pending"));
+
+    end_requested_song(&mut s);
+    s.check_music_finished();
+    assert!(
+        s.drain_pending_commands().is_empty(),
+        "rest before the request"
+    );
+
+    for track in ["Beyond the Horizon", "First Light Waltz"] {
+        s.self_music_rest_until = Some(std::time::Instant::now());
+        assert!(s.refuses_play_command("/play_music Twilight Fields"));
+        assert!(s.begin_recital(&["A tale".to_string()]).is_err());
+        s.check_music_finished();
+        assert!(matches!(s.drain_pending_commands().as_slice(),
+            [ClientMessage::ChatMessage { message }] if message == &format!("/play_music {track}")
+        ));
+        assert!(s.refuses_play_command("/play_music Twilight Fields"));
+        s.check_music_finished();
+        assert!(
+            s.drain_pending_commands().is_empty(),
+            "no duplicate while awaiting start"
+        );
+        s.push_event(ServerMessage::PlayerMusicStarted {
+            player_id: s.self_player_id.unwrap(),
+            track: track.to_string(),
+            elapsed_secs: 0.0,
+        });
+        end_requested_song(&mut s);
+    }
+    assert!(s.song_requests.is_empty());
+    s.self_music_rest_until = Some(std::time::Instant::now());
+    s.check_music_finished();
+    assert!(!s.refuses_play_command("/play_music Twilight Fields"));
+}
+
+#[test]
+fn requests_wait_for_the_bard_to_resume_performing_and_for_start_confirmation() {
+    let mut s = requesting_bard();
+    request_song(&mut s, "fan", "Beyond the Horizon");
+    s.self_player.as_mut().unwrap().object_type = Some("bed".to_string());
+    s.check_music_finished();
+    assert!(s.drain_pending_commands().is_empty());
+    s.self_player.as_mut().unwrap().object_type = None;
+    s.move_status = Some(onlinerpg_shared::messages::MoveStatus::Moving);
+    s.check_music_finished();
+    assert!(s.drain_pending_commands().is_empty());
+    s.move_status = Some(onlinerpg_shared::messages::MoveStatus::Arrived);
+    let hat = s.tip_hats.remove(&900).unwrap();
+    s.check_music_finished();
+    assert!(s.drain_pending_commands().is_empty());
+    s.tip_hats.insert(hat.id, hat);
+    let instrument = s.self_bag.pop().unwrap();
+    s.check_music_finished();
+    assert!(s.drain_pending_commands().is_empty());
+    s.self_bag.push(instrument);
+
+    s.check_music_finished();
+    assert_eq!(s.drain_pending_commands().len(), 1);
+    assert_eq!(
+        s.song_requests.len(),
+        1,
+        "keep the request until music starts"
+    );
+    s.push_event(ServerMessage::PlayerMusicStarted {
+        player_id: PlayerId::from(2),
+        track: "Beyond the Horizon".to_string(),
+        elapsed_secs: 0.0,
+    });
+    assert_eq!(
+        s.song_requests.len(),
+        1,
+        "another bard cannot consume our request"
+    );
+    s.song_request_sent_at = Some(std::time::Instant::now() - std::time::Duration::from_secs(11));
+    s.check_music_finished();
+    assert!(matches!(s.drain_pending_commands().as_slice(),
+        [ClientMessage::ChatMessage { message }] if message == "/play_music Beyond the Horizon"
+    ));
+    s.push_event(ServerMessage::PlayerMusicStarted {
+        player_id: s.self_player_id.unwrap(),
+        track: "Beyond the Horizon".to_string(),
+        elapsed_secs: 0.0,
+    });
+    assert!(s.song_requests.is_empty());
+}
+
 /// The LLM will happily call for a new song halfway through the last one,
 /// which restarts the music for everyone listening. The command is dropped
 /// and the model is told why — on its next prompt, not by waking it here.

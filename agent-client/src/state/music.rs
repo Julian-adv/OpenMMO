@@ -105,14 +105,7 @@ impl SharedState {
         }
     }
 
-    /// Drop a `/play_music` the agent typed for a song that does not exist, or
-    /// while its own tune is still running, or during the quiet spell after it:
-    /// a second command restarts the music for every listener, and the LLM is
-    /// not patient enough to wait on its own. A timing refusal does not wake the
-    /// driver — the end of the rest does that, and waking here would only invite
-    /// another attempt. A made-up title does wake it, once: the bard has already
-    /// announced the song to the square, and nothing else would prompt it to
-    /// take that back before the idle interval, an hour later.
+    /// Validate LLM song choices without interrupting a performance or request queue.
     pub fn refuses_play_command(&mut self, message: &str) -> bool {
         // The same parser the server runs on the other end of this command.
         let Some(query) = onlinerpg_shared::messages::strip_command(message, "/play_music") else {
@@ -147,6 +140,8 @@ impl SharedState {
                 "the square is quiet between songs for another {}s",
                 rest_until.saturating_duration_since(now).as_secs()
             )
+        } else if !self.song_requests.is_empty() {
+            "tip-hat requests are queued and will start automatically in order".to_string()
         } else {
             return false;
         };
@@ -159,23 +154,23 @@ impl SharedState {
         true
     }
 
-    /// Stop strumming once the track we started has run its length, and invite
-    /// the next song when the quiet spell after it is over. The web client
-    /// ends a performance when its audio ends and rests before the next track;
-    /// we have no audio, so this tick is our equivalent — without it an NPC
-    /// bard plays one tune forever, or one unbroken stream of them.
+    /// Time performances and rest periods, then play queued requests.
     pub fn check_music_finished(&mut self) {
         self.tick_recital();
         if let Some(rest_until) = self.self_music_rest_until {
             if std::time::Instant::now() >= rest_until {
                 self.self_music_rest_until = None;
-                self.push_ambient_event(
-                    "[PlayMusic] The square is quiet again — time for another song.".to_string(),
-                );
+                if self.song_requests.is_empty() {
+                    self.push_ambient_event(
+                        "[PlayMusic] The square is quiet again — time for another song."
+                            .to_string(),
+                    );
+                }
             }
         }
 
         let Some(perf) = &self.self_performance else {
+            self.start_requested_song();
             return;
         };
         let walked_off = self.self_player.as_ref().is_some_and(|me| {
@@ -191,6 +186,54 @@ impl SharedState {
         if self.held_pose().is_none() {
             self.pending_commands.push(ClientMessage::StopInteraction);
         }
+    }
+
+    fn start_requested_song(&mut self) {
+        use onlinerpg_shared::messages::MoveStatus;
+
+        let Some((requester, track)) = self.song_requests.front() else {
+            return;
+        };
+        if !self.in_game
+            || !self.plays_music
+            || self.self_music_rest_until.is_some()
+            || self.held_pose().is_some()
+            || self.self_fishing
+            || self.own_tip_hat().is_none()
+            || self.self_player.as_ref().is_none_or(|me| me.health == 0)
+            || self
+                .self_player_id
+                .is_some_and(|id| self.music_performers.contains_key(&id))
+            || matches!(
+                self.move_status,
+                Some(MoveStatus::Searching | MoveStatus::Moving)
+            )
+            || self
+                .song_request_sent_at
+                .is_some_and(|at| at.elapsed().as_secs() < 10)
+        {
+            return;
+        }
+        let holds_instrument =
+            self.self_bag
+                .iter()
+                .chain(self.self_equipped.values())
+                .any(|item| {
+                    crate::item_defs::get(&item.item_def_id).is_some_and(|def| def.is_instrument())
+                });
+        if !holds_instrument {
+            return;
+        }
+        self.recital = None;
+        self.pending_commands.push(ClientMessage::ChatMessage {
+            message: format!("/play_music {track}"),
+        });
+        if self.song_request_sent_at.is_none() {
+            self.push_agent_event_quiet(format!(
+                "[SongRequest] Automatically starting \"{track}\", requested by {requester}."
+            ));
+        }
+        self.song_request_sent_at = Some(std::time::Instant::now());
     }
 
     /// A busker plays on a workhorse instrument — never the starter sword,
@@ -248,6 +291,11 @@ impl SharedState {
     /// follow every `RECITE_LINE_SECS`, cycling until our song ends. A new
     /// recital replaces one still running.
     pub fn begin_recital(&mut self, verses: &[String]) -> Result<(), String> {
+        if !self.song_requests.is_empty() {
+            return Err(
+                "tip-hat song requests will play automatically before the next tale".to_string(),
+            );
+        }
         if let Some(held) = self.held_pose() {
             return Err(format!("you are resting on the {held}"));
         }

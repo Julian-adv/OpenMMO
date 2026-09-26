@@ -468,8 +468,9 @@
 {#if $tipHatDialog}
   <TipHatDialog
     ownerName={$tipHatDialog.ownerName}
-    onConfirm={(copper) => {
-      networkManager.sendTipHat($tipHatDialog!.hatId, copper)
+    acceptsSongRequests={$tipHatDialog.acceptsSongRequests}
+    onConfirm={(copper, song) => {
+      networkManager.sendTipHat($tipHatDialog!.hatId, copper, song)
       tipHatDialog.set(null)
     }}
     onCancel={() => tipHatDialog.set(null)}

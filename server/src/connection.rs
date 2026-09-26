@@ -2075,9 +2075,15 @@ async fn handle_client_message(
             }
         }
 
-        ClientMessage::TipHat { hat_id, amount } => {
+        ClientMessage::TipHat {
+            hat_id,
+            amount,
+            song,
+        } => {
             if let Some(id) = &state.player_id {
-                game_state.tip_hat_tip(id, hat_id, amount).await;
+                game_state
+                    .tip_hat_tip(id, hat_id, amount, song.as_deref())
+                    .await;
             }
         }
 

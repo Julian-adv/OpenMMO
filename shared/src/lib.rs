@@ -189,7 +189,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v98: server-driven keyboard and mounted movement.
 /// v99: authoritative furniture interaction positions.
 /// v100: player stalls accept buy orders alongside sale listings.
-pub const PROTOCOL_VERSION: u32 = 100;
+/// v101: tip hats accept optional song requests delivered to the performer.
+pub const PROTOCOL_VERSION: u32 = 101;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

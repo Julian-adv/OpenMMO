@@ -358,6 +358,8 @@ pub struct SharedState {
     recital: Option<Recital>,
     /// Until when the square stays quiet after our own song (`MUSIC_REST_*`).
     self_music_rest_until: Option<std::time::Instant>,
+    song_requests: VecDeque<(String, String)>,
+    song_request_sent_at: Option<std::time::Instant>,
     /// Tips left while we were still playing, as (instance id, event line).
     /// Held until the song ends: the thanks belong in the quiet spell, and
     /// walking over mid-song would abandon the performance.
@@ -510,6 +512,8 @@ impl SharedState {
             self_songs_started: 0,
             recital: None,
             self_music_rest_until: None,
+            song_requests: VecDeque::new(),
+            song_request_sent_at: None,
             pending_tips: Vec::new(),
             tips_noticed: 0,
             bad_song_title_refused: false,

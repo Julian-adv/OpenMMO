@@ -4,4 +4,5 @@ import { writable } from 'svelte/store'
 export const tipHatDialog = writable<{
   hatId: number
   ownerName: string
+  acceptsSongRequests: boolean
 } | null>(null)

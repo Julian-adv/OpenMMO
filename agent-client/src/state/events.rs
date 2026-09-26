@@ -813,6 +813,15 @@ impl SharedState {
             } => {
                 self.music_performers.insert(*player_id, track.clone());
                 if self.self_player_id.as_ref() == Some(player_id) {
+                    if self.song_request_sent_at.is_some()
+                        && self
+                            .song_requests
+                            .front()
+                            .is_some_and(|(_, song)| song == track)
+                    {
+                        self.song_requests.pop_front();
+                        self.song_request_sent_at = None;
+                    }
                     self.bad_song_title_refused = false;
                     self.tips_noticed = 0;
                     push_capped(&mut self.recent_songs, track.clone(), MAX_RECENT_SONGS);
@@ -1089,6 +1098,21 @@ impl SharedState {
             }
             ServerMessage::TipHatRemoved { tip_hat_id } => {
                 self.tip_hats.remove(tip_hat_id);
+            }
+            ServerMessage::SongRequested {
+                requester_name,
+                track,
+            } => {
+                if self.plays_music && crate::bgm_defs::knows(track) {
+                    self.song_requests
+                        .push_back((requester_name.clone(), track.clone()));
+                    self.push_agent_event_quiet(format!(
+                        "[SongRequest] {requester_name} requested \"{track}\" with a tip. \
+                         Queued at position {}. The client will play it automatically in order; \
+                         you may thank them, but do not choose a replacement or start a tale.",
+                        self.song_requests.len()
+                    ));
+                }
             }
             ServerMessage::MealPlaced { ref meal } | ServerMessage::MealAppeared { ref meal } => {
                 self.meals.insert(meal.id, meal.clone());

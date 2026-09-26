@@ -15,6 +15,8 @@ pub struct TipHat {
     /// Owner's yaw when it was set down.
     pub rotation: f32,
     pub floor_level: i8,
+    #[serde(default)]
+    pub accepts_song_requests: bool,
 }
 
 /// How far the owner may wander before the hat is packed up automatically.

@@ -672,6 +672,8 @@ pub enum ClientMessage {
     TipHat {
         hat_id: u64,
         amount: i64,
+        #[serde(default)]
+        song: Option<String>,
     },
     /// Step up to a stall. An NPC's stall is its shop front and opens the
     /// priced shop instead; a player's opens the consignment panel.
@@ -1822,6 +1824,10 @@ pub enum ServerMessage {
     TipHatRemoved {
         tip_hat_id: u64,
     },
+    SongRequested {
+        requester_name: String,
+        track: String,
+    },
     /// A maid just set a dish down on a table nearby.
     MealPlaced {
         meal: crate::meal::Meal,
@@ -2009,6 +2015,7 @@ impl ServerMessage {
             | Self::DungeonDiscoveries { .. }
             | Self::WhisperMessage { .. }
             | Self::SystemMessage { .. }
+            | Self::SongRequested { .. }
             | Self::PartyChatMessage { .. }
             | Self::PartyInviteReceived { .. }
             | Self::PartyInviteResult { .. }

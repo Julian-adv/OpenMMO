@@ -6,9 +6,8 @@ use onlinerpg_shared::{PlayerId, ServerMessage};
 
 use super::GameState;
 
-/// Two cells in front of the performer, so it stands between them and the
-/// audience rather than under their feet.
-const TIP_HAT_PLACEMENT_M: f32 = 2.0;
+/// Keep the hat close to the performer, clear of nearby windows.
+const TIP_HAT_PLACEMENT_M: f32 = 1.0;
 
 /// How close a tipper must stand to the hat. Roomier than the client's reach
 /// so a step taken while the dialog is open doesn't void the tip.
@@ -40,9 +39,15 @@ impl GameState {
         else {
             return;
         };
-        let Some((owner_name, rotation)) = ({
+        let Some((owner_name, rotation, accepts_song_requests)) = ({
             let players = self.players.read().await;
-            players.get(player_id).map(|p| (p.name.clone(), p.rotation))
+            players.get(player_id).map(|p| {
+                (
+                    p.name.clone(),
+                    p.rotation,
+                    p.is_official_npc && p.class == onlinerpg_shared::CharacterClass::Bard,
+                )
+            })
         }) else {
             return;
         };
@@ -53,6 +58,7 @@ impl GameState {
             position: placement,
             rotation,
             floor_level,
+            accepts_song_requests,
         };
         self.tip_hats
             .write()
@@ -97,7 +103,13 @@ impl GameState {
     }
 
     /// Drop `amount` copper into someone else's hat.
-    pub async fn tip_hat_tip(&self, player_id: &PlayerId, hat_id: u64, amount: i64) {
+    pub async fn tip_hat_tip(
+        &self,
+        player_id: &PlayerId,
+        hat_id: u64,
+        amount: i64,
+        song: Option<&str>,
+    ) {
         if amount <= 0 {
             return;
         }
@@ -130,16 +142,48 @@ impl GameState {
             return;
         }
 
+        let track = if let Some(song) = song {
+            if !hat.accepts_song_requests {
+                self.send_system_message(player_id, "This performer isn't taking song requests.")
+                    .await;
+                return;
+            }
+            let Some(track) = crate::bgm_defs::bgm_defs()
+                .resolve(song)
+                .filter(|_| !song.trim().is_empty())
+            else {
+                self.send_system_message(player_id, "No such song.").await;
+                return;
+            };
+            Some(track)
+        } else {
+            None
+        };
+
         if !self.spend_copper(player_id, amount).await {
             self.send_system_message(player_id, "Not enough gold").await;
             return;
         }
         self.award_copper(&hat.owner, amount).await;
 
+        if let Some(track) = track {
+            self.send_direct_message(
+                &hat.owner,
+                ServerMessage::SongRequested {
+                    requester_name: tipper_name.clone(),
+                    track: track.to_string(),
+                },
+            )
+            .await;
+        }
+
         let owner_name = hat.owner_name;
+        let request_note = track.map_or_else(String::new, |track| {
+            format!(" Requested \"{track}\". Songs are played in request order.")
+        });
         self.send_system_message(
             player_id,
-            format!("You drop {amount} copper into {owner_name}'s tip hat."),
+            format!("You drop {amount} copper into {owner_name}'s tip hat.{request_note}"),
         )
         .await;
         self.send_system_message(

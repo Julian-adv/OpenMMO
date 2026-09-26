@@ -168,6 +168,7 @@ fn tip_hat(owner: PlayerId) -> onlinerpg_shared::tip_hat::TipHat {
         id: 900,
         owner,
         owner_name: "Me".to_string(),
+        accepts_song_requests: false,
         position: p(0.0, 0.0, 2.0),
         rotation: 0.0,
         floor_level: 0,

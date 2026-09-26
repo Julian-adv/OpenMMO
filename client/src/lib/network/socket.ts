@@ -936,8 +936,8 @@ class NetworkManager {
   }
 
   /** Drop copper into a nearby performer's tip hat. */
-  sendTipHat(hatId: number, amount: number) {
-    this.sendMessage({ TipHat: { hat_id: hatId, amount } })
+  sendTipHat(hatId: number, amount: number, song: string | null = null) {
+    this.sendMessage({ TipHat: { hat_id: hatId, amount, song } })
   }
 
   sendEatMeal(mealId: number) {

@@ -794,6 +794,7 @@ pub(super) async fn handle_response(
             let cmd = onlinerpg_shared::ClientMessage::TipHat {
                 hat_id,
                 amount: *amount,
+                song: None,
             };
             if let Err(e) = s.send_command(cmd).await {
                 error!("Failed to send tip: {e}");

@@ -157,6 +157,18 @@ impl SharedState {
                 list.join(", ")
             ));
         }
+        if !self.song_requests.is_empty() {
+            let requests: Vec<_> = self
+                .song_requests
+                .iter()
+                .take(10)
+                .map(|(requester, track)| format!("\"{track}\" for {requester}"))
+                .collect();
+            lines.push(format!(
+                "Tip-hat song queue ({} pending, played automatically in order before any other song or tale): {}",
+                self.song_requests.len(), requests.join("; ")
+            ));
+        }
 
         if !self.party_members.is_empty() {
             let names: Vec<String> = self

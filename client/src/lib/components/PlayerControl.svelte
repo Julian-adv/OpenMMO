@@ -1445,7 +1445,12 @@
   function tipHat(intent: Extract<ClickIntent, { type: 'tip_hat' }>) {
     approachAndAct({ position: intent.position, ...TIP_HAT_APPROACH }, () => {
       const hat = tipHatManager.hats.get(intent.hatId)
-      if (hat) tipHatDialog.set({ hatId: hat.id, ownerName: hat.owner_name })
+      if (hat)
+        tipHatDialog.set({
+          hatId: hat.id,
+          ownerName: hat.owner_name,
+          acceptsSongRequests: hat.accepts_song_requests,
+        })
     })
   }
 

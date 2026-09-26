@@ -332,7 +332,7 @@ export type ClientMessage =
   | { DyeCape: { instance_id: number; color: string } }
   | { ApplyCapeTexture: { instance_id: number; texture: string } }
   | { ReportCapeTexture: { player_id: number } }
-  | { TipHat: { hat_id: number; amount: number } }
+  | { TipHat: { hat_id: number; amount: number; song: string | null } }
   | { EatMeal: { meal_id: number } }
   | { OpenShop: { merchant_player_id: number } }
   | { CloseShop: { merchant_player_id: number } }
@@ -528,6 +528,7 @@ export type ServerTipHat = {
   position: Position
   rotation: number
   floor_level: number
+  accepts_song_requests: boolean
 }
 
 /** A dish the inn maid set on a table in front of a seated guest. */
