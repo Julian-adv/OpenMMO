@@ -72,34 +72,8 @@
   const OVERCAST_DAY_RGB = [138, 146, 156]
   const OVERCAST_TWILIGHT_RGB = [120, 104, 110]
   const OVERCAST_NIGHT_RGB = [26, 30, 40]
-  const OVERCAST_SUN_GLOW_ALPHA = 0.4
-  const OVERCAST_MOON_GLOW_ALPHA = 0.3
   const OVERCAST_DAY_CLOUD_LIGHT = 0.13
   const OVERCAST_NIGHT_CLOUD_LIGHT = 0.07
-  // [width%, height%, x%, y%, alpha]
-  const CLOUD_LIGHT_PUFFS = [
-    [16, 50, 7, 22, 1],
-    [11, 38, 24, 58, 0.7],
-    [24, 55, 41, 16, 0.9],
-    [9, 34, 60, 50, 0.6],
-    [19, 48, 76, 26, 1],
-    [12, 40, 94, 62, 0.8],
-  ]
-  const CLOUD_SHADE_PUFFS = [
-    [22, 45, 16, 82, 0.18],
-    [12, 35, 33, 34, 0.12],
-    [18, 42, 53, 78, 0.16],
-    [26, 45, 72, 86, 0.14],
-    [10, 32, 86, 30, 0.1],
-  ]
-  const cloudPuff = ([w, h, x, y]: number[], color: string) =>
-    `radial-gradient(ellipse ${w}% ${h}% at ${x}% ${y}%, ${color}, transparent 70%)`
-  const CLOUD_TEXTURE = [
-    ...CLOUD_LIGHT_PUFFS.map((p) =>
-      cloudPuff(p, `rgba(255, 255, 255, calc(var(--cloud-light) * ${p[4]}))`)
-    ),
-    ...CLOUD_SHADE_PUFFS.map((p) => cloudPuff(p, `rgba(0, 0, 0, ${p[4]})`)),
-  ].join(', ')
 
   interface MoonVisualDefinition extends MoonDefinition {
     sizePx: number
@@ -417,20 +391,18 @@
       {#if overcast > 0}
         <div
           class="overcast"
-          style="background-color: {overcastColor}; background-image: {CLOUD_TEXTURE}; opacity: {overcast}; --cloud-light: {overcastCloudLight}"
+          style="background-color: {overcastColor}; opacity: {overcast}; --cloud-light: {overcastCloudLight}"
         >
           {#if sunVisual.isDaylight}
             <div
               class="overcast-glow sun-glow"
-              style="left: {sunVisual.xPercent}%; top: {sunVisual.yPercent}%; opacity: {OVERCAST_SUN_GLOW_ALPHA *
-                dayFactor}"
+              style="--sun-x: {sunVisual.xPercent}%; --sun-y: {sunVisual.yPercent}%; opacity: {dayFactor}"
             ></div>
           {/if}
           {#each moonVisuals as moon (moon.id)}
             <div
               class="overcast-glow moon-glow"
-              style="left: {moon.xPercent}%; top: {moon.yPercent}%; --glow-size: {moon.sizePx}px; opacity: {OVERCAST_MOON_GLOW_ALPHA *
-                moon.illumination *
+              style="--moon-x: {moon.xPercent}%; --moon-y: {moon.yPercent}%; --moon-size: {moon.sizePx}px; opacity: {moon.illumination *
                 moon.opacity *
                 (1 - dayFactor)}"
             ></div>
@@ -582,6 +554,62 @@
     position: absolute;
     inset: 0;
     z-index: 2;
+    background-image:
+      radial-gradient(
+        ellipse 16% 50% at 7% 22%,
+        rgba(255, 255, 255, var(--cloud-light)),
+        transparent 70%
+      ),
+      radial-gradient(
+        ellipse 11% 38% at 24% 58%,
+        rgba(255, 255, 255, calc(var(--cloud-light) * 0.7)),
+        transparent 70%
+      ),
+      radial-gradient(
+        ellipse 24% 55% at 41% 16%,
+        rgba(255, 255, 255, calc(var(--cloud-light) * 0.9)),
+        transparent 70%
+      ),
+      radial-gradient(
+        ellipse 9% 34% at 60% 50%,
+        rgba(255, 255, 255, calc(var(--cloud-light) * 0.6)),
+        transparent 70%
+      ),
+      radial-gradient(
+        ellipse 19% 48% at 76% 26%,
+        rgba(255, 255, 255, var(--cloud-light)),
+        transparent 70%
+      ),
+      radial-gradient(
+        ellipse 12% 40% at 94% 62%,
+        rgba(255, 255, 255, calc(var(--cloud-light) * 0.8)),
+        transparent 70%
+      ),
+      radial-gradient(
+        ellipse 22% 45% at 16% 82%,
+        rgba(0, 0, 0, 0.18),
+        transparent 70%
+      ),
+      radial-gradient(
+        ellipse 12% 35% at 33% 34%,
+        rgba(0, 0, 0, 0.12),
+        transparent 70%
+      ),
+      radial-gradient(
+        ellipse 18% 42% at 53% 78%,
+        rgba(0, 0, 0, 0.16),
+        transparent 70%
+      ),
+      radial-gradient(
+        ellipse 26% 45% at 72% 86%,
+        rgba(0, 0, 0, 0.14),
+        transparent 70%
+      ),
+      radial-gradient(
+        ellipse 10% 32% at 86% 30%,
+        rgba(0, 0, 0, 0.1),
+        transparent 70%
+      );
   }
 
   .overcast-glow {
@@ -590,15 +618,27 @@
   }
 
   .sun-glow {
+    left: var(--sun-x);
+    top: var(--sun-y);
     width: 72px;
     height: 56px;
-    background: radial-gradient(closest-side, rgb(255, 248, 225), transparent);
+    background: radial-gradient(
+      closest-side,
+      rgba(255, 248, 225, 0.4),
+      transparent
+    );
   }
 
   .moon-glow {
-    width: calc(var(--glow-size) * 3.6);
-    height: calc(var(--glow-size) * 2.8);
-    background: radial-gradient(closest-side, rgb(215, 228, 255), transparent);
+    left: var(--moon-x);
+    top: var(--moon-y);
+    width: calc(var(--moon-size) * 3.6);
+    height: calc(var(--moon-size) * 2.8);
+    background: radial-gradient(
+      closest-side,
+      rgba(215, 228, 255, 0.3),
+      transparent
+    );
   }
 
   .horizon-front {
