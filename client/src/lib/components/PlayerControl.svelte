@@ -2217,7 +2217,11 @@
           progress.position.x,
           progress.position.z
         )
-        if (progress.status !== 'moving' && progress.status !== 'searching') {
+        if (
+          serverMovement.isCurrentRequest(progress.request_id) &&
+          progress.status !== 'moving' &&
+          progress.status !== 'searching'
+        ) {
           if (!['arrived', 'partial', 'blocked'].includes(progress.status)) {
             const movement = movingState()
             if (movement) movement.approach = null

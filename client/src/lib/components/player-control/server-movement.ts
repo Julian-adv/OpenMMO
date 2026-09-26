@@ -8,7 +8,7 @@ import type {
 } from '../../network/networkTypes'
 import { shortestWrappedDeltaX, wrapWorldX } from '../../terrain/world-wrap'
 
-const SEND_INTERVAL_MS = 100
+const SEND_INTERVAL_MS = 200
 const MAX_EXTRAPOLATION_MS = 500
 const STOP_BLEND_MS = 120
 
@@ -16,6 +16,12 @@ type Pose = {
   position: Position
   rotation: number
   speed: number
+}
+
+type MovementUpdate = {
+  progress: MoveProgress
+  waypoints: MoveWaypoint[]
+  at: number
 }
 
 export class ServerMovement {
@@ -27,7 +33,8 @@ export class ServerMovement {
   private waypoints: MoveWaypoint[] = []
   private anchor: MoveProgress | null = null
   private anchorAt = 0
-  private queuedPaths: { path: MovePath; at: number }[] = []
+  private queuedUpdates: MovementUpdate[] = []
+  private sentGoalIds: number[] = []
   private blockedPose: Pose | null = null
   private nextSendAt = 0
   private pending: MoveGoal | null = null
@@ -51,9 +58,13 @@ export class ServerMovement {
     )
   }
 
+  isCurrentRequest(requestId: number) {
+    return requestId === this.requestId
+  }
+
   request(x: number, z: number, sprinting: boolean, stopAtEntrance = false) {
     if (!Number.isFinite(x) || !Number.isFinite(z)) return
-    this.clear(false)
+    if (this.directionInput || this.stopping || !this.active) this.clear(false)
     this.requestId = this.nextId()
     this.pending = {
       request_id: this.requestId,
@@ -64,7 +75,8 @@ export class ServerMovement {
     }
     const delay = this.nextSendAt - performance.now()
     if (delay <= 0) this.flush()
-    else this.timer = setTimeout(() => this.flush(), delay)
+    else if (this.timer === null)
+      this.timer = setTimeout(() => this.flush(), delay)
   }
 
   direction(input: Omit<MoveDirection, 'request_id'>) {
@@ -94,43 +106,55 @@ export class ServerMovement {
     if (this.timer !== null) clearTimeout(this.timer)
     this.timer = null
     if (!this.pending) return
+    this.sentGoalIds.push(this.pending.request_id)
     this.sendGoal(this.pending)
     this.pending = null
     this.nextSendAt = performance.now() + SEND_INTERVAL_MS
   }
 
   acceptPath(path: MovePath): boolean {
+    return this.acceptUpdate(
+      { ...path, next_waypoint: 0, status: 'moving' },
+      path.waypoints
+    )
+  }
+
+  private acceptUpdate(progress: MoveProgress, waypoints: MoveWaypoint[]) {
+    const goalIndex = this.sentGoalIds.indexOf(progress.request_id)
     if (
-      path.request_id !== this.requestId ||
-      path.server_time_ms < this.latestServerTime
+      (this.directionInput
+        ? !this.isCurrentRequest(progress.request_id)
+        : goalIndex < 0) ||
+      progress.server_time_ms < this.latestServerTime
     )
       return false
+    if (goalIndex >= 0) this.sentGoalIds.splice(0, goalIndex)
     const now = performance.now()
-    // Renewed paths (keyboard, and every tick while mounted) share a playback
-    // clock despite arrival jitter, so the pose never steps back.
+    // Retargets and progress share the approved path's playback clock.
     const at = this.anchor
-      ? this.anchorAt + (path.server_time_ms - this.anchor.server_time_ms)
+      ? this.anchorAt + (progress.server_time_ms - this.anchor.server_time_ms)
       : now
-    if (at > now) this.queuedPaths.push({ path, at })
+    const update = { progress, waypoints, at }
+    if (at > now) this.queuedUpdates.push(update)
     else {
-      this.queuedPaths = []
-      this.applyPath(path, at)
+      this.queuedUpdates = []
+      this.applyUpdate(update)
     }
     return true
   }
 
   private get latestServerTime() {
     return (
-      this.queuedPaths.at(-1)?.path.server_time_ms ??
+      this.queuedUpdates.at(-1)?.progress.server_time_ms ??
       this.anchor?.server_time_ms ??
       0
     )
   }
 
-  private applyPath(path: MovePath, at: number) {
-    this.waypoints = path.waypoints
+  private applyUpdate({ progress, waypoints, at }: MovementUpdate) {
+    this.waypoints = waypoints
     this.blockedPose = null
-    this.anchor = { ...path, next_waypoint: 0, status: 'moving' }
+    this.anchor = progress
     this.anchorAt = at
   }
 
@@ -157,16 +181,14 @@ export class ServerMovement {
   }
 
   acceptProgress(progress: MoveProgress): boolean {
-    if (
-      progress.request_id !== this.requestId ||
-      progress.server_time_ms < this.latestServerTime
-    )
-      return false
-    this.anchor = progress
-    this.queuedPaths = []
-    this.blockedPose = null
-    this.anchorAt = performance.now()
-    return true
+    const latest = this.queuedUpdates.at(-1)
+    const previous = latest?.progress ?? this.anchor
+    const waypoints =
+      progress.status === 'moving' &&
+      progress.request_id === previous?.request_id
+        ? (latest?.waypoints ?? this.waypoints)
+        : []
+    return this.acceptUpdate(progress, waypoints)
   }
 
   sample(blocked: (from: Position, to: Position) => boolean): Pose | null {
@@ -216,9 +238,8 @@ export class ServerMovement {
     blocked: (from: Position, to: Position) => boolean
   ): Pose | null {
     const now = performance.now()
-    while (this.queuedPaths.length && this.queuedPaths[0].at <= now) {
-      const { path, at } = this.queuedPaths.shift()!
-      this.applyPath(path, at)
+    while (this.queuedUpdates.length && this.queuedUpdates[0].at <= now) {
+      this.applyUpdate(this.queuedUpdates.shift()!)
     }
     if (this.blockedPose) return this.blockedPose
     const anchor = this.anchor
@@ -290,7 +311,8 @@ export class ServerMovement {
     this.stopBlend = null
     this.requestId = null
     this.anchor = null
-    this.queuedPaths = []
+    this.queuedUpdates = []
+    this.sentGoalIds = []
     this.waypoints = []
     this.blockedPose = null
     if (!notify) this.stopId = null

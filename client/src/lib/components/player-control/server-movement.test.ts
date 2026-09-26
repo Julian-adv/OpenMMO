@@ -241,6 +241,223 @@ describe('keyboard release', () => {
 })
 
 describe('server approved movement', () => {
+  it.each([20, 150, 250])(
+    'keeps dragging continuous with %ims RTT and jittery replies',
+    (rtt) => {
+      const { movement, goal } = setup()
+      const replies: { at: number; path: MovePath }[] = []
+      const sentAt: number[] = []
+      goal.mockImplementation(({ request_id }) => {
+        sentAt.push(performance.now())
+        const serverTime = performance.now() + rtt / 2
+        replies.push({
+          at: serverTime + rtt / 2 + [0, 30, -10, 20][(request_id - 1) % 4],
+          path: {
+            ...path(request_id),
+            server_time_ms: serverTime,
+            position: { x: (serverTime - rtt / 2) * 0.003, y: 0, z: 0 },
+            waypoints: [{ position: { x: 30, y: 0, z: 0 }, floor_level: 0 }],
+          },
+        })
+      })
+      for (let elapsed = 0; elapsed <= 1000; elapsed += 10) {
+        if (elapsed > 0) vi.advanceTimersByTime(10)
+        if (elapsed % 100 === 0) movement.request(30 + elapsed / 100, 0, false)
+        while (replies.length && replies[0].at <= elapsed) {
+          const reply = replies.shift()!.path
+          expect(
+            movement.acceptProgress({
+              ...reply,
+              next_waypoint: 0,
+              speed: 0,
+              status: 'searching',
+            })
+          ).toBe(true)
+          expect(movement.acceptPath(reply)).toBe(true)
+        }
+        const pose = movement.sample(() => false)
+        if (elapsed < rtt) expect(pose).toBeNull()
+        else {
+          expect(pose?.position.x).toBeCloseTo((elapsed - rtt) * 0.003, 5)
+          expect(pose?.speed).toBe(3)
+        }
+      }
+      expect(sentAt).toEqual([0, 200, 400, 600, 800, 1000])
+    }
+  )
+
+  it('keeps the approved route while a replacement is throttled or in flight', () => {
+    const { movement } = setup()
+    movement.request(3, 3, false)
+    movement.acceptPath(path())
+    vi.advanceTimersByTime(40)
+    movement.request(6, 3, false)
+    vi.advanceTimersByTime(40)
+    movement.request(9, 3, false)
+    expect(movement.sample(() => false)?.position.x).toBeCloseTo(0.24)
+    vi.advanceTimersByTime(120)
+    expect(movement.sample(() => false)?.position.x).toBeCloseTo(0.6)
+    expect(movement.acceptPath(path(2))).toBe(false)
+    vi.advanceTimersByTime(1000)
+    expect(movement.sample(() => false)?.position.x).toBeCloseTo(1.5)
+    expect(movement.sample(() => false)?.speed).toBe(0)
+  })
+
+  it('plays a replacement turn at its server time with its own waypoints', () => {
+    const { movement } = setup()
+    movement.request(3, 0, false)
+    vi.advanceTimersByTime(200)
+    movement.acceptPath(path())
+    movement.request(0.3, 3, false)
+    vi.advanceTimersByTime(50)
+    movement.acceptPath({
+      ...path(2),
+      server_time_ms: 100,
+      position: { x: 0.3, y: 0, z: 0 },
+      waypoints: [{ position: { x: 0.3, y: 0, z: 3 }, floor_level: 0 }],
+    })
+    movement.acceptProgress({
+      ...path(2),
+      server_time_ms: 150,
+      position: { x: 0.3, y: 0, z: 0.15 },
+      next_waypoint: 0,
+      status: 'moving',
+    })
+    expect(movement.sample(() => false)?.position).toMatchObject({ z: 0 })
+    expect(movement.sample(() => false)?.position.x).toBeCloseTo(0.15)
+    vi.advanceTimersByTime(60)
+    expect(movement.sample(() => false)?.position.x).toBeCloseTo(0.3)
+    expect(movement.sample(() => false)?.position.z).toBeCloseTo(0.03)
+    vi.advanceTimersByTime(60)
+    expect(movement.sample(() => false)?.position.x).toBeCloseTo(0.3)
+    expect(movement.sample(() => false)?.position.z).toBeCloseTo(0.21)
+  })
+
+  it('keeps click progress on the playback clock despite packet jitter', () => {
+    const { movement } = setup()
+    movement.request(30, 0, false)
+    vi.advanceTimersByTime(100)
+    movement.acceptPath(path())
+    vi.advanceTimersByTime(250)
+    movement.acceptProgress({
+      ...path(),
+      server_time_ms: 200,
+      position: { x: 0.6, y: 0, z: 0 },
+      next_waypoint: 0,
+      status: 'moving',
+    })
+    expect(movement.sample(() => false)?.position.x).toBeCloseTo(0.75)
+    vi.advanceTimersByTime(100)
+    movement.acceptProgress({
+      ...path(),
+      server_time_ms: 400,
+      position: { x: 1.2, y: 0, z: 0 },
+      next_waypoint: 0,
+      status: 'moving',
+    })
+    expect(movement.sample(() => false)?.position.x).toBeCloseTo(1.05)
+    vi.advanceTimersByTime(100)
+    expect(movement.sample(() => false)?.position.x).toBeCloseTo(1.35)
+  })
+
+  it('plays a search pause at its server time before taking the new route', () => {
+    const { movement } = setup()
+    movement.request(3, 0, false)
+    vi.advanceTimersByTime(250)
+    movement.acceptPath(path())
+    movement.request(6, 0, false)
+    vi.advanceTimersByTime(50)
+    movement.acceptProgress({
+      ...path(2),
+      server_time_ms: 100,
+      position: { x: 0.3, y: 0, z: 0 },
+      next_waypoint: 0,
+      speed: 0,
+      status: 'searching',
+    })
+    movement.acceptPath({
+      ...path(2),
+      server_time_ms: 150,
+      position: { x: 0.3, y: 0, z: 0 },
+    })
+    expect(movement.sample(() => false)?.position.x).toBeCloseTo(0.15)
+    vi.advanceTimersByTime(50)
+    expect(movement.sample(() => false)?.position.x).toBeCloseTo(0.3)
+    expect(movement.sample(() => false)?.speed).toBe(0)
+    vi.advanceTimersByTime(100)
+    expect(movement.sample(() => false)?.position.x).toBeCloseTo(0.45)
+    expect(movement.sample(() => false)?.speed).toBe(3)
+    expect(
+      movement.acceptProgress({
+        ...path(),
+        server_time_ms: 200,
+        next_waypoint: 0,
+        status: 'moving',
+      })
+    ).toBe(false)
+  })
+
+  it('keeps a newer pending goal active when the previous goal finishes', () => {
+    const { movement, goal } = setup()
+    movement.request(3, 3, false)
+    movement.acceptPath(path())
+    vi.advanceTimersByTime(50)
+    movement.request(6, 3, false)
+    expect(
+      movement.acceptProgress({
+        ...stopped(1, 50),
+        status: 'arrived',
+      })
+    ).toBe(true)
+    expect(movement.isCurrentRequest(1)).toBe(false)
+    expect(movement.isCurrentRequest(2)).toBe(true)
+    expect(movement.active).toBe(true)
+    expect(movement.sample(() => false)?.speed).toBe(0)
+    vi.advanceTimersByTime(150)
+    expect(goal.mock.lastCall?.[0].request_id).toBe(2)
+    expect(
+      movement.acceptPath({
+        ...path(2),
+        server_time_ms: 200,
+        position: { x: 0.15, y: 0, z: 0 },
+      })
+    ).toBe(true)
+    vi.advanceTimersByTime(100)
+    expect(movement.sample(() => false)?.position.x).toBeCloseTo(0.45)
+  })
+
+  it.each(['stop', 'direction', 'finish', 'relocate'])(
+    'discards queued drag updates and in-flight replies after %s',
+    (action) => {
+      const { movement, goal } = setup()
+      movement.request(3, 3, false)
+      vi.advanceTimersByTime(250)
+      movement.acceptPath(path())
+      movement.request(6, 3, false)
+      movement.acceptPath({ ...path(2), server_time_ms: 100 })
+      movement.request(9, 3, false)
+      if (action === 'stop') movement.clear()
+      else if (action === 'relocate') movement.clear(false)
+      else if (action === 'finish') movement.finish()
+      else
+        movement.direction({
+          rotation: 0,
+          forward: 1,
+          turn: 0,
+          sprinting: false,
+        })
+      vi.advanceTimersByTime(200)
+      expect(movement.sample(() => false)).toBeNull()
+      expect(goal).toHaveBeenCalledTimes(2)
+      expect(movement.acceptPath({ ...path(2), server_time_ms: 200 })).toBe(
+        false
+      )
+      expect(movement.acceptPath({ ...path(3), server_time_ms: 300 })).toBe(
+        false
+      )
+    }
+  )
+
   it.each([20, 75, 125])(
     'keeps keyboard motion continuous with %ims initial latency and jitter',
     (latency) => {
@@ -456,7 +673,7 @@ describe('server approved movement', () => {
     expect(movement.sample(() => false)?.position.x).toBeCloseTo(0.6)
   })
 
-  it('sends the first click immediately, then only the latest at a fixed deadline', () => {
+  it('sends the first click immediately, then only the latest at the 200ms deadline', () => {
     const { movement, goal } = setup()
     movement.request(1, 0, false)
     vi.advanceTimersByTime(40)
@@ -464,11 +681,15 @@ describe('server approved movement', () => {
     vi.advanceTimersByTime(40)
     movement.request(3, 0, false)
     expect(goal).toHaveBeenCalledTimes(1)
-    vi.advanceTimersByTime(20)
+    vi.advanceTimersByTime(119)
+    expect(goal).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(1)
     expect(goal).toHaveBeenCalledTimes(2)
     expect(goal.mock.lastCall?.[0]).toMatchObject({ request_id: 3, x: 3 })
-    expect(movement.acceptPath(path(1))).toBe(false)
+    expect(movement.acceptPath(path(1))).toBe(true)
+    expect(movement.acceptPath(path(2))).toBe(false)
     expect(movement.acceptPath(path(3))).toBe(true)
+    expect(movement.acceptPath(path(1))).toBe(false)
   })
 
   it('stop bypasses throttling, removes the trailing send and ignores late approval', () => {

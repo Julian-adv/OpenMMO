@@ -52,6 +52,7 @@
   import { visibleMana } from '../stores/gameStore'
   import { playerHealthDisplay } from '../stores/playerHealthDisplay'
   import { RiderMotion } from '../utils/riderMotion'
+  import { MovementRotation } from '../utils/movementRotation'
   import { FishingReel } from '../utils/fishingReel'
   import { fishingReelStance, type FishingCatch } from '../stores/fishingStore'
   import {
@@ -465,6 +466,13 @@
     }
   })
   let modelGroup = $state<THREE.Group | undefined>(undefined)
+  const movementRotation = new MovementRotation()
+  const smoothRotation = $derived(
+    isCurrentPlayer &&
+      playerState === 'moving' &&
+      mount === null &&
+      !teleportHidden
+  )
 
   let hoverProxyGroup = $state<THREE.Group | undefined>(undefined)
   const isHoveredPlayer = $derived(
@@ -1609,11 +1617,16 @@
 
   // Function to update mixer and animation state and nametag
   function updatePose(deltaTime: number) {
-    // Sync Three.js group position directly from the Vector3 prop
-    // (Svelte cannot track mutations on THREE.Vector3 objects)
+    const displayedRotation = movementRotation.update(
+      rotation,
+      deltaTime,
+      smoothRotation
+    )
+    // Vector3 mutations need a direct frame update.
     if (modelGroup) {
       const yOffset = playerState === 'interact' ? interactOffsetY : 0
       modelGroup.position.set(position.x, position.y + yOffset, position.z)
+      modelGroup.rotation.y = displayedRotation
     }
     if (hoverProxyGroup) {
       hoverProxyGroup.position.set(position.x, position.y, position.z)
@@ -1872,7 +1885,9 @@
     <T.Group
       bind:ref={modelGroup}
       position={[position.x, position.y, position.z]}
-      rotation={[0, rotation, 0]}
+      oncreate={(group) => {
+        group.rotation.y = movementRotation.update(rotation, 0, smoothRotation)
+      }}
     >
       <!-- 3D Character Model with real animations -->
       {#if horseMount}
