@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { HorseMount } from './horseMount'
+import { HorseMount, TURN_LOOP_START } from './horseMount'
 
 function mount(animations: THREE.AnimationClip[] = [], withHead = true) {
   const scene = new THREE.Group()
@@ -49,7 +49,7 @@ describe('continuous horse turns', () => {
           horse.update(1 / rate, 0, THREE.MathUtils.degToRad(angle))
         }
         expect(horse.root.getObjectByName('Head')!.position.x).toBeCloseTo(
-          0.4,
+          TURN_LOOP_START + 0.4,
           5
         )
         horse.dispose()

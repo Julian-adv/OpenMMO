@@ -1327,6 +1327,87 @@ async fn mounted_goal_preserves_turn_time_and_honors_stop() {
     assert_eq!(game.players.read().await[&id].position, stopped);
 }
 
+async fn fenced_rider(
+    name: &str,
+    gaps: bool,
+    x: f32,
+    z: f32,
+    rotation: f32,
+) -> (
+    GameState,
+    PlayerId,
+    tokio::sync::mpsc::UnboundedReceiver<bytes::Bytes>,
+) {
+    use onlinerpg_shared::fence::{Fence, FenceAxis, FenceEdge};
+    let game = make_test_game_state(name);
+    let mut fences: std::collections::HashMap<String, Vec<Fence>> = Default::default();
+    for post in (90..110).filter(|post| !gaps || post % 2 == 0) {
+        let edge = FenceEdge {
+            x: post,
+            z: 1,
+            axis: FenceAxis::X,
+        };
+        fences.entry(edge.cache_key()).or_default().push(Fence {
+            edge,
+            y: 5.0,
+            owner_id: 1,
+        });
+    }
+    let mut cache = game.passability_write();
+    for (key, group) in fences {
+        onlinerpg_shared::fence::sync_passability(&mut cache, &key, &group);
+    }
+    drop(cache);
+    let mut player = make_player(name, x, z);
+    player.position.y = 5.0;
+    player.rotation = rotation;
+    player.mount = Some(onlinerpg_shared::mount::MountKind::Horse);
+    let id = player.id;
+    game.add_player(player).await;
+    let rx = game.register_connection_channel(&id).await;
+    (game, id, rx)
+}
+
+#[tokio::test]
+async fn a_rider_facing_a_fence_turns_in_place_before_leaving() {
+    let (game, id, mut rx) = fenced_rider("goal_mounted_fence", false, 100.0, 0.995, 0.0).await;
+    game.request_move_goal(id, 1, 100.0, -3.0, false).await;
+    let ServerMessage::PlayerMovePath {
+        termination,
+        waypoints,
+        ..
+    } = next_path(&mut rx).await
+    else {
+        unreachable!()
+    };
+    assert_eq!(termination, PathTermination::Reached);
+    assert_eq!(waypoints[0].position.z, 0.995);
+    assert!(waypoints[0].rotation.unwrap().abs() > 3.1);
+    advance(&game, id, 10.0).await;
+    let arrived = game.players.read().await[&id].position;
+    assert!(
+        arrived.z < -2.9 && (arrived.x - 100.0).abs() < 0.1,
+        "{arrived:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_rider_beside_a_gapped_fence_rides_through_a_one_metre_gap() {
+    let (game, id, mut rx) =
+        fenced_rider("goal_mounted_gap", true, 101.2, 0.95, -45_f32.to_radians()).await;
+    game.request_move_goal(id, 1, 98.5, 4.5, false).await;
+    let ServerMessage::PlayerMovePath { termination, .. } = next_path(&mut rx).await else {
+        unreachable!()
+    };
+    assert_eq!(termination, PathTermination::Reached);
+    advance(&game, id, 10.0).await;
+    let arrived = game.players.read().await[&id].position;
+    assert!(
+        (arrived.x - 98.5).abs() < 0.1 && (arrived.z - 4.5).abs() < 0.1,
+        "{arrived:?}"
+    );
+}
+
 #[tokio::test]
 async fn a_house_click_can_stop_inside_the_entrance_without_truncating_interaction_goals() {
     use onlinerpg_shared::housing::{HouseData, RoomData};

@@ -316,6 +316,36 @@ describe('server approved movement', () => {
     }
   })
 
+  it('keeps a mounted click turn continuous across jittery path renewals', () => {
+    const { movement } = setup()
+    movement.request(3, 0, false)
+    const turningPath = (time: number): MovePath => ({
+      ...path(),
+      server_time_ms: time,
+      rotation: time / 1000,
+      waypoints: [
+        {
+          position: { x: 0, y: 0, z: 0 },
+          floor_level: 0,
+          rotation: time / 1000 + 0.4,
+          travel_seconds: 0.4,
+        },
+      ],
+    })
+    vi.advanceTimersByTime(250)
+    movement.acceptPath(turningPath(0))
+    vi.advanceTimersByTime(50)
+    movement.acceptPath(turningPath(100))
+    movement.acceptPath(turningPath(200))
+    for (let elapsed = 50; elapsed <= 300; elapsed += 10) {
+      expect(movement.sample(() => false)!.rotation).toBeCloseTo(
+        elapsed / 1000,
+        5
+      )
+      vi.advanceTimersByTime(10)
+    }
+  })
+
   it('does not extend the approved keyboard route when a renewal arrives late', () => {
     const { movement } = setup()
     movement.direction({ rotation: 0, forward: 1, turn: 0, sprinting: false })
@@ -624,7 +654,7 @@ it('holds a locally blocked pose until the next official update', () => {
   const stopped = movement.sample(() => true)
   vi.advanceTimersByTime(100)
   expect(movement.sample(() => false)).toEqual(stopped)
-  movement.acceptPath({ ...path(), server_time_ms: 1 })
+  movement.acceptPath({ ...path(), server_time_ms: 200 })
   vi.advanceTimersByTime(100)
   expect(movement.sample(() => false)?.position.x).toBeCloseTo(0.3)
 })

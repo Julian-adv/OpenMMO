@@ -8,7 +8,7 @@ export const HORSE_MODEL_PATH = '/models/mounts/horse.glb'
 export const RIDING_ANIMATION_PATH = '/models/animations/riding.glb'
 const RUN_STRIDE_DURATION = 20 / 30
 const RIDER_IDLE_YAW_LIMIT = Math.PI / 6
-const TURN_LOOP_START = 0.25
+export const TURN_LOOP_START = 0.25
 const TURN_LOOP_END = 0.65
 
 export class HorseMount {
@@ -131,7 +131,8 @@ export class HorseMount {
     }
     if (next && next !== this.current) {
       next.reset().setEffectiveWeight(1).play()
-      if (repeat) next.time = next.getClip().duration * TURN_LOOP_START
+      // Start mid-turn so the head leads the body from the first frame.
+      if (this.turnName) next.time = next.getClip().duration * TURN_LOOP_START
       else if (this.reversing) next.time = next.getClip().duration
       next.setLoop(this.turnName ? THREE.LoopOnce : THREE.LoopRepeat, Infinity)
       next.clampWhenFinished = this.turnName !== null

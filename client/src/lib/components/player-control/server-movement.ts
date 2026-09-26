@@ -106,11 +106,11 @@ export class ServerMovement {
     )
       return false
     const now = performance.now()
-    // Renewed keyboard paths share a playback clock despite arrival jitter.
-    const at =
-      this.directionInput && this.anchor
-        ? this.anchorAt + (path.server_time_ms - this.anchor.server_time_ms)
-        : now
+    // Renewed paths (keyboard, and every tick while mounted) share a playback
+    // clock despite arrival jitter, so the pose never steps back.
+    const at = this.anchor
+      ? this.anchorAt + (path.server_time_ms - this.anchor.server_time_ms)
+      : now
     if (at > now) this.queuedPaths.push({ path, at })
     else {
       this.queuedPaths = []

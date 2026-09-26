@@ -1,6 +1,38 @@
 use super::*;
 use onlinerpg_shared::mount::MountKind;
 
+// Click pivots turn at the pace the horse turn clips are authored for (timeScale 1), so the
+// hooves do not slide; keyboard turns keep the faster shared steering rate.
+const PIVOT_TURN_RATE: f32 = std::f32::consts::FRAC_PI_2;
+const MIN_PIVOT_SECONDS: f32 = 0.5;
+const PIVOT_LOOKAHEAD: usize = 8;
+const MIN_PIVOT_ANGLE: f32 = 10_f32.to_radians();
+
+fn line_points(from: Position, dx: f32, dz: f32) -> impl Iterator<Item = Position> {
+    let steps = dx.hypot(dz).ceil().max(1.0) as usize;
+    (1..=steps).map(move |step| {
+        let t = step as f32 / steps as f32;
+        Position {
+            x: wrap_world_x(from.x + dx * t),
+            y: from.y,
+            z: from.z + dz * t,
+        }
+    })
+}
+
+fn straight_clear(cache: &PassabilityCache, from: Position, dx: f32, dz: f32) -> bool {
+    let mut previous = from;
+    line_points(from, dx, dz).all(|point| {
+        let (sx, sz) = (
+            shortest_world_delta_x(previous.x, point.x),
+            point.z - previous.z,
+        );
+        let blocked = swept_blocked(cache, previous, sx, sz, 0);
+        previous = point;
+        !blocked
+    })
+}
+
 impl GameState {
     pub(super) async fn stop_route_at_entrance(
         &self,
@@ -67,6 +99,90 @@ impl GameState {
     }
 
     pub(super) async fn mount_route(
+        &self,
+        player: &Player,
+        route: &[PathWaypoint],
+        mount: MountKind,
+    ) -> (Vec<MoveWaypoint>, Option<PathTermination>) {
+        let arc = self.mount_arc_route(player, route, mount).await;
+        if arc.1 != Some(PathTermination::Unreachable) {
+            return arc;
+        }
+        // Arcs drift off cell centres, so a rider against a fence or entering a narrow gap
+        // falls back to turning in place and riding straight.
+        let pivot = self.mount_pivot_route(player, route, mount).await;
+        if pivot.1.is_none() {
+            pivot
+        } else {
+            arc
+        }
+    }
+
+    async fn mount_pivot_route(
+        &self,
+        player: &Player,
+        route: &[PathWaypoint],
+        mount: MountKind,
+    ) -> (Vec<MoveWaypoint>, Option<PathTermination>) {
+        use onlinerpg_shared::mount_movement::angle_delta;
+        let speed = PLAYER_MOVE_SPEED * mount.speed_mult();
+        let mut position = player.position;
+        let mut rotation = player.rotation;
+        let mut points = Vec::new();
+        if route.iter().any(|w| w.floor != 0) {
+            return (points, Some(PathTermination::Unreachable));
+        }
+        let mut next = 0;
+        while next < route.len() {
+            // Aim at the farthest waypoint in straight sight so the horse turns once, not per cell.
+            let last = (next + PIVOT_LOOKAHEAD).min(route.len()) - 1;
+            let found = {
+                let cache = self.passability_read();
+                (next..=last).rev().find_map(|index| {
+                    let dx = shortest_world_delta_x(position.x, route[index].x);
+                    let dz = route[index].z - position.z;
+                    straight_clear(&cache, position, dx, dz).then_some((index, dx, dz))
+                })
+            };
+            let Some((index, dx, dz)) = found else {
+                return (points, Some(PathTermination::Unreachable));
+            };
+            next = index + 1;
+            let distance = dx.hypot(dz);
+            if distance < 0.02 {
+                continue;
+            }
+            let heading = dx.atan2(dz);
+            let turn = angle_delta(rotation, heading);
+            rotation = heading;
+            if turn.abs() > MIN_PIVOT_ANGLE {
+                points.push(MoveWaypoint {
+                    position,
+                    floor_level: 0,
+                    rotation: Some(rotation),
+                    travel_seconds: Some((turn.abs() / PIVOT_TURN_RATE).max(MIN_PIVOT_SECONDS)),
+                });
+            }
+            for mut sample in line_points(position, dx, dz) {
+                sample.y = self
+                    .surface_ground_y(0, &sample, position.y, Some(mount))
+                    .await;
+                points.push(MoveWaypoint {
+                    position: sample,
+                    floor_level: 0,
+                    rotation: Some(rotation),
+                    travel_seconds: Some(
+                        shortest_world_delta_x(position.x, sample.x).hypot(sample.z - position.z)
+                            / speed,
+                    ),
+                });
+                position = sample;
+            }
+        }
+        (points, None)
+    }
+
+    async fn mount_arc_route(
         &self,
         player: &Player,
         route: &[PathWaypoint],
