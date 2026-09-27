@@ -492,7 +492,10 @@ pub(super) async fn handle_response(
         }
 
         // For attack actions, chase the monster and attack
-        if let AgentAction::Attack { monster_id, sprint } = action {
+        if let AgentAction::Attack {
+            monster_id, sprint, ..
+        } = action
+        {
             info!("Agent attacking monster {monster_id}, chasing...");
             match chase_monster(state, monster_id, *sprint).await {
                 ChaseResult::InRange => {

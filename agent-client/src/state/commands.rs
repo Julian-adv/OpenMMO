@@ -18,6 +18,18 @@ impl SharedState {
             })
     }
 
+    pub fn double_slash_wait(&self) -> std::time::Duration {
+        self.double_slash_ready_at
+            .map_or(std::time::Duration::ZERO, |ready| {
+                ready.saturating_duration_since(tokio::time::Instant::now())
+            })
+    }
+
+    pub(super) fn update_double_slash_cooldown(&mut self, remaining_ms: u64) {
+        self.double_slash_ready_at =
+            Some(tokio::time::Instant::now() + std::time::Duration::from_millis(remaining_ms));
+    }
+
     pub async fn send_command(&mut self, msg: ClientMessage) -> anyhow::Result<()> {
         self.dispatch_command(msg, true).await
     }
@@ -44,9 +56,20 @@ impl SharedState {
         msg: ClientMessage,
         from_action: bool,
     ) -> anyhow::Result<()> {
-        let player_attack = matches!(&msg, ClientMessage::PlayerAttack { .. });
+        let double_slash = matches!(&msg, ClientMessage::DaggerDoubleSlash { .. });
+        let player_attack = double_slash || matches!(&msg, ClientMessage::PlayerAttack { .. });
         let fishing_cast = matches!(&msg, ClientMessage::FishingCast { .. });
         let fishing_stop = matches!(&msg, ClientMessage::FishingStop);
+        if double_slash {
+            let wait = self.double_slash_wait().max(self.player_attack_wait());
+            if !wait.is_zero() {
+                self.push_agent_event(format!(
+                    "[DoubleSlashFailed] Still recovering; wait {:.1}s before trying Double Slash again.",
+                    wait.as_secs_f32()
+                ));
+                return Ok(());
+            }
+        }
         if player_attack && !self.player_attack_wait().is_zero() {
             // The combat loop retries the latest target after the cooldown.
             return Ok(());

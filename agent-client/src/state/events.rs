@@ -126,6 +126,7 @@ impl SharedState {
             // State-only: tracked on SharedState, shown in the world state.
             ServerMessage::GoldUpdate { .. }
             | ServerMessage::ManaUpdate { .. }
+            | ServerMessage::AbilityCooldowns { .. }
             | ServerMessage::GoldGained { .. }
             | ServerMessage::InventoryState { .. }
             | ServerMessage::InventoryUpdated { .. }
@@ -471,6 +472,7 @@ impl SharedState {
                 self.self_player_id = Some(player.id);
                 self.self_player = Some(player.clone());
                 self.self_mana = None;
+                self.double_slash_ready_at = None;
                 self.set_self_fishing(false);
                 self.fishing_retry_at = None;
                 // A character saved underground rejoins there (the server
@@ -1196,6 +1198,26 @@ impl SharedState {
             }
             ServerMessage::HouseRemoved { ref house_id } => {
                 self.world_cache.write().unwrap().remove_house(house_id);
+            }
+            ServerMessage::AbilityCooldowns { cooldowns } => {
+                let remaining_ms = cooldowns
+                    .iter()
+                    .find(|timer| {
+                        timer.ability == onlinerpg_shared::ability::AbilityId::DaggerDoubleSlash
+                    })
+                    .map_or(0, |timer| timer.remaining_ms);
+                self.update_double_slash_cooldown(remaining_ms);
+            }
+            ServerMessage::DaggerDoubleSlashStarted {
+                player_id,
+                cooldown_ms,
+                ..
+            } if self.self_player_id.as_ref() == Some(player_id) => {
+                self.update_double_slash_cooldown(*cooldown_ms);
+                self.last_player_attack_at = Some(tokio::time::Instant::now());
+            }
+            ServerMessage::DaggerDoubleSlashRejected { cooldown_ms, .. } if *cooldown_ms > 0 => {
+                self.update_double_slash_cooldown(*cooldown_ms);
             }
             ServerMessage::DoorToggled {
                 ref house_id,

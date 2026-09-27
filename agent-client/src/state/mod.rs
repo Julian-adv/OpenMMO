@@ -430,6 +430,7 @@ pub struct SharedState {
     cmd_tx: mpsc::Sender<ClientMessage>,
     pub attack_cooldown: std::time::Duration,
     last_player_attack_at: Option<tokio::time::Instant>,
+    double_slash_ready_at: Option<tokio::time::Instant>,
     /// Notified when an urgent event arrives
     pub urgent_notify: Arc<Notify>,
     /// Commands queued while processing server events.
@@ -545,6 +546,7 @@ impl SharedState {
             cmd_tx,
             attack_cooldown: DEFAULT_ATTACK_COOLDOWN,
             last_player_attack_at: None,
+            double_slash_ready_at: None,
             urgent_notify: Arc::new(Notify::new()),
             pending_commands: Vec::new(),
             watch,

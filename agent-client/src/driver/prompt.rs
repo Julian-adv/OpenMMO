@@ -346,9 +346,39 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             monster_id,
             hit,
             damage,
+            dagger_strike,
             ..
         } => Some(format!(
-            "[Attack] {} -> {monster_id}: hit={hit} dmg={damage}",
+            "[Attack] {} -> {monster_id}: hit={hit} dmg={damage}{}",
+            player_name(state, player_id),
+            dagger_strike.map_or_else(String::new, |strike| format!(
+                " (Double Slash strike {strike})"
+            ))
+        )),
+        ServerMessage::DaggerDoubleSlashStarted {
+            player_id,
+            monster_id,
+            cooldown_ms,
+        } => Some(format!(
+            "[DoubleSlashStarted] {} -> {monster_id}; cooldown {:.1}s. Strike results follow.",
+            player_name(state, player_id),
+            *cooldown_ms as f64 / 1000.0
+        )),
+        ServerMessage::DaggerDoubleSlashRejected {
+            monster_id,
+            reason,
+            cooldown_ms,
+        } => Some(format!(
+            "[DoubleSlashFailed] {monster_id}: {reason}; remaining cooldown {:.1}s.",
+            *cooldown_ms as f64 / 1000.0
+        )),
+        ServerMessage::DaggerDoubleSlashSkipped {
+            player_id,
+            monster_id,
+            strike,
+            reason,
+        } => Some(format!(
+            "[DoubleSlashSkipped] {} -> {monster_id}, strike {strike}: {reason}.",
             player_name(state, player_id)
         )),
         ServerMessage::PlayerAttackRejected { monster_id, reason } => {

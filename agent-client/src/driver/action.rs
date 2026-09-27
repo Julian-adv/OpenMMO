@@ -9,6 +9,12 @@ use onlinerpg_shared::ClientMessage;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum AttackSkill {
+    DoubleSlash,
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 pub(super) enum AgentAction {
     #[serde(rename = "say", alias = "chat")]
@@ -26,6 +32,7 @@ pub(super) enum AgentAction {
         monster_id: String,
         /// Unset = the agent's `always_sprint` default; false walks instead.
         sprint: Option<bool>,
+        skill: Option<AttackSkill>,
     },
     #[serde(rename = "move")]
     Move {
@@ -1382,8 +1389,15 @@ pub(super) fn action_to_command(
         AgentAction::Say { message } => Some(ClientMessage::ChatMessage {
             message: message.clone(),
         }),
-        AgentAction::Attack { monster_id, .. } => Some(ClientMessage::PlayerAttack {
-            monster_id: monster_id.clone(),
+        AgentAction::Attack {
+            monster_id, skill, ..
+        } => Some(match skill {
+            Some(AttackSkill::DoubleSlash) => ClientMessage::DaggerDoubleSlash {
+                monster_id: monster_id.clone(),
+            },
+            None => ClientMessage::PlayerAttack {
+                monster_id: monster_id.clone(),
+            },
         }),
         AgentAction::Move {
             target,
@@ -2544,6 +2558,7 @@ mod tests {
             AgentAction::Attack {
                 monster_id: "m21".to_string(),
                 sprint: None,
+                skill: None,
             },
             AgentAction::Use {
                 item: "torch".to_string(),

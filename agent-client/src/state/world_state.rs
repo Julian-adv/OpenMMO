@@ -71,6 +71,39 @@ impl SharedState {
         if let Some((mana, max_mana)) = self.self_mana {
             lines.push(format!("MP: {mana}/{max_mana}"));
         }
+        if let Some(player) = self
+            .self_player
+            .as_ref()
+            .filter(|player| player.class == onlinerpg_shared::CharacterClass::Rogue)
+        {
+            let dagger_equipped = self
+                .self_equipped
+                .get(&onlinerpg_shared::inventory::EquipSlot::MainHand)
+                .and_then(|item| crate::item_defs::get(&item.item_def_id))
+                .is_some_and(|def| def.weapon_type.as_deref() == Some("dagger"));
+            let wait = self.double_slash_wait().max(self.player_attack_wait());
+            let readiness = if player.health == 0 {
+                "respawn first".to_string()
+            } else if !dagger_equipped {
+                "equip a dagger in your main hand first".to_string()
+            } else if player.is_mounted() || player.object_type.is_some() {
+                "dismount or leave your current pose first".to_string()
+            } else if !wait.is_zero() {
+                format!("ready in {:.1}s", wait.as_secs_f32())
+            } else {
+                "ready".to_string()
+            };
+            lines.push(format!(
+                r#"Double Slash: {readiness}.
+With a dagger equipped, you can choose Double Slash for the opening strike:
+{{"type": "attack", "target": "m21", "skill": "double_slash"}}
+This attempts the skill once, then continues with ordinary attacks.
+Check readiness above; it shares normal attack recovery and has its own
+cooldown. Moving, changing weapons or mounting can interrupt its two strikes.
+The server reports starts, failures and skipped strikes; a start alone does
+not mean both strikes hit."#
+            ));
+        }
         if let Some((satiation, state)) = self.self_hunger {
             let mut line = format!("Hunger: {state:?} ({satiation}/1000)");
             if !self.self_debuffs.is_empty() {

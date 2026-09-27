@@ -18,6 +18,8 @@ pub struct ItemDef {
     pub equip_slot: Option<EquipSlot>,
     #[serde(default)]
     pub category: Option<String>,
+    #[serde(rename = "weaponType", default)]
+    pub weapon_type: Option<String>,
     /// Usable straight from the bag — the items.csv flag, which the server
     /// validates against its `use_effect` dispatch at boot.
     #[serde(default)]
