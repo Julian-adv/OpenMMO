@@ -141,11 +141,7 @@
   import { capeDyePreview } from '../stores/capeDyeStore'
   import { capeTexturePreview } from '../stores/capeTextureStore'
   import { capeTextureUrl } from '../utils/networkUtils'
-  import {
-    capeCollarBiasOverride,
-    capeEnabled,
-    torchLightEnabled,
-  } from '../stores/debugStore'
+  import { capeCollarBiasOverride, capeEnabled } from '../stores/debugStore'
   import { localPlayerRightHand } from '../stores/playerHandRegistry'
   import {
     PlayerEffectAnchors,
@@ -721,14 +717,12 @@
     })
   })
 
-  // Off-hand equip tracking. Local player uses inventory with a debug-toggle
-  // fallback; remote players receive `torchOn` broadcast from the server.
+  // Local equipment comes from inventory; remote torch state comes from the server.
   const equippedOffHandItemId = $derived(
     torchEffectsDisabled
       ? null
       : isCurrentPlayer
-        ? ($inventoryStore.equipped.off_hand?.item_def_id ??
-          ($torchLightEnabled ? 'torch' : null))
+        ? ($inventoryStore.equipped.off_hand?.item_def_id ?? null)
         : torchOn
           ? 'torch'
           : null

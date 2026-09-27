@@ -32,10 +32,7 @@ fn a_sighted_chest_is_approached_from_a_cell_a_path_can_reach() {
     }
 }
 
-/// Every coordinate the underground state line hands the LLM has to be a
-/// cell it can actually stand on. A shaft is walkable on this floor only
-/// along one row — its min corner and the cell half a metre over are both
-/// rock — so a wrong end or a rounded centre reads as a wall.
+/// Floor descriptions must name reachable cell centers.
 #[test]
 fn the_floor_map_only_names_cells_the_agent_can_stand_on() {
     let (mut s, _crypt, _rx) = dungeon_state();
@@ -49,20 +46,15 @@ fn the_floor_map_only_names_cells_the_agent_can_stand_on() {
             .dungeon_by_id(&def.id)
             .expect("registered dungeon");
 
-        // Every door open: a shut one is a detour the mover handles, so it
-        // must not be confused with a cell walled off for good.
-        let doors: Vec<(u8, u32)> = (1..=dungeon.max_depth())
-            .flat_map(|d| {
-                dungeon
-                    .closed_doors(d, &HashSet::new())
-                    .into_iter()
-                    .map(move |door| (d, door.door_id))
-            })
-            .collect();
-        s.world_cache
-            .write()
-            .unwrap()
-            .set_dungeon_doors(&dungeon.id, &doors);
+        // Open doors so only permanent obstacles limit reachability.
+        {
+            let mut cache = s.world_cache.write().unwrap();
+            for depth in 1..=dungeon.max_depth() {
+                for door in dungeon.closed_doors(depth, &HashSet::new()) {
+                    cache.set_dungeon_door(&dungeon.id, depth, door.door_id, true);
+                }
+            }
+        }
 
         for depth in 1..=dungeon.max_depth() {
             let layout = &dungeon.layouts()[depth as usize - 1];
@@ -233,16 +225,14 @@ fn opening_a_door_reopens_the_route_behind_it() {
         "floor 1's stairs down are supposed to start sealed"
     );
 
-    let doors: Vec<(u8, u32)> = dungeon
-        .closed_doors(1, &HashSet::new())
-        .iter()
-        .map(|d| (1u8, d.door_id))
-        .collect();
+    let doors = dungeon.closed_doors(1, &HashSet::new());
     assert!(!doors.is_empty());
-    s.world_cache
-        .write()
-        .unwrap()
-        .set_dungeon_doors(&dungeon.id, &doors);
+    {
+        let mut cache = s.world_cache.write().unwrap();
+        for door in doors {
+            cache.set_dungeon_door(&dungeon.id, 1, door.door_id, true);
+        }
+    }
 
     assert!(
         s.find_path_to(below.x, below.z, goal_floor).found,

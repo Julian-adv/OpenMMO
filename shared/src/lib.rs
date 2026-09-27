@@ -193,7 +193,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v102: rain cells drift with the seasonal wind, change size and dry in the lee of ridges.
 /// v103: winter cells fall as snow, and WeatherSync can force snow.
 /// v104: remove unused NpcRelocate and ModifyRoom requests.
-pub const PROTOCOL_VERSION: u32 = 104;
+/// v105: remove unused RequestDungeonDoors and DungeonDoorsState messages.
+/// v106: remove the TorchToggle debug request.
+pub const PROTOCOL_VERSION: u32 = 106;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

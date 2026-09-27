@@ -903,8 +903,6 @@ pub(super) async fn handle_response(
                 ));
                 continue;
             };
-            // No TorchToggle: the server derives the light from the off-hand
-            // slot, and a refused equip would light us anyway.
             let cmd = match placed {
                 Carried::Worn(slot) => onlinerpg_shared::ClientMessage::UnequipItem { slot },
                 Carried::InBag(instance_id) => {

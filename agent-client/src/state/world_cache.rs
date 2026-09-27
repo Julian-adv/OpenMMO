@@ -286,30 +286,6 @@ impl WorldCache {
             .unwrap_or_default()
     }
 
-    /// Replace the open-door set for a dungeon (the `DungeonDoorsState`
-    /// snapshot covers every depth at once, so unlisted floors are all shut).
-    pub fn set_dungeon_doors(&mut self, id: &str, doors: &[(u8, u32)]) {
-        let touched: HashSet<u8> = self
-            .dungeon_doors
-            .keys()
-            .filter(|(k, _)| k == id)
-            .map(|(_, depth)| *depth)
-            .chain(doors.iter().map(|(depth, _)| *depth))
-            .collect();
-        for depth in &touched {
-            self.dungeon_doors.remove(&(id.to_string(), *depth));
-        }
-        for (depth, door_id) in doors {
-            self.dungeon_doors
-                .entry((id.to_string(), *depth))
-                .or_default()
-                .insert(*door_id);
-        }
-        for depth in touched {
-            self.rebuild_dungeon_floor(id, depth);
-        }
-    }
-
     pub fn set_dungeon_door(&mut self, id: &str, depth: u8, door_id: u32, is_open: bool) {
         let set = self
             .dungeon_doors

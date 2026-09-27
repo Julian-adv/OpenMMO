@@ -51,7 +51,6 @@
     unwrapWorldXNear,
   } from '../../terrain/world-wrap'
   import { OFFSCREEN_Y } from '../../utils/house-geo-utils'
-  import { torchLightEnabled } from '../../stores/debugStore'
   import { localTorchEquipped } from '../../stores/inventoryStore'
   import { LIGHT_WAKE, LIGHT_FADE } from '../../effects/radiance'
 
@@ -416,7 +415,7 @@
         scale: CAMPFIRE_INTENSITY_SCALE,
       }
     }
-    const localTorch = get(localTorchEquipped) || get(torchLightEnabled)
+    const localTorch = get(localTorchEquipped)
     const localRadiance = radianceStrengths.get(currentPlayer.id) ?? 0
     if (localTorch || localRadiance > 0) {
       const p = currentPlayer.position

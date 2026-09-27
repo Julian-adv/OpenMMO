@@ -484,13 +484,6 @@ pub enum ClientMessage {
         depth: u8,
         door_id: u32,
     },
-    /// Ask for the open/closed state of every door in a dungeon (entrance +
-    /// interior, all depths). The server replies with DungeonDoorsState. Sent
-    /// when the client registers the dungeon and again when crossing into
-    /// toggle-delivery range, so doors others left open render correctly.
-    RequestDungeonDoors {
-        entrance_id: String,
-    },
     DebugTeleport {
         position: Position,
     },
@@ -503,9 +496,6 @@ pub enum ClientMessage {
     },
     DebugResetDungeonProps {
         entrance_id: String,
-    },
-    TorchToggle {
-        enabled: bool,
     },
     InteractObject {
         object_type: String,
@@ -1058,24 +1048,12 @@ pub enum ServerMessage {
         broken: Vec<u32>,
         opened: Vec<u32>,
     },
-    /// A dungeon door was toggled (surface entrance at depth 0, or an interior
-    /// room door at depth ≥1). Delivered to nearby players on the door's floor
-    /// (surface floor for depth 0); the toggler always receives it. Clients
-    /// re-pull DungeonDoorsState when crossing into delivery range.
+    /// A door toggle delivered to nearby players on the door's floor.
     DungeonDoorToggled {
         entrance_id: String,
         depth: u8,
         door_id: u32,
         is_open: bool,
-    },
-    /// Snapshot of every open door in a dungeon (entrance + interior), sent in
-    /// reply to RequestDungeonDoors and pushed on every dungeon floor entry
-    /// (door broadcasts are floor/radius-gated, so an arriving player may
-    /// have missed toggles since their registration-time snapshot). Each
-    /// entry is (depth, door_id); doors not listed are shut.
-    DungeonDoorsState {
-        entrance_id: String,
-        doors: Vec<(u8, u32)>,
     },
     /// Every dungeon entrance this character has discovered (world-map
     /// markers): full snapshot at join and after each new discovery. Only
@@ -1930,7 +1908,6 @@ impl ServerMessage {
             | Self::DungeonPropOpened { .. }
             | Self::DungeonPropsState { .. }
             | Self::DungeonDoorToggled { .. }
-            | Self::DungeonDoorsState { .. }
             | Self::GameState { .. }
             | Self::MonsterSpawned { .. }
             | Self::MonsterMoved { .. }

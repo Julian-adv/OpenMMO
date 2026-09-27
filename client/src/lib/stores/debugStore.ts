@@ -16,7 +16,6 @@ export const debugSpeedMode = writable(false)
 export const refractionEnabled = writable(true)
 export const reflectionEnabled = writable(true)
 export const teleportLoading = writable(false)
-export const torchLightEnabled = writable(false)
 export const windDebugVisible = writable(false)
 export const weatherRadarVisible = writable(false)
 export const housingEditorMode = writable(false)
@@ -36,10 +35,7 @@ export interface PlayerDebugInfo {
 
 export const playerDebugInfo = writable<PlayerDebugInfo | null>(null)
 
-/** Flags with gameplay or server reach, reset when the character is not an
- *  admin. debugSpeedMode is the one that bites: it runs the client at 10x while
- *  the server stays capped at walk speed, so the two sims drift apart while it
- *  is set. Purely visual flags are deliberately left alone. */
+/** Clear privileged debug flags when switching to a non-admin character. */
 export function resetPrivilegedDebugFlags() {
   debugVisible.set(false)
   debugSpeedMode.set(false)

@@ -32,7 +32,6 @@
 
 <script lang="ts">
   import { currentBgmTrack } from '../managers/bgmManager'
-  import { networkManager } from '../network/socket'
   import { cameraDistance } from '../stores/cameraStore'
   import { worldToTileCell } from './game-scene/terrain-utils'
   import { tileToRegion } from '../terrain/terrain-constants'
@@ -59,7 +58,6 @@
     resetPrivilegedDebugFlags,
     refractionEnabled,
     reflectionEnabled,
-    torchLightEnabled,
     windDebugVisible,
   } from '../stores/debugStore'
   import { isAdminUser } from '../stores/gameStore'
@@ -185,26 +183,14 @@
     mapEditorMode.update((v) => !v)
   }
 
-  function toggleTorchLight() {
-    torchLightEnabled.update((v) => {
-      const newValue = !v
-      networkManager.sendTorchToggle(newValue)
-      return newValue
-    })
-  }
-
   function toggleWindDebug() {
     windDebugVisible.update((v) => !v)
   }
 
-  // Hiding the buttons is not enough: a flag left on by an admin character
-  // survives the switch to a non-admin one, and the panel that turns it back
-  // off is gone.
+  // Clear admin flags when switching characters.
   $effect(() => {
     if ($isAdminUser) return
     resetPrivilegedDebugFlags()
-    // Routed through the toggle so the server is told the torch went out.
-    if ($torchLightEnabled) toggleTorchLight()
   })
 </script>
 
@@ -401,15 +387,6 @@
           </button>
 
           <button
-            class="action-btn torch-btn"
-            class:active={$torchLightEnabled}
-            onclick={toggleTorchLight}
-            title="Toggle Torch Point Light"
-          >
-            TORCH
-          </button>
-
-          <button
             class="action-btn wind-btn"
             class:active={$windDebugVisible}
             onclick={toggleWindDebug}
@@ -591,11 +568,6 @@
   .action-btn.reflection-btn.active {
     background: #553b8a;
     border-color: #b794f4;
-  }
-
-  .action-btn.torch-btn.active {
-    background: #b7791f;
-    border-color: #ecc94b;
   }
 
   .action-btn.wind-btn.active {

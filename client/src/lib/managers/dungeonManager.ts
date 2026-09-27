@@ -962,17 +962,6 @@ class DungeonManager {
     this.rebuildFloorPassability(depth)
   }
 
-  /** Replace the whole open-door set from the server snapshot (reply to a
-   *  RequestDungeonDoors, and pushed on every floor entry). */
-  applyDoorsSnapshot(entranceId: string, doors: [number, number][]) {
-    if (entranceId !== this.id) return
-    this.openDoors.clear()
-    for (const [depth, doorId] of doors) this.setDoorOpen(depth, doorId, true)
-    // The snapshot may touch several depths at once.
-    for (let depth = 1; depth <= this.layouts.length; depth++)
-      this.rebuildFloorPassability(depth)
-  }
-
   /**
    * Surface-opening rects for *all* registry dungeons, independent of
    * proximity registration. Layouts are generated once (deterministic from

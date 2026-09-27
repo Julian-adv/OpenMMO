@@ -602,16 +602,6 @@ class NetworkManager {
     })
   }
 
-  /** Ask the server for the current open/closed state of all of a dungeon's
-   *  doors (sent on registering the dungeon, so others' open doors render). */
-  sendRequestDungeonDoors(entranceId: string) {
-    this.sendMessage({ RequestDungeonDoors: { entrance_id: entranceId } })
-  }
-
-  sendTorchToggle(enabled: boolean) {
-    this.sendMessage({ TorchToggle: { enabled } })
-  }
-
   sendSetActiveTitle(title: string | null) {
     this.sendMessage({ SetActiveTitle: { title } })
   }

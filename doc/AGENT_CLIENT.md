@@ -192,7 +192,7 @@ LLM이 매 프레임 좌표를 결정하는 것은 비현실적이고 비용이 
 - **문** — 인테리어 문은 기본 닫힘이고 실제로 하강 계단을 막는다(old_crypt 기준 5층 중
   3개 층). 경로가 막히면 mover가 갈 수 있는 가장 가까운 닫힌 문으로 걸어가
   `ToggleDungeonDoor`를 보내고 다시 경로를 찾는다. 서버의 문/소품 상태는
-  `DungeonDoorsState`/`DungeonPropsState`로 받아 해당 층 셀을 재계산한다.
+  `DungeonDoorState`/`DungeonPropState`로 받아 해당 층 셀을 재계산한다.
 
 몬스터 AI와 던전 지면 계산은 서버가 담당한다. 에이전트는 수신한 몬스터 위치를 관찰하며, 몬스터 이동·공격을 서버에 전송하지 않는다.
 

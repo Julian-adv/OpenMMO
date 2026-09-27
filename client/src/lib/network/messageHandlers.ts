@@ -2033,10 +2033,6 @@ export function handleServerMessage(
       )
       break
 
-    case 'DungeonDoorsState':
-      dungeonManager.applyDoorsSnapshot(data.entrance_id, data.doors)
-      break
-
     case 'DungeonDiscoveries':
       discoveredDungeonIds.set(new Set(data.entrance_ids as string[]))
       break

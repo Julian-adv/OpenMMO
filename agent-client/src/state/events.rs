@@ -543,15 +543,6 @@ impl SharedState {
                 }
                 self.latest_player_moves.remove(&player.id);
             }
-            ServerMessage::DungeonDoorsState {
-                ref entrance_id,
-                ref doors,
-            } => {
-                self.world_cache
-                    .write()
-                    .unwrap()
-                    .set_dungeon_doors(entrance_id, doors);
-            }
             ServerMessage::DungeonDoorState {
                 entrance_id,
                 depth,

@@ -81,7 +81,6 @@
   import {
     mapEditorMode,
     housingEditorMode,
-    torchLightEnabled,
     cameraRotationEnabled,
     teleportLoading,
   } from '../stores/debugStore'
@@ -621,7 +620,7 @@
       currentSpeed,
       playerRotation,
       totalDistance,
-      hasTorch: $localTorchEquipped || $torchLightEnabled,
+      hasTorch: $localTorchEquipped,
       isInCombat: combatController.isInCombat,
       attackCounter: combatController.attackCounter,
       isSprinting: serverMovement.stopping

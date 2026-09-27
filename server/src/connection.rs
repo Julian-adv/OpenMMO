@@ -1578,12 +1578,6 @@ async fn handle_client_message(
             }
         }
 
-        ClientMessage::RequestDungeonDoors { .. } => {
-            if let Some(id) = &state.player_id {
-                game_state.reset_world_view(id).await;
-            }
-        }
-
         ClientMessage::DebugTeleport { position } => {
             if let Some(id) = &state.player_id {
                 let rotation = game_state
@@ -1624,14 +1618,6 @@ async fn handle_client_message(
                 game_state.debug_reset_dungeon_props(&entrance_id).await;
             } else {
                 warn!("Received debug dungeon prop reset from client that is not in game");
-            }
-        }
-
-        ClientMessage::TorchToggle { enabled } => {
-            if let Some(id) = &state.player_id {
-                game_state.set_player_torch(id, enabled).await;
-            } else {
-                warn!("Received torch toggle from client that is not in game");
             }
         }
 

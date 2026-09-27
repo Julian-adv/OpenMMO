@@ -593,9 +593,7 @@ impl GameState {
         hidden
     }
 
-    /// Every currently-open door in a dungeon as (depth, door_id) pairs, for the
-    /// RequestDungeonDoors snapshot. Reads without creating the runtime — an
-    /// untouched dungeon simply has no open doors.
+    /// Currently open (depth, door_id) pairs for test assertions.
     #[cfg(test)]
     pub async fn dungeon_open_doors(&self, entrance_id: &str) -> Vec<(u8, u32)> {
         let dungeons = self.dungeons.read().await;

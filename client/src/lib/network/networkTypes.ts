@@ -233,12 +233,10 @@ export type ClientMessage =
         door_id: number
       }
     }
-  | { RequestDungeonDoors: { entrance_id: string } }
   | { DebugTeleport: { position: Position } }
   | { DebugDropItem: { item_def_id: string } }
   | { DebugSetTime: { hour: number; minute: number } }
   | { DebugResetDungeonProps: { entrance_id: string } }
-  | { TorchToggle: { enabled: boolean } }
   | { SetActiveTitle: { title: string | null } }
   | {
       ToggleDoor: {
