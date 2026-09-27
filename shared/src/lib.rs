@@ -195,7 +195,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v104: remove unused NpcRelocate and ModifyRoom requests.
 /// v105: remove unused RequestDungeonDoors and DungeonDoorsState messages.
 /// v106: remove the TorchToggle debug request.
-pub const PROTOCOL_VERSION: u32 = 106;
+/// v107: unify dropping bag items and equipped gear under DropItems.
+pub const PROTOCOL_VERSION: u32 = 107;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

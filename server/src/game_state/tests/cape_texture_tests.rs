@@ -164,7 +164,15 @@ async fn a_dropped_cape_keeps_its_print() {
         .apply_cape_texture(&pid("printer"), KIT_ID, HASH)
         .await;
 
-    game_state.drop_item(&pid("printer"), CAPE_ID).await;
+    game_state
+        .drop_items(
+            &pid("printer"),
+            vec![BagLineItem {
+                instance_id: CAPE_ID,
+                qty: 1,
+            }],
+        )
+        .await;
     let dropped = game_state
         .ground_items
         .read()

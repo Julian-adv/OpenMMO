@@ -692,11 +692,6 @@ class NetworkManager {
     return true
   }
 
-  sendDropItem(instanceId: number) {
-    if (!this.isNetworkableInstanceId(instanceId, 'drop')) return
-    this.sendMessage({ DropItem: { instance_id: instanceId } })
-  }
-
   sendDropItems(items: BagLineItem[]) {
     const valid = items.filter((i) =>
       this.isNetworkableInstanceId(i.instance_id, 'drop')

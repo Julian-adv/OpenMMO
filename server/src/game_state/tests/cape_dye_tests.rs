@@ -154,7 +154,15 @@ async fn a_dropped_cape_keeps_its_dye() {
     let _rx = setup_dyer(&game_state, true, 1).await;
     game_state.dye_cape(&pid("dyer"), DYE_ID, RED).await;
 
-    game_state.drop_item(&pid("dyer"), CAPE_ID).await;
+    game_state
+        .drop_items(
+            &pid("dyer"),
+            vec![BagLineItem {
+                instance_id: CAPE_ID,
+                qty: 1,
+            }],
+        )
+        .await;
     let dropped = game_state
         .ground_items
         .read()

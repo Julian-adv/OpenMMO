@@ -155,8 +155,7 @@ pub struct TradeLineItem {
     pub qty: u32,
 }
 
-/// One line of a batched `SellItems` or `DropItems` request: act on `qty`
-/// units of one bag stack.
+/// A quantity from one inventory instance; equipped items require qty 1.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BagLineItem {
     pub instance_id: u64,
@@ -538,12 +537,7 @@ pub enum ClientMessage {
     SelectAmmo {
         item_def_id: Option<String>,
     },
-    DropItem {
-        instance_id: u64,
-    },
-    /// Drop multiple bag stacks (partial quantities allowed) in one
-    /// all-or-nothing transaction, so a multi-item bag cleanup round-trips
-    /// once instead of once per stack.
+    /// Drop bag quantities and equipped items in one all-or-nothing operation.
     DropItems {
         items: Vec<BagLineItem>,
     },

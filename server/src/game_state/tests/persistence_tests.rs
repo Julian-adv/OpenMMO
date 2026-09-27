@@ -148,7 +148,15 @@ async fn kick_flushes_dropped_inventory_before_replacement_load() {
 
     // A drops the sword (in-memory only; not yet persisted).
     let instance_id = game_state.get_player_inventory(&a).await.unwrap().bag[0].instance_id;
-    game_state.drop_item(&a, instance_id).await;
+    game_state
+        .drop_items(
+            &a,
+            vec![BagLineItem {
+                instance_id,
+                qty: 1,
+            }],
+        )
+        .await;
     assert!(game_state
         .get_player_inventory(&a)
         .await

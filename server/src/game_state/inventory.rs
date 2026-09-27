@@ -1860,139 +1860,7 @@ impl super::GameState {
         }
     }
 
-    pub async fn drop_item(&self, player_id: &PlayerId, instance_id: u64) {
-        if self
-            .reject_if_trade_reserved(player_id, instance_id, "drop")
-            .await
-            || self
-                .reject_if_holding_up_stall(player_id, instance_id, "drop")
-                .await
-        {
-            return;
-        }
-        let (player_position, rotation, floor_level) = {
-            let players = self.players.read().await;
-            match players.get(player_id) {
-                Some(p) => (p.position, p.rotation, p.floor_level),
-                None => return,
-            }
-        };
-        // Scatter, or a run of drops piles onto one pixel under the player.
-        let preferred = drop_landing_position(player_position, rotation);
-        let position = self
-            .loot_drop_position(player_position, floor_level, preferred)
-            .await;
-        // For the unit that splits off a stack — the stack keeps its own id.
-        // Reserved outside the lock like award_item; unused otherwise.
-        let split_instance_id = self.next_instance_id().await;
-        let npc_def = self.official_npc_def(player_id).await;
-
-        let (snapshot, dropped, dropped_from_off_hand) = {
-            let mut inventories = self.inventories.write().await;
-            let inv = match inventories.get_mut(player_id) {
-                Some(inv) => inv,
-                None => return,
-            };
-
-            // Dropped loadout gear would be lootable and re-seeded on the
-            // NPC's next join — an item faucet, like selling it.
-            if npc_def.is_some_and(|def| {
-                inv.items()
-                    .any(|i| i.instance_id == instance_id && def.in_loadout(&i.item_def_id))
-            }) {
-                drop(inventories);
-                self.send_system_message(
-                    player_id,
-                    localized("server.dropIssued", "You never drop your issued gear"),
-                )
-                .await;
-                return;
-            }
-
-            if inv
-                .items()
-                .any(|item| item.instance_id == instance_id && item.locked)
-            {
-                drop(inventories);
-                self.send_system_message(player_id, LOCKED_ITEM_MESSAGE)
-                    .await;
-                return;
-            }
-            let (dropped, dropped_from_off_hand) =
-                if let Some(idx) = inv.bag.iter().position(|i| i.instance_id == instance_id) {
-                    if inv.bag[idx].quantity > 1 {
-                        inv.bag[idx].quantity -= 1;
-                        let unit = ItemInstance {
-                            locked: false,
-                            instance_id: split_instance_id,
-                            item_def_id: inv.bag[idx].item_def_id.clone(),
-                            quantity: 1,
-                            enchant: inv.bag[idx].enchant,
-                            cape_color: inv.bag[idx].cape_color.clone(),
-                            cape_texture: inv.bag[idx].cape_texture.clone(),
-                        };
-                        (unit, false)
-                    } else {
-                        (inv.bag.remove(idx), false)
-                    }
-                } else if let Some(slot) = inv
-                    .equipped
-                    .iter()
-                    .find(|(_, item)| item.instance_id == instance_id)
-                    .map(|(slot, _)| *slot)
-                {
-                    (
-                        inv.equipped.remove(&slot).expect("checked above"),
-                        slot == EquipSlot::OffHand,
-                    )
-                } else {
-                    drop(inventories);
-                    self.send_system_message(
-                        player_id,
-                        localized("server.itemMissing", "Item not found"),
-                    )
-                    .await;
-                    return;
-                };
-
-            (inv.clone(), dropped, dropped_from_off_hand)
-        };
-
-        let ground_item = GroundItem {
-            instance_id: dropped.instance_id,
-            item_def_id: dropped.item_def_id,
-            position,
-            floor_level,
-            quantity: 1,
-            enchant: dropped.enchant,
-            cape_color: dropped.cape_color,
-            cape_texture: dropped.cape_texture,
-            dropped_by: Some(*player_id),
-        };
-
-        self.mark_inventory_dirty(player_id).await;
-        self.send_inventory_snapshot(player_id, snapshot).await;
-        if dropped_from_off_hand {
-            self.set_player_torch(player_id, false).await;
-        }
-        self.item_audit_actor(player_id).await.log_transfer(
-            "drop",
-            &ground_item,
-            1,
-            Some(instance_id),
-        );
-        self.spawn_ground_item(ground_item).await;
-        // Dropping the equipped rod is as much "putting it away" as
-        // unequipping it — same mid-session abort.
-        self.abort_fishing_if_rod_lost(player_id).await;
-        self.abort_instrument_if_lost(player_id).await;
-    }
-
-    /// Drop multiple bag stacks (partial quantities allowed) in one
-    /// all-or-nothing transaction: every line is validated against the bag
-    /// before anything is removed. Bag-only — unlike `drop_item`, there is no
-    /// equipped-slot fallback, since batch selection only ever offers bag
-    /// items.
+    /// Validate every quantity before dropping bag items or equipped gear.
     pub async fn drop_items(&self, player_id: &PlayerId, mut items: Vec<BagLineItem>) {
         items.retain(|i| i.qty > 0);
         if items.is_empty() {
@@ -2011,6 +1879,12 @@ impl super::GameState {
             .await;
             return;
         };
+        if self
+            .reject_if_holding_up_stall(player_id, quantities.keys().copied(), "drop")
+            .await
+        {
+            return;
+        }
         let (player_position, rotation, floor_level) = {
             let players = self.players.read().await;
             match players.get(player_id) {
@@ -2021,6 +1895,7 @@ impl super::GameState {
 
         struct Plan {
             instance_id: u64,
+            slot: Option<EquipSlot>,
             qty: u32,
             item_def_id: String,
             enchant: i32,
@@ -2038,7 +1913,18 @@ impl super::GameState {
             };
 
             for req in &items {
-                let Some(item) = inv.bag.iter().find(|i| i.instance_id == req.instance_id) else {
+                let Some((item, slot)) = inv
+                    .bag
+                    .iter()
+                    .find(|item| item.instance_id == req.instance_id)
+                    .map(|item| (item, None))
+                    .or_else(|| {
+                        inv.equipped
+                            .iter()
+                            .find(|(_, item)| item.instance_id == req.instance_id)
+                            .map(|(slot, item)| (item, Some(*slot)))
+                    })
+                else {
                     drop(inventories);
                     self.send_system_message(
                         player_id,
@@ -2053,7 +1939,8 @@ impl super::GameState {
                         .await;
                     return;
                 }
-                if quantities[&req.instance_id] > item.quantity {
+                let available = if slot.is_some() { 1 } else { item.quantity };
+                if quantities[&req.instance_id] > available {
                     drop(inventories);
                     self.send_system_message(
                         player_id,
@@ -2073,6 +1960,7 @@ impl super::GameState {
                 }
                 plans.push(Plan {
                     instance_id: req.instance_id,
+                    slot,
                     qty: req.qty,
                     item_def_id: item.item_def_id.clone(),
                     enchant: item.enchant,
@@ -2080,8 +1968,11 @@ impl super::GameState {
                     cape_texture: item.cape_texture.clone(),
                 });
             }
-            // Every line is now guaranteed to apply cleanly — mutate.
             for plan in &plans {
+                if let Some(slot) = plan.slot {
+                    inv.equipped.remove(&slot);
+                    continue;
+                }
                 let idx = inv
                     .bag
                     .iter()
@@ -2098,12 +1989,16 @@ impl super::GameState {
 
         self.mark_inventory_dirty(player_id).await;
         self.send_inventory_snapshot(player_id, snapshot).await;
+        if plans
+            .iter()
+            .any(|plan| plan.slot == Some(EquipSlot::OffHand))
+        {
+            self.set_player_torch(player_id, false).await;
+        }
+        self.abort_fishing_if_rod_lost(player_id).await;
         self.abort_instrument_if_lost(player_id).await;
 
-        // A stackable line lands as a single N-unit pile, a non-stackable one
-        // scatters unit by unit since those units are distinct objects. One
-        // (piles, per-pile) shape per plan keeps the id reservation and the
-        // spawn loop counting the same way.
+        // Stackable quantities form one pile; other items scatter individually.
         let shapes: Vec<(u32, u32)> = plans
             .iter()
             .map(|plan| {
@@ -2231,9 +2126,7 @@ impl super::GameState {
         let item_weight = self
             .item_defs
             .weight_with(&ground_item.item_def_id, armor_mult);
-        // For the bag entry — the pile that stays behind keeps its own id.
-        // Reserved outside the locks like `drop_item`'s split id; unused when
-        // the insert merges into an existing bag stack.
+        // Reserve a bag ID before locking; unused when the pickup merges.
         let bag_instance_id = self.next_instance_id().await;
 
         // Acquire write lock for both weight check and mutation atomically

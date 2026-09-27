@@ -367,24 +367,19 @@ impl super::GameState {
         false
     }
 
-    /// Refuse a def-keyed bulk action while a trade is open. Those paths draw
-    /// by definition and lowest enchant first, so they cannot be reconciled
-    /// against instance-level reservations.
+    /// Refuse inventory changes while trading or listing goods on a stall.
     pub(super) async fn reject_if_trading(&self, player_id: &PlayerId, action: &str) -> bool {
         if self.live_session(player_id).await.is_some() {
             self.send_system_message(
                 player_id,
-                &format!("Finish your trade before you {action} in bulk."),
+                &format!("Finish your trade before you {action}."),
             )
             .await;
             return true;
         }
         if self.stall_has_listings(player_id).await {
-            self.send_system_message(
-                player_id,
-                &format!("Clear your stall before you {action} in bulk."),
-            )
-            .await;
+            self.send_system_message(player_id, &format!("Clear your stall before you {action}."))
+                .await;
             return true;
         }
         false

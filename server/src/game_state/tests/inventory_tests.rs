@@ -94,7 +94,14 @@ async fn ground_item_audit_links_single_and_batch_drops_to_merged_pickups() {
         .with_writer(move || writer.clone())
         .finish();
     async {
-        game.drop_item(&id, 11).await;
+        game.drop_items(
+            &id,
+            vec![BagLineItem {
+                instance_id: 11,
+                qty: 1,
+            }],
+        )
+        .await;
         let first = *game.ground_items.read().await.keys().next().unwrap();
         game.pickup_item(&id, first).await;
         game.drop_items(
@@ -168,9 +175,15 @@ async fn item_lock_blocks_equipped_and_batch_drops_until_unlocked() {
     );
     game.set_item_locked(&id, 1, true).await;
     game.equip_item(&id, 1).await;
-    game.drop_item(&id, 1).await;
+    game.drop_items(
+        &id,
+        vec![BagLineItem {
+            instance_id: 1,
+            qty: 1,
+        }],
+    )
+    .await;
     assert!(game.get_player_inventory(&id).await.unwrap().equipped[&EquipSlot::MainHand].locked);
-    game.unequip_item(&id, EquipSlot::MainHand).await;
     game.drop_items(
         &id,
         vec![
@@ -186,7 +199,8 @@ async fn item_lock_blocks_equipped_and_batch_drops_until_unlocked() {
     )
     .await;
     let inv = game.get_player_inventory(&id).await.unwrap();
-    assert_eq!(inv.bag.len(), 2);
+    assert_eq!(inv.bag.len(), 1);
+    assert!(inv.equipped[&EquipSlot::MainHand].locked);
     assert_eq!(
         inv.bag
             .iter()
@@ -197,10 +211,122 @@ async fn item_lock_blocks_equipped_and_batch_drops_until_unlocked() {
     );
     assert!(game.ground_items.read().await.is_empty());
     game.set_item_locked(&id, 1, false).await;
-    game.drop_item(&id, 1).await;
+    game.drop_items(
+        &id,
+        vec![BagLineItem {
+            instance_id: 1,
+            qty: 1,
+        }],
+    )
+    .await;
     let ground = game.ground_items.read().await;
     assert_eq!(ground.len(), 1);
     assert_eq!(ground.values().next().unwrap().item.enchant, 5);
+}
+
+#[tokio::test]
+async fn dropping_bag_items_and_equipment_updates_gear_and_torch_together() {
+    let game = make_test_game_state("mixed_equipment_drop");
+    let id = pid("dropper");
+    game.add_player(make_player("dropper", 0.0, 0.0)).await;
+    game.add_player(make_player("observer", 1.0, 0.0)).await;
+    game.inventories.write().await.insert(
+        id,
+        PlayerInventory {
+            bag: vec![
+                bag_item(20, "healing_potion", 5),
+                ItemInstance {
+                    enchant: 4,
+                    ..bag_item(21, "iron_sword", 1)
+                },
+                bag_item(22, "torch", 1),
+            ],
+            ..Default::default()
+        },
+    );
+    game.equip_item(&id, 21).await;
+    game.equip_item(&id, 22).await;
+    assert!(game.get_all_players().await[&id].torch_on);
+    let mut observer = game.register_direct_channel(&pid("observer")).await;
+
+    game.drop_items(
+        &id,
+        vec![
+            BagLineItem {
+                instance_id: 20,
+                qty: 3,
+            },
+            BagLineItem {
+                instance_id: 21,
+                qty: 1,
+            },
+            BagLineItem {
+                instance_id: 22,
+                qty: 1,
+            },
+        ],
+    )
+    .await;
+
+    let inventory = game.get_player_inventory(&id).await.unwrap();
+    assert!(inventory.equipped.is_empty());
+    assert_eq!(inventory.bag.len(), 1);
+    assert_eq!(inventory.bag[0].quantity, 2);
+    let players = game.get_all_players().await;
+    assert!(players[&id].main_hand.is_none());
+    assert!(!players[&id].torch_on);
+    let messages = drain(&mut observer);
+    assert!(messages.iter().any(|message| matches!(message,
+        ServerMessage::PlayerMainHandChanged { player_id, item_def_id: None } if *player_id == id
+    )));
+    assert!(messages.iter().any(|message| matches!(message,
+        ServerMessage::PlayerTorchToggled { player_id, enabled: false } if *player_id == id
+    )));
+    let ground = game.ground_items.read().await;
+    assert_eq!(ground.len(), 3);
+    assert!(ground
+        .values()
+        .any(|entry| entry.item.item_def_id == "iron_sword"
+            && entry.item.enchant == 4
+            && entry.item.quantity == 1));
+    assert!(ground
+        .values()
+        .any(|entry| entry.item.item_def_id == "healing_potion" && entry.item.quantity == 3));
+}
+
+#[tokio::test]
+async fn invalid_equipment_drops_leave_the_whole_batch_untouched() {
+    for invalid in [vec![(21, 2)], vec![(21, 1), (21, 1)], vec![(99, 1)]] {
+        let game = make_test_game_state("invalid_equipment_drop");
+        let id = pid("dropper");
+        game.add_player(make_player("dropper", 0.0, 0.0)).await;
+        game.inventories.write().await.insert(
+            id,
+            PlayerInventory {
+                bag: vec![bag_item(20, "apple", 3)],
+                equipped: [(EquipSlot::MainHand, bag_item(21, "iron_sword", 1))].into(),
+                ..Default::default()
+            },
+        );
+        let mut lines = vec![BagLineItem {
+            instance_id: 20,
+            qty: 2,
+        }];
+        lines.extend(
+            invalid
+                .into_iter()
+                .map(|(instance_id, qty)| BagLineItem { instance_id, qty }),
+        );
+        let next_id = game.reserve_instance_ids(0).await;
+
+        game.drop_items(&id, lines).await;
+
+        let inventory = game.get_player_inventory(&id).await.unwrap();
+        assert_eq!(inventory.bag[0].quantity, 3);
+        assert_eq!(inventory.equipped[&EquipSlot::MainHand].instance_id, 21);
+        assert!(game.ground_items.read().await.is_empty());
+        assert_eq!(game.reserve_instance_ids(0).await, next_id);
+    }
 }
 
 #[tokio::test]
@@ -359,7 +485,15 @@ async fn dropping_from_a_stack_sheds_one_unit() {
         inventories.insert(pid("dropper"), inv);
     }
 
-    game_state.drop_item(&pid("dropper"), 11).await;
+    game_state
+        .drop_items(
+            &pid("dropper"),
+            vec![BagLineItem {
+                instance_id: 11,
+                qty: 1,
+            }],
+        )
+        .await;
 
     {
         let inventories = game_state.inventories.read().await;
@@ -380,8 +514,24 @@ async fn dropping_from_a_stack_sheds_one_unit() {
     }
 
     // Draining the stack unit by unit ends with an empty bag, nothing lost.
-    game_state.drop_item(&pid("dropper"), 11).await;
-    game_state.drop_item(&pid("dropper"), 11).await;
+    game_state
+        .drop_items(
+            &pid("dropper"),
+            vec![BagLineItem {
+                instance_id: 11,
+                qty: 1,
+            }],
+        )
+        .await;
+    game_state
+        .drop_items(
+            &pid("dropper"),
+            vec![BagLineItem {
+                instance_id: 11,
+                qty: 1,
+            }],
+        )
+        .await;
     assert!(game_state.inventories.read().await[&pid("dropper")]
         .bag
         .is_empty());

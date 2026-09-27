@@ -210,13 +210,28 @@ async fn a_hand_dropped_item_spawns_immediately() {
     }
 
     let mut dropper_rx = game_state.register_direct_channel(&pid("dropper")).await;
-    game_state.drop_item(&pid("dropper"), 11).await;
+    game_state
+        .drop_items(
+            &pid("dropper"),
+            vec![BagLineItem {
+                instance_id: 11,
+                qty: 1,
+            }],
+        )
+        .await;
 
-    assert!(game_state.ground_items.read().await.contains_key(&11));
+    let dropped_id = {
+        let ground = game_state.ground_items.read().await;
+        assert_eq!(ground.len(), 1);
+        let item = &ground.values().next().unwrap().item;
+        assert_eq!(item.item_def_id, "test_item");
+        assert_eq!(item.quantity, 1);
+        item.instance_id
+    };
     assert!(
         drain(&mut dropper_rx).iter().any(|msg| {
             matches!(msg, ServerMessage::GroundItemSpawned { item }
-                if item.instance_id == 11 && item.dropped_by.as_ref() == Some(&pid("dropper")))
+                if item.instance_id == dropped_id && item.dropped_by.as_ref() == Some(&pid("dropper")))
         }),
         "the spawn must say who dropped it"
     );

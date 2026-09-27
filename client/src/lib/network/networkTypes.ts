@@ -254,7 +254,6 @@ export type ClientMessage =
   | { SelectAmmo: { item_def_id: string | null } }
   | { UnequipItem: { slot: EquipSlot } }
   | { SetItemLocked: { instance_id: number; locked: boolean } }
-  | { DropItem: { instance_id: number } }
   | { DropItems: { items: BagLineItem[] } }
   | 'PickupStarted'
   | { PickupItem: { instance_id: number } }

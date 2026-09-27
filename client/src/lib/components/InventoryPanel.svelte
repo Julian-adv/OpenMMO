@@ -264,7 +264,9 @@
           if (slot.quantity > 1 && def) {
             pendingDrop = { slot, def }
           } else {
-            networkManager.sendDropItem(slot.instance_id)
+            networkManager.sendDropItems([
+              { instance_id: slot.instance_id, qty: 1 },
+            ])
           }
         }
       }

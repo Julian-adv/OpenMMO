@@ -185,7 +185,9 @@
           return
         }
         if (!item.locked && !isOverAnyDialog(x, y)) {
-          networkManager.sendDropItem(item.instance_id)
+          networkManager.sendDropItems([
+            { instance_id: item.instance_id, qty: 1 },
+          ])
         }
       }
     )

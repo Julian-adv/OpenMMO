@@ -151,7 +151,7 @@ impl GameState {
             .reject_if_trade_reserved(player_id, instance_id, "sell")
             .await
             || self
-                .reject_if_holding_up_stall(player_id, instance_id, "sell")
+                .reject_if_holding_up_stall(player_id, [instance_id], "sell")
                 .await
         {
             return;

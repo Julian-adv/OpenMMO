@@ -319,6 +319,28 @@ async fn listed_goods_and_the_deployed_stall_itself_are_locked() {
     give(game_state, &market.owner, bag_item(2, "apple", 4)).await;
     game_state.use_item(&market.owner, 1).await;
 
+    game_state
+        .drop_items(
+            &market.owner,
+            vec![
+                BagLineItem {
+                    instance_id: 2,
+                    qty: 2,
+                },
+                BagLineItem {
+                    instance_id: 1,
+                    qty: 1,
+                },
+            ],
+        )
+        .await;
+    assert!(game_state.ground_items.read().await.is_empty());
+    assert_eq!(
+        game_state.inventories.read().await[&market.owner].bag[1].quantity,
+        4
+    );
+    assert!(game_state.stalls.read().await.contains_key(&market.owner));
+
     game_state.list_stall_item(&market.owner, 1, 1, 500).await;
     assert!(
         game_state.stalls.read().await[&market.owner]
@@ -332,7 +354,15 @@ async fn listed_goods_and_the_deployed_stall_itself_are_locked() {
         game_state.stall_reserved_quantity(&market.owner, 2).await,
         4
     );
-    game_state.drop_item(&market.owner, 2).await;
+    game_state
+        .drop_items(
+            &market.owner,
+            vec![BagLineItem {
+                instance_id: 2,
+                qty: 1,
+            }],
+        )
+        .await;
     assert_eq!(
         game_state.inventories.read().await[&market.owner].bag[1].quantity,
         4,

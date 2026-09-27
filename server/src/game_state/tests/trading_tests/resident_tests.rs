@@ -746,7 +746,15 @@ async fn an_npc_never_drops_its_issued_gear() {
 
     // Bagged and worn loadout gear alike stay put.
     for instance_id in [11, 13] {
-        game_state.drop_item(&pid("npc_karl"), instance_id).await;
+        game_state
+            .drop_items(
+                &pid("npc_karl"),
+                vec![BagLineItem {
+                    instance_id,
+                    qty: 1,
+                }],
+            )
+            .await;
         match karl_rx.try_recv() {
             Ok(ServerMessage::SystemMessage { message, .. }) => {
                 assert!(message.contains("issued gear"), "got: {message}")

@@ -1754,12 +1754,6 @@ async fn handle_client_message(
             }
         }
 
-        ClientMessage::DropItem { instance_id } => {
-            if let Some(id) = &state.player_id {
-                game_state.drop_item(id, instance_id).await;
-            }
-        }
-
         ClientMessage::DropItems { items } => {
             if let Some(id) = &state.player_id {
                 game_state.drop_items(id, items).await;

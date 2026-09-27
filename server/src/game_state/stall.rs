@@ -190,21 +190,21 @@ impl GameState {
             .unwrap_or(0)
     }
 
-    /// Refuse to part with the item currently holding a table up. Not folded
-    /// into the reservation guard because `use` is exactly how a stall is
-    /// packed away — only the paths that would orphan it ask.
+    /// Refuse transfers of a deployed stall; using it still packs it away.
     pub(super) async fn reject_if_holding_up_stall(
         &self,
         player_id: &PlayerId,
-        instance_id: u64,
+        instance_ids: impl IntoIterator<Item = u64>,
         action: &str,
     ) -> bool {
-        let deployed = self
+        let placed_with = self
             .stalls
             .read()
             .await
             .get(player_id)
-            .is_some_and(|entry| entry.placed_with == instance_id);
+            .map(|entry| entry.placed_with);
+        let deployed = placed_with
+            .is_some_and(|placed_with| instance_ids.into_iter().any(|id| id == placed_with));
         if deployed {
             self.send_system_message(
                 player_id,

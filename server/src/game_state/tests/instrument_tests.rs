@@ -356,14 +356,30 @@ async fn losing_the_instrument_ends_the_live_session_but_gear_changes_do_not() {
         .await
         .contains(&instrumentist));
 
-    game_state.drop_item(&instrumentist, 2).await;
+    game_state
+        .drop_items(
+            &instrumentist,
+            vec![BagLineItem {
+                instance_id: 2,
+                qty: 1,
+            }],
+        )
+        .await;
     assert!(game_state
         .live_instrument_players
         .read()
         .await
         .contains(&instrumentist));
 
-    game_state.drop_item(&instrumentist, 1).await;
+    game_state
+        .drop_items(
+            &instrumentist,
+            vec![BagLineItem {
+                instance_id: 1,
+                qty: 1,
+            }],
+        )
+        .await;
     assert!(!game_state
         .live_instrument_players
         .read()

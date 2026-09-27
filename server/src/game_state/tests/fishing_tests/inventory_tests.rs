@@ -208,7 +208,15 @@ async fn dropped_items_scatter_instead_of_stacking() {
     }
 
     for instance in 600u64..606 {
-        game_state.drop_item(&id, instance).await;
+        game_state
+            .drop_items(
+                &id,
+                vec![BagLineItem {
+                    instance_id: instance,
+                    qty: 1,
+                }],
+            )
+            .await;
     }
 
     let dropped: Vec<_> = game_state

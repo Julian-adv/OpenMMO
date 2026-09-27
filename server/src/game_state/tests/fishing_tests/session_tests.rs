@@ -11,7 +11,15 @@ async fn dropping_the_equipped_rod_aborts_the_session() {
     game_state.start_fishing(&id, water_target()).await;
     advance_with_ticks(&game_state, u64::from(CAST_MS) + 250).await;
     // 999 is the rod's instance id from make_angler.
-    game_state.drop_item(&id, 999).await;
+    game_state
+        .drop_items(
+            &id,
+            vec![BagLineItem {
+                instance_id: 999,
+                qty: 1,
+            }],
+        )
+        .await;
 
     assert!(
         drain(&mut rx).iter().any(|m| matches!(

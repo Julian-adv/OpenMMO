@@ -359,7 +359,15 @@ async fn offered_items_are_reserved_against_other_actions() {
         .await;
 
     assert_eq!(pair.game_state.trade_reserved_quantity(&pair.a, 1).await, 1);
-    pair.game_state.drop_item(&pair.a, 1).await;
+    pair.game_state
+        .drop_items(
+            &pair.a,
+            vec![BagLineItem {
+                instance_id: 1,
+                qty: 1,
+            }],
+        )
+        .await;
     pair.game_state.use_item(&pair.a, 1).await;
 
     let bag = bag_of(&pair.game_state, &pair.a).await;
@@ -367,8 +375,27 @@ async fn offered_items_are_reserved_against_other_actions() {
     assert_eq!(bag[0].quantity, 2, "neither drop nor use touched the stack");
 }
 
-/// A disconnect ends the session, so nothing stays reserved for a player who
-/// is no longer there.
+#[tokio::test]
+async fn dropping_unoffered_items_is_blocked_while_trading() {
+    let pair = make_trade_pair("trade_blocks_drop", 0, 0).await;
+    give(&pair.game_state, &pair.a, bag_item(1, "apple", 2)).await;
+    open_session(&pair).await;
+
+    pair.game_state
+        .drop_items(
+            &pair.a,
+            vec![BagLineItem {
+                instance_id: 1,
+                qty: 1,
+            }],
+        )
+        .await;
+
+    assert_eq!(bag_of(&pair.game_state, &pair.a).await[0].quantity, 2);
+    assert!(pair.game_state.ground_items.read().await.is_empty());
+}
+
+/// Disconnecting releases every trade reservation.
 #[tokio::test]
 async fn a_disconnect_releases_the_table() {
     let pair = make_trade_pair("trade_disconnect", 0, 0).await;

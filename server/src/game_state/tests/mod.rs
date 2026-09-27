@@ -9,7 +9,7 @@ use crate::types::{
 };
 use crate::world_config::world_config;
 use onlinerpg_shared::inventory::{EquipSlot, GroundItem, ItemInstance, PlayerInventory};
-use onlinerpg_shared::messages::DealKind;
+use onlinerpg_shared::messages::{BagLineItem, DealKind};
 use tokio::sync::broadcast::error::TryRecvError;
 use tokio::sync::mpsc::error::TryRecvError as MpscTryRecvError;
 
