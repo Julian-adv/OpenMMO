@@ -60,6 +60,12 @@ pub(super) enum WalkTo<'a> {
         z: f32,
         floor: u8,
     },
+
+    Schedule {
+        x: f32,
+        z: f32,
+        floor: u8,
+    },
 }
 
 struct Tuning {
@@ -79,7 +85,7 @@ impl WalkTo<'_> {
             Self::Character(id) => s.nearby_players.get(*id).map(|p| p.position),
             Self::GroundItem(id) => s.ground_item(*id).map(|i| i.position),
             Self::Point { pos, .. } => Some(*pos),
-            Self::Place { x, z, .. } => Some(Position {
+            Self::Place { x, z, .. } | Self::Schedule { x, z, .. } => Some(Position {
                 x: *x,
                 y: 0.0,
                 z: *z,
@@ -93,7 +99,7 @@ impl WalkTo<'_> {
             Self::Character(id) => s.nearby_players.get(*id).map(|p| p.floor_level),
             Self::GroundItem(id) => s.ground_item(*id).map(|i| i.floor_level),
             Self::Point { floor_level, .. } => Some(*floor_level),
-            Self::Place { floor, .. } => return *floor,
+            Self::Place { floor, .. } | Self::Schedule { floor, .. } => return *floor,
         };
         onlinerpg_shared::dungeon::passability_floor_for_level(level.unwrap_or(0))
     }
@@ -132,9 +138,7 @@ impl WalkTo<'_> {
                 needs_clear_line: false,
                 max_doors: MAX_CHASE_DOORS,
             },
-            // Arrival is the goal cell itself: A* smooths its last waypoint
-            // onto it, so anything short of standing there is still walking.
-            Self::Place { .. } => Tuning {
+            Self::Place { .. } | Self::Schedule { .. } => Tuning {
                 arrive_range: 0.1,
                 max_distance: f32::INFINITY,
                 max_secs: f32::INFINITY,
@@ -152,7 +156,9 @@ impl std::fmt::Display for WalkTo<'_> {
             Self::Character(id) => write!(f, "{id}"),
             Self::GroundItem(id) => write!(f, "item {id}"),
             Self::Point { pos, .. } => write!(f, "point ({:.1}, {:.1})", pos.x, pos.z),
-            Self::Place { x, z, .. } => write!(f, "({x:.1}, {z:.1})"),
+            Self::Place { x, z, .. } | Self::Schedule { x, z, .. } => {
+                write!(f, "({x:.1}, {z:.1})")
+            }
         }
     }
 }
@@ -207,7 +213,10 @@ pub(super) async fn walk(
     let mut owned_request = None;
     let result = walk_inner(state, to, background, sprint, &mut owned_request).await;
     let mut s = state.lock().await;
-    if owned_request == Some(s.move_request_id) {
+    if owned_request == Some(s.move_request_id)
+        && s.move_status
+            .is_none_or(|status| matches!(status, MoveStatus::Moving | MoveStatus::Searching))
+    {
         let _ = s
             .send_flagged_command(ClientMessage::PlayerMoveStop { request_id: 0 }, background)
             .await;
@@ -223,9 +232,12 @@ async fn walk_inner(
     owned_request: &mut Option<u32>,
 ) -> Walked {
     let tuning = to.tuning();
+    let schedule = matches!(to, WalkTo::Schedule { .. });
+    let fixed = matches!(to, WalkTo::Place { .. } | WalkTo::Schedule { .. });
     let started = Instant::now();
     let mut last_goal: Option<(f32, f32)> = None;
     let mut request_id = None;
+    let mut request_is_final = false;
     let mut sent_at = Instant::now();
     let mut doors_opened = 0;
     let relocations = state.lock().await.relocations;
@@ -245,7 +257,13 @@ async fn walk_inner(
         };
         let delta = PlanarDelta::between(&me.position, &target);
         let target_floor = to.floor(&s);
-        if delta.dist <= tuning.arrive_range
+        let already_stopped = request_id.is_none()
+            && !matches!(
+                s.move_status,
+                Some(MoveStatus::Moving | MoveStatus::Searching)
+            );
+        if (!schedule || already_stopped)
+            && delta.dist <= tuning.arrive_range
             && s.passability_floor() == target_floor
             && !(tuning.needs_clear_line && s.attack_line_blocked(target.x, target.z))
         {
@@ -254,26 +272,6 @@ async fn walk_inner(
         if delta.dist > tuning.max_distance {
             return Walked::Lost(LostReason::TooFar(delta.dist));
         }
-        let mut goal = (target.x, target.z);
-        if s.passability_floor() != target_floor {
-            let route = s.find_path_to(target.x, target.z, target_floor);
-            if let Some(point) = route
-                .waypoints
-                .iter()
-                .find(|p| p.floor != s.passability_floor())
-            {
-                goal = (point.x, point.z);
-            }
-        }
-        let to_goal = PlanarDelta::to_xz(&me.position, goal.0, goal.1);
-        if to_goal.dist > 48.0 {
-            goal = (
-                me.position.x + to_goal.dx * 48.0 / to_goal.dist,
-                me.position.z + to_goal.dz * 48.0 / to_goal.dist,
-            );
-        }
-        let changed = last_goal
-            .is_none_or(|(x, z)| PlanarDelta::xz(x, z, goal.0, goal.1).dist > REROUTE_THRESHOLD);
         let status = (request_id == Some(s.move_request_id))
             .then_some(s.move_status)
             .flatten();
@@ -282,37 +280,84 @@ async fn walk_inner(
         }
         let terminal = status
             .is_some_and(|status| !matches!(status, MoveStatus::Moving | MoveStatus::Searching));
-        if terminal && status != Some(MoveStatus::Arrived) && !changed {
-            drop(s);
-            if doors_opened < tuning.max_doors
-                && open_blocking_door(state, background, sprint, owned_request).await
-            {
-                doors_opened += 1;
-                request_id = None;
-                last_goal = None;
-                continue;
-            }
-            let s = state.lock().await;
-            return Walked::Lost(if locked_door_without_key(&s) {
-                LostReason::LockedDoor
-            } else {
-                LostReason::NoPath
-            });
+        if schedule && request_is_final && status == Some(MoveStatus::Arrived) {
+            return Walked::Arrived;
         }
-        if request_id.is_none()
-            || (changed && sent_at.elapsed() >= Duration::from_millis(200))
-            || terminal
-        {
-            match s.request_move(goal.0, goal.1, background, sprint).await {
-                Ok(id) => {
-                    request_id = Some(id);
-                    *owned_request = Some(id);
+        if schedule && matches!(status, Some(MoveStatus::Partial | MoveStatus::Blocked)) {
+            tracing::info!(
+                player_id = ?s.self_player_id,
+                ?status,
+                requested_x = target.x,
+                requested_z = target.z,
+                requested_floor = target_floor,
+                position = ?me.position,
+                floor = s.self_floor_level,
+                "Schedule move completed at the server destination"
+            );
+            return Walked::Arrived;
+        }
+        if schedule && terminal && status != Some(MoveStatus::Arrived) {
+            return Walked::Lost(LostReason::NoPath);
+        }
+        if !fixed || request_id.is_none() || terminal {
+            let mut goal = (target.x, target.z);
+            let mut final_goal = true;
+            if s.passability_floor() != target_floor {
+                let route = s.find_path_to(target.x, target.z, target_floor);
+                if let Some(point) = route
+                    .waypoints
+                    .iter()
+                    .find(|p| p.floor != s.passability_floor())
+                {
+                    goal = (point.x, point.z);
+                    final_goal = false;
                 }
-                Err(_) => return Walked::Error,
             }
-            last_goal = Some(goal);
-            sent_at = Instant::now();
-        } else if sent_at.elapsed() > Duration::from_secs(60) {
+            let to_goal = PlanarDelta::to_xz(&me.position, goal.0, goal.1);
+            if to_goal.dist > 48.0 {
+                goal = (
+                    me.position.x + to_goal.dx * 48.0 / to_goal.dist,
+                    me.position.z + to_goal.dz * 48.0 / to_goal.dist,
+                );
+                final_goal = false;
+            }
+            let changed = last_goal.is_none_or(|(x, z)| {
+                PlanarDelta::xz(x, z, goal.0, goal.1).dist > REROUTE_THRESHOLD
+            });
+            if terminal && status != Some(MoveStatus::Arrived) && !changed {
+                drop(s);
+                if doors_opened < tuning.max_doors
+                    && open_blocking_door(state, background, sprint, owned_request).await
+                {
+                    doors_opened += 1;
+                    request_id = None;
+                    last_goal = None;
+                    continue;
+                }
+                let s = state.lock().await;
+                return Walked::Lost(if locked_door_without_key(&s) {
+                    LostReason::LockedDoor
+                } else {
+                    LostReason::NoPath
+                });
+            }
+            if request_id.is_none()
+                || (changed && sent_at.elapsed() >= Duration::from_millis(200))
+                || terminal
+            {
+                match s.request_move(goal.0, goal.1, background, sprint).await {
+                    Ok(id) => {
+                        request_id = Some(id);
+                        *owned_request = Some(id);
+                        request_is_final = final_goal;
+                    }
+                    Err(_) => return Walked::Error,
+                }
+                last_goal = Some(goal);
+                sent_at = Instant::now();
+            }
+        }
+        if sent_at.elapsed() > Duration::from_secs(60) {
             return Walked::Lost(LostReason::Timeout);
         }
         drop(s);

@@ -423,7 +423,7 @@ impl onlinerpg_terrain::height::HeightTiles for FlatLand {
 }
 
 /// A flat, dry, grassy world — the fixture for ambient spawn tests.
-fn make_flat_world_game_state(test_name: &str) -> GameState {
+pub(super) fn make_flat_world_game_state(test_name: &str) -> GameState {
     make_game_state_with(test_name, FlatLand, SeaOnlyWater)
 }
 

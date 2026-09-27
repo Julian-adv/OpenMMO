@@ -39,10 +39,7 @@ fn fence_visibility_is_shared_without_one_npc_removing_anothers_collision() {
     ));
 }
 
-/// A schedule pose authored on the bed itself must not reach A* as the
-/// goal — the bed seals its own cells and the search could never enter
-/// them. The walk goal steps to the nearest open neighbour; open ground
-/// passes through untouched.
+/// Table service can select an open standing spot beside furniture.
 #[test]
 fn walkable_near_steps_off_sealed_furniture() {
     let (s, _rx) = test_state();

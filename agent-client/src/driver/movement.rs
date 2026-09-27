@@ -1,25 +1,24 @@
-//! Schedule transitions, forced moves, and the housing-data prefetch that
-//! lets pathfinding avoid buildings before the NPC starts moving. The walking
-//! itself belongs to `walk`.
+//! Schedule transitions and housing-data prefetch for NPC walking.
+
+#[cfg(test)]
+#[path = "schedule_movement_tests.rs"]
+mod schedule_tests;
 
 use std::collections::HashSet;
 use std::sync::Arc;
 
 use onlinerpg_shared::furniture::FurniturePlacement;
-use onlinerpg_shared::{ClientMessage, Position};
+use onlinerpg_shared::ClientMessage;
 use onlinerpg_terrain::coords::{tile_to_region, world_to_tile};
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
 use super::walk;
-use crate::geom::PlanarDelta;
 use crate::state::SharedState;
 use crate::terrain_http::http_client;
 use onlinerpg_shared::schedule::{ScheduleCondition, ScheduleEntry};
 
 use onlinerpg_shared::schedule::resolve_active_schedule;
-
-const SCHEDULE_ARRIVAL_RADIUS: f32 = 2.0;
 
 pub(super) enum MoveResult {
     Arrived,
@@ -151,7 +150,6 @@ pub(super) async fn maintain_scheduled_fishing(
 }
 
 pub(super) async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry: &ScheduleEntry) {
-    // Walk through patrol waypoints first (if any)
     for (i, wp) in entry.waypoints.iter().enumerate() {
         let (wx, wz) = (wp[0], wp[2]);
         debug!(
@@ -161,7 +159,12 @@ pub(super) async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry
             wx,
             wz
         );
-        match execute_move(state, wx, wz, entry.floor_level, Some(false)).await {
+        let to = walk::WalkTo::Schedule {
+            x: wx,
+            z: wz,
+            floor: entry.floor_level,
+        };
+        match execute_walk(state, &to, Some(false)).await {
             MoveResult::Arrived => {}
             MoveResult::Blocked => {
                 warn!("Patrol waypoint {i} blocked — skipping ({wx:.1}, {wz:.1})");
@@ -173,72 +176,30 @@ pub(super) async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry
         }
     }
 
-    // Go to final position
-    let (x, y, z) = (entry.pos[0], entry.pos[1], entry.pos[2]);
-
-    // Already near the target (same floor)? Skip the walk but still fall
-    // through to the exact-position send — the entry's spot and rotation
-    // apply even without a walk (a maid already standing at the table must
-    // still turn to face the guest).
-    let already_near = {
-        let s = state.lock().await;
-        s.self_player.as_ref().is_some_and(|p| {
-            s.passability_floor() == entry.floor_level
-                && PlanarDelta::to_xz(&p.position, x, z).dist < SCHEDULE_ARRIVAL_RADIUS
-        })
+    let to = walk::WalkTo::Schedule {
+        x: entry.pos[0],
+        z: entry.pos[2],
+        floor: entry.floor_level,
     };
-
-    let arrived = if already_near {
-        debug!("Already near schedule target — skipping the walk");
-        true
-    } else {
-        // A pose position may sit on the furniture itself (a bed swallows its
-        // own cells); walk beside it and let the exact-position send below
-        // cross the last metre.
-        let (walk_x, walk_z) = {
-            let s = state.lock().await;
-            s.walkable_near(x, z, entry.floor_level)
-        };
-        match execute_move(state, walk_x, walk_z, entry.floor_level, Some(false)).await {
-            MoveResult::Arrived => true,
-            MoveResult::Blocked => {
-                // Force-move to schedule position (e.g. cross-floor moves through
-                // closed doors). NPCs must follow their schedules.
-                warn!(
-                    "Schedule move blocked — force-moving to ({x:.1}, {z:.1}) floor {}",
-                    entry.floor_level
-                );
-                true
-            }
-            MoveResult::Died => false,
-            MoveResult::Error => {
-                error!("Schedule move error");
-                false
-            }
+    match execute_walk(state, &to, Some(false)).await {
+        MoveResult::Arrived => {}
+        MoveResult::Blocked | MoveResult::Died => return,
+        MoveResult::Error => {
+            error!("Schedule move error");
+            return;
         }
-    };
-
-    if arrived {
-        // Send final position with exact rotation
-        let rot_rad = entry.rotation.to_radians();
-        let mut s = state.lock().await;
-        // Schedules are authored in housing floors, which the wire and the
-        // passability cache number the same way. adopt_floor_level so a
-        // cross-floor force-move still purges the left floor's monsters.
-        let target = Position { x, y, z };
-        if let Err(e) = s
-            .send_command(ClientMessage::NpcRelocate {
-                position: target,
-                rotation: rot_rad,
-                floor_level: entry.floor_level as i8,
-            })
-            .await
-        {
-            error!("Failed to send schedule move: {e}");
-        }
-
-        send_interact_if_needed(&mut s, entry).await;
     }
+
+    let mut s = state.lock().await;
+    if let Err(e) = s
+        .send_command(ClientMessage::PlayerFace {
+            rotation: entry.rotation.to_radians(),
+        })
+        .await
+    {
+        error!("Failed to face schedule target: {e}");
+    }
+    send_interact_if_needed(&mut s, entry).await;
 }
 
 pub(super) async fn execute_move(
@@ -253,11 +214,30 @@ pub(super) async fn execute_move(
         z: goal_z,
         floor: goal_floor,
     };
-    match walk::walk(state, &to, false, sprint).await {
+    execute_walk(state, &to, sprint).await
+}
+
+async fn execute_walk(
+    state: &Arc<Mutex<SharedState>>,
+    to: &walk::WalkTo<'_>,
+    sprint: Option<bool>,
+) -> MoveResult {
+    match walk::walk(state, to, false, sprint).await {
         walk::Walked::Arrived => MoveResult::Arrived,
         walk::Walked::Error => MoveResult::Error,
         walk::Walked::Lost(walk::LostReason::PlayerDied) => MoveResult::Died,
-        walk::Walked::Lost(_) => MoveResult::Blocked,
+        walk::Walked::Lost(reason) => {
+            let s = state.lock().await;
+            warn!(
+                player_id = ?s.self_player_id,
+                target = %to,
+                ?reason,
+                status = ?s.move_status,
+                position = ?s.self_player.as_ref().map(|p| p.position),
+                "Move did not complete"
+            );
+            MoveResult::Blocked
+        }
     }
 }
 
@@ -344,7 +324,7 @@ mod tests {
     use crate::state::tests::{test_player, test_state};
     use onlinerpg_shared::fishing::{FishState, FishingAction, FishingOutcome};
     use onlinerpg_shared::inventory::{EquipSlot, ItemInstance};
-    use onlinerpg_shared::{PlayerId, ServerMessage};
+    use onlinerpg_shared::{PlayerId, Position, ServerMessage};
 
     fn npc_schedule(json: &str) -> Vec<ScheduleEntry> {
         #[derive(serde::Deserialize)]
@@ -413,9 +393,8 @@ mod tests {
 
         maintain_scheduled_fishing(&state, entry).await;
         assert!(
-            matches!(rx.try_recv(), Ok(ClientMessage::NpcRelocate { position, rotation, .. })
-                if position.x == entry.pos[0] && position.y == entry.pos[1]
-                    && position.z == entry.pos[2] && rotation == entry.rotation.to_radians()
+            matches!(rx.try_recv(), Ok(ClientMessage::PlayerFace { rotation })
+                if rotation == entry.rotation.to_radians()
             )
         );
         assert!(
@@ -475,7 +454,7 @@ mod tests {
         maintain_scheduled_fishing(&state, entry).await;
         assert!(matches!(
             rx.try_recv(),
-            Ok(ClientMessage::NpcRelocate { .. })
+            Ok(ClientMessage::PlayerFace { .. })
         ));
         assert!(matches!(
             rx.try_recv(),
@@ -504,7 +483,7 @@ mod tests {
         assert!(matches!(rx.try_recv(), Ok(ClientMessage::StopInteraction)));
         assert!(matches!(
             rx.try_recv(),
-            Ok(ClientMessage::NpcRelocate { .. })
+            Ok(ClientMessage::PlayerFace { .. })
         ));
         assert!(
             matches!(rx.try_recv(), Ok(ClientMessage::InteractObject { object_type, object_id: 111 })
@@ -530,7 +509,7 @@ mod tests {
         assert!(matches!(rx.try_recv(), Ok(ClientMessage::StopInteraction)));
         assert!(matches!(
             rx.try_recv(),
-            Ok(ClientMessage::NpcRelocate { .. })
+            Ok(ClientMessage::PlayerFace { .. })
         ));
         assert!(rx.try_recv().is_err(), "breakfast must not cast the rod");
 
@@ -543,7 +522,7 @@ mod tests {
         assert!(matches!(rx.try_recv(), Ok(ClientMessage::StopInteraction)));
         assert!(matches!(
             rx.try_recv(),
-            Ok(ClientMessage::NpcRelocate { .. })
+            Ok(ClientMessage::PlayerFace { .. })
         ));
         assert!(matches!(
             rx.try_recv(),
@@ -583,7 +562,7 @@ mod tests {
         maintain_scheduled_fishing(&state, entry).await;
         assert!(matches!(
             rx.try_recv(),
-            Ok(ClientMessage::NpcRelocate { .. })
+            Ok(ClientMessage::PlayerFace { .. })
         ));
         assert!(matches!(
             rx.try_recv(),
@@ -595,7 +574,7 @@ mod tests {
         maintain_scheduled_fishing(&state, entry).await;
         assert!(matches!(
             rx.try_recv(),
-            Ok(ClientMessage::NpcRelocate { .. })
+            Ok(ClientMessage::PlayerFace { .. })
         ));
         assert!(matches!(
             rx.try_recv(),
@@ -615,7 +594,7 @@ mod tests {
         maintain_scheduled_fishing(&state, entry).await;
         assert!(matches!(
             rx.try_recv(),
-            Ok(ClientMessage::NpcRelocate { .. })
+            Ok(ClientMessage::PlayerFace { .. })
         ));
         assert!(matches!(
             rx.try_recv(),
@@ -710,7 +689,7 @@ mod tests {
         assert!(matches!(rx.try_recv(), Ok(ClientMessage::StopInteraction)));
         assert!(matches!(
             rx.try_recv(),
-            Ok(ClientMessage::NpcRelocate { .. })
+            Ok(ClientMessage::PlayerFace { .. })
         ));
         assert!(matches!(
             rx.try_recv(),

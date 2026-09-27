@@ -1,6 +1,8 @@
 use onlinerpg_shared::pathfinding::{
-    find_and_smooth_path, PassabilityCache, PathResult, PathWaypoint,
+    find_and_smooth_path, is_cell_sealed, is_circle_blocked_on_floor, PassabilityCache, PathResult,
+    PathTermination, PathWaypoint,
 };
+use onlinerpg_shared::shortest_world_delta_x;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Semaphore;
@@ -8,6 +10,31 @@ use tokio::sync::Semaphore;
 const WORKERS: usize = 4;
 const QUEUED_SEARCHES: usize = 128;
 const QUEUE_TIMEOUT: Duration = Duration::from_millis(100);
+
+fn open_goal_near(
+    cache: &PassabilityCache,
+    start: &PathWaypoint,
+    goal: &PathWaypoint,
+) -> Option<(f32, f32)> {
+    if !is_cell_sealed(cache, goal.x, goal.z, goal.floor, None) {
+        return None;
+    }
+    let (cx, cz) = (goal.x.floor() + 0.5, goal.z.floor() + 0.5);
+    let distance = |(x, z): (f32, f32), point: &PathWaypoint| {
+        shortest_world_delta_x(x, point.x).powi(2) + (z - point.z).powi(2)
+    };
+    (-2..=2)
+        .flat_map(|dz| (-2..=2).map(move |dx| (cx + dx as f32, cz + dz as f32)))
+        .filter(|&(x, z)| {
+            !is_cell_sealed(cache, x, z, goal.floor, None)
+                && !is_circle_blocked_on_floor(cache, x, z, 0.31, goal.floor, None)
+        })
+        .min_by(|&a, &b| {
+            distance(a, goal)
+                .total_cmp(&distance(b, goal))
+                .then_with(|| distance(a, start).total_cmp(&distance(b, start)))
+        })
+}
 
 pub(super) struct PathSearchPool {
     workers: Arc<Semaphore>,
@@ -51,16 +78,23 @@ impl PathSearchPool {
         max_nodes: usize,
     ) -> Result<PathResult, SearchError> {
         self.run(move || {
-            find_and_smooth_path(
+            let adjusted = open_goal_near(&cache, &start, &goal);
+            let (x, z) = adjusted.unwrap_or((goal.x, goal.z));
+            let mut path = find_and_smooth_path(
                 start.x,
                 start.z,
                 start.floor,
-                goal.x,
-                goal.z,
+                x,
+                z,
                 goal.floor,
                 &cache,
                 max_nodes,
-            )
+            );
+            if adjusted.is_some() && path.found {
+                path.found = false;
+                path.termination = PathTermination::Unreachable;
+            }
+            path
         })
         .await
     }
@@ -89,7 +123,42 @@ impl PathSearchPool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use onlinerpg_shared::pathfinding::{build_furniture_passability, FurniturePiece};
     use std::sync::atomic::{AtomicBool, Ordering};
+
+    #[tokio::test]
+    async fn a_furniture_goal_finishes_beside_it_without_exhausting_the_search() {
+        let pool = PathSearchPool::default();
+        let furniture = build_furniture_passability(&[FurniturePiece {
+            cells: vec![(5, 5), (5, 6)],
+            floor_level: 0,
+            y_base: 0.0,
+            wall_height: onlinerpg_shared::furniture::FURNITURE_BLOCK_HEIGHT,
+        }])
+        .unwrap();
+        let cache = Arc::new(PassabilityCache::from([("furniture".into(), furniture)]));
+        let path = pool
+            .search(
+                Arc::clone(&cache),
+                PathWaypoint {
+                    x: 1.5,
+                    z: 5.5,
+                    floor: 0,
+                },
+                PathWaypoint {
+                    x: 5.5,
+                    z: 5.5,
+                    floor: 0,
+                },
+                100,
+            )
+            .await
+            .unwrap();
+        assert_eq!(path.termination, PathTermination::Unreachable);
+        let destination = path.waypoints.last().unwrap();
+        assert_eq!((destination.x, destination.z), (4.5, 5.5));
+        assert!(!path.found);
+    }
 
     #[tokio::test]
     async fn saturation_rejects_without_running_the_job() {

@@ -1,4 +1,4 @@
-use super::super::tests::{make_player, make_test_game_state};
+use super::super::tests::{make_flat_world_game_state, make_player, make_test_game_state};
 use super::*;
 use onlinerpg_shared::pathfinding::{RuntimeFloorGrid, RuntimePassability};
 
@@ -194,6 +194,59 @@ async fn unreachable_goal_approves_a_partial_route_without_claiming_arrival() {
         }
     }
     assert_eq!(terminal, Some(MoveStatus::Partial));
+}
+
+#[tokio::test]
+async fn a_bed_goal_stops_beside_the_bed_and_can_interact_without_relocation() {
+    let game = make_flat_world_game_state("goal_bed_approach");
+    let bed = onlinerpg_shared::furniture::FurniturePlacement {
+        id: 7,
+        type_id: "bed".into(),
+        x: 6.5,
+        y: 5.0,
+        z: 1.5,
+        rotation_deg: 90.0,
+        floor_level: 0,
+    };
+    game.sync_region_furniture(0, 0, std::slice::from_ref(&bed));
+    let mut player = make_player("bed_walker", 1.5, 1.5);
+    player.position.y = 5.0;
+    let id = player.id;
+    game.add_player(player).await;
+    let mut rx = game.register_connection_channel(&id).await;
+
+    game.request_move_goal(id, 1, bed.x, bed.z, false).await;
+    let ServerMessage::PlayerMovePath {
+        termination,
+        waypoints,
+        ..
+    } = next_path(&mut rx).await
+    else {
+        unreachable!()
+    };
+    assert_eq!(termination, PathTermination::Unreachable);
+    let destination = waypoints.last().unwrap().position;
+    assert_ne!((destination.x, destination.z), (bed.x, bed.z));
+    advance(&game, id, 10.0).await;
+    assert_eq!(game.players.read().await[&id].position, destination);
+    let mut completed = false;
+    while let Ok(bytes) = rx.try_recv() {
+        if let ServerMessage::PlayerMoveProgress {
+            position,
+            status: MoveStatus::Partial,
+            ..
+        } = onlinerpg_shared::deserialize_server_msg(&bytes).unwrap()
+        {
+            assert_eq!(position, destination);
+            completed = true;
+        }
+    }
+    assert!(completed);
+    game.set_player_interaction(&id, Some("bed".into()), Some(bed.id))
+        .await;
+    let player = game.players.read().await[&id].clone();
+    assert_eq!(player.object_id, Some(bed.id));
+    assert_eq!((player.position.x, player.position.z), (bed.x, bed.z));
 }
 
 #[tokio::test]
