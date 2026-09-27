@@ -26,7 +26,7 @@ pub struct WorldDropEntry {
 impl WorldDropEntry {
     /// This entry's chance for a loot source of `source_level`. A source with
     /// no level (chest, prop) always rolls the full chance.
-    fn chance_for(&self, source_level: Option<u8>) -> f32 {
+    pub fn chance_for(&self, source_level: Option<u8>) -> f32 {
         match (
             self.low_level_chance,
             self.low_level_max_level,
@@ -90,6 +90,10 @@ impl WorldDropDefs {
         Self {
             entries: Arc::new(entries),
         }
+    }
+
+    pub fn entry(&self, item_def_id: &str) -> Option<&WorldDropEntry> {
+        self.entries.iter().find(|e| e.id == item_def_id)
     }
 
     /// Roll every entry independently and return the item ids that dropped.

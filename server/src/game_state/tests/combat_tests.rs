@@ -920,6 +920,8 @@ async fn dagger_skill_first_hit_kill_reports_skipped_second_strike_without_dupli
             .count(),
         1
     );
+    let kills: u64 = game.pending_loot_tally().kills.values().sum();
+    assert_eq!(kills, 1);
 }
 
 #[tokio::test]

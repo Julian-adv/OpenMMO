@@ -12,6 +12,8 @@ mod gold_sinks;
 mod land;
 #[path = "auth_landscaping.rs"]
 mod landscaping;
+#[path = "auth_loot_tally.rs"]
+mod loot_tally;
 #[path = "auth_metrics.rs"]
 mod metrics;
 use crate::world_config::world_config;
@@ -694,6 +696,7 @@ impl AuthService {
         Self::ensure_gold_history_schema(&conn)?;
         Self::ensure_weapon_enchant_history_schema(&conn)?;
         Self::ensure_weapon_enchant_failures_schema(&conn)?;
+        Self::ensure_loot_tally_schema(&conn)?;
         Self::ensure_armor_enchant_history_schema(&conn)?;
         Self::ensure_land_history_schema(&conn)?;
 

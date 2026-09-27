@@ -1808,6 +1808,7 @@ impl super::GameState {
             let mut rng = rand::thread_rng();
             item_def_ids.extend(self.world_drop_defs.roll(&mut rng, source_level));
         }
+        self.record_item_drops(&item_def_ids, source_level.is_some());
         if !item_def_ids.is_empty() {
             info!(
                 "Bonus drops {:?} at ({:.1},{:.1}) {}",

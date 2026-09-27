@@ -955,6 +955,7 @@ impl super::GameState {
                     crate::dungeon_defs::place_label(&corpse_position, monster_floor_level),
                     dropped_weapon_item_def_id.as_deref().unwrap_or("none")
                 );
+                self.record_monster_kill(&monster_type, effective_level.unwrap_or(0));
                 self.publish_nearby(
                     &monster_position,
                     monster_floor_level,

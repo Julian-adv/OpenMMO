@@ -15,6 +15,10 @@ use tracing::warn;
 mod combat_audit;
 #[path = "metrics_heroic_tales.rs"]
 mod heroic_tales;
+#[path = "metrics_rare_drops.rs"]
+mod rare_drops;
+
+pub use rare_drops::LootTally;
 
 pub const SAMPLE_INTERVAL_SECONDS: i64 = 3600;
 pub const CONCURRENT_SAMPLE_INTERVAL_SECONDS: i64 = 60;
@@ -516,6 +520,7 @@ fn metrics_routes(game: Arc<GameState>, auth: Arc<AuthService>) -> Router {
             "/api/metrics/combat-audit-targets",
             get(combat_audit::targets),
         )
+        .route("/api/metrics/rare-drops", get(rare_drops::rare_drops))
         .with_state(MetricsState { game, auth })
 }
 

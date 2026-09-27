@@ -6,6 +6,11 @@ use crate::types::{ClientKind, PlayerId};
 use std::collections::HashMap;
 use tracing::warn;
 
+fn current_hour() -> i64 {
+    let now = unix_now();
+    now - now.rem_euclid(crate::metrics::SAMPLE_INTERVAL_SECONDS)
+}
+
 impl super::GameState {
     pub(crate) async fn flush_weapon_enchant_failures(&self, auth: &AuthService) {
         let failures = std::mem::take(&mut *self.pending_weapon_enchant_failures.write().await);
@@ -25,9 +30,71 @@ impl super::GameState {
         }
     }
 
+    pub(crate) fn pending_loot_tally(
+        &self,
+    ) -> std::sync::MutexGuard<'_, crate::metrics::LootTally> {
+        self.pending_loot_tally
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub(super) fn record_monster_kill(&self, monster_type: &str, level: u8) {
+        *self
+            .pending_loot_tally()
+            .kills
+            .entry((current_hour(), monster_type.to_owned(), level))
+            .or_default() += 1;
+    }
+
+    pub(super) fn record_item_drops(&self, item_def_ids: &[String], from_kill: bool) {
+        let hour = current_hour();
+        let mut tally = self.pending_loot_tally();
+        for id in item_def_ids {
+            *tally
+                .drops
+                .entry((hour, id.clone(), from_kill))
+                .or_default() += 1;
+        }
+    }
+
+    pub(crate) async fn flush_loot_tally(&self, auth: &AuthService) {
+        let tally = std::mem::take(&mut *self.pending_loot_tally());
+        if tally.is_empty() {
+            return;
+        }
+        let saved = tally.clone();
+        let auth = auth.clone();
+        if let Err(error) = super::auth_db(move || auth.record_loot_tally(&saved)).await {
+            warn!("Loot tally save failed: {error}");
+            self.pending_loot_tally().merge(tally);
+        }
+    }
+
+    pub(crate) async fn ground_item_quantities(
+        &self,
+        item_def_ids: &[&str],
+    ) -> HashMap<String, u64> {
+        let mut counts = HashMap::new();
+        for ground in self.ground_items.read().await.values() {
+            if item_def_ids.contains(&ground.item.item_def_id.as_str()) {
+                *counts.entry(ground.item.item_def_id.clone()).or_default() +=
+                    u64::from(ground.item.quantity);
+            }
+        }
+        counts
+    }
+
+    pub(crate) fn loot_defs(
+        &self,
+    ) -> (
+        &crate::world_drop_defs::WorldDropDefs,
+        &crate::monster_defs::MonsterDefs,
+    ) {
+        (&self.world_drop_defs, &self.monster_defs)
+    }
+
     pub(super) async fn record_gold_sink(&self, sink: GoldSink, quantity: u32, gold: i64) {
-        let now = unix_now();
-        let timestamp = now - now.rem_euclid(crate::metrics::SAMPLE_INTERVAL_SECONDS);
+        let timestamp = current_hour();
         let mut pending = self.pending_gold_sinks.write().await;
         let record = pending
             .entry((timestamp, sink.clone()))
@@ -87,8 +154,7 @@ impl super::GameState {
     }
 
     pub(super) async fn record_gold_source(&self, source: GoldSource, quantity: u32, gold: i64) {
-        let now = unix_now();
-        let timestamp = now - now.rem_euclid(crate::metrics::SAMPLE_INTERVAL_SECONDS);
+        let timestamp = current_hour();
         let mut pending = self.pending_gold_sources.write().await;
         let record = pending
             .entry((timestamp, source.clone()))
