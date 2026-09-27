@@ -268,6 +268,7 @@ function mapBuyback(
         item_def_id: string
         enchant: number
         price: number
+        quantity: number
       }[]
     | undefined
 ): BuybackEntry[] {
@@ -276,6 +277,7 @@ function mapBuyback(
     itemDefId: e.item_def_id,
     enchant: e.enchant,
     price: Number(e.price),
+    quantity: e.quantity,
   }))
 }
 

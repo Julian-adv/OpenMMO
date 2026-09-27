@@ -1,8 +1,8 @@
 import estateStorageJson from '../../../../data/estate_storage.json'
-import catalog from '../../../public/models/objects/catalog.json'
 import footprints from '../../../../data/furniture_footprints.json'
 import type { EstateFurniturePlacementDefinition } from '../terrain/estatePlacement'
 import { getObjectModelPath } from '../utils/modelPaths'
+import { getObjectDef } from './objectCatalog'
 
 interface EstateStorageData {
   id: string
@@ -37,8 +37,7 @@ export const estateStorageDefs = new Map<string, EstateStorageDefinition>(
         modelId: data.modelId,
         capacityKg: data.capacityKg,
         modelUrl: getObjectModelPath(
-          catalog.find((def) => def.id === data.modelId)?.model ??
-            `objects/${data.modelId}.glb`
+          getObjectDef(data.modelId)?.model ?? `objects/${data.modelId}.glb`
         ),
         maxHeightOffset: data.maxHeightOffset,
         textLabel: data.textLabel,

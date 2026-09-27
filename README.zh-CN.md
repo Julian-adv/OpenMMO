@@ -212,7 +212,7 @@ npm run dev -- --port 10005
 
 请在生产主机上运行 `tools/deploy-prod.sh` 进行部署。该脚本会拉取 master、构建两个二进制文件和客户端包、发布静态文件，然后重启两个单元。
 
-没有主机初始化脚本。生产环境的 nginx 是手工维护的 `/etc/nginx/sites-available/openmmo`，需与作为缓存规则参考的 `docker/nginx.conf.template` 保持一致。尤其是 `/models/` 必须以 `Cache-Control: no-cache` 提供 — 对象目录和 GLB 按固定路径获取，基于时间的过期会让过期的 `catalog.json` 无声地隐藏新增家具。
+没有主机初始化脚本。生产环境的 nginx 是手工维护的 `/etc/nginx/sites-available/openmmo`，需与作为缓存规则参考的 `docker/nginx.conf.template` 保持一致。通过 `/models/` 下固定路径获取的模型必须以 `Cache-Control: no-cache` 提供。对象目录的源文件位于 `data/object_catalog.json`，会被打包进客户端和 Rust 二进制文件。
 
 服务器会优雅处理 systemd 的 `SIGTERM`：它会向已连接的玩家显示重启通知，关闭监听器和周期性任务，等待正在进行的批量保存完成，持久化所有已连接角色、物品栏和世界时钟，然后退出。`systemctl restart` 会等待该排空过程完成，再启动新的二进制文件。
 

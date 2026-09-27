@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { getObjectDef } from '../../data/objectCatalog'
   import { T, useTask, useThrelte } from '@threlte/core'
   import { onMount, untrack } from 'svelte'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
@@ -7,7 +8,6 @@
   import GameSceneEstateFurniturePlacementLayer from './GameSceneEstateFurniturePlacementLayer.svelte'
   import {
     loadEstateFurnitureModel,
-    furnitureModelDefinition,
     estateFurnitureInteractionData,
   } from '../../utils/estateFurnitureModels'
   import { buildShopSignText, getShopSignStyle } from '../../utils/shop-sign'
@@ -157,7 +157,7 @@
     const moving = chest.id === movingFurnitureId
     const visual = source.scene.clone(true)
     const definition = getEstateStorageDef(chest.item_def_id)
-    const model = furnitureModelDefinition(definition?.modelId)
+    const model = getObjectDef(definition?.modelId)
     if (chest.text && model?.procedural === 'shopSign') {
       const style = getShopSignStyle(model.shopSignStyle)
       const key = `${chest.item_def_id}:${chest.text}`

@@ -352,7 +352,7 @@ ssh pc5090 "cd ~/work/OnlineRPG && git diff --stat doc/assets/"          # 4) �
 
 `items.csv`에 아직 안 붙였으면 끝에 `아직 items.csv 미연결 **[미사용]**`을 덧붙인다. 쓰이지 않게 된 애셋은 **[미사용]** 표기.
 
-게임에 실제로 등장시키려면 별도 작업이 필요하다 — `data-src/items.csv` 항목, 아이콘 경로, 필요하면 `client/public/models/objects/catalog.json` 등록.
+게임에 실제로 등장시키려면 별도 작업이 필요하다 — `data-src/items.csv` 항목, 아이콘 경로, 필요하면 `data/object_catalog.json` 등록.
 
 ---
 

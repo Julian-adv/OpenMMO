@@ -12,7 +12,7 @@ describe('asset service worker', () => {
         '/models/characters/knight.glb':
           '/models/characters/knight.92dadd6c.glb',
         '/models/duplicate.glb': '/models/characters/knight.92dadd6c.glb',
-        '/models/objects/catalog.json': '/models/objects/catalog.12345678.json',
+        '/models/metadata.json': '/models/metadata.12345678.json',
         '/textures/stone.png': '/textures/stone.12345678.png',
         '/models/unhashed.glb': '/models/unhashed.glb',
         '/textures/stone.glb': '/textures/stone.12345678.glb',

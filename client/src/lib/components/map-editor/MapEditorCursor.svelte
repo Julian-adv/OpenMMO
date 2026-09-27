@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { getObjectDef } from '../../data/objectCatalog'
   import * as THREE from 'three'
   import { snapBrushCoordinate } from '../../terrain/landscaping'
   import { onMount } from 'svelte'
@@ -128,7 +129,7 @@
 
   function snapXZ(x: number, z: number): { x: number; z: number } {
     if (!currentObjectType) return { x, z }
-    const def = objectManager.getCatalogEntry(currentObjectType)
+    const def = getObjectDef(currentObjectType)
     if (def?.gridAlign) {
       return { x: Math.round(x), z: Math.round(z) }
     }
@@ -618,7 +619,7 @@
     terrainY: number,
     floor: number
   ): number {
-    const def = objectManager.getCatalogEntry(objectType)
+    const def = getObjectDef(objectType)
     return def?.defaultY ?? terrainY + floorYBase(floor, DEFAULT_WALL_HEIGHT)
   }
 
@@ -666,7 +667,7 @@
       for (const p of data.placements) {
         // Skip orphans whose type was removed from the catalog — they have no
         // visible mesh, so letting them win the click intercepts selection.
-        const def = objectManager.getCatalogEntry(p.type)
+        const def = getObjectDef(p.type)
         if (!def) continue
         const dx = worldX - p.x
         const dz = worldZ - p.z

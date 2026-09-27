@@ -10,11 +10,8 @@ FROM rust:1-bookworm AS builder
 WORKDIR /build
 
 COPY Cargo.toml Cargo.lock clippy.toml ./
-# shared/ embeds tracked JSON from data/ and the object catalog with
-# include_str!. The catalog is a small tracked file, so it is copied alone
-# rather than dragging all of client/public into the image.
+# shared/ embeds tracked JSON from data/.
 COPY data/ data/
-COPY client/public/models/objects/catalog.json client/public/models/objects/
 COPY shared/ shared/
 COPY terrain/ terrain/
 COPY agent-client/ agent-client/

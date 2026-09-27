@@ -198,7 +198,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v107: unify dropping bag items and equipped gear under DropItems.
 /// v108: unify teleport scroll use under UseItem.
 /// v109: unify Double Slash requests under UseAbility.
-pub const PROTOCOL_VERSION: u32 = 109;
+/// v110: stack stackable buyback units into one BuybackEntry with a quantity.
+pub const PROTOCOL_VERSION: u32 = 110;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

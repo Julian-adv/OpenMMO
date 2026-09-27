@@ -18,7 +18,7 @@ try {
   const { buildShopSignBoard, getShopSignStyle, SHOP_SIGN_DEFAULTS } =
     await server.ssrLoadModule('/src/lib/utils/shop-sign.ts')
   const catalog = JSON.parse(await readFile(
-    join(root, 'client/public/models/objects/catalog.json'), 'utf8'
+    join(root, 'data/object_catalog.json'), 'utf8'
   ))
   for (const definition of catalog.filter(entry => entry.procedural === 'shopSign')) {
     const params = { ...SHOP_SIGN_DEFAULTS, ...getShopSignStyle(definition.shopSignStyle).board }

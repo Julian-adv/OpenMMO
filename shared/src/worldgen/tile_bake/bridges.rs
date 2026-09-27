@@ -57,9 +57,7 @@ const BRIDGE_WIDE_RIBBON_M: f32 = 12.0;
 /// editor's `FLATTEN_BLEND_RADIUS = 2`.
 const BRIDGE_FLATTEN_BLEND_M: f32 = 2.0;
 
-/// Catalog data for one bridge model. Mirrors the bridge entries in
-/// `client/public/models/objects/catalog.json`. Loaded once by the bake
-/// driver and cloned into per-tile flatten lists.
+/// Bridge metadata from `data/object_catalog.json`.
 #[derive(Debug, Clone)]
 pub struct BridgeModel {
     pub id: String,

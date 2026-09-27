@@ -44,7 +44,7 @@ async fn zero_quantity_trade_batches_still_validate_the_trader() {
 // all-or-nothing round trip instead of N single-unit calls) ---
 
 #[tokio::test]
-async fn sell_items_batch_sells_partial_quantity_and_records_one_buyback_per_unit() {
+async fn sell_items_batch_sells_partial_quantity() {
     let game_state = make_test_game_state("batch_sell_partial");
     game_state
         .add_player(make_npc("npc_rica", "Rica", 0.0, 0.0))
@@ -600,7 +600,7 @@ async fn buyback_items_batch_rejoins_one_stack() {
             .map(|s| s.entry.entry_id)
             .collect()
     };
-    assert_eq!(entry_ids.len(), 2, "one buyback entry per sold unit");
+    assert_eq!(entry_ids.len(), 1, "sold units of one stack share an entry");
 
     game_state
         .buyback_items(&pid("buyer"), &pid("npc_rica"), entry_ids)
@@ -608,7 +608,7 @@ async fn buyback_items_batch_rejoins_one_stack() {
 
     let inventories = game_state.inventories.read().await;
     let bag = &inventories[&pid("buyer")].bag;
-    assert_eq!(bag.len(), 1, "both repurchased units rejoin the one stack");
+    assert_eq!(bag.len(), 1, "the repurchased units rejoin the one stack");
     assert_eq!(bag[0].instance_id, 7);
     assert_eq!(bag[0].quantity, 3);
 }
@@ -720,21 +720,59 @@ async fn buy_items_batch_redeems_each_deal_once() {
         .is_empty());
 }
 
+#[tokio::test]
+async fn sell_items_batch_records_a_stackable_line_as_one_entry() {
+    let game_state = make_test_game_state("batch_buyback_stack");
+    let (_buyer_rx, _npc_rx) = setup_haggle(&game_state, 10, 0).await;
+    game_state.inventories.write().await.insert(
+        pid("buyer"),
+        PlayerInventory {
+            bag: vec![bag_item(7, "apple", 500), bag_item(8, "dagger", 2)],
+            ..Default::default()
+        },
+    );
+
+    game_state
+        .sell_items(
+            &pid("buyer"),
+            &pid("npc_rica"),
+            vec![
+                BagLineItem {
+                    instance_id: 7,
+                    qty: 500,
+                },
+                BagLineItem {
+                    instance_id: 8,
+                    qty: 2,
+                },
+            ],
+        )
+        .await;
+
+    let buybacks = game_state.buybacks.read().await;
+    let quantities: Vec<(&str, u32)> = buybacks[&(1, "Rica".to_string())]
+        .iter()
+        .map(|s| (s.entry.item_def_id.as_str(), s.entry.quantity))
+        .collect();
+    assert_eq!(quantities, [("apple", 500), ("dagger", 1), ("dagger", 1)]);
+}
+
 /// Recording a whole batch at once must trim to `BUYBACK_CAP` exactly as the
 /// per-unit path did: oldest dropped first, order preserved.
 #[tokio::test]
 async fn sell_items_batch_keeps_only_the_newest_buyback_entries() {
+    const DAGGERS: u32 = trading::BUYBACK_CAP as u32 - 4;
     let game_state = make_test_game_state("batch_buyback_cap");
     let (_buyer_rx, _npc_rx) = setup_haggle(&game_state, 10, 0).await;
     game_state.inventories.write().await.insert(
         pid("buyer"),
         PlayerInventory {
-            bag: vec![bag_item(7, "iron_sword", 8), bag_item(8, "dagger", 6)],
+            bag: vec![bag_item(7, "iron_sword", 8), bag_item(8, "dagger", DAGGERS)],
             ..Default::default()
         },
     );
 
-    // 14 units in one call, cap 10: the 4 oldest (swords) fall off.
+    // Cap + 4 units in one call: the 4 oldest (swords) fall off.
     game_state
         .sell_items(
             &pid("buyer"),
@@ -746,7 +784,7 @@ async fn sell_items_batch_keeps_only_the_newest_buyback_entries() {
                 },
                 BagLineItem {
                     instance_id: 8,
-                    qty: 6,
+                    qty: DAGGERS,
                 },
             ],
         )
@@ -754,7 +792,7 @@ async fn sell_items_batch_keeps_only_the_newest_buyback_entries() {
 
     let buybacks = game_state.buybacks.read().await;
     let list = &buybacks[&(1, "Rica".to_string())];
-    assert_eq!(list.len(), 10);
+    assert_eq!(list.len(), trading::BUYBACK_CAP);
     assert_eq!(
         list.iter()
             .filter(|s| s.entry.item_def_id == "iron_sword")
@@ -766,7 +804,7 @@ async fn sell_items_batch_keeps_only_the_newest_buyback_entries() {
         list.iter()
             .filter(|s| s.entry.item_def_id == "dagger")
             .count(),
-        6
+        DAGGERS as usize
     );
     let ids: Vec<u64> = list.iter().map(|s| s.entry.entry_id).collect();
     assert!(ids.windows(2).all(|w| w[0] < w[1]), "kept in sale order");

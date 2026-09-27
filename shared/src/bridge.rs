@@ -6,7 +6,7 @@ use crate::furniture::FurniturePlacement;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-static CATALOG_JSON: &str = include_str!("../../client/public/models/objects/catalog.json");
+static CATALOG_JSON: &str = include_str!("../../data/object_catalog.json");
 
 /// A mover this close to a deck's height counts as on it
 /// (`bridgeManager.DECK_Y_TOLERANCE`).
@@ -82,7 +82,7 @@ fn decks() -> &'static HashMap<String, DeckRect> {
     static TABLE: OnceLock<HashMap<String, DeckRect>> = OnceLock::new();
     TABLE.get_or_init(|| {
         let entries: Vec<CatalogEntry> =
-            serde_json::from_str(CATALOG_JSON).expect("objects/catalog.json is malformed");
+            serde_json::from_str(CATALOG_JSON).expect("data/object_catalog.json is malformed");
         entries
             .into_iter()
             .filter_map(|e| Some((e.id, e.bridge?.derive())))

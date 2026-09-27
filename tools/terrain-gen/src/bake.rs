@@ -529,10 +529,7 @@ fn build_worldgen_json(
     })
 }
 
-/// Embedded copy of `client/public/models/objects/catalog.json` so the bake
-/// runs without a runtime config path. Compiled-in rather than read from
-/// disk because the bake binary runs from arbitrary working directories.
-const CATALOG_JSON: &str = include_str!("../../../client/public/models/objects/catalog.json");
+const CATALOG_JSON: &str = include_str!("../../../data/object_catalog.json");
 
 fn load_bridge_catalog() -> Option<bridges::BridgeCatalog> {
     let entries: serde_json::Value = serde_json::from_str(CATALOG_JSON).ok()?;

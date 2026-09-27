@@ -6,10 +6,7 @@ const toolsDir = path.dirname(fileURLToPath(import.meta.url))
 const sourceDir = path.join(toolsDir, '..', 'data-src')
 const dataDir = path.join(toolsDir, '..', 'data')
 
-/**
- * Convert a single CSV file to a JSON file keyed by the `id` column.
- * Returns the number of entries converted.
- */
+/** Convert CSV rows to JSON keyed by id. */
 export function convertCsvFile(csvFileName) {
   const csvPath = path.join(sourceDir, csvFileName)
   const jsonFileName = csvFileName.replace(/\.csv$/, '.json')

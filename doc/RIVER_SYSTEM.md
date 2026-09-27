@@ -349,7 +349,7 @@ cell 한 쌍이 곧 다리 후보다. 다음 필터를 차례로 통과해야 �
 
 ### 7.2 모델 선택 (`BridgeCatalog`)
 
-`catalog.json` 의 `kind: "bridge"` 엔트리 중 두 모델을 베이크가 사용:
+`data/object_catalog.json` 의 `kind: "bridge"` 엔트리 중 두 모델을 베이크가 사용:
 
 | 슬롯 | 모델 ID | 임계값 |
 |---|---|---|

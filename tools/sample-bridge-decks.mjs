@@ -5,7 +5,7 @@ import { MeshoptDecoder } from '../client/node_modules/three/examples/jsm/libs/m
 import { readFile, writeFile } from 'fs/promises'
 
 const SAMPLES = 11 // t=0, 0.1, …, 1.0
-const CATALOG_PATH = 'client/public/models/objects/catalog.json'
+const CATALOG_PATH = 'data/object_catalog.json'
 const MODELS_DIR = 'client/public/models'
 
 const io = new NodeIO()

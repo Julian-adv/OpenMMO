@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { getObjectDef } from '../../data/objectCatalog'
   // Build only the current floor; adjacent floors share matching stair geometry.
   import { T } from '@threlte/core'
   import * as THREE from 'three'
@@ -18,7 +19,6 @@
     TREASURE_CHEST_PROP_ID,
     type DungeonFloorLayout,
   } from '../../managers/dungeonManager'
-  import { objectManager } from '../../managers/objectManager'
   import { loadGLB } from '../../utils/gltfCache'
   import { getObjectModelPath } from '../../utils/modelPaths'
   import { rotatedRectAabb } from '../../utils/objectFootprint'
@@ -313,7 +313,7 @@
   async function loadPropTemplate(
     catalogId: string
   ): Promise<THREE.Object3D | null> {
-    const def = objectManager.getCatalogEntry(catalogId)
+    const def = getObjectDef(catalogId)
     if (!def?.model) return null
     try {
       const gltf = await loadGLB(getObjectModelPath(def.model))
@@ -623,8 +623,6 @@
   ) {
     const specs = layout.props ?? []
     if (specs.length === 0 && !layout.chest) return
-    await objectManager.fetchCatalog()
-    if (key !== builtKey) return
 
     const group = new THREE.Group()
     group.position.set(

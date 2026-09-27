@@ -115,11 +115,8 @@ async fn gold_sinks_separate_buybacks_and_ignore_resident_transfers() {
         .iter()
         .map(|stored| stored.entry.entry_id)
         .collect();
-    assert_eq!(entries.len(), 3);
+    assert_eq!(entries.len(), 1);
     game.buyback_item(&buyer, &merchant, entries[0]).await;
-    game.buyback_items(&buyer, &merchant, entries[1..].to_vec())
-        .await;
-    game.buyback_items(&buyer, &merchant, entries).await;
     assert_eq!(game.get_player_gold(&buyer).await, 0);
     assert_gold_consumption(
         &game,

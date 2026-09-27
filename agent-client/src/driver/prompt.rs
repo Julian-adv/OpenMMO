@@ -260,10 +260,14 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
                 .iter()
                 .take(6)
                 .map(|e| {
-                    let price = crate::shop_info::format_price(e.price);
-                    match e.enchant {
-                        0 => format!("{} @{price}", e.item_def_id),
-                        n => format!("{} +{n} @{price}", e.item_def_id),
+                    let price = crate::shop_info::format_price(e.total_price());
+                    let name = match e.enchant {
+                        0 => e.item_def_id.clone(),
+                        n => format!("{} +{n}", e.item_def_id),
+                    };
+                    match e.quantity {
+                        1 => format!("{name} @{price}"),
+                        n => format!("{name} x{n} (all together) @{price}"),
                     }
                 })
                 .collect();

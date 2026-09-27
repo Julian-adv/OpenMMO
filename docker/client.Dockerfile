@@ -23,7 +23,7 @@ RUN --mount=type=cache,target=/root/.cargo/registry \
 WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY assets.lock ./
-# shared/ embeds three tracked JSON files from data/ with include_str!.
+# shared/ embeds tracked JSON from data/.
 COPY data/ data/
 COPY shared/ shared/
 COPY terrain/ terrain/

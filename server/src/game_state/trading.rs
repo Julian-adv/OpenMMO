@@ -18,11 +18,11 @@ use super::StoredBuyback;
 /// Maximum distance between player and trader for any shop interaction.
 pub(super) const MAX_TRADE_DISTANCE: f32 = 6.0;
 
-/// Most recent sold units kept per (player, merchant) for buyback; older
-/// entries are dropped oldest-first.
-const BUYBACK_CAP: usize = 10;
+/// Most recent buyback entries kept per (player, merchant); older entries are
+/// dropped oldest-first.
+pub(super) const BUYBACK_CAP: usize = 50;
 
-/// How long a sold unit stays repurchasable. Long enough to cover finding out
+/// How long a buyback entry stays repurchasable. Long enough to cover finding out
 /// about a mis-sell later; a restart clears the map anyway, so this only binds
 /// on a long uptime, where it is what keeps the map from growing forever.
 const BUYBACK_TTL_MS: u64 = 24 * 60 * 60 * 1000;
@@ -99,6 +99,14 @@ impl TraderDef {
                 }
             }
         }
+    }
+}
+
+fn buyback_insert(stackable: bool, entry: &BuybackEntry) -> BagInsert<'_> {
+    BagInsert {
+        quantity: entry.quantity,
+        ..BagInsert::one(stackable, &entry.item_def_id, entry.enchant, entry.entry_id)
+            .with_cape_skin(entry.cape_color.clone(), entry.cape_texture.clone())
     }
 }
 
@@ -1445,6 +1453,7 @@ impl super::GameState {
                         cape_color: sold_color.clone(),
                         cape_texture: sold_texture.clone(),
                         price: payout,
+                        quantity: 1,
                     }],
                 )
                 .await;
@@ -1793,18 +1802,16 @@ impl super::GameState {
         let mut recorded = Vec::new();
         if !is_resident {
             for plan in &plans {
-                let unit_price = sell_payout(plan.base_price, rate, 0, plan.sell_cap);
-                for _ in 0..plan.qty {
-                    recorded.push(BuybackEntry {
-                        entry_id: next_unit_id,
-                        item_def_id: plan.item_def_id.clone(),
-                        enchant: plan.enchant,
-                        cape_color: plan.cape_color.clone(),
-                        cape_texture: plan.cape_texture.clone(),
-                        price: unit_price,
-                    });
-                    next_unit_id += 1;
-                }
+                recorded.push(BuybackEntry {
+                    entry_id: next_unit_id,
+                    item_def_id: plan.item_def_id.clone(),
+                    enchant: plan.enchant,
+                    cape_color: plan.cape_color.clone(),
+                    cape_texture: plan.cape_texture.clone(),
+                    price: sell_payout(plan.base_price, rate, 0, plan.sell_cap),
+                    quantity: plan.qty,
+                });
+                next_unit_id += u64::from(plan.qty);
             }
         }
         if !recorded.is_empty() {
@@ -1911,7 +1918,10 @@ impl super::GameState {
     }
 
     /// Append sold units to the character's buyback list with this merchant,
-    /// dropping the oldest entries past `BUYBACK_CAP`. Returns the new list.
+    /// dropping the oldest entries past `BUYBACK_CAP`. Stackable units merge
+    /// into the newest entry when it holds the same units, which keeps a run of
+    /// single sales in one slot; non-stackable units get an entry each, using
+    /// the ids after `entry_id`. Returns the new list.
     /// One lock acquisition per sale, not per unit.
     async fn record_buybacks(
         &self,
@@ -1931,10 +1941,30 @@ impl super::GameState {
         // Not the tick's job duplicated: expired entries left in place would
         // eat cap slots and evict live ones below.
         list.retain(|stored| stored.is_live(now_ms));
-        list.extend(entries.into_iter().map(|entry| StoredBuyback {
-            entry,
-            expires_at_ms: now_ms + BUYBACK_TTL_MS,
-        }));
+        let expires_at_ms = now_ms + BUYBACK_TTL_MS;
+        for entry in entries {
+            if !self.item_defs.stackable(&entry.item_def_id) {
+                list.extend((0..u64::from(entry.quantity)).map(|offset| StoredBuyback {
+                    entry: BuybackEntry {
+                        entry_id: entry.entry_id + offset,
+                        quantity: 1,
+                        ..entry.clone()
+                    },
+                    expires_at_ms,
+                }));
+                continue;
+            }
+            match list.last_mut() {
+                Some(last) if last.entry.same_units(&entry) => {
+                    last.entry.quantity += entry.quantity;
+                    last.expires_at_ms = expires_at_ms;
+                }
+                _ => list.push(StoredBuyback {
+                    entry,
+                    expires_at_ms,
+                }),
+            }
+        }
         if list.len() > BUYBACK_CAP {
             let excess = list.len() - BUYBACK_CAP;
             list.drain(..excess);
@@ -1942,7 +1972,7 @@ impl super::GameState {
         live_entries(list, now_ms)
     }
 
-    /// Repurchase a unit previously sold to a merchant, at the exact payout
+    /// Repurchase one entry previously sold to a merchant, at the exact payout
     /// the player received — the round trip is gold-neutral, so no money
     /// pump is possible in either direction. Entries are scoped to the
     /// selling character, live in memory only, and expire after
@@ -1953,158 +1983,8 @@ impl super::GameState {
         npc_player_id: &PlayerId,
         entry_id: u64,
     ) {
-        let def = match self.validate_trader(player_id, npc_player_id).await {
-            Ok(def) => def,
-            Err(reason) => return self.send_trade_error(player_id, reason).await,
-        };
-        // Residents keep bought units in their real inventory, already
-        // repurchasable through `stock`.
-        let TraderDef::Merchant(def) = def else {
-            return self
-                .send_trade_error(player_id, "They have nothing to buy back")
-                .await;
-        };
-        let npc_name = def.npc_name.clone();
-        let Some(char_id) = self.character_id_of(player_id).await else {
-            return;
-        };
-
-        let now_ms = Self::now_ms();
-        let entry = {
-            let buybacks = self.buybacks.read().await;
-            buybacks
-                .get(&(char_id, npc_name.clone()))
-                .and_then(|list| {
-                    list.iter()
-                        .find(|s| s.entry.entry_id == entry_id && s.is_live(now_ms))
-                })
-                .map(|stored| stored.entry.clone())
-        };
-        let Some(entry) = entry else {
-            return self
-                .send_trade_error(
-                    player_id,
-                    localized("server.itemUnavailable", "That item is no longer available"),
-                )
-                .await;
-        };
-
-        let max_weight = self.max_carry_weight(player_id).await;
-        let armor_mult = self.armor_weight_mult(player_id).await;
-        let item_weight = self.item_defs.weight_with(&entry.item_def_id, armor_mult);
-
-        let (snapshot, buyback) = {
-            let mut gold_map = self.player_gold.write().await;
-            let Some(gold) = gold_map.get(player_id).copied() else {
-                drop(gold_map);
-                return;
-            };
-            if gold < entry.price {
-                drop(gold_map);
-                return self
-                    .send_trade_error(
-                        player_id,
-                        localized("server.insufficientGold", "Not enough gold"),
-                    )
-                    .await;
-            }
-
-            let mut inventories = self.inventories.write().await;
-            if inventories.get(player_id).is_none() {
-                drop(inventories);
-                drop(gold_map);
-                return;
-            }
-            if self.calc_total_weight(&inventories[player_id], armor_mult) + item_weight
-                > max_weight
-            {
-                drop(inventories);
-                drop(gold_map);
-                return self
-                    .send_trade_error(
-                        player_id,
-                        localized("server.tooHeavy", "Too heavy to carry"),
-                    )
-                    .await;
-            }
-
-            // Consume the entry under the same critical section as the gold
-            // deduction so a concurrent request cannot restore it twice.
-            let mut buybacks = self.buybacks.write().await;
-            let taken = buybacks
-                .get_mut(&(char_id, npc_name.clone()))
-                .and_then(|list| {
-                    let idx = list
-                        .iter()
-                        .position(|s| s.entry.entry_id == entry_id && s.is_live(now_ms))?;
-                    list.remove(idx);
-                    Some(live_entries(list, now_ms))
-                });
-            let Some(buyback) = taken else {
-                drop(buybacks);
-                drop(inventories);
-                drop(gold_map);
-                return self
-                    .send_trade_error(
-                        player_id,
-                        localized("server.itemUnavailable", "That item is no longer available"),
-                    )
-                    .await;
-            };
-
-            let inv = inventories.get_mut(player_id).expect("checked above");
-            let stackable = self.item_defs.stackable(&entry.item_def_id);
-            stack_into_bag(
-                &mut inv.bag,
-                BagInsert::one(stackable, &entry.item_def_id, entry.enchant, entry.entry_id)
-                    .with_cape_skin(entry.cape_color.clone(), entry.cape_texture.clone()),
-            );
-            let snapshot = inv.clone();
-            *gold_map.get_mut(player_id).expect("checked above") -= entry.price;
-            (snapshot, buyback)
-        };
-
-        let player_name = self.player_name_of(player_id).await;
-        info!(
-            "{player_name} bought back {} from {npc_name} for {}",
-            entry.item_def_id, entry.price
-        );
-        self.record_gold_sink(
-            crate::metrics::GoldSink::ItemBuyback {
-                item_def_id: entry.item_def_id.clone(),
-            },
-            1,
-            entry.price,
-        )
-        .await;
-        self.mark_dirty(player_id).await;
-        self.mark_inventory_dirty(player_id).await;
-        self.send_direct_message(
-            player_id,
-            ServerMessage::InventoryUpdated {
-                inventory: snapshot,
-            },
-        )
-        .await;
-        self.send_gold_update(player_id).await;
-        self.send_direct_message(
-            player_id,
-            ServerMessage::BuybackUpdated {
-                merchant_player_id: *npc_player_id,
-                buyback,
-            },
-        )
-        .await;
-        let npc_gold = self.get_player_gold(npc_player_id).await;
-        self.send_trade_notice(
-            npc_player_id,
-            player_name,
-            &entry.item_def_id,
-            DealKind::Buy,
-            entry.price,
-            npc_gold,
-        )
-        .await;
+        self.buyback_items(player_id, npc_player_id, vec![entry_id])
+            .await;
     }
 
     /// Repurchase multiple buyback entries in one all-or-nothing transaction:
@@ -2130,6 +2010,8 @@ impl super::GameState {
             Ok(def) => def,
             Err(reason) => return self.send_trade_error(player_id, reason).await,
         };
+        // Residents keep bought units in their real inventory, already
+        // repurchasable through `stock`.
         let TraderDef::Merchant(def) = def else {
             return self
                 .send_trade_error(player_id, "They have nothing to buy back")
@@ -2170,12 +2052,12 @@ impl super::GameState {
             resolved
         };
 
-        let total_price: i64 = entries.iter().map(|e| e.price).sum();
+        let total_price: i64 = entries.iter().map(BuybackEntry::total_price).sum();
         let max_weight = self.max_carry_weight(player_id).await;
         let armor_mult = self.armor_weight_mult(player_id).await;
         let added_weight: f32 = entries
             .iter()
-            .map(|e| self.item_defs.weight_with(&e.item_def_id, armor_mult))
+            .map(|e| self.item_defs.weight_with(&e.item_def_id, armor_mult) * e.quantity as f32)
             .sum();
 
         let (snapshot, buyback) = {
@@ -2255,11 +2137,7 @@ impl super::GameState {
             let inv = inventories.get_mut(player_id).expect("checked above");
             for entry in &entries {
                 let stackable = self.item_defs.stackable(&entry.item_def_id);
-                stack_into_bag(
-                    &mut inv.bag,
-                    BagInsert::one(stackable, &entry.item_def_id, entry.enchant, entry.entry_id)
-                        .with_cape_skin(entry.cape_color.clone(), entry.cape_texture.clone()),
-                );
+                stack_into_bag(&mut inv.bag, buyback_insert(stackable, entry));
             }
             let snapshot = inv.clone();
             *gold_map.get_mut(player_id).expect("checked above") -= total_price;
@@ -2269,15 +2147,17 @@ impl super::GameState {
         let player_name = self.player_name_of(player_id).await;
         for entry in &entries {
             info!(
-                "{player_name} bought back {} from {npc_name} for {}",
-                entry.item_def_id, entry.price
+                "{player_name} bought back {}x{} from {npc_name} for {}",
+                entry.quantity,
+                entry.item_def_id,
+                entry.total_price()
             );
             self.record_gold_sink(
                 crate::metrics::GoldSink::ItemBuyback {
                     item_def_id: entry.item_def_id.clone(),
                 },
-                1,
-                entry.price,
+                entry.quantity,
+                entry.total_price(),
             )
             .await;
         }
@@ -2306,7 +2186,7 @@ impl super::GameState {
                 player_name.clone(),
                 &entry.item_def_id,
                 DealKind::Buy,
-                entry.price,
+                entry.total_price(),
                 npc_gold,
             )
             .await;

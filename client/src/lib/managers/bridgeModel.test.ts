@@ -3,16 +3,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import { createGLTFLoader } from '../utils/gltfCache'
 import { bridgeManager } from './bridgeManager'
-import type { ObjectDef, ObjectPlacement } from '../stores/editorStore'
+import type { ObjectPlacement } from '../stores/editorStore'
+import { getObjectDef } from '../data/objectCatalog'
 
 const modelId = 'bridge_wood_long'
-const catalog: ObjectDef[] = JSON.parse(
-  readFileSync(
-    new URL('../../../public/models/objects/catalog.json', import.meta.url),
-    'utf8'
-  )
-)
-const definition = catalog.find((entry) => entry.id === modelId)!
+const definition = getObjectDef(modelId)!
 let scene: THREE.Group
 
 beforeAll(async () => {

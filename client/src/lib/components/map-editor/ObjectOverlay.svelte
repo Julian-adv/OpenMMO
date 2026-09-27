@@ -5,7 +5,6 @@
   import {
     editorTool,
     currentObjectData,
-    objectCatalog,
     selectedObjectPlacementId,
     objectPreviewPos,
     objectRotation,
@@ -23,6 +22,7 @@
   import { tileToRegion } from '../../terrain/terrain-constants'
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
   import { objectManager } from '../../managers/objectManager'
+  import { objectDefsById } from '../../data/objectCatalog'
   import { worldView } from '../../network/worldView'
   import { bridgeManager } from '../../managers/bridgeManager'
   import { furnitureManager } from '../../managers/furnitureManager'
@@ -61,8 +61,6 @@
   let currentFloor = $state(0)
   let currentHouseId = $state<string | null>(null)
 
-  let catalogById = new Map<string, ObjectDef>()
-
   let lastLoadedRegion = { rx: NaN, rz: NaN }
   let regionLoadGeneration = 0
   let regionRetry: ReturnType<typeof setTimeout> | undefined
@@ -76,15 +74,8 @@
       // region has been loaded.
       const { rx, rz } = lastLoadedRegion
       if (Number.isNaN(rx)) return
-      if (catalogById.size > 0) {
-        bridgeManager.syncRegion(rx, rz, v.placements, catalogById)
-      }
+      bridgeManager.syncRegion(rx, rz, v.placements, objectDefsById)
       furnitureManager.syncRegion(rx, rz, v.placements)
-    }),
-    objectCatalog.subscribe((v) => {
-      // Keep catalogById in sync with whoever populated the store
-      // (ObjectBrushPanel can fetch the catalog before loadRegionObject runs).
-      catalogById = new Map(v.map((d) => [d.id, d]))
     }),
     selectedObjectPlacementId.subscribe((v) => (selectedId = v)),
     objectPreviewPos.subscribe((v) => (previewPos = v)),
@@ -123,11 +114,6 @@
     clearTimeout(regionRetry)
     worldView.staticReady = false
     try {
-      if (catalogById.size === 0) {
-        const cat = await objectManager.fetchCatalog()
-        if (generation !== regionLoadGeneration) return
-        objectCatalog.set(cat)
-      }
       const data = await objectManager.fetchObject(rx, rz)
       if (generation !== regionLoadGeneration) return
       currentObjectData.set(data)
@@ -175,7 +161,7 @@
     const key = `${type}\u0000${text}`
     let base = signTextCache.get(key)
     if (!base) {
-      const style = getShopSignStyle(catalogById.get(type)?.shopSignStyle)
+      const style = getShopSignStyle(objectDefsById.get(type)?.shopSignStyle)
       base = buildShopSignText(text, style.board, style.text)
       signTextCache.set(key, base)
     }
@@ -188,7 +174,7 @@
     if (modelCache.has(objectId)) return modelCache.get(objectId)!
     if (loadingModels.has(objectId)) return null
 
-    const def = catalogById.get(objectId)
+    const def = objectDefsById.get(objectId)
     if (!def) return null
 
     loadingModels.add(objectId)
@@ -323,7 +309,7 @@
     _activeFires.length = 0
     _seenFires.clear()
     for (const p of visible) {
-      const def = catalogById.get(p.type)
+      const def = objectDefsById.get(p.type)
       const fire = def?.fire
       if (!fire) continue
       const isTorch = def?.fireKind === 'torch'
@@ -406,7 +392,7 @@
     clone.userData.objectId = p.id
     clone.userData.objectType = p.type
     clone.userData.structKey = structKey
-    const catDef = catalogById.get(p.type)
+    const catDef = objectDefsById.get(p.type)
     if (p.text) {
       if (catDef?.procedural === 'shopSign') {
         // Persistent baked sign face — no hover bubble (so we skip objectText).

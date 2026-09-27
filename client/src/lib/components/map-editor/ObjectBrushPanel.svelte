@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte'
+  import { onDestroy } from 'svelte'
   import { get } from 'svelte/store'
   import {
-    objectCatalog,
     selectedObjectType,
     objectRotation,
     currentObjectData,
@@ -12,12 +11,16 @@
     editorGrassDataManager,
   } from '../../stores/editorStore'
   import type {
-    ObjectDef,
     ObjectPlacement,
     ObjectRegionData,
     ObjectSubTool,
   } from '../../stores/editorStore'
   import { objectManager } from '../../managers/objectManager'
+  import {
+    getObjectDef,
+    objectDefs,
+    objectDefsById,
+  } from '../../data/objectCatalog'
   import { furnitureManager } from '../../managers/furnitureManager'
   import {
     deleteSelectedPlacement,
@@ -35,7 +38,6 @@
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { TerrainGrassDataManager } from '../../managers/terrainGrassDataManager'
 
-  let catalog = $state<ObjectDef[]>([])
   let selected = $state<string | null>(null)
   let rotation = $state(0)
   let placements = $state<ObjectPlacement[]>([])
@@ -60,7 +62,6 @@
   const FLATTEN_BLEND_RADIUS = 2
 
   const unsubs = [
-    objectCatalog.subscribe((v) => (catalog = v)),
     selectedObjectType.subscribe((v) => (selected = v)),
     objectRotation.subscribe((v) => (rotation = v)),
     currentObjectData.subscribe((v) => (placements = v.placements)),
@@ -92,12 +93,6 @@
     flushTextDraft()
     if (saveTimer !== null) flushPendingSave()
     unsubs.forEach((u) => u())
-  })
-
-  onMount(async () => {
-    if (get(objectCatalog).length > 0) return
-    const list = await objectManager.fetchCatalog()
-    objectCatalog.set(list)
   })
 
   function selectType(id: string) {
@@ -250,8 +245,7 @@
       const fp = await objectManager.fetchFootprint(p.type)
       if (!fp || fp.rects.length === 0) return
 
-      const buryDepth =
-        objectManager.getCatalogEntry(p.type)?.flattenBuryDepth ?? 0
+      const buryDepth = getObjectDef(p.type)?.flattenBuryDepth ?? 0
       const targetY = p.y + fp.minLocalY + buryDepth
       // Flatten using the local rect + placement rotation so footprints rotated
       // off-axis (e.g. 45°) carve the right oriented region instead of bleeding
@@ -301,7 +295,7 @@
 
   let selectedDef = $derived(
     selectedPlacement
-      ? (catalog.find((d) => d.id === selectedPlacement.type) ?? null)
+      ? (objectDefsById.get(selectedPlacement.type) ?? null)
       : null
   )
 </script>
@@ -325,7 +319,7 @@
   {#if subTool === 'place'}
     <div class="section-label">Catalog</div>
     <div class="object-list">
-      {#each catalog as item (item.id)}
+      {#each objectDefs as item (item.id)}
         <button
           class="object-item-btn"
           class:active={selected === item.id}
@@ -450,7 +444,7 @@
                 scheduleSave()
               }}
             >
-              {#each catalog.filter((item) => item.procedural === 'shopSign') as sign (sign.id)}
+              {#each objectDefs.filter((item) => item.procedural === 'shopSign') as sign (sign.id)}
                 <option value={sign.id}>{sign.name}</option>
               {/each}
             </select>

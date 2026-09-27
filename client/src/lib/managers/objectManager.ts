@@ -2,13 +2,10 @@ import { MathUtils } from 'three'
 import { get } from 'svelte/store'
 import { estateChests } from '../stores/estateFurnitureStore'
 import { getEstateStorageDef } from '../data/estateFurnitureDefs'
+import { getObjectDef } from '../data/objectCatalog'
 import { unwrapWorldXNear } from '../terrain/world-wrap'
 import { apiFetch, getTerrainApiUrl } from '../utils/networkUtils'
-import type {
-  ObjectDef,
-  ObjectPlacement,
-  ObjectRegionData,
-} from '../stores/editorStore'
+import type { ObjectPlacement, ObjectRegionData } from '../stores/editorStore'
 import type { Position } from '../network/networkTypes'
 import { createEvent } from '../network/networkEvents'
 import {
@@ -72,7 +69,6 @@ export function shouldMoveObjectWithHouse(
 export class ObjectManager {
   private cache = new Map<string, ObjectRegionData>()
   private terrainApiUrl: string
-  private catalogCache: ObjectDef[] | null = null
   private footprintCache = new Map<string, FootprintData>()
   private regionChanged = createEvent<(region: ChangedObjectRegion) => void>()
   private worldReset = createEvent<() => void>()
@@ -82,19 +78,10 @@ export class ObjectManager {
     this.terrainApiUrl = getTerrainApiUrl()
   }
 
-  async fetchCatalog(): Promise<ObjectDef[]> {
-    if (this.catalogCache) return this.catalogCache
-    const resp = await fetch('/models/objects/catalog.json')
-    const data: ObjectDef[] = await resp.json()
-    this.catalogCache = data
-    return data
-  }
-
   async fetchFootprint(objectType: string): Promise<FootprintData | null> {
     const cached = this.footprintCache.get(objectType)
     if (cached) return cached
-    await this.fetchCatalog()
-    const def = this.getCatalogEntry(objectType)
+    const def = getObjectDef(objectType)
     if (!def || !def.model) return null
     const gltf = await loadGLB(getObjectModelPath(def.model))
     const data = detectFootprint(gltf.scene)
@@ -267,12 +254,6 @@ export class ObjectManager {
     this.cache.delete(regionKey(rx, rz))
   }
 
-  /** Look up a object definition by type id (e.g. "bed"). Returns null if catalog not loaded or not found. */
-  getCatalogEntry(objectType: string): ObjectDef | null {
-    if (!this.catalogCache) return null
-    return this.catalogCache.find((d) => d.id === objectType) ?? null
-  }
-
   /** Prefer the server's placement ID, then the nearest object of that type. */
   findNearestPlacement(
     objectType: string,
@@ -325,11 +306,13 @@ export class ObjectManager {
     placement: ObjectPlacement | null
     rotation?: number
   }> {
-    const [, placement] = await Promise.all([
-      this.fetchCatalog(),
-      this.findNearestPlacementAsync(objectType, wx, wz, objectId),
-    ])
-    const def = this.getCatalogEntry(
+    const placement = await this.findNearestPlacementAsync(
+      objectType,
+      wx,
+      wz,
+      objectId
+    )
+    const def = getObjectDef(
       placement?.type ?? getEstateStorageDef(objectType)?.modelId ?? objectType
     )
     return {

@@ -103,6 +103,7 @@
     itemDefId: string
     groupKey?: string
     entryId?: number
+    enchant?: number
     qty: number
     unitPrice: number
     dealPct?: number
@@ -111,7 +112,7 @@
   interface PendingAdd {
     kind: 'buy' | 'sell'
     itemDefId: string
-    groupKey?: string
+    group?: SelectableGroup
     def: ItemDefinition
     max: number
     defaultQty?: number
@@ -183,7 +184,16 @@
     const remaining = new SvelteMap(
       sellEntries.map((group) => [group.key, group.totalQty])
     )
+    const buybackQty = new SvelteMap(
+      (session?.buyback ?? []).map((e) => [e.entryId, e.quantity])
+    )
     const next = cart.flatMap((entry) => {
+      if (entry.kind === 'buyback') {
+        // A later sale can merge into the entry, or a buyback elsewhere can take it.
+        const qty = buybackQty.get(entry.entryId ?? -1)
+        if (qty === undefined) return []
+        return [qty === entry.qty ? entry : { ...entry, qty }]
+      }
       if (entry.kind !== 'sell') return [entry]
       const key = entry.groupKey ?? ''
       const available = remaining.get(key) ?? 0
@@ -198,7 +208,7 @@
       cart = next
     if (
       pendingAdd?.kind === 'sell' &&
-      !remaining.has(pendingAdd.groupKey ?? '')
+      !remaining.has(pendingAdd.group?.key ?? '')
     )
       pendingAdd = null
   })
@@ -321,6 +331,7 @@
         kind: 'sell',
         itemDefId: group.itemDefId,
         groupKey: group.key,
+        enchant: group.enchant,
         qty: 1,
         unitPrice: sellPrice(def, pct),
         dealPct: pct,
@@ -331,13 +342,13 @@
     if (max <= 0) return
     const unitPrice = sellPrice(def, 0)
     if (max <= 1) {
-      addSellUnits(group.itemDefId, group.key, unitPrice, 1)
+      addSellUnits(group, unitPrice, 1)
       return
     }
     pendingAdd = {
       kind: 'sell',
       itemDefId: group.itemDefId,
-      groupKey: group.key,
+      group,
       def,
       max,
       unitPrice,
@@ -345,28 +356,34 @@
   }
 
   function addSellUnits(
-    itemDefId: string,
-    groupKey: string,
+    group: SelectableGroup,
     unitPrice: number,
     qty: number
   ) {
     const existing = cart.find(
-      (e) => e.kind === 'sell' && e.groupKey === groupKey && !e.dealPct
+      (e) => e.kind === 'sell' && e.groupKey === group.key && !e.dealPct
     )
     if (existing) {
       existing.qty += qty
     } else {
-      cart.push({ kind: 'sell', itemDefId, groupKey, qty, unitPrice })
+      cart.push({
+        kind: 'sell',
+        itemDefId: group.itemDefId,
+        groupKey: group.key,
+        enchant: group.enchant,
+        qty,
+        unitPrice,
+      })
     }
   }
 
   function confirmPendingAdd(qty: number) {
     if (!pendingAdd) return
-    const { kind, itemDefId, groupKey, unitPrice } = pendingAdd
+    const { kind, itemDefId, group, unitPrice } = pendingAdd
     if (kind === 'buy') {
       addBuyUnits(itemDefId, unitPrice, qty)
-    } else if (groupKey !== undefined) {
-      addSellUnits(itemDefId, groupKey, unitPrice, qty)
+    } else if (group) {
+      addSellUnits(group, unitPrice, qty)
     }
     pendingAdd = null
   }
@@ -381,7 +398,8 @@
       kind: 'buyback',
       itemDefId: entry.itemDefId,
       entryId: entry.entryId,
-      qty: 1,
+      enchant: entry.enchant,
+      qty: entry.quantity,
       unitPrice: entry.price,
     })
   }
@@ -395,8 +413,7 @@
       removeFurnitureItemFromBasket(entry.itemDefId)
       return
     }
-    entry.qty -= 1
-    if (entry.qty <= 0) {
+    if (entry.kind === 'buyback' || --entry.qty <= 0) {
       cart = cart.filter((e) => e !== entry)
     }
   }
@@ -593,10 +610,10 @@
                       def,
                       entry.enchant > 0 ? entry.enchant : 0,
                       $locale
-                    )}
+                    )}{entry.quantity > 1 ? ` ×${entry.quantity}` : ''}
                   </span>
                   <span class="item-price"
-                    ><GoldAmount copper={entry.price} /></span
+                    ><GoldAmount copper={entry.price * entry.quantity} /></span
                   >
                 </button>
               {/if}
@@ -648,7 +665,7 @@
                   draggable="false"
                 />
                 <span class="item-name">
-                  {displayName(def, 0, $locale)}{entry.qty > 1
+                  {displayName(def, entry.enchant ?? 0, $locale)}{entry.qty > 1
                     ? ` ×${entry.qty}`
                     : ''}
                 </span>
@@ -734,7 +751,8 @@
                     draggable="false"
                   />
                   <span class="item-name">
-                    {displayName(def, 0, $locale)}{group.totalQty > 1
+                    {displayName(def, group.enchant, $locale)}{group.totalQty >
+                    1
                       ? ` ×${group.totalQty}`
                       : ''}
                   </span>
@@ -771,7 +789,9 @@
 
 <QuantityPopup
   visible={pendingAdd !== null}
-  itemName={pendingAdd ? displayName(pendingAdd.def, 0, $locale) : ''}
+  itemName={pendingAdd
+    ? displayName(pendingAdd.def, pendingAdd.group?.enchant ?? 0, $locale)
+    : ''}
   icon={pendingAdd?.def.icon ?? ''}
   max={pendingAdd?.max ?? 1}
   defaultQty={pendingAdd?.defaultQty}

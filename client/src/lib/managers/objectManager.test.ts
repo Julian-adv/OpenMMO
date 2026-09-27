@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { estateChests } from '../stores/estateFurnitureStore'
-import catalog from '../../../public/models/objects/catalog.json'
 import type { ObjectPlacement } from '../stores/editorStore'
 import type { HouseData } from '../types/housing'
 
@@ -110,9 +109,7 @@ describe('seat lookup', () => {
       const manager = new ObjectManager()
       const state = manager as unknown as {
         cache: Map<string, unknown>
-        catalogCache: unknown[]
       }
-      state.catalogCache = catalog
       state.cache.set('test', { placements: [chair(7, 1, 1)] })
       estateChests.set(
         new Map([
@@ -170,7 +167,6 @@ describe('seat lookup', () => {
     }
     const state = manager as unknown as {
       cache: Map<string, unknown>
-      catalogCache: unknown[]
     }
     state.cache.set('-2,4', {
       placements: [
@@ -178,18 +174,6 @@ describe('seat lookup', () => {
         bed,
       ],
     })
-    state.catalogCache = [
-      {
-        id: 'bed',
-        interaction: 'sleep',
-        interactOffset: { x: 0, y: 0.78, z: 0 },
-      },
-      {
-        id: 'rustic_bed',
-        interaction: 'sleep',
-        interactOffset: { x: 0, y: 0.56, z: 0 },
-      },
-    ]
 
     const pose = await manager.resolvePose('bed', bed.x, bed.z, 71)
 

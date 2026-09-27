@@ -1,12 +1,10 @@
 <script lang="ts">
+  import { getObjectDef } from '../../data/objectCatalog'
   import { T, useTask, useThrelte } from '@threlte/core'
   import { onMount } from 'svelte'
   import { get } from 'svelte/store'
   import * as THREE from 'three'
-  import {
-    loadEstateFurnitureModel,
-    furnitureModelDefinition,
-  } from '../../utils/estateFurnitureModels'
+  import { loadEstateFurnitureModel } from '../../utils/estateFurnitureModels'
   import { buildShopSignText, getShopSignStyle } from '../../utils/shop-sign'
   import {
     TorchFireParticles,
@@ -222,7 +220,7 @@
     if (text === renderedSignText) return
     renderedSignText = text
     clearSignText()
-    const model = furnitureModelDefinition(definition.modelId)
+    const model = getObjectDef(definition.modelId)
     if (text && model?.procedural === 'shopSign') {
       const style = getShopSignStyle(model.shopSignStyle)
       signText = buildShopSignText(text, style.board, style.text)
@@ -362,7 +360,7 @@
             ? materials
             : materials[0]
         })
-        const model = furnitureModelDefinition(definition.modelId)
+        const model = getObjectDef(definition.modelId)
         updateSignText()
         if (model?.fire) {
           torchFire = model.fireKind === 'torch'

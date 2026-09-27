@@ -191,7 +191,6 @@ export interface ObjectRegionData {
 
 export type ObjectSubTool = 'place' | 'select'
 export const objectSubTool = writable<ObjectSubTool>('place')
-export const objectCatalog = writable<ObjectDef[]>([])
 export const selectedObjectType = writable<string | null>(null)
 export const objectRotation = writable<number>(0)
 export const currentObjectData = writable<ObjectRegionData>({

@@ -8,22 +8,13 @@
 FROM rust:1-bookworm AS builder
 WORKDIR /build
 
-# build.rs turns data-src/*.csv into data/*.json, which the binaries then embed
-# with include_str!. The generated JSON never needs to reach the runtime image.
-#
-# data/ also holds three *tracked* JSON files that shared/ embeds directly
-# (furniture_footprints, material-impact-sounds, monster_attack_clips), so the
-# directory is a build input even though its generated members are gitignored.
+# Rust embeds tracked data/*.json and JSON generated from data-src/*.csv.
 COPY Cargo.toml Cargo.lock clippy.toml ./
 COPY data/ data/
 COPY shared/ shared/
 COPY terrain/ terrain/
 COPY server/ server/
 COPY tools/terrain-gen/ tools/terrain-gen/
-# terrain-gen embeds the furniture catalog when placing objects. It is a small
-# tracked JSON that happens to live beside the LFS models, so copy just the file
-# rather than dragging client/public into the build context.
-COPY client/public/models/objects/catalog.json client/public/models/objects/
 COPY tools/cargo-build-data.rs tools/
 COPY data-src/ data-src/
 

@@ -11,7 +11,7 @@ import { dirname, join } from "path";
 // Resolve paths from the script's own location (repo root = tools/..) so the
 // tool works regardless of the CWD it's launched from.
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const CATALOG_PATH = join(ROOT, "client/public/models/objects/catalog.json");
+const CATALOG_PATH = join(ROOT, "data/object_catalog.json");
 const MODELS_DIR = join(ROOT, "client/public/models");
 const OUT_PATH = join(ROOT, "data/furniture_footprints.json");
 

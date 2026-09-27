@@ -6,14 +6,15 @@ export interface StockEntry {
   quantity: number
 }
 
-/** One unit the player recently sold to a merchant, repurchasable at the
- *  exact payout received (sold units otherwise vanish — merchants keep no
- *  stock). */
+/** Units the player recently sold to a merchant, repurchasable at the exact
+ *  payout received (sold units otherwise vanish — merchants keep no stock).
+ *  `price` is per unit; the whole entry is bought back at once. */
 export interface BuybackEntry {
   entryId: number
   itemDefId: string
   enchant: number
   price: number
+  quantity: number
 }
 
 /** An open shop session with a trading NPC, driven by ServerMessage::ShopState.

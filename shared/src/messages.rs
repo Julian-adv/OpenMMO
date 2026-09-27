@@ -120,9 +120,10 @@ pub struct StockEntry {
     pub quantity: u32,
 }
 
-/// One unit the player recently sold to a merchant, repurchasable at the
-/// exact payout the player received. Sold units normally vanish (merchants
-/// keep no stock), so this is the only way to undo a mis-sell.
+/// Units the player recently sold to a merchant, repurchasable at the exact
+/// payout the player received. Sold units normally vanish (merchants keep no
+/// stock), so this is the only way to undo a mis-sell. Stackable units sold
+/// back to back at one price share an entry and are bought back together.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BuybackEntry {
     /// Server-issued id the client references in `BuybackItem`; becomes the
@@ -136,9 +137,24 @@ pub struct BuybackEntry {
     /// Same for its texture hash.
     #[serde(default)]
     pub cape_texture: Option<String>,
-    /// Gold the player was paid for the unit (smallest unit) — buying it
-    /// back costs exactly this, so the round trip is gold-neutral.
+    /// Gold the player was paid per unit (smallest unit) — buying back
+    /// costs exactly this, so the round trip is gold-neutral.
     pub price: i64,
+    pub quantity: u32,
+}
+
+impl BuybackEntry {
+    pub fn total_price(&self) -> i64 {
+        self.price * i64::from(self.quantity)
+    }
+
+    pub fn same_units(&self, other: &BuybackEntry) -> bool {
+        self.item_def_id == other.item_def_id
+            && self.enchant == other.enchant
+            && self.cape_color == other.cape_color
+            && self.cape_texture == other.cape_texture
+            && self.price == other.price
+    }
 }
 
 /// One line of a stall purchase: `quantity` units off one listing.
@@ -726,8 +742,8 @@ pub enum ClientMessage {
         merchant_player_id: PlayerId,
         instance_id: u64,
     },
-    /// Repurchase a unit previously sold to this merchant, at the payout
-    /// price recorded in its `BuybackEntry`.
+    /// Repurchase a whole `BuybackEntry` previously sold to this merchant, at
+    /// its recorded per-unit payout times its quantity.
     BuybackItem {
         merchant_player_id: PlayerId,
         entry_id: u64,

@@ -81,6 +81,66 @@ async fn buyback_returns_the_unit_into_its_stack() {
 }
 
 #[tokio::test]
+async fn repeated_stackable_sales_share_one_buyback_entry() {
+    let game_state = make_test_game_state("buyback_merge");
+    let (_buyer_rx, _npc_rx) = setup_haggle(&game_state, 10, 0).await;
+    {
+        let mut inventories = game_state.inventories.write().await;
+        let mut inv: onlinerpg_shared::inventory::PlayerInventory = Default::default();
+        inv.bag.push(bag_item(7, "apple", 3));
+        inventories.insert(pid("buyer"), inv);
+    }
+    let start_gold = game_state.get_player_gold(&pid("buyer")).await;
+
+    for _ in 0..3 {
+        game_state
+            .sell_item(&pid("buyer"), &pid("npc_rica"), 7)
+            .await;
+    }
+    let entry = {
+        let buybacks = game_state.buybacks.read().await;
+        let list = &buybacks[&(1, "Rica".to_string())];
+        assert_eq!(list.len(), 1);
+        list[0].entry.clone()
+    };
+    assert_eq!(entry.quantity, 3);
+
+    game_state
+        .buyback_item(&pid("buyer"), &pid("npc_rica"), entry.entry_id)
+        .await;
+    assert_eq!(game_state.get_player_gold(&pid("buyer")).await, start_gold);
+    let inventories = game_state.inventories.read().await;
+    let bag = &inventories[&pid("buyer")].bag;
+    assert_eq!(bag.len(), 1);
+    assert_eq!(bag[0].quantity, 3);
+}
+
+#[tokio::test]
+async fn stackable_sales_of_different_units_stay_separate() {
+    let game_state = make_test_game_state("buyback_no_merge");
+    let (_buyer_rx, _npc_rx) = setup_haggle(&game_state, 10, 0).await;
+    {
+        let mut inventories = game_state.inventories.write().await;
+        let mut inv: onlinerpg_shared::inventory::PlayerInventory = Default::default();
+        inv.bag.push(bag_item(7, "apple", 1));
+        inv.bag.push(enchanted_bag_item(8, "apple", 1, 1));
+        inv.bag.push(bag_item(9, "apple", 1));
+        inventories.insert(pid("buyer"), inv);
+    }
+
+    for id in [7, 8, 9] {
+        game_state
+            .sell_item(&pid("buyer"), &pid("npc_rica"), id)
+            .await;
+    }
+    let buybacks = game_state.buybacks.read().await;
+    let list = &buybacks[&(1, "Rica".to_string())];
+    let enchants: Vec<i32> = list.iter().map(|s| s.entry.enchant).collect();
+    assert_eq!(enchants, [0, 1, 0], "only the newest entry absorbs a sale");
+    assert!(list.iter().all(|s| s.entry.quantity == 1));
+}
+
+#[tokio::test]
 async fn buyback_rejects_without_enough_gold() {
     let game_state = make_test_game_state("buyback_no_gold");
     let (mut buyer_rx, _npc_rx) = setup_haggle(&game_state, 10, 0).await;
@@ -138,17 +198,21 @@ async fn buyback_list_keeps_only_the_newest_entries() {
     {
         let mut inventories = game_state.inventories.write().await;
         let mut inv: onlinerpg_shared::inventory::PlayerInventory = Default::default();
-        inv.bag.push(bag_item(7, "iron_sword", 12));
+        inv.bag
+            .push(bag_item(7, "iron_sword", trading::BUYBACK_CAP as u32 + 2));
         inventories.insert(pid("buyer"), inv);
     }
 
-    for _ in 0..12 {
+    for _ in 0..trading::BUYBACK_CAP + 2 {
         game_state
             .sell_item(&pid("buyer"), &pid("npc_rica"), 7)
             .await;
     }
     let buybacks = game_state.buybacks.read().await;
-    assert_eq!(buybacks[&(1, "Rica".to_string())].len(), 10);
+    assert_eq!(
+        buybacks[&(1, "Rica".to_string())].len(),
+        trading::BUYBACK_CAP
+    );
 }
 
 /// Backdate every stored entry so it has already expired.
