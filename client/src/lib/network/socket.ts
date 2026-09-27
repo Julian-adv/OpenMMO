@@ -724,7 +724,7 @@ class NetworkManager {
       category === 'estate_return_scroll'
     ) {
       this.sendAfterTeleportDeparture({
-        UseTeleportScroll: { instance_id: instanceId },
+        UseItem: { instance_id: instanceId },
       })
       return
     }

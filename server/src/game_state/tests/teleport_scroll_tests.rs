@@ -113,11 +113,9 @@ async fn scroll_request_over_websocket(item_def_id: &str) {
         .push(bag_item(100, item_def_id, 1));
     socket
         .send(Message::Binary(
-            onlinerpg_shared::serialize_client_msg(&ClientMessage::UseTeleportScroll {
-                instance_id: 100,
-            })
-            .unwrap()
-            .into(),
+            onlinerpg_shared::serialize_client_msg(&ClientMessage::UseItem { instance_id: 100 })
+                .unwrap()
+                .into(),
         ))
         .await
         .unwrap();
@@ -347,7 +345,7 @@ async fn teleport_scroll_rejects_a_request_if_the_reader_died_during_the_client_
     let id = give_scrolls(&game, player, 1).await;
     let mut rx = game.register_direct_channel(&id).await;
     game.players.write().await.get_mut(&id).unwrap().health = 0;
-    game.use_teleport_scroll(&id, 100).await;
+    game.use_item(&id, 100).await;
     assert_eq!(quantity(&game, &id).await, 1);
     assert_eq!(game.players.read().await[&id].position, origin);
     let messages = drain(&mut rx);
@@ -368,7 +366,7 @@ async fn teleport_scroll_has_no_server_animation_delay() {
     let game = make_flat_world_game_state("teleport_scroll_no_delay");
     let id = give_scrolls(&game, make_player("Reader", 800.0, 800.0), 1).await;
     let started = tokio::time::Instant::now();
-    game.use_teleport_scroll(&id, 100).await;
+    game.use_item(&id, 100).await;
     assert_eq!(tokio::time::Instant::now(), started);
     assert_eq!(quantity(&game, &id).await, 0);
 }
@@ -388,7 +386,7 @@ async fn teleport_scroll_rejects_missing_or_wrong_items_and_cancels_the_client_e
         .push(bag_item(101, "torch", 1));
     let mut rx = game.register_direct_channel(&id).await;
     for instance in [101, 999] {
-        game.use_teleport_scroll(&id, instance).await;
+        game.use_item(&id, instance).await;
         assert!(drain(&mut rx).iter().any(|message| matches!(
             message,
             ServerMessage::PlayerTeleportEffect {
@@ -537,9 +535,17 @@ async fn teleport_scroll_preserves_item_when_defeated_or_trade_reserved() {
     )
     .await;
     assert_eq!(game.trade_reserved_quantity(&id, 100).await, 1);
+    drain(&mut rx);
     game.use_item(&id, 100).await;
     assert_eq!(quantity(&game, &id).await, 2);
     assert_eq!(game.players.read().await[&id].position, origin);
+    assert!(drain(&mut rx).iter().any(|message| matches!(
+        message,
+        ServerMessage::PlayerTeleportEffect {
+            phase: onlinerpg_shared::TeleportPhase::Cancelled,
+            ..
+        }
+    )));
 }
 
 #[tokio::test]

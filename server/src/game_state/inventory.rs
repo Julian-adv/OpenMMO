@@ -922,22 +922,25 @@ impl super::GameState {
             .authenticated_use_action
     }
 
-    /// Use a consumable from the bag: resolve its effect and dispatch to the
-    /// matching handler (healing potion, return scroll, ...).
+    /// Use a consumable from the bag.
     pub async fn use_item(&self, player_id: &PlayerId, instance_id: u64) {
         self.stop_bed_rest(player_id).await;
         if self
             .reject_if_trade_reserved(player_id, instance_id, "use")
             .await
         {
+            self.cancel_teleport_effect(player_id).await;
             return;
         }
-        // Resolve which usable effect this item carries before mutating anything.
         let effect = {
             let inventories = self.inventories.read().await;
             let inv = match inventories.get(player_id) {
                 Some(inv) => inv,
-                None => return,
+                None => {
+                    drop(inventories);
+                    self.cancel_teleport_effect(player_id).await;
+                    return;
+                }
             };
             let item = match inv.bag.iter().find(|i| i.instance_id == instance_id) {
                 Some(item) => item,
@@ -948,6 +951,7 @@ impl super::GameState {
                         localized("server.itemNotInBag", "Item not found in bag"),
                     )
                     .await;
+                    self.cancel_teleport_effect(player_id).await;
                     return;
                 }
             };
@@ -964,6 +968,7 @@ impl super::GameState {
                         localized("server.cannotUse", "This item cannot be used"),
                     )
                     .await;
+                    self.cancel_teleport_effect(player_id).await;
                     return;
                 }
             }

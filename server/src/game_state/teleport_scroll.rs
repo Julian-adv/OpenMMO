@@ -78,8 +78,7 @@ fn sample_destination(
 }
 
 impl GameState {
-    pub(crate) async fn use_teleport_scroll(&self, player_id: &PlayerId, instance_id: u64) {
-        self.stop_bed_rest(player_id).await;
+    pub(super) async fn use_teleport_scroll(&self, player_id: &PlayerId, instance_id: u64) {
         let effect = {
             let inventories = self.inventories.read().await;
             inventories

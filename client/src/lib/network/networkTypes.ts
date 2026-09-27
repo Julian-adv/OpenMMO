@@ -258,7 +258,6 @@ export type ClientMessage =
   | 'PickupStarted'
   | { PickupItem: { instance_id: number } }
   | { UseItem: { instance_id: number } }
-  | { UseTeleportScroll: { instance_id: number } }
   | {
       PlaceHouse: {
         instance_id: number

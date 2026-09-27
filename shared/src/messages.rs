@@ -552,9 +552,6 @@ pub enum ClientMessage {
     UseItem {
         instance_id: u64,
     },
-    UseTeleportScroll {
-        instance_id: u64,
-    },
     UseLandDocument {
         instance_id: u64,
         tile_x: i32,
