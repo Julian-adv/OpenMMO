@@ -10,7 +10,10 @@ use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
 use crate::dungeon::ChestKind;
-use crate::state::{Carried, CarriedBagCopies, MoveTarget, MoveTargetError, SharedState};
+use crate::state::{
+    Carried, CarriedBagCopies, MoveTarget, MoveTargetError, PlayerTradePrice, PlayerTradeTerms,
+    SharedState,
+};
 use onlinerpg_shared::messages::BagLineItem;
 
 use super::action::{
@@ -408,7 +411,10 @@ pub(super) async fn handle_response(
 
         // Skip movement/attack when the NPC must stay put — resting on a
         // scheduled object, or serving a customer with an open trade window.
-        if skip_movement && action.blocked_while_holding_position() {
+        let trading = state.lock().await.player_trade_in_progress();
+        if (skip_movement && action.blocked_while_holding_position())
+            || (trading && action.takes_over_movement() && !matches!(action, AgentAction::Respawn))
+        {
             debug!("Skipping {:?} action — NPC is holding position", action);
             let mut s = state.lock().await;
             s.push_agent_event(format!(
@@ -524,6 +530,55 @@ pub(super) async fn handle_response(
                 }
             }
             last_attack_target = Some((monster_id.clone(), *sprint));
+        }
+
+        let player_trade = match action {
+            AgentAction::BuyFromPlayer {
+                player,
+                item,
+                quantity,
+                max_copper,
+                enchant,
+            } => Some((
+                player,
+                PlayerTradeTerms {
+                    item: item.clone(),
+                    quantity: *quantity,
+                    enchant: *enchant,
+                    price: PlayerTradePrice::Buy {
+                        max_copper: *max_copper,
+                    },
+                },
+            )),
+            AgentAction::SellToPlayer {
+                player,
+                item,
+                quantity,
+                min_copper,
+                enchant,
+            } => Some((
+                player,
+                PlayerTradeTerms {
+                    item: item.clone(),
+                    quantity: *quantity,
+                    enchant: *enchant,
+                    price: PlayerTradePrice::Sell {
+                        min_copper: *min_copper,
+                    },
+                },
+            )),
+            _ => None,
+        };
+        if let Some((player, terms)) = player_trade {
+            let mut s = state.lock().await;
+            if let Err(reason) = s.start_player_trade(player, terms).await {
+                s.push_agent_event(format!("[PlayerTradeFailed] {reason}"));
+            }
+            continue;
+        }
+        if matches!(action, AgentAction::CancelPlayerTrade) {
+            state.lock().await.cancel_player_trade().await;
+            continue;
         }
 
         // Haggling: resolve the target player's name to an id and send the

@@ -23,6 +23,8 @@ pub struct ItemDef {
     #[serde(rename = "armorType", default)]
     pub armor_type: Option<String>,
     pub hands: Option<u8>,
+    #[serde(default)]
+    pub untradeable: bool,
     /// Usable straight from the bag — the items.csv flag, which the server
     /// validates against its `use_effect` dispatch at boot.
     #[serde(default)]

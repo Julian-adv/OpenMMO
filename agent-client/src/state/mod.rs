@@ -177,6 +177,7 @@ mod inventory;
 mod movement;
 mod music;
 mod perception;
+mod player_trade;
 mod social;
 mod stall;
 mod terrain_summary;
@@ -189,6 +190,7 @@ pub use commands::ActionProgress;
 pub use events::EventUrgency;
 pub use inventory::{Carried, CarriedBagCopies};
 pub use movement::{MoveTarget, MoveTargetError};
+pub(crate) use player_trade::{PlayerTradePrice, PlayerTradeTerms};
 pub use social::{PendingFriendRequest, PendingPartyInvite, PendingPartySummon, PushedTrade};
 pub use world_cache::WorldCache;
 pub(crate) use world_state::{storey_name, FLOOR_ZERO_HINT};
@@ -257,6 +259,7 @@ pub struct SharedState {
     /// `TradeBusy`). We stay put and keep serving them — the LLM's movement
     /// actions are suppressed — until the trade ends.
     pub trade_busy: bool,
+    player_trade: player_trade::PlayerTradeAutomation,
     /// Until when trade pushes at each player stay blocked after they waved
     /// off our trade window (`TradeDeclined` → `TRADE_DECLINE_COOLDOWN`).
     trade_declined_until: HashMap<PlayerId, std::time::Instant>,
@@ -475,6 +478,7 @@ impl SharedState {
             self_equipped: HashMap::new(),
             trade_satiated_until: None,
             trade_busy: false,
+            player_trade: Default::default(),
             trade_declined_until: HashMap::new(),
             self_fishing: false,
             fishing_retry_at: None,

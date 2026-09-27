@@ -110,6 +110,26 @@ pub(super) enum AgentAction {
         #[serde(alias = "target", alias = "player_name", alias = "target_player")]
         player: String,
     },
+    #[serde(rename = "buy_from_player")]
+    BuyFromPlayer {
+        player: String,
+        item: String,
+        quantity: u32,
+        max_copper: i64,
+        #[serde(default)]
+        enchant: i32,
+    },
+    #[serde(rename = "sell_to_player")]
+    SellToPlayer {
+        player: String,
+        item: String,
+        quantity: u32,
+        min_copper: i64,
+        #[serde(default)]
+        enchant: i32,
+    },
+    #[serde(rename = "cancel_player_trade")]
+    CancelPlayerTrade,
     #[serde(rename = "open_stall")]
     OpenStall { stall_id: u64 },
     #[serde(rename = "close_stall")]
@@ -398,6 +418,26 @@ pub(super) struct ActionSpec {
 }
 
 pub(super) const ACTION_SPECS: &[ActionSpec] = &[
+    ActionSpec {
+        names: &["buy_from_player", "sell_to_player", "cancel_player_trade"],
+        aliases: &[],
+        doc: r#"- Trade with a nearby player by stating your terms (official NPCs use shops):
+  {"type":"buy_from_player","player":"Alice","item":"iron_sword","quantity":1,"max_copper":100,"enchant":0}
+  {"type":"sell_to_player","player":"Alice","item":"apple","quantity":5,"min_copper":100}
+  Prices are TOTAL copper for the whole quantity, not per item. A buyer
+  offers max_copper; negotiate a lower total in chat before setting it.
+  A seller accepts min_copper or more. Enchant is exact (default 0).
+  Matching an item id accepts any cosmetic variant. Only unlocked bag
+  items are sold; equipment is never removed automatically.
+  The client handles invitations, item selection, offer checks and the
+  exchange. A matching incoming invitation is accepted automatically.
+  Otherwise it invites the named player. Stay nearby and wait for the
+  server result. A conflicting offer is reported for you to negotiate.
+  Only one intent runs at a time. Repeating it does not start another.
+  To stop, decline pending invitations, or change terms, cancel first:
+  {"type":"cancel_player_trade"}
+  Wait for the open trade to close before issuing new terms."#,
+    },
     ActionSpec {
         names: &["say"],
         aliases: &["chat"],
@@ -810,6 +850,9 @@ impl AgentAction {
             | Self::Respawn => true,
             Self::Say { .. }
             | Self::UseAbility { .. }
+            | Self::BuyFromPlayer { .. }
+            | Self::SellToPlayer { .. }
+            | Self::CancelPlayerTrade
             | Self::OpenStall { .. }
             | Self::CloseStall
             | Self::BuyFromStall { .. }
@@ -866,6 +909,8 @@ impl AgentAction {
                     | Self::BuyFromStall { .. }
                     | Self::SellToStall { .. }
                     | Self::OfferDeal { .. }
+                    | Self::BuyFromPlayer { .. }
+                    | Self::SellToPlayer { .. }
                     | Self::Use { .. }
                     | Self::Drop { .. }
                     // Tipping is gated on standing within 5m of the hat.
@@ -879,6 +924,9 @@ impl AgentAction {
             Self::Say { .. } | Self::Recite { .. } | Self::PartySay { .. } | Self::Wait => true,
             Self::Move { .. }
             | Self::UseAbility { .. }
+            | Self::BuyFromPlayer { .. }
+            | Self::SellToPlayer { .. }
+            | Self::CancelPlayerTrade
             | Self::OpenStall { .. }
             | Self::CloseStall
             | Self::BuyFromStall { .. }
@@ -929,6 +977,9 @@ impl AgentAction {
             Self::Recite { .. } => "recite",
             Self::Attack { .. } => "attack",
             Self::UseAbility { .. } => "use_ability",
+            Self::BuyFromPlayer { .. } => "buy_from_player",
+            Self::SellToPlayer { .. } => "sell_to_player",
+            Self::CancelPlayerTrade => "cancel_player_trade",
             Self::Move { .. } => "move",
             Self::Follow { .. } => "follow",
             Self::Respawn => "respawn",
@@ -1394,9 +1445,11 @@ pub(super) fn action_to_command(
         AgentAction::SetStallSign { sign } => {
             Some(ClientMessage::SetStallSign { sign: sign.clone() })
         }
-        // Handled in `execute::handle_response` (needs name resolution and a
-        // background chase task).
-        AgentAction::Follow { .. } => None,
+        // Handled by execute::handle_response.
+        AgentAction::Follow { .. }
+        | AgentAction::BuyFromPlayer { .. }
+        | AgentAction::SellToPlayer { .. }
+        | AgentAction::CancelPlayerTrade => None,
         // Paced out by the state's recital tick, one `/recite` per verse.
         AgentAction::Recite { .. } => None,
         AgentAction::Say { message } => Some(ClientMessage::ChatMessage {

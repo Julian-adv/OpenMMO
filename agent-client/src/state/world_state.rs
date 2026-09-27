@@ -74,6 +74,9 @@ impl SharedState {
         if let Some((mana, max_mana)) = self.self_mana {
             lines.push(format!("MP: {mana}/{max_mana}"));
         }
+        if let Some(trade) = self.format_player_trade() {
+            lines.push(trade);
+        }
         if let Some(player) = self
             .self_player
             .as_ref()

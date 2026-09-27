@@ -234,13 +234,11 @@ impl SharedState {
             | ServerMessage::GrillStarted
             // Cosmetic: only the browser's footprint trail reads it.
             | ServerMessage::PlayerWetToggled { .. }
-            // NPCs are refused player-to-player trades server-side, so these
-            // should never arrive; classified rather than left to the default.
-            | ServerMessage::PlayerTradeRequested { .. }
             | ServerMessage::PlayerTradeRequestResult { .. }
-            | ServerMessage::PlayerTradeUpdate { .. }
+            | ServerMessage::PlayerTradeUpdate { .. } => EventUrgency::Noise,
+            ServerMessage::PlayerTradeRequested { .. }
             | ServerMessage::PlayerTradeEnded { .. }
-            | ServerMessage::PlayerTradeError { .. } => EventUrgency::Noise,
+            | ServerMessage::PlayerTradeError { .. } => EventUrgency::Urgent,
 
             // Auth/character events: routine (handled before game entry)
             _ => EventUrgency::Routine,
@@ -278,6 +276,7 @@ impl SharedState {
         self.in_game
             && !self.self_fishing
             && !self.trade_busy
+            && !self.player_trade_in_progress()
             && self
                 .fishing_retry_at
                 .is_none_or(|at| tokio::time::Instant::now() >= at)
@@ -449,6 +448,9 @@ impl SharedState {
             }
             return urgency;
         }
+        if self.apply_player_trade_event(&msg) {
+            return self.classify_event(&msg);
+        }
         // Feed the spectator panel before mutating, while names still resolve
         if let Some(watch) = self.watch.clone() {
             if let Some(kind) = crate::watch::feed_kind(&msg) {
@@ -475,6 +477,7 @@ impl SharedState {
                 self.self_mana = None;
                 self.ability_ready_at.clear();
                 self.buff_expires_at.clear();
+                self.player_trade = Default::default();
                 self.set_self_fishing(false);
                 self.fishing_retry_at = None;
                 // A character saved underground rejoins there (the server

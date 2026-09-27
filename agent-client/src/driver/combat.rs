@@ -66,6 +66,9 @@ pub(super) async fn tick_combat(
     monster_id: &str,
     sprint: Option<bool>,
 ) -> bool {
+    if state.lock().await.player_trade_in_progress() {
+        return false;
+    }
     // Chase until in range (handles monster movement during chase)
     match chase_monster(state, monster_id, sprint).await {
         ChaseResult::InRange => {}

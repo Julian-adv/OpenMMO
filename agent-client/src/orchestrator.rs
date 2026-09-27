@@ -604,6 +604,7 @@ async fn run_npc_session(
             if !state.in_game {
                 continue;
             }
+            state.drive_player_trade().await;
             if !state.world_view.synchronized {
                 let _ = state
                     .send_background_command(ClientMessage::ResyncWorld)
@@ -666,7 +667,18 @@ async fn handle_incoming(state: &Arc<Mutex<SharedState>>, _label: &str, msg: Ser
         return;
     }
 
+    let player_trade_event = matches!(
+        msg,
+        ServerMessage::PlayerTradeRequested { .. }
+            | ServerMessage::PlayerTradeRequestResult { .. }
+            | ServerMessage::PlayerTradeUpdate { .. }
+            | ServerMessage::PlayerTradeEnded { .. }
+            | ServerMessage::PlayerTradeError { .. }
+    );
     s.push_event(msg);
+    if player_trade_event {
+        s.drive_player_trade().await;
+    }
 }
 
 async fn apply_pending_terrain(

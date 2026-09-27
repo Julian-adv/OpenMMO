@@ -9,7 +9,25 @@
 
 - 우편 첨부와 경매장은 이번 범위가 아니다. 위탁 판매는 이후 좌판으로 구현했다 ([ECONOMY.md](ECONOMY.md#플레이어-위탁-좌판-2026-09-09)).
 - 다만 **"A와 B 사이에서 아이템·골드를 원자적으로 옮긴다"는 서비스는 재사용 가능한 형태로 분리한다.** 우편·경매장이 생기면 그 위에 얹는다.
-- LLM NPC는 참여하지 않는다 (아래 [NPC 제외](#결정-npc는-참여하지-않는다) 참고).
+- 공식 NPC는 참여하지 않는다 (아래 [NPC 제외](#결정-npc는-참여하지-않는다) 참고). 일반 사용자 에이전트는 아래의 거래 의사 행동으로 참여한다.
+
+## 에이전트의 구매·판매 의사
+
+LLM은 가까이 있는 상대와 품목·수량·가격 조건을 지정한다. 클라이언트가 `PlayerTrade*` 신청·응답·제안·잠금·승인·취소를 처리하며, LLM에게 거래 버전 번호나 잠금 행동을 노출하지 않는다.
+
+```json
+{"type":"buy_from_player","player":"Alice","item":"iron_sword","quantity":1,"max_copper":100,"enchant":0}
+{"type":"sell_to_player","player":"Alice","item":"apple","quantity":5,"min_copper":100}
+{"type":"cancel_player_trade"}
+```
+
+- 금액은 단가가 아닌 **해당 수량 전체의 동전 총액**이다. 구매자는 `max_copper`를 실제 제안 금액으로 올린다. 더 낮은 가격을 원하면 대화로 협의한 뒤 그 금액을 지정한다. 판매자는 `min_copper` 이상의 돈을 받는 제안만 승인한다.
+- 품목과 수량, 강화 수치는 정확히 일치해야 한다. `enchant`의 기본값은 0이다. 같은 품목·강화 수치의 외형 변형은 허용하며, 판매 물품은 잠기지 않은 가방 아이템에서 선택한다. 장착 해제는 자동으로 하지 않는다.
+- 한 번에 하나의 의사만 진행한다. 같은 의사를 반복해도 중복 신청하지 않는다. 상대에게서 유효한 신청을 받아 두었다면 수락하고, 그렇지 않으면 신청한다. 의사 없이 받은 신청은 LLM에게 판단을 요청한다.
+- 구매 시 상대에게 추가 돈을 받거나, 판매 시 상대에게 다른 물품을 받는 혼합 제안은 자동 승인하지 않는다. 조건 밖의 제안은 내용을 알려 대화로 협의하게 한다. 조건을 바꾸려면 취소하고 거래 종료 후 새 의사를 지정한다.
+- 서버가 돌려준 양쪽 제안을 검증한 뒤 잠그고, 양쪽 잠금이 확인되면 해당 `revision`으로 최종 승인한다. 변경된 제안은 다시 검증하며 조건을 벗어나면 잠금을 푼다. 잔액·인벤토리는 서버 결과로만 갱신한다.
+- 신청 대기는 30초, 열린 거래 의사는 최대 180초다. 취소·시간 초과·서버 오류·재접속 시 자동 승인 권한을 버린다. 철회 후 늦게 열린 거래창은 취소한다. `cancel_player_trade`는 대기 중인 받은 신청도 모두 거절한다.
+- 진행 중에는 LLM의 이동·공격, 자동 전투와 일정 전환을 멈춘다. 공식 NPC의 개인 간 거래 제한은 그대로 적용한다.
 
 ## 결정: 진입과 동의
 
@@ -158,7 +176,7 @@
 
 - 프로토콜 버전 **29 → 30**. 메시지 한 쌍을 추가하려면 7개 지점을 건드려야 한다: [messages.rs](../shared/src/messages.rs), [lib.rs](../shared/src/lib.rs)(버전), [connection.rs](../server/src/connection.rs)(디스패치), [networkTypes.ts](../client/src/lib/network/networkTypes.ts), [socket.ts](../client/src/lib/network/socket.ts), [messageHandlers.ts](../client/src/lib/network/messageHandlers.ts), [events.rs](../agent-client/src/state/events.rs)(urgency 분류 — 빠뜨리면 LLM NPC 쪽이 깨진다).
 - CSV에 컬럼을 추가하면 **59개 데이터 행 전부에 쉼표를 채워야 한다.** Rust 변환기([cargo-build-data.rs](../tools/cargo-build-data.rs))는 헤더와 필드 수가 다르면 에러를 내지만 JS 변환기([convert.mjs](../tools/convert.mjs))는 조용히 넘어간다 — npm 변환은 통과하는데 cargo 빌드가 깨지는 비대칭 실패가 나므로 주의한다.
-- [agent-client/src/item_defs.rs](../agent-client/src/item_defs.rs)의 `ItemDef`는 필요한 필드만 골라 받는 부분 미러이고 serde가 나머지를 무시하므로 `untradeable`을 추가할 필요가 없다. NPC가 거래에 참여하지 않으므로 쓸 일도 없다.
+- [agent-client/src/item_defs.rs](../agent-client/src/item_defs.rs)의 `ItemDef`는 `untradeable`도 읽어 일반 사용자 에이전트의 거래 불가 품목 요청을 미리 거절한다. 서버가 최종 검증한다.
 - 거래창 UI는 기존 [TradeWindow.svelte](../client/src/lib/components/TradeWindow.svelte)를 구조적 모델로 삼되 별도 컴포넌트로 만든다. 패널은 서로 배타적이지 않으므로 배낭과 동시에 열려 있어도 된다.
 
 ## 테스트

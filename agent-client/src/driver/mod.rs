@@ -29,6 +29,8 @@ mod combat_timing_tests;
 mod execute;
 mod movement;
 mod outcome;
+#[cfg(test)]
+mod player_trade_tests;
 mod prompt;
 mod unload_catch;
 mod walk;

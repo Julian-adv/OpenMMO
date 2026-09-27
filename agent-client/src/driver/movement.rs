@@ -54,6 +54,9 @@ pub(super) async fn check_schedule_transition(
     new: (Option<usize>, Option<u32>),
     label: &str,
 ) -> (Option<usize>, Option<u32>) {
+    if state.lock().await.player_trade_in_progress() {
+        return current;
+    }
     if new != current {
         let meeting = new
             .0
