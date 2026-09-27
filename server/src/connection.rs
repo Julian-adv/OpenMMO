@@ -1441,19 +1441,6 @@ async fn handle_client_message(
                 game_state.face_player(id, rotation).await;
             }
         }
-        ClientMessage::NpcRelocate {
-            position,
-            rotation,
-            floor_level,
-        } => {
-            if state.is_official_npc {
-                if let Some(id) = state.player_id {
-                    game_state
-                        .relocate_npc(id, position, rotation, floor_level)
-                        .await;
-                }
-            }
-        }
 
         ClientMessage::ResyncWorld => {
             if let Some(id) = &state.player_id {
@@ -1734,10 +1721,6 @@ async fn handle_client_message(
                     .place_house(id, instance_id, origin, quarter_turns, auth_service)
                     .await;
             }
-        }
-
-        ClientMessage::ModifyRoom { .. } => {
-            // TODO: room modification broadcast
         }
 
         ClientMessage::RemoveHouse { house_id } => {

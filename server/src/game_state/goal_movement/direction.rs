@@ -152,33 +152,6 @@ impl GameState {
         .await;
     }
 
-    pub(crate) async fn relocate_npc(
-        &self,
-        id: PlayerId,
-        position: Position,
-        rotation: f32,
-        floor_level: i8,
-    ) {
-        if !position.is_finite()
-            || !rotation.is_finite()
-            || floor_level < 0
-            || floor_level > onlinerpg_shared::housing::MAX_FLOOR_LEVEL as i8
-        {
-            return;
-        }
-        if !self
-            .players
-            .read()
-            .await
-            .get(&id)
-            .is_some_and(|p| p.is_official_npc)
-        {
-            return;
-        }
-        self.teleport_player(&id, position, rotation, floor_level)
-            .await;
-    }
-
     pub(super) async fn reject_move_input(
         &self,
         id: PlayerId,

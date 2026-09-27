@@ -442,11 +442,6 @@ pub enum ClientMessage {
     PlayerFace {
         rotation: f32,
     },
-    NpcRelocate {
-        position: Position,
-        rotation: f32,
-        floor_level: i8,
-    },
     ChatMessage {
         message: String,
     },
@@ -526,11 +521,6 @@ pub enum ClientMessage {
         instance_id: u64,
         origin: Position,
         quarter_turns: u8,
-    },
-    ModifyRoom {
-        house_id: String,
-        room_index: u32,
-        room: housing::RoomData,
     },
     RemoveHouse {
         house_id: String,
