@@ -502,10 +502,6 @@ class NetworkManager {
     this.sendMessage({ PlayerAttack: { monster_id: monsterId } })
   }
 
-  sendDaggerDoubleSlash(monsterId: string) {
-    this.sendMessage({ DaggerDoubleSlash: { monster_id: monsterId } })
-  }
-
   requestRespawn() {
     if (this.sendAndSerialize('RequestRespawn')) {
       this.respawnRequested.emit()

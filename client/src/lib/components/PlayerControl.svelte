@@ -674,7 +674,7 @@
       abilityEquipmentAllowed(DAGGER_SKILL.clip, $inventoryStore.equipped)
     if (canUseDaggerSkill && currentPlayer && consumeDaggerSkill()) {
       playDaggerSkill(currentPlayer.id)
-      networkManager.sendDaggerDoubleSlash(monsterId)
+      networkManager.sendUseAbility(DAGGER_SKILL.clip, monsterId)
     } else {
       if (!canUseDaggerSkill)
         daggerSkillState.update((state) => ({ ...state, queued: false }))

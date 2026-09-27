@@ -1,4 +1,5 @@
 use super::*;
+use onlinerpg_shared::ability::{AbilityId, AbilityRejectReason};
 use std::time::Duration;
 
 #[tokio::test]
@@ -579,15 +580,58 @@ async fn setup_dagger_skill(game: &GameState, weapon: &str) -> DirectRx {
     rx
 }
 
+async fn use_dagger_skill(game: &GameState, player_id: &PlayerId) {
+    game.use_targeted_ability(
+        player_id,
+        AbilityId::DaggerDoubleSlash,
+        Some("skill_target"),
+        None,
+        None,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn dagger_skill_rejects_missing_or_ambiguous_ability_targets() {
+    let game = make_test_game_state("dagger_skill_invalid_targets");
+    let mut rx = setup_dagger_skill(&game, "dagger").await;
+    let id = pid("archer");
+    for (monster_id, target_player_id) in [
+        (None, None),
+        (None, Some(id)),
+        (Some("skill_target"), Some(id)),
+    ] {
+        game.use_targeted_ability(
+            &id,
+            AbilityId::DaggerDoubleSlash,
+            monster_id,
+            target_player_id,
+            None,
+        )
+        .await;
+        let messages = drain(&mut rx);
+        assert!(messages.iter().any(|message| matches!(
+            message,
+            ServerMessage::AbilityRejected {
+                ability: AbilityId::DaggerDoubleSlash,
+                reason: AbilityRejectReason::Unavailable,
+            }
+        )));
+        assert!(!messages.iter().any(|message| matches!(
+            message,
+            ServerMessage::DaggerDoubleSlashStarted { .. } | ServerMessage::PlayerAttacked { .. }
+        )));
+        assert_eq!(game.dagger_skill_cooldown_ms(1).await, 0);
+        assert_eq!(game.monsters.read().await["skill_target"].health, 500);
+    }
+}
+
 #[tokio::test]
 async fn dagger_skill_reconnect_reports_and_enforces_remaining_cooldown() {
-    use onlinerpg_shared::ability::AbilityId;
-
     let game = make_test_game_state("dagger_skill_reconnect");
     let mut rx = setup_dagger_skill(&game, "dagger").await;
     let old_id = pid("archer");
-    game.dagger_double_slash(&old_id, "skill_target".into(), None)
-        .await;
+    use_dagger_skill(&game, &old_id).await;
     assert!(drain(&mut rx)
         .iter()
         .any(|message| matches!(message, ServerMessage::DaggerDoubleSlashStarted { .. })));
@@ -617,8 +661,7 @@ async fn dagger_skill_reconnect_reports_and_enforces_remaining_cooldown() {
     };
     let before = remaining(game.ability_cooldown_message(&id).await);
     assert!(before > 0 && before <= 10_000);
-    game.dagger_double_slash(&id, "skill_target".into(), None)
-        .await;
+    use_dagger_skill(&game, &id).await;
     let messages = drain(&mut rx);
     assert!(messages.iter().any(|message| matches!(message,
         ServerMessage::DaggerDoubleSlashRejected { reason, cooldown_ms, .. }
@@ -636,8 +679,7 @@ async fn dagger_skill_reconnect_reports_and_enforces_remaining_cooldown() {
         .await
         .insert(1, GameState::now_ms() - 10_000);
     assert_eq!(remaining(game.ability_cooldown_message(&id).await), 0);
-    game.dagger_double_slash(&id, "skill_target".into(), None)
-        .await;
+    use_dagger_skill(&game, &id).await;
     let messages = drain(&mut rx);
     assert_eq!(
         messages
@@ -672,13 +714,10 @@ async fn dagger_skill_finishes_the_existing_approach_before_impact() {
         false,
     )
     .await;
-    tokio::join!(
-        game.dagger_double_slash(&player_id, "skill_target".into(), None),
-        async {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            game.advance_test_movement(0.1).await;
-        }
-    );
+    tokio::join!(use_dagger_skill(&game, &player_id), async {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        game.advance_test_movement(0.1).await;
+    });
     let damage: Vec<_> = drain(&mut rx)
         .into_iter()
         .filter_map(|message| match message {
@@ -701,8 +740,7 @@ async fn dagger_skill_finishes_the_existing_approach_before_impact() {
 async fn dagger_skill_deals_two_full_hits_and_shares_the_attack_window() {
     let game = make_test_game_state("dagger_skill_full_hits");
     let mut rx = setup_dagger_skill(&game, "dagger").await;
-    game.dagger_double_slash(&pid("archer"), "skill_target".into(), None)
-        .await;
+    use_dagger_skill(&game, &pid("archer")).await;
     game.broadcast_player_attack(&pid("archer"), "skill_target".into())
         .await;
     let hits: Vec<_> = drain(&mut rx)
@@ -739,8 +777,7 @@ async fn dagger_skill_deals_two_full_hits_and_shares_the_attack_window() {
         500 - hits.iter().map(|(_, damage)| damage).sum::<u32>()
     );
     game.last_player_attacks.write().await.clear();
-    game.dagger_double_slash(&pid("archer"), "skill_target".into(), None)
-        .await;
+    use_dagger_skill(&game, &pid("archer")).await;
     assert!(drain(&mut rx).iter().any(|message| matches!(message,
         ServerMessage::DaggerDoubleSlashRejected { reason, cooldown_ms, .. } if reason == "cooldown" && *cooldown_ms > 9000)));
 }
@@ -774,8 +811,7 @@ async fn dagger_skill_rejects_other_classes_without_damage_or_cooldown() {
             .get_mut(&player_id)
             .unwrap()
             .class = class;
-        game.dagger_double_slash(&player_id, "skill_target".into(), None)
-            .await;
+        use_dagger_skill(&game, &player_id).await;
         let messages = drain(&mut rx);
         assert!(messages.iter().any(|message| matches!(message,
             ServerMessage::DaggerDoubleSlashRejected { reason, cooldown_ms, .. }
@@ -795,8 +831,7 @@ async fn dagger_skill_rejects_other_weapon_types_without_spending_cooldown() {
     for weapon in ["iron_sword", "goblin_sword", "great_sword"] {
         let game = make_test_game_state(&format!("dagger_skill_reject_{weapon}"));
         let mut rx = setup_dagger_skill(&game, weapon).await;
-        game.dagger_double_slash(&pid("archer"), "skill_target".into(), None)
-            .await;
+        use_dagger_skill(&game, &pid("archer")).await;
         assert!(drain(&mut rx).iter().any(|message| matches!(message,
             ServerMessage::DaggerDoubleSlashRejected { reason, .. } if reason == "dagger_required")));
         assert!(game.last_dagger_skills.read().await.is_empty());
@@ -811,8 +846,7 @@ async fn dagger_skill_cannot_follow_a_basic_attack_immediately() {
     game.broadcast_player_attack(&pid("archer"), "skill_target".into())
         .await;
     drain(&mut rx);
-    game.dagger_double_slash(&pid("archer"), "skill_target".into(), None)
-        .await;
+    use_dagger_skill(&game, &pid("archer")).await;
     assert!(drain(&mut rx).iter().any(|message| matches!(message,
         ServerMessage::DaggerDoubleSlashRejected { reason, .. } if reason == "attack_cooldown")));
     assert!(game.last_dagger_skills.read().await.is_empty());
@@ -823,21 +857,18 @@ async fn dagger_skill_weapon_swap_cancels_the_second_hit() {
     let game = make_test_game_state("dagger_skill_swap");
     let mut rx = setup_dagger_skill(&game, "dagger").await;
     let player_id = pid("archer");
-    tokio::join!(
-        game.dagger_double_slash(&player_id, "skill_target".into(), None),
-        async {
-            tokio::time::sleep(Duration::from_millis(280)).await;
-            game.inventories
-                .write()
-                .await
-                .get_mut(&pid("archer"))
-                .unwrap()
-                .equipped
-                .get_mut(&EquipSlot::MainHand)
-                .unwrap()
-                .item_def_id = "iron_sword".into();
-        }
-    );
+    tokio::join!(use_dagger_skill(&game, &player_id), async {
+        tokio::time::sleep(Duration::from_millis(280)).await;
+        game.inventories
+            .write()
+            .await
+            .get_mut(&pid("archer"))
+            .unwrap()
+            .equipped
+            .get_mut(&EquipSlot::MainHand)
+            .unwrap()
+            .item_def_id = "iron_sword".into();
+    });
     let count = drain(&mut rx)
         .iter()
         .filter(|message| {
@@ -865,8 +896,7 @@ async fn dagger_skill_first_hit_kill_reports_skipped_second_strike_without_dupli
         .health = 1;
     seed_subjects(&game).await;
     drain(&mut rx);
-    game.dagger_double_slash(&pid("archer"), "skill_target".into(), None)
-        .await;
+    use_dagger_skill(&game, &pid("archer")).await;
     let messages = drain(&mut rx);
     assert!(messages.iter().any(|message| matches!(message,
         ServerMessage::DaggerDoubleSlashSkipped { strike: 2, reason, .. } if reason == "target_defeated")));
@@ -898,8 +928,8 @@ async fn dagger_skill_rechecks_range_and_serializes_concurrent_casts() {
     let mut rx = setup_dagger_skill(&game, "dagger").await;
     let player_id = pid("archer");
     tokio::join!(
-        game.dagger_double_slash(&player_id, "skill_target".into(), None),
-        game.dagger_double_slash(&player_id, "skill_target".into(), None),
+        use_dagger_skill(&game, &player_id),
+        use_dagger_skill(&game, &player_id),
         async {
             tokio::time::sleep(Duration::from_millis(280)).await;
             game.monsters
@@ -948,24 +978,21 @@ async fn dagger_skill_new_movement_command_cancels_the_second_hit() {
     let mut rx = setup_dagger_skill(&game, "dagger").await;
     let player_id = pid("archer");
     let position = game.players.read().await[&player_id].position;
-    tokio::join!(
-        game.dagger_double_slash(&player_id, "skill_target".into(), None),
-        async {
-            tokio::time::sleep(Duration::from_millis(280)).await;
-            game.request_test_move(
-                &player_id,
-                TestMove {
-                    position: Position {
-                        x: position.x + 1.0,
-                        ..position
-                    },
-                    sprinting: false,
+    tokio::join!(use_dagger_skill(&game, &player_id), async {
+        tokio::time::sleep(Duration::from_millis(280)).await;
+        game.request_test_move(
+            &player_id,
+            TestMove {
+                position: Position {
+                    x: position.x + 1.0,
+                    ..position
                 },
-                false,
-            )
-            .await;
-        }
-    );
+                sprinting: false,
+            },
+            false,
+        )
+        .await;
+    });
     let messages = drain(&mut rx);
     assert_eq!(
         messages

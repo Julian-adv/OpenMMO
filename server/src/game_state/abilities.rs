@@ -173,7 +173,18 @@ impl GameState {
         ability: AbilityId,
         monster_id: Option<&str>,
         target_player_id: Option<PlayerId>,
+        auth: Option<&crate::auth::AuthService>,
     ) {
+        if ability == AbilityId::DaggerDoubleSlash {
+            match (monster_id, target_player_id) {
+                (Some(monster_id), None) => {
+                    self.dagger_double_slash(player_id, monster_id.to_owned(), auth)
+                        .await;
+                }
+                _ => self.use_ability(player_id, ability).await,
+            }
+            return;
+        }
         if ability == AbilityId::Auscultation {
             self.stop_bed_rest(player_id).await;
             let result = self

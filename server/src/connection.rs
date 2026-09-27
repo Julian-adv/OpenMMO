@@ -14,6 +14,7 @@ use crate::types::{
 };
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
+use onlinerpg_shared::ability::AbilityId;
 use onlinerpg_shared::deserialize_client_msg;
 use onlinerpg_shared::furniture_shop::{FurnitureTip, SHOP};
 use onlinerpg_shared::inventory::EquipSlot;
@@ -1470,10 +1471,24 @@ async fn handle_client_message(
             monster_id,
             target_player_id,
         } => {
-            if let Some(id) = &state.player_id {
-                game_state
-                    .use_targeted_ability(id, ability, monster_id.as_deref(), target_player_id)
+            if let Some(id) = state.player_id {
+                let game = Arc::clone(game_state);
+                let auth = Arc::clone(auth_service);
+                let cast = async move {
+                    game.use_targeted_ability(
+                        &id,
+                        ability,
+                        monster_id.as_deref(),
+                        target_player_id,
+                        Some(&auth),
+                    )
                     .await;
+                };
+                if ability == AbilityId::DaggerDoubleSlash {
+                    tokio::spawn(cast);
+                } else {
+                    cast.await;
+                }
             }
         }
         ClientMessage::PlayerAttack { monster_id } => {
@@ -1483,16 +1498,6 @@ async fn handle_client_message(
                     .await;
             } else {
                 warn!("Received attack from client that is not in game");
-            }
-        }
-
-        ClientMessage::DaggerDoubleSlash { monster_id } => {
-            if let Some(id) = state.player_id {
-                let game = Arc::clone(game_state);
-                let auth = Arc::clone(auth_service);
-                tokio::spawn(async move {
-                    game.dagger_double_slash(&id, monster_id, Some(&auth)).await;
-                });
             }
         }
 

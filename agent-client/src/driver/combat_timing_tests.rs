@@ -123,9 +123,11 @@ async fn llm_double_slash_is_used_once_then_combat_resumes_with_normal_attacks()
         rx.try_recv(),
         Ok(ClientMessage::PlayerFace { .. })
     ));
-    assert!(
-        matches!(rx.try_recv(), Ok(ClientMessage::DaggerDoubleSlash { monster_id }) if monster_id == "first")
-    );
+    assert!(matches!(rx.try_recv(), Ok(ClientMessage::UseAbility {
+            ability: AbilityId::DaggerDoubleSlash,
+            monster_id: Some(monster_id),
+            target_player_id: None,
+        }) if monster_id == "first"));
     assert!(rx.try_recv().is_err());
 
     tokio::time::advance(Duration::from_millis(100)).await;
@@ -279,8 +281,10 @@ async fn failed_double_slash_dispatch_does_not_consume_attack_recovery() {
     drop(rx);
     let mut state = state.lock().await;
     assert!(state
-        .send_command(ClientMessage::DaggerDoubleSlash {
-            monster_id: "first".into()
+        .send_command(ClientMessage::UseAbility {
+            ability: AbilityId::DaggerDoubleSlash,
+            monster_id: Some("first".into()),
+            target_player_id: None,
         })
         .await
         .is_err());

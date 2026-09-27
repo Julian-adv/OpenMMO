@@ -79,9 +79,10 @@ export const TRUE_AIM = {
 export const BUFF_ABILITIES = [GUARDIAN_WARD, RADIANCE, TRUE_AIM] as const
 export type AbilityId =
   | (typeof BUFF_ABILITIES)[number]['id']
+  | typeof DOUBLE_SLASH.id
   | typeof AUSCULTATION.id
 export type AbilityTimer = {
-  ability: AbilityId | typeof DAGGER_SKILL.clip
+  ability: AbilityId
   remaining_ms: number
 }
 

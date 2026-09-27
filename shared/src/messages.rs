@@ -447,9 +447,6 @@ pub enum ClientMessage {
     PlayerAttack {
         monster_id: String,
     },
-    DaggerDoubleSlash {
-        monster_id: String,
-    },
     RequestRespawn,
     /// Open the treasure chest on a dungeon's final floor. The server
     /// validates proximity, boss state and the per-player cooldown.

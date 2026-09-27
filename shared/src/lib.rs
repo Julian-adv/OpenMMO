@@ -197,7 +197,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v106: remove the TorchToggle debug request.
 /// v107: unify dropping bag items and equipped gear under DropItems.
 /// v108: unify teleport scroll use under UseItem.
-pub const PROTOCOL_VERSION: u32 = 108;
+/// v109: unify Double Slash requests under UseAbility.
+pub const PROTOCOL_VERSION: u32 = 109;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from
@@ -361,12 +362,18 @@ mod tests {
 
     #[test]
     fn roundtrip_dagger_skill_messages() {
-        let request = ClientMessage::DaggerDoubleSlash {
-            monster_id: "m1".to_string(),
+        let request = ClientMessage::UseAbility {
+            ability: crate::ability::AbilityId::DaggerDoubleSlash,
+            monster_id: Some("m1".to_string()),
+            target_player_id: None,
         };
         let bytes = serialize_client_msg(&request).unwrap();
         assert!(matches!(deserialize_client_msg(&bytes).unwrap(),
-            ClientMessage::DaggerDoubleSlash { monster_id } if monster_id == "m1"));
+            ClientMessage::UseAbility {
+                ability: crate::ability::AbilityId::DaggerDoubleSlash,
+                monster_id: Some(monster_id),
+                target_player_id: None,
+            } if monster_id == "m1"));
         for message in [
             ServerMessage::AbilityCooldowns {
                 cooldowns: vec![crate::ability::AbilityTimer {

@@ -13,6 +13,7 @@ use onlinerpg_shared::messages::{BagLineItem, DealKind};
 use tokio::sync::broadcast::error::TryRecvError;
 use tokio::sync::mpsc::error::TryRecvError as MpscTryRecvError;
 
+mod ability_request_tests;
 mod ability_tests;
 mod ambient_spawn_tests;
 mod bed_rest_tests;

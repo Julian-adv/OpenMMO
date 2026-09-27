@@ -41,6 +41,7 @@ async fn abilities_and_save_complete_with_queued_writers() {
             ability,
             Some("target"),
             None,
+            None,
         ));
         let save = futures_util::future::maybe_done(gs.get_player_save_data(&id));
         let ready = futures_util::future::maybe_done(gs.mark_world_ready(&id));
@@ -100,11 +101,11 @@ async fn bow_mark_does_not_bypass_attack_reach_ammo_or_line_of_sight() {
         .position
         .z = 0.5;
     gs.sync_region_furniture(0, 0, &[table_placement(4.5, 0.5)]);
-    gs.use_targeted_ability(&pid("caster"), MARK, Some("target"), None)
+    gs.use_targeted_ability(&pid("caster"), MARK, Some("target"), None, None)
         .await;
     rejected(&mut rx, AbilityRejectReason::Unavailable);
     gs.sync_region_furniture(0, 0, &[]);
-    gs.use_targeted_ability(&pid("caster"), MARK, Some("target"), None)
+    gs.use_targeted_ability(&pid("caster"), MARK, Some("target"), None, None)
         .await;
     assert!(gs
         .abilities
@@ -218,7 +219,7 @@ async fn bow_mark_rejects_dead_loading_and_mounted_casters() {
             caster.ready_at = ready_at;
             caster.mount = mounted.then_some(onlinerpg_shared::mount::MountKind::Horse);
         }
-        gs.use_targeted_ability(&pid("caster"), MARK, Some("target"), None)
+        gs.use_targeted_ability(&pid("caster"), MARK, Some("target"), None, None)
             .await;
         rejected(&mut rx, AbilityRejectReason::Unavailable);
     }
@@ -228,7 +229,7 @@ async fn bow_mark_rejects_dead_loading_and_mounted_casters() {
         .get_mut(&pid("caster"))
         .unwrap()
         .mount = None;
-    gs.use_targeted_ability(&pid("caster"), MARK, Some("target"), None)
+    gs.use_targeted_ability(&pid("caster"), MARK, Some("target"), None, None)
         .await;
     assert!(gs
         .abilities
@@ -246,7 +247,7 @@ async fn bow_mark_is_private_and_only_guarantees_its_casters_selected_target() {
     add_mark_target(&gs, "target", 5.0).await;
     messages(&mut caster_rx);
     messages(&mut party_rx);
-    gs.use_targeted_ability(&pid("caster"), MARK, Some("target"), None)
+    gs.use_targeted_ability(&pid("caster"), MARK, Some("target"), None, None)
         .await;
     let state = gs.abilities.read().await;
     assert!(state.marks_target(&pid("caster"), "target"));
@@ -290,8 +291,8 @@ async fn bow_mark_cooldown_is_atomic_and_survives_reconnect() {
     add_mark_target(&gs, "target", 5.0).await;
     let caster = pid("caster");
     tokio::join!(
-        gs.use_targeted_ability(&caster, MARK, Some("target"), None),
-        gs.use_targeted_ability(&caster, MARK, Some("target"), None)
+        gs.use_targeted_ability(&caster, MARK, Some("target"), None, None),
+        gs.use_targeted_ability(&caster, MARK, Some("target"), None, None)
     );
     let updates = messages(&mut rx);
     assert_eq!(
@@ -319,11 +320,11 @@ async fn bow_mark_cooldown_is_atomic_and_survives_reconnect() {
     assert!(!gs.abilities.read().await.marks_target(&caster, "target"));
     let mut rx = add_mark_player(&gs, "reconnected", 1).await;
     tokio::time::advance(Duration::from_millis(9999)).await;
-    gs.use_targeted_ability(&pid("reconnected"), MARK, Some("target"), None)
+    gs.use_targeted_ability(&pid("reconnected"), MARK, Some("target"), None, None)
         .await;
     rejected(&mut rx, AbilityRejectReason::Cooldown);
     tokio::time::advance(Duration::from_millis(1)).await;
-    gs.use_targeted_ability(&pid("reconnected"), MARK, Some("target"), None)
+    gs.use_targeted_ability(&pid("reconnected"), MARK, Some("target"), None, None)
         .await;
     assert!(gs
         .abilities
@@ -338,7 +339,7 @@ async fn bow_mark_rejects_wrong_equipment_missing_dead_far_or_other_floor_target
     let gs = make_test_game_state("bow_mark_validation");
     let mut rx = add_ward_player(&gs, "caster", 0.0, 1).await;
     add_mark_target(&gs, "target", 5.0).await;
-    gs.use_targeted_ability(&pid("caster"), MARK, Some("target"), None)
+    gs.use_targeted_ability(&pid("caster"), MARK, Some("target"), None, None)
         .await;
     rejected(&mut rx, AbilityRejectReason::Equipment);
     gs.inventories
@@ -349,7 +350,7 @@ async fn bow_mark_rejects_wrong_equipment_missing_dead_far_or_other_floor_target
         .equipped
         .insert(EquipSlot::MainHand, bag_item(1, "bow", 1));
     for target in [None, Some("missing")] {
-        gs.use_targeted_ability(&pid("caster"), MARK, target, None)
+        gs.use_targeted_ability(&pid("caster"), MARK, target, None, None)
             .await;
         rejected(&mut rx, AbilityRejectReason::Unavailable);
     }
@@ -365,7 +366,7 @@ async fn bow_mark_rejects_wrong_equipment_missing_dead_far_or_other_floor_target
             target.floor_level = floor;
             target.health = health;
         }
-        gs.use_targeted_ability(&pid("caster"), MARK, Some("target"), None)
+        gs.use_targeted_ability(&pid("caster"), MARK, Some("target"), None, None)
             .await;
         rejected(&mut rx, reason);
         assert!(!gs
@@ -380,7 +381,7 @@ async fn bow_mark_rejects_wrong_equipment_missing_dead_far_or_other_floor_target
         ));
     }
     add_mark_target(&gs, "target", 10.0).await;
-    gs.use_targeted_ability(&pid("caster"), MARK, Some("target"), None)
+    gs.use_targeted_ability(&pid("caster"), MARK, Some("target"), None, None)
         .await;
     assert!(gs
         .abilities
@@ -395,7 +396,7 @@ async fn bow_mark_clears_when_target_dies_disappears_or_caster_changes_floor() {
         let gs = make_test_game_state(&format!("bow_mark_clear_{change}"));
         let mut rx = add_mark_player(&gs, "caster", 1).await;
         add_mark_target(&gs, "target", 5.0).await;
-        gs.use_targeted_ability(&pid("caster"), MARK, Some("target"), None)
+        gs.use_targeted_ability(&pid("caster"), MARK, Some("target"), None, None)
             .await;
         messages(&mut rx);
         match change {
@@ -679,7 +680,7 @@ async fn ward_spends_two_mana_and_syncs_and_saves_the_new_state() {
         gs.mana.write().await.get_mut(&id).unwrap().mana = before;
         gs.register_hunger(&id, 0).await;
         gs.remove_dirty(&id).await;
-        gs.use_targeted_ability(&id, WARD, None, None).await;
+        gs.use_targeted_ability(&id, WARD, None, None, None).await;
         assert_eq!(gs.mana.read().await[&id].mana, before - 2);
         assert_eq!(gs.hunger_satiation(&id).await, Some(0));
         assert!(gs.dirty_players.read().await.contains(&id));
@@ -752,7 +753,7 @@ async fn ward_rejects_other_classes_without_buff_or_cooldown() {
         CharacterClass::Priest,
     ] {
         gs.players.write().await.get_mut(&id).unwrap().class = class;
-        gs.use_targeted_ability(&id, WARD, None, None).await;
+        gs.use_targeted_ability(&id, WARD, None, None, None).await;
         let responses = messages(&mut rx);
         assert!(responses.iter().any(|message| matches!(message,
             ServerMessage::AbilityRejected { ability, reason: AbilityRejectReason::Unavailable }
@@ -769,7 +770,7 @@ async fn ward_rejects_other_classes_without_buff_or_cooldown() {
                 if cooldowns.iter().all(|timer| timer.remaining_ms == 0))));
     }
     gs.players.write().await.get_mut(&id).unwrap().class = CharacterClass::Knight;
-    gs.use_targeted_ability(&id, WARD, None, None).await;
+    gs.use_targeted_ability(&id, WARD, None, None, None).await;
     assert_eq!(gs.effective_guard(&id).await, 34);
     assert!(messages(&mut rx).iter().any(|message| matches!(message,
         ServerMessage::AbilityUsed { ability, .. } if *ability == WARD)));
@@ -1002,8 +1003,14 @@ async fn add_examiner(gs: &GameState) -> DirectRx {
 }
 
 async fn examine(gs: &GameState, monster: Option<&str>, player: Option<PlayerId>) {
-    gs.use_targeted_ability(&pid("examiner"), AbilityId::Auscultation, monster, player)
-        .await;
+    gs.use_targeted_ability(
+        &pid("examiner"),
+        AbilityId::Auscultation,
+        monster,
+        player,
+        None,
+    )
+    .await;
 }
 
 fn inspection(rx: &mut DirectRx) -> InspectionResult {

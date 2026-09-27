@@ -160,7 +160,6 @@ export type ClientMessage =
         target_player_id: number | null
       }
     }
-  | { DaggerDoubleSlash: { monster_id: string } }
   | 'RequestRespawn'
   | { FishingCast: { position: Position } }
   | { FishingRespond: { action: FishingAction } }

@@ -104,7 +104,10 @@ export function applyAbilityCooldowns(
 }
 
 export type AbilityEffectEvent = {
-  ability: Exclude<AbilityId, 'bow_mark' | 'auscultation'>
+  ability: Exclude<
+    AbilityId,
+    'bow_mark' | 'auscultation' | 'dagger_double_slash'
+  >
   player_id: number
   position: Position
   floor_level: number

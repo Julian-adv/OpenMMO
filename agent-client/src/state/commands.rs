@@ -56,7 +56,13 @@ impl SharedState {
         msg: ClientMessage,
         from_action: bool,
     ) -> anyhow::Result<()> {
-        let double_slash = matches!(&msg, ClientMessage::DaggerDoubleSlash { .. });
+        let double_slash = matches!(
+            &msg,
+            ClientMessage::UseAbility {
+                ability: onlinerpg_shared::ability::AbilityId::DaggerDoubleSlash,
+                ..
+            }
+        );
         let player_attack = double_slash || matches!(&msg, ClientMessage::PlayerAttack { .. });
         let fishing_cast = matches!(&msg, ClientMessage::FishingCast { .. });
         let fishing_stop = matches!(&msg, ClientMessage::FishingStop);

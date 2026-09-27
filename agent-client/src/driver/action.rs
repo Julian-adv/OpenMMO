@@ -1392,8 +1392,10 @@ pub(super) fn action_to_command(
         AgentAction::Attack {
             monster_id, skill, ..
         } => Some(match skill {
-            Some(AttackSkill::DoubleSlash) => ClientMessage::DaggerDoubleSlash {
-                monster_id: monster_id.clone(),
+            Some(AttackSkill::DoubleSlash) => ClientMessage::UseAbility {
+                ability: onlinerpg_shared::ability::AbilityId::DaggerDoubleSlash,
+                monster_id: Some(monster_id.clone()),
+                target_player_id: None,
             },
             None => ClientMessage::PlayerAttack {
                 monster_id: monster_id.clone(),
