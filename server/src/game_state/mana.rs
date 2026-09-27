@@ -48,10 +48,7 @@ impl GameState {
         player: &Player,
         wis: u8,
         saved: Option<u32>,
-    ) -> Option<ServerMessage> {
-        if player.is_official_npc {
-            return None;
-        }
+    ) -> ServerMessage {
         let maximum = max_mana(&player.class, wis, player.level);
         let data = ManaData {
             mana: saved.unwrap_or(maximum).min(maximum),
@@ -60,7 +57,7 @@ impl GameState {
         };
         let message = data.message();
         self.mana.write().await.insert(player.id, data);
-        Some(message)
+        message
     }
 
     pub(super) async fn send_mana_update(&self, player_id: &PlayerId) {

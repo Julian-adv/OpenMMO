@@ -127,6 +127,7 @@ impl SharedState {
             ServerMessage::GoldUpdate { .. }
             | ServerMessage::ManaUpdate { .. }
             | ServerMessage::AbilityCooldowns { .. }
+            | ServerMessage::BuffUpdate { .. }
             | ServerMessage::GoldGained { .. }
             | ServerMessage::InventoryState { .. }
             | ServerMessage::InventoryUpdated { .. }
@@ -472,7 +473,8 @@ impl SharedState {
                 self.self_player_id = Some(player.id);
                 self.self_player = Some(player.clone());
                 self.self_mana = None;
-                self.double_slash_ready_at = None;
+                self.ability_ready_at.clear();
+                self.buff_expires_at.clear();
                 self.set_self_fishing(false);
                 self.fishing_retry_at = None;
                 // A character saved underground rejoins there (the server
@@ -1191,24 +1193,34 @@ impl SharedState {
                 self.world_cache.write().unwrap().remove_house(house_id);
             }
             ServerMessage::AbilityCooldowns { cooldowns } => {
-                let remaining_ms = cooldowns
+                self.ability_ready_at.clear();
+                for timer in cooldowns {
+                    self.update_ability_cooldown(timer.ability, timer.remaining_ms);
+                }
+            }
+            ServerMessage::BuffUpdate { buffs } => {
+                let now = tokio::time::Instant::now();
+                self.buff_expires_at = buffs
                     .iter()
-                    .find(|timer| {
-                        timer.ability == onlinerpg_shared::ability::AbilityId::DaggerDoubleSlash
+                    .filter(|timer| timer.remaining_ms > 0)
+                    .map(|timer| {
+                        (
+                            timer.ability,
+                            now + Duration::from_millis(timer.remaining_ms),
+                        )
                     })
-                    .map_or(0, |timer| timer.remaining_ms);
-                self.update_double_slash_cooldown(remaining_ms);
+                    .collect();
             }
             ServerMessage::DaggerDoubleSlashStarted {
                 player_id,
                 cooldown_ms,
                 ..
             } if self.self_player_id.as_ref() == Some(player_id) => {
-                self.update_double_slash_cooldown(*cooldown_ms);
+                self.update_ability_cooldown(AbilityId::DaggerDoubleSlash, *cooldown_ms);
                 self.last_player_attack_at = Some(tokio::time::Instant::now());
             }
             ServerMessage::DaggerDoubleSlashRejected { cooldown_ms, .. } if *cooldown_ms > 0 => {
-                self.update_double_slash_cooldown(*cooldown_ms);
+                self.update_ability_cooldown(AbilityId::DaggerDoubleSlash, *cooldown_ms);
             }
             ServerMessage::DoorToggled {
                 ref house_id,

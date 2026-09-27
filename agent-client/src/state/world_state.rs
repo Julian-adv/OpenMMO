@@ -1,4 +1,7 @@
 use super::*;
+use onlinerpg_shared::ability::{
+    GUARDIAN_WARD_COOLDOWN_MS, GUARDIAN_WARD_DURATION_MS, GUARDIAN_WARD_RADIUS,
+};
 
 impl SharedState {
     /// Current game time snapshot for schedule resolution.
@@ -102,6 +105,62 @@ Check readiness above; it shares normal attack recovery and has its own
 cooldown. Moving, changing weapons or mounting can interrupt its two strikes.
 The server reports starts, failures and skipped strikes; a start alone does
 not mean both strikes hit."#
+            ));
+        }
+        if let Some(player) = self
+            .self_player
+            .as_ref()
+            .filter(|player| player.class == onlinerpg_shared::CharacterClass::Knight)
+        {
+            let main = self
+                .self_equipped
+                .get(&onlinerpg_shared::inventory::EquipSlot::MainHand)
+                .and_then(|item| crate::item_defs::get(&item.item_def_id));
+            let off = self
+                .self_equipped
+                .get(&onlinerpg_shared::inventory::EquipSlot::OffHand)
+                .and_then(|item| crate::item_defs::get(&item.item_def_id));
+            let equipped = main.is_some_and(|def| {
+                matches!(def.weapon_type.as_deref(), Some("sword" | "mace"))
+                    && def.hands.unwrap_or(1) < 2
+            }) && off.is_some_and(|def| def.armor_type.as_deref() == Some("shield"));
+            let wait = self.ability_wait(AbilityId::GuardianWard);
+            let mana_cost = AbilityId::GuardianWard.mana_cost();
+            let readiness = if player.health == 0 {
+                "respawn first".to_string()
+            } else if player.is_mounted() {
+                "dismount first".to_string()
+            } else if !equipped {
+                "equip a one-handed sword or mace and an off-hand shield first".to_string()
+            } else if !wait.is_zero() {
+                format!("ready in {:.1}s", wait.as_secs_f32())
+            } else {
+                match self.self_mana {
+                    Some((mana, _)) if mana >= mana_cost => "ready".to_string(),
+                    Some(_) => format!("not enough MP; requires {mana_cost} MP"),
+                    None => "waiting for MP state".to_string(),
+                }
+            };
+            let remaining = self
+                .buff_expires_at
+                .get(&AbilityId::GuardianWard)
+                .map_or(std::time::Duration::ZERO, |expires| {
+                    expires.saturating_duration_since(tokio::time::Instant::now())
+                });
+            let buff = if remaining.is_zero() {
+                "not active".to_string()
+            } else {
+                format!("active for {:.1}s", remaining.as_secs_f32())
+            };
+            lines.push(format!(
+                r#"Guardian Ward: {readiness}. Your ward: {buff}.
+As a Knight, cast with {{"type": "use_ability", "ability": "guardian_ward"}}.
+Requires a one-handed sword or mace, an off-hand shield and {mana_cost} MP.
+Grants Guard +10% to you and living party members within {GUARDIAN_WARD_RADIUS}m on the same floor
+for {}s; cooldown {}s. No target is needed. Recasting refreshes the duration; it does not stack.
+Use the readiness and ward status above. Wait for server success or failure feedback."#,
+                GUARDIAN_WARD_DURATION_MS / 1000,
+                GUARDIAN_WARD_COOLDOWN_MS / 1000,
             ));
         }
         if let Some((satiation, state)) = self.self_hunger {

@@ -46,6 +46,7 @@ impl SharedState {
 }
 
 use crate::dungeon::Dungeon;
+use onlinerpg_shared::ability::AbilityId;
 use onlinerpg_shared::dungeon::{
     cell_center, dungeon_cache_key, floor_cells, passability_floor_for_level, path_max_nodes,
     set_floor_cells, world_to_cell,
@@ -430,7 +431,8 @@ pub struct SharedState {
     cmd_tx: mpsc::Sender<ClientMessage>,
     pub attack_cooldown: std::time::Duration,
     last_player_attack_at: Option<tokio::time::Instant>,
-    double_slash_ready_at: Option<tokio::time::Instant>,
+    ability_ready_at: HashMap<AbilityId, tokio::time::Instant>,
+    buff_expires_at: HashMap<AbilityId, tokio::time::Instant>,
     /// Notified when an urgent event arrives
     pub urgent_notify: Arc<Notify>,
     /// Commands queued while processing server events.
@@ -546,7 +548,8 @@ impl SharedState {
             cmd_tx,
             attack_cooldown: DEFAULT_ATTACK_COOLDOWN,
             last_player_attack_at: None,
-            double_slash_ready_at: None,
+            ability_ready_at: HashMap::new(),
+            buff_expires_at: HashMap::new(),
             urgent_notify: Arc::new(Notify::new()),
             pending_commands: Vec::new(),
             watch,

@@ -19,15 +19,22 @@ impl SharedState {
     }
 
     pub fn double_slash_wait(&self) -> std::time::Duration {
-        self.double_slash_ready_at
+        self.ability_wait(AbilityId::DaggerDoubleSlash)
+    }
+
+    pub fn ability_wait(&self, ability: AbilityId) -> std::time::Duration {
+        self.ability_ready_at
+            .get(&ability)
             .map_or(std::time::Duration::ZERO, |ready| {
                 ready.saturating_duration_since(tokio::time::Instant::now())
             })
     }
 
-    pub(super) fn update_double_slash_cooldown(&mut self, remaining_ms: u64) {
-        self.double_slash_ready_at =
-            Some(tokio::time::Instant::now() + std::time::Duration::from_millis(remaining_ms));
+    pub(super) fn update_ability_cooldown(&mut self, ability: AbilityId, remaining_ms: u64) {
+        self.ability_ready_at.insert(
+            ability,
+            tokio::time::Instant::now() + std::time::Duration::from_millis(remaining_ms),
+        );
     }
 
     pub async fn send_command(&mut self, msg: ClientMessage) -> anyhow::Result<()> {
@@ -66,6 +73,22 @@ impl SharedState {
         let player_attack = double_slash || matches!(&msg, ClientMessage::PlayerAttack { .. });
         let fishing_cast = matches!(&msg, ClientMessage::FishingCast { .. });
         let fishing_stop = matches!(&msg, ClientMessage::FishingStop);
+        if matches!(
+            &msg,
+            ClientMessage::UseAbility {
+                ability: AbilityId::GuardianWard,
+                ..
+            }
+        ) {
+            let wait = self.ability_wait(AbilityId::GuardianWard);
+            if !wait.is_zero() {
+                self.push_agent_event(format!(
+                    "[GuardianWardFailed] Wait {:.1}s before casting Guardian Ward again.",
+                    wait.as_secs_f32()
+                ));
+                return Ok(());
+            }
+        }
         if double_slash {
             let wait = self.double_slash_wait().max(self.player_attack_wait());
             if !wait.is_zero() {

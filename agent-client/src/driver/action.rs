@@ -15,6 +15,12 @@ pub(super) enum AttackSkill {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum AgentAbility {
+    GuardianWard,
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 pub(super) enum AgentAction {
     #[serde(rename = "say", alias = "chat")]
@@ -34,6 +40,8 @@ pub(super) enum AgentAction {
         sprint: Option<bool>,
         skill: Option<AttackSkill>,
     },
+    #[serde(rename = "use_ability")]
+    UseAbility { ability: AgentAbility },
     #[serde(rename = "move")]
     Move {
         // Character name: approach them and stop a polite distance short
@@ -375,14 +383,7 @@ pub(super) enum AgentAction {
     Wait,
 }
 
-/// One block of the action reference: the prompt text agents read, tied to
-/// the serde tag(s) it documents. `action_reference()` renders the table into
-/// the `{{ACTIONS}}` slot of the system prompt, so this table IS the format
-/// documentation — there is no hand-maintained copy anywhere else.
-///
-/// Tests lock the table to the enum: every action the parser accepts must be
-/// documented here (and nothing extra), and every example line must parse.
-/// Adding an `AgentAction` variant without a spec entry fails `cargo test`.
+/// Action documentation rendered into `{{ACTIONS}}`; tests verify tags and examples.
 pub(super) struct ActionSpec {
     /// serde tag(s) this block documents — the enum `rename` values.
     /// Read by the lock tests below and by `action_is`.
@@ -429,6 +430,15 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
   You walk into range first, then strike. Add "sprint": false to walk that
   approach instead of sprinting it:
   {"type": "attack", "target": "m21", "sprint": false}"#,
+    },
+    ActionSpec {
+        names: &["use_ability"],
+        aliases: &[],
+        doc: r#"- Cast a class ability (Knights: Guardian Ward):
+  {"type": "use_ability", "ability": "guardian_ward"}
+  Check your class-specific world-state guidance for equipment, MP,
+  cooldown and active buff status. Guardian Ward needs no target.
+  The server reports success or failure."#,
     },
     ActionSpec {
         names: &["follow"],
@@ -799,6 +809,7 @@ impl AgentAction {
             | Self::Fish { .. }
             | Self::Respawn => true,
             Self::Say { .. }
+            | Self::UseAbility { .. }
             | Self::OpenStall { .. }
             | Self::CloseStall
             | Self::BuyFromStall { .. }
@@ -867,6 +878,7 @@ impl AgentAction {
         match self {
             Self::Say { .. } | Self::Recite { .. } | Self::PartySay { .. } | Self::Wait => true,
             Self::Move { .. }
+            | Self::UseAbility { .. }
             | Self::OpenStall { .. }
             | Self::CloseStall
             | Self::BuyFromStall { .. }
@@ -916,6 +928,7 @@ impl AgentAction {
             Self::Say { .. } => "say",
             Self::Recite { .. } => "recite",
             Self::Attack { .. } => "attack",
+            Self::UseAbility { .. } => "use_ability",
             Self::Move { .. } => "move",
             Self::Follow { .. } => "follow",
             Self::Respawn => "respawn",
@@ -1400,6 +1413,13 @@ pub(super) fn action_to_command(
             None => ClientMessage::PlayerAttack {
                 monster_id: monster_id.clone(),
             },
+        }),
+        AgentAction::UseAbility {
+            ability: AgentAbility::GuardianWard,
+        } => Some(ClientMessage::UseAbility {
+            ability: onlinerpg_shared::ability::AbilityId::GuardianWard,
+            monster_id: None,
+            target_player_id: None,
         }),
         AgentAction::Move {
             target,

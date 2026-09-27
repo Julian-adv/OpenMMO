@@ -355,6 +355,44 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
                 " (Double Slash strike {strike})"
             ))
         )),
+        ServerMessage::AbilityUsed {
+            ability: onlinerpg_shared::ability::AbilityId::GuardianWard,
+            player_id,
+            targets,
+            ..
+        } => {
+            let self_id = state.self_player_id?;
+            if self_id != *player_id && !targets.contains(&self_id) {
+                return None;
+            }
+            let names = targets
+                .iter()
+                .map(|id| player_name(state, id))
+                .collect::<Vec<_>>()
+                .join(", ");
+            Some(format!(
+                "[GuardianWard] {} cast Guardian Ward on {names}.",
+                player_name(state, player_id),
+            ))
+        }
+        ServerMessage::AbilityRejected {
+            ability: onlinerpg_shared::ability::AbilityId::GuardianWard,
+            reason,
+        } => {
+            use onlinerpg_shared::ability::AbilityRejectReason;
+            let reason = match reason {
+                AbilityRejectReason::Unavailable => {
+                    "unavailable in your current state; requires a living, unmounted Knight with an MP pool"
+                }
+                AbilityRejectReason::Equipment => {
+                    "equip a one-handed sword or mace and an off-hand shield"
+                }
+                AbilityRejectReason::Cooldown => "still on cooldown; check readiness",
+                AbilityRejectReason::NotEnoughMana => "not enough MP",
+                AbilityRejectReason::OutOfRange => "target is out of range",
+            };
+            Some(format!("[GuardianWardFailed] {reason}."))
+        }
         ServerMessage::DaggerDoubleSlashStarted {
             player_id,
             monster_id,

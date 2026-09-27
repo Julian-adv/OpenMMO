@@ -16,6 +16,8 @@
 //! - `execute`: parse a response and run each action; returns the
 //!   monster_id of the final attack so the loop can take over chasing it.
 
+#[cfg(test)]
+mod ability_tests;
 mod action;
 mod backoff;
 #[cfg(test)]

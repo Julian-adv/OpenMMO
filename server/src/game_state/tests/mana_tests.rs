@@ -146,18 +146,90 @@ async fn mana_initializes_once_and_saved_zero_survives_reconnect_and_server_rest
 }
 
 #[tokio::test]
-async fn mana_exempts_official_npcs_and_clamps_saved_values() {
+async fn mana_initializes_and_restores_players_and_official_npcs_equally() {
     let gs = make_test_game_state("mana_npc");
     let mut player = make_player("npc", 0.0, 0.0);
+    for official in [false, true] {
+        player.is_official_npc = official;
+        for (saved, expected) in [(None, 15), (Some(0), 0), (Some(7), 7), (Some(999), 15)] {
+            assert!(matches!(
+                gs.register_mana(&player, 10, saved).await,
+                ServerMessage::ManaUpdate { mana, max_mana: 15 } if mana == expected
+            ));
+            assert_eq!(gs.mana.read().await[&player.id].mana, expected);
+        }
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn official_npc_casts_guardian_ward_regenerates_and_persists_mana() {
+    let auth = make_test_auth("npc_ward_mana");
+    let account = auth.login_npc("npc_ward_mana").unwrap();
+    let record = create_test_character(&auth, &account, "Wardknig");
+    assert_eq!(record.mana, None);
+    let gs = make_test_game_state("npc_ward_mana");
+    let mut player = make_player("npc_knight", 100.0, 50.0);
     player.is_official_npc = true;
-    assert!(gs.register_mana(&player, 10, None).await.is_none());
-    assert!(!gs.mana.read().await.contains_key(&player.id));
-    player.is_official_npc = false;
-    assert!(matches!(
-        gs.register_mana(&player, 10, Some(999)).await,
-        Some(ServerMessage::ManaUpdate {
-            mana: 15,
+    let id = player.id;
+    gs.register_player_character(&id, record.id, 0, attrs_with_cha(10), 0, None)
+        .await;
+    gs.register_mana(&player, 10, record.mana).await;
+    gs.add_player(player.clone()).await;
+    let mut inventory = PlayerInventory::default();
+    inventory
+        .equipped
+        .insert(EquipSlot::MainHand, bag_item(1, "iron_sword", 1));
+    inventory
+        .equipped
+        .insert(EquipSlot::OffHand, bag_item(2, "wooden_shield", 1));
+    gs.inventories.write().await.insert(id, inventory);
+    let mut rx = gs.register_direct_channel(&id).await;
+    gs.use_targeted_ability(
+        &id,
+        onlinerpg_shared::ability::AbilityId::GuardianWard,
+        None,
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(gs.mana.read().await[&id].mana, 13);
+    assert!(drain(&mut rx).iter().any(|message| matches!(
+        message,
+        ServerMessage::ManaUpdate {
+            mana: 13,
             max_mana: 15
-        })
+        }
+    )));
+    assert_eq!(gs.get_player_save_data(&id).await.unwrap().mana, Some(13));
+    advance(Duration::from_millis(MANA_REGEN_INTERVAL_MS)).await;
+    gs.tick_regeneration().await;
+    assert_eq!(gs.mana.read().await[&id].mana, 14);
+    assert!(drain(&mut rx).iter().any(|message| matches!(
+        message,
+        ServerMessage::ManaUpdate {
+            mana: 14,
+            max_mana: 15
+        }
+    )));
+    gs.mana
+        .write()
+        .await
+        .get_mut(&id)
+        .unwrap()
+        .spend(14)
+        .unwrap();
+    gs.mark_dirty(&id).await;
+    gs.flush_dirty_saves(&auth).await;
+    let saved = auth.get_character_for_account(&account, record.id).unwrap();
+    assert_eq!(saved.mana, Some(0));
+    gs.unregister_player_character(&id).await;
+    assert!(!gs.mana.read().await.contains_key(&id));
+    let next = make_test_game_state("npc_ward_mana_restart");
+    assert!(matches!(
+        next.register_mana(&player, 10, saved.mana).await,
+        ServerMessage::ManaUpdate {
+            mana: 0,
+            max_mana: 15
+        }
     ));
 }
