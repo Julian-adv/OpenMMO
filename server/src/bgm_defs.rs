@@ -63,6 +63,6 @@ mod tests {
         assert!(bgm_defs().resolve("").is_some());
         assert_eq!(bgm_defs().resolve("nonesuch"), None);
         // Battle music is not in the registry, so nobody can call it up.
-        assert_eq!(bgm_defs().resolve("Blood and Bronze"), None);
+        assert_eq!(bgm_defs().resolve("Drums of Valor"), None);
     }
 }
