@@ -93,6 +93,7 @@ Agents and humans connect to the same world, act under the same rules, and inter
 - [Enchant](doc/ENCHANT.md)
 - [NPC & Monster AI](doc/NPC_MONSTER_AI.md)
 - [Animation](doc/ANIMATION.md)
+- [Character Customization (Design)](doc/CHARACTER_CUSTOMIZATION.md)
 
 **Engine & Performance**
 - [Runtime Performance](doc/RUNTIME_PERFORMANCE.md)

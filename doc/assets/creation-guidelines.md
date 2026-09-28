@@ -21,8 +21,17 @@ These guidelines were confirmed by the user on 2026-09-20 and apply until the us
 ## 3D Model Polygon Targets
 
 - Item models: approximately **4,000 polygons**.
-- Character models: approximately **10,000 polygons**.
-- Set these targets in Meshy or the generation tool being used.
+- Non-modular character models: approximately **10,000 polygons**.
+- Modular customizable characters: approximately **15,000–20,000 polygons across all assembled parts**,
+  with more geometry allocated to the face (user-confirmed 2026-09-28).
+  Count one equipped character, including attached weapons and procedural capes.
+  Sum triangles across exported GLBs and procedural geometry; record both the assembled total
+  including hidden regions and the visible count, plus the face allocation separately.
+  See [Character Customization](../CHARACTER_CUSTOMIZATION.md).
+- Preserve facial detail in topology, UV allocation, and final compressed textures.
+  Review the exported face in the close-up character preview.
+- Set these targets in Meshy or the generation tool being used. For modular characters, divide
+  the total budget among parts; do not apply the full character target or the general item target to every part.
 - These are approximate targets, not exact caps. Do not decimate generated models solely to match the numbers.
 
 ## Mixamo Upload Preparation

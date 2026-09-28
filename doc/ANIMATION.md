@@ -2,6 +2,9 @@
 
 OnlineRPG 클라이언트의 캐릭터 애니메이션 로딩/매핑 규칙 문서.
 
+공통 리그에 파츠를 조립하고 기존 동작을 재사용하는 계획은
+[캐릭터 커스터마이제이션 설계](CHARACTER_CUSTOMIZATION.md)에 정리한다.
+
 ## 1. 관련 파일
 
 - 캐릭터 베이스 모델: `client/src/lib/utils/modelPaths.ts`의 `getCharacterModelPath(...)`가 반환하는 모델
