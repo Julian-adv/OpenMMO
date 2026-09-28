@@ -61,7 +61,12 @@ describe('modular outfit coverage', () => {
     legs.add(legPrimitive)
     const body = [torso, hands, feet, legPrimitive]
     const shirt = [region('torso'), region('sleeves')]
-    const pants = [region('main'), region('cuffs'), region('waist')]
+    const pants = [
+      region('main'),
+      region('cuffs'),
+      region('waist'),
+      region('tucked_cuffs'),
+    ]
     const parts = new Map([
       ['top_linen', shirt],
       ['pants_cloth', pants],
@@ -79,7 +84,12 @@ describe('modular outfit coverage', () => {
     })
     expect(body.every((mesh) => !mesh.visible)).toBe(true)
     expect(shirt.map((mesh) => mesh.visible)).toEqual([false, true])
-    expect(pants.map((mesh) => mesh.visible)).toEqual([true, false, false])
+    expect(pants.map((mesh) => mesh.visible)).toEqual([
+      true,
+      false,
+      false,
+      true,
+    ])
     expect(parts.get('hair_crop')![0].visible).toBe(false)
     expect(parts.get('hair_sidepart')![0].visible).toBe(true)
     showModularOutfit(body, parts, {
@@ -95,7 +105,12 @@ describe('modular outfit coverage', () => {
       feet.visible,
       legPrimitive.visible,
     ]).toEqual([false, true, true, false])
-    expect(pants.map((mesh) => mesh.visible)).toEqual([true, true, false])
+    expect(pants.map((mesh) => mesh.visible)).toEqual([
+      true,
+      true,
+      false,
+      false,
+    ])
     showModularOutfit(body, parts, {
       hair: 'none',
       top: 'none',
@@ -108,13 +123,27 @@ describe('modular outfit coverage', () => {
       feet.visible,
       legPrimitive.visible,
     ]).toEqual([true, true, true, false])
-    expect(pants.every((mesh) => mesh.visible)).toBe(true)
+    expect(pants.map((mesh) => mesh.visible)).toEqual([true, true, true, false])
     expect(
       [...parts]
         .filter(([id]) => id !== 'pants_cloth')
         .flatMap(([, meshes]) => meshes)
         .every((mesh) => !mesh.visible)
     ).toBe(true)
+    for (const boots of [true, false, true]) {
+      showModularOutfit(body, parts, {
+        hair: 'none',
+        top: 'none',
+        gloves: false,
+        boots,
+      })
+      expect(pants.map((mesh) => mesh.visible)).toEqual([
+        true,
+        !boots,
+        true,
+        boots,
+      ])
+    }
   })
 })
 

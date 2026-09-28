@@ -83,6 +83,11 @@ export function showModularOutfit(
         ) &&
         !(
           id === 'pants_cloth' &&
+          !outfit.boots &&
+          mesh.userData.region === 'tucked_cuffs'
+        ) &&
+        !(
+          id === 'pants_cloth' &&
           outfit.top !== 'none' &&
           mesh.userData.region === 'waist'
         ) &&
