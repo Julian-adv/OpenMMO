@@ -53,7 +53,8 @@ impl GameState {
         sprinting: bool,
     ) {
         if !rotation.is_finite() || !(-1..=1).contains(&forward) || !(-1..=1).contains(&turn) {
-            self.reject_move_input(id, request_id, "direction").await;
+            self.reject_move_input(id, request_id, "direction", None)
+                .await;
             return;
         }
         {
@@ -157,6 +158,7 @@ impl GameState {
         id: PlayerId,
         request_id: u32,
         reason: &'static str,
+        detail: Option<String>,
     ) {
         let mut goals = self.goal_moves.lock(id).await;
         let state = goals.get_or_insert_with(|| GoalMovement::new(request_id));
@@ -166,7 +168,7 @@ impl GameState {
             .last_diagnostic
             .is_none_or(|last| now.duration_since(last) >= Duration::from_secs(10))
         {
-            tracing::warn!(%id, request_id, reason, count = state.invalid_requests, "Invalid movement input");
+            tracing::warn!(%id, request_id, reason, count = state.invalid_requests, detail = detail.as_deref().unwrap_or(""), "Invalid movement input");
             state.last_diagnostic = Some(now);
             state.invalid_requests = 0;
         }

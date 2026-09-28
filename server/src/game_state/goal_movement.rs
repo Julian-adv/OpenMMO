@@ -143,18 +143,27 @@ impl GameState {
         stop_at_entrance: bool,
     ) {
         if !x.is_finite() || !z.is_finite() {
-            self.reject_move_input(id, request_id, "coordinates").await;
+            self.reject_move_input(id, request_id, "coordinates", None)
+                .await;
             return;
         }
         self.settle_goal_players(&[id]).await;
         let x = wrap_world_x(x);
-        let valid = self.players.read().await.get(&id).is_some_and(|player| {
-            player.health > 0
-                && shortest_world_delta_x(player.position.x, x).hypot(z - player.position.z)
-                    <= MAX_MOVE_TARGET_DISTANCE
-        });
-        if !valid {
-            self.reject_move_input(id, request_id, "state_or_distance")
+        let invalid = match self.players.read().await.get(&id) {
+            None => Some("no player".to_string()),
+            Some(player) => {
+                let distance =
+                    shortest_world_delta_x(player.position.x, x).hypot(z - player.position.z);
+                (player.health == 0 || distance > MAX_MOVE_TARGET_DISTANCE).then(|| {
+                    format!(
+                        "goal=({x:.1},{z:.1}) player=({:.1},{:.1}) floor={} distance={distance:.1} health={}",
+                        player.position.x, player.position.z, player.floor_level, player.health
+                    )
+                })
+            }
+        };
+        if let Some(detail) = invalid {
+            self.reject_move_input(id, request_id, "state_or_distance", Some(detail))
                 .await;
             return;
         }
