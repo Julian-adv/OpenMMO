@@ -1,5 +1,35 @@
 # Character Assets
 
+## Modular Human Male 01 — 제작 샘플 (2026-09-28)
+
+- [캐릭터 커스터마이제이션](../CHARACTER_CUSTOMIZATION.md)의 기준 몸체 제작 샘플.
+  기존 플레이어 모델을 교체하지 않은 작업 에셋이며, 공통 리그와 파츠 분리는 미완료다.
+- 원화: [정면](../images/characters/modular_human_male_01/base-front.png),
+  [왼쪽 측면](../images/characters/modular_human_male_01/base-left.png).
+  OpenAI Codex built-in ImageGen, ChatGPT Pro 20x, 2026-09-28. OpenAI 생성 출력물 이용 조건 적용.
+  실제 프롬프트·해시·후면 생성 실패 기록: [concept-source.json](../../assets/modular_human_male_01/concept-source.json).
+- 성인 남성, 민머리·수염 없음, 빈손 A포즈, 회색 모델링용 반바지. 체형과 얼굴·손의
+  제작 가능성을 먼저 확인하며, 반바지와 몸체는 이후 분리·보완한다.
+- Meshy.ai Premium(기존 사용자 확인), Multi-Image to 3D API, `meshy-7.1`,
+  2026-09-28. [Meshy 유료 생성물 이용 조건](https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models) 적용.
+  Community에 공개 게시하지 않는다. 작업 ID `01a0e673-476f-7162-bce0-c9007851039b`.
+- 생성 설정: 정면·측면 두 장, Ultra 2K 형상, 리메시 10,000 triangles 목표,
+  4K PBR 텍스처, 리메시 전 원본 보존. 최종 조립 캐릭터의 15,000~20,000 목표 중
+  기준 몸체 몫이다. 실제 출력 **10,443 triangles**, 리메시 전 원본 **215,016 triangles**.
+  머리·목 근사 영역 1,767 triangles(키 상위 18%; 얼굴만의 수치 아님).
+- 생성 35크레딧, Meshy 리깅 비교 5크레딧으로 총 **40크레딧** 사용(6,100 → 6,060).
+  원본·PBR·Blender 파일·확대 렌더를 보존했다. 얼굴 윤곽·손가락 간격·손의 면 보정과
+  복장 분리·홍채 마스크 제작이 필요하며, 아직 제작용 기준 몸체로 승인하지 않는다.
+- 리깅 작업 `01a0e679-0cd5-7095-9b8c-27cc9a9dedf2`는 24본·손가락 본 없음.
+  기존 Mixamo 팩과 본 이름·척추 계층이 달라 공통 리그에 채택하지 않는다.
+  클라이언트 리타게팅으로 `idle1`·`walk`·`run`·`slash1` 각 12개 시점을 측정했지만,
+  유한한 좌표 확인만으로 시각적 호환성을 통과한 것은 아니다.
+- 원본 OBJ 보존·재질 참조·ZIP 무결성을 확인한 Mixamo 비교용 ZIP도 준비했다. 업로드·리깅은 미실행.
+  제작 원본·검증 파일은 HF에 보관하고 `assets.lock`으로 고정한다. 게임에는 연결하지 않았다.
+- 비용·다운로드 기록: [generation.json](../../assets/modular_human_male_01/generation.json),
+  [rigging.json](../../assets/modular_human_male_01/rigging.json).
+  품질 판정·검증 결과·재현 명령: [샘플 README](../../assets/modular_human_male_01/README.md).
+
 ## Human
 
 - https://sketchfab.com/3d-models/blake-slim-walk-c4d-c076264ca7394357bf3f17837edd72c9 — **[미사용]** 캐릭터 미사용; 걷기 애니는 Mixamo 사용

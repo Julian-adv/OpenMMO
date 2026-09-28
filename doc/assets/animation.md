@@ -1,5 +1,18 @@
 # Animation Assets
 
+## Meshy Modular Body Rig Trial (2026-09-28)
+
+- Source: Meshy.ai Rigging API, user-confirmed Premium tier, 2026-09-28.
+  [Meshy paid output ownership terms](https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models) apply.
+  Task `01a0e679-0cd5-7095-9b8c-27cc9a9dedf2`, 5 credits including basic walking/running outputs.
+- Local comparison files: `assets/modular_human_male_01/walking_armature_glb.glb` and
+  `running_armature_glb.glb`. These are not used in the game; their motion quality has not
+  been accepted. The trial rig has 24 bones, no finger bones, and a different spine naming
+  order from the existing Mixamo packs, so it was not adopted as the canonical rig.
+- [Source hashes and download record](../../assets/modular_human_male_01/rigging.json),
+  [sample findings](../../assets/modular_human_male_01/README.md). Source and validation
+  files are preserved in the HF asset repository and pinned by `assets.lock`.
+
 ## Dagger Double Slash (2026-09-13)
 
 - Source: Adobe [Mixamo](https://www.mixamo.com/), confirmed by the contributor
