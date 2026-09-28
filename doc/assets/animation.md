@@ -1,8 +1,29 @@
 # Animation Assets
 
+## Modular Human Male 01 — Baked Animation Preview (2026-09-28)
+
+- Follow-up after `f4a63e49`; the baked GLBs and checks are archived on HF and pinned by the accompanying `assets.lock`.
+  Uses the existing Mixamo sources below and Three.js; no new generation or paid service call.
+  Source FBX, shared animation packs, body/shorts GLBs, and the hand profile are unchanged.
+- `rigged_hand_tuned/animations.glb` stores seven retargeted clips with the accepted finger and
+  grounding corrections. `animations-comparison.glb` keeps the same grounding with the original
+  finger tracks for the preview toggle. Each pack contains the reference node hierarchy and
+  animation tracks only, without meshes, textures, skins, or equipment tracks.
+- The preview validates the rig, reference transforms, and processing stage, then plays the
+  loaded clips directly. Do not retarget, reground, or apply finger corrections again.
+  The model-root rest sole offset is still applied once. Sword attachment transforms and
+  walking attachment keyframes remain in `hand-grips.json` and crossfade with the body.
+- Reimported key times/values and durations match exactly. Both variants passed seven clips
+  × 65 poses: maximum bone-matrix and body/shorts vertex error is zero against the former
+  runtime result. Chrome passed 175 poses, ten reattachments, six transitions, and controls;
+  requests confirm the shared locomotion/combat packs are no longer loaded by this preview.
+- Reproduce: `node assets/modular_human_male_01/bake_animations.mjs`.
+  [Files, checks, and limitations](../../assets/modular_human_male_01/rigged_hand_tuned/README.md#전용-애니메이션-glb).
+  Player integration and the existing waist/underarm deformation remain pending.
+
 ## Modular Human Male 01 — Finger and Grip Preview (2026-09-28)
 
-- Follow-up to checkpoint `cf2ad8bb`, archived on HF and pinned by the accompanying `assets.lock`.
+- Runtime-correction checkpoint `f4a63e49`, following `cf2ad8bb`, archived on HF and pinned by its `assets.lock`.
   Uses the Mixamo sources recorded below; processed with Blender, NumPy, and Three.js,
   without another generation or paid service call. The same source terms apply.
 - `rigged_hand_tuned/hand-grips.json` supplies rig-specific preview overrides after runtime

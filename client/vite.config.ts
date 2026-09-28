@@ -62,7 +62,13 @@ function modularCharacterPreview(): Plugin {
     '../assets/modular_human_male_01/rigged_hand_tuned/',
     import.meta.url
   )
-  const files = new Set(['base.glb', 'default_shorts.glb', 'hand-grips.json'])
+  const files = new Set([
+    'base.glb',
+    'default_shorts.glb',
+    'hand-grips.json',
+    'animations.glb',
+    'animations-comparison.glb',
+  ])
   return {
     name: 'modular-character-preview',
     apply: 'serve',

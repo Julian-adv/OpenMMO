@@ -48,6 +48,48 @@ function matrixMatches(a: THREE.Matrix4, b: THREE.Matrix4): boolean {
   return a.elements.every((value, i) => Math.abs(value - b.elements[i]) < 1e-5)
 }
 
+export function modularAnimationClips(
+  body: THREE.Object3D,
+  pack: { scene: THREE.Object3D; animations: THREE.AnimationClip[] },
+  variant: 'corrected' | 'comparison'
+): THREE.AnimationClip[] {
+  if (
+    modularRigId(body) !== modularRigId(pack.scene) ||
+    pack.scene.userData.animation_stage !== 'modular-baked-v1' ||
+    pack.scene.userData.variant !== variant
+  )
+    throw new Error('전용 애니메이션의 리그 또는 보정 단계가 다릅니다.')
+  const bones = skinnedParts(body)[0]?.skeleton.bones
+  if (!bones?.length) throw new Error('몸체의 스킨 골격이 없습니다.')
+  body.updateMatrixWorld(true)
+  pack.scene.updateMatrixWorld(true)
+  for (const bone of bones) {
+    const source = pack.scene.getObjectByName(bone.name)
+    if (
+      !source ||
+      source.parent?.name !== bone.parent?.name ||
+      !matrixMatches(source.matrix, bone.matrix) ||
+      !matrixMatches(source.matrixWorld, bone.matrixWorld)
+    )
+      throw new Error('전용 애니메이션의 기준 골격이 몸체와 다릅니다.')
+  }
+  const boneNames = new Set(bones.map((bone) => bone.name))
+  const clipNames = new Set<string>()
+  for (const clip of pack.animations) {
+    const tracks = new Set<string>()
+    if (!clip.name || clipNames.has(clip.name) || !clip.validate())
+      throw new Error('전용 애니메이션 클립이 올바르지 않습니다.')
+    clipNames.add(clip.name)
+    for (const track of clip.tracks) {
+      const match = /^(\w+)\.(position|quaternion|scale)$/.exec(track.name)
+      if (!match || !boneNames.has(match[1]) || tracks.has(track.name))
+        throw new Error('전용 애니메이션에 알 수 없는 본 트랙이 있습니다.')
+      tracks.add(track.name)
+    }
+  }
+  return pack.animations
+}
+
 export function bindModularPart(
   body: THREE.Object3D,
   source: THREE.Object3D

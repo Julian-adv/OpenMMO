@@ -4,12 +4,10 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import {
   computeSoleGroundOffset,
   createCharacterModelRoot,
-  groundRetargetedClips,
-  retargetAnimationsForCharacterModel,
 } from '../lib/utils/characterAnimationUtils'
 import {
-  applyModularFingerPose,
   bindModularPart,
+  modularAnimationClips,
   modularRigId,
   modularSwordTracks,
   parseModularHandProfile,
@@ -103,17 +101,25 @@ async function main() {
     resources.push(gltf.scene)
     return gltf
   }
-  const [base, shorts, locomotion, combat, sword, profile] = await Promise.all([
-    load('/__modular-character/base.glb'),
-    load('/__modular-character/default_shorts.glb'),
-    load('/models/animations/locomotion.glb'),
-    load('/models/animations/combat_melee.glb'),
-    load('/models/weapons/sword.glb'),
-    fetch('/__modular-character/hand-grips.json').then(async (response) => {
-      if (!response.ok) throw new Error('손 보정 파일을 불러오지 못했습니다.')
-      return parseModularHandProfile(await response.json())
-    }),
-  ])
+  const [base, shorts, animations, comparison, sword, profile] =
+    await Promise.all([
+      load('/__modular-character/base.glb'),
+      load('/__modular-character/default_shorts.glb'),
+      load('/__modular-character/animations.glb'),
+      load('/__modular-character/animations-comparison.glb'),
+      load('/models/weapons/sword.glb'),
+      fetch('/__modular-character/hand-grips.json').then(async (response) => {
+        if (!response.ok) throw new Error('손 보정 파일을 불러오지 못했습니다.')
+        return parseModularHandProfile(await response.json())
+      }),
+    ])
+  const original = modularAnimationClips(base.scene, comparison, 'comparison')
+  const corrected = modularAnimationClips(base.scene, animations, 'corrected')
+  for (const clips of [original, corrected]) {
+    for (const option of clipSelect.options)
+      if (!clips.some((clip) => clip.name === option.value))
+        throw new Error(`동작이 없습니다: ${option.value}`)
+  }
   const { modelRoot, clonedScene: body } = createCharacterModelRoot(base.scene)
   scene.add(modelRoot)
   const rigId = modularRigId(body)
@@ -125,36 +131,6 @@ async function main() {
       mesh.visible = false
     mesh.frustumCulled = false
   }
-  status.textContent = '기존 게임 동작과 손 보정을 준비하는 중…'
-  const packs = [
-    { gltf: locomotion, names: ['idle1', 'walk', 'run', 'jump'] },
-    { gltf: combat, names: ['combat_idle', 'slash1', 'dying'] },
-  ]
-  const raw: THREE.AnimationClip[] = []
-  for (const { gltf, names } of packs) {
-    const clips = names.map((name) => {
-      const clip = gltf.animations.find((clip) => clip.name === name)
-      if (!clip) throw new Error(`동작이 없습니다: ${name}`)
-      return clip
-    })
-    raw.push(
-      ...(await retargetAnimationsForCharacterModel(
-        base.scene,
-        gltf.scene,
-        clips
-      ))
-    )
-  }
-  const original = await groundRetargetedClips(base.scene, raw, {
-    restClip: 'dying',
-    plantedClips: ['walk'],
-    baselineClips: ['jump'],
-  })
-  const corrected = await groundRetargetedClips(
-    base.scene,
-    raw.map((clip) => applyModularFingerPose(clip, profile, rigId)),
-    { restClip: 'dying', plantedClips: ['walk'], baselineClips: ['jump'] }
-  )
   if (disposed) return
   const hand = body.getObjectByName('RightHand')
   const head = body.getObjectByName('Head')

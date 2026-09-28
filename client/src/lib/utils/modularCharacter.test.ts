@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyModularFingerPose,
   bindModularPart,
+  modularAnimationClips,
   parseModularHandProfile,
   modularSwordTracks,
   poseModularSword,
@@ -42,6 +43,70 @@ const profile: ModularHandProfile = {
   iron_sword: { position: [0, 0.05, -0.03], quaternion: [0, 0, 0, 1] },
   finger_pose_sources: { walk: { RightHandPinky1: 'RightHandRing1' } },
 }
+
+describe('baked modular animations', () => {
+  function pack() {
+    const source = rig()
+    source.root.userData.animation_stage = 'modular-baked-v1'
+    source.root.userData.variant = 'corrected'
+    return {
+      scene: source.root,
+      animations: [
+        new THREE.AnimationClip('jump', 1, [
+          new THREE.VectorKeyframeTrack(
+            'Hips.position',
+            [0, 0.5, 1],
+            [0, 1, 0, 0, 2, 0, 0, 1, 0]
+          ),
+        ]),
+      ],
+    }
+  }
+
+  it('plays baked values directly without changing their height or timing', () => {
+    const body = rig()
+    const source = pack()
+    const [clip] = modularAnimationClips(body.root, source, 'corrected')
+    const mixer = new THREE.AnimationMixer(body.root)
+    mixer.clipAction(clip).play()
+    mixer.update(0.5)
+    expect(body.bone.position.y).toBe(2)
+    expect(clip).toBe(source.animations[0])
+    expect(clip.duration).toBe(1)
+  })
+
+  it('rejects a different rig, bind pose, processing stage or comparison variant', () => {
+    const body = rig()
+    expect(() =>
+      modularAnimationClips(rig('other').root, pack(), 'corrected')
+    ).toThrow('리그')
+    expect(() =>
+      modularAnimationClips(rig('test-rig', 2).root, pack(), 'corrected')
+    ).toThrow('기준 골격')
+    expect(() =>
+      modularAnimationClips(body.root, pack(), 'comparison')
+    ).toThrow('보정 단계')
+    const source = pack()
+    delete source.scene.userData.animation_stage
+    expect(() => modularAnimationClips(body.root, source, 'corrected')).toThrow(
+      '보정 단계'
+    )
+  })
+
+  it('rejects weapon tracks and duplicate clips in a body-only pack', () => {
+    const body = rig()
+    const source = pack()
+    source.animations[0].tracks[0].name = 'sword.position'
+    expect(() => modularAnimationClips(body.root, source, 'corrected')).toThrow(
+      '본 트랙'
+    )
+    const duplicate = pack()
+    duplicate.animations.push(duplicate.animations[0].clone())
+    expect(() =>
+      modularAnimationClips(body.root, duplicate, 'corrected')
+    ).toThrow('클립')
+  })
+})
 
 describe('modular parts', () => {
   it('shares one skeleton across separate body material primitives', () => {
