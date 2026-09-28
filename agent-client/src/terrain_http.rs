@@ -33,6 +33,7 @@ pub struct HttpTiles {
     prefix: &'static str,
     expected_size: usize,
     revisions: tokio::sync::Mutex<std::collections::HashMap<(i32, i32), u64>>,
+    epoch: fn() -> String,
 }
 
 impl HttpTiles {
@@ -55,13 +56,14 @@ impl HttpTiles {
             prefix,
             expected_size,
             revisions: Default::default(),
+            epoch: world_epoch,
         }
     }
 
     fn cache_path(&self, tx: i32, tz: i32) -> PathBuf {
         self.cache_dir
             .join(onlinerpg_shared::LAYOUT_VERSION)
-            .join(world_epoch())
+            .join((self.epoch)())
             .join(format!("{}{tx}_{tz}.bin", self.prefix))
     }
 
@@ -143,10 +145,10 @@ impl HttpTiles {
 
     /// Missing files use defaults; network errors remain retryable.
     pub async fn read(&self, tx: i32, tz: i32) -> std::io::Result<Option<Vec<u8>>> {
-        let epoch = world_epoch();
+        let epoch = (self.epoch)();
         let path = self.cache_path(tx, tz);
         if let Some(cached) = self.read_cached(&path).await {
-            if epoch != world_epoch() {
+            if epoch != (self.epoch)() {
                 return Err(std::io::Error::other(
                     "World epoch changed during cache read",
                 ));
@@ -157,7 +159,7 @@ impl HttpTiles {
     }
 
     pub async fn read_fresh(&self, tx: i32, tz: i32) -> std::io::Result<Option<Vec<u8>>> {
-        let epoch = world_epoch();
+        let epoch = (self.epoch)();
         let path = self.cache_path(tx, tz);
         let revision = self
             .revisions
@@ -167,7 +169,7 @@ impl HttpTiles {
             .copied()
             .unwrap_or(0);
         let fetched = self.fetch(tx, tz).await;
-        if epoch != world_epoch() {
+        if epoch != (self.epoch)() {
             return Err(std::io::Error::other(
                 "World epoch changed during tile request",
             ));
@@ -265,10 +267,7 @@ mod tests {
             axum::serve(listener, app).await.unwrap();
         });
         let cache = scratch_dir();
-        let tiles = Arc::new(HttpHeightTiles::new(
-            &format!("http://{address}"),
-            cache.clone(),
-        ));
+        let tiles = Arc::new(height_tiles(&format!("http://{address}"), cache.clone()));
         let pending = tokio::spawn({
             let tiles = tiles.clone();
             async move { tiles.read_heightmap(1, 2).await.unwrap() }
@@ -281,6 +280,13 @@ mod tests {
         server.abort();
         assert_eq!(tiles.read_heightmap(1, 2).await.unwrap(), fresh);
         tokio::fs::remove_dir_all(cache).await.unwrap();
+    }
+
+    /// Other tests reset the process-wide epoch concurrently.
+    fn height_tiles(base_url: &str, cache_dir: PathBuf) -> HttpHeightTiles {
+        let mut tiles = HttpHeightTiles::new(base_url, cache_dir);
+        tiles.0.epoch = String::new;
+        tiles
     }
 
     fn scratch_dir() -> PathBuf {
@@ -333,7 +339,7 @@ mod tests {
         let expected = vec![7u8; HEIGHTMAP_SIZE];
         let (base_url, server) = serve_one_tile(expected.clone()).await;
         let cache = scratch_dir();
-        let tiles = HttpHeightTiles::new(&base_url, cache.clone());
+        let tiles = height_tiles(&base_url, cache.clone());
 
         assert_eq!(tiles.read_heightmap(1, 2).await.unwrap(), expected);
 
@@ -348,7 +354,7 @@ mod tests {
     async fn unbaked_tiles_fall_back_to_flat_ground() {
         let (base_url, server) = serve_one_tile(vec![0u8; HEIGHTMAP_SIZE]).await;
         let cache = scratch_dir();
-        let tiles = HttpHeightTiles::new(&base_url, cache.clone());
+        let tiles = height_tiles(&base_url, cache.clone());
 
         assert_eq!(
             tiles.read_heightmap(9, 9).await.unwrap(),
@@ -362,8 +368,49 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn epoch_change_during_a_request_is_an_error() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        static CHANGED: AtomicBool = AtomicBool::new(false);
+        let body = vec![7u8; HEIGHTMAP_SIZE];
+        let files = height_manifest(&body);
+        let app = Router::new()
+            .route(
+                "/api/terrain/manifest/{tx}/{tz}",
+                get(move || async move { axum::Json(files) }),
+            )
+            .route(
+                "/api/terrain/files/{kind}/{region}/{file}",
+                get(move || async move {
+                    CHANGED.store(true, Ordering::SeqCst);
+                    body
+                }),
+            );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        let cache = scratch_dir();
+        let mut tiles = height_tiles(&format!("http://{address}"), cache.clone());
+        tiles.0.epoch = || {
+            if CHANGED.load(Ordering::SeqCst) {
+                "b"
+            } else {
+                "a"
+            }
+            .into()
+        };
+
+        let error = tiles.read_heightmap(1, 2).await.unwrap_err();
+        assert_eq!(error.to_string(), "World epoch changed during tile request");
+
+        server.abort();
+        let _ = tokio::fs::remove_dir_all(&cache).await;
+    }
+
+    #[tokio::test]
     async fn unreachable_server_is_an_error_not_flat_ground() {
-        let tiles = HttpHeightTiles::new("http://127.0.0.1:1", scratch_dir());
+        let tiles = height_tiles("http://127.0.0.1:1", scratch_dir());
         assert!(tiles.read_heightmap(1, 2).await.is_err());
     }
 }
