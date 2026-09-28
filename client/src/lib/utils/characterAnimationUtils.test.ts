@@ -4,6 +4,7 @@ import * as retargeting from './retargetClipAsync'
 import { yieldTask } from './frameYield'
 import {
   computeCorpseGroundOffset,
+  computeSoleGroundOffset,
   groundRetargetedClips,
   retargetAnimationsForCharacterModel,
 } from './characterAnimationUtils'
@@ -244,6 +245,136 @@ describe('retargetAnimationsForCharacterModel', () => {
 })
 
 describe('groundRetargetedClips', () => {
+  function makeFootRig() {
+    const root = new THREE.Group()
+    const hips = new THREE.Bone()
+    hips.name = 'Hips'
+    hips.position.y = 1
+    root.add(hips)
+    const feet = ['LeftFoot', 'RightFoot'].map((name) => {
+      const foot = new THREE.Bone()
+      foot.name = name
+      foot.position.y = -1
+      hips.add(foot)
+      return foot
+    })
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute([-0.1, 0, 0, 0.1, 0, 0], 3)
+    )
+    geometry.setAttribute(
+      'skinIndex',
+      new THREE.Uint16BufferAttribute([0, 0, 0, 0, 1, 0, 0, 0], 4)
+    )
+    geometry.setAttribute(
+      'skinWeight',
+      new THREE.Float32BufferAttribute([1, 0, 0, 0, 1, 0, 0, 0], 4)
+    )
+    const mesh = new THREE.SkinnedMesh(geometry, new THREE.MeshBasicMaterial())
+    root.add(mesh)
+    root.updateMatrixWorld(true)
+    mesh.bind(new THREE.Skeleton(feet))
+    return { root, mesh }
+  }
+
+  it('aligns a floating jump baseline without changing its trajectory or source', async () => {
+    const { root, mesh } = makeFootRig()
+    const clip = new THREE.AnimationClip('jump', 2, [
+      new THREE.VectorKeyframeTrack(
+        'Hips.position',
+        [0, 1, 2],
+        [0, 1.45, 0, 0.2, 2.45, 0, 0.4, 1.45, 0]
+      ),
+      new THREE.QuaternionKeyframeTrack(
+        'LeftFoot.quaternion',
+        [0, 2],
+        [0, 0, 0, 1, 0, 0, 0, 1]
+      ),
+    ])
+    const original = clip.tracks[0].values.slice()
+    const [grounded] = await groundRetargetedClips(root, [clip], {
+      baselineClips: ['jump'],
+    })
+    expect(clip.tracks[0].values).toEqual(original)
+    const track = grounded.tracks[0]
+    expect(track.times).toEqual(clip.tracks[0].times)
+    for (let i = 0; i < track.values.length; i++) {
+      expect(track.values[i] - original[i]).toBeCloseTo(
+        i % 3 === 1 ? -0.45 : 0,
+        5
+      )
+    }
+    expect(grounded.tracks[1].values).toEqual(clip.tracks[1].values)
+    root.position.y += computeSoleGroundOffset(root)
+    const mixer = new THREE.AnimationMixer(root)
+    const action = mixer.clipAction(grounded).setLoop(THREE.LoopOnce, 1)
+    action.clampWhenFinished = true
+    action.play()
+    for (const [time, expected] of [
+      [0, 0.005],
+      [1, 1.005],
+      [2, 0.005],
+    ]) {
+      mixer.setTime(time)
+      root.updateMatrixWorld(true)
+      expect(
+        mesh
+          .getVertexPosition(0, new THREE.Vector3())
+          .applyMatrix4(mesh.matrixWorld).y
+      ).toBeCloseTo(expected, 5)
+    }
+  })
+
+  it('plants a floating walk by its soles, keeping swing feet and other clips intact', async () => {
+    const { root, mesh } = makeFootRig()
+    const clip = new THREE.AnimationClip('walk', 1, [
+      new THREE.VectorKeyframeTrack(
+        'Hips.position',
+        [0, 0.5, 1],
+        [0, 1.1, 0, 0, 1.12, 0, 0, 1.1, 0]
+      ),
+      new THREE.VectorKeyframeTrack(
+        'LeftFoot.position',
+        [0, 0.5, 1],
+        [0, -1, 0, 0, -0.92, 0, 0, -1, 0]
+      ),
+      new THREE.VectorKeyframeTrack(
+        'RightFoot.position',
+        [0, 0.5, 1],
+        [0, -0.92, 0, 0, -1, 0, 0, -0.92, 0]
+      ),
+    ])
+    const raw = clip.tracks[0].values.slice()
+    const [grounded] = await groundRetargetedClips(root, [clip], {
+      plantedClips: ['walk'],
+    })
+    expect(clip.tracks[0].values).toEqual(raw)
+    expect(grounded.tracks[1].values).toEqual(clip.tracks[1].values)
+    const jump = clip.clone()
+    jump.name = 'jump'
+    const [untouched] = await groundRetargetedClips(root, [jump], {
+      plantedClips: ['walk'],
+    })
+    expect(untouched.tracks[0].values).toEqual(raw)
+    root.position.y += computeSoleGroundOffset(root)
+    const mixer = new THREE.AnimationMixer(root)
+    mixer.clipAction(grounded).play()
+    for (const time of [0, 0.125, 0.25, 0.5, 0.75]) {
+      mixer.setTime(time)
+      root.updateMatrixWorld(true)
+      const heights = [0, 1].map(
+        (i) =>
+          mesh
+            .getVertexPosition(i, new THREE.Vector3())
+            .applyMatrix4(mesh.matrixWorld).y
+      )
+      expect(Math.min(...heights)).toBeCloseTo(0.005, 4)
+      if (time === 0 || time === 0.5)
+        expect(Math.max(...heights)).toBeCloseTo(0.085, 4)
+    }
+  })
+
   const sunkClip = () =>
     new THREE.AnimationClip('dying', 1, [
       new THREE.VectorKeyframeTrack(

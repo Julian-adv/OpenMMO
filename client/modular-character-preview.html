@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>캐릭터 파츠 · 동작 미리보기</title>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">OPENMMO · CHARACTER WORKSHOP</p>
+        <h1>캐릭터 파츠 미리보기</h1>
+        <p>동작을 이어 재생하면서 손의 움직임과 검 그립을 살펴보세요.</p>
+      </header>
+      <div class="workspace">
+        <section id="viewport" aria-label="캐릭터 3D 미리보기">
+          <p class="hint">드래그하여 회전 · 휠로 확대</p>
+        </section>
+        <aside>
+          <p id="status" role="status">몸체와 기본 하의를 불러오는 중…</p>
+          <fieldset id="controls" disabled>
+            <legend>동작과 시점</legend>
+            <label for="clip">동작</label>
+            <select id="clip">
+              <option value="idle1">대기</option>
+              <option value="walk">걷기</option>
+              <option value="run">달리기</option>
+              <option value="jump">점프</option>
+              <option value="combat_idle" selected>전투 대기</option>
+              <option value="slash1">공격</option>
+              <option value="dying">쓰러지기</option>
+            </select>
+            <div class="buttons">
+              <button id="pause" type="button">일시정지</button>
+              <button id="replay" type="button">처음부터</button>
+            </div>
+            <label for="scrub"
+              >재생 위치 <output id="time">0.00 / 0.00초</output></label
+            >
+            <input
+              id="scrub"
+              type="range"
+              min="0"
+              max="1"
+              step="0.001"
+              value="0"
+            />
+            <label for="speed">재생 속도</label>
+            <select id="speed">
+              <option value="0.25">0.25배</option>
+              <option value="0.5">0.5배</option>
+              <option value="1" selected>1배</option>
+            </select>
+            <label for="camera">시점</label>
+            <select id="camera">
+              <option value="full">전신</option>
+              <option value="face">얼굴 확대</option>
+              <option value="hand">오른손 확대</option>
+            </select>
+            <label class="toggle"
+              ><input id="correction" type="checkbox" checked /> 손가락·검 그립
+              보정</label
+            >
+            <label class="toggle"
+              ><input id="weapon" type="checkbox" checked /> 검 표시</label
+            >
+            <button id="sequence" type="button">동작 전환 연속 확인</button>
+            <button id="reattach" type="button">하의 다시 장착</button>
+          </fieldset>
+          <p id="stats" class="details"></p>
+          <p class="details">
+            남성 기본 체형 · 기본 반바지<br />제작 중인 샘플 미리보기입니다.
+          </p>
+        </aside>
+      </div>
+    </main>
+    <script type="module" src="/src/previews/modular-character.ts"></script>
+  </body>
+</html>

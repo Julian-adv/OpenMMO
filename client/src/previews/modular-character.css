@@ -1,0 +1,166 @@
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: #10191e;
+  color: #e6ecec;
+  font:
+    14px/1.5 system-ui,
+    sans-serif;
+}
+main {
+  max-width: 1440px;
+  margin: auto;
+  padding: 28px;
+}
+header {
+  margin-bottom: 24px;
+}
+.eyebrow {
+  color: #91b6b5;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+}
+h1 {
+  font-size: 28px;
+  margin: 6px 0;
+  font-weight: 600;
+}
+header p {
+  margin: 6px 0;
+  color: #afbec4;
+}
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  border: 1px solid #35474e;
+  border-radius: 12px;
+  overflow: hidden;
+}
+#viewport {
+  min-width: 0;
+  height: min(76vh, 860px);
+  min-height: 460px;
+  position: relative;
+  background: #17252d;
+}
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+.hint {
+  position: absolute;
+  bottom: 12px;
+  left: 20px;
+  pointer-events: none;
+  color: #b4c8cf;
+  font-size: 12px;
+}
+aside {
+  padding: 22px;
+  background: #18232a;
+  border-left: 1px solid #35474e;
+}
+#status {
+  color: #b4ded2;
+  margin: 0 0 18px;
+  overflow-wrap: anywhere;
+}
+#status[data-error] {
+  color: #ffc4b2;
+}
+fieldset {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  min-width: 0;
+}
+legend {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+label {
+  display: block;
+  margin: 14px 0 6px;
+  color: #c1d1d6;
+}
+select,
+button {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  background: #243740;
+  border: 1px solid #526d78;
+  border-radius: 6px;
+  padding: 9px 10px;
+}
+button {
+  cursor: pointer;
+}
+button:hover {
+  background: #304a55;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: wait;
+}
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 2px solid #9ee6d3;
+  outline-offset: 3px;
+}
+.buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+output {
+  float: right;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+input[type='range'] {
+  width: 100%;
+  accent-color: #9dd1c5;
+}
+input[type='checkbox'] {
+  accent-color: #9dd1c5;
+}
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#sequence,
+#reattach {
+  margin-top: 12px;
+}
+.details {
+  color: #a3b6bf;
+  font-size: 12px;
+  margin: 18px 0 0;
+}
+@media (max-width: 760px) {
+  main {
+    padding: 16px;
+  }
+  h1 {
+    font-size: 23px;
+  }
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+  #viewport {
+    height: 56vh;
+    min-height: 340px;
+  }
+  aside {
+    border-left: 0;
+    border-top: 1px solid #35474e;
+  }
+}

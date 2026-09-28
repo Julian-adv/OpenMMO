@@ -1,5 +1,54 @@
 # Animation Assets
 
+## Modular Human Male 01 — Finger and Grip Preview (2026-09-28)
+
+- Follow-up to checkpoint `cf2ad8bb`, archived on HF and pinned by the accompanying `assets.lock`.
+  Uses the Mixamo sources recorded below; processed with Blender, NumPy, and Three.js,
+  without another generation or paid service call. The same source terms apply.
+- `rigged_hand_tuned/hand-grips.json` supplies rig-specific preview overrides after runtime
+  retargeting. Both pinky chains copy the corresponding ring-finger quaternion tracks in
+  `idle1`, `walk`, `run`, `jump`, and `combat_idle`; `slash1` and `dying` use their own tracks as input.
+  Locomotion lacks pinky tracks; combat idle has tracks but leaves the pinky straight.
+- Corrections operate on cloned clips. Shared animation packs and the original FBX are unchanged.
+  The profile also supplies the iron-sword attachment transform, accounting for the model's
+  internal handle offset. The development browser preview consumes the profile through the
+  same `modularCharacter.ts` helpers as the asset validator. Player/selection integration is pending.
+- Following the user's head-clipping report, the sword attachment was tilted forward by 40 degrees
+  around its handle center. The rotation axis was fitted for idle and slash clearance. This adjustment
+  changed only the attachment transform at that stage.
+  [Sampled head-clearance checks and images](../../assets/modular_human_male_01/rigged_hand_tuned/README.md#검-부착-회전-검증).
+- Following the user's finger-clipping report, the handle moves 10 mm toward the wrist while
+  retaining that rotation. In `combat_idle` and `slash1`, right index/pinky joints 2 and 3 blend
+  25% and 18% toward their rig rest rotations, after any pinky-track copying. Wrist, other fingers,
+  mesh files, and source packs are unchanged by this refinement; `dying` has no finger override.
+- Walking uses a raised sword attachment in `iron_sword_by_clip`, keeping the same handle
+  center. Attachment tracks crossfade with the body animation; combat idle and slash retain
+  their previous grip. The preview opts into `plantedClips: ['walk']`: its hip height is sampled
+  at 120 Hz against foot/toe-skinned vertices, lowering the floating walk while preserving
+  the raised foot. Run keeps its existing motion. The preview floor is at Y = 0.
+  [Walking clearance and sole-height checks](../../assets/modular_human_male_01/rigged_hand_tuned/README.md#걷기-검-각도와-접지).
+  The user found the first carry too upright, so its added rotation was halved: about 70 to
+  56 degrees above horizontal at the reference pose before the raised-hand adjustment below.
+  The walking loop passes mesh clearance;
+  the existing normal-idle-to-walk transition still needs a separate carry-pose adjustment.
+- To improve walking index-knuckle clearance, attachment keyframes tilt the sword toward the
+  left arm by up to 10 degrees during phases 0.16–0.34, returning to the base carry by phase 0.60.
+  The handle center and wrist pose are preserved. The user accepted the walking result on 2026-09-28.
+- Jump opts into `baselineClips: ['jump']`. Clip preparation samples the sole height at 120 Hz
+  and shifts all hip-position keys down by the same 0.4343 m. Timing, relative jump trajectory,
+  and joint rotations are preserved; source FBX and animation packs remain unchanged.
+  In 193 browser samples, the sole is about 1 cm above the floor at start/landing and reaches
+  1.05 m in the air. All 150 non-jump comparison poses are unchanged.
+  The user accepted the jump result on 2026-09-28.
+  [Jump checks and images](../../assets/modular_human_male_01/rigged_hand_tuned/README.md#점프-기준-높이).
+- All seven clips passed 25-sample assembly and skinning checks. The profile hash is included
+  in the validation report. Reviewed combat-idle/slash renders show improved finger folds and
+  grip alignment. Chrome WebGL (SwiftShader) also passed 175 poses, ten part reattachments,
+  six live transitions, sequential playback, correction/weapon toggles, and a narrow layout.
+  Hardware GPU performance has not been measured. Remaining waist/underarm deformation
+  in combat poses prevents final visual acceptance of the body rig.
+- [Outputs, comparison evidence, limits, and reproduction](../../assets/modular_human_male_01/rigged_hand_tuned/README.md).
+
 ## Modular Human Male 01 — Corrected Hand Pose Rig (2026-09-28)
 
 - Source: user-provided `Idle (11).fbx`, confirmed as Adobe Mixamo rigging on 2026-09-28.
@@ -13,7 +62,8 @@
   Comparison renders no longer show the previous wrist twist. Local finger folding and sword-grip
   spacing still need adjustment; missing locomotion pinky tracks remain a separate limitation.
 - [Sources, hashes, outputs, comparison renders, and reproduction](../../assets/modular_human_male_01/rigged_palms_down/README.md).
-  Current candidate, not yet integrated into the game. Source and outputs are stored on HF and pinned by `assets.lock`.
+  Baseline candidate for the refinement above, not yet integrated into the game.
+  This checkpoint's source and outputs are stored on HF and pinned by `assets.lock`.
 
 ## Modular Human Male 01 — Mixamo Idle Reference (2026-09-28)
 

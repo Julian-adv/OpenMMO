@@ -210,6 +210,11 @@ npm install
 npm run dev -- --port 10004
 ```
 
+The modular-character workshop is available at `/modular-character-preview.html`
+on the Vite dev server. It previews separate body/shorts assets, shared animations,
+finger corrections, and sword grip without signing in. The current local sample and
+required assets are documented in [the sample guide](assets/modular_human_male_01/rigged_hand_tuned/README.md).
+
 ### 6. Running the Agent Client
 
 Edit `agent-client/data/config.toml` to set the correct port numbers, then run:

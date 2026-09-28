@@ -57,6 +57,45 @@ function landOwnershipPreview(): Plugin {
   }
 }
 
+function modularCharacterPreview(): Plugin {
+  const directory = new URL(
+    '../assets/modular_human_male_01/rigged_hand_tuned/',
+    import.meta.url
+  )
+  const files = new Set(['base.glb', 'default_shorts.glb', 'hand-grips.json'])
+  return {
+    name: 'modular-character-preview',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const path = req.url?.split('?')[0] ?? ''
+        const prefix = '/__modular-character/'
+        if (!path.startsWith(prefix)) return next()
+        const name = path.slice(prefix.length)
+        if (req.method !== 'GET' || !files.has(name)) {
+          res.statusCode = 404
+          res.end('Unknown preview asset')
+          return
+        }
+        fs.readFile(new URL(name, directory), (error, data) => {
+          res.setHeader('Cache-Control', 'no-store')
+          if (error) {
+            res.statusCode = error.code === 'ENOENT' ? 404 : 500
+            res.end('Preview asset unavailable: ' + name)
+            return
+          }
+          res.setHeader(
+            'Content-Type',
+            name.endsWith('.glb') ? 'model/gltf-binary' : 'application/json'
+          )
+          res.setHeader('Content-Length', data.length)
+          res.end(data)
+        })
+      })
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 
@@ -106,7 +145,13 @@ export default defineConfig(({ mode }) => {
   }+${gitShortHash()}`
 
   return {
-    plugins: [landOwnershipPreview(), monsterCsvPlugin(), wasm(), svelte()],
+    plugins: [
+      landOwnershipPreview(),
+      modularCharacterPreview(),
+      monsterCsvPlugin(),
+      wasm(),
+      svelte(),
+    ],
     define: { __APP_VERSION__: JSON.stringify(appVersion) },
     server: {
       host: true,
