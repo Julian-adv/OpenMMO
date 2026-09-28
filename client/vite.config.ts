@@ -69,6 +69,20 @@ function modularCharacterPreview(): Plugin {
     'animations.glb',
     'animations-comparison.glb',
   ])
+  const fitted = new URL(
+    '../assets/modular_human_male_01/parts/fitted/',
+    import.meta.url
+  )
+  const parts = new Set([
+    'base',
+    'hair_crop',
+    'hair_sidepart',
+    'top_linen',
+    'top_leather',
+    'pants_cloth',
+    'gloves_leather',
+    'boots_leather',
+  ])
   return {
     name: 'modular-character-preview',
     apply: 'serve',
@@ -78,12 +92,19 @@ function modularCharacterPreview(): Plugin {
         const prefix = '/__modular-character/'
         if (!path.startsWith(prefix)) return next()
         const name = path.slice(prefix.length)
-        if (req.method !== 'GET' || !files.has(name)) {
+        const part = /^parts\/(\w+)\.glb$/.exec(name)
+        const url =
+          part && parts.has(part[1])
+            ? new URL(`${part[1]}.glb`, fitted)
+            : files.has(name)
+              ? new URL(name, directory)
+              : null
+        if (req.method !== 'GET' || !url) {
           res.statusCode = 404
           res.end('Unknown preview asset')
           return
         }
-        fs.readFile(new URL(name, directory), (error, data) => {
+        fs.readFile(url, (error, data) => {
           res.setHeader('Cache-Control', 'no-store')
           if (error) {
             res.statusCode = error.code === 'ENOENT' ? 404 : 500

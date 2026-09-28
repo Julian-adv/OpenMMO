@@ -44,6 +44,56 @@ export function skinnedParts(root: THREE.Object3D): THREE.SkinnedMesh[] {
   return result
 }
 
+export interface ModularOutfit {
+  hair: 'hair_crop' | 'hair_sidepart' | 'none'
+  top: 'linen' | 'leather' | 'none'
+  gloves: boolean
+  boots: boolean
+}
+
+export function showModularOutfit(
+  body: THREE.SkinnedMesh[],
+  parts: ReadonlyMap<string, THREE.SkinnedMesh[]>,
+  outfit: ModularOutfit
+) {
+  const region = (mesh: THREE.Object3D): string | undefined => {
+    for (let node: THREE.Object3D | null = mesh; node; node = node.parent)
+      if (typeof node.userData.region === 'string') return node.userData.region
+  }
+  const hidden = new Set(['legs'])
+  if (outfit.top !== 'none') {
+    for (const region of ['torso', 'upper_arms', 'forearms']) hidden.add(region)
+  }
+  if (outfit.gloves) hidden.add('hands')
+  if (outfit.boots) hidden.add('feet')
+  for (const mesh of body) mesh.visible = !hidden.has(region(mesh) ?? '')
+  const selected = new Set(['pants_cloth', outfit.hair])
+  if (outfit.top !== 'none') selected.add('top_linen')
+  if (outfit.top === 'leather') selected.add('top_leather')
+  if (outfit.gloves) selected.add('gloves_leather')
+  if (outfit.boots) selected.add('boots_leather')
+  for (const [id, meshes] of parts)
+    for (const mesh of meshes)
+      mesh.visible =
+        selected.has(id) &&
+        !(
+          id === 'pants_cloth' &&
+          outfit.boots &&
+          mesh.userData.region === 'cuffs'
+        ) &&
+        !(
+          id === 'pants_cloth' &&
+          outfit.top !== 'none' &&
+          mesh.userData.region === 'waist'
+        ) &&
+        !(
+          id === 'top_linen' &&
+          outfit.top === 'leather' &&
+          mesh.userData.region === 'torso'
+        )
+  return selected
+}
+
 function matrixMatches(a: THREE.Matrix4, b: THREE.Matrix4): boolean {
   return a.elements.every((value, i) => Math.abs(value - b.elements[i]) < 1e-5)
 }

@@ -1,5 +1,44 @@
 # Character Assets
 
+## Modular Human Male 01 — 첫 교체 파츠 (2026-09-28)
+
+- `d6c71e90` 이후 제작 작업. 사용자 요청에 따라 몸체 추가 보완보다 기본 복장과 교체 파츠를
+  먼저 제작한다. [전체 목록·원화·완료 기준](../../assets/modular_human_male_01/parts/README.md).
+- 짧은 크롭·옆가르마 헤어, 기본 천 셔츠·가죽 갑옷, 천 바지·가죽 장갑·가죽 부츠 한 세트.
+  원화는 OpenAI Codex built-in ImageGen, **ChatGPT Pro 20x**, 2026-09-28 생성.
+  OpenAI 생성 출력물 이용 조건 적용. [실제 프롬프트·원화 해시](../../assets/modular_human_male_01/parts/concepts.json).
+- 3D는 **Meshy Premium**, Image to 3D API, `meshy-7.1`, Ultra 2K 형상·2K PBR 텍스처,
+  2026-09-28 생성. [Meshy 유료 생성물 이용 조건](https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models)
+  적용. Meshy Community에는 게시하지 않는다. 파츠별 폴더의 `generation.json`에 입력·설정·작업 ID·비용·파일 해시를 보존한다.
+- 7종 생성·원본 다운로드 완료. 각 35, 총 **245 API 크레딧** 사용(5,790 → 5,545).
+  크롭 933·옆가르마 1,111·천 셔츠 2,087·가죽 상의 2,586·바지 1,553·장갑 한 쌍 1,033·부츠 한 쌍 1,455 triangles.
+  [원본 검사](../../assets/modular_human_male_01/parts/source-validation.json)와
+  [작업 ID·비용](../../assets/modular_human_male_01/parts/generation-summary.json)을 보존한다.
+- 생성 원본은 보존하고, Blender로 [1차 착용본](../../assets/modular_human_male_01/parts/fitted/README.md)을
+  만들었다. 기존 `human_male_01_mixamo_candidate_v2`의 65본·bind pose를 사용한다.
+  머리 형상·옷깃·소매·손가락 위치를 맞추고 몸체 가중치를 옮겼으며 가림 영역을 분리했다.
+  옷깃의 면 보강 후 천 셔츠는 **2,402**, 가죽 갑옷은 **3,757 triangles**, 나머지 파츠는 원본 수를 유지한다.
+- 개발 미리보기 `/modular-character-preview.html`에서 헤어 2종·상의 2종 교체, 장갑·부츠 착탈,
+  머리색·눈색 변경을 연결했다. 머리 재질을 복제하고 홍채만 셰이더 마스크로 염색한다.
+  기존 전용 애니메이션과 검 부착 프로파일은 변경하지 않았다. 추가 생성 비용 없음.
+- 장갑·부츠·검 302를 포함한 조합 수치는 다음과 같다. 숨긴 몸체와 안쪽 의상도 전체에 포함한다.
+
+  | 조합 | 전체 triangles | 표시 triangles | 얼굴 지정 영역 |
+  | --- | ---: | ---: | ---: |
+  | 크롭 + 천 셔츠 | 20,108 | 10,277 | 1,505 |
+  | 옆가르마 + 천 셔츠 | 20,286 | 10,455 | 1,505 |
+  | 크롭 + 가죽 갑옷 + 안쪽 셔츠 | 23,865 | 12,466 | 1,505 |
+  | 옆가르마 + 가죽 갑옷 + 안쪽 셔츠 | 24,043 | 12,644 | 1,505 |
+
+- 4조합 × 7동작 × 25시점(700포즈), 교체 20회, 동작 전환 7회에서 유한한 좌표·공유 골격·재생 연속성을
+  확인했다. GLB 속성·가중치·입력 해시 검사, 프런트엔드 check·lint와 관련 테스트 14개도 통과했다.
+  [내보내기 검사](../../assets/modular_human_male_01/parts/fitted/export-validation.json),
+  [브라우저 검사·착용 화면](../../assets/modular_human_male_01/parts/fitted/browser-validation.json).
+- **제작 중인 착용 샘플**이다. 옷깃·소매·갑옷 어깨의 겹침, 장갑의 관절 면과 헤어 표면은 추가 보완이 필요하다.
+  갑옷 조합은 15,000–20,000 목표를 초과한다. 텍스처도 원본 해상도의 제작용 출력이므로 배포 최적화가 남아 있다.
+  실제 플레이어·저장·장비 동기화에는 연결하지 않았다. 원화는 Git에, 원본·착용본·제작 도구는
+  HF 에셋 저장소에 보관하며 함께 커밋한 `assets.lock`으로 복원한다(2026-09-29).
+
 ## Modular Human Male 01 — 제작 샘플 (2026-09-28)
 
 - [캐릭터 커스터마이제이션](../CHARACTER_CUSTOMIZATION.md)의 기준 몸체 제작 샘플.
@@ -116,7 +155,8 @@
   [브라우저 결과·해시·화면](../../assets/modular_human_male_01/rigged_hand_tuned/browser-validation.json).
   실제 GPU 성능·플레이어 연결은 아직 검증하지 않았다.
 - 전투 자세의 허리 경계 관통·겨드랑이 접힘은 그림자 수신을 끈 화면에도 남는다.
-  다음 작업은 해당 부위의 몸체·하의 가중치 보정이다. 최종 리그 품질 승인은 보류한다.
+  최종 리그 품질 승인은 보류한다. 기본 복장·헤어·장비 파츠 제작을 먼저 진행하고,
+  해당 변형은 파츠를 착용한 동작 검사에서 필요한 범위로 보완한다(사용자 확인: 2026-09-28).
 - 사용자 지적에 따라 검 부착을 손잡이 중심 기준으로 앞쪽에 40도 회전했다.
   이 단계에서는 손목·손가락 자세나 메시를 변경하지 않았다. 전투 대기 129개 시점에서 머리 경계
   영역 간섭이 없고 공격·전환도 검사했다. [결과·수정 화면](../../assets/modular_human_male_01/rigged_hand_tuned/README.md#검-부착-회전-검증).

@@ -10,16 +10,40 @@
       <header>
         <p class="eyebrow">OPENMMO · CHARACTER WORKSHOP</p>
         <h1>캐릭터 파츠 미리보기</h1>
-        <p>동작을 이어 재생하면서 손의 움직임과 검 그립을 살펴보세요.</p>
+        <p>
+          헤어와 복장을 바꾸고, 동작을 이어 재생하면서 착용 모습을 살펴보세요.
+        </p>
       </header>
       <div class="workspace">
         <section id="viewport" aria-label="캐릭터 3D 미리보기">
           <p class="hint">드래그하여 회전 · 휠로 확대</p>
         </section>
         <aside>
-          <p id="status" role="status">몸체와 기본 하의를 불러오는 중…</p>
+          <p id="status" role="status">몸체와 교체 파츠를 불러오는 중…</p>
           <fieldset id="controls" disabled>
-            <legend>동작과 시점</legend>
+            <legend>외형과 동작</legend>
+            <label for="hair">헤어</label>
+            <select id="hair">
+              <option value="hair_crop">짧은 크롭</option>
+              <option value="hair_sidepart">짧은 옆가르마</option>
+              <option value="none">없음</option>
+            </select>
+            <label for="hair-color">머리색</label>
+            <input id="hair-color" type="color" value="#604332" />
+            <label for="eye-color">눈색</label>
+            <input id="eye-color" type="color" value="#786545" />
+            <label for="top">상의</label>
+            <select id="top">
+              <option value="linen">기본 천 셔츠</option>
+              <option value="leather">가죽 갑옷</option>
+              <option value="none">착용 전 몸체</option>
+            </select>
+            <label class="toggle"
+              ><input id="gloves" type="checkbox" /> 가죽 장갑</label
+            >
+            <label class="toggle"
+              ><input id="boots" type="checkbox" checked /> 가죽 부츠</label
+            >
             <label for="clip">동작</label>
             <select id="clip">
               <option value="idle1">대기</option>
@@ -69,7 +93,7 @@
           </fieldset>
           <p id="stats" class="details"></p>
           <p class="details">
-            남성 기본 체형 · 기본 반바지<br />제작 중인 샘플 미리보기입니다.
+            남성 기본 체형 · 교체 파츠<br />제작 중인 샘플 미리보기입니다.
           </p>
         </aside>
       </div>

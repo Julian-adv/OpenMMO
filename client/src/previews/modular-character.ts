@@ -11,7 +11,9 @@ import {
   modularRigId,
   modularSwordTracks,
   parseModularHandProfile,
+  showModularOutfit,
   skinnedParts,
+  type ModularOutfit,
 } from '../lib/utils/modularCharacter'
 import { poseMainHandProp } from '../lib/utils/handProps'
 import './modular-character.css'
@@ -29,6 +31,12 @@ const speed = el<HTMLSelectElement>('speed')
 const scrub = el<HTMLInputElement>('scrub')
 const correction = el<HTMLInputElement>('correction')
 const showWeapon = el<HTMLInputElement>('weapon')
+const hairSelect = el<HTMLSelectElement>('hair')
+const hairColor = el<HTMLInputElement>('hair-color')
+const eyeColor = el<HTMLInputElement>('eye-color')
+const topSelect = el<HTMLSelectElement>('top')
+const gloves = el<HTMLInputElement>('gloves')
+const boots = el<HTMLInputElement>('boots')
 const pause = el<HTMLButtonElement>('pause')
 const sequence = el<HTMLButtonElement>('sequence')
 const clockLabel = el<HTMLOutputElement>('time')
@@ -85,6 +93,7 @@ export let preview:
       mixer: THREE.AnimationMixer
       currentAction: () => THREE.AnimationAction
       weapon: THREE.Object3D
+      parts: Map<string, THREE.SkinnedMesh[]>
     }
   | undefined
 
@@ -101,10 +110,21 @@ async function main() {
     resources.push(gltf.scene)
     return gltf
   }
-  const [base, shorts, animations, comparison, sword, profile] =
+  const ids = [
+    'hair_crop',
+    'hair_sidepart',
+    'top_linen',
+    'top_leather',
+    'pants_cloth',
+    'gloves_leather',
+    'boots_leather',
+  ]
+  const [base, sources, animations, comparison, sword, profile] =
     await Promise.all([
-      load('/__modular-character/base.glb'),
-      load('/__modular-character/default_shorts.glb'),
+      load('/__modular-character/parts/base.glb'),
+      Promise.all(
+        ids.map((id) => load(`/__modular-character/parts/${id}.glb`))
+      ),
       load('/__modular-character/animations.glb'),
       load('/__modular-character/animations-comparison.glb'),
       load('/models/weapons/sword.glb'),
@@ -123,14 +143,77 @@ async function main() {
   const { modelRoot, clonedScene: body } = createCharacterModelRoot(base.scene)
   scene.add(modelRoot)
   const rigId = modularRigId(body)
-  let pants = bindModularPart(body, shorts.scene)
+  const bodyMeshes = skinnedParts(body)
   modelRoot.position.y += computeSoleGroundOffset(modelRoot)
+  const parts = new Map(
+    ids.map((id, i) => [id, bindModularPart(body, sources[i].scene)])
+  )
   const meshes = skinnedParts(body)
   for (const mesh of meshes) {
-    if (!Array.isArray(mesh.material) && mesh.material.name === 'covered_skin')
-      mesh.visible = false
     mesh.frustumCulled = false
   }
+  for (const id of ['hair_crop', 'hair_sidepart'])
+    for (const mesh of parts.get(id)!) {
+      mesh.material = Array.isArray(mesh.material)
+        ? mesh.material.map((m) => m.clone())
+        : mesh.material.clone()
+    }
+  const irisColor = { value: new THREE.Color(eyeColor.value) }
+  for (const mesh of bodyMeshes.filter(
+    (mesh) => mesh.userData.region === 'head'
+  )) {
+    const tint = (source: THREE.Material) => {
+      if (!(source instanceof THREE.MeshStandardMaterial)) return source
+      const material = source.clone()
+      material.onBeforeCompile = (shader) => {
+        shader.uniforms.irisColor = irisColor
+        shader.vertexShader =
+          'varying vec3 irisRestPosition;\n' +
+          shader.vertexShader.replace(
+            '#include <begin_vertex>',
+            '#include <begin_vertex>\nirisRestPosition = position;'
+          )
+        shader.fragmentShader =
+          'varying vec3 irisRestPosition;\nuniform vec3 irisColor;\n' +
+          shader.fragmentShader.replace(
+            '#include <map_fragment>',
+            `#include <map_fragment>
+            vec2 irisPoint = vec2(abs(irisRestPosition.x) - 0.034, irisRestPosition.y - 1.7825);
+            float irisRadius = length(irisPoint / vec2(0.005, 0.0045));
+            float irisMask = (1.0 - smoothstep(0.85, 1.0, irisRadius)) * smoothstep(0.26, 0.48, irisRadius);
+            irisMask *= step(0.07, irisRestPosition.z);
+            float irisDetail = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+            diffuseColor.rgb = mix(diffuseColor.rgb, irisColor * clamp(irisDetail * 6.0, 0.15, 1.2), irisMask * 0.9);`
+          )
+      }
+      material.customProgramCacheKey = () => 'modular-male-iris-v1'
+      return material
+    }
+    mesh.material = Array.isArray(mesh.material)
+      ? mesh.material.map(tint)
+      : tint(mesh.material)
+  }
+  eyeColor.oninput = () => irisColor.value.set(eyeColor.value)
+  let equipped = new Set<string>()
+  const dress = () => {
+    equipped = showModularOutfit(bodyMeshes, parts, {
+      hair: hairSelect.value as ModularOutfit['hair'],
+      top: topSelect.value as ModularOutfit['top'],
+      gloves: gloves.checked,
+      boots: boots.checked,
+    })
+    for (const id of ['hair_crop', 'hair_sidepart'])
+      for (const mesh of parts.get(id)!)
+        for (const mat of Array.isArray(mesh.material)
+          ? mesh.material
+          : [mesh.material])
+          if (mat instanceof THREE.MeshStandardMaterial)
+            mat.color.set(hairColor.value)
+    updateStats()
+  }
+  for (const element of [hairSelect, topSelect, gloves, boots])
+    element.onchange = dress
+  hairColor.oninput = dress
   if (disposed) return
   const hand = body.getObjectByName('RightHand')
   const head = body.getObjectByName('Head')
@@ -229,7 +312,7 @@ async function main() {
   const mixerActions = () =>
     new Set(actions.flatMap((map) => [...map.values()]))
   play('combat_idle', false)
-  preview = { modelRoot, mixer, currentAction: () => active, weapon }
+  preview = { modelRoot, mixer, currentAction: () => active, weapon, parts }
   clipSelect.onchange = () => {
     stopSequence()
     play(clipSelect.value)
@@ -262,6 +345,7 @@ async function main() {
   }
   showWeapon.onchange = () => {
     weapon.visible = showWeapon.checked
+    updateStats()
   }
   sequence.onclick = () => {
     if (sequencing) return stopSequence()
@@ -273,10 +357,14 @@ async function main() {
     play(route[0])
   }
   el('reattach').onclick = () => {
-    const replacement = bindModularPart(body, shorts.scene)
-    for (const mesh of pants) mesh.removeFromParent()
-    pants = replacement
-    for (const mesh of pants) mesh.frustumCulled = false
+    const replacement = bindModularPart(
+      body,
+      sources[ids.indexOf('pants_cloth')].scene
+    )
+    for (const mesh of parts.get('pants_cloth')!) mesh.removeFromParent()
+    parts.set('pants_cloth', replacement)
+    for (const mesh of replacement) mesh.frustumCulled = false
+    dress()
     status.textContent = '하의를 다시 장착했습니다. 동작은 이어서 재생합니다.'
   }
   const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -359,8 +447,23 @@ async function main() {
     })
     return count
   }
-  el('stats').textContent =
-    `몸체·하의 ${triangles(body, false) - triangles(weapon, false)}삼각형 · 표시 ${triangles(body, true) - triangles(weapon, true)} · 얼굴 1,505 · 검 302`
+  function updateStats() {
+    const selected = [
+      ...bodyMeshes,
+      ...[...parts]
+        .filter(([id]) => equipped.has(id))
+        .flatMap(([, meshes]) => meshes),
+    ]
+    const total =
+      selected.reduce((sum, mesh) => sum + triangles(mesh, false), 0) +
+      (showWeapon.checked ? 302 : 0)
+    const visible =
+      selected.reduce((sum, mesh) => sum + triangles(mesh, true), 0) +
+      (showWeapon.checked ? 302 : 0)
+    el('stats').textContent =
+      `조합 ${total.toLocaleString()}삼각형 · 표시 ${visible.toLocaleString()} · 얼굴 1,505`
+  }
+  dress()
   let last = performance.now()
   const render = (now: number) => {
     const dt = Math.min((now - last) / 1000, 0.05) * Number(speed.value)

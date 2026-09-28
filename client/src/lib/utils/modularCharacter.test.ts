@@ -7,6 +7,7 @@ import {
   parseModularHandProfile,
   modularSwordTracks,
   poseModularSword,
+  showModularOutfit,
   skinnedParts,
   type ModularHandProfile,
 } from './modularCharacter'
@@ -43,6 +44,79 @@ const profile: ModularHandProfile = {
   iron_sword: { position: [0, 0.05, -0.03], quaternion: [0, 0, 0, 1] },
   finger_pose_sources: { walk: { RightHandPinky1: 'RightHandRing1' } },
 }
+
+describe('modular outfit coverage', () => {
+  it('restores body and underclothes after changing equipment, including grouped primitives', () => {
+    const region = (name: string) => {
+      const mesh = new THREE.SkinnedMesh()
+      mesh.userData.region = name
+      return mesh
+    }
+    const torso = region('torso')
+    const hands = region('hands')
+    const feet = region('feet')
+    const legs = new THREE.Group()
+    legs.userData.region = 'legs'
+    const legPrimitive = new THREE.SkinnedMesh()
+    legs.add(legPrimitive)
+    const body = [torso, hands, feet, legPrimitive]
+    const shirt = [region('torso'), region('sleeves')]
+    const pants = [region('main'), region('cuffs'), region('waist')]
+    const parts = new Map([
+      ['top_linen', shirt],
+      ['pants_cloth', pants],
+      ['top_leather', [region('armor')]],
+      ['gloves_leather', [region('gloves')]],
+      ['boots_leather', [region('boots')]],
+      ['hair_crop', [region('hair')]],
+      ['hair_sidepart', [region('hair')]],
+    ])
+    showModularOutfit(body, parts, {
+      hair: 'hair_sidepart',
+      top: 'leather',
+      gloves: true,
+      boots: true,
+    })
+    expect(body.every((mesh) => !mesh.visible)).toBe(true)
+    expect(shirt.map((mesh) => mesh.visible)).toEqual([false, true])
+    expect(pants.map((mesh) => mesh.visible)).toEqual([true, false, false])
+    expect(parts.get('hair_crop')![0].visible).toBe(false)
+    expect(parts.get('hair_sidepart')![0].visible).toBe(true)
+    showModularOutfit(body, parts, {
+      hair: 'hair_crop',
+      top: 'linen',
+      gloves: false,
+      boots: false,
+    })
+    expect(shirt.every((mesh) => mesh.visible)).toBe(true)
+    expect([
+      torso.visible,
+      hands.visible,
+      feet.visible,
+      legPrimitive.visible,
+    ]).toEqual([false, true, true, false])
+    expect(pants.map((mesh) => mesh.visible)).toEqual([true, true, false])
+    showModularOutfit(body, parts, {
+      hair: 'none',
+      top: 'none',
+      gloves: false,
+      boots: false,
+    })
+    expect([
+      torso.visible,
+      hands.visible,
+      feet.visible,
+      legPrimitive.visible,
+    ]).toEqual([true, true, true, false])
+    expect(pants.every((mesh) => mesh.visible)).toBe(true)
+    expect(
+      [...parts]
+        .filter(([id]) => id !== 'pants_cloth')
+        .flatMap(([, meshes]) => meshes)
+        .every((mesh) => !mesh.visible)
+    ).toBe(true)
+  })
+})
 
 describe('baked modular animations', () => {
   function pack() {
