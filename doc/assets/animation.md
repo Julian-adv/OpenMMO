@@ -1,5 +1,39 @@
 # Animation Assets
 
+## Modular Human Male 01 — Corrected Hand Pose Rig (2026-09-28)
+
+- Source: user-provided `Idle (11).fbx`, confirmed as Adobe Mixamo rigging on 2026-09-28.
+  Preserved unchanged in `assets/modular_human_male_01/refined_palms_down/`.
+  Free service; the existing [Mixamo license record](characters.md#license) applies.
+  Original download date was not separately recorded.
+- 65 bones including all ten finger chains; Idle frames 1–60 at 30fps.
+  `rigged_palms_down/uploaded_idle_reference.glb` retains a 2-second comparison clip.
+  Modular part GLBs contain no animations; shared game packs are unchanged.
+- Existing locomotion/combat clips passed the same seven-clip, 25-sample assembly checks.
+  Comparison renders no longer show the previous wrist twist. Local finger folding and sword-grip
+  spacing still need adjustment; missing locomotion pinky tracks remain a separate limitation.
+- [Sources, hashes, outputs, comparison renders, and reproduction](../../assets/modular_human_male_01/rigged_palms_down/README.md).
+  Current candidate, not yet integrated into the game. Source and outputs are stored on HF and pinned by `assets.lock`.
+
+## Modular Human Male 01 — Mixamo Idle Reference (2026-09-28)
+
+- Source: user-provided `assets/modular_human_male_01/refined/Idle (7).fbx`;
+  the user confirmed Mixamo rigging and Idle animation on 2026-09-28.
+  Adobe Mixamo, free service; the existing [Mixamo license record](characters.md#license) applies.
+  Original download date was not recorded. The FBX has 65 bones, including all ten finger chains.
+- The original FBX is unchanged. `rigged/uploaded_idle_reference.glb` preserves the Idle for comparison
+  with restored PBR materials and meter-scale geometry. The sampled GLB clip lasts about 8.367 seconds.
+  It is not added to a shared game animation pack or embedded in the modular part GLBs.
+- Existing `idle1`, `walk`, `run`, `jump`, `combat_idle`, `slash1`, and `dying` were tested with
+  the actual client retargeting and grounding functions at 25 sample times each. Separately assembled
+  parts matched the combined GLB. Visual review still found wrist folding and an incorrect sword grip;
+  numerical validation is not visual acceptance. The locomotion rig also lacks pinky tracks.
+- [Files, source hash, comparison renders, and reproduction](../../assets/modular_human_male_01/rigged/README.md).
+  Comparison candidate only; not integrated. Source and outputs are stored on HF and pinned by `assets.lock`.
+- **[미사용]** The forward-palm candidate is now retained for comparison. Following the user's
+  hand-pose correction, a [palms-down/inward upload](../../assets/modular_human_male_01/refined_palms_down/README.md)
+  was prepared for fresh Mixamo rigging. The returned `Idle (11).fbx` and results are recorded above.
+
 ## Meshy Modular Body Rig Trial (2026-09-28)
 
 - Source: Meshy.ai Rigging API, user-confirmed Premium tier, 2026-09-28.

@@ -3,7 +3,9 @@
 ## Modular Human Male 01 — 제작 샘플 (2026-09-28)
 
 - [캐릭터 커스터마이제이션](../CHARACTER_CUSTOMIZATION.md)의 기준 몸체 제작 샘플.
-  기존 플레이어 모델을 교체하지 않은 작업 에셋이며, 공통 리그와 파츠 분리는 미완료다.
+  기존 플레이어 모델을 교체하지 않은 작업 에셋이다. 몸체·반바지 분리와 이전 Mixamo 리그
+  후보 검사를 마쳤다. 손바닥 방향 수정 후 재리깅한 현재 후보는 손목 뒤틀림이 개선됐으며,
+  강하게 굽힌 손가락·검 그립의 보정을 남겨두고 있다.
 - 원화: [정면](../images/characters/modular_human_male_01/base-front.png),
   [왼쪽 측면](../images/characters/modular_human_male_01/base-left.png).
   OpenAI Codex built-in ImageGen, ChatGPT Pro 20x, 2026-09-28. OpenAI 생성 출력물 이용 조건 적용.
@@ -24,11 +26,73 @@
   기존 Mixamo 팩과 본 이름·척추 계층이 달라 공통 리그에 채택하지 않는다.
   클라이언트 리타게팅으로 `idle1`·`walk`·`run`·`slash1` 각 12개 시점을 측정했지만,
   유한한 좌표 확인만으로 시각적 호환성을 통과한 것은 아니다.
-- 원본 OBJ 보존·재질 참조·ZIP 무결성을 확인한 Mixamo 비교용 ZIP도 준비했다. 업로드·리깅은 미실행.
+- 원본 OBJ 보존·재질 참조·ZIP 무결성을 확인한 초기 비교용 ZIP은 업로드하지 않았다.
+  이후 보정본을 사용자가 Mixamo에서 리깅해 제공했다(아래 기록).
   제작 원본·검증 파일은 HF에 보관하고 `assets.lock`으로 고정한다. 게임에는 연결하지 않았다.
 - 비용·다운로드 기록: [generation.json](../../assets/modular_human_male_01/generation.json),
   [rigging.json](../../assets/modular_human_male_01/rigging.json).
   품질 판정·검증 결과·재현 명령: [샘플 README](../../assets/modular_human_male_01/README.md).
+
+### 기준 몸체 보정과 반바지 분리 (2026-09-28)
+
+- 같은 Meshy 원본을 Blender 5.2.0 LTS에서 보정했다. 추가 Meshy 생성은 하지 않았다.
+  [몸체·반바지·조립 GLB와 렌더](../../assets/modular_human_male_01/refined/README.md).
+- 몸체 **11,730**, 기본 반바지 **1,010**, 합계 **12,740 triangles**(가려지는 몸체 포함).
+  머리·목 근사 영역은 1,767 → 3,057, 지정한 얼굴 앞쪽 영역은 **630 → 1,505 triangles**.
+  얼굴 450개·나머지 머리 200개 엣지를 세분화하고 고밀도 원본 표면에 투영했다.
+- 손가락은 단면 검사에서 원래 분리된 것으로 확인했다. 팔꿈치부터 손목까지 회전을
+  보정해 손바닥을 앞으로 돌렸다. 열린 경계·비매니폴드 엣지는 몸체에서 모두 0이며,
+  반바지의 열린 경계는 허리·양쪽 다리 세 곳이다. 반바지 아래 몸체는 단순화된 형상이다.
+- 보정한 형상에 맞춰 4096² 노멀맵을 다시 베이크했다. 원본의 등 텍스처 반복 오류는
+  OpenAI Codex built-in ImageGen, **ChatGPT Pro 20x**, 2026-09-28 생성 출력으로 국소 보정했다.
+  OpenAI 생성 출력물 이용 조건 적용. [프롬프트·입력·해시](../../assets/modular_human_male_01/refined/back-repair-source.json).
+- GLB 재가져오기·파츠별 지오메트리/UV 일치·텍스처 내장·Mixamo ZIP 무결성 검증 완료.
+  공통 리그·무기 그립·홍채 마스크·장비 조립은 이 단계에서 미완료다. 보정 원본·산출물은 HF에
+  보관하고 `assets.lock`으로 고정한다. 초기 샘플은 `72ef46aa`와 해당 `assets.lock`에 보존한다.
+
+### Mixamo 리그 후보와 기존 동작 검사 (2026-09-28)
+
+- 사용자 제공 [Idle (7).fbx](../../assets/modular_human_male_01/refined/Idle%20%287%29.fbx).
+  Adobe Mixamo에서 리깅·Idle 적용한 파일임을 사용자가 확인했다. 무료 서비스,
+  아래 Mixamo 라이선스 적용. 제공일 2026-09-28, 원본 다운로드 날짜는 미확인.
+- 65본·양손 다섯 손가락 포함. 단위·원점 정규화, PBR 복원, 정점당 최대 4개 본 가중치로
+  몸체·반바지·통합 GLB를 내보냈다. 총량은 **12,740 triangles**를 유지한다.
+  반바지 아래 피부 primitive를 숨긴 가시 총량은 **11,730 triangles**(무기·헤어 제외).
+- 동일 골격에 별도 파츠를 연결한 결과는 통합본과 일치했다. 기존 이동·전투 동작 7종 ×
+  25개 시점 수치 검사 통과. 다만 확대 렌더에서 손목 접힘·검 그립 문제가 있어 시각 검증은
+  미통과다. 이동 팩의 새끼손가락 트랙 부재도 기록했다. 기준 리그는 후보 상태다.
+- 제공된 Idle은 별도 참조 GLB에 보존했다. 원본 FBX와 공용 애니메이션 팩은 수정하지 않았다.
+  [파일·출처 해시·비교 렌더·검증·재현](../../assets/modular_human_male_01/rigged/README.md).
+  게임에는 연결하지 않았다. 원본·산출물은 HF에 보관하고 `assets.lock`으로 고정한다.
+
+### 손바닥 방향 수정과 재리깅 입력 (2026-09-28)
+
+- 사용자가 손바닥 정면 자세를 손목 뒤틀림 원인으로 지적했다. 전완을 돌렸던 보정을
+  철회하고, 손바닥이 아래·몸통 쪽을 향하는 Meshy 원래 자세로 다시 제작했다.
+  [현재 몸체·Mixamo ZIP·검토 렌더](../../assets/modular_human_male_01/refined_palms_down/README.md).
+- 얼굴 보강·반바지 분리·UV·등 보정 텍스처를 유지했다. 전완·손 이외의 위치 오차 0,
+  전체 **12,740 triangles**, 얼굴 지정 영역 **1,505 triangles**. 변경한 자세에 맞춰
+  고밀도 원본에서 노멀맵을 다시 베이크했다. 추가 AI 생성이나 Meshy 비용은 없다.
+- GLB 재검사, 이전 UV·베이스컬러 보존, ZIP 무결성·재질 참조 검사를 통과했다.
+  이후 사용자가 재리깅한 `Idle (11).fbx`를 제공했다(아래 기록).
+- **[미사용]** `refined/`의 손바닥 정면 버전과 `rigged/`의 이전 리그는 비교·출처 보존용이다.
+  사용자 FBX는 수정하지 않았다. 원본과 새 작업본은 HF에 보관하고 `assets.lock`으로 고정한다.
+
+### 손 방향 수정 후 Mixamo 리그 (2026-09-28)
+
+- 원본: 사용자 제공 `Idle (11).fbx`, Adobe Mixamo 리깅임을 사용자 확인.
+  `/mnt/y/web_downloads/Idle (11).fbx`를
+  [로컬 FBX](../../assets/modular_human_male_01/refined_palms_down/Idle%20%2811%29.fbx)로 그대로 보존했다.
+  무료 서비스·아래 Mixamo 이용 조건 적용. 제공일 2026-09-28, 별도 다운로드 날짜는 미확인.
+- 손가락 포함 65본, 30fps Idle 1~60프레임. 참조 GLB는 2초 Idle을 보존한다.
+  `human_male_01_mixamo_candidate_v2`로 몸체·반바지를 내보냈다. 총 **12,740 triangles** 유지,
+  기존 수정본과 면 중심 위치 오차는 최대 0.00000084m다. PBR 복원·최대 4본 가중치 정규화 완료.
+- 기존 동작 7종 × 25개 시점에서 별도 파츠 조립본과 통합 GLB의 정점 위치 오차 0.
+  비교 렌더에서 이전 손목 뒤틀림은 보이지 않는다. 검을 쥐는 손가락의 국소 접힘과 그립 간격,
+  이동 팩의 새끼손가락 트랙 부재는 남아 있다. 전체 품질 승인·게임 연결은 아직 하지 않았다.
+- [파일·해시·검증·렌더·재현](../../assets/modular_human_male_01/rigged_palms_down/README.md).
+  원본 FBX·이전 리그·공용 애니메이션 팩은 수정하지 않았다. 추가 생성 비용 없음.
+  새 원본과 산출물은 HF에 보관하고 `assets.lock`으로 고정한다.
 
 ## Human
 
