@@ -17,7 +17,7 @@
 - 생성 원본은 보존하고, Blender로 [1차 착용본](../../assets/modular_human_male_01/parts/fitted/README.md)을
   만들었다. 기존 `human_male_01_mixamo_candidate_v2`의 65본·bind pose를 사용한다.
   머리 형상·옷깃·소매·손가락 위치를 맞추고 몸체 가중치를 옮겼으며 가림 영역을 분리했다.
-  옷깃·손목 경계 보강 후 천 셔츠는 **2,855**, 가죽 갑옷은 **3,757 triangles**다.
+  옷깃·손목 경계 보강과 겨드랑이 영역 분리 후 천 셔츠는 **3,321**, 가죽 갑옷은 **3,757 triangles**다.
   헤어·장갑·부츠는 원본 수를 유지하며, 바지의 후속 끝단 변형은 아래에 기록한다.
 - 2026-09-29 셔츠 소매가 손과 어긋나는 문제를 수정했다. 전완 중심에 소매를 맞추고,
   손가락으로 잘못 옮겨진 가중치를 제거했다. 소매 끝을 안감·겉감 간격이 있는 열린 커프로
@@ -56,17 +56,42 @@
   [수정 후](../../assets/modular_human_male_01/parts/fitted/waist-after-combat_idle-front.png)와 뒤쪽 비교를 남겼다.
   [보존 검사](../../assets/modular_human_male_01/parts/fitted/waist-preservation.json)에서 머리·목·팔·손·발과
   바지 끝단 두 변형의 형상·UV·가중치는 동일하다. Blender 가공이며 기존 출처·라이선스를 유지하고 추가 생성 비용은 없다.
+- `beb1d6f2` 이후 겨드랑이 보정: 갑옷 착용 시 셔츠 몸통 전체를 숨겨 옆면이 비던 문제를 수정했다.
+  기존 셔츠에서 겨드랑이 영역 632 triangles를 분리해 소매와 함께 표시하고, 몸통 중앙만 가린다.
+  Blender에서 기존 Meshy 원본을 가공했으며 출처·라이선스를 유지하고 추가 생성 비용은 없다.
+  [겨드랑이 검사](../../assets/modular_human_male_01/parts/fitted/armhole-validation.json)는
+  7동작 × 25시점 × 양쪽 6개 광선, 총 2,100표본의 가림을 확인했다. 뒤어깨 보정 후 새 영역을 숨기면 그중 696개가 빈 공간을 통과한다.
+  상의 교체 30회에도 재생을 유지한다. 표본 검사이며 전체 의상 충돌을 보증하지 않는다.
+  [수정 전](../../assets/modular_human_male_01/parts/fitted/armhole-before-combat_idle-left.png)·
+  [수정 후](../../assets/modular_human_male_01/parts/fitted/armhole-after-combat_idle-left.png)와 반대쪽·정면·뒤쪽 비교를 남겼다.
+- 같은 날 목 보정: 목 피부를 삼각형 중심으로 분류하면서 옷깃 위에 드러나던 가림 경계를 수정했다.
+  목·몸통 경계를 앞쪽은 낮고 뒤쪽은 높게 분할하고, 뒷목 옆면은 좁혀 셔츠 등판으로 나오는 피부를 줄였다.
+  몸체는 **13,520 triangles**, 얼굴 지정 영역은 **1,505**다. Blender 가공이며 기존 원본·출처·라이선스를 유지하고 추가 생성 비용은 없다.
+  [목 검사](../../assets/modular_human_male_01/parts/fitted/neck-validation.json)는 셔츠·갑옷 각각
+  7동작 × 25시점 × 목 주변 38표본, 총 **13,300표본**의 가림과 상의 교체 30회의 연속성을 확인했다.
+  수정 전 몸체는 동일 검사에서 실패한다. 피부 뒤 10mm 이내의 의상도 가림으로 인정하며, 관통·간격 전체 검사는 아니다.
+  [보존 검사](../../assets/modular_human_male_01/parts/fitted/neck-preservation.json)에서 머리·손·전완·발·다리의
+  형상·노멀·UV·가중치와 기존 몸체 정점의 위치·UV·가중치를 확인했다. 경계에 새 정점만 보간한다.
+  [수정 전](../../assets/modular_human_male_01/parts/fitted/neck-before-leather-combat_idle-front.png)·
+  [수정 후](../../assets/modular_human_male_01/parts/fitted/neck-after-leather-combat_idle-front.png)와 셔츠·상의 없는 앞뒤 비교를 남겼다.
+- 후속 뒤어깨 보정: 갑옷 어깨판 밖으로 나오던 셔츠를 안쪽으로 맞추고, 해당 위치의 갑옷 가중치를
+  주변 셔츠 가중치와 부드럽게 섞었다. Blender로 셔츠 정점 189개를 보정했으며 기존 출처·라이선스를 유지하고 추가 생성 비용은 없다.
+  [보존 검사](../../assets/modular_human_male_01/parts/fitted/shoulder-preservation.json)에서 몸체·다른 파츠 GLB 해시,
+  셔츠의 삼각형 수 **3,321**·UV와 손목을 포함한 하부 소매의 위치·가중치를 확인했다.
+  목·겨드랑이·손목 검사와 기존 700포즈 조립 검사를 다시 통과했다. 어깨의 시각 검토는 대기·전투 대기·걷기·공격 비교이며 전체 의상 충돌 검사는 아니다.
+  [수정 전](../../assets/modular_human_male_01/parts/fitted/shoulder-before-leather-combat_idle-left.png)·
+  [수정 후](../../assets/modular_human_male_01/parts/fitted/shoulder-after-leather-combat_idle-left.png)와 반대쪽·등·셔츠 단독 착용 비교를 남겼다.
 - 장갑·부츠·검 302를 포함한 조합 수치는 다음과 같다. 숨긴 몸체와 안쪽 의상도 전체에 포함한다.
 
   | 조합 | 전체 triangles | 표시 triangles | 얼굴 지정 영역 |
   | --- | ---: | ---: | ---: |
-  | 크롭 + 천 셔츠 | 21,734 | 11,294 | 1,505 |
-  | 옆가르마 + 천 셔츠 | 21,912 | 11,472 | 1,505 |
-  | 크롭 + 가죽 갑옷 + 안쪽 셔츠 | 25,491 | 13,482 | 1,505 |
-  | 옆가르마 + 가죽 갑옷 + 안쪽 셔츠 | 25,669 | 13,660 | 1,505 |
+  | 크롭 + 천 셔츠 | 23,120 | 12,003 | 1,505 |
+  | 옆가르마 + 천 셔츠 | 23,298 | 12,181 | 1,505 |
+  | 크롭 + 가죽 갑옷 + 안쪽 셔츠 | 26,877 | 14,357 | 1,505 |
+  | 옆가르마 + 가죽 갑옷 + 안쪽 셔츠 | 27,055 | 14,535 | 1,505 |
 
 - 4조합 × 7동작 × 25시점(700포즈), 교체 20회, 동작 전환 7회에서 유한한 좌표·공유 골격·재생 연속성을
-  확인했다. 소매·바지 끝단·허리 수정 후 같은 조립 검사와 GLB 속성·가중치·입력 해시 검사를 다시 통과했다.
+  확인했다. 소매·바지 끝단·허리·겨드랑이·목 수정 후 같은 조립 검사와 GLB 속성·가중치·입력 해시 검사를 다시 통과했다.
   프런트엔드 check·lint와 관련 테스트 14개도 다시 통과했다.
   [내보내기 검사](../../assets/modular_human_male_01/parts/fitted/export-validation.json),
   [브라우저 검사·착용 화면](../../assets/modular_human_male_01/parts/fitted/browser-validation.json).
@@ -74,6 +99,7 @@
   갑옷 조합은 15,000–20,000 목표를 초과한다. 텍스처도 원본 해상도의 제작용 출력이므로 배포 최적화가 남아 있다.
   실제 플레이어·저장·장비 동기화에는 연결하지 않았다. 원화는 Git에, 원본·착용본·제작 도구는
   HF 에셋 저장소에 보관하며 함께 커밋한 `assets.lock`으로 복원한다. 소매·바지 끝단·허리 보정과 검증 기록을 포함한다.
+  `beb1d6f2` 이후 겨드랑이·목·뒤어깨 보정과 검증 기록도 이번 체크포인트의 HF·`assets.lock`에 포함한다.
 
 ## Modular Human Male 01 — 제작 샘플 (2026-09-28)
 

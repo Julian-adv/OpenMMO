@@ -60,7 +60,7 @@ describe('modular outfit coverage', () => {
     const legPrimitive = new THREE.SkinnedMesh()
     legs.add(legPrimitive)
     const body = [torso, hands, feet, legPrimitive]
-    const shirt = [region('torso'), region('sleeves')]
+    const shirt = [region('torso'), region('sleeves'), region('underarms')]
     const pants = [
       region('main'),
       region('cuffs'),
@@ -83,7 +83,7 @@ describe('modular outfit coverage', () => {
       boots: true,
     })
     expect(body.every((mesh) => !mesh.visible)).toBe(true)
-    expect(shirt.map((mesh) => mesh.visible)).toEqual([false, true])
+    expect(shirt.map((mesh) => mesh.visible)).toEqual([false, true, true])
     expect(pants.map((mesh) => mesh.visible)).toEqual([
       true,
       false,
