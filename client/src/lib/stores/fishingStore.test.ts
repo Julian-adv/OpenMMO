@@ -168,24 +168,17 @@ describe('fishingBobbers', () => {
     })
   })
 
-  it('marks a bite only for an existing bobber', () => {
+  it('marks a bite only for an existing bobber; an unknown id leaves the map untouched', () => {
     upsertBobber(ID, { x: 1, y: 0, z: 2 })
 
     markBobberBite(ID)
+    const before = get(fishingBobbers)
     markBobberBite(99)
 
     const map = get(fishingBobbers)
+    expect(map).toBe(before)
     expect(map.get(ID)?.bite).toBe(true)
     expect(map.has(99)).toBe(false)
-  })
-
-  it('a bite for an unknown player does not touch the map — no spurious rerender', () => {
-    upsertBobber(ID, { x: 1, y: 0, z: 2 })
-    const before = get(fishingBobbers)
-
-    markBobberBite(99)
-
-    expect(get(fishingBobbers)).toBe(before)
   })
 
   it('a fight beat moves the bobber, clears the bite, and carries the readout', () => {

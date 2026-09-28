@@ -42,7 +42,7 @@ fn signed_token(key: &EncodingKey, claims: &Value) -> String {
     encode(&header, claims, key).unwrap()
 }
 
-async fn serve(access: AuthContext) -> (String, tokio::task::JoinHandle<()>) {
+async fn serve(access: AuthContext) -> String {
     let auth = Arc::new(
         AuthService::new(crate::test_util::unique_temp_dir("metrics_access").join("game.db"))
             .unwrap(),
@@ -60,16 +60,13 @@ async fn serve(access: AuthContext) -> (String, tokio::task::JoinHandle<()>) {
         }),
         crate::hardware::HardwareMetrics::default(),
     );
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let url = format!("http://{}/api/metrics", listener.local_addr().unwrap());
-    let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-    (url, task)
+    format!("{}/api/metrics", crate::test_util::serve(router).await)
 }
 
 #[tokio::test]
 async fn every_metrics_endpoint_requires_a_verified_google_admin() {
     let (verifier, key) = crate::google_auth::test_verifier();
-    let (url, task) = serve(AuthContext {
+    let url = serve(AuthContext {
         google: Some(verifier),
         npc_token: "test-npc-secret".into(),
         admin_emails: vec!["admin@example.com".into()],
@@ -153,14 +150,13 @@ async fn every_metrics_endpoint_requires_a_verified_google_admin() {
         );
         assert_eq!(response.headers()["cache-control"], "no-store");
     }
-    task.abort();
 }
 
 #[tokio::test]
 async fn missing_google_configuration_or_empty_admin_list_denies_access() {
     for google_enabled in [false, true] {
         let (verifier, key) = crate::google_auth::test_verifier();
-        let (url, task) = serve(AuthContext {
+        let url = serve(AuthContext {
             google: google_enabled.then_some(verifier),
             npc_token: "test-npc-secret".into(),
             admin_emails: vec![],
@@ -180,7 +176,6 @@ async fn missing_google_configuration_or_empty_admin_list_denies_access() {
                 StatusCode::UNAUTHORIZED
             }
         );
-        task.abort();
     }
 }
 
@@ -201,9 +196,7 @@ async fn game_api_keeps_public_reads_and_existing_write_access() {
             access,
             crate::api_auth::require_admin_for_writes,
         ));
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let url = format!("http://{}/game", listener.local_addr().unwrap());
-    let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+    let url = format!("{}/game", crate::test_util::serve(router).await);
     let client = reqwest::Client::new();
     assert_eq!(
         client.get(&url).send().await.unwrap().status(),
@@ -237,5 +230,4 @@ async fn game_api_keeps_public_reads_and_existing_write_access() {
             .status(),
         StatusCode::FORBIDDEN
     );
-    task.abort();
 }

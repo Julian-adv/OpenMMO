@@ -10,6 +10,7 @@ use crate::types::{
 use crate::world_config::world_config;
 use onlinerpg_shared::inventory::{EquipSlot, GroundItem, ItemInstance, PlayerInventory};
 use onlinerpg_shared::messages::{BagLineItem, DealKind};
+use onlinerpg_terrain::land::{plot_addr, LandGrade, REGION_PLOTS};
 use tokio::sync::broadcast::error::TryRecvError;
 use tokio::sync::mpsc::error::TryRecvError as MpscTryRecvError;
 
@@ -160,6 +161,162 @@ fn bag_item(instance_id: u64, item_def_id: &str, quantity: u32) -> ItemInstance 
         cape_color: None,
         cape_texture: None,
     }
+}
+
+async fn hand_instrument(game_state: &GameState, player: &str) {
+    game_state.inventories.write().await.insert(
+        pid(player),
+        PlayerInventory {
+            bag: vec![bag_item(1, "worn_mandolin", 1)],
+            ..Default::default()
+        },
+    );
+}
+
+/// Player on dry land (positive x) with hunger tracked at `satiation`.
+async fn add_hungry_player(
+    game_state: &GameState,
+    name: &str,
+    satiation: u32,
+) -> (PlayerId, DirectRx) {
+    let id = pid(name);
+    game_state.add_player(make_player(name, 100.0, 50.0)).await;
+    game_state
+        .register_player_character(&id, 1, 0, attrs_with_cha(10), 0, Some(satiation))
+        .await;
+    let rx = game_state.register_direct_channel(&id).await;
+    (id, rx)
+}
+
+const EMPTY_WEATHER_JSON: &[u8] = br#"{"version":1,"seed":42,"sectors":[]}"#;
+
+fn empty_weather(bias: f32) -> crate::game_state::weather::WeatherState {
+    crate::game_state::weather::WeatherState::new(
+        serde_json::from_slice(EMPTY_WEATHER_JSON).unwrap(),
+        bias,
+        EMPTY_WEATHER_JSON.to_vec(),
+    )
+}
+
+fn pos3(x: f32, y: f32, z: f32) -> Position {
+    Position { x, y, z }
+}
+
+/// Also grades region (0, 0) Homestead throughout.
+async fn estate_owner(
+    game: &GameState,
+    auth: &crate::auth::AuthService,
+    account: &str,
+    name: &str,
+    position: Position,
+    bag: Vec<ItemInstance>,
+) -> i64 {
+    let character = create_test_character(auth, account, name);
+    let mut player = make_player(name, position.x, position.z);
+    player.position.y = position.y;
+    player.level = 10;
+    game.add_player(player).await;
+    game.register_player_character(
+        &pid(name),
+        character.id,
+        onlinerpg_shared::xp::xp_for_level(10),
+        attrs_with_cha(12),
+        0,
+        None,
+    )
+    .await;
+    game.inventories.write().await.insert(
+        pid(name),
+        PlayerInventory {
+            bag,
+            ..Default::default()
+        },
+    );
+    game.terrain_io
+        .write_land_grades(0, 0, &vec![LandGrade::Homestead as u8; REGION_PLOTS])
+        .await
+        .unwrap();
+    character.id
+}
+
+/// Claims the plot under (x, z) with the deed at bag instance 1.
+async fn claim_plot_at(
+    game: &GameState,
+    auth: &crate::auth::AuthService,
+    name: &str,
+    x: f32,
+    z: f32,
+) {
+    let plot = super::land::plot_key(plot_addr(x, z));
+    game.claim_land(&pid(name), 1, plot, auth).await;
+}
+
+async fn give(game_state: &GameState, player_id: &PlayerId, item: ItemInstance) {
+    game_state
+        .inventories
+        .write()
+        .await
+        .get_mut(player_id)
+        .unwrap()
+        .bag
+        .push(item);
+}
+
+async fn add_db_player(
+    game_state: &GameState,
+    auth: &crate::auth::AuthService,
+    account: &str,
+    name: &str,
+    x: f32,
+    z: f32,
+    gold: i64,
+) -> crate::auth::CharacterRecord {
+    let record = create_test_character(auth, account, name);
+    game_state.add_player(make_player(name, x, z)).await;
+    game_state
+        .register_player_character(&pid(name), record.id, 0, attrs_with_cha(12), gold, None)
+        .await;
+    game_state
+        .inventories
+        .write()
+        .await
+        .insert(pid(name), PlayerInventory::default());
+    record
+}
+
+const CAPE_ID: u64 = 1;
+
+async fn setup_cape_wearer(
+    game_state: &GameState,
+    name: &str,
+    caped: bool,
+    instance_id: u64,
+    item_def_id: &str,
+    quantity: u32,
+) -> DirectRx {
+    game_state.add_player(make_player(name, 0.0, 0.0)).await;
+    let rx = game_state.register_direct_channel(&pid(name)).await;
+
+    let mut inv = PlayerInventory::default();
+    if caped {
+        inv.equipped
+            .insert(EquipSlot::Back, bag_item(CAPE_ID, "wool_cape", 1));
+    }
+    if quantity > 0 {
+        inv.bag.push(bag_item(instance_id, item_def_id, quantity));
+    }
+    game_state.inventories.write().await.insert(pid(name), inv);
+    rx
+}
+
+async fn worn_cape(game_state: &GameState, name: &str) -> ItemInstance {
+    game_state
+        .get_player_inventory(&pid(name))
+        .await
+        .unwrap()
+        .equipped
+        .remove(&EquipSlot::Back)
+        .unwrap()
 }
 
 fn pos(x: f32) -> Position {

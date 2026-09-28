@@ -188,12 +188,10 @@ mod tests {
                 .insert((now, "scroll_of_enchant_weapon".into(), false), 3);
         }
         let router = crate::metrics::metrics_routes(Arc::clone(&game), auth);
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let url = format!(
-            "http://{}/api/metrics/rare-drops",
-            listener.local_addr().unwrap()
+            "{}/api/metrics/rare-drops",
+            crate::test_util::serve(router).await
         );
-        tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
 
         let response = reqwest::get(&url).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);

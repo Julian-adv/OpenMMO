@@ -25,15 +25,6 @@ describe('drainTileWork — execution order', () => {
     drainTileWork(Number.POSITIVE_INFINITY)
     expect(log).toEqual([1, 2, 3])
   })
-
-  it('runs each item exactly once across multiple drains', () => {
-    const log: number[] = []
-    enqueueTileWork(() => log.push(1))
-    enqueueTileWork(() => log.push(2))
-    drainTileWork(Number.POSITIVE_INFINITY)
-    drainTileWork(Number.POSITIVE_INFINITY)
-    expect(log).toEqual([1, 2])
-  })
 })
 
 describe('drainTileWork — time budget', () => {

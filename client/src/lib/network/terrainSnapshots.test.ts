@@ -1,18 +1,17 @@
 import { TerrainFileCache } from './terrainFiles'
-import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   TerrainSnapshots,
-  type TerrainFile,
   type TerrainSnapshot,
   type TerrainVersion,
 } from './terrainSnapshots'
+import {
+  landscapeBytes,
+  stubSha256Digest,
+  terrainFile as file,
+} from './terrain-files.fixture'
 
 const heightData = (value: number) => new Uint8Array(65 * 65 * 2).fill(value)
-const file = (path: string, data: Uint8Array): TerrainFile => ({
-  path,
-  hash: createHash('sha256').update(data).digest('hex'),
-})
 const version = (value: number): TerrainVersion => ({
   tile_x: 1,
   tile_z: 2,
@@ -41,19 +40,7 @@ describe('terrain file downloads', () => {
       () => new Promise<Response>((resolve) => replies.push(resolve))
     )
     vi.stubGlobal('fetch', fetchMock)
-    vi.stubGlobal('crypto', {
-      subtle: {
-        digest: async (_algorithm: string, bytes: ArrayBuffer) => {
-          const digest = createHash('sha256')
-            .update(new Uint8Array(bytes))
-            .digest()
-          return digest.buffer.slice(
-            digest.byteOffset,
-            digest.byteOffset + digest.byteLength
-          )
-        },
-      },
-    })
+    stubSha256Digest()
     apply = vi.fn()
     resync = vi.fn()
     tiles = new TerrainSnapshots(
@@ -166,10 +153,7 @@ describe('terrain file downloads', () => {
   })
 
   it('uses the raw landscaping splat and mask, fetching only changed files', async () => {
-    const landscape = new Uint8Array(4 + 16384 + 512)
-    landscape.set([76, 78, 68, 49])
-    landscape[4] = 5
-    landscape[4 + 16384] = 128
+    const landscape = landscapeBytes()
     const first = version(1)
     first.files.landscape = file(
       'landscaping/r+00_+00/l_+0001_+0002.bin',

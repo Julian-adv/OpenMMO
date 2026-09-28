@@ -6,6 +6,7 @@ import {
   type PlayerControlEvent,
   type PlayerControlEventActions,
 } from './events'
+import { makeCanvasClickActions } from '../canvas-click-actions.fixture'
 
 function mouseEvent(button: number) {
   return { button } as MouseEvent
@@ -73,20 +74,7 @@ describe('createCanvasIntentEvent', () => {
 
 function makeActions() {
   return {
-    attackInRange: vi.fn(),
-    chaseAndAttack: vi.fn(),
-    toggleDoor: vi.fn(),
-    toggleDungeonDoor: vi.fn(),
-    interactObject: vi.fn(),
-    pickupItem: vi.fn(),
-    interactNpc: vi.fn(),
-    breakProp: vi.fn(),
-    openProp: vi.fn(),
-    moveToGround: vi.fn(),
-    castFishing: vi.fn(),
-    tipHat: vi.fn(),
-    tradeAtStall: vi.fn(),
-    eatMeal: vi.fn(),
+    ...makeCanvasClickActions(),
     requestMove: vi.fn(),
     onInteractionFinished: vi.fn(),
     onPickupGrab: vi.fn(),

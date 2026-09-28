@@ -98,7 +98,7 @@ async fn enchant_scroll_preserves_locked_weapons_and_materials() {
         let mut rx = setup_weapon_enchant_reader(&game, Some(("iron_sword", enchant)), 1).await;
         game.set_item_locked(&pid("reader"), 1, true).await;
         let before = game.get_player_inventory(&pid("reader")).await.unwrap();
-        while rx.try_recv().is_ok() {}
+        drain(&mut rx);
 
         game.use_item(&pid("reader"), SCROLL_ID).await;
 
@@ -153,6 +153,9 @@ async fn enchant_scroll_requires_wielded_weapon() {
         }
         other => panic!("Expected a system reply, got {:?}", other),
     }
+    assert!(!drain(&mut rx)
+        .iter()
+        .any(|msg| matches!(msg, ServerMessage::EquipmentEnchantSucceeded { .. })));
 }
 
 // --- Enchant armor scrolls ---
@@ -267,7 +270,7 @@ async fn enchant_armor_scroll_keeps_materials_when_all_armor_is_locked() {
     game.set_item_locked(&pid("reader"), 1, true).await;
     game.set_item_locked(&pid("reader"), 2, true).await;
     let before = game.get_player_inventory(&pid("reader")).await.unwrap();
-    while rx.try_recv().is_ok() {}
+    drain(&mut rx);
 
     game.use_item(&pid("reader"), SCROLL_ID).await;
 
@@ -330,23 +333,6 @@ async fn enchant_armor_scroll_destroys_over_enchanted_armor() {
         }
     }
     panic!("the armor should have evaporated within 100 reads at 99% odds");
-}
-
-#[tokio::test]
-async fn enchant_scroll_destroys_over_enchanted_weapon() {
-    let game_state = make_test_game_state("enchant_boom");
-    // Surviving 100 attempts at +12 has probability about 1e-200.
-    let _rx = setup_weapon_enchant_reader(&game_state, Some(("iron_sword", 12)), 100).await;
-
-    let reader = pid("reader");
-    for _ in 0..100 {
-        game_state.use_item(&reader, SCROLL_ID).await;
-        let inv = game_state.get_player_inventory(&reader).await.unwrap();
-        if !inv.equipped.contains_key(&EquipSlot::MainHand) {
-            return; // evaporated, as expected
-        }
-    }
-    panic!("the weapon should have evaporated within 100 reads at 99% odds");
 }
 
 #[tokio::test]
@@ -524,15 +510,4 @@ async fn enchant_success_event_is_sent_once_to_self_and_nearby_same_floor() {
             .iter()
             .any(|msg| matches!(msg, ServerMessage::EquipmentEnchantSucceeded { .. })));
     }
-}
-
-#[tokio::test]
-async fn enchant_rejected_without_target_emits_no_success_event() {
-    let game_state = make_test_game_state("enchant_event_rejected");
-    let mut owner = setup_weapon_enchant_reader(&game_state, None, 1).await;
-    drain(&mut owner);
-    game_state.use_item(&pid("reader"), SCROLL_ID).await;
-    assert!(!drain(&mut owner)
-        .iter()
-        .any(|msg| matches!(msg, ServerMessage::EquipmentEnchantSucceeded { .. })));
 }

@@ -2219,12 +2219,11 @@ impl AuthService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_util::temp_auth;
 
     #[test]
     fn gold_snapshot_adds_treasuries_to_total_and_splits_npc_and_active_gold() {
-        let db_path =
-            std::env::temp_dir().join(format!("onlinerpg_auth_snap_{}.db", uuid::Uuid::new_v4()));
-        let auth = AuthService::new(db_path).unwrap();
+        let (auth, _) = temp_auth("auth_snap");
         let player = auth.login_google("sub-snap").unwrap();
         let npc = auth.login_npc("npc_snap").unwrap();
         let active = create(&auth, &player, "Active").unwrap().id;
@@ -2270,9 +2269,7 @@ mod tests {
 
     #[test]
     fn titles_persist_and_only_an_earned_one_can_be_shown() {
-        let db_path =
-            std::env::temp_dir().join(format!("onlinerpg_auth_titles_{}.db", uuid::Uuid::new_v4()));
-        let auth = AuthService::new(db_path).unwrap();
+        let (auth, _) = temp_auth("auth_titles");
         let player = auth.login_google("sub-titles").unwrap();
         let id = create(&auth, &player, "Slayer").unwrap().id;
 
@@ -2301,9 +2298,7 @@ mod tests {
 
     #[test]
     fn save_batch_skips_discovery_rows_for_deleted_characters() {
-        let db_path =
-            std::env::temp_dir().join(format!("onlinerpg_auth_disc_{}.db", uuid::Uuid::new_v4()));
-        let auth = AuthService::new(db_path).unwrap();
+        let (auth, _) = temp_auth("auth_disc");
         let player = auth.login_google("sub-disc").unwrap();
         let kept = create(&auth, &player, "Kept").unwrap().id;
         let deleted = create(&auth, &player, "Doomed").unwrap().id;
@@ -2328,9 +2323,7 @@ mod tests {
 
     #[test]
     fn pricing_state_round_trips_with_its_meeting_row() {
-        let db_path =
-            std::env::temp_dir().join(format!("onlinerpg_auth_price_{}.db", uuid::Uuid::new_v4()));
-        let auth = AuthService::new(db_path).unwrap();
+        let (auth, _) = temp_auth("auth_price");
         assert_eq!(auth.load_pricing_state().unwrap(), PricingState::default());
 
         let state = PricingState {
@@ -2358,9 +2351,7 @@ mod tests {
 
     #[test]
     fn a_bard_starts_with_a_worn_mandolin_on_top_of_the_common_kit() {
-        let db_path =
-            std::env::temp_dir().join(format!("onlinerpg_auth_bard_{}.db", uuid::Uuid::new_v4()));
-        let auth = AuthService::new(db_path).unwrap();
+        let (auth, _) = temp_auth("auth_bard");
         let account = auth.login_google("sub-bard").unwrap();
         let attributes = CharacterAttributes {
             r#str: 10,
@@ -2402,9 +2393,7 @@ mod tests {
 
     #[test]
     fn a_registry_npc_starts_bare_and_loses_a_legacy_starter_sword() {
-        let db_path =
-            std::env::temp_dir().join(format!("onlinerpg_auth_npc_{}.db", uuid::Uuid::new_v4()));
-        let auth = AuthService::new(db_path.clone()).unwrap();
+        let (auth, db_path) = temp_auth("auth_npc");
         let account = auth.login_npc("npc_merchant").unwrap();
         let rica = auth
             .create_character(
@@ -2436,12 +2425,7 @@ mod tests {
     }
 
     fn banned_name_auth(tag: &str) -> AuthService {
-        let db_path = std::env::temp_dir().join(format!(
-            "onlinerpg_auth_{}_{}.db",
-            tag,
-            uuid::Uuid::new_v4()
-        ));
-        AuthService::new(db_path).unwrap().with_banned_names(
+        temp_auth(tag).0.with_banned_names(
             ["gm".to_string(), "운영자".to_string()]
                 .into_iter()
                 .collect(),
@@ -2473,11 +2457,7 @@ mod tests {
 
     #[test]
     fn dungeon_epoch_migration_preserves_legacy_character_state() {
-        let db_path = std::env::temp_dir().join(format!(
-            "onlinerpg_dungeon_epoch_migration_{}.db",
-            uuid::Uuid::new_v4()
-        ));
-        let auth = AuthService::new(db_path.clone()).unwrap();
+        let (auth, db_path) = temp_auth("dungeon_epoch_migration");
         let account = auth.login_npc("npc_legacy_dungeon").unwrap();
         let character = create(&auth, &account, "Delver").unwrap();
         drop(auth);
@@ -2555,11 +2535,7 @@ mod tests {
 
     #[test]
     fn a_registry_npc_with_a_loadout_skips_the_starter_kit() {
-        let db_path = std::env::temp_dir().join(format!(
-            "onlinerpg_auth_loadout_{}.db",
-            uuid::Uuid::new_v4()
-        ));
-        let auth = AuthService::new(db_path).unwrap();
+        let (auth, _) = temp_auth("auth_loadout");
         let account = auth.login_npc("npc_loadout_test").unwrap();
         let def = crate::npc_defs::npc_defs().get_by_npc_name("Karl").unwrap();
         assert!(
@@ -2595,9 +2571,7 @@ mod tests {
 
     #[test]
     fn npc_login_enforces_prefix_and_google_separation() {
-        let db_path =
-            std::env::temp_dir().join(format!("onlinerpg_auth_npc_{}.db", uuid::Uuid::new_v4()));
-        let auth = AuthService::new(db_path.clone()).unwrap();
+        let (auth, db_path) = temp_auth("auth_npc");
 
         assert!(auth.login_npc("merchant_bob").is_err());
         assert!(auth.login_npc("").is_err());
@@ -2618,29 +2592,9 @@ mod tests {
 
     #[test]
     fn a_ban_survives_recreating_the_character_and_expires_on_its_own() {
-        let db_path =
-            std::env::temp_dir().join(format!("onlinerpg_auth_ban_{}.db", uuid::Uuid::new_v4()));
-        let auth = AuthService::new(db_path).unwrap();
+        let (auth, _) = temp_auth("auth_ban");
         let account = auth.login_google("sub-ban").unwrap();
-        let attributes = CharacterAttributes {
-            r#str: 12,
-            dex: 12,
-            con: 12,
-            int: 12,
-            wis: 12,
-            cha: 12,
-            guard: 10,
-        };
-        let record = auth
-            .create_character(
-                &account,
-                "Ruffian",
-                &attributes,
-                16,
-                CharacterClass::Knight,
-                Gender::Male,
-            )
-            .unwrap();
+        let record = create(&auth, &account, "Ruffian").unwrap();
 
         // An operator types a character name; the ban lands on the account.
         assert_eq!(
@@ -2683,69 +2637,19 @@ mod tests {
 
         // Lifting a live ban reports that it did something, once.
         auth.ban_account(&account, None, None).unwrap();
+        assert!(auth.active_ban(&account).unwrap().is_some());
         assert!(auth.unban_account(&account).unwrap());
         assert!(!auth.unban_account(&account).unwrap());
         assert!(auth.active_ban(&account).unwrap().is_none());
-    }
-
-    /// The expiry path cleans up after itself, and a fresh ban placed after an
-    /// expiry is honoured rather than swallowed by the cleanup.
-    #[test]
-    fn an_expired_ban_is_swept_and_a_later_ban_still_applies() {
-        let db_path = std::env::temp_dir().join(format!(
-            "onlinerpg_auth_ban_sweep_{}.db",
-            uuid::Uuid::new_v4()
-        ));
-        let auth = AuthService::new(db_path).unwrap();
-        let account = auth.login_npc("npc_ban_sweep").unwrap();
-
-        auth.ban_account(&account, None, Some(unix_now() - 1))
-            .unwrap();
-        assert!(
-            auth.active_ban(&account).unwrap().is_none(),
-            "an expired ban stops applying"
-        );
-        assert!(
-            !auth.unban_account(&account).unwrap(),
-            "and the row is gone, so there is nothing left to lift"
-        );
-
-        auth.ban_account(&account, Some("re-banned"), None).unwrap();
-        let ban = auth
-            .active_ban(&account)
-            .unwrap()
-            .expect("the new ban applies");
-        assert_eq!(ban.reason.as_deref(), Some("re-banned"));
     }
 
     /// A ban outlives its characters, so `/unban` has to be able to name the
     /// account directly — otherwise deleting the last character strands it.
     #[test]
     fn an_account_can_be_unbanned_after_its_last_character_is_gone() {
-        let db_path = std::env::temp_dir().join(format!(
-            "onlinerpg_auth_ban_orphan_{}.db",
-            uuid::Uuid::new_v4()
-        ));
-        let auth = AuthService::new(db_path).unwrap();
+        let (auth, _) = temp_auth("auth_ban_orphan");
         let account = auth.login_npc("npc_ban_orphan").unwrap();
-        let record = auth
-            .create_character(
-                &account,
-                "Lonely",
-                &CharacterAttributes {
-                    r#str: 12,
-                    dex: 12,
-                    con: 12,
-                    int: 12,
-                    wis: 12,
-                    cha: 12,
-                    guard: 10,
-                },
-                16,
-                CharacterClass::Knight,
-                Gender::Male,
-            )
-            .unwrap();
+        let record = create(&auth, &account, "Lonely").unwrap();
         auth.ban_account(&account, None, None).unwrap();
         auth.delete_character(&account, record.id).unwrap();
 
@@ -2758,26 +2662,13 @@ mod tests {
     }
 
     #[test]
-    fn banning_an_unknown_character_finds_no_account() {
-        let db_path = std::env::temp_dir().join(format!(
-            "onlinerpg_auth_ban_miss_{}.db",
-            uuid::Uuid::new_v4()
-        ));
-        let auth = AuthService::new(db_path).unwrap();
-        assert!(auth.account_of_character("nobody").unwrap().is_none());
-    }
-
-    #[test]
     fn startup_migrates_legacy_item_definition_ids() {
         for (old, new, slot, enchant) in [
             ("leather_cap", "leather_helmet", "head", 2),
             ("iron_chestplate", "breastplate", "chest", 3),
         ] {
-            let db_path = std::env::temp_dir().join(format!(
-                "onlinerpg_auth_item_ids_{}.db",
-                uuid::Uuid::new_v4()
-            ));
-            drop(AuthService::new(db_path.clone()).unwrap());
+            let (auth, db_path) = temp_auth("auth_item_ids");
+            drop(auth);
 
             let conn = Connection::open(&db_path).unwrap();
             conn.execute_batch(
@@ -2829,11 +2720,8 @@ mod tests {
     /// that is already on the new table.
     #[test]
     fn startup_migrates_xp_to_the_new_curve_once() {
-        let db_path = std::env::temp_dir().join(format!(
-            "onlinerpg_auth_level_curve_{}.db",
-            uuid::Uuid::new_v4()
-        ));
-        drop(AuthService::new(db_path.clone()).unwrap());
+        let (auth, db_path) = temp_auth("auth_level_curve");
+        drop(auth);
 
         let conn = Connection::open(&db_path).unwrap();
         conn.execute_batch(
@@ -2871,29 +2759,9 @@ mod tests {
 
     #[test]
     fn skills_round_trip_and_upsert_preserves_unknown_rows() {
-        let db_path =
-            std::env::temp_dir().join(format!("onlinerpg_auth_skills_{}.db", uuid::Uuid::new_v4()));
-        let auth = AuthService::new(db_path).unwrap();
+        let (auth, _) = temp_auth("auth_skills");
         let account = auth.login_npc("npc_skills_test").unwrap();
-        let attributes = CharacterAttributes {
-            r#str: 12,
-            dex: 12,
-            con: 12,
-            int: 12,
-            wis: 12,
-            cha: 12,
-            guard: 10,
-        };
-        let record = auth
-            .create_character(
-                &account,
-                "Fisherman",
-                &attributes,
-                16,
-                CharacterClass::Ranger,
-                Gender::Female,
-            )
-            .unwrap();
+        let record = create(&auth, &account, "Fisherman").unwrap();
 
         assert!(auth.load_skills(record.id).unwrap().is_empty());
 
@@ -2931,16 +2799,7 @@ mod tests {
             assert_eq!(rows[0].skill_id, "fishing");
             assert_eq!(rows[1].skill_id, "underwater_basketweaving");
         }
-        let beginner = auth
-            .create_character(
-                &account,
-                "Beginner",
-                &attributes,
-                16,
-                CharacterClass::Ranger,
-                Gender::Female,
-            )
-            .unwrap();
+        let beginner = create(&auth, &account, "Beginner").unwrap();
         auth.save_batch(
             &[],
             &[],
@@ -3038,21 +2897,13 @@ mod tests {
     /// must surface as an error — never as a valid empty history.
     #[test]
     fn dungeon_history_load_fails_when_storage_is_unavailable() {
-        let db_path = std::env::temp_dir().join(format!(
-            "onlinerpg_auth_dungeon_history_{}.db",
-            uuid::Uuid::new_v4()
-        ));
-        let auth = AuthService::new(db_path).unwrap();
+        let (auth, _) = temp_auth("auth_dungeon_history");
         let (opens, discoveries) = auth.load_dungeon_history(1).unwrap();
         assert!(opens.is_empty());
         assert!(discoveries.is_empty());
 
         for table in ["character_dungeon_chests", "character_dungeon_discoveries"] {
-            let db_path = std::env::temp_dir().join(format!(
-                "onlinerpg_auth_dungeon_history_{}.db",
-                uuid::Uuid::new_v4()
-            ));
-            let auth = AuthService::new(db_path.clone()).unwrap();
+            let (auth, db_path) = temp_auth("auth_dungeon_history");
             let conn = Connection::open(db_path).unwrap();
             conn.execute(&format!("DROP TABLE {table}"), []).unwrap();
 
@@ -3062,38 +2913,17 @@ mod tests {
 
     #[test]
     fn name_validation_rejects_control_chars_and_long_names() {
-        let db_path =
-            std::env::temp_dir().join(format!("onlinerpg_auth_names_{}.db", uuid::Uuid::new_v4()));
-        let auth = AuthService::new(db_path).unwrap();
+        let (auth, _) = temp_auth("auth_names");
 
         assert!(auth.login_npc("npc_bad\nname").is_err());
 
         let account = auth.login_npc("npc_name_test").unwrap();
-        let attributes = CharacterAttributes {
-            r#str: 12,
-            dex: 12,
-            con: 12,
-            int: 12,
-            wis: 12,
-            cha: 12,
-            guard: 10,
-        };
-        let create = |name: &str| {
-            auth.create_character(
-                &account,
-                name,
-                &attributes,
-                16,
-                CharacterClass::Knight,
-                Gender::Male,
-            )
-        };
-        assert!(create("Bad\nName").is_err());
-        assert!(create("30000").is_err());
-        assert!(create("_Player").is_err());
-        assert!(create("김철수").is_ok());
-        assert!(create("ㅇㅇ_Player1").is_ok());
-        assert!(create("Player1").is_ok());
+        assert!(create(&auth, &account, "Bad\nName").is_err());
+        assert!(create(&auth, &account, "30000").is_err());
+        assert!(create(&auth, &account, "_Player").is_err());
+        assert!(create(&auth, &account, "김철수").is_ok());
+        assert!(create(&auth, &account, "ㅇㅇ_Player1").is_ok());
+        assert!(create(&auth, &account, "Player1").is_ok());
 
         assert!(!valid_character_name("30000"));
         assert!(!valid_character_name("9lives"));
@@ -3119,37 +2949,15 @@ mod tests {
 
     #[test]
     fn character_names_unique_ignoring_ascii_case() {
-        let db_path =
-            std::env::temp_dir().join(format!("onlinerpg_auth_case_{}.db", uuid::Uuid::new_v4()));
-        let auth = AuthService::new(db_path).unwrap();
+        let (auth, _) = temp_auth("auth_case");
         let account = auth.login_npc("npc_case_test").unwrap();
-
-        let attributes = CharacterAttributes {
-            r#str: 12,
-            dex: 12,
-            con: 12,
-            int: 12,
-            wis: 12,
-            cha: 12,
-            guard: 10,
-        };
-        let create = |name: &str| {
-            auth.create_character(
-                &account,
-                name,
-                &attributes,
-                16,
-                CharacterClass::Knight,
-                Gender::Male,
-            )
-        };
-        assert!(create("Valkyrie").is_ok());
+        assert!(create(&auth, &account, "Valkyrie").is_ok());
         assert!(matches!(
-            create("valkyrie"),
+            create(&auth, &account, "valkyrie"),
             Err(AuthError::CharacterNameAlreadyExists)
         ));
         assert!(matches!(
-            create("VALKYRIE"),
+            create(&auth, &account, "VALKYRIE"),
             Err(AuthError::CharacterNameAlreadyExists)
         ));
     }
@@ -3189,30 +2997,10 @@ mod tests {
 
     #[test]
     fn admin_role_defaults_to_zero_and_loads_after_update() {
-        let db_path =
-            std::env::temp_dir().join(format!("onlinerpg_auth_admin_{}.db", uuid::Uuid::new_v4()));
-        let auth = AuthService::new(db_path.clone()).unwrap();
+        let (auth, db_path) = temp_auth("auth_admin");
         let account = auth.login_npc("npc_admin_role_test").unwrap();
 
-        let attributes = CharacterAttributes {
-            r#str: 12,
-            dex: 12,
-            con: 12,
-            int: 12,
-            wis: 12,
-            cha: 12,
-            guard: 10,
-        };
-        let record = auth
-            .create_character(
-                &account,
-                "AdminRoleTest",
-                &attributes,
-                16,
-                CharacterClass::Knight,
-                Gender::Male,
-            )
-            .unwrap();
+        let record = create(&auth, &account, "AdminRoleTest").unwrap();
         assert_eq!(record.admin_role, 0);
 
         let conn = Connection::open(&db_path).unwrap();

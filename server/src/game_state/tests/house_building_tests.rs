@@ -5,7 +5,6 @@ use onlinerpg_shared::{
     tree_format::TREE_V1_MAGIC,
 };
 use onlinerpg_terrain::height::encode_height;
-use onlinerpg_terrain::land::{plot_addr, LandGrade, REGION_PLOTS};
 
 fn tile_position(world: f32) -> u16 {
     (((world + 32.0) / 64.0) * 65535.0).round() as u16
@@ -59,40 +58,12 @@ async fn builder() -> (GameState, crate::auth::AuthService, i64, DirectRx) {
     let game = make_test_game_state("house_scroll_build");
     let auth = make_test_auth("house_scroll_build");
     let account = auth.login_google("house-builder").unwrap();
-    let character = create_test_character(&auth, &account, "Builder");
-    let mut player = make_player("Builder", 5.0, 5.0);
-    player.position.y = 5.0;
-    player.level = 10;
-    game.add_player(player).await;
-    game.register_player_character(
-        &pid("Builder"),
-        character.id,
-        onlinerpg_shared::xp::xp_for_level(10),
-        attrs_with_cha(12),
-        0,
-        None,
-    )
-    .await;
-    game.inventories.write().await.insert(
-        pid("Builder"),
-        PlayerInventory {
-            bag: vec![bag_item(1, "land_deed", 1)],
-            ..Default::default()
-        },
-    );
-    game.terrain_io
-        .write_land_grades(0, 0, &vec![LandGrade::Homestead as u8; REGION_PLOTS])
-        .await
-        .unwrap();
+    let bag = vec![bag_item(1, "land_deed", 1)];
+    let character_id =
+        estate_owner(&game, &auth, &account, "Builder", pos3(5.0, 5.0, 5.0), bag).await;
     let rx = game.register_direct_channel(&pid("Builder")).await;
-    game.claim_land(
-        &pid("Builder"),
-        1,
-        super::super::land::plot_key(plot_addr(5.0, 5.0)),
-        &auth,
-    )
-    .await;
-    (game, auth, character.id, rx)
+    claim_plot_at(&game, &auth, "Builder", 5.0, 5.0).await;
+    (game, auth, character_id, rx)
 }
 
 #[tokio::test]

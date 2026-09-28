@@ -183,15 +183,7 @@ async fn packing_up_before_leaving_folds_our_stall_and_tip_hat() {
     let me = test_player(0.0, 0.0);
     s.self_player_id = Some(me.id);
     s.self_player = Some(me);
-    s.self_bag = vec![onlinerpg_shared::inventory::ItemInstance {
-        locked: false,
-        instance_id: 41,
-        item_def_id: "tip_hat".to_string(),
-        quantity: 1,
-        enchant: 0,
-        cape_color: None,
-        cape_texture: None,
-    }];
+    s.self_bag = vec![bag_item(41, "tip_hat", 1)];
 
     s.tip_hats.insert(900, tip_hat(PlayerId::from(2)));
     s.pack_up_placeables("test").await;

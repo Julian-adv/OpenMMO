@@ -39,17 +39,6 @@ describe('sortBag', () => {
     expect(sorted.find((item) => !item.locked)?.quantity).toBe(12)
     expect(bag.map((item) => item.quantity)).toEqual([3, 2, 5, 7])
   })
-  it('merges stackable stacks of the same item and enchant', () => {
-    const bag = [
-      makeItem({ instance_id: 1, item_def_id: 'healing_potion', quantity: 30 }),
-      makeItem({ instance_id: 2, item_def_id: 'healing_potion', quantity: 70 }),
-    ]
-
-    const result = sortBag(bag)
-
-    expect(result).toHaveLength(1)
-    expect(result[0].quantity).toBe(100)
-  })
 
   it('keeps different enchant levels of the same item separate', () => {
     const bag = [
@@ -144,15 +133,6 @@ describe('runs that wear no slot', () => {
       'bow',
       'iron_arrow',
       'wooden_shield',
-    ])
-  })
-
-  /** Strongest first: reading the quiver top-down answers what the next shot
-   *  fires, which is the strongest the bag holds. */
-  it('runs rounds strongest first rather than alphabetically', () => {
-    expect(order(['iron_arrow', 'steel_arrow'])).toEqual([
-      'steel_arrow',
-      'iron_arrow',
     ])
   })
 

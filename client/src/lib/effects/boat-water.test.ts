@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import {
   afterEach,
   beforeAll,
@@ -9,8 +8,9 @@ import {
   vi,
 } from 'vitest'
 import * as THREE from 'three'
-import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { BoatMount } from '../utils/boatMount'
+import { loadHeadlessGlb } from '../utils/headless-glb.fixture'
 import { BoatWaterEffects } from './boat-water'
 
 let gltf: GLTF
@@ -23,18 +23,7 @@ beforeEach(() => {
 })
 afterEach(() => vi.restoreAllMocks())
 beforeAll(async () => {
-  const file = readFileSync(
-    new URL('../../../public/models/mounts/rowboat.glb', import.meta.url)
-  )
-  gltf = await new GLTFLoader()
-    .register(() => ({
-      name: 'headless-materials',
-      loadMaterial: async () => new THREE.MeshBasicMaterial(),
-    }))
-    .parseAsync(
-      file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength),
-      ''
-    )
+  gltf = await loadHeadlessGlb('models/mounts/rowboat.glb')
 })
 
 function setup(surfaceAt: (x: number, z: number) => number | null = () => 0) {

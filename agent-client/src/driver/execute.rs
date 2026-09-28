@@ -2204,11 +2204,11 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn an_action_that_left_no_trace_gets_a_no_result() {
+    async fn assert_torch_use_gets_no_result(noise: impl std::ops::AsyncFnOnce(&mut SharedState)) {
         let (s, _rx) = test_state();
         let state = Arc::new(Mutex::new(s));
         let mark = state.lock().await.action_progress();
+        noise(&mut *state.lock().await).await;
 
         let outcome = settle_action(
             &state,
@@ -2225,6 +2225,11 @@ mod tests {
             events.iter().any(|e| e.starts_with("[NoResult]")),
             "{events:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn an_action_that_left_no_trace_gets_a_no_result() {
+        assert_torch_use_gets_no_result(async |_| {}).await;
     }
 
     #[tokio::test]
@@ -2267,58 +2272,20 @@ mod tests {
 
     #[tokio::test]
     async fn an_ambient_event_is_not_an_actions_result() {
-        let (s, _rx) = test_state();
-        let state = Arc::new(Mutex::new(s));
-        let mark = state.lock().await.action_progress();
-        state
-            .lock()
-            .await
-            .push_ambient_event("[TimeChange] It is now 21:00 (night).".to_string());
-
-        let outcome = settle_action(
-            &state,
-            &AgentAction::Use {
-                item: "torch".to_string(),
-            },
-            mark,
-        )
+        assert_torch_use_gets_no_result(async |s| {
+            s.push_ambient_event("[TimeChange] It is now 21:00 (night).".to_string());
+        })
         .await;
-
-        assert_eq!(outcome, ActionOutcome::Failed);
-        let events = state.lock().await.drain_agent_events();
-        assert!(
-            events.iter().any(|e| e.starts_with("[NoResult]")),
-            "{events:?}"
-        );
     }
 
     #[tokio::test]
     async fn background_traffic_is_not_an_actions_result() {
-        let (s, _rx) = test_state();
-        let state = Arc::new(Mutex::new(s));
-        let mark = state.lock().await.action_progress();
-        state
-            .lock()
-            .await
-            .send_background_command(onlinerpg_shared::ClientMessage::Heartbeat)
-            .await
-            .unwrap();
-
-        let outcome = settle_action(
-            &state,
-            &AgentAction::Use {
-                item: "torch".to_string(),
-            },
-            mark,
-        )
+        assert_torch_use_gets_no_result(async |s| {
+            s.send_background_command(onlinerpg_shared::ClientMessage::Heartbeat)
+                .await
+                .unwrap();
+        })
         .await;
-
-        assert_eq!(outcome, ActionOutcome::Failed);
-        let events = state.lock().await.drain_agent_events();
-        assert!(
-            events.iter().any(|e| e.starts_with("[NoResult]")),
-            "{events:?}"
-        );
     }
 
     #[tokio::test]

@@ -40,27 +40,15 @@ async fn check_failed_driver(successful_calls: usize) {
     let drain = tokio::spawn(async move { while rx.recv().await.is_some() {} });
     let calls = Arc::new(AtomicUsize::new(0));
     let config = DriverConfig {
-        label: "backoff_test".into(),
-        memory_file: None,
-        favor_file: None,
-        min_interval: Duration::ZERO,
-        urgent_min_interval: Duration::ZERO,
-        debounce: Duration::ZERO,
-        idle_interval: Duration::ZERO,
-        activity_window: Duration::ZERO,
         always_active: true,
-        schedule: Vec::new(),
-        sickroom: Vec::new(),
         serve_tables: true,
-        maid_names: HashSet::new(),
         tables: vec![VisitSpot {
             object_id: 46,
             pos: [position.x, position.y, position.z],
             rotation: 0.0,
             floor_level: 0,
         }],
-        claims: Arc::default(),
-        api_base_url: "http://127.0.0.1:9".into(),
+        ..super::tests::test_driver_config("backoff_test")
     };
     let driver = tokio::spawn(llm_driver(
         Arc::clone(&state),

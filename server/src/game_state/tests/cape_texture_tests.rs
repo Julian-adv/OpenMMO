@@ -2,44 +2,22 @@ use super::*;
 
 /// Bag instance the transfer kit takes in every setup below.
 const KIT_ID: u64 = 8;
-const CAPE_ID: u64 = 1;
 /// A well-formed content hash. The store only ever answers with hashes of
 /// this shape, and only a file that exists under one is wearable.
 const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
-/// A live player with `kits` transfer kits in the bag, wearing a cape if
-/// `caped`, and one texture already sitting in the store.
 async fn setup_printer(game_state: &GameState, caped: bool, kits: u32) -> DirectRx {
-    game_state
-        .add_player(make_player("printer", 0.0, 0.0))
-        .await;
-    let rx = game_state.register_direct_channel(&pid("printer")).await;
-
-    let mut inv: onlinerpg_shared::inventory::PlayerInventory = Default::default();
-    if caped {
-        inv.equipped
-            .insert(EquipSlot::Back, bag_item(CAPE_ID, "wool_cape", 1));
-    }
-    if kits > 0 {
-        inv.bag.push(bag_item(KIT_ID, "cape_transfer_kit", kits));
-    }
-    game_state
-        .inventories
-        .write()
-        .await
-        .insert(pid("printer"), inv);
+    let rx = setup_cape_wearer(
+        game_state,
+        "printer",
+        caped,
+        KIT_ID,
+        "cape_transfer_kit",
+        kits,
+    )
+    .await;
     std::fs::write(game_state.cape_textures().path(HASH), b"png").expect("stored texture");
     rx
-}
-
-async fn worn_cape(game_state: &GameState) -> ItemInstance {
-    game_state
-        .get_player_inventory(&pid("printer"))
-        .await
-        .unwrap()
-        .equipped
-        .remove(&EquipSlot::Back)
-        .unwrap()
 }
 
 #[tokio::test]
@@ -70,7 +48,10 @@ async fn applying_a_stored_texture_prints_the_cape_and_spends_the_kit() {
         .await;
 
     assert_eq!(
-        worn_cape(&game_state).await.cape_texture.as_deref(),
+        worn_cape(&game_state, "printer")
+            .await
+            .cape_texture
+            .as_deref(),
         Some(HASH)
     );
     let inv = game_state
@@ -97,7 +78,7 @@ async fn a_texture_the_store_never_saw_is_refused() {
             .await;
     }
 
-    assert_eq!(worn_cape(&game_state).await.cape_texture, None);
+    assert_eq!(worn_cape(&game_state, "printer").await.cape_texture, None);
     let inv = game_state
         .get_player_inventory(&pid("printer"))
         .await

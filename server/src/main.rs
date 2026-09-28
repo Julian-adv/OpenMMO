@@ -980,11 +980,7 @@ async fn main() -> ExitCode {
 mod tests {
     use super::*;
     use rusqlite::Connection;
-
-    fn temp_auth(name: &str) -> (AuthService, std::path::PathBuf) {
-        let db_path = test_util::unique_temp_dir(name).join("auth.db");
-        (AuthService::new(db_path.clone()).unwrap(), db_path)
-    }
+    use test_util::temp_auth;
 
     /// The systemd units run with CWD = repo root and pass no path flags, so
     /// these defaults are the compatibility contract with the existing deploy.

@@ -338,30 +338,6 @@ async fn teleport_scroll_moves_in_combat_spends_one_and_clears_movement() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn teleport_scroll_rejects_a_request_if_the_reader_died_during_the_client_effect() {
-    let game = make_flat_world_game_state("teleport_scroll_cancelled");
-    let player = make_player("Reader", 800.0, 800.0);
-    let origin = player.position;
-    let id = give_scrolls(&game, player, 1).await;
-    let mut rx = game.register_direct_channel(&id).await;
-    game.players.write().await.get_mut(&id).unwrap().health = 0;
-    game.use_item(&id, 100).await;
-    assert_eq!(quantity(&game, &id).await, 1);
-    assert_eq!(game.players.read().await[&id].position, origin);
-    let messages = drain(&mut rx);
-    assert!(messages.iter().any(|msg| matches!(
-        msg,
-        ServerMessage::PlayerTeleportEffect {
-            phase: onlinerpg_shared::TeleportPhase::Cancelled,
-            ..
-        }
-    )));
-    assert!(!messages
-        .iter()
-        .any(|msg| matches!(msg, ServerMessage::PlayerTeleported { .. })));
-}
-
-#[tokio::test(start_paused = true)]
 async fn teleport_scroll_has_no_server_animation_delay() {
     let game = make_flat_world_game_state("teleport_scroll_no_delay");
     let id = give_scrolls(&game, make_player("Reader", 800.0, 800.0), 1).await;
@@ -517,9 +493,20 @@ async fn teleport_scroll_preserves_item_when_defeated_or_trade_reserved() {
     game.use_item(&id, 100).await;
     assert_eq!(quantity(&game, &id).await, 2);
     assert_eq!(game.players.read().await[&id].position, origin);
-    assert!(drain(&mut rx).iter().any(|msg| matches!(
+    let messages = drain(&mut rx);
+    assert!(messages.iter().any(|msg| matches!(
         msg, ServerMessage::SystemMessage { message, .. } if message.contains("defeated")
     )));
+    assert!(messages.iter().any(|msg| matches!(
+        msg,
+        ServerMessage::PlayerTeleportEffect {
+            phase: onlinerpg_shared::TeleportPhase::Cancelled,
+            ..
+        }
+    )));
+    assert!(!messages
+        .iter()
+        .any(|msg| matches!(msg, ServerMessage::PlayerTeleported { .. })));
 
     game.players.write().await.get_mut(&id).unwrap().health = 10;
     give_scrolls(&game, make_player("Buyer", 1.0, 0.0), 0).await;

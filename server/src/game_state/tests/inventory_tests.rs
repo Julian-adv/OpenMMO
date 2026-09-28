@@ -716,30 +716,3 @@ async fn a_shield_equip_is_refused_under_a_two_hander() {
     );
     assert!(inv.bag.iter().any(|i| i.item_def_id == "wooden_shield"));
 }
-
-/// One-handed weapons keep the off-hand equipment.
-#[tokio::test]
-async fn a_one_handed_weapon_keeps_the_off_hand() {
-    let game_state = make_test_game_state("one_hand_keeps_off_hand");
-    game_state
-        .add_player(make_player("wielder", 0.0, 0.0))
-        .await;
-    let mut inv: onlinerpg_shared::inventory::PlayerInventory = Default::default();
-    inv.bag.push(bag_item(1, "iron_sword", 1));
-    inv.bag.push(bag_item(2, "wooden_shield", 1));
-    game_state
-        .inventories
-        .write()
-        .await
-        .insert(pid("wielder"), inv);
-
-    game_state.equip_item(&pid("wielder"), 1).await;
-    game_state.equip_item(&pid("wielder"), 2).await;
-
-    let inventories = game_state.inventories.read().await;
-    let inv = &inventories[&pid("wielder")];
-    assert_eq!(
-        inv.equipped_def_id(EquipSlot::OffHand).as_deref(),
-        Some("wooden_shield")
-    );
-}

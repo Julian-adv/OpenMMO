@@ -1,33 +1,50 @@
 use super::*;
 
-fn requesting_bard() -> SharedState {
-    let (mut s, _rx) = test_state();
+fn performer() -> (SharedState, mpsc::Receiver<ClientMessage>) {
+    let (mut s, rx) = test_state();
     let me = test_player(0.0, 0.0);
     s.self_player_id = Some(me.id);
+    s.self_player = Some(me);
+    s.in_game = true;
+    (s, rx)
+}
+
+fn start_song(s: &mut SharedState) {
+    s.push_event(ServerMessage::PlayerMusicStarted {
+        player_id: s.self_player_id.unwrap(),
+        track: "Twilight Fields".to_string(),
+        elapsed_secs: 0.0,
+    });
+}
+
+fn set_pose(s: &mut SharedState, object_type: Option<&str>) {
+    s.push_event(ServerMessage::PlayerInteractionChanged {
+        player_id: s.self_player_id.unwrap(),
+        position: s.self_player.as_ref().unwrap().position,
+        rotation: 0.0,
+        floor_level: 0,
+        object_type: object_type.map(str::to_string),
+        object_id: None,
+    });
+}
+
+fn requesting_bard() -> SharedState {
+    let (mut s, _rx) = performer();
+    let me = s.self_player.clone().unwrap();
     s.tip_hats.insert(
         900,
         onlinerpg_shared::tip_hat::TipHat {
             id: 900,
             owner: me.id,
-            owner_name: me.name.clone(),
+            owner_name: me.name,
             position: me.position,
             rotation: 0.0,
             floor_level: 0,
             accepts_song_requests: true,
         },
     );
-    s.self_player = Some(me);
-    s.in_game = true;
     s.plays_music = true;
-    s.self_bag.push(onlinerpg_shared::inventory::ItemInstance {
-        instance_id: 1,
-        item_def_id: "worn_mandolin".to_string(),
-        quantity: 1,
-        enchant: 0,
-        locked: false,
-        cape_color: None,
-        cape_texture: None,
-    });
+    s.self_bag.push(bag_item(1, "worn_mandolin", 1));
     s
 }
 
@@ -50,24 +67,13 @@ fn end_requested_song(s: &mut SharedState) {
         s.drain_pending_commands().is_empty(),
         "wait for the stop acknowledgement"
     );
-    s.push_event(ServerMessage::PlayerInteractionChanged {
-        player_id: s.self_player_id.unwrap(),
-        position: s.self_player.as_ref().unwrap().position,
-        rotation: 0.0,
-        floor_level: 0,
-        object_type: None,
-        object_id: None,
-    });
+    set_pose(s, None);
 }
 
 #[test]
 fn paid_requests_play_in_order_after_the_song_and_break_without_llm_choices() {
     let mut s = requesting_bard();
-    s.push_event(ServerMessage::PlayerMusicStarted {
-        player_id: s.self_player_id.unwrap(),
-        track: "Twilight Fields".to_string(),
-        elapsed_secs: 0.0,
-    });
+    start_song(&mut s);
     request_song(&mut s, "First fan", "Beyond the Horizon");
     request_song(&mut s, "Second fan", "First Light Waltz");
     s.check_music_finished();
@@ -164,22 +170,14 @@ fn requests_wait_for_the_bard_to_resume_performing_and_for_start_confirmation() 
 /// and the model is told why — on its next prompt, not by waking it here.
 #[test]
 fn a_second_tune_is_refused_while_the_first_still_plays() {
-    let (mut s, _rx) = test_state();
-    let me = test_player(0.0, 0.0);
-    s.self_player_id = Some(me.id);
-    s.self_player = Some(me);
-    s.in_game = true;
+    let (mut s, _rx) = performer();
 
     assert!(
         !s.refuses_play_command("/play_music"),
         "nothing playing yet"
     );
 
-    s.push_event(ServerMessage::PlayerMusicStarted {
-        player_id: PlayerId::from(1),
-        track: "Twilight Fields".to_string(),
-        elapsed_secs: 0.0,
-    });
+    start_song(&mut s);
 
     assert!(s.refuses_play_command("/play_music creekside"));
     assert!(s.refuses_play_command("/play_music"));
@@ -202,11 +200,7 @@ fn a_second_tune_is_refused_while_the_first_still_plays() {
 /// square still waiting on a song the bard announced.
 #[test]
 fn a_song_the_bard_does_not_know_is_refused_before_it_is_sent() {
-    let (mut s, _rx) = test_state();
-    let me = test_player(0.0, 0.0);
-    s.self_player_id = Some(me.id);
-    s.self_player = Some(me);
-    s.in_game = true;
+    let (mut s, _rx) = performer();
 
     assert!(s.refuses_play_command("/play_music Ballad of the Missing Track"));
     assert_eq!(s.take_wake_urgency(), EventUrgency::Urgent);
@@ -232,25 +226,10 @@ fn a_song_the_bard_does_not_know_is_refused_before_it_is_sent() {
 /// is left of it.
 #[test]
 fn a_song_is_followed_by_a_quiet_spell_before_the_next() {
-    let (mut s, _rx) = test_state();
-    let me = test_player(0.0, 0.0);
-    s.self_player_id = Some(me.id);
-    s.self_player = Some(me);
-    s.in_game = true;
+    let (mut s, _rx) = performer();
 
-    s.push_event(ServerMessage::PlayerMusicStarted {
-        player_id: PlayerId::from(1),
-        track: "Twilight Fields".to_string(),
-        elapsed_secs: 0.0,
-    });
-    s.push_event(ServerMessage::PlayerInteractionChanged {
-        position: s.self_player.as_ref().unwrap().position,
-        rotation: 0.0,
-        floor_level: 0,
-        object_id: None,
-        player_id: PlayerId::from(1),
-        object_type: None,
-    });
+    start_song(&mut s);
+    set_pose(&mut s, None);
 
     let rest_until = s.self_music_rest_until.expect("a rest was scheduled");
     let rest = rest_until.saturating_duration_since(std::time::Instant::now());
@@ -280,14 +259,7 @@ fn a_song_is_followed_by_a_quiet_spell_before_the_next() {
 
     // In bed on the night schedule: playing would drop the sleeping pose
     // and nothing would put it back until morning.
-    s.push_event(ServerMessage::PlayerInteractionChanged {
-        position: s.self_player.as_ref().unwrap().position,
-        rotation: 0.0,
-        floor_level: 0,
-        object_id: None,
-        player_id: PlayerId::from(1),
-        object_type: Some("bed".to_string()),
-    });
+    set_pose(&mut s, Some("bed"));
     assert!(s.refuses_play_command("/play_music"));
     let events = s.drain_agent_events();
     assert!(
@@ -301,17 +273,9 @@ fn a_song_is_followed_by_a_quiet_spell_before_the_next() {
 /// bard would strum the same song forever.
 #[test]
 fn a_tune_is_announced_at_both_ends_and_our_own_stops_itself() {
-    let (mut s, _rx) = test_state();
-    let me = test_player(0.0, 0.0);
-    s.self_player_id = Some(me.id);
-    s.self_player = Some(me);
-    s.in_game = true;
+    let (mut s, _rx) = performer();
 
-    s.push_event(ServerMessage::PlayerMusicStarted {
-        player_id: PlayerId::from(1),
-        track: "Twilight Fields".to_string(),
-        elapsed_secs: 0.0,
-    });
+    start_song(&mut s);
 
     s.check_music_finished();
     assert!(
@@ -329,14 +293,7 @@ fn a_tune_is_announced_at_both_ends_and_our_own_stops_itself() {
     ));
 
     // The server clears the interaction; that is what the LLM reads.
-    s.push_event(ServerMessage::PlayerInteractionChanged {
-        position: s.self_player.as_ref().unwrap().position,
-        rotation: 0.0,
-        floor_level: 0,
-        object_id: None,
-        player_id: PlayerId::from(1),
-        object_type: None,
-    });
+    set_pose(&mut s, None);
     let events = s.drain_agent_events();
     assert!(
         events
@@ -351,17 +308,9 @@ fn a_tune_is_announced_at_both_ends_and_our_own_stops_itself() {
 /// StopInteraction — that would stand the sleeper up for the night.
 #[test]
 fn a_song_expiring_in_bed_does_not_stand_the_sleeper_up() {
-    let (mut s, _rx) = test_state();
-    let me = test_player(0.0, 0.0);
-    s.self_player_id = Some(me.id);
-    s.self_player = Some(me);
-    s.in_game = true;
+    let (mut s, _rx) = performer();
 
-    s.push_event(ServerMessage::PlayerMusicStarted {
-        player_id: PlayerId::from(1),
-        track: "Twilight Fields".to_string(),
-        elapsed_secs: 0.0,
-    });
+    start_song(&mut s);
     // The schedule sent InteractObject(bed) and adopted the pose on send.
     s.self_player.as_mut().unwrap().object_type = Some("bed".to_string());
     if let Some(p) = s.self_performance.as_mut() {
@@ -381,12 +330,8 @@ fn a_song_expiring_in_bed_does_not_stand_the_sleeper_up() {
 /// thank. Loot that no player dropped is not a tip.
 #[test]
 fn tips_left_during_a_song_are_announced_when_it_ends() {
-    let (mut s, _rx) = test_state();
-    let me = test_player(0.0, 0.0);
+    let (mut s, _rx) = performer();
     s.plays_music = true;
-    s.self_player_id = Some(me.id);
-    s.self_player = Some(me);
-    s.in_game = true;
     let mut listener = test_player(1.0, 0.0);
     listener.id = PlayerId::from(2);
     listener.name = "Miriel".to_string();
@@ -406,11 +351,7 @@ fn tips_left_during_a_song_are_announced_when_it_ends() {
         "{events:?}"
     );
 
-    s.push_event(ServerMessage::PlayerMusicStarted {
-        player_id: PlayerId::from(1),
-        track: "Twilight Fields".to_string(),
-        elapsed_secs: 0.0,
-    });
+    start_song(&mut s);
     s.push_event(ServerMessage::GroundItemSpawned {
         item: dropped_item(2, "coin_pile", 1.0, 0.0, tipper),
     });
@@ -437,14 +378,7 @@ fn tips_left_during_a_song_are_announced_when_it_ends() {
         "our own drop must not be sighted: {mid_song:?}"
     );
 
-    s.push_event(ServerMessage::PlayerInteractionChanged {
-        position: s.self_player.as_ref().unwrap().position,
-        rotation: 0.0,
-        floor_level: 0,
-        object_id: None,
-        player_id: PlayerId::from(1),
-        object_type: None,
-    });
+    set_pose(&mut s, None);
     let events = s.drain_agent_events();
     assert!(
         events
@@ -472,14 +406,7 @@ fn tips_left_during_a_song_are_announced_when_it_ends() {
     );
 
     // Once the schedule has put it to bed, a tip is not worth getting up.
-    s.push_event(ServerMessage::PlayerInteractionChanged {
-        position: s.self_player.as_ref().unwrap().position,
-        rotation: 0.0,
-        floor_level: 0,
-        object_id: None,
-        player_id: PlayerId::from(1),
-        object_type: Some("bed".to_string()),
-    });
+    set_pose(&mut s, Some("bed"));
     s.push_event(ServerMessage::GroundItemSpawned {
         item: dropped_item(7, "gold_ring", 1.0, 0.0, tipper),
     });
@@ -491,11 +418,7 @@ fn tips_left_during_a_song_are_announced_when_it_ends() {
 /// that does not busk is ordinary loot, and stays out of its events.
 #[test]
 fn only_a_busker_reads_a_drop_as_a_tip() {
-    let (mut s, _rx) = test_state();
-    let me = test_player(0.0, 0.0);
-    s.self_player_id = Some(me.id);
-    s.self_player = Some(me);
-    s.in_game = true;
+    let (mut s, _rx) = performer();
     let mut passer_by = test_player(1.0, 0.0);
     passer_by.id = PlayerId::from(2);
     s.nearby_players.insert(passer_by.id, passer_by);
@@ -513,12 +436,8 @@ fn only_a_busker_reads_a_drop_as_a_tip() {
 /// it instead, and only once the song is over.
 #[test]
 fn a_tip_taken_before_the_song_ends_is_forgotten() {
-    let (mut s, _rx) = test_state();
-    let me = test_player(0.0, 0.0);
+    let (mut s, _rx) = performer();
     s.plays_music = true;
-    s.self_player_id = Some(me.id);
-    s.self_player = Some(me);
-    s.in_game = true;
     let mut listener = test_player(1.0, 0.0);
     listener.id = PlayerId::from(2);
     s.nearby_players.insert(listener.id, listener);
@@ -527,11 +446,7 @@ fn a_tip_taken_before_the_song_ends_is_forgotten() {
     thief.name = "Bran".to_string();
     s.nearby_players.insert(thief.id, thief);
 
-    s.push_event(ServerMessage::PlayerMusicStarted {
-        player_id: PlayerId::from(1),
-        track: "Twilight Fields".to_string(),
-        elapsed_secs: 0.0,
-    });
+    start_song(&mut s);
     s.push_event(ServerMessage::GroundItemSpawned {
         item: dropped_item(1, "coin_pile", 1.0, 0.0, PlayerId::from(2)),
     });
@@ -540,14 +455,7 @@ fn a_tip_taken_before_the_song_ends_is_forgotten() {
         picked_up_by: Some(PlayerId::from(3)),
     });
     assert_eq!(s.take_wake_urgency(), EventUrgency::Noise, "not mid-song");
-    s.push_event(ServerMessage::PlayerInteractionChanged {
-        position: s.self_player.as_ref().unwrap().position,
-        rotation: 0.0,
-        floor_level: 0,
-        object_id: None,
-        player_id: PlayerId::from(1),
-        object_type: None,
-    });
+    set_pose(&mut s, None);
 
     let events = s.drain_agent_events();
     assert!(!events.iter().any(|e| e.contains("[Tip]")), "{events:?}");
@@ -581,17 +489,9 @@ fn a_tip_taken_before_the_song_ends_is_forgotten() {
 /// alone.
 #[test]
 fn a_joining_bard_takes_up_the_worn_mandolin() {
-    use onlinerpg_shared::inventory::{EquipSlot, ItemInstance, PlayerInventory};
+    use onlinerpg_shared::inventory::{EquipSlot, PlayerInventory};
 
-    let item = |instance_id: u64, def: &str| ItemInstance {
-        locked: false,
-        instance_id,
-        item_def_id: def.to_string(),
-        quantity: 1,
-        enchant: 0,
-        cape_color: None,
-        cape_texture: None,
-    };
+    let item = |instance_id: u64, def: &str| bag_item(instance_id, def, 1);
     let mut inventory = PlayerInventory {
         bag: vec![item(1, "worn_mandolin"), item(2, "mandolin")],
         equipped: HashMap::from([(EquipSlot::MainHand, item(3, "worn_iron_sword"))]),
@@ -655,11 +555,7 @@ fn a_joining_bard_takes_up_the_worn_mandolin() {
 /// announcement keeps its bubble, cycling; and they stop with our song.
 #[test]
 fn a_recital_is_paced_and_ends_with_the_song() {
-    let (mut s, _rx) = test_state();
-    let me = test_player(0.0, 0.0);
-    s.self_player_id = Some(me.id);
-    s.self_player = Some(me);
-    s.in_game = true;
+    let (mut s, _rx) = performer();
 
     assert!(
         s.begin_recital(&["  ".to_string()]).is_err(),
@@ -701,21 +597,10 @@ fn a_recital_is_paced_and_ends_with_the_song() {
     );
 
     // Our song starts: the recital now lives as long as the song does.
-    s.push_event(ServerMessage::PlayerMusicStarted {
-        player_id: s.self_player_id.unwrap(),
-        track: "Twilight Fields".to_string(),
-        elapsed_secs: 0.0,
-    });
+    start_song(&mut s);
     s.check_music_finished();
     assert!(s.recital.is_some());
-    s.push_event(ServerMessage::PlayerInteractionChanged {
-        position: s.self_player.as_ref().unwrap().position,
-        rotation: 0.0,
-        floor_level: 0,
-        player_id: s.self_player_id.unwrap(),
-        object_type: None,
-        object_id: None,
-    });
+    set_pose(&mut s, None);
     assert!(s.recital.is_none(), "the song ended, so did the verses");
 
     // Without a song, the grace runs out.

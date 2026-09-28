@@ -1553,6 +1553,27 @@ mod tests {
     use super::*;
     use crate::state::tests::{test_player, test_state};
 
+    pub(super) fn test_driver_config(label: &str) -> DriverConfig {
+        DriverConfig {
+            label: label.to_string(),
+            memory_file: None,
+            favor_file: None,
+            min_interval: Duration::ZERO,
+            urgent_min_interval: Duration::ZERO,
+            debounce: Duration::ZERO,
+            idle_interval: Duration::ZERO,
+            activity_window: Duration::ZERO,
+            always_active: false,
+            schedule: Vec::new(),
+            sickroom: Vec::new(),
+            serve_tables: false,
+            maid_names: HashSet::new(),
+            tables: Vec::new(),
+            claims: Arc::default(),
+            api_base_url: "http://127.0.0.1:9".to_string(),
+        }
+    }
+
     #[tokio::test]
     async fn a_rain_seat_invites_rest_instead_of_ordering_a_meal() {
         let (s, _rx) = test_state();
@@ -1759,22 +1780,12 @@ mod tests {
         let state = Arc::new(Mutex::new(s));
         let prompts: Arc<std::sync::Mutex<Vec<String>>> = Arc::default();
         let config = DriverConfig {
-            label: "idle_test".into(),
-            memory_file: None,
-            favor_file: None,
             min_interval: Duration::from_secs(1),
             urgent_min_interval: Duration::from_secs(1),
-            debounce: Duration::ZERO,
             idle_interval: Duration::from_secs(if send_chat { 3600 } else { 1 }),
             activity_window: Duration::from_secs(if send_chat { 30 } else { 0 }),
             always_active: true,
-            schedule: Vec::new(),
-            sickroom: Vec::new(),
-            serve_tables: false,
-            maid_names: HashSet::new(),
-            tables: Vec::new(),
-            claims: Arc::default(),
-            api_base_url: "http://127.0.0.1:9".into(),
+            ..test_driver_config("idle_test")
         };
         let driver = tokio::spawn(llm_driver(
             Arc::clone(&state),
@@ -1812,15 +1823,51 @@ mod tests {
         assert!(state.lock().await.pending_event_urgency().is_none());
     }
 
-    #[tokio::test]
-    async fn a_sickroom_respawn_sends_the_npc_to_the_bedside() {
-        let (mut s, mut rx) = test_state();
+    fn night_maid() -> (SharedState, tokio::sync::mpsc::Receiver<ClientMessage>) {
+        let (mut s, rx) = test_state();
         let me = test_player(-1443.9, 4748.9);
         s.in_game = true;
         s.is_night = Some(true);
         s.schedule_period = Some(onlinerpg_shared::schedule::SchedulePeriod::Night);
         s.self_player_id = Some(me.id);
         s.self_player = Some(me);
+        (s, rx)
+    }
+
+    async fn run_maid_until(
+        s: SharedState,
+        mut rx: tokio::sync::mpsc::Receiver<ClientMessage>,
+        config: DriverConfig,
+        marker: &str,
+    ) {
+        let state = Arc::new(Mutex::new(s));
+        // Keep the outgoing command channel drained so walking can't block.
+        tokio::spawn(async move { while rx.recv().await.is_some() {} });
+        let prompts: Arc<std::sync::Mutex<Vec<String>>> = Arc::default();
+        let never = Duration::from_secs(3600);
+        let config = DriverConfig {
+            min_interval: never,
+            urgent_min_interval: never,
+            debounce: never,
+            idle_interval: never,
+            activity_window: never,
+            ..config
+        };
+        let scheduler = LlmScheduler::new(1, Duration::from_secs(5));
+        let driver = tokio::spawn(llm_driver(
+            Arc::clone(&state),
+            Arc::new(Capture(Arc::clone(&prompts))),
+            scheduler,
+            config,
+        ));
+
+        await_marker(&state, &prompts, marker).await;
+        driver.abort();
+    }
+
+    #[tokio::test]
+    async fn a_sickroom_respawn_sends_the_npc_to_the_bedside() {
+        let (mut s, rx) = night_maid();
 
         // Queued before the driver starts: the respawn buffer must survive
         // startup and be picked up by the loop's first drain.
@@ -1828,13 +1875,6 @@ mod tests {
         woken.id = onlinerpg_shared::PlayerId::from(7);
         woken.object_id = Some(52);
         s.push_event(onlinerpg_shared::ServerMessage::PlayerRespawned { player: woken });
-
-        let state = Arc::new(Mutex::new(s));
-
-        // Keep the outgoing command channel drained so walking can't block.
-        tokio::spawn(async move { while rx.recv().await.is_some() {} });
-
-        let prompts: Arc<std::sync::Mutex<Vec<String>>> = Arc::default();
 
         // One live entry on the NPC's serving spot, so the visit leaves a
         // real active schedule the way Miriel's does.
@@ -1848,17 +1888,7 @@ mod tests {
         };
         entry.parse_condition().unwrap();
 
-        let never = Duration::from_secs(3600);
         let config = DriverConfig {
-            label: "test_maid".to_string(),
-            memory_file: None,
-            favor_file: None,
-            min_interval: never,
-            urgent_min_interval: never,
-            debounce: never,
-            idle_interval: never,
-            activity_window: never,
-            always_active: false,
             schedule: vec![entry],
             sickroom: vec![VisitSpot {
                 object_id: 52,
@@ -1866,22 +1896,9 @@ mod tests {
                 rotation: -104.6,
                 floor_level: 1,
             }],
-            serve_tables: false,
-            maid_names: HashSet::new(),
-            tables: Vec::new(),
-            claims: Arc::default(),
-            api_base_url: "http://127.0.0.1:9".to_string(),
+            ..test_driver_config("test_maid")
         };
-        let scheduler = LlmScheduler::new(1, Duration::from_secs(5));
-        let driver = tokio::spawn(llm_driver(
-            Arc::clone(&state),
-            Arc::new(Capture(Arc::clone(&prompts))),
-            scheduler,
-            config,
-        ));
-
-        await_marker(&state, &prompts, "[SickRoom]").await;
-        driver.abort();
+        run_maid_until(s, rx, config, "[SickRoom]").await;
     }
 
     #[test]
@@ -1895,13 +1912,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_seated_guest_sends_the_npc_to_the_table() {
-        let (mut s, mut rx) = test_state();
-        let me = test_player(-1443.9, 4748.9);
-        s.in_game = true;
-        s.is_night = Some(true);
-        s.schedule_period = Some(onlinerpg_shared::schedule::SchedulePeriod::Night);
-        s.self_player_id = Some(me.id);
-        s.self_player = Some(me);
+        let (mut s, rx) = night_maid();
 
         // A guest in sight sits down before the driver starts: the seating
         // buffer must survive startup like the respawn one does.
@@ -1920,40 +1931,11 @@ mod tests {
             object_id: Some(46),
         });
 
-        let state = Arc::new(Mutex::new(s));
-        tokio::spawn(async move { while rx.recv().await.is_some() {} });
-
-        let prompts: Arc<std::sync::Mutex<Vec<String>>> = Arc::default();
-
-        let never = Duration::from_secs(3600);
         let config = DriverConfig {
-            label: "test_maid".to_string(),
-            memory_file: None,
-            favor_file: None,
-            min_interval: never,
-            urgent_min_interval: never,
-            debounce: never,
-            idle_interval: never,
-            activity_window: never,
-            always_active: false,
-            schedule: Vec::new(),
-            sickroom: Vec::new(),
             serve_tables: true,
-            maid_names: HashSet::new(),
-            tables: Vec::new(),
-            claims: Arc::default(),
-            api_base_url: "http://127.0.0.1:9".to_string(),
+            ..test_driver_config("test_maid")
         };
-        let scheduler = LlmScheduler::new(1, Duration::from_secs(5));
-        let driver = tokio::spawn(llm_driver(
-            Arc::clone(&state),
-            Arc::new(Capture(Arc::clone(&prompts))),
-            scheduler,
-            config,
-        ));
-
-        await_marker(&state, &prompts, "[Guest] Jake").await;
-        driver.abort();
+        run_maid_until(s, rx, config, "[Guest] Jake").await;
     }
 
     #[tokio::test]

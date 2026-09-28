@@ -11,6 +11,7 @@ import type { DungeonFloorLayout } from '../managers/dungeonManager'
 import { buildMasonryWall, buildMasonryWallGhost } from './dungeon-geo-masonry'
 import { disposeDungeonGroup } from './dungeon-geometry'
 import { buildDungeonFloorGroup } from './dungeon-geo-floor'
+import { carveDungeon, dungeonCtx } from './dungeon-layout.fixture'
 import { dungeonCaveTheme } from './dungeon-cave-themes'
 import { HOUSING_TEXTURES } from './housing-textures'
 import { DUNGEON_FLOOR_TEXTURE_IDX } from './dungeon-geo-constants'
@@ -190,13 +191,10 @@ describe('masonry wall ghosts', () => {
   })
 })
 
-const ctx = { grid: 32, wallHeight: 3, floorHeight: 4, shaftW: 2, shaftLen: 8 }
-const carved = Array<boolean>(ctx.grid ** 2).fill(false)
-for (let z = 2; z < 28; z++)
-  for (let x = 4; x < 8; x++) carved[x + z * ctx.grid] = true
+const ctx = dungeonCtx(32)
 const layout: DungeonFloorLayout = {
   depth: 1,
-  carved,
+  carved: carveDungeon(ctx, [{ x: 4, z: 2, w: 4, d: 26 }]),
   rooms: [{ x: 4, z: 24, w: 4, d: 4 }],
   upShaft: { x: 4, z: 2, alongZ: true, reversed: false },
   downShaft: { x: 6, z: 2, alongZ: true, reversed: false },

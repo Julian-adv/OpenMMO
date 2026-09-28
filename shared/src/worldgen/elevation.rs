@@ -487,26 +487,14 @@ mod tests {
     }
 
     #[test]
-    fn sea_cells_are_zero_elevation() {
+    fn elevation_is_zero_at_sea_and_capped_on_land() {
         let cfg = test_config(64);
         let mut map = continent::generate_continent_mask(&cfg);
         generate_elevation(&mut map);
-        for i in 0..map.land_mask.len() {
+        for (i, &e) in map.elevation_m.iter().enumerate() {
             if map.land_mask[i] == 0 {
-                assert_eq!(
-                    map.elevation_m[i], 0.0,
-                    "sea cell {i} has non-zero elevation"
-                );
+                assert_eq!(e, 0.0, "sea cell {i} has non-zero elevation");
             }
-        }
-    }
-
-    #[test]
-    fn land_elevation_within_max_cap() {
-        let cfg = test_config(64);
-        let mut map = continent::generate_continent_mask(&cfg);
-        generate_elevation(&mut map);
-        for &e in &map.elevation_m {
             assert!(
                 e >= 0.0 && e <= cfg.max_elevation_m + 1e-3,
                 "elevation {e} out of range"

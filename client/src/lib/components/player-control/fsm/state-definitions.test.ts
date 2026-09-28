@@ -184,16 +184,20 @@ describe('createNetworkEventStateOverrides', () => {
   })
 })
 
+function makeLocalActions() {
+  return {
+    onInteractionFinished: vi.fn(),
+    onPickupGrab: vi.fn(),
+    onInteractionRejected: vi.fn(),
+    handleInteractKey: vi.fn(),
+    handleKeyboard: vi.fn(),
+    tick: vi.fn(),
+  }
+}
+
 describe('createLocalPlayerControlStateDefinitions', () => {
   it('wires local player event, timer, network, and frame state behavior', () => {
-    const actions = {
-      onInteractionFinished: vi.fn(),
-      onPickupGrab: vi.fn(),
-      onInteractionRejected: vi.fn(),
-      handleInteractKey: vi.fn(),
-      handleKeyboard: vi.fn(),
-      tick: vi.fn(),
-    }
+    const actions = makeLocalActions()
     const states = createLocalPlayerControlStateDefinitions(actions)
 
     expect(states.picking_up.handleEvent?.({ type: 'anim_pickup_grab' })).toBe(
@@ -212,14 +216,7 @@ describe('createLocalPlayerControlStateDefinitions', () => {
   })
 
   it('assigns frame phases to every local player control state', () => {
-    const actions = {
-      onInteractionFinished: vi.fn(),
-      onPickupGrab: vi.fn(),
-      onInteractionRejected: vi.fn(),
-      handleInteractKey: vi.fn(),
-      handleKeyboard: vi.fn(),
-      tick: vi.fn(),
-    }
+    const actions = makeLocalActions()
     const states = createLocalPlayerControlStateDefinitions(actions)
 
     for (const state of Object.values(states)) {
@@ -232,18 +229,11 @@ describe('createLocalPlayerControlStateDefinitions', () => {
 
 describe('createLocalPlayerControlMachine', () => {
   it('creates a machine wired with local player state behavior', () => {
-    const onPickupGrab = vi.fn()
-    const tick = vi.fn()
+    const stateActions = makeLocalActions()
+    const { onPickupGrab, tick } = stateActions
     const machine = createLocalPlayerControlMachine({
       dispatchEvent: vi.fn(),
-      stateActions: {
-        onInteractionFinished: vi.fn(),
-        onPickupGrab,
-        onInteractionRejected: vi.fn(),
-        handleInteractKey: vi.fn(),
-        handleKeyboard: vi.fn(),
-        tick,
-      },
+      stateActions,
     })
 
     // The picking_up state's handleEvent consumes anim_pickup_grab → onPickupGrab.

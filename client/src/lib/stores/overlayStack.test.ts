@@ -99,13 +99,19 @@ describe('closeTopOverlay', () => {
     expect(get(openOverlays)).toEqual([])
   })
 
-  it('closes the world map ahead of a panel it paints over', () => {
+  it.each([
+    'worldMap',
+    'settings',
+    'respawn',
+    'chatChannelMenu',
+    'instrument',
+  ] as const)('closes %s ahead of a panel opened before it', (id) => {
     inventoryVisible.set(true)
-    let mapCloses = 0
-    const unmount = mountOverlay('worldMap', () => mapCloses++)
+    let closes = 0
+    const unmount = mountOverlay(id, () => closes++)
 
     expect(closeTopOverlay()).toBe('closed')
-    expect(mapCloses).toBe(1)
+    expect(closes).toBe(1)
     expect(get(inventoryVisible)).toBe(true)
 
     unmount()
@@ -113,39 +119,19 @@ describe('closeTopOverlay', () => {
     expect(get(inventoryVisible)).toBe(false)
   })
 
-  it('still closes the world map first when the panel was opened last', () => {
-    const unmount = mountOverlay('worldMap', () => {})
-    inventoryVisible.set(true)
+  it.each(['worldMap', 'settings'] as const)(
+    'still closes %s first when a panel was opened over it',
+    (id) => {
+      let closes = 0
+      const unmount = mountOverlay(id, () => closes++)
+      inventoryVisible.set(true)
 
-    expect(closeTopOverlay()).toBe('closed')
-    expect(get(inventoryVisible)).toBe(true)
-    unmount()
-  })
-
-  it('closes settings before an inventory opened underneath it', () => {
-    inventoryVisible.set(true)
-    let settingsCloses = 0
-    const unmount = mountOverlay('settings', () => settingsCloses++)
-
-    expect(closeTopOverlay()).toBe('closed')
-    expect(settingsCloses).toBe(1)
-    expect(get(inventoryVisible)).toBe(true)
-
-    unmount()
-    expect(closeTopOverlay()).toBe('closed')
-    expect(get(inventoryVisible)).toBe(false)
-  })
-
-  it('closes settings first even when the panel was opened over it', () => {
-    let settingsCloses = 0
-    const unmount = mountOverlay('settings', () => settingsCloses++)
-    inventoryVisible.set(true)
-
-    expect(closeTopOverlay()).toBe('closed')
-    expect(settingsCloses).toBe(1)
-    expect(get(inventoryVisible)).toBe(true)
-    unmount()
-  })
+      expect(closeTopOverlay()).toBe('closed')
+      expect(closes).toBe(1)
+      expect(get(inventoryVisible)).toBe(true)
+      unmount()
+    }
+  )
 
   it('closes the trade window before a character sheet under it', () => {
     characterPanelVisible.set(true)
@@ -157,20 +143,6 @@ describe('closeTopOverlay', () => {
 
     expect(closeTopOverlay()).toBe('closed')
     expect(get(characterPanelVisible)).toBe(false)
-  })
-
-  it('defers the respawn dialog before touching a panel behind it', () => {
-    inventoryVisible.set(true)
-    let laterCalls = 0
-    const unmount = mountOverlay('respawn', () => laterCalls++)
-
-    expect(closeTopOverlay()).toBe('closed')
-    expect(laterCalls).toBe(1)
-    expect(get(inventoryVisible)).toBe(true)
-
-    unmount()
-    expect(closeTopOverlay()).toBe('closed')
-    expect(get(inventoryVisible)).toBe(false)
   })
 
   it('never closes a panel hidden behind the loading dialog', () => {
@@ -202,20 +174,6 @@ describe('closeTopOverlay', () => {
     expect(closeTopOverlay()).toBe('none')
   })
 
-  it('closes the chat channel menu before any panel behind it', () => {
-    inventoryVisible.set(true)
-    let menuCloses = 0
-    const unmount = mountOverlay('chatChannelMenu', () => menuCloses++)
-
-    expect(closeTopOverlay()).toBe('closed')
-    expect(menuCloses).toBe(1)
-    expect(get(inventoryVisible)).toBe(true)
-
-    unmount()
-    expect(closeTopOverlay()).toBe('closed')
-    expect(get(inventoryVisible)).toBe(false)
-  })
-
   it('closes the emote panel like any other side panel', () => {
     emotePanelVisible.set(true)
     expect(get(openOverlays)).toEqual(['emotes'])
@@ -223,18 +181,6 @@ describe('closeTopOverlay', () => {
     expect(closeTopOverlay()).toBe('closed')
     expect(get(emotePanelVisible)).toBe(false)
     expect(get(openOverlays)).toEqual([])
-  })
-
-  it('uses the instrument session closer ahead of side panels', () => {
-    inventoryVisible.set(true)
-    let instrumentStops = 0
-    const unmount = mountOverlay('instrument', () => instrumentStops++)
-
-    expect(closeTopOverlay()).toBe('closed')
-    expect(instrumentStops).toBe(1)
-    expect(get(inventoryVisible)).toBe(true)
-
-    unmount()
   })
 
   it('closes the social menu before the emote panel behind it', () => {

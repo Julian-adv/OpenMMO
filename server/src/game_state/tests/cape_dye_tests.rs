@@ -2,38 +2,10 @@ use super::*;
 
 /// Bag instance the dye bottle takes in every setup below.
 const DYE_ID: u64 = 7;
-const CAPE_ID: u64 = 1;
 const RED: &str = "#3355ff";
 
-/// A live player with `dyes` bottles in the bag, wearing a cape if `caped`.
 async fn setup_dyer(game_state: &GameState, caped: bool, dyes: u32) -> DirectRx {
-    game_state.add_player(make_player("dyer", 0.0, 0.0)).await;
-    let rx = game_state.register_direct_channel(&pid("dyer")).await;
-
-    let mut inv: onlinerpg_shared::inventory::PlayerInventory = Default::default();
-    if caped {
-        inv.equipped
-            .insert(EquipSlot::Back, bag_item(CAPE_ID, "wool_cape", 1));
-    }
-    if dyes > 0 {
-        inv.bag.push(bag_item(DYE_ID, "cape_dye", dyes));
-    }
-    game_state
-        .inventories
-        .write()
-        .await
-        .insert(pid("dyer"), inv);
-    rx
-}
-
-async fn worn_cape(game_state: &GameState) -> ItemInstance {
-    game_state
-        .get_player_inventory(&pid("dyer"))
-        .await
-        .unwrap()
-        .equipped
-        .remove(&EquipSlot::Back)
-        .unwrap()
+    setup_cape_wearer(game_state, "dyer", caped, DYE_ID, "cape_dye", dyes).await
 }
 
 #[tokio::test]
@@ -59,7 +31,7 @@ async fn dye_recolours_the_worn_cape_and_is_spent() {
     game_state.dye_cape(&pid("dyer"), DYE_ID, "#3355FF").await;
 
     assert_eq!(
-        worn_cape(&game_state).await.cape_color.as_deref(),
+        worn_cape(&game_state, "dyer").await.cape_color.as_deref(),
         Some(RED)
     );
     let inv = game_state.get_player_inventory(&pid("dyer")).await.unwrap();
@@ -94,7 +66,7 @@ async fn a_colour_that_is_not_a_colour_is_refused() {
         game_state.dye_cape(&pid("dyer"), DYE_ID, bad).await;
     }
 
-    assert_eq!(worn_cape(&game_state).await.cape_color, None);
+    assert_eq!(worn_cape(&game_state, "dyer").await.cape_color, None);
     let inv = game_state.get_player_inventory(&pid("dyer")).await.unwrap();
     assert_eq!(inv.bag[0].quantity, 1, "the bottle should be kept");
 }
@@ -138,7 +110,7 @@ async fn taking_a_dyed_cape_off_and_on_keeps_the_dye() {
     game_state.equip_item(&pid("dyer"), CAPE_ID).await;
 
     assert_eq!(
-        worn_cape(&game_state).await.cape_color.as_deref(),
+        worn_cape(&game_state, "dyer").await.cape_color.as_deref(),
         Some(RED)
     );
     let redressed = drain(&mut watcher_rx).into_iter().any(|msg| {

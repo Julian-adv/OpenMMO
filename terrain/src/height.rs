@@ -496,6 +496,13 @@ mod tests {
     }
 
     #[test]
+    fn encode_decode_roundtrip() {
+        assert_eq!(encode_height(0.0), 10000);
+        assert_eq!(encode_height(-200.0), 6000);
+        assert!((decode_height(encode_height(12.5)) - 12.5).abs() < 0.05);
+    }
+
+    #[test]
     fn world_to_tile_center() {
         // Position (0, 0) should be tile (0, 0)
         assert_eq!(world_to_tile(0.0), 0);

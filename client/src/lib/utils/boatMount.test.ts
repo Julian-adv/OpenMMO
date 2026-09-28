@@ -1,23 +1,12 @@
-import { readFileSync } from 'node:fs'
 import { beforeAll, describe, expect, it } from 'vitest'
 import * as THREE from 'three'
-import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { BoatMount } from './boatMount'
+import { loadHeadlessGlb } from './headless-glb.fixture'
 
 let gltf: GLTF
 beforeAll(async () => {
-  const file = readFileSync(
-    new URL('../../../public/models/mounts/rowboat.glb', import.meta.url)
-  )
-  gltf = await new GLTFLoader()
-    .register(() => ({
-      name: 'headless-materials',
-      loadMaterial: async () => new THREE.MeshBasicMaterial(),
-    }))
-    .parseAsync(
-      file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength),
-      ''
-    )
+  gltf = await loadHeadlessGlb('models/mounts/rowboat.glb')
 })
 
 function advance(boat: BoatMount, seconds: number, speed: number, fps = 60) {

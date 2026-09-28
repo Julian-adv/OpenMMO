@@ -50,12 +50,10 @@ mod tests {
         let auth = Arc::new(AuthService::new(path.clone()).unwrap());
         let game = Arc::new(make_test_game_state("combat_audit_targets_api"));
         let router = crate::metrics::metrics_routes(Arc::clone(&game), auth);
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let url = format!(
-            "http://{}/api/metrics/combat-audit-targets",
-            listener.local_addr().unwrap()
+            "{}/api/metrics/combat-audit-targets",
+            crate::test_util::serve(router).await
         );
-        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
         let client = reqwest::Client::new();
 
         let data: CombatAuditTargets = client.get(&url).send().await.unwrap().json().await.unwrap();
@@ -123,7 +121,6 @@ mod tests {
         let response = client.get(&url).send().await.unwrap();
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
         assert_eq!(response.headers()["cache-control"], "no-store");
-        task.abort();
         drop(conn);
         std::fs::remove_dir_all(dir).unwrap();
     }

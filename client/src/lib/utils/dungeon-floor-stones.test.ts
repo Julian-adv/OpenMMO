@@ -3,14 +3,12 @@ import { Mesh, Raycaster, Vector3 } from 'three'
 import type { DungeonFloorLayout } from '../managers/dungeonManager'
 import { generateDungeonFloorStones } from './dungeon-floor-stones'
 import { buildDungeonFloorRubble } from './dungeon-geo-rubble'
+import { carveDungeon, dungeonCtx } from './dungeon-layout.fixture'
 
-const ctx = { grid: 32, wallHeight: 3, floorHeight: 4, shaftW: 2, shaftLen: 8 }
-const carved = Array<boolean>(ctx.grid ** 2).fill(false)
-for (let z = 2; z < 30; z++)
-  for (let x = 8; x < 12; x++) carved[x + z * ctx.grid] = true
+const ctx = dungeonCtx(32)
 const layout: DungeonFloorLayout = {
   depth: 1,
-  carved,
+  carved: carveDungeon(ctx, [{ x: 8, z: 2, w: 4, d: 28 }]),
   rooms: [{ x: 8, z: 26, w: 4, d: 4 }],
   upShaft: { x: 8, z: 2, alongZ: true, reversed: false },
   downShaft: { x: 10, z: 2, alongZ: true, reversed: false },

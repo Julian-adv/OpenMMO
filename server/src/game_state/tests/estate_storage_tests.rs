@@ -1,47 +1,17 @@
 use super::*;
 use onlinerpg_shared::messages::BagLineItem;
-use onlinerpg_terrain::land::{plot_addr, LandGrade, REGION_PLOTS};
 
 async fn storage_owner(game: &GameState, auth: &crate::auth::AuthService, name: &str) -> i64 {
     let account = auth.login_google(name).unwrap();
-    let character = create_test_character(auth, &account, name);
-    let mut player = make_player(name, 1.5, 1.5);
-    player.position.y = 5.05;
-    player.level = 10;
-    game.add_player(player).await;
-    game.register_player_character(
-        &pid(name),
-        character.id,
-        onlinerpg_shared::xp::xp_for_level(10),
-        attrs_with_cha(12),
-        0,
-        None,
-    )
-    .await;
-    game.inventories.write().await.insert(
-        pid(name),
-        PlayerInventory {
-            bag: vec![
-                bag_item(1, "land_deed", 1),
-                bag_item(2, "storage_chest", 1),
-                bag_item(3, "apple", 3),
-                bag_item(4, "worn_torch", 1),
-            ],
-            ..Default::default()
-        },
-    );
-    game.terrain_io
-        .write_land_grades(0, 0, &vec![LandGrade::Homestead as u8; REGION_PLOTS])
-        .await
-        .unwrap();
-    game.claim_land(
-        &pid(name),
-        1,
-        super::super::land::plot_key(plot_addr(1.5, 1.5)),
-        auth,
-    )
-    .await;
-    character.id
+    let bag = vec![
+        bag_item(1, "land_deed", 1),
+        bag_item(2, "storage_chest", 1),
+        bag_item(3, "apple", 3),
+        bag_item(4, "worn_torch", 1),
+    ];
+    let character_id = estate_owner(game, auth, &account, name, pos3(1.5, 5.05, 1.5), bag).await;
+    claim_plot_at(game, auth, name, 1.5, 1.5).await;
+    character_id
 }
 
 fn item_quantity(inventory: &PlayerInventory, item_def_id: &str) -> u32 {

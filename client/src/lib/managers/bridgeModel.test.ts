@@ -1,7 +1,6 @@
-import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import * as THREE from 'three'
-import { createGLTFLoader } from '../utils/gltfCache'
+import { loadHeadlessGlb } from '../utils/headless-glb.fixture'
 import { bridgeManager } from './bridgeManager'
 import type { ObjectPlacement } from '../stores/editorStore'
 import { getObjectDef } from '../data/objectCatalog'
@@ -11,21 +10,7 @@ const definition = getObjectDef(modelId)!
 let scene: THREE.Group
 
 beforeAll(async () => {
-  const file = readFileSync(
-    new URL(
-      '../../../public/models/objects/bridge_wood_long.glb',
-      import.meta.url
-    )
-  )
-  const gltf = await createGLTFLoader()
-    .register(() => ({
-      name: 'headless-materials',
-      loadMaterial: async () => new THREE.MeshBasicMaterial(),
-    }))
-    .parseAsync(
-      file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength),
-      ''
-    )
+  const gltf = await loadHeadlessGlb('models/objects/bridge_wood_long.glb')
   scene = gltf.scene
   bridgeManager.reset()
   bridgeManager.registerBridgeMesh(modelId, scene, definition.bridge!)

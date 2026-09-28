@@ -19,15 +19,7 @@ async fn teacher(game: &GameState) -> (PlayerId, DirectRx) {
 }
 
 async fn land_cast(game: &GameState, id: &PlayerId, rx: &mut DirectRx) {
-    advance_until_bite(game, rx).await;
-    {
-        let mut sessions = game.fishing_sessions.write().await;
-        let fish = sessions.get_mut(id).unwrap().rolled_fish.as_mut().unwrap();
-        fish.item_def_id = "raw_minnow".into();
-        fish.rarity = 1;
-        fish.trophy = false;
-    }
-    game.respond_fishing(id, FishingAction::Hook).await;
+    flow_tests::hook_forced_fish(game, id, rx, "raw_minnow").await;
     let (outcome, _) = flow_tests::fight_to_the_end(game, id, rx, auto_stance).await;
     assert!(matches!(outcome, FishingOutcome::Caught { .. }));
 }

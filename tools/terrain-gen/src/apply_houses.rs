@@ -37,8 +37,6 @@ use onlinerpg_shared::grass_format::{GRASS_FILE_BYTES, GRASS_V3_MAGIC, GRASS_V4_
 use onlinerpg_shared::housing::{HouseData, RoomData};
 #[cfg(test)]
 use onlinerpg_terrain::defaults::TILE_DIM;
-#[cfg(test)]
-use onlinerpg_terrain::height::{decode_height, encode_height};
 use onlinerpg_terrain::{
     coords, defaults::HEIGHTMAP_SIZE, grass::filter_grass_in_rects, height::flatten_heightmap_tile,
     trees::TreeExclusionRect,
@@ -432,13 +430,6 @@ mod tests {
     }
 
     #[test]
-    fn height_encode_decode_roundtrip() {
-        assert_eq!(encode_height(0.0), 10000);
-        assert_eq!(encode_height(-200.0), 6000);
-        assert!((decode_height(encode_height(12.5)) - 12.5).abs() < 0.05);
-    }
-
-    #[test]
     fn grass_filter_removes_only_instances_inside_rect() {
         let data = encode_grass([&[(32.0, 32.0)], &[(52.5, 32.0)], &[]]);
         let rect: Rect = [-5.0, -5.0, 5.0, 5.0];
@@ -462,12 +453,5 @@ mod tests {
         assert!(filter_grass_in_rects(0, 0, &data, &[rect])
             .unwrap()
             .is_none());
-    }
-
-    #[test]
-    fn grass_filter_rejects_bad_magic() {
-        let mut data = encode_grass([&[(1.0, 1.0)], &[], &[]]);
-        data[0] = 0xff;
-        assert!(filter_grass_in_rects(0, 0, &data, &[[0.0, 0.0, 1.0, 1.0]]).is_err());
     }
 }

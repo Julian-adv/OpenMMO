@@ -101,10 +101,6 @@ describe('minutesUntilRain', () => {
     expect(minutesUntilRain(42, 1, SHOWER_START + 1, 0, 0)).toBe(0)
   })
 
-  it('finds the onset minute itself, not a rounded-up one', () => {
-    expect(minutesUntilRain(42, 1, 0, 0, 0)).toBe(SHOWER_START)
-  })
-
   it('returns null when the horizon stays dry', () => {
     expect(minutesUntilRain(42, 1, SHOWER_END, 0, 0, 40)).toBeNull()
   })

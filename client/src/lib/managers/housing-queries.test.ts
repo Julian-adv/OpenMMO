@@ -13,26 +13,21 @@ import {
   wallApproachPositions,
 } from './housing-queries'
 import type { HouseData, RoomData, WallConfig } from '../types/housing'
+import { makeRoom } from '../utils/house-room.fixture'
 
 const WALL_HEIGHT = 3
 const FLOOR_THICKNESS = 0.1
 
 const room = (over: Partial<RoomData>): RoomData =>
-  ({
-    roomType: 'normal',
-    floorLevel: 0,
-    localX: 0,
-    localZ: 0,
-    sizeX: 4,
+  makeRoom({
     sizeZ: 6,
     wallHeight: WALL_HEIGHT,
-    floorTexture: 0,
     wallNorth: [],
     wallSouth: [],
     wallEast: [],
     wallWest: [],
     ...over,
-  }) as RoomData
+  })
 
 /** r-23_+73_1's shape: two stacked rooms with a 1x4 stairwell inside them. */
 function house(): ReadonlyMap<string, HouseData> {

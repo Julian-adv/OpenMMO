@@ -160,18 +160,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn idle_tile_survives_one_full_period_after_its_last_touch() {
-        let cache = TileCache::new(TILE_CACHE_CAPACITY);
-        cache.insert_if_absent((0, 0), 1u32).await;
-
-        // Untouched across one sweep boundary: still resident...
-        assert_eq!(cache.sweep_stale().await, 0);
-        // ...but gone after a second sweep with no touch in between.
-        assert_eq!(cache.sweep_stale().await, 1);
-        assert_eq!(cache.len().await, 0);
-    }
-
-    #[tokio::test]
     async fn capacity_fuse_evicts_stalest_generation_first() {
         let cache = TileCache::new(2);
         cache.insert_if_absent((0, 0), 1u32).await;

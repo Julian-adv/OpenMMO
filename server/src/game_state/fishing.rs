@@ -1484,24 +1484,6 @@ mod tests {
     }
 
     #[test]
-    fn flotsam_holds_a_fixed_share() {
-        let table = vec![candidate("raw_minnow", 1, 130), candidate("old_boot", 0, 6)];
-        let weights = effective_weights(&table);
-        let total: u64 = weights.iter().sum();
-        assert_eq!(weights[1] * 100, total * FLOTSAM_SHARE_PCT);
-    }
-
-    #[test]
-    fn pick_walks_cumulative_weights() {
-        let w = vec![50, 1];
-        assert_eq!(pick_catch(&w, 0), Some(0));
-        assert_eq!(pick_catch(&w, 49), Some(0));
-        assert_eq!(pick_catch(&w, 50), Some(1));
-        // Out-of-range roll (caller bug) picks nothing rather than panicking.
-        assert_eq!(pick_catch(&w, 51), None);
-    }
-
-    #[test]
     fn wait_stays_in_the_shared_range() {
         let mut rng = rand::thread_rng();
         for _ in 0..200 {

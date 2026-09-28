@@ -170,16 +170,20 @@ mod tests {
         }
     }
 
-    #[test]
-    fn roads_have_reasonable_count() {
-        let cfg = test_config(128);
-        let mut map = continent::generate_continent_mask(&cfg);
+    fn build(cfg: &WorldGenConfig) -> (GlobalMap, usize, RoadNetwork) {
+        let mut map = continent::generate_continent_mask(cfg);
         elevation::generate_elevation(&mut map);
         let mut rm = rivers::compute_flow(&map);
         rivers::extract_rivers(&map, &mut rm, 50.0, 4);
         let s = settlements::place_settlements(&map, &rm);
         let net = compute_roads(&map, &s, &rm);
-        let n = s.len();
+        (map, s.len(), net)
+    }
+
+    #[test]
+    fn roads_are_bounded_and_stay_on_land() {
+        let cfg = test_config(128);
+        let (map, n, net) = build(&cfg);
         let max_possible = n * (n - 1) / 2;
         assert!(
             net.roads.len() <= max_possible,
@@ -187,22 +191,9 @@ mod tests {
             net.roads.len(),
             max_possible
         );
-        for r in &net.roads {
-            assert!(r.points.len() >= 2, "road too short");
-        }
-    }
-
-    #[test]
-    fn roads_stay_on_land() {
-        let cfg = test_config(128);
-        let mut map = continent::generate_continent_mask(&cfg);
-        elevation::generate_elevation(&mut map);
-        let mut rm = rivers::compute_flow(&map);
-        rivers::extract_rivers(&map, &mut rm, 50.0, 4);
-        let s = settlements::place_settlements(&map, &rm);
-        let net = compute_roads(&map, &s, &rm);
         let res = cfg.global_res as usize;
         for r in &net.roads {
+            assert!(r.points.len() >= 2, "road too short");
             for &(x, y) in &r.points {
                 let i = (y as usize) * res + x as usize;
                 assert_eq!(map.land_mask[i], 1, "road crosses sea at ({x}, {y})");
@@ -213,16 +204,8 @@ mod tests {
     #[test]
     fn deterministic_for_same_seed() {
         let cfg = test_config(128);
-        let build = || {
-            let mut map = continent::generate_continent_mask(&cfg);
-            elevation::generate_elevation(&mut map);
-            let mut rm = rivers::compute_flow(&map);
-            rivers::extract_rivers(&map, &mut rm, 50.0, 4);
-            let s = settlements::place_settlements(&map, &rm);
-            compute_roads(&map, &s, &rm)
-        };
-        let a = build();
-        let b = build();
+        let (_, _, a) = build(&cfg);
+        let (_, _, b) = build(&cfg);
         assert_eq!(a.roads.len(), b.roads.len());
         for (ra, rb) in a.roads.iter().zip(b.roads.iter()) {
             assert_eq!(ra.points, rb.points);

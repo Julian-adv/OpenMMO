@@ -30,6 +30,14 @@ fn progress(request_id: u32, x: f32, status: MoveStatus) -> ServerMessage {
     }
 }
 
+fn spawn_move(
+    state: &Arc<Mutex<SharedState>>,
+    entry: ScheduleEntry,
+) -> tokio::task::JoinHandle<()> {
+    let state = Arc::clone(state);
+    tokio::spawn(async move { execute_schedule_move(&state, &entry).await })
+}
+
 async fn next_goal(rx: &mut mpsc::Receiver<ClientMessage>, expected_x: f32) -> u32 {
     let command = timeout(Duration::from_secs(1), rx.recv())
         .await
@@ -53,18 +61,14 @@ async fn schedule_keeps_the_server_destination_without_relocation_or_retry() {
         MoveStatus::Blocked,
     ] {
         let (state, mut rx) = walker();
-        let task_state = Arc::clone(&state);
-        let task = tokio::spawn(async move {
-            execute_schedule_move(
-                &task_state,
-                &ScheduleEntry {
-                    pos: [1.5, 99.0, 0.5],
-                    rotation: 90.0,
-                    ..Default::default()
-                },
-            )
-            .await;
-        });
+        let task = spawn_move(
+            &state,
+            ScheduleEntry {
+                pos: [1.5, 99.0, 0.5],
+                rotation: 90.0,
+                ..Default::default()
+            },
+        );
         let id = next_goal(&mut rx, 1.5).await;
         state
             .lock()
@@ -172,19 +176,15 @@ async fn furniture_schedule_requests_the_authored_goal_and_uses_the_server_stop(
                 floor_level: 0,
             }],
         );
-    let task_state = Arc::clone(&state);
-    let task = tokio::spawn(async move {
-        execute_schedule_move(
-            &task_state,
-            &ScheduleEntry {
-                pos: [10.5, 0.0, 0.5],
-                action: Some("bed".into()),
-                object_id: Some(23),
-                ..Default::default()
-            },
-        )
-        .await;
-    });
+    let task = spawn_move(
+        &state,
+        ScheduleEntry {
+            pos: [10.5, 0.0, 0.5],
+            action: Some("bed".into()),
+            object_id: Some(23),
+            ..Default::default()
+        },
+    );
     let id = next_goal(&mut rx, 10.5).await;
     state
         .lock()
@@ -219,19 +219,15 @@ async fn refused_or_interrupted_schedule_moves_do_not_interact_or_relocate() {
         MoveStatus::Stopped,
     ] {
         let (state, mut rx) = walker();
-        let task_state = Arc::clone(&state);
-        let task = tokio::spawn(async move {
-            execute_schedule_move(
-                &task_state,
-                &ScheduleEntry {
-                    pos: [10.5, 0.0, 0.5],
-                    action: Some("bed".into()),
-                    object_id: Some(23),
-                    ..Default::default()
-                },
-            )
-            .await;
-        });
+        let task = spawn_move(
+            &state,
+            ScheduleEntry {
+                pos: [10.5, 0.0, 0.5],
+                action: Some("bed".into()),
+                object_id: Some(23),
+                ..Default::default()
+            },
+        );
         let id = next_goal(&mut rx, 10.5).await;
         state.lock().await.push_event(progress(id, 0.5, status));
         timeout(Duration::from_secs(1), task)
@@ -248,17 +244,13 @@ async fn refused_or_interrupted_schedule_moves_do_not_interact_or_relocate() {
 #[tokio::test(start_paused = true)]
 async fn long_schedule_moves_finish_each_server_segment_before_requesting_the_next() {
     let (state, mut rx) = walker();
-    let task_state = Arc::clone(&state);
-    let task = tokio::spawn(async move {
-        execute_schedule_move(
-            &task_state,
-            &ScheduleEntry {
-                pos: [70.5, 0.0, 0.5],
-                ..Default::default()
-            },
-        )
-        .await;
-    });
+    let task = spawn_move(
+        &state,
+        ScheduleEntry {
+            pos: [70.5, 0.0, 0.5],
+            ..Default::default()
+        },
+    );
     let first = next_goal(&mut rx, 48.5).await;
     state
         .lock()

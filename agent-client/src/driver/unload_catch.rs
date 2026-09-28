@@ -151,18 +151,7 @@ pub(super) async fn run(state: Arc<Mutex<SharedState>>, label: String) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn item(instance_id: u64, id: &str, quantity: u32) -> ItemInstance {
-        ItemInstance {
-            instance_id,
-            item_def_id: id.into(),
-            quantity,
-            enchant: 0,
-            cape_color: None,
-            cape_texture: None,
-            locked: false,
-        }
-    }
+    use crate::state::tests::bag_item;
 
     fn line(instance_id: u64, qty: u32) -> BagLineItem {
         BagLineItem { instance_id, qty }
@@ -171,16 +160,16 @@ mod tests {
     #[test]
     fn plan_opens_pouches_drops_junk_sells_the_rest_and_keeps_meal_fish() {
         let bag = vec![
-            item(1, "fishing_rod", 1),
-            item(2, "raw_perch", 4),
-            item(3, "raw_minnow", 1),
-            item(4, "trophy_raw_trout", 1),
-            item(5, "sunken_coin_pouch", 1),
-            item(6, "sunken_coin_pouch", 1),
-            item(7, "old_boot", 1),
-            item(8, "clump_of_kelp", 1),
-            item(9, "message_in_a_bottle", 1),
-            item(10, "grilled_perch", 1),
+            bag_item(1, "fishing_rod", 1),
+            bag_item(2, "raw_perch", 4),
+            bag_item(3, "raw_minnow", 1),
+            bag_item(4, "trophy_raw_trout", 1),
+            bag_item(5, "sunken_coin_pouch", 1),
+            bag_item(6, "sunken_coin_pouch", 1),
+            bag_item(7, "old_boot", 1),
+            bag_item(8, "clump_of_kelp", 1),
+            bag_item(9, "message_in_a_bottle", 1),
+            bag_item(10, "grilled_perch", 1),
         ];
         let plan = plan(&bag);
         assert_eq!(plan.open, vec![5, 6]);
@@ -198,33 +187,16 @@ mod tests {
 
     #[test]
     fn a_trip_is_due_near_the_carry_limit_or_after_a_catch_slipped() {
-        use onlinerpg_shared::character::{Character, CharacterAttributes, CharacterClass};
+        use onlinerpg_shared::character::{CharacterClass, Gender};
         let (mut s, _rx) = crate::state::tests::test_state();
-        s.characters.push(Character {
-            id: 1,
-            name: "Tobin".into(),
-            created_at: 0,
-            level: 1,
-            xp: 0,
-            max_hp: 10,
-            attributes: CharacterAttributes {
-                r#str: 10,
-                dex: 10,
-                con: 10,
-                int: 10,
-                wis: 10,
-                cha: 10,
-                guard: 0,
-            },
-            class: CharacterClass::Knight,
-            gender: Default::default(),
-            equipment: Default::default(),
-            titles: Vec::new(),
-            active_title: None,
-        });
-        s.self_bag = vec![item(1, "raw_trout", 119)];
+        s.characters.push(crate::orchestrator::tests::character(
+            "Tobin",
+            CharacterClass::Knight,
+            Gender::default(),
+        ));
+        s.self_bag = vec![bag_item(1, "raw_trout", 119)];
         assert!(!is_due(&s), "119 of 150");
-        s.self_bag = vec![item(1, "raw_trout", 120)];
+        s.self_bag = vec![bag_item(1, "raw_trout", 120)];
         assert!(is_due(&s), "120 of 150");
         s.self_carry_mult = 2.0;
         assert!(!is_due(&s), "a fed angler carries more");
@@ -237,7 +209,10 @@ mod tests {
         let (mut s, mut rx) = crate::state::tests::test_state();
         s.self_fishing = true;
         s.catch_slipped = true;
-        s.self_bag = vec![item(1, "raw_trout", 50), item(2, "sunken_coin_pouch", 1)];
+        s.self_bag = vec![
+            bag_item(1, "raw_trout", 50),
+            bag_item(2, "sunken_coin_pouch", 1),
+        ];
         let state = Arc::new(Mutex::new(s));
         run(Arc::clone(&state), "tobin".into()).await;
         assert!(rx.try_recv().is_err(), "no stop, open, drop or sale");
@@ -248,9 +223,9 @@ mod tests {
 
     #[test]
     fn plan_leaves_locked_items_alone() {
-        let mut pouch = item(1, "sunken_coin_pouch", 1);
+        let mut pouch = bag_item(1, "sunken_coin_pouch", 1);
         pouch.locked = true;
-        let mut trout = item(2, "raw_trout", 5);
+        let mut trout = bag_item(2, "raw_trout", 5);
         trout.locked = true;
         assert_eq!(plan(&[pouch, trout]), Plan::default());
     }

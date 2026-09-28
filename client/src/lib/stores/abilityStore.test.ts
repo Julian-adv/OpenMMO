@@ -1,6 +1,4 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { initSync } from '../wasm/onlinerpg_shared'
 import { get } from 'svelte/store'
 import {
   getAbility,
@@ -24,7 +22,7 @@ import {
   timerSnapshot,
   visibleAbilityBuffs,
 } from './abilityStore'
-import type { ItemInstance } from '../network/networkTypes'
+import { initSharedWasm, testItem } from '../utils/ability.fixture'
 import {
   acknowledgeDaggerSkill,
   consumeDaggerSkill,
@@ -34,21 +32,7 @@ import {
   resetDaggerSkill,
 } from './daggerSkillStore'
 
-const item = (item_def_id: string): ItemInstance => ({
-  instance_id: 1,
-  item_def_id,
-  enchant: 9,
-  quantity: 1,
-  locked: false,
-})
-
-beforeAll(() => {
-  initSync({
-    module: readFileSync(
-      new URL('../wasm/onlinerpg_shared_bg.wasm', import.meta.url)
-    ),
-  })
-})
+beforeAll(initSharedWasm)
 
 it('uses the server mana cost in the Ward tooltip and keeps Double Slash free', () => {
   expect(GUARDIAN_WARD.manaCost).toBe(2)
@@ -126,25 +110,25 @@ it('requires a dagger for Double Slash through the shared equipment check', () =
   expect(abilityEquipmentAllowed('dagger_double_slash', {})).toBe(false)
   expect(
     abilityEquipmentAllowed('dagger_double_slash', {
-      main_hand: item('dagger'),
+      main_hand: testItem('dagger'),
     })
   ).toBe(true)
   for (const weapon of ['bow', 'iron_sword', 'morningstar', 'torch']) {
     expect(
       abilityEquipmentAllowed('dagger_double_slash', {
-        main_hand: item(weapon),
+        main_hand: testItem(weapon),
       })
     ).toBe(false)
   }
 })
 
 it('requires a Bow for True Aim and keeps its private mark separate from buff timers', () => {
-  expect(abilityEquipmentAllowed('bow_mark', { main_hand: item('bow') })).toBe(
-    true
-  )
+  expect(
+    abilityEquipmentAllowed('bow_mark', { main_hand: testItem('bow') })
+  ).toBe(true)
   for (const weapon of ['dagger', 'iron_sword', 'morningstar', 'torch'])
     expect(
-      abilityEquipmentAllowed('bow_mark', { main_hand: item(weapon) })
+      abilityEquipmentAllowed('bow_mark', { main_hand: testItem(weapon) })
     ).toBe(false)
   expect(abilityEquipmentAllowed('bow_mark', {})).toBe(false)
   updateBowMark('target', 5000, 1000)
@@ -191,26 +175,28 @@ describe('Guardian Ward', () => {
     ]) {
       expect(
         guardianWardEquipment({
-          main_hand: item(weapon),
-          off_hand: item('raven_shield'),
+          main_hand: testItem(weapon),
+          off_hand: testItem('raven_shield'),
         })
       ).toBe(true)
     }
     for (const weapon of ['dagger', 'great_sword', 'torch']) {
       expect(
         guardianWardEquipment({
-          main_hand: item(weapon),
-          off_hand: item('wooden_shield'),
+          main_hand: testItem(weapon),
+          off_hand: testItem('wooden_shield'),
         })
       ).toBe(false)
     }
     expect(
       guardianWardEquipment({
-        main_hand: item('iron_sword'),
-        off_hand: item('torch'),
+        main_hand: testItem('iron_sword'),
+        off_hand: testItem('torch'),
       })
     ).toBe(false)
-    expect(guardianWardEquipment({ main_hand: item('iron_sword') })).toBe(false)
+    expect(guardianWardEquipment({ main_hand: testItem('iron_sword') })).toBe(
+      false
+    )
   })
 
   it('waits for server cooldown and releases a lost acknowledgement after three seconds', () => {
@@ -265,7 +251,7 @@ it('allows Radiance with empty hands and every weapon while keeping Ward restric
       'spear',
       'great_sword',
       'bow',
-    ].map((id) => ({ main_hand: item(id) })),
+    ].map((id) => ({ main_hand: testItem(id) })),
   ]) {
     expect(abilityEquipmentAllowed('radiance', equipped)).toBe(true)
     expect(abilityEquipmentAllowed('guardian_ward', equipped)).toBe(false)

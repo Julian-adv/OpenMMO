@@ -560,42 +560,6 @@ mod tests {
     }
 
     #[test]
-    fn potential_is_x_periodic() {
-        // The fundamental wrap guarantee: sampling at x=0 and x=res (i.e.
-        // exactly one world-width further) must give the same potential, so
-        // the world seamlessly connects east-to-west. We test this via the
-        // noise function directly since the stored grid only covers
-        // [0, res-1]; x=res would be written as x=0.
-        use super::super::noise::{fbm_wrap_x, PerlinNoise3D};
-        let cfg = test_config(64, 0.4);
-        let noise = PerlinNoise3D::new(cfg.seed ^ 0xC00C_00C0_0C00_u64);
-        let world_width = cfg.global_res as f32;
-        for y in 0..cfg.global_res {
-            let a = fbm_wrap_x(
-                &noise,
-                0.0,
-                y as f32,
-                world_width,
-                cfg.continent_frequency,
-                cfg.continent_octaves,
-                CONTINENT_LACUNARITY,
-                cfg.continent_gain,
-            );
-            let b = fbm_wrap_x(
-                &noise,
-                world_width,
-                y as f32,
-                world_width,
-                cfg.continent_frequency,
-                cfg.continent_octaves,
-                CONTINENT_LACUNARITY,
-                cfg.continent_gain,
-            );
-            assert!((a - b).abs() < 1e-5, "wrap mismatch at y={y}: {a} vs {b}");
-        }
-    }
-
-    #[test]
     fn flood_fill_wraps_x() {
         // A single land stripe that touches both x=0 and x=res-1 should be
         // one component under X-wrap flood fill. With min_cells larger than

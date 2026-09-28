@@ -79,9 +79,10 @@ async fn endpoints_report_weighted_network_rates_totals_rankings_and_bounded_ran
         access_log: None,
         interval_seconds: 60,
     });
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let url = format!("http://{}/api/metrics", listener.local_addr().unwrap());
-    let task = tokio::spawn(async move { axum::serve(listener, metrics.router()).await.unwrap() });
+    let url = format!(
+        "{}/api/metrics",
+        crate::test_util::serve(metrics.router()).await
+    );
     let client = reqwest::Client::new();
     let response = client
         .get(format!("{url}/network?hours=1"))
@@ -126,5 +127,4 @@ async fn endpoints_report_weighted_network_rates_totals_rankings_and_bounded_ran
             );
         }
     }
-    task.abort();
 }

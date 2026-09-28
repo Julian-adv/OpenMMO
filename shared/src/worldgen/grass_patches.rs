@@ -271,15 +271,19 @@ mod tests {
     #[test]
     fn coverage_is_partial_not_uniform() {
         // The whole point of switching away from fBm+threshold: the new
-        // field must produce *some* grass-free ground.
+        // field must produce *some* grass-free ground, while patch interiors
+        // still reach full strength.
         let field = GrassPatchField::new(42, 2048.0);
         let mut covered = 0;
         let mut uncovered = 0;
+        let mut max_strength = 0.0f32;
         for i in 0..128 {
             for j in 0..128 {
                 let x = (i as f32 - 64.0) * 8.0;
                 let z = (j as f32 - 64.0) * 8.0;
-                if field.sample(x, z).strength > 0.0 {
+                let s = field.sample(x, z).strength;
+                max_strength = max_strength.max(s);
+                if s > 0.0 {
                     covered += 1;
                 } else {
                     uncovered += 1;
@@ -295,6 +299,7 @@ mod tests {
             uncovered > total / 10,
             "expected at least 10 % bare ground, got {uncovered}/{total}"
         );
+        assert!(max_strength > 0.99, "max strength {max_strength} < 0.99");
     }
 
     #[test]
@@ -315,23 +320,6 @@ mod tests {
             );
             assert_eq!(left.is_tall, right.is_tall);
         }
-    }
-
-    #[test]
-    fn patch_interior_reaches_full_strength() {
-        let field = GrassPatchField::new(42, 2048.0);
-        let mut max_strength = 0.0f32;
-        for i in 0..128 {
-            for j in 0..128 {
-                let x = (i as f32 - 64.0) * 8.0;
-                let z = (j as f32 - 64.0) * 8.0;
-                let s = field.sample(x, z).strength;
-                if s > max_strength {
-                    max_strength = s;
-                }
-            }
-        }
-        assert!(max_strength > 0.99, "max strength {max_strength} < 0.99");
     }
 
     #[test]

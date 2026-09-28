@@ -19,22 +19,13 @@ fn raw_fish(nutrition: u32) -> crate::item_defs::EatEffect {
     }
 }
 
-/// Player on dry land (positive x) with hunger tracked at `satiation`.
 async fn make_eater(game_state: &GameState, name: &str, satiation: u32) -> (PlayerId, DirectRx) {
-    let id = pid(name);
-    game_state.add_player(make_player(name, 100.0, 50.0)).await;
-    game_state.inventories.write().await.insert(
-        id,
-        PlayerInventory {
-            active_ammo: None,
-            bag: vec![],
-            equipped: std::collections::HashMap::new(),
-        },
-    );
+    let (id, rx) = add_hungry_player(game_state, name, satiation).await;
     game_state
-        .register_player_character(&id, 1, 0, attrs_with_cha(10), 0, Some(satiation))
-        .await;
-    let rx = game_state.register_direct_channel(&id).await;
+        .inventories
+        .write()
+        .await
+        .insert(id, PlayerInventory::default());
     (id, rx)
 }
 

@@ -1,6 +1,6 @@
 use super::*;
-use crate::state::tests::{test_player, test_state};
-use onlinerpg_shared::inventory::{EquipSlot, ItemInstance};
+use crate::state::tests::{bag_item, test_player, test_state};
+use onlinerpg_shared::inventory::EquipSlot;
 use onlinerpg_shared::messages::{PlayerTradeItem, PlayerTradeSide, PlayerTradeState};
 use onlinerpg_shared::{PlayerId, ServerMessage};
 use tokio::sync::mpsc;
@@ -22,18 +22,6 @@ fn trading_state() -> (Arc<Mutex<SharedState>>, mpsc::Receiver<ClientMessage>) {
     partner.name = "Alice".into();
     state.nearby_players.insert(partner.id, partner);
     (Arc::new(Mutex::new(state)), rx)
-}
-
-fn item(id: u64, name: &str, quantity: u32) -> ItemInstance {
-    ItemInstance {
-        instance_id: id,
-        item_def_id: name.into(),
-        quantity,
-        enchant: 0,
-        cape_color: None,
-        cape_texture: None,
-        locked: false,
-    }
 }
 
 fn offered(id: u64, name: &str, quantity: u32) -> PlayerTradeItem {
@@ -153,13 +141,18 @@ async fn sell_intent_selects_bag_stacks_and_revalidates_changed_payment() {
     let (state, mut rx) = trading_state();
     {
         let mut s = state.lock().await;
-        let mut locked = item(3, "apple", 10);
+        let mut locked = bag_item(3, "apple", 10);
         locked.locked = true;
-        let mut enchanted = item(4, "apple", 10);
+        let mut enchanted = bag_item(4, "apple", 10);
         enchanted.enchant = 1;
-        s.self_bag = vec![locked, enchanted, item(5, "apple", 2), item(6, "apple", 4)];
+        s.self_bag = vec![
+            locked,
+            enchanted,
+            bag_item(5, "apple", 2),
+            bag_item(6, "apple", 4),
+        ];
         s.self_equipped
-            .insert(EquipSlot::MainHand, item(7, "apple", 10));
+            .insert(EquipSlot::MainHand, bag_item(7, "apple", 10));
     }
     event(
         &state,

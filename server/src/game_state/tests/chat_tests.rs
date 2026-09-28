@@ -306,8 +306,8 @@ async fn reply_targets_the_last_whisper_partner() {
     game_state
         .send_chat_message(&sender_id, "/w rica psst".to_string(), &auth)
         .await;
-    while sender_rx.try_recv().is_ok() {}
-    while target_rx.try_recv().is_ok() {}
+    drain(&mut sender_rx);
+    drain(&mut target_rx);
 
     // Receiving a whisper arms the recipient's /r too.
     game_state
@@ -398,7 +398,7 @@ async fn whisper_matches_names_ignoring_ascii_case() {
 
     // The name index follows the roster: once Rica leaves, the lookup misses.
     game_state.remove_player(&rica_id).await;
-    while sender_rx.try_recv().is_ok() {}
+    drain(&mut sender_rx);
     game_state
         .send_chat_message(&sender_id, "/w RICA psst".to_string(), &auth)
         .await;
@@ -577,13 +577,13 @@ async fn blocked_sender_does_not_become_the_reply_target() {
     game_state
         .send_chat_message(&friend_id, "/w blocker hey".to_string(), &auth)
         .await;
-    while blocker_rx.try_recv().is_ok() {}
-    while friend_rx.try_recv().is_ok() {}
+    drain(&mut blocker_rx);
+    drain(&mut friend_rx);
 
     game_state
         .send_chat_message(&sender_id, "/w blocker psst".to_string(), &auth)
         .await;
-    while sender_rx.try_recv().is_ok() {}
+    drain(&mut sender_rx);
 
     // The suppressed whisper must leave the blocker's /r aimed at the friend.
     game_state
@@ -1212,8 +1212,8 @@ async fn mute_command_silences_chat_and_whispers_until_unmute() {
         .add_player(make_player("spammer", 5.0, 0.0))
         .await;
     let mut spammer_rx = game_state.register_direct_channel(&spammer_id).await;
-    while listener_rx.try_recv().is_ok() {}
-    while admin_rx.try_recv().is_ok() {}
+    drain(&mut listener_rx);
+    drain(&mut admin_rx);
     game_state
         .send_chat_message(&spammer_id, "still here".to_string(), &auth)
         .await;
@@ -1477,17 +1477,6 @@ async fn escape_command_refused_while_in_combat() {
     );
 }
 
-/// Playing takes an instrument; the test bards carry the starter mandolin.
-async fn hand_a_mandolin(game_state: &GameState, player: &str) {
-    game_state.inventories.write().await.insert(
-        pid(player),
-        PlayerInventory {
-            bag: vec![bag_item(1, "worn_mandolin", 1)],
-            ..Default::default()
-        },
-    );
-}
-
 #[tokio::test]
 async fn play_music_hands_the_track_to_neighbours() {
     let game_state = make_test_game_state("play_music");
@@ -1498,7 +1487,7 @@ async fn play_music_hands_the_track_to_neighbours() {
     game_state
         .add_player(make_player("listener", 10.0, 0.0))
         .await;
-    hand_a_mandolin(&game_state, "bard").await;
+    hand_instrument(&game_state, "bard").await;
     let mut listener_rx = game_state.register_direct_channel(&listener_id).await;
 
     // A fragment is enough — the server resolves it to the whole title.
@@ -1546,7 +1535,7 @@ async fn bare_play_music_picks_a_track_for_the_performer() {
     game_state
         .add_player(make_player("listener", 10.0, 0.0))
         .await;
-    hand_a_mandolin(&game_state, "bard").await;
+    hand_instrument(&game_state, "bard").await;
     let mut listener_rx = game_state.register_direct_channel(&listener_id).await;
 
     game_state
@@ -1660,7 +1649,7 @@ async fn an_unknown_song_title_refuses_the_performance() {
     game_state
         .add_player(make_player("listener", 10.0, 0.0))
         .await;
-    hand_a_mandolin(&game_state, "bard").await;
+    hand_instrument(&game_state, "bard").await;
     let mut bard_rx = game_state.register_direct_channel(&bard_id).await;
     let mut listener_rx = game_state.register_direct_channel(&listener_id).await;
 

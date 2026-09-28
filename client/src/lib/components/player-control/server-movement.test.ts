@@ -5,7 +5,7 @@ import { WORLD_MAX_X, WORLD_MIN_X } from '../../terrain/world-wrap'
 import { projectPlayerState, projectStoppedPlayerState } from './fsm/projection'
 import { buildAttackState } from './player-state-builders'
 import { transitionAttackToIdle } from './fsm/combat'
-import type { PlayerState } from '../../utils/movementUtils'
+import type { MovementMode, PlayerState } from '../../utils/movementUtils'
 
 function setup() {
   let id = 0
@@ -58,6 +58,34 @@ function stopped(requestId: number, serverTimeMs: number): MoveProgress {
   }
 }
 
+function releaseKeyAfterMoving(movement: ServerMovement, approvalDelay = 0) {
+  movement.direction({ rotation: 0, forward: 1, turn: 0, sprinting: false })
+  if (approvalDelay) vi.advanceTimersByTime(approvalDelay)
+  movement.acceptPath(directionPath(0))
+  vi.advanceTimersByTime(100)
+  const released = movement.sample(() => false)!
+  movement.stopDirection()
+  return released
+}
+
+function attackWhileClickMoving(
+  movement: ServerMovement,
+  movementMode: MovementMode,
+  attackCounter: number
+) {
+  movement.request(3, 3, false)
+  movement.acceptPath(path())
+  vi.advanceTimersByTime(100)
+  const moving = movement.sample(() => false)!
+  const attack = buildAttackState(
+    { ...moving, state: 'moving', movementMode },
+    1,
+    attackCounter
+  )
+  movement.clear()
+  return { moving, attack }
+}
+
 beforeEach(() =>
   vi.useFakeTimers({ toFake: ['performance', 'setTimeout', 'clearTimeout'] })
 )
@@ -68,12 +96,7 @@ describe('keyboard release', () => {
     'finishes smoothly with %ims RTT and a delayed stop acknowledgement',
     (rtt) => {
       const { movement, stop } = setup()
-      movement.direction({ rotation: 0, forward: 1, turn: 0, sprinting: false })
-      vi.advanceTimersByTime(rtt / 2)
-      movement.acceptPath(directionPath(0))
-      vi.advanceTimersByTime(100)
-      const released = movement.sample(() => false)!
-      movement.stopDirection()
+      const released = releaseKeyAfterMoving(movement, rtt / 2)
       movement.stopDirection()
       expect(stop).toHaveBeenCalledExactlyOnceWith(2)
       expect(movement.stopping).toBe(true)
@@ -112,11 +135,7 @@ describe('keyboard release', () => {
 
   it('does not move beyond the approved route while waiting for stop', () => {
     const { movement } = setup()
-    movement.direction({ rotation: 0, forward: 1, turn: 0, sprinting: false })
-    movement.acceptPath(directionPath(0))
-    vi.advanceTimersByTime(100)
-    movement.sample(() => false)
-    movement.stopDirection()
+    releaseKeyAfterMoving(movement)
     vi.advanceTimersByTime(3000)
     const pose = movement.sample(() => false)!
     expect(pose.position.x).toBeCloseTo(1.2, 5)
@@ -127,14 +146,9 @@ describe('keyboard release', () => {
     'restarts the same direction with a fresh request, acknowledged stop: %s',
     (acknowledged) => {
       const { movement, direction } = setup()
-      const input = { rotation: 0, forward: 1, turn: 0, sprinting: false }
-      movement.direction(input)
-      movement.acceptPath(directionPath(0))
-      vi.advanceTimersByTime(100)
-      movement.sample(() => false)
-      movement.stopDirection()
+      releaseKeyAfterMoving(movement)
       if (acknowledged) movement.acceptStopped(stopped(2, 150))
-      movement.direction(input)
+      movement.direction({ rotation: 0, forward: 1, turn: 0, sprinting: false })
       expect(direction.mock.lastCall?.[0].request_id).toBe(3)
       expect(movement.stopping).toBe(false)
       expect(movement.acceptStopped(stopped(2, 150))).toBe(false)
@@ -151,11 +165,7 @@ describe('keyboard release', () => {
     'cancels the final stop blend on %s',
     (action) => {
       const { movement } = setup()
-      movement.direction({ rotation: 0, forward: 1, turn: 0, sprinting: false })
-      movement.acceptPath(directionPath(0))
-      vi.advanceTimersByTime(100)
-      movement.sample(() => false)
-      movement.stopDirection()
+      releaseKeyAfterMoving(movement)
       movement.acceptStopped(stopped(2, 150))
       if (action === 'click') movement.request(10, 0, false)
       else movement.clear(action !== 'relocate')
@@ -212,11 +222,7 @@ describe('keyboard release', () => {
 
   it('finishes immediately when the display already matches the stop', () => {
     const { movement } = setup()
-    movement.direction({ rotation: 0, forward: 1, turn: 0, sprinting: false })
-    movement.acceptPath(directionPath(0))
-    vi.advanceTimersByTime(100)
-    movement.sample(() => false)
-    movement.stopDirection()
+    releaseKeyAfterMoving(movement)
     movement.acceptStopped(stopped(2, 100))
     expect(movement.sample(() => false)?.speed).toBe(0)
     expect(movement.stopping).toBe(false)
@@ -224,11 +230,7 @@ describe('keyboard release', () => {
 
   it('uses the official stop pose when an obstacle prevents blending', () => {
     const { movement } = setup()
-    movement.direction({ rotation: 0, forward: 1, turn: 0, sprinting: false })
-    movement.acceptPath(directionPath(0))
-    vi.advanceTimersByTime(100)
-    movement.sample(() => false)
-    movement.stopDirection()
+    releaseKeyAfterMoving(movement)
     const progress = stopped(2, 150)
     movement.acceptStopped(progress)
     vi.advanceTimersByTime(60)
@@ -246,18 +248,14 @@ describe('combat stop', () => {
     'blends a stop reply delayed by %ims without interrupting the opening swing',
     (delay) => {
       const { movement, stop } = setup()
-      movement.request(3, 3, false)
-      movement.acceptPath(path())
-      vi.advanceTimersByTime(100)
-      const moving = movement.sample(() => false)!
-      let attack = buildAttackState(
-        { ...moving, state: 'moving', movementMode: 'run' },
-        1,
+      const { moving, attack: opening } = attackWhileClickMoving(
+        movement,
+        'run',
         1
       )
+      let attack = opening
       expect(attack.speed).toBe(0)
       expect(attack.movementMode).toBeUndefined()
-      movement.clear()
       expect(stop).toHaveBeenCalledExactlyOnceWith(2)
 
       vi.advanceTimersByTime(delay)
@@ -789,17 +787,6 @@ describe('server approved movement', () => {
     }
   )
 
-  it('stays still until approval and starts from the server pose', () => {
-    const { movement } = setup()
-    movement.request(3, 3, false)
-    vi.advanceTimersByTime(300)
-    expect(movement.sample(() => false)).toBeNull()
-    movement.acceptPath(path())
-    expect(movement.sample(() => false)?.position).toEqual({ x: 0, y: 0, z: 0 })
-    vi.advanceTimersByTime(200)
-    expect(movement.sample(() => false)?.position.x).toBeCloseTo(0.6)
-  })
-
   it('sends the first click immediately, then only the latest at the 200ms deadline', () => {
     const { movement, goal } = setup()
     movement.request(1, 0, false)
@@ -905,16 +892,7 @@ describe('server approved movement', () => {
     'keeps a prop swing playing after a stop acknowledgement delayed by %ims',
     (delay) => {
       const { movement, stop } = setup()
-      movement.request(3, 3, false)
-      movement.acceptPath(path())
-      vi.advanceTimersByTime(100)
-      const pose = movement.sample(() => false)!
-      const attackState = buildAttackState(
-        { ...pose, state: 'moving', movementMode: 'jog' },
-        1,
-        3
-      )
-      movement.clear()
+      const { attack: attackState } = attackWhileClickMoving(movement, 'jog', 3)
       expect(stop).toHaveBeenCalledExactlyOnceWith(2)
 
       vi.advanceTimersByTime(delay)
@@ -985,6 +963,7 @@ it.each([20, 150, 250])(
     vi.advanceTimersByTime(rtt)
     expect(movement.sample(() => false)).toBeNull()
     movement.acceptPath(path())
+    expect(movement.sample(() => false)?.position).toEqual({ x: 0, y: 0, z: 0 })
     vi.advanceTimersByTime(100)
     expect(movement.sample(() => false)?.position.x).toBeCloseTo(0.3)
     movement.clear()

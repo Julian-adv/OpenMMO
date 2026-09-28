@@ -1,25 +1,15 @@
 use super::*;
-use crate::state::tests::{test_player, test_state};
+use crate::state::tests::{bag_item, test_player, test_state};
 use onlinerpg_shared::ability::{AbilityId, AbilityRejectReason, AbilityTimer};
-use onlinerpg_shared::inventory::{EquipSlot, ItemInstance};
+use onlinerpg_shared::inventory::EquipSlot;
 use onlinerpg_shared::{CharacterClass, ServerMessage};
 use tokio::sync::mpsc;
 
 const CAST_WARD: &str = r#"{"type":"use_ability","ability":"guardian_ward"}"#;
 
 fn equip(state: &mut SharedState, slot: EquipSlot, item: &str) {
-    state.self_equipped.insert(
-        slot,
-        ItemInstance {
-            instance_id: if slot == EquipSlot::MainHand { 1 } else { 2 },
-            item_def_id: item.into(),
-            quantity: 1,
-            enchant: 0,
-            cape_color: None,
-            cape_texture: None,
-            locked: false,
-        },
-    );
+    let id = if slot == EquipSlot::MainHand { 1 } else { 2 };
+    state.self_equipped.insert(slot, bag_item(id, item, 1));
 }
 
 fn knight_state() -> (SharedState, mpsc::Receiver<ClientMessage>) {

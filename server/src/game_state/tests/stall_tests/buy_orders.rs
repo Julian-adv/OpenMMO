@@ -167,15 +167,8 @@ async fn concurrent_sellers_cannot_overfill_the_last_unit() {
     let (m, id, order) = setup("stall_orders_race", 1000, "apple", 1, 100).await;
     let g = &m.game_state;
     let account = m.auth.login_npc("npc_stall_orders_race").unwrap();
-    let record = create_test_character(&m.auth, &account, "Third");
+    add_db_player(g, &m.auth, &account, "Third", 101.0, 50.0, 0).await;
     let third = pid("Third");
-    g.add_player(make_player("Third", 101.0, 50.0)).await;
-    g.register_player_character(&third, record.id, 0, attrs_with_cha(12), 0, None)
-        .await;
-    g.inventories
-        .write()
-        .await
-        .insert(third, PlayerInventory::default());
     give(g, &m.customer, bag_item(2, "apple", 1)).await;
     give(g, &third, bag_item(3, "apple", 1)).await;
     tokio::join!(

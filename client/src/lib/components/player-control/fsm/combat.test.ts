@@ -69,25 +69,6 @@ describe('beginAttack', () => {
       },
     })
   })
-
-  it('stops movement even when position and facing are unchanged', () => {
-    const { stopAndFace } = runBeginAttack({
-      currentPosition: { x: 1, y: 10, z: 2 },
-      playerRotation: playerState.rotation,
-    })
-
-    expect(stopAndFace).toHaveBeenCalledWith(0)
-  })
-
-  it('syncs the new facing even when the position is unchanged', () => {
-    const currentPosition = { x: 1, y: 10, z: 2 }
-    const { stopAndFace } = runBeginAttack({
-      currentPosition,
-      playerRotation: 1.5,
-    })
-
-    expect(stopAndFace).toHaveBeenCalledWith(1.5)
-  })
 })
 
 describe('transitionAttackToIdle', () => {

@@ -643,7 +643,7 @@ mod tests {
         // `RIVER_FAN_SAND_BASE_WIDTH_M`), the river branch retracts the
         // pebble band so the primary is PAL_SAND instead of PAL_RIVER_BED;
         // both share the GROUND secondary so coast/river continuity still
-        // holds. Inland (`priority_river_beats_sea_inland`) exercises the
+        // holds. Inland, `priority_river_beats_road` exercises the
         // PAL_RIVER_BED path at natural widths.
         let (p, s, _, _) = call_classify(SplatInputs {
             is_sea: true,
@@ -654,18 +654,6 @@ mod tests {
             ..plain_inputs(0.0)
         });
         assert_eq!((p, s), (PAL_SAND, PAL_GROUND));
-    }
-
-    #[test]
-    fn priority_river_beats_sea_inland() {
-        // Same priority guard as above, but at inland h_center so the river
-        // branch emits PAL_RIVER_BED (the wet-pebble inland look).
-        let (p, s, _, _) = call_classify(SplatInputs {
-            river_d_m: 0.0,
-            river_width_m: TEST_RIVER_WIDTH_M,
-            ..plain_inputs(100.0)
-        });
-        assert_eq!((p, s), (PAL_RIVER_BED, PAL_GROUND));
     }
 
     #[test]

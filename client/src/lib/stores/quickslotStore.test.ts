@@ -74,6 +74,10 @@ describe('resolveQuickslot', () => {
     expect(plus3.enchant).toBe(3)
     expect(plus3.bagItem?.instance_id).toBe(2)
     expect(plus3.qty).toBe(1)
+    expect(quickslotAction(SHIELD, plus3)).toEqual({
+      kind: 'equip',
+      instanceId: 2,
+    })
     const plain = resolveQuickslot(
       { defId: 'shield', enchant: 0 },
       SHIELD,
@@ -116,6 +120,10 @@ describe('resolveQuickslot', () => {
     expect(resolved.enchant).toBe(4)
     expect(resolved.wornSlot).not.toBeNull()
     expect(resolved.bagItem).toBeUndefined()
+    expect(quickslotAction(SWORD, resolved)).toEqual({
+      kind: 'unequip',
+      slot: 'main_hand',
+    })
   })
 
   it('picks the bag copy closest to the bound level, not the strongest', () => {
@@ -178,32 +186,6 @@ describe('resolveQuickslot', () => {
 })
 
 describe('quickslotAction', () => {
-  it('unequips the worn copy even when a bag spare matches the bound level', () => {
-    const resolved = resolveQuickslot(
-      { defId: 'iron_sword', enchant: 3 },
-      SWORD,
-      { main_hand: item(9, 'iron_sword', 4) },
-      [item(5, 'iron_sword', 3)]
-    )
-    expect(quickslotAction(SWORD, resolved)).toEqual({
-      kind: 'unequip',
-      slot: 'main_hand',
-    })
-  })
-
-  it('equips exactly the bound instance (#148)', () => {
-    const resolved = resolveQuickslot(
-      { defId: 'shield', enchant: 3 },
-      SHIELD,
-      {},
-      [item(1, 'shield', 0), item(2, 'shield', 3)]
-    )
-    expect(quickslotAction(SHIELD, resolved)).toEqual({
-      kind: 'equip',
-      instanceId: 2,
-    })
-  })
-
   it('consumes from the bag and goes inert when nothing is carried', () => {
     const resolved = resolveQuickslot(
       { defId: 'healing_potion', enchant: 0 },
@@ -255,14 +237,6 @@ describe('assignQuickslot', () => {
 })
 
 describe('loadQuickslots', () => {
-  it('round-trips assignments through storage', () => {
-    loadQuickslots(7)
-    assignQuickslot(2, { defId: 'shield', enchant: 3 })
-    quickslots.set([])
-    loadQuickslots(7)
-    expect(get(quickslots)[2]).toEqual({ defId: 'shield', enchant: 3 })
-  })
-
   it('reads pre-enchant entries (plain def ids) as any-level bindings', () => {
     storage.set(
       'quickslots:7',

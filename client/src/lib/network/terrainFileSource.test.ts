@@ -1,15 +1,15 @@
-import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearTerrainManifests,
   loadTerrainFile,
   rememberTerrainFiles,
 } from './terrainFileSource'
+import { TerrainFileCache, type TerrainFiles } from './terrainFiles'
 import {
-  TerrainFileCache,
-  type TerrainFile,
-  type TerrainFiles,
-} from './terrainFiles'
+  landscapeBytes,
+  stubSha256Digest,
+  terrainFile as descriptor,
+} from './terrain-files.fixture'
 
 const empty = (): TerrainFiles => ({
   height: null,
@@ -18,25 +18,9 @@ const empty = (): TerrainFiles => ({
   grass: null,
   landscape: null,
 })
-const descriptor = (path: string, bytes: Uint8Array): TerrainFile => ({
-  path,
-  hash: createHash('sha256').update(bytes).digest('hex'),
-})
 
 beforeEach(() => {
-  vi.stubGlobal('crypto', {
-    subtle: {
-      digest: async (_algorithm: string, bytes: ArrayBuffer) => {
-        const digest = createHash('sha256')
-          .update(new Uint8Array(bytes))
-          .digest()
-        return digest.buffer.slice(
-          digest.byteOffset,
-          digest.byteOffset + digest.byteLength
-        )
-      },
-    },
-  })
+  stubSha256Digest()
 })
 afterEach(() => {
   clearTerrainManifests()
@@ -60,10 +44,7 @@ describe('terrain renderer file source', () => {
   })
 
   it('uses websocket manifests and shares landscaping bytes between visual layers', async () => {
-    const landscape = new Uint8Array(4 + 16384 + 512)
-    landscape.set([76, 78, 68, 49])
-    landscape[4] = 5
-    landscape[4 + 16384] = 128
+    const landscape = landscapeBytes()
     const files = empty()
     files.landscape = descriptor(
       'landscaping/r+00_+00/l_+0000_+0000.bin',

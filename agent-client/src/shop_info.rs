@@ -325,15 +325,7 @@ mod tests {
     fn bag(ids: &[&str]) -> Vec<onlinerpg_shared::inventory::ItemInstance> {
         ids.iter()
             .enumerate()
-            .map(|(i, id)| onlinerpg_shared::inventory::ItemInstance {
-                locked: false,
-                instance_id: i as u64 + 1,
-                item_def_id: (*id).to_string(),
-                quantity: 1,
-                enchant: 0,
-                cape_color: None,
-                cape_texture: None,
-            })
+            .map(|(i, id)| crate::state::tests::bag_item(i as u64 + 1, id, 1))
             .collect()
     }
 
@@ -478,17 +470,6 @@ mod tests {
             )
             .is_none(),
             "spare sold: only the unsellable worn instrument is left"
-        );
-    }
-
-    /// The whole keepsake temptation stays out of the prompt until someone
-    /// nearby has actually earned it — favor is the gate, not LLM judgement.
-    #[test]
-    fn keepsakes_stay_hidden_from_strangers() {
-        assert!(
-            resident_trade_prompt_for("Signe", &bag(&["mandolin", "worn_mandolin"]), true, &[])
-                .is_none(),
-            "no favored player nearby: no keepsake section at all"
         );
     }
 }

@@ -231,13 +231,7 @@ async fn upper_floor_furniture_uses_the_floor_surface_for_entry_and_exit() {
 #[tokio::test]
 async fn leaving_a_chair_to_play_an_instrument_keeps_the_new_performance() {
     let (game, id, _) = setup("interaction_instrument", &[chair()]).await;
-    game.inventories.write().await.insert(
-        id,
-        PlayerInventory {
-            bag: vec![bag_item(1, "worn_mandolin", 1)],
-            ..Default::default()
-        },
-    );
+    hand_instrument(&game, "sitter").await;
     game.set_player_interaction(&id, Some("chair".into()), Some(7))
         .await;
     let seated = game.players.read().await[&id].position;

@@ -1,26 +1,31 @@
 use super::*;
 
-#[tokio::test]
-async fn coin_pickup_records_only_the_successful_payout() {
-    let game = make_test_game_state("coin_pickup_metrics");
-    game.add_player(make_player("picker", 0.0, 0.0)).await;
-    game.add_player(make_player("rival", 0.0, 0.0)).await;
-    game.spawn_ground_item(GroundItem {
-        instance_id: 42,
-        item_def_id: COIN_PILE_ITEM_ID.into(),
+/// An item lying at (0.5, 0, 0), within reach of a picker at the origin.
+fn ground_item(instance_id: u64, item_def_id: &str, quantity: u32) -> GroundItem {
+    GroundItem {
+        instance_id,
+        item_def_id: item_def_id.to_string(),
         position: Position {
             x: 0.5,
             y: 0.0,
             z: 0.0,
         },
         floor_level: 0,
-        quantity: 1,
+        quantity,
         enchant: 0,
         dropped_by: None,
         cape_color: None,
         cape_texture: None,
-    })
-    .await;
+    }
+}
+
+#[tokio::test]
+async fn coin_pickup_records_only_the_successful_payout() {
+    let game = make_test_game_state("coin_pickup_metrics");
+    game.add_player(make_player("picker", 0.0, 0.0)).await;
+    game.add_player(make_player("rival", 0.0, 0.0)).await;
+    game.spawn_ground_item(ground_item(42, COIN_PILE_ITEM_ID, 1))
+        .await;
     assert!(game.pending_gold_sources.read().await.is_empty());
     let picker = pid("picker");
     let rival = pid("rival");
@@ -42,30 +47,13 @@ async fn pickup_broadcasts_the_pickup_animation() {
         let mut inventories = game_state.inventories.write().await;
         inventories.insert(pid("picker"), Default::default());
     }
-    {
-        let mut ground_items = game_state.ground_items.write().await;
-        ground_items.insert(
-            42,
-            ServerGroundItem {
-                item: GroundItem {
-                    instance_id: 42,
-                    item_def_id: "test_item".to_string(),
-                    position: Position {
-                        x: 0.5,
-                        y: 0.0,
-                        z: 0.0,
-                    },
-                    floor_level: 0,
-                    quantity: 1,
-                    enchant: 0,
-                    dropped_by: None,
-                    cape_color: None,
-                    cape_texture: None,
-                },
-                dropped_at_ms: 0,
-            },
-        );
-    }
+    game_state.ground_items.write().await.insert(
+        42,
+        ServerGroundItem {
+            item: ground_item(42, "test_item", 1),
+            dropped_at_ms: 0,
+        },
+    );
     let mut watcher_rx = game_state.register_direct_channel(&pid("watcher")).await;
     let mut picker_rx = game_state.register_direct_channel(&pid("picker")).await;
 
@@ -137,17 +125,7 @@ async fn monster_loot_is_withheld_until_the_killing_blow_lands() {
         z: 0.0,
     };
     game_state.spawn_kill_loot_after_impact(
-        Some(GroundItem {
-            instance_id: 7,
-            item_def_id: "test_item".to_string(),
-            position: drop_position,
-            floor_level: 0,
-            quantity: 1,
-            enchant: 0,
-            dropped_by: None,
-            cape_color: None,
-            cape_texture: None,
-        }),
+        Some(ground_item(7, "test_item", 1)),
         Vec::new(),
         drop_position,
         0,
@@ -267,30 +245,7 @@ async fn picked_up_stackable_joins_the_existing_stack() {
         inv.bag.push(bag_item(11, "apple", 1));
         inventories.insert(pid("picker"), inv);
     }
-    {
-        let mut ground_items = game_state.ground_items.write().await;
-        ground_items.insert(
-            42,
-            ServerGroundItem {
-                item: GroundItem {
-                    instance_id: 42,
-                    item_def_id: "apple".to_string(),
-                    position: Position {
-                        x: 0.5,
-                        y: 0.0,
-                        z: 0.0,
-                    },
-                    floor_level: 0,
-                    quantity: 1,
-                    enchant: 0,
-                    dropped_by: None,
-                    cape_color: None,
-                    cape_texture: None,
-                },
-                dropped_at_ms: 0,
-            },
-        );
-    }
+    place_apple_pile(&game_state, 42, 1).await;
 
     game_state.pickup_item(&pid("picker"), 42).await;
 
@@ -305,21 +260,7 @@ async fn place_apple_pile(game_state: &GameState, instance_id: u64, quantity: u3
     game_state.ground_items.write().await.insert(
         instance_id,
         ServerGroundItem {
-            item: GroundItem {
-                instance_id,
-                item_def_id: "apple".to_string(),
-                position: Position {
-                    x: 0.5,
-                    y: 0.0,
-                    z: 0.0,
-                },
-                floor_level: 0,
-                quantity,
-                enchant: 0,
-                dropped_by: None,
-                cape_color: None,
-                cape_texture: None,
-            },
+            item: ground_item(instance_id, "apple", quantity),
             dropped_at_ms: 0,
         },
     );

@@ -112,11 +112,11 @@ async fn bow_mark_does_not_bypass_attack_reach_ammo_or_line_of_sight() {
         .read()
         .await
         .marks_target(&pid("caster"), "target"));
-    messages(&mut rx);
+    drain(&mut rx);
     gs.sync_region_furniture(0, 0, &[table_placement(4.5, 0.5)]);
     gs.player_attack(&pid("caster"), "target".to_owned(), None)
         .await;
-    assert!(messages(&mut rx).iter().any(|m| matches!(
+    assert!(drain(&mut rx).iter().any(|m| matches!(
         m,
         ServerMessage::PlayerAttackRejected {
             reason: AttackRejectReason::OutOfRange,
@@ -133,7 +133,7 @@ async fn bow_mark_does_not_bypass_attack_reach_ammo_or_line_of_sight() {
         .x = 20.0;
     gs.player_attack(&pid("caster"), "target".to_owned(), None)
         .await;
-    assert!(messages(&mut rx).iter().any(|m| matches!(
+    assert!(drain(&mut rx).iter().any(|m| matches!(
         m,
         ServerMessage::PlayerAttackRejected {
             reason: AttackRejectReason::OutOfRange,
@@ -156,7 +156,7 @@ async fn bow_mark_does_not_bypass_attack_reach_ammo_or_line_of_sight() {
         .clear();
     gs.player_attack(&pid("caster"), "target".to_owned(), None)
         .await;
-    assert!(messages(&mut rx)
+    assert!(drain(&mut rx)
         .iter()
         .any(|m| matches!(m, ServerMessage::PlayerAttackRejected { .. })));
     assert_eq!(gs.monsters.read().await.get("target").unwrap().health, 1000);
@@ -178,7 +178,7 @@ async fn bow_mark_does_not_bypass_attack_reach_ammo_or_line_of_sight() {
         .enchant = -1000;
     gs.player_attack(&pid("caster"), "target".to_owned(), None)
         .await;
-    assert!(messages(&mut rx).iter().any(|m| matches!(
+    assert!(drain(&mut rx).iter().any(|m| matches!(
         m,
         ServerMessage::PlayerAttacked {
             hit: true,
@@ -193,7 +193,7 @@ async fn bow_mark_does_not_bypass_attack_reach_ammo_or_line_of_sight() {
     );
     gs.player_attack(&pid("caster"), "target".to_owned(), None)
         .await;
-    assert!(!messages(&mut rx)
+    assert!(!drain(&mut rx)
         .iter()
         .any(|m| matches!(m, ServerMessage::PlayerAttacked { .. })));
     assert_eq!(
@@ -245,8 +245,8 @@ async fn bow_mark_is_private_and_only_guarantees_its_casters_selected_target() {
     let mut party_rx = add_mark_player(&gs, "party", 2).await;
     party(&gs, "caster", "party").await;
     add_mark_target(&gs, "target", 5.0).await;
-    messages(&mut caster_rx);
-    messages(&mut party_rx);
+    drain(&mut caster_rx);
+    drain(&mut party_rx);
     gs.use_targeted_ability(&pid("caster"), MARK, Some("target"), None, None)
         .await;
     let state = gs.abilities.read().await;
@@ -254,13 +254,13 @@ async fn bow_mark_is_private_and_only_guarantees_its_casters_selected_target() {
     assert!(!state.marks_target(&pid("caster"), "other"));
     assert!(!state.marks_target(&pid("party"), "target"));
     drop(state);
-    let updates = messages(&mut caster_rx);
+    let updates = drain(&mut caster_rx);
     assert!(updates.iter().any(|m| matches!(m, ServerMessage::BowMarkUpdate { monster_id: Some(id), remaining_ms: 5000 } if id == "target")));
     assert!(updates.iter().any(|m| matches!(m, ServerMessage::BuffUpdate { buffs } if buffs.iter().any(|b| b.ability == MARK && b.remaining_ms == 5000))));
     assert!(!updates
         .iter()
         .any(|m| matches!(m, ServerMessage::AbilityUsed { .. })));
-    assert!(messages(&mut party_rx).is_empty());
+    assert!(drain(&mut party_rx).is_empty());
     tokio::time::advance(Duration::from_millis(4999)).await;
     assert!(gs
         .abilities
@@ -274,14 +274,14 @@ async fn bow_mark_is_private_and_only_guarantees_its_casters_selected_target() {
         .await
         .marks_target(&pid("caster"), "target"));
     gs.tick_buffs().await;
-    assert!(messages(&mut caster_rx).iter().any(|m| matches!(
+    assert!(drain(&mut caster_rx).iter().any(|m| matches!(
         m,
         ServerMessage::BowMarkUpdate {
             monster_id: None,
             remaining_ms: 0
         }
     )));
-    assert!(messages(&mut party_rx).is_empty());
+    assert!(drain(&mut party_rx).is_empty());
 }
 
 #[tokio::test(start_paused = true)]
@@ -294,7 +294,7 @@ async fn bow_mark_cooldown_is_atomic_and_survives_reconnect() {
         gs.use_targeted_ability(&caster, MARK, Some("target"), None, None),
         gs.use_targeted_ability(&caster, MARK, Some("target"), None, None)
     );
-    let updates = messages(&mut rx);
+    let updates = drain(&mut rx);
     assert_eq!(
         updates
             .iter()
@@ -398,7 +398,7 @@ async fn bow_mark_clears_when_target_dies_disappears_or_caster_changes_floor() {
         add_mark_target(&gs, "target", 5.0).await;
         gs.use_targeted_ability(&pid("caster"), MARK, Some("target"), None, None)
             .await;
-        messages(&mut rx);
+        drain(&mut rx);
         match change {
             "dead" => {
                 gs.monsters.write().await.get_mut("target").unwrap().state = MonsterState::Dead
@@ -424,7 +424,7 @@ async fn bow_mark_clears_when_target_dies_disappears_or_caster_changes_floor() {
             .read()
             .await
             .marks_target(&pid("caster"), "target"));
-        assert!(messages(&mut rx).iter().any(|m| matches!(
+        assert!(drain(&mut rx).iter().any(|m| matches!(
             m,
             ServerMessage::BowMarkUpdate {
                 monster_id: None,
@@ -465,7 +465,7 @@ async fn radiance_accepts_every_weapon_and_empty_hands_without_a_shield() {
         gs.use_ability(&pid(&name), RADIANCE).await;
         assert!(gs.get_all_players().await[&pid(&name)].radiance_on);
         assert_eq!(gs.effective_guard(&pid(&name)).await, guard);
-        assert!(messages(&mut rx).iter().any(|message| matches!(message, ServerMessage::BuffUpdate { buffs } if buffs.iter().any(|buff| buff.ability == RADIANCE && buff.remaining_ms > 119_000))));
+        assert!(drain(&mut rx).iter().any(|message| matches!(message, ServerMessage::BuffUpdate { buffs } if buffs.iter().any(|buff| buff.ability == RADIANCE && buff.remaining_ms > 119_000))));
     }
 }
 
@@ -478,7 +478,7 @@ async fn radiance_toggle_is_atomic_and_has_an_eight_hundred_ms_cooldown_both_way
         gs.use_ability(&caster, RADIANCE),
         gs.use_ability(&caster, RADIANCE)
     );
-    let updates = messages(&mut rx);
+    let updates = drain(&mut rx);
     assert_eq!(
         updates
             .iter()
@@ -495,7 +495,7 @@ async fn radiance_toggle_is_atomic_and_has_an_eight_hundred_ms_cooldown_both_way
     tokio::time::advance(Duration::from_millis(1)).await;
     gs.use_ability(&caster, RADIANCE).await;
     assert!(!gs.get_all_players().await[&caster].radiance_on);
-    assert!(!messages(&mut rx)
+    assert!(!drain(&mut rx)
         .iter()
         .any(|m| matches!(m, ServerMessage::AbilityUsed { .. })));
     tokio::time::advance(Duration::from_millis(799)).await;
@@ -504,7 +504,7 @@ async fn radiance_toggle_is_atomic_and_has_an_eight_hundred_ms_cooldown_both_way
     tokio::time::advance(Duration::from_millis(1)).await;
     gs.use_ability(&caster, RADIANCE).await;
     assert!(gs.get_all_players().await[&caster].radiance_on);
-    assert!(messages(&mut rx).iter().any(|m| matches!(m, ServerMessage::BuffUpdate { buffs } if buffs.iter().any(|b| b.ability == RADIANCE && b.remaining_ms == 120_000))));
+    assert!(drain(&mut rx).iter().any(|m| matches!(m, ServerMessage::BuffUpdate { buffs } if buffs.iter().any(|b| b.ability == RADIANCE && b.remaining_ms == 120_000))));
 }
 
 #[tokio::test(start_paused = true)]
@@ -517,12 +517,12 @@ async fn radiance_expires_at_two_minutes_without_clearing_a_later_ward() {
     tokio::time::advance(Duration::from_secs(39)).await;
     gs.tick_buffs().await;
     assert!(gs.get_all_players().await[&pid("caster")].radiance_on);
-    messages(&mut rx);
+    drain(&mut rx);
     tokio::time::advance(Duration::from_secs(1)).await;
     gs.tick_buffs().await;
     assert!(!gs.get_all_players().await[&pid("caster")].radiance_on);
     assert_eq!(gs.effective_guard(&pid("caster")).await, 34);
-    assert!(messages(&mut rx).iter().any(|m| matches!(m, ServerMessage::BuffUpdate { buffs } if buffs.len() == 1 && buffs[0].ability == WARD)));
+    assert!(drain(&mut rx).iter().any(|m| matches!(m, ServerMessage::BuffUpdate { buffs } if buffs.len() == 1 && buffs[0].ability == WARD)));
     gs.use_ability(&pid("caster"), RADIANCE).await;
     assert!(gs.get_all_players().await[&pid("caster")].radiance_on);
 }
@@ -533,12 +533,12 @@ async fn ward_expiry_does_not_remove_radiance() {
     let mut rx = add_ward_player(&gs, "caster", 0.0, 1).await;
     gs.use_ability(&pid("caster"), WARD).await;
     gs.use_ability(&pid("caster"), RADIANCE).await;
-    messages(&mut rx);
+    drain(&mut rx);
     tokio::time::advance(Duration::from_secs(60)).await;
     gs.tick_buffs().await;
     assert!(gs.get_all_players().await[&pid("caster")].radiance_on);
     assert_eq!(gs.effective_guard(&pid("caster")).await, 31);
-    assert!(messages(&mut rx).iter().any(|m| matches!(m, ServerMessage::BuffUpdate { buffs } if buffs.len() == 1 && buffs[0].ability == RADIANCE)));
+    assert!(drain(&mut rx).iter().any(|m| matches!(m, ServerMessage::BuffUpdate { buffs } if buffs.len() == 1 && buffs[0].ability == RADIANCE)));
 }
 
 #[tokio::test(start_paused = true)]
@@ -555,11 +555,11 @@ async fn radiance_replicates_light_and_cast_only_to_nearby_same_floor_players() 
         .unwrap()
         .floor_level = -1;
     gs.reconcile_view(&pid("downstairs")).await;
-    messages(&mut nearby);
-    messages(&mut downstairs);
-    messages(&mut far);
+    drain(&mut nearby);
+    drain(&mut downstairs);
+    drain(&mut far);
     gs.use_ability(&pid("caster"), RADIANCE).await;
-    let events = messages(&mut nearby);
+    let events = drain(&mut nearby);
     assert!(events.iter().any(|m| matches!(
         m,
         ServerMessage::PlayerRadianceToggled { enabled: true, .. }
@@ -568,7 +568,7 @@ async fn radiance_replicates_light_and_cast_only_to_nearby_same_floor_players() 
         .iter()
         .any(|m| matches!(m, ServerMessage::AbilityUsed { ability, .. } if *ability == RADIANCE)));
     for rx in [&mut downstairs, &mut far] {
-        assert!(!messages(rx).iter().any(|m| matches!(
+        assert!(!drain(rx).iter().any(|m| matches!(
             m,
             ServerMessage::PlayerRadianceToggled { .. } | ServerMessage::AbilityUsed { .. }
         )));
@@ -578,7 +578,7 @@ async fn radiance_replicates_light_and_cast_only_to_nearby_same_floor_players() 
     assert!(gs.get_all_players().await[&pid("caster")].radiance_on);
     tokio::time::advance(Duration::from_millis(800)).await;
     gs.use_ability(&pid("caster"), RADIANCE).await;
-    assert!(messages(&mut nearby).iter().any(|m| matches!(
+    assert!(drain(&mut nearby).iter().any(|m| matches!(
         m,
         ServerMessage::PlayerRadianceToggled { enabled: false, .. }
     )));
@@ -655,12 +655,8 @@ async fn add_ward_player(gs: &GameState, name: &str, x: f32, character: i64) -> 
     gs.register_direct_channel(&pid(name)).await
 }
 
-fn messages(rx: &mut DirectRx) -> Vec<ServerMessage> {
-    std::iter::from_fn(|| rx.try_recv().ok()).collect()
-}
-
 fn rejected(rx: &mut DirectRx, reason: AbilityRejectReason) {
-    assert!(messages(rx).iter().any(
+    assert!(drain(rx).iter().any(
         |m| matches!(m, ServerMessage::AbilityRejected { reason: actual, .. } if *actual == reason)
     ));
 }
@@ -688,7 +684,7 @@ async fn ward_spends_two_mana_and_syncs_and_saves_the_new_state() {
             gs.get_player_save_data(&id).await.unwrap().mana,
             Some(before - 2)
         );
-        let updates = messages(&mut rx);
+        let updates = drain(&mut rx);
         assert!(updates.iter().any(|message| matches!(message,
             ServerMessage::ManaUpdate { mana, max_mana: 15 } if *mana == before - 2)));
         assert!(!updates
@@ -733,11 +729,11 @@ async fn ward_cost_is_unaffected_by_activity_drain_modifiers() {
         .bag
         .push(bag_item(3, "silver_necklace", 1));
     gs.equip_item(&id, 3).await;
-    messages(&mut rx);
+    drain(&mut rx);
     gs.use_ability(&id, WARD).await;
     assert_eq!(gs.mana.read().await[&id].mana, 13);
     assert_eq!(gs.hunger_satiation(&id).await, Some(SATIATION_START));
-    assert!(messages(&mut rx).iter().any(|message| matches!(message,
+    assert!(drain(&mut rx).iter().any(|message| matches!(message,
         ServerMessage::AbilityUsed { ability, .. } if *ability == WARD)));
 }
 
@@ -754,7 +750,7 @@ async fn ward_rejects_other_classes_without_buff_or_cooldown() {
     ] {
         gs.players.write().await.get_mut(&id).unwrap().class = class;
         gs.use_targeted_ability(&id, WARD, None, None, None).await;
-        let responses = messages(&mut rx);
+        let responses = drain(&mut rx);
         assert!(responses.iter().any(|message| matches!(message,
             ServerMessage::AbilityRejected { ability, reason: AbilityRejectReason::Unavailable }
                 if *ability == WARD)));
@@ -772,7 +768,7 @@ async fn ward_rejects_other_classes_without_buff_or_cooldown() {
     gs.players.write().await.get_mut(&id).unwrap().class = CharacterClass::Knight;
     gs.use_targeted_ability(&id, WARD, None, None, None).await;
     assert_eq!(gs.effective_guard(&id).await, 34);
-    assert!(messages(&mut rx).iter().any(|message| matches!(message,
+    assert!(drain(&mut rx).iter().any(|message| matches!(message,
         ServerMessage::AbilityUsed { ability, .. } if *ability == WARD)));
 }
 
@@ -806,7 +802,7 @@ async fn ward_checks_weapon_classification_and_off_hand_armor_type() {
         gs.use_ability(&pid(&name), WARD).await;
         if allowed {
             assert_eq!(gs.effective_guard(&pid(&name)).await, before + before / 10);
-            assert!(messages(&mut rx)
+            assert!(drain(&mut rx)
                 .iter()
                 .any(|m| matches!(m, ServerMessage::AbilityUsed { .. })));
         } else {
@@ -849,7 +845,7 @@ async fn ward_affects_caster_and_living_party_members_within_twenty_meters_on_sa
     }
     gs.reconcile_view(&pid("downstairs")).await;
     for rx in &mut receivers {
-        messages(rx);
+        drain(rx);
     }
     gs.use_ability(&pid("caster"), WARD).await;
     for name in ["caster", "edge"] {
@@ -857,16 +853,16 @@ async fn ward_affects_caster_and_living_party_members_within_twenty_meters_on_sa
     }
     assert_eq!(gs.mana.read().await[&pid("caster")].mana, 13);
     assert_eq!(gs.mana.read().await[&pid("edge")].mana, 15);
-    assert!(!messages(&mut receivers[1])
+    assert!(!drain(&mut receivers[1])
         .iter()
         .any(|message| matches!(message, ServerMessage::ManaUpdate { .. })));
     for name in ["outside", "downstairs", "dead", "stranger"] {
         assert_eq!(gs.effective_guard(&pid(name)).await, 31);
     }
-    assert!(!messages(&mut receivers[3])
+    assert!(!drain(&mut receivers[3])
         .iter()
         .any(|m| matches!(m, ServerMessage::AbilityUsed { .. })));
-    let cast = messages(&mut receivers[0]);
+    let cast = drain(&mut receivers[0]);
     assert!(cast.iter().any(|m| matches!(m, ServerMessage::AbilityUsed { targets, .. } if targets.len() == 2 && targets.contains(&pid("edge")))));
 }
 
@@ -878,11 +874,11 @@ async fn ward_expires_at_sixty_seconds_and_restores_reported_guard() {
     assert_eq!(gs.effective_guard(&pid("caster")).await, 34);
     tokio::time::advance(Duration::from_secs(59)).await;
     assert_eq!(gs.effective_guard(&pid("caster")).await, 34);
-    messages(&mut rx);
+    drain(&mut rx);
     tokio::time::advance(Duration::from_secs(1)).await;
     assert_eq!(gs.effective_guard(&pid("caster")).await, 31);
     gs.tick_buffs().await;
-    let updates = messages(&mut rx);
+    let updates = drain(&mut rx);
     assert!(updates
         .iter()
         .any(|m| matches!(m, ServerMessage::BuffUpdate { buffs } if buffs.is_empty())));
@@ -902,7 +898,7 @@ async fn ward_cooldown_is_atomic_and_recast_refreshes_without_stacking() {
         gs.use_ability(&caster, WARD),
         gs.tick_regeneration()
     );
-    let casts = messages(&mut rx);
+    let casts = drain(&mut rx);
     assert_eq!(gs.mana.read().await[&caster].mana, 13);
     assert_eq!(
         casts
@@ -1014,7 +1010,7 @@ async fn examine(gs: &GameState, monster: Option<&str>, player: Option<PlayerId>
 }
 
 fn inspection(rx: &mut DirectRx) -> InspectionResult {
-    messages(rx)
+    drain(rx)
         .into_iter()
         .find_map(|m| match m {
             ServerMessage::InspectionResult { inspection } => Some(inspection),
@@ -1024,7 +1020,7 @@ fn inspection(rx: &mut DirectRx) -> InspectionResult {
 }
 
 fn inspection_rejected(rx: &mut DirectRx, reason: AbilityRejectReason) {
-    let updates = messages(rx);
+    let updates = drain(rx);
     assert!(!updates
         .iter()
         .any(|m| matches!(m, ServerMessage::InspectionResult { .. })));
@@ -1054,8 +1050,8 @@ async fn auscultation_reports_live_player_stats_and_only_equipped_items_privatel
         .bag
         .push(bag_item(99, "gold_ring", 1));
     gs.use_ability(&target_id, WARD).await;
-    messages(&mut target_rx);
-    messages(&mut rx);
+    drain(&mut target_rx);
+    drain(&mut rx);
     examine(&gs, None, Some(target_id)).await;
     let result = inspection(&mut rx);
     assert_eq!(
@@ -1076,7 +1072,7 @@ async fn auscultation_reports_live_player_stats_and_only_equipped_items_privatel
         .any(|item| item.slot == EquipSlot::OffHand
             && item.item_def_id == "raven_shield"
             && item.enchant == 9));
-    assert!(messages(&mut target_rx).is_empty());
+    assert!(drain(&mut target_rx).is_empty());
     assert_eq!(
         gs.inventories.read().await[&pid("examiner")].equipped[&EquipSlot::Neck].quantity,
         1
@@ -1113,8 +1109,8 @@ async fn auscultation_can_examine_signe_without_interrupting_her_performance() {
         .push(bag_item(99, "worn_mandolin", 1));
     gs.start_live_instrument(&signe).await;
     assert!(gs.live_instrument_players.read().await.contains(&signe));
-    messages(&mut rx);
-    messages(&mut signe_rx);
+    drain(&mut rx);
+    drain(&mut signe_rx);
 
     examine(&gs, None, Some(signe)).await;
 
@@ -1126,7 +1122,7 @@ async fn auscultation_can_examine_signe_without_interrupting_her_performance() {
         Some(onlinerpg_shared::messages::MUSIC_EMOTE)
     );
     assert!(gs.live_instrument_players.read().await.contains(&signe));
-    assert!(messages(&mut signe_rx).is_empty());
+    assert!(drain(&mut signe_rx).is_empty());
 }
 
 #[tokio::test(start_paused = true)]
@@ -1159,7 +1155,7 @@ async fn auscultation_preserves_seated_and_resting_player_poses() {
             .y = 5.0;
         gs.set_player_interaction(&target, Some(kind.to_owned()), Some(39))
             .await;
-        messages(&mut rx);
+        drain(&mut rx);
 
         examine(&gs, None, Some(target)).await;
 
@@ -1214,15 +1210,15 @@ async fn auscultation_requires_neck_equipment_even_if_carried_or_removed_after_s
     let mut rx = add_examiner(&gs).await;
     let _target_rx = add_ward_player(&gs, "target", 1.0, 2).await;
     gs.unequip_item(&pid("examiner"), EquipSlot::Neck).await;
-    messages(&mut rx);
+    drain(&mut rx);
     examine(&gs, None, Some(pid("target"))).await;
     inspection_rejected(&mut rx, AbilityRejectReason::Equipment);
     gs.equip_item(&pid("examiner"), 4).await;
-    messages(&mut rx);
+    drain(&mut rx);
     examine(&gs, None, Some(pid("target"))).await;
     inspection(&mut rx);
     gs.unequip_item(&pid("examiner"), EquipSlot::Neck).await;
-    messages(&mut rx);
+    drain(&mut rx);
     examine(&gs, None, Some(pid("target"))).await;
     inspection_rejected(&mut rx, AbilityRejectReason::Equipment);
 }
@@ -1347,7 +1343,7 @@ async fn auscultation_serializes_simultaneous_casts_and_releases_cooldown_after_
         examine(&gs, None, Some(pid("target"))),
         examine(&gs, None, Some(pid("target")))
     );
-    let updates = messages(&mut rx);
+    let updates = drain(&mut rx);
     assert_eq!(
         updates
             .iter()

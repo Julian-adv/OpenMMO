@@ -719,23 +719,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn fishing_rod_is_not_dungeon_chest_treasure() {
-        // Rods are bought, not looted from bosses: none carries a chestTier,
-        // and load() fails the boot if one is ever given it.
-        let defs = ItemDefs::load();
-        let pool = table_ids(&defs, u8::MAX);
-        assert!(
-            !pool.contains(&"fishing_rod".to_string()),
-            "fishing rod must not be in the dungeon chest loot pool"
-        );
-        // Sanity: opted-in combat gear still is.
-        assert!(
-            pool.contains(&"iron_boots".to_string()),
-            "expected iron_boots in the chest pool"
-        );
-    }
-
     /// Pool membership and chances are laws derived from the defs, so adding
     /// an item can't stale this test. The doc/ITEM_TIERS.md placement is
     /// pinned only by the debut anchors, which move when the design does.

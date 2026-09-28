@@ -5,15 +5,7 @@ use super::*;
 #[test]
 fn selling_off_a_stack_leaves_the_rest_of_it_reachable() {
     let (mut s, _rx) = test_state();
-    s.self_bag = vec![onlinerpg_shared::inventory::ItemInstance {
-        locked: false,
-        instance_id: 7,
-        item_def_id: "healing_potion".to_string(),
-        quantity: 3,
-        enchant: 0,
-        cape_color: None,
-        cape_texture: None,
-    }];
+    s.self_bag = vec![bag_item(7, "healing_potion", 3)];
 
     let mut spent: HashMap<u64, u32> = HashMap::new();
     for unit in 1..=3 {
@@ -42,26 +34,7 @@ fn selling_off_a_stack_leaves_the_rest_of_it_reachable() {
 #[test]
 fn fragmented_stacks_are_gathered_across_every_instance() {
     let (mut s, _rx) = test_state();
-    s.self_bag = vec![
-        onlinerpg_shared::inventory::ItemInstance {
-            locked: false,
-            instance_id: 1,
-            item_def_id: "old_boot".to_string(),
-            quantity: 1,
-            enchant: 0,
-            cape_color: None,
-            cape_texture: None,
-        },
-        onlinerpg_shared::inventory::ItemInstance {
-            locked: false,
-            instance_id: 2,
-            item_def_id: "old_boot".to_string(),
-            quantity: 1,
-            enchant: 0,
-            cape_color: None,
-            cape_texture: None,
-        },
-    ];
+    s.self_bag = vec![bag_item(1, "old_boot", 1), bag_item(2, "old_boot", 1)];
 
     let CarriedBagCopies::InBag { def_id, copies } = s
         .find_carried_bag_copies("old_boot", &HashMap::new())
@@ -80,15 +53,7 @@ fn worn_only_item_is_not_a_bag_copy() {
     let (mut s, _rx) = test_state();
     s.self_equipped.insert(
         onlinerpg_shared::inventory::EquipSlot::MainHand,
-        onlinerpg_shared::inventory::ItemInstance {
-            locked: false,
-            instance_id: 9,
-            item_def_id: "iron_sword".to_string(),
-            quantity: 1,
-            enchant: 0,
-            cape_color: None,
-            cape_texture: None,
-        },
+        bag_item(9, "iron_sword", 1),
     );
 
     let CarriedBagCopies::WornOnly { def_id } = s

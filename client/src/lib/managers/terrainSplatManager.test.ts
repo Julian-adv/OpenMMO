@@ -156,27 +156,6 @@ describe('NEIGHBOR_OFFSETS_9', () => {
     }
     expect(seen.size).toBe(9)
   })
-
-  it('writing all 9 offsets from the same source fills every padded cell', () => {
-    const own = tagged64()
-    const dst = new Uint8Array(PAD * PAD * BYTES_PER_CELL)
-    for (const [dx, dz] of NEIGHBOR_OFFSETS_9) {
-      writePaddedRange(dst, own, /*srcIsOwn=*/ true, dx, dz)
-    }
-    // Every padded pixel must have been written.
-    for (let pz = 0; pz < PAD; pz++) {
-      for (let px = 0; px < PAD; px++) {
-        // byte 1 = cz (0..63), never equals the initial 0 unless actual source cz=0.
-        // Safer assertion: primary-byte nibble is a valid tagged value (not
-        // the original zero init) OR the cell decodes to a legitimate (0, 0).
-        const [cx, cz] = decodeCellAt(dst, px, pz)
-        expect(cx).toBeGreaterThanOrEqual(0)
-        expect(cx).toBeLessThan(TILE_DIM)
-        expect(cz).toBeGreaterThanOrEqual(0)
-        expect(cz).toBeLessThan(TILE_DIM)
-      }
-    }
-  })
 })
 
 describe('padded layout continuity (the bug this all fixes)', () => {

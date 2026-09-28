@@ -39,7 +39,27 @@ function stubCtx() {
   return { ctx: ctx as unknown as CanvasRenderingContext2D, lines }
 }
 
+function recordFills() {
+  const rects: number[][] = []
+  const fills: string[] = []
+  const ctx = {
+    save() {},
+    restore() {},
+    fillStyle: '',
+    fillRect(x: number, y: number, w: number, h: number) {
+      rects.push([x, y, w, h])
+      fills.push(ctx.fillStyle)
+    },
+  }
+  return { ctx: ctx as unknown as CanvasRenderingContext2D, rects, fills }
+}
+
 const transform = { centerX: 0, viewLeft: 0, viewTop: 0, scale: 1 }
+const ownedPlots = [
+  { rx: 0, rz: 0, index: 0, ownerName: 'Alice' },
+  { rx: 0, rz: 0, index: 1, ownerName: 'Bob' },
+  { rx: 1, rz: 0, index: 0, ownerName: 'Alice' },
+]
 
 describe('drawLandPlotGrid', () => {
   it('draws 32 m plot lines', () => {
@@ -64,15 +84,7 @@ describe('drawLandPlotGrid', () => {
   })
 
   it('fills graded plots at their world origin', () => {
-    const rects: number[][] = []
-    const ctx = {
-      save() {},
-      restore() {},
-      fillStyle: '',
-      fillRect(x: number, y: number, w: number, h: number) {
-        rects.push([x, y, w, h])
-      },
-    } as unknown as CanvasRenderingContext2D
+    const { ctx, rects } = recordFills()
     const grades = new Uint8Array(REGION_PLOTS).fill(LandGrade.Homestead)
     const addr = plotAddress(1000, 500)
     grades[addr.index] = LandGrade.Crown
@@ -87,26 +99,14 @@ describe('drawLandPlotGrid', () => {
   })
 
   it('prioritizes owner colors over grades, including before grades load', () => {
-    const fills: string[] = []
-    const ctx = {
-      save() {},
-      restore() {},
-      fillStyle: '',
-      fillRect() {
-        fills.push(this.fillStyle)
-      },
-    }
+    const { ctx, fills } = recordFills()
     const grades = new Uint8Array(REGION_PLOTS).fill(LandGrade.Homestead)
     grades[0] = LandGrade.Crown
     grades[1] = LandGrade.Reserved
     grades[2] = LandGrade.Crown
-    const ownerColors = buildLandOwnerColors([
-      { rx: 0, rz: 0, index: 0, ownerName: 'Alice' },
-      { rx: 0, rz: 0, index: 1, ownerName: 'Bob' },
-      { rx: 1, rz: 0, index: 0, ownerName: 'Alice' },
-    ])
+    const ownerColors = buildLandOwnerColors(ownedPlots)
     drawLandPlotCells(
-      ctx as unknown as CanvasRenderingContext2D,
+      ctx,
       [
         {
           rx: 0,
@@ -132,23 +132,11 @@ describe('drawLandPlotGrid', () => {
   })
 
   it('preserves owner colors when the viewport contains only part of their land', () => {
-    const ownerColors = buildLandOwnerColors([
-      { rx: 0, rz: 0, index: 0, ownerName: 'Alice' },
-      { rx: 0, rz: 0, index: 1, ownerName: 'Bob' },
-      { rx: 1, rz: 0, index: 0, ownerName: 'Alice' },
-    ])
-    const fills: string[] = []
-    const ctx = {
-      save() {},
-      restore() {},
-      fillStyle: '',
-      fillRect() {
-        fills.push(this.fillStyle)
-      },
-    }
+    const ownerColors = buildLandOwnerColors(ownedPlots)
+    const { ctx, fills } = recordFills()
     for (const rx of [0, 1]) {
       drawLandPlotCells(
-        ctx as unknown as CanvasRenderingContext2D,
+        ctx,
         [{ rx, rz: 0, grades: null, owners: new Map([[0, 'Alice']]) }],
         { ...transform, centerX: rx * 1024 },
         ownerColors

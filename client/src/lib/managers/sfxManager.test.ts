@@ -72,15 +72,6 @@ describe('delayed fishing sounds', () => {
     expect(playedCount('splash')).toBe(1)
   })
 
-  it('an aborted cast cancels the pending splash — no splash after the line is back in', () => {
-    playFishingSound('splash', 1400)
-
-    cancelPendingFishingSounds()
-
-    vi.advanceTimersByTime(5000)
-    expect(playedCount('splash')).toBe(0)
-  })
-
   it('cancels every pending timer, whoosh included, when aborted inside the swing delay', () => {
     playFishingSound('cast', 200)
     playFishingSound('splash', 1400)

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { estateChests } from '../stores/estateFurnitureStore'
 import type { ObjectPlacement } from '../stores/editorStore'
 import type { HouseData } from '../types/housing'
+import { makeRoom } from '../utils/house-room.fixture'
 
 const { apiFetch } = vi.hoisted(() => ({ apiFetch: vi.fn() }))
 
@@ -188,24 +189,7 @@ const house = {
   id: 'house',
   ownerId: 'local',
   origin: { x: 10, y: 2, z: 20 },
-  rooms: [
-    {
-      roomType: 'normal',
-      localX: 0,
-      localZ: 0,
-      sizeX: 4,
-      sizeZ: 6,
-      floorLevel: 0,
-    },
-    {
-      roomType: 'normal',
-      localX: 0,
-      localZ: 0,
-      sizeX: 4,
-      sizeZ: 6,
-      floorLevel: 1,
-    },
-  ],
+  rooms: [makeRoom({ sizeZ: 6 }), makeRoom({ sizeZ: 6, floorLevel: 1 })],
 } as HouseData
 
 function placement(x: number, z: number, floorLevel: number): ObjectPlacement {

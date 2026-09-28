@@ -1,6 +1,5 @@
 use super::*;
 use onlinerpg_shared::landscaping::{LandscapingStroke, TOOLBOX_ITEM};
-use onlinerpg_terrain::land::{plot_addr, LandGrade, REGION_PLOTS};
 
 #[tokio::test]
 async fn one_failed_tile_does_not_skip_other_changed_tiles_and_retries_without_movement() {
@@ -38,46 +37,17 @@ async fn gardener(
     name: &str,
 ) -> (i64, DirectRx) {
     let account = auth.login_google(name).unwrap();
-    let character = create_test_character(auth, &account, name);
-    let mut player = make_player(name, 1.5, 1.5);
-    player.position.y = 5.05;
-    player.level = 10;
-    game.add_player(player).await;
-    game.register_player_character(
-        &pid(name),
-        character.id,
-        onlinerpg_shared::xp::xp_for_level(10),
-        attrs_with_cha(12),
-        0,
-        None,
-    )
-    .await;
-    game.inventories.write().await.insert(
-        pid(name),
-        PlayerInventory {
-            bag: vec![
-                bag_item(1, "land_deed", 1),
-                bag_item(2, TOOLBOX_ITEM, 1),
-                bag_item(3, "landscaping_palette_sand", 2),
-            ],
-            ..Default::default()
-        },
-    );
-    (character.id, game.register_direct_channel(&pid(name)).await)
+    let bag = vec![
+        bag_item(1, "land_deed", 1),
+        bag_item(2, TOOLBOX_ITEM, 1),
+        bag_item(3, "landscaping_palette_sand", 2),
+    ];
+    let character_id = estate_owner(game, auth, &account, name, pos3(1.5, 5.05, 1.5), bag).await;
+    (character_id, game.register_direct_channel(&pid(name)).await)
 }
 
 async fn claim(game: &GameState, auth: &crate::auth::AuthService) {
-    game.terrain_io
-        .write_land_grades(0, 0, &vec![LandGrade::Homestead as u8; REGION_PLOTS])
-        .await
-        .unwrap();
-    game.claim_land(
-        &pid("Gardener"),
-        1,
-        super::super::land::plot_key(plot_addr(1.5, 1.5)),
-        auth,
-    )
-    .await;
+    claim_plot_at(game, auth, "Gardener", 1.5, 1.5).await;
     assert_eq!(auth.owned_land_plots().unwrap().len(), 1);
 }
 

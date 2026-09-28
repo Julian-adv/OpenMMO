@@ -120,22 +120,9 @@ impl CampfireMeal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::tests::{test_player, test_state};
+    use crate::state::tests::{bag_item, test_player, test_state};
     use onlinerpg_shared::hunger::Campfire;
-    use onlinerpg_shared::inventory::ItemInstance;
     use onlinerpg_shared::ServerMessage;
-
-    fn item(instance_id: u64, id: &str) -> ItemInstance {
-        ItemInstance {
-            instance_id,
-            item_def_id: id.into(),
-            quantity: 1,
-            enchant: 0,
-            cape_color: None,
-            cape_texture: None,
-            locked: false,
-        }
-    }
 
     fn breakfast() -> (
         SharedState,
@@ -173,7 +160,10 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn breakfast_lights_a_fire_cooks_a_cheap_fish_and_eats_only_once() {
         let (mut state, mut rx, entry) = breakfast();
-        state.self_bag = vec![item(1, "trophy_raw_minnow"), item(2, "raw_minnow")];
+        state.self_bag = vec![
+            bag_item(1, "trophy_raw_minnow", 1),
+            bag_item(2, "raw_minnow", 1),
+        ];
         let mut meal = CampfireMeal::default();
         meal.tick(&mut state, &entry).await.unwrap();
         assert!(
@@ -194,7 +184,7 @@ mod tests {
             "wait for the server to cook the fish"
         );
 
-        state.self_bag[1] = item(3, "grilled_minnow");
+        state.self_bag[1] = bag_item(3, "grilled_minnow", 1);
         tokio::time::advance(Duration::from_secs(10)).await;
         meal.tick(&mut state, &entry).await.unwrap();
         assert!(matches!(
@@ -217,7 +207,7 @@ mod tests {
         let mut meal = CampfireMeal::default();
         meal.tick(&mut state, &entry).await.unwrap();
         assert!(rx.try_recv().is_err());
-        let mut fish = item(4, "raw_perch");
+        let mut fish = bag_item(4, "raw_perch", 1);
         fish.locked = true;
         state.self_bag.push(fish);
         tokio::time::advance(Duration::from_secs(10)).await;

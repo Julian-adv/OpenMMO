@@ -1,16 +1,6 @@
 use super::*;
 use onlinerpg_shared::messages::{InstrumentNoteEvent, MUSIC_EMOTE};
 
-async fn hand_instrument(game_state: &GameState, player: &str) {
-    game_state.inventories.write().await.insert(
-        pid(player),
-        PlayerInventory {
-            bag: vec![bag_item(1, "worn_mandolin", 1)],
-            ..Default::default()
-        },
-    );
-}
-
 fn notes() -> Vec<InstrumentNoteEvent> {
     vec![
         InstrumentNoteEvent {

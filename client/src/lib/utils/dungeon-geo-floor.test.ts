@@ -8,16 +8,11 @@ import {
   DUNGEON_FLOOR_TEXTURE_IDX,
   DUNGEON_WALL_TEXTURE_IDX,
 } from './dungeon-geo-constants'
+import { carveDungeon, dungeonCtx } from './dungeon-layout.fixture'
 
 vi.mock('./dungeon-geo-doors', () => ({ buildInteriorDoor: vi.fn() }))
 
-const ctx = {
-  grid: 20,
-  wallHeight: 3,
-  floorHeight: 4,
-  shaftW: 2,
-  shaftLen: 8,
-}
+const ctx = dungeonCtx(20)
 let group: Group
 afterEach(() => {
   group?.traverse((object) => {
@@ -26,16 +21,11 @@ afterEach(() => {
 })
 
 function buildWalls(corridors: DungeonRoom[], rooms: DungeonRoom[] = []) {
-  const carved = Array<boolean>(ctx.grid ** 2).fill(false)
-  for (const rect of [...rooms, ...corridors])
-    for (let z = rect.z; z < rect.z + rect.d; z++)
-      for (let x = rect.x; x < rect.x + rect.w; x++)
-        carved[x + z * ctx.grid] = true
   const floor = buildDungeonFloorGroup(
     {
       depth: 1,
       rooms,
-      carved,
+      carved: carveDungeon(ctx, [...rooms, ...corridors]),
       upShaft: { x: 16, z: 12, alongZ: true, reversed: false },
       spawns: [],
       props: [],

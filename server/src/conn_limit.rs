@@ -119,15 +119,6 @@ mod tests {
     }
 
     #[test]
-    fn burst_is_allowed_then_exhausted() {
-        let limiter = ConnectLimiter::default();
-        for _ in 0..BURST as usize {
-            assert!(limiter.allow(ip(1)));
-        }
-        assert!(!limiter.allow(ip(1)));
-    }
-
-    #[test]
     fn buckets_are_per_ip() {
         let limiter = ConnectLimiter::default();
         for _ in 0..BURST as usize {

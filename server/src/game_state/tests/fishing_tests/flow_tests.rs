@@ -49,13 +49,13 @@ async fn fight_to_the_end_with_auth(
     panic!("the fight never ended");
 }
 
-async fn hook_forced_fish(
+/// Waits out the running cast's bite, swaps in an ordinary `item_def_id`, and hooks it.
+pub(super) async fn hook_forced_fish(
     game_state: &GameState,
     id: &PlayerId,
     rx: &mut DirectRx,
     item_def_id: &str,
 ) {
-    game_state.start_fishing(id, water_target()).await;
     advance_until_bite(game_state, rx).await;
     {
         let mut sessions = game_state.fishing_sessions.write().await;
@@ -243,6 +243,7 @@ async fn landing_a_golden_sturgeon_earns_the_angler_title() {
     let (id, mut rx) = make_angler(&game_state, "angler_title").await;
     game_state.set_player_titles(&id, Vec::new()).await;
 
+    game_state.start_fishing(&id, water_target()).await;
     hook_forced_fish(&game_state, &id, &mut rx, "golden_sturgeon").await;
     let (outcome, msgs) = fight_to_the_end(&game_state, &id, &mut rx, auto_stance).await;
     assert!(matches!(outcome, FishingOutcome::Caught { .. }));
@@ -272,6 +273,7 @@ async fn golden_sturgeon_title_is_persisted_before_disconnect() {
         .await;
     game_state.set_player_titles(&id, Vec::new()).await;
 
+    game_state.start_fishing(&id, water_target()).await;
     hook_forced_fish(&game_state, &id, &mut rx, "golden_sturgeon").await;
     let (outcome, _) =
         fight_to_the_end_with_auth(&game_state, &id, &mut rx, auto_stance, Some(&auth)).await;

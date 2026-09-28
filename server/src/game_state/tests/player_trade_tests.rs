@@ -22,27 +22,10 @@ struct TradePair {
 async fn make_trade_pair(test_name: &str, a_gold: i64, b_gold: i64) -> TradePair {
     let auth = make_test_auth(test_name);
     let account = auth.login_npc(&format!("npc_{test_name}")).unwrap();
-    let a_record = create_test_character(&auth, &account, "Aldis");
-    let b_record = create_test_character(&auth, &account, "Bryn");
-
     let game_state = make_test_game_state(test_name);
+    let a_record = add_db_player(&game_state, &auth, &account, "Aldis", 10.0, 0.0, a_gold).await;
+    let b_record = add_db_player(&game_state, &auth, &account, "Bryn", 11.0, 0.0, b_gold).await;
     let (a, b) = (pid("Aldis"), pid("Bryn"));
-    for (id, name, x, record, gold) in [
-        ("Aldis", "Aldis", 10.0, &a_record, a_gold),
-        ("Bryn", "Bryn", 11.0, &b_record, b_gold),
-    ] {
-        let mut player = make_player(id, x, 0.0);
-        player.name = name.to_string();
-        game_state.add_player(player).await;
-        game_state
-            .register_player_character(&pid(id), record.id, 0, attrs_with_cha(12), gold, None)
-            .await;
-        game_state
-            .inventories
-            .write()
-            .await
-            .insert(pid(id), PlayerInventory::default());
-    }
     TradePair {
         game_state,
         auth,
@@ -52,17 +35,6 @@ async fn make_trade_pair(test_name: &str, a_gold: i64, b_gold: i64) -> TradePair
         b_record,
         account,
     }
-}
-
-async fn give(game_state: &GameState, player_id: &PlayerId, item: ItemInstance) {
-    game_state
-        .inventories
-        .write()
-        .await
-        .get_mut(player_id)
-        .unwrap()
-        .bag
-        .push(item);
 }
 
 async fn open_session(pair: &TradePair) {

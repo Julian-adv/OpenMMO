@@ -143,31 +143,6 @@ async fn cross_floor_dungeon_door_toggle_is_rejected() {
     );
 }
 
-#[tokio::test]
-async fn same_floor_dungeon_door_toggle_still_updates_state() {
-    let game_state = make_test_game_state("dungeon_door_same_floor");
-    let (entrance, depth, door) = first_dungeon_door(&game_state);
-    let (outside, _) = door_side_positions(&entrance, depth, &door, false);
-    let player_id = add_delver(&game_state, "delver", outside, depth).await;
-
-    assert_eq!(
-        game_state
-            .toggle_dungeon_door(&player_id, &entrance.id, depth, door.door_id)
-            .await,
-        Some(true)
-    );
-    assert!(game_state
-        .dungeon_open_doors(&entrance.id)
-        .await
-        .contains(&(depth, door.door_id)));
-    assert_eq!(
-        game_state
-            .toggle_dungeon_door(&player_id, &entrance.id, depth, door.door_id)
-            .await,
-        Some(false)
-    );
-}
-
 /// Reach is also what pins a toggle to the dungeon the player stands in — a
 /// door is only in reach from its own grid. One registry dungeon, so the
 /// cross-dungeon case has nothing to exercise directly.
@@ -384,7 +359,7 @@ async fn dungeon_door_toggle_delivery_uses_actual_door_positions_and_spaces() {
     assert!(far.try_recv().is_err());
 }
 
-/// the move through, toggling again reseals it.
+/// A shut door seals the crossing, opening it lets the move through, toggling again reseals it.
 #[tokio::test]
 async fn dungeon_door_blocks_movement_until_opened() {
     let game_state = make_test_game_state("dungeon_door_block");
@@ -416,6 +391,10 @@ async fn dungeon_door_blocks_movement_until_opened() {
             .await,
         Some(true)
     );
+    assert!(game_state
+        .dungeon_open_doors(&entrance.id)
+        .await
+        .contains(&(depth, door.door_id)));
     game_state
         .request_test_move(&player_id, go(to), false)
         .await;

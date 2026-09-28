@@ -5,14 +5,9 @@ import {
   dungeonPuddleRadius,
   generateDungeonPuddles,
 } from './dungeon-puddles'
+import { carveDungeon, dungeonCtx } from './dungeon-layout.fixture'
 
-const ctx = {
-  grid: 64,
-  wallHeight: 3,
-  floorHeight: 4,
-  shaftW: 2,
-  shaftLen: 8,
-}
+const ctx = dungeonCtx(64)
 
 function fixture(): DungeonFloorLayout {
   const rooms = [
@@ -21,16 +16,13 @@ function fixture(): DungeonFloorLayout {
     { x: 2, z: 40, w: 14, d: 14 },
     { x: 40, z: 40, w: 14, d: 14 },
   ]
-  const carved = Array<boolean>(ctx.grid ** 2).fill(false)
-  for (const r of [
+  const carved = carveDungeon(ctx, [
     ...rooms,
     { x: 8, z: 8, w: 39, d: 2 },
     { x: 8, z: 8, w: 2, d: 39 },
     { x: 8, z: 46, w: 39, d: 2 },
     { x: 46, z: 8, w: 2, d: 39 },
   ])
-    for (let z = r.z; z < r.z + r.d; z++)
-      for (let x = r.x; x < r.x + r.w; x++) carved[x + z * ctx.grid] = true
   return {
     depth: 1,
     rooms,

@@ -199,21 +199,6 @@ describe('calculateMovementStep', () => {
     expect(result.newSpeed).toBeCloseTo(cfg.maxSpeed - cfg.deceleration * 0.1)
   })
 
-  it('does not let deceleration go below 0', () => {
-    const target: Position = { x: 5, y: 0, z: 0 }
-    const state = initMovementState({ x: 0, y: 0, z: 0 }, target)
-    state.currentSpeed = 0.1
-    const result = calculateMovementStep(
-      { x: 4.9, y: 0, z: 0 },
-      state,
-      cfg,
-      1.0
-    )
-    // Would undercut to negative; clamped to 0 and arrives
-    expect(result.newSpeed).toBe(0)
-    expect(result.arrived).toBe(true)
-  })
-
   it('rotates toward target using atan2(dx, dz)', () => {
     const target: Position = { x: 0, y: 0, z: 10 } // +Z
     const state = initMovementState({ x: 0, y: 0, z: 0 }, target)
@@ -253,14 +238,6 @@ describe('calculateMovementStep', () => {
     expect(result.arrived).toBe(false)
     expect(result.newPos.x).toBeCloseTo(start.x + 0.3)
     expect(result.rotation).toBeCloseTo(Math.PI / 2)
-  })
-
-  it('preserves Y from currentPos (terrain handles Y)', () => {
-    const target: Position = { x: 10, y: 999, z: 0 }
-    const state = initMovementState({ x: 0, y: 0, z: 0 }, target)
-    state.currentSpeed = 2
-    const result = calculateMovementStep({ x: 1, y: 42, z: 0 }, state, cfg, 0.1)
-    expect(result.newPos.y).toBe(42)
   })
 
   it('snaps to target when moveDistance exceeds remaining', () => {

@@ -46,15 +46,9 @@ async fn zero_quantity_trade_batches_still_validate_the_trader() {
 #[tokio::test]
 async fn sell_items_batch_sells_partial_quantity() {
     let game_state = make_test_game_state("batch_sell_partial");
-    game_state
-        .add_player(make_npc("npc_rica", "Rica", 0.0, 0.0))
-        .await;
-    game_state.add_player(make_player("seller", 1.0, 0.0)).await;
-    game_state
-        .register_player_character(&pid("seller"), 1, 0, attrs_with_cha(10), 0, None)
-        .await;
+    let _rx = setup_haggle(&game_state, 10, 0).await;
     game_state.inventories.write().await.insert(
-        pid("seller"),
+        pid("buyer"),
         PlayerInventory {
             bag: vec![bag_item(7, "healing_potion", 5)],
             ..Default::default()
@@ -64,7 +58,7 @@ async fn sell_items_batch_sells_partial_quantity() {
     // Rica: 40% sell rate, healing_potion base 600 -> 240/unit.
     game_state
         .sell_items(
-            &pid("seller"),
+            &pid("buyer"),
             &pid("npc_rica"),
             vec![BagLineItem {
                 instance_id: 7,
@@ -73,10 +67,10 @@ async fn sell_items_batch_sells_partial_quantity() {
         )
         .await;
 
-    assert_eq!(game_state.get_player_gold(&pid("seller")).await, 720);
+    assert_eq!(game_state.get_player_gold(&pid("buyer")).await, 720);
     {
         let inventories = game_state.inventories.read().await;
-        let bag = &inventories[&pid("seller")].bag;
+        let bag = &inventories[&pid("buyer")].bag;
         assert_eq!(bag.len(), 1, "the remaining 2 units stay as one stack");
         assert_eq!(bag[0].quantity, 2);
     }
@@ -84,11 +78,11 @@ async fn sell_items_batch_sells_partial_quantity() {
     // Payouts ignore the index (still 240 at 150%) but never exceed the
     // cheapest possible buy: at 50%, 600 * 50% * 75% = 225.
     for (index, expected) in [(150, 240), (50, 225)] {
-        let before = game_state.get_player_gold(&pid("seller")).await;
+        let before = game_state.get_player_gold(&pid("buyer")).await;
         game_state.set_price_index_percent(index).await;
         game_state
             .sell_items(
-                &pid("seller"),
+                &pid("buyer"),
                 &pid("npc_rica"),
                 vec![BagLineItem {
                     instance_id: 7,
@@ -96,7 +90,7 @@ async fn sell_items_batch_sells_partial_quantity() {
                 }],
             )
             .await;
-        let after = game_state.get_player_gold(&pid("seller")).await;
+        let after = game_state.get_player_gold(&pid("buyer")).await;
         assert_eq!(after - before, expected, "index {index}");
     }
 }
@@ -104,26 +98,19 @@ async fn sell_items_batch_sells_partial_quantity() {
 #[tokio::test]
 async fn sell_items_batch_is_all_or_nothing_when_a_line_is_invalid() {
     let game_state = make_test_game_state("batch_sell_atomic");
-    game_state
-        .add_player(make_npc("npc_rica", "Rica", 0.0, 0.0))
-        .await;
-    game_state.add_player(make_player("seller", 1.0, 0.0)).await;
-    game_state
-        .register_player_character(&pid("seller"), 1, 0, attrs_with_cha(10), 0, None)
-        .await;
+    let (mut buyer_rx, _npc_rx) = setup_haggle(&game_state, 10, 0).await;
     game_state.inventories.write().await.insert(
-        pid("seller"),
+        pid("buyer"),
         PlayerInventory {
             bag: vec![bag_item(7, "healing_potion", 5)],
             ..Default::default()
         },
     );
-    let mut seller_rx = game_state.register_direct_channel(&pid("seller")).await;
 
     // Second line references an instance_id that doesn't exist in the bag.
     game_state
         .sell_items(
-            &pid("seller"),
+            &pid("buyer"),
             &pid("npc_rica"),
             vec![
                 BagLineItem {
@@ -139,17 +126,17 @@ async fn sell_items_batch_is_all_or_nothing_when_a_line_is_invalid() {
         .await;
 
     assert_eq!(
-        game_state.get_player_gold(&pid("seller")).await,
+        game_state.get_player_gold(&pid("buyer")).await,
         0,
         "no partial payout"
     );
     let inventories = game_state.inventories.read().await;
     assert_eq!(
-        inventories[&pid("seller")].bag[0].quantity,
+        inventories[&pid("buyer")].bag[0].quantity,
         5,
         "the valid line must not apply either"
     );
-    match seller_rx.try_recv() {
+    match buyer_rx.try_recv() {
         Ok(ServerMessage::TradeError { .. }) => {}
         other => panic!("Expected TradeError, got {:?}", other),
     }
@@ -239,13 +226,7 @@ async fn sell_items_batch_resident_is_all_or_nothing_on_insufficient_wallet() {
 #[tokio::test]
 async fn buy_items_batch_merges_stackables_and_splits_non_stackables() {
     let game_state = make_test_game_state("batch_buy");
-    game_state
-        .add_player(make_npc("npc_rica", "Rica", 0.0, 0.0))
-        .await;
-    game_state.add_player(make_player("buyer", 1.0, 0.0)).await;
-    game_state
-        .register_player_character(&pid("buyer"), 1, 0, attrs_with_cha(10), 10_000, None)
-        .await;
+    let _rx = setup_haggle(&game_state, 10, 10_000).await;
     game_state.inventories.write().await.insert(
         pid("buyer"),
         PlayerInventory {
@@ -813,19 +794,12 @@ async fn sell_items_batch_keeps_only_the_newest_buyback_entries() {
 #[tokio::test]
 async fn buy_items_batch_notifies_the_merchant_once_per_unit() {
     let game_state = make_test_game_state("batch_buy_notices");
-    game_state
-        .add_player(make_npc("npc_rica", "Rica", 0.0, 0.0))
-        .await;
-    game_state.add_player(make_player("buyer", 1.0, 0.0)).await;
-    game_state
-        .register_player_character(&pid("buyer"), 1, 0, attrs_with_cha(10), 10_000, None)
-        .await;
+    let (_buyer_rx, mut npc_rx) = setup_haggle(&game_state, 10, 10_000).await;
     game_state
         .inventories
         .write()
         .await
         .insert(pid("buyer"), PlayerInventory::default());
-    let mut npc_rx = game_state.register_direct_channel(&pid("npc_rica")).await;
 
     game_state
         .buy_items(

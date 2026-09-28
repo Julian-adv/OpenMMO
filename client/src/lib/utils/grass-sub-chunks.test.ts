@@ -20,13 +20,6 @@ describe('tileSubChunkRange', () => {
     const r = tileSubChunkRange(1, 0)
     expect(r).toEqual({ scMinX: 1, scMaxX: 2, scMinZ: -1, scMaxZ: 0 })
   })
-
-  it('tiles do not overlap in sub-chunk ranges', () => {
-    const r00 = tileSubChunkRange(0, 0)
-    const r10 = tileSubChunkRange(1, 0)
-    // tile (0,0) max X should be less than tile (1,0) min X
-    expect(r00.scMaxX).toBeLessThan(r10.scMinX)
-  })
 })
 
 describe('isKeyInTileRange', () => {

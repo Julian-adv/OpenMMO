@@ -5,15 +5,7 @@ async fn stall_offers_and_matching_bag_ids_survive_updates_and_clear_on_close() 
     let (mut state, mut rx) = test_state();
     state.self_player = Some(test_player(0.0, 0.0));
     state.self_player_id = Some(PlayerId::from(1));
-    state.self_bag = vec![onlinerpg_shared::inventory::ItemInstance {
-        instance_id: 91,
-        item_def_id: "scroll_of_enchant_weapon".into(),
-        quantity: 5,
-        enchant: 0,
-        locked: false,
-        cape_color: None,
-        cape_texture: None,
-    }];
+    state.self_bag = vec![bag_item(91, "scroll_of_enchant_weapon", 5)];
     let snapshot = |quantity| ServerMessage::StallState {
         stall_id: 42,
         owner_name: "Sella".into(),

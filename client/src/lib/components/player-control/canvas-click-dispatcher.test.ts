@@ -1,33 +1,12 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { ClickIntent } from '../../managers/inputHandler'
-import {
-  dispatchCanvasClickIntent,
-  type CanvasClickActions,
-} from './canvas-click-dispatcher'
+import { dispatchCanvasClickIntent } from './canvas-click-dispatcher'
 import { PLAYER_ATTACK_RANGE_METERS } from '../../data/combatTiming'
-
-function makeActions() {
-  return {
-    attackInRange: vi.fn(),
-    chaseAndAttack: vi.fn(),
-    toggleDoor: vi.fn(),
-    toggleDungeonDoor: vi.fn(),
-    interactObject: vi.fn(),
-    pickupItem: vi.fn(),
-    interactNpc: vi.fn(),
-    breakProp: vi.fn(),
-    openProp: vi.fn(),
-    moveToGround: vi.fn(),
-    castFishing: vi.fn(),
-    tipHat: vi.fn(),
-    tradeAtStall: vi.fn(),
-    eatMeal: vi.fn(),
-  } satisfies CanvasClickActions
-}
+import { makeCanvasClickActions } from './canvas-click-actions.fixture'
 
 describe('dispatchCanvasClickIntent tip hats', () => {
   it('routes a tip_hat intent to tipHat', () => {
-    const actions = makeActions()
+    const actions = makeCanvasClickActions()
     const intent: ClickIntent = {
       type: 'tip_hat',
       hatId: 7,
@@ -47,7 +26,7 @@ describe('dispatchCanvasClickIntent tip hats', () => {
 
 describe('dispatchCanvasClickIntent prop handling', () => {
   it('routes a break_prop intent to breakProp', () => {
-    const actions = makeActions()
+    const actions = makeCanvasClickActions()
     const intent: ClickIntent = {
       type: 'break_prop',
       entranceId: 'd1',
@@ -68,7 +47,7 @@ describe('dispatchCanvasClickIntent prop handling', () => {
   })
 
   it('routes an open_prop intent to openProp', () => {
-    const actions = makeActions()
+    const actions = makeCanvasClickActions()
     const intent: ClickIntent = {
       type: 'open_prop',
       entranceId: 'd1',
@@ -91,7 +70,7 @@ describe('dispatchCanvasClickIntent prop handling', () => {
 
 describe('dispatchCanvasClickIntent walk-up interactions', () => {
   it('routes a ground item to pickupItem at any distance', () => {
-    const actions = makeActions()
+    const actions = makeCanvasClickActions()
     const intent: ClickIntent = {
       type: 'pickup_ground_item',
       instanceId: 42,
@@ -109,7 +88,7 @@ describe('dispatchCanvasClickIntent walk-up interactions', () => {
   })
 
   it('routes a far door to toggleDoor rather than a plain walk', () => {
-    const actions = makeActions()
+    const actions = makeCanvasClickActions()
     const intent: ClickIntent = {
       type: 'toggle_door',
       houseId: 'h1',
@@ -133,7 +112,7 @@ describe('dispatchCanvasClickIntent walk-up interactions', () => {
 
 describe('dispatchCanvasClickIntent ground movement', () => {
   it('marks ordinary ground movement as an implicit floor route', () => {
-    const actions = makeActions()
+    const actions = makeCanvasClickActions()
     const position = { x: 1, y: 0, z: 2 }
 
     dispatchCanvasClickIntent(
@@ -147,7 +126,7 @@ describe('dispatchCanvasClickIntent ground movement', () => {
   })
 
   it('preserves an explicit housing stair route', () => {
-    const actions = makeActions()
+    const actions = makeCanvasClickActions()
     const position = { x: 1, y: 3, z: 2 }
 
     dispatchCanvasClickIntent(
@@ -168,7 +147,7 @@ describe('dispatchCanvasClickIntent ground movement', () => {
 
 describe('dispatchCanvasClickIntent meals', () => {
   it('routes a meal intent to eatMeal', () => {
-    const actions = makeActions()
+    const actions = makeCanvasClickActions()
     const intent: ClickIntent = {
       type: 'meal',
       mealId: 3,

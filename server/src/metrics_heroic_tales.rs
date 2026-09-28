@@ -78,12 +78,10 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("ledger.txt");
         let app = router(path.clone());
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let url = format!(
-            "http://{}/api/metrics/heroic-tales",
-            listener.local_addr().unwrap()
+            "{}/api/metrics/heroic-tales",
+            crate::test_util::serve(app).await
         );
-        let task = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
         let client = reqwest::Client::new();
 
         let response = client.get(&url).send().await.unwrap();
@@ -139,7 +137,6 @@ mod tests {
         let data: HeroicTales = client.get(&url).send().await.unwrap().json().await.unwrap();
         assert!(!data.available);
         assert!(data.entries.is_empty());
-        task.abort();
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

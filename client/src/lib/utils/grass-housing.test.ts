@@ -93,43 +93,6 @@ describe('removeGrassInRect', () => {
 })
 
 describe('grass suppression under house footprint', () => {
-  it('removes grass within house footprint + margin', () => {
-    // Simulate a house at origin (10, 0, 10) with a 4×4 ground-floor room
-    const houseOriginX = 10
-    const houseOriginZ = 10
-    const roomSizeX = 4
-    const roomSizeZ = 4
-    const GRASS_MARGIN = 1
-
-    const rectMinX = houseOriginX - GRASS_MARGIN // 9
-    const rectMinZ = houseOriginZ - GRASS_MARGIN // 9
-    const rectMaxX = houseOriginX + roomSizeX + GRASS_MARGIN // 15
-    const rectMaxZ = houseOriginZ + roomSizeZ + GRASS_MARGIN // 15
-
-    const data = makeGrassData([
-      [12, 0, 12], // inside house
-      [10, 0, 10], // inside house (corner)
-      [14, 0, 14], // inside margin
-      [8, 0, 8], // outside
-      [20, 0, 20], // outside
-      [9, 0, 12], // inside margin zone
-    ])
-
-    const filtered = removeGrassInRect(
-      data,
-      rectMinX,
-      rectMinZ,
-      rectMaxX,
-      rectMaxZ
-    )
-    expect(filtered).not.toBeNull()
-    expect(filtered!.shortCount).toBe(2)
-    expect(getPositions(filtered!)).toEqual([
-      [8, 8],
-      [20, 20],
-    ])
-  })
-
   it('sequential removal for multiple rooms clears all footprints', () => {
     // Two adjacent 4×4 rooms
     const GRASS_MARGIN = 1

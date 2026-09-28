@@ -101,18 +101,7 @@ async fn make_market(test_name: &str, owner_gold: i64, customer_gold: i64) -> Ma
     let account = auth.login_npc(&format!("npc_{test_name}")).unwrap();
     let game_state = make_test_game_state(test_name);
     for (name, x, gold) in [("Sella", 100.0, owner_gold), ("Bram", 101.0, customer_gold)] {
-        let record = create_test_character(&auth, &account, name);
-        let mut player = make_player(name, x, 50.0);
-        player.name = name.to_string();
-        game_state.add_player(player).await;
-        game_state
-            .register_player_character(&pid(name), record.id, 0, attrs_with_cha(12), gold, None)
-            .await;
-        game_state
-            .inventories
-            .write()
-            .await
-            .insert(pid(name), PlayerInventory::default());
+        add_db_player(&game_state, &auth, &account, name, x, 50.0, gold).await;
     }
     Market {
         game_state,
@@ -120,17 +109,6 @@ async fn make_market(test_name: &str, owner_gold: i64, customer_gold: i64) -> Ma
         owner: pid("Sella"),
         customer: pid("Bram"),
     }
-}
-
-async fn give(game_state: &GameState, player_id: &PlayerId, item: ItemInstance) {
-    game_state
-        .inventories
-        .write()
-        .await
-        .get_mut(player_id)
-        .unwrap()
-        .bag
-        .push(item);
 }
 
 fn buy(instance_id: u64, quantity: u32) -> Vec<StallBuyLine> {

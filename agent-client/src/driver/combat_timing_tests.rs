@@ -1,7 +1,7 @@
 use super::*;
-use crate::state::tests::{monster, test_player, test_state};
+use crate::state::tests::{bag_item, monster, test_player, test_state};
 use onlinerpg_shared::ability::{AbilityId, AbilityTimer};
-use onlinerpg_shared::inventory::{EquipSlot, ItemInstance};
+use onlinerpg_shared::inventory::EquipSlot;
 use onlinerpg_shared::{CharacterClass, ServerMessage};
 use tokio::sync::mpsc;
 
@@ -201,18 +201,9 @@ async fn double_slash_readiness_and_feedback_follow_server_events() {
     state.self_player_id = Some(player.id);
     state.self_player = Some(player.clone());
     assert!(state.format_world_state().contains("equip a dagger"));
-    state.self_equipped.insert(
-        EquipSlot::MainHand,
-        ItemInstance {
-            instance_id: 1,
-            item_def_id: "dagger".into(),
-            quantity: 1,
-            enchant: 0,
-            cape_color: None,
-            cape_texture: None,
-            locked: false,
-        },
-    );
+    state
+        .self_equipped
+        .insert(EquipSlot::MainHand, bag_item(1, "dagger", 1));
     state.push_event(ServerMessage::AbilityCooldowns {
         cooldowns: vec![
             AbilityTimer {

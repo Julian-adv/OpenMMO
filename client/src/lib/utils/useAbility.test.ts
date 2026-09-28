@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { get, writable } from 'svelte/store'
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
-import type { ItemInstance } from '../network/networkTypes'
+import { initSharedWasm, testItem } from './ability.fixture'
 import { networkManager } from '../network/socket'
 import { abilityCooldowns, resetAbilities } from '../stores/abilityStore'
 import {
@@ -22,7 +22,6 @@ import {
   quickslots,
   resetQuickslots,
 } from '../stores/quickslotStore'
-import { initSync } from '../wasm/onlinerpg_shared'
 import { useAbility } from './useAbility'
 import { FISHING, getAbility, isAbilityAvailable } from '../data/abilities'
 import {
@@ -49,13 +48,6 @@ vi.mock('../managers/monsterManager', () => ({
   monsterManager: { monsters: new Map() },
 }))
 
-const item = (item_def_id: string): ItemInstance => ({
-  instance_id: 1,
-  item_def_id,
-  enchant: 0,
-  quantity: 1,
-})
-
 function updatePlayer(patch: Partial<LocalPlayer>) {
   gameStore.update((state) => ({
     ...state,
@@ -63,13 +55,7 @@ function updatePlayer(patch: Partial<LocalPlayer>) {
   }))
 }
 
-beforeAll(() => {
-  initSync({
-    module: readFileSync(
-      new URL('../wasm/onlinerpg_shared_bg.wasm', import.meta.url)
-    ),
-  })
-})
+beforeAll(initSharedWasm)
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -87,9 +73,9 @@ beforeEach(() => {
   inventoryStore.set({
     bag: [],
     equipped: {
-      main_hand: item('iron_sword'),
-      off_hand: item('wooden_shield'),
-      neck: item('stethoscope'),
+      main_hand: testItem('iron_sword'),
+      off_hand: testItem('wooden_shield'),
+      neck: testItem('stethoscope'),
     },
   })
   manaState.set({ mana: 10, max_mana: 10 })
@@ -162,7 +148,7 @@ it('queues and cancels inspection, and cancels it when using another skill', () 
 
 it('queues Double Slash for the next attack, toggles it off, and honors its cooldown', () => {
   updatePlayer({ characterClass: 'rogue' })
-  inventoryStore.set({ bag: [], equipped: { main_hand: item('dagger') } })
+  inventoryStore.set({ bag: [], equipped: { main_hand: testItem('dagger') } })
   manaState.set({ mana: 0, max_mana: 10 })
   useAbility('dagger_double_slash')
   expect(get(daggerSkillState).queued).toBe(true)
@@ -207,7 +193,10 @@ it('lists Fishing for every class only after learning it, with an icon and instr
 })
 
 it('uses a Fishing quickslot to select water without sending a combat ability', () => {
-  inventoryStore.set({ bag: [], equipped: { main_hand: item('fishing_rod') } })
+  inventoryStore.set({
+    bag: [],
+    equipped: { main_hand: testItem('fishing_rod') },
+  })
   useAbility(FISHING.id)
   expect(get(fishingTargeting)).toBe(false)
   skillsStore.set({ learned: ['fishing'] })
@@ -231,7 +220,10 @@ it('requires a rod and open water, supports rowboats, and blocks a second sessio
     'Equip a fishing rod to use Fishing.'
   )
   expect(get(fishingTargeting)).toBe(false)
-  inventoryStore.set({ bag: [], equipped: { main_hand: item('fishing_rod') } })
+  inventoryStore.set({
+    bag: [],
+    equipped: { main_hand: testItem('fishing_rod') },
+  })
   currentDungeonDepth.set(1)
   useAbility(FISHING.id)
   expect(reportSkillFailure).toHaveBeenLastCalledWith(
@@ -261,7 +253,7 @@ it('switches between fishing and inspection targeting and resets on logout', () 
   skillsStore.set({ learned: ['fishing'] })
   inventoryStore.update((inventory) => ({
     ...inventory,
-    equipped: { ...inventory.equipped, main_hand: item('fishing_rod') },
+    equipped: { ...inventory.equipped, main_hand: testItem('fishing_rod') },
   }))
   useAbility('auscultation')
   useAbility(FISHING.id)

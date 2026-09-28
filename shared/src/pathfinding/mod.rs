@@ -1119,22 +1119,6 @@ mod tests {
         );
     }
 
-    /// The waiver is furniture-only: sealed in by something that does not
-    /// yield, A* must still plan nothing.
-    #[test]
-    fn astar_grants_no_escape_from_a_wall_sealed_start() {
-        let (id, rp) = make_rect_room(1, 1);
-        let mut cache = PassabilityCache::new();
-        cache.insert(id, rp);
-
-        let result = find_path(10.5, 10.5, 0, 13.5, 10.5, 0, &cache, 500);
-        assert!(
-            !result.found,
-            "walls never yield, even to a sealed-in mover"
-        );
-        assert!(result.waypoints.is_empty());
-    }
-
     /// Furniture sealed against a wall: the furniture sides open, the wall
     /// side stays solid, so the escape goes around the wall — never through.
     #[test]

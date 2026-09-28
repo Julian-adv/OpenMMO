@@ -256,6 +256,7 @@ fn compute_pixel(
 #[cfg(test)]
 mod tests {
     use super::super::super::vector_features::RiverSegment;
+    use super::super::small_test_ctx;
     use super::*;
 
     fn fake_segments() -> Vec<RiverSegment> {
@@ -271,27 +272,6 @@ mod tests {
             bed_floor_a: 0.0,
             bed_floor_b: 0.0,
         }]
-    }
-
-    fn small_test_ctx() -> (
-        crate::worldgen::global_map::GlobalMap,
-        crate::worldgen::tile_bake::BakeContext,
-    ) {
-        // Tiny world keeps the test fast.
-        let cfg = crate::worldgen::config::WorldGenConfig {
-            seed: 7,
-            world_size_m: 256,
-            global_res: 32,
-            ..Default::default()
-        };
-        let mut map = crate::worldgen::continent::generate_continent_mask(&cfg);
-        crate::worldgen::elevation::generate_elevation(&mut map);
-        let rm = crate::worldgen::rivers::compute_flow(&map);
-        let net = crate::worldgen::roads::compute_roads(&map, &[], &rm);
-        let coast =
-            crate::worldgen::coasts::extract_coasts(&map.land_mask, map.config.global_res as usize);
-        let ctx = BakeContext::new(&map, &rm, &net, &coast);
-        (map, ctx)
     }
 
     #[test]

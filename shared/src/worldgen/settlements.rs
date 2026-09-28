@@ -728,14 +728,21 @@ mod tests {
     }
 
     #[test]
-    fn settlements_respect_min_spacing() {
+    fn settlements_are_spaced_on_habitable_land() {
         let cfg = test_config(128);
         let (map, rm) = full_map(&cfg);
         let settlements = place_settlements(&map, &rm);
         let min_sp = cfg.settlement_min_spacing_cells as f32;
         let min_sp_sq = min_sp * min_sp;
-        let res_f = cfg.global_res as f32;
+        let res = cfg.global_res as usize;
+        let res_f = res as f32;
         for (i, a) in settlements.iter().enumerate() {
+            let cell = (a.cell_y as usize) * res + a.cell_x as usize;
+            assert_eq!(map.land_mask[cell], 1, "settlement placed on sea");
+            assert!(
+                map.elevation_m[cell] <= cfg.settlement_max_elevation_m,
+                "settlement above elevation cap"
+            );
             for b in &settlements[i + 1..] {
                 let dx_raw = (a.cell_x as f32 - b.cell_x as f32).abs();
                 let dx = dx_raw.min(res_f - dx_raw);
@@ -750,22 +757,6 @@ mod tests {
                     b.cell_y
                 );
             }
-        }
-    }
-
-    #[test]
-    fn settlements_are_on_habitable_land() {
-        let cfg = test_config(128);
-        let (map, rm) = full_map(&cfg);
-        let settlements = place_settlements(&map, &rm);
-        let res = cfg.global_res as usize;
-        for s in &settlements {
-            let i = (s.cell_y as usize) * res + s.cell_x as usize;
-            assert_eq!(map.land_mask[i], 1, "settlement placed on sea");
-            assert!(
-                map.elevation_m[i] <= cfg.settlement_max_elevation_m,
-                "settlement above elevation cap"
-            );
         }
     }
 

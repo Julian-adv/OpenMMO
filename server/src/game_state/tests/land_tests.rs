@@ -209,31 +209,9 @@ async fn land_owner(
     account: &str,
     name: &str,
 ) -> (i64, DirectRx) {
-    let character = create_test_character(auth, account, name);
-    let mut player = make_player(name, 1.0, 1.0);
-    player.level = 10;
-    game.add_player(player).await;
-    game.register_player_character(
-        &pid(name),
-        character.id,
-        onlinerpg_shared::xp::xp_for_level(10),
-        attrs_with_cha(12),
-        0,
-        None,
-    )
-    .await;
-    game.inventories.write().await.insert(
-        pid(name),
-        PlayerInventory {
-            bag: (1..=20).map(|id| bag_item(id, "land_deed", 1)).collect(),
-            ..Default::default()
-        },
-    );
-    game.terrain_io
-        .write_land_grades(0, 0, &vec![LandGrade::Homestead as u8; REGION_PLOTS])
-        .await
-        .unwrap();
-    (character.id, game.register_direct_channel(&pid(name)).await)
+    let deeds = (1..=20).map(|id| bag_item(id, "land_deed", 1)).collect();
+    let character_id = estate_owner(game, auth, account, name, pos3(1.0, 0.0, 1.0), deeds).await;
+    (character_id, game.register_direct_channel(&pid(name)).await)
 }
 
 async fn claim_at(

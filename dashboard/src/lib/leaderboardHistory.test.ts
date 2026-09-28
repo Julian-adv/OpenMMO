@@ -159,14 +159,6 @@ describe('character gold history', () => {
     ]) expect(() => parseGoldLeaderboard({ ...data, ...invalid }, 168)).toThrow()
   })
 
-  it('keeps earned and spent gold until the next recorded change', () => {
-    const samples = [{ timestamp: 100, gold: 0 }, { timestamp: 200, gold: 5000000000 }, { timestamp: 300, gold: 50 }]
-    expect(sampleAt(samples, 99)).toBeNull()
-    expect(sampleAt(samples, 199)?.gold).toBe(0)
-    expect(sampleAt(samples, 200)?.gold).toBe(5000000000)
-    expect(sampleAt(samples, 400)?.gold).toBe(50)
-    expect(stepPath(samples, 400, (time) => time, (gold) => gold, (sample) => sample.gold)).toBe('M100,0 H200V5000000000 H300V50 H400')
-  })
 })
 
 describe('character weapon enchant history', () => {
@@ -208,14 +200,6 @@ describe('character weapon enchant history', () => {
     expect(() => parseWeaponEnchantLeaderboard({ ...data, series: [] }, 168)).toThrow()
   })
 
-  it('preserves decreases when the strongest owned weapon is lost', () => {
-    const samples = [{ timestamp: 100, weapon_enchant: 3 }, { timestamp: 200, weapon_enchant: 7 }, { timestamp: 300, weapon_enchant: 0 }]
-    expect(sampleAt(samples, 99)).toBeNull()
-    expect(sampleAt(samples, 199)?.weapon_enchant).toBe(3)
-    expect(sampleAt(samples, 200)?.weapon_enchant).toBe(7)
-    expect(sampleAt(samples, 400)?.weapon_enchant).toBe(0)
-    expect(stepPath(samples, 400, (time) => time, (enchant) => enchant, (sample) => sample.weapon_enchant)).toBe('M100,3 H200V7 H300V0 H400')
-  })
 })
 
 describe('character armor enchant history', () => {

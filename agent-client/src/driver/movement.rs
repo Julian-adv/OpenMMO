@@ -324,9 +324,9 @@ pub(super) async fn fetch_furniture_around(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::tests::{test_player, test_state};
+    use crate::state::tests::{bag_item, test_player, test_state};
     use onlinerpg_shared::fishing::{FishState, FishingAction, FishingOutcome};
-    use onlinerpg_shared::inventory::{EquipSlot, ItemInstance};
+    use onlinerpg_shared::inventory::EquipSlot;
     use onlinerpg_shared::{PlayerId, Position, ServerMessage};
 
     fn npc_schedule(json: &str) -> Vec<ScheduleEntry> {
@@ -350,18 +350,8 @@ mod tests {
         s.self_player_id = Some(me.id);
         s.self_player = Some(me);
         s.in_game = true;
-        s.self_equipped.insert(
-            EquipSlot::MainHand,
-            ItemInstance {
-                instance_id: 1,
-                item_def_id: "fishing_rod".into(),
-                quantity: 1,
-                enchant: 0,
-                cape_color: None,
-                cape_texture: None,
-                locked: false,
-            },
-        );
+        s.self_equipped
+            .insert(EquipSlot::MainHand, bag_item(1, "fishing_rod", 1));
         assert!(rx.try_recv().is_err());
         (Arc::new(Mutex::new(s)), rx)
     }

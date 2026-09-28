@@ -47,3 +47,18 @@ pub fn unique_temp_dir(name: &str) -> PathBuf {
         std::process::id()
     ))
 }
+
+pub fn temp_auth(name: &str) -> (crate::auth::AuthService, PathBuf) {
+    let db_path = unique_temp_dir(name).join("auth.db");
+    (
+        crate::auth::AuthService::new(db_path.clone()).unwrap(),
+        db_path,
+    )
+}
+
+pub async fn serve(router: axum::Router) -> String {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+    base
+}

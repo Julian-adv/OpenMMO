@@ -634,7 +634,8 @@ fn attacks_refuse_to_cross_a_shaft_side_wall() {
 /// side, corridor cell on the other), be sealed while shut — both in the
 /// per-floor rebuild and in the default `dungeon_passability` grids (doors
 /// start shut) — and reopen cleanly. Guards the Rust port of the client's
-/// original door scan and the default-shut wiring.
+/// original door scan and the default-shut wiring. Door toggles resolve by
+/// `(depth, door_id)`, so no interior door may take the entrance's id.
 #[test]
 fn interior_doors_seal_corridor_mouths_until_opened() {
     use super::{EDGE_E, EDGE_N, EDGE_S, EDGE_W};
@@ -668,6 +669,11 @@ fn interior_doors_seal_corridor_mouths_until_opened() {
                     && !layout.down_shaft.is_some_and(|s| s.contains(x, z))
             };
             for d in &doors {
+                assert_ne!(
+                    d.door_id, ENTRANCE_DOOR_ID,
+                    "seed {seed} depth {}",
+                    layout.depth
+                );
                 let [ax, az, bx, bz] = d.seg();
                 // Cell pairs straddling the wall line, and the edge bits a
                 // shut door must set on each (mirrors `is_*_blocked`'s OR).
@@ -711,23 +717,6 @@ fn interior_doors_seal_corridor_mouths_until_opened() {
         }
     }
     assert!(total > 0, "no interior doors across any test seed");
-}
-
-/// The entrance door shares its id space with the interior doors — a toggle
-/// resolves by `(depth, door_id)` — so its reserved id must never name one.
-#[test]
-fn entrance_door_id_is_not_an_interior_door() {
-    for seed in 0..10u64 {
-        for layout in &generate_dungeon(seed) {
-            for d in interior_doors(layout) {
-                assert_ne!(
-                    d.door_id, ENTRANCE_DOOR_ID,
-                    "seed {seed} depth {}",
-                    layout.depth
-                );
-            }
-        }
-    }
 }
 
 /// A corridor running alongside a room wall would tear the wall open along

@@ -925,20 +925,40 @@ mod access_tests;
 mod tests {
     use super::*;
     use crate::game_state::tests::make_test_game_state;
+    use std::path::PathBuf;
+
+    async fn serve_metrics(name: &str) -> (PathBuf, Arc<AuthService>, reqwest::Client, String) {
+        let path = crate::test_util::unique_temp_dir(name).join("game.db");
+        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
+        let router = metrics_routes(Arc::new(make_test_game_state(name)), Arc::clone(&auth));
+        let base = crate::test_util::serve(router).await;
+        (path, auth, reqwest::Client::new(), base)
+    }
+
+    async fn assert_bad_hours(client: &reqwest::Client, url: &str, hours: &[&str]) {
+        for hours in hours {
+            assert_eq!(
+                client
+                    .get(format!("{url}?hours={hours}"))
+                    .send()
+                    .await
+                    .unwrap()
+                    .status(),
+                StatusCode::BAD_REQUEST
+            );
+        }
+    }
+
+    async fn assert_unavailable(client: &reqwest::Client, url: &str) {
+        let response = client.get(url).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+    }
 
     #[tokio::test]
     async fn gold_sinks_api_validates_periods_and_reports_database_failures() {
-        let path = crate::test_util::unique_temp_dir("gold_sinks_api").join("game.db");
-        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let router = metrics_routes(
-            Arc::new(make_test_game_state("gold_sinks_api")),
-            Arc::clone(&auth),
-        );
-        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-        let client = reqwest::Client::new();
-        let url = format!("http://{addr}/api/metrics/gold-sinks");
+        let (path, auth, client, base) = serve_metrics("gold_sinks_api").await;
+        let url = format!("{base}/api/metrics/gold-sinks");
         let empty: GoldSinks = client.get(&url).send().await.unwrap().json().await.unwrap();
         assert_eq!(empty.until - empty.from, 24 * 3600);
         assert!(empty.entries.is_empty());
@@ -973,40 +993,18 @@ mod tests {
             assert_eq!(sources.entries[0].quantity, 1);
             assert_eq!(sources.entries[1].quantity, 2);
         }
-        for hours in ["0", "6", "-1", "25", "invalid"] {
-            assert_eq!(
-                client
-                    .get(format!("{url}?hours={hours}"))
-                    .send()
-                    .await
-                    .unwrap()
-                    .status(),
-                StatusCode::BAD_REQUEST
-            );
-        }
+        assert_bad_hours(&client, &url, &["0", "6", "-1", "25", "invalid"]).await;
         rusqlite::Connection::open(path)
             .unwrap()
             .execute("DROP TABLE gold_sink_samples", [])
             .unwrap();
-        let response = client.get(&url).send().await.unwrap();
-        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
-        task.abort();
+        assert_unavailable(&client, &url).await;
     }
 
     #[tokio::test]
     async fn item_gold_sources_api_validates_periods_and_reports_database_failures() {
-        let path = crate::test_util::unique_temp_dir("item_gold_sources_api").join("game.db");
-        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let router = metrics_routes(
-            Arc::new(make_test_game_state("item_gold_sources_api")),
-            Arc::clone(&auth),
-        );
-        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-        let client = reqwest::Client::new();
-        let url = format!("http://{addr}/api/metrics/item-gold-sources");
+        let (path, auth, client, base) = serve_metrics("item_gold_sources_api").await;
+        let url = format!("{base}/api/metrics/item-gold-sources");
         let empty: ItemGoldSources = client.get(&url).send().await.unwrap().json().await.unwrap();
         assert_eq!(empty.until - empty.from, 24 * 3600);
         assert!(empty.entries.is_empty());
@@ -1041,38 +1039,18 @@ mod tests {
             assert_eq!(sources.entries[0].quantity, 1);
             assert_eq!(sources.entries[1].quantity, 2);
         }
-        for hours in ["0", "6", "-1", "25", "invalid"] {
-            assert_eq!(
-                client
-                    .get(format!("{url}?hours={hours}"))
-                    .send()
-                    .await
-                    .unwrap()
-                    .status(),
-                StatusCode::BAD_REQUEST
-            );
-        }
+        assert_bad_hours(&client, &url, &["0", "6", "-1", "25", "invalid"]).await;
         rusqlite::Connection::open(path)
             .unwrap()
             .execute("DROP TABLE item_sale_samples", [])
             .unwrap();
-        let response = client.get(&url).send().await.unwrap();
-        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
-        task.abort();
+        assert_unavailable(&client, &url).await;
     }
 
     #[tokio::test]
     async fn weapon_enchant_failures_endpoint_returns_events_and_reports_storage_failure() {
-        let path = crate::test_util::unique_temp_dir("enchant_failure_api").join("game.db");
-        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
-        let game = Arc::new(make_test_game_state("enchant_failure_api"));
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let router = metrics_routes(game, Arc::clone(&auth));
-        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-        let client = reqwest::Client::new();
-        let url = format!("http://{addr}/api/metrics/weapon-enchant-failures");
+        let (path, auth, client, base) = serve_metrics("enchant_failure_api").await;
+        let url = format!("{base}/api/metrics/weapon-enchant-failures");
         let empty: WeaponEnchantFailures =
             client.get(&url).send().await.unwrap().json().await.unwrap();
         assert!(empty.entries.is_empty());
@@ -1102,23 +1080,13 @@ mod tests {
             .unwrap()
             .execute("DROP TABLE weapon_enchant_failures", [])
             .unwrap();
-        let response = client.get(&url).send().await.unwrap();
-        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
-        task.abort();
+        assert_unavailable(&client, &url).await;
     }
 
     #[tokio::test]
     async fn weapon_enchant_leaderboard_returns_every_inventory_maximum_at_least_seven() {
-        let path = crate::test_util::unique_temp_dir("weapon_enchant_leaderboard").join("game.db");
-        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
-        let game = Arc::new(make_test_game_state("weapon_enchant_leaderboard"));
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let router = metrics_routes(game, Arc::clone(&auth));
-        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-        let client = reqwest::Client::new();
-        let url = format!("http://{addr}/api/metrics/weapon-enchant-leaderboard");
+        let (path, auth, client, base) = serve_metrics("weapon_enchant_leaderboard").await;
+        let url = format!("{base}/api/metrics/weapon-enchant-leaderboard");
         let empty: WeaponEnchantLeaderboard =
             client.get(&url).send().await.unwrap().json().await.unwrap();
         assert!(empty.entries.is_empty());
@@ -1136,17 +1104,7 @@ mod tests {
             assert_eq!(history.timestamp - history.from, hours * 3600);
             assert_eq!(history.sample_interval_seconds, interval);
         }
-        for hours in ["0", "24", "169", "-1", "invalid"] {
-            assert_eq!(
-                client
-                    .get(format!("{url}?hours={hours}"))
-                    .send()
-                    .await
-                    .unwrap()
-                    .status(),
-                StatusCode::BAD_REQUEST
-            );
-        }
+        assert_bad_hours(&client, &url, &["0", "24", "169", "-1", "invalid"]).await;
         let conn = rusqlite::Connection::open(path).unwrap();
         conn.execute_batch(
             "INSERT INTO accounts (player_name) VALUES ('player'), ('npc_test'), ('npcxplayer');",
@@ -1256,23 +1214,13 @@ mod tests {
             .any(|series| series.name == "Hero1"));
         conn.execute("DROP TABLE character_weapon_enchant_history", [])
             .unwrap();
-        let response = client.get(&url).send().await.unwrap();
-        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
-        task.abort();
+        assert_unavailable(&client, &url).await;
     }
 
     #[tokio::test]
     async fn land_leaderboard_ranks_owned_plots_and_returns_history() {
-        let path = crate::test_util::unique_temp_dir("land_leaderboard").join("game.db");
-        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
-        let game = Arc::new(make_test_game_state("land_leaderboard"));
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let router = metrics_routes(game, Arc::clone(&auth));
-        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-        let client = reqwest::Client::new();
-        let url = format!("http://{addr}/api/metrics/land-leaderboard");
+        let (path, auth, client, base) = serve_metrics("land_leaderboard").await;
+        let url = format!("{base}/api/metrics/land-leaderboard");
         let empty: LandLeaderboard = client.get(&url).send().await.unwrap().json().await.unwrap();
         assert!(empty.entries.is_empty());
         assert!(empty.series.is_empty());
@@ -1344,37 +1292,17 @@ mod tests {
                 assert_eq!(entry.land_plots, series.samples.last().unwrap().land_plots);
             }
         }
-        for hours in ["0", "24", "169", "-1", "invalid"] {
-            assert_eq!(
-                client
-                    .get(format!("{url}?hours={hours}"))
-                    .send()
-                    .await
-                    .unwrap()
-                    .status(),
-                StatusCode::BAD_REQUEST
-            );
-        }
+        assert_bad_hours(&client, &url, &["0", "24", "169", "-1", "invalid"]).await;
         assert!(!auth.record_hourly_character_metrics(unix_now()).unwrap());
         conn.execute("DROP TABLE character_land_plots_history", [])
             .unwrap();
-        let response = client.get(&url).send().await.unwrap();
-        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
-        task.abort();
+        assert_unavailable(&client, &url).await;
     }
 
     #[tokio::test]
     async fn armor_enchant_leaderboard_ranks_slot_totals_and_returns_history() {
-        let path = crate::test_util::unique_temp_dir("armor_enchant_leaderboard").join("game.db");
-        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
-        let game = Arc::new(make_test_game_state("armor_enchant_leaderboard"));
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let router = metrics_routes(game, Arc::clone(&auth));
-        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-        let client = reqwest::Client::new();
-        let url = format!("http://{addr}/api/metrics/armor-enchant-leaderboard");
+        let (path, auth, client, base) = serve_metrics("armor_enchant_leaderboard").await;
+        let url = format!("{base}/api/metrics/armor-enchant-leaderboard");
         let empty: ArmorEnchantLeaderboard =
             client.get(&url).send().await.unwrap().json().await.unwrap();
         assert!(empty.entries.is_empty());
@@ -1462,36 +1390,16 @@ mod tests {
                 );
             }
         }
-        for hours in ["0", "24", "169", "-1", "invalid"] {
-            assert_eq!(
-                client
-                    .get(format!("{url}?hours={hours}"))
-                    .send()
-                    .await
-                    .unwrap()
-                    .status(),
-                StatusCode::BAD_REQUEST
-            );
-        }
+        assert_bad_hours(&client, &url, &["0", "24", "169", "-1", "invalid"]).await;
         conn.execute("DROP TABLE character_armor_enchant_history", [])
             .unwrap();
-        let response = client.get(&url).send().await.unwrap();
-        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
-        task.abort();
+        assert_unavailable(&client, &url).await;
     }
 
     #[tokio::test]
     async fn gold_leaderboard_ranks_saved_characters_and_returns_their_history() {
-        let path = crate::test_util::unique_temp_dir("gold_leaderboard").join("game.db");
-        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
-        let game = Arc::new(make_test_game_state("gold_leaderboard"));
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let router = metrics_routes(game, Arc::clone(&auth));
-        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-        let client = reqwest::Client::new();
-        let url = format!("http://{addr}/api/metrics/gold-leaderboard");
+        let (path, auth, client, base) = serve_metrics("gold_leaderboard").await;
+        let url = format!("{base}/api/metrics/gold-leaderboard");
         let empty: GoldLeaderboard = client.get(&url).send().await.unwrap().json().await.unwrap();
         assert!(empty.entries.is_empty());
         assert!(empty.series.is_empty());
@@ -1508,17 +1416,7 @@ mod tests {
             assert_eq!(history.timestamp - history.from, hours * 3600);
             assert_eq!(history.sample_interval_seconds, interval);
         }
-        for hours in ["0", "24", "169", "-1", "invalid"] {
-            assert_eq!(
-                client
-                    .get(format!("{url}?hours={hours}"))
-                    .send()
-                    .await
-                    .unwrap()
-                    .status(),
-                StatusCode::BAD_REQUEST
-            );
-        }
+        assert_bad_hours(&client, &url, &["0", "24", "169", "-1", "invalid"]).await;
 
         let conn = rusqlite::Connection::open(path).unwrap();
         conn.execute_batch(
@@ -1628,23 +1526,13 @@ mod tests {
         assert_eq!(single.series[0].samples.last().unwrap().gold, 6000000000);
         assert!(!auth.record_hourly_character_metrics(unix_now()).unwrap());
         conn.execute("DROP TABLE characters", []).unwrap();
-        let response = client.get(&url).send().await.unwrap();
-        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
-        task.abort();
+        assert_unavailable(&client, &url).await;
     }
 
     #[tokio::test]
     async fn level_leaderboard_ranks_saved_characters_and_excludes_npc_accounts() {
-        let path = crate::test_util::unique_temp_dir("level_leaderboard").join("game.db");
-        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
-        let game = Arc::new(make_test_game_state("level_leaderboard"));
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let router = metrics_routes(game, Arc::clone(&auth));
-        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-        let client = reqwest::Client::new();
-        let url = format!("http://{addr}/api/metrics/level-leaderboard");
+        let (path, auth, client, base) = serve_metrics("level_leaderboard").await;
+        let url = format!("{base}/api/metrics/level-leaderboard");
         let empty: LevelLeaderboard = client.get(&url).send().await.unwrap().json().await.unwrap();
         assert!(empty.entries.is_empty());
         assert!(empty.series.is_empty());
@@ -1661,17 +1549,7 @@ mod tests {
             assert_eq!(history.timestamp - history.from, hours * 3600);
             assert_eq!(history.sample_interval_seconds, interval);
         }
-        for hours in ["0", "24", "169", "-1", "invalid"] {
-            assert_eq!(
-                client
-                    .get(format!("{url}?hours={hours}"))
-                    .send()
-                    .await
-                    .unwrap()
-                    .status(),
-                StatusCode::BAD_REQUEST
-            );
-        }
+        assert_bad_hours(&client, &url, &["0", "24", "169", "-1", "invalid"]).await;
 
         let conn = rusqlite::Connection::open(path).unwrap();
         let npc = auth.login_npc("npc_leaderboard").unwrap();
@@ -1806,23 +1684,13 @@ mod tests {
         );
 
         conn.execute("DROP TABLE characters", []).unwrap();
-        let response = client.get(&url).send().await.unwrap();
-        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
-        task.abort();
+        assert_unavailable(&client, &url).await;
     }
 
     #[tokio::test]
     async fn per_account_gold_endpoint_supports_independent_ranges_and_active_windows() {
-        let path = crate::test_util::unique_temp_dir("per_account_gold_endpoint").join("game.db");
-        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
-        let game = Arc::new(make_test_game_state("per_account_gold_endpoint"));
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let router = metrics_routes(game, Arc::clone(&auth));
-        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-        let client = reqwest::Client::new();
-        let url = format!("http://{addr}/api/metrics/gold-per-account");
+        let (path, auth, client, base) = serve_metrics("per_account_gold_endpoint").await;
+        let url = format!("{base}/api/metrics/gold-per-account");
         let empty: PerAccountGoldHistory =
             client.get(&url).send().await.unwrap().json().await.unwrap();
         assert_eq!(empty.window_seconds, DAY_SECONDS);
@@ -1882,23 +1750,13 @@ mod tests {
         }
         conn.execute("DROP TABLE unique_account_daily_samples", [])
             .unwrap();
-        let response = client.get(&url).send().await.unwrap();
-        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
-        task.abort();
+        assert_unavailable(&client, &url).await;
     }
 
     #[tokio::test]
     async fn server_starts_endpoint_flags_build_changes_as_deploys() {
-        let path = crate::test_util::unique_temp_dir("server_starts_endpoint").join("game.db");
-        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
-        let game = Arc::new(make_test_game_state("server_starts_endpoint"));
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let router = metrics_routes(game, Arc::clone(&auth));
-        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-        let client = reqwest::Client::new();
-        let url = format!("http://{addr}/api/metrics/server-starts");
+        let (path, auth, client, base) = serve_metrics("server_starts_endpoint").await;
+        let url = format!("{base}/api/metrics/server-starts");
 
         let now = unix_now();
         for (age, build) in [
@@ -1937,17 +1795,7 @@ mod tests {
         }
         let default: ServerStarts = client.get(&url).send().await.unwrap().json().await.unwrap();
         assert_eq!(default.until - default.from, 8760 * 3600);
-        for hours in ["0", "48", "invalid"] {
-            assert_eq!(
-                client
-                    .get(format!("{url}?hours={hours}"))
-                    .send()
-                    .await
-                    .unwrap()
-                    .status(),
-                StatusCode::BAD_REQUEST
-            );
-        }
+        assert_bad_hours(&client, &url, &["0", "48", "invalid"]).await;
         rusqlite::Connection::open(&path)
             .unwrap()
             .execute("DROP TABLE server_starts", [])
@@ -1956,20 +1804,12 @@ mod tests {
             client.get(&url).send().await.unwrap().status(),
             StatusCode::SERVICE_UNAVAILABLE
         );
-        task.abort();
     }
 
     #[tokio::test]
     async fn price_index_endpoint_reports_meetings_and_the_index_in_effect_at_window_start() {
-        let path = crate::test_util::unique_temp_dir("price_index_endpoint").join("game.db");
-        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
-        let game = Arc::new(make_test_game_state("price_index_endpoint"));
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let router = metrics_routes(game, Arc::clone(&auth));
-        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-        let client = reqwest::Client::new();
-        let url = format!("http://{addr}/api/metrics/price-index");
+        let (path, auth, client, base) = serve_metrics("price_index_endpoint").await;
+        let url = format!("{base}/api/metrics/price-index");
 
         let empty: PriceIndexHistory = client.get(&url).send().await.unwrap().json().await.unwrap();
         assert_eq!(empty.until - empty.from, 168 * 3600);
@@ -2035,35 +1875,15 @@ mod tests {
                 .all(|m| m.timestamp > body.from && m.timestamp <= body.until));
         }
 
-        for hours in ["0", "24", "169", "-1", "invalid"] {
-            assert_eq!(
-                client
-                    .get(format!("{url}?hours={hours}"))
-                    .send()
-                    .await
-                    .unwrap()
-                    .status(),
-                StatusCode::BAD_REQUEST
-            );
-        }
+        assert_bad_hours(&client, &url, &["0", "24", "169", "-1", "invalid"]).await;
         conn.execute("DROP TABLE pricing_history", []).unwrap();
-        let response = client.get(&url).send().await.unwrap();
-        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
-        task.abort();
+        assert_unavailable(&client, &url).await;
     }
 
     #[tokio::test]
     async fn gold_endpoint_returns_saved_totals_for_all_six_periods() {
-        let path = crate::test_util::unique_temp_dir("gold_endpoint").join("game.db");
-        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
-        let game = Arc::new(make_test_game_state("gold_endpoint"));
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let router = metrics_routes(game, Arc::clone(&auth));
-        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-        let client = reqwest::Client::new();
-        let url = format!("http://{addr}/api/metrics/gold");
+        let (path, auth, client, base) = serve_metrics("gold_endpoint").await;
+        let url = format!("{base}/api/metrics/gold");
         let empty: GoldHistory = client.get(&url).send().await.unwrap().json().await.unwrap();
         assert_eq!(empty.until - empty.from, 86400);
         assert_eq!(empty.latest, None);
@@ -2099,33 +1919,25 @@ mod tests {
                 if hours == 8760 { 2 } else { 1 }
             );
         }
-        for hours in [
-            "0",
-            "6",
-            "25",
-            "8761",
-            "-1",
-            "invalid",
-            "99999999999999999999",
-        ] {
-            assert_eq!(
-                client
-                    .get(format!("{url}?hours={hours}"))
-                    .send()
-                    .await
-                    .unwrap()
-                    .status(),
-                StatusCode::BAD_REQUEST
-            );
-        }
+        assert_bad_hours(
+            &client,
+            &url,
+            &[
+                "0",
+                "6",
+                "25",
+                "8761",
+                "-1",
+                "invalid",
+                "99999999999999999999",
+            ],
+        )
+        .await;
         rusqlite::Connection::open(path)
             .unwrap()
             .execute("DROP TABLE gold_snapshots", [])
             .unwrap();
-        let response = client.get(&url).send().await.unwrap();
-        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
-        task.abort();
+        assert_unavailable(&client, &url).await;
     }
 
     #[tokio::test]
@@ -2210,17 +2022,8 @@ mod tests {
 
     #[tokio::test]
     async fn account_endpoints_limit_ranges_and_preserve_distinct_counts() {
-        let path = crate::test_util::unique_temp_dir("metrics_endpoint").join("game.db");
-        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
-        let game = Arc::new(make_test_game_state("metrics_endpoint"));
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let router = metrics_routes(Arc::clone(&game), Arc::clone(&auth));
-        let task = tokio::spawn(async move {
-            axum::serve(listener, router).await.unwrap();
-        });
-        let client = reqwest::Client::new();
-        let url = format!("http://{addr}/api/metrics/concurrent");
+        let (path, auth, client, base) = serve_metrics("metrics_endpoint").await;
+        let url = format!("{base}/api/metrics/concurrent");
         let response = client.get(&url).send().await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
@@ -2305,17 +2108,12 @@ mod tests {
             }
         }
 
-        for hours in ["0", "25", "8761", "99999999999999999999", "-1", "invalid"] {
-            assert_eq!(
-                client
-                    .get(format!("{url}?hours={hours}"))
-                    .send()
-                    .await
-                    .unwrap()
-                    .status(),
-                StatusCode::BAD_REQUEST
-            );
-        }
+        assert_bad_hours(
+            &client,
+            &url,
+            &["0", "25", "8761", "99999999999999999999", "-1", "invalid"],
+        )
+        .await;
         let now = kst_day_start(unix_now());
         rusqlite::Connection::open(&path)
             .unwrap()
@@ -2359,7 +2157,7 @@ mod tests {
         assert!(pending.samples.is_empty());
         assert_eq!(pending.last_aggregated_at, None);
         assert!(auth.aggregate_daily_unique_accounts(now).unwrap());
-        let countries_url = format!("http://{addr}/api/metrics/countries");
+        let countries_url = format!("{base}/api/metrics/countries");
         let response = client
             .get(format!("{countries_url}?hours=168"))
             .send()
@@ -2388,7 +2186,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        let unique_url = format!("http://{addr}/api/metrics/unique");
+        let unique_url = format!("{base}/api/metrics/unique");
         let default: UniqueHistory = client
             .get(&unique_url)
             .send()
@@ -2438,26 +2236,21 @@ mod tests {
                 .status(),
             StatusCode::BAD_REQUEST
         );
-        for hours in [
-            "0",
-            "1",
-            "6",
-            "25",
-            "8761",
-            "99999999999999999999",
-            "-1",
-            "invalid",
-        ] {
-            assert_eq!(
-                client
-                    .get(format!("{unique_url}?hours={hours}"))
-                    .send()
-                    .await
-                    .unwrap()
-                    .status(),
-                StatusCode::BAD_REQUEST
-            );
-        }
+        assert_bad_hours(
+            &client,
+            &unique_url,
+            &[
+                "0",
+                "1",
+                "6",
+                "25",
+                "8761",
+                "99999999999999999999",
+                "-1",
+                "invalid",
+            ],
+        )
+        .await;
         rusqlite::Connection::open(&path)
             .unwrap()
             .execute("DROP TABLE account_activity_sessions", [])
@@ -2470,9 +2263,6 @@ mod tests {
             .unwrap()
             .execute("DROP TABLE unique_account_daily_samples", [])
             .unwrap();
-        let response = client.get(&unique_url).send().await.unwrap();
-        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
-        task.abort();
+        assert_unavailable(&client, &unique_url).await;
     }
 }

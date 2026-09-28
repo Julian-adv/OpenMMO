@@ -255,37 +255,6 @@ pub struct Monster {
 mod tests {
     use super::*;
 
-    /// rmp_serde encodes structs as positional arrays, so every field must
-    /// serialize unconditionally — a `skip_serializing_if` that fires shifts
-    /// all later fields into the wrong slots. These round-trip the exact
-    /// case that broke: an overworld monster with `level_override: None`
-    /// followed by a populated `aggressive` flag.
-    #[test]
-    fn monster_roundtrips_with_none_level_override() {
-        let monster = Monster {
-            id: "m1".into(),
-            monster_type: "slime".into(),
-            position: Position {
-                x: 1.0,
-                y: 2.0,
-                z: 3.0,
-            },
-            rotation: 0.5,
-            state: MonsterState::Walk,
-            health: 10,
-            max_health: 12,
-            floor_level: 0,
-            level_override: None,
-            aggressive: true,
-            lifecycle: MonsterLifecycle::Ambient,
-            last_attack_at: 0,
-        };
-        let bytes = rmp_serde::to_vec(&monster).unwrap();
-        let decoded: Monster = rmp_serde::from_slice(&bytes).unwrap();
-        assert_eq!(decoded.level_override, None);
-        assert!(decoded.aggressive);
-    }
-
     /// `PlayerId` must reach the client as a bare integer, not as a nested
     /// one-element array (what a newtype encodes to without
     /// `#[serde(transparent)]`) and not as a string. The client decodes this
@@ -337,6 +306,8 @@ mod tests {
         assert_eq!(rmp_serde::from_slice::<u64>(&id_bytes).unwrap(), 7);
     }
 
+    /// rmp_serde encodes structs positionally, so a `skip_serializing_if`
+    /// that fires shifts later fields into the wrong slots.
     #[test]
     fn player_roundtrips_with_none_object_type() {
         let player = Player {

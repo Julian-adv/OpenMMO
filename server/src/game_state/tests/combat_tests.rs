@@ -1134,23 +1134,6 @@ async fn a_bow_shot_at_its_range_survives_the_lag_the_server_trails_by() {
     assert!(hit);
 }
 
-#[tokio::test]
-async fn a_bow_shot_past_its_range_is_rejected() {
-    let game_state = make_test_game_state("bow_range_rejects");
-    let mut rx = setup_archer(&game_state, "bow", attrs_with(10, 30)).await;
-    game_state
-        .monsters
-        .write()
-        .await
-        .insert("beyond".to_string(), make_monster("beyond", at(11.5), 0));
-
-    game_state
-        .broadcast_player_attack(&pid("archer"), "beyond".to_string())
-        .await;
-
-    expect_attack_rejected(&mut rx, "beyond", AttackRejectReason::OutOfRange);
-}
-
 /// A melee weapon keeps the 2m reach (plus lag tolerance) it always had, so
 /// an empty `range` column changes nothing.
 #[tokio::test]

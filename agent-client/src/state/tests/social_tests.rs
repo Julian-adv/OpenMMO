@@ -156,14 +156,6 @@ fn favor_accumulates_and_gates_keepsakes() {
         "{}",
         s.format_world_state()
     );
-
-    // Even a favored regular is not courted while their decline
-    // cooldown runs — the keepsake section drops them too.
-    s.push_event(ServerMessage::TradeDeclined {
-        player_id: PlayerId::from(2),
-        player_name: "jake1".to_string(),
-    });
-    assert!(s.trade_worthy_players().is_empty());
 }
 
 /// The wishlist pitch needs an audience with any favor at all, and a

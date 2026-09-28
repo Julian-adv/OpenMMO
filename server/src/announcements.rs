@@ -438,8 +438,7 @@ mod tests {
 
     #[tokio::test]
     async fn store_loads_announcements_only_once() {
-        let dir =
-            std::env::temp_dir().join(format!("onlinerpg-announcements-{}", uuid::Uuid::new_v4()));
+        let dir = crate::test_util::unique_temp_dir("announcements");
         std::fs::create_dir(&dir).expect("created temp directory");
         let path = dir.join("2026-07-22-notice.md");
         std::fs::write(&path, "first body").expect("wrote first announcement");

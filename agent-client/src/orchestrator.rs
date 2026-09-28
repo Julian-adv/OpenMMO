@@ -1154,7 +1154,7 @@ fn spawn_llm_task(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use onlinerpg_shared::CharacterAttributes;
 
@@ -1300,7 +1300,7 @@ mod tests {
         assert_eq!(msg, "Could not create character 'x': reason");
     }
 
-    fn character(name: &str, class: CharacterClass, gender: Gender) -> Character {
+    pub(crate) fn character(name: &str, class: CharacterClass, gender: Gender) -> Character {
         Character {
             id: 1,
             name: name.to_string(),

@@ -11,6 +11,7 @@ import { buildCaveWall } from './dungeon-geo-cave'
 import { buildMasonryWall } from './dungeon-geo-masonry'
 import { buildDungeonWallWeathering } from './dungeon-wall-weathering'
 import { buildDungeonFloorGroup } from './dungeon-geo-floor'
+import { carveDungeon, dungeonCtx } from './dungeon-layout.fixture'
 import { disposeDungeonGroup } from './dungeon-geometry'
 import { dungeonCaveTheme } from './dungeon-cave-themes'
 import { getHousingMaterial } from './housing-textures'
@@ -185,16 +186,8 @@ describe('dungeon wall weathering', () => {
   })
 
   it('adds unpickable overlays to all corridor sets and rooms and disposes them with the floor', () => {
-    const ctx = {
-      grid: 24,
-      wallHeight: 3,
-      floorHeight: 4,
-      shaftW: 2,
-      shaftLen: 8,
-    }
-    const carved = Array<boolean>(ctx.grid ** 2).fill(false)
-    for (let z = 2; z < 22; z++)
-      for (let x = 4; x < 8; x++) carved[x + z * ctx.grid] = true
+    const ctx = dungeonCtx(24)
+    const carved = carveDungeon(ctx, [{ x: 4, z: 2, w: 4, d: 20 }])
     const themes = new Set<string>()
     for (const depth of [1, 2, 3]) {
       const theme = dungeonCaveTheme('weathering-test', depth)

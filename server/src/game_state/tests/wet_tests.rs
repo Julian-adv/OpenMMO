@@ -16,13 +16,7 @@ use crate::game_state::WET_DEBUFF_ID as WET;
 const BUCKETS: usize = 5;
 
 async fn make_wader(game_state: &GameState, name: &str) -> (PlayerId, DirectRx) {
-    let id = pid(name);
-    game_state.add_player(make_player(name, 100.0, 50.0)).await;
-    game_state
-        .register_player_character(&id, 1, 0, attrs_with_cha(10), 0, Some(SATIATION_START))
-        .await;
-    let rx = game_state.register_direct_channel(&id).await;
-    (id, rx)
+    add_hungry_player(game_state, name, SATIATION_START).await
 }
 
 fn step_to(player_id: PlayerId, x: f32, floor_level: i8) -> MoveStep {
@@ -83,8 +77,7 @@ mod rain {
     }
 
     fn set_override(game: &GameState, intensity: f32, snow: bool) {
-        let json = br#"{"version":1,"seed":42,"sectors":[]}"#.to_vec();
-        let mut weather = WeatherState::new(serde_json::from_slice(&json).unwrap(), 1.0, json);
+        let mut weather = empty_weather(1.0);
         weather.rain_override = Some(intensity);
         weather.snow_override = snow;
         game.set_weather(weather);
@@ -514,19 +507,6 @@ async fn wading_refreshes_only_once_the_soaking_is_wearing_off() {
     );
 }
 
-#[tokio::test(start_paused = true)]
-async fn leaving_the_water_dries_off_after_a_game_hour() {
-    let game_state = make_test_game_state("wet_dries_off");
-    let (id, _rx) = make_wader(&game_state, "beachcomber").await;
-
-    soak(&game_state, &[step_to(id, -100.0, 0)]).await;
-    advance(Duration::from_secs(451)).await;
-    game_state.tick_debuffs().await;
-
-    assert_eq!(wet_remaining(&game_state, &id).await, None);
-    assert_eq!(move_mult(&game_state, &id).await, 1.0);
-}
-
 /// A lit fire at the wader's feet, on their floor.
 async fn light_fire_at(game_state: &GameState, x: f32, floor_level: i8) {
     game_state
@@ -536,32 +516,6 @@ async fn light_fire_at(game_state: &GameState, x: f32, floor_level: i8) {
             onlinerpg_shared::hunger::CAMPFIRE_DURATION_MS,
         )
         .await;
-}
-
-#[tokio::test(start_paused = true)]
-async fn a_campfire_pulls_the_soaking_down_ten_times_faster() {
-    let game_state = make_test_game_state("wet_campfire_dries");
-    let (id, _rx) = make_wader(&game_state, "camper").await;
-    soak(&game_state, &[step_to(id, -100.0, 0)]).await;
-    light_fire_at(&game_state, 100.0, 0).await;
-
-    // One sweep second by the fire burns ten off the soaking.
-    game_state
-        .tick_campfire_drying(Duration::from_secs(1))
-        .await;
-    assert_eq!(
-        wet_remaining(&game_state, &id).await,
-        Some(Duration::from_secs(441))
-    );
-
-    for _ in 0..49 {
-        game_state
-            .tick_campfire_drying(Duration::from_secs(1))
-            .await;
-    }
-    game_state.tick_debuffs().await;
-    assert_eq!(wet_remaining(&game_state, &id).await, None);
-    assert_eq!(move_mult(&game_state, &id).await, 1.0);
 }
 
 #[tokio::test(start_paused = true)]
@@ -629,7 +583,7 @@ async fn broadcast_wet_flag(game_state: &GameState, id: &PlayerId) -> bool {
 }
 
 #[tokio::test(start_paused = true)]
-async fn the_soaking_rides_the_broadcast_player_for_nearby_clients() {
+async fn the_soaking_rides_the_broadcast_player_and_dries_off_after_a_game_hour() {
     let game_state = make_test_game_state("wet_broadcast_flag");
     let (id, _rx) = make_wader(&game_state, "splasher").await;
     assert!(!broadcast_wet_flag(&game_state, &id).await);
@@ -640,6 +594,8 @@ async fn the_soaking_rides_the_broadcast_player_for_nearby_clients() {
     advance(Duration::from_secs(451)).await;
     game_state.tick_debuffs().await;
     assert!(!broadcast_wet_flag(&game_state, &id).await);
+    assert_eq!(wet_remaining(&game_state, &id).await, None);
+    assert_eq!(move_mult(&game_state, &id).await, 1.0);
 }
 
 #[tokio::test(start_paused = true)]

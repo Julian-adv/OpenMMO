@@ -166,35 +166,12 @@ async fn respawn_player_revives_dead_player_only() {
     let game_state = make_test_game_state("respawn_dead");
 
     let player = Player {
-        id: pid("player_dead"),
         name: "DeadPlayer".to_string(),
-        position: Position {
-            x: 12.0,
-            y: 0.0,
-            z: -4.0,
-        },
         rotation: 1.25,
         level: 3,
         health: 0,
         max_health: 30,
-        class: CharacterClass::Knight,
-        gender: Gender::default(),
-        is_official_npc: false,
-        torch_on: false,
-        radiance_on: false,
-        wet: false,
-        title: None,
-        floor_level: 0,
-        object_type: None,
-        main_hand: None,
-        back: None,
-        object_id: None,
-        last_combat_at: 0,
-        client_kind: Default::default(),
-        mount: None,
-        ready_at: 0,
-        back_color: None,
-        back_texture: None,
+        ..make_player("player_dead", 12.0, -4.0)
     };
     let player_id = player.id;
     game_state.add_player(player).await;
@@ -246,35 +223,12 @@ async fn respawn_does_not_disclose_players_on_other_floors() {
     let respawn = &world_config().respawn;
 
     let mut dead = Player {
-        id: pid("cross_floor_dead"),
         name: "DeadPlayer".to_string(),
-        position: Position {
-            x: 12.0,
-            y: 0.0,
-            z: -4.0,
-        },
         rotation: 1.25,
         level: 3,
         health: 0,
         max_health: 30,
-        class: CharacterClass::Knight,
-        gender: Gender::default(),
-        is_official_npc: false,
-        torch_on: false,
-        radiance_on: false,
-        wet: false,
-        title: None,
-        floor_level: 0,
-        object_type: None,
-        main_hand: None,
-        back: None,
-        object_id: None,
-        last_combat_at: 0,
-        client_kind: Default::default(),
-        mount: None,
-        ready_at: 0,
-        back_color: None,
-        back_texture: None,
+        ..make_player("cross_floor_dead", 12.0, -4.0)
     };
     let dead_id = dead.id;
 
@@ -382,35 +336,12 @@ async fn respawn_player_ignores_alive_player() {
     let game_state = make_test_game_state("respawn_alive");
 
     let player = Player {
-        id: pid("player_alive"),
         name: "AlivePlayer".to_string(),
-        position: Position {
-            x: 5.0,
-            y: 0.0,
-            z: 6.0,
-        },
         rotation: 0.75,
         level: 2,
         health: 18,
         max_health: 20,
-        class: CharacterClass::Knight,
-        gender: Gender::default(),
-        is_official_npc: false,
-        torch_on: false,
-        radiance_on: false,
-        wet: false,
-        title: None,
-        floor_level: 0,
-        object_type: None,
-        main_hand: None,
-        back: None,
-        object_id: None,
-        last_combat_at: 0,
-        client_kind: Default::default(),
-        mount: None,
-        ready_at: 0,
-        back_color: None,
-        back_texture: None,
+        ..make_player("player_alive", 5.0, 6.0)
     };
     let player_id = player.id;
     game_state.add_player(player).await;

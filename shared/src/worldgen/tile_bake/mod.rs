@@ -243,6 +243,25 @@ pub(super) fn world_to_tile(wx: f32) -> i32 {
     ((wx + TILE_DIM as f32 * 0.5) / TILE_DIM as f32).floor() as i32
 }
 
+/// Tiny world shared by the river/water field tests.
+#[cfg(test)]
+fn small_test_ctx() -> (GlobalMap, BakeContext) {
+    use super::{coasts, config::WorldGenConfig, continent, elevation, rivers, roads};
+    let cfg = WorldGenConfig {
+        seed: 7,
+        world_size_m: 256,
+        global_res: 32,
+        ..Default::default()
+    };
+    let mut map = continent::generate_continent_mask(&cfg);
+    elevation::generate_elevation(&mut map);
+    let rm = rivers::compute_flow(&map);
+    let net = roads::compute_roads(&map, &[], &rm);
+    let coast = coasts::extract_coasts(&map.land_mask, map.config.global_res as usize);
+    let ctx = BakeContext::new(&map, &rm, &net, &coast);
+    (map, ctx)
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::{continent, elevation, rivers, roads, settlements};
@@ -289,18 +308,6 @@ mod tests {
             super::super::coasts::extract_coasts(&map.land_mask, map.config.global_res as usize);
         let ctx = BakeContext::new(&map, &rm, &net, &coast_polys);
         (map, ctx)
-    }
-
-    #[test]
-    fn output_byte_sizes_match_terrain_io() {
-        let (map, ctx) = build_context();
-        let baked = bake_tile(&map, &ctx, 0, 0);
-        // These constants duplicate `terrain::defaults::{HEIGHTMAP_SIZE,
-        // SPLATMAP_SIZE}` on purpose — the shared crate can't depend on
-        // the terrain crate, so the fixed sizes are asserted here as a
-        // contract pin.
-        assert_eq!(baked.heightmap.len(), VERTS_PER_SIDE * VERTS_PER_SIDE * 2);
-        assert_eq!(baked.splatmap.len(), TILE_DIM * TILE_DIM * 4);
     }
 
     #[test]
@@ -392,9 +399,13 @@ mod tests {
     }
 
     #[test]
-    fn splat_bytes_reference_valid_palette_slots() {
+    fn baked_bytes_match_terrain_io_and_palette() {
         let (map, ctx) = build_context();
         let baked = bake_tile(&map, &ctx, 0, 0);
+        // Pins `terrain::defaults::{HEIGHTMAP_SIZE, SPLATMAP_SIZE}`; the
+        // shared crate can't depend on the terrain crate.
+        assert_eq!(baked.heightmap.len(), VERTS_PER_SIDE * VERTS_PER_SIDE * 2);
+        assert_eq!(baked.splatmap.len(), TILE_DIM * TILE_DIM * 4);
         for chunk in baked.splatmap.as_chunks::<4>().0 {
             let primary = (chunk[0] >> 4) & 0x0F;
             let secondary = chunk[0] & 0x0F;

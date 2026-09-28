@@ -846,68 +846,41 @@ mod tests {
         }
     }
 
-    #[test]
-    fn erosion_preserves_sea_at_zero() {
-        let cfg = test_config(96);
-        let mut map = continent::generate_continent_mask(&cfg);
+    fn eroded_map(cfg: &WorldGenConfig) -> GlobalMap {
+        let mut map = continent::generate_continent_mask(cfg);
         elevation::generate_elevation(&mut map);
         erode_hydraulic(&mut map);
-        for i in 0..map.land_mask.len() {
-            if map.land_mask[i] == 0 {
-                assert_eq!(
-                    map.elevation_m[i], 0.0,
-                    "sea cell {i} elevated to {}",
-                    map.elevation_m[i]
-                );
-            }
-        }
+        map
     }
 
     #[test]
-    fn erosion_does_not_exceed_max_elevation() {
+    fn eroded_elevation_stays_within_bounds() {
         let cfg = test_config(96);
-        let mut map = continent::generate_continent_mask(&cfg);
-        elevation::generate_elevation(&mut map);
-        erode_hydraulic(&mut map);
-        let max_observed = map.elevation_m.iter().fold(0.0f32, |a, &b| a.max(b));
-        assert!(
-            max_observed <= cfg.max_elevation_m + 1e-3,
-            "post-erosion max {max_observed} exceeds cap {}",
-            cfg.max_elevation_m
-        );
-    }
-
-    #[test]
-    fn deterministic_for_same_seed() {
-        let cfg = test_config(64);
-        let mut a = continent::generate_continent_mask(&cfg);
-        elevation::generate_elevation(&mut a);
-        erode_hydraulic(&mut a);
-        let mut b = continent::generate_continent_mask(&cfg);
-        elevation::generate_elevation(&mut b);
-        erode_hydraulic(&mut b);
-        assert_eq!(a.elevation_m, b.elevation_m);
-    }
-
-    #[test]
-    fn min_land_floor_lifts_all_land_above_threshold() {
-        // Floor + half-amplitude noise → every land cell must clear
-        // (min − amp/2). Coastal cells the beach ramp drops to 0.1 m
-        // come back up to ≥ 0.75 m with the default config (1 m floor,
-        // 0.5 m amplitude), comfortably above the river water surface.
-        let cfg = test_config(96);
-        let mut map = continent::generate_continent_mask(&cfg);
-        elevation::generate_elevation(&mut map);
-        erode_hydraulic(&mut map);
+        let map = eroded_map(&cfg);
+        // Floor + half-amplitude noise: coastal cells the beach ramp drops to
+        // 0.1 m must come back above the river water surface.
         let lower_bound = cfg.min_land_height_m - cfg.min_land_height_noise_amp_m * 0.5;
         for (i, &h) in map.elevation_m.iter().enumerate() {
-            if map.land_mask[i] == 1 {
+            if map.land_mask[i] == 0 {
+                assert_eq!(h, 0.0, "sea cell {i} elevated to {h}");
+            } else {
                 assert!(
                     h >= lower_bound - 1e-3,
                     "land cell {i} below floor: {h} < {lower_bound}"
                 );
             }
+            assert!(
+                h <= cfg.max_elevation_m + 1e-3,
+                "post-erosion cell {i} at {h} exceeds cap {}",
+                cfg.max_elevation_m
+            );
         }
+    }
+
+    #[test]
+    fn deterministic_for_same_seed() {
+        let cfg = test_config(64);
+        assert_eq!(eroded_map(&cfg).elevation_m, eroded_map(&cfg).elevation_m);
     }
 
     #[test]
@@ -916,9 +889,7 @@ mod tests {
         // beach ramp pulled to 0.1 m stay at 0.1 m.
         let mut cfg = test_config(96);
         cfg.min_land_height_m = 0.0;
-        let mut map = continent::generate_continent_mask(&cfg);
-        elevation::generate_elevation(&mut map);
-        erode_hydraulic(&mut map);
+        let map = eroded_map(&cfg);
         let any_below_floor = map
             .elevation_m
             .iter()

@@ -68,6 +68,18 @@ pub(crate) fn monster(id: &str) -> Monster {
     }
 }
 
+pub(crate) fn bag_item(id: u64, def: &str, qty: u32) -> onlinerpg_shared::inventory::ItemInstance {
+    onlinerpg_shared::inventory::ItemInstance {
+        instance_id: id,
+        item_def_id: def.to_string(),
+        quantity: qty,
+        enchant: 0,
+        cape_color: None,
+        cape_texture: None,
+        locked: false,
+    }
+}
+
 pub(crate) fn ground_item(id: u64, def: &str, x: f32, z: f32, floor: i8) -> GroundItem {
     GroundItem {
         instance_id: id,

@@ -1835,355 +1835,218 @@ mod tests {
     }
 
     #[test]
-    fn level_history_seeds_existing_characters_and_tracks_saved_changes() {
-        let path = crate::test_util::unique_temp_dir("level_history_lifecycle").join("game.db");
-        let auth = AuthService::new(path.clone()).unwrap();
-        let conn = auth.open_connection().unwrap();
-        conn.execute_batch(
-            "DROP TRIGGER character_level_created;
-             DROP TRIGGER IF EXISTS character_level_changed;
-             DROP TABLE character_level_history;
-             INSERT INTO accounts (player_name) VALUES ('player'), ('npc_test'), ('npcxplayer');
-             INSERT INTO characters (id, account_name, character_name, level, created_at)
-             VALUES (1, 'player', 'Hero', 10, 100), (2, 'npc_test', 'Npc', 99, 100);",
-        )
-        .unwrap();
-        let before = unix_now();
-        AuthService::ensure_level_history_schema(&conn).unwrap();
-        let baseline: (i64, u32) = conn
-            .query_row(
-                "SELECT timestamp, level FROM character_level_history WHERE character_id = 1",
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
+    fn character_history_seeds_existing_characters_and_tracks_saved_changes() {
+        type EnsureSchema = fn(&Connection) -> Result<(), rusqlite::Error>;
+        type FirstSeriesName = fn(&AuthService) -> String;
+        let cases: [(&str, EnsureSchema, FirstSeriesName); 2] = [
+            ("level", AuthService::ensure_level_history_schema, |auth| {
+                auth.level_leaderboard(168, 3600)
+                    .unwrap()
+                    .series
+                    .remove(0)
+                    .name
+            }),
+            ("gold", AuthService::ensure_gold_history_schema, |auth| {
+                auth.gold_leaderboard(168, 3600)
+                    .unwrap()
+                    .series
+                    .remove(0)
+                    .name
+            }),
+        ];
+        for (metric, ensure_schema, first_series_name) in cases {
+            let path = crate::test_util::unique_temp_dir(&format!("{metric}_history_lifecycle"))
+                .join("game.db");
+            let auth = AuthService::new(path.clone()).unwrap();
+            let conn = auth.open_connection().unwrap();
+            let history_count = |filter: &str| {
+                conn.query_row(
+                    &format!("SELECT COUNT(*) FROM character_{metric}_history {filter}"),
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )
+                .unwrap()
+            };
+            conn.execute_batch(&format!(
+                "DROP TRIGGER character_{metric}_created;
+                 DROP TRIGGER IF EXISTS character_{metric}_changed;
+                 DROP TABLE character_{metric}_history;
+                 INSERT INTO accounts (player_name) VALUES ('player'), ('npc_test'), ('npcxplayer');
+                 INSERT INTO characters (id, account_name, character_name, {metric}, created_at)
+                 VALUES (1, 'player', 'Hero', 10, 100), (2, 'npc_test', 'Npc', 99, 100);"
+            ))
             .unwrap();
-        assert!((before..=unix_now()).contains(&baseline.0));
-        assert_eq!(baseline.1, 10);
-        conn.execute_batch(
-            "UPDATE character_level_history SET timestamp = timestamp - 86400;
-             UPDATE characters SET level = 10 WHERE id = 1;
-             INSERT INTO characters (id, account_name, character_name) VALUES (3, 'npcxplayer', 'NewHero');"
-        ).unwrap();
-        assert_eq!(
-            conn.query_row("SELECT COUNT(*) FROM character_level_history", [], |row| {
-                row.get::<_, i64>(0)
-            })
-            .unwrap(),
-            2
-        );
-        conn.execute_batch(
-            "UPDATE characters SET level = 11 WHERE id = 1;
-             UPDATE characters SET level = 9 WHERE id = 1;
-             UPDATE characters SET character_name = 'Renamed' WHERE id = 1;",
-        )
-        .unwrap();
-        AuthService::write_character_metric_samples(&conn, unix_now()).unwrap();
-        let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM character_level_history", [], |row| {
-                row.get(0)
-            })
+            let before = unix_now();
+            ensure_schema(&conn).unwrap();
+            let baseline: (i64, i64) = conn
+                .query_row(
+                    &format!(
+                        "SELECT timestamp, {metric} FROM character_{metric}_history WHERE character_id = 1"
+                    ),
+                    [],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .unwrap();
+            assert!((before..=unix_now()).contains(&baseline.0), "{metric}");
+            assert_eq!(baseline.1, 10, "{metric}");
+            conn.execute_batch(&format!(
+                "UPDATE character_{metric}_history SET timestamp = timestamp - 86400;
+                 UPDATE characters SET {metric} = 10 WHERE id = 1;
+                 INSERT INTO characters (id, account_name, character_name) VALUES (3, 'npcxplayer', 'NewHero');"
+            ))
             .unwrap();
-        assert_eq!(conn.query_row("SELECT level FROM character_level_history WHERE character_id = 1 ORDER BY timestamp DESC LIMIT 1", [], |row| row.get::<_, u32>(0)).unwrap(), 9);
-        conn.execute_batch("BEGIN; UPDATE characters SET level = 20 WHERE id = 1; ROLLBACK;")
+            assert_eq!(history_count(""), 2, "{metric}");
+            conn.execute_batch(&format!(
+                "UPDATE characters SET {metric} = 11 WHERE id = 1;
+                 UPDATE characters SET {metric} = 9 WHERE id = 1;
+                 UPDATE characters SET character_name = 'Renamed' WHERE id = 1;"
+            ))
             .unwrap();
-        drop(AuthService::new(path).unwrap());
-        assert_eq!(
-            conn.query_row("SELECT COUNT(*) FROM character_level_history", [], |row| {
-                row.get::<_, i64>(0)
-            })
-            .unwrap(),
-            count
-        );
-        assert_eq!(
-            auth.level_leaderboard(168, 3600).unwrap().series[0].name,
-            "Renamed"
-        );
-        conn.execute("DELETE FROM characters WHERE id = 1", [])
-            .unwrap();
-        assert_eq!(
-            conn.query_row(
-                "SELECT COUNT(*) FROM character_level_history WHERE character_id IN (1, 2)",
-                [],
-                |row| row.get::<_, i64>(0)
-            )
-            .unwrap(),
-            0
-        );
-    }
-
-    #[test]
-    fn level_history_preserves_baselines_and_last_bucket_values_for_every_period() {
-        let path = crate::test_util::unique_temp_dir("level_history_ranges").join("game.db");
-        let auth = AuthService::new(path).unwrap();
-        let conn = auth.open_connection().unwrap();
-        conn.execute_batch(
-            "INSERT INTO accounts (player_name) VALUES ('player');
-             INSERT INTO characters (id, account_name, character_name, level)
-             VALUES (1, 'player', 'Hero', 10), (2, 'player', 'NewHero', 1);
-             DELETE FROM character_level_history WHERE character_id = 1;",
-        )
-        .unwrap();
-        let now = unix_now();
-        let bucket = (now / DAY_SECONDS - 2) * DAY_SECONDS;
-        for (timestamp, level) in [
-            (now - 400 * DAY_SECONDS, 1),
-            (now - 20 * DAY_SECONDS, 5),
-            (bucket + 1, 6),
-            (bucket + 2, 7),
-            (bucket + 3, 6),
-            (now - 3600, 10),
-        ] {
-            conn.execute(
-                "INSERT INTO character_level_history VALUES (1, ?1, ?2)",
-                params![timestamp, level],
-            )
-            .unwrap();
-        }
-        for (hours, interval) in [(168, 3600), (720, 3600), (4320, 21600), (8760, DAY_SECONDS)] {
-            let result = auth.level_leaderboard(hours, interval).unwrap();
-            assert_eq!(result.timestamp - result.from, i64::from(hours) * 3600);
-            assert_eq!(result.sample_interval_seconds, interval);
-            let hero = &result.series[0];
-            assert_eq!(hero.started_at, now - 400 * DAY_SECONDS);
+            AuthService::write_character_metric_samples(&conn, unix_now()).unwrap();
+            let count = history_count("");
             assert_eq!(
-                hero.samples[0],
-                LevelSample {
-                    timestamp: result.from,
-                    level: if hours == 168 { 5 } else { 1 }
-                }
+                conn.query_row(
+                    &format!(
+                        "SELECT {metric} FROM character_{metric}_history WHERE character_id = 1 ORDER BY timestamp DESC LIMIT 1"
+                    ),
+                    [],
+                    |row| row.get::<_, i64>(0)
+                )
+                .unwrap(),
+                9,
+                "{metric}"
             );
-            assert!(hero.samples.contains(&LevelSample {
-                timestamp: bucket + 3,
-                level: 6
-            }));
-            assert!(!hero.samples.iter().any(|sample| sample.level == 7));
-            assert_eq!(hero.samples.last().unwrap().level, 10);
-            assert!(hero
-                .samples
-                .windows(2)
-                .all(|pair| pair[0].timestamp < pair[1].timestamp));
-            let new_hero = &result.series[1];
-            assert_eq!(new_hero.samples.len(), 1);
-            assert_eq!(new_hero.samples[0].timestamp, new_hero.started_at);
-            assert!(new_hero.started_at > result.from);
+            conn.execute_batch(&format!(
+                "BEGIN; UPDATE characters SET {metric} = 20 WHERE id = 1; ROLLBACK;"
+            ))
+            .unwrap();
+            drop(AuthService::new(path).unwrap());
+            assert_eq!(history_count(""), count, "{metric}");
+            assert_eq!(first_series_name(&auth), "Renamed", "{metric}");
+            conn.execute("DELETE FROM characters WHERE id = 1", [])
+                .unwrap();
+            assert_eq!(history_count("WHERE character_id IN (1, 2)"), 0, "{metric}");
         }
-        assert_eq!(
-            conn.query_row("SELECT COUNT(*) FROM character_level_history", [], |row| {
-                row.get::<_, i64>(0)
-            })
-            .unwrap(),
-            7
-        );
+    }
+
+    /// Sample values widened to i64 so one test body covers every metric.
+    type SeriesPoints = (i64, Vec<(i64, i64)>);
+
+    struct HistoryRange {
+        timestamp: i64,
+        from: i64,
+        sample_interval_seconds: i64,
+        series: Vec<SeriesPoints>,
+    }
+
+    fn history_range<Entry, Series>(
+        board: crate::metrics::CharacterLeaderboard<Entry, Series>,
+        series: fn(Series) -> SeriesPoints,
+    ) -> HistoryRange {
+        HistoryRange {
+            timestamp: board.timestamp,
+            from: board.from,
+            sample_interval_seconds: board.sample_interval_seconds,
+            series: board.series.into_iter().map(series).collect(),
+        }
     }
 
     #[test]
-    fn gold_history_seeds_existing_characters_and_tracks_saved_changes() {
-        let path = crate::test_util::unique_temp_dir("gold_history_lifecycle").join("game.db");
-        let auth = AuthService::new(path.clone()).unwrap();
-        let conn = auth.open_connection().unwrap();
-        conn.execute_batch(
-            "DROP TRIGGER character_gold_created;
-             DROP TRIGGER IF EXISTS character_gold_changed;
-             DROP TABLE character_gold_history;
-             INSERT INTO accounts (player_name) VALUES ('player'), ('npc_test'), ('npcxplayer');
-             INSERT INTO characters (id, account_name, character_name, gold, created_at)
-             VALUES (1, 'player', 'Hero', 10, 100), (2, 'npc_test', 'Npc', 99, 100);",
-        )
-        .unwrap();
-        let before = unix_now();
-        AuthService::ensure_gold_history_schema(&conn).unwrap();
-        let baseline: (i64, i64) = conn
-            .query_row(
-                "SELECT timestamp, gold FROM character_gold_history WHERE character_id = 1",
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
+    fn character_history_preserves_baselines_and_last_bucket_values_for_every_period() {
+        type Range = fn(&AuthService, u32, i64) -> HistoryRange;
+        let cases: [(&str, i64, i64, Range); 3] = [
+            ("level", 1, 1, |auth, hours, interval| {
+                let board = auth.level_leaderboard(hours, interval).unwrap();
+                history_range(board, |s| {
+                    let samples = s.samples.iter().map(|x| (x.timestamp, i64::from(x.level)));
+                    (s.started_at, samples.collect())
+                })
+            }),
+            ("gold", 0, 0, |auth, hours, interval| {
+                let board = auth.gold_leaderboard(hours, interval).unwrap();
+                history_range(board, |s| {
+                    let samples = s.samples.iter().map(|x| (x.timestamp, x.gold));
+                    (s.started_at, samples.collect())
+                })
+            }),
+            ("weapon_enchant", 7, 0, |auth, hours, interval| {
+                let board = auth.weapon_enchant_leaderboard(hours, interval).unwrap();
+                history_range(board, |s| {
+                    let samples = s
+                        .samples
+                        .iter()
+                        .map(|x| (x.timestamp, i64::from(x.weapon_enchant)));
+                    (s.started_at, samples.collect())
+                })
+            }),
+        ];
+        for (metric, new_hero_value, oldest, range) in cases {
+            let path = crate::test_util::unique_temp_dir(&format!("{metric}_history_ranges"))
+                .join("game.db");
+            let auth = AuthService::new(path).unwrap();
+            let conn = auth.open_connection().unwrap();
+            conn.execute_batch(&format!(
+                "INSERT INTO accounts (player_name) VALUES ('player');
+                 INSERT INTO characters (id, account_name, character_name, {metric})
+                 VALUES (1, 'player', 'Hero', 10), (2, 'player', 'NewHero', {new_hero_value});
+                 DELETE FROM character_{metric}_history WHERE character_id = 1;"
+            ))
             .unwrap();
-        assert!((before..=unix_now()).contains(&baseline.0));
-        assert_eq!(baseline.1, 10);
-        conn.execute_batch(
-            "UPDATE character_gold_history SET timestamp = timestamp - 86400;
-             UPDATE characters SET gold = 10 WHERE id = 1;
-             INSERT INTO characters (id, account_name, character_name) VALUES (3, 'npcxplayer', 'NewHero');"
-        ).unwrap();
-        assert_eq!(
-            conn.query_row("SELECT COUNT(*) FROM character_gold_history", [], |row| {
-                row.get::<_, i64>(0)
-            })
-            .unwrap(),
-            2
-        );
-        conn.execute_batch(
-            "UPDATE characters SET gold = 11 WHERE id = 1;
-             UPDATE characters SET gold = 9 WHERE id = 1;
-             UPDATE characters SET character_name = 'Renamed' WHERE id = 1;",
-        )
-        .unwrap();
-        AuthService::write_character_metric_samples(&conn, unix_now()).unwrap();
-        let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM character_gold_history", [], |row| {
-                row.get(0)
-            })
-            .unwrap();
-        assert_eq!(conn.query_row("SELECT gold FROM character_gold_history WHERE character_id = 1 ORDER BY timestamp DESC LIMIT 1", [], |row| row.get::<_, i64>(0)).unwrap(), 9);
-        conn.execute_batch("BEGIN; UPDATE characters SET gold = 20 WHERE id = 1; ROLLBACK;")
-            .unwrap();
-        drop(AuthService::new(path).unwrap());
-        assert_eq!(
-            conn.query_row("SELECT COUNT(*) FROM character_gold_history", [], |row| {
-                row.get::<_, i64>(0)
-            })
-            .unwrap(),
-            count
-        );
-        assert_eq!(
-            auth.gold_leaderboard(168, 3600).unwrap().series[0].name,
-            "Renamed"
-        );
-        conn.execute("DELETE FROM characters WHERE id = 1", [])
-            .unwrap();
-        assert_eq!(
-            conn.query_row(
-                "SELECT COUNT(*) FROM character_gold_history WHERE character_id IN (1, 2)",
-                [],
-                |row| row.get::<_, i64>(0)
-            )
-            .unwrap(),
-            0
-        );
-    }
-
-    #[test]
-    fn gold_history_preserves_baselines_and_last_bucket_values_for_every_period() {
-        let path = crate::test_util::unique_temp_dir("gold_history_ranges").join("game.db");
-        let auth = AuthService::new(path).unwrap();
-        let conn = auth.open_connection().unwrap();
-        conn.execute_batch(
-            "INSERT INTO accounts (player_name) VALUES ('player');
-             INSERT INTO characters (id, account_name, character_name, gold)
-             VALUES (1, 'player', 'Hero', 10), (2, 'player', 'NewHero', 0);
-             DELETE FROM character_gold_history WHERE character_id = 1;",
-        )
-        .unwrap();
-        let now = unix_now();
-        let bucket = (now / DAY_SECONDS - 2) * DAY_SECONDS;
-        for (timestamp, gold) in [
-            (now - 400 * DAY_SECONDS, 0),
-            (now - 20 * DAY_SECONDS, 5),
-            (bucket + 1, 6),
-            (bucket + 2, 7),
-            (bucket + 3, 6),
-            (now - 3600, 10),
-        ] {
-            conn.execute(
-                "INSERT INTO character_gold_history VALUES (1, ?1, ?2)",
-                params![timestamp, gold],
-            )
-            .unwrap();
-        }
-        for (hours, interval) in [(168, 3600), (720, 3600), (4320, 21600), (8760, DAY_SECONDS)] {
-            let result = auth.gold_leaderboard(hours, interval).unwrap();
-            assert_eq!(result.timestamp - result.from, i64::from(hours) * 3600);
-            assert_eq!(result.sample_interval_seconds, interval);
-            let hero = &result.series[0];
-            assert_eq!(hero.started_at, now - 400 * DAY_SECONDS);
+            let now = unix_now();
+            let bucket = (now / DAY_SECONDS - 2) * DAY_SECONDS;
+            for (timestamp, value) in [
+                (now - 400 * DAY_SECONDS, oldest),
+                (now - 20 * DAY_SECONDS, 5),
+                (bucket + 1, 6),
+                (bucket + 2, 7),
+                (bucket + 3, 6),
+                (now - 3600, 10),
+            ] {
+                conn.execute(
+                    &format!("INSERT INTO character_{metric}_history VALUES (1, ?1, ?2)"),
+                    params![timestamp, value],
+                )
+                .unwrap();
+            }
+            for (hours, interval) in [(168, 3600), (720, 3600), (4320, 21600), (8760, DAY_SECONDS)]
+            {
+                let result = range(&auth, hours, interval);
+                assert_eq!(
+                    result.timestamp - result.from,
+                    i64::from(hours) * 3600,
+                    "{metric}"
+                );
+                assert_eq!(result.sample_interval_seconds, interval, "{metric}");
+                let (started_at, samples) = &result.series[0];
+                assert_eq!(*started_at, now - 400 * DAY_SECONDS, "{metric}");
+                assert_eq!(
+                    samples[0],
+                    (result.from, if hours == 168 { 5 } else { oldest }),
+                    "{metric}"
+                );
+                assert!(samples.contains(&(bucket + 3, 6)), "{metric}");
+                assert!(!samples.iter().any(|&(_, value)| value == 7), "{metric}");
+                assert_eq!(samples.last().unwrap().1, 10, "{metric}");
+                assert!(
+                    samples.windows(2).all(|pair| pair[0].0 < pair[1].0),
+                    "{metric}"
+                );
+                let (new_started_at, new_samples) = &result.series[1];
+                assert_eq!(new_samples.len(), 1, "{metric}");
+                assert_eq!(new_samples[0].0, *new_started_at, "{metric}");
+                assert!(*new_started_at > result.from, "{metric}");
+            }
             assert_eq!(
-                hero.samples[0],
-                CharacterGoldSample {
-                    timestamp: result.from,
-                    gold: if hours == 168 { 5 } else { 0 }
-                }
+                conn.query_row(
+                    &format!("SELECT COUNT(*) FROM character_{metric}_history"),
+                    [],
+                    |row| row.get::<_, i64>(0)
+                )
+                .unwrap(),
+                7,
+                "{metric}"
             );
-            assert!(hero.samples.contains(&CharacterGoldSample {
-                timestamp: bucket + 3,
-                gold: 6
-            }));
-            assert!(!hero.samples.iter().any(|sample| sample.gold == 7));
-            assert_eq!(hero.samples.last().unwrap().gold, 10);
-            assert!(hero
-                .samples
-                .windows(2)
-                .all(|pair| pair[0].timestamp < pair[1].timestamp));
-            let new_hero = &result.series[1];
-            assert_eq!(new_hero.samples.len(), 1);
-            assert_eq!(new_hero.samples[0].timestamp, new_hero.started_at);
-            assert!(new_hero.started_at > result.from);
         }
-        assert_eq!(
-            conn.query_row("SELECT COUNT(*) FROM character_gold_history", [], |row| {
-                row.get::<_, i64>(0)
-            })
-            .unwrap(),
-            7
-        );
-    }
-
-    #[test]
-    fn weapon_enchant_history_preserves_baselines_and_last_bucket_values_for_every_period() {
-        let path =
-            crate::test_util::unique_temp_dir("weapon_enchant_history_ranges").join("game.db");
-        let auth = AuthService::new(path).unwrap();
-        let conn = auth.open_connection().unwrap();
-        conn.execute_batch(
-            "INSERT INTO accounts (player_name) VALUES ('player');
-             INSERT INTO characters (id, account_name, character_name, weapon_enchant)
-             VALUES (1, 'player', 'Hero', 10), (2, 'player', 'NewHero', 7);
-             DELETE FROM character_weapon_enchant_history WHERE character_id = 1;",
-        )
-        .unwrap();
-        let now = unix_now();
-        let bucket = (now / DAY_SECONDS - 2) * DAY_SECONDS;
-        for (timestamp, weapon_enchant) in [
-            (now - 400 * DAY_SECONDS, 0),
-            (now - 20 * DAY_SECONDS, 5),
-            (bucket + 1, 6),
-            (bucket + 2, 7),
-            (bucket + 3, 6),
-            (now - 3600, 10),
-        ] {
-            conn.execute(
-                "INSERT INTO character_weapon_enchant_history VALUES (1, ?1, ?2)",
-                params![timestamp, weapon_enchant],
-            )
-            .unwrap();
-        }
-        for (hours, interval) in [(168, 3600), (720, 3600), (4320, 21600), (8760, DAY_SECONDS)] {
-            let result = auth.weapon_enchant_leaderboard(hours, interval).unwrap();
-            assert_eq!(result.timestamp - result.from, i64::from(hours) * 3600);
-            assert_eq!(result.sample_interval_seconds, interval);
-            let hero = &result.series[0];
-            assert_eq!(hero.started_at, now - 400 * DAY_SECONDS);
-            assert_eq!(
-                hero.samples[0],
-                WeaponEnchantSample {
-                    timestamp: result.from,
-                    weapon_enchant: if hours == 168 { 5 } else { 0 }
-                }
-            );
-            assert!(hero.samples.contains(&WeaponEnchantSample {
-                timestamp: bucket + 3,
-                weapon_enchant: 6
-            }));
-            assert!(!hero.samples.iter().any(|sample| sample.weapon_enchant == 7));
-            assert_eq!(hero.samples.last().unwrap().weapon_enchant, 10);
-            assert!(hero
-                .samples
-                .windows(2)
-                .all(|pair| pair[0].timestamp < pair[1].timestamp));
-            let new_hero = &result.series[1];
-            assert_eq!(new_hero.samples.len(), 1);
-            assert_eq!(new_hero.samples[0].timestamp, new_hero.started_at);
-            assert!(new_hero.started_at > result.from);
-        }
-        assert_eq!(
-            conn.query_row(
-                "SELECT COUNT(*) FROM character_weapon_enchant_history",
-                [],
-                |row| { row.get::<_, i64>(0) }
-            )
-            .unwrap(),
-            7
-        );
     }
 
     #[test]

@@ -104,20 +104,6 @@ fn a_neighbours_teleport_only_moves_their_entry() {
     );
 }
 
-/// Another player's FishingEnded renders no prompt line, so scheduling an
-/// LLM cycle for it would buy a blank prompt; our own stays urgent.
-#[test]
-fn fishing_ended_wakes_llm_only_for_own_outcome() {
-    let (mut s, _rx) = test_state();
-    s.self_player_id = Some(PlayerId::from(1));
-    let ended = |id: u64| ServerMessage::FishingEnded {
-        player_id: PlayerId::from(id),
-        outcome: onlinerpg_shared::fishing::FishingOutcome::Escaped,
-    };
-    assert_eq!(s.classify_event(&ended(1)), EventUrgency::Urgent);
-    assert_eq!(s.classify_event(&ended(2)), EventUrgency::Noise);
-}
-
 /// A catch past the carry limit lands at our feet; the prompt must not
 /// claim it is in the bag, or the model tries to `use` a pouch it lacks.
 #[test]
@@ -243,8 +229,9 @@ async fn a_beat_during_the_reaction_is_missed() {
     assert!(rx.try_recv().is_err(), "only one answer may be in flight");
 }
 
-/// The driver submits a prompt whenever the event buffer is non-empty, so
-/// a spectator ending must skip the buffer entirely, not just rank low.
+/// Another player's FishingEnded renders no prompt line, and the driver
+/// submits a prompt whenever the buffer is non-empty, so a spectator ending
+/// must neither wake the LLM nor buffer; our own stays urgent.
 #[test]
 fn fishing_ended_buffers_only_own_outcome() {
     let (mut s, _rx) = test_state();
@@ -253,9 +240,9 @@ fn fishing_ended_buffers_only_own_outcome() {
         player_id: PlayerId::from(id),
         outcome: onlinerpg_shared::fishing::FishingOutcome::Escaped,
     };
-    s.push_event(ended(2));
+    assert_eq!(s.push_event(ended(2)), EventUrgency::Noise);
     assert!(s.events.is_empty(), "spectator ending must not buffer");
-    s.push_event(ended(1));
+    assert_eq!(s.push_event(ended(1)), EventUrgency::Urgent);
     assert_eq!(s.events.len(), 1, "own ending must reach the prompt");
 }
 

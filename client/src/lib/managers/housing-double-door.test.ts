@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { crossRoomDoorPartner, doubleDoorPartner } from './housing-passability'
 import type { RoomData, WallConfig, WallVariant } from '../types/housing'
+import { makeRoom } from '../utils/house-room.fixture'
 
 const wall = (...v: WallVariant[]): WallConfig[] =>
   v.map((variant) => ({ variant, texture: 0 }))
@@ -24,20 +25,8 @@ describe('doubleDoorPartner', () => {
   })
 })
 
-const room = (localX: number, south: WallConfig[]): RoomData => ({
-  localX,
-  localZ: 0,
-  sizeX: 3,
-  sizeZ: 3,
-  floorLevel: 0,
-  floorTexture: 0,
-  roofTexture: 0,
-  wallHeight: 3,
-  wallNorth: wall('solid', 'solid', 'solid'),
-  wallSouth: south,
-  wallEast: wall('solid', 'solid', 'solid'),
-  wallWest: wall('solid', 'solid', 'solid'),
-})
+const room = (localX: number, south: WallConfig[]): RoomData =>
+  makeRoom({ localX, sizeX: 3, sizeZ: 3, wallSouth: south })
 
 describe('crossRoomDoorPartner', () => {
   it('pairs lone halves across the shared wall end of adjacent rooms', () => {
