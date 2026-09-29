@@ -44,6 +44,19 @@ function makeSkinned(localYs: number[], posedBoneY = 0): THREE.Group {
 const CLEARANCE = 0.01
 
 describe('computeCorpseGroundOffset', () => {
+  it('ignores body regions hidden by modular clothes when grounding', () => {
+    const root = makeSkinned([0.1])
+    const mesh = root.children[0] as THREE.SkinnedMesh
+    mesh.skeleton.bones[0].name = 'RightFoot'
+    const hidden = makeSkinned([-2])
+    ;(hidden.children[0] as THREE.SkinnedMesh).skeleton.bones[0].name =
+      'RightFoot'
+    hidden.visible = false
+    root.add(hidden)
+    expect(computeCorpseGroundOffset(root)).toBeCloseTo(-0.1 + CLEARANCE)
+    expect(computeSoleGroundOffset(root)).toBeCloseTo(-0.1 + 0.005)
+  })
+
   it('grounds on the lowest vertex, wherever the body sits', () => {
     // One vertex dangling to -0.50 m (like a tail tip) below a body at 0.30 m.
     const root = makeSkinned([-0.5, ...new Array(100).fill(0.3)])

@@ -18,7 +18,11 @@
     graphicsQuality,
   } from '../stores/graphicsSettings'
   import { createRenderCadence } from '../utils/renderCadence'
-  import { loadGLB } from '../utils/gltfCache'
+  import {
+    loadCharacterModel,
+    loadCharacterAnimationPack,
+    disposeCharacterSkeletons,
+  } from '../utils/characterModel'
   import type { CharacterClass, Gender } from '../network/networkTypes'
 
   interface Props {
@@ -77,24 +81,31 @@
     const path = modelPath
     let cancelled = false
     Promise.all([
-      loadGLB(path),
-      loadGLB(CHARACTER_ANIMATION_PACK_PATHS.social),
-    ]).then(([charGltf, socialGltf]) => {
-      if (cancelled) return
-      for (const clip of getGltfAnimations(socialGltf)) {
-        clipsByName.set(clip.name, clip)
-      }
-      const { modelRoot: root } = createCharacterModelRoot(charGltf.scene)
-      root.position.y = computeSoleGroundOffset(root)
-      mixer = new THREE.AnimationMixer(root)
-      modelRoot = root
-      // One hidden bind-pose frame so the character's pipelines compile
-      // before the wrapper ever becomes visible.
-      invalidate()
-    })
+      loadCharacterModel(path),
+      loadCharacterAnimationPack(path, CHARACTER_ANIMATION_PACK_PATHS.social),
+    ])
+      .then(([charGltf, socialGltf]) => {
+        if (cancelled) return
+        for (const clip of getGltfAnimations(socialGltf)) {
+          clipsByName.set(clip.name, clip)
+        }
+        const { modelRoot: root } = createCharacterModelRoot(charGltf.scene)
+        root.position.y = computeSoleGroundOffset(root)
+        mixer = new THREE.AnimationMixer(root)
+        modelRoot = root
+        // One hidden bind-pose frame so the character's pipelines compile
+        // before the wrapper ever becomes visible.
+        invalidate()
+      })
+      .catch((error) => console.error('Failed to load emote preview', error))
     return () => {
       cancelled = true
       mixer?.stopAllAction()
+      if (modelRoot) {
+        mixer?.uncacheRoot(modelRoot)
+        disposeCharacterSkeletons(modelRoot)
+      }
+      clipsByName.clear()
       mixer = null
       currentAction = null
       modelRoot = null

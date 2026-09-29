@@ -5,6 +5,7 @@ import { createFrameYielder, yieldTask } from './frameYield'
 import { retargetClipAsync } from './retargetClipAsync'
 import { loadGLB } from './gltfCache'
 import { CHARACTER_ANIMATION_PACK_PATHS } from './modelPaths'
+import { skinnedParts } from './modularCharacter'
 
 type AnimationSource = 'base' | 'locomotion' | 'combat_melee'
 
@@ -72,6 +73,16 @@ export function createCharacterModelRoot(sourceScene: THREE.Object3D): {
   modelRoot: THREE.Group
 } {
   const clonedScene = SkeletonUtils.clone(sourceScene) as THREE.Object3D
+  if (sourceScene.userData.modular_character) {
+    const meshes = skinnedParts(clonedScene)
+    const shared = meshes[0]?.skeleton
+    if (shared) {
+      const unused = new Set(meshes.map((mesh) => mesh.skeleton))
+      unused.delete(shared)
+      for (const mesh of meshes) mesh.bind(shared, mesh.bindMatrix.clone())
+      for (const skeleton of unused) skeleton.dispose()
+    }
+  }
   const modelRoot = new THREE.Group()
   modelRoot.add(clonedScene)
 
@@ -92,26 +103,13 @@ const FOOT_INFLUENCE_THRESHOLD = 0.5
  *  doesn't peter-pan where coplanar with the ground. */
 const FOOT_GROUND_CLEARANCE = 0.005
 
-/**
- * Y offset (metres) to add to a freshly-cloned model so its shoe soles rest
- * just above the floor plane (y = 0 at the model-root origin), with a hair of
- * ground clearance. Measured in the skeleton's current pose, so callers MUST
- * call this right after createCharacterModelRoot — i.e. in the deterministic
- * bind/rest pose, where both soles are planted — before any animation is
- * played. This replaces sampling an arbitrary first animation frame, which
- * (with a randomly-picked idle clip) produced a different lift every session
- * and left the character floating on flat ground.
- *
- * Only foot/toe-skinned vertices are considered, so skirts, capes and
- * not-yet-attached weapons can't pull the contact point below the soles.
- * Returns 0 when the model has no skinned foot geometry (left unshifted).
- */
+/** Measure visible foot geometry in the bind pose before playing animations. */
 export function computeSoleGroundOffset(modelRoot: THREE.Object3D): number {
   modelRoot.updateMatrixWorld(true)
   let lowest = Infinity
   const v = new THREE.Vector3()
 
-  modelRoot.traverse((child) => {
+  modelRoot.traverseVisible((child) => {
     if (!(child instanceof THREE.SkinnedMesh) || !child.skeleton) return
 
     const footBones = new Set<number>()
@@ -166,7 +164,7 @@ export function computeCorpseGroundOffset(
   let lowest = Infinity
   const v = new THREE.Vector3()
 
-  model.traverse((child) => {
+  model.traverseVisible((child) => {
     if (!(child instanceof THREE.SkinnedMesh) || !child.skeleton) return
     const position = child.geometry.getAttribute('position')
     if (!position) return

@@ -12,6 +12,7 @@
   } from '../utils/twoHandedGrip'
   import {
     createCharacterModelRoot,
+    computeSoleGroundOffset,
     findBoneByName,
     getGltfAnimations,
     retargetOrderedCharacterAnimationsForModel,
@@ -21,8 +22,15 @@
     CHARACTER_ANIMATION_PACK_PATHS,
     getCharacterModelPath,
     getWeaponModelPath,
+    MODULAR_MALE_MODEL_PATH,
   } from '../utils/modelPaths'
   import { loadGLB } from '../utils/gltfCache'
+  import {
+    disposeCharacterSkeletons,
+    loadCharacterModel,
+    loadCharacterAnimationPack,
+    modularSwordAttachment,
+  } from '../utils/characterModel'
   import { capeColorOf, getItemDef } from '../data/itemDefs'
   import { capeTextureUrl } from '../utils/networkUtils'
   import { isTorchItemDefId } from '../stores/inventoryStore'
@@ -76,7 +84,6 @@
     camera,
   }: Props = $props()
 
-  // Load via shared cache so GLBs persist across Canvas lifecycles
   let characterGltfData = $state<GLTF | null>(null)
   let locomotionGltfData = $state<GLTF | null>(null)
   let combatMeleeGltfData = $state<GLTF | null>(null)
@@ -84,15 +91,31 @@
   const modelPath = $derived(getCharacterModelPath(characterClass, gender))
 
   $effect(() => {
-    loadGLB(modelPath).then((g) => {
-      characterGltfData = g
-    })
-  })
-  loadGLB(CHARACTER_ANIMATION_PACK_PATHS.locomotion).then((g) => {
-    locomotionGltfData = g
-  })
-  loadGLB(CHARACTER_ANIMATION_PACK_PATHS.combatMelee).then((g) => {
-    combatMeleeGltfData = g
+    const path = modelPath
+    let cancelled = false
+    Promise.all([
+      loadCharacterModel(path),
+      loadCharacterAnimationPack(
+        path,
+        CHARACTER_ANIMATION_PACK_PATHS.locomotion
+      ),
+      loadCharacterAnimationPack(
+        path,
+        CHARACTER_ANIMATION_PACK_PATHS.combatMelee
+      ),
+    ])
+      .then(([character, locomotion, combat]) => {
+        if (cancelled) return
+        characterGltfData = character
+        locomotionGltfData = locomotion
+        combatMeleeGltfData = combat
+      })
+      .catch((error) =>
+        console.error('Failed to load character preview', error)
+      )
+    return () => {
+      cancelled = true
+    }
   })
 
   let mixer = $state<THREE.AnimationMixer | null>(null)
@@ -102,6 +125,7 @@
   let footBones: THREE.Bone[] = []
   let validAnimations = $state<THREE.AnimationClip[]>([])
   let setupDone = $state(false)
+  let setupGeneration = 0
   let weaponIdle: THREE.AnimationClip | undefined
 
   $effect(() => {
@@ -200,7 +224,10 @@
       if (gen !== equipGeneration || !bone) return
 
       const prop = gltf.scene.clone()
-      if (mainHand) {
+      const socket = mainHand
+        ? modularSwordAttachment(characterRoot, worldModel)
+        : undefined
+      if (mainHand && !socket) {
         poseMainHandProp(
           prop,
           itemDefId,
@@ -208,8 +235,8 @@
             ? forearmLength(characterRoot, boneName, `${modelPath}:${boneName}`)
             : undefined
         )
-      } else poseOffHandProp(prop)
-      bone.add(prop)
+      } else if (!mainHand) poseOffHandProp(prop)
+      ;(socket ?? bone).add(prop)
       heldProps.push(prop)
       const gripReach = getWeaponAnimation(itemDefId)?.offHandGripReach
       if (mainHand && gripReach) {
@@ -325,6 +352,9 @@
     const sourceScene = characterGltfData.scene
     const { clonedScene: newClonedScene, modelRoot: newModelRoot } =
       createCharacterModelRoot(sourceScene)
+    const generation = ++setupGeneration
+    if (modelPath === MODULAR_MALE_MODEL_PATH)
+      newClonedScene.position.y = computeSoleGroundOffset(newModelRoot)
 
     const orderedAnims = selectOrderedCharacterAnimations(
       getGltfAnimations(characterGltfData),
@@ -332,17 +362,30 @@
       getGltfAnimations(combatMeleeGltfData)
     )
 
-    retargetOrderedCharacterAnimationsForModel(newModelRoot, orderedAnims, {
-      base: sourceScene,
-      locomotion: locomotionGltfData.scene,
-      combatMelee: combatMeleeGltfData.scene,
-    }).then((clips) => {
+    const animations =
+      modelPath === MODULAR_MALE_MODEL_PATH
+        ? Promise.resolve(orderedAnims.map((selection) => selection.clip))
+        : retargetOrderedCharacterAnimationsForModel(
+            newModelRoot,
+            orderedAnims,
+            {
+              base: sourceScene,
+              locomotion: locomotionGltfData.scene,
+              combatMelee: combatMeleeGltfData.scene,
+            }
+          )
+    animations.then((clips) => {
+      if (generation !== setupGeneration) {
+        disposeCharacterSkeletons(newModelRoot)
+        return
+      }
       validAnimations = clips
 
       if (validAnimations.length > 0) {
         try {
           mixer = new THREE.AnimationMixer(newModelRoot)
           playIdleAnimation()
+          mixer.update(0)
         } catch (error) {
           console.warn('Failed to start preview animation clips', error)
           if (mixer) {
@@ -392,7 +435,12 @@
     if (selected && mixer && currentAction) {
       mixer.update(delta)
 
-      if (clonedScene && modelRoot && footBones.length > 0) {
+      if (
+        modelPath !== MODULAR_MALE_MODEL_PATH &&
+        clonedScene &&
+        modelRoot &&
+        footBones.length > 0
+      ) {
         clonedScene.position.y = 0
         modelRoot.updateMatrixWorld(true)
 
@@ -430,13 +478,17 @@
   }
 
   export function dispose(): void {
+    setupGeneration++
+    detachEquipment()
     if (mixer) {
       mixer.stopAllAction()
+      if (modelRoot) mixer.uncacheRoot(modelRoot)
       mixer = null
     }
     currentAction = null
     clonedScene = null
     footBones = []
+    if (modelRoot) disposeCharacterSkeletons(modelRoot)
     modelRoot = null
     validAnimations = []
     setupDone = false

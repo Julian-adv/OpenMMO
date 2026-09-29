@@ -39,7 +39,9 @@
     const additive = clip.clone()
     // Dropping position keeps the recoil in the body instead of shoving it.
     additive.tracks = additive.tracks.filter(
-      (track) => !track.name.endsWith('.position')
+      (track) =>
+        !track.name.endsWith('.position') &&
+        !track.name.startsWith(`${MODULAR_SWORD_ATTACHMENT}.`)
     )
     THREE.AnimationUtils.makeClipAdditive(additive)
     additiveClipCache.set(clip, additive)
@@ -118,8 +120,16 @@
     getCharacterModelPath,
     getNpcModelPath,
     getWeaponModelPath,
+    MODULAR_MALE_MODEL_PATH,
   } from '../utils/modelPaths'
   import { loadGLB } from '../utils/gltfCache'
+  import {
+    disposeCharacterSkeletons,
+    loadCharacterModel,
+    loadCharacterAnimationPack,
+    modularSwordAttachment,
+    MODULAR_SWORD_ATTACHMENT,
+  } from '../utils/characterModel'
   import { warmupPipelines } from '../utils/pipelineWarmup'
   import { getDaggerComboClip } from '../utils/daggerSkillAnimation'
   import { DaggerBladeTrail } from '../effects/dagger-blade-trail'
@@ -316,9 +326,7 @@
     Math.max(0, Math.min(1, displayedHealth / (maxHealth || 1)))
   )
 
-  // Load only the active character model + shared animation packs via shared cache.
-  // This cache persists across Threlte Canvas lifecycles, so GLBs loaded in
-  // character select don't re-download when entering the game scene.
+  // Reuse character assets across selection and gameplay.
   let activeGltfData = $state<GLTF | null>(null)
   let locomotionGltfData = $state<GLTF | null>(null)
   let combatMeleeGltfData = $state<GLTF | null>(null)
@@ -326,16 +334,18 @@
   // svelte-ignore state_referenced_locally
   const modelPath =
     (npcPlayerId !== undefined ? getNpcModelPath(name) : undefined) ??
-    getCharacterModelPath(characterClass, gender)
-  const modelPromise = loadGLB(modelPath).then((g) => {
+    getCharacterModelPath(characterClass, gender, npcPlayerId !== undefined)
+  const modelPromise = loadCharacterModel(modelPath).then((g) => {
     activeGltfData = g
   })
-  const locomotionPromise = loadGLB(
+  const locomotionPromise = loadCharacterAnimationPack(
+    modelPath,
     CHARACTER_ANIMATION_PACK_PATHS.locomotion
   ).then((g) => {
     locomotionGltfData = g
   })
-  const combatMeleePromise = loadGLB(
+  const combatMeleePromise = loadCharacterAnimationPack(
+    modelPath,
     CHARACTER_ANIMATION_PACK_PATHS.combatMelee
   ).then((g) => {
     combatMeleeGltfData = g
@@ -429,14 +439,17 @@
     let mount: HorseMount | null = null
     void Promise.all([
       loadGLB(HORSE_MODEL_PATH),
-      loadGLB(RIDING_ANIMATION_PATH),
+      loadCharacterAnimationPack(modelPath, RIDING_ANIMATION_PATH),
     ])
       .then(async ([horse, rider]) => {
-        const clips = await retargetAnimationsForCharacterModel(
-          root,
-          rider.scene,
-          getGltfAnimations(rider)
-        )
+        const clips =
+          modelPath === MODULAR_MALE_MODEL_PATH
+            ? rider.animations
+            : await retargetAnimationsForCharacterModel(
+                root,
+                rider.scene,
+                getGltfAnimations(rider)
+              )
         if (cancelled) return
         mount = new HorseMount(horse)
         await warmupPipelines(threlte, 'mount:horse', mount.root)
@@ -534,13 +547,18 @@
     }
 
     weaponObject = gltfScene.clone()
-    poseMainHandProp(
-      weaponObject,
-      itemDefId,
-      boneName === 'LeftHand'
-        ? forearmLength(characterRoot, boneName, `${modelPath}:${boneName}`)
-        : undefined
+    const socket = modularSwordAttachment(
+      characterRoot,
+      getItemDef(itemDefId)?.worldModel ?? ''
     )
+    if (!socket)
+      poseMainHandProp(
+        weaponObject,
+        itemDefId,
+        boneName === 'LeftHand'
+          ? forearmLength(characterRoot, boneName, `${modelPath}:${boneName}`)
+          : undefined
+      )
     if (itemDefId === 'fishing_rod') {
       rodTipNode = resolveTipNode(
         weaponObject,
@@ -548,7 +566,7 @@
         FALLBACK_ROD_TIP_LOCAL_OFFSET
       )
     }
-    handBone.add(weaponObject)
+    ;(socket ?? handBone).add(weaponObject)
     if (itemDefId === 'fishing_rod') {
       fishingReel = new FishingReel(characterRoot, weaponObject)
     }
@@ -938,16 +956,21 @@
   function loadSocialAnimations(): Promise<void> {
     if (socialLoadPromise) return socialLoadPromise
     socialLoadPromise = (async () => {
-      // Interaction-state clips come from two packs; both land in the same
-      // by-name map since interactionAnim is resolved purely by clip name.
       const [socialGltf, fishingGltf] = await Promise.all([
-        loadGLB(CHARACTER_ANIMATION_PACK_PATHS.social),
-        loadGLB(CHARACTER_ANIMATION_PACK_PATHS.fishing),
+        loadCharacterAnimationPack(
+          modelPath,
+          CHARACTER_ANIMATION_PACK_PATHS.social
+        ),
+        loadCharacterAnimationPack(
+          modelPath,
+          CHARACTER_ANIMATION_PACK_PATHS.fishing
+        ),
       ])
       for (const clip of getGltfAnimations(socialGltf)) {
         socialClipsByName.set(clip.name, clip)
       }
-      for (const clip of getGltfAnimations(fishingGltf)) {
+      for (const source of getGltfAnimations(fishingGltf)) {
+        const clip = source.clone()
         if (
           clip.name === FishingAnimationName.CAST &&
           clip.duration > FISHING_CAST_TRIM_S
@@ -1007,7 +1030,10 @@
    *  slash, so a missing GLB must not break the swing. */
   function loadRangedAnimations(): Promise<void> {
     if (rangedLoadPromise) return rangedLoadPromise
-    rangedLoadPromise = loadGLB(CHARACTER_ANIMATION_PACK_PATHS.combatRanged)
+    rangedLoadPromise = loadCharacterAnimationPack(
+      modelPath,
+      CHARACTER_ANIMATION_PACK_PATHS.combatRanged
+    )
       .then((gltf) => {
         for (const clip of getGltfAnimations(gltf))
           rangedClips.set(clip.name, clip)
@@ -1022,7 +1048,10 @@
   function loadOffhandAnimations(): Promise<void> {
     if (offhandLoadPromise) return offhandLoadPromise
     offhandLoadPromise = (async () => {
-      const offhandGltf = await loadGLB(CHARACTER_ANIMATION_PACK_PATHS.offhand)
+      const offhandGltf = await loadCharacterAnimationPack(
+        modelPath,
+        CHARACTER_ANIMATION_PACK_PATHS.offhand
+      )
       const rawClips = getGltfAnimations(offhandGltf)
       offhandClips.clear()
       for (const clip of rawClips) offhandClips.set(clip.name, clip)
@@ -1292,7 +1321,7 @@
 
   async function setupRealAnimation() {
     const activeGltf = activeGltfData
-    if (activeGltf && !mixer && !modelRoot) {
+    if (activeGltf && !destroyed && !mixer && !modelRoot) {
       console.log('Setting up real animation system')
       hitAction = null
       enchantAction = null
@@ -1303,11 +1332,7 @@
       const { clonedScene: cloned, modelRoot: newModelRoot } =
         createCharacterModelRoot(activeGltf.scene)
 
-      // Plant the soles on the floor. Measured once here in the bind pose
-      // (deterministic, both feet down) instead of on the first animation
-      // frame — that earlier approach sampled a randomly-picked idle clip, so
-      // the lift differed every session and the character floated above flat
-      // dungeon floors after a restart.
+      // Measure visible soles in the bind pose before starting animations.
       cloned.position.y = computeSoleGroundOffset(newModelRoot)
       // Compiles alongside the retargeting below; awaited before mounting.
       const warmed = warmupPipelines(
@@ -1342,15 +1367,18 @@
         locomotionAnimations,
         combatMeleeAnimations
       )
-      validAnimations = await retargetOrderedCharacterAnimationsForModel(
-        newModelRoot,
-        orderedSelections,
-        {
-          base: activeGltf.scene,
-          locomotion: locomotionGltfData?.scene,
-          combatMelee: combatMeleeGltfData?.scene,
-        }
-      )
+      validAnimations =
+        modelPath === MODULAR_MALE_MODEL_PATH
+          ? orderedSelections.map((selection) => selection.clip)
+          : await retargetOrderedCharacterAnimationsForModel(
+              newModelRoot,
+              orderedSelections,
+              {
+                base: activeGltf.scene,
+                locomotion: locomotionGltfData?.scene,
+                combatMelee: combatMeleeGltfData?.scene,
+              }
+            )
 
       for (const selection of orderedSelections) {
         if (selection.fromFallback) {
@@ -1429,7 +1457,12 @@
       }
 
       await warmed
-      if (destroyed) return
+      if (destroyed) {
+        mixer?.stopAllAction()
+        mixer = null
+        disposeCharacterSkeletons(newModelRoot)
+        return
+      }
       clonedScene = cloned
       modelRoot = newModelRoot
       effectAnchors = new PlayerEffectAnchors(cloned)
@@ -1457,7 +1490,8 @@
     isLoading = true
     glbReady
       .then(() => setupRealAnimation())
-      .then(() => {
+      .catch((error) => console.error('Failed to load player model', error))
+      .finally(() => {
         isLoading = false
       })
 
@@ -1468,10 +1502,12 @@
       daggerTrail = undefined
       if (mixer) {
         mixer.stopAllAction()
+        if (modelRoot) mixer.uncacheRoot(modelRoot)
         mixer = null
       }
       hitAction = null
       if (modelRoot) {
+        disposeCharacterSkeletons(modelRoot)
         modelRoot = null
       }
       clonedScene = null

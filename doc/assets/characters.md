@@ -1,5 +1,40 @@
 # Character Assets
 
+## Modular Human Male 01 — 남성 플레이어 연결 (2026-09-29)
+
+- 사용자 요청으로 남성 플레이어 6직업의 생성·선택·게임 화면과 감정표현 미리보기에 적용했다.
+  공식 NPC와 여성은 기존 모델을 유지한다. 기본 복장은 갈색 크롭·천 셔츠·바지·부츠이며
+  방어구 인벤토리와 개인별 머리·눈 선택값 저장은 아직 연결하지 않았다.
+- 게임 파일: `client/public/models/characters/modular_male/`. 아래 기록의
+  `parts/fitted/` 5파일과 `rigged_hand_tuned/animations.glb`, `hand-grips.json`,
+  기존 Mixamo 공용 팩을 가공했다. 새 AI 생성·리깅·구매는 없다.
+  원본의 ImageGen **ChatGPT Pro 20x**, Meshy 유료 생성물 이용 조건과 Mixamo 라이선스를
+  유지한다. 원본 파츠의 Meshy 구독은 아래에 기록된 **Premium**이다.
+- 재생성: 저장소 루트에서 `node tools/prepare-modular-character.mjs`.
+  프로젝트 `.venv`의 Pillow·NumPy와 클라이언트 Node 의존성이 필요하다.
+  [입출력 SHA-256·동작 목록](../../client/public/models/characters/modular_male/manifest.json)을 기록한다.
+  새 GLB는 다른 바이너리와 동일하게 커밋 시 HF 업로드·`assets.lock` 갱신 대상이다.
+- 파츠 텍스처만 기존 재압축 도구로 최적화했다. 몸체의 4096px base-color와
+  얼굴 지정 영역 **1,505 triangles**를 유지하고 normal/roughness는 최대 1024px로 변환했다.
+  파츠 5파일은 합계 **62.85 MB → 18.19 MB**다. 형상·UV·리그는 변경하지 않았다.
+- 기본 복장과 철검 조합은 숨김 영역 포함 **23,375**, 실제 표시 **14,232 triangles**,
+  **12 draw calls**다. 망토는 별도 추가된다. 숨김 포함 수치는 목표 15,000–20,000을 초과하며
+  원본 형상은 유지했다.
+- 원본 보정 7동작은 재리타게팅·재접지하지 않는다. 일반 대기 2–5는 팔·손가락을 검토한
+  `idle1`을 재사용하고 같은 검 그립을 적용한다. 추가 이동·전투·생활 동작은 첫 체형으로
+  오프라인 리타게팅해 9팩 **51클립**으로 저장했다. 탑승은 접지 보정을 적용하지 않는다.
+  검 부착점의 트랙은 캐릭터 믹서에서 함께 혼합하므로 전환 중에도 보정 위치가 이어진다.
+- 게임 로더로 51동작 × 5시점 **255포즈**의 유한 정점·체형 범위를 검사했고 브라우저 오류는 0이었다.
+  얼굴 확대·일반 대기·걷기·달리기·점프·전투 대기·공격·죽음·앉기·낚시·탑승을 렌더했다.
+  실제 `PlayerModel`과 `CharacterPreview`도 같은 화면에 올려 이동·앉기·공격과 철검↔대검 교체를 확인했다.
+  헤드리스 환경에서는 게임의 WebGPURenderer가 WebGL2 백엔드로 폴백했다.
+  [포즈 검사](../../assets/modular_human_male_01/game-integration/pose-validation.json),
+  [컴포넌트 검사](../../assets/modular_human_male_01/game-integration/component-validation.json),
+  [선택·플레이어 비교](../../assets/modular_human_male_01/game-integration/selection-and-player.png),
+  [얼굴](../../assets/modular_human_male_01/game-integration/face.png),
+  [공격](../../assets/modular_human_male_01/game-integration/slash1.png)을 보존한다.
+  이는 모든 옷 관통·부착 장비의 품질 검토가 끝났다는 뜻은 아니다.
+
 ## Modular Human Male 01 — 첫 교체 파츠 (2026-09-28)
 
 - `d6c71e90` 이후 제작 작업. 사용자 요청에 따라 몸체 추가 보완보다 기본 복장과 교체 파츠를

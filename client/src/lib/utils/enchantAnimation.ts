@@ -1,6 +1,9 @@
 import * as THREE from 'three'
-import { loadGLB } from './gltfCache'
-import { CHARACTER_ANIMATION_PACK_PATHS } from './modelPaths'
+import { loadCharacterAnimationPack } from './characterModel'
+import {
+  CHARACTER_ANIMATION_PACK_PATHS,
+  MODULAR_MALE_MODEL_PATH,
+} from './modelPaths'
 import {
   groundRetargetedClips,
   retargetAnimationsForCharacterModel,
@@ -43,7 +46,7 @@ export function loadEnchantAnimations(modelPath: string, root: THREE.Object3D) {
         CHARACTER_ANIMATION_PACK_PATHS.social,
         CHARACTER_ANIMATION_PACK_PATHS.enchantArmor,
       ].map(async (path) => {
-        const gltf = await loadGLB(path)
+        const gltf = await loadCharacterAnimationPack(modelPath, path)
         const clips = gltf.animations.filter((clip) =>
           [
             ENCHANT_WEAPON_ANIMATION,
@@ -52,10 +55,16 @@ export function loadEnchantAnimations(modelPath: string, root: THREE.Object3D) {
             ENCHANT_LEFT_ARMOR_ANIMATION,
           ].includes(clip.name)
         )
-        return retargetAnimationsForCharacterModel(root, gltf.scene, clips)
+        return modelPath === MODULAR_MALE_MODEL_PATH
+          ? clips
+          : retargetAnimationsForCharacterModel(root, gltf.scene, clips)
       })
     )
-      .then((packs) => groundRetargetedClips(root, packs.flat()))
+      .then((packs) =>
+        modelPath === MODULAR_MALE_MODEL_PATH
+          ? packs.flat()
+          : groundRetargetedClips(root, packs.flat())
+      )
       .then((clips) => new Map(clips.map((clip) => [clip.name, clip])))
       .catch((error) => {
         clipsByModel.delete(modelPath)

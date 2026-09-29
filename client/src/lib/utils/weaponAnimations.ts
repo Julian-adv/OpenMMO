@@ -1,6 +1,7 @@
 import type { Object3D, AnimationClip } from 'three'
 import type { WeaponAnimationDefinition } from '../data/weaponAnimationDefs'
-import { loadGLB } from './gltfCache'
+import { loadCharacterAnimationPack } from './characterModel'
+import { MODULAR_MALE_MODEL_PATH } from './modelPaths'
 import { PLAYER_ATTACK_IMPACT_DELAY_MS } from '../data/combatTiming'
 import {
   groundRetargetedClips,
@@ -17,8 +18,9 @@ export function loadWeaponAnimations(
   const cacheKey = `${modelPath}:${JSON.stringify(profile)}`
   let pending = packs.get(cacheKey)
   if (!pending) {
-    pending = loadGLB(`/models/${profile.pack}`)
+    pending = loadCharacterAnimationPack(modelPath, `/models/${profile.pack}`)
       .then(async (pack) => {
+        if (modelPath === MODULAR_MALE_MODEL_PATH) return pack.animations
         const clips = await retargetAnimationsForCharacterModel(
           target,
           pack.scene,

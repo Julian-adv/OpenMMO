@@ -1,0 +1,109 @@
+{
+  "source": "Existing modular male sample and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md",
+  "inputs": {
+    "assets/modular_human_male_01/parts/fitted/base.glb": "3e776c750293a36f06d95145d3d7585b715b4cfcdc1dd65a2b9f38d37c27263d",
+    "assets/modular_human_male_01/parts/fitted/hair_crop.glb": "6d754801583d1ae6147ac98cb55fac5237d5b43329e7273d5cb8977c91a0364a",
+    "assets/modular_human_male_01/parts/fitted/top_linen.glb": "64e7d1fc6ec4524635d07cabd90b9a8d277a3c324400a29b21c8a57862039125",
+    "assets/modular_human_male_01/parts/fitted/pants_cloth.glb": "113fc102558c4f391ae6c91b5a9316115cd2190e20a4c361583b65aff155a45a",
+    "assets/modular_human_male_01/parts/fitted/boots_leather.glb": "aec7de43d7e47b6000e6aff2138289d780a454106c68ccbceee0c023b938df2f",
+    "assets/modular_human_male_01/rigged_hand_tuned/animations.glb": "21d7170936448a65aece4f91c155d302418f16d67f719c0c085fe4a36096f5a6",
+    "assets/modular_human_male_01/rigged_hand_tuned/hand-grips.json": "1e5be82d2af969625e5a04e2dfe815c7d7cb715cdbdc5bb0a39fe2726a36951f",
+    "client/public/models/animations/locomotion.glb": "cfa79f5b5f82f3b26d0d0bc86e4293a919fbc28829a2c6192f19a4a488271da8",
+    "client/public/models/animations/combat_melee.glb": "b29f34de8cf7523d176a634ceac7ab4791084994493adbfac5f59dda686a057b",
+    "client/public/models/animations/social.glb": "789cea2a6670840e53f1ca0d5555b5c599765414ca52c7dd16cc7d49536fea95",
+    "client/public/models/animations/fishing.glb": "04dcb3fa6b0ea6f2fac21a29e630665c4e01c05820848b98f660c3a9dbd1dd3e",
+    "client/public/models/animations/combat_ranged.glb": "7aeb8c233c2f246a651cf7c3c96a557edc1584ab2a35ce283d51cc746ce36518",
+    "client/public/models/animations/offhand.glb": "b9dfabc7e57505515da545622ac7b781541d550d035c3351bfb1c532fc2df125",
+    "client/public/models/animations/enchant_armor.glb": "77178f2ea299e1ebd73351c290285442347134c8519723e37c07ce722c409568",
+    "client/public/models/animations/great_sword.glb": "ff7e995994d4f95298c1dd444e0e16dd5f93b7c6728de1fe6d8077a2624c366d",
+    "client/public/models/animations/riding.glb": "e0d76b9900e0f9bf76425c4165ebba8fd9e350895f9d99779a085af6dc51c9f8"
+  },
+  "outputs": {
+    "base.glb": "5d84859b06308f44d913f1b49c64054f170c12372f74fd2140c9595ea92e89d2",
+    "hair_crop.glb": "b4f8168a12af6030dddc76bb42ef156f32027c49ae2f1aae247b58826de6820b",
+    "top_linen.glb": "60e3bd61d499c085030717fa2b231f8aae54537b87bd9bf7fd88cb44f46c58e9",
+    "pants_cloth.glb": "818ecb21715da9eeac1c2db2847c8d70afd70e37f41268780db52184c251da6f",
+    "boots_leather.glb": "4ce6df0448f2f3ea9eb834892bf4a9e90c39e01bed31f4718be520ac59bef796",
+    "animations/locomotion.glb": {
+      "sha256": "1609465a2313782344ed23dc288144cee8ec70f3266baf677528998d0edad9af",
+      "clips": [
+        "idle1",
+        "idle2",
+        "idle3",
+        "idle4",
+        "idle5",
+        "walk",
+        "jog",
+        "run",
+        "jump"
+      ]
+    },
+    "animations/combat_melee.glb": {
+      "sha256": "e31e6177da43ea5f5bcbde3f7f30996d52e03cb1cec896aa7842a1297ff29bed",
+      "clips": [
+        "slash1",
+        "slash2",
+        "slash3",
+        "slash4",
+        "dying",
+        "combat_idle",
+        "claw1",
+        "claw2",
+        "hit"
+      ]
+    },
+    "animations/social.glb": {
+      "sha256": "c3ba34480b4c572cefb49db8d40e95c73391bbb664a350e7f12da6d7a7c597c2",
+      "clips": [
+        "sleep",
+        "pickup",
+        "guitar_playing",
+        "excited",
+        "clap",
+        "twist",
+        "macarena",
+        "chicken",
+        "stand_to_sit",
+        "sit_idle",
+        "sit_talk",
+        "sit_to_stand",
+        "stand_pose2",
+        "stand_pose3",
+        "stand_pose4",
+        "weight_shift",
+        "yawn",
+        "enchant_weapon",
+        "enchant_weapon_left"
+      ]
+    },
+    "animations/fishing.glb": {
+      "sha256": "ed7ae8ba144048fb582facda288bd91cdb3cc051d3fbe3b504a92dec5b57636c",
+      "clips": ["fishing_cast", "fishing_idle"]
+    },
+    "animations/combat_ranged.glb": {
+      "sha256": "3461e67f7a544313b777c719e25dc962051fc1dd05fdf819a831aa271cd85778",
+      "clips": ["bow_shoot"]
+    },
+    "animations/offhand.glb": {
+      "sha256": "5e3361ff0ddf99f19631a895f9ef72cf1276b769b40e6eea30068f8694e26ee2",
+      "clips": ["torch_idle1", "torch_idle2", "torch_walk", "torch_run"]
+    },
+    "animations/enchant_armor.glb": {
+      "sha256": "ae996640e7cf474a8ff6bf601847b3f22ba65d32004b55a506b95ad92944ae74",
+      "clips": ["enchant_armor", "enchant_armor_left"]
+    },
+    "animations/great_sword.glb": {
+      "sha256": "aa0ad318a6d1ef6b5e9667be71d6291c1c6b6a9e6f0ee435d8abe1b5a0ff58e2",
+      "clips": [
+        "great_sword_idle",
+        "great_sword_walk",
+        "great_sword_run",
+        "great_sword_slash"
+      ]
+    },
+    "animations/riding.glb": {
+      "sha256": "8d95e3a66ec0b47df29e26274ba7458c4a5786754c66b6fce0475ae475a6a582",
+      "clips": ["ride"]
+    }
+  }
+}
