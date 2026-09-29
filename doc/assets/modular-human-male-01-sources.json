@@ -1675,5 +1675,248 @@
       "game_geometry_and_skin_match_source": true,
       "blender_max_position_difference_m": 0.0000041164171236214525
     }
+  },
+  "cloth_boot_cuffs_ankle_width": {
+    "date": "2026-09-29",
+    "purpose": "Subtly widen the narrow cloth ankle silhouette along the user-marked red lines above the boots.",
+    "tool": "Local NumPy mesh deformation and Blender source synchronization",
+    "source": "Existing fitted pants_cloth.glb after medial and fore-aft adjustments; original Meshy and Mixamo licenses continue to apply.",
+    "additional_generation_credits": 0,
+    "input_sha256": "1045da1c8b6cb60803851029f98d6794e6f0009393797bc443244945d74409d7",
+    "method": {
+      "region": "tucked_cuffs",
+      "coordinate_system": "glTF Y-up, meters",
+      "blend": "smoothstep((y - 0.19) / 0.045) * (1 - smoothstep((y - 0.265) / 0.105)); each smoothstep clamps its input to [0, 1]",
+      "center": "Interpolated left/right Leg-to-Foot shin axis, with the existing -0.025 * (1 - smoothstep((y - 0.225) / 0.105)) Z translation.",
+      "maximum_x_radius_increase": 0.12,
+      "maximum_z_radius_increase": 0.08,
+      "changed_exported_vertices": 688,
+      "maximum_vertex_displacement_m": 0.0068087954524219,
+      "normals": "Inverse-transpose deformation Jacobian; tangents use the forward Jacobian.",
+      "preserved": [
+        "Y coordinates",
+        "Bottom edge at y = 0.19 m",
+        "Original shape at and above y = 0.37 m",
+        "Barefoot cuffs",
+        "Main trouser legs",
+        "Waist",
+        "Upper seam",
+        "Topology",
+        "UVs and textures",
+        "Skin weights and joint assignments",
+        "Rig and inverse bind matrices",
+        "Boot geometry"
+      ]
+    },
+    "outputs": [
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/pants_cloth.glb",
+        "bytes": 6711308,
+        "sha256": "e3e3831f9a48801ca2d9892180ab4b506c1e2cb771058d906245b8c080ef3208"
+      },
+      {
+        "path": "client/public/models/characters/modular_male/pants_cloth.glb",
+        "bytes": 2356128,
+        "sha256": "95e14ac76a365b81197a163f1221d7d98fb7d6649e98b8955bbefc885639e72b"
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/character_parts.blend",
+        "bytes": 94917350,
+        "sha256": "354d3f1bb3c49d4dc3292cb126e2cc8419daa94edec9b5c4e27c0b282602bcf3"
+      }
+    ],
+    "triangles": {
+      "pants_including_hidden": 2556,
+      "regions": {
+        "cuffs": 531,
+        "main": 1155,
+        "tucked_cuffs": 647,
+        "waist": 223
+      },
+      "face_region_unchanged": 1505
+    },
+    "validation": {
+      "clips": [
+        "idle1",
+        "walk",
+        "run",
+        "jump",
+        "combat_idle",
+        "slash1"
+      ],
+      "phases": [
+        0.2,
+        0.65
+      ],
+      "boot_variants": [
+        "plate",
+        "leather"
+      ],
+      "animated_views": 72,
+      "glb_files": 2,
+      "glb_errors": 0,
+      "unchanged_warnings_per_file": 8,
+      "browser_errors": 0,
+      "game_geometry_and_skin_match_source": true,
+      "blender_max_position_difference_m": 3.331476105831167e-06
+    }
+  },
+  "cloth_boot_cuffs_front_hollow": {
+    "date": "2026-09-29",
+    "purpose": "Fill the localized front-facing ankle hollow above the boot collar along the additional user-marked red line.",
+    "tool": "Local NumPy mesh deformation and Blender source synchronization",
+    "source": "Existing ankle-width-adjusted pants_cloth.glb; original Meshy and Mixamo licenses continue to apply.",
+    "additional_generation_credits": 0,
+    "input_sha256": "e3e3831f9a48801ca2d9892180ab4b506c1e2cb771058d906245b8c080ef3208",
+    "method": {
+      "region": "tucked_cuffs",
+      "coordinate_system": "glTF Y-up, meters; smoothstep clamps its argument to [0, 1]",
+      "center": "Interpolated Leg-to-Foot shin axis, with the existing -0.025 * (1 - smoothstep((y - 0.225) / 0.105)) Z translation.",
+      "height_mask": "smoothstep((y - 0.205) / 0.025) * (1 - smoothstep((y - 0.265) / 0.035))",
+      "front_mask": "smoothstep((z - center_z - 0.005) / 0.025)",
+      "target_z": "-0.001 + 0.2 * (y - 0.22) - 8 * (x - center_x)^2",
+      "z_translation": "gap = max(target_z - z, 0); delta_z = 0.95 * gap^2 / (gap + 0.001) * height_mask * front_mask",
+      "changed_exported_vertices": 298,
+      "median_vertex_displacement_m": 0.00776444735,
+      "maximum_vertex_displacement_m": 0.022384093680650318,
+      "normals": "Inverse-transpose deformation Jacobian; tangents use the forward Jacobian.",
+      "preserved": [
+        "X and Y coordinates",
+        "Rear surface",
+        "Positions at and below y = 0.205 m and at and above y = 0.30 m",
+        "Barefoot cuffs, main legs and waist",
+        "Topology, UVs and textures",
+        "Skin weights, joint assignments, rig and inverse bind matrices",
+        "Boot geometry"
+      ]
+    },
+    "outputs": [
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/pants_cloth.glb",
+        "bytes": 6711308,
+        "sha256": "25467d8d5621dbbe813b254f347ed7f3fc1fe162e8019f1f55afe55cf79f457b"
+      },
+      {
+        "path": "client/public/models/characters/modular_male/pants_cloth.glb",
+        "bytes": 2356128,
+        "sha256": "85ccb4843522151ce31a9fa79f3a8e5556a81897ceb6fa82904fd7a29ae4c6a3"
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/character_parts.blend",
+        "bytes": 94917579,
+        "sha256": "6464e6f7d6e5c961e0e24c946c9d68224c6179942e4c0a34548fe0844ce83c18"
+      }
+    ],
+    "triangles": {
+      "pants_including_hidden": 2556,
+      "tucked_cuffs": 647,
+      "face_region_unchanged": 1505
+    },
+    "validation": {
+      "closeups": "Both ankles with plate and leather boots",
+      "clips": [
+        "idle1",
+        "walk",
+        "run",
+        "jump",
+        "combat_idle",
+        "slash1"
+      ],
+      "phases": [
+        0.2,
+        0.65
+      ],
+      "boot_variants": [
+        "plate",
+        "leather"
+      ],
+      "animated_views": 72,
+      "glb_files": 2,
+      "glb_errors": 0,
+      "unchanged_warnings_per_file": 8,
+      "browser_errors": 0,
+      "minimum_deformation_jacobian_determinant": 0.05169276344034563,
+      "game_geometry_and_skin_match_source": true,
+      "blender_max_position_difference_m": 3.331476105831167e-06
+    }
+  },
+  "cloth_boot_cuffs_left_outer_hollow": {
+    "date": "2026-09-29",
+    "purpose": "Fill the small left outer ankle hollow marked in the oblique frontal reference, preserving the previous width and front-surface refinements.",
+    "tool": "Local NumPy mesh deformation and Blender source synchronization",
+    "source": "Existing front-hollow-adjusted pants_cloth.glb; original Meshy and Mixamo licenses continue to apply.",
+    "additional_generation_credits": 0,
+    "input_sha256": "25467d8d5621dbbe813b254f347ed7f3fc1fe162e8019f1f55afe55cf79f457b",
+    "method": {
+      "region": "tucked_cuffs, Left leg only (x > 0)",
+      "coordinate_system": "glTF Y-up, meters; smoothstep clamps its argument to [0, 1]",
+      "center": "Interpolated LeftLeg-to-LeftFoot shin axis, with the existing -0.025 * (1 - smoothstep((y - 0.225) / 0.105)) Z translation.",
+      "height_mask": "smoothstep((y - 0.205) / 0.025) * (1 - smoothstep((y - 0.265) / 0.045))",
+      "outer_mask": "smoothstep((x - center_x - 0.022) / 0.025)",
+      "target_x": "center_x + 0.040 + 0.4 * (y - 0.22) - 8 * (z - center_z)^2",
+      "x_translation": "gap = max(target_x - x, 0); correction = 0.95 * gap^2 / (gap + 0.001); delta_x = 0.008 * tanh(correction / 0.008) * height_mask * outer_mask",
+      "changed_exported_vertices": 43,
+      "median_vertex_displacement_m": 0.000498592614,
+      "maximum_vertex_displacement_m": 0.0040300815597296424,
+      "normals": "Inverse-transpose deformation Jacobian; tangents use the forward Jacobian.",
+      "preserved": [
+        "Y and Z coordinates",
+        "Opposite leg",
+        "Positions at and below y = 0.205 m and at and above y = 0.31 m",
+        "Barefoot cuffs, main legs and waist",
+        "Topology, UVs and textures",
+        "Skin weights, joint assignments, rig and inverse bind matrices",
+        "Boot geometry"
+      ]
+    },
+    "outputs": [
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/pants_cloth.glb",
+        "bytes": 6711308,
+        "sha256": "2352b8bbdfe08c1c7c43fff9be88e4283ad61b57c2219fbbde2d0c1e3ae41964"
+      },
+      {
+        "path": "client/public/models/characters/modular_male/pants_cloth.glb",
+        "bytes": 2356128,
+        "sha256": "de6c18ebe7bee66f180c9968d80fc08bf767f42e16b7e7fc76a98dacc7777297"
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/character_parts.blend",
+        "bytes": 94917532,
+        "sha256": "855022d747a69b2316494790ac92f0089dce2074099f67fecfc76cd7a86e3bdf"
+      }
+    ],
+    "triangles": {
+      "pants_including_hidden": 2556,
+      "tucked_cuffs": 647,
+      "face_region_unchanged": 1505
+    },
+    "validation": {
+      "closeups": "Before and after in the matching oblique frontal combat stance",
+      "clips": [
+        "idle1",
+        "walk",
+        "run",
+        "jump",
+        "combat_idle",
+        "slash1"
+      ],
+      "phases": [
+        0.2,
+        0.65
+      ],
+      "boot_variants": [
+        "plate",
+        "leather"
+      ],
+      "animated_views": 72,
+      "glb_files": 2,
+      "glb_errors": 0,
+      "unchanged_warnings_per_file": 8,
+      "browser_errors": 0,
+      "minimum_deformation_jacobian_determinant": 0.251254208526903,
+      "game_geometry_and_skin_match_source": true,
+      "blender_max_position_difference_m": 3.331476105831167e-06
+    }
   }
 }
