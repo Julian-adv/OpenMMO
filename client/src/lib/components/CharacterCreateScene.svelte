@@ -2,7 +2,11 @@
   import { T, useThrelte, useTask } from '@threlte/core'
   import * as THREE from 'three'
   import { onMount } from 'svelte'
-  import type { CharacterClass, Gender } from '../network/networkTypes'
+  import type {
+    CharacterClass,
+    Gender,
+    VisibleEquipment,
+  } from '../network/networkTypes'
   import CharacterPreview from './CharacterPreview.svelte'
 
   interface Props {
@@ -11,6 +15,16 @@
   }
 
   let { characterClass, gender }: Props = $props()
+
+  const KNIGHT_STARTER_EQUIPMENT: VisibleEquipment = {
+    armor: {
+      head: 'worn_plate_helmet',
+      chest: 'worn_breastplate',
+      pants: 'worn_plate_greaves',
+      boots: 'worn_plate_boots',
+      hands: 'worn_plate_gauntlets',
+    },
+  }
 
   const CAMERA_FOV = 42
   const CAMERA_POSITION_Y = 1.4
@@ -180,6 +194,9 @@
     selected={true}
     {characterClass}
     {gender}
+    equipment={characterClass === 'knight'
+      ? KNIGHT_STARTER_EQUIPMENT
+      : undefined}
     rotationY={modelRotationY}
   />
 {/key}
