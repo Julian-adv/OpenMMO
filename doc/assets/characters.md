@@ -28,299 +28,44 @@
   얼굴 확대·일반 대기·걷기·달리기·점프·전투 대기·공격·죽음·앉기·낚시·탑승을 렌더했다.
   실제 `PlayerModel`과 `CharacterPreview`도 같은 화면에 올려 이동·앉기·공격과 철검↔대검 교체를 확인했다.
   헤드리스 환경에서는 게임의 WebGPURenderer가 WebGL2 백엔드로 폴백했다.
-  [포즈 검사](../../assets/modular_human_male_01/game-integration/pose-validation.json),
-  [컴포넌트 검사](../../assets/modular_human_male_01/game-integration/component-validation.json),
-  [선택·플레이어 비교](../../assets/modular_human_male_01/game-integration/selection-and-player.png),
-  [얼굴](../../assets/modular_human_male_01/game-integration/face.png),
-  [공격](../../assets/modular_human_male_01/game-integration/slash1.png)을 보존한다.
   이는 모든 옷 관통·부착 장비의 품질 검토가 끝났다는 뜻은 아니다.
+  검증 보고서와 비교 화면은 2026-09-29 정리했으며 최종 파일은 아래 안내를 따른다.
 
-## Modular Human Male 01 — 첫 교체 파츠 (2026-09-28)
+## Modular Human Male 01 — 최종 제작 파일과 출처 (2026-09-29)
 
-- `d6c71e90` 이후 제작 작업. 사용자 요청에 따라 몸체 추가 보완보다 기본 복장과 교체 파츠를
-  먼저 제작한다. [전체 목록·원화·완료 기준](../../assets/modular_human_male_01/parts/README.md).
-- 짧은 크롭·옆가르마 헤어, 기본 천 셔츠·가죽 갑옷, 천 바지·가죽 장갑·가죽 부츠 한 세트.
-  원화는 OpenAI Codex built-in ImageGen, **ChatGPT Pro 20x**, 2026-09-28 생성.
-  OpenAI 생성 출력물 이용 조건 적용. [실제 프롬프트·원화 해시](../../assets/modular_human_male_01/parts/concepts.json).
-- 3D는 **Meshy Premium**, Image to 3D API, `meshy-7.1`, Ultra 2K 형상·2K PBR 텍스처,
-  2026-09-28 생성. [Meshy 유료 생성물 이용 조건](https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models)
-  적용. Meshy Community에는 게시하지 않는다. 파츠별 폴더의 `generation.json`에 입력·설정·작업 ID·비용·파일 해시를 보존한다.
-- 7종 생성·원본 다운로드 완료. 각 35, 총 **245 API 크레딧** 사용(5,790 → 5,545).
-  크롭 933·옆가르마 1,111·천 셔츠 2,087·가죽 상의 2,586·바지 1,553·장갑 한 쌍 1,033·부츠 한 쌍 1,455 triangles.
-  [원본 검사](../../assets/modular_human_male_01/parts/source-validation.json)와
-  [작업 ID·비용](../../assets/modular_human_male_01/parts/generation-summary.json)을 보존한다.
-- 생성 원본은 보존하고, Blender로 [1차 착용본](../../assets/modular_human_male_01/parts/fitted/README.md)을
-  만들었다. 기존 `human_male_01_mixamo_candidate_v2`의 65본·bind pose를 사용한다.
-  머리 형상·옷깃·소매·손가락 위치를 맞추고 몸체 가중치를 옮겼으며 가림 영역을 분리했다.
-  옷깃·손목 경계 보강과 겨드랑이 영역 분리 후 천 셔츠는 **3,321**, 가죽 갑옷은 **3,757 triangles**다.
-  헤어·장갑·부츠는 원본 수를 유지하며, 바지의 후속 끝단 변형은 아래에 기록한다.
-- 2026-09-29 셔츠 소매가 손과 어긋나는 문제를 수정했다. 전완 중심에 소매를 맞추고,
-  손가락으로 잘못 옮겨진 가중치를 제거했다. 소매 끝을 안감·겉감 간격이 있는 열린 커프로
-  다시 만들고 전완·손목 가중치로 연결했다. 기존 몸체·다른 파츠 GLB·동작·검 그립은 동일하다.
-  Blender 가공이며 원본 출처·라이선스를 유지하고 추가 생성 비용은 없다.
-  [손목 검사](../../assets/modular_human_male_01/parts/fitted/sleeve-validation.json)는
-  7동작 × 25시점 × 양손에서 커프 중심과 손목 관절의 최대 거리가 **7.36mm 미만**이며
-  소매의 손가락 가중치는 0이다. 대기·전투 대기·공격·걷기와 장갑 착용 확대 화면도 남겼다.
-  전체 의상 관통이나 소매 표면 품질을 최종 승인한 것은 아니다. 이 보정본은 개발 미리보기용 제작 에셋이다.
-- 같은 날 후속 팔꿈치 처짐을 수정했다. 셔츠 밑단의 골반 가중치 규칙이 소매 가중치를 덮어쓰지
-  않게 분리하고, 팔꿈치 안쪽 정점도 소매 단면 맞춤에 포함했다. 소매의 골반 가중치는 0이며
-  이전 에셋에서 실패하는 회귀 검사를 추가했다. 손목 350표본·기존 700포즈 조립 검사를 통과했고,
-  전체 삼각형 수와 다른 파츠는 유지한다. [수정 전 뒤쪽](../../assets/modular_human_male_01/parts/fitted/elbow-before-combat_idle-back.png)·
-  [수정 후 뒤쪽](../../assets/modular_human_male_01/parts/fitted/elbow-after-combat_idle-back.png) 비교를 남겼다.
-- 개발 미리보기 `/modular-character-preview.html`에서 헤어 2종·상의 2종 교체, 장갑·부츠 착탈,
-  머리색·눈색 변경을 연결했다. 머리 재질을 복제하고 홍채만 셰이더 마스크로 염색한다.
-  기존 전용 애니메이션과 검 부착 프로파일은 변경하지 않았다. 추가 생성 비용 없음.
-- 2026-09-29 바지가 부츠 밖으로 나오는 문제를 수정했다. 부츠용 끝단은 입구 안쪽에
-  겹치고, 부츠를 벗으면 원래 폭의 끝단을 표시한다. 바지에는 두 형상과 후속 허리 분할을 포함해 **2,556 triangles**가
-  들어 있다. Blender로 기존 Meshy 원본을 가공했으며 출처·라이선스와 추가 생성 비용 없음은 동일하다.
-  후속 요청에 따라 발목 폭을 부츠 굵기에 가깝게 넓히고, 좁히기 시작하는 높이를 38cm에서 32cm로
-  낮췄다. 입구 부근 24cm에 단면을 추가하고 부츠 표면에 맞춰 안으로 들어가는 부분만 보정했다.
-  [부츠 검사](../../assets/modular_human_male_01/parts/fitted/boots-validation.json)는 7동작 × 25시점의
-  양발 4개 높이의 단면 517표본에서 최소 2.6mm의 안쪽 여유, 종아리 연결 경계 오차 0, 착탈 20회의 재생 연속성을 확인했다.
-  [수정 전](../../assets/modular_human_male_01/parts/fitted/boots-before-walk-side.png)·
-  [수정 후](../../assets/modular_human_male_01/parts/fitted/boots-after-walk-side.png)와 맨발 화면을 기록했다.
-  발목 폭 보정은 [넓히기 전](../../assets/modular_human_male_01/parts/fitted/cuff-width-before-idle1-front.png)·
-  [넓힌 후](../../assets/modular_human_male_01/parts/fitted/boots-after-idle1-front.png) 정면에서도 비교할 수 있다.
-- `6388ecda` 이후 허리 보정: 상의를 벗으면 다리 가림 영역이 허리 피부까지 지우던 문제를 수정했다.
-  몸체와 바지를 기준 자세 높이 1.055m에서 나누고, 안쪽 피부를 바지 표면보다 안으로 맞췄다.
-  허리밴드는 골반 본을 따르며 아래쪽은 기존 가중치로 이어진다. 안쪽 피부도 바지 표면 가중치에 맞춘다.
-  몸체는 **12,600**, 바지는 **2,556 triangles**이며 얼굴 지정 영역 **1,505**는 유지한다.
-  [허리 검사](../../assets/modular_human_male_01/parts/fitted/waist-validation.json)는 경계와 안쪽 피부의
-  490표본 × 175포즈에서 바지까지 최소 **9.4mm**의 안쪽 여유와 상의 교체 20회의 연속성을 확인했다.
-  이전 몸체는 허리 가림 경계 검사에서 실패한다. [수정 전](../../assets/modular_human_male_01/parts/fitted/waist-before-combat_idle-front.png)·
-  [수정 후](../../assets/modular_human_male_01/parts/fitted/waist-after-combat_idle-front.png)와 뒤쪽 비교를 남겼다.
-  [보존 검사](../../assets/modular_human_male_01/parts/fitted/waist-preservation.json)에서 머리·목·팔·손·발과
-  바지 끝단 두 변형의 형상·UV·가중치는 동일하다. Blender 가공이며 기존 출처·라이선스를 유지하고 추가 생성 비용은 없다.
-- `beb1d6f2` 이후 겨드랑이 보정: 갑옷 착용 시 셔츠 몸통 전체를 숨겨 옆면이 비던 문제를 수정했다.
-  기존 셔츠에서 겨드랑이 영역 632 triangles를 분리해 소매와 함께 표시하고, 몸통 중앙만 가린다.
-  Blender에서 기존 Meshy 원본을 가공했으며 출처·라이선스를 유지하고 추가 생성 비용은 없다.
-  [겨드랑이 검사](../../assets/modular_human_male_01/parts/fitted/armhole-validation.json)는
-  7동작 × 25시점 × 양쪽 6개 광선, 총 2,100표본의 가림을 확인했다. 뒤어깨 보정 후 새 영역을 숨기면 그중 696개가 빈 공간을 통과한다.
-  상의 교체 30회에도 재생을 유지한다. 표본 검사이며 전체 의상 충돌을 보증하지 않는다.
-  [수정 전](../../assets/modular_human_male_01/parts/fitted/armhole-before-combat_idle-left.png)·
-  [수정 후](../../assets/modular_human_male_01/parts/fitted/armhole-after-combat_idle-left.png)와 반대쪽·정면·뒤쪽 비교를 남겼다.
-- 같은 날 목 보정: 목 피부를 삼각형 중심으로 분류하면서 옷깃 위에 드러나던 가림 경계를 수정했다.
-  목·몸통 경계를 앞쪽은 낮고 뒤쪽은 높게 분할하고, 뒷목 옆면은 좁혀 셔츠 등판으로 나오는 피부를 줄였다.
-  몸체는 **13,520 triangles**, 얼굴 지정 영역은 **1,505**다. Blender 가공이며 기존 원본·출처·라이선스를 유지하고 추가 생성 비용은 없다.
-  [목 검사](../../assets/modular_human_male_01/parts/fitted/neck-validation.json)는 셔츠·갑옷 각각
-  7동작 × 25시점 × 목 주변 38표본, 총 **13,300표본**의 가림과 상의 교체 30회의 연속성을 확인했다.
-  수정 전 몸체는 동일 검사에서 실패한다. 피부 뒤 10mm 이내의 의상도 가림으로 인정하며, 관통·간격 전체 검사는 아니다.
-  [보존 검사](../../assets/modular_human_male_01/parts/fitted/neck-preservation.json)에서 머리·손·전완·발·다리의
-  형상·노멀·UV·가중치와 기존 몸체 정점의 위치·UV·가중치를 확인했다. 경계에 새 정점만 보간한다.
-  [수정 전](../../assets/modular_human_male_01/parts/fitted/neck-before-leather-combat_idle-front.png)·
-  [수정 후](../../assets/modular_human_male_01/parts/fitted/neck-after-leather-combat_idle-front.png)와 셔츠·상의 없는 앞뒤 비교를 남겼다.
-- 후속 뒤어깨 보정: 갑옷 어깨판 밖으로 나오던 셔츠를 안쪽으로 맞추고, 해당 위치의 갑옷 가중치를
-  주변 셔츠 가중치와 부드럽게 섞었다. Blender로 셔츠 정점 189개를 보정했으며 기존 출처·라이선스를 유지하고 추가 생성 비용은 없다.
-  [보존 검사](../../assets/modular_human_male_01/parts/fitted/shoulder-preservation.json)에서 몸체·다른 파츠 GLB 해시,
-  셔츠의 삼각형 수 **3,321**·UV와 손목을 포함한 하부 소매의 위치·가중치를 확인했다.
-  목·겨드랑이·손목 검사와 기존 700포즈 조립 검사를 다시 통과했다. 어깨의 시각 검토는 대기·전투 대기·걷기·공격 비교이며 전체 의상 충돌 검사는 아니다.
-  [수정 전](../../assets/modular_human_male_01/parts/fitted/shoulder-before-leather-combat_idle-left.png)·
-  [수정 후](../../assets/modular_human_male_01/parts/fitted/shoulder-after-leather-combat_idle-left.png)와 반대쪽·등·셔츠 단독 착용 비교를 남겼다.
-- 2026-09-29 셔츠 밑단을 바지 안으로 넣었다. 기존 Meshy 셔츠의 하부 정점 220개를 Blender로
-  짧고 좁게 맞추고 허리밴드와 같은 골반 가중치로 연결했다. 기존 출처·라이선스를 따르며 추가 생성 비용은 없다.
-  천 셔츠 착용 시 바지 허리 부분을 표시하고 갑옷 착용 시에는 숨긴다.
-  [수정 전](../../assets/modular_human_male_01/parts/fitted/tuck-before-idle1-front.png)·
-  [첫 수정 후](../../assets/modular_human_male_01/parts/fitted/tuck-after-idle1-front.png) 비교를 남겼다.
-- 후속 옆선 보정은 사용자 제공 [ASCII 스케치](../../assets/modular_human_male_01/parts/shirt-silhouette-reference.txt)를
-  참고했다. 등판의 부피를 줄이고 앞뒤가 허리선 근처까지 곧게 내려온 뒤 약 4cm 구간에서 접히도록
-  형상·가중치를 조정했다. 허리선 기울기를 따르는 단면 3개를 보강해 셔츠는 **3,957 triangles**다.
-  동일한 Meshy 원본의 Blender 가공이며 기존 출처·라이선스와 추가 생성 비용 없음은 유지한다.
-  [밑단 검사](../../assets/modular_human_male_01/parts/fitted/tuck-validation.json)는 175포즈 × 224표본에서
-  최소 3.84mm의 안쪽 여유와 상의 교체 30회의 재생 연속성을 확인했다.
-  [보존 검사](../../assets/modular_human_male_01/parts/fitted/tuck-fold-preservation.json)에서 다른 파츠 해시,
-  기존 셔츠 UV 좌표·총 UV 면적과 소매·상부 셔츠 2,117개 삼각형의 위치·UV·가중치가 유지됐다.
-  [옆선 수정 전](../../assets/modular_human_male_01/parts/fitted/tuck-fold-before-combat_idle-side.png)·
-  [수정 후](../../assets/modular_human_male_01/parts/fitted/tuck-fold-after-combat_idle-side.png) 및 대기·걷기·공격의 앞뒤·옆 비교를 남겼다.
-  2026-09-29 사용자 확인 후 모델·작업 파일·재현 스크립트·스케치·검증 기록을 HF·`assets.lock`에 보존했다.
-- 2026-09-29 갑옷 착용 시 셔츠 목깃까지 숨겨지던 문제를 수정했다. 기존 Meshy 셔츠에서
-  목깃 652 triangles를 복제하고 가장자리 형상·가중치를 갑옷에 맞춘 `armored_collar`를 추가했다.
-  Blender 가공이며 기존 출처·라이선스를 따르고 추가 생성 비용은 없다. 갑옷을 입을 때만 표시한다.
-  [보존 검사](../../assets/modular_human_male_01/parts/fitted/collar-preservation.json)에서 기존 셔츠의
-  위치·UV·가중치·노멀과 다른 파츠 해시가 유지됐다. 셔츠 GLB는 숨긴 목깃까지 **4,609 triangles**다.
-  [목 검사](../../assets/modular_human_male_01/parts/fitted/neck-validation.json)는 목 피부 38표본과
-  셔츠 32표본을 두 상의 각각 175포즈에서 확인한다. 셔츠 표본은 피부로 가려져도 통과하지 않는다.
-  [수정 전](../../assets/modular_human_male_01/parts/fitted/neck-collar-before-leather-idle1-front.png)·
-  [수정 후](../../assets/modular_human_male_01/parts/fitted/neck-collar-after-leather-idle1-front.png)와 전투·걷기·공격 비교를 남겼다.
-  사용자 확인 후 모델·작업 파일·제작 스크립트·비교 화면·검증 기록을 HF·`assets.lock`에 보존했다.
-- 장갑·부츠·검 302를 포함한 조합 수치는 다음과 같다. 숨긴 몸체·안쪽 의상·목깃 변형도 전체에 포함한다.
-
-  | 조합 | 전체 triangles | 표시 triangles | 얼굴 지정 영역 |
-  | --- | ---: | ---: | ---: |
-  | 크롭 + 천 셔츠 | 24,408 | 12,862 | 1,505 |
-  | 옆가르마 + 천 셔츠 | 24,586 | 13,040 | 1,505 |
-  | 크롭 + 가죽 갑옷 + 안쪽 셔츠 | 28,165 | 15,009 | 1,505 |
-  | 옆가르마 + 가죽 갑옷 + 안쪽 셔츠 | 28,343 | 15,187 | 1,505 |
-
-- 4조합 × 7동작 × 25시점(700포즈), 교체 20회, 동작 전환 7회에서 유한한 좌표·공유 골격·재생 연속성을
-  확인했다. 소매·바지 끝단·허리·겨드랑이·목·셔츠 밑단 수정 후 같은 조립 검사와 GLB 속성·가중치·입력 해시 검사를 다시 통과했다.
-  프런트엔드 check·lint와 관련 테스트 14개도 다시 통과했다.
-  [내보내기 검사](../../assets/modular_human_male_01/parts/fitted/export-validation.json),
-  [브라우저 검사·착용 화면](../../assets/modular_human_male_01/parts/fitted/browser-validation.json).
-- **제작 중인 착용 샘플**이다. 옷깃·소매·갑옷 어깨의 겹침, 장갑의 관절 면과 헤어 표면은 추가 보완이 필요하다.
-  갑옷 조합은 15,000–20,000 목표를 초과한다. 텍스처도 원본 해상도의 제작용 출력이므로 배포 최적화가 남아 있다.
-  실제 플레이어·저장·장비 동기화에는 연결하지 않았다. 원화는 Git에, 원본·착용본·제작 도구는
-  HF 에셋 저장소에 보관하며 함께 커밋한 `assets.lock`으로 복원한다. 소매·바지 끝단·허리 보정과 검증 기록을 포함한다.
-  `beb1d6f2` 이후 겨드랑이·목·뒤어깨 보정과 검증 기록도 이번 체크포인트의 HF·`assets.lock`에 포함한다.
-
-## Modular Human Male 01 — 제작 샘플 (2026-09-28)
-
-- [캐릭터 커스터마이제이션](../CHARACTER_CUSTOMIZATION.md)의 기준 몸체 제작 샘플.
-  기존 플레이어 모델을 교체하지 않은 작업 에셋이다. 몸체·반바지 분리와 이전 Mixamo 리그
-  후보 검사를 마쳤다. 손바닥 방향 수정 후 재리깅으로 손목 뒤틀림을 개선했고,
-  후속 작업본에서 손가락 관절·가중치·검 그립을 보정했다. 게임 연결 검증은 남아 있다.
-- 원화: [정면](../images/characters/modular_human_male_01/base-front.png),
-  [왼쪽 측면](../images/characters/modular_human_male_01/base-left.png).
-  OpenAI Codex built-in ImageGen, ChatGPT Pro 20x, 2026-09-28. OpenAI 생성 출력물 이용 조건 적용.
-  실제 프롬프트·해시·후면 생성 실패 기록: [concept-source.json](../../assets/modular_human_male_01/concept-source.json).
-- 성인 남성, 민머리·수염 없음, 빈손 A포즈, 회색 모델링용 반바지. 체형과 얼굴·손의
-  제작 가능성을 먼저 확인하며, 반바지와 몸체는 이후 분리·보완한다.
-- Meshy.ai Premium(기존 사용자 확인), Multi-Image to 3D API, `meshy-7.1`,
-  2026-09-28. [Meshy 유료 생성물 이용 조건](https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models) 적용.
-  Community에 공개 게시하지 않는다. 작업 ID `01a0e673-476f-7162-bce0-c9007851039b`.
-- 생성 설정: 정면·측면 두 장, Ultra 2K 형상, 리메시 10,000 triangles 목표,
-  4K PBR 텍스처, 리메시 전 원본 보존. 최종 조립 캐릭터의 15,000~20,000 목표 중
-  기준 몸체 몫이다. 실제 출력 **10,443 triangles**, 리메시 전 원본 **215,016 triangles**.
-  머리·목 근사 영역 1,767 triangles(키 상위 18%; 얼굴만의 수치 아님).
-- 생성 35크레딧, Meshy 리깅 비교 5크레딧으로 총 **40크레딧** 사용(6,100 → 6,060).
-  원본·PBR·Blender 파일·확대 렌더를 보존했다. 얼굴 윤곽·손가락 간격·손의 면 보정과
-  복장 분리·홍채 마스크 제작이 필요하며, 아직 제작용 기준 몸체로 승인하지 않는다.
-- 리깅 작업 `01a0e679-0cd5-7095-9b8c-27cc9a9dedf2`는 24본·손가락 본 없음.
-  기존 Mixamo 팩과 본 이름·척추 계층이 달라 공통 리그에 채택하지 않는다.
-  클라이언트 리타게팅으로 `idle1`·`walk`·`run`·`slash1` 각 12개 시점을 측정했지만,
-  유한한 좌표 확인만으로 시각적 호환성을 통과한 것은 아니다.
-- 원본 OBJ 보존·재질 참조·ZIP 무결성을 확인한 초기 비교용 ZIP은 업로드하지 않았다.
-  이후 보정본을 사용자가 Mixamo에서 리깅해 제공했다(아래 기록).
-  제작 원본·검증 파일은 HF에 보관하고 `assets.lock`으로 고정한다. 게임에는 연결하지 않았다.
-- 비용·다운로드 기록: [generation.json](../../assets/modular_human_male_01/generation.json),
-  [rigging.json](../../assets/modular_human_male_01/rigging.json).
-  품질 판정·검증 결과·재현 명령: [샘플 README](../../assets/modular_human_male_01/README.md).
-
-### 기준 몸체 보정과 반바지 분리 (2026-09-28)
-
-- 같은 Meshy 원본을 Blender 5.2.0 LTS에서 보정했다. 추가 Meshy 생성은 하지 않았다.
-  [몸체·반바지·조립 GLB와 렌더](../../assets/modular_human_male_01/refined/README.md).
-- 몸체 **11,730**, 기본 반바지 **1,010**, 합계 **12,740 triangles**(가려지는 몸체 포함).
-  머리·목 근사 영역은 1,767 → 3,057, 지정한 얼굴 앞쪽 영역은 **630 → 1,505 triangles**.
-  얼굴 450개·나머지 머리 200개 엣지를 세분화하고 고밀도 원본 표면에 투영했다.
-- 손가락은 단면 검사에서 원래 분리된 것으로 확인했다. 팔꿈치부터 손목까지 회전을
-  보정해 손바닥을 앞으로 돌렸다. 열린 경계·비매니폴드 엣지는 몸체에서 모두 0이며,
-  반바지의 열린 경계는 허리·양쪽 다리 세 곳이다. 반바지 아래 몸체는 단순화된 형상이다.
-- 보정한 형상에 맞춰 4096² 노멀맵을 다시 베이크했다. 원본의 등 텍스처 반복 오류는
-  OpenAI Codex built-in ImageGen, **ChatGPT Pro 20x**, 2026-09-28 생성 출력으로 국소 보정했다.
-  OpenAI 생성 출력물 이용 조건 적용. [프롬프트·입력·해시](../../assets/modular_human_male_01/refined/back-repair-source.json).
-- GLB 재가져오기·파츠별 지오메트리/UV 일치·텍스처 내장·Mixamo ZIP 무결성 검증 완료.
-  공통 리그·무기 그립·홍채 마스크·장비 조립은 이 단계에서 미완료다. 보정 원본·산출물은 HF에
-  보관하고 `assets.lock`으로 고정한다. 초기 샘플은 `72ef46aa`와 해당 `assets.lock`에 보존한다.
-
-### Mixamo 리그 후보와 기존 동작 검사 (2026-09-28)
-
-- 사용자 제공 [Idle (7).fbx](../../assets/modular_human_male_01/refined/Idle%20%287%29.fbx).
-  Adobe Mixamo에서 리깅·Idle 적용한 파일임을 사용자가 확인했다. 무료 서비스,
-  아래 Mixamo 라이선스 적용. 제공일 2026-09-28, 원본 다운로드 날짜는 미확인.
-- 65본·양손 다섯 손가락 포함. 단위·원점 정규화, PBR 복원, 정점당 최대 4개 본 가중치로
-  몸체·반바지·통합 GLB를 내보냈다. 총량은 **12,740 triangles**를 유지한다.
-  반바지 아래 피부 primitive를 숨긴 가시 총량은 **11,730 triangles**(무기·헤어 제외).
-- 동일 골격에 별도 파츠를 연결한 결과는 통합본과 일치했다. 기존 이동·전투 동작 7종 ×
-  25개 시점 수치 검사 통과. 다만 확대 렌더에서 손목 접힘·검 그립 문제가 있어 시각 검증은
-  미통과다. 이동 팩의 새끼손가락 트랙 부재도 기록했다. 기준 리그는 후보 상태다.
-- 제공된 Idle은 별도 참조 GLB에 보존했다. 원본 FBX와 공용 애니메이션 팩은 수정하지 않았다.
-  [파일·출처 해시·비교 렌더·검증·재현](../../assets/modular_human_male_01/rigged/README.md).
-  게임에는 연결하지 않았다. 원본·산출물은 HF에 보관하고 `assets.lock`으로 고정한다.
-
-### 손바닥 방향 수정과 재리깅 입력 (2026-09-28)
-
-- 사용자가 손바닥 정면 자세를 손목 뒤틀림 원인으로 지적했다. 전완을 돌렸던 보정을
-  철회하고, 손바닥이 아래·몸통 쪽을 향하는 Meshy 원래 자세로 다시 제작했다.
-  [현재 몸체·Mixamo ZIP·검토 렌더](../../assets/modular_human_male_01/refined_palms_down/README.md).
-- 얼굴 보강·반바지 분리·UV·등 보정 텍스처를 유지했다. 전완·손 이외의 위치 오차 0,
-  전체 **12,740 triangles**, 얼굴 지정 영역 **1,505 triangles**. 변경한 자세에 맞춰
-  고밀도 원본에서 노멀맵을 다시 베이크했다. 추가 AI 생성이나 Meshy 비용은 없다.
-- GLB 재검사, 이전 UV·베이스컬러 보존, ZIP 무결성·재질 참조 검사를 통과했다.
-  이후 사용자가 재리깅한 `Idle (11).fbx`를 제공했다(아래 기록).
-- **[미사용]** `refined/`의 손바닥 정면 버전과 `rigged/`의 이전 리그는 비교·출처 보존용이다.
-  사용자 FBX는 수정하지 않았다. 원본과 새 작업본은 HF에 보관하고 `assets.lock`으로 고정한다.
-
-### 손 방향 수정 후 Mixamo 리그 (2026-09-28)
-
-- 원본: 사용자 제공 `Idle (11).fbx`, Adobe Mixamo 리깅임을 사용자 확인.
-  `/mnt/y/web_downloads/Idle (11).fbx`를
-  [로컬 FBX](../../assets/modular_human_male_01/refined_palms_down/Idle%20%2811%29.fbx)로 그대로 보존했다.
-  무료 서비스·아래 Mixamo 이용 조건 적용. 제공일 2026-09-28, 별도 다운로드 날짜는 미확인.
-- 손가락 포함 65본, 30fps Idle 1~60프레임. 참조 GLB는 2초 Idle을 보존한다.
-  `human_male_01_mixamo_candidate_v2`로 몸체·반바지를 내보냈다. 총 **12,740 triangles** 유지,
-  기존 수정본과 면 중심 위치 오차는 최대 0.00000084m다. PBR 복원·최대 4본 가중치 정규화 완료.
-- 기존 동작 7종 × 25개 시점에서 별도 파츠 조립본과 통합 GLB의 정점 위치 오차 0.
-  비교 렌더에서 이전 손목 뒤틀림은 보이지 않는다. 검을 쥐는 손가락의 국소 접힘과 그립 간격,
-  이동 팩의 새끼손가락 트랙 부재는 남아 있다. 전체 품질 승인·게임 연결은 아직 하지 않았다.
-- [파일·해시·검증·렌더·재현](../../assets/modular_human_male_01/rigged_palms_down/README.md).
-  원본 FBX·이전 리그·공용 애니메이션 팩은 수정하지 않았다. 추가 생성 비용 없음.
-  새 원본과 산출물은 HF에 보관하고 `assets.lock`으로 고정한다.
-
-### 손가락 관절과 검 그립 보정 (2026-09-28)
-
-- `cf2ad8bb` 커밋 이후의 [보정본](../../assets/modular_human_male_01/rigged_hand_tuned/README.md).
-  원본·가공 파일·검증 기록은 HF에 보관하며 함께 커밋한 `assets.lock`으로 복원한다.
-- 위 Mixamo 후보와 Meshy·ImageGen 원본을 Blender 5.2.0 LTS, NumPy, Three.js로 가공했다.
-  원본의 이용 조건을 따른다. 추가 AI 생성·유료 서비스 사용·비용은 없다.
-- 손 부위 698개 정점의 가중치를 보정하고 관절 엣지 350개를 세분화했다.
-  몸체 **12,430** + 반바지 **1,010** = **13,440 triangles**. 반바지 아래 피부를 제외하면
-  **12,430 triangles**다. 실제 `iron_sword` 302개를 포함한 검토 조합은 총 **13,742**,
-  가시 **12,732 triangles**이며 헤어·추가 의상·망토는 아직 없다. 얼굴 지정 영역은 **1,505** 유지.
-- 원래 정점·UV 쌍, 65본의 기준 행렬과 반바지 바이트를 보존했다. GLB 재가져오기에서
-  몸체 열린 경계·비매니폴드 엣지 0, 반바지는 허리·양쪽 다리 세 경계를 확인했다.
-- 기존 동작 7종 × 25개 시점의 조립 검사 통과. 같은 보정 포즈로 비교한 손 표면의
-  역방향 면적 진단값은 약 73.4% 감소했다. 이는 자기 관통이 모두 사라졌다는 판정은 아니다.
-  전투 대기·공격 확대 렌더에서 접힘 감소와 그립 정렬을 확인했다.
-- 손가락 자세와 검 장착 변환은 `hand-grips.json`을 읽는 에셋 검증과 브라우저
-  `/modular-character-preview.html`에서 같은 함수를 사용한다. 원본 FBX·공용 동작 팩은 유지했다.
-- Chrome WebGL(SwiftShader)에서 175개 포즈, 하의 재장착 10회, 동작 전환 6회,
-  연속 재생·보정 비교·390px 화면을 확인했다. 몸체와 하의는 65본의 Skeleton 하나를 공유한다.
-  [브라우저 결과·해시·화면](../../assets/modular_human_male_01/rigged_hand_tuned/browser-validation.json).
-  실제 GPU 성능·플레이어 연결은 아직 검증하지 않았다.
-- 전투 자세의 허리 경계 관통·겨드랑이 접힘은 그림자 수신을 끈 화면에도 남는다.
-  최종 리그 품질 승인은 보류한다. 기본 복장·헤어·장비 파츠 제작을 먼저 진행하고,
-  해당 변형은 파츠를 착용한 동작 검사에서 필요한 범위로 보완한다(사용자 확인: 2026-09-28).
-- 사용자 지적에 따라 검 부착을 손잡이 중심 기준으로 앞쪽에 40도 회전했다.
-  이 단계에서는 손목·손가락 자세나 메시를 변경하지 않았다. 전투 대기 129개 시점에서 머리 경계
-  영역 간섭이 없고 공격·전환도 검사했다. [결과·수정 화면](../../assets/modular_human_male_01/rigged_hand_tuned/README.md#검-부착-회전-검증).
-- 후속 요청에 따라 같은 회전을 유지하며 손잡이를 손목 방향으로 1cm 옮겼다.
-  전투 대기·공격에서 오른손 검지·새끼손가락의 두 번째·세 번째 관절을 각각 25%·18%
-  기준 자세 쪽으로 펴도록 보정했다. 손목, 다른 손가락과 원본 동작 팩은 유지했다.
-- 걷기에는 검을 세운 별도 장착 변환을 적용하고, 걷기 키프레임의 골반 높이를 발바닥
-  기준으로 보정했다. 지지하는 발의 높이는 기준 지면에서 약 9.6~12.3cm → 5~7mm다.
-  검이 너무 서 있다는 후속 의견에 따라 추가 회전을 절반으로 줄였다(기준 자세 약 70도 → 56도).
-  걷기 129개 시점에서 오른쪽 허벅지 메시와의 실제 교차와 머리 경계 영역의 겹침은 0이었다.
-  [검사·화면](../../assets/modular_human_male_01/rigged_hand_tuned/README.md#걷기-검-각도와-접지).
-- 손이 올라오는 걷기 구간에서는 검 장착값을 왼팔 쪽으로 최대 10도 기울여 검지 쪽 접촉을
-  줄였다. 손잡이 중심과 손목 자세는 유지하며 사용자가 걷기 상태를 확인했다(2026-09-28).
-- 점프는 복제한 골반 위치 트랙 전체를 약 43.4cm 내려 시작·착지 때 발 높이를 약 1cm로
-  맞췄다. 상대적인 점프 궤적·타이밍과 다른 동작은 유지한다. 원본 애니메이션 파일은 그대로이며
-  개발 미리보기에서 클립 준비 시 적용한다. 사용자 확인 완료(2026-09-28).
-  [검사·화면](../../assets/modular_human_male_01/rigged_hand_tuned/README.md#점프-기준-높이).
-- 위 런타임 보정 단계는 `f4a63e49`에 보존했다. 후속 작업에서 손가락·접지 보정을
-  전용 애니메이션 GLB로 저장하고 미리보기가 직접 재생하도록 연결했다. 몸체·하의 GLB는 그대로다.
-  두 비교 버전 × 7동작 × 65시점의 본·정점 오차는 0이다. 검 장착 설정은 별도로 유지한다.
+- [최종 파일·편집 원본·복원 안내](modular-human-male-01.md).
+  제작 폴더에는 파츠 GLB 8개, 텍스처를 내장한 최종 Blender 파일 1개,
+  전용 애니메이션과 검 그립 설정만 남겼다. 게임용 배포 파일의 내용은 유지한다.
+- 원화와 등 텍스처 보정: OpenAI Codex built-in ImageGen, **ChatGPT Pro 20x**, 2026-09-28.
+  OpenAI 생성 출력물 이용 조건 적용. [정면 원화](../images/characters/modular_human_male_01/base-front.png),
+  [왼쪽 측면 원화](../images/characters/modular_human_male_01/base-left.png).
+- 몸체: Meshy Multi-Image to 3D API, **Premium**, `meshy-7.1`, 2026-09-28,
+  Ultra 2K 형상·4K PBR, 목표 10,000 triangles, 생성 35크레딧.
+  작업 ID `01a0e673-476f-7162-bce0-c9007851039b`.
+- 파츠 7종: 크롭·옆가르마 헤어, 천 셔츠·가죽 갑옷, 천 바지·가죽 장갑·가죽 부츠.
+  Meshy Image to 3D API, **Premium**, `meshy-7.1`, 2026-09-28,
+  Ultra 2K 형상·2K PBR, 각 35크레딧, 총 245크레딧.
+  [Meshy 유료 생성물 이용 조건](https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models) 적용.
+  Community에는 공개 게시하지 않았다.
+- 리그: 사용자 제공 Adobe Mixamo `Idle (11).fbx`, 2026-09-28 확인, 무료 서비스.
+  원본 다운로드 날짜는 별도 기록되지 않았다. 아래 Mixamo 라이선스를 따른다.
+  손바닥이 아래·몸통 쪽을 향하는 기준 자세이며 손가락을 포함한 65본을 사용한다.
+- Blender 5.2.0 LTS에서 얼굴·손·가중치, 의상 개구부·가림 경계·목깃·밑단을 보정했다.
+  추가 AI 생성·리깅 비용은 없다. 최종 몸체는 **13,520 triangles**, 얼굴 지정 영역은 **1,505**다.
+  원본 해상도의 파츠와 편집 원본은 보관하고 게임 배포 단계에서 텍스처를 압축한다.
+- 최종 파츠의 triangles: 크롭 933, 옆가르마 1,111, 천 셔츠와 갑옷용 목깃 4,609,
+  가죽 갑옷 3,757, 바지 2,556, 장갑 1,033, 부츠 1,455.
+  제작 미리보기의 장갑·부츠·검 포함 조합은 천 셔츠 **24,408–24,586**(표시 **12,862–13,040**),
+  가죽 갑옷 **28,165–28,343**(표시 **15,009–15,187**) triangles다.
+  숨긴 몸체·안쪽 의상·목깃·바지 끝단 변형을 포함하며 망토는 별도다.
+- 손목·팔꿈치, 허리·목 가림, 갑옷 겨드랑이·뒤어깨, 부츠용 바지 끝단,
+  셔츠 넣어 입기와 갑옷용 목깃 보정을 반영했다. 장갑 겹침과 의상·헤어 표면,
+  숨김 포함 조합의 15,000–20,000 triangles 목표 초과는 후속 검토 대상이다.
+- 실제 프롬프트·Meshy 작업 ID·설정·비용·원본 해시는 [출처 기록](modular-human-male-01-sources.json)에 보관한다.
   [전용 애니메이션 기록](animation.md#modular-human-male-01--baked-animation-preview-2026-09-28).
-- 2026-09-29 사용자가 지정한 공격 마지막 프레임의 어깨선에 전투 대기를 맞췄다.
-  전용 `combat_idle`의 쇄골·팔·손 회전만 보정하며, 기존 호흡·손·검 자세와 다른 동작은 유지한다.
-  몸체·의상 형상과 가중치는 그대로다. 기존 Mixamo 소스를 Three.js로 가공했으며 기존 이용 조건을 따른다.
-  [검사·착용 전후 화면](../../assets/modular_human_male_01/rigged_hand_tuned/README.md#전투-대기-어깨-보정-2026-09-29).
-- 2026-09-29 일반 대기에서 검을 쥔 오른손 손가락이 펴져 있던 자세를 보정했다.
-  기존 전투 대기의 그립을 일반 대기 오른손 손가락 15개 회전 트랙에 적용했다.
-  기존 Mixamo 동작의 Three.js 가공이며 출처·이용 조건은 동일하고 추가 생성 비용은 없다.
-  이 그립 단계에서는 손목·팔·몸통·왼손과 다른 6동작, 비교용 GLB·검 장착값·몸체·의상을 유지했다.
-  두 버전 × 7동작 × 65시점 재가져오기 검사와 700포즈 조립 검사, 맨손·장갑의 대기 전환을 확인했다.
-  [검사·수정 전후 화면](../../assets/modular_human_male_01/rigged_hand_tuned/README.md#일반-대기-검-그립-보정-2026-09-29).
-- 후속 일반 대기 보정에서는 손과 바지의 겹침을 줄이도록 상완을 오른쪽 7.5°, 왼쪽 2° 바깥으로 벌렸다.
-  기존 Mixamo 동작을 Three.js로 가공했으며 출처·이용 조건은 동일하고 추가 생성 비용은 없다.
-  손가락 비교용을 포함한 두 GLB의 `idle1` 상완 회전 2트랙만 바뀐다. 기존 손가락 그립·팔꿈치·손목의
-  로컬 회전, 몸체·의상·검 장착값과 다른 동작은 유지한다.
-  맨손·장갑 각각 65시점의 표본 검사에서 바지와의 수평 간격은 오른쪽 최소 6.79mm, 왼쪽 11.03mm다.
-  [검사·수정 전후 화면](../../assets/modular_human_male_01/rigged_hand_tuned/README.md#일반-대기-팔-간격-보정-2026-09-29).
-- 일반 대기의 검 손잡이가 검지를 가리던 문제는 `idle1` 전용 장착 위치를 약 22mm 옮겨 보정했다.
-  기존 검의 장착값을 NumPy로 가공했으며 출처·이용 조건과 폴리곤 수는 같고 추가 생성 비용은 없다.
-  팔·손가락 애니메이션, 검 회전과 다른 동작의 장착값은 유지한다. 맨손 검지의 65시점 내부 표본은 0이며,
-  장갑의 일부 겹침은 남아 있다. [검사·수정 전후 화면](../../assets/modular_human_male_01/rigged_hand_tuned/README.md#일반-대기-검-위치-보정-2026-09-29).
+- **[미사용]** 손가락이 없는 Meshy 24본 리그 시험은 5크레딧을 사용했으며 채택하지 않았다.
+  이전 정면 손바닥 리그·중간 모델·검증 보고서·비교 화면·일회성 스크립트는
+  현재 폴더와 `assets.lock`에서 제거했다. 이전 HF 리비전은 최종 파일 안내에 기록했다.
 
 ## Human
 

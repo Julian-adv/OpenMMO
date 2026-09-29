@@ -37,7 +37,7 @@ These guidelines were confirmed by the user on 2026-09-20 and apply until the us
 ## Mixamo Upload Preparation
 
 - For Mixamo characters, prepare the neutral A/T pose with palms facing down/toward the body, not forward (user-confirmed project requirement, 2026-09-28). Inspect finger separation from a side view instead of twisting the forearms to expose the palms in front views.
-- If the hand rest pose changes, prepare a new rigging input and validate the returned rig with existing game animations before accepting it. The modular male's previous forward-palm rig is retained only for comparison; the corrected upload is documented in [the palms-down sample](../../assets/modular_human_male_01/refined_palms_down/README.md).
+- If the hand rest pose changes, prepare a new rigging input and validate the returned rig with existing game animations before accepting it. The modular male uses the corrected palms-down/inward rig; its final files and source record are in [the asset guide](modular-human-male-01.md).
 - Prepare character uploads as a ZIP containing the original OBJ, an MTL, and the base-color texture at the archive root.
 - Match the OBJ's `mtllib` to the MTL filename and its `usemtl` to the MTL's `newmtl` name. Set `map_Kd` to the exact base-color filename using a relative path; match filename case.
 - Use a simple base-color-only material in the upload ZIP. Preserve the original GLB and all PBR textures separately for material restoration after rigging.

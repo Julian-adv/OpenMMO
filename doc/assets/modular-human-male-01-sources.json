@@ -1,0 +1,917 @@
+{
+  "asset": "modular_human_male_01",
+  "cleanup_date": "2026-09-29",
+  "archive": {
+    "repo": "jake-song-openmmo/onlinerpg-assets",
+    "revision": "6f15946b4d61d860c9037775a6fbb3e6c303e1be",
+    "note": "Original source paths below describe archived production history; only the final files listed in the asset guide remain locally."
+  },
+  "body_concept": {
+    "name": "modular_human_male_01",
+    "generation_date": "2026-09-28",
+    "tool": "OpenAI Codex built-in ImageGen",
+    "tier": "ChatGPT Pro 20x",
+    "tier_source": "doc/assets/creation-guidelines.md",
+    "use_case": "stylized-concept",
+    "purpose": "First modular character base-body feasibility sample; adult male, bald, neutral A-pose, gray modeling shorts.",
+    "license": "OpenAI generated output terms",
+    "images": [
+      {
+        "path": "doc/images/characters/modular_human_male_01/base-front.png",
+        "view": "front",
+        "prompt": "Use case: stylized-concept.\nAsset type: production modeling reference for the first modular player-character base body in OpenMMO, for Meshy image-to-3D and a shared humanoid animation rig.\nPrimary request: create ONE original adult human male, approximately 27 years old, in a precise front-facing neutral symmetrical A-pose. Moderately athletic everyday adventurer build, lean and believable rather than bodybuilder, natural roughly seven-and-a-half-head proportions. An attractive but grounded realistic fantasy game face with clearly shaped eyelids, open gray irises, a straight natural nose, defined lips, readable ears and jaw, a neutral closed mouth. Completely bald smooth scalp, no beard or facial stubble; subtle natural eyebrows only. Warm neutral light-medium skin, no tattoos or scars.\nPose and anatomy: head level and looking directly forward; arms straight approximately 35 degrees away from the sides of the torso, relaxed wrists, palms toward the viewer, exactly five anatomically correct visibly separated fingers on each empty hand. Legs straight with feet hip-width apart and toes forward. Both bare feet entirely visible and firmly on one ground plane. Bilateral symmetry suitable for rigging.\nClothing: only simple opaque matte muted charcoal-gray fitted mid-thigh modeling shorts with a flat waistband, no logos, no prominent seams, no pockets, no drawstrings. Bare torso, arms, calves and feet so joint anatomy is visible. This is a neutral technical character-design reference, not a fashion or fitness photograph.\nStyle/medium: polished realistic medieval fantasy game character concept render, believable anatomy and skin with slightly simplified readable forms, no exaggerated cartoon features. Prioritize detailed facial forms without waxy skin or over-sharpening; soft restrained material detail.\nComposition/framing: portrait image, exactly one full-body frontal view, near-orthographic lens centered at torso height, complete scalp to soles, balanced margins around every fingertip and foot, figure occupies most of the height. Plain uniform pale warm-gray studio background, very subtle contact shadow only. Broad even neutral lighting, no dramatic cast shadows.\nConstraints: one person and one view only. No hair, helmet, armor, shirt, shoes, gloves, jewelry, weapons, props, pedestal, environment, turnaround panels, face insets, lettering, logos or watermark. No heroic stance, contrapposto, bent elbows, crossed limbs or hidden fingers.",
+        "sha256": "5b9fa90790195fd9f85892452eee13c7daeb1d691bf2acbe65bbbde52502d7a8",
+        "dimensions": [
+          1024,
+          1536
+        ]
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/base-left.png",
+        "view": "left",
+        "reference": "doc/images/characters/modular_human_male_01/base-front.png",
+        "prompt": "Use case: identity-preserve.\nAsset type: side-view production modeling reference for a modular medieval fantasy game character.\nEdit target: the attached front-view character reference.\nCreate a strict left-side profile view of EXACTLY THE SAME adult bald male character, facing toward the left edge of the image, preserving his face identity, skull and jaw shapes, body proportions, skin tone, moderately athletic build, opaque charcoal-gray mid-thigh shorts, bare feet, neutral expression, and the same symmetrical relaxed A-pose. Rotate the view 90 degrees around his vertical axis; do not redesign the character or change the pose. Arms remain extended diagonally away from the body in the frontal plane, so the near arm overlaps the far arm in this true profile. Preserve correct five-finger hands and human anatomy. No hair and no facial hair.\nOne full-body side view only, scalp to soles visible, same scale and plain pale gray studio background, near-orthographic camera, even neutral lighting, clean modeling-reference render. No front view, no three-quarter view, no additional people, no inset panels, no labels, text, props or equipment.",
+        "sha256": "d894ecdd0bf88e97c53a8f07434936111134fd5a0a540ace775338ef47efe98f",
+        "dimensions": [
+          1024,
+          1536
+        ]
+      }
+    ],
+    "unavailable_views": [
+      {
+        "view": "back",
+        "status": "IMAGEGEN_OUTPUT_MODERATION_BLOCKED",
+        "attempts": [
+          {
+            "prompt": "Use case: identity-preserve.\nAsset type: rear-view production modeling reference for a modular medieval fantasy game character.\nEdit target: the attached front-view character reference.\nCreate a strict back view of EXACTLY THE SAME adult bald male character, preserving his skull shape, ears, moderately athletic body proportions, skin tone, opaque charcoal-gray fitted mid-thigh shorts, bare feet and symmetrical neutral A-pose. Rotate the camera 180 degrees around his vertical axis. His face must not be visible. Arms stay straight diagonally outward, hands empty with five separated fingers; palms remain facing the original front direction, so the backs of his hands face this camera. Legs remain straight, hip-width apart. Keep the same body, same shorts and pose, no added tattoos or scars, no hair.\nOne full-body rear view only, scalp to soles visible at the same scale, plain pale gray studio background, near-orthographic camera, even neutral lighting and clean readable anatomy. No front view, no three-quarter view, no extra people, panels, labels, lettering, props or equipment.",
+            "request_id": "2701a7f0-db66-4ef4-a153-b9964296ed28"
+          },
+          {
+            "prompt": "Create a neutral full-body back-view 3D game-character modeling reference using the provided front-view reference. Same adult male character, same height, build, skin, bald head, A-pose and proportions. The figure wears the same opaque charcoal-gray mid-thigh shorts as in the reference; the shorts fully cover the entire pelvis and buttocks with a modest ordinary fit. Keep this garment intact, with no exposed buttocks and no revealing fabric. The neutral standing figure is seen directly from behind, from the scalp to the soles of both feet. Arms are angled down and outward symmetrically, hands empty, five fingers per hand, feet apart. One person, one rear view only, no face inset or additional views. Plain pale gray background, near-orthographic camera, even studio light, clean technical reference for game-asset construction. No text, labels, props, armor or weapons.",
+            "request_id": "d3aaf75b-37c8-454d-b6cb-4defcdfd4aba"
+          }
+        ],
+        "next_step": "Use the accepted front and left images for the initial multi-image Meshy sample."
+      }
+    ]
+  },
+  "part_concepts": {
+    "date": "2026-09-28",
+    "tool": "OpenAI Codex built-in ImageGen",
+    "tier": "ChatGPT Pro 20x",
+    "license": "OpenAI generated output terms",
+    "parts": [
+      {
+        "id": "hair_crop",
+        "triangles": 1000,
+        "prompt": "Use case: stylized-concept. Create one isolated short masculine textured crop hairstyle as a hollow wearable wig shell, a production reference for a realistic medieval fantasy game modular hair mesh. Three-quarter front view, camera slightly above eye level showing the top and the left side. Short compact clumps of hair 2–3 cm long on the crown, short tapered sides, natural forehead hairline, clear ear cutouts and tidy short nape. Neutral medium-gray hair, visible soft strand texture but solid readable sculpted locks rather than isolated thin strands. Fit a proportionate adult male skull. There must be NO head, face, ears, neck, skin, scalp mannequin, stand or pedestal; only the shaped hair shell floating by itself. Uniform pale gray background, broad even studio illumination, entire hairstyle visible, minimal shadow. No text, no multiple views.",
+        "path": "doc/images/characters/modular_human_male_01/parts/hair_crop.png",
+        "sha256": "b580be620aed20859fbbada54832ea8ba0022628455290268c67a268778b3b07",
+        "review": "Isolated part, no body or mannequin, readable shape; accepted as first Meshy input"
+      },
+      {
+        "id": "hair_sidepart",
+        "triangles": 1200,
+        "prompt": "Use case: stylized-concept. Create one isolated short masculine side-part hairstyle as a hollow wearable wig shell, a production reference for a realistic medieval fantasy game modular hair mesh. Three-quarter front view, camera slightly above eye level showing the top and the left side. A clear natural side part, crown locks about 5 cm long swept sideways in broad solid sculpted clumps, compact tapered side hair and short nape, clear ear cutouts. Restrained practical adventurer hairstyle, no shaved geometric patterns. Neutral medium-gray hair with soft strand detail. Fit a proportionate adult male skull. There must be NO head, face, ears, neck, skin, scalp mannequin, stand or pedestal; show only the hair shell floating by itself. Uniform pale gray background, broad even studio illumination, whole silhouette visible. No text, no multiple views.",
+        "path": "doc/images/characters/modular_human_male_01/parts/hair_sidepart.png",
+        "sha256": "cc295f4792421a0ede0fe1b948c9be4c0baf0499b297c7a8fd2d0ff2513525fd",
+        "review": "Isolated part, no body or mannequin, readable shape; accepted as first Meshy input"
+      },
+      {
+        "id": "top_linen",
+        "triangles": 2000,
+        "prompt": "Use case: stylized-concept. Production reference for a modular realistic medieval fantasy RPG part, to be reconstructed with Meshy. One isolated asset only, occupying most of the image, on a uniform pale neutral gray background. Clean realistic game-asset render, soft flat studio light, readable volumes, restrained surface detail. No text, logos, labels, panels, floor props, mannequin, human skin, body, head, hands or feet inside the garment. Fit a moderately athletic 1.90m adult male. No modern zippers, no glowing effects, no ornate decorations. Asset: a simple oatmeal linen long-sleeved medieval adventurer shirt. Tailored but not skin-tight, straight hem ending at upper hip, small round neck with a short V slit and one discreet tie, plain seams and subtle natural fabric folds. Both sleeves straight in symmetrical neutral A-pose, arms angled 35 degrees outward from the sides of the torso, cuffs ending at wrist. Open dark hollow neck, sleeve ends and bottom hem, no caps filling openings. Exactly one complete shirt, frontal view with very slight three-quarter angle so depth is visible, centered.",
+        "path": "doc/images/characters/modular_human_male_01/parts/top_linen.png",
+        "sha256": "d1fb01c7202bc5f190af6bbe76ace3a633da1c104154d00f99dd8ffa86c812c0",
+        "review": "Isolated part, no body or mannequin, readable shape; accepted as first Meshy input"
+      },
+      {
+        "id": "top_leather",
+        "triangles": 2500,
+        "prompt": "Use case: stylized-concept. Production reference for a modular realistic medieval fantasy RPG part, to be reconstructed with Meshy. One isolated asset only, occupying most of the image, on a uniform pale neutral gray background. Clean realistic game-asset render, soft flat studio light, readable volumes, restrained surface detail. No text, logos, labels, panels, floor props, mannequin, human skin, body, head, hands or feet inside the garment. Fit a moderately athletic 1.90m adult male. No modern zippers, no glowing effects, no ornate decorations. Asset: a practical dark warm-brown leather adventurer cuirass with short fitted shoulder caps and a restrained central front closure of three small flat buckles. Waist-length, subtly shaped chest and overlapping narrow panels at the lower hem, no belt hanging below the garment. Sturdy worn matte leather with modest stitching, no metal plate, no large shoulder pauldrons, no spikes. Sleeveless open armholes leaving elbow joints free, hollow neck and open lower hem. Exactly one complete wearable torso armor, frontal view with slight three-quarter angle.",
+        "path": "doc/images/characters/modular_human_male_01/parts/top_leather.png",
+        "sha256": "2ddf928be3d67f998dd8e32b9c54bbaea6aa1c2f12b106950dfa3ee283d9d183",
+        "review": "Isolated garment/pair with visible openings and no body; accepted as first Meshy input"
+      },
+      {
+        "id": "pants_cloth",
+        "triangles": 1500,
+        "prompt": "Use case: stylized-concept. Production reference for a modular realistic medieval fantasy RPG part, to be reconstructed with Meshy. One isolated asset only, occupying most of the image, on a uniform pale neutral gray background. Clean realistic game-asset render, soft flat studio light, readable volumes, restrained surface detail. No text, logos, labels, panels, floor props, mannequin, human skin, body, head, hands or feet inside the garment. Fit a moderately athletic 1.90m adult male. No modern zippers, no glowing effects, no ornate decorations. Asset: a pair of simple charcoal-brown medieval cloth trousers, straight slim legs, fitted waistband at natural waist, discreet cloth drawstring, no pockets or hanging straps. Legs in neutral stance, hip-width apart and straight, two ankle-length hems. Natural subtle folds at crotch, knees and ankles, sturdy matte fabric. Hollow waist opening and ankle openings. Exactly one complete pair of trousers, front view with a very slight three-quarter angle, entire garment visible.",
+        "path": "doc/images/characters/modular_human_male_01/parts/pants_cloth.png",
+        "sha256": "4cc78cedb785298715c8f53c49742c0d45d4ff41b0a6d739eba210434484fefe",
+        "review": "Isolated garment/pair with visible openings and no body; accepted as first Meshy input"
+      },
+      {
+        "id": "gloves_leather",
+        "triangles": 1000,
+        "prompt": "Use case: stylized-concept. Production reference for a modular realistic medieval fantasy RPG part, to be reconstructed with Meshy. One isolated asset only, occupying most of the image, on a uniform pale neutral gray background. Clean realistic game-asset render, soft flat studio light, readable volumes, restrained surface detail. No text, logos, labels, panels, floor props, mannequin, human skin, body, head, hands or feet inside the garment. Fit a moderately athletic 1.90m adult male. No modern zippers, no glowing effects, no ornate decorations. Asset: one matching left-and-right pair of practical worn brown leather full-finger gloves. Five anatomically correct gently extended and clearly separated fingers per glove, short cuffs ending just above wrists, plain back-of-hand seams, no metal plates or buckles. Show the gloves side by side, parallel wrists at the bottom and fingers pointing upward, backs of the gloves facing the camera in a slight three-quarter view. Keep the two gloves visibly separated with a small clear gap, fully visible. Hollow cuff openings, no hands inside.",
+        "path": "doc/images/characters/modular_human_male_01/parts/gloves_leather.png",
+        "sha256": "718266b7fa966f3fd68620a29b0e5534f70c687fe876a0a11aa96486214006cd",
+        "review": "Isolated garment/pair with visible openings and no body; accepted as first Meshy input"
+      },
+      {
+        "id": "boots_leather",
+        "triangles": 1400,
+        "prompt": "Use case: stylized-concept. Production reference for a modular realistic medieval fantasy RPG part, to be reconstructed with Meshy. One isolated asset only, occupying most of the image, on a uniform pale neutral gray background. Clean realistic game-asset render, soft flat studio light, readable volumes, restrained surface detail. No text, logos, labels, panels, floor props, mannequin, human skin, body, head, hands or feet inside the garment. Fit a moderately athletic 1.90m adult male. No modern zippers, no glowing effects, no ornate decorations. Asset: one matching left-and-right pair of simple dark brown leather ankle boots for a medieval adventurer. Short shafts ending 12 cm above sole, broad practical toes, low flat heels and sturdy thin dark soles, one small plain leather side strap per boot, subdued seams. No modern tread or zippers. Show both boots side by side in the same forward direction with a small clear gap, front three-quarter view. Open hollow top cuffs, no legs or feet inside. Entire pair visible.",
+        "path": "doc/images/characters/modular_human_male_01/parts/boots_leather.png",
+        "sha256": "69a32f1d48390cdb05afdf3223091186d45ef05e0b7877b2ec1bde2b8bdec541",
+        "review": "Isolated garment/pair with visible openings and no body; accepted as first Meshy input"
+      }
+    ]
+  },
+  "back_texture_repair": {
+    "tool": "OpenAI Codex built-in ImageGen",
+    "tier": "ChatGPT Pro 20x",
+    "generation_date": "2026-09-28",
+    "license": "OpenAI generated output terms",
+    "input": "refined/back-albedo-input.png",
+    "output": "refined/back-albedo-repaired.png",
+    "prompt": "Use case: precise-object-edit.\nAsset type: albedo texture repair reference for a 3D fantasy game character.\nInput image: edit target, an unlit orthographic render of the BACK of an adult male game model wearing charcoal shorts. The head is cropped at the top.\nPrimary request: repair ONLY the two incorrect dark circular chest-like marks painted on the left and right shoulder-blade areas of this BACK. Replace each mark with continuous normal back skin matching the immediately surrounding warm tan skin tone and fine texture. This is the rear torso: there should be ordinary unmarked skin at both locations.\nPreserve the exact square framing, pixel alignment, body outline, anatomy, A-pose, original color and skin detail everywhere else, plain gray background, shorts, arms, neck, and every edge. Do not add lighting or shadows; retain the flat unlit albedo appearance. No zoom, rotation, recropping, redesign, scars, freckles, logos, text or additional objects. Change only those two small circular surface defects and blend them seamlessly into the adjacent skin.",
+    "purpose": "Correct duplicated front torso marks on the back; project only two local repair areas onto the Meshy-derived model.",
+    "sha256": {
+      "back-albedo-input.png": "63d3638384869b7d0be3704d1423012f724479987b10f2d3ea7655666fa3c970",
+      "back-albedo-repaired.png": "3f7cf1fba6d01eedcde895a69978c8059cdc8d9d8fe655ae20cf86240aa8cdc8",
+      "base_color.png": "f55b554d4877dc6913b5290615bf7d2f2d8a45fbbac9cf6606c4c5366bdf36c5"
+    },
+    "projection": {
+      "method": "Blender material projection and emission bake to original 4096px UV atlas",
+      "centers_xz_m": [
+        [
+          -0.15,
+          1.431
+        ],
+        [
+          0.15,
+          1.431
+        ]
+      ],
+      "full_strength_radius_m": 0.023,
+      "fade_end_radius_m": 0.055,
+      "back_only_y_above_m": 0.015
+    }
+  },
+  "body_generation": {
+    "generation_date": "2026-09-28",
+    "service": "Meshy Multi-Image to 3D API",
+    "tier": "Premium (user-confirmed in project asset records, 2026-09-20)",
+    "source_images": [
+      {
+        "path": "doc/images/characters/modular_human_male_01/base-front.png",
+        "view": "front",
+        "sha256": "5b9fa90790195fd9f85892452eee13c7daeb1d691bf2acbe65bbbde52502d7a8"
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/base-left.png",
+        "view": "left",
+        "sha256": "d894ecdd0bf88e97c53a8f07434936111134fd5a0a540ace775338ef47efe98f"
+      }
+    ],
+    "parameters": {
+      "ai_model": "meshy-7.1",
+      "geometry_resolution": "2k",
+      "should_remesh": true,
+      "topology": "triangle",
+      "target_polycount": 10000,
+      "save_pre_remeshed_model": true,
+      "should_texture": true,
+      "enable_pbr": true,
+      "texture_resolution": "4k",
+      "pose_mode": "a-pose",
+      "image_enhancement": false,
+      "remove_lighting": true,
+      "target_formats": [
+        "glb",
+        "obj",
+        "fbx"
+      ],
+      "multi_view_thumbnails": true
+    },
+    "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+    "task_id": "01a0e673-476f-7162-bce0-c9007851039b",
+    "consumed_credits": 35,
+    "outputs": [
+      {
+        "path": "assets/modular_human_male_01/base_meshy.glb",
+        "role": "Meshy model glb",
+        "bytes": 22001444,
+        "sha256": "ea79b719bb19c9a3cd1d3658de0a56e7a6dfc94862ec3610db5ba7ab14c37e96"
+      },
+      {
+        "path": "assets/modular_human_male_01/base_meshy.fbx",
+        "role": "Meshy model fbx",
+        "bytes": 30545020,
+        "sha256": "1bbde1175a62329360c66c8acc442c5af9e4d2f066a3baa14e7d9c452d9ac7d7"
+      },
+      {
+        "path": "assets/modular_human_male_01/base_meshy.obj",
+        "role": "Meshy model obj",
+        "bytes": 978355,
+        "sha256": "631ff050e4a2c5ae6f7d1e52e262fcb52eacda69dcc77d05a1896194836b72c4"
+      },
+      {
+        "path": "assets/modular_human_male_01/base_meshy.mtl",
+        "role": "Meshy model mtl",
+        "bytes": 228,
+        "sha256": "be49deb48b81c3f7aaae863ed758d661cf68ee674a52a02884a03ebd76c3b443"
+      },
+      {
+        "path": "assets/modular_human_male_01/base_meshy_source.glb",
+        "role": "Meshy model pre_remeshed_glb",
+        "bytes": 5161236,
+        "sha256": "ed4798d877c4aa7cde648f81121bd4bb986b84da12277d739b02c8fd9efa555b"
+      },
+      {
+        "path": "assets/modular_human_male_01/texture_0_base_color.png",
+        "role": "PBR texture base_color",
+        "bytes": 15685731,
+        "sha256": "bf332ae96561aa482822a6624dde9cef4f69b2d0970830061435706f6ec6966f"
+      },
+      {
+        "path": "assets/modular_human_male_01/texture_0_metallic.png",
+        "role": "PBR texture metallic",
+        "bytes": 442390,
+        "sha256": "e31c67d3a294799732298d52aa0b76603646c1e7911681901acad1635eb6dca3"
+      },
+      {
+        "path": "assets/modular_human_male_01/texture_0_roughness.png",
+        "role": "PBR texture roughness",
+        "bytes": 1548363,
+        "sha256": "87e411574ad157f6599d2a25289d7792071566f6b6241c282d2eab90b52c63f5"
+      },
+      {
+        "path": "assets/modular_human_male_01/texture_0_normal.png",
+        "role": "PBR texture normal",
+        "bytes": 12436943,
+        "sha256": "06f06562beec3b1739b47089314541750d8929dc0b6048981852b7ead2802477"
+      },
+      {
+        "path": "assets/modular_human_male_01/meshy-preview.png",
+        "role": "Meshy preview",
+        "bytes": 70327,
+        "sha256": "09ebefa026846cc1280b719abbb78c185442cc767a7e792552cd0cbea64b89e5"
+      },
+      {
+        "path": "assets/modular_human_male_01/meshy-back.png",
+        "role": "Meshy back preview",
+        "bytes": 67761,
+        "sha256": "f7c6895a3008f1863d0cd3531c0a6e95b933deda9590b7ab8368fe76fcd9343f"
+      },
+      {
+        "path": "assets/modular_human_male_01/meshy-front.png",
+        "role": "Meshy front preview",
+        "bytes": 70327,
+        "sha256": "09ebefa026846cc1280b719abbb78c185442cc767a7e792552cd0cbea64b89e5"
+      },
+      {
+        "path": "assets/modular_human_male_01/meshy-left.png",
+        "role": "Meshy left preview",
+        "bytes": 51545,
+        "sha256": "2e51db98a28f3092d54f197b2282cfcfe191a9f5ff87b7367c8605a276ff454f"
+      },
+      {
+        "path": "assets/modular_human_male_01/meshy-right.png",
+        "role": "Meshy right preview",
+        "bytes": 48755,
+        "sha256": "d0538daf14cc360809a47ea4525b9d16d6bf6cbd5d103a2086737afb33da0d25"
+      }
+    ]
+  },
+  "part_generation": [
+    {
+      "part_id": "hair_crop",
+      "generation_date": "2026-09-28",
+      "service": "Meshy Image to 3D API",
+      "tier": "Premium (user-confirmed project tier)",
+      "source": {
+        "path": "doc/images/characters/modular_human_male_01/parts/hair_crop.png",
+        "sha256": "b580be620aed20859fbbada54832ea8ba0022628455290268c67a268778b3b07"
+      },
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "model_type": "standard",
+        "geometry_resolution": "2k",
+        "should_remesh": true,
+        "topology": "triangle",
+        "target_polycount": 1000,
+        "save_pre_remeshed_model": true,
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "pose_mode": "",
+        "target_formats": [
+          "glb",
+          "obj",
+          "fbx"
+        ]
+      },
+      "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+      "publication": "Private API generation; not posted to Meshy Community",
+      "task_id": "01a0e7f8-5d05-7753-a30a-f006e7062309",
+      "consumed_credits": 35,
+      "outputs": [
+        {
+          "path": "assets/modular_human_male_01/parts/hair_crop/meshy_glb.glb",
+          "bytes": 12730744,
+          "sha256": "d5a318939d4a5096746c009b33c870f5ae3abc00b72f2195b969aee3e6a56d17"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/hair_crop/meshy_fbx.fbx",
+          "bytes": 15112268,
+          "sha256": "23f991a3e61b62de451fa06472ce6f2b109d7b8a6d6be9cc15d1dba5a634ae8f"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/hair_crop/meshy_obj.obj",
+          "bytes": 114723,
+          "sha256": "e39ff545790a44f30b57c0a46a3bf6f336f50ba82234af2e402d0e7aba18ab28"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/hair_crop/meshy_mtl.mtl",
+          "bytes": 228,
+          "sha256": "10a40817a5422a70fbfd161ad86c915d2bfb81cee153f166b379c118f8fd1fbe"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/hair_crop/meshy_pre_remeshed_glb.glb",
+          "bytes": 189378860,
+          "sha256": "c6bc617017df162230b21c52edc7d800a915d84182698984597f3b6f14f1a2bd"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/hair_crop/texture_0_base_color.png",
+          "bytes": 6219390,
+          "sha256": "c719a966387656154f4931e038f12b6e0c14c4374781b9cc3b26c6cec08cf1c6"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/hair_crop/texture_0_metallic.png",
+          "bytes": 25271,
+          "sha256": "e532d9ac85110941f426babdb4a178dce18098f38c046df346e382b83edfaefc"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/hair_crop/texture_0_roughness.png",
+          "bytes": 1585910,
+          "sha256": "77453f27852e753eec594b4357a00fc13ba01f1cd000bdd276cf2e1b9d63cae8"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/hair_crop/texture_0_normal.png",
+          "bytes": 7208196,
+          "sha256": "52956f9090bf1c8ef34dbba9e18ee79e8235398ccebb611b58e6f366748e85a4"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/hair_crop/meshy-preview.png",
+          "bytes": 122134,
+          "sha256": "d77434e0778ebc84e1d0d4953ddf0c942ca63c0d0d274708afc936084870bbd1"
+        }
+      ]
+    },
+    {
+      "part_id": "hair_sidepart",
+      "generation_date": "2026-09-28",
+      "service": "Meshy Image to 3D API",
+      "tier": "Premium (user-confirmed project tier)",
+      "source": {
+        "path": "doc/images/characters/modular_human_male_01/parts/hair_sidepart.png",
+        "sha256": "cc295f4792421a0ede0fe1b948c9be4c0baf0499b297c7a8fd2d0ff2513525fd"
+      },
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "model_type": "standard",
+        "geometry_resolution": "2k",
+        "should_remesh": true,
+        "topology": "triangle",
+        "target_polycount": 1200,
+        "save_pre_remeshed_model": true,
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "pose_mode": "",
+        "target_formats": [
+          "glb",
+          "obj",
+          "fbx"
+        ]
+      },
+      "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+      "publication": "Private API generation; not posted to Meshy Community",
+      "task_id": "01a0e7f8-667d-72a5-8cdd-ea0f78cf4e15",
+      "consumed_credits": 35,
+      "outputs": [
+        {
+          "path": "assets/modular_human_male_01/parts/hair_sidepart/meshy_glb.glb",
+          "bytes": 12133284,
+          "sha256": "018d8aa1de2d3e0b685c9e50d4c9f49900abb9b7d8b5c3ebffd75978fd5f2307"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/hair_sidepart/meshy_fbx.fbx",
+          "bytes": 14411500,
+          "sha256": "7bd0154e6ef1641022ef9c06d540c59734a6a90788804cf99727c2004b84b456"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/hair_sidepart/meshy_obj.obj",
+          "bytes": 122552,
+          "sha256": "377edef5cd7ef6c4b9d857c9d26d3d1fd3ed2b9c08c0fc252f2a20b9d9af40b3"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/hair_sidepart/meshy_mtl.mtl",
+          "bytes": 224,
+          "sha256": "bbc4c2c5908a6fc3ce2a7757e18d2d938fb9254a98a3316614e04b9b36f53d10"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/hair_sidepart/meshy_pre_remeshed_glb.glb",
+          "bytes": 184947404,
+          "sha256": "736006fd9c780fdc6ea066eea1dfa755b3aa43ad69f4941ed99c41e7445d54a0"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/hair_sidepart/texture_0_base_color.png",
+          "bytes": 5904262,
+          "sha256": "eb7bbb906eb5ee5b6a49643394df47c30c8e078ec11311a2ca26baed756eb8f6"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/hair_sidepart/texture_0_metallic.png",
+          "bytes": 29487,
+          "sha256": "5c5f40643c145b4b328a5edd5172051b439c34a52a9f55557b2aded680a77d59"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/hair_sidepart/texture_0_roughness.png",
+          "bytes": 1556731,
+          "sha256": "665d14e0fcd52e1943cc5a32031417ba076f899339929e09b5da573c4aa9860d"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/hair_sidepart/texture_0_normal.png",
+          "bytes": 6843925,
+          "sha256": "e0a45a8a78451ed2121f0e2953dd4905c62495a76d7f6a66fa31b1053e1db752"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/hair_sidepart/meshy-preview.png",
+          "bytes": 146356,
+          "sha256": "a2e800c0010972f4725277049d4eaae8cab924a552b97ad3f6d3f3b5f4b638e3"
+        }
+      ]
+    },
+    {
+      "part_id": "top_linen",
+      "generation_date": "2026-09-28",
+      "service": "Meshy Image to 3D API",
+      "tier": "Premium (user-confirmed project tier)",
+      "source": {
+        "path": "doc/images/characters/modular_human_male_01/parts/top_linen.png",
+        "sha256": "d1fb01c7202bc5f190af6bbe76ace3a633da1c104154d00f99dd8ffa86c812c0"
+      },
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "model_type": "standard",
+        "geometry_resolution": "2k",
+        "should_remesh": true,
+        "topology": "triangle",
+        "target_polycount": 2000,
+        "save_pre_remeshed_model": true,
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "pose_mode": "",
+        "target_formats": [
+          "glb",
+          "obj",
+          "fbx"
+        ]
+      },
+      "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+      "publication": "Private API generation; not posted to Meshy Community",
+      "task_id": "01a0e7f8-6f3c-72d6-afde-f85d19227001",
+      "consumed_credits": 35,
+      "outputs": [
+        {
+          "path": "assets/modular_human_male_01/parts/top_linen/meshy_glb.glb",
+          "bytes": 7469584,
+          "sha256": "e88630e1d33ee5c79ec60e2d2a17ac8f1db8f8a0805422665b0caee71a8ec1f0"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/top_linen/meshy_fbx.fbx",
+          "bytes": 9800348,
+          "sha256": "73c6f8da6a2f38b6ba78b76187900cd8003f73985214060bfb238187d2f587a4"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/top_linen/meshy_obj.obj",
+          "bytes": 228398,
+          "sha256": "3f9e71354accf478ce43f8ce3c05f7279daad60667aed971155de167f3b8a09f"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/top_linen/meshy_mtl.mtl",
+          "bytes": 228,
+          "sha256": "be49deb48b81c3f7aaae863ed758d661cf68ee674a52a02884a03ebd76c3b443"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/top_linen/meshy_pre_remeshed_glb.glb",
+          "bytes": 13959684,
+          "sha256": "7539951e54588e62f86d88a4052d902d0c1db3771c67535ccb8d1b2b2cf7d1b3"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/top_linen/texture_0_base_color.png",
+          "bytes": 4366068,
+          "sha256": "d89803ab28b77e3d44ff73cdbf1ee18c7ee2307175b593622343e249399bf1c1"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/top_linen/texture_0_metallic.png",
+          "bytes": 21639,
+          "sha256": "7bf60bce9d97e2a4c800808c57901833a5cbc2ad5e8da5367da2445193e2d2ad"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/top_linen/texture_0_roughness.png",
+          "bytes": 1125021,
+          "sha256": "77742a9fd3420658107c328c05e44624ee83db30319902c417a223dad9469ad8"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/top_linen/texture_0_normal.png",
+          "bytes": 4165989,
+          "sha256": "3c888506552060d6dcd516ba47ebf487df45f26ab37f51332a68d9cf8333e584"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/top_linen/meshy-preview.png",
+          "bytes": 105567,
+          "sha256": "91f57923c9b4c676ed9a6b0f3a9bd58f727528d28884e104cc3b05d8e9f423d5"
+        }
+      ]
+    },
+    {
+      "part_id": "top_leather",
+      "generation_date": "2026-09-28",
+      "service": "Meshy Image to 3D API",
+      "tier": "Premium (user-confirmed project tier)",
+      "source": {
+        "path": "doc/images/characters/modular_human_male_01/parts/top_leather.png",
+        "sha256": "2ddf928be3d67f998dd8e32b9c54bbaea6aa1c2f12b106950dfa3ee283d9d183"
+      },
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "model_type": "standard",
+        "geometry_resolution": "2k",
+        "should_remesh": true,
+        "topology": "triangle",
+        "target_polycount": 2500,
+        "save_pre_remeshed_model": true,
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "pose_mode": "",
+        "target_formats": [
+          "glb",
+          "obj",
+          "fbx"
+        ]
+      },
+      "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+      "publication": "Private API generation; not posted to Meshy Community",
+      "task_id": "01a0e7fb-34a8-73bc-80d9-8dc5f6f889b1",
+      "consumed_credits": 35,
+      "outputs": [
+        {
+          "path": "assets/modular_human_male_01/parts/top_leather/meshy_glb.glb",
+          "bytes": 10144172,
+          "sha256": "350e37c760c06c52dace4e449f3040f88559da56201358271f646fc8dceef156"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/top_leather/meshy_fbx.fbx",
+          "bytes": 12552716,
+          "sha256": "4bb6ffa32261082f6415592aeec9c9aec6b2cd3fd796215679040f9428e813b6"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/top_leather/meshy_obj.obj",
+          "bytes": 273420,
+          "sha256": "dee77609b46369b1009b9685fa1ff06f4437b1becc4ed8193f589640300150ca"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/top_leather/meshy_mtl.mtl",
+          "bytes": 224,
+          "sha256": "bbc4c2c5908a6fc3ce2a7757e18d2d938fb9254a98a3316614e04b9b36f53d10"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/top_leather/meshy_pre_remeshed_glb.glb",
+          "bytes": 18625044,
+          "sha256": "ef5d7a4c805c4344083e7cae2acf6c11584ab0cbd87078226f7ab7478f1af3fc"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/top_leather/texture_0_base_color.png",
+          "bytes": 5904683,
+          "sha256": "12be648153da1ab0d6005f7f1d83087a2a9b63b033533561cbea40239a18f69f"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/top_leather/texture_0_metallic.png",
+          "bytes": 57543,
+          "sha256": "b6be226683fad3ea147f9e1018adb392c8124b2bd1b1c90e6f661aa1e6c5f7f9"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/top_leather/texture_0_roughness.png",
+          "bytes": 1496849,
+          "sha256": "b834c137c4ddfcbf52caafce11914ac56b48de9aa5ab43a1d3169cfcc7efa851"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/top_leather/texture_0_normal.png",
+          "bytes": 4952631,
+          "sha256": "88fb55ec526e0ed3311726b3393e68254d5d7eda92693ac0b2319bb2172f16ca"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/top_leather/meshy-preview.png",
+          "bytes": 230610,
+          "sha256": "82acd618d2c610c076ae4b024463637b4ae9a8be680598b873d999604a09e5f7"
+        }
+      ]
+    },
+    {
+      "part_id": "pants_cloth",
+      "generation_date": "2026-09-28",
+      "service": "Meshy Image to 3D API",
+      "tier": "Premium (user-confirmed project tier)",
+      "source": {
+        "path": "doc/images/characters/modular_human_male_01/parts/pants_cloth.png",
+        "sha256": "4cc78cedb785298715c8f53c49742c0d45d4ff41b0a6d739eba210434484fefe"
+      },
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "model_type": "standard",
+        "geometry_resolution": "2k",
+        "should_remesh": true,
+        "topology": "triangle",
+        "target_polycount": 1500,
+        "save_pre_remeshed_model": true,
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "pose_mode": "",
+        "target_formats": [
+          "glb",
+          "obj",
+          "fbx"
+        ]
+      },
+      "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+      "publication": "Private API generation; not posted to Meshy Community",
+      "task_id": "01a0e7fb-3e63-7249-b146-17878a23d0e4",
+      "consumed_credits": 35,
+      "outputs": [
+        {
+          "path": "assets/modular_human_male_01/parts/pants_cloth/meshy_glb.glb",
+          "bytes": 6552540,
+          "sha256": "57f13e74720e1b262e0c2af96953858d173c2eab6677b58f2772be68f6e8d433"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/pants_cloth/meshy_fbx.fbx",
+          "bytes": 9077964,
+          "sha256": "b3eaa4cd201af7354ebc536d026bad3fac31f989dfca86a23aa1d8f0507fa5b1"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/pants_cloth/meshy_obj.obj",
+          "bytes": 169868,
+          "sha256": "0fafe13604463d1e43f8f4a3a7a4ec86394dc070d7b345e70db86d00d03309da"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/pants_cloth/meshy_mtl.mtl",
+          "bytes": 228,
+          "sha256": "be49deb48b81c3f7aaae863ed758d661cf68ee674a52a02884a03ebd76c3b443"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/pants_cloth/meshy_pre_remeshed_glb.glb",
+          "bytes": 11406516,
+          "sha256": "20a008f5aa90ba86bb5319d86e085ee912803cbe84bd59f11445dd9c8e1aaabd"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/pants_cloth/texture_0_base_color.png",
+          "bytes": 4094718,
+          "sha256": "61b5a16dc8b01870a96d05e6d8eba8ab404b63f59dc57fb7db2390a9d91a522f"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/pants_cloth/texture_0_metallic.png",
+          "bytes": 18849,
+          "sha256": "1edd7d95e967dead7263dc9f4fea9e70362eca339579c207c53ed70fa8b7e545"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/pants_cloth/texture_0_roughness.png",
+          "bytes": 1020383,
+          "sha256": "f3c9ddc6ebb18ce1f136936a15f7280d143ee86336ed1f1a0eb45f529459d918"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/pants_cloth/texture_0_normal.png",
+          "bytes": 3846215,
+          "sha256": "d56922c0f2ef9821c18f383c7b06406751f5d5b832f96c9b102c0115e1786ba2"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/pants_cloth/meshy-preview.png",
+          "bytes": 80565,
+          "sha256": "20d05edc3a174efa281e0037fc931c56a769409a97456216acda0014101961db"
+        }
+      ]
+    },
+    {
+      "part_id": "gloves_leather",
+      "generation_date": "2026-09-28",
+      "service": "Meshy Image to 3D API",
+      "tier": "Premium (user-confirmed project tier)",
+      "source": {
+        "path": "doc/images/characters/modular_human_male_01/parts/gloves_leather.png",
+        "sha256": "718266b7fa966f3fd68620a29b0e5534f70c687fe876a0a11aa96486214006cd"
+      },
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "model_type": "standard",
+        "geometry_resolution": "2k",
+        "should_remesh": true,
+        "topology": "triangle",
+        "target_polycount": 1000,
+        "save_pre_remeshed_model": true,
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "pose_mode": "",
+        "target_formats": [
+          "glb",
+          "obj",
+          "fbx"
+        ]
+      },
+      "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+      "publication": "Private API generation; not posted to Meshy Community",
+      "task_id": "01a0e7fb-46fc-709a-b65b-6ae8ccc2861a",
+      "consumed_credits": 35,
+      "outputs": [
+        {
+          "path": "assets/modular_human_male_01/parts/gloves_leather/meshy_glb.glb",
+          "bytes": 10138432,
+          "sha256": "79891a6b3ec62ec53448fa74fdce4f85017dcf77000b179735809707955a3e26"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/gloves_leather/meshy_fbx.fbx",
+          "bytes": 12448956,
+          "sha256": "d7484738d11d275a5b860afa43b253ad11e30a6ece0fc44302bbbf5485aae3fc"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/gloves_leather/meshy_obj.obj",
+          "bytes": 113712,
+          "sha256": "23038f4e8442b74db49fc10dc6bab3ff019e0cdaf04bc8753f695861a9b7eb15"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/gloves_leather/meshy_mtl.mtl",
+          "bytes": 228,
+          "sha256": "bc72e4d25746121a1a8e4ab70b706a20c7c748152b3ad54a67c76b017d0ead3e"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/gloves_leather/meshy_pre_remeshed_glb.glb",
+          "bytes": 13298340,
+          "sha256": "a7fb63a26d96b9d7012aa2085d11c17a656a3c735f84f9a10ea2d92b5cf5a7e5"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/gloves_leather/texture_0_base_color.png",
+          "bytes": 5952044,
+          "sha256": "59d6c73d51097964c9626c6ce023cd35451e549bbd0a5396b60e8517124ad953"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/gloves_leather/texture_0_metallic.png",
+          "bytes": 34479,
+          "sha256": "9a0813023d21750b1cc83ab6fdca7ecbb1a4392aeb7a72c29c1aeff82a4044aa"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/gloves_leather/texture_0_roughness.png",
+          "bytes": 1346954,
+          "sha256": "705c23dbd01b16e5aa137e91d5e7dd8bd41421205c74dfb1bd8d5233f7b9bfdd"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/gloves_leather/texture_0_normal.png",
+          "bytes": 5043416,
+          "sha256": "8c9ef3a3a93331ab900e9ab74750d5f0e52461fcf210943b15f18f5442cd2455"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/gloves_leather/meshy-preview.png",
+          "bytes": 184774,
+          "sha256": "f389888353f5ce7bad4ac0786126ed5510a3befd7459717e2617b29a82ae79e0"
+        }
+      ]
+    },
+    {
+      "part_id": "boots_leather",
+      "generation_date": "2026-09-28",
+      "service": "Meshy Image to 3D API",
+      "tier": "Premium (user-confirmed project tier)",
+      "source": {
+        "path": "doc/images/characters/modular_human_male_01/parts/boots_leather.png",
+        "sha256": "69a32f1d48390cdb05afdf3223091186d45ef05e0b7877b2ec1bde2b8bdec541"
+      },
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "model_type": "standard",
+        "geometry_resolution": "2k",
+        "should_remesh": true,
+        "topology": "triangle",
+        "target_polycount": 1400,
+        "save_pre_remeshed_model": true,
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "pose_mode": "",
+        "target_formats": [
+          "glb",
+          "obj",
+          "fbx"
+        ]
+      },
+      "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+      "publication": "Private API generation; not posted to Meshy Community",
+      "task_id": "01a0e7fb-5068-72ec-96e6-fef82ebfc79a",
+      "consumed_credits": 35,
+      "outputs": [
+        {
+          "path": "assets/modular_human_male_01/parts/boots_leather/meshy_glb.glb",
+          "bytes": 8165692,
+          "sha256": "d91ffb65e6e58c0691fd9720c3d62d245c8001eec043d495de0b80caa85e947c"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/boots_leather/meshy_fbx.fbx",
+          "bytes": 10411084,
+          "sha256": "6f4b5c2a9ea15b588b85e0b9e4d9a0f72570fe66be63503707805751229c0fa4"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/boots_leather/meshy_obj.obj",
+          "bytes": 150739,
+          "sha256": "a8117343ef6803b17470acf7a79dbe67b7cec04ef8fcc76d08e218d2855d70c5"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/boots_leather/meshy_mtl.mtl",
+          "bytes": 228,
+          "sha256": "be49deb48b81c3f7aaae863ed758d661cf68ee674a52a02884a03ebd76c3b443"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/boots_leather/meshy_pre_remeshed_glb.glb",
+          "bytes": 8904036,
+          "sha256": "6203184e7f546ae5aacd18ad27894dc5bf2cd24b034979d46763df7a414c0f0f"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/boots_leather/texture_0_base_color.png",
+          "bytes": 4985184,
+          "sha256": "f40c540228e3ffcb9117647f62cddaf1f425ba21004467dae0a0d78f17a7abdc"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/boots_leather/texture_0_metallic.png",
+          "bytes": 30409,
+          "sha256": "ebb562db3786fed1e52457ef73bf74e7c5d84e088cc404476e9f3d6cb06b408f"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/boots_leather/texture_0_roughness.png",
+          "bytes": 1295112,
+          "sha256": "6fd37ee7890994adc0cecde120d663a37dde290375f9c2165a6494a083480a77"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/boots_leather/texture_0_normal.png",
+          "bytes": 4011709,
+          "sha256": "363852080b3c8e836217d89a68e8874ffccef78c3411d46c30cc41ee2a97eda3"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/boots_leather/meshy-preview.png",
+          "bytes": 113893,
+          "sha256": "912664e61b659282d15d5edf09d0ca738fa320ab739a6b9e815427d6727bdd7f"
+        }
+      ]
+    }
+  ],
+  "mixamo_rig": {
+    "preserved_path": "refined_palms_down/Idle (11).fbx",
+    "sha256": "f774a2ca19699412a1ce45720c7d00b618ff3e168d6ca77a626feffa98da9a8c",
+    "bytes": 18835104,
+    "source": "Adobe Mixamo; user confirmed rigging on 2026-09-28",
+    "received_date": "2026-09-28"
+  },
+  "unused_rig_trial": {
+    "generation_date": "2026-09-28",
+    "service": "Meshy Rigging API",
+    "tier": "Premium (user-confirmed in project asset records, 2026-09-20)",
+    "parameters": {
+      "input_task_id": "01a0e673-476f-7162-bce0-c9007851039b",
+      "height_meters": 1.9
+    },
+    "task_id": "01a0e679-0cd5-7095-9b8c-27cc9a9dedf2",
+    "consumed_credits": 5,
+    "outputs": [
+      {
+        "path": "assets/modular_human_male_01/base_meshy_rigged.glb",
+        "bytes": 16280252,
+        "sha256": "72df8fa6fbc5e6b4eb63d25af6921c98b9f6e48c67ee70f1040d82317f245d7d"
+      },
+      {
+        "path": "assets/modular_human_male_01/base_meshy_rigged.fbx",
+        "bytes": 16421516,
+        "sha256": "61783a90cfef5602f0c939bec41df172604eaf419bc21025014f16672079efcb"
+      },
+      {
+        "path": "assets/modular_human_male_01/walking_armature_glb.glb",
+        "bytes": 65284,
+        "sha256": "48a575e73b50ff6bdb972072c8fa89b5b3e60d46a955b30ac2b26ee06e6b0448"
+      },
+      {
+        "path": "assets/modular_human_male_01/running_armature_glb.glb",
+        "bytes": 60672,
+        "sha256": "835c63bcbf07cae8c3f7c7b257ff77a3446960bfc4294ba5daf3609a7670cdf5"
+      }
+    ]
+  }
+}

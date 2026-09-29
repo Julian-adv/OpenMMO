@@ -15,7 +15,6 @@ import {
   skinnedParts,
   type ModularOutfit,
 } from '../lib/utils/modularCharacter'
-import { poseMainHandProp } from '../lib/utils/handProps'
 import './modular-character.css'
 
 const el = <T extends HTMLElement>(id: string): T => {
@@ -29,7 +28,6 @@ const clipSelect = el<HTMLSelectElement>('clip')
 const cameraSelect = el<HTMLSelectElement>('camera')
 const speed = el<HTMLSelectElement>('speed')
 const scrub = el<HTMLInputElement>('scrub')
-const correction = el<HTMLInputElement>('correction')
 const showWeapon = el<HTMLInputElement>('weapon')
 const hairSelect = el<HTMLSelectElement>('hair')
 const hairColor = el<HTMLInputElement>('hair-color')
@@ -119,27 +117,20 @@ async function main() {
     'gloves_leather',
     'boots_leather',
   ]
-  const [base, sources, animations, comparison, sword, profile] =
-    await Promise.all([
-      load('/__modular-character/parts/base.glb'),
-      Promise.all(
-        ids.map((id) => load(`/__modular-character/parts/${id}.glb`))
-      ),
-      load('/__modular-character/animations.glb'),
-      load('/__modular-character/animations-comparison.glb'),
-      load('/models/weapons/sword.glb'),
-      fetch('/__modular-character/hand-grips.json').then(async (response) => {
-        if (!response.ok) throw new Error('손 보정 파일을 불러오지 못했습니다.')
-        return parseModularHandProfile(await response.json())
-      }),
-    ])
-  const original = modularAnimationClips(base.scene, comparison, 'comparison')
-  const corrected = modularAnimationClips(base.scene, animations, 'corrected')
-  for (const clips of [original, corrected]) {
-    for (const option of clipSelect.options)
-      if (!clips.some((clip) => clip.name === option.value))
-        throw new Error(`동작이 없습니다: ${option.value}`)
-  }
+  const [base, sources, animations, sword, profile] = await Promise.all([
+    load('/__modular-character/parts/base.glb'),
+    Promise.all(ids.map((id) => load(`/__modular-character/parts/${id}.glb`))),
+    load('/__modular-character/animations.glb'),
+    load('/models/weapons/sword.glb'),
+    fetch('/__modular-character/hand-grips.json').then(async (response) => {
+      if (!response.ok) throw new Error('손 보정 파일을 불러오지 못했습니다.')
+      return parseModularHandProfile(await response.json())
+    }),
+  ])
+  const clips = modularAnimationClips(base.scene, animations, 'corrected')
+  for (const option of clipSelect.options)
+    if (!clips.some((clip) => clip.name === option.value))
+      throw new Error(`동작이 없습니다: ${option.value}`)
   const { modelRoot, clonedScene: body } = createCharacterModelRoot(base.scene)
   scene.add(modelRoot)
   const rigId = modularRigId(body)
@@ -243,42 +234,22 @@ async function main() {
     'idle1',
   ]
   let routeIndex = 0
-  const actions = [original, corrected].map(
-    (clips, variant) =>
-      new Map(
-        clips.map((clip) => {
-          const posed = clip.clone()
-          if (variant === 1) {
-            posed.tracks.push(
-              ...modularSwordTracks(profile, rigId, clip, weapon.name)
-            )
-          } else {
-            const grip = new THREE.Object3D()
-            poseMainHandProp(grip, 'iron_sword')
-            posed.tracks.push(
-              new THREE.VectorKeyframeTrack(
-                `${weapon.name}.position`,
-                [0],
-                grip.position.toArray()
-              ),
-              new THREE.QuaternionKeyframeTrack(
-                `${weapon.name}.quaternion`,
-                [0],
-                grip.quaternion.toArray()
-              )
-            )
-          }
-          const action = mixer.clipAction(posed)
-          action.setLoop(
-            ['jump', 'slash1', 'dying'].includes(clip.name)
-              ? THREE.LoopOnce
-              : THREE.LoopRepeat,
-            Infinity
-          )
-          action.clampWhenFinished = true
-          return [clip.name, action]
-        })
+  const actions = new Map(
+    clips.map((clip) => {
+      const posed = clip.clone()
+      posed.tracks.push(
+        ...modularSwordTracks(profile, rigId, clip, weapon.name)
       )
+      const action = mixer.clipAction(posed)
+      action.setLoop(
+        ['jump', 'slash1', 'dying'].includes(clip.name)
+          ? THREE.LoopOnce
+          : THREE.LoopRepeat,
+        Infinity
+      )
+      action.clampWhenFinished = true
+      return [clip.name, action]
+    })
   )
   const setPlaying = (value: boolean) => {
     playing = value
@@ -288,16 +259,15 @@ async function main() {
     sequencing = false
     sequence.textContent = '동작 전환 연속 확인'
   }
-  const play = (name: string, fade = true, normalizedTime = 0) => {
-    const next = actions[correction.checked ? 1 : 0].get(name)
+  const play = (name: string, fade = true) => {
+    const next = actions.get(name)
     if (!next) throw new Error(`재생할 동작이 없습니다: ${name}`)
-    for (const action of mixerActions()) {
+    for (const action of actions.values()) {
       action.stopFading()
       if (action !== active) action.stop()
     }
     const previous = active
     next.reset().setEffectiveTimeScale(1).setEffectiveWeight(1).play()
-    next.time = normalizedTime * next.getClip().duration
     if (previous && previous !== next) {
       if (fade && playing) {
         previous.crossFadeTo(next, 0.25, false)
@@ -307,10 +277,8 @@ async function main() {
     active = next
     clipSelect.value = name
     mixer.update(0)
-    status.textContent = `${clipSelect.selectedOptions[0].textContent} · ${correction.checked ? '손 보정 적용' : '기본 손 자세·그립'}`
+    status.textContent = clipSelect.selectedOptions[0].textContent
   }
-  const mixerActions = () =>
-    new Set(actions.flatMap((map) => [...map.values()]))
   play('combat_idle', false)
   preview = { modelRoot, mixer, currentAction: () => active, weapon, parts }
   clipSelect.onchange = () => {
@@ -326,7 +294,7 @@ async function main() {
   scrub.oninput = () => {
     stopSequence()
     setPlaying(false)
-    for (const action of mixerActions()) {
+    for (const action of actions.values()) {
       action.stopFading()
       if (action !== active) action.stop()
     }
@@ -338,10 +306,6 @@ async function main() {
       active.getClip().duration - 1e-5
     )
     mixer.update(0)
-  }
-  correction.onchange = () => {
-    const fraction = active.time / active.getClip().duration
-    play(clipSelect.value, false, fraction)
   }
   showWeapon.onchange = () => {
     weapon.visible = showWeapon.checked
@@ -470,10 +434,12 @@ async function main() {
     last = now
     if (playing) {
       mixer.update(dt)
-      transitionLeft -= dt
-      if (transitionLeft <= 0) {
-        for (const action of mixerActions())
-          if (action !== active) action.stop()
+      if (transitionLeft > 0) {
+        transitionLeft -= dt
+        if (transitionLeft <= 0) {
+          for (const action of actions.values())
+            if (action !== active) action.stop()
+        }
       }
       if (sequencing) {
         sequenceTime += dt
