@@ -126,6 +126,7 @@
   import {
     disposeCharacterSkeletons,
     loadCharacterModel,
+    applyCharacterArmor,
     loadCharacterAnimationPack,
     modularSwordAttachment,
     MODULAR_SWORD_ATTACHMENT,
@@ -137,7 +138,11 @@
   import { daggerSkillCasts } from '../stores/daggerSkillStore'
   import { gameStore } from '../stores/gameStore'
   import { pickRandom } from '../utils/randomUtils'
-  import { inventoryStore, isTorchItemDefId } from '../stores/inventoryStore'
+  import {
+    equippedArmor,
+    inventoryStore,
+    isTorchItemDefId,
+  } from '../stores/inventoryStore'
   import { capeColorOf, getItemDef, isRangedWeapon } from '../data/itemDefs'
   import {
     getWeaponAnimation,
@@ -167,7 +172,11 @@
   } from '../effects/cape-rig'
   import { OFFSCREEN_Y } from '../utils/house-geo-utils'
 
-  import type { CharacterClass, Gender } from '../network/networkTypes'
+  import type {
+    ArmorEquipment,
+    CharacterClass,
+    Gender,
+  } from '../network/networkTypes'
   import {
     type MovementMode,
     type PlayerStateName,
@@ -222,6 +231,7 @@
     /** Remote players' broadcast main-hand item def id; the local player
      *  renders from inventory instead. */
     mainHand?: string | null
+    armor?: ArmorEquipment
     /** Dye on that cape, as broadcast with it. */
     backColor?: string | null
     /** Content hash of the print on that cape, as broadcast with it. */
@@ -279,6 +289,7 @@
     lastGoldInfo,
     torchOn = false,
     mainHand = null,
+    armor,
     back = null,
     backColor = null,
     backTexture = null,
@@ -335,12 +346,9 @@
   const modelPath =
     (npcPlayerId !== undefined ? getNpcModelPath(name) : undefined) ??
     getCharacterModelPath(characterClass, gender, npcPlayerId !== undefined)
-  // svelte-ignore state_referenced_locally
-  const modelPromise = loadCharacterModel(modelPath, characterClass).then(
-    (g) => {
-      activeGltfData = g
-    }
-  )
+  const modelPromise = loadCharacterModel(modelPath).then((g) => {
+    activeGltfData = g
+  })
   const locomotionPromise = loadCharacterAnimationPack(
     modelPath,
     CHARACTER_ANIMATION_PACK_PATHS.locomotion
@@ -644,6 +652,11 @@
     offhandObject = null
     torchTipNode = null
   }
+
+  const visibleArmor = $derived(isCurrentPlayer ? $equippedArmor : armor)
+  $effect(() => {
+    if (modelRoot) applyCharacterArmor(modelRoot, visibleArmor)
+  })
 
   const equippedMainHandItemId = $derived(
     isCurrentPlayer
@@ -1335,7 +1348,9 @@
       const { clonedScene: cloned, modelRoot: newModelRoot } =
         createCharacterModelRoot(activeGltf.scene)
 
-      // Measure visible soles in the bind pose before starting animations.
+      applyCharacterArmor(newModelRoot, visibleArmor)
+
+      // Measure visible soles before starting animations.
       cloned.position.y = computeSoleGroundOffset(newModelRoot)
       // Compiles alongside the retargeting below; awaited before mounting.
       const warmed = warmupPipelines(

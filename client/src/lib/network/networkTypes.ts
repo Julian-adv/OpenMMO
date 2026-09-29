@@ -48,6 +48,7 @@ export type ServerPlayer = {
   back?: string | null
   back_color?: string | null
   back_texture?: string | null
+  armor?: ArmorEquipment
   /** Carrying the `wet` soaking — drives the footprint trail (doc/DEBUFF.md). */
   wet?: boolean
   /** Shown title id (doc/TITLES.md). */
@@ -84,8 +85,13 @@ export type AccountCharacter = {
   active_title?: string | null
 }
 
+export type ArmorEquipment = Partial<
+  Record<'head' | 'chest' | 'pants' | 'boots' | 'hands', string | null>
+>
+
 /** Equipped item def ids the character-select preview renders. */
 export type VisibleEquipment = {
+  armor?: ArmorEquipment
   main_hand?: string | null
   off_hand?: string | null
   back?: string | null

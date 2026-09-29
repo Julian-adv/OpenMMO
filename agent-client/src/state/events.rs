@@ -163,6 +163,7 @@ impl SharedState {
             | ServerMessage::PlayerTorchToggled { .. }
             | ServerMessage::PlayerMainHandChanged { .. }
             | ServerMessage::PlayerBackChanged { .. }
+            | ServerMessage::PlayerArmorChanged { .. }
             | ServerMessage::PlayerMountChanged { .. }
             | ServerMessage::PlayerTitleChanged { .. }
             | ServerMessage::TitleEarned { .. }

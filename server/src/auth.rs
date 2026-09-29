@@ -29,20 +29,23 @@ use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-/// New characters start with no gold: anything redeemable granted at creation
-/// would let abusers mint wealth by recycling characters (see doc/ECONOMY.md).
-/// Starter gear instead uses item defs without a basePrice, which merchants
-/// refuse to buy. (item_def_id, quantity, equip_slot)
+/// Starter gear omits basePrice. (item_def_id, quantity, equip_slot)
 const STARTER_ITEMS: &[(&str, u32, Option<&str>)] = &[
     ("worn_iron_sword", 1, Some("main_hand")),
     ("worn_torch", 1, None),
 ];
 
-/// Class additions to the starter kit, under the same no-basePrice rule.
 fn class_starter_items(
     class: &CharacterClass,
 ) -> &'static [(&'static str, u32, Option<&'static str>)] {
     match class {
+        CharacterClass::Knight => &[
+            ("worn_plate_helmet", 1, Some("head")),
+            ("worn_breastplate", 1, Some("chest")),
+            ("worn_plate_greaves", 1, Some("pants")),
+            ("worn_plate_boots", 1, Some("boots")),
+            ("worn_plate_gauntlets", 1, Some("hands")),
+        ],
         CharacterClass::Bard => &[("worn_mandolin", 1, None)],
         _ => &[],
     }
@@ -375,8 +378,16 @@ fn read_characters(
 }
 
 /// Slots the character-select preview draws.
-const PREVIEW_EQUIP_SLOTS: [EquipSlot; 3] =
-    [EquipSlot::MainHand, EquipSlot::OffHand, EquipSlot::Back];
+const PREVIEW_EQUIP_SLOTS: [EquipSlot; 8] = [
+    EquipSlot::MainHand,
+    EquipSlot::OffHand,
+    EquipSlot::Back,
+    EquipSlot::Head,
+    EquipSlot::Chest,
+    EquipSlot::Pants,
+    EquipSlot::Boots,
+    EquipSlot::Hands,
+];
 
 /// The preview's gear for a whole account in one query rather than one per
 /// character.
@@ -460,6 +471,11 @@ fn read_visible_equipment(
         let (character_id, slot, item_def_id, cape_color, cape_texture) = row?;
         let entry = equipment.entry(character_id).or_default();
         match slot.parse() {
+            Ok(EquipSlot::Head) => entry.armor.head = Some(item_def_id),
+            Ok(EquipSlot::Chest) => entry.armor.chest = Some(item_def_id),
+            Ok(EquipSlot::Pants) => entry.armor.pants = Some(item_def_id),
+            Ok(EquipSlot::Boots) => entry.armor.boots = Some(item_def_id),
+            Ok(EquipSlot::Hands) => entry.armor.hands = Some(item_def_id),
             Ok(EquipSlot::MainHand) => entry.main_hand = Some(item_def_id),
             Ok(EquipSlot::OffHand) => entry.off_hand = Some(item_def_id),
             Ok(EquipSlot::Back) => {
@@ -2347,6 +2363,54 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM pricing_history", [], |r| r.get(0))
             .unwrap();
         assert_eq!(rows, 1);
+    }
+
+    #[test]
+    fn knights_start_with_equipped_unpriced_plate_armor() {
+        let (auth, _) = temp_auth("auth_knight_armor");
+        let account = auth.login_google("sub-knight-armor").unwrap();
+        let knight = create(&auth, &account, "Armored").unwrap();
+        let items = auth.load_inventory(knight.id).unwrap();
+        let defs = crate::item_defs::item_defs();
+        for (id, quantity, slot) in class_starter_items(&CharacterClass::Knight) {
+            let item = items.iter().find(|item| item.item_def_id == *id).unwrap();
+            assert_eq!(item.quantity, *quantity);
+            assert_eq!(item.equip_slot.as_deref(), *slot);
+            let def = defs.get(id).unwrap();
+            assert_eq!(def.base_price, None);
+            assert!(def.untradeable);
+            assert_eq!(def.guard, Some(1));
+            assert!(def.chest_tier.is_none());
+        }
+        assert_eq!(items.len(), STARTER_ITEMS.len() + 5);
+        let worn = auth.load_character_equipment(knight.id).unwrap();
+        assert_eq!(worn.armor.head.as_deref(), Some("worn_plate_helmet"));
+        assert_eq!(worn.armor.chest.as_deref(), Some("worn_breastplate"));
+        assert_eq!(worn.armor.pants.as_deref(), Some("worn_plate_greaves"));
+        assert_eq!(worn.armor.boots.as_deref(), Some("worn_plate_boots"));
+        assert_eq!(worn.armor.hands.as_deref(), Some("worn_plate_gauntlets"));
+        let listed = auth.list_characters_with_equipment(&account).unwrap();
+        assert_eq!(listed[0].worn.armor, worn.armor);
+        assert_eq!(knight.gold, 0);
+
+        let ranger = auth
+            .create_character(
+                &account,
+                "Unarmored",
+                &plain_attributes(),
+                10,
+                CharacterClass::Ranger,
+                Gender::Male,
+            )
+            .unwrap();
+        assert_eq!(
+            auth.load_inventory(ranger.id).unwrap().len(),
+            STARTER_ITEMS.len()
+        );
+        assert_eq!(
+            auth.load_character_equipment(ranger.id).unwrap().armor,
+            Default::default()
+        );
     }
 
     #[test]

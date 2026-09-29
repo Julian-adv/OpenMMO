@@ -3,7 +3,8 @@ import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { loadGLB } from './gltfCache'
 import { MODULAR_MALE_DIRECTORY, MODULAR_MALE_MODEL_PATH } from './modelPaths'
-import type { CharacterClass } from '../network/networkTypes'
+import type { ArmorEquipment } from '../network/networkTypes'
+import { modularOutfitForArmor } from './modularEquipment'
 import {
   DEFAULT_MODULAR_OUTFIT,
   KNIGHT_MODULAR_OUTFIT,
@@ -18,21 +19,18 @@ import {
 } from './modularCharacter'
 
 export const MODULAR_SWORD_ATTACHMENT = 'modularSwordAttachment'
-const maleModels = new Map<string, Promise<GLTF>>()
+let maleModel: Promise<GLTF> | undefined
 const animations = new Map<string, Promise<GLTF>>()
+const outfitParts = new Set([
+  ...modularOutfitParts(DEFAULT_MODULAR_OUTFIT),
+  ...modularOutfitParts(KNIGHT_MODULAR_OUTFIT),
+])
 
-export function loadCharacterModel(
-  path: string,
-  characterClass?: CharacterClass
-): Promise<GLTF> {
+export function loadCharacterModel(path: string): Promise<GLTF> {
   if (path !== MODULAR_MALE_MODEL_PATH) return loadGLB(path)
-  const outfit =
-    characterClass === 'knight' ? KNIGHT_MODULAR_OUTFIT : DEFAULT_MODULAR_OUTFIT
-  const key = outfit.top
-  let pending = maleModels.get(key)
-  if (!pending) {
-    const ids = [...modularOutfitParts(outfit)]
-    pending = Promise.all([
+  if (!maleModel) {
+    const ids = [...outfitParts]
+    maleModel = Promise.all([
       loadGLB(path),
       ...ids.map((id) => loadGLB(`${MODULAR_MALE_DIRECTORY}/${id}.glb`)),
     ])
@@ -43,7 +41,7 @@ export function loadCharacterModel(
         const parts = new Map(
           ids.map((id, i) => [id, bindModularPart(scene, sources[i].scene)])
         )
-        showModularOutfit(body, parts, outfit)
+        showModularOutfit(body, parts, DEFAULT_MODULAR_OUTFIT)
         for (const mesh of parts.get('hair_crop') ?? []) {
           const tint = (source: THREE.Material) => {
             const material = source.clone()
@@ -64,12 +62,29 @@ export function loadCharacterModel(
         return { ...base, scene, scenes: [scene] }
       })
       .catch((error) => {
-        maleModels.delete(key)
+        maleModel = undefined
         throw error
       })
-    maleModels.set(key, pending)
   }
-  return pending
+  return maleModel
+}
+
+export function applyCharacterArmor(
+  root: THREE.Object3D,
+  armor?: ArmorEquipment
+): void {
+  const meshes = skinnedParts(root)
+  const body: THREE.SkinnedMesh[] = []
+  const parts = new Map<string, THREE.SkinnedMesh[]>()
+  for (const mesh of meshes) {
+    const id = mesh.userData.part_id
+    if (outfitParts.has(id)) {
+      const group = parts.get(id) ?? []
+      group.push(mesh)
+      parts.set(id, group)
+    } else body.push(mesh)
+  }
+  if (parts.size) showModularOutfit(body, parts, modularOutfitForArmor(armor))
 }
 
 export function loadCharacterAnimationPack(

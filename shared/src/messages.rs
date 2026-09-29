@@ -1506,6 +1506,10 @@ pub enum ServerMessage {
         #[serde(default)]
         cape_texture: Option<String>,
     },
+    PlayerArmorChanged {
+        player_id: PlayerId,
+        armor: crate::character::ArmorEquipment,
+    },
     PlayerInteractionChanged {
         player_id: PlayerId,
         object_type: Option<String>,
@@ -1932,6 +1936,7 @@ impl ServerMessage {
             | Self::EstateChestVisibility { .. }
             | Self::PlayerMainHandChanged { .. }
             | Self::PlayerBackChanged { .. }
+            | Self::PlayerArmorChanged { .. }
             | Self::PlayerInteractionChanged { .. }
             | Self::PlayerMusicStarted { .. }
             | Self::PlayerInstrumentStarted { .. }

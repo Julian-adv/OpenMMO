@@ -99,6 +99,8 @@ pub struct Player {
     pub mount: Option<MountKind>,
     #[serde(default)]
     pub radiance_on: bool,
+    #[serde(default)]
+    pub armor: crate::character::ArmorEquipment,
     #[serde(skip)]
     pub last_combat_at: u64,
     /// Which program drives this player, from the `ClientInfo` handshake.
@@ -290,6 +292,7 @@ mod tests {
             ready_at: 0,
             back_color: None,
             back_texture: None,
+            armor: Default::default(),
             wet: false,
             title: None,
         };
@@ -338,6 +341,7 @@ mod tests {
             ready_at: 0,
             back_color: None,
             back_texture: None,
+            armor: Default::default(),
             wet: false,
             title: None,
         };

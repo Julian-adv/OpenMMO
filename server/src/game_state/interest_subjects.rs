@@ -203,6 +203,7 @@ impl Interest {
             | ServerMessage::PlayerTitleChanged { player_id, .. }
             | ServerMessage::PlayerMainHandChanged { player_id, .. }
             | ServerMessage::PlayerBackChanged { player_id, .. }
+            | ServerMessage::PlayerArmorChanged { player_id, .. }
             | ServerMessage::PlayerInteractionChanged { player_id, .. }
             | ServerMessage::PlayerHealthUpdate { player_id, .. }
             | ServerMessage::PlayerDead { player_id, .. } => {
@@ -216,6 +217,7 @@ impl Interest {
                                 ServerMessage::PlayerMountChanged { mount, .. } => { player.mount = *mount; },
                                 ServerMessage::PlayerTitleChanged { title, .. } => { player.title = title.clone(); },
                                 ServerMessage::PlayerMainHandChanged { item_def_id, .. } => { player.main_hand = item_def_id.clone(); },
+                                ServerMessage::PlayerArmorChanged { armor, .. } => { player.armor = armor.clone(); },
                                 ServerMessage::PlayerBackChanged { item_def_id, cape_color, cape_texture, .. } => { player.back = item_def_id.clone(); player.back_color = cape_color.clone(); player.back_texture = cape_texture.clone(); },
                                 ServerMessage::PlayerInteractionChanged { object_type, object_id, .. } => { player.object_type = object_type.clone(); player.object_id = *object_id; },
                                 ServerMessage::PlayerHealthUpdate { health, max_health, .. } => { player.health = *health; player.max_health = *max_health; },

@@ -1283,6 +1283,10 @@ async fn handle_client_message(
             // The equipped off-hand is the authoritative carried-torch state.
             // Resolve it before add_player builds the late-join GameState snapshot.
             let inventory = game_state.get_player_inventory(&id).await;
+            player.armor = inventory
+                .as_ref()
+                .map(|inv| inv.equipped_armor())
+                .unwrap_or_default();
             player.torch_on = inventory.as_ref().is_some_and(|inv| inv.is_torch_lit());
             player.main_hand = inventory
                 .as_ref()

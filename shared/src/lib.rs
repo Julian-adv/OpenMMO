@@ -199,7 +199,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v108: unify teleport scroll use under UseItem.
 /// v109: unify Double Slash requests under UseAbility.
 /// v110: stack stackable buyback units into one BuybackEntry with a quantity.
-pub const PROTOCOL_VERSION: u32 = 110;
+/// v111: equipped armor in player snapshots and character previews.
+pub const PROTOCOL_VERSION: u32 = 111;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from
@@ -529,6 +530,7 @@ mod tests {
             ready_at: 0,
             back_color: None,
             back_texture: None,
+            armor: Default::default(),
             wet: false,
             title: None,
         }];

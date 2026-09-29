@@ -20,9 +20,11 @@
   import { createRenderCadence } from '../utils/renderCadence'
   import {
     loadCharacterModel,
+    applyCharacterArmor,
     loadCharacterAnimationPack,
     disposeCharacterSkeletons,
   } from '../utils/characterModel'
+  import { equippedArmor } from '../stores/inventoryStore'
   import type { CharacterClass, Gender } from '../network/networkTypes'
 
   interface Props {
@@ -81,7 +83,7 @@
     const path = modelPath
     let cancelled = false
     Promise.all([
-      loadCharacterModel(path, characterClass),
+      loadCharacterModel(path),
       loadCharacterAnimationPack(path, CHARACTER_ANIMATION_PACK_PATHS.social),
     ])
       .then(([charGltf, socialGltf]) => {
@@ -90,6 +92,7 @@
           clipsByName.set(clip.name, clip)
         }
         const { modelRoot: root } = createCharacterModelRoot(charGltf.scene)
+        applyCharacterArmor(root, $equippedArmor)
         root.position.y = computeSoleGroundOffset(root)
         mixer = new THREE.AnimationMixer(root)
         modelRoot = root
@@ -110,6 +113,13 @@
       currentAction = null
       modelRoot = null
       playing = false
+    }
+  })
+
+  $effect(() => {
+    if (modelRoot) {
+      applyCharacterArmor(modelRoot, $equippedArmor)
+      invalidate()
     }
   })
 

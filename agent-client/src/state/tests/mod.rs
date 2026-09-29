@@ -127,6 +127,7 @@ pub(crate) fn test_player(x: f32, z: f32) -> Player {
         ready_at: 0,
         back_color: None,
         back_texture: None,
+        armor: Default::default(),
         wet: false,
         title: None,
     }

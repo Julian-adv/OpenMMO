@@ -308,6 +308,7 @@ function toRemotePlayer(sp: ServerPlayer): RemotePlayer {
     wet: sp.wet ?? false,
     title: sp.title ?? null,
     mainHand: sp.main_hand ?? null,
+    armor: sp.armor,
     back: sp.back ?? null,
     backColor: sp.back_color ?? null,
     backTexture: sp.back_texture ?? null,
@@ -1837,6 +1838,11 @@ export function handleServerMessage(
 
     case 'CapeTexturePrompt': {
       capeTextureDialog.set({ instanceId: data.instance_id })
+      break
+    }
+
+    case 'PlayerArmorChanged': {
+      updatePlayer(data.player_id, { armor: data.armor })
       break
     }
 

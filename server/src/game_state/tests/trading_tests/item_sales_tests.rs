@@ -2,6 +2,72 @@ use super::*;
 use onlinerpg_shared::messages::BagLineItem;
 
 #[tokio::test]
+async fn unpriced_starter_gear_cannot_mint_gold_from_single_or_batch_sales() {
+    let game = make_test_game_state("starter_armor_sales");
+    let seller = pid("seller");
+    let merchant = pid("npc_rica");
+    game.add_player(make_npc("npc_rica", "Rica", 0.0, 0.0))
+        .await;
+    game.add_player(make_player("seller", 1.0, 0.0)).await;
+    game.register_player_character(&seller, 1, 0, attrs_with_cha(18), 0, None)
+        .await;
+    let items = [
+        "worn_breastplate",
+        "worn_plate_helmet",
+        "worn_plate_greaves",
+        "worn_plate_boots",
+        "worn_plate_gauntlets",
+        "worn_iron_sword",
+        "worn_torch",
+    ];
+    let mut bag: Vec<_> = items
+        .iter()
+        .enumerate()
+        .map(|(i, id)| bag_item(i as u64 + 1, id, 1))
+        .collect();
+    let potion_id = items.len() as u64 + 1;
+    bag.push(bag_item(potion_id, "healing_potion", 1));
+    game.inventories.write().await.insert(
+        seller,
+        PlayerInventory {
+            bag,
+            ..Default::default()
+        },
+    );
+    let mut rx = game.register_direct_channel(&seller).await;
+    for instance_id in 1..=items.len() as u64 {
+        game.sell_item(&seller, &merchant, instance_id).await;
+        assert!(drain(&mut rx)
+            .iter()
+            .any(|message| matches!(message, ServerMessage::TradeError { .. })));
+    }
+    game.sell_items(
+        &seller,
+        &merchant,
+        vec![
+            BagLineItem {
+                instance_id: potion_id,
+                qty: 1,
+            },
+            BagLineItem {
+                instance_id: 1,
+                qty: 1,
+            },
+        ],
+    )
+    .await;
+    assert!(drain(&mut rx)
+        .iter()
+        .any(|message| matches!(message, ServerMessage::TradeError { .. })));
+    assert_eq!(game.get_player_gold(&seller).await, 0);
+    assert_eq!(
+        game.get_player_inventory(&seller).await.unwrap().bag.len(),
+        items.len() + 1
+    );
+    assert!(game.pending_gold_sources.read().await.is_empty());
+}
+
+#[tokio::test]
 async fn gold_sources_wait_for_hourly_flush_and_survive_logout_retries_and_shutdown() {
     let game = make_test_game_state("item_sales_persistence");
     let (auth, path) = make_test_auth_with_path("item_sales_persistence");

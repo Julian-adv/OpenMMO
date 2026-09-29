@@ -5,7 +5,12 @@ import { playerHealthDisplay } from './playerHealthDisplay'
 import { derived, get, writable } from 'svelte/store'
 import { SvelteMap } from 'svelte/reactivity'
 import type { Vector3 } from 'three'
-import type { CharacterClass, Gender, MountKind } from '../network/networkTypes'
+import type {
+  ArmorEquipment,
+  CharacterClass,
+  Gender,
+  MountKind,
+} from '../network/networkTypes'
 import type { HoverTarget } from '../managers/inputHandler'
 import { resetInventoryStore } from './inventoryStore'
 import { resetLandClaimPreview } from './landClaimStore'
@@ -58,6 +63,7 @@ interface PlayerBase {
   /** Shown title id (doc/TITLES.md). */
   title?: string | null
   mainHand?: string | null
+  armor?: ArmorEquipment
   back?: string | null
   /** Dye on that cape, as broadcast with it. */
   backColor?: string | null

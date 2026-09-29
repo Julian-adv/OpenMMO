@@ -1,6 +1,7 @@
 import { derived, get, writable } from 'svelte/store'
 import type {
   CharacterAttributes,
+  ArmorEquipment,
   EquipSlot,
   ItemInstance,
   PlayerInventory,
@@ -23,6 +24,16 @@ const initialState: PlayerInventory = {
 }
 
 export const inventoryStore = writable<PlayerInventory>({ ...initialState })
+export const equippedArmor = derived(
+  inventoryStore,
+  ({ equipped }): ArmorEquipment => ({
+    head: equipped.head?.item_def_id,
+    chest: equipped.chest?.item_def_id,
+    pants: equipped.pants?.item_def_id,
+    boots: equipped.boots?.item_def_id,
+    hands: equipped.hands?.item_def_id,
+  })
+)
 export const itemLockMode = writable(false)
 
 /** Mirrors the server's equip-target rule (`EquipSlot::alternate`). */

@@ -81,6 +81,57 @@ async fn replacement_login_kicks_the_previous_account_session() {
 }
 
 #[tokio::test]
+async fn armor_changes_reach_live_and_late_join_players() {
+    let game = make_test_game_state("armor_snapshots");
+    let wearer = pid("wearer");
+    game.add_player(make_player("wearer", 0.0, 0.0)).await;
+    game.add_player(make_player("observer", 1.0, 0.0)).await;
+    let mut observer = game.register_direct_channel(&pid("observer")).await;
+    drain(&mut observer);
+    game.inventories.write().await.insert(
+        wearer,
+        PlayerInventory {
+            bag: vec![
+                bag_item(1, "worn_breastplate", 1),
+                bag_item(2, "worn_plate_helmet", 1),
+            ],
+            ..Default::default()
+        },
+    );
+    game.equip_item(&wearer, 1).await;
+    game.equip_item(&wearer, 2).await;
+    assert!(drain(&mut observer).iter().any(|message| matches!(message,
+        ServerMessage::PlayerArmorChanged { player_id, armor }
+        if *player_id == wearer && armor.chest.as_deref() == Some("worn_breastplate")
+            && armor.head.as_deref() == Some("worn_plate_helmet")
+    )));
+    game.unequip_item(&wearer, EquipSlot::Head).await;
+    let expected = game.get_all_players().await[&wearer].armor.clone();
+    assert!(expected.head.is_none());
+    assert_eq!(expected.chest.as_deref(), Some("worn_breastplate"));
+    assert!(drain(&mut observer).iter().any(|message| matches!(message,
+        ServerMessage::PlayerArmorChanged { player_id, armor }
+        if *player_id == wearer && *armor == expected
+    )));
+    let snapshot = join_snapshot(&game, make_player("late_armor", 2.0, 0.0)).await;
+    assert!(snapshot.iter().any(|message| matches!(message,
+        ServerMessage::PlayerAppeared { player } if player.id == wearer && player.armor == expected
+    )));
+    game.drop_items(
+        &wearer,
+        vec![onlinerpg_shared::messages::BagLineItem {
+            instance_id: 1,
+            qty: 1,
+        }],
+    )
+    .await;
+    assert_eq!(
+        game.get_all_players().await[&wearer].armor,
+        Default::default()
+    );
+}
+
+#[tokio::test]
 async fn equipped_torch_syncs_live_and_late_join_player_state() {
     let game_state = make_test_game_state("late_join_torch_snapshot");
     let torch_holder_id = pid("torch_holder");

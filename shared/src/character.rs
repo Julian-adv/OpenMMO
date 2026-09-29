@@ -177,7 +177,16 @@ pub struct CharacterAttributes {
     pub guard: u8,
 }
 
-/// The equipped item def ids that show on a character-select preview.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ArmorEquipment {
+    pub head: Option<String>,
+    pub chest: Option<String>,
+    pub pants: Option<String>,
+    pub boots: Option<String>,
+    pub hands: Option<String>,
+}
+
+/// Equipped item def ids shown in character previews.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct VisibleEquipment {
     pub main_hand: Option<String>,
@@ -189,6 +198,8 @@ pub struct VisibleEquipment {
     /// Texture hash on the worn cape, for the same reason.
     #[serde(default)]
     pub back_texture: Option<String>,
+    #[serde(default)]
+    pub armor: ArmorEquipment,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

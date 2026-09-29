@@ -134,6 +134,7 @@ pub(super) fn make_player(id: &str, x: f32, z: f32) -> Player {
         client_kind: Default::default(),
         back_color: None,
         back_texture: None,
+        armor: Default::default(),
         mount: None,
         ready_at: 0,
     }

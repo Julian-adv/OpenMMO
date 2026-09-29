@@ -112,6 +112,16 @@ pub struct PlayerInventory {
 }
 
 impl PlayerInventory {
+    pub fn equipped_armor(&self) -> crate::character::ArmorEquipment {
+        crate::character::ArmorEquipment {
+            head: self.equipped_def_id(EquipSlot::Head),
+            chest: self.equipped_def_id(EquipSlot::Chest),
+            pants: self.equipped_def_id(EquipSlot::Pants),
+            boots: self.equipped_def_id(EquipSlot::Boots),
+            hands: self.equipped_def_id(EquipSlot::Hands),
+        }
+    }
+
     pub fn has_equipped_item(&self, slot: EquipSlot, item_def_id: &str) -> bool {
         self.equipped
             .get(&slot)

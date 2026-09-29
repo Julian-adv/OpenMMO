@@ -28,6 +28,7 @@
   import {
     disposeCharacterSkeletons,
     loadCharacterModel,
+    applyCharacterArmor,
     loadCharacterAnimationPack,
     modularSwordAttachment,
   } from '../utils/characterModel'
@@ -94,7 +95,7 @@
     const path = modelPath
     let cancelled = false
     Promise.all([
-      loadCharacterModel(path, characterClass),
+      loadCharacterModel(path),
       loadCharacterAnimationPack(
         path,
         CHARACTER_ANIMATION_PACK_PATHS.locomotion
@@ -329,6 +330,10 @@
     return detachEquipment
   })
 
+  $effect(() => {
+    if (modelRoot) applyCharacterArmor(modelRoot, equipment?.armor)
+  })
+
   // --- Exported interface for parent game loop ---
 
   export function isGltfReady(): boolean {
@@ -352,6 +357,7 @@
     const sourceScene = characterGltfData.scene
     const { clonedScene: newClonedScene, modelRoot: newModelRoot } =
       createCharacterModelRoot(sourceScene)
+    applyCharacterArmor(newModelRoot, equipment?.armor)
     const generation = ++setupGeneration
     if (modelPath === MODULAR_MALE_MODEL_PATH)
       newClonedScene.position.y = computeSoleGroundOffset(newModelRoot)

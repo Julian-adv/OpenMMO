@@ -517,6 +517,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::PlayerTitles { .. } => "PlayerTitles",
         ServerMessage::PlayerMainHandChanged { .. } => "PlayerMainHandChanged",
         ServerMessage::PlayerBackChanged { .. } => "PlayerBackChanged",
+        ServerMessage::PlayerArmorChanged { .. } => "PlayerArmorChanged",
         ServerMessage::CapeDyePrompt { .. } => "CapeDyePrompt",
         ServerMessage::LandClaimPrompt { .. } => "LandClaimPrompt",
         ServerMessage::LandscapingMode { .. } => "LandscapingMode",

@@ -52,6 +52,7 @@ pub fn new_player(
         main_hand: None,
         back: None,
         back_texture: None,
+        armor: Default::default(),
         object_id: None,
         last_combat_at: 0,
         client_kind,

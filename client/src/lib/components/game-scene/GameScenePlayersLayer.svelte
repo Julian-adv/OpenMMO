@@ -750,6 +750,7 @@
         torchOn={player.torchOn}
         mount={player.mount}
         mainHand={player.mainHand}
+        armor={player.armor}
         back={player.back}
         backColor={player.backColor}
         backTexture={player.backTexture}

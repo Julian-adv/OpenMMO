@@ -1122,25 +1122,26 @@ impl super::GameState {
         }
     }
 
-    /// Update the gear nearby clients render and tell them what changed. Both
-    /// slots are compared under one write lock: every bag mutation routes
-    /// through here and almost none of them touch gear, so taking the global
-    /// players lock once per snapshot rather than once per slot matters.
-    /// Reads what shows from the inventory itself rather than taking a widening
-    /// list of `Option<String>`s. The cape's dye and texture are part of it:
-    /// neither changes the def id, so both have to count as a change or the
-    /// new look never reaches anyone else.
+    /// Broadcast changed gear, including armor and cape customization.
     pub async fn set_player_gear(&self, player_id: &PlayerId, inventory: &PlayerInventory) {
         let main_hand = inventory.equipped_def_id(EquipSlot::MainHand);
         let back = inventory.equipped_def_id(EquipSlot::Back);
         let back_color = inventory.equipped_cape_color();
         let back_texture = inventory.equipped_cape_texture();
+        let armor = inventory.equipped_armor();
         let changed = {
             let mut players = self.players.write().await;
             let Some(player) = players.get_mut(player_id) else {
                 return;
             };
             let mut messages = Vec::new();
+            if player.armor != armor {
+                player.armor = armor.clone();
+                messages.push(ServerMessage::PlayerArmorChanged {
+                    player_id: *player_id,
+                    armor,
+                });
+            }
             if player.main_hand != main_hand {
                 player.main_hand = main_hand.clone();
                 messages.push(ServerMessage::PlayerMainHandChanged {

@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { describe, expect, it, vi } from 'vitest'
 import {
   loadCharacterModel,
+  applyCharacterArmor,
   loadCharacterAnimationPack,
   MODULAR_SWORD_ATTACHMENT,
   modularSwordAttachment,
@@ -57,42 +58,57 @@ describe('male player model selection', () => {
 describe.skipIf(
   !existsSync(resolve('public', MODULAR_MALE_MODEL_PATH.slice(1)))
 )('modular player assets', () => {
-  it('keeps knight plate separate from other classes and shares the animation rig', async () => {
-    const [knight, ranger] = await Promise.all([
-      loadCharacterModel(MODULAR_MALE_MODEL_PATH, 'knight'),
-      loadCharacterModel(MODULAR_MALE_MODEL_PATH, 'ranger'),
-    ])
-    expect(knight).not.toBe(ranger)
-    expect(await loadCharacterModel(MODULAR_MALE_MODEL_PATH, 'knight')).toBe(
-      knight
-    )
-    expect(await loadCharacterModel(MODULAR_MALE_MODEL_PATH, 'rogue')).toBe(
-      ranger
-    )
-    const meshes = skinnedParts(knight.scene)
-    const armor = meshes.filter((mesh) =>
-      mesh.userData.part_id?.endsWith('_plate')
-    )
-    expect(new Set(armor.map((mesh) => mesh.userData.part_id))).toEqual(
-      new Set([
-        'top_plate',
-        'pants_plate',
-        'boots_plate',
-        'gloves_plate',
-        'helmet_plate',
-      ])
-    )
-    expect(armor.every((mesh) => mesh.visible)).toBe(true)
+  it('changes each armor slot from equipped items and keeps other players independent', async () => {
+    const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
+    const { modelRoot: knight } = createCharacterModelRoot(source.scene)
+    const { modelRoot: other } = createCharacterModelRoot(source.scene)
+    const armor = {
+      chest: 'worn_breastplate',
+      pants: 'worn_plate_greaves',
+      boots: 'worn_plate_boots',
+      hands: 'worn_plate_gauntlets',
+      head: 'worn_plate_helmet',
+    }
+    const visible = (root: THREE.Object3D, id: string) =>
+      skinnedParts(root)
+        .filter((mesh) => mesh.userData.part_id === id)
+        .some((mesh) => mesh.visible)
+    applyCharacterArmor(knight, armor)
+    for (const part of ['top', 'pants', 'boots', 'gloves', 'helmet']) {
+      expect(visible(knight, part + '_plate')).toBe(true)
+      expect(visible(other, part + '_plate')).toBe(false)
+    }
+    expect(visible(knight, 'hair_crop')).toBe(false)
+    expect(visible(other, 'hair_crop')).toBe(true)
+    const meshes = skinnedParts(knight)
     expect(new Set(meshes.map((mesh) => mesh.skeleton)).size).toBe(1)
     expect(meshes[0].skeleton.bones).toHaveLength(65)
+
+    applyCharacterArmor(knight, { ...armor, head: null })
+    expect(visible(knight, 'helmet_plate')).toBe(false)
+    expect(visible(knight, 'hair_crop')).toBe(true)
+    expect(visible(knight, 'top_plate')).toBe(true)
+
+    applyCharacterArmor(knight, { ...armor, chest: 'leather_armor' })
+    expect(visible(knight, 'top_plate')).toBe(false)
+    expect(visible(knight, 'top_linen')).toBe(true)
+    expect(visible(knight, 'pants_plate')).toBe(true)
+
+    applyCharacterArmor(knight, {})
+    for (const part of ['top', 'pants', 'boots', 'gloves', 'helmet'])
+      expect(visible(knight, part + '_plate')).toBe(false)
+    expect(visible(knight, 'top_linen')).toBe(true)
+    expect(visible(knight, 'pants_cloth')).toBe(true)
+    expect(visible(knight, 'hair_crop')).toBe(true)
     expect(
-      meshes.some((mesh) => mesh.userData.region === 'head' && mesh.visible)
+      meshes.some((mesh) => mesh.userData.region === 'hands' && mesh.visible)
     ).toBe(true)
-    expect(
-      skinnedParts(ranger.scene).some(
-        (mesh) => mesh.userData.part_id === 'top_linen' && mesh.visible
-      )
-    ).toBe(true)
+
+    applyCharacterArmor(other, { chest: 'breastplate', head: 'plate_helmet' })
+    expect(visible(other, 'top_plate')).toBe(true)
+    expect(visible(other, 'helmet_plate')).toBe(true)
+    expect(visible(knight, 'top_plate')).toBe(false)
+    expect(visible(source.scene, 'top_plate')).toBe(false)
   })
 
   it('assembles clothes before exposure and isolates skeletons between players', async () => {
