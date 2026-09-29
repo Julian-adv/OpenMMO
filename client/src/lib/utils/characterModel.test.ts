@@ -81,24 +81,71 @@ describe.skipIf(
     expect(visible(knight, 'hair_crop')).toBe(false)
     expect(visible(other, 'hair_crop')).toBe(true)
     const meshes = skinnedParts(knight)
+    const bodyRegion = (region: string) =>
+      meshes.filter(
+        (mesh) =>
+          (mesh.userData.part_id ?? mesh.parent?.userData.part_id) === 'base' &&
+          (mesh.userData.region ?? mesh.parent?.userData.region) === region
+      )
     expect(new Set(meshes.map((mesh) => mesh.skeleton)).size).toBe(1)
     expect(meshes[0].skeleton.bones).toHaveLength(65)
+    const legs = bodyRegion('legs')
+    const bootAnkles = bodyRegion('boot_ankles')
+    const bareAnkles = bodyRegion('ankles')
+    expect(legs.length).toBeGreaterThan(0)
+    expect(bootAnkles.length).toBeGreaterThan(0)
+    expect(bareAnkles.length).toBeGreaterThan(0)
+    expect(legs.every((mesh) => !mesh.visible)).toBe(true)
+    expect(bootAnkles.every((mesh) => !mesh.visible)).toBe(true)
 
     applyCharacterArmor(knight, { ...armor, head: null })
     expect(visible(knight, 'helmet_plate')).toBe(false)
     expect(visible(knight, 'hair_crop')).toBe(true)
     expect(visible(knight, 'top_plate')).toBe(true)
 
+    applyCharacterArmor(knight, { ...armor, pants: null })
+    expect(visible(knight, 'pants_plate')).toBe(false)
+    expect(visible(knight, 'pants_cloth')).toBe(false)
+    expect(legs.every((mesh) => mesh.visible)).toBe(true)
+    expect(bootAnkles.every((mesh) => mesh.visible)).toBe(true)
+    expect(bareAnkles.every((mesh) => !mesh.visible)).toBe(true)
+    expect(visible(knight, 'top_plate')).toBe(true)
+    expect(visible(knight, 'boots_plate')).toBe(true)
+    expect(visible(other, 'pants_cloth')).toBe(true)
+
+    applyCharacterArmor(knight, { ...armor, chest: null })
+    expect(visible(knight, 'top_plate')).toBe(false)
+    expect(visible(knight, 'top_linen')).toBe(false)
+    expect(visible(knight, 'pants_plate')).toBe(true)
+    expect(legs.every((mesh) => !mesh.visible)).toBe(true)
+    expect(bootAnkles.every((mesh) => !mesh.visible)).toBe(true)
+    for (const region of ['torso', 'upper_arms', 'forearms', 'neck']) {
+      const body = bodyRegion(region)
+      expect(body.length).toBeGreaterThan(0)
+      expect(body.every((mesh) => mesh.visible)).toBe(true)
+    }
+    expect(visible(other, 'top_linen')).toBe(true)
+
+    applyCharacterArmor(knight, armor)
+    expect(visible(knight, 'top_plate')).toBe(true)
+    expect(visible(knight, 'top_linen')).toBe(false)
+
     applyCharacterArmor(knight, { ...armor, chest: 'leather_armor' })
     expect(visible(knight, 'top_plate')).toBe(false)
     expect(visible(knight, 'top_linen')).toBe(true)
     expect(visible(knight, 'pants_plate')).toBe(true)
 
+    applyCharacterArmor(knight, { ...armor, pants: 'leather_pants' })
+    expect(visible(knight, 'pants_plate')).toBe(false)
+    expect(visible(knight, 'pants_cloth')).toBe(true)
+    expect(legs.every((mesh) => !mesh.visible)).toBe(true)
+
     applyCharacterArmor(knight, {})
     for (const part of ['top', 'pants', 'boots', 'gloves', 'helmet'])
       expect(visible(knight, part + '_plate')).toBe(false)
-    expect(visible(knight, 'top_linen')).toBe(true)
-    expect(visible(knight, 'pants_cloth')).toBe(true)
+    expect(visible(knight, 'top_linen')).toBe(false)
+    expect(visible(knight, 'pants_cloth')).toBe(false)
+    expect(legs.every((mesh) => mesh.visible)).toBe(true)
     expect(visible(knight, 'hair_crop')).toBe(true)
     expect(
       meshes.some((mesh) => mesh.userData.region === 'hands' && mesh.visible)

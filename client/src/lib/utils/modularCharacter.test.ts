@@ -94,7 +94,9 @@ describe('modular outfit coverage', () => {
     legs.userData.region = 'legs'
     const legPrimitive = new THREE.SkinnedMesh()
     legs.add(legPrimitive)
-    const body = [torso, hands, feet, legPrimitive]
+    const ankles = region('ankles')
+    const bootAnkles = region('boot_ankles')
+    const body = [torso, hands, feet, legPrimitive, ankles, bootAnkles]
     const shirt = [
       region('torso'),
       region('sleeves'),
@@ -163,6 +165,23 @@ describe('modular outfit coverage', () => {
         .flatMap(([, meshes]) => meshes)
         .every((mesh) => !mesh.visible)
     ).toBe(true)
+    const selected = showModularOutfit(body, parts, {
+      ...DEFAULT_MODULAR_OUTFIT,
+      pants: 'none',
+    })
+    expect(selected.has('pants_none')).toBe(false)
+    expect(legPrimitive.visible).toBe(true)
+    expect(ankles.visible).toBe(false)
+    expect(bootAnkles.visible).toBe(true)
+    expect(pants.every((mesh) => !mesh.visible)).toBe(true)
+    showModularOutfit(body, parts, {
+      ...DEFAULT_MODULAR_OUTFIT,
+      pants: 'none',
+      boots: 'none',
+    })
+    expect(ankles.visible).toBe(true)
+    expect(bootAnkles.visible).toBe(false)
+    expect(feet.visible).toBe(true)
     for (const boots of [true, false, true]) {
       showModularOutfit(body, parts, {
         ...DEFAULT_MODULAR_OUTFIT,
@@ -171,6 +190,9 @@ describe('modular outfit coverage', () => {
         gloves: 'none',
         boots: boots ? 'leather' : 'none',
       })
+      expect(legPrimitive.visible).toBe(false)
+      expect(ankles.visible).toBe(false)
+      expect(bootAnkles.visible).toBe(false)
       expect(pants.map((mesh) => mesh.visible)).toEqual([
         true,
         !boots,

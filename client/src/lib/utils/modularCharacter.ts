@@ -47,7 +47,7 @@ export function skinnedParts(root: THREE.Object3D): THREE.SkinnedMesh[] {
 export interface ModularOutfit {
   hair: 'hair_crop' | 'hair_sidepart' | 'none'
   top: 'linen' | 'leather' | 'plate' | 'none'
-  pants: 'cloth' | 'plate'
+  pants: 'cloth' | 'plate' | 'none'
   gloves: 'none' | 'leather' | 'plate'
   boots: 'none' | 'leather' | 'plate'
   helmet: 'none' | 'plate'
@@ -72,7 +72,8 @@ export const KNIGHT_MODULAR_OUTFIT: ModularOutfit = {
 }
 
 export function modularOutfitParts(outfit: ModularOutfit): Set<string> {
-  const selected = new Set([`pants_${outfit.pants}`])
+  const selected = new Set<string>()
+  if (outfit.pants !== 'none') selected.add(`pants_${outfit.pants}`)
   if (outfit.hair !== 'none' && outfit.helmet === 'none')
     selected.add(outfit.hair)
   if (outfit.top === 'linen' || outfit.top === 'leather')
@@ -94,13 +95,19 @@ export function showModularOutfit(
     for (let node: THREE.Object3D | null = mesh; node; node = node.parent)
       if (typeof node.userData.region === 'string') return node.userData.region
   }
-  const hidden = new Set(['legs'])
+  const hidden = new Set<string>()
+  if (outfit.pants !== 'none') {
+    for (const region of ['legs', 'ankles', 'boot_ankles']) hidden.add(region)
+  }
   if (outfit.top !== 'none') {
     for (const region of ['torso', 'upper_arms', 'forearms']) hidden.add(region)
   }
   if (outfit.top === 'plate') hidden.add('neck')
   if (outfit.gloves !== 'none') hidden.add('hands')
-  if (outfit.boots !== 'none') hidden.add('feet')
+  if (outfit.boots !== 'none') {
+    hidden.add('feet')
+    hidden.add('ankles')
+  } else hidden.add('boot_ankles')
   for (const mesh of body) mesh.visible = !hidden.has(region(mesh) ?? '')
   const selected = modularOutfitParts(outfit)
   for (const [id, meshes] of parts)

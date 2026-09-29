@@ -342,6 +342,7 @@ async function main() {
     play(route[0])
   }
   el('reattach').onclick = () => {
+    if (pants.value === 'none') return
     const id = `pants_${pants.value}`
     const replacement = bindModularPart(body, sources[ids.indexOf(id)].scene)
     for (const mesh of parts.get(id)!) mesh.removeFromParent()

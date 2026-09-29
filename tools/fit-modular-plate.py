@@ -1,5 +1,6 @@
 import copy
 from collections import Counter
+from functools import cache
 from pathlib import Path
 
 import numpy as np
@@ -223,7 +224,7 @@ def pants_fit(p):
         center = shin_center(result[mask, 1], side)
         for axis in [0, 2]:
             result[mask, axis] = center[:, axis] + offset[:, axis] * (1 + .04 * hem[mask])
-    return fit_plate_waist(result)
+    return fit_greave_cuffs(fit_ankle_clearance(fit_plate_waist(result)))
 
 
 def boots_fit(p):
@@ -240,6 +241,65 @@ def boots_fit(p):
         cuff[:, 0] += sign * (abs(p[mask, 0]) - .343) * .16
         cuff[:, 2] += (p[mask, 2] + .304) * .16
         result[mask] += (cuff - result[mask]) * blend[mask, None]
+    return fit_ankle_clearance(result)
+
+
+def fit_ankle_clearance(positions, width=.55, depth=.45, back=.022):
+    result = positions.copy()
+    blend = smoothstep((positions[:, 1] - .085) / .105)
+    blend *= 1 - smoothstep((positions[:, 1] - .24) / .16)
+    for sign, side in [(1, 'Left'), (-1, 'Right')]:
+        mask = positions[:, 0] * sign > 0
+        center = shin_center(positions[mask, 1], side)
+        for axis, expansion in [(0, width), (2, depth)]:
+            result[mask, axis] += (positions[mask, axis] - center[:, axis]) * expansion * blend[mask]
+    result[:, 2] -= back * blend
+    return result
+
+
+@cache
+def plate_boot_triangles():
+    doc, binary = read_glb(PARTS / 'plate_sources/boots_plate.glb')
+    triangles = []
+    for primitive in doc['meshes'][0]['primitives']:
+        positions = boots_fit(accessor(doc, binary, primitive['attributes']['POSITION']))
+        indices = accessor(doc, binary, primitive['indices']).reshape(-1, 3)
+        triangles.extend(positions[indices])
+    return np.array(triangles)
+
+
+def fit_greave_cuffs(positions):
+    result = positions.copy()
+    triangles = plate_boot_triangles()
+    for sign, side in [(1, 'Left'), (-1, 'Right')]:
+        mask = (positions[:, 0] * sign > 0) & (positions[:, 1] < .30)
+        points = positions[mask]
+        if not len(points):
+            continue
+        center = fit_ankle_clearance(shin_center(points[:, 1], side))
+        offset = points - center
+        offset[:, 1] = 0
+        radius = np.linalg.norm(offset, axis=1)
+        direction = offset / radius[:, None]
+        origin = fit_ankle_clearance(shin_center(np.minimum(points[:, 1], .19), side))
+        faces = triangles[triangles[:, :, 0].mean(axis=1) * sign > 0]
+        edge1, edge2 = faces[:, 1] - faces[:, 0], faces[:, 2] - faces[:, 0]
+        cross = np.cross(direction[:, None], edge2)
+        determinant = np.sum(edge1 * cross, axis=2)
+        reciprocal = np.zeros_like(determinant)
+        np.divide(1, determinant, out=reciprocal, where=abs(determinant) > 1e-10)
+        distance = origin[:, None] - faces[:, 0]
+        u = np.sum(distance * cross, axis=2) * reciprocal
+        q = np.cross(distance, edge1)
+        v = np.sum(direction[:, None] * q, axis=2) * reciprocal
+        t = np.sum(edge2 * q, axis=2) * reciprocal
+        hit = (abs(determinant) > 1e-10) & (u >= 0) & (v >= 0) & (u + v <= 1) & (t > 0)
+        surface = np.max(np.where(hit, t, 0), axis=1)
+        if np.any(surface == 0):
+            raise ValueError('Greave cuff ray missed the boot surface')
+        blend = 1 - smoothstep((points[:, 1] - .20) / .10)
+        shrink = np.minimum(surface + .004 - radius, 0) * blend * .6
+        result[mask] += direction * shrink[:, None]
     return result
 
 

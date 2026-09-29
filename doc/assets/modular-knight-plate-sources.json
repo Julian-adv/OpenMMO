@@ -783,7 +783,7 @@
         "upper_helmet_unchanged_above_y_m": 1.7,
         "deformation_samples": 4695,
         "inverted_deformation_samples": 0,
-        "minimum_jacobian_determinant": 6.840838350280709e-05,
+        "minimum_jacobian_determinant": 0.00006840838350280709,
         "degenerate_triangles": 0,
         "greave_subdivision_unchanged": true,
         "other_armor_unchanged": true
@@ -910,6 +910,135 @@
         "runtime_poses": 255,
         "browser_errors": 0
       }
+    }
+  },
+  "ankle_collar_width": {
+    "date": "2026-09-29",
+    "source": "Local refit of existing plate boots and pants for anatomical ankle width; original license records apply. No AI generation or credits.",
+    "record": "modular-human-male-01-sources.json#boot_ankle_width",
+    "outputs": [
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/boots_plate.glb",
+        "bytes": 11053696,
+        "sha256": "60839b7c0b9b94cd97bb6463fa385c6b65443695e176028abe4c10cec7ec3650"
+      },
+      {
+        "path": "client/public/models/characters/modular_male/boots_plate.glb",
+        "bytes": 4434452,
+        "sha256": "8af7545df1054659e93176c4162c1f6e6c8ad40a19b477b01ff9ccf70d5fedc8"
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+        "bytes": 11524492,
+        "sha256": "7c9d5bc7510d3038695e1e3543b968f382c33d9de0ee5238603249bfe0f19002"
+      },
+      {
+        "path": "client/public/models/characters/modular_male/pants_plate.glb",
+        "bytes": 4707688,
+        "sha256": "46bbbe88b4c57159fa5178af68f4904901fe74584405cd8804114585a66c336b"
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/plate_parts.blend",
+        "bytes": 84778188,
+        "sha256": "befeda3626c020508e79a3b5c8377fa4ccfb3b88e127a3e0f966d983a5d82038"
+      }
+    ],
+    "triangles_unchanged": true,
+    "pants_followup": "The boot enlargement remains; plate_cuff_close_fit reduces the resulting trouser-hem flare without resizing boots."
+  },
+  "plate_cuff_close_fit": {
+    "date": "2026-09-29",
+    "purpose": "Reduce the enlarged plate trouser hem flare and fit it closer over the unchanged plate boots, including the view from below.",
+    "source": "Local refit of existing plate pants; original Meshy and Mixamo license records apply.",
+    "tool": "NumPy mesh deformation, Blender source synchronization and existing texture repacker",
+    "additional_generation_credits": 0,
+    "input_sha256": "7c9d5bc7510d3038695e1e3543b968f382c33d9de0ee5238603249bfe0f19002",
+    "method": {
+      "script": "tools/fit-modular-plate.py#fit_greave_cuffs",
+      "coordinate_system": "glTF Y-up, meters",
+      "center": "Shin axis with the existing boot-collar displacement",
+      "target": "Outermost radial intersection with the corresponding plate boot plus 4 mm; above y = 0.19 m use the y = 0.19 m collar section translated along the shin axis.",
+      "blend": "0.6 * (1 - smoothstep((y - 0.20) / 0.10)), with smoothstep clamped to [0, 1]",
+      "displacement": "Only reduce radius where it exceeds the target. Partial fitting preserves the metal rim and avoids collapsing its folds.",
+      "changed_exported_vertices": 272,
+      "maximum_vertex_displacement_m": 0.02744467742741108,
+      "normals": "Inverse-transpose deformation Jacobian; tangents use the forward Jacobian.",
+      "preserved": [
+        "Boot source and game binaries",
+        "Hem height",
+        "Geometry at and above y = 0.30 m",
+        "Topology",
+        "UVs and textures",
+        "Skin weights and joint assignments",
+        "Rig and inverse bind matrices"
+      ]
+    },
+    "outputs": [
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+        "bytes": 11524492,
+        "sha256": "aa95a9f1b85aa881df47e6e37ecbfebc7c168b352fcf0f4a9941208962eeff04"
+      },
+      {
+        "path": "client/public/models/characters/modular_male/pants_plate.glb",
+        "bytes": 4707688,
+        "sha256": "6df47c2263b9d515dabeebc80844711c0284668cfc4dc64eb8779beb1a2a7c0a"
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/plate_parts.blend",
+        "bytes": 84779174,
+        "sha256": "f797f27dcf24c33a49dad2bd210eeb49d281d48a12fd395f2caf27bfa89c74fa"
+      }
+    ],
+    "unchanged_boots": [
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/boots_plate.glb",
+        "bytes": 11053696,
+        "sha256": "60839b7c0b9b94cd97bb6463fa385c6b65443695e176028abe4c10cec7ec3650"
+      },
+      {
+        "path": "client/public/models/characters/modular_male/boots_plate.glb",
+        "bytes": 4434452,
+        "sha256": "8af7545df1054659e93176c4162c1f6e6c8ad40a19b477b01ff9ccf70d5fedc8"
+      }
+    ],
+    "triangles": {
+      "pants_plate": 1600,
+      "knight_plate_iron_sword": {
+        "including_hidden": 23306,
+        "visible": 11990
+      },
+      "face_region": 1505,
+      "cape": 0
+    },
+    "validation": {
+      "clips": [
+        "idle1",
+        "walk",
+        "run",
+        "jump",
+        "combat_idle",
+        "slash1"
+      ],
+      "phases": [
+        0.2,
+        0.65
+      ],
+      "views": [
+        "front",
+        "back",
+        "side",
+        "below"
+      ],
+      "animated_views": 48,
+      "glb_files_without_issues": 2,
+      "browser_errors": 0,
+      "degenerate_triangles": 0,
+      "reversed_face_normals": 0,
+      "minimum_face_area_ratio": 0.14915152,
+      "game_geometry_and_skin_match_source": true,
+      "regenerator_max_position_difference_m": 5.9273685071303817e-8,
+      "blender_max_position_difference_m": 0.000004580042548891925
     }
   }
 }

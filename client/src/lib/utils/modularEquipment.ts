@@ -9,11 +9,16 @@ export function modularOutfitForArmor(
     getItemDef(armor[slot] ?? '')?.worldModel
   return {
     ...DEFAULT_MODULAR_OUTFIT,
-    top:
-      model('chest') === 'armor/plate_armor.glb'
+    top: !armor.chest
+      ? 'none'
+      : model('chest') === 'armor/plate_armor.glb'
         ? 'plate'
         : DEFAULT_MODULAR_OUTFIT.top,
-    pants: model('pants') === 'armor/iron_leggings.glb' ? 'plate' : 'cloth',
+    pants: !armor.pants
+      ? 'none'
+      : model('pants') === 'armor/iron_leggings.glb'
+        ? 'plate'
+        : 'cloth',
     boots:
       model('boots') === 'armor/plate_greaves.glb'
         ? 'plate'
