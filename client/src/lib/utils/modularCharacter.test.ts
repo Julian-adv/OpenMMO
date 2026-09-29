@@ -105,12 +105,7 @@ describe('modular outfit coverage', () => {
       feet.visible,
       legPrimitive.visible,
     ]).toEqual([false, true, true, false])
-    expect(pants.map((mesh) => mesh.visible)).toEqual([
-      true,
-      true,
-      false,
-      false,
-    ])
+    expect(pants.map((mesh) => mesh.visible)).toEqual([true, true, true, false])
     showModularOutfit(body, parts, {
       hair: 'none',
       top: 'none',

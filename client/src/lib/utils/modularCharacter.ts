@@ -88,7 +88,7 @@ export function showModularOutfit(
         ) &&
         !(
           id === 'pants_cloth' &&
-          outfit.top !== 'none' &&
+          outfit.top === 'leather' &&
           mesh.userData.region === 'waist'
         ) &&
         !(

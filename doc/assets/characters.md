@@ -81,17 +81,33 @@
   목·겨드랑이·손목 검사와 기존 700포즈 조립 검사를 다시 통과했다. 어깨의 시각 검토는 대기·전투 대기·걷기·공격 비교이며 전체 의상 충돌 검사는 아니다.
   [수정 전](../../assets/modular_human_male_01/parts/fitted/shoulder-before-leather-combat_idle-left.png)·
   [수정 후](../../assets/modular_human_male_01/parts/fitted/shoulder-after-leather-combat_idle-left.png)와 반대쪽·등·셔츠 단독 착용 비교를 남겼다.
+- 2026-09-29 셔츠 밑단을 바지 안으로 넣었다. 기존 Meshy 셔츠의 하부 정점 220개를 Blender로
+  짧고 좁게 맞추고 허리밴드와 같은 골반 가중치로 연결했다. 기존 출처·라이선스를 따르며 추가 생성 비용은 없다.
+  천 셔츠 착용 시 바지 허리 부분을 표시하고 갑옷 착용 시에는 숨긴다.
+  [수정 전](../../assets/modular_human_male_01/parts/fitted/tuck-before-idle1-front.png)·
+  [첫 수정 후](../../assets/modular_human_male_01/parts/fitted/tuck-after-idle1-front.png) 비교를 남겼다.
+- 후속 옆선 보정은 사용자 제공 [ASCII 스케치](../../assets/modular_human_male_01/parts/shirt-silhouette-reference.txt)를
+  참고했다. 등판의 부피를 줄이고 앞뒤가 허리선 근처까지 곧게 내려온 뒤 약 4cm 구간에서 접히도록
+  형상·가중치를 조정했다. 허리선 기울기를 따르는 단면 3개를 보강해 셔츠는 **3,957 triangles**다.
+  동일한 Meshy 원본의 Blender 가공이며 기존 출처·라이선스와 추가 생성 비용 없음은 유지한다.
+  [밑단 검사](../../assets/modular_human_male_01/parts/fitted/tuck-validation.json)는 175포즈 × 224표본에서
+  최소 3.84mm의 안쪽 여유와 상의 교체 30회의 재생 연속성을 확인했다.
+  [보존 검사](../../assets/modular_human_male_01/parts/fitted/tuck-fold-preservation.json)에서 다른 파츠 해시,
+  기존 셔츠 UV 좌표·총 UV 면적과 소매·상부 셔츠 2,117개 삼각형의 위치·UV·가중치가 유지됐다.
+  [옆선 수정 전](../../assets/modular_human_male_01/parts/fitted/tuck-fold-before-combat_idle-side.png)·
+  [수정 후](../../assets/modular_human_male_01/parts/fitted/tuck-fold-after-combat_idle-side.png) 및 대기·걷기·공격의 앞뒤·옆 비교를 남겼다.
+  2026-09-29 사용자 확인 후 모델·작업 파일·재현 스크립트·스케치·검증 기록을 HF·`assets.lock`에 보존했다.
 - 장갑·부츠·검 302를 포함한 조합 수치는 다음과 같다. 숨긴 몸체와 안쪽 의상도 전체에 포함한다.
 
   | 조합 | 전체 triangles | 표시 triangles | 얼굴 지정 영역 |
   | --- | ---: | ---: | ---: |
-  | 크롭 + 천 셔츠 | 23,120 | 12,003 | 1,505 |
-  | 옆가르마 + 천 셔츠 | 23,298 | 12,181 | 1,505 |
-  | 크롭 + 가죽 갑옷 + 안쪽 셔츠 | 26,877 | 14,357 | 1,505 |
-  | 옆가르마 + 가죽 갑옷 + 안쪽 셔츠 | 27,055 | 14,535 | 1,505 |
+  | 크롭 + 천 셔츠 | 23,756 | 12,862 | 1,505 |
+  | 옆가르마 + 천 셔츠 | 23,934 | 13,040 | 1,505 |
+  | 크롭 + 가죽 갑옷 + 안쪽 셔츠 | 27,513 | 14,357 | 1,505 |
+  | 옆가르마 + 가죽 갑옷 + 안쪽 셔츠 | 27,691 | 14,535 | 1,505 |
 
 - 4조합 × 7동작 × 25시점(700포즈), 교체 20회, 동작 전환 7회에서 유한한 좌표·공유 골격·재생 연속성을
-  확인했다. 소매·바지 끝단·허리·겨드랑이·목 수정 후 같은 조립 검사와 GLB 속성·가중치·입력 해시 검사를 다시 통과했다.
+  확인했다. 소매·바지 끝단·허리·겨드랑이·목·셔츠 밑단 수정 후 같은 조립 검사와 GLB 속성·가중치·입력 해시 검사를 다시 통과했다.
   프런트엔드 check·lint와 관련 테스트 14개도 다시 통과했다.
   [내보내기 검사](../../assets/modular_human_male_01/parts/fitted/export-validation.json),
   [브라우저 검사·착용 화면](../../assets/modular_human_male_01/parts/fitted/browser-validation.json).
