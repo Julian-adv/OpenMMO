@@ -1,5 +1,21 @@
 # Animation Assets
 
+## Modular Human Male 01 — Combat Idle Shoulders (2026-09-29)
+
+- Processed the existing Mixamo sources with Three.js; the same source terms apply.
+  No new generation or paid service call.
+- Both rig-specific animation GLBs match the initial `combat_idle` clavicles to the final
+  `slash1` frame requested by the user. Constant local rotation offsets preserve breathing;
+  elbows use fixed bone lengths to preserve each hand's world position and orientation.
+  Shoulder joints descend another 3.67–5.59cm from the initial 15° correction. Only eight arm rotation tracks change;
+  the other six clips, key times, body/garment meshes, and sword attachment profile are unchanged.
+- Both variants passed 609 comparison samples, with maximum wrist position error below
+  0.0022mm, and seven clips × 65 reimported poses. Initial clavicle rotations match the attack reference;
+  the largest arm-track loop endpoint difference is 0.012°. Neck and underarm coverage checks passed.
+  [Validation and outfit comparisons](../../assets/modular_human_male_01/rigged_hand_tuned/README.md#전투-대기-어깨-보정-2026-09-29).
+- Reproduce with `node assets/modular_human_male_01/bake_animations.mjs`.
+  This correction is baked once; playback requires no additional shoulder adjustment.
+
 ## Modular Human Male 01 — Baked Animation Preview (2026-09-28)
 
 - Follow-up after `f4a63e49`; the baked GLBs and checks are archived on HF and pinned by the accompanying `assets.lock`.
