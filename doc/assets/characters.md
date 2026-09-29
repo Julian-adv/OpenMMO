@@ -7,7 +7,7 @@
 - 원화: built-in ImageGen, **ChatGPT Pro 20x**. 형상·2K PBR: **Meshy Premium**, `meshy-7.1`.
   모두 2026-09-29 제작. 채택 175크레딧, 미채택 상의까지 총 210크레딧.
   Meshy 유료 생성물 이용 조건과 기존 몸체·Mixamo 리그 라이선스를 따른다.
-- 철검 포함 **21,227 triangles**, 표시 **10,282**, 기존 얼굴 영역 **1,505**.
+- 철검 포함 **21,473 triangles**, 표시 **10,528**, 기존 얼굴 영역 **1,505**.
   기본 망토를 추가하면 120 triangles가 늘어난다. 상의 표면 개선과 손목 테두리·안감 보정으로 목표 상한을 넘겼다.
 - [파일·재현 명령·라이선스·검증](modular-knight-plate.md), [프롬프트·설정·작업 ID·해시](modular-knight-plate-sources.json).
 

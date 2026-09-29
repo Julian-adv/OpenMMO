@@ -261,26 +261,26 @@
       },
       {
         "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
-        "bytes": 11508716,
-        "sha256": "ba4070aa1ccc5beaed57aaecf1f435fb21aa8b1b2eb2c256ef407868772270e2",
-        "triangles": 1354
+        "bytes": 11524488,
+        "sha256": "cd85cd6d3aa04d4cb125c1734f4768249ab038df2d9f83bdc9a92ca7a552724e",
+        "triangles": 1600
       },
       {
         "path": "client/public/models/characters/modular_male/pants_plate.glb",
-        "bytes": 4691916,
-        "sha256": "02bc5b92b81e0ac4fe0eb8b50e38fecd333c6c14f905679cc1e39896f4a6037e",
-        "triangles": 1354
+        "bytes": 4707684,
+        "sha256": "8c66b2854af38db5883674dfdef266982ba299437fcaa469490009bec3dcd6ac",
+        "triangles": 1600
       },
       {
         "path": "assets/modular_human_male_01/parts/fitted/boots_plate.glb",
         "bytes": 11053696,
-        "sha256": "fa78ba1377908197351910214c0a870b2683d6a637353f679a6408d9693fedaf",
+        "sha256": "776ce32c25c37f7513ba55287e74eb1c8be96eb631ff686c9f9f052313c0e92c",
         "triangles": 709
       },
       {
         "path": "client/public/models/characters/modular_male/boots_plate.glb",
         "bytes": 4434452,
-        "sha256": "5eb67e2b5cc6b94c2f9348f76f624d76125d394e16a2df69e3c1ef378f8bbb05",
+        "sha256": "5f1e2866ddb5db79f09f57291cfe438d6caff06387fb775e6d2f2310b1fa9f2c",
         "triangles": 709
       },
       {
@@ -309,17 +309,17 @@
       },
       {
         "path": "assets/modular_human_male_01/parts/fitted/plate_parts.blend",
-        "bytes": 84691552,
-        "sha256": "f502b233c2573b0d5020f91de49af2ab2253413af440ceefdc74ed9ab346d70c"
+        "bytes": 84707221,
+        "sha256": "9d0707d93f83fc04919cc2e2a147dcb155dbc4916a99d85f1f523e5c52e661a4"
       }
     ],
     "counts": {
       "body": 13520,
       "face_region": 1505,
-      "armor": 7405,
+      "armor": 7651,
       "iron_sword": 302,
-      "assembled_including_hidden": 21227,
-      "visible": 10282,
+      "assembled_including_hidden": 21473,
+      "visible": 10528,
       "optional_default_cape": 120
     },
     "licenses": "Inherited from original modular body/Mixamo and the Meshy paid-generation terms recorded above; local fitting adds no third-party asset.",
@@ -331,7 +331,8 @@
       ],
       "method": "Recenter boot cuffs on each shin bone axis; taper greave ends inside the cuffs; use the same height-based Leg/Foot blend over both ankle overlaps. Preserve toes, soles and triangle counts.",
       "additional_generation_credits": 0,
-      "visual_review": "Both ankles from front and rear: idle, combat idle, two walking phases, running and jumping."
+      "visual_review": "Both ankles from front and rear: idle, combat idle, two walking phases, running and jumping.",
+      "superseded_by": "ankle_overlap_rebuild"
     },
     "wrist_correction": {
       "date": "2026-09-29",
@@ -434,6 +435,163 @@
         "loader_tests_passed": 5,
         "type_check": "passed",
         "lint": "passed"
+      }
+    },
+    "ankle_overlap_rebuild": {
+      "date": "2026-09-29",
+      "affected_parts": [
+        "pants_plate",
+        "boots_plate"
+      ],
+      "reference": "User-provided photograph of greaves overlapping sabatons, supplied in conversation; used for shape reference only, not copied into textures or distributed assets.",
+      "method": "Replace the tucked greave taper with an outer shell: raise the front hem into an arch, extend the sides and rear downward, and narrow the sabaton cuff on the shin axis. Subdivide only long source edges near the greave hems, interpolate UVs, and retain the shared height-based Leg/Foot weight profile.",
+      "triangles_before": {
+        "pants_plate": 1354,
+        "boots_plate": 709
+      },
+      "triangles_after": {
+        "pants_plate": 1600,
+        "boots_plate": 709
+      },
+      "additional_generation_credits": 0,
+      "preserved": [
+        "65-bone bind pose and existing animations",
+        "Boot toe and sole geometry below 85 mm",
+        "Original PBR textures",
+        "Other armor parts and body"
+      ],
+      "visual_review": {
+        "sides": [
+          "Left",
+          "Right"
+        ],
+        "poses": [
+          "rest",
+          "idle1",
+          "walk at 0 and 0.5",
+          "run",
+          "jump",
+          "combat_idle",
+          "slash1"
+        ],
+        "views": [
+          "front",
+          "rear"
+        ],
+        "runtime_screenshots": 16
+      },
+      "validation": {
+        "runtime_glb_errors": 0,
+        "runtime_glb_warnings": 0,
+        "runtime_glb_infos": 0,
+        "runtime_glb_hints": 0,
+        "animation_clips": 51,
+        "sampled_poses": 255,
+        "shared_bones": 65,
+        "browser_errors": 0,
+        "modular_and_loader_tests_passed": 20,
+        "subdivision_preserves_source_area_and_existing_uvs": true,
+        "degenerate_triangles": 0,
+        "weights_normalized": true
+      },
+      "arch_centering": {
+        "date": "2026-09-29",
+        "reason": "The arch was centered on the shin bone while the fitted sabaton instep ridge lies farther outward.",
+        "method": "Offset only the front arch center 14 mm outward on each side to align it with the visible instep ridge; retain the rear hem profile, upper greave geometry, UVs, topology and boot mesh.",
+        "outward_offset_m": 0.014,
+        "additional_generation_credits": 0,
+        "visual_review": {
+          "views": "Looking down the toe direction of each foot",
+          "poses": [
+            "rest",
+            "idle1",
+            "walk at 0 and 0.5",
+            "run",
+            "combat_idle"
+          ]
+        },
+        "validation": {
+          "runtime_glb_errors": 0,
+          "runtime_glb_warnings": 0,
+          "animation_clips": 51,
+          "sampled_poses": 255,
+          "browser_errors": 0,
+          "degenerate_triangles": 0,
+          "weights_normalized": true,
+          "unchanged_topology": true,
+          "upper_greaves_unchanged": true
+        }
+      }
+    },
+    "crotch_weight_correction": {
+      "date": "2026-09-29",
+      "affected_parts": [
+        "pants_plate"
+      ],
+      "cause": "Nearest-body vertex weight transfer assigned adjacent central gusset vertices strongly to opposite thighs, stretching their shared faces during wide leg poses.",
+      "method": "Replace front crotch weights with a continuous height-dependent Hips/LeftUpLeg/RightUpLeg field and blend back to the original weights at the region boundary. Widen the thigh transition toward the pelvis. Fade the correction from Z = -0.04 to 0.01 m to preserve rear armor weights.",
+      "region_m": {
+        "y": [
+          0.78,
+          1.12
+        ],
+        "abs_x_max": 0.16,
+        "z_fade": [
+          -0.04,
+          0.01
+        ]
+      },
+      "preserved": [
+        "Rest geometry, normals and tangents",
+        "UVs and PBR textures",
+        "1600 triangles",
+        "Ankle shape, weights and arch centering",
+        "Weights outside the crotch region within 1e-7",
+        "Rear armor weights at Z <= -0.04 m within 1e-7",
+        "Existing 65-bone rig and animation tracks"
+      ],
+      "additional_generation_credits": 0,
+      "deformation_comparison": {
+        "metric": "Maximum deformed/rest edge-length ratio per sampled triangle; not a claim of zero deformation.",
+        "triangle_selection": "Rest-pose face centroid: 0.72 <= Y < 1.02 m, abs(X) <= 0.19 m and Z > 0.01 m",
+        "triangles_per_pose": 133,
+        "sampled_poses": 25,
+        "worst_before": 6.714119739901209,
+        "worst_after": 3.159529023166113,
+        "reported_front_gusset_face": 723,
+        "combat_idle_phase": 0,
+        "reported_face_before": 6.703893018071931,
+        "reported_face_after": 1.1358829639968375
+      },
+      "validation": {
+        "runtime_glb_errors": 0,
+        "runtime_glb_warnings": 0,
+        "runtime_glb_infos": 0,
+        "runtime_glb_hints": 0,
+        "animation_clips": 51,
+        "sampled_poses": 255,
+        "browser_errors": 0,
+        "weights_normalized": true,
+        "rest_geometry_uv_textures_unchanged": true
+      },
+      "visual_review": {
+        "views": [
+          "Pelvis-aligned front",
+          "Rear"
+        ],
+        "poses": [
+          "rest",
+          "walk",
+          "run",
+          "jump",
+          "combat_idle",
+          "slash1"
+        ],
+        "materials": [
+          "Original PBR",
+          "Unlit base color",
+          "Plain gray"
+        ]
       }
     }
   }

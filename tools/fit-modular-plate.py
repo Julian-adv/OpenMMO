@@ -138,6 +138,44 @@ def top_fit(p):
     return out
 
 
+def subdivide_greave_hems(positions, uv, indices):
+    points, texcoords = list(positions), list(uv)
+    for _ in range(2):
+        midpoints = {}
+        for face in indices:
+            for a, b in zip(face, np.roll(face, -1)):
+                edge = tuple(sorted((a, b)))
+                if edge in midpoints or max(points[a][1], points[b][1]) >= -.65:
+                    continue
+                if np.linalg.norm(points[a] - points[b]) <= .075:
+                    continue
+                midpoints[edge] = len(points)
+                points.append((points[a] + points[b]) / 2)
+                texcoords.append((texcoords[a] + texcoords[b]) / 2)
+        triangles = []
+        for face in indices:
+            mids = [midpoints.get(tuple(sorted((a, b))))
+                    for a, b in zip(face, np.roll(face, -1))]
+            count = sum(mid is not None for mid in mids)
+            if count == 0:
+                triangles.append(face)
+            elif count == 3:
+                a, b, c = face
+                ab, bc, ca = mids
+                triangles.extend([[a, ab, ca], [ab, b, bc], [ca, bc, c], [ab, bc, ca]])
+            else:
+                start = next(i for i in range(3) if mids[i] is not None and
+                             (count == 1 or mids[(i + 1) % 3] is not None))
+                a, b, c = np.roll(face, -start)
+                ab, bc, _ = np.roll(mids, -start)
+                if count == 1:
+                    triangles.extend([[a, ab, c], [ab, b, c]])
+                else:
+                    triangles.extend([[b, bc, ab], [a, ab, c], [ab, bc, c]])
+        indices = np.array(triangles, dtype=int)
+    return np.array(points), np.array(texcoords), indices
+
+
 def pants_fit(p):
     y = np.interp(p[:, 1], [-.951, -.10, .946], [.165, .553, 1.145])
     center_x = np.interp(p[:, 1], [-.951, -.10, .6, .946], [.33, .265, .215, .18])
@@ -148,12 +186,20 @@ def pants_fit(p):
     z_center = np.interp(p[:, 1], [-.951, -.25, .05, .5, .946], [-.10, -.10, .02, .02, .05])
     desired_z = np.interp(y, [.165, .553, 1.145], [-.035, -.025, -.012])
     result = np.column_stack([x, y, (p[:, 2] - z_center) * .51 + desired_z])
-    taper = .72 + .28 * smoothstep((y - .18) / .16)
+    hem = 1 - smoothstep((y - .175) / .16)
     for sign, side in [(1, 'Left'), (-1, 'Right')]:
         mask = p[:, 0] * sign > 0
         center = shin_center(y[mask], side)
+        offset = result[mask] - center
+        arch_x = offset[:, 0] - sign * .014
+        front_angle = np.arctan2(arch_x / .055, offset[:, 2] / .06)
+        angle = np.arctan2(offset[:, 0] / .055, offset[:, 2] / .06)
+        front = np.maximum(np.cos(front_angle), 0)
+        back = np.maximum(-np.cos(angle), 0)
+        result[mask, 1] += hem[mask] * (-.055 + .070 * front ** 1.4 + .010 * back)
+        center = shin_center(result[mask, 1], side)
         for axis in [0, 2]:
-            result[mask, axis] = center[:, axis] + (result[mask, axis] - center[:, axis]) * taper[mask]
+            result[mask, axis] = center[:, axis] + offset[:, axis] * (1 + .04 * hem[mask])
     return result
 
 
@@ -164,14 +210,34 @@ def boots_fit(p):
     x = np.sign(p[:, 0]) * (target_x + (abs(p[:, 0]) - source_x) * .205)
     y = (p[:, 1] + .323282) * .355
     result = np.column_stack([x, y, z])
-    blend = smoothstep((y - .115) / .07)
+    blend = smoothstep((y - .085) / .09)
     for sign, side in [(1, 'Left'), (-1, 'Right')]:
         mask = p[:, 0] * sign > 0
         cuff = shin_center(y[mask], side)
-        cuff[:, 0] += sign * (abs(p[mask, 0]) - .343) * .26
-        cuff[:, 2] += (p[mask, 2] + .304) * .26
+        cuff[:, 0] += sign * (abs(p[mask, 0]) - .343) * .16
+        cuff[:, 2] += (p[mask, 2] + .304) * .16
         result[mask] += (cuff - result[mask]) * blend[mask, None]
     return result
+
+
+def align_crotch_weights(positions, joints, weights):
+    names = [BASE['nodes'][i]['name'] for i in BASE['skins'][0]['joints']]
+    dense = np.zeros((len(positions), len(names)))
+    np.add.at(dense, (np.arange(len(positions))[:, None], joints), weights)
+    x, y = abs(positions[:, 0]), positions[:, 1]
+    blend = smoothstep((y - .78) / .06) * (1 - smoothstep((y - 1.04) / .08))
+    blend *= 1 - smoothstep((x - .10) / .06)
+    blend *= smoothstep((positions[:, 2] + .04) / .05)
+    width = .015 + .10 * smoothstep((y - .83) / .12)
+    left = smoothstep((positions[:, 0] + width) / (2 * width))
+    hip = smoothstep((y - .88) / .15)
+    dense *= 1 - blend[:, None]
+    dense[:, names.index('Hips')] += blend * hip
+    dense[:, names.index('LeftUpLeg')] += blend * (1 - hip) * left
+    dense[:, names.index('RightUpLeg')] += blend * (1 - hip) * (1 - left)
+    joints = np.argsort(dense, axis=1)[:, -4:][:, ::-1]
+    weights = np.take_along_axis(dense, joints, axis=1)
+    return joints, weights / weights.sum(axis=1, keepdims=True)
 
 
 def align_ankle_weights(positions, joints, weights):
@@ -434,6 +500,9 @@ def build(name, fit):
         source = accessor(doc, raw, attributes['POSITION'])
         indices = accessor(doc, raw, primitive['indices']).reshape(-1, 3)
         uv = accessor(doc, raw, attributes['TEXCOORD_0'])
+        if name == 'pants_plate':
+            source, uv, indices = subdivide_greave_hems(source, uv, indices)
+            attributes['TEXCOORD_0'] = add_accessor(doc, binary, uv, 'VEC2')
         if name == 'gloves_plate':
             source, uv, indices, boundary = clip_glove_cuff(source, uv, indices)
         positions = fit(source)
@@ -452,6 +521,8 @@ def build(name, fit):
             weights[:, 0] = 1
         else:
             joints, weights = transfer_weights(positions)
+        if name == 'pants_plate':
+            joints, weights = align_crotch_weights(positions, joints, weights)
         if name in ('pants_plate', 'boots_plate'):
             joints, weights = align_ankle_weights(positions, joints, weights)
         if name in ('top_plate', 'gloves_plate'):
