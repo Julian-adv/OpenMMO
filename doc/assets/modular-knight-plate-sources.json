@@ -1,0 +1,440 @@
+{
+  "generation_date": "2026-09-29",
+  "image_generation": {
+    "service": "OpenAI Codex built-in ImageGen",
+    "tier": "ChatGPT Pro 20x",
+    "license": "OpenAI generated output terms",
+    "parts": [
+      {
+        "id": "top_plate",
+        "prompt": "Use case: stylized-concept. Asset type: isolated reference for one modular realistic medieval RPG upper-body armor, for image-to-3D reconstruction. Make a practical starter knight steel plate cuirass with integrated rounded pauldrons, articulated upper-arm and forearm armor, small elbow cops, overlapping waist lames ending at the hips. Matching set design: satin silver forged steel, subtle rolled steel edges, restrained dark steel rivets, charcoal padded fabric only at flexible joints, a few dark brown fastening straps; no gold, no ornament, no heraldry. Athletic adult male proportions, regular build, not bulky. Hollow empty garment in a symmetrical neutral T-pose, both arms extended perfectly horizontal, wrists open and empty, neck open, no hands, no head, no person, no mannequin, no legs. Direct front view, near orthographic, full object centered and filling image with generous margin around arm ends. Uniform pale gray background, clean softly lit game asset render with readable separate plates, physically plausible steel highlights, no cast shadow, no text, no panels, no weapons, no additional objects. The garment must have sleeves and both arms from shoulders through forearms, but no gloves.",
+        "path": "doc/images/characters/modular_human_male_01/parts/top_plate.png",
+        "sha256": "f835002801d5b1a95fe82005d2252752e6dcce53f01ee4d90ec90aa015ca55c3"
+      },
+      {
+        "id": "pants_plate",
+        "prompt": "Use case: stylized-concept. Asset type: isolated modular medieval RPG armor reference for image-to-3D reconstruction. Design matches the reference upper-body armor exactly in material language: satin silver forged steel, subtle rolled edges, small dark steel rivets, charcoal quilted fabric at flexible joints, dark brown fastening straps, no gold, no heraldry, no ornament. The input image is a STYLE REFERENCE ONLY, do not include the cuirass or arms in the output. Clean softly lit realistic game asset render, uniform pale gray backdrop, one single view, no people, mannequin, human skin, labels, text, panels or extra objects. Primary request: one hollow pair of armored trousers for an athletic adult male, waist through ankles, front view near orthographic. Complete connected trousers with a narrow charcoal waistband and flexible charcoal crotch, silver steel articulated cuisses covering thighs, rounded knee cops, narrow articulated calf plates. Legs straight and slightly separated at the ankles, left-right symmetric, natural proportions. No feet, boots, torso or belt ornaments. Centered, whole garment visible, 10% empty margin. Functional starter knight design with clearly readable metal thigh and knee plates, not fabric trousers.",
+        "path": "doc/images/characters/modular_human_male_01/parts/pants_plate.png",
+        "sha256": "2577f09aa0f4465d2f15dfb01020d89e96875da4e5ffa05a6e51f3c2104b2069"
+      },
+      {
+        "id": "boots_plate",
+        "prompt": "Use case: stylized-concept. Asset type: isolated modular medieval RPG armor reference for image-to-3D reconstruction. Match the reference armor's material and style: satin silver forged steel, subtle rolled edges, small dark steel rivets, charcoal padded fabric at joints and dark brown fastening straps. No gold, ornament or heraldry. Input is STYLE REFERENCE ONLY; no torso armor in the output. Pale neutral gray uniform background, soft neutral studio lighting, realistic game asset render, centered complete object with 12% empty margin. No skin, body, mannequin, labels, text, collage, panels, weapons, props or floor shadows. Primary request: a matching PAIR of low steel armored boots (sabatons), ankle height only, not tall shin greaves. Both feet parallel, heels side by side with clear separation, toes pointing toward viewer. Front three-quarter view slightly above the feet shows each segmented instep and articulated rounded toe, black leather sole and short ankle cuff. Hollow openings visible at top, no leg inside. Realistic practical medieval footwear, modest width, no exaggerated pointed toes. Complete disconnected left and right boots only, no trousers, legs, hands or gauntlets.",
+        "path": "doc/images/characters/modular_human_male_01/parts/boots_plate.png",
+        "sha256": "7a28a846da4ac971ae0ca308dd838dcbfe2a79d79c7b21e3a0d44d32fa7c8718"
+      },
+      {
+        "id": "gloves_plate",
+        "prompt": "Use case: stylized-concept. Asset type: isolated modular medieval RPG armor reference for image-to-3D reconstruction. Match the reference armor's material and style: satin silver forged steel, subtle rolled edges, small dark steel rivets, charcoal padded fabric at joints and dark brown fastening straps. No gold, ornament or heraldry. Input is STYLE REFERENCE ONLY; no torso armor in the output. Pale neutral gray uniform background, soft neutral studio lighting, realistic game asset render, centered complete object with 12% empty margin. No skin, body, mannequin, labels, text, collage, panels, weapons, props or floor shadows. Primary request: one LEFT HAND steel plate gauntlet only, five clearly separated straight extended fingers with small natural spacing, thumb spread outward. Anatomically correct, flexible articulated plates over every finger, broad knuckle plate, back-of-hand plate, short flared wrist cuff open and hollow. Charcoal leather glove on palm beneath metal plates. Present dorsum/back of hand to camera in near orthographic overhead view, fingertips toward bottom of image, cuff toward top; thumb to the RIGHT of image. The fingers should be clearly distinct, not clenched or curved inward. Wrist cuff not a long forearm bracer. Regular adult male hand proportions, restrained practical starter knight design. Exactly one glove; its partner will be mirrored in 3D.",
+        "path": "doc/images/characters/modular_human_male_01/parts/gloves_plate.png",
+        "sha256": "22b773fb171e900838f8b6f4c4a66cccda5a6771080453bf064410f72eaff480"
+      },
+      {
+        "id": "helmet_plate",
+        "prompt": "Use case: stylized-concept. Asset type: isolated modular medieval RPG armor reference for image-to-3D reconstruction. Design matches the reference upper-body armor exactly in material language: satin silver forged steel, subtle rolled edges, small dark steel rivets, charcoal quilted fabric at flexible joints, dark brown fastening straps, no gold, no heraldry, no ornament. The input image is a STYLE REFERENCE ONLY, do not include the cuirass or arms in the output. Clean softly lit realistic game asset render, uniform pale gray backdrop, one single view, no people, mannequin, human skin, labels, text, panels or extra objects. Primary request: one open-face steel sallet helmet for the matching starter knight set, modestly rounded dome with a central shallow ridge, short protective rear neck skirt, small side cheek guards, broad completely open face aperture so a character's whole face is visible. No visor across eyes or mouth, no plume, horns, spikes or face within. Hollow dark padded interior visible inside the face opening. Front three-quarter view turned only 15 degrees, camera at head height, centered whole helmet visible with 12% empty margin. Realistic fitting proportions, restrained craftsmanship.",
+        "path": "doc/images/characters/modular_human_male_01/parts/helmet_plate.png",
+        "sha256": "2a2bacaea326b97b262b6abef14462b15ec53fc435cfeb9287973e275f9860c9"
+      }
+    ]
+  },
+  "meshy": [
+    {
+      "part_id": "top_plate",
+      "generation_date": "2026-09-29",
+      "service": "Meshy Image to 3D API",
+      "tier": "Premium",
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "model_type": "standard",
+        "geometry_resolution": "4k",
+        "should_remesh": true,
+        "topology": "triangle",
+        "target_polycount": 3000,
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "pose_mode": "",
+        "target_formats": [
+          "glb"
+        ]
+      },
+      "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+      "publication": "Private API generation; not posted to Meshy Community",
+      "task_id": "01a0ec08-2182-74d7-bfc3-9623f6294b5e",
+      "status": "SUCCEEDED",
+      "consumed_credits": 35,
+      "source": {
+        "path": "assets/modular_human_male_01/parts/plate_sources/top_plate.glb",
+        "bytes": 11702088,
+        "sha256": "ad6eda044a97e53ce5d00573b28b256e71c36ba1e2013f2503b87b5495f95775"
+      }
+    },
+    {
+      "part_id": "pants_plate",
+      "generation_date": "2026-09-29",
+      "service": "Meshy Image to 3D API",
+      "tier": "Premium",
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "model_type": "standard",
+        "geometry_resolution": "2k",
+        "should_remesh": true,
+        "topology": "triangle",
+        "target_polycount": 1300,
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "pose_mode": "",
+        "target_formats": [
+          "glb"
+        ]
+      },
+      "task_id": "01a0ebfb-a2f7-751a-84cf-0ab059b9aab3",
+      "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+      "publication": "Private API generation; not posted to Meshy Community",
+      "status": "SUCCEEDED",
+      "consumed_credits": 35,
+      "source": {
+        "path": "assets/modular_human_male_01/parts/plate_sources/pants_plate.glb",
+        "bytes": 11401004,
+        "sha256": "dd3d248be2569b3aaf3a30cca3af4db9e297ec4f5a6392bef91af020d0007636"
+      }
+    },
+    {
+      "part_id": "boots_plate",
+      "generation_date": "2026-09-29",
+      "service": "Meshy Image to 3D API",
+      "tier": "Premium",
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "model_type": "standard",
+        "geometry_resolution": "2k",
+        "should_remesh": true,
+        "topology": "triangle",
+        "target_polycount": 700,
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "pose_mode": "",
+        "target_formats": [
+          "glb"
+        ]
+      },
+      "task_id": "01a0ebfb-aa53-72fa-802a-ae6b3bf06995",
+      "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+      "publication": "Private API generation; not posted to Meshy Community",
+      "status": "SUCCEEDED",
+      "consumed_credits": 35,
+      "source": {
+        "path": "assets/modular_human_male_01/parts/plate_sources/boots_plate.glb",
+        "bytes": 10982452,
+        "sha256": "cf4ffe64abf03534d4137e57d78c81e7daee531cc3c1c9a57323f6a4486b7723"
+      }
+    },
+    {
+      "part_id": "gloves_plate",
+      "generation_date": "2026-09-29",
+      "service": "Meshy Image to 3D API",
+      "tier": "Premium",
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "model_type": "standard",
+        "geometry_resolution": "2k",
+        "should_remesh": true,
+        "topology": "triangle",
+        "target_polycount": 500,
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "pose_mode": "",
+        "target_formats": [
+          "glb"
+        ]
+      },
+      "task_id": "01a0ebfb-b1d8-7168-8224-5a4aba81b41d",
+      "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+      "publication": "Private API generation; not posted to Meshy Community",
+      "status": "SUCCEEDED",
+      "consumed_credits": 35,
+      "source": {
+        "path": "assets/modular_human_male_01/parts/plate_sources/gloves_plate.glb",
+        "bytes": 11691532,
+        "sha256": "052edd2423c1cb3e366bf0d2050d20effe92cee77b63c504f2d29ec504844891"
+      }
+    },
+    {
+      "part_id": "helmet_plate",
+      "generation_date": "2026-09-29",
+      "service": "Meshy Image to 3D API",
+      "tier": "Premium",
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "model_type": "standard",
+        "geometry_resolution": "2k",
+        "should_remesh": true,
+        "topology": "triangle",
+        "target_polycount": 800,
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "pose_mode": "",
+        "target_formats": [
+          "glb"
+        ]
+      },
+      "task_id": "01a0ebfb-b8c6-74db-b246-70691ddc4085",
+      "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+      "publication": "Private API generation; not posted to Meshy Community",
+      "status": "SUCCEEDED",
+      "consumed_credits": 35,
+      "source": {
+        "path": "assets/modular_human_male_01/parts/plate_sources/helmet_plate.glb",
+        "bytes": 11287380,
+        "sha256": "a95d8887c638a7bd8ab7fffabb25980762a47f3f794ad113b01324325fe5b762"
+      }
+    }
+  ],
+  "unused_meshy": [
+    {
+      "part_id": "top_plate",
+      "generation_date": "2026-09-29",
+      "service": "Meshy Image to 3D API",
+      "tier": "Premium",
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "model_type": "standard",
+        "geometry_resolution": "2k",
+        "should_remesh": true,
+        "topology": "triangle",
+        "target_polycount": 2100,
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "pose_mode": "",
+        "target_formats": [
+          "glb"
+        ]
+      },
+      "task_id": "01a0ebfb-9c46-76f2-a3ec-f018dd9552a2",
+      "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+      "publication": "Private API generation; not posted to Meshy Community",
+      "status": "SUCCEEDED",
+      "consumed_credits": 35,
+      "source_glb_sha256": "06f11a4c264e7dba136ed57b28e86c3abb9de0714dbd01b844e220f1c26da14a",
+      "usage": "Unused: rough upper-body surface; replaced with 4K geometry generation."
+    }
+  ],
+  "processing": {
+    "date": "2026-09-29",
+    "tools": [
+      "Project .venv Python / NumPy",
+      "Blender 5.2.0 LTS",
+      "tools/fit-modular-plate.py",
+      "tools/blender-scripts/pack_modular_plate.py",
+      "tools/prepare-modular-character.mjs"
+    ],
+    "body": {
+      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "bytes": 27423040,
+      "sha256": "3e776c750293a36f06d95145d3d7585b715b4cfcdc1dd65a2b9f38d37c27263d"
+    },
+    "rig_id": "human_male_01_mixamo_candidate_v2",
+    "method": "Fit to original 65-bone A pose, adjust gorget and wrist openings, align knees/ankles, fit five finger landmarks and mirror gauntlet; transfer body weights, rigid Head binding for helmet. Smooth normals, rebuild tangent space, compact GLB data, compress runtime textures. No geometry decimation after generation.",
+    "outputs": [
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/top_plate.glb",
+        "bytes": 11941912,
+        "sha256": "be78efe4efa48b89be05402d77548bc0de77e34c4c22e9b405e90467ae9bf059",
+        "triangles": 3101
+      },
+      {
+        "path": "client/public/models/characters/modular_male/top_plate.glb",
+        "bytes": 5006320,
+        "sha256": "4aff2f1d3bb95a40767921fe4f310a961a48a74e311e79da4ad1545ecc2fe5e4",
+        "triangles": 3101
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+        "bytes": 11508716,
+        "sha256": "ba4070aa1ccc5beaed57aaecf1f435fb21aa8b1b2eb2c256ef407868772270e2",
+        "triangles": 1354
+      },
+      {
+        "path": "client/public/models/characters/modular_male/pants_plate.glb",
+        "bytes": 4691916,
+        "sha256": "02bc5b92b81e0ac4fe0eb8b50e38fecd333c6c14f905679cc1e39896f4a6037e",
+        "triangles": 1354
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/boots_plate.glb",
+        "bytes": 11053696,
+        "sha256": "fa78ba1377908197351910214c0a870b2683d6a637353f679a6408d9693fedaf",
+        "triangles": 709
+      },
+      {
+        "path": "client/public/models/characters/modular_male/boots_plate.glb",
+        "bytes": 4434452,
+        "sha256": "5eb67e2b5cc6b94c2f9348f76f624d76125d394e16a2df69e3c1ef378f8bbb05",
+        "triangles": 709
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/gloves_plate.glb",
+        "bytes": 11834532,
+        "sha256": "9f533effca5d082daddc179971540a372a328c3caa95c934eb8092fbbffd7792",
+        "triangles": 1404
+      },
+      {
+        "path": "client/public/models/characters/modular_male/gloves_plate.glb",
+        "bytes": 4733604,
+        "sha256": "eeb91e0e5c8ea2805d0f70a168bf51657f157663b7d4851f3fb7705d81188d68",
+        "triangles": 1404
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/helmet_plate.glb",
+        "bytes": 11365672,
+        "sha256": "875b697f9dcd46fa082920a64d1a5a96d24e48d99120a0fbffe1792b2ef5542a",
+        "triangles": 837
+      },
+      {
+        "path": "client/public/models/characters/modular_male/helmet_plate.glb",
+        "bytes": 4500832,
+        "sha256": "9d31f13a8b16ba81dcd16ff391b6ec74118c9eb08ca4684bc3e5b77aa335b3d8",
+        "triangles": 837
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/plate_parts.blend",
+        "bytes": 84691552,
+        "sha256": "f502b233c2573b0d5020f91de49af2ab2253413af440ceefdc74ed9ab346d70c"
+      }
+    ],
+    "counts": {
+      "body": 13520,
+      "face_region": 1505,
+      "armor": 7405,
+      "iron_sword": 302,
+      "assembled_including_hidden": 21227,
+      "visible": 10282,
+      "optional_default_cape": 120
+    },
+    "licenses": "Inherited from original modular body/Mixamo and the Meshy paid-generation terms recorded above; local fitting adds no third-party asset.",
+    "ankle_correction": {
+      "date": "2026-09-29",
+      "affected_parts": [
+        "pants_plate",
+        "boots_plate"
+      ],
+      "method": "Recenter boot cuffs on each shin bone axis; taper greave ends inside the cuffs; use the same height-based Leg/Foot blend over both ankle overlaps. Preserve toes, soles and triangle counts.",
+      "additional_generation_credits": 0,
+      "visual_review": "Both ankles from front and rear: idle, combat idle, two walking phases, running and jumping."
+    },
+    "wrist_correction": {
+      "date": "2026-09-29",
+      "affected_parts": [
+        "top_plate",
+        "gloves_plate"
+      ],
+      "method": "Center and taper distal vambraces on each ForeArm–Hand axis. Align and flare gauntlet cuffs around that axis, blending back into the existing palm warp. Use the same axial-distance ForeArm/Hand weight profile throughout the overlap.",
+      "preserved": [
+        "Finger landmark positions",
+        "65-bone bind pose",
+        "Triangle counts",
+        "Corrected pants and boots"
+      ],
+      "additional_generation_credits": 0,
+      "visual_review": {
+        "sides": [
+          "Left",
+          "Right"
+        ],
+        "poses": [
+          "rest",
+          "idle1",
+          "walk",
+          "run",
+          "combat_idle",
+          "slash1"
+        ],
+        "views": [
+          "palm",
+          "back",
+          "inner side",
+          "outer side"
+        ],
+        "additional_wrist_rotation_radians": [
+          -0.7,
+          0.7
+        ]
+      },
+      "validation": {
+        "runtime_glb_errors": 0,
+        "runtime_glb_warnings": 0,
+        "animation_clips": 51,
+        "sampled_poses": 255,
+        "loader_tests_passed": 5
+      },
+      "cuff_shape_superseded_by": "wrist_cuff_rebuild"
+    },
+    "wrist_cuff_rebuild": {
+      "date": "2026-09-29",
+      "affected_parts": [
+        "gloves_plate"
+      ],
+      "method": "Remove three nonmanifold source flaps per hand, clip the old cuff at source Z = -0.5, stitch its ordered boundary to an elliptical steel cuff with a beveled rim, and close the inside with a recessed padded lining. Mirror the completed geometry and retain the shared ForeArm/Hand weights. Store part metadata on the mesh as well as its node for multi-material loading.",
+      "materials": [
+        "Original Meshy glove PBR",
+        "Locally authored polished steel cuff",
+        "Locally authored dark padded lining"
+      ],
+      "triangles_before": 1038,
+      "triangles_after": 1404,
+      "additional_generation_credits": 0,
+      "topology_validation": {
+        "open_edges": 0,
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": 0,
+        "degenerate_triangles": 0,
+        "closed_shells": 2,
+        "checked_during_regeneration": true
+      },
+      "visual_review": {
+        "sides": [
+          "Left",
+          "Right"
+        ],
+        "poses": [
+          "rest",
+          "idle1",
+          "walk",
+          "run",
+          "combat_idle",
+          "slash1"
+        ],
+        "additional_wrist_rotation_radians": [
+          -0.7,
+          0.7
+        ],
+        "views": "Side views and oblique views looking into both cuff openings"
+      },
+      "preserved": [
+        "Distal glove geometry and UVs",
+        "65-bone bind pose",
+        "All other fitted armor GLBs"
+      ],
+      "validation": {
+        "runtime_glb_errors": 0,
+        "runtime_glb_warnings": 0,
+        "animation_clips": 51,
+        "sampled_poses": 255,
+        "loader_tests_passed": 5,
+        "type_check": "passed",
+        "lint": "passed"
+      }
+    }
+  }
+}

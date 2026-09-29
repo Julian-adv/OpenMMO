@@ -46,9 +46,43 @@ export function skinnedParts(root: THREE.Object3D): THREE.SkinnedMesh[] {
 
 export interface ModularOutfit {
   hair: 'hair_crop' | 'hair_sidepart' | 'none'
-  top: 'linen' | 'leather' | 'none'
-  gloves: boolean
-  boots: boolean
+  top: 'linen' | 'leather' | 'plate' | 'none'
+  pants: 'cloth' | 'plate'
+  gloves: 'none' | 'leather' | 'plate'
+  boots: 'none' | 'leather' | 'plate'
+  helmet: 'none' | 'plate'
+}
+
+export const DEFAULT_MODULAR_OUTFIT: ModularOutfit = {
+  hair: 'hair_crop',
+  top: 'linen',
+  pants: 'cloth',
+  gloves: 'none',
+  boots: 'leather',
+  helmet: 'none',
+}
+
+export const KNIGHT_MODULAR_OUTFIT: ModularOutfit = {
+  hair: 'none',
+  top: 'plate',
+  pants: 'plate',
+  gloves: 'plate',
+  boots: 'plate',
+  helmet: 'plate',
+}
+
+export function modularOutfitParts(outfit: ModularOutfit): Set<string> {
+  const selected = new Set([`pants_${outfit.pants}`])
+  if (outfit.hair !== 'none' && outfit.helmet === 'none')
+    selected.add(outfit.hair)
+  if (outfit.top === 'linen' || outfit.top === 'leather')
+    selected.add('top_linen')
+  if (outfit.top === 'leather' || outfit.top === 'plate')
+    selected.add(`top_${outfit.top}`)
+  if (outfit.gloves !== 'none') selected.add(`gloves_${outfit.gloves}`)
+  if (outfit.boots !== 'none') selected.add(`boots_${outfit.boots}`)
+  if (outfit.helmet !== 'none') selected.add(`helmet_${outfit.helmet}`)
+  return selected
 }
 
 export function showModularOutfit(
@@ -64,31 +98,28 @@ export function showModularOutfit(
   if (outfit.top !== 'none') {
     for (const region of ['torso', 'upper_arms', 'forearms']) hidden.add(region)
   }
-  if (outfit.gloves) hidden.add('hands')
-  if (outfit.boots) hidden.add('feet')
+  if (outfit.top === 'plate') hidden.add('neck')
+  if (outfit.gloves !== 'none') hidden.add('hands')
+  if (outfit.boots !== 'none') hidden.add('feet')
   for (const mesh of body) mesh.visible = !hidden.has(region(mesh) ?? '')
-  const selected = new Set(['pants_cloth', outfit.hair])
-  if (outfit.top !== 'none') selected.add('top_linen')
-  if (outfit.top === 'leather') selected.add('top_leather')
-  if (outfit.gloves) selected.add('gloves_leather')
-  if (outfit.boots) selected.add('boots_leather')
+  const selected = modularOutfitParts(outfit)
   for (const [id, meshes] of parts)
     for (const mesh of meshes)
       mesh.visible =
         selected.has(id) &&
         !(
           id === 'pants_cloth' &&
-          outfit.boots &&
+          outfit.boots !== 'none' &&
           mesh.userData.region === 'cuffs'
         ) &&
         !(
           id === 'pants_cloth' &&
-          !outfit.boots &&
+          outfit.boots === 'none' &&
           mesh.userData.region === 'tucked_cuffs'
         ) &&
         !(
           id === 'pants_cloth' &&
-          outfit.top === 'leather' &&
+          (outfit.top === 'leather' || outfit.top === 'plate') &&
           mesh.userData.region === 'waist'
         ) &&
         !(

@@ -913,5 +913,45 @@
         "sha256": "835c63bcbf07cae8c3f7c7b257ff77a3446960bfc4294ba5daf3609a7670cdf5"
       }
     ]
+  },
+  "uniform_sword_grip": {
+    "date": "2026-09-29",
+    "source": "Local edit of the existing Mixamo animation rig and sword attachment; no new generated assets or credits.",
+    "clips": [
+      "idle1",
+      "walk",
+      "run",
+      "jump",
+      "combat_idle",
+      "slash1"
+    ],
+    "method": "Fit the four fingers to one handle surface, close the thumb around the index-side web, and bake the final right-hand rotations. Move the walking attachment rotation to RightHand to preserve the blade heading with a stable grip.",
+    "profile_record": "sword_grip in assets/modular_human_male_01/rigged_hand_tuned/hand-grips.json",
+    "outputs": [
+      {
+        "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+        "bytes": 873340,
+        "sha256": "773e16688af0bf205d2f56c6dce7b947a3d74ee6d55b1bb76a92a9d6b993b10a"
+      },
+      {
+        "path": "assets/modular_human_male_01/rigged_hand_tuned/hand-grips.json",
+        "bytes": 4490,
+        "sha256": "c94ab8d01ef40bd57c46e7beab045f1d86906a6d4013523227ee611d619151ab"
+      }
+    ],
+    "runtime_manifest": "client/public/models/characters/modular_male/manifest.json",
+    "validation": {
+      "unchanged_non_grip_tracks": 363,
+      "walk_blade_rotation_error_degrees_max": 0.005467647488348276,
+      "walk_sample_count": 241,
+      "animation_glbs_without_validator_issues": 10,
+      "runtime_clips": 51,
+      "runtime_poses": 255,
+      "preview_poses": 18,
+      "browser_errors": 0,
+      "tests_passed": 36,
+      "check": "passed",
+      "lint": "passed"
+    }
   }
 }

@@ -3,10 +3,14 @@ import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { loadGLB } from './gltfCache'
 import { MODULAR_MALE_DIRECTORY, MODULAR_MALE_MODEL_PATH } from './modelPaths'
+import type { CharacterClass } from '../network/networkTypes'
 import {
+  DEFAULT_MODULAR_OUTFIT,
+  KNIGHT_MODULAR_OUTFIT,
   bindModularPart,
   modularAnimationClips,
   modularRigId,
+  modularOutfitParts,
   modularSwordTracks,
   parseModularHandProfile,
   showModularOutfit,
@@ -14,36 +18,33 @@ import {
 } from './modularCharacter'
 
 export const MODULAR_SWORD_ATTACHMENT = 'modularSwordAttachment'
-const DEFAULT_PARTS = ['hair_crop', 'top_linen', 'pants_cloth', 'boots_leather']
-let maleModel: Promise<GLTF> | undefined
+const maleModels = new Map<string, Promise<GLTF>>()
 const animations = new Map<string, Promise<GLTF>>()
 
-export function loadCharacterModel(path: string): Promise<GLTF> {
+export function loadCharacterModel(
+  path: string,
+  characterClass?: CharacterClass
+): Promise<GLTF> {
   if (path !== MODULAR_MALE_MODEL_PATH) return loadGLB(path)
-  if (!maleModel) {
-    maleModel = Promise.all([
+  const outfit =
+    characterClass === 'knight' ? KNIGHT_MODULAR_OUTFIT : DEFAULT_MODULAR_OUTFIT
+  const key = outfit.top
+  let pending = maleModels.get(key)
+  if (!pending) {
+    const ids = [...modularOutfitParts(outfit)]
+    pending = Promise.all([
       loadGLB(path),
-      ...DEFAULT_PARTS.map((id) =>
-        loadGLB(`${MODULAR_MALE_DIRECTORY}/${id}.glb`)
-      ),
+      ...ids.map((id) => loadGLB(`${MODULAR_MALE_DIRECTORY}/${id}.glb`)),
     ])
       .then(([base, ...sources]) => {
         const scene = clone(base.scene) as THREE.Group
         scene.userData.modular_character = true
         const body = skinnedParts(scene)
         const parts = new Map(
-          DEFAULT_PARTS.map((id, i) => [
-            id,
-            bindModularPart(scene, sources[i].scene),
-          ])
+          ids.map((id, i) => [id, bindModularPart(scene, sources[i].scene)])
         )
-        showModularOutfit(body, parts, {
-          hair: 'hair_crop',
-          top: 'linen',
-          gloves: false,
-          boots: true,
-        })
-        for (const mesh of parts.get('hair_crop')!) {
+        showModularOutfit(body, parts, outfit)
+        for (const mesh of parts.get('hair_crop') ?? []) {
           const tint = (source: THREE.Material) => {
             const material = source.clone()
             if (material instanceof THREE.MeshStandardMaterial)
@@ -63,11 +64,12 @@ export function loadCharacterModel(path: string): Promise<GLTF> {
         return { ...base, scene, scenes: [scene] }
       })
       .catch((error) => {
-        maleModel = undefined
+        maleModels.delete(key)
         throw error
       })
+    maleModels.set(key, pending)
   }
-  return maleModel
+  return pending
 }
 
 export function loadCharacterAnimationPack(

@@ -1,6 +1,8 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_MODULAR_OUTFIT,
+  KNIGHT_MODULAR_OUTFIT,
   applyModularFingerPose,
   bindModularPart,
   modularAnimationClips,
@@ -46,6 +48,39 @@ const profile: ModularHandProfile = {
 }
 
 describe('modular outfit coverage', () => {
+  it('covers the neck and hides hair in plate armor, then restores them for cloth', () => {
+    const head = new THREE.SkinnedMesh()
+    head.userData.region = 'head'
+    const neck = new THREE.SkinnedMesh()
+    neck.userData.region = 'neck'
+    const ids = [
+      'hair_crop',
+      'top_linen',
+      'pants_cloth',
+      'boots_leather',
+      'top_plate',
+      'pants_plate',
+      'gloves_plate',
+      'boots_plate',
+      'helmet_plate',
+    ]
+    const parts = new Map(ids.map((id) => [id, [new THREE.SkinnedMesh()]]))
+    showModularOutfit([head, neck], parts, {
+      ...KNIGHT_MODULAR_OUTFIT,
+      hair: 'hair_crop',
+    })
+    expect(head.visible).toBe(true)
+    expect(neck.visible).toBe(false)
+    expect(parts.get('hair_crop')![0].visible).toBe(false)
+    expect(parts.get('top_linen')![0].visible).toBe(false)
+    expect(parts.get('pants_cloth')![0].visible).toBe(false)
+    expect(parts.get('helmet_plate')![0].visible).toBe(true)
+    showModularOutfit([head, neck], parts, DEFAULT_MODULAR_OUTFIT)
+    expect(neck.visible).toBe(true)
+    expect(parts.get('hair_crop')![0].visible).toBe(true)
+    expect(parts.get('helmet_plate')![0].visible).toBe(false)
+  })
+
   it('restores body and underclothes after changing equipment, including grouped primitives', () => {
     const region = (name: string) => {
       const mesh = new THREE.SkinnedMesh()
@@ -82,10 +117,11 @@ describe('modular outfit coverage', () => {
       ['hair_sidepart', [region('hair')]],
     ])
     showModularOutfit(body, parts, {
+      ...DEFAULT_MODULAR_OUTFIT,
       hair: 'hair_sidepart',
       top: 'leather',
-      gloves: true,
-      boots: true,
+      gloves: 'leather',
+      boots: 'leather',
     })
     expect(body.every((mesh) => !mesh.visible)).toBe(true)
     expect(shirt.map((mesh) => mesh.visible)).toEqual([false, true, true, true])
@@ -98,10 +134,11 @@ describe('modular outfit coverage', () => {
     expect(parts.get('hair_crop')![0].visible).toBe(false)
     expect(parts.get('hair_sidepart')![0].visible).toBe(true)
     showModularOutfit(body, parts, {
+      ...DEFAULT_MODULAR_OUTFIT,
       hair: 'hair_crop',
       top: 'linen',
-      gloves: false,
-      boots: false,
+      gloves: 'none',
+      boots: 'none',
     })
     expect(shirt.map((mesh) => mesh.visible)).toEqual([true, true, true, false])
     expect([
@@ -112,10 +149,11 @@ describe('modular outfit coverage', () => {
     ]).toEqual([false, true, true, false])
     expect(pants.map((mesh) => mesh.visible)).toEqual([true, true, true, false])
     showModularOutfit(body, parts, {
+      ...DEFAULT_MODULAR_OUTFIT,
       hair: 'none',
       top: 'none',
-      gloves: false,
-      boots: false,
+      gloves: 'none',
+      boots: 'none',
     })
     expect([
       torso.visible,
@@ -132,10 +170,11 @@ describe('modular outfit coverage', () => {
     ).toBe(true)
     for (const boots of [true, false, true]) {
       showModularOutfit(body, parts, {
+        ...DEFAULT_MODULAR_OUTFIT,
         hair: 'none',
         top: 'none',
-        gloves: false,
-        boots,
+        gloves: 'none',
+        boots: boots ? 'leather' : 'none',
       })
       expect(pants.map((mesh) => mesh.visible)).toEqual([
         true,

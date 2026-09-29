@@ -18,6 +18,11 @@ const parts = [
   "top_linen",
   "pants_cloth",
   "boots_leather",
+  "top_plate",
+  "pants_plate",
+  "gloves_plate",
+  "boots_plate",
+  "helmet_plate",
 ];
 const packs = [
   "locomotion",
@@ -42,7 +47,7 @@ const hash = (path) =>
     .digest("hex");
 const report = {
   source:
-    "Existing modular male sample and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md",
+    "Modular male body, knight plate parts and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md",
   inputs: {},
   outputs: {},
 };

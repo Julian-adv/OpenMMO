@@ -81,7 +81,7 @@
     const path = modelPath
     let cancelled = false
     Promise.all([
-      loadCharacterModel(path),
+      loadCharacterModel(path, characterClass),
       loadCharacterAnimationPack(path, CHARACTER_ANIMATION_PACK_PATHS.social),
     ])
       .then(([charGltf, socialGltf]) => {

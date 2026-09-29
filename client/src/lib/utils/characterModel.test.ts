@@ -57,6 +57,44 @@ describe('male player model selection', () => {
 describe.skipIf(
   !existsSync(resolve('public', MODULAR_MALE_MODEL_PATH.slice(1)))
 )('modular player assets', () => {
+  it('keeps knight plate separate from other classes and shares the animation rig', async () => {
+    const [knight, ranger] = await Promise.all([
+      loadCharacterModel(MODULAR_MALE_MODEL_PATH, 'knight'),
+      loadCharacterModel(MODULAR_MALE_MODEL_PATH, 'ranger'),
+    ])
+    expect(knight).not.toBe(ranger)
+    expect(await loadCharacterModel(MODULAR_MALE_MODEL_PATH, 'knight')).toBe(
+      knight
+    )
+    expect(await loadCharacterModel(MODULAR_MALE_MODEL_PATH, 'rogue')).toBe(
+      ranger
+    )
+    const meshes = skinnedParts(knight.scene)
+    const armor = meshes.filter((mesh) =>
+      mesh.userData.part_id?.endsWith('_plate')
+    )
+    expect(new Set(armor.map((mesh) => mesh.userData.part_id))).toEqual(
+      new Set([
+        'top_plate',
+        'pants_plate',
+        'boots_plate',
+        'gloves_plate',
+        'helmet_plate',
+      ])
+    )
+    expect(armor.every((mesh) => mesh.visible)).toBe(true)
+    expect(new Set(meshes.map((mesh) => mesh.skeleton)).size).toBe(1)
+    expect(meshes[0].skeleton.bones).toHaveLength(65)
+    expect(
+      meshes.some((mesh) => mesh.userData.region === 'head' && mesh.visible)
+    ).toBe(true)
+    expect(
+      skinnedParts(ranger.scene).some(
+        (mesh) => mesh.userData.part_id === 'top_linen' && mesh.visible
+      )
+    ).toBe(true)
+  })
+
   it('assembles clothes before exposure and isolates skeletons between players', async () => {
     const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
     expect(await loadCharacterModel(MODULAR_MALE_MODEL_PATH)).toBe(source)

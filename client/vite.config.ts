@@ -76,6 +76,11 @@ function modularCharacterPreview(): Plugin {
     'pants_cloth',
     'gloves_leather',
     'boots_leather',
+    'top_plate',
+    'pants_plate',
+    'gloves_plate',
+    'boots_plate',
+    'helmet_plate',
   ])
   return {
     name: 'modular-character-preview',

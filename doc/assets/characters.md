@@ -1,9 +1,21 @@
 # Character Assets
 
+## Modular Knight Plate — 기사 판금 세트 (2026-09-29)
+
+- 남성 모듈러 기사에 판금 갑옷·바지·신발·장갑·열린 헬멧을 기본 외형으로 연결했다.
+  생성·선택·게임·감정표현 미리보기가 같은 세트를 사용한다. 방어구 인벤토리 지급과 슬롯 연동은 별도다.
+- 원화: built-in ImageGen, **ChatGPT Pro 20x**. 형상·2K PBR: **Meshy Premium**, `meshy-7.1`.
+  모두 2026-09-29 제작. 채택 175크레딧, 미채택 상의까지 총 210크레딧.
+  Meshy 유료 생성물 이용 조건과 기존 몸체·Mixamo 리그 라이선스를 따른다.
+- 철검 포함 **21,227 triangles**, 표시 **10,282**, 기존 얼굴 영역 **1,505**.
+  기본 망토를 추가하면 120 triangles가 늘어난다. 상의 표면 개선과 손목 테두리·안감 보정으로 목표 상한을 넘겼다.
+- [파일·재현 명령·라이선스·검증](modular-knight-plate.md), [프롬프트·설정·작업 ID·해시](modular-knight-plate-sources.json).
+
 ## Modular Human Male 01 — 남성 플레이어 연결 (2026-09-29)
 
 - 사용자 요청으로 남성 플레이어 6직업의 생성·선택·게임 화면과 감정표현 미리보기에 적용했다.
-  공식 NPC와 여성은 기존 모델을 유지한다. 기본 복장은 갈색 크롭·천 셔츠·바지·부츠이며
+  공식 NPC와 여성은 기존 모델을 유지한다. 최초 기본 복장은 갈색 크롭·천 셔츠·바지·부츠였으며,
+  기사는 이후 위 판금 세트로 변경했다.
   방어구 인벤토리와 개인별 머리·눈 선택값 저장은 아직 연결하지 않았다.
 - 게임 파일: `client/public/models/characters/modular_male/`. 아래 기록의
   `parts/fitted/` 5파일과 `rigged_hand_tuned/animations.glb`, `hand-grips.json`,

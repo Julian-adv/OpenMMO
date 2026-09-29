@@ -335,9 +335,12 @@
   const modelPath =
     (npcPlayerId !== undefined ? getNpcModelPath(name) : undefined) ??
     getCharacterModelPath(characterClass, gender, npcPlayerId !== undefined)
-  const modelPromise = loadCharacterModel(modelPath).then((g) => {
-    activeGltfData = g
-  })
+  // svelte-ignore state_referenced_locally
+  const modelPromise = loadCharacterModel(modelPath, characterClass).then(
+    (g) => {
+      activeGltfData = g
+    }
+  )
   const locomotionPromise = loadCharacterAnimationPack(
     modelPath,
     CHARACTER_ANIMATION_PACK_PATHS.locomotion

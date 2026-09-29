@@ -1,8 +1,9 @@
 # Modular Human Male 01 — 최종 보관 파일
 
 2026-09-29 사용자 요청으로 중간 작업물과 검증·테스트 파일을 정리했다.
-`assets/modular_human_male_01/`에는 현재 채택한 파츠, 편집용 원본, 애니메이션과
-검 그립 설정 11파일만 보관한다. 게임과 미리보기에서 사용하는 경로는 유지한다.
+기본 파츠, 편집용 원본, 애니메이션과 검 그립 설정 11파일을 남겼다.
+같은 날 [기사 판금 세트](modular-knight-plate.md)의 파츠·입력 원본·편집 파일 11개를 추가했다.
+게임과 미리보기에서 사용하는 기존 경로는 유지한다.
 
 ## 파일 구성
 
@@ -19,6 +20,9 @@
 | `parts/fitted/character_parts.blend` | 최종 파츠 편집 원본; 24개 이미지 내장, 외부 라이브러리 없음 |
 | `rigged_hand_tuned/animations.glb` | 손가락·어깨·대기 자세·접지 보정을 저장한 7동작 |
 | `rigged_hand_tuned/hand-grips.json` | 동작별 검 부착 위치·회전과 손 자세 프로파일 |
+| `parts/fitted/*_plate.glb` | 기사 판금 갑옷·바지·장갑·신발·헬멧 5종 |
+| `parts/fitted/plate_parts.blend` | 한 리그와 내장 텍스처를 사용하는 판금 편집 원본 |
+| `parts/plate_sources/*_plate.glb` | 판금 재가공용 Meshy 입력 GLB 5종 |
 
 최종 파츠는 `human_male_01_mixamo_candidate_v2`의 같은 65본과 기준 자세를 사용한다.
 몸체는 13,520 triangles, 얼굴 지정 영역은 1,505 triangles다.
@@ -39,7 +43,7 @@ bash tools/fetch-assets.sh assets/modular_human_male_01/
 개발 서버의 `/modular-character-preview.html`에서 헤어·복장·색상과 동작을 확인한다.
 미리보기는 확정 애니메이션만 사용하며, 삭제한 이전 손 자세와의 비교 기능은 제공하지 않는다.
 
-게임용 압축 파츠 5개와 동작 9팩은 `client/public/models/characters/modular_male/`에 있다.
+게임용 압축 파츠 10개와 동작 9팩은 `client/public/models/characters/modular_male/`에 있다.
 재생성에는 위 최종 파일과 기존 공용 애니메이션 팩을 사용한다.
 
 ```sh
@@ -51,6 +55,24 @@ node tools/prepare-modular-character.mjs
 완성된 전용 애니메이션은 다시 리타게팅하거나 접지·손가락 보정을 중복 적용하지 않는다.
 검 부착 트랙은 `hand-grips.json`에서 가져와 캐릭터 믹서에서 함께 혼합한다.
 
+## 검 그립 보정 — 2026-09-29
+
+대기·걷기·달리기·점프·전투 대기·공격의 오른손을 같은 손잡이 둘레에 맞췄다.
+검지·새끼의 과도한 접힘을 풀고 중지·약지의 끝마디를 조정했으며,
+엄지는 검지 쪽 손잡이를 감싸도록 바꿨다. 손잡이 중심을 손바닥 앞쪽으로
+약 11mm, 손바닥 면에서 바깥쪽으로 약 14mm 옮겨 검지 안에 파묻히던 위치를 조정했다.
+기존 일반 대기의 별도 위치 보정은 새 공통 그립으로 대체했다.
+
+걷기의 검 부착 회전은 오른손목 트랙으로 옮겨 손 안에서 검이 따로 기울지 않게 했다.
+검의 기존 월드 회전과의 최대 차이는 241시점에서 0.006도 미만이다.
+최종 손가락 회전은 `animations.glb`에 저장하고 `hand-grips.json`의
+`sword_grip`에 기록했다. 게임용 9팩도 재생성했으며 추가 AI 생성·크레딧 사용은 없다.
+
+오른손 보정 이외의 원본 트랙 363개가 유지되는 것을 확인했다.
+애니메이션 GLB 10개는 glTF Validator 지적 0, 게임 로더는 51클립·255포즈 검사 통과다.
+제작 미리보기의 6동작·18포즈와 맨손·판금 장갑 확대를 확인했으며,
+관련 테스트 36개, `npm run check`, `npm run lint`도 통과했다.
+
 ## 출처와 정리 범위
 
 - 원화와 등 텍스처 보정: OpenAI Codex built-in ImageGen, **ChatGPT Pro 20x**, 2026-09-28.
@@ -61,10 +83,11 @@ node tools/prepare-modular-character.mjs
   원본 SHA-256은 `f774a2ca19699412a1ce45720c7d00b618ff3e168d6ca77a626feffa98da9a8c`다.
   라이선스는 [캐릭터 출처 기록](characters.md#license)을 따른다.
 - 실제 프롬프트·작업 ID·설정·원본 해시는 [출처 기록](modular-human-male-01-sources.json)에 모았다.
+- 추가 판금의 원화·Meshy 출처와 비용은 [판금 출처 기록](modular-knight-plate-sources.json)에 분리했다.
 - **[미사용]** Meshy 24본 리그 시험(5크레딧), 이전 정면 손바닥 리그, 재리깅 전 몸체,
   중복 GLB·FBX·OBJ·텍스처·ZIP, 비교 애니메이션, 렌더·스크린샷, 검증 JSON·로그,
   일회성 제작·검사 스크립트와 Blender 백업은 현재 폴더와 `assets.lock`에서 제거했다.
 
 삭제 전 기록은 HF `jake-song-openmmo/onlinerpg-assets`의
 `6f15946b4d61d860c9037775a6fbb3e6c303e1be` 리비전에 남아 있다.
-현재 `assets.lock`은 최종 11파일만 복원하므로 중간 작업물이 다시 내려오지 않는다.
+정리 당시 `assets.lock`은 기본 최종 11파일만 복원하도록 갱신했으며, 삭제한 중간 작업물은 복원 대상이 아니다.

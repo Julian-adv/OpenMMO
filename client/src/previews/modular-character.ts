@@ -1,12 +1,14 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import {
   computeSoleGroundOffset,
   createCharacterModelRoot,
 } from '../lib/utils/characterAnimationUtils'
 import {
   bindModularPart,
+  KNIGHT_MODULAR_OUTFIT,
   modularAnimationClips,
   modularRigId,
   modularSwordTracks,
@@ -33,8 +35,10 @@ const hairSelect = el<HTMLSelectElement>('hair')
 const hairColor = el<HTMLInputElement>('hair-color')
 const eyeColor = el<HTMLInputElement>('eye-color')
 const topSelect = el<HTMLSelectElement>('top')
-const gloves = el<HTMLInputElement>('gloves')
-const boots = el<HTMLInputElement>('boots')
+const pants = el<HTMLSelectElement>('pants')
+const gloves = el<HTMLSelectElement>('gloves')
+const boots = el<HTMLSelectElement>('boots')
+const helmet = el<HTMLSelectElement>('helmet')
 const pause = el<HTMLButtonElement>('pause')
 const sequence = el<HTMLButtonElement>('sequence')
 const clockLabel = el<HTMLOutputElement>('time')
@@ -116,6 +120,11 @@ async function main() {
     'pants_cloth',
     'gloves_leather',
     'boots_leather',
+    'top_plate',
+    'pants_plate',
+    'gloves_plate',
+    'boots_plate',
+    'helmet_plate',
   ]
   const [base, sources, animations, sword, profile] = await Promise.all([
     load('/__modular-character/parts/base.glb'),
@@ -190,8 +199,10 @@ async function main() {
     equipped = showModularOutfit(bodyMeshes, parts, {
       hair: hairSelect.value as ModularOutfit['hair'],
       top: topSelect.value as ModularOutfit['top'],
-      gloves: gloves.checked,
-      boots: boots.checked,
+      pants: pants.value as ModularOutfit['pants'],
+      gloves: gloves.value as ModularOutfit['gloves'],
+      boots: boots.value as ModularOutfit['boots'],
+      helmet: helmet.value as ModularOutfit['helmet'],
     })
     for (const id of ['hair_crop', 'hair_sidepart'])
       for (const mesh of parts.get(id)!)
@@ -202,8 +213,18 @@ async function main() {
             mat.color.set(hairColor.value)
     updateStats()
   }
-  for (const element of [hairSelect, topSelect, gloves, boots])
+  for (const element of [hairSelect, topSelect, pants, gloves, boots, helmet])
     element.onchange = dress
+  el('knight-outfit').onclick = () => {
+    const outfit = KNIGHT_MODULAR_OUTFIT
+    hairSelect.value = outfit.hair
+    topSelect.value = outfit.top
+    pants.value = outfit.pants
+    gloves.value = outfit.gloves
+    boots.value = outfit.boots
+    helmet.value = outfit.helmet
+    dress()
+  }
   hairColor.oninput = dress
   if (disposed) return
   const hand = body.getObjectByName('RightHand')
@@ -321,12 +342,10 @@ async function main() {
     play(route[0])
   }
   el('reattach').onclick = () => {
-    const replacement = bindModularPart(
-      body,
-      sources[ids.indexOf('pants_cloth')].scene
-    )
-    for (const mesh of parts.get('pants_cloth')!) mesh.removeFromParent()
-    parts.set('pants_cloth', replacement)
+    const id = `pants_${pants.value}`
+    const replacement = bindModularPart(body, sources[ids.indexOf(id)].scene)
+    for (const mesh of parts.get(id)!) mesh.removeFromParent()
+    parts.set(id, replacement)
     for (const mesh of replacement) mesh.frustumCulled = false
     dress()
     status.textContent = '하의를 다시 장착했습니다. 동작은 이어서 재생합니다.'
@@ -337,6 +356,14 @@ async function main() {
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  const room = new RoomEnvironment()
+  const pmrem = new THREE.PMREMGenerator(renderer)
+  const environment = pmrem.fromScene(room)
+  scene.environment = environment.texture
+  scene.environmentIntensity = 0.65
+  room.dispose()
+  pmrem.dispose()
+  cleanup.push(() => environment.dispose())
   host.append(renderer.domElement)
   cleanup.push(() => {
     renderer.dispose()
