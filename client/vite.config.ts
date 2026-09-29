@@ -81,6 +81,11 @@ function modularCharacterPreview(): Plugin {
     'gloves_plate',
     'boots_plate',
     'helmet_plate',
+    'top_barbarian',
+    'pants_barbarian',
+    'gloves_barbarian',
+    'boots_barbarian',
+    'helmet_barbarian',
   ])
   return {
     name: 'modular-character-preview',

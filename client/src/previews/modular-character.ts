@@ -8,6 +8,7 @@ import {
 } from '../lib/utils/characterAnimationUtils'
 import {
   bindModularPart,
+  BARBARIAN_MODULAR_OUTFIT,
   KNIGHT_MODULAR_OUTFIT,
   modularAnimationClips,
   modularRigId,
@@ -125,6 +126,11 @@ async function main() {
     'gloves_plate',
     'boots_plate',
     'helmet_plate',
+    'top_barbarian',
+    'pants_barbarian',
+    'gloves_barbarian',
+    'boots_barbarian',
+    'helmet_barbarian',
   ]
   const [base, sources, animations, sword, profile] = await Promise.all([
     load('/__modular-character/parts/base.glb'),
@@ -215,8 +221,7 @@ async function main() {
   }
   for (const element of [hairSelect, topSelect, pants, gloves, boots, helmet])
     element.onchange = dress
-  el('knight-outfit').onclick = () => {
-    const outfit = KNIGHT_MODULAR_OUTFIT
+  const wearOutfit = (outfit: ModularOutfit) => {
     hairSelect.value = outfit.hair
     topSelect.value = outfit.top
     pants.value = outfit.pants
@@ -225,6 +230,8 @@ async function main() {
     helmet.value = outfit.helmet
     dress()
   }
+  el('knight-outfit').onclick = () => wearOutfit(KNIGHT_MODULAR_OUTFIT)
+  el('barbarian-outfit').onclick = () => wearOutfit(BARBARIAN_MODULAR_OUTFIT)
   hairColor.oninput = dress
   if (disposed) return
   const hand = body.getObjectByName('RightHand')
@@ -455,7 +462,9 @@ async function main() {
     el('stats').textContent =
       `조합 ${total.toLocaleString()}삼각형 · 표시 ${visible.toLocaleString()} · 얼굴 1,505`
   }
-  dress()
+  if (new URLSearchParams(location.search).get('outfit') === 'barbarian')
+    wearOutfit(BARBARIAN_MODULAR_OUTFIT)
+  else dress()
   let last = performance.now()
   const render = (now: number) => {
     const dt = Math.min((now - last) / 1000, 0.05) * Number(speed.value)

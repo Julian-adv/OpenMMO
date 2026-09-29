@@ -1,5 +1,5 @@
 {
-  "source": "Modular male body, knight plate parts and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md",
+  "source": "Modular male body, knight and barbarian equipment and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md",
   "inputs": {
     "assets/modular_human_male_01/parts/fitted/base.glb": "2d2903c5de9ae524016dff8525fab2b06ed3c91deeb916bb8c42d491c938955a",
     "assets/modular_human_male_01/parts/fitted/hair_crop.glb": "6d754801583d1ae6147ac98cb55fac5237d5b43329e7273d5cb8977c91a0364a",
@@ -11,6 +11,11 @@
     "assets/modular_human_male_01/parts/fitted/gloves_plate.glb": "9f533effca5d082daddc179971540a372a328c3caa95c934eb8092fbbffd7792",
     "assets/modular_human_male_01/parts/fitted/boots_plate.glb": "60839b7c0b9b94cd97bb6463fa385c6b65443695e176028abe4c10cec7ec3650",
     "assets/modular_human_male_01/parts/fitted/helmet_plate.glb": "46ef09da43e0217720f98c95941d2a678fe1789a3d813855e0010443feb851ee",
+    "assets/modular_human_male_01/parts/fitted/top_barbarian.glb": "eae4eed05fdbb08e11dba3ba52072d4c2c8b8208ec7021558695935ef1c09e1d",
+    "assets/modular_human_male_01/parts/fitted/pants_barbarian.glb": "579185cecbeb70d9b986febc91d9a657917785329517ba8d4a771971c57fce80",
+    "assets/modular_human_male_01/parts/fitted/gloves_barbarian.glb": "6dbd8f4fbed0c463a07fa8b0b0b35ba221677f584b31eb082e84365fb18a272b",
+    "assets/modular_human_male_01/parts/fitted/boots_barbarian.glb": "a26c6a9d0d896f13eb8b1ba12557eade3cf790bcef15b670fdbd8f8c089bfb62",
+    "assets/modular_human_male_01/parts/fitted/helmet_barbarian.glb": "a01e6155007cda2447c87926fabf5ccc8187782d8005f861c4f98debebd8eee1",
     "assets/modular_human_male_01/rigged_hand_tuned/animations.glb": "773e16688af0bf205d2f56c6dce7b947a3d74ee6d55b1bb76a92a9d6b993b10a",
     "assets/modular_human_male_01/rigged_hand_tuned/hand-grips.json": "c94ab8d01ef40bd57c46e7beab045f1d86906a6d4013523227ee611d619151ab",
     "client/public/models/animations/locomotion.glb": "cfa79f5b5f82f3b26d0d0bc86e4293a919fbc28829a2c6192f19a4a488271da8",
@@ -34,6 +39,11 @@
     "gloves_plate.glb": "eeb91e0e5c8ea2805d0f70a168bf51657f157663b7d4851f3fb7705d81188d68",
     "boots_plate.glb": "8af7545df1054659e93176c4162c1f6e6c8ad40a19b477b01ff9ccf70d5fedc8",
     "helmet_plate.glb": "b3e723c432c67d01440f69519785cc97071c781644c07febd60a2d3707075179",
+    "top_barbarian.glb": "06689acbcd5e23a36f44f58d947a2871497c2f519be39b8ec2ab58340ebc7580",
+    "pants_barbarian.glb": "d9779e911d48a20deca1afabb2573a07ed8ef05fa88f198732cb57ea181fc760",
+    "gloves_barbarian.glb": "69db82f1d4fcc34535cab53d0915e19e1bdb8d754c4ca7166002d7817f739270",
+    "boots_barbarian.glb": "5a06154846a7fb28bbca43029c9e1185c83d6eade5d81c7f04376814259f9447",
+    "helmet_barbarian.glb": "75ade3f8b261c0ad026900368180ddc6bfdb2a5cc46aa3035e4f57308a0ff192",
     "animations/locomotion.glb": {
       "sha256": "3bd119edc5f175d7bad0346c4012a5c4a1f529475d1293bd2a3d9837aab31b3a",
       "clips": [

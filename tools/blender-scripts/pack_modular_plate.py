@@ -1,18 +1,25 @@
+import argparse
+import sys
 from pathlib import Path
 
 import bpy
 
 ROOT = Path(__file__).resolve().parents[2]
 PARTS = ROOT / 'assets/modular_human_male_01/parts/fitted'
+parser = argparse.ArgumentParser()
+parser.add_argument('--outfit', choices=['plate', 'barbarian'], default='plate')
+args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else [])
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=str(PARTS / 'base.glb'))
 rig = next(obj for obj in bpy.context.scene.objects if obj.type == 'ARMATURE')
 for obj in bpy.context.scene.objects:
     if obj.type == 'MESH':
-        obj.hide_render = obj.get('region') != 'head'
+        obj.hide_render = (obj.get('region') != 'head' if args.outfit == 'plate'
+                           else obj.get('region') == 'boot_ankles')
         obj.hide_set(obj.hide_render)
 
-for name in ['top_plate', 'pants_plate', 'boots_plate', 'gloves_plate', 'helmet_plate']:
+for slot in ['top', 'pants', 'boots', 'gloves', 'helmet']:
+    name = f'{slot}_{args.outfit}'
     before = set(bpy.data.objects)
     bpy.ops.import_scene.gltf(filepath=str(PARTS / f'{name}.glb'))
     imported = set(bpy.data.objects) - before
@@ -36,4 +43,4 @@ for obj in list(bpy.data.objects):
         bpy.data.objects.remove(obj, do_unlink=True)
 bpy.ops.file.pack_all()
 bpy.context.preferences.filepaths.save_version = 0
-bpy.ops.wm.save_as_mainfile(filepath=str(PARTS / 'plate_parts.blend'))
+bpy.ops.wm.save_as_mainfile(filepath=str(PARTS / f'{args.outfit}_parts.blend'))

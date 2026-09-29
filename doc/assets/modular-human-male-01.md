@@ -5,6 +5,10 @@
 같은 날 [기사 판금 세트](modular-knight-plate.md)의 파츠·입력 원본·편집 파일 11개를 추가했다.
 게임과 미리보기에서 사용하는 기존 경로는 유지한다.
 
+2026-09-30 [바바리안 복장](modular-barbarian.md)의 5종 파츠와
+`barbarian_parts.blend`, `parts/barbarian_sources/`의 생성 원본을 추가했다.
+같은 리그를 사용하며 제작 미리보기에서 부위별로 교체한다.
+
 ## 파일 구성
 
 | 경로 (`assets/modular_human_male_01/` 기준) | 용도 |

@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import {
+  BARBARIAN_MODULAR_OUTFIT,
   DEFAULT_MODULAR_OUTFIT,
   KNIGHT_MODULAR_OUTFIT,
   applyModularFingerPose,
@@ -48,6 +49,44 @@ const profile: ModularHandProfile = {
 }
 
 describe('modular outfit coverage', () => {
+  it('preserves exposed skin for barbarian armor and restores coverage when changing sets', () => {
+    const regions = [
+      'head',
+      'neck',
+      'torso',
+      'upper_arms',
+      'forearms',
+      'hands',
+      'legs',
+      'ankles',
+      'feet',
+      'boot_ankles',
+    ]
+    const body = regions.map((region) => {
+      const mesh = new THREE.SkinnedMesh()
+      mesh.userData.region = region
+      return mesh
+    })
+    const ids = ['helmet', 'top', 'pants', 'boots', 'gloves'].flatMap((slot) =>
+      ['barbarian', 'plate'].map((style) => `${slot}_${style}`)
+    )
+    const parts = new Map(ids.map((id) => [id, [new THREE.SkinnedMesh()]]))
+    showModularOutfit(body, parts, KNIGHT_MODULAR_OUTFIT)
+    expect(
+      body.filter((mesh) => mesh.visible).map((mesh) => mesh.userData.region)
+    ).toEqual(['head'])
+    showModularOutfit(body, parts, BARBARIAN_MODULAR_OUTFIT)
+    expect(
+      body.filter((mesh) => mesh.visible).map((mesh) => mesh.userData.region)
+    ).toEqual(regions.slice(0, -1))
+    for (const [id, meshes] of parts)
+      expect(meshes[0].visible).toBe(id.endsWith('_barbarian'))
+    showModularOutfit(body, parts, KNIGHT_MODULAR_OUTFIT)
+    expect(
+      body.filter((mesh) => mesh.visible).map((mesh) => mesh.userData.region)
+    ).toEqual(['head'])
+  })
+
   it('covers the neck and hides hair in plate armor, then restores them for cloth', () => {
     const head = new THREE.SkinnedMesh()
     head.userData.region = 'head'

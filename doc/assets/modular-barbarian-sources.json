@@ -1,0 +1,448 @@
+{
+  "generation_date": "2026-09-30",
+  "reference": {
+    "path": "client/public/character_concepts/barbarian.webp",
+    "source_record": "doc/assets/characters.md#other-classes"
+  },
+  "image_generation": {
+    "service": "OpenAI Codex built-in ImageGen",
+    "tier": "ChatGPT Pro 20x",
+    "license": "OpenAI generated output terms",
+    "parts": [
+      {
+        "id": "helmet_barbarian",
+        "prompt": "Use case: stylized-concept. Asset type: isolated modular equipment reference for image-to-3D reconstruction for a realistic fantasy RPG. Input image is the exact design and material reference: preserve its worn engraved silver steel, warm brown leather, tawny fur, and proportions. Output only the requested empty wearable equipment, with no person, skin, hair, mannequin or body filling the openings. Uniform pale gray background, soft neutral studio illumination, sharp readable surfaces, no hard shadows, text, labels, panels or extra props. One single near-orthographic front view, whole object centered with generous margin. Create ONLY the barbarian horned helmet from the reference. Match the upward and outward sweeping pair of natural brown horns with carved bands, weathered silver steel dome with engraved central ridge, small red forehead gemstone, angular steel cheek guards and completely open eye/nose/mouth area. Hollow dark interior; no head inside. Front view with a very slight elevated angle so the helmet is clearly a hollow wearable shell. Preserve the reference shape closely; no neck armor, hair or shoulders. Natural adult male head fit.",
+        "path": "doc/images/characters/modular_human_male_01/parts/helmet_barbarian.png",
+        "sha256": "5203680c1e83c388069767e6f985d38ebb35e99397c777fcea826b418526fd81"
+      },
+      {
+        "id": "top_barbarian",
+        "prompt": "Use case: stylized-concept. Asset type: isolated modular equipment reference for image-to-3D reconstruction for a realistic fantasy RPG. Input image is the exact design and material reference: preserve its worn engraved silver steel, warm brown leather, tawny fur, and proportions. Output only the requested empty wearable equipment, with no person, skin, hair, mannequin or body filling the openings. Uniform pale gray background, soft neutral studio illumination, sharp readable surfaces, no hard shadows, text, labels, panels or extra props. One single near-orthographic front view, whole object centered with generous margin. Create ONLY the shoulder-and-chest harness assembly from the reference: a matching pair of layered engraved silver steel pauldrons, short brown leather shoulder straps connected to the V-shaped decorated narrow chest strap and central dark teardrop-shaped metal pendant. This is one wearable upper-body item holding both shoulder pieces together with straps; the entire muscular chest and abdomen would remain exposed. Add only a minimal practical brown leather rear connecting strap to hold the assembly. Shape the pauldrons for a neutral A pose with arms lowered about 40 degrees from horizontal. Symmetric front view, empty open space beneath and between the shoulders, no shirt, cuirass, sleeves, arms, abdomen or torso surface. Match the detailed reference pauldrons and sternum ornament faithfully.",
+        "path": "doc/images/characters/modular_human_male_01/parts/top_barbarian.png",
+        "sha256": "f1364ef5a801cc4e78e1a397cb9b652f1bc923727a021e5443ac55fee1ef6bb8"
+      },
+      {
+        "id": "pants_barbarian",
+        "prompt": "Use case: stylized-concept. Asset type: isolated modular equipment reference for image-to-3D reconstruction for a realistic fantasy RPG. Input image is the exact design and material reference: preserve its worn engraved silver steel, warm brown leather, tawny fur, and proportions. Output only the requested empty wearable equipment, with no person, skin, hair, mannequin or body filling the openings. Uniform pale gray background, soft neutral studio illumination, sharp readable surfaces, no hard shadows, text, labels, panels or extra props. One single near-orthographic front view, whole object centered with generous margin. Create ONLY the belt-and-fur-loincloth lower garment from the reference. Wide studded warm brown leather waist belt with large round engraved silver star/knotwork buckle, thick tawny fur rim, tapering pointed brown scaled/leather front apron edged by tawny fur, short side fur flaps and hanging leather ties. It is a short wraparound hip garment with a matching modest back panel; thigh sides remain open. Preserve the silhouette of the reference; no trousers, legs, skin, body, mannequin or boots. Hollow oval waist opening visible subtly from a slightly elevated front view. The complete connected belt and loincloth are one item. Do not include the upper body harness.",
+        "path": "doc/images/characters/modular_human_male_01/parts/pants_barbarian.png",
+        "sha256": "c77922788b84f010b4b14a629c27ff28e57b610d7fe96034692671267d8a02b7"
+      },
+      {
+        "id": "boots_barbarian",
+        "prompt": "Use case: precise-object-edit. This image is the edit target. Make a clean image-to-3D reference of the SAME barbarian shin wrap, retaining its silver forked vertical reinforcement, brown wrapped leather, silver ankle rim and tawny fur cuff. CHANGE ONLY: replace all background transparency or dark gradients with absolutely solid opaque light gray; make the fur cuff a thick continuous solid tawny fur volume with short broad shaggy tufts, not thin transparent individual hairs. Strong readable chunky fur silhouette all around the top rim. Keep the SINGLE wrap upright and hollow, straight shin tube; the front opening faces camera, top and bottom are clearly open, with NO end caps, feet, soles, body or extra objects. Direct front three-quarter view turned only 8 degrees with minimal perspective. Full object centered with 12% margin. Fur cuff is essential and occupies the upper quarter. Soft diffuse neutral lighting, no text. Aspect ratio of complete greave about 2.5 height to 1 width.",
+        "path": "doc/images/characters/modular_human_male_01/parts/boots_barbarian.png",
+        "edit_reference": "doc/images/characters/modular_human_male_01/parts/boots_barbarian-unused-v1.png",
+        "sha256": "a00b54a0abf4a2aa0ca0e93bde2db811d05d8fd5dc340de3e3f0b265c46fbe89"
+      },
+      {
+        "id": "gloves_barbarian",
+        "prompt": "Use case: precise-object-edit. This image is the edit target. Make a clean image-to-3D reference of the SAME barbarian brown leather forearm bracer, preserving the wide engraved silver upper border, central shield-shaped engraved steel outer plate, narrow silver wrist band and leather wraps. CHANGE ONLY: make it shorter and sturdier, total height about 2 times the widest width. Replace all transparency or gradients in the background with completely solid opaque light gray. Exactly ONE upright anatomically tapered hollow forearm cuff, broad elbow opening up, narrower wrist opening down. Show decorated outer face directly forward, turned just 8 degrees to reveal thickness. The openings are clearly EMPTY, no end caps, skin, arm, hand, fingers, mannequin, ropes, dangling loops, second object, text or labels. Continuous solid leather tube with crisp visible metal detailing, evenly lit neutral studio image. Full object centered with 12% margin.",
+        "path": "doc/images/characters/modular_human_male_01/parts/gloves_barbarian.png",
+        "edit_reference": "doc/images/characters/modular_human_male_01/parts/gloves_barbarian-unused-v1.png",
+        "sha256": "b6dbbfef11dc1bcf552c6c7ddecc3860c65b362ff60fe479fe384f8b187f7862"
+      }
+    ],
+    "unused_parts": [
+      {
+        "id": "boots_barbarian",
+        "prompt": "Use case: stylized-concept. Asset type: isolated modular equipment reference for image-to-3D reconstruction for a realistic fantasy RPG. Input image is the exact design and material reference: preserve its worn engraved silver steel, warm brown leather, tawny fur, and proportions. Output only the requested empty wearable equipment, with no person, skin, hair, mannequin or body filling the openings. Uniform pale gray background, soft neutral studio illumination, sharp readable surfaces, no hard shadows, text, labels, panels or extra props. One single near-orthographic front view, whole object centered with generous margin. Create ONLY ONE of the open-foot shin/ankle wraps from the reference, to be mirrored later for the pair. A tapered hollow calf-high brown leather greave with tawny fur around its wide upper rim, wraparound leather straps and silver rivets, narrow vertical silver central reinforcing strip ending in the lower steel rim, forked pointed silver decoration at the upper front. Match the reference exactly. It stops above the bare foot: no shoe sole, toe cap, foot, toes, leg, mannequin or skin. Clearly open empty top AND bottom, wearable tubular shin wrap. Near-orthographic front view turned only 10 degrees to show the leather depth and open upper rim. Exactly one greave.",
+        "path": "doc/images/characters/modular_human_male_01/parts/boots_barbarian-unused-v1.png",
+        "sha256": "128838d1dac1bc344042e47cdfdea957088159a95307ad7be27137b2a52cafa7",
+        "unused": true,
+        "file_status": "removed during intermediate cleanup on 2026-09-30; provenance retained"
+      },
+      {
+        "id": "gloves_barbarian",
+        "prompt": "Use case: stylized-concept. Asset type: isolated modular equipment reference for image-to-3D reconstruction for a realistic fantasy RPG. Input image is the exact design and material reference: preserve its worn engraved silver steel, warm brown leather, tawny fur, and proportions. Output only the requested empty wearable equipment, with no person, skin, hair, mannequin or body filling the openings. Uniform pale gray background, soft neutral studio illumination, sharp readable surfaces, no hard shadows, text, labels, panels or extra props. One single near-orthographic front view, whole object centered with generous margin. Create ONLY ONE of the open-handed forearm/wrist bracers from the reference, to be mirrored later for the pair. Brown wrapped leather tapered hollow forearm cuff reinforced with weathered engraved silver steel shield-shaped outer plate, rolled silver borders and small rivets. Wider at the elbow end and narrower at the wrist. About two adult hand lengths long as in the reference. Match the original engraved tribal linework and silver/leather proportions. No fingers, glove hand, arm, skin, mannequin, spikes or elbow cap. Front view of the outer decorated face, elbow end up and wrist end down, turned only 10 degrees so hollow openings and tube depth are readable. Exactly one bracer.",
+        "path": "doc/images/characters/modular_human_male_01/parts/gloves_barbarian-unused-v1.png",
+        "sha256": "214061a15e99f2270a8e4d677f70fbb88d1586024757eda6830fe0e351df91a3",
+        "unused": true,
+        "file_status": "removed during intermediate cleanup on 2026-09-30; provenance retained"
+      }
+    ],
+    "textures": [
+      {
+        "id": "barbarian_leather",
+        "prompt": "Use case: stylized-concept. Asset type: seamless square albedo texture for a realistic fantasy RPG barbarian's worn brown leather equipment. Generate only a FLAT CLOSE-UP MATERIAL SWATCH filling the entire square edge to edge: medium-dark chestnut brown worn leather, dense fine irregular pores and subtle fine creases at a consistent small scale, restrained natural color variation, slightly weathered supple hide. No large folds, wood grain, fur, cloth weave, stitches, border, seams, metal, studs, buckles, straps, objects, labels, lighting highlights or shadows. Orthographic flat material surface, diffuse neutral even illumination. Seamless tileable on all four sides. High-frequency realistic leather texture at a scale of a 20 cm square.",
+        "path": "doc/images/characters/modular_human_male_01/parts/barbarian_leather.png",
+        "sha256": "466890078fbf5bf623814e5362b4b03781e7ec3faf96b7471f67905352535499"
+      },
+      {
+        "id": "barbarian_fur",
+        "prompt": "Use case: stylized-concept. Asset type: seamless square albedo texture for a realistic fantasy RPG barbarian's tawny fur cuffs. Generate only a FLAT CLOSE-UP MATERIAL SWATCH filling the entire square edge to edge: dense layered tawny brown and warm beige animal fur, mostly medium brown roots and small beige tips, short thick overlapping natural tufts with fine hair strands. Fur flows predominantly downward with gently varying tuft directions. Keep the hair texture fine at a consistent scale like a 20 cm square of hide. No white patches, no large sweeping waves, no wood grain, no leather, metal, straps, buttons, studs, seams, border, objects, text or labels. Uniform diffuse neutral lighting without directional shadow or highlights. Seamless tileable left-right and top-bottom. Realistic game material albedo, not an object photograph.",
+        "path": "doc/images/characters/modular_human_male_01/parts/barbarian_fur.png",
+        "sha256": "64a9bf075a8443f9f3c55fa1d7f58f64a5f99f598dc0e4aa155de5e29894ade5"
+      }
+    ]
+  },
+  "meshy": [
+    {
+      "part_id": "helmet_barbarian",
+      "generation_date": "2026-09-30",
+      "service": "Meshy Image to 3D API",
+      "tier": "Premium",
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "model_type": "standard",
+        "geometry_resolution": "4k",
+        "should_remesh": true,
+        "topology": "triangle",
+        "target_polycount": 1400,
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "pose_mode": "",
+        "target_formats": [
+          "glb"
+        ]
+      },
+      "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+      "publication": "Private API generation; not posted to Meshy Community",
+      "task_id": "01a0edb8-81e1-757d-a36e-090307085df4",
+      "status": "SUCCEEDED",
+      "progress": 100,
+      "consumed_credits": 35,
+      "source": {
+        "path": "assets/modular_human_male_01/parts/barbarian_sources/helmet_barbarian.glb",
+        "bytes": 12689492,
+        "sha256": "dda94e18f478a9d9845e6ff5a4f4c440680c080cb22b1d6639d6588c7e27dc2e"
+      }
+    },
+    {
+      "part_id": "top_barbarian",
+      "generation_date": "2026-09-30",
+      "service": "Meshy Image to 3D API",
+      "tier": "Premium",
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "model_type": "standard",
+        "geometry_resolution": "4k",
+        "should_remesh": true,
+        "topology": "triangle",
+        "target_polycount": 1800,
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "pose_mode": "",
+        "target_formats": [
+          "glb"
+        ]
+      },
+      "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+      "publication": "Private API generation; not posted to Meshy Community",
+      "task_id": "01a0edb8-8a7e-743a-a18b-910f96f35187",
+      "status": "SUCCEEDED",
+      "progress": 100,
+      "consumed_credits": 35,
+      "source": {
+        "path": "assets/modular_human_male_01/parts/barbarian_sources/top_barbarian.glb",
+        "bytes": 11661908,
+        "sha256": "ad771e885ea576e757d81b9059479ea743b3a2b934b03ca91af90d93d22533ef"
+      }
+    },
+    {
+      "part_id": "pants_barbarian",
+      "generation_date": "2026-09-30",
+      "service": "Meshy Image to 3D API",
+      "tier": "Premium",
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "model_type": "standard",
+        "geometry_resolution": "4k",
+        "should_remesh": true,
+        "topology": "triangle",
+        "target_polycount": 1800,
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "pose_mode": "",
+        "target_formats": [
+          "glb"
+        ]
+      },
+      "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+      "publication": "Private API generation; not posted to Meshy Community",
+      "task_id": "01a0edb8-9277-70e5-88be-ce1fde787627",
+      "status": "SUCCEEDED",
+      "progress": 100,
+      "consumed_credits": 35,
+      "source": {
+        "path": "assets/modular_human_male_01/parts/barbarian_sources/pants_barbarian.glb",
+        "bytes": 11080472,
+        "sha256": "cf64af53269fa827b38ceb4e1fdad2a35d8851c7cf73c3a1f3e87c10f52b2866"
+      }
+    },
+    {
+      "part_id": "boots_barbarian",
+      "generation_date": "2026-09-30",
+      "service": "Meshy Image to 3D API",
+      "tier": "Premium",
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "model_type": "standard",
+        "geometry_resolution": "4k",
+        "should_remesh": true,
+        "topology": "triangle",
+        "target_polycount": 900,
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "pose_mode": "",
+        "target_formats": [
+          "glb"
+        ]
+      },
+      "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+      "publication": "Private API generation; not posted to Meshy Community",
+      "task_id": "01a0edbe-dbe3-7320-b6a8-3fbbee4068fe",
+      "status": "SUCCEEDED",
+      "progress": 100,
+      "consumed_credits": 35,
+      "source": {
+        "path": "assets/modular_human_male_01/parts/barbarian_sources/boots_barbarian.glb",
+        "bytes": 11872588,
+        "sha256": "2f21c0db9e1705d9a8244700df25ef7037669940b9c2c88f791affbca1916895"
+      }
+    },
+    {
+      "part_id": "gloves_barbarian",
+      "generation_date": "2026-09-30",
+      "service": "Meshy Image to 3D API",
+      "tier": "Premium",
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "model_type": "standard",
+        "geometry_resolution": "4k",
+        "should_remesh": true,
+        "topology": "triangle",
+        "target_polycount": 700,
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "pose_mode": "",
+        "target_formats": [
+          "glb"
+        ]
+      },
+      "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+      "publication": "Private API generation; not posted to Meshy Community",
+      "task_id": "01a0edbe-e4c1-7541-bad3-4eab32b89302",
+      "status": "SUCCEEDED",
+      "progress": 100,
+      "consumed_credits": 35,
+      "source": {
+        "path": "assets/modular_human_male_01/parts/barbarian_sources/gloves_barbarian.glb",
+        "bytes": 12527696,
+        "sha256": "8c610a6276166909c66cc9a81ededd357151525f43c5a1a679d7b726963a036a"
+      }
+    }
+  ],
+  "unused_generations": [
+    {
+      "part_id": "boots_barbarian",
+      "generation_date": "2026-09-30",
+      "service": "Meshy Image to 3D API",
+      "tier": "Premium",
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "model_type": "standard",
+        "geometry_resolution": "4k",
+        "should_remesh": true,
+        "topology": "triangle",
+        "target_polycount": 650,
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "pose_mode": "",
+        "target_formats": [
+          "glb"
+        ]
+      },
+      "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+      "publication": "Private API generation; not posted to Meshy Community",
+      "task_id": "01a0edb8-9bbf-713d-8589-9bda6592b185",
+      "status": "SUCCEEDED",
+      "progress": 100,
+      "consumed_credits": 35,
+      "source": {
+        "path": "assets/modular_human_male_01/parts/barbarian_sources/boots_barbarian-unused-v1.glb",
+        "bytes": 11607484,
+        "sha256": "65da28fbf50d1d3eb3dca09543f8836c6f28883f30cfd7004688b1bcc5e156fd",
+        "file_status": "removed during intermediate cleanup on 2026-09-30; provenance retained"
+      },
+      "unused": true,
+      "reason": "Missing fur cuff"
+    },
+    {
+      "part_id": "gloves_barbarian",
+      "generation_date": "2026-09-30",
+      "service": "Meshy Image to 3D API",
+      "tier": "Premium",
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "model_type": "standard",
+        "geometry_resolution": "4k",
+        "should_remesh": true,
+        "topology": "triangle",
+        "target_polycount": 650,
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "pose_mode": "",
+        "target_formats": [
+          "glb"
+        ]
+      },
+      "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+      "publication": "Private API generation; not posted to Meshy Community",
+      "task_id": "01a0edb8-a5f1-777e-b2eb-390330368d07",
+      "status": "SUCCEEDED",
+      "progress": 100,
+      "consumed_credits": 35,
+      "source": {
+        "path": "assets/modular_human_male_01/parts/barbarian_sources/gloves_barbarian-unused-v1.glb",
+        "bytes": 10196292,
+        "sha256": "12a1299a50735fd0388e873ce95ca09ddcaa56d3cc5eda5124c721c7705eac57",
+        "file_status": "removed during intermediate cleanup on 2026-09-30; provenance retained"
+      },
+      "unused": true,
+      "reason": "Overly elongated malformed bracer"
+    }
+  ],
+  "local_processing": {
+    "shared_rig": "human_male_01_mixamo_candidate_v2",
+    "fit_script": "tools/fit-modular-barbarian.py",
+    "blend_command": "blender -b --python-exit-code 1 -P tools/blender-scripts/pack_modular_plate.py -- --outfit barbarian",
+    "game_command": "node tools/prepare-modular-character.mjs --parts-only",
+    "additional_geometry": [
+      "Mirrored pairs",
+      "Rear loincloth panel",
+      "Body-derived leather lining",
+      "Rear belt",
+      "Body-fitted leather sleeves and greave liners",
+      "Tawny fur cuff rings"
+    ],
+    "tile_texture_size": [
+      1024,
+      1024
+    ],
+    "tile_resampling": "FFmpeg Lanczos; 1254px generated originals retained",
+    "outputs": {
+      "assets/modular_human_male_01/parts/fitted/helmet_barbarian.glb": {
+        "sha256": "a01e6155007cda2447c87926fabf5ccc8187782d8005f861c4f98debebd8eee1",
+        "bytes": 12802820
+      },
+      "client/public/models/characters/modular_male/helmet_barbarian.glb": {
+        "sha256": "75ade3f8b261c0ad026900368180ddc6bfdb2a5cc46aa3035e4f57308a0ff192",
+        "bytes": 5387940
+      },
+      "assets/modular_human_male_01/parts/fitted/top_barbarian.glb": {
+        "sha256": "eae4eed05fdbb08e11dba3ba52072d4c2c8b8208ec7021558695935ef1c09e1d",
+        "bytes": 11822936
+      },
+      "client/public/models/characters/modular_male/top_barbarian.glb": {
+        "sha256": "06689acbcd5e23a36f44f58d947a2871497c2f519be39b8ec2ab58340ebc7580",
+        "bytes": 5099440
+      },
+      "assets/modular_human_male_01/parts/fitted/pants_barbarian.glb": {
+        "sha256": "579185cecbeb70d9b986febc91d9a657917785329517ba8d4a771971c57fce80",
+        "bytes": 13988984
+      },
+      "client/public/models/characters/modular_male/pants_barbarian.glb": {
+        "sha256": "d9779e911d48a20deca1afabb2573a07ed8ef05fa88f198732cb57ea181fc760",
+        "bytes": 5335008
+      },
+      "assets/modular_human_male_01/parts/fitted/boots_barbarian.glb": {
+        "sha256": "a26c6a9d0d896f13eb8b1ba12557eade3cf790bcef15b670fdbd8f8c089bfb62",
+        "bytes": 17380804
+      },
+      "client/public/models/characters/modular_male/boots_barbarian.glb": {
+        "sha256": "5a06154846a7fb28bbca43029c9e1185c83d6eade5d81c7f04376814259f9447",
+        "bytes": 6286476
+      },
+      "assets/modular_human_male_01/parts/fitted/gloves_barbarian.glb": {
+        "sha256": "6dbd8f4fbed0c463a07fa8b0b0b35ba221677f584b31eb082e84365fb18a272b",
+        "bytes": 15340628
+      },
+      "client/public/models/characters/modular_male/gloves_barbarian.glb": {
+        "sha256": "69db82f1d4fcc34535cab53d0915e19e1bdb8d754c4ca7166002d7817f739270",
+        "bytes": 6073356
+      },
+      "assets/modular_human_male_01/parts/fitted/barbarian_parts.blend": {
+        "sha256": "2447aa4667b4b063f51d48e3eb4a2a1d11f1219bc9d7c271f12957e40d48ce6d",
+        "bytes": 98034670
+      }
+    }
+  },
+  "validation": {
+    "glb": {
+      "top_barbarian": {
+        "numErrors": 0,
+        "numWarnings": 0,
+        "numInfos": 0,
+        "numHints": 0,
+        "messages": [],
+        "truncated": false
+      },
+      "pants_barbarian": {
+        "numErrors": 0,
+        "numWarnings": 0,
+        "numInfos": 0,
+        "numHints": 0,
+        "messages": [],
+        "truncated": false
+      },
+      "gloves_barbarian": {
+        "numErrors": 0,
+        "numWarnings": 0,
+        "numInfos": 0,
+        "numHints": 0,
+        "messages": [],
+        "truncated": false
+      },
+      "boots_barbarian": {
+        "numErrors": 0,
+        "numWarnings": 0,
+        "numInfos": 0,
+        "numHints": 0,
+        "messages": [],
+        "truncated": false
+      },
+      "helmet_barbarian": {
+        "numErrors": 0,
+        "numWarnings": 0,
+        "numInfos": 0,
+        "numHints": 0,
+        "messages": [],
+        "truncated": false
+      }
+    },
+    "browser": {
+      "clips": 51,
+      "poses": 255,
+      "bones": 65,
+      "skeletons": 1,
+      "totalTriangles": 25416,
+      "visibleTriangles": 25045,
+      "parts": {
+        "helmet_barbarian": 1453,
+        "top_barbarian": 1860,
+        "pants_barbarian": 3410,
+        "boots_barbarian": 2704,
+        "gloves_barbarian": 2098
+      },
+      "errors": []
+    },
+    "geometry_and_skin_preserved_in_game_export": true,
+    "frontend_tests": 37,
+    "frontend_check": "passed",
+    "frontend_lint": "passed"
+  }
+}

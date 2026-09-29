@@ -23,6 +23,11 @@ const parts = [
   "gloves_plate",
   "boots_plate",
   "helmet_plate",
+  "top_barbarian",
+  "pants_barbarian",
+  "gloves_barbarian",
+  "boots_barbarian",
+  "helmet_barbarian",
 ];
 const packs = [
   "locomotion",
@@ -47,7 +52,7 @@ const hash = (path) =>
     .digest("hex");
 const report = {
   source:
-    "Modular male body, knight plate parts and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md",
+    "Modular male body, knight and barbarian equipment and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md",
   inputs: {},
   outputs: {},
 };
@@ -66,6 +71,17 @@ for (const name of parts) {
     { stdio: "inherit" },
   );
   report.outputs[`${name}.glb`] = hash(`${output}/${name}.glb`);
+}
+
+if (process.argv.includes("--parts-only")) {
+  const manifest = resolve(root, output, "manifest.json");
+  const previous = existsSync(manifest)
+    ? JSON.parse(readFileSync(manifest, "utf8"))
+    : {};
+  report.inputs = { ...previous.inputs, ...report.inputs };
+  report.outputs = { ...previous.outputs, ...report.outputs };
+  writeFileSync(manifest, JSON.stringify(report, null, 2) + "\n");
+  process.exit(0);
 }
 
 globalThis.self = globalThis;

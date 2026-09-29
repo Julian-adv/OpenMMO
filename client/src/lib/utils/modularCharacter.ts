@@ -46,11 +46,11 @@ export function skinnedParts(root: THREE.Object3D): THREE.SkinnedMesh[] {
 
 export interface ModularOutfit {
   hair: 'hair_crop' | 'hair_sidepart' | 'none'
-  top: 'linen' | 'leather' | 'plate' | 'none'
-  pants: 'cloth' | 'plate' | 'none'
-  gloves: 'none' | 'leather' | 'plate'
-  boots: 'none' | 'leather' | 'plate'
-  helmet: 'none' | 'plate'
+  top: 'linen' | 'leather' | 'plate' | 'barbarian' | 'none'
+  pants: 'cloth' | 'plate' | 'barbarian' | 'none'
+  gloves: 'none' | 'leather' | 'plate' | 'barbarian'
+  boots: 'none' | 'leather' | 'plate' | 'barbarian'
+  helmet: 'none' | 'plate' | 'barbarian'
 }
 
 export const DEFAULT_MODULAR_OUTFIT: ModularOutfit = {
@@ -71,6 +71,15 @@ export const KNIGHT_MODULAR_OUTFIT: ModularOutfit = {
   helmet: 'plate',
 }
 
+export const BARBARIAN_MODULAR_OUTFIT: ModularOutfit = {
+  hair: 'none',
+  top: 'barbarian',
+  pants: 'barbarian',
+  gloves: 'barbarian',
+  boots: 'barbarian',
+  helmet: 'barbarian',
+}
+
 export function modularOutfitParts(outfit: ModularOutfit): Set<string> {
   const selected = new Set<string>()
   if (outfit.pants !== 'none') selected.add(`pants_${outfit.pants}`)
@@ -78,7 +87,7 @@ export function modularOutfitParts(outfit: ModularOutfit): Set<string> {
     selected.add(outfit.hair)
   if (outfit.top === 'linen' || outfit.top === 'leather')
     selected.add('top_linen')
-  if (outfit.top === 'leather' || outfit.top === 'plate')
+  if (['leather', 'plate', 'barbarian'].includes(outfit.top))
     selected.add(`top_${outfit.top}`)
   if (outfit.gloves !== 'none') selected.add(`gloves_${outfit.gloves}`)
   if (outfit.boots !== 'none') selected.add(`boots_${outfit.boots}`)
@@ -96,15 +105,18 @@ export function showModularOutfit(
       if (typeof node.userData.region === 'string') return node.userData.region
   }
   const hidden = new Set<string>()
-  if (outfit.pants !== 'none') {
+  const coveredLegs = outfit.pants === 'cloth' || outfit.pants === 'plate'
+  const coveredFeet = outfit.boots === 'leather' || outfit.boots === 'plate'
+  if (coveredLegs) {
     for (const region of ['legs', 'ankles', 'boot_ankles']) hidden.add(region)
   }
-  if (outfit.top !== 'none') {
+  if (outfit.top !== 'none' && outfit.top !== 'barbarian') {
     for (const region of ['torso', 'upper_arms', 'forearms']) hidden.add(region)
   }
   if (outfit.top === 'plate') hidden.add('neck')
-  if (outfit.gloves !== 'none') hidden.add('hands')
-  if (outfit.boots !== 'none') {
+  if (outfit.gloves === 'leather' || outfit.gloves === 'plate')
+    hidden.add('hands')
+  if (coveredFeet) {
     hidden.add('feet')
     hidden.add('ankles')
   } else hidden.add('boot_ankles')
@@ -116,12 +128,12 @@ export function showModularOutfit(
         selected.has(id) &&
         !(
           id === 'pants_cloth' &&
-          outfit.boots !== 'none' &&
+          coveredFeet &&
           mesh.userData.region === 'cuffs'
         ) &&
         !(
           id === 'pants_cloth' &&
-          outfit.boots === 'none' &&
+          !coveredFeet &&
           mesh.userData.region === 'tucked_cuffs'
         ) &&
         !(
