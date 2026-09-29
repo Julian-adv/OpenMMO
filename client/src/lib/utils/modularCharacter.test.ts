@@ -125,12 +125,7 @@ describe('modular outfit coverage', () => {
     })
     expect(body.every((mesh) => !mesh.visible)).toBe(true)
     expect(shirt.map((mesh) => mesh.visible)).toEqual([false, true, true, true])
-    expect(pants.map((mesh) => mesh.visible)).toEqual([
-      true,
-      false,
-      false,
-      true,
-    ])
+    expect(pants.map((mesh) => mesh.visible)).toEqual([true, false, true, true])
     expect(parts.get('hair_crop')![0].visible).toBe(false)
     expect(parts.get('hair_sidepart')![0].visible).toBe(true)
     showModularOutfit(body, parts, {

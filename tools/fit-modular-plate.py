@@ -108,6 +108,16 @@ def transfer_weights(positions):
     return np.array(joints, dtype='<u2'), np.array(weights, dtype='<f4')
 
 
+def fit_plate_waist(positions):
+    result = positions.copy()
+    waist = smoothstep((result[:, 1] - .99) / .07)
+    waist *= 1 - smoothstep((result[:, 1] - 1.15) / .09)
+    waist *= 1 - smoothstep((abs(result[:, 0]) - .10) / .07)
+    waist *= smoothstep((result[:, 2] - .015) / .045)
+    result[:, 2] += .016 * waist
+    return result
+
+
 def top_fit(p):
     out = p * [.88, .92, .96] + [0, 1.31, -.025]
     out[:, 1] += np.clip((p[:, 1] - .21) / .10, 0, 1) * np.clip((.16 - abs(p[:, 0])) / .04, 0, 1) * .048
@@ -135,19 +145,17 @@ def top_fit(p):
                 blend = np.clip((distance - .20) / .09, 0, 1)
                 arm = out * (1 - blend[:, None]) + arm * blend[:, None]
             out[mask] = arm[mask]
-    return out
+    return fit_plate_waist(out)
 
 
-def subdivide_greave_hems(positions, uv, indices):
+def subdivide_edges(positions, uv, indices, split_edge, iterations=2):
     points, texcoords = list(positions), list(uv)
-    for _ in range(2):
+    for _ in range(iterations):
         midpoints = {}
         for face in indices:
             for a, b in zip(face, np.roll(face, -1)):
                 edge = tuple(sorted((a, b)))
-                if edge in midpoints or max(points[a][1], points[b][1]) >= -.65:
-                    continue
-                if np.linalg.norm(points[a] - points[b]) <= .075:
+                if edge in midpoints or not split_edge(points[a], points[b]):
                     continue
                 midpoints[edge] = len(points)
                 points.append((points[a] + points[b]) / 2)
@@ -176,6 +184,21 @@ def subdivide_greave_hems(positions, uv, indices):
     return np.array(points), np.array(texcoords), indices
 
 
+def subdivide_greave_hems(positions, uv, indices):
+    return subdivide_edges(positions, uv, indices, lambda a, b:
+        max(a[1], b[1]) < -.65 and np.linalg.norm(a - b) > .075)
+
+
+def subdivide_helmet_cheeks(positions, uv, indices):
+    def split_edge(a, b):
+        p = np.array([a, b]) * [.174, .177, .150] + [0, 1.772, .003]
+        if p[:, 1].min() >= 1.765 or p[:, 2].max() <= -.04:
+            return False
+        fitted = helmet_fit(np.array([a, b, (a + b) / 2]))
+        return np.linalg.norm(fitted[2] - fitted[:2].mean(axis=0)) > .003
+    return subdivide_edges(positions, uv, indices, split_edge, iterations=3)
+
+
 def pants_fit(p):
     y = np.interp(p[:, 1], [-.951, -.10, .946], [.165, .553, 1.145])
     center_x = np.interp(p[:, 1], [-.951, -.10, .6, .946], [.33, .265, .215, .18])
@@ -200,7 +223,7 @@ def pants_fit(p):
         center = shin_center(result[mask, 1], side)
         for axis in [0, 2]:
             result[mask, axis] = center[:, axis] + offset[:, axis] * (1 + .04 * hem[mask])
-    return result
+    return fit_plate_waist(result)
 
 
 def boots_fit(p):
@@ -258,7 +281,37 @@ def align_ankle_weights(positions, joints, weights):
 
 
 def helmet_fit(p):
-    return p * [.174, .177, .150] + [0, 1.772, .003]
+    fitted = p * [.174, .177, .150] + [0, 1.772, .003]
+    x, y, z = np.abs(fitted[:, 0]), fitted[:, 1], fitted[:, 2]
+    ear = smoothstep((y - 1.69) / .05) * (1 - smoothstep((y - 1.81) / .04))
+    ear *= smoothstep((z + .10) / .05) * (1 - smoothstep((z + .005) / .05))
+    ear *= smoothstep((x - .04) / .035)
+    width = x * .85
+    fitted[:, 0] = np.sign(fitted[:, 0]) * (width + (.101 + (x - .10) * .3 - width) * ear)
+    x = np.abs(fitted[:, 0])
+    cheek = (1 - smoothstep((y - 1.725) / .035)) * smoothstep((z + .035) / .02)
+    front = .064 + .014 * (1 - smoothstep((y - 1.665) / .055))
+    angle = (z + .035) / (front + .035) * 1.62
+    wrapped_x = x * np.cos(angle)
+    wrapped_z = -.035 + (.173 + x - .095) * np.sin(angle)
+    fitted[:, 0] += np.sign(fitted[:, 0]) * (wrapped_x - x) * cheek
+    fitted[:, 1] += .025 * smoothstep((1.69 - y) / .065) * smoothstep((z + .015) / .075) * cheek
+    fitted[:, 2] += (wrapped_z - z) * cheek
+    throat = smoothstep((1.70 - fitted[:, 1]) / .05) * smoothstep((fitted[:, 2] + .045) / .06)
+    radial = fitted[:, [0, 2]] / [.10, .17] + [0, .035 / .17]
+    radius = np.linalg.norm(radial, axis=1, keepdims=True)
+    neck = radial / np.maximum(radius, 1e-8) * (.75 + .25 * radius) * [.070, .078] + [0, -.042]
+    fitted[:, [0, 2]] += (neck - fitted[:, [0, 2]]) * throat[:, None]
+    fitted[:, 1] += (1.592 + .2 * (fitted[:, 1] - 1.65) - fitted[:, 1]) * throat
+    return fitted
+
+
+def rigid_weights(count, bone):
+    joints = np.zeros((count, 4), dtype='<u2')
+    joints[:, 0] = [BASE['nodes'][i]['name'] for i in BASE['skins'][0]['joints']].index(bone)
+    weights = np.zeros((count, 4), dtype='<f4')
+    weights[:, 0] = 1
+    return joints, weights
 
 
 def glove_warp():
@@ -503,6 +556,9 @@ def build(name, fit):
         if name == 'pants_plate':
             source, uv, indices = subdivide_greave_hems(source, uv, indices)
             attributes['TEXCOORD_0'] = add_accessor(doc, binary, uv, 'VEC2')
+        if name == 'helmet_plate':
+            source, uv, indices = subdivide_helmet_cheeks(source, uv, indices)
+            attributes['TEXCOORD_0'] = add_accessor(doc, binary, uv, 'VEC2')
         if name == 'gloves_plate':
             source, uv, indices, boundary = clip_glove_cuff(source, uv, indices)
         positions = fit(source)
@@ -515,10 +571,7 @@ def build(name, fit):
             uv = np.vstack([uv, uv])
             attributes['TEXCOORD_0'] = add_accessor(doc, binary, uv, 'VEC2')
         if name == 'helmet_plate':
-            joints = np.zeros((len(positions), 4), dtype='<u2')
-            joints[:, 0] = [BASE['nodes'][i]['name'] for i in BASE['skins'][0]['joints']].index('Head')
-            weights = np.zeros((len(positions), 4), dtype='<f4')
-            weights[:, 0] = 1
+            joints, weights = rigid_weights(len(positions), 'Head')
         else:
             joints, weights = transfer_weights(positions)
         if name == 'pants_plate':
@@ -565,7 +618,7 @@ def build(name, fit):
     doc['scenes'][0]['nodes'].append(len(doc['nodes']))
     extras = {'rig_id': 'human_male_01_mixamo_candidate_v2', 'part_id': name, 'region': name}
     doc['nodes'].append({'name': name, 'mesh': 0, 'skin': 0, 'extras': extras})
-    if name == 'gloves_plate':
+    if name in ('gloves_plate', 'helmet_plate'):
         doc['meshes'][0]['extras'] = extras
     path = PARTS / 'fitted' / f'{name}.glb'
     write_glb(path, doc, compact(doc, binary))

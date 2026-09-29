@@ -953,5 +953,204 @@
       "check": "passed",
       "lint": "passed"
     }
+  },
+  "plate_waist_shirt_tuck": {
+    "date": "2026-09-29",
+    "source": "Local geometry edit of the existing linen shirt; original Meshy and Mixamo license records above apply. No new AI generation or credits.",
+    "reason": "The plate trouser belt is narrower in front than the cloth waistband, exposing the linen hem through the belt.",
+    "input_sha256": "64e7d1fc6ec4524635d07cabd90b9a8d277a3c324400a29b21c8a57862039125",
+    "method": {
+      "region": "torso",
+      "coordinates": "glTF meters, Y up",
+      "tuck": "1 - smoothstep(1.085, 1.165, y)",
+      "x": "x * (1 - 0.20 * tuck)",
+      "z": "-0.015 + (z + 0.015) * (1 - 0.30 * tuck)",
+      "normals": "Inverse-transpose deformation Jacobian; same deformation and custom-normal update in Blender.",
+      "changed_exported_vertices": 783,
+      "max_displacement_m": 0.0343896473447647
+    },
+    "preserved": [
+      "triangle count and indices",
+      "UVs",
+      "embedded PBR images",
+      "skin weights and rig",
+      "sleeves, underarms and armored collar"
+    ],
+    "outputs": [
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/top_linen.glb",
+        "bytes": 7696420,
+        "sha256": "2c7b1c591e90be8ed2aeaefd045051c3698be8043cfcfd8d3c13a61b5b15e64a"
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/character_parts.blend",
+        "bytes": 94812925,
+        "sha256": "28aa40fc3510f5800cd10809a1596ba2bbcad97e4ce961421a7ac917f2dab36e"
+      },
+      {
+        "path": "client/public/models/characters/modular_male/top_linen.glb",
+        "bytes": 2919132,
+        "sha256": "08fd5d994976a66d8b1e5d8fb5af2cf875c2b45dd264d921c5862f8e4476d437"
+      }
+    ],
+    "runtime_manifest": "client/public/models/characters/modular_male/manifest.json",
+    "validation": {
+      "preview_pants": [
+        "cloth",
+        "plate"
+      ],
+      "runtime_clips": [
+        "idle1",
+        "walk",
+        "run",
+        "jump",
+        "combat_idle",
+        "slash1"
+      ],
+      "runtime_poses": 12,
+      "runtime_views": 36,
+      "browser_errors": 0,
+      "glb_errors": 0,
+      "unchanged_existing_warnings_per_glb": 8,
+      "blender_to_source_vertex_error_m": 0.0
+    }
+  },
+  "leather_waist_fit": {
+    "date": "2026-09-29",
+    "source": "Local editing of existing Meshy leather armor and linen shirt; original license records above apply. No new AI generation or credits.",
+    "request": "Shorten the leather armor to slightly cover the belt and taper the waist like plate armor.",
+    "input_sha256": {
+      "top_leather.glb": "7dadbec7e510804b9431d7cd42c0afbc108bfd969305dabebf1f95845eba2de4",
+      "top_linen.glb": "2c7b1c591e90be8ed2aeaefd045051c3698be8043cfcfd8d3c13a61b5b15e64a"
+    },
+    "method": {
+      "coordinates": "glTF meters, Y up",
+      "height": "y_new = y + 0.14 * max((1.32 - y) / 0.36, 0)^2",
+      "taper": "t = 1 - smoothstep(1.10, 1.30, y_new); x_new = x * (1 - 0.14 * t); z_new = -0.035 + (z + 0.035) * (1 - 0.14 * t)",
+      "normals": "Inverse-transpose deformation Jacobian, mirrored in Blender custom normals.",
+      "preserved": [
+        "chest and shoulders above 1.32m",
+        "leather triangle topology",
+        "UVs and embedded PBR images",
+        "skin weights and rig"
+      ],
+      "hem_height_before_m": 0.96,
+      "hem_height_after_m": 1.1,
+      "leather_triangles": 3757
+    },
+    "lining": {
+      "region": "armored_collar",
+      "source": "135 existing central front torso faces below 1.32m, excluding collar duplicates; retain their UVs and weights.",
+      "inset": "z_new = z - 0.032 * (1 - smoothstep(1.25, 1.32, y))",
+      "added_triangles": 135,
+      "shirt_total_triangles": 4744,
+      "cloth_waist": "Keep pants_cloth waist visible under leather armor."
+    },
+    "outputs": [
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/top_leather.glb",
+        "bytes": 10293652,
+        "sha256": "db72b0be772e3874c67d493121cbfb3b24639077dc0de6d07e2034bf2061bffb"
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/top_linen.glb",
+        "bytes": 7704036,
+        "sha256": "188ae91799541ff6563a176058695a0c398039d60bc2ee28d97b56b199094a43"
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/character_parts.blend",
+        "bytes": 94843679,
+        "sha256": "6f04f96b3c68fc04ccb3133ba6f85e31a20cee6351d2b886d522510b4fbb00a3"
+      },
+      {
+        "path": "client/public/models/characters/modular_male/top_linen.glb",
+        "bytes": 2926748,
+        "sha256": "eeb16055c61ba73779b1eac4623eeb6614e56e42425923150c575b303798430d"
+      }
+    ],
+    "validation": {
+      "pants": [
+        "cloth",
+        "plate"
+      ],
+      "animation_clips": [
+        "idle1",
+        "walk",
+        "run",
+        "jump",
+        "combat_idle",
+        "slash1"
+      ],
+      "animation_poses": 12,
+      "animation_views": 36,
+      "browser_errors": 0,
+      "glb_errors": 0,
+      "unchanged_existing_glb_warnings": {
+        "top_leather_source": 2,
+        "top_linen_source": 8,
+        "top_linen_runtime": 8
+      },
+      "leather_blender_vertex_error_m": 0,
+      "tests": 20,
+      "frontend_check": "passed",
+      "frontend_lint": "passed"
+    }
+  },
+  "leather_underarm_weights": {
+    "date": "2026-09-29",
+    "source": "Local skin-weight correction of existing leather armor; original license records above apply. No AI generation or credits.",
+    "input_sha256": "db72b0be772e3874c67d493121cbfb3b24639077dc0de6d07e2034bf2061bffb",
+    "reason": "Arm influence on the lower armhole rim pulled individual vertices into pointed protrusions during animation.",
+    "method": {
+      "coordinates": "glTF meters, Y up",
+      "mask": "(1 - smoothstep(1.34, 1.44, y)) * (1 - smoothstep(0.215, 0.270, abs(x)))",
+      "bones": [
+        "LeftArm",
+        "RightArm",
+        "LeftForeArm",
+        "RightForeArm"
+      ],
+      "transfer": "Remove masked arm influence and distribute it proportionally among existing non-arm influences. Preserve vertices with less than 0.05 non-arm influence. Clear joint slots whose weight becomes zero.",
+      "changed_exported_vertices": 441,
+      "changed_blender_vertices": 285,
+      "max_removed_arm_influence": 0.5057276
+    },
+    "preserved": [
+      "all vertex positions and normals",
+      "triangle topology and count",
+      "UVs and embedded textures",
+      "rig and bind matrices",
+      "accepted short hem and tapered waist"
+    ],
+    "outputs": [
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/top_leather.glb",
+        "bytes": 10293652,
+        "sha256": "1aaf9549c30cd9fa1c82033d6e3de8fcc21664e1d8f53c93ba12262d62ac5ff2"
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/character_parts.blend",
+        "bytes": 94844023,
+        "sha256": "8d2ce16bc3327476420a31860399c4ea97882fc4b2221f7cb52e519780fd00f5"
+      }
+    ],
+    "validation": {
+      "clips": [
+        "idle1",
+        "walk",
+        "run",
+        "jump",
+        "combat_idle",
+        "slash1"
+      ],
+      "poses": 6,
+      "underarm_views": 36,
+      "browser_errors": 0,
+      "glb_errors": 0,
+      "unchanged_existing_glb_warnings": 2,
+      "weights_normalized": true,
+      "only_skin_attributes_changed": true,
+      "blender_weights_match_glb": true
+    }
   }
 }

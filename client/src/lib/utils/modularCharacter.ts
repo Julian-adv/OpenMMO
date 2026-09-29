@@ -119,7 +119,7 @@ export function showModularOutfit(
         ) &&
         !(
           id === 'pants_cloth' &&
-          (outfit.top === 'leather' || outfit.top === 'plate') &&
+          outfit.top === 'plate' &&
           mesh.userData.region === 'waist'
         ) &&
         !(

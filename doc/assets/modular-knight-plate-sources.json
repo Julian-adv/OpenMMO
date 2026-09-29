@@ -250,25 +250,25 @@
       {
         "path": "assets/modular_human_male_01/parts/fitted/top_plate.glb",
         "bytes": 11941912,
-        "sha256": "be78efe4efa48b89be05402d77548bc0de77e34c4c22e9b405e90467ae9bf059",
+        "sha256": "ef1e43ee4ac37aed9d54c77eaa2a0286d1165235ae8b5ea01b00a564fa861637",
         "triangles": 3101
       },
       {
         "path": "client/public/models/characters/modular_male/top_plate.glb",
         "bytes": 5006320,
-        "sha256": "4aff2f1d3bb95a40767921fe4f310a961a48a74e311e79da4ad1545ecc2fe5e4",
+        "sha256": "a4dbb9b46c12dd8fd57935ec444251ad107a191b5dab55023f0b9b5f7a47eabd",
         "triangles": 3101
       },
       {
         "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
         "bytes": 11524488,
-        "sha256": "cd85cd6d3aa04d4cb125c1734f4768249ab038df2d9f83bdc9a92ca7a552724e",
+        "sha256": "0802ccf5513a75f7ecdfd1f4d58e293a2bb7659ddc1314eb3bfb66c5e5b4e52d",
         "triangles": 1600
       },
       {
         "path": "client/public/models/characters/modular_male/pants_plate.glb",
         "bytes": 4707684,
-        "sha256": "8c66b2854af38db5883674dfdef266982ba299437fcaa469490009bec3dcd6ac",
+        "sha256": "5a096691398686e6c51c6ccf411f73dceff1ee838e8bf988a15b92fc88a3b9b0",
         "triangles": 1600
       },
       {
@@ -297,29 +297,29 @@
       },
       {
         "path": "assets/modular_human_male_01/parts/fitted/helmet_plate.glb",
-        "bytes": 11365672,
-        "sha256": "875b697f9dcd46fa082920a64d1a5a96d24e48d99120a0fbffe1792b2ef5542a",
-        "triangles": 837
+        "bytes": 11457340,
+        "sha256": "46ef09da43e0217720f98c95941d2a678fe1789a3d813855e0010443feb851ee",
+        "triangles": 2299
       },
       {
         "path": "client/public/models/characters/modular_male/helmet_plate.glb",
-        "bytes": 4500832,
-        "sha256": "9d31f13a8b16ba81dcd16ff391b6ec74118c9eb08ca4684bc3e5b77aa335b3d8",
-        "triangles": 837
+        "bytes": 4592500,
+        "sha256": "b3e723c432c67d01440f69519785cc97071c781644c07febd60a2d3707075179",
+        "triangles": 2299
       },
       {
         "path": "assets/modular_human_male_01/parts/fitted/plate_parts.blend",
-        "bytes": 84707221,
-        "sha256": "9d0707d93f83fc04919cc2e2a147dcb155dbc4916a99d85f1f523e5c52e661a4"
+        "bytes": 84773394,
+        "sha256": "f01b1297211c136307f03688efb7fe1b6fba8322f641c32fe4f9008c914dd9dc"
       }
     ],
     "counts": {
       "body": 13520,
       "face_region": 1505,
-      "armor": 7651,
+      "armor": 9113,
       "iron_sword": 302,
-      "assembled_including_hidden": 21473,
-      "visible": 10528,
+      "assembled_including_hidden": 22935,
+      "visible": 11990,
       "optional_default_cape": 120
     },
     "licenses": "Inherited from original modular body/Mixamo and the Meshy paid-generation terms recorded above; local fitting adds no third-party asset.",
@@ -592,6 +592,323 @@
           "Unlit base color",
           "Plain gray"
         ]
+      }
+    },
+    "helmet_width_correction": {
+      "date": "2026-09-29",
+      "affected_parts": [
+        "helmet_plate"
+      ],
+      "method": "Reduce lateral width by 15% away from the ears. Smoothly blend the ear region to X = sign(X) * (0.101 + (abs(X) - 0.10) * 0.3) m using the pre-correction fitted coordinates, keeping the shell close to the ears without the penetration caused by uniform scaling. Rebuild normals and tangents.",
+      "geometry": {
+        "width_before_m": 0.24131572246551514,
+        "width_after_m": 0.20956510305404663,
+        "width_reduction_percent": 13.157296180725098,
+        "triangles": 837,
+        "preserved_geometry_axes": [
+          "Y",
+          "Z"
+        ],
+        "uv_rig_weights_textures_unchanged": true,
+        "other_armor_unchanged": true,
+        "degenerate_triangles": 0
+      },
+      "preserved": [
+        "Height and front-to-back depth",
+        "UVs and original PBR textures",
+        "837 triangles and topology",
+        "65-bone rig, rigid Head weights and animations",
+        "All other armor GLBs"
+      ],
+      "additional_generation_credits": 0,
+      "visual_review": {
+        "asset": "Runtime compressed helmet GLB",
+        "poses": [
+          "rest",
+          "combat_idle",
+          "run",
+          "slash1"
+        ],
+        "views": [
+          "front",
+          "left oblique",
+          "right oblique"
+        ]
+      },
+      "validation": {
+        "runtime_glb_errors": 0,
+        "runtime_glb_warnings": 0,
+        "runtime_glb_infos": 0,
+        "runtime_glb_hints": 0,
+        "animation_clips": 51,
+        "sampled_poses": 255,
+        "browser_errors": 0
+      }
+    },
+    "helmet_bevor_addition": {
+      "date": "2026-09-29",
+      "affected_parts": [
+        "helmet_plate"
+      ],
+      "source": "Locally authored procedural geometry and steel PBR material in tools/fit-modular-plate.py; no external asset or generated texture added.",
+      "method": "Add a closed curved lower-face plate from below the nose to the chin, with a shallow center ridge, beveled rim and ends overlapping the existing cheek guards. Bind it rigidly to Head and store part metadata on the mesh for loading both material primitives together.",
+      "material": {
+        "name": "Steel bevor",
+        "base_color": [
+          0.48,
+          0.5,
+          0.52,
+          1
+        ],
+        "metallic": 0.8,
+        "roughness": 0.32
+      },
+      "additional_generation_credits": 0,
+      "geometry": {
+        "unchanged_original_helmet_primitive": true,
+        "guard_triangles": 272,
+        "helmet_triangles": 1109,
+        "guard_open_edges": 0,
+        "guard_nonmanifold_edges": 0,
+        "guard_winding_errors": 0,
+        "guard_degenerate_triangles": 0,
+        "sampled_lower_face_vertices": 262,
+        "minimum_forward_clearance_m": 0.022972708763517438
+      },
+      "preserved": [
+        "Previously narrowed helmet shell, normals, tangents and UVs",
+        "Original helmet PBR textures",
+        "65-bone rig and existing animations",
+        "All other armor parts"
+      ],
+      "visual_review": {
+        "asset": "Runtime compressed helmet GLB",
+        "poses": [
+          "rest",
+          "combat_idle",
+          "run",
+          "slash1"
+        ],
+        "views": [
+          "front",
+          "left oblique",
+          "right oblique"
+        ]
+      },
+      "validation": {
+        "runtime_glb_errors": 0,
+        "runtime_glb_warnings": 0,
+        "runtime_glb_infos": 0,
+        "runtime_glb_hints": 0,
+        "animation_clips": 51,
+        "sampled_poses": 255,
+        "browser_errors": 0,
+        "modular_and_loader_tests_passed": 20
+      },
+      "usage": "Unused: the separate 272-triangle guard and Steel bevor material were removed at the user's request.",
+      "superseded_by": "helmet_cheek_wrap"
+    },
+    "helmet_cheek_wrap": {
+      "date": "2026-09-29",
+      "affected_parts": [
+        "helmet_plate"
+      ],
+      "reference": "User-annotated side view identifying the original cheek guard; used as the shape-edit reference.",
+      "method": "Remove the separate mouth guard and its material. Lengthen the original left and right cheek guards along a curved path toward the mouth, curl the lower tips upward toward the chin, and blend into the existing narrowed upper helmet. Subdivide source edges only where curved midpoints deviate by more than 3 mm, with at most three passes; interpolate original UVs and rebuild normals/tangents.",
+      "geometry": {
+        "helmet_triangles": 1793,
+        "original_shell_triangles": 837,
+        "added_by_subdivision": 956,
+        "removed_separate_guard_triangles": 272,
+        "material_count": 1,
+        "original_pbr_images_unchanged": true,
+        "existing_uv_vertices_unchanged": true,
+        "subdivision_preserves_source_surface_and_uv_area": true,
+        "upper_helmet_unchanged_above_y_m": 1.76,
+        "deformation_samples": 3855,
+        "inverted_deformation_samples": 0,
+        "minimum_jacobian_determinant": 0.0013859099999900422,
+        "degenerate_triangles": 0,
+        "greave_subdivision_unchanged": true,
+        "other_armor_unchanged": true
+      },
+      "preserved": [
+        "Original Meshy PBR image bytes and material",
+        "Original UV vertices, with interpolated UVs on subdivided edges",
+        "Narrowed helmet above Y = 1.76 m",
+        "65-bone rig, rigid Head weights and animations",
+        "All other armor GLBs"
+      ],
+      "additional_generation_credits": 0,
+      "visual_review": {
+        "asset": "Runtime compressed helmet GLB",
+        "comparison": "Previous separate guard versus extended original cheek guards",
+        "poses": [
+          "rest",
+          "combat_idle",
+          "run",
+          "slash1"
+        ],
+        "views": [
+          "front",
+          "left oblique",
+          "right oblique"
+        ]
+      },
+      "validation": {
+        "runtime_glb_errors": 0,
+        "runtime_glb_warnings": 0,
+        "runtime_glb_infos": 0,
+        "runtime_glb_hints": 0,
+        "animation_clips": 51,
+        "sampled_poses": 255,
+        "browser_errors": 0
+      }
+    },
+    "helmet_neck_closure": {
+      "date": "2026-09-29",
+      "affected_parts": [
+        "helmet_plate"
+      ],
+      "reference": "User-provided low-angle game screenshot showing exposed skin below the chin, followed by two closed-helmet photographs; shape references only.",
+      "method": "Continue the existing cheek guards beneath the chin into a rounded throat. Blend their lower vertices toward an elliptical neck opening centered at Z = -0.042 m, preserve radial thickness, and tuck the lower hem inside the existing gorget. Retain the original helmet material and extend only its source geometry; no separate plate or material is added. Subdivide curved source edges and interpolate original UVs.",
+      "geometry": {
+        "helmet_triangles": 2299,
+        "original_shell_triangles": 837,
+        "added_by_subdivision": 1462,
+        "material_count": 1,
+        "original_pbr_images_unchanged": true,
+        "existing_uv_vertices_unchanged": true,
+        "subdivision_preserves_source_surface_and_uv_area": true,
+        "upper_helmet_unchanged_above_y_m": 1.7,
+        "deformation_samples": 4695,
+        "inverted_deformation_samples": 0,
+        "minimum_jacobian_determinant": 6.840838350280709e-05,
+        "degenerate_triangles": 0,
+        "greave_subdivision_unchanged": true,
+        "other_armor_unchanged": true
+      },
+      "triangles_before": 1793,
+      "triangles_after": 2299,
+      "additional_generation_credits": 0,
+      "preserved": [
+        "Helmet shape at and above Y = 1.70 m",
+        "Original PBR images, material and existing UV vertices",
+        "65-bone rig and rigid Head binding",
+        "Other armor parts and animation files"
+      ],
+      "visual_review": {
+        "asset": "Runtime compressed helmet GLB",
+        "views": [
+          "front",
+          "low left oblique",
+          "low right oblique"
+        ],
+        "poses": [
+          "rest",
+          "combat_idle",
+          "slash1",
+          "head pitched up",
+          "head turned left and pitched up",
+          "head turned right and pitched up"
+        ],
+        "additional_head_rotations_radians": {
+          "up_pitch": -0.55,
+          "left_yaw": 0.7,
+          "right_yaw": -0.7,
+          "pitch_during_turn": -0.35
+        }
+      },
+      "validation": {
+        "runtime_glb_errors": 0,
+        "runtime_glb_warnings": 0,
+        "runtime_glb_infos": 0,
+        "runtime_glb_hints": 0,
+        "animation_clips": 51,
+        "sampled_poses": 255,
+        "browser_errors": 0
+      }
+    },
+    "bare_waist_clearance": {
+      "date": "2026-09-29",
+      "affected_parts": [
+        "pants_plate",
+        "top_plate"
+      ],
+      "cause": "The front belt and padded trouser waist intersected the visible lower torso when no top was equipped.",
+      "source": "Local fit adjustment of the existing Meshy plate geometry; licenses unchanged.",
+      "method": "Offset the front waist in +Z by up to 16mm. Apply the same smooth field to the overlapping plate cuirass waist to preserve its overlap. Rebuild normals/tangents and transfer skin weights at the adjusted positions.",
+      "deformation": "z += 0.016 * smoothstep(0.99, 1.06, y) * (1 - smoothstep(1.15, 1.24, y)) * (1 - smoothstep(0.10, 0.17, abs(x))) * smoothstep(0.015, 0.060, z)",
+      "changed_vertices": {
+        "pants_plate": 187,
+        "top_plate": 300
+      },
+      "preserved": [
+        "body geometry",
+        "thigh, knee and ankle fit",
+        "UVs and embedded PBR images",
+        "triangle counts and topology",
+        "rig and bind matrices",
+        "geometry and skin weights outside the adjusted waist"
+      ],
+      "additional_generation_credits": 0,
+      "inputs": [
+        {
+          "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+          "sha256": "cd85cd6d3aa04d4cb125c1734f4768249ab038df2d9f83bdc9a92ca7a552724e"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/fitted/top_plate.glb",
+          "sha256": "be78efe4efa48b89be05402d77548bc0de77e34c4c22e9b405e90467ae9bf059"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "assets/modular_human_male_01/parts/fitted/top_plate.glb",
+          "bytes": 11941912,
+          "sha256": "ef1e43ee4ac37aed9d54c77eaa2a0286d1165235ae8b5ea01b00a564fa861637"
+        },
+        {
+          "path": "client/public/models/characters/modular_male/top_plate.glb",
+          "bytes": 5006320,
+          "sha256": "a4dbb9b46c12dd8fd57935ec444251ad107a191b5dab55023f0b9b5f7a47eabd"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+          "bytes": 11524488,
+          "sha256": "0802ccf5513a75f7ecdfd1f4d58e293a2bb7659ddc1314eb3bfb66c5e5b4e52d"
+        },
+        {
+          "path": "client/public/models/characters/modular_male/pants_plate.glb",
+          "bytes": 4707684,
+          "sha256": "5a096691398686e6c51c6ccf411f73dceff1ee838e8bf988a15b92fc88a3b9b0"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/fitted/plate_parts.blend",
+          "bytes": 84773394,
+          "sha256": "f01b1297211c136307f03688efb7fe1b6fba8322f641c32fe4f9008c914dd9dc"
+        }
+      ],
+      "validation": {
+        "bare_torso_clips": [
+          "idle1",
+          "walk",
+          "run",
+          "jump",
+          "combat_idle",
+          "slash1"
+        ],
+        "bare_torso_poses": 12,
+        "bare_torso_views": 36,
+        "other_tops": [
+          "linen",
+          "leather",
+          "plate"
+        ],
+        "runtime_glbs_without_issues": 5,
+        "runtime_clips": 51,
+        "runtime_poses": 255,
+        "browser_errors": 0
       }
     }
   }
