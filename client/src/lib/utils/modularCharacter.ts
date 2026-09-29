@@ -93,8 +93,9 @@ export function showModularOutfit(
         ) &&
         !(
           id === 'top_linen' &&
-          outfit.top === 'leather' &&
-          mesh.userData.region === 'torso'
+          (outfit.top === 'leather'
+            ? mesh.userData.region === 'torso'
+            : mesh.userData.region === 'armored_collar')
         )
   return selected
 }

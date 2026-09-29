@@ -97,14 +97,24 @@
   [옆선 수정 전](../../assets/modular_human_male_01/parts/fitted/tuck-fold-before-combat_idle-side.png)·
   [수정 후](../../assets/modular_human_male_01/parts/fitted/tuck-fold-after-combat_idle-side.png) 및 대기·걷기·공격의 앞뒤·옆 비교를 남겼다.
   2026-09-29 사용자 확인 후 모델·작업 파일·재현 스크립트·스케치·검증 기록을 HF·`assets.lock`에 보존했다.
-- 장갑·부츠·검 302를 포함한 조합 수치는 다음과 같다. 숨긴 몸체와 안쪽 의상도 전체에 포함한다.
+- 2026-09-29 갑옷 착용 시 셔츠 목깃까지 숨겨지던 문제를 수정했다. 기존 Meshy 셔츠에서
+  목깃 652 triangles를 복제하고 가장자리 형상·가중치를 갑옷에 맞춘 `armored_collar`를 추가했다.
+  Blender 가공이며 기존 출처·라이선스를 따르고 추가 생성 비용은 없다. 갑옷을 입을 때만 표시한다.
+  [보존 검사](../../assets/modular_human_male_01/parts/fitted/collar-preservation.json)에서 기존 셔츠의
+  위치·UV·가중치·노멀과 다른 파츠 해시가 유지됐다. 셔츠 GLB는 숨긴 목깃까지 **4,609 triangles**다.
+  [목 검사](../../assets/modular_human_male_01/parts/fitted/neck-validation.json)는 목 피부 38표본과
+  셔츠 32표본을 두 상의 각각 175포즈에서 확인한다. 셔츠 표본은 피부로 가려져도 통과하지 않는다.
+  [수정 전](../../assets/modular_human_male_01/parts/fitted/neck-collar-before-leather-idle1-front.png)·
+  [수정 후](../../assets/modular_human_male_01/parts/fitted/neck-collar-after-leather-idle1-front.png)와 전투·걷기·공격 비교를 남겼다.
+  사용자 확인 후 모델·작업 파일·제작 스크립트·비교 화면·검증 기록을 HF·`assets.lock`에 보존했다.
+- 장갑·부츠·검 302를 포함한 조합 수치는 다음과 같다. 숨긴 몸체·안쪽 의상·목깃 변형도 전체에 포함한다.
 
   | 조합 | 전체 triangles | 표시 triangles | 얼굴 지정 영역 |
   | --- | ---: | ---: | ---: |
-  | 크롭 + 천 셔츠 | 23,756 | 12,862 | 1,505 |
-  | 옆가르마 + 천 셔츠 | 23,934 | 13,040 | 1,505 |
-  | 크롭 + 가죽 갑옷 + 안쪽 셔츠 | 27,513 | 14,357 | 1,505 |
-  | 옆가르마 + 가죽 갑옷 + 안쪽 셔츠 | 27,691 | 14,535 | 1,505 |
+  | 크롭 + 천 셔츠 | 24,408 | 12,862 | 1,505 |
+  | 옆가르마 + 천 셔츠 | 24,586 | 13,040 | 1,505 |
+  | 크롭 + 가죽 갑옷 + 안쪽 셔츠 | 28,165 | 15,009 | 1,505 |
+  | 옆가르마 + 가죽 갑옷 + 안쪽 셔츠 | 28,343 | 15,187 | 1,505 |
 
 - 4조합 × 7동작 × 25시점(700포즈), 교체 20회, 동작 전환 7회에서 유한한 좌표·공유 골격·재생 연속성을
   확인했다. 소매·바지 끝단·허리·겨드랑이·목·셔츠 밑단 수정 후 같은 조립 검사와 GLB 속성·가중치·입력 해시 검사를 다시 통과했다.
