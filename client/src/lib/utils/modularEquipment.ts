@@ -19,8 +19,9 @@ export function modularOutfitForArmor(
       : model('pants') === 'armor/iron_leggings.glb'
         ? 'plate'
         : 'cloth',
-    boots:
-      model('boots') === 'armor/plate_greaves.glb'
+    boots: !armor.boots
+      ? 'none'
+      : model('boots') === 'armor/plate_greaves.glb'
         ? 'plate'
         : DEFAULT_MODULAR_OUTFIT.boots,
     gloves: model('hands') === 'armor/plate_gauntlets.glb' ? 'plate' : 'none',
