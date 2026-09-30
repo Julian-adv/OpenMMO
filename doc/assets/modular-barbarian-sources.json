@@ -345,28 +345,28 @@
         "bytes": 5387940
       },
       "assets/modular_human_male_01/parts/fitted/top_barbarian.glb": {
-        "sha256": "eae4eed05fdbb08e11dba3ba52072d4c2c8b8208ec7021558695935ef1c09e1d",
-        "bytes": 11822936
+        "sha256": "a78ade539b6c13d0dca57f3100867d1cfbe90c87c3a6eb45724cebbfd21b5ee9",
+        "bytes": 11822932
       },
       "client/public/models/characters/modular_male/top_barbarian.glb": {
-        "sha256": "06689acbcd5e23a36f44f58d947a2871497c2f519be39b8ec2ab58340ebc7580",
+        "sha256": "366c328ba96cd1ba283f541193b5b39c647cb8f5ad324d3bb01e854dc4cf77e1",
         "bytes": 5099440
       },
       "assets/modular_human_male_01/parts/fitted/pants_barbarian.glb": {
-        "sha256": "b5d15a294b3cfc7b459fc53cb238580997b8b9d29c4f6575d3db1599b17fd487",
-        "bytes": 16659252
+        "sha256": "03156e8fbd535657f7cd278b46f6ff9e2787185877300346575e2fd50c6160d8",
+        "bytes": 16641516
       },
       "client/public/models/characters/modular_male/pants_barbarian.glb": {
-        "sha256": "781a3ea7582cb349ed379ee1b518e29838f3f971a035145d386b130d6a78e86d",
-        "bytes": 5850204
+        "sha256": "f383b7b6a0db7f818862b5c1beee257c037219622b5e80a1ed156066472e8a3d",
+        "bytes": 5832472
       },
       "assets/modular_human_male_01/parts/fitted/boots_barbarian.glb": {
-        "sha256": "a26c6a9d0d896f13eb8b1ba12557eade3cf790bcef15b670fdbd8f8c089bfb62",
-        "bytes": 17380804
+        "sha256": "0af32548e9a650ef06b1da0249fae2591d19382d8096132ec1ed2bcbd07db20c",
+        "bytes": 17406580
       },
       "client/public/models/characters/modular_male/boots_barbarian.glb": {
-        "sha256": "5a06154846a7fb28bbca43029c9e1185c83d6eade5d81c7f04376814259f9447",
-        "bytes": 6286476
+        "sha256": "8a126537e4b456372ceb9c4a65b20028e0ba0b20d63c0bdd829ab541551f46ae",
+        "bytes": 6312248
       },
       "assets/modular_human_male_01/parts/fitted/gloves_barbarian.glb": {
         "sha256": "6dbd8f4fbed0c463a07fa8b0b0b35ba221677f584b31eb082e84365fb18a272b",
@@ -377,29 +377,29 @@
         "bytes": 6073356
       },
       "assets/modular_human_male_01/parts/fitted/barbarian_parts.blend": {
-        "sha256": "b263bf6aaec32857be5cc0939f52efcb7c0f3b485dfa8125ec647c4c32cbf997",
-        "bytes": 100619177
+        "sha256": "cdc2f35f810c579ddfde658aae4b3544c516c02cc1e9ecfe4f13eb678b29b022",
+        "bytes": 95139216
       }
     },
     "pants_revision": {
       "date": "2026-09-30",
       "removed": "Brown leather trouser lining (1035 triangles)",
       "rear_belt_triangles": 144,
-      "fit": "Two top rows of each side-fur panel and leather strap are sampled from the actual belt surface and inset by 1.5 mm. Curved side panels are 6 mm thick, straps 3 mm thick; all attach to Hips. Lower rows have body clearance. Original central front/back pelt UVs and rigid hinge behavior are retained.",
-      "retained_body": "Original base geometry and covered_skin material unchanged",
+      "fit": "Decorated belt fitted radially to the actual waist, rear belt follows body sections with 13 mm outer clearance. Strap and side-fur angles shifted 0.24 rad toward the front center; two top rows resampled from the belt and inset by 1.5 mm. Front/back pelt roots reattached to the narrowed belt. Original UVs retained for equipment; body covered_skin UVs restored separately.",
+      "retained_body": "Body geometry and skin weights unchanged; covered_skin replaced with restored_skin using existing skin texture UV islands in the subsequent waist_layout_skin_revision.",
       "license": "Local edits of the existing project Meshy asset; no new AI generation or credits",
       "runtime_helper": "client/src/lib/effects/pelt-rig.ts",
       "runtime_simulation": "Front/back pelts retain 1/60 s rigid pendulums. Two side pelts and four straps use 330 Verlet particles at 1/120 s with two fixed top rows, distance/shear/bending constraints, body ellipsoid contacts, and a 4% upper bound on vertical segment extension. Compression and folds are allowed. Belt attachment positions and normals are restored exactly. Free normals and shell thickness follow the deformed grid.",
       "runtime_lifecycle": "Character selection preview, player update and modular authoring preview; reset after teleport/hiding/scrub; dispose owned geometry on removal or character disposal",
       "fallback": "Generic GLB viewers and Blender use the exported static mesh and skin weights; physics runs in OpenMMO",
-      "total_triangles": 3121,
+      "total_triangles": 3005,
       "front_and_back_pelt_triangles": 722,
       "leather_strap_triangles": 512,
-      "front_belt_triangles": 959,
+      "front_belt_triangles": 843,
       "components": [
         {
           "name": "barbarian_belt",
-          "triangles": 1103
+          "triangles": 987
         },
         {
           "name": "barbarian_pelt_front",
@@ -409,7 +409,7 @@
           "pivot": [
             0,
             1.08,
-            0.125
+            0.1148997234781714
           ],
           "outward": [
             0,
@@ -426,7 +426,7 @@
           "pivot": [
             0,
             1.08,
-            -0.183
+            -0.11451831413980171
           ],
           "outward": [
             0,
@@ -441,14 +441,14 @@
           "kind": "fur",
           "bone": "Hips",
           "pivot": [
-            0.1674049273708135,
+            0.14227066784921039,
             1.11,
-            -0.044036974120494246
+            -0.005442833801424641
           ],
           "outward": [
             0.9928086358538663,
             0,
-            -0.11971220728891936
+            0.11971220728891936
           ],
           "length": 0.33,
           "cloth": {
@@ -463,16 +463,16 @@
           "kind": "strap",
           "bone": "Hips",
           "pivot": [
-            0.11613010204343255,
+            0.10588108929300284,
             1.11,
-            0.09926654302342296
+            0.09054656490843523
           ],
           "outward": [
-            0.6822212072876136,
+            0.6748757600712672,
             0,
-            0.7311458297268958
+            0.7379313711099627
           ],
-          "length": 0.32,
+          "length": 0.28,
           "cloth": {
             "columns": 3,
             "rows": 11,
@@ -485,14 +485,14 @@
           "kind": "strap",
           "bone": "Hips",
           "pivot": [
-            0.16389725864324153,
+            0.12322120914704966,
             1.11,
-            0.054204805792380885
+            0.07665590788803194
           ],
           "outward": [
-            0.9004471023526769,
+            0.7712460149971067,
             0,
-            0.43496553411123023
+            0.6365371822219679
           ],
           "length": 0.28,
           "cloth": {
@@ -507,14 +507,14 @@
           "kind": "fur",
           "bone": "Hips",
           "pivot": [
-            -0.16771250780171365,
+            -0.14664738556088452,
             1.11,
-            -0.04397613168036143
+            -0.004980045757071188
           ],
           "outward": [
             -0.9928086358538663,
             0,
-            -0.11971220728891936
+            0.11971220728891936
           ],
           "length": 0.33,
           "cloth": {
@@ -529,16 +529,16 @@
           "kind": "strap",
           "bone": "Hips",
           "pivot": [
-            -0.11630650220309435,
+            -0.10677099847107922,
             1.11,
-            0.099374327201122
+            0.09144961677767426
           ],
           "outward": [
-            -0.6822212072876136,
+            -0.6748757600712672,
             0,
-            0.7311458297268958
+            0.7379313711099627
           ],
-          "length": 0.32,
+          "length": 0.28,
           "cloth": {
             "columns": 3,
             "rows": 11,
@@ -551,14 +551,14 @@
           "kind": "strap",
           "bone": "Hips",
           "pivot": [
-            -0.1641259393982287,
+            -0.12472041284141434,
             1.11,
-            0.05421298079166972
+            0.07798428248861089
           ],
           "outward": [
-            -0.9004471023526769,
+            -0.7712460149971067,
             0,
-            0.43496553411123023
+            0.6365371822219679
           ],
           "length": 0.28,
           "cloth": {
@@ -655,6 +655,134 @@
           "rest_attraction": 12,
           "wind_acceleration": 0.18
         }
+      },
+      "strap_clearance_revision": {
+        "date": "2026-09-30",
+        "reason": "Leather straps intersected the covered_skin surface between the pelvis and upper thigh in combat idle.",
+        "pelvis_collider": {
+          "bone": "Hips",
+          "center": [
+            0,
+            0.98,
+            -0.023
+          ],
+          "radii": [
+            0.205,
+            0.215,
+            0.155
+          ]
+        },
+        "scope": "Override the default pelvis collider for all four straps. Geometry, skin, textures, pinned rows, fur colliders and simulation coefficients are unchanged.",
+        "license": "Local metadata edit of the existing project asset; no new generation or credits"
+      },
+      "waist_layout_skin_revision": {
+        "date": "2026-09-30",
+        "request": "Tighten the belt, move straps and side pelts toward the front center, and replace the visible underwear material with the existing body skin texture.",
+        "belt": {
+          "method": "Fit the decorated belt radially to the body while preserving its relief. Sample the rear belt directly from the body surface. Reattach front/back pelt roots.",
+          "front_reference_clearance_m": 0.016,
+          "rear_outer_clearance_m": 0.013,
+          "rear_inner_clearance_m": 0.009
+        },
+        "attachments": {
+          "forward_rotation_radians": 0.24,
+          "side_pelt_angle_radians": 0.12,
+          "strap_angles_radians": [
+            1.06,
+            0.69
+          ],
+          "pinned_rows": 2,
+          "belt_inset_m": 0.0015
+        },
+        "body_skin_record": "doc/assets/modular-human-male-01-sources.json#covered_skin_restoration",
+        "preserved": [
+          "Body geometry and skin weights",
+          "Existing texture image bytes",
+          "Triangle counts",
+          "Cloth damping, stiffness and wind response",
+          "Skeleton and animations"
+        ],
+        "license": "Local edits of the existing project assets; no new AI generation or credits",
+        "preview": {
+          "path": "doc/images/characters/modular_human_male_01/barbarian-waist-refit-preview.png",
+          "sha256": "5c6b7f124d846847f302361e5a3991f9fb0ae316d390c3707dd4134dfe2543c1",
+          "source": "Project Three.js render of the fitted body and barbarian parts; existing asset licenses apply.",
+          "unused": true,
+          "file_status": "Removed superseded preview during final cleanup on 2026-09-30; provenance retained"
+        }
+      },
+      "seam_and_rear_panel_revision": {
+        "date": "2026-09-30",
+        "rear_pelt": "Mirror the unchanged front pelt profile about its attachment depth; remove the previous root-only offset that produced a kink.",
+        "rear_pelvis_collider": {
+          "bone": "Hips",
+          "center": [
+            0,
+            0.985,
+            0
+          ],
+          "radii": [
+            0.25,
+            0.155,
+            0.145
+          ]
+        },
+        "inner_straps": {
+          "angle_radians": 0.83,
+          "length_m": 0.28,
+          "reason": "Expose the previously hidden inner strap beside the outer strap; match its length to avoid folding."
+        },
+        "preserved_components": [
+          "barbarian_pelt_front",
+          "barbarian_strap_left_1",
+          "barbarian_strap_right_1"
+        ],
+        "belt": "Remove the decorated source belt behind z=-0.025. Blend front seam vertices to the rear belt shell; clamp seam top to 1.14 m. Extend rear belt by 0.035 rad across each seam.",
+        "removed_triangles_net": 116,
+        "preview": {
+          "path": "doc/images/characters/modular_human_male_01/barbarian-seam-finish-preview.png",
+          "sha256": "9ee81360e336fd0179008a39619eaa981ec1efae3f8b354b77b430a8629d5084",
+          "bytes": 729268,
+          "source": "Project Three.js render of the game pants GLB in the modular character preview",
+          "unused": true,
+          "file_status": "Removed superseded preview during final cleanup on 2026-09-30; provenance retained"
+        },
+        "license": "Local geometry and metadata edits of existing assets; no new AI generation or credits"
+      }
+    },
+    "shoulder_and_sandals_revision": {
+      "date": "2026-09-30",
+      "source": "Local fitting and added geometry using original body, barbarian top and barbarian leather texture",
+      "additional_meshy_credits": 0,
+      "shoulder_fit": "Nearest body triangle surface; smoothed displacement toward body with shoulder/rear influence, then body weight transfer",
+      "back_strap_clearance": {
+        "before": {
+          "min_mm": 16.549542546272278,
+          "median_mm": 29.226230457425117,
+          "p90_mm": 46.26631364226341,
+          "max_mm": 58.850135654211044
+        },
+        "after": {
+          "min_mm": 4.147280007600784,
+          "median_mm": 14.687714166939259,
+          "p90_mm": 21.145452558994297,
+          "max_mm": 25.774700567126274
+        }
+      },
+      "sandals": {
+        "triangles_added": 488,
+        "boots_total_triangles": 3192,
+        "construction": "Paired leather soles and two arched instep straps; existing leather texture and body foot/toe weights",
+        "sole_y_m": [
+          -0.009,
+          0.002
+        ]
+      },
+      "preview": {
+        "path": "doc/images/characters/modular_human_male_01/barbarian-skin-sandals-preview.png",
+        "sha256": "0bf906496e276eaaa69510ef9676a1e1bebc6e94baa8aee6a6f62c8b37e73df5",
+        "bytes": 605725,
+        "source": "Three.js render of final game GLBs; project-authored screenshot"
       }
     }
   },
@@ -705,13 +833,13 @@
       "clips": 6,
       "bones": 65,
       "skeletons": 1,
-      "totalTriangles": 25127,
-      "visibleTriangles": 24756,
+      "totalTriangles": 25499,
+      "visibleTriangles": 25128,
       "parts": {
         "helmet_barbarian": 1453,
         "top_barbarian": 1860,
-        "pants_barbarian": 3121,
-        "boots_barbarian": 2704,
+        "pants_barbarian": 3005,
+        "boots_barbarian": 3192,
         "gloves_barbarian": 2098
       },
       "errors": [],
@@ -767,7 +895,515 @@
         "WebGLRenderer browser preview with shadows: no errors"
       ],
       "performance_scope": "Single character in local headless Chrome; simulation and geometry updates, excluding rendering; no crowd or mobile benchmark",
-      "limitations": "Ellipsoid contacts are approximate. Stretch is capped while compression and folds are allowed. Self-collision, ground collision and exact triangle intersections are not simulated. Extreme poses and other equipment combinations are not guaranteed penetration-free."
+      "limitations": "Ellipsoid contacts are approximate. Stretch is capped while compression and folds are allowed. Self-collision, ground collision and exact triangle intersections are not simulated. Extreme poses and other equipment combinations are not guaranteed penetration-free.",
+      "strap_clearance_revision": {
+        "pose": "combat_idle at time 0, settled for 600 frames at 60 fps",
+        "sampling": "Front strap vertices and vertical edge midpoints, excluding pinned rows; outward ray clearance against torso and leg triangles",
+        "before_min_clearance_m": -0.008696867005962283,
+        "after_min_clearance_m": 0.0045209785609124364,
+        "after_body_hit_samples": 184,
+        "motion_clips": [
+          "idle1",
+          "walk",
+          "run",
+          "combat_idle",
+          "slash1",
+          "jump"
+        ],
+        "motion_frames": 1080,
+        "max_pin_error_m": 0,
+        "max_segment_extension_fraction": 0.04000379954538946,
+        "pelt_tests_passed": 12,
+        "game_glb_validator": {
+          "errors": 0,
+          "warnings": 0,
+          "infos": 0,
+          "hints": 0
+        }
+      }
+    },
+    "waist_layout_skin_revision": {
+      "belt_outer_surface_radial_clearance": {
+        "before": {
+          "samples": 212,
+          "mean_m": 0.05107956561836076,
+          "min_m": 0.015584458471890189,
+          "max_m": 0.09809367797085644
+        },
+        "after": {
+          "samples": 212,
+          "mean_m": 0.017384160447496605,
+          "min_m": 0.0020942824345441813,
+          "max_m": 0.027822980195219033
+        }
+      },
+      "cloth_motion": {
+        "motion": [
+          {
+            "clip": "idle1",
+            "frames": 180,
+            "maxPinError": 0,
+            "maxStretch": 0.0400032015753351
+          },
+          {
+            "clip": "walk",
+            "frames": 180,
+            "maxPinError": 0,
+            "maxStretch": 0.04000334208551548
+          },
+          {
+            "clip": "run",
+            "frames": 180,
+            "maxPinError": 0,
+            "maxStretch": 0.040003318377910047
+          },
+          {
+            "clip": "combat_idle",
+            "frames": 180,
+            "maxPinError": 0,
+            "maxStretch": 0.04000293845544722
+          },
+          {
+            "clip": "slash1",
+            "frames": 180,
+            "maxPinError": 0,
+            "maxStretch": 0.04000364872881823
+          },
+          {
+            "clip": "jump",
+            "frames": 180,
+            "maxPinError": 0,
+            "maxStretch": 0.040003527053462884
+          }
+        ],
+        "errors": []
+      },
+      "tests_passed": 30,
+      "game_glb": {
+        "base": {
+          "errors": 0,
+          "warnings": 21
+        },
+        "pants_barbarian": {
+          "errors": 0,
+          "warnings": 0
+        }
+      },
+      "views": [
+        "front",
+        "side",
+        "back",
+        "above"
+      ]
+    },
+    "seam_and_rear_panel_revision": {
+      "geometry": {
+        "barbarian_strap_left_1": "All attributes and physics metadata unchanged",
+        "barbarian_strap_right_1": "All attributes and physics metadata unchanged",
+        "barbarian_pelt_front": "All attributes and physics metadata unchanged",
+        "rear_front_mirror_max_error_m": 1.4901161193847656e-08,
+        "front_belt_min_z": -0.02500000037252903,
+        "triangles": 3005
+      },
+      "cloth_motion": {
+        "motion": [
+          {
+            "clip": "idle1",
+            "frames": 180,
+            "maxPinError": 0,
+            "maxStretch": 0.0400031748677494
+          },
+          {
+            "clip": "walk",
+            "frames": 180,
+            "maxPinError": 0,
+            "maxStretch": 0.040003473083342955
+          },
+          {
+            "clip": "run",
+            "frames": 180,
+            "maxPinError": 0,
+            "maxStretch": 0.04000370656422825
+          },
+          {
+            "clip": "combat_idle",
+            "frames": 180,
+            "maxPinError": 0,
+            "maxStretch": 0.0400034840736867
+          },
+          {
+            "clip": "slash1",
+            "frames": 180,
+            "maxPinError": 0,
+            "maxStretch": 0.04000364872881823
+          },
+          {
+            "clip": "jump",
+            "frames": 180,
+            "maxPinError": 0,
+            "maxStretch": 0.040003527053462884
+          }
+        ],
+        "errors": []
+      },
+      "game_glb": {
+        "numErrors": 0,
+        "numWarnings": 0,
+        "numInfos": 0,
+        "numHints": 0,
+        "messages": [],
+        "truncated": false
+      },
+      "tests_passed": 30,
+      "visual_checks": "Game GLB: idle and combat idle from front, three-quarter front, profile, back, side seam and above (12 views)."
+    },
+    "shoulder_skin_sandals": {
+      "geometry": {
+        "body_positions_indices_weights_preserved": true,
+        "head_pixels_checked": 1248558,
+        "head_texture_max_delta": 0,
+        "rear_top_surface_distance": {
+          "before": {
+            "min_mm": 16.549542546272278,
+            "median_mm": 29.226230457425117,
+            "p90_mm": 46.26631364226341,
+            "max_mm": 58.850135654211044
+          },
+          "after": {
+            "min_mm": 4.147280007600784,
+            "median_mm": 14.687714166939259,
+            "p90_mm": 21.145452558994297,
+            "max_mm": 25.774700567126274
+          }
+        }
+      },
+      "game_glb": {
+        "base": {
+          "numErrors": 0,
+          "numWarnings": 17,
+          "numInfos": 0,
+          "numHints": 0,
+          "messages": [
+            {
+              "code": "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE",
+              "message": "Material requires a tangent space but the mesh primitive does not provide it. Runtime-generated tangent space may be non-portable across implementations.",
+              "severity": 1,
+              "pointer": "/meshes/0/primitives/0/material"
+            },
+            {
+              "code": "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE",
+              "message": "Material requires a tangent space but the mesh primitive does not provide it. Runtime-generated tangent space may be non-portable across implementations.",
+              "severity": 1,
+              "pointer": "/meshes/1/primitives/0/material"
+            },
+            {
+              "code": "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE",
+              "message": "Material requires a tangent space but the mesh primitive does not provide it. Runtime-generated tangent space may be non-portable across implementations.",
+              "severity": 1,
+              "pointer": "/meshes/2/primitives/0/material"
+            },
+            {
+              "code": "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE",
+              "message": "Material requires a tangent space but the mesh primitive does not provide it. Runtime-generated tangent space may be non-portable across implementations.",
+              "severity": 1,
+              "pointer": "/meshes/3/primitives/0/material"
+            },
+            {
+              "code": "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE",
+              "message": "Material requires a tangent space but the mesh primitive does not provide it. Runtime-generated tangent space may be non-portable across implementations.",
+              "severity": 1,
+              "pointer": "/meshes/5/primitives/0/material"
+            },
+            {
+              "code": "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE",
+              "message": "Material requires a tangent space but the mesh primitive does not provide it. Runtime-generated tangent space may be non-portable across implementations.",
+              "severity": 1,
+              "pointer": "/meshes/7/primitives/0/material"
+            },
+            {
+              "code": "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE",
+              "message": "Material requires a tangent space but the mesh primitive does not provide it. Runtime-generated tangent space may be non-portable across implementations.",
+              "severity": 1,
+              "pointer": "/meshes/8/primitives/0/material"
+            },
+            {
+              "code": "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE",
+              "message": "Material requires a tangent space but the mesh primitive does not provide it. Runtime-generated tangent space may be non-portable across implementations.",
+              "severity": 1,
+              "pointer": "/meshes/9/primitives/0/material"
+            },
+            {
+              "code": "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE",
+              "message": "Material requires a tangent space but the mesh primitive does not provide it. Runtime-generated tangent space may be non-portable across implementations.",
+              "severity": 1,
+              "pointer": "/meshes/9/primitives/1/material"
+            },
+            {
+              "code": "NODE_SKINNED_MESH_NON_ROOT",
+              "message": "Node with a skinned mesh is not root. Parent transforms will not affect a skinned mesh.",
+              "severity": 1,
+              "pointer": "/nodes/65"
+            },
+            {
+              "code": "NODE_SKINNED_MESH_NON_ROOT",
+              "message": "Node with a skinned mesh is not root. Parent transforms will not affect a skinned mesh.",
+              "severity": 1,
+              "pointer": "/nodes/66"
+            },
+            {
+              "code": "NODE_SKINNED_MESH_NON_ROOT",
+              "message": "Node with a skinned mesh is not root. Parent transforms will not affect a skinned mesh.",
+              "severity": 1,
+              "pointer": "/nodes/67"
+            },
+            {
+              "code": "NODE_SKINNED_MESH_NON_ROOT",
+              "message": "Node with a skinned mesh is not root. Parent transforms will not affect a skinned mesh.",
+              "severity": 1,
+              "pointer": "/nodes/68"
+            },
+            {
+              "code": "NODE_SKINNED_MESH_NON_ROOT",
+              "message": "Node with a skinned mesh is not root. Parent transforms will not affect a skinned mesh.",
+              "severity": 1,
+              "pointer": "/nodes/69"
+            },
+            {
+              "code": "NODE_SKINNED_MESH_NON_ROOT",
+              "message": "Node with a skinned mesh is not root. Parent transforms will not affect a skinned mesh.",
+              "severity": 1,
+              "pointer": "/nodes/70"
+            },
+            {
+              "code": "NODE_SKINNED_MESH_NON_ROOT",
+              "message": "Node with a skinned mesh is not root. Parent transforms will not affect a skinned mesh.",
+              "severity": 1,
+              "pointer": "/nodes/71"
+            },
+            {
+              "code": "NODE_SKINNED_MESH_NON_ROOT",
+              "message": "Node with a skinned mesh is not root. Parent transforms will not affect a skinned mesh.",
+              "severity": 1,
+              "pointer": "/nodes/72"
+            }
+          ],
+          "truncated": false
+        },
+        "top_barbarian": {
+          "numErrors": 0,
+          "numWarnings": 0,
+          "numInfos": 0,
+          "numHints": 0,
+          "messages": [],
+          "truncated": false
+        },
+        "boots_barbarian": {
+          "numErrors": 0,
+          "numWarnings": 0,
+          "numInfos": 0,
+          "numHints": 0,
+          "messages": [],
+          "truncated": false
+        }
+      },
+      "skin_bake_idempotent": true,
+      "tests_passed": 30,
+      "visual_checks": "Final game GLBs: six clips, five views each (back, shoulders, skin front, skin side, feet); 30 views",
+      "motion": {
+        "motion": [
+          {
+            "clip": "idle1",
+            "frames": 180,
+            "maxPinError": 0,
+            "maxStretch": 0.0400031748677494
+          },
+          {
+            "clip": "walk",
+            "frames": 180,
+            "maxPinError": 0,
+            "maxStretch": 0.040003473083342955
+          },
+          {
+            "clip": "run",
+            "frames": 180,
+            "maxPinError": 0,
+            "maxStretch": 0.04000370656422825
+          },
+          {
+            "clip": "combat_idle",
+            "frames": 180,
+            "maxPinError": 0,
+            "maxStretch": 0.0400034840736867
+          },
+          {
+            "clip": "slash1",
+            "frames": 180,
+            "maxPinError": 0,
+            "maxStretch": 0.04000364872881823
+          },
+          {
+            "clip": "jump",
+            "frames": 180,
+            "maxPinError": 0,
+            "maxStretch": 0.040003527053462884
+          }
+        ],
+        "errors": []
+      }
+    }
+  },
+  "skin_surface_revision": {
+    "date": "2026-09-30",
+    "tool": "OpenAI Codex built-in ImageGen",
+    "tier": "ChatGPT Pro 20x",
+    "license": "OpenAI generated output terms; body source maps retain original Meshy Premium provenance",
+    "reference": "doc/images/characters/modular_human_male_01/base-front.png",
+    "prompt": "Use case: stylized-concept. Asset type: square seamless diffuse albedo texture for an existing 3D male game character's skin. The attached character image is a COLOR AND MATERIAL REFERENCE ONLY. Generate ONLY a flat square swatch of warm light tan human skin matching the reference's upper thigh and abdomen, evenly lit without directional lighting, very subtle fine pores and faint natural mottling. This is a surface texture tile, NOT a picture of a person or body part. Edge-to-edge uniform skin, no clothing, seams, folds, hairs, freckles, scars, limbs, anatomy, text, black borders, highlights, large blotches, or shadows. Fine pore density suitable for a 45-centimeter wide skin surface. All four edges must tile seamlessly. Low contrast, photorealistic PBR base-color swatch. Do not depict any person, pose, genitals, or body contours.",
+    "generated_surface": {
+      "path": "doc/images/characters/modular_human_male_01/parts/body_skin_surface.png",
+      "sha256": "bfcd74c9212e46be56dc0dd975090c24e1e895dcfcbc0d917706333934c2038a",
+      "bytes": 2418199,
+      "size": [
+        1254,
+        1254
+      ]
+    },
+    "source_maps": {
+      "assets/modular_human_male_01/parts/skin_sources/color.png": {
+        "sha256": "f55b554d4877dc6913b5290615bf7d2f2d8a45fbbac9cf6606c4c5366bdf36c5",
+        "bytes": 17576316
+      },
+      "assets/modular_human_male_01/parts/skin_sources/normal.png": {
+        "sha256": "5ec898265198fe42f95c6686b2ee4d1be1e766e8ab429e535abadee3467dcdaf",
+        "bytes": 8018849
+      },
+      "assets/modular_human_male_01/parts/skin_sources/original-uv.json": {
+        "sha256": "4e59d9006687bc9adec5add713a6286f9be0a4daa3377f16afd522a6b87ec9ea",
+        "bytes": 46499
+      },
+      "assets/modular_human_male_01/parts/skin_sources/roughness.png": {
+        "sha256": "761e0ded1d0feec64aea73c94892d096469fea5244566d1704a7c45437cbb527",
+        "bytes": 1081739
+      }
+    },
+    "processing": {
+      "script": "tools/restore-modular-skin.py",
+      "uv": "Restore original garment UVs, rebake diffuse/normal/roughness continuously in rest-space across both material regions",
+      "source_sampling": "Central 20–80 percent of generated image; no use of outer transparency and no periodic tiling",
+      "skin_blend_y_m": [
+        0.61,
+        0.77,
+        1.09,
+        1.21
+      ],
+      "color_target_srgb": [
+        180,
+        134,
+        104
+      ],
+      "detail_contrast": 0.18,
+      "filter_sigma_px": 1.2,
+      "uv_padding_px": 8,
+      "normals": "Blend welded geometric normals across hip/thigh region; flatten garment normal map where fully replaced",
+      "preserved": [
+        "body vertex positions",
+        "indices",
+        "skin joint indices and weights",
+        "65-bone rig",
+        "head texture pixels and geometry",
+        "existing animations"
+      ]
+    },
+    "outputs": {
+      "assets/modular_human_male_01/parts/fitted/base.glb": {
+        "sha256": "99016ab4311f8fb4256b7a42bdb0d404e2d991154c6ff18c3acb3da76a43f7f0",
+        "bytes": 22024012
+      },
+      "client/public/models/characters/modular_male/base.glb": {
+        "sha256": "b52890caa647ba7d9fdb35640e1e3d3c84f6a4744f830f440fac116c29e3bf15",
+        "bytes": 4861248
+      },
+      "assets/modular_human_male_01/parts/fitted/character_parts.blend": {
+        "sha256": "89863715496c9c0a74d748657852f0c337672cd10ae20b5e68f91de01e9c23a3",
+        "bytes": 116197201
+      },
+      "assets/modular_human_male_01/parts/fitted/plate_parts.blend": {
+        "sha256": "8981a356ec9d493bfcb948bc3297e9afdb1be88d92d5520f3e92fd252b5191e6",
+        "bytes": 79278628
+      },
+      "assets/modular_human_male_01/parts/fitted/barbarian_parts.blend": {
+        "sha256": "cdc2f35f810c579ddfde658aae4b3544c516c02cc1e9ecfe4f13eb678b29b022",
+        "bytes": 95139216
+      }
+    }
+  },
+  "final_cleanup": {
+    "date": "2026-09-30",
+    "removed_previews": [
+      "doc/images/characters/modular_human_male_01/barbarian-outfit-preview.png",
+      "doc/images/characters/modular_human_male_01/barbarian-seam-finish-preview.png",
+      "doc/images/characters/modular_human_male_01/barbarian-waist-refit-preview.png"
+    ],
+    "retained_preview": "doc/images/characters/modular_human_male_01/barbarian-skin-sandals-preview.png",
+    "retained_sources": "Generated skin surface and immutable original color/normal/roughness maps and UVs remain required rebuild inputs",
+    "simplify_validation": {
+      "fit": "Identical GLB document and binary; skin fingerprint excluded",
+      "skin": "Identical GLB document and binary; skin fingerprint excluded"
+    },
+    "blend_cleanup": {
+      "character_parts.blend": {
+        "removed": {
+          "materials": [
+            "Material_0.001",
+            "restored_skin.001"
+          ],
+          "images": [
+            "base_color",
+            "Image_1.008",
+            "normal.008"
+          ]
+        },
+        "before_bytes": 137996907,
+        "after_bytes": 116197201,
+        "scene_objects_and_polygon_counts_preserved": true
+      },
+      "plate_parts.blend": {
+        "removed": {
+          "materials": [
+            "Material_0.006",
+            "restored_skin.001"
+          ],
+          "images": [
+            "base_color",
+            "base_color.001",
+            "Image_1",
+            "Image_1.006",
+            "normal",
+            "normal.006"
+          ]
+        },
+        "before_bytes": 127751760,
+        "after_bytes": 79278628,
+        "scene_objects_and_polygon_counts_preserved": true
+      }
+    },
+    "bake_fingerprint": "Updated source/runtime metadata only after identical old/new generator output verification; approved geometry and texture bytes preserved",
+    "asset_publication": {
+      "repo": "jake-song-openmmo/onlinerpg-assets",
+      "revision": "8de6868ebab44a112ec4f8557cb6558785646890",
+      "verified_files": 15
+    },
+    "checks": {
+      "npm_format": "passed",
+      "npm_lint": "passed",
+      "npm_check": "passed; svelte-check 0 errors and 0 warnings",
+      "related_tests_passed": 30,
+      "game_glb_errors": 0
+    },
+    "temporary_files_removed": {
+      "files": 250,
+      "bytes": 469930555,
+      "scope": "Task-owned temporary backups, renders, review scripts and logs under /tmp only"
     }
   }
 }

@@ -1237,7 +1237,7 @@
       "added_warning": "Three new textured primitives use runtime-generated tangent space, as the existing body does.",
       "original_bare_geometry_attributes_preserved": true,
       "game_geometry_matches_source": true,
-      "blender_max_position_difference_m": 0.00000448,
+      "blender_max_position_difference_m": 4.48e-06,
       "tests_passed": 36,
       "check_passed": true,
       "lint_passed": true
@@ -1378,7 +1378,7 @@
       },
       "browser_errors": 0,
       "game_geometry_matches_source": true,
-      "blender_max_position_difference_m": 0.00000642,
+      "blender_max_position_difference_m": 6.42e-06,
       "tests_passed": 36
     }
   },
@@ -1475,7 +1475,7 @@
       "unchanged_warnings_per_file": 8,
       "browser_errors": 0,
       "game_geometry_and_skin_match_source": true,
-      "blender_max_position_difference_m": 0.0000033303532719661414,
+      "blender_max_position_difference_m": 3.3303532719661414e-06,
       "tests_passed": 20
     },
     "status": "Unused: superseded by cloth_boot_cuffs_medial_only after user feedback that the whole ankle became too narrow."
@@ -1575,7 +1575,7 @@
       "unchanged_warnings_per_file": 8,
       "browser_errors": 0,
       "game_geometry_and_skin_match_source": true,
-      "blender_max_position_difference_m": 0.000003993511199951172
+      "blender_max_position_difference_m": 3.993511199951172e-06
     },
     "followup": "Medial adjustment retained; cloth_boot_cuffs_fore_aft additionally moves the lower cuff backward to match the user-marked front protrusion and rear gap."
   },
@@ -1673,7 +1673,7 @@
       "unchanged_warnings_per_file": 8,
       "browser_errors": 0,
       "game_geometry_and_skin_match_source": true,
-      "blender_max_position_difference_m": 0.0000041164171236214525
+      "blender_max_position_difference_m": 4.1164171236214525e-06
     }
   },
   "cloth_boot_cuffs_ankle_width": {
@@ -1917,6 +1917,279 @@
       "minimum_deformation_jacobian_determinant": 0.251254208526903,
       "game_geometry_and_skin_match_source": true,
       "blender_max_position_difference_m": 3.331476105831167e-06
+    }
+  },
+  "covered_skin_restoration": {
+    "date": "2026-09-30",
+    "request": "Use the existing skin texture on the underwear-shaped surface exposed by the barbarian outfit.",
+    "script": "tools/restore-modular-skin.py",
+    "triangles": 1180,
+    "uv_islands": 71,
+    "material": "restored_skin",
+    "texture_source": "Existing Material_0 base color, normal and metallic/roughness images in base.glb",
+    "uv_patch": {
+      "center": [
+        0.5065,
+        0.7275
+      ],
+      "extent": [
+        0.079,
+        0.051
+      ],
+      "layout": "Fit each existing UV island without changing its aspect ratio; shared UV boundaries retain matching coordinates."
+    },
+    "normal_scale": 0.25,
+    "image_bytes_preserved": true,
+    "geometry_and_skin_preserved": true,
+    "outputs": {
+      "assets/modular_human_male_01/parts/fitted/base.glb": {
+        "sha256": "9ef374b220b0000499af2f69b8a6c7b306e8db554beac79089b47ab818b5777e",
+        "bytes": 27462588
+      },
+      "client/public/models/characters/modular_male/base.glb": {
+        "sha256": "34cead01b819f2866e4d1345cf87797717dd7519eb768bd85b9fff265f523865",
+        "bytes": 4958008
+      },
+      "assets/modular_human_male_01/parts/fitted/character_parts.blend": {
+        "sha256": "b221d13afadf06e75cf53262675963a051cbdf5864fcdbd58b275fce4aa2c048",
+        "bytes": 94923940
+      },
+      "assets/modular_human_male_01/parts/fitted/plate_parts.blend": {
+        "sha256": "0910b1c6a2b42f2a04c510d011ed821735da558d21bd1bda53d3076bfed11ebf",
+        "bytes": 84779748
+      },
+      "assets/modular_human_male_01/parts/fitted/barbarian_parts.blend": {
+        "sha256": "d837f73e066689d9d8076c52fa46aa6fbd1bfc1b13f8ded1958d510dc6a018a3",
+        "bytes": 100621857
+      }
+    },
+    "validation": {
+      "game_glb_errors": 0,
+      "game_glb_warnings": 21,
+      "new_warnings": "Automatic tangent generation for the two newly textured skin primitives",
+      "blender_source_uv_match_error": 0,
+      "browser_errors": []
+    },
+    "license": "Reuse of existing project body textures; no new AI generation or credits",
+    "status": "unused; superseded by skin_surface_revision because UV patch assignment left garment border marks"
+  },
+  "skin_surface_revision": {
+    "date": "2026-09-30",
+    "tool": "OpenAI Codex built-in ImageGen",
+    "tier": "ChatGPT Pro 20x",
+    "license": "OpenAI generated output terms; body source maps retain original Meshy Premium provenance",
+    "reference": "doc/images/characters/modular_human_male_01/base-front.png",
+    "prompt": "Use case: stylized-concept. Asset type: square seamless diffuse albedo texture for an existing 3D male game character's skin. The attached character image is a COLOR AND MATERIAL REFERENCE ONLY. Generate ONLY a flat square swatch of warm light tan human skin matching the reference's upper thigh and abdomen, evenly lit without directional lighting, very subtle fine pores and faint natural mottling. This is a surface texture tile, NOT a picture of a person or body part. Edge-to-edge uniform skin, no clothing, seams, folds, hairs, freckles, scars, limbs, anatomy, text, black borders, highlights, large blotches, or shadows. Fine pore density suitable for a 45-centimeter wide skin surface. All four edges must tile seamlessly. Low contrast, photorealistic PBR base-color swatch. Do not depict any person, pose, genitals, or body contours.",
+    "generated_surface": {
+      "path": "doc/images/characters/modular_human_male_01/parts/body_skin_surface.png",
+      "sha256": "bfcd74c9212e46be56dc0dd975090c24e1e895dcfcbc0d917706333934c2038a",
+      "bytes": 2418199,
+      "size": [
+        1254,
+        1254
+      ]
+    },
+    "source_maps": {
+      "assets/modular_human_male_01/parts/skin_sources/color.png": {
+        "sha256": "f55b554d4877dc6913b5290615bf7d2f2d8a45fbbac9cf6606c4c5366bdf36c5",
+        "bytes": 17576316
+      },
+      "assets/modular_human_male_01/parts/skin_sources/normal.png": {
+        "sha256": "5ec898265198fe42f95c6686b2ee4d1be1e766e8ab429e535abadee3467dcdaf",
+        "bytes": 8018849
+      },
+      "assets/modular_human_male_01/parts/skin_sources/original-uv.json": {
+        "sha256": "4e59d9006687bc9adec5add713a6286f9be0a4daa3377f16afd522a6b87ec9ea",
+        "bytes": 46499
+      },
+      "assets/modular_human_male_01/parts/skin_sources/roughness.png": {
+        "sha256": "761e0ded1d0feec64aea73c94892d096469fea5244566d1704a7c45437cbb527",
+        "bytes": 1081739
+      }
+    },
+    "processing": {
+      "script": "tools/restore-modular-skin.py",
+      "uv": "Restore original garment UVs, rebake diffuse/normal/roughness continuously in rest-space across both material regions",
+      "source_sampling": "Central 20–80 percent of generated image; no use of outer transparency and no periodic tiling",
+      "skin_blend_y_m": [
+        0.61,
+        0.77,
+        1.09,
+        1.21
+      ],
+      "color_target_srgb": [
+        180,
+        134,
+        104
+      ],
+      "detail_contrast": 0.18,
+      "filter_sigma_px": 1.2,
+      "uv_padding_px": 8,
+      "normals": "Blend welded geometric normals across hip/thigh region; flatten garment normal map where fully replaced",
+      "preserved": [
+        "body vertex positions",
+        "indices",
+        "skin joint indices and weights",
+        "65-bone rig",
+        "head texture pixels and geometry",
+        "existing animations"
+      ]
+    },
+    "outputs": {
+      "assets/modular_human_male_01/parts/fitted/base.glb": {
+        "sha256": "99016ab4311f8fb4256b7a42bdb0d404e2d991154c6ff18c3acb3da76a43f7f0",
+        "bytes": 22024012
+      },
+      "client/public/models/characters/modular_male/base.glb": {
+        "sha256": "b52890caa647ba7d9fdb35640e1e3d3c84f6a4744f830f440fac116c29e3bf15",
+        "bytes": 4861248
+      },
+      "assets/modular_human_male_01/parts/fitted/character_parts.blend": {
+        "sha256": "89863715496c9c0a74d748657852f0c337672cd10ae20b5e68f91de01e9c23a3",
+        "bytes": 116197201
+      },
+      "assets/modular_human_male_01/parts/fitted/plate_parts.blend": {
+        "sha256": "8981a356ec9d493bfcb948bc3297e9afdb1be88d92d5520f3e92fd252b5191e6",
+        "bytes": 79278628
+      },
+      "assets/modular_human_male_01/parts/fitted/barbarian_parts.blend": {
+        "sha256": "cdc2f35f810c579ddfde658aae4b3544c516c02cc1e9ecfe4f13eb678b29b022",
+        "bytes": 95139216
+      }
+    },
+    "validation": {
+      "geometry": {
+        "body_positions_indices_weights_preserved": true,
+        "head_pixels_checked": 1248558,
+        "head_texture_max_delta": 0,
+        "rear_top_surface_distance": {
+          "before": {
+            "min_mm": 16.549542546272278,
+            "median_mm": 29.226230457425117,
+            "p90_mm": 46.26631364226341,
+            "max_mm": 58.850135654211044
+          },
+          "after": {
+            "min_mm": 4.147280007600784,
+            "median_mm": 14.687714166939259,
+            "p90_mm": 21.145452558994297,
+            "max_mm": 25.774700567126274
+          }
+        }
+      },
+      "base_glb": {
+        "numErrors": 0,
+        "numWarnings": 17,
+        "numInfos": 0,
+        "numHints": 0,
+        "messages": [
+          {
+            "code": "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE",
+            "message": "Material requires a tangent space but the mesh primitive does not provide it. Runtime-generated tangent space may be non-portable across implementations.",
+            "severity": 1,
+            "pointer": "/meshes/0/primitives/0/material"
+          },
+          {
+            "code": "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE",
+            "message": "Material requires a tangent space but the mesh primitive does not provide it. Runtime-generated tangent space may be non-portable across implementations.",
+            "severity": 1,
+            "pointer": "/meshes/1/primitives/0/material"
+          },
+          {
+            "code": "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE",
+            "message": "Material requires a tangent space but the mesh primitive does not provide it. Runtime-generated tangent space may be non-portable across implementations.",
+            "severity": 1,
+            "pointer": "/meshes/2/primitives/0/material"
+          },
+          {
+            "code": "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE",
+            "message": "Material requires a tangent space but the mesh primitive does not provide it. Runtime-generated tangent space may be non-portable across implementations.",
+            "severity": 1,
+            "pointer": "/meshes/3/primitives/0/material"
+          },
+          {
+            "code": "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE",
+            "message": "Material requires a tangent space but the mesh primitive does not provide it. Runtime-generated tangent space may be non-portable across implementations.",
+            "severity": 1,
+            "pointer": "/meshes/5/primitives/0/material"
+          },
+          {
+            "code": "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE",
+            "message": "Material requires a tangent space but the mesh primitive does not provide it. Runtime-generated tangent space may be non-portable across implementations.",
+            "severity": 1,
+            "pointer": "/meshes/7/primitives/0/material"
+          },
+          {
+            "code": "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE",
+            "message": "Material requires a tangent space but the mesh primitive does not provide it. Runtime-generated tangent space may be non-portable across implementations.",
+            "severity": 1,
+            "pointer": "/meshes/8/primitives/0/material"
+          },
+          {
+            "code": "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE",
+            "message": "Material requires a tangent space but the mesh primitive does not provide it. Runtime-generated tangent space may be non-portable across implementations.",
+            "severity": 1,
+            "pointer": "/meshes/9/primitives/0/material"
+          },
+          {
+            "code": "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE",
+            "message": "Material requires a tangent space but the mesh primitive does not provide it. Runtime-generated tangent space may be non-portable across implementations.",
+            "severity": 1,
+            "pointer": "/meshes/9/primitives/1/material"
+          },
+          {
+            "code": "NODE_SKINNED_MESH_NON_ROOT",
+            "message": "Node with a skinned mesh is not root. Parent transforms will not affect a skinned mesh.",
+            "severity": 1,
+            "pointer": "/nodes/65"
+          },
+          {
+            "code": "NODE_SKINNED_MESH_NON_ROOT",
+            "message": "Node with a skinned mesh is not root. Parent transforms will not affect a skinned mesh.",
+            "severity": 1,
+            "pointer": "/nodes/66"
+          },
+          {
+            "code": "NODE_SKINNED_MESH_NON_ROOT",
+            "message": "Node with a skinned mesh is not root. Parent transforms will not affect a skinned mesh.",
+            "severity": 1,
+            "pointer": "/nodes/67"
+          },
+          {
+            "code": "NODE_SKINNED_MESH_NON_ROOT",
+            "message": "Node with a skinned mesh is not root. Parent transforms will not affect a skinned mesh.",
+            "severity": 1,
+            "pointer": "/nodes/68"
+          },
+          {
+            "code": "NODE_SKINNED_MESH_NON_ROOT",
+            "message": "Node with a skinned mesh is not root. Parent transforms will not affect a skinned mesh.",
+            "severity": 1,
+            "pointer": "/nodes/69"
+          },
+          {
+            "code": "NODE_SKINNED_MESH_NON_ROOT",
+            "message": "Node with a skinned mesh is not root. Parent transforms will not affect a skinned mesh.",
+            "severity": 1,
+            "pointer": "/nodes/70"
+          },
+          {
+            "code": "NODE_SKINNED_MESH_NON_ROOT",
+            "message": "Node with a skinned mesh is not root. Parent transforms will not affect a skinned mesh.",
+            "severity": 1,
+            "pointer": "/nodes/71"
+          },
+          {
+            "code": "NODE_SKINNED_MESH_NON_ROOT",
+            "message": "Node with a skinned mesh is not root. Parent transforms will not affect a skinned mesh.",
+            "severity": 1,
+            "pointer": "/nodes/72"
+          }
+        ],
+        "truncated": false
+      },
+      "tests_passed": 30,
+      "idempotent": true
     }
   }
 }

@@ -9,6 +9,15 @@
 `barbarian_parts.blend`, `parts/barbarian_sources/`의 생성 원본을 추가했다.
 같은 리그를 사용하며 제작 미리보기에서 부위별로 교체한다.
 
+같은 날 바바리안 착용 시 보이던 속옷 영역을 사용자의 요청으로 피부 재질로 변경했다.
+최초의 1,180 triangles·71개 UV 조각 재배치는 피부 경계선이 남아 대체했다.
+원래 UV를 복원하고 새 피부 소재를 골반·허벅지에 연속 베이크한 `restored_skin`을 사용한다.
+경계의 색·법선·거칠기와 정점 법선을 함께 연결하며 얼굴 텍스처, 몸체 정점 위치·삼각형·
+스킨 가중치·리그는 유지한다. 보존 원본은 `parts/skin_sources/`에 있다.
+몸체 GLB 제작용·게임용과 `character_parts.blend`, `plate_parts.blend`,
+`barbarian_parts.blend`에 반영했다. 재처리 도구는 `tools/restore-modular-skin.py`이며,
+세부 내용은 [바바리안 복장 기록](modular-barbarian.md)을 따른다.
+
 ## 파일 구성
 
 | 경로 (`assets/modular_human_male_01/` 기준) | 용도 |
