@@ -47,9 +47,14 @@ function area(geometry: THREE.BufferGeometry) {
 }
 
 describe('modular clothing cuts', () => {
-  it.each([-1, 1])(
-    'shortens the sleeve to each glove opening and restores the bare arm (side: %s)',
-    (side) => {
+  it.each([
+    { side: -1, top: 'linen' },
+    { side: 1, top: 'linen' },
+    { side: -1, top: 'plate' },
+    { side: 1, top: 'plate' },
+  ] as const)(
+    'shortens the $top sleeve to each glove opening and restores the bare arm (side: $side)',
+    ({ side, top }) => {
       const source = cloth()
       const position = source.attributes.position
       for (let i = 0; i < position.count; i++)
@@ -60,12 +65,16 @@ describe('modular clothing cuts', () => {
         )
       const sleeve = new THREE.SkinnedMesh(source)
       const arm = new THREE.SkinnedMesh(source)
-      sleeve.userData.region = 'sleeves'
+      sleeve.userData.region = top === 'linen' ? 'sleeves' : 'top_plate'
       arm.userData.region = 'forearms'
-      const parts = new Map([['top_linen', [sleeve]]])
+      const parts = new Map([[`top_${top}`, [sleeve]]])
       let previous = 0
       for (const gloves of ['barbarian', 'plate', 'leather', 'none'] as const) {
-        showModularOutfit([arm], parts, { ...DEFAULT_MODULAR_OUTFIT, gloves })
+        showModularOutfit([arm], parts, {
+          ...DEFAULT_MODULAR_OUTFIT,
+          top,
+          gloves,
+        })
         const covered = Math.abs(area(sleeve.geometry))
         expect(covered).toBeGreaterThan(previous)
         previous = covered
@@ -85,6 +94,22 @@ describe('modular clothing cuts', () => {
       expect(arm.geometry).toBe(source)
     }
   )
+
+  it('preserves the lower torso when trimming one-piece plate armor', () => {
+    const source = cloth()
+    const position = source.attributes.position
+    for (let i = 0; i < position.count; i++)
+      position.setXY(i, position.getX(i) * 0.24, 0.96 + position.getY(i) * 0.2)
+    const armor = new THREE.SkinnedMesh(source)
+    const parts = new Map([['top_plate', [armor]]])
+    showModularOutfit([], parts, {
+      ...DEFAULT_MODULAR_OUTFIT,
+      top: 'plate',
+      gloves: 'barbarian',
+    })
+    expect(area(armor.geometry)).toBeCloseTo(area(source))
+    expect(armor.geometry.attributes.position.array).toEqual(position.array)
+  })
 
   it.each([false, true])(
     'cuts a straight boundary with continuous UVs and bone weights (nonindexed: %s)',

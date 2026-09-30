@@ -148,8 +148,8 @@ export function showModularOutfit(
       barbarian: 'bracers',
     } as const
   )[outfit.gloves]
-  const shortSleeves =
-    (outfit.top === 'linen' || outfit.top === 'leather') && sleeveCut
+  const coveredArms = outfit.top !== 'none' && outfit.top !== 'barbarian'
+  const shortSleeves = coveredArms && sleeveCut
   if (coveredLegs) {
     if (!shortPants) {
       hidden.add('legs')
@@ -157,7 +157,7 @@ export function showModularOutfit(
     }
     hidden.add('boot_ankles')
   }
-  if (outfit.top !== 'none' && outfit.top !== 'barbarian') {
+  if (coveredArms) {
     for (const region of ['torso', 'upper_arms']) hidden.add(region)
     if (!shortSleeves) hidden.add('forearms')
   }
@@ -190,7 +190,7 @@ export function showModularOutfit(
     for (const mesh of meshes) {
       const partRegion = region(mesh)
       const cut =
-        id === 'top_linen' && partRegion === 'sleeves'
+        (id === 'top_linen' && partRegion === 'sleeves') || id === 'top_plate'
           ? sleeveCut
           : shortPants &&
               (id === 'pants_plate' ||

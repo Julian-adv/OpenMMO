@@ -108,7 +108,7 @@ describe('modular outfit coverage', () => {
     showModularOutfit(body, parts, KNIGHT_MODULAR_OUTFIT)
     expect(
       body.filter((mesh) => mesh.visible).map((mesh) => mesh.userData.region)
-    ).toEqual(['head'])
+    ).toEqual(['head', 'forearms'])
     showModularOutfit(body, parts, BARBARIAN_MODULAR_OUTFIT)
     expect(
       body.filter((mesh) => mesh.visible).map((mesh) => mesh.userData.region)
@@ -118,7 +118,7 @@ describe('modular outfit coverage', () => {
     showModularOutfit(body, parts, KNIGHT_MODULAR_OUTFIT)
     expect(
       body.filter((mesh) => mesh.visible).map((mesh) => mesh.userData.region)
-    ).toEqual(['head'])
+    ).toEqual(['head', 'forearms'])
   })
 
   it('covers the neck and hides hair in plate armor, then restores them for cloth', () => {

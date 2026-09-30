@@ -3,8 +3,8 @@ import type { PeltPhysics } from './pelt-rig'
 import type { WindSample } from '../shaders/grass-material'
 
 type Contact = (point: THREE.Vector3, outward: THREE.Vector3) => void
-const STEP = 1 / 120
-const ITERATIONS = 8
+const STEP = 1 / 60
+const ITERATIONS = 4
 
 export function createPeltCloth(
   geometry: THREE.BufferGeometry,
@@ -32,6 +32,7 @@ export function createPeltCloth(
   const outward = directions.map(() => new THREE.Vector3())
   const thickness = new Float32Array(count)
   const segmentLengths = new Float32Array(count)
+  const contacts = new Uint8Array(count)
   const links: { a: number; b: number; length: number; stiffness: number }[] =
     []
   const local = new THREE.Vector3()
@@ -41,7 +42,7 @@ export function createPeltCloth(
   const next = new THREE.Vector3()
   const inverse = new THREE.Matrix4()
   const fur = config.kind === 'fur'
-  const damping = Math.exp(-(fur ? 14 : 11) * STEP)
+  const damping = Math.exp(-(fur ? 48 : 24) * STEP)
   let scale = 1
   let accumulator = 0
   for (let i = 0; i < count; i++) {
@@ -97,6 +98,7 @@ export function createPeltCloth(
   }
 
   function constrain(contact: Contact) {
+    contacts.fill(0)
     for (let iteration = 0; iteration < ITERATIONS; iteration++) {
       for (const { a, b, length, stiffness } of links) {
         const wa = a < pinned ? 0 : 1,
@@ -111,7 +113,11 @@ export function createPeltCloth(
         if (wa) points[a].add(delta)
         if (wb) points[b].sub(delta)
       }
-      for (let i = pinned; i < count; i++) contact(points[i], outward[i])
+      for (let i = pinned; i < count; i++) {
+        local.copy(points[i])
+        contact(points[i], outward[i])
+        if (points[i].distanceToSquared(local) > 1e-12) contacts[i] = 1
+      }
     }
   }
 
@@ -190,8 +196,9 @@ export function createPeltCloth(
     wind: WindSample | null,
     contact: Contact
   ) {
+    accumulator = Math.min(accumulator + dt, STEP * 4)
+    if (accumulator + 1e-10 < STEP) return
     refresh(frame)
-    accumulator = Math.min(accumulator + dt, STEP * 8)
     while (accumulator + 1e-10 >= STEP) {
       accumulator -= STEP
       for (let i = 0; i < count; i++) {
@@ -207,21 +214,21 @@ export function createPeltCloth(
           .add(points[i])
           .addScaledVector(
             delta.copy(targets[i]).sub(points[i]),
-            (fur ? 24 : 12) * STEP * STEP
+            (fur ? 40 : 18) * STEP * STEP
           )
         next.y -= 12 * scale * STEP * STEP
         if (wind) {
           next.x +=
             wind.windDirX *
             wind.windStrength *
-            (fur ? 0.12 : 0.18) *
+            (fur ? 0.06 : 0.12) *
             scale *
             STEP *
             STEP
           next.z +=
             wind.windDirZ *
             wind.windStrength *
-            (fur ? 0.12 : 0.18) *
+            (fur ? 0.06 : 0.12) *
             scale *
             STEP *
             STEP
@@ -240,6 +247,9 @@ export function createPeltCloth(
       }
       constrain(contact)
       preserveLengths()
+      // Contact corrections must not become velocity on the next step.
+      for (let i = pinned; i < count; i++)
+        if (contacts[i]) previous[i].copy(points[i])
     }
     deform()
   }

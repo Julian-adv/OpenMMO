@@ -260,8 +260,20 @@ describe('flexible belt attachments', () => {
       rig.reset()
       root.position.z = -0.06
       hip.rotation.y = 0.15
-      for (let i = 0; i < 12; i++) rig.update(1 / 60)
       const positions = mesh.geometry.getAttribute('position')
+      let bend = 0
+      for (let i = 0; i < 12; i++) {
+        rig.update(1 / 60)
+        const top = new THREE.Vector3().fromBufferAttribute(positions, 4)
+        const middle = new THREE.Vector3().fromBufferAttribute(positions, 10)
+        const hem = new THREE.Vector3().fromBufferAttribute(positions, 16)
+        const straight = new THREE.Line3(top, hem).closestPointToPoint(
+          middle,
+          true,
+          new THREE.Vector3()
+        )
+        bend = Math.max(bend, middle.distanceTo(straight))
+      }
       const original = source.getAttribute('position')
       for (const start of [0, 18])
         for (let i = start; i < start + 6; i++) {
@@ -271,15 +283,7 @@ describe('flexible belt attachments', () => {
             positions.getZ(i),
           ]).toEqual([original.getX(i), original.getY(i), original.getZ(i)])
         }
-      const top = new THREE.Vector3().fromBufferAttribute(positions, 4)
-      const middle = new THREE.Vector3().fromBufferAttribute(positions, 10)
-      const hem = new THREE.Vector3().fromBufferAttribute(positions, 16)
-      const straight = new THREE.Line3(top, hem).closestPointToPoint(
-        middle,
-        true,
-        new THREE.Vector3()
-      )
-      expect(middle.distanceTo(straight)).toBeGreaterThan(0.003)
+      expect(bend).toBeGreaterThan(0.003)
       for (let i = 6; i < 18; i++) {
         const edge = new THREE.Vector3()
           .fromBufferAttribute(positions, i)
@@ -290,19 +294,42 @@ describe('flexible belt attachments', () => {
     }
   )
 
-  it('gives the same flexible result at 30 and 60 fps', () => {
-    const a = softFixture(),
-      b = softFixture()
-    const ra = createPeltRig(a.mesh, a.settings),
-      rb = createPeltRig(b.mesh, b.settings)
-    ra.reset()
-    rb.reset()
-    a.root.position.z = b.root.position.z = -0.04
-    for (let i = 0; i < 30; i++) ra.update(1 / 30)
-    for (let i = 0; i < 60; i++) rb.update(1 / 60)
-    expect(Array.from(a.mesh.geometry.getAttribute('position').array)).toEqual(
-      Array.from(b.mesh.geometry.getAttribute('position').array)
-    )
+  it.each([30, 120, 144])(
+    'gives the same flexible result at %i and 60 fps',
+    (fps) => {
+      const a = softFixture(),
+        b = softFixture()
+      const ra = createPeltRig(a.mesh, a.settings),
+        rb = createPeltRig(b.mesh, b.settings)
+      ra.reset()
+      rb.reset()
+      a.root.position.z = b.root.position.z = -0.04
+      for (let i = 0; i < fps; i++) ra.update(1 / fps)
+      for (let i = 0; i < 60; i++) rb.update(1 / 60)
+      expect(
+        Array.from(a.mesh.geometry.getAttribute('position').array)
+      ).toEqual(Array.from(b.mesh.geometry.getAttribute('position').array))
+    }
+  )
+
+  it('skips geometry uploads and normal updates between physics steps', () => {
+    const { mesh, settings } = softFixture('fur')
+    const rig = createPeltRig(mesh, settings)
+    rig.reset()
+    const positions = mesh.geometry.getAttribute(
+      'position'
+    ) as THREE.BufferAttribute
+    const normals = mesh.geometry.getAttribute(
+      'normal'
+    ) as THREE.BufferAttribute
+    const positionVersion = positions.version
+    const normalVersion = normals.version
+    rig.update(1 / 120)
+    expect(positions.version).toBe(positionVersion)
+    expect(normals.version).toBe(normalVersion)
+    rig.update(1 / 120)
+    expect(positions.version).toBeGreaterThan(positionVersion)
+    expect(normals.version).toBeGreaterThan(normalVersion)
   })
 
   it('settles against a body contact without moving the attachment or its cached geometry', () => {
@@ -315,12 +342,14 @@ describe('flexible belt attachments', () => {
     updatePeltPhysics(root, 1 / 60)
     for (let i = 0; i < 600; i++) updatePeltPhysics(root, 1 / 60)
     const positions = mesh.geometry.getAttribute('position')
-    const before = Array.from(positions.array)
-    for (let i = 0; i < 120; i++) updatePeltPhysics(root, 1 / 60)
-    const movement = Array.from(positions.array).map((v, i) =>
-      Math.abs(v - before[i])
-    )
-    expect(Math.max(...movement)).toBeLessThan(0.0001)
+    let before = Array.from(positions.array)
+    for (let i = 0; i < 120; i++) {
+      updatePeltPhysics(root, 1 / 60)
+      const current = Array.from(positions.array)
+      const movement = current.map((v, j) => Math.abs(v - before[j]))
+      expect(Math.max(...movement)).toBeLessThan(0.0001)
+      before = current
+    }
     for (let i = 6; i < 18; i++) {
       const point = worldVertex(mesh, i)
         .sub(new THREE.Vector3(0, 0.82, 0.2))

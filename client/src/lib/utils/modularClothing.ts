@@ -12,7 +12,11 @@ function sleeveCut(fraction: number): Distance {
       elbow.lerp(wrist, fraction)
     )
   })
-  return (point) => planes[point.x < 0 ? 1 : 0].distanceToPoint(point)
+  return (point) =>
+    Math.max(
+      0.28 - Math.abs(point.x),
+      planes[point.x < 0 ? 1 : 0].distanceToPoint(point)
+    )
 }
 
 const cuts: Record<Cut, Distance> = {

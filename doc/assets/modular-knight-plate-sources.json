@@ -1040,5 +1040,275 @@
       "regenerator_max_position_difference_m": 5.9273685071303817e-8,
       "blender_max_position_difference_m": 0.000004580042548891925
     }
+  },
+  "arm_body_fit_2026_09_30": {
+    "request": "Match plate-arm position and thickness to the bare body and linen shirt, including barbarian bracers.",
+    "method": "Fit upper-arm and forearm cross-sections to the existing body along the Arm/ForeArm/Hand axes, with 8 mm clearance and a smooth shoulder transition. Recompute surface normals, tangents and transferred skin weights.",
+    "script": "tools/fit-modular-plate.py",
+    "source_and_license": "Local edit of the existing Meshy Premium plate source and modular male body; original license records above apply.",
+    "additional_ai_generation": false,
+    "additional_credits": 0,
+    "inputs": [
+      {
+        "path": "assets/modular_human_male_01/parts/plate_sources/top_plate.glb",
+        "bytes": 11702088,
+        "sha256": "ad6eda044a97e53ce5d00573b28b256e71c36ba1e2013f2503b87b5495f95775"
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+        "bytes": 22024012,
+        "sha256": "99016ab4311f8fb4256b7a42bdb0d404e2d991154c6ff18c3acb3da76a43f7f0"
+      }
+    ],
+    "outputs": [
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/top_plate.glb",
+        "bytes": 11941912,
+        "sha256": "c29b772b91d9c7d6b5622758edc707ea2caea4d69618e5729f126d3f88ea47ce"
+      },
+      {
+        "path": "client/public/models/characters/modular_male/top_plate.glb",
+        "bytes": 5006320,
+        "sha256": "4c74d12f405b3947c46556bd17ea06d800b1dd177591a46a3cf4f7fa553ffb91"
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/plate_parts.blend",
+        "bytes": 79277392,
+        "sha256": "afe60edd0916ae540ccfc8cf426d7c07c2aa11b28c9e3af1a20642086e616d28"
+      }
+    ],
+    "validation": {
+      "triangles": 3101,
+      "torso_max_displacement_mm": 0,
+      "minimum_triangle_area_m2": 0.000006731374014634639,
+      "minimum_jacobian_determinant": 0.5416138987940237,
+      "measurements": [
+        {
+          "side": "Left",
+          "fraction": 0.25,
+          "skin": {
+            "center_mm": [
+              -1.06,
+              -4.796
+            ],
+            "radius_mm": [
+              55.146,
+              50.892
+            ]
+          },
+          "before": {
+            "center_mm": [
+              15.585,
+              -25.611
+            ],
+            "radius_mm": [
+              53.29,
+              46.872
+            ]
+          },
+          "after": {
+            "center_mm": [
+              1.196,
+              -3.943
+            ],
+            "radius_mm": [
+              62.229,
+              58.369
+            ]
+          }
+        },
+        {
+          "side": "Left",
+          "fraction": 0.5,
+          "skin": {
+            "center_mm": [
+              -2.875,
+              -6.371
+            ],
+            "radius_mm": [
+              45.857,
+              47.044
+            ]
+          },
+          "before": {
+            "center_mm": [
+              10.502,
+              -18.483
+            ],
+            "radius_mm": [
+              41.701,
+              36.084
+            ]
+          },
+          "after": {
+            "center_mm": [
+              0.324,
+              -3.23
+            ],
+            "radius_mm": [
+              51.528,
+              55.552
+            ]
+          }
+        },
+        {
+          "side": "Left",
+          "fraction": 0.75,
+          "skin": {
+            "center_mm": [
+              -2.527,
+              -2.161
+            ],
+            "radius_mm": [
+              32.618,
+              42.201
+            ]
+          },
+          "before": {
+            "center_mm": [
+              5.418,
+              -9.048
+            ],
+            "radius_mm": [
+              30.113,
+              29.609
+            ]
+          },
+          "after": {
+            "center_mm": [
+              -0.548,
+              -2.156
+            ],
+            "radius_mm": [
+              40.826,
+              52.732
+            ]
+          }
+        },
+        {
+          "side": "Right",
+          "fraction": 0.25,
+          "skin": {
+            "center_mm": [
+              -0.8,
+              -4.849
+            ],
+            "radius_mm": [
+              54.938,
+              51.109
+            ]
+          },
+          "before": {
+            "center_mm": [
+              15.827,
+              -23.549
+            ],
+            "radius_mm": [
+              50.905,
+              50.118
+            ]
+          },
+          "after": {
+            "center_mm": [
+              -1.804,
+              -4.285
+            ],
+            "radius_mm": [
+              62.135,
+              58.401
+            ]
+          }
+        },
+        {
+          "side": "Right",
+          "fraction": 0.5,
+          "skin": {
+            "center_mm": [
+              -2.787,
+              -6.474
+            ],
+            "radius_mm": [
+              45.527,
+              46.763
+            ]
+          },
+          "before": {
+            "center_mm": [
+              11.238,
+              -16.271
+            ],
+            "radius_mm": [
+              39.516,
+              40.967
+            ]
+          },
+          "after": {
+            "center_mm": [
+              -1.57,
+              -4.261
+            ],
+            "radius_mm": [
+              52.171,
+              54.849
+            ]
+          }
+        },
+        {
+          "side": "Right",
+          "fraction": 0.75,
+          "skin": {
+            "center_mm": [
+              -2.463,
+              -2.702
+            ],
+            "radius_mm": [
+              32.265,
+              42.158
+            ]
+          },
+          "before": {
+            "center_mm": [
+              5.368,
+              -8.89
+            ],
+            "radius_mm": [
+              29.407,
+              31.92
+            ]
+          },
+          "after": {
+            "center_mm": [
+              -1.249,
+              -3.658
+            ],
+            "radius_mm": [
+              41.266,
+              51.875
+            ]
+          }
+        }
+      ],
+      "unchanged": [
+        "UV",
+        "texture bytes",
+        "materials",
+        "triangles",
+        "65 bone bind matrices"
+      ],
+      "minimum_jacobian_scope": "Changed arm region (source |x| > 0.30), including vertices and face centers.",
+      "game_geometry_and_skin_match_source": true,
+      "game_texture_bytes_unchanged": true,
+      "glb_files_without_issues": 2,
+      "posed_equipment_samples": 48,
+      "browser_errors": 0,
+      "blender_max_position_difference_mm": 0.001701
+    },
+    "triangles": {
+      "top_plate": 3101,
+      "knight_plate_iron_sword_including_hidden": 23306,
+      "face_region": 1505,
+      "cape": 0,
+      "knight_plate_iron_sword_visible": 11985
+    }
   }
 }

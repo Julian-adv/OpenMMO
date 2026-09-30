@@ -119,6 +119,65 @@ def fit_plate_waist(positions):
     return result
 
 
+def section_bounds(triangles, center, axis, cross_axes):
+    distances = (triangles - center) @ axis
+    intersections = []
+    for a, b in [(0, 1), (1, 2), (2, 0)]:
+        crossing = distances[:, a] * distances[:, b] < 0
+        t = distances[crossing, a] / (distances[crossing, a] - distances[crossing, b])
+        intersections.append(triangles[crossing, a] + t[:, None] *
+                             (triangles[crossing, b] - triangles[crossing, a]))
+    points = (np.concatenate(intersections) - center) @ cross_axes.T
+    if not len(points):
+        raise ValueError('Missing arm cross-section')
+    return np.array([points.min(0), points.max(0)])
+
+
+@cache
+def plate_arm_triangles():
+    source, binary = read_glb(PARTS / 'plate_sources/top_plate.glb')
+    primitive = source['meshes'][0]['primitives'][0]
+    points = accessor(source, binary, primitive['attributes']['POSITION'])
+    faces = accessor(source, binary, primitive['indices']).reshape(-1, 3)
+    original = points[faces]
+    body = []
+    for node in BASE['nodes']:
+        if node.get('extras', {}).get('region') not in ('upper_arms', 'forearms', 'hands'):
+            continue
+        for primitive in BASE['meshes'][node['mesh']]['primitives']:
+            points = accessor(BASE, BASE_BIN, primitive['attributes']['POSITION'])
+            faces = accessor(BASE, BASE_BIN, primitive['indices']).reshape(-1, 3)
+            body.extend(points[faces])
+    return original, np.array(body)
+
+
+@cache
+def plate_arm_sections(side, lo, hi):
+    sign = 1 if side == 'Left' else -1
+    original, body = plate_arm_triangles()
+    body = body[body.mean(1)[:, 0] * sign > .12]
+    a, b = (('Arm', 'ForeArm') if lo == .24 else ('ForeArm', 'Hand'))
+    start, end = BONES[side + a], BONES[side + b]
+    axis = unit(end - start)
+    up = unit(np.array([-axis[1] * sign, abs(axis[0]), 0]))
+    forward = unit(np.cross(axis, up)) * sign
+    samples = np.linspace(max(lo, .30), min(hi, .94), 25)
+    source_bounds, target_bounds = [], []
+    for distance in samples:
+        source_bounds.append(section_bounds(original, [sign * distance, 0, 0],
+                                            np.array([sign, 0, 0]), np.eye(3)[1:]))
+        center = start + (end - start) * ((distance - lo) / (hi - lo))
+        bounds = section_bounds(body, center, axis, np.array([up, forward]))
+        target_bounds.append(bounds + np.array([[-.008], [.008]]))
+    return samples, np.array(source_bounds), np.array(target_bounds), up, forward
+
+
+def interpolate_bounds(samples, bounds, distances):
+    return [np.column_stack((np.interp(distances, samples, bounds[:, edge, 0]),
+                             np.interp(distances, samples, bounds[:, edge, 1])))
+            for edge in range(2)]
+
+
 def top_fit(p):
     out = p * [.88, .92, .96] + [0, 1.31, -.025]
     out[:, 1] += np.clip((p[:, 1] - .21) / .10, 0, 1) * np.clip((.16 - abs(p[:, 0])) / .04, 0, 1) * .048
@@ -130,19 +189,17 @@ def top_fit(p):
         for lo, hi, a, b in [(.24, .59, shoulder, elbow), (.59, .95, elbow, wrist)]:
             t = (distance - lo) / (hi - lo)
             center = a + (b - a) * t[:, None]
-            up = unit(np.array([abs(b[1] - a[1]) * sign, abs(b[0] - a[0]), 0]))
-            taper = 1 - np.clip((distance - .65) / .30, 0, 1) * .40
-            arm = center + (p[:, 1] - .205)[:, None] * up * .90 * taper[:, None]
-            source_z = np.interp(distance, [.24, .59, .95], [-.024, -.024, .012])
-            arm[:, 2] += (p[:, 2] - source_z) * .94 * taper
-            if lo == .59:
-                blend = smoothstep((distance - .70) / .16)
-                forward = unit(np.cross(unit(b - a), up)) * sign
-                sleeve = center + (p[:, 1] - .231)[:, None] * up * .78 * taper[:, None]
-                sleeve += (p[:, 2] + .030)[:, None] * forward * .84 * taper[:, None]
-                arm += (sleeve - arm) * blend[:, None]
+            samples, source_bounds, target_bounds, up, forward = plate_arm_sections(side, lo, hi)
+            source_low, source_high = interpolate_bounds(samples, source_bounds, distance)
+            target_low, target_high = interpolate_bounds(samples, target_bounds, distance)
+            cross = target_low + (p[:, 1:] - source_low) / (source_high - source_low) * (target_high - target_low)
+            arm = center + cross[:, :1] * up + cross[:, 1:] * forward
             mask = (distance >= lo) & ((distance < hi) if hi != .95 else True)
             if lo == .24:
+                shoulder_shape = center + (p[:, 1] - .205)[:, None] * up * .90
+                shoulder_shape[:, 2] += (p[:, 2] + .024) * .94
+                blend = smoothstep((distance - .30) / .14)
+                arm = shoulder_shape * (1 - blend[:, None]) + arm * blend[:, None]
                 blend = np.clip((distance - .20) / .09, 0, 1)
                 arm = out * (1 - blend[:, None]) + arm * blend[:, None]
             out[mask] = arm[mask]
@@ -674,7 +731,7 @@ def build(name, fit):
     doc['skins'] = [skin]
     doc['scenes'] = copy.deepcopy(BASE['scenes'])
     for scene in doc['scenes']:
-        scene['nodes'] = [remap[i] for i in scene['nodes']]
+        scene['nodes'] = [remap[i] for i in scene['nodes'] if i in remap]
     doc['scenes'][0]['nodes'].append(len(doc['nodes']))
     extras = {'rig_id': 'human_male_01_mixamo_candidate_v2', 'part_id': name, 'region': name}
     doc['nodes'].append({'name': name, 'mesh': 0, 'skin': 0, 'extras': extras})
