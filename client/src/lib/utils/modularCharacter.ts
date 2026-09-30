@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import type { PeltPhysics } from '../effects/pelt-rig'
+import { trimModularClothing } from './modularClothing'
 
 interface SwordTransform {
   position: [number, number, number]
@@ -138,11 +139,27 @@ export function showModularOutfit(
   const hidden = new Set<string>()
   const coveredLegs = outfit.pants === 'cloth' || outfit.pants === 'plate'
   const coveredFeet = outfit.boots === 'leather' || outfit.boots === 'plate'
+  const shortPants = coveredLegs && outfit.boots === 'barbarian'
+  const sleeveCut = (
+    {
+      none: undefined,
+      leather: 'gloves',
+      plate: 'gauntlets',
+      barbarian: 'bracers',
+    } as const
+  )[outfit.gloves]
+  const shortSleeves =
+    (outfit.top === 'linen' || outfit.top === 'leather') && sleeveCut
   if (coveredLegs) {
-    for (const region of ['legs', 'ankles', 'boot_ankles']) hidden.add(region)
+    if (!shortPants) {
+      hidden.add('legs')
+      hidden.add('ankles')
+    }
+    hidden.add('boot_ankles')
   }
   if (outfit.top !== 'none' && outfit.top !== 'barbarian') {
-    for (const region of ['torso', 'upper_arms', 'forearms']) hidden.add(region)
+    for (const region of ['torso', 'upper_arms']) hidden.add(region)
+    if (!shortSleeves) hidden.add('forearms')
   }
   if (outfit.top === 'plate') hidden.add('neck')
   if (outfit.gloves === 'leather' || outfit.gloves === 'plate')
@@ -152,7 +169,17 @@ export function showModularOutfit(
     hidden.add('ankles')
   } else hidden.add('boot_ankles')
   for (const mesh of body) {
-    mesh.visible = !hidden.has(region(mesh) ?? '')
+    const bodyRegion = region(mesh)
+    mesh.visible = !hidden.has(bodyRegion ?? '')
+    trimModularClothing(
+      mesh,
+      shortPants && (bodyRegion === 'legs' || bodyRegion === 'ankles')
+        ? 'greaves'
+        : shortSleeves && bodyRegion === 'forearms'
+          ? sleeveCut
+          : undefined,
+      true
+    )
     const underwear = outfit.pants !== 'barbarian'
     mesh.material = Array.isArray(mesh.material)
       ? mesh.material.map((material) => bodyMaterial(material, underwear))
@@ -160,30 +187,41 @@ export function showModularOutfit(
   }
   const selected = modularOutfitParts(outfit)
   for (const [id, meshes] of parts)
-    for (const mesh of meshes)
+    for (const mesh of meshes) {
+      const partRegion = region(mesh)
+      const cut =
+        id === 'top_linen' && partRegion === 'sleeves'
+          ? sleeveCut
+          : shortPants &&
+              (id === 'pants_plate' ||
+                (id === 'pants_cloth' && partRegion === 'main'))
+            ? 'greaves'
+            : undefined
       mesh.visible =
         selected.has(id) &&
         !(
           id === 'pants_cloth' &&
-          coveredFeet &&
-          mesh.userData.region === 'cuffs'
+          (coveredFeet || shortPants) &&
+          partRegion === 'cuffs'
         ) &&
         !(
           id === 'pants_cloth' &&
           !coveredFeet &&
-          mesh.userData.region === 'tucked_cuffs'
+          partRegion === 'tucked_cuffs'
         ) &&
         !(
           id === 'pants_cloth' &&
           outfit.top === 'plate' &&
-          mesh.userData.region === 'waist'
+          partRegion === 'waist'
         ) &&
         !(
           id === 'top_linen' &&
           (outfit.top === 'leather'
-            ? mesh.userData.region === 'torso'
-            : mesh.userData.region === 'armored_collar')
+            ? partRegion === 'torso'
+            : partRegion === 'armored_collar')
         )
+      trimModularClothing(mesh, mesh.visible ? cut : undefined)
+    }
   return selected
 }
 
