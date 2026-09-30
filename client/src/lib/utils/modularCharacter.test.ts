@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   BARBARIAN_MODULAR_OUTFIT,
   DEFAULT_MODULAR_OUTFIT,
@@ -49,6 +49,40 @@ const profile: ModularHandProfile = {
 }
 
 describe('modular outfit coverage', () => {
+  it('restores shorts independently for characters sharing the skin material', () => {
+    const skin = new THREE.MeshStandardMaterial({ name: 'restored_skin' })
+    skin.map = new THREE.Texture()
+    const exposed = new THREE.MeshStandardMaterial()
+    const first = new THREE.SkinnedMesh(new THREE.BufferGeometry(), skin)
+    const second = new THREE.SkinnedMesh(new THREE.BufferGeometry(), [
+      exposed,
+      skin,
+    ])
+    const parts = new Map<string, THREE.SkinnedMesh[]>()
+    const underwear = { ...BARBARIAN_MODULAR_OUTFIT, pants: 'none' as const }
+
+    showModularOutfit([first], parts, underwear)
+    const shorts = first.material as THREE.MeshStandardMaterial
+    expect(shorts.name).toBe('covered_skin')
+    expect(shorts.color.toArray()).toEqual([0.58, 0.36, 0.25])
+    expect(shorts.map).toBeNull()
+    expect(second.material).toEqual([exposed, skin])
+    expect(skin.map).not.toBeNull()
+
+    showModularOutfit([second], parts, BARBARIAN_MODULAR_OUTFIT)
+    expect(second.material).toEqual([exposed, skin])
+    expect(first.material).toBe(shorts)
+    showModularOutfit([first], parts, BARBARIAN_MODULAR_OUTFIT)
+    expect(first.material).toBe(skin)
+    showModularOutfit([first], parts, underwear)
+    expect(first.material).toBe(shorts)
+
+    const disposed = vi.fn()
+    shorts.addEventListener('dispose', disposed)
+    skin.dispose()
+    expect(disposed).toHaveBeenCalledOnce()
+  })
+
   it('preserves exposed skin for barbarian armor and restores coverage when changing sets', () => {
     const regions = [
       'head',

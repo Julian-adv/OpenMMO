@@ -96,6 +96,36 @@ export function modularOutfitParts(outfit: ModularOutfit): Set<string> {
   return selected
 }
 
+const bodyMaterials = new WeakMap<
+  THREE.Material,
+  { skin: THREE.Material; underwear: THREE.Material }
+>()
+
+function bodyMaterial(material: THREE.Material, underwear: boolean) {
+  let variants = bodyMaterials.get(material)
+  if (!variants && material.name === 'restored_skin') {
+    variants = {
+      skin: material,
+      underwear: new THREE.MeshStandardMaterial({
+        name: 'covered_skin',
+        color: new THREE.Color(0.58, 0.36, 0.25),
+        metalness: 0,
+        roughness: 0.7,
+        side: material.side,
+      }),
+    }
+    const covered = variants.underwear
+    bodyMaterials.set(material, variants)
+    bodyMaterials.set(covered, variants)
+    material.addEventListener('dispose', () => {
+      covered.dispose()
+      bodyMaterials.delete(material)
+      bodyMaterials.delete(covered)
+    })
+  }
+  return variants ? variants[underwear ? 'underwear' : 'skin'] : material
+}
+
 export function showModularOutfit(
   body: THREE.SkinnedMesh[],
   parts: ReadonlyMap<string, THREE.SkinnedMesh[]>,
@@ -121,7 +151,13 @@ export function showModularOutfit(
     hidden.add('feet')
     hidden.add('ankles')
   } else hidden.add('boot_ankles')
-  for (const mesh of body) mesh.visible = !hidden.has(region(mesh) ?? '')
+  for (const mesh of body) {
+    mesh.visible = !hidden.has(region(mesh) ?? '')
+    const underwear = outfit.pants !== 'barbarian'
+    mesh.material = Array.isArray(mesh.material)
+      ? mesh.material.map((material) => bodyMaterial(material, underwear))
+      : bodyMaterial(mesh.material, underwear)
+  }
   const selected = modularOutfitParts(outfit)
   for (const [id, meshes] of parts)
     for (const mesh of meshes)

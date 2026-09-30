@@ -291,10 +291,58 @@ def cloth_panel(belt, body, sign, angle, arc, length, columns, thickness, fur):
     return np.vstack([points, back]), np.vstack([uv, uv]), np.array(faces), config
 
 
-def build_pants(doc, raw, binary):
+def largest_connected_faces(points, faces):
     from scipy.sparse import coo_matrix
     from scipy.sparse.csgraph import connected_components
 
+    _, weld = np.unique(np.round(points, 5), axis=0, return_inverse=True)
+    edges = np.concatenate([weld[faces[:, [0, 1]]], weld[faces[:, [1, 2]]], weld[faces[:, [2, 0]]]])
+    graph = coo_matrix((np.ones(len(edges)), (edges[:, 0], edges[:, 1])), shape=(weld.max() + 1,) * 2)
+    _, labels = connected_components(graph, directed=False)
+    groups = labels[weld[faces[:, 0]]]
+    return faces[groups == np.bincount(groups).argmax()]
+
+
+def pelt_surface(points, uv, faces):
+    from shapely import LineString, constrained_delaunay_triangles, set_precision
+    from shapely.ops import polygonize, unary_union
+
+    triangles = points[faces]
+    xy = triangles[:, :, :2]
+    inverse = np.linalg.inv(np.stack([xy[:, 1] - xy[:, 0], xy[:, 2] - xy[:, 0]], axis=2))
+
+    def barycentric(samples):
+        vw = np.einsum('fij,sfj->sfi', inverse, samples[:, None] - xy[None, :, 0])
+        return np.concatenate([1 - vw.sum(2, keepdims=True), vw], axis=2)
+
+    edges = [set_precision(LineString(triangle[[0, 1, 2, 0]]), 1e-6) for triangle in xy]
+    vertices, texcoords = [], []
+    for polygon in polygonize(unary_union(edges)):
+        if polygon.area < 1e-12:
+            continue
+        sample = np.array(polygon.representative_point().coords)
+        bary = barycentric(sample)[0]
+        inside = (bary >= -1e-4).all(1)
+        if not inside.any():
+            continue
+        depth = np.sum(bary * triangles[:, :, 2], axis=1)
+        source = np.where(inside, depth, -np.inf).argmax()
+        for triangle in constrained_delaunay_triangles(polygon).geoms:
+            coords = np.array(triangle.exterior.coords)[:3]
+            if not triangle.exterior.is_ccw:
+                coords = coords[::-1]
+            bary = barycentric(coords)
+            inside = (bary >= -1e-3).all(2)
+            depth = np.sum(bary * triangles[None, :, :, 2], axis=2)
+            z = np.where(inside, depth, -np.inf).max(1)
+            if not np.isfinite(z).all():
+                raise ValueError('Pelt boundary is outside the source surface')
+            vertices.extend(np.column_stack([coords, z]))
+            texcoords.extend(bary[:, source] @ uv[faces[source]])
+    return np.array(vertices), np.array(texcoords), np.arange(len(vertices)).reshape(-1, 3)
+
+
+def build_pants(doc, raw, binary):
     source = doc['meshes'][0]['primitives'][0]
     points = pants_fit(plate.accessor(doc, raw, source['attributes']['POSITION']))
     uv = plate.accessor(doc, raw, source['attributes']['TEXCOORD_0'])
@@ -316,17 +364,25 @@ def build_pants(doc, raw, binary):
 
     centers = points[faces].mean(1)
     front = faces[(centers[:, 1] < 1.055) & (centers[:, 2] > .04)]
-    _, weld = np.unique(np.round(points, 5), axis=0, return_inverse=True)
-    edges = np.concatenate([weld[front[:, [0, 1]]], weld[front[:, [1, 2]]], weld[front[:, [2, 0]]]])
-    graph = coo_matrix((np.ones(len(edges)), (edges[:, 0], edges[:, 1])), shape=(weld.max() + 1,) * 2)
-    _, labels = connected_components(graph, directed=False)
-    groups = labels[weld[front[:, 0]]]
-    front = front[groups == np.bincount(groups).argmax()]
+    front = largest_connected_faces(points, front)
     p, t, f = clip_height(points, uv, front, 1.055, False)
+    cross = np.cross(p[f[:, 1]] - p[f[:, 0]], p[f[:, 2]] - p[f[:, 0]])
+    f = largest_connected_faces(p, f[cross[:, 2] > 0])
+    p, t, f = pelt_surface(p, t, f)
     p[:, 1] = .69 + (p[:, 1] - .69) * (.39 / .365)
     hanging = np.clip((1.08 - p[:, 1]) / .055, 0, 1)
     depth = (p[:, 2] - .105) * .15 * hanging
     p[:, 2] = .125 + .032 * hanging + depth
+    _, weld = np.unique(np.round(p, 5), axis=0, return_inverse=True)
+    edges = np.concatenate([f[:, [0, 1]], f[:, [1, 2]], f[:, [2, 0]]])
+    _, inverse, counts = np.unique(np.sort(weld[edges], axis=1), axis=0,
+                                  return_inverse=True, return_counts=True)
+    boundary = edges[counts[inverse] == 1]
+    count = len(p)
+    sides = [[a, a + count, b] for a, b in boundary] + [[b, a + count, b + count] for a, b in boundary]
+    f = np.vstack([f, f[:, ::-1] + count, sides])
+    p = np.vstack([p, p - [0, 0, .004]])
+    t = np.vstack([t, t])
     for back in (False, True):
         panel = p.copy()
         direction = [0, 0, -1 if back else 1]
@@ -488,22 +544,43 @@ def add_sandals(doc, binary):
             depth = z + (row / 2 - .5) * width
             near = footprint[abs(footprint[:, 1] - depth) < .028]
             lo, hi = near[:, 0].min() - .004, near[:, 0].max() + .004
-            samples = np.linspace(lo, hi, segments + 1)
-            heights = [ray_surface(triangles, [x, -.05, depth], [0, 1, 0]) for x in samples]
-            arc = np.sin(np.linspace(0, np.pi, segments + 1)) ** .6
-            rise = max((h - .05 + .007 - .003) / max(a, .1)
-                       for h, a in zip(heights[2:-2], arc[2:-2]) if h is not None)
+            origin = np.array([(lo + hi) / 2, .018, depth])
             for col in range(segments + 1):
                 t = col / segments
-                x = samples[col]
-                y = .003 + rise * arc[col]
-                points.append([x, y, depth])
+                angle = np.pi * (1 - t)
+                direction = np.array([np.cos(angle), np.sin(angle), 0])
+                radius = ray_surface(triangles, origin, direction)
+                if radius is None:
+                    raise ValueError(f'Missing instep surface at {depth}, {angle}')
+                point = origin + direction * (radius + .006)
+                if col in (0, segments):
+                    point[1] = .003
+                points.append(point)
                 uv.append([t * .65, row / 2 * .20 + z * 2])
         for row in range(2):
             for col in range(segments):
                 a = start + row * (segments + 1) + col
                 b = a + segments + 1
                 faces.extend([[a, b, a + 1], [a + 1, b, b + 1]])
+    start = len(points)
+    segments = 28
+    for row in range(3):
+        for col in range(segments + 1):
+            t = col / segments
+            angle = -np.pi * t
+            y = .046 + .016 * np.sin(np.pi * t) + (row / 2 - .5) * .023
+            origin = np.array([plate.BONES['LeftFoot'][0], y, .023])
+            direction = np.array([np.cos(angle), 0, np.sin(angle)])
+            radius = ray_surface(triangles, origin, direction)
+            if radius is None:
+                raise ValueError(f'Missing heel surface at {y}, {angle}')
+            points.append(origin + direction * (radius + .006))
+            uv.append([t * 1.4, row / 2 * .13 + .5])
+    for row in range(2):
+        for col in range(segments):
+            a = start + row * (segments + 1) + col
+            b = a + segments + 1
+            faces.extend([[a, a + 1, b], [a + 1, b + 1, b]])
     points, uv, faces = np.array(points), np.array(uv), np.array(faces)
     normals = plate.smooth_normals(points, faces)
     faces = np.vstack([faces, faces[:, ::-1] + len(points)])

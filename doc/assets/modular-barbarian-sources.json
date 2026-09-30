@@ -328,7 +328,8 @@
       "Body-fitted leather sleeves and greave liners",
       "Tawny fur cuff rings",
       "Two curved fur panels fitted to the belt contour (392 triangles each)",
-      "Four flexible leather straps attached to the belt surface (128 triangles each)"
+      "Four flexible leather straps attached to the belt surface (128 triangles each)",
+      "Paired leather soles, fitted instep straps and heel straps (712 triangles total)"
     ],
     "tile_texture_size": [
       1024,
@@ -353,20 +354,20 @@
         "bytes": 5099440
       },
       "assets/modular_human_male_01/parts/fitted/pants_barbarian.glb": {
-        "sha256": "03156e8fbd535657f7cd278b46f6ff9e2787185877300346575e2fd50c6160d8",
-        "bytes": 16641516
+        "sha256": "2c0de6c3bec60219f8369467f21edcaef42b3a5e7939691470500661d106001c",
+        "bytes": 16687240
       },
       "client/public/models/characters/modular_male/pants_barbarian.glb": {
-        "sha256": "f383b7b6a0db7f818862b5c1beee257c037219622b5e80a1ed156066472e8a3d",
-        "bytes": 5832472
+        "sha256": "b8a1c89893d254ee9431e41878fd01bb37961ec8775735012c4931c7e3a98f32",
+        "bytes": 5878192
       },
       "assets/modular_human_male_01/parts/fitted/boots_barbarian.glb": {
-        "sha256": "0af32548e9a650ef06b1da0249fae2591d19382d8096132ec1ed2bcbd07db20c",
-        "bytes": 17406580
+        "sha256": "32d4a9f8e469c671be01dfdefb9bd84bb5b731ea308b66ade878ba505ac945a9",
+        "bytes": 17419012
       },
       "client/public/models/characters/modular_male/boots_barbarian.glb": {
-        "sha256": "8a126537e4b456372ceb9c4a65b20028e0ba0b20d63c0bdd829ab541551f46ae",
-        "bytes": 6312248
+        "sha256": "364f746404eaf6c981d4a546eec20ee467fdbb04285c132792365c44cdb2b058",
+        "bytes": 6324680
       },
       "assets/modular_human_male_01/parts/fitted/gloves_barbarian.glb": {
         "sha256": "6dbd8f4fbed0c463a07fa8b0b0b35ba221677f584b31eb082e84365fb18a272b",
@@ -377,8 +378,8 @@
         "bytes": 6073356
       },
       "assets/modular_human_male_01/parts/fitted/barbarian_parts.blend": {
-        "sha256": "cdc2f35f810c579ddfde658aae4b3544c516c02cc1e9ecfe4f13eb678b29b022",
-        "bytes": 95139216
+        "sha256": "b7729b02dc61d637f8c7bfeaec9f0560378e5a7905c2fecdd70bf0d15d989dd5",
+        "bytes": 95147208
       }
     },
     "pants_revision": {
@@ -784,6 +785,76 @@
         "bytes": 605725,
         "source": "Three.js render of final game GLBs; project-authored screenshot"
       }
+    },
+    "sandal_underwear_pelt_revision": {
+      "date": "2026-09-30",
+      "source": "Local edits to the existing barbarian equipment and runtime material selection; original Meshy and ImageGen asset licenses apply",
+      "additional_generation_cost": 0,
+      "sandals": {
+        "instep_radial_clearance_m": 0.006,
+        "heel_radial_clearance_m": 0.006,
+        "heel_strap_width_m": 0.023,
+        "triangles": 712,
+        "skinning": "Existing body foot/toe weight transfer"
+      },
+      "underwear": {
+        "material": "covered_skin",
+        "base_color_factor": [
+          0.58,
+          0.36,
+          0.25,
+          1
+        ],
+        "roughness": 0.7,
+        "source_asset_revision": "700c1825b9efc3d1c9c8688252118bb294c8eb7d",
+        "selection": "Use the original shorts material unless pants are barbarian; switch per-mesh material references without mutating shared skin material or adding geometry"
+      },
+      "pelt": {
+        "construction": "Keep the connected outer surface, split its projected triangle arrangement, retain a single surface in each cell, interpolate source UVs and build a closed 4 mm shell; mirror for the rear panel",
+        "thickness_m": 0.004,
+        "dependency": "Shapely >=2.1,<3",
+        "preserved": [
+          "belt",
+          "side pelts",
+          "leather straps",
+          "physics parameters",
+          "rig"
+        ]
+      },
+      "preview": {
+        "path": "doc/images/characters/modular_human_male_01/barbarian-sandal-fit-preview.png",
+        "sha256": "c2e28b4763ee3d70a54a7f0b798338afcdb39f54abd93c7b5fb7f0e8010dcc14",
+        "bytes": 562411,
+        "source": "Project Three.js render of the final game GLBs"
+      },
+      "asset_publication": {
+        "repo": "jake-song-openmmo/onlinerpg-assets",
+        "revision": "7cddbc8496bed33ff409c9b87736f5eb0e1cfaee",
+        "changed_files": [
+          "assets/modular_human_male_01/parts/fitted/barbarian_parts.blend",
+          "assets/modular_human_male_01/parts/fitted/boots_barbarian.glb",
+          "assets/modular_human_male_01/parts/fitted/pants_barbarian.glb",
+          "client/public/models/characters/modular_male/boots_barbarian.glb",
+          "client/public/models/characters/modular_male/pants_barbarian.glb"
+        ],
+        "verification": "All five files exist at the pinned revision; remote LFS SHA-256 and size match local contents. Unrelated remote assets and lock entries preserved."
+      },
+      "cleanup": {
+        "date": "2026-09-30",
+        "simplification": "Reuse one largest_connected_faces helper for both connected-surface filtering passes, preserving their order and tolerances.",
+        "validation": "All five generated equipment GLBs are byte-identical before and after simplification.",
+        "removed_temporary_files": 25,
+        "removed_bytes": 40285217,
+        "removed_content": [
+          "Intermediate browser captures",
+          "One-off review and geometry scripts",
+          "Temporary validation reports duplicated in this record",
+          "Downloaded old body comparison GLB",
+          "Downscaled source atlas preview"
+        ],
+        "retained_preview": "doc/images/characters/modular_human_male_01/barbarian-sandal-fit-preview.png",
+        "retained_sources": "Keep all current fitted GLBs, the editable Blender scene, original generation sources and textures required for reproduction."
+      }
     }
   },
   "validation": {
@@ -833,13 +904,13 @@
       "clips": 6,
       "bones": 65,
       "skeletons": 1,
-      "totalTriangles": 25499,
-      "visibleTriangles": 25128,
+      "totalTriangles": 26041,
+      "visibleTriangles": 25670,
       "parts": {
         "helmet_barbarian": 1453,
         "top_barbarian": 1860,
-        "pants_barbarian": 3005,
-        "boots_barbarian": 3192,
+        "pants_barbarian": 3323,
+        "boots_barbarian": 3416,
         "gloves_barbarian": 2098
       },
       "errors": [],
@@ -1250,6 +1321,104 @@
         ],
         "errors": []
       }
+    },
+    "sandal_underwear_pelt_revision": {
+      "geometry": {
+        "pelt": {
+          "sampled_rays": 7149,
+          "max_surface_hits": 2,
+          "min_thickness_mm": 3.999993038526106,
+          "max_thickness_mm": 4.000008106231828
+        },
+        "instep": {
+          "vertical_gap_mm": {
+            "min": 2.4400709068713584,
+            "median": 6.49734046892482,
+            "max": 18.613795488917116
+          }
+        },
+        "sandals_triangles": 712
+      },
+      "browser": {
+        "errors": [],
+        "shots": [
+          "barbarian-idle1-feet",
+          "barbarian-idle1-pelt",
+          "barbarian-combat_idle-feet",
+          "barbarian-combat_idle-pelt",
+          "barbarian-walk-feet",
+          "barbarian-walk-pelt",
+          "barbarian-run-feet",
+          "barbarian-run-pelt",
+          "barbarian-jump-feet",
+          "barbarian-jump-pelt",
+          "barbarian-slash1-feet",
+          "barbarian-slash1-pelt",
+          "none-idle1-shorts",
+          "none-combat_idle-shorts",
+          "none-walk-shorts",
+          "none-run-shorts",
+          "none-jump-shorts",
+          "none-slash1-shorts"
+        ],
+        "materials": [
+          {
+            "pants": "barbarian",
+            "entries": [
+              {
+                "name": "restored_skin",
+                "textured": true
+              },
+              {
+                "name": "restored_skin",
+                "textured": true
+              }
+            ]
+          },
+          {
+            "pants": "none",
+            "entries": [
+              {
+                "name": "covered_skin",
+                "textured": false
+              },
+              {
+                "name": "covered_skin",
+                "textured": false
+              }
+            ]
+          }
+        ],
+        "motion": {
+          "frames": 1080,
+          "finite": true,
+          "maxPinError": 0,
+          "skeletons": 1,
+          "bones": 65
+        },
+        "stats": "조합 26,041삼각형 · 표시 25,670 · 얼굴 1,505"
+      },
+      "glb": {
+        "boots_barbarian": {
+          "numErrors": 0,
+          "numWarnings": 0,
+          "numInfos": 0,
+          "numHints": 0,
+          "messages": [],
+          "truncated": false
+        },
+        "pants_barbarian": {
+          "numErrors": 0,
+          "numWarnings": 0,
+          "numInfos": 0,
+          "numHints": 0,
+          "messages": [],
+          "truncated": false
+        }
+      },
+      "frontend_tests": 31,
+      "frontend_check": "passed",
+      "frontend_lint": "passed"
     }
   },
   "skin_surface_revision": {

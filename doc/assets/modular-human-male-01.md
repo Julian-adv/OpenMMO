@@ -17,6 +17,8 @@
 몸체 GLB 제작용·게임용과 `character_parts.blend`, `plate_parts.blend`,
 `barbarian_parts.blend`에 반영했다. 재처리 도구는 `tools/restore-modular-skin.py`이며,
 세부 내용은 [바바리안 복장 기록](modular-barbarian.md)을 따른다.
+후속 수정에서 속옷 선택 시 기존 반바지 재질을 복원하도록 했다. 바바리안 하의에서는
+연속 피부 재질을 사용하며, 몸체 자산을 추가하거나 복제하지 않고 메시별 재질 참조를 전환한다.
 
 ## 파일 구성
 
