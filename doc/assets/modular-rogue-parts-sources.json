@@ -1,0 +1,208 @@
+{
+  "date": "2026-10-01",
+  "status": "Five selected component concept images for four proposed equipment slots. No 3D generation, fitting, rigging or runtime changes.",
+  "service": "OpenAI Codex built-in ImageGen",
+  "tier": "ChatGPT Pro 20x",
+  "license": "OpenAI generated output terms; existing source body and concept licenses retained.",
+  "concept": "doc/images/characters/modular_human_male_01/concepts/rogue-dungeon-delver-v3.png",
+  "body_reference": {
+    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "99016ab4311f8fb4256b7a42bdb0d404e2d991154c6ff18c3acb3da76a43f7f0",
+    "source_record": "doc/assets/modular-human-male-01.md",
+    "rig_id": "human_male_01_mixamo_candidate_v2",
+    "joints": 65,
+    "height_m": 1.9,
+    "triangles": 13891,
+    "face_triangles": 1505,
+    "render": {
+      "service": "Blender 5.2.0 LTS",
+      "operation": "Render existing unmodified base geometry and rig with a neutral gray material override; hide alternate boot_ankles region.",
+      "engine": "Cycles",
+      "samples": 16,
+      "resolution": [
+        1024,
+        1536
+      ],
+      "camera": "orthographic",
+      "ortho_scale_m": 2.08,
+      "look_at_blender": [
+        0,
+        0,
+        0.95
+      ],
+      "views": [
+        {
+          "path": "doc/images/characters/modular_human_male_01/parts/rogue/rig-front.png",
+          "camera_blender": [
+            0,
+            -5,
+            0.95
+          ],
+          "sha256": "273dba2db0ccb1dba4709c6183f29ff18cebfb646deac7cedcf29a11832bc8f0"
+        },
+        {
+          "path": "doc/images/characters/modular_human_male_01/parts/rogue/rig-side.png",
+          "camera_blender": [
+            5,
+            0,
+            0.95
+          ],
+          "sha256": "48498279c70fdae9f51795fb69c30408ce5d21381c328fe3e86f4e769565dd0a"
+        }
+      ]
+    }
+  },
+  "parts": [
+    {
+      "id": "top_rogue",
+      "proposed_slot": "chest",
+      "reference_images": [
+        "doc/images/characters/modular_human_male_01/concepts/rogue-dungeon-delver-v3.png",
+        "doc/images/characters/modular_human_male_01/parts/rogue/rig-front.png",
+        "doc/images/characters/modular_human_male_01/parts/rogue/rig-side.png"
+      ],
+      "planned_triangles": 2200,
+      "planned_copies": 1,
+      "selected_version": 1,
+      "versions": [
+        {
+          "version": 1,
+          "status": "Selected concept; not in game",
+          "prompt": "Use case: stylized-concept.\nAsset type: one isolated modular equipment design reference for a realistic fantasy RPG; this is pre-modeling costume design, NOT a finished fitted 3D model.\nReference 1 is the APPROVED rogue costume design: faithfully preserve its moss-green short folded hood/cowl, faded flax linen, worn reddish-russet leather, ochre waist cloth, muted blue-gray trousers, umber soft boots and hand-repaired old-school dungeon-adventurer character.\nReferences 2 and 3 show the ACTUAL current modular male base mesh from the game, front and side in its fixed rest pose. Use its real adult male body proportions, shoulder width, torso depth, hand/foot sizes and stout calves rather than the slimmer painted hero. Base height 1.90 m. For any sleeves, follow this exact lowered A pose: each upper arm is about 27 degrees out from vertical, elbows nearly straight, hands palms inward/down, never palms forward.\nScene and style: isolated empty wearable items on clean uniform warm very light gray background. Crisp realistic hand-painted 3D-production concept rendering, materials as in reference 1, soft even studio light, restrained worn detail with readable construction. NO human body, skin, dummy, mannequin, face, skeleton, floor scene, text, captions, dimensions, arrows, labels, watermarks or other equipment not specifically requested. Garments keep their natural worn 3D volume with hollow openings, not flat patterns. Keep ample margins. Match the approved design, adapting construction only for clean modular assembly. No modern zippers, tactical hardware, denim jeans detailing, long coat, skirt, long cape or dangling strips crossing joints.\nRequested item: the COMPLETE UPPER GARMENT as one chest-slot assembly: flax linen rolled-sleeve shirt + short worn reddish-russet leather vest with a tiny leather shoulder cap on wearer's LEFT shoulder + short moss-green cowl with the hood folded DOWN against upper back. These three layers are shown ALREADY worn together, never as loose floating separated garments. No headgear.\nConstruction: keep the reference's attractive irregular diagonal overlapping leather chest panels, side lacing, visible repaired edging and simple muted metal fasteners; no black crossed chest harness. Shirt collar peeks out, linen sleeves rolled to just below each elbow, leaving most forearm and wrists free. Fit the shoulders and roomy armholes to the actual mannequin. Cowl stays close to collarbones and upper back, ends ABOVE armpit level at the sides, and does not bridge to either upper arm or hang below the chest. Its small shoulder pin fastens to the upper vest. The short vest ends at natural waist; no long tails. The shirt has a SHORT plain continuous tuck-in hem extending only 3 cm below the vest, no belt or sash. Leave this hem unobstructed so it can later tuck inside a separate trouser waistband. Neck and sleeve openings are hollow. No arms, no trousers, no belt, no pouches, no hands or weapons.\nComposition: landscape two-view construction sheet of THIS SAME SINGLE UPPER GARMENT, FRONT at left and BACK at right, equal scale, nearly orthographic, matching lowered A-shaped empty sleeves. Entire garment visible in each view. Exact same shoulder cap side and cowl cut in both views: wearer's left shoulder is on viewer RIGHT in front view and viewer LEFT in back view. Back shows folded-down hood resting flat at upper spine, fitted simple leather back below it, and a continuous clean waist hem.",
+          "path": "doc/images/characters/modular_human_male_01/parts/rogue/top_rogue-v1.png",
+          "sha256": "e00a212371b643d94c210b26242460d57be2fd2b714485e6bb4cd25049e0faec",
+          "retained": true
+        }
+      ]
+    },
+    {
+      "id": "pants_rogue",
+      "proposed_slot": "pants",
+      "reference_images": [
+        "doc/images/characters/modular_human_male_01/concepts/rogue-dungeon-delver-v3.png",
+        "doc/images/characters/modular_human_male_01/parts/rogue/rig-front.png",
+        "doc/images/characters/modular_human_male_01/parts/rogue/rig-side.png"
+      ],
+      "planned_triangles": 1300,
+      "planned_copies": 1,
+      "selected_version": 2,
+      "versions": [
+        {
+          "version": 1,
+          "status": "[미사용] Superseded intermediate image removed on 2026-10-01 before commit.",
+          "prompt": "Use case: stylized-concept.\nAsset type: one isolated modular equipment design reference for a realistic fantasy RPG; this is pre-modeling costume design, NOT a finished fitted 3D model.\nReference 1 is the APPROVED rogue costume design: faithfully preserve its moss-green short folded hood/cowl, faded flax linen, worn reddish-russet leather, ochre waist cloth, muted blue-gray trousers, umber soft boots and hand-repaired old-school dungeon-adventurer character.\nReferences 2 and 3 show the ACTUAL current modular male base mesh from the game, front and side in its fixed rest pose. Use its real adult male body proportions, shoulder width, torso depth, hand/foot sizes and stout calves rather than the slimmer painted hero. Base height 1.90 m. For any sleeves, follow this exact lowered A pose: each upper arm is about 27 degrees out from vertical, elbows nearly straight, hands palms inward/down, never palms forward.\nScene and style: isolated empty wearable items on clean uniform warm very light gray background. Crisp realistic hand-painted 3D-production concept rendering, materials as in reference 1, soft even studio light, restrained worn detail with readable construction. NO human body, skin, dummy, mannequin, face, skeleton, floor scene, text, captions, dimensions, arrows, labels, watermarks or other equipment not specifically requested. Garments keep their natural worn 3D volume with hollow openings, not flat patterns. Keep ample margins. Match the approved design, adapting construction only for clean modular assembly. No modern zippers, tactical hardware, denim jeans detailing, long coat, skirt, long cape or dangling strips crossing joints.\nRequested item: ONLY ONE PAIR of rogue TROUSERS with the complete BELT / SASH / POUCH ASSEMBLY built into the waistband. No upper clothing, feet, shoes or leg body inside. Muted slate blue-gray woven medieval work cloth, NOT denim: no fly zipper, no jeans pockets or bright orange jeans stitching. Reinforced patch repairs at both knees, gently roomy thighs fitted to reference mannequin, straight relaxed legs set apart exactly as the mannequin rather than a narrow fashion stance.\nConstruction: waist follows natural waist on the actual modular body; complete 5 cm tall belt and ochre folded cloth band conceal the eventual shirt hem. Ochre sash tail is tucked back under belt so nothing hangs down across the hip crease. Front central belt buckle leaves a clear 6 cm band above it for the vest overlap. Equipment is restrained: two compact flat brown leather pouches on sides, one flat back-right map/lockpick wallet and a small flat rope coil held by TWO straps at back-left. Keep all pouches shallow, attached entirely to the trouser belt and above the high thigh, well away from groin, knee and swinging hands. Do NOT include a knife, dagger, sheath, key, key ring, tools sticking out or weapon: runtime weapons stay separate. No straps running onto a shirt or torso.\nLower legs taper smoothly into simple tucked ankle cuffs: cuffs narrow only at the final few centimeters, enough to insert 3–4 cm INTO a separate LOW ankle boot. Keep the true mannequin calf thickness above that. Both ankle openings are hollow; no boot folds on trousers, no calf-high gaiters, no cuffs folded OVER shoes.\nComposition: one landscape two-view construction sheet, FRONT at left and BACK at right, equal scale, orthographic and fully visible from waistband to ankle hems. Exact consistent pouch placement, belt height, leg length and knee patches across views.",
+          "sha256": "499f652903f0accc4877366e2e2b2ee1e2f0f2d173697feb3025648f29e1e391",
+          "retained": false,
+          "removed_path": "doc/images/characters/modular_human_male_01/parts/rogue/pants_rogue-v1.png"
+        },
+        {
+          "version": 2,
+          "status": "Selected concept; not in game",
+          "edit_target": "doc/images/characters/modular_human_male_01/parts/rogue/pants_rogue-v1.png",
+          "prompt": "Use case: precise-object-edit. Edit ONLY the attached rogue trouser FRONT/BACK design sheet to make the waist accessories practical to assemble as one hip-weighted modular equipment part. Keep the exact blue-gray trousers, leg pose, knee patches, ankle cuff geometry, reddish-brown leather pouches, ochre cloth, belt height, two-view layout, material detail and background.\nMake these two targeted construction corrections consistently in both views:\n1. The ochre cloth MUST have NO dangling scarf end. Tuck the loose end entirely behind the belt, forming a continuous compact folded waistband with a clean lower edge above the groin/hip crease. Remove the hanging pointed yellow fabric in the front view. Preserve the ochre band above and below the belt.\n2. In the back view make the rope coil SMALLER and FLATTER, compact against the upper back-left hip and held by TWO short leather keepers, one near the top of coil and one near its bottom. The coil should be shallow, about the size of the flat pouch on the opposite hip, ending above the buttock fold. Nothing dangles or extends outward past the pouches.\nEverything else unchanged. Output the same two-view sheet, no text or added objects.",
+          "path": "doc/images/characters/modular_human_male_01/parts/rogue/pants_rogue-v2.png",
+          "sha256": "255db35d31ed8c697e196a7115f342db3ff3b476167822cd519424a006296a4a",
+          "retained": true,
+          "edit_target_retained": false
+        }
+      ]
+    },
+    {
+      "id": "glove_rogue_right",
+      "proposed_slot": "hands",
+      "reference_images": [
+        "doc/images/characters/modular_human_male_01/concepts/rogue-dungeon-delver-v3.png",
+        "doc/images/characters/modular_human_male_01/parts/rogue/rig-front.png",
+        "doc/images/characters/modular_human_male_01/parts/rogue/rig-side.png"
+      ],
+      "planned_triangles": 400,
+      "planned_copies": 1,
+      "selected_version": 2,
+      "versions": [
+        {
+          "version": 1,
+          "status": "[미사용] Superseded intermediate image removed on 2026-10-01 before commit.",
+          "prompt": "Use case: stylized-concept.\nAsset type: one isolated modular equipment design reference for a realistic fantasy RPG; this is pre-modeling costume design, NOT a finished fitted 3D model.\nReference 1 is the APPROVED rogue costume design: faithfully preserve its moss-green short folded hood/cowl, faded flax linen, worn reddish-russet leather, ochre waist cloth, muted blue-gray trousers, umber soft boots and hand-repaired old-school dungeon-adventurer character.\nReferences 2 and 3 show the ACTUAL current modular male base mesh from the game, front and side in its fixed rest pose. Use its real adult male body proportions, shoulder width, torso depth, hand/foot sizes and stout calves rather than the slimmer painted hero. Base height 1.90 m. For any sleeves, follow this exact lowered A pose: each upper arm is about 27 degrees out from vertical, elbows nearly straight, hands palms inward/down, never palms forward.\nScene and style: isolated empty wearable items on clean uniform warm very light gray background. Crisp realistic hand-painted 3D-production concept rendering, materials as in reference 1, soft even studio light, restrained worn detail with readable construction. NO human body, skin, dummy, mannequin, face, skeleton, floor scene, text, captions, dimensions, arrows, labels, watermarks or other equipment not specifically requested. Garments keep their natural worn 3D volume with hollow openings, not flat patterns. Keep ample margins. Match the approved design, adapting construction only for clean modular assembly. No modern zippers, tactical hardware, denim jeans detailing, long coat, skirt, long cape or dangling strips crossing joints.\nRequested item: ONE RIGHT-HAND fingerless leather glove ONLY. This is the hand-slot leather piece; the other wrist wrap will be designed separately. Preserve the approved concept's supple worn dark umber leather, simple reinforced back-of-hand panel, stitched seams and short clean fitted cuff with one small dull buckle. Low-profile adventurer glove, no armor plates, claws, gauntlet or long forearm bracer.\nConstruction: anatomically RIGHT hand, fitted to the current mannequin's broad adult male palm; five separate open short finger sleeves, including a thumb opening. Leather ends around the first knuckle of each finger, leaving middle/distal fingers and fingertips exposed when worn. In this EMPTY glove, these ends are visible hollow openings with thin folded hems, no skin, no inserted hand. Fingers straight relaxed and gently separated for future individual finger rigging, never clenched or forming a gesture. Cuff extends only about 4 cm above wrist, leaving bare forearm gap to the separately rolled shirt sleeve. Wrist opening is hollow. No dangling straps.\nComposition: landscape detail sheet of the SAME right glove: large dorsal view on the left and palm view on the right, plus no other objects. Wrist at top, finger ends toward bottom, glove held in natural relaxed volume. The palm view is the same right glove turned over, not a left glove or a pair. Make its short finger openings and free thumb opening unmistakable.",
+          "sha256": "a9cd41ef3ab6d46a6afc62611b6217ab5a850af236f4ec3ca3f3a587de3ca112",
+          "retained": false,
+          "removed_path": "doc/images/characters/modular_human_male_01/parts/rogue/glove_rogue_right-v1.png"
+        },
+        {
+          "version": 2,
+          "status": "Selected concept; not in game",
+          "edit_target": "doc/images/characters/modular_human_male_01/parts/rogue/glove_rogue_right-v1.png",
+          "prompt": "Use case: precise-object-edit. This is a technical handedness correction to an existing two-view RIGHT-HAND glove design sheet. The LEFT image, which shows the BACK OF HAND and thumb on the VIEWER'S RIGHT, is correct and must remain completely unchanged. The RIGHT image shows the PALM but mistakenly also places the thumb on the viewer's right. HORIZONTALLY MIRROR ONLY THE RIGHT-HALF PALM-VIEW GLOVE in place, so that in this RIGHT panel its thumb now projects to VIEWER'S LEFT, toward the center gutter. Keep the wrist at top and the four finger tubes pointing down. This should now clearly be the same anatomically RIGHT glove seen from dorsal and palmar directions. Do not swap the panels. Do not mirror the complete image. Preserve all leather, stitching, buckles, proportions, hollow openings, background and positions. No text or added objects.",
+          "path": "doc/images/characters/modular_human_male_01/parts/rogue/glove_rogue_right-v2.png",
+          "sha256": "583af2809a3f710426fc977dd4d8c997d712413575a25ae62f7a366fcd8712f8",
+          "retained": true,
+          "edit_target_retained": false
+        }
+      ]
+    },
+    {
+      "id": "wrap_rogue_left",
+      "proposed_slot": "hands",
+      "reference_images": [
+        "doc/images/characters/modular_human_male_01/concepts/rogue-dungeon-delver-v3.png",
+        "doc/images/characters/modular_human_male_01/parts/rogue/rig-front.png",
+        "doc/images/characters/modular_human_male_01/parts/rogue/rig-side.png"
+      ],
+      "planned_triangles": 200,
+      "planned_copies": 1,
+      "selected_version": 1,
+      "versions": [
+        {
+          "version": 1,
+          "status": "Selected concept; not in game",
+          "prompt": "Use case: stylized-concept.\nAsset type: one isolated modular equipment design reference for a realistic fantasy RPG; this is pre-modeling costume design, NOT a finished fitted 3D model.\nReference 1 is the APPROVED rogue costume design: faithfully preserve its moss-green short folded hood/cowl, faded flax linen, worn reddish-russet leather, ochre waist cloth, muted blue-gray trousers, umber soft boots and hand-repaired old-school dungeon-adventurer character.\nReferences 2 and 3 show the ACTUAL current modular male base mesh from the game, front and side in its fixed rest pose. Use its real adult male body proportions, shoulder width, torso depth, hand/foot sizes and stout calves rather than the slimmer painted hero. Base height 1.90 m. For any sleeves, follow this exact lowered A pose: each upper arm is about 27 degrees out from vertical, elbows nearly straight, hands palms inward/down, never palms forward.\nScene and style: isolated empty wearable items on clean uniform warm very light gray background. Crisp realistic hand-painted 3D-production concept rendering, materials as in reference 1, soft even studio light, restrained worn detail with readable construction. NO human body, skin, dummy, mannequin, face, skeleton, floor scene, text, captions, dimensions, arrows, labels, watermarks or other equipment not specifically requested. Garments keep their natural worn 3D volume with hollow openings, not flat patterns. Keep ample margins. Match the approved design, adapting construction only for clean modular assembly. No modern zippers, tactical hardware, denim jeans detailing, long coat, skirt, long cape or dangling strips crossing joints.\nRequested item: ONE LEFT-WRIST LINEN WRAP ONLY, companion to the right-hand glove. A simple short overlapping cylinder of worn oatmeal/flax linen strips, slightly stained, soft woven texture, practical hand-wrapped medieval bandage-like wrist guard. Faithfully reference the bare-hand/wrist-wrap side of the approved rogue.\nConstruction: wraps ONLY the left wrist and lowest 6–7 cm of forearm, with a small taper following the actual mannequin wrist. Both circular end openings are visibly hollow. No palm coverage, no glove fingers, no thumb hole, no hand, no forearm skin, no mannequin, no leather bracer. All strip ends tucked in tightly; no loose ribbon tails. Subtle diagonal spiral overlap with simple layered edges, maximum 3 mm apparent fabric thickness. Clean open upper and lower edges, no solid caps. Leave the entire hand exposed when worn and ample bare forearm between it and the shirt.\nComposition: square image, ONE single floating hollow cuff, clear three-quarter angle slightly looking into upper opening, wrist axis vertical with the narrower hand end downward. Large centered isolated object with margin. Not a roll of unused fabric; it must be pre-shaped as a wearable wrist cuff.",
+          "path": "doc/images/characters/modular_human_male_01/parts/rogue/wrap_rogue_left-v1.png",
+          "sha256": "51a10630b323eb528f5d74f52209984d4eb2a665b5e3d42215c071d5c9e98802",
+          "retained": true
+        }
+      ]
+    },
+    {
+      "id": "boot_rogue_left",
+      "proposed_slot": "boots",
+      "reference_images": [
+        "doc/images/characters/modular_human_male_01/concepts/rogue-dungeon-delver-v3.png",
+        "doc/images/characters/modular_human_male_01/parts/rogue/rig-front.png",
+        "doc/images/characters/modular_human_male_01/parts/rogue/rig-side.png"
+      ],
+      "planned_triangles": 350,
+      "planned_copies": 2,
+      "selected_version": 1,
+      "versions": [
+        {
+          "version": 1,
+          "status": "Selected concept; not in game",
+          "prompt": "Use case: stylized-concept.\nAsset type: one isolated modular equipment design reference for a realistic fantasy RPG; this is pre-modeling costume design, NOT a finished fitted 3D model.\nReference 1 is the APPROVED rogue costume design: faithfully preserve its moss-green short folded hood/cowl, faded flax linen, worn reddish-russet leather, ochre waist cloth, muted blue-gray trousers, umber soft boots and hand-repaired old-school dungeon-adventurer character.\nReferences 2 and 3 show the ACTUAL current modular male base mesh from the game, front and side in its fixed rest pose. Use its real adult male body proportions, shoulder width, torso depth, hand/foot sizes and stout calves rather than the slimmer painted hero. Base height 1.90 m. For any sleeves, follow this exact lowered A pose: each upper arm is about 27 degrees out from vertical, elbows nearly straight, hands palms inward/down, never palms forward.\nScene and style: isolated empty wearable items on clean uniform warm very light gray background. Crisp realistic hand-painted 3D-production concept rendering, materials as in reference 1, soft even studio light, restrained worn detail with readable construction. NO human body, skin, dummy, mannequin, face, skeleton, floor scene, text, captions, dimensions, arrows, labels, watermarks or other equipment not specifically requested. Garments keep their natural worn 3D volume with hollow openings, not flat patterns. Keep ample margins. Match the approved design, adapting construction only for clean modular assembly. No modern zippers, tactical hardware, denim jeans detailing, long coat, skirt, long cape or dangling strips crossing joints.\nRequested item: ONE LEFT FOOT LOW ANKLE BOOT ONLY, designed to mirror for the other foot. Preserve the approved rogue's quiet soft worn umber-brown leather ankle boot, turned-down lighter weathered cuff, slightly pointed but anatomical roomy toe, flat dark leather sole and small understated outside closure. This is a flexible medieval adventurer shoe, not a modern hiking boot, knee boot or armor greave.\nConstruction: fit the actual base mannequin's normal broad adult male foot and substantial ankle. No very narrow wasp ankle or exaggerated long elf point. Total shaft height above floor approximately 22–24 cm; top safely BELOW calf. A complete round open collar with a soft fold-over cuff and short side slit makes space for the separate trouser hem to tuck 3–4 cm inside. Reinforce heel and toe subtly. Thin flat sole, tiny practical heel, no modern tire tread. No trouser fabric, foot, leg, socks, fur or ribbons visible inside. Hollow dark leather boot interior with generous readable top opening. Two small leather side fasteners, no long dangling laces.\nComposition: one landscape two-view construction sheet of the EXACT SAME single LEFT boot, three-quarter front/outside view at left and three-quarter rear/inside view at right, same scale, fully visible with margins. Show the low shaft, open top and calf-free silhouette clearly. No right boot, no pair, no detached sole.",
+          "path": "doc/images/characters/modular_human_male_01/parts/rogue/boot_rogue_left-v1.png",
+          "sha256": "de597c68f2c090d29eb21e05d8065ed4ac1c02adb2505c6ef2ebfdb18b40d6f7",
+          "retained": true
+        }
+      ]
+    }
+  ],
+  "budget": {
+    "status": "Planning targets only; generated costume geometry does not yet exist.",
+    "new_equipment_target_triangles": 4800,
+    "existing_body": 13891,
+    "existing_crop_hair": 933,
+    "existing_sword": 302,
+    "assembled_target_including_hidden_triangles": 19926,
+    "visible_triangles": null,
+    "face_triangles": 1505
+  },
+  "notes": [
+    "Each multi-view sheet depicts one item from different sides; separate views before image-to-3D submission to avoid duplicated objects.",
+    "Arms, exposed fingertips and bare left hand require dedicated visibility handling; existing full glove and full sleeve rules are unsuitable.",
+    "The hood remains down as part of the upper garment, with no new helmet part.",
+    "Weapon geometry and swinging loose keys are excluded from pants to keep existing equipment behavior independent."
+  ],
+  "cleanup": {
+    "date": "2026-10-01",
+    "reason": "User requested removal of unnecessary files before committing.",
+    "retained": "Selected component images and the exact body renders used as generation references."
+  }
+}

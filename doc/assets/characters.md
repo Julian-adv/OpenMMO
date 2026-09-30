@@ -1,5 +1,16 @@
 # Character Assets
 
+## Modular Rogue — 도적 복장 설계 (2026-10-01)
+
+- D&D·NetHack풍 던전 탐험가 원화와 현재 남성 모듈형 몸체를 참고한 부위 원화 5종을 제작했다.
+  상의·하의·손·신발 4슬롯 구성으로, 숄은 상의에 포함하고 손은 오른쪽 반장갑·왼쪽 손목 천으로 나눈다.
+- **[미사용]** 모델링 전 설계다. 실제 GLB·리깅·게임 연결은 아직 진행하지 않았다.
+- 원화: built-in ImageGen, **ChatGPT Pro 20x**, 2026-10-01. OpenAI 생성 출력물 이용 조건 적용.
+  체형 참고 렌더는 기존 몸체를 Blender 5.2.0 LTS로 렌더했다.
+- 미채택 전체 원화 2장과 수정 전 부위 원화 2장은 정리하고 최종 원화·체형 참고·출처 기록을 남겼다.
+- [전체 원화](modular-rogue-leather.md), [부위별 원화·조립 기준](modular-rogue-parts.md),
+  [부위 프롬프트·입력·해시](modular-rogue-parts-sources.json).
+
 ## Modular Barbarian — 바바리안 복장 (2026-09-30)
 
 - 기존 남성 바바리안 원화를 기준으로 뿔 투구, 견갑·가슴 장식 상의,
