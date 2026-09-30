@@ -324,10 +324,11 @@
     "additional_geometry": [
       "Mirrored pairs",
       "Rear loincloth panel",
-      "Body-derived leather lining",
       "Rear belt",
       "Body-fitted leather sleeves and greave liners",
-      "Tawny fur cuff rings"
+      "Tawny fur cuff rings",
+      "Two curved fur panels fitted to the belt contour (392 triangles each)",
+      "Four flexible leather straps attached to the belt surface (128 triangles each)"
     ],
     "tile_texture_size": [
       1024,
@@ -352,12 +353,12 @@
         "bytes": 5099440
       },
       "assets/modular_human_male_01/parts/fitted/pants_barbarian.glb": {
-        "sha256": "579185cecbeb70d9b986febc91d9a657917785329517ba8d4a771971c57fce80",
-        "bytes": 13988984
+        "sha256": "b5d15a294b3cfc7b459fc53cb238580997b8b9d29c4f6575d3db1599b17fd487",
+        "bytes": 16659252
       },
       "client/public/models/characters/modular_male/pants_barbarian.glb": {
-        "sha256": "d9779e911d48a20deca1afabb2573a07ed8ef05fa88f198732cb57ea181fc760",
-        "bytes": 5335008
+        "sha256": "781a3ea7582cb349ed379ee1b518e29838f3f971a035145d386b130d6a78e86d",
+        "bytes": 5850204
       },
       "assets/modular_human_male_01/parts/fitted/boots_barbarian.glb": {
         "sha256": "a26c6a9d0d896f13eb8b1ba12557eade3cf790bcef15b670fdbd8f8c089bfb62",
@@ -376,8 +377,284 @@
         "bytes": 6073356
       },
       "assets/modular_human_male_01/parts/fitted/barbarian_parts.blend": {
-        "sha256": "2447aa4667b4b063f51d48e3eb4a2a1d11f1219bc9d7c271f12957e40d48ce6d",
-        "bytes": 98034670
+        "sha256": "b263bf6aaec32857be5cc0939f52efcb7c0f3b485dfa8125ec647c4c32cbf997",
+        "bytes": 100619177
+      }
+    },
+    "pants_revision": {
+      "date": "2026-09-30",
+      "removed": "Brown leather trouser lining (1035 triangles)",
+      "rear_belt_triangles": 144,
+      "fit": "Two top rows of each side-fur panel and leather strap are sampled from the actual belt surface and inset by 1.5 mm. Curved side panels are 6 mm thick, straps 3 mm thick; all attach to Hips. Lower rows have body clearance. Original central front/back pelt UVs and rigid hinge behavior are retained.",
+      "retained_body": "Original base geometry and covered_skin material unchanged",
+      "license": "Local edits of the existing project Meshy asset; no new AI generation or credits",
+      "runtime_helper": "client/src/lib/effects/pelt-rig.ts",
+      "runtime_simulation": "Front/back pelts retain 1/60 s rigid pendulums. Two side pelts and four straps use 330 Verlet particles at 1/120 s with two fixed top rows, distance/shear/bending constraints, body ellipsoid contacts, and a 4% upper bound on vertical segment extension. Compression and folds are allowed. Belt attachment positions and normals are restored exactly. Free normals and shell thickness follow the deformed grid.",
+      "runtime_lifecycle": "Character selection preview, player update and modular authoring preview; reset after teleport/hiding/scrub; dispose owned geometry on removal or character disposal",
+      "fallback": "Generic GLB viewers and Blender use the exported static mesh and skin weights; physics runs in OpenMMO",
+      "total_triangles": 3121,
+      "front_and_back_pelt_triangles": 722,
+      "leather_strap_triangles": 512,
+      "front_belt_triangles": 959,
+      "components": [
+        {
+          "name": "barbarian_belt",
+          "triangles": 1103
+        },
+        {
+          "name": "barbarian_pelt_front",
+          "triangles": 361,
+          "kind": "plate",
+          "bone": "Hips",
+          "pivot": [
+            0,
+            1.08,
+            0.125
+          ],
+          "outward": [
+            0,
+            0,
+            1
+          ],
+          "length": 0.39
+        },
+        {
+          "name": "barbarian_pelt_back",
+          "triangles": 361,
+          "kind": "plate",
+          "bone": "Hips",
+          "pivot": [
+            0,
+            1.08,
+            -0.183
+          ],
+          "outward": [
+            0,
+            0,
+            -1
+          ],
+          "length": 0.39
+        },
+        {
+          "name": "barbarian_pelt_left",
+          "triangles": 392,
+          "kind": "fur",
+          "bone": "Hips",
+          "pivot": [
+            0.1674049273708135,
+            1.11,
+            -0.044036974120494246
+          ],
+          "outward": [
+            0.9928086358538663,
+            0,
+            -0.11971220728891936
+          ],
+          "length": 0.33,
+          "cloth": {
+            "columns": 9,
+            "rows": 11,
+            "pinned_rows": 2
+          }
+        },
+        {
+          "name": "barbarian_strap_left_0",
+          "triangles": 128,
+          "kind": "strap",
+          "bone": "Hips",
+          "pivot": [
+            0.11613010204343255,
+            1.11,
+            0.09926654302342296
+          ],
+          "outward": [
+            0.6822212072876136,
+            0,
+            0.7311458297268958
+          ],
+          "length": 0.32,
+          "cloth": {
+            "columns": 3,
+            "rows": 11,
+            "pinned_rows": 2
+          }
+        },
+        {
+          "name": "barbarian_strap_left_1",
+          "triangles": 128,
+          "kind": "strap",
+          "bone": "Hips",
+          "pivot": [
+            0.16389725864324153,
+            1.11,
+            0.054204805792380885
+          ],
+          "outward": [
+            0.9004471023526769,
+            0,
+            0.43496553411123023
+          ],
+          "length": 0.28,
+          "cloth": {
+            "columns": 3,
+            "rows": 11,
+            "pinned_rows": 2
+          }
+        },
+        {
+          "name": "barbarian_pelt_right",
+          "triangles": 392,
+          "kind": "fur",
+          "bone": "Hips",
+          "pivot": [
+            -0.16771250780171365,
+            1.11,
+            -0.04397613168036143
+          ],
+          "outward": [
+            -0.9928086358538663,
+            0,
+            -0.11971220728891936
+          ],
+          "length": 0.33,
+          "cloth": {
+            "columns": 9,
+            "rows": 11,
+            "pinned_rows": 2
+          }
+        },
+        {
+          "name": "barbarian_strap_right_0",
+          "triangles": 128,
+          "kind": "strap",
+          "bone": "Hips",
+          "pivot": [
+            -0.11630650220309435,
+            1.11,
+            0.099374327201122
+          ],
+          "outward": [
+            -0.6822212072876136,
+            0,
+            0.7311458297268958
+          ],
+          "length": 0.32,
+          "cloth": {
+            "columns": 3,
+            "rows": 11,
+            "pinned_rows": 2
+          }
+        },
+        {
+          "name": "barbarian_strap_right_1",
+          "triangles": 128,
+          "kind": "strap",
+          "bone": "Hips",
+          "pivot": [
+            -0.1641259393982287,
+            1.11,
+            0.05421298079166972
+          ],
+          "outward": [
+            -0.9004471023526769,
+            0,
+            0.43496553411123023
+          ],
+          "length": 0.28,
+          "cloth": {
+            "columns": 3,
+            "rows": 11,
+            "pinned_rows": 2
+          }
+        }
+      ],
+      "colliders": [
+        {
+          "bone": "Hips",
+          "center": [
+            0,
+            1.015,
+            -0.023
+          ],
+          "radii": [
+            0.183,
+            0.17,
+            0.135
+          ]
+        },
+        {
+          "bone": "LeftUpLeg",
+          "center": [
+            0.13,
+            0.8,
+            -0.012
+          ],
+          "radii": [
+            0.105,
+            0.235,
+            0.127
+          ]
+        },
+        {
+          "bone": "RightUpLeg",
+          "center": [
+            -0.13,
+            0.8,
+            -0.012
+          ],
+          "radii": [
+            0.105,
+            0.235,
+            0.127
+          ]
+        },
+        {
+          "bone": "LeftLeg",
+          "center": [
+            0.165,
+            0.33,
+            -0.04
+          ],
+          "radii": [
+            0.085,
+            0.27,
+            0.105
+          ]
+        },
+        {
+          "bone": "RightLeg",
+          "center": [
+            -0.165,
+            0.33,
+            -0.04
+          ],
+          "radii": [
+            0.085,
+            0.27,
+            0.105
+          ]
+        }
+      ],
+      "side_fur_triangles": 784,
+      "flexible_runtime_helper": "client/src/lib/effects/pelt-cloth.ts",
+      "motion_profile": {
+        "date": "2026-09-30",
+        "user_confirmed": [
+          "side fur",
+          "leather straps"
+        ],
+        "fur": {
+          "damping": 14,
+          "bend_stiffness": 0.28,
+          "rest_attraction": 24,
+          "wind_acceleration": 0.12
+        },
+        "strap": {
+          "damping": 11,
+          "bend_stiffness": 0.12,
+          "rest_attraction": 12,
+          "wind_acceleration": 0.18
+        }
       }
     }
   },
@@ -425,24 +702,72 @@
       }
     },
     "browser": {
-      "clips": 51,
-      "poses": 255,
+      "clips": 6,
       "bones": 65,
       "skeletons": 1,
-      "totalTriangles": 25416,
-      "visibleTriangles": 25045,
+      "totalTriangles": 25127,
+      "visibleTriangles": 24756,
       "parts": {
         "helmet_barbarian": 1453,
         "top_barbarian": 1860,
-        "pants_barbarian": 3410,
+        "pants_barbarian": 3121,
         "boots_barbarian": 2704,
         "gloves_barbarian": 2098
       },
-      "errors": []
+      "errors": [],
+      "frames": 1080
     },
     "geometry_and_skin_preserved_in_game_export": true,
-    "frontend_tests": 37,
+    "frontend_tests": 66,
     "frontend_check": "passed",
-    "frontend_lint": "passed"
+    "frontend_lint": "passed",
+    "physics": {
+      "ticks": 1080,
+      "clips": 6,
+      "dynamicParts": 8,
+      "clothParticles": 330,
+      "pinnedVertices": 288,
+      "maxPinError": 4.470348358154297e-08,
+      "maxStretch": 0.04000379954538946,
+      "maxJitter": 0,
+      "meanMs": 0.6855555563061325,
+      "maxMs": 1.2999999523162842,
+      "failures": [],
+      "bones": 65,
+      "skeletons": 1,
+      "max_segment_shortening_fraction": 0.7405601612210042,
+      "errors": [],
+      "belt_attachments": {
+        "barbarian_pelt_left": {
+          "pinned_front_vertices": 18,
+          "max_distance_to_belt_m": 0.0014940063701942563
+        },
+        "barbarian_strap_left_0": {
+          "pinned_front_vertices": 6,
+          "max_distance_to_belt_m": 0.0013520496431738138
+        },
+        "barbarian_strap_left_1": {
+          "pinned_front_vertices": 6,
+          "max_distance_to_belt_m": 0.0012849302729591727
+        },
+        "barbarian_pelt_right": {
+          "pinned_front_vertices": 18,
+          "max_distance_to_belt_m": 0.0014940063701942563
+        },
+        "barbarian_strap_right_0": {
+          "pinned_front_vertices": 6,
+          "max_distance_to_belt_m": 0.0014250625390559435
+        },
+        "barbarian_strap_right_1": {
+          "pinned_front_vertices": 6,
+          "max_distance_to_belt_m": 0.0013881101040169597
+        }
+      },
+      "renderer_checks": [
+        "WebGLRenderer browser preview with shadows: no errors"
+      ],
+      "performance_scope": "Single character in local headless Chrome; simulation and geometry updates, excluding rendering; no crowd or mobile benchmark",
+      "limitations": "Ellipsoid contacts are approximate. Stretch is capped while compression and folds are allowed. Self-collision, ground collision and exact triangle intersections are not simulated. Extreme poses and other equipment combinations are not guaranteed penetration-free."
+    }
   }
 }

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { T } from '@threlte/core'
+  import { updatePeltPhysics } from '../effects/pelt-rig'
   import * as THREE from 'three'
   import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
   import { onDestroy, untrack } from 'svelte'
@@ -480,6 +481,7 @@
     // unselected character reads as a bug.
     weaponGrip?.update(currentAction?.getClip() === weaponIdle)
     capeRig?.update(delta, null)
+    if (modelRoot) updatePeltPhysics(modelRoot, delta)
     updateTorch(delta)
   }
 

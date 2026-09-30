@@ -50,6 +50,7 @@
 </script>
 
 <script lang="ts">
+  import { updatePeltPhysics } from '../effects/pelt-rig'
   import { translate } from '../i18n'
   import { visibleMana } from '../stores/gameStore'
   import { playerHealthDisplay } from '../stores/playerHealthDisplay'
@@ -1661,6 +1662,8 @@
       catchPresentation
     )
     updateCape(deltaTime, wind)
+    if (modelRoot && position.y > OFFSCREEN_Y / 2)
+      updatePeltPhysics(modelRoot, deltaTime, wind)
   }
 
   // Function to update mixer and animation state and nametag

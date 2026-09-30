@@ -5,6 +5,7 @@ import { loadGLB } from './gltfCache'
 import { MODULAR_MALE_DIRECTORY, MODULAR_MALE_MODEL_PATH } from './modelPaths'
 import type { ArmorEquipment } from '../network/networkTypes'
 import { modularOutfitForArmor } from './modularEquipment'
+import { disposePeltPhysics } from '../effects/pelt-rig'
 import {
   DEFAULT_MODULAR_OUTFIT,
   KNIGHT_MODULAR_OUTFIT,
@@ -141,6 +142,7 @@ export function modularSwordAttachment(
 }
 
 export function disposeCharacterSkeletons(root: THREE.Object3D): void {
+  disposePeltPhysics(root)
   const skeletons = new Set(skinnedParts(root).map((mesh) => mesh.skeleton))
   for (const skeleton of skeletons) skeleton.dispose()
 }

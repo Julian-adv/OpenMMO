@@ -34,10 +34,12 @@ def with_rig(doc, binary, name):
     for scene in doc['scenes']:
         scene['nodes'] = [remap[i] for i in scene['nodes'] if i in remap]
     extras = {'rig_id': 'human_male_01_mixamo_candidate_v2', 'part_id': name, 'region': name}
-    doc['scenes'][0]['nodes'].append(len(doc['nodes']))
-    doc['nodes'].append({'name': name, 'mesh': 0, 'skin': 0, 'extras': extras})
-    doc['meshes'][0]['name'] = name
-    doc['meshes'][0]['extras'] = extras
+    for index, mesh in enumerate(doc['meshes']):
+        metadata = {**extras, **mesh.get('extras', {})}
+        mesh_name = mesh.get('name', name) if name == 'pants_barbarian' else name
+        mesh.update(name=mesh_name, extras=metadata)
+        doc['scenes'][0]['nodes'].append(len(doc['nodes']))
+        doc['nodes'].append({'name': mesh_name, 'mesh': index, 'skin': 0, 'extras': metadata})
     doc.pop('animations', None)
 
 
@@ -51,40 +53,28 @@ def build(name, fit, skinning, mirror=False):
             material['normalTexture']['scale'] = .5
         material.pop('emissiveTexture', None)
         material.pop('emissiveFactor', None)
-    for primitive in doc['meshes'][0]['primitives']:
-        attrs = primitive['attributes']
-        source = plate.accessor(doc, raw, attrs['POSITION'])
-        uv = plate.accessor(doc, raw, attrs['TEXCOORD_0'])
-        indices = plate.accessor(doc, raw, primitive['indices']).reshape(-1, 3)
-        positions = fit(source)
-        normals = plate.smooth_normals(positions, indices)
-        if name == 'pants_barbarian':
-            centers = source[indices].mean(axis=1)
-            faces = indices[(centers[:, 1] < .55) & (abs(centers[:, 0]) < .40) &
-                            (centers[:, 2] > .12)]
-            used, mapped = np.unique(faces, return_inverse=True)
-            back = positions[used].copy()
-            back[:, 2] = -back[:, 2] - .052
-            back[:, 0] *= 1.12
-            indices = np.vstack([indices, mapped.reshape(-1, 3)[:, ::-1] + len(positions)])
-            positions = np.vstack([positions, back])
-            normals = np.vstack([normals, normals[used] * [1, 1, -1]])
-            uv = np.vstack([uv, uv[used]])
-        if mirror:
-            positions = np.vstack([positions, positions * [-1, 1, 1]])
-            normals = np.vstack([normals, normals * [-1, 1, 1]])
-            uv = np.vstack([uv, uv])
-            indices = np.vstack([indices, indices[:, ::-1] + len(source)])
-        joints, weights = skinning(positions)
-        attrs.clear()
-        attrs.update(plate.add_skin_attributes(doc, binary, positions, normals, joints, weights))
-        attrs['TEXCOORD_0'] = plate.add_accessor(doc, binary, uv, 'VEC2')
-        attrs['TANGENT'] = plate.add_accessor(doc, binary,
-            plate.tangents(positions, normals, uv, indices), 'VEC4')
-        primitive['indices'] = plate.add_accessor(doc, binary, indices.reshape(-1, 1), 'SCALAR', 5125)
     if name == 'pants_barbarian':
-        add_lining(doc, binary)
-        add_back_belt(doc, binary)
+        build_pants(doc, raw, binary)
+    else:
+        for primitive in doc['meshes'][0]['primitives']:
+            attrs = primitive['attributes']
+            source = plate.accessor(doc, raw, attrs['POSITION'])
+            uv = plate.accessor(doc, raw, attrs['TEXCOORD_0'])
+            indices = plate.accessor(doc, raw, primitive['indices']).reshape(-1, 3)
+            positions = fit(source)
+            normals = plate.smooth_normals(positions, indices)
+            if mirror:
+                positions = np.vstack([positions, positions * [-1, 1, 1]])
+                normals = np.vstack([normals, normals * [-1, 1, 1]])
+                uv = np.vstack([uv, uv])
+                indices = np.vstack([indices, indices[:, ::-1] + len(source)])
+            joints, weights = skinning(positions)
+            attrs.clear()
+            attrs.update(plate.add_skin_attributes(doc, binary, positions, normals, joints, weights))
+            attrs['TEXCOORD_0'] = plate.add_accessor(doc, binary, uv, 'VEC2')
+            attrs['TANGENT'] = plate.add_accessor(doc, binary,
+                plate.tangents(positions, normals, uv, indices), 'VEC4')
+            primitive['indices'] = plate.add_accessor(doc, binary, indices.reshape(-1, 1), 'SCALAR', 5125)
     if name in ('boots_barbarian', 'gloves_barbarian'):
         add_cuff(doc, binary, name)
     if name == 'boots_barbarian':
@@ -92,7 +82,7 @@ def build(name, fit, skinning, mirror=False):
     with_rig(doc, binary, name)
     path = PARTS / 'fitted' / f'{name}.glb'
     write_glb(path, doc, plate.compact(doc, binary))
-    triangles = sum(doc['accessors'][p['indices']]['count'] // 3 for p in doc['meshes'][0]['primitives'])
+    triangles = sum(doc['accessors'][p['indices']]['count'] // 3 for mesh in doc['meshes'] for p in mesh['primitives'])
     print(name, 'triangles', triangles)
 
 
@@ -106,6 +96,188 @@ def top_fit(points):
 
 def pants_fit(points):
     return points * [.37, .25, .44] + [0, .927, -.025]
+
+
+def clip_height(points, uv, faces, height, above):
+    vertices, texcoords, triangles = [], [], []
+    for face in faces:
+        polygon = [(points[i], uv[i]) for i in face]
+        clipped = []
+        for (a, ta), (b, tb) in zip(polygon, polygon[1:] + polygon[:1]):
+            inside_a, inside_b = (a[1] >= height) == above, (b[1] >= height) == above
+            if inside_a:
+                clipped.append((a, ta))
+            if inside_a != inside_b:
+                t = (height - a[1]) / (b[1] - a[1])
+                clipped.append((a + t * (b - a), ta + t * (tb - ta)))
+        start = len(vertices)
+        vertices.extend(p for p, _ in clipped)
+        texcoords.extend(t for _, t in clipped)
+        triangles.extend([start, start + i, start + i + 1] for i in range(1, len(clipped) - 1))
+    return np.array(vertices), np.array(texcoords), np.array(triangles)
+
+
+def panel_physics(kind, bone, pivot, outward, length):
+    return {'kind': kind, 'bone': bone, 'pivot': pivot, 'outward': outward, 'length': length,
+            'colliders': [
+                {'bone': b, 'center': c, 'radii': r}
+                for b, c, r in [
+                    ('Hips', [0, 1.015, -.023], [.183, .17, .135]),
+                    ('LeftUpLeg', [.13, .80, -.012], [.105, .235, .127]),
+                    ('RightUpLeg', [-.13, .80, -.012], [.105, .235, .127]),
+                    ('LeftLeg', [.165, .33, -.04], [.085, .27, .105]),
+                    ('RightLeg', [-.165, .33, -.04], [.085, .27, .105]),
+                ]
+            ]}
+
+
+def add_panel(doc, binary, name, points, uv, faces, material, physics=None, bone='Hips'):
+    normals = plate.smooth_normals(points, faces)
+    joints, weights = plate.rigid_weights(len(points), bone)
+    attrs = plate.add_skin_attributes(doc, binary, points, normals, joints, weights)
+    attrs['TEXCOORD_0'] = plate.add_accessor(doc, binary, uv, 'VEC2')
+    if 'normalTexture' in doc['materials'][material]:
+        attrs['TANGENT'] = plate.add_accessor(doc, binary, plate.tangents(points, normals, uv, faces), 'VEC4')
+    doc['meshes'].append({'name': name, 'extras': {'pelt_physics': physics} if physics else {},
+        'primitives': [{'attributes': attrs, 'material': material,
+            'indices': plate.add_accessor(doc, binary, faces.reshape(-1, 1), 'SCALAR', 5125)}]})
+
+
+def radial_surface(triangles, y, angle):
+    direction = np.array([np.cos(angle), 0, np.sin(angle)])
+    origin = np.array([0, y, -.025])
+    a, b, c = triangles[:, 0], triangles[:, 1], triangles[:, 2]
+    e1, e2 = b - a, c - a
+    h = np.cross(direction, e2)
+    det = np.einsum('ij,ij->i', e1, h)
+    inv = np.divide(1., det, out=np.zeros_like(det), where=abs(det) > 1e-10)
+    offset = origin - a
+    u = np.einsum('ij,ij->i', offset, h) * inv
+    q = np.cross(offset, e1)
+    v = (q @ direction) * inv
+    distance = np.einsum('ij,ij->i', e2, q) * inv
+    valid = (abs(det) > 1e-10) & (u >= -1e-6) & (v >= -1e-6) & (u + v <= 1 + 1e-6) & (distance > 0)
+    if not valid.any():
+        return None
+    return distance[valid].max()
+
+
+def cloth_panel(belt, body, sign, angle, arc, length, columns, thickness, fur):
+    rows = 11
+    points, uv, faces = [], [], []
+    top = 1.11
+    for row in range(rows):
+        t = row / (rows - 1)
+        taper = 1 - (.18 if fur else .20) * plate.smoothstep((t - .7) / .3)
+        for col in range(columns):
+            across = col / (columns - 1) * 2 - 1
+            at = angle + across * arc / 2 * taper
+            y = top - length * t + (.03 * across ** 2 * t ** 3 if fur else 0)
+            belt_y = y if row < 2 else top - length / (rows - 1)
+            radius = radial_surface(belt, belt_y, at if sign > 0 else np.pi - at)
+            if radius is None:
+                raise ValueError(f'Missing belt attachment at {belt_y:.4f}, {at:.4f}')
+            if row < 2:
+                radius -= .0015
+            else:
+                radius += .018 * plate.smoothstep((t - .1) / .5)
+                surface = radial_surface(body, y, at if sign > 0 else np.pi - at)
+                if surface is not None:
+                    radius = max(radius, surface + thickness + .008)
+            points.append([sign * radius * np.cos(at), y, -.025 + radius * np.sin(at)])
+            uv.append([col / (columns - 1), t])
+    points = np.array(points)
+    back = points.copy()
+    radial = back[:, [0, 2]] - [0, -.025]
+    radial /= np.linalg.norm(radial, axis=1, keepdims=True)
+    back[:, [0, 2]] -= radial * thickness
+    count = len(points)
+    for back_face in (False, True):
+        offset = count * back_face
+        for row in range(rows - 1):
+            for col in range(columns - 1):
+                a = offset + row * columns + col
+                pair = [[a, a + 1, a + columns], [a + 1, a + columns + 1, a + columns]]
+                faces.extend([f[::-1] for f in pair] if back_face != (sign < 0) else pair)
+    perimeter = (list(range(columns)) + [r * columns + columns - 1 for r in range(1, rows)] +
+                 list(range(count - 2, count - columns - 1, -1)) +
+                 [r * columns for r in range(rows - 2, 0, -1)])
+    for a, b in zip(perimeter, perimeter[1:] + perimeter[:1]):
+        pair = [[a, b + count, b], [a, a + count, b + count]]
+        faces.extend([f[::-1] for f in pair] if sign < 0 else pair)
+    pivot = points[:columns].mean(0).tolist()
+    config = panel_physics('fur' if fur else 'strap', 'Hips', pivot,
+                           [sign * float(np.cos(angle)), 0, float(np.sin(angle))], length)
+    config['cloth'] = {'columns': columns, 'rows': rows, 'pinned_rows': 2}
+    return np.vstack([points, back]), np.vstack([uv, uv]), np.array(faces), config
+
+
+def build_pants(doc, raw, binary):
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    source = doc['meshes'][0]['primitives'][0]
+    points = pants_fit(plate.accessor(doc, raw, source['attributes']['POSITION']))
+    uv = plate.accessor(doc, raw, source['attributes']['TEXCOORD_0'])
+    faces = plate.accessor(doc, raw, source['indices']).reshape(-1, 3)
+    material = source['material']
+    doc['materials'][material]['doubleSided'] = True
+    doc['meshes'] = []
+    belt = clip_height(points, uv, faces, 1.07, True)
+    add_panel(doc, binary, 'barbarian_belt', *belt, material)
+    add_back_belt(doc, binary)
+
+    centers = points[faces].mean(1)
+    front = faces[(centers[:, 1] < 1.055) & (centers[:, 2] > .04)]
+    _, weld = np.unique(np.round(points, 5), axis=0, return_inverse=True)
+    edges = np.concatenate([weld[front[:, [0, 1]]], weld[front[:, [1, 2]]], weld[front[:, [2, 0]]]])
+    graph = coo_matrix((np.ones(len(edges)), (edges[:, 0], edges[:, 1])), shape=(weld.max() + 1,) * 2)
+    _, labels = connected_components(graph, directed=False)
+    groups = labels[weld[front[:, 0]]]
+    front = front[groups == np.bincount(groups).argmax()]
+    p, t, f = clip_height(points, uv, front, 1.055, False)
+    p[:, 1] = .69 + (p[:, 1] - .69) * (.39 / .365)
+    hanging = np.clip((1.08 - p[:, 1]) / .055, 0, 1)
+    depth = (p[:, 2] - .105) * .15 * hanging
+    p[:, 2] = .125 + .032 * hanging + depth
+    for back in (False, True):
+        panel = p.copy()
+        if back:
+            panel[:, 2] = -panel[:, 2] - .035 - .023 * (1 - hanging)
+        direction = [0, 0, -1 if back else 1]
+        pivot = [0, 1.08, -.183 if back else .125]
+        add_panel(doc, binary, 'barbarian_pelt_' + ('back' if back else 'front'), panel, t,
+                  f[:, ::-1] if back else f, material,
+                  panel_physics('plate', 'Hips', pivot, direction, .39))
+
+    materials = {}
+    for kind in ('fur', 'leather'):
+        materials[kind] = len(doc['materials'])
+        doc['materials'].append({'name': 'Barbarian ' + kind,
+            'pbrMetallicRoughness': {'baseColorTexture': {'index': reference_texture(doc, binary, 'barbarian_' + kind)},
+                                    'metallicFactor': 0, 'roughnessFactor': .94}})
+    belt_triangles, body_triangles = [], []
+    for primitive in doc['meshes'][0]['primitives']:
+        p = plate.accessor(doc, binary, primitive['attributes']['POSITION'])
+        f = plate.accessor(doc, binary, primitive['indices']).reshape(-1, 3)
+        belt_triangles.extend(p[f])
+    for node in plate.BASE['nodes']:
+        if node.get('extras', {}).get('region') not in ('legs', 'torso'):
+            continue
+        for primitive in plate.BASE['meshes'][node['mesh']]['primitives']:
+            p = plate.accessor(plate.BASE, plate.BASE_BIN, primitive['attributes']['POSITION'])
+            f = plate.accessor(plate.BASE, plate.BASE_BIN, primitive['indices']).reshape(-1, 3)
+            body_triangles.extend(p[f])
+    belt_triangles, body_triangles = np.array(belt_triangles), np.array(body_triangles)
+    for sign, side in [(1, 'left'), (-1, 'right')]:
+        p, uv, f, config = cloth_panel(belt_triangles, body_triangles, sign,
+                                      -.12, 1.22, .33, 9, .006, True)
+        add_panel(doc, binary, 'barbarian_pelt_' + side, p, uv, f, materials['fur'], config)
+        for i, (angle, length) in enumerate([(.82, .32), (.45, .28)]):
+            p, uv, f, config = cloth_panel(belt_triangles, body_triangles, sign,
+                                          angle, .115, length, 3, .003, False)
+            add_panel(doc, binary, f'barbarian_strap_{side}_{i}', p, uv, f,
+                      materials['leather'], config)
 
 
 def helmet_fit(points):
@@ -179,49 +351,6 @@ def paired_rigid_weights(points, bone):
     right, _ = plate.rigid_weights(len(points), 'Right' + bone)
     joints[points[:, 0] < 0] = right[points[:, 0] < 0]
     return joints, weights
-
-
-def pants_weights(points):
-    joints, weights = plate.rigid_weights(len(points), 'Hips')
-    left, _ = plate.rigid_weights(len(points), 'LeftUpLeg')
-    right, _ = plate.rigid_weights(len(points), 'RightUpLeg')
-    lower = plate.smoothstep((1.06 - points[:, 1]) / .29) * .45
-    side = plate.smoothstep((points[:, 0] + .09) / .18)
-    joints[:, 1], joints[:, 2] = left[:, 0], right[:, 0]
-    weights[:, 0] = 1 - lower
-    weights[:, 1], weights[:, 2] = lower * side, lower * (1 - side)
-    return joints, weights
-
-
-def add_lining(doc, binary):
-    material = len(doc['materials'])
-    texture = reference_texture(doc, binary, 'barbarian_leather')
-    doc['materials'].append({'name': 'Brown leather loincloth lining',
-        'pbrMetallicRoughness': {'baseColorTexture': {'index': texture},
-                                'metallicFactor': 0, 'roughnessFactor': .92}})
-    for node in plate.BASE['nodes']:
-        if node.get('extras', {}).get('region') != 'legs' or 'mesh' not in node:
-            continue
-        for primitive in plate.BASE['meshes'][node['mesh']]['primitives']:
-            attrs = primitive['attributes']
-            positions = plate.accessor(plate.BASE, plate.BASE_BIN, attrs['POSITION'])
-            faces = plate.accessor(plate.BASE, plate.BASE_BIN, primitive['indices']).reshape(-1, 3)
-            faces = faces[positions[faces, 1].max(axis=1) > .795]
-            used, mapped = np.unique(faces, return_inverse=True)
-            normals = plate.accessor(plate.BASE, plate.BASE_BIN, attrs['NORMAL'])[used]
-            points = positions[used] + normals * .004
-            points[:, 1] = np.maximum(points[:, 1], .795)
-            joints = plate.accessor(plate.BASE, plate.BASE_BIN, attrs['JOINTS_0'])[used]
-            weights = plate.accessor(plate.BASE, plate.BASE_BIN, attrs['WEIGHTS_0'])[used]
-            attrs = plate.add_skin_attributes(doc, binary, points, normals, joints, weights)
-            uv = np.column_stack([np.arctan2(points[:, 2], points[:, 0]) / np.pi * 2,
-                                  (1.1 - points[:, 1]) * 5])
-            attrs['TEXCOORD_0'] = plate.add_accessor(doc, binary, uv, 'VEC2')
-            doc['meshes'][0]['primitives'].append({
-                'attributes': attrs,
-                'indices': plate.add_accessor(doc, binary, mapped.reshape(-1, 1), 'SCALAR', 5125),
-                'material': material,
-            })
 
 
 def reference_texture(doc, binary, name):
@@ -300,6 +429,11 @@ def add_cuff(doc, binary, name, shaft=False):
 
 
 def add_back_belt(doc, binary):
+    texture = reference_texture(doc, binary, 'barbarian_leather')
+    material = len(doc['materials'])
+    doc['materials'].append({'name': 'Brown leather rear belt',
+        'pbrMetallicRoughness': {'baseColorTexture': {'index': texture},
+                                'metallicFactor': 0, 'roughnessFactor': .92}})
     points, faces, uv = [], [], []
     count = 24
     for row in range(4):
@@ -322,13 +456,13 @@ def add_back_belt(doc, binary):
     doc['meshes'][0]['primitives'].append({
         'attributes': attrs,
         'indices': plate.add_accessor(doc, binary, faces.reshape(-1, 1), 'SCALAR', 5125),
-        'material': len(doc['materials']) - 1,
+        'material': material,
     })
 
 
 if __name__ == '__main__':
     build('helmet_barbarian', helmet_fit, lambda p: plate.rigid_weights(len(p), 'Head'))
     build('top_barbarian', top_fit, plate.transfer_weights)
-    build('pants_barbarian', pants_fit, pants_weights)
+    build('pants_barbarian', pants_fit, None)
     build('boots_barbarian', boots_fit, lambda p: paired_rigid_weights(p, 'Leg'), mirror=True)
     build('gloves_barbarian', gloves_fit, lambda p: paired_rigid_weights(p, 'ForeArm'), mirror=True)

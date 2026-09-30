@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js'
+import type { PeltPhysics } from '../effects/pelt-rig'
 
 interface SwordTransform {
   position: [number, number, number]
@@ -237,8 +238,16 @@ export function bindModularPart(
   for (const mesh of meshes) {
     mesh.matrix.multiplyMatrices(inverseRoot, mesh.matrixWorld)
     mesh.matrix.decompose(mesh.position, mesh.quaternion, mesh.scale)
+    let peltPhysics: PeltPhysics | undefined
+    for (let node: THREE.Object3D | null = mesh; node; node = node.parent) {
+      if (node.userData.pelt_physics) {
+        peltPhysics = node.userData.pelt_physics as PeltPhysics
+        break
+      }
+    }
     body.add(mesh)
     mesh.bind(skeleton, mesh.bindMatrix.clone())
+    if (peltPhysics) mesh.userData.pelt_physics = peltPhysics
     mesh.castShadow = mesh.receiveShadow = true
   }
   for (const unused of discarded) unused.dispose()

@@ -307,6 +307,48 @@ describe('baked modular animations', () => {
 })
 
 describe('modular parts', () => {
+  it('carries pelt physics settings to attached primitives without changing cached assets', () => {
+    const body = rig()
+    const part = rig()
+    const config = {
+      kind: 'plate',
+      bone: 'Hips',
+      pivot: [0, 1.055, 0.2],
+      outward: [0, 0, 1],
+      length: 0.365,
+      colliders: [],
+    }
+    part.root.userData.pelt_physics = config
+    const [attached] = bindModularPart(body.root, part.root)
+    expect(attached.userData.pelt_physics).toEqual(config)
+    expect(attached.geometry).toBe(part.mesh.geometry)
+    expect(attached.material).toBe(part.mesh.material)
+    expect(attached.skeleton).toBe(body.mesh.skeleton)
+  })
+
+  it('preserves separate panel and strap settings without applying physics to the belt', () => {
+    const body = rig()
+    const part = rig()
+    const panel = new THREE.SkinnedMesh(part.mesh.geometry, part.mesh.material)
+    const strap = new THREE.SkinnedMesh(part.mesh.geometry, part.mesh.material)
+    part.root.add(panel, strap)
+    panel.bind(part.mesh.skeleton)
+    strap.bind(part.mesh.skeleton)
+    panel.userData.pelt_physics = { kind: 'plate', bone: 'LeftUpLeg' }
+    strap.userData.pelt_physics = { kind: 'strap', bone: 'Hips' }
+    const [belt, attachedPanel, attachedStrap] = bindModularPart(
+      body.root,
+      part.root
+    )
+    expect(belt.userData.pelt_physics).toBeUndefined()
+    expect(attachedPanel.userData.pelt_physics).toEqual(
+      panel.userData.pelt_physics
+    )
+    expect(attachedStrap.userData.pelt_physics).toEqual(
+      strap.userData.pelt_physics
+    )
+  })
+
   it('shares one skeleton across separate body material primitives', () => {
     const body = rig()
     const second = new THREE.SkinnedMesh(body.mesh.geometry, body.mesh.material)

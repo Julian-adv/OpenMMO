@@ -19,6 +19,11 @@ import {
   type ModularOutfit,
 } from '../lib/utils/modularCharacter'
 import './modular-character.css'
+import {
+  updatePeltPhysics,
+  resetPeltPhysics,
+  disposePeltPhysics,
+} from '../lib/effects/pelt-rig'
 
 const el = <T extends HTMLElement>(id: string): T => {
   const node = document.getElementById(id)
@@ -85,6 +90,7 @@ function dispose() {
   if (disposed) return
   disposed = true
   for (const release of cleanup.reverse()) release()
+  disposePeltPhysics(scene)
   disposeObjects(resources)
 }
 window.addEventListener('pagehide', dispose, { once: true })
@@ -97,6 +103,8 @@ export let preview:
       currentAction: () => THREE.AnimationAction
       weapon: THREE.Object3D
       parts: Map<string, THREE.SkinnedMesh[]>
+      updateCloth: (dt: number) => void
+      resetCloth: () => void
     }
   | undefined
 
@@ -305,10 +313,19 @@ async function main() {
     active = next
     clipSelect.value = name
     mixer.update(0)
+    if (!fade || !playing) resetPeltPhysics(modelRoot)
     status.textContent = clipSelect.selectedOptions[0].textContent
   }
   play('combat_idle', false)
-  preview = { modelRoot, mixer, currentAction: () => active, weapon, parts }
+  preview = {
+    modelRoot,
+    mixer,
+    currentAction: () => active,
+    weapon,
+    parts,
+    updateCloth: (dt) => updatePeltPhysics(modelRoot, dt),
+    resetCloth: () => resetPeltPhysics(modelRoot),
+  }
   clipSelect.onchange = () => {
     stopSequence()
     play(clipSelect.value)
@@ -334,6 +351,7 @@ async function main() {
       active.getClip().duration - 1e-5
     )
     mixer.update(0)
+    resetPeltPhysics(modelRoot)
   }
   showWeapon.onchange = () => {
     weapon.visible = showWeapon.checked
@@ -489,6 +507,7 @@ async function main() {
       }
     }
     modelRoot.updateMatrixWorld(true)
+    updatePeltPhysics(modelRoot, playing ? dt : 0)
     if (cameraSelect.value !== 'full') {
       const target = cameraSelect.value === 'hand' ? hand : head
       target.getWorldPosition(tracked)
