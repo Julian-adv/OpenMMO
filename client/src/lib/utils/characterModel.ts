@@ -9,6 +9,7 @@ import { disposePeltPhysics } from '../effects/pelt-rig'
 import {
   DEFAULT_MODULAR_OUTFIT,
   KNIGHT_MODULAR_OUTFIT,
+  BARBARIAN_MODULAR_OUTFIT,
   bindModularPart,
   modularAnimationClips,
   modularRigId,
@@ -25,6 +26,7 @@ const animations = new Map<string, Promise<GLTF>>()
 const outfitParts = new Set([
   ...modularOutfitParts(DEFAULT_MODULAR_OUTFIT),
   ...modularOutfitParts(KNIGHT_MODULAR_OUTFIT),
+  ...modularOutfitParts(BARBARIAN_MODULAR_OUTFIT),
 ])
 
 export function loadCharacterModel(path: string): Promise<GLTF> {

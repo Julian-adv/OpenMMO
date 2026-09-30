@@ -17,6 +17,11 @@ async fn unpriced_starter_gear_cannot_mint_gold_from_single_or_batch_sales() {
         "worn_plate_greaves",
         "worn_plate_boots",
         "worn_plate_gauntlets",
+        "worn_barbarian_helmet",
+        "worn_barbarian_armor",
+        "worn_barbarian_pants",
+        "worn_barbarian_boots",
+        "worn_barbarian_bracers",
         "worn_iron_sword",
         "worn_torch",
     ];
@@ -40,25 +45,25 @@ async fn unpriced_starter_gear_cannot_mint_gold_from_single_or_batch_sales() {
         assert!(drain(&mut rx)
             .iter()
             .any(|message| matches!(message, ServerMessage::TradeError { .. })));
+        game.sell_items(
+            &seller,
+            &merchant,
+            vec![
+                BagLineItem {
+                    instance_id: potion_id,
+                    qty: 1,
+                },
+                BagLineItem {
+                    instance_id,
+                    qty: 1,
+                },
+            ],
+        )
+        .await;
+        assert!(drain(&mut rx)
+            .iter()
+            .any(|message| matches!(message, ServerMessage::TradeError { .. })));
     }
-    game.sell_items(
-        &seller,
-        &merchant,
-        vec![
-            BagLineItem {
-                instance_id: potion_id,
-                qty: 1,
-            },
-            BagLineItem {
-                instance_id: 1,
-                qty: 1,
-            },
-        ],
-    )
-    .await;
-    assert!(drain(&mut rx)
-        .iter()
-        .any(|message| matches!(message, ServerMessage::TradeError { .. })));
     assert_eq!(game.get_player_gold(&seller).await, 0);
     assert_eq!(
         game.get_player_inventory(&seller).await.unwrap().bag.len(),

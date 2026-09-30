@@ -28,8 +28,45 @@
 
 개발 서버의 `/modular-character-preview.html?outfit=barbarian`으로 바로 착용한 모습을 본다.
 각 슬롯을 따로 교체하거나 `바바리안 세트 입기` 버튼으로 전체를 적용한다.
-이번 연결은 제작 미리보기와 게임용 자산 준비까지다. 신규 캐릭터의 아이템 지급,
-`modularEquipment.ts`의 아이템 매핑과 실제 게임 기본 복장 적용은 아직 포함하지 않았다.
+신규 야만용사는 성별과 관계없이 아래 낡은 장비 5종을 자동 장착하고 시작한다.
+남성 모듈형 캐릭터는 생성·선택·게임·감정표현 화면에서 실제 장착 아이템에 따라
+각 파츠를 표시하며, 여성은 기존 일체형 모델을 유지한다.
+
+## 시작 아이템
+
+2026-10-01 아이템 등록과 정적 자산 제작을 완료했다.
+
+| 아이템 ID | 이름 | 슬롯 | 무게(kg) | 착용 파츠 |
+| --- | --- | --- | ---: | --- |
+| `worn_barbarian_helmet` | 낡은 야만용사 투구 | head | 3 | `helmet_barbarian` |
+| `worn_barbarian_armor` | 낡은 야만용사 견갑 | chest | 5 | `top_barbarian` |
+| `worn_barbarian_pants` | 낡은 야만용사 모피 하의 | pants | 3 | `pants_barbarian` |
+| `worn_barbarian_boots` | 낡은 야만용사 샌들 | boots | 3 | `boots_barbarian` |
+| `worn_barbarian_bracers` | 낡은 야만용사 손목 보호대 | hands | 1 | `gloves_barbarian` |
+
+기사 시작 장비처럼 부위마다 방어력 1, `basePrice` 없음, `untradeable=true`다.
+상인의 개별·일괄 매입과 플레이어 간 거래가 불가능하며 상자 전리품에도 포함하지 않는다.
+공통 시작 장비인 낡은 철검과 낡은 횃불은 함께 지급한다. 기존 캐릭터에는 소급 지급하지 않는다.
+
+아이콘 `client/public/items/armor/barbarian_*.png`와 바닥 모델
+`client/public/models/armor/barbarian_*.glb`는 위 제작용 파츠를 Blender에서
+정적 메시로 변환해 제작했다. 접두사 `worn_`를 뺀 아이템 ID가 파일명이다.
+원래 크기·형상·PBR 소재를 유지하고 원점을 바닥 중앙으로 옮겼으며,
+아이템에는 리그·애니메이션·천 물리 메타데이터를 포함하지 않는다.
+텍스처는 최대 512px WebP, 투명 아이콘은 Cycles 512px 렌더를 128px로 축소한다.
+부위별 폴리곤 수는 위 착용 파츠와 같으며, 아이템 목표를 맞추기 위한 추가 감축은 없다.
+편집 원본은 `assets/barbarian_*/*.blend`에 보존한다.
+중간 고해상도 렌더와 `.blend1` 백업은 삭제했다.
+기존 Meshy Premium·ChatGPT Pro 20x 원본의 라이선스를 그대로 따르는 로컬 가공이며
+추가 AI 생성·유료 API 사용은 없다. 출처와 생성일은 아래 출처 기록을 따른다.
+
+재생성:
+
+```sh
+blender -b --python-exit-code 1 -P tools/blender-scripts/export_barbarian_items.py
+```
+
+## 착용 모습
 
 어깨·등 연결끈 밀착, 피부 경계 제거와 가죽 샌들 추가 후:
 

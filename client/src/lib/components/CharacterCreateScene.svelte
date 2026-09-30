@@ -16,13 +16,24 @@
 
   let { characterClass, gender }: Props = $props()
 
-  const KNIGHT_STARTER_EQUIPMENT: VisibleEquipment = {
-    armor: {
-      head: 'worn_plate_helmet',
-      chest: 'worn_breastplate',
-      pants: 'worn_plate_greaves',
-      boots: 'worn_plate_boots',
-      hands: 'worn_plate_gauntlets',
+  const STARTER_EQUIPMENT: Partial<Record<CharacterClass, VisibleEquipment>> = {
+    knight: {
+      armor: {
+        head: 'worn_plate_helmet',
+        chest: 'worn_breastplate',
+        pants: 'worn_plate_greaves',
+        boots: 'worn_plate_boots',
+        hands: 'worn_plate_gauntlets',
+      },
+    },
+    barbarian: {
+      armor: {
+        head: 'worn_barbarian_helmet',
+        chest: 'worn_barbarian_armor',
+        pants: 'worn_barbarian_pants',
+        boots: 'worn_barbarian_boots',
+        hands: 'worn_barbarian_bracers',
+      },
     },
   }
 
@@ -194,9 +205,7 @@
     selected={true}
     {characterClass}
     {gender}
-    equipment={characterClass === 'knight'
-      ? KNIGHT_STARTER_EQUIPMENT
-      : undefined}
+    equipment={STARTER_EQUIPMENT[characterClass]}
     rotationY={modelRotationY}
   />
 {/key}

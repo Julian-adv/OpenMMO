@@ -22,6 +22,7 @@ import {
   computeSoleGroundOffset,
 } from './characterAnimationUtils'
 import { skinnedParts } from './modularCharacter'
+import type { ArmorEquipment } from '../network/networkTypes'
 
 vi.mock('./gltfCache', async (importOriginal) => {
   const original = await importOriginal<typeof import('./gltfCache')>()
@@ -58,6 +59,70 @@ describe('male player model selection', () => {
 describe.skipIf(
   !existsSync(resolve('public', MODULAR_MALE_MODEL_PATH.slice(1)))
 )('modular player assets', () => {
+  const visible = (root: THREE.Object3D, id: string) =>
+    skinnedParts(root).some(
+      (mesh) => mesh.userData.part_id === id && mesh.visible
+    )
+  const bodyRegion = (meshes: THREE.SkinnedMesh[], region: string) =>
+    meshes.filter(
+      (mesh) =>
+        (mesh.userData.part_id ?? mesh.parent?.userData.part_id) === 'base' &&
+        (mesh.userData.region ?? mesh.parent?.userData.region) === region
+    )
+
+  it('equips and removes barbarian pieces independently without affecting other players', async () => {
+    const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
+    const { modelRoot: barbarian } = createCharacterModelRoot(source.scene)
+    const { modelRoot: other } = createCharacterModelRoot(source.scene)
+    const armor = {
+      chest: 'worn_barbarian_armor',
+      pants: 'worn_barbarian_pants',
+      boots: 'worn_barbarian_boots',
+      hands: 'worn_barbarian_bracers',
+      head: 'worn_barbarian_helmet',
+    }
+    const parts = {
+      chest: 'top',
+      pants: 'pants',
+      boots: 'boots',
+      hands: 'gloves',
+      head: 'helmet',
+    } as const
+    applyCharacterArmor(barbarian, armor)
+    for (const part of Object.values(parts)) {
+      expect(visible(barbarian, `${part}_barbarian`)).toBe(true)
+      expect(visible(other, `${part}_barbarian`)).toBe(false)
+      expect(visible(source.scene, `${part}_barbarian`)).toBe(false)
+    }
+    expect(visible(barbarian, 'hair_crop')).toBe(false)
+    expect(visible(barbarian, 'top_linen')).toBe(false)
+    expect(visible(barbarian, 'pants_cloth')).toBe(false)
+    const meshes = skinnedParts(barbarian)
+    for (const region of ['torso', 'upper_arms', 'legs', 'hands', 'feet']) {
+      const body = bodyRegion(meshes, region)
+      expect(body.length).toBeGreaterThan(0)
+      expect(body.every((mesh) => mesh.visible)).toBe(true)
+    }
+    expect(
+      meshes.some((mesh) => mesh.visible && mesh.userData.pelt_physics)
+    ).toBe(true)
+    for (const slot of Object.keys(parts) as (keyof typeof parts)[]) {
+      applyCharacterArmor(barbarian, { ...armor, [slot]: null })
+      for (const [otherSlot, part] of Object.entries(parts))
+        expect(visible(barbarian, `${part}_barbarian`)).toBe(otherSlot !== slot)
+      expect(visible(barbarian, 'hair_crop')).toBe(slot === 'head')
+    }
+    const mixed: ArmorEquipment = { ...armor, chest: 'worn_breastplate' }
+    applyCharacterArmor(barbarian, mixed)
+    expect(visible(barbarian, 'top_plate')).toBe(true)
+    expect(visible(barbarian, 'top_barbarian')).toBe(false)
+    expect(visible(barbarian, 'gloves_barbarian')).toBe(true)
+    applyCharacterArmor(barbarian, {})
+    for (const part of Object.values(parts))
+      expect(visible(barbarian, `${part}_barbarian`)).toBe(false)
+    expect(visible(other, 'top_linen')).toBe(true)
+  })
+
   it('changes each armor slot from equipped items and keeps other players independent', async () => {
     const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
     const { modelRoot: knight } = createCharacterModelRoot(source.scene)
@@ -69,10 +134,6 @@ describe.skipIf(
       hands: 'worn_plate_gauntlets',
       head: 'worn_plate_helmet',
     }
-    const visible = (root: THREE.Object3D, id: string) =>
-      skinnedParts(root)
-        .filter((mesh) => mesh.userData.part_id === id)
-        .some((mesh) => mesh.visible)
     applyCharacterArmor(knight, armor)
     for (const part of ['top', 'pants', 'boots', 'gloves', 'helmet']) {
       expect(visible(knight, part + '_plate')).toBe(true)
@@ -81,17 +142,11 @@ describe.skipIf(
     expect(visible(knight, 'hair_crop')).toBe(false)
     expect(visible(other, 'hair_crop')).toBe(true)
     const meshes = skinnedParts(knight)
-    const bodyRegion = (region: string) =>
-      meshes.filter(
-        (mesh) =>
-          (mesh.userData.part_id ?? mesh.parent?.userData.part_id) === 'base' &&
-          (mesh.userData.region ?? mesh.parent?.userData.region) === region
-      )
     expect(new Set(meshes.map((mesh) => mesh.skeleton)).size).toBe(1)
     expect(meshes[0].skeleton.bones).toHaveLength(65)
-    const legs = bodyRegion('legs')
-    const bootAnkles = bodyRegion('boot_ankles')
-    const bareAnkles = bodyRegion('ankles')
+    const legs = bodyRegion(meshes, 'legs')
+    const bootAnkles = bodyRegion(meshes, 'boot_ankles')
+    const bareAnkles = bodyRegion(meshes, 'ankles')
     expect(legs.length).toBeGreaterThan(0)
     expect(bootAnkles.length).toBeGreaterThan(0)
     expect(bareAnkles.length).toBeGreaterThan(0)
@@ -120,7 +175,7 @@ describe.skipIf(
     expect(legs.every((mesh) => !mesh.visible)).toBe(true)
     expect(bootAnkles.every((mesh) => !mesh.visible)).toBe(true)
     for (const region of ['torso', 'upper_arms', 'forearms', 'neck']) {
-      const body = bodyRegion(region)
+      const body = bodyRegion(meshes, region)
       expect(body.length).toBeGreaterThan(0)
       expect(body.every((mesh) => mesh.visible)).toBe(true)
     }
