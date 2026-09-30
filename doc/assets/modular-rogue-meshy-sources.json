@@ -1,0 +1,596 @@
+{
+  "generation_date": "2026-10-01",
+  "service": "Meshy Multi-Image to 3D API",
+  "tier": "Premium",
+  "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+  "endpoint": "https://api.meshy.ai/openapi/v1/multi-image-to-3d",
+  "tasks": [
+    {
+      "part_id": "top_rogue",
+      "inputs": [
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/inputs/top-front.png",
+          "sha256": "5c75e22c3e9ff034a4f9c682d35cf4c6cd8ba09bc87cc638d6c407310cbef059"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/inputs/top-back.png",
+          "sha256": "76ad81468684927228cd7ea4dae8555c37f478fd1e4725c6d8460da57f8ae9e8"
+        }
+      ],
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "geometry_resolution": "standard",
+        "should_remesh": true,
+        "topology": "triangle",
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "remove_lighting": true,
+        "pose_mode": "",
+        "target_formats": [
+          "glb"
+        ],
+        "multi_view_thumbnails": true,
+        "target_polycount": 2200
+      },
+      "status": "SUCCEEDED",
+      "task_id": "01a0f322-9f41-7245-b2ca-31c69a368396",
+      "progress": 100,
+      "consumed_credits": 30,
+      "created_at": 1790785529254,
+      "finished_at": 1790785809508,
+      "task_error": null,
+      "files": [
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/top_rogue/source.glb",
+          "sha256": "ccdabe63fc2bee8865a4693a4b212b0d19666f20c9d51f0eb87857cb0c3c7055",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/top_rogue/preview.png",
+          "sha256": "6df3d373cd78e350e6f6ddd3bc8e223ca16b3e9f5b189f7bb388d6c1f5670ec2",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/top_rogue/preview-back.png",
+          "sha256": "8bf51ddc524c524c3215bf451639aa4ecfbce230fb402c51d5dfc92fb8f4cff7",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/top_rogue/preview-front.png",
+          "sha256": "6df3d373cd78e350e6f6ddd3bc8e223ca16b3e9f5b189f7bb388d6c1f5670ec2",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/top_rogue/preview-left.png",
+          "sha256": "201b664f682efe5efe6d23a5d8a1181a6b9c03d816acbb7c71229fc786ffc25e",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/top_rogue/preview-right.png",
+          "sha256": "f4e314c709e31ca97b7aa56e88aa29fdae99dc9a67498fdaed448964ba936c8d",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/top_rogue/texture-0-base_color.png",
+          "sha256": "0818b91ffd49121a652cc382da69bbed9a969c52a00f1c6e2e771c95f7ad8d2a",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/top_rogue/texture-0-metallic.png",
+          "sha256": "7d2ddaebd1161c539563a0aca707a42848ebf2ac46d1e8eaf79cf851e7965072",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/top_rogue/texture-0-roughness.png",
+          "sha256": "d94be5d57a119f8ffe46e7cc57aabf384926cdd4f85474d62611070e81df95e1",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/top_rogue/texture-0-normal.png",
+          "sha256": "beecd116995d9bc4ded95a1a2506974a001f03075b78b925d4a2b3f248691978",
+          "retained": false
+        }
+      ],
+      "selected_for_fitting": false,
+      "geometry_review": {
+        "id": "top_rogue",
+        "source": "assets/modular_human_male_01/parts/rogue_sources/top_rogue/source.glb",
+        "sha256": "ccdabe63fc2bee8865a4693a4b212b0d19666f20c9d51f0eb87857cb0c3c7055",
+        "target_triangles": 2200,
+        "triangles": 1658,
+        "mesh_count": 1,
+        "meshes": [
+          {
+            "name": "Mesh_0",
+            "components_vertex_counts": [
+              594
+            ],
+            "boundary_edges": 229,
+            "nonmanifold_edges": 618,
+            "degenerate_faces": 0,
+            "collapsed_uv_triangles": 14
+          }
+        ],
+        "source_extent_blender": [
+          1.8920930624008179,
+          0.9745109677314758,
+          1.530903935432434
+        ],
+        "rigged": false
+      }
+    },
+    {
+      "part_id": "pants_rogue",
+      "inputs": [
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/inputs/pants-front.png",
+          "sha256": "0151461044cd3b8aa608ba224947bb68ace89991cf44802e78de7b067285364d"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/inputs/pants-back.png",
+          "sha256": "eb6ccd9b2f3fa63c8c8f9dfa410adfbef1eb11a085f564933de3b3f9ee808f55"
+        }
+      ],
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "geometry_resolution": "standard",
+        "should_remesh": true,
+        "topology": "triangle",
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "remove_lighting": true,
+        "pose_mode": "",
+        "target_formats": [
+          "glb"
+        ],
+        "multi_view_thumbnails": true,
+        "target_polycount": 1300
+      },
+      "status": "SUCCEEDED",
+      "task_id": "01a0f322-a8e7-7208-80aa-c9fb22e5148e",
+      "progress": 100,
+      "consumed_credits": 30,
+      "created_at": 1790785531448,
+      "finished_at": 1790785699371,
+      "task_error": null,
+      "files": [
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/pants_rogue/source.glb",
+          "sha256": "f1e4b59d7751438abe2caaa78ec04027d66bb38486a8d4fb58e5096a861f9b6c",
+          "retained": true
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/pants_rogue/preview.png",
+          "sha256": "aab2f46b558b4286f721605ad15692e4d5e662433d575a7870ab5ef09a3c3edb",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/pants_rogue/preview-back.png",
+          "sha256": "c5af7277fbe9df72bcfe23305125309b555d795ff1325c59d51f3152a1f31e30",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/pants_rogue/preview-front.png",
+          "sha256": "aab2f46b558b4286f721605ad15692e4d5e662433d575a7870ab5ef09a3c3edb",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/pants_rogue/preview-left.png",
+          "sha256": "0f4c04e02df7ddeb65bb9a105c212d52bb57519f2e49ba31f25e5eca782e4569",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/pants_rogue/preview-right.png",
+          "sha256": "d51a7112e497e01b7885aee305cdd4a9e14fd84078d21ca49ab51d270773428c",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/pants_rogue/texture-0-base_color.png",
+          "sha256": "704e0e254e7b109c3f06d4d8c107781acad03ec1d84f248f8a036ed4d1485376",
+          "retained": true
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/pants_rogue/texture-0-metallic.png",
+          "sha256": "9642564b691ea085b7067cb05700d0dc717a6c75f4a7e424ada6bbd0cc6c04e8",
+          "retained": true
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/pants_rogue/texture-0-roughness.png",
+          "sha256": "6e1d9deddf8413a35a0983af5591bdb38946ff6334434afac11c99672df0c114",
+          "retained": true
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/pants_rogue/texture-0-normal.png",
+          "sha256": "96221b92cd95d79b3fbd18b3671f4991aa507f1d4b776769560d3e8d43e27ac1",
+          "retained": true
+        }
+      ],
+      "selected_for_fitting": true,
+      "geometry_review": {
+        "id": "pants_rogue",
+        "source": "assets/modular_human_male_01/parts/rogue_sources/pants_rogue/source.glb",
+        "sha256": "f1e4b59d7751438abe2caaa78ec04027d66bb38486a8d4fb58e5096a861f9b6c",
+        "target_triangles": 1300,
+        "triangles": 1274,
+        "mesh_count": 1,
+        "meshes": [
+          {
+            "name": "Mesh_0.002",
+            "components_vertex_counts": [
+              602
+            ],
+            "boundary_edges": 50,
+            "nonmanifold_edges": 121,
+            "degenerate_faces": 0,
+            "collapsed_uv_triangles": 4
+          }
+        ],
+        "source_extent_blender": [
+          1.0780551433563232,
+          0.5824490189552307,
+          1.8948551416397095
+        ],
+        "rigged": false
+      }
+    },
+    {
+      "part_id": "glove_rogue_right",
+      "inputs": [
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/inputs/glove-dorsal.png",
+          "sha256": "99a1fc35359747ef1b4ceceed87ee4fab7a94112cb12ab36d72afd716b4bd0b3"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/inputs/glove-palm.png",
+          "sha256": "a7725e65d49ed5f77c2a17991c2328c4b9dbb56d7c736ffaf9809cc47929723a"
+        }
+      ],
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "geometry_resolution": "standard",
+        "should_remesh": true,
+        "topology": "triangle",
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "remove_lighting": true,
+        "pose_mode": "",
+        "target_formats": [
+          "glb"
+        ],
+        "multi_view_thumbnails": true,
+        "target_polycount": 400
+      },
+      "status": "SUCCEEDED",
+      "task_id": "01a0f322-b07c-7181-b2d4-ee0906500b9f",
+      "progress": 100,
+      "consumed_credits": 30,
+      "created_at": 1790785533580,
+      "finished_at": 1790785706373,
+      "task_error": null,
+      "files": [
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/glove_rogue_right/source.glb",
+          "sha256": "47122f8b76e5cdc3318e371002adc1b7d6fb60b2a69b25c6044a6f238196085f",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/glove_rogue_right/preview.png",
+          "sha256": "183e98de1f6e36362c74dec631eab0ad809849117f2d44a1b78015c843d7518d",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/glove_rogue_right/preview-back.png",
+          "sha256": "6f432374b1760c7e20f41df82aafe6c51d6a571d80c58f29be49c04355bc1cd6",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/glove_rogue_right/preview-front.png",
+          "sha256": "183e98de1f6e36362c74dec631eab0ad809849117f2d44a1b78015c843d7518d",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/glove_rogue_right/preview-left.png",
+          "sha256": "0f8274e3094c910807d6f0f20f4c67e15a0f141f4a946eef549422bb16ee5ff7",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/glove_rogue_right/preview-right.png",
+          "sha256": "b202a9f927f372cac8aebb3abb92c1308d528f556d60f980da0ca938a94c4742",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/glove_rogue_right/texture-0-base_color.png",
+          "sha256": "6b945bf6021ac2cd4ce1968e30e4147835151f2411fc6978efba2fe6d2af5711",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/glove_rogue_right/texture-0-metallic.png",
+          "sha256": "5b9842eff29b8064d70916a413ea59bc254569e04faa7bbe21a4d12675fc62f7",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/glove_rogue_right/texture-0-roughness.png",
+          "sha256": "8a54bb88c5dc181877b712b59b97a64cbd4bf1a056452c99b794cd1d2af54c38",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/glove_rogue_right/texture-0-normal.png",
+          "sha256": "5840072a99b2f5f7da15c2678daa8e6ee1b6a0995c1457a378e4306980c4b31a",
+          "retained": false
+        }
+      ],
+      "selected_for_fitting": false,
+      "geometry_review": {
+        "id": "glove_rogue_right",
+        "source": "assets/modular_human_male_01/parts/rogue_sources/glove_rogue_right/source.glb",
+        "sha256": "47122f8b76e5cdc3318e371002adc1b7d6fb60b2a69b25c6044a6f238196085f",
+        "target_triangles": 400,
+        "triangles": 397,
+        "mesh_count": 1,
+        "meshes": [
+          {
+            "name": "Mesh_0.004",
+            "components_vertex_counts": [
+              170
+            ],
+            "boundary_edges": 9,
+            "nonmanifold_edges": 47,
+            "degenerate_faces": 0,
+            "collapsed_uv_triangles": 0
+          }
+        ],
+        "source_extent_blender": [
+          1.394252061843872,
+          0.8460869789123535,
+          1.8638430833816528
+        ],
+        "rigged": false
+      }
+    },
+    {
+      "part_id": "wrap_rogue_left",
+      "inputs": [
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/inputs/wrap.png",
+          "sha256": "51a10630b323eb528f5d74f52209984d4eb2a665b5e3d42215c071d5c9e98802"
+        }
+      ],
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "geometry_resolution": "standard",
+        "should_remesh": true,
+        "topology": "triangle",
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "remove_lighting": true,
+        "pose_mode": "",
+        "target_formats": [
+          "glb"
+        ],
+        "multi_view_thumbnails": true,
+        "target_polycount": 200
+      },
+      "status": "SUCCEEDED",
+      "task_id": "01a0f322-b8ea-713e-a67f-01748a3a15bd",
+      "progress": 100,
+      "consumed_credits": 30,
+      "created_at": 1790785535487,
+      "finished_at": 1790785754545,
+      "task_error": null,
+      "files": [
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/wrap_rogue_left/source.glb",
+          "sha256": "6e5c582da5d58643e4acdad68ace576e163fa87a8e69258e33a46b761327cb85",
+          "retained": true
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/wrap_rogue_left/preview.png",
+          "sha256": "3277010258c30dd8ef7c381dbb06bfdca2138d96219e1b083164318c8ce99669",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/wrap_rogue_left/preview-back.png",
+          "sha256": "d12af982f3e7552b924d88cd214050da604f4245b8256a5b7b75766565e3f4b5",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/wrap_rogue_left/preview-front.png",
+          "sha256": "3277010258c30dd8ef7c381dbb06bfdca2138d96219e1b083164318c8ce99669",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/wrap_rogue_left/preview-left.png",
+          "sha256": "7680ad6018485634d6c23e1fc1c3b87b7e409c8084c42d3756af3a0dbd0d7157",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/wrap_rogue_left/preview-right.png",
+          "sha256": "2289f8dbbee0f0269ef814f6ed72455e43b2cdf0f8fb29d40af1b05b39c68840",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/wrap_rogue_left/texture-0-base_color.png",
+          "sha256": "eb3a7058e725ced7a98ce250ec3c66ba503aa8bf669055209bcd2201d80dd6c6",
+          "retained": true
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/wrap_rogue_left/texture-0-metallic.png",
+          "sha256": "1abbe169825fe8319a8d375e5454d4163a2d727b7cccd8e42255a619e2c6615d",
+          "retained": true
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/wrap_rogue_left/texture-0-roughness.png",
+          "sha256": "3c86dd43118aa895835b12d480849bb9ebe4c88ae0cd022454dd4ed79b6478df",
+          "retained": true
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/wrap_rogue_left/texture-0-normal.png",
+          "sha256": "05d1959c02a0393b2fb738824d75f7932b14120505a7cee2cd0526716612cac3",
+          "retained": true
+        }
+      ],
+      "selected_for_fitting": true,
+      "geometry_review": {
+        "id": "wrap_rogue_left",
+        "source": "assets/modular_human_male_01/parts/rogue_sources/wrap_rogue_left/source.glb",
+        "sha256": "6e5c582da5d58643e4acdad68ace576e163fa87a8e69258e33a46b761327cb85",
+        "target_triangles": 200,
+        "triangles": 156,
+        "mesh_count": 1,
+        "meshes": [
+          {
+            "name": "Mesh_0.006",
+            "components_vertex_counts": [
+              61
+            ],
+            "boundary_edges": 15,
+            "nonmanifold_edges": 65,
+            "degenerate_faces": 0,
+            "collapsed_uv_triangles": 2
+          }
+        ],
+        "source_extent_blender": [
+          1.2539780139923096,
+          1.254060983657837,
+          1.8296387195587158
+        ],
+        "rigged": false
+      }
+    },
+    {
+      "part_id": "boot_rogue_left",
+      "inputs": [
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/inputs/boot-front.png",
+          "sha256": "20f93bab42e8238e0bdeb5b939737de9ccde24b40e60485fdcd4f723a3861335"
+        }
+      ],
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "geometry_resolution": "standard",
+        "should_remesh": true,
+        "topology": "triangle",
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "remove_lighting": true,
+        "pose_mode": "",
+        "target_formats": [
+          "glb"
+        ],
+        "multi_view_thumbnails": true,
+        "target_polycount": 350
+      },
+      "status": "SUCCEEDED",
+      "task_id": "01a0f322-bfe6-747f-a7bd-5a114d5a521a",
+      "progress": 100,
+      "consumed_credits": 30,
+      "created_at": 1790785537152,
+      "finished_at": 1790785698263,
+      "task_error": null,
+      "files": [
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/boot_rogue_left/source.glb",
+          "sha256": "a6c57d7dc34b580173c717422ba706c6b00b3692d8165de50fa6e72fc87330bc",
+          "retained": true
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/boot_rogue_left/preview.png",
+          "sha256": "3de25edc6ffc21ac3a494f9cd3a3b8dbf5deb34ed0597ffe773b9f090e9040b7",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/boot_rogue_left/preview-back.png",
+          "sha256": "8cb4b4dcc194065aae1c2f17a85e8dca2c7620e7e7c626c4dee5239507a26d2b",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/boot_rogue_left/preview-front.png",
+          "sha256": "3de25edc6ffc21ac3a494f9cd3a3b8dbf5deb34ed0597ffe773b9f090e9040b7",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/boot_rogue_left/preview-left.png",
+          "sha256": "46fae68333a1b7e6daba844d95222c5e90cc71df3c21b13b156dcb005bc859fb",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/boot_rogue_left/preview-right.png",
+          "sha256": "344d372c36c0c84f7b629106addefb27063ee2f090c574ebb6857db70b0f0c7a",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/boot_rogue_left/texture-0-base_color.png",
+          "sha256": "b9dad9b55297596742d80bd7be8601bea32aca2a91bcb4095d358fbcddb82e8b",
+          "retained": true
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/boot_rogue_left/texture-0-metallic.png",
+          "sha256": "c7d81bb65cbec58e35aa9707db667f29330db7433368a147ab46497bf3aa0006",
+          "retained": true
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/boot_rogue_left/texture-0-roughness.png",
+          "sha256": "f67bd454c1c34b229fc3b7ef415c2015acf2eae2ee716195ef1aae0d4468694d",
+          "retained": true
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/boot_rogue_left/texture-0-normal.png",
+          "sha256": "c92e5dab7ad6ec50c1d012fc63c3aeaeb64e8dbd82f8e58b71c942c580215588",
+          "retained": true
+        }
+      ],
+      "selected_for_fitting": true,
+      "geometry_review": {
+        "id": "boot_rogue_left",
+        "source": "assets/modular_human_male_01/parts/rogue_sources/boot_rogue_left/source.glb",
+        "sha256": "a6c57d7dc34b580173c717422ba706c6b00b3692d8165de50fa6e72fc87330bc",
+        "target_triangles": 350,
+        "triangles": 352,
+        "mesh_count": 1,
+        "meshes": [
+          {
+            "name": "Mesh_0.008",
+            "components_vertex_counts": [
+              179
+            ],
+            "boundary_edges": 7,
+            "nonmanifold_edges": 12,
+            "degenerate_faces": 0,
+            "collapsed_uv_triangles": 0
+          }
+        ],
+        "source_extent_blender": [
+          1.8923132419586182,
+          0.728693962097168,
+          1.209204077720642
+        ],
+        "rigged": false
+      }
+    }
+  ],
+  "status": "Raw generation; not fitted, rigged or game-ready",
+  "reference": {
+    "base": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "base_sha256": "99016ab4311f8fb4256b7a42bdb0d404e2d991154c6ff18c3acb3da76a43f7f0",
+    "rig_id": "human_male_01_mixamo_candidate_v2",
+    "interfaces": "assets/modular_human_male_01/parts/interfaces/v0/interfaces.json",
+    "interfaces_status": "provisional"
+  },
+  "cleanup": {
+    "date": "2026-10-01",
+    "reason": "User requested removal of unnecessary intermediate files before checkpoint commit.",
+    "retained": "Selected GLBs and original PBR texture maps; task settings, hashes, costs and diagnostics.",
+    "discarded": "Rejected generation binaries and redundant API previews. Entries with retained=false are historical records, not missing deliverables.",
+    "inputs": "Cropped input images removed; reproduce from retained concepts and versioned build configs with prepare."
+  }
+}

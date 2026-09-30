@@ -2,6 +2,13 @@
 
 These guidelines were confirmed by the user on 2026-09-20 and apply until the user reports a change.
 
+## Modular Outfit Workflow
+
+- For new modular outfits, follow [the reusable production workflow](modular-outfit-workflow.md)
+  and [the connection rules](modular-outfit-connections.md).
+- Keep generation, fitting, and runtime compatibility as separate review stages. Record failures
+  and corrections alongside accepted assets; the rogue outfit is the first workflow example.
+
 ## Source and License Records
 
 - When adding an asset, record its source and license in the matching `doc/assets/` document.

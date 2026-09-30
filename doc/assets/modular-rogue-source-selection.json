@@ -1,0 +1,75 @@
+{
+  "status": "Selected raw sources for the first fitting pass, not finished equipment",
+  "reference": {
+    "base": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "base_sha256": "99016ab4311f8fb4256b7a42bdb0d404e2d991154c6ff18c3acb3da76a43f7f0",
+    "rig_id": "human_male_01_mixamo_candidate_v2",
+    "interfaces": "assets/modular_human_male_01/parts/interfaces/v0/interfaces.json",
+    "interfaces_status": "provisional"
+  },
+  "parts": [
+    {
+      "id": "top_rogue",
+      "source_glb": "assets/modular_human_male_01/parts/rogue_sources_v3/top_rogue/source.glb",
+      "target_triangles": 2200,
+      "status": "raw fitting candidate; no rig or runtime compatibility approval",
+      "remaining_work": [
+        "Texture striping resolved with front-only input; v1/v2 rejected.",
+        "Large triangular artifacts remain on front vest; clean topology and collar/sleeve openings before fitting.",
+        "Back is inferred from the front-only generation; compare to approved back concept."
+      ]
+    },
+    {
+      "id": "pants_rogue",
+      "source_glb": "assets/modular_human_male_01/parts/rogue_sources/pants_rogue/source.glb",
+      "target_triangles": 1300,
+      "status": "raw fitting candidate; no rig or runtime compatibility approval",
+      "remaining_work": [
+        "Fit waist under outer layers and cuffs inside boots.",
+        "Inspect waist/ankle openings, accessory clearance and knee bending."
+      ]
+    },
+    {
+      "id": "glove_rogue_right",
+      "source_glb": "assets/modular_human_male_01/parts/rogue_sources_v2/glove_rogue_right/source.glb",
+      "target_triangles": 700,
+      "status": "raw fitting candidate; no rig or runtime compatibility approval",
+      "remaining_work": [
+        "v2 selected over v1 for clearer fingers and buckle.",
+        "Source is shallow; fit palm volume, five finger openings and wrist to actual right hand."
+      ]
+    },
+    {
+      "id": "wrap_rogue_left",
+      "source_glb": "assets/modular_human_male_01/parts/rogue_sources/wrap_rogue_left/source.glb",
+      "target_triangles": 200,
+      "status": "raw fitting candidate; no rig or runtime compatibility approval",
+      "remaining_work": [
+        "Clean lower cloth edge and open both ends.",
+        "Fit to left wrist while preserving bare hand and forearm gap."
+      ]
+    },
+    {
+      "id": "boot_rogue_left",
+      "source_glb": "assets/modular_human_male_01/parts/rogue_sources/boot_rogue_left/source.glb",
+      "target_triangles": 350,
+      "status": "raw fitting candidate; no rig or runtime compatibility approval",
+      "remaining_work": [
+        "Orient and fit to actual left foot; mirror in 3D for right foot.",
+        "Preserve hollow collar and trouser overlap; inspect toe weights."
+      ]
+    }
+  ],
+  "budget": {
+    "raw_equipment_triangles_with_planned_second_boot": 4578,
+    "existing_body_triangles": 13891,
+    "existing_crop_hair_triangles": 933,
+    "existing_sword_triangles": 302,
+    "raw_assembled_projection_including_hidden_triangles": 19704,
+    "actual_fitted_assembled_triangles": null,
+    "visible_triangles": null,
+    "face_triangles": 1505
+  },
+  "supported_combinations": [],
+  "consumed_credits_all_attempts": 255
+}

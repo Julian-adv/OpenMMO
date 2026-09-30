@@ -185,7 +185,7 @@
     }
   ],
   "budget": {
-    "status": "Planning targets only; generated costume geometry does not yet exist.",
+    "status": "Original planning targets; raw generation measurements and selection are tracked in modular-rogue-mesh-review-selected.json and modular-rogue-parts.md. Fitted and visible totals pending.",
     "new_equipment_target_triangles": 4800,
     "existing_body": 13891,
     "existing_crop_hair": 933,
@@ -204,5 +204,6 @@
     "date": "2026-10-01",
     "reason": "User requested removal of unnecessary files before committing.",
     "retained": "Selected component images and the exact body renders used as generation references."
-  }
+  },
+  "production_workflow": "doc/assets/modular-outfit-workflow.md"
 }

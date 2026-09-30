@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "generation_date": "2026-10-01",
+  "tier": "Premium",
+  "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+  "record": "doc/assets/modular-rogue-meshy-v3-sources.json",
+  "output_dir": "assets/modular_human_male_01/parts/rogue_sources_v3",
+  "parameters": {
+    "ai_model": "meshy-7.1",
+    "geometry_resolution": "2k",
+    "should_remesh": true,
+    "topology": "triangle",
+    "should_texture": true,
+    "enable_pbr": true,
+    "texture_resolution": "2k",
+    "image_enhancement": false,
+    "remove_lighting": true,
+    "pose_mode": "",
+    "target_formats": [
+      "glb"
+    ],
+    "multi_view_thumbnails": true
+  },
+  "parts": [
+    {
+      "id": "top_rogue",
+      "target_triangles": 2200,
+      "views": [
+        {
+          "source": "doc/images/characters/modular_human_male_01/parts/rogue/top_rogue-v1.png",
+          "source_sha256": "e00a212371b643d94c210b26242460d57be2fd2b714485e6bb4cd25049e0faec",
+          "path": "assets/modular_human_male_01/parts/rogue_sources/inputs/top-front.png",
+          "crop": [
+            0,
+            0,
+            790,
+            1024
+          ]
+        }
+      ]
+    }
+  ],
+  "reference": {
+    "base": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "base_sha256": "99016ab4311f8fb4256b7a42bdb0d404e2d991154c6ff18c3acb3da76a43f7f0",
+    "rig_id": "human_male_01_mixamo_candidate_v2",
+    "interfaces": "assets/modular_human_male_01/parts/interfaces/v0/interfaces.json",
+    "interfaces_status": "provisional"
+  }
+}

@@ -1,0 +1,135 @@
+{
+  "status": "raw sources, normalized separately for display; not assembled or fitted",
+  "parts": [
+    {
+      "id": "top_rogue",
+      "source": "assets/modular_human_male_01/parts/rogue_sources_v3/top_rogue/source.glb",
+      "sha256": "3baa541c6e93d2aafb449f58bc2cbe2e565d009df899e5b0b4f342e924779375",
+      "target_triangles": 2200,
+      "triangles": 1799,
+      "mesh_count": 1,
+      "meshes": [
+        {
+          "name": "Mesh_0",
+          "components_vertex_counts": [
+            705
+          ],
+          "boundary_edges": 283,
+          "nonmanifold_edges": 633,
+          "degenerate_faces": 0,
+          "collapsed_uv_triangles": 21
+        }
+      ],
+      "source_extent_blender": [
+        1.880897045135498,
+        0.9135480523109436,
+        1.6314480304718018
+      ],
+      "rigged": false
+    },
+    {
+      "id": "pants_rogue",
+      "source": "assets/modular_human_male_01/parts/rogue_sources/pants_rogue/source.glb",
+      "sha256": "f1e4b59d7751438abe2caaa78ec04027d66bb38486a8d4fb58e5096a861f9b6c",
+      "target_triangles": 1300,
+      "triangles": 1274,
+      "mesh_count": 1,
+      "meshes": [
+        {
+          "name": "Mesh_0.002",
+          "components_vertex_counts": [
+            602
+          ],
+          "boundary_edges": 50,
+          "nonmanifold_edges": 121,
+          "degenerate_faces": 0,
+          "collapsed_uv_triangles": 4
+        }
+      ],
+      "source_extent_blender": [
+        1.0780551433563232,
+        0.5824490189552307,
+        1.8948551416397095
+      ],
+      "rigged": false
+    },
+    {
+      "id": "glove_rogue_right",
+      "source": "assets/modular_human_male_01/parts/rogue_sources_v2/glove_rogue_right/source.glb",
+      "sha256": "7aa8a5a81cfdc83aadd2c91be13ff4204aaec7f8398b13a23470ee822babf56a",
+      "target_triangles": 700,
+      "triangles": 645,
+      "mesh_count": 1,
+      "meshes": [
+        {
+          "name": "Mesh_0.004",
+          "components_vertex_counts": [
+            266
+          ],
+          "boundary_edges": 40,
+          "nonmanifold_edges": 141,
+          "degenerate_faces": 0,
+          "collapsed_uv_triangles": 3
+        }
+      ],
+      "source_extent_blender": [
+        1.5070829391479492,
+        0.27991509437561035,
+        1.8889451026916504
+      ],
+      "rigged": false
+    },
+    {
+      "id": "wrap_rogue_left",
+      "source": "assets/modular_human_male_01/parts/rogue_sources/wrap_rogue_left/source.glb",
+      "sha256": "6e5c582da5d58643e4acdad68ace576e163fa87a8e69258e33a46b761327cb85",
+      "target_triangles": 200,
+      "triangles": 156,
+      "mesh_count": 1,
+      "meshes": [
+        {
+          "name": "Mesh_0.006",
+          "components_vertex_counts": [
+            61
+          ],
+          "boundary_edges": 15,
+          "nonmanifold_edges": 65,
+          "degenerate_faces": 0,
+          "collapsed_uv_triangles": 2
+        }
+      ],
+      "source_extent_blender": [
+        1.2539780139923096,
+        1.254060983657837,
+        1.8296387195587158
+      ],
+      "rigged": false
+    },
+    {
+      "id": "boot_rogue_left",
+      "source": "assets/modular_human_male_01/parts/rogue_sources/boot_rogue_left/source.glb",
+      "sha256": "a6c57d7dc34b580173c717422ba706c6b00b3692d8165de50fa6e72fc87330bc",
+      "target_triangles": 350,
+      "triangles": 352,
+      "mesh_count": 1,
+      "meshes": [
+        {
+          "name": "Mesh_0.008",
+          "components_vertex_counts": [
+            179
+          ],
+          "boundary_edges": 7,
+          "nonmanifold_edges": 12,
+          "degenerate_faces": 0,
+          "collapsed_uv_triangles": 0
+        }
+      ],
+      "source_extent_blender": [
+        1.8923132419586182,
+        0.728693962097168,
+        1.209204077720642
+      ],
+      "rigged": false
+    }
+  ]
+}

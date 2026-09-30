@@ -1,0 +1,254 @@
+{
+  "generation_date": "2026-10-01",
+  "service": "Meshy Multi-Image to 3D API",
+  "tier": "Premium",
+  "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
+  "endpoint": "https://api.meshy.ai/openapi/v1/multi-image-to-3d",
+  "tasks": [
+    {
+      "part_id": "top_rogue",
+      "inputs": [
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/inputs/top-front.png",
+          "sha256": "5c75e22c3e9ff034a4f9c682d35cf4c6cd8ba09bc87cc638d6c407310cbef059"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/inputs/top-back.png",
+          "sha256": "76ad81468684927228cd7ea4dae8555c37f478fd1e4725c6d8460da57f8ae9e8"
+        }
+      ],
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "geometry_resolution": "2k",
+        "should_remesh": true,
+        "topology": "triangle",
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "remove_lighting": true,
+        "pose_mode": "",
+        "target_formats": [
+          "glb"
+        ],
+        "multi_view_thumbnails": true,
+        "target_polycount": 2200
+      },
+      "status": "SUCCEEDED",
+      "task_id": "01a0f328-6e00-7174-a710-5214d0c11b5f",
+      "progress": 100,
+      "consumed_credits": 35,
+      "created_at": 1790785909727,
+      "finished_at": 1790786126715,
+      "task_error": null,
+      "files": [
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources_v2/top_rogue/source.glb",
+          "sha256": "7c5ee3be5ccc784bf8ce13ed0190b5617f96ace3b6f2787586027dad0f467fda",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources_v2/top_rogue/preview.png",
+          "sha256": "53bd042552809eb4054185138b2ab21ccf495296d85f01437947d63a334ca0e2",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources_v2/top_rogue/preview-back.png",
+          "sha256": "c9e073bafbfb56d6435eb0b3f21dae16b7aed207498a78d98414335d98b5e541",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources_v2/top_rogue/preview-front.png",
+          "sha256": "53bd042552809eb4054185138b2ab21ccf495296d85f01437947d63a334ca0e2",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources_v2/top_rogue/preview-left.png",
+          "sha256": "3b733a5a83667cdcb24a5341d0f1a22e0a460cf0a38c6fd51375dc15568e8cf7",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources_v2/top_rogue/preview-right.png",
+          "sha256": "a324adf7cdd2d9edc75e9cc8c6b6e5a50cdf2d9de3886e86fc35dcd397f2f27d",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources_v2/top_rogue/texture-0-base_color.png",
+          "sha256": "63583a6bac1ce38efd73bba48de9e36cc1b3148ff8e6174a6671127308bcf078",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources_v2/top_rogue/texture-0-metallic.png",
+          "sha256": "71af15fe81e7a5ea3358ee6d22699e8f22c8cb9fb2e76b6da173c3a405440353",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources_v2/top_rogue/texture-0-roughness.png",
+          "sha256": "49a8104f9b15d1a2495f79d0a4d031c2279d281d620935ee1e7370285f468cb5",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources_v2/top_rogue/texture-0-normal.png",
+          "sha256": "f9640454349bb2a68ad963bc7ffce073ebca143787ace3fc24d79441ce227964",
+          "retained": false
+        }
+      ],
+      "selected_for_fitting": false,
+      "geometry_review": {
+        "id": "top_rogue",
+        "source": "assets/modular_human_male_01/parts/rogue_sources_v2/top_rogue/source.glb",
+        "sha256": "7c5ee3be5ccc784bf8ce13ed0190b5617f96ace3b6f2787586027dad0f467fda",
+        "target_triangles": 2200,
+        "triangles": 1701,
+        "mesh_count": 1,
+        "meshes": [
+          {
+            "name": "Mesh_0",
+            "components_vertex_counts": [
+              613
+            ],
+            "boundary_edges": 201,
+            "nonmanifold_edges": 585,
+            "degenerate_faces": 0
+          }
+        ],
+        "source_extent_blender": [
+          1.860097885131836,
+          0.8506699800491333,
+          1.4622329473495483
+        ],
+        "rigged": false
+      }
+    },
+    {
+      "part_id": "glove_rogue_right",
+      "inputs": [
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/inputs/glove-dorsal.png",
+          "sha256": "99a1fc35359747ef1b4ceceed87ee4fab7a94112cb12ab36d72afd716b4bd0b3"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources/inputs/glove-palm.png",
+          "sha256": "a7725e65d49ed5f77c2a17991c2328c4b9dbb56d7c736ffaf9809cc47929723a"
+        }
+      ],
+      "parameters": {
+        "ai_model": "meshy-7.1",
+        "geometry_resolution": "2k",
+        "should_remesh": true,
+        "topology": "triangle",
+        "should_texture": true,
+        "enable_pbr": true,
+        "texture_resolution": "2k",
+        "image_enhancement": false,
+        "remove_lighting": true,
+        "pose_mode": "",
+        "target_formats": [
+          "glb"
+        ],
+        "multi_view_thumbnails": true,
+        "target_polycount": 700
+      },
+      "status": "SUCCEEDED",
+      "task_id": "01a0f328-771c-7733-b0f9-4a6450b9ff10",
+      "progress": 100,
+      "consumed_credits": 35,
+      "created_at": 1790785912024,
+      "finished_at": 1790786060161,
+      "task_error": null,
+      "files": [
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources_v2/glove_rogue_right/source.glb",
+          "sha256": "7aa8a5a81cfdc83aadd2c91be13ff4204aaec7f8398b13a23470ee822babf56a",
+          "retained": true
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources_v2/glove_rogue_right/preview.png",
+          "sha256": "5aa29986175da548626636e00ba6c6f36cb0f64591cfef33a2380525ca7258ab",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources_v2/glove_rogue_right/preview-back.png",
+          "sha256": "062a918770bb70aabb120498bf735700d3d1ba01d58d0efe2f6e28e38c70ccdb",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources_v2/glove_rogue_right/preview-front.png",
+          "sha256": "5aa29986175da548626636e00ba6c6f36cb0f64591cfef33a2380525ca7258ab",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources_v2/glove_rogue_right/preview-left.png",
+          "sha256": "a7d70ca295394fc54d5adb3c1e00645b0585f7d1417b1b8e4a791553c8333fc2",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources_v2/glove_rogue_right/preview-right.png",
+          "sha256": "042481214d08de2dc58afd410b7757411dce93578e5435c853001e40b6321faa",
+          "retained": false
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources_v2/glove_rogue_right/texture-0-base_color.png",
+          "sha256": "67fdf4d31b29a9b46b8a4e4e4e16659f1ad2b37b8c01fe63172e47377de44211",
+          "retained": true
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources_v2/glove_rogue_right/texture-0-metallic.png",
+          "sha256": "c68046c3999561461794e6b6fcb65d49681dcea055570179c9d1e2aea4e26b2b",
+          "retained": true
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources_v2/glove_rogue_right/texture-0-roughness.png",
+          "sha256": "9e1df3adac4ddc9f0a984fe2096b4a5965b894c65f0bc0dd55f0381ae5c2b3f5",
+          "retained": true
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_sources_v2/glove_rogue_right/texture-0-normal.png",
+          "sha256": "161c062367a9c23db27b8bd27df142f2a4810ae63a71d1e0d6e1c09c52f93c41",
+          "retained": true
+        }
+      ],
+      "selected_for_fitting": true,
+      "geometry_review": {
+        "id": "glove_rogue_right",
+        "source": "assets/modular_human_male_01/parts/rogue_sources_v2/glove_rogue_right/source.glb",
+        "sha256": "7aa8a5a81cfdc83aadd2c91be13ff4204aaec7f8398b13a23470ee822babf56a",
+        "target_triangles": 700,
+        "triangles": 645,
+        "mesh_count": 1,
+        "meshes": [
+          {
+            "name": "Mesh_0.002",
+            "components_vertex_counts": [
+              266
+            ],
+            "boundary_edges": 40,
+            "nonmanifold_edges": 141,
+            "degenerate_faces": 0
+          }
+        ],
+        "source_extent_blender": [
+          1.5070829391479492,
+          0.27991509437561035,
+          1.8889451026916504
+        ],
+        "rigged": false
+      }
+    }
+  ],
+  "status": "Raw generation; not fitted, rigged or game-ready",
+  "reference": {
+    "base": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "base_sha256": "99016ab4311f8fb4256b7a42bdb0d404e2d991154c6ff18c3acb3da76a43f7f0",
+    "rig_id": "human_male_01_mixamo_candidate_v2",
+    "interfaces": "assets/modular_human_male_01/parts/interfaces/v0/interfaces.json",
+    "interfaces_status": "provisional"
+  },
+  "cleanup": {
+    "date": "2026-10-01",
+    "reason": "User requested removal of unnecessary intermediate files before checkpoint commit.",
+    "retained": "Selected GLBs and original PBR texture maps; task settings, hashes, costs and diagnostics.",
+    "discarded": "Rejected generation binaries and redundant API previews. Entries with retained=false are historical records, not missing deliverables.",
+    "inputs": "Cropped input images removed; reproduce from retained concepts and versioned build configs with prepare."
+  }
+}
