@@ -25,6 +25,9 @@
 
 ## 기준 몸체와 연결부
 
+공통 제작 원칙은 [모듈형 복장 절단선과 연결 기준](modular-outfit-connections.md)을 따른다.
+아래 수치는 도적 복장의 모델링 시작값이며, 공통 규격의 확정 치수는 아니다.
+
 `assets/modular_human_male_01/parts/fitted/base.glb`의 현재 형상을 직접 렌더해
 [정면](../images/characters/modular_human_male_01/parts/rogue/rig-front.png)과
 [측면](../images/characters/modular_human_male_01/parts/rogue/rig-side.png)을 생성 입력에 함께 제공했다.

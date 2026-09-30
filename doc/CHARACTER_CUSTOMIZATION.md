@@ -13,6 +13,10 @@
 
 [기사 판금 세트의 제작 파일·출처·검증](assets/modular-knight-plate.md).
 
+새 복장의 연결 위치·겹침·가림·리깅·혼합 조합 검증은
+[모듈형 복장 절단선과 연결 기준](assets/modular-outfit-connections.md)을 따른다.
+2026-10-01 제작 원칙을 정리했으며, 3D 기준 테두리와 공통 치수는 아직 확정 전이다.
+
 게임용 파츠·전용 동작 9팩의 출처, 재생성 방법과 검증은
 [게임 연결 기록](assets/characters.md#modular-human-male-01--남성-플레이어-연결-2026-09-29)에 정리했다.
 
