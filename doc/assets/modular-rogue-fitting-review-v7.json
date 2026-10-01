@@ -3,45 +3,55 @@
   "blender_version": "5.2.0 LTS",
   "editable": {
     "path": "assets/modular_human_male_01/parts/rogue_fitted_v7/rogue-fitting.blend",
-    "sha256": "2a170dfb3727f24dada02cc607a2733f868735738129802f2774298720224e52"
+    "sha256": "2a170dfb3727f24dada02cc607a2733f868735738129802f2774298720224e52",
+    "retained": false
   },
   "images": [
     {
       "path": "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v7-rest.png",
-      "sha256": "6129c2ec45181fa55e3c34eef1fbf026c0b43134b6791bfb33ca480b59af5e8f"
+      "sha256": "6129c2ec45181fa55e3c34eef1fbf026c0b43134b6791bfb33ca480b59af5e8f",
+      "retained": true
     },
     {
       "path": "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v7-sleeves.png",
-      "sha256": "0e01bc23c4c7abbd1ff4fe5819f6625bb9fe585eb4b82102f09d44cd1b5c46dc"
+      "sha256": "0e01bc23c4c7abbd1ff4fe5819f6625bb9fe585eb4b82102f09d44cd1b5c46dc",
+      "retained": true
     },
     {
       "path": "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v7-motion.png",
-      "sha256": "c7f66193a4a3e854a41c80100d621470763f101d4d887c7da004998e978f0625"
+      "sha256": "c7f66193a4a3e854a41c80100d621470763f101d4d887c7da004998e978f0625",
+      "retained": true
     },
     {
       "path": "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v7-fixes.png",
-      "sha256": "c301720df66d4ab6a602cf1d6d82355b7debb585d20657d4572da3716aedb0ec"
+      "sha256": "c301720df66d4ab6a602cf1d6d82355b7debb585d20657d4572da3716aedb0ec",
+      "retained": true
     },
     {
       "path": "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v7-connections.png",
-      "sha256": "c235a1be1b5362e73a151556b8810762373c3d7ad92feb7076c2c35e58fb05f0"
+      "sha256": "c235a1be1b5362e73a151556b8810762373c3d7ad92feb7076c2c35e58fb05f0",
+      "retained": true
     }
   ],
   "fitting_record": {
     "path": "doc/assets/modular-rogue-fitting-v7.json",
-    "sha256": "55b11ad4c3aec1c9f38697b87d1b34cc49bc60e84ae83210a31f71a510cb919d"
+    "sha256": "55b11ad4c3aec1c9f38697b87d1b34cc49bc60e84ae83210a31f71a510cb919d",
+    "retained": false
   },
   "animation_record": {
     "path": "doc/assets/modular-rogue-animation-review-v7.json",
-    "sha256": "f6acc9041678455ebb49c79998da86121036255f49d41c4a14d603007a3f8712"
+    "sha256": "f6acc9041678455ebb49c79998da86121036255f49d41c4a14d603007a3f8712",
+    "retained": false
   },
   "snapshots": {
     "path": "assets/modular_human_male_01/parts/rogue_fitted_v7/animation-snapshots.json",
-    "sha256": "187950ec6f60d3788c7fbf7f1c0d3bdf426bced80f3ac992c21abff368f92a97"
+    "sha256": "187950ec6f60d3788c7fbf7f1c0d3bdf426bced80f3ac992c21abff368f92a97",
+    "retained": false
   },
   "wrap_record": {
     "path": "doc/assets/modular-rogue-wrap-review-v7.json",
-    "sha256": "2e072a4a2c7b1c7969a158948deb1d87305035928835e05de65f962790c89ba9"
+    "sha256": "2e072a4a2c7b1c7969a158948deb1d87305035928835e05de65f962790c89ba9",
+    "retained": false
   },
   "runtime_review": {
     "engine": "Three.js development modular-character preview",
@@ -93,5 +103,6 @@
     "Nearest-surface and row-only skin blends overstretched the new seam; replaced with shared shoulder/arm weights and surface smoothing, with cuff weights fixed",
     "Original hidden neckline folds produced inverted shoulder faces when exposed; replaced with a continuous neckline and collar loft",
     "Floating scarf expansion replaced by a shared-cut drape following the vest shell"
-  ]
+  ],
+  "archive_note": "Historical measurements; records marked retained=false refer to intermediate files removed after approval."
 }

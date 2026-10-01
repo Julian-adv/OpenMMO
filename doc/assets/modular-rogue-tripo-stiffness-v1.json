@@ -1,0 +1,98 @@
+{
+  "sources": [
+    {
+      "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/before-leather-stiffness/top_rogue.glb",
+      "sha256": "f6748b5d66f10332530c3c93d78e24eaaee4586f9d98826bc43c3b1ecf7ef026",
+      "retained": false
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/before-right-armhole/top_rogue.glb",
+      "sha256": "3878f6579141b09551f54c5bf58184324c8f8baba71f2a3e24a0ba6ff2b98061",
+      "retained": false
+    }
+  ],
+  "unchanged_geometry_normals_uv": true,
+  "unchanged_outer_sleeve_collar_hem_weights": true,
+  "measurement": "Absolute edge length strain in central leather torso: abs(X)<0.14m, 1.18<Y<1.42m; edges longer than 1mm",
+  "edges": 264,
+  "clips": [
+    {
+      "name": "idle1",
+      "before": {
+        "maximum_strain": 0.5326206120152219,
+        "p95_strain": 0.21315413939577788
+      },
+      "after": {
+        "maximum_strain": 0.12052271429536021,
+        "p95_strain": 0.05227371951506552
+      }
+    },
+    {
+      "name": "walk",
+      "before": {
+        "maximum_strain": 0.35481684379084877,
+        "p95_strain": 0.12732188505140618
+      },
+      "after": {
+        "maximum_strain": 0.06810693330470463,
+        "p95_strain": 0.03013187239830291
+      }
+    },
+    {
+      "name": "run",
+      "before": {
+        "maximum_strain": 0.7746679945684947,
+        "p95_strain": 0.2980188633542885
+      },
+      "after": {
+        "maximum_strain": 0.15097945656076328,
+        "p95_strain": 0.06880730139111259
+      }
+    },
+    {
+      "name": "jump",
+      "before": {
+        "maximum_strain": 1.3298604733476171,
+        "p95_strain": 0.5763774328785409
+      },
+      "after": {
+        "maximum_strain": 0.7962855752528679,
+        "p95_strain": 0.2224062473545077
+      }
+    },
+    {
+      "name": "slash1",
+      "before": {
+        "maximum_strain": 1.4736598951028048,
+        "p95_strain": 0.4540090958931705
+      },
+      "after": {
+        "maximum_strain": 0.26389739264223966,
+        "p95_strain": 0.0921161820531548
+      }
+    },
+    {
+      "name": "combat_idle",
+      "before": {
+        "maximum_strain": 0.5619002615619944,
+        "p95_strain": 0.34235115273216316
+      },
+      "after": {
+        "maximum_strain": 0.09165916632843518,
+        "p95_strain": 0.06879527076772599
+      }
+    },
+    {
+      "name": "sit_idle",
+      "before": {
+        "maximum_strain": 0.5715457533890114,
+        "p95_strain": 0.3043041228728771
+      },
+      "after": {
+        "maximum_strain": 0.23694247006026137,
+        "p95_strain": 0.1259678866375968
+      }
+    }
+  ],
+  "archive_note": "Historical measurements; records marked retained=false refer to intermediate files removed after approval."
+}

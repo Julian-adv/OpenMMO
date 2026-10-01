@@ -1,0 +1,165 @@
+{
+  "status": "Fitted and rigged candidate; rerun animation and visual review after rebuilding",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/source.glb",
+    "sha256": "70584277a1701b0072c54578aaedb223cfc8b68e46f27e1c4a98d2020504b17d"
+  },
+  "base": {
+    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b"
+  },
+  "rig_id": "human_male_01_mixamo_candidate_v2",
+  "method": "Anatomical alignment, smooth clearance correction, plate waist contour, barycentric sleeve weights and a shared leather torso blend",
+  "source_triangles": 4877,
+  "preserved_uv_and_embedded_texture": true,
+  "clearance_target_m": 0.012,
+  "correction_iterations": [
+    {
+      "step": 0,
+      "minimum_signed_distance_m": -0.07635814923873929,
+      "maximum_correction_m": 0.016809717122655148
+    },
+    {
+      "step": 1,
+      "minimum_signed_distance_m": -0.06079503824671349,
+      "maximum_correction_m": 0.012067838355414893
+    },
+    {
+      "step": 2,
+      "minimum_signed_distance_m": -0.05616176561320099,
+      "maximum_correction_m": 0.007794476621618937
+    },
+    {
+      "step": 3,
+      "minimum_signed_distance_m": -0.05408453775476185,
+      "maximum_correction_m": 0.006169980763593749
+    },
+    {
+      "step": 4,
+      "minimum_signed_distance_m": -0.0492945594613035,
+      "maximum_correction_m": 0.004852068134092534
+    },
+    {
+      "step": 5,
+      "minimum_signed_distance_m": -0.046460008668474356,
+      "maximum_correction_m": 0.0039405421888166715
+    },
+    {
+      "step": 6,
+      "minimum_signed_distance_m": -0.04240275846316903,
+      "maximum_correction_m": 0.003425208172084877
+    },
+    {
+      "step": 7,
+      "minimum_signed_distance_m": -0.03942650100517846,
+      "maximum_correction_m": 0.0029472836901999057
+    },
+    {
+      "step": 8,
+      "minimum_signed_distance_m": -0.04009856406315522,
+      "maximum_correction_m": 0.0023915469512323113
+    },
+    {
+      "step": 9,
+      "minimum_signed_distance_m": -0.03819684083063885,
+      "maximum_correction_m": 0.0021394695883273037
+    },
+    {
+      "step": 10,
+      "minimum_signed_distance_m": -0.03640222713011995,
+      "maximum_correction_m": 0.001911878251880236
+    },
+    {
+      "step": 11,
+      "minimum_signed_distance_m": -0.03544462253031603,
+      "maximum_correction_m": 0.0017350339856340652
+    }
+  ],
+  "validation": {
+    "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+    "sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
+    "triangles": 4877,
+    "bones": 65,
+    "exact_rest_hierarchy_and_inverse_bind_match": true,
+    "maximum_weight_sum_error": 1.1920928955078125e-07,
+    "active_bones": [
+      "Hips",
+      "LeftArm",
+      "LeftForeArm",
+      "Neck",
+      "RightArm",
+      "RightForeArm",
+      "Spine",
+      "Spine1",
+      "Spine2"
+    ]
+  },
+  "waist_taper": {
+    "method": "Smooth section scales follow the plate waist silhouette with body clearance; shared layer deformation preserves cloth overlap",
+    "reference": {
+      "path": "assets/modular_human_male_01/parts/fitted/top_plate.glb",
+      "sha256": "c29b772b91d9c7d6b5622758edc707ea2caea4d69618e5729f126d3f88ea47ce"
+    },
+    "maximum_contour_blend": 0.85,
+    "transition_height_m": [
+      1.2,
+      1.36
+    ],
+    "section_body_margin_m": 0.03,
+    "changed_vertices": 1394,
+    "maximum_displacement_m": 0.026245544584703264,
+    "original_heights_and_skin_weights_preserved": true
+  },
+  "right_armhole": {
+    "method": "Ease the character-right front armhole outward with a smooth local falloff",
+    "maximum_displacement_m": 0.005,
+    "changed_vertices": 68,
+    "unchanged_uv_texture_skin_weights": true,
+    "applies_to": "Base garment shape in all poses"
+  },
+  "side_laces": {
+    "method": "Transfer adjacent vest panel weights to leather side laces and their attachments",
+    "changed_welded_vertices": 713,
+    "lace_welded_vertices": 484,
+    "attachment_transition_diffusion": 0.04,
+    "unchanged_geometry_uv_texture": true
+  },
+  "rest_surface_diagnostic": {
+    "samples": 10818,
+    "minimum_signed_distance_m": -0.04638566543135937,
+    "negative_samples": 63,
+    "interpretation": "Includes retained internal collar and cuff surfaces; not a collision-free acceptance test"
+  },
+  "weight_policy": {
+    "surface_diffusion": 0.05,
+    "cuff_fidelity": 80,
+    "sleeve_fidelity": 20,
+    "maximum_influences": 4,
+    "arm_centerline_fade_m": 0.13,
+    "leather_shared_blend": {
+      "Spine1": 1
+    },
+    "leather_stiffness": 0.94,
+    "leather_transition_diffusion": 0.04,
+    "leather_side_transition_abs_x_m": [
+      0.16,
+      0.28
+    ],
+    "leather_upper_transition_y_m": [
+      1.43,
+      1.52
+    ],
+    "leather_hem_transition_y_m": [
+      1.12,
+      1.22
+    ]
+  },
+  "budget": {
+    "top_triangles": 4877,
+    "body_with_hidden_regions": 13891,
+    "crop_hair": 933,
+    "body_hair_top_total": 19701,
+    "full_rogue_set_with_hair_sword_including_hidden": 23458,
+    "face_triangles": 1505
+  }
+}

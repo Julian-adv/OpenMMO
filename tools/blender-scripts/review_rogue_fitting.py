@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 
 import bpy
+import bmesh
 from mathutils import Matrix, Vector
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -56,6 +57,30 @@ def file_record(path):
     return dict(path=str(path.relative_to(ROOT)), sha256=hashlib.sha256(path.read_bytes()).hexdigest())
 
 
+def clip_top_skin(obj, tripo_top):
+    if obj.get('region') == 'neck':
+        mesh = bmesh.new()
+        mesh.from_mesh(obj.data)
+        mesh.transform(obj.matrix_world)
+        bmesh.ops.bisect_plane(mesh, geom=list(mesh.verts) + list(mesh.edges) + list(mesh.faces),
+                              plane_co=(0, 0, 1.54 if tripo_top else 1.61), plane_no=(0, 0, 1), clear_inner=True)
+        for side in [-1, 1]:
+            bmesh.ops.bisect_plane(mesh, geom=list(mesh.verts) + list(mesh.edges) + list(mesh.faces),
+                                  plane_co=(side * .075, 0, 0), plane_no=(side, 0, 0), clear_outer=True)
+        mesh.transform(obj.matrix_world.inverted())
+        mesh.to_mesh(obj.data)
+        mesh.free()
+    if obj.get('region') == 'torso' and tripo_top:
+        mesh = bmesh.new()
+        mesh.from_mesh(obj.data)
+        mesh.transform(obj.matrix_world)
+        bmesh.ops.bisect_plane(mesh, geom=list(mesh.verts) + list(mesh.edges) + list(mesh.faces),
+                              plane_co=(0, 0, 1.14), plane_no=(0, 0, 1), clear_outer=True)
+        mesh.transform(obj.matrix_world.inverted())
+        mesh.to_mesh(obj.data)
+        mesh.free()
+
+
 def main(default_images):
     selection = json.loads((ROOT / 'doc/assets/modular-rogue-source-selection.json').read_text())
     candidate = selection['fitting_candidate']
@@ -69,21 +94,25 @@ def main(default_images):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.ops.import_scene.gltf(filepath=str(PARTS / 'fitted/base.glb'))
     rig = next(o for o in bpy.data.objects if o.type == 'ARMATURE')
-    for obj in list(bpy.data.objects):
-        if obj.type != 'MESH':
-            continue
-        region = obj.get('region')
-        obj.hide_render = region == 'boot_ankles' or (not args.unmasked and region in ['torso', 'upper_arms', 'neck', 'legs', 'feet', 'ankles'])
-        obj.hide_set(obj.hide_render)
+    body = [obj for obj in bpy.data.objects if obj.type == 'MESH']
     for name in ['top_rogue', 'pants_rogue', 'gloves_rogue', 'boots_rogue']:
-        import_part(args.output / f'{name}.glb', rig)
+        selected = candidate.get('part_overrides', {}).get(name)
+        meshes = import_part(ROOT / selected if selected else args.output / f'{name}.glb', rig)
+        if name == 'top_rogue':
+            tripo_top = any(obj.get('fitting_status') == 'candidate_tripo_v1' for obj in meshes)
+    for obj in body:
+        region = obj.get('region')
+        if not args.unmasked:
+            clip_top_skin(obj, tripo_top)
+        obj.hide_render = region == 'boot_ankles' or (not args.unmasked and (region in ['upper_arms', 'legs', 'feet', 'ankles'] or (region == 'torso' and not tripo_top)))
+        obj.hide_set(obj.hide_render)
     import_part(PARTS / 'fitted/hair_crop.glb', rig)
     for obj in bpy.data.objects:
         if obj.type == 'MESH':
             for poly in obj.data.polygons:
                 poly.use_smooth = True
     if not args.quick:
-        references = bpy.data.collections.new('Original Meshy sources - unmodified, hidden')
+        references = bpy.data.collections.new('Original outfit sources - unmodified, hidden')
         bpy.context.scene.collection.children.link(references)
         for index, part in enumerate(selection['parts']):
             before = set(bpy.data.objects)
@@ -186,6 +215,8 @@ def main(default_images):
             if snapshot['clip'] == 'sit_idle':
                 def mesh_center(name):
                     obj = bpy.data.objects.get(name)
+                    if obj is None and tripo_top and name in ['vest_rogue', 'scarf_rogue']:
+                        obj = next(o for o in scene.objects if o.type == 'MESH' and o.get('part_id') == 'top_rogue')
                     evaluated = obj.evaluated_get(depsgraph)
                     corners = [evaluated.matrix_world @ Vector(corner) for corner in evaluated.bound_box]
                     return sum(corners, Vector()) / len(corners)

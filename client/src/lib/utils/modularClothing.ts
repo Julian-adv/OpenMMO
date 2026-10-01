@@ -1,6 +1,13 @@
 import * as THREE from 'three'
 
-type Cut = 'bracers' | 'gauntlets' | 'gloves' | 'greaves'
+type Cut =
+  | 'bracers'
+  | 'gauntlets'
+  | 'gloves'
+  | 'greaves'
+  | 'collar'
+  | 'tripo_collar'
+  | 'tripo_waist'
 type Distance = (point: THREE.Vector3) => number
 
 function sleeveCut(fraction: number): Distance {
@@ -24,6 +31,9 @@ const cuts: Record<Cut, Distance> = {
   gauntlets: sleeveCut(0.85),
   gloves: sleeveCut(0.89),
   greaves: (point) => point.y - 0.46,
+  collar: (point) => Math.max(1.61 - point.y, Math.abs(point.x) - 0.075),
+  tripo_collar: (point) => Math.max(1.54 - point.y, Math.abs(point.x) - 0.075),
+  tripo_waist: (point) => point.y - 1.14,
 }
 
 export function clipSkinnedGeometry(

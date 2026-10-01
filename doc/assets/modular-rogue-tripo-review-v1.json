@@ -1,0 +1,40 @@
+{
+  "status": "Fitted and rigged candidate; mixed equipment and gameplay acceptance pending",
+  "blender_version": "5.2.0 LTS",
+  "skin_mask": {
+    "hidden_regions": [
+      "upper_arms",
+      "boot_ankles"
+    ],
+    "torso_maximum_y": 1.14,
+    "neck_minimum_y": 1.54,
+    "neck_maximum_abs_x": 0.075,
+    "scope": "Review scene only; canonical base GLB unchanged"
+  },
+  "editable": {
+    "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/tripo-fitting.blend",
+    "sha256": "814d0ece44b12afa4ecb1c47afe1c3f4bedf3588496396d1c6375b3a760af439"
+  },
+  "images": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/tripo-v1-rest.png",
+      "sha256": "08b05f4616a1727df0276dfac573df3de394e04c4943c69ddcad585430aa4410"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/tripo-v1-motion.png",
+      "sha256": "ee5a93caab5d4add425d1aa927674928f6ca4617b16061a3754f098f858d398a"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/tripo-v1-hero.png",
+      "sha256": "847b3725ab97cf0fc732c2215df610d65f23f2501cbfbda4af893a53c9d54308"
+    }
+  ],
+  "fitting": {
+    "path": "doc/assets/modular-rogue-tripo-fitting-v1.json",
+    "sha256": "683acbbbfc3988bbeee1246cb201e14e76bcdb465cbe8ac42b352f7e448545d0"
+  },
+  "animation": {
+    "path": "doc/assets/modular-rogue-tripo-animation-v1.json",
+    "sha256": "5ed4d1a4e5833ed9e6a9546070648531ae8b2e1d95b6951d16c817f2f587ef7b"
+  }
+}

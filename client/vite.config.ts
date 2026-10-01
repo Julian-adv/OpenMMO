@@ -111,14 +111,20 @@ function modularCharacterPreview(): Plugin {
     apply: 'serve',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        const path = req.url?.split('?')[0] ?? ''
+        const request = new URL(req.url ?? '/', 'http://localhost')
+        const path = request.pathname
         const prefix = '/__modular-character/'
         if (!path.startsWith(prefix)) return next()
         const name = path.slice(prefix.length)
         const part = /^parts\/(\w+)\.glb$/.exec(name)
         const url =
           part && rogueParts.has(part[1])
-            ? new URL(`${part[1]}.glb`, rogue)
+            ? selection.fitting_candidate.part_overrides?.[part[1]]
+              ? new URL(
+                  `../${selection.fitting_candidate.part_overrides[part[1]]}`,
+                  import.meta.url
+                )
+              : new URL(`${part[1]}.glb`, rogue)
             : part && parts.has(part[1])
               ? new URL(`${part[1]}.glb`, fitted)
               : files.has(name)

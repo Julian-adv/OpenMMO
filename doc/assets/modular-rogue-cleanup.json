@@ -67,7 +67,7 @@
     "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v6-sleeves.png"
   ],
   "retained": [
-    "rogue_fitted_v7 GLBs, editable blend, animation snapshots and validation poses",
+    "rogue_fitted_v7 GLBs, editable blend, animation snapshots and validation poses (superseded and removed in the Tripo follow-up cleanup below)",
     "selected raw Meshy GLBs and PBR maps",
     "canonical body and current editable outfit files",
     "base-before-calf-v1.glb required for reproducible geometry edit",
@@ -386,6 +386,37 @@
           "bytes": 493715,
           "sha256": "fc1f6b7b6021487b740c3426cc13848393407c1ddf485fefbc9dfa954509a2aa"
         }
+      ]
+    }
+  ],
+  "followup_cleanups": [
+    {
+      "date": "2026-10-01",
+      "reason": "User-requested cleanup after approving the Tripo default top",
+      "files_removed": 63,
+      "bytes_removed": 521975947,
+      "removed_paths": [
+        "assets/modular_human_male_01/parts/rogue_tripo_v1/before-leather-stiffness",
+        "assets/modular_human_male_01/parts/rogue_tripo_v1/before-right-armhole",
+        "assets/modular_human_male_01/parts/rogue_tripo_v1/before-side-laces",
+        "assets/modular_human_male_01/parts/rogue_tripo_v1/before-waist-taper",
+        "assets/modular_human_male_01/parts/rogue_fitted_v7",
+        "assets/modular_human_male_01/parts/rogue_fitted_v8/other-parts.blend",
+        "tmp/tripo-fitting",
+        "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v8-body-alignment.png",
+        "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v8-fixes.png",
+        "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v8-motion.png",
+        "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v8-rest.png",
+        "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v8-sleeves.png",
+        "doc/assets/modular-rogue-fitting-v8.json",
+        "doc/assets/modular-rogue-animation-review-v8.json",
+        "doc/assets/modular-rogue-fitting-review-v8.json",
+        "doc/assets/modular-rogue-wrap-review-v8.json"
+      ],
+      "preserved": [
+        "Tripo source, accepted GLB and editable blend",
+        "Current full-set blend, other equipment and animation samples",
+        "Current review reports and images; historical comparison measurements"
       ]
     }
   ]

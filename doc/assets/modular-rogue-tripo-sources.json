@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-01",
+  "provider": "Tripo Studio",
+  "subscription": "User-reported approximately USD 20/month Studio subscription",
+  "license": "Subject to the original Tripo Studio output terms; retain original source and account provenance. No separate license grant is inferred from the file.",
+  "delivery_path_windows": "Y:\\public\\web_downloads\\medieval+leather+vest+3d+model.glb",
+  "delivery_path_linux": "/mnt/y/web_downloads/medieval+leather+vest+3d+model.glb",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/source.glb",
+    "sha256": "70584277a1701b0072c54578aaedb223cfc8b68e46f27e1c4a98d2020504b17d"
+  },
+  "base": {
+    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b"
+  },
+  "rig_id": "human_male_01_mixamo_candidate_v2",
+  "interfaces": {
+    "path": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+    "sha256": "f3fc3aed9c5080cf26a294dac496293c89bce8f67466add18a7ef72b326f006b"
+  },
+  "reference_artwork": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/top_rogue-front-v1.png",
+      "sha256": "c642e17ef9b626a7a5e444d3b8547929ebf96468478e2f5f698e205d16bf5e2c"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/top_rogue-back-v1.png",
+      "sha256": "ba87e6aba2934ede43ba86c275fa78ccf5f38c0c7618591352552b23da3ba447"
+    }
+  ],
+  "generation_task_id": null,
+  "generation_model_version": null,
+  "submitted_prompt": null,
+  "submitted_images_confirmed": false,
+  "requested_polygon_count_confirmed": null,
+  "export_observed": {
+    "format": "GLB 2.0",
+    "generator": "Tripo",
+    "triangles": 4877,
+    "vertices_including_uv_splits": 5941,
+    "texture_dimensions": [
+      2048,
+      2048
+    ],
+    "texture_format": "JPEG",
+    "rigged": false
+  },
+  "local_fitting": "Existing mesh and UVs preserved; no AI generation or paid API calls during fitting.",
+  "retained": true
+}

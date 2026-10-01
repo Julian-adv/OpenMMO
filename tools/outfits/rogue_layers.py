@@ -1,29 +1,31 @@
 """Continuous rogue vest, scarf and wrist wrap on the canonical rig."""
 from collections import Counter
+from functools import cache
+import json
 
 import numpy as np
-from scipy.interpolate import PchipInterpolator
 
 ATLAS = 'assets/modular_human_male_01/parts/rogue_rebuild_v5/material-atlas.png'
-TORSO_PROFILE = np.array([
-    [1.105, .177, .133, .119],
-    [1.13, .174, .129, .123],
-    [1.19, .168, .126, .128],
-    [1.25, .174, .129, .145],
-    [1.31, .195, .142, .169],
-    [1.35, .215, .153, .188],
-    [1.395, .235, .157, .200],
-    [1.44, .249, .140, .200],
-    [1.53, .262, .095, .185],
-    [1.595, .268, .065, .170],
-])
-TORSO_CURVE = PchipInterpolator(TORSO_PROFILE[:, 0], TORSO_PROFILE[:, 1:], axis=0)
-SECTION_EXPONENT = .75
+SHELL_LEVELS = np.array([1.105, 1.13, 1.19, 1.25, 1.31, 1.35, 1.395, 1.44, 1.53, 1.595, 1.63])
+SHELL_CLEARANCE = .012
 
 
-def torso_profile(height):
-    values = TORSO_CURVE(np.clip(height, TORSO_PROFILE[0, 0], TORSO_PROFILE[-1, 0]))
-    return values[..., 0], values[..., 1], values[..., 2]
+def body_ring(fit, height, theta, clearance=SHELL_CLEARANCE):
+    body, faces, _ = fit.body_surface(('torso', 'neck', 'upper_arms', 'head'))
+    axis = np.array([0, 1, 0])
+    basis = np.array([[1, 0, 0], [0, 0, 1]])
+    radial = np.column_stack([np.sin(theta), np.cos(theta)])
+    origin = np.array([0, height, 0])
+    spine = np.array([fit.BONES[name] for name in ['Hips', 'Spine', 'Spine1', 'Spine2', 'Neck', 'Head']])
+    mid = np.array([0, np.interp(height, spine[:, 1], spine[:, 2])])
+    mid, radius = wrist_section(body[faces], origin, axis, basis, radial, mid=mid, outermost=False)
+    return origin + (mid + radial * (radius + clearance)[:, None]) @ basis
+
+
+@cache
+def torso_shell(fit):
+    theta = np.arange(40) * 2 * np.pi / 40
+    return np.array([body_ring(fit, height, theta) for height in SHELL_LEVELS])
 
 
 def materials(fit, doc, binary):
@@ -52,30 +54,19 @@ def atlas_uv(uv, quadrant):
     return np.asarray(uv) * scale
 
 
-def torso_weights(fit, points):
-    y = points[:, 1]
-    levels = [1.10, 1.23, 1.38, 1.50]
-    dense = np.zeros((len(points), len(fit.NAMES)))
-    for index, name in enumerate(['Hips', 'Spine', 'Spine1', 'Spine2']):
-        values = np.zeros(4)
-        values[index] = 1
-        dense[:, fit.NAMES.index(name)] = np.interp(y, levels, values)
-    for sign, side in [(1, 'Left'), (-1, 'Right')]:
-        amount = .50 * fit.io.smoothstep((points[:, 0] * sign - .08) / .06) * fit.io.smoothstep((y - 1.37) / .06)
-        dense *= 1 - amount[:, None]
-        dense[:, fit.NAMES.index(side + 'Shoulder')] += amount
-    return compact_weights(dense)
-
-
 def compact_weights(dense):
     joints = np.argsort(dense, axis=1)[:, -4:][:, ::-1]
     weights = np.take_along_axis(dense, joints, axis=1)
     return joints, weights / weights.sum(axis=1, keepdims=True)
 
 
-def garment_weights(fit, points, shoulders):
+def garment_weights(fit, points, shoulders=None):
     points = np.asarray(points)
-    joints, weights = torso_weights(fit, points)
+    joints, weights = fit.transfer(points, fit.body_surface(('torso', 'neck', 'upper_arms', 'head')),
+                                  {'Hips', 'Spine', 'Spine1', 'Spine2', 'Neck', 'Head',
+                                   'LeftShoulder', 'LeftArm', 'RightShoulder', 'RightArm'})
+    if not shoulders:
+        return joints, weights
     dense = np.zeros((len(points), len(fit.NAMES)))
     np.add.at(dense, (np.arange(len(points))[:, None], joints), weights)
     for side, root in shoulders.items():
@@ -83,6 +74,7 @@ def garment_weights(fit, points, shoulders):
         along = np.clip(np.sum((points[:, None] - root) * edges, axis=2) / np.sum(edges * edges, axis=1), 0, 1)
         distance = np.linalg.norm(points[:, None] - root - along[..., None] * edges, axis=2).min(axis=1)
         amount = 1 - fit.io.smoothstep((distance - .020) / .14)
+        amount *= 1 - fit.io.smoothstep((points[:, 1] - SHELL_LEVELS[-2]) / (SHELL_LEVELS[-1] - SHELL_LEVELS[-2]))
         dense *= 1 - amount[:, None]
         dense[:, fit.NAMES.index(side + 'Shoulder')] += .65 * amount
         dense[:, fit.NAMES.index(side + 'Arm')] += .35 * amount
@@ -95,7 +87,7 @@ def emit(fit, doc, binary, name, points, faces, uv, material, skin=None):
     used, inverse = np.unique(faces, return_inverse=True)
     points, uv, faces = points[used], uv[used], inverse.reshape(-1, 3)
     normals = io.smooth_normals(points, faces)
-    joints, weights = torso_weights(fit, points) if skin is None else (skin[0][used], skin[1][used])
+    joints, weights = garment_weights(fit, points) if skin is None else (skin[0][used], skin[1][used])
     attrs = io.add_skin_attributes(doc, binary, points, normals, joints, weights)
     attrs['TEXCOORD_0'] = io.add_accessor(doc, binary, uv, 'VEC2')
     attrs['TANGENT'] = io.add_accessor(doc, binary, io.tangents(points, normals, uv, faces), 'VEC4')
@@ -163,17 +155,10 @@ def clip_garment(points, faces, uv, distance):
 def vest(fit, doc, binary, mats):
     n = 40
     theta = np.arange(n) * 2 * np.pi / n
-    levels = TORSO_PROFILE[:, 0]
-    points, uv = [], []
-    for row, height in enumerate(levels):
-        rx, front, back = torso_profile(height)
-        z = np.where(np.cos(theta) >= 0, front, back) * np.sign(np.cos(theta)) * abs(np.cos(theta)) ** SECTION_EXPONENT - .015
-        y = height - .085 * fit.io.smoothstep((height - 1.38) / .215) * np.maximum(0, np.cos(theta)) ** 8
-        y += (.006 * np.sin(theta) ** 2 - .010 * np.maximum(0, np.cos(theta)) ** 4) * (1 - fit.io.smoothstep((height - 1.105) / .085))
-        points.extend(np.column_stack([rx * np.sin(theta), y, z]))
-        uv.extend(np.column_stack([theta / (2 * np.pi), np.full(n, 1 - row / len(levels))]))
-    points.extend(np.column_stack([.106 * np.sin(theta), np.full(n, 1.63), -.03 + np.where(np.cos(theta) >= 0, .08, .09) * np.cos(theta)]))
-    uv.extend(np.column_stack([theta / (2 * np.pi), np.zeros(n)]))
+    levels = SHELL_LEVELS[:-1]
+    points = torso_shell(fit).reshape(-1, 3).copy()
+    uv = np.array([np.column_stack([theta / (2 * np.pi), np.full(n, 1 - row / len(levels))])
+                   for row in range(len(SHELL_LEVELS))]).reshape(-1, 2)
     faces = []
     for row in range(len(levels)):
         for col in range(n):
@@ -191,6 +176,9 @@ def vest(fit, doc, binary, mats):
             for _ in range(3):
                 p = points[loop]
                 points[loop] = .5 * p + .25 * np.roll(p, 1, axis=0) + .25 * np.roll(p, -1, axis=0)
+    body = fit.body_surface(('torso', 'neck', 'upper_arms', 'head'))
+    surface, normals, _ = fit.nearest_surface(points, body, candidates=128)
+    points = surface + normals * SHELL_CLEARANCE
     shoulders = {('Left' if points[loop, 0].mean() > 0 else 'Right'): points[loop] for loop in loops if len(loop) != n}
     hem_height = 1.485 - .080 * np.maximum(0, -np.cos(theta)) ** 4 + .12 * abs(np.sin(theta)) ** 4
     hem_height = np.where(abs(np.sin(theta)) > .82, 1.595, np.minimum(hem_height, 1.595))
@@ -200,10 +188,13 @@ def vest(fit, doc, binary, mats):
     vest_points, vest_faces, vest_uv = clip_garment(points, faces, uv, distance)
     result = emit(fit, doc, binary, 'vest_rogue', vest_points, vest_faces, atlas_uv(vest_uv, 'leather'), mats['leather'], garment_weights(fit, vest_points, shoulders))
     shirt_points = points.copy()
-    shirt_points[:, 0] *= .94
-    shirt_points[:, 2] = -.025 + (shirt_points[:, 2] + .025) * .94
+    for row in range(len(SHELL_LEVELS)):
+        start = row * n
+        center = body_ring(fit, SHELL_LEVELS[row], theta, clearance=0).mean(axis=0)
+        radial = fit.io.unit((shirt_points[start:start + n] - center) * [1, 0, 1])
+        shirt_points[start:start + n] -= radial * .004
     shirt_faces = faces[(faces >= 4 * n).all(axis=1)][:, [1, 2, 0]]
-    shirt_skin = garment_weights(fit, shirt_points, shoulders)
+    shirt_skin = garment_weights(fit, points, shoulders)
     emit(fit, doc, binary, 'shirt_armholes', shirt_points, shirt_faces, atlas_uv(uv, 'linen'), mats['linen'], shirt_skin)
     roots = {}
     for loop in loops:
@@ -233,10 +224,13 @@ def vest(fit, doc, binary, mats):
                 emit(fit, doc, binary, f'armhole_binding_{index}_{name}', binding_points, binding_faces, atlas_uv(binding_uv, name), material, garment_weights(fit, binding_points, shoulders))
     result.update(expected_openings=['waist', 'connected scarf and armhole edge'], construction_opening_loops=len(loops), hem_y_m=1.105,
                   scarf_connection='Shared garment cut boundary and skin weights',
-                  silhouette=dict(profile_columns=['height_m', 'half_width_m', 'front_radius_m', 'back_radius_m'],
-                                  profile=TORSO_PROFILE.tolist(), interpolation='PCHIP', section_exponent=SECTION_EXPONENT,
-                                  waist_to_chest_width_ratio=float(torso_profile(1.19)[0] / torso_profile(1.395)[0]),
-                                  hem_front_drop_m=.010, hem_side_raise_m=.006))
+                  silhouette=dict(method='Canonical body sections, then normal surface projection with uniform clothing clearance',
+                                  reference=fit.SELECTION['reference']['base'], reference_sha256=fit.SELECTION['reference']['base_sha256'],
+                                  body_regions=['torso', 'neck', 'upper_arms', 'head'],
+                                  section_heights_m=SHELL_LEVELS.tolist(), circumferential_segments=n,
+                                  normal_clearance_m=SHELL_CLEARANCE,
+                                  skinning='Reference body weight transfer with the existing bound shoulder seam constraints'))
+
     return result, roots, (points, faces, uv, distance, shoulders)
 
 
@@ -244,13 +238,24 @@ def scarf(fit, doc, binary, mats, shell):
     n = 40
     theta = np.linspace(0, 2 * np.pi, n + 1)
     points, uv = [], []
-    profiles = [(.081, .073, 1.676), (.092, .083, 1.668), (.105, .091, 1.647), (.098, .085, 1.638)]
-    for row, (rx, rz, y) in enumerate(profiles):
+    neck_body, _, _ = fit.body_surface(('neck',))
+    interface = next(item for item in json.loads((fit.ROOT / fit.SELECTION['reference']['interfaces']).read_text())['interfaces']
+                     if item['name'] == 'neck_base')
+    top = float(neck_body[:, 1].max())
+    depth = interface['candidate_band_depth_m']
+    for height in np.linspace(top, top - depth, 33):
+        try:
+            body_ring(fit, height, theta, clearance=0)
+        except AssertionError:
+            continue
+        top = float(height)
+        break
+    else:
+        raise ValueError('No closed neck section in the reference collar band')
+    profiles = [(top, .008), (top - depth * .2, .014), (top - depth * .65, .014), (top - depth, .010)]
+    for row, (height, clearance) in enumerate(profiles):
         amount = row / 7
-        radius = 1 + .025 * np.sin(5 * theta + row * .9) * amount
-        ring = np.column_stack([rx * np.sin(theta) * radius,
-            y + .0015 * np.sin(3 * theta) * amount,
-            -.043 + rz * np.cos(theta) * radius])
+        ring = body_ring(fit, height, theta, clearance)
         points.extend(ring)
         uv.extend(np.column_stack([theta / (2 * np.pi), np.full(n + 1, amount)]))
     shell_points, shell_faces, shell_uv, distance, shoulders = shell
@@ -265,12 +270,19 @@ def scarf(fit, doc, binary, mats, shell):
     result['expected_openings'] = ['neckline', 'continuous outer drape edge']
     result['garment_attachment'] = dict(clearance_m=0, method='Continuous shoulder drape on the vest shell',
                                        skinning='Exact shared cut-edge positions and torso weights')
+    result['collar_fitting'] = dict(reference_section_top_m=top, band_depth_m=depth,
+                                   section_heights_and_clearances_m=[list(row) for row in profiles],
+                                   method='Closed neck sections measured from the reference body')
     return result
 
 
-def front_z(x, y):
-    radius, depth, _ = torso_profile(y)
-    return -.015 + depth * np.maximum(0, 1 - (x / radius) ** 2) ** (SECTION_EXPONENT / 2)
+def front_z(fit, x, y):
+    shell = torso_shell(fit)
+    row = int(np.clip(np.searchsorted(SHELL_LEVELS, y) - 1, 0, len(SHELL_LEVELS) - 2))
+    amount = np.clip((y - SHELL_LEVELS[row]) / (SHELL_LEVELS[row + 1] - SHELL_LEVELS[row]), 0, 1)
+    section = shell[row] * (1 - amount) + shell[row + 1] * amount
+    front = section[np.r_[30:40, 0:11]]
+    return float(np.interp(x, front[:, 0], front[:, 2]))
 
 
 def fasteners(fit, doc, binary, mats, shoulders):
@@ -280,12 +292,12 @@ def fasteners(fit, doc, binary, mats, shoulders):
         x, y = -.08 + .17 * t, 1.12 + .33 * t
         for side in [-1, 1]:
             px, py = x + side * .018, y - side * .009
-            points.append([px, py, front_z(px, py) + .004])
+            points.append([px, py, front_z(fit, px, py) + .004])
             uv.append([(side + 1) / 2, t])
     emit(fit, doc, binary, 'vest_overlap_strap', points, grid_faces(rows, 2), atlas_uv(uv, 'trim'), mats['trim'], garment_weights(fit, points, shoulders))
     for index, t in enumerate([.12, .40, .70, .91]):
         x, y = -.08 + .17 * t, 1.12 + .33 * t
-        z = front_z(x, y) + .009
+        z = front_z(fit, x, y) + .009
         angles = np.arange(12) * 2 * np.pi / 12
         points = [[x, y, z + .002]] + np.column_stack([x + .008 * np.cos(angles), y + .008 * np.sin(angles), np.full(12, z)]).tolist()
         faces = [[0, i + 1, (i + 1) % 12 + 1] for i in range(12)]
@@ -301,11 +313,26 @@ def build_top(fit, doc, binary):
     fasteners(fit, doc, binary, mats, shell[-1])
     report['sleeves'] = add_sleeves(fit, doc, binary, mats['linen'], roots)
     report['scarf'] = scarf(fit, doc, binary, mats, shell)
+    report['surface_fitting'] = []
+    for mesh in doc['meshes']:
+        if mesh['name'] not in ['vest_rogue', 'scarf_rogue']:
+            continue
+        primitive = mesh['primitives'][0]
+        points = fit.io.accessor(doc, binary, primitive['attributes']['POSITION'])
+        faces = fit.io.accessor(doc, binary, primitive['indices']).reshape(-1, 3)
+        samples = np.vstack([points, points[faces].mean(axis=1)])
+        surface, normal, _ = fit.nearest_surface(samples, fit.body_surface(('torso', 'neck', 'upper_arms', 'head')), candidates=128)
+        clearance = np.sum((samples - surface) * normal, axis=1)
+        assert clearance.min() > 0, f'{mesh["name"]}: reference body penetration'
+        report['surface_fitting'].append(dict(mesh=mesh['name'], vertex_and_triangle_center_samples=len(samples),
+                                             minimum_signed_clearance_m=float(clearance.min()),
+                                             maximum_signed_clearance_m=float(clearance.max()),
+                                             method='Signed nearest-surface distance against the unchanged reference body'))
     report['texture'] = dict(path=ATLAS, sha256=fit.digest(fit.ROOT / ATLAS))
     return report
 
 
-def wrist_section(triangles, origin, axis, basis, radial, mid=None):
+def wrist_section(triangles, origin, axis, basis, radial, mid=None, outermost=True):
     distance = (triangles - origin) @ axis
     crossing = (distance.min(axis=1) < 0) & (distance.max(axis=1) > 0)
     segments = []
@@ -325,8 +352,9 @@ def wrist_section(triangles, origin, axis, basis, radial, mid=None):
     denominator = cross(radial[:, None], edge)
     along = np.divide(cross(start, edge)[None, :], denominator, out=np.full_like(denominator, -np.inf), where=abs(denominator) > 1e-10)
     between = np.divide(cross(start, radial[:, None]), denominator, out=np.full_like(denominator, -np.inf), where=abs(denominator) > 1e-10)
-    radius = np.where((between >= 0) & (between <= 1) & (along > 0), along, -np.inf).max(axis=1)
-    assert np.isfinite(radius).all(), 'Open wrist body section'
+    valid = (between >= 0) & (between <= 1) & (along > 0)
+    radius = np.where(valid, along, -np.inf).max(axis=1) if outermost else np.where(valid, along, np.inf).min(axis=1)
+    assert np.isfinite(radius).all(), f'Open body section at {origin.tolist()}'
     return mid, radius
 
 

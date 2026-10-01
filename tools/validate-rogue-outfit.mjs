@@ -44,7 +44,7 @@ try {
   const meshes = []
   const sources = [{ path: bodyPath, sha256: hash(bodyPath) }]
   for (const name of ['top_rogue', 'pants_rogue', 'gloves_rogue', 'boots_rogue']) {
-    const path = directory + name + '.glb'
+    const path = candidate.part_overrides?.[name] ?? directory + name + '.glb'
     const part = await load(path)
     meshes.push(...bindModularPart(body, part.scene))
     sources.push({ path, sha256: hash(path) })

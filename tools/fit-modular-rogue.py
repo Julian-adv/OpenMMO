@@ -493,7 +493,7 @@ def validate(path):
                 assert all(NAMES[i] in ['LeftArm', 'LeftForeArm', 'LeftHand', 'LeftHandThumb1', 'LeftHandThumb2'] for i in j[w > 1e-6])
             if mesh['name'].startswith('shirt_sleeve_'):
                 side = mesh['name'].rsplit('_', 1)[1].capitalize()
-                assert all(NAMES[i] in ['Spine1', 'Spine2'] + [side + bone for bone in ['Shoulder', 'Arm', 'ForeArm']] for i in j[w > 1e-6])
+                assert all(NAMES[i] in ['Spine', 'Spine1', 'Spine2', 'Neck'] + [side + bone for bone in ['Shoulder', 'Arm', 'ForeArm']] for i in j[w > 1e-6])
     return dict(path=str(path.relative_to(ROOT)), sha256=digest(path), triangles=triangles, bones=65,
                 exact_rest_hierarchy_and_inverse_bind_match=True, maximum_weight_sum_error=max_error, active_bones=sorted(active))
 
@@ -520,6 +520,11 @@ def main():
                   generator='tools/fit-modular-rogue.py', uv_repairs={}, sources=[], outputs=[])
     version = args.output.name.rsplit('_', 1)[-1]
     for name, ids, fit, regions, side in specs:
+        selected = selection['fitting_candidate'].get('part_overrides', {}).get(name)
+        if selected:
+            report['outputs'].append(validate(ROOT / selected))
+            report['sources'].append(dict(id=name, path=selected, sha256=digest(ROOT / selected), role='User-selected fitted part'))
+            continue
         doc = dict(asset={'version': '2.0', 'generator': 'OpenMMO rogue fitting ' + version}, accessors=[], bufferViews=[], meshes=[])
         binary = bytearray()
         for part_id in ids:

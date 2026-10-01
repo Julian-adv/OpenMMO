@@ -651,5 +651,6 @@
     }
   ],
   "method": "Nearest surface distance plus majority parity of three forearm-plane rays; normals alone are insufficient at folded wrist skin",
-  "passed": true
+  "passed": true,
+  "archive_note": "Historical measurements; records marked retained=false refer to intermediate files removed after approval."
 }

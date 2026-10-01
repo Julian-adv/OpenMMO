@@ -1,0 +1,97 @@
+{
+  "sources": [
+    {
+      "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/before-side-laces/top_rogue.glb",
+      "sha256": "0f0794165a3e984d37bf1c7c637b7c4c4c1eb28deed2da5229c0dd7c2d3ae69a",
+      "retained": false
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+      "sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
+      "retained": true
+    }
+  ],
+  "unchanged_positions_normals_uv": true,
+  "measurement": "Increase in distance between central side lace vertices and their nearest interior vest reference point from rest",
+  "samples": 117,
+  "clips": [
+    {
+      "name": "idle1",
+      "before": {
+        "p95_extra_gap_m": 0.0,
+        "maximum_extra_gap_m": 0.0
+      },
+      "after": {
+        "p95_extra_gap_m": 0.00020944441309440898,
+        "maximum_extra_gap_m": 0.0013246836383763727
+      }
+    },
+    {
+      "name": "walk",
+      "before": {
+        "p95_extra_gap_m": 0.014937712758796129,
+        "maximum_extra_gap_m": 0.01950637201683622
+      },
+      "after": {
+        "p95_extra_gap_m": 0.004861426854866194,
+        "maximum_extra_gap_m": 0.010510275916480849
+      }
+    },
+    {
+      "name": "run",
+      "before": {
+        "p95_extra_gap_m": 0.047001953046546224,
+        "maximum_extra_gap_m": 0.07463141768532969
+      },
+      "after": {
+        "p95_extra_gap_m": 0.01452720164435825,
+        "maximum_extra_gap_m": 0.032272187547860126
+      }
+    },
+    {
+      "name": "jump",
+      "before": {
+        "p95_extra_gap_m": 0.06004912693916875,
+        "maximum_extra_gap_m": 0.09173700811395308
+      },
+      "after": {
+        "p95_extra_gap_m": 0.008116693243504766,
+        "maximum_extra_gap_m": 0.042665916796310294
+      }
+    },
+    {
+      "name": "slash1",
+      "before": {
+        "p95_extra_gap_m": 0.04630723180936977,
+        "maximum_extra_gap_m": 0.08595116672615391
+      },
+      "after": {
+        "p95_extra_gap_m": 0.009617606062161874,
+        "maximum_extra_gap_m": 0.031122232884031403
+      }
+    },
+    {
+      "name": "combat_idle",
+      "before": {
+        "p95_extra_gap_m": 0.029385475111239567,
+        "maximum_extra_gap_m": 0.03805222231126501
+      },
+      "after": {
+        "p95_extra_gap_m": 0.005459032205737652,
+        "maximum_extra_gap_m": 0.017853261816368843
+      }
+    },
+    {
+      "name": "sit_idle",
+      "before": {
+        "p95_extra_gap_m": 0.022195528754039004,
+        "maximum_extra_gap_m": 0.028568511561554155
+      },
+      "after": {
+        "p95_extra_gap_m": 0.005245905528648301,
+        "maximum_extra_gap_m": 0.014169310405117735
+      }
+    }
+  ],
+  "archive_note": "Historical measurements; records marked retained=false refer to intermediate files removed after approval."
+}

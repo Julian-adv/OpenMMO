@@ -1,0 +1,38 @@
+{
+  "status": "Candidate: provisional body-region hiding only; hand/short-sleeve runtime masks pending",
+  "blender_version": "5.2.0 LTS",
+  "editable": {
+    "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/rogue-fitting.blend",
+    "sha256": "c705874e34bead479caf044c68fb746c2808ff65c99b274540ff7eff0d17017e"
+  },
+  "images": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/fitting-current-rest.png",
+      "sha256": "97d290e720b175a314e42870f3358dea4db7682526efb79e0a963bcdb65207cf"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/fitting-current-sleeves.png",
+      "sha256": "320af9dd1b819ae723ac0d38556ceee6497dcc6279bbde16189461c22b7b9d14"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/fitting-current-motion.png",
+      "sha256": "6a4c08948954db69816f01e08a4ac21b7cbdeea1bc87f7725b6cc34735239173"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/fitting-current-fixes.png",
+      "sha256": "a8678ff7968fb7b3a5875ddc61b99b6b78c6c9785caf6cd1e9fe5f08be99e3d7"
+    }
+  ],
+  "fitting_record": {
+    "path": "doc/assets/modular-rogue-fitting-current.json",
+    "sha256": "bb47ea78130e13e525a0d2d29efe131ba98066bac0003ebda8d59a47bfd13365"
+  },
+  "animation_record": {
+    "path": "doc/assets/modular-rogue-animation-current.json",
+    "sha256": "d59f5aff94ed8636967afb441d3de80b2f07a3cf21be8679354848ea09c501b3"
+  },
+  "snapshots": {
+    "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/animation-snapshots.json",
+    "sha256": "187950ec6f60d3788c7fbf7f1c0d3bdf426bced80f3ac992c21abff368f92a97"
+  }
+}

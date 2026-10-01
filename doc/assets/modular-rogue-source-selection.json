@@ -1,5 +1,5 @@
 {
-  "status": "Selected raw sources for the first fitting pass, not finished equipment",
+  "status": "User selected the fitted Tripo vest as the default rogue top; other slots retain their current candidates",
   "reference": {
     "base": "assets/modular_human_male_01/parts/fitted/base.glb",
     "base_sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b",
@@ -10,13 +10,16 @@
   "parts": [
     {
       "id": "top_rogue",
-      "source_glb": "assets/modular_human_male_01/parts/rogue_sources_v3/top_rogue/source.glb",
+      "source_glb": "assets/modular_human_male_01/parts/rogue_tripo_v1/source.glb",
       "target_triangles": 2200,
-      "status": "raw fitting candidate; no rig or runtime compatibility approval",
+      "status": "User-approved default rogue top",
       "remaining_work": [
-        "Raw source retained only as a design reference; v5 replaces vest, scarf and sleeves with continuous layers.",
-        "Review rebuilt silhouette and mixed-equipment compatibility."
-      ]
+        "Mixed-equipment and full gameplay compatibility review"
+      ],
+      "selected_glb": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+      "selected_sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
+      "selected_date": "2026-10-01",
+      "actual_triangles": 4877
     },
     {
       "id": "pants_rogue",
@@ -64,19 +67,32 @@
     "existing_crop_hair_triangles": 933,
     "existing_sword_triangles": 302,
     "raw_assembled_projection_including_hidden_triangles": 19704,
-    "actual_fitted_assembled_triangles": 21851,
-    "visible_triangles": 13326,
-    "face_triangles": 1505
+    "actual_fitted_assembled_triangles": 23458,
+    "visible_triangles": 15626,
+    "face_triangles": 1505,
+    "preview_assembled_after_skin_trim_triangles": 21756,
+    "visible_count_scope": "Workshop: selected rogue set, crop hair and sword; canonical body remains unchanged"
   },
   "supported_combinations": [],
   "consumed_credits_all_attempts": 255,
   "fitting_candidate": {
-    "status": "v7 connects sleeve roots to the shirt torso and scarf perimeter to the fitted vest; full gameplay and mixed equipment acceptance pending",
-    "directory": "assets/modular_human_male_01/parts/rogue_fitted_v7",
-    "report": "doc/assets/modular-rogue-fitting-v7.json",
-    "animation_report": "doc/assets/modular-rogue-animation-review-v7.json",
+    "status": "Tripo vest selected as default top; v8 pants, gloves and boots retained",
+    "directory": "assets/modular_human_male_01/parts/rogue_fitted_v8",
+    "report": "doc/assets/modular-rogue-fitting-current.json",
+    "animation_report": "doc/assets/modular-rogue-animation-current.json",
     "runtime_registered": false,
-    "review_report": "doc/assets/modular-rogue-fitting-review-v7.json",
-    "review_image_prefix": "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v7"
+    "review_report": "doc/assets/modular-rogue-review-current.json",
+    "review_image_prefix": "doc/images/characters/modular_human_male_01/parts/rogue/fitting-current",
+    "part_overrides": {
+      "top_rogue": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb"
+    }
+  },
+  "default_top": {
+    "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+    "sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
+    "editable": "assets/modular_human_male_01/parts/rogue_tripo_v1/tripo-fitting.blend",
+    "review": "doc/assets/modular-rogue-tripo-review-v1.json",
+    "approved_by": "user",
+    "date": "2026-10-01"
   }
 }

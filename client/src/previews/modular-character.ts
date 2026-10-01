@@ -116,6 +116,9 @@ async function main() {
   if (!import.meta.env.DEV)
     throw new Error('개발 서버에서 여는 제작용 미리보기입니다.')
   const loader = new GLTFLoader()
+  const requestedOutfit = new URLSearchParams(location.search).get('outfit')
+  const tripo = requestedOutfit === 'tripo'
+  if (tripo) showWeapon.checked = false
   const load = async (url: string) => {
     const gltf = await loader.loadAsync(url)
     if (disposed) {
@@ -257,7 +260,7 @@ async function main() {
     note.hidden = rogueAvailable && !inspectingRogue
     note.textContent = !rogueAvailable
       ? '일부 로그 파츠를 불러오지 못했습니다. 새로고침해 다시 시도하세요.'
-      : '로그 상의·숄·손목 천과 접힌 소매를 보정한 검수 모델입니다. 다른 세트와의 혼합 호환은 검증 중입니다.'
+      : '기본 로그 상의를 적용했습니다. 다른 장비와의 혼합 호환은 검수 중입니다.'
     for (const id of ['hair_crop', 'hair_sidepart'])
       for (const mesh of parts.get(id)!)
         for (const mat of Array.isArray(mesh.material)
@@ -553,12 +556,17 @@ async function main() {
     el('stats').textContent =
       `조합 ${total.toLocaleString()}삼각형 · 표시 ${visible.toLocaleString()} · 얼굴 1,505`
   }
-  if (new URLSearchParams(location.search).get('outfit') === 'barbarian')
-    wearOutfit(BARBARIAN_MODULAR_OUTFIT)
-  else if (
-    new URLSearchParams(location.search).get('outfit') === 'rogue' &&
-    rogueAvailable
-  )
+  if (tripo && parts.has('top_rogue'))
+    wearOutfit({
+      hair: 'hair_crop',
+      top: 'rogue',
+      pants: 'none',
+      gloves: 'none',
+      boots: 'none',
+      helmet: 'none',
+    })
+  else if (requestedOutfit === 'barbarian') wearOutfit(BARBARIAN_MODULAR_OUTFIT)
+  else if (requestedOutfit === 'rogue' && rogueAvailable)
     wearOutfit(ROGUE_PREVIEW_OUTFIT)
   else dress()
   let last = performance.now()
