@@ -14,10 +14,14 @@ import {
   modularRigId,
   modularSwordTracks,
   parseModularHandProfile,
-  showModularOutfit,
   skinnedParts,
-  type ModularOutfit,
 } from '../lib/utils/modularCharacter'
+import {
+  ROGUE_PREVIEW_OUTFIT,
+  ROGUE_PREVIEW_PARTS,
+  showPreviewOutfit,
+  type PreviewOutfit,
+} from './modular-outfit'
 import './modular-character.css'
 import {
   updatePeltPhysics,
@@ -140,17 +144,47 @@ async function main() {
     'boots_barbarian',
     'helmet_barbarian',
   ]
-  const [base, sources, animations, sword, profile] = await Promise.all([
-    load('/__modular-character/parts/base.glb'),
-    Promise.all(ids.map((id) => load(`/__modular-character/parts/${id}.glb`))),
-    load('/__modular-character/animations.glb'),
-    load('/models/weapons/sword.glb'),
-    fetch('/__modular-character/hand-grips.json').then(async (response) => {
-      if (!response.ok) throw new Error('손 보정 파일을 불러오지 못했습니다.')
-      return parseModularHandProfile(await response.json())
-    }),
-  ])
-  const clips = modularAnimationClips(base.scene, animations, 'corrected')
+  const [base, sources, animations, sword, profile, rogueSources, social] =
+    await Promise.all([
+      load('/__modular-character/parts/base.glb'),
+      Promise.all(
+        ids.map((id) => load(`/__modular-character/parts/${id}.glb`))
+      ),
+      load('/__modular-character/animations.glb'),
+      load('/models/weapons/sword.glb'),
+      fetch('/__modular-character/hand-grips.json').then(async (response) => {
+        if (!response.ok) throw new Error('손 보정 파일을 불러오지 못했습니다.')
+        return parseModularHandProfile(await response.json())
+      }),
+      Promise.allSettled(
+        ROGUE_PREVIEW_PARTS.map((id) =>
+          load(`/__modular-character/parts/${id}.glb`)
+        )
+      ),
+      load('/models/characters/modular_male/animations/social.glb'),
+    ])
+  for (const [index, result] of rogueSources.entries()) {
+    const id = ROGUE_PREVIEW_PARTS[index]
+    if (result.status === 'fulfilled') {
+      ids.push(id)
+      sources.push(result.value)
+    } else {
+      const slot = id.replace('_rogue', '')
+      el<HTMLSelectElement>(slot).querySelector<HTMLOptionElement>(
+        'option[value="rogue"]'
+      )!.disabled = true
+    }
+  }
+  const rogueAvailable = rogueSources.every(
+    (result) => result.status === 'fulfilled'
+  )
+  el<HTMLButtonElement>('rogue-outfit').disabled = !rogueAvailable
+  const clips = [
+    ...modularAnimationClips(base.scene, animations, 'corrected'),
+    ...modularAnimationClips(base.scene, social, 'corrected').filter(
+      (clip) => clip.name === 'sit_idle'
+    ),
+  ]
   for (const option of clipSelect.options)
     if (!clips.some((clip) => clip.name === option.value))
       throw new Error(`동작이 없습니다: ${option.value}`)
@@ -210,14 +244,20 @@ async function main() {
   eyeColor.oninput = () => irisColor.value.set(eyeColor.value)
   let equipped = new Set<string>()
   const dress = () => {
-    equipped = showModularOutfit(bodyMeshes, parts, {
-      hair: hairSelect.value as ModularOutfit['hair'],
-      top: topSelect.value as ModularOutfit['top'],
-      pants: pants.value as ModularOutfit['pants'],
-      gloves: gloves.value as ModularOutfit['gloves'],
-      boots: boots.value as ModularOutfit['boots'],
-      helmet: helmet.value as ModularOutfit['helmet'],
+    equipped = showPreviewOutfit(bodyMeshes, parts, {
+      hair: hairSelect.value as PreviewOutfit['hair'],
+      top: topSelect.value as PreviewOutfit['top'],
+      pants: pants.value as PreviewOutfit['pants'],
+      gloves: gloves.value as PreviewOutfit['gloves'],
+      boots: boots.value as PreviewOutfit['boots'],
+      helmet: helmet.value as PreviewOutfit['helmet'],
     })
+    const note = el('outfit-note')
+    const inspectingRogue = ROGUE_PREVIEW_PARTS.some((id) => equipped.has(id))
+    note.hidden = rogueAvailable && !inspectingRogue
+    note.textContent = !rogueAvailable
+      ? '일부 로그 파츠를 불러오지 못했습니다. 새로고침해 다시 시도하세요.'
+      : '공통 몸체의 종아리와 로그 바지 실루엣을 줄였습니다. 상의 표면과 장갑 끝단, 피부 가림은 보정이 남아 있습니다.'
     for (const id of ['hair_crop', 'hair_sidepart'])
       for (const mesh of parts.get(id)!)
         for (const mat of Array.isArray(mesh.material)
@@ -229,7 +269,7 @@ async function main() {
   }
   for (const element of [hairSelect, topSelect, pants, gloves, boots, helmet])
     element.onchange = dress
-  const wearOutfit = (outfit: ModularOutfit) => {
+  const wearOutfit = (outfit: PreviewOutfit) => {
     hairSelect.value = outfit.hair
     topSelect.value = outfit.top
     pants.value = outfit.pants
@@ -240,11 +280,15 @@ async function main() {
   }
   el('knight-outfit').onclick = () => wearOutfit(KNIGHT_MODULAR_OUTFIT)
   el('barbarian-outfit').onclick = () => wearOutfit(BARBARIAN_MODULAR_OUTFIT)
+  el('rogue-outfit').onclick = () => wearOutfit(ROGUE_PREVIEW_OUTFIT)
   hairColor.oninput = dress
   if (disposed) return
   const hand = body.getObjectByName('RightHand')
   const head = body.getObjectByName('Head')
-  if (!hand || !head) throw new Error('손 또는 머리 본을 찾지 못했습니다.')
+  const foot = body.getObjectByName('LeftFoot')
+  const knee = body.getObjectByName('LeftLeg')
+  if (!hand || !head || !foot || !knee)
+    throw new Error('확대 시점에 필요한 본을 찾지 못했습니다.')
   const weapon = new THREE.Group()
   weapon.name = 'previewSwordAttachment'
   weapon.add(sword.scene.clone(true))
@@ -267,6 +311,7 @@ async function main() {
     'combat_idle',
     'slash1',
     'dying',
+    'sit_idle',
     'idle1',
   ]
   let routeIndex = 0
@@ -425,16 +470,44 @@ async function main() {
   cleanup.push(() => controls.dispose())
   const tracked = new THREE.Vector3()
   const previousTarget = new THREE.Vector3()
+  const closeups: Record<
+    string,
+    { bone: THREE.Object3D; offsetY: number; position: THREE.Vector3 }
+  > = {
+    hand: {
+      bone: hand,
+      offsetY: -0.08,
+      position: new THREE.Vector3(-0.44, 0.18, 0.55),
+    },
+    calf: {
+      bone: knee,
+      offsetY: -0.14,
+      position: new THREE.Vector3(1.05, 0.04, 0.05),
+    },
+    ankle: {
+      bone: foot,
+      offsetY: 0.1,
+      position: new THREE.Vector3(0.4, 0.18, 0.55),
+    },
+    face: {
+      bone: head,
+      offsetY: 0.1,
+      position: new THREE.Vector3(0.18, 0.04, 0.72),
+    },
+  }
+  const trackCloseup = () => {
+    const view = closeups[cameraSelect.value]
+    if (view) {
+      view.bone.getWorldPosition(tracked)
+      tracked.y += view.offsetY
+    }
+    return view
+  }
   const setCamera = () => {
     modelRoot.updateMatrixWorld(true)
-    if (cameraSelect.value === 'hand') {
-      hand.getWorldPosition(tracked)
-      tracked.y -= 0.08
-      camera.position.copy(tracked).add(new THREE.Vector3(-0.44, 0.18, 0.55))
-    } else if (cameraSelect.value === 'face') {
-      head.getWorldPosition(tracked)
-      tracked.y += 0.1
-      camera.position.copy(tracked).add(new THREE.Vector3(0.18, 0.04, 0.72))
+    const view = trackCloseup()
+    if (view) {
+      camera.position.copy(tracked).add(view.position)
     } else {
       tracked.set(0, 0.95, 0)
       camera.position.set(2.6, 2, 4.3)
@@ -482,6 +555,11 @@ async function main() {
   }
   if (new URLSearchParams(location.search).get('outfit') === 'barbarian')
     wearOutfit(BARBARIAN_MODULAR_OUTFIT)
+  else if (
+    new URLSearchParams(location.search).get('outfit') === 'rogue' &&
+    rogueAvailable
+  )
+    wearOutfit(ROGUE_PREVIEW_OUTFIT)
   else dress()
   let last = performance.now()
   const render = (now: number) => {
@@ -508,10 +586,7 @@ async function main() {
     }
     modelRoot.updateMatrixWorld(true)
     updatePeltPhysics(modelRoot, playing ? dt : 0)
-    if (cameraSelect.value !== 'full') {
-      const target = cameraSelect.value === 'hand' ? hand : head
-      target.getWorldPosition(tracked)
-      tracked.y += cameraSelect.value === 'hand' ? -0.08 : 0.1
+    if (trackCloseup()) {
       const delta = tracked.clone().sub(previousTarget)
       camera.position.add(delta)
       controls.target.add(delta)

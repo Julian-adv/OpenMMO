@@ -20,6 +20,7 @@
         </section>
         <aside>
           <p id="status" role="status">몸체와 교체 파츠를 불러오는 중…</p>
+          <p id="outfit-note" class="details" role="status" hidden></p>
           <fieldset id="controls" disabled>
             <legend>외형과 동작</legend>
             <label for="hair">헤어</label>
@@ -38,6 +39,7 @@
               <option value="leather">가죽 갑옷</option>
               <option value="plate" selected>판금 갑옷</option>
               <option value="barbarian">바바리안 견갑·가슴 장식</option>
+              <option value="rogue">로그 상의 (피팅 검수 중)</option>
               <option value="none">착용 전 몸체</option>
             </select>
             <label for="pants">하의</label>
@@ -46,6 +48,7 @@
               <option value="cloth">천 바지</option>
               <option value="plate" selected>판금 바지</option>
               <option value="barbarian">바바리안 벨트·모피 하의</option>
+              <option value="rogue">로그 바지 (피팅 검수 중)</option>
             </select>
             <label for="gloves">장갑</label>
             <select id="gloves">
@@ -53,6 +56,7 @@
               <option value="leather">가죽 장갑</option>
               <option value="plate" selected>판금 장갑</option>
               <option value="barbarian">바바리안 손목 보호대</option>
+              <option value="rogue">로그 반장갑·손목 천 (피팅 검수 중)</option>
             </select>
             <label for="boots">신발</label>
             <select id="boots">
@@ -60,6 +64,7 @@
               <option value="leather">가죽 부츠</option>
               <option value="plate" selected>판금 신발</option>
               <option value="barbarian">바바리안 정강이 보호대</option>
+              <option value="rogue">로그 부츠 (피팅 검수 중)</option>
             </select>
             <label for="helmet">헬멧</label>
             <select id="helmet">
@@ -73,6 +78,7 @@
             <button id="barbarian-outfit" type="button">
               바바리안 세트 입기
             </button>
+            <button id="rogue-outfit" type="button">로그 세트 입기</button>
             <label for="clip">동작</label>
             <select id="clip">
               <option value="idle1">대기</option>
@@ -82,6 +88,7 @@
               <option value="combat_idle" selected>전투 대기</option>
               <option value="slash1">공격</option>
               <option value="dying">쓰러지기</option>
+              <option value="sit_idle">앉기</option>
             </select>
             <div class="buttons">
               <button id="pause" type="button">일시정지</button>
@@ -109,6 +116,8 @@
               <option value="full">전신</option>
               <option value="face">얼굴 확대</option>
               <option value="hand">오른손 확대</option>
+              <option value="ankle">발목 연결부 확대</option>
+              <option value="calf">종아리 측면 확대</option>
             </select>
             <label class="toggle"
               ><input id="weapon" type="checkbox" checked /> 검 표시</label

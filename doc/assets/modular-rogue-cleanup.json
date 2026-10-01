@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-01",
+  "reason": "User-requested intermediate cleanup before commit",
+  "files_removed": 61,
+  "bytes_removed": 767917772,
+  "removed_paths": [
+    "assets/modular_human_male_01/parts/rogue_fitted_v1",
+    "assets/modular_human_male_01/parts/rogue_fitted_v2",
+    "assets/modular_human_male_01/parts/rogue_fitted_v3/review",
+    "assets/modular_human_male_01/parts/interfaces/v0/outfit-reference.blend",
+    "assets/modular_human_male_01/parts/body_shape_sources/barbarian_parts-before-calf-v1.blend",
+    "assets/modular_human_male_01/parts/body_shape_sources/plate_parts-before-calf-v1.blend",
+    "assets/modular_human_male_01/parts/body_shape_sources/character_parts-before-calf-v1.blend",
+    "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v1-motion.png",
+    "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v1-rest.png",
+    "doc/assets/modular-rogue-fitting-v1.json",
+    "doc/assets/modular-rogue-animation-review-v1.json",
+    "doc/assets/modular-rogue-fitting-review-v1.json",
+    "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v2-rest.png",
+    "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v2-ankle.png",
+    "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v2-motion.png",
+    "doc/assets/modular-rogue-fitting-v2.json",
+    "doc/assets/modular-rogue-animation-review-v2.json",
+    "doc/assets/modular-rogue-fitting-review-v2.json",
+    "assets/modular_human_male_01/parts/rogue_sources/rogue-source-review.blend"
+  ],
+  "retained": [
+    "rogue_fitted_v3 GLBs, editable blend, animation snapshots",
+    "selected raw Meshy GLBs and PBR maps",
+    "canonical body and current editable outfit files",
+    "base-before-calf-v1.glb required for reproducible geometry edit",
+    "interfaces/v1 current reference and interfaces/v0 JSON provenance",
+    "current review reports, montage images and compact fitting history"
+  ]
+}

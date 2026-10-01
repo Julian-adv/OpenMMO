@@ -2191,5 +2191,15 @@
       "tests_passed": 30,
       "idempotent": true
     }
+  },
+  "canonical_calf_shape_v1": {
+    "date": "2026-10-01",
+    "reason": "User requested a slimmer canonical calf so all future pants use the corrected body",
+    "method": "Local geometry edit; maximum posterior displacement 21.8mm; rig and weights preserved",
+    "report": "doc/assets/modular-male-calf-shape-v1.json",
+    "editable_report": "doc/assets/modular-male-calf-editable-v1.json",
+    "current_interfaces": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+    "source_license": "Same as the existing modular male body; no new AI generation",
+    "additional_credits": 0
   }
 }

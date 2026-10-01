@@ -1,7 +1,7 @@
 {
   "source": "Modular male body, knight and barbarian equipment and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md",
   "inputs": {
-    "assets/modular_human_male_01/parts/fitted/base.glb": "99016ab4311f8fb4256b7a42bdb0d404e2d991154c6ff18c3acb3da76a43f7f0",
+    "assets/modular_human_male_01/parts/fitted/base.glb": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b",
     "assets/modular_human_male_01/parts/fitted/hair_crop.glb": "6d754801583d1ae6147ac98cb55fac5237d5b43329e7273d5cb8977c91a0364a",
     "assets/modular_human_male_01/parts/fitted/top_linen.glb": "188ae91799541ff6563a176058695a0c398039d60bc2ee28d97b56b199094a43",
     "assets/modular_human_male_01/parts/fitted/pants_cloth.glb": "2352b8bbdfe08c1c7c43fff9be88e4283ad61b57c2219fbbde2d0c1e3ae41964",
@@ -29,7 +29,7 @@
     "client/public/models/animations/riding.glb": "e0d76b9900e0f9bf76425c4165ebba8fd9e350895f9d99779a085af6dc51c9f8"
   },
   "outputs": {
-    "base.glb": "b52890caa647ba7d9fdb35640e1e3d3c84f6a4744f830f440fac116c29e3bf15",
+    "base.glb": "577d36244539eec21b2b258858c3490adec3bc20d2c9652bced6993a06aa65fb",
     "hair_crop.glb": "b4f8168a12af6030dddc76bb42ef156f32027c49ae2f1aae247b58826de6820b",
     "top_linen.glb": "eeb16055c61ba73779b1eac4623eeb6614e56e42425923150c575b303798430d",
     "pants_cloth.glb": "de6c18ebe7bee66f180c9968d80fc08bf767f42e16b7e7fc76a98dacc7777297",

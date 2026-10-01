@@ -4,7 +4,9 @@
 현재 남성 모듈형 몸체를 참고한 원화 5종을 제작했다. 게임 장착 단위는 상의·하의·손·신발 4개다.
 머리는 기존 헤어를 사용하고, 내려 쓴 후드 숄은 상의에 포함한다.
 
-현재 단계는 **[미사용] Meshy 원본 생성·검수**다. 원화는 정확한 치수 도면이나 3D 피팅 결과가 아니다.
+현재 단계는 **공통 몸체의 종아리 보정을 반영한 피팅 후보 v3 검수**다.
+[작업 결과와 남은 보정](#1차-피팅리깅--2026-10-01)을 참고한다. 런타임 등록·호환 합격 전이다.
+원화는 정확한 치수 도면이나 3D 피팅 결과가 아니다.
 아래 수치는 모델링 시작 기준이며 실제 메시·애니메이션에서 조정하고 검증해야 한다.
 [반복 제작 워크플로우](modular-outfit-workflow.md)의 첫 적용 예제로, 생성·검수·연결 테두리
 추출 도구와 실패 기록을 함께 보존한다. 게임 장착용 피팅·리깅 합격을 뜻하지 않는다.
@@ -90,7 +92,7 @@
 ## 연결 원칙에 따른 원화 재검토 — 2026-10-01
 
 원화 5종의 디자인은 유지하고 다음 조건으로 Meshy 제작을 진행했다.
-공통 테두리는 `assets/modular_human_male_01/parts/interfaces/v0`의 초기 후보를 사용한다.
+공통 테두리는 `assets/modular_human_male_01/parts/interfaces/v1`의 최신 몸체 단면을 사용한다.
 의상 내부 여유 공간과 최종 겹침 깊이는 아직 확정하지 않았다.
 
 | 파츠 | 연결 규격·안팎 순서 | 피팅·가림에서 해결할 항목 |
@@ -154,7 +156,8 @@
 
 [선택 명세·남은 작업](modular-rogue-source-selection.json),
 [선택 원본의 실제 측정](modular-rogue-mesh-review-selected.json).
-검수용 Blender 파일은 `assets/modular_human_male_01/parts/rogue_sources/rogue-source-review.blend`다.
+선택 원본은 현재 `rogue_fitted_v3/rogue-fitting.blend`의 숨김 참조 컬렉션에도 보관한다.
+**[미사용]** 별도 원본 검수용 `rogue-source-review.blend`는 중복되어 최종 정리 때 삭제했다.
 원본 GLB의 텍스처를 포함하고 각 파츠의 앞뒤를 독립 전시한다. 몸체에 피팅한 파일이 아니다.
 
 오른쪽 부츠를 동일 triangle 수로 대칭 제작한다고 가정하면 원본 장비는 **4,578 triangles**,
@@ -176,3 +179,89 @@ Meshy 자동 프리뷰, 분할 입력 이미지, 이전 검수 화면·독립 �
 `interfaces/v0/outfit-reference.blend`와 `interfaces.json`, 선택 원본 검수 이미지·측정 결과,
 연결 기준 이미지는 남겼다. 분할 입력은 원화와 제작 명세로 `prepare`에서 재현할 수 있다.
 선택 원본의 열람·검수에는 `modular-rogue-source-selection.json`을 사용한다.
+
+## 피팅·리깅 현재 후보 v3 — 2026-10-01
+
+선택한 Meshy 원본 5종으로 장착 슬롯 4종을 제작했다. 공통 몸체의 종아리 수정과
+발목 연결 단면을 적용한 현재 후보는 `assets/modular_human_male_01/parts/rogue_fitted_v3/`다.
+원본 GLB·PBR의 기존 Meshy Premium 출처·이용 조건을 따르며 추가 생성 요청은 없다.
+변형·스킨 전사·렌더는 로컬 NumPy/SciPy·Blender 5.2.0 LTS로 수행했다.
+
+| 출력 | triangles | 적용 내용 |
+| --- | ---: | --- |
+| `top_rogue.glb` | 1,799 | 어깨·팔·허리 피팅, 몸통/팔 가중치 전사, 손상 UV 일부 보정 |
+| `pants_rogue.glb` | 1,402 | 허리·다리·종아리 피팅, 공통 발목 단면과 안쪽 밑단 |
+| `gloves_rogue.glb` | 801 | 오른손 반장갑과 왼쪽 손목 천, 손가락별 스킨 영향 제한 |
+| `boots_rogue.glb` | 896 | 좌우 개별 몸체 단면에 피팅, 공통 발목 가중치와 내부 안감 |
+
+장비 합계는 **4,898 triangles**다. 몸체 13,891 + 크롭 헤어 933 + 철검 302를 포함한
+숨김 포함 조립 수는 **20,024**, 미리보기 표시 수는 **12,081**, 얼굴은 **1,505**다.
+근사 예산 20,000보다 24개 많으며 감면하지 않았다. 표시 수치는 미리보기의 임시 가림 기준이다.
+
+### 공통 몸체와 연결부
+
+[몸체 원본의 종아리 보정](modular-human-male-01.md#공통-몸체-종아리-실루엣--2026-10-01)을
+로그 바지에도 반영했다. 앞으로 만드는 바지는 수정된 공통 몸체를 기준으로 피팅한다.
+좌우 `shoe_ankle` 중심·축·둘레는 현재 `interfaces/v1`에서 읽으며 바지는 안쪽,
+부츠는 바깥쪽에 배치한다. 단면 아래 30mm를 겹치고 Leg/Foot 가중치를 함께 맞췄다.
+원본 끝단 사이에 바지 밑단과 열린 입구·내부 바닥을 갖춘 부츠 안감 320 triangles를 추가했다.
+
+### 검증과 편집본
+
+- [피팅 기록](modular-rogue-fitting-v3.json): 입력/출력 SHA-256, UV 수정 면, 65본 계층과
+  rest/inverse bind 일치, 정상 본 인덱스, 유한 좌표와 가중치 합계를 검사했다.
+- [동작 검사](modular-rogue-animation-review-v3.json): 실제 `bindModularPart`와
+  `modularAnimationClips`를 사용했다. 기준 자세와 7개 게임 클립의 91개 자세에서 발목별
+  7개 단면 × 둘레 144방향을 검사했다. 총 185,472회 측정에서 누락 0,
+  공통 가중치 좌표계의 최소 여유 3.69mm다. 접힌 무릎은 발목 검사에서 제외한다.
+- [Blender·렌더 기록](modular-rogue-fitting-review-v3.json): 후보 폴더의 `rogue-fitting.blend`에
+  기준 몸체·원본 참조·연결 곡선 36개·내장 텍스처·검사 자세가 있다. 프레임 1은 기준 자세,
+  10/20/30/40/50/60은 대기/걷기/달리기/점프/공격/앉기다. 보간을 끈 스냅샷이며 전체 클립은 아니다.
+- GLB 바지·부츠 검증 오류/경고 0. 브라우저의 착탈·재장착·기존 세트 전환·파일 누락 복원을
+  확인했다. 프런트엔드 검사·린트와 미리보기 테스트 3개도 통과했다.
+
+![현재 후보의 정면·후면·측면·손·허리](../images/characters/modular_human_male_01/parts/rogue/fitting-v3-rest.png)
+
+![실제 게임 클립의 검사 자세](../images/characters/modular_human_male_01/parts/rogue/fitting-v3-motion.png)
+
+렌더는 후보를 실제 몸체에 장착한 화면이다. 몸통·상완·다리·발은 영역 단위로 가리고
+전완과 손은 남겼다. 최종 게임의 피부 가림·혼합 호환 합격 판정은 아니다.
+
+### 남은 작업
+
+1. 상의의 가죽 표면 UV 패치 자국과 노멀맵 정리, 합쳐진 셔츠·베스트·숄의 편집용 층 분리.
+2. 반장갑의 접힌 면·손가락 개구부·피부 관통, 왼쪽 손목 천의 거친 끝단 정리.
+3. 상의/허리 안팎 순서, 맨발용 바지 밑단과 다른 신발 세트의 연결 검증.
+4. 짧은 소매·반장갑·비대칭 노출 피부의 최종 가림과 게임 플레이·혼합 장비 검증.
+
+현재는 제작용 후보이며 게임의 `ModularOutfit`에는 등록하지 않았다.
+
+### 제작용 미리보기와 재현
+
+개발 서버의 `/modular-character-preview.html?outfit=rogue` 또는 **로그 세트 입기**로 선택한다.
+발목 연결부 확대·종아리 측면 확대에서 하의를 벗겨 몸체와 비교할 수 있다.
+파일이 누락된 부위는 선택을 비활성화한다. 활성 후보 경로는
+`modular-rogue-source-selection.json` 한 곳에서 피팅·검증·렌더·미리보기가 함께 읽는다.
+
+```bash
+.venv/bin/python tools/fit-modular-rogue.py
+node tools/validate-rogue-outfit.mjs
+blender -b -t 6 --python-exit-code 1 --python tools/blender-scripts/review_rogue_fitting.py -- --animations
+```
+
+피팅은 입력 해시를 확인하고 후보를 재생성한다. 직접 편집한 결과는 별도 버전으로 보관한다.
+자세 행렬은 후보의 `animation-snapshots.json`에 남기며 개별 렌더는 임시 폴더에서 조합 후 정리한다.
+필요하면 렌더의 `--images <폴더>` 옵션으로 개별 이미지를 보관한다.
+
+### 수정 이력과 중간 파일 정리
+
+[이전 피팅 이력](modular-rogue-fitting-history.json)에 v1/v2 출력 해시·삼각형 수·검사 결과를 보존했다.
+**[미사용] v1**은 독립 크기·위치 보정만 적용해 공통 발목 단면이 빠져 있었다.
+**[미사용] v2**에서 발목 단면·가중치·안감을 수정했고, v3에서 공통 종아리 보정을 반영했다.
+곡선이 편집본에 존재하거나 좌표가 유한하다는 이유만으로 연결부 합격을 판정하지 않는다.
+
+사용자 요청으로 구버전 v1/v2의 GLB·편집본·이미지·자세 데이터와 상세 검사 중복본,
+수정 전 Blender 백업 3개, 이전 연결 기준 Blender 파일, 현재 후보의 개별 렌더와 중복된 원본 검수용 Blender 파일을 삭제했다.
+총 **61개 파일, 약 732.3 MiB**를 정리했다. [정리 기록](modular-rogue-cleanup.json)을 참고한다.
+현재 v3·선택 원본 GLB/PBR·최신 공통 몸체/편집본·v1 연결 기준·최종 검수 이미지는 유지했다.
+재현에 필요한 수정 전 몸체 GLB와 v0 단면 JSON도 보존한다.

@@ -94,7 +94,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--base', default='assets/modular_human_male_01/parts/fitted/base.glb')
     parser.add_argument('--output')
-    parser.add_argument('--version', default='v0')
+    parser.add_argument('--version', default='v1')
     parser.add_argument('--preview', action='store_true')
     args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else [])
     base = ROOT / args.base
