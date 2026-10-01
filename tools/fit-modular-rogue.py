@@ -400,7 +400,7 @@ def restrict_fingers(source, positions, joints, weights):
     return joints, weights / weights.sum(1, keepdims=True)
 
 
-def with_rig(doc, binary, name):
+def with_rig(doc, binary, name, version):
     indices = [i for i, node in enumerate(io.BASE['nodes']) if 'mesh' not in node]
     remap = {old: new for new, old in enumerate(indices)}
     doc['nodes'] = [copy.deepcopy(io.BASE['nodes'][i]) for i in indices]
@@ -417,7 +417,7 @@ def with_rig(doc, binary, name):
     for scene in doc['scenes']:
         scene['nodes'] = [remap[i] for i in scene['nodes'] if i in remap]
     for index, mesh in enumerate(doc['meshes']):
-        metadata = dict(rig_id='human_male_01_mixamo_candidate_v2', part_id=name, region=mesh['name'], fitting_status='candidate_v5')
+        metadata = dict(rig_id='human_male_01_mixamo_candidate_v2', part_id=name, region=mesh['name'], fitting_status='candidate_' + version)
         mesh['extras'] = metadata
         doc['scenes'][0]['nodes'].append(len(doc['nodes']))
         doc['nodes'].append(dict(name=mesh['name'], mesh=index, skin=0, extras=metadata))
@@ -518,8 +518,9 @@ def main():
     ]
     report = dict(status='fitting and skinning candidate; runtime acceptance pending', reference=selection['reference'],
                   generator='tools/fit-modular-rogue.py', uv_repairs={}, sources=[], outputs=[])
+    version = args.output.name.rsplit('_', 1)[-1]
     for name, ids, fit, regions, side in specs:
-        doc = dict(asset={'version': '2.0', 'generator': 'OpenMMO rogue fitting v5'}, accessors=[], bufferViews=[], meshes=[])
+        doc = dict(asset={'version': '2.0', 'generator': 'OpenMMO rogue fitting ' + version}, accessors=[], bufferViews=[], meshes=[])
         binary = bytearray()
         for part_id in ids:
             part = next(p for p in selection['parts'] if p['id'] == part_id)
@@ -580,7 +581,7 @@ def main():
                 doc['meshes'].append(dict(name=part_id, primitives=[dict(attributes=attrs, material=offset + primitive.get('material', 0), indices=io.add_accessor(doc, binary, f.reshape(-1, 1), 'SCALAR', 5125))]))
         if name in ['pants_rogue', 'boots_rogue']:
             add_ankle_lining(doc, binary, name)
-        with_rig(doc, binary, name)
+        with_rig(doc, binary, name, version)
         path = args.output / f'{name}.glb'
         write_glb(path, doc, io.compact(doc, binary))
         result = validate(path)

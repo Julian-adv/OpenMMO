@@ -2,11 +2,30 @@
 import json
 
 import numpy as np
+from scipy.sparse import coo_matrix, eye
+from scipy.sparse.linalg import spsolve
 
-from outfits.rogue_layers import atlas_uv, grid_faces
+from outfits.rogue_layers import atlas_uv, compact_weights, grid_faces
 
 
-def add_sleeves(fit, doc, binary, material_index):
+def smooth_skin(points, faces, dense, fixed):
+    unique, inverse = np.unique(np.round(points, 6), axis=0, return_inverse=True)
+    edges = np.sort(np.concatenate([inverse[faces[:, [0, 1]]], inverse[faces[:, [1, 2]]], inverse[faces[:, [2, 0]]]]), axis=1)
+    edges = np.unique(edges, axis=0)
+    a, b = edges.T
+    amount = .06 ** 2 / np.sum((unique[a] - unique[b]) ** 2, axis=1)
+    laplacian = coo_matrix((np.concatenate([amount, amount, -amount, -amount]),
+                           (np.concatenate([a, b, a, b]), np.concatenate([a, b, b, a]))), shape=(len(unique), len(unique))).tocsr()
+    matrix = eye(len(unique), format='csr') + laplacian
+    _, first = np.unique(inverse, return_index=True)
+    target = dense[first]
+    fixed = np.unique(inverse[fixed])
+    free = np.setdiff1d(np.arange(len(unique)), fixed)
+    target[free] = spsolve(matrix[free][:, free], target[free] - matrix[free][:, fixed] @ target[fixed])
+    return np.maximum(target[inverse], 0)
+
+
+def add_sleeves(fit, doc, binary, material_index, roots):
     io = fit.io
     reference = json.loads((fit.ROOT / fit.SELECTION['reference']['interfaces']).read_text())
     records = []
@@ -38,6 +57,18 @@ def add_sleeves(fit, doc, binary, material_index):
             points.extend(ring)
             uv.extend(np.column_stack([theta / (2 * np.pi), np.full(count + 1, row / (len(heights) - 1))]))
         outer_rings = len(heights)
+        root, (root_joints, root_weights) = roots[side]
+        assert len(root) == count
+        regular = np.array(points[:count])
+        orders = [np.roll(np.arange(count)[::direction], shift) for direction in [1, -1] for shift in range(count)]
+        order = min(orders, key=lambda indices: np.sum((root[indices] - regular) ** 2))
+        root = root[order]
+        root_joints, root_weights = root_joints[order], root_weights[order]
+        root_delta = np.vstack([root, root[:1]]) - np.array(points[:count + 1])
+        for row, amount in enumerate([1., .5, .15]):
+            start = row * (count + 1)
+            ring = np.array(points[start:start + count + 1])
+            points[start:start + count + 1] = (ring + amount * root_delta).tolist()
         last = np.array(points[-count - 1:])
         folds = [(0, .003), (.008, .008), (.027, .010), (.031, .006), (.027, .003)]
         for index, (height, thickness) in enumerate(folds):
@@ -45,15 +76,11 @@ def add_sleeves(fit, doc, binary, material_index):
             uv.extend(np.column_stack([theta / (2 * np.pi), np.full(count + 1, .90 - index * .04)]))
         total_rings = outer_rings + len(folds)
         faces = grid_faces(total_rings, count + 1)[:, [0, 2, 1]].tolist()
-        cap = len(points)
-        points.append(np.mean(points[:count], axis=0))
-        uv.append([.5, .05])
-        faces.extend([[cap, col, col + 1] for col in range(count)])
         points, uv, faces = np.array(points), np.array(uv), np.array(faces)
         _, welded = np.unique(np.round(points, 6), axis=0, return_inverse=True)
         edges = np.sort(np.concatenate([welded[faces[:, [0, 1]]], welded[faces[:, [1, 2]]], welded[faces[:, [2, 0]]]]), axis=1)
         _, incidence = np.unique(edges, axis=0, return_counts=True)
-        assert np.count_nonzero(incidence == 1) == count
+        assert np.count_nonzero(incidence == 1) == count * 2
         assert incidence.max() == 2
         cuff = points[(outer_rings - 1) * (count + 1):outer_rings * (count + 1)]
         plane_error = float(np.max(abs((cuff - center) @ axis + .0175)))
@@ -62,15 +89,21 @@ def add_sleeves(fit, doc, binary, material_index):
         for row in range(total_rings):
             a, b = row * (count + 1), (row + 1) * (count + 1) - 1
             normals[a] = normals[b] = io.unit(normals[a] + normals[b])
-        weight_heights = np.concatenate([np.repeat(heights, count + 1), np.full(len(folds) * (count + 1), heights[-1]), [heights[0]]])
+        weight_heights = np.concatenate([np.repeat(heights, count + 1), np.full(len(folds) * (count + 1), heights[-1])])
         elbow_height = (fit.BONES[side + 'ForeArm'] - center) @ axis
         forearm = 1 - io.smoothstep((weight_heights - elbow_height + .065) / .13)
         inward = np.tile(np.maximum(0, -(radial @ basis)[:, 0] * sign), total_rings)
-        inward = np.append(inward, 1.)
         shoulder_weight = np.maximum(.65 * io.smoothstep((weight_heights - length + .07) / .10),
                                      .65 * inward * io.smoothstep((weight_heights - .13) / .10))
         joints = np.tile([fit.NAMES.index(side + bone) for bone in ['Shoulder', 'Arm', 'ForeArm']] + [0], (len(points), 1))
         weights = np.column_stack([shoulder_weight, 1 - shoulder_weight - forearm, forearm, np.zeros(len(points))])
+        dense = np.zeros((len(points), len(fit.NAMES)))
+        np.add.at(dense, (np.arange(len(points))[:, None], joints), weights)
+        dense[:count + 1] = 0
+        np.add.at(dense, (np.arange(count + 1)[:, None], np.vstack([root_joints, root_joints[:1]])), np.vstack([root_weights, root_weights[:1]]))
+        fixed = np.concatenate([np.arange(count + 1), np.arange((outer_rings - 1) * (count + 1), len(points))])
+        dense = smooth_skin(points, faces, dense, fixed)
+        joints, weights = compact_weights(dense)
         attrs = io.add_skin_attributes(doc, binary, points, normals, joints, weights)
         attrs['TEXCOORD_0'] = io.add_accessor(doc, binary, atlas_uv(uv, 'linen'), 'VEC2')
         attrs['TANGENT'] = io.add_accessor(doc, binary, io.tangents(points, normals, uv, faces), 'VEC4')
@@ -80,8 +113,10 @@ def add_sleeves(fit, doc, binary, material_index):
         records.append(dict(side=side, interface=ref['name'], center=center.tolist(), axis=axis.tolist(),
                             cuff_plane_offset_m=-.0175, folded_cuff_width_m=.031, folded_cuff_projection_m=.010, triangles=len(faces),
                             cuff_plane_maximum_error_m=plane_error,
-                            boundary_edges=count, nonmanifold_edges=0,
-                            boundary_location='fold upper lip tucked against sleeve; shoulder capped, sleeve wall continuous',
-                            skinning='smooth axial Shoulder/Arm/ForeArm blend; cuff lining shares outer weights',
+                            boundary_edges=count * 2, nonmanifold_edges=0,
+                            boundary_location='Shoulder shares torso positions and weights; cuff lip tucked against sleeve',
+                            shoulder_shared_vertices=count,
+                            shoulder_rest_positions=root.tolist(),
+                            skinning='Shared torso/shoulder/arm seam; surface-smoothed sleeve weights with fixed cuff',
                             circumferential_segments=count, outer_rings=outer_rings))
     return records

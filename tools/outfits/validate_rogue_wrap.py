@@ -78,7 +78,8 @@ def main():
         inside_skin_vertices=sum(p['inside_skin_vertices'] for p in results),
         maximum_skin_signed_distance_m=max(p['maximum_skin_signed_distance_m'] for p in results), samples=results)
     print(json.dumps({k: v for k, v in report.items() if k != 'samples'}, indent=2))
-    output = ROOT / 'doc/assets/modular-rogue-wrap-review-v5.json'
+    version = directory.name.rsplit('_', 1)[-1]
+    output = ROOT / f'doc/assets/modular-rogue-wrap-review-{version}.json'
     report['method'] = 'Nearest surface distance plus majority parity of three forearm-plane rays; normals alone are insufficient at folded wrist skin'
     report['passed'] = report['minimum_wrap_clearance_m'] > .001 and report['maximum_skin_signed_distance_m'] < -.001 and report['inside_skin_vertices'] == 0
     output.write_text(json.dumps(report, indent=2) + '\n')

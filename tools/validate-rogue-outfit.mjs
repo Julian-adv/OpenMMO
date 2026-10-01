@@ -65,6 +65,32 @@ try {
   const snapshots = []
   const allPoses = []
   const rest = meshes.map((mesh) => ({ mesh, positions: Array.from({ length: mesh.geometry.attributes.position.count }, (_, i) => mesh.getVertexPosition(i, new THREE.Vector3()).applyMatrix4(mesh.matrixWorld)) }))
+  const seams = []
+  if (fitting.layer_rebuild?.scarf?.garment_attachment) {
+    const shirt = rest.find(({ mesh }) => mesh.name === 'shirt_armholes')
+    for (const sleeve of fitting.sleeve_connections) {
+      const entry = rest.find(({ mesh }) => mesh.name === 'shirt_sleeve_' + sleeve.side.toLowerCase())
+      for (const point of sleeve.shoulder_rest_positions) {
+        const target = new THREE.Vector3(...point)
+        const find = (positions) => positions.findIndex((position) => position.distanceTo(target) < 1e-6)
+        const a = find(shirt.positions), b = find(entry.positions)
+        assert.ok(a >= 0 && b >= 0, `${sleeve.side}: missing shared shoulder vertex`)
+        seams.push({ a: shirt.mesh, ai: a, b: entry.mesh, bi: b })
+      }
+    }
+    const vest = rest.find(({ mesh }) => mesh.name === 'vest_rogue')
+    const scarf = rest.find(({ mesh }) => mesh.name === 'scarf_rogue')
+    const seen = new Set()
+    for (const [bi, point] of scarf.positions.entries()) {
+      const ai = vest.positions.findIndex((position) => position.distanceTo(point) < 1e-6)
+      if (ai >= 0 && !seen.has(ai)) {
+        seen.add(ai)
+        seams.push({ a: vest.mesh, ai, b: scarf.mesh, bi })
+      }
+    }
+    assert.ok(seen.size >= 40, 'Scarf perimeter must connect around the vest')
+  }
+  let maximumSeamGap = 0
   const sleeveRest = new Map(rest.filter(({ mesh }) => mesh.name.startsWith('shirt_sleeve_')).map(({ mesh, positions }) => [mesh, positions]))
   const sleeveEdgeAB = new THREE.Vector3()
   const sleeveEdgeAC = new THREE.Vector3()
@@ -127,6 +153,14 @@ try {
             }
           }
         }
+        if (seams.length) {
+          const positions = new Map(posed.map(({ mesh, positions }) => [mesh, positions]))
+          for (const seam of seams) {
+            const gap = positions.get(seam.a)[seam.ai].distanceTo(positions.get(seam.b)[seam.bi])
+            maximumSeamGap = Math.max(maximumSeamGap, gap)
+            assert.ok(gap < 1e-5, `${name}: garment seam opened by ${gap} m`)
+          }
+        }
         const ankles = measureAnkleConnections(posed, fitting.ankle_connections, skeleton)
         if (fitting.wrist_wrap) allPoses.push({
           clip: name,
@@ -181,6 +215,13 @@ try {
     minimum_clearance_m: Math.min(...planes.map((plane) => plane.minimum_clearance_m)),
     required_clearance_m: .002,
     method: '144 radial rays at 7 planes per ankle in the inverse shared-weight frame; rest plus 13 poses per clip',
+  }
+  if (seams.length) report.garment_seams = {
+    shared_vertices: seams.length,
+    sampled_poses: report.clips.length * report.samples_per_clip,
+    maximum_gap_m: maximumSeamGap,
+    required_maximum_gap_m: 1e-5,
+    interfaces: ['shirt to left sleeve', 'shirt to right sleeve', 'vest to scarf'],
   }
   writeFileSync(new URL(candidate.animation_report, root), JSON.stringify(report, null, 2) + '\n')
   writeFileSync(new URL(directory + 'animation-snapshots.json', root), JSON.stringify(snapshots) + '\n')

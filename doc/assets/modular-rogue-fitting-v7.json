@@ -1,0 +1,990 @@
+{
+  "status": "fitting and skinning candidate; runtime acceptance pending",
+  "reference": {
+    "base": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "base_sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b",
+    "rig_id": "human_male_01_mixamo_candidate_v2",
+    "interfaces": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+    "interfaces_status": "provisional"
+  },
+  "generator": "tools/fit-modular-rogue.py",
+  "uv_repairs": {
+    "pants_rogue": [
+      {
+        "face": 374,
+        "reference_face": 362
+      },
+      {
+        "face": 389,
+        "reference_face": 362
+      },
+      {
+        "face": 850,
+        "reference_face": 844
+      },
+      {
+        "face": 872,
+        "reference_face": 954
+      }
+    ],
+    "glove_rogue_right": [
+      {
+        "face": 239,
+        "reference_face": 268
+      },
+      {
+        "face": 261,
+        "reference_face": 268
+      },
+      {
+        "face": 279,
+        "reference_face": 268
+      }
+    ],
+    "boot_rogue_left": []
+  },
+  "sources": [
+    {
+      "id": "top_rogue",
+      "path": "assets/modular_human_male_01/parts/rogue_sources_v3/top_rogue/source.glb",
+      "sha256": "3baa541c6e93d2aafb449f58bc2cbe2e565d009df899e5b0b4f342e924779375",
+      "role": "design reference; geometry replaced in v5"
+    },
+    {
+      "id": "pants_rogue",
+      "path": "assets/modular_human_male_01/parts/rogue_sources/pants_rogue/source.glb",
+      "sha256": "f1e4b59d7751438abe2caaa78ec04027d66bb38486a8d4fb58e5096a861f9b6c",
+      "role": "fitted source geometry"
+    },
+    {
+      "id": "glove_rogue_right",
+      "path": "assets/modular_human_male_01/parts/rogue_sources_v2/glove_rogue_right/source.glb",
+      "sha256": "7aa8a5a81cfdc83aadd2c91be13ff4204aaec7f8398b13a23470ee822babf56a",
+      "role": "fitted source geometry"
+    },
+    {
+      "id": "wrap_rogue_left",
+      "path": "assets/modular_human_male_01/parts/rogue_sources/wrap_rogue_left/source.glb",
+      "sha256": "6e5c582da5d58643e4acdad68ace576e163fa87a8e69258e33a46b761327cb85",
+      "role": "design reference; geometry replaced in v5"
+    },
+    {
+      "id": "boot_rogue_left",
+      "path": "assets/modular_human_male_01/parts/rogue_sources/boot_rogue_left/source.glb",
+      "sha256": "a6c57d7dc34b580173c717422ba706c6b00b3692d8165de50fa6e72fc87330bc",
+      "role": "fitted source geometry"
+    }
+  ],
+  "outputs": [
+    {
+      "path": "assets/modular_human_male_01/parts/rogue_fitted_v7/top_rogue.glb",
+      "sha256": "793af48bdde245342aa4667940e4109ae34fbf132d5243f490f1431a60238b88",
+      "triangles": 3270,
+      "bones": 65,
+      "exact_rest_hierarchy_and_inverse_bind_match": true,
+      "maximum_weight_sum_error": 1.1920928955078125e-07,
+      "active_bones": [
+        "Hips",
+        "LeftArm",
+        "LeftForeArm",
+        "LeftShoulder",
+        "RightArm",
+        "RightForeArm",
+        "RightShoulder",
+        "Spine",
+        "Spine1",
+        "Spine2"
+      ]
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/rogue_fitted_v7/pants_rogue.glb",
+      "sha256": "d4632e37fc7c0e6ea17ad02f85f5dc009bf9b59429261e17c797735c54cd82e8",
+      "triangles": 1402,
+      "bones": 65,
+      "exact_rest_hierarchy_and_inverse_bind_match": true,
+      "maximum_weight_sum_error": 5.960464477539063e-08,
+      "active_bones": [
+        "Hips",
+        "LeftFoot",
+        "LeftLeg",
+        "LeftUpLeg",
+        "RightFoot",
+        "RightLeg",
+        "RightUpLeg",
+        "Spine"
+      ]
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/rogue_fitted_v7/gloves_rogue.glb",
+      "sha256": "ceb87fb5034b1ce5ac49fc4ef0c7a0833442bc684fc3216b956af1db3bdb9b79",
+      "triangles": 1157,
+      "bones": 65,
+      "exact_rest_hierarchy_and_inverse_bind_match": true,
+      "maximum_weight_sum_error": 1.1920928955078125e-07,
+      "active_bones": [
+        "LeftArm",
+        "LeftForeArm",
+        "LeftHand",
+        "LeftHandThumb1",
+        "LeftHandThumb2",
+        "RightForeArm",
+        "RightHand",
+        "RightHandIndex1",
+        "RightHandIndex2",
+        "RightHandIndex3",
+        "RightHandMiddle1",
+        "RightHandMiddle2",
+        "RightHandMiddle3",
+        "RightHandPinky1",
+        "RightHandPinky2",
+        "RightHandPinky3",
+        "RightHandRing1",
+        "RightHandRing2",
+        "RightHandRing3",
+        "RightHandThumb1",
+        "RightHandThumb2",
+        "RightHandThumb3"
+      ]
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/rogue_fitted_v7/boots_rogue.glb",
+      "sha256": "36abd9aef0d715e7532b4e1b92d03829e22bf6a21b971a5a235aaffcaa8a8f1c",
+      "triangles": 896,
+      "bones": 65,
+      "exact_rest_hierarchy_and_inverse_bind_match": true,
+      "maximum_weight_sum_error": 5.960464477539063e-08,
+      "active_bones": [
+        "LeftFoot",
+        "LeftLeg",
+        "LeftToeBase",
+        "RightFoot",
+        "RightLeg",
+        "RightToeBase"
+      ]
+    }
+  ],
+  "layer_rebuild": {
+    "vest": {
+      "mesh": "vest_rogue",
+      "triangles": 560,
+      "boundary_edges": 122,
+      "nonmanifold_edges": 0,
+      "expected_openings": [
+        "waist",
+        "connected scarf and armhole edge"
+      ],
+      "construction_opening_loops": 4,
+      "hem_y_m": 1.105,
+      "scarf_connection": "Shared garment cut boundary and skin weights",
+      "silhouette": {
+        "profile_columns": [
+          "height_m",
+          "half_width_m",
+          "front_radius_m",
+          "back_radius_m"
+        ],
+        "profile": [
+          [
+            1.105,
+            0.177,
+            0.133,
+            0.119
+          ],
+          [
+            1.13,
+            0.174,
+            0.129,
+            0.123
+          ],
+          [
+            1.19,
+            0.168,
+            0.126,
+            0.128
+          ],
+          [
+            1.25,
+            0.174,
+            0.129,
+            0.145
+          ],
+          [
+            1.31,
+            0.195,
+            0.142,
+            0.169
+          ],
+          [
+            1.35,
+            0.215,
+            0.153,
+            0.188
+          ],
+          [
+            1.395,
+            0.235,
+            0.157,
+            0.2
+          ],
+          [
+            1.44,
+            0.249,
+            0.14,
+            0.2
+          ],
+          [
+            1.53,
+            0.262,
+            0.095,
+            0.185
+          ],
+          [
+            1.595,
+            0.268,
+            0.065,
+            0.17
+          ]
+        ],
+        "interpolation": "PCHIP",
+        "section_exponent": 0.75,
+        "waist_to_chest_width_ratio": 0.7148936170212766,
+        "hem_front_drop_m": 0.01,
+        "hem_side_raise_m": 0.006
+      }
+    },
+    "sleeves": [
+      {
+        "side": "Left",
+        "interface": "glove_long_Left",
+        "center": [
+          0.3416706323623657,
+          1.1905194520950317,
+          -0.05365661904215813
+        ],
+        "axis": [
+          -0.46663870731533896,
+          0.8837359387956529,
+          -0.03548390220981217
+        ],
+        "cuff_plane_offset_m": -0.0175,
+        "folded_cuff_width_m": 0.031,
+        "folded_cuff_projection_m": 0.01,
+        "triangles": 768,
+        "cuff_plane_maximum_error_m": 1.5959455978986625e-16,
+        "boundary_edges": 48,
+        "nonmanifold_edges": 0,
+        "boundary_location": "Shoulder shares torso positions and weights; cuff lip tucked against sleeve",
+        "shoulder_shared_vertices": 24,
+        "shoulder_rest_positions": [
+          [
+            0.24729625032890276,
+            1.5949969335620806,
+            -0.02604213906018555
+          ],
+          [
+            0.2442516231227538,
+            1.594999886709338,
+            -0.051685937440001356
+          ],
+          [
+            0.2355225597846941,
+            1.5939843745236804,
+            -0.07797131879727931
+          ],
+          [
+            0.2229667263143529,
+            1.5864843749999997,
+            -0.1005269713454354
+          ],
+          [
+            0.20989030642551054,
+            1.562109375,
+            -0.11783161986484084
+          ],
+          [
+            0.19850817327066103,
+            1.5157812499999999,
+            -0.1298076916048575
+          ],
+          [
+            0.18851426409965635,
+            1.45765625,
+            -0.1360648583705702
+          ],
+          [
+            0.18029794830925233,
+            1.405859375,
+            -0.13534974528909868
+          ],
+          [
+            0.17718858651704383,
+            1.3717968749999998,
+            -0.1263681234604289
+          ],
+          [
+            0.18122674597217836,
+            1.3556250000000003,
+            -0.10903901550988512
+          ],
+          [
+            0.18924018119573396,
+            1.3507031250000003,
+            -0.08423374714996147
+          ],
+          [
+            0.19594813049026893,
+            1.35,
+            -0.05323487142736298
+          ],
+          [
+            0.1983906485847541,
+            1.35,
+            -0.019080713020035132
+          ],
+          [
+            0.19594813049026888,
+            1.35,
+            0.013250328580688711
+          ],
+          [
+            0.1892401811957339,
+            1.350702861530293,
+            0.03996740487239974
+          ],
+          [
+            0.1812267459721783,
+            1.3556198205711287,
+            0.05987788729092531
+          ],
+          [
+            0.17718858651704383,
+            1.3717565512826706,
+            0.07179906731046637
+          ],
+          [
+            0.1802979483092523,
+            1.4056925234665028,
+            0.07334198932045377
+          ],
+          [
+            0.18851426409965635,
+            1.457242691332548,
+            0.06394387122478384
+          ],
+          [
+            0.198508173270661,
+            1.5151317552671872,
+            0.047811903864982984
+          ],
+          [
+            0.20989030642551051,
+            1.5614507475799755,
+            0.031629448955077466
+          ],
+          [
+            0.22296672631435288,
+            1.5860586590759187,
+            0.018933905963485292
+          ],
+          [
+            0.2355225597846941,
+            1.5938178911490803,
+            0.007956818664327285
+          ],
+          [
+            0.2442516231227538,
+            1.5949650308702532,
+            -0.005867691100141691
+          ]
+        ],
+        "skinning": "Shared torso/shoulder/arm seam; surface-smoothed sleeve weights with fixed cuff",
+        "circumferential_segments": 24,
+        "outer_rings": 12
+      },
+      {
+        "side": "Right",
+        "interface": "glove_long_Right",
+        "center": [
+          -0.34166866540908813,
+          1.1905232667922974,
+          -0.05368368327617645
+        ],
+        "axis": [
+          0.46660674176401173,
+          0.8836765394998685,
+          -0.037335265874375904
+        ],
+        "cuff_plane_offset_m": -0.0175,
+        "folded_cuff_width_m": 0.031,
+        "folded_cuff_projection_m": 0.01,
+        "triangles": 768,
+        "cuff_plane_maximum_error_m": 1.1449174941446927e-16,
+        "boundary_edges": 48,
+        "nonmanifold_edges": 0,
+        "boundary_location": "Shoulder shares torso positions and weights; cuff lip tucked against sleeve",
+        "shoulder_shared_vertices": 24,
+        "shoulder_rest_positions": [
+          [
+            -0.1983906485847541,
+            1.35,
+            -0.019080713020153423
+          ],
+          [
+            -0.19594813049026888,
+            1.35,
+            -0.053234871427451716
+          ],
+          [
+            -0.1892401811957339,
+            1.350703125,
+            -0.08423374714999698
+          ],
+          [
+            -0.1812267459721783,
+            1.3556249999999999,
+            -0.10903901550989109
+          ],
+          [
+            -0.17718858651704383,
+            1.3717968749999998,
+            -0.1263681234604289
+          ],
+          [
+            -0.1802979483092523,
+            1.405859375,
+            -0.1353497452890987
+          ],
+          [
+            -0.18851426409965633,
+            1.4576562499999999,
+            -0.13606485837057025
+          ],
+          [
+            -0.19850817327066098,
+            1.51578125,
+            -0.12980769160485753
+          ],
+          [
+            -0.20989030642551051,
+            1.5621093750000001,
+            -0.11783161986484086
+          ],
+          [
+            -0.22296672631435288,
+            1.5864843750000002,
+            -0.10052697134544006
+          ],
+          [
+            -0.2355225597846941,
+            1.5939843745236804,
+            -0.07797131879730695
+          ],
+          [
+            -0.2442516231227538,
+            1.5949998867093378,
+            -0.05168593744007041
+          ],
+          [
+            -0.24729625032890276,
+            1.5949969335620806,
+            -0.026042139060277594
+          ],
+          [
+            -0.2442516231227538,
+            1.5949650308702532,
+            -0.0058676911002107195
+          ],
+          [
+            -0.2355225597846941,
+            1.5938178911490803,
+            0.007956818664299668
+          ],
+          [
+            -0.22296672631435294,
+            1.5860586590759187,
+            0.018933905963480685
+          ],
+          [
+            -0.2098903064255106,
+            1.5614507475799755,
+            0.03162944895507745
+          ],
+          [
+            -0.19850817327066103,
+            1.5151317552671872,
+            0.047811903864982984
+          ],
+          [
+            -0.1885142640996564,
+            1.457242691332548,
+            0.06394387122478382
+          ],
+          [
+            -0.18029794830925233,
+            1.4056925234665032,
+            0.07334198932045374
+          ],
+          [
+            -0.17718858651704386,
+            1.3717565512826706,
+            0.07179906731046634
+          ],
+          [
+            -0.18122674597217836,
+            1.3556198205711287,
+            0.0598778872909194
+          ],
+          [
+            -0.18924018119573396,
+            1.3507028615302934,
+            0.039967404872364255
+          ],
+          [
+            -0.19594813049026893,
+            1.35,
+            0.01325032858059999
+          ]
+        ],
+        "skinning": "Shared torso/shoulder/arm seam; surface-smoothed sleeve weights with fixed cuff",
+        "circumferential_segments": 24,
+        "outer_rings": 12
+      }
+    ],
+    "scarf": {
+      "mesh": "scarf_rogue",
+      "triangles": 536,
+      "boundary_edges": 114,
+      "nonmanifold_edges": 0,
+      "expected_openings": [
+        "neckline",
+        "continuous outer drape edge"
+      ],
+      "garment_attachment": {
+        "clearance_m": 0,
+        "method": "Continuous shoulder drape on the vest shell",
+        "skinning": "Exact shared cut-edge positions and torso weights"
+      }
+    },
+    "texture": {
+      "path": "assets/modular_human_male_01/parts/rogue_rebuild_v5/material-atlas.png",
+      "sha256": "233fcdd9f3edafd2d5f9dfff9f0c8ba59c7f1906503d0d748a92b7cc47a935ac"
+    }
+  },
+  "sleeve_connections": [
+    {
+      "side": "Left",
+      "interface": "glove_long_Left",
+      "center": [
+        0.3416706323623657,
+        1.1905194520950317,
+        -0.05365661904215813
+      ],
+      "axis": [
+        -0.46663870731533896,
+        0.8837359387956529,
+        -0.03548390220981217
+      ],
+      "cuff_plane_offset_m": -0.0175,
+      "folded_cuff_width_m": 0.031,
+      "folded_cuff_projection_m": 0.01,
+      "triangles": 768,
+      "cuff_plane_maximum_error_m": 1.5959455978986625e-16,
+      "boundary_edges": 48,
+      "nonmanifold_edges": 0,
+      "boundary_location": "Shoulder shares torso positions and weights; cuff lip tucked against sleeve",
+      "shoulder_shared_vertices": 24,
+      "shoulder_rest_positions": [
+        [
+          0.24729625032890276,
+          1.5949969335620806,
+          -0.02604213906018555
+        ],
+        [
+          0.2442516231227538,
+          1.594999886709338,
+          -0.051685937440001356
+        ],
+        [
+          0.2355225597846941,
+          1.5939843745236804,
+          -0.07797131879727931
+        ],
+        [
+          0.2229667263143529,
+          1.5864843749999997,
+          -0.1005269713454354
+        ],
+        [
+          0.20989030642551054,
+          1.562109375,
+          -0.11783161986484084
+        ],
+        [
+          0.19850817327066103,
+          1.5157812499999999,
+          -0.1298076916048575
+        ],
+        [
+          0.18851426409965635,
+          1.45765625,
+          -0.1360648583705702
+        ],
+        [
+          0.18029794830925233,
+          1.405859375,
+          -0.13534974528909868
+        ],
+        [
+          0.17718858651704383,
+          1.3717968749999998,
+          -0.1263681234604289
+        ],
+        [
+          0.18122674597217836,
+          1.3556250000000003,
+          -0.10903901550988512
+        ],
+        [
+          0.18924018119573396,
+          1.3507031250000003,
+          -0.08423374714996147
+        ],
+        [
+          0.19594813049026893,
+          1.35,
+          -0.05323487142736298
+        ],
+        [
+          0.1983906485847541,
+          1.35,
+          -0.019080713020035132
+        ],
+        [
+          0.19594813049026888,
+          1.35,
+          0.013250328580688711
+        ],
+        [
+          0.1892401811957339,
+          1.350702861530293,
+          0.03996740487239974
+        ],
+        [
+          0.1812267459721783,
+          1.3556198205711287,
+          0.05987788729092531
+        ],
+        [
+          0.17718858651704383,
+          1.3717565512826706,
+          0.07179906731046637
+        ],
+        [
+          0.1802979483092523,
+          1.4056925234665028,
+          0.07334198932045377
+        ],
+        [
+          0.18851426409965635,
+          1.457242691332548,
+          0.06394387122478384
+        ],
+        [
+          0.198508173270661,
+          1.5151317552671872,
+          0.047811903864982984
+        ],
+        [
+          0.20989030642551051,
+          1.5614507475799755,
+          0.031629448955077466
+        ],
+        [
+          0.22296672631435288,
+          1.5860586590759187,
+          0.018933905963485292
+        ],
+        [
+          0.2355225597846941,
+          1.5938178911490803,
+          0.007956818664327285
+        ],
+        [
+          0.2442516231227538,
+          1.5949650308702532,
+          -0.005867691100141691
+        ]
+      ],
+      "skinning": "Shared torso/shoulder/arm seam; surface-smoothed sleeve weights with fixed cuff",
+      "circumferential_segments": 24,
+      "outer_rings": 12
+    },
+    {
+      "side": "Right",
+      "interface": "glove_long_Right",
+      "center": [
+        -0.34166866540908813,
+        1.1905232667922974,
+        -0.05368368327617645
+      ],
+      "axis": [
+        0.46660674176401173,
+        0.8836765394998685,
+        -0.037335265874375904
+      ],
+      "cuff_plane_offset_m": -0.0175,
+      "folded_cuff_width_m": 0.031,
+      "folded_cuff_projection_m": 0.01,
+      "triangles": 768,
+      "cuff_plane_maximum_error_m": 1.1449174941446927e-16,
+      "boundary_edges": 48,
+      "nonmanifold_edges": 0,
+      "boundary_location": "Shoulder shares torso positions and weights; cuff lip tucked against sleeve",
+      "shoulder_shared_vertices": 24,
+      "shoulder_rest_positions": [
+        [
+          -0.1983906485847541,
+          1.35,
+          -0.019080713020153423
+        ],
+        [
+          -0.19594813049026888,
+          1.35,
+          -0.053234871427451716
+        ],
+        [
+          -0.1892401811957339,
+          1.350703125,
+          -0.08423374714999698
+        ],
+        [
+          -0.1812267459721783,
+          1.3556249999999999,
+          -0.10903901550989109
+        ],
+        [
+          -0.17718858651704383,
+          1.3717968749999998,
+          -0.1263681234604289
+        ],
+        [
+          -0.1802979483092523,
+          1.405859375,
+          -0.1353497452890987
+        ],
+        [
+          -0.18851426409965633,
+          1.4576562499999999,
+          -0.13606485837057025
+        ],
+        [
+          -0.19850817327066098,
+          1.51578125,
+          -0.12980769160485753
+        ],
+        [
+          -0.20989030642551051,
+          1.5621093750000001,
+          -0.11783161986484086
+        ],
+        [
+          -0.22296672631435288,
+          1.5864843750000002,
+          -0.10052697134544006
+        ],
+        [
+          -0.2355225597846941,
+          1.5939843745236804,
+          -0.07797131879730695
+        ],
+        [
+          -0.2442516231227538,
+          1.5949998867093378,
+          -0.05168593744007041
+        ],
+        [
+          -0.24729625032890276,
+          1.5949969335620806,
+          -0.026042139060277594
+        ],
+        [
+          -0.2442516231227538,
+          1.5949650308702532,
+          -0.0058676911002107195
+        ],
+        [
+          -0.2355225597846941,
+          1.5938178911490803,
+          0.007956818664299668
+        ],
+        [
+          -0.22296672631435294,
+          1.5860586590759187,
+          0.018933905963480685
+        ],
+        [
+          -0.2098903064255106,
+          1.5614507475799755,
+          0.03162944895507745
+        ],
+        [
+          -0.19850817327066103,
+          1.5151317552671872,
+          0.047811903864982984
+        ],
+        [
+          -0.1885142640996564,
+          1.457242691332548,
+          0.06394387122478382
+        ],
+        [
+          -0.18029794830925233,
+          1.4056925234665032,
+          0.07334198932045374
+        ],
+        [
+          -0.17718858651704386,
+          1.3717565512826706,
+          0.07179906731046634
+        ],
+        [
+          -0.18122674597217836,
+          1.3556198205711287,
+          0.0598778872909194
+        ],
+        [
+          -0.18924018119573396,
+          1.3507028615302934,
+          0.039967404872364255
+        ],
+        [
+          -0.19594813049026893,
+          1.35,
+          0.01325032858059999
+        ]
+      ],
+      "skinning": "Shared torso/shoulder/arm seam; surface-smoothed sleeve weights with fixed cuff",
+      "circumferential_segments": 24,
+      "outer_rings": 12
+    }
+  ],
+  "wrist_wrap": {
+    "mesh": "wrap_rogue_left",
+    "triangles": 512,
+    "boundary_edges": 64,
+    "nonmanifold_edges": 0,
+    "minimum_radial_clearance_m": 0.013,
+    "axial_interval_m": [
+      0.012,
+      0.077
+    ],
+    "closed_circumference": true,
+    "method": "Exact wrist body sections with local reference skin weights including thumb-root influence"
+  },
+  "budget": {
+    "equipment_triangles": 6725,
+    "assembled_including_hidden_triangles": 21851,
+    "face_triangles": 1505,
+    "runtime_visible_triangles": null
+  },
+  "hand_influences": {
+    "right_only": true,
+    "left_wrap_matches_local_wrist_including_thumb_root": true,
+    "distal_finger_regions_restricted_to_own_finger": true
+  },
+  "ankle_fitting": {
+    "interface_sha256": "f3fc3aed9c5080cf26a294dac496293c89bce8f67466add18a7ef72b326f006b",
+    "method": "Both cuffs follow the body section in its local plane, with trouser-inside-boot clearance and shared Leg/Foot weights",
+    "verified_overlap_interval_m": [
+      -0.03,
+      0
+    ],
+    "added_lining_triangles": 320
+  },
+  "ankle_connections": [
+    {
+      "side": "Left",
+      "interface": "shoe_ankle_Left",
+      "center": [
+        0.15926159918308258,
+        0.23499998450279236,
+        -0.03282027319073677
+      ],
+      "axis": [
+        -0.05732715403881295,
+        0.9980521083118923,
+        0.024608667253572837
+      ],
+      "basis": [
+        [
+          0.9983554464266773,
+          0.05730973588289026,
+          0.0014130687255574281
+        ],
+        [
+          -2.168404344971009e-19,
+          -0.024649204190403725,
+          0.9996961622076879
+        ]
+      ],
+      "weights": {
+        "LeftLeg": 0.9591349695661484,
+        "LeftFoot": 0.04086503043385167
+      },
+      "sample_heights_m": [
+        -0.03,
+        -0.025,
+        -0.02,
+        -0.015,
+        -0.01,
+        -0.005,
+        0
+      ]
+    },
+    {
+      "side": "Right",
+      "interface": "shoe_ankle_Right",
+      "center": [
+        -0.15926215052604675,
+        0.23499999940395355,
+        -0.03594214841723442
+      ],
+      "axis": [
+        0.05730302665267743,
+        0.997607654189585,
+        0.038669515626602424
+      ],
+      "basis": [
+        [
+          0.9983568315669715,
+          -0.05726002586391477,
+          -0.002219527341861716
+        ],
+        [
+          0.0,
+          -0.03873316073363134,
+          0.999249589571886
+        ]
+      ],
+      "weights": {
+        "RightLeg": 0.940803562814493,
+        "RightFoot": 0.05919643718550703
+      },
+      "sample_heights_m": [
+        -0.03,
+        -0.025,
+        -0.02,
+        -0.015,
+        -0.01,
+        -0.005,
+        0
+      ]
+    }
+  ],
+  "pending": [
+    "Right glove finger openings retain source geometry; final hand equipment acceptance pending",
+    "Long-glove clearance and occlusion with actual mixed equipment",
+    "Barefoot trouser variant and connections to other boot sets",
+    "Full gameplay and mixed outfit acceptance beyond the reviewed set"
+  ]
+}
