@@ -54,6 +54,10 @@ try {
   const rest = positions()
   const leatherCore = rest.map((p) => values.part === 'pants_rogue'
     ? Math.abs(p.x) > .075 && p.y > .49 && p.y < .66 && p.z > .015
+    : values.part === 'glove_rogue_right'
+    ? p.x < -.46 && p.y > .84 && p.y < .97
+    : values.part === 'wrap_rogue_left'
+    ? p.x > .36 && p.y > .99 && p.y < 1.10
     : Math.abs(p.x) < .14 && p.y > 1.18 && p.y < 1.42)
   const indices = mesh.geometry.index.array
   const edges = new Map()
@@ -72,7 +76,24 @@ try {
     status: 'Numeric runtime bind and skinning review; visual review is separate',
     sources: [bodyPath, partPath].map((path) => ({ path, sha256: hash(path) })),
     bind_modular_part_passed: true, samples_per_clip: 13, clips: [],
-    strain_region: values.part === 'pants_rogue' ? 'Front knee region, including leather patches' : 'Central torso leather',
+    strain_region: values.part === 'pants_rogue' ? 'Front knee region, including leather patches'
+      : values.part === 'glove_rogue_right' ? 'Right palm and short finger sleeves'
+      : values.part === 'wrap_rogue_left' ? 'Left wrist cloth wrap' : 'Central torso leather',
+  }
+  if (values.part === 'glove_rogue_right') {
+    assert.ok(values.fitting, '--fitting is required for the right glove')
+    const fitting = JSON.parse(readFileSync(new URL(values.fitting, root), 'utf8'))
+    assert.equal(fitting.right_glove.sha256, hash(partPath), 'Fitting report must match the glove being validated')
+    assert.equal(fitting.topology.wrist_and_finger_openings, 6)
+    const indices = mesh.geometry.attributes.skinIndex.array
+    const weights = mesh.geometry.attributes.skinWeight.array
+    for (const region of Object.values(fitting.finger_regions)) for (const index of region.vertices) {
+      for (let slot = 0; slot < 4; slot++) if (weights[index * 4 + slot] > 1e-6) {
+        assert.ok(region.allowed_bones.includes(skeleton.bones[indices[index * 4 + slot]].name), 'Neighboring finger influence')
+      }
+    }
+    report.finger_bone_isolation_passed = true
+    report.sources.push({ path: values.fitting, sha256: hash(values.fitting) })
   }
   function checkAnkles(points) {
     const posed = [{ mesh, positions: points }, ...boots.map((part) => ({ mesh: part, positions: positions(part) }))]

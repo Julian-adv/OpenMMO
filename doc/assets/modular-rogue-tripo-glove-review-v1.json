@@ -1,0 +1,45 @@
+{
+  "status": "User-approved corrected right glove; historical render before left-wrap replacement",
+  "date": "2026-10-02",
+  "blender_version": "5.2.0 LTS",
+  "editable": {
+    "path": "assets/modular_human_male_01/parts/rogue_tripo_glove_v1/tripo-glove-fitting.blend",
+    "sha256": "6c88e5e67e320a2efbb6761d6f26038812d24ad67cead45082fa6b7acecbcf84",
+    "retained": false,
+    "status": "[\ubbf8\uc0ac\uc6a9] Replaced by final wrap/glove combination and shared editable scene"
+  },
+  "fitting": {
+    "path": "doc/assets/modular-rogue-tripo-glove-fitting-v1.json",
+    "sha256": "ebc9c4f661b4eb447af09163fe2771cf594266d3939ae2d4c524184ca7a3b6ce"
+  },
+  "images": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/tripo-glove-v1-source.png",
+      "sha256": "7a08c976aae43024c8cd4831d2e1744358cf86dd41cf6b2a587cf706391736b9"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/tripo-glove-v1-hand.png",
+      "sha256": "d40f5c7e34e1cad3af35e2af6c8685b05a5bdb8858917e1b71200b22fec42278"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/tripo-glove-v1-rest.png",
+      "sha256": "299f4de0e242df40a8e4d4607c3a7857e7f66c319fa6b3ea5f135fd220f5eff3"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/tripo-glove-v1-motion.png",
+      "sha256": "14c996ed66ee74d0a8a4aa2d93a14bf11e1121f98e5205090cee52f6bfcd6948"
+    }
+  ],
+  "canonical_body_unchanged": true,
+  "hand_skin_visible": true,
+  "localized_coverage_correction": {
+    "report": "doc/assets/modular-rogue-tripo-glove-coverage-v1.json",
+    "browser_comparison": {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/tripo-glove-v1-index-fix.png",
+      "sha256": "29f8b28bfba4ae36662c6dde80fb87bd343d86544b5e3303568e75f3cda40257"
+    },
+    "renderer": "Chromium WebGL, existing workshop scene; same idle1 pose and camera before/after; reference skin triangle located within 2.1e-8m"
+  },
+  "current_combination": "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/gloves_rogue.glb",
+  "current_editable": "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/tripo-wrap-fitting.blend"
+}

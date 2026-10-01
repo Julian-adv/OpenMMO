@@ -6,8 +6,9 @@
 
 현재 기본 로그 상의는 사용자가 승인한 [Tripo 피팅 상의](modular-rogue-tripo.md)다.
 하의도 사용자가 승인한 [Tripo Smart Mesh 바지](modular-rogue-tripo-pants.md)를 기본으로 사용하며,
-장갑·부츠는 v8을 유지한다. **[미사용] 이전 v7/v8 상의 GLB는 삭제했다.**
-현재 혼합 세트의 편집본은 `rogue_tripo_pants_v1/tripo-pants-fitting.blend`다.
+작업실 장갑은 [승인된 Smart Mesh 오른손 장갑](modular-rogue-tripo-glove.md)과 [새 Tripo 왼손목 천](modular-rogue-tripo-wrap.md)을 사용하고,
+부츠는 v8을 유지한다. **[미사용] 이전 v7/v8 상의 GLB는 삭제했다.**
+현재 혼합 세트의 편집본은 `rogue_tripo_wrap_v1/tripo-wrap-fitting.blend`다. **[미사용]** 기존 왼손 천과 합친 중간 GLB·중복 장갑 편집본은 삭제했다.
 중간 백업과 이전 v7 파일은 정리하고 검수 이력을 보존했다.
 일반 로그 상의 선택과 `?outfit=rogue`, `?outfit=tripo`가 같은 승인 상의를 사용한다.
 아래 v8 상의 제작 내용은 과거 기록이며 런타임 등록·혼합 호환 검수는 별도다.
@@ -60,6 +61,28 @@ FFmpeg로 원본을 무손실 크롭했다. 재생성·크기 변경 없이 기�
 
 사용자가 전달한 Tripo 상의를 피팅한 뒤 기본 로그 상의로 승인했다.
 원본의 4,877 triangles와 2K 텍스처를 사용한다.
+
+## Tripo 업로드용 오른손 장갑 시점 분리 — 2026-10-02
+
+이 원화를 바탕으로 사용자가 전달한 Smart Mesh 장갑은
+[오른손 피팅 후보](modular-rogue-tripo-glove.md)로 작업실에 적용했다.
+손바닥은 간단히 처리하고 손등·커프·버클과 손가락 동작을 우선한다.
+
+오른손 반장갑 v2의 두 시점을 각각 768×1024 PNG로 무손실 크롭했다.
+
+- [손등](../images/characters/modular_human_male_01/parts/rogue/glove_rogue_right-dorsal-v2.png): 원본 `(0, 0, 768, 1024)` 영역.
+- [손바닥](../images/characters/modular_human_male_01/parts/rogue/glove_rogue_right-palmar-v2.png): 원본 `(768, 0, 768, 1024)` 영역.
+- 원본은 2026-10-01 OpenAI Codex ImageGen, **ChatGPT Pro 20x** 생성물이다.
+  로컬 FFmpeg로 분리했으며 기존 디자인과 OpenAI 출력물 이용 조건을 유지한다.
+- [입력·출력 해시와 분리 기록](modular-rogue-parts-sources.json).
+
+같은 날 사용자의 요청으로 주변 그라디언트를 제거한 투명 PNG를 제작했다.
+Tripo 입력에는 [손등 투명본](../images/characters/modular_human_male_01/parts/rogue/glove_rogue_right-dorsal-transparent-v2.png)과
+[손바닥 투명본](../images/characters/modular_human_male_01/parts/rogue/glove_rogue_right-palmar-transparent-v2.png)을 사용한다.
+두 파일은 1086×1448 RGBA이며 원본 분리 이미지는 수정 입력으로 보존한다.
+OpenAI Codex ImageGen, **ChatGPT Pro 20x**, 2026-10-02 편집물이며 기존 OpenAI 출력물 이용 조건을 따른다.
+AI 배경 제거 편집으로 무손실 크롭과는 구분한다.
+[실제 편집 프롬프트·출처·해시](modular-rogue-glove-cutouts-sources.json).
 
 ## 기준 몸체와 연결부
 
@@ -392,3 +415,22 @@ blender -b -t 6 --python-exit-code 1 --python tools/blender-scripts/review_rogue
 개별 렌더는 임시 폴더에서 조합한 뒤 정리한다. `--images <폴더>`로 개별 이미지를 보관할 수 있다.
 편집본에는 기준 몸체·원본 참조·연결 곡선·내장 텍스처·검사 자세가 있다.
 프레임 1은 기준 자세, 10/20/30/40/50/60은 대기/걷기/달리기/점프/공격/앉기 스냅샷이다.
+
+
+## Tripo 왼손목 천과 허리 겹침 보정 — 2026-10-02
+
+사용자가 전달한 Smart Mesh 천 튜브를 왼손목 띠와 교체했다.
+기존 승인 오른손 장갑의 형상·UV·가중치·재질·이미지 바이트는 그대로 보존했다.
+원본 2,011삼각형에서 막힌 내부 끝을 열고 양끝을 정리한 천은 1,904삼각형이며,
+통합 장갑은 3,495삼각형이다. [출처·피팅·검수·재현](modular-rogue-tripo-wrap.md).
+
+전체를 덮는 상의가 있으면 바지 상단과 안쪽 몸통 피부를 기준 자세 Y=1.105m까지
+조건부로 잘라 황토색 천이 베스트를 뚫지 않게 한다. 상의를 벗거나 바바리안 상의로
+바꾸면 원본 허리 형상을 복원한다. 원본 몸체·바지 GLB는 수정하지 않았다.
+[허리 검사 기록](modular-rogue-tripo-waist-v1.json).
+
+![허리 겹침 수정 전후](../images/characters/modular_human_male_01/parts/rogue/tripo-pants-v1-waist-fix.png)
+
+현재 크롭 헤어·검 조합은 원본 숨김 포함 26,416삼각형, 작업실 절단 후 24,527삼각형,
+실제 표시 18,397삼각형이며 얼굴은 1,505삼각형이다.
+검수 이미지는 실제 Tripo 메시를 Blender/Chromium에서 렌더한 결과이며 기존 출력물 이용 조건을 따른다.

@@ -199,4 +199,76 @@ describe('rogue workshop preview', () => {
     expect(visible('torso')).toBe(true)
     expect(torso.geometry).toBe(source)
   })
+
+  it.each(['rogue', 'linen', 'leather', 'plate'] as const)(
+    'hides the high trouser waistband under %s and restores it with a bare waist',
+    (top) => {
+      const { body, parts } = fixture()
+      const pants = parts.get('pants_rogue')![0]
+      pants.userData.fitting_status = 'candidate_tripo_pants_v1'
+      const source = new THREE.BufferGeometry()
+      source.setAttribute(
+        'position',
+        new THREE.Float32BufferAttribute(
+          [-0.1, 1, 0.1, 0.1, 1, 0.1, 0.1, 1.16, 0.1, -0.1, 1.16, 0.1],
+          3
+        )
+      )
+      source.setIndex([0, 1, 2, 0, 2, 3])
+      const original = source.attributes.position.array.slice()
+      pants.geometry = source
+      showPreviewOutfit(body, parts, { ...ROGUE_PREVIEW_OUTFIT, top })
+      const trimmed = pants.geometry
+      expect(trimmed).not.toBe(source)
+      expect(trimmed.index!.count).toBeGreaterThan(0)
+      const heights = Array.from(
+        { length: trimmed.attributes.position.count },
+        (_, i) => trimmed.attributes.position.getY(i)
+      )
+      expect(Math.max(...heights)).toBeLessThan(1.11)
+      expect(Math.min(...heights)).toBeCloseTo(1)
+      for (const bareTop of ['none', 'barbarian'] as const) {
+        showPreviewOutfit(body, parts, {
+          ...ROGUE_PREVIEW_OUTFIT,
+          top: bareTop,
+        })
+        expect(pants.geometry).toBe(source)
+        expect(source.attributes.position.array).toEqual(original)
+      }
+      showPreviewOutfit(body, parts, { ...ROGUE_PREVIEW_OUTFIT, top })
+      expect(pants.geometry).toBe(trimmed)
+      if (top === 'rogue') {
+        parts.delete('top_rogue')
+        showPreviewOutfit(body, parts, ROGUE_PREVIEW_OUTFIT)
+        expect(pants.geometry).toBe(source)
+      }
+    }
+  )
+
+  it('restores waist skin when the Tripo trousers are removed', () => {
+    const { body, parts } = fixture()
+    parts.get('top_rogue')![0].userData.fitting_status = 'candidate_tripo_v1'
+    parts.get('pants_rogue')![0].userData.fitting_status =
+      'candidate_tripo_pants_v1'
+    const torso = body.find((mesh) => mesh.userData.region === 'torso')!
+    torso.geometry = new THREE.BufferGeometry()
+    torso.geometry.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(
+        [-0.1, 1.05, 0.09, 0.1, 1.05, 0.09, 0, 1.14, 0.09],
+        3
+      )
+    )
+    torso.geometry.setIndex([0, 1, 2])
+    showPreviewOutfit(body, parts, ROGUE_PREVIEW_OUTFIT)
+    const heights = () => {
+      const position = torso.geometry.attributes.position
+      return Math.max(
+        ...Array.from({ length: position.count }, (_, i) => position.getY(i))
+      )
+    }
+    expect(heights()).toBeCloseTo(1.105)
+    showPreviewOutfit(body, parts, { ...ROGUE_PREVIEW_OUTFIT, pants: 'none' })
+    expect(heights()).toBeCloseTo(1.14)
+  })
 })

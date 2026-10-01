@@ -1,0 +1,37 @@
+{
+  "status": "Historical passed Chromium check before left-wrap replacement",
+  "date": "2026-10-02",
+  "gloves": {
+    "path": "assets/modular_human_male_01/parts/rogue_tripo_glove_v1/gloves_rogue.glb",
+    "sha256": "776b502afcdc543452329ba002a236f2da7032765a84509d1a2012ad81696be6",
+    "retained": false
+  },
+  "served_asset_matches": true,
+  "mesh_info": [
+    {
+      "name": "glove_rogue_right",
+      "triangles": 1591,
+      "bones": 65,
+      "visible": true
+    },
+    {
+      "name": "wrap_rogue_left",
+      "triangles": 512,
+      "bones": 65,
+      "visible": true
+    }
+  ],
+  "stats": "\uc870\ud569 23,322\uc0bc\uac01\ud615 \u00b7 \ud45c\uc2dc 17,192 \u00b7 \uc5bc\uad74 1,505",
+  "clips": [
+    "idle1",
+    "walk",
+    "run",
+    "jump",
+    "slash1",
+    "combat_idle",
+    "sit_idle"
+  ],
+  "unequip_reequip_and_reattach": true,
+  "page_errors": [],
+  "current_browser_report": "doc/assets/modular-rogue-tripo-wrap-browser-v1.json"
+}

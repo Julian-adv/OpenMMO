@@ -1,0 +1,39 @@
+{
+  "date": "2026-10-02",
+  "status": "Conditional workshop waistband clipping verified",
+  "sources": [
+    {
+      "path": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/pants_rogue.glb",
+      "sha256": "7178d06a9b2e18953e2c3fb0672df8424b688d6f4ccc47affc856a9084e8e81c"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b"
+    }
+  ],
+  "cut_height_m": 1.105,
+  "source_pants_triangles": 2022,
+  "covered_pants_triangles": 1944,
+  "full_covering_tops": [
+    "rogue",
+    "linen",
+    "leather",
+    "plate"
+  ],
+  "original_geometry_restored_for": [
+    "none",
+    "barbarian",
+    "missing rogue top"
+  ],
+  "covered_torso_skin_below_cut": true,
+  "source_assets_unchanged": true,
+  "browser_report": {
+    "path": "doc/assets/modular-rogue-tripo-wrap-browser-v1.json",
+    "sha256": "a450859a2a47a22e152ffa55a70562d84e349d387a2f945d51b44b0844741acb"
+  },
+  "comparison": {
+    "path": "doc/images/characters/modular_human_male_01/parts/rogue/tripo-pants-v1-waist-fix.png",
+    "sha256": "80624ea3510b5cf748cd9ea3c7f33b9a1129b71ac711734c2da6441c4e5ad814"
+  },
+  "comparison_method": "Current Chromium workshop scene, same paused idle1 pose and camera; compare original vs clipped pants geometry. Current body mask retained for both renders. Local FFmpeg composition; no AI image generation."
+}

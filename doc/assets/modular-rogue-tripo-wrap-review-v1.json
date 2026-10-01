@@ -1,0 +1,33 @@
+{
+  "status": "Workshop wrap candidate; user appearance and full gameplay review pending",
+  "date": "2026-10-02",
+  "blender_version": "5.2.0 LTS",
+  "editable": {
+    "path": "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/tripo-wrap-fitting.blend",
+    "sha256": "453b34ea6a7b1e1e6e10a934c609536930cc98c07d66d29f51348f1a83fff196"
+  },
+  "fitting": {
+    "path": "doc/assets/modular-rogue-tripo-wrap-fitting-v1.json",
+    "sha256": "7fe945de188c08a87e68dd3665a448ba02a7c671213e331bb2402fe627a27edc"
+  },
+  "images": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/tripo-wrap-v1-source.png",
+      "sha256": "f0f8a62879ce803ccee13a489361a04856d1bdb72009dc058c9a49e3e94d742c"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/tripo-wrap-v1-hand.png",
+      "sha256": "6c2f0c9ddfd0d62c17b78ab6f21e0fee62a3f00f806203f53a82ad90f950be31"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/tripo-wrap-v1-rest.png",
+      "sha256": "635799292304a6a0a5b4b61a484cae36bbc5eefd0eae6056459715c8d4c2e6f9"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/tripo-wrap-v1-motion.png",
+      "sha256": "b61abb67cf78f6caa9421ec0bbd6a7c8f854f564388177e644e7029cb17f175f"
+    }
+  ],
+  "canonical_body_unchanged": true,
+  "hand_skin_visible": true
+}

@@ -64,6 +64,21 @@ export function showPreviewOutfit(
   }
   for (const id of ROGUE_PREVIEW_PARTS)
     for (const mesh of parts.get(id) ?? []) mesh.visible = selected.has(id)
+  const coveredWaist =
+    pants === 'rogue' &&
+    top !== 'none' &&
+    top !== 'barbarian' &&
+    parts
+      .get('pants_rogue')
+      ?.some(
+        (mesh) => mesh.userData.fitting_status === 'candidate_tripo_pants_v1'
+      )
+  for (const mesh of parts.get('pants_rogue') ?? [])
+    trimModularClothing(
+      mesh,
+      coveredWaist ? 'tripo_covered_waist' : undefined,
+      true
+    )
   const hidden = new Set([
     ...(top === 'rogue' ? ['torso', 'upper_arms'] : []),
     ...(pants === 'rogue' ? ['legs', 'ankles', 'boot_ankles'] : []),
@@ -79,7 +94,11 @@ export function showPreviewOutfit(
           top === 'rogue' &&
           collar === 'tripo_collar'
         ) {
-          trimModularClothing(mesh, 'tripo_waist', true)
+          trimModularClothing(
+            mesh,
+            coveredWaist ? 'tripo_covered_waist' : 'tripo_waist',
+            true
+          )
           mesh.visible = true
         }
         break

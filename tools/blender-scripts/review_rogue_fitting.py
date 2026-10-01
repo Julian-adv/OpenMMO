@@ -57,7 +57,18 @@ def file_record(path):
     return dict(path=str(path.relative_to(ROOT)), sha256=hashlib.sha256(path.read_bytes()).hexdigest())
 
 
-def clip_top_skin(obj, tripo_top):
+def clip_above(obj, height):
+    mesh = bmesh.new()
+    mesh.from_mesh(obj.data)
+    mesh.transform(obj.matrix_world)
+    bmesh.ops.bisect_plane(mesh, geom=list(mesh.verts) + list(mesh.edges) + list(mesh.faces),
+                          plane_co=(0, 0, height), plane_no=(0, 0, 1), clear_outer=True)
+    mesh.transform(obj.matrix_world.inverted())
+    mesh.to_mesh(obj.data)
+    mesh.free()
+
+
+def clip_top_skin(obj, tripo_top, waist_height=1.14):
     if obj.get('region') == 'neck':
         mesh = bmesh.new()
         mesh.from_mesh(obj.data)
@@ -71,14 +82,7 @@ def clip_top_skin(obj, tripo_top):
         mesh.to_mesh(obj.data)
         mesh.free()
     if obj.get('region') == 'torso' and tripo_top:
-        mesh = bmesh.new()
-        mesh.from_mesh(obj.data)
-        mesh.transform(obj.matrix_world)
-        bmesh.ops.bisect_plane(mesh, geom=list(mesh.verts) + list(mesh.edges) + list(mesh.faces),
-                              plane_co=(0, 0, 1.14), plane_no=(0, 0, 1), clear_outer=True)
-        mesh.transform(obj.matrix_world.inverted())
-        mesh.to_mesh(obj.data)
-        mesh.free()
+        clip_above(obj, waist_height)
 
 
 def main(default_images):

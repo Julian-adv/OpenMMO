@@ -8,6 +8,7 @@ type Cut =
   | 'collar'
   | 'tripo_collar'
   | 'tripo_waist'
+  | 'tripo_covered_waist'
 type Distance = (point: THREE.Vector3) => number
 
 function sleeveCut(fraction: number): Distance {
@@ -34,6 +35,7 @@ const cuts: Record<Cut, Distance> = {
   collar: (point) => Math.max(1.61 - point.y, Math.abs(point.x) - 0.075),
   tripo_collar: (point) => Math.max(1.54 - point.y, Math.abs(point.x) - 0.075),
   tripo_waist: (point) => point.y - 1.14,
+  tripo_covered_waist: (point) => point.y - 1.105,
 }
 
 export function clipSkinnedGeometry(

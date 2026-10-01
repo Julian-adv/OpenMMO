@@ -1,0 +1,97 @@
+{
+  "date": "2026-10-02",
+  "status": "Fitted and rigged; animation and visual review required",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/source.glb",
+    "sha256": "594950bbdf39e3f3e816c54b47b0cbbed5563645a68020ff2c042a6ac2fc997b"
+  },
+  "base": {
+    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b"
+  },
+  "rig_id": "human_male_01_mixamo_candidate_v2",
+  "alignment": {
+    "wrist": [
+      0.4456532073031322,
+      0.9935932594280406,
+      -0.0457497108654611
+    ],
+    "axis": [
+      -0.46663833708618147,
+      0.883736138687016,
+      -0.03548379263842324
+    ],
+    "axial_range_m": [
+      0.012,
+      0.092
+    ],
+    "section_count": 32,
+    "angular_samples": 96,
+    "minimum_radial_clearance_m": 0.003,
+    "method": "Fit to actual canonical left forearm radial sections; preserve source fold variation with a positive smooth radial allowance and retain original UVs/texture"
+  },
+  "topology": {
+    "source_triangles": 2011,
+    "fitted_triangles": 1904,
+    "through_openings": 2,
+    "source_correction": "Trim uneven bottom below source Y=0.13; remove the interior top cap while preserving the outer lip and cloth coils",
+    "opening_vertices": [
+      64,
+      26
+    ],
+    "original_texture_preserved": true,
+    "minimum_triangle_area_m2": 1.8622528747822072e-08
+  },
+  "left_wrap": {
+    "path": "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/wrap_rogue_left.glb",
+    "sha256": "e76ef7aef73122ebcecca8c7d82ee46c697789c55be8a75fec431efc1aff1889",
+    "triangles": 1904,
+    "bones": 65,
+    "exact_rest_hierarchy_and_inverse_bind_match": true,
+    "maximum_weight_sum_error": 1.1920928955078125e-07,
+    "active_bones": [
+      "LeftForeArm",
+      "LeftHand",
+      "LeftHandThumb1",
+      "LeftHandThumb2"
+    ]
+  },
+  "combined_gloves": {
+    "path": "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/gloves_rogue.glb",
+    "sha256": "80107110dabfcbd0c6bda685550e52b0133e6c62272c6ab660a6b24f11eb835a",
+    "triangles": 3495,
+    "bones": 65,
+    "exact_rest_hierarchy_and_inverse_bind_match": true,
+    "maximum_weight_sum_error": 1.1920928955078125e-07,
+    "active_bones": [
+      "LeftForeArm",
+      "LeftHand",
+      "LeftHandThumb1",
+      "LeftHandThumb2",
+      "RightArm",
+      "RightForeArm",
+      "RightHand",
+      "RightHandIndex1",
+      "RightHandIndex2",
+      "RightHandIndex3",
+      "RightHandMiddle1",
+      "RightHandMiddle2",
+      "RightHandMiddle3",
+      "RightHandPinky1",
+      "RightHandPinky2",
+      "RightHandPinky3",
+      "RightHandRing1",
+      "RightHandRing2",
+      "RightHandRing3",
+      "RightHandThumb1",
+      "RightHandThumb2",
+      "RightHandThumb3"
+    ]
+  },
+  "preserved_right_glove": {
+    "path": "assets/modular_human_male_01/parts/rogue_tripo_glove_v1/glove_rogue_right.glb",
+    "sha256": "409a4a231c02c8efd6d7e615d73ced1b7740d90c47334682ccaee764b1d9cb47",
+    "geometry_uv_skin_weights_material_and_texture_exact": true
+  },
+  "canonical_body_unchanged": true
+}

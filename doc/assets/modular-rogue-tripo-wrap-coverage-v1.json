@@ -1,0 +1,88 @@
+{
+  "date": "2026-10-02",
+  "scope": "Canonical left wrist skin triangles fully inside the wrap band; three interior points per triangle, outward rays to wrap within 30mm",
+  "base_sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b",
+  "validation_poses_sha256": "bb193bfb9035e9e6f6c708725e45ec0584ff148030289cc523417291284e20fc",
+  "poses": 91,
+  "skin_triangles": [
+    [
+      355,
+      365,
+      363
+    ],
+    [
+      2504,
+      2505,
+      364
+    ],
+    [
+      376,
+      369,
+      398
+    ],
+    [
+      362,
+      387,
+      370
+    ],
+    [
+      398,
+      383,
+      376
+    ],
+    [
+      386,
+      2260,
+      369
+    ],
+    [
+      398,
+      451,
+      383
+    ],
+    [
+      436,
+      383,
+      451
+    ],
+    [
+      362,
+      2505,
+      2400
+    ],
+    [
+      2504,
+      364,
+      368
+    ],
+    [
+      387,
+      362,
+      2400
+    ],
+    [
+      398,
+      369,
+      2260
+    ],
+    [
+      362,
+      364,
+      2505
+    ]
+  ],
+  "after": {
+    "sha256": "e76ef7aef73122ebcecca8c7d82ee46c697789c55be8a75fec431efc1aff1889",
+    "sampled_skin_points": 3549,
+    "uncovered_skin_points": 0,
+    "uncovered_by_clip": {
+      "idle1": 0,
+      "walk": 0,
+      "run": 0,
+      "jump": 0,
+      "slash1": 0,
+      "combat_idle": 0,
+      "sit_idle": 0
+    }
+  }
+}

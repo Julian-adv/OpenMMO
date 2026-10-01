@@ -1,0 +1,63 @@
+{
+  "date": "2026-10-02",
+  "provider": "Tripo Studio",
+  "generation_mode": "Smart Mesh",
+  "generation_mode_confirmed_by": "user",
+  "subscription": "User-reported approximately USD 20/month Studio subscription",
+  "license": "Subject to original Tripo Studio output terms; retain source and account provenance.",
+  "delivery_path_windows": "Y:\\public\\web_downloads\\leather+glove+3d+model.glb",
+  "delivery_path_linux": "/mnt/y/web_downloads/leather+glove+3d+model.glb",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/rogue_tripo_glove_v1/source.glb",
+    "sha256": "4609f42e762219126c0005cbbc45b746644a35b85b78df982ffada213a3dabdb"
+  },
+  "base": {
+    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b"
+  },
+  "interfaces": {
+    "path": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+    "sha256": "f3fc3aed9c5080cf26a294dac496293c89bce8f67466add18a7ef72b326f006b"
+  },
+  "previous_gloves": {
+    "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/gloves_rogue.glb",
+    "sha256": "060932d4b013d1f0d5f069c8d512e0210a2685b3ab13d4bba887628090c14fa2"
+  },
+  "rig_id": "human_male_01_mixamo_candidate_v2",
+  "reference_artwork": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/glove_rogue_right-dorsal-transparent-v2.png",
+      "sha256": "98a406734b86973b87f4744ca13c5b73cdb4eb6e74c647e5dba517b216c62dbd"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/glove_rogue_right-palmar-transparent-v2.png",
+      "sha256": "5bb30d73f6f52c5492e9229ceb290005223182b707fc52f39f6df61baf37b7a6"
+    }
+  ],
+  "artwork_record": "doc/assets/modular-rogue-glove-cutouts-sources.json",
+  "submitted_images_confirmed": false,
+  "generation_task_id": null,
+  "generation_model_version": null,
+  "submitted_prompt": null,
+  "requested_polygon_count_confirmed": null,
+  "export_observed": {
+    "format": "GLB 2.0",
+    "generator": "Tripo",
+    "triangles": 2043,
+    "vertices_including_uv_splits": 2189,
+    "texture_dimensions": [
+      2048,
+      2048
+    ],
+    "texture_format": "JPEG",
+    "rigged": false
+  },
+  "local_fitting": "Canonical-hand-derived 3mm shell, five open finger sleeves, source cuff and buckle retained. Dorsal/palmar texture charts baked from original Tripo texture; thumb-side detail simplified. Existing left wrist wrap preserved exactly.",
+  "retained": true,
+  "user_priority": {
+    "dorsal_cuff_and_buckle": "Primary visual priority",
+    "palmar_detail": "May remain rough/simple, confirmed 2026-10-02"
+  },
+  "fitting_script": "tools/fit-tripo-glove.py",
+  "texture_baking": "Local source-texture projection and atlas packing; no new AI texture generation"
+}

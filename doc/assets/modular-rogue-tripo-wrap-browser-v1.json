@@ -1,0 +1,40 @@
+{
+  "status": "Passed headless Chromium workshop check",
+  "date": "2026-10-02",
+  "gloves": {
+    "path": "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/gloves_rogue.glb",
+    "sha256": "80107110dabfcbd0c6bda685550e52b0133e6c62272c6ab660a6b24f11eb835a"
+  },
+  "served_asset_matches": true,
+  "mesh_info": [
+    {
+      "name": "glove_rogue_right",
+      "triangles": 1591,
+      "bones": 65,
+      "visible": true
+    },
+    {
+      "name": "wrap_rogue_left",
+      "triangles": 1904,
+      "bones": 65,
+      "visible": true
+    }
+  ],
+  "stats": "조합 24,527삼각형 · 표시 18,397 · 얼굴 1,505",
+  "clips": [
+    "idle1",
+    "walk",
+    "run",
+    "jump",
+    "slash1",
+    "combat_idle",
+    "sit_idle"
+  ],
+  "unequip_reequip_and_reattach": true,
+  "page_errors": [],
+  "waist_trim": {
+    "triangles": 1944,
+    "maxY": 1.1050000190734863
+  },
+  "bare_and_barbarian_waist_restored": true
+}

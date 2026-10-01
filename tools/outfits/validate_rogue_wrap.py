@@ -8,14 +8,11 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'tools'))
+from outfits.skinning import deform
+
 spec = importlib.util.spec_from_file_location('rogue_fit', ROOT / 'tools/fit-modular-rogue.py')
 fit = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fit)
-
-
-def deform(points, joints, weights, matrices):
-    homogeneous = np.column_stack([points, np.ones(len(points))])
-    return np.einsum('nkij,nj,nk->ni', matrices[joints], homogeneous, weights)[:, :3]
 
 
 def inside_skin(points, triangles, directions):

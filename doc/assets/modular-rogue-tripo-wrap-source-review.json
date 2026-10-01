@@ -1,0 +1,31 @@
+{
+  "status": "raw sources, normalized separately for display; not assembled or fitted",
+  "parts": [
+    {
+      "id": "wrap_rogue_left",
+      "source": "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/source.glb",
+      "sha256": "594950bbdf39e3f3e816c54b47b0cbbed5563645a68020ff2c042a6ac2fc997b",
+      "target_triangles": 700,
+      "triangles": 2011,
+      "mesh_count": 1,
+      "meshes": [
+        {
+          "name": "tripo_node_ed833d68-3982-4bbb-badf-eabbe372fcc3",
+          "components_vertex_counts": [
+            1025
+          ],
+          "boundary_edges": 37,
+          "nonmanifold_edges": 37,
+          "degenerate_faces": 0,
+          "collapsed_uv_triangles": 0
+        }
+      ],
+      "source_extent_blender": [
+        0.66650390625,
+        0.64013671875,
+        0.99951171875
+      ],
+      "rigged": false
+    }
+  ]
+}

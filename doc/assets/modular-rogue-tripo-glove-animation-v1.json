@@ -1,0 +1,217 @@
+{
+  "status": "Numeric runtime bind and skinning review; visual review is separate",
+  "sources": [
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/rogue_tripo_glove_v1/glove_rogue_right.glb",
+      "sha256": "409a4a231c02c8efd6d7e615d73ced1b7740d90c47334682ccaee764b1d9cb47"
+    },
+    {
+      "path": "doc/assets/modular-rogue-tripo-glove-fitting-v1.json",
+      "sha256": "ebc9c4f661b4eb447af09163fe2771cf594266d3939ae2d4c524184ca7a3b6ce"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/locomotion.glb",
+      "sha256": "3bd119edc5f175d7bad0346c4012a5c4a1f529475d1293bd2a3d9837aab31b3a"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/combat_melee.glb",
+      "sha256": "c70372c773f9613646ef5e2c01e138db682449bc50d353ee23567bb2007d16fc"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/social.glb",
+      "sha256": "a9efe7a2d388011cdc039ca6778c2b3a929b07953941ee7bb7c50a511d4b083d"
+    }
+  ],
+  "bind_modular_part_passed": true,
+  "samples_per_clip": 13,
+  "clips": [
+    {
+      "name": "idle1",
+      "maximum_edge_stretch_ratio": 3.1889239817962753,
+      "stretch_p99": 1.414494636945744,
+      "leather_core_strain_p95": 0.3900745015316749,
+      "worst_time": 4.166666507720947,
+      "worst_edge": {
+        "a": 1873,
+        "b": 1874,
+        "length": 0.0013117479174434958,
+        "rest": [
+          [
+            -0.5271863398687858,
+            0.8402943344264259,
+            -0.024607488855920633
+          ],
+          [
+            -0.5261020101079914,
+            0.8396258636488962,
+            -0.024920631616274107
+          ]
+        ]
+      },
+      "maximum_seam_gap_m": 1.846343550913979e-09,
+      "all_vertices_finite": true
+    },
+    {
+      "name": "walk",
+      "maximum_edge_stretch_ratio": 3.1889323516567485,
+      "stretch_p99": 1.607785489601115,
+      "leather_core_strain_p95": 0.3900744988210455,
+      "worst_time": 0.34444443384806317,
+      "worst_edge": {
+        "a": 1873,
+        "b": 1874,
+        "length": 0.0013117479174434958,
+        "rest": [
+          [
+            -0.5271863398687858,
+            0.8402943344264259,
+            -0.024607488855920633
+          ],
+          [
+            -0.5261020101079914,
+            0.8396258636488962,
+            -0.024920631616274107
+          ]
+        ]
+      },
+      "maximum_seam_gap_m": 1.824165783068567e-09,
+      "all_vertices_finite": true
+    },
+    {
+      "name": "run",
+      "maximum_edge_stretch_ratio": 3.188933506068968,
+      "stretch_p99": 1.4763049878568426,
+      "leather_core_strain_p95": 0.390074494905412,
+      "worst_time": 0.052777777115503945,
+      "worst_edge": {
+        "a": 1873,
+        "b": 1874,
+        "length": 0.0013117479174434958,
+        "rest": [
+          [
+            -0.5271863398687858,
+            0.8402943344264259,
+            -0.024607488855920633
+          ],
+          [
+            -0.5261020101079914,
+            0.8396258636488962,
+            -0.024920631616274107
+          ]
+        ]
+      },
+      "maximum_seam_gap_m": 1.8422877952190429e-09,
+      "all_vertices_finite": true
+    },
+    {
+      "name": "jump",
+      "maximum_edge_stretch_ratio": 3.1889408311251954,
+      "stretch_p99": 1.5416711467845703,
+      "leather_core_strain_p95": 0.3900744983263652,
+      "worst_time": 0.6333333253860474,
+      "worst_edge": {
+        "a": 1873,
+        "b": 1874,
+        "length": 0.0013117479174434958,
+        "rest": [
+          [
+            -0.5271863398687858,
+            0.8402943344264259,
+            -0.024607488855920633
+          ],
+          [
+            -0.5261020101079914,
+            0.8396258636488962,
+            -0.024920631616274107
+          ]
+        ]
+      },
+      "maximum_seam_gap_m": 1.826259627871068e-09,
+      "all_vertices_finite": true
+    },
+    {
+      "name": "slash1",
+      "maximum_edge_stretch_ratio": 3.188936546626166,
+      "stretch_p99": 1.537516401856038,
+      "leather_core_strain_p95": 0.39007448706731607,
+      "worst_time": 0.38333332538604736,
+      "worst_edge": {
+        "a": 1873,
+        "b": 1874,
+        "length": 0.0013117479174434958,
+        "rest": [
+          [
+            -0.5271863398687858,
+            0.8402943344264259,
+            -0.024607488855920633
+          ],
+          [
+            -0.5261020101079914,
+            0.8396258636488962,
+            -0.024920631616274107
+          ]
+        ]
+      },
+      "maximum_seam_gap_m": 1.83011609488673e-09,
+      "all_vertices_finite": true
+    },
+    {
+      "name": "combat_idle",
+      "maximum_edge_stretch_ratio": 3.188929713320007,
+      "stretch_p99": 1.4480754154253477,
+      "leather_core_strain_p95": 0.3900745015316548,
+      "worst_time": 0.21388888359069824,
+      "worst_edge": {
+        "a": 1873,
+        "b": 1874,
+        "length": 0.0013117479174434958,
+        "rest": [
+          [
+            -0.5271863398687858,
+            0.8402943344264259,
+            -0.024607488855920633
+          ],
+          [
+            -0.5261020101079914,
+            0.8396258636488962,
+            -0.024920631616274107
+          ]
+        ]
+      },
+      "maximum_seam_gap_m": 1.8264661978439891e-09,
+      "all_vertices_finite": true
+    },
+    {
+      "name": "sit_idle",
+      "maximum_edge_stretch_ratio": 2.474403414653687,
+      "stretch_p99": 1.3648552033110761,
+      "leather_core_strain_p95": 0.20267857244617615,
+      "worst_time": 4.333333492279053,
+      "worst_edge": {
+        "a": 1982,
+        "b": 1980,
+        "length": 0.003931892566034517,
+        "rest": [
+          [
+            -0.5333942213781978,
+            0.8440964502932776,
+            -0.025661827717275144
+          ],
+          [
+            -0.5303079958626615,
+            0.8422152429089923,
+            -0.02411390976227859
+          ]
+        ]
+      },
+      "maximum_seam_gap_m": 1.8626448619148868e-09,
+      "all_vertices_finite": true
+    }
+  ],
+  "strain_region": "Right palm and short finger sleeves",
+  "finger_bone_isolation_passed": true
+}

@@ -1,0 +1,107 @@
+{
+  "date": "2026-10-02",
+  "scope": "14 canonical skin triangles at the right index/thumb web; three interior points per triangle, outward rays to glove within 30mm",
+  "base_sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b",
+  "validation_poses_sha256": "bb193bfb9035e9e6f6c708725e45ec0584ff148030289cc523417291284e20fc",
+  "poses": 91,
+  "skin_triangles": [
+    [
+      1982,
+      1218,
+      1122
+    ],
+    [
+      1122,
+      1218,
+      1126
+    ],
+    [
+      1122,
+      2107,
+      1982
+    ],
+    [
+      1226,
+      1224,
+      1219
+    ],
+    [
+      2108,
+      2106,
+      1212
+    ],
+    [
+      2108,
+      1224,
+      1230
+    ],
+    [
+      1251,
+      1230,
+      1224
+    ],
+    [
+      1226,
+      1251,
+      1224
+    ],
+    [
+      1230,
+      2106,
+      2108
+    ],
+    [
+      1217,
+      1982,
+      2107
+    ],
+    [
+      1982,
+      1217,
+      1218
+    ],
+    [
+      1122,
+      1213,
+      2107
+    ],
+    [
+      2108,
+      1212,
+      1224
+    ],
+    [
+      1230,
+      1215,
+      2106
+    ]
+  ],
+  "after": {
+    "sha256": "409a4a231c02c8efd6d7e615d73ced1b7740d90c47334682ccaee764b1d9cb47",
+    "sampled_skin_points": 3822,
+    "uncovered_skin_points": 0,
+    "uncovered_by_clip": {
+      "idle1": 0,
+      "walk": 0,
+      "run": 0,
+      "jump": 0,
+      "slash1": 0,
+      "combat_idle": 0,
+      "sit_idle": 0
+    }
+  },
+  "before": {
+    "sha256": "092e4b251098c3a06aa36695483fd5271dd66fa8e503a2c298e3e032c1cdec9c",
+    "sampled_skin_points": 3822,
+    "uncovered_skin_points": 2808,
+    "uncovered_by_clip": {
+      "idle1": 403,
+      "walk": 403,
+      "run": 403,
+      "jump": 403,
+      "slash1": 403,
+      "combat_idle": 403,
+      "sit_idle": 390
+    }
+  }
+}

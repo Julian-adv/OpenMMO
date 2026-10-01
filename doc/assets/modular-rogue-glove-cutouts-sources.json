@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-02",
+  "service": "OpenAI Codex built-in ImageGen",
+  "tier": "ChatGPT Pro 20x",
+  "license": "OpenAI generated output terms; original concept and body reference provenance inherited.",
+  "status": "Transparent right glove views for Tripo reference; no 3D generation or runtime change.",
+  "operation": "AI background extraction from separated v2 views; preserve generated alpha. Not a lossless crop.",
+  "source_record": "doc/assets/modular-rogue-parts-sources.json",
+  "outputs": [
+    {
+      "view": "dorsal",
+      "edit_target": {
+        "path": "doc/images/characters/modular_human_male_01/parts/rogue/glove_rogue_right-dorsal-v2.png",
+        "sha256": "99a1fc35359747ef1b4ceceed87ee4fab7a94112cb12ab36d72afd716b4bd0b3"
+      },
+      "output": {
+        "path": "doc/images/characters/modular_human_male_01/parts/rogue/glove_rogue_right-dorsal-transparent-v2.png",
+        "sha256": "98a406734b86973b87f4744ca13c5b73cdb4eb6e74c647e5dba517b216c62dbd",
+        "dimensions": [
+          1086,
+          1448
+        ],
+        "mode": "RGBA",
+        "transparent_background": true
+      },
+      "prompt": "Use case: background-extraction.\nAsset type: isolated right-hand fingerless leather glove back-of-hand (dorsal) view for Tripo 3D modeling.\nInput image 1: EDIT TARGET, the existing separated dorsal glove concept.\nPrimary request: Remove ONLY the surrounding black/brown studio background and its gradient glow, producing a clean cutout on an ACTUAL transparent alpha background. Preserve the SAME single glove exactly as depicted: right-handedness, viewpoint, position, scale, silhouette, all five hollow finger sleeves, hollow wrist cuff, leather grain, stitches, seams, buckle/strap details, colors and original lighting on the glove. Keep the dark inner leather surfaces inside the cuff and finger tubes; these are part of the glove. Only visible exterior background and true background gaps should become transparent.\nComposition: maintain the portrait framing and full uncropped glove with margins, wrist at top, fingers at bottom. Do not mirror, rotate, redraw, recolor or redesign the glove. No halo, no gradient, no shadow outside the silhouette, no matte rectangle, no checkerboard baked into pixels, no extra objects, text or watermark.\nCritical framing correction: The glove must be ENTIRELY inside the canvas. Keep the original glove's full outline, with transparent padding at least 5% of image width on BOTH left and right and at least 5% height top and bottom. Reduce its displayed size if necessary to ensure these margins; never zoom in. Do not crop off the little-finger opening or the thumb edge. Background removal only, no glove redesign."
+    },
+    {
+      "view": "palmar",
+      "edit_target": {
+        "path": "doc/images/characters/modular_human_male_01/parts/rogue/glove_rogue_right-palmar-v2.png",
+        "sha256": "a7725e65d49ed5f77c2a17991c2328c4b9dbb56d7c736ffaf9809cc47929723a"
+      },
+      "output": {
+        "path": "doc/images/characters/modular_human_male_01/parts/rogue/glove_rogue_right-palmar-transparent-v2.png",
+        "sha256": "5bb30d73f6f52c5492e9229ceb290005223182b707fc52f39f6df61baf37b7a6",
+        "dimensions": [
+          1086,
+          1448
+        ],
+        "mode": "RGBA",
+        "transparent_background": true
+      },
+      "prompt": "Use case: background-extraction.\nAsset type: isolated right-hand fingerless leather glove palm (palmar) view for Tripo 3D modeling.\nInput image 1: EDIT TARGET, the existing separated palmar glove concept.\nPrimary request: Remove ONLY the surrounding black/brown studio background and its gradient glow, producing a clean cutout on an ACTUAL transparent alpha background. Preserve the SAME single glove exactly as depicted: right-handedness, viewpoint, position, scale, silhouette, all five hollow finger sleeves, hollow wrist cuff, leather grain, stitches, seams, buckle/strap details, colors and original lighting on the glove. Keep the dark inner leather surfaces inside the cuff and finger tubes; these are part of the glove. Only visible exterior background and true background gaps should become transparent.\nComposition: maintain the portrait framing and full uncropped glove with margins, wrist at top, fingers at bottom. Do not mirror, rotate, redraw, recolor or redesign the glove. No halo, no gradient, no shadow outside the silhouette, no matte rectangle, no checkerboard baked into pixels, no extra objects, text or watermark."
+    }
+  ],
+  "iterations": [
+    {
+      "view": "dorsal",
+      "status": "First output replaced by a framing correction; not retained in repository.",
+      "output_sha256": "6a2a1a9f4c4c5bf253bbc47cb78366c8d48084c18fe9a1af817e1d0821230e3f",
+      "prompt": "Use case: background-extraction.\nAsset type: isolated right-hand fingerless leather glove back-of-hand (dorsal) view for Tripo 3D modeling.\nInput image 1: EDIT TARGET, the existing separated dorsal glove concept.\nPrimary request: Remove ONLY the surrounding black/brown studio background and its gradient glow, producing a clean cutout on an ACTUAL transparent alpha background. Preserve the SAME single glove exactly as depicted: right-handedness, viewpoint, position, scale, silhouette, all five hollow finger sleeves, hollow wrist cuff, leather grain, stitches, seams, buckle/strap details, colors and original lighting on the glove. Keep the dark inner leather surfaces inside the cuff and finger tubes; these are part of the glove. Only visible exterior background and true background gaps should become transparent.\nComposition: maintain the portrait framing and full uncropped glove with margins, wrist at top, fingers at bottom. Do not mirror, rotate, redraw, recolor or redesign the glove. No halo, no gradient, no shadow outside the silhouette, no matte rectangle, no checkerboard baked into pixels, no extra objects, text or watermark."
+    }
+  ],
+  "validation": {
+    "rgba_verified": true,
+    "transparent_corners_verified": true,
+    "visual_review": "Both outputs show isolated right-glove views without the studio gradient, with hollow cuff and finger openings."
+  }
+}

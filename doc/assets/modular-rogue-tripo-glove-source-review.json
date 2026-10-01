@@ -1,0 +1,27 @@
+{
+  "status": "Raw Tripo source; not fitted or rigged",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/rogue_tripo_glove_v1/source.glb",
+    "sha256": "4609f42e762219126c0005cbbc45b746644a35b85b78df982ffada213a3dabdb"
+  },
+  "triangles": 2043,
+  "mesh_count": 1,
+  "meshes": [
+    {
+      "name": "tripo_node_f88730bf-0d08-4a37-8f93-d000547a7e53",
+      "components_vertex_counts": [
+        1040
+      ],
+      "boundary_edges": 35,
+      "nonmanifold_edges": 35,
+      "degenerate_faces": 0,
+      "collapsed_uv_triangles": 0
+    }
+  ],
+  "source_extent_blender": [
+    0.87548828125,
+    0.78466796875,
+    0.99951171875
+  ],
+  "rigged": false
+}
