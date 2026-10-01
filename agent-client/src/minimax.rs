@@ -93,6 +93,9 @@ impl MiniMaxConfig {
         if self.model.is_empty() {
             anyhow::bail!("minimax.model is not set");
         }
+        if self.model == "MiniMax-M2.7" && self.thinking.is_some() {
+            anyhow::bail!("MiniMax-M2.7 thinking is always on; leave minimax.thinking unset");
+        }
 
         let api_key = resolve_api_key(&self.api_key, "MINIMAX_API_KEY");
         if api_key.is_empty() {
@@ -378,7 +381,7 @@ mod tests {
         let config: MiniMaxConfig = toml::from_str(
             r#"
 api_key = "test-key"
-model = "MiniMax-M2.7"
+model = "MiniMax-M3"
 region = "cn_zh"
 protocol = "openai"
 thinking = "disabled"
@@ -388,6 +391,31 @@ thinking = "disabled"
         assert_eq!(config.region, MiniMaxRegion::CnZh);
         assert_eq!(config.protocol, MiniMaxProtocol::Openai);
         assert_eq!(config.thinking, Some(MiniMaxThinking::Disabled));
+        assert!(MiniMaxInvoker::new(&config, String::new()).is_ok());
+    }
+
+    #[test]
+    fn always_on_model_rejects_explicit_thinking_modes() {
+        for protocol in ["anthropic", "openai"] {
+            for thinking in ["adaptive", "disabled"] {
+                let config: MiniMaxConfig = toml::from_str(&format!(
+                    r#"
+api_key = "test-key"
+model = "MiniMax-M2.7"
+protocol = "{protocol}"
+thinking = "{thinking}"
+"#,
+                ))
+                .unwrap();
+                let error = MiniMaxInvoker::new(&config, String::new())
+                    .err()
+                    .expect("explicit thinking mode must be rejected");
+                assert_eq!(
+                    error.to_string(),
+                    "MiniMax-M2.7 thinking is always on; leave minimax.thinking unset"
+                );
+            }
+        }
     }
 
     #[test]

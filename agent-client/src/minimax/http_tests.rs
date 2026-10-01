@@ -5,7 +5,7 @@ use axum::{http::HeaderMap, routing::post, Json, Router};
 use serde_json::{json, Value};
 use tokio::sync::{mpsc, Mutex};
 
-use super::{MiniMaxConfig, MiniMaxInvoker, MiniMaxProtocol};
+use super::{MiniMaxConfig, MiniMaxInvoker, MiniMaxProtocol, MiniMaxThinking};
 use crate::driver::LlmBackend;
 
 struct MockApi {
@@ -17,9 +17,20 @@ struct MockApi {
 
 impl MockApi {
     async fn start(protocol: MiniMaxProtocol, responses: Vec<Value>) -> Self {
+        Self::start_with_config(
+            MiniMaxConfig {
+                protocol,
+                ..Default::default()
+            },
+            responses,
+        )
+        .await
+    }
+
+    async fn start_with_config(config: MiniMaxConfig, responses: Vec<Value>) -> Self {
         let responses = Arc::new(Mutex::new(VecDeque::from(responses)));
         let (tx, requests) = mpsc::unbounded_channel();
-        let path = match protocol {
+        let path = match config.protocol {
             MiniMaxProtocol::Openai => "/chat/completions",
             MiniMaxProtocol::Anthropic => "/v1/messages",
         };
@@ -42,10 +53,9 @@ impl MockApi {
         });
         let config = MiniMaxConfig {
             api_key: "test-key".into(),
-            protocol,
             global_openai_base_url: base_url.clone(),
             global_anthropic_base_url: base_url.clone(),
-            ..Default::default()
+            ..config
         };
         Self {
             base_url,
@@ -70,6 +80,36 @@ fn reply(protocol: MiniMaxProtocol, text: &str) -> Value {
         MiniMaxProtocol::Anthropic => json!({
             "content": [{"type": "text", "text": text}], "stop_reason": "end_turn"
         }),
+    }
+}
+
+#[tokio::test]
+async fn thinking_configuration_respects_model_capabilities_in_both_protocols() {
+    for protocol in [MiniMaxProtocol::Anthropic, MiniMaxProtocol::Openai] {
+        for (model, thinking) in [
+            ("MiniMax-M2.7", None),
+            ("MiniMax-M3", None),
+            ("MiniMax-M3", Some(MiniMaxThinking::Adaptive)),
+            ("MiniMax-M3", Some(MiniMaxThinking::Disabled)),
+        ] {
+            let mut api = MockApi::start_with_config(
+                MiniMaxConfig {
+                    model: model.into(),
+                    protocol,
+                    thinking,
+                    ..Default::default()
+                },
+                vec![reply(protocol, "ok")],
+            )
+            .await;
+            assert_eq!(api.invoker.send_message("hello").await.unwrap(), "ok");
+            let request = api.requests.recv().await.unwrap();
+            assert_eq!(request["model"], model);
+            match thinking {
+                Some(value) => assert_eq!(request["thinking"]["type"], value.as_str()),
+                None => assert!(request.get("thinking").is_none()),
+            }
+        }
     }
 }
 
