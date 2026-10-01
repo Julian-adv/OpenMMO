@@ -55,10 +55,11 @@ describe('rogue workshop preview', () => {
       expect(selected.has(id)).toBe(true)
       expect(parts.get(id)![0].visible).toBe(true)
     }
-    for (const region of ['forearms', 'hands', 'head', 'neck'])
+    for (const region of ['forearms', 'hands', 'head'])
       expect(visible(region)).toBe(true)
     for (const region of [
       'torso',
+      'neck',
       'upper_arms',
       'legs',
       'ankles',
@@ -86,6 +87,7 @@ describe('rogue workshop preview', () => {
     for (const id of ROGUE_PREVIEW_PARTS) expect(selected.has(id)).toBe(false)
     for (const region of [
       'torso',
+      'neck',
       'upper_arms',
       'hands',
       'legs',

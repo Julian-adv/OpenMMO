@@ -73,7 +73,7 @@ def main(default_images):
         if obj.type != 'MESH':
             continue
         region = obj.get('region')
-        obj.hide_render = region == 'boot_ankles' or (not args.unmasked and region in ['torso', 'upper_arms', 'legs', 'feet', 'ankles'])
+        obj.hide_render = region == 'boot_ankles' or (not args.unmasked and region in ['torso', 'upper_arms', 'neck', 'legs', 'feet', 'ankles'])
         obj.hide_set(obj.hide_render)
     for name in ['top_rogue', 'pants_rogue', 'gloves_rogue', 'boots_rogue']:
         import_part(args.output / f'{name}.glb', rig)
@@ -130,7 +130,9 @@ def main(default_images):
              ('side', (5, -.2, 1.1), (0, 0, .98), 2.13),
              ('hands', (-2.8, -2, 1.4), (-.44, .035, 1.02), .48),
              ('connections', (1.9, -4, 1.2), (0, 0, 1.2), 1.0)]
-    for name, location, target, scale in views:
+    sleeve_views = [('sleeve-left', (3, -3, 1.6), (.28, 0, 1.36), .64),
+                    ('sleeve-right', (-3, -3, 1.6), (-.28, 0, 1.36), .64)]
+    for name, location, target, scale in views + sleeve_views:
         camera.location = location
         camera.rotation_euler = (Vector(target) - camera.location).to_track_quat('-Z', 'Y').to_euler()
         camera.data.ortho_scale = scale
@@ -181,6 +183,25 @@ def main(default_images):
             camera.data.ortho_scale = max(2.3, height * 1.15, width * 900 / 700 * 1.15)
             scene.render.filepath = str(args.images / (snapshot['clip'] + '.png'))
             bpy.ops.render.render(write_still=True)
+            if snapshot['clip'] == 'sit_idle':
+                def mesh_center(name):
+                    obj = bpy.data.objects.get(name)
+                    evaluated = obj.evaluated_get(depsgraph)
+                    corners = [evaluated.matrix_world @ Vector(corner) for corner in evaluated.bound_box]
+                    return sum(corners, Vector()) / len(corners)
+                vest_center = mesh_center('vest_rogue')
+                details = [
+                    ('sit-back', mesh_center('scarf_rogue'), Vector((2, 4, 1)), .82),
+                    ('sit-side', vest_center + Vector((.15, 0, .10)), Vector((4, 1, .6)), .72),
+                    ('sit-hem', vest_center - Vector((0, 0, .17)), Vector((2, -4, .1)), .64),
+                    ('sit-wrist', mesh_center('wrap_rogue_left'), Vector((2, -3, .5)), .40),
+                ]
+                for name, target, offset, scale in details:
+                    camera.location = target + offset
+                    camera.rotation_euler = (target - camera.location).to_track_quat('-Z', 'Y').to_euler()
+                    camera.data.ortho_scale = scale
+                    scene.render.filepath = str(args.images / (name + '.png'))
+                    bpy.ops.render.render(write_still=True)
         action = rig.animation_data.action
         action.name = 'Review snapshots - sampled game poses, not continuous playback'
         for layer in action.layers:
@@ -212,10 +233,17 @@ def main(default_images):
         rest = ROOT / (candidate['review_image_prefix'] + '-rest.png')
         contact_sheet(args.images, [v[0] for v in views], ['FRONT - CANDIDATE', 'BACK', 'SIDE', 'HAND - CLEANUP PENDING', 'WAIST / UV REVIEW'], 5, rest)
         records = [file_record(rest)]
+        sleeves = ROOT / (candidate['review_image_prefix'] + '-sleeves.png')
+        contact_sheet(args.images, [v[0] for v in sleeve_views], ['LEFT SLEEVE / LONG GLOVE CUT', 'RIGHT SLEEVE / LONG GLOVE CUT'], 2, sleeves)
+        records.append(file_record(sleeves))
         if args.animations:
             motion = ROOT / (candidate['review_image_prefix'] + '-motion.png')
             contact_sheet(args.images, [p['clip'] for p in snapshots], ['IDLE - GAME CLIP SAMPLE', 'WALK', 'RUN', 'JUMP', 'SLASH', 'SIT'], 3, motion)
             records.append(file_record(motion))
+            fixes = ROOT / (candidate['review_image_prefix'] + '-fixes.png')
+            contact_sheet(args.images, ['sit-back', 'sit-side', 'sit-hem', 'sit-wrist'],
+                          ['BACK / SCARF', 'UNDERARM / LAYERS', 'CONTINUOUS HEM', 'WRIST / FOLDED CUFF'], 2, fixes)
+            records.append(file_record(fixes))
         record = dict(status=scene['review_status'], blender_version=bpy.app.version_string,
                       editable=file_record(blend), images=records,
                       fitting_record=file_record(ROOT / candidate['report']),

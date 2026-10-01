@@ -59,7 +59,7 @@ export function showPreviewOutfit(
   for (const id of ROGUE_PREVIEW_PARTS)
     for (const mesh of parts.get(id) ?? []) mesh.visible = selected.has(id)
   const hidden = new Set([
-    ...(top === 'rogue' ? ['torso', 'upper_arms'] : []),
+    ...(top === 'rogue' ? ['torso', 'upper_arms', 'neck'] : []),
     ...(pants === 'rogue' ? ['legs', 'ankles', 'boot_ankles'] : []),
   ])
   for (const mesh of body)

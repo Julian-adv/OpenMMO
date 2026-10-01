@@ -1,0 +1,655 @@
+{
+  "poses": 92,
+  "covered_skin_vertices": 39,
+  "minimum_wrap_clearance_m": 0.0017086603931820833,
+  "inside_skin_vertices": 0,
+  "maximum_skin_signed_distance_m": -0.006134895133087112,
+  "samples": [
+    {
+      "clip": "rest",
+      "time": 0,
+      "minimum_wrap_clearance_m": 0.010132522592939534,
+      "maximum_skin_signed_distance_m": -0.011291418360178293,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 0,
+      "minimum_wrap_clearance_m": 0.010308377080606093,
+      "maximum_skin_signed_distance_m": -0.011273448931173814,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 0.6944444179534912,
+      "minimum_wrap_clearance_m": 0.010310092699705009,
+      "maximum_skin_signed_distance_m": -0.011235164928722334,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 1.3888888359069824,
+      "minimum_wrap_clearance_m": 0.010305906069789771,
+      "maximum_skin_signed_distance_m": -0.011244028458810179,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 2.0833332538604736,
+      "minimum_wrap_clearance_m": 0.010303140732179934,
+      "maximum_skin_signed_distance_m": -0.01124701585845842,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 2.777777671813965,
+      "minimum_wrap_clearance_m": 0.010302081817840468,
+      "maximum_skin_signed_distance_m": -0.011248142882270395,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 3.472222089767456,
+      "minimum_wrap_clearance_m": 0.010316295966489171,
+      "maximum_skin_signed_distance_m": -0.01127188536123043,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 4.166666507720947,
+      "minimum_wrap_clearance_m": 0.01032859999232362,
+      "maximum_skin_signed_distance_m": -0.011269587057264226,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 4.8611109256744385,
+      "minimum_wrap_clearance_m": 0.010310149039246572,
+      "maximum_skin_signed_distance_m": -0.011278226428655329,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 5.55555534362793,
+      "minimum_wrap_clearance_m": 0.010299626214743797,
+      "maximum_skin_signed_distance_m": -0.011252235765332956,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 6.249999761581421,
+      "minimum_wrap_clearance_m": 0.010285956502674403,
+      "maximum_skin_signed_distance_m": -0.011269923690680052,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 6.944444179534912,
+      "minimum_wrap_clearance_m": 0.010295840340347313,
+      "maximum_skin_signed_distance_m": -0.011255292597492233,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 7.638888597488403,
+      "minimum_wrap_clearance_m": 0.010311233586595981,
+      "maximum_skin_signed_distance_m": -0.011235260220748272,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 8.333333015441895,
+      "minimum_wrap_clearance_m": 0.010308377049661534,
+      "maximum_skin_signed_distance_m": -0.01123852786120001,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "walk",
+      "time": 0,
+      "minimum_wrap_clearance_m": 0.009036385481947587,
+      "maximum_skin_signed_distance_m": -0.009647363489722529,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "walk",
+      "time": 0.08611110846201579,
+      "minimum_wrap_clearance_m": 0.009043914233944,
+      "maximum_skin_signed_distance_m": -0.00987849477015292,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "walk",
+      "time": 0.17222221692403158,
+      "minimum_wrap_clearance_m": 0.008997958470592987,
+      "maximum_skin_signed_distance_m": -0.009412447012871649,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "walk",
+      "time": 0.25833332538604736,
+      "minimum_wrap_clearance_m": 0.00880076884536027,
+      "maximum_skin_signed_distance_m": -0.008004938402527252,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "walk",
+      "time": 0.34444443384806317,
+      "minimum_wrap_clearance_m": 0.006169326472884848,
+      "maximum_skin_signed_distance_m": -0.0063827931874115215,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "walk",
+      "time": 0.4305555423100789,
+      "minimum_wrap_clearance_m": 0.005915562278314359,
+      "maximum_skin_signed_distance_m": -0.006134895133087112,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "walk",
+      "time": 0.5166666507720947,
+      "minimum_wrap_clearance_m": 0.008978747420652324,
+      "maximum_skin_signed_distance_m": -0.008169543418321854,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "walk",
+      "time": 0.6027777592341105,
+      "minimum_wrap_clearance_m": 0.009295019330679553,
+      "maximum_skin_signed_distance_m": -0.009108572526687673,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "walk",
+      "time": 0.6888888676961263,
+      "minimum_wrap_clearance_m": 0.009415542218978641,
+      "maximum_skin_signed_distance_m": -0.010094526393131777,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "walk",
+      "time": 0.7749999761581421,
+      "minimum_wrap_clearance_m": 0.009245714550974738,
+      "maximum_skin_signed_distance_m": -0.010488493512398374,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "walk",
+      "time": 0.8611110846201578,
+      "minimum_wrap_clearance_m": 0.009128062447018968,
+      "maximum_skin_signed_distance_m": -0.009958751448518547,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "walk",
+      "time": 0.9472221930821737,
+      "minimum_wrap_clearance_m": 0.009160159509630544,
+      "maximum_skin_signed_distance_m": -0.00994401201848598,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "walk",
+      "time": 1.0333333015441895,
+      "minimum_wrap_clearance_m": 0.009036385706752572,
+      "maximum_skin_signed_distance_m": -0.009647363534552787,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "run",
+      "time": 0,
+      "minimum_wrap_clearance_m": 0.010064225018060742,
+      "maximum_skin_signed_distance_m": -0.011159924768625802,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "run",
+      "time": 0.052777777115503945,
+      "minimum_wrap_clearance_m": 0.010168793254651367,
+      "maximum_skin_signed_distance_m": -0.0112184160844877,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "run",
+      "time": 0.10555555423100789,
+      "minimum_wrap_clearance_m": 0.009967515166588248,
+      "maximum_skin_signed_distance_m": -0.011221404032323376,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "run",
+      "time": 0.15833333134651184,
+      "minimum_wrap_clearance_m": 0.009548746076824615,
+      "maximum_skin_signed_distance_m": -0.011078980334672927,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "run",
+      "time": 0.21111110846201578,
+      "minimum_wrap_clearance_m": 0.009617969065159332,
+      "maximum_skin_signed_distance_m": -0.010728710642187616,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "run",
+      "time": 0.2638888855775197,
+      "minimum_wrap_clearance_m": 0.009516353317076422,
+      "maximum_skin_signed_distance_m": -0.010325266363440498,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "run",
+      "time": 0.3166666626930237,
+      "minimum_wrap_clearance_m": 0.009822589757863447,
+      "maximum_skin_signed_distance_m": -0.010539684599228875,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "run",
+      "time": 0.36944443980852765,
+      "minimum_wrap_clearance_m": 0.009644957172791511,
+      "maximum_skin_signed_distance_m": -0.010362522335686707,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "run",
+      "time": 0.42222221692403156,
+      "minimum_wrap_clearance_m": 0.009614863522145857,
+      "maximum_skin_signed_distance_m": -0.01015595849456408,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "run",
+      "time": 0.4749999940395355,
+      "minimum_wrap_clearance_m": 0.00985471695358923,
+      "maximum_skin_signed_distance_m": -0.010636816796642409,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "run",
+      "time": 0.5277777711550394,
+      "minimum_wrap_clearance_m": 0.009989590953145399,
+      "maximum_skin_signed_distance_m": -0.010995092603728987,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "run",
+      "time": 0.5805555482705435,
+      "minimum_wrap_clearance_m": 0.009971805588935598,
+      "maximum_skin_signed_distance_m": -0.011076926424828278,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "run",
+      "time": 0.6333333253860474,
+      "minimum_wrap_clearance_m": 0.010064224211199773,
+      "maximum_skin_signed_distance_m": -0.011159923744124212,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "jump",
+      "time": 0,
+      "minimum_wrap_clearance_m": 0.00858925277692879,
+      "maximum_skin_signed_distance_m": -0.009849058155176315,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "jump",
+      "time": 0.15833333134651184,
+      "minimum_wrap_clearance_m": 0.008380865709645543,
+      "maximum_skin_signed_distance_m": -0.009198629537057097,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "jump",
+      "time": 0.3166666626930237,
+      "minimum_wrap_clearance_m": 0.00946940282808697,
+      "maximum_skin_signed_distance_m": -0.00955483490521394,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "jump",
+      "time": 0.4749999940395355,
+      "minimum_wrap_clearance_m": 0.009345105861545524,
+      "maximum_skin_signed_distance_m": -0.010817419486963596,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "jump",
+      "time": 0.6333333253860474,
+      "minimum_wrap_clearance_m": 0.0017086603931820833,
+      "maximum_skin_signed_distance_m": -0.006458905334052118,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "jump",
+      "time": 0.7916666567325592,
+      "minimum_wrap_clearance_m": 0.006845695163542205,
+      "maximum_skin_signed_distance_m": -0.009460649029296143,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "jump",
+      "time": 0.949999988079071,
+      "minimum_wrap_clearance_m": 0.007807607395054082,
+      "maximum_skin_signed_distance_m": -0.009498870389615473,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "jump",
+      "time": 1.1083333194255829,
+      "minimum_wrap_clearance_m": 0.008047879869391416,
+      "maximum_skin_signed_distance_m": -0.009596045169908125,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "jump",
+      "time": 1.2666666507720947,
+      "minimum_wrap_clearance_m": 0.008528026231338887,
+      "maximum_skin_signed_distance_m": -0.00825832230650054,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "jump",
+      "time": 1.4249999821186066,
+      "minimum_wrap_clearance_m": 0.008896974350251339,
+      "maximum_skin_signed_distance_m": -0.009242681207905525,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "jump",
+      "time": 1.5833333134651184,
+      "minimum_wrap_clearance_m": 0.00873423398466277,
+      "maximum_skin_signed_distance_m": -0.009680618036874028,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "jump",
+      "time": 1.7416666448116302,
+      "minimum_wrap_clearance_m": 0.008613243147140038,
+      "maximum_skin_signed_distance_m": -0.009896174167128508,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "jump",
+      "time": 1.899999976158142,
+      "minimum_wrap_clearance_m": 0.008588881142911842,
+      "maximum_skin_signed_distance_m": -0.009848977173427522,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "slash1",
+      "time": 0,
+      "minimum_wrap_clearance_m": 0.010027125200820887,
+      "maximum_skin_signed_distance_m": -0.01066218521855582,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "slash1",
+      "time": 0.12777777512868246,
+      "minimum_wrap_clearance_m": 0.008540473784520277,
+      "maximum_skin_signed_distance_m": -0.009631109709187452,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "slash1",
+      "time": 0.2555555502573649,
+      "minimum_wrap_clearance_m": 0.007516230677641354,
+      "maximum_skin_signed_distance_m": -0.009235501129177084,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "slash1",
+      "time": 0.38333332538604736,
+      "minimum_wrap_clearance_m": 0.009794803342911062,
+      "maximum_skin_signed_distance_m": -0.010414796336350885,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "slash1",
+      "time": 0.5111111005147299,
+      "minimum_wrap_clearance_m": 0.010080294659094559,
+      "maximum_skin_signed_distance_m": -0.010666554669086144,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "slash1",
+      "time": 0.6388888756434122,
+      "minimum_wrap_clearance_m": 0.007223485623196595,
+      "maximum_skin_signed_distance_m": -0.008173904961584226,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "slash1",
+      "time": 0.7666666507720947,
+      "minimum_wrap_clearance_m": 0.008399190462593588,
+      "maximum_skin_signed_distance_m": -0.009952369545802801,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "slash1",
+      "time": 0.8944444259007772,
+      "minimum_wrap_clearance_m": 0.007957390171218085,
+      "maximum_skin_signed_distance_m": -0.009592392633968603,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "slash1",
+      "time": 1.0222222010294597,
+      "minimum_wrap_clearance_m": 0.009076906541044712,
+      "maximum_skin_signed_distance_m": -0.010231288293817642,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "slash1",
+      "time": 1.149999976158142,
+      "minimum_wrap_clearance_m": 0.008327663537872504,
+      "maximum_skin_signed_distance_m": -0.009485752904129353,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "slash1",
+      "time": 1.2777777512868245,
+      "minimum_wrap_clearance_m": 0.010063016078102944,
+      "maximum_skin_signed_distance_m": -0.010391662760253037,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "slash1",
+      "time": 1.405555526415507,
+      "minimum_wrap_clearance_m": 0.010064637477722587,
+      "maximum_skin_signed_distance_m": -0.010627711298359117,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "slash1",
+      "time": 1.5333333015441895,
+      "minimum_wrap_clearance_m": 0.010027125996973783,
+      "maximum_skin_signed_distance_m": -0.01066218598404559,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "combat_idle",
+      "time": 0,
+      "minimum_wrap_clearance_m": 0.010118053250951739,
+      "maximum_skin_signed_distance_m": -0.011199837411020156,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "combat_idle",
+      "time": 0.21388888359069824,
+      "minimum_wrap_clearance_m": 0.01014135406824756,
+      "maximum_skin_signed_distance_m": -0.01120098065774219,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "combat_idle",
+      "time": 0.4277777671813965,
+      "minimum_wrap_clearance_m": 0.010160117784284942,
+      "maximum_skin_signed_distance_m": -0.011202203122395301,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "combat_idle",
+      "time": 0.6416666507720947,
+      "minimum_wrap_clearance_m": 0.010161894985361306,
+      "maximum_skin_signed_distance_m": -0.011202933290258987,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "combat_idle",
+      "time": 0.855555534362793,
+      "minimum_wrap_clearance_m": 0.010149138248011518,
+      "maximum_skin_signed_distance_m": -0.011203408118971848,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "combat_idle",
+      "time": 1.0694444179534912,
+      "minimum_wrap_clearance_m": 0.01013208792560384,
+      "maximum_skin_signed_distance_m": -0.011202921212294603,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "combat_idle",
+      "time": 1.2833333015441895,
+      "minimum_wrap_clearance_m": 0.010120425961882822,
+      "maximum_skin_signed_distance_m": -0.01120100816492284,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "combat_idle",
+      "time": 1.4972221851348877,
+      "minimum_wrap_clearance_m": 0.010119220469018305,
+      "maximum_skin_signed_distance_m": -0.011199584828794736,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "combat_idle",
+      "time": 1.711111068725586,
+      "minimum_wrap_clearance_m": 0.010133403423555898,
+      "maximum_skin_signed_distance_m": -0.011202364300411553,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "combat_idle",
+      "time": 1.9249999523162842,
+      "minimum_wrap_clearance_m": 0.010146737845476152,
+      "maximum_skin_signed_distance_m": -0.011204680132664901,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "combat_idle",
+      "time": 2.1388888359069824,
+      "minimum_wrap_clearance_m": 0.010142901820394783,
+      "maximum_skin_signed_distance_m": -0.011204690364031974,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "combat_idle",
+      "time": 2.3527777194976807,
+      "minimum_wrap_clearance_m": 0.01013060487078408,
+      "maximum_skin_signed_distance_m": -0.011203336228328305,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "combat_idle",
+      "time": 2.566666603088379,
+      "minimum_wrap_clearance_m": 0.0101182046946672,
+      "maximum_skin_signed_distance_m": -0.011199801839440804,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "sit_idle",
+      "time": 0,
+      "minimum_wrap_clearance_m": 0.009123190856748474,
+      "maximum_skin_signed_distance_m": -0.010487474974423866,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "sit_idle",
+      "time": 0.3611111243565877,
+      "minimum_wrap_clearance_m": 0.009116548959015019,
+      "maximum_skin_signed_distance_m": -0.01048189557834884,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "sit_idle",
+      "time": 0.7222222487131754,
+      "minimum_wrap_clearance_m": 0.009103607010358082,
+      "maximum_skin_signed_distance_m": -0.01046923043153812,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "sit_idle",
+      "time": 1.0833333730697632,
+      "minimum_wrap_clearance_m": 0.009099351533315966,
+      "maximum_skin_signed_distance_m": -0.010462800894860286,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "sit_idle",
+      "time": 1.4444444974263508,
+      "minimum_wrap_clearance_m": 0.00912393546163344,
+      "maximum_skin_signed_distance_m": -0.010484314114010478,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "sit_idle",
+      "time": 1.8055556217829387,
+      "minimum_wrap_clearance_m": 0.009152203719716659,
+      "maximum_skin_signed_distance_m": -0.0105168905218431,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "sit_idle",
+      "time": 2.1666667461395264,
+      "minimum_wrap_clearance_m": 0.009155482509080975,
+      "maximum_skin_signed_distance_m": -0.010521718742044333,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "sit_idle",
+      "time": 2.5277778704961142,
+      "minimum_wrap_clearance_m": 0.009146637758374777,
+      "maximum_skin_signed_distance_m": -0.010513540453669054,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "sit_idle",
+      "time": 2.8888889948527017,
+      "minimum_wrap_clearance_m": 0.009138263534367565,
+      "maximum_skin_signed_distance_m": -0.01050665860540894,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "sit_idle",
+      "time": 3.2500001192092896,
+      "minimum_wrap_clearance_m": 0.009140721974716999,
+      "maximum_skin_signed_distance_m": -0.010508611267334746,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "sit_idle",
+      "time": 3.6111112435658774,
+      "minimum_wrap_clearance_m": 0.009145987197192841,
+      "maximum_skin_signed_distance_m": -0.010512006849456008,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "sit_idle",
+      "time": 3.972222367922465,
+      "minimum_wrap_clearance_m": 0.009131746883068722,
+      "maximum_skin_signed_distance_m": -0.01049753152729581,
+      "inside_skin_vertices": 0
+    },
+    {
+      "clip": "sit_idle",
+      "time": 4.333333492279053,
+      "minimum_wrap_clearance_m": 0.009123190447076471,
+      "maximum_skin_signed_distance_m": -0.010487474486019752,
+      "inside_skin_vertices": 0
+    }
+  ],
+  "method": "Nearest surface distance plus majority parity of three forearm-plane rays; normals alone are insufficient at folded wrist skin",
+  "passed": true
+}

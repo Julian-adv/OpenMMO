@@ -257,7 +257,7 @@ async function main() {
     note.hidden = rogueAvailable && !inspectingRogue
     note.textContent = !rogueAvailable
       ? '일부 로그 파츠를 불러오지 못했습니다. 새로고침해 다시 시도하세요.'
-      : '공통 몸체의 종아리와 로그 바지 실루엣을 줄였습니다. 상의 표면과 장갑 끝단, 피부 가림은 보정이 남아 있습니다.'
+      : '로그 상의·숄·손목 천과 접힌 소매를 보정한 검수 모델입니다. 다른 세트와의 혼합 호환은 검증 중입니다.'
     for (const id of ['hair_crop', 'hair_sidepart'])
       for (const mesh of parts.get(id)!)
         for (const mat of Array.isArray(mesh.material)

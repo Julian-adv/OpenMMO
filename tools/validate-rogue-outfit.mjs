@@ -63,7 +63,14 @@ try {
     clips: [],
   }
   const snapshots = []
+  const allPoses = []
   const rest = meshes.map((mesh) => ({ mesh, positions: Array.from({ length: mesh.geometry.attributes.position.count }, (_, i) => mesh.getVertexPosition(i, new THREE.Vector3()).applyMatrix4(mesh.matrixWorld)) }))
+  const sleeveRest = new Map(rest.filter(({ mesh }) => mesh.name.startsWith('shirt_sleeve_')).map(({ mesh, positions }) => [mesh, positions]))
+  const sleeveEdgeAB = new THREE.Vector3()
+  const sleeveEdgeAC = new THREE.Vector3()
+  let maximumSleeveStretch = 1
+  let maximumSleeveStretchAt
+  let minimumSleeveArea = Infinity
   report.rest_ankles = measureAnkleConnections(rest, fitting.ankle_connections, skeleton)
   checkAnkles(report.rest_ankles, 'rest')
   for (const [pack, names] of [
@@ -101,8 +108,31 @@ try {
             vertices.push(vector.clone())
           }
           posed.push({ mesh, positions: vertices })
+          const originalSleeve = sleeveRest.get(mesh)
+          if (originalSleeve) {
+            const indices = mesh.geometry.index.array
+            for (let i = 0; i < indices.length; i += 3) {
+              const a = indices[i], b = indices[i + 1], c = indices[i + 2]
+              const area = sleeveEdgeAB.subVectors(vertices[b], vertices[a])
+                .cross(sleeveEdgeAC.subVectors(vertices[c], vertices[a])).length() / 2
+              minimumSleeveArea = Math.min(minimumSleeveArea, area)
+              for (const [start, end] of [[a, b], [b, c], [c, a]]) {
+                const restLength = originalSleeve[start].distanceTo(originalSleeve[end])
+                const stretch = vertices[start].distanceTo(vertices[end]) / restLength
+                if (stretch > maximumSleeveStretch) {
+                  maximumSleeveStretch = stretch
+                  maximumSleeveStretchAt = { mesh: mesh.name, clip: name, time, start, end, rest_length: restLength }
+                }
+              }
+            }
+          }
         }
         const ankles = measureAnkleConnections(posed, fitting.ankle_connections, skeleton)
+        if (fitting.wrist_wrap) allPoses.push({
+          clip: name,
+          time,
+          matrices: skeleton.bones.map((bone, i) => new THREE.Matrix4().multiplyMatrices(bone.matrixWorld, skeleton.boneInverses[i]).toArray()),
+        })
         checkAnkles(ankles, `${name} ${time}`)
         ankleSamples.push({ time, ankles })
         if (sample === 5 && name !== 'combat_idle') {
@@ -133,6 +163,17 @@ try {
     }
   }
   const planes = [report.rest_ankles, ...report.clips.flatMap((clip) => clip.ankle_samples.map((sample) => sample.ankles))].flatMap((ankles) => ankles.flatMap((ankle) => ankle.planes))
+  if (fitting.sleeve_connections) {
+    assert.equal(sleeveRest.size, 2, 'Both rebuilt sleeves must be present')
+    assert.ok(minimumSleeveArea > 1e-10, 'Collapsed sleeve triangle during animation')
+    assert.ok(maximumSleeveStretch < 2.5, `Excessive sleeve stretch during animation: ${maximumSleeveStretch} ${JSON.stringify(maximumSleeveStretchAt)}`)
+    report.sleeve_summary = {
+      sampled_poses: report.clips.length * report.samples_per_clip,
+      maximum_edge_stretch_ratio: maximumSleeveStretch,
+      minimum_triangle_area_m2: minimumSleeveArea,
+      visual_and_mixed_glove_acceptance: 'See fitting render review; long-glove combination pending',
+    }
+  }
   report.ankle_summary = {
     planes_tested: planes.length,
     radial_samples: planes.length * 144,
@@ -143,6 +184,7 @@ try {
   }
   writeFileSync(new URL(candidate.animation_report, root), JSON.stringify(report, null, 2) + '\n')
   writeFileSync(new URL(directory + 'animation-snapshots.json', root), JSON.stringify(snapshots) + '\n')
+  if (allPoses.length) writeFileSync(new URL(directory + 'validation-poses.json', root), JSON.stringify(allPoses) + '\n')
 } finally {
   await server.close()
 }

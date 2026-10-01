@@ -1,0 +1,80 @@
+{
+  "date": "2026-10-01",
+  "tool": "OpenAI Codex built-in ImageGen",
+  "tier": "ChatGPT Pro 20x",
+  "license": "OpenAI generated output terms",
+  "path": "assets/modular_human_male_01/parts/rogue_rebuild_v5/material-atlas.png",
+  "prompt": "Use case: stylized-concept. Asset type: production base-color texture atlas for a repaired fantasy rogue outfit, square 2048x2048. Create ONE image divided into exactly four equal square quadrants meeting at the precise horizontal and vertical midpoint, no gutters, borders, labels, objects or perspective. Each quadrant is a flat evenly lit orthographic material swatch filling its entire square. TOP LEFT: aged reddish chestnut brown leather, fine grain, subtle uneven patina, fine worn scratches but no tears, no holes, no dramatic cracks. TOP RIGHT: muted dark olive moss green woven scarf cloth with tiny visible fibers and subtle worn color mottling, absolutely intact. BOTTOM LEFT: warm natural ivory beige linen, small fine weave with faint dirt speckling and natural fiber irregularity, not pure white. BOTTOM RIGHT: darker chestnut brown leather suitable for stitched garment edging, fine grain with very subtle wear. Match understated realistic medieval dungeon adventurer materials. These are seamless-looking texture fields, no drawn clothing, no buckles, no seams, no folds, no shadows, no borders, no visible gaps, no lighting gradient, no specular highlights, no text. Material-scale detail uniform across each quadrant. Keep top left richly brown rather than pale pink, top right moss olive rather than saturated green, bottom left beige rather than white. The image will be UV mapped onto real 3D garment geometry.",
+  "sha256": "233fcdd9f3edafd2d5f9dfff9f0c8ba59c7f1906503d0d748a92b7cc47a935ac",
+  "actual_dimensions": [
+    1254,
+    1254
+  ],
+  "derived_textures": [
+    {
+      "path": "assets/modular_human_male_01/parts/rogue_rebuild_v5/leather.png",
+      "sha256": "b220177be5a0107828dea8ea5f06017f886ca216ef1f3eb8e5336466863d1508",
+      "crop": [
+        0,
+        0,
+        627,
+        627
+      ],
+      "dimensions": [
+        627,
+        627
+      ]
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/rogue_rebuild_v5/scarf.png",
+      "sha256": "de53c61dce4d733c2ac7d2fe943396b34ec27a6a96f86d6d53b00ccd7d5aa643",
+      "crop": [
+        627,
+        0,
+        627,
+        627
+      ],
+      "dimensions": [
+        627,
+        627
+      ]
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/rogue_rebuild_v5/linen.png",
+      "sha256": "e9ce51b1ca0b7b8056a9c1f861bba438df7fc892572c3f3de249e740aa188ea0",
+      "crop": [
+        0,
+        627,
+        627,
+        627
+      ],
+      "dimensions": [
+        627,
+        627
+      ]
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/rogue_rebuild_v5/trim.png",
+      "sha256": "0535191263efb1843440b6f29b141787a5844855f63af2fdb04854d7497f9fc0",
+      "crop": [
+        627,
+        627,
+        627,
+        627
+      ],
+      "dimensions": [
+        627,
+        627
+      ]
+    }
+  ],
+  "extraction": "FFmpeg exact quadrant crops; no visual repainting",
+  "geometry_source": "Direct authored retopology guided by original rogue concept and canonical body; no new Meshy request",
+  "base": {
+    "base": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "base_sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b",
+    "rig_id": "human_male_01_mixamo_candidate_v2",
+    "interfaces": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+    "interfaces_status": "provisional"
+  }
+}

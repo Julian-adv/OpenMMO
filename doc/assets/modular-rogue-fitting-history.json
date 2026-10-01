@@ -240,5 +240,318 @@
       "method": "144 radial rays at 7 planes per ankle in the inverse shared-weight frame; rest plus 13 poses per clip"
     },
     "outcome": "Shared ankle contours and weights passed; replaced by v3 following canonical calf revision"
+  },
+  {
+    "version": "v3",
+    "retained": false,
+    "status": "[미사용] Superseded by v5; intermediate files removed on 2026-10-01",
+    "reference": {
+      "base": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "base_sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b",
+      "rig_id": "human_male_01_mixamo_candidate_v2",
+      "interfaces": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+      "interfaces_status": "provisional"
+    },
+    "outputs": [
+      {
+        "path": "assets/modular_human_male_01/parts/rogue_fitted_v3/top_rogue.glb",
+        "sha256": "23c989ba60822633b12fe9833aad0edc8bc5e2c97196638bbe13bd4584f21b6f",
+        "triangles": 1799,
+        "bones": 65,
+        "exact_rest_hierarchy_and_inverse_bind_match": true,
+        "maximum_weight_sum_error": 1.1920928955078125e-07,
+        "active_bones": [
+          "Hips",
+          "LeftArm",
+          "LeftForeArm",
+          "LeftShoulder",
+          "RightArm",
+          "RightForeArm",
+          "RightShoulder",
+          "Spine",
+          "Spine1",
+          "Spine2"
+        ],
+        "retained": false
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/rogue_fitted_v3/pants_rogue.glb",
+        "sha256": "33d77cd0676d9318ad5ee66e19040528f31898e23b2097dc9cf18026a829a579",
+        "triangles": 1402,
+        "bones": 65,
+        "exact_rest_hierarchy_and_inverse_bind_match": true,
+        "maximum_weight_sum_error": 5.960464477539063e-08,
+        "active_bones": [
+          "Hips",
+          "LeftFoot",
+          "LeftLeg",
+          "LeftUpLeg",
+          "RightFoot",
+          "RightLeg",
+          "RightUpLeg",
+          "Spine"
+        ],
+        "retained": false
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/rogue_fitted_v3/gloves_rogue.glb",
+        "sha256": "5b2c23d3bd4d13c3f351a29e8435052b7907cd4b54c2c9285376a03107488d47",
+        "triangles": 801,
+        "bones": 65,
+        "exact_rest_hierarchy_and_inverse_bind_match": true,
+        "maximum_weight_sum_error": 1.1920928955078125e-07,
+        "active_bones": [
+          "LeftForeArm",
+          "LeftHand",
+          "RightForeArm",
+          "RightHand",
+          "RightHandIndex1",
+          "RightHandIndex2",
+          "RightHandIndex3",
+          "RightHandMiddle1",
+          "RightHandMiddle2",
+          "RightHandMiddle3",
+          "RightHandPinky1",
+          "RightHandPinky2",
+          "RightHandPinky3",
+          "RightHandRing1",
+          "RightHandRing2",
+          "RightHandRing3",
+          "RightHandThumb1",
+          "RightHandThumb2",
+          "RightHandThumb3"
+        ],
+        "retained": false
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/rogue_fitted_v3/boots_rogue.glb",
+        "sha256": "8551e3829f646c365b54fdbffeb6f3e165b649afb62788e2af3b78fd97eb0e74",
+        "triangles": 896,
+        "bones": 65,
+        "exact_rest_hierarchy_and_inverse_bind_match": true,
+        "maximum_weight_sum_error": 5.960464477539063e-08,
+        "active_bones": [
+          "LeftFoot",
+          "LeftLeg",
+          "LeftToeBase",
+          "RightFoot",
+          "RightLeg",
+          "RightToeBase"
+        ],
+        "retained": false
+      }
+    ],
+    "budget": {
+      "equipment_triangles": 4898,
+      "assembled_including_hidden_triangles": 20024,
+      "face_triangles": 1505,
+      "runtime_visible_triangles": null
+    },
+    "issues": [
+      "User reported open holes in the shirt sleeve and an uneven cuff outside the long-glove cutting plane"
+    ],
+    "correction": "v4 replaces both sleeves with continuous geometry, a planar long-glove cuff, and underarm lining",
+    "clips": [
+      "idle1",
+      "walk",
+      "run",
+      "jump",
+      "slash1",
+      "combat_idle",
+      "sit_idle"
+    ],
+    "samples_per_clip": 13,
+    "ankle_summary": {
+      "planes_tested": 1288,
+      "radial_samples": 185472,
+      "missing_rays": 0,
+      "minimum_clearance_m": 0.003688902142221416,
+      "required_clearance_m": 0.002,
+      "method": "144 radial rays at 7 planes per ankle in the inverse shared-weight frame; rest plus 13 poses per clip"
+    },
+    "review": {
+      "blender_version": "5.2.0 LTS",
+      "editable": {
+        "path": "assets/modular_human_male_01/parts/rogue_fitted_v3/rogue-fitting.blend",
+        "sha256": "06e9134cd77fbef084304f0efc7aadd7246707b39801116b5d2cfbd6db324777",
+        "retained": false
+      },
+      "images": [
+        {
+          "path": "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v3-rest.png",
+          "sha256": "a67c540f005eec482ae502df443930507d360110d5bafce7653827f3abf06d0c",
+          "retained": false
+        },
+        {
+          "path": "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v3-motion.png",
+          "sha256": "84f9bb69ea1a5257cbf0b1c71027f0461431214d0ce4655e3e8cbce1a340444b",
+          "retained": false
+        }
+      ]
+    }
+  },
+  {
+    "version": "v4",
+    "retained": false,
+    "status": "[미사용] Superseded by v5; intermediate files removed on 2026-10-01",
+    "reference": {
+      "base": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "base_sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b",
+      "rig_id": "human_male_01_mixamo_candidate_v2",
+      "interfaces": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+      "interfaces_status": "provisional"
+    },
+    "outputs": [
+      {
+        "path": "assets/modular_human_male_01/parts/rogue_fitted_v4/top_rogue.glb",
+        "sha256": "7fbd831217caf822431c47e2b94e02cd0e85221fc10dfa309e93303daf6d0b7e",
+        "triangles": 3262,
+        "bones": 65,
+        "exact_rest_hierarchy_and_inverse_bind_match": true,
+        "maximum_weight_sum_error": 1.1920928955078125e-07,
+        "active_bones": [
+          "Hips",
+          "LeftArm",
+          "LeftForeArm",
+          "LeftShoulder",
+          "RightArm",
+          "RightForeArm",
+          "RightShoulder",
+          "Spine",
+          "Spine1",
+          "Spine2"
+        ],
+        "retained": false
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/rogue_fitted_v4/pants_rogue.glb",
+        "sha256": "339be7c005daac5b08b1a12879d03235c4dd0de1c6302451aa041fb23d8e8347",
+        "triangles": 1402,
+        "bones": 65,
+        "exact_rest_hierarchy_and_inverse_bind_match": true,
+        "maximum_weight_sum_error": 5.960464477539063e-08,
+        "active_bones": [
+          "Hips",
+          "LeftFoot",
+          "LeftLeg",
+          "LeftUpLeg",
+          "RightFoot",
+          "RightLeg",
+          "RightUpLeg",
+          "Spine"
+        ],
+        "retained": false
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/rogue_fitted_v4/gloves_rogue.glb",
+        "sha256": "eb14b0578c4bb0bb4017218c005ce43bfae91712d16273d807df50109dbc4fdc",
+        "triangles": 801,
+        "bones": 65,
+        "exact_rest_hierarchy_and_inverse_bind_match": true,
+        "maximum_weight_sum_error": 1.1920928955078125e-07,
+        "active_bones": [
+          "LeftForeArm",
+          "LeftHand",
+          "RightForeArm",
+          "RightHand",
+          "RightHandIndex1",
+          "RightHandIndex2",
+          "RightHandIndex3",
+          "RightHandMiddle1",
+          "RightHandMiddle2",
+          "RightHandMiddle3",
+          "RightHandPinky1",
+          "RightHandPinky2",
+          "RightHandPinky3",
+          "RightHandRing1",
+          "RightHandRing2",
+          "RightHandRing3",
+          "RightHandThumb1",
+          "RightHandThumb2",
+          "RightHandThumb3"
+        ],
+        "retained": false
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/rogue_fitted_v4/boots_rogue.glb",
+        "sha256": "c68eba44a69f0573b6b2a7b71071aaef22faa09d65fb6fef1e6edba2d89f1f22",
+        "triangles": 896,
+        "bones": 65,
+        "exact_rest_hierarchy_and_inverse_bind_match": true,
+        "maximum_weight_sum_error": 5.960464477539063e-08,
+        "active_bones": [
+          "LeftFoot",
+          "LeftLeg",
+          "LeftToeBase",
+          "RightFoot",
+          "RightLeg",
+          "RightToeBase"
+        ],
+        "retained": false
+      }
+    ],
+    "budget": {
+      "equipment_triangles": 6361,
+      "assembled_including_hidden_triangles": 21487,
+      "face_triangles": 1505,
+      "runtime_visible_triangles": null
+    },
+    "issues": [
+      "Shirt shoulder/back penetration through vest",
+      "Open vest underarms and scarf behind neck",
+      "Jagged vest hem",
+      "Left wrist skin penetration",
+      "Missing outward folded sleeve cuff"
+    ],
+    "correction": "Rebuilt separate outer layers, clipped covered inner geometry, folded cuffs, closed wrist section and local skin weights",
+    "clips": [
+      "idle1",
+      "walk",
+      "run",
+      "jump",
+      "slash1",
+      "combat_idle",
+      "sit_idle"
+    ],
+    "samples_per_clip": 13,
+    "ankle_summary": {
+      "planes_tested": 1288,
+      "radial_samples": 185472,
+      "missing_rays": 0,
+      "minimum_clearance_m": 0.003688902142221416,
+      "required_clearance_m": 0.002,
+      "method": "144 radial rays at 7 planes per ankle in the inverse shared-weight frame; rest plus 13 poses per clip"
+    },
+    "sleeve_summary": {
+      "sampled_poses": 91,
+      "maximum_edge_stretch_ratio": 2.1828454816236404,
+      "minimum_triangle_area_m2": 1.1521323033231725e-05,
+      "visual_and_mixed_glove_acceptance": "See fitting render review; long-glove combination pending"
+    },
+    "review": {
+      "blender_version": "5.2.0 LTS",
+      "editable": {
+        "path": "assets/modular_human_male_01/parts/rogue_fitted_v4/rogue-fitting.blend",
+        "sha256": "5e8e343875bde23aa317ec033b6058377a4ceaa7d2ea6943ea26538e94343098",
+        "retained": false
+      },
+      "images": [
+        {
+          "path": "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v4-rest.png",
+          "sha256": "c4a89972c902f738dfe1d707e91ea9a94f16c0e467c6d61935e67a471c154c57",
+          "retained": false
+        },
+        {
+          "path": "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v4-sleeves.png",
+          "sha256": "875a23004dc6871afc2c402b60eda6e665f0ba0906e5fd9fa1b900d345076d77",
+          "retained": false
+        },
+        {
+          "path": "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v4-motion.png",
+          "sha256": "c5118dbc5f48477db6c0776d6ca2a9774cdbf0a655eb68d63f630e4ba3b6ed58",
+          "retained": false
+        }
+      ]
+    }
   }
 ]

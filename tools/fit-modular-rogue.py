@@ -4,6 +4,7 @@ import copy
 import hashlib
 import importlib.util
 import json
+import sys
 from pathlib import Path
 from functools import cache
 
@@ -13,6 +14,7 @@ from scipy.spatial import cKDTree
 
 from lib.glb import read_glb, write_glb
 from outfits.body_shape import slim_calves
+from outfits.rogue_layers import build_top, build_wrap
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('plate_io', ROOT / 'tools/fit-modular-plate.py')
@@ -51,10 +53,10 @@ def body_surface(regions, side=0):
     return np.asarray(points), np.asarray(faces), np.asarray(weights)
 
 
-def nearest_surface(points, surface):
+def nearest_surface(points, surface, candidates=32):
     vertices, faces, weights = surface
     triangles = vertices[faces]
-    near = cKDTree(triangles.mean(1)).query(points, k=min(32, len(faces)))[1]
+    near = cKDTree(triangles.mean(1)).query(points, k=min(candidates, len(faces)))[1]
     a, b, c = np.moveaxis(triangles[near], 2, 0)
     ab, ac, ap = b - a, c - a, points[:, None] - a
     dot = lambda x, y: np.sum(x * y, axis=-1)
@@ -97,7 +99,7 @@ def transfer(points, surface, allowed):
     return joints, weights
 
 
-def repair_uv(points, uv, faces, part_id):
+def repair_uv(points, uv, faces):
     t = uv[faces]
     ab, ac = t[:, 1] - t[:, 0], t[:, 2] - t[:, 0]
     good = abs(ab[:, 0] * ac[:, 1] - ab[:, 1] * ac[:, 0]) > 1e-10
@@ -113,10 +115,7 @@ def repair_uv(points, uv, faces, part_id):
         distances = np.linalg.norm(centers - centers[index], axis=1)
         distances[~good | (normals @ normals[index] < .4)] = np.inf
         neighbor = distances.argmin()
-        vest_patch = part_id == 'top_rogue' and index in (1086, 1103)
-        if vest_patch:
-            neighbor = 770
-        if not good[neighbor] or (not vest_patch and not np.isfinite(distances[neighbor])):
+        if not good[neighbor] or not np.isfinite(distances[neighbor]):
             raise ValueError('No adjacent UV patch for repair')
         a, b, c = points[faces[neighbor]]
         local = np.linalg.lstsq(np.column_stack([b - a, c - a]), (points[faces[index]] - a).T, rcond=None)[0].T
@@ -132,30 +131,6 @@ def repair_uv(points, uv, faces, part_id):
         faces[index] = np.arange(start, start + 3)
         repaired.append(dict(face=int(index), reference_face=int(neighbor)))
     return np.array(new_points), np.array(new_uv), faces, repaired, np.array(vertex_map)
-
-
-def top_fit(p):
-    out = p * [.425, .345, .39] + [0, 1.368, -.025]
-    for sign, side in [(1, 'Left'), (-1, 'Right')]:
-        source_start = np.array([sign * .51, .46, .02])
-        source_end = np.array([sign * .82, -.43, .045])
-        source_axis = io.unit(source_end - source_start)
-        source_cross = io.unit(np.array([-source_axis[1] * sign, abs(source_axis[0]), 0]))
-        start = BONES[side + 'Arm']
-        end = BONES[side + 'ForeArm'] * .73 + BONES[side + 'Hand'] * .27
-        target_axis = io.unit(end - start)
-        target_cross = io.unit(np.array([-target_axis[1] * sign, abs(target_axis[0]), 0]))
-        t = ((p - source_start) @ source_axis) / np.linalg.norm(source_end - source_start)
-        sleeve = start + t[:, None] * (end - start)
-        sleeve += ((p - source_start) @ source_cross)[:, None] * target_cross * .40
-        sleeve[:, 2] += (p[:, 2] - source_start[2]) * .40
-        blend = io.smoothstep((p[:, 0] * sign - .46) / .20)
-        out = out * (1 - blend[:, None]) + sleeve * blend[:, None]
-    hem = io.smoothstep((-p[:, 1] - .35) / .32) * (1 - io.smoothstep((abs(p[:, 0]) - .48) / .1))
-    out[:, 1] -= .075 * hem
-    out[:, 0] *= 1 - .10 * hem
-    out[:, 2] = -.015 + (out[:, 2] + .015) * (1 - .12 * hem)
-    return out
 
 
 def pants_initial(p):
@@ -326,16 +301,6 @@ def add_ankle_lining(doc, binary, name):
         indices=io.add_accessor(doc, binary, np.array(faces).reshape(-1, 1), 'SCALAR', 5125))]))
 
 
-def wrap_fit(p):
-    wrist, elbow = BONES['LeftHand'], BONES['LeftForeArm']
-    axis = io.unit(wrist - elbow)
-    cross = io.unit(np.array([-axis[1], axis[0], 0]))
-    center = wrist - ((p[:, 1] + .914) / 1.83 * .067 + .004)[:, None] * axis
-    out = center + (p[:, 0] - .027)[:, None] * cross * .063
-    out[:, 2] += (p[:, 2] + .015) * .087
-    return out
-
-
 def ray_bounds(centers, normal, triangles, limit):
     a, b, c = triangles[:, 0], triangles[:, 1], triangles[:, 2]
     e1, e2 = b - a, c - a
@@ -452,7 +417,7 @@ def with_rig(doc, binary, name):
     for scene in doc['scenes']:
         scene['nodes'] = [remap[i] for i in scene['nodes'] if i in remap]
     for index, mesh in enumerate(doc['meshes']):
-        metadata = dict(rig_id='human_male_01_mixamo_candidate_v2', part_id=name, region=mesh['name'], fitting_status='candidate_v3')
+        metadata = dict(rig_id='human_male_01_mixamo_candidate_v2', part_id=name, region=mesh['name'], fitting_status='candidate_v5')
         mesh['extras'] = metadata
         doc['scenes'][0]['nodes'].append(len(doc['nodes']))
         doc['nodes'].append(dict(name=mesh['name'], mesh=index, skin=0, extras=metadata))
@@ -525,7 +490,10 @@ def validate(path):
             if mesh['name'] == 'glove_rogue_right':
                 assert all(NAMES[i].startswith('Right') for i in j[w > 1e-6])
             if mesh['name'] == 'wrap_rogue_left':
-                assert all(NAMES[i] in ['LeftForeArm', 'LeftHand'] for i in j[w > 1e-6])
+                assert all(NAMES[i] in ['LeftArm', 'LeftForeArm', 'LeftHand', 'LeftHandThumb1', 'LeftHandThumb2'] for i in j[w > 1e-6])
+            if mesh['name'].startswith('shirt_sleeve_'):
+                side = mesh['name'].rsplit('_', 1)[1].capitalize()
+                assert all(NAMES[i] in ['Spine1', 'Spine2'] + [side + bone for bone in ['Shoulder', 'Arm', 'ForeArm']] for i in j[w > 1e-6])
     return dict(path=str(path.relative_to(ROOT)), sha256=digest(path), triangles=triangles, bones=65,
                 exact_rest_hierarchy_and_inverse_bind_match=True, maximum_weight_sum_error=max_error, active_bones=sorted(active))
 
@@ -535,13 +503,15 @@ def main():
     parser.add_argument('--output', type=Path, default=OUTPUT)
     parser.add_argument('--report', type=Path, default=REPORT)
     args = parser.parse_args()
+    args.output = args.output.resolve()
+    args.report = args.report.resolve()
     selection = SELECTION
     assert digest(ROOT / selection['reference']['base']) == selection['reference']['base_sha256']
     review = json.loads((ROOT / 'doc/assets/modular-rogue-mesh-review-selected.json').read_text())
     hashes = {part['id']: part['sha256'] for part in review['parts']}
     args.output.mkdir(parents=True, exist_ok=True)
     specs = [
-        ('top_rogue', ['top_rogue'], top_fit, ('torso', 'neck', 'upper_arms', 'forearms'), 0),
+        ('top_rogue', ['top_rogue'], None, (), 0),
         ('pants_rogue', ['pants_rogue'], pants_fit, ('legs', 'ankles', 'torso'), 0),
         ('gloves_rogue', ['glove_rogue_right', 'wrap_rogue_left'], None, (), 0),
         ('boots_rogue', ['boot_rogue_left'], boot_fit, ('feet', 'ankles', 'legs'), 1),
@@ -549,13 +519,21 @@ def main():
     report = dict(status='fitting and skinning candidate; runtime acceptance pending', reference=selection['reference'],
                   generator='tools/fit-modular-rogue.py', uv_repairs={}, sources=[], outputs=[])
     for name, ids, fit, regions, side in specs:
-        doc = dict(asset={'version': '2.0', 'generator': 'OpenMMO rogue fitting v3'}, accessors=[], bufferViews=[], meshes=[])
+        doc = dict(asset={'version': '2.0', 'generator': 'OpenMMO rogue fitting v5'}, accessors=[], bufferViews=[], meshes=[])
         binary = bytearray()
         for part_id in ids:
             part = next(p for p in selection['parts'] if p['id'] == part_id)
             path = ROOT / part['source_glb']
             assert digest(path) == hashes[part_id], f'Source changed: {path}'
-            report['sources'].append(dict(id=part_id, path=part['source_glb'], sha256=hashes[part_id]))
+            report['sources'].append(dict(id=part_id, path=part['source_glb'], sha256=hashes[part_id],
+                role='design reference; geometry replaced in v5' if part_id in ['top_rogue', 'wrap_rogue_left'] else 'fitted source geometry'))
+            if part_id == 'top_rogue':
+                report['layer_rebuild'] = build_top(sys.modules[__name__], doc, binary)
+                report['sleeve_connections'] = report['layer_rebuild']['sleeves']
+                continue
+            if part_id == 'wrap_rogue_left':
+                report['wrist_wrap'] = build_wrap(sys.modules[__name__], doc, binary)
+                continue
             src, raw = read_glb(path)
             assert len(src['nodes']) == 1 and not any(k in src['nodes'][0] for k in ['matrix', 'translation', 'rotation', 'scale'])
             offset = append_source(doc, binary, src, raw)
@@ -564,22 +542,16 @@ def main():
                 p = io.accessor(src, raw, a['POSITION'])
                 uv = io.accessor(src, raw, a['TEXCOORD_0'])
                 f = io.accessor(src, raw, primitive['indices']).reshape(-1, 3)
-                p, uv, f, repaired, vertex_map = repair_uv(p, uv, f, part_id)
+                p, uv, f, repaired, vertex_map = repair_uv(p, uv, f)
                 report['uv_repairs'][part_id] = repaired
                 if part_id == 'glove_rogue_right':
                     fit, regions, side = glove_fit, ('hands', 'forearms'), -1
-                elif part_id == 'wrap_rogue_left':
-                    fit, regions, side = wrap_fit, ('forearms', 'hands'), 1
                 positions = fit(p)
                 normal_fit = (lambda q: glove_fit(q, volume=False)) if part_id == 'glove_rogue_right' else fit
                 normals = io.transformed_normals(p, io.accessor(src, raw, a['NORMAL'])[vertex_map], normal_fit)
                 allowed = set(NAMES)
-                if name == 'top_rogue':
-                    allowed = {n for n in NAMES if n in ['Hips', 'Spine', 'Spine1', 'Spine2'] or any(n == s + b for s in ['Left', 'Right'] for b in ['Shoulder', 'Arm', 'ForeArm'])}
-                elif name == 'pants_rogue':
+                if name == 'pants_rogue':
                     allowed = {n for n in NAMES if n in ['Hips', 'Spine'] or any(n == s + b for s in ['Left', 'Right'] for b in ['UpLeg', 'Leg', 'Foot'])}
-                elif part_id == 'wrap_rogue_left':
-                    allowed = {'LeftForeArm', 'LeftHand'}
                 elif part_id == 'glove_rogue_right':
                     allowed = {n for n in NAMES if n.startswith('RightHand') or n == 'RightForeArm'}
                 elif name == 'boots_rogue':
@@ -616,12 +588,12 @@ def main():
         print(name, result['triangles'], 'triangles; rig and weights passed')
     total = sum(o['triangles'] for o in report['outputs'])
     report['budget'] = dict(equipment_triangles=total, assembled_including_hidden_triangles=total + 13891 + 933 + 302, face_triangles=1505, runtime_visible_triangles=None)
-    report['hand_influences'] = dict(right_only=True, left_wrap_forearm_and_hand_only=True, distal_finger_regions_restricted_to_own_finger=True)
+    report['hand_influences'] = dict(right_only=True, left_wrap_matches_local_wrist_including_thumb_root=True, distal_finger_regions_restricted_to_own_finger=True)
     report['ankle_fitting'] = dict(interface_sha256=digest(ROOT / selection['reference']['interfaces']),
         method='Both cuffs follow the body section in its local plane, with trouser-inside-boot clearance and shared Leg/Foot weights',
         verified_overlap_interval_m=[-.030, 0], added_lining_triangles=320)
     report['ankle_connections'] = [dict(side=side, interface='shoe_ankle_' + side, center=ankle_interface(side)[0].tolist(), axis=ankle_interface(side)[1].tolist(), basis=ankle_interface(side)[2].tolist(), weights={NAMES[i]: float(w) for i, w in enumerate(ankle_interface(side)[4]) if w > 0}, sample_heights_m=[-.030, -.025, -.020, -.015, -.010, -.005, 0]) for side in ['Left', 'Right']]
-    report['pending'] = ['Vest UV repair remains visibly patchy; finish UV/material cleanup', 'Glove finger openings and cuff have folded source geometry; finish topology and skin clearance', 'Separate editable shirt, vest and shawl layers from fused source topology', 'Short sleeve and asymmetric hand runtime occlusion', 'Barefoot trouser variant and connections to other boot sets', 'Visual gameplay and mixed outfit acceptance']
+    report['pending'] = ['Right glove finger openings retain source geometry; final hand equipment acceptance pending', 'Long-glove clearance and occlusion with actual mixed equipment', 'Barefoot trouser variant and connections to other boot sets', 'Full gameplay and mixed outfit acceptance beyond the reviewed set']
     args.report.write_text(json.dumps(report, indent=2) + '\n')
 
 
