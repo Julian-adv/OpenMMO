@@ -1,9 +1,11 @@
 {
-  "status": "Candidate: provisional body-region hiding only; hand/short-sleeve runtime masks pending",
+  "status": "Historical v8 garment review; selected Tripo top and pants have separate current reviews",
   "blender_version": "5.2.0 LTS",
   "editable": {
     "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/rogue-fitting.blend",
-    "sha256": "c705874e34bead479caf044c68fb746c2808ff65c99b274540ff7eff0d17017e"
+    "sha256": "c705874e34bead479caf044c68fb746c2808ff65c99b274540ff7eff0d17017e",
+    "retained": false,
+    "replacement": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/tripo-pants-fitting.blend"
   },
   "images": [
     {
@@ -25,11 +27,11 @@
   ],
   "fitting_record": {
     "path": "doc/assets/modular-rogue-fitting-current.json",
-    "sha256": "bb47ea78130e13e525a0d2d29efe131ba98066bac0003ebda8d59a47bfd13365"
+    "sha256": "347406f4c211b5c86809bacefa1221fb56231459a0d3ca70eef5121c317291f7"
   },
   "animation_record": {
     "path": "doc/assets/modular-rogue-animation-current.json",
-    "sha256": "d59f5aff94ed8636967afb441d3de80b2f07a3cf21be8679354848ea09c501b3"
+    "sha256": "8d5c7ac55e9899fbca40c1d460fc4e58944889c1feaf33aa49ce57a46f1eaa0f"
   },
   "snapshots": {
     "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/animation-snapshots.json",

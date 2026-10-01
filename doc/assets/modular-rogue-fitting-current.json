@@ -1,5 +1,5 @@
 {
-  "status": "Selected default rogue top with existing fitted other slots; full gameplay acceptance pending",
+  "status": "Historical v8 pants measurements; current Tripo trousers use separate fitting and animation reviews",
   "reference": {
     "base": "assets/modular_human_male_01/parts/fitted/base.glb",
     "base_sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b",
@@ -111,7 +111,9 @@
         "RightLeg",
         "RightUpLeg",
         "Spine"
-      ]
+      ],
+      "retained": false,
+      "replacement": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/pants_rogue.glb"
     },
     {
       "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/gloves_rogue.glb",

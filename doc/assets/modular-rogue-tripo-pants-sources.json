@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-01",
+  "provider": "Tripo Studio",
+  "generation_mode": "Smart Mesh",
+  "generation_mode_confirmed_by": "user",
+  "subscription": "User-reported approximately USD 20/month Studio subscription",
+  "license": "Subject to original Tripo Studio output terms; retain original source and account provenance.",
+  "delivery_path_windows": "Y:\\public\\web_downloads\\steampunk+pants+3d+model.glb",
+  "delivery_path_linux": "/mnt/y/web_downloads/steampunk+pants+3d+model.glb",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/source.glb",
+    "sha256": "3e3274fa3f6995904d29ba0ea3fa46ca18782b2b7fa5b24e2d550a51f272b524"
+  },
+  "base": {
+    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b"
+  },
+  "interfaces": {
+    "path": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+    "sha256": "f3fc3aed9c5080cf26a294dac496293c89bce8f67466add18a7ef72b326f006b"
+  },
+  "rig_id": "human_male_01_mixamo_candidate_v2",
+  "reference_artwork": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/pants_rogue-front-v3.png",
+      "sha256": "af7853cf683aa3ad35265264cbc96bda803ab94b2ecf93361ee4e86b486e7f18"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/pants_rogue-back-v3.png",
+      "sha256": "fa98cf6866043d86345d70179ec59c937fe5500406a418e813046da70d331632"
+    }
+  ],
+  "submitted_images_confirmed": false,
+  "generation_task_id": null,
+  "generation_model_version": null,
+  "submitted_prompt": null,
+  "requested_polygon_count_confirmed": null,
+  "export_observed": {
+    "format": "GLB 2.0",
+    "generator": "Tripo",
+    "triangles": 2066,
+    "vertices_including_uv_splits": 2351,
+    "texture_dimensions": [
+      2048,
+      2048
+    ],
+    "texture_format": "JPEG",
+    "rigged": false
+  },
+  "local_fitting": "Local fitting to current canonical body; no AI generation or paid API calls.",
+  "retained": true,
+  "local_fitting_date": "2026-10-02"
+}

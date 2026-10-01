@@ -1,5 +1,5 @@
 {
-  "status": "User selected the fitted Tripo vest as the default rogue top; other slots retain their current candidates",
+  "status": "User-approved Tripo top and Smart Mesh trousers; full gameplay compatibility pending",
   "reference": {
     "base": "assets/modular_human_male_01/parts/fitted/base.glb",
     "base_sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b",
@@ -23,13 +23,19 @@
     },
     {
       "id": "pants_rogue",
-      "source_glb": "assets/modular_human_male_01/parts/rogue_sources/pants_rogue/source.glb",
+      "source_glb": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/source.glb",
       "target_triangles": 1300,
-      "status": "raw fitting candidate; no rig or runtime compatibility approval",
+      "status": "User-approved default rogue trousers",
       "remaining_work": [
-        "Fit waist under outer layers and cuffs inside boots.",
-        "Inspect waist/ankle openings, accessory clearance and knee bending."
-      ]
+        "Full gameplay and mixed-equipment review",
+        "Barefoot hem and other boot variants",
+        "Small rear calf skin intersections above boots in the unmasked review"
+      ],
+      "previous_source_glb": "assets/modular_human_male_01/parts/rogue_sources/pants_rogue/source.glb",
+      "selected_glb": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/pants_rogue.glb",
+      "selected_sha256": "7178d06a9b2e18953e2c3fb0672df8424b688d6f4ccc47affc856a9084e8e81c",
+      "actual_triangles": 2022,
+      "selected_date": "2026-10-02"
     },
     {
       "id": "glove_rogue_right",
@@ -67,16 +73,16 @@
     "existing_crop_hair_triangles": 933,
     "existing_sword_triangles": 302,
     "raw_assembled_projection_including_hidden_triangles": 19704,
-    "actual_fitted_assembled_triangles": 23458,
-    "visible_triangles": 15626,
+    "actual_fitted_assembled_triangles": 24078,
+    "visible_triangles": 16246,
     "face_triangles": 1505,
-    "preview_assembled_after_skin_trim_triangles": 21756,
-    "visible_count_scope": "Workshop: selected rogue set, crop hair and sword; canonical body remains unchanged"
+    "preview_assembled_after_skin_trim_triangles": 22376,
+    "visible_count_scope": "Measured with showPreviewOutfit: Tripo top and trousers, v8 gloves/boots, crop hair and sword; canonical body unchanged"
   },
   "supported_combinations": [],
   "consumed_credits_all_attempts": 255,
   "fitting_candidate": {
-    "status": "Tripo vest selected as default top; v8 pants, gloves and boots retained",
+    "status": "Tripo top and trousers are the approved defaults; v8 gloves and boots retained",
     "directory": "assets/modular_human_male_01/parts/rogue_fitted_v8",
     "report": "doc/assets/modular-rogue-fitting-current.json",
     "animation_report": "doc/assets/modular-rogue-animation-current.json",
@@ -84,8 +90,10 @@
     "review_report": "doc/assets/modular-rogue-review-current.json",
     "review_image_prefix": "doc/images/characters/modular_human_male_01/parts/rogue/fitting-current",
     "part_overrides": {
-      "top_rogue": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb"
-    }
+      "top_rogue": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+      "pants_rogue": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/pants_rogue.glb"
+    },
+    "pants_review": "doc/assets/modular-rogue-tripo-pants-review-v1.json"
   },
   "default_top": {
     "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
@@ -94,5 +102,13 @@
     "review": "doc/assets/modular-rogue-tripo-review-v1.json",
     "approved_by": "user",
     "date": "2026-10-01"
+  },
+  "default_pants": {
+    "path": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/pants_rogue.glb",
+    "sha256": "7178d06a9b2e18953e2c3fb0672df8424b688d6f4ccc47affc856a9084e8e81c",
+    "editable": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/tripo-pants-fitting.blend",
+    "review": "doc/assets/modular-rogue-tripo-pants-review-v1.json",
+    "approved_by": "user",
+    "date": "2026-10-02"
   }
 }

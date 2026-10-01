@@ -1,0 +1,59 @@
+{
+  "status": "User-approved default rogue trousers; full gameplay and mixed-equipment acceptance pending",
+  "blender_version": "5.2.0 LTS",
+  "editable": {
+    "path": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/tripo-pants-fitting.blend",
+    "sha256": "487ecfb82db8c17d732f8e3fa53c7ac0474db14c8274e567f8795bab720e0db4"
+  },
+  "images": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/tripo-pants-v1-source.png",
+      "sha256": "acaf547a7f782556b6eba134d1122a72543d19c3a7dcdf9d0145c531f0820229"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/tripo-pants-v1-rest.png",
+      "sha256": "1fa95f3ac36b5cc00199de03af142c3d39d6b7583067f6f3b6e2790a91c7b0da"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/tripo-pants-v1-skin.png",
+      "sha256": "002427aaa5c6335b08815daa199b025d9b998297d9b0d4e56345478f84a3e682"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/tripo-pants-v1-connections.png",
+      "sha256": "cb7a593075c95acd7b591bbea02c9ad7b1904814598acd2c8d72b6fcb0be7aaa"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/tripo-pants-v1-motion.png",
+      "sha256": "2bec53a4464282ce69e10097998c71cf36fa7935539797ca3bc22e997e1c1089"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/rogue/tripo-pants-v1-sit.png",
+      "sha256": "d9a6a7d2f177dcf5a27db6cb369c01238fa032e5da79fd5d2147a8eb4f685e22"
+    }
+  ],
+  "fitting": {
+    "path": "doc/assets/modular-rogue-tripo-pants-fitting-v1.json",
+    "sha256": "6568ba82294c95fa2ce5846bb11a98fcbe857c4c7029745d54014bc1b1042cef"
+  },
+  "animation": {
+    "path": "doc/assets/modular-rogue-tripo-pants-animation-v1.json",
+    "sha256": "7aec501b901125a30abb77e8e5798524a4a3cd58f19da010095813784cad1d38"
+  },
+  "skin_mask": {
+    "hidden_regions": [
+      "upper_arms",
+      "boot_ankles",
+      "legs",
+      "ankles",
+      "feet"
+    ],
+    "torso_maximum_y": 1.14,
+    "scope": "Review scene only; canonical body unchanged"
+  },
+  "date": "2026-10-02",
+  "remaining_visual_issue": "Small rear calf skin intersections above the boots in the unmasked review; workshop masks hide legs.",
+  "user_approval": {
+    "date": "2026-10-02",
+    "scope": "Current workshop outfit appearance"
+  }
+}

@@ -5,8 +5,9 @@
 머리는 기존 헤어를 사용하고, 내려 쓴 후드 숄은 상의에 포함한다.
 
 현재 기본 로그 상의는 사용자가 승인한 [Tripo 피팅 상의](modular-rogue-tripo.md)다.
-하의·장갑·부츠는 v8을 유지한다. **[미사용] 이전 v7/v8 상의 GLB는 삭제했다.**
-현재 세트의 편집본은 `rogue_fitted_v8/rogue-fitting.blend`다.
+하의도 사용자가 승인한 [Tripo Smart Mesh 바지](modular-rogue-tripo-pants.md)를 기본으로 사용하며,
+장갑·부츠는 v8을 유지한다. **[미사용] 이전 v7/v8 상의 GLB는 삭제했다.**
+현재 혼합 세트의 편집본은 `rogue_tripo_pants_v1/tripo-pants-fitting.blend`다.
 중간 백업과 이전 v7 파일은 정리하고 검수 이력을 보존했다.
 일반 로그 상의 선택과 `?outfit=rogue`, `?outfit=tripo`가 같은 승인 상의를 사용한다.
 아래 v8 상의 제작 내용은 과거 기록이며 런타임 등록·혼합 호환 검수는 별도다.
@@ -20,7 +21,7 @@
 | 예정 출력 | 원화 | 포함 범위 | 조립 방식 |
 | --- | --- | --- | --- |
 | `top_rogue.glb` | [상의 앞·뒤](../images/characters/modular_human_male_01/parts/rogue/top_rogue-v1.png) | 리넨 셔츠, 적갈색 베스트, 왼쪽 작은 견갑, 이끼색 후드 숄 | 한 장비로 교체. 제작 원본에서는 소재와 가림 처리를 위해 층별 메시를 구분한다. |
-| `pants_rogue.glb` | [하의 앞·뒤](../images/characters/modular_human_male_01/parts/rogue/pants_rogue-v2.png) | 청회색 바지, 황토색 허리 천, 벨트, 주머니, 짧은 로프 고리 | 허리 장식은 모두 하의 소속으로 두고 골반을 따른다. |
+| `pants_rogue.glb` | [하의 앞·뒤](../images/characters/modular_human_male_01/parts/rogue/pants_rogue-v3.png) | 회갈색 울 바지, 황토색 리넨 허리 천, 가죽 벨트·주머니·무릎 덧댐, 짧은 로프 고리 | 허리 장식은 모두 하의 소속으로 두고 골반을 따른다. |
 | `gloves_rogue.glb` | [오른손 반장갑](../images/characters/modular_human_male_01/parts/rogue/glove_rogue_right-v2.png), [왼쪽 손목 천](../images/characters/modular_human_male_01/parts/rogue/wrap_rogue_left-v1.png) | 오른손 가죽 반장갑과 왼쪽 손목 천 | 두 제작 입력을 하나의 hands 슬롯으로 내보낸다. 왼손 전체와 오른손 끝마디를 노출한다. |
 | `boots_rogue.glb` | [왼쪽 부츠 두 시점](../images/characters/modular_human_male_01/parts/rogue/boot_rogue_left-v1.png) | 낮은 가죽 부츠와 접힌 커프 | 왼쪽 형상을 기준으로 오른쪽을 대칭 제작하고 각각 발·발가락 가중치를 맞춘다. |
 
@@ -30,6 +31,25 @@
 
 장갑 v2는 손바닥 쪽 엄지 방향을 수정해 같은 오른손 장갑의 두 시점으로 정리했다.
 앞뒤 시점의 봉제선·버클 세부는 모델링 때 하나의 메시 구조로 확정한다.
+
+## 하의 울 원화 v3 제안 — 2026-10-01
+
+사용자가 v2의 청바지 같은 외관을 지적해 [하의 v3](../images/characters/modular_human_male_01/parts/rogue/pants_rogue-v3.png)를 제작했다.
+회갈색 무광 울, 단순한 중앙 이음선과 넉넉한 주름으로 바꾸고 현대적인 앞여밈·대비 봉제선을 없앴다.
+황토색 리넨 허리 천, 가죽 벨트·주머니·무릎 덧댐과 짧은 로프 고리는 유지했다.
+**[미사용]** 기존 v2는 수정 입력의 출처로 보존한다.
+후속 [Tripo 바지](modular-rogue-tripo-pants.md)는 2026-10-02 기본 하의로 사용자 승인을 받았다.
+실제 게임 등록·혼합 장비 호환 검수는 별도다.
+
+- 생성: OpenAI Codex built-in ImageGen, **ChatGPT Pro 20x**, 2026-10-01.
+- 이용 조건: OpenAI 생성 출력물 이용 조건과 기존 입력 원화의 출처를 따른다.
+- [실제 수정 프롬프트·입력·검수 이력·SHA-256](modular-rogue-pants-v3-sources.json).
+
+Tripo 업로드용으로 v3 앞뒤 시점을 분리했다. 각 파일은 768×1024 PNG이며,
+FFmpeg로 원본을 무손실 크롭했다. 재생성·크기 변경 없이 기존 원화와 이용 조건을 유지한다.
+
+- [앞면](../images/characters/modular_human_male_01/parts/rogue/pants_rogue-front-v3.png): 원본 `(0, 0, 768, 1024)` 영역.
+- [뒷면](../images/characters/modular_human_male_01/parts/rogue/pants_rogue-back-v3.png): 원본 `(768, 0, 768, 1024)` 영역.
 
 ## Tripo 업로드용 상의 시점 분리 — 2026-10-01
 
@@ -170,7 +190,7 @@
 
 [선택 명세·남은 작업](modular-rogue-source-selection.json),
 [선택 원본의 실제 측정](modular-rogue-mesh-review-selected.json).
-선택 원본은 현재 `rogue_fitted_v8/rogue-fitting.blend`의 숨김 참조 컬렉션에도 보관한다.
+선택 원본 GLB는 출처 기록과 함께 보관한다.
 **[미사용]** 별도 원본 검수용 `rogue-source-review.blend`는 중복되어 최종 정리 때 삭제했다.
 원본 GLB의 텍스처를 포함하고 각 파츠의 앞뒤를 독립 전시한다. 몸체에 피팅한 파일이 아니다.
 
@@ -350,8 +370,8 @@ Blender 검수본에도 같은 가림 범위를 적용했다. 소매 연결의 �
 목 가림을 적용한 제작 미리보기의 조립 수는 21,422, 표시 수는 13,479이며 얼굴은 1,505다.
 출처·라이선스는 기존 v7/v5와 몸체의 기록을 따른다. 2026-10-01 Codex의 기존 메시 편집이며
 새 AI 생성이나 유료 호출은 없다. 기존 v7/v8 상의와 비교용 편집본은 삭제했다.
-현재 `assets/modular_human_male_01/parts/rogue_fitted_v8/rogue-fitting.blend`에는
-승인된 Tripo 상의와 v8 하의·장갑·부츠가 들어 있다.
+**[미사용]** v8 하의와 `rogue_fitted_v8/rogue-fitting.blend`는 Tripo 하의 승인 후 삭제했다.
+현재 전체 조합은 `rogue_tripo_pants_v1/tripo-pants-fitting.blend`에서 편집한다.
 전체 게임 및 다른 장비와의 호환 합격은 별도 검수 범위로 남아 있다.
 
 ### 제작용 미리보기와 재현

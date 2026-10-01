@@ -1,0 +1,77 @@
+{
+  "date": "2026-10-01",
+  "status": "Final wool trouser concept; modeled in Tripo and fitted trousers approved by user on 2026-10-02",
+  "service": "OpenAI Codex built-in ImageGen",
+  "tier": "ChatGPT Pro 20x",
+  "license": "OpenAI generated output terms; existing reference provenance retained.",
+  "edit_target": {
+    "path": "doc/images/characters/modular_human_male_01/parts/rogue/pants_rogue-v2.png",
+    "sha256": "255db35d31ed8c697e196a7115f342db3ff3b476167822cd519424a006296a4a",
+    "source_record": "doc/assets/modular-rogue-parts-sources.json",
+    "retained": true
+  },
+  "output": {
+    "path": "doc/images/characters/modular_human_male_01/parts/rogue/pants_rogue-v3.png",
+    "sha256": "4797cb909d8b5eff3769da0e42e84f6183c4974ab666b2fb90a7d4a9e7b8d23f",
+    "retained": true
+  },
+  "view_exports": {
+    "date": "2026-10-01",
+    "service": "Local FFmpeg",
+    "operation": "Lossless PNG crop; no regeneration, resizing or design changes.",
+    "source": "doc/images/characters/modular_human_male_01/parts/rogue/pants_rogue-v3.png",
+    "source_sha256": "4797cb909d8b5eff3769da0e42e84f6183c4974ab666b2fb90a7d4a9e7b8d23f",
+    "license": "Inherited from the source concept; OpenAI generated output terms.",
+    "views": [
+      {
+        "view": "front",
+        "path": "doc/images/characters/modular_human_male_01/parts/rogue/pants_rogue-front-v3.png",
+        "crop_xywh": [
+          0,
+          0,
+          768,
+          1024
+        ],
+        "sha256": "af7853cf683aa3ad35265264cbc96bda803ab94b2ecf93361ee4e86b486e7f18"
+      },
+      {
+        "view": "back",
+        "path": "doc/images/characters/modular_human_male_01/parts/rogue/pants_rogue-back-v3.png",
+        "crop_xywh": [
+          768,
+          0,
+          768,
+          1024
+        ],
+        "sha256": "fa98cf6866043d86345d70179ec59c937fe5500406a418e813046da70d331632"
+      }
+    ]
+  },
+  "materials": {
+    "trousers": "Warm gray-brown matte fulled wool",
+    "waist_sash": "Ochre linen",
+    "belt_pouches_knee_patches": "Worn brown leather"
+  },
+  "iterations": [
+    {
+      "prompt": "Use case: precise-object-edit.\nAsset type: revised modular rogue trousers concept sheet for a medieval fantasy RPG, intended as a Tripo 3D modeling reference.\nInput image: edit target, existing rogue trouser front/back sheet. Preserve its same single pair of empty trousers, proportions, stance, length, waistband height, two-view layout (FRONT left, BACK right), brown leather belt with simple brass buckle, compact leather pouches, tucked ochre linen sash, compact back-left rope coil with two keepers, knee repair patches, and open ankle hems.\nPrimary request: replace the modern denim/jeans appearance with convincing handwoven WOOL trousers for a worn medieval dungeon adventurer. Change cloth and trouser construction consistently in both views. Main fabric is subdued charcoal with a slight desaturated blue-gray cast: matte, soft, dense fulled wool, fine visible wool fibers and restrained coarse plain-weave texture, broad soft folds with natural weight. It must read unmistakably as WOOL, never as blue jeans. Remove the speckled stonewashed denim pattern, contrasting orange/yellow double topstitching, curved jeans fly outline, zipper fly, rivets, rear jeans yoke, and five-pocket jeans construction. Front center below sash should be simple uninterrupted wool with a discreet tonal seam; any waist closure is concealed beneath the sash. Use quiet irregular handsewn seams in matching dark thread. Both knee patches are worn dark umber leather attached with restrained hand stitches, readable as repair patches rather than modern kneepads. Slight dirt and edge wear without all-over denim-like scratches or bleaching. Preserve the ochre LINEN waist wrap and brown LEATHER accessories and their locations.\nComposition: landscape sheet, exactly two views of the SAME trousers, equal scale, fully visible waistband to ankle, orthographic-like, margins, no body or mannequin. Keep similar silhouette, moderately roomy thighs and substantial calves with simple narrower final ankle hems that tuck into separate low boots. Keep all accessories above the hip crease. Soft even light for clear material readability; simple plain neutral warm-gray studio background.\nAvoid: indigo denim, jeans, denim twill, stonewashing, acid washing, bright contrasting machine stitches, zipper, modern pockets, metal rivets, printed fabric, tactical details, added objects, weapons, dangling cloth, human skin, boots, text, labels, watermark. Preserve the front/back accessory consistency as much as possible.",
+      "status": "Rejected: jeans fly and patterned surface remained.",
+      "output_retained_in_repository": false,
+      "output_sha256": "2fcfefed3d14cdc0a2ecee529224679dd83e6e32a651011c9a9879a429414211",
+      "output_retained_locally": false
+    },
+    {
+      "prompt": "Use case: precise-object-edit. Edit the attached trouser concept sheet. The first revision still has a JEANS FLY and mottled scratched denim-like surface. Fix ONLY the trouser fabric and its seam construction, making an obvious wool garment.\nREPLACE the fabric surface completely with PLAIN charcoal-gray felted wool: smooth matte soft dense wool, tiny fine diffuse fuzz, subtle wool fibers at close range, no visible decorative pattern, NO pale scribbles, NO marbling, NO streaks, NO denim fading, no high contrast texture. Broad soft drapery and heavy cloth folds. Clean well-maintained practical wool with gentle wear only at hems. This is medieval fantasy wool cloth, not denim, not patterned fabric.\nREMOVE the curved J-shaped stitched jeans fly under the buckle entirely. Replace it with a single subtle STRAIGHT vertical center joining seam in matching charcoal thread from hidden waistband down to crotch, no overlapping fly flap or zipper outline, no double rows of machine stitches. Any waist fastening is hidden under sash. Remove contrasting yellow stitching from outer leg seams and ankle cuffs; use discreet same-color hand stitches and plain folded wool ankle hems. Preserve knee patch shapes, but make them plain worn dark brown leather with modest hand stitches, not scratched marble texture.\nSTRICTLY preserve same two-view front left/back right composition, trouser silhouette and leg length, waist sash, belt, buckle, pouches, two-strapped rope coil, accessory colors and locations, hollow openings, background and lighting. No body, no boots, no added items, no labels. Output this SAME single pair from front and back.",
+      "status": "Rejected: insufficient material and seam changes.",
+      "output_retained_in_repository": false,
+      "edit_target_sha256": "2fcfefed3d14cdc0a2ecee529224679dd83e6e32a651011c9a9879a429414211",
+      "output_sha256": "84b8952a13fae60e6428b4f95bbe116a4ec5e9593a2c901cc0d77e9d6a1b520f",
+      "output_retained_locally": false
+    },
+    {
+      "prompt": "Use case: precise-object-edit. Redesign and REPLACE the actual trousers in this reference sheet. The reference trousers look like modern jeans, and the user explicitly rejects that. DO NOT preserve the reference trousers' texture, cut, fly, seams or tiny gathered wrinkles. Keep only the attached waist accessories: ochre linen sash, worn brown leather belt and pouches, small rope coil.\nDraw new plain medieval fantasy WOOL trousers: warm gray-brown UNPATTERNED fulled wool, a soft matte solid cloth with barely visible fuzzy fibers. Spacious simple legs with a few broad heavy folds, NO texture scribbles or all-over scratched markings. Handsewn simple vertical joining seams, no fly outline at all. Cloth drawstring waist concealed by the sash. A plain dark brown leather repair patch handstitched over each knee. Simple wool leg hems narrowing only near ankle for tucking into low boots. New wool cloth should clearly look like a plain wool tunic's fabric, with even solid color; never denim or leather. Use warm gray-brown rather than blue so it cannot read as jeans. Preserve the existing waist accessories, their placement and rustic materials.\nProduction concept art, clear realistic materials, isolated hollow garment without person or mannequin. Landscape front view LEFT and back view RIGHT of the SAME pair at equal scale, full waistband to ankles, matching accessories. Plain light warm gray background, soft even lighting. No text, no shoes, no weapons. No zipper, J-shaped fly stitch, denim, jeans, machine double topstitch, rivets, rear jeans yoke, decorative motifs, marbling or printed pattern. This is a substantial garment redesign, not just recoloring.",
+      "status": "Saved as v3 proposal; reviewed visually for wool material, simple center seam, front/back layout and retained waist accessories.",
+      "edit_target_sha256": "255db35d31ed8c697e196a7115f342db3ff3b476167822cd519424a006296a4a"
+    }
+  ]
+}

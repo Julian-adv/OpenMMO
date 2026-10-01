@@ -1,0 +1,54 @@
+{
+  "status": "Measured actual workshop visibility after showPreviewOutfit",
+  "body_sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b",
+  "pants_sha256": "7178d06a9b2e18953e2c3fb0672df8424b688d6f4ccc47affc856a9084e8e81c",
+  "assembled_including_hidden_triangles": 24078,
+  "preview_assembled_after_skin_trim_triangles": 22376,
+  "visible_triangles": 16246,
+  "face_triangles": 1505,
+  "includes": [
+    "body",
+    "crop hair",
+    "Tripo top",
+    "Tripo pants",
+    "v8 gloves",
+    "v8 boots",
+    "302-triangle sword"
+  ],
+  "served_preview_pants_sha256": "7178d06a9b2e18953e2c3fb0672df8424b688d6f4ccc47affc856a9084e8e81c",
+  "browser": {
+    "date": "2026-10-02",
+    "url": "https://localhost:10004/modular-character-preview.html?outfit=rogue",
+    "version": "Chrome/153.0.8010.52",
+    "model": [
+      {
+        "name": "pants_rogue_tripo",
+        "triangles": 2022,
+        "bones": 65,
+        "visible": true,
+        "texture": [
+          2048,
+          2048
+        ]
+      }
+    ],
+    "removal": {
+      "pantsHidden": true,
+      "skinVisible": true
+    },
+    "views": [
+      "idle1",
+      "sit_idle"
+    ],
+    "images": [
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/rogue/tripo-pants-v1-workshop.png",
+        "sha256": "90992b20b3c4e15fc3c5ab04d71321632736e61383062ecb8bac133ba5af8c94"
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/rogue/tripo-pants-v1-workshop-sit.png",
+        "sha256": "88b6a962441350067dbf406fc20ab9a10ae89f8d7cf12448a3ec0584b5ade7b4"
+      }
+    ]
+  }
+}

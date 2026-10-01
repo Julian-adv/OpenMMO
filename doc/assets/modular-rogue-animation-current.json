@@ -1,5 +1,5 @@
 {
-  "status": "Runtime bind and numeric skinning checks; not a visual gameplay acceptance",
+  "status": "Historical v8 pants measurements; current Tripo trousers use separate fitting and animation reviews",
   "sources": [
     {
       "path": "client/public/models/characters/modular_male/base.glb",
@@ -11,7 +11,9 @@
     },
     {
       "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/pants_rogue.glb",
-      "sha256": "2db79af871d61d3a350a96191db80d5b38674a70d153af2bce40728702d27017"
+      "sha256": "2db79af871d61d3a350a96191db80d5b38674a70d153af2bce40728702d27017",
+      "retained": false,
+      "replacement": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/pants_rogue.glb"
     },
     {
       "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/gloves_rogue.glb",

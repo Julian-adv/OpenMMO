@@ -1,0 +1,34 @@
+{
+  "status": "Raw source review; not fitted or rigged",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/source.glb",
+    "sha256": "3e3274fa3f6995904d29ba0ea3fa46ca18782b2b7fa5b24e2d550a51f272b524"
+  },
+  "triangles": 2066,
+  "mesh_count": 1,
+  "meshes": [
+    {
+      "name": "tripo_node_99cef2e5-c6f6-42eb-9344-ba4c382436a5",
+      "components_vertex_counts": [
+        814,
+        61,
+        42,
+        42,
+        42,
+        24,
+        24,
+        24
+      ],
+      "boundary_edges": 56,
+      "nonmanifold_edges": 56,
+      "degenerate_faces": 0,
+      "collapsed_uv_triangles": 0
+    }
+  ],
+  "source_extent_blender": [
+    0.57080078125,
+    0.2836914360523224,
+    0.99951171875
+  ],
+  "rigged": false
+}

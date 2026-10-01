@@ -418,6 +418,85 @@
         "Current full-set blend, other equipment and animation samples",
         "Current review reports and images; historical comparison measurements"
       ]
+    },
+    {
+      "date": "2026-10-02",
+      "reason": "User-requested cleanup after approving Smart Mesh wool trousers",
+      "files_removed": 630,
+      "bytes_removed": 269396462,
+      "removed": [
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/pants_rogue.glb",
+          "files": 1,
+          "bytes": 10851792,
+          "sha256": "2db79af871d61d3a350a96191db80d5b38674a70d153af2bce40728702d27017"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/rogue-fitting.blend",
+          "files": 1,
+          "bytes": 109668725,
+          "sha256": "c705874e34bead479caf044c68fb746c2808ff65c99b274540ff7eff0d17017e"
+        },
+        {
+          "path": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/validation-poses.json",
+          "files": 1,
+          "bytes": 1468466,
+          "sha256": "bb193bfb9035e9e6f6c708725e45ec0584ff148030289cc523417291284e20fc"
+        },
+        {
+          "path": "/home/jake/.codex/generated_images/01a0f7d4-548a-7100-b6ce-f100c12cf2f5/exec-a338ecce-d4a5-441d-a116-df635f6b9f87.png",
+          "files": 1,
+          "bytes": 2040693,
+          "sha256": "2fcfefed3d14cdc0a2ecee529224679dd83e6e32a651011c9a9879a429414211"
+        },
+        {
+          "path": "/home/jake/.codex/generated_images/01a0f7d4-548a-7100-b6ce-f100c12cf2f5/exec-f4a7880f-0346-4766-b2c0-287f74a5df22.png",
+          "files": 1,
+          "bytes": 1944095,
+          "sha256": "84b8952a13fae60e6428b4f95bbe116a4ec5e9593a2c901cc0d77e9d6a1b520f"
+        },
+        {
+          "path": "/tmp/tripo-pants-validation.log",
+          "files": 1,
+          "bytes": 7188,
+          "sha256": "9c26837d92bb7c16c5f311f80a860fd36181b61e5abcf069bb34c37443c2f99a"
+        },
+        {
+          "path": "/tmp/tripo-pants-review.log",
+          "files": 1,
+          "bytes": 3971,
+          "sha256": "9e9aca4b36e0f04db793a93432df03df0b33ecc1ac46800e9e0cf1fd90e5b6a4"
+        },
+        {
+          "path": "/tmp/tripo-pants-browser.log",
+          "files": 1,
+          "bytes": 257,
+          "sha256": "14a016441b5f9997d0ac27688c2166f3e413fe6c1d2037fd84dcab695aa75201"
+        },
+        {
+          "path": "/tmp/tripo-pants-workshop.png",
+          "files": 1,
+          "bytes": 141190,
+          "sha256": "66d981f57b9c240736b21c5cbfcf4e75ce759b2516ad0ed7e4daf362661c489b"
+        },
+        {
+          "path": "/tmp/tripo-pants-cdp.log",
+          "files": 1,
+          "bytes": 2377,
+          "sha256": "fb495c2fa04fc7456af842c243a623862117d29e1c6864d155ccf73456ac65a5"
+        },
+        {
+          "path": "/tmp/tripo-pants-chrome-profile",
+          "files": 620,
+          "bytes": 143267708
+        }
+      ],
+      "preserved": [
+        "Final v3 artwork and front/back exports; v2 edit reference provenance",
+        "Original Tripo source, approved fitted GLB and editable full-set blend",
+        "Current review reports, final render sheets and browser captures",
+        "Animation snapshots; full validation matrices can be regenerated"
+      ]
     }
   ]
 }
