@@ -1047,10 +1047,87 @@ fn seed_is_stable_fnv() {
     assert_eq!(dungeon_seed("a"), 0xaf63_dc4c_8601_ec8c);
 }
 
-/// The surface entrance must be walkable in, and leak-proof sideways — see
-/// `surface_passability_cells`. Standing on the open ground above the dungeon
-/// must key the mover to the surface, or they collide with the walls beneath
-/// their feet.
+#[test]
+fn stair_landings_allow_side_and_diagonal_entry_in_every_direction() {
+    use crate::pathfinding::is_movement_blocked_for_mover;
+
+    let entrance = test_entrance();
+    let mut floors = generate_dungeon(0);
+    floors.truncate(2);
+    for layout in &mut floors {
+        layout.carved.fill(true);
+        layout.props.clear();
+        layout.chest = None;
+    }
+    for along_z in [false, true] {
+        for reversed in [false, true] {
+            let shaft = StairShaft {
+                x: 20,
+                z: 20,
+                along_z,
+                reversed,
+            };
+            floors[0].up_shaft = StairShaft {
+                x: 10,
+                z: 10,
+                ..shaft
+            };
+            floors[0].down_shaft = Some(shaft);
+            floors[1].up_shaft = shaft;
+            floors[1].down_shaft = None;
+            let mut cache = PassabilityCache::new();
+            cache.insert(
+                dungeon_cache_key("t"),
+                passability_with_doors_open(&entrance, &floors),
+            );
+
+            for (depth, own_step) in [(1, 0), (2, SHAFT_LEN - 1)] {
+                let floor = passability_floor_for_depth(depth);
+                for i in 0..SHAFT_LEN {
+                    for (w, outside_w) in [(0, -1), (SHAFT_W - 1, SHAFT_W)] {
+                        let inside = cell_center(&entrance, depth, shaft.step_cell(i, w));
+                        let outside = cell_center(&entrance, depth, shaft.step_cell(i, outside_w));
+                        let blocked = |from: &Position, to: &Position| {
+                            is_movement_blocked_for_mover(
+                                &cache,
+                                from.x,
+                                from.z,
+                                to.x,
+                                to.z,
+                                floor,
+                                Some(inside.y),
+                            )
+                        };
+                        assert_eq!(
+                            blocked(&outside, &inside),
+                            i != own_step,
+                            "shaft {shaft:?} depth {depth} step {i} side {w} entry"
+                        );
+                        if i != own_step {
+                            continue;
+                        }
+                        assert!(!blocked(&inside, &outside), "landing side exit");
+                        let mut diagonal = outside;
+                        let offset = if (own_step == 0) == reversed {
+                            0.4
+                        } else {
+                            -0.4
+                        };
+                        if along_z {
+                            diagonal.z += offset;
+                        } else {
+                            diagonal.x += offset;
+                        }
+                        assert!(!blocked(&diagonal, &inside), "landing diagonal entry");
+                        assert!(!blocked(&inside, &diagonal), "landing diagonal exit");
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Surface landings open sideways; the ramp stays sealed.
 #[test]
 fn surface_entrance_is_walkable_but_not_leaky() {
     use crate::pathfinding::{get_floor_at_position, is_movement_blocked_for_mover};
@@ -1092,15 +1169,21 @@ fn surface_entrance_is_walkable_but_not_leaky() {
             );
         }
 
-        // Sideways off the run: blocked everywhere but the bottom landing.
+        // Only the two flat landings allow side exits.
         for i in 0..SHAFT_LEN {
             for (w, out) in [(0, -1), (SHAFT_W - 1, SHAFT_W)] {
                 let leaks = clear(at(shaft.step_cell(i, w)), at(shaft.step_cell(i, out)), f1);
                 assert_eq!(
                     leaks,
-                    i == SHAFT_LEN - 1,
+                    i == 0 || i == SHAFT_LEN - 1,
                     "seed {seed}: run {i} lateral leak={leaks}"
                 );
+                if i == 0 {
+                    assert!(
+                        clear(at(shaft.step_cell(i, out)), at(shaft.step_cell(i, w)), 0),
+                        "seed {seed}: surface landing side entry blocked"
+                    );
+                }
             }
         }
 

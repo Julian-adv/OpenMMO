@@ -607,15 +607,8 @@ pub fn monster_level_for_depth(def_level: u8, depth: u8) -> u8 {
 /// or a decorative prop's 1×1 collision pillar (see `roll_props`).
 pub(crate) const EDGE_ALL: u8 = EDGE_N | EDGE_E | EDGE_S | EDGE_W;
 
-/// Edge-bitmask cells for one floor, derived from its carved mask plus walls
-/// turning each stair shaft into a dead-end whose only opening on this floor is
-/// the landing this floor stands on. The shaft footprint sits inside a room, so
-/// without the far landing's run-end walled, A* treats it as a cut-through and
-/// marches a same-floor monster across it onto steps that render at the *other*
-/// floor's height; the side walls also keep a descending player from stepping
-/// sideways off the stairs mid-run. The steps themselves stay open along the run
-/// so a descending player (collision-checked against this floor once their Y
-/// drops into range) still walks through.
+/// Floor edge bits: only this floor's stair landings open to the room.
+/// Ramp sides and the far run-end stay sealed; lengthwise stair movement stays open.
 pub fn floor_passability_cells(layout: &FloorLayout) -> Vec<u8> {
     floor_passability_cells_inner(layout, &[], &[])
 }
@@ -677,60 +670,36 @@ fn floor_passability_cells_inner(
         }
     }
 
-    // Wall a shaft so its footprint is a dead-end on this floor, opening only
-    // at the landing this floor stands on. `legit_is_exit` is true for the
-    // up-shaft (you arrive at and step off its deep/exit landing) and false for
-    // the down-shaft (you step onto its shallow/entry landing to descend).
-    //   * lateral side walls keep a descending player from sidestepping off the
-    //     run into a flush room — the up-shaft exit landing is the only row left
-    //     open sideways, so you can step out at the bottom;
-    //   * the *far* landing (the one belonging to the other floor) gets its
-    //     room-facing run-end walled too. That's the one new opening the old
-    //     code left, and it let same-floor A* march a monster straight across
-    //     the footprint and onto steps that render at the other floor's height.
-    // The steps in between stay open along the run on purpose: a descending
-    // player is collision-checked against *this* floor's grid once their Y
-    // drops into its range (~a quarter of the way down, see `is_movement_blocked`
-    // floor selection), so the run must stay walkable. Cross-floor pathfinding
-    // is unaffected either way — it walks the shaft via the stairwell expansion,
-    // which ignores these edge bits.
+    // Open only this floor's landing to the room; keep the ramp walkable lengthwise.
     let mut wall_shaft = |shaft: &StairShaft, legit_is_exit: bool| {
         let r = shaft.rect();
+        let (own, far) = if legit_is_exit {
+            (shaft.exit_cell(), shaft.entry_cell())
+        } else {
+            (shaft.entry_cell(), shaft.exit_cell())
+        };
         if shaft.along_z {
-            let exit_z = shaft.exit_cell().1;
-            let far_z = if legit_is_exit {
-                shaft.entry_cell().1
-            } else {
-                exit_z
-            };
             for z in r.z..r.z + r.d {
-                if !(legit_is_exit && z == exit_z) {
+                if z != own.1 {
                     or_edge_bit(&mut cells, r.x, z, EDGE_W);
                     or_edge_bit(&mut cells, r.x - 1, z, EDGE_E);
                     or_edge_bit(&mut cells, r.x + r.w - 1, z, EDGE_E);
                     or_edge_bit(&mut cells, r.x + r.w, z, EDGE_W);
                 }
             }
-            // Far landing's outer run-end (points away from the steps, into the
-            // wrapping room).
+            // Seal the landing that belongs to the other floor.
             for x in r.x..r.x + r.w {
-                if far_z == r.z {
-                    or_edge_bit(&mut cells, x, far_z, EDGE_N);
-                    or_edge_bit(&mut cells, x, far_z - 1, EDGE_S);
+                if far.1 == r.z {
+                    or_edge_bit(&mut cells, x, far.1, EDGE_N);
+                    or_edge_bit(&mut cells, x, far.1 - 1, EDGE_S);
                 } else {
-                    or_edge_bit(&mut cells, x, far_z, EDGE_S);
-                    or_edge_bit(&mut cells, x, far_z + 1, EDGE_N);
+                    or_edge_bit(&mut cells, x, far.1, EDGE_S);
+                    or_edge_bit(&mut cells, x, far.1 + 1, EDGE_N);
                 }
             }
         } else {
-            let exit_x = shaft.exit_cell().0;
-            let far_x = if legit_is_exit {
-                shaft.entry_cell().0
-            } else {
-                exit_x
-            };
             for x in r.x..r.x + r.w {
-                if !(legit_is_exit && x == exit_x) {
+                if x != own.0 {
                     or_edge_bit(&mut cells, x, r.z, EDGE_N);
                     or_edge_bit(&mut cells, x, r.z - 1, EDGE_S);
                     or_edge_bit(&mut cells, x, r.z + r.d - 1, EDGE_S);
@@ -738,12 +707,12 @@ fn floor_passability_cells_inner(
                 }
             }
             for z in r.z..r.z + r.d {
-                if far_x == r.x {
-                    or_edge_bit(&mut cells, far_x, z, EDGE_W);
-                    or_edge_bit(&mut cells, far_x - 1, z, EDGE_E);
+                if far.0 == r.x {
+                    or_edge_bit(&mut cells, far.0, z, EDGE_W);
+                    or_edge_bit(&mut cells, far.0 - 1, z, EDGE_E);
                 } else {
-                    or_edge_bit(&mut cells, far_x, z, EDGE_E);
-                    or_edge_bit(&mut cells, far_x + 1, z, EDGE_W);
+                    or_edge_bit(&mut cells, far.0, z, EDGE_E);
+                    or_edge_bit(&mut cells, far.0 + 1, z, EDGE_W);
                 }
             }
         }
@@ -803,18 +772,8 @@ fn floor_passability_cells_inner(
     cells
 }
 
-/// Floor-0 (surface) cells over the dungeon footprint: empty but for the
-/// entrance shaft's lateral side walls, which stop a player walking down from
-/// stepping off the run.
-///
-/// Mostly it just has to exist. Floor selection keys a mover to the grid whose
-/// `y_base` is nearest ([`crate::pathfinding::get_floor_at_position`]), so
-/// without a surface grid someone on the open ground above a dungeon is keyed
-/// to depth 1 and collides with the walls under their feet. The entry run-end
-/// (the mouth) stays open on purpose: it is the only way in, and the stairwell
-/// consult refuses a move only when *every* connected floor does — so depth 1's
-/// grid, which seals that same end against same-floor monsters, would otherwise
-/// decide alone and wall the dungeon shut.
+/// Surface grid: open entry landing, sealed ramp sides.
+/// This grid keeps surface movers from colliding with underground walls.
 fn surface_passability_cells(up_shaft: &StairShaft) -> Vec<u8> {
     let mut cells = vec![0u8; (GRID * GRID) as usize];
     let (near, far) = if up_shaft.along_z {
@@ -822,7 +781,7 @@ fn surface_passability_cells(up_shaft: &StairShaft) -> Vec<u8> {
     } else {
         (EDGE_N, EDGE_S)
     };
-    for i in 0..SHAFT_LEN {
+    for i in 1..SHAFT_LEN {
         for (w, bit) in [(0, near), (SHAFT_W - 1, far)] {
             let (x, z) = up_shaft.step_cell(i, w);
             or_edge_bit(&mut cells, x, z, bit);
