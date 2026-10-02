@@ -13,15 +13,7 @@
   } from '../../terrain/world-wrap'
   import type { PlayerState } from '../../utils/movementUtils'
   import type { RemotePlayer } from '../../stores/gameStore'
-
-  /**
-   * Wet footprints behind anyone carrying the `wet` soaking (doc/DEBUFF.md).
-   *
-   * The local player's own trail comes from `activeDebuffs` (owner-only, so
-   * it knows the remaining time and fades the prints as they dry). Remote
-   * trails ride the broadcast `Player.wet` flag, which carries no countdown —
-   * their prints keep one strength — and only `high` asks for them.
-   */
+  import type { MonsterData } from '../../types/Monster'
 
   interface Props {
     mounted?: boolean
@@ -29,6 +21,7 @@
     /** Interpolated remote-player poses, the same source their models use. */
     remotePlayers?: Map<number, PlayerState>
     otherPlayers?: Map<number, RemotePlayer>
+    monsters?: Map<string, MonsterData>
     enableRemote?: boolean
     /** Baked water surface height at a world XZ (sea level where none). */
     waterSurfaceAt?: (x: number, z: number) => number
@@ -41,6 +34,7 @@
     playerPosition = null,
     remotePlayers = undefined,
     otherPlayers = undefined,
+    monsters = undefined,
     enableRemote = false,
     waterSurfaceAt = undefined,
     groundHeightAt = undefined,
@@ -81,6 +75,8 @@
   let localStride: Stride | null = null
   /* eslint-disable-next-line svelte/prefer-svelte-reactivity */
   const remoteStrides = new Map<number, Stride>()
+  /* eslint-disable-next-line svelte/prefer-svelte-reactivity */
+  const monsterStrides = new Map<string, Stride>()
 
   /** Accumulate one walker's travel and stamp a print each full stride. */
   function trail(
@@ -97,8 +93,7 @@
     const moved = Math.hypot(dx, dz)
     last.x = x
     last.z = z
-    // Teleports and respawns land here; the seam wrap does not, since the
-    // delta above takes the short way round.
+    // Ignore teleports and respawns.
     if (moved > TELEPORT_M) {
       last.walked = 0
       return last
@@ -106,8 +101,7 @@
     last.walked += moved
     if (last.walked < STRIDE_M) return last
     last.walked = 0
-    // Wading leaves no visible trail — the print would sit on the riverbed,
-    // under the water surface.
+    // Underwater prints are invisible.
     if ((waterSurfaceAt?.(x, z) ?? -Infinity) - y > SUBMERGED_M) return last
     system.emit(x, y, z, dx, dz, last.side, strength, snow)
     last.side = -last.side
@@ -133,9 +127,6 @@
     if (playerPosition && !mounted) {
       const { x, y, z } = playerPosition
       const snow = onSnow(x, y, z, snowCover)
-      // Checked at emit time, so the trail stops the instant the soaking
-      // expires even between the server's sweeps. The last of the water
-      // leaves fainter prints.
       const remaining = wetUntil - Date.now()
       const strength = snow
         ? snowStrength
@@ -148,36 +139,67 @@
       localStride = null
     }
 
-    if (!enableRemote || !remotePlayers || !otherPlayers || !playerPosition) {
+    if (!enableRemote || !playerPosition) {
       remoteStrides.clear()
+      monsterStrides.clear()
       return
     }
-    for (const [id, pose] of remotePlayers) {
-      const other = otherPlayers.get(id)
-      // Their model is drawn unwrapped near the viewer; the prints have to
-      // land under it, not a world width away.
-      const x = unwrapWorldXNear(playerPosition.x, pose.position.x)
-      const { y, z } = pose.position
-      const snow = !!other && !isMounted(other) && onSnow(x, y, z, snowCover)
-      if (!snow && (!other?.wet || isMounted(other))) {
-        remoteStrides.delete(id)
+    if (remotePlayers && otherPlayers) {
+      for (const [id, pose] of remotePlayers) {
+        const other = otherPlayers.get(id)
+        if (!other || isMounted(other)) {
+          remoteStrides.delete(id)
+          continue
+        }
+        const x = unwrapWorldXNear(playerPosition.x, pose.position.x)
+        const { y, z } = pose.position
+        const snow = onSnow(x, y, z, snowCover)
+        if (!snow && !other.wet) {
+          remoteStrides.delete(id)
+          continue
+        }
+        remoteStrides.set(
+          id,
+          trail(
+            remoteStrides.get(id) ?? null,
+            x,
+            y,
+            z,
+            snow ? snowStrength : REMOTE_STRENGTH,
+            snow
+          )
+        )
+      }
+      for (const id of remoteStrides.keys()) {
+        if (!remotePlayers.has(id)) remoteStrides.delete(id)
+      }
+    } else {
+      remoteStrides.clear()
+    }
+
+    if (!monsters || snowCover < SNOW_PRINT_MIN_COVER) {
+      monsterStrides.clear()
+      return
+    }
+    for (const [id, monster] of monsters) {
+      const x = unwrapWorldXNear(playerPosition.x, monster.position.x)
+      const { y, z } = monster.position
+      if (
+        (monster.floorLevel ?? 0) !== 0 ||
+        monster.health <= 0 ||
+        (monster.state !== 'walk' && monster.state !== 'run') ||
+        !onSnow(x, y, z, snowCover)
+      ) {
+        monsterStrides.delete(id)
         continue
       }
-      remoteStrides.set(
+      monsterStrides.set(
         id,
-        trail(
-          remoteStrides.get(id) ?? null,
-          x,
-          y,
-          z,
-          snow ? snowStrength : REMOTE_STRENGTH,
-          snow
-        )
+        trail(monsterStrides.get(id) ?? null, x, y, z, snowStrength, true)
       )
     }
-    // Anyone who walked out of range keeps no accumulator.
-    for (const id of remoteStrides.keys()) {
-      if (!remotePlayers.has(id)) remoteStrides.delete(id)
+    for (const id of monsterStrides.keys()) {
+      if (!monsters.has(id)) monsterStrides.delete(id)
     }
   }
 </script>

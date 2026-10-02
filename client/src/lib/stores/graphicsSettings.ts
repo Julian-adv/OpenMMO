@@ -36,8 +36,7 @@ export interface GraphicsPreset {
   enableRainSplashes: boolean
   enableRainPuddles: boolean
   enablePuddleRipples: boolean
-  /** Footprints behind *other* soaked players. The local player's always
-   *  draw; the fan-out is what costs, so only `high` takes it. */
+  /** High-only wet/snow trails for other players and snow trails for monsters. */
   enableRemoteFootprints: boolean
   enableHousingLayer: boolean
   enableTorchEffects: boolean

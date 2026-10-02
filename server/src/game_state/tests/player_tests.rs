@@ -283,7 +283,7 @@ async fn respawn_does_not_disclose_players_on_other_floors() {
     };
     let dead_id = dead.id;
 
-    // The maid downstairs: same spot as the sick room, one floor below.
+    // An observer downstairs must not see the sick room.
     let mut maid = dead.clone();
     maid.id = pid("cross_floor_maid");
     maid.name = "Maid".to_string();
@@ -319,6 +319,93 @@ fn respawn_bed(id: u32, x: f32) -> onlinerpg_shared::furniture::FurniturePlaceme
         rotation_deg: 180.0,
         floor_level: respawn.floor_level as u8,
     }
+}
+
+#[tokio::test]
+async fn sickroom_respawn_notifies_nearby_maids_across_floors_once() {
+    let game = make_test_game_state("sickroom_maid_notice");
+    let respawn = &world_config().respawn;
+    let bed_id = respawn.bed_ids[0];
+    let (rx, rz) = respawn.region();
+    game.sync_region_furniture(rx, rz, &[respawn_bed(bed_id, respawn.x)]);
+
+    let mut dead = make_player("sickroom_guest", respawn.x + 200.0, respawn.z);
+    dead.health = 0;
+    let dead_id = dead.id;
+    game.add_player(dead).await;
+
+    let mut observers = Vec::new();
+    for (name, floor, offset, official, class, expected) in [
+        ("downstairs_maid", 0, 0.0, true, CharacterClass::Maid, 1),
+        ("upstairs_maid", 1, 0.0, true, CharacterClass::Maid, 1),
+        ("distant_maid", 0, 100.0, true, CharacterClass::Maid, 0),
+        ("dungeon_maid", -1, 0.0, true, CharacterClass::Maid, 0),
+        ("other_staff", 0, 0.0, true, CharacterClass::Guard, 0),
+        ("ordinary_guest", 0, 0.0, false, CharacterClass::Maid, 0),
+    ] {
+        let mut observer = make_player(name, respawn.x + offset, respawn.z);
+        observer.floor_level = floor;
+        observer.is_official_npc = official;
+        observer.class = class;
+        let id = observer.id;
+        game.add_player(observer).await;
+        observers.push((name, game.register_direct_channel(&id).await, expected));
+    }
+    for (_, channel, _) in &mut observers {
+        drain(channel);
+    }
+
+    game.respawn_player(&dead_id).await;
+
+    for (name, mut channel, expected) in observers {
+        let messages = drain(&mut channel);
+        let notices: Vec<_> = messages
+            .iter()
+            .filter_map(|message| match message {
+                ServerMessage::PlayerRespawned { player } if player.id == dead_id => Some(player),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(notices.len(), expected, "{name}");
+        for player in notices {
+            assert_eq!(player.object_id, Some(bed_id));
+        }
+        if name == "downstairs_maid" {
+            assert!(!messages.iter().any(|message| matches!(message,
+                ServerMessage::PlayerAppeared { player } if player.id == dead_id
+            )));
+        }
+    }
+}
+
+#[tokio::test]
+async fn sickroom_respawn_does_not_repeat_a_maid_notice_from_the_death_floor() {
+    let game = make_test_game_state("sickroom_maid_same_origin");
+    let respawn = &world_config().respawn;
+    let (rx, rz) = respawn.region();
+    game.sync_region_furniture(rx, rz, &[respawn_bed(respawn.bed_ids[0], respawn.x)]);
+    let mut dead = make_player("nearby_dead_guest", respawn.x, respawn.z);
+    dead.health = 0;
+    let dead_id = dead.id;
+    game.add_player(dead).await;
+    let mut maid = make_player("nearby_maid", respawn.x, respawn.z);
+    maid.class = CharacterClass::Maid;
+    maid.is_official_npc = true;
+    let maid_id = maid.id;
+    game.add_player(maid).await;
+    let mut channel = game.register_direct_channel(&maid_id).await;
+
+    game.respawn_player(&dead_id).await;
+
+    assert_eq!(
+        drain(&mut channel)
+            .iter()
+            .filter(|message| matches!(message,
+                ServerMessage::PlayerRespawned { player } if player.id == dead_id
+            ))
+            .count(),
+        1
+    );
 }
 
 async fn kill(game_state: &GameState, id: &PlayerId) {

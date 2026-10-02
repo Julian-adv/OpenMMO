@@ -1869,15 +1869,16 @@ mod tests {
     async fn a_sickroom_respawn_sends_the_npc_to_the_bedside() {
         let (mut s, rx) = night_maid();
 
-        // Queued before the driver starts: the respawn buffer must survive
-        // startup and be picked up by the loop's first drain.
+        // A downstairs maid receives the notice before the driver starts.
         let mut woken = test_player(-1451.5, 4754.05);
         woken.id = onlinerpg_shared::PlayerId::from(7);
+        woken.position.y = 4.4;
+        woken.floor_level = 1;
+        woken.object_type = Some("rustic_bed".to_string());
         woken.object_id = Some(52);
         s.push_event(onlinerpg_shared::ServerMessage::PlayerRespawned { player: woken });
 
-        // One live entry on the NPC's serving spot, so the visit leaves a
-        // real active schedule the way Miriel's does.
+        // The visit interrupts the maid's serving schedule.
         let mut entry = ScheduleEntry {
             at: "night".to_string(),
             pos: [-1443.9, 1.3, 4748.9],

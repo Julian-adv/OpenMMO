@@ -370,8 +370,7 @@ fn monster_damage_and_death_update_local_health() {
     assert_eq!(s.nearby_players[&PlayerId::from(2)].health, 0);
 }
 
-/// A respawn into a sick-room bed must queue the bed for the bedside visit
-/// (introductions stay the AOI's job — PlayerAppeared handles those).
+/// A cross-floor respawn queues a visit without changing visible players.
 #[test]
 fn a_respawn_records_the_bed_for_the_sickroom_visit() {
     let (mut s, _rx) = test_state();
@@ -390,6 +389,7 @@ fn a_respawn_records_the_bed_for_the_sickroom_visit() {
 
     assert_eq!(s.drain_recent_respawns(), vec![("Hero".to_string(), 53)]);
     assert!(s.drain_recent_respawns().is_empty(), "drain must consume");
+    assert!(!s.nearby_players.contains_key(&woken.id));
 
     // An official NPC respawning queues no visit.
     let mut npc = woken;

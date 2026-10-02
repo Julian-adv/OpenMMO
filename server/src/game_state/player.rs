@@ -1,7 +1,9 @@
 use super::localization::PlayerMessage;
 use super::KickNotice;
 use crate::auth::{AuthError, AuthService, CharacterSaveData, ItemRow};
-use crate::types::{CharacterAttributes, Player, PlayerId, Position, ServerMessage};
+use crate::types::{
+    CharacterAttributes, CharacterClass, Player, PlayerId, Position, ServerMessage,
+};
 use crate::world_config::world_config;
 use bytes::Bytes;
 use onlinerpg_shared::estate_storage::is_estate_storage_item;
@@ -1054,6 +1056,29 @@ impl super::GameState {
             update_msg,
         )
         .await;
+        // Maids outside the movement audience still need a bedside notice.
+        if !player.is_official_npc && player.object_id.is_some() {
+            let radius_sq = super::EVENT_DELIVERY_RADIUS.powi(2);
+            let maids: Vec<_> = self
+                .players
+                .read()
+                .await
+                .values()
+                .filter(|maid| {
+                    maid.is_official_npc
+                        && maid.class == CharacterClass::Maid
+                        && maid.health > 0
+                        && maid.floor_level >= 0
+                        && maid.floor_level != player.floor_level
+                        && maid.position.dist_xz_sq(&player.position) <= radius_sq
+                        && (maid.floor_level != old_floor
+                            || maid.position.dist_xz_sq(&old_position) > radius_sq)
+                })
+                .map(|maid| maid.id)
+                .collect();
+            self.send_direct_message_to_players(&maids, ServerMessage::PlayerRespawned { player })
+                .await;
+        }
         self.reset_hunger_on_respawn(player_id).await;
         self.mark_party_vitals_dirty(player_id).await;
     }

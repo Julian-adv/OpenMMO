@@ -874,7 +874,7 @@
       campfiresLayerRef?.update(deltaTime, camera)
       objectOverlayRef?.update(deltaTime, camera)
 
-      // Age the local player's wet footprints and stamp new ones
+      // Age footprints and stamp new trails.
       footprintsRef?.update(deltaTime, snowCover.value)
 
       // Update camera with preserved offset
@@ -1510,6 +1510,7 @@
   playerPosition={currentPlayer?.position ?? null}
   remotePlayers={remotePlayerManager.players}
   {otherPlayers}
+  monsters={monsterManager.monsters}
   enableRemote={graphicsPreset.enableRemoteFootprints}
   {waterSurfaceAt}
   groundHeightAt={(x, z) => terrainHeightManager.groundYOrNull(x, z)}
