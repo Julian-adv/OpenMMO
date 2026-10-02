@@ -199,3 +199,49 @@
 
 - great_sword.glb — Tripo Pro 유료 생성 모델, 2026-09-12. Tripo 서비스 이용 조건 적용. [PR #178의 기여자 확인](https://github.com/Julian-adv/OpenMMO/pull/178#issuecomment-5638085991)에 따라 Skeleton Knight의 대검을 플레이어 아이템으로 분리했다. 원본 `fantasy+sword+3d+model.glb`는 `assets/skeleton_greatsword/source.glb`와 SHA-256이 동일하다(`04a73e744dfe381abc5bdd2fdd7444332afded3a9a4ec2ec223ba0c50be0b3a2`). 원본은 `assets/great_sword/source.glb`에 보존. 전장 1.8m, 칼날 +X, 칼날 평면 XZ(Blender), 원점은 손잡이 끝에서 전장의 19%. 텍스처 3장 512², emissive 제거. `export_item_asset.py --rotation 0 90 0 --grip-fraction 0.19 --icon-rotation 90 0 40`으로 GLB 및 투명 128² 아이콘 생성. `great_sword`: great_sword 타입·2d8·무게 6·28,000·티어 4·hands=2. 전용 Idle·Walk·Run·Slash 팩 사용. 기준 손 로컬 회전(-1.907 / -0.475 / 0.139 rad)은 타입별 weapon_animations.csv에서 읽는다. `offHandGripReach=0.3m`로 대기·걷기·달리기·공격의 매 프레임 왼손 그립에 손잡이 축(-X)을 맞추며, 원래 칼날의 롤과 오른손 위치를 유지한다. 대기 중 손을 떼면 기준 파지로 부드럽게 돌아간다. 애니메이션 출처는 animation.md 참조.
     - 컨셉아트: Google AI 생성, 사용자 제공 `image.png`(Pro 요금제, 2026-09-12 제공 기록). PNG의 XMP 크레딧은 `Made with Google AI`이며 내장 C2PA에도 Google Media Processing Services가 기록되어 있다. Google 서비스 이용 조건 적용. ![원화](../images/items/great_sword.png)
+
+## 로그 기본 장비 — 2026-10-02
+
+새 로그 캐릭터는 `worn_rogue_top`, `worn_rogue_pants`, `worn_rogue_gloves`,
+`worn_rogue_boots`를 각 1개 착용하고 시작한다. 머리 슬롯은 비워둔다.
+각 부위는 guard 1이며 판매 가격·상자 드롭 없이 거래 불가다. 기존 기본 검·횃불은 함께 지급한다.
+
+착용 모델은 [현재 선택 명세](modular-rogue-source-selection.json)의 Tripo 상의·바지·
+오른손 반장갑과 새 왼손 천띠 통합 장갑, v8 부츠다. 각 원본의 출처·생성 날짜·구독·라이선스는
+[상의](modular-rogue-tripo.md), [바지](modular-rogue-tripo-pants.md),
+[오른손 장갑](modular-rogue-tripo-glove.md), [왼손 천띠](modular-rogue-tripo-wrap.md),
+[부츠 제작 기록](modular-rogue-parts.md)을 따른다. 새 AI 생성이나 유료 호출은 없다.
+
+`node tools/prepare-modular-character.mjs --rogue-only`로 게임용 스킨 GLB를
+`client/public/models/characters/modular_male/`에 내보낸다. 원본 메시·리깅·UV를 유지하고
+기존 텍스처 압축 도구를 적용한다. 일반 재생성 및 `--parts-only`에도 로그 파츠가 포함된다.
+남성 모듈형 캐릭터의 게임·생성 미리보기는 작업실과 같은 가림·허리 절단·복원 규칙을 사용한다.
+여성 로그에게도 아이템을 지급하지만 외형은 기존 일체형 여성 모델을 사용한다.
+
+`blender -b -t 6 --python-exit-code 1 --python tools/blender-scripts/export_rogue_items.py`로
+선택된 네 파츠에서 정적 아이템 모델과 아이콘을 추출한다. Blender 5.2.0 LTS,
+512px 텍스처·바닥 중앙 원점, Cycles 512² 렌더를 128² 투명 PNG로 축소했다.
+출력은 `client/public/models/armor/rogue_{top,pants,gloves,boots}.glb` 및
+`client/public/items/armor/rogue_{top,pants,gloves,boots}.png`이며, 편집본은
+`assets/rogue_{top,pants,gloves,boots}/`에 보관한다.
+
+[런타임 출력·검증 기록](modular-rogue-runtime.json).
+
+2026-10-02 후속 수정: 바닥용 `rogue_pants.glb`는 Blender X축 −90° 회전을 적용해
+땅과 평행하게 눕혔다. 바지 아이콘은 X축 +25°로 보정해 기존 서 있는 표시 방향을 유지한다.
+바닥용 `rogue_gloves.glb`와 인벤토리 아이콘은 승인된
+`rogue_tripo_glove_v1/glove_rogue_right.glb`의 오른손 반장갑만 사용한다(1,591삼각형).
+착용 장갑은 오른손 반장갑과 왼손 천띠를 함께 사용하는 기존 통합 파츠다.
+**[미사용]** 서 있는 바지 바닥 모델과 양손을 함께 표시하던 장갑 아이콘·바닥 모델은 교체했다.
+변경 전후 해시는 위 런타임 기록에 보존한다. 같은 Blender 추출·렌더 도구와 원본 라이선스를 따른다.
+두 부위만 재생성하려면 내보내기 명령 뒤에 `-- --parts pants gloves`를 추가한다.
+
+장갑 방향 후속 수정: 피팅 기록의 손등 법선과 실제 `RightHand`·`RightHandMiddle1` 본 방향으로
+정적 오른손 장갑을 정렬했다. 게임 좌표에서 손등은 +Y, 손바닥은 −Y를 향하므로 바닥에
+손바닥 면이 닿는다. 아이콘은 정렬된 손등을 정면으로 보고 화면에서 Z축 −35°만 회전해
+손가락 부분을 각각 구분할 수 있게 렌더한다. **[미사용]** 직전 옆면 아이콘과 서 있는
+오른손 바닥 모델은 이 출력으로 교체했다. 메시·텍스처·라이선스는 같은 승인 원본을 따른다.
+
+최종 정리: 정적 아이템의 최신 `.blend` 편집본과 게임용 GLB·128² 아이콘을 보관한다.
+중간 512² 렌더, `.blend1` 백업, 임시 브라우저·바닥 검수 파일은 삭제했다.
+로그 내보내기 도구도 중간 렌더를 제거하고 편집본 백업을 만들지 않는다.

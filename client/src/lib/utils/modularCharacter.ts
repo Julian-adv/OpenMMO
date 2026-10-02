@@ -48,10 +48,10 @@ export function skinnedParts(root: THREE.Object3D): THREE.SkinnedMesh[] {
 
 export interface ModularOutfit {
   hair: 'hair_crop' | 'hair_sidepart' | 'none'
-  top: 'linen' | 'leather' | 'plate' | 'barbarian' | 'none'
-  pants: 'cloth' | 'plate' | 'barbarian' | 'none'
-  gloves: 'none' | 'leather' | 'plate' | 'barbarian'
-  boots: 'none' | 'leather' | 'plate' | 'barbarian'
+  top: 'linen' | 'leather' | 'plate' | 'barbarian' | 'rogue' | 'none'
+  pants: 'cloth' | 'plate' | 'barbarian' | 'rogue' | 'none'
+  gloves: 'none' | 'leather' | 'plate' | 'barbarian' | 'rogue'
+  boots: 'none' | 'leather' | 'plate' | 'barbarian' | 'rogue'
   helmet: 'none' | 'plate' | 'barbarian'
 }
 
@@ -89,7 +89,7 @@ export function modularOutfitParts(outfit: ModularOutfit): Set<string> {
     selected.add(outfit.hair)
   if (outfit.top === 'linen' || outfit.top === 'leather')
     selected.add('top_linen')
-  if (['leather', 'plate', 'barbarian'].includes(outfit.top))
+  if (['leather', 'plate', 'barbarian', 'rogue'].includes(outfit.top))
     selected.add(`top_${outfit.top}`)
   if (outfit.gloves !== 'none') selected.add(`gloves_${outfit.gloves}`)
   if (outfit.boots !== 'none') selected.add(`boots_${outfit.boots}`)
@@ -127,15 +127,16 @@ function bodyMaterial(material: THREE.Material, underwear: boolean) {
   return variants ? variants[underwear ? 'underwear' : 'skin'] : material
 }
 
-export function showModularOutfit(
+function region(mesh: THREE.Object3D): string | undefined {
+  for (let node: THREE.Object3D | null = mesh; node; node = node.parent)
+    if (typeof node.userData.region === 'string') return node.userData.region
+}
+
+function showBaseModularOutfit(
   body: THREE.SkinnedMesh[],
   parts: ReadonlyMap<string, THREE.SkinnedMesh[]>,
   outfit: ModularOutfit
 ) {
-  const region = (mesh: THREE.Object3D): string | undefined => {
-    for (let node: THREE.Object3D | null = mesh; node; node = node.parent)
-      if (typeof node.userData.region === 'string') return node.userData.region
-  }
   const hidden = new Set<string>()
   const coveredLegs = outfit.pants === 'cloth' || outfit.pants === 'plate'
   const coveredFeet = outfit.boots === 'leather' || outfit.boots === 'plate'
@@ -143,6 +144,7 @@ export function showModularOutfit(
   const sleeveCut = (
     {
       none: undefined,
+      rogue: undefined,
       leather: 'gloves',
       plate: 'gauntlets',
       barbarian: 'bracers',
@@ -222,6 +224,103 @@ export function showModularOutfit(
         )
       trimModularClothing(mesh, mesh.visible ? cut : undefined)
     }
+  return selected
+}
+
+type RogueSlot = 'top' | 'pants' | 'gloves' | 'boots'
+
+export const ROGUE_MODULAR_PARTS = [
+  'top_rogue',
+  'pants_rogue',
+  'gloves_rogue',
+  'boots_rogue',
+] as const
+
+export const ROGUE_MODULAR_OUTFIT: ModularOutfit = {
+  hair: 'hair_crop',
+  top: 'rogue',
+  pants: 'rogue',
+  gloves: 'rogue',
+  boots: 'rogue',
+  helmet: 'none',
+}
+
+export function showModularOutfit(
+  body: THREE.SkinnedMesh[],
+  parts: ReadonlyMap<string, THREE.SkinnedMesh[]>,
+  outfit: ModularOutfit
+): Set<string> {
+  const available = <Slot extends RogueSlot>(slot: Slot) =>
+    outfit[slot] === 'rogue' && !parts.get(`${slot}_rogue`)?.length
+      ? 'none'
+      : outfit[slot]
+  const top = available('top')
+  const pants = available('pants')
+  const gloves = available('gloves')
+  const boots = available('boots')
+  const collar = parts
+    .get('top_rogue')
+    ?.some((mesh) => mesh.userData.fitting_status === 'candidate_tripo_v1')
+    ? 'tripo_collar'
+    : 'collar'
+  const selected = showBaseModularOutfit(body, parts, {
+    ...outfit,
+    top: top === 'rogue' ? 'none' : top,
+    pants: pants === 'rogue' ? 'cloth' : pants,
+    gloves: gloves === 'rogue' ? 'none' : gloves,
+    boots: boots === 'rogue' ? 'leather' : boots,
+  })
+  if (![top, pants, gloves, boots].includes('rogue')) return selected
+  for (const [style, proxy] of [
+    [pants, 'pants_cloth'],
+    [boots, 'boots_leather'],
+  ]) {
+    if (style !== 'rogue') continue
+    selected.delete(proxy)
+    for (const mesh of parts.get(proxy) ?? []) mesh.visible = false
+  }
+  for (const [slot, style] of Object.entries({ top, pants, gloves, boots })) {
+    if (style === 'rogue') selected.add(`${slot}_rogue`)
+  }
+  for (const id of ROGUE_MODULAR_PARTS)
+    for (const mesh of parts.get(id) ?? []) mesh.visible = selected.has(id)
+  const coveredWaist =
+    pants === 'rogue' &&
+    top !== 'none' &&
+    top !== 'barbarian' &&
+    parts
+      .get('pants_rogue')
+      ?.some(
+        (mesh) => mesh.userData.fitting_status === 'candidate_tripo_pants_v1'
+      )
+  for (const mesh of parts.get('pants_rogue') ?? [])
+    trimModularClothing(
+      mesh,
+      coveredWaist ? 'tripo_covered_waist' : undefined,
+      true
+    )
+  const hidden = new Set([
+    ...(top === 'rogue' ? ['torso', 'upper_arms'] : []),
+    ...(pants === 'rogue' ? ['legs', 'ankles', 'boot_ankles'] : []),
+  ])
+  for (const mesh of body) {
+    const bodyRegion = region(mesh)
+    if (bodyRegion === 'neck')
+      trimModularClothing(mesh, top === 'rogue' ? collar : undefined, true)
+    if (hidden.has(bodyRegion ?? '')) mesh.visible = false
+    if (
+      bodyRegion === 'torso' &&
+      top === 'rogue' &&
+      collar === 'tripo_collar'
+    ) {
+      trimModularClothing(
+        mesh,
+        coveredWaist ? 'tripo_covered_waist' : 'tripo_waist',
+        true
+      )
+      mesh.visible = true
+    }
+  }
   return selected
 }
 

@@ -299,6 +299,14 @@
   "worn_plate_greaves.name": "古びたプレートレギンス",
   "worn_plate_helmet.description": "新米騎士に支給される古びた板金鎧。商人は買い取りません。",
   "worn_plate_helmet.name": "古びたプレートヘルム",
+  "worn_rogue_boots.description": "新米盗賊に支給される古びた衣服。商人は買い取りません。",
+  "worn_rogue_boots.name": "古びた盗賊のブーツ",
+  "worn_rogue_gloves.description": "新米盗賊に支給される右手の革製指なし手袋と左手首の布巻き。商人は買い取りません。",
+  "worn_rogue_gloves.name": "古びた盗賊の手袋",
+  "worn_rogue_pants.description": "新米盗賊に支給される古びた衣服。商人は買い取りません。",
+  "worn_rogue_pants.name": "古びた盗賊のズボン",
+  "worn_rogue_top.description": "新米盗賊に支給される古びた衣服。商人は買い取りません。",
+  "worn_rogue_top.name": "古びた盗賊の上着",
   "worn_torch.description": "半分ほど燃え尽きた短い松明。商人は買い取ってくれません。",
   "worn_torch.name": "使い古した松明"
 }

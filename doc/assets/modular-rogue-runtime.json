@@ -1,0 +1,251 @@
+{
+  "date": "2026-10-02",
+  "source_selection": "doc/assets/modular-rogue-source-selection.json",
+  "inputs": [
+    {
+      "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+      "sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
+      "bytes": 2150516,
+      "triangles": 4877
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/pants_rogue.glb",
+      "sha256": "7178d06a9b2e18953e2c3fb0672df8424b688d6f4ccc47affc856a9084e8e81c",
+      "bytes": 2169748,
+      "triangles": 2022
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/gloves_rogue.glb",
+      "sha256": "80107110dabfcbd0c6bda685550e52b0133e6c62272c6ab660a6b24f11eb835a",
+      "bytes": 14889824,
+      "triangles": 3495
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/boots_rogue.glb",
+      "sha256": "dfefa61608f8359837b7e4b746424b18042f538d191438774663bed394097f16",
+      "bytes": 9769204,
+      "triangles": 896
+    }
+  ],
+  "outputs": [
+    {
+      "path": "client/public/models/characters/modular_male/top_rogue.glb",
+      "sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
+      "bytes": 2150516,
+      "triangles": 4877
+    },
+    {
+      "path": "client/public/models/armor/rogue_top.glb",
+      "sha256": "03be30222c71ab3f7893f2fdd1cf1a55828ff117cdf36927e129f6c1f2b7f679",
+      "bytes": 310540,
+      "triangles": 4877
+    },
+    {
+      "path": "client/public/items/armor/rogue_top.png",
+      "sha256": "f25cb44644dac653cae3b9489ba15db96a2e263eb37ec9e92ac81511b1c8d1df",
+      "bytes": 16376
+    },
+    {
+      "path": "client/public/models/characters/modular_male/pants_rogue.glb",
+      "sha256": "7178d06a9b2e18953e2c3fb0672df8424b688d6f4ccc47affc856a9084e8e81c",
+      "bytes": 2169748,
+      "triangles": 2022
+    },
+    {
+      "path": "client/public/models/armor/rogue_pants.glb",
+      "sha256": "e3e2390d154008f312b0c11ebce6c6ec6144854aa6224851c0ec3c882225f594",
+      "bytes": 178564,
+      "triangles": 2022
+    },
+    {
+      "path": "client/public/items/armor/rogue_pants.png",
+      "sha256": "e39a5e23908997977e74c744fc3ef34c55ba6b0160dc7518b42fc4d1c146a537",
+      "bytes": 12029
+    },
+    {
+      "path": "client/public/models/characters/modular_male/gloves_rogue.glb",
+      "sha256": "d9d192ffcd043abd629732e52c292fdadde1b3b1872d757ba51aeb68faa65fed",
+      "bytes": 7367224,
+      "triangles": 3495
+    },
+    {
+      "path": "client/public/models/armor/rogue_gloves.glb",
+      "sha256": "adf82fa15f7f994d5829c19a5b9d5bec1d8fddc549b1f1b365cbc1ed1c4600fd",
+      "bytes": 194020,
+      "triangles": 1591
+    },
+    {
+      "path": "client/public/items/armor/rogue_gloves.png",
+      "sha256": "fdc00e65fe844f59024c4593ba54bb57fab01e107da921f54b10840c9409d2b7",
+      "bytes": 12875
+    },
+    {
+      "path": "client/public/models/characters/modular_male/boots_rogue.glb",
+      "sha256": "6e1ed626c06a4ad6c3f4b0c297739d623cebdfcf53da10c80780716a12419761",
+      "bytes": 3958724,
+      "triangles": 896
+    },
+    {
+      "path": "client/public/models/armor/rogue_boots.glb",
+      "sha256": "102d795192d7fe5af5ec822f012cedef5436caf79153cfb92e93edffffae64e0",
+      "bytes": 246660,
+      "triangles": 896
+    },
+    {
+      "path": "client/public/items/armor/rogue_boots.png",
+      "sha256": "f4754c010165cb665d33f5f029cc78d05207db1992b3fd522ebedcaecea34e95",
+      "bytes": 11006
+    }
+  ],
+  "starter_items": [
+    "worn_rogue_top",
+    "worn_rogue_pants",
+    "worn_rogue_gloves",
+    "worn_rogue_boots"
+  ],
+  "helmet": false,
+  "assembled_triangles": {
+    "raw_with_hidden_without_weapon": 26114,
+    "active_geometry_with_hidden_without_weapon": 21166,
+    "visible_without_weapon": 17757,
+    "raw_with_hidden_with_sword": 26416,
+    "visible_with_sword": 18059,
+    "face": 1505
+  },
+  "validation": {
+    "cargo_fmt": "passed",
+    "cargo_check": "passed",
+    "server_auth_tests": 27,
+    "client_targeted_tests": 71,
+    "npm_check": "passed; 0 errors and warnings",
+    "npm_lint": "passed",
+    "browser": {
+      "renderer": "Chromium WebGL; gameplay loadCharacterModel/applyCharacterArmor and animation packs",
+      "page_errors": [],
+      "visual_review": [
+        "rogue set front/back",
+        "knight chest and boots with rogue pants/hands"
+      ],
+      "scope": "Standalone runtime scene; no authenticated gameplay session"
+    },
+    "cargo_clippy": "passed; workspace/all-targets/locked with -D warnings",
+    "cleanup": {
+      "review": "Four simplify perspectives completed",
+      "changes": [
+        "Reuse the ancestor region lookup",
+        "Skip rogue-specific work when no rogue part is equipped"
+      ],
+      "removed": [
+        "Four intermediate 512px inventory renders",
+        "Two Blender backup files",
+        "Temporary runtime/ground review files"
+      ],
+      "retained": "Final wearable/static GLBs, 128px inventory icons, and latest static-item Blender sources"
+    }
+  },
+  "limitations": [
+    "Female rogues receive the same items but retain their existing non-modular model",
+    "Exhaustive mixed-equipment and full gameplay compatibility review remains pending"
+  ],
+  "licenses": "Derived from the existing Tripo and Meshy sources listed in doc/assets/items.md; no new generation or paid API calls",
+  "inventory_export": {
+    "pants": {
+      "ground_rotation_blender_degrees": [
+        -90,
+        0,
+        0
+      ],
+      "icon_rotation_blender_degrees": [
+        25,
+        -8,
+        -12
+      ],
+      "size_game_xyz_m": [
+        0.489694,
+        0.291201,
+        0.976179
+      ]
+    },
+    "gloves": {
+      "source": "assets/modular_human_male_01/parts/rogue_tripo_glove_v1/glove_rogue_right.glb",
+      "source_sha256": "409a4a231c02c8efd6d7e615d73ced1b7740d90c47334682ccaee764b1d9cb47",
+      "includes": "Right half-glove only; the wearable model still includes the left wrist cloth",
+      "triangles": 1591,
+      "ground_orientation": "Canonical dorsal normal aligned to +Y in game coordinates; palm points toward the ground; middle finger direction aligned to ground-plane -Z",
+      "icon_rotation_blender_degrees": [
+        0,
+        0,
+        -35
+      ],
+      "bounds_game_m": {
+        "min": [
+          -0.07250238955020905,
+          0,
+          -0.11666756868362427
+        ],
+        "max": [
+          0.07250238955020905,
+          0.08355236053466797,
+          0.11666762828826904
+        ],
+        "size": [
+          0.1450047791004181,
+          0.08355236053466797,
+          0.2333351969718933
+        ]
+      },
+      "superseded_side_view": {
+        "status": "[미사용] Upright right-glove ground model and side-view inventory icon",
+        "outputs": [
+          {
+            "path": "client/public/models/armor/rogue_gloves.glb",
+            "sha256": "a546bfb9d7117cfaadb0a51fe1581fb133290c3753894dffe4fa783b22fee8a8",
+            "bytes": 194020,
+            "triangles": 1591
+          },
+          {
+            "path": "client/public/items/armor/rogue_gloves.png",
+            "sha256": "1936913885f1b6fe3da3f83d3092220ac0dff5ae892bfae064fd5307ce02b96b",
+            "bytes": 8269
+          }
+        ]
+      }
+    },
+    "superseded_outputs": {
+      "status": "[미사용] Upright pants ground model and combined two-hand inventory/ground glove assets",
+      "outputs": [
+        {
+          "path": "client/public/models/armor/rogue_pants.glb",
+          "sha256": "b1106d6e059b80aa275388f51c0743e3c527cff77879bff5c33225d938ae380d",
+          "bytes": 178596,
+          "triangles": 2022
+        },
+        {
+          "path": "client/public/items/armor/rogue_pants.png",
+          "sha256": "cf185a288d2c1dc63ab2809cf49a645919780a1a351c62347b2fb37d6c00678a",
+          "bytes": 12043
+        },
+        {
+          "path": "client/public/models/armor/rogue_gloves.glb",
+          "sha256": "62d022a8fbbd11acb2d03435055c26d990752e107531a62b1db32626cd5430fe",
+          "bytes": 485316,
+          "triangles": 3495
+        },
+        {
+          "path": "client/public/items/armor/rogue_gloves.png",
+          "sha256": "8c1c89f64352218fb22a54e28360668cc965b177e3241f81fa84886f653a6901",
+          "bytes": 2536
+        }
+      ]
+    },
+    "validation": {
+      "export": "Blender 5.2.0 LTS completed for pants/gloves",
+      "pants": "Long axis horizontal; ground minimum Y = 0; dimensions 0.489694 x 0.291201 x 0.976179 m",
+      "gloves": "1591 triangles; dorsal-facing 128 x 128 icon visually reviewed, separate finger ends visible; ground minimum Y = 0 and palm down",
+      "wearable_gloves": "Combined right glove and left wrist cloth unchanged",
+      "python_compile": "passed",
+      "ground_render": "Blender render of both exported ground models visually reviewed: pants horizontal, right glove only"
+    }
+  },
+  "asset_revision": "735abc823ef3c7bd1874b5f4838f07918e8bb3e0"
+}

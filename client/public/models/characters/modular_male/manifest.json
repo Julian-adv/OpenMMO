@@ -1,5 +1,5 @@
 {
-  "source": "Modular male body, knight and barbarian equipment and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md",
+  "source": "Modular male body, knight, barbarian and rogue equipment and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md",
   "inputs": {
     "assets/modular_human_male_01/parts/fitted/base.glb": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b",
     "assets/modular_human_male_01/parts/fitted/hair_crop.glb": "6d754801583d1ae6147ac98cb55fac5237d5b43329e7273d5cb8977c91a0364a",
@@ -26,7 +26,11 @@
     "client/public/models/animations/offhand.glb": "b9dfabc7e57505515da545622ac7b781541d550d035c3351bfb1c532fc2df125",
     "client/public/models/animations/enchant_armor.glb": "77178f2ea299e1ebd73351c290285442347134c8519723e37c07ce722c409568",
     "client/public/models/animations/great_sword.glb": "ff7e995994d4f95298c1dd444e0e16dd5f93b7c6728de1fe6d8077a2624c366d",
-    "client/public/models/animations/riding.glb": "e0d76b9900e0f9bf76425c4165ebba8fd9e350895f9d99779a085af6dc51c9f8"
+    "client/public/models/animations/riding.glb": "e0d76b9900e0f9bf76425c4165ebba8fd9e350895f9d99779a085af6dc51c9f8",
+    "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
+    "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/pants_rogue.glb": "7178d06a9b2e18953e2c3fb0672df8424b688d6f4ccc47affc856a9084e8e81c",
+    "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/gloves_rogue.glb": "80107110dabfcbd0c6bda685550e52b0133e6c62272c6ab660a6b24f11eb835a",
+    "assets/modular_human_male_01/parts/rogue_fitted_v8/boots_rogue.glb": "dfefa61608f8359837b7e4b746424b18042f538d191438774663bed394097f16"
   },
   "outputs": {
     "base.glb": "577d36244539eec21b2b258858c3490adec3bc20d2c9652bced6993a06aa65fb",
@@ -124,6 +128,10 @@
     "animations/riding.glb": {
       "sha256": "232453e2837721ac30c7185bd21ce7fc65960adf8f5f017eb8ff3661011176f6",
       "clips": ["ride"]
-    }
+    },
+    "top_rogue.glb": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
+    "pants_rogue.glb": "7178d06a9b2e18953e2c3fb0672df8424b688d6f4ccc47affc856a9084e8e81c",
+    "gloves_rogue.glb": "d9d192ffcd043abd629732e52c292fdadde1b3b1872d757ba51aeb68faa65fed",
+    "boots_rogue.glb": "6e1ed626c06a4ad6c3f4b0c297739d623cebdfcf53da10c80780716a12419761"
   }
 }

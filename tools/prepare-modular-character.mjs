@@ -29,6 +29,11 @@ const parts = [
   "boots_barbarian",
   "helmet_barbarian",
 ];
+const rogue = JSON.parse(
+  readFileSync(resolve(root, "doc/assets/modular-rogue-source-selection.json"), "utf8"),
+).fitting_candidate;
+const rogueParts = ["top_rogue", "pants_rogue", "gloves_rogue", "boots_rogue"];
+parts.push(...rogueParts);
 const packs = [
   "locomotion",
   "combat_melee",
@@ -52,13 +57,15 @@ const hash = (path) =>
     .digest("hex");
 const report = {
   source:
-    "Modular male body, knight and barbarian equipment and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md",
+    "Modular male body, knight, barbarian and rogue equipment and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md",
   inputs: {},
   outputs: {},
 };
 mkdirSync(resolve(root, output, "animations"), { recursive: true });
-for (const name of parts) {
-  const source = `${fitted}/${name}.glb`;
+for (const name of process.argv.includes("--rogue-only") ? rogueParts : parts) {
+  const source = rogueParts.includes(name)
+    ? rogue.part_overrides[name] ?? `${rogue.directory}/${name}.glb`
+    : `${fitted}/${name}.glb`;
   report.inputs[source] = hash(source);
   execFileSync(
     python,
@@ -73,7 +80,7 @@ for (const name of parts) {
   report.outputs[`${name}.glb`] = hash(`${output}/${name}.glb`);
 }
 
-if (process.argv.includes("--parts-only")) {
+if (process.argv.includes("--parts-only") || process.argv.includes("--rogue-only")) {
   const manifest = resolve(root, output, "manifest.json");
   const previous = existsSync(manifest)
     ? JSON.parse(readFileSync(manifest, "utf8"))

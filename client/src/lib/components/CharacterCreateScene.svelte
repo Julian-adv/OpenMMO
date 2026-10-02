@@ -26,6 +26,14 @@
         hands: 'worn_plate_gauntlets',
       },
     },
+    rogue: {
+      armor: {
+        chest: 'worn_rogue_top',
+        pants: 'worn_rogue_pants',
+        hands: 'worn_rogue_gloves',
+        boots: 'worn_rogue_boots',
+      },
+    },
     barbarian: {
       armor: {
         head: 'worn_barbarian_helmet',

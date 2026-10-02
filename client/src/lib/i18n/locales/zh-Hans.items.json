@@ -299,6 +299,14 @@
   "worn_plate_greaves.name": "破旧板甲护腿",
   "worn_plate_helmet.description": "发给新手骑士的破旧板甲。商人不会收购。",
   "worn_plate_helmet.name": "破旧板甲头盔",
+  "worn_rogue_boots.description": "发给新手盗贼的破旧衣物。商人不会收购。",
+  "worn_rogue_boots.name": "破旧盗贼靴子",
+  "worn_rogue_gloves.description": "发给新手盗贼的右手皮革半指手套和左手腕布带。商人不会收购。",
+  "worn_rogue_gloves.name": "破旧盗贼手套",
+  "worn_rogue_pants.description": "发给新手盗贼的破旧衣物。商人不会收购。",
+  "worn_rogue_pants.name": "破旧盗贼裤子",
+  "worn_rogue_top.description": "发给新手盗贼的破旧衣物。商人不会收购。",
+  "worn_rogue_top.name": "破旧盗贼上衣",
   "worn_torch.description": "一支烧掉了一半的短火把。商人不会收购。",
   "worn_torch.name": "残旧火把"
 }

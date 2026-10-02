@@ -70,6 +70,76 @@ describe.skipIf(
         (mesh.userData.region ?? mesh.parent?.userData.region) === region
     )
 
+  it('equips the current rogue set, removes each slot and switches mixed equipment', async () => {
+    const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
+    const { modelRoot: rogue } = createCharacterModelRoot(source.scene)
+    const { modelRoot: other } = createCharacterModelRoot(source.scene)
+    const armor = {
+      chest: 'worn_rogue_top',
+      pants: 'worn_rogue_pants',
+      hands: 'worn_rogue_gloves',
+      boots: 'worn_rogue_boots',
+    }
+    const parts = {
+      chest: 'top_rogue',
+      pants: 'pants_rogue',
+      hands: 'gloves_rogue',
+      boots: 'boots_rogue',
+    } as const
+    applyCharacterArmor(rogue, armor)
+    for (const part of Object.values(parts)) {
+      expect(visible(rogue, part)).toBe(true)
+      expect(visible(other, part)).toBe(false)
+      expect(visible(source.scene, part)).toBe(false)
+    }
+    expect(visible(rogue, 'hair_crop')).toBe(true)
+    expect(visible(rogue, 'top_linen')).toBe(false)
+    expect(visible(rogue, 'pants_cloth')).toBe(false)
+    const meshes = skinnedParts(rogue)
+    for (const region of ['hands', 'forearms'])
+      expect(bodyRegion(meshes, region).every((mesh) => mesh.visible)).toBe(
+        true
+      )
+    const gloves = meshes.filter(
+      (mesh) => mesh.userData.part_id === 'gloves_rogue'
+    )
+    expect(gloves.length).toBeGreaterThan(0)
+    const handJoints = new Set<string>()
+    for (const mesh of gloves) {
+      const joints = mesh.geometry.getAttribute('skinIndex')
+      const weights = mesh.geometry.getAttribute('skinWeight')
+      for (let i = 0; i < joints.count; i++)
+        for (let j = 0; j < 4; j++)
+          if (weights.getComponent(i, j) > 0)
+            handJoints.add(mesh.skeleton.bones[joints.getComponent(i, j)].name)
+    }
+    expect(handJoints.has('LeftHand')).toBe(true)
+    expect(handJoints.has('RightHand')).toBe(true)
+    for (const slot of Object.keys(parts) as (keyof typeof parts)[]) {
+      applyCharacterArmor(rogue, { ...armor, [slot]: null })
+      for (const [otherSlot, part] of Object.entries(parts))
+        expect(visible(rogue, part)).toBe(otherSlot !== slot)
+    }
+    applyCharacterArmor(rogue, {
+      ...armor,
+      chest: 'worn_breastplate',
+      head: 'worn_plate_helmet',
+    })
+    expect(visible(rogue, 'top_plate')).toBe(true)
+    expect(visible(rogue, 'top_rogue')).toBe(false)
+    expect(visible(rogue, 'hair_crop')).toBe(false)
+    applyCharacterArmor(rogue, armor)
+    expect(visible(rogue, 'top_rogue')).toBe(true)
+    expect(visible(rogue, 'hair_crop')).toBe(true)
+    applyCharacterArmor(rogue, {})
+    for (const part of Object.values(parts))
+      expect(visible(rogue, part)).toBe(false)
+    for (const region of ['torso', 'legs', 'hands', 'feet'])
+      expect(bodyRegion(meshes, region).every((mesh) => mesh.visible)).toBe(
+        true
+      )
+  })
+
   it('equips and removes barbarian pieces independently without affecting other players', async () => {
     const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
     const { modelRoot: barbarian } = createCharacterModelRoot(source.scene)
