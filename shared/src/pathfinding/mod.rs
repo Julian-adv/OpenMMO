@@ -405,6 +405,37 @@ mod tests {
     }
 
     #[test]
+    fn a_path_from_beside_a_furniture_corner_clears_the_body_radius() {
+        let cache = furniture_cache(vec![(-1450, 4753)]);
+        for (x, z, gx, gz) in [
+            (-1449.0, 4754.35, -1448.5, 4752.5),
+            (-1448.9697, 4754.299, -1448.5, 4752.5),
+            (-1448.7244, 4752.8813, -1448.5, 4753.5),
+        ] {
+            let path = find_and_smooth_path(x, z, 0, gx, gz, 0, &cache, 2000);
+            assert!(path.found);
+            let mut from = PathWaypoint { x, z, floor: 0 };
+            for to in &path.waypoints {
+                assert!(is_line_passable(&from, to, &cache));
+                let steps = ((to.x - from.x).hypot(to.z - from.z) / 0.01).ceil() as usize;
+                for step in 1..=steps {
+                    let t = step as f32 / steps as f32;
+                    assert!(!is_circle_blocked_on_floor(
+                        &cache,
+                        from.x + (to.x - from.x) * t,
+                        from.z + (to.z - from.z) * t,
+                        0.3,
+                        0,
+                        None,
+                    ));
+                }
+                from = to.clone();
+            }
+            assert_eq!((from.x, from.z), (gx, gz));
+        }
+    }
+
+    #[test]
     fn furniture_sealed_player_can_step_out() {
         // A bed's footprint seals every edge of the cells it covers, so a player
         // standing where one is placed has no legal step in any direction.

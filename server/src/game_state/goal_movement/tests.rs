@@ -102,6 +102,131 @@ pub(super) async fn search_finished(game: &GameState, id: PlayerId) {
 }
 
 #[tokio::test]
+async fn rica_can_use_her_inn_chair_and_return_home() {
+    use onlinerpg_shared::furniture::FurniturePlacement;
+    use onlinerpg_shared::housing::HouseData;
+
+    let game = make_flat_world_game_state("rica_inn_chair");
+    for json in [
+        include_str!("../../../../data-src/house-templates/aldermark-inn.json"),
+        include_str!("../../../../data-src/house-templates/rica-shop.json"),
+    ] {
+        let mut house: HouseData = serde_json::from_str(json).unwrap();
+        house.origin.y = 5.0;
+        let mut cache = game.passability_write();
+        cache.insert(
+            house.id.clone(),
+            pathfinding::build_runtime_passability(&house),
+        );
+        pathfinding::apply_door_overlays(&mut cache, &house);
+    }
+    let placements = [
+        FurniturePlacement {
+            id: 29,
+            type_id: "table".into(),
+            x: -1450.1311,
+            y: 5.0,
+            z: 4750.187,
+            rotation_deg: 0.0,
+            floor_level: 0,
+        },
+        FurniturePlacement {
+            id: 30,
+            type_id: "table".into(),
+            x: -1450.45,
+            y: 5.0,
+            z: 4753.4224,
+            rotation_deg: 0.0,
+            floor_level: 0,
+        },
+        FurniturePlacement {
+            id: 40,
+            type_id: "chair".into(),
+            x: -1449.0,
+            y: 5.0,
+            z: 4753.35,
+            rotation_deg: 270.0,
+            floor_level: 0,
+        },
+        FurniturePlacement {
+            id: 41,
+            type_id: "chair".into(),
+            x: -1450.4,
+            y: 5.0,
+            z: 4754.6,
+            rotation_deg: 180.0,
+            floor_level: 0,
+        },
+    ];
+    game.sync_region_furniture(-2, 4, &placements);
+    let mut player = make_player("Rica", -1448.7244, 4752.8813);
+    player.position.y = 5.0;
+    let id = player.id;
+    game.add_player(player).await;
+    let mut rx = game.register_connection_channel(&id).await;
+    game.request_move_goal(id, 1, -1449.0, 4753.35, false).await;
+    assert!(matches!(
+        next_path(&mut rx).await,
+        ServerMessage::PlayerMovePath {
+            termination: PathTermination::Unreachable,
+            ..
+        }
+    ));
+    advance(&game, id, 10.0).await;
+    let mut status = None;
+    while let Ok(bytes) = rx.try_recv() {
+        if let ServerMessage::PlayerMoveProgress {
+            status: terminal, ..
+        } = onlinerpg_shared::deserialize_server_msg(&bytes).unwrap()
+        {
+            status = Some(terminal);
+        }
+    }
+    assert_eq!(status, Some(MoveStatus::Partial));
+    let beside = game.players.read().await[&id].position;
+    assert!(!pathfinding::is_circle_blocked_on_floor(
+        &game.passability_read(),
+        beside.x,
+        beside.z,
+        0.3,
+        0,
+        Some(beside.y)
+    ));
+    game.set_player_interaction(&id, Some("chair".into()), Some(40))
+        .await;
+    assert_eq!(game.players.read().await[&id].object_id, Some(40));
+    game.set_player_interaction(&id, None, None).await;
+    let standing = game.players.read().await[&id].position;
+    assert_eq!((standing.x, standing.z), (-1449.0, 4754.35));
+    while rx.try_recv().is_ok() {}
+    game.request_move_goal(id, 2, -1473.3, 4732.8, false).await;
+    next_path(&mut rx).await;
+    advance(&game, id, 60.0).await;
+    let home = game.players.read().await[&id].clone();
+    assert!(
+        shortest_world_delta_x(home.position.x, -1473.3).hypot(home.position.z - 4732.8) < 1.0,
+        "{home:?}"
+    );
+    assert_eq!(home.floor_level, 0);
+    while rx.try_recv().is_ok() {}
+
+    {
+        let mut players = game.players.write().await;
+        let player = players.get_mut(&id).unwrap();
+        player.position.x = -1448.9697;
+        player.position.z = 4754.299;
+    }
+    game.request_move_goal(id, 3, -1473.3, 4732.8, false).await;
+    next_path(&mut rx).await;
+    advance(&game, id, 60.0).await;
+    let home = game.players.read().await[&id].position;
+    assert!(
+        shortest_world_delta_x(home.x, -1473.3).hypot(home.z - 4732.8) < 1.0,
+        "{home:?}"
+    );
+}
+
+#[tokio::test]
 async fn goal_is_approved_before_tick_and_uses_only_time_since_approval() {
     for (sprinting, expected_speed) in [(false, 3.0), (true, 4.5)] {
         let (game, id, mut rx) = walker(&format!("goal_clock_{sprinting}"), false).await;

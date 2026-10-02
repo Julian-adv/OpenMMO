@@ -22,6 +22,8 @@ const APPROACH_RANGE: f32 = 1.0;
 
 const PICKUP_ARRIVE_RANGE: f32 = 2.0;
 
+const SCHEDULE_ARRIVAL_RADIUS: f32 = 2.0;
+
 const MAX_CHASE_DISTANCE: f32 = 20.0;
 
 const REROUTE_THRESHOLD: f32 = 1.5;
@@ -280,24 +282,32 @@ async fn walk_inner(
         }
         let terminal = status
             .is_some_and(|status| !matches!(status, MoveStatus::Moving | MoveStatus::Searching));
-        if schedule && request_is_final && status == Some(MoveStatus::Arrived) {
-            return Walked::Arrived;
-        }
-        if schedule && matches!(status, Some(MoveStatus::Partial | MoveStatus::Blocked)) {
-            tracing::info!(
-                player_id = ?s.self_player_id,
-                ?status,
-                requested_x = target.x,
-                requested_z = target.z,
-                requested_floor = target_floor,
-                position = ?me.position,
-                floor = s.self_floor_level,
-                "Schedule move completed at the server destination"
-            );
-            return Walked::Arrived;
-        }
-        if schedule && terminal && status != Some(MoveStatus::Arrived) {
-            return Walked::Lost(LostReason::NoPath);
+        if schedule && terminal {
+            if request_is_final
+                && delta.dist <= SCHEDULE_ARRIVAL_RADIUS
+                && s.passability_floor() == target_floor
+                && matches!(
+                    status,
+                    Some(MoveStatus::Arrived | MoveStatus::Partial | MoveStatus::Blocked)
+                )
+            {
+                if status != Some(MoveStatus::Arrived) {
+                    tracing::info!(
+                        player_id = ?s.self_player_id,
+                        ?status,
+                        requested_x = target.x,
+                        requested_z = target.z,
+                        requested_floor = target_floor,
+                        position = ?me.position,
+                        floor = s.self_floor_level,
+                        "Schedule move completed near the target"
+                    );
+                }
+                return Walked::Arrived;
+            }
+            if request_is_final || status != Some(MoveStatus::Arrived) {
+                return Walked::Lost(LostReason::NoPath);
+            }
         }
         if !fixed || request_id.is_none() || terminal {
             let mut goal = (target.x, target.z);

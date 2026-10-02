@@ -16,7 +16,11 @@ fn open_goal_near(
     start: &PathWaypoint,
     goal: &PathWaypoint,
 ) -> Option<(f32, f32)> {
-    if !is_cell_sealed(cache, goal.x, goal.z, goal.floor, None) {
+    let is_open = |x, z| {
+        !is_cell_sealed(cache, x, z, goal.floor, None)
+            && !is_circle_blocked_on_floor(cache, x, z, 0.31, goal.floor, None)
+    };
+    if is_open(goal.x, goal.z) {
         return None;
     }
     let (cx, cz) = (goal.x.floor() + 0.5, goal.z.floor() + 0.5);
@@ -25,10 +29,7 @@ fn open_goal_near(
     };
     (-2..=2)
         .flat_map(|dz| (-2..=2).map(move |dx| (cx + dx as f32, cz + dz as f32)))
-        .filter(|&(x, z)| {
-            !is_cell_sealed(cache, x, z, goal.floor, None)
-                && !is_circle_blocked_on_floor(cache, x, z, 0.31, goal.floor, None)
-        })
+        .filter(|&(x, z)| is_open(x, z))
         .min_by(|&a, &b| {
             distance(a, goal)
                 .total_cmp(&distance(b, goal))
@@ -158,6 +159,50 @@ mod tests {
         let destination = path.waypoints.last().unwrap();
         assert_eq!((destination.x, destination.z), (4.5, 5.5));
         assert!(!path.found);
+    }
+
+    #[tokio::test]
+    async fn a_goal_beside_furniture_leaves_room_for_the_body() {
+        let pool = PathSearchPool::default();
+        let furniture = build_furniture_passability(&[FurniturePiece {
+            cells: vec![(4, 5)],
+            floor_level: 0,
+            y_base: 0.0,
+            wall_height: onlinerpg_shared::furniture::FURNITURE_BLOCK_HEIGHT,
+        }])
+        .unwrap();
+        let cache = Arc::new(PassabilityCache::from([("furniture".into(), furniture)]));
+        assert!(!is_cell_sealed(&cache, 5.0, 5.35, 0, None));
+        assert!(is_circle_blocked_on_floor(&cache, 5.0, 5.35, 0.3, 0, None));
+        for (x, z, termination) in [
+            (5.0, 5.35, PathTermination::Unreachable),
+            (5.5, 5.5, PathTermination::Reached),
+        ] {
+            let path = pool
+                .search(
+                    Arc::clone(&cache),
+                    PathWaypoint {
+                        x: 1.5,
+                        z: 5.5,
+                        floor: 0,
+                    },
+                    PathWaypoint { x, z, floor: 0 },
+                    100,
+                )
+                .await
+                .unwrap();
+            assert_eq!(path.termination, termination);
+            let destination = path.waypoints.last().unwrap();
+            assert_eq!((destination.x, destination.z), (5.5, 5.5));
+            assert!(!is_circle_blocked_on_floor(
+                &cache,
+                destination.x,
+                destination.z,
+                0.3,
+                0,
+                None
+            ));
+        }
     }
 
     #[tokio::test]

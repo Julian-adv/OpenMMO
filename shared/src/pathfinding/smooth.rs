@@ -1,10 +1,5 @@
-//! Greedy line-of-sight path smoothing on top of `find_path`.
-//! `find_and_smooth_path` is the single entry-point most callers use:
-//! it runs A*, prepends the player's continuous start position, then
-//! collapses cardinal A* zig-zags into the longest straight runs each
-//! cell-edge mask still permits. Smoothing only spans within a single
-//! floor; floor-transition waypoints (stairwell entry/exit) are anchored
-//! so the path stays cardinal across the seam.
+//! Smooth A* paths from the player's continuous position using line of sight.
+//! Anchor floor transitions to keep stairwell movement cardinal.
 
 use super::astar::{find_path_avoiding, segment_enters_cells};
 use super::query::{
@@ -13,9 +8,7 @@ use super::query::{
 };
 use super::{PassabilityCache, PathResult, PathWaypoint};
 
-/// Player collision half-width, mirroring the client's `PLAYER_RADIUS` used by
-/// the continuous mover (`player-physics.ts`). Smoothing rejects any diagonal
-/// whose interior would bring a body of this radius into a wall.
+/// Matches `PLAYER_RADIUS` in the client's `player-physics.ts`.
 const PLAYER_RADIUS: f32 = 0.3;
 
 /// Greedy line-of-sight path smoothing. Only smooths within the same floor level.
@@ -34,9 +27,7 @@ fn smooth_path(
     while anchor < waypoints.len() - 1 {
         let mut farthest = anchor + 1;
 
-        // Don't smooth from floor-transition points (stairwell exit/entry).
-        // The first step after a floor change must stay cardinal to avoid
-        // diagonal paths that clip stairwell side-walls.
+        // Keep the first step after a floor change cardinal.
         let is_floor_transition =
             anchor > 0 && waypoints[anchor].floor != waypoints[anchor - 1].floor;
 
@@ -60,9 +51,7 @@ fn smooth_path(
     result
 }
 
-/// Line-of-sight check for path smoothing: the point-thickness Bresenham cell
-/// walk, plus a body-radius sweep that rejects diagonals whose interior would
-/// clip a convex wall corner the player's body can't clear.
+/// Check cell edges and body clearance along a smoothing segment.
 pub(super) fn is_line_passable(
     from: &PathWaypoint,
     to: &PathWaypoint,
@@ -94,13 +83,30 @@ fn line_passable_avoiding(
     !body_clips_wall(from, to, cache)
 }
 
-/// Sample the segment interior for a wall the body radius can't clear.
+/// Check the body's swept edges and interior.
 fn body_clips_wall(from: &PathWaypoint, to: &PathWaypoint, cache: &PassabilityCache) -> bool {
     let floor = from.floor;
     let r = PLAYER_RADIUS;
     let dx = to.x - from.x;
     let dz = to.z - from.z;
     let len = (dx * dx + dz * dz).sqrt();
+    if len < 1e-5 {
+        return false;
+    }
+    let (ox, oz) = (-dz / len * r, dx / len * r);
+    if [-1.0, 1.0].into_iter().any(|side| {
+        is_movement_blocked(
+            cache,
+            from.x + ox * side,
+            from.z + oz * side,
+            to.x + ox * side,
+            to.z + oz * side,
+            floor,
+            None,
+        )
+    }) {
+        return true;
+    }
     // Step finer than the radius so a corner notch can't slip between samples.
     let steps = (len / (r * 0.5)).ceil() as i32;
     for i in 1..steps {
@@ -172,11 +178,7 @@ fn cells_line_passable(from: &PathWaypoint, to: &PathWaypoint, cache: &Passabili
     }
 }
 
-/// Same-floor direct shortcut: when the straight start→goal segment passes the
-/// exact line-of-sight test smoothing applies, A* could only produce a path
-/// that collapses to this segment, so the search is skipped. Stairwell contact
-/// falls back to A* (see `segment_obstacles`), and a segment nowhere near any
-/// obstacle is accepted without walking the line.
+/// Skip A* for clear same-floor segments; stairwell contact requires a search.
 fn direct_line_ok(
     start_x: f32,
     start_z: f32,
@@ -238,9 +240,7 @@ pub fn find_and_smooth_path(
     )
 }
 
-/// [`find_and_smooth_path`] that keeps out of `blocked` cells, in the search
-/// and in the smoothing alike — a wall-only line check would otherwise cut
-/// the detour straight back through the cell it was routed around.
+/// Keep both search and smoothing out of `blocked` cells.
 #[allow(clippy::too_many_arguments)]
 pub fn find_and_smooth_path_avoiding(
     start_x: f32,
@@ -289,19 +289,31 @@ pub fn find_and_smooth_path_avoiding(
     if result.waypoints.is_empty() {
         return result;
     }
-    // Prepend the player's actual position so smoothing can optimize the
-    // entire trajectory (start → goal), not just (first A* cell → goal).
-    let mut full_path = Vec::with_capacity(result.waypoints.len() + 1);
-    full_path.push(PathWaypoint {
+    let start = PathWaypoint {
         x: start_x,
         z: start_z,
         floor: start_floor,
-    });
+    };
+    let center = PathWaypoint {
+        x: start_x.floor() + 0.5,
+        z: start_z.floor() + 0.5,
+        floor: start_floor,
+    };
+    let first = &result.waypoints[0];
+    let mut full_path = Vec::with_capacity(result.waypoints.len() + 2);
+    full_path.push(start.clone());
+    if first.floor == start_floor
+        && !line_passable_avoiding(&start, first, cache, blocked)
+        && !is_circle_blocked_on_floor(cache, center.x, center.z, PLAYER_RADIUS, start_floor, None)
+        && line_passable_avoiding(&start, &center, cache, blocked)
+        && line_passable_avoiding(&center, first, cache, blocked)
+    {
+        full_path.push(center);
+    }
     full_path.extend(result.waypoints);
     let smoothed = smooth_path(&full_path, cache, blocked);
     PathResult {
-        // Remove the start position — the client already knows where the player is
-        // and uses the first waypoint as the movement target.
+        // The client uses the first waypoint as its next target.
         waypoints: if smoothed.len() > 1 {
             smoothed[1..].to_vec()
         } else {

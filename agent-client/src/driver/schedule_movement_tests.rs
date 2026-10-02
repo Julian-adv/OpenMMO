@@ -210,8 +210,11 @@ async fn furniture_schedule_requests_the_authored_goal_and_uses_the_server_stop(
 }
 
 #[tokio::test(start_paused = true)]
-async fn refused_or_interrupted_schedule_moves_do_not_interact_or_relocate() {
+async fn distant_or_refused_schedule_moves_do_not_interact_or_relocate() {
     for status in [
+        MoveStatus::Arrived,
+        MoveStatus::Partial,
+        MoveStatus::Blocked,
         MoveStatus::Rejected,
         MoveStatus::Busy,
         MoveStatus::NodeLimit,
@@ -239,6 +242,59 @@ async fn refused_or_interrupted_schedule_moves_do_not_interact_or_relocate() {
             "{status:?} must not start another action"
         );
     }
+}
+
+#[tokio::test(start_paused = true)]
+async fn schedule_completion_requires_the_target_floor_even_when_nearby() {
+    for status in [
+        MoveStatus::Arrived,
+        MoveStatus::Partial,
+        MoveStatus::Blocked,
+    ] {
+        let (state, mut rx) = walker();
+        let task = spawn_move(
+            &state,
+            ScheduleEntry {
+                pos: [1.5, 4.2, 0.5],
+                floor_level: 1,
+                action: Some("bed".into()),
+                object_id: Some(23),
+                ..Default::default()
+            },
+        );
+        let id = next_goal(&mut rx, 1.5).await;
+        state.lock().await.push_event(progress(id, 1.1, status));
+        timeout(Duration::from_secs(1), task)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            rx.try_recv().is_err(),
+            "{status:?} on the wrong floor must not start the action"
+        );
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_partial_intermediate_segment_does_not_complete_the_schedule() {
+    let (state, mut rx) = walker();
+    let task = spawn_move(
+        &state,
+        ScheduleEntry {
+            pos: [70.5, 0.0, 0.5],
+            ..Default::default()
+        },
+    );
+    let id = next_goal(&mut rx, 48.5).await;
+    state
+        .lock()
+        .await
+        .push_event(progress(id, 48.1, MoveStatus::Partial));
+    timeout(Duration::from_secs(1), task)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(rx.try_recv().is_err());
 }
 
 #[tokio::test(start_paused = true)]
