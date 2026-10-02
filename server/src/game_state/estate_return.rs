@@ -4,8 +4,14 @@ use crate::{
     item_defs::AuthenticatedUseAction,
     types::{PlayerId, Position},
 };
-use onlinerpg_shared::pathfinding::{get_floor_y_base, is_circle_blocked_on_floor};
-use onlinerpg_terrain::{defaults::TILE_DIM, land::PLOT_SIZE};
+use onlinerpg_shared::estate_storage::estate_storage_def;
+use onlinerpg_shared::furniture::point_in_house_floor;
+use onlinerpg_shared::housing::FLOOR_THICKNESS;
+use onlinerpg_shared::pathfinding::{get_floor_y_base, is_cell_sealed, is_circle_blocked_on_floor};
+use onlinerpg_terrain::{
+    defaults::TILE_DIM,
+    land::{plot_addr, PLOT_SIZE},
+};
 use std::sync::LazyLock;
 
 static ARRIVAL_OFFSETS: LazyLock<Vec<(i32, i32)>> = LazyLock::new(|| {
@@ -50,8 +56,15 @@ impl GameState {
             return false;
         };
         let auth = auth.clone();
-        let plots = match auth_db(move || auth.homestead_plots(character_id)).await {
-            Ok(plots) => plots,
+        let (plots, rugs) = match auth_db(move || {
+            Ok::<_, crate::auth::AuthError>((
+                auth.homestead_plots(character_id)?,
+                auth.estate_return_rugs(character_id)?,
+            ))
+        })
+        .await
+        {
+            Ok(destination) => destination,
             Err(error) => {
                 tracing::warn!(%error, "Failed to load estate return destination");
                 self.send_system_message(player_id, "Estate return is temporarily unavailable.")
@@ -64,7 +77,14 @@ impl GameState {
                 .await;
             return false;
         }
-        let Some(position) = self.estate_return_position(&plots).await else {
+        let destination = match self.estate_rug_destination(&plots, &rugs).await {
+            Some(destination) => Some(destination),
+            None => self
+                .estate_return_position(&plots)
+                .await
+                .map(|position| (position, 0.0, 0)),
+        };
+        let Some((position, rotation, floor_level)) = destination else {
             self.send_system_message(
                 player_id,
                 "No safe outdoor arrival spot was found on your estate.",
@@ -102,9 +122,76 @@ impl GameState {
         }
         self.mark_inventory_dirty(player_id).await;
         self.send_inventory_snapshot(player_id, snapshot).await;
-        self.teleport_player_with_effects(player_id, position, 0.0, 0)
+        self.teleport_player_with_effects(player_id, position, rotation, floor_level)
             .await;
         true
+    }
+
+    async fn estate_rug_destination(
+        &self,
+        plots: &[(i32, i32, u8)],
+        rugs: &[(Position, f32, i8)],
+    ) -> Option<(Position, f32, i8)> {
+        if rugs.is_empty() {
+            return None;
+        }
+        let houses = self.housing_io.read_all_houses().await.ok()?;
+        let max_height_offset = estate_storage_def("furniture_hearthbound_rug")?.max_height_offset;
+        for &(mut position, rotation_deg, floor_level) in rugs {
+            if !position.is_finite() || !rotation_deg.is_finite() || !(0..=3).contains(&floor_level)
+            {
+                continue;
+            }
+            if !plots.contains(&super::land::plot_key(plot_addr(position.x, position.z))) {
+                continue;
+            }
+            let floor = floor_level as u8;
+            let house = houses
+                .iter()
+                .find(|house| point_in_house_floor(house, position.x, position.z, floor));
+            if let Some(house) = house {
+                let Some(y) = self.house_floor_y_base(house, &position, floor) else {
+                    continue;
+                };
+                if !y.is_finite()
+                    || !(y - 0.15..=y + FLOOR_THICKNESS / 2.0 + max_height_offset + 0.15)
+                        .contains(&position.y)
+                {
+                    continue;
+                }
+                position.y = y;
+            } else {
+                if floor_level != 0 {
+                    continue;
+                }
+                let Some((y, depth)) = self.ground_and_depth_at(position.x, position.z).await
+                else {
+                    continue;
+                };
+                if !y.is_finite()
+                    || depth > 0.1
+                    || !(y - 0.15..=y + max_height_offset + 0.15).contains(&position.y)
+                {
+                    continue;
+                }
+                position.y = y;
+            }
+            let cache = self.passability_read();
+            if is_cell_sealed(&cache, position.x, position.z, floor, Some(position.y))
+                || is_circle_blocked_on_floor(
+                    &cache,
+                    position.x,
+                    position.z,
+                    0.3,
+                    floor,
+                    Some(position.y),
+                )
+            {
+                continue;
+            }
+            return Some((position, rotation_deg.to_radians(), floor_level));
+        }
+        None
     }
 
     async fn estate_return_position(&self, plots: &[(i32, i32, u8)]) -> Option<Position> {

@@ -12,6 +12,7 @@ use onlinerpg_shared::estate_storage::{
 use onlinerpg_shared::furniture::{
     self, occupancy_fits_house_floor, point_in_house_floor, FurniturePlacement,
 };
+use onlinerpg_shared::housing::FLOOR_THICKNESS;
 use onlinerpg_shared::inventory::GroundItem;
 use onlinerpg_shared::messages::BagLineItem;
 use std::collections::{HashMap, HashSet};
@@ -658,14 +659,10 @@ impl GameState {
         } else if target_house.is_some() || floor_level > 0 {
             return Err("Enter the building floor before placing furniture there.");
         }
-        position.y = if player_house.is_some() {
-            onlinerpg_shared::pathfinding::get_floor_y_base(
-                &self.passability_read(),
-                position.x,
-                position.z,
-                floor,
-            )
-            .ok_or("Place the furniture on the current building floor.")?
+        position.y = if let Some(house) = player_house {
+            self.house_floor_y_base(house, &position, floor)
+                .ok_or("Place the furniture on the current building floor.")?
+                + FLOOR_THICKNESS / 2.0
         } else {
             self.height_sampler
                 .sample_height(position.x, position.z)
@@ -675,7 +672,7 @@ impl GameState {
         if definition.max_height_offset > 0.0 {
             let offset = requested.y - position.y;
             if !(-0.15..=definition.max_height_offset + 0.05).contains(&offset) {
-                return Err("Keep decorations within three meters of the current floor.");
+                return Err("Keep decorations within the allowed height above the current floor.");
             }
             position.y += offset.clamp(0.0, definition.max_height_offset);
         }

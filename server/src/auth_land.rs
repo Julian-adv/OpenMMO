@@ -355,6 +355,12 @@ impl AuthService {
                 PRIMARY KEY (tile_x, tile_z, quadrant)
             );
             CREATE INDEX IF NOT EXISTS idx_land_plots_estate ON land_plots(estate_id);
+            CREATE TABLE IF NOT EXISTS land_house_claims (
+                house_id TEXT PRIMARY KEY,
+                estate_id INTEGER NOT NULL REFERENCES land_estates(id) ON DELETE CASCADE,
+                owner_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                previous_owner_id TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS land_tax_periods (
                 estate_id INTEGER PRIMARY KEY REFERENCES land_estates(id) ON DELETE CASCADE,
                 month INTEGER NOT NULL
@@ -368,6 +374,7 @@ impl AuthService {
         plot: (i32, i32, u8),
         inventory: &[ItemRow],
         month: i64,
+        houses: &[(String, String)],
     ) -> Result<Result<i64, &'static str>, AuthError> {
         let mut conn = self.open_connection()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -393,8 +400,45 @@ impl AuthService {
         )?;
         Self::write_character_states(&tx, std::slice::from_ref(character))?;
         Self::replace_inventories(&tx, [(character.character_id, inventory)])?;
+        for (house_id, previous_owner_id) in houses {
+            let Ok(previous_id) = previous_owner_id.parse::<i64>() else {
+                continue;
+            };
+            if previous_id <= 0 {
+                continue;
+            }
+            tx.execute(
+                "INSERT INTO land_house_claims (house_id,estate_id,owner_id,previous_owner_id)
+                 SELECT ?1,?2,?3,?4 WHERE NOT EXISTS(SELECT 1 FROM characters WHERE id=?5)
+                 ON CONFLICT(house_id) DO NOTHING",
+                params![
+                    house_id,
+                    estate_id,
+                    character.character_id,
+                    previous_owner_id,
+                    previous_id
+                ],
+            )?;
+        }
         tx.commit()?;
         Ok(Ok(estate_id))
+    }
+
+    pub fn pending_estate_house_claims(&self) -> Result<Vec<(String, i64, String)>, AuthError> {
+        let conn = self.open_connection()?;
+        let mut stmt = conn.prepare(
+            "SELECT house_id,owner_id,previous_owner_id FROM land_house_claims ORDER BY house_id",
+        )?;
+        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    pub fn complete_estate_house_claim(&self, house_id: &str) -> Result<(), AuthError> {
+        self.open_connection()?.execute(
+            "DELETE FROM land_house_claims WHERE house_id=?1",
+            [house_id],
+        )?;
+        Ok(())
     }
 
     pub fn check_homestead_claim(

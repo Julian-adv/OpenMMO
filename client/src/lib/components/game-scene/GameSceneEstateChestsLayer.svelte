@@ -9,6 +9,7 @@
   import {
     loadEstateFurnitureModel,
     estateFurnitureInteractionData,
+    estateFurnitureRenderY,
   } from '../../utils/estateFurnitureModels'
   import { buildShopSignText, getShopSignStyle } from '../../utils/shop-sign'
   import { createSelectionBox } from '../../utils/objectSelectionBox'
@@ -28,6 +29,7 @@
   } from '../../effects/fire-particles'
   import { networkManager } from '../../network/socket'
   import { playPropSound } from '../../managers/sfxManager'
+  import { housingManager } from '../../managers/housingManager'
   import {
     estateChests,
     estateChestMode,
@@ -46,6 +48,7 @@
   import { unwrapWorldXNear } from '../../terrain/world-wrap'
   import type { LocalPlayer } from '../../stores/gameStore'
   import type { EstateChest } from '../../network/networkTypes'
+  import type { HouseData } from '../../types/housing'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { EstateFurniturePlacement } from '../../terrain/estatePlacement'
   import {
@@ -151,7 +154,7 @@
     }
   }
 
-  function makeVisual(chest: EstateChest) {
+  function makeVisual(chest: EstateChest, houses: HouseData[]) {
     const source = sources.get(chest.item_def_id)
     if (!source || !player) return
     const moving = chest.id === movingFurnitureId
@@ -174,7 +177,7 @@
     Object.assign(visual.userData, estateFurnitureInteractionData(chest))
     visual.position.set(
       unwrapWorldXNear(player.position.x, chest.position.x),
-      chest.position.y,
+      estateFurnitureRenderY(chest, houses),
       chest.position.z
     )
     visual.rotation.y = THREE.MathUtils.degToRad(chest.rotation_deg)
@@ -258,8 +261,9 @@
     torchPositions.length = 0
     visuals.clear()
     mixers.clear()
+    const houses = housingManager.getAllHouses()
     for (const chest of current.values()) {
-      if (chest.floor_level === floorLevel) makeVisual(chest)
+      if (chest.floor_level === floorLevel) makeVisual(chest, houses)
     }
   }
 
@@ -353,6 +357,9 @@
   }
 
   onMount(() => {
+    const unsubscribeHouses = housingManager.onHousesChanged(() => {
+      lastChests = null
+    })
     const canvas = renderer.domElement
     const click = (event: MouseEvent) => {
       if (
@@ -420,6 +427,7 @@
     window.addEventListener('keydown', escape, true)
     return () => {
       disposed = true
+      unsubscribeHouses()
       canvas.removeEventListener('mousedown', click, true)
       window.removeEventListener('keydown', escape, true)
       clearSavedPositionMaterials()

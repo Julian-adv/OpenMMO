@@ -3,14 +3,13 @@
 //! plus stairwell metadata. Built once per house from `HouseData`, then
 //! mutated via `update_door_edge` whenever a door opens or closes.
 
-use crate::housing::{HouseData, RoomData, RoomType, WallDirection};
+use crate::housing::{HouseData, RoomData, RoomType, WallDirection, FLOOR_THICKNESS};
 
 use super::{
     PassabilityCache, RuntimeFloorGrid, RuntimePassability, StairwellInfo, EDGE_E, EDGE_N, EDGE_S,
     EDGE_W,
 };
 
-const FLOOR_THICKNESS: f32 = 0.1;
 const DEFAULT_WALL_HEIGHT: f32 = 3.0;
 
 #[inline]

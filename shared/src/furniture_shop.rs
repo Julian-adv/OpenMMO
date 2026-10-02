@@ -80,7 +80,7 @@ mod tests {
     #[test]
     fn all_displays_sell_placeable_furniture() {
         let mut displays = std::collections::HashSet::new();
-        assert_eq!(SHOP.products.len(), 23);
+        assert_eq!(SHOP.products.len(), 24);
         for product in &SHOP.products {
             let definition =
                 crate::estate_storage::estate_storage_def(&product.item_def_id).unwrap();
@@ -98,7 +98,7 @@ mod tests {
                 assert!(displays.insert(id));
             }
         }
-        assert_eq!(displays.len(), 25);
+        assert_eq!(displays.len(), 26);
         assert!(!displays.contains(&84));
     }
 

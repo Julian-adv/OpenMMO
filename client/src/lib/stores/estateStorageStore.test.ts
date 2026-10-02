@@ -481,6 +481,25 @@ describe('estate storage visibility', () => {
     })
   })
 
+  it('allows wheel height adjustment of a previously buried rug', () => {
+    const rug = { ...chest, item_def_id: 'furniture_hearthbound_rug' }
+    startEstateFurniturePlacement({
+      kind: 'move',
+      furniture: rug,
+      item_def_id: rug.item_def_id,
+      owner_id: rug.owner_id,
+      plots: [{ x: 0, z: 0 }],
+    })
+    initializeEstateFurniturePlacementHeight(5.05)
+    expect(get(estateFurniturePlacementHeight).offset).toBe(0)
+    adjustEstateFurniturePlacementHeight(1)
+    expect(get(estateFurniturePlacementHeight).offset).toBeCloseTo(0.05)
+    setEstateFurniturePlacementHeight(1)
+    expect(get(estateFurniturePlacementHeight).offset).toBe(0.2)
+    adjustEstateFurniturePlacementHeight(-1)
+    expect(get(estateFurniturePlacementHeight).offset).toBeCloseTo(0.15)
+  })
+
   it('limits height adjustments to supported decorations and resets between items', () => {
     const mode = {
       kind: 'place' as const,

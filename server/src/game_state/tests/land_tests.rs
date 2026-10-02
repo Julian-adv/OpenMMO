@@ -21,6 +21,248 @@ async fn estate_return_quantity(game: &GameState, name: &str) -> u32 {
         .map_or(0, |item| item.quantity)
 }
 
+async fn place_return_rug(
+    game: &GameState,
+    auth: &crate::auth::AuthService,
+    name: &str,
+    position: Position,
+    floor_level: i8,
+) -> onlinerpg_shared::estate_storage::EstateChest {
+    let id = pid(name);
+    {
+        let mut players = game.players.write().await;
+        let player = players.get_mut(&id).unwrap();
+        player.position = position;
+        player.floor_level = floor_level;
+    }
+    game.inventories
+        .write()
+        .await
+        .get_mut(&id)
+        .unwrap()
+        .bag
+        .push(bag_item(101, "furniture_hearthbound_rug", 1));
+    game.place_estate_chest(&id, 101, position, 90.0, floor_level, auth)
+        .await;
+    auth.load_estate_chests()
+        .unwrap()
+        .into_iter()
+        .find(|rug| {
+            rug.position.x == position.x
+                && rug.position.z == position.z
+                && rug.floor_level == floor_level
+        })
+        .expect("rug placed")
+}
+
+async fn return_rug_house(game: &GameState) -> onlinerpg_shared::housing::HouseData {
+    let rooms: Vec<_> = (0..=1)
+        .map(|floor| {
+            serde_json::json!({
+                "localX": 0, "localZ": 0, "sizeX": 6, "sizeZ": 6,
+                "floorLevel": floor, "floorTexture": 0, "roofTexture": 0, "wallHeight": 3.0,
+                "wallNorth": [], "wallSouth": [], "wallEast": [], "wallWest": []
+            })
+        })
+        .collect();
+    let grids: Vec<_> = (0..=1)
+        .map(|floor| {
+            serde_json::json!({
+                "floorLevel": floor, "originX": 0, "originZ": 0, "width": 6, "depth": 6,
+                "cells": vec![0; 36]
+            })
+        })
+        .collect();
+    let house = serde_json::from_value(serde_json::json!({
+        "id": "return_rug_house", "ownerId": "Settler",
+        "origin": {"x": 3.0, "y": 5.0, "z": 3.0},
+        "rooms": rooms, "passability": grids
+    }))
+    .unwrap();
+    game.housing_io.write_house(&house).await.unwrap();
+    game.passability_add_house(&house).await;
+    house
+}
+
+#[tokio::test]
+async fn estate_return_rug_arrives_on_an_upper_floor_for_account_characters() {
+    let game = make_test_game_state("estate_return_indoor_rug");
+    let auth = make_test_auth("estate_return_indoor_rug");
+    let account = auth.login_google("indoor-rug-owner").unwrap();
+    land_owner(&game, &auth, &account, "Settler").await;
+    claim_at(&game, &auth, "Settler", 1, 1.0, 1.0).await;
+    return_rug_house(&game).await;
+    let position = pos3(5.5, 8.1, 5.5);
+    let rug = place_return_rug(&game, &auth, "Settler", position, 1).await;
+    assert!((rug.position.y - 8.15).abs() < 0.001);
+    let (_, mut rx) = land_owner(&game, &auth, &account, "Sibling").await;
+    add_estate_return_scroll(&game, "Sibling").await;
+    let id = pid("Sibling");
+    {
+        let mut players = game.players.write().await;
+        let player = players.get_mut(&id).unwrap();
+        player.position = pos3(200.0, -10.0, 200.0);
+        player.floor_level = -1;
+    }
+    game.use_estate_return_scroll(&id, 100, &auth).await;
+    let player = game.players.read().await[&id].clone();
+    assert_eq!(player.position, position);
+    assert_eq!(player.floor_level, 1);
+    assert_eq!(player.rotation, std::f32::consts::FRAC_PI_2);
+    assert_eq!(estate_return_quantity(&game, "Sibling").await, 1);
+    assert!(drain(&mut rx).iter().any(|msg| matches!(msg,
+        ServerMessage::PlayerTeleportEffect { position: target, floor_level: 1, phase: onlinerpg_shared::TeleportPhase::Arriving, .. }
+        if *target == position
+    )));
+}
+
+#[tokio::test]
+async fn estate_return_rug_preserves_adjusted_height_and_returns_to_the_walking_floor() {
+    use crate::game_state::estate_storage::EstateFurnitureMove;
+    for (indoors, floor, base_y) in [(false, 0, 5.0), (true, 0, 5.0), (true, 1, 8.1)] {
+        let test_name = format!("estate_return_raised_rug_{indoors}_{floor}");
+        let game = make_test_game_state(&test_name);
+        let auth = make_test_auth(&test_name);
+        let account = auth.login_google(&test_name).unwrap();
+        land_owner(&game, &auth, &account, "Settler").await;
+        claim_at(&game, &auth, "Settler", 1, 1.0, 1.0).await;
+        if indoors {
+            return_rug_house(&game).await;
+        }
+        let position = pos3(5.5, base_y, 5.5);
+        let rug = place_return_rug(&game, &auth, "Settler", position, floor).await;
+        let surface_y = base_y + if indoors { 0.05 } else { 0.0 };
+        assert!((rug.position.y - surface_y).abs() < 0.001);
+        let id = pid("Settler");
+        let target = pos3(5.55, surface_y + 0.2, 5.5);
+        game.move_estate_furniture(
+            &id,
+            EstateFurnitureMove {
+                furniture_id: rug.id,
+                expected_revision: rug.revision,
+                position: target,
+                rotation_deg: 90.0,
+                floor_level: floor,
+            },
+            &auth,
+        )
+        .await;
+        let saved = auth.load_estate_chests().unwrap().remove(0);
+        assert!((saved.position.y - target.y).abs() < 0.001);
+        assert_eq!(saved.revision, rug.revision + 1);
+        game.move_estate_furniture(
+            &id,
+            EstateFurnitureMove {
+                furniture_id: rug.id,
+                expected_revision: saved.revision,
+                position: pos3(target.x, surface_y + 1.0, target.z),
+                rotation_deg: 90.0,
+                floor_level: floor,
+            },
+            &auth,
+        )
+        .await;
+        let unchanged = auth.load_estate_chests().unwrap().remove(0);
+        assert_eq!(unchanged.position, saved.position);
+        assert_eq!(unchanged.revision, saved.revision);
+        add_estate_return_scroll(&game, "Settler").await;
+        {
+            let mut players = game.players.write().await;
+            let player = players.get_mut(&id).unwrap();
+            player.position = pos3(200.0, 5.0, 200.0);
+            player.floor_level = 0;
+        }
+        game.use_estate_return_scroll(&id, 100, &auth).await;
+        let player = game.players.read().await[&id].clone();
+        assert!((player.position.x - target.x).abs() < 0.001);
+        assert!((player.position.y - base_y).abs() < 0.001);
+        assert_eq!(player.position.z, target.z);
+        assert_eq!(player.floor_level, floor);
+        assert_eq!(estate_return_quantity(&game, "Settler").await, 1);
+    }
+}
+
+#[tokio::test]
+async fn estate_return_rug_follows_moves_and_recovery_restores_outdoor_return() {
+    use crate::game_state::estate_storage::EstateFurnitureMove;
+    let game = make_test_game_state("estate_return_moved_rug");
+    let auth = make_test_auth("estate_return_moved_rug");
+    let account = auth.login_google("moved-rug-owner").unwrap();
+    land_owner(&game, &auth, &account, "Settler").await;
+    claim_at(&game, &auth, "Settler", 1, 1.0, 1.0).await;
+    let rug = place_return_rug(&game, &auth, "Settler", pos3(6.5, 5.0, 6.5), 0).await;
+    add_estate_return_scroll(&game, "Settler").await;
+    let id = pid("Settler");
+    let target = pos3(12.5, 5.0, 12.5);
+    game.move_estate_furniture(
+        &id,
+        EstateFurnitureMove {
+            furniture_id: rug.id,
+            expected_revision: rug.revision,
+            position: target,
+            rotation_deg: 180.0,
+            floor_level: 0,
+        },
+        &auth,
+    )
+    .await;
+    game.use_estate_return_scroll(&id, 100, &auth).await;
+    assert_eq!(game.players.read().await[&id].position, target);
+    game.recover_estate_chest(&id, rug.id, &auth).await;
+    assert!(auth.estate_return_rugs(rug.owner_id).unwrap().is_empty());
+    game.use_estate_return_scroll(&id, 100, &auth).await;
+    assert_ne!(game.players.read().await[&id].position, target);
+    assert_eq!(estate_return_quantity(&game, "Settler").await, 0);
+}
+
+#[tokio::test]
+async fn estate_return_rug_skips_blocked_and_removed_building_floors() {
+    let game = make_test_game_state("estate_return_blocked_rug");
+    let auth = make_test_auth("estate_return_blocked_rug");
+    let account = auth.login_google("blocked-rug-owner").unwrap();
+    land_owner(&game, &auth, &account, "Settler").await;
+    claim_at(&game, &auth, "Settler", 1, 1.0, 1.0).await;
+    let mut house = return_rug_house(&game).await;
+    let target = pos3(5.5, 8.1, 5.5);
+    place_return_rug(&game, &auth, "Settler", target, 1).await;
+    add_estate_return_scroll(&game, "Settler").await;
+    house.passability[1].cells[14] = 0b1111;
+    game.passability_add_house(&house).await;
+    game.use_estate_return_scroll(&pid("Settler"), 100, &auth)
+        .await;
+    assert_eq!(game.players.read().await[&pid("Settler")].floor_level, 0);
+    assert_ne!(game.players.read().await[&pid("Settler")].position, target);
+    house.rooms.retain(|room| room.floor_level == 0);
+    house.passability.retain(|grid| grid.floor_level == 0);
+    game.housing_io.write_house(&house).await.unwrap();
+    game.passability_add_house(&house).await;
+    game.use_estate_return_scroll(&pid("Settler"), 100, &auth)
+        .await;
+    assert_eq!(game.players.read().await[&pid("Settler")].floor_level, 0);
+    assert_eq!(estate_return_quantity(&game, "Settler").await, 0);
+}
+
+#[tokio::test]
+async fn estate_return_rug_ignores_other_accounts() {
+    let game = make_test_game_state("estate_return_foreign_rug");
+    let auth = make_test_auth("estate_return_foreign_rug");
+    let account = auth.login_google("foreign-rug-owner").unwrap();
+    let (owner, _) = land_owner(&game, &auth, &account, "Settler").await;
+    claim_at(&game, &auth, "Settler", 1, 1.0, 1.0).await;
+    place_return_rug(&game, &auth, "Settler", pos3(6.5, 5.0, 6.5), 0).await;
+    let outsider = auth.login_google("foreign-rug-outsider").unwrap();
+    let (other, _) = land_owner(&game, &auth, &outsider, "Outsider").await;
+    claim_at(&game, &auth, "Outsider", 1, 33.0, 1.0).await;
+    assert_eq!(auth.estate_return_rugs(owner).unwrap().len(), 1);
+    assert!(auth.estate_return_rugs(other).unwrap().is_empty());
+    add_estate_return_scroll(&game, "Outsider").await;
+    game.use_estate_return_scroll(&pid("Outsider"), 100, &auth)
+        .await;
+    let position = game.players.read().await[&pid("Outsider")].position;
+    assert_eq!(plot_addr(position.x, position.z), plot_addr(33.0, 1.0));
+    assert_eq!(estate_return_quantity(&game, "Outsider").await, 1);
+}
+
 #[tokio::test]
 async fn estate_return_scroll_returns_from_dungeon_and_spends_one() {
     let game = make_test_game_state("estate_return");
@@ -239,6 +481,260 @@ fn rejected(rx: &mut DirectRx, text: &str) {
     ));
 }
 
+fn claim_test_house(
+    id: &str,
+    owner_id: &str,
+    x: f32,
+    z: f32,
+) -> onlinerpg_shared::housing::HouseData {
+    serde_json::from_value(serde_json::json!({
+        "id": id, "ownerId": owner_id, "origin": {"x": x, "y": 5.0, "z": z},
+        "sourceScrollId": "scroll_of_small_house",
+        "rooms": [{
+            "localX": 0, "localZ": 0, "sizeX": 6, "sizeZ": 6, "floorLevel": 0,
+            "floorTexture": 0, "roofTexture": 0, "wallHeight": 3.0,
+            "wallNorth": [], "wallSouth": [], "wallEast": [], "wallWest": []
+        }],
+        "passability": [{"floorLevel": 0, "originX": 0, "originZ": 0,
+            "width": 6, "depth": 6, "cells": vec![0; 36]}]
+    }))
+    .unwrap()
+}
+
+#[tokio::test]
+async fn land_claim_adopts_abandoned_house_and_preserves_existing_owners() {
+    let game = make_test_game_state("land_adopts_house");
+    let auth = make_test_auth("land_adopts_house");
+    let account = auth.login_google("house-claimant").unwrap();
+    let (claimant, mut rx) = land_owner(&game, &auth, &account, "Settler").await;
+    let other_account = auth.login_google("existing-house-owner").unwrap();
+    let existing = create_test_character(&auth, &other_account, "Existing");
+    let former = create_test_character(&auth, &other_account, "Former");
+    auth.delete_character(&other_account, former.id).unwrap();
+    let abandoned = claim_test_house("abandoned", &former.id.to_string(), 3.0, 3.0);
+    let houses = [
+        abandoned.clone(),
+        claim_test_house("occupied", &existing.id.to_string(), 12.0, 3.0),
+        claim_test_house("public", "", 21.0, 3.0),
+        claim_test_house("editor", "local", 3.0, 12.0),
+        claim_test_house("outside", &former.id.to_string(), 35.0, 3.0),
+    ];
+    for house in &houses {
+        game.housing_io.write_house(house).await.unwrap();
+        game.passability_add_house(house).await;
+    }
+    claim_at(&game, &auth, "Settler", 1, 1.0, 1.0).await;
+    assert!(drain(&mut rx)
+        .iter()
+        .any(|msg| matches!(msg, ServerMessage::LandClaimed { .. })));
+    let adopted = game
+        .housing_io
+        .find_house("abandoned")
+        .await
+        .unwrap()
+        .unwrap();
+    let mut expected = abandoned;
+    expected.owner_id = claimant.to_string();
+    assert_eq!(
+        serde_json::to_value(&adopted).unwrap(),
+        serde_json::to_value(&expected).unwrap()
+    );
+    for house in &houses[1..] {
+        assert_eq!(
+            game.housing_io
+                .find_house(&house.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .owner_id,
+            house.owner_id
+        );
+    }
+    assert!(auth.pending_estate_house_claims().unwrap().is_empty());
+    game.inventories
+        .write()
+        .await
+        .get_mut(&pid("Settler"))
+        .unwrap()
+        .bag
+        .push(bag_item(
+            100,
+            onlinerpg_shared::landscaping::TOOLBOX_ITEM,
+            1,
+        ));
+    game.demolish_house(&pid("Settler"), adopted.id.clone(), &auth)
+        .await;
+    assert!(game
+        .housing_io
+        .find_house(&adopted.id)
+        .await
+        .unwrap()
+        .is_none());
+}
+
+#[tokio::test]
+async fn land_claim_adopts_house_only_after_its_whole_foundation_is_owned() {
+    let game = make_test_game_state("land_adopts_whole_house");
+    let auth = make_test_auth("land_adopts_whole_house");
+    let account = auth.login_google("whole-house-claimant").unwrap();
+    let (claimant, _) = land_owner(&game, &auth, &account, "Settler").await;
+    let house = claim_test_house("spanning", "999999", 30.0, 3.0);
+    game.housing_io.write_house(&house).await.unwrap();
+    claim_at(&game, &auth, "Settler", 1, 1.0, 1.0).await;
+    assert_eq!(
+        game.housing_io
+            .find_house(&house.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .owner_id,
+        "999999"
+    );
+    claim_at(&game, &auth, "Settler", 2, 33.0, 1.0).await;
+    assert_eq!(
+        game.housing_io
+            .find_house(&house.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .owner_id,
+        claimant.to_string()
+    );
+}
+
+#[tokio::test]
+async fn land_claim_rejection_leaves_abandoned_house_and_deed_unchanged() {
+    let game = make_test_game_state("land_house_rejected_claim");
+    let auth = make_test_auth("land_house_rejected_claim");
+    let account = auth.login_google("rejected-house-claimant").unwrap();
+    let (_, mut rx) = land_owner(&game, &auth, &account, "Settler").await;
+    let house = claim_test_house("nonadjacent", "999999", 100.0, 3.0);
+    game.housing_io.write_house(&house).await.unwrap();
+    claim_at(&game, &auth, "Settler", 1, 1.0, 1.0).await;
+    claim_at(&game, &auth, "Settler", 2, 100.0, 1.0).await;
+    rejected(&mut rx, "edge");
+    assert_eq!(
+        game.housing_io
+            .find_house(&house.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .owner_id,
+        "999999"
+    );
+    assert!(game
+        .get_player_inventory(&pid("Settler"))
+        .await
+        .unwrap()
+        .bag
+        .iter()
+        .any(|item| item.instance_id == 2));
+    assert!(auth.pending_estate_house_claims().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn land_house_claim_persists_and_retries_after_file_error_and_owner_deletion() {
+    let mut game = make_test_game_state("land_house_claim_retry");
+    let housing_dir =
+        std::env::temp_dir().join(format!("land_house_retry_{}", uuid::Uuid::new_v4()));
+    game.housing_io = Arc::new(HousingIO::new(housing_dir.clone()));
+    let (auth, path) = make_test_auth_with_path("land_house_claim_retry");
+    let account = auth.login_google("house-claim-retry").unwrap();
+    let (claimant, _) = land_owner(&game, &auth, &account, "Settler").await;
+    let (sibling, _) = land_owner(&game, &auth, &account, "Sibling").await;
+    let house = claim_test_house("retry-house", "999999", 3.0, 3.0);
+    game.housing_io.write_house(&house).await.unwrap();
+    let character = game.get_player_save_data(&pid("Settler")).await.unwrap();
+    let mut inventory = game.get_player_inventory(&pid("Settler")).await.unwrap();
+    inventory.bag.retain(|item| item.instance_id != 1);
+    let rows = super::super::inventory::serialize_inventory(&inventory);
+    auth.claim_homestead(
+        &character,
+        (0, 0, 3),
+        &rows,
+        0,
+        &[(house.id.clone(), house.owner_id.clone())],
+    )
+    .unwrap()
+    .unwrap();
+    auth.delete_character(&account, claimant).unwrap();
+    let reopened = crate::auth::AuthService::new(path).unwrap();
+    assert_eq!(
+        reopened.pending_estate_house_claims().unwrap()[0].1,
+        sibling
+    );
+    let house_path = housing_dir.join("r+00_+00/retry-house.json");
+    tokio::fs::write(&house_path, b"invalid json")
+        .await
+        .unwrap();
+    assert!(game.apply_estate_house_claims(&reopened).await.is_err());
+    assert_eq!(reopened.pending_estate_house_claims().unwrap().len(), 1);
+    game.housing_io.write_house(&house).await.unwrap();
+    game.apply_estate_house_claims(&reopened).await.unwrap();
+    assert_eq!(
+        game.housing_io
+            .find_house(&house.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .owner_id,
+        sibling.to_string()
+    );
+    assert!(reopened.pending_estate_house_claims().unwrap().is_empty());
+    game.apply_estate_house_claims(&reopened).await.unwrap();
+}
+
+#[tokio::test]
+async fn land_house_claim_retry_preserves_houses_moved_or_given_an_owner() {
+    let game = make_test_game_state("land_house_claim_changed");
+    let auth = make_test_auth("land_house_claim_changed");
+    let account = auth.login_google("changed-house-claimant").unwrap();
+    let (claimant, _) = land_owner(&game, &auth, &account, "Settler").await;
+    let other_account = auth.login_google("changed-house-owner").unwrap();
+    let existing = create_test_character(&auth, &other_account, "Existing");
+    let mut moved = claim_test_house("moved-pending", "999999", 3.0, 3.0);
+    let mut reassigned = claim_test_house("reassigned-pending", "999999", 12.0, 3.0);
+    let character = game.get_player_save_data(&pid("Settler")).await.unwrap();
+    let inventory = game.get_player_inventory(&pid("Settler")).await.unwrap();
+    let rows = super::super::inventory::serialize_inventory(&inventory);
+    auth.claim_homestead(
+        &character,
+        (0, 0, 3),
+        &rows,
+        0,
+        &[
+            (moved.id.clone(), moved.owner_id.clone()),
+            (reassigned.id.clone(), reassigned.owner_id.clone()),
+        ],
+    )
+    .unwrap()
+    .unwrap();
+    moved.origin.x = 100.0;
+    reassigned.owner_id = existing.id.to_string();
+    game.housing_io.write_house(&moved).await.unwrap();
+    game.housing_io.write_house(&reassigned).await.unwrap();
+    game.apply_estate_house_claims(&auth).await.unwrap();
+    assert_ne!(
+        game.housing_io
+            .find_house(&moved.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .owner_id,
+        claimant.to_string()
+    );
+    assert_eq!(
+        game.housing_io
+            .find_house(&reassigned.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .owner_id,
+        existing.id.to_string()
+    );
+    assert!(auth.pending_estate_house_claims().unwrap().is_empty());
+}
+
 #[tokio::test]
 async fn land_expansion_wraps_across_the_world_seam() {
     let game = make_test_game_state("land_seam");
@@ -379,15 +875,15 @@ async fn land_rechecks_level_location_alive_floor_and_document() {
         .await
         .get_mut(&pid("Settler"))
         .unwrap()
-        .level = 9;
+        .level = 3;
     claim_at(&game, &auth, "Settler", 1, 1.0, 1.0).await;
-    rejected(&mut rx, "level 10");
+    rejected(&mut rx, "level 4");
     game.players
         .write()
         .await
         .get_mut(&pid("Settler"))
         .unwrap()
-        .level = 10;
+        .level = 4;
     game.players
         .write()
         .await
@@ -699,14 +1195,14 @@ async fn land_preview_checks_level_grades_and_ownership_without_spending() {
         .await
         .get_mut(&pid("Settler"))
         .unwrap()
-        .level = 9;
-    preview_rejected(&game, &auth, &mut rx, "level 10").await;
+        .level = 3;
+    preview_rejected(&game, &auth, &mut rx, "level 4").await;
     game.players
         .write()
         .await
         .get_mut(&pid("Settler"))
         .unwrap()
-        .level = 10;
+        .level = 4;
     for (grade, reason) in [
         (LandGrade::Crown, "Crown"),
         (LandGrade::Reserved, "reserved"),

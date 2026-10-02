@@ -13,6 +13,7 @@ furniture_chair,chair,0,0.05,90,0.588,0.65,0,3,0,0.15,0.2,0,false
 furniture_table,table,0,0.05,90,1.594,0.974,0,3,0,0.15,0.2,0,false
 furniture_rustic_bed,rustic_bed,0,0.05,90,0.906,2.2,0,3,0,0.15,0.2,0,false
 furniture_stone_hearth,stone_hearth,0,0.05,90,1.93,0.696,0,3,0,0.15,0.2,0,false
+furniture_hearthbound_rug,hearthbound_rug,0,0.05,90,2.4,1.6,0,3,0,0,0,0.2,false
 furniture_torch_wall,torch_wall,0,0.05,90,0.2,0.2,0,3,0,0,0,3,false
 furniture_health_potion,health_potion,0,0.05,15,0.2,0.2,0,3,0,0,0,3,false
 furniture_healing_potion,healing_potion,0,0.05,15,0.2,0.2,0,3,0,0,0,3,false

@@ -2,6 +2,7 @@ use super::{auth_db, inventory::serialize_inventory, GameState};
 use crate::auth::AuthService;
 use crate::types::{Player, PlayerId, ServerMessage};
 use onlinerpg_terrain::land::{plot_addr, LandGrade, PlotAddr};
+use std::collections::HashSet;
 
 pub(super) fn plot_key(addr: PlotAddr) -> (i32, i32, u8) {
     let tile = (addr.index / 4) as i32;
@@ -46,6 +47,9 @@ impl GameState {
                 }
             }
             Err(error) => tracing::warn!(%error, "Failed to load foreclosed estates"),
+        }
+        if let Err(error) = self.apply_estate_house_claims(auth).await {
+            tracing::warn!(%error, "Failed to apply abandoned house claims; will retry");
         }
         drop(_persistence);
         drop(last);
@@ -310,6 +314,9 @@ impl GameState {
         let player = players.get(player_id).ok_or("Character not found.")?;
         let addr = claim_location(player, plot)?;
         self.check_land_grade(addr).await?;
+        let houses = self
+            .abandoned_houses_for_claim(character.character_id, plot, auth)
+            .await?;
         let mut inventories = self.inventories.write().await;
         let inventory = inventories
             .get_mut(player_id)
@@ -326,23 +333,83 @@ impl GameState {
         let mut updated = inventory.clone();
         updated.bag.remove(index);
         let rows = serialize_inventory(&updated);
-        let auth = auth.clone();
+        let auth_copy = auth.clone();
         let month = self
             .current_game_day()
             .div_euclid(super::time::GAME_DAYS_PER_MONTH);
-        let estate_id = auth_db(move || auth.claim_homestead(&character, plot, &rows, month))
-            .await
-            .map_err(|error| {
-                tracing::warn!(%error, "Failed to commit land claim");
-                "Land registration could not be saved. Your Land Deed was not consumed."
-            })??;
+        let estate_id =
+            auth_db(move || auth_copy.claim_homestead(&character, plot, &rows, month, &houses))
+                .await
+                .map_err(|error| {
+                    tracing::warn!(%error, "Failed to commit land claim");
+                    "Land registration could not be saved. Your Land Deed was not consumed."
+                })??;
         *inventory = updated.clone();
         drop(inventories);
         drop(players);
+        if let Err(error) = self.apply_estate_house_claims(auth).await {
+            tracing::warn!(%error, "Failed to apply abandoned house claims; will retry");
+        }
         drop(persistence);
         self.mark_inventory_dirty(player_id).await;
         self.send_inventory_snapshot(player_id, updated).await;
         Ok(estate_id)
+    }
+
+    async fn abandoned_houses_for_claim(
+        &self,
+        character_id: i64,
+        plot: (i32, i32, u8),
+        auth: &AuthService,
+    ) -> Result<Vec<(String, String)>, &'static str> {
+        let houses = self.housing_io.read_all_houses().await.map_err(|error| {
+            tracing::warn!(%error, "Failed to load houses for land claim");
+            "Land registration could not check existing houses. Your Land Deed was not consumed."
+        })?;
+        let houses: Vec<_> = houses
+            .into_iter()
+            .filter_map(|house| {
+                let owner_id = house.owner_id.parse::<i64>().ok().filter(|id| *id > 0)?;
+                Some((house, owner_id))
+            })
+            .collect();
+        if houses.is_empty() {
+            return Ok(Vec::new());
+        }
+        let owner_ids: Vec<_> = houses
+            .iter()
+            .map(|(_, owner_id)| *owner_id)
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
+        let auth_copy = auth.clone();
+        let (owners, plots) = auth_db(move || {
+            Ok::<_, crate::auth::AuthError>((
+                auth_copy.character_names(&owner_ids)?,
+                auth_copy.homestead_plots(character_id)?,
+            ))
+        })
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "Failed to check abandoned house ownership");
+            "Land registration could not check existing houses. Your Land Deed was not consumed."
+        })?;
+        let mut plots: HashSet<_> = plots.into_iter().collect();
+        plots.insert(plot);
+        Ok(houses
+            .into_iter()
+            .filter(|(house, owner_id)| {
+                if owners.contains_key(owner_id) {
+                    return false;
+                }
+                let cells = super::house_building::foundation_cells(house);
+                !cells.is_empty()
+                    && cells
+                        .into_iter()
+                        .all(|(x, z)| plots.contains(&plot_key(plot_addr(x, z))))
+            })
+            .map(|(house, _)| (house.id, house.owner_id))
+            .collect())
     }
 }
 
@@ -350,8 +417,8 @@ fn claim_location(player: &Player, plot: (i32, i32, u8)) -> Result<PlotAddr, &'s
     if player.health == 0 {
         return Err("You must be alive to claim land.");
     }
-    if player.level < 10 {
-        return Err("You must be level 10 or higher to use a Land Deed.");
+    if player.level < 4 {
+        return Err("You must be level 4 or higher to use a Land Deed.");
     }
     if player.floor_level != 0 {
         return Err("Stand on outdoor ground to claim land.");

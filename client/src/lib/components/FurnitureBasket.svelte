@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { locale } from '../i18n'
+  import { t, locale } from '../i18n'
   import {
     furnitureBasket,
     furnitureBasketTotal,
@@ -13,23 +13,20 @@
 
 {#if $furnitureBasket.length}
   <div class="basket">
-    <strong>ORKEA · Unpaid furniture</strong>
+    <strong>{$t('furnitureShop.basketTitle')}</strong>
     {#each $furnitureBasket as line (line.displayId)}
       {@const product = displayProduct(line.displayId)!}
+      {@const name = itemDisplayName(product.itemDefId, 0, $locale)}
+      {@const removeLabel = $t('furnitureShop.removeOne', { name })}
       <div class="line">
         <img src="/items/{getItemDef(product.itemDefId)?.icon}" alt="" />
-        <span
-          >{itemDisplayName(product.itemDefId, 0, $locale)} ×{line.quantity}</span
-        >
+        <span>{name} ×{line.quantity}</span>
         <GoldAmount copper={product.price * line.quantity} />
         <button
           disabled={$furniturePurchasePending}
           onclick={() => removeFurnitureFromBasket(line.displayId)}
-          aria-label="Remove one {itemDisplayName(
-            product.itemDefId,
-            0,
-            $locale
-          )}"
+          aria-label={removeLabel}
+          title={removeLabel}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -50,10 +47,11 @@
         </button>
       </div>
     {/each}
-    <div class="total">Total <GoldAmount copper={$furnitureBasketTotal} /></div>
-    <small
-      >Click Grida to check out. Unpaid items are returned when you leave.</small
-    >
+    <div class="total">
+      {$t('furnitureShop.basketTotal')}
+      <GoldAmount copper={$furnitureBasketTotal} />
+    </div>
+    <small>{$t('furnitureShop.checkoutHint')}</small>
   </div>
 {/if}
 

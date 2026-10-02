@@ -256,6 +256,34 @@ impl AuthService {
         Ok(chests)
     }
 
+    pub fn estate_return_rugs(
+        &self,
+        character_id: i64,
+    ) -> Result<Vec<(Position, f32, i8)>, AuthError> {
+        let conn = self.open_connection()?;
+        let mut stmt = conn.prepare(
+            "SELECT c.x,c.y,c.z,c.rotation_deg,c.floor_level
+             FROM estate_chests c JOIN land_estates e ON e.id=c.estate_id
+             WHERE e.account_name=(SELECT account_name FROM characters WHERE id=?1)
+               AND e.grade=1 AND c.item_def_id='furniture_hearthbound_rug'
+             ORDER BY c.id",
+        )?;
+        let rugs = stmt
+            .query_map([character_id], |row| {
+                Ok((
+                    Position {
+                        x: row.get::<_, f64>(0)? as f32,
+                        y: row.get::<_, f64>(1)? as f32,
+                        z: row.get::<_, f64>(2)? as f32,
+                    },
+                    row.get::<_, f64>(3)? as f32,
+                    row.get::<_, i64>(4)? as i8,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rugs)
+    }
+
     pub fn estate_storage_plots(&self, character_id: i64) -> Result<Vec<FencePlot>, AuthError> {
         self.fence_plots(character_id)
     }

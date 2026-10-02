@@ -2097,6 +2097,11 @@ impl AuthService {
                  EXISTS(SELECT 1 FROM characters WHERE id=?2 AND account_name=?1)",
                 params![account_name, character_id, replacement],
             )?;
+            tx.execute(
+                "UPDATE land_house_claims SET owner_id=?3 WHERE owner_id=?2 AND
+                 EXISTS(SELECT 1 FROM characters WHERE id=?2 AND account_name=?1)",
+                params![account_name, character_id, replacement],
+            )?;
         }
         let rows_affected = tx.execute(
             "DELETE FROM characters WHERE id = ?1 AND account_name = ?2",

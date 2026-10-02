@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { locale } from '../i18n'
+  import { t, locale } from '../i18n'
   import {
     furnitureBasket,
     furnitureShopHover,
@@ -8,6 +8,8 @@
   } from '../stores/furnitureShopStore'
   import { shopSession } from '../stores/tradeStore'
   import { itemDisplayName } from '../data/itemDefs'
+  import { getEstateStorageDef } from '../data/estateFurnitureDefs'
+  import { getObjectDef } from '../data/objectCatalog'
   import FurnitureBasket from './FurnitureBasket.svelte'
   import GoldAmount from './GoldAmount.svelte'
 </script>
@@ -15,12 +17,27 @@
 {#if $shopSession?.merchantName !== furnitureShop.clerkNpcName && ($furnitureShopHover || $furnitureBasket.length || $furnitureShopError)}
   <div class="shop-panel">
     {#if $furnitureShopHover}
+      {@const product = $furnitureShopHover.product}
+      {@const definition = getEstateStorageDef(product.itemDefId)}
       <p>
         {itemDisplayName($furnitureShopHover.product.itemDefId, 0, $locale)} · <GoldAmount
           copper={$furnitureShopHover.product.price}
         />
       </p>
-      <small>Click the display to add one to your unpaid basket.</small>
+      {#if getObjectDef(product.objectType)?.interaction === 'sleep'}
+        <small class="feature">{$t('furnitureShop.sleepFeature')}</small>
+      {/if}
+      {#if definition && definition.capacityKg > 0}
+        <small class="feature"
+          >{$t('furnitureShop.storageFeature', {
+            capacity: definition.capacityKg,
+          })}</small
+        >
+      {/if}
+      {#if product.itemDefId === 'furniture_hearthbound_rug'}
+        <small class="feature">{$t('furnitureShop.returnFeature')}</small>
+      {/if}
+      <small>{$t('furnitureShop.addToBasketHint')}</small>
     {/if}
     {#if $furnitureBasket.length}
       <FurnitureBasket />
@@ -42,7 +59,7 @@
     border-radius: 10px;
     background: rgba(6, 10, 14, 0.88);
     color: #e6edf3;
-    font-family: 'Courier New', monospace;
+    font-family: 'Noto Sans KR', sans-serif;
     font-size: 12px;
     max-width: calc(100vw - 64px);
   }
@@ -60,5 +77,9 @@
   }
   .shop-panel [role='status'] {
     color: #f0b8b8;
+  }
+  .shop-panel .feature {
+    color: #c9bea1;
+    line-height: 1.5;
   }
 </style>

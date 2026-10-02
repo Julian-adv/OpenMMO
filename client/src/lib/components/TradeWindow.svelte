@@ -801,6 +801,9 @@
 />
 
 <style>
+  .trade-window {
+    font-family: 'Noto Sans KR', sans-serif;
+  }
   .checkout-error {
     color: #f0b8b8;
   }

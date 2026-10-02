@@ -5,10 +5,29 @@ import {
   type ShopSignStyleId,
 } from './shop-sign'
 import type { EstateFurniturePlacementDefinition } from '../terrain/estatePlacement'
+import { houseFloorY } from '../terrain/estatePlacement'
+import type { HouseData } from '../types/housing'
 import type * as THREE from 'three'
 import type { EstateChest } from '../network/networkTypes'
 import { getEstateStorageDef } from '../data/estateFurnitureDefs'
 import { getObjectDef } from '../data/objectCatalog'
+
+export function estateFurnitureRenderY(
+  chest: EstateChest,
+  houses: HouseData[]
+) {
+  if (chest.item_def_id !== 'furniture_hearthbound_rug') return chest.position.y
+  for (const house of houses) {
+    const floorY = houseFloorY(
+      house,
+      chest.floor_level,
+      chest.position.x,
+      chest.position.z
+    )
+    if (floorY !== null) return Math.max(chest.position.y, floorY)
+  }
+  return chest.position.y
+}
 
 export function estateFurnitureInteractionData(chest: EstateChest) {
   const definition = getEstateStorageDef(chest.item_def_id)

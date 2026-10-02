@@ -219,6 +219,11 @@
     "solid": true
   },
   {
+    "id": "hearthbound_rug",
+    "name": "Hearthbound Rug",
+    "model": "objects/hearthbound_rug.glb"
+  },
+  {
     "id": "ammobox",
     "name": "Ammo Box",
     "model": "objects/ammobox.glb",

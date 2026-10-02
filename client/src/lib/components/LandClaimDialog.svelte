@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t, locale } from '../i18n'
+  import { landClaimReason } from '../i18n/landClaim'
   import { landClaimDialog } from '../stores/landClaimStore'
   import { mountOverlay } from '../stores/overlayStack'
   import { networkManager } from '../network/socket'
@@ -27,27 +29,26 @@
   >
     <h2 id="land-claim-title">
       {$landClaimDialog.status === 'claimed'
-        ? 'Land claimed'
+        ? $t('landClaim.titleClaimed')
         : $landClaimDialog.status === 'rejected'
-          ? 'Cannot claim this plot'
-          : 'Claim this plot?'}
+          ? $t('landClaim.titleRejected')
+          : $t('landClaim.titleConfirm')}
     </h2>
     <p class="plot">32 × 32 m · 1,024 m²</p>
     {#if $landClaimDialog.refreshing}
-      <p role="status">Checking this plot…</p>
+      <p role="status">{$t('landClaim.checkingPlot')}</p>
     {:else if $landClaimDialog.status === 'claimed'}
-      <p>This plot is now part of your homestead.</p>
-      <p>One Land Deed was consumed.</p>
+      <p>{$t('landClaim.claimed')}</p>
+      <p>{$t('landClaim.deedConsumed')}</p>
     {:else if $landClaimDialog.status === 'rejected'}
-      <p role="alert">{$landClaimDialog.reason}</p>
-      <p>Your Land Deed was not consumed.</p>
+      <p role="alert">{landClaimReason($landClaimDialog.reason, $locale)}</p>
+      <p>{$t('landClaim.deedNotConsumed')}</p>
     {:else}
-      <p>Claim the highlighted plot as your homestead?</p>
+      <p>{$t('landClaim.confirmHint')}</p>
       <p>
-        Requires level 10 and unclaimed homestead land. Expansions must share an
-        edge with your land.
+        {$t('landClaim.requirements')}
       </p>
-      <p>One Land Deed will be consumed on success.</p>
+      <p>{$t('landClaim.deedCost')}</p>
     {/if}
     <div class="actions">
       {#if $landClaimDialog.status === 'confirm' || $landClaimDialog.status === 'pending'}
@@ -58,16 +59,16 @@
             $landClaimDialog.refreshing}
         >
           {$landClaimDialog.refreshing
-            ? 'Checking…'
+            ? $t('landClaim.checking')
             : $landClaimDialog.status === 'pending'
-              ? 'Claiming…'
-              : 'Claim plot'}
+              ? $t('landClaim.claiming')
+              : $t('landClaim.claimButton')}
         </button>
         <button onclick={close} disabled={$landClaimDialog.status === 'pending'}
-          >Cancel</button
+          >{$t('common.cancel')}</button
         >
       {:else}
-        <button onclick={close}>Close</button>
+        <button onclick={close}>{$t('common.close')}</button>
       {/if}
     </div>
   </div>
@@ -87,6 +88,7 @@
     border: 1px solid #aa915b;
     background: rgba(16, 20, 16, 0.95);
     color: #f4f4f4;
+    font-family: 'Noto Sans KR', sans-serif;
   }
   h2 {
     margin: 0 0 8px;
@@ -106,6 +108,7 @@
     margin-top: 18px;
   }
   button {
+    font-family: inherit;
     padding: 7px 12px;
     font-size: 13px;
     border: 1px solid #666;

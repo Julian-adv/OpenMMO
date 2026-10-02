@@ -120,6 +120,14 @@
       ]
     },
     {
+      "objectType": "hearthbound_rug",
+      "itemDefId": "furniture_hearthbound_rug",
+      "price": 2000,
+      "displayIds": [
+        112
+      ]
+    },
+    {
       "objectType": "torch_wall",
       "itemDefId": "furniture_torch_wall",
       "price": 300,

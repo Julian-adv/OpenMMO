@@ -10,6 +10,8 @@ use crate::Position;
 /// automatically.
 pub const MAX_FLOOR_LEVEL: u8 = 3;
 
+pub const FLOOR_THICKNESS: f32 = 0.1;
+
 /// Jetty overhang of an upper storey's drawn floor past its grid, per level.
 /// Mirrored in client `house-geo-utils.ts` FLOOR_OVERHANG_PER_LEVEL.
 pub const FLOOR_OVERHANG_PER_LEVEL: f32 = 0.15;

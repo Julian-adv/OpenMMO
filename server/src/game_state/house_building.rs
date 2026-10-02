@@ -156,7 +156,7 @@ fn rotate_house_quarter_turn(house: &mut HouseData) {
     }
 }
 
-fn foundation_cells(house: &HouseData) -> Vec<(f32, f32)> {
+pub(super) fn foundation_cells(house: &HouseData) -> Vec<(f32, f32)> {
     let mut cells = HashSet::new();
     for room in house
         .rooms
@@ -229,6 +229,54 @@ fn rects_overlap(a: HeightRect, b: HeightRect) -> bool {
 }
 
 impl GameState {
+    pub(super) async fn apply_estate_house_claims(
+        &self,
+        auth: &AuthService,
+    ) -> Result<(), crate::auth::AuthError> {
+        let auth_copy = auth.clone();
+        let claims = super::auth_db(move || auth_copy.pending_estate_house_claims()).await?;
+        for (house_id, owner_id, previous_owner_id) in claims {
+            let previous_id = previous_owner_id.parse::<i64>().unwrap_or_default();
+            let auth_copy = auth.clone();
+            let (previous_owner_exists, plots) = super::auth_db(move || {
+                Ok::<_, crate::auth::AuthError>((
+                    !auth_copy.character_names(&[previous_id])?.is_empty(),
+                    auth_copy.homestead_plots(owner_id)?,
+                ))
+            })
+            .await?;
+            let plots: HashSet<_> = plots.into_iter().collect();
+            if let Some(mut house) = self
+                .housing_io
+                .find_house(&house_id)
+                .await
+                .map_err(|error| crate::auth::AuthError::Database(error.to_string()))?
+            {
+                let cells = foundation_cells(&house);
+                let inside_estate = !cells.is_empty()
+                    && cells.into_iter().all(|(x, z)| {
+                        plots.contains(&super::land::plot_key(onlinerpg_terrain::land::plot_addr(
+                            x, z,
+                        )))
+                    });
+                if house.owner_id == previous_owner_id && !previous_owner_exists && inside_estate {
+                    house.owner_id = owner_id.to_string();
+                    self.housing_io
+                        .write_house(&house)
+                        .await
+                        .map_err(|error| crate::auth::AuthError::Database(error.to_string()))?;
+                    self.publish_house(&house);
+                    tracing::info!(%house_id, owner_id, %previous_owner_id, "Claimed abandoned house");
+                } else if house.owner_id != owner_id.to_string() {
+                    tracing::warn!(%house_id, "Abandoned house no longer qualifies for claim");
+                }
+            }
+            let auth_copy = auth.clone();
+            super::auth_db(move || auth_copy.complete_estate_house_claim(&house_id)).await?;
+        }
+        Ok(())
+    }
+
     pub(super) async fn remove_estate_buildings(
         &self,
         auth: &AuthService,

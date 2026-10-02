@@ -143,6 +143,29 @@ pub(super) fn authoritative_floor(
 }
 
 impl super::GameState {
+    pub(super) fn house_floor_y_base(
+        &self,
+        house: &HouseData,
+        position: &crate::types::Position,
+        floor_level: u8,
+    ) -> Option<f32> {
+        self.passability_read()
+            .get(&house.id)?
+            .floors
+            .iter()
+            .find_map(|grid| {
+                let x = onlinerpg_shared::shortest_world_delta_x(house.origin.x, position.x)
+                    - grid.origin_x as f32;
+                let z = position.z - house.origin.z - grid.origin_z as f32;
+                (grid.floor_level == floor_level
+                    && x >= 0.0
+                    && x < grid.width as f32
+                    && z >= 0.0
+                    && z < grid.depth as f32)
+                    .then_some(grid.y_base)
+            })
+    }
+
     /// Authoritative ground or floating surface Y. `ref_y` selects stacked
     /// bridge decks; unknown terrain or storeys retain the reported Y.
     pub async fn surface_ground_y(

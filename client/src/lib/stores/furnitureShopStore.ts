@@ -1,5 +1,6 @@
 import { derived, get, writable } from 'svelte/store'
 import shop from '../../../../data/furniture_shop.json'
+import { translate } from '../i18n'
 
 export { shop as furnitureShop }
 export type FurnitureProduct = (typeof shop.products)[number]
@@ -57,7 +58,9 @@ export function addFurnitureToBasket(displayId: number) {
   if (get(furniturePurchasePending) || !displayProduct(displayId)) return false
   const lines = get(furnitureBasket)
   if (lines.reduce((total, line) => total + line.quantity, 0) >= 64) {
-    furnitureShopError.set('Your basket holds at most 64 pieces.')
+    furnitureShopError.set(
+      translate('furnitureShop.basketLimit', { count: 64 })
+    )
     return false
   }
   const existing = lines.find((line) => line.displayId === displayId)

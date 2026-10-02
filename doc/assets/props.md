@@ -2,6 +2,13 @@
 
 ## Furniture
 
+- Hearthbound Rug / 귀향의 러그 (2026-10-03) — 벽난로 앞에 놓는 붉은 양모 러그. 집·불꽃 중심 문양, 금빛·크림색 테두리, 짧은 술 장식.
+  - 원화·텍스처: [hearthbound_rug.png](../images/props/hearthbound_rug.png), Codex 내장 ImageGen, **ChatGPT Pro 20x**, 생성일 2026-10-03. AI 생성 출력물이며 OpenAI 이용약관 적용. [전체 생성 프롬프트](hearthbound-rug-prompt.txt).
+  - 모델·아이콘: 프로젝트 자체 제작 Blender 메시·렌더, 프로젝트와 동일 라이선스. Meshy 미사용. `client/public/models/objects/hearthbound_rug.glb`, `client/public/items/objects/hearthbound_rug.png`.
+  - 2.4×1.6m 평면, 2삼각형, 바닥에서 1.2cm 높이, 중심 원점, 상향 법선. 평면 소품이므로 일반 아이템의 약 4,000폴리곤 목표보다 단순하게 제작했다. 1024×683 RGBA 텍스처, alpha MASK 0.5, 양면·거친 직물 재질. 술 사이 투명도 유지, 이동 충돌 없음.
+  - 재생성: `blender -b -t 4 -P tools/blender-scripts/build_hearthbound_rug.py`. 소스·생성 기록·미리보기는 `assets/hearthbound_rug/`에 저장. 아이콘은 공통 Cycles 직교 렌더 512²→128².
+  - `hearthbound_rug` 맵 에디터 오브젝트와 `furniture_hearthbound_rug` 실내·야외 배치 아이템 등록. ORKEA 전시물 ID 112와 점원 메뉴에서 2,000동화(20은화)에 판매한다. 바닥 전시는 운영자가 직접 배치했다. 영지에 설치하면 영지 귀환 주문서의 도착 지점이 되며, 설치 위치·층·방향을 사용한다. 여러 개면 먼저 설치한 안전한 러그를 선택한다.
+
 - bed.glb https://sketchfab.com/3d-models/old-wooden-bed-frame-and-dirty-sheets-79c856755e6a44a3bcf19671e5c70d2d
   - `client/public/items/objects/bed.png` — 기존 `bed.glb`를 Blender 5.2.0 LTS로 렌더한 ORKEA 기본 침대 아이콘 (2026-09-19). 원본: effiebop의 Old wooden bed frame and dirty sheets, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). `blender -b -P tools/blender-scripts/render_furniture_icon.py -- bed`로 투명 배경·직교 사선 구도 512²→128² 렌더.
 
