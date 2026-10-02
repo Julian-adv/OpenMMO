@@ -311,14 +311,10 @@ pub fn find_and_smooth_path_avoiding(
         full_path.push(center);
     }
     full_path.extend(result.waypoints);
-    let smoothed = smooth_path(&full_path, cache, blocked);
+    let mut smoothed = smooth_path(&full_path, cache, blocked);
+    smoothed.remove(0);
     PathResult {
-        // The client uses the first waypoint as its next target.
-        waypoints: if smoothed.len() > 1 {
-            smoothed[1..].to_vec()
-        } else {
-            smoothed
-        },
+        waypoints: smoothed,
         found: result.found,
         termination: result.termination,
     }
