@@ -257,12 +257,14 @@ describe.skipIf(
 
     applyCharacterArmor(knight, { ...armor, chest: 'leather_armor' })
     expect(visible(knight, 'top_plate')).toBe(false)
-    expect(visible(knight, 'top_linen')).toBe(true)
+    expect(visible(knight, 'top_rogue')).toBe(true)
+    expect(visible(knight, 'top_linen')).toBe(false)
     expect(visible(knight, 'pants_plate')).toBe(true)
 
     applyCharacterArmor(knight, { ...armor, pants: 'leather_pants' })
     expect(visible(knight, 'pants_plate')).toBe(false)
-    expect(visible(knight, 'pants_cloth')).toBe(true)
+    expect(visible(knight, 'pants_rogue')).toBe(true)
+    expect(visible(knight, 'pants_cloth')).toBe(false)
     expect(legs.every((mesh) => !mesh.visible)).toBe(true)
 
     applyCharacterArmor(knight, {})
@@ -281,6 +283,39 @@ describe.skipIf(
     expect(visible(other, 'helmet_plate')).toBe(true)
     expect(visible(knight, 'top_plate')).toBe(false)
     expect(visible(source.scene, 'top_plate')).toBe(false)
+  })
+
+  it('renders legacy leather and metal equipment with existing modular parts', async () => {
+    const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
+    const { modelRoot } = createCharacterModelRoot(source.scene)
+    applyCharacterArmor(modelRoot, {
+      chest: 'leather_armor',
+      pants: 'leather_pants',
+      boots: 'leather_boots',
+      hands: 'leather_gloves',
+      head: 'leather_helmet',
+    })
+    for (const part of ['top', 'pants', 'boots', 'gloves'])
+      expect(visible(modelRoot, `${part}_rogue`)).toBe(true)
+    expect(visible(modelRoot, 'helmet_plate')).toBe(true)
+    expect(visible(modelRoot, 'hair_crop')).toBe(false)
+
+    applyCharacterArmor(modelRoot, {
+      chest: 'chain_mail',
+      pants: 'plate_greaves',
+      boots: 'iron_boots',
+      hands: 'iron_gauntlets',
+      head: 'iron_helmet',
+    })
+    for (const part of ['top', 'pants', 'boots', 'gloves', 'helmet']) {
+      expect(visible(modelRoot, `${part}_plate`)).toBe(true)
+      expect(visible(modelRoot, `${part}_rogue`)).toBe(false)
+    }
+
+    applyCharacterArmor(modelRoot, {})
+    for (const part of ['top', 'pants', 'boots', 'gloves', 'helmet'])
+      expect(visible(modelRoot, `${part}_plate`)).toBe(false)
+    expect(visible(modelRoot, 'hair_crop')).toBe(true)
   })
 
   it('assembles clothes before exposure and isolates skeletons between players', async () => {

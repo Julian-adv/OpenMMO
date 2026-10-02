@@ -29,25 +29,35 @@ const ARMOR_STYLES = {
   },
 } as const
 
+const MATERIAL_STYLES = { metal: 'plate', leather: 'rogue' } as const
+const HELMET_MATERIAL_STYLES = { metal: 'plate', leather: 'plate' } as const
+
 export function modularOutfitForArmor(
   armor: ArmorEquipment = {}
 ): ModularOutfit {
   const style = <Style extends string>(
     models: Record<string, Style>,
-    id: string | null | undefined
-  ) => models[getItemDef(id ?? '')?.worldModel ?? '']
+    id: string | null | undefined,
+    materials: Record<string, Style>
+  ) => {
+    const item = getItemDef(id ?? '')
+    return models[item?.worldModel ?? ''] ?? materials[item?.material ?? '']
+  }
   return {
     ...DEFAULT_MODULAR_OUTFIT,
     top: armor.chest
-      ? (style(ARMOR_STYLES.chest, armor.chest) ?? DEFAULT_MODULAR_OUTFIT.top)
+      ? (style(ARMOR_STYLES.chest, armor.chest, MATERIAL_STYLES) ??
+        DEFAULT_MODULAR_OUTFIT.top)
       : 'none',
     pants: armor.pants
-      ? (style(ARMOR_STYLES.pants, armor.pants) ?? 'cloth')
+      ? (style(ARMOR_STYLES.pants, armor.pants, MATERIAL_STYLES) ?? 'cloth')
       : 'none',
     boots: armor.boots
-      ? (style(ARMOR_STYLES.boots, armor.boots) ?? DEFAULT_MODULAR_OUTFIT.boots)
+      ? (style(ARMOR_STYLES.boots, armor.boots, MATERIAL_STYLES) ??
+        DEFAULT_MODULAR_OUTFIT.boots)
       : 'none',
-    gloves: style(ARMOR_STYLES.hands, armor.hands) ?? 'none',
-    helmet: style(ARMOR_STYLES.head, armor.head) ?? 'none',
+    gloves: style(ARMOR_STYLES.hands, armor.hands, MATERIAL_STYLES) ?? 'none',
+    helmet:
+      style(ARMOR_STYLES.head, armor.head, HELMET_MATERIAL_STYLES) ?? 'none',
   }
 }
