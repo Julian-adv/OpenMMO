@@ -18,6 +18,8 @@ use super::ServerGroundItem;
 const GROUND_ITEM_LIFETIME_MS: u64 = 30 * 60 * 1000;
 
 const MAX_PICKUP_DISTANCE: f32 = 2.5;
+const NEARBY_PICKUP_DISTANCE: f32 = 2.0;
+const CHEST_LOOT_RESERVATION_MS: u64 = 30_000;
 
 pub(super) const PLACEMENT_DISTANCE_M: f32 = 1.0;
 pub(super) const LOCKED_ITEM_MESSAGE: &str = "Unlock this item before dropping or trading it.";
@@ -1761,6 +1763,14 @@ impl super::GameState {
     /// Visible and pickable the moment this runs; a caller that owes the drop
     /// an animation beat delays this call (`spawn_kill_loot_after_impact`).
     pub(super) async fn spawn_ground_item(&self, ground_item: GroundItem) {
+        self.spawn_ground_item_with_owner(ground_item, None).await;
+    }
+
+    pub(super) async fn spawn_ground_item_with_owner(
+        &self,
+        ground_item: GroundItem,
+        reserved_for: Option<PlayerId>,
+    ) {
         let position = ground_item.position;
         let floor_level = ground_item.floor_level;
         {
@@ -1770,6 +1780,10 @@ impl super::GameState {
                 ServerGroundItem {
                     item: ground_item.clone(),
                     dropped_at_ms: Self::now_ms(),
+                    reservation: reserved_for.map(|player_id| super::LootReservation {
+                        player_id,
+                        until_ms: Self::now_ms() + CHEST_LOOT_RESERVATION_MS,
+                    }),
                 },
             );
         }
@@ -1801,6 +1815,18 @@ impl super::GameState {
         source_level: Option<u8>,
         bonus_item_ids: Vec<String>,
     ) {
+        self.spawn_world_drops_with_owner(origin, floor_level, source_level, bonus_item_ids, None)
+            .await;
+    }
+
+    pub(super) async fn spawn_world_drops_with_owner(
+        &self,
+        origin: crate::types::Position,
+        floor_level: i8,
+        source_level: Option<u8>,
+        bonus_item_ids: Vec<String>,
+        reserved_for: Option<PlayerId>,
+    ) {
         /// How far from the loot origin a world drop scatters.
         const WORLD_DROP_OFFSET_METERS: f32 = 1.5;
 
@@ -1825,14 +1851,12 @@ impl super::GameState {
             floor_level,
             WORLD_DROP_OFFSET_METERS,
             WORLD_DROP_OFFSET_METERS,
+            reserved_for,
         )
         .await;
     }
 
-    /// Spawn items as ground drops scattered around `origin`, each at a random
-    /// angle and a radius in `min_r..=max_r`. Each drop is clamped onto
-    /// walkable floor inside dungeons so it never lands in a wall; anyone may
-    /// pick them up.
+    /// Scatter drops onto walkable floor, optionally reserving them for their opener.
     pub(super) async fn spawn_scattered_items(
         &self,
         item_def_ids: Vec<String>,
@@ -1840,6 +1864,7 @@ impl super::GameState {
         floor_level: i8,
         min_r: f32,
         max_r: f32,
+        reserved_for: Option<PlayerId>,
     ) {
         use std::f32::consts::TAU;
 
@@ -1852,17 +1877,20 @@ impl super::GameState {
                 .await;
 
             let instance_id = self.next_instance_id().await;
-            self.spawn_ground_item(GroundItem {
-                instance_id,
-                item_def_id,
-                position,
-                floor_level,
-                quantity: 1,
-                enchant: 0,
-                dropped_by: None,
-                cape_color: None,
-                cape_texture: None,
-            })
+            self.spawn_ground_item_with_owner(
+                GroundItem {
+                    instance_id,
+                    item_def_id,
+                    position,
+                    floor_level,
+                    quantity: 1,
+                    enchant: 0,
+                    dropped_by: None,
+                    cape_color: None,
+                    cape_texture: None,
+                },
+                reserved_for,
+            )
             .await;
         }
     }
@@ -2076,18 +2104,59 @@ impl super::GameState {
     }
 
     pub async fn pickup_item(&self, player_id: &PlayerId, instance_id: u64) {
+        self.pickup_item_with_range(player_id, instance_id, MAX_PICKUP_DISTANCE)
+            .await;
+    }
+
+    pub async fn pickup_nearby_items(&self, player_id: &PlayerId) {
+        let Some((position, _, floor_level, _)) = self.player_pose(player_id).await else {
+            return;
+        };
+        let mut candidates = {
+            let ground_items = self.ground_items.read().await;
+            let now = Self::now_ms();
+            ground_items
+                .values()
+                .filter_map(|entry| {
+                    if entry.item.floor_level != floor_level || !entry.can_pickup(player_id, now) {
+                        return None;
+                    }
+                    let distance_sq = entry.item.position.dist_xz_sq(&position);
+                    (distance_sq <= NEARBY_PICKUP_DISTANCE * NEARBY_PICKUP_DISTANCE)
+                        .then_some((distance_sq, entry.item.instance_id))
+                })
+                .collect::<Vec<_>>()
+        };
+        candidates.sort_unstable_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+        for (_, instance_id) in candidates {
+            self.pickup_item_with_range(player_id, instance_id, NEARBY_PICKUP_DISTANCE)
+                .await;
+        }
+    }
+
+    async fn pickup_item_with_range(
+        &self,
+        player_id: &PlayerId,
+        instance_id: u64,
+        max_distance: f32,
+    ) {
         let (player_pos, player_floor) = {
             let players = self.players.read().await;
             match players.get(player_id) {
-                Some(p) => (p.position, p.floor_level),
-                None => return,
+                Some(p) if p.health > 0 => (p.position, p.floor_level),
+                _ => return,
             }
         };
 
         let ground_item = {
             let ground_items = self.ground_items.read().await;
             match ground_items.get(&instance_id) {
-                Some(sgi) => sgi.item.clone(),
+                Some(sgi) if sgi.can_pickup(player_id, Self::now_ms()) => sgi.item.clone(),
+                Some(_) => {
+                    drop(ground_items);
+                    self.send_loot_reserved_message(player_id).await;
+                    return;
+                }
                 None => {
                     self.send_system_message(
                         player_id,
@@ -2099,17 +2168,12 @@ impl super::GameState {
             }
         };
 
-        let dx = onlinerpg_shared::shortest_world_delta_x(ground_item.position.x, player_pos.x);
-        let dz = player_pos.z - ground_item.position.z;
-        if dx * dx + dz * dz > MAX_PICKUP_DISTANCE * MAX_PICKUP_DISTANCE {
+        if ground_item.position.dist_xz_sq(&player_pos) > max_distance * max_distance {
             self.send_system_message(player_id, localized("server.tooFar", "Too far away"))
                 .await;
             return;
         }
 
-        // Exact floor match. Negative floors are dungeon depths now, so
-        // the old "-1 matches any floor" wildcard is gone (outdoors and
-        // house ground floors are both 0).
         if player_floor != ground_item.floor_level {
             self.send_system_message(
                 player_id,
@@ -2148,6 +2212,11 @@ impl super::GameState {
                 .await;
                 return;
             };
+            if !entry.can_pickup(player_id, Self::now_ms()) {
+                drop(ground_items);
+                self.send_loot_reserved_message(player_id).await;
+                return;
+            }
             // Re-read under the lock: another picker may have thinned the pile
             // since the distance check above read it. A non-stackable ground
             // item is always a single object, and taking more would outrun the
@@ -2238,6 +2307,17 @@ impl super::GameState {
         }
     }
 
+    async fn send_loot_reserved_message(&self, player_id: &PlayerId) {
+        self.send_system_message(
+            player_id,
+            localized(
+                "server.lootReserved",
+                "This loot is reserved for the chest opener for 30 seconds.",
+            ),
+        )
+        .await;
+    }
+
     /// Show the pickup crouch on nearby clients. Driven by `PickupStarted` at
     /// the clip's first frame, so remotes play it from the top rather than
     /// joining at the grab moment and finishing a third of a clip late.
@@ -2317,6 +2397,14 @@ impl super::GameState {
         // the same pile can't both be paid.
         {
             let mut ground_items = self.ground_items.write().await;
+            if ground_items
+                .get(&instance_id)
+                .is_some_and(|entry| !entry.can_pickup(player_id, Self::now_ms()))
+            {
+                drop(ground_items);
+                self.send_loot_reserved_message(player_id).await;
+                return;
+            }
             if ground_items.remove(&instance_id).is_none() {
                 self.send_system_message(
                     player_id,

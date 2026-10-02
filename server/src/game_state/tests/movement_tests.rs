@@ -66,6 +66,7 @@ async fn movement_into_aoi_sends_existing_monsters_and_ground_items() {
                     cape_texture: None,
                 },
                 dropped_at_ms: 0,
+                reservation: None,
             },
         );
     }

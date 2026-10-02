@@ -21,6 +21,7 @@ import {
   openInstrumentPanel,
 } from '../stores/instrumentStore'
 import { alwaysRun } from '../stores/movementSettings'
+import { DEFAULT_PICKUP_KEY, pickupKeyCode } from '../stores/pickupSettings'
 import { estateFurnitureInteractionData } from '../utils/estateFurnitureModels'
 import { KeyboardDirectionSender } from '../components/player-control/keyboard-direction'
 
@@ -30,11 +31,80 @@ describe('movement keys', () => {
     resetFishingStore()
     closeInstrumentPanel()
     inputHandler.clearTransientInput()
+    pickupKeyCode.set(DEFAULT_PICKUP_KEY)
   })
 
   afterEach(() => {
     inputHandler.clearTransientInput()
+    pickupKeyCode.set(DEFAULT_PICKUP_KEY)
     vi.unstubAllGlobals()
+  })
+
+  it('consumes comma once per press and clears pending pickup on reset', () => {
+    const press = { code: 'Comma', target: null } as KeyboardEvent
+    inputHandler.handleKeyDown(press)
+    expect(inputHandler.consumePickup()).toBe(true)
+    expect(inputHandler.consumePickup()).toBe(false)
+    inputHandler.handleKeyDown({ ...press, repeat: true } as KeyboardEvent)
+    expect(inputHandler.consumePickup()).toBe(false)
+    inputHandler.handleKeyDown(press)
+    inputHandler.clearTransientInput()
+    expect(inputHandler.consumePickup()).toBe(false)
+  })
+
+  it('uses the newly bound pickup key immediately and releases the old key', () => {
+    pickupKeyCode.set('KeyZ')
+    inputHandler.handleKeyDown({ code: 'Comma', target: null } as KeyboardEvent)
+    expect(inputHandler.consumePickup()).toBe(false)
+    inputHandler.handleKeyDown({ code: 'KeyZ', target: null } as KeyboardEvent)
+    expect(inputHandler.consumePickup()).toBe(true)
+    pickupKeyCode.set(DEFAULT_PICKUP_KEY)
+    inputHandler.handleKeyDown({ code: 'KeyZ', target: null } as KeyboardEvent)
+    expect(inputHandler.consumePickup()).toBe(false)
+    inputHandler.handleKeyDown({ code: 'Comma', target: null } as KeyboardEvent)
+    expect(inputHandler.consumePickup()).toBe(true)
+  })
+
+  it('discards a pending pickup when its binding changes', () => {
+    inputHandler.handleKeyDown({ code: 'Comma', target: null } as KeyboardEvent)
+    pickupKeyCode.set('KeyZ')
+    expect(inputHandler.consumePickup()).toBe(false)
+  })
+
+  it('keeps a newly assigned key inactive while the binding input is focused', () => {
+    pickupKeyCode.set('KeyZ')
+    const input = new HTMLElement()
+    Object.assign(input, { tagName: 'INPUT' })
+    inputHandler.handleKeyDown({
+      code: 'KeyZ',
+      target: input,
+    } as unknown as KeyboardEvent)
+    expect(inputHandler.consumePickup()).toBe(false)
+  })
+
+  it.each(['ctrlKey', 'altKey', 'metaKey'])(
+    'ignores modified pickup shortcuts with %s',
+    (modifier) => {
+      inputHandler.handleKeyDown({
+        code: 'Comma',
+        target: null,
+        [modifier]: true,
+      } as unknown as KeyboardEvent)
+      expect(inputHandler.consumePickup()).toBe(false)
+    }
+  )
+
+  it('ignores pickup while typing or playing an instrument', () => {
+    const input = new HTMLElement()
+    Object.assign(input, { tagName: 'INPUT' })
+    inputHandler.handleKeyDown({
+      code: 'Comma',
+      target: input,
+    } as unknown as KeyboardEvent)
+    expect(inputHandler.consumePickup()).toBe(false)
+    openInstrumentPanel()
+    inputHandler.handleKeyDown({ code: 'Comma', target: null } as KeyboardEvent)
+    expect(inputHandler.consumePickup()).toBe(false)
   })
 
   it.each([

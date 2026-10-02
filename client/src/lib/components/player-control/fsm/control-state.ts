@@ -16,6 +16,7 @@ export interface MovingStateData {
 export interface PickingUpStateData {
   /** Ground-item instance being picked up by the current pickup animation. */
   pendingPickupInstanceId: number
+  pickupNearby?: boolean
 }
 
 export type ControlState =

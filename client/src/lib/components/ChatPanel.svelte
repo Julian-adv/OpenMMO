@@ -294,7 +294,12 @@
 
   function handleKeyDown(event: KeyboardEvent) {
     const intent = chatInputKeyIntent(event)
-    if (intent === 'complete-command') {
+    if (intent === 'blur') {
+      event.preventDefault()
+      event.stopPropagation()
+      channelMenuOpen = false
+      chatInput?.blur()
+    } else if (intent === 'complete-command') {
       event.preventDefault()
       completeCommand()
     } else if (intent === 'send') {
@@ -320,13 +325,6 @@
   function handleGlobalKeydown(event: KeyboardEvent) {
     if ($instrumentPanelVisible) return
     if (event.isComposing || event.keyCode === 229) return
-    // The overlay handler skips input targets, so close this menu here.
-    if (event.key === 'Escape') {
-      if (channelMenuOpen && document.activeElement === chatInput) {
-        channelMenuOpen = false
-      }
-      return
-    }
     if (
       shouldFocusChatOnEnter(event, channelMenuOpen) &&
       document.activeElement !== chatInput

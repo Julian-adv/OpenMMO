@@ -262,6 +262,7 @@ export type ClientMessage =
   | { DropItems: { items: BagLineItem[] } }
   | 'PickupStarted'
   | { PickupItem: { instance_id: number } }
+  | 'PickupNearbyItems'
   | { UseItem: { instance_id: number } }
   | {
       PlaceHouse: {

@@ -150,32 +150,8 @@ fn skeleton_crypt_has_twenty_floors_and_its_own_monsters() {
     }
 }
 
-// Captured from the first blessed run; see golden_layout_hash. Re-blessed when
-// the spawn table moved from depth-band arrays (dungeon_spawns.json) to the
-// per-monster `dungeon*` columns of monsters.csv: same monster presence per
-// depth, but weighted-selection order now follows csv row order, so the picks
-// (and thus the hash) shift. Re-blessed again when floor 1 spawn count dropped
-// to 3..=5 (from the uniform 5..=9): the smaller draw shifts depth-1 RNG order.
-// Re-blessed again when decorative room clutter (`props`) was added: roll_props
-// draws RNG after roll_spawns on every floor (spawns themselves are unchanged),
-// and the new field widens the Debug-hashed layout. Re-blessed again when the
-// per-room prop count range was raised from 2..=4 to 5..=10. Re-blessed again
-// when the spawn/prop cell picks switched from `gen_range(0..len())` (usize:
-// u64 native vs u32 wasm — drew differently per platform, desyncing client
-// from server) to a fixed-width `as u32` draw. Re-blessed again when wall
-// torches were added (`roll_wall_torches` draws one RNG per room after
-// roll_props, and appends a `TorchWall` prop per eligible room). Re-blessed
-// when old_crypt was capped to 5 floors via the dungeons.csv `floors` column
-// (the hash now covers the override path, `generate_dungeon_for`) and the
-// boss became `goblin_boss` (the type string is part of the hashed layout).
-// Re-blessed when floors whose corridors hug a room wall (a mouth wider than
-// `CORRIDOR_MOUTH_MAX`) started being rejected and redrawn: the first
-// re-bless that moves rooms, corridors and shafts, not just spawns/props.
-// Re-blessed for dungeon keys (doc/DUNGEON_REWARD.md): stair rooms no longer
-// host spawns (the 3-cell exit clearance became a whole-room exclusion), and
-// every 5th floor's stair room keeps a single, always-doored exit — corridors
-// there route around it and floors that can't are redrawn.
-const GOLDEN_OLD_CRYPT_HASH: u64 = 0xf2b4_1519_88a6_a4ba;
+// Updated for chest flank and front clearance.
+const GOLDEN_OLD_CRYPT_HASH: u64 = 0x216b_8cee_51ff_2b67;
 
 #[test]
 fn structure_invariants_many_seeds() {
@@ -943,11 +919,10 @@ fn props_are_well_placed() {
                         p.x,
                         p.z
                     );
-                    // The overflowing body keeps its flanks clear.
-                    for (fx, fz) in gen::flank_cells(p.x, p.z, back) {
+                    for (fx, fz) in gen::chest_clearance_cells(p.x, p.z, back) {
                         assert!(
                             !solid_at(layout, fx, fz),
-                            "seed {seed}: solid prop on chest ({},{}) flank ({fx},{fz})",
+                            "seed {seed}: solid prop in chest ({},{}) clearance ({fx},{fz})",
                             p.x,
                             p.z
                         );
@@ -966,18 +941,34 @@ fn props_are_well_placed() {
                 }
             }
 
-            // The treasure chest (rendered yaw 0) keeps its x±1 flanks clear.
             if let Some((cx, cz)) = layout.chest {
-                for (fx, fz) in gen::flank_cells(cx, cz, (0, -1)) {
+                for (fx, fz) in gen::chest_clearance_cells(cx, cz, (0, -1)) {
                     assert!(
                         !solid_at(layout, fx, fz),
-                        "seed {seed}: solid prop on treasure chest flank ({fx},{fz})"
+                        "seed {seed}: solid prop in treasure chest clearance ({fx},{fz})"
                     );
                 }
             }
         }
     }
     assert!(total > 0, "no props were ever placed");
+}
+
+#[test]
+fn old_crypt_chest_near_reported_position_has_no_box_in_front() {
+    let entrance = entrance("old_crypt").unwrap().position();
+    let (x, z) = world_to_cell(&entrance, -1425.9, 4685.9);
+    let floors = generate_dungeon_for("old_crypt");
+    let layout = &floors[0];
+    let chest = layout
+        .props
+        .iter()
+        .find(|p| p.kind == PropKind::Chest && (p.x, p.z) == (x + 1, z - 1))
+        .expect("reported chest remains on the north wall");
+    assert!(!layout
+        .props
+        .iter()
+        .any(|p| { p.kind.is_solid() && (p.x - chest.x).abs() <= 1 && p.z == chest.z + 1 }));
 }
 
 /// With props sealed into the passability grid, every room center stays

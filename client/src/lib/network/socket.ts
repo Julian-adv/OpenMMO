@@ -707,6 +707,10 @@ class NetworkManager {
     this.sendMessage({ PickupItem: { instance_id: instanceId } })
   }
 
+  sendPickupNearbyItems() {
+    this.sendMessage('PickupNearbyItems')
+  }
+
   sendUseItem(instanceId: number) {
     if (!this.isNetworkableInstanceId(instanceId, 'use')) return
     if (get(localTeleportActive)) return

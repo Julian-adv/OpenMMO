@@ -599,14 +599,24 @@ pub(super) fn chest_back_delta(layout: &FloorLayout, x: i32, z: i32) -> (i32, i3
         .unwrap_or((0, -1))
 }
 
-/// The two cells flanking a chest along its long side (which runs along the
-/// backed wall); the ~1.5m model overflows the 1m cell into these flanks, so
-/// they must hold no other solid prop.
+/// Flanks along the chest's long side.
 pub(super) fn flank_cells(x: i32, z: i32, back: (i32, i32)) -> [(i32, i32); 2] {
     match back {
         (0, _) => [(x - 1, z), (x + 1, z)],
         _ => [(x, z - 1), (x, z + 1)],
     }
+}
+
+/// Keep the body and its wall-offset front clear of other props.
+pub(super) fn chest_clearance_cells(x: i32, z: i32, back: (i32, i32)) -> [(i32, i32); 5] {
+    let [left, right] = flank_cells(x, z, back);
+    [
+        left,
+        right,
+        (x - back.0, z - back.1),
+        (left.0 - back.0, left.1 - back.1),
+        (right.0 - back.0, right.1 - back.1),
+    ]
 }
 
 /// Yaw the client renders a chest with: hinge onto the backed wall
@@ -740,24 +750,16 @@ fn pick_prop_kind(rng: &mut ChaCha8Rng) -> PropKind {
     }
 }
 
-/// Scatter a few decorative barrels/crates/chests through the rooms, biased
-/// toward corners and walls. Props are *solid* — [`floor_passability_cells`]
-/// seals their cell — so placement keeps corridor mouths and stair landings
-/// clear (see [`prop_cell_ok`]) and, as a backstop, rejects any individual prop
-/// that would wall a room off (re-checking reachability with it sealed). Runs
-/// after the layout is otherwise final. Deterministic: rooms visited in order,
-/// candidate cells gathered row-major, every random draw integer, and the
-/// connectivity check is pure — same seed, same clutter on server and client.
+/// Place solid clutter deterministically without blocking routes or chest clearance.
 fn roll_props(rng: &mut ChaCha8Rng, layout: &FloorLayout) -> Vec<PropSpec> {
     // Landing cells (this floor's own up-shaft exit row + the down-shaft entry
     // row): the spots a prop in front of would wall off the stairs.
     let landings = collect_landing_cells(layout);
 
     let mut taken = vec![false; (GRID * GRID) as usize];
-    // The treasure chest renders yaw-0 (long side along X); reserve its
-    // flanks like a placed chest's so clutter can't clip its body.
+    // The treasure chest faces south.
     if let Some((cx, cz)) = layout.chest {
-        for (fx, fz) in flank_cells(cx, cz, (0, -1)) {
+        for (fx, fz) in chest_clearance_cells(cx, cz, (0, -1)) {
             if layout.is_carved(fx, fz) {
                 taken[(fx + fz * GRID) as usize] = true;
             }
@@ -837,29 +839,21 @@ fn roll_props(rng: &mut ChaCha8Rng, layout: &FloorLayout) -> Vec<PropSpec> {
                 continue;
             }
 
-            // A chest's ~1.5m body overflows its 1m cell along the backed
-            // wall, and loot spilled from it would roll down a stair shaft in
-            // front: demote to a crate when a flank is already taken or the
-            // opening faces a shaft, and reserve both flanks once a chest
-            // stands. The demote path takes the stack draw a chest would
-            // skip, but the branch is a pure function of shared state, so
-            // server and client still walk identical streams. (Flank indices
-            // need no bounds check: rooms keep a 1-cell border inside the
-            // grid.)
+            // Reserve the chest's flanks and front, or fall back to a crate.
             let mut kind = pick_prop_kind(rng);
             let mut chest_back = None;
             if kind == PropKind::Chest {
                 let back = chest_back_delta(layout, x, z);
-                let flanks = flank_cells(x, z, back);
+                let clearance = chest_clearance_cells(x, z, back);
                 let front = (x - back.0, z - back.1);
-                if flanks
+                if clearance
                     .iter()
                     .any(|&(fx, fz)| taken[(fx + fz * GRID) as usize])
                     || cell_in_any_shaft(layout, front.0, front.1)
                 {
                     kind = PropKind::Crate;
                 } else {
-                    for (fx, fz) in flanks {
+                    for (fx, fz) in clearance {
                         taken[(fx + fz * GRID) as usize] = true;
                         corners.retain(|&c| c != (fx, fz));
                         edges.retain(|&c| c != (fx, fz));

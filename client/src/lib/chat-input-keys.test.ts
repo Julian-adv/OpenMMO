@@ -56,9 +56,19 @@ describe('chatInputKeyIntent', () => {
     expect(chatInputKeyIntent(key('Tab', { keyCode: 229 }))).toBe('none')
   })
 
+  it('releases chat focus on Escape', () => {
+    expect(chatInputKeyIntent(key('Escape', { keyCode: 27 }))).toBe('blur')
+  })
+
+  it('leaves Escape to the IME during composition', () => {
+    expect(
+      chatInputKeyIntent(key('Escape', { isComposing: true, keyCode: 27 }))
+    ).toBe('none')
+    expect(chatInputKeyIntent(key('Escape', { keyCode: 229 }))).toBe('none')
+  })
+
   it('ignores other keys', () => {
     expect(chatInputKeyIntent(key('a', { keyCode: 65 }))).toBe('none')
-    expect(chatInputKeyIntent(key('Escape', { keyCode: 27 }))).toBe('none')
   })
 })
 

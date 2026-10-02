@@ -869,7 +869,7 @@ impl GameState {
             (items, gold)
         };
 
-        self.eject_chest_loot(item_def_ids.clone(), chest_pos, player_floor);
+        self.eject_chest_loot(item_def_ids.clone(), chest_pos, player_floor, *player_id);
         let new_gold = {
             let mut gold_map = self.player_gold.write().await;
             let wallet = gold_map.entry(*player_id).or_insert(0);
@@ -903,10 +903,14 @@ impl GameState {
         .await;
     }
 
-    /// Burst a treasure chest's loot out as scattered ground items once the
-    /// lid has swung open. The wait lives server-side so a client that skips
-    /// the lid animation can't reach the loot early (same rule as kill loot).
-    fn eject_chest_loot(&self, item_def_ids: Vec<String>, chest_pos: Position, floor_level: i8) {
+    /// Eject reserved loot after the chest lid opens.
+    fn eject_chest_loot(
+        &self,
+        item_def_ids: Vec<String>,
+        chest_pos: Position,
+        floor_level: i8,
+        player_id: PlayerId,
+    ) {
         let game_state = self.clone();
         tokio::spawn(async move {
             tokio::time::sleep(*super::combat::CHEST_LOOT_EJECT_DELAY).await;
@@ -917,11 +921,17 @@ impl GameState {
                     floor_level,
                     CHEST_LOOT_SCATTER_MIN,
                     CHEST_LOOT_SCATTER_MAX,
+                    Some(player_id),
                 )
                 .await;
-            // Rare bonus world drops burst out with the rest.
             game_state
-                .spawn_world_drops(chest_pos, floor_level, None, Vec::new())
+                .spawn_world_drops_with_owner(
+                    chest_pos,
+                    floor_level,
+                    None,
+                    Vec::new(),
+                    Some(player_id),
+                )
                 .await;
         });
     }
@@ -963,7 +973,8 @@ impl GameState {
                 let drop_pos = self
                     .prop_wall_opposite_drop_position(entrance_id, depth, prop_id, prop_pos)
                     .await;
-                self.spawn_dungeon_coin_pile(drop_pos, -(depth as i8)).await;
+                self.spawn_dungeon_coin_pile(drop_pos, -(depth as i8), None)
+                    .await;
             }
             let key = self.roll_prop_key_drop(player_id, entrance_id, depth).await;
             self.spawn_world_drops(prop_pos, -(depth as i8), None, key.into_iter().collect())
@@ -971,12 +982,7 @@ impl GameState {
         }
     }
 
-    /// Open an interactive chest prop: requires standing next to it on its
-    /// floor. Records the open for the instance and broadcasts it to nearby
-    /// players (the opener included) so every client plays the lid animation.
-    /// The chest stays solid — opening changes no passability. No-op if it's
-    /// already open. A fresh open also spills a loose coin pile next to the
-    /// chest for anyone nearby to grab (1–10 copper on pickup).
+    /// Open a chest prop once and reserve its drops for the opener.
     pub async fn open_dungeon_prop(
         &self,
         player_id: &PlayerId,
@@ -1005,26 +1011,41 @@ impl GameState {
             let drop_pos = self
                 .prop_wall_opposite_drop_position(entrance_id, depth, prop_id, chest_pos)
                 .await;
-            self.spawn_dungeon_coin_pile(drop_pos, -(depth as i8)).await;
-            let key = self.roll_prop_key_drop(player_id, entrance_id, depth).await;
-            self.spawn_world_drops(chest_pos, -(depth as i8), None, key.into_iter().collect())
+            self.spawn_dungeon_coin_pile(drop_pos, -(depth as i8), Some(*player_id))
                 .await;
+            let key = self.roll_prop_key_drop(player_id, entrance_id, depth).await;
+            self.spawn_world_drops_with_owner(
+                chest_pos,
+                -(depth as i8),
+                None,
+                key.into_iter().collect(),
+                Some(*player_id),
+            )
+            .await;
         }
     }
 
-    async fn spawn_dungeon_coin_pile(&self, position: Position, floor_level: i8) {
+    async fn spawn_dungeon_coin_pile(
+        &self,
+        position: Position,
+        floor_level: i8,
+        reserved_for: Option<PlayerId>,
+    ) {
         let instance_id = self.next_instance_id().await;
-        self.spawn_ground_item(GroundItem {
-            instance_id,
-            item_def_id: super::COIN_PILE_ITEM_ID.to_string(),
-            position,
-            floor_level,
-            quantity: 1,
-            enchant: 0,
-            dropped_by: None,
-            cape_color: None,
-            cape_texture: None,
-        })
+        self.spawn_ground_item_with_owner(
+            GroundItem {
+                instance_id,
+                item_def_id: super::COIN_PILE_ITEM_ID.to_string(),
+                position,
+                floor_level,
+                quantity: 1,
+                enchant: 0,
+                dropped_by: None,
+                cape_color: None,
+                cape_texture: None,
+            },
+            reserved_for,
+        )
         .await;
     }
 

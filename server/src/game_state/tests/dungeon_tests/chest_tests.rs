@@ -374,6 +374,14 @@ async fn dungeon_chest_persistence_failure_rejects_without_reward_and_can_retry(
         !game_state.ground_items.read().await.is_empty(),
         "retry after schema repair should eject chest loot onto the floor"
     );
+    let now = GameState::now_ms();
+    assert!(game_state.ground_items.read().await.values().all(|entry| {
+        entry.reservation.is_some_and(|reservation| {
+            reservation.player_id == player_id
+                && reservation.until_ms > now
+                && reservation.until_ms <= now + 30_000
+        })
+    }));
     assert_eq!(
         repaired_auth
             .load_dungeon_history(character.id)

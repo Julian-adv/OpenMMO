@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { translate } from '../i18n'
 import type { PlayerDamageInfo, PlayerGoldInfo } from '../stores/gameStore'
 import { drawOutlinedText } from '../utils/textBadge'
 import { createTextTexture } from '../utils/text-label-pool'
@@ -113,7 +114,7 @@ export class DamageTextEmitter {
     if (damage && damage.trigger !== this.lastDamageTrigger) {
       this.lastDamageTrigger = damage.trigger
       this.spawn(
-        damage.hit ? `${damage.damage}` : 'Miss',
+        damage.hit ? `${damage.damage}` : translate('combat.missLabel'),
         damage.hit ? '#ff4d4d' : '#a0aec0',
         yOffset
       )
@@ -124,7 +125,11 @@ export class DamageTextEmitter {
     }
     if (gold && gold.trigger !== this.lastGoldTrigger) {
       this.lastGoldTrigger = gold.trigger
-      this.spawn(`+${gold.amount} copper`, '#f6c453', yOffset)
+      this.spawn(
+        translate('currency.copperGained', { amount: gold.amount }),
+        '#f6c453',
+        yOffset
+      )
     }
     if (this.slots.length === 0) return
     let live = 0

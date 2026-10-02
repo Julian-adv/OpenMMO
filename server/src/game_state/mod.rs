@@ -318,6 +318,20 @@ pub(crate) struct GameClock {
 pub(crate) struct ServerGroundItem {
     pub item: onlinerpg_shared::inventory::GroundItem,
     pub dropped_at_ms: u64,
+    pub reservation: Option<LootReservation>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct LootReservation {
+    pub player_id: PlayerId,
+    pub until_ms: u64,
+}
+
+impl ServerGroundItem {
+    fn can_pickup(&self, player_id: &PlayerId, now_ms: u64) -> bool {
+        self.reservation
+            .is_none_or(|r| r.player_id == *player_id || now_ms >= r.until_ms)
+    }
 }
 
 #[derive(Clone)]

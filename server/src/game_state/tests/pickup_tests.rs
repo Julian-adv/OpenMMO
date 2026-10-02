@@ -20,6 +20,163 @@ fn ground_item(instance_id: u64, item_def_id: &str, quantity: u32) -> GroundItem
 }
 
 #[tokio::test]
+async fn chest_loot_is_reserved_for_its_opener_then_becomes_public() {
+    let game = make_test_game_state("reserved_chest_loot");
+    for name in ["opener", "rival"] {
+        game.add_player(make_player(name, 0.0, 0.0)).await;
+        game.inventories
+            .write()
+            .await
+            .insert(pid(name), Default::default());
+    }
+    for instance_id in [41, 42] {
+        game.spawn_ground_item_with_owner(
+            ground_item(instance_id, "test_item", 1),
+            Some(pid("opener")),
+        )
+        .await;
+    }
+
+    game.pickup_item(&pid("rival"), 41).await;
+    game.pickup_nearby_items(&pid("rival")).await;
+    assert_eq!(game.ground_items.read().await.len(), 2);
+    assert!(game.inventories.read().await[&pid("rival")].bag.is_empty());
+
+    game.pickup_item(&pid("opener"), 41).await;
+    assert!(!game.ground_items.read().await.contains_key(&41));
+    game.ground_items
+        .write()
+        .await
+        .get_mut(&42)
+        .unwrap()
+        .reservation
+        .as_mut()
+        .unwrap()
+        .until_ms = GameState::now_ms();
+    game.pickup_nearby_items(&pid("rival")).await;
+    assert!(game.ground_items.read().await.is_empty());
+    assert_eq!(game.inventories.read().await[&pid("rival")].bag.len(), 1);
+}
+
+#[tokio::test]
+async fn chest_coins_are_reserved_before_any_wallet_is_credited() {
+    let game = make_test_game_state("reserved_chest_coins");
+    for name in ["opener", "rival"] {
+        game.add_player(make_player(name, 0.0, 0.0)).await;
+    }
+    game.spawn_ground_item_with_owner(ground_item(42, COIN_PILE_ITEM_ID, 1), Some(pid("opener")))
+        .await;
+    game.pickup_item(&pid("rival"), 42).await;
+    assert_eq!(game.get_player_gold(&pid("rival")).await, 0);
+    assert!(game.ground_items.read().await.contains_key(&42));
+    game.pickup_nearby_items(&pid("opener")).await;
+    assert!((1..=10).contains(&game.get_player_gold(&pid("opener")).await));
+    assert!(game.ground_items.read().await.is_empty());
+}
+
+#[test]
+fn loot_reservation_expires_at_the_deadline() {
+    let entry = ServerGroundItem {
+        item: ground_item(42, "test_item", 1),
+        dropped_at_ms: 1_000,
+        reservation: Some(LootReservation {
+            player_id: pid("opener"),
+            until_ms: 31_000,
+        }),
+    };
+    assert!(entry.can_pickup(&pid("opener"), 1_000));
+    assert!(!entry.can_pickup(&pid("rival"), 30_999));
+    assert!(entry.can_pickup(&pid("rival"), 31_000));
+}
+
+#[tokio::test]
+async fn nearby_pickup_obeys_radius_floor_and_reservations() {
+    let game = make_test_game_state("nearby_pickup_boundaries");
+    game.add_player(make_player("picker", 0.0, 0.0)).await;
+    game.inventories
+        .write()
+        .await
+        .insert(pid("picker"), Default::default());
+    for (instance_id, x, floor, owner) in [
+        (41, 1.0, 0, None),
+        (42, 2.0, 0, Some(pid("picker"))),
+        (43, 2.01, 0, None),
+        (44, 1.0, -1, None),
+        (45, 1.0, 0, Some(pid("rival"))),
+    ] {
+        let mut item = ground_item(instance_id, "test_item", 1);
+        item.position.x = x;
+        item.floor_level = floor;
+        game.spawn_ground_item_with_owner(item, owner).await;
+    }
+    game.pickup_nearby_items(&pid("picker")).await;
+    let ground_items = game.ground_items.read().await;
+    assert_eq!(ground_items.len(), 3);
+    for instance_id in [43, 44, 45] {
+        assert!(ground_items.contains_key(&instance_id));
+    }
+    assert_eq!(game.inventories.read().await[&pid("picker")].bag.len(), 2);
+}
+
+#[tokio::test]
+async fn nearby_pickup_takes_nearest_items_and_leaves_excess_weight_reserved() {
+    let game = make_test_game_state("nearby_pickup_weight");
+    game.add_player(make_player("picker", 0.0, 0.0)).await;
+    game.inventories.write().await.insert(
+        pid("picker"),
+        PlayerInventory {
+            bag: vec![bag_item(11, "apple", 495)],
+            ..Default::default()
+        },
+    );
+    let mut near = ground_item(41, "apple", 3);
+    near.position.x = 0.25;
+    game.spawn_ground_item_with_owner(near, Some(pid("picker")))
+        .await;
+    game.spawn_ground_item_with_owner(ground_item(42, "apple", 12), Some(pid("picker")))
+        .await;
+    game.pickup_nearby_items(&pid("picker")).await;
+    let ground_items = game.ground_items.read().await;
+    assert!(!ground_items.contains_key(&41));
+    assert_eq!(ground_items[&42].item.quantity, 10);
+    assert!(!ground_items[&42].can_pickup(&pid("rival"), GameState::now_ms()));
+    assert_eq!(
+        game.inventories.read().await[&pid("picker")].bag[0].quantity,
+        500
+    );
+}
+
+#[tokio::test]
+async fn dead_players_cannot_pick_up_nearby_items() {
+    let game = make_test_game_state("nearby_pickup_dead");
+    let mut player = make_player("picker", 0.0, 0.0);
+    player.health = 0;
+    game.add_player(player).await;
+    game.spawn_ground_item(ground_item(42, COIN_PILE_ITEM_ID, 1))
+        .await;
+    game.pickup_nearby_items(&pid("picker")).await;
+    assert!(game.ground_items.read().await.contains_key(&42));
+    assert_eq!(game.get_player_gold(&pid("picker")).await, 0);
+}
+
+#[tokio::test]
+async fn nearby_pickup_reaches_across_the_world_seam() {
+    let game = make_test_game_state("nearby_pickup_seam");
+    game.add_player(make_player(
+        "picker",
+        onlinerpg_shared::world::WORLD_MIN_X + 0.5,
+        0.0,
+    ))
+    .await;
+    let mut item = ground_item(42, COIN_PILE_ITEM_ID, 1);
+    item.position.x = onlinerpg_shared::world::WORLD_MAX_X - 0.5;
+    game.spawn_ground_item(item).await;
+    game.pickup_nearby_items(&pid("picker")).await;
+    assert!(game.ground_items.read().await.is_empty());
+    assert!((1..=10).contains(&game.get_player_gold(&pid("picker")).await));
+}
+
+#[tokio::test]
 async fn coin_pickup_records_only_the_successful_payout() {
     let game = make_test_game_state("coin_pickup_metrics");
     game.add_player(make_player("picker", 0.0, 0.0)).await;
@@ -52,6 +209,7 @@ async fn pickup_broadcasts_the_pickup_animation() {
         ServerGroundItem {
             item: ground_item(42, "test_item", 1),
             dropped_at_ms: 0,
+            reservation: None,
         },
     );
     let mut watcher_rx = game_state.register_direct_channel(&pid("watcher")).await;
@@ -262,6 +420,7 @@ async fn place_apple_pile(game_state: &GameState, instance_id: u64, quantity: u3
         ServerGroundItem {
             item: ground_item(instance_id, "apple", quantity),
             dropped_at_ms: 0,
+            reservation: None,
         },
     );
     seed_subjects(game_state).await;

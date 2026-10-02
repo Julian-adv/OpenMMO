@@ -5,6 +5,7 @@ import { myFishing } from '../stores/fishingStore'
 import { instrumentPanelVisible } from '../stores/instrumentStore'
 import { pointInRect } from '../stores/dragStore'
 import { sprintRequested } from '../stores/movementSettings'
+import { pickupKeyCode } from '../stores/pickupSettings'
 import { isTypingTarget } from '../utils/dom'
 import { setupCanvasDragMove } from './canvasDragMove'
 import {
@@ -267,6 +268,7 @@ export function movementInput(keys: ReadonlySet<string>) {
 class InputHandler {
   private keysPressed = new Set<string>()
   private _interactJustPressed = false
+  private _pickupJustPressed = false
   /** Dedicated raycaster reused across pointermove hover queries. */
   private _hoverRaycaster = new Raycaster()
   private readonly _hoverNDC = new Vector2()
@@ -284,6 +286,7 @@ class InputHandler {
       }
     })
     instrumentPanelVisible.subscribe(() => this.clearTransientInput())
+    pickupKeyCode.subscribe(() => (this._pickupJustPressed = false))
   }
 
   get hasKeysPressed(): boolean {
@@ -299,6 +302,13 @@ class InputHandler {
   clearTransientInput() {
     this.keysPressed.clear()
     this._interactJustPressed = false
+    this._pickupJustPressed = false
+  }
+
+  consumePickup(): boolean {
+    const pressed = this._pickupJustPressed
+    this._pickupJustPressed = false
+    return pressed
   }
 
   /** Returns true once per E key press, then resets. */
@@ -888,6 +898,14 @@ class InputHandler {
 
     if (event.code === 'KeyE' && !event.repeat) {
       this._interactJustPressed = true
+    }
+    if (
+      event.code === get(pickupKeyCode) &&
+      !event.repeat &&
+      !event.altKey &&
+      !event.metaKey
+    ) {
+      this._pickupJustPressed = true
     }
     this.keysPressed.add(event.code)
     return true

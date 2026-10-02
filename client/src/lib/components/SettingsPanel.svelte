@@ -16,6 +16,12 @@
   import VolumeControl from './VolumeControl.svelte'
   import { minimapEnabled } from '../stores/minimapStore'
   import { alwaysRun, keyboardMovementMode } from '../stores/movementSettings'
+  import {
+    DEFAULT_PICKUP_KEY,
+    isPickupKeyCode,
+    pickupKeyCode,
+    pickupKeyLabel,
+  } from '../stores/pickupSettings'
   import { lightningEnabled } from '../stores/effectSettings'
   import ToggleSwitch from './ToggleSwitch.svelte'
   import { friendOnlineNoticeEnabled } from '../stores/friendStore'
@@ -31,6 +37,33 @@
   $effect(() => mountOverlay('settings', onClose))
 
   const qualityOptions: QualityLevel[] = ['high', 'medium', 'low']
+
+  let changingPickupKey = $state(false)
+  let pickupKeyError = $state(false)
+
+  function changePickupKey(event: KeyboardEvent) {
+    if (event.key === 'Tab') return
+    event.preventDefault()
+    event.stopPropagation()
+    const input = event.currentTarget as HTMLInputElement
+    if (event.key === 'Escape') {
+      input.blur()
+      return
+    }
+    if (event.repeat) return
+    if (
+      event.ctrlKey ||
+      event.altKey ||
+      event.metaKey ||
+      event.shiftKey ||
+      !isPickupKeyCode(event.code)
+    ) {
+      pickupKeyError = true
+      return
+    }
+    pickupKeyCode.set(event.code)
+    input.blur()
+  }
 </script>
 
 {#snippet toggleRow(
@@ -110,6 +143,46 @@
           : $t('settings.relativeHint')}
       </span>
     </div>
+    <div class="setting-row">
+      <label class="setting-label" for="pickup-key">
+        {$t('settings.pickupNearby')}
+      </label>
+      <div class="pickup-key-controls">
+        <input
+          id="pickup-key"
+          class="pickup-key"
+          type="text"
+          readonly
+          aria-describedby="pickup-key-hint"
+          value={changingPickupKey
+            ? $t('settings.pickupPressKey')
+            : pickupKeyLabel($pickupKeyCode)}
+          onfocus={() => {
+            changingPickupKey = true
+            pickupKeyError = false
+          }}
+          onblur={() => {
+            changingPickupKey = false
+            pickupKeyError = false
+          }}
+          onkeydown={changePickupKey}
+        />
+        <button
+          class="action-btn"
+          disabled={$pickupKeyCode === DEFAULT_PICKUP_KEY}
+          onclick={() => pickupKeyCode.set(DEFAULT_PICKUP_KEY)}
+          >{$t('common.reset')}</button
+        >
+      </div>
+    </div>
+    <p id="pickup-key-hint" class="pickup-key-hint">
+      {$t('settings.pickupChangeHint')}
+    </p>
+    {#if pickupKeyError}
+      <p class="pickup-key-error" role="alert">
+        {$t('settings.pickupKeyUnavailable')}
+      </p>
+    {/if}
     {@render toggleRow($t('settings.friendNotice'), friendOnlineNoticeEnabled)}
     {@render toggleRow(
       $t('settings.lightning'),
@@ -253,6 +326,46 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+  }
+
+  .pickup-key-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .pickup-key {
+    width: 94px;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 6px;
+    background: #2d3748;
+    color: #edf2f7;
+    border: 1px solid #4a5568;
+    border-radius: 4px;
+    text-align: center;
+    cursor: pointer;
+  }
+
+  .pickup-key:focus {
+    outline: 2px solid #bee3f8;
+    outline-offset: 1px;
+  }
+
+  .pickup-key-hint,
+  .pickup-key-error {
+    margin: 6px 0 12px;
+    font-size: 12px;
+    color: #a0aec0;
+  }
+
+  .pickup-key-error {
+    color: #f6ad55;
+  }
+
+  .pickup-key-controls .action-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
 
   .sfx-row {

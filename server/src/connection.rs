@@ -1780,6 +1780,12 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::PickupNearbyItems => {
+            if let Some(id) = &state.player_id {
+                game_state.pickup_nearby_items(id).await;
+            }
+        }
+
         ClientMessage::UseItem { instance_id } => {
             if let Some(id) = &state.player_id {
                 match game_state.authenticated_use_action(id, instance_id).await {

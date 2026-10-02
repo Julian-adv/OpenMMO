@@ -11,6 +11,7 @@
     takeInspectionTarget,
   } from '../stores/inspectionStore'
   import {
+    myFishing,
     fishingTargeting,
     cancelFishingTargeting,
   } from '../stores/fishingStore'
@@ -420,6 +421,10 @@
   function onPickupGrab() {
     const p = pickingUpState()
     if (!p) return
+    if (p.pickupNearby) {
+      networkManager.sendPickupNearbyItems()
+      return
+    }
     handlePickupGrab(p.pendingPickupInstanceId, {
       setInHand: (id) => groundItemManager.setInHand(id),
       remove: (id) => groundItemManager.remove(id),
@@ -782,8 +787,9 @@
     transitionTo('idle')
   }
 
-  /** Check E key interaction (door toggle). Call from game loop. */
+  /** Consume interaction and pickup shortcuts each frame. */
   function checkInteraction() {
+    if (inputHandler.consumePickup()) pickupNearbyItems()
     handleInteractKey({
       currentPlayer,
       consumeInteract: () => {
@@ -1226,7 +1232,37 @@
     }
   })
 
-  function enterPickup(instanceId: number) {
+  function pickupNearbyItems() {
+    if (
+      !currentPlayer ||
+      currentPlayer.health <= 0 ||
+      playerState.state === 'interact' ||
+      isMounted(currentPlayer) ||
+      get(myFishing).phase !== 'idle'
+    )
+      return
+
+    let nearestId: number | null = null
+    let nearestDistanceSq = Infinity
+    const floorLevel = get(ownPlayerFloor)
+    for (const item of groundItemManager.items.values()) {
+      if (item.instanceId < 0 || item.inHand || item.floorLevel !== floorLevel)
+        continue
+      const dx = shortestWrappedDeltaX(
+        currentPlayer.position.x,
+        item.position.x
+      )
+      const dz = item.position.z - currentPlayer.position.z
+      const distanceSq = dx * dx + dz * dz
+      if (distanceSq <= 4 && distanceSq < nearestDistanceSq) {
+        nearestId = item.instanceId
+        nearestDistanceSq = distanceSq
+      }
+    }
+    if (nearestId !== null) enterPickup(nearestId, true)
+  }
+
+  function enterPickup(instanceId: number, pickupNearby = false) {
     cancelAutoTravel()
     // Face the item: an in-reach click never walks, and a blocked walk-up
     // stops facing its travel direction.
@@ -1237,7 +1273,9 @@
       instanceId,
       previousPlayerState: { ...playerState, rotation: playerRotation },
       hasGroundItem: () => item !== undefined,
-      beginPickup: (id) => groundItemManager.beginPickup(id),
+      beginPickup: (id) => {
+        if (!pickupNearby) groundItemManager.beginPickup(id)
+      },
       cancelCombat: () => combatController.cancelCombat(),
     })
 
@@ -1252,6 +1290,7 @@
     playerControlMachine.transition({
       name: 'picking_up',
       pendingPickupInstanceId: result.pendingPickupInstanceId,
+      pickupNearby,
     })
   }
 

@@ -561,6 +561,7 @@ pub enum ClientMessage {
     PickupItem {
         instance_id: u64,
     },
+    PickupNearbyItems,
     /// Consume a usable item from the bag (e.g. drink a healing potion).
     UseItem {
         instance_id: u64,
