@@ -37,23 +37,24 @@ const STARTER_ITEMS: &[(&str, u32, Option<&str>)] = &[
 
 fn class_starter_items(
     class: &CharacterClass,
+    gender: Gender,
 ) -> &'static [(&'static str, u32, Option<&'static str>)] {
     match class {
-        CharacterClass::Knight => &[
+        CharacterClass::Knight if gender == Gender::Male => &[
             ("worn_plate_helmet", 1, Some("head")),
             ("worn_breastplate", 1, Some("chest")),
             ("worn_plate_greaves", 1, Some("pants")),
             ("worn_plate_boots", 1, Some("boots")),
             ("worn_plate_gauntlets", 1, Some("hands")),
         ],
-        CharacterClass::Barbarian => &[
+        CharacterClass::Barbarian if gender == Gender::Male => &[
             ("worn_barbarian_helmet", 1, Some("head")),
             ("worn_barbarian_armor", 1, Some("chest")),
             ("worn_barbarian_pants", 1, Some("pants")),
             ("worn_barbarian_boots", 1, Some("boots")),
             ("worn_barbarian_bracers", 1, Some("hands")),
         ],
-        CharacterClass::Rogue => &[
+        CharacterClass::Rogue if gender == Gender::Male => &[
             ("worn_rogue_top", 1, Some("chest")),
             ("worn_rogue_pants", 1, Some("pants")),
             ("worn_rogue_gloves", 1, Some("hands")),
@@ -1969,8 +1970,9 @@ impl AuthService {
                 "INSERT INTO character_items (character_id, item_def_id, quantity, equip_slot) \
                  VALUES (?1, ?2, ?3, ?4)",
             )?;
-            for (item_def_id, quantity, equip_slot) in
-                STARTER_ITEMS.iter().chain(class_starter_items(&class))
+            for (item_def_id, quantity, equip_slot) in STARTER_ITEMS
+                .iter()
+                .chain(class_starter_items(&class, gender))
             {
                 stmt.execute(params![id, item_def_id, quantity, equip_slot])?;
             }
@@ -2382,7 +2384,7 @@ mod tests {
         let knight = create(&auth, &account, "Armored").unwrap();
         let items = auth.load_inventory(knight.id).unwrap();
         let defs = crate::item_defs::item_defs();
-        for (id, quantity, slot) in class_starter_items(&CharacterClass::Knight) {
+        for (id, quantity, slot) in class_starter_items(&CharacterClass::Knight, Gender::Male) {
             let item = items.iter().find(|item| item.item_def_id == *id).unwrap();
             assert_eq!(item.quantity, *quantity);
             assert_eq!(item.equip_slot.as_deref(), *slot);
@@ -2440,6 +2442,11 @@ mod tests {
                 .unwrap();
             let items = auth.load_inventory(character.id).unwrap();
             let worn = auth.load_character_equipment(character.id).unwrap();
+            if gender == Gender::Female {
+                assert_eq!(items.len(), STARTER_ITEMS.len());
+                assert_eq!(worn.armor, Default::default());
+                continue;
+            }
             for (id, slot) in [
                 ("worn_barbarian_helmet", "head"),
                 ("worn_barbarian_armor", "chest"),
@@ -2487,6 +2494,14 @@ mod tests {
                 )
                 .unwrap();
             let items = auth.load_inventory(character.id).unwrap();
+            if gender == Gender::Female {
+                assert_eq!(items.len(), STARTER_ITEMS.len());
+                assert_eq!(
+                    auth.load_character_equipment(character.id).unwrap().armor,
+                    Default::default()
+                );
+                continue;
+            }
             for (id, slot) in [
                 ("worn_rogue_top", "chest"),
                 ("worn_rogue_pants", "pants"),
@@ -2515,6 +2530,28 @@ mod tests {
             let listed = auth.list_characters_with_equipment(&account).unwrap();
             assert_eq!(listed[0].worn.armor, worn.armor);
         }
+    }
+
+    #[test]
+    fn female_knights_start_without_modular_armor() {
+        let (auth, _) = temp_auth("auth_female_knight_armor");
+        let account = auth.login_google("sub-female-knight-armor").unwrap();
+        let character = auth
+            .create_character(
+                &account,
+                "LadyKnight",
+                &plain_attributes(),
+                10,
+                CharacterClass::Knight,
+                Gender::Female,
+            )
+            .unwrap();
+        let items = auth.load_inventory(character.id).unwrap();
+        assert_eq!(items.len(), STARTER_ITEMS.len());
+        let worn = auth.load_character_equipment(character.id).unwrap();
+        assert_eq!(worn.armor, Default::default());
+        assert_eq!(worn.main_hand.as_deref(), Some("worn_iron_sword"));
+        assert!(items.iter().any(|item| item.item_def_id == "worn_torch"));
     }
 
     #[test]

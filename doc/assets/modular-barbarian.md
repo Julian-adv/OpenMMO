@@ -46,7 +46,8 @@
 
 기사 시작 장비처럼 부위마다 방어력 1, `basePrice` 없음, `untradeable=true`다.
 상인의 개별·일괄 매입과 플레이어 간 거래가 불가능하며 상자 전리품에도 포함하지 않는다.
-공통 시작 장비인 낡은 철검과 낡은 횃불은 함께 지급한다. 기존 캐릭터에는 소급 지급하지 않는다.
+신규 캐릭터에는 공통 시작 장비인 낡은 철검과 낡은 횃불도 함께 지급한다.
+2026-10 시작 방어구 소급 지급은 [기사 복장 문서](modular-knight-plate.md#기존-캐릭터-소급-지급)를 따른다.
 
 아이콘 `client/public/items/armor/barbarian_*.png`와 바닥 모델
 `client/public/models/armor/barbarian_*.glb`는 위 제작용 파츠를 Blender에서

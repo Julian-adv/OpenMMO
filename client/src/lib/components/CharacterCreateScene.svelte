@@ -213,7 +213,9 @@
     selected={true}
     {characterClass}
     {gender}
-    equipment={STARTER_EQUIPMENT[characterClass]}
+    equipment={gender === 'male'
+      ? STARTER_EQUIPMENT[characterClass]
+      : undefined}
     rotationY={modelRotationY}
   />
 {/key}
