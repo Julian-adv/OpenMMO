@@ -205,6 +205,8 @@ pub struct VisibleEquipment {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Character {
     pub id: i64,
+    #[serde(default)]
+    pub deletion_due_at: Option<i64>,
     pub name: String,
     pub created_at: i64,
     pub level: u32,

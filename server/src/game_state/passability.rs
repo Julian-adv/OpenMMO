@@ -197,6 +197,11 @@ impl super::GameState {
             .unwrap_or(to.y)
     }
 
+    pub(crate) fn has_surface_floor(&self, floor: u8, position: &crate::types::Position) -> bool {
+        pathfinding::get_floor_y_base(&self.passability_read(), position.x, position.z, floor)
+            .is_some()
+    }
+
     pub(super) fn passability_read(&self) -> super::passability_snapshot::Read<'_> {
         self.passability.read()
     }

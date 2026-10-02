@@ -403,7 +403,7 @@ async fn run_npc_session(
     let (mut characters, others) = desired.partition(may_delete, characters);
 
     let others = if may_delete {
-        for c in &others {
+        if let Some(c) = others.first() {
             info!(
                 "[{}] Deleting character '{}' (id={}, {:?}, {:?}) — mismatch (want name={:?}, class={:?}, gender={:?})",
                 label, c.name, c.id, c.class, c.gender, desired.name, desired.class, desired.gender
@@ -413,13 +413,29 @@ async fn run_npc_session(
                 &ClientMessage::DeleteCharacter { character_id: c.id },
             )
             .await?;
-            ws::wait_for_msg(&mut ws_rx, label, "CharacterDeleted", |msg| {
-                matches!(
-                    msg,
-                    ServerMessage::CharacterDeleted { .. } | ServerMessage::CharacterError { .. }
-                )
-            })
-            .await?;
+            let response =
+                ws::wait_for_msg(&mut ws_rx, label, "CharacterDeletionScheduled", |msg| {
+                    matches!(
+                        msg,
+                        ServerMessage::CharacterDeletionScheduled { .. }
+                            | ServerMessage::CharacterError { .. }
+                    )
+                })
+                .await?;
+            match response {
+                ServerMessage::CharacterDeletionScheduled {
+                    deletion_due_at, ..
+                } => {
+                    return Err(ws::AuthRejected(format!(
+                        "Character '{}' is awaiting deletion until Unix time {deletion_due_at}; retry after deletion completes",
+                        c.name
+                    )).into());
+                }
+                ServerMessage::CharacterError { message } => {
+                    return Err(ws::AuthRejected(message).into());
+                }
+                _ => unreachable!(),
+            }
         }
         Vec::new()
     } else {
@@ -1303,6 +1319,7 @@ pub(crate) mod tests {
     pub(crate) fn character(name: &str, class: CharacterClass, gender: Gender) -> Character {
         Character {
             id: 1,
+            deletion_due_at: None,
             name: name.to_string(),
             created_at: 0,
             level: 1,

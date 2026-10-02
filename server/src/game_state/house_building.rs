@@ -229,6 +229,89 @@ fn rects_overlap(a: HeightRect, b: HeightRect) -> bool {
 }
 
 impl GameState {
+    pub(super) async fn remove_estate_buildings(
+        &self,
+        auth: &AuthService,
+        estates: &[crate::auth::EstateCleanup],
+        deleted_owners: &[i64],
+    ) -> Result<(), crate::auth::AuthError> {
+        let plots: HashSet<_> = estates
+            .iter()
+            .flat_map(|estate| estate.plots.iter().copied())
+            .collect();
+        let houses = self
+            .housing_io
+            .read_all_houses()
+            .await
+            .map_err(|error| crate::auth::AuthError::Database(error.to_string()))?;
+        for house in houses {
+            let owned = house
+                .owner_id
+                .parse::<i64>()
+                .is_ok_and(|id| deleted_owners.contains(&id));
+            let on_estate = foundation_cells(&house).into_iter().any(|(x, z)| {
+                plots.contains(&super::land::plot_key(onlinerpg_terrain::land::plot_addr(
+                    x, z,
+                )))
+            });
+            if !owned && !on_estate {
+                continue;
+            }
+            let (cx, cz) = world_to_chunk(house.origin.x, house.origin.z);
+            self.housing_io
+                .delete_house(&house.id, cx, cz)
+                .await
+                .map_err(|error| crate::auth::AuthError::Database(error.to_string()))?;
+            let occupants: Vec<_> = self
+                .players
+                .read()
+                .await
+                .values()
+                .filter(|player| {
+                    u8::try_from(player.floor_level).is_ok_and(|floor| {
+                        onlinerpg_shared::furniture::point_in_house_floor(
+                            &house,
+                            player.position.x,
+                            player.position.z,
+                            floor,
+                        )
+                    })
+                })
+                .map(|player| player.id)
+                .collect();
+            self.passability_remove_house(&house.id).await;
+            let changed = self.restore_demolished_house_terrain(&house).await;
+            crate::housing::routes::publish_house_terrain_changes(self, &changed, &[], &[]).await;
+            self.pending_estate_evictions
+                .write()
+                .await
+                .extend(occupants);
+        }
+        let ids: Vec<_> = estates.iter().map(|estate| estate.id).collect();
+        let auth_copy = auth.clone();
+        let removed = super::auth_db(move || auth_copy.remove_estates(&ids)).await?;
+        self.remove_estate_furniture(&removed).await;
+        self.refresh_fence_owners_locked(auth).await?;
+        Ok(())
+    }
+
+    pub(crate) async fn evacuate_estate_occupants(&self) {
+        let occupants: Vec<_> = self
+            .pending_estate_evictions
+            .write()
+            .await
+            .drain()
+            .collect();
+        for player_id in occupants {
+            self.teleport_to_town(&player_id).await;
+            self.send_system_message(
+                &player_id,
+                "The estate was removed. You have been moved to town.",
+            )
+            .await;
+        }
+    }
+
     async fn apply_heightmap_edits(
         &self,
         house_id: &str,

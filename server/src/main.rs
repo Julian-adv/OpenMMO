@@ -127,6 +127,8 @@ async fn time_sync_tick(game_state: &GameState, auth_service: &Arc<AuthService>,
     // Pay NPC trader salaries on game-day rollover (economy phase 3)
     game_state.tick_npc_salaries().await;
     game_state.tick_land_taxes(auth_service).await;
+    game_state.tick_character_deletions(auth_service).await;
+    game_state.evacuate_estate_occupants().await;
 
     // Merchants' price meeting on Serin's dark evening (doc/PRICING.md).
     game_state.tick_pricing_meeting(auth_service).await;

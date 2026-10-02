@@ -175,10 +175,23 @@
     return result
   }
 
-  async function handleDeleteCharacter(characterId: number) {
-    const result = await networkManager.requestDeleteCharacter(characterId)
-    if (result.ok) {
+  $effect(() =>
+    networkManager.characterDeleted.on((characterId) => {
       accountCharacters = accountCharacters.filter((c) => c.id !== characterId)
+    })
+  )
+
+  async function handleDeleteCharacter(characterId: number, cancel = false) {
+    const result = await networkManager.requestDeleteCharacter(
+      characterId,
+      cancel
+    )
+    if (result.ok) {
+      accountCharacters = accountCharacters.map((character) =>
+        character.id === characterId
+          ? { ...character, deletion_due_at: result.deletionDueAt ?? null }
+          : character
+      )
     }
     return result
   }

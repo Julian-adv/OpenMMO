@@ -10,7 +10,7 @@
   const account = $derived($landAccount)
   const status = $derived.by(() => {
     if (!account?.plots) return 'No estate'
-    if (account.missed >= 6) return 'Foreclosure due'
+    if (account.missed >= 6) return 'Foreclosed'
     if (account.missed >= 4) return 'Ruined'
     if (account.missed >= 2) return 'Abandoned'
     if (account.missed === 1) return 'Grace period'
@@ -28,7 +28,7 @@
   <button
     class="account-balance"
     onclick={onwithdraw}
-    disabled={!account?.treasury || $landTransferPending}
+    disabled={!account?.treasury || account.missed >= 6 || $landTransferPending}
     title="Withdraw gold from your tax account"
   >
     <span>Tax account</span>
@@ -72,33 +72,44 @@
             ? ''
             : 's'}.
         </p>
-        <p>
-          No new construction or furniture placement. Deposits and withdrawals
-          remain available.
-        </p>
-        {#if account.missed >= 2}<p>
+        {#if account.missed >= 6}
+          <p>
+            The estate is being reclaimed. Recovery and transfers are no longer
+            available.
+          </p>
+        {:else}
+          <p>
+            No new construction or furniture placement. Deposits and withdrawals
+            remain available.
+          </p>
+        {/if}
+        {#if account.missed >= 2 && account.missed < 6}<p>
             Doors unlock; furniture interactions are disabled.
           </p>{/if}
-        {#if account.missed >= 4}<p>The estate is in the ruin stage.</p>{/if}
+        {#if account.missed >= 4 && account.missed < 6}<p>
+            The estate is in the ruin stage.
+          </p>{/if}
         <p>
-          At 6 missed payments, land is subject to release and houses and
-          furniture to removal. Furniture is returned to its owner.
+          At 6 missed payments, the estate is reclaimed. All houses, furniture,
+          and stored items are permanently removed without a refund.
         </p>
-        <div class="tax-row">
-          <span>Restore account</span><GoldAmount
-            copper={account.recovery_cost}
-          />
-        </div>
-        <p>
-          Deposit enough to cover all missed tax plus one month. This is charged
-          immediately and the next payment is waived. Partial funding does not
-          clear overdue status.
-        </p>
-        <div class="tax-row">
-          <span>Additional deposit needed</span><GoldAmount
-            copper={Math.max(0, account.recovery_cost - account.treasury)}
-          />
-        </div>
+        {#if account.missed < 6}
+          <div class="tax-row">
+            <span>Restore account</span><GoldAmount
+              copper={account.recovery_cost}
+            />
+          </div>
+          <p>
+            Deposit enough to cover all missed tax plus one month. This is
+            charged immediately and the next payment is waived. Partial funding
+            does not clear overdue status.
+          </p>
+          <div class="tax-row">
+            <span>Additional deposit needed</span><GoldAmount
+              copper={Math.max(0, account.recovery_cost - account.treasury)}
+            />
+          </div>
+        {/if}
       {:else}<p>Your account is in good standing.</p>{/if}
     </div>
   {/if}

@@ -223,6 +223,7 @@ async fn deleting_an_offline_character_removes_the_stall() {
     let (m, _, _) = buy_orders::setup("stall_offline_delete", 1000, "apple", 1, 100).await;
     let (character_id, _) = logout(&m).await;
     let account = m.auth.login_npc("npc_stall_offline_delete").unwrap();
+    m.auth.make_character_deletion_due(character_id);
     assert!(m
         .game_state
         .delete_character_if_inactive(&m.auth, &account, character_id)

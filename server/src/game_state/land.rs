@@ -18,21 +18,38 @@ impl GameState {
             .current_game_day()
             .div_euclid(super::time::GAME_DAYS_PER_MONTH);
         let mut last = self.land_tax_last_month.lock().await;
-        if *last == Some(month) {
-            return;
+        let _persistence = self.persistence_lock.lock().await;
+        if *last != Some(month) {
+            let online = self
+                .player_characters
+                .read()
+                .await
+                .values()
+                .map(|(id, _, _)| *id)
+                .collect::<Vec<_>>();
+            let auth_copy = auth.clone();
+            match auth_db(move || auth_copy.collect_land_taxes(month, &online)).await {
+                Ok(()) => *last = Some(month),
+                Err(error) => {
+                    tracing::warn!(%error, "Failed to collect land taxes");
+                    return;
+                }
+            }
         }
-        let online = self
-            .player_characters
-            .read()
-            .await
-            .values()
-            .map(|(id, _, _)| *id)
-            .collect::<Vec<_>>();
-        let auth = auth.clone();
-        match auth_db(move || auth.collect_land_taxes(month, &online)).await {
-            Ok(()) => *last = Some(month),
-            Err(error) => tracing::warn!(%error, "Failed to collect land taxes"),
+        let auth_copy = auth.clone();
+        match auth_db(move || auth_copy.foreclosed_estates()).await {
+            Ok(estates) => {
+                for estate in estates {
+                    if let Err(error) = self.remove_estate_buildings(auth, &[estate], &[]).await {
+                        tracing::warn!(%error, "Failed to clean up foreclosed estate; will retry");
+                    }
+                }
+            }
+            Err(error) => tracing::warn!(%error, "Failed to load foreclosed estates"),
         }
+        drop(_persistence);
+        drop(last);
+        self.evacuate_estate_occupants().await;
     }
 
     pub async fn land_account_action(

@@ -584,6 +584,7 @@ async fn active_character_cannot_be_deleted_from_another_session() {
     let deleting_auth = auth.clone();
     let deleting_account = account.clone();
     let character_id = record.id;
+    auth.make_character_deletion_due(character_id);
     let delete = tokio::spawn(async move {
         deleting_state
             .delete_character_if_inactive(&deleting_auth, &deleting_account, character_id)

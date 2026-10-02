@@ -294,14 +294,12 @@ struct AccountSession {
     kick_tx: mpsc::UnboundedSender<KickNotice>,
 }
 
-/// A session ending from the server side: what to tell the player, and how to
-/// close the socket afterwards.
+/// An account message, optionally ending the session.
 #[derive(Debug)]
 pub(crate) struct KickNotice {
+    pub(crate) keep_open: bool,
     pub(crate) message: ServerMessage,
-    /// Close code for the frame that follows. `None` closes normally, which is
-    /// right for a kick the client should not act on beyond showing the
-    /// reason (an operator's `/kick`, a replacement login).
+    /// Optional close code when ending the session.
     pub(crate) close_code: Option<u16>,
 }
 
@@ -475,6 +473,7 @@ pub struct GameState {
     npc_salary_last_day: Arc<RwLock<Option<i64>>>,
     land_tax_last_month: Arc<tokio::sync::Mutex<Option<i64>>>,
     estate_chests: Arc<RwLock<estate_storage::EstateChestIndex>>,
+    pending_estate_evictions: Arc<RwLock<HashSet<PlayerId>>>,
     fences: Arc<RwLock<fence::FenceIndex>>,
     /// Price index + meeting bookkeeping (doc/PRICING.md), mirrored in DB.
     pricing: Arc<RwLock<crate::auth::PricingState>>,
@@ -756,6 +755,7 @@ impl GameState {
             npc_salary_last_day: Arc::new(RwLock::new(None)),
             land_tax_last_month: Arc::new(tokio::sync::Mutex::new(None)),
             estate_chests: Arc::new(RwLock::new(estate_storage::EstateChestIndex::default())),
+            pending_estate_evictions: Arc::new(RwLock::new(HashSet::new())),
             fences: Arc::new(RwLock::new(fence::FenceIndex::default())),
             pricing: Arc::new(RwLock::new(Default::default())),
             dungeon_reset: Arc::new(RwLock::new(Default::default())),

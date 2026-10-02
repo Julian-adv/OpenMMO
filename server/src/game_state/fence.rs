@@ -226,10 +226,33 @@ impl GameState {
 
     pub(super) async fn refresh_fence_owners(&self, auth: &AuthService) -> Result<(), AuthError> {
         let _persistence = self.persistence_lock.lock().await;
+        self.refresh_fence_owners_locked(auth).await
+    }
+
+    pub(super) async fn refresh_fence_owners_locked(
+        &self,
+        auth: &AuthService,
+    ) -> Result<(), AuthError> {
         let auth = auth.clone();
         let records = auth_db(move || auth.load_fences()).await?;
         let mut fences = self.fences.write().await;
         let mut changed = Vec::new();
+        let kept: HashSet<_> = records.iter().map(|record| record.edge).collect();
+        let removed: Vec<_> = fences
+            .buckets
+            .values()
+            .flat_map(|bucket| bucket.keys())
+            .filter(|edge| !kept.contains(edge))
+            .copied()
+            .collect();
+        for edge in &removed {
+            fences.remove(edge);
+            fence::sync_passability(
+                &mut self.passability_write(),
+                &edge.cache_key(),
+                &fences.group(*edge),
+            );
+        }
         for record in records {
             if let Some(fence) = fences.get(&record.edge) {
                 if fence.owner_id != record.owner_id {
@@ -245,7 +268,7 @@ impl GameState {
         self.interest_lock()
             .publish_state(&ServerMessage::FenceVisibility {
                 added: changed,
-                removed: vec![],
+                removed,
             });
         Ok(())
     }

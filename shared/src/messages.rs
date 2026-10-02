@@ -424,6 +424,9 @@ pub enum ClientMessage {
     DeleteCharacter {
         character_id: i64,
     },
+    CancelCharacterDeletion {
+        character_id: i64,
+    },
     /// New name for one of the account's characters, sent from character
     /// select after the server refused entry with `CharacterRenameRequired`.
     RenameCharacter {
@@ -949,6 +952,13 @@ pub enum ServerMessage {
         max_hp: u32,
     },
     CharacterDeleted {
+        character_id: i64,
+    },
+    CharacterDeletionScheduled {
+        character_id: i64,
+        deletion_due_at: i64,
+    },
+    CharacterDeletionCancelled {
         character_id: i64,
     },
     /// Entry refused: the character's name is on the banned list. NPC
@@ -1989,6 +1999,8 @@ impl ServerMessage {
             | Self::CharacterCreated { .. }
             | Self::CharacterStatsRolled { .. }
             | Self::CharacterDeleted { .. }
+            | Self::CharacterDeletionScheduled { .. }
+            | Self::CharacterDeletionCancelled { .. }
             | Self::CharacterRenameRequired { .. }
             | Self::CharacterRenamed { .. }
             | Self::CharacterError { .. }

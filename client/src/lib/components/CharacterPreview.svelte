@@ -45,6 +45,7 @@
     resolveTipNode,
   } from '../utils/handProps'
   import { TorchFireParticles } from '../effects/fire-particles'
+  import { CharacterGrayscale } from '../shaders/character-grayscale'
   import {
     applyTorchFlickerWorld,
     TORCH_BASE_DECAY,
@@ -67,6 +68,7 @@
     positionZ: number
     rotationY?: number
     selected: boolean
+    deletionPending?: boolean
     characterClass: CharacterClass
     gender?: Gender
     equipment?: VisibleEquipment
@@ -80,6 +82,7 @@
     positionZ,
     rotationY = 0,
     selected,
+    deletionPending = false,
     characterClass,
     gender,
     equipment,
@@ -91,6 +94,11 @@
   let combatMeleeGltfData = $state<GLTF | null>(null)
 
   const modelPath = $derived(getCharacterModelPath(characterClass, gender))
+  const grayscale = new CharacterGrayscale()
+
+  $effect(() => {
+    grayscale.setEnabled(deletionPending)
+  })
 
   $effect(() => {
     const path = modelPath
@@ -192,8 +200,7 @@
   let capeRig: CapeRig | null = null
   let heldProps: THREE.Object3D[] = []
   let weaponGrip: TwoHandedGrip | null = null
-  // Bumped on detach so a GLB that lands afterwards doesn't attach to a
-  // discarded rig.
+  // Reject late equipment loads after detach.
   let equipGeneration = 0
 
   let torchFire: TorchFireParticles | null = null
@@ -203,9 +210,7 @@
   let torchFlickerTime = 0
   const _torchTipWorld = new THREE.Vector3()
 
-  /** The select scene is lit far more dimly than the night world the torch
-   *  constants are tuned for, and the tip sits centimetres from the wearer —
-   *  at full strength the flame would blow the character out. */
+  // Dim the torch for the selection scene.
   const TORCH_LIGHT_INTENSITY_SCALE = 0.03
   const TORCH_LIGHT_DISTANCE = 6
 
@@ -301,6 +306,8 @@
   }
 
   function detachEquipment(): void {
+    if (modelRoot) grayscale.restore(modelRoot)
+    if (torchFireGroup) grayscale.restore(torchFireGroup)
     weaponGrip = null
     equipGeneration++
     capeRig?.dispose()
@@ -310,8 +317,7 @@
     heldProps = []
   }
 
-  // Returning from the game refreshes the list without remounting the slot;
-  // keyed on the visible fields so an unchanged list is a no-op.
+  // Refresh equipment only when visible fields change.
   const wornKey = $derived(
     [
       equipment?.main_hand,
@@ -332,7 +338,10 @@
   })
 
   $effect(() => {
-    if (modelRoot) applyCharacterArmor(modelRoot, equipment?.armor)
+    if (modelRoot) {
+      grayscale.restore(modelRoot)
+      applyCharacterArmor(modelRoot, equipment?.armor)
+    }
   })
 
   // --- Exported interface for parent game loop ---
@@ -475,18 +484,17 @@
       }
     }
 
-    // After the mixer, so cloth and flame ride the pose this frame draws. Both
-    // step for every slot, not just the selected one: the cloth starts in its
-    // bind pose and needs frames to fall into a hang, and an unlit torch on an
-    // unselected character reads as a bug.
+    // Update cloth and flames after the pose, even for unselected slots.
     weaponGrip?.update(currentAction?.getClip() === weaponIdle)
     capeRig?.update(delta, null)
     if (modelRoot) updatePeltPhysics(modelRoot, delta)
     updateTorch(delta)
+    grayscale.sync(modelRoot, torchFireGroup)
   }
 
   export function dispose(): void {
     setupGeneration++
+    grayscale.dispose()
     detachEquipment()
     if (mixer) {
       mixer.stopAllAction()

@@ -103,6 +103,7 @@ async fn shared_estate_houses_survive_owner_deletion_and_allow_sibling_demolitio
     let chest = auth.load_estate_chests().unwrap().remove(0);
     assert_eq!(chest.owner_id, owner);
     game.unregister_player_character(&pid("Builder")).await;
+    auth.make_character_deletion_due(owner);
     assert!(game
         .delete_character_if_inactive(&auth, &account, owner)
         .await

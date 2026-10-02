@@ -202,7 +202,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v111: equipped armor in player snapshots and character previews.
 /// v112: server-validated pickup of items within 2 meters.
 /// v113: account character IDs for shared estate editing.
-pub const PROTOCOL_VERSION: u32 = 113;
+/// v114: scheduled, cancellable character deletion.
+pub const PROTOCOL_VERSION: u32 = 114;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

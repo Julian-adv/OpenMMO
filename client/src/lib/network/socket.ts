@@ -148,6 +148,10 @@ class NetworkManager {
   readonly characterStatsRolled =
     createEvent<(result: CharacterRollResult) => void>()
   readonly characterDeleted = createEvent<(characterId: number) => void>()
+  readonly characterDeletionChanged =
+    createEvent<
+      (payload: { characterId: number; deletionDueAt: number | null }) => void
+    >()
   readonly characterRenameRequired =
     createEvent<(characterId: number) => void>()
   readonly characterRenamed =
@@ -194,6 +198,7 @@ class NetworkManager {
       characterCreated: this.characterCreated,
       characterStatsRolled: this.characterStatsRolled,
       characterDeleted: this.characterDeleted,
+      characterDeletionChanged: this.characterDeletionChanged,
       characterRenameRequired: this.characterRenameRequired,
       characterRenamed: this.characterRenamed,
       characterError: this.characterError,
@@ -1277,8 +1282,9 @@ class NetworkManager {
   }
 
   async requestDeleteCharacter(
-    characterId: number
-  ): Promise<{ ok: boolean; message?: string }> {
+    characterId: number,
+    cancel = false
+  ): Promise<{ ok: boolean; message?: string; deletionDueAt?: number | null }> {
     await this.ensureWasm()
     if (!this.isConnected()) {
       return { ok: false, message: 'Socket is not connected' }
@@ -1289,8 +1295,10 @@ class NetworkManager {
       'Character deletion timed out',
       (settle, onCleanup) => {
         onCleanup(
-          this.characterDeleted.on(() => {
-            settle({ ok: true })
+          this.characterDeletionChanged.on((payload) => {
+            if (payload.characterId === characterId) {
+              settle({ ok: true, deletionDueAt: payload.deletionDueAt })
+            }
           })
         )
         onCleanup(
@@ -1305,9 +1313,11 @@ class NetworkManager {
         )
         return {
           send: () =>
-            this.sendAndSerialize({
-              DeleteCharacter: { character_id: characterId },
-            }),
+            this.sendAndSerialize(
+              cancel
+                ? { CancelCharacterDeletion: { character_id: characterId } }
+                : { DeleteCharacter: { character_id: characterId } }
+            ),
           notSentResult: { ok: false, message: 'Socket is not connected' },
         }
       }

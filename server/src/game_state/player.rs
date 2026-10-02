@@ -286,6 +286,7 @@ impl super::GameState {
         if let Some(replaced) = replaced {
             info!("Replacing active session for account '{}'", account_name);
             let _ = replaced.kick_tx.send(KickNotice {
+                keep_open: false,
                 message: ServerMessage::Kicked {
                     player_id: replaced.player_id.unwrap_or(PlayerId::from(0)),
                     reason: "Another session logged in with the same account".to_string(),
@@ -353,7 +354,47 @@ impl super::GameState {
         }
     }
 
-    /// Deletes an inactive character, or returns `false` if it is registered.
+    pub(crate) async fn change_character_deletion(
+        &self,
+        auth: &AuthService,
+        account: &str,
+        character_id: i64,
+        cancel: bool,
+    ) -> Result<Option<i64>, AuthError> {
+        let _sessions = self.character_session_lock.lock().await;
+        if self
+            .player_characters
+            .read()
+            .await
+            .values()
+            .any(|(id, _, _)| *id == character_id)
+        {
+            return Err(AuthError::InvalidInput(
+                "Cannot delete a character while it is in game",
+            ));
+        }
+        let _persistence = self.persistence_lock.lock().await;
+        let auth = auth.clone();
+        let account = account.to_string();
+        super::auth_db(move || auth.change_character_deletion(&account, character_id, cancel)).await
+    }
+
+    pub(crate) async fn tick_character_deletions(&self, auth: &AuthService) {
+        let auth_copy = auth.clone();
+        let due = match super::auth_db(move || auth_copy.due_character_deletions()).await {
+            Ok(due) => due,
+            Err(error) => {
+                tracing::warn!(%error, "Failed to read pending character deletions");
+                return;
+            }
+        };
+        for (account, id) in due {
+            if let Err(error) = self.delete_character_if_inactive(auth, &account, id).await {
+                tracing::warn!(%error, character_id = id, "Failed to finalize character deletion; will retry");
+            }
+        }
+    }
+
     pub(crate) async fn delete_character_if_inactive(
         &self,
         auth: &AuthService,
@@ -371,7 +412,13 @@ impl super::GameState {
             return Ok(false);
         }
         let _persistence = self.persistence_lock.lock().await;
-        auth.get_character_for_account(account_name, character_id)?;
+        let character = auth.get_character_for_account(account_name, character_id)?;
+        if !character
+            .deletion_due_at
+            .is_some_and(|due| due <= super::super::auth::unix_now())
+        {
+            return Ok(false);
+        }
         let replacement = auth
             .account_character_ids(character_id)?
             .into_iter()
@@ -393,7 +440,32 @@ impl super::GameState {
                 }
             }
         }
+        let removed_furniture = if replacement.is_none() {
+            let estates = auth.estates_for_account(account_name)?;
+            let auth_copy = auth.clone();
+            let furniture =
+                super::auth_db(move || auth_copy.estate_furniture_ids_for_owner(character_id))
+                    .await?;
+            self.remove_estate_buildings(auth, &estates, &[character_id])
+                .await?;
+            furniture
+        } else {
+            Vec::new()
+        };
         auth.delete_character(account_name, character_id)?;
+        if let Some(session) = self
+            .account_sessions
+            .read()
+            .await
+            .get(&account_name.to_ascii_lowercase())
+        {
+            let _ = session.kick_tx.send(KickNotice {
+                keep_open: true,
+                message: ServerMessage::CharacterDeleted { character_id },
+                close_code: None,
+            });
+        }
+        self.remove_estate_furniture(&removed_furniture).await;
         if let Some(replacement) = replacement {
             self.reassign_estate_furniture_owner(character_id, replacement)
                 .await;
@@ -404,6 +476,7 @@ impl super::GameState {
         if let Err(error) = self.refresh_fence_owners(auth).await {
             tracing::warn!(%error, "Failed to refresh fences after character deletion");
         }
+        self.evacuate_estate_occupants().await;
         Ok(true)
     }
 
@@ -509,6 +582,7 @@ impl super::GameState {
             return;
         };
         let _ = session.kick_tx.send(KickNotice {
+            keep_open: false,
             message: ServerMessage::Kicked {
                 player_id: session.player_id.unwrap_or(PlayerId::from(0)),
                 reason: reason.to_string(),

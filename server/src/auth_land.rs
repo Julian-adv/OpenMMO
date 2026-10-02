@@ -6,6 +6,12 @@ use serde::Serialize;
 
 const WORLD_PLOTS_X: i32 = WORLD_TILES_X * 2;
 pub const LAND_TAX_PER_PLOT: i64 = 2_000;
+pub const LAND_FORECLOSURE_MISSED: u32 = 6;
+
+pub(crate) struct EstateCleanup {
+    pub id: i64,
+    pub plots: Vec<(i32, i32, u8)>,
+}
 
 #[derive(Default, Debug)]
 pub struct LandAccount {
@@ -109,6 +115,9 @@ impl AuthService {
         let mut account = Self::read_land_account(&tx, character.character_id)?;
         if account.plots == 0 {
             return Ok(Err("Claim a homestead before using its tax account."));
+        }
+        if account.missed >= LAND_FORECLOSURE_MISSED {
+            return Ok(Err("Your estate has been foreclosed."));
         }
         let (gold, treasury) = if deposit {
             if amount > character.gold {
@@ -217,6 +226,9 @@ impl AuthService {
         for (id, account, mut treasury, mut missed, mut free, last, seen, plots) in rows {
             let tax = plots * LAND_TAX_PER_PLOT;
             for period in last + 1..=month {
+                if missed >= LAND_FORECLOSURE_MISSED {
+                    break;
+                }
                 let inactive = !online_accounts.contains(&account)
                     && super::unix_now() - (month - period) * month_seconds - seen
                         > 8 * month_seconds;
@@ -244,6 +256,57 @@ impl AuthService {
         }
         tx.commit()?;
         Ok(())
+    }
+
+    pub fn foreclosed_estates(&self) -> Result<Vec<EstateCleanup>, AuthError> {
+        let conn = self.open_connection()?;
+        let mut stmt = conn.prepare("SELECT id FROM land_estates WHERE missed>=?1")?;
+        let ids = stmt
+            .query_map([LAND_FORECLOSURE_MISSED], |row| row.get(0))?
+            .collect::<Result<Vec<i64>, _>>()?;
+        Self::estate_cleanup_plots(&conn, ids)
+    }
+
+    pub fn estates_for_account(&self, account: &str) -> Result<Vec<EstateCleanup>, AuthError> {
+        let conn = self.open_connection()?;
+        let mut stmt = conn.prepare("SELECT id FROM land_estates WHERE account_name=?1")?;
+        let ids = stmt
+            .query_map([account], |row| row.get(0))?
+            .collect::<Result<Vec<i64>, _>>()?;
+        Self::estate_cleanup_plots(&conn, ids)
+    }
+
+    fn estate_cleanup_plots(
+        conn: &Connection,
+        ids: Vec<i64>,
+    ) -> Result<Vec<EstateCleanup>, AuthError> {
+        let mut stmt =
+            conn.prepare("SELECT tile_x,tile_z,quadrant FROM land_plots WHERE estate_id=?1")?;
+        ids.into_iter()
+            .map(|id| {
+                let plots = stmt
+                    .query_map([id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+                    .collect::<Result<_, _>>()?;
+                Ok(EstateCleanup { id, plots })
+            })
+            .collect()
+    }
+
+    pub fn remove_estates(&self, ids: &[i64]) -> Result<Vec<i64>, AuthError> {
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let mut removed = Vec::new();
+        for id in ids {
+            let mut stmt = tx.prepare("SELECT id FROM estate_chests WHERE estate_id=?1")?;
+            removed.extend(
+                stmt.query_map([id], |row| row.get::<_, i64>(0))?
+                    .collect::<Result<Vec<_>, _>>()?,
+            );
+            tx.execute("DELETE FROM estate_chests WHERE estate_id=?1", [id])?;
+            tx.execute("DELETE FROM land_estates WHERE id=?1", [id])?;
+        }
+        tx.commit()?;
+        Ok(removed)
     }
 
     pub fn owned_land_plots(&self) -> Result<Vec<OwnedLandPlot>, AuthError> {

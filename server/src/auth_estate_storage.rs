@@ -214,6 +214,18 @@ impl AuthService {
         Ok(())
     }
 
+    pub(crate) fn estate_furniture_ids_for_owner(
+        &self,
+        owner_id: i64,
+    ) -> Result<Vec<i64>, AuthError> {
+        let conn = self.open_connection()?;
+        let mut stmt = conn.prepare("SELECT id FROM estate_chests WHERE owner_id=?1")?;
+        let ids = stmt
+            .query_map([owner_id], |row| row.get(0))?
+            .collect::<Result<_, _>>()?;
+        Ok(ids)
+    }
+
     pub fn load_estate_chests(&self) -> Result<Vec<EstateChest>, AuthError> {
         let conn = self.open_connection()?;
         let mut stmt = conn.prepare(

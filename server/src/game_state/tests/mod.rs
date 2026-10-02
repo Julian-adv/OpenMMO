@@ -20,6 +20,7 @@ mod ambient_spawn_tests;
 mod bed_rest_tests;
 mod cape_dye_tests;
 mod cape_texture_tests;
+mod character_deletion_tests;
 mod chat_tests;
 mod combat_audit_tests;
 mod combat_tests;

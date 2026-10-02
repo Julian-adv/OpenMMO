@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
   import type { AccountCharacter } from '../network/socket'
   import { t } from '../i18n'
   import type { CharacterSlotLayout } from '../utils/characterSelectLayout'
@@ -15,7 +16,8 @@
       characterId: number
     ) => Promise<{ ok: boolean; message?: string; renameRequired?: boolean }>
     onDeleteCharacter: (
-      characterId: number
+      characterId: number,
+      cancel?: boolean
     ) => Promise<{ ok: boolean; message?: string }>
     onLogout: () => void
   }
@@ -34,6 +36,11 @@
   let isStarting = $state(false)
   let isDeleting = $state(false)
   let errorMessage = $state('')
+  let now = $state(Date.now())
+  onMount(() => {
+    const timer = setInterval(() => (now = Date.now()), 1000)
+    return () => clearInterval(timer)
+  })
   let selectedCharacter = $derived(
     characters.find((character) => character.id === selectedCharacterId)
   )
@@ -49,14 +56,14 @@
 
   async function handleStart(characterId?: number) {
     const id = characterId ?? selectedCharacterId
-    if (!id || isBusy()) return
+    if (!id || isBusy() || characters.find((c) => c.id === id)?.deletion_due_at)
+      return
 
     isStarting = true
     errorMessage = ''
     const result = await onStartGame(id)
     isStarting = false
 
-    // A rename-required refusal opens App's dialog instead.
     if (!result.ok && !result.renameRequired) {
       errorMessage = result.message ?? $t('characterSelect.enterFailed')
     }
@@ -68,14 +75,10 @@
     const character = characters.find((c) => c.id === selectedCharacterId)
     if (!character) return
 
-    const confirmed = confirm(
-      $t('characterSelect.deleteConfirm', { name: character.name })
-    )
-    if (!confirmed) return
-
+    const cancel = Boolean(character.deletion_due_at)
     isDeleting = true
     errorMessage = ''
-    const result = await onDeleteCharacter(selectedCharacterId)
+    const result = await onDeleteCharacter(selectedCharacterId, cancel)
     isDeleting = false
 
     if (!result.ok) {
@@ -113,9 +116,30 @@
   </div>
 
   {#if selectedCharacter}
-    <div class="mobile-character-info" bind:clientHeight={detailsHeight}>
+    <div
+      class="mobile-character-info"
+      class:deletion-pending={Boolean(selectedCharacter.deletion_due_at)}
+      bind:clientHeight={detailsHeight}
+    >
       <CharacterSummary character={selectedCharacter} />
     </div>
+  {/if}
+
+  {#if selectedCharacter?.deletion_due_at}
+    {@const remainingMinutes = Math.max(
+      0,
+      Math.ceil((selectedCharacter.deletion_due_at * 1000 - now) / 60000)
+    )}
+    <p class="deletion-notice" role="status">
+      {selectedCharacter.deletion_due_at * 1000 <= now
+        ? $t('characterSelect.deletionFinalizing')
+        : $t('characterSelect.deletionPending', {
+            hours: Math.floor(remainingMinutes / 60),
+            minutes: remainingMinutes % 60,
+          })}
+      <br />
+      {$t('characterSelect.lastCharacterDeletionNotice')}
+    </p>
   {/if}
 
   <div class="bottom-row">
@@ -131,7 +155,9 @@
       type="button"
       class="primary"
       onclick={() => handleStart()}
-      disabled={!selectedCharacterId || isBusy()}
+      disabled={!selectedCharacterId ||
+        Boolean(selectedCharacter?.deletion_due_at) ||
+        isBusy()}
     >
       {isStarting
         ? $t('characterSelect.starting')
@@ -141,11 +167,18 @@
       type="button"
       class="danger"
       onclick={handleDelete}
-      disabled={!selectedCharacterId || isBusy()}
+      disabled={!selectedCharacterId ||
+        isBusy() ||
+        Boolean(
+          selectedCharacter?.deletion_due_at &&
+          selectedCharacter.deletion_due_at * 1000 <= now
+        )}
     >
       {isDeleting
         ? $t('characterSelect.deleting')
-        : $t('characterSelect.delete')}
+        : selectedCharacter?.deletion_due_at
+          ? $t('characterSelect.cancelDeletion')
+          : $t('characterSelect.delete')}
     </button>
     {#if errorMessage}
       <div class="error-message">{errorMessage}</div>
@@ -154,6 +187,16 @@
 </div>
 
 <style>
+  .deletion-notice {
+    position: fixed;
+    bottom: max(60px, calc(env(safe-area-inset-bottom) + 54px));
+    left: 16px;
+    right: 16px;
+    text-align: center;
+    color: #ffbf9f;
+    text-shadow: 0 1px 4px #000;
+  }
+
   .character-select-overlay {
     font-family: 'Noto Sans KR', sans-serif;
     position: fixed;
@@ -199,6 +242,24 @@
 
   .mobile-character-info {
     display: none;
+  }
+
+  .mobile-character-info.deletion-pending {
+    overflow: hidden;
+  }
+
+  .mobile-character-info.deletion-pending::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom right,
+      transparent calc(50% - 6px),
+      #d63d49 calc(50% - 6px),
+      #d63d49 calc(50% + 6px),
+      transparent calc(50% + 6px)
+    );
+    pointer-events: none;
   }
 
   .bottom-row {

@@ -453,6 +453,9 @@ export type MessageEvents = {
   characterCreated: NetworkEvent<(character: AccountCharacter) => void>
   characterStatsRolled: NetworkEvent<(result: CharacterRollResult) => void>
   characterDeleted: NetworkEvent<(characterId: number) => void>
+  characterDeletionChanged: NetworkEvent<
+    (payload: { characterId: number; deletionDueAt: number | null }) => void
+  >
   characterRenameRequired: NetworkEvent<(characterId: number) => void>
   characterRenamed: NetworkEvent<
     (payload: { characterId: number; name: string }) => void
@@ -821,6 +824,22 @@ export function handleServerMessage(
       events.characterStatsRolled.emit({
         attributes,
         maxHp: data.max_hp,
+      })
+      break
+    }
+
+    case 'CharacterDeletionScheduled': {
+      events.characterDeletionChanged.emit({
+        characterId: data.character_id,
+        deletionDueAt: data.deletion_due_at,
+      })
+      break
+    }
+
+    case 'CharacterDeletionCancelled': {
+      events.characterDeletionChanged.emit({
+        characterId: data.character_id,
+        deletionDueAt: null,
       })
       break
     }

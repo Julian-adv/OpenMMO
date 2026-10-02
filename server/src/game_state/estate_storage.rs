@@ -346,6 +346,30 @@ impl GameState {
         }
     }
 
+    pub(super) async fn remove_estate_furniture(&self, ids: &[i64]) {
+        let mut index = self.estate_chests.write().await;
+        let mut keys = HashSet::new();
+        for id in ids {
+            if let Some(chest) = index.remove(*id) {
+                keys.insert(EstateChestIndex::bucket(&chest.position));
+            }
+        }
+        let groups: Vec<_> = keys
+            .into_iter()
+            .map(|key| (key, index.group(key)))
+            .collect();
+        drop(index);
+        for (key, group) in groups {
+            self.sync_estate_chest_bucket(key, &group);
+        }
+        if !ids.is_empty() {
+            self.publish_subject_change(ServerMessage::EstateChestVisibility {
+                added: vec![],
+                removed: ids.to_vec(),
+            });
+        }
+    }
+
     pub async fn load_estate_chests(&self, auth: &AuthService) -> Result<(), AuthError> {
         let auth = auth.clone();
         let loaded = auth_db(move || auth.load_estate_chests()).await?;

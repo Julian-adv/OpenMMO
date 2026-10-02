@@ -98,8 +98,7 @@
     undefined,
     undefined,
   ])
-  // Single pair of spotlights — created once via Three.js, moved in useTask.
-  // Avoids WebGPU pipeline recompilation on selection changes.
+  // Reuse spotlights to avoid WebGPU pipeline recompilation.
   const spotlightTarget = new THREE.Object3D()
   const keyLight = new THREE.SpotLight('#ffffff', 9.0, 14, 0.34, 0.22, 1.2)
   keyLight.castShadow = true
@@ -384,6 +383,7 @@
         positionZ={SLOT_DEPTH}
         rotationY={slotRotations[slotIndex]}
         selected={character.id === selectedCharacterId}
+        deletionPending={Boolean(character.deletion_due_at)}
         characterClass={character.class}
         gender={character.gender}
         equipment={character.equipment}

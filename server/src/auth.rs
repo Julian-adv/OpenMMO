@@ -1,4 +1,6 @@
 use crate::types::{CharacterAttributes, GameDateTime};
+#[path = "auth_character_deletion.rs"]
+mod character_deletion;
 #[path = "auth_enchant_failures.rs"]
 mod enchant_failures;
 #[path = "auth_estate_storage.rs"]
@@ -17,6 +19,7 @@ mod loot_tally;
 #[path = "auth_metrics.rs"]
 mod metrics;
 use crate::world_config::world_config;
+pub(crate) use land::EstateCleanup;
 pub use land::{LandAccount, OwnedLandPlot};
 use onlinerpg_shared::inventory::EquipSlot;
 use onlinerpg_shared::messages::FriendEntry;
@@ -248,6 +251,7 @@ impl CharacterListing {
 #[derive(Debug, Clone)]
 pub struct CharacterRecord {
     pub id: i64,
+    pub deletion_due_at: Option<i64>,
     pub name: String,
     pub created_at: i64,
     pub level: u32,
@@ -306,7 +310,7 @@ pub struct TradeLedgerEntry {
 }
 
 /// Column list shared between queries that return full CharacterRecord rows.
-const CHARACTER_COLUMNS: &str = "id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation, health, floor_level, gender, gold, admin_role, satiation, mana, dungeon_epoch";
+const CHARACTER_COLUMNS: &str = "id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation, health, floor_level, gender, gold, admin_role, satiation, mana, dungeon_epoch, deletion_due_at";
 
 fn class_from_row(row: &rusqlite::Row<'_>, idx: usize) -> rusqlite::Result<CharacterClass> {
     let class_str: String = row.get(idx)?;
@@ -365,6 +369,7 @@ fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterR
             .get::<_, Option<i64>>(24)?
             .map(|v| v.clamp(0, i64::from(u32::MAX)) as u32),
         dungeon_epoch: row.get(25)?,
+        deletion_due_at: row.get(26)?,
     })
 }
 
@@ -822,6 +827,16 @@ impl AuthService {
             [],
         )?;
         Self::ensure_character_attribute_columns(conn)?;
+        if !Self::table_columns(conn, "characters")?.contains("deletion_due_at") {
+            conn.execute(
+                "ALTER TABLE characters ADD COLUMN deletion_due_at INTEGER",
+                [],
+            )?;
+        }
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_characters_deletion_due ON characters(deletion_due_at) WHERE deletion_due_at IS NOT NULL",
+            [],
+        )?;
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_characters_account_name ON characters(account_name)",
             [],
@@ -1986,6 +2001,7 @@ impl AuthService {
         Ok(CharacterRecord {
             id,
             name: character_name.to_string(),
+            deletion_due_at: None,
             created_at,
             level: 1,
             xp: 0,

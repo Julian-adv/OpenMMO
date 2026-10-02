@@ -462,6 +462,8 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::CharacterCreated { .. } => "CharacterCreated",
         ServerMessage::CharacterStatsRolled { .. } => "CharacterStatsRolled",
         ServerMessage::CharacterDeleted { .. } => "CharacterDeleted",
+        ServerMessage::CharacterDeletionScheduled { .. } => "CharacterDeletionScheduled",
+        ServerMessage::CharacterDeletionCancelled { .. } => "CharacterDeletionCancelled",
         ServerMessage::CharacterError { .. } => "CharacterError",
         ServerMessage::PlayerJoined { .. } => "PlayerJoined",
         ServerMessage::PlayerLeft { .. } => "PlayerLeft",

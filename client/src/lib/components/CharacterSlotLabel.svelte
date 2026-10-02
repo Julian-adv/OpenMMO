@@ -58,6 +58,7 @@
   class:selected
   class:compact
   class:empty={!character}
+  class:deletion-pending={Boolean(character?.deletion_due_at)}
   aria-pressed={character ? selected : undefined}
   {disabled}
   bind:clientHeight={height}
@@ -80,6 +81,9 @@
 >
   {#if character}
     <CharacterSummary {character} {compact} />
+    {#if character.deletion_due_at}
+      <span>{$t('characterSelect.awaitingDeletion')}</span>
+    {/if}
   {:else}
     <span>{$t('characterSelect.create')}</span>
   {/if}
@@ -118,6 +122,24 @@
   .character-slot:focus-visible {
     outline: 2px solid #d6edff;
     outline-offset: 3px;
+  }
+
+  .character-slot.deletion-pending {
+    overflow: hidden;
+  }
+
+  .character-slot.deletion-pending::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom right,
+      transparent calc(50% - 6px),
+      #d63d49 calc(50% - 6px),
+      #d63d49 calc(50% + 6px),
+      transparent calc(50% + 6px)
+    );
+    pointer-events: none;
   }
 
   .character-slot:disabled {

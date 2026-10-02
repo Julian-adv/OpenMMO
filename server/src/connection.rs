@@ -446,8 +446,9 @@ pub async fn handle_connection(
                     if let Some(bytes) = encode_server_msg(&notice.message) {
                         let _ = ws_sender.send(Message::Binary(bytes)).await;
                     }
-                    // A code the client acts on (reload, stop reconnecting)
-                    // rather than a bare close it can only guess at.
+                    if notice.keep_open {
+                        continue;
+                    }
                     if let Some(code) = notice.close_code {
                         let _ = ws_sender.send(close_frame(code, "client desync")).await;
                     }
@@ -945,6 +946,8 @@ async fn handle_client_message(
             };
 
             let max_hp = default_character_max_hp(&rolled_attributes, &character_class);
+            let _sessions = game_state.lock_character_sessions().await;
+            let _persistence = game_state.lock_player_persistence().await;
             match auth_service.create_character(
                 &authed_account_name,
                 &character_name,
@@ -978,44 +981,29 @@ async fn handle_client_message(
             }
         }
 
-        ClientMessage::DeleteCharacter { character_id } => {
-            if let Err(responses) = state.require_not_in_game("DeleteCharacter") {
+        ClientMessage::DeleteCharacter { character_id }
+        | ClientMessage::CancelCharacterDeletion { character_id } => {
+            if let Err(responses) = state.require_not_in_game("CharacterDeletion") {
                 return Ok(responses);
             }
-            let authed_account_name = match state.require_auth("DeleteCharacter") {
+            let account = match state.require_auth("CharacterDeletion") {
                 Ok(name) => name,
                 Err(responses) => return Ok(responses),
             };
-            match game_state
-                .delete_character_if_inactive(auth_service, &authed_account_name, character_id)
-                .await
-            {
-                Ok(true) => {
-                    info!(
-                        "Character id={} deleted for account '{}'",
-                        character_id, authed_account_name
-                    );
-                    return Ok(vec![ServerMessage::CharacterDeleted { character_id }]);
-                }
-                Ok(false) => {
-                    warn!(
-                        "Character delete rejected for account '{}': id={} is active",
-                        authed_account_name, character_id
-                    );
-                    return Ok(vec![ServerMessage::CharacterError {
-                        message: "Cannot delete a character while it is in game".to_string(),
-                    }]);
-                }
-                Err(err) => {
-                    warn!(
-                        "Character delete failed for account '{}': {}",
-                        authed_account_name, err
-                    );
-                    return Ok(vec![ServerMessage::CharacterError {
-                        message: err.client_message().to_string(),
-                    }]);
-                }
-            }
+            let cancel = matches!(client_msg, ClientMessage::CancelCharacterDeletion { .. });
+            let result = game_state
+                .change_character_deletion(auth_service, &account, character_id, cancel)
+                .await;
+            return Ok(vec![match result {
+                Ok(Some(deletion_due_at)) => ServerMessage::CharacterDeletionScheduled {
+                    character_id,
+                    deletion_due_at,
+                },
+                Ok(None) => ServerMessage::CharacterDeletionCancelled { character_id },
+                Err(error) => ServerMessage::CharacterError {
+                    message: error.client_message().to_string(),
+                },
+            }]);
         }
 
         ClientMessage::RenameCharacter {
@@ -1107,6 +1095,14 @@ async fn handle_client_message(
                         }]);
                     }
                 };
+
+            if selected_character.deletion_due_at.is_some() {
+                return Ok(vec![ServerMessage::CharacterError {
+                    message:
+                        "This character is awaiting deletion. Cancel deletion to enter the game."
+                            .to_string(),
+                }]);
+            }
 
             // A name banned after the character was made stops it here, not
             // at login: the client answers with RenameCharacter and retries.
@@ -1202,6 +1198,14 @@ async fn handle_client_message(
                     player.rotation = spawn.rotation;
                     player.floor_level = 0;
                 }
+            }
+            if player.floor_level > 0
+                && !game_state.has_surface_floor(player.floor_level as u8, &player.position)
+            {
+                let spawn = &crate::world_config::world_config().spawn_position;
+                player.position = spawn.position();
+                player.rotation = spawn.rotation;
+                player.floor_level = 0;
             }
             // The stored Y was the client's word at logout; re-ground it.
             if player.floor_level >= 0 {
@@ -2400,6 +2404,7 @@ fn character_listing_to_shared(listing: crate::auth::CharacterListing) -> Charac
     } = listing;
     Character {
         id: record.id,
+        deletion_due_at: record.deletion_due_at,
         name: record.name,
         created_at: record.created_at,
         level: record.level,
@@ -2449,6 +2454,58 @@ fn default_character_max_hp(
 mod tests {
     use super::*;
     use std::net::Ipv4Addr;
+
+    #[tokio::test]
+    async fn pending_character_deletion_blocks_entry_until_cancelled() {
+        let game = Arc::new(crate::game_state::tests::make_test_game_state(
+            "deletion_entry",
+        ));
+        let auth = Arc::new(crate::game_state::tests::make_test_auth("deletion_entry"));
+        let account = auth.login_google("deletion-entry").unwrap();
+        let character = auth
+            .create_character(
+                &account,
+                "WaitingEntry",
+                &roll_character_attributes(&CharacterClass::Knight, crate::types::Gender::Male),
+                16,
+                CharacterClass::Knight,
+                crate::types::Gender::Male,
+            )
+            .unwrap();
+        let mut state = ConnectionState::new(Ipv4Addr::LOCALHOST.into());
+        handle_handshake(
+            &client_info(onlinerpg_shared::PROTOCOL_VERSION, "web"),
+            &mut state,
+        );
+        finish_auth(&game, &auth, &mut state, account, false).await;
+        let auth_ctx = Arc::new(AuthContext {
+            google: None,
+            npc_token: String::new(),
+            admin_emails: vec![],
+        });
+        let character_id = character.id;
+        for (index, request) in [
+            ClientMessage::DeleteCharacter { character_id },
+            ClientMessage::EnterGame { character_id },
+            ClientMessage::CancelCharacterDeletion { character_id },
+            ClientMessage::EnterGame { character_id },
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let encoded = onlinerpg_shared::serialize_client_msg(&request).unwrap();
+            let responses = handle_client_message(&encoded, &game, &auth, &auth_ctx, &mut state)
+                .await
+                .unwrap();
+            assert!(responses.iter().any(|message| match index {
+                0 => matches!(message, ServerMessage::CharacterDeletionScheduled { .. }),
+                1 => matches!(message, ServerMessage::CharacterError { message } if message.contains("awaiting deletion")),
+                2 => matches!(message, ServerMessage::CharacterDeletionCancelled { .. }),
+                3 => matches!(message, ServerMessage::JoinSuccess { .. }),
+                _ => unreachable!(),
+            }), "step {index}: {responses:?}");
+        }
+    }
 
     #[tokio::test]
     async fn enter_game_restores_only_current_dungeon_visits() {

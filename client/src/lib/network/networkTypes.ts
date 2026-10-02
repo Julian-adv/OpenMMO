@@ -71,6 +71,7 @@ export type ServerMonster = {
 }
 
 export type AccountCharacter = {
+  deletion_due_at?: number | null
   id: number
   name: string
   created_at: number
@@ -153,6 +154,7 @@ export type ClientMessage =
       }
     }
   | { DeleteCharacter: { character_id: number } }
+  | { CancelCharacterDeletion: { character_id: number } }
   | { RenameCharacter: { character_id: number; new_name: string } }
   | { RollCharacterStats: { character_class: CharacterClass; gender: Gender } }
   | { EnterGame: { character_id: number } }
