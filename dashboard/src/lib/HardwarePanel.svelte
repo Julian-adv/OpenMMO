@@ -1,11 +1,13 @@
 <script lang="ts">
   import type { MetricsResource } from './metricsResource.svelte'
   import MetricsError from './MetricsError.svelte'
-  import { formatDateTime } from './metrics'
+  import PeriodFilter from './PeriodFilter.svelte'
+  import HardwareHistoryChart from './HardwareHistoryChart.svelte'
+  import { formatDateTime, type ChartMarker } from './metrics'
   import { formatBytes } from './traffic'
-  import { formatPercent, usagePercent, type HardwareStatus } from './hardware'
+  import { formatPercent, usagePercent, hardwarePeriods, type HardwareHours, type HardwareStatus } from './hardware'
 
-  let { resource }: { resource: MetricsResource<HardwareStatus> } = $props()
+  let { hours = $bindable<HardwareHours>(24), resource, markers = [] }: { hours?: HardwareHours; resource: MetricsResource<HardwareStatus>; markers?: ChartMarker[] } = $props()
   let { history, loading, refreshing, error, refresh } = $derived(resource)
   let latest = $derived(history?.latest)
   let agent = $derived(latest && latest.agent.instances > 0 ? latest.agent : null)
@@ -17,11 +19,11 @@
 <section class="chart-panel" aria-labelledby="hardware-title" aria-busy={loading}>
   <div class="chart-heading">
     <div><h2 id="hardware-title">서버 하드웨어 상태</h2><p>서버 실행 환경 기준 · 1분마다 수집 및 갱신</p></div>
-    <span class="live-tag">{error || history && !history.available ? '수집 확인 필요' : loading ? '연결 중' : '1분 갱신'}</span>
+    <PeriodFilter bind:hours options={hardwarePeriods} label="하드웨어 조회 기간" />
   </div>
   <MetricsError {error} until={latest?.timestamp} {refreshing} {refresh} />
   {#if history && !history.available}
-    <p class="chart-notice">{latest ? '하드웨어 수집이 지연되거나 중단되었습니다. 마지막으로 수집한 값을 표시합니다.' : '하드웨어 정보를 아직 수집하지 못했습니다.'}</p>
+    <p class="chart-notice">{latest ? '하드웨어 수집 또는 저장이 지연되거나 중단되었습니다. 마지막으로 수집한 값을 표시합니다.' : '하드웨어 정보를 아직 수집하지 못했습니다.'}</p>
   {/if}
   <div class="hardware-summary">
     <div>
@@ -38,14 +40,25 @@
     </div>
     <div>
       <span>agent-client CPU</span>
-      <strong>{formatPercent(agent?.cpu_percent)}</strong>
-      <small>{coreBasis ? `자식 프로세스 포함 · ${coreBasis}` : '수집 대기 중'}</small>
-      {#if agent?.cpu_percent != null}<meter min="0" max="100" value={agent.cpu_percent} aria-label="agent-client CPU 사용률"></meter>{/if}
+      <strong>{formatPercent(agent?.client.cpu_percent)}</strong>
+      <small>{coreBasis ? `본체만 · ${coreBasis}` : '수집 대기 중'}</small>
+      {#if agent?.client.cpu_percent != null}<meter min="0" max="100" value={agent.client.cpu_percent} aria-label="agent-client CPU 사용률"></meter>{/if}
+    </div>
+    <div>
+      <span>LLM CLI CPU</span>
+      <strong>{formatPercent(agent?.llm.cpu_percent)}</strong>
+      <small>{coreBasis ? `Codex 등 자식 프로세스 · ${coreBasis}` : '수집 대기 중'}</small>
+      {#if agent?.llm.cpu_percent != null}<meter min="0" max="100" value={agent.llm.cpu_percent} aria-label="LLM CLI CPU 사용률"></meter>{/if}
     </div>
     <div>
       <span>agent-client 메모리</span>
-      <strong>{agent ? formatBytes(agent.memory_bytes) : '—'}</strong>
-      <small>{agent ? `${agent.instances}개 agent-client · 자식 포함 ${agent.process_count}개 프로세스` : latest ? '실행 중인 agent-client가 감지되지 않았습니다' : '수집 대기 중'}</small>
+      <strong>{agent ? formatBytes(agent.client.memory_bytes) : '—'}</strong>
+      <small>{agent ? `본체 ${agent.client.process_count}개 프로세스` : latest ? '실행 중인 agent-client가 감지되지 않았습니다' : '수집 대기 중'}</small>
+    </div>
+    <div>
+      <span>LLM CLI 메모리</span>
+      <strong>{agent ? formatBytes(agent.llm.memory_bytes) : '—'}</strong>
+      <small>{agent ? `Codex 등 자식 ${agent.llm.process_count}개 · Node 실행기 포함` : '수집 대기 중'}</small>
     </div>
   </div>
   {#if latest?.load_average}
@@ -54,7 +67,8 @@
       {#each latest.load_average as value, index (index)}<span>{[1, 5, 15][index]}분 <b>{load(value)}</b></span>{/each}
     </div>
   {/if}
-  <p class="hardware-note">{latest && latest.cpu_percent === null ? 'CPU 사용률은 첫 수집 후 1분부터 표시합니다.' : 'CPU 사용률은 직전 수집 구간의 평균입니다.'} 메모리는 재사용 가능한 캐시를 제외하며, agent-client는 자식 프로세스를 포함한 상주 메모리(RSS) 합계로 공유 메모리가 중복될 수 있습니다.</p>
+  <p class="hardware-note">{latest && latest.cpu_percent === null ? 'CPU 사용률은 첫 수집 후 1분부터 표시합니다.' : 'CPU 사용률은 직전 수집 구간의 평균입니다.'} agent-client 본체와 LLM CLI 자식 프로세스의 메모리를 분리합니다. 프로세스 메모리는 RSS이며 공유 메모리가 중복될 수 있습니다.</p>
+  {#if history}<HardwareHistoryChart {history} {markers} />{:else}<div class="chart-empty" role="status"><strong>{loading ? '하드웨어 기록을 불러오고 있어요' : '하드웨어 기록을 조회할 수 없습니다'}</strong></div>{/if}
   <div class="disk-heading"><h3>디스크 여유 공간</h3><span>일반 사용자에게 남은 용량 기준</span></div>
   {#if latest?.disks.length}
     <div class="disk-table-wrap">
@@ -78,12 +92,13 @@
   {/if}
   <div class="chart-footer">
     <span>{latest ? `${formatDateTime(latest.timestamp)} KST 기준` : '첫 수집 대기 중'}</span>
-    <span>최근 수집값</span>
+    <span>최근 7일 보관</span>
   </div>
+  {#if history?.collection_started_at != null}<p class="hardware-note">보관 중인 첫 기록: {formatDateTime(history.collection_started_at)} KST. 수집 중단 구간은 그래프에서 연결하지 않습니다.</p>{/if}
 </section>
 
 <style>
-  .hardware-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; padding: 22px 0 16px; }
+  .hardware-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; padding: 22px 0 16px; }
   .hardware-summary > div { display: flex; flex-direction: column; gap: 8px; }
   .hardware-summary span, .hardware-summary small, .hardware-note, .load-average, .disk-heading span, .disk-empty { color: #75877f; font-size: 11px; line-height: 1.8; }
   .hardware-summary strong { color: #166d5e; font-size: 27px; font-weight: 600; font-variant-numeric: tabular-nums; }

@@ -76,6 +76,8 @@ __pycache__/
 data/*.db
 data/network_metrics.db-shm
 data/network_metrics.db-wal
+data/hardware_metrics.db-shm
+data/hardware_metrics.db-wal
 data/npc_token
 data/bgm.json
 data/debuffs.json

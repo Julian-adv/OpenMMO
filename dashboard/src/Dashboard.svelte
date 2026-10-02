@@ -23,7 +23,7 @@
   import MetricsError from './lib/MetricsError.svelte'
   import NetworkPanel from './lib/NetworkPanel.svelte'
   import HardwarePanel from './lib/HardwarePanel.svelte'
-  import { parseHardwareStatus } from './lib/hardware'
+  import { parseHardwareStatus, type HardwareHours } from './lib/hardware'
   import AssetTrafficPanel from './lib/AssetTrafficPanel.svelte'
   import { parseNetworkHistory, parseAssetTraffic, type TrafficHours } from './lib/traffic'
   import PeriodFilter from './lib/PeriodFilter.svelte'
@@ -38,7 +38,8 @@
   let uniqueWindowHours = $state<UniqueHours>(24)
   let uniqueWindow = $derived(uniquePeriods.find((period) => period.hours === uniqueWindowHours)!)
   const concurrent = createMetricsResource(() => hours, 'concurrent', parseHistory, '접속 현황', () => ({}), 60000)
-  const hardware = createMetricsResource(() => undefined, 'hardware', parseHardwareStatus, '서버 하드웨어 상태', () => ({}), 60000)
+  let hardwareHours = $state<HardwareHours>(24)
+  const hardware = createMetricsResource(() => hardwareHours, 'hardware', parseHardwareStatus, '서버 하드웨어 상태', () => ({}), 60000)
   let networkHours = $state<TrafficHours>(24)
   let assetTrafficHours = $state<TrafficHours>(24)
   const network = createMetricsResource(() => networkHours, 'network', parseNetworkHistory, '네트워크 현황', () => ({}), 60000)
@@ -166,7 +167,7 @@
     </div>
   </section>
 
-  <HardwarePanel resource={hardware} />
+  <HardwarePanel resource={hardware} bind:hours={hardwareHours} {markers} />
   <NetworkPanel bind:hours={networkHours} resource={network} />
   <AssetTrafficPanel bind:hours={assetTrafficHours} resource={assetTraffic} />
 

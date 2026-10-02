@@ -565,7 +565,7 @@ async fn main() -> ExitCode {
     let (drain_shutdown_tx, drain_shutdown) = watch::channel(());
     let (connection_shutdown_tx, connection_shutdown) = watch::channel(());
     let mut background = JoinSet::new();
-    let hardware = hardware::HardwareMetrics::default();
+    let hardware = hardware::HardwareMetrics::new(args.state_dir.join("hardware_metrics.db"));
     background.spawn(hardware.clone().run(drain_shutdown.clone()));
     let traffic = traffic::TrafficMetrics::new(traffic::Config {
         path: args.state_dir.join("network_metrics.db"),

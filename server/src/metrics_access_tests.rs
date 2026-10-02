@@ -58,7 +58,9 @@ async fn serve(access: AuthContext) -> String {
             access_log: None,
             interval_seconds: 60,
         }),
-        crate::hardware::HardwareMetrics::default(),
+        crate::hardware::HardwareMetrics::new(
+            crate::test_util::unique_temp_dir("metrics_access_hardware").join("metrics.db"),
+        ),
     );
     format!("{}/api/metrics", crate::test_util::serve(router).await)
 }
