@@ -592,11 +592,7 @@ impl super::GameState {
         Ok(())
     }
 
-    /// Award one unit of an item, respecting the carry-weight cap: stacks onto
-    /// an existing bag entry when the def says `stackable` (otherwise each unit
-    /// takes its own slot), and when the unit would not fit, spills it to the
-    /// ground at the player's feet instead — an award is never silently lost.
-    /// Fishing catches land here.
+    /// Award one unit to the bag, or the ground when it exceeds carry weight.
     pub async fn award_item(&self, player_id: &PlayerId, item_def_id: &str) {
         let Some(stackable) = self.item_defs.get(item_def_id).map(|d| d.stackable) else {
             warn!("award_item: unknown item_def_id {:?}", item_def_id);
@@ -605,8 +601,7 @@ impl super::GameState {
         let max_weight = self.max_carry_weight(player_id).await;
         let armor_mult = self.armor_weight_mult(player_id).await;
         let def_weight = self.item_defs.weight_with(item_def_id, armor_mult);
-        // Reserved before the inventory lock; unused when the unit stacks
-        // onto an existing entry. A skipped id is cheaper than lock nesting.
+        // Reserve before locking inventory to avoid nested locks.
         let reserved_instance_id = self.next_instance_id().await;
 
         enum Placement {
@@ -644,7 +639,7 @@ impl super::GameState {
                 };
                 self.send_system_message(player_id, "Too heavy to carry — it slips to the ground.")
                     .await;
-                self.spawn_ground_item(GroundItem {
+                let ground_item = GroundItem {
                     instance_id: reserved_instance_id,
                     item_def_id: item_def_id.to_string(),
                     position,
@@ -654,8 +649,14 @@ impl super::GameState {
                     dropped_by: Some(*player_id),
                     cape_color: None,
                     cape_texture: None,
-                })
-                .await;
+                };
+                self.item_audit_actor(player_id).await.log_transfer(
+                    "drop",
+                    &ground_item,
+                    ground_item.quantity,
+                    None,
+                );
+                self.spawn_ground_item(ground_item).await;
             }
         }
     }

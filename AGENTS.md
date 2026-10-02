@@ -2,6 +2,7 @@
 
 - Avoid comments in code where possible; only write them when truly necessary, keeping them short and concise.
 - If you find long or verbose comments in existing code, rewrite them to be short and concise, or remove them where possible.
+- For production log audits, read [prod-log-audit](.claude/skills/prod-log-audit/SKILL.md), including its recorded operator decisions.
 - When creating or adding assets, read and follow [Asset Creation Guidelines](doc/assets/creation-guidelines.md).
 - Before production deployment, read [~/work/notes/DEPLOY_NOTES.md](../notes/DEPLOY_NOTES.md) outside this repository and carry out any pending operator-data transfers recorded there.
 
