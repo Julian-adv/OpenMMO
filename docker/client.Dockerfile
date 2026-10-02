@@ -59,6 +59,7 @@ COPY client/index.html client/vite.config.ts client/svelte.config.js \
      client/tsconfig.json client/tsconfig.app.json client/tsconfig.node.json ./
 COPY client/src/ src/
 COPY client/scripts/ scripts/
+COPY doc/assets/modular-rogue-source-selection.json /build/doc/assets/
 
 ARG CLIENT_ID_PLACEHOLDER
 ENV VITE_GOOGLE_CLIENT_ID=${CLIENT_ID_PLACEHOLDER}
