@@ -86,7 +86,8 @@ async fn estate_return_scroll_rejects_nonowners_defeat_and_reserved_items() {
     let auth = make_test_auth("estate_return_guards");
     let account = auth.login_google("estate-return-guards").unwrap();
     let (_, mut rx) = land_owner(&game, &auth, &account, "Settler").await;
-    land_owner(&game, &auth, &account, "Sibling").await;
+    let other_account = auth.login_google("estate-return-outsider").unwrap();
+    land_owner(&game, &auth, &other_account, "Sibling").await;
     add_estate_return_scroll(&game, "Settler").await;
     add_estate_return_scroll(&game, "Sibling").await;
     let id = pid("Settler");
@@ -475,14 +476,20 @@ async fn land_expansion_requires_edges_and_enforces_account_and_size_limits() {
     let game = make_test_game_state("land_limits");
     let auth = make_test_auth("land_limits");
     let account = auth.login_google("land-limits").unwrap();
-    let (_, mut rx) = land_owner(&game, &auth, &account, "Settler").await;
-    let (_, mut alt_rx) = land_owner(&game, &auth, &account, "Sibling").await;
+    let (owner, mut rx) = land_owner(&game, &auth, &account, "Settler").await;
+    let (sibling, mut alt_rx) = land_owner(&game, &auth, &account, "Sibling").await;
     claim_at(&game, &auth, "Settler", 1, 1.0, 1.0).await;
     claim_at(&game, &auth, "Sibling", 1, 33.0, 1.0).await;
-    rejected(&mut alt_rx, "Another character");
-    claim_at(&game, &auth, "Settler", 2, 33.0, 33.0).await;
+    assert!(drain(&mut alt_rx)
+        .iter()
+        .any(|msg| matches!(msg, ServerMessage::LandClaimed { .. })));
+    assert_eq!(
+        auth.homestead_plots(owner).unwrap(),
+        auth.homestead_plots(sibling).unwrap()
+    );
+    claim_at(&game, &auth, "Settler", 2, 65.0, 33.0).await;
     rejected(&mut rx, "shares an edge");
-    for i in 1..8 {
+    for i in 2..8 {
         claim_at(&game, &auth, "Settler", i + 1, i as f32 * 32.0 + 1.0, 1.0).await;
     }
     claim_at(&game, &auth, "Settler", 9, 257.0, 1.0).await;
@@ -498,8 +505,96 @@ async fn land_expansion_requires_edges_and_enforces_account_and_size_limits() {
             .unwrap()
             .bag
             .len(),
-        4
+        5
     );
+}
+
+#[tokio::test]
+async fn shared_estate_returns_and_tax_account_follow_all_three_characters() {
+    let game = make_test_game_state("shared_estate_return");
+    let auth = make_test_auth("shared_estate_return");
+    let account = auth.login_google("shared-estate-return").unwrap();
+    let (owner, _) = land_owner(&game, &auth, &account, "Owner").await;
+    claim_at(&game, &auth, "Owner", 1, 1.0, 1.0).await;
+    for name in ["Sibling", "Third"] {
+        let (character_id, _) = land_owner(&game, &auth, &account, name).await;
+        assert_eq!(
+            auth.homestead_plots(character_id).unwrap(),
+            auth.homestead_plots(owner).unwrap()
+        );
+        assert_eq!(auth.land_account(character_id).unwrap().plots, 1);
+        add_estate_return_scroll(&game, name).await;
+        game.players
+            .write()
+            .await
+            .get_mut(&pid(name))
+            .unwrap()
+            .position = pos3(200.0, 5.0, 200.0);
+        game.use_estate_return_scroll(&pid(name), 100, &auth).await;
+        let position = game.players.read().await[&pid(name)].position;
+        assert_eq!(plot_addr(position.x, position.z), plot_addr(1.0, 1.0));
+        assert_eq!(estate_return_quantity(&game, name).await, 1);
+    }
+    let stranger = auth.login_google("shared-estate-stranger").unwrap();
+    let (outsider, _) = land_owner(&game, &auth, &stranger, "Outsider").await;
+    assert!(auth.homestead_plots(outsider).unwrap().is_empty());
+    assert_eq!(auth.land_account(outsider).unwrap().plots, 0);
+    let steward = pid("npc_steward");
+    let mut npc = make_player("npc_steward", 1.0, 1.0);
+    npc.name = "Aldwin".into();
+    npc.is_official_npc = true;
+    game.add_player(npc).await;
+    game.players
+        .write()
+        .await
+        .get_mut(&pid("Sibling"))
+        .unwrap()
+        .position = pos3(1.0, 5.0, 1.0);
+    game.players
+        .write()
+        .await
+        .get_mut(&pid("Third"))
+        .unwrap()
+        .position = pos3(1.0, 5.0, 1.0);
+    game.player_gold
+        .write()
+        .await
+        .insert(pid("Sibling"), 10_000);
+    game.player_gold.write().await.insert(pid("Third"), 0);
+    game.land_account_action(&pid("Sibling"), &steward, Some((6_000, true)), &auth)
+        .await;
+    assert_eq!(auth.land_account(owner).unwrap().treasury, 6_000);
+    game.land_account_action(&pid("Third"), &steward, Some((1_000, false)), &auth)
+        .await;
+    assert_eq!(auth.land_account(owner).unwrap().treasury, 5_000);
+    assert_eq!(game.player_gold.read().await[&pid("Third")], 1_000);
+    assert_eq!(game.player_gold.read().await[&pid("Sibling")], 4_000);
+}
+
+#[tokio::test]
+async fn shared_estate_tax_activity_includes_online_and_recent_siblings() {
+    let game = make_test_game_state("shared_estate_tax");
+    let (auth, path) = make_test_auth_with_path("shared_estate_tax");
+    let account = auth.login_google("shared-estate-tax").unwrap();
+    let (owner, _) = land_owner(&game, &auth, &account, "Owner").await;
+    let (sibling, _) = land_owner(&game, &auth, &account, "Sibling").await;
+    claim_at(&game, &auth, "Owner", 1, 1.0, 1.0).await;
+    let db = rusqlite::Connection::open(path).unwrap();
+    let month: i64 = db
+        .query_row("SELECT month FROM land_tax_periods", [], |row| row.get(0))
+        .unwrap();
+    db.execute_batch("UPDATE land_estates SET treasury=10000,free_months=0; UPDATE characters SET last_seen_at=0;").unwrap();
+    auth.collect_land_taxes(month + 1, &[sibling]).unwrap();
+    assert_eq!(auth.land_account(owner).unwrap().treasury, 8_000);
+    assert_eq!(auth.land_account(owner).unwrap().missed, 0);
+    db.execute(
+        "UPDATE characters SET last_seen_at=?1 WHERE id=?2",
+        rusqlite::params![crate::auth::unix_now(), sibling],
+    )
+    .unwrap();
+    auth.collect_land_taxes(month + 2, &[]).unwrap();
+    assert_eq!(auth.land_account(sibling).unwrap().treasury, 6_000);
+    assert_eq!(auth.land_account(sibling).unwrap().missed, 0);
 }
 
 #[tokio::test]

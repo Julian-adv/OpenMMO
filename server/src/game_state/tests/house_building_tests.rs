@@ -67,6 +67,116 @@ async fn builder() -> (GameState, crate::auth::AuthService, i64, DirectRx) {
 }
 
 #[tokio::test]
+async fn shared_estate_houses_survive_owner_deletion_and_allow_sibling_demolition() {
+    let (game, auth, owner, _) = builder().await;
+    let account = auth.login_google("house-builder").unwrap();
+    let sibling = estate_owner(
+        &game,
+        &auth,
+        &account,
+        "Sibling",
+        pos3(5.0, 5.0, 5.0),
+        vec![bag_item(4, onlinerpg_shared::landscaping::TOOLBOX_ITEM, 1)],
+    )
+    .await;
+    game.inventories
+        .write()
+        .await
+        .get_mut(&pid("Builder"))
+        .unwrap()
+        .bag = vec![
+        bag_item(2, "scroll_of_small_house", 1),
+        bag_item(3, "storage_chest", 1),
+        bag_item(4, onlinerpg_shared::landscaping::TOOLBOX_ITEM, 1),
+    ];
+    game.place_house(&pid("Builder"), 2, pos3(5.0, 5.0, 5.0), 0, &auth)
+        .await;
+    let house = game.housing_io.read_all_houses().await.unwrap().remove(0);
+    game.players
+        .write()
+        .await
+        .get_mut(&pid("Builder"))
+        .unwrap()
+        .position = pos3(20.5, 5.05, 19.5);
+    game.place_estate_chest(&pid("Builder"), 3, pos3(20.5, 5.0, 20.5), 0.0, 0, &auth)
+        .await;
+    let chest = auth.load_estate_chests().unwrap().remove(0);
+    assert_eq!(chest.owner_id, owner);
+    game.unregister_player_character(&pid("Builder")).await;
+    assert!(game
+        .delete_character_if_inactive(&auth, &account, owner)
+        .await
+        .unwrap());
+    assert_eq!(auth.homestead_plots(sibling).unwrap().len(), 1);
+    assert_eq!(auth.load_estate_chests().unwrap()[0].owner_id, sibling);
+    assert_eq!(
+        game.estate_chests
+            .read()
+            .await
+            .get(chest.id)
+            .unwrap()
+            .owner_id,
+        sibling
+    );
+    assert_eq!(
+        game.housing_io.read_all_houses().await.unwrap()[0].owner_id,
+        sibling.to_string()
+    );
+    let mut rx = game.register_direct_channel(&pid("Sibling")).await;
+    game.demolish_house(&pid("Sibling"), house.id, &auth).await;
+    assert!(drain(&mut rx).iter().any(|message| matches!(
+        message,
+        ServerMessage::HouseDemolitionResult { error: None, .. }
+    )));
+    assert!(game.housing_io.read_all_houses().await.unwrap().is_empty());
+    assert!(
+        game.give_item(&pid("Sibling"), "scroll_of_small_house")
+            .await
+    );
+    let scroll = game
+        .get_player_inventory(&pid("Sibling"))
+        .await
+        .unwrap()
+        .bag
+        .into_iter()
+        .find(|item| item.item_def_id == "scroll_of_small_house")
+        .unwrap()
+        .instance_id;
+    game.place_house(&pid("Sibling"), scroll, pos3(5.0, 5.0, 5.0), 0, &auth)
+        .await;
+    assert_eq!(game.housing_io.read_all_houses().await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn shared_estate_house_can_be_demolished_by_another_character() {
+    let (game, auth, _, _) = builder().await;
+    let account = auth.login_google("house-builder").unwrap();
+    estate_owner(
+        &game,
+        &auth,
+        &account,
+        "Sibling",
+        pos3(5.0, 5.0, 5.0),
+        vec![
+            bag_item(2, "scroll_of_small_house", 1),
+            bag_item(4, onlinerpg_shared::landscaping::TOOLBOX_ITEM, 1),
+        ],
+    )
+    .await;
+    game.inventories
+        .write()
+        .await
+        .get_mut(&pid("Builder"))
+        .unwrap()
+        .bag = vec![bag_item(4, onlinerpg_shared::landscaping::TOOLBOX_ITEM, 1)];
+    game.place_house(&pid("Sibling"), 2, pos3(5.0, 5.0, 5.0), 0, &auth)
+        .await;
+    let house = game.housing_io.read_all_houses().await.unwrap().remove(0);
+    game.demolish_house(&pid("Builder"), house.id, &auth).await;
+    assert!(game.housing_io.read_all_houses().await.unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn house_scroll_builds_only_inside_the_owned_estate_and_persists_consumption() {
     let (game, auth, character_id, mut rx) = builder().await;
     drain(&mut rx);

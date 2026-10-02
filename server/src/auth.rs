@@ -2062,8 +2062,27 @@ impl AuthService {
             return Err(AuthError::CharacterNotFound);
         }
 
-        let conn = self.open_connection()?;
-        let rows_affected = conn.execute(
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let replacement: Option<i64> = tx
+            .query_row(
+                "SELECT id FROM characters WHERE account_name=?1 AND id<>?2 ORDER BY id LIMIT 1",
+                params![account_name, character_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if let Some(replacement) = replacement {
+            tx.execute(
+                "UPDATE land_estates SET owner_id=?3 WHERE owner_id=?2 AND account_name=?1",
+                params![account_name, character_id, replacement],
+            )?;
+            tx.execute(
+                "UPDATE estate_chests SET owner_id=?3 WHERE owner_id=?2 AND
+                 EXISTS(SELECT 1 FROM characters WHERE id=?2 AND account_name=?1)",
+                params![account_name, character_id, replacement],
+            )?;
+        }
+        let rows_affected = tx.execute(
             "DELETE FROM characters WHERE id = ?1 AND account_name = ?2",
             params![character_id, account_name],
         )?;
@@ -2071,7 +2090,7 @@ impl AuthService {
         if rows_affected == 0 {
             return Err(AuthError::CharacterNotFound);
         }
-
+        tx.commit()?;
         Ok(())
     }
 

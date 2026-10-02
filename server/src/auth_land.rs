@@ -39,12 +39,37 @@ pub struct OwnedLandPlot {
 }
 
 impl AuthService {
+    pub fn account_character_ids(&self, character_id: i64) -> Result<Vec<i64>, AuthError> {
+        let conn = self.open_connection()?;
+        let mut stmt = conn.prepare(
+            "SELECT id FROM characters
+             WHERE account_name=(SELECT account_name FROM characters WHERE id=?1) ORDER BY id",
+        )?;
+        let ids = stmt.query_map([character_id], |row| row.get(0))?;
+        Ok(ids.collect::<Result<Vec<_>, _>>()?)
+    }
+
+    pub fn characters_share_account(
+        &self,
+        character_id: i64,
+        owner_id: i64,
+    ) -> Result<bool, AuthError> {
+        let conn = self.open_connection()?;
+        Ok(conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM characters c JOIN characters owner
+             ON owner.account_name=c.account_name WHERE c.id=?1 AND owner.id=?2)",
+            params![character_id, owner_id],
+            |row| row.get(0),
+        )?)
+    }
+
     pub fn homestead_plots(&self, character_id: i64) -> Result<Vec<(i32, i32, u8)>, AuthError> {
         let conn = self.open_connection()?;
         let mut stmt = conn.prepare(
             "SELECT p.tile_x, p.tile_z, p.quadrant FROM land_plots p
              JOIN land_estates e ON e.id=p.estate_id
-             WHERE e.owner_id=?1 AND e.grade=1 ORDER BY p.rowid",
+             WHERE e.account_name=(SELECT account_name FROM characters WHERE id=?1)
+               AND e.grade=1 ORDER BY p.rowid",
         )?;
         let plots = stmt
             .query_map([character_id], |row| {
@@ -57,7 +82,8 @@ impl AuthService {
     fn read_land_account(conn: &Connection, character_id: i64) -> Result<LandAccount, AuthError> {
         Ok(conn.query_row(
             "SELECT treasury, missed, free_months, (SELECT COUNT(*) FROM land_plots WHERE estate_id=e.id)
-             FROM land_estates e WHERE owner_id=?1 AND grade=1",
+             FROM land_estates e
+             WHERE account_name=(SELECT account_name FROM characters WHERE id=?1) AND grade=1",
             [character_id],
             |row| Ok(LandAccount { treasury: row.get(0)?, missed: row.get(1)?, free_months: row.get(2)?, plots: row.get(3)? }),
         ).optional()?.unwrap_or_default())
@@ -120,8 +146,16 @@ impl AuthService {
             account.missed = 0;
             account.free_months = 1;
         }
-        tx.execute("UPDATE land_estates SET treasury=?2, missed=?3, free_months=?4 WHERE owner_id=?1 AND grade=1",
-            params![character.character_id, account.treasury, account.missed, account.free_months])?;
+        tx.execute(
+            "UPDATE land_estates SET treasury=?2, missed=?3, free_months=?4
+            WHERE account_name=(SELECT account_name FROM characters WHERE id=?1) AND grade=1",
+            params![
+                character.character_id,
+                account.treasury,
+                account.missed,
+                account.free_months
+            ],
+        )?;
         character.gold = gold;
         Self::write_character_states(&tx, std::slice::from_ref(&character))?;
         Self::replace_inventories(&tx, [(character.character_id, inventory)])?;
@@ -130,25 +164,37 @@ impl AuthService {
     }
 
     pub fn collect_land_taxes(&self, month: i64, online: &[i64]) -> Result<(), AuthError> {
-        let online: std::collections::HashSet<_> = online.iter().copied().collect();
         let mut conn = self.open_connection()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let mut online_accounts = std::collections::HashSet::new();
+        {
+            let mut stmt = tx.prepare("SELECT account_name FROM characters WHERE id=?1")?;
+            for character_id in online {
+                if let Some(account) = stmt
+                    .query_row([character_id], |row| row.get::<_, String>(0))
+                    .optional()?
+                {
+                    online_accounts.insert(account);
+                }
+            }
+        }
         tx.execute(
             "INSERT OR IGNORE INTO land_tax_periods SELECT id, ?1 FROM land_estates",
             [month],
         )?;
         let mut stmt = tx.prepare(
-            "SELECT e.id, e.owner_id, e.treasury, e.missed, e.free_months, t.month,
-                    COALESCE(c.last_seen_at, e.created_at), COUNT(p.estate_id)
+            "SELECT e.id, e.account_name, e.treasury, e.missed, e.free_months, t.month,
+                    (SELECT MAX(COALESCE(c.last_seen_at, e.created_at))
+                     FROM characters c WHERE c.account_name=e.account_name), COUNT(p.estate_id)
              FROM land_estates e JOIN land_tax_periods t ON t.estate_id=e.id
-             JOIN characters c ON c.id=e.owner_id JOIN land_plots p ON p.estate_id=e.id
+             JOIN land_plots p ON p.estate_id=e.id
              WHERE t.month < ?1 GROUP BY e.id",
         )?;
         let rows = stmt
             .query_map([month], |row| {
                 Ok((
                     row.get::<_, i64>(0)?,
-                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(1)?,
                     row.get::<_, i64>(2)?,
                     row.get::<_, u32>(3)?,
                     row.get::<_, u32>(4)?,
@@ -168,10 +214,10 @@ impl AuthService {
             quantity: 0,
             gold: 0,
         };
-        for (id, owner, mut treasury, mut missed, mut free, last, seen, plots) in rows {
+        for (id, account, mut treasury, mut missed, mut free, last, seen, plots) in rows {
             let tax = plots * LAND_TAX_PER_PLOT;
             for period in last + 1..=month {
-                let inactive = !online.contains(&owner)
+                let inactive = !online_accounts.contains(&account)
                     && super::unix_now() - (month - period) * month_seconds - seen
                         > 8 * month_seconds;
                 if free > 0 {
@@ -317,21 +363,16 @@ impl AuthService {
             [character_id],
             |row| row.get(0),
         )?;
-        let estate: Option<(i64, i64)> = conn
+        let estate: Option<i64> = conn
             .query_row(
-                "SELECT id, owner_id FROM land_estates WHERE account_name=?1 AND grade=1",
+                "SELECT id FROM land_estates WHERE account_name=?1 AND grade=1",
                 [&account],
-                |row| Ok((row.get(0)?, row.get(1)?)),
+                |row| row.get(0),
             )
             .optional()?;
-        let Some((estate_id, owner)) = estate else {
+        let Some(estate_id) = estate else {
             return Ok(Ok(None));
         };
-        if owner != character_id {
-            return Ok(Err(
-                "Another character on your account already owns a homestead.",
-            ));
-        }
         let mut stmt =
             conn.prepare("SELECT tile_x, tile_z, quadrant FROM land_plots WHERE estate_id=?1")?;
         let plots = stmt

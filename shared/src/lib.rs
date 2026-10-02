@@ -201,7 +201,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v110: stack stackable buyback units into one BuybackEntry with a quantity.
 /// v111: equipped armor in player snapshots and character previews.
 /// v112: server-validated pickup of items within 2 meters.
-pub const PROTOCOL_VERSION: u32 = 112;
+/// v113: account character IDs for shared estate editing.
+pub const PROTOCOL_VERSION: u32 = 113;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

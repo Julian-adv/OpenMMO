@@ -39,6 +39,42 @@ fn blocked(game: &GameState) -> bool {
     is_movement_blocked(&game.passability_read(), 1.5, 1.5, 2.5, 1.5, 0, Some(5.05))
 }
 
+#[tokio::test]
+async fn shared_estate_fences_can_be_placed_and_recovered_by_siblings() {
+    let game = make_flat_world_game_state("shared_estate_fences");
+    let auth = make_test_auth("shared_estate_fences");
+    let (owner_id, _) = owner(&game, &auth, "Builder").await;
+    claim(&game, &auth, "Builder").await;
+    let account = auth.login_google("Builder").unwrap();
+    let sibling = estate_owner(
+        &game,
+        &auth,
+        &account,
+        "Sibling",
+        pos3(1.5, 5.05, 1.5),
+        vec![bag_item(2, "wooden_fence", 2)],
+    )
+    .await;
+    let mut rx = game.register_direct_channel(&pid("Sibling")).await;
+    game.start_fence_mode(&pid("Sibling"), &auth).await;
+    assert!(drain(&mut rx).iter().any(|message| matches!(message,
+        ServerMessage::LandscapingMode { plots, owned_character_ids, .. }
+            if !plots.is_empty() && owned_character_ids.contains(&owner_id) && owned_character_ids.contains(&sibling))));
+    game.edit_fence(&pid("Builder"), EDGE, true, &auth, false)
+        .await;
+    game.edit_fence(&pid("Sibling"), EDGE, false, &auth, false)
+        .await;
+    assert_eq!(quantity(&game, "Sibling").await, 3);
+    assert!(auth.load_fences().unwrap().is_empty());
+    game.edit_fence(&pid("Sibling"), EDGE, true, &auth, false)
+        .await;
+    assert_eq!(quantity(&game, "Sibling").await, 2);
+    assert_eq!(auth.load_fences().unwrap().len(), 1);
+    game.edit_fence(&pid("Builder"), EDGE, false, &auth, false)
+        .await;
+    assert!(auth.load_fences().unwrap().is_empty());
+}
+
 struct FenceTerrain(f32);
 
 #[async_trait::async_trait]
@@ -312,7 +348,8 @@ async fn fence_recovery_follows_the_estate_owner_instead_of_the_installer() {
     let db = rusqlite::Connection::open(path).unwrap();
     db.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
     db.execute(
-        "UPDATE land_estates SET owner_id=?1 WHERE owner_id=?2",
+        "UPDATE land_estates SET owner_id=?1,
+         account_name=(SELECT account_name FROM characters WHERE id=?1) WHERE owner_id=?2",
         rusqlite::params![new_owner, installer],
     )
     .unwrap();

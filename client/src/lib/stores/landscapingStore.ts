@@ -6,6 +6,7 @@ import { splatLayer } from './editorStore'
 
 export interface LandscapingMode {
   owner_id: number
+  owned_character_ids: number[]
   plots: FencePlot[]
   palette: number[]
   has_toolbox: boolean

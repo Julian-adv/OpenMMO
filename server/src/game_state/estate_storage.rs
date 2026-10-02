@@ -139,18 +139,20 @@ impl GameState {
         &self,
         player_id: &PlayerId,
         furniture_id: i64,
+        auth: &AuthService,
     ) -> Result<EstateChest, &'static str> {
         let furniture = self
             .furniture_on_player_floor(player_id, furniture_id)
             .await?;
         let owner_id = self
-            .player_characters
-            .read()
+            .character_id_of(player_id)
             .await
-            .get(player_id)
-            .map(|entry| entry.0)
             .ok_or("Character not found.")?;
-        if furniture.owner_id != owner_id || furniture.overdue {
+        let auth = auth.clone();
+        let state = auth_db(move || auth.estate_furniture_access(furniture_id, owner_id))
+            .await
+            .map_err(|_| "Furniture editing is temporarily unavailable.")?;
+        if state != Some(true) || furniture.overdue {
             return Err("You can only move furniture on your active estate.");
         }
         let players = self.players.read().await;
@@ -176,9 +178,12 @@ impl GameState {
         self.tick_land_taxes(auth).await;
         let result = async {
             let furniture = self
-                .movable_estate_furniture(player_id, furniture_id)
+                .movable_estate_furniture(player_id, furniture_id, auth)
                 .await?;
-            let owner_id = furniture.owner_id;
+            let owner_id = self
+                .character_id_of(player_id)
+                .await
+                .ok_or("Character not found.")?;
             let auth = auth.clone();
             let plots = auth_db(move || auth.estate_storage_plots(owner_id))
                 .await
@@ -229,7 +234,7 @@ impl GameState {
             return Err("Finish your player trade first.");
         }
         let mut furniture = self
-            .movable_estate_furniture(player_id, furniture_id)
+            .movable_estate_furniture(player_id, furniture_id, auth)
             .await?;
         if furniture.revision != expected_revision {
             return Err("The furniture changed. Select it again.");
@@ -253,7 +258,10 @@ impl GameState {
         }) {
             return Err("Someone is using this furniture. Wait until they get up.");
         }
-        let owner_id = furniture.owner_id;
+        let owner_id = self
+            .character_id_of(player_id)
+            .await
+            .ok_or("Character not found.")?;
         let auth = auth.clone();
         let estate_id = auth_db(move || {
             auth.move_estate_furniture(
@@ -316,6 +324,25 @@ impl GameState {
             None => {
                 passability.remove(&key);
             }
+        }
+    }
+
+    pub(super) async fn reassign_estate_furniture_owner(&self, previous: i64, replacement: i64) {
+        let mut index = self.estate_chests.write().await;
+        let mut added = Vec::new();
+        for chest in index
+            .by_id
+            .values_mut()
+            .filter(|chest| chest.owner_id == previous)
+        {
+            chest.owner_id = replacement;
+            added.push(chest.clone());
+        }
+        if !added.is_empty() {
+            self.publish_subject_change(ServerMessage::EstateChestVisibility {
+                added,
+                removed: vec![],
+            });
         }
     }
 

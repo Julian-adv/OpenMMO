@@ -1588,17 +1588,7 @@ async fn handle_client_message(
 
         ClientMessage::DebugTeleport { position } => {
             if let Some(id) = &state.player_id {
-                let rotation = game_state
-                    .get_player_position(id)
-                    .await
-                    .map(|(_, rot, _)| rot)
-                    .unwrap_or(0.0);
-                // Debug teleports can land inside a dungeon; infer the
-                // floor from the target Y instead of trusting the old one.
-                let floor_level = game_state.dungeon_floor_for_position(&position).await;
-                game_state
-                    .teleport_player(id, position, rotation, floor_level)
-                    .await;
+                game_state.debug_teleport_player(id, position).await;
             } else {
                 warn!("Received debug teleport from client that is not in game");
             }

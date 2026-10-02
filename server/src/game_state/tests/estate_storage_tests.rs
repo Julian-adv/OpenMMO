@@ -1,6 +1,193 @@
 use super::*;
 use onlinerpg_shared::messages::BagLineItem;
 
+#[tokio::test]
+async fn shared_estate_storage_allows_siblings_and_rejects_other_accounts() {
+    let game = make_flat_world_game_state("shared_estate_storage");
+    let (auth, path) = make_test_auth_with_path("shared_estate_storage");
+    let owner_id = storage_owner(&game, &auth, "Owner").await;
+    let account = auth.login_google("Owner").unwrap();
+    let sibling = estate_owner(
+        &game,
+        &auth,
+        &account,
+        "Sibling",
+        pos3(1.5, 5.05, 1.5),
+        vec![bag_item(2, "storage_chest", 1)],
+    )
+    .await;
+    let third = estate_owner(
+        &game,
+        &auth,
+        &account,
+        "Third",
+        pos3(1.5, 5.05, 1.5),
+        vec![bag_item(3, "apple", 3)],
+    )
+    .await;
+    let outsider_account = auth.login_google("shared-storage-outsider").unwrap();
+    let outsider = estate_owner(
+        &game,
+        &auth,
+        &outsider_account,
+        "Outsider",
+        pos3(1.5, 5.05, 1.5),
+        vec![bag_item(2, "storage_chest", 1)],
+    )
+    .await;
+    game.place_estate_chest(&pid("Owner"), 2, pos3(2.5, 5.0, 2.5), 0.0, 0, &auth)
+        .await;
+    let chest = auth.load_estate_chests().unwrap().remove(0);
+    for id in [owner_id, sibling, third] {
+        assert!(
+            auth.estate_chest_state(chest.id, id)
+                .unwrap()
+                .unwrap()
+                .can_deposit
+        );
+        assert!(!auth.estate_storage_plots(id).unwrap().is_empty());
+    }
+    assert!(auth
+        .estate_chest_state(chest.id, outsider)
+        .unwrap()
+        .is_err());
+    assert!(auth.estate_storage_plots(outsider).unwrap().is_empty());
+    assert!(!auth
+        .set_estate_furniture_text(chest.id, outsider, "intruder")
+        .unwrap());
+    assert!(auth
+        .set_estate_furniture_text(chest.id, sibling, "shared")
+        .unwrap());
+    game.load_estate_chests(&auth).await.unwrap();
+    game.transfer_estate_items(
+        &pid("Third"),
+        chest.id,
+        vec![BagLineItem {
+            instance_id: 3,
+            qty: 2,
+        }],
+        vec![],
+        1,
+        &auth,
+    )
+    .await;
+    let stored = auth.estate_chest_state(chest.id, sibling).unwrap().unwrap();
+    assert_eq!(stored.revision, 2);
+    assert_eq!(stored.items[0].quantity, 2);
+    assert_eq!(
+        item_quantity(
+            &game.get_player_inventory(&pid("Third")).await.unwrap(),
+            "apple"
+        ),
+        1
+    );
+    game.transfer_estate_items(
+        &pid("Sibling"),
+        chest.id,
+        vec![],
+        vec![BagLineItem {
+            instance_id: stored.items[0].instance_id,
+            qty: 1,
+        }],
+        1,
+        &auth,
+    )
+    .await;
+    assert_eq!(
+        auth.estate_chest_state(chest.id, sibling)
+            .unwrap()
+            .unwrap()
+            .revision,
+        2
+    );
+    game.transfer_estate_items(
+        &pid("Sibling"),
+        chest.id,
+        vec![],
+        vec![BagLineItem {
+            instance_id: stored.items[0].instance_id,
+            qty: 1,
+        }],
+        2,
+        &auth,
+    )
+    .await;
+    assert_eq!(
+        item_quantity(
+            &game.get_player_inventory(&pid("Sibling")).await.unwrap(),
+            "apple"
+        ),
+        1
+    );
+    let mut rx = game.register_direct_channel(&pid("Sibling")).await;
+    game.start_estate_furniture_move(&pid("Sibling"), chest.id, &auth)
+        .await;
+    assert!(drain(&mut rx).iter().any(|message| matches!(message,
+        ServerMessage::EstateFurnitureMoveMode { furniture, plots } if furniture.id==chest.id && !plots.is_empty())));
+    game.move_estate_furniture(
+        &pid("Sibling"),
+        EstateFurnitureMove {
+            furniture_id: chest.id,
+            expected_revision: 3,
+            position: pos3(10.5, 5.0, 10.5),
+            rotation_deg: 0.0,
+            floor_level: 0,
+        },
+        &auth,
+    )
+    .await;
+    assert_eq!(
+        auth.load_estate_chests().unwrap()[0].position,
+        pos3(10.5, 5.0, 10.5)
+    );
+    game.place_estate_chest(&pid("Sibling"), 2, pos3(8.5, 5.0, 2.5), 0.0, 0, &auth)
+        .await;
+    assert_eq!(auth.load_estate_chests().unwrap().len(), 2);
+    game.place_estate_chest(&pid("Outsider"), 2, pos3(15.5, 5.0, 2.5), 0.0, 0, &auth)
+        .await;
+    assert_eq!(auth.load_estate_chests().unwrap().len(), 2);
+    let db = rusqlite::Connection::open(path).unwrap();
+    db.execute("UPDATE land_estates SET missed=1", []).unwrap();
+    game.load_estate_chests(&auth).await.unwrap();
+    for id in [owner_id, sibling, third] {
+        assert!(
+            !auth
+                .estate_chest_state(chest.id, id)
+                .unwrap()
+                .unwrap()
+                .can_deposit
+        );
+    }
+    game.players
+        .write()
+        .await
+        .get_mut(&pid("Sibling"))
+        .unwrap()
+        .position = pos3(10.5, 5.05, 9.5);
+    let stored = auth.estate_chest_state(chest.id, sibling).unwrap().unwrap();
+    game.transfer_estate_items(
+        &pid("Sibling"),
+        chest.id,
+        vec![],
+        vec![BagLineItem {
+            instance_id: stored.items[0].instance_id,
+            qty: 1,
+        }],
+        stored.revision,
+        &auth,
+    )
+    .await;
+    assert!(auth
+        .estate_chest_state(chest.id, sibling)
+        .unwrap()
+        .unwrap()
+        .items
+        .is_empty());
+    game.recover_estate_chest(&pid("Sibling"), chest.id, &auth)
+        .await;
+    assert_eq!(auth.load_estate_chests().unwrap().len(), 1);
+}
+
 async fn storage_owner(game: &GameState, auth: &crate::auth::AuthService, name: &str) -> i64 {
     let account = auth.login_google(name).unwrap();
     let bag = vec![

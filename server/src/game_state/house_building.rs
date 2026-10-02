@@ -467,7 +467,13 @@ impl GameState {
                 "House demolition is temporarily unavailable.".to_string()
             })?
             .ok_or("That house no longer exists.")?;
-        if house.owner_id != character_id.to_string() {
+        let auth_copy = auth.clone();
+        let owner_id = house.owner_id.parse::<i64>().unwrap_or_default();
+        let shares_account =
+            auth_db(move || auth_copy.characters_share_account(character_id, owner_id))
+                .await
+                .map_err(|_| "House demolition is temporarily unavailable.".to_string())?;
+        if !shares_account {
             return Err("You can only demolish your own house.".to_string());
         }
         if distance_to_house(&house, &player_position) > PLACEMENT_REACH_M {

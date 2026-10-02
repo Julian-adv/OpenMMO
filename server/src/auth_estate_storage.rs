@@ -33,7 +33,7 @@ fn active_estate_at(
     tx.query_row(
         "SELECT e.id FROM land_plots p JOIN land_estates e ON e.id=p.estate_id
          WHERE p.tile_x=?1 AND p.tile_z=?2 AND p.quadrant=?3
-           AND e.owner_id=?4 AND e.missed=0",
+           AND e.account_name=(SELECT account_name FROM characters WHERE id=?4) AND e.missed=0",
         params![tile_x, tile_z, quadrant, owner_id],
         |row| row.get(0),
     )
@@ -72,14 +72,15 @@ fn placement_estate(
 }
 
 fn chest_access(
-    tx: &Transaction<'_>,
+    conn: &Connection,
     chest_id: i64,
     character_id: i64,
 ) -> Result<Option<(u64, bool)>, rusqlite::Error> {
-    tx.query_row(
-        "SELECT c.revision, c.owner_id=?2 AND COALESCE(e.missed, 1)=0
+    conn.query_row(
+        "SELECT c.revision, COALESCE(e.missed, 1)=0
          FROM estate_chests c LEFT JOIN land_estates e ON e.id=c.estate_id
-         WHERE c.id=?1 AND (c.owner_id=?2 OR e.id IS NULL)",
+         WHERE c.id=?1 AND
+           (e.account_name=(SELECT account_name FROM characters WHERE id=?2) OR e.id IS NULL)",
         params![chest_id, character_id],
         |row| Ok((row.get::<_, i64>(0)? as u64, row.get(1)?)),
     )
@@ -108,6 +109,15 @@ fn read_items(conn: &Connection, chest_id: i64) -> Result<Vec<ItemInstance>, rus
 }
 
 impl AuthService {
+    pub fn estate_furniture_access(
+        &self,
+        furniture_id: i64,
+        character_id: i64,
+    ) -> Result<Option<bool>, AuthError> {
+        let conn = self.open_connection()?;
+        Ok(chest_access(&conn, furniture_id, character_id)?.map(|(_, active)| active))
+    }
+
     pub(super) fn ensure_estate_storage_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS estate_chests (
@@ -235,24 +245,7 @@ impl AuthService {
     }
 
     pub fn estate_storage_plots(&self, character_id: i64) -> Result<Vec<FencePlot>, AuthError> {
-        let conn = self.open_connection()?;
-        let mut stmt = conn.prepare(
-            "SELECT p.tile_x,p.tile_z,p.quadrant FROM land_plots p
-             JOIN land_estates e ON e.id=p.estate_id
-             WHERE e.owner_id=?1 AND e.missed=0",
-        )?;
-        let plots = stmt
-            .query_map([character_id], |row| {
-                let tile_x: i32 = row.get(0)?;
-                let tile_z: i32 = row.get(1)?;
-                let quadrant: i32 = row.get(2)?;
-                Ok(FencePlot {
-                    x: tile_x * 64 - 32 + (quadrant % 2) * 32,
-                    z: tile_z * 64 - 32 + (quadrant / 2) * 32,
-                })
-            })?
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(plots)
+        self.fence_plots(character_id)
     }
 
     pub fn place_estate_chest(
@@ -371,8 +364,9 @@ impl AuthService {
         let conn = self.open_connection()?;
         Ok(conn.execute(
             "UPDATE estate_chests SET text=?1,revision=revision+1
-             WHERE id=?2 AND owner_id=?3 AND estate_id IN
-             (SELECT id FROM land_estates WHERE owner_id=?3 AND missed=0)",
+             WHERE id=?2 AND estate_id IN
+             (SELECT id FROM land_estates
+              WHERE account_name=(SELECT account_name FROM characters WHERE id=?3) AND missed=0)",
             params![text, furniture_id, owner_id],
         )? == 1)
     }
@@ -385,10 +379,11 @@ impl AuthService {
         let conn = self.open_connection()?;
         let access: Option<(u64, bool, String)> = conn
             .query_row(
-                "SELECT c.revision,c.owner_id=?2 AND COALESCE(e.missed,1)=0,c.item_def_id
+                "SELECT c.revision,COALESCE(e.missed,1)=0,c.item_def_id
                  FROM estate_chests c
                  LEFT JOIN land_estates e ON e.id=c.estate_id
-                 WHERE c.id=?1 AND (c.owner_id=?2 OR e.id IS NULL)",
+                 WHERE c.id=?1 AND
+                   (e.account_name=(SELECT account_name FROM characters WHERE id=?2) OR e.id IS NULL)",
                 params![chest_id, character_id],
                 |row| Ok((row.get::<_, i64>(0)? as u64, row.get(1)?, row.get(2)?)),
             )

@@ -115,10 +115,11 @@ impl GameState {
                     .any(|item| item.item_def_id == TOOLBOX_ITEM && item.quantity > 0)
             });
         let auth = auth.clone();
-        let (plots, palette) = auth_db(move || {
+        let (plots, palette, owned_character_ids) = auth_db(move || {
             Ok((
                 auth.fence_plots(owner_id)?,
                 auth.landscaping_palette(owner_id)?,
+                auth.account_character_ids(owner_id)?,
             ))
         })
         .await
@@ -146,6 +147,7 @@ impl GameState {
             player_id,
             ServerMessage::LandscapingMode {
                 owner_id,
+                owned_character_ids,
                 plots: plots.clone(),
                 palette,
                 has_toolbox,

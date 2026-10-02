@@ -371,9 +371,39 @@ impl super::GameState {
             return Ok(false);
         }
         let _persistence = self.persistence_lock.lock().await;
+        auth.get_character_for_account(account_name, character_id)?;
+        let replacement = auth
+            .account_character_ids(character_id)?
+            .into_iter()
+            .find(|id| *id != character_id);
+        if let Some(replacement) = replacement {
+            for mut house in self
+                .housing_io
+                .read_all_houses()
+                .await
+                .map_err(|error| AuthError::Database(error.to_string()))?
+            {
+                if house.owner_id == character_id.to_string() {
+                    house.owner_id = replacement.to_string();
+                    self.housing_io
+                        .write_house(&house)
+                        .await
+                        .map_err(|error| AuthError::Database(error.to_string()))?;
+                    self.publish_house(&house);
+                }
+            }
+        }
         auth.delete_character(account_name, character_id)?;
+        if let Some(replacement) = replacement {
+            self.reassign_estate_furniture_owner(character_id, replacement)
+                .await;
+        }
         self.remove_character_stall(character_id).await;
         self.discard_pending_discovery_saves(character_id).await;
+        drop(_persistence);
+        if let Err(error) = self.refresh_fence_owners(auth).await {
+            tracing::warn!(%error, "Failed to refresh fences after character deletion");
+        }
         Ok(true)
     }
 
@@ -935,6 +965,45 @@ impl super::GameState {
             }
         }
         *center
+    }
+
+    pub async fn debug_teleport_player(&self, player_id: &PlayerId, mut position: Position) {
+        if !position.is_finite() {
+            warn!("Rejected non-finite debug teleport for player {player_id}");
+            return;
+        }
+        let Some((previous, rotation, previous_floor)) = self.get_player_position(player_id).await
+        else {
+            return;
+        };
+        position.x = wrap_world_x(position.x);
+        let floor_level = self.dungeon_floor_for_position(&position).await;
+        if floor_level == 0 {
+            let ground = match self
+                .height_sampler
+                .sample_height(position.x, position.z)
+                .await
+            {
+                Ok(height) if height.is_finite() => height,
+                _ => {
+                    self.send_system_message(player_id, "Destination terrain could not be loaded.")
+                        .await;
+                    self.teleport_player(player_id, previous, rotation, previous_floor)
+                        .await;
+                    return;
+                }
+            };
+            let floor = onlinerpg_shared::pathfinding::get_floor_y_base(
+                &self.passability_read(),
+                position.x,
+                position.z,
+                0,
+            )
+            .unwrap_or(ground);
+            position.y = position.y.max(ground).max(floor);
+        }
+        self.teleport_player(player_id, position, rotation, floor_level)
+            .await;
     }
 
     pub async fn teleport_player(

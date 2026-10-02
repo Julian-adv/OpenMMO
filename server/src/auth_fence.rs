@@ -90,7 +90,8 @@ impl AuthService {
         let conn = self.open_connection()?;
         let mut stmt = conn.prepare(
             "SELECT p.tile_x, p.tile_z, p.quadrant FROM land_plots p
-             JOIN land_estates e ON e.id=p.estate_id WHERE e.owner_id=?1 AND e.missed=0",
+             JOIN land_estates e ON e.id=p.estate_id
+             WHERE e.account_name=(SELECT account_name FROM characters WHERE id=?1) AND e.missed=0",
         )?;
         let plots = stmt
             .query_map([character_id], |row| {
@@ -117,12 +118,14 @@ impl AuthService {
         let mut conn = self.open_connection()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let edge = fence.edge;
-        let existing: Option<i64> = tx
+        let existing: Option<bool> = tx
             .query_row(
-                "SELECT COALESCE(e.owner_id, f.installer_id) FROM land_fences f
+                "SELECT CASE WHEN e.id IS NULL THEN f.installer_id=?4
+                         ELSE e.account_name=(SELECT account_name FROM characters WHERE id=?4) END
+                 FROM land_fences f
                  LEFT JOIN land_estates e ON e.id=f.estate_id
                  WHERE f.x=?1 AND f.z=?2 AND f.axis=?3",
-                params![edge.x, edge.z, axis_id(edge.axis)],
+                params![edge.x, edge.z, axis_id(edge.axis), character.character_id],
                 |row| row.get(0),
             )
             .optional()?;
@@ -138,7 +141,8 @@ impl AuthService {
                 let tz_coord = addr.rz * 16 + tile / 16;
                 estate = tx.query_row(
                     "SELECT e.id FROM land_plots p JOIN land_estates e ON e.id=p.estate_id
-                     WHERE p.tile_x=?1 AND p.tile_z=?2 AND p.quadrant=?3 AND e.owner_id=?4 AND e.missed=0",
+                     WHERE p.tile_x=?1 AND p.tile_z=?2 AND p.quadrant=?3
+                       AND e.account_name=(SELECT account_name FROM characters WHERE id=?4) AND e.missed=0",
                     params![tx_coord, tz_coord, addr.index % 4, character.character_id], |row| row.get::<_, i64>(0)
                 ).optional()?;
                 if estate.is_some() {
@@ -158,9 +162,7 @@ impl AuthService {
         } else {
             match existing {
                 None => return Ok(Err("That fence has already been removed.")),
-                Some(owner) if owner != character.character_id => {
-                    return Ok(Err("You can only recover your own fences."))
-                }
+                Some(false) => return Ok(Err("You can only recover your own fences.")),
                 _ => {}
             }
             tx.execute(

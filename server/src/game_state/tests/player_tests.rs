@@ -1,5 +1,64 @@
 use super::*;
 
+#[tokio::test]
+async fn debug_teleport_lands_above_edited_terrain_and_broadcasts_the_correct_height() {
+    let game = make_test_game_state("debug_teleport_surface");
+    let id = pid("Admin");
+    game.add_player(make_player("Admin", 0.0, 0.0)).await;
+    let mut rx = game.register_direct_channel(&id).await;
+    game.save_terrain_heightmap(-20, 71, &uniform_heightmap(1.4))
+        .await
+        .unwrap();
+    game.debug_teleport_player(&id, pos3(-1292.4, 0.0, 4554.4))
+        .await;
+    let player = game.players.read().await[&id].clone();
+    assert_eq!(player.floor_level, 0);
+    assert_eq!((player.position.x, player.position.z), (-1292.4, 4554.4));
+    assert!((player.position.y - 1.4).abs() < 0.001);
+    assert!(drain(&mut rx).iter().any(|message| matches!(message,
+        ServerMessage::PlayerTeleported { position, floor_level: 0, .. }
+            if (position.y - 1.4).abs() < 0.001)));
+    game.debug_teleport_player(&id, pos3(-1292.4, 20.0, 4554.4))
+        .await;
+    assert_eq!(game.players.read().await[&id].position.y, 20.0);
+}
+
+#[tokio::test]
+async fn debug_teleport_keeps_explicit_dungeon_destinations_underground() {
+    let game = make_test_game_state("debug_teleport_dungeon");
+    let id = pid("Admin");
+    game.add_player(make_player("Admin", 0.0, 0.0)).await;
+    let entrance = game.dungeon_defs.all().next().unwrap();
+    let mut destination = entrance.position();
+    destination.y = onlinerpg_shared::dungeon::floor_world_y(entrance.y, 1);
+    game.debug_teleport_player(&id, destination).await;
+    let player = game.players.read().await[&id].clone();
+    assert_eq!(player.floor_level, -1);
+    assert_eq!(player.position, destination);
+}
+
+#[tokio::test]
+async fn debug_teleport_restores_the_client_when_destination_terrain_is_unavailable() {
+    struct MissingHeight;
+    #[async_trait::async_trait]
+    impl onlinerpg_terrain::height::HeightTiles for MissingHeight {
+        async fn read_heightmap(&self, _tx: i32, _tz: i32) -> std::io::Result<Vec<u8>> {
+            Err(std::io::Error::other("terrain unavailable"))
+        }
+    }
+    let game = make_game_state_with("debug_teleport_missing", MissingHeight, SeaOnlyWater);
+    let player = make_player("Admin", 0.0, 0.0);
+    let origin = player.position;
+    let id = player.id;
+    game.add_player(player).await;
+    let mut rx = game.register_direct_channel(&id).await;
+    game.debug_teleport_player(&id, pos3(-1292.4, 0.0, 4554.4))
+        .await;
+    assert_eq!(game.players.read().await[&id].position, origin);
+    assert!(drain(&mut rx).iter().any(|message| matches!(message,
+        ServerMessage::PlayerTeleported { position, .. } if *position == origin)));
+}
+
 /// `GameState.players` is a list (numeric ids can't key a wasm-serialized
 /// map), so snapshot assertions look their player up by id.
 fn find_player(players: &[Player], id: PlayerId) -> &Player {

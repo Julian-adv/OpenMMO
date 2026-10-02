@@ -1414,6 +1414,7 @@ pub enum ServerMessage {
     },
     LandscapingMode {
         owner_id: i64,
+        owned_character_ids: Vec<i64>,
         plots: Vec<crate::fence::FencePlot>,
         palette: Vec<u8>,
         has_toolbox: bool,

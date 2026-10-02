@@ -169,7 +169,7 @@
     const heights = [-0.5, 0, 0.5].map(heightAt)
     const y = existing?.y ?? Math.min(...heights)
     const reason =
-      existing && existing.owner_id !== mode.owner_id
+      existing && !mode.owned_character_ids.includes(existing.owner_id)
         ? 'This fence belongs to another player'
         : !existing && !get(isAdminUser) && !fenceOnOwnedPlot(edge, mode.plots)
           ? 'Choose an edge on your estate'

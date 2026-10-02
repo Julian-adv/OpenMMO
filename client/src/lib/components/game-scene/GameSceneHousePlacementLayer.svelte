@@ -276,7 +276,10 @@
       clearDemolitionTarget('That house is not loaded')
       return
     }
-    const ownsHouse = house.ownerId === String(get(landscapingMode)?.owner_id)
+    const ownsHouse =
+      get(landscapingMode)?.owned_character_ids.some(
+        (id) => house.ownerId === String(id)
+      ) ?? false
     const inRange = distanceToHouse(house) <= 30
     const valid = ownsHouse && inRange
     const reason = !ownsHouse
