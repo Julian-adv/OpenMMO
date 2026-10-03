@@ -41,6 +41,7 @@ const meshoptParts = new Set([
   "gloves_rogue",
   "boots_barbarian",
   "gloves_barbarian",
+  "pants_barbarian",
 ]);
 const packs = [
   "locomotion",

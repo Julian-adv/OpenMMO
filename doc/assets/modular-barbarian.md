@@ -289,3 +289,25 @@ node tools/prepare-modular-character.mjs --part boots_barbarian
 ```sh
 node tools/prepare-modular-character.mjs --part gloves_barbarian
 ```
+
+## 게임용 하의 전송량 최적화 — 2026-10-03
+
+`pants_barbarian.b5a5c64c.glb`의 색상·법선·금속성/거칠기·가죽·모피 텍스처
+5장을 512×512 JPEG q90·4:4:4로 축소하고, 메시에는 양자화·정점 재배치 없이
+`EXT_meshopt_compression`을 적용했다. 확대하면 가죽의 미세한 질감이 부드러워지고,
+실제 캐릭터 표시 크기에서 차이는 거의 없다.
+메시 9개·3,323 triangles·재질 4개와 정점 속성 53개를 유지한다.
+모피·끈 8개의 `pelt_physics`, 고정점·충돌체·격자 설정과 본 가중치·역바인드
+행렬도 그대로다. 제작용 원본과 기존 출처·라이선스는 위 기록을 따르며,
+추가 AI 생성이나 유료 호출은 없다.
+
+파일은 5,878,192 → 903,296바이트(84.6% 감소), gzip level 6 전송량은
+5,536,086 → 822,471바이트(85.1% 감소)다. glTF Validator 오류·경고 0,
+브라우저 이미지 디코딩·렌더링·페이지 오류 0을 확인했다. 22동작·110자세에서
+정점 위치 차이가 0이었으며, 6동작·1,080프레임의 실제 모피·끈 물리 비교에서도
+변형 정점·법선 차이가 0이었다. 모듈형 캐릭터·펠트 관련 테스트 44개가 통과했고,
+제작용 원본에서 재생성한 출력의 SHA-256도 일치했다.
+
+```sh
+node tools/prepare-modular-character.mjs --part pants_barbarian
+```
