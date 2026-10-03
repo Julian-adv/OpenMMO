@@ -37,6 +37,7 @@ const rogue = JSON.parse(
 ).fitting_candidate;
 const rogueParts = ["top_rogue", "pants_rogue", "gloves_rogue", "boots_rogue"];
 parts.push(...rogueParts);
+const meshoptParts = new Set(["gloves_rogue", "boots_barbarian"]);
 const packs = [
   "locomotion",
   "combat_melee",
@@ -92,27 +93,25 @@ for (const name of selectedParts) {
     ? (rogue.part_overrides[name] ?? `${rogue.directory}/${name}.glb`)
     : `${fitted}/${name}.glb`;
   report.inputs[source] = hash(source);
-  if (name === "gloves_rogue")
-    execFileSync(
-      process.execPath,
-      [
-        resolve(root, "tools/optimize-rogue-gloves.mjs"),
-        resolve(root, source),
-        resolve(root, output, `${name}.glb`),
-      ],
-      { stdio: "inherit" },
-    );
-  else
-    execFileSync(
-      python,
-      [
-        resolve(root, "tools/repack-glb-textures.py"),
-        resolve(root, source),
-        "--out",
-        resolve(root, output),
-      ],
-      { stdio: "inherit" },
-    );
+  const [command, args] = meshoptParts.has(name)
+    ? [
+        process.execPath,
+        [
+          resolve(root, "tools/optimize-modular-part.mjs"),
+          resolve(root, source),
+          resolve(root, output, `${name}.glb`),
+        ],
+      ]
+    : [
+        python,
+        [
+          resolve(root, "tools/repack-glb-textures.py"),
+          resolve(root, source),
+          "--out",
+          resolve(root, output),
+        ],
+      ];
+  execFileSync(command, args, { stdio: "inherit" });
   report.outputs[`${name}.glb`] = hash(`${output}/${name}.glb`);
 }
 

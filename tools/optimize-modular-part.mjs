@@ -8,7 +8,7 @@ import sharp from 'sharp'
 
 const [source, output] = process.argv.slice(2)
 if (!source || !output || process.argv.length !== 4) {
-  console.error('Usage: node tools/optimize-rogue-gloves.mjs SOURCE.glb OUTPUT.glb')
+  console.error('Usage: node tools/optimize-modular-part.mjs SOURCE.glb OUTPUT.glb')
   process.exit(1)
 }
 
@@ -27,8 +27,11 @@ if (document.hasExtension('EXT_meshopt_compression')) {
 await document.transform(prune({ keepLeaves: true, keepAttributes: true, keepIndices: true }))
 for (const texture of document.getRoot().listTextures()) {
   const image = texture.getImage()
-  if (!image) throw new Error('An embedded glove texture is required.')
-  const resized = await sharp(image)
+  if (!image) throw new Error('An embedded part texture is required.')
+  const input = sharp(image)
+  if ((await input.metadata()).hasAlpha)
+    throw new Error('Only opaque textures are supported.')
+  const resized = await input
     .resize({ width: 512, height: 512, fit: 'inside', withoutEnlargement: true })
     .jpeg({ quality: 90, chromaSubsampling: '4:4:4' })
     .toBuffer()

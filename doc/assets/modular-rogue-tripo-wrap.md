@@ -60,8 +60,8 @@ blender -b --python-exit-code 1 --python tools/blender-scripts/review_tripo_glov
 glTF Validator 오류·경고 0, Chromium의 이미지 디코딩·렌더링·페이지 오류 0을 확인했다.
 작은 캐릭터 화면에서는 차이가 거의 없고, 확대 화면의 가죽 질감은 더 부드럽다.
 
-`tools/optimize-rogue-gloves.mjs`는 선택 명세의 제작용 GLB에서 다시 생성하며,
-`tools/prepare-modular-character.mjs`가 장갑을 만들 때 자동 적용한다.
+`tools/optimize-modular-part.mjs`는 선택 명세의 제작용 GLB에서 다시 생성하며,
+`tools/prepare-modular-character.mjs`가 이 장갑과 바바리안 신발을 만들 때 자동 적용한다.
 Node 의존성은 `@gltf-transform/core`, `@gltf-transform/extensions`, `@gltf-transform/functions`
 4.4.2, `meshoptimizer` 1.2.0, `sharp` 0.35.4를 사용했다.
 
