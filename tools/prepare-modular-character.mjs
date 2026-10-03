@@ -37,16 +37,6 @@ const rogue = JSON.parse(
 ).fitting_candidate;
 const rogueParts = ["top_rogue", "pants_rogue", "gloves_rogue", "boots_rogue"];
 parts.push(...rogueParts);
-const meshoptParts = new Set([
-  "hair_crop",
-  "top_plate",
-  "gloves_rogue",
-  "boots_barbarian",
-  "gloves_barbarian",
-  "pants_barbarian",
-  "helmet_barbarian",
-  "top_barbarian",
-]);
 const packs = [
   "locomotion",
   "combat_melee",
@@ -58,12 +48,6 @@ const packs = [
   "great_sword",
   "riding",
 ];
-const python = resolve(
-  root,
-  existsSync(resolve(root, ".venv/Scripts/python.exe"))
-    ? ".venv/Scripts/python.exe"
-    : ".venv/bin/python",
-);
 const hash = (path) =>
   createHash("sha256")
     .update(readFileSync(resolve(root, path)))
@@ -102,25 +86,16 @@ for (const name of selectedParts) {
     ? (rogue.part_overrides[name] ?? `${rogue.directory}/${name}.glb`)
     : `${fitted}/${name}.glb`;
   report.inputs[source] = hash(source);
-  const [command, args] = meshoptParts.has(name)
-    ? [
-        process.execPath,
-        [
-          resolve(root, "tools/optimize-modular-part.mjs"),
-          resolve(root, source),
-          resolve(root, output, `${name}.glb`),
-        ],
-      ]
-    : [
-        python,
-        [
-          resolve(root, "tools/repack-glb-textures.py"),
-          resolve(root, source),
-          "--out",
-          resolve(root, output),
-        ],
-      ];
-  execFileSync(command, args, { stdio: "inherit" });
+  execFileSync(
+    process.execPath,
+    [
+      resolve(root, "tools/optimize-modular-part.mjs"),
+      resolve(root, source),
+      resolve(root, output, `${name}.glb`),
+      ...(name === "base" ? ["--body"] : []),
+    ],
+    { stdio: "inherit" },
+  );
   report.outputs[`${name}.glb`] = hash(`${output}/${name}.glb`);
 }
 

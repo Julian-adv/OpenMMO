@@ -33,16 +33,16 @@
     "assets/modular_human_male_01/parts/rogue_fitted_v8/boots_rogue.glb": "dfefa61608f8359837b7e4b746424b18042f538d191438774663bed394097f16"
   },
   "outputs": {
-    "base.glb": "577d36244539eec21b2b258858c3490adec3bc20d2c9652bced6993a06aa65fb",
+    "base.glb": "126a395b8d32b3ed69fe5b014815fe28b6be758bca9fad493cbb7e625a0208e6",
     "hair_crop.glb": "92cbf595f01534c694ed1f5eba344da84bf2c06fca7d3f2072bfa39c0b044ae3",
-    "top_linen.glb": "eeb16055c61ba73779b1eac4623eeb6614e56e42425923150c575b303798430d",
-    "pants_cloth.glb": "de6c18ebe7bee66f180c9968d80fc08bf767f42e16b7e7fc76a98dacc7777297",
-    "boots_leather.glb": "c2b652053566653dbd01997299211883ac6de9ecf565ab2d8aba66bbf95a8c78",
+    "top_linen.glb": "c90d4840fbe428db95513842eda3c4ec4c5164fa416ccef5e0357791767aadd7",
+    "pants_cloth.glb": "2de09c1ba08b87c5a0b96760384d4e074ae972560d3c9e8cae18bcb0adfa984a",
+    "boots_leather.glb": "8aa4803b80738fcd968b906b9591f8d9218ce185dd6755a3c0d1a51fd544256e",
     "top_plate.glb": "96720324a124eb46735da2f4a08da203a61f8e702446ab8ba28e5ddc793116c7",
-    "pants_plate.glb": "6df47c2263b9d515dabeebc80844711c0284668cfc4dc64eb8779beb1a2a7c0a",
-    "gloves_plate.glb": "eeb91e0e5c8ea2805d0f70a168bf51657f157663b7d4851f3fb7705d81188d68",
-    "boots_plate.glb": "8af7545df1054659e93176c4162c1f6e6c8ad40a19b477b01ff9ccf70d5fedc8",
-    "helmet_plate.glb": "b3e723c432c67d01440f69519785cc97071c781644c07febd60a2d3707075179",
+    "pants_plate.glb": "032522ff5af1e6bfedcd91c300f31fac71ec58eb7cbb54e8d612268610a29cfe",
+    "gloves_plate.glb": "a13f56960af93399f95a1293322bc167b8f41ef4cbded535fbc52ab9c98795c1",
+    "boots_plate.glb": "928b68edea8108a7397459cf52fe658346eede884d675863df0c9099dfac58c9",
+    "helmet_plate.glb": "efe100f357da6a130c6b5338008d6b28ba8921deb93b10812046fecbf95b0a08",
     "top_barbarian.glb": "f794606e05bd7011986983cc5a087832cc32973b6efbe192f806268ad04030e8",
     "pants_barbarian.glb": "97c011e10396e6bf076a7d603f513f6a2507ae9ab9c2831a5efe8013fa598254",
     "gloves_barbarian.glb": "a99885be589f5af4a8e678ee58fa23b9eed2b74febb16264b987dd1d87ced501",
@@ -129,9 +129,9 @@
       "sha256": "232453e2837721ac30c7185bd21ce7fc65960adf8f5f017eb8ff3661011176f6",
       "clips": ["ride"]
     },
-    "top_rogue.glb": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
-    "pants_rogue.glb": "7178d06a9b2e18953e2c3fb0672df8424b688d6f4ccc47affc856a9084e8e81c",
+    "top_rogue.glb": "6026de2994f041e4ac707cbafcb3d3651e23ba22f38e986e8352dc1b45d4e04e",
+    "pants_rogue.glb": "6e8c5720f3c6fa783962599584985493c5a708d34c1f7395d36a51d4108ae1a1",
     "gloves_rogue.glb": "59024889a206492b9f1d11a5aafe73adda6e905e43956354abd527b6bf43b4bf",
-    "boots_rogue.glb": "6e1ed626c06a4ad6c3f4b0c297739d623cebdfcf53da10c80780716a12419761"
+    "boots_rogue.glb": "4f4dc7fc9e81eb1390ed2c7bad1653fab29d342dca95773000498db7633d0059"
   }
 }
