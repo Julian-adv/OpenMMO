@@ -198,6 +198,9 @@ try {
       variant: "corrected",
       hand_profile: profile,
     };
+    if (animations.some((clip) => /^idle[1-5]$/.test(clip.name)))
+      scene.userData.idle_shoulder_retraction_degrees =
+        baked.scene.userData.idle_shoulder_retraction_degrees ?? 0;
     const rig = base.scene.clone(true);
     const meshes = [];
     rig.traverse((node) => {

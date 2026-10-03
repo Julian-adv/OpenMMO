@@ -1,0 +1,170 @@
+{
+  "source": {
+    "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+    "source_sha256": "773e16688af0bf205d2f56c6dce7b947a3d74ee6d55b1bb76a92a9d6b993b10a",
+    "sha256": "76eeb462770754895834271423b4ef7f33efdbd34bdfb9830beba4ba84e7569f",
+    "rest_rig_unchanged": true,
+    "unchanged_tracks": 452,
+    "changed_tracks": [
+      {
+        "clip": "idle1",
+        "bone": "LeftShoulder",
+        "keys": 251,
+        "min_angle": 5.9998920885883775,
+        "max_angle": 6.000125653460557
+      },
+      {
+        "clip": "idle1",
+        "bone": "RightShoulder",
+        "keys": 251,
+        "min_angle": 5.999856862739079,
+        "max_angle": 6.000157344887899
+      }
+    ]
+  },
+  "runtime": {
+    "path": "client/public/models/characters/modular_male/animations/locomotion.glb",
+    "source_sha256": "3bd119edc5f175d7bad0346c4012a5c4a1f529475d1293bd2a3d9837aab31b3a",
+    "sha256": "d4aa8d7369c6396f7455b7066d2342ef7662fa2ef46595c42de76f3f3855055d",
+    "rest_rig_unchanged": true,
+    "unchanged_tracks": 560,
+    "changed_tracks": [
+      {
+        "clip": "idle1",
+        "bone": "LeftShoulder",
+        "keys": 251,
+        "min_angle": 5.9998920885883775,
+        "max_angle": 6.000125653460557
+      },
+      {
+        "clip": "idle1",
+        "bone": "RightShoulder",
+        "keys": 251,
+        "min_angle": 5.999856862739079,
+        "max_angle": 6.000157344887899
+      },
+      {
+        "clip": "idle2",
+        "bone": "LeftShoulder",
+        "keys": 251,
+        "min_angle": 5.9998920885883775,
+        "max_angle": 6.000125653460557
+      },
+      {
+        "clip": "idle2",
+        "bone": "RightShoulder",
+        "keys": 251,
+        "min_angle": 5.999856862739079,
+        "max_angle": 6.000157344887899
+      },
+      {
+        "clip": "idle3",
+        "bone": "LeftShoulder",
+        "keys": 251,
+        "min_angle": 5.9998920885883775,
+        "max_angle": 6.000125653460557
+      },
+      {
+        "clip": "idle3",
+        "bone": "RightShoulder",
+        "keys": 251,
+        "min_angle": 5.999856862739079,
+        "max_angle": 6.000157344887899
+      },
+      {
+        "clip": "idle4",
+        "bone": "LeftShoulder",
+        "keys": 251,
+        "min_angle": 5.9998920885883775,
+        "max_angle": 6.000125653460557
+      },
+      {
+        "clip": "idle4",
+        "bone": "RightShoulder",
+        "keys": 251,
+        "min_angle": 5.999856862739079,
+        "max_angle": 6.000157344887899
+      },
+      {
+        "clip": "idle5",
+        "bone": "LeftShoulder",
+        "keys": 251,
+        "min_angle": 5.9998920885883775,
+        "max_angle": 6.000125653460557
+      },
+      {
+        "clip": "idle5",
+        "bone": "RightShoulder",
+        "keys": 251,
+        "min_angle": 5.999856862739079,
+        "max_angle": 6.000157344887899
+      }
+    ]
+  },
+  "unchanged_other_packs": [
+    "client/public/models/characters/modular_male/animations/combat_melee.glb",
+    "client/public/models/characters/modular_male/animations/combat_ranged.glb",
+    "client/public/models/characters/modular_male/animations/enchant_armor.glb",
+    "client/public/models/characters/modular_male/animations/fishing.glb",
+    "client/public/models/characters/modular_male/animations/great_sword.glb",
+    "client/public/models/characters/modular_male/animations/offhand.glb",
+    "client/public/models/characters/modular_male/animations/riding.glb",
+    "client/public/models/characters/modular_male/animations/social.glb"
+  ],
+  "garment_sha256": "e495478ffdcf1d018a9c1faed604d91e92b6b2df91e1baf1599544800ad9ab9f",
+  "date": "2026-10-04",
+  "scope": "Relaxed idle1; runtime idle2–idle5 are existing idle1 aliases",
+  "shoulder_retraction_degrees": 6,
+  "axis": "Spine2 local Y: +6° LeftShoulder, -6° RightShoulder",
+  "source_license": "Existing user-provided Mixamo animation and modular male rig; no new generated assets or paid calls",
+  "preserved_source": {
+    "repository": "jake-song-openmmo/onlinerpg-assets",
+    "revision": "33a8a0642c25af1364ad6feea5ee2cf176c300b9",
+    "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+    "sha256": "773e16688af0bf205d2f56c6dce7b947a3d74ee6d55b1bb76a92a9d6b993b10a"
+  },
+  "browser": {
+    "idle_samples": 25,
+    "joint_deltas": {
+      "LeftArm": {
+        "minimum_delta_m": [
+          0.0032936017205866253, -0.000664945794593752, -0.013186954938876134
+        ],
+        "maximum_delta_m": [
+          0.003854149238786908, -5.953742576414456e-5, -0.013002081287722587
+        ]
+      },
+      "RightArm": {
+        "minimum_delta_m": [
+          -0.0021086840886912483, -0.0009430706980471104, -0.01325651394246874
+        ],
+        "maximum_delta_m": [
+          -0.001397166189909732, -0.0004086256877957606, -0.013099163439764833
+        ]
+      },
+      "Head": {
+        "minimum_delta_m": [0, 0, 0],
+        "maximum_delta_m": [0, 0, 0]
+      },
+      "LeftFoot": {
+        "minimum_delta_m": [0, 0, 0],
+        "maximum_delta_m": [0, 0, 0]
+      },
+      "RightFoot": {
+        "minimum_delta_m": [0, 0, 0],
+        "maximum_delta_m": [0, 0, 0]
+      }
+    },
+    "outfit_pose_samples": 21,
+    "page_errors": 0,
+    "http_errors": 0
+  },
+  "validation": {
+    "gltf_errors": 0,
+    "gltf_warnings": 0,
+    "idempotent_reapplication": true,
+    "tests_passed": 33,
+    "client_check": "passed: 0 errors, 0 warnings",
+    "client_lint": "passed"
+  }
+}
