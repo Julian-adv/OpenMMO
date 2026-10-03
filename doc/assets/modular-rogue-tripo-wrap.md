@@ -44,3 +44,27 @@ blender -b --python-exit-code 1 --python tools/blender-scripts/review_tripo_glov
 
 이미지는 실제 메시를 Blender 5.2.0 LTS에서 렌더했다. 새 AI 생성이나 유료 생성 호출은 없다.
 브라우저에서 7동작 전환·탈착·세트 교체·재연결을 확인했고 페이지 오류는 없었다.
+
+## 게임용 장갑 전송량 최적화 — 2026-10-03
+
+사용자가 화면에서 작게 보이는 장갑의 텍스처 최대 크기를 512px로 지정했다.
+게임용 `client/public/models/characters/modular_male/gloves_rogue.glb`에서 미사용 원본 이미지
+1장을 제거하고, 오른손 텍스처를 512×256, 왼손목 천을 512×512 JPEG q90·4:4:4로 축소했다.
+제작용 GLB와 Blender 원본은 보존한다. 파생 이미지의 출처·라이선스는 위 Tripo 원본과 같다.
+추가 AI 생성이나 유료 호출은 없다.
+
+메시에는 양자화·정점 재배치 없이 `EXT_meshopt_compression`을 적용했다.
+메시 2개·3,495삼각형, 정점 속성·인덱스·본 연결·장비 메타데이터가 유지된다.
+파일은 7,367,224 → 553,244바이트, gzip level 6은 6,871,663 → 523,287바이트다.
+게임 로더의 몸체 연결과 37동작·185자세에서 변경 전후 정점 위치 차이가 0이었다.
+glTF Validator 오류·경고 0, Chromium의 이미지 디코딩·렌더링·페이지 오류 0을 확인했다.
+작은 캐릭터 화면에서는 차이가 거의 없고, 확대 화면의 가죽 질감은 더 부드럽다.
+
+`tools/optimize-rogue-gloves.mjs`는 선택 명세의 제작용 GLB에서 다시 생성하며,
+`tools/prepare-modular-character.mjs`가 장갑을 만들 때 자동 적용한다.
+Node 의존성은 `@gltf-transform/core`, `@gltf-transform/extensions`, `@gltf-transform/functions`
+4.4.2, `meshoptimizer` 1.2.0, `sharp` 0.35.4를 사용했다.
+
+```bash
+node tools/prepare-modular-character.mjs --part gloves_rogue
+```

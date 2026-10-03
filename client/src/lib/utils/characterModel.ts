@@ -6,11 +6,14 @@ import { MODULAR_MALE_DIRECTORY, MODULAR_MALE_MODEL_PATH } from './modelPaths'
 import type { ArmorEquipment } from '../network/networkTypes'
 import { modularOutfitForArmor } from './modularEquipment'
 import { disposePeltPhysics } from '../effects/pelt-rig'
+import { computeSoleGroundOffset } from './characterAnimationUtils'
 import {
   DEFAULT_MODULAR_OUTFIT,
   KNIGHT_MODULAR_OUTFIT,
   BARBARIAN_MODULAR_OUTFIT,
   ROGUE_MODULAR_OUTFIT,
+  MODULAR_BOOTS,
+  type ModularOutfit,
   bindModularPart,
   modularAnimationClips,
   modularRigId,
@@ -46,6 +49,12 @@ export function loadCharacterModel(path: string): Promise<GLTF> {
         const parts = new Map(
           ids.map((id, i) => [id, bindModularPart(scene, sources[i].scene)])
         )
+        const soleOffsets = {} as Record<ModularOutfit['boots'], number>
+        for (const boots of MODULAR_BOOTS) {
+          showModularOutfit(body, parts, { ...DEFAULT_MODULAR_OUTFIT, boots })
+          soleOffsets[boots] = computeSoleGroundOffset(scene)
+        }
+        scene.userData.modular_sole_offsets = soleOffsets
         showModularOutfit(body, parts, DEFAULT_MODULAR_OUTFIT)
         for (const mesh of parts.get('hair_crop') ?? []) {
           const tint = (source: THREE.Material) => {
@@ -89,7 +98,14 @@ export function applyCharacterArmor(
       parts.set(id, group)
     } else body.push(mesh)
   }
-  if (parts.size) showModularOutfit(body, parts, modularOutfitForArmor(armor))
+  if (parts.size) {
+    const outfit = modularOutfitForArmor(armor)
+    showModularOutfit(body, parts, outfit)
+    root.traverse((node) => {
+      const offsets = node.userData.modular_sole_offsets
+      if (offsets) node.position.y = offsets[outfit.boots]
+    })
+  }
 }
 
 export function loadCharacterAnimationPack(

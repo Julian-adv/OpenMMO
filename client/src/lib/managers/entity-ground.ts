@@ -3,6 +3,19 @@ import { bridgeManager } from './bridgeManager'
 import { dungeonManager } from './dungeonManager'
 import { housingManager } from './housingManager'
 import type { TerrainHeightManager } from './terrainHeightManager'
+import { FLOOR_THICKNESS } from '../utils/house-geometry'
+
+export function localPlayerRenderY(
+  floorLevel: number,
+  x: number,
+  y: number,
+  z: number
+): number {
+  if (floorLevel < 0) return y
+  const surfaceY = housingManager.floorHeightAt(floorLevel, wrapWorldX(x), z)
+  if (surfaceY === null || Math.abs(surfaceY - y) > FLOOR_THICKNESS) return y
+  return Math.max(y, surfaceY)
+}
 
 /**
  * Ground Y for an entity whose floor level is known but whose Y is not

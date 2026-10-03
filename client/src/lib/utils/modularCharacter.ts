@@ -17,6 +17,13 @@ export interface ModularHandProfile {
   iron_sword: SwordPose
   iron_sword_by_clip?: Record<string, SwordPose>
   finger_pose_sources: Record<string, Record<string, string>>
+  finger_poses?: Record<
+    string,
+    {
+      clips: string[]
+      quaternions: Record<string, [number, number, number, number]>
+    }
+  >
   finger_relaxation?: Record<
     string,
     Record<
@@ -46,12 +53,20 @@ export function skinnedParts(root: THREE.Object3D): THREE.SkinnedMesh[] {
   return result
 }
 
+export const MODULAR_BOOTS = [
+  'none',
+  'leather',
+  'plate',
+  'barbarian',
+  'rogue',
+] as const
+
 export interface ModularOutfit {
   hair: 'hair_crop' | 'hair_sidepart' | 'none'
   top: 'linen' | 'leather' | 'plate' | 'barbarian' | 'rogue' | 'none'
   pants: 'cloth' | 'plate' | 'barbarian' | 'rogue' | 'none'
   gloves: 'none' | 'leather' | 'plate' | 'barbarian' | 'rogue'
-  boots: 'none' | 'leather' | 'plate' | 'barbarian' | 'rogue'
+  boots: (typeof MODULAR_BOOTS)[number]
   helmet: 'none' | 'plate' | 'barbarian'
 }
 
@@ -433,6 +448,9 @@ export function parseModularHandProfile(value: unknown): ModularHandProfile {
     Array.isArray(values) &&
     values.length === size &&
     values.every((v) => typeof v === 'number' && Number.isFinite(v))
+  const unitQuaternion = (values: unknown): values is number[] =>
+    finiteTuple(values, 4) &&
+    Math.abs(Math.hypot(...(values as number[])) - 1) <= 1e-4
   if (
     !profile ||
     typeof profile.rig_id !== 'string' ||
@@ -457,8 +475,7 @@ export function parseModularHandProfile(value: unknown): ModularHandProfile {
         (pose) =>
           !pose ||
           !finiteTuple(pose.position, 3) ||
-          !finiteTuple(pose.quaternion, 4) ||
-          Math.abs(Math.hypot(...pose.quaternion) - 1) > 1e-4
+          !unitQuaternion(pose.quaternion)
       )
     ) {
       throw new Error('동작별 검 장착 설정이 올바르지 않습니다.')
@@ -481,8 +498,7 @@ export function parseModularHandProfile(value: unknown): ModularHandProfile {
           frame.phase > 1 ||
           (i > 0 && frame.phase <= frames[i - 1].phase) ||
           !finiteTuple(frame.position, 3) ||
-          !finiteTuple(frame.quaternion, 4) ||
-          Math.abs(Math.hypot(...frame.quaternion) - 1) > 1e-4
+          !unitQuaternion(frame.quaternion)
       ) ||
       frames[0].phase !== 0 ||
       frames[frames.length - 1].phase !== 1
@@ -490,6 +506,26 @@ export function parseModularHandProfile(value: unknown): ModularHandProfile {
       throw new Error('검 장착 키프레임이 올바르지 않습니다.')
   }
   const finger = /^(Left|Right)Hand(Thumb|Index|Middle|Ring|Pinky)[123]$/
+  if (
+    profile.finger_poses !== undefined &&
+    (!profile.finger_poses ||
+      typeof profile.finger_poses !== 'object' ||
+      Array.isArray(profile.finger_poses) ||
+      Object.values(profile.finger_poses).some(
+        (pose) =>
+          !pose ||
+          !Array.isArray(pose.clips) ||
+          pose.clips.some((name) => typeof name !== 'string' || !name) ||
+          !pose.quaternions ||
+          typeof pose.quaternions !== 'object' ||
+          Array.isArray(pose.quaternions) ||
+          Object.entries(pose.quaternions).some(
+            ([bone, quaternion]) =>
+              !finger.test(bone) || !unitQuaternion(quaternion)
+          )
+      ))
+  )
+    throw new Error('손가락 자세 설정이 올바르지 않습니다.')
   for (const mapping of Object.values(profile.finger_pose_sources)) {
     if (
       !mapping ||
@@ -521,8 +557,7 @@ export function parseModularHandProfile(value: unknown): ModularHandProfile {
         if (
           !finger.test(bone) ||
           !adjustment ||
-          !finiteTuple(adjustment.rest_quaternion, 4) ||
-          Math.abs(Math.hypot(...adjustment.rest_quaternion) - 1) > 1e-4 ||
+          !unitQuaternion(adjustment.rest_quaternion) ||
           !Number.isFinite(adjustment.amount) ||
           adjustment.amount < 0 ||
           adjustment.amount > 1
@@ -544,7 +579,10 @@ export function applyModularFingerPose(
     throw new Error('손 보정 프로파일의 리그가 다릅니다.')
   const mapping = profile.finger_pose_sources[clip.name]
   const relaxation = profile.finger_relaxation?.[clip.name]
-  if (!mapping && !relaxation) return clip
+  const poses = Object.values(profile.finger_poses ?? {}).filter((pose) =>
+    pose.clips.includes(clip.name)
+  )
+  if (!mapping && !relaxation && poses.length === 0) return clip
   const adjusted = clip.clone()
   for (const [target, source] of Object.entries(mapping ?? {})) {
     const track = clip.tracks.find(
@@ -577,6 +615,23 @@ export function applyModularFingerPose(
         .toArray(track.values, i)
     }
   }
+  const pinned = new Map<string, number[]>(
+    poses.flatMap((pose) =>
+      Object.entries(pose.quaternions).map(([bone, quaternion]) => [
+        `${bone}.quaternion`,
+        quaternion,
+      ])
+    )
+  )
+  adjusted.tracks = adjusted.tracks.filter((track) => !pinned.has(track.name))
+  for (const [name, quaternion] of pinned)
+    adjusted.tracks.push(
+      new THREE.QuaternionKeyframeTrack(
+        name,
+        [0, clip.duration],
+        [...quaternion, ...quaternion]
+      )
+    )
   return adjusted
 }
 

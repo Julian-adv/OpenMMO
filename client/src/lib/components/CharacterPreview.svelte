@@ -13,7 +13,6 @@
   } from '../utils/twoHandedGrip'
   import {
     createCharacterModelRoot,
-    computeSoleGroundOffset,
     findBoneByName,
     getGltfAnimations,
     retargetOrderedCharacterAnimationsForModel,
@@ -242,7 +241,7 @@
             ? forearmLength(characterRoot, boneName, `${modelPath}:${boneName}`)
             : undefined
         )
-      } else if (!mainHand) poseOffHandProp(prop)
+      } else if (!mainHand) poseOffHandProp(prop, worldModel, modelPath)
       ;(socket ?? bone).add(prop)
       heldProps.push(prop)
       const gripReach = getWeaponAnimation(itemDefId)?.offHandGripReach
@@ -369,8 +368,6 @@
       createCharacterModelRoot(sourceScene)
     applyCharacterArmor(newModelRoot, equipment?.armor)
     const generation = ++setupGeneration
-    if (modelPath === MODULAR_MALE_MODEL_PATH)
-      newClonedScene.position.y = computeSoleGroundOffset(newModelRoot)
 
     const orderedAnims = selectOrderedCharacterAnimations(
       getGltfAnimations(characterGltfData),

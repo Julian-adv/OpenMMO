@@ -1,49 +1,27 @@
-// How a held item sits in the hand that holds it. Shared by the in-game player
-// model and the character-select preview so both grip alike.
-
 import * as THREE from 'three'
 import { isRangedWeapon } from '../data/itemDefs'
 import { getWeaponAnimation } from '../data/weaponAnimationDefs'
+import { MODULAR_MALE_MODEL_PATH } from './modelPaths'
 
 /** Offset from the wrist bone toward the palm, so a prop looks gripped. */
 const HAND_GRIP_OFFSET = new THREE.Vector3(0, 0.08, 0)
+const MODULAR_TORCH_GRIP_OFFSET = new THREE.Vector3(0.025, 0.08, 0.012)
 
 // Seat the model's off-origin handle between the thumb and index finger.
 const FISHING_ROD_POSITION = new THREE.Vector3(0.045, 0.01, 0.06)
 const FISHING_ROD_ROTATION = new THREE.Euler(0, -Math.PI / 6, -Math.PI / 3)
 
-// A bow rides the bow hand, so it needs its own seat in the palm rather than
-// the shared grip offset. Fitted by eye in `tools/rig-importer` against the
-// `bow_shoot` stance — the same bone-local position and XYZ euler that tool
-// writes for monsters, which parents a weapon exactly as `attachWeaponModel`
-// does here, so its numbers transplant unchanged. Re-fit if the clip or
-// bow.glb changes.
+// Fitted in tools/rig-importer against bow_shoot.
 const BOW_POSITION = new THREE.Vector3(0.01, 0.06, 0.04)
 const BOW_ROTATION = new THREE.Euler((-13 * Math.PI) / 180, 0, 0)
 
-// The along-bone offset is the one axis that cannot be a constant: it pushes
-// the stave from the wrist out to the fingers, and these rigs are not one size.
-// Forearm length is the proxy, not the hand's own geometry: a fur bracer
-// weighted to the hand bone puts caveman's mesh reach at 0.225 m against
-// knight's 0.062, and a rig with no finger bones (night_merchant) carries the
-// whole palm in one bone. Forearms span a mere 0.197–0.267 m across all
-// eighteen, with no such outlier. Fitted on knight.glb, whose forearm is
-// 0.267 m.
+// Scale grip reach by forearm length; bracers distort hand mesh bounds.
 const KNIGHT_FOREARM_METERS = 0.267
 const BOW_FOREARM_RATIO = BOW_POSITION.y / KNIGHT_FOREARM_METERS
 
 export const MANDOLIN_ITEM_DEF_ID = 'mandolin'
 
-// The mandolin's origin sits on the strum point with the neck along +X and
-// the soundboard facing +Z. Fitted to the guitar_playing clip by
-// `tools/fit-hand-prop.mjs --tilt 15 --push 0.06 --lift 0.04`: 15° hangs the
-// body down off the chest to the waist, the lift carries the neck up onto the
-// fretting fingers instead of through the fist, and the push trades the sound
-// box's depth in the torso against clearance for the strumming wrist, which
-// the clip otherwise buries in it — 0.06 leaves the wrist 1 cm proud of the
-// face. All three pivot on the fretting hand, so none of them costs the neck
-// that grip. The position is no longer the plain palm offset because of them:
-// it puts the origin back where the hand can hold it.
+// Fitted with tools/fit-hand-prop.mjs --tilt 15 --push 0.06 --lift 0.04.
 const MANDOLIN_ROTATION = new THREE.Euler(-2.413, -0.409, -0.353)
 const MANDOLIN_POSITION = new THREE.Vector3(-0.03, 0.103, 0.126)
 
@@ -115,8 +93,16 @@ export function forearmLength(
   return length
 }
 /** Pose a left-hand prop — shields and torches face the other way. */
-export function poseOffHandProp(prop: THREE.Object3D) {
-  prop.position.copy(HAND_GRIP_OFFSET)
+export function poseOffHandProp(
+  prop: THREE.Object3D,
+  worldModel?: string,
+  modelPath?: string
+) {
+  prop.position.copy(
+    modelPath === MODULAR_MALE_MODEL_PATH && worldModel === 'weapons/torch.glb'
+      ? MODULAR_TORCH_GRIP_OFFSET
+      : HAND_GRIP_OFFSET
+  )
   prop.rotation.y = Math.PI
 }
 

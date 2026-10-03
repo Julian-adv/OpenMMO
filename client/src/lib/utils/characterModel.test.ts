@@ -345,6 +345,24 @@ describe.skipIf(
     expect(modularSwordAttachment(first, 'weapons/bow.glb')).toBeUndefined()
   })
 
+  it('recalculates footwear clearance without resetting an animated pose', async () => {
+    const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
+    const { modelRoot, clonedScene } = createCharacterModelRoot(source.scene)
+    const { modelRoot: other } = createCharacterModelRoot(source.scene)
+    applyCharacterArmor(modelRoot, { boots: 'worn_barbarian_boots' })
+    expect(computeSoleGroundOffset(modelRoot)).toBeCloseTo(0, 6)
+    const hips = modelRoot.getObjectByName('Hips')!
+    hips.position.y += 0.25
+    const posed = hips.position.clone()
+    applyCharacterArmor(modelRoot, { boots: 'worn_plate_boots' })
+    expect(hips.position).toEqual(posed)
+    expect(computeSoleGroundOffset(modelRoot)).toBeCloseTo(-0.25, 5)
+    const offset = clonedScene.position.y
+    applyCharacterArmor(modelRoot, { boots: 'worn_plate_boots' })
+    expect(clonedScene.position.y).toBe(offset)
+    expect(other.children[0].position.y).toBe(0)
+  })
+
   it('keeps the corrected movement and sword grip through crossfades', async () => {
     const [source, pack] = await Promise.all([
       loadCharacterModel(MODULAR_MALE_MODEL_PATH),

@@ -30,7 +30,10 @@ const parts = [
   "helmet_barbarian",
 ];
 const rogue = JSON.parse(
-  readFileSync(resolve(root, "doc/assets/modular-rogue-source-selection.json"), "utf8"),
+  readFileSync(
+    resolve(root, "doc/assets/modular-rogue-source-selection.json"),
+    "utf8",
+  ),
 ).fitting_candidate;
 const rogueParts = ["top_rogue", "pants_rogue", "gloves_rogue", "boots_rogue"];
 parts.push(...rogueParts);
@@ -62,32 +65,63 @@ const report = {
   outputs: {},
 };
 mkdirSync(resolve(root, output, "animations"), { recursive: true });
-for (const name of process.argv.includes("--rogue-only") ? rogueParts : parts) {
+function option(flag, allowed) {
+  const index = process.argv.indexOf(flag);
+  if (index === -1) return undefined;
+  const value = process.argv[index + 1];
+  if (!allowed.includes(value))
+    throw new Error(`${flag} requires one of: ${allowed.join(", ")}`);
+  return value;
+}
+function writeManifest(merge) {
+  const manifest = resolve(root, output, "manifest.json");
+  if (merge && existsSync(manifest)) {
+    const previous = JSON.parse(readFileSync(manifest, "utf8"));
+    report.inputs = { ...previous.inputs, ...report.inputs };
+    report.outputs = { ...previous.outputs, ...report.outputs };
+  }
+  writeFileSync(manifest, JSON.stringify(report, null, 2) + "\n");
+}
+const selectedPart = option("--part", parts);
+const selectedPack = option("--pack", packs);
+let selectedParts = process.argv.includes("--rogue-only") ? rogueParts : parts;
+if (selectedPart) selectedParts = [selectedPart];
+if (selectedPack) selectedParts = [];
+for (const name of selectedParts) {
   const source = rogueParts.includes(name)
-    ? rogue.part_overrides[name] ?? `${rogue.directory}/${name}.glb`
+    ? (rogue.part_overrides[name] ?? `${rogue.directory}/${name}.glb`)
     : `${fitted}/${name}.glb`;
   report.inputs[source] = hash(source);
-  execFileSync(
-    python,
-    [
-      resolve(root, "tools/repack-glb-textures.py"),
-      resolve(root, source),
-      "--out",
-      resolve(root, output),
-    ],
-    { stdio: "inherit" },
-  );
+  if (name === "gloves_rogue")
+    execFileSync(
+      process.execPath,
+      [
+        resolve(root, "tools/optimize-rogue-gloves.mjs"),
+        resolve(root, source),
+        resolve(root, output, `${name}.glb`),
+      ],
+      { stdio: "inherit" },
+    );
+  else
+    execFileSync(
+      python,
+      [
+        resolve(root, "tools/repack-glb-textures.py"),
+        resolve(root, source),
+        "--out",
+        resolve(root, output),
+      ],
+      { stdio: "inherit" },
+    );
   report.outputs[`${name}.glb`] = hash(`${output}/${name}.glb`);
 }
 
-if (process.argv.includes("--parts-only") || process.argv.includes("--rogue-only")) {
-  const manifest = resolve(root, output, "manifest.json");
-  const previous = existsSync(manifest)
-    ? JSON.parse(readFileSync(manifest, "utf8"))
-    : {};
-  report.inputs = { ...previous.inputs, ...report.inputs };
-  report.outputs = { ...previous.outputs, ...report.outputs };
-  writeFileSync(manifest, JSON.stringify(report, null, 2) + "\n");
+if (
+  selectedPart ||
+  process.argv.includes("--parts-only") ||
+  process.argv.includes("--rogue-only")
+) {
+  writeManifest(true);
   process.exit(0);
 }
 
@@ -145,7 +179,7 @@ try {
   }
   report.inputs[`${tuned}/animations.glb`] = hash(`${tuned}/animations.glb`);
   report.inputs[`${tuned}/hand-grips.json`] = hash(`${tuned}/hand-grips.json`);
-  for (const name of packs) {
+  for (const name of selectedPack ? [selectedPack] : packs) {
     const path = `client/public/models/animations/${name}.glb`;
     report.inputs[path] = hash(path);
     const pack = await load(path);
@@ -159,7 +193,17 @@ try {
       modular.applyModularFingerPose(clip, profile, rigId),
     );
     if (name !== "riding")
-      clips = await runtime.groundRetargetedClips(base.scene, clips);
+      clips = await runtime.groundRetargetedClips(
+        base.scene,
+        clips,
+        name === "offhand"
+          ? {
+              plantedClips: ["torch_idle1", "torch_idle2", "torch_walk"],
+              baselineClips: ["torch_run"],
+              soleClearance: 0.002,
+            }
+          : {},
+      );
     const byName = new Map(clips.map((clip) => [clip.name, clip]));
     const animations = pack.animations.map(
       (clip) => corrected.get(clip.name) ?? byName.get(clip.name),
@@ -196,10 +240,7 @@ try {
       `${name}: ${animations.length} clips, ${bytes.byteLength} bytes`,
     );
   }
-  writeFileSync(
-    resolve(root, output, "manifest.json"),
-    JSON.stringify(report, null, 2) + "\n",
-  );
+  writeManifest(Boolean(selectedPack));
 } finally {
   await server.close();
 }

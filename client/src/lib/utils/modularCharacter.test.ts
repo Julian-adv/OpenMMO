@@ -640,6 +640,55 @@ describe('modular hand profile', () => {
     }
   })
 
+  it('fills missing grip tracks and preserves wrist motion and shared clips', () => {
+    const wrist = new THREE.QuaternionKeyframeTrack(
+      'LeftHand.quaternion',
+      [0, 1],
+      [0, 0, 0, 1, 0, 0, 0, 1]
+    )
+    const clip = new THREE.AnimationClip('torch_idle1', 1, [wrist])
+    const rotation = new THREE.Quaternion()
+      .setFromAxisAngle(new THREE.Vector3(1, 0, 0), 1.2)
+      .toArray() as [number, number, number, number]
+    const customized = parseModularHandProfile({
+      ...profile,
+      finger_poses: {
+        torch: {
+          clips: ['torch_idle1'],
+          quaternions: { LeftHandMiddle2: rotation, RightHandIndex2: rotation },
+        },
+      },
+    })
+    const adjusted = applyModularFingerPose(clip, customized, 'test-rig')
+    expect(clip.tracks).toHaveLength(1)
+    expect(adjusted.tracks).toHaveLength(3)
+    expect(adjusted.tracks[0].values).toEqual(wrist.values)
+    for (const track of adjusted.tracks.slice(1))
+      expect(
+        new THREE.Quaternion()
+          .fromArray(track.values)
+          .angleTo(new THREE.Quaternion())
+      ).toBeCloseTo(1.2, 5)
+    expect(
+      applyModularFingerPose(
+        new THREE.AnimationClip('idle2', 1, []),
+        customized,
+        'test-rig'
+      ).tracks
+    ).toHaveLength(0)
+    expect(() =>
+      parseModularHandProfile({
+        ...profile,
+        finger_poses: {
+          torch: {
+            clips: ['torch_idle1'],
+            quaternions: { LeftHand: rotation },
+          },
+        },
+      })
+    ).toThrow('자세')
+  })
+
   it('copies finger motion without mutating shared clips or keyframe buffers', () => {
     const ring = new THREE.QuaternionKeyframeTrack(
       'RightHandRing1.quaternion',

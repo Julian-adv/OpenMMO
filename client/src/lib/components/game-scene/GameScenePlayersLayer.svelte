@@ -664,6 +664,7 @@
     name={currentPlayer.name}
     title={currentPlayer.title}
     isCurrentPlayer={true}
+    floorLevel={localFloorLevel}
     playerState={effectivePlayerState}
     catchPresentation={localCatch}
     interactionAnim={effectiveInteractionAnim}

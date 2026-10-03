@@ -172,6 +172,7 @@
     type CapeRig,
   } from '../effects/cape-rig'
   import { OFFSCREEN_Y } from '../utils/house-geo-utils'
+  import { localPlayerRenderY } from '../managers/entity-ground'
 
   import type {
     ArmorEquipment,
@@ -627,7 +628,8 @@
 
   function attachOffhandModel(
     gltfScene: THREE.Object3D,
-    characterRoot: THREE.Object3D
+    characterRoot: THREE.Object3D,
+    worldModel: string
   ): boolean {
     const leftHandBone = findBoneByName(characterRoot, 'LeftHand')
     if (!leftHandBone) {
@@ -636,7 +638,7 @@
     }
 
     offhandObject = gltfScene.clone()
-    poseOffHandProp(offhandObject)
+    poseOffHandProp(offhandObject, worldModel, modelPath)
     leftHandBone.add(offhandObject)
     torchTipNode = resolveTipNode(
       offhandObject,
@@ -780,15 +782,15 @@
 
     if (!itemDefId) return
 
-    const itemDef = getItemDef(itemDefId)
-    if (!itemDef?.worldModel) return
+    const worldModel = getItemDef(itemDefId)?.worldModel
+    if (!worldModel) return
 
     const gen = ++offhandAttachGeneration
-    const offhandModelPath = getWeaponModelPath(itemDef.worldModel)
+    const offhandModelPath = getWeaponModelPath(worldModel)
     loadWarmGLB(offhandModelPath).then(async (gltf) => {
       if (gen !== offhandAttachGeneration || !clonedScene) return
 
-      attachOffhandModel(gltf.scene, clonedScene)
+      attachOffhandModel(gltf.scene, clonedScene, worldModel)
       attachedOffhandItemId = itemDefId
       if (isTorchItemDefId(itemDefId)) {
         attachTorchFire()
@@ -1351,8 +1353,9 @@
 
       applyCharacterArmor(newModelRoot, visibleArmor)
 
-      // Measure visible soles before starting animations.
-      cloned.position.y = computeSoleGroundOffset(newModelRoot)
+      // Modular models take their footwear offset from applyCharacterArmor.
+      if (!cloned.userData.modular_sole_offsets)
+        cloned.position.y = computeSoleGroundOffset(newModelRoot)
       // Compiles alongside the retargeting below; awaited before mounting.
       const warmed = warmupPipelines(
         threlte,
@@ -1676,7 +1679,11 @@
     // Vector3 mutations need a direct frame update.
     if (modelGroup) {
       const yOffset = playerState === 'interact' ? interactOffsetY : 0
-      modelGroup.position.set(position.x, position.y + yOffset, position.z)
+      const groundY =
+        isCurrentPlayer && !riding && !boating
+          ? localPlayerRenderY(floorLevel, position.x, position.y, position.z)
+          : position.y
+      modelGroup.position.set(position.x, groundY + yOffset, position.z)
       modelGroup.rotation.y = displayedRotation
     }
     if (hoverProxyGroup) {

@@ -17,7 +17,7 @@
     "assets/modular_human_male_01/parts/fitted/boots_barbarian.glb": "32d4a9f8e469c671be01dfdefb9bd84bb5b731ea308b66ade878ba505ac945a9",
     "assets/modular_human_male_01/parts/fitted/helmet_barbarian.glb": "a01e6155007cda2447c87926fabf5ccc8187782d8005f861c4f98debebd8eee1",
     "assets/modular_human_male_01/rigged_hand_tuned/animations.glb": "773e16688af0bf205d2f56c6dce7b947a3d74ee6d55b1bb76a92a9d6b993b10a",
-    "assets/modular_human_male_01/rigged_hand_tuned/hand-grips.json": "c94ab8d01ef40bd57c46e7beab045f1d86906a6d4013523227ee611d619151ab",
+    "assets/modular_human_male_01/rigged_hand_tuned/hand-grips.json": "c34d315d2794038dc44ee68ef4c4bc9b36133fb2d1895727dfddec5b2ad1ca89",
     "client/public/models/animations/locomotion.glb": "cfa79f5b5f82f3b26d0d0bc86e4293a919fbc28829a2c6192f19a4a488271da8",
     "client/public/models/animations/combat_melee.glb": "b29f34de8cf7523d176a634ceac7ab4791084994493adbfac5f59dda686a057b",
     "client/public/models/animations/social.glb": "789cea2a6670840e53f1ca0d5555b5c599765414ca52c7dd16cc7d49536fea95",
@@ -109,7 +109,7 @@
       "clips": ["bow_shoot"]
     },
     "animations/offhand.glb": {
-      "sha256": "4183700895c97ad7354c91f825bb925c0b5e2f044bf185414c4ff6295decd12e",
+      "sha256": "10800c4e7cc0cd984bfe504c750f335b7ac0a788579255cac4306f3ac551b8dd",
       "clips": ["torch_idle1", "torch_idle2", "torch_walk", "torch_run"]
     },
     "animations/enchant_armor.glb": {
@@ -131,7 +131,7 @@
     },
     "top_rogue.glb": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
     "pants_rogue.glb": "7178d06a9b2e18953e2c3fb0672df8424b688d6f4ccc47affc856a9084e8e81c",
-    "gloves_rogue.glb": "d9d192ffcd043abd629732e52c292fdadde1b3b1872d757ba51aeb68faa65fed",
+    "gloves_rogue.glb": "59024889a206492b9f1d11a5aafe73adda6e905e43956354abd527b6bf43b4bf",
     "boots_rogue.glb": "6e1ed626c06a4ad6c3f4b0c297739d623cebdfcf53da10c80780716a12419761"
   }
 }

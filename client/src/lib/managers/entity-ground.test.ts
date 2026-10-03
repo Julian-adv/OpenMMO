@@ -2,7 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { bridgeManager } from './bridgeManager'
 import { TerrainHeightManager } from './terrainHeightManager'
 import { VERTS_PER_SIDE, encodeHeight } from './terrain-height-types'
-import { entityGroundY } from './entity-ground'
+import { entityGroundY, localPlayerRenderY } from './entity-ground'
+import { housingManager } from './housingManager'
+import { houseFloorHeightAt } from './housing-queries'
+import { collectFloorGeometry } from '../utils/house-geo-floor'
+import { makeRoom } from '../utils/house-room.fixture'
+import type { HouseData } from '../types/housing'
 import * as terrainFiles from '../network/terrainFileSource'
 
 function fakeHeightManager(
@@ -19,6 +24,44 @@ describe('entityGroundY', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+  })
+
+  it('renders authoritative house floor centers on the actual slab surface', () => {
+    for (const floorLevel of [0, 1]) {
+      const room = makeRoom({ floorLevel, sizeX: 4, sizeZ: 4, wallHeight: 3 })
+      const house = { origin: { x: 0, y: 0, z: 0 }, rooms: [room] } as HouseData
+      const floors: Parameters<typeof collectFloorGeometry>[1] = []
+      collectFloorGeometry(room, floors, [])
+      floors[0].geo.computeBoundingBox()
+      const surfaceY = floors[0].geo.boundingBox!.max.y
+      vi.spyOn(housingManager, 'floorHeightAt').mockImplementation(
+        (floor, x, z) =>
+          houseFloorHeightAt(new Map([['house', house]]), floor, x, z)
+      )
+      const serverY = floorLevel * 3.1
+      expect(localPlayerRenderY(floorLevel, 2, serverY, 2)).toBeCloseTo(
+        surfaceY,
+        6
+      )
+      expect(localPlayerRenderY(floorLevel, 2, surfaceY, 2)).toBeCloseTo(
+        surfaceY,
+        6
+      )
+      expect(localPlayerRenderY(floorLevel, 2, surfaceY + 0.4, 2)).toBe(
+        surfaceY + 0.4
+      )
+      for (const floor of floors) floor.geo.dispose()
+    }
+  })
+
+  it('preserves terrain, dungeon and hidden player heights', () => {
+    const query = vi
+      .spyOn(housingManager, 'floorHeightAt')
+      .mockReturnValue(null)
+    expect(localPlayerRenderY(0, 2, 8, 2)).toBe(8)
+    expect(localPlayerRenderY(-1, 2, -4, 2)).toBe(-4)
+    query.mockReturnValue(0.05)
+    expect(localPlayerRenderY(0, 2, -10000, 2)).toBe(-10000)
   })
 
   it('uses loaded terrain at the query coordinates', () => {

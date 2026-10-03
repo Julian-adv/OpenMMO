@@ -677,6 +677,8 @@ export interface GroundClipsOptions {
   plantedClips?: readonly string[]
   /** Align the lowest sole sample while preserving the clip's vertical arc. */
   baselineClips?: readonly string[]
+  /** Extra lift for planted and baseline clips, leaving room for footwear deformation. */
+  soleClearance?: number
 }
 
 /** Correct retargeted hip height for the target model's proportions. */
@@ -691,7 +693,7 @@ export async function groundRetargetedClips(
   const yieldIfDue = createFrameYielder()
   const soleRestOffset =
     options.plantedClips?.length || options.baselineClips?.length
-      ? computeSoleGroundOffset(scene)
+      ? computeSoleGroundOffset(scene) - (options.soleClearance ?? 0)
       : 0
 
   for (const clip of clips) {
@@ -786,7 +788,7 @@ export function loadSharedPackClipsForModel(
   grounding: GroundClipsOptions = {}
 ): Promise<THREE.AnimationClip[]> {
   const wanted = new Set(clipNames)
-  const cacheKey = `${modelPath}::${[...wanted].sort().join(',')}::${grounding.restClip ?? ''}:${grounding.restOffset ?? 0}:${[...(grounding.plantedClips ?? [])].sort().join(',')}:${[...(grounding.baselineClips ?? [])].sort().join(',')}`
+  const cacheKey = `${modelPath}::${[...wanted].sort().join(',')}::${grounding.restClip ?? ''}:${grounding.restOffset ?? 0}:${[...(grounding.plantedClips ?? [])].sort().join(',')}:${[...(grounding.baselineClips ?? [])].sort().join(',')}:${grounding.soleClearance ?? 0}`
   const cached = sharedPackClipsByModel.get(cacheKey)
   if (cached) return cached
 

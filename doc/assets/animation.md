@@ -32,6 +32,46 @@
   The Meshy trial used Premium, 2026-09-28, task `01a0e679-0cd5-7095-9b8c-27cc9a9dedf2`,
   5 credits. Its original ownership terms and hashes remain in the source record.
 
+## Modular Torch Grip and Footwear Grounding (2026-10-03)
+
+- The user reported open fingers on both hands during torch idle and boots sinking
+  into a house floor. The retargeted torch clips retained rest rotations for most fingers.
+- `hand-grips.json` now stores a shared two-hand torch grip for `torch_idle1`,
+  `torch_idle2`, `torch_walk`, and `torch_run`. The right hand uses the approved
+  sword grip; the left fingers curl around the torch and the thumb closes the grip.
+  The preparation tool fills missing finger tracks and bakes the pose into the offhand pack.
+- Torch idle and walk use sole grounding sampled at 120 Hz. Run keeps its vertical
+  arc with a constant offset. All four clips include 2 mm clearance for footwear deformation.
+- Runtime footwear offsets are measured in the bind pose when assembling the model.
+  Equipment changes select the matching offset without resetting the animated skeleton.
+  This corrects the roughly 1 cm sinking observed after switching to barbarian boots.
+- Source and license remain the existing Adobe Mixamo packs and modular rig recorded above.
+  There are no new generated assets or paid generation calls. Only the modular offhand
+  animation pack and the hand profile are updated; the shared source pack is retained.
+- Validation: five footwear variants × four clips × 25 poses stayed above the floor,
+  with at least 0.53 mm clearance. Run retained 9.7–11.6 cm vertical variation.
+  The 108 wrist, arm, leg, and torso rotation tracks remained identical. GLB validation
+  reported zero errors or warnings; the Chromium comparison rendered without page errors.
+  The 45 related tests, frontend type checks, and lint passed.
+- Reproduce the animation output with `node tools/prepare-modular-character.mjs --pack offhand`.
+
+The user's follow-up screenshot exposed a separate house-floor height mismatch. The server
+uses the slab center for local player positions, while the rendered 10 cm slab has its top
+5 cm higher. The earlier pose comparison used a flat plane and missed this difference.
+`PlayerModel.svelte` now aligns the local player's display height to the nearby house surface,
+using the current floor level. This also covers stair ramps without changing server positions.
+Remote players already resample the surface height; mounts and boats keep their existing placement.
+The actual wooden slab comparison measured the barbarian sole 48.77 mm below its top before
+the correction and 1.23 mm above it afterward. First- and second-storey slab regression tests,
+48 related tests, type checks, and lint passed. The browser comparison reported no page errors.
+
+The torch handle ended inside the closed left fist. Its modular male attachment now uses
+the hand-local offset `(0.025, 0.08, 0.012)` metres, exposing the handle below the little
+finger and moving it 12 mm out of the palm. Gameplay and character preview share this
+placement for both torch variants. A Chromium comparison checked both sides of the grip;
+all four torch clips retained the attachment across four sampled poses each, and the flame
+tip followed the handle. Other rigs and offhand props kept their previous placement.
+
 ## Dagger Double Slash (2026-09-13)
 
 - Source: Adobe [Mixamo](https://www.mixamo.com/), confirmed by the contributor
