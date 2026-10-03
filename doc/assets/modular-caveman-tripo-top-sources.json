@@ -1,0 +1,112 @@
+{
+  "delivery_date": "2026-10-03",
+  "generation_date": null,
+  "provider": "Tripo Studio",
+  "subscription": {
+    "previous_user_report": "Approximately USD 20/month Studio subscription",
+    "previous_source_record": "doc/assets/modular-rogue-tripo-sources.json",
+    "current_file_tier_separately_confirmed": false
+  },
+  "license": "Subject to the original Tripo Studio output terms; retain original source/account provenance. No separate license grant inferred from file delivery.",
+  "delivery_path_windows": "Y:\\public\\web_downloads\\bone+necklace+3d+model.glb",
+  "delivery_path_linux": "/mnt/y/web_downloads/bone+necklace+3d+model.glb",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/source.glb",
+    "sha256": "6332d1538f9db297dcc62f307a330b2853f8e9e11bd300d3a0014cf57f146e89",
+    "bytes": 1979540,
+    "byte_identical_to_delivery": true
+  },
+  "generation_task_id": null,
+  "generation_model_version": null,
+  "submitted_prompt": null,
+  "submitted_images_confirmed": false,
+  "requested_polygon_count_confirmed": null,
+  "discussion_target_triangles": 2000,
+  "reference_artwork": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/top_caveman-front-v1.png",
+      "sha256": "3f7bbdb01b12715808726243d9eaea52d6daf909a67b91fc7369f6f946f9fcc0"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/top_caveman-side-v2.png",
+      "sha256": "5b97e49e52fcef955fbf31c7837e72a4e72d4b58033167402d7db4b676ee3ee3"
+    }
+  ],
+  "export_observed": {
+    "format": "GLB 2.0",
+    "generator": "Tripo",
+    "triangles": 2110,
+    "vertices_including_uv_splits": 2815,
+    "mesh_count": 1,
+    "material_count": 1,
+    "textures": [
+      {
+        "size": [
+          2048,
+          2048
+        ],
+        "format": "JPEG"
+      }
+    ],
+    "rigged": false,
+    "animations": 0
+  },
+  "review": {
+    "date": "2026-10-03",
+    "tool": "Blender 5.2.0 LTS; existing raw mesh diagnostics helper",
+    "report": "doc/assets/modular-caveman-tripo-top-review-v1.json",
+    "image": "doc/images/characters/modular_human_male_01/parts/caveman/tripo-top-raw-review-v1.png",
+    "image_sha256": "cf553735f0cd343253be826cbb7f7909f9f13c76c04f3eff8e97a8bf29b090ed",
+    "scope": "Raw front, side, back and underside views; separate display copies normalized, original geometry and UVs preserved. No body fit.",
+    "observations": [
+      "Front pelt is viewer-left and visually matches artwork.",
+      "Side and underside show a rounded open shoulder cavity with textured lining.",
+      "Diagnostics after welding at 1e-5 Blender units: three connected components, five boundary edges and nine nonmanifold edges; component attachment and these edges require fitting-stage inspection.",
+      "No degenerate faces or collapsed UV triangles in current diagnostic."
+    ],
+    "new_ai_generation_or_paid_calls": false,
+    "deleted_review_scene": {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/source-review.blend",
+      "sha256": "46200f5ff4e1574b2d3ca17d88689f3147d36a4a8c6d590a4717f56ec1e7ee5a",
+      "retained": false,
+      "deleted_on": "2026-10-04",
+      "reason": "Duplicate raw inspection scene; original source GLB and final editable scene retained"
+    }
+  },
+  "status": "User-selected fitting restored and rigged on 2026-10-04. Runtime bind and seven animations sampled; extreme-pose collision acceptance and game integration pending.",
+  "retained": true,
+  "fitting": {
+    "date": "2026-10-04",
+    "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/top_caveman.glb",
+    "sha256": "e495478ffdcf1d018a9c1faed604d91e92b6b2df91e1baf1599544800ad9ab9f",
+    "rig_id": "human_male_01_mixamo_candidate_v2",
+    "preserved_original_uv_and_texture": true,
+    "tools": [
+      "tools/fit-tripo-caveman-top.py",
+      "tools/validate-tripo-caveman-top.py",
+      "tools/blender-scripts/review_tripo_caveman_top.py"
+    ],
+    "report": "doc/assets/modular-caveman-tripo-top-fitting-v1.json",
+    "animation_report": "doc/assets/modular-caveman-tripo-top-animation-v1.json",
+    "visual_report": "doc/assets/modular-caveman-tripo-top-fitted-review-v1.json",
+    "user_selection": {
+      "reference": "doc/images/characters/modular_human_male_01/parts/caveman/tripo-top-preferred-reference.png",
+      "sha256": "e763fd44ed4284c9273f4eb94b1de7a4964c1abe641a3d0c068d79997dd8431b",
+      "provenance": "User-selected earlier Blender fitting screenshot supplied in this chat on 2026-10-04. No AI image generation.",
+      "preferred_shape_and_placement_preserved": true
+    },
+    "workshop": {
+      "url": "https://localhost:10004/modular-character-preview.html?outfit=caveman",
+      "report": "doc/assets/modular-caveman-tripo-top-workshop-v1.json",
+      "screenshot": "doc/images/characters/modular_human_male_01/parts/caveman/tripo-top-workshop-v1.png",
+      "source_glb_unchanged": true
+    },
+    "discarded_trial": {
+      "directory": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/unused-clearance-trial",
+      "reason": "User selected the earlier fitting and requested deletion of unnecessary intermediate files; trial history retained here",
+      "retained": false,
+      "deleted_on": "2026-10-04"
+    }
+  },
+  "cleanup_record": "doc/assets/modular-caveman-cleanup.json"
+}

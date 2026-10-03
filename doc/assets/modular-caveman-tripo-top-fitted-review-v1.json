@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-04",
+  "status": "User-selected fitting restored; rigged and reviewed with seven sampled game animations. Extreme-pose collisions and gameplay acceptance remain pending.",
+  "blender_version": "5.2.0 LTS",
+  "skin_mask": "No top skin masking; only alternate boot-ankle meshes hidden",
+  "user_selected_model_sha256": "e495478ffdcf1d018a9c1faed604d91e92b6b2df91e1baf1599544800ad9ab9f",
+  "budget": {
+    "top": 2110,
+    "base_including_hidden": 13891,
+    "base_visible": 13520,
+    "crop_hair": 933,
+    "assembled_including_hidden": 16934,
+    "assembled_visible": 16563,
+    "face": 1505,
+    "scope": "Base, crop hair and top only; pants, bracer, boots and weapons not included"
+  },
+  "editable": {
+    "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/caveman-top-fitting.blend",
+    "sha256": "8f69c54fe2c8bbf5731e6a572caf45215f32ce31eb5e077ed0a3778bbd2a34cd"
+  },
+  "images": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/tripo-top-fitted-v1-rest.png",
+      "sha256": "b9e8c45dea1c5f467f7256e7fc4e14257f5806de97dc55bc88dcf084ccdc28f8"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/tripo-top-fitted-v1-motion.png",
+      "sha256": "fccef2c937ad9803ea626d619d757303473a9743e72b9b5fc8cf43cfb65456d0"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/tripo-top-fitted-v1-hero.png",
+      "sha256": "d0c86bf8b9f729be9a7435be8f71d8d969d1cacdf84826746a63165b0bbbb85a"
+    }
+  ],
+  "fitting": {
+    "path": "doc/assets/modular-caveman-tripo-top-fitting-v1.json",
+    "sha256": "618e1153aa3a64a858b03fd1392f8b33a1c32bbe11cefaa8f7e1131eaa13862b"
+  },
+  "animation": {
+    "path": "doc/assets/modular-caveman-tripo-top-animation-v1.json",
+    "sha256": "56e2df1a809a27b8935f1d2f91083dd9db5f02b802790b9d1eed084129b33fdd"
+  }
+}

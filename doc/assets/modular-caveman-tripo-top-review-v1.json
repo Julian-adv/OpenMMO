@@ -1,0 +1,28 @@
+{
+  "triangles": 2110,
+  "mesh_count": 1,
+  "meshes": [
+    {
+      "name": "tripo_node_16b0c181-a8eb-4630-8f41-a5c263bd37ba",
+      "components_vertex_counts": [
+        884,
+        117,
+        54
+      ],
+      "boundary_edges": 5,
+      "nonmanifold_edges": 9,
+      "degenerate_faces": 0,
+      "collapsed_uv_triangles": 0
+    }
+  ],
+  "source_extent_blender": [
+    0.99951171875,
+    0.7290038466453552,
+    0.85693359375
+  ],
+  "rigged": false,
+  "source": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/source.glb",
+  "sha256": "6332d1538f9db297dcc62f307a330b2853f8e9e11bd300d3a0014cf57f146e89",
+  "status": "Raw Tripo source normalized for visual review; no body fitting or rigging.",
+  "vertices_including_uv_splits": 2815
+}

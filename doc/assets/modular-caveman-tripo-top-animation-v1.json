@@ -1,0 +1,1246 @@
+{
+  "status": "Numeric runtime bind and skinning review; visual review is separate",
+  "sources": [
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/top_caveman.glb",
+      "sha256": "e495478ffdcf1d018a9c1faed604d91e92b6b2df91e1baf1599544800ad9ab9f"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/locomotion.glb",
+      "sha256": "3bd119edc5f175d7bad0346c4012a5c4a1f529475d1293bd2a3d9837aab31b3a"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/combat_melee.glb",
+      "sha256": "c70372c773f9613646ef5e2c01e138db682449bc50d353ee23567bb2007d16fc"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/social.glb",
+      "sha256": "a9efe7a2d388011cdc039ca6778c2b3a929b07953941ee7bb7c50a511d4b083d"
+    },
+    {
+      "path": "doc/assets/modular-caveman-tripo-top-fitting-v1.json",
+      "sha256": "618e1153aa3a64a858b03fd1392f8b33a1c32bbe11cefaa8f7e1131eaa13862b"
+    }
+  ],
+  "bind_modular_part_passed": true,
+  "samples_per_clip": 13,
+  "clips": [
+    {
+      "name": "idle1",
+      "maximum_edge_stretch_ratio": 1.7138820988306622,
+      "stretch_p99": 1.1452378103566307,
+      "worst_time": 6.249999761581421,
+      "worst_edge": {
+        "a": 992,
+        "b": 989,
+        "length": 0.0016385639316518156,
+        "rest": [
+          [
+            -0.11356801262918999,
+            1.5901026307136337,
+            -0.010940507401225645
+          ],
+          [
+            -0.11314130137080994,
+            1.5894812702370475,
+            -0.00948561207226942
+          ]
+        ]
+      },
+      "maximum_seam_gap_m": 0,
+      "all_vertices_finite": true,
+      "chest_ornament_strain_p95": 1.8581514105164842e-10
+    },
+    {
+      "name": "walk",
+      "maximum_edge_stretch_ratio": 1.494313705800741,
+      "stretch_p99": 1.090694488006982,
+      "worst_time": 0.25833332538604736,
+      "worst_edge": {
+        "a": 1003,
+        "b": 990,
+        "length": 0.0010258564553986302,
+        "rest": [
+          [
+            -0.1145026569571117,
+            1.5904764676330658,
+            -0.011138162163465972
+          ],
+          [
+            -0.11356801262918999,
+            1.5901026307136337,
+            -0.010940507401225645
+          ]
+        ]
+      },
+      "maximum_seam_gap_m": 0,
+      "all_vertices_finite": true,
+      "chest_ornament_strain_p95": 1.8583201644162273e-10
+    },
+    {
+      "name": "run",
+      "maximum_edge_stretch_ratio": 1.5466462163840335,
+      "stretch_p99": 1.1261738547175886,
+      "worst_time": 0.36944443980852765,
+      "worst_edge": {
+        "a": 1003,
+        "b": 990,
+        "length": 0.0010258564553986302,
+        "rest": [
+          [
+            -0.1145026569571117,
+            1.5904764676330658,
+            -0.011138162163465972
+          ],
+          [
+            -0.11356801262918999,
+            1.5901026307136337,
+            -0.010940507401225645
+          ]
+        ]
+      },
+      "maximum_seam_gap_m": 0,
+      "all_vertices_finite": true,
+      "chest_ornament_strain_p95": 8.23015877671196e-10
+    },
+    {
+      "name": "jump",
+      "maximum_edge_stretch_ratio": 1.779295592958471,
+      "stretch_p99": 1.2298951801173343,
+      "worst_time": 0.7916666567325592,
+      "worst_edge": {
+        "a": 500,
+        "b": 512,
+        "length": 0.0018425075615388234,
+        "rest": [
+          [
+            -0.1033052416336842,
+            1.5090328792211907,
+            0.07460709240674264
+          ],
+          [
+            -0.10206488790672312,
+            1.5085043753440215,
+            0.07586289509751801
+          ]
+        ]
+      },
+      "maximum_seam_gap_m": 0,
+      "all_vertices_finite": true,
+      "chest_ornament_strain_p95": 9.57802948065023e-09
+    },
+    {
+      "name": "slash1",
+      "maximum_edge_stretch_ratio": 2.9618668159450623,
+      "stretch_p99": 1.430790614266149,
+      "worst_time": 0.7666666507720947,
+      "worst_edge": {
+        "a": 1019,
+        "b": 1013,
+        "length": 0.00162384510075408,
+        "rest": [
+          [
+            -0.11228169149949183,
+            1.5936141528839924,
+            -0.015000862703612039
+          ],
+          [
+            -0.11359253505735098,
+            1.59270948369312,
+            -0.014684420397419799
+          ]
+        ]
+      },
+      "maximum_seam_gap_m": 0,
+      "all_vertices_finite": true,
+      "chest_ornament_strain_p95": 9.119069055429918e-09
+    },
+    {
+      "name": "combat_idle",
+      "maximum_edge_stretch_ratio": 2.0955844549818385,
+      "stretch_p99": 1.5453073198329448,
+      "worst_time": 0.4277777671813965,
+      "worst_edge": {
+        "a": 1019,
+        "b": 1013,
+        "length": 0.00162384510075408,
+        "rest": [
+          [
+            -0.11228169149949183,
+            1.5936141528839924,
+            -0.015000862703612039
+          ],
+          [
+            -0.11359253505735098,
+            1.59270948369312,
+            -0.014684420397419799
+          ]
+        ]
+      },
+      "maximum_seam_gap_m": 0,
+      "all_vertices_finite": true,
+      "chest_ornament_strain_p95": 3.78901221509409e-09
+    },
+    {
+      "name": "sit_idle",
+      "maximum_edge_stretch_ratio": 2.380721989891861,
+      "stretch_p99": 1.2346991132155167,
+      "worst_time": 1.8055556217829387,
+      "worst_edge": {
+        "a": 1019,
+        "b": 1013,
+        "length": 0.00162384510075408,
+        "rest": [
+          [
+            -0.11228169149949183,
+            1.5936141528839924,
+            -0.015000862703612039
+          ],
+          [
+            -0.11359253505735098,
+            1.59270948369312,
+            -0.014684420397419799
+          ]
+        ]
+      },
+      "maximum_seam_gap_m": 0,
+      "all_vertices_finite": true,
+      "chest_ornament_strain_p95": 4.783615725756363e-10
+    }
+  ],
+  "strain_region": "Chest ornaments; separately validate the shoulder horn as a rigid group",
+  "rigid_ornament_edge_error_maximum": {
+    "horn": 4.827350518210594e-07,
+    "ornament": 1.378318585931737e-07
+  },
+  "rigid_ornament_validation_passed": true,
+  "body_surface_diagnostic": {
+    "method": "Posed unique vertices and triangle centers versus nearest body triangles; signed normal distance is diagnostic, not an exact intersection test",
+    "body_regions": [
+      "torso",
+      "neck",
+      "upper_arms",
+      "forearms",
+      "head"
+    ],
+    "pose_count": 91,
+    "samples": [
+      {
+        "clip": "idle1",
+        "time": 0,
+        "minimum_signed_distance_m": -0.01074819248361955,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.14604346920482955,
+          1.4851106155826541,
+          0.08476857924887327
+        ]
+      },
+      {
+        "clip": "idle1",
+        "time": 0.6944444179534912,
+        "minimum_signed_distance_m": -0.010599185957109264,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.14642851670851972,
+          1.485553949831245,
+          0.0861003677708192
+        ]
+      },
+      {
+        "clip": "idle1",
+        "time": 1.3888888359069824,
+        "minimum_signed_distance_m": -0.01081279967358104,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.14898635468255603,
+          1.4832936823759486,
+          0.09289588423783102
+        ]
+      },
+      {
+        "clip": "idle1",
+        "time": 2.0833332538604736,
+        "minimum_signed_distance_m": -0.011153067329853324,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.1526588992048874,
+          1.4812365686173248,
+          0.0946098498471759
+        ]
+      },
+      {
+        "clip": "idle1",
+        "time": 2.777777671813965,
+        "minimum_signed_distance_m": -0.011165924401467058,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.15237196490745616,
+          1.4815903012669345,
+          0.09488129661756876
+        ]
+      },
+      {
+        "clip": "idle1",
+        "time": 3.472222089767456,
+        "minimum_signed_distance_m": -0.010783579581788405,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.15686273921021307,
+          1.4826089471395019,
+          0.0905064182760263
+        ]
+      },
+      {
+        "clip": "idle1",
+        "time": 4.166666507720947,
+        "minimum_signed_distance_m": -0.010083637199247718,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.1552445682960585,
+          1.4856617693871972,
+          0.08502396079394266
+        ]
+      },
+      {
+        "clip": "idle1",
+        "time": 4.8611109256744385,
+        "minimum_signed_distance_m": -0.01038713444636137,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.15512560677242526,
+          1.4840067905042653,
+          0.09028721952955969
+        ]
+      },
+      {
+        "clip": "idle1",
+        "time": 5.55555534362793,
+        "minimum_signed_distance_m": -0.010693187282310062,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.15500372696345452,
+          1.4814230826127108,
+          0.09583752817349746
+        ]
+      },
+      {
+        "clip": "idle1",
+        "time": 6.249999761581421,
+        "minimum_signed_distance_m": -0.011366171826120411,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.15573780050317512,
+          1.4789762557613004,
+          0.09947940604554421
+        ]
+      },
+      {
+        "clip": "idle1",
+        "time": 6.944444179534912,
+        "minimum_signed_distance_m": -0.011166616576885991,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.1521142566385679,
+          1.4807246037336252,
+          0.09134359465685234
+        ]
+      },
+      {
+        "clip": "idle1",
+        "time": 7.638888597488403,
+        "minimum_signed_distance_m": -0.010980002090756755,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.1462507412398002,
+          1.484894126638548,
+          0.0816165401394643
+        ]
+      },
+      {
+        "clip": "idle1",
+        "time": 8.333333015441895,
+        "minimum_signed_distance_m": -0.010748198783733703,
+        "samples_below_minus_3mm": 5,
+        "worst_probe": [
+          -0.1460434612262495,
+          1.485110619225412,
+          0.08476857394816144
+        ]
+      },
+      {
+        "clip": "walk",
+        "time": 0,
+        "minimum_signed_distance_m": -0.011235188640692378,
+        "samples_below_minus_3mm": 4,
+        "worst_probe": [
+          -0.1226905229329468,
+          1.590599450159439,
+          -0.04622052635772935
+        ]
+      },
+      {
+        "clip": "walk",
+        "time": 0.08611110846201579,
+        "minimum_signed_distance_m": -0.010994680510016917,
+        "samples_below_minus_3mm": 4,
+        "worst_probe": [
+          -0.11181529108080827,
+          1.595947837067958,
+          -0.049676387897054135
+        ]
+      },
+      {
+        "clip": "walk",
+        "time": 0.17222221692403158,
+        "minimum_signed_distance_m": -0.009900729002433701,
+        "samples_below_minus_3mm": 5,
+        "worst_probe": [
+          -0.10716521206986218,
+          1.5672461706347003,
+          -0.05671546821994594
+        ]
+      },
+      {
+        "clip": "walk",
+        "time": 0.25833332538604736,
+        "minimum_signed_distance_m": -0.009325278931289118,
+        "samples_below_minus_3mm": 5,
+        "worst_probe": [
+          -0.08425042488537449,
+          1.5314241240387823,
+          -0.015870705831673552
+        ]
+      },
+      {
+        "clip": "walk",
+        "time": 0.34444443384806317,
+        "minimum_signed_distance_m": -0.008477895179715313,
+        "samples_below_minus_3mm": 4,
+        "worst_probe": [
+          -0.08457375031808577,
+          1.5255385003196824,
+          -0.04493790880319246
+        ]
+      },
+      {
+        "clip": "walk",
+        "time": 0.4305555423100789,
+        "minimum_signed_distance_m": -0.007717000858884462,
+        "samples_below_minus_3mm": 3,
+        "worst_probe": [
+          -0.07843251058296842,
+          1.5658508248039091,
+          -0.04747457757009277
+        ]
+      },
+      {
+        "clip": "walk",
+        "time": 0.5166666507720947,
+        "minimum_signed_distance_m": -0.008101584544844907,
+        "samples_below_minus_3mm": 3,
+        "worst_probe": [
+          -0.07670593391735264,
+          1.6031405227048954,
+          -0.055037386574595365
+        ]
+      },
+      {
+        "clip": "walk",
+        "time": 0.6027777592341105,
+        "minimum_signed_distance_m": -0.009312972310270652,
+        "samples_below_minus_3mm": 2,
+        "worst_probe": [
+          -0.0872277183327254,
+          1.5956425282078381,
+          -0.05474507778650555
+        ]
+      },
+      {
+        "clip": "walk",
+        "time": 0.6888888676961263,
+        "minimum_signed_distance_m": -0.009863772362986675,
+        "samples_below_minus_3mm": 2,
+        "worst_probe": [
+          -0.10223544950710217,
+          1.550988600615538,
+          -0.048265796743332645
+        ]
+      },
+      {
+        "clip": "walk",
+        "time": 0.7749999761581421,
+        "minimum_signed_distance_m": -0.010506818415933091,
+        "samples_below_minus_3mm": 2,
+        "worst_probe": [
+          -0.11599466411660109,
+          1.4996929453800139,
+          -0.04426906529187578
+        ]
+      },
+      {
+        "clip": "walk",
+        "time": 0.8611110846201578,
+        "minimum_signed_distance_m": -0.011025931950488817,
+        "samples_below_minus_3mm": 2,
+        "worst_probe": [
+          -0.12052514443586977,
+          1.5046919487721035,
+          -0.04267280021771084
+        ]
+      },
+      {
+        "clip": "walk",
+        "time": 0.9472221930821737,
+        "minimum_signed_distance_m": -0.01113612362878853,
+        "samples_below_minus_3mm": 2,
+        "worst_probe": [
+          -0.12547843925319033,
+          1.5536969540319376,
+          -0.04201256943745238
+        ]
+      },
+      {
+        "clip": "walk",
+        "time": 1.0333333015441895,
+        "minimum_signed_distance_m": -0.01123519035221414,
+        "samples_below_minus_3mm": 4,
+        "worst_probe": [
+          -0.12268750420254064,
+          1.5905805192113822,
+          -0.04621794785148733
+        ]
+      },
+      {
+        "clip": "run",
+        "time": 0,
+        "minimum_signed_distance_m": -0.010131053153952184,
+        "samples_below_minus_3mm": 5,
+        "worst_probe": [
+          -0.1181703037598174,
+          1.5977041787553503,
+          0.11079475889914096
+        ]
+      },
+      {
+        "clip": "run",
+        "time": 0.052777777115503945,
+        "minimum_signed_distance_m": -0.00991158772140692,
+        "samples_below_minus_3mm": 5,
+        "worst_probe": [
+          -0.11011612675118183,
+          1.6217651660943722,
+          0.11001691873254284
+        ]
+      },
+      {
+        "clip": "run",
+        "time": 0.10555555423100789,
+        "minimum_signed_distance_m": -0.007915482260428408,
+        "samples_below_minus_3mm": 5,
+        "worst_probe": [
+          -0.12737786720853841,
+          1.6445395154883091,
+          0.07412642239108715
+        ]
+      },
+      {
+        "clip": "run",
+        "time": 0.15833333134651184,
+        "minimum_signed_distance_m": -0.006776196132172684,
+        "samples_below_minus_3mm": 4,
+        "worst_probe": [
+          -0.1265974365049572,
+          1.6264833645136092,
+          0.0745252274386457
+        ]
+      },
+      {
+        "clip": "run",
+        "time": 0.21111110846201578,
+        "minimum_signed_distance_m": -0.0079493330980029,
+        "samples_below_minus_3mm": 2,
+        "worst_probe": [
+          -0.12968128816552008,
+          1.595493339992794,
+          0.07972683907535964
+        ]
+      },
+      {
+        "clip": "run",
+        "time": 0.2638888855775197,
+        "minimum_signed_distance_m": -0.009979455947711838,
+        "samples_below_minus_3mm": 3,
+        "worst_probe": [
+          -0.12869466131072016,
+          1.5866262338063226,
+          0.062489929653321306
+        ]
+      },
+      {
+        "clip": "run",
+        "time": 0.3166666626930237,
+        "minimum_signed_distance_m": -0.01291379271556224,
+        "samples_below_minus_3mm": 2,
+        "worst_probe": [
+          -0.11153023877009953,
+          1.6040438401913821,
+          0.05602121927059032
+        ]
+      },
+      {
+        "clip": "run",
+        "time": 0.36944443980852765,
+        "minimum_signed_distance_m": -0.013898898529140767,
+        "samples_below_minus_3mm": 2,
+        "worst_probe": [
+          -0.10955156205029544,
+          1.6279818033487148,
+          0.05335756459492822
+        ]
+      },
+      {
+        "clip": "run",
+        "time": 0.42222221692403156,
+        "minimum_signed_distance_m": -0.01264917147356513,
+        "samples_below_minus_3mm": 2,
+        "worst_probe": [
+          -0.12209122957166119,
+          1.644031842740499,
+          0.05220274514511677
+        ]
+      },
+      {
+        "clip": "run",
+        "time": 0.4749999940395355,
+        "minimum_signed_distance_m": -0.010758575845102944,
+        "samples_below_minus_3mm": 2,
+        "worst_probe": [
+          -0.1308333897844969,
+          1.6333040459598973,
+          0.058369480812809106
+        ]
+      },
+      {
+        "clip": "run",
+        "time": 0.5277777711550394,
+        "minimum_signed_distance_m": -0.008660352532012916,
+        "samples_below_minus_3mm": 2,
+        "worst_probe": [
+          -0.13433199526566358,
+          1.605393505487985,
+          0.08657188969684466
+        ]
+      },
+      {
+        "clip": "run",
+        "time": 0.5805555482705435,
+        "minimum_signed_distance_m": -0.008112441037192237,
+        "samples_below_minus_3mm": 4,
+        "worst_probe": [
+          -0.1353154492219513,
+          1.5955994173008285,
+          0.0847578110554254
+        ]
+      },
+      {
+        "clip": "run",
+        "time": 0.6333333253860474,
+        "minimum_signed_distance_m": -0.010131055292380701,
+        "samples_below_minus_3mm": 5,
+        "worst_probe": [
+          -0.11817029718066611,
+          1.5977042085662567,
+          0.11079470462386058
+        ]
+      },
+      {
+        "clip": "jump",
+        "time": 0,
+        "minimum_signed_distance_m": -0.01034709760236442,
+        "samples_below_minus_3mm": 30,
+        "worst_probe": [
+          -0.11385075097931034,
+          1.5349845573402583,
+          -0.004819680877748422
+        ]
+      },
+      {
+        "clip": "jump",
+        "time": 0.15833333134651184,
+        "minimum_signed_distance_m": -0.013581466178759067,
+        "samples_below_minus_3mm": 35,
+        "worst_probe": [
+          0.009412889138897151,
+          1.0080235038647078,
+          0.07544108403644523
+        ]
+      },
+      {
+        "clip": "jump",
+        "time": 0.3166666626930237,
+        "minimum_signed_distance_m": -0.027717194271456053,
+        "samples_below_minus_3mm": 51,
+        "worst_probe": [
+          0.039540851098767926,
+          0.7159990685096099,
+          0.03221896864025531
+        ]
+      },
+      {
+        "clip": "jump",
+        "time": 0.4749999940395355,
+        "minimum_signed_distance_m": -0.024476966154839016,
+        "samples_below_minus_3mm": 37,
+        "worst_probe": [
+          -0.10532475188113966,
+          1.4063155605935143,
+          -0.08133206000815021
+        ]
+      },
+      {
+        "clip": "jump",
+        "time": 0.6333333253860474,
+        "minimum_signed_distance_m": -0.028541760665783275,
+        "samples_below_minus_3mm": 39,
+        "worst_probe": [
+          -0.19077127837082616,
+          1.98833234557386,
+          -0.07977217558622247
+        ]
+      },
+      {
+        "clip": "jump",
+        "time": 0.7916666567325592,
+        "minimum_signed_distance_m": -0.07357930164880556,
+        "samples_below_minus_3mm": 166,
+        "worst_probe": [
+          -0.09160951796569033,
+          1.7944566591203635,
+          -0.10538582781430206
+        ]
+      },
+      {
+        "clip": "jump",
+        "time": 0.949999988079071,
+        "minimum_signed_distance_m": -0.04305742241076111,
+        "samples_below_minus_3mm": 84,
+        "worst_probe": [
+          -0.09618777517497396,
+          1.6224103742782656,
+          -0.02085946797700855
+        ]
+      },
+      {
+        "clip": "jump",
+        "time": 1.1083333194255829,
+        "minimum_signed_distance_m": -0.020240513388125124,
+        "samples_below_minus_3mm": 7,
+        "worst_probe": [
+          -0.17559018716845934,
+          1.4815994010242897,
+          0.0874908066193432
+        ]
+      },
+      {
+        "clip": "jump",
+        "time": 1.2666666507720947,
+        "minimum_signed_distance_m": -0.04594873938359128,
+        "samples_below_minus_3mm": 83,
+        "worst_probe": [
+          -0.04672571374014678,
+          0.7608040359373107,
+          0.1024619196930785
+        ]
+      },
+      {
+        "clip": "jump",
+        "time": 1.4249999821186066,
+        "minimum_signed_distance_m": -0.0575147613515097,
+        "samples_below_minus_3mm": 134,
+        "worst_probe": [
+          -0.016702140221693584,
+          0.8626400273502097,
+          0.07743519531003185
+        ]
+      },
+      {
+        "clip": "jump",
+        "time": 1.5833333134651184,
+        "minimum_signed_distance_m": -0.03192379563234056,
+        "samples_below_minus_3mm": 59,
+        "worst_probe": [
+          -0.024277600778459085,
+          1.0874731300917544,
+          0.08873462017883982
+        ]
+      },
+      {
+        "clip": "jump",
+        "time": 1.7416666448116302,
+        "minimum_signed_distance_m": -0.013393930305498188,
+        "samples_below_minus_3mm": 35,
+        "worst_probe": [
+          -0.017323048229854143,
+          1.160048975349587,
+          0.0884618826364304
+        ]
+      },
+      {
+        "clip": "jump",
+        "time": 1.899999976158142,
+        "minimum_signed_distance_m": -0.010347004322771573,
+        "samples_below_minus_3mm": 30,
+        "worst_probe": [
+          -0.1138327764723429,
+          1.534998392755459,
+          -0.00480714139326265
+        ]
+      },
+      {
+        "clip": "slash1",
+        "time": 0,
+        "minimum_signed_distance_m": -0.011360313838034293,
+        "samples_below_minus_3mm": 5,
+        "worst_probe": [
+          -0.09262027761979019,
+          1.4648136571942232,
+          -0.05846242933185936
+        ]
+      },
+      {
+        "clip": "slash1",
+        "time": 0.12777777512868246,
+        "minimum_signed_distance_m": -0.014928401779146531,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.13766163222858827,
+          1.455339901633841,
+          -0.05789633799445007
+        ]
+      },
+      {
+        "clip": "slash1",
+        "time": 0.2555555502573649,
+        "minimum_signed_distance_m": -0.019273662684803617,
+        "samples_below_minus_3mm": 14,
+        "worst_probe": [
+          -0.10736900166785353,
+          1.438434617543123,
+          -0.052152237691354165
+        ]
+      },
+      {
+        "clip": "slash1",
+        "time": 0.38333332538604736,
+        "minimum_signed_distance_m": -0.026329454743176172,
+        "samples_below_minus_3mm": 29,
+        "worst_probe": [
+          -0.092595905576549,
+          1.406995643382711,
+          0.08271648040494743
+        ]
+      },
+      {
+        "clip": "slash1",
+        "time": 0.5111111005147299,
+        "minimum_signed_distance_m": -0.028568819761185624,
+        "samples_below_minus_3mm": 45,
+        "worst_probe": [
+          -0.07090904565211469,
+          1.3910000397440065,
+          0.37247136604604086
+        ]
+      },
+      {
+        "clip": "slash1",
+        "time": 0.6388888756434122,
+        "minimum_signed_distance_m": -0.02326028110196105,
+        "samples_below_minus_3mm": 16,
+        "worst_probe": [
+          0.02491490752864345,
+          1.2982078890556867,
+          0.6515687692729876
+        ]
+      },
+      {
+        "clip": "slash1",
+        "time": 0.7666666507720947,
+        "minimum_signed_distance_m": -0.025444425218450157,
+        "samples_below_minus_3mm": 49,
+        "worst_probe": [
+          0.2133776837329589,
+          1.1140897153689646,
+          0.7947265399193727
+        ]
+      },
+      {
+        "clip": "slash1",
+        "time": 0.8944444259007772,
+        "minimum_signed_distance_m": -0.022486826586217635,
+        "samples_below_minus_3mm": 59,
+        "worst_probe": [
+          0.22963962537033308,
+          1.1713069195972532,
+          0.8400385967443283
+        ]
+      },
+      {
+        "clip": "slash1",
+        "time": 1.0222222010294597,
+        "minimum_signed_distance_m": -0.02374464722610016,
+        "samples_below_minus_3mm": 30,
+        "worst_probe": [
+          0.19070713212301252,
+          1.2012819287055614,
+          0.8115169047017178
+        ]
+      },
+      {
+        "clip": "slash1",
+        "time": 1.149999976158142,
+        "minimum_signed_distance_m": -0.022906387161619163,
+        "samples_below_minus_3mm": 14,
+        "worst_probe": [
+          0.08237123951136692,
+          1.3107669748135922,
+          0.6396812593752353
+        ]
+      },
+      {
+        "clip": "slash1",
+        "time": 1.2777777512868245,
+        "minimum_signed_distance_m": -0.021500814542016338,
+        "samples_below_minus_3mm": 14,
+        "worst_probe": [
+          -0.01159292826336795,
+          1.4086470945123146,
+          0.355520797925095
+        ]
+      },
+      {
+        "clip": "slash1",
+        "time": 1.405555526415507,
+        "minimum_signed_distance_m": -0.017769699036223222,
+        "samples_below_minus_3mm": 7,
+        "worst_probe": [
+          -0.08490738842816346,
+          1.4469946397435223,
+          0.1303336184478805
+        ]
+      },
+      {
+        "clip": "slash1",
+        "time": 1.5333333015441895,
+        "minimum_signed_distance_m": -0.01136032683260059,
+        "samples_below_minus_3mm": 5,
+        "worst_probe": [
+          -0.09262030382923502,
+          1.4648136545339794,
+          -0.058462205395137024
+        ]
+      },
+      {
+        "clip": "combat_idle",
+        "time": 0,
+        "minimum_signed_distance_m": -0.01752968685142441,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.043603182218922676,
+          1.4150707383197831,
+          -0.14579194212727117
+        ]
+      },
+      {
+        "clip": "combat_idle",
+        "time": 0.21388888359069824,
+        "minimum_signed_distance_m": -0.017546409624526232,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.04544842124597769,
+          1.417833115925273,
+          -0.14150109987418108
+        ]
+      },
+      {
+        "clip": "combat_idle",
+        "time": 0.4277777671813965,
+        "minimum_signed_distance_m": -0.017194452239434034,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.04310244131649054,
+          1.421670786290731,
+          -0.1398267365717736
+        ]
+      },
+      {
+        "clip": "combat_idle",
+        "time": 0.6416666507720947,
+        "minimum_signed_distance_m": -0.016243058932900643,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.03767892731389728,
+          1.4251698361460223,
+          -0.14371978229071528
+        ]
+      },
+      {
+        "clip": "combat_idle",
+        "time": 0.855555534362793,
+        "minimum_signed_distance_m": -0.015332624080318985,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.034083421721473585,
+          1.4251722878556554,
+          -0.14850460252531397
+        ]
+      },
+      {
+        "clip": "combat_idle",
+        "time": 1.0694444179534912,
+        "minimum_signed_distance_m": -0.015548489875165657,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.03589742736867965,
+          1.4224162386104284,
+          -0.14909456760277354
+        ]
+      },
+      {
+        "clip": "combat_idle",
+        "time": 1.2833333015441895,
+        "minimum_signed_distance_m": -0.016793081812955912,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.0397583612020952,
+          1.419074742253044,
+          -0.14682462715207942
+        ]
+      },
+      {
+        "clip": "combat_idle",
+        "time": 1.4972221851348877,
+        "minimum_signed_distance_m": -0.01790677433703436,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.0423903810149835,
+          1.4193860648846612,
+          -0.1404040499430019
+        ]
+      },
+      {
+        "clip": "combat_idle",
+        "time": 1.711111068725586,
+        "minimum_signed_distance_m": -0.01730943929671028,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.04108514339664833,
+          1.4245983862188079,
+          -0.13426688758121766
+        ]
+      },
+      {
+        "clip": "combat_idle",
+        "time": 1.9249999523162842,
+        "minimum_signed_distance_m": -0.01512465476668716,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.03835665389997955,
+          1.429628023985274,
+          -0.1368527623691515
+        ]
+      },
+      {
+        "clip": "combat_idle",
+        "time": 2.1388888359069824,
+        "minimum_signed_distance_m": -0.014029219315529116,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.03715175959041863,
+          1.4285895865613103,
+          -0.14425217620916783
+        ]
+      },
+      {
+        "clip": "combat_idle",
+        "time": 2.3527777194976807,
+        "minimum_signed_distance_m": -0.015254286910038006,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.03942973656494896,
+          1.4222510521910599,
+          -0.14811636937988185
+        ]
+      },
+      {
+        "clip": "combat_idle",
+        "time": 2.566666603088379,
+        "minimum_signed_distance_m": -0.017529703789118563,
+        "samples_below_minus_3mm": 6,
+        "worst_probe": [
+          -0.043523013002919476,
+          1.4151564721563135,
+          -0.1455627625125163
+        ]
+      },
+      {
+        "clip": "sit_idle",
+        "time": 0,
+        "minimum_signed_distance_m": -0.05190033008845662,
+        "samples_below_minus_3mm": 165,
+        "worst_probe": [
+          -0.10406868912244016,
+          0.986825421733877,
+          0.15802824440816826
+        ]
+      },
+      {
+        "clip": "sit_idle",
+        "time": 0.3611111243565877,
+        "minimum_signed_distance_m": -0.05160807381872342,
+        "samples_below_minus_3mm": 161,
+        "worst_probe": [
+          -0.10516713653604182,
+          0.984333888544042,
+          0.16343522383946152
+        ]
+      },
+      {
+        "clip": "sit_idle",
+        "time": 0.7222222487131754,
+        "minimum_signed_distance_m": -0.05156234074386161,
+        "samples_below_minus_3mm": 158,
+        "worst_probe": [
+          -0.10626828518629305,
+          0.982154489616183,
+          0.16760811111997684
+        ]
+      },
+      {
+        "clip": "sit_idle",
+        "time": 1.0833333730697632,
+        "minimum_signed_distance_m": -0.031167666889658517,
+        "samples_below_minus_3mm": 155,
+        "worst_probe": [
+          -0.12127676913046455,
+          0.9829649652851149,
+          0.14679971092798352
+        ]
+      },
+      {
+        "clip": "sit_idle",
+        "time": 1.4444444974263508,
+        "minimum_signed_distance_m": -0.05031499191063539,
+        "samples_below_minus_3mm": 170,
+        "worst_probe": [
+          -0.10583323650127852,
+          0.992951476051239,
+          0.15295131581109803
+        ]
+      },
+      {
+        "clip": "sit_idle",
+        "time": 1.8055556217829387,
+        "minimum_signed_distance_m": -0.05056407021970656,
+        "samples_below_minus_3mm": 167,
+        "worst_probe": [
+          -0.10587684595638014,
+          0.9941808940363942,
+          0.14891312547939503
+        ]
+      },
+      {
+        "clip": "sit_idle",
+        "time": 2.1666667461395264,
+        "minimum_signed_distance_m": -0.04948442232421171,
+        "samples_below_minus_3mm": 152,
+        "worst_probe": [
+          -0.10662434064673243,
+          0.9901064042442661,
+          0.15200712992577214
+        ]
+      },
+      {
+        "clip": "sit_idle",
+        "time": 2.5277778704961142,
+        "minimum_signed_distance_m": -0.05126381078131387,
+        "samples_below_minus_3mm": 145,
+        "worst_probe": [
+          -0.10546870655869889,
+          0.982086228163368,
+          0.1595120922418778
+        ]
+      },
+      {
+        "clip": "sit_idle",
+        "time": 2.8888889948527017,
+        "minimum_signed_distance_m": -0.05034532462191719,
+        "samples_below_minus_3mm": 134,
+        "worst_probe": [
+          -0.10528906707213137,
+          0.977319170890922,
+          0.16320035670386202
+        ]
+      },
+      {
+        "clip": "sit_idle",
+        "time": 3.2500001192092896,
+        "minimum_signed_distance_m": -0.050072876098926695,
+        "samples_below_minus_3mm": 129,
+        "worst_probe": [
+          -0.10513804846935615,
+          0.9770725563877631,
+          0.1603801393089892
+        ]
+      },
+      {
+        "clip": "sit_idle",
+        "time": 3.6111112435658774,
+        "minimum_signed_distance_m": -0.02983759560053611,
+        "samples_below_minus_3mm": 130,
+        "worst_probe": [
+          -0.12156053690155304,
+          0.9770767366250088,
+          0.14032602589232812
+        ]
+      },
+      {
+        "clip": "sit_idle",
+        "time": 3.972222367922465,
+        "minimum_signed_distance_m": -0.030156550980755672,
+        "samples_below_minus_3mm": 143,
+        "worst_probe": [
+          -0.12060043454624392,
+          0.9800250320474116,
+          0.14052265473025471
+        ]
+      },
+      {
+        "clip": "sit_idle",
+        "time": 4.333333492279053,
+        "minimum_signed_distance_m": -0.051900334056341424,
+        "samples_below_minus_3mm": 165,
+        "worst_probe": [
+          -0.10406869539640484,
+          0.986825417339138,
+          0.15802824975384788
+        ]
+      }
+    ],
+    "worst": {
+      "clip": "jump",
+      "time": 0.7916666567325592,
+      "minimum_signed_distance_m": -0.07357930164880556,
+      "samples_below_minus_3mm": 166,
+      "worst_probe": [
+        -0.09160951796569033,
+        1.7944566591203635,
+        -0.10538582781430206
+      ]
+    }
+  }
+}

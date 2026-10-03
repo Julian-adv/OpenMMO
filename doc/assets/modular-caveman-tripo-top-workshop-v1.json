@@ -1,0 +1,103 @@
+{
+  "url": "https://localhost:10004/modular-character-preview.html?outfit=caveman",
+  "samples": [
+    {
+      "clip": "idle1",
+      "phase": 0
+    },
+    {
+      "clip": "idle1",
+      "phase": 0.4167
+    },
+    {
+      "clip": "idle1",
+      "phase": 0.8333
+    },
+    {
+      "clip": "walk",
+      "phase": 0
+    },
+    {
+      "clip": "walk",
+      "phase": 0.4167
+    },
+    {
+      "clip": "walk",
+      "phase": 0.8333
+    },
+    {
+      "clip": "run",
+      "phase": 0
+    },
+    {
+      "clip": "run",
+      "phase": 0.4167
+    },
+    {
+      "clip": "run",
+      "phase": 0.8333
+    },
+    {
+      "clip": "jump",
+      "phase": 0
+    },
+    {
+      "clip": "jump",
+      "phase": 0.4167
+    },
+    {
+      "clip": "jump",
+      "phase": 0.8333
+    },
+    {
+      "clip": "slash1",
+      "phase": 0
+    },
+    {
+      "clip": "slash1",
+      "phase": 0.4167
+    },
+    {
+      "clip": "slash1",
+      "phase": 0.8333
+    },
+    {
+      "clip": "combat_idle",
+      "phase": 0
+    },
+    {
+      "clip": "combat_idle",
+      "phase": 0.4167
+    },
+    {
+      "clip": "combat_idle",
+      "phase": 0.8333
+    },
+    {
+      "clip": "sit_idle",
+      "phase": 0
+    },
+    {
+      "clip": "sit_idle",
+      "phase": 0.4167
+    },
+    {
+      "clip": "sit_idle",
+      "phase": 0.8333
+    }
+  ],
+  "errors": [],
+  "failed": [],
+  "stats": "조합 16,934삼각형 · 표시 16,563 · 얼굴 1,505",
+  "screenshot": {
+    "path": "doc/images/characters/modular_human_male_01/parts/caveman/tripo-top-workshop-v1.png",
+    "sha256": "69094e71078c2a66145be844b90655487a82f7ecb0f65ffe7fe5699316d38570",
+    "tool": "Headless Chrome / Playwright; captured from the actual Three.js preview"
+  },
+  "source": {
+    "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/top_caveman.glb",
+    "sha256": "e495478ffdcf1d018a9c1faed604d91e92b6b2df91e1baf1599544800ad9ab9f"
+  },
+  "date": "2026-10-04",
+  "scope": "Local workshop preview only; selected GLB unchanged; no production/game registration"
+}

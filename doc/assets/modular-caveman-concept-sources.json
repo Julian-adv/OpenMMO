@@ -1,0 +1,62 @@
+{
+  "version": 2,
+  "generation_date": "2026-10-03",
+  "status": "[미사용] Full-outfit concept for user review; no 3D generation, fitting or game integration.",
+  "service": "OpenAI Codex built-in ImageGen",
+  "tier": "ChatGPT Pro 20x",
+  "license": "OpenAI generated output terms; reference assets retain their recorded source and usage terms.",
+  "references": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/concepts/caveman-outfit-v1.png",
+      "role": "Edit target: preserve costume sheet and replace bare feet with fur-cuffed leather boots",
+      "sha256": "1f4ed9c0fa8279181927e655ec487fb08aaa817db1678de27cee3545b793270a",
+      "source_record": "doc/assets/modular-caveman-concept-sources.json#previous_versions",
+      "retained": false,
+      "deleted_on": "2026-10-04",
+      "deletion_reason": "Superseded intermediate removed at user request; prompt and hash retained"
+    }
+  ],
+  "prompt": "Use case: precise-object-edit.\nAsset type: OpenMMO primitive warrior costume concept sheet, footwear revision v2.\nInput image: the supplied full-body front/rear caveman outfit concept is the EDIT TARGET.\nPrimary request: Replace the bare feet and exposed ankles with practical rustic brown leather boots in BOTH front and rear views. Integrate the existing upper-calf fur wraps as the shaggy fur cuffs of the boots: retain their current height and fur color, and extend fitted dark umber worn hide boot shafts from beneath them down over ankles into enclosed rounded leather toes and heels. Add simple rawhide bindings around the lower shafts, subtle hand-stitched seams, and sturdy flat layered hide soles. A primitive fantasy handmade leather-and-fur boot design that matches the forearm bracers and brown hide loincloth. Cover all toes, feet and ankles completely. No metal armor, tall heels or modern rubber soles. Keep boots proportionate, closely fitted below the fur cuffs, not oversized.\nConstraints: Change ONLY footwear areas from the existing calf fur cuffs downward on all four depicted legs. Preserve the EXACT face, hair, beard, warpaint, skin, body proportions, pose, hands, right-shoulder fur and bone accent, necklace, belt, loincloth, thigh and knee exposure, background, lighting, full-body framing, two-view layout and image dimensions. Keep the same person and outfit in front and rear with identical boot materials, shaft height, binding placement and sole construction. Both figures stay in the same positions. Same rendering style. No text, labels, added props, watermark or extra views.",
+  "output": "doc/images/characters/modular_human_male_01/concepts/caveman-outfit-v2.png",
+  "sha256": "480c7421f68e79706eea86bc614cfe4631de0b66c5cc0c0f3a37f30b1042fead",
+  "review": {
+    "front_rear_shoulder_side": "Wearer right shoulder is consistent across views.",
+    "remaining": "Rear necklace ornament and fastening construction are concept proposals; confirm attachment and slot ownership before separate part generation. Image proportions are not measured 3D fit.",
+    "footwear": "Front and rear views show enclosed brown hide boots with the previous calf fur as cuffs, rawhide bindings and flat stitched soles."
+  },
+  "previous_versions": [
+    {
+      "version": 1,
+      "generation_date": "2026-10-03",
+      "status": "[미사용] Superseded file deleted at user request on 2026-10-04; generation record retained.",
+      "service": "OpenAI Codex built-in ImageGen",
+      "tier": "ChatGPT Pro 20x",
+      "license": "OpenAI generated output terms; reference assets retain their recorded source and usage terms.",
+      "references": [
+        {
+          "path": "client/public/character_concepts/caveman.webp",
+          "role": "Principal existing caveman costume and character styling reference",
+          "sha256": "f891cc2dae06a59b1267676bed6889aba57f78b7843f265a713807b043d56afc",
+          "source_record": "doc/assets/characters.md#other-classes"
+        },
+        {
+          "path": "doc/images/characters/modular_human_male_01/base-front.png",
+          "role": "Current male modular body proportion and facial structure reference",
+          "sha256": "5b9fa90790195fd9f85892452eee13c7daeb1d691bf2acbe65bbbde52502d7a8",
+          "source_record": "doc/assets/modular-human-male-01.md"
+        }
+      ],
+      "prompt": "Use case: stylized-concept.\nAsset type: OpenMMO male modular caveman / primitive warrior costume concept sheet, design review before modeling.\nPrimary request: Create a full-body FRONT and REAR costume concept using the existing caveman character concept as the principal reference. Faithfully retain its recognizable costume, materials and primitive fantasy character; refine construction clarity rather than inventing a different class.\nInput images: Image 1 is the principal outfit and character styling reference (caveman.webp). Image 2 is the current male modular body reference (base-front.png); use its height, natural muscular build, torso and slender calf proportions, not its underwear or forward-facing palms. The result is a NEW costume concept sheet, not a change to either input file.\nSubject: one adult male human, matching Image 2 body proportions and facial structure, with the long dark slightly braided hair, dark beard, sparse bone hair beads and restrained red cheek war paint of Image 1. No helmet. Bare chest and abdomen. Maintain the recognizable outfit from Image 1: small dark-brown fur shoulder piece on the WEARER'S RIGHT shoulder with a pale curved bone accent; a close-fitting necklace of ivory teeth and small stylized carved skull beads with one elongated central tooth; dark rough leather forearm bracers edged in brown fur and bound with thin ochre rawhide cords, bare hands; a broad dark leather waist belt with its small dull rectangular buckle and a controlled row of carved skull/bone and tooth pendants; layered opaque brown hide loincloth, lighter shaggy fur edging and short side/back fur panels, fully covered groin and buttocks, bare thighs and knees; brown fur upper-calf wraps with simple hidden rawhide fastening; bare ankles and bare feet as in the original. No modern tailoring, no plate armor, no large horns, no weapon or added props. Natural muted umber, dark brown, tan fur and ivory bone; subtle material variation.\nComposition: a clean landscape concept sheet on a plain warm light-gray/ivory background. Two equally sized complete full-body figures, FRONT on left and REAR on right, entirely visible from hair to toes, aligned at the same height and showing EXACTLY THE SAME costume and person. Neutral shallow A pose with arms separated slightly from the torso, relaxed straight legs, hands palms angled down/inward. Front view reveals costume structure; back view shows how shoulder piece, necklace cord, bracer bindings, belt and opaque rear hide panel actually attach. Keep shoulder asymmetry anatomically consistent: wearer right is image-left in front and image-right in rear. Keep accessories consistent in placement across the two views. Leave space between figures and clean margins. No text, labels, arrows, panel frames, palette swatches or watermarks.\nStyle: detailed painterly realistic fantasy RPG production concept art, matching the realism and material feel of Image 1 with clear silhouettes and soft neutral studio lighting. Crisp readable fur tufts, rough leather grain, rawhide binding and carved bone. Practical restrained detailing for eventual separate modular outfit parts. Costume design only; no claim of measured 3D fit. Avoid photoreal fashion photography, overly bulky calves, caricature proportions, exaggerated bodybuilder anatomy, extra limbs or fingers, clutter, scenery and dramatic action.",
+      "output": "doc/images/characters/modular_human_male_01/concepts/caveman-outfit-v1.png",
+      "sha256": "1f4ed9c0fa8279181927e655ec487fb08aaa817db1678de27cee3545b793270a",
+      "review": {
+        "front_rear_shoulder_side": "Wearer right shoulder is consistent across views.",
+        "remaining": "Rear necklace ornament and fastening construction are concept proposals; confirm attachment and slot ownership before separate part generation. Image proportions are not measured 3D fit."
+      },
+      "retained": false,
+      "deleted_on": "2026-10-04",
+      "deletion_reason": "Superseded intermediate removed at user request; prompt and hash retained"
+    }
+  ],
+  "cleanup_record": "doc/assets/modular-caveman-cleanup.json"
+}

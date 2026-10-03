@@ -5,6 +5,7 @@ import {
   type ModularOutfit,
 } from '../lib/utils/modularCharacter'
 import {
+  CAVEMAN_PREVIEW_OUTFIT,
   ROGUE_PREVIEW_OUTFIT,
   ROGUE_PREVIEW_PARTS,
   showPreviewOutfit,
@@ -46,6 +47,32 @@ const undressed: ModularOutfit = {
   boots: 'none',
   helmet: 'none',
 }
+
+describe('caveman workshop preview', () => {
+  it('restores bare skin after another top and hides the pelt when switching', () => {
+    const { body, parts, visible } = fixture()
+    const pelt = new THREE.SkinnedMesh()
+    parts.set('top_caveman', [pelt])
+    showPreviewOutfit(body, parts, ROGUE_PREVIEW_OUTFIT)
+    expect(visible('torso')).toBe(false)
+    const selected = showPreviewOutfit(body, parts, CAVEMAN_PREVIEW_OUTFIT)
+    expect(selected.has('top_caveman')).toBe(true)
+    expect(pelt.visible).toBe(true)
+    for (const mesh of body)
+      expect(mesh.visible).toBe(mesh.userData.region !== 'boot_ankles')
+    showPreviewOutfit(body, parts, KNIGHT_MODULAR_OUTFIT)
+    expect(pelt.visible).toBe(false)
+    expect(visible('torso')).toBe(false)
+  })
+
+  it('keeps bare skin when the top is unavailable', () => {
+    const { body, parts } = fixture()
+    const selected = showPreviewOutfit(body, parts, CAVEMAN_PREVIEW_OUTFIT)
+    expect(selected.has('top_caveman')).toBe(false)
+    for (const mesh of body)
+      expect(mesh.visible).toBe(mesh.userData.region !== 'boot_ankles')
+  })
+})
 
 describe('rogue workshop preview', () => {
   it('shows four candidate slots and keeps bare forearms and fingers visible', () => {

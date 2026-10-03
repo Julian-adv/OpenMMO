@@ -1,0 +1,569 @@
+{
+  "version": 3,
+  "generation_date": "2026-10-03",
+  "service": "OpenAI Codex built-in ImageGen",
+  "tier": "ChatGPT Pro 20x",
+  "license": "OpenAI generated output terms; original references retain their recorded source and usage terms.",
+  "status": "[미사용] Eight selected concept inputs retained. User-delivered Tripo top fitted and rigged on 2026-10-04; the user selected the earlier fitting appearance. Game integration and remaining part models pending.",
+  "reference": {
+    "path": "doc/images/characters/modular_human_male_01/concepts/caveman-outfit-v2.png",
+    "sha256": "480c7421f68e79706eea86bc614cfe4631de0b66c5cc0c0f3a37f30b1042fead",
+    "source_record": "doc/assets/modular-caveman-concept-sources.json"
+  },
+  "parts": [
+    {
+      "id": "top_caveman",
+      "slot": "chest",
+      "includes": "Wearer-right shoulder fur, bone accent, closed neck cord and bone necklace.",
+      "planned_copies": 1,
+      "background": "transparent",
+      "review": "Pelt viewer-left in both selected front and side. Side v2 defines a thin curved fur/hide cap with a rounded concave shoulder cavity opening downward, transparent empty interior and no triangular infill. Use side for shoulder volume and front for ornament identity. Actual 3D fit unverified.",
+      "views": [
+        {
+          "path": "doc/images/characters/modular_human_male_01/parts/caveman/top_caveman-front-v1.png",
+          "sha256": "3f7bbdb01b12715808726243d9eaea52d6daf909a67b91fc7369f6f946f9fcc0",
+          "size": [
+            1222,
+            1287
+          ],
+          "mode": "RGBA",
+          "corner_pixel": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "alpha_extrema": [
+            0,
+            255
+          ],
+          "view": "front"
+        },
+        {
+          "path": "doc/images/characters/modular_human_male_01/parts/caveman/top_caveman-side-v2.png",
+          "sha256": "5b97e49e52fcef955fbf31c7837e72a4e72d4b58033167402d7db4b676ee3ee3",
+          "size": [
+            1254,
+            1254
+          ],
+          "mode": "RGBA",
+          "corner_pixel": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "alpha_extrema": [
+            0,
+            255
+          ],
+          "view": "side",
+          "camera": "oblique side presentation, pelt viewer-left, necklace viewer-right"
+        }
+      ],
+      "superseded_views": [
+        {
+          "path": "doc/images/characters/modular_human_male_01/parts/caveman/top_caveman-back-v1.png",
+          "sha256": "b0f35909b530ec638b87a1a57c510dc8ef7d42111cb87840502b1aaf47a69222",
+          "size": [
+            1222,
+            1287
+          ],
+          "mode": "RGBA",
+          "corner_pixel": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "alpha_extrema": [
+            0,
+            255
+          ],
+          "view": "back",
+          "status": "[미사용] Superseded file deleted at user request on 2026-10-04; generation record retained.",
+          "retained": false,
+          "deleted_on": "2026-10-04",
+          "deletion_reason": "Superseded intermediate removed at user request; prompt and hash retained"
+        },
+        {
+          "path": "doc/images/characters/modular_human_male_01/parts/caveman/top_caveman-side-v1.png",
+          "sha256": "887f9023222adcbd7691574bf1096145941879d7c7972b7584cc77fdda49a993",
+          "size": [
+            1254,
+            1254
+          ],
+          "mode": "RGBA",
+          "corner_pixel": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "alpha_extrema": [
+            0,
+            255
+          ],
+          "view": "side",
+          "camera": "right front-oblique side view",
+          "status": "[미사용] Superseded file deleted at user request on 2026-10-04; generation record retained.",
+          "retained": false,
+          "deleted_on": "2026-10-04",
+          "deletion_reason": "Superseded intermediate removed at user request; prompt and hash retained"
+        }
+      ]
+    },
+    {
+      "id": "bracer_caveman_right",
+      "slot": "hands",
+      "includes": "One hollow right forearm bracer, both fur rims and three double rawhide bands; hands and fingers remain bare.",
+      "planned_copies": 2,
+      "background": "white",
+      "review": "Rear has vertical leather seam. Mirror for left bracer during modeling; this concept is not a glove.",
+      "views": [
+        {
+          "path": "doc/images/characters/modular_human_male_01/parts/caveman/bracer_caveman_right-front-v1.png",
+          "sha256": "d4f1ba5d7df2b8391db770f9299e90c83f68e2681459680003b713b03bd7994c",
+          "size": [
+            1024,
+            1536
+          ],
+          "mode": "RGB",
+          "corner_pixel": [
+            254,
+            254,
+            254
+          ],
+          "view": "front"
+        },
+        {
+          "path": "doc/images/characters/modular_human_male_01/parts/caveman/bracer_caveman_right-back-v1.png",
+          "sha256": "06782be1d672928a25af4adb2a0e88d41e71fba7151d51ef088be4a3663d603e",
+          "size": [
+            1024,
+            1536
+          ],
+          "mode": "RGB",
+          "corner_pixel": [
+            254,
+            255,
+            254
+          ],
+          "view": "back"
+        }
+      ]
+    },
+    {
+      "id": "pants_caveman",
+      "slot": "pants",
+      "includes": "Closed waist belt, carved bone ornaments, opaque front/rear hide panels and fur side/edge panels.",
+      "planned_copies": 1,
+      "background": "transparent",
+      "review": "Front has metal buckle; rear has keeper strap. Waist is hollow. Exact ornament counts and wrapping seams are modeling review items.",
+      "views": [
+        {
+          "path": "doc/images/characters/modular_human_male_01/parts/caveman/pants_caveman-front-v1.png",
+          "sha256": "a64e102a49d68acbe18f7eb34f7094d219ef14a327d7e29be5d96ad648d0b417",
+          "size": [
+            1145,
+            1374
+          ],
+          "mode": "RGBA",
+          "corner_pixel": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "alpha_extrema": [
+            0,
+            255
+          ],
+          "view": "front"
+        },
+        {
+          "path": "doc/images/characters/modular_human_male_01/parts/caveman/pants_caveman-back-v1.png",
+          "sha256": "89f5b2918b9be43c7b2fcf6d4035934894f706ec775f8e3f724b9a5d0a7e8f2b",
+          "size": [
+            1145,
+            1374
+          ],
+          "mode": "RGBA",
+          "corner_pixel": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "alpha_extrema": [
+            0,
+            255
+          ],
+          "view": "back"
+        }
+      ]
+    },
+    {
+      "id": "boot_caveman_left",
+      "slot": "boots",
+      "includes": "One left enclosed leather boot, upper-calf fur cuff, rawhide wraps and flat stitched hide sole.",
+      "planned_copies": 2,
+      "background": "white",
+      "review": "Corrected rear shows heel counter and rear shaft seam; front shows toe/vamp. Mirror for right boot during modeling.",
+      "views": [
+        {
+          "path": "doc/images/characters/modular_human_male_01/parts/caveman/boot_caveman_left-front-v1.png",
+          "sha256": "bee956743b16f6a9b16fcd7509170b890d694b3dfac06e3028e1377c4a6f9033",
+          "size": [
+            1024,
+            1536
+          ],
+          "mode": "RGB",
+          "corner_pixel": [
+            254,
+            255,
+            254
+          ],
+          "view": "front"
+        },
+        {
+          "path": "doc/images/characters/modular_human_male_01/parts/caveman/boot_caveman_left-back-v1.png",
+          "sha256": "7dec87602612959d489bb56f8e9e75c308ded082b7e03217087460041e99fd98",
+          "size": [
+            1024,
+            1536
+          ],
+          "mode": "RGB",
+          "corner_pixel": [
+            254,
+            253,
+            254
+          ],
+          "view": "back"
+        }
+      ]
+    }
+  ],
+  "generation_attempts": [
+    {
+      "id": "top_caveman",
+      "view": "front",
+      "stage": "initial-generation",
+      "prompt": "Use case: stylized-concept.\nAsset type: single-view isolated wearable equipment concept for subsequent Tripo image-to-3D generation in OpenMMO.\nInput image 1 is the approved primitive warrior full-costume v2: use it as the authoritative design reference. Extract and faithfully redraw ONLY the requested equipment. Keep its realistic worn brown hide, brown shaggy fur, ochre rawhide bindings and carved ivory bone materials. Preserve design, restrained details and original proportions. A beautiful crisp realistic production concept image, soft even neutral lighting, readable geometry and material texture.\nScene: genuinely transparent background, isolated empty wearable equipment maintaining its natural worn three-dimensional volume. No body, skin, hand, limb, mannequin, dummy, head, hair, anatomy, stand, display pedestal, floor or scenery. No text, labels, dimensions, arrows, extra inset views, duplicate object or other equipment. One object viewed from ONE direction only, centered large with clean margins and no clipped parts. No cast ground shadow. Full object visible. Hollow openings with thin physically believable edge thickness. Do not cap garment openings.\n\nRequested item: ONE upper-equipment ASSEMBLY consisting only of the wearer's RIGHT shoulder brown shaggy fur pad with its pale curved bone accent, plus the original ivory tooth-and-small-carved-skull necklace and the continuous thin dark leather neck cord. Preserve the necklace's dominant central elongated tooth and the small surrounding teeth/skull beads, and original scale relative to shoulder pad. Empty natural shoulder-shaped fur pad with dark leather underside, no large armor plates, no torso shirt or breastplate. The neck cord forms a complete wearable loop; its right side attaches discreetly to the inner edge of the shoulder pad so the assembly has explicit construction. Bare chest in the reference means there is no chest garment to invent. No waist belt or wrist equipment. Front camera faces the wearer's chest, so the RIGHT shoulder pad must appear on the VIEWER'S LEFT; the necklace descends toward center. Show the whole neck loop and shoulder assembly as a coherent worn-volume arrangement with no body occupying it.\nComposition: FRONT view, camera straight ahead at upper-chest height, minimal perspective with a very slight elevated angle sufficient to read the empty neck loop.\nOutput: one portrait-oriented isolated object image, transparent RGBA background.",
+      "references": [
+        "doc/images/characters/modular_human_male_01/concepts/caveman-outfit-v2.png"
+      ],
+      "transparent_background": true,
+      "output": "doc/images/characters/modular_human_male_01/parts/caveman/top_caveman-front-v1.png",
+      "sha256": "3f7bbdb01b12715808726243d9eaea52d6daf909a67b91fc7369f6f946f9fcc0",
+      "status": "selected"
+    },
+    {
+      "id": "bracer_caveman_right",
+      "view": "front",
+      "stage": "initial-generation",
+      "prompt": "Use case: stylized-concept.\nAsset type: single-view isolated wearable equipment concept for subsequent Tripo image-to-3D generation in OpenMMO.\nInput image 1 is the approved primitive warrior full-costume v2: use it as the authoritative design reference. Extract and faithfully redraw ONLY the requested equipment. Keep its realistic worn brown hide, brown shaggy fur, ochre rawhide bindings and carved ivory bone materials. Preserve design, restrained details and original proportions. A beautiful crisp realistic production concept image, soft even neutral lighting, readable geometry and material texture.\nScene: genuinely transparent background, isolated empty wearable equipment maintaining its natural worn three-dimensional volume. No body, skin, hand, limb, mannequin, dummy, head, hair, anatomy, stand, display pedestal, floor or scenery. No text, labels, dimensions, arrows, extra inset views, duplicate object or other equipment. One object viewed from ONE direction only, centered large with clean margins and no clipped parts. No cast ground shadow. Full object visible. Hollow openings with thin physically believable edge thickness. Do not cap garment openings.\n\nRequested item: ONE RIGHT FOREARM / WRIST BRACER only, as in the approved costume. A tapered dark brown hide sleeve with brown shaggy fur around the broader elbow-side upper rim and narrower wrist-side lower rim, three thin ochre rawhide binding bands with restrained diagonal connections. Match the original bracer design, handmade hide texture and thickness. Hollow tubular cuff, broader upper forearm opening and narrower lower wrist opening, both open, no inserted limb. No glove, finger tubes, palm cover or hand: the original hands remain bare. Forearm axis vertical, elbow end at top, hand end at bottom. One cuff only, not a left/right pair.\nComposition: FRONT / dorsal outer-forearm view, straight-on with very slight elevation revealing the hollow upper opening. Single side only.\nOutput: one portrait-oriented isolated object image, transparent RGBA background.",
+      "references": [
+        "doc/images/characters/modular_human_male_01/concepts/caveman-outfit-v2.png"
+      ],
+      "transparent_background": true,
+      "output": "doc/images/characters/modular_human_male_01/parts/caveman/sources/bracer_caveman_right-front-initial.png",
+      "sha256": "4f39f7085c69ef188675a969159abee48b19ea6bf2df7c0c255f8cded7502407",
+      "status": "[미사용] Superseded file deleted at user request on 2026-10-04; generation record retained.",
+      "retained": false,
+      "deleted_on": "2026-10-04",
+      "deletion_reason": "Superseded intermediate removed at user request; prompt and hash retained"
+    },
+    {
+      "id": "pants_caveman",
+      "view": "front",
+      "stage": "initial-generation",
+      "prompt": "Use case: stylized-concept.\nAsset type: single-view isolated wearable equipment concept for subsequent Tripo image-to-3D generation in OpenMMO.\nInput image 1 is the approved primitive warrior full-costume v2: use it as the authoritative design reference. Extract and faithfully redraw ONLY the requested equipment. Keep its realistic worn brown hide, brown shaggy fur, ochre rawhide bindings and carved ivory bone materials. Preserve design, restrained details and original proportions. A beautiful crisp realistic production concept image, soft even neutral lighting, readable geometry and material texture.\nScene: genuinely transparent background, isolated empty wearable equipment maintaining its natural worn three-dimensional volume. No body, skin, hand, limb, mannequin, dummy, head, hair, anatomy, stand, display pedestal, floor or scenery. No text, labels, dimensions, arrows, extra inset views, duplicate object or other equipment. One object viewed from ONE direction only, centered large with clean margins and no clipped parts. No cast ground shadow. Full object visible. Hollow openings with thin physically believable edge thickness. Do not cap garment openings.\n\nRequested item: ONE complete opaque primitive leather-and-fur loincloth / short wrap-skirt assembly with attached broad dark-brown waist belt, a small dull rectangular front buckle, and the original restrained ring of carved skull-and-tooth bone pendants. Preserve the original long tapered dark embossed hide FRONT panel with light tan shaggy fur edging, shorter brown fur side panels and an opaque matching rear panel behind. Maintain the worn full hip volume of a closed short wrap, not a flat skin cutout; completely empty with an OPEN oval waistband. No human legs or pelvis, no trousers extending to knees, no extra pouch or weapon. Bone waist pendants belong to this part; shoulder and necklace ornaments do not. The entire assembly from waist through the tips of the hide/fur panels must fit the canvas.\nComposition: FRONT view, camera faces the front buckle and front hide panel. Near orthographic straight-on with very slight elevation to reveal the hollow waist opening. Rear panel naturally occluded behind the front, no detached panel.\nOutput: one portrait-oriented isolated object image, transparent RGBA background.",
+      "references": [
+        "doc/images/characters/modular_human_male_01/concepts/caveman-outfit-v2.png"
+      ],
+      "transparent_background": true,
+      "output": "doc/images/characters/modular_human_male_01/parts/caveman/pants_caveman-front-v1.png",
+      "sha256": "a64e102a49d68acbe18f7eb34f7094d219ef14a327d7e29be5d96ad648d0b417",
+      "status": "selected"
+    },
+    {
+      "id": "boot_caveman_left",
+      "view": "front",
+      "stage": "initial-generation",
+      "prompt": "Use case: stylized-concept.\nAsset type: single-view isolated wearable equipment concept for subsequent Tripo image-to-3D generation in OpenMMO.\nInput image 1 is the approved primitive warrior full-costume v2: use it as the authoritative design reference. Extract and faithfully redraw ONLY the requested equipment. Keep its realistic worn brown hide, brown shaggy fur, ochre rawhide bindings and carved ivory bone materials. Preserve design, restrained details and original proportions. A beautiful crisp realistic production concept image, soft even neutral lighting, readable geometry and material texture.\nScene: genuinely transparent background, isolated empty wearable equipment maintaining its natural worn three-dimensional volume. No body, skin, hand, limb, mannequin, dummy, head, hair, anatomy, stand, display pedestal, floor or scenery. No text, labels, dimensions, arrows, extra inset views, duplicate object or other equipment. One object viewed from ONE direction only, centered large with clean margins and no clipped parts. No cast ground shadow. Full object visible. Hollow openings with thin physically believable edge thickness. Do not cap garment openings.\n\nRequested item: ONE LEFT FOOT BOOT from the latest reference, for later mirroring. Match the brown handmade hide boot, shaggy dark-brown upper-calf fur cuff, fitted dark leather shaft beneath, ochre rawhide diagonal ankle bindings, prominent hand stitching on rounded enclosed toe, and sturdy thin flat layered hide sole. Keep original calf cuff height and realistic male foot proportions, no oversized boot. Upper opening is a complete hollow fur-edged rim with dark leather interior, no inserted foot/leg. Completely closed toe and heel, no sandals. No armor, no modern rubber tread, no high heel. Shaft vertical and sole horizontal. ONE left boot only, no pair.\nComposition: FRONT view of the same anatomical LEFT boot, camera faces the toe and front shaft. Near orthographic with very slight elevation to reveal the hollow upper opening and toe shape. No side/rear inset.\nOutput: one portrait-oriented isolated object image, transparent RGBA background.",
+      "references": [
+        "doc/images/characters/modular_human_male_01/concepts/caveman-outfit-v2.png"
+      ],
+      "transparent_background": true,
+      "output": "doc/images/characters/modular_human_male_01/parts/caveman/sources/boot_caveman_left-front-initial.png",
+      "sha256": "b8cd050b1fcc5d78f9148d14b8efb2126b6d445ebd2edf88fdb8fe6169647400",
+      "status": "[미사용] Superseded file deleted at user request on 2026-10-04; generation record retained.",
+      "retained": false,
+      "deleted_on": "2026-10-04",
+      "deletion_reason": "Superseded intermediate removed at user request; prompt and hash retained"
+    },
+    {
+      "id": "top_caveman",
+      "view": "back",
+      "stage": "rear-generation",
+      "prompt": "Use case: stylized-concept.\nAsset type: single-view Tripo image-to-3D equipment input.\nInput image 1: full primitive warrior v2 outfit, supporting design reference. Input image 2: the generated FRONT of the requested part, authoritative same-object geometry and materials reference.\nPrimary request: Draw only the opposite REAR side of exactly the same wearable part, preserving identity and scale. REAR view of the identical upper assembly. Turn the whole wearable neck-loop and right-shoulder pad around 180 degrees about the wearer's vertical axis, keeping world vertical up. The wearer's RIGHT shoulder pad now appears on VIEWER'S RIGHT. Show its shaggy fur rear surface, leather underside edges and the reversed pale shoulder bone. Match the exact pad size, bone, cord, three small skulls/front teeth and central long front tooth from image 2. Bone pendants on the front of the necklace should be seen from their plain BACKS through the EMPTY neck loop, never move all of them to the nape or duplicate them. Include the tiny separate rear-nape skull-and-short-tooth pendant from the full outfit image 1 on the rear cord, restrained in scale. Same worn-volume layout and camera height as image 2, rear angle only. No human or torso, no duplicate necklace. A consistent same-object rear view, not a horizontal mirror of the front.\nStyle: crisp realistic fantasy equipment production illustration with soft even light, matching reference 2 material detail. One isolated EMPTY wearable object centered large with clean margins, full silhouette visible. Single rear view only. TRUE transparent RGBA background, perfectly clear empty space, NO brown glow, vignette, background gradient, cast shadow, smoke or halo behind the object. Transparency extends between disconnected decorative shapes and through hollow gaps. No body, skin, limb, mannequin, stand, head, hair, other equipment, text, labels or extra views.\nComposition: same portrait canvas orientation and object scale as image 2, ample margins.",
+      "references": [
+        "doc/images/characters/modular_human_male_01/concepts/caveman-outfit-v2.png",
+        "doc/images/characters/modular_human_male_01/parts/caveman/top_caveman-front-v1.png"
+      ],
+      "transparent_background": true,
+      "output": "doc/images/characters/modular_human_male_01/parts/caveman/top_caveman-back-v1.png",
+      "sha256": "b0f35909b530ec638b87a1a57c510dc8ef7d42111cb87840502b1aaf47a69222",
+      "retained_in_workspace": true,
+      "status": "[미사용] Superseded file deleted at user request on 2026-10-04; generation record retained.",
+      "retained": false,
+      "deleted_on": "2026-10-04",
+      "deletion_reason": "Superseded intermediate removed at user request; prompt and hash retained"
+    },
+    {
+      "id": "bracer_caveman_right",
+      "view": "back",
+      "stage": "rear-generation",
+      "prompt": "Use case: stylized-concept.\nAsset type: single-view Tripo image-to-3D equipment input.\nInput image 1: full primitive warrior v2 outfit, supporting design reference. Input image 2: the generated FRONT of the requested part, authoritative same-object geometry and materials reference.\nPrimary request: Draw only the opposite REAR side of exactly the same wearable part, preserving identity and scale. REAR / inner-forearm view of the SAME RIGHT tubular bracer in image 2, rotated 180 degrees around its vertical forearm axis. Broad elbow opening remains at TOP; narrow wrist opening at BOTTOM. Maintain both fur rims, exact cuff taper, leather length, rawhide colors and the THREE double narrow rawhide binding bands at exactly the same heights. Show the back construction as a subtle single vertical leather seam beneath the same continuous circumferential bands; wrapped cords must continue around the object, with tidy tucked ends. Do not create glove fingers, thumb openings or hand/palm skin. ONE hollow cuff only.\nStyle: crisp realistic fantasy equipment production illustration with soft even light, matching reference 2 material detail. One isolated EMPTY wearable object centered large with clean margins, full silhouette visible. Single rear view only. TRUE transparent RGBA background, perfectly clear empty space, NO brown glow, vignette, background gradient, cast shadow, smoke or halo behind the object. Transparency extends between disconnected decorative shapes and through hollow gaps. No body, skin, limb, mannequin, stand, head, hair, other equipment, text, labels or extra views.\nComposition: same portrait canvas orientation and object scale as image 2, ample margins.",
+      "references": [
+        "doc/images/characters/modular_human_male_01/concepts/caveman-outfit-v2.png",
+        "doc/images/characters/modular_human_male_01/parts/caveman/sources/bracer_caveman_right-front-initial.png"
+      ],
+      "transparent_background": true,
+      "output": "doc/images/characters/modular_human_male_01/parts/caveman/sources/bracer_caveman_right-back-initial.png",
+      "sha256": "4b1d74dfcb24dc5e202e844bbc9d0f0b1c98c71d8422b4cd1a942a858b8cc41e",
+      "retained_in_workspace": true,
+      "status": "[미사용] Superseded file deleted at user request on 2026-10-04; generation record retained.",
+      "retained": false,
+      "deleted_on": "2026-10-04",
+      "deletion_reason": "Superseded intermediate removed at user request; prompt and hash retained",
+      "deleted_reference_files": [
+        "doc/images/characters/modular_human_male_01/parts/caveman/sources/bracer_caveman_right-front-initial.png"
+      ]
+    },
+    {
+      "id": "pants_caveman",
+      "view": "back",
+      "stage": "rear-generation",
+      "prompt": "Use case: stylized-concept.\nAsset type: single-view Tripo image-to-3D equipment input.\nInput image 1: full primitive warrior v2 outfit, supporting design reference. Input image 2: the generated FRONT of the requested part, authoritative same-object geometry and materials reference.\nPrimary request: Draw only the opposite REAR side of exactly the same wearable part, preserving identity and scale. REAR view of the SAME closed primitive loincloth wrap and belt in image 2, rotated 180 degrees about vertical. Same waist height and width, dark brown belt leather, skull/tooth pendant style and density, tan fur edging, brown fur side panels and overall panel length. Use image 1 rear outfit for rear design: broad closed stitched brown belt back, small leather keeper strap, NO front metal buckle on the rear. One opaque tapering brown hide REAR panel covers buttocks when worn, same diamond embossed motifs and lighter tan shaggy fur border matching image 2. Side panels remain attached as part of the full hip-volume wrap. Open hollow waist, entirely empty with no pelvis or thighs. Single whole rear object, no other views.\nStyle: crisp realistic fantasy equipment production illustration with soft even light, matching reference 2 material detail. One isolated EMPTY wearable object centered large with clean margins, full silhouette visible. Single rear view only. TRUE transparent RGBA background, perfectly clear empty space, NO brown glow, vignette, background gradient, cast shadow, smoke or halo behind the object. Transparency extends between disconnected decorative shapes and through hollow gaps. No body, skin, limb, mannequin, stand, head, hair, other equipment, text, labels or extra views.\nComposition: same portrait canvas orientation and object scale as image 2, ample margins.",
+      "references": [
+        "doc/images/characters/modular_human_male_01/concepts/caveman-outfit-v2.png",
+        "doc/images/characters/modular_human_male_01/parts/caveman/pants_caveman-front-v1.png"
+      ],
+      "transparent_background": true,
+      "output": "doc/images/characters/modular_human_male_01/parts/caveman/pants_caveman-back-v1.png",
+      "sha256": "89f5b2918b9be43c7b2fcf6d4035934894f706ec775f8e3f724b9a5d0a7e8f2b",
+      "retained_in_workspace": true,
+      "status": "selected"
+    },
+    {
+      "id": "boot_caveman_left",
+      "view": "back",
+      "stage": "rear-generation",
+      "prompt": "Use case: stylized-concept.\nAsset type: single-view Tripo image-to-3D equipment input.\nInput image 1: full primitive warrior v2 outfit, supporting design reference. Input image 2: the generated FRONT of the requested part, authoritative same-object geometry and materials reference.\nPrimary request: Draw only the opposite REAR side of exactly the same wearable part, preserving identity and scale. REAR view of the EXACT SAME anatomical LEFT boot in image 2, rotated 180 degrees around its vertical shaft. Match the high brown fur cuff's exact height and volume, fitted dark worn hide shaft, ochre rawhide ankle bindings at the same levels, flat thin stitched hide sole and proportion. Camera directly faces heel and back shaft. Show the handmade center heel/back seam with short hand stitches as in image 1 rear boot. Toe points away and is naturally occluded by heel, do not show a second boot or a front toe in the foreground. Open fur-edged top rim with dark EMPTY leather lining, no foot or leg. Do not mirror anatomy to a right boot.\nStyle: crisp realistic fantasy equipment production illustration with soft even light, matching reference 2 material detail. One isolated EMPTY wearable object centered large with clean margins, full silhouette visible. Single rear view only. TRUE transparent RGBA background, perfectly clear empty space, NO brown glow, vignette, background gradient, cast shadow, smoke or halo behind the object. Transparency extends between disconnected decorative shapes and through hollow gaps. No body, skin, limb, mannequin, stand, head, hair, other equipment, text, labels or extra views.\nComposition: same portrait canvas orientation and object scale as image 2, ample margins.",
+      "references": [
+        "doc/images/characters/modular_human_male_01/concepts/caveman-outfit-v2.png",
+        "doc/images/characters/modular_human_male_01/parts/caveman/sources/boot_caveman_left-front-initial.png"
+      ],
+      "transparent_background": true,
+      "output": null,
+      "sha256": "48c92690f6d51629e398e2783fa2cea5252bbc719002daa367122fd678ea13f9",
+      "retained_in_workspace": false,
+      "status": "[미사용] Rejected: depicted toe/front rather than heel/rear.",
+      "deleted_reference_files": [
+        "doc/images/characters/modular_human_male_01/parts/caveman/sources/boot_caveman_left-front-initial.png"
+      ]
+    },
+    {
+      "id": "bracer_caveman_right",
+      "view": "front",
+      "stage": "alpha-cleanup-attempt",
+      "prompt": "Use case: background-extraction.\nPrimary request: Remove ONLY the brown luminous halo, gradient and diffuse background shadow around the supplied isolated wearable object. The entire background must be truly transparent with alpha zero outside the actual object, including any spaces around fur strands. Preserve fur edges and every visible strand, leather material, cords, stitches, geometry, openings, perspective, scale, object position, lighting on the object, image dimensions and all design details EXACTLY. Do not redraw or redesign the equipment. No color glow or drop shadow. Keep dark leather material inside the hollow item but remove backdrop beyond it. Result: clean transparent RGBA cutout of the IDENTICAL object, ready as a single-view 3D generation input.",
+      "references": [
+        "doc/images/characters/modular_human_male_01/parts/caveman/sources/bracer_caveman_right-front-initial.png"
+      ],
+      "transparent_background": true,
+      "output": null,
+      "sha256": "0e4008e02cfbe61017eb5b90e26796fcbfb927cdd1b33277fdf0db16bbe58ebe",
+      "retained_in_workspace": false,
+      "status": "[미사용] Rejected: requested removal of brown halo was not reliably reflected in the saved cutout. Replaced by white-background revision.",
+      "deleted_reference_files": [
+        "doc/images/characters/modular_human_male_01/parts/caveman/sources/bracer_caveman_right-front-initial.png"
+      ]
+    },
+    {
+      "id": "boot_caveman_left",
+      "view": "front",
+      "stage": "alpha-cleanup-attempt",
+      "prompt": "Use case: background-extraction.\nPrimary request: Remove ONLY the brown luminous halo, gradient and diffuse background shadow around the supplied isolated wearable object. The entire background must be truly transparent with alpha zero outside the actual object, including any spaces around fur strands. Preserve fur edges and every visible strand, leather material, cords, stitches, geometry, openings, perspective, scale, object position, lighting on the object, image dimensions and all design details EXACTLY. Do not redraw or redesign the equipment. No color glow or drop shadow. Keep dark leather material inside the hollow item but remove backdrop beyond it. Result: clean transparent RGBA cutout of the IDENTICAL object, ready as a single-view 3D generation input.",
+      "references": [
+        "doc/images/characters/modular_human_male_01/parts/caveman/sources/boot_caveman_left-front-initial.png"
+      ],
+      "transparent_background": true,
+      "output": null,
+      "sha256": "48cb65768cc16bd6ba4aa3720221a95e2eb14481c4cdf60bf0ac960091a04288",
+      "retained_in_workspace": false,
+      "status": "[미사용] Rejected: requested removal of brown halo was not reliably reflected in the saved cutout. Replaced by white-background revision.",
+      "deleted_reference_files": [
+        "doc/images/characters/modular_human_male_01/parts/caveman/sources/boot_caveman_left-front-initial.png"
+      ]
+    },
+    {
+      "id": "bracer_caveman_right",
+      "view": "front",
+      "stage": "white-background-revision",
+      "prompt": "Use case: precise-object-edit.\nPrimary request: Replace the entire background, dark brown vignette and luminous brown halo with a perfectly flat SOLID PURE WHITE #FFFFFF background. Keep the isolated wearable equipment, ALL actual fur strands, brown leather, ochre bindings, hand stitching, hollow interior, exact object geometry, pose, position, scale and lighting on the object unchanged. Clearly visible equipment on white. No transparency is requested for this output. NO gradient, brown glow, smoke, gray background, ground shadow, scene, text or extra object. Preserve existing portrait image dimensions. The white background must reach right up to the actual leather/fur silhouette. Render full equipment with the original rich material colors, do not remove or fade the equipment itself.",
+      "references": [
+        "doc/images/characters/modular_human_male_01/parts/caveman/sources/bracer_caveman_right-front-initial.png"
+      ],
+      "transparent_background": false,
+      "output": "doc/images/characters/modular_human_male_01/parts/caveman/bracer_caveman_right-front-v1.png",
+      "sha256": "d4f1ba5d7df2b8391db770f9299e90c83f68e2681459680003b713b03bd7994c",
+      "status": "selected",
+      "deleted_reference_files": [
+        "doc/images/characters/modular_human_male_01/parts/caveman/sources/bracer_caveman_right-front-initial.png"
+      ]
+    },
+    {
+      "id": "bracer_caveman_right",
+      "view": "back",
+      "stage": "white-background-revision",
+      "prompt": "Use case: precise-object-edit.\nPrimary request: Replace the entire background, dark brown vignette and luminous brown halo with a perfectly flat SOLID PURE WHITE #FFFFFF background. Keep the isolated wearable equipment, ALL actual fur strands, brown leather, ochre bindings, hand stitching, hollow interior, exact object geometry, pose, position, scale and lighting on the object unchanged. Clearly visible equipment on white. No transparency is requested for this output. NO gradient, brown glow, smoke, gray background, ground shadow, scene, text or extra object. Preserve existing portrait image dimensions. The white background must reach right up to the actual leather/fur silhouette. Render full equipment with the original rich material colors, do not remove or fade the equipment itself.",
+      "references": [
+        "doc/images/characters/modular_human_male_01/parts/caveman/sources/bracer_caveman_right-back-initial.png"
+      ],
+      "transparent_background": false,
+      "output": "doc/images/characters/modular_human_male_01/parts/caveman/bracer_caveman_right-back-v1.png",
+      "sha256": "06782be1d672928a25af4adb2a0e88d41e71fba7151d51ef088be4a3663d603e",
+      "status": "selected",
+      "deleted_reference_files": [
+        "doc/images/characters/modular_human_male_01/parts/caveman/sources/bracer_caveman_right-back-initial.png"
+      ]
+    },
+    {
+      "id": "boot_caveman_left",
+      "view": "front",
+      "stage": "white-background-revision",
+      "prompt": "Use case: precise-object-edit.\nPrimary request: Replace the entire background, dark brown vignette and luminous brown halo with a perfectly flat SOLID PURE WHITE #FFFFFF background. Keep the isolated wearable equipment, ALL actual fur strands, brown leather, ochre bindings, hand stitching, hollow interior, exact object geometry, pose, position, scale and lighting on the object unchanged. Clearly visible equipment on white. No transparency is requested for this output. NO gradient, brown glow, smoke, gray background, ground shadow, scene, text or extra object. Preserve existing portrait image dimensions. The white background must reach right up to the actual leather/fur silhouette. Render full equipment with the original rich material colors, do not remove or fade the equipment itself.",
+      "references": [
+        "doc/images/characters/modular_human_male_01/parts/caveman/sources/boot_caveman_left-front-initial.png"
+      ],
+      "transparent_background": false,
+      "output": "doc/images/characters/modular_human_male_01/parts/caveman/boot_caveman_left-front-v1.png",
+      "sha256": "bee956743b16f6a9b16fcd7509170b890d694b3dfac06e3028e1377c4a6f9033",
+      "status": "selected",
+      "deleted_reference_files": [
+        "doc/images/characters/modular_human_male_01/parts/caveman/sources/boot_caveman_left-front-initial.png"
+      ]
+    },
+    {
+      "id": "boot_caveman_left",
+      "view": "back",
+      "stage": "rear-correction",
+      "prompt": "Use case: stylized-concept.\nAsset type: ONE single REAR-view boot reference for Tripo image-to-3D.\nReference 1 is the full approved outfit FRONT and BACK sheet: look specifically at the RIGHT-HAND FIGURE's boot HEELS for camera direction. Reference 2 shows a FRONT-facing left boot and is ONLY a materials and height reference; the new output must be seen from the OPPOSITE SIDE.\nPrimary request: Draw ONE LEFT leather-and-fur boot seen DIRECTLY FROM BEHIND, heel towards the viewer and toes pointed AWAY from the viewer. The boot sits upright. The heel has a fairly narrow flat vertically rising heel counter with a short center stitched seam that CONTINUES STRAIGHT DOWN the back of the shaft to the heel sole. The bottom silhouette is a compact narrow squared rounded heel, approximately the same width as the low shaft. The broad rounded toe box, front instep mound, front vamp arc seam and top of toes MUST BE HIDDEN behind the shaft/heel; NONE visible in foreground. This is not a mirrored or repainted front view. Camera at lower-calf height, nearly orthographic looking at the back centerline.\nDesign: same dark brown handmade worn hide shaft, high shaggy brown upper-calf fur cuff, hollow open leather-lined upper rim, ochre rawhide ankle wraps continuing around the back, thin flat stitched leather sole as the reference front boot. Keep cuff height and width, shaft length and taper. Camera sees narrow heel stitching instead of the front toe stitching. Only ONE boot, no pair, foot, limb, skin, stand, mannequin or other equipment.\nBackground: perfectly flat SOLID PURE WHITE #FFFFFF, no alpha transparency, vignette, halo, gradient or ground shadow. One object centered on a portrait canvas with generous margin, full silhouette visible, same rich brown material detail as reference 2, soft even neutral light, no text.",
+      "references": [
+        "doc/images/characters/modular_human_male_01/concepts/caveman-outfit-v2.png",
+        "doc/images/characters/modular_human_male_01/parts/caveman/sources/boot_caveman_left-front-initial.png"
+      ],
+      "transparent_background": false,
+      "output": "doc/images/characters/modular_human_male_01/parts/caveman/boot_caveman_left-back-v1.png",
+      "sha256": "7dec87602612959d489bb56f8e9e75c308ded082b7e03217087460041e99fd98",
+      "status": "selected",
+      "deleted_reference_files": [
+        "doc/images/characters/modular_human_male_01/parts/caveman/sources/boot_caveman_left-front-initial.png"
+      ]
+    },
+    {
+      "id": "top_caveman",
+      "view": "side",
+      "stage": "replace-rejected-rear-with-side",
+      "prompt": "Use case: stylized-concept.\nAsset type: SINGLE RIGHT-SIDE view of OpenMMO primitive warrior upper equipment, for Tripo image-to-3D alongside an existing front reference.\nInput image 1: the isolated FRONT upper assembly, authoritative design/material reference. Input image 2: approved full costume, reference for how that equipment actually hangs on a shoulder and chest. Do not use or reproduce the rejected rear equipment illustration.\nPrimary request: Draw the EXACT SAME shoulder fur pad, pale curved shoulder bone accent, thin dark leather neck cord and ivory skull/teeth necklace from image 1, viewed in TRUE RIGHT-SIDE PROFILE as a dimensional WEARABLE assembly in its WORN position. The imaginary wearer is upright and faces the VIEWER'S LEFT. Camera is at the wearer's RIGHT side, looking horizontally toward the neck/shoulder; anterior chest is image-left, posterior back is image-right. There must be NO person or mannequin in the output.\nConstruction and camera: reconstruct the natural worn depth from image 2. The neck cord goes AROUND the base of a neck in a horizontally oriented closed oval loop near the TOP; from a side camera it is foreshortened, NOT a giant upright circular wreath laid flat toward camera. Front tooth/skull ornaments lie against the upper chest plane and hang DOWN on image-left in natural depth, with the long central tooth lowest. From this true side camera, those FRONT ornaments are mostly edge-on or naturally overlap one another; do NOT spread them in a frontal semicircular row or show all skull faces front-on. Show their thickness and leather ties. No new rear skull pendant, no duplicated tooth row on the back. The fur shoulder pad lies like a small curved saddle over the wearer's RIGHT shoulder adjacent to and below the neck loop, presenting its outer shoulder SIDE to the camera. The pale crescent-shaped bone is fixed to its outer surface by the same dark leather binding. Show pad thickness, shaggy fur surface, thin fitted leather underside and inner neck-cord attachment; preserve the actual bone shape and shoulder pad footprint from image 1. The shoulder cover should not become a long cape or huge vertical pelt. Keep pad, cord and necklace connected in one coherent empty wearable assembly, rather than exploded or laid-flat pieces.\nStyle: crisp realistic fantasy game production concept, matching references' brown shaggy fur, rough dark umber hide, ochre bindings and warm ivory carved bone; soft neutral light, readable silhouettes and surface detail.\nOutput: ONE isolated complete object, ONE right-profile side view ONLY, centered with generous margins on a square canvas. TRUE transparent RGBA background with no glow, shadow or vignette. No body, skin, mannequin, neck, head, hair, arm, chest, skeleton, support stand, clothing from other slots, inset front/back view, arrows, text, labels or watermark. Keep all necklace tips and pad edges visible inside the canvas. This is a side geometry reference, not a mirrored front view.",
+      "references": [
+        "doc/images/characters/modular_human_male_01/parts/caveman/top_caveman-front-v1.png",
+        "doc/images/characters/modular_human_male_01/concepts/caveman-outfit-v2.png"
+      ],
+      "transparent_background": true,
+      "output": "doc/images/characters/modular_human_male_01/parts/caveman/top_caveman-side-v1.png",
+      "sha256": "887f9023222adcbd7691574bf1096145941879d7c7972b7584cc77fdda49a993",
+      "status": "[미사용] Superseded file deleted at user request on 2026-10-04; generation record retained.",
+      "review": "Output is a right front-oblique side view, rather than a strict orthographic 90-degree profile; shows pad/ornament depth and overlap.",
+      "retained": false,
+      "deleted_on": "2026-10-04",
+      "deletion_reason": "Superseded intermediate removed at user request; prompt and hash retained"
+    },
+    {
+      "id": "top_caveman",
+      "view": "side",
+      "stage": "rounded-hollow-shoulder-correction",
+      "prompt": "Use case: precise-object-edit.\nAsset type: primitive warrior upper equipment SIDE reference for Tripo, shoulder-fit construction correction v2.\nInput image: EDIT TARGET, isolated shoulder fur pelt and bone necklace in right oblique side view.\nPrimary request: Correct ONLY the shoulder PELT shape on the RIGHT of this image so that a human shoulder can fit INSIDE it. Currently it is a long flat fur flap with a filled pointed triangular leather backing. Replace that flat triangular silhouette and backing with a SHORT CURVED HOLLOW SHOULDER CAP: a thin fur-covered hide shell shaped like an inverted U / arch in side view (∩). Its upper surface follows the ROUND convex top of a shoulder; its INNER surface is a broad ROUND CONCAVE cavity. The middle underneath must be genuinely EMPTY so the shoulder/upper arm can occupy it. The front and back sides of the shell descend as short fur-edged skirts around the shoulder, with a clearly visible wide semicircular arch between them OPEN DOWNWARD. No leather panel closing or filling this recess, no solid center. The empty cavity/background should be clearly visible inside and below the arch, with a curved thin dark leather lining visible only along the upper inside rim. Hollow shaped wearable saddle, not a flat pelt, solid fur block, donut with an enclosed drilled hole, or a long hanging pointed cape.\nMake the ROUND SHOULDER RECESS unmistakable from the existing side camera, occupying the middle/lower area of the pelt. The fur cap's outside retains the same shaggy brown fur; use a natural thin hide shell thickness, not bulky rigid metal armor. Keep the pale crescent bone accent and its brown binding fixed to the OUTER TOP of the newly curved cap, above the cavity. Preserve the same inner neck-cord attachment, with cord attached to the cap near the top so it does not span or block the empty shoulder cavity.\nInvariants: keep the necklace on the LEFT and its long central tooth, three skull pendants, small ivory beads and other tooth ornaments EXACTLY unchanged, including their positions, overlap, shape, count, materials, lighting and scale. Keep the neck loop, image dimensions, transparent background, right oblique side camera, isolated single assembly composition and rendering style. Change only the shoulder pelt geometry needed to produce the rounded hollow shoulder fit, and reposition its existing bone minimally to sit on the curved shell. NO person, inserted shoulder, skin, mannequin, arm, torso, stand, text, labels, cross-section inset or additional view. The empty ∩-shaped opening must remain transparent so the recess is readable.",
+      "references": [
+        "doc/images/characters/modular_human_male_01/parts/caveman/top_caveman-side-v1.png"
+      ],
+      "transparent_background": true,
+      "output": "doc/images/characters/modular_human_male_01/parts/caveman/sources/top_caveman-side-hollow-intermediate.png",
+      "sha256": "4eb69aa6f9717eef5b1f717993faeb54af25612a1e3c5b7b73f86a1413059745",
+      "status": "[미사용] Superseded file deleted at user request on 2026-10-04; generation record retained.",
+      "retained": false,
+      "deleted_on": "2026-10-04",
+      "deletion_reason": "Superseded intermediate removed at user request; prompt and hash retained",
+      "deleted_reference_files": [
+        "doc/images/characters/modular_human_male_01/parts/caveman/top_caveman-side-v1.png"
+      ]
+    },
+    {
+      "id": "top_caveman",
+      "view": "side",
+      "stage": "front-consistent-orientation-correction",
+      "prompt": "Use case: precise-object-edit.\nAsset type: orientation correction to the primitive warrior upper-equipment side reference.\nInput image 1: EDIT TARGET, the side illustration with the correctly hollow ∩-shaped fur shoulder cap. Input image 2: the established FRONT reference for consistent pelt placement on the VIEWER'S LEFT.\nPrimary request: HORIZONTALLY MIRROR THE ENTIRE FIRST IMAGE in place. The finished side illustration must put the FUR SHOULDER CAP and its pale crescent bone on the VIEWER'S LEFT, and the hanging SKULL/TOOTH NECKLACE on the VIEWER'S RIGHT, matching the left-side pelt placement of image 2. This is the same equipment viewed in the opposite side presentation orientation, not a redesign or exchange of attachments. Keep the neck cord connected to the same inner cap edge. Do not regenerate the necklace or add different skulls. A pure complete left-right reflection of image 1 is the intended edit.\nPreserve the rounded HOLLOW shoulder recess: a broad semicircular empty cavity in the middle underside of the cap, opening DOWNWARD with thin curved dark leather lining along its inner upper arch. The cavity remains truly empty/transparent; no leather or fur fills it. Keep the ∩-shaped shell, both short fur side skirts, fur strands, bone, bindings, pendant count, long central tooth, materials, lighting, scale and image dimensions exactly the same. Only the entire object's horizontal orientation changes. Preserve transparent background. No body, shoulder, mannequin, stand, text, arrows, extra views, new objects or other modifications.",
+      "references": [
+        "doc/images/characters/modular_human_male_01/parts/caveman/sources/top_caveman-side-hollow-intermediate.png",
+        "doc/images/characters/modular_human_male_01/parts/caveman/top_caveman-front-v1.png"
+      ],
+      "transparent_background": true,
+      "output": "doc/images/characters/modular_human_male_01/parts/caveman/top_caveman-side-v2.png",
+      "sha256": "5b97e49e52fcef955fbf31c7837e72a4e72d4b58033167402d7db4b676ee3ee3",
+      "status": "selected",
+      "review": "Pelt viewer-left, necklace viewer-right; rounded hollow cap underside visible.",
+      "deleted_reference_files": [
+        "doc/images/characters/modular_human_male_01/parts/caveman/sources/top_caveman-side-hollow-intermediate.png"
+      ]
+    }
+  ],
+  "archive": {
+    "path": "doc/images/characters/modular_human_male_01/parts/caveman/caveman-tripo-inputs-v3.zip",
+    "contains": "Eight selected images: upper front and hollow shoulder side v2, and bracer/pants/boot front/back."
+  },
+  "notes": [
+    "Images depict one equipment item or wearable assembly per view, with no human body.",
+    "Single right bracer and single left boot are modeling sources for mirrored pairs.",
+    "Concept geometry is not the measured 3D body interface. Confirm hollow edges, ornament fastening, fit and joint behavior before accepting generated meshes."
+  ],
+  "previous_archives": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/caveman-tripo-inputs-v1.zip",
+      "contains": "Only the eight selected front/back images; no intermediate source images.",
+      "status": "[미사용] Superseded file deleted at user request on 2026-10-04; generation record retained.",
+      "retained": false,
+      "deleted_on": "2026-10-04",
+      "deletion_reason": "Superseded intermediate removed at user request; prompt and hash retained"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/caveman-tripo-inputs-v2.zip",
+      "contains": "Eight selected images: upper front/side, and bracer/pants/boot front/back.",
+      "status": "[미사용] Superseded file deleted at user request on 2026-10-04; generation record retained.",
+      "retained": false,
+      "deleted_on": "2026-10-04",
+      "deletion_reason": "Superseded intermediate removed at user request; prompt and hash retained"
+    }
+  ],
+  "tripo_deliveries": {
+    "top_caveman": {
+      "source_record": "doc/assets/modular-caveman-tripo-top-sources.json",
+      "review": "doc/assets/modular-caveman-tripo-top-review-v1.json",
+      "delivery_date": "2026-10-03",
+      "status": "Raw fitting candidate; no body fit or rig."
+    }
+  },
+  "cleanup_record": "doc/assets/modular-caveman-cleanup.json"
+}

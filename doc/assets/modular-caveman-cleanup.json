@@ -1,0 +1,109 @@
+{
+  "date": "2026-10-04",
+  "reason": "User requested removal of unnecessary intermediate files before committing",
+  "removed_files": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/concepts/caveman-outfit-v1.png",
+      "sha256": "1f4ed9c0fa8279181927e655ec487fb08aaa817db1678de27cee3545b793270a",
+      "bytes": 2034600
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/top_caveman-back-v1.png",
+      "sha256": "b0f35909b530ec638b87a1a57c510dc8ef7d42111cb87840502b1aaf47a69222",
+      "bytes": 1035157
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/top_caveman-side-v1.png",
+      "sha256": "887f9023222adcbd7691574bf1096145941879d7c7972b7584cc77fdda49a993",
+      "bytes": 1284793
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/caveman-tripo-inputs-v1.zip",
+      "sha256": "5b48cc4b00e497dab1c54bcc27fb2d7a1075d01e31168d92503bb29b6cff8ab2",
+      "bytes": 14899379
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/caveman-tripo-inputs-v2.zip",
+      "sha256": "63d70ea2f46cfa711d8908791508143d178e3768c08ba75d679efab227c358d6",
+      "bytes": 15148145
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/source-review.blend",
+      "sha256": "46200f5ff4e1574b2d3ca17d88689f3147d36a4a8c6d590a4717f56ec1e7ee5a",
+      "bytes": 2069914
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/animation-snapshots.json",
+      "sha256": "fa296885ee2db0250d2a866ccced54a56ddbe9de7b06d53e6e4ecfccb404ee09",
+      "bytes": 119888
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/validation-poses.json",
+      "sha256": "bb193bfb9035e9e6f6c708725e45ec0584ff148030289cc523417291284e20fc",
+      "bytes": 1468466
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/sources/boot_caveman_left-front-initial.png",
+      "sha256": "b8cd050b1fcc5d78f9148d14b8efb2126b6d445ebd2edf88fdb8fe6169647400",
+      "bytes": 2360818
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/sources/bracer_caveman_right-back-initial.png",
+      "sha256": "4b1d74dfcb24dc5e202e844bbc9d0f0b1c98c71d8422b4cd1a942a858b8cc41e",
+      "bytes": 2695291
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/sources/bracer_caveman_right-front-initial.png",
+      "sha256": "4f39f7085c69ef188675a969159abee48b19ea6bf2df7c0c255f8cded7502407",
+      "bytes": 2848126
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/sources/top_caveman-side-hollow-intermediate.png",
+      "sha256": "4eb69aa6f9717eef5b1f717993faeb54af25612a1e3c5b7b73f86a1413059745",
+      "bytes": 1126189
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/unused-clearance-trial/README.txt",
+      "sha256": "5f1d0f2fb5e4596a26cd8e01d277c8251717404a0d014f5c2c2e5a14f8c1a4aa",
+      "bytes": 247
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/unused-clearance-trial/fit-tripo-caveman-top.py",
+      "sha256": "1a24126c9a72ca8c857065470f1966a62499e82919882e52bb5a133a16f10d26",
+      "bytes": 11795
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/unused-clearance-trial/modular-caveman-tripo-top-animation-v1.json",
+      "sha256": "bcb04490309cac45a7872afc3e83337cfd2dd0501a58c3d0bf76a1f4d6f7e871",
+      "bytes": 34358
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/unused-clearance-trial/modular-caveman-tripo-top-fitting-v1.json",
+      "sha256": "f09481389a2a9979927d439aa9b44256ad44e5ade27ebf6ee45631f080be49b7",
+      "bytes": 34233
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/unused-clearance-trial/top_caveman.glb",
+      "sha256": "748238e2e1d259de8559c91042a407800d35f71dd9fd9b4ca31f74d604faffbf",
+      "bytes": 2065640
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/unused-clearance-trial/tripo-top-fitted-v1-motion.png",
+      "sha256": "21e3e62e8f2c4bc4728b1eab2e03364851c64e99f3a9e10b20502b003ff89c54",
+      "bytes": 940770
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/unused-clearance-trial/tripo-top-fitted-v1-rest.png",
+      "sha256": "fe40d66022d506a7622c097f1122d5b3ba03cace39a4278f06ec4f33eb73c662",
+      "bytes": 461280
+    }
+  ],
+  "removed_count": 19,
+  "removed_bytes": 50639089,
+  "retained": [
+    "Final full outfit v2 and eight selected Tripo input images with ZIP v3",
+    "Original delivered GLB, user-selected rigged GLB and final editable Blender scene",
+    "Final review images, selected screenshot, source/prompt/hash records and reusable scripts"
+  ],
+  "regenerable_caches": "Animation snapshots and validation poses are regenerated by tools/validate-tripo-caveman-top.py before rendering"
+}
