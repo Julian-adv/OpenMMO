@@ -625,7 +625,7 @@
   "landClaim.deedConsumed": "土地証書を1枚消費しました。",
   "landClaim.deedNotConsumed": "土地証書は消費されていません。",
   "landClaim.confirmHint": "表示されている土地を領地として登録しますか？",
-  "landClaim.requirements": "レベル4以上で、所有者のいない開拓地が必要です。拡張する土地は自分の領地と辺で接している必要があります。",
+  "landClaim.requirements": "レベル{{level}}以上で、所有者のいない開拓地が必要です。拡張する土地は自分の領地と辺で接している必要があります。",
   "landClaim.deedCost": "登録に成功すると土地証書を1枚消費します。",
   "landClaim.checking": "確認中…",
   "landClaim.claiming": "登録中…",

@@ -625,7 +625,7 @@
   "landClaim.deedConsumed": "消耗了1張地契。",
   "landClaim.deedNotConsumed": "地契未被消耗。",
   "landClaim.confirmHint": "將標出的土地登記為你的領地？",
-  "landClaim.requirements": "需要達到4級，且土地必須是無主的開拓地。擴展領地時，新土地必須與現有領地共用一條邊。",
+  "landClaim.requirements": "需要達到{{level}}級，且土地必須是無主的開拓地。擴展領地時，新土地必須與現有領地共用一條邊。",
   "landClaim.deedCost": "登記成功後將消耗1張地契。",
   "landClaim.checking": "檢查中…",
   "landClaim.claiming": "登記中…",

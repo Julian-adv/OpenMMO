@@ -1,4 +1,5 @@
 use super::*;
+use onlinerpg_shared::land::LAND_CLAIM_MIN_LEVEL;
 use onlinerpg_terrain::land::{plot_addr, LandGrade, REGION_PLOTS};
 
 async fn add_estate_return_scroll(game: &GameState, name: &str) {
@@ -875,15 +876,15 @@ async fn land_rechecks_level_location_alive_floor_and_document() {
         .await
         .get_mut(&pid("Settler"))
         .unwrap()
-        .level = 3;
+        .level = LAND_CLAIM_MIN_LEVEL - 1;
     claim_at(&game, &auth, "Settler", 1, 1.0, 1.0).await;
-    rejected(&mut rx, "level 4");
+    rejected(&mut rx, &format!("level {LAND_CLAIM_MIN_LEVEL}"));
     game.players
         .write()
         .await
         .get_mut(&pid("Settler"))
         .unwrap()
-        .level = 4;
+        .level = LAND_CLAIM_MIN_LEVEL;
     game.players
         .write()
         .await
@@ -1195,14 +1196,20 @@ async fn land_preview_checks_level_grades_and_ownership_without_spending() {
         .await
         .get_mut(&pid("Settler"))
         .unwrap()
-        .level = 3;
-    preview_rejected(&game, &auth, &mut rx, "level 4").await;
+        .level = LAND_CLAIM_MIN_LEVEL - 1;
+    preview_rejected(
+        &game,
+        &auth,
+        &mut rx,
+        &format!("level {LAND_CLAIM_MIN_LEVEL}"),
+    )
+    .await;
     game.players
         .write()
         .await
         .get_mut(&pid("Settler"))
         .unwrap()
-        .level = 4;
+        .level = LAND_CLAIM_MIN_LEVEL;
     for (grade, reason) in [
         (LandGrade::Crown, "Crown"),
         (LandGrade::Reserved, "reserved"),

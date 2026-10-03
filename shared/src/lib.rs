@@ -22,6 +22,7 @@ pub mod housing;
 pub mod hunger;
 pub mod interest;
 pub mod inventory;
+pub mod land;
 pub mod landscaping;
 pub mod mana;
 pub mod meal;

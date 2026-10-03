@@ -625,7 +625,7 @@
   "landClaim.deedConsumed": "消耗了1张地契。",
   "landClaim.deedNotConsumed": "地契未被消耗。",
   "landClaim.confirmHint": "将标出的土地登记为你的领地？",
-  "landClaim.requirements": "需要达到4级，且土地必须是无主的开拓地。扩展领地时，新土地必须与现有领地共用一条边。",
+  "landClaim.requirements": "需要达到{{level}}级，且土地必须是无主的开拓地。扩展领地时，新土地必须与现有领地共用一条边。",
   "landClaim.deedCost": "登记成功后将消耗1张地契。",
   "landClaim.checking": "检查中…",
   "landClaim.claiming": "登记中…",

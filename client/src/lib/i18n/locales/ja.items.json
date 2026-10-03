@@ -123,7 +123,7 @@
   "iron_sword.name": "鉄の剣",
   "jerky.description": "塩漬けして干した肉。腹持ちがよく持ち運びも楽。",
   "jerky.name": "干し肉",
-  "land_deed.description": "立っている32 m四方の区画を領地にします。レベル4が必要で、取得に成功したときだけ消費します。",
+  "land_deed.description": "立っている32 m四方の区画を領地にします。レベル{{landClaimMinLevel}}が必要で、取得に成功したときだけ消費します。",
   "land_deed.name": "土地の権利書",
   "landscaping_palette_gravel.description": "使うと領地で「砂利道」を永久に使用できます。習得時のみ消費し、塗るには造園道具箱が必要です。",
   "landscaping_palette_gravel.name": "造園見本帳：砂利道",

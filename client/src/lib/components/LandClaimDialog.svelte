@@ -4,6 +4,7 @@
   import { landClaimDialog } from '../stores/landClaimStore'
   import { mountOverlay } from '../stores/overlayStack'
   import { networkManager } from '../network/socket'
+  import { land_claim_min_level } from '../wasm/onlinerpg_shared'
 
   function close() {
     if ($landClaimDialog?.status !== 'pending') landClaimDialog.set(null)
@@ -46,7 +47,7 @@
     {:else}
       <p>{$t('landClaim.confirmHint')}</p>
       <p>
-        {$t('landClaim.requirements')}
+        {$t('landClaim.requirements', { level: land_claim_min_level() })}
       </p>
       <p>{$t('landClaim.deedCost')}</p>
     {/if}

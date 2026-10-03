@@ -625,7 +625,7 @@
   "landClaim.deedConsumed": "토지 증서 1개를 사용했습니다.",
   "landClaim.deedNotConsumed": "토지 증서는 사용되지 않았습니다.",
   "landClaim.confirmHint": "표시된 땅을 내 영지로 등록할까요?",
-  "landClaim.requirements": "4레벨 이상이어야 하며, 소유자가 없는 개척지만 등록할 수 있습니다. 영지를 확장할 땅은 내 영지와 변이 맞닿아 있어야 합니다.",
+  "landClaim.requirements": "{{level}}레벨 이상이어야 하며, 소유자가 없는 개척지만 등록할 수 있습니다. 영지를 확장할 땅은 내 영지와 변이 맞닿아 있어야 합니다.",
   "landClaim.deedCost": "등록에 성공하면 토지 증서 1개를 사용합니다.",
   "landClaim.checking": "확인 중…",
   "landClaim.claiming": "등록 중…",

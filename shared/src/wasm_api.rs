@@ -560,6 +560,11 @@ pub fn dungeon_interior_doors(entrance_id: &str, depth: u8) -> Result<JsValue, J
 }
 
 #[wasm_bindgen]
+pub fn land_claim_min_level() -> u32 {
+    crate::land::LAND_CLAIM_MIN_LEVEL
+}
+
+#[wasm_bindgen]
 pub fn world_constants() -> Result<JsValue, JsError> {
     #[derive(Serialize)]
     #[serde(rename_all = "camelCase")]

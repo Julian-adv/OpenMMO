@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { get } from 'svelte/store'
 import { browserLocale } from './locale'
 import {
@@ -29,12 +29,18 @@ import jaItems from './locales/ja.items.json'
 import zhItems from './locales/zh-Hans.items.json'
 import zhHantItems from './locales/zh-Hant.items.json'
 import items from '../../../../data/items.json'
+import { initSharedWasm } from '../utils/ability.fixture'
+import * as sharedWasm from '../wasm/onlinerpg_shared'
+import { landClaimReason } from './landClaim'
+
+beforeAll(initSharedWasm)
 
 afterEach(() => {
   resetDebuffStore()
   languagePreference.set('en')
   vi.useRealTimers()
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 describe('language selection', () => {
@@ -140,6 +146,28 @@ describe('catalog integrity', () => {
 })
 
 describe('message rendering', () => {
+  it.each(['en', 'ko', 'ja', 'zh-Hans', 'zh-Hant'] as const)(
+    '%s uses the shared land level in descriptions and claim guidance',
+    (language) => {
+      vi.spyOn(sharedWasm, 'land_claim_min_level').mockReturnValue(17)
+      const description = itemDescription(getItemDef('land_deed')!, language)
+      const requirements = translate(
+        'landClaim.requirements',
+        { level: sharedWasm.land_claim_min_level() },
+        language
+      )
+      const reason = landClaimReason(
+        'You must be level 17 or higher to use a Land Deed.',
+        language
+      )
+      for (const text of [description, requirements, reason]) {
+        expect(text).toContain('17')
+        expect(text).not.toContain('{{')
+        expect(text).not.toContain('10')
+      }
+    }
+  )
+
   it('updates character titles and new chat messages with the game language', () => {
     languagePreference.set('en')
     const labels: string[] = []

@@ -123,7 +123,7 @@
   "iron_sword.name": "铁剑",
   "jerky.description": "腌制风干的肉，紧实且便于携带。",
   "jerky.name": "肉干",
-  "land_deed.description": "将脚下32 m × 32 m的地块划为领地。需要4级，仅成功取得土地时消耗。",
+  "land_deed.description": "将脚下32 m × 32 m的地块划为领地。需要{{landClaimMinLevel}}级，仅成功取得土地时消耗。",
   "land_deed.name": "地契",
   "landscaping_palette_gravel.description": "使用后永久解锁领地的「砂砾路」材质。仅学习时消耗，铺设需要园艺工具箱。",
   "landscaping_palette_gravel.name": "园艺样本册：砂砾路",

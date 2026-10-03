@@ -123,7 +123,7 @@
   "iron_sword.name": "鐵劍",
   "jerky.description": "醃製風乾的肉，緊實且便於攜帶。",
   "jerky.name": "肉乾",
-  "land_deed.description": "將腳下32 m × 32 m的地塊劃為領地。需要4級，僅成功取得土地時消耗。",
+  "land_deed.description": "將腳下32 m × 32 m的地塊劃為領地。需要{{landClaimMinLevel}}級，僅成功取得土地時消耗。",
   "land_deed.name": "地契",
   "landscaping_palette_gravel.description": "使用後永久解鎖領地的「砂礫路」材質。僅學習時消耗，鋪設需要園藝工具箱。",
   "landscaping_palette_gravel.name": "園藝樣本冊：砂礫路",

@@ -1,8 +1,13 @@
 use super::{auth_db, inventory::serialize_inventory, GameState};
 use crate::auth::AuthService;
 use crate::types::{Player, PlayerId, ServerMessage};
+use onlinerpg_shared::land::LAND_CLAIM_MIN_LEVEL;
 use onlinerpg_terrain::land::{plot_addr, LandGrade, PlotAddr};
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::LazyLock};
+
+static LAND_CLAIM_LEVEL_ERROR: LazyLock<String> = LazyLock::new(|| {
+    format!("You must be level {LAND_CLAIM_MIN_LEVEL} or higher to use a Land Deed.")
+});
 
 pub(super) fn plot_key(addr: PlotAddr) -> (i32, i32, u8) {
     let tile = (addr.index / 4) as i32;
@@ -417,8 +422,8 @@ fn claim_location(player: &Player, plot: (i32, i32, u8)) -> Result<PlotAddr, &'s
     if player.health == 0 {
         return Err("You must be alive to claim land.");
     }
-    if player.level < 4 {
-        return Err("You must be level 4 or higher to use a Land Deed.");
+    if player.level < LAND_CLAIM_MIN_LEVEL {
+        return Err(&LAND_CLAIM_LEVEL_ERROR);
     }
     if player.floor_level != 0 {
         return Err("Stand on outdoor ground to claim land.");

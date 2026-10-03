@@ -625,7 +625,7 @@
   "landClaim.deedConsumed": "One Land Deed was consumed.",
   "landClaim.deedNotConsumed": "Your Land Deed was not consumed.",
   "landClaim.confirmHint": "Claim the highlighted plot as your homestead?",
-  "landClaim.requirements": "Requires level 4 and unclaimed homestead land. Expansions must share an edge with your land.",
+  "landClaim.requirements": "Requires level {{level}} and unclaimed homestead land. Expansions must share an edge with your land.",
   "landClaim.deedCost": "One Land Deed will be consumed on success.",
   "landClaim.checking": "Checking…",
   "landClaim.claiming": "Claiming…",

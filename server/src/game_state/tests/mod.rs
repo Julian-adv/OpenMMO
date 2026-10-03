@@ -216,12 +216,12 @@ async fn estate_owner(
     let character = create_test_character(auth, account, name);
     let mut player = make_player(name, position.x, position.z);
     player.position.y = position.y;
-    player.level = 10;
+    player.level = onlinerpg_shared::land::LAND_CLAIM_MIN_LEVEL;
     game.add_player(player).await;
     game.register_player_character(
         &pid(name),
         character.id,
-        onlinerpg_shared::xp::xp_for_level(10),
+        onlinerpg_shared::xp::xp_for_level(onlinerpg_shared::land::LAND_CLAIM_MIN_LEVEL),
         attrs_with_cha(12),
         0,
         None,

@@ -123,7 +123,7 @@
   "iron_sword.name": "철검",
   "jerky.description": "소금에 절여 말린 고기. 알차고 휴대하기 좋습니다.",
   "jerky.name": "육포",
-  "land_deed.description": "현재 서 있는 32 m × 32 m 부지를 영지로 소유합니다. 4레벨부터 사용 가능하며 소유에 성공할 때만 소모됩니다.",
+  "land_deed.description": "현재 서 있는 32 m × 32 m 부지를 영지로 소유합니다. {{landClaimMinLevel}}레벨부터 사용 가능하며 소유에 성공할 때만 소모됩니다.",
   "land_deed.name": "토지 증서",
   "landscaping_palette_gravel.description": "사용하면 영지에서 자갈길 재질을 영구적으로 사용할 수 있습니다. 배울 때만 소모되며 칠하려면 조경 도구함이 필요합니다.",
   "landscaping_palette_gravel.name": "조경 견본집: 자갈길",

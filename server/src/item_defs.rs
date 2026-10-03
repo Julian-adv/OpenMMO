@@ -445,6 +445,13 @@ impl ItemDefs {
         let mut defs: HashMap<String, ItemDefinition> =
             serde_json::from_str(data).expect("Failed to parse items.json");
 
+        if let Some(deed) = defs.get_mut("land_deed") {
+            deed.description = deed.description.replace(
+                "{{landClaimMinLevel}}",
+                &onlinerpg_shared::land::LAND_CLAIM_MIN_LEVEL.to_string(),
+            );
+        }
+
         for storage in onlinerpg_shared::estate_storage::estate_storage_defs().values() {
             let item = defs.get(&storage.id).unwrap_or_else(|| {
                 panic!("estate storage '{}' has no item definition", storage.id)
@@ -705,6 +712,12 @@ mod tests {
     #[test]
     fn authenticated_item_use_is_data_driven() {
         let defs = ItemDefs::load();
+        let description = &defs.get("land_deed").unwrap().description;
+        assert!(description.contains(&format!(
+            "Requires level {}.",
+            onlinerpg_shared::land::LAND_CLAIM_MIN_LEVEL
+        )));
+        assert!(!description.contains("{{"));
         assert_eq!(
             defs.get("storage_chest").unwrap().authenticated_use_action,
             Some(AuthenticatedUseAction::EstateStorage)
