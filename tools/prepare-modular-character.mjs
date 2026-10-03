@@ -38,6 +38,8 @@ const rogue = JSON.parse(
 const rogueParts = ["top_rogue", "pants_rogue", "gloves_rogue", "boots_rogue"];
 parts.push(...rogueParts);
 const meshoptParts = new Set([
+  "hair_crop",
+  "top_plate",
   "gloves_rogue",
   "boots_barbarian",
   "gloves_barbarian",

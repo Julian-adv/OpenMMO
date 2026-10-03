@@ -1,0 +1,45 @@
+{
+  "source": {
+    "path": "assets/modular_human_male_01/parts/hair_shape_sources/hair_crop-before-rear-clearance-v1.glb",
+    "sha256": "6d754801583d1ae6147ac98cb55fac5237d5b43329e7273d5cb8977c91a0364a"
+  },
+  "output": {
+    "path": "assets/modular_human_male_01/parts/fitted/hair_crop.glb",
+    "sha256": "5aea523e5de994b8a2b6e15aef1589a3cbe7413514bc429194e1f0a940141686"
+  },
+  "vertices_changed": 659,
+  "triangles": 933,
+  "maximum_displacement_m": 0.0040000006556510925,
+  "preserved": [
+    "topology",
+    "front hairline",
+    "UV",
+    "textures",
+    "skin weights",
+    "rig"
+  ],
+  "source_and_license": "Existing modular male hair; local geometry edit, no additional generation",
+  "editable": {
+    "path": "assets/modular_human_male_01/parts/fitted/character_parts.blend",
+    "sha256": "3aa263560882997f3f166c4d36c4318117193fbe3eba6e57ce91e398012003df",
+    "maximum_position_error_m": 7.450580596923828e-09
+  },
+  "runtime": {
+    "path": "client/public/models/characters/modular_male/hair_crop.glb",
+    "sha256": "92cbf595f01534c694ed1f5eba344da84bf2c06fca7d3f2072bfa39c0b044ae3",
+    "bytes": 420960
+  },
+  "validation": {
+    "rear_clearance": {
+      "samples": 17288,
+      "penetrating_before": 765,
+      "penetrating_after": 0,
+      "minimum_clearance_m": 0.003474784313413734
+    },
+    "animation_clips": 51,
+    "animation_poses": 255,
+    "tests_passed": 42,
+    "glb_errors": 0,
+    "preexisting_glb_warnings": 2
+  }
+}
