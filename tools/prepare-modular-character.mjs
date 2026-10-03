@@ -37,7 +37,11 @@ const rogue = JSON.parse(
 ).fitting_candidate;
 const rogueParts = ["top_rogue", "pants_rogue", "gloves_rogue", "boots_rogue"];
 parts.push(...rogueParts);
-const meshoptParts = new Set(["gloves_rogue", "boots_barbarian"]);
+const meshoptParts = new Set([
+  "gloves_rogue",
+  "boots_barbarian",
+  "gloves_barbarian",
+]);
 const packs = [
   "locomotion",
   "combat_melee",
