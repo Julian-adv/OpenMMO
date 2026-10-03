@@ -293,12 +293,15 @@ async fn walk_inner(
             {
                 if status != Some(MoveStatus::Arrived) {
                     tracing::info!(
-                        player_id = ?s.self_player_id,
-                        ?status,
+                        npc = me.name,
+                        player_id = s.self_player_id.map(PlayerId::get),
+                        status = status.map(tracing::field::debug),
                         requested_x = target.x,
                         requested_z = target.z,
                         requested_floor = target_floor,
-                        position = ?me.position,
+                        x = me.position.x,
+                        y = me.position.y,
+                        z = me.position.z,
                         floor = s.self_floor_level,
                         "Schedule move completed near the target"
                     );

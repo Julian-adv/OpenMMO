@@ -231,12 +231,17 @@ async fn execute_walk(
         walk::Walked::Lost(walk::LostReason::PlayerDied) => MoveResult::Died,
         walk::Walked::Lost(reason) => {
             let s = state.lock().await;
+            let player = s.self_player.as_ref();
             warn!(
-                player_id = ?s.self_player_id,
+                npc = player.map(|p| p.name.as_str()),
+                player_id = s.self_player_id.map(onlinerpg_shared::PlayerId::get),
                 target = %to,
                 ?reason,
-                status = ?s.move_status,
-                position = ?s.self_player.as_ref().map(|p| p.position),
+                status = s.move_status.map(tracing::field::debug),
+                x = player.map(|p| p.position.x),
+                y = player.map(|p| p.position.y),
+                z = player.map(|p| p.position.z),
+                floor = s.self_floor_level,
                 "Move did not complete"
             );
             MoveResult::Blocked

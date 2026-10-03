@@ -3,6 +3,34 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+pub fn capture_logs() -> (
+    impl tracing::Subscriber + Send + Sync,
+    std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+) {
+    #[derive(Clone)]
+    struct Writer(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+    impl std::io::Write for Writer {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    let buffer = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let writer = Writer(buffer.clone());
+    let subscriber = tracing_subscriber::fmt()
+        .without_time()
+        .with_ansi(false)
+        .with_writer(move || writer.clone())
+        .finish();
+    (subscriber, buffer)
+}
+
 /// A solid-colour PNG, for the paths that take an uploaded image.
 pub fn test_png(size: u32, pixel: [u8; 4]) -> Vec<u8> {
     encode_png(&image::RgbaImage::from_pixel(

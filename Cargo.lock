@@ -1193,6 +1193,7 @@ dependencies = [
  "bytes",
  "clap",
  "futures-util",
+ "httparse",
  "image",
  "jsonwebtoken",
  "onlinerpg-shared",

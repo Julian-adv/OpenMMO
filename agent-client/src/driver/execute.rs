@@ -399,7 +399,13 @@ pub(super) async fn handle_response(
             if settle_action(state, prev, mark).await == ActionOutcome::Failed
                 && prev.takes_over_movement()
             {
-                warn!("Position lost by a failed {}", prev.label());
+                let s = state.lock().await;
+                warn!(
+                    npc = s.self_player.as_ref().map(|p| p.name.as_str()),
+                    player_id = s.self_player_id.map(onlinerpg_shared::PlayerId::get),
+                    action = prev.label(),
+                    "Position lost by a failed action"
+                );
                 lost_position = lost_position.or(Some(prev.label()));
             }
         }

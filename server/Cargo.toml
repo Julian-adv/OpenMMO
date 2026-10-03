@@ -9,6 +9,7 @@ onlinerpg-terrain = { path = "../terrain" }
 tokio = { version = "1.0", features = ["full"] }
 tokio-tungstenite = "0.26"
 bytes = "1"
+httparse = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 time = "0.3"

@@ -62,17 +62,6 @@ fn locked_stacks_do_not_merge_with_unlocked_items() {
 #[tokio::test]
 async fn ground_item_audit_links_single_and_batch_drops_to_merged_pickups() {
     use tracing::instrument::WithSubscriber;
-    #[derive(Clone)]
-    struct LogWriter(Arc<std::sync::Mutex<Vec<u8>>>);
-    impl std::io::Write for LogWriter {
-        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-            self.0.lock().unwrap().extend_from_slice(bytes);
-            Ok(bytes.len())
-        }
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
     let game = make_test_game_state("item_audit");
     let id = pid("keeper");
     game.add_player(make_player("keeper", 0.0, 0.0)).await;
@@ -86,13 +75,7 @@ async fn ground_item_audit_links_single_and_batch_drops_to_merged_pickups() {
         },
     );
     game.reserve_instance_ids(100).await;
-    let buffer = Arc::new(std::sync::Mutex::new(Vec::new()));
-    let writer = LogWriter(buffer.clone());
-    let subscriber = tracing_subscriber::fmt()
-        .without_time()
-        .with_ansi(false)
-        .with_writer(move || writer.clone())
-        .finish();
+    let (subscriber, buffer) = crate::test_util::capture_logs();
     async {
         game.drop_items(
             &id,

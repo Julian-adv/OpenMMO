@@ -1,5 +1,5 @@
 use crate::auth::AuthService;
-use crate::conn_limit::{resolve_client_ip, ConnectLimiter};
+use crate::conn_limit::ConnectLimiter;
 use crate::game::character_attributes::roll_character_attributes;
 use crate::game::character_hp::{level_one_max_hp, DEFAULT_CHARACTER_RACE};
 use crate::game_state::{
@@ -25,14 +25,15 @@ use std::time::{Duration, Instant};
 use tokio::net::TcpStream;
 use tokio::sync::{broadcast, mpsc, watch};
 use tokio_tungstenite::{
-    accept_hdr_async_with_config,
+    accept_async_with_config,
     tungstenite::{
-        handshake::server::{ErrorResponse, Request, Response},
         protocol::{frame::coding::CloseCode, CloseFrame, WebSocketConfig},
         Message,
     },
 };
 use tracing::{debug, error, info, warn};
+
+mod handshake;
 
 const FALLBACK_DEFAULT_MAX_HP: u32 = 13;
 
@@ -299,25 +300,39 @@ impl ConnectionState {
         }
     }
 
-    /// Merchant and Guard are reserved for operator-run NPCs. The web client
-    /// simply does not offer them, so this catches hand-rolled clients —
-    /// agent-clients included, which is the point.
+    /// Merchant and Guard are reserved for operator-run NPCs.
     fn require_selectable_class(&self, class: &CharacterClass) -> Result<(), Vec<ServerMessage>> {
         if self.is_official_npc || class.is_player_selectable() {
             return Ok(());
         }
         warn!(
-            "Rejected {:?} character for account {:?}: class is operator-only",
-            class, self.account_name
+            ip = %self.client_ip, account = self.account_name.as_deref(),
+            class = class.as_str(),
+            "Character rejected: class is operator-only"
         );
         Err(vec![ServerMessage::CharacterError {
             message: format!("The {} class is not available", class.as_str()),
         }])
     }
 
+    fn require_in_game(&self, request: &str) -> Option<PlayerId> {
+        if self.player_id.is_none() {
+            warn!(
+                ip = %self.client_ip, account = self.account_name.as_deref(),
+                "Received {request} from client that is not in game"
+            );
+        }
+        self.player_id
+    }
+
     fn require_not_in_game(&self, action: &str) -> Result<(), Vec<ServerMessage>> {
         if self.player_id.is_some() {
-            warn!("{} ignored because client is already in game", action);
+            warn!(
+                ip = %self.client_ip, account = self.account_name.as_deref(),
+                character = self.character_name.as_deref(),
+                player_id = self.player_id.map(PlayerId::get), action,
+                "Request ignored because client is already in game"
+            );
             Err(vec![ServerMessage::CharacterError {
                 message: format!("Cannot {} while in game", action),
             }])
@@ -327,8 +342,7 @@ impl ConnectionState {
     }
 }
 
-/// Per-server services every connection needs, bundled so the accept loop
-/// clones one `Arc` per connection instead of four.
+/// Services shared by all connections.
 pub struct ServerContext {
     pub geoip: crate::geoip::GeoIp,
     pub game_state: Arc<GameState>,
@@ -337,9 +351,6 @@ pub struct ServerContext {
     pub connect_limiter: ConnectLimiter,
 }
 
-// `ErrorResponse` is a large http::Response; the shape is tungstenite's
-// handshake-callback signature, not ours.
-#[allow(clippy::result_large_err)]
 pub async fn handle_connection(
     stream: TcpStream,
     peer: SocketAddr,
@@ -359,20 +370,8 @@ pub async fn handle_connection(
         .max_frame_size(Some(MAX_WS_MESSAGE_BYTES))
         .read_buffer_size(WS_READ_BUFFER_BYTES);
 
-    // `X-Real-IP` rides the upgrade request and is gone once the handshake
-    // future resolves, so catch it in the callback.
     let forwarded_ip: OnceLock<IpAddr> = OnceLock::new();
-    let on_request = |req: &Request, res: Response| -> Result<Response, ErrorResponse> {
-        if let Some(ip) = req
-            .headers()
-            .get("x-real-ip")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|v| v.trim().parse::<IpAddr>().ok())
-        {
-            let _ = forwarded_ip.set(ip);
-        }
-        Ok(res)
-    };
+    let stream = handshake::HandshakeStream::new(stream, peer, &forwarded_ip);
 
     let handshake = tokio::select! {
         biased;
@@ -380,17 +379,19 @@ pub async fn handle_connection(
             info!("Closing pending connection for server shutdown");
             return;
         }
-        result = accept_hdr_async_with_config(stream, on_request, Some(ws_config)) => result,
+        result = accept_async_with_config(stream, Some(ws_config)) => result,
     };
+    let client_ip = forwarded_ip.get().copied().unwrap_or(peer.ip());
     let ws_stream = match handshake {
         Ok(ws) => ws,
         Err(e) => {
-            error!("WebSocket handshake failed from {}: {}", peer.ip(), e);
+            error!(
+                ip = %client_ip, peer_ip = %peer.ip(), error = %e,
+                "WebSocket handshake failed"
+            );
             return;
         }
     };
-
-    let client_ip = resolve_client_ip(peer, forwarded_ip.get().copied());
 
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
 
@@ -410,7 +411,7 @@ pub async fn handle_connection(
         return;
     }
 
-    debug!("New WebSocket connection established from {client_ip}");
+    debug!(ip = %client_ip, "New WebSocket connection established");
 
     let mut game_receiver = game_state.subscribe();
     let mut state = ConnectionState::new(client_ip);
@@ -452,7 +453,9 @@ pub async fn handle_connection(
                     if let Some(code) = notice.close_code {
                         let _ = ws_sender.send(close_frame(code, "client desync")).await;
                     }
-                    info!("Account {:?} session ended by the server", state.account_name);
+                    info!(ip = %state.client_ip, account = state.account_name.as_deref(),
+                        character = state.character_name.as_deref(), player_id = state.player_id.map(PlayerId::get),
+                        "Session ended by the server");
                     break;
                 }
             }
@@ -479,7 +482,9 @@ pub async fn handle_connection(
                 if state.player_id.is_some()
                     && state.last_heartbeat.elapsed().as_secs() > HEARTBEAT_TIMEOUT_SECS
                 {
-                    warn!("Heartbeat timeout for player {:?}", state.character_name);
+                    warn!(ip = %state.client_ip, account = state.account_name.as_deref(),
+                        character = state.character_name.as_deref(), player_id = state.player_id.map(PlayerId::get),
+                        "Heartbeat timeout");
                     let _ = ws_sender.send(close_frame(
                         onlinerpg_shared::CLOSE_CODE_IDLE_TIMEOUT,
                         "no heartbeat",
@@ -526,7 +531,8 @@ pub async fn handle_connection(
                                         continue;
                                     };
                                     if let Err(e) = ws_sender.send(Message::Binary(bytes)).await {
-                                        error!("Failed to send direct response to client: {}", e);
+                                        error!(ip = %state.client_ip, account = state.account_name.as_deref(),
+                                            error = %e, "Failed to send direct response to client");
                                     }
                                 }
                                 if state.must_close {
@@ -543,20 +549,25 @@ pub async fn handle_connection(
                                 }
                             }
                             Err(e) => {
-                                error!("Error handling client message: {}", e);
+                                error!(ip = %state.client_ip, account = state.account_name.as_deref(),
+                                    player_id = state.player_id.map(PlayerId::get), error = %e,
+                                    "Error handling client message");
                             }
                         }
                     }
                     Some(Ok(Message::Close(_))) => {
-                        info!("Client requested close");
+                        info!(ip = %state.client_ip, account = state.account_name.as_deref(),
+                            player_id = state.player_id.map(PlayerId::get), "Client requested close");
                         break;
                     }
                     Some(Err(e)) => {
-                        error!("WebSocket error: {}", e);
+                        error!(ip = %state.client_ip, account = state.account_name.as_deref(),
+                            player_id = state.player_id.map(PlayerId::get), error = %e, "WebSocket error");
                         break;
                     }
                     None => {
-                        info!("WebSocket stream ended");
+                        info!(ip = %state.client_ip, account = state.account_name.as_deref(),
+                            player_id = state.player_id.map(PlayerId::get), "WebSocket stream ended");
                         break;
                     }
                     _ => {}
@@ -570,7 +581,9 @@ pub async fn handle_connection(
                     Ok(_) if state.account_name.is_none() => {}
                     Ok(msg) => {
                         if let Err(e) = ws_sender.send(Message::Binary(msg.bytes.clone())).await {
-                            error!("Failed to send message to client: {}", e);
+                            error!(ip = %state.client_ip, account = state.account_name.as_deref(),
+                                player_id = state.player_id.map(PlayerId::get), error = %e,
+                                "Failed to send message to client");
                             break;
                         }
                     }
@@ -579,7 +592,9 @@ pub async fn handle_connection(
                         break;
                     }
                     Err(broadcast::error::RecvError::Lagged(skipped)) => {
-                        warn!("Client lagged behind, skipped {} messages", skipped);
+                        warn!(ip = %state.client_ip, account = state.account_name.as_deref(),
+                            player_id = state.player_id.map(PlayerId::get), skipped,
+                            "Client lagged behind");
                     }
                 }
             }
@@ -614,10 +629,11 @@ pub async fn handle_connection(
         game_state.cape_textures().close_session(&token).await;
     }
 
-    match &state.character_name {
-        Some(name) => info!("Session ended for {name} ({})", state.client_ip),
-        None => debug!("Connection handler finished"),
-    }
+    info!(
+        ip = %state.client_ip, account = state.account_name.as_deref(),
+        character = state.character_name.as_deref(), player_id = state.player_id.map(PlayerId::get),
+        "Connection handler finished"
+    );
 }
 
 /// Shared tail of both auth paths: replace any account session, load
@@ -694,9 +710,8 @@ async fn finish_auth(
     };
 
     info!(
-        "Account '{}' authenticated successfully with {} character(s)",
-        account_name,
-        characters.len()
+        ip = %state.client_ip, account = account_name, character_count = characters.len(),
+        "Account authenticated successfully"
     );
     // Replaces any token an earlier auth on this connection handed out, so
     // the store never holds two for one socket.
@@ -756,7 +771,8 @@ fn handle_handshake(
     } = client_msg
     {
         if state.client_kind.is_some() {
-            warn!("Duplicate ClientInfo ignored");
+            warn!(ip = %state.client_ip, account = state.account_name.as_deref(),
+                "Duplicate ClientInfo ignored");
             return Some(vec![]);
         }
         if *protocol_version != onlinerpg_shared::PROTOCOL_VERSION {
@@ -837,7 +853,8 @@ async fn handle_client_message(
         ClientMessage::Authenticate { .. } | ClientMessage::AuthenticateNpc { .. }
     ) && state.account_name.is_some()
     {
-        warn!("Client is already authenticated");
+        warn!(ip = %state.client_ip, account = state.account_name.as_deref(),
+            "Client is already authenticated");
         return Ok(vec![ServerMessage::AuthError {
             message: "Already authenticated".to_string(),
         }]);
@@ -845,8 +862,9 @@ async fn handle_client_message(
 
     if requires_admin(&client_msg) && !state.is_admin {
         warn!(
-            "Admin-only message rejected for account {:?}",
-            state.account_name
+            ip = %state.client_ip, account = state.account_name.as_deref(),
+            character = state.character_name.as_deref(), player_id = state.player_id.map(PlayerId::get),
+            "Admin-only message rejected"
         );
         return Ok(match &state.player_id {
             Some(_) => vec![ServerMessage::SystemMessage {
@@ -864,7 +882,7 @@ async fn handle_client_message(
     match client_msg {
         ClientMessage::Authenticate { google_id_token } => {
             let Some(verifier) = &auth_ctx.google else {
-                warn!("Google login attempted but no --google-client-id is configured");
+                warn!(ip = %state.client_ip, "Google login attempted but no --google-client-id is configured");
                 return Ok(vec![ServerMessage::AuthError {
                     message: "Google sign-in is not configured on this server".to_string(),
                 }]);
@@ -873,7 +891,7 @@ async fn handle_client_message(
             let claims = match verifier.verify(&google_id_token).await {
                 Ok(claims) => claims,
                 Err(err) => {
-                    warn!("Google token verification failed: {}", err);
+                    warn!(ip = %state.client_ip, error = %err, "Google token verification failed");
                     return Ok(vec![ServerMessage::AuthError {
                         message: "Google sign-in verification failed".to_string(),
                     }]);
@@ -900,7 +918,7 @@ async fn handle_client_message(
             npc_token,
         } => {
             if !token_matches(&npc_token, &auth_ctx.npc_token) {
-                warn!("NPC auth rejected for {:?}: bad token", account_name);
+                warn!(ip = %state.client_ip, account = account_name, "NPC auth rejected: bad token");
                 return Ok(vec![ServerMessage::AuthError {
                     message: "Invalid NPC token".to_string(),
                 }]);
@@ -909,7 +927,7 @@ async fn handle_client_message(
             let account_name = match auth_service.login_npc(&account_name) {
                 Ok(name) => name,
                 Err(err) => {
-                    warn!("NPC login failed for {:?}: {}", account_name, err);
+                    warn!(ip = %state.client_ip, account = account_name, error = %err, "NPC login failed");
                     return Ok(vec![ServerMessage::AuthError {
                         message: err.client_message().to_string(),
                     }]);
@@ -1062,7 +1080,12 @@ async fn handle_client_message(
 
         ClientMessage::EnterGame { character_id } => {
             if state.player_id.is_some() {
-                warn!("Client already entered game, ignoring EnterGame request");
+                warn!(
+                    ip = %state.client_ip, account = state.account_name.as_deref(),
+                    character = state.character_name.as_deref(), player_id = state.player_id.map(PlayerId::get),
+                    requested_character_id = character_id,
+                    "Client already entered game, ignoring EnterGame request"
+                );
                 return Ok(vec![]);
             }
 
@@ -1363,10 +1386,12 @@ async fn handle_client_message(
             let rejoin_floor = player.floor_level;
             let rejoin_pos = player.position;
             info!(target: "player_session",
+                ip = %state.client_ip, account = authed_account_name, character = selected_character.name,
                 player_id = %id, character_id, account_session_id,
-                client_kind = ?state.client_kind,
-                reported_version = ?state.reported_client_version,
-                position = ?player.position, rotation = player.rotation, floor = player.floor_level,
+                client_kind = state.client_kind.map(|kind| kind.as_str()),
+                reported_version = state.reported_client_version,
+                x = player.position.x, y = player.position.y, z = player.position.z,
+                rotation = player.rotation, floor = player.floor_level,
                 "Movement session joined");
             drop(player_persistence);
             game_state.add_player(player).await;
@@ -1400,8 +1425,9 @@ async fn handle_client_message(
             drop(character_sessions);
 
             info!(
-                "Account '{}' entered game as character '{}' with player ID {:?}",
-                authed_account_name, selected_character.name, state.player_id
+                ip = %state.client_ip, account = authed_account_name, character = selected_character.name,
+                player_id = %id, character_id,
+                "Account entered game"
             );
             return Ok(responses);
         }
@@ -1456,20 +1482,16 @@ async fn handle_client_message(
             }
         }
         ClientMessage::WorldReady => {
-            if let Some(id) = &state.player_id {
+            if let Some(id) = &state.require_in_game("world ready") {
                 game_state.mark_world_ready(id).await;
-            } else {
-                warn!("Received world ready from client that is not in game");
             }
         }
 
         ClientMessage::ChatMessage { message } => {
-            if let Some(id) = &state.player_id {
+            if let Some(id) = &state.require_in_game("chat message") {
                 game_state
                     .send_chat_message(id, message, auth_service)
                     .await;
-            } else {
-                warn!("Received chat message from client that is not in game");
             }
         }
 
@@ -1478,7 +1500,7 @@ async fn handle_client_message(
             monster_id,
             target_player_id,
         } => {
-            if let Some(id) = state.player_id {
+            if let Some(id) = state.require_in_game("attack") {
                 let game = Arc::clone(game_state);
                 let auth = Arc::clone(auth_service);
                 let cast = async move {
@@ -1503,50 +1525,38 @@ async fn handle_client_message(
                 game_state
                     .player_attack(id, monster_id, Some(auth_service))
                     .await;
-            } else {
-                warn!("Received attack from client that is not in game");
             }
         }
 
         ClientMessage::FishingCast { position } => {
-            if let Some(id) = &state.player_id {
+            if let Some(id) = &state.require_in_game("fishing cast") {
                 game_state.start_fishing(id, position).await;
-            } else {
-                warn!("Received fishing cast from client that is not in game");
             }
         }
 
         ClientMessage::FishingRespond { action } => {
-            if let Some(id) = &state.player_id {
+            if let Some(id) = &state.require_in_game("fishing response") {
                 game_state.respond_fishing(id, action).await;
-            } else {
-                warn!("Received fishing response from client that is not in game");
             }
         }
 
         ClientMessage::FishingStop => {
-            if let Some(id) = &state.player_id {
+            if let Some(id) = &state.require_in_game("fishing stop") {
                 game_state.stop_fishing(id).await;
-            } else {
-                warn!("Received fishing stop from client that is not in game");
             }
         }
 
         ClientMessage::RequestRespawn => {
-            if let Some(id) = &state.player_id {
+            if let Some(id) = &state.require_in_game("respawn request") {
                 game_state.respawn_player(id).await;
-            } else {
-                warn!("Received respawn request from client that is not in game");
             }
         }
 
         ClientMessage::OpenDungeonChest { entrance_id } => {
-            if let Some(id) = &state.player_id {
+            if let Some(id) = &state.require_in_game("chest open") {
                 game_state
                     .open_dungeon_chest(id, &entrance_id, auth_service)
                     .await;
-            } else {
-                warn!("Received chest open from client that is not in game");
             }
         }
 
@@ -1555,12 +1565,10 @@ async fn handle_client_message(
             depth,
             prop_id,
         } => {
-            if let Some(id) = &state.player_id {
+            if let Some(id) = &state.require_in_game("prop break") {
                 game_state
                     .break_dungeon_prop(id, &entrance_id, depth, prop_id)
                     .await;
-            } else {
-                warn!("Received prop break from client that is not in game");
             }
         }
 
@@ -1569,12 +1577,10 @@ async fn handle_client_message(
             depth,
             prop_id,
         } => {
-            if let Some(id) = &state.player_id {
+            if let Some(id) = &state.require_in_game("prop open") {
                 game_state
                     .open_dungeon_prop(id, &entrance_id, depth, prop_id)
                     .await;
-            } else {
-                warn!("Received prop open from client that is not in game");
             }
         }
 
@@ -1583,7 +1589,7 @@ async fn handle_client_message(
             depth,
             door_id,
         } => {
-            if let Some(id) = &state.player_id {
+            if let Some(id) = &state.require_in_game("debug teleport") {
                 game_state
                     .toggle_dungeon_door(id, &entrance_id, depth, door_id)
                     .await;
@@ -1593,33 +1599,25 @@ async fn handle_client_message(
         ClientMessage::DebugTeleport { position } => {
             if let Some(id) = &state.player_id {
                 game_state.debug_teleport_player(id, position).await;
-            } else {
-                warn!("Received debug teleport from client that is not in game");
             }
         }
 
         ClientMessage::DebugDropItem { item_def_id } => {
-            if let Some(id) = &state.player_id {
+            if let Some(id) = &state.require_in_game("debug drop") {
                 game_state.debug_drop_item(id, &item_def_id).await;
-            } else {
-                warn!("Received debug drop from client that is not in game");
             }
         }
 
         ClientMessage::DebugSetTime { hour, minute } => {
-            if state.player_id.is_some() {
+            if state.require_in_game("debug set time").is_some() {
                 let datetime = game_state.debug_set_time(hour, minute);
                 info!("Debug time jump to {}", datetime);
-            } else {
-                warn!("Received debug set time from client that is not in game");
             }
         }
 
         ClientMessage::DebugResetDungeonProps { entrance_id } => {
-            if state.player_id.is_some() {
+            if state.require_in_game("debug dungeon prop reset").is_some() {
                 game_state.debug_reset_dungeon_props(&entrance_id).await;
-            } else {
-                warn!("Received debug dungeon prop reset from client that is not in game");
             }
         }
 
@@ -1627,38 +1625,30 @@ async fn handle_client_message(
             object_type,
             object_id,
         } => {
-            if let Some(id) = &state.player_id {
+            if let Some(id) = &state.require_in_game("interact object") {
                 game_state
                     .set_player_interaction(id, Some(object_type), Some(object_id))
                     .await;
-            } else {
-                warn!("Received interact object from client that is not in game");
             }
         }
 
         ClientMessage::StartInstrument => {
-            if let Some(id) = state.player_id {
+            if let Some(id) = state.require_in_game("instrument start") {
                 game_state.start_live_instrument(&id).await;
-            } else {
-                warn!("Received instrument start from client that is not in game");
             }
         }
 
         ClientMessage::InstrumentNotes { events } => {
-            if let Some(id) = state.player_id {
+            if let Some(id) = state.require_in_game("instrument notes") {
                 if state.instrument_batch_limiter.allow() {
                     game_state.play_live_instrument_notes(&id, events).await;
                 }
-            } else {
-                warn!("Received instrument notes from client that is not in game");
             }
         }
 
         ClientMessage::StopInteraction => {
-            if let Some(id) = &state.player_id {
+            if let Some(id) = &state.require_in_game("stop interaction") {
                 game_state.set_player_interaction(id, None, None).await;
-            } else {
-                warn!("Received stop interaction from client that is not in game");
             }
         }
 
@@ -2454,6 +2444,30 @@ fn default_character_max_hp(
 mod tests {
     use super::*;
     use std::net::Ipv4Addr;
+
+    #[test]
+    fn in_game_rejection_identifies_the_connection_without_debug_wrappers() {
+        let (subscriber, buffer) = crate::test_util::capture_logs();
+        let mut state = ConnectionState::new("203.0.113.7".parse().unwrap());
+        state.account_name = Some("account1".into());
+        state.character_name = Some("Player One".into());
+        state.player_id = Some(PlayerId::from(42));
+        tracing::subscriber::with_default(subscriber, || {
+            assert!(state.require_not_in_game("RollCharacterStats").is_err());
+        });
+        let logs = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
+        for field in [
+            "ip=203.0.113.7",
+            "account=\"account1\"",
+            "character=\"Player One\"",
+            "player_id=42",
+            "action=\"RollCharacterStats\"",
+        ] {
+            assert!(logs.contains(field), "{logs}");
+        }
+        assert!(!logs.contains("Some("), "{logs}");
+        assert!(!logs.contains("PlayerId("), "{logs}");
+    }
 
     #[tokio::test]
     async fn pending_character_deletion_blocks_entry_until_cancelled() {

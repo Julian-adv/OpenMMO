@@ -24,20 +24,25 @@ const PRUNE_INTERVAL: Duration = Duration::from_secs(60);
 /// without bound.
 const MAX_TRACKED_IPS: usize = 100_000;
 
-/// The address to hold a client accountable for.
-///
-/// Behind nginx the TCP peer is always 127.0.0.1 and the real address arrives
-/// in `X-Real-IP`, which nginx overwrites with `$remote_addr` — so it is
-/// trustworthy, but only from nginx. Bound to 0.0.0.0 the listener is also
-/// reachable directly, where the header would be attacker-supplied; there the
-/// peer address is already the truth. Trusting it only from loopback covers
-/// both, and pairs with `allow`'s loopback exemption so each connection is
-/// charged exactly once.
+/// Trust forwarded addresses only from the local proxy.
 pub fn resolve_client_ip(peer: SocketAddr, forwarded: Option<IpAddr>) -> IpAddr {
     match forwarded {
         Some(ip) if peer.ip().is_loopback() => ip,
         _ => peer.ip(),
     }
+}
+
+/// nginx appends the client address after any caller-supplied X-Forwarded-For.
+pub fn forwarded_client_ip(
+    peer: SocketAddr,
+    forwarded_for: Option<&str>,
+    real_ip: Option<&str>,
+) -> IpAddr {
+    let forwarded = forwarded_for
+        .and_then(|value| value.rsplit(',').next())
+        .and_then(|value| value.trim().parse().ok())
+        .or_else(|| real_ip.and_then(|value| value.trim().parse().ok()));
+    resolve_client_ip(peer, forwarded)
 }
 
 struct Bucket {
@@ -149,6 +154,34 @@ mod tests {
         assert_eq!(resolve_client_ip(direct, Some(real)), direct.ip());
         // Proxy without the header falls back to the exempt loopback address.
         assert_eq!(resolve_client_ip(via_proxy, None), via_proxy.ip());
+    }
+
+    #[test]
+    fn forwarded_headers_use_the_address_appended_by_nginx() {
+        let proxy = "127.0.0.1:44100".parse().unwrap();
+        let direct: SocketAddr = "198.51.100.9:44100".parse().unwrap();
+        let real = "203.0.113.7".parse::<IpAddr>().unwrap();
+        let chain = Some("192.0.2.1, 203.0.113.7");
+        assert_eq!(forwarded_client_ip(proxy, chain, Some("192.0.2.2")), real);
+        assert_eq!(
+            forwarded_client_ip(direct, chain, Some("192.0.2.2")),
+            direct.ip()
+        );
+        assert_eq!(
+            forwarded_client_ip(proxy, Some("invalid"), Some("203.0.113.7")),
+            real
+        );
+        assert_eq!(forwarded_client_ip(proxy, None, Some("203.0.113.7")), real);
+        assert_eq!(
+            forwarded_client_ip(proxy, Some("203.0.113.7, invalid"), None),
+            proxy.ip()
+        );
+        let ipv6 = "2001:db8::7".parse::<IpAddr>().unwrap();
+        assert_eq!(
+            forwarded_client_ip(proxy, Some("192.0.2.1, 2001:db8::7"), None),
+            ipv6
+        );
+        assert_eq!(forwarded_client_ip(proxy, None, None), proxy.ip());
     }
 
     /// The two call sites split on `is_loopback`, so each connection must be

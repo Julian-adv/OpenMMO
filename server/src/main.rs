@@ -841,9 +841,12 @@ async fn main() -> ExitCode {
             info!("Terrain REST API listening on: {}", terrain_addr);
             let api_shutdown = drain_shutdown.clone();
             api_task.spawn(async move {
-                if let Err(e) = axum::serve(terrain_listener, terrain_app)
-                    .with_graceful_shutdown(wait_for_shutdown(api_shutdown))
-                    .await
+                if let Err(e) = axum::serve(
+                    terrain_listener,
+                    terrain_app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+                )
+                .with_graceful_shutdown(wait_for_shutdown(api_shutdown))
+                .await
                 {
                     error!("Terrain API server error: {}", e);
                 }
