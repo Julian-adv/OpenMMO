@@ -57,6 +57,121 @@ async fn server_brain_chases_and_attacks_the_player() {
 }
 
 #[tokio::test]
+async fn a_closed_dungeon_door_hides_the_target_and_reopening_resumes_chase() {
+    dungeon_door_chase_cycle(true).await;
+    dungeon_door_chase_cycle(false).await;
+}
+
+async fn dungeon_door_chase_cycle(aggressive: bool) {
+    use onlinerpg_shared::dungeon::interior_doors;
+
+    let game_state = make_flat_world_game_state(&format!("server_ai_door_sensing_{aggressive}"));
+    let entrance = game_state.dungeon_defs.get("skeleton_crypt").unwrap();
+    game_state.ensure_dungeon_runtime(&entrance.id).await;
+    {
+        let mut dungeons = game_state.dungeons.write().await;
+        let rt = dungeons.get_mut(&entrance.id).unwrap();
+        rt.open_doors.insert(
+            1,
+            interior_doors(&rt.layouts[0])
+                .iter()
+                .map(|d| d.door_id)
+                .collect(),
+        );
+    }
+    game_state
+        .rebuild_dungeon_floor_passability(&entrance.id, 1)
+        .await;
+
+    let player_id = pid("delver");
+    let mut player = make_player("delver", -1035.2, 4263.0);
+    player.position.y = entrance.y - 4.0;
+    player.floor_level = -1;
+    game_state.add_player(player).await;
+    let skeleton = game_state
+        .spawn_monster(
+            "skeleton_weak".into(),
+            Position {
+                x: -1036.55,
+                y: entrance.y - 4.0,
+                z: 4265.14,
+            },
+            0.0,
+            -1,
+            MonsterLifecycle::DungeonSlot,
+            None,
+            aggressive,
+        )
+        .await
+        .unwrap()
+        .id;
+
+    assert_eq!(
+        game_state
+            .toggle_dungeon_door(&player_id, &entrance.id, 1, 148025)
+            .await,
+        Some(false)
+    );
+    game_state.tick_monster_ai_by(200.0).await;
+    assert_eq!(game_state.brain_target(&skeleton).await, None);
+    assert_eq!(game_state.brain_pathfind_count().await, 0);
+    assert_eq!(
+        game_state
+            .toggle_dungeon_door(&player_id, &entrance.id, 1, 148025)
+            .await,
+        Some(true)
+    );
+    if !aggressive {
+        game_state.brain_hit(&skeleton, &player_id, false, 0).await;
+    }
+    game_state.tick_monster_ai_by(16.0).await;
+    game_state.tick_monster_ai_by(16.0).await;
+    assert_eq!(game_state.brain_target(&skeleton).await, Some(player_id));
+    assert_eq!(
+        game_state.monsters.read().await[&skeleton].state,
+        MonsterState::Run
+    );
+
+    assert_eq!(
+        game_state
+            .toggle_dungeon_door(&player_id, &entrance.id, 1, 148025)
+            .await,
+        Some(false)
+    );
+    let queries = game_state.brain_pathfind_count().await;
+    game_state.tick_monster_ai_by(200.0).await;
+    assert_eq!(game_state.brain_target(&skeleton).await, None);
+    assert_eq!(
+        game_state.monsters.read().await[&skeleton].state,
+        MonsterState::Idle
+    );
+    let stopped = game_state.monsters.read().await[&skeleton].position;
+    for _ in 0..30 {
+        game_state.tick_monster_ai_by(200.0).await;
+    }
+    assert_eq!(game_state.brain_pathfind_count().await, queries);
+    assert_eq!(
+        game_state.monsters.read().await[&skeleton].position,
+        stopped
+    );
+
+    assert_eq!(
+        game_state
+            .toggle_dungeon_door(&player_id, &entrance.id, 1, 148025)
+            .await,
+        Some(true)
+    );
+    game_state.tick_monster_ai_by(200.0).await;
+    assert_eq!(game_state.brain_target(&skeleton).await, Some(player_id));
+    assert!(game_state.brain_pathfind_count().await > queries);
+    game_state.tick_monster_ai_by(200.0).await;
+    assert_ne!(
+        game_state.monsters.read().await[&skeleton].position,
+        stopped
+    );
+}
+
+#[tokio::test]
 async fn brain_is_dropped_when_the_monster_dies() {
     let game_state = make_flat_world_game_state("server_ai_death");
     game_state.add_player(make_player("slayer", 0.0, 0.0)).await;

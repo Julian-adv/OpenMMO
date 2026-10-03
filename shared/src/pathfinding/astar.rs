@@ -119,6 +119,34 @@ pub fn find_path_avoiding(
     max_nodes: usize,
     blocked: &[(i32, i32)],
 ) -> PathResult {
+    find_path_avoiding_counted(
+        start_x,
+        start_z,
+        start_floor,
+        goal_x,
+        goal_z,
+        goal_floor,
+        cache,
+        max_nodes,
+        blocked,
+        &mut 0,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn find_path_avoiding_counted(
+    start_x: f32,
+    start_z: f32,
+    start_floor: u8,
+    goal_x: f32,
+    goal_z: f32,
+    goal_floor: u8,
+    cache: &PassabilityCache,
+    max_nodes: usize,
+    blocked: &[(i32, i32)],
+    expanded: &mut usize,
+) -> PathResult {
+    *expanded = 0;
     let (goal_x, goal_z) = snap_goal_into_floor(cache, goal_x, goal_z, goal_floor);
     let sx = start_x.floor() as i32;
     let sz = start_z.floor() as i32;
@@ -235,15 +263,14 @@ pub fn find_path_avoiding(
 
     let mut best_h = start_h;
     let mut best_key = start_key;
-    let mut expanded = 0;
     let mut termination = crate::pathfinding::PathTermination::Unreachable;
 
     while let Some(Reverse(cur)) = open.pop() {
-        if expanded >= max_nodes {
+        if *expanded >= max_nodes {
             termination = crate::pathfinding::PathTermination::NodeLimit;
             break;
         }
-        expanded += 1;
+        *expanded += 1;
 
         let cur_key: AStarKey = (cur.x, cur.z, cur.fk);
 

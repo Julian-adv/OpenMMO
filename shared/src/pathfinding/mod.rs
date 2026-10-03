@@ -27,6 +27,8 @@ pub use cache::{
     apply_door_overlays, build_furniture_passability, build_runtime_passability, door_cells,
     update_door_edge, FurniturePiece,
 };
+pub(crate) use query::ramp_fraction;
+pub use query::segment_touches_box;
 pub use query::{
     attack_line_blocked, attack_line_blocked_in, blocking_entry_for_mover, get_floor_at_position,
     get_floor_y_base, in_stairwell_span, is_cardinal_move_blocked, is_cell_sealed,
@@ -34,8 +36,9 @@ pub use query::{
     is_movement_blocked_for_mover, leg_touches_stairwell, ranged_attack_line_blocked,
     snap_goal_into_floor, start_floor_at, storey_ground_y, supporting_floor_y, BlockInfo,
 };
-pub(crate) use query::{ramp_fraction, segment_touches_box};
-pub use smooth::{find_and_smooth_path, find_and_smooth_path_avoiding};
+pub use smooth::{
+    find_and_smooth_path, find_and_smooth_path_avoiding, find_and_smooth_path_avoiding_with_budget,
+};
 
 use std::collections::HashMap;
 

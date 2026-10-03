@@ -169,6 +169,7 @@ impl MonsterBrain {
             goal_x,
             goal_z,
             path_provider,
+            usize::MAX,
         )
     }
 
@@ -181,15 +182,21 @@ impl MonsterBrain {
         goal_x: f32,
         goal_z: f32,
         path_provider: &dyn PathProvider,
+        max_nodes: usize,
     ) -> crate::pathfinding::PathResult {
         let local_goal_x = start_x + shortest_world_delta_x(start_x, goal_x);
-        let mut result = path_provider.find_path(
+        let mut result = path_provider.find_path_avoiding(
             start_x,
             start_z,
             self.path_floor,
             local_goal_x,
             goal_z,
             self.path_floor,
+            &[],
+            max_nodes.min(crate::dungeon::path_max_nodes(
+                self.path_floor,
+                self.path_floor,
+            )),
         );
         for wp in &mut result.waypoints {
             wp.x = wrap_world_x(wp.x);

@@ -403,13 +403,16 @@ impl MonsterBrain {
             self.state = AiState::Chase;
         }
 
-        // While waiting on an unreachable target (empty waypoints, Hold),
-        // retry only at repath cadence — every tick would flood A* at 60Hz.
+        // Failed routes back off until the target or door state changes.
         let exhausted = self.current_waypoint_idx >= self.waypoints.len();
         let target_moved = self.target_moved_significantly_by(&target_pos, target_move_threshold);
-        let needs_repath = (exhausted && self.state != AiState::Hold)
-            || self.path_elapsed_ms > path_recalc_ms
-            || target_moved;
+        if target_moved {
+            self.clear_chase_backoff();
+        }
+        let needs_repath = self.chase_retry_left_ms <= 0.0
+            && ((exhausted && self.state != AiState::Hold)
+                || self.path_elapsed_ms > path_recalc_ms
+                || target_moved);
 
         if needs_repath {
             if target_moved {
@@ -419,12 +422,7 @@ impl MonsterBrain {
             if !self.continue_detour(path_provider)
                 && !self.path_to_chase_slot(&target_pos, path_provider)
             {
-                // No reachable free cell — head for the target itself; the
-                // advance gate still queues us behind standers. A* answers an
-                // unreachable target with a partial path (found=false):
-                // walking it brings the pack up to the door, and once the
-                // partial leg stops covering ground it counts as no path, so
-                // the chase waits instead of re-arriving every tick.
+                // Follow a partial route only while it still makes progress.
                 let result = self.query_path(target_pos.x, target_pos.z, path_provider);
                 let keep = result.found
                     || path_len(self.position.x, self.position.z, &result.waypoints)
@@ -432,10 +430,9 @@ impl MonsterBrain {
                 self.install_path(if keep { result.waypoints } else { Vec::new() });
             }
             if self.waypoints.is_empty() {
-                // Unreachable target (a shut door): wait here instead of
-                // failing into a frantic wander. A bunched wait still
-                // spreads — a cell-sharer steps one cell aside when it can.
+                // Wait without wandering; overlapping standers may spread.
                 if !(self.cell_yield && self.try_sidestep(&target_pos, path_provider, false)) {
+                    self.defer_chase(path_recalc_ms);
                     self.enter_hold(commands);
                     return BehaviorStatus::Running;
                 }
@@ -462,10 +459,14 @@ impl MonsterBrain {
                     || self.try_detour(&target_pos, path_provider))
             {
                 self.state = AiState::Chase;
+                self.clear_chase_backoff();
                 if !pre_synced {
                     self.sync_chase(target_pos, commands);
                 }
                 return BehaviorStatus::Running;
+            }
+            if needs_repath || self.state != AiState::Hold {
+                self.defer_chase(path_recalc_ms);
             }
             self.enter_hold(commands);
             return BehaviorStatus::Running;
@@ -473,6 +474,7 @@ impl MonsterBrain {
         // A Hold that got a path again resumes; the state change makes
         // `should_sync_move` report the transition at once.
         self.state = AiState::Chase;
+        self.clear_chase_backoff();
         if reached {
             self.reslotting = false;
             self.detour_goal = None;
@@ -521,7 +523,7 @@ impl MonsterBrain {
     /// Enter (or stay in) the chase hold — queued behind a stander, or
     /// waiting on an unreachable target. `AiState::Hold` reports as Idle so
     /// remote clients stop the model.
-    fn enter_hold(&mut self, commands: &mut Vec<AiCommand>) {
+    pub(super) fn enter_hold(&mut self, commands: &mut Vec<AiCommand>) {
         self.reslotting = false;
         if self.state == AiState::Hold {
             return;
@@ -530,6 +532,12 @@ impl MonsterBrain {
         self.state_timer_ms = 0.0;
         self.target_position = None;
         commands.push(self.make_move_cmd());
+    }
+
+    fn defer_chase(&mut self, base_ms: f32) {
+        self.chase_failures = self.chase_failures.saturating_add(1);
+        self.chase_retry_left_ms =
+            (base_ms * 2.0_f32.powi(i32::from(self.chase_failures.min(4)) - 1)).min(4000.0);
     }
 
     /// Remote clients walk toward `target_position` until the next sync, so
@@ -622,7 +630,8 @@ impl MonsterBrain {
                 continue;
             }
             if require_closer {
-                let cand_route = self.query_path_from(cx, cz, goal_x, goal_z, path_provider);
+                let cand_route =
+                    self.query_path_from(cx, cz, goal_x, goal_z, path_provider, usize::MAX);
                 if !cand_route.found || path_len(cx, cz, &cand_route.waypoints) >= cur_route {
                     continue;
                 }
@@ -768,17 +777,17 @@ impl MonsterBrain {
         false
     }
 
-    /// Commit a goal cell: path to its center, keeping the cell only when the
-    /// goal is actually reachable. `found` is load-bearing: A* answers an
-    /// unreachable goal with a partial path toward it, and accepting that
-    /// made the two front monsters at a shut door ping-pong forever — each
-    /// "reached" the partial end in the other's lane and re-slotted to the
-    /// opposite player-side cell. (The raw-target fallback deliberately keeps
-    /// partial paths: its goal is fixed, so it converges at the door and
-    /// holds.)
+    /// Slots require a complete route; reserve nodes for the raw-target fallback.
     fn try_goal_cell(&mut self, cell: (i32, i32), path_provider: &dyn PathProvider) -> bool {
         let (gx, gz) = cell_center(cell);
-        let result = self.query_path(gx, gz, path_provider);
+        let result = self.query_path_from(
+            self.position.x,
+            self.position.z,
+            gx,
+            gz,
+            path_provider,
+            crate::pathfinding::DEFAULT_MAX_NODES,
+        );
         if !result.found || result.waypoints.is_empty() {
             return false;
         }

@@ -898,7 +898,7 @@ pub fn in_stairwell_span(cache: &PassabilityCache, x: f32, z: f32, y: f32) -> bo
 }
 
 /// Slab clip of a 2D segment against an axis-aligned box.
-pub(crate) fn segment_touches_box(
+pub fn segment_touches_box(
     (min_x, max_x): (f32, f32),
     (min_z, max_z): (f32, f32),
     (x0, z0): (f32, f32),

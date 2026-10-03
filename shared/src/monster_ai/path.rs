@@ -13,10 +13,7 @@ pub trait PathProvider {
         goal_floor: u8,
     ) -> PathResult;
 
-    /// Whether a blow from `(from_x, from_z)` to `(to_x, to_z)` on `floor`
-    /// crosses a wall — a shut door, a stair wall. No default: a provider that
-    /// forgot to answer would let its monsters swing through walls, which is
-    /// the one thing this gate exists to stop.
+    /// Whether the attack line crosses a wall or closed door.
     fn attack_line_blocked(
         &self,
         from_x: f32,
@@ -26,11 +23,7 @@ pub trait PathProvider {
         floor: u8,
     ) -> bool;
 
-    /// Cheap pre-check that the cell holding `(x, z)` can be stood in at all.
-    /// Standing-cell candidates go through this before `find_path`: A* has no
-    /// early goal reject, so a wall-interior candidate would otherwise flood
-    /// the whole reachable region every try. Default true — a provider without
-    /// the data just pays the path query.
+    /// Reject sealed standing cells before searching for a route.
     fn cell_passable(&self, _x: f32, _z: f32, _floor: u8) -> bool {
         true
     }

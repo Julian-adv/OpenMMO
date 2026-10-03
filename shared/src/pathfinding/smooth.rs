@@ -1,7 +1,7 @@
 //! Smooth A* paths from the player's continuous position using line of sight.
 //! Anchor floor transitions to keep stairwell movement cardinal.
 
-use super::astar::{find_path_avoiding, segment_enters_cells};
+use super::astar::{find_path_avoiding_counted, segment_enters_cells};
 use super::query::{
     is_cardinal_move_blocked, is_circle_blocked_on_floor, is_movement_blocked, segment_obstacles,
     SegmentObstacles,
@@ -253,6 +253,33 @@ pub fn find_and_smooth_path_avoiding(
     max_nodes: usize,
     blocked: &[(i32, i32)],
 ) -> PathResult {
+    find_and_smooth_path_avoiding_with_budget(
+        start_x,
+        start_z,
+        start_floor,
+        goal_x,
+        goal_z,
+        goal_floor,
+        cache,
+        max_nodes,
+        blocked,
+        &std::cell::Cell::new(max_nodes),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn find_and_smooth_path_avoiding_with_budget(
+    start_x: f32,
+    start_z: f32,
+    start_floor: u8,
+    goal_x: f32,
+    goal_z: f32,
+    goal_floor: u8,
+    cache: &PassabilityCache,
+    max_nodes: usize,
+    blocked: &[(i32, i32)],
+    remaining: &std::cell::Cell<usize>,
+) -> PathResult {
     if start_floor == goal_floor
         && direct_line_ok(
             start_x,
@@ -275,7 +302,15 @@ pub fn find_and_smooth_path_avoiding(
         };
     }
 
-    let result = find_path_avoiding(
+    if remaining.get() == 0 {
+        return PathResult {
+            waypoints: vec![],
+            found: false,
+            termination: crate::pathfinding::PathTermination::NodeLimit,
+        };
+    }
+    let mut expanded = 0;
+    let result = find_path_avoiding_counted(
         start_x,
         start_z,
         start_floor,
@@ -283,9 +318,11 @@ pub fn find_and_smooth_path_avoiding(
         goal_z,
         goal_floor,
         cache,
-        max_nodes,
+        max_nodes.min(remaining.get()),
         blocked,
+        &mut expanded,
     );
+    remaining.set(remaining.get().saturating_sub(expanded));
     if result.waypoints.is_empty() {
         return result;
     }

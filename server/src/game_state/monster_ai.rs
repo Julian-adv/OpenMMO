@@ -6,7 +6,9 @@ use onlinerpg_shared::monster_ai::{
     self, AiCommand, BehaviorTree, CachePathProvider, ChaseAim, MonsterBrain, NearbyMonster,
     NearbyPlayer, PathProvider, AGGRESSIVE_BEHAVIOR, DEFAULT_BEHAVIOR,
 };
-use onlinerpg_shared::pathfinding::{is_movement_blocked, PathResult};
+use onlinerpg_shared::pathfinding::{
+    find_and_smooth_path_avoiding_with_budget, is_movement_blocked, segment_touches_box, PathResult,
+};
 use onlinerpg_shared::shortest_world_delta_x;
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
@@ -15,6 +17,7 @@ use tracing::{debug, info, warn};
 
 /// CPU spent on brains per tick before the rest wait for the next one.
 const TICK_BUDGET: Duration = Duration::from_millis(40);
+const BRAIN_PATH_NODE_BUDGET: usize = 20_000;
 /// A brain skipped for long (budget starvation, or nobody near it) resumes
 /// with at most this much simulated time, so it can't leap a whole path.
 const MAX_BRAIN_DELTA_MS: f32 = 1000.0;
@@ -33,6 +36,8 @@ struct Entry {
     watched_gen: u64,
     /// When the brain's current target was last in plain sight.
     target_seen: Option<(PlayerId, Instant)>,
+    closed_doors: Vec<[f32; 4]>,
+    door_hidden_target: Option<PlayerId>,
 }
 
 impl Entry {
@@ -107,12 +112,13 @@ impl ServerBrains {
 struct CountingPath<'a> {
     inner: CachePathProvider<'a>,
     count: Cell<u64>,
+    remaining: Cell<usize>,
 }
 
 impl PathProvider for CountingPath<'_> {
     fn find_path(&self, sx: f32, sz: f32, sf: u8, gx: f32, gz: f32, gf: u8) -> PathResult {
-        self.count.set(self.count.get() + 1);
-        self.inner.find_path(sx, sz, sf, gx, gz, gf)
+        let max_nodes = onlinerpg_shared::dungeon::path_max_nodes(sf, gf);
+        self.find_path_avoiding(sx, sz, sf, gx, gz, gf, &[], max_nodes)
     }
 
     fn attack_line_blocked(&self, fx: f32, fz: f32, tx: f32, tz: f32, floor: u8) -> bool {
@@ -135,9 +141,33 @@ impl PathProvider for CountingPath<'_> {
         max_nodes: usize,
     ) -> PathResult {
         self.count.set(self.count.get() + 1);
-        self.inner
-            .find_path_avoiding(sx, sz, sf, gx, gz, gf, blocked, max_nodes)
+        find_and_smooth_path_avoiding_with_budget(
+            sx,
+            sz,
+            sf,
+            gx,
+            gz,
+            gf,
+            self.inner.cache,
+            max_nodes,
+            blocked,
+            &self.remaining,
+        )
     }
+}
+
+fn door_blocks_sense(from: &Position, to: &Position, doors: &[[f32; 4]]) -> bool {
+    let tx = from.x + shortest_world_delta_x(from.x, to.x);
+    doors.iter().any(|&[ax, az, bx, bz]| {
+        let ax = from.x + shortest_world_delta_x(from.x, ax);
+        let bx = ax + shortest_world_delta_x(ax, bx);
+        segment_touches_box(
+            (ax.min(bx), ax.max(bx)),
+            (az.min(bz), az.max(bz)),
+            (from.x, from.z),
+            (tx, to.z),
+        )
+    })
 }
 
 type Roster = HashMap<super::SpatialCell, Vec<(PlayerId, Position, u32, i8)>>;
@@ -158,6 +188,11 @@ impl super::GameState {
             .entries
             .get(monster_id)
             .and_then(|e| e.brain.target_player_id())
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn brain_pathfind_count(&self) -> u64 {
+        self.monster_brains.lock().await.stats.pathfinds
     }
 
     fn new_brain(&self, monster: &Monster) -> MonsterBrain {
@@ -222,6 +257,45 @@ impl super::GameState {
         };
         // Just arrived, or behind a shut locked door: out of every monster's sight.
         let sealed = self.players_hidden_in_stair_rooms(&underground).await;
+        let closed_doors = {
+            let dungeons = self.dungeons.read().await;
+            let mut doors = HashMap::new();
+            for (_, pos, level) in &underground {
+                let Some(entrance) = self.dungeon_defs.entrance_at(pos.x, pos.z) else {
+                    continue;
+                };
+                let Some(rt) = dungeons.get(&entrance.id) else {
+                    continue;
+                };
+                let depth = level.unsigned_abs();
+                let Some(layout) = rt.layouts.get(depth as usize - 1) else {
+                    continue;
+                };
+                doors
+                    .entry((entrance.id.as_str(), *level))
+                    .or_insert_with(|| {
+                        let (ox, oz) =
+                            onlinerpg_shared::dungeon::dungeon_origin(entrance.x, entrance.z);
+                        onlinerpg_shared::dungeon::closed_door_segs(
+                            layout,
+                            rt.open_doors.get(&depth),
+                        )
+                        .as_chunks::<4>()
+                        .0
+                        .iter()
+                        .map(|&[ax, az, bx, bz]| {
+                            [
+                                ox + ax as f32,
+                                oz + az as f32,
+                                ox + bx as f32,
+                                oz + bz as f32,
+                            ]
+                        })
+                        .collect::<Vec<_>>()
+                    });
+            }
+            doors
+        };
         for entries in roster.values_mut() {
             entries.retain(|(id, ..)| !sealed.contains(id));
         }
@@ -282,6 +356,8 @@ impl super::GameState {
                             last_tick: started,
                             watched_gen: 0,
                             target_seen: None,
+                            closed_doors: Vec::new(),
+                            door_hidden_target: None,
                         },
                     );
                 }
@@ -294,9 +370,8 @@ impl super::GameState {
             }
             (active, standing)
         };
-        // Underground, walls and shut doors block sight (houses stay
-        // see-through, by budget). Sight memory keeps a chase alive through
-        // the tick where the doorway corner clips the line.
+        let mut commands: Vec<(String, i8, AiCommand)> = Vec::new();
+        // Closed doors block sensing and sight memory too.
         {
             let cache = self.passability_read();
             for a in active.iter_mut().filter(|a| a.floor_level < 0) {
@@ -309,10 +384,26 @@ impl super::GameState {
                 };
                 let key = onlinerpg_shared::dungeon::dungeon_cache_key(&entrance.id);
                 let floor = passability_floor_for_level(a.floor_level);
-                let from = a.position;
-                let target = entry.brain.target_player_id();
+                let from = entry.brain.position;
+                let target = entry.brain.target_player_id().or(entry.door_hidden_target);
                 let remembered = entry.remembered(target, started);
+                let doors = closed_doors
+                    .get(&(entrance.id.as_str(), a.floor_level))
+                    .map(Vec::as_slice)
+                    .unwrap_or_default();
+                if entry.closed_doors != doors {
+                    entry.closed_doors = doors.to_vec();
+                    entry.brain.retry_chase();
+                }
+                let mut target_hidden = false;
                 a.players.retain(|p| {
+                    if door_blocks_sense(&from, &p.position, doors) {
+                        if Some(p.id) == target {
+                            target_hidden = true;
+                            entry.target_seen = None;
+                        }
+                        return false;
+                    }
                     let visible = from.dist_xz_sq(&p.position) <= SENSE_RANGE * SENSE_RANGE
                         || !onlinerpg_shared::pathfinding::attack_line_blocked_in(
                             &cache,
@@ -328,6 +419,22 @@ impl super::GameState {
                     }
                     visible || Some(p.id) == remembered
                 });
+                if target_hidden {
+                    commands.extend(
+                        entry
+                            .brain
+                            .pause_chase()
+                            .into_iter()
+                            .map(|c| (a.id.clone(), a.floor_level, c)),
+                    );
+                    entry.door_hidden_target = target;
+                } else if let Some(hidden) = entry.door_hidden_target.take() {
+                    if entry.brain.target_player_id().is_none()
+                        && a.players.iter().any(|p| p.id == hidden)
+                    {
+                        entry.brain.resume_chase(hidden);
+                    }
+                }
             }
             active.retain(|a| !a.players.is_empty());
         }
@@ -338,21 +445,21 @@ impl super::GameState {
                 entry.watch(gen, started);
             }
         }
-        if active.is_empty() {
+        if active.is_empty() && commands.is_empty() {
             return;
         }
 
-        let mut commands: Vec<(String, i8, AiCommand)> = Vec::new();
         let pathfinds = {
             let cache = self.passability_read();
             let path = CountingPath {
                 inner: CachePathProvider { cache: &cache },
                 count: Cell::new(0),
+                remaining: Cell::new(BRAIN_PATH_NODE_BUDGET),
             };
             let mut rng = rand::thread_rng();
             let mut ticked = 0usize;
             let n = active.len();
-            let start = brains.cursor % n;
+            let start = brains.cursor % n.max(1);
             let mut over_budget = false;
             for i in 0..n {
                 if started.elapsed() > TICK_BUDGET {
@@ -376,6 +483,7 @@ impl super::GameState {
                         .filter(|m| m.id != a.id)
                         .cloned()
                         .collect();
+                path.remaining.set(BRAIN_PATH_NODE_BUDGET);
                 let result = entry.brain.tick_with_behavior_tree(
                     delta_ms, &a.players, &monsters, tree, &path, &mut rng,
                 );
@@ -591,5 +699,82 @@ impl super::GameState {
     #[cfg(test)]
     pub(crate) async fn brain_count(&self) -> usize {
         self.monster_brains.lock().await.len()
+    }
+}
+
+#[cfg(test)]
+mod path_budget_tests {
+    use super::*;
+    use onlinerpg_shared::pathfinding::{
+        build_furniture_passability, FurniturePiece, PassabilityCache, PathTermination,
+    };
+
+    #[test]
+    fn all_path_queries_share_the_brains_node_budget() {
+        let obstacle = build_furniture_passability(&[FurniturePiece {
+            cells: vec![(0, 0)],
+            floor_level: 0,
+            y_base: 0.0,
+            wall_height: 3.0,
+        }])
+        .unwrap();
+        let cache = PassabilityCache::from([("obstacle".into(), obstacle)]);
+        let path = CountingPath {
+            inner: CachePathProvider { cache: &cache },
+            count: Cell::new(0),
+            remaining: Cell::new(20),
+        };
+        let first = path.find_path_avoiding(10.5, 0.5, 0, 0.5, 0.5, 0, &[], 6);
+        assert_eq!(first.termination, PathTermination::NodeLimit);
+        assert_eq!(path.remaining.get(), 14);
+        let second = path.find_path_avoiding(10.5, 0.5, 0, 0.5, 0.5, 0, &[], 7);
+        assert_eq!(second.termination, PathTermination::NodeLimit);
+        assert_eq!(path.remaining.get(), 7);
+        let third = path.find_path(10.5, 0.5, 0, 0.5, 0.5, 0);
+        assert_eq!(third.termination, PathTermination::NodeLimit);
+        assert_eq!(path.remaining.get(), 0);
+        let fourth = path.find_path(10.5, 0.5, 0, 0.5, 0.5, 0);
+        assert_eq!(fourth.termination, PathTermination::NodeLimit);
+        assert!(fourth.waypoints.is_empty());
+        assert_eq!(path.remaining.get(), 0);
+
+        path.remaining.set(20);
+        let reached = path.find_path(-1.5, 0.5, 0, 2.5, 0.5, 0);
+        assert!(reached.found);
+        assert!(path.remaining.get() > 0 && path.remaining.get() < 20);
+    }
+
+    #[test]
+    fn closed_door_sensing_checks_the_opening_span() {
+        let from = Position {
+            x: -2.0,
+            y: 0.0,
+            z: 0.5,
+        };
+        let to = Position {
+            x: 2.0,
+            y: 0.0,
+            z: 0.5,
+        };
+        assert!(door_blocks_sense(&from, &to, &[[0.0, 0.0, 0.0, 1.0]]));
+        assert!(!door_blocks_sense(&from, &to, &[[0.0, 1.0, 0.0, 2.0]]));
+        assert!(!door_blocks_sense(&from, &to, &[]));
+        let other_side = Position { x: -1.0, ..to };
+        assert!(!door_blocks_sense(
+            &from,
+            &other_side,
+            &[[0.0, 0.0, 0.0, 1.0]]
+        ));
+        let from = Position {
+            x: 0.5,
+            y: 0.0,
+            z: -2.0,
+        };
+        let to = Position {
+            x: 0.5,
+            y: 0.0,
+            z: 2.0,
+        };
+        assert!(door_blocks_sense(&from, &to, &[[0.0, 0.0, 1.0, 0.0]]));
     }
 }

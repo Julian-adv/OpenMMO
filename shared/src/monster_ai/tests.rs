@@ -1460,6 +1460,51 @@ fn unreachable_target_holds_in_place_instead_of_wandering() {
 }
 
 #[test]
+fn failed_chases_back_off_and_retry_when_the_target_moves() {
+    struct FailedPath(std::cell::Cell<usize>);
+    impl PathProvider for FailedPath {
+        fn find_path(&self, _: f32, _: f32, _: u8, _: f32, _: f32, _: u8) -> PathResult {
+            self.0.set(self.0.get() + 1);
+            PathResult {
+                waypoints: vec![],
+                found: false,
+                termination: crate::pathfinding::PathTermination::NodeLimit,
+            }
+        }
+
+        fn attack_line_blocked(&self, _: f32, _: f32, _: f32, _: f32, _: u8) -> bool {
+            true
+        }
+    }
+
+    let mut brain = brain_at("m1", 14.0, 10.5);
+    let tree = chase_attack_tree();
+    let mut rng = SmallRng::seed_from_u64(42);
+    let mut players = attacker_at(10.0, 10.5);
+    let path = FailedPath(std::cell::Cell::new(0));
+    let mut attempts = vec![];
+    for tick in 0..60 {
+        let before = path.0.get();
+        brain.tick_with_behavior_tree(200.0, &players, &[], &tree, &path, &mut rng);
+        if path.0.get() > before {
+            attempts.push(tick);
+        }
+    }
+    assert_eq!(attempts, vec![0, 3, 8, 18, 38, 58]);
+
+    let before = path.0.get();
+    players[0].position.x -= 4.0;
+    brain.tick_with_behavior_tree(200.0, &players, &[], &tree, &path, &mut rng);
+    assert_eq!(path.0.get(), before + 1);
+
+    brain.retry_chase();
+    brain.tick_with_behavior_tree(16.0, &players, &[], &tree, &DirectPath, &mut rng);
+    assert!(!brain.waypoints.is_empty());
+    assert_eq!(brain.chase_failures, 0);
+    assert_eq!(brain.chase_retry_left_ms, 0.0);
+}
+
+#[test]
 fn stacked_attackers_spread_to_one_per_cell() {
     let mut b1 = brain_at("m1", 14.0, 10.5);
     let mut b2 = brain_at("m2", 14.0, 10.5);

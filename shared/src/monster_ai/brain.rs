@@ -35,6 +35,8 @@ pub struct MonsterBrain {
     pub(super) current_waypoint_idx: usize,
     pub(super) path_elapsed_ms: f32,
     pub(super) return_retry_left_ms: f32,
+    pub(super) chase_retry_left_ms: f32,
+    pub(super) chase_failures: u8,
     pub(super) last_known_target_pos: Option<Position>,
     pub(super) spawn_position: Position,
     /// Passability floor for path queries. 0 = overworld/house ground;
@@ -118,6 +120,8 @@ impl MonsterBrain {
             current_waypoint_idx: 0,
             path_elapsed_ms: 0.0,
             return_retry_left_ms: 0.0,
+            chase_retry_left_ms: 0.0,
+            chase_failures: 0,
             last_known_target_pos: None,
             spawn_position: position,
             position,
@@ -175,6 +179,36 @@ impl MonsterBrain {
         self.waypoints.clear();
         self.current_waypoint_idx = 0;
         self.pending_bend_sync = false;
+        self.retry_chase();
+    }
+
+    pub fn retry_chase(&mut self) {
+        self.clear_chase_backoff();
+        self.last_known_target_pos = None;
+    }
+
+    pub(super) fn clear_chase_backoff(&mut self) {
+        self.chase_failures = 0;
+        self.chase_retry_left_ms = 0.0;
+    }
+
+    pub fn pause_chase(&mut self) -> Vec<AiCommand> {
+        self.target_player_id = None;
+        self.waypoints.clear();
+        self.current_waypoint_idx = 0;
+        self.chase_goal_cell = None;
+        self.detour_goal = None;
+        self.target_position = None;
+        let mut commands = Vec::new();
+        if !matches!(self.state, AiState::Idle | AiState::Hit | AiState::Dead) {
+            self.enter_hold(&mut commands);
+        }
+        commands
+    }
+
+    pub fn resume_chase(&mut self, target: PlayerId) {
+        self.target_player_id = Some(target);
+        self.retry_chase();
     }
 
     pub fn state(&self) -> AiState {
@@ -197,6 +231,7 @@ impl MonsterBrain {
         self.state_timer_ms += delta_ms;
         self.path_elapsed_ms += delta_ms;
         self.return_retry_left_ms = (self.return_retry_left_ms - delta_ms).max(0.0);
+        self.chase_retry_left_ms = (self.chase_retry_left_ms - delta_ms).max(0.0);
         self.sync_elapsed_ms += delta_ms;
         self.attack_cooldown_left_ms = (self.attack_cooldown_left_ms - delta_ms).max(0.0);
         self.swing_left_ms = (self.swing_left_ms - delta_ms).max(0.0);
@@ -304,6 +339,10 @@ impl MonsterBrain {
             return vec![];
         }
 
+        if previous_target != self.target_player_id {
+            self.retry_chase();
+        }
+
         if hit {
             self.state = AiState::Hit;
             self.state_timer_ms = 0.0;
@@ -311,10 +350,6 @@ impl MonsterBrain {
         } else if self.state.is_engaged() {
             // Already engaged: idling here stopped a charging monster and
             // slid it back to the last tick's pose on every missed swing.
-            // A new attacker only needs the next repath aimed at them.
-            if previous_target != self.target_player_id {
-                self.last_known_target_pos = None;
-            }
             vec![]
         } else {
             // A miss (and the server's out-of-range provoke event) still
