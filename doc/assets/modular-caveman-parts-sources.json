@@ -563,6 +563,12 @@
       "review": "doc/assets/modular-caveman-tripo-top-review-v1.json",
       "delivery_date": "2026-10-03",
       "status": "Raw fitting candidate; no body fit or rig."
+    },
+    "pants_caveman": {
+      "source_record": "doc/assets/modular-caveman-tripo-pants-sources.json",
+      "review": "doc/assets/modular-caveman-tripo-pants-review-v1.json",
+      "delivery_date": "2026-10-04",
+      "status": "Fitted preview candidate: four independently bending hip-anchored pelts; runtime motions checked."
     }
   },
   "cleanup_record": "doc/assets/modular-caveman-cleanup.json"

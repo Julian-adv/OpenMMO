@@ -49,6 +49,26 @@ const undressed: ModularOutfit = {
 }
 
 describe('caveman workshop preview', () => {
+  it('shows the pelt skirt with exposed legs, hides the proxy and restores other outfits', () => {
+    const { body, parts, visible } = fixture()
+    const skirt = new THREE.SkinnedMesh()
+    const proxy = new THREE.SkinnedMesh()
+    parts.set('pants_caveman', [skirt])
+    parts.set('pants_barbarian', [proxy])
+    const selected = showPreviewOutfit(body, parts, CAVEMAN_PREVIEW_OUTFIT)
+    expect(selected.has('pants_caveman')).toBe(true)
+    expect(selected.has('pants_barbarian')).toBe(false)
+    expect(skirt.visible).toBe(true)
+    expect(proxy.visible).toBe(false)
+    expect(visible('legs')).toBe(true)
+    expect(visible('feet')).toBe(true)
+    showPreviewOutfit(body, parts, KNIGHT_MODULAR_OUTFIT)
+    expect(skirt.visible).toBe(false)
+    expect(visible('legs')).toBe(false)
+    showPreviewOutfit(body, parts, CAVEMAN_PREVIEW_OUTFIT)
+    expect(skirt.visible).toBe(true)
+    expect(visible('legs')).toBe(true)
+  })
   it('restores bare skin after another top and hides the pelt when switching', () => {
     const { body, parts, visible } = fixture()
     const pelt = new THREE.SkinnedMesh()

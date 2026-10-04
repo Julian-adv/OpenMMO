@@ -82,6 +82,53 @@ function worldVertex(mesh: THREE.SkinnedMesh, i: number) {
 }
 
 describe('pelt physics', () => {
+  it('keeps a heavier side pelt closer to its wearer after a sudden movement', () => {
+    const a = fixture(),
+      b = fixture(),
+      c = fixture()
+    const normal = createPeltRig(a.mesh, config)
+    const heavy = createPeltRig(b.mesh, {
+      ...config,
+      motion: {
+        damping: 26,
+        stiffness: 40,
+        gravity: 14,
+        inertia: 0.2,
+        max_angle: 0.65,
+      },
+    })
+    const middle = createPeltRig(c.mesh, {
+      ...config,
+      motion: {
+        damping: 19,
+        stiffness: 52,
+        gravity: 10,
+        inertia: 0.6,
+        max_angle: 0.95,
+      },
+    })
+    normal.reset()
+    heavy.reset()
+    middle.reset()
+    a.root.position.z = b.root.position.z = c.root.position.z = -0.08
+    let normalSwing = 0,
+      heavySwing = 0,
+      middleSwing = 0
+    for (let i = 0; i < 60; i++) {
+      normal.update(1 / 60)
+      heavy.update(1 / 60)
+      middle.update(1 / 60)
+      normalSwing = Math.max(normalSwing, worldVertex(a.mesh, 17).z - 0.12)
+      heavySwing = Math.max(heavySwing, worldVertex(b.mesh, 17).z - 0.12)
+      middleSwing = Math.max(middleSwing, worldVertex(c.mesh, 17).z - 0.12)
+    }
+    expect(normalSwing).toBeGreaterThan(0.04)
+    expect(heavySwing).toBeLessThan(normalSwing * 0.4)
+    expect(middleSwing).toBeGreaterThan(heavySwing * 1.5)
+    expect(middleSwing).toBeLessThan(normalSwing * 0.85)
+    expect(worldVertex(b.mesh, 17).z).toBeCloseTo(0.12, 3)
+  })
+
   it('pins the hinge and lets a rigid plate trail a moving wearer, then settle', () => {
     const { root, mesh } = fixture()
     const rig = createPeltRig(mesh, config)
@@ -251,6 +298,208 @@ describe('pelt physics', () => {
 })
 
 describe('flexible belt attachments', () => {
+  it('keeps side clearance and lifts further when the thigh swings forward', () => {
+    const { root, hip, mesh } = fixture()
+    mesh.geometry.rotateY(Math.PI / 2)
+    const thigh = new THREE.Bone()
+    thigh.name = 'LeftUpLeg'
+    root.add(thigh)
+    root.updateMatrixWorld(true)
+    mesh.bind(new THREE.Skeleton([hip, thigh]))
+    const rig = createPeltRig(mesh, {
+      ...config,
+      pivot: [0.2, 1.055, 0],
+      outward: [1, 0, 0],
+      bend: { droop: 0, contact: true },
+      motion: {
+        damping: 19,
+        stiffness: 52,
+        gravity: 10,
+        inertia: 0.6,
+        min_angle: 0.18,
+        flex_clearance: 0.35,
+      },
+      colliders: [
+        { bone: 'LeftUpLeg', center: [0, 0.8, 0], radii: [0.01, 0.01, 0.01] },
+      ],
+    })
+    rig.reset()
+    const pinned = worldVertex(mesh, 1)
+    const standing = worldVertex(mesh, 16)
+    expect(standing.x).toBeGreaterThan(0.25)
+    thigh.rotation.x = 0.7
+    rig.update(1 / 60)
+    expect(worldVertex(mesh, 16).x).toBeGreaterThan(standing.x + 0.04)
+    expect(worldVertex(mesh, 1).distanceTo(pinned)).toBeLessThan(1e-6)
+    rig.dispose()
+  })
+
+  it('folds both sides around the longitudinal centerline while keeping the waist and lengths', () => {
+    const { mesh } = fixture()
+    const source = mesh.geometry
+    const rig = createPeltRig(mesh, {
+      ...config,
+      bend: {
+        droop: 0,
+        crease: { width: 0.025, angle: 0.25, damping: 14, stiffness: 36 },
+      },
+    })
+    rig.reset()
+    const position = mesh.geometry.getAttribute('position')
+    const rest = source.getAttribute('position')
+    const center = new THREE.Vector3().fromBufferAttribute(position, 16)
+    for (const i of [15, 17]) {
+      const edge = new THREE.Vector3().fromBufferAttribute(position, i)
+      expect(center.z - edge.z).toBeGreaterThan(0.008)
+    }
+    for (const i of [0, 1, 2, 16])
+      expect(
+        new THREE.Vector3()
+          .fromBufferAttribute(position, i)
+          .distanceTo(new THREE.Vector3().fromBufferAttribute(rest, i))
+      ).toBeLessThan(0.001)
+    const index = mesh.geometry.index!
+    for (let i = 0; i < index.count; i += 3)
+      for (let j = 0; j < 3; j++) {
+        const a = index.getX(i + j),
+          b = index.getX(i + ((j + 1) % 3))
+        const length = new THREE.Vector3()
+          .fromBufferAttribute(rest, a)
+          .distanceTo(new THREE.Vector3().fromBufferAttribute(rest, b))
+        const posed = new THREE.Vector3()
+          .fromBufferAttribute(position, a)
+          .distanceTo(new THREE.Vector3().fromBufferAttribute(position, b))
+        expect(posed).toBeLessThanOrEqual(length * 1.021)
+      }
+    rig.dispose()
+    expect(mesh.geometry).toBe(source)
+  })
+
+  it('lets the lower half fold at the middle and lag behind the waist without elongating', () => {
+    const { root, mesh } = fixture()
+    const source = mesh.geometry
+    const original = Array.from(source.getAttribute('position').array)
+    const rig = createPeltRig(mesh, {
+      ...config,
+      motion: {
+        damping: 19,
+        stiffness: 52,
+        gravity: 10,
+        inertia: 0.6,
+        max_angle: 0.95,
+      },
+      bend: {
+        droop: 0.6,
+        joint: {
+          at: 0.5,
+          width: 0.14,
+          damping: 12,
+          stiffness: 28,
+          inertia: 0.65,
+        },
+      },
+    })
+    rig.reset()
+    root.position.z = -0.08
+    let fold = 0
+    for (let frame = 0; frame < 90; frame++) {
+      rig.update(1 / 60)
+      const p = mesh.geometry.getAttribute('position')
+      const upper = new THREE.Vector3()
+        .fromBufferAttribute(p, 7)
+        .sub(new THREE.Vector3().fromBufferAttribute(p, 4))
+      const lower = new THREE.Vector3()
+        .fromBufferAttribute(p, 16)
+        .sub(new THREE.Vector3().fromBufferAttribute(p, 13))
+      fold = Math.max(
+        fold,
+        Math.abs(Math.atan2(upper.z, -upper.y) - Math.atan2(lower.z, -lower.y))
+      )
+      for (let row = 1; row < 6; row++) {
+        const a = new THREE.Vector3().fromBufferAttribute(p, row * 3 + 1)
+        const b = new THREE.Vector3().fromBufferAttribute(p, (row - 1) * 3 + 1)
+        expect(a.distanceTo(b)).toBeLessThan(0.073 * 1.021)
+      }
+      expect(
+        worldVertex(mesh, 1).distanceTo(new THREE.Vector3(0, 1.055, 0.12))
+      ).toBeLessThan(1e-6)
+    }
+    expect(fold).toBeGreaterThan(0.15)
+    expect(Array.from(source.getAttribute('position').array)).toEqual(original)
+    rig.dispose()
+    expect(mesh.geometry).toBe(source)
+  })
+
+  it('updates local thigh contact even when the hip hinge angle stays still', () => {
+    const { root, hip, mesh } = fixture()
+    const thigh = new THREE.Bone()
+    thigh.name = 'LeftUpLeg'
+    root.add(thigh)
+    root.updateMatrixWorld(true)
+    mesh.bind(new THREE.Skeleton([hip, thigh]))
+    const source = mesh.geometry
+    const rig = createPeltRig(mesh, {
+      ...config,
+      bend: { droop: 0.6, contact: true },
+      colliders: [
+        {
+          bone: 'LeftUpLeg',
+          center: [0, 0.82, 0.16],
+          radii: [0.11, 0.12, 0.09],
+        },
+      ],
+    })
+    rig.reset()
+    const before = Array.from(mesh.geometry.getAttribute('position').array)
+    thigh.position.z = 0.05
+    rig.update(1 / 60)
+    const after = Array.from(mesh.geometry.getAttribute('position').array)
+    expect(
+      Math.max(...after.map((v, i) => Math.abs(v - before[i])))
+    ).toBeGreaterThan(0.001)
+    expect(after.every(Number.isFinite)).toBe(true)
+    rig.dispose()
+    expect(mesh.geometry).toBe(source)
+  })
+
+  it('curves a separate pelt toward its hem without stretching it into the legs', () => {
+    const { root, mesh } = fixture()
+    const source = mesh.geometry
+    const original = Array.from(source.getAttribute('position').array)
+    const rig = createPeltRig(mesh, { ...config, bend: { droop: 0.6 } })
+    rig.reset()
+    root.position.z = -0.08
+    let curve = 0
+    for (let frame = 0; frame < 30; frame++) {
+      rig.update(1 / 60)
+      const position = mesh.geometry.getAttribute('position')
+      const top = new THREE.Vector3().fromBufferAttribute(position, 1)
+      const middle = new THREE.Vector3().fromBufferAttribute(position, 10)
+      const bottom = new THREE.Vector3().fromBufferAttribute(position, 16)
+      const straight = new THREE.Line3(top, bottom).closestPointToPoint(
+        middle,
+        true,
+        new THREE.Vector3()
+      )
+      curve = Math.max(curve, middle.distanceTo(straight))
+      for (let row = 1; row < 6; row++) {
+        const a = new THREE.Vector3().fromBufferAttribute(position, row * 3 + 1)
+        const b = new THREE.Vector3().fromBufferAttribute(
+          position,
+          (row - 1) * 3 + 1
+        )
+        expect(a.distanceTo(b)).toBeLessThan(0.073 * 1.015)
+      }
+      expect(
+        worldVertex(mesh, 1).distanceTo(new THREE.Vector3(0, 1.055, 0.12))
+      ).toBeLessThan(1e-6)
+    }
+    expect(curve).toBeGreaterThan(0.005)
+    expect(Array.from(source.getAttribute('position').array)).toEqual(original)
+    rig.dispose()
+    expect(mesh.geometry).toBe(source)
+  })
+
   it.each(['strap', 'fur'] as const)(
     'keeps both top rows of %s fixed while the lower rows bend',
     (kind) => {

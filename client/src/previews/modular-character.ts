@@ -121,7 +121,7 @@ async function main() {
   const tripo = requestedOutfit === 'tripo'
   const caveman = requestedOutfit === 'caveman'
   if (tripo || caveman) showWeapon.checked = false
-  if (caveman) cameraSelect.value = 'top'
+  if (caveman) cameraSelect.value = 'full'
   const load = async (url: string) => {
     const gltf = await loader.loadAsync(url)
     if (disposed) {
@@ -150,7 +150,11 @@ async function main() {
     'boots_barbarian',
     'helmet_barbarian',
   ]
-  const candidateParts = [...ROGUE_PREVIEW_PARTS, 'top_caveman']
+  const candidateParts = [
+    ...ROGUE_PREVIEW_PARTS,
+    'top_caveman',
+    'pants_caveman',
+  ]
   const [base, sources, animations, sword, profile, candidateSources, social] =
     await Promise.all([
       load('/__modular-character/parts/base.glb'),
@@ -184,7 +188,9 @@ async function main() {
     .slice(0, ROGUE_PREVIEW_PARTS.length)
     .every((result) => result.status === 'fulfilled')
   el<HTMLButtonElement>('rogue-outfit').disabled = !rogueAvailable
-  const cavemanAvailable = candidateSources.at(-1)?.status === 'fulfilled'
+  const cavemanAvailable = candidateSources
+    .slice(ROGUE_PREVIEW_PARTS.length)
+    .every((result) => result.status === 'fulfilled')
   el<HTMLButtonElement>('caveman-outfit').disabled = !cavemanAvailable
   const clips = [
     ...modularAnimationClips(base.scene, animations, 'corrected'),
@@ -261,10 +267,11 @@ async function main() {
     })
     const note = el('outfit-note')
     const inspectingRogue = ROGUE_PREVIEW_PARTS.some((id) => equipped.has(id))
-    const inspectingCaveman = equipped.has('top_caveman')
+    const inspectingCaveman =
+      equipped.has('top_caveman') || equipped.has('pants_caveman')
     note.hidden = rogueAvailable && !inspectingRogue && !inspectingCaveman
     note.textContent = inspectingCaveman
-      ? '원시전사 어깨 펠트와 뼈 목걸이'
+      ? '원시전사 모피와 뼈 장식'
       : !rogueAvailable
         ? '일부 로그 파츠를 불러오지 못했습니다. 새로고침해 다시 시도하세요.'
         : '기본 로그 상의를 적용했습니다. 다른 장비와의 혼합 호환은 검수 중입니다.'
@@ -302,6 +309,7 @@ async function main() {
     throw new Error('확대 시점에 필요한 본을 찾지 못했습니다.')
   const weapon = new THREE.Group()
   weapon.name = 'previewSwordAttachment'
+  weapon.visible = showWeapon.checked
   weapon.add(sword.scene.clone(true))
   hand.add(weapon)
   const mixer = new THREE.AnimationMixer(modelRoot)
@@ -485,6 +493,11 @@ async function main() {
     string,
     { bone: THREE.Object3D; offsetY: number; position: THREE.Vector3 }
   > = {
+    pants: {
+      bone: body.getObjectByName('Hips')!,
+      offsetY: -0.15,
+      position: new THREE.Vector3(-0.6, 0.2, 1.7),
+    },
     top: {
       bone: body.getObjectByName('Spine2')!,
       offsetY: 0.07,

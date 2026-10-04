@@ -1,0 +1,509 @@
+{
+  "date": "2026-10-04",
+  "status": "Fitted belt and four independently bending pelts; runtime and visual validation required",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/source.glb",
+    "sha256": "a7b5cb922f7c117352a45b013054103905aad9eb0b0e3ec473b17b82f575bba3"
+  },
+  "base": {
+    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b"
+  },
+  "interfaces": {
+    "path": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+    "sha256": "f3fc3aed9c5080cf26a294dac496293c89bce8f67466add18a7ef72b326f006b"
+  },
+  "rig_id": "human_male_01_mixamo_candidate_v2",
+  "preserved_embedded_texture": true,
+  "topology": {
+    "source_triangles": 4960,
+    "rigid_core_meshes": 2,
+    "separate_hinged_panels": 4,
+    "method": "Clip source cloth into front/back/left/right quadrants with interpolated original UV; 17mm overlap beneath the rigid waistband",
+    "waist_overlap_y_m": [
+      1.095,
+      1.112
+    ]
+  },
+  "transform": {
+    "scale": [
+      0.55,
+      0.495,
+      0.6
+    ],
+    "translation": [
+      0,
+      0.65,
+      -0.02
+    ],
+    "waist": "Actual body radial sections with preserved shell and accessory offsets"
+  },
+  "source_components": 19,
+  "physics": {
+    "anchor_bone": "Hips",
+    "rigid_accessory_components": 18,
+    "method": "Independent hip hinges; side pelts add a damped midpoint hinge, a longitudinal center crease and local contact. Welded edge projection caps extension at 2% plus 1 micrometer tolerance; no thigh skinning",
+    "panels": {
+      "caveman_pelt_front": {
+        "kind": "plate",
+        "bone": "Hips",
+        "pivot": [
+          0,
+          1.106,
+          0.107
+        ],
+        "outward": [
+          0,
+          0,
+          1
+        ],
+        "length": 0.4526126057081593,
+        "colliders": [
+          {
+            "bone": "Hips",
+            "center": [
+              0,
+              0.98,
+              -0.01
+            ],
+            "radii": [
+              0.192,
+              0.15,
+              0.14
+            ]
+          },
+          {
+            "bone": "LeftUpLeg",
+            "center": [
+              0.13,
+              0.8,
+              -0.012
+            ],
+            "radii": [
+              0.105,
+              0.235,
+              0.127
+            ]
+          },
+          {
+            "bone": "RightUpLeg",
+            "center": [
+              -0.13,
+              0.8,
+              -0.012
+            ],
+            "radii": [
+              0.105,
+              0.235,
+              0.127
+            ]
+          },
+          {
+            "bone": "LeftLeg",
+            "center": [
+              0.165,
+              0.33,
+              -0.04
+            ],
+            "radii": [
+              0.085,
+              0.27,
+              0.105
+            ]
+          },
+          {
+            "bone": "RightLeg",
+            "center": [
+              -0.165,
+              0.33,
+              -0.04
+            ],
+            "radii": [
+              0.085,
+              0.27,
+              0.105
+            ]
+          }
+        ],
+        "bend": {
+          "droop": 0.6
+        }
+      },
+      "caveman_pelt_back": {
+        "kind": "plate",
+        "bone": "Hips",
+        "pivot": [
+          0,
+          1.106,
+          -0.137
+        ],
+        "outward": [
+          0,
+          0,
+          -1
+        ],
+        "length": 0.45599994083113415,
+        "colliders": [
+          {
+            "bone": "Hips",
+            "center": [
+              0,
+              0.98,
+              -0.01
+            ],
+            "radii": [
+              0.174,
+              0.15,
+              0.13
+            ]
+          },
+          {
+            "bone": "LeftUpLeg",
+            "center": [
+              0.13,
+              0.8,
+              -0.012
+            ],
+            "radii": [
+              0.105,
+              0.235,
+              0.127
+            ]
+          },
+          {
+            "bone": "RightUpLeg",
+            "center": [
+              -0.13,
+              0.8,
+              -0.012
+            ],
+            "radii": [
+              0.105,
+              0.235,
+              0.127
+            ]
+          },
+          {
+            "bone": "LeftLeg",
+            "center": [
+              0.165,
+              0.33,
+              -0.04
+            ],
+            "radii": [
+              0.085,
+              0.27,
+              0.105
+            ]
+          },
+          {
+            "bone": "RightLeg",
+            "center": [
+              -0.165,
+              0.33,
+              -0.04
+            ],
+            "radii": [
+              0.085,
+              0.27,
+              0.105
+            ]
+          }
+        ],
+        "bend": {
+          "droop": 0.15,
+          "contact": true
+        }
+      },
+      "caveman_pelt_left": {
+        "kind": "plate",
+        "bone": "Hips",
+        "pivot": [
+          0.16,
+          1.106,
+          -0.02
+        ],
+        "outward": [
+          1,
+          0,
+          0
+        ],
+        "length": 0.33635880040701915,
+        "colliders": [
+          {
+            "bone": "Hips",
+            "center": [
+              0,
+              0.98,
+              -0.01
+            ],
+            "radii": [
+              0.185,
+              0.155,
+              0.145
+            ]
+          },
+          {
+            "bone": "LeftUpLeg",
+            "center": [
+              0.115,
+              0.81,
+              -0.012
+            ],
+            "radii": [
+              0.115,
+              0.215,
+              0.132
+            ]
+          },
+          {
+            "bone": "LeftLeg",
+            "center": [
+              0.165,
+              0.33,
+              -0.04
+            ],
+            "radii": [
+              0.08,
+              0.25,
+              0.1
+            ]
+          }
+        ],
+        "bend": {
+          "droop": 0.6,
+          "contact": true,
+          "joint": {
+            "at": 0.5,
+            "width": 0.14,
+            "damping": 12,
+            "stiffness": 28,
+            "inertia": 0.65
+          },
+          "crease": {
+            "width": 0.025,
+            "angle": 0.16,
+            "damping": 14,
+            "stiffness": 36
+          }
+        },
+        "motion": {
+          "damping": 19,
+          "stiffness": 52,
+          "gravity": 10,
+          "inertia": 0.6,
+          "max_angle": 1.05,
+          "min_angle": 0.24,
+          "flex_clearance": 0.45
+        }
+      },
+      "caveman_pelt_right": {
+        "kind": "plate",
+        "bone": "Hips",
+        "pivot": [
+          -0.16,
+          1.106,
+          -0.02
+        ],
+        "outward": [
+          -1,
+          0,
+          0
+        ],
+        "length": 0.33635886217064126,
+        "colliders": [
+          {
+            "bone": "Hips",
+            "center": [
+              0,
+              0.98,
+              -0.01
+            ],
+            "radii": [
+              0.185,
+              0.155,
+              0.145
+            ]
+          },
+          {
+            "bone": "RightUpLeg",
+            "center": [
+              -0.115,
+              0.81,
+              -0.012
+            ],
+            "radii": [
+              0.115,
+              0.215,
+              0.132
+            ]
+          },
+          {
+            "bone": "RightLeg",
+            "center": [
+              -0.165,
+              0.33,
+              -0.04
+            ],
+            "radii": [
+              0.08,
+              0.25,
+              0.1
+            ]
+          }
+        ],
+        "bend": {
+          "droop": 0.6,
+          "contact": true,
+          "joint": {
+            "at": 0.5,
+            "width": 0.14,
+            "damping": 12,
+            "stiffness": 28,
+            "inertia": 0.65
+          },
+          "crease": {
+            "width": 0.025,
+            "angle": 0.16,
+            "damping": 14,
+            "stiffness": 36
+          }
+        },
+        "motion": {
+          "damping": 19,
+          "stiffness": 52,
+          "gravity": 10,
+          "inertia": 0.6,
+          "max_angle": 1.05,
+          "min_angle": 0.24,
+          "flex_clearance": 0.45
+        }
+      }
+    }
+  },
+  "clearance_iterations": [
+    {
+      "step": 0,
+      "minimum_signed_distance_m": -0.0018865505572767372,
+      "maximum_correction_m": 0.0027916335518637756
+    },
+    {
+      "step": 1,
+      "minimum_signed_distance_m": 0.00031142866576364564,
+      "maximum_correction_m": 0.001889306635542329
+    },
+    {
+      "step": 2,
+      "minimum_signed_distance_m": 0.0019462121955488684,
+      "maximum_correction_m": 0.0014031320263892296
+    },
+    {
+      "step": 3,
+      "minimum_signed_distance_m": 0.0032333725752247784,
+      "maximum_correction_m": 0.0010420764564102963
+    },
+    {
+      "step": 4,
+      "minimum_signed_distance_m": 0.004246840567892823,
+      "maximum_correction_m": 0.0007979813586024019
+    },
+    {
+      "step": 5,
+      "minimum_signed_distance_m": 0.005044821941411833,
+      "maximum_correction_m": 0.0006283203132413635
+    },
+    {
+      "step": 6,
+      "minimum_signed_distance_m": 0.005673142265846325,
+      "maximum_correction_m": 0.0005405485021744939
+    },
+    {
+      "step": 7,
+      "minimum_signed_distance_m": 0.006167912659546242,
+      "maximum_correction_m": 0.00038955610640974744
+    },
+    {
+      "step": 8,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 0.00030669860833547856
+    },
+    {
+      "step": 9,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 0.00025097083441735703
+    },
+    {
+      "step": 10,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 0.00019015958139108606
+    },
+    {
+      "step": 11,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 0.00014971366293453381
+    },
+    {
+      "step": 12,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 0.00012394048736877355
+    },
+    {
+      "step": 13,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 9.28283796896032e-05
+    },
+    {
+      "step": 14,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 7.308860400558443e-05
+    },
+    {
+      "step": 15,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 5.7540390893048596e-05
+    },
+    {
+      "step": 16,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 4.5306383414940066e-05
+    },
+    {
+      "step": 17,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 3.567532427200138e-05
+    },
+    {
+      "step": 18,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 2.808955438469491e-05
+    },
+    {
+      "step": 19,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 4.3634697300683865e-05
+    }
+  ],
+  "bounds_m": {
+    "minimum": [
+      -0.2480281510470846,
+      0.6500000591688659,
+      -0.23665082682964525
+    ],
+    "maximum": [
+      0.24803374631805716,
+      1.14475830078125,
+      0.19665412398156154
+    ]
+  },
+  "validation": {
+    "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb",
+    "sha256": "3be3265a6d2e203098a63d599636d49c33498ef748f2745aa5d278ad04392ad6",
+    "triangles": 5797,
+    "bones": 65,
+    "exact_rest_hierarchy_and_inverse_bind_match": true,
+    "maximum_weight_sum_error": 0,
+    "active_bones": [
+      "Hips"
+    ]
+  }
+}

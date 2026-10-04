@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { createPeltCloth } from './pelt-cloth'
+import { createPeltBend } from './pelt-bend'
 import type { WindSample } from '../shaders/grass-material'
 
 export interface PeltPhysics {
@@ -9,6 +10,32 @@ export interface PeltPhysics {
   outward: [number, number, number]
   length: number
   cloth?: { columns: number; rows: number; pinned_rows: number }
+  bend?: {
+    droop: number
+    contact?: boolean
+    joint?: {
+      at: number
+      width: number
+      damping: number
+      stiffness: number
+      inertia: number
+    }
+    crease?: {
+      width: number
+      angle: number
+      damping: number
+      stiffness: number
+    }
+  }
+  motion?: {
+    damping: number
+    stiffness: number
+    gravity: number
+    inertia: number
+    max_angle?: number
+    min_angle?: number
+    flex_clearance?: number
+  }
   colliders: {
     bone: string
     center: [number, number, number]
@@ -53,6 +80,17 @@ export function createPeltRig(mesh: THREE.SkinnedMesh, config: PeltPhysics) {
   const cloth = config.cloth
     ? createPeltCloth(geometry, original, config)
     : null
+  const bend = config.bend
+    ? createPeltBend(
+        geometry,
+        pivot,
+        outward,
+        config.length,
+        config.bend.droop,
+        config.bend.joint,
+        config.bend.crease
+      )
+    : null
   const frame = new THREE.Matrix4()
   const inverseFrame = new THREE.Matrix4()
   const matrix = new THREE.Matrix4()
@@ -65,6 +103,9 @@ export function createPeltRig(mesh: THREE.SkinnedMesh, config: PeltPhysics) {
   const target = new THREE.Vector3()
   const anchor = new THREE.Vector3()
   const lastAnchor = new THREE.Vector3()
+  const anchorShift = new THREE.Vector3()
+  const contactDirection = new THREE.Vector3()
+  const maxAngle = config.motion?.max_angle ?? MAX_ANGLE
   const samples = new Map<string, THREE.Vector3>()
   const sample = (p: THREE.Vector3) => {
     if (cloth || p.y > pivot.y - 0.055) return
@@ -102,6 +143,12 @@ export function createPeltRig(mesh: THREE.SkinnedMesh, config: PeltPhysics) {
   let accumulator = 0
   let angle = 0
   let drawnAngle = NaN
+  let jointAngle = 0
+  let jointVelocity = 0
+  let drawnJointAngle = NaN
+  let creaseAngle = 0
+  let creaseVelocity = 0
+  let drawnCreaseAngle = NaN
   let scale = 1
 
   function skin(target: THREE.Matrix4, index: number) {
@@ -144,20 +191,46 @@ export function createPeltRig(mesh: THREE.SkinnedMesh, config: PeltPhysics) {
   function penetrates(at: number) {
     rotation.setFromAxisAngle(axis, at)
     for (const p of samples.values()) {
-      local.copy(p).applyQuaternion(rotation).add(pivot)
-      for (const shape of shapes)
+      if (bend)
+        bend.deform(
+          local.copy(p).add(pivot),
+          at,
+          jointTarget(at),
+          creaseTarget(at, jointTarget(at))
+        )
+      else local.copy(p).applyQuaternion(rotation).add(pivot)
+      for (const shape of shapes) {
+        if (config.bend?.contact && shape.bone !== bone) continue
         if (test.copy(local).applyMatrix4(shape.inverse).lengthSq() < 1.06)
           return true
+      }
     }
     return false
   }
 
   function collisionAngle() {
-    if (!penetrates(0)) return 0
+    const minimum = config.motion?.min_angle ?? 0
+    if (config.bend?.contact) {
+      const thigh = shapes.find((shape) =>
+        mesh.skeleton.bones[shape.bone].name.endsWith('UpLeg')
+      )
+      if (thigh && Math.abs(outward.x) > 0.5) {
+        skin(matrix, thigh.bone).premultiply(inverseFrame)
+        local.set(0, -1, 0).transformDirection(matrix)
+        return THREE.MathUtils.clamp(
+          Math.max(0, Math.atan2(local.dot(outward), -local.y)) +
+            minimum +
+            Math.abs(local.dot(axis)) * (config.motion?.flex_clearance ?? 0),
+          0,
+          maxAngle
+        )
+      }
+    }
+    if (!penetrates(minimum)) return minimum
     for (let step = 1; step <= 14; step++) {
-      let high = Math.min(step * 0.1, MAX_ANGLE)
+      let high = Math.min(minimum + step * 0.1, maxAngle)
       if (penetrates(high)) continue
-      let low = (step - 1) * 0.1
+      let low = minimum + (step - 1) * 0.1
       for (let i = 0; i < 7; i++) {
         const middle = (low + high) / 2
         if (penetrates(middle)) low = middle
@@ -165,7 +238,7 @@ export function createPeltRig(mesh: THREE.SkinnedMesh, config: PeltPhysics) {
       }
       return high
     }
-    return MAX_ANGLE
+    return maxAngle
   }
 
   function tip(target: THREE.Vector3, at: number) {
@@ -178,27 +251,50 @@ export function createPeltRig(mesh: THREE.SkinnedMesh, config: PeltPhysics) {
   }
 
   function deform() {
-    if (Math.abs(angle - drawnAngle) < 1e-7) return
+    if (
+      !config.bend?.contact &&
+      Math.abs(angle - drawnAngle) < 1e-7 &&
+      Math.abs(jointAngle - drawnJointAngle) < 1e-7 &&
+      Math.abs(creaseAngle - drawnCreaseAngle) < 1e-7
+    )
+      return
     rotation.setFromAxisAngle(axis, angle)
     for (let i = 0; i < rest.count; i++) {
-      local
-        .fromBufferAttribute(rest, i)
-        .sub(pivot)
-        .applyQuaternion(rotation)
-        .add(pivot)
+      local.fromBufferAttribute(rest, i)
+      if (bend) bend.deform(local, angle, jointAngle, creaseAngle)
+      else local.sub(pivot).applyQuaternion(rotation).add(pivot)
       position.setXYZ(i, local.x, local.y, local.z)
-      if (restNormals) {
-        local.fromBufferAttribute(restNormals, i).applyQuaternion(rotation)
+      if (restNormals && !bend) {
+        local.fromBufferAttribute(restNormals, i)
+        local.applyQuaternion(rotation)
         normals.setXYZ(i, local.x, local.y, local.z)
       }
-      if (restTangents) {
-        local.fromBufferAttribute(restTangents, i).applyQuaternion(rotation)
+      if (restTangents && !bend) {
+        local.fromBufferAttribute(restTangents, i)
+        local.applyQuaternion(rotation)
         tangents.setXYZ(i, local.x, local.y, local.z)
       }
     }
     for (const attr of [position, normals, tangents])
       if (attr) attr.needsUpdate = true
+    bend?.constrain(angle, config.bend?.contact ? bendContact : undefined)
     drawnAngle = angle
+    drawnJointAngle = jointAngle
+    drawnCreaseAngle = creaseAngle
+  }
+
+  function bendContact(p: THREE.Vector3) {
+    p.applyMatrix4(frame)
+    contactDirection.copy(outward).transformDirection(frame)
+    for (const shape of shapes) {
+      local.copy(p).applyMatrix4(shape.worldInverse)
+      if (local.lengthSq() >= 1.06) continue
+      if (local.lengthSq() < 1e-10)
+        local.copy(contactDirection).transformDirection(shape.worldInverse)
+      local.setLength(Math.sqrt(1.06))
+      p.copy(local.applyMatrix4(shape.world))
+    }
+    p.applyMatrix4(inverseFrame)
   }
 
   function reset() {
@@ -207,6 +303,10 @@ export function createPeltRig(mesh: THREE.SkinnedMesh, config: PeltPhysics) {
     if (cloth) cloth.reset(frame, contact)
     else {
       angle = collisionAngle()
+      jointAngle = jointTarget()
+      jointVelocity = 0
+      creaseAngle = creaseTarget()
+      creaseVelocity = 0
       tip(point, angle)
       previous.copy(point)
     }
@@ -214,6 +314,22 @@ export function createPeltRig(mesh: THREE.SkinnedMesh, config: PeltPhysics) {
     accumulator = 0
     initialized = true
     if (!cloth) deform()
+  }
+
+  function creaseTarget(at = angle, jointAt = jointAngle) {
+    const crease = config.bend?.crease
+    return crease
+      ? THREE.MathUtils.clamp(
+          crease.angle + at * 0.1 - jointAt * 0.15,
+          0.1,
+          0.4
+        )
+      : 0
+  }
+
+  function jointTarget(at = angle) {
+    const joint = config.bend?.joint
+    return joint ? -at * 0.7 - 0.08 : 0
   }
 
   function update(dt: number, wind: WindSample | null = null) {
@@ -231,39 +347,65 @@ export function createPeltRig(mesh: THREE.SkinnedMesh, config: PeltPhysics) {
       reset()
       return
     }
+    anchorShift.copy(anchor).sub(lastAnchor)
     lastAnchor.copy(anchor)
     if (!(dt > 0)) return
     if (cloth) {
       cloth.update(frame, dt, wind, contact)
       return
     }
+    const inertia = config.motion?.inertia ?? 1
+    point.addScaledVector(anchorShift, 1 - inertia)
+    previous.addScaledVector(anchorShift, 1 - inertia)
     accumulator = Math.min(accumulator + dt, STEP * 4)
     if (accumulator + 1e-10 < STEP) return
     const minimum = collisionAngle()
     const strap = config.kind === 'strap'
+    const damping = config.motion?.damping ?? (strap ? 7 : 12)
+    const stiffness = config.motion?.stiffness ?? (strap ? 24 : 65)
+    const gravity = config.motion?.gravity ?? 6
     tip(target, minimum)
     while (accumulator + 1e-10 >= STEP) {
       accumulator -= STEP
       next
         .copy(point)
         .sub(previous)
-        .multiplyScalar(Math.exp(-(strap ? 7 : 12) * STEP))
+        .multiplyScalar(Math.exp(-damping * STEP))
         .add(point)
       next.addScaledVector(
         local.copy(target).sub(point),
-        (strap ? 24 : 65) * STEP * STEP
+        stiffness * STEP * STEP
       )
-      next.y -= 6 * scale * STEP * STEP
+      next.y -= gravity * scale * STEP * STEP
       if (wind) {
         next.x += wind.windDirX * wind.windStrength * 0.3 * scale * STEP * STEP
         next.z += wind.windDirZ * wind.windStrength * 0.3 * scale * STEP * STEP
       }
       local.copy(next).applyMatrix4(inverseFrame).sub(pivot)
+      const beforeAngle = angle
       angle = THREE.MathUtils.clamp(
         Math.atan2(local.dot(outward), -local.y),
         minimum,
-        MAX_ANGLE
+        maxAngle
       )
+      const joint = config.bend?.joint
+      if (joint) {
+        jointVelocity -= ((angle - beforeAngle) * joint.inertia) / STEP
+        jointVelocity += (jointTarget() - jointAngle) * joint.stiffness * STEP
+        jointVelocity *= Math.exp(-joint.damping * STEP)
+        const proposed = jointAngle + jointVelocity * STEP
+        jointAngle = THREE.MathUtils.clamp(proposed, -0.8, 0.35)
+        if (proposed !== jointAngle) jointVelocity = 0
+      }
+      const crease = config.bend?.crease
+      if (crease) {
+        creaseVelocity +=
+          (creaseTarget() - creaseAngle) * crease.stiffness * STEP
+        creaseVelocity *= Math.exp(-crease.damping * STEP)
+        const proposed = creaseAngle + creaseVelocity * STEP
+        creaseAngle = THREE.MathUtils.clamp(proposed, 0, 0.45)
+        if (proposed !== creaseAngle) creaseVelocity = 0
+      }
       previous.copy(point)
       tip(point, angle)
     }

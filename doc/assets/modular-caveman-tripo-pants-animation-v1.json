@@ -1,0 +1,301 @@
+{
+  "date": "2026-10-04",
+  "method": "Actual runtime physics at 60 Hz, about 13 geometry samples per clip; extension measured against original GLB positions, not an already simulated pose",
+  "sources": [
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb",
+      "sha256": "3be3265a6d2e203098a63d599636d49c33498ef748f2745aa5d278ad04392ad6"
+    },
+    {
+      "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+      "sha256": "76eeb462770754895834271423b4ef7f33efdbd34bdfb9830beba4ba84e7569f"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/social.glb",
+      "sha256": "a9efe7a2d388011cdc039ca6778c2b3a929b07953941ee7bb7c50a511d4b083d"
+    }
+  ],
+  "mesh_count": 6,
+  "panel_count": 4,
+  "all_skin_influences": "Hips only",
+  "clips": [
+    {
+      "clip": "idle1",
+      "frames": 500,
+      "maximum_edge_extension_relative": 0.020062019533273023
+    },
+    {
+      "clip": "walk",
+      "frames": 62,
+      "maximum_edge_extension_relative": 0.02007160077964798
+    },
+    {
+      "clip": "run",
+      "frames": 38,
+      "maximum_edge_extension_relative": 0.020923183201105644
+    },
+    {
+      "clip": "jump",
+      "frames": 114,
+      "maximum_edge_extension_relative": 0.020935824248222712
+    },
+    {
+      "clip": "combat_idle",
+      "frames": 154,
+      "maximum_edge_extension_relative": 0.020907930303137423
+    },
+    {
+      "clip": "slash1",
+      "frames": 92,
+      "maximum_edge_extension_relative": 0.020900486018890607
+    },
+    {
+      "clip": "sit_idle",
+      "frames": 261,
+      "maximum_edge_extension_relative": 0.01195358100853361
+    }
+  ],
+  "maximum_allowed_extension": "2% plus 1 micrometer numerical allowance; edges shorter than 1mm excluded from relative-error reporting",
+  "cached_geometry_restored": true,
+  "meshes": [
+    {
+      "name": "caveman_belt",
+      "triangles": 541,
+      "maximum_edge_extension_relative": 0,
+      "maximum_local_motion_m": 0
+    },
+    {
+      "name": "caveman_bone_ornaments",
+      "triangles": 3114,
+      "maximum_edge_extension_relative": 0,
+      "maximum_local_motion_m": 0
+    },
+    {
+      "name": "caveman_pelt_front",
+      "triangles": 320,
+      "maximum_edge_extension_relative": 0.01006352992249937,
+      "maximum_local_motion_m": 0.46372128972454735
+    },
+    {
+      "name": "caveman_pelt_back",
+      "triangles": 480,
+      "maximum_edge_extension_relative": 0.020454373182642316,
+      "maximum_local_motion_m": 0.23516409857191012
+    },
+    {
+      "name": "caveman_pelt_left",
+      "triangles": 672,
+      "maximum_edge_extension_relative": 0.020935824248222712,
+      "maximum_local_motion_m": 0.3380892982230689,
+      "maximum_midpoint_fold_radians": 0.39410165770604844
+    },
+    {
+      "name": "caveman_pelt_right",
+      "triangles": 670,
+      "maximum_edge_extension_relative": 0.020062019533273023,
+      "maximum_local_motion_m": 0.33854711427764567,
+      "maximum_midpoint_fold_radians": 0.3765865735202024
+    }
+  ],
+  "runtime_sources": [
+    {
+      "path": "client/src/lib/effects/pelt-rig.ts",
+      "sha256": "f89b69880057313e8d7bfa2e2fa84fd492e1e9137c67a0215532c5b70f1b4aba"
+    },
+    {
+      "path": "client/src/lib/effects/pelt-bend.ts",
+      "sha256": "a6724475972ea958c2c0c839f0f653200ca4cb677a3a68bf1540644ef068bb12"
+    }
+  ],
+  "side_parameters": {
+    "kind": "plate",
+    "bone": "Hips",
+    "pivot": [
+      0.16,
+      1.106,
+      -0.02
+    ],
+    "outward": [
+      1,
+      0,
+      0
+    ],
+    "length": 0.33635880040701915,
+    "colliders": [
+      {
+        "bone": "Hips",
+        "center": [
+          0,
+          0.98,
+          -0.01
+        ],
+        "radii": [
+          0.185,
+          0.155,
+          0.145
+        ]
+      },
+      {
+        "bone": "LeftUpLeg",
+        "center": [
+          0.115,
+          0.81,
+          -0.012
+        ],
+        "radii": [
+          0.115,
+          0.215,
+          0.132
+        ]
+      },
+      {
+        "bone": "LeftLeg",
+        "center": [
+          0.165,
+          0.33,
+          -0.04
+        ],
+        "radii": [
+          0.08,
+          0.25,
+          0.1
+        ]
+      }
+    ],
+    "bend": {
+      "droop": 0.6,
+      "contact": true,
+      "joint": {
+        "at": 0.5,
+        "width": 0.14,
+        "damping": 12,
+        "stiffness": 28,
+        "inertia": 0.65
+      },
+      "crease": {
+        "width": 0.025,
+        "angle": 0.16,
+        "damping": 14,
+        "stiffness": 36
+      }
+    },
+    "motion": {
+      "damping": 19,
+      "stiffness": 52,
+      "gravity": 10,
+      "inertia": 0.6,
+      "max_angle": 1.05,
+      "min_angle": 0.24,
+      "flex_clearance": 0.45
+    }
+  },
+  "back_parameters": {
+    "kind": "plate",
+    "bone": "Hips",
+    "pivot": [
+      0,
+      1.106,
+      -0.137
+    ],
+    "outward": [
+      0,
+      0,
+      -1
+    ],
+    "length": 0.45599994083113415,
+    "colliders": [
+      {
+        "bone": "Hips",
+        "center": [
+          0,
+          0.98,
+          -0.01
+        ],
+        "radii": [
+          0.174,
+          0.15,
+          0.13
+        ]
+      },
+      {
+        "bone": "LeftUpLeg",
+        "center": [
+          0.13,
+          0.8,
+          -0.012
+        ],
+        "radii": [
+          0.105,
+          0.235,
+          0.127
+        ]
+      },
+      {
+        "bone": "RightUpLeg",
+        "center": [
+          -0.13,
+          0.8,
+          -0.012
+        ],
+        "radii": [
+          0.105,
+          0.235,
+          0.127
+        ]
+      },
+      {
+        "bone": "LeftLeg",
+        "center": [
+          0.165,
+          0.33,
+          -0.04
+        ],
+        "radii": [
+          0.085,
+          0.27,
+          0.105
+        ]
+      },
+      {
+        "bone": "RightLeg",
+        "center": [
+          -0.165,
+          0.33,
+          -0.04
+        ],
+        "radii": [
+          0.085,
+          0.27,
+          0.105
+        ]
+      }
+    ],
+    "bend": {
+      "droop": 0.15,
+      "contact": true
+    }
+  },
+  "contact_projection": {
+    "iterations": 512,
+    "edge_allowance": 0.02,
+    "numerical_allowance_m": 1e-06
+  },
+  "browser_review": {
+    "clips": [
+      "idle1",
+      "walk",
+      "run",
+      "combat_idle",
+      "jump",
+      "sit_idle",
+      "slash1"
+    ],
+    "page_errors": [],
+    "clearance_image": "doc/images/characters/modular_human_male_01/parts/caveman/tripo-pants-clearance-review-v1.png",
+    "scope": "Visual spot checks, including front/side/back of combat idle and walk; not exhaustive collision clearance certification."
+  }
+}

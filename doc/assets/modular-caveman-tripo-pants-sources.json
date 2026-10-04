@@ -1,0 +1,133 @@
+{
+  "delivery_date": "2026-10-04",
+  "generation_date": null,
+  "provider": "Tripo Studio",
+  "subscription": {
+    "previous_user_report": "Approximately USD 20/month Studio subscription",
+    "previous_source_record": "doc/assets/modular-rogue-tripo-sources.json",
+    "current_file_tier_separately_confirmed": false
+  },
+  "license": "Subject to the original Tripo Studio output terms; retain original source/account provenance. No separate license grant inferred from file delivery.",
+  "delivery_path_windows": "Y:\\public\\web_downloads\\skeletal+belt+3d+model.glb",
+  "delivery_path_linux": "/mnt/y/web_downloads/skeletal+belt+3d+model.glb",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/source.glb",
+    "sha256": "a7b5cb922f7c117352a45b013054103905aad9eb0b0e3ec473b17b82f575bba3",
+    "bytes": 1850908,
+    "byte_identical_to_delivery": true
+  },
+  "generation_task_id": null,
+  "generation_model_version": null,
+  "submitted_prompt": null,
+  "submitted_images_confirmed": false,
+  "requested_polygon_count_confirmed": null,
+  "discussion_target_quads": 2500,
+  "discussion_target_triangles": 5000,
+  "reference_artwork": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/pants_caveman-front-v1.png",
+      "sha256": "a64e102a49d68acbe18f7eb34f7094d219ef14a327d7e29be5d96ad648d0b417"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/pants_caveman-back-v1.png",
+      "sha256": "89f5b2918b9be43c7b2fcf6d4035934894f706ec775f8e3f724b9a5d0a7e8f2b"
+    }
+  ],
+  "export_observed": {
+    "format": "GLB 2.0",
+    "generator": "Tripo",
+    "triangles": 4960,
+    "original_quad_count": null,
+    "vertices_including_uv_splits": 6575,
+    "mesh_count": 1,
+    "material_count": 1,
+    "textures": [
+      {
+        "size": [
+          2048,
+          2048
+        ],
+        "format": "JPEG"
+      }
+    ],
+    "rigged": false,
+    "animations": 0
+  },
+  "review": {
+    "date": "2026-10-04",
+    "tool": "Blender 5.2.0 LTS with tools/blender-scripts/review_outfit_sources.py diagnostics and review_rogue_fitting.py contact sheet helper",
+    "report": "doc/assets/modular-caveman-tripo-pants-review-v1.json",
+    "image": "doc/images/characters/modular_human_male_01/parts/caveman/tripo-pants-raw-review-v1.png",
+    "image_sha256": "3797beb5d69d722f027d0ca8eb355f1f2f865a7705e5dd77af8754ff45c9687a",
+    "scope": "Unmodified raw source: front, side, back and waist opening; no body fit or rig. No duplicate Blender review scene retained.",
+    "observations": [
+      "Front buckle, skull/teeth belt decorations, front/back leather panels and side fur are present.",
+      "Top view shows an open waist cavity.",
+      "After diagnostic welding at 1e-5 source units: 19 connected components, no boundary/nonmanifold edges, degenerate faces or collapsed UV triangles.",
+      "GLB contains only triangles; 2480 is a triangle-to-quad budget equivalent, not a measured original quad count."
+    ],
+    "new_ai_generation_or_paid_calls": false
+  },
+  "status": "User accepted the fitted caveman pants preview and pelt motion on 2026-10-04. Seven runtime motions checked; mixed equipment and gameplay registration pending.",
+  "retained": true,
+  "fitting": {
+    "date": "2026-10-04",
+    "tool": "tools/fit-tripo-caveman-pants.py",
+    "validation_tool": "tools/validate-tripo-caveman-pants.mjs",
+    "rig_id": "human_male_01_mixamo_candidate_v2",
+    "output": {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb",
+      "sha256": "3be3265a6d2e203098a63d599636d49c33498ef748f2745aa5d278ad04392ad6"
+    },
+    "editable": {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/caveman-pants-fitting.blend",
+      "sha256": "eb0e06922bd3f28d8285285ebeeefee96c17226ae606815e89df7291dc97d619"
+    },
+    "reports": [
+      "doc/assets/modular-caveman-tripo-pants-fitting-v1.json",
+      "doc/assets/modular-caveman-tripo-pants-animation-v1.json"
+    ],
+    "preserved_source": true,
+    "preserved_original_texture": true,
+    "motion_image": {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/tripo-pants-fitted-motion-v1.png",
+      "sha256": "a5fa071469c24b20e1e433ecf58d9221241b286804e24d6b24072cc7bcd36122"
+    },
+    "clearance_review": {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/tripo-pants-clearance-review-v1.png",
+      "sha256": "615d71763a2ec36c12341198374d2f56f7be900eb0b5df1cd22d20a31dc2a75e",
+      "scope": "Combat idle and walk, front/side/back at 41.7% of each clip; current runtime preview render."
+    },
+    "user_preview_acceptance_date": "2026-10-04"
+  },
+  "corrections": [
+    {
+      "status": "unused",
+      "reason": "Connected surface approach did not match the requested separated front/back/side panels; leg-driven stretching rejected."
+    },
+    {
+      "status": "superseded",
+      "reason": "Whole rigid panel rotations looked like boards; retain separation but add modest downward bending with edge-length limits."
+    },
+    {
+      "date": "2026-10-04",
+      "status": "superseded",
+      "reason": "User reported excessive side flapping during run and raised side pelts in combat idle. Side-only heavier damping/gravity, reduced wearer-motion response, 0.65rad hinge cap, closer colliders and local thigh contact replace whole-panel lifting. An angle-cap-only trial hid cloth inside the thighs and was discarded."
+    },
+    {
+      "date": "2026-10-04",
+      "status": "current",
+      "reason": "User requested motion between the previous light/heavy settings and one fold at the side midpoint. Side damping/gravity/inertia interpolated; a separately damped second hinge bends the lower half with delayed motion. Original GLB topology, texture and hip-only skinning retained."
+    },
+    {
+      "date": "2026-10-04",
+      "status": "current",
+      "reason": "User-marked longitudinal centerline now folds the front/rear wings of each side pelt inward. This adds a second bend direction to the retained midpoint hinge; medium motion tuning retained. Waist anchor and original edge-length limits verified."
+    },
+    {
+      "date": "2026-10-04",
+      "status": "current",
+      "reason": "User requested side pelt clearance in combat idle, more lift during walking and a straight upper back pelt. Side minimum hinge 0.24rad plus forward/backward thigh response 0.45, 1.05rad cap, wider hip/thigh contacts and 0.16rad crease retained with midpoint bending. Contact edge projection now uses 512 passes with the same 2% + 1um cap to prevent the final length correction from undoing thigh clearance. Back droop reduced to 0.15 with local contact instead of whole-panel thigh lifting."
+    }
+  ]
+}

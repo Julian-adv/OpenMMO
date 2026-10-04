@@ -1,0 +1,25 @@
+{
+  "triangles": 4960,
+  "mesh_count": 1,
+  "meshes": [
+    {
+      "name": "tripo_node_3234f78b-40e6-43ee-bd40-a7ad8dc71e7e",
+      "components_vertex_counts": [
+        925, 103, 102, 100, 100, 100, 100, 100, 100, 100, 100, 99, 99, 99, 99,
+        60, 60, 44, 24
+      ],
+      "boundary_edges": 0,
+      "nonmanifold_edges": 0,
+      "degenerate_faces": 0,
+      "collapsed_uv_triangles": 0
+    }
+  ],
+  "source_extent_blender": [0.90185546875, 0.72216796875, 0.99951171875],
+  "rigged": false,
+  "source": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/source.glb",
+  "sha256": "a7b5cb922f7c117352a45b013054103905aad9eb0b0e3ec473b17b82f575bba3",
+  "vertices_including_uv_splits": 6575,
+  "status": "Raw user-delivered Tripo mesh; not fitted or rigged",
+  "blender_version": "5.2.0 LTS",
+  "date": "2026-10-04"
+}
