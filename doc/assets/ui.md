@@ -86,3 +86,27 @@
 
 - `client/public/icons/skills/guardian-ward.png` — Guardian Ward (검의 수호) 능력 및 퀵슬롯 아이콘. OpenAI Codex built-in ImageGen, workspace-provided tier (정확한 등급은 도구에서 공개되지 않음), 생성 2026-09-13. 프로젝트를 위해 생성한 이미지이며 OpenAI 서비스 약관의 출력물 이용 조건에 따른다. 기존 Double Slash 아이콘/생성 프롬프트를 스타일 기준으로 사용했다. 검은 바탕, 옅은 금빛 방패와 보호 궤적, 짧은 빛 번짐. [실제 생성 프롬프트](guardian-ward-icon-prompt.txt). PNG는 게임 Git 저장소에서 직접 관리한다.
 - `client/public/icons/skills/true-aim.png` — True Aim 어빌리티·퀵슬롯 아이콘. OpenAI Codex built-in ImageGen, workspace-provided tier (정확한 등급은 도구에 공개되지 않음), 생성 2026-09-13. 프로젝트용 생성 이미지이며 OpenAI 서비스 약관의 출력물 이용 조건에 따른다. 기존 Double Slash 아이콘을 스타일 참조로 사용한 검은 바탕의 은백색 조준 문양. [실제 생성 프롬프트](true-aim-icon-prompt.txt).
+
+## 캐릭터 생성 외형 아이콘 — 2026-10-05
+
+`client/src/assets/character-appearance/`의 PNG 4장은 기존 게임용 모듈형 남성
+모델을 로컬 Chromium/Three.js에서 미리 촬영한 128×128 투명 배경 이미지다.
+캐릭터 생성 화면의 96×96 버튼에서 사용하며, 실행 중에는 촬영하지 않는다.
+Vite가 이미지 파일을 번들에 포함하고 내용 해시를 붙인다.
+
+| 파일 | 촬영한 모델과 선택값 |
+| --- | --- |
+| `face-default.png` | `base.glb`, 기본 얼굴·머리 없음; 두 선택 버튼에서 재사용 |
+| `face-rugged.png` | `base_rugged.glb`, 각진 얼굴·머리 없음 |
+| `hair-crop.png` | `base.glb` + `hair_crop.glb`, 기본 얼굴·짧은 머리 |
+| `hair-wavy-bone.png` | `base.glb` + `hair_wavy_bone.glb`, 기본 얼굴·웨이브 장발 |
+
+원본은 `client/public/models/characters/modular_male/`의 현재 게임용 GLB다.
+출처·라이선스는 [기본 모듈형 남성](modular-human-male-01.md)과
+[각진 얼굴·웨이브 헤어](modular-rugged-face-wavy-hair.md)의 기록을 따른다.
+기존 프로젝트 자산의 렌더 결과이며, 별도 AI 생성이나 유료 호출은 없다.
+촬영은 장비 높이 보정 후 머리 영역의 월드 경계를 기준으로 정사영 카메라를
+배치하고, ACES 톤 매핑·반구광·따뜻한 정면 방향광을 적용했다.
+각진 얼굴은 `face_neck_bridge` 영역의 목 연결 메시도 함께 표시한다.
+이 메시를 숨긴 최초 촬영본은 턱과 몸체 사이가 끊겨 보여 최종 PNG로 대체했다.
+PNG는 게임 Git 저장소에서 직접 관리한다.

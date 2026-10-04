@@ -205,7 +205,7 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v113: account character IDs for shared estate editing.
 /// v114: scheduled, cancellable character deletion.
 /// v115: saved character face and hairstyle.
-pub const PROTOCOL_VERSION: u32 = 115;
+pub const PROTOCOL_VERSION: u32 = 116;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from
@@ -273,8 +273,8 @@ pub const CLOSE_CODE_IDLE_TIMEOUT: u16 = 4003;
 mod wasm_api;
 
 pub use character::{
-    Character, CharacterAppearance, CharacterAttributes, CharacterClass, FaceStyle, Gender,
-    HairStyle, VisibleEquipment,
+    AppearanceColor, Character, CharacterAppearance, CharacterAttributes, CharacterClass,
+    FaceStyle, Gender, HairStyle, VisibleEquipment,
 };
 pub use entity::{Monster, MonsterLifecycle, MonsterState, Player, PlayerId};
 pub use messages::{

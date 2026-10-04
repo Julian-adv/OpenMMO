@@ -113,6 +113,32 @@ describe.skipIf(
     expect(visible(other, 'hair_crop')).toBe(true)
   })
 
+  it('separates wavy hair ornaments without changing vertices or triangle coverage', async () => {
+    const { loadHeadlessGlb } = await import('./headless-glb.fixture')
+    const original = await loadHeadlessGlb(
+      'models/characters/modular_male/hair_wavy_bone.glb'
+    )
+    const raw = skinnedParts(original.scene)[0].geometry
+    const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
+    const hair = skinnedParts(source.scene).find(
+      (mesh) => mesh.userData.part_id === 'hair_wavy_bone'
+    )!
+    const geometry = hair.geometry
+    expect(geometry.getAttribute('position').array).toEqual(
+      raw.getAttribute('position').array
+    )
+    expect([...geometry.index!.array].sort((a, b) => a - b)).toEqual(
+      [...raw.index!.array].sort((a, b) => a - b)
+    )
+    expect(geometry.groups).toHaveLength(2)
+    expect(geometry.groups[0].materialIndex).toBe(0)
+    expect(geometry.groups[1].materialIndex).toBe(1)
+    expect(geometry.groups[1].count).toBeGreaterThan(0)
+    const materials = hair.material as THREE.Material[]
+    expect(materials[0].userData.appearance_color_fixed).not.toBe(true)
+    expect(materials[1].userData.appearance_color_fixed).toBe(true)
+  })
+
   it('keeps shared cropped hair clear of the rugged rear scalp after runtime compression', async () => {
     const appearance = { face: 'rugged', hair: 'crop' } as const
     const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH, appearance)

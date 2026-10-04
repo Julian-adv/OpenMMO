@@ -29,6 +29,8 @@ export type Gender = 'male' | 'female'
 export type CharacterAppearance = {
   face: 'default' | 'rugged'
   hair: 'crop' | 'wavy_bone' | 'none'
+  hair_color?: string
+  eye_color?: string
 }
 
 export type ServerPlayer = {

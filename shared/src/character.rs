@@ -28,12 +28,58 @@ pub enum HairStyle {
     None,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct AppearanceColor(u32);
+
+impl TryFrom<String> for AppearanceColor {
+    type Error = &'static str;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value
+            .strip_prefix('#')
+            .filter(|hex| hex.len() == 6 && hex.bytes().all(|b| b.is_ascii_hexdigit()))
+            .and_then(|hex| u32::from_str_radix(hex, 16).ok())
+            .map(Self)
+            .ok_or("Appearance color must be #rrggbb")
+    }
+}
+
+impl From<AppearanceColor> for String {
+    fn from(value: AppearanceColor) -> Self {
+        format!("#{:06x}", value.0)
+    }
+}
+
+fn default_hair_color() -> AppearanceColor {
+    AppearanceColor(0x604332)
+}
+
+fn default_eye_color() -> AppearanceColor {
+    AppearanceColor(0x786545)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CharacterAppearance {
     #[serde(default)]
     pub face: FaceStyle,
     #[serde(default)]
     pub hair: HairStyle,
+    #[serde(default = "default_hair_color")]
+    pub hair_color: AppearanceColor,
+    #[serde(default = "default_eye_color")]
+    pub eye_color: AppearanceColor,
+}
+
+impl Default for CharacterAppearance {
+    fn default() -> Self {
+        Self {
+            face: FaceStyle::default(),
+            hair: HairStyle::default(),
+            hair_color: default_hair_color(),
+            eye_color: default_eye_color(),
+        }
+    }
 }
 
 impl CharacterAppearance {
@@ -52,6 +98,51 @@ impl CharacterAppearance {
             self
         } else {
             Self::default()
+        }
+    }
+}
+
+#[cfg(test)]
+mod appearance_tests {
+    use super::*;
+
+    #[test]
+    fn legacy_appearance_keeps_style_and_defaults_colors() {
+        let appearance: CharacterAppearance =
+            serde_json::from_str(r#"{"face":"rugged","hair":"none"}"#).unwrap();
+        assert_eq!(appearance.face, FaceStyle::Rugged);
+        assert_eq!(appearance.hair, HairStyle::None);
+        assert_eq!(String::from(appearance.hair_color), "#604332");
+        assert_eq!(String::from(appearance.eye_color), "#786545");
+    }
+
+    #[test]
+    fn colors_normalize_and_roundtrip_over_the_protocol() {
+        let appearance: CharacterAppearance = serde_json::from_str(
+            r##"{"face":"rugged","hair":"wavy_bone","hair_color":"#AaBBcc","eye_color":"#1199FF"}"##,
+        )
+        .unwrap();
+        assert_eq!(String::from(appearance.hair_color), "#aabbcc");
+        assert_eq!(String::from(appearance.eye_color), "#1199ff");
+        let bytes = rmp_serde::to_vec(&appearance).unwrap();
+        assert_eq!(
+            rmp_serde::from_slice::<CharacterAppearance>(&bytes).unwrap(),
+            appearance
+        );
+        assert_eq!(
+            appearance.for_character(&CharacterClass::Knight, Gender::Male),
+            appearance
+        );
+        assert_eq!(
+            appearance.for_character(&CharacterClass::Knight, Gender::Female),
+            CharacterAppearance::default()
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_color_strings() {
+        for invalid in ["red", "#fff", "#12345678", "#zzzzzz", "1234567", "#１２３"] {
+            assert!(AppearanceColor::try_from(invalid.to_owned()).is_err());
         }
     }
 }

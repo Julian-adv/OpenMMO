@@ -2360,6 +2360,8 @@ mod tests {
         let appearance = CharacterAppearance {
             face: onlinerpg_shared::FaceStyle::Rugged,
             hair: onlinerpg_shared::HairStyle::WavyBone,
+            hair_color: "#dab378".to_string().try_into().unwrap(),
+            eye_color: "#527baa".to_string().try_into().unwrap(),
         };
         let created = auth
             .create_character_with_appearance(

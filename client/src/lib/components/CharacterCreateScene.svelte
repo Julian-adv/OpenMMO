@@ -14,9 +14,15 @@
     characterClass: CharacterClass
     gender: Gender
     appearance: CharacterAppearance
+    facePreview?: boolean
   }
 
-  let { characterClass, gender, appearance }: Props = $props()
+  let {
+    characterClass,
+    gender,
+    appearance,
+    facePreview = false,
+  }: Props = $props()
 
   const STARTER_EQUIPMENT: Partial<Record<CharacterClass, VisibleEquipment>> = {
     knight: {
@@ -57,6 +63,9 @@
   const CAMERA_POSITION_Y = 1.4
   const CAMERA_POSITION_Z = 7.6
   const CAMERA_LOOK_AT_Y = 0.85
+  const FACE_CAMERA_Y = 1.85
+  const FACE_CAMERA_DISTANCE = 0.98
+  const FACE_LOOK_AT_Y = 1.82
 
   const PLATFORM_RADIUS = 0.92
   const PLATFORM_THICKNESS = 0.1
@@ -110,7 +119,16 @@
 
   $effect(() => {
     if (!cameraRef) return
-    cameraRef.lookAt(0, CAMERA_LOOK_AT_Y, CHARACTER_Z)
+    cameraRef.position.set(
+      0,
+      facePreview ? FACE_CAMERA_Y : CAMERA_POSITION_Y,
+      facePreview ? CHARACTER_Z + FACE_CAMERA_DISTANCE : CAMERA_POSITION_Z
+    )
+    cameraRef.lookAt(
+      0,
+      facePreview ? FACE_LOOK_AT_Y : CAMERA_LOOK_AT_Y,
+      CHARACTER_Z
+    )
   })
 
   function onPointerDown(e: PointerEvent) {

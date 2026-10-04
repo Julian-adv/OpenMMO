@@ -81,6 +81,7 @@
     face: 'default',
     hair: 'crop',
   })
+  let createFacePreview = $state(false)
 
   // First launch on this browser: measure the GPU while the login screen is
   // up and pick a preset from it. A stored choice, however it got there,
@@ -406,6 +407,7 @@
             characterClass={createSelectedClass}
             gender={createSelectedGender}
             appearance={createAppearance}
+            facePreview={createFacePreview}
           />
         {:else if screen === 'game'}
           <GameScene
@@ -461,6 +463,8 @@
       selectedClass={createSelectedClass}
       selectedGender={createSelectedGender}
       appearance={createAppearance}
+      facePreview={createFacePreview}
+      onFacePreviewChange={(zoomed) => (createFacePreview = zoomed)}
       onAppearanceChange={(value) => {
         createAppearance = value
       }}

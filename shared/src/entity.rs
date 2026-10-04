@@ -333,6 +333,8 @@ mod tests {
             appearance: crate::CharacterAppearance {
                 face: crate::FaceStyle::Rugged,
                 hair: crate::HairStyle::WavyBone,
+                hair_color: "#aabbcc".to_string().try_into().unwrap(),
+                eye_color: "#1188ff".to_string().try_into().unwrap(),
             },
             is_official_npc: false,
             torch_on: true,

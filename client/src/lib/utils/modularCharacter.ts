@@ -150,7 +150,7 @@ function bodyMaterial(material: THREE.Material, underwear: boolean) {
   return variants ? variants[underwear ? 'underwear' : 'skin'] : material
 }
 
-function region(mesh: THREE.Object3D): string | undefined {
+export function region(mesh: THREE.Object3D): string | undefined {
   for (let node: THREE.Object3D | null = mesh; node; node = node.parent)
     if (typeof node.userData.region === 'string') return node.userData.region
 }

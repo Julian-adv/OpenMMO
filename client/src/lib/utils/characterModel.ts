@@ -9,7 +9,12 @@ import type {
 } from '../network/networkTypes'
 import { modularOutfitForArmor } from './modularEquipment'
 import { disposePeltPhysics } from '../effects/pelt-rig'
+import { separateWavyHairMaterials } from './wavyHairMaterials'
 import { computeSoleGroundOffset } from './characterAnimationUtils'
+import {
+  applyAppearanceColors,
+  disposeAppearanceColors,
+} from '../shaders/character-appearance-colors'
 import {
   DEFAULT_MODULAR_OUTFIT,
   KNIGHT_MODULAR_OUTFIT,
@@ -61,6 +66,8 @@ export function loadCharacterModel(
         const parts = new Map(
           ids.map((id, i) => [id, bindModularPart(scene, sources[i].scene)])
         )
+        for (const mesh of parts.get('hair_wavy_bone') ?? [])
+          separateWavyHairMaterials(mesh)
         const soleOffsets = {} as Record<ModularOutfit['boots'], number>
         for (const boots of MODULAR_BOOTS) {
           showModularOutfit(body, parts, { ...DEFAULT_MODULAR_OUTFIT, boots })
@@ -68,17 +75,6 @@ export function loadCharacterModel(
         }
         scene.userData.modular_sole_offsets = soleOffsets
         showModularOutfit(body, parts, DEFAULT_MODULAR_OUTFIT)
-        for (const mesh of parts.get('hair_crop') ?? []) {
-          const tint = (source: THREE.Material) => {
-            const material = source.clone()
-            if (material instanceof THREE.MeshStandardMaterial)
-              material.color.set('#604332')
-            return material
-          }
-          mesh.material = Array.isArray(mesh.material)
-            ? mesh.material.map(tint)
-            : tint(mesh.material)
-        }
         for (const mesh of skinnedParts(scene)) mesh.frustumCulled = false
         const socket = new THREE.Group()
         socket.name = MODULAR_SWORD_ATTACHMENT
@@ -123,6 +119,7 @@ export function applyCharacterArmor(
             : 'hair_crop'
     }
     showModularOutfit(body, parts, outfit)
+    applyAppearanceColors(root, meshes, appearance)
     root.traverse((node) => {
       const offsets = node.userData.modular_sole_offsets
       if (offsets) node.position.y = offsets[outfit.boots]
@@ -184,6 +181,7 @@ export function modularSwordAttachment(
 }
 
 export function disposeCharacterSkeletons(root: THREE.Object3D): void {
+  disposeAppearanceColors(root)
   disposePeltPhysics(root)
   const skeletons = new Set(skinnedParts(root).map((mesh) => mesh.skeleton))
   for (const skeleton of skeletons) skeleton.dispose()
