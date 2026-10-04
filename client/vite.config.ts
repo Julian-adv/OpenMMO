@@ -83,6 +83,10 @@ function modularCharacterPreview(): Plugin {
     '../assets/modular_human_male_01/parts/caveman_tripo_bracer_v1/gloves_caveman.glb',
     import.meta.url
   )
+  const wavyHair = new URL(
+    '../assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb',
+    import.meta.url
+  )
   const selection = JSON.parse(
     fs.readFileSync(
       new URL(
@@ -142,18 +146,20 @@ function modularCharacterPreview(): Plugin {
                 ? cavemanBoots
                 : part?.[1] === 'gloves_caveman'
                   ? cavemanGloves
-                  : part && rogueParts.has(part[1])
-                    ? selection.fitting_candidate.part_overrides?.[part[1]]
-                      ? new URL(
-                          `../${selection.fitting_candidate.part_overrides[part[1]]}`,
-                          import.meta.url
-                        )
-                      : new URL(`${part[1]}.glb`, rogue)
-                    : part && parts.has(part[1])
-                      ? new URL(`${part[1]}.glb`, fitted)
-                      : files.has(name)
-                        ? new URL(name, directory)
-                        : null
+                  : part?.[1] === 'hair_wavy_bone'
+                    ? wavyHair
+                    : part && rogueParts.has(part[1])
+                      ? selection.fitting_candidate.part_overrides?.[part[1]]
+                        ? new URL(
+                            `../${selection.fitting_candidate.part_overrides[part[1]]}`,
+                            import.meta.url
+                          )
+                        : new URL(`${part[1]}.glb`, rogue)
+                      : part && parts.has(part[1])
+                        ? new URL(`${part[1]}.glb`, fitted)
+                        : files.has(name)
+                          ? new URL(name, directory)
+                          : null
         if (req.method !== 'GET' || !url) {
           res.statusCode = 404
           res.end('Unknown preview asset')
@@ -181,9 +187,7 @@ function modularCharacterPreview(): Plugin {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 
-  // Default to IPv4 explicitly: Node 18+ resolves 'localhost' to ::1 first,
-  // which fails because the Rust server only listens on 127.0.0.1, causing
-  // the proxy to reset every /ws and /api request.
+  // Match the Rust server's IPv4 binding.
   const backendHost = env.VITE_BACKEND_HOST ?? '127.0.0.1'
   const apiTarget = env.VITE_API_TARGET ?? `http://${backendHost}:10007`
   const wsTarget = env.VITE_WS_TARGET ?? `ws://${backendHost}:10006`

@@ -1,0 +1,65 @@
+{
+  "date": "2026-10-04",
+  "reason": "User requested deleting intermediate generation results and committing the final fitted hair.",
+  "removed_repository_files": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/customization/hair_wavy_bone-front-v1.png",
+      "sha256": "3380013a2d1944004453e57c93aefc244c63b73b23c378f51e768e919ebd01c4",
+      "bytes": 1826322
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/customization/hair_wavy_bone-back-v1.png",
+      "sha256": "308c165d9fe987150ab129ecee5889dedf8d0774a15a48d9a18b83cd1de21d6f",
+      "bytes": 2123981
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/customization/hair-wavy-bone-tripo-inputs-v2.zip",
+      "sha256": "fe52e414e4ec93d589db17c3c4819e92553b7607c5a6dbfbe756a8f9c89833b7",
+      "bytes": 2942760
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/customization/rugged-face-wavy-hair-inputs-v1.zip",
+      "sha256": "fe91f5e9e9c878a1d1e9c7720ee4e3b8d372def931178dbf1b463dbabc05b5a9",
+      "bytes": 7480030
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/customization/hair-wavy-bone-fitted-v1-front-comparison.png",
+      "sha256": "6c48b0ec688186f65dc902d00ec029d57a3372e55ad1f4cc6ac09d510b07678b",
+      "bytes": 283368
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/customization/hair-wavy-bone-fitted-v1-rest.png",
+      "sha256": "b3258f46c76215c4ab87a6a28796ca84a96f0b2fd2b17fd68168be8666b9dd31",
+      "bytes": 587739
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/customization/hair-wavy-bone-fitted-v1-workshop.png",
+      "sha256": "b6fcf8e23303509da350ea9775c048f5f04a2da3359e6999ad3d54f47e5eb179",
+      "bytes": 353061
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/customization/hair-wavy-bone-fitted-v1-rear-workshop.png",
+      "sha256": "3e79ffdd3c504739e5d6fd2972fe7096065ffdefbb8b21c0f68a852fb54aae05",
+      "bytes": 282658
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone-before-front-fit.glb",
+      "sha256": "fc59c008c33e92aa10eb30afd8cb964cb5baceb913058dc56674a107b4950922",
+      "bytes": 1147496
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone-before-rear-fill.glb",
+      "sha256": "f9299483f510b4786889b7728a610f0fbcb97fbc8e3c695e90921baca9bae1cb",
+      "bytes": 1128480
+    }
+  ],
+  "removed_repository_bytes": 18155895,
+  "removed_temporary_files_count": 1182,
+  "removed_temporary_bytes": 127442940,
+  "temporary_scope": "Only this hair task audit directories, one-off scripts, render/log/texture files, and closed isolated headless browser profiles under /tmp.",
+  "retained": [
+    "Final fitted and Head-rigged 3621-triangle hair GLB, unchanged delivered Tripo source, packed editable Blender scene and eight-pose data",
+    "Selected transparent hair front/back and bald face front/side references",
+    "Final front/side, rear, motion and workshop reviews; source/fitting/animation records and reproducible scripts"
+  ]
+}

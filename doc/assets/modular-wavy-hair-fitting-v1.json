@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-04",
+  "revision": "front_fit_v3",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/hair_tripo_wavy_v1/source.glb",
+    "sha256": "0f9fe4473895d187ee08b659585d6c3b8c58bf4c72b97444bb4ebc9939af2a9f",
+    "original_path": "Y:\\public\\web_downloads\\brown wavy hair 3d model.glb",
+    "provider": "User-supplied Tripo Studio output",
+    "license": "Subject to original Tripo Studio output terms; original source retained.",
+    "generation_date": null,
+    "subscription_tier": "Current file tier unconfirmed; prior record approximately USD 20/month",
+    "received_date": "2026-10-04"
+  },
+  "base": {
+    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
+  },
+  "output": {
+    "path": "assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb",
+    "sha256": "01090fcaaf447686b1fe57410e1667aed0df7ee705c7503b053b28a3478c9f5b"
+  },
+  "method": "Fit crown/side locks onto actual canonical head surface with 6mm vertex clearance. Canonical Head weighting and unchanged 65-bone bind matrices.",
+  "validation": {
+    "path": "assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb",
+    "sha256": "01090fcaaf447686b1fe57410e1667aed0df7ee705c7503b053b28a3478c9f5b",
+    "triangles": 3621,
+    "bones": 65,
+    "exact_rest_hierarchy_and_inverse_bind_match": true,
+    "maximum_weight_sum_error": 0,
+    "active_bones": [
+      "Head"
+    ]
+  },
+  "source_triangles": 2054,
+  "fitted_triangles": 3621,
+  "rear_lock_triangles": 573,
+  "rear_lock_method": "Reuse two original side lock surfaces on a curved rear profile, retaining their original UV and texture",
+  "scalp_underlay_triangles": 562,
+  "scalp_underlay_method": "Canonical scalp surface offset 3mm, using a small brown patch in the unchanged source texture; original body unaffected",
+  "rear_underlay_triangles": 432,
+  "rear_underlay_method": "Continuous curved nape surface behind original locks, with wave relief and original brown strand texture UV",
+  "forehead_fitting": {
+    "adjusted_vertices": 205,
+    "maximum_inward_shift_mm": 18.0,
+    "median_clearance_before_mm": 30.34873675007191,
+    "median_clearance_after_mm": 20.30924306093671,
+    "method": "Smooth local forehead taper toward the canonical head, retaining a 9mm target volume and limiting movement to 18mm"
+  },
+  "previous_front_shape": {
+    "path": "assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone-before-front-fit.glb",
+    "sha256": "fc59c008c33e92aa10eb30afd8cb964cb5baceb913058dc56674a107b4950922",
+    "status": "unused; loose forehead gap reported by user",
+    "retained": false
+  },
+  "superseded_candidate": {
+    "path": "assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone-before-rear-fill.glb",
+    "sha256": "f9299483f510b4786889b7728a610f0fbcb97fbc8e3c695e90921baca9bae1cb",
+    "status": "unused; rear gaps reported by user",
+    "retained": false
+  },
+  "texture_bytes_and_source_uv_preserved": true,
+  "rigid_head_weighting": true,
+  "material_changes": {
+    "double_sided": true,
+    "roughness": 0.85,
+    "removed_specular_extension": true
+  }
+}

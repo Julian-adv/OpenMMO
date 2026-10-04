@@ -1,0 +1,233 @@
+{
+  "date": "2026-10-04",
+  "tool": "OpenAI Codex built-in ImageGen",
+  "subscription_tier": "ChatGPT Pro 20x",
+  "license": "OpenAI generated output terms; reference provenance: modular-rugged-face-wavy-hair-sources.json",
+  "status": "selected_2d_references; actual Tripo input images unconfirmed",
+  "changes": [
+    "Transparent alpha background",
+    "Broad connected wavy locks; fewer wispy flyaways and tiny gaps",
+    "Five bone beads with reversed left/right positions between front and rear"
+  ],
+  "generation_target": {
+    "quads": 1500,
+    "estimated_triangles": 3000
+  },
+  "records": [
+    {
+      "id": "hair_wavy_bone-front-v2",
+      "path": "doc/images/characters/modular_human_male_01/customization/hair_wavy_bone-front-v2.png",
+      "references": [
+        "doc/images/characters/modular_human_male_01/customization/hair_wavy_bone-front-v1.png"
+      ],
+      "prompt": "Use case: precise-object-edit\nAsset type: FRONT reference of an isolated modular hairstyle for Tripo image-to-3D.\nInput image 1 is the edit target: the chosen front-view long brown hair with bone beads.\nRedraw the SAME hairstyle for cleaner 3D reconstruction. Preserve the front view, center part, shoulder-length silhouette, dark warm brown color, natural large waves, hollow face opening, and the exact FIVE small ivory bone/skull beads at their existing locations: a single high bead and a lower pair on image-left; a middle pair on image-right. Keep the small brown bead bindings.\nRequired changes: consolidate hair into about 10-14 broad rounded, thick, overlapping wavy locks, each continuously connected from scalp or a main lock to its rounded taper. The crown is one continuous full hair cap. The sides are dense, coherent masses with sculpted wave ridges and subtle dark strand texture, without perforations. Reduce wispy flyaways and micro-strands almost completely; do not leave hairline slivers, isolated strands, detached floating pieces, thin flat ribbons, sharp papery torn edges, tiny transparent holes between locks, or deep cutouts in the outer masses. Tips stay substantial and smoothly tapered. Preserve the long natural wavy design, without turning it into braids or dreadlocks.\nBackground must be genuinely TRANSPARENT alpha, including the empty face opening. Remove the white background completely. Edge pixels must retain dark brown hair color without white/gray matte fringe. Hair stays consistently brown with soft warm subdued highlights, no white/silver/gray strands or rim light. Only bone beads are ivory.\nRealistic stylized fantasy game asset sculpt render with useful volume, soft even diffuse lighting, matte hair, slightly simplified but clearly detailed large wave shapes. A single exact FRONT view only, centered upright, whole crown and all tips fully visible with generous transparent margins. Hair piece alone, no face, skin, head, mannequin, beard, neck, shoulders, body, text, labels, checkerboard painted into the image, or shadow on a background.",
+      "validation": {
+        "dimensions": [
+          1323,
+          1189
+        ],
+        "mode": "RGBA",
+        "alpha_extrema": [
+          0,
+          255
+        ],
+        "corner_alpha": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "transparent_pixels": 932742,
+        "opaque_pixels": 66,
+        "subject_mean_alpha": 247.8,
+        "nearly_opaque_pixels": 504905,
+        "center_alpha": 0
+      },
+      "sha256": "8e954cc9e92700b7efb4b38bd61d6766b0aae5fdb07cb56d007f6ef05011c2b3",
+      "references_sha256": {
+        "doc/images/characters/modular_human_male_01/customization/hair_wavy_bone-front-v1.png": "3380013a2d1944004453e57c93aefc244c63b73b23c378f51e768e919ebd01c4"
+      },
+      "retained_in_workspace": true
+    },
+    {
+      "id": "hair_wavy_bone-back-v2",
+      "path": "doc/images/characters/modular_human_male_01/customization/hair_wavy_bone-back-v2.png",
+      "references": [
+        "doc/images/characters/modular_human_male_01/customization/hair_wavy_bone-back-v1.png",
+        "doc/images/characters/modular_human_male_01/customization/hair_wavy_bone-front-v2.png"
+      ],
+      "prompt": "Use case: precise-object-edit\nAsset type: matching BACK-view modular hairstyle reference for Tripo image-to-3D.\nInput image 1 is the old BACK-view hair reference, to be redrawn. Input image 2 is the NEW chosen transparent FRONT view and is authoritative for the updated style, color, length, wave thickness and ornaments.\nRender one strict BACK view of exactly the same updated hair piece seen in image 2, viewed after turning it 180 degrees. Preserve its brown shoulder-length wavy silhouette and dense volume. The back is a continuous rounded crown hair cap flowing into a coherent layered curtain of about 10-14 broad rounded overlapping wavy locks. Large locks stay connected to the crown/main masses, with broad sculpted wave ridges and subtle brown strand texture. Consolidate flyaway strands and tiny gaps, remove hairline slivers, detached pieces, paper-thin ribbons and perforations. Substantial smoothly tapered ends, restrained edge detail. It should be easy to reconstruct as solid hair volumes in 3D; no braids or dreadlocks.\nThe FRONT view has exactly FIVE ivory bone/skull beads: one upper bead plus a lower pair on front image-left, and a middle pair on front image-right. In this BACK view positions reverse horizontally: the upper single bead and lower pair are on image-right, and the middle pair on image-left. Show them only where they naturally peek around side locks, retaining brown bindings; do not duplicate or add beads in the central rear curtain. Remove the extra sixth bead from old image 1. Match the front image's scale and relative heights.\nFrom behind the center is filled with continuous brown rear hair, NOT an empty face hole. No scalp skin or mannequin. Background genuinely TRANSPARENT alpha outside the silhouette and between any sparse end locks. No white/gray matte fringe, silver strands or rim-light. Hair is warm dark brown throughout with subdued warm highlights; only beads are ivory. Matte fantasy game asset sculpt render, soft even diffuse neutral lighting. Single BACK view only, centered upright, whole crown and all ends visible with generous margins. No head, face, body, neck, clothing, labels, text, painted checkerboard or background shadow.",
+      "validation": {
+        "dimensions": [
+          1323,
+          1189
+        ],
+        "mode": "RGBA",
+        "alpha_extrema": [
+          0,
+          255
+        ],
+        "corner_alpha": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "transparent_pixels": 822185,
+        "opaque_pixels": 6,
+        "subject_mean_alpha": 249.29,
+        "nearly_opaque_pixels": 617722,
+        "center_alpha": 253
+      },
+      "sha256": "111a293c2a043bba0db810022ec832e4502beb17bd0a1c90044ee4b2c2b09e80",
+      "references_sha256": {
+        "doc/images/characters/modular_human_male_01/customization/hair_wavy_bone-back-v1.png": "308c165d9fe987150ab129ecee5889dedf8d0774a15a48d9a18b83cd1de21d6f",
+        "doc/images/characters/modular_human_male_01/customization/hair_wavy_bone-front-v2.png": "8e954cc9e92700b7efb4b38bd61d6766b0aae5fdb07cb56d007f6ef05011c2b3"
+      },
+      "retained_in_workspace": true
+    }
+  ],
+  "bundle": {
+    "path": "doc/images/characters/modular_human_male_01/customization/hair-wavy-bone-tripo-inputs-v2.zip",
+    "sha256": "fe52e414e4ec93d589db17c3c4819e92553b7607c5a6dbfbe756a8f9c89833b7",
+    "image_count": 2,
+    "retained_in_workspace": false
+  },
+  "previous_user_model_review": {
+    "source": "/mnt/y/web_downloads/hair+with+beads+3d+model.glb",
+    "sha256": "fe2f09bf719c328f2407a1d9f45c62d39ae87993f1d2376a1323f0062c2d26f8",
+    "triangles": 2191,
+    "texture_dimensions": [
+      2048,
+      2048
+    ],
+    "status": "regeneration_requested; original untouched",
+    "cause": "gray texture regions and thin fragmented geometry observed; white-background contamination suspected, not proven"
+  },
+  "second_user_model_review": {
+    "source": "/mnt/y/web_downloads/hair with beads 3d model.glb",
+    "status": "not_accepted_for_fitting; geometry unchanged within 1e-6",
+    "diagnostics": {
+      "meshes": [
+        {
+          "name": "tripo_25317420_bffc_4463_96fc_24c2e876293d",
+          "triangles": 2191,
+          "vertices": 2865,
+          "polygons": 2191,
+          "boundary_edges": 953,
+          "boundary_length": 31.46926656551659,
+          "nonmanifold_edges": 963,
+          "loose_edges": 0,
+          "degenerate_faces": 0,
+          "components_vertices": [
+            755,
+            193,
+            140,
+            45,
+            44,
+            43,
+            43,
+            43,
+            43,
+            42,
+            42,
+            40,
+            28,
+            19,
+            18,
+            16,
+            16,
+            8,
+            8
+          ]
+        }
+      ],
+      "bounds": {
+        "min": [
+          -0.477294921875,
+          -0.374755859375,
+          0.0
+        ],
+        "max": [
+          0.477294921875,
+          0.374755859375,
+          0.99951171875
+        ]
+      }
+    },
+    "comparison": {
+      "old_vertices": 2857,
+      "new_vertices": 2865,
+      "old_geometry_signature_1e6": "30ec9f53435312de360a265edc51381d03d092c41e8ce3c4d23fa7a39d650388",
+      "new_geometry_signature_1e6": "05d4cc7a1ce1f20fbd57339664bb8c5ed6137f281f02de576bb4f4e5ff8eb480",
+      "same_triangles_at_1e6": false,
+      "max_nearest_position_distance_old_to_new": 9.541398640621973e-08,
+      "max_nearest_position_distance_new_to_old": 9.541398640621973e-08,
+      "same_triangle_connectivity_after_position_matching": true,
+      "matching_tolerance": 1e-06,
+      "same_geometry_within_tolerance": true
+    },
+    "interpretation": "Texture/material/export changed, but mesh was effectively reused. Actual Studio operation and submitted images are not confirmed."
+  },
+  "third_user_model_review": {
+    "source": "/mnt/y/web_downloads/brown wavy hair 3d model.glb",
+    "sha256": "0f9fe4473895d187ee08b659585d6c3b8c58bf4c72b97444bb4ebc9939af2a9f",
+    "date": "2026-10-04",
+    "diagnostics": {
+      "meshes": [
+        {
+          "name": "tripo_75498e66_eda5_4e1e_8d4e_d527ab6520c3",
+          "triangles": 2054,
+          "vertices": 2479,
+          "polygons": 2054,
+          "boundary_edges": 1016,
+          "boundary_length": 23.779256832785904,
+          "nonmanifold_edges": 1016,
+          "loose_edges": 0,
+          "degenerate_faces": 0,
+          "components_vertices": [
+            571,
+            194,
+            113,
+            79,
+            79,
+            56,
+            56,
+            56,
+            56,
+            56,
+            56,
+            55,
+            55,
+            44,
+            32
+          ]
+        }
+      ],
+      "bounds": {
+        "min": [
+          -0.426025390625,
+          -0.279052734375,
+          0.0
+        ],
+        "max": [
+          0.426025390625,
+          0.279052734375,
+          0.99951171875
+        ]
+      }
+    },
+    "texture_dimensions": [
+      2048,
+      2048
+    ],
+    "observations": [
+      "New geometry: 2054 triangles vs 2191 previously; dimensions and wave structure changed.",
+      "Diffuse/base-color render has substantially less gray contamination; strong white highlights in lit render are partly specular.",
+      "Large open region in lower rear hair curtain, unlike the provided rear concept.",
+      "Thin ribbons and detached-looking side layers remain."
+    ],
+    "status": "raw source reviewed; no fitting or runtime acceptance yet",
+    "generation_settings": "User supplied Tripo GLB; actual job settings and submitted views unconfirmed."
+  }
+}

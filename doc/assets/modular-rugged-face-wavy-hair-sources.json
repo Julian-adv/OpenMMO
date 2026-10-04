@@ -1,0 +1,93 @@
+{
+  "date": "2026-10-04",
+  "tool": "OpenAI Codex built-in ImageGen",
+  "subscription_tier": "ChatGPT Pro 20x",
+  "license": "OpenAI generated output terms; reference provenance: doc/assets/modular-caveman-concept-sources.json",
+  "runtime_status": "Original hair references superseded; selected face references retained; fitted Tripo hair in workshop preview",
+  "user_approval": "User requested cleanup and commit after fitting revisions",
+  "records": [
+    {
+      "id": "hair_wavy_bone-front-v1",
+      "path": "doc/images/characters/modular_human_male_01/customization/hair_wavy_bone-front-v1.png",
+      "refs": [
+        "doc/images/characters/modular_human_male_01/concepts/caveman-outfit-v2.png"
+      ],
+      "status": "unused; replaced by transparent v2; deleted at user request",
+      "prompt": "Use case: stylized-concept\nAsset type: standalone modular hairstyle reference for Tripo/3D modeling in the OnlineRPG game.\nInput image 1 is a visual reference, not the output composition: use ONLY the shoulder-length dark brown wavy hairstyle of the male caveman in the reference. Create a single isolated HAIR PIECE viewed straight from the FRONT, with no human head, no face, no beard, no skin, no bust, no mannequin, no neck or shoulders. Show the hair as a complete wearable scalp cap with a hollow empty opening where the face would be. Preserve the middle/softly irregular center part, thick flowing wavy strands, natural rough slightly tangled silhouette and the shoulder-length uneven tapered ends from the reference. Hair extends around both sides of the absent face; keep the empty face opening clear. Preserve the original small bone/bead ornaments among the side strands, restrained and in the same natural style. This is the hairstyle only, wholly disconnected from all outfit components. Realistic game concept sculpt render, defined chunky strand clumps with finer strand textures, dark brown base, neutral soft lighting with no baked colored light. One FRONT view only, upright, entire scalp top and every long end visible, centered with ample empty margins, pure white background. No ground shadow, text, labels, extra views, accessories unrelated to hair, or cropped tips.",
+      "sha256": "3380013a2d1944004453e57c93aefc244c63b73b23c378f51e768e919ebd01c4",
+      "dimensions": [
+        1322,
+        1190
+      ],
+      "mode": "RGB",
+      "retained_in_workspace": false
+    },
+    {
+      "id": "hair_wavy_bone-back-v1",
+      "path": "doc/images/characters/modular_human_male_01/customization/hair_wavy_bone-back-v1.png",
+      "refs": [
+        "doc/images/characters/modular_human_male_01/concepts/caveman-outfit-v2.png",
+        "doc/images/characters/modular_human_male_01/customization/hair_wavy_bone-front-v1.png"
+      ],
+      "status": "unused; replaced by transparent v2; deleted at user request",
+      "prompt": "Use case: stylized-concept\nAsset type: isolated modular hairstyle BACK-view reference for Tripo/3D modeling.\nInput image 1 is the original caveman character design; input image 2 is the chosen isolated FRONT view of his hairstyle. Render the exact SAME hair piece from directly BEHIND, rotated 180 degrees, preserving its length, volume, dark brown color, wavy thick strand clumps, irregular middle part and small bone/bead ornaments. The original rear view in image 1 guides the rear flow. One upright BACK view only. Hair forms a continuous full scalp cap covering the crown and rear skull, then falls in a layered dense curtain to just below the shoulders. In a true rear view, the rear hair curtain fills the center: do NOT show the empty face opening as a central hole. The isolated hairstyle floats alone without head, face, skin, beard, mannequin, neck, body or clothes. Keep scale and silhouette consistent with input image 2. Existing side ornaments may peek at their physically correct positions; do not invent large rear decorations. Realistic game asset concept render, detailed clumps, soft neutral lighting, pure white background, entire piece visible with margins. No labels, text, extra views, ground shadow, or cropped tips.",
+      "sha256": "308c165d9fe987150ab129ecee5889dedf8d0774a15a48d9a18b83cd1de21d6f",
+      "dimensions": [
+        1323,
+        1189
+      ],
+      "mode": "RGB",
+      "retained_in_workspace": false
+    },
+    {
+      "id": "face_rugged-front-v1",
+      "path": "doc/images/characters/modular_human_male_01/customization/face_rugged-front-v1.png",
+      "refs": [
+        "doc/images/characters/modular_human_male_01/concepts/caveman-outfit-v2.png"
+      ],
+      "status": "selected",
+      "prompt": "Use case: stylized-concept\nAsset type: standalone reusable male HEAD/FACE reference for modular character 3D modeling in OnlineRPG.\nInput image 1 is the visual reference for facial identity: the male caveman from the FRONT view. Produce a close, strictly straight FRONT portrait of this same man's entire bald head and short bare neck, isolated on pure white. Preserve his masculine identity, broad square jaw, prominent cheekbones, deep-set warm brown eyes, thick dark eyebrows, strong straight nose, adult approximately 35-40-year-old proportions and warm naturally tan skin. Remove all scalp hair, facial beard and moustache, red warpaint/forehead markings, ornaments, necklaces, clothes, shoulder equipment and body. This is a clean-shaven, completely BALD reusable head that can wear independently interchangeable hair. Natural clean-shaven skin without stubble; eyebrows and eyelashes remain. Show the whole round cranium, both complete ears, forehead, eyes, nose, closed lips, chin and short neck stub ending at neck base, no shoulders or torso. Neutral relaxed symmetrical expression with eyes forward and mouth closed, no angry grimace. Preserve the strong reference facial structure without copying its facial hair. Realistic premium fantasy game sculpt reference, clear anatomy and subtle skin detail, even neutral diffuse studio lighting, no strong directional shadow or colored light. One FRONT view only, centered at large scale with ample white margins around the entire head and neck. No labels, text, extra heads, hairstyle, beard, tattoo, ornaments or cropped cranium.",
+      "sha256": "5e0e1aac5a42192b0c3723d5a48a971f28bcb8328f5c47fb3100acee7d859820",
+      "dimensions": [
+        1199,
+        1312
+      ],
+      "mode": "RGB",
+      "retained_in_workspace": true
+    },
+    {
+      "id": "face_rugged-side-v1",
+      "refs": [
+        "doc/images/characters/modular_human_male_01/concepts/caveman-outfit-v2.png",
+        "doc/images/characters/modular_human_male_01/customization/face_rugged-front-v1.png"
+      ],
+      "status": "rejected",
+      "reason": "Slight three-quarter angle; replaced with a stricter side profile.",
+      "prompt": "Use case: stylized-concept\nAsset type: standalone reusable male HEAD/FACE exact SIDE profile reference for modular character 3D modeling.\nInput image 1 is the original male caveman identity reference. Input image 2 is the selected bald clean-shaven FRONT head design; it is the authoritative head identity and anatomy. Render exactly the SAME bald male head from a strict 90-degree SIDE profile, nose pointing toward the LEFT edge of the image. No three-quarter angle: only one eye and one ear visible, no far eye visible. Preserve its broad square jaw, prominent cheekbone, strong straight nose, forehead slope, dark thick eyebrow, warm brown eye, warm tan skin, whole smooth bald skull shape, ear shape, closed lips and short bare neck stub. Keep the proportions and facial features consistent with image 2; do not invent a different man or enlarge the nose. Clean-shaven, no beard or moustache, no visible stubble, no scalp hair, no warpaint, tattoos, piercings or ornaments. Whole cranium, complete nose tip, ear, chin and short neck base fully visible, no shoulders or torso. Neutral relaxed expression. Realistic fantasy game sculpt reference, soft even diffuse neutral lighting, pure white background, centered large head with ample empty margins. One SIDE view only, no text, labels, inset views, cast ground shadow or cropped edges.",
+      "sha256": "7298ddb3f363b6ddf832168c50a690c3cdd4b4392c238cc96b33514ba3b845e9",
+      "retained_in_workspace": false
+    },
+    {
+      "id": "face_rugged-side-v2",
+      "path": "doc/images/characters/modular_human_male_01/customization/face_rugged-side-v2.png",
+      "refs": [
+        "face_rugged-side-v1"
+      ],
+      "status": "selected",
+      "prompt": "Use case: precise-object-edit\nEdit target: input image 1, the bald male head side reference.\nCorrect ONLY the camera angle into a strict orthographic 90-degree side profile, nose pointing LEFT. Keep the exact same man's facial identity, head shape, jaw, nose, skin tone, eyebrow, ear, neck crop, scale, white background and lighting. Rotate fully sideways: the distant eyebrow, distant eye socket, distant cheek, and distant nose wing must be entirely hidden. Only the near eyebrow, near eye in profile, and near ear can be visible. The side silhouette must clearly show forehead, nose bridge and tip, closed lips, chin and neck. Keep whole cranium and neck in frame. Maintain a bald scalp; remove the remaining tiny beard/moustache stubble so the skin is freshly clean-shaven, preserving natural pores and texture. No hair, beard, tattoos, clothes, shoulders, text or extra views.",
+      "sha256": "632d6a40038b7a83e91f13b593326c65c7b540348bf39a3013ddf567cf6e5d06",
+      "dimensions": [
+        1199,
+        1312
+      ],
+      "mode": "RGB",
+      "retained_in_workspace": true
+    }
+  ],
+  "bundle": {
+    "path": "doc/images/characters/modular_human_male_01/customization/rugged-face-wavy-hair-inputs-v1.zip",
+    "sha256": "fe91f5e9e9c878a1d1e9c7720ee4e3b8d372def931178dbf1b463dbabc05b5a9",
+    "image_count": 4,
+    "retained_in_workspace": false
+  }
+}

@@ -115,7 +115,8 @@ async function main() {
   if (!import.meta.env.DEV)
     throw new Error('개발 서버에서 여는 제작용 미리보기입니다.')
   const loader = new GLTFLoader()
-  const requestedOutfit = new URLSearchParams(location.search).get('outfit')
+  const params = new URLSearchParams(location.search)
+  const requestedOutfit = params.get('outfit')
   const tripo = requestedOutfit === 'tripo'
   const caveman = requestedOutfit === 'caveman'
   if (tripo || caveman) showWeapon.checked = false
@@ -154,6 +155,7 @@ async function main() {
     'pants_caveman',
     'boots_caveman',
     'gloves_caveman',
+    'hair_wavy_bone',
   ]
   const [base, sources, animations, sword, profile, candidateSources, social] =
     await Promise.all([
@@ -180,7 +182,7 @@ async function main() {
     } else {
       const [slot, style] = id.split('_')
       el<HTMLSelectElement>(slot).querySelector<HTMLOptionElement>(
-        `option[value="${style}"]`
+        `option[value="${slot === 'hair' ? id : style}"]`
       )!.disabled = true
     }
   }
@@ -189,7 +191,7 @@ async function main() {
     .every((result) => result.status === 'fulfilled')
   el<HTMLButtonElement>('rogue-outfit').disabled = !rogueAvailable
   const cavemanAvailable = candidateSources
-    .slice(ROGUE_MODULAR_PARTS.length)
+    .slice(ROGUE_MODULAR_PARTS.length, ROGUE_MODULAR_PARTS.length + 4)
     .every((result) => result.status === 'fulfilled')
   el<HTMLButtonElement>('caveman-outfit').disabled = !cavemanAvailable
   const clips = [
@@ -257,6 +259,7 @@ async function main() {
   eyeColor.oninput = () => irisColor.value.set(eyeColor.value)
   let equipped = new Set<string>()
   const dress = () => {
+    hairColor.disabled = hairSelect.value === 'hair_wavy_bone'
     equipped = showModularOutfit(bodyMeshes, parts, {
       hair: hairSelect.value as ModularOutfit['hair'],
       top: topSelect.value as ModularOutfit['top'],
@@ -599,6 +602,11 @@ async function main() {
   else if (requestedOutfit === 'rogue' && rogueAvailable)
     wearOutfit(ROGUE_MODULAR_OUTFIT)
   else dress()
+  if (params.get('hair') === 'hair_wavy_bone' && parts.has('hair_wavy_bone')) {
+    hairSelect.value = 'hair_wavy_bone'
+    helmet.value = 'none'
+    dress()
+  }
   let last = performance.now()
   const render = (now: number) => {
     const dt = Math.min((now - last) / 1000, 0.05) * Number(speed.value)
