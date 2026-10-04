@@ -1,0 +1,146 @@
+{
+  "date": "2026-10-04",
+  "source_records": [
+    "doc/assets/modular-caveman-tripo-top-sources.json",
+    "doc/assets/modular-caveman-tripo-pants-sources.json",
+    "doc/assets/modular-caveman-tripo-boots-sources.json",
+    "doc/assets/modular-caveman-tripo-bracer-sources.json"
+  ],
+  "outputs": {
+    "client/public/models/armor/caveman_top.glb": {
+      "sha256": "9046d1c8f9cd9d9174df569f48a9768492e05763483d753e9d02d563a83e3c1a",
+      "bytes": 204652
+    },
+    "client/public/models/armor/caveman_pants.glb": {
+      "sha256": "b6e2b4fe588914e74abce4ddf67756676e50bf6e107bcf90a9c2803cd7750d78",
+      "bytes": 508384
+    },
+    "client/public/models/armor/caveman_boots.glb": {
+      "sha256": "0e4fb52f7a507c12dd491facbe3d6b397e0ed586abf60bae3eea9fc35c5bf70e",
+      "bytes": 311424
+    },
+    "client/public/models/armor/caveman_bracers.glb": {
+      "sha256": "b32d36f43a2e91268189bf2d81e46d60ed8cca13c312466c5fed685b58931107",
+      "bytes": 172920
+    },
+    "client/public/items/armor/caveman_top.png": {
+      "sha256": "4d548f399eb8333a608f8fade3eb626d2005220ae672a34eefe2bdc216b9dc41",
+      "bytes": 10644
+    },
+    "client/public/items/armor/caveman_pants.png": {
+      "sha256": "f8ddf5d94e95227727427d3e8eda02c0d63b7c8cdccf697b10461ad7602d4af1",
+      "bytes": 15068
+    },
+    "client/public/items/armor/caveman_boots.png": {
+      "sha256": "cfd80f57d77eeb68ffdc6b312a5c6c2eaa282b0357746a2d33555235527c99da",
+      "bytes": 15229
+    },
+    "client/public/items/armor/caveman_bracers.png": {
+      "sha256": "9e6261a9cf1dccc05e8226d15acd80845dbc8f42cef765aa6bf4407615bb4bbb",
+      "bytes": 10854
+    },
+    "assets/caveman_top/caveman_top.blend": {
+      "sha256": "4dd397326fecb2b4f57f19391524587023697edc3a31f643404669699159fe17",
+      "bytes": 738367
+    },
+    "assets/caveman_pants/caveman_pants.blend": {
+      "sha256": "093f83f63063b62d4b802cfd4b94657bd8557c360d621cd73cc9dc4e90113919",
+      "bytes": 888656
+    },
+    "assets/caveman_boots/caveman_boots.blend": {
+      "sha256": "290cf954c3b430aef7ceac22adfbca20d4ed2933909142f3443f840f15fa61f1",
+      "bytes": 846667
+    },
+    "assets/caveman_bracers/caveman_bracers.blend": {
+      "sha256": "6880b3b7900e9c570f29cc593185109193d440306b11ce4216d22facbc363062",
+      "bytes": 691686
+    }
+  },
+  "validation": {
+    "client/public/models/armor/caveman_top.glb": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": []
+    },
+    "client/public/models/armor/caveman_pants.glb": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": []
+    },
+    "client/public/models/armor/caveman_boots.glb": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": []
+    },
+    "client/public/models/armor/caveman_bracers.glb": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": []
+    },
+    "client/public/models/characters/modular_male/top_caveman.glb": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        }
+      ]
+    },
+    "client/public/models/characters/modular_male/pants_caveman.glb": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        }
+      ]
+    },
+    "client/public/models/characters/modular_male/boots_caveman.glb": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        }
+      ]
+    },
+    "client/public/models/characters/modular_male/gloves_caveman.glb": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        }
+      ]
+    }
+  },
+  "top_ground_revision": {
+    "date": "2026-10-04",
+    "source": "Existing fitted Tripo top; local rotation only, no new generation.",
+    "previous_ground_sha256": "461ef5381df4e569a0b779dd27b5994abf583121fe722d8e27df03942df6e596",
+    "bounds": {
+      "ground_rotation_x_degrees": -90,
+      "ground_min_y": 0.0,
+      "size": [
+        0.45177948474884033,
+        0.3458782434463501,
+        0.3422929048538208
+      ],
+      "rotation_max_vertex_error_m": 5.960464477539063e-08
+    },
+    "icon_pixels_unchanged": false,
+    "preview": "doc/images/characters/modular_human_male_01/parts/caveman/top-ground-rest.png"
+  }
+}

@@ -9,20 +9,18 @@ import {
 import {
   bindModularPart,
   BARBARIAN_MODULAR_OUTFIT,
+  CAVEMAN_MODULAR_OUTFIT,
   KNIGHT_MODULAR_OUTFIT,
   modularAnimationClips,
   modularRigId,
   modularSwordTracks,
   parseModularHandProfile,
+  ROGUE_MODULAR_OUTFIT,
+  ROGUE_MODULAR_PARTS,
+  showModularOutfit,
   skinnedParts,
+  type ModularOutfit,
 } from '../lib/utils/modularCharacter'
-import {
-  CAVEMAN_PREVIEW_OUTFIT,
-  ROGUE_PREVIEW_OUTFIT,
-  ROGUE_PREVIEW_PARTS,
-  showPreviewOutfit,
-  type PreviewOutfit,
-} from './modular-outfit'
 import './modular-character.css'
 import {
   updatePeltPhysics,
@@ -151,7 +149,7 @@ async function main() {
     'helmet_barbarian',
   ]
   const candidateParts = [
-    ...ROGUE_PREVIEW_PARTS,
+    ...ROGUE_MODULAR_PARTS,
     'top_caveman',
     'pants_caveman',
     'boots_caveman',
@@ -187,11 +185,11 @@ async function main() {
     }
   }
   const rogueAvailable = candidateSources
-    .slice(0, ROGUE_PREVIEW_PARTS.length)
+    .slice(0, ROGUE_MODULAR_PARTS.length)
     .every((result) => result.status === 'fulfilled')
   el<HTMLButtonElement>('rogue-outfit').disabled = !rogueAvailable
   const cavemanAvailable = candidateSources
-    .slice(ROGUE_PREVIEW_PARTS.length)
+    .slice(ROGUE_MODULAR_PARTS.length)
     .every((result) => result.status === 'fulfilled')
   el<HTMLButtonElement>('caveman-outfit').disabled = !cavemanAvailable
   const clips = [
@@ -259,16 +257,16 @@ async function main() {
   eyeColor.oninput = () => irisColor.value.set(eyeColor.value)
   let equipped = new Set<string>()
   const dress = () => {
-    equipped = showPreviewOutfit(bodyMeshes, parts, {
-      hair: hairSelect.value as PreviewOutfit['hair'],
-      top: topSelect.value as PreviewOutfit['top'],
-      pants: pants.value as PreviewOutfit['pants'],
-      gloves: gloves.value as PreviewOutfit['gloves'],
-      boots: boots.value as PreviewOutfit['boots'],
-      helmet: helmet.value as PreviewOutfit['helmet'],
+    equipped = showModularOutfit(bodyMeshes, parts, {
+      hair: hairSelect.value as ModularOutfit['hair'],
+      top: topSelect.value as ModularOutfit['top'],
+      pants: pants.value as ModularOutfit['pants'],
+      gloves: gloves.value as ModularOutfit['gloves'],
+      boots: boots.value as ModularOutfit['boots'],
+      helmet: helmet.value as ModularOutfit['helmet'],
     })
     const note = el('outfit-note')
-    const inspectingRogue = ROGUE_PREVIEW_PARTS.some((id) => equipped.has(id))
+    const inspectingRogue = ROGUE_MODULAR_PARTS.some((id) => equipped.has(id))
     const inspectingCaveman =
       equipped.has('top_caveman') ||
       equipped.has('pants_caveman') ||
@@ -291,7 +289,7 @@ async function main() {
   }
   for (const element of [hairSelect, topSelect, pants, gloves, boots, helmet])
     element.onchange = dress
-  const wearOutfit = (outfit: PreviewOutfit) => {
+  const wearOutfit = (outfit: ModularOutfit) => {
     hairSelect.value = outfit.hair
     topSelect.value = outfit.top
     pants.value = outfit.pants
@@ -302,8 +300,8 @@ async function main() {
   }
   el('knight-outfit').onclick = () => wearOutfit(KNIGHT_MODULAR_OUTFIT)
   el('barbarian-outfit').onclick = () => wearOutfit(BARBARIAN_MODULAR_OUTFIT)
-  el('rogue-outfit').onclick = () => wearOutfit(ROGUE_PREVIEW_OUTFIT)
-  el('caveman-outfit').onclick = () => wearOutfit(CAVEMAN_PREVIEW_OUTFIT)
+  el('rogue-outfit').onclick = () => wearOutfit(ROGUE_MODULAR_OUTFIT)
+  el('caveman-outfit').onclick = () => wearOutfit(CAVEMAN_MODULAR_OUTFIT)
   hairColor.oninput = dress
   if (disposed) return
   const hand = body.getObjectByName('RightHand')
@@ -587,7 +585,7 @@ async function main() {
     el('stats').textContent =
       `조합 ${total.toLocaleString()}삼각형 · 표시 ${visible.toLocaleString()} · 얼굴 1,505`
   }
-  if (caveman && cavemanAvailable) wearOutfit(CAVEMAN_PREVIEW_OUTFIT)
+  if (caveman && cavemanAvailable) wearOutfit(CAVEMAN_MODULAR_OUTFIT)
   else if (tripo && parts.has('top_rogue'))
     wearOutfit({
       hair: 'hair_crop',
@@ -599,7 +597,7 @@ async function main() {
     })
   else if (requestedOutfit === 'barbarian') wearOutfit(BARBARIAN_MODULAR_OUTFIT)
   else if (requestedOutfit === 'rogue' && rogueAvailable)
-    wearOutfit(ROGUE_PREVIEW_OUTFIT)
+    wearOutfit(ROGUE_MODULAR_OUTFIT)
   else dress()
   let last = performance.now()
   const render = (now: number) => {

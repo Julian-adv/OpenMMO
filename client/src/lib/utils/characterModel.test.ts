@@ -70,6 +70,62 @@ describe.skipIf(
         (mesh.userData.region ?? mesh.parent?.userData.region) === region
     )
 
+  it('equips caveman starter clothing, removes pieces and restores skin with other armor', async () => {
+    const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
+    const { modelRoot } = createCharacterModelRoot(source.scene)
+    const { modelRoot: other } = createCharacterModelRoot(source.scene)
+    const armor = {
+      chest: 'worn_caveman_top',
+      pants: 'worn_caveman_pants',
+      hands: 'worn_caveman_bracers',
+      boots: 'worn_caveman_boots',
+    }
+    const parts = {
+      chest: 'top_caveman',
+      pants: 'pants_caveman',
+      hands: 'gloves_caveman',
+      boots: 'boots_caveman',
+    } as const
+    applyCharacterArmor(modelRoot, armor)
+    for (const part of Object.values(parts)) {
+      expect(visible(modelRoot, part)).toBe(true)
+      expect(visible(other, part)).toBe(false)
+    }
+    expect(visible(modelRoot, 'hair_crop')).toBe(true)
+    const meshes = skinnedParts(modelRoot)
+    for (const region of ['torso', 'upper_arms', 'hands'])
+      expect(bodyRegion(meshes, region).every((mesh) => mesh.visible)).toBe(
+        true
+      )
+    for (const region of ['feet', 'ankles', 'boot_ankles'])
+      expect(bodyRegion(meshes, region).every((mesh) => !mesh.visible)).toBe(
+        true
+      )
+    for (const slot of Object.keys(parts) as (keyof typeof parts)[]) {
+      applyCharacterArmor(modelRoot, { ...armor, [slot]: null })
+      for (const [otherSlot, part] of Object.entries(parts))
+        expect(visible(modelRoot, part)).toBe(otherSlot !== slot)
+    }
+    applyCharacterArmor(modelRoot, { ...armor, pants: 'worn_plate_greaves' })
+    expect(visible(modelRoot, 'pants_plate')).toBe(true)
+    expect(visible(modelRoot, 'pants_caveman')).toBe(false)
+    for (const mesh of skinnedParts(modelRoot).filter(
+      (mesh) => mesh.userData.part_id === 'pants_plate'
+    )) {
+      mesh.geometry.computeBoundingBox()
+      expect(mesh.geometry.boundingBox?.min.y).toBeGreaterThanOrEqual(
+        0.43 - 1e-5
+      )
+    }
+    applyCharacterArmor(modelRoot, {})
+    for (const part of Object.values(parts))
+      expect(visible(modelRoot, part)).toBe(false)
+    for (const region of ['torso', 'forearms', 'feet', 'legs'])
+      expect(bodyRegion(meshes, region).every((mesh) => mesh.visible)).toBe(
+        true
+      )
+  })
+
   it('equips the current rogue set, removes each slot and switches mixed equipment', async () => {
     const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
     const { modelRoot: rogue } = createCharacterModelRoot(source.scene)

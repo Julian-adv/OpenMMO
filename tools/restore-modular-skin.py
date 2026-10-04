@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 from scipy.ndimage import distance_transform_edt, gaussian_filter, map_coordinates
+from scipy.spatial import cKDTree
 
 from lib.glb import write_glb
 
@@ -46,7 +47,78 @@ def rasterize(uv, positions, faces, size):
             yield yy.ravel()[inside], xx.ravel()[inside], bary[inside] @ positions[face]
 
 
-def bake_map(kind, surface, primitives):
+def thigh_palette(primitives):
+    source = np.asarray(Image.open(SOURCES / 'color.png').convert('RGB'), dtype=float)
+    points, colors = [], []
+    for uv, positions, faces, affected in primitives:
+        if not affected or positions[:, 1].min() > .76:
+            continue
+        for face in faces:
+            if positions[face, 1].max() < .61 or positions[face, 1].min() > .76:
+                continue
+            for y, x, samples in rasterize(uv, positions, [face], 512):
+                mask = (samples[:, 1] >= .61) & (samples[:, 1] <= .76)
+                if not mask.any():
+                    continue
+                coords = np.array([(y[mask] + .5) / 512 * source.shape[0] - .5,
+                                   (x[mask] + .5) / 512 * source.shape[1] - .5])
+                points.append(samples[mask])
+                colors.append(np.column_stack([map_coordinates(source[:, :, channel], coords, order=1)
+                                                for channel in range(3)]))
+    points, colors = np.vstack(points), np.vstack(colors)
+    centers, references = [], []
+    for side in [-1, 1]:
+        selected = points[:, 0] * side > 0
+        ring = points[selected][:, [0, 2]]
+        center = (ring.min(0) + ring.max(0)) / 2
+        angles = np.arctan2(ring[:, 1] - center[1], ring[:, 0] - center[0])
+        features = np.column_stack([np.cos(angles), np.sin(angles), points[selected, 1] * 8])
+        references.append((cKDTree(features), colors[selected]))
+        centers.append(center)
+    return np.array(centers), references
+
+
+def matched_thigh_color(points, centers, references):
+    result = np.empty_like(points)
+    for index, (tree, colors) in enumerate(references):
+        selected = (points[:, 0] >= 0) == bool(index)
+        offsets = points[selected][:, [0, 2]] - centers[index]
+        angles = np.arctan2(offsets[:, 1], offsets[:, 0])
+        height = np.clip(.74 - .45 * np.maximum(points[selected, 1] - .74, 0), .61, .74)
+        features = np.column_stack([np.cos(angles), np.sin(angles), height * 8])
+        distance, nearest = tree.query(features, k=4)
+        weight = 1 / np.maximum(distance, .0001) ** 2
+        result[selected] = np.sum(colors[nearest] * weight[:, :, None], axis=1) / weight.sum(1)[:, None]
+    return result
+
+
+def blend_thigh_normals(plate, doc, binary, primitives):
+    points = np.vstack([entry[1] for entry in primitives])
+    normals = np.vstack([plate.accessor(doc, binary, entry[0]['NORMAL']) for entry in primitives])
+    unique, first, inverse = np.unique(np.round(points, 6), axis=0, return_index=True, return_inverse=True)
+    source = normals[first]
+    blended = source.copy()
+    tree = cKDTree(unique)
+    for index in np.flatnonzero((unique[:, 1] > .67) & (unique[:, 1] < .94)):
+        neighbors = tree.query_ball_point(unique[index], .075)
+        distance = np.linalg.norm(unique[neighbors] - unique[index], axis=1)
+        facing = np.maximum(source[neighbors] @ source[index], 0) ** 4
+        weight = np.exp(-.5 * (distance / .035) ** 2) * facing
+        target = np.sum(source[neighbors] * weight[:, None], axis=0)
+        target /= np.linalg.norm(target)
+        y = unique[index, 1]
+        blend = smoothstep((y - .67) / .08) * (1 - smoothstep((y - .86) / .08))
+        blended[index] = source[index] * (1 - blend) + target * blend
+    blended /= np.maximum(np.linalg.norm(blended, axis=1, keepdims=True), 1e-8)
+    offset = 0
+    for attrs, positions, uv, faces in primitives:
+        normal = blended[inverse[offset:offset + len(positions)]]
+        attrs['NORMAL'] = plate.add_accessor(doc, binary, normal, 'VEC3')
+        attrs['TANGENT'] = plate.add_accessor(doc, binary, plate.tangents(positions, normal, uv, faces), 'VEC4')
+        offset += len(positions)
+
+
+def bake_map(kind, surface, primitives, palette):
     pixels = np.asarray(Image.open(SOURCES / f'{kind}.png').convert('RGB')).copy()
     size = len(pixels)
     occupied = np.zeros((size, size), bool)
@@ -64,6 +136,8 @@ def bake_map(kind, surface, primitives):
                 v = .2 + (1.22 - points[:, 1]) / .62 * .6
                 coords = np.array([v * (surface.shape[0] - 1), u * (surface.shape[1] - 1)])
                 target = np.column_stack([map_coordinates(surface[:, :, channel], coords, order=1, mode='nearest') for channel in range(3)])
+                blend = (1 - smoothstep((points[:, 1] - .88) / .16))[:, None]
+                target += (matched_thigh_color(points, *palette) - [180, 134, 104]) * blend
             else:
                 target = np.array([128, 128, 255] if kind == 'normal' else [0, 220, 0])
             pixels[y, x] = np.round(pixels[y, x] * (1 - alpha[:, None]) + target * alpha[:, None]).clip(0, 255)
@@ -84,6 +158,7 @@ def restore_skin():
     fingerprint = hashlib.sha256(SURFACE.read_bytes() + Path(__file__).read_bytes()).hexdigest()
     if doc.get('extras', {}).get('skin_surface_bake') == fingerprint:
         return
+    restore_normals = 'skin_surface_bake' not in doc.get('extras', {})
     original_uv = json.loads((SOURCES / 'original-uv.json').read_text())
     binary = bytearray(raw)
     skin = next(material for material in doc['materials'] if material['name'] == 'Material_0')
@@ -119,31 +194,37 @@ def restore_skin():
     maps = [('color', skin['pbrMetallicRoughness']['baseColorTexture']),
             ('normal', skin['normalTexture']),
             ('roughness', skin['pbrMetallicRoughness']['metallicRoughnessTexture'])]
+    palette = thigh_palette(primitives)
     for kind, info in maps:
-        data = bake_map(kind, surface, primitives)
+        data = bake_map(kind, surface, primitives, palette)
         image = doc['images'][doc['textures'][info['index']]['source']]
         binary.extend(b'\0' * (-len(binary) % 4))
         image.update(bufferView=len(doc['bufferViews']), mimeType='image/png')
         doc['bufferViews'].append({'buffer': 0, 'byteOffset': len(binary), 'byteLength': len(data)})
         binary.extend(data)
-    positions = np.vstack([entry[1] for entry in smooth])
-    faces, offset = [], 0
-    for _, points, _, indices in smooth:
-        faces.extend(indices + offset)
-        offset += len(points)
-    normals = plate.smooth_normals(positions, np.array(faces))
-    offset = 0
-    for attrs, points, uv, faces in smooth:
-        existing = plate.accessor(doc, raw, attrs['NORMAL'])
-        blend = coverage(points)[:, None]
-        normal = existing * (1 - blend) + normals[offset:offset + len(points)] * blend
-        normal /= np.maximum(np.linalg.norm(normal, axis=1, keepdims=True), 1e-8)
-        attrs['NORMAL'] = plate.add_accessor(doc, binary, normal, 'VEC3')
-        attrs['TANGENT'] = plate.add_accessor(doc, binary, plate.tangents(points, normal, uv, faces), 'VEC4')
-        offset += len(points)
+    if restore_normals:
+        positions = np.vstack([entry[1] for entry in smooth])
+        faces, offset = [], 0
+        for _, points, _, indices in smooth:
+            faces.extend(indices + offset)
+            offset += len(points)
+        normals = plate.smooth_normals(positions, np.array(faces))
+        offset = 0
+        for attrs, points, uv, faces in smooth:
+            existing = plate.accessor(doc, raw, attrs['NORMAL'])
+            blend = coverage(points)[:, None]
+            normal = existing * (1 - blend) + normals[offset:offset + len(points)] * blend
+            normal /= np.maximum(np.linalg.norm(normal, axis=1, keepdims=True), 1e-8)
+            attrs['NORMAL'] = plate.add_accessor(doc, binary, normal, 'VEC3')
+            attrs['TANGENT'] = plate.add_accessor(doc, binary, plate.tangents(points, normal, uv, faces), 'VEC4')
+            offset += len(points)
+    if doc.get('extras', {}).get('thigh_shading_blend') != 'v1':
+        thigh_primitives = [entry for entry in smooth if entry[1][:, 1].min() < 1]
+        blend_thigh_normals(plate, doc, binary, thigh_primitives)
+        doc.setdefault('extras', {})['thigh_shading_blend'] = 'v1'
     doc.setdefault('extras', {})['skin_surface_bake'] = fingerprint
     write_glb(BASE, doc, plate.compact(doc, binary))
-    print('Baked continuous hip/thigh skin with original UVs and blended boundary normals')
+    print('Matched hip skin to the thighs and softened the former clothing boundary')
 
 
 if __name__ == '__main__':

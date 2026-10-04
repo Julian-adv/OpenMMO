@@ -57,6 +57,12 @@ fn class_starter_items(
             ("worn_barbarian_boots", 1, Some("boots")),
             ("worn_barbarian_bracers", 1, Some("hands")),
         ],
+        CharacterClass::Caveman if gender == Gender::Male => &[
+            ("worn_caveman_top", 1, Some("chest")),
+            ("worn_caveman_pants", 1, Some("pants")),
+            ("worn_caveman_boots", 1, Some("boots")),
+            ("worn_caveman_bracers", 1, Some("hands")),
+        ],
         CharacterClass::Rogue if gender == Gender::Male => &[
             ("worn_rogue_top", 1, Some("chest")),
             ("worn_rogue_pants", 1, Some("pants")),
@@ -2567,6 +2573,60 @@ mod tests {
             assert_eq!(worn.armor.pants.as_deref(), Some("worn_rogue_pants"));
             assert_eq!(worn.armor.hands.as_deref(), Some("worn_rogue_gloves"));
             assert_eq!(worn.armor.boots.as_deref(), Some("worn_rogue_boots"));
+            let listed = auth.list_characters_with_equipment(&account).unwrap();
+            assert_eq!(listed[0].worn.armor, worn.armor);
+        }
+    }
+
+    #[test]
+    fn cavemen_start_with_four_equipped_unpriced_pieces_and_no_helmet() {
+        let (auth, _) = temp_auth("auth_caveman_armor");
+        for (name, gender) in [("Caveman", Gender::Male), ("Cavewoman", Gender::Female)] {
+            let account = auth.login_google(&format!("sub-{name}")).unwrap();
+            let character = auth
+                .create_character(
+                    &account,
+                    name,
+                    &plain_attributes(),
+                    10,
+                    CharacterClass::Caveman,
+                    gender,
+                )
+                .unwrap();
+            let items = auth.load_inventory(character.id).unwrap();
+            if gender == Gender::Female {
+                assert_eq!(items.len(), STARTER_ITEMS.len());
+                assert_eq!(
+                    auth.load_character_equipment(character.id).unwrap().armor,
+                    Default::default()
+                );
+                continue;
+            }
+            for (id, slot) in [
+                ("worn_caveman_top", "chest"),
+                ("worn_caveman_pants", "pants"),
+                ("worn_caveman_bracers", "hands"),
+                ("worn_caveman_boots", "boots"),
+            ] {
+                let item = items.iter().find(|item| item.item_def_id == id).unwrap();
+                assert_eq!(item.quantity, 1);
+                assert_eq!(item.equip_slot.as_deref(), Some(slot));
+                let def = crate::item_defs::item_defs().get(id).unwrap();
+                assert_eq!(def.equip_slot.as_ref().map(EquipSlot::as_str), Some(slot));
+                assert_eq!(def.base_price, None);
+                assert!(def.untradeable);
+                assert_eq!(def.guard, Some(1));
+                assert!(def.chest_tier.is_none());
+            }
+            assert_eq!(items.len(), STARTER_ITEMS.len() + 4);
+            let worn = auth.load_character_equipment(character.id).unwrap();
+            assert_eq!(worn.main_hand.as_deref(), Some("worn_iron_sword"));
+            assert!(items.iter().any(|item| item.item_def_id == "worn_torch"));
+            assert_eq!(worn.armor.head, None);
+            assert_eq!(worn.armor.chest.as_deref(), Some("worn_caveman_top"));
+            assert_eq!(worn.armor.pants.as_deref(), Some("worn_caveman_pants"));
+            assert_eq!(worn.armor.hands.as_deref(), Some("worn_caveman_bracers"));
+            assert_eq!(worn.armor.boots.as_deref(), Some("worn_caveman_boots"));
             let listed = auth.list_characters_with_equipment(&account).unwrap();
             assert_eq!(listed[0].worn.armor, worn.armor);
         }

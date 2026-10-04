@@ -59,13 +59,21 @@ export const MODULAR_BOOTS = [
   'plate',
   'barbarian',
   'rogue',
+  'caveman',
 ] as const
 
 export interface ModularOutfit {
   hair: 'hair_crop' | 'hair_sidepart' | 'none'
-  top: 'linen' | 'leather' | 'plate' | 'barbarian' | 'rogue' | 'none'
-  pants: 'cloth' | 'plate' | 'barbarian' | 'rogue' | 'none'
-  gloves: 'none' | 'leather' | 'plate' | 'barbarian' | 'rogue'
+  top:
+    | 'linen'
+    | 'leather'
+    | 'plate'
+    | 'barbarian'
+    | 'rogue'
+    | 'caveman'
+    | 'none'
+  pants: 'cloth' | 'plate' | 'barbarian' | 'rogue' | 'caveman' | 'none'
+  gloves: 'none' | 'leather' | 'plate' | 'barbarian' | 'rogue' | 'caveman'
   boots: (typeof MODULAR_BOOTS)[number]
   helmet: 'none' | 'plate' | 'barbarian'
 }
@@ -104,7 +112,7 @@ export function modularOutfitParts(outfit: ModularOutfit): Set<string> {
     selected.add(outfit.hair)
   if (outfit.top === 'linen' || outfit.top === 'leather')
     selected.add('top_linen')
-  if (['leather', 'plate', 'barbarian', 'rogue'].includes(outfit.top))
+  if (outfit.top !== 'linen' && outfit.top !== 'none')
     selected.add(`top_${outfit.top}`)
   if (outfit.gloves !== 'none') selected.add(`gloves_${outfit.gloves}`)
   if (outfit.boots !== 'none') selected.add(`boots_${outfit.boots}`)
@@ -161,6 +169,7 @@ function showBaseModularOutfit(
     {
       none: undefined,
       rogue: undefined,
+      caveman: undefined,
       leather: 'gloves',
       plate: 'gauntlets',
       barbarian: 'bracers',
@@ -245,7 +254,7 @@ function showBaseModularOutfit(
   return selected
 }
 
-type RogueSlot = 'top' | 'pants' | 'gloves' | 'boots'
+type ProxiedSlot = 'top' | 'pants' | 'gloves' | 'boots'
 
 export const ROGUE_MODULAR_PARTS = [
   'top_rogue',
@@ -263,13 +272,31 @@ export const ROGUE_MODULAR_OUTFIT: ModularOutfit = {
   helmet: 'none',
 }
 
+const CAVEMAN_MODULAR_PARTS = [
+  'top_caveman',
+  'pants_caveman',
+  'gloves_caveman',
+  'boots_caveman',
+] as const
+
+export const CAVEMAN_MODULAR_OUTFIT: ModularOutfit = {
+  hair: 'hair_crop',
+  top: 'caveman',
+  pants: 'caveman',
+  gloves: 'caveman',
+  boots: 'caveman',
+  helmet: 'none',
+}
+
+const proxied = (style: string) => style === 'rogue' || style === 'caveman'
+
 export function showModularOutfit(
   body: THREE.SkinnedMesh[],
   parts: ReadonlyMap<string, THREE.SkinnedMesh[]>,
   outfit: ModularOutfit
 ): Set<string> {
-  const available = <Slot extends RogueSlot>(slot: Slot) =>
-    outfit[slot] === 'rogue' && !parts.get(`${slot}_rogue`)?.length
+  const available = <Slot extends ProxiedSlot>(slot: Slot) =>
+    proxied(outfit[slot]) && !parts.get(`${slot}_${outfit[slot]}`)?.length
       ? 'none'
       : outfit[slot]
   const top = available('top')
@@ -286,31 +313,43 @@ export function showModularOutfit(
     parts,
     {
       ...outfit,
-      top: top === 'rogue' ? 'none' : top,
-      pants: pants === 'rogue' ? 'cloth' : pants,
-      gloves: gloves === 'rogue' ? 'none' : gloves,
-      boots: boots === 'rogue' ? 'leather' : boots,
+      top: proxied(top) ? 'none' : top,
+      pants:
+        pants === 'rogue' ? 'cloth' : pants === 'caveman' ? 'barbarian' : pants,
+      gloves:
+        gloves === 'rogue'
+          ? 'none'
+          : gloves === 'caveman'
+            ? 'barbarian'
+            : gloves,
+      boots: proxied(boots) ? 'leather' : boots,
     },
     boots === 'leather' && !!parts.get('boots_leather')?.length
   )
-  if (![top, pants, gloves, boots].includes('rogue')) return selected
-  for (const [style, proxy] of [
-    [pants, 'pants_cloth'],
-    [boots, 'boots_leather'],
-  ]) {
-    if (style !== 'rogue') continue
+  if (![top, pants, gloves, boots].some(proxied)) return selected
+  for (const [shown, proxy] of [
+    [pants === 'rogue', 'pants_cloth'],
+    [pants === 'caveman', 'pants_barbarian'],
+    [gloves === 'caveman', 'gloves_barbarian'],
+    [proxied(boots), 'boots_leather'],
+  ] as const) {
+    if (!shown) continue
     selected.delete(proxy)
     for (const mesh of parts.get(proxy) ?? []) mesh.visible = false
   }
   for (const [slot, style] of Object.entries({ top, pants, gloves, boots })) {
-    if (style === 'rogue') selected.add(`${slot}_rogue`)
+    if (proxied(style)) selected.add(`${slot}_${style}`)
   }
-  for (const id of ROGUE_MODULAR_PARTS)
+  for (const id of [...ROGUE_MODULAR_PARTS, ...CAVEMAN_MODULAR_PARTS])
     for (const mesh of parts.get(id) ?? []) mesh.visible = selected.has(id)
+  if (boots === 'caveman')
+    for (const mesh of parts.get('pants_plate') ?? [])
+      if (mesh.visible) trimModularClothing(mesh, 'caveman_boots')
   const coveredWaist =
     pants === 'rogue' &&
     top !== 'none' &&
     top !== 'barbarian' &&
+    top !== 'caveman' &&
     parts
       .get('pants_rogue')
       ?.some(
@@ -325,12 +364,17 @@ export function showModularOutfit(
   const hidden = new Set([
     ...(top === 'rogue' ? ['torso', 'upper_arms'] : []),
     ...(pants === 'rogue' ? ['legs', 'ankles', 'boot_ankles'] : []),
+    ...(boots === 'caveman' ? ['feet', 'ankles', 'boot_ankles'] : []),
   ])
   for (const mesh of body) {
     const bodyRegion = region(mesh)
     if (bodyRegion === 'neck')
       trimModularClothing(mesh, top === 'rogue' ? collar : undefined, true)
     if (hidden.has(bodyRegion ?? '')) mesh.visible = false
+    if (gloves === 'caveman' && bodyRegion === 'forearms')
+      trimModularClothing(mesh, 'bracers')
+    if (boots === 'caveman' && bodyRegion === 'legs')
+      trimModularClothing(mesh, 'caveman_boots')
     if (
       bodyRegion === 'torso' &&
       top === 'rogue' &&

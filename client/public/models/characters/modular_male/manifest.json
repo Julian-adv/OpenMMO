@@ -1,7 +1,7 @@
 {
-  "source": "Modular male body, knight, barbarian and rogue equipment and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md",
+  "source": "Modular male body, knight, barbarian, rogue and caveman equipment and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md",
   "inputs": {
-    "assets/modular_human_male_01/parts/fitted/base.glb": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b",
+    "assets/modular_human_male_01/parts/fitted/base.glb": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
     "assets/modular_human_male_01/parts/fitted/hair_crop.glb": "5aea523e5de994b8a2b6e15aef1589a3cbe7413514bc429194e1f0a940141686",
     "assets/modular_human_male_01/parts/fitted/top_linen.glb": "188ae91799541ff6563a176058695a0c398039d60bc2ee28d97b56b199094a43",
     "assets/modular_human_male_01/parts/fitted/pants_cloth.glb": "2352b8bbdfe08c1c7c43fff9be88e4283ad61b57c2219fbbde2d0c1e3ae41964",
@@ -30,10 +30,14 @@
     "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
     "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/pants_rogue.glb": "7178d06a9b2e18953e2c3fb0672df8424b688d6f4ccc47affc856a9084e8e81c",
     "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/gloves_rogue.glb": "80107110dabfcbd0c6bda685550e52b0133e6c62272c6ab660a6b24f11eb835a",
-    "assets/modular_human_male_01/parts/rogue_fitted_v8/boots_rogue.glb": "dfefa61608f8359837b7e4b746424b18042f538d191438774663bed394097f16"
+    "assets/modular_human_male_01/parts/rogue_fitted_v8/boots_rogue.glb": "dfefa61608f8359837b7e4b746424b18042f538d191438774663bed394097f16",
+    "assets/modular_human_male_01/parts/caveman_tripo_top_v1/top_caveman.glb": "e495478ffdcf1d018a9c1faed604d91e92b6b2df91e1baf1599544800ad9ab9f",
+    "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb": "3be3265a6d2e203098a63d599636d49c33498ef748f2745aa5d278ad04392ad6",
+    "assets/modular_human_male_01/parts/caveman_tripo_boots_v1/boots_caveman.glb": "816349031a0c5bcac6efd7bb1320b8cd3d27f77ec86c47a10e6f9ccee72e4a48",
+    "assets/modular_human_male_01/parts/caveman_tripo_bracer_v1/gloves_caveman.glb": "cbf5af0d066dd2f805fdee6e94661d31c38f07afc68492ecb65ebe509f0faf86"
   },
   "outputs": {
-    "base.glb": "126a395b8d32b3ed69fe5b014815fe28b6be758bca9fad493cbb7e625a0208e6",
+    "base.glb": "048ebb21caca9a224b1dadecc6faf53b89f270da212791dc2af3088d92509af1",
     "hair_crop.glb": "92cbf595f01534c694ed1f5eba344da84bf2c06fca7d3f2072bfa39c0b044ae3",
     "top_linen.glb": "c90d4840fbe428db95513842eda3c4ec4c5164fa416ccef5e0357791767aadd7",
     "pants_cloth.glb": "2de09c1ba08b87c5a0b96760384d4e074ae972560d3c9e8cae18bcb0adfa984a",
@@ -132,6 +136,10 @@
     "top_rogue.glb": "6026de2994f041e4ac707cbafcb3d3651e23ba22f38e986e8352dc1b45d4e04e",
     "pants_rogue.glb": "6e8c5720f3c6fa783962599584985493c5a708d34c1f7395d36a51d4108ae1a1",
     "gloves_rogue.glb": "59024889a206492b9f1d11a5aafe73adda6e905e43956354abd527b6bf43b4bf",
-    "boots_rogue.glb": "4f4dc7fc9e81eb1390ed2c7bad1653fab29d342dca95773000498db7633d0059"
+    "boots_rogue.glb": "4f4dc7fc9e81eb1390ed2c7bad1653fab29d342dca95773000498db7633d0059",
+    "top_caveman.glb": "ce2d6f0afb5527d2e3c83434e8034e63b24bc788b34e56ea36e216d10e58015f",
+    "pants_caveman.glb": "3405c90a0d1f0df55424adef515f23272ae361a9e554e48ef6721d79df3301ae",
+    "boots_caveman.glb": "e73a046cdebbcbb6bde88aac91b69ded8fc106f35c9ef368daf839ea33c60f91",
+    "gloves_caveman.glb": "6993bae6459b2ec63f4cfe5c8b350bc5150f565e6eb2902f8e3774a2427f49f8"
   }
 }

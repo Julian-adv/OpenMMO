@@ -43,6 +43,14 @@
         hands: 'worn_barbarian_bracers',
       },
     },
+    caveman: {
+      armor: {
+        chest: 'worn_caveman_top',
+        pants: 'worn_caveman_pants',
+        boots: 'worn_caveman_boots',
+        hands: 'worn_caveman_bracers',
+      },
+    },
   }
 
   const CAMERA_FOV = 42

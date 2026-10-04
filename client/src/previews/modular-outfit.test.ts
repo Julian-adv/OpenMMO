@@ -1,15 +1,13 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import {
+  CAVEMAN_MODULAR_OUTFIT,
   KNIGHT_MODULAR_OUTFIT,
+  ROGUE_MODULAR_OUTFIT,
+  ROGUE_MODULAR_PARTS,
+  showModularOutfit,
   type ModularOutfit,
 } from '../lib/utils/modularCharacter'
-import {
-  CAVEMAN_PREVIEW_OUTFIT,
-  ROGUE_PREVIEW_OUTFIT,
-  ROGUE_PREVIEW_PARTS,
-  showPreviewOutfit,
-} from './modular-outfit'
 
 function fixture() {
   const mesh = (region: string) => {
@@ -31,7 +29,7 @@ function fixture() {
   ]
   const body = regions.map(mesh)
   const parts = new Map([
-    ...ROGUE_PREVIEW_PARTS.map((id) => [id, [mesh(id)]] as const),
+    ...ROGUE_MODULAR_PARTS.map((id) => [id, [mesh(id)]] as const),
     ['pants_cloth', [mesh('main'), mesh('cuffs'), mesh('tucked_cuffs')]],
     ['boots_leather', [mesh('boots_leather')]],
   ] as [string, THREE.SkinnedMesh[]][])
@@ -60,8 +58,8 @@ describe('caveman workshop preview', () => {
     })
     parts.set('pants_plate', pants)
     parts.set('boots_caveman', [new THREE.SkinnedMesh()])
-    const outfit = { ...CAVEMAN_PREVIEW_OUTFIT, pants: 'plate' as const }
-    const selected = showPreviewOutfit(body, parts, outfit)
+    const outfit = { ...CAVEMAN_MODULAR_OUTFIT, pants: 'plate' as const }
+    const selected = showModularOutfit(body, parts, outfit)
     expect(selected.has('pants_plate')).toBe(true)
     for (const mesh of pants) {
       expect(mesh.visible).toBe(true)
@@ -74,12 +72,12 @@ describe('caveman workshop preview', () => {
       expect(Math.max(...heights)).toBeCloseTo(0.8)
     }
     for (const boots of ['none', 'plate'] as const) {
-      showPreviewOutfit(body, parts, { ...outfit, boots })
+      showModularOutfit(body, parts, { ...outfit, boots })
       for (const [i, mesh] of pants.entries())
         expect(mesh.geometry).toBe(originals[i])
-      showPreviewOutfit(body, parts, outfit)
+      showModularOutfit(body, parts, outfit)
     }
-    showPreviewOutfit(body, parts, { ...outfit, boots: 'leather' })
+    showModularOutfit(body, parts, { ...outfit, boots: 'leather' })
     for (const mesh of pants) {
       const points = mesh.geometry.attributes.position
       expect(
@@ -88,7 +86,7 @@ describe('caveman workshop preview', () => {
         )
       ).toBeCloseTo(0.235)
     }
-    showPreviewOutfit(body, parts, outfit)
+    showModularOutfit(body, parts, outfit)
     for (const mesh of pants) {
       const points = mesh.geometry.attributes.position
       expect(
@@ -97,7 +95,7 @@ describe('caveman workshop preview', () => {
         )
       ).toBeCloseTo(0.43)
     }
-    showPreviewOutfit(body, parts, { ...outfit, boots: 'barbarian' })
+    showModularOutfit(body, parts, { ...outfit, boots: 'barbarian' })
     for (const mesh of pants) {
       const points = mesh.geometry.attributes.position
       expect(
@@ -107,7 +105,7 @@ describe('caveman workshop preview', () => {
       ).toBeCloseTo(0.46)
     }
     parts.delete('boots_caveman')
-    showPreviewOutfit(body, parts, outfit)
+    showModularOutfit(body, parts, outfit)
     for (const [i, mesh] of pants.entries())
       expect(mesh.geometry).toBe(originals[i])
   })
@@ -129,7 +127,7 @@ describe('caveman workshop preview', () => {
     const proxy = new THREE.SkinnedMesh()
     parts.set('gloves_caveman', [bracer])
     parts.set('gloves_barbarian', [proxy])
-    const selected = showPreviewOutfit(body, parts, CAVEMAN_PREVIEW_OUTFIT)
+    const selected = showModularOutfit(body, parts, CAVEMAN_MODULAR_OUTFIT)
     expect(selected.has('gloves_caveman')).toBe(true)
     expect(selected.has('gloves_barbarian')).toBe(false)
     expect(proxy.visible).toBe(false)
@@ -150,16 +148,16 @@ describe('caveman workshop preview', () => {
           new THREE.Vector3().fromBufferAttribute(points, i)
         )
       ).toBeGreaterThanOrEqual(-1e-6)
-    showPreviewOutfit(body, parts, {
-      ...CAVEMAN_PREVIEW_OUTFIT,
+    showModularOutfit(body, parts, {
+      ...CAVEMAN_MODULAR_OUTFIT,
       gloves: 'none',
     })
     expect(forearm.geometry).toBe(original)
     expect(bracer.visible).toBe(false)
     expect(visible('hands')).toBe(true)
-    showPreviewOutfit(body, parts, CAVEMAN_PREVIEW_OUTFIT)
+    showModularOutfit(body, parts, CAVEMAN_MODULAR_OUTFIT)
     parts.delete('gloves_caveman')
-    showPreviewOutfit(body, parts, CAVEMAN_PREVIEW_OUTFIT)
+    showModularOutfit(body, parts, CAVEMAN_MODULAR_OUTFIT)
     expect(forearm.geometry).toBe(original)
     expect(visible('hands')).toBe(true)
     expect(proxy.visible).toBe(false)
@@ -173,7 +171,7 @@ describe('caveman workshop preview', () => {
     legs.geometry = original
     const boots = new THREE.SkinnedMesh()
     parts.set('boots_caveman', [boots])
-    const selected = showPreviewOutfit(body, parts, CAVEMAN_PREVIEW_OUTFIT)
+    const selected = showModularOutfit(body, parts, CAVEMAN_MODULAR_OUTFIT)
     expect(selected.has('boots_caveman')).toBe(true)
     expect(selected.has('boots_leather')).toBe(false)
     expect(parts.get('boots_leather')![0].visible).toBe(false)
@@ -183,7 +181,7 @@ describe('caveman workshop preview', () => {
     expect(position.count).toBeGreaterThan(0)
     for (let i = 0; i < position.count; i++)
       expect(position.getY(i)).toBeGreaterThanOrEqual(0.42999)
-    showPreviewOutfit(body, parts, { ...CAVEMAN_PREVIEW_OUTFIT, boots: 'none' })
+    showModularOutfit(body, parts, { ...CAVEMAN_MODULAR_OUTFIT, boots: 'none' })
     expect(legs.geometry).toBe(original)
     expect(visible('feet')).toBe(true)
     expect(visible('ankles')).toBe(true)
@@ -192,7 +190,7 @@ describe('caveman workshop preview', () => {
 
   it('keeps bare skin when the requested caveman boots failed to load', () => {
     const { body, parts, visible } = fixture()
-    const selected = showPreviewOutfit(body, parts, CAVEMAN_PREVIEW_OUTFIT)
+    const selected = showModularOutfit(body, parts, CAVEMAN_MODULAR_OUTFIT)
     expect(selected.has('boots_caveman')).toBe(false)
     expect(selected.has('boots_leather')).toBe(false)
     expect(visible('legs')).toBe(true)
@@ -206,17 +204,17 @@ describe('caveman workshop preview', () => {
     const proxy = new THREE.SkinnedMesh()
     parts.set('pants_caveman', [skirt])
     parts.set('pants_barbarian', [proxy])
-    const selected = showPreviewOutfit(body, parts, CAVEMAN_PREVIEW_OUTFIT)
+    const selected = showModularOutfit(body, parts, CAVEMAN_MODULAR_OUTFIT)
     expect(selected.has('pants_caveman')).toBe(true)
     expect(selected.has('pants_barbarian')).toBe(false)
     expect(skirt.visible).toBe(true)
     expect(proxy.visible).toBe(false)
     expect(visible('legs')).toBe(true)
     expect(visible('feet')).toBe(true)
-    showPreviewOutfit(body, parts, KNIGHT_MODULAR_OUTFIT)
+    showModularOutfit(body, parts, KNIGHT_MODULAR_OUTFIT)
     expect(skirt.visible).toBe(false)
     expect(visible('legs')).toBe(false)
-    showPreviewOutfit(body, parts, CAVEMAN_PREVIEW_OUTFIT)
+    showModularOutfit(body, parts, CAVEMAN_MODULAR_OUTFIT)
     expect(skirt.visible).toBe(true)
     expect(visible('legs')).toBe(true)
   })
@@ -224,21 +222,21 @@ describe('caveman workshop preview', () => {
     const { body, parts, visible } = fixture()
     const pelt = new THREE.SkinnedMesh()
     parts.set('top_caveman', [pelt])
-    showPreviewOutfit(body, parts, ROGUE_PREVIEW_OUTFIT)
+    showModularOutfit(body, parts, ROGUE_MODULAR_OUTFIT)
     expect(visible('torso')).toBe(false)
-    const selected = showPreviewOutfit(body, parts, CAVEMAN_PREVIEW_OUTFIT)
+    const selected = showModularOutfit(body, parts, CAVEMAN_MODULAR_OUTFIT)
     expect(selected.has('top_caveman')).toBe(true)
     expect(pelt.visible).toBe(true)
     for (const mesh of body)
       expect(mesh.visible).toBe(mesh.userData.region !== 'boot_ankles')
-    showPreviewOutfit(body, parts, KNIGHT_MODULAR_OUTFIT)
+    showModularOutfit(body, parts, KNIGHT_MODULAR_OUTFIT)
     expect(pelt.visible).toBe(false)
     expect(visible('torso')).toBe(false)
   })
 
   it('keeps bare skin when the top is unavailable', () => {
     const { body, parts } = fixture()
-    const selected = showPreviewOutfit(body, parts, CAVEMAN_PREVIEW_OUTFIT)
+    const selected = showModularOutfit(body, parts, CAVEMAN_MODULAR_OUTFIT)
     expect(selected.has('top_caveman')).toBe(false)
     for (const mesh of body)
       expect(mesh.visible).toBe(mesh.userData.region !== 'boot_ankles')
@@ -248,8 +246,8 @@ describe('caveman workshop preview', () => {
 describe('rogue workshop preview', () => {
   it('shows four candidate slots and keeps bare forearms and fingers visible', () => {
     const { body, parts, visible } = fixture()
-    const selected = showPreviewOutfit(body, parts, ROGUE_PREVIEW_OUTFIT)
-    for (const id of ROGUE_PREVIEW_PARTS) {
+    const selected = showModularOutfit(body, parts, ROGUE_MODULAR_OUTFIT)
+    for (const id of ROGUE_MODULAR_PARTS) {
       expect(selected.has(id)).toBe(true)
       expect(parts.get(id)![0].visible).toBe(true)
     }
@@ -268,20 +266,20 @@ describe('rogue workshop preview', () => {
       expect(selected.has(id)).toBe(false)
       expect(parts.get(id)!.every((mesh) => !mesh.visible)).toBe(true)
     }
-    showPreviewOutfit(body, parts, KNIGHT_MODULAR_OUTFIT)
+    showModularOutfit(body, parts, KNIGHT_MODULAR_OUTFIT)
     expect(visible('hands')).toBe(false)
-    showPreviewOutfit(body, parts, undressed)
+    showModularOutfit(body, parts, undressed)
     for (const mesh of body)
       expect(mesh.visible).toBe(mesh.userData.region !== 'boot_ankles')
-    for (const id of ROGUE_PREVIEW_PARTS)
+    for (const id of ROGUE_MODULAR_PARTS)
       expect(parts.get(id)![0].visible).toBe(false)
   })
 
   it('keeps skin when candidate files are unavailable', () => {
     const { body, parts, visible } = fixture()
-    for (const id of ROGUE_PREVIEW_PARTS) parts.delete(id)
-    const selected = showPreviewOutfit(body, parts, ROGUE_PREVIEW_OUTFIT)
-    for (const id of ROGUE_PREVIEW_PARTS) expect(selected.has(id)).toBe(false)
+    for (const id of ROGUE_MODULAR_PARTS) parts.delete(id)
+    const selected = showModularOutfit(body, parts, ROGUE_MODULAR_OUTFIT)
+    for (const id of ROGUE_MODULAR_PARTS) expect(selected.has(id)).toBe(false)
     for (const region of [
       'torso',
       'neck',
@@ -313,7 +311,7 @@ describe('rogue workshop preview', () => {
       )
       source.setIndex([0, 1, 2])
       neck.geometry = source
-      showPreviewOutfit(body, parts, ROGUE_PREVIEW_OUTFIT)
+      showModularOutfit(body, parts, ROGUE_MODULAR_OUTFIT)
       expect(visible('neck')).toBe(true)
       const position = neck.geometry.getAttribute('position')
       expect(position.count).toBeGreaterThan(0)
@@ -328,12 +326,12 @@ describe('rogue workshop preview', () => {
           )
         ).toBeLessThan(1.61)
       expect(neck.geometry.index!.count).toBeGreaterThan(0)
-      showPreviewOutfit(body, parts, KNIGHT_MODULAR_OUTFIT)
+      showModularOutfit(body, parts, KNIGHT_MODULAR_OUTFIT)
       expect(visible('neck')).toBe(false)
       expect(neck.geometry).toBe(source)
-      showPreviewOutfit(body, parts, ROGUE_PREVIEW_OUTFIT)
+      showModularOutfit(body, parts, ROGUE_MODULAR_OUTFIT)
       parts.delete('top_rogue')
-      showPreviewOutfit(body, parts, ROGUE_PREVIEW_OUTFIT)
+      showModularOutfit(body, parts, ROGUE_MODULAR_OUTFIT)
       expect(visible('neck')).toBe(true)
       expect(neck.geometry).toBe(source)
     }
@@ -341,7 +339,7 @@ describe('rogue workshop preview', () => {
 
   it('tucks existing cloth cuffs into rogue boots and restores them on removal', () => {
     const { body, parts, visible } = fixture()
-    showPreviewOutfit(body, parts, {
+    showModularOutfit(body, parts, {
       ...undressed,
       pants: 'cloth',
       boots: 'rogue',
@@ -349,11 +347,11 @@ describe('rogue workshop preview', () => {
     const [, cuffs, tucked] = parts.get('pants_cloth')!
     expect(cuffs.visible).toBe(false)
     expect(tucked.visible).toBe(true)
-    showPreviewOutfit(body, parts, { ...undressed, pants: 'cloth' })
+    showModularOutfit(body, parts, { ...undressed, pants: 'cloth' })
     expect(cuffs.visible).toBe(true)
     expect(tucked.visible).toBe(false)
     expect(visible('feet')).toBe(true)
-    showPreviewOutfit(body, parts, {
+    showModularOutfit(body, parts, {
       ...undressed,
       pants: 'rogue',
       boots: 'barbarian',
@@ -376,7 +374,7 @@ describe('rogue workshop preview', () => {
     )
     source.setIndex([0, 1, 2])
     torso.geometry = source
-    showPreviewOutfit(body, parts, ROGUE_PREVIEW_OUTFIT)
+    showModularOutfit(body, parts, ROGUE_MODULAR_OUTFIT)
     expect(visible('torso')).toBe(true)
     expect(visible('upper_arms')).toBe(false)
     const position = torso.geometry.getAttribute('position')
@@ -387,13 +385,13 @@ describe('rogue workshop preview', () => {
     expect(Math.max(...heights)).toBeCloseTo(1.14)
     expect(torso.geometry.index!.count).toBeGreaterThan(0)
     top.userData.fitting_status = 'candidate_v8'
-    showPreviewOutfit(body, parts, ROGUE_PREVIEW_OUTFIT)
+    showModularOutfit(body, parts, ROGUE_MODULAR_OUTFIT)
     expect(visible('torso')).toBe(false)
     expect(torso.geometry).toBe(source)
     top.userData.fitting_status = 'candidate_tripo_v1'
-    showPreviewOutfit(body, parts, ROGUE_PREVIEW_OUTFIT)
+    showModularOutfit(body, parts, ROGUE_MODULAR_OUTFIT)
     parts.delete('top_rogue')
-    showPreviewOutfit(body, parts, ROGUE_PREVIEW_OUTFIT)
+    showModularOutfit(body, parts, ROGUE_MODULAR_OUTFIT)
     expect(visible('torso')).toBe(true)
     expect(torso.geometry).toBe(source)
   })
@@ -415,7 +413,7 @@ describe('rogue workshop preview', () => {
       source.setIndex([0, 1, 2, 0, 2, 3])
       const original = source.attributes.position.array.slice()
       pants.geometry = source
-      showPreviewOutfit(body, parts, { ...ROGUE_PREVIEW_OUTFIT, top })
+      showModularOutfit(body, parts, { ...ROGUE_MODULAR_OUTFIT, top })
       const trimmed = pants.geometry
       expect(trimmed).not.toBe(source)
       expect(trimmed.index!.count).toBeGreaterThan(0)
@@ -426,18 +424,18 @@ describe('rogue workshop preview', () => {
       expect(Math.max(...heights)).toBeLessThan(1.11)
       expect(Math.min(...heights)).toBeCloseTo(1)
       for (const bareTop of ['none', 'barbarian'] as const) {
-        showPreviewOutfit(body, parts, {
-          ...ROGUE_PREVIEW_OUTFIT,
+        showModularOutfit(body, parts, {
+          ...ROGUE_MODULAR_OUTFIT,
           top: bareTop,
         })
         expect(pants.geometry).toBe(source)
         expect(source.attributes.position.array).toEqual(original)
       }
-      showPreviewOutfit(body, parts, { ...ROGUE_PREVIEW_OUTFIT, top })
+      showModularOutfit(body, parts, { ...ROGUE_MODULAR_OUTFIT, top })
       expect(pants.geometry).toBe(trimmed)
       if (top === 'rogue') {
         parts.delete('top_rogue')
-        showPreviewOutfit(body, parts, ROGUE_PREVIEW_OUTFIT)
+        showModularOutfit(body, parts, ROGUE_MODULAR_OUTFIT)
         expect(pants.geometry).toBe(source)
       }
     }
@@ -458,7 +456,7 @@ describe('rogue workshop preview', () => {
       )
     )
     torso.geometry.setIndex([0, 1, 2])
-    showPreviewOutfit(body, parts, ROGUE_PREVIEW_OUTFIT)
+    showModularOutfit(body, parts, ROGUE_MODULAR_OUTFIT)
     const heights = () => {
       const position = torso.geometry.attributes.position
       return Math.max(
@@ -466,7 +464,7 @@ describe('rogue workshop preview', () => {
       )
     }
     expect(heights()).toBeCloseTo(1.105)
-    showPreviewOutfit(body, parts, { ...ROGUE_PREVIEW_OUTFIT, pants: 'none' })
+    showModularOutfit(body, parts, { ...ROGUE_MODULAR_OUTFIT, pants: 'none' })
     expect(heights()).toBeCloseTo(1.14)
   })
 })

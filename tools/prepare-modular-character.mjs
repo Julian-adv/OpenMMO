@@ -37,6 +37,14 @@ const rogue = JSON.parse(
 ).fitting_candidate;
 const rogueParts = ["top_rogue", "pants_rogue", "gloves_rogue", "boots_rogue"];
 parts.push(...rogueParts);
+const cavemanSources = {
+  top_caveman: "assets/modular_human_male_01/parts/caveman_tripo_top_v1/top_caveman.glb",
+  pants_caveman: "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb",
+  boots_caveman: "assets/modular_human_male_01/parts/caveman_tripo_boots_v1/boots_caveman.glb",
+  gloves_caveman: "assets/modular_human_male_01/parts/caveman_tripo_bracer_v1/gloves_caveman.glb",
+};
+const cavemanParts = Object.keys(cavemanSources);
+parts.push(...cavemanParts);
 const packs = [
   "locomotion",
   "combat_melee",
@@ -54,7 +62,7 @@ const hash = (path) =>
     .digest("hex");
 const report = {
   source:
-    "Modular male body, knight, barbarian and rogue equipment and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md",
+    "Modular male body, knight, barbarian, rogue and caveman equipment and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md",
   inputs: {},
   outputs: {},
 };
@@ -79,12 +87,13 @@ function writeManifest(merge) {
 const selectedPart = option("--part", parts);
 const selectedPack = option("--pack", packs);
 let selectedParts = process.argv.includes("--rogue-only") ? rogueParts : parts;
+if (process.argv.includes("--caveman-only")) selectedParts = cavemanParts;
 if (selectedPart) selectedParts = [selectedPart];
 if (selectedPack) selectedParts = [];
 for (const name of selectedParts) {
-  const source = rogueParts.includes(name)
+  const source = cavemanSources[name] ?? (rogueParts.includes(name)
     ? (rogue.part_overrides[name] ?? `${rogue.directory}/${name}.glb`)
-    : `${fitted}/${name}.glb`;
+    : `${fitted}/${name}.glb`);
   report.inputs[source] = hash(source);
   execFileSync(
     process.execPath,
@@ -102,7 +111,8 @@ for (const name of selectedParts) {
 if (
   selectedPart ||
   process.argv.includes("--parts-only") ||
-  process.argv.includes("--rogue-only")
+  process.argv.includes("--rogue-only") ||
+  process.argv.includes("--caveman-only")
 ) {
   writeManifest(true);
   process.exit(0);

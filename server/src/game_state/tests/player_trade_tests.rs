@@ -297,26 +297,34 @@ async fn an_overweight_receiver_aborts_the_whole_trade() {
     );
 }
 
-/// Starter gear carries `untradeable`, which `basePrice` alone never enforced
-/// between players.
 #[tokio::test]
 async fn untradeable_starter_gear_cannot_be_offered() {
     let pair = make_trade_pair("trade_untradeable", 0, 0).await;
-    give(&pair.game_state, &pair.a, bag_item(1, "worn_iron_sword", 1)).await;
     open_session(&pair).await;
-
-    pair.game_state
-        .set_player_trade_offer(&pair.a, vec![slot(1, 1)], 0)
-        .await;
-
-    let trades = pair.game_state.player_trades.read().await;
-    let session = trades
-        .get(&pair.a)
-        .expect("session survives a refused offer");
-    assert!(
-        session.side(&pair.a).unwrap().items.is_empty(),
-        "the refused item never reaches the table"
-    );
+    for (index, id) in [
+        "worn_iron_sword",
+        "worn_caveman_top",
+        "worn_caveman_pants",
+        "worn_caveman_boots",
+        "worn_caveman_bracers",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let instance_id = index as u64 + 1;
+        give(&pair.game_state, &pair.a, bag_item(instance_id, id, 1)).await;
+        pair.game_state
+            .set_player_trade_offer(&pair.a, vec![slot(instance_id, 1)], 0)
+            .await;
+        let trades = pair.game_state.player_trades.read().await;
+        let session = trades
+            .get(&pair.a)
+            .expect("session survives a refused offer");
+        assert!(
+            session.side(&pair.a).unwrap().items.is_empty(),
+            "the refused item never reaches the table: {id}"
+        );
+    }
 }
 
 /// The soft reservation: what is on the table cannot be sold, dropped, used or
