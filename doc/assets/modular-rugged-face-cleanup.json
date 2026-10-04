@@ -1,0 +1,55 @@
+{
+  "date": "2026-10-04",
+  "reason": "User requested removing unnecessary intermediate files and committing the accepted rugged face.",
+  "removed_repository_files": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/customization/face-rugged-chin-v3-game.png",
+      "sha256": "fe412fcf03ea7f6b5e6c23ee4be99a0081f4f072b2856843e3d38054a6049554",
+      "bytes": 232318
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/customization/face-rugged-neck-v4-game.png",
+      "sha256": "9002284d620948cde95e25e189cda8b547c21b5872af58fe250850fed1f071ea",
+      "bytes": 232489
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/customization/face-rugged-fitted-v1-workshop.png",
+      "sha256": "6478db0c65c0d23d77fa25c7ddc132396cee9692958ee9257a33376e1b0d2a78",
+      "bytes": 283685
+    }
+  ],
+  "retained_assets": [
+    "assets/modular_human_male_01/parts/face_tripo_rugged_v1/animation-snapshots.json",
+    "assets/modular_human_male_01/parts/face_tripo_rugged_v1/base_rugged.glb",
+    "assets/modular_human_male_01/parts/face_tripo_rugged_v1/face_rugged.glb",
+    "assets/modular_human_male_01/parts/face_tripo_rugged_v1/hair_wavy_bone_rugged.glb",
+    "assets/modular_human_male_01/parts/face_tripo_rugged_v1/neck-seam-validation.json",
+    "assets/modular_human_male_01/parts/face_tripo_rugged_v1/neck-transition.png",
+    "assets/modular_human_male_01/parts/face_tripo_rugged_v1/rugged-face-fitting.blend",
+    "assets/modular_human_male_01/parts/face_tripo_rugged_v1/source.glb"
+  ],
+  "retained_reviews": [
+    "doc/images/characters/modular_human_male_01/customization/face-rugged-fitted-v1-motion.png",
+    "doc/images/characters/modular_human_male_01/customization/face-rugged-fitted-v1-review.png",
+    "doc/images/characters/modular_human_male_01/customization/face-rugged-neck-v5-game.png",
+    "doc/images/characters/modular_human_male_01/customization/face-rugged-tripo-raw-review-v1.png",
+    "doc/images/characters/modular_human_male_01/customization/face-rugged-wavy-hair-v1-review.png"
+  ],
+  "historical_intermediate_hashes": "Retained in modular-rugged-face-fitting-v1.json; final evidence is face-rugged-neck-v5-game.png.",
+  "publication": {
+    "repo": "jake-song-openmmo/onlinerpg-assets",
+    "revision": "b675eaf77c3ec77da88bc6307d57007ffef1f5b7",
+    "files": {
+      "assets/modular_human_male_01/parts/face_tripo_rugged_v1/animation-snapshots.json": "9796ccefb993d426c06a9c1c8c0c46d7b606b3004093ae5eb2a6920e0065e07f",
+      "assets/modular_human_male_01/parts/face_tripo_rugged_v1/base_rugged.glb": "235f60f52fa4fa8ff87796b349943dfb0549112a7c94474ce862137a3284be1a",
+      "assets/modular_human_male_01/parts/face_tripo_rugged_v1/face_rugged.glb": "69bf72e0170cf0770b7b9b555c5d73d67d5f163af13df3261c03fe3228c7a18a",
+      "assets/modular_human_male_01/parts/face_tripo_rugged_v1/hair_wavy_bone_rugged.glb": "a070ca393c0446bb66fe2eb076da702b0d98e48d76d4b61dd0d8fe75f1add9c9",
+      "assets/modular_human_male_01/parts/face_tripo_rugged_v1/neck-seam-validation.json": "a66248c27d9ce510ce217029b1f88648c77021b2b74c0005f06a580598e8d212",
+      "assets/modular_human_male_01/parts/face_tripo_rugged_v1/neck-transition.png": "12fc45c0fd0d7bc430000a9f974b60f3fc936a84e0363ee1914a4da62c1651a2",
+      "assets/modular_human_male_01/parts/face_tripo_rugged_v1/rugged-face-fitting.blend": "c08bd8fb26c6174f2d650d94ed46766bf68ee98a210a2d2d23a034c0cd75a3a7",
+      "assets/modular_human_male_01/parts/face_tripo_rugged_v1/source.glb": "939d8c700ba5a33ae3818bc8b2c89947080ab94b7a9f4634ed19daafe8f36d3f"
+    },
+    "remote_sha256_verified": true,
+    "unrelated_remote_files_preserved": true
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "date": "2026-10-04",
+  "sources": [
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/face_tripo_rugged_v1/face_rugged.glb",
+      "sha256": "69bf72e0170cf0770b7b9b555c5d73d67d5f163af13df3261c03fe3228c7a18a"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/face_tripo_rugged_v1/hair_wavy_bone_rugged.glb",
+      "sha256": "a070ca393c0446bb66fe2eb076da702b0d98e48d76d4b61dd0d8fe75f1add9c9"
+    },
+    {
+      "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+      "sha256": "76eeb462770754895834271423b4ef7f33efdbd34bdfb9830beba4ba84e7569f"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/social.glb",
+      "sha256": "a9efe7a2d388011cdc039ca6778c2b3a929b07953941ee7bb7c50a511d4b083d"
+    }
+  ],
+  "bones": 65,
+  "normalized_weights": true,
+  "face_triangles": 3664,
+  "retained_neck_triangles": 113,
+  "neck_bridge_triangles": 1834,
+  "hair_triangles": 3621,
+  "clips": [
+    {
+      "clip": "idle1",
+      "samples": 25,
+      "body_neck_seam_error_m": 7.049525207681529e-8,
+      "lower_seam_error_m": 9.86507644307185e-8,
+      "upper_seam_error_m": 1.3953957367567377e-7,
+      "rigid_head_error_m": 1.1110900478144057e-15
+    },
+    {
+      "clip": "walk",
+      "samples": 25,
+      "body_neck_seam_error_m": 7.121786450361141e-8,
+      "lower_seam_error_m": 8.829150293333659e-8,
+      "upper_seam_error_m": 1.4611698823132432e-7,
+      "rigid_head_error_m": 1.1157819071397953e-15
+    },
+    {
+      "clip": "run",
+      "samples": 25,
+      "body_neck_seam_error_m": 7.878703826697346e-8,
+      "lower_seam_error_m": 1.1926661716403507e-7,
+      "upper_seam_error_m": 1.4232601186181297e-7,
+      "rigid_head_error_m": 1.1106566208239272e-15
+    },
+    {
+      "clip": "jump",
+      "samples": 25,
+      "body_neck_seam_error_m": 9.233487652595448e-8,
+      "lower_seam_error_m": 1.3246521370504851e-7,
+      "upper_seam_error_m": 1.4717373140568492e-7,
+      "rigid_head_error_m": 1.1883147037820922e-15
+    },
+    {
+      "clip": "combat_idle",
+      "samples": 25,
+      "body_neck_seam_error_m": 7.75949256074902e-8,
+      "lower_seam_error_m": 8.924146584402354e-8,
+      "upper_seam_error_m": 1.3205266023116758e-7,
+      "rigid_head_error_m": 1.117915891698869e-15
+    },
+    {
+      "clip": "slash1",
+      "samples": 25,
+      "body_neck_seam_error_m": 9.247156173726117e-8,
+      "lower_seam_error_m": 1.4273916639654648e-7,
+      "upper_seam_error_m": 1.4944062538812652e-7,
+      "rigid_head_error_m": 9.742167503148516e-16
+    },
+    {
+      "clip": "dying",
+      "samples": 25,
+      "body_neck_seam_error_m": 9.773636129813352e-8,
+      "lower_seam_error_m": 1.0960996521615849e-7,
+      "upper_seam_error_m": 1.6082763118025046e-7,
+      "rigid_head_error_m": 1.14256004855512e-15
+    },
+    {
+      "clip": "sit_idle",
+      "samples": 25,
+      "body_neck_seam_error_m": 7.006320437523093e-8,
+      "lower_seam_error_m": 1.0773078548153825e-7,
+      "upper_seam_error_m": 1.430709077984954e-7,
+      "rigid_head_error_m": 1.1160246108833703e-15
+    }
+  ],
+  "scope": "200 actual game poses; finite deformation, rigid face and hair, interpolated neck and head seams. Facial expressions and all equipment intersections are outside this validation."
+}

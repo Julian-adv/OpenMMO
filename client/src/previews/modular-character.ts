@@ -41,6 +41,7 @@ const speed = el<HTMLSelectElement>('speed')
 const scrub = el<HTMLInputElement>('scrub')
 const showWeapon = el<HTMLInputElement>('weapon')
 const hairSelect = el<HTMLSelectElement>('hair')
+const faceSelect = el<HTMLSelectElement>('face')
 const hairColor = el<HTMLInputElement>('hair-color')
 const eyeColor = el<HTMLInputElement>('eye-color')
 const topSelect = el<HTMLSelectElement>('top')
@@ -116,6 +117,14 @@ async function main() {
     throw new Error('개발 서버에서 여는 제작용 미리보기입니다.')
   const loader = new GLTFLoader()
   const params = new URLSearchParams(location.search)
+  const ruggedFace = params.get('face') === 'rugged'
+  faceSelect.value = ruggedFace ? 'rugged' : 'original'
+  faceSelect.onchange = () => {
+    const query = new URLSearchParams(location.search)
+    query.set('face', faceSelect.value)
+    query.set('hair', hairSelect.value)
+    location.search = query.toString()
+  }
   const requestedOutfit = params.get('outfit')
   const tripo = requestedOutfit === 'tripo'
   const caveman = requestedOutfit === 'caveman'
@@ -159,7 +168,9 @@ async function main() {
   ]
   const [base, sources, animations, sword, profile, candidateSources, social] =
     await Promise.all([
-      load('/__modular-character/parts/base.glb'),
+      load(
+        `/__modular-character/parts/base.glb${ruggedFace ? '?face=rugged' : ''}`
+      ),
       Promise.all(
         ids.map((id) => load(`/__modular-character/parts/${id}.glb`))
       ),
@@ -170,7 +181,11 @@ async function main() {
         return parseModularHandProfile(await response.json())
       }),
       Promise.allSettled(
-        candidateParts.map((id) => load(`/__modular-character/parts/${id}.glb`))
+        candidateParts.map((id) =>
+          load(
+            `/__modular-character/parts/${id}.glb${ruggedFace && id === 'hair_wavy_bone' ? '?face=rugged' : ''}`
+          )
+        )
       ),
       load('/models/characters/modular_male/animations/social.glb'),
     ])
@@ -222,8 +237,9 @@ async function main() {
         : mesh.material.clone()
     }
   const irisColor = { value: new THREE.Color(eyeColor.value) }
+  eyeColor.disabled = ruggedFace
   for (const mesh of bodyMeshes.filter(
-    (mesh) => mesh.userData.region === 'head'
+    (mesh) => !ruggedFace && mesh.userData.region === 'head'
   )) {
     const tint = (source: THREE.Material) => {
       if (!(source instanceof THREE.MeshStandardMaterial)) return source
@@ -586,7 +602,14 @@ async function main() {
       selected.reduce((sum, mesh) => sum + triangles(mesh, true), 0) +
       (showWeapon.checked ? 302 : 0)
     el('stats').textContent =
-      `조합 ${total.toLocaleString()}삼각형 · 표시 ${visible.toLocaleString()} · 얼굴 1,505`
+      `조합 ${total.toLocaleString()}삼각형 · 표시 ${visible.toLocaleString()} · ${
+        ruggedFace
+          ? `두상 ${bodyMeshes
+              .filter((mesh) => mesh.userData.region === 'head')
+              .reduce((sum, mesh) => sum + triangles(mesh, false), 0)
+              .toLocaleString()}`
+          : '얼굴 1,505'
+      }`
   }
   if (caveman && cavemanAvailable) wearOutfit(CAVEMAN_MODULAR_OUTFIT)
   else if (tripo && parts.has('top_rogue'))

@@ -1,0 +1,230 @@
+{
+  "date": "2026-10-04",
+  "source_sha256": "939d8c700ba5a33ae3818bc8b2c89947080ab94b7a9f4634ed19daafe8f36d3f",
+  "base_sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
+  "source_triangles": 4046,
+  "fitted_head_triangles": 3664,
+  "collar_triangles": 1834,
+  "retained_neck_triangles": 113,
+  "neck_seam": {
+    "lower_vertices": 68,
+    "upper_vertices": 74,
+    "lower_row_count": 69,
+    "upper_row_start": 927,
+    "lower_y_range_m": [
+      1.635931134223938,
+      1.6608951091766357
+    ],
+    "top_y_range_m": [
+      1.670548220306228,
+      1.7081549605000346
+    ],
+    "exact_lower_position_and_weight_interpolation": true,
+    "exact_upper_position_and_weight_interpolation": true
+  },
+  "canonical_rig_preserved": true,
+  "face_texture_bytes_preserved": true,
+  "hair_refitting": {
+    "source_sha256": "01090fcaaf447686b1fe57410e1667aed0df7ee705c7503b053b28a3478c9f5b",
+    "maximum_shift_mm": 14.300309207862874,
+    "triangles": 3621
+  },
+  "non_head_body_geometry_uv_weights_and_normals_outside_upper_neck_preserved": true,
+  "neck_surface": {
+    "revision": 5,
+    "retained_canonical_lower_neck": true,
+    "shared_boundary_normals": true,
+    "retained_neck_band_height_m": 0.004,
+    "original_chin_shelf_removed": true,
+    "retained_neck_front_outward_growth_removed": true,
+    "interior_contour_smoothing": true,
+    "maximum_outward_overlap_m": 0,
+    "normal_smoothing_sigma_m": 0.01,
+    "body_neck_shading_blend_y_m": [
+      1.59,
+      1.62
+    ],
+    "texture": "512x512 neck skin projection with filtered color transition and preserved donor detail; original face JPEG unchanged",
+    "deformed_neck_material": {
+      "original_base_color_preserved": true,
+      "obsolete_normal_and_roughness_maps_removed": true,
+      "roughness": 0.9,
+      "metallic": 0
+    },
+    "closeup_limitations": "Some texture stretching remains at the rear neck",
+    "white_strip_correction": {
+      "cause": "Retained canonical chin underside formed an extra upward-facing shelf below the new jaw; visible under game lighting.",
+      "diagnosis": "Emission-only material renders and selective hiding of face, bridge, and retained neck in the actual preview.",
+      "superseded_revision_2_face_sha256": "8a81a3b50a57ecd59785b1f441babf8c78a9d27931dcf8746c938841ba777497",
+      "superseded_revision_2_body_sha256": "1429dfd4828e9bc939a293bac8b85ce28f19873267220ca88a458a5ed2b80548",
+      "game_lighting_lower_angle_white_strip_absent": true,
+      "removed_evidence": "doc/images/characters/modular_human_male_01/customization/face-rugged-chin-v3-game.png",
+      "evidence_retained": false
+    },
+    "front_bump_correction": {
+      "diagnosis": "Side renders hiding body neck, retained neck, and bridge separately; point comes from the retained neck upper edge and connected bridge.",
+      "superseded_revision_3_files": {
+        "face_rugged.glb": "402350f22c33287ab94ee970596086b12e80fcb9f30fd913cd66292642461d2a",
+        "base_rugged.glb": "2ae2845e41c05e7e66267ff3d82745ab41f9d04fe92f684abbd8aed07088589a",
+        "hair_wavy_bone_rugged.glb": "a070ca393c0446bb66fe2eb076da702b0d98e48d76d4b61dd0d8fe75f1add9c9",
+        "neck-transition.png": "f8ae0192b9aa375817a087e9fab61395c082171b98bc5b91f0e4d56b3c21b8f4"
+      },
+      "maximum_inward_adjustment_mm": 4.4745693,
+      "zero_degenerate_triangles": true,
+      "profile_game_lighting_reviewed": true,
+      "removed_evidence": "doc/images/characters/modular_human_male_01/customization/face-rugged-neck-v4-game.png",
+      "evidence_retained": false
+    },
+    "texture_and_shading_review": {
+      "superseded_revision_4_files": {
+        "face_rugged.glb": "ba8506873c9f1e43c246215687baf7bfe732e88f9490cfcc9a538d35db24f7e3",
+        "base_rugged.glb": "c9933421c05942ff3c470815df835d0b60ee1f2c209492e314f180d868344e0e",
+        "hair_wavy_bone_rugged.glb": "a070ca393c0446bb66fe2eb076da702b0d98e48d76d4b61dd0d8fe75f1add9c9",
+        "neck-transition.png": "918b5a6ac55532be29e1069db98ab79999662516bbffa2e4d921faf435b02f5f"
+      },
+      "positions_uv_joints_weights_indices_identical_to_revision_4": true,
+      "normal_seams": [
+        {
+          "meshes": [
+            "body_neck",
+            "face_neck_lower"
+          ],
+          "matched_vertices": 57,
+          "max_normal_angle_degrees": 0.01978234015405178
+        },
+        {
+          "meshes": [
+            "face_neck_lower",
+            "face_neck_bridge"
+          ],
+          "matched_vertices": 86,
+          "max_normal_angle_degrees": 0.02797645330429077
+        },
+        {
+          "meshes": [
+            "face_neck_bridge",
+            "face_rugged"
+          ],
+          "matched_vertices": 75,
+          "max_normal_angle_degrees": 0.02797645330429077
+        }
+      ],
+      "skin_detail_donor_offset_m": 0.055,
+      "body_normal_map_removed_in_rugged_neck_only": true,
+      "front_three_quarter_side_game_lighting_reviewed": true,
+      "evidence": "doc/images/characters/modular_human_male_01/customization/face-rugged-neck-v5-game.png"
+    }
+  },
+  "files": {
+    "face_rugged.glb": "69bf72e0170cf0770b7b9b555c5d73d67d5f163af13df3261c03fe3228c7a18a",
+    "base_rugged.glb": "235f60f52fa4fa8ff87796b349943dfb0549112a7c94474ce862137a3284be1a",
+    "hair_wavy_bone_rugged.glb": "a070ca393c0446bb66fe2eb076da702b0d98e48d76d4b61dd0d8fe75f1add9c9",
+    "neck-transition.png": "12fc45c0fd0d7bc430000a9f974b60f3fc936a84e0363ee1914a4da62c1651a2"
+  },
+  "validations": [
+    {
+      "path": "assets/modular_human_male_01/parts/face_tripo_rugged_v1/face_rugged.glb",
+      "sha256": "69bf72e0170cf0770b7b9b555c5d73d67d5f163af13df3261c03fe3228c7a18a",
+      "triangles": 5611,
+      "bones": 65,
+      "exact_rest_hierarchy_and_inverse_bind_match": true,
+      "maximum_weight_sum_error": 1.1920928955078125e-07,
+      "active_bones": [
+        "Head",
+        "Neck",
+        "RightShoulder",
+        "Spine2"
+      ]
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/face_tripo_rugged_v1/base_rugged.glb",
+      "sha256": "235f60f52fa4fa8ff87796b349943dfb0549112a7c94474ce862137a3284be1a",
+      "triangles": 16927,
+      "bones": 65,
+      "exact_rest_hierarchy_and_inverse_bind_match": true,
+      "maximum_weight_sum_error": 1.7881393432617188e-07,
+      "active_bones": [
+        "Head",
+        "Hips",
+        "LeftArm",
+        "LeftFoot",
+        "LeftForeArm",
+        "LeftHand",
+        "LeftHandIndex1",
+        "LeftHandIndex2",
+        "LeftHandIndex3",
+        "LeftHandMiddle1",
+        "LeftHandMiddle2",
+        "LeftHandMiddle3",
+        "LeftHandPinky1",
+        "LeftHandPinky2",
+        "LeftHandPinky3",
+        "LeftHandRing1",
+        "LeftHandRing2",
+        "LeftHandRing3",
+        "LeftHandThumb1",
+        "LeftHandThumb2",
+        "LeftHandThumb3",
+        "LeftLeg",
+        "LeftShoulder",
+        "LeftToeBase",
+        "LeftUpLeg",
+        "Neck",
+        "RightArm",
+        "RightFoot",
+        "RightForeArm",
+        "RightHand",
+        "RightHandIndex1",
+        "RightHandIndex2",
+        "RightHandIndex3",
+        "RightHandMiddle1",
+        "RightHandMiddle2",
+        "RightHandMiddle3",
+        "RightHandPinky1",
+        "RightHandPinky2",
+        "RightHandPinky3",
+        "RightHandRing1",
+        "RightHandRing2",
+        "RightHandRing3",
+        "RightHandThumb1",
+        "RightHandThumb2",
+        "RightHandThumb3",
+        "RightLeg",
+        "RightShoulder",
+        "RightToeBase",
+        "RightUpLeg",
+        "Spine",
+        "Spine1",
+        "Spine2"
+      ]
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/face_tripo_rugged_v1/hair_wavy_bone_rugged.glb",
+      "sha256": "a070ca393c0446bb66fe2eb076da702b0d98e48d76d4b61dd0d8fe75f1add9c9",
+      "triangles": 3621,
+      "bones": 65,
+      "exact_rest_hierarchy_and_inverse_bind_match": true,
+      "maximum_weight_sum_error": 0,
+      "active_bones": [
+        "Head"
+      ]
+    }
+  ],
+  "editing_file": {
+    "path": "assets/modular_human_male_01/parts/face_tripo_rugged_v1/rugged-face-fitting.blend",
+    "sha256": "c08bd8fb26c6174f2d650d94ed46766bf68ee98a210a2d2d23a034c0cd75a3a7"
+  },
+  "workshop_validation": {
+    "outfit": "caveman",
+    "face": "rugged",
+    "hair": "hair_wavy_bone",
+    "assembled_triangles": 36418,
+    "visible_triangles": 34412,
+    "head_triangles": 3664,
+    "body_and_hair_triangles": 20548,
+    "runtime_exceptions": [],
+    "lower_angle_and_opposite_three_quarter_views_reviewed": true,
+    "side_profile_reviewed": true,
+    "neck_texture_front_three_quarter_side_reviewed": true
+  }
+}

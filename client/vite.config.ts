@@ -87,6 +87,10 @@ function modularCharacterPreview(): Plugin {
     '../assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb',
     import.meta.url
   )
+  const ruggedFace = new URL(
+    '../assets/modular_human_male_01/parts/face_tripo_rugged_v1/',
+    import.meta.url
+  )
   const selection = JSON.parse(
     fs.readFileSync(
       new URL(
@@ -138,28 +142,35 @@ function modularCharacterPreview(): Plugin {
         const name = path.slice(prefix.length)
         const part = /^parts\/(\w+)\.glb$/.exec(name)
         const url =
-          part?.[1] === 'top_caveman'
-            ? caveman
-            : part?.[1] === 'pants_caveman'
-              ? cavemanPants
-              : part?.[1] === 'boots_caveman'
-                ? cavemanBoots
-                : part?.[1] === 'gloves_caveman'
-                  ? cavemanGloves
-                  : part?.[1] === 'hair_wavy_bone'
-                    ? wavyHair
-                    : part && rogueParts.has(part[1])
-                      ? selection.fitting_candidate.part_overrides?.[part[1]]
-                        ? new URL(
-                            `../${selection.fitting_candidate.part_overrides[part[1]]}`,
-                            import.meta.url
-                          )
-                        : new URL(`${part[1]}.glb`, rogue)
-                      : part && parts.has(part[1])
-                        ? new URL(`${part[1]}.glb`, fitted)
-                        : files.has(name)
-                          ? new URL(name, directory)
-                          : null
+          request.searchParams.get('face') === 'rugged' && part?.[1] === 'base'
+            ? new URL('base_rugged.glb', ruggedFace)
+            : request.searchParams.get('face') === 'rugged' &&
+                part?.[1] === 'hair_wavy_bone'
+              ? new URL('hair_wavy_bone_rugged.glb', ruggedFace)
+              : part?.[1] === 'top_caveman'
+                ? caveman
+                : part?.[1] === 'pants_caveman'
+                  ? cavemanPants
+                  : part?.[1] === 'boots_caveman'
+                    ? cavemanBoots
+                    : part?.[1] === 'gloves_caveman'
+                      ? cavemanGloves
+                      : part?.[1] === 'hair_wavy_bone'
+                        ? wavyHair
+                        : part && rogueParts.has(part[1])
+                          ? selection.fitting_candidate.part_overrides?.[
+                              part[1]
+                            ]
+                            ? new URL(
+                                `../${selection.fitting_candidate.part_overrides[part[1]]}`,
+                                import.meta.url
+                              )
+                            : new URL(`${part[1]}.glb`, rogue)
+                          : part && parts.has(part[1])
+                            ? new URL(`${part[1]}.glb`, fitted)
+                            : files.has(name)
+                              ? new URL(name, directory)
+                              : null
         if (req.method !== 'GET' || !url) {
           res.statusCode = 404
           res.end('Unknown preview asset')
