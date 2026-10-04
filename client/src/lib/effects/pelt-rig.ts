@@ -434,7 +434,11 @@ export function updatePeltPhysics(
 ) {
   const meshes: THREE.SkinnedMesh[] = []
   root.traverse((node) => {
-    if (node instanceof THREE.SkinnedMesh && node.userData.pelt_physics)
+    if (
+      node instanceof THREE.SkinnedMesh &&
+      node.userData.pelt_physics &&
+      (node.visible || rigs.has(node))
+    )
       meshes.push(node)
   })
   if (!meshes.length) return
