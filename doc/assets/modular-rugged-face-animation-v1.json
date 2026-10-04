@@ -1,5 +1,5 @@
 {
-  "date": "2026-10-04",
+  "date": "2026-10-05",
   "sources": [
     {
       "path": "assets/modular_human_male_01/parts/fitted/base.glb",
@@ -7,11 +7,11 @@
     },
     {
       "path": "assets/modular_human_male_01/parts/face_tripo_rugged_v1/face_rugged.glb",
-      "sha256": "69bf72e0170cf0770b7b9b555c5d73d67d5f163af13df3261c03fe3228c7a18a"
+      "sha256": "74e8ea33407511876559a68d57a24a88576a4b4f5ab21a7afbb2a0c616483589"
     },
     {
-      "path": "assets/modular_human_male_01/parts/face_tripo_rugged_v1/hair_wavy_bone_rugged.glb",
-      "sha256": "a070ca393c0446bb66fe2eb076da702b0d98e48d76d4b61dd0d8fe75f1add9c9"
+      "path": "assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb",
+      "sha256": "01090fcaaf447686b1fe57410e1667aed0df7ee705c7503b053b28a3478c9f5b"
     },
     {
       "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
@@ -35,7 +35,7 @@
       "body_neck_seam_error_m": 7.049525207681529e-8,
       "lower_seam_error_m": 9.86507644307185e-8,
       "upper_seam_error_m": 1.3953957367567377e-7,
-      "rigid_head_error_m": 1.1110900478144057e-15
+      "rigid_head_error_m": 8.920999951067233e-16
     },
     {
       "clip": "walk",
@@ -51,7 +51,7 @@
       "body_neck_seam_error_m": 7.878703826697346e-8,
       "lower_seam_error_m": 1.1926661716403507e-7,
       "upper_seam_error_m": 1.4232601186181297e-7,
-      "rigid_head_error_m": 1.1106566208239272e-15
+      "rigid_head_error_m": 1.1119563949618733e-15
     },
     {
       "clip": "jump",
@@ -59,7 +59,7 @@
       "body_neck_seam_error_m": 9.233487652595448e-8,
       "lower_seam_error_m": 1.3246521370504851e-7,
       "upper_seam_error_m": 1.4717373140568492e-7,
-      "rigid_head_error_m": 1.1883147037820922e-15
+      "rigid_head_error_m": 1.1853938111129682e-15
     },
     {
       "clip": "combat_idle",
@@ -75,7 +75,7 @@
       "body_neck_seam_error_m": 9.247156173726117e-8,
       "lower_seam_error_m": 1.4273916639654648e-7,
       "upper_seam_error_m": 1.4944062538812652e-7,
-      "rigid_head_error_m": 9.742167503148516e-16
+      "rigid_head_error_m": 1.1644117316690922e-15
     },
     {
       "clip": "dying",
@@ -83,7 +83,7 @@
       "body_neck_seam_error_m": 9.773636129813352e-8,
       "lower_seam_error_m": 1.0960996521615849e-7,
       "upper_seam_error_m": 1.6082763118025046e-7,
-      "rigid_head_error_m": 1.14256004855512e-15
+      "rigid_head_error_m": 1.1527756336890508e-15
     },
     {
       "clip": "sit_idle",

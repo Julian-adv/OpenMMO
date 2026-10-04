@@ -386,6 +386,7 @@
         deletionPending={Boolean(character.deletion_due_at)}
         characterClass={character.class}
         gender={character.gender}
+        appearance={character.appearance}
         equipment={character.equipment}
         camera={cameraRef}
       />

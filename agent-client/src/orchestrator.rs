@@ -496,6 +496,7 @@ async fn run_npc_session(
                     character_name: char_name.clone(),
                     character_class: class,
                     gender,
+                    appearance: Default::default(),
                 },
             )
             .await?;
@@ -1336,6 +1337,7 @@ pub(crate) mod tests {
             },
             class,
             gender,
+            appearance: Default::default(),
             equipment: Default::default(),
             titles: Vec::new(),
             active_title: None,

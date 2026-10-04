@@ -112,6 +112,7 @@ fn expect_attack_rejected(
 
 pub(super) fn make_player(id: &str, x: f32, z: f32) -> Player {
     Player {
+        appearance: Default::default(),
         id: pid(id),
         name: id.to_string(),
         position: Position { x, y: 0.0, z },

@@ -7,18 +7,30 @@
     getEffectivePreset,
     graphicsQuality,
   } from '../stores/graphicsSettings'
-  import type { CharacterClass, Gender } from '../network/networkTypes'
+  import type {
+    CharacterAppearance,
+    CharacterClass,
+    Gender,
+  } from '../network/networkTypes'
 
   interface Props {
     anim: string | null
     label: string | null
     characterClass: CharacterClass
     gender: Gender
+    appearance?: CharacterAppearance
     /** Which side of the panel the box hangs off. */
     side?: 'left' | 'right'
   }
 
-  let { anim, label, characterClass, gender, side = 'left' }: Props = $props()
+  let {
+    anim,
+    label,
+    characterClass,
+    gender,
+    appearance,
+    side = 'left',
+  }: Props = $props()
 
   let playing = $state(false)
 
@@ -40,7 +52,13 @@
 >
   <div class="preview-canvas">
     <Canvas createRenderer={createPreviewWebGPURenderer} {dpr} shadows={false}>
-      <EmotePreviewScene {anim} {characterClass} {gender} bind:playing />
+      <EmotePreviewScene
+        {anim}
+        {characterClass}
+        {gender}
+        {appearance}
+        bind:playing
+      />
     </Canvas>
   </div>
   {#if label}

@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-05",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/face_tripo_rugged_v1/face-rugged-before-standard-scalp.glb",
+    "sha256": "69bf72e0170cf0770b7b9b555c5d73d67d5f163af13df3261c03fe3228c7a18a"
+  },
+  "canonical_head_sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
+  "shared_crop_sha256": "5aea523e5de994b8a2b6e15aef1589a3cbe7413514bc429194e1f0a940141686",
+  "shared_wavy_hair_sha256": "01090fcaaf447686b1fe57410e1667aed0df7ee705c7503b053b28a3478c9f5b",
+  "changed_vertices": 678,
+  "maximum_displacement_m": 0.007852541282773018,
+  "preserved": [
+    "facial features below upper forehead",
+    "jaw",
+    "neck seams",
+    "UV",
+    "textures",
+    "topology",
+    "rig",
+    "skin weights",
+    "shared hair geometry"
+  ],
+  "method": "Radial canonical scalp projection; smooth transition at upper forehead and lower rear skull",
+  "outputs": {
+    "face_rugged.glb": "74e8ea33407511876559a68d57a24a88576a4b4f5ab21a7afbb2a0c616483589",
+    "base_rugged.glb": "4a55f83d90e2c6370ef9d13f17a75c0cbc98e5a4a6ecefbe1e33b591313ce954"
+  },
+  "source_and_license": "Existing fitted user-provided Tripo head and modular male canonical head; local geometry edit, no new generation"
+}

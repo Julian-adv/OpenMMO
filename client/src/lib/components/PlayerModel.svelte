@@ -50,6 +50,7 @@
 </script>
 
 <script lang="ts">
+  import type { CharacterAppearance } from '../network/networkTypes'
   import { updatePeltPhysics } from '../effects/pelt-rig'
   import { createSecondaryMotionScheduler } from '../effects/secondary-motion-scheduler'
   import { translate } from '../i18n'
@@ -219,6 +220,7 @@
     chatBubble?: string
     chatBubbleAt?: number
     characterClass: CharacterClass
+    appearance?: CharacterAppearance
     gender: Gender
     health: number
     maxHealth: number
@@ -280,6 +282,7 @@
     chatBubbleAt,
     characterClass,
     gender,
+    appearance,
     health,
     maxHealth,
     onAttackDuration,
@@ -349,7 +352,10 @@
   const modelPath =
     (npcPlayerId !== undefined ? getNpcModelPath(name) : undefined) ??
     getCharacterModelPath(characterClass, gender, npcPlayerId !== undefined)
-  const modelPromise = loadCharacterModel(modelPath).then((g) => {
+  const modelPromise = loadCharacterModel(
+    modelPath,
+    untrack(() => appearance)
+  ).then((g) => {
     activeGltfData = g
   })
   const locomotionPromise = loadCharacterAnimationPack(
@@ -659,7 +665,7 @@
 
   const visibleArmor = $derived(isCurrentPlayer ? $equippedArmor : armor)
   $effect(() => {
-    if (modelRoot) applyCharacterArmor(modelRoot, visibleArmor)
+    if (modelRoot) applyCharacterArmor(modelRoot, visibleArmor, appearance)
   })
 
   const equippedMainHandItemId = $derived(
@@ -1346,7 +1352,7 @@
       const { clonedScene: cloned, modelRoot: newModelRoot } =
         createCharacterModelRoot(activeGltf.scene)
 
-      applyCharacterArmor(newModelRoot, visibleArmor)
+      applyCharacterArmor(newModelRoot, visibleArmor, appearance)
 
       // Modular models take their footwear offset from applyCharacterArmor.
       if (!cloned.userData.modular_sole_offsets)

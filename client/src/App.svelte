@@ -19,6 +19,7 @@
     networkManager,
     type AccountCharacter,
     type CharacterClass,
+    type CharacterAppearance,
     type Gender,
   } from './lib/network/socket'
   import { bgmMuted, startBgm } from './lib/managers/bgmManager'
@@ -76,6 +77,10 @@
   // Character create screen state
   let createSelectedClass = $state<CharacterClass>('knight')
   let createSelectedGender = $state<Gender>('male')
+  let createAppearance = $state<CharacterAppearance>({
+    face: 'default',
+    hair: 'crop',
+  })
 
   // First launch on this browser: measure the GPU while the login screen is
   // up and pick a preset from it. A stored choice, however it got there,
@@ -162,12 +167,14 @@
   async function handleCreateCharacter(
     characterName: string,
     characterClass: CharacterClass,
-    gender: Gender
+    gender: Gender,
+    appearance: CharacterAppearance
   ) {
     const result = await networkManager.requestCreateCharacter(
       characterName,
       characterClass,
-      gender
+      gender,
+      appearance
     )
     if (result.ok && result.character) {
       accountCharacters = [...accountCharacters, result.character]
@@ -398,6 +405,7 @@
           <CharacterCreateScene
             characterClass={createSelectedClass}
             gender={createSelectedGender}
+            appearance={createAppearance}
           />
         {:else if screen === 'game'}
           <GameScene
@@ -452,6 +460,10 @@
       characters={accountCharacters}
       selectedClass={createSelectedClass}
       selectedGender={createSelectedGender}
+      appearance={createAppearance}
+      onAppearanceChange={(value) => {
+        createAppearance = value
+      }}
       onClassChange={(cls) => {
         createSelectedClass = cls
       }}

@@ -941,6 +941,7 @@ async fn handle_client_message(
             character_name,
             character_class,
             gender,
+            appearance,
         } => {
             if let Err(responses) = state.require_not_in_game("CreateCharacter") {
                 return Ok(responses);
@@ -966,13 +967,14 @@ async fn handle_client_message(
             let max_hp = default_character_max_hp(&rolled_attributes, &character_class);
             let _sessions = game_state.lock_character_sessions().await;
             let _persistence = game_state.lock_player_persistence().await;
-            match auth_service.create_character(
+            match auth_service.create_character_with_appearance(
                 &authed_account_name,
                 &character_name,
                 &rolled_attributes,
                 max_hp,
                 character_class.clone(),
                 gender,
+                appearance,
             ) {
                 Ok(character) => {
                     state.pending_character_attributes = None;
@@ -1192,6 +1194,7 @@ async fn handle_client_message(
                 state.is_official_npc,
                 state.client_kind.unwrap_or_default(),
             );
+            player.appearance = selected_character.appearance;
             player.title = titles.1.clone();
 
             // Restore saved health (if available) and floor_level from DB
@@ -2403,6 +2406,7 @@ fn character_listing_to_shared(listing: crate::auth::CharacterListing) -> Charac
         attributes: record.attributes,
         class: record.class,
         gender: record.gender,
+        appearance: record.appearance,
         equipment: worn,
         titles,
         active_title,

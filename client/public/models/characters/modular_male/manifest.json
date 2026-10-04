@@ -34,7 +34,9 @@
     "assets/modular_human_male_01/parts/caveman_tripo_top_v1/top_caveman.glb": "e495478ffdcf1d018a9c1faed604d91e92b6b2df91e1baf1599544800ad9ab9f",
     "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb": "1fc3a92b29c8b5e37931cda6b32966754e1f3b1f33fe478a528179fc739a2db4",
     "assets/modular_human_male_01/parts/caveman_tripo_boots_v1/boots_caveman.glb": "816349031a0c5bcac6efd7bb1320b8cd3d27f77ec86c47a10e6f9ccee72e4a48",
-    "assets/modular_human_male_01/parts/caveman_tripo_bracer_v1/gloves_caveman.glb": "cbf5af0d066dd2f805fdee6e94661d31c38f07afc68492ecb65ebe509f0faf86"
+    "assets/modular_human_male_01/parts/caveman_tripo_bracer_v1/gloves_caveman.glb": "cbf5af0d066dd2f805fdee6e94661d31c38f07afc68492ecb65ebe509f0faf86",
+    "assets/modular_human_male_01/parts/face_tripo_rugged_v1/base_rugged.glb": "4a55f83d90e2c6370ef9d13f17a75c0cbc98e5a4a6ecefbe1e33b591313ce954",
+    "assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb": "01090fcaaf447686b1fe57410e1667aed0df7ee705c7503b053b28a3478c9f5b"
   },
   "outputs": {
     "base.glb": "048ebb21caca9a224b1dadecc6faf53b89f270da212791dc2af3088d92509af1",
@@ -140,6 +142,8 @@
     "top_caveman.glb": "ce2d6f0afb5527d2e3c83434e8034e63b24bc788b34e56ea36e216d10e58015f",
     "pants_caveman.glb": "c4439a951085cff557dc8c99f8163fd058b365208ad890b1822367579ab4f233",
     "boots_caveman.glb": "e73a046cdebbcbb6bde88aac91b69ded8fc106f35c9ef368daf839ea33c60f91",
-    "gloves_caveman.glb": "6993bae6459b2ec63f4cfe5c8b350bc5150f565e6eb2902f8e3774a2427f49f8"
+    "gloves_caveman.glb": "6993bae6459b2ec63f4cfe5c8b350bc5150f565e6eb2902f8e3774a2427f49f8",
+    "base_rugged.glb": "ced727720b858153480712512d2669d97c5626e2f11b6ad81bdd547203239a98",
+    "hair_wavy_bone.glb": "c2702a92b821789ffceaabbc5bd345f212b29105f02aa8224e27e42a6f64cf12"
   }
 }

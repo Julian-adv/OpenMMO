@@ -3,7 +3,10 @@ import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { loadGLB } from './gltfCache'
 import { MODULAR_MALE_DIRECTORY, MODULAR_MALE_MODEL_PATH } from './modelPaths'
-import type { ArmorEquipment } from '../network/networkTypes'
+import type {
+  ArmorEquipment,
+  CharacterAppearance,
+} from '../network/networkTypes'
 import { modularOutfitForArmor } from './modularEquipment'
 import { disposePeltPhysics } from '../effects/pelt-rig'
 import { computeSoleGroundOffset } from './characterAnimationUtils'
@@ -26,7 +29,7 @@ import {
 } from './modularCharacter'
 
 export const MODULAR_SWORD_ATTACHMENT = 'modularSwordAttachment'
-let maleModel: Promise<GLTF> | undefined
+const maleModels = new Map<string, Promise<GLTF>>()
 const animations = new Map<string, Promise<GLTF>>()
 const outfitParts = new Set([
   ...modularOutfitParts(DEFAULT_MODULAR_OUTFIT),
@@ -36,12 +39,19 @@ const outfitParts = new Set([
   ...modularOutfitParts(CAVEMAN_MODULAR_OUTFIT),
 ])
 
-export function loadCharacterModel(path: string): Promise<GLTF> {
+export function loadCharacterModel(
+  path: string,
+  appearance?: Pick<CharacterAppearance, 'face'>
+): Promise<GLTF> {
   if (path !== MODULAR_MALE_MODEL_PATH) return loadGLB(path)
+  const face = appearance?.face ?? 'default'
+  let maleModel = maleModels.get(face)
   if (!maleModel) {
-    const ids = [...outfitParts]
+    const ids = [...outfitParts, 'hair_wavy_bone']
     maleModel = Promise.all([
-      loadGLB(path),
+      loadGLB(
+        face === 'rugged' ? `${MODULAR_MALE_DIRECTORY}/base_rugged.glb` : path
+      ),
       ...ids.map((id) => loadGLB(`${MODULAR_MALE_DIRECTORY}/${id}.glb`)),
     ])
       .then(([base, ...sources]) => {
@@ -78,23 +88,25 @@ export function loadCharacterModel(path: string): Promise<GLTF> {
         return { ...base, scene, scenes: [scene] }
       })
       .catch((error) => {
-        maleModel = undefined
+        maleModels.delete(face)
         throw error
       })
+    maleModels.set(face, maleModel)
   }
   return maleModel
 }
 
 export function applyCharacterArmor(
   root: THREE.Object3D,
-  armor?: ArmorEquipment
+  armor?: ArmorEquipment,
+  appearance?: CharacterAppearance
 ): void {
   const meshes = skinnedParts(root)
   const body: THREE.SkinnedMesh[] = []
   const parts = new Map<string, THREE.SkinnedMesh[]>()
   for (const mesh of meshes) {
     const id = mesh.userData.part_id
-    if (outfitParts.has(id)) {
+    if (outfitParts.has(id) || id === 'hair_wavy_bone') {
       const group = parts.get(id) ?? []
       group.push(mesh)
       parts.set(id, group)
@@ -102,6 +114,14 @@ export function applyCharacterArmor(
   }
   if (parts.size) {
     const outfit = modularOutfitForArmor(armor)
+    if (appearance) {
+      outfit.hair =
+        appearance.hair === 'none'
+          ? 'none'
+          : appearance.hair === 'wavy_bone'
+            ? 'hair_wavy_bone'
+            : 'hair_crop'
+    }
     showModularOutfit(body, parts, outfit)
     root.traverse((node) => {
       const offsets = node.userData.modular_sole_offsets

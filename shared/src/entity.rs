@@ -101,6 +101,8 @@ pub struct Player {
     pub radiance_on: bool,
     #[serde(default)]
     pub armor: crate::character::ArmorEquipment,
+    #[serde(default)]
+    pub appearance: crate::character::CharacterAppearance,
     #[serde(skip)]
     pub last_combat_at: u64,
     /// Which program drives this player, from the `ClientInfo` handshake.
@@ -278,6 +280,7 @@ mod tests {
             max_health: 5,
             class: CharacterClass::Knight,
             gender: Gender::default(),
+            appearance: Default::default(),
             is_official_npc: false,
             torch_on: false,
             radiance_on: false,
@@ -327,6 +330,10 @@ mod tests {
             max_health: 17,
             class: CharacterClass::Knight,
             gender: Gender::default(),
+            appearance: crate::CharacterAppearance {
+                face: crate::FaceStyle::Rugged,
+                hair: crate::HairStyle::WavyBone,
+            },
             is_official_npc: false,
             torch_on: true,
             radiance_on: true,
@@ -350,6 +357,7 @@ mod tests {
         assert_eq!(decoded.object_type, None);
         assert!(decoded.torch_on);
         assert!(decoded.radiance_on);
+        assert_eq!(decoded.appearance, player.appearance);
         // The occupied bed must survive the wire: a `#[serde(skip)]` here
         // once silently broke the maid's bedside visits.
         assert_eq!(decoded.object_id, Some(52));

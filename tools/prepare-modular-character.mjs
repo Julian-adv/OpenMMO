@@ -38,13 +38,25 @@ const rogue = JSON.parse(
 const rogueParts = ["top_rogue", "pants_rogue", "gloves_rogue", "boots_rogue"];
 parts.push(...rogueParts);
 const cavemanSources = {
-  top_caveman: "assets/modular_human_male_01/parts/caveman_tripo_top_v1/top_caveman.glb",
-  pants_caveman: "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb",
-  boots_caveman: "assets/modular_human_male_01/parts/caveman_tripo_boots_v1/boots_caveman.glb",
-  gloves_caveman: "assets/modular_human_male_01/parts/caveman_tripo_bracer_v1/gloves_caveman.glb",
+  top_caveman:
+    "assets/modular_human_male_01/parts/caveman_tripo_top_v1/top_caveman.glb",
+  pants_caveman:
+    "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb",
+  boots_caveman:
+    "assets/modular_human_male_01/parts/caveman_tripo_boots_v1/boots_caveman.glb",
+  gloves_caveman:
+    "assets/modular_human_male_01/parts/caveman_tripo_bracer_v1/gloves_caveman.glb",
 };
 const cavemanParts = Object.keys(cavemanSources);
 parts.push(...cavemanParts);
+const appearanceSources = {
+  base_rugged:
+    "assets/modular_human_male_01/parts/face_tripo_rugged_v1/base_rugged.glb",
+  hair_wavy_bone:
+    "assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb",
+};
+const appearanceParts = Object.keys(appearanceSources);
+parts.push(...appearanceParts);
 const packs = [
   "locomotion",
   "combat_melee",
@@ -88,12 +100,16 @@ const selectedPart = option("--part", parts);
 const selectedPack = option("--pack", packs);
 let selectedParts = process.argv.includes("--rogue-only") ? rogueParts : parts;
 if (process.argv.includes("--caveman-only")) selectedParts = cavemanParts;
+if (process.argv.includes("--appearance-only")) selectedParts = appearanceParts;
 if (selectedPart) selectedParts = [selectedPart];
 if (selectedPack) selectedParts = [];
 for (const name of selectedParts) {
-  const source = cavemanSources[name] ?? (rogueParts.includes(name)
-    ? (rogue.part_overrides[name] ?? `${rogue.directory}/${name}.glb`)
-    : `${fitted}/${name}.glb`);
+  const source =
+    appearanceSources[name] ??
+    cavemanSources[name] ??
+    (rogueParts.includes(name)
+      ? (rogue.part_overrides[name] ?? `${rogue.directory}/${name}.glb`)
+      : `${fitted}/${name}.glb`);
   report.inputs[source] = hash(source);
   execFileSync(
     process.execPath,
@@ -101,7 +117,7 @@ for (const name of selectedParts) {
       resolve(root, "tools/optimize-modular-part.mjs"),
       resolve(root, source),
       resolve(root, output, `${name}.glb`),
-      ...(name === "base" ? ["--body"] : []),
+      ...(["base", "base_rugged"].includes(name) ? ["--body"] : []),
     ],
     { stdio: "inherit" },
   );
@@ -112,7 +128,8 @@ if (
   selectedPart ||
   process.argv.includes("--parts-only") ||
   process.argv.includes("--rogue-only") ||
-  process.argv.includes("--caveman-only")
+  process.argv.includes("--caveman-only") ||
+  process.argv.includes("--appearance-only")
 ) {
   writeManifest(true);
   process.exit(0);

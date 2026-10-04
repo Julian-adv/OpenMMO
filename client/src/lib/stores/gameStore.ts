@@ -8,6 +8,7 @@ import type { Vector3 } from 'three'
 import type {
   ArmorEquipment,
   CharacterClass,
+  CharacterAppearance,
   Gender,
   MountKind,
 } from '../network/networkTypes'
@@ -54,6 +55,7 @@ interface PlayerBase {
   health: number
   maxHealth: number
   characterClass: CharacterClass
+  appearance?: CharacterAppearance
   gender: Gender
   mount?: MountKind | null
   torchOn?: boolean

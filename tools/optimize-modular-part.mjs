@@ -34,16 +34,18 @@ for (const texture of document.getRoot().listTextures()) {
   const image = texture.getImage()
   if (!image) throw new Error('An embedded part texture is required.')
   const input = sharp(image)
-  if ((await input.metadata()).hasAlpha)
-    throw new Error('Only opaque textures are supported.')
-  const [encoded, mimeType] = webp.has(texture)
+  const hasAlpha = (await input.metadata()).hasAlpha
+  const [encoded, mimeType] = hasAlpha
+    ? [input.webp({ lossless: true, effort: 6 }), 'image/webp']
+    : webp.has(texture)
     ? [input.webp({ quality: 95, effort: 6 }), 'image/webp']
     : [input
         .resize({ width: size, height: size, fit: 'inside', withoutEnlargement: true })
         .jpeg({ quality: normals.has(texture) ? 92 : 90, chromaSubsampling: '4:4:4' }), 'image/jpeg']
   texture.setImage(await encoded.toBuffer()).setMimeType(mimeType)
 }
-if (body) document.createExtension(EXTTextureWebP).setRequired(true)
+if (document.getRoot().listTextures().some(texture => texture.getMimeType() === 'image/webp'))
+  document.createExtension(EXTTextureWebP).setRequired(true)
 document.createExtension(EXTMeshoptCompression)
   .setRequired(true)
   .setEncoderOptions({ method: EXTMeshoptCompression.EncoderMethod.QUANTIZE })

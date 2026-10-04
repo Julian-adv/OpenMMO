@@ -70,6 +70,125 @@ describe.skipIf(
         (mesh.userData.region ?? mesh.parent?.userData.region) === region
     )
 
+  it('keeps selected faces and hair independent across players and armor changes', async () => {
+    const appearance = { face: 'rugged', hair: 'wavy_bone' } as const
+    const rugged = await loadCharacterModel(MODULAR_MALE_MODEL_PATH, appearance)
+    const standard = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
+    const { modelRoot } = createCharacterModelRoot(rugged.scene)
+    const { modelRoot: other } = createCharacterModelRoot(standard.scene)
+    expect(modelRoot.getObjectByName('face_rugged')).toBeDefined()
+    expect(other.getObjectByName('face_rugged')).toBeUndefined()
+    for (const id of ['hair_crop', 'hair_wavy_bone']) {
+      const shared = (root: THREE.Object3D) =>
+        skinnedParts(root).find((mesh) => mesh.userData.part_id === id)!
+          .geometry
+      const first = shared(modelRoot)
+      const second = shared(other)
+      expect(first.index!.array).toEqual(second.index!.array)
+      for (const name of [
+        'position',
+        'normal',
+        'uv',
+        'skinIndex',
+        'skinWeight',
+      ])
+        expect(first.getAttribute(name).array).toEqual(
+          second.getAttribute(name).array
+        )
+    }
+    applyCharacterArmor(modelRoot, {}, appearance)
+    applyCharacterArmor(other, {})
+    expect(visible(modelRoot, 'hair_wavy_bone')).toBe(true)
+    expect(visible(modelRoot, 'hair_crop')).toBe(false)
+    expect(visible(other, 'hair_wavy_bone')).toBe(false)
+    expect(visible(other, 'hair_crop')).toBe(true)
+    applyCharacterArmor(modelRoot, { head: 'worn_plate_helmet' }, appearance)
+    expect(visible(modelRoot, 'hair_wavy_bone')).toBe(false)
+    expect(visible(modelRoot, 'helmet_plate')).toBe(true)
+    applyCharacterArmor(modelRoot, {}, appearance)
+    expect(visible(modelRoot, 'hair_wavy_bone')).toBe(true)
+    applyCharacterArmor(modelRoot, {}, { ...appearance, hair: 'none' })
+    expect(visible(modelRoot, 'hair_wavy_bone')).toBe(false)
+    expect(visible(modelRoot, 'hair_crop')).toBe(false)
+    expect(visible(other, 'hair_crop')).toBe(true)
+  })
+
+  it('keeps shared cropped hair clear of the rugged rear scalp after runtime compression', async () => {
+    const appearance = { face: 'rugged', hair: 'crop' } as const
+    const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH, appearance)
+    const { modelRoot } = createCharacterModelRoot(source.scene)
+    applyCharacterArmor(modelRoot, {}, appearance)
+    modelRoot.updateMatrixWorld(true)
+    const face = modelRoot.getObjectByName('face_rugged') as THREE.SkinnedMesh
+    const hair = skinnedParts(modelRoot).find(
+      (mesh) => mesh.userData.part_id === 'hair_crop'
+    )!
+    const material = (face.material as THREE.Material).clone()
+    material.side = THREE.DoubleSide
+    const posedMesh = (mesh: THREE.SkinnedMesh) => {
+      const geometry = mesh.geometry.clone()
+      const positions = geometry.getAttribute('position')
+      for (let i = 0; i < positions.count; i++) {
+        const point = mesh.getVertexPosition(i, new THREE.Vector3())
+        positions.setXYZ(i, point.x, point.y, point.z)
+      }
+      geometry.computeBoundingBox()
+      geometry.computeBoundingSphere()
+      const posed = new THREE.Mesh(geometry, material)
+      posed.matrixAutoUpdate = false
+      posed.matrix.copy(mesh.matrixWorld)
+      posed.updateMatrixWorld(true)
+      return posed
+    }
+    const scalp = posedMesh(face)
+    const croppedHair = posedMesh(hair)
+    const origin = face.localToWorld(new THREE.Vector3(0, 1.81, 0))
+    const indices = hair.geometry.index!
+    const ray = new THREE.Raycaster()
+    let minimum = Infinity
+    let checked = 0
+    for (let i = 0; i < indices.count; i += 3) {
+      const triangle = [0, 1, 2].map((corner) =>
+        hair
+          .getVertexPosition(indices.getX(i + corner), new THREE.Vector3())
+          .applyMatrix4(hair.matrixWorld)
+      )
+      const normal = triangle[1]
+        .clone()
+        .sub(triangle[0])
+        .cross(triangle[2].clone().sub(triangle[0]))
+        .normalize()
+      for (let a = 0; a <= 3; a++) {
+        for (let b = 0; b <= 3 - a; b++) {
+          const point = triangle[0]
+            .clone()
+            .multiplyScalar(a / 3)
+            .addScaledVector(triangle[1], b / 3)
+            .addScaledVector(triangle[2], (3 - a - b) / 3)
+          const direction = point.clone().sub(origin)
+          const local = face.worldToLocal(point.clone())
+          if (Math.abs(local.x) > 0.055 || local.z > -0.045 || local.y < 1.74)
+            continue
+          if (normal.dot(direction) <= 0) continue
+          ray.set(origin, direction.normalize())
+          const scalpHits = ray.intersectObject(scalp, false)
+          const hairHits = ray.intersectObject(croppedHair, false)
+          if (!scalpHits.length || !hairHits.length) continue
+          minimum = Math.min(
+            minimum,
+            hairHits.at(-1)!.distance - scalpHits.at(-1)!.distance
+          )
+          checked++
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(1000)
+    expect(minimum).toBeGreaterThan(0.002)
+    material.dispose()
+    scalp.geometry.dispose()
+    croppedHair.geometry.dispose()
+  })
+
   it('equips caveman starter clothing, removes pieces and restores skin with other armor', async () => {
     const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
     const { modelRoot } = createCharacterModelRoot(source.scene)

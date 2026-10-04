@@ -58,6 +58,7 @@ import { worldView } from './worldView'
 import type {
   AccountCharacter,
   CharacterClass,
+  CharacterAppearance,
   CharacterRollResult,
   ClientMessage,
   EquipSlot,
@@ -71,6 +72,7 @@ export type {
   AccountCharacter,
   CharacterAttributes,
   CharacterClass,
+  CharacterAppearance,
   CharacterRollResult,
   Gender,
   RollCharacterStatsResult,
@@ -1240,7 +1242,8 @@ class NetworkManager {
   async requestCreateCharacter(
     characterName: string,
     characterClass: CharacterClass,
-    gender: Gender
+    gender: Gender,
+    appearance: CharacterAppearance = { face: 'default', hair: 'crop' }
   ): Promise<{ ok: boolean; message?: string; character?: AccountCharacter }> {
     await this.ensureWasm()
     if (!this.isConnected()) {
@@ -1273,6 +1276,7 @@ class NetworkManager {
                 character_name: characterName,
                 character_class: characterClass,
                 gender,
+                appearance,
               },
             }),
           notSentResult: { ok: false, message: 'Socket is not connected' },

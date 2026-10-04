@@ -296,31 +296,6 @@ def assemble(face, raw, neck_normals):
     return doc, io.compact(doc, binary)
 
 
-def fit_hair(surface):
-    path = io.PARTS / 'hair_tripo_wavy_v1/hair_wavy_bone.glb'
-    doc, raw = fit.read_glb(path)
-    primitive = doc['meshes'][0]['primitives'][0]
-    attrs = primitive['attributes']
-    points = io.accessor(doc, raw, attrs['POSITION'])
-    canonical = fit.body_surface(('head',))
-    old, _, _ = fit.nearest_surface(points, canonical)
-    new, normals, _ = fit.nearest_surface(old, surface)
-    distance = np.linalg.norm(points - old, axis=1)
-    influence = io.smoothstep((points[:, 1] - 1.70) / .08) * (1 - io.smoothstep((distance - .045) / .025))
-    result = points + (new - old) * influence[:, None]
-    q, n, _ = fit.nearest_surface(result, surface)
-    signed = np.einsum('ij,ij->i', result - q, n)
-    near = np.linalg.norm(result - q, axis=1)
-    mask = (result[:, 1] > 1.74) & (near < .025) & (signed < .004)
-    result[mask] = q[mask] + n[mask] * .006
-    binary = bytearray(raw)
-    attrs['POSITION'] = io.add_accessor(doc, binary, result, 'VEC3')
-    faces = io.accessor(doc, raw, primitive['indices']).reshape(-1, 3)
-    attrs['NORMAL'] = io.add_accessor(doc, binary, io.smooth_normals(result, faces), 'VEC3')
-    fit.write_glb(OUTPUT / 'hair_wavy_bone_rugged.glb', doc, io.compact(doc, binary))
-    return dict(source_sha256=fit.digest(path), maximum_shift_mm=float(np.max(np.linalg.norm(result - points, axis=1)) * 1000), triangles=len(faces))
-
-
 def validate_body_preservation(doc, raw):
     for original in io.BASE['nodes']:
         if 'mesh' not in original or original.get('extras', {}).get('region') == 'head':
@@ -433,11 +408,10 @@ def main():
     assembled, assembled_raw = assemble(doc, binary, body_normals)
     body_preserved = validate_body_preservation(assembled, assembled_raw)
     fit.write_glb(OUTPUT / 'base_rugged.glb', assembled, assembled_raw)
-    hair = fit_hair((points, faces, dense))
     (OUTPUT / 'neck-seam-validation.json').write_text(json.dumps(dict(body_seam=body_seam.tolist(), lower=neck['points'][:seam['lower_row_count']].tolist(), upper=neck['points'][seam['upper_row_start']:].tolist(), upper_start=seam['upper_row_start']), indent=2) + '\n')
     report = dict(date='2026-10-04', source_sha256=fit.digest(source_path), base_sha256=fit.digest(io.PARTS / 'fitted/base.glb'),
         source_triangles=4046, fitted_head_triangles=len(faces), collar_triangles=len(neck['faces']), retained_neck_triangles=len(lower_neck['faces']), neck_seam=seam,
-        canonical_rig_preserved=True, face_texture_bytes_preserved=True, hair_refitting=hair,
+        canonical_rig_preserved=True, face_texture_bytes_preserved=True, shared_hair='assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb',
         non_head_body_geometry_uv_weights_and_normals_outside_upper_neck_preserved=body_preserved,
         neck_surface=dict(revision=5, retained_canonical_lower_neck=True, shared_boundary_normals=True,
             retained_neck_band_height_m=.004, original_chin_shelf_removed=True,
@@ -447,8 +421,8 @@ def main():
             texture='512x512 neck skin projection with filtered color transition and preserved donor detail; original face JPEG unchanged',
             deformed_neck_material=dict(original_base_color_preserved=True,obsolete_normal_and_roughness_maps_removed=True,roughness=.9,metallic=0),
             closeup_limitations='Some texture stretching remains at the rear neck'),
-        files={name: fit.digest(OUTPUT / name) for name in ['face_rugged.glb', 'base_rugged.glb', 'hair_wavy_bone_rugged.glb', 'neck-transition.png']},
-        validations=[fit.validate(OUTPUT / name) for name in ['face_rugged.glb', 'base_rugged.glb', 'hair_wavy_bone_rugged.glb']])
+        files={name: fit.digest(OUTPUT / name) for name in ['face_rugged.glb', 'base_rugged.glb', 'neck-transition.png']},
+        validations=[fit.validate(OUTPUT / name) for name in ['face_rugged.glb', 'base_rugged.glb']])
     (ROOT / 'doc/assets/modular-rugged-face-fitting-v1.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report))
 

@@ -289,6 +289,7 @@ function toLocalPlayer(sp: ServerPlayer): LocalPlayer {
     maxHealth: sp.max_health,
     characterClass: sp.class,
     gender: sp.gender,
+    appearance: sp.appearance,
     radianceOn: sp.radiance_on ?? false,
   }
 }
@@ -302,6 +303,7 @@ function toRemotePlayer(sp: ServerPlayer): RemotePlayer {
     maxHealth: sp.max_health,
     characterClass: sp.class,
     gender: sp.gender,
+    appearance: sp.appearance,
     mount: sp.mount ?? null,
     torchOn: sp.torch_on,
     radianceOn: sp.radiance_on ?? false,

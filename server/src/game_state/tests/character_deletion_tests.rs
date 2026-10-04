@@ -2,7 +2,7 @@ use super::*;
 use std::time::Duration;
 
 #[tokio::test]
-async fn character_deletion_waits_24_hours_survives_restart_and_can_be_cancelled() {
+async fn character_deletion_waits_for_deadline_survives_restart_and_can_be_cancelled() {
     let game = make_test_game_state("character_deletion_delay");
     let (auth, path) = make_test_auth_with_path("character_deletion_delay");
     let account = auth.login_google("delete-delay").unwrap();
@@ -18,7 +18,8 @@ async fn character_deletion_waits_24_hours_survives_restart_and_can_be_cancelled
         .await
         .unwrap()
         .unwrap();
-    assert!((before + 86400..=crate::auth::unix_now() + 86400).contains(&due));
+    let delay = if cfg!(debug_assertions) { 60 } else { 86400 };
+    assert!((before + delay..=crate::auth::unix_now() + delay).contains(&due));
     assert_eq!(
         game.change_character_deletion(&auth, &account, character.id, false)
             .await
@@ -64,6 +65,52 @@ async fn character_deletion_waits_24_hours_survives_restart_and_can_be_cancelled
     assert!(
         matches!(rx.try_recv(), Ok(KickNotice { keep_open: true, message: ServerMessage::CharacterDeleted { character_id }, .. }) if character_id == character.id)
     );
+}
+
+#[tokio::test]
+async fn character_deletion_restart_shortens_only_long_development_deadlines() {
+    let (auth, path) = make_test_auth_with_path("character_deletion_restart");
+    let account = auth.login_google("delete-restart").unwrap();
+    let long = create_test_character(&auth, &account, "Long");
+    let soon = create_test_character(&auth, &account, "Soon");
+    let kept = create_test_character(&auth, &account, "Kept");
+    let now = crate::auth::unix_now();
+    let long_deadline = now + 86400;
+    let soon_deadline = now + 30;
+    let conn = rusqlite::Connection::open(&path).unwrap();
+    for (id, deadline) in [(long.id, long_deadline), (soon.id, soon_deadline)] {
+        conn.execute(
+            "UPDATE characters SET deletion_due_at=?2 WHERE id=?1",
+            rusqlite::params![id, deadline],
+        )
+        .unwrap();
+    }
+    drop(conn);
+    drop(auth);
+    let before = crate::auth::unix_now();
+    let reopened = crate::auth::AuthService::new(path).unwrap();
+    let due = reopened
+        .get_character_for_account(&account, long.id)
+        .unwrap()
+        .deletion_due_at
+        .unwrap();
+    if cfg!(debug_assertions) {
+        assert!((before + 60..=crate::auth::unix_now() + 60).contains(&due));
+    } else {
+        assert_eq!(due, long_deadline);
+    }
+    assert_eq!(
+        reopened
+            .get_character_for_account(&account, soon.id)
+            .unwrap()
+            .deletion_due_at,
+        Some(soon_deadline)
+    );
+    assert!(reopened
+        .get_character_for_account(&account, kept.id)
+        .unwrap()
+        .deletion_due_at
+        .is_none());
 }
 
 #[tokio::test]

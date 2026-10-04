@@ -235,10 +235,11 @@ v5의 새 얼굴용 몸체에서 목 위쪽 법선·재질만 함께 보정했�
 
 - 독립 얼굴·목 연결부: `assets/modular_human_male_01/parts/face_tripo_rugged_v1/face_rugged.glb`.
 - 조립 몸체: 같은 폴더의 `base_rugged.glb`; 기존 `body_head`만 교체한 제작 후보.
-- 새 두상용 헤어: 같은 폴더의 `hair_wavy_bone_rugged.glb`.
-- 편집본: 같은 폴더의 `rugged-face-fitting.blend`; 원본·리그·몸체·헤어·8개 동작 자세·텍스처 포함.
+- **[미사용]** 이전 새 두상용 헤어 `hair_wavy_bone_rugged.glb`는 표준 두상 보정 후 삭제했고 공용 헤어로 교체했다.
+- 편집본 재생성: `review_tripo_rugged_face.py`로 원본·리그·몸체·공용 헤어·8개 동작 자세·텍스처를 포함한 `rugged-face-fitting.blend`를 만들 수 있다.
 - [피팅·파일 해시](modular-rugged-face-fitting-v1.json), [동작·목 경계 검사](modular-rugged-face-animation-v1.json).
-- 재현: `.venv/bin/python tools/fit-tripo-rugged-face.py`, `node tools/validate-tripo-rugged-face.mjs`,
+- 재현: `.venv/bin/python tools/fit-tripo-rugged-face.py`, `.venv/bin/python tools/standardize-rugged-scalp.py`,
+  `node tools/validate-tripo-rugged-face.mjs`,
   `blender -b --python tools/blender-scripts/review_tripo_rugged_face.py`.
 - [새 얼굴 제작 미리보기](https://localhost:10004/modular-character-preview.html?outfit=caveman&hair=hair_wavy_bone&face=rugged).
   얼굴 선택에서 기본 얼굴과 비교할 수 있다. 새 얼굴은 원본 눈색을 사용한다.
@@ -283,3 +284,41 @@ Tripo 원본, 최종 두상·몸체·헤어, 연결부 텍스처, Blender 편집
 - OpenAI 생성 출력물 이용 조건 적용. 참고 원화 출처는
   [원시전사 원화 기록](modular-caveman-concept-sources.json)을 따른다.
 - [실제 프롬프트·참조·선택/미채택 기록·SHA-256](modular-rugged-face-wavy-hair-sources.json).
+
+## 캐릭터 생성 메뉴 연결 (2026-10-05)
+
+기존 확정 소스를 게임용으로 압축해 다음 파일을 추가했다. 새 유료 생성은 없다.
+출처·라이선스·생성 구독 등급은 이 문서의 기존 원화와 사용자 제공 Tripo 기록을 따른다.
+
+- `client/public/models/characters/modular_male/base_rugged.glb`: 새 얼굴을 결합한 몸체.
+- `client/public/models/characters/modular_male/hair_wavy_bone.glb`: 두 얼굴이 공유하는 웨이브 장발.
+- 기존 `hair_crop.glb`도 두 얼굴이 동일한 파일을 공유한다.
+
+재생성: `node tools/prepare-modular-character.mjs --appearance-only`.
+입력·출력 SHA-256은 같은 게임용 폴더의 `manifest.json`에 기록한다.
+Meshopt로 형상을 압축하고, 얼굴 색상 텍스처는 원래 해상도를 유지한다.
+알파 채널이 있는 목 연결 텍스처는 무손실 WebP로 보존한다.
+생성창에서 선택한 외형은 DB에 저장해 캐릭터 선택·게임·감정표현 미리보기에 반영한다.
+
+
+## 공용 헤어를 위한 표준 두상 보정 (2026-10-05)
+
+사용자 확인에 따라 공용 크롭 헤어는 수정하지 않고 각진 얼굴의 뒤통수·정수리를
+표준 남성 두상으로 보정했다. 상부 이마와 하부 뒤통수는 부드럽게 연결하며
+귀·턱·얼굴 특징·목 경계·UV·텍스처·본·스킨 가중치·삼각형 수를 유지했다.
+정점 678개를 최대 7.85mm 이동했으며 뒤집힌 삼각형은 없다.
+기본 얼굴과 각진 얼굴은 크롭·웨이브 헤어를 모두 공유하며 얼굴별 헤어 분기는 제거했다.
+
+기존 사용자 제공 Tripo 얼굴과 표준 모듈 두상의 로컬 형상 편집이다.
+출처·라이선스·구독 등급은 위 원본 기록을 따르며 추가 생성은 없다.
+보정 전 얼굴은 `assets/modular_human_male_01/parts/face_tripo_rugged_v1/face-rugged-before-standard-scalp.glb`에 보존했다.
+이전 전용 웨이브 헤어와 낡은 Blender 편집본은 **[미사용]** 이전 피팅 자료로 삭제했다.
+현재 GLB와 공용 헤어로 편집본을 다시 생성할 수 있다. 피팅 스크립트에서도 전용 헤어 생성을 제거했다.
+
+재현: `.venv/bin/python tools/standardize-rugged-scalp.py`,
+`node tools/prepare-modular-character.mjs --appearance-only`,
+`node tools/validate-tripo-rugged-face.mjs`.
+[보정 범위·원본·출력 해시](modular-rugged-standard-scalp.json),
+[8개 동작·200개 자세의 목 경계·리깅 검사](modular-rugged-face-animation-v1.json).
+압축된 게임용 모델의 공용 크롭 헤어와 뒤통수 표면 간격을 회귀 검사한다.
+브라우저에서 실제 게임 로더로 정면·측면·뒤통수를 렌더링해 빈틈 제거를 확인했다.

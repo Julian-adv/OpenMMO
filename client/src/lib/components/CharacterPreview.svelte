@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { CharacterAppearance } from '../network/networkTypes'
   import { T } from '@threlte/core'
   import { updatePeltPhysics } from '../effects/pelt-rig'
   import * as THREE from 'three'
@@ -69,6 +70,7 @@
     selected: boolean
     deletionPending?: boolean
     characterClass: CharacterClass
+    appearance?: CharacterAppearance
     gender?: Gender
     equipment?: VisibleEquipment
     /** Needed to billboard the torch flame's particles. */
@@ -84,6 +86,7 @@
     deletionPending = false,
     characterClass,
     gender,
+    appearance,
     equipment,
     camera,
   }: Props = $props()
@@ -93,6 +96,7 @@
   let combatMeleeGltfData = $state<GLTF | null>(null)
 
   const modelPath = $derived(getCharacterModelPath(characterClass, gender))
+  const face = $derived(appearance?.face ?? 'default')
   const grayscale = new CharacterGrayscale()
 
   $effect(() => {
@@ -103,7 +107,7 @@
     const path = modelPath
     let cancelled = false
     Promise.all([
-      loadCharacterModel(path),
+      loadCharacterModel(path, { face }),
       loadCharacterAnimationPack(
         path,
         CHARACTER_ANIMATION_PACK_PATHS.locomotion
@@ -339,7 +343,7 @@
   $effect(() => {
     if (modelRoot) {
       grayscale.restore(modelRoot)
-      applyCharacterArmor(modelRoot, equipment?.armor)
+      applyCharacterArmor(modelRoot, equipment?.armor, appearance)
     }
   })
 
@@ -366,7 +370,7 @@
     const sourceScene = characterGltfData.scene
     const { clonedScene: newClonedScene, modelRoot: newModelRoot } =
       createCharacterModelRoot(sourceScene)
-    applyCharacterArmor(newModelRoot, equipment?.armor)
+    applyCharacterArmor(newModelRoot, equipment?.armor, appearance)
     const generation = ++setupGeneration
 
     const orderedAnims = selectOrderedCharacterAnimations(

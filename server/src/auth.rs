@@ -24,7 +24,7 @@ pub use land::{LandAccount, OwnedLandPlot};
 use onlinerpg_shared::inventory::EquipSlot;
 use onlinerpg_shared::messages::FriendEntry;
 use onlinerpg_shared::xp;
-use onlinerpg_shared::{CharacterClass, Gender, VisibleEquipment};
+use onlinerpg_shared::{CharacterAppearance, CharacterClass, Gender, VisibleEquipment};
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
 use std::collections::{HashMap, HashSet};
@@ -266,6 +266,7 @@ pub struct CharacterRecord {
     pub attributes: CharacterAttributes,
     pub class: CharacterClass,
     pub gender: Gender,
+    pub appearance: CharacterAppearance,
     pub last_x: f32,
     pub last_y: f32,
     pub last_z: f32,
@@ -316,7 +317,7 @@ pub struct TradeLedgerEntry {
 }
 
 /// Column list shared between queries that return full CharacterRecord rows.
-const CHARACTER_COLUMNS: &str = "id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation, health, floor_level, gender, gold, admin_role, satiation, mana, dungeon_epoch, deletion_due_at";
+const CHARACTER_COLUMNS: &str = "id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation, health, floor_level, gender, gold, admin_role, satiation, mana, dungeon_epoch, deletion_due_at, appearance";
 
 fn class_from_row(row: &rusqlite::Row<'_>, idx: usize) -> rusqlite::Result<CharacterClass> {
     let class_str: String = row.get(idx)?;
@@ -376,6 +377,16 @@ fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterR
             .map(|v| v.clamp(0, i64::from(u32::MAX)) as u32),
         dungeon_epoch: row.get(25)?,
         deletion_due_at: row.get(26)?,
+        appearance: {
+            let json: String = row.get(27)?;
+            serde_json::from_str(&json).map_err(|error| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    27,
+                    rusqlite::types::Type::Text,
+                    Box::new(error),
+                )
+            })?
+        },
     })
 }
 
@@ -713,6 +724,14 @@ impl AuthService {
         )?;
         Self::ensure_accounts_columns(&conn)?;
         Self::ensure_characters_schema(&conn)?;
+        #[cfg(debug_assertions)]
+        {
+            let deadline = unix_now() + character_deletion::DELETION_DELAY_SECONDS;
+            conn.execute(
+                "UPDATE characters SET deletion_due_at=?1 WHERE deletion_due_at>?1",
+                [deadline],
+            )?;
+        }
         Self::migrate_item_definition_ids(&conn)?;
         Self::strip_npc_starter_weapons(&conn)?;
         Self::ensure_blocks_schema(&conn)?;
@@ -1455,6 +1474,7 @@ impl AuthService {
             ("floor_level", "INTEGER NOT NULL DEFAULT 0".into()),
             ("dungeon_epoch", "INTEGER".into()),
             ("gender", "TEXT NOT NULL DEFAULT 'male'".into()),
+            ("appearance", "TEXT NOT NULL DEFAULT '{}'".into()),
             ("gold", "INTEGER NOT NULL DEFAULT 0".into()),
             ("admin_role", "INTEGER NOT NULL DEFAULT 0".into()),
             // Unix seconds, NULL until first seen since the column shipped.
@@ -1892,6 +1912,7 @@ impl AuthService {
         Ok(())
     }
 
+    #[cfg(test)]
     pub fn create_character(
         &self,
         account_name: &str,
@@ -1901,6 +1922,29 @@ impl AuthService {
         class: CharacterClass,
         gender: Gender,
     ) -> Result<CharacterRecord, AuthError> {
+        self.create_character_with_appearance(
+            account_name,
+            character_name,
+            attributes,
+            max_hp,
+            class,
+            gender,
+            CharacterAppearance::default(),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_character_with_appearance(
+        &self,
+        account_name: &str,
+        character_name: &str,
+        attributes: &CharacterAttributes,
+        max_hp: u32,
+        class: CharacterClass,
+        gender: Gender,
+        appearance: CharacterAppearance,
+    ) -> Result<CharacterRecord, AuthError> {
+        let appearance = appearance.for_character(&class, gender);
         let account_name = account_name.trim();
         let character_name = character_name.trim();
 
@@ -1956,8 +2000,9 @@ impl AuthService {
                 last_y,
                 last_z,
                 last_rotation,
-                gold
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, 0)",
+                gold,
+                appearance
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, 0, ?18)",
             params![
                 account_name,
                 character_name,
@@ -1976,6 +2021,7 @@ impl AuthService {
                 f64::from(world_config().spawn_position.y),
                 f64::from(world_config().spawn_position.z),
                 f64::from(world_config().spawn_position.rotation),
+                serde_json::to_string(&appearance).expect("appearance serializes"),
             ],
         )?;
 
@@ -2015,6 +2061,7 @@ impl AuthService {
             attributes: attributes.clone(),
             class,
             gender,
+            appearance,
             last_x: world_config().spawn_position.x,
             last_y: world_config().spawn_position.y,
             last_z: world_config().spawn_position.z,
@@ -2294,6 +2341,68 @@ impl AuthService {
 mod tests {
     use super::*;
     use crate::test_util::temp_auth;
+
+    #[test]
+    fn character_appearance_survives_reload_and_legacy_migration() {
+        let (auth, db_path) = temp_auth("appearance_migration");
+        let account = auth.login_google("sub-appearance").unwrap();
+        let legacy = create(&auth, &account, "Original").unwrap();
+        drop(auth);
+        let conn = Connection::open(&db_path).unwrap();
+        conn.execute_batch("ALTER TABLE characters DROP COLUMN appearance;")
+            .unwrap();
+        drop(conn);
+        let auth = AuthService::new(db_path.clone()).unwrap();
+        let restored = auth.get_character_for_account(&account, legacy.id).unwrap();
+        assert_eq!(restored.appearance, CharacterAppearance::default());
+        assert_eq!(restored.attributes.r#str, legacy.attributes.r#str);
+        assert_eq!(restored.max_hp, legacy.max_hp);
+        let appearance = CharacterAppearance {
+            face: onlinerpg_shared::FaceStyle::Rugged,
+            hair: onlinerpg_shared::HairStyle::WavyBone,
+        };
+        let created = auth
+            .create_character_with_appearance(
+                &account,
+                "Waves",
+                &plain_attributes(),
+                10,
+                CharacterClass::Caveman,
+                Gender::Male,
+                appearance,
+            )
+            .unwrap();
+        let female = auth
+            .create_character_with_appearance(
+                &account,
+                "Female",
+                &plain_attributes(),
+                10,
+                CharacterClass::Rogue,
+                Gender::Female,
+                appearance,
+            )
+            .unwrap();
+        assert_eq!(female.appearance, CharacterAppearance::default());
+        drop(auth);
+        let auth = AuthService::new(db_path.clone()).unwrap();
+        assert_eq!(
+            auth.get_character_for_account(&account, created.id)
+                .unwrap()
+                .appearance,
+            appearance
+        );
+        let listing = auth.list_characters_with_equipment(&account).unwrap();
+        assert_eq!(
+            listing
+                .iter()
+                .find(|c| c.record.id == created.id)
+                .unwrap()
+                .record
+                .appearance,
+            appearance
+        );
+    }
 
     #[test]
     fn gold_snapshot_adds_treasuries_to_total_and_splits_npc_and_active_gold() {

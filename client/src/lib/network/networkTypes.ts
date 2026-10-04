@@ -26,6 +26,11 @@ export type CharacterClass =
 
 export type Gender = 'male' | 'female'
 
+export type CharacterAppearance = {
+  face: 'default' | 'rugged'
+  hair: 'crop' | 'wavy_bone' | 'none'
+}
+
 export type ServerPlayer = {
   id: number
   name: string
@@ -36,6 +41,7 @@ export type ServerPlayer = {
   max_health: number
   class: CharacterClass
   gender: Gender
+  appearance?: CharacterAppearance
   is_official_npc: boolean
   mount?: MountKind | null
   torch_on: boolean
@@ -81,6 +87,7 @@ export type AccountCharacter = {
   attributes: CharacterAttributes
   class: CharacterClass
   gender: Gender
+  appearance?: CharacterAppearance
   equipment?: VisibleEquipment
   titles?: string[]
   active_title?: string | null
@@ -151,6 +158,7 @@ export type ClientMessage =
         character_name: string
         character_class: CharacterClass
         gender: Gender
+        appearance?: CharacterAppearance
       }
     }
   | { DeleteCharacter: { character_id: number } }

@@ -682,6 +682,7 @@
     chatBubbleAt={chatBubbles.get(currentPlayer.id)?.timestamp}
     characterClass={currentPlayer.characterClass}
     gender={currentPlayer.gender}
+    appearance={currentPlayer.appearance}
     health={currentPlayer.health}
     maxHealth={currentPlayer.maxHealth}
     {onAttackDuration}
@@ -748,6 +749,7 @@
         chatBubbleAt={chatBubbles.get(player.id)?.timestamp}
         characterClass={player.characterClass}
         gender={player.gender}
+        appearance={player.appearance}
         health={player.health}
         maxHealth={player.maxHealth}
         torchOn={player.torchOn}

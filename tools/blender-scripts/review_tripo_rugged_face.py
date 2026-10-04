@@ -51,7 +51,7 @@ def main(directory):
     for name, location in views:
         render(name, location)
     review.contact_sheet(directory, [n for n, _ in views], ['FRONT', 'THREE QUARTER', 'SIDE', 'BACK'], 4, IMAGES / 'face-rugged-fitted-v1-review.png')
-    review.import_part(OUTPUT / 'hair_wavy_bone_rugged.glb', rig)
+    review.import_part(PARTS / 'hair_tripo_wavy_v1/hair_wavy_bone.glb', rig)
     for name, location in views:
         render('hair-' + name, location)
     review.contact_sheet(directory, ['hair-' + n for n, _ in views], ['FRONT', 'THREE QUARTER', 'SIDE', 'BACK'], 4, IMAGES / 'face-rugged-wavy-hair-v1-review.png')

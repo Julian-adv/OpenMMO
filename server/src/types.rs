@@ -42,6 +42,7 @@ pub fn new_player(
         max_health,
         class,
         gender,
+        appearance: Default::default(),
         is_official_npc,
         torch_on: false,
         radiance_on: false,

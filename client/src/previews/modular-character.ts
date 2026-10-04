@@ -181,11 +181,7 @@ async function main() {
         return parseModularHandProfile(await response.json())
       }),
       Promise.allSettled(
-        candidateParts.map((id) =>
-          load(
-            `/__modular-character/parts/${id}.glb${ruggedFace && id === 'hair_wavy_bone' ? '?face=rugged' : ''}`
-          )
-        )
+        candidateParts.map((id) => load(`/__modular-character/parts/${id}.glb`))
       ),
       load('/models/characters/modular_male/animations/social.glb'),
     ])

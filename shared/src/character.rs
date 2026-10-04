@@ -1,9 +1,4 @@
-//! Character traits: gender, class, rolled attributes, and the saved-character
-//! record returned to the client. `CharacterClass` carries enough behaviour
-//! (hit-die size, gendered stat adjustments, string round-trip) that it
-//! pulls in `Gender` here too, and `Character` lives next to its
-//! `CharacterAttributes` so the rolled-stats payload type isn't separated
-//! from the persistent record it ends up inside.
+//! Character traits and saved-character records.
 
 use serde::{Deserialize, Serialize};
 
@@ -14,6 +9,51 @@ pub enum Gender {
     Male,
     #[serde(rename = "female")]
     Female,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FaceStyle {
+    #[default]
+    Default,
+    Rugged,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HairStyle {
+    #[default]
+    Crop,
+    WavyBone,
+    None,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CharacterAppearance {
+    #[serde(default)]
+    pub face: FaceStyle,
+    #[serde(default)]
+    pub hair: HairStyle,
+}
+
+impl CharacterAppearance {
+    pub fn for_character(self, class: &CharacterClass, gender: Gender) -> Self {
+        if gender == Gender::Male
+            && matches!(
+                class,
+                CharacterClass::Knight
+                    | CharacterClass::Barbarian
+                    | CharacterClass::Rogue
+                    | CharacterClass::Caveman
+                    | CharacterClass::Ranger
+                    | CharacterClass::Priest
+            )
+        {
+            self
+        } else {
+            Self::default()
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -223,4 +263,6 @@ pub struct Character {
     pub titles: Vec<String>,
     #[serde(default)]
     pub active_title: Option<String>,
+    #[serde(default)]
+    pub appearance: CharacterAppearance,
 }

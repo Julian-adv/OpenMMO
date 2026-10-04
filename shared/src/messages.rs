@@ -10,7 +10,9 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::character::{Character, CharacterAttributes, CharacterClass, Gender};
+use crate::character::{
+    Character, CharacterAppearance, CharacterAttributes, CharacterClass, Gender,
+};
 use crate::entity::{Monster, MonsterState, Player};
 use crate::world::{GameDateTime, Position};
 use crate::{fishing, housing, inventory, skills};
@@ -416,6 +418,8 @@ pub enum ClientMessage {
         character_name: String,
         character_class: CharacterClass,
         gender: Gender,
+        #[serde(default)]
+        appearance: CharacterAppearance,
     },
     RollCharacterStats {
         character_class: CharacterClass,

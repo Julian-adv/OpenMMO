@@ -1,7 +1,11 @@
 use super::{unix_now, AuthError, AuthService};
 use rusqlite::{params, OptionalExtension};
 
-const DELETION_DELAY_SECONDS: i64 = 24 * 60 * 60;
+pub(super) const DELETION_DELAY_SECONDS: i64 = if cfg!(debug_assertions) {
+    60
+} else {
+    24 * 60 * 60
+};
 
 impl AuthService {
     #[cfg(test)]

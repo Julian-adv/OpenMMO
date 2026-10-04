@@ -40,7 +40,7 @@ try {
   const { bindModularPart, modularAnimationClips } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
   const body = (await load('assets/modular_human_male_01/parts/fitted/base.glb')).scene
   const faceMeshes = bindModularPart(body, (await load(output + 'face_rugged.glb')).scene)
-  const hair = bindModularPart(body, (await load(output + 'hair_wavy_bone_rugged.glb')).scene)[0]
+  const hair = bindModularPart(body, (await load('assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb')).scene)[0]
   assert.equal(faceMeshes.length, 3)
   const face = faceMeshes.find(m => m.name === 'face_rugged')
   const bridge = faceMeshes.find(m => m.name === 'face_neck_bridge')
@@ -121,7 +121,7 @@ try {
     assert.ok(upperError < 1e-6, `${name}: face seam ${upperError}`)
     clips.push({ clip: name, samples: 25, body_neck_seam_error_m: bodyError, lower_seam_error_m: lowerError, upper_seam_error_m: upperError, rigid_head_error_m: rigidError })
   }
-  const report = { date: '2026-10-04', sources, bones: bones.length, normalized_weights: true,
+  const report = { date: '2026-10-05', sources, bones: bones.length, normalized_weights: true,
     face_triangles: face.geometry.index.count / 3, retained_neck_triangles: lowerNeck.geometry.index.count / 3, neck_bridge_triangles: bridge.geometry.index.count / 3,
     hair_triangles: hair.geometry.index.count / 3, clips,
     scope: '200 actual game poses; finite deformation, rigid face and hair, interpolated neck and head seams. Facial expressions and all equipment intersections are outside this validation.' }

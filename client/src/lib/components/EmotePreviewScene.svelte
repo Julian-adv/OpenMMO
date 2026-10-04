@@ -25,15 +25,19 @@
     disposeCharacterSkeletons,
   } from '../utils/characterModel'
   import { equippedArmor } from '../stores/inventoryStore'
-  import type { CharacterClass, Gender } from '../network/networkTypes'
+  import type {
+    CharacterAppearance,
+    CharacterClass,
+    Gender,
+  } from '../network/networkTypes'
 
   interface Props {
     /** Social-pack clip to loop, or null to show nothing. */
     anim: string | null
     characterClass: CharacterClass
     gender: Gender
-    /** True once a clip is actually posing the model, so the wrapper can
-     *  stay hidden through the load window instead of framing an empty box. */
+    appearance?: CharacterAppearance
+    /** Hide the preview until a clip poses the model. */
     playing?: boolean
   }
 
@@ -41,6 +45,7 @@
     anim,
     characterClass,
     gender,
+    appearance,
     playing = $bindable(false),
   }: Props = $props()
 
@@ -78,12 +83,13 @@
   const clipsByName = new SvelteMap<string, THREE.AnimationClip>()
 
   const modelPath = $derived(getCharacterModelPath(characterClass, gender))
+  const face = $derived(appearance?.face ?? 'default')
 
   $effect(() => {
     const path = modelPath
     let cancelled = false
     Promise.all([
-      loadCharacterModel(path),
+      loadCharacterModel(path, { face }),
       loadCharacterAnimationPack(path, CHARACTER_ANIMATION_PACK_PATHS.social),
     ])
       .then(([charGltf, socialGltf]) => {
@@ -92,12 +98,11 @@
           clipsByName.set(clip.name, clip)
         }
         const { modelRoot: root } = createCharacterModelRoot(charGltf.scene)
-        applyCharacterArmor(root, $equippedArmor)
+        applyCharacterArmor(root, $equippedArmor, appearance)
         root.position.y = computeSoleGroundOffset(root)
         mixer = new THREE.AnimationMixer(root)
         modelRoot = root
-        // One hidden bind-pose frame so the character's pipelines compile
-        // before the wrapper ever becomes visible.
+        // Compile pipelines before showing the preview.
         invalidate()
       })
       .catch((error) => console.error('Failed to load emote preview', error))
@@ -118,7 +123,7 @@
 
   $effect(() => {
     if (modelRoot) {
-      applyCharacterArmor(modelRoot, $equippedArmor)
+      applyCharacterArmor(modelRoot, $equippedArmor, appearance)
       invalidate()
     }
   })

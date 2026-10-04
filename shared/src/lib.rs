@@ -204,7 +204,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v112: server-validated pickup of items within 2 meters.
 /// v113: account character IDs for shared estate editing.
 /// v114: scheduled, cancellable character deletion.
-pub const PROTOCOL_VERSION: u32 = 114;
+/// v115: saved character face and hairstyle.
+pub const PROTOCOL_VERSION: u32 = 115;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from
@@ -271,7 +272,10 @@ pub const CLOSE_CODE_IDLE_TIMEOUT: u16 = 4003;
 #[cfg(target_arch = "wasm32")]
 mod wasm_api;
 
-pub use character::{Character, CharacterAttributes, CharacterClass, Gender, VisibleEquipment};
+pub use character::{
+    Character, CharacterAppearance, CharacterAttributes, CharacterClass, FaceStyle, Gender,
+    HairStyle, VisibleEquipment,
+};
 pub use entity::{Monster, MonsterLifecycle, MonsterState, Player, PlayerId};
 pub use messages::{
     deserialize_client_msg, deserialize_server_msg, serialize_client_msg, serialize_server_msg,
@@ -520,6 +524,7 @@ mod tests {
             max_health: 10,
             class: CharacterClass::Knight,
             gender: Gender::default(),
+            appearance: Default::default(),
             is_official_npc: false,
             torch_on: false,
             radiance_on: false,

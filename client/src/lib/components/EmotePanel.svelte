@@ -160,6 +160,7 @@
         label={previewed ? emoteLabel(previewed, $locale) : null}
         characterClass={previewPlayer.characterClass}
         gender={previewPlayer.gender}
+        appearance={previewPlayer.appearance}
         side={placement.side}
       />
     {/if}

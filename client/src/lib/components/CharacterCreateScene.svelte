@@ -4,6 +4,7 @@
   import { onMount } from 'svelte'
   import type {
     CharacterClass,
+    CharacterAppearance,
     Gender,
     VisibleEquipment,
   } from '../network/networkTypes'
@@ -12,14 +13,14 @@
   interface Props {
     characterClass: CharacterClass
     gender: Gender
+    appearance: CharacterAppearance
   }
 
-  let { characterClass, gender }: Props = $props()
+  let { characterClass, gender, appearance }: Props = $props()
 
   const STARTER_EQUIPMENT: Partial<Record<CharacterClass, VisibleEquipment>> = {
     knight: {
       armor: {
-        head: 'worn_plate_helmet',
         chest: 'worn_breastplate',
         pants: 'worn_plate_greaves',
         boots: 'worn_plate_boots',
@@ -36,7 +37,6 @@
     },
     barbarian: {
       armor: {
-        head: 'worn_barbarian_helmet',
         chest: 'worn_barbarian_armor',
         pants: 'worn_barbarian_pants',
         boots: 'worn_barbarian_boots',
@@ -212,7 +212,7 @@
   <T.MeshStandardMaterial color="#2f3f52" opacity={1.0} transparent />
 </T.Mesh>
 
-{#key `${characterClass}-${gender}`}
+{#key `${characterClass}-${gender}-${appearance.face}`}
   <CharacterPreview
     bind:this={characterPreview}
     positionX={0}
@@ -221,6 +221,7 @@
     selected={true}
     {characterClass}
     {gender}
+    {appearance}
     equipment={gender === 'male'
       ? STARTER_EQUIPMENT[characterClass]
       : undefined}

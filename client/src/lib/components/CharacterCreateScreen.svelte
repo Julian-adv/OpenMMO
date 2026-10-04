@@ -2,12 +2,17 @@
   import type {
     AccountCharacter,
     CharacterClass,
+    CharacterAppearance,
     CharacterRollResult,
     Gender,
     RollCharacterStatsResult,
   } from '../network/socket'
   import { t } from '../i18n'
-  import { getAvailableGenders } from '../utils/modelPaths'
+  import {
+    getAvailableGenders,
+    getCharacterModelPath,
+    MODULAR_MALE_MODEL_PATH,
+  } from '../utils/modelPaths'
 
   const MAX_CHARACTER_SLOTS = 3
   const CHARACTER_CLASSES = [
@@ -26,6 +31,8 @@
     characters: AccountCharacter[]
     selectedClass: CharacterClass
     selectedGender: Gender
+    appearance: CharacterAppearance
+    onAppearanceChange: (appearance: CharacterAppearance) => void
     onClassChange: (cls: CharacterClass) => void
     onGenderChange: (gender: Gender) => void
     onRollCharacterStats: (
@@ -35,7 +42,8 @@
     onCreateCharacter: (
       characterName: string,
       characterClass: CharacterClass,
-      gender: Gender
+      gender: Gender,
+      appearance: CharacterAppearance
     ) => Promise<{
       ok: boolean
       message?: string
@@ -50,6 +58,8 @@
     characters,
     selectedClass,
     selectedGender,
+    appearance,
+    onAppearanceChange,
     onClassChange,
     onGenderChange,
     onRollCharacterStats,
@@ -59,6 +69,10 @@
   }: Props = $props()
 
   let availableGenders = $derived(getAvailableGenders(selectedClass))
+  let canCustomize = $derived(
+    getCharacterModelPath(selectedClass, selectedGender) ===
+      MODULAR_MALE_MODEL_PATH
+  )
   let createCharacterName = $state('')
   let rolledStats = $state<CharacterRollResult | null>(null)
   let isCreating = $state(false)
@@ -135,7 +149,8 @@
     const result = await onCreateCharacter(
       characterName,
       selectedClass,
-      selectedGender
+      selectedGender,
+      canCustomize ? appearance : { face: 'default', hair: 'crop' }
     )
     isCreating = false
 
@@ -155,7 +170,6 @@
   }
 </script>
 
-<!-- The shared Canvas renders the 3D scene. -->
 <div class="character-create-overlay">
   <div class="top-bar">
     <h1 class="title">{$t('characterCreate.title')}</h1>
@@ -183,6 +197,47 @@
     </div>
 
     <div class="bottom-bar">
+      {#if canCustomize}
+        <div class="appearance-fields">
+          <label class="appearance-field">
+            <span class="field-label">{$t('characterCreate.face')}</span>
+            <select
+              value={appearance.face}
+              disabled={isBusy()}
+              onchange={(event) =>
+                onAppearanceChange({
+                  ...appearance,
+                  face: event.currentTarget
+                    .value as CharacterAppearance['face'],
+                })}
+            >
+              <option value="default"
+                >{$t('characterCreate.faceDefault')}</option
+              >
+              <option value="rugged">{$t('characterCreate.faceRugged')}</option>
+            </select>
+          </label>
+          <label class="appearance-field">
+            <span class="field-label">{$t('characterCreate.hair')}</span>
+            <select
+              value={appearance.hair}
+              disabled={isBusy()}
+              onchange={(event) =>
+                onAppearanceChange({
+                  ...appearance,
+                  hair: event.currentTarget
+                    .value as CharacterAppearance['hair'],
+                })}
+            >
+              <option value="crop">{$t('characterCreate.hairCrop')}</option>
+              <option value="wavy_bone"
+                >{$t('characterCreate.hairWavyBone')}</option
+              >
+              <option value="none">{$t('characterCreate.hairNone')}</option>
+            </select>
+          </label>
+        </div>
+      {/if}
       {#if errorMessage}
         <div class="error-message">{errorMessage}</div>
       {/if}
@@ -370,6 +425,30 @@
     display: flex;
     align-items: end;
     gap: 10px;
+  }
+
+  .appearance-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .appearance-field {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .appearance-field select {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid #526276;
+    border-radius: 7px;
+    padding: 8px 10px;
+    background: #111923;
+    color: #edf2f7;
+    font-size: 14px;
   }
 
   .gender-field {

@@ -113,6 +113,7 @@ pub(crate) fn test_player(x: f32, z: f32) -> Player {
         max_health: 10,
         class: onlinerpg_shared::CharacterClass::Rogue,
         gender: Default::default(),
+        appearance: Default::default(),
         is_official_npc: false,
         torch_on: false,
         radiance_on: false,
