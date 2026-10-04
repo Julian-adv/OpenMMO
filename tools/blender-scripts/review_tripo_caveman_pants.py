@@ -57,7 +57,7 @@ for area in bpy.context.screen.areas:
     if area.type == 'VIEW_3D':
         area.spaces.active.region_3d.view_distance = 2.3
         area.spaces.active.region_3d.view_location = Vector((0, 0, 1))
-bpy.context.scene['review_status'] = 'Rest fitting only; four separate pelts bend in Three.js runtime, not Blender'
+bpy.context.scene['review_status'] = 'Rest fitting only; front/back hinges and 9x11 side cloth run in Three.js'
 bpy.ops.file.pack_all()
 bpy.context.preferences.filepaths.save_version = 0
 bpy.ops.wm.save_as_mainfile(filepath=str(OUTPUT / 'caveman-pants-fitting.blend'))

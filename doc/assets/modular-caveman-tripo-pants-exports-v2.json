@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-04",
+  "reports": {
+    "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb": {
+      "sha256": "1fc3a92b29c8b5e37931cda6b32966754e1f3b1f33fe478a528179fc739a2db4",
+      "bytes": 4812332,
+      "errors": 0,
+      "warnings": 0,
+      "messages": []
+    },
+    "client/public/models/characters/modular_male/pants_caveman.glb": {
+      "sha256": "c4439a951085cff557dc8c99f8163fd058b365208ad890b1822367579ab4f233",
+      "bytes": 473828,
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        }
+      ]
+    },
+    "client/public/models/armor/caveman_pants.glb": {
+      "sha256": "f4ce541117c35f43902185266f4190834659d648ab7f4bc119fa6eaa4c95c957",
+      "bytes": 487832,
+      "errors": 0,
+      "warnings": 0,
+      "messages": []
+    }
+  }
+}

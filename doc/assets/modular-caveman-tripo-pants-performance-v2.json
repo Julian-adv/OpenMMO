@@ -1,0 +1,161 @@
+{
+  "date": "2026-10-04",
+  "runtime": "v25.2.1",
+  "method": "Same process, canonical rig and animations at 60 Hz; 12 warmup and 120 measured frames per clip. Times cover updatePeltPhysics only, excluding animation, rendering and matrix updates. These are CPU physics costs, not game FPS.",
+  "sources": [
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/unused-bending-v1/pants_caveman.glb",
+      "sha256": "3be3265a6d2e203098a63d599636d49c33498ef748f2745aa5d278ad04392ad6",
+      "retained": false
+    },
+    {
+      "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+      "sha256": "76eeb462770754895834271423b4ef7f33efdbd34bdfb9830beba4ba84e7569f"
+    },
+    {
+      "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+      "sha256": "76eeb462770754895834271423b4ef7f33efdbd34bdfb9830beba4ba84e7569f"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/social.glb",
+      "sha256": "a9efe7a2d388011cdc039ca6778c2b3a929b07953941ee7bb7c50a511d4b083d"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/pants_barbarian.glb",
+      "sha256": "2c0de6c3bec60219f8369467f21edcaef42b3a5e7939691470500661d106001c"
+    },
+    {
+      "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+      "sha256": "76eeb462770754895834271423b4ef7f33efdbd34bdfb9830beba4ba84e7569f"
+    },
+    {
+      "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+      "sha256": "76eeb462770754895834271423b4ef7f33efdbd34bdfb9830beba4ba84e7569f"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/social.glb",
+      "sha256": "a9efe7a2d388011cdc039ca6778c2b3a929b07953941ee7bb7c50a511d4b083d"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb",
+      "sha256": "1fc3a92b29c8b5e37931cda6b32966754e1f3b1f33fe478a528179fc739a2db4"
+    },
+    {
+      "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+      "sha256": "76eeb462770754895834271423b4ef7f33efdbd34bdfb9830beba4ba84e7569f"
+    },
+    {
+      "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+      "sha256": "76eeb462770754895834271423b4ef7f33efdbd34bdfb9830beba4ba84e7569f"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/social.glb",
+      "sha256": "a9efe7a2d388011cdc039ca6778c2b3a929b07953941ee7bb7c50a511d4b083d"
+    }
+  ],
+  "results": [
+    {
+      "name": "previous_caveman",
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/unused-bending-v1/pants_caveman.glb",
+      "triangles": 5797,
+      "timings": [
+        {
+          "clip": "walk",
+          "frames": 120,
+          "mean_ms": 23.05092413333332,
+          "median_ms": 24.623619999999846,
+          "p95_ms": 27.481002999999873
+        },
+        {
+          "clip": "run",
+          "frames": 120,
+          "mean_ms": 19.362923350000052,
+          "median_ms": 18.77971300000081,
+          "p95_ms": 23.9402029999992
+        },
+        {
+          "clip": "sit_idle",
+          "frames": 120,
+          "mean_ms": 19.647068666666588,
+          "median_ms": 18.16549600000144,
+          "p95_ms": 24.06424700000025
+        }
+      ],
+      "retained": false
+    },
+    {
+      "name": "barbarian",
+      "path": "assets/modular_human_male_01/parts/fitted/pants_barbarian.glb",
+      "triangles": 3323,
+      "timings": [
+        {
+          "clip": "walk",
+          "frames": 120,
+          "mean_ms": 0.3904627500000061,
+          "median_ms": 0.3699370000013005,
+          "p95_ms": 0.4855139999999665
+        },
+        {
+          "clip": "run",
+          "frames": 120,
+          "mean_ms": 0.3485568249999536,
+          "median_ms": 0.3434870000000956,
+          "p95_ms": 0.3731630000002042
+        },
+        {
+          "clip": "sit_idle",
+          "frames": 120,
+          "mean_ms": 0.3077988166667334,
+          "median_ms": 0.3048739999994723,
+          "p95_ms": 0.31909100000120816
+        }
+      ]
+    },
+    {
+      "name": "rebuilt_caveman",
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb",
+      "triangles": 5239,
+      "timings": [
+        {
+          "clip": "walk",
+          "frames": 120,
+          "mean_ms": 0.5554823000000245,
+          "median_ms": 0.5475810000007186,
+          "p95_ms": 0.7260080000014568
+        },
+        {
+          "clip": "run",
+          "frames": 120,
+          "mean_ms": 0.2702525416666958,
+          "median_ms": 0.26906699999926786,
+          "p95_ms": 0.2889739999991434
+        },
+        {
+          "clip": "sit_idle",
+          "frames": 120,
+          "mean_ms": 0.21974927500010988,
+          "median_ms": 0.2195929999998043,
+          "p95_ms": 0.2225990000006277
+        }
+      ]
+    }
+  ],
+  "historical_baseline_recovery": {
+    "repo": "jake-song-openmmo/onlinerpg-assets",
+    "revision": "29ee0158bb9b9fbcef821ff9036bb006610a625d",
+    "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb",
+    "note": "Previous fitted model at the asset revision used before this change; local comparison copies removed after measurement at user request"
+  }
+}

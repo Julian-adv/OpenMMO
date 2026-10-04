@@ -91,3 +91,15 @@ blender -b -t 6 --python-exit-code 1 --python tools/blender-scripts/export_cavem
 해시와 배치 수치는 [런타임 기록](modular-caveman-runtime.json)의 `top_ground_revision`에 보관한다.
 
 ![어깨 덮개의 바닥 배치](../images/characters/modular_human_male_01/parts/caveman/top-ground-rest.png)
+
+## 하의 경량화 — 2026-10-04
+
+프레임 저하에 대한 사용자 요청으로 하의를 야만용사의 기존 물리 방식으로 다시 제작했다.
+앞뒤는 허리 힌지, 양옆은 9×11 천 격자로 처리해 고밀도 메시의 128/512회 휘어짐 보정을
+제거했다. 허리와 뼈 장식·앞뒤 질감은 원본을 유지하고 옆 모피는 기존 야만용사 소재를
+재사용했다. 추가 AI 생성·유료 호출은 없다.
+
+착용용 `pants_caveman.glb`, 바닥용 `caveman_pants.glb`, 아이콘과 Blender 원본을 갱신했다.
+원본·압축본 각각 7종 동작 검사, 관련 테스트 81개, GLB 3종의 오류·경고 0을 확인했다.
+CPU 바지 물리 비용은 비교 측정에서 약 19–23ms/프레임에서 0.2–0.6ms로 줄었다.
+게임 전체 FPS 측정은 아니다. [피팅·출처·측정 기록](modular-caveman-tripo-pants.md#현재-경량-버전-v2--2026-10-04).

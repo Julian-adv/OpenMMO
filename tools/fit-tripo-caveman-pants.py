@@ -1,4 +1,4 @@
-"""Fit the Tripo skirt as a rigid belt with four independently bending pelts."""
+"""Fit the Tripo skirt with barbarian hinges and small side-cloth grids."""
 import importlib.util
 import json
 from pathlib import Path
@@ -42,11 +42,52 @@ def add_mesh(doc, binary, name, points, uv, faces, material):
         material=material, indices=io.add_accessor(doc, binary, faces.reshape(-1, 1), 'SCALAR', 5125))]))
 
 
+def cloth_side(panel, belt, body, sign):
+    points, uv, faces = panel
+    columns, rows = 9, 11
+    grid, texcoords, triangles, physics = barbarian.cloth_panel(
+        belt, body, sign, .09, 1.56, .34, columns, .006, True)
+    surface = points[faces]
+    source_normals = np.cross(surface[:, 1] - surface[:, 0], surface[:, 2] - surface[:, 0])
+    radial = surface.mean(1) - [0, 0, -.020]
+    radial[:, 1] = 0
+    outer = np.sum(source_normals * radial, axis=1) > 0
+    assert outer.any()
+    exterior = points, faces[outer], uv
+    count = columns * rows
+    for col in range(columns):
+        angle = .09 + (col / (columns - 1) - .5) * 1.56
+        direction = np.array([sign * np.cos(angle), 0, np.sin(angle)])
+        plane = np.cross(direction, [0, 1, 0])
+        distances = (surface - [0, 0, -.020]) @ plane
+        crossings = []
+        for a, b in [(0, 1), (1, 2), (2, 0)]:
+            selected = distances[:, a] * distances[:, b] < 0
+            t = distances[selected, a] / (distances[selected, a] - distances[selected, b])
+            crossings.extend(surface[selected, a] + t[:, None] * (surface[selected, b] - surface[selected, a]))
+        assert crossings
+        hem = np.asarray(crossings)[:, 1].min()
+        for row in range(rows):
+            y = 1.112 + (hem - 1.112) * row / (rows - 1)
+            radius = barbarian.ray_surface(surface, [0, y, -.020], direction)
+            if radius is None:
+                radius = np.linalg.norm(grid[row * columns + col, [0, 2]] - [0, -.025])
+            grid[row * columns + col] = [direction[0] * radius, y, -.020 + direction[2] * radius]
+    front, _, _ = fit.nearest_surface(grid[:count], exterior, candidates=96)
+    radial = front[:, [0, 2]] - [0, -.020]
+    radial /= np.linalg.norm(radial, axis=1, keepdims=True)
+    back = front.copy()
+    back[:, [0, 2]] -= radial * .006
+    physics['pivot'] = front[:columns].mean(0).tolist()
+    physics['length'] = float(front[0, 1] - front[:, 1].min())
+    return np.vstack([front, back]), texcoords, triangles, physics
+
+
 def main():
     source = OUTPUT / 'source.glb'
     base = ROOT / 'assets/modular_human_male_01/parts/fitted/base.glb'
     assert fit.digest(source) == 'a7b5cb922f7c117352a45b013054103905aad9eb0b0e3ec473b17b82f575bba3'
-    assert fit.digest(base) == 'ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b'
+    assert len(fit.NAMES) == 65 and 'Hips' in fit.NAMES
     doc, raw = fit.read_glb(source)
     primitive = doc['meshes'][0]['primitives'][0]
     attrs = primitive['attributes']
@@ -101,6 +142,10 @@ def main():
     positions = points[inverse]
     binary = bytearray(raw)
     material = primitive['material']
+    fur_material = len(doc['materials'])
+    doc['materials'].append(dict(name='Caveman side fur', pbrMetallicRoughness=dict(
+        baseColorTexture=dict(index=barbarian.reference_texture(doc, binary, 'barbarian_fur')),
+        metallicFactor=0, roughnessFactor=.94)))
     doc['meshes'] = []
     cloth_faces = faces[np.all(main_component[inverse][faces], axis=1)]
     accessory_faces = faces[~np.all(main_component[inverse][faces], axis=1)]
@@ -108,6 +153,7 @@ def main():
     add_mesh(doc, binary, 'caveman_belt', *core, material)
     add_mesh(doc, binary, 'caveman_bone_ornaments', positions, uv, accessory_faces, material)
     loose = barbarian.clip_height(positions, uv, cloth_faces, 1.112, False)
+    belt_triangles = positions[cloth_faces]
     physics_by_name = {}
     for name, outward, pivot in [
         ('front', [0, 0, 1], [0, 1.106, .107]),
@@ -119,29 +165,17 @@ def main():
         panel = clip_plane(*loose, [x + z, 0, z - x])
         panel = clip_plane(*panel, [x - z, 0, z + x])
         region = 'caveman_pelt_' + name
-        add_mesh(doc, binary, region, *panel, material)
         physics = barbarian.panel_physics('plate', 'Hips', pivot, outward,
             float(pivot[1] - panel[0][:, 1].min()))
         physics['colliders'][0].update(center=[0, .98, -.010], radii=[.192, .15, .14])
-        physics['bend'] = dict(droop=.60)
         if name in ('left', 'right'):
-            side = 'Left' if name == 'left' else 'Right'
             sign = 1 if name == 'left' else -1
-            physics['motion'] = dict(damping=19, stiffness=52, gravity=10, inertia=.60, max_angle=1.05,
-                min_angle=.24, flex_clearance=.45)
-            physics['bend']['contact'] = True
-            physics['bend']['joint'] = dict(at=.50, width=.14, damping=12, stiffness=28, inertia=.65)
-            physics['bend']['crease'] = dict(width=.025, angle=.16, damping=14, stiffness=36)
-            physics['colliders'] = [
-                dict(bone='Hips', center=[0, .98, -.010], radii=[.185, .155, .145]),
-                dict(bone=side + 'UpLeg', center=[sign * .115, .81, -.012], radii=[.115, .215, .132]),
-                dict(bone=side + 'Leg', center=[sign * .165, .33, -.04], radii=[.080, .25, .10]),
-            ]
-        elif name == 'back':
-            physics['bend'] = dict(droop=.15, contact=True)
-            physics['colliders'][0].update(radii=[.174, .15, .13])
+            p, t, f, physics = cloth_side(panel, belt_triangles, body_triangles, sign)
+            barbarian.add_panel(doc, binary, region, p, t, f, fur_material)
+        else:
+            add_mesh(doc, binary, region, *panel, material)
         physics_by_name[region] = physics
-    fit.with_rig(doc, binary, 'pants_caveman', 'tripo_caveman_pants_v1')
+    fit.with_rig(doc, binary, 'pants_caveman', 'tripo_caveman_pants_v2')
     for node in doc['nodes']:
         if node.get('name') in physics_by_name:
             node['extras']['pelt_physics'] = physics_by_name[node['name']]
@@ -151,22 +185,25 @@ def main():
     binary = io.compact(doc, binary)
     target = OUTPUT / 'pants_caveman.glb'
     fit.write_glb(target, doc, binary)
-    assert images == [view_bytes(doc, binary, image['bufferView']) for image in doc['images']]
-    report = dict(date='2026-10-04', status='Fitted belt and four independently bending pelts; runtime and visual validation required',
+    assert images == [view_bytes(doc, binary, image['bufferView']) for image in doc['images'][:len(images)]]
+    report = dict(date='2026-10-04', status='Barbarian-style rigid front/back hinges and 9x11 side cloth; runtime and visual validation required',
         source={'path': str(source.relative_to(ROOT)), 'sha256': fit.digest(source)},
         base={'path': str(base.relative_to(ROOT)), 'sha256': fit.digest(base)},
         interfaces={'path': 'assets/modular_human_male_01/parts/interfaces/v1/interfaces.json', 'sha256': fit.digest(ROOT / 'assets/modular_human_male_01/parts/interfaces/v1/interfaces.json')},
-        rig_id='human_male_01_mixamo_candidate_v2', preserved_embedded_texture=True,
-        topology=dict(source_triangles=len(faces), rigid_core_meshes=2, separate_hinged_panels=4,
-            method='Clip source cloth into front/back/left/right quadrants with interpolated original UV; 17mm overlap beneath the rigid waistband',
+        rig_id='human_male_01_mixamo_candidate_v2', preserved_original_embedded_texture=True,
+        side_fur_texture=dict(path='doc/images/characters/modular_human_male_01/parts/barbarian_fur.png',
+            sha256=fit.digest(ROOT / 'doc/images/characters/modular_human_male_01/parts/barbarian_fur.png'),
+            source_record='doc/assets/modular-barbarian-sources.json'),
+        topology=dict(source_triangles=len(faces), rigid_core_meshes=2, hinged_panels=2, cloth_panels=2,
+            method='Preserve source belt, ornaments and front/back panels with original UV; resample side shells onto paired 9x11 grids with source hem heights, existing barbarian fur texture and 17mm waistband overlap',
             waist_overlap_y_m=[1.095, 1.112]),
         transform=dict(scale=[.55, .495, .60], translation=[0, .65, -.020], waist='Actual body radial sections with preserved shell and accessory offsets'),
         source_components=count,
         physics=dict(anchor_bone='Hips', rigid_accessory_components=count - 1,
-            method='Independent hip hinges; side pelts add a damped midpoint hinge, a longitudinal center crease and local contact. Welded edge projection caps extension at 2% plus 1 micrometer tolerance; no thigh skinning',
+            method='Existing barbarian runtime: rigid front/back hip hinges and two 99-particle cloth grids with four constraint iterations; no pelt_bend, no thigh skinning',
             panels=physics_by_name),
         clearance_iterations=iterations, bounds_m=dict(minimum=positions.min(0).tolist(), maximum=positions.max(0).tolist()), validation=fit.validate(target))
-    (ROOT / 'doc/assets/modular-caveman-tripo-pants-fitting-v1.json').write_text(json.dumps(report, indent=2) + '\n')
+    (ROOT / 'doc/assets/modular-caveman-tripo-pants-fitting-v2.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report['validation']))
 
 

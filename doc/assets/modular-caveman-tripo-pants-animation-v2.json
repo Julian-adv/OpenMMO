@@ -1,0 +1,104 @@
+{
+  "date": "2026-10-04",
+  "method": "Actual barbarian runtime physics at 60 Hz, about 13 geometry samples per clip; rigid edges, side-grid pins, thickness and vertical length limits measured against original GLB positions",
+  "sources": [
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb",
+      "sha256": "1fc3a92b29c8b5e37931cda6b32966754e1f3b1f33fe478a528179fc739a2db4"
+    },
+    {
+      "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+      "sha256": "76eeb462770754895834271423b4ef7f33efdbd34bdfb9830beba4ba84e7569f"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/social.glb",
+      "sha256": "a9efe7a2d388011cdc039ca6778c2b3a929b07953941ee7bb7c50a511d4b083d"
+    }
+  ],
+  "mesh_count": 6,
+  "panel_count": 4,
+  "all_skin_influences": "Hips only",
+  "clips": [
+    {
+      "clip": "idle1",
+      "frames": 500,
+      "maximum_edge_extension_relative": 0.6163771160285547
+    },
+    {
+      "clip": "walk",
+      "frames": 62,
+      "maximum_edge_extension_relative": 0.5969661828845187
+    },
+    {
+      "clip": "run",
+      "frames": 38,
+      "maximum_edge_extension_relative": 0.9307262934958367
+    },
+    {
+      "clip": "jump",
+      "frames": 114,
+      "maximum_edge_extension_relative": 0.6469974392140019
+    },
+    {
+      "clip": "combat_idle",
+      "frames": 154,
+      "maximum_edge_extension_relative": 0.7100248911282534
+    },
+    {
+      "clip": "slash1",
+      "frames": 92,
+      "maximum_edge_extension_relative": 0.6543716653272593
+    },
+    {
+      "clip": "sit_idle",
+      "frames": 261,
+      "maximum_edge_extension_relative": 0.5166933522722628
+    }
+  ],
+  "limits": "Rigid edge change under 1 micrometer; side-cloth vertical extension at most 4.002%, pinned rows fixed and original thickness preserved. Side-grid lateral/diagonal stretch is reported, not constrained to the retired bend solver limit.",
+  "cached_geometry_restored": true,
+  "meshes": [
+    {
+      "name": "caveman_belt",
+      "triangles": 541,
+      "maximum_edge_extension_relative": 0,
+      "maximum_local_motion_m": 0
+    },
+    {
+      "name": "caveman_bone_ornaments",
+      "triangles": 3114,
+      "maximum_edge_extension_relative": 0,
+      "maximum_local_motion_m": 0
+    },
+    {
+      "name": "caveman_pelt_front",
+      "triangles": 320,
+      "maximum_edge_extension_relative": 0.00007867969544173015,
+      "maximum_local_motion_m": 0.5766635582912643
+    },
+    {
+      "name": "caveman_pelt_back",
+      "triangles": 480,
+      "maximum_edge_extension_relative": 0.00007389848829109091,
+      "maximum_local_motion_m": 0.5751924543331688
+    },
+    {
+      "name": "caveman_pelt_left",
+      "triangles": 392,
+      "maximum_edge_extension_relative": 0.7100248911282534,
+      "maximum_vertical_extension_relative": 0.040010816565535956,
+      "maximum_local_motion_m": 0.3029334551916357
+    },
+    {
+      "name": "caveman_pelt_right",
+      "triangles": 392,
+      "maximum_edge_extension_relative": 0.9307262934958367,
+      "maximum_vertical_extension_relative": 0.0400096375664174,
+      "maximum_local_motion_m": 0.24175370518089578
+    }
+  ]
+}

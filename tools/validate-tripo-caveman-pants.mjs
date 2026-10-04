@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import * as THREE from '../client/node_modules/three/build/three.module.js'
 import { GLTFLoader } from '../client/node_modules/three/examples/jsm/loaders/GLTFLoader.js'
+import { MeshoptDecoder } from '../client/node_modules/three/examples/jsm/libs/meshopt_decoder.module.js'
 import { createServer } from '../client/node_modules/vite/dist/node/index.js'
 
 const root = new URL('../', import.meta.url)
@@ -13,7 +14,8 @@ const server = await createServer({
   server: { middlewareMode: true, watch: null }, appType: 'custom',
 })
 globalThis.self = globalThis
-const loader = new GLTFLoader().register(() => ({
+const runtime = process.argv.includes('--runtime')
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).register(() => ({
   name: 'headless-materials', loadMaterial: async () => new THREE.MeshBasicMaterial(),
 }))
 const sources = []
@@ -25,8 +27,8 @@ async function load(path) {
 try {
   const { bindModularPart, modularAnimationClips } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
   const { updatePeltPhysics, resetPeltPhysics, disposePeltPhysics } = await server.ssrLoadModule('/src/lib/effects/pelt-rig.ts')
-  const body = (await load('assets/modular_human_male_01/parts/fitted/base.glb')).scene
-  const meshes = bindModularPart(body, (await load('assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb')).scene)
+  const body = (await load(runtime ? 'client/public/models/characters/modular_male/base.glb' : 'assets/modular_human_male_01/parts/fitted/base.glb')).scene
+  const meshes = bindModularPart(body, (await load(runtime ? 'client/public/models/characters/modular_male/pants_caveman.glb' : 'assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb')).scene)
   assert.equal(meshes.length, 6)
   const records = meshes.map(mesh => {
     const geometry = mesh.geometry
@@ -42,21 +44,13 @@ try {
         assert.equal(mesh.skeleton.bones[geometry.attributes.skinIndex.array[i * 4 + j]].name, 'Hips')
     }
     const physics = mesh.userData.pelt_physics
-    let landmarks
-    if (physics?.bend?.joint) {
-      const pivot = new THREE.Vector3(...physics.pivot)
-      const axis = new THREE.Vector3().crossVectors(new THREE.Vector3(...physics.outward), new THREE.Vector3(0, 1, 0))
-      landmarks = [.15, .5, .9].map(depth => {
-        let best = 0, score = Infinity
-        for (let i = 0; i < rest.length; i++) {
-          const offset = rest[i].clone().sub(pivot)
-          const distance = (offset.y + depth * physics.length) ** 2 + offset.dot(axis) ** 2
-          if (distance < score) { best = i; score = distance }
-        }
-        return best
-      })
+    assert.ok(!physics?.bend, `${mesh.name}: expensive bend solver must not be used`)
+    assert.equal(geometry.attributes.uv.count, rest.length)
+    if (physics?.cloth) {
+      assert.deepEqual(physics.cloth, { columns: 9, rows: 11, pinned_rows: 2 })
+      assert.equal(rest.length, 198)
     }
-    return { mesh, rest, edges: [...edges.values()], extension: 0, motion: 0, landmarks, fold: 0 }
+    return { mesh, rest, edges: [...edges.values()], extension: 0, verticalExtension: 0, motion: 0 }
   })
   const mixer = new THREE.AnimationMixer(body)
   const clips = []
@@ -93,15 +87,18 @@ try {
           const { mesh, rest, edges } = record
           const position = mesh.geometry.attributes.position
           const points = rest.map((_, i) => new THREE.Vector3().fromBufferAttribute(position, i))
-          if (record.landmarks) {
-            const [a, b, c] = record.landmarks
-            const outward = new THREE.Vector3(...mesh.userData.pelt_physics.outward)
-            const tilt = (points, a, b) => {
-              const direction = points[b].clone().sub(points[a])
-              return Math.atan2(direction.dot(outward), -direction.y)
+          const cloth = mesh.userData.pelt_physics?.cloth
+          if (cloth) {
+            const count = cloth.columns * cloth.rows, pinned = cloth.columns * cloth.pinned_rows
+            for (let i = 0; i < pinned; i++) for (const index of [i, i + count])
+              assert.ok(points[index].distanceTo(rest[index]) < 1e-7, `${name}: ${mesh.name} pin moved`)
+            for (let i = pinned; i < count; i++) {
+              const a = i - cloth.columns
+              const error = points[i].distanceTo(points[a]) / rest[i].distanceTo(rest[a]) - 1
+              assert.ok(error <= .04002, `${name}: ${mesh.name} vertical extension ${error}`)
+              record.verticalExtension = Math.max(record.verticalExtension, error)
+              assert.ok(Math.abs(points[i].distanceTo(points[i + count]) - rest[i].distanceTo(rest[i + count])) < 1e-6, `${name}: cloth thickness changed`)
             }
-            const change = tilt(points, b, c) - tilt(rest, b, c) - tilt(points, a, b) + tilt(rest, a, b)
-            record.fold = Math.max(record.fold, Math.abs(Math.atan2(Math.sin(change), Math.cos(change))))
           }
           for (let i = 0; i < points.length; i++) {
             assert.ok(points[i].toArray().every(Number.isFinite), `${name}: nonfinite point`)
@@ -109,7 +106,7 @@ try {
           }
           for (const { a, b, length } of edges) {
             const error = Math.max(0, points[a].distanceTo(points[b]) / length - 1)
-            assert.ok(error < .0212, `${name}: ${mesh.name} extension ${error}`)
+            if (!cloth) assert.ok(Math.abs(points[a].distanceTo(points[b]) - length) < 1e-6, `${name}: ${mesh.name} rigid edge changed`)
             extension = Math.max(extension, error)
             record.extension = Math.max(record.extension, error)
           }
@@ -121,16 +118,16 @@ try {
   const panels = records.filter(r => r.mesh.userData.pelt_physics)
   assert.equal(panels.length, 4)
   assert.ok(panels.every(r => r.motion > .01))
-  assert.ok(panels.filter(r => r.landmarks).every(r => r.fold > .08), 'Side midpoint did not bend')
+  assert.equal(panels.filter(r => r.mesh.userData.pelt_physics.cloth).length, 2)
   disposePeltPhysics(body)
   for (const { mesh, rest } of records) for (let i = 0; i < rest.length; i++)
     assert.ok(new THREE.Vector3().fromBufferAttribute(mesh.geometry.attributes.position, i).equals(rest[i]))
-  const report = { date: '2026-10-04', method: 'Actual runtime physics at 60 Hz, about 13 geometry samples per clip; extension measured against original GLB positions, not an already simulated pose', sources,
+  const report = { date: '2026-10-04', method: 'Actual barbarian runtime physics at 60 Hz, about 13 geometry samples per clip; rigid edges, side-grid pins, thickness and vertical length limits measured against original GLB positions', sources,
     mesh_count: meshes.length, panel_count: panels.length, all_skin_influences: 'Hips only', clips,
-    maximum_allowed_extension: '2% plus 1 micrometer numerical allowance; edges shorter than 1mm excluded from relative-error reporting',
+    limits: 'Rigid edge change under 1 micrometer; side-cloth vertical extension at most 4.002%, pinned rows fixed and original thickness preserved. Side-grid lateral/diagonal stretch is reported, not constrained to the retired bend solver limit.',
     cached_geometry_restored: true,
-    meshes: records.map(r => ({ name: r.mesh.name, triangles: r.mesh.geometry.index.count / 3, maximum_edge_extension_relative: r.extension, maximum_local_motion_m: r.motion, maximum_midpoint_fold_radians: r.landmarks ? r.fold : undefined })) }
-  writeFileSync(new URL('doc/assets/modular-caveman-tripo-pants-animation-v1.json', root), JSON.stringify(report, null, 2) + '\n')
+    meshes: records.map(r => ({ name: r.mesh.name, triangles: r.mesh.geometry.index.count / 3, maximum_edge_extension_relative: r.extension, maximum_vertical_extension_relative: r.mesh.userData.pelt_physics?.cloth ? r.verticalExtension : undefined, maximum_local_motion_m: r.motion })) }
+  writeFileSync(new URL(`doc/assets/modular-caveman-tripo-pants-${runtime ? 'runtime-' : ''}animation-v2.json`, root), JSON.stringify(report, null, 2) + '\n')
   console.log(JSON.stringify(report.clips))
 } finally {
   await server.close()

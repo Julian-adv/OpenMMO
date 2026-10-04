@@ -497,7 +497,7 @@ def reference_texture(doc, binary, name):
             return next(j for j, texture in enumerate(doc['textures']) if texture.get('source') == i)
     image_path = ROOT / f'doc/images/characters/modular_human_male_01/parts/{name}.png'
     data = subprocess.check_output(['ffmpeg', '-v', 'error', '-i', str(image_path),
-        '-vf', 'scale=1024:1024:flags=lanczos', '-f', 'image2pipe', '-vcodec', 'png', '-'])
+        '-vf', 'scale=1024:1024:flags=lanczos,setsar=1', '-f', 'image2pipe', '-vcodec', 'png', '-'])
     binary.extend(b'\0' * (-len(binary) % 4))
     view = len(doc['bufferViews'])
     doc['bufferViews'].append({'buffer': 0, 'byteOffset': len(binary), 'byteLength': len(data)})

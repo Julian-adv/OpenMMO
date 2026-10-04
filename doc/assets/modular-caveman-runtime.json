@@ -12,8 +12,8 @@
       "bytes": 204652
     },
     "client/public/models/armor/caveman_pants.glb": {
-      "sha256": "b6e2b4fe588914e74abce4ddf67756676e50bf6e107bcf90a9c2803cd7750d78",
-      "bytes": 508384
+      "sha256": "f4ce541117c35f43902185266f4190834659d648ab7f4bc119fa6eaa4c95c957",
+      "bytes": 487832
     },
     "client/public/models/armor/caveman_boots.glb": {
       "sha256": "0e4fb52f7a507c12dd491facbe3d6b397e0ed586abf60bae3eea9fc35c5bf70e",
@@ -28,8 +28,8 @@
       "bytes": 10644
     },
     "client/public/items/armor/caveman_pants.png": {
-      "sha256": "f8ddf5d94e95227727427d3e8eda02c0d63b7c8cdccf697b10461ad7602d4af1",
-      "bytes": 15068
+      "sha256": "57ffaa0f5ed62062eb90b98384660d7bb25be2f5a8bd4598fa259f2b97da25d1",
+      "bytes": 14865
     },
     "client/public/items/armor/caveman_boots.png": {
       "sha256": "cfd80f57d77eeb68ffdc6b312a5c6c2eaa282b0357746a2d33555235527c99da",
@@ -44,8 +44,8 @@
       "bytes": 738367
     },
     "assets/caveman_pants/caveman_pants.blend": {
-      "sha256": "093f83f63063b62d4b802cfd4b94657bd8557c360d621cd73cc9dc4e90113919",
-      "bytes": 888656
+      "sha256": "fcf7eae53e05ffaccc768741dc0e1c883db0968d39a1997708a3a08e1f05cdc0",
+      "bytes": 1346537
     },
     "assets/caveman_boots/caveman_boots.blend": {
       "sha256": "290cf954c3b430aef7ceac22adfbca20d4ed2933909142f3443f840f15fa61f1",
@@ -142,5 +142,35 @@
     },
     "icon_pixels_unchanged": false,
     "preview": "doc/images/characters/modular_human_male_01/parts/caveman/top-ground-rest.png"
+  },
+  "pants_lightweight_revision": {
+    "date": "2026-10-04",
+    "source_record": "doc/assets/modular-caveman-tripo-pants-sources.json",
+    "native": {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb",
+      "sha256": "1fc3a92b29c8b5e37931cda6b32966754e1f3b1f33fe478a528179fc739a2db4",
+      "bytes": 4812332
+    },
+    "runtime": {
+      "path": "client/public/models/characters/modular_male/pants_caveman.glb",
+      "sha256": "c4439a951085cff557dc8c99f8163fd058b365208ad890b1822367579ab4f233",
+      "bytes": 473828
+    },
+    "method": "Barbarian front/back hinges plus two 9x11 side grids, four cloth constraint iterations, no dense bend solver",
+    "assembly": {
+      "total_triangles_including_hidden": 30979,
+      "visible_triangles": 28688,
+      "face_allocation_triangles": 1505,
+      "scope": "Full caveman starter outfit with body, crop hair, top, pants, bracers and boots; no weapon or cape",
+      "visible_method": "Visible runtime meshes after applyCharacterArmor with all four starter items; index triangle counts include back surfaces"
+    },
+    "reports": [
+      "doc/assets/modular-caveman-tripo-pants-sources.json",
+      "doc/assets/modular-caveman-tripo-pants-animation-v2.json",
+      "doc/assets/modular-caveman-tripo-pants-runtime-animation-v2.json",
+      "doc/assets/modular-caveman-tripo-pants-performance-v2.json",
+      "doc/assets/modular-caveman-tripo-pants-exports-v2.json"
+    ],
+    "preview": "doc/images/characters/modular_human_male_01/parts/caveman/tripo-pants-lightweight-motion-v2.png"
   }
 }

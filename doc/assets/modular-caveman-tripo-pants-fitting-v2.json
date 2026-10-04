@@ -1,0 +1,518 @@
+{
+  "date": "2026-10-04",
+  "status": "Barbarian-style rigid front/back hinges and 9x11 side cloth; runtime and visual validation required",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/source.glb",
+    "sha256": "a7b5cb922f7c117352a45b013054103905aad9eb0b0e3ec473b17b82f575bba3"
+  },
+  "base": {
+    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
+  },
+  "interfaces": {
+    "path": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+    "sha256": "f3fc3aed9c5080cf26a294dac496293c89bce8f67466add18a7ef72b326f006b"
+  },
+  "rig_id": "human_male_01_mixamo_candidate_v2",
+  "preserved_original_embedded_texture": true,
+  "side_fur_texture": {
+    "path": "doc/images/characters/modular_human_male_01/parts/barbarian_fur.png",
+    "sha256": "64a9bf075a8443f9f3c55fa1d7f58f64a5f99f598dc0e4aa155de5e29894ade5",
+    "source_record": "doc/assets/modular-barbarian-sources.json"
+  },
+  "topology": {
+    "source_triangles": 4960,
+    "rigid_core_meshes": 2,
+    "hinged_panels": 2,
+    "cloth_panels": 2,
+    "method": "Preserve source belt, ornaments and front/back panels with original UV; resample side shells onto paired 9x11 grids with source hem heights, existing barbarian fur texture and 17mm waistband overlap",
+    "waist_overlap_y_m": [
+      1.095,
+      1.112
+    ]
+  },
+  "transform": {
+    "scale": [
+      0.55,
+      0.495,
+      0.6
+    ],
+    "translation": [
+      0,
+      0.65,
+      -0.02
+    ],
+    "waist": "Actual body radial sections with preserved shell and accessory offsets"
+  },
+  "source_components": 19,
+  "physics": {
+    "anchor_bone": "Hips",
+    "rigid_accessory_components": 18,
+    "method": "Existing barbarian runtime: rigid front/back hip hinges and two 99-particle cloth grids with four constraint iterations; no pelt_bend, no thigh skinning",
+    "panels": {
+      "caveman_pelt_front": {
+        "kind": "plate",
+        "bone": "Hips",
+        "pivot": [
+          0,
+          1.106,
+          0.107
+        ],
+        "outward": [
+          0,
+          0,
+          1
+        ],
+        "length": 0.4526126057081593,
+        "colliders": [
+          {
+            "bone": "Hips",
+            "center": [
+              0,
+              0.98,
+              -0.01
+            ],
+            "radii": [
+              0.192,
+              0.15,
+              0.14
+            ]
+          },
+          {
+            "bone": "LeftUpLeg",
+            "center": [
+              0.13,
+              0.8,
+              -0.012
+            ],
+            "radii": [
+              0.105,
+              0.235,
+              0.127
+            ]
+          },
+          {
+            "bone": "RightUpLeg",
+            "center": [
+              -0.13,
+              0.8,
+              -0.012
+            ],
+            "radii": [
+              0.105,
+              0.235,
+              0.127
+            ]
+          },
+          {
+            "bone": "LeftLeg",
+            "center": [
+              0.165,
+              0.33,
+              -0.04
+            ],
+            "radii": [
+              0.085,
+              0.27,
+              0.105
+            ]
+          },
+          {
+            "bone": "RightLeg",
+            "center": [
+              -0.165,
+              0.33,
+              -0.04
+            ],
+            "radii": [
+              0.085,
+              0.27,
+              0.105
+            ]
+          }
+        ]
+      },
+      "caveman_pelt_back": {
+        "kind": "plate",
+        "bone": "Hips",
+        "pivot": [
+          0,
+          1.106,
+          -0.137
+        ],
+        "outward": [
+          0,
+          0,
+          -1
+        ],
+        "length": 0.45599994083113415,
+        "colliders": [
+          {
+            "bone": "Hips",
+            "center": [
+              0,
+              0.98,
+              -0.01
+            ],
+            "radii": [
+              0.192,
+              0.15,
+              0.14
+            ]
+          },
+          {
+            "bone": "LeftUpLeg",
+            "center": [
+              0.13,
+              0.8,
+              -0.012
+            ],
+            "radii": [
+              0.105,
+              0.235,
+              0.127
+            ]
+          },
+          {
+            "bone": "RightUpLeg",
+            "center": [
+              -0.13,
+              0.8,
+              -0.012
+            ],
+            "radii": [
+              0.105,
+              0.235,
+              0.127
+            ]
+          },
+          {
+            "bone": "LeftLeg",
+            "center": [
+              0.165,
+              0.33,
+              -0.04
+            ],
+            "radii": [
+              0.085,
+              0.27,
+              0.105
+            ]
+          },
+          {
+            "bone": "RightLeg",
+            "center": [
+              -0.165,
+              0.33,
+              -0.04
+            ],
+            "radii": [
+              0.085,
+              0.27,
+              0.105
+            ]
+          }
+        ]
+      },
+      "caveman_pelt_left": {
+        "kind": "fur",
+        "bone": "Hips",
+        "pivot": [
+          0.13383031502242795,
+          1.110959086624546,
+          -0.0022415619758242114
+        ],
+        "outward": [
+          0.9959527330119943,
+          0,
+          0.08987854919801104
+        ],
+        "length": 0.3352756736254624,
+        "colliders": [
+          {
+            "bone": "Hips",
+            "center": [
+              0,
+              1.015,
+              -0.023
+            ],
+            "radii": [
+              0.183,
+              0.17,
+              0.135
+            ]
+          },
+          {
+            "bone": "LeftUpLeg",
+            "center": [
+              0.13,
+              0.8,
+              -0.012
+            ],
+            "radii": [
+              0.105,
+              0.235,
+              0.127
+            ]
+          },
+          {
+            "bone": "RightUpLeg",
+            "center": [
+              -0.13,
+              0.8,
+              -0.012
+            ],
+            "radii": [
+              0.105,
+              0.235,
+              0.127
+            ]
+          },
+          {
+            "bone": "LeftLeg",
+            "center": [
+              0.165,
+              0.33,
+              -0.04
+            ],
+            "radii": [
+              0.085,
+              0.27,
+              0.105
+            ]
+          },
+          {
+            "bone": "RightLeg",
+            "center": [
+              -0.165,
+              0.33,
+              -0.04
+            ],
+            "radii": [
+              0.085,
+              0.27,
+              0.105
+            ]
+          }
+        ],
+        "cloth": {
+          "columns": 9,
+          "rows": 11,
+          "pinned_rows": 2
+        }
+      },
+      "caveman_pelt_right": {
+        "kind": "fur",
+        "bone": "Hips",
+        "pivot": [
+          -0.13537436012091977,
+          1.1112984605392142,
+          -0.002001210042720528
+        ],
+        "outward": [
+          -0.9959527330119943,
+          0,
+          0.08987854919801104
+        ],
+        "length": 0.33495182215728136,
+        "colliders": [
+          {
+            "bone": "Hips",
+            "center": [
+              0,
+              1.015,
+              -0.023
+            ],
+            "radii": [
+              0.183,
+              0.17,
+              0.135
+            ]
+          },
+          {
+            "bone": "LeftUpLeg",
+            "center": [
+              0.13,
+              0.8,
+              -0.012
+            ],
+            "radii": [
+              0.105,
+              0.235,
+              0.127
+            ]
+          },
+          {
+            "bone": "RightUpLeg",
+            "center": [
+              -0.13,
+              0.8,
+              -0.012
+            ],
+            "radii": [
+              0.105,
+              0.235,
+              0.127
+            ]
+          },
+          {
+            "bone": "LeftLeg",
+            "center": [
+              0.165,
+              0.33,
+              -0.04
+            ],
+            "radii": [
+              0.085,
+              0.27,
+              0.105
+            ]
+          },
+          {
+            "bone": "RightLeg",
+            "center": [
+              -0.165,
+              0.33,
+              -0.04
+            ],
+            "radii": [
+              0.085,
+              0.27,
+              0.105
+            ]
+          }
+        ],
+        "cloth": {
+          "columns": 9,
+          "rows": 11,
+          "pinned_rows": 2
+        }
+      }
+    }
+  },
+  "clearance_iterations": [
+    {
+      "step": 0,
+      "minimum_signed_distance_m": -0.0018865505572767372,
+      "maximum_correction_m": 0.0027916335518637756
+    },
+    {
+      "step": 1,
+      "minimum_signed_distance_m": 0.00031142866576364564,
+      "maximum_correction_m": 0.001889306635542329
+    },
+    {
+      "step": 2,
+      "minimum_signed_distance_m": 0.0019462121955488684,
+      "maximum_correction_m": 0.0014031320263892296
+    },
+    {
+      "step": 3,
+      "minimum_signed_distance_m": 0.0032333725752247784,
+      "maximum_correction_m": 0.0010420764564102963
+    },
+    {
+      "step": 4,
+      "minimum_signed_distance_m": 0.004246840567892823,
+      "maximum_correction_m": 0.0007979813586024019
+    },
+    {
+      "step": 5,
+      "minimum_signed_distance_m": 0.005044821941411833,
+      "maximum_correction_m": 0.0006283203132413635
+    },
+    {
+      "step": 6,
+      "minimum_signed_distance_m": 0.005673142265846325,
+      "maximum_correction_m": 0.0005405485021744939
+    },
+    {
+      "step": 7,
+      "minimum_signed_distance_m": 0.006167912659546242,
+      "maximum_correction_m": 0.00038955610640974744
+    },
+    {
+      "step": 8,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 0.00030669860833547856
+    },
+    {
+      "step": 9,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 0.00025097083441735703
+    },
+    {
+      "step": 10,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 0.00019015958139108606
+    },
+    {
+      "step": 11,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 0.00014971366293453381
+    },
+    {
+      "step": 12,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 0.00012394048736877355
+    },
+    {
+      "step": 13,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 9.28283796896032e-05
+    },
+    {
+      "step": 14,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 7.308860400558443e-05
+    },
+    {
+      "step": 15,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 5.7540390893048596e-05
+    },
+    {
+      "step": 16,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 4.5306383414940066e-05
+    },
+    {
+      "step": 17,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 3.567532427200138e-05
+    },
+    {
+      "step": 18,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 2.808955438469491e-05
+    },
+    {
+      "step": 19,
+      "minimum_signed_distance_m": 0.006384878613345812,
+      "maximum_correction_m": 4.3634697300683865e-05
+    }
+  ],
+  "bounds_m": {
+    "minimum": [
+      -0.2480281510470846,
+      0.6500000591688659,
+      -0.23665082682964525
+    ],
+    "maximum": [
+      0.24803374631805716,
+      1.14475830078125,
+      0.19665412398156154
+    ]
+  },
+  "validation": {
+    "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb",
+    "sha256": "1fc3a92b29c8b5e37931cda6b32966754e1f3b1f33fe478a528179fc739a2db4",
+    "triangles": 5239,
+    "bones": 65,
+    "exact_rest_hierarchy_and_inverse_bind_match": true,
+    "maximum_weight_sum_error": 0,
+    "active_bones": [
+      "Hips"
+    ]
+  }
+}

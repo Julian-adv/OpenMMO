@@ -1,12 +1,66 @@
 # 원시전사 하의 — Tripo 피팅과 모피 움직임
 
-2026-10-04 사용자 전달 `skeletal+belt+3d+model.glb`를 그대로 보관하고 현재 공통 몸체에 피팅했다. 미리보기에서 상의와 함께 착용할 수 있으며 사용자가 최종 피팅과 움직임을 확인했다. 게임 장비 등록과 다른 세트의 장갑·부츠 조합 검수는 아직 하지 않았다.
+2026-10-04 사용자 전달 `skeletal+belt+3d+model.glb`를 보관하고 현재 공통 몸체에 피팅했다. 현재는 기본 복장으로 게임과 캐릭터 생성창에 등록되어 있다. 사용자가 원시전사 하의의 프레임 저하를 보고하고 야만용사 방식으로 재제작하도록 요청해 아래 v2로 교체했다.
+
+## 현재 경량 버전 v2 — 2026-10-04
+
+야만용사의 기존 런타임을 사용한다. 앞뒤 모피는 허리 힌지로 회전하고 양옆은 각각
+**9열×11행, 99개 입자**의 두께 있는 천으로 움직인다. 천 제약 보정은 매 단계 4회다.
+기존 고밀도 메시의 128/512회 휘어짐 보정(`pelt_bend`)을 적용하지 않는다.
+
+허리띠·해골·이빨과 앞뒤 가죽·모피의 원본 형상·UV·텍스처를 유지했다. 옆면은 원본 외피와
+밑단 높이를 작은 격자로 다시 샘플링하고, 야만용사의 기존 `barbarian_fur.png`를 사용한다.
+원본의 분리된 UV 아틀라스를 작은 격자에 옮길 때 생긴 줄무늬 왜곡을 피한다.
+이 모피는 2026-09-30 내장 ImageGen / **ChatGPT Pro 20x** 생성물로,
+[야만용사 출처 기록](modular-barbarian-sources.json)의 라이선스를 따른다. 추가 생성·유료 호출은 없다.
+정사각형으로 줄인 PNG의 픽셀 종횡비도 1:1로 기록한다.
+
+6개 메시, **5,239 triangles**, 기존 65본 리그와 Hips 100% 가중치를 사용한다.
+게임용 압축본, 바닥 모델, 아이콘, 편집용 Blender 파일을 함께 갱신했다.
+이전 휘어짐 GLB·게임용 GLB·Blender 비교본과 `.blend1` 백업은 사용자 요청으로 삭제했다.
+**[미사용]** v1의 해시·피팅·동작·성능 기록은 유지하며 원본 Tripo GLB와 현재 최종 편집본은 보관한다.
+
+같은 Node 프로세스에서 걷기·달리기·앉기를 60Hz로 실행하고 각 120프레임의
+`updatePeltPhysics` 비용을 비교했다. 이전 약 19–23ms에서 약 0.2–0.6ms로 줄었으며
+야만용사와 비슷한 수준이다. 이 수치는 렌더링을 제외한 CPU 물리 비용이며 게임 전체 FPS가 아니다.
+[성능 측정 원본](modular-caveman-tripo-pants-performance-v2.json).
+
+원본과 게임용 압축본에서 대기·걷기·달리기·점프·전투 대기·공격·앉기 7종을 검사했다.
+벨트·장식은 고정되고 앞뒤 판의 모서리 길이는 1µm 오차 이내로 유지된다. 옆 천의 고정 2행,
+두께와 세로 길이 4% 제한, 유한 정점, 해제 후 원본 복원을 확인했다. 가로·대각 모서리는
+야만용사 천의 기존 보정 규칙을 따르며 이전 휘어짐 방식의 전체 모서리 2% 제한은 적용하지 않는다.
+게임용 압축본의 실제 걷기·달리기·앉기 정면·측면·뒷면도 브라우저에서 확인했다.
+모든 극단 자세나 다른 세트 조합의 관통을 보장하는 검사는 아니다.
+
+![경량 바지의 게임용 압축본 동작](../images/characters/modular_human_male_01/parts/caveman/tripo-pants-lightweight-motion-v2.png)
+
+현재 기본 세트 전체(몸체·헤어·상의·하의·보호대·부츠)의 합계는 **30,979 triangles**,
+피부 가림을 적용한 표시 합계는 **28,688**, 얼굴 배분은 기존 **1,505**다. 무기·망토는 제외한다.
+목표 15,000–20,000보다 크지만 이번 성능 병목은 고밀도 모피의 CPU 반복 계산으로 확인했다.
+장식·얼굴을 숫자만 맞추려고 줄이지 않았다.
+
+- [v2 피팅·리그 기록](modular-caveman-tripo-pants-fitting-v2.json)
+- [원본 동작 검사](modular-caveman-tripo-pants-animation-v2.json)
+- [압축본 동작 검사](modular-caveman-tripo-pants-runtime-animation-v2.json)
+- [GLB 출력·검증](modular-caveman-tripo-pants-exports-v2.json)
+
+```bash
+.venv/bin/python tools/fit-tripo-caveman-pants.py
+node tools/prepare-modular-character.mjs --part pants_caveman
+node tools/validate-tripo-caveman-pants.mjs
+node tools/validate-tripo-caveman-pants.mjs --runtime
+node tools/benchmark-caveman-pants.mjs
+blender -b -t 6 --python-exit-code 1 --python tools/blender-scripts/review_tripo_caveman_pants.py
+blender -b -t 6 --python-exit-code 1 --python tools/blender-scripts/export_caveman_items.py -- --parts pants
+```
+
+## 이전 휘어짐 버전 v1 — [미사용]
 
 원본은 **4,960 triangles**, UV 분리 포함 정점 6,575개, 메시·재질 각 1개다. 내장 2048×2048 JPEG는 그대로 유지했다. 생성 당시 쿼드 수는 확인되지 않았다. 원본 용접 진단의 연결 성분 19개 중 큰 성분은 가죽·모피이며 나머지 18개는 뼈 장식이다.
 
 ![생성 원본 검수](../images/characters/modular_human_male_01/parts/caveman/tripo-pants-raw-review-v1.png)
 
-## 피팅·리깅
+### v1 피팅·리깅
 
 기준은 `parts/fitted/base.glb`, `interfaces/v1`, `human_male_01_mixamo_candidate_v2`의 기존 65본이다. 실제 몸체 허리 단면에 맞추고 내부 몸체와의 간격을 보정했다. 원본, 공통 몸체와 사용자가 선택한 상의는 변경하지 않았다.
 
@@ -28,7 +82,7 @@
 
 연결된 표면 방식은 사용자 요청과 다리 사이 변형을 만족하지 못해 **[미사용]**이다. 이후 네 개의 강체 판 방식은 판대기처럼 보인다는 사용자 지적에 따라 위 휘어짐 방식으로 대체했다.
 
-## 확인 범위
+### v1 확인 범위
 
 실제 런타임 물리를 60Hz로 실행해 대기·걷기·달리기·점프·전투 대기·공격·앉기 7종을 검사했다. 원본 GLB 정점 대비 1mm 이상 모서리의 최대 연장은 약 **2.094%**다. 허리 장식의 형태 유지와 숨김·복원·재부착, 브라우저 로딩도 확인했다. 수치 검사는 극단 자세의 모든 관통이나 다른 장비와의 조합 합격을 뜻하지 않는다.
 
@@ -36,15 +90,15 @@
 
 미리보기는 바바리안 하의의 피부 표시 규칙으로 맨다리를 복원한 뒤 바바리안 메시를 숨긴다. 상의에는 별도 피부 가림을 적용하지 않는다. 허리 장식은 하의 소속이며, 미제작 원시전사 손·부츠와의 혼합은 미검증이다.
 
-현재 몸체 13,891＋헤어 933＋상의 2,110＋하의 5,797＝**22,731 triangles**, 표시 **22,360**, 얼굴 **1,505**다. 검·장갑·부츠는 포함하지 않는다. 대략적인 15,000–20,000 목표보다 크지만 숫자만 맞추는 데시메이션은 하지 않았다.
+v1 검수 당시 몸체 13,891＋헤어 933＋상의 2,110＋하의 5,797＝**22,731 triangles**, 표시 **22,360**, 얼굴 **1,505**였다. 검·장갑·부츠는 포함하지 않았다. 대략적인 15,000–20,000 목표보다 크지만 숫자만 맞추는 데시메이션은 하지 않았다.
 
 편집본 `caveman-pants-fitting.blend`에는 공통 몸체·리그·허리 기준선·원본 참조·6개 작업 메시가 있다. Blender는 기본 피팅 자세이며 움직임은 Three.js 미리보기에서 재현한다.
 
-```bash
-.venv/bin/python tools/fit-tripo-caveman-pants.py
-node tools/validate-tripo-caveman-pants.mjs
-blender -b --python-exit-code 1 --python tools/blender-scripts/review_tripo_caveman_pants.py
-```
+성능 도구는 현재 원시전사와 야만용사를 측정해 `/tmp/caveman-pants-performance.json`에 쓴다.
+이전 모델과 비교하려면 첫 번째 인자로 해당 GLB 경로를 전달한다. 저장된 v2 성능 기록은
+비교본을 삭제하기 전 측정 결과이며 덮어쓰지 않는다.
+
+위 재현 도구는 현재 v2를 출력한다. v1 피팅·동작 JSON은 당시 설정과 결과를 보관한다.
 
 출처는 사용자 Tripo Studio 생성물이며 기존 출력물 이용 조건을 따른다. 생성일·작업 ID·실제 구독 등급·제출 이미지는 별도 확인되지 않았다. 이전 약 USD 20/월 구독 정보는 이전 출처 기록으로 구분했다. 추가 유료 생성은 없다.
 
