@@ -4,7 +4,7 @@
   "service": "OpenAI Codex built-in ImageGen",
   "tier": "ChatGPT Pro 20x",
   "license": "OpenAI generated output terms; original references retain their recorded source and usage terms.",
-  "status": "[미사용] Eight selected concept inputs retained. User-delivered Tripo top fitted and rigged on 2026-10-04; the user selected the earlier fitting appearance. Game integration and remaining part models pending.",
+  "status": "[\ubbf8\uc0ac\uc6a9] Nine selected concept views retained. User accepted fitted Tripo top, pants and mirrored boots previews; gameplay integration and bracer model pending.",
   "reference": {
     "path": "doc/images/characters/modular_human_male_01/concepts/caveman-outfit-v2.png",
     "sha256": "480c7421f68e79706eea86bc614cfe4631de0b66c5cc0c0f3a37f30b1042fead",
@@ -81,7 +81,7 @@
             255
           ],
           "view": "back",
-          "status": "[미사용] Superseded file deleted at user request on 2026-10-04; generation record retained.",
+          "status": "[\ubbf8\uc0ac\uc6a9] Superseded file deleted at user request on 2026-10-04; generation record retained.",
           "retained": false,
           "deleted_on": "2026-10-04",
           "deletion_reason": "Superseded intermediate removed at user request; prompt and hash retained"
@@ -106,7 +106,7 @@
           ],
           "view": "side",
           "camera": "right front-oblique side view",
-          "status": "[미사용] Superseded file deleted at user request on 2026-10-04; generation record retained.",
+          "status": "[\ubbf8\uc0ac\uc6a9] Superseded file deleted at user request on 2026-10-04; generation record retained.",
           "retained": false,
           "deleted_on": "2026-10-04",
           "deletion_reason": "Superseded intermediate removed at user request; prompt and hash retained"
@@ -209,7 +209,7 @@
       "includes": "One left enclosed leather boot, upper-calf fur cuff, rawhide wraps and flat stitched hide sole.",
       "planned_copies": 2,
       "background": "white",
-      "review": "Corrected rear shows heel counter and rear shaft seam; front shows toe/vamp. Mirror for right boot during modeling.",
+      "review": "Corrected rear shows heel counter and rear shaft seam; front shows toe/vamp. Mirror for right boot during modeling. Supplementary outer-side profile shows the projecting rounded toe, instep and flat sole; front/back views remain the ornament and seam references.",
       "views": [
         {
           "path": "doc/images/characters/modular_human_male_01/parts/caveman/boot_caveman_left-front-v1.png",
@@ -240,6 +240,23 @@
             254
           ],
           "view": "back"
+        },
+        {
+          "path": "doc/images/characters/modular_human_male_01/parts/caveman/boot_caveman_left-side-v1.png",
+          "sha256": "828777498ec189f286c02f25adc834d4fe74904919141a8a1e0ee6417c3f67f2",
+          "size": [
+            1024,
+            1536
+          ],
+          "mode": "RGB",
+          "corner_pixel": [
+            252,
+            253,
+            253
+          ],
+          "view": "side",
+          "camera": "Outer lateral profile, toe viewer-left and heel viewer-right",
+          "generation_date": "2026-10-04"
         }
       ]
     }
@@ -269,7 +286,7 @@
       "transparent_background": true,
       "output": "doc/images/characters/modular_human_male_01/parts/caveman/sources/bracer_caveman_right-front-initial.png",
       "sha256": "4f39f7085c69ef188675a969159abee48b19ea6bf2df7c0c255f8cded7502407",
-      "status": "[미사용] Superseded file deleted at user request on 2026-10-04; generation record retained.",
+      "status": "[\ubbf8\uc0ac\uc6a9] Superseded file deleted at user request on 2026-10-04; generation record retained.",
       "retained": false,
       "deleted_on": "2026-10-04",
       "deletion_reason": "Superseded intermediate removed at user request; prompt and hash retained"
@@ -298,7 +315,7 @@
       "transparent_background": true,
       "output": "doc/images/characters/modular_human_male_01/parts/caveman/sources/boot_caveman_left-front-initial.png",
       "sha256": "b8cd050b1fcc5d78f9148d14b8efb2126b6d445ebd2edf88fdb8fe6169647400",
-      "status": "[미사용] Superseded file deleted at user request on 2026-10-04; generation record retained.",
+      "status": "[\ubbf8\uc0ac\uc6a9] Superseded file deleted at user request on 2026-10-04; generation record retained.",
       "retained": false,
       "deleted_on": "2026-10-04",
       "deletion_reason": "Superseded intermediate removed at user request; prompt and hash retained"
@@ -316,7 +333,7 @@
       "output": "doc/images/characters/modular_human_male_01/parts/caveman/top_caveman-back-v1.png",
       "sha256": "b0f35909b530ec638b87a1a57c510dc8ef7d42111cb87840502b1aaf47a69222",
       "retained_in_workspace": true,
-      "status": "[미사용] Superseded file deleted at user request on 2026-10-04; generation record retained.",
+      "status": "[\ubbf8\uc0ac\uc6a9] Superseded file deleted at user request on 2026-10-04; generation record retained.",
       "retained": false,
       "deleted_on": "2026-10-04",
       "deletion_reason": "Superseded intermediate removed at user request; prompt and hash retained"
@@ -334,7 +351,7 @@
       "output": "doc/images/characters/modular_human_male_01/parts/caveman/sources/bracer_caveman_right-back-initial.png",
       "sha256": "4b1d74dfcb24dc5e202e844bbc9d0f0b1c98c71d8422b4cd1a942a858b8cc41e",
       "retained_in_workspace": true,
-      "status": "[미사용] Superseded file deleted at user request on 2026-10-04; generation record retained.",
+      "status": "[\ubbf8\uc0ac\uc6a9] Superseded file deleted at user request on 2026-10-04; generation record retained.",
       "retained": false,
       "deleted_on": "2026-10-04",
       "deletion_reason": "Superseded intermediate removed at user request; prompt and hash retained",
@@ -370,7 +387,7 @@
       "output": null,
       "sha256": "48c92690f6d51629e398e2783fa2cea5252bbc719002daa367122fd678ea13f9",
       "retained_in_workspace": false,
-      "status": "[미사용] Rejected: depicted toe/front rather than heel/rear.",
+      "status": "[\ubbf8\uc0ac\uc6a9] Rejected: depicted toe/front rather than heel/rear.",
       "deleted_reference_files": [
         "doc/images/characters/modular_human_male_01/parts/caveman/sources/boot_caveman_left-front-initial.png"
       ]
@@ -387,7 +404,7 @@
       "output": null,
       "sha256": "0e4008e02cfbe61017eb5b90e26796fcbfb927cdd1b33277fdf0db16bbe58ebe",
       "retained_in_workspace": false,
-      "status": "[미사용] Rejected: requested removal of brown halo was not reliably reflected in the saved cutout. Replaced by white-background revision.",
+      "status": "[\ubbf8\uc0ac\uc6a9] Rejected: requested removal of brown halo was not reliably reflected in the saved cutout. Replaced by white-background revision.",
       "deleted_reference_files": [
         "doc/images/characters/modular_human_male_01/parts/caveman/sources/bracer_caveman_right-front-initial.png"
       ]
@@ -404,7 +421,7 @@
       "output": null,
       "sha256": "48cb65768cc16bd6ba4aa3720221a95e2eb14481c4cdf60bf0ac960091a04288",
       "retained_in_workspace": false,
-      "status": "[미사용] Rejected: requested removal of brown halo was not reliably reflected in the saved cutout. Replaced by white-background revision.",
+      "status": "[\ubbf8\uc0ac\uc6a9] Rejected: requested removal of brown halo was not reliably reflected in the saved cutout. Replaced by white-background revision.",
       "deleted_reference_files": [
         "doc/images/characters/modular_human_male_01/parts/caveman/sources/boot_caveman_left-front-initial.png"
       ]
@@ -486,7 +503,7 @@
       "transparent_background": true,
       "output": "doc/images/characters/modular_human_male_01/parts/caveman/top_caveman-side-v1.png",
       "sha256": "887f9023222adcbd7691574bf1096145941879d7c7972b7584cc77fdda49a993",
-      "status": "[미사용] Superseded file deleted at user request on 2026-10-04; generation record retained.",
+      "status": "[\ubbf8\uc0ac\uc6a9] Superseded file deleted at user request on 2026-10-04; generation record retained.",
       "review": "Output is a right front-oblique side view, rather than a strict orthographic 90-degree profile; shows pad/ornament depth and overlap.",
       "retained": false,
       "deleted_on": "2026-10-04",
@@ -496,14 +513,14 @@
       "id": "top_caveman",
       "view": "side",
       "stage": "rounded-hollow-shoulder-correction",
-      "prompt": "Use case: precise-object-edit.\nAsset type: primitive warrior upper equipment SIDE reference for Tripo, shoulder-fit construction correction v2.\nInput image: EDIT TARGET, isolated shoulder fur pelt and bone necklace in right oblique side view.\nPrimary request: Correct ONLY the shoulder PELT shape on the RIGHT of this image so that a human shoulder can fit INSIDE it. Currently it is a long flat fur flap with a filled pointed triangular leather backing. Replace that flat triangular silhouette and backing with a SHORT CURVED HOLLOW SHOULDER CAP: a thin fur-covered hide shell shaped like an inverted U / arch in side view (∩). Its upper surface follows the ROUND convex top of a shoulder; its INNER surface is a broad ROUND CONCAVE cavity. The middle underneath must be genuinely EMPTY so the shoulder/upper arm can occupy it. The front and back sides of the shell descend as short fur-edged skirts around the shoulder, with a clearly visible wide semicircular arch between them OPEN DOWNWARD. No leather panel closing or filling this recess, no solid center. The empty cavity/background should be clearly visible inside and below the arch, with a curved thin dark leather lining visible only along the upper inside rim. Hollow shaped wearable saddle, not a flat pelt, solid fur block, donut with an enclosed drilled hole, or a long hanging pointed cape.\nMake the ROUND SHOULDER RECESS unmistakable from the existing side camera, occupying the middle/lower area of the pelt. The fur cap's outside retains the same shaggy brown fur; use a natural thin hide shell thickness, not bulky rigid metal armor. Keep the pale crescent bone accent and its brown binding fixed to the OUTER TOP of the newly curved cap, above the cavity. Preserve the same inner neck-cord attachment, with cord attached to the cap near the top so it does not span or block the empty shoulder cavity.\nInvariants: keep the necklace on the LEFT and its long central tooth, three skull pendants, small ivory beads and other tooth ornaments EXACTLY unchanged, including their positions, overlap, shape, count, materials, lighting and scale. Keep the neck loop, image dimensions, transparent background, right oblique side camera, isolated single assembly composition and rendering style. Change only the shoulder pelt geometry needed to produce the rounded hollow shoulder fit, and reposition its existing bone minimally to sit on the curved shell. NO person, inserted shoulder, skin, mannequin, arm, torso, stand, text, labels, cross-section inset or additional view. The empty ∩-shaped opening must remain transparent so the recess is readable.",
+      "prompt": "Use case: precise-object-edit.\nAsset type: primitive warrior upper equipment SIDE reference for Tripo, shoulder-fit construction correction v2.\nInput image: EDIT TARGET, isolated shoulder fur pelt and bone necklace in right oblique side view.\nPrimary request: Correct ONLY the shoulder PELT shape on the RIGHT of this image so that a human shoulder can fit INSIDE it. Currently it is a long flat fur flap with a filled pointed triangular leather backing. Replace that flat triangular silhouette and backing with a SHORT CURVED HOLLOW SHOULDER CAP: a thin fur-covered hide shell shaped like an inverted U / arch in side view (\u2229). Its upper surface follows the ROUND convex top of a shoulder; its INNER surface is a broad ROUND CONCAVE cavity. The middle underneath must be genuinely EMPTY so the shoulder/upper arm can occupy it. The front and back sides of the shell descend as short fur-edged skirts around the shoulder, with a clearly visible wide semicircular arch between them OPEN DOWNWARD. No leather panel closing or filling this recess, no solid center. The empty cavity/background should be clearly visible inside and below the arch, with a curved thin dark leather lining visible only along the upper inside rim. Hollow shaped wearable saddle, not a flat pelt, solid fur block, donut with an enclosed drilled hole, or a long hanging pointed cape.\nMake the ROUND SHOULDER RECESS unmistakable from the existing side camera, occupying the middle/lower area of the pelt. The fur cap's outside retains the same shaggy brown fur; use a natural thin hide shell thickness, not bulky rigid metal armor. Keep the pale crescent bone accent and its brown binding fixed to the OUTER TOP of the newly curved cap, above the cavity. Preserve the same inner neck-cord attachment, with cord attached to the cap near the top so it does not span or block the empty shoulder cavity.\nInvariants: keep the necklace on the LEFT and its long central tooth, three skull pendants, small ivory beads and other tooth ornaments EXACTLY unchanged, including their positions, overlap, shape, count, materials, lighting and scale. Keep the neck loop, image dimensions, transparent background, right oblique side camera, isolated single assembly composition and rendering style. Change only the shoulder pelt geometry needed to produce the rounded hollow shoulder fit, and reposition its existing bone minimally to sit on the curved shell. NO person, inserted shoulder, skin, mannequin, arm, torso, stand, text, labels, cross-section inset or additional view. The empty \u2229-shaped opening must remain transparent so the recess is readable.",
       "references": [
         "doc/images/characters/modular_human_male_01/parts/caveman/top_caveman-side-v1.png"
       ],
       "transparent_background": true,
       "output": "doc/images/characters/modular_human_male_01/parts/caveman/sources/top_caveman-side-hollow-intermediate.png",
       "sha256": "4eb69aa6f9717eef5b1f717993faeb54af25612a1e3c5b7b73f86a1413059745",
-      "status": "[미사용] Superseded file deleted at user request on 2026-10-04; generation record retained.",
+      "status": "[\ubbf8\uc0ac\uc6a9] Superseded file deleted at user request on 2026-10-04; generation record retained.",
       "retained": false,
       "deleted_on": "2026-10-04",
       "deletion_reason": "Superseded intermediate removed at user request; prompt and hash retained",
@@ -515,7 +532,7 @@
       "id": "top_caveman",
       "view": "side",
       "stage": "front-consistent-orientation-correction",
-      "prompt": "Use case: precise-object-edit.\nAsset type: orientation correction to the primitive warrior upper-equipment side reference.\nInput image 1: EDIT TARGET, the side illustration with the correctly hollow ∩-shaped fur shoulder cap. Input image 2: the established FRONT reference for consistent pelt placement on the VIEWER'S LEFT.\nPrimary request: HORIZONTALLY MIRROR THE ENTIRE FIRST IMAGE in place. The finished side illustration must put the FUR SHOULDER CAP and its pale crescent bone on the VIEWER'S LEFT, and the hanging SKULL/TOOTH NECKLACE on the VIEWER'S RIGHT, matching the left-side pelt placement of image 2. This is the same equipment viewed in the opposite side presentation orientation, not a redesign or exchange of attachments. Keep the neck cord connected to the same inner cap edge. Do not regenerate the necklace or add different skulls. A pure complete left-right reflection of image 1 is the intended edit.\nPreserve the rounded HOLLOW shoulder recess: a broad semicircular empty cavity in the middle underside of the cap, opening DOWNWARD with thin curved dark leather lining along its inner upper arch. The cavity remains truly empty/transparent; no leather or fur fills it. Keep the ∩-shaped shell, both short fur side skirts, fur strands, bone, bindings, pendant count, long central tooth, materials, lighting, scale and image dimensions exactly the same. Only the entire object's horizontal orientation changes. Preserve transparent background. No body, shoulder, mannequin, stand, text, arrows, extra views, new objects or other modifications.",
+      "prompt": "Use case: precise-object-edit.\nAsset type: orientation correction to the primitive warrior upper-equipment side reference.\nInput image 1: EDIT TARGET, the side illustration with the correctly hollow \u2229-shaped fur shoulder cap. Input image 2: the established FRONT reference for consistent pelt placement on the VIEWER'S LEFT.\nPrimary request: HORIZONTALLY MIRROR THE ENTIRE FIRST IMAGE in place. The finished side illustration must put the FUR SHOULDER CAP and its pale crescent bone on the VIEWER'S LEFT, and the hanging SKULL/TOOTH NECKLACE on the VIEWER'S RIGHT, matching the left-side pelt placement of image 2. This is the same equipment viewed in the opposite side presentation orientation, not a redesign or exchange of attachments. Keep the neck cord connected to the same inner cap edge. Do not regenerate the necklace or add different skulls. A pure complete left-right reflection of image 1 is the intended edit.\nPreserve the rounded HOLLOW shoulder recess: a broad semicircular empty cavity in the middle underside of the cap, opening DOWNWARD with thin curved dark leather lining along its inner upper arch. The cavity remains truly empty/transparent; no leather or fur fills it. Keep the \u2229-shaped shell, both short fur side skirts, fur strands, bone, bindings, pendant count, long central tooth, materials, lighting, scale and image dimensions exactly the same. Only the entire object's horizontal orientation changes. Preserve transparent background. No body, shoulder, mannequin, stand, text, arrows, extra views, new objects or other modifications.",
       "references": [
         "doc/images/characters/modular_human_male_01/parts/caveman/sources/top_caveman-side-hollow-intermediate.png",
         "doc/images/characters/modular_human_male_01/parts/caveman/top_caveman-front-v1.png"
@@ -528,6 +545,24 @@
       "deleted_reference_files": [
         "doc/images/characters/modular_human_male_01/parts/caveman/sources/top_caveman-side-hollow-intermediate.png"
       ]
+    },
+    {
+      "id": "boot_caveman_left",
+      "view": "side",
+      "stage": "supplementary-lateral-concept",
+      "generation_date": "2026-10-04",
+      "service": "OpenAI Codex built-in ImageGen",
+      "tier": "ChatGPT Pro 20x",
+      "prompt": "Use case: stylized-concept. Asset type: game equipment concept reference for Tripo 3D reconstruction. Input image 1 is the approved FRONT reference of a single left caveman boot; input image 2 is the approved BACK reference of the very same left boot. Generate one additional matching SIDE VIEW, not a redesign. Single isolated empty left boot in a true lateral profile, viewed from its OUTER side, toe pointing toward the LEFT of the image and heel on the RIGHT. Neutral white background, vertically oriented 1024x1536 composition, entire boot visible with clean margins. Match both supplied references exactly in identity, brown color palette, construction and proportions: tall supple weathered dark brown hide/leather shaft, very large thick shaggy brown fur cuff covering the upper third, muted lighter tan hide straps wrapping diagonally around the shaft with the same outer-side knot and short loose ends, front and back tan cross stitches staying on their respective front and back seams, rounded broad soft toe with closed leather upper, low flat continuous dark leather sole with tan whip stitching around the perimeter, no raised modern heel, no metal. The foot must project clearly leftward in profile with visible instep curve, ankle, sole thickness and rounded heel; avoid turning toward a front or rear three-quarter view. Maintain the existing cuff diameter relative to the shaft and plausible volume of its empty top opening. Realistic game concept illustration with detailed fur and aged leather, soft even studio light, subtle grounding shadow only. No foot, leg, person, extra boot, other equipment, text, arrows, layout labels or watermark.",
+      "references": [
+        "doc/images/characters/modular_human_male_01/parts/caveman/boot_caveman_left-front-v1.png",
+        "doc/images/characters/modular_human_male_01/parts/caveman/boot_caveman_left-back-v1.png"
+      ],
+      "transparent_background": false,
+      "output": "doc/images/characters/modular_human_male_01/parts/caveman/boot_caveman_left-side-v1.png",
+      "sha256": "828777498ec189f286c02f25adc834d4fe74904919141a8a1e0ee6417c3f67f2",
+      "status": "selected",
+      "review": "One isolated boot on white background; outer lateral profile, toe left, fur cuff, tan wraps and flat stitched sole retained. Auxiliary concept only; actual 3D seam continuity still requires modeling review."
     }
   ],
   "archive": {
@@ -537,13 +572,14 @@
   "notes": [
     "Images depict one equipment item or wearable assembly per view, with no human body.",
     "Single right bracer and single left boot are modeling sources for mirrored pairs.",
-    "Concept geometry is not the measured 3D body interface. Confirm hollow edges, ornament fastening, fit and joint behavior before accepting generated meshes."
+    "Concept geometry is not the measured 3D body interface. Confirm hollow edges, ornament fastening, fit and joint behavior before accepting generated meshes.",
+    "2026-10-04: Supplementary left-boot outer side added separately. Existing eight-view ZIP v3 and all front/back concepts preserved."
   ],
   "previous_archives": [
     {
       "path": "doc/images/characters/modular_human_male_01/parts/caveman/caveman-tripo-inputs-v1.zip",
       "contains": "Only the eight selected front/back images; no intermediate source images.",
-      "status": "[미사용] Superseded file deleted at user request on 2026-10-04; generation record retained.",
+      "status": "[\ubbf8\uc0ac\uc6a9] Superseded file deleted at user request on 2026-10-04; generation record retained.",
       "retained": false,
       "deleted_on": "2026-10-04",
       "deletion_reason": "Superseded intermediate removed at user request; prompt and hash retained"
@@ -551,7 +587,7 @@
     {
       "path": "doc/images/characters/modular_human_male_01/parts/caveman/caveman-tripo-inputs-v2.zip",
       "contains": "Eight selected images: upper front/side, and bracer/pants/boot front/back.",
-      "status": "[미사용] Superseded file deleted at user request on 2026-10-04; generation record retained.",
+      "status": "[\ubbf8\uc0ac\uc6a9] Superseded file deleted at user request on 2026-10-04; generation record retained.",
       "retained": false,
       "deleted_on": "2026-10-04",
       "deletion_reason": "Superseded intermediate removed at user request; prompt and hash retained"
@@ -569,6 +605,12 @@
       "review": "doc/assets/modular-caveman-tripo-pants-review-v1.json",
       "delivery_date": "2026-10-04",
       "status": "Fitted preview candidate: four independently bending hip-anchored pelts; runtime motions checked."
+    },
+    "boots_caveman": {
+      "source_record": "doc/assets/modular-caveman-tripo-boots-sources.json",
+      "review": "doc/assets/modular-caveman-tripo-boots-review-v1.json",
+      "delivery_date": "2026-10-04",
+      "status": "User accepted fitted mirrored boots with rounded fur cuffs and straightened rear ankle. 5178 triangles, canonical Leg/Foot/ToeBase rig, seven motions checked."
     }
   },
   "cleanup_record": "doc/assets/modular-caveman-cleanup.json"

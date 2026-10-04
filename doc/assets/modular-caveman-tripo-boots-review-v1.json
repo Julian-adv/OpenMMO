@@ -1,0 +1,26 @@
+{
+  "triangles": 2059,
+  "mesh_count": 1,
+  "meshes": [
+    {
+      "name": "tripo_node_ee863bfd-ac99-4f16-96a2-9be6148fe11f",
+      "components_vertex_counts": [
+        1027
+      ],
+      "boundary_edges": 82,
+      "nonmanifold_edges": 160,
+      "degenerate_faces": 0,
+      "collapsed_uv_triangles": 0
+    }
+  ],
+  "source_extent_blender": [
+    0.50341796875,
+    0.73876953125,
+    0.99951171875
+  ],
+  "rigged": false,
+  "source": "assets/modular_human_male_01/parts/caveman_tripo_boots_v1/source.glb",
+  "sha256": "5c5077cf8a67480c2edba22fd0af0c7f3cbe19e124f9ed463983b71ef7934d46",
+  "status": "Raw Tripo source normalized for visual review; no body fitting or rigging.",
+  "vertices_including_uv_splits": 2462
+}

@@ -5,6 +5,7 @@ type Cut =
   | 'gauntlets'
   | 'gloves'
   | 'greaves'
+  | 'caveman_boots'
   | 'collar'
   | 'tripo_collar'
   | 'tripo_waist'
@@ -32,6 +33,7 @@ const cuts: Record<Cut, Distance> = {
   gauntlets: sleeveCut(0.85),
   gloves: sleeveCut(0.89),
   greaves: (point) => point.y - 0.46,
+  caveman_boots: (point) => point.y - 0.43,
   collar: (point) => Math.max(1.61 - point.y, Math.abs(point.x) - 0.075),
   tripo_collar: (point) => Math.max(1.54 - point.y, Math.abs(point.x) - 0.075),
   tripo_waist: (point) => point.y - 1.14,

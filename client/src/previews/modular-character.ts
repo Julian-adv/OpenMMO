@@ -154,6 +154,7 @@ async function main() {
     ...ROGUE_PREVIEW_PARTS,
     'top_caveman',
     'pants_caveman',
+    'boots_caveman',
   ]
   const [base, sources, animations, sword, profile, candidateSources, social] =
     await Promise.all([
@@ -268,7 +269,9 @@ async function main() {
     const note = el('outfit-note')
     const inspectingRogue = ROGUE_PREVIEW_PARTS.some((id) => equipped.has(id))
     const inspectingCaveman =
-      equipped.has('top_caveman') || equipped.has('pants_caveman')
+      equipped.has('top_caveman') ||
+      equipped.has('pants_caveman') ||
+      equipped.has('boots_caveman')
     note.hidden = rogueAvailable && !inspectingRogue && !inspectingCaveman
     note.textContent = inspectingCaveman
       ? '원시전사 모피와 뼈 장식'

@@ -49,6 +49,41 @@ const undressed: ModularOutfit = {
 }
 
 describe('caveman workshop preview', () => {
+  it('covers skin inside the boots and restores the original legs when removed', () => {
+    const { body, parts, visible } = fixture()
+    const legs = body.find((mesh) => mesh.userData.region === 'legs')!
+    const original = new THREE.PlaneGeometry(0.2, 0.8, 2, 4)
+    original.translate(0.17, 0.4, 0)
+    legs.geometry = original
+    const boots = new THREE.SkinnedMesh()
+    parts.set('boots_caveman', [boots])
+    const selected = showPreviewOutfit(body, parts, CAVEMAN_PREVIEW_OUTFIT)
+    expect(selected.has('boots_caveman')).toBe(true)
+    expect(selected.has('boots_leather')).toBe(false)
+    expect(parts.get('boots_leather')![0].visible).toBe(false)
+    for (const region of ['feet', 'ankles', 'boot_ankles'])
+      expect(visible(region)).toBe(false)
+    const position = legs.geometry.getAttribute('position')
+    expect(position.count).toBeGreaterThan(0)
+    for (let i = 0; i < position.count; i++)
+      expect(position.getY(i)).toBeGreaterThanOrEqual(0.42999)
+    showPreviewOutfit(body, parts, { ...CAVEMAN_PREVIEW_OUTFIT, boots: 'none' })
+    expect(legs.geometry).toBe(original)
+    expect(visible('feet')).toBe(true)
+    expect(visible('ankles')).toBe(true)
+    expect(boots.visible).toBe(false)
+  })
+
+  it('keeps bare skin when the requested caveman boots failed to load', () => {
+    const { body, parts, visible } = fixture()
+    const selected = showPreviewOutfit(body, parts, CAVEMAN_PREVIEW_OUTFIT)
+    expect(selected.has('boots_caveman')).toBe(false)
+    expect(selected.has('boots_leather')).toBe(false)
+    expect(visible('legs')).toBe(true)
+    expect(visible('feet')).toBe(true)
+    expect(visible('ankles')).toBe(true)
+  })
+
   it('shows the pelt skirt with exposed legs, hides the proxy and restores other outfits', () => {
     const { body, parts, visible } = fixture()
     const skirt = new THREE.SkinnedMesh()

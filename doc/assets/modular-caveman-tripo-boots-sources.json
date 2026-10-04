@@ -1,0 +1,154 @@
+{
+  "delivery_date": "2026-10-04",
+  "generation_date": null,
+  "provider": "Tripo Studio",
+  "subscription": {
+    "previous_user_report": "Approximately USD 20/month Studio subscription",
+    "previous_source_record": "doc/assets/modular-rogue-tripo-sources.json",
+    "current_file_tier_separately_confirmed": false
+  },
+  "license": "Subject to the original Tripo Studio output terms; retain original source/account provenance. No separate license grant inferred from file delivery.",
+  "delivery_path_windows": "Y:\\public\\web_downloads\\fur-lined+boot+3d+model.glb",
+  "delivery_path_linux": "/mnt/y/web_downloads/fur-lined+boot+3d+model.glb",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/caveman_tripo_boots_v1/source.glb",
+    "sha256": "5c5077cf8a67480c2edba22fd0af0c7f3cbe19e124f9ed463983b71ef7934d46",
+    "bytes": 1979480,
+    "byte_identical_to_delivery": true
+  },
+  "generation_task_id": null,
+  "generation_model_version": null,
+  "submitted_prompt": null,
+  "submitted_images_confirmed": false,
+  "requested_polygon_count_confirmed": null,
+  "reference_artwork": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/boot_caveman_left-front-v1.png",
+      "sha256": "bee956743b16f6a9b16fcd7509170b890d694b3dfac06e3028e1377c4a6f9033"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/boot_caveman_left-back-v1.png",
+      "sha256": "7dec87602612959d489bb56f8e9e75c308ded082b7e03217087460041e99fd98"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/boot_caveman_left-side-v1.png",
+      "sha256": "828777498ec189f286c02f25adc834d4fe74904919141a8a1e0ee6417c3f67f2"
+    }
+  ],
+  "export_observed": {
+    "format": "GLB 2.0",
+    "generator": "Tripo",
+    "triangles": 2059,
+    "original_quad_count": null,
+    "vertices_including_uv_splits": 2462,
+    "mesh_count": 1,
+    "material_count": 1,
+    "textures": [
+      {
+        "size": [
+          2048,
+          2048
+        ],
+        "format": "JPEG",
+        "embedded_sha256": "cd670f80c8d57075e223f6b1a8c2e8dd4d853b273bdb62764426e28733eabfde"
+      }
+    ],
+    "rigged": false,
+    "animations": 0
+  },
+  "review": {
+    "date": "2026-10-04",
+    "tool": "Blender 5.2.0 LTS; review_outfit_sources.py diagnostics and review_rogue_fitting.py contact-sheet helper",
+    "report": "doc/assets/modular-caveman-tripo-boots-review-v1.json",
+    "image": {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/tripo-boots-raw-review-v1.png",
+      "sha256": "df48d8a6c2518ed8ce9d74d08419a9d517a87ca2f39a53ca968c4b5139a164d9"
+    },
+    "observations": [
+      "One hollow boot with layered fur cuff, diagonal tan wraps, knot and stitched flat sole.",
+      "Diagnostic welding at 1e-5 source units: 1 component, 82 boundary edges, 160 nonmanifold edges, no degenerate faces or collapsed UV triangles. Source geometry retained."
+    ],
+    "new_ai_generation_or_paid_calls": false
+  },
+  "status": "User accepted the fitted mirrored boots and rear ankle correction on 2026-10-04. Seven motions checked; mixed long-pants combinations and gameplay registration pending.",
+  "retained": true,
+  "fitting": {
+    "date": "2026-10-04",
+    "tool": "tools/fit-tripo-caveman-boots.py",
+    "validation_tool": "tools/validate-tripo-caveman-boots.mjs",
+    "rig_id": "human_male_01_mixamo_candidate_v2",
+    "output": {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_boots_v1/boots_caveman.glb",
+      "sha256": "816349031a0c5bcac6efd7bb1320b8cd3d27f77ec86c47a10e6f9ccee72e4a48"
+    },
+    "editable": {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_boots_v1/caveman-boots-fitting.blend",
+      "sha256": "85adbbf9ded78988bbb61bbf654c5098273afb9e277a0648db892d379e8f879c"
+    },
+    "reports": [
+      "doc/assets/modular-caveman-tripo-boots-fitting-v1.json",
+      "doc/assets/modular-caveman-tripo-boots-animation-v1.json"
+    ],
+    "preserved_source": true,
+    "preserved_original_texture": true,
+    "motion_image": {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/tripo-boots-fitted-motion-v1.png",
+      "sha256": "6e5b8dd9c92324f5bccb724ef70c10ddb675c176c2b8abf614f5a9c05bb6a57a"
+    },
+    "browser_review": {
+      "errors": [],
+      "assembled_after_skin_clipping_triangles": 27778,
+      "visible_triangles": 25772,
+      "face_triangles": 1505,
+      "scope": "Seven motions with ankle close-up, side and full set; 41.7% clip position, attack at 58.3%."
+    },
+    "rounded_cuff_triangles_per_boot": 2589,
+    "cuff_side_review": {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/tripo-boots-cuff-review-v1.png",
+      "sha256": "3c76c3f46daaa3e50e14190a40cba7f3429e7d5e6f07b8ba472172791bf6771e",
+      "retained": false,
+      "status": "[\ubbf8\uc0ac\uc6a9] Detail comparison removed after acceptance; final motion review retained.",
+      "removed_on": "2026-10-04"
+    },
+    "heel_profile_review": {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/tripo-boots-heel-review-v1.png",
+      "sha256": "6f86591401be78f2edc20fef1f94c34895f3fe78e8b1891ee500ef553b58d449",
+      "retained": false,
+      "status": "[\ubbf8\uc0ac\uc6a9] Detail comparison removed after acceptance; final motion review retained.",
+      "removed_on": "2026-10-04"
+    },
+    "user_cuff_acceptance_date": "2026-10-04",
+    "user_preview_acceptance_date": "2026-10-04"
+  },
+  "corrections": [
+    {
+      "status": "unused",
+      "reason": "Direct nearest-body toe weights combined with height-only calf influences pulled the instep between Leg and ToeBase. Replaced with shaft-limited ankle blend, Foot-only instep and smooth modest toe weights; source geometry unchanged."
+    },
+    {
+      "date": "2026-10-04",
+      "status": "current",
+      "reason": "User requested slightly thinner ankle/boot end and closer fit. Shaft outer clearance reduced from 14mm to 12mm and additional fur radius from 35mm to 27mm; 6mm inner clearance, sole/toe dimensions and rig method retained.",
+      "previous_output_sha256": "04f53d0d8e05d25e793b9b4de5bf8619556cdc98e5bc8be233bb99d83b90f56a"
+    },
+    {
+      "date": "2026-10-04",
+      "status": "superseded",
+      "reason": "User marked pointed upper fur corners. Locally subdivided upper-cuff edges once and smoothed the welded contour, preserving UV seams, original texture and 6mm opening clearance. Lower boot vertices unchanged; mirrored pair now 4816 triangles.",
+      "previous_output_sha256": "fe9245c0b18cf6344530ddfb7eb5c89e9b02b050a3d35ae547b42be1712fa261"
+    },
+    {
+      "date": "2026-10-04",
+      "status": "current",
+      "reason": "User marked a remaining pointed side flap beneath the already softened rim. Extended local rounding down to 0.395m with full influence at 0.435m; upper protrusions now approach a 38mm maximum clearance smoothly with 6mm softness. Opening minimum clearance stays 6mm; lower boot unchanged. Both side views and seven motions reviewed; pair now 5178 triangles.",
+      "previous_output_sha256": "4fd026d1fe663d6c764fe3455beaeae2d4aa34b1bdb1c80a8531e2561960f721"
+    },
+    {
+      "date": "2026-10-04",
+      "status": "current",
+      "reason": "User accepted the fur rounding and requested a straighter rear ankle. Filled the rear-only indentation between 0.05m and 0.24m toward the heel-to-shaft profile, maximum 26.9mm. Sole, toe, instep and cuff vertices preserved exactly; same rig and 5178 triangles. Matched before/after idle side views and seven motions checked.",
+      "previous_output_sha256": "ceff59059c9cffc48ca704cf5318eed51a6d2175db879484fe5118ff8baa22d3"
+    }
+  ],
+  "cleanup_record": "doc/assets/modular-caveman-tripo-boots-cleanup.json"
+}

@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-04",
+  "reason": "User requested removal of unnecessary intermediate files before committing the accepted boots",
+  "removed_repository_files": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/tripo-boots-cuff-review-v1.png",
+      "sha256": "3c76c3f46daaa3e50e14190a40cba7f3429e7d5e6f07b8ba472172791bf6771e",
+      "bytes": 311087
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/tripo-boots-heel-review-v1.png",
+      "sha256": "6f86591401be78f2edc20fef1f94c34895f3fe78e8b1891ee500ef553b58d449",
+      "bytes": 216448
+    }
+  ],
+  "removed_temporary_files_count": 32,
+  "removed_temporary_bytes": 20711331,
+  "temporary_scope": "Only boot-task temporary GLBs, render PNGs, one-off scripts and raw render log under /tmp; unrelated tasks untouched.",
+  "retained": [
+    "Original delivered GLB, final fitted boots GLB and editable Blender scene",
+    "Selected boot concept views, raw source review and final seven-motion review",
+    "Source, fitting, animation and correction records; reproducible fitting and Blender scripts"
+  ]
+}

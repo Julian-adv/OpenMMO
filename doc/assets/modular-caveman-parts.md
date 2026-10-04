@@ -2,6 +2,7 @@
 
 2026-10-03 제작. [부츠를 신긴 전체 원화 v2](modular-caveman-concept.md)를 참고해
 상의·손·하의·부츠의 정면과 보조 시점을 각각 한 장씩, 총 8장으로 다시 그렸다.
+2026-10-04에는 기존 앞·뒷면을 참조한 왼쪽 부츠 외측면 1장을 추가했다.
 사용자 요청으로 상의 보조 시점을 뒷면에서 오른쪽 사선 측면으로 변경했다.
 측면 v2는 어깨가 들어가는 둥근 빈 공간을 아래로 열고, 정면처럼 펠트를 화면 왼쪽에 배치했다.
 **[미사용]** 게임 적용 전 원화다. 사용자가 [Tripo 상의 원본](modular-caveman-tripo-top.md)을 전달했고,
@@ -10,6 +11,9 @@
 같은 날 [Tripo 하의 원본](modular-caveman-tripo-pants.md)을 전달받아
 4,960 triangles와 열린 허리 입구를 확인했다. 현재 몸체에 피팅하고 앞·뒤·양옆 모피를
 분리해 골반에 고정했다. 모피는 독립적으로 흔들리며 아래쪽으로 완만하게 휘어진다.
+같은 날 [Tripo 부츠](modular-caveman-tripo-boots.md) 한쪽 2,059 triangles를 전달받아
+발·종아리에 피팅하고 반대쪽을 대칭 제작했다. 양쪽 5,178 triangles를 공통 리그에 연결해
+상의·하의와 함께 미리보기에서 착용한다. 손목 보호대 제작과 게임 장비 등록은 후속 작업이다.
 
 ## 생성용 파일
 
@@ -18,15 +22,16 @@
 | 상의 | [앞면](../images/characters/modular_human_male_01/parts/caveman/top_caveman-front-v1.png) | [사선 측면 v2](../images/characters/modular_human_male_01/parts/caveman/top_caveman-side-v2.png) | 착용자 오른쪽 모피 어깨 장식, 뼈 장식, 목끈·목걸이 |
 | 손 | [앞면](../images/characters/modular_human_male_01/parts/caveman/bracer_caveman_right-front-v1.png) | [뒷면](../images/characters/modular_human_male_01/parts/caveman/bracer_caveman_right-back-v1.png) | 오른쪽 손목·전완 보호대 1개, 양끝 모피와 가죽 끈 |
 | 하의 | [앞면](../images/characters/modular_human_male_01/parts/caveman/pants_caveman-front-v1.png) | [뒷면](../images/characters/modular_human_male_01/parts/caveman/pants_caveman-back-v1.png) | 허리띠·뼈 장식·앞뒤 가죽 패널·옆 모피 |
-| 부츠 | [앞면](../images/characters/modular_human_male_01/parts/caveman/boot_caveman_left-front-v1.png) | [뒷면](../images/characters/modular_human_male_01/parts/caveman/boot_caveman_left-back-v1.png) | 왼쪽 부츠 1개, 종아리 모피 커프·가죽 끈·밑창 |
+| 부츠 | [앞면](../images/characters/modular_human_male_01/parts/caveman/boot_caveman_left-front-v1.png) | [뒷면](../images/characters/modular_human_male_01/parts/caveman/boot_caveman_left-back-v1.png) · [외측면](../images/characters/modular_human_male_01/parts/caveman/boot_caveman_left-side-v1.png) | 왼쪽 부츠 1개, 종아리 모피 커프·가죽 끈·밑창 |
 
 [선택한 8장 묶음 ZIP v3](../images/characters/modular_human_male_01/parts/caveman/caveman-tripo-inputs-v3.zip).
+추가 부츠 측면은 별도 이미지이며 기존 ZIP에는 포함되지 않는다.
 각 이미지에는 같은 파트의 한 시점만 담았다. 인체·다른 장비·문자는 제외했다.
 손목 보호대와 부츠는 한쪽을 생성한 뒤 반대쪽을 대칭 제작하고 실제 몸체에 맞춘다.
 손 장비는 장갑이 아니며 손과 손가락이 노출된다.
 
 - 상의: 정면 1222×1287, 측면 1254×1254 RGBA. 하의: 앞뒤 1145×1374 RGBA. 모두 투명 배경이다.
-- 손목 보호대와 부츠: 1024×1536 RGB, 앞뒤 모두 흰 배경이다.
+- 손목 보호대와 부츠: 1024×1536 RGB, 앞뒤 및 추가 부츠 측면 모두 흰 배경이다.
   초기 투명화 결과의 갈색 배경 번짐 때문에 단색 배경으로 수정했다.
 - 부츠 첫 후면은 앞코가 보이는 오류로 미채택했다. 선택 후면은 뒤꿈치와 뒷축 봉제선을 보여준다.
 - 초기 배경 수정용 3장과 빈 어깨 공간을 수정한 중간 측면 1장은 중간 파일 정리 요청으로 삭제했다.
@@ -48,6 +53,6 @@
 
 ## 출처
 
-- 생성·수정: OpenAI Codex built-in ImageGen, **ChatGPT Pro 20x**, 2026-10-03.
+- 생성·수정: OpenAI Codex built-in ImageGen, **ChatGPT Pro 20x**, 2026-10-03. 추가 부츠 측면: 같은 도구·등급, 2026-10-04.
 - OpenAI 생성 출력물 이용 조건과 [입력 원화의 출처](modular-caveman-concept-sources.json)를 따른다.
 - [모든 실제 프롬프트·참조·선택/미채택 기록·파일 해시](modular-caveman-parts-sources.json).
