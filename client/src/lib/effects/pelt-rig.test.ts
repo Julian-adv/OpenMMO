@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createPeltRig,
   disposePeltPhysics,
+  resetPeltPhysics,
   updatePeltPhysics,
   type PeltPhysics,
 } from './pelt-rig'
@@ -82,6 +83,76 @@ function worldVertex(mesh: THREE.SkinnedMesh, i: number) {
 }
 
 describe('pelt physics', () => {
+  it.each(['strap', 'fur'] as const)(
+    'keeps %s cloth pinned and unstretched at a 30 Hz physics step',
+    (kind) => {
+      const { root, hip, mesh, settings } = softFixture(kind)
+      const rig = createPeltRig(mesh, settings)
+      rig.reset()
+      for (let i = 0; i < 120; i++) {
+        root.position.z = i / 30
+        root.rotation.y = Math.sin(i / 30) * 0.6
+        hip.position.y = 1 + Math.sin(i) * 0.03
+        rig.update(
+          1 / 30,
+          { windDirX: 1, windDirZ: 0, windStrength: 1 },
+          1 / 30
+        )
+        const positions = mesh.geometry.getAttribute('position')
+        expect(Array.from(positions.array).every(Number.isFinite)).toBe(true)
+        const rest = root.worldToLocal(worldVertex(mesh, 1))
+        expect(rest.y).toBeCloseTo(1.055 + Math.sin(i) * 0.03, 5)
+        for (let row = 2; row < 6; row++)
+          for (let col = 0; col < 3; col++) {
+            const index = row * 3 + col
+            const length = worldVertex(mesh, index).distanceTo(
+              worldVertex(mesh, index - 3)
+            )
+            expect(length).toBeLessThanOrEqual(0.073 * 1.041)
+          }
+      }
+      rig.dispose()
+    }
+  )
+
+  it.each(['plate', 'fur'] as const)(
+    'matches standalone %s physics with shared matrices through animation and resets',
+    (kind) => {
+      const make = () => (kind === 'fur' ? softFixture('fur') : fixture())
+      const a = make()
+      const b = make()
+      const settings: PeltPhysics = {
+        ...(a.mesh.userData.pelt_physics as PeltPhysics),
+        colliders: [
+          { bone: 'Hips', center: [0, 0.82, 0.2], radii: [0.11, 0.09, 0.08] },
+        ],
+      }
+      a.mesh.userData.pelt_physics = settings
+      const standalone = createPeltRig(b.mesh, settings)
+      for (let i = 0; i < 60; i++) {
+        for (const { root, hip } of [a, b]) {
+          root.position.set(3 + Math.sin(i * 0.1) * 0.1, 2, -1)
+          root.rotation.y = 0.7 + i * 0.01
+          root.scale.setScalar(1.2)
+          hip.position.y = 1 + Math.sin(i * 0.2) * 0.03
+          hip.rotation.x = Math.sin(i * 0.1) * 0.2
+        }
+        if (i === 30) {
+          resetPeltPhysics(a.root)
+          standalone.reset()
+        }
+        const dt = i === 45 ? 1 : 1 / 60
+        updatePeltPhysics(a.root, dt)
+        standalone.update(dt)
+        expect(
+          Array.from(a.mesh.geometry.getAttribute('position').array)
+        ).toEqual(Array.from(b.mesh.geometry.getAttribute('position').array))
+      }
+      disposePeltPhysics(a.root)
+      standalone.dispose()
+    }
+  )
+
   it('keeps a heavier side pelt closer to its wearer after a sudden movement', () => {
     const a = fixture(),
       b = fixture(),

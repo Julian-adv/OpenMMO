@@ -167,6 +167,7 @@
   import { type TerrainTile } from './game-scene/terrain-utils'
   import { createLoopProfiler } from './game-scene/loop-profiler'
   import { createRenderProfiler } from './game-scene/render-profiler'
+  import { installSceneMatrixReuse } from './game-scene/scene-matrix-reuse'
   import {
     installAsyncPipelines,
     type AsyncPipelines,
@@ -1109,6 +1110,7 @@
   onMount(() => {
     loopProfileEnabled = false
     loopProfiler.resetWindow(performance.now())
+    const restoreSceneMatrices = installSceneMatrixReuse(renderer, scene)
     renderProfiler.wrap(renderer)
     asyncPipelines = installAsyncPipelines(renderer, scene)
 
@@ -1260,6 +1262,7 @@
 
     return () => {
       cleanupDebugConsole()
+      restoreSceneMatrices()
       asyncPipelines?.dispose()
       scene.environment?.dispose()
       scene.environment = null

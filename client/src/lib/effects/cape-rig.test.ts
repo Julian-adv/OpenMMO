@@ -232,41 +232,64 @@ describe('cape fit', () => {
     expect(fitCapeToSkeleton(bare)).toBeNull()
   })
 
-  it('keeps the buttocks from poking through, standing and walking', () => {
-    const facing = new THREE.Vector3(0, 0, 1)
-    const { root } = makeCharacter(facing)
-    const fit = fitCapeToSkeleton(root)
-    if (!fit) throw new Error('expected a fit')
+  it.each([60, 30])(
+    'keeps body contact while standing and walking at %i Hz',
+    (fps) => {
+      const facing = new THREE.Vector3(0, 0, 1)
+      const { root } = makeCharacter(facing)
+      const fit = fitCapeToSkeleton(root)
+      if (!fit) throw new Error('expected a fit')
 
-    const rig = attachCapeFit(fit)
+      const rig = attachCapeFit(fit)
 
-    const segments = fit.options.segments ?? 5
-    const check = () => {
-      for (const p of capePoints(rig, segments)) {
-        const local = root.worldToLocal(p.clone())
-        // Behind the body surface at its own height (-z is behind here).
-        expect(-local.z).toBeGreaterThan(bodyDepth(local.y, local.x) - 1e-3)
+      const segments = fit.options.segments ?? 5
+      const check = () => {
+        for (const p of capePoints(rig, segments)) {
+          const local = root.worldToLocal(p.clone())
+          // Behind the body surface at its own height (-z is behind here).
+          expect(-local.z).toBeGreaterThan(bodyDepth(local.y, local.x) - 1e-3)
+        }
+      }
+
+      for (let i = 0; i < fps * 2; i++) {
+        rig.update(1 / fps, null, 1 / fps)
+        check()
+      }
+
+      // Walk forwards, sway the hips, and turn — the sheet is pressed against the
+      // body the whole time.
+      for (let i = 0; i < fps * 4; i++) {
+        root.position.z += 3 / fps
+        root.position.y = Math.sin((i / fps) * 30) * 0.03
+        root.rotation.y = Math.sin((i / fps) * 3) * 0.6
+        rig.update(
+          1 / fps,
+          { windDirX: 0, windDirZ: 1, windStrength: 1 },
+          1 / fps
+        )
+        check()
       }
     }
-
-    for (let i = 0; i < 120; i++) {
-      rig.update(1 / 60, null)
-      check()
-    }
-
-    // Walk forwards, sway the hips, and turn — the sheet is pressed against the
-    // body the whole time.
-    for (let i = 0; i < 240; i++) {
-      root.position.z += 3 / 60
-      root.position.y = Math.sin(i * 0.5) * 0.03
-      root.rotation.y = Math.sin(i * 0.05) * 0.6
-      rig.update(1 / 60, { windDirX: 0, windDirZ: 1, windStrength: 1 })
-      check()
-    }
-  })
+  )
 })
 
 describe('cape rig', () => {
+  it('resets paused cloth in place without inheriting its old velocity', () => {
+    const { rig, mover } = makeRig()
+    for (let i = 0; i < 60; i++) {
+      mover.position.z -= 4 / 30
+      rig.update(1 / 30, null, 1 / 30)
+    }
+    rig.reset()
+    const local = rig.root.worldToLocal(tips(rig)[1].clone())
+    const fresh = makeRig()
+    fresh.rig.reset()
+    const rest = fresh.rig.root.worldToLocal(tips(fresh.rig)[1].clone())
+    expect(local.distanceTo(rest)).toBeLessThan(1e-6)
+    expect(local.length()).toBeLessThan(OPTIONS.length * 1.05)
+    fresh.rig.dispose()
+    rig.dispose()
+  })
   it('settles hanging straight down when the wearer stands still', () => {
     const { rig } = makeRig()
     settle(rig, 3)

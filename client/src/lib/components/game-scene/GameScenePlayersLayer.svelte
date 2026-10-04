@@ -586,6 +586,8 @@
         unifiedTorchLight.intensity = 0
       }
     }
+    if (unifiedTorchLight)
+      unifiedTorchLight.shadow.autoUpdate = unifiedTorchLight.intensity > 0
     updateWallTorchPool(deltaTime, wallPositions, occupiedWallIdx)
   }
 
@@ -779,6 +781,7 @@
       distance={TORCH_BASE_DISTANCE}
       decay={TORCH_BASE_DECAY}
       castShadow={torchLightCastsShadow}
+      shadow.autoUpdate={false}
       shadow.mapSize.width={torchShadowMapSize}
       shadow.mapSize.height={torchShadowMapSize}
       shadow.camera.near={1.5}

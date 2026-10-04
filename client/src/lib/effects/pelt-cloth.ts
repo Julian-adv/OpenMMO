@@ -42,7 +42,6 @@ export function createPeltCloth(
   const next = new THREE.Vector3()
   const inverse = new THREE.Matrix4()
   const fur = config.kind === 'fur'
-  const damping = Math.exp(-(fur ? 48 : 24) * STEP)
   let scale = 1
   let accumulator = 0
   for (let i = 0; i < count; i++) {
@@ -194,13 +193,19 @@ export function createPeltCloth(
     frame: THREE.Matrix4,
     dt: number,
     wind: WindSample | null,
-    contact: Contact
+    contact: Contact,
+    step = STEP
   ) {
-    accumulator = Math.min(accumulator + dt, STEP * 4)
-    if (accumulator + 1e-10 < STEP) return
+    accumulator = Math.min(accumulator + dt, step * 4)
+    if (accumulator + 1e-10 < step) return
+    const damping = Math.exp(-(fur ? 48 : 24) * step)
+    const step2 = step * step
     refresh(frame)
-    while (accumulator + 1e-10 >= STEP) {
-      accumulator -= STEP
+    const push = wind
+      ? wind.windStrength * (fur ? 0.06 : 0.12) * scale * step2
+      : 0
+    while (accumulator + 1e-10 >= step) {
+      accumulator -= step
       for (let i = 0; i < count; i++) {
         if (i < pinned) {
           points[i].copy(targets[i])
@@ -214,24 +219,12 @@ export function createPeltCloth(
           .add(points[i])
           .addScaledVector(
             delta.copy(targets[i]).sub(points[i]),
-            (fur ? 40 : 18) * STEP * STEP
+            (fur ? 40 : 18) * step2
           )
-        next.y -= 12 * scale * STEP * STEP
+        next.y -= 12 * scale * step2
         if (wind) {
-          next.x +=
-            wind.windDirX *
-            wind.windStrength *
-            (fur ? 0.06 : 0.12) *
-            scale *
-            STEP *
-            STEP
-          next.z +=
-            wind.windDirZ *
-            wind.windStrength *
-            (fur ? 0.06 : 0.12) *
-            scale *
-            STEP *
-            STEP
+          next.x += wind.windDirX * push
+          next.z += wind.windDirZ * push
         }
         const row = Math.floor(i / columns)
         delta

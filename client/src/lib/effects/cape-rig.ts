@@ -57,7 +57,8 @@ export interface CapeRig {
   /** Attach to the spine bone. Local frame: +x right, +y up, +z away from back. */
   root: THREE.Group
   mesh: THREE.SkinnedMesh
-  update(dt: number, wind: WindSample | null): void
+  update(dt: number, wind: WindSample | null, step?: number): void
+  reset(): void
   /** Re-dye or re-print the hanging cloth. Nothing else in the rig depends on
    *  how it looks, so the pickers swap materials instead of rebuilding the
    *  sheet on every drag of the colour wheel. */
@@ -485,6 +486,7 @@ export function createCapeRig(options: CapeRigOptions): CapeRig {
 
   function integrate(dt: number, wind: WindSample | null): void {
     const dt2 = dt * dt
+    const damping = Math.pow(DAMPING, dt / SUBSTEP)
     const speedBoost = Math.min(
       smoothedSpeed * FLUTTER_SPEED_SCALE,
       FLUTTER_SPEED_CAP
@@ -513,7 +515,7 @@ export function createCapeRig(options: CapeRigOptions): CapeRig {
         )
 
         const p = points[c][i]
-        _vel.subVectors(p, prev[c][i]).multiplyScalar(DAMPING)
+        _vel.subVectors(p, prev[c][i]).multiplyScalar(damping)
         _next.copy(p).add(_vel).addScaledVector(_accel, dt2)
         prev[c][i].copy(p)
         p.copy(_next)
@@ -583,10 +585,14 @@ export function createCapeRig(options: CapeRigOptions): CapeRig {
     }
   }
 
-  function update(dt: number, wind: WindSample | null): void {
+  function reset(): void {
+    resetToRest()
+    driveBones()
+  }
+
+  function update(dt: number, wind: WindSample | null, step = SUBSTEP): void {
     if (!initialized) {
-      resetToRest()
-      driveBones()
+      reset()
       return
     }
     if (!(dt > 0)) return
@@ -595,19 +601,18 @@ export function createCapeRig(options: CapeRigOptions): CapeRig {
     refreshFrame()
     const jump = _prevCenter.distanceTo(anchors[1])
     if (jump > TELEPORT_JUMP) {
-      resetToRest()
-      driveBones()
+      reset()
       return
     }
     const speed = jump / dt
     smoothedSpeed += (speed - smoothedSpeed) * Math.min(1, dt / SPEED_SMOOTHING)
 
     elapsed += dt
-    accumulator = Math.min(accumulator + dt, MAX_SUBSTEPS * SUBSTEP)
-    while (accumulator >= SUBSTEP) {
-      accumulator -= SUBSTEP
+    accumulator = Math.min(accumulator + dt, MAX_SUBSTEPS * step)
+    while (accumulator + 1e-10 >= step) {
+      accumulator -= step
       for (let c = 0; c < COLUMNS; c++) points[c][0].copy(anchors[c])
-      integrate(SUBSTEP, wind)
+      integrate(step, wind)
       applyConstraints()
     }
 
@@ -618,6 +623,7 @@ export function createCapeRig(options: CapeRigOptions): CapeRig {
     root,
     mesh,
     update,
+    reset,
     setSkin(skin) {
       if (skinKey(skin) === claimed.key) return
       const next = claimMaterial(skin)

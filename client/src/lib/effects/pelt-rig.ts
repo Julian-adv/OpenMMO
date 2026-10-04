@@ -47,7 +47,11 @@ const STEP = 1 / 60
 const MAX_ANGLE = 1.35
 const rigs = new WeakMap<THREE.SkinnedMesh, PeltRig>()
 
-export function createPeltRig(mesh: THREE.SkinnedMesh, config: PeltPhysics) {
+export function createPeltRig(
+  mesh: THREE.SkinnedMesh,
+  config: PeltPhysics,
+  updateWorldMatrices = true
+) {
   const original = mesh.geometry
   const geometry = original.clone()
   const position = geometry.getAttribute('position') as THREE.BufferAttribute
@@ -152,7 +156,8 @@ export function createPeltRig(mesh: THREE.SkinnedMesh, config: PeltPhysics) {
   let scale = 1
 
   function skin(target: THREE.Matrix4, index: number) {
-    mesh.skeleton.bones[index].updateWorldMatrix(true, false)
+    if (updateWorldMatrices)
+      mesh.skeleton.bones[index].updateWorldMatrix(true, false)
     return target
       .copy(mesh.matrixWorld)
       .multiply(mesh.bindMatrixInverse)
@@ -162,8 +167,10 @@ export function createPeltRig(mesh: THREE.SkinnedMesh, config: PeltPhysics) {
   }
 
   function refresh() {
-    mesh.updateWorldMatrix(true, false)
-    mesh.updateMatrixWorld(true)
+    if (updateWorldMatrices) {
+      mesh.updateWorldMatrix(true, false)
+      mesh.updateMatrixWorld(true)
+    }
     skin(frame, bone)
     inverseFrame.copy(frame).invert()
     scale = frame.getMaxScaleOnAxis()
@@ -332,7 +339,7 @@ export function createPeltRig(mesh: THREE.SkinnedMesh, config: PeltPhysics) {
     return joint ? -at * 0.7 - 0.08 : 0
   }
 
-  function update(dt: number, wind: WindSample | null = null) {
+  function update(dt: number, wind: WindSample | null = null, step = STEP) {
     if (!active) return
     if (!mesh.visible) {
       initialized = false
@@ -351,35 +358,30 @@ export function createPeltRig(mesh: THREE.SkinnedMesh, config: PeltPhysics) {
     lastAnchor.copy(anchor)
     if (!(dt > 0)) return
     if (cloth) {
-      cloth.update(frame, dt, wind, contact)
+      cloth.update(frame, dt, wind, contact, step)
       return
     }
     const inertia = config.motion?.inertia ?? 1
     point.addScaledVector(anchorShift, 1 - inertia)
     previous.addScaledVector(anchorShift, 1 - inertia)
-    accumulator = Math.min(accumulator + dt, STEP * 4)
-    if (accumulator + 1e-10 < STEP) return
+    accumulator = Math.min(accumulator + dt, step * 4)
+    if (accumulator + 1e-10 < step) return
     const minimum = collisionAngle()
     const strap = config.kind === 'strap'
     const damping = config.motion?.damping ?? (strap ? 7 : 12)
     const stiffness = config.motion?.stiffness ?? (strap ? 24 : 65)
     const gravity = config.motion?.gravity ?? 6
+    const step2 = step * step
+    const decay = Math.exp(-damping * step)
     tip(target, minimum)
-    while (accumulator + 1e-10 >= STEP) {
-      accumulator -= STEP
-      next
-        .copy(point)
-        .sub(previous)
-        .multiplyScalar(Math.exp(-damping * STEP))
-        .add(point)
-      next.addScaledVector(
-        local.copy(target).sub(point),
-        stiffness * STEP * STEP
-      )
-      next.y -= gravity * scale * STEP * STEP
+    while (accumulator + 1e-10 >= step) {
+      accumulator -= step
+      next.copy(point).sub(previous).multiplyScalar(decay).add(point)
+      next.addScaledVector(local.copy(target).sub(point), stiffness * step2)
+      next.y -= gravity * scale * step2
       if (wind) {
-        next.x += wind.windDirX * wind.windStrength * 0.3 * scale * STEP * STEP
-        next.z += wind.windDirZ * wind.windStrength * 0.3 * scale * STEP * STEP
+        next.x += wind.windDirX * wind.windStrength * 0.3 * scale * step2
+        next.z += wind.windDirZ * wind.windStrength * 0.3 * scale * step2
       }
       local.copy(next).applyMatrix4(inverseFrame).sub(pivot)
       const beforeAngle = angle
@@ -390,19 +392,19 @@ export function createPeltRig(mesh: THREE.SkinnedMesh, config: PeltPhysics) {
       )
       const joint = config.bend?.joint
       if (joint) {
-        jointVelocity -= ((angle - beforeAngle) * joint.inertia) / STEP
-        jointVelocity += (jointTarget() - jointAngle) * joint.stiffness * STEP
-        jointVelocity *= Math.exp(-joint.damping * STEP)
-        const proposed = jointAngle + jointVelocity * STEP
+        jointVelocity -= ((angle - beforeAngle) * joint.inertia) / step
+        jointVelocity += (jointTarget() - jointAngle) * joint.stiffness * step
+        jointVelocity *= Math.exp(-joint.damping * step)
+        const proposed = jointAngle + jointVelocity * step
         jointAngle = THREE.MathUtils.clamp(proposed, -0.8, 0.35)
         if (proposed !== jointAngle) jointVelocity = 0
       }
       const crease = config.bend?.crease
       if (crease) {
         creaseVelocity +=
-          (creaseTarget() - creaseAngle) * crease.stiffness * STEP
-        creaseVelocity *= Math.exp(-crease.damping * STEP)
-        const proposed = creaseAngle + creaseVelocity * STEP
+          (creaseTarget() - creaseAngle) * crease.stiffness * step
+        creaseVelocity *= Math.exp(-crease.damping * step)
+        const proposed = creaseAngle + creaseVelocity * step
         creaseAngle = THREE.MathUtils.clamp(proposed, 0, 0.45)
         if (proposed !== creaseAngle) creaseVelocity = 0
       }
@@ -430,7 +432,9 @@ export type PeltRig = ReturnType<typeof createPeltRig>
 export function updatePeltPhysics(
   root: THREE.Object3D,
   dt: number,
-  wind: WindSample | null = null
+  wind: WindSample | null = null,
+  step = STEP,
+  reset = false
 ) {
   const meshes: THREE.SkinnedMesh[] = []
   root.traverse((node) => {
@@ -447,14 +451,21 @@ export function updatePeltPhysics(
   for (const node of meshes) {
     let rig = rigs.get(node)
     if (!rig && node.visible) {
-      rig = createPeltRig(node, node.userData.pelt_physics as PeltPhysics)
+      rig = createPeltRig(
+        node,
+        node.userData.pelt_physics as PeltPhysics,
+        false
+      )
       rigs.set(node, rig)
     }
-    rig?.update(dt, wind)
+    if (reset) rig?.reset()
+    rig?.update(dt, wind, step)
   }
 }
 
 export function resetPeltPhysics(root: THREE.Object3D) {
+  root.updateWorldMatrix(true, false)
+  root.updateMatrixWorld(true)
   root.traverse((node) => {
     if (node instanceof THREE.SkinnedMesh) rigs.get(node)?.reset()
   })

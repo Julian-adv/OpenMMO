@@ -51,6 +51,7 @@
 
 <script lang="ts">
   import { updatePeltPhysics } from '../effects/pelt-rig'
+  import { createSecondaryMotionScheduler } from '../effects/secondary-motion-scheduler'
   import { translate } from '../i18n'
   import { visibleMana } from '../stores/gameStore'
   import { playerHealthDisplay } from '../stores/playerHealthDisplay'
@@ -892,15 +893,9 @@
     if (color !== null) capeRig?.setSkin({ color, texture })
   })
 
-  /** Steps the cape cloth, after the mixer so the sheet follows the pose this
-   *  frame renders. A parked remote player sits at OFFSCREEN_Y; skip the solve
-   *  and the draws rather than simulating cloth nobody can see. */
-  function updateCape(deltaTime: number, wind: WindState | null) {
-    if (!capeRig) return
-    const onScreen = position.y > OFFSCREEN_Y / 2
-    capeRig.root.visible = onScreen
-    if (onScreen) capeRig.update(deltaTime, wind)
-  }
+  const secondaryMotion = untrack(() =>
+    createSecondaryMotionScheduler(remotePlayerId ?? npcPlayerId)
+  )
 
   // ── Music emote prop ────────────────────────────────────
   // The server requires an instrument in the performer's inventory, but the
@@ -1664,9 +1659,14 @@
         !riding,
       catchPresentation
     )
-    updateCape(deltaTime, wind)
-    if (modelRoot && position.y > OFFSCREEN_Y / 2)
-      updatePeltPhysics(modelRoot, deltaTime, wind)
+    const onScreen = !teleportHidden && position.y > OFFSCREEN_Y / 2
+    if (capeRig) capeRig.root.visible = onScreen
+    const physics = secondaryMotion.next(deltaTime, onScreen, isCurrentPlayer)
+    if (!physics) return
+    const { deltaTime: dt, reset, step } = physics
+    if (reset) capeRig?.reset()
+    capeRig?.update(dt, wind, step)
+    if (modelRoot) updatePeltPhysics(modelRoot, dt, wind, step, reset)
   }
 
   // Function to update mixer and animation state and nametag
