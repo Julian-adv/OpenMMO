@@ -1,0 +1,136 @@
+{
+  "delivery_date": "2026-10-04",
+  "generation_date": null,
+  "provider": "Tripo Studio",
+  "subscription": {
+    "previous_user_report": "Approximately USD 20/month Studio subscription",
+    "previous_source_record": "doc/assets/modular-rogue-tripo-sources.json",
+    "current_file_tier_separately_confirmed": false
+  },
+  "license": "Subject to the original Tripo Studio output terms; retain original source/account provenance. No separate license grant inferred from file delivery.",
+  "delivery_path_windows": "Y:\\public\\web_downloads\\fur+boot+3d+model.glb",
+  "delivery_path_linux": "/mnt/y/web_downloads/fur+boot+3d+model.glb",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/caveman_tripo_bracer_v1/source.glb",
+    "sha256": "17ef57be917df0988f0e1f41ca19e759a9a305b3fc2135de5dc58a155a0b9ad0",
+    "bytes": 1742696,
+    "byte_identical_to_delivery": true
+  },
+  "generation_task_id": null,
+  "generation_model_version": null,
+  "submitted_prompt": null,
+  "submitted_images_confirmed": false,
+  "requested_polygon_count_confirmed": null,
+  "reference_artwork": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/bracer_caveman_right-front-v1.png",
+      "sha256": "d4f1ba5d7df2b8391db770f9299e90c83f68e2681459680003b713b03bd7994c"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/bracer_caveman_right-back-v1.png",
+      "sha256": "06782be1d672928a25af4adb2a0e88d41e71fba7151d51ef088be4a3663d603e"
+    }
+  ],
+  "export_observed": {
+    "format": "GLB 2.0",
+    "generator": "Tripo",
+    "triangles": 1814,
+    "original_quad_count": null,
+    "vertices_including_uv_splits": 2192,
+    "mesh_count": 1,
+    "material_count": 1,
+    "textures": [
+      {
+        "size": [
+          2048,
+          2048
+        ],
+        "format": "JPEG",
+        "embedded_sha256": "8866b26a914e7c60d36e47b77567a5ffa185e1161b049ca9409c0794f9c6ef1e"
+      }
+    ],
+    "rigged": false,
+    "animations": 0
+  },
+  "review": {
+    "date": "2026-10-04",
+    "tool": "Blender 5.2.0 LTS with review_outfit_sources.py diagnostics and review_rogue_fitting.py contact-sheet helper",
+    "report": "doc/assets/modular-caveman-tripo-bracer-review-v1.json",
+    "image": {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/tripo-bracer-raw-review-v1.png",
+      "sha256": "7e9460bbf07b87fa035a8804d28a0d682061ce2e9b2a7703bdc1d7bcb1f074dd"
+    },
+    "scope": "Original source front, side, back and opening; no body fitting or rig.",
+    "observations": [
+      "Although the delivery filename says boot, the mesh is a hollow leather forearm bracer with upper/lower fur bands and three tan ties.",
+      "Top opening is hollow; finger/hand geometry is absent. Lower opening and fur edge clearance need review during body fitting.",
+      "Diagnostic welding at 1e-5 source units: 23 connected components, 341 boundary edges, 360 nonmanifold edges, no degenerate faces or collapsed UV triangles. Source retained unchanged."
+    ],
+    "new_ai_generation_or_paid_calls": false
+  },
+  "status": "User accepted the fitted mirrored bracers on 2026-10-04. Seven motion clips, canonical rig binding and reversible skin masking checked in the workshop preview; mixed sleeves and gameplay registration pending.",
+  "retained": true,
+  "fitting": {
+    "date": "2026-10-04",
+    "tool": "tools/fit-tripo-caveman-bracer.py",
+    "validation_tool": "tools/validate-tripo-caveman-bracer.mjs",
+    "rig_id": "human_male_01_mixamo_candidate_v2",
+    "output": {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_bracer_v1/gloves_caveman.glb",
+      "sha256": "cbf5af0d066dd2f805fdee6e94661d31c38f07afc68492ecb65ebe509f0faf86",
+      "bytes": 1970920
+    },
+    "editable": {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_bracer_v1/caveman-bracer-fitting.blend",
+      "sha256": "8665e2b7760b713ad9129325c9bab1aef3c528484f2cf57d6cbc60394a32a35e",
+      "bytes": 44369326
+    },
+    "reports": [
+      "doc/assets/modular-caveman-tripo-bracer-fitting-v1.json",
+      "doc/assets/modular-caveman-tripo-bracer-animation-v1.json"
+    ],
+    "preserved_source": true,
+    "preserved_original_topology_uv_and_texture": true,
+    "mirrored_pair_triangles": 3628,
+    "skin_mask": "Forearm skin below the 23% elbow-to-wrist plane is hidden inside loaded bracers. Bare hands remain visible; original skin geometry is restored on removal or loading failure.",
+    "skin_inner_clearance_m": 0.004,
+    "upper_skin_overlap_m": 0.01637,
+    "bone_weights": "LeftForeArm 100% and RightForeArm 100%; wrist/finger bones remain free.",
+    "motion_image": {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/tripo-bracer-fitted-motion-v1.png",
+      "sha256": "c15e10f17aaa48d6a0ca5e8a7c0b2a65a9612f39f059ee96686f9e393f25bd1a",
+      "bytes": 615932
+    },
+    "set_image": {
+      "path": "doc/images/characters/modular_human_male_01/parts/caveman/tripo-bracer-fitted-set-v1.png",
+      "sha256": "d2ad2677c547f9d38690333124d7171973c494a5672d7039199468509f6c8f81",
+      "bytes": 159953
+    },
+    "browser_review": {
+      "errors": [],
+      "assembled_before_skin_clipping_triangles": 31537,
+      "assembled_after_skin_clipping_triangles": 31252,
+      "visible_triangles": 29246,
+      "face_triangles": 1505,
+      "scope": "Seven real motion clips at 41.7% with wrist views for combat idle, slash and sit (58.3%). Jump uses a tracked torso view. Skin restoration reviewed on removal; automated loading-failure/restore test passes.",
+      "supported_combination": "Full caveman outfit in the workshop preview; mixed sleeves and gameplay not yet certified."
+    },
+    "quality_checks": {
+      "svelte_check_errors": 0,
+      "svelte_check_warnings": 0,
+      "typescript_check_passed": true,
+      "eslint_passed": true,
+      "related_tests_passed": 48
+    },
+    "user_preview_acceptance_date": "2026-10-04"
+  },
+  "cleanup_record": "doc/assets/modular-caveman-tripo-bracer-cleanup.json",
+  "publication": {
+    "date": "2026-10-04",
+    "repo": "jake-song-openmmo/onlinerpg-assets",
+    "revision": "ad6d7ff520f790ea10c7a76b37588cb969374618",
+    "verified_files": 3,
+    "preserved_existing_entries": 708,
+    "lock": "assets.lock"
+  }
+}

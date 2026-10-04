@@ -79,6 +79,10 @@ function modularCharacterPreview(): Plugin {
     '../assets/modular_human_male_01/parts/caveman_tripo_boots_v1/boots_caveman.glb',
     import.meta.url
   )
+  const cavemanGloves = new URL(
+    '../assets/modular_human_male_01/parts/caveman_tripo_bracer_v1/gloves_caveman.glb',
+    import.meta.url
+  )
   const selection = JSON.parse(
     fs.readFileSync(
       new URL(
@@ -136,18 +140,20 @@ function modularCharacterPreview(): Plugin {
               ? cavemanPants
               : part?.[1] === 'boots_caveman'
                 ? cavemanBoots
-                : part && rogueParts.has(part[1])
-                  ? selection.fitting_candidate.part_overrides?.[part[1]]
-                    ? new URL(
-                        `../${selection.fitting_candidate.part_overrides[part[1]]}`,
-                        import.meta.url
-                      )
-                    : new URL(`${part[1]}.glb`, rogue)
-                  : part && parts.has(part[1])
-                    ? new URL(`${part[1]}.glb`, fitted)
-                    : files.has(name)
-                      ? new URL(name, directory)
-                      : null
+                : part?.[1] === 'gloves_caveman'
+                  ? cavemanGloves
+                  : part && rogueParts.has(part[1])
+                    ? selection.fitting_candidate.part_overrides?.[part[1]]
+                      ? new URL(
+                          `../${selection.fitting_candidate.part_overrides[part[1]]}`,
+                          import.meta.url
+                        )
+                      : new URL(`${part[1]}.glb`, rogue)
+                    : part && parts.has(part[1])
+                      ? new URL(`${part[1]}.glb`, fitted)
+                      : files.has(name)
+                        ? new URL(name, directory)
+                        : null
         if (req.method !== 'GET' || !url) {
           res.statusCode = 404
           res.end('Unknown preview asset')

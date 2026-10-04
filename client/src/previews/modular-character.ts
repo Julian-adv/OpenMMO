@@ -155,6 +155,7 @@ async function main() {
     'top_caveman',
     'pants_caveman',
     'boots_caveman',
+    'gloves_caveman',
   ]
   const [base, sources, animations, sword, profile, candidateSources, social] =
     await Promise.all([
@@ -271,7 +272,8 @@ async function main() {
     const inspectingCaveman =
       equipped.has('top_caveman') ||
       equipped.has('pants_caveman') ||
-      equipped.has('boots_caveman')
+      equipped.has('boots_caveman') ||
+      equipped.has('gloves_caveman')
     note.hidden = rogueAvailable && !inspectingRogue && !inspectingCaveman
     note.textContent = inspectingCaveman
       ? '원시전사 모피와 뼈 장식'

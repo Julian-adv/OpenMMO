@@ -10,9 +10,13 @@ export {
   ROGUE_MODULAR_PARTS as ROGUE_PREVIEW_PARTS,
 } from '../lib/utils/modularCharacter'
 
-export type PreviewOutfit = Omit<ModularOutfit, 'top' | 'pants' | 'boots'> & {
+export type PreviewOutfit = Omit<
+  ModularOutfit,
+  'top' | 'pants' | 'gloves' | 'boots'
+> & {
   top: ModularOutfit['top'] | 'caveman'
   pants: ModularOutfit['pants'] | 'caveman'
+  gloves: ModularOutfit['gloves'] | 'caveman'
   boots: ModularOutfit['boots'] | 'caveman'
 }
 
@@ -20,7 +24,7 @@ export const CAVEMAN_PREVIEW_OUTFIT: PreviewOutfit = {
   hair: 'hair_crop',
   top: 'caveman',
   pants: 'caveman',
-  gloves: 'none',
+  gloves: 'caveman',
   boots: 'caveman',
   helmet: 'none',
 }
@@ -32,6 +36,8 @@ export function showPreviewOutfit(
 ): Set<string> {
   const cavemanBoots =
     outfit.boots === 'caveman' && !!parts.get('boots_caveman')?.length
+  const cavemanGloves =
+    outfit.gloves === 'caveman' && !!parts.get('gloves_caveman')?.length
   const selected = showModularOutfit(body, parts, {
     ...outfit,
     top: outfit.top === 'caveman' ? 'none' : outfit.top,
@@ -41,6 +47,12 @@ export function showPreviewOutfit(
           ? 'barbarian'
           : 'none'
         : outfit.pants,
+    gloves:
+      outfit.gloves === 'caveman'
+        ? cavemanGloves
+          ? 'barbarian'
+          : 'none'
+        : outfit.gloves,
     boots:
       outfit.boots === 'caveman'
         ? cavemanBoots
@@ -51,6 +63,17 @@ export function showPreviewOutfit(
   if (outfit.pants === 'caveman') {
     selected.delete('pants_barbarian')
     for (const mesh of parts.get('pants_barbarian') ?? []) mesh.visible = false
+  }
+  if (cavemanGloves) {
+    selected.delete('gloves_barbarian')
+    for (const mesh of parts.get('gloves_barbarian') ?? []) mesh.visible = false
+    for (const mesh of body) {
+      let node: THREE.Object3D | null = mesh
+      while (node && typeof node.userData.region !== 'string')
+        node = node.parent
+      if (node?.userData.region === 'forearms')
+        trimModularClothing(mesh, 'bracers')
+    }
   }
   if (cavemanBoots) {
     selected.delete('boots_leather')
@@ -65,7 +88,7 @@ export function showPreviewOutfit(
       if (region === 'legs') trimModularClothing(mesh, 'caveman_boots')
     }
   }
-  for (const slot of ['top', 'pants', 'boots'] as const) {
+  for (const slot of ['top', 'pants', 'gloves', 'boots'] as const) {
     const id = `${slot}_caveman`
     const meshes = parts.get(id) ?? []
     if (outfit[slot] === 'caveman' && meshes.length) {

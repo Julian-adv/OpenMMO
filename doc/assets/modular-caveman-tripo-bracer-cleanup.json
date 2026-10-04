@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-04",
+  "reason": "User accepted the fitted bracers and requested removal of unnecessary intermediate files before committing.",
+  "removed_repository_files": [],
+  "removed_temporary_files_count": 27,
+  "removed_temporary_bytes": 4619769,
+  "temporary_scope": "Only bracer-task raw and motion frame renders, one-off scripts, insertion scratch file and validation logs under /tmp.",
+  "retained": [
+    "Unmodified delivered source GLB, fitted mirrored bracer GLB and editable Blender scene",
+    "Selected bracer concepts, raw source review, final equipped set view and seven-motion review",
+    "Source, fitting and animation records; reproducible fitting, validation and Blender scripts"
+  ]
+}

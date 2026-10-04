@@ -49,6 +49,59 @@ const undressed: ModularOutfit = {
 }
 
 describe('caveman workshop preview', () => {
+  it('clips covered forearms, keeps hands and restores skin when bracers are removed', () => {
+    const { body, parts, visible } = fixture()
+    const forearm = body.find((mesh) => mesh.userData.region === 'forearms')!
+    const original = new THREE.BufferGeometry()
+    original.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(
+        [0.31, 1.23, -0.05, 0.34, 1.16, -0.05, 0.35, 1.15, -0.05],
+        3
+      )
+    )
+    original.setIndex([0, 1, 2])
+    forearm.geometry = original
+    const bracer = new THREE.SkinnedMesh()
+    const proxy = new THREE.SkinnedMesh()
+    parts.set('gloves_caveman', [bracer])
+    parts.set('gloves_barbarian', [proxy])
+    const selected = showPreviewOutfit(body, parts, CAVEMAN_PREVIEW_OUTFIT)
+    expect(selected.has('gloves_caveman')).toBe(true)
+    expect(selected.has('gloves_barbarian')).toBe(false)
+    expect(proxy.visible).toBe(false)
+    expect(visible('hands')).toBe(true)
+    expect(visible('forearms')).toBe(true)
+    expect(forearm.geometry).not.toBe(original)
+    const elbow = new THREE.Vector3(0.311339, 1.247962, -0.056036)
+    const wrist = new THREE.Vector3(0.445653, 0.993593, -0.045557)
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(
+      elbow.clone().sub(wrist).normalize(),
+      elbow.lerp(wrist, 0.23)
+    )
+    const points = forearm.geometry.attributes.position
+    expect(points.count).toBeGreaterThan(0)
+    for (let i = 0; i < points.count; i++)
+      expect(
+        plane.distanceToPoint(
+          new THREE.Vector3().fromBufferAttribute(points, i)
+        )
+      ).toBeGreaterThanOrEqual(-1e-6)
+    showPreviewOutfit(body, parts, {
+      ...CAVEMAN_PREVIEW_OUTFIT,
+      gloves: 'none',
+    })
+    expect(forearm.geometry).toBe(original)
+    expect(bracer.visible).toBe(false)
+    expect(visible('hands')).toBe(true)
+    showPreviewOutfit(body, parts, CAVEMAN_PREVIEW_OUTFIT)
+    parts.delete('gloves_caveman')
+    showPreviewOutfit(body, parts, CAVEMAN_PREVIEW_OUTFIT)
+    expect(forearm.geometry).toBe(original)
+    expect(visible('hands')).toBe(true)
+    expect(proxy.visible).toBe(false)
+  })
+
   it('covers skin inside the boots and restores the original legs when removed', () => {
     const { body, parts, visible } = fixture()
     const legs = body.find((mesh) => mesh.userData.region === 'legs')!

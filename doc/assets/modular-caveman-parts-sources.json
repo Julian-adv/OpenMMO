@@ -4,7 +4,7 @@
   "service": "OpenAI Codex built-in ImageGen",
   "tier": "ChatGPT Pro 20x",
   "license": "OpenAI generated output terms; original references retain their recorded source and usage terms.",
-  "status": "[\ubbf8\uc0ac\uc6a9] Nine selected concept views retained. User accepted fitted Tripo top, pants and mirrored boots previews; gameplay integration and bracer model pending.",
+  "status": "[\ubbf8\uc0ac\uc6a9] Nine selected concept views retained. User accepted fitted Tripo top, pants, mirrored boots and bracers previews; mixed outfit compatibility and gameplay integration pending.",
   "reference": {
     "path": "doc/images/characters/modular_human_male_01/concepts/caveman-outfit-v2.png",
     "sha256": "480c7421f68e79706eea86bc614cfe4631de0b66c5cc0c0f3a37f30b1042fead",
@@ -611,6 +611,12 @@
       "review": "doc/assets/modular-caveman-tripo-boots-review-v1.json",
       "delivery_date": "2026-10-04",
       "status": "User accepted fitted mirrored boots with rounded fur cuffs and straightened rear ankle. 5178 triangles, canonical Leg/Foot/ToeBase rig, seven motions checked."
+    },
+    "gloves_caveman": {
+      "source_record": "doc/assets/modular-caveman-tripo-bracer-sources.json",
+      "review": "doc/assets/modular-caveman-tripo-bracer-review-v1.json",
+      "delivery_date": "2026-10-04",
+      "status": "User accepted fitted mirrored bracers, 3628 triangles; canonical ForeArm weights, exposed hands, reversible forearm skin masking and seven motion clips checked in the workshop preview. Mixed sleeves and gameplay registration pending."
     }
   },
   "cleanup_record": "doc/assets/modular-caveman-cleanup.json"

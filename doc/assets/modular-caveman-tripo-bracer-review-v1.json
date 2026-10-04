@@ -1,0 +1,48 @@
+{
+  "triangles": 1814,
+  "mesh_count": 1,
+  "meshes": [
+    {
+      "name": "tripo_node_dba39659-03de-4597-ae06-026d6a57b265",
+      "components_vertex_counts": [
+        346,
+        112,
+        112,
+        112,
+        64,
+        63,
+        40,
+        40,
+        14,
+        14,
+        14,
+        14,
+        14,
+        14,
+        13,
+        13,
+        13,
+        13,
+        13,
+        12,
+        12,
+        12,
+        12
+      ],
+      "boundary_edges": 341,
+      "nonmanifold_edges": 360,
+      "degenerate_faces": 0,
+      "collapsed_uv_triangles": 0
+    }
+  ],
+  "source_extent_blender": [
+    0.60595703125,
+    0.71923828125,
+    0.99951171875
+  ],
+  "rigged": false,
+  "source": "assets/modular_human_male_01/parts/caveman_tripo_bracer_v1/source.glb",
+  "sha256": "17ef57be917df0988f0e1f41ca19e759a9a305b3fc2135de5dc58a155a0b9ad0",
+  "vertices_including_uv_splits": 2192,
+  "status": "Unmodified raw Tripo bracer source; no body fitting or rigging."
+}
