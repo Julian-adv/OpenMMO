@@ -150,7 +150,8 @@ function region(mesh: THREE.Object3D): string | undefined {
 function showBaseModularOutfit(
   body: THREE.SkinnedMesh[],
   parts: ReadonlyMap<string, THREE.SkinnedMesh[]>,
-  outfit: ModularOutfit
+  outfit: ModularOutfit,
+  leatherBoots: boolean
 ) {
   const hidden = new Set<string>()
   const coveredLegs = outfit.pants === 'cloth' || outfit.pants === 'plate'
@@ -209,11 +210,13 @@ function showBaseModularOutfit(
       const cut =
         (id === 'top_linen' && partRegion === 'sleeves') || id === 'top_plate'
           ? sleeveCut
-          : shortPants &&
-              (id === 'pants_plate' ||
-                (id === 'pants_cloth' && partRegion === 'main'))
-            ? 'greaves'
-            : undefined
+          : id === 'pants_plate' && leatherBoots
+            ? 'leather_boots'
+            : shortPants &&
+                (id === 'pants_plate' ||
+                  (id === 'pants_cloth' && partRegion === 'main'))
+              ? 'greaves'
+              : undefined
       mesh.visible =
         selected.has(id) &&
         !(
@@ -278,13 +281,18 @@ export function showModularOutfit(
     ?.some((mesh) => mesh.userData.fitting_status === 'candidate_tripo_v1')
     ? 'tripo_collar'
     : 'collar'
-  const selected = showBaseModularOutfit(body, parts, {
-    ...outfit,
-    top: top === 'rogue' ? 'none' : top,
-    pants: pants === 'rogue' ? 'cloth' : pants,
-    gloves: gloves === 'rogue' ? 'none' : gloves,
-    boots: boots === 'rogue' ? 'leather' : boots,
-  })
+  const selected = showBaseModularOutfit(
+    body,
+    parts,
+    {
+      ...outfit,
+      top: top === 'rogue' ? 'none' : top,
+      pants: pants === 'rogue' ? 'cloth' : pants,
+      gloves: gloves === 'rogue' ? 'none' : gloves,
+      boots: boots === 'rogue' ? 'leather' : boots,
+    },
+    boots === 'leather' && !!parts.get('boots_leather')?.length
+  )
   if (![top, pants, gloves, boots].includes('rogue')) return selected
   for (const [style, proxy] of [
     [pants, 'pants_cloth'],

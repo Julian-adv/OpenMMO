@@ -20,5 +20,15 @@
     "Original delivered GLB, final fitted boots GLB and editable Blender scene",
     "Selected boot concept views, raw source review and final seven-motion review",
     "Source, fitting, animation and correction records; reproducible fitting and Blender scripts"
-  ]
+  ],
+  "plate_pants_followup": {
+    "date": "2026-10-04",
+    "reason": "User requested cleanup and commit after plate-pants tuck corrections for caveman and leather boots.",
+    "removed_temporary_files_count": 13,
+    "removed_temporary_bytes": 1481245,
+    "temporary_scope": "Only the 13 named temporary screenshots, browser inspection/candidate scripts and check logs for the plate-pants/boots follow-up.",
+    "removed_repository_files": [],
+    "retained": "Boot and pants source/fitted GLBs, Blender scenes, final asset review images, runtime cut code, regression tests and source/compatibility records.",
+    "barbarian_decision": "The plate pants already stop inside the barbarian fur cuff at rest Y=0.46m. The grey ankle plates belong to the greaves themselves; the user explicitly requested retaining those decorations. No barbarian asset edit."
+  }
 }

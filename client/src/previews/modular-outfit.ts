@@ -78,6 +78,8 @@ export function showPreviewOutfit(
   if (cavemanBoots) {
     selected.delete('boots_leather')
     for (const mesh of parts.get('boots_leather') ?? []) mesh.visible = false
+    for (const mesh of parts.get('pants_plate') ?? [])
+      if (mesh.visible) trimModularClothing(mesh, 'caveman_boots')
     for (const mesh of body) {
       let node: THREE.Object3D | null = mesh
       while (node && typeof node.userData.region !== 'string')

@@ -70,7 +70,7 @@
     ],
     "new_ai_generation_or_paid_calls": false
   },
-  "status": "User accepted the fitted mirrored boots and rear ankle correction on 2026-10-04. Seven motions checked; mixed long-pants combinations and gameplay registration pending.",
+  "status": "User accepted the fitted mirrored boots and rear ankle correction on 2026-10-04. Seven motions checked; plate-pants tuck and restoration verified in the workshop preview. Other mixed long-pants combinations and gameplay registration pending.",
   "retained": true,
   "fitting": {
     "date": "2026-10-04",
@@ -150,5 +150,10 @@
       "previous_output_sha256": "ceff59059c9cffc48ca704cf5318eed51a6d2175db879484fe5118ff8baa22d3"
     }
   ],
-  "cleanup_record": "doc/assets/modular-caveman-tripo-boots-cleanup.json"
+  "cleanup_record": "doc/assets/modular-caveman-tripo-boots-cleanup.json",
+  "preview_plate_pants_compatibility": {
+    "date": "2026-10-04",
+    "method": "Clip visible pants_plate meshes at rest Y=0.43m only while caveman boots are loaded and selected. Preserve original GLBs; restore on unequip or load failure. Leather boots use their own 0.235m cut, and barbarian greaves retain the 0.46m cut.",
+    "validation": "Actual GLB and seven clip switches checked for cut persistence; boot switching checked for original/appropriate cut geometry. Combat-idle calf close-up reviewed, browser errors 0; related tests 50, npm check and lint passed."
+  }
 }

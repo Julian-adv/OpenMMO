@@ -49,6 +49,69 @@ const undressed: ModularOutfit = {
 }
 
 describe('caveman workshop preview', () => {
+  it('tucks plate pants inside caveman boots and restores the pants for other boots', () => {
+    const { body, parts } = fixture()
+    const pants = [new THREE.SkinnedMesh(), new THREE.SkinnedMesh()]
+    const originals = pants.map((mesh, i) => {
+      const geometry = new THREE.PlaneGeometry(0.2, 0.8, 2, 4)
+      geometry.translate(i ? -0.17 : 0.17, 0.4, 0)
+      mesh.geometry = geometry
+      return geometry
+    })
+    parts.set('pants_plate', pants)
+    parts.set('boots_caveman', [new THREE.SkinnedMesh()])
+    const outfit = { ...CAVEMAN_PREVIEW_OUTFIT, pants: 'plate' as const }
+    const selected = showPreviewOutfit(body, parts, outfit)
+    expect(selected.has('pants_plate')).toBe(true)
+    for (const mesh of pants) {
+      expect(mesh.visible).toBe(true)
+      const points = mesh.geometry.attributes.position
+      expect(points.count).toBeGreaterThan(0)
+      const heights = Array.from({ length: points.count }, (_, i) =>
+        points.getY(i)
+      )
+      expect(Math.min(...heights)).toBeCloseTo(0.43)
+      expect(Math.max(...heights)).toBeCloseTo(0.8)
+    }
+    for (const boots of ['none', 'plate'] as const) {
+      showPreviewOutfit(body, parts, { ...outfit, boots })
+      for (const [i, mesh] of pants.entries())
+        expect(mesh.geometry).toBe(originals[i])
+      showPreviewOutfit(body, parts, outfit)
+    }
+    showPreviewOutfit(body, parts, { ...outfit, boots: 'leather' })
+    for (const mesh of pants) {
+      const points = mesh.geometry.attributes.position
+      expect(
+        Math.min(
+          ...Array.from({ length: points.count }, (_, i) => points.getY(i))
+        )
+      ).toBeCloseTo(0.235)
+    }
+    showPreviewOutfit(body, parts, outfit)
+    for (const mesh of pants) {
+      const points = mesh.geometry.attributes.position
+      expect(
+        Math.min(
+          ...Array.from({ length: points.count }, (_, i) => points.getY(i))
+        )
+      ).toBeCloseTo(0.43)
+    }
+    showPreviewOutfit(body, parts, { ...outfit, boots: 'barbarian' })
+    for (const mesh of pants) {
+      const points = mesh.geometry.attributes.position
+      expect(
+        Math.min(
+          ...Array.from({ length: points.count }, (_, i) => points.getY(i))
+        )
+      ).toBeCloseTo(0.46)
+    }
+    parts.delete('boots_caveman')
+    showPreviewOutfit(body, parts, outfit)
+    for (const [i, mesh] of pants.entries())
+      expect(mesh.geometry).toBe(originals[i])
+  })
+
   it('clips covered forearms, keeps hands and restores skin when bracers are removed', () => {
     const { body, parts, visible } = fixture()
     const forearm = body.find((mesh) => mesh.userData.region === 'forearms')!

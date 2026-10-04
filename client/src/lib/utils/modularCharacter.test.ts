@@ -83,6 +83,37 @@ describe('modular outfit coverage', () => {
     expect(disposed).toHaveBeenCalledOnce()
   })
 
+  it('tucks plate pants into loaded leather boots and restores them on removal or load failure', () => {
+    const original = new THREE.PlaneGeometry(0.2, 0.8, 2, 4)
+    original.translate(0.17, 0.4, 0)
+    const pants = new THREE.SkinnedMesh(original)
+    const parts = new Map([
+      ['pants_plate', [pants]],
+      ['boots_leather', [new THREE.SkinnedMesh()]],
+    ])
+    const outfit = { ...KNIGHT_MODULAR_OUTFIT, boots: 'leather' as const }
+    const selected = showModularOutfit([], parts, outfit)
+    expect(selected.has('pants_plate')).toBe(true)
+    expect(pants.visible).toBe(true)
+    const points = pants.geometry.attributes.position
+    expect(points.count).toBeGreaterThan(0)
+    expect(
+      Math.min(
+        ...Array.from({ length: points.count }, (_, i) => points.getY(i))
+      )
+    ).toBeCloseTo(0.235)
+    showModularOutfit([], parts, { ...outfit, boots: 'none' })
+    expect(pants.geometry).toBe(original)
+    parts.set('boots_rogue', [new THREE.SkinnedMesh()])
+    showModularOutfit([], parts, outfit)
+    showModularOutfit([], parts, { ...outfit, boots: 'rogue' })
+    expect(pants.geometry).toBe(original)
+    showModularOutfit([], parts, outfit)
+    parts.delete('boots_leather')
+    showModularOutfit([], parts, outfit)
+    expect(pants.geometry).toBe(original)
+  })
+
   it('preserves exposed skin for barbarian armor and restores coverage when changing sets', () => {
     const regions = [
       'head',
