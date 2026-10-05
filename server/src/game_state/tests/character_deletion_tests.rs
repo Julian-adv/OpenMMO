@@ -1,6 +1,64 @@
 use super::*;
 use std::time::Duration;
 
+#[test]
+fn character_deletion_logs_only_committed_changes_with_account_and_character_id() {
+    let auth = make_test_auth("character_deletion_logs");
+    let account = auth.login_google("deletion-logs").unwrap();
+    let character = create_test_character(&auth, &account, "AuditDelete");
+    let (subscriber, buffer) = crate::test_util::capture_logs();
+    tracing::subscriber::with_default(subscriber, || {
+        assert!(auth
+            .change_character_deletion("other-account", character.id, false)
+            .is_err());
+        assert!(auth
+            .delete_character("other-account", character.id)
+            .is_err());
+        assert!(buffer.lock().unwrap().is_empty());
+        let due = auth
+            .change_character_deletion(&account, character.id, false)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            auth.get_character_for_account(&account, character.id)
+                .unwrap()
+                .deletion_due_at,
+            Some(due)
+        );
+        auth.change_character_deletion(&account, character.id, true)
+            .unwrap();
+        assert!(auth
+            .get_character_for_account(&account, character.id)
+            .unwrap()
+            .deletion_due_at
+            .is_none());
+        auth.delete_character(&account, character.id).unwrap();
+        assert!(matches!(
+            auth.get_character_for_account(&account, character.id),
+            Err(crate::auth::AuthError::CharacterNotFound)
+        ));
+        let logs = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
+        let lines: Vec<_> = logs.lines().collect();
+        assert_eq!(lines.len(), 3, "{logs}");
+        for (line, event) in lines.iter().zip([
+            "Character deletion scheduled",
+            "Character deletion cancelled",
+            "Character deleted",
+        ]) {
+            assert!(line.contains(event), "{line}");
+            assert!(line.contains(&format!("account=\"{account}\"")), "{line}");
+            assert!(
+                line.contains(&format!("character_id={}", character.id)),
+                "{line}"
+            );
+        }
+        assert!(
+            lines[0].contains(&format!("deletion_due_at={due}")),
+            "{logs}"
+        );
+    });
+}
+
 #[tokio::test]
 async fn character_deletion_waits_for_deadline_survives_restart_and_can_be_cancelled() {
     let game = make_test_game_state("character_deletion_delay");

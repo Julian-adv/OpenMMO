@@ -2165,6 +2165,7 @@ impl AuthService {
             return Err(AuthError::CharacterNotFound);
         }
         tx.commit()?;
+        tracing::info!(account = account_name, character_id, "Character deleted");
         Ok(())
     }
 

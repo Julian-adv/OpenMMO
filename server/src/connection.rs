@@ -289,10 +289,7 @@ impl ConnectionState {
         match &self.account_name {
             Some(name) => Ok(name.clone()),
             None => {
-                warn!(
-                    "{} requested by unauthenticated client ip={}",
-                    action, self.client_ip
-                );
+                warn!(ip = %self.client_ip, action, "Request rejected: unauthenticated client");
                 Err(vec![ServerMessage::CharacterError {
                     message: "Authenticate first".to_string(),
                 }])
@@ -1003,14 +1000,18 @@ async fn handle_client_message(
 
         ClientMessage::DeleteCharacter { character_id }
         | ClientMessage::CancelCharacterDeletion { character_id } => {
-            if let Err(responses) = state.require_not_in_game("CharacterDeletion") {
-                return Ok(responses);
-            }
-            let account = match state.require_auth("CharacterDeletion") {
-                Ok(name) => name,
+            let (cancel, action) = match client_msg {
+                ClientMessage::DeleteCharacter { .. } => (false, "DeleteCharacter"),
+                _ => (true, "CancelCharacterDeletion"),
+            };
+            let checked = tracing::info_span!("character_deletion", character_id).in_scope(|| {
+                state.require_not_in_game(action)?;
+                state.require_auth(action)
+            });
+            let account = match checked {
+                Ok(account) => account,
                 Err(responses) => return Ok(responses),
             };
-            let cancel = matches!(client_msg, ClientMessage::CancelCharacterDeletion { .. });
             let result = game_state
                 .change_character_deletion(auth_service, &account, character_id, cancel)
                 .await;
@@ -1020,9 +1021,13 @@ async fn handle_client_message(
                     deletion_due_at,
                 },
                 Ok(None) => ServerMessage::CharacterDeletionCancelled { character_id },
-                Err(error) => ServerMessage::CharacterError {
-                    message: error.client_message().to_string(),
-                },
+                Err(error) => {
+                    warn!(ip = %state.client_ip, %account, character_id, action, %error,
+                        "Character deletion request failed");
+                    ServerMessage::CharacterError {
+                        message: error.client_message().to_string(),
+                    }
+                }
             }]);
         }
 
@@ -2474,6 +2479,53 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn unauthenticated_character_deletion_is_rejected_and_identified() {
+        use tracing::instrument::WithSubscriber;
+
+        let game = Arc::new(crate::game_state::tests::make_test_game_state(
+            "deletion_unauthenticated",
+        ));
+        let auth = Arc::new(crate::game_state::tests::make_test_auth(
+            "deletion_unauthenticated",
+        ));
+        let auth_ctx = test_auth_ctx();
+        let mut state = ConnectionState::new("203.0.113.7".parse().unwrap());
+        handle_handshake(
+            &client_info(onlinerpg_shared::PROTOCOL_VERSION, "web"),
+            &mut state,
+        );
+        for (request, action) in [
+            (
+                ClientMessage::DeleteCharacter { character_id: 42 },
+                "DeleteCharacter",
+            ),
+            (
+                ClientMessage::CancelCharacterDeletion { character_id: 42 },
+                "CancelCharacterDeletion",
+            ),
+        ] {
+            let (subscriber, buffer) = crate::test_util::capture_logs();
+            let encoded = onlinerpg_shared::serialize_client_msg(&request).unwrap();
+            let responses = handle_client_message(&encoded, &game, &auth, &auth_ctx, &mut state)
+                .with_subscriber(subscriber)
+                .await
+                .unwrap();
+            assert!(
+                matches!(responses.as_slice(), [ServerMessage::CharacterError { message }] if message == "Authenticate first")
+            );
+            let logs = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
+            for field in [
+                "unauthenticated client",
+                "ip=203.0.113.7",
+                "character_id=42",
+                &format!("action=\"{action}\""),
+            ] {
+                assert!(logs.contains(field), "{logs}");
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn pending_character_deletion_blocks_entry_until_cancelled() {
         let game = Arc::new(crate::game_state::tests::make_test_game_state(
             "deletion_entry",
@@ -2496,11 +2548,7 @@ mod tests {
             &mut state,
         );
         finish_auth(&game, &auth, &mut state, account, false).await;
-        let auth_ctx = Arc::new(AuthContext {
-            google: None,
-            npc_token: String::new(),
-            admin_emails: vec![],
-        });
+        let auth_ctx = test_auth_ctx();
         let character_id = character.id;
         for (index, request) in [
             ClientMessage::DeleteCharacter { character_id },
@@ -2588,11 +2636,7 @@ mod tests {
                 &mut state,
             );
             finish_auth(&game, &auth, &mut state, account.clone(), false).await;
-            let auth_ctx = Arc::new(AuthContext {
-                google: None,
-                npc_token: String::new(),
-                admin_emails: vec![],
-            });
+            let auth_ctx = test_auth_ctx();
             let request = onlinerpg_shared::serialize_client_msg(&ClientMessage::EnterGame {
                 character_id: character.id,
             })
@@ -2750,6 +2794,14 @@ mod tests {
         assert!(limiter.allow_at(start + Duration::from_millis(250)));
         assert!(!limiter.allow_at(start + Duration::from_millis(250)));
         assert!(limiter.allow_at(start + Duration::from_millis(500)));
+    }
+
+    fn test_auth_ctx() -> Arc<AuthContext> {
+        Arc::new(AuthContext {
+            google: None,
+            npc_token: String::new(),
+            admin_emails: vec![],
+        })
     }
 
     fn client_info(protocol_version: u32, kind: &str) -> ClientMessage {

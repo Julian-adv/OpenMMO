@@ -128,6 +128,7 @@ class NetworkManager {
   private wasmReady = false
   /// Reset per socket: the handshake is per connection, not per session.
   private handshakeSent = false
+  private authenticated = false
   /// Server refused this build at the handshake. Reconnecting cannot fix a
   /// stale bundle, so every path stops trying until the page is reloaded.
   private refusedPermanently = false
@@ -170,9 +171,9 @@ class NetworkManager {
     createEvent<(position: Position, rotation: number) => void>()
 
   constructor() {
-    // Only a fully authenticated connection clears the counter; a socket that
-    // merely opened proves nothing, since refusals arrive after the open.
+    // Reset backoff only after authentication succeeds.
     this.authSuccess.on(() => {
+      this.authenticated = true
       this.reconnectAttempts = 0
       this.lastKickReason = null
       // This build is current, so a later refusal deserves its own reload.
@@ -183,6 +184,7 @@ class NetworkManager {
       }
     })
     this.authError.on((message) => {
+      this.authenticated = false
       this.lastAuthErrorMessage = message
     })
     // The reason arrives as a message just before the close frame that says
@@ -249,6 +251,7 @@ class NetworkManager {
 
     console.log('Attempting to connect to:', targetUrl)
     this.handshakeSent = false
+    this.authenticated = false
     this.lastAuthErrorMessage = null
     this.socket = new WebSocket(targetUrl)
     this.socket.binaryType = 'arraybuffer'
@@ -1193,6 +1196,7 @@ class NetworkManager {
   /// Drop cached credentials so a later reconnect can't re-auth as this user.
   /// Call on logout/kick, not on transient disconnects (which must reconnect).
   clearSession() {
+    this.authenticated = false
     this.lastCharacterId = null
     setApiAuthToken(null)
   }
@@ -1292,6 +1296,9 @@ class NetworkManager {
     await this.ensureWasm()
     if (!this.isConnected()) {
       return { ok: false, message: 'Socket is not connected' }
+    }
+    if (!this.authenticated) {
+      return { ok: false, message: 'Authenticate first' }
     }
 
     return this.requestWithTimeout(

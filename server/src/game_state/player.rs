@@ -390,7 +390,7 @@ impl super::GameState {
         };
         for (account, id) in due {
             if let Err(error) = self.delete_character_if_inactive(auth, &account, id).await {
-                tracing::warn!(%error, character_id = id, "Failed to finalize character deletion; will retry");
+                tracing::warn!(%error, %account, character_id = id, "Failed to finalize character deletion; will retry");
             }
         }
     }
@@ -474,7 +474,7 @@ impl super::GameState {
         self.discard_pending_discovery_saves(character_id).await;
         drop(_persistence);
         if let Err(error) = self.refresh_fence_owners(auth).await {
-            tracing::warn!(%error, "Failed to refresh fences after character deletion");
+            tracing::warn!(%error, account = account_name, character_id, "Failed to refresh fences after character deletion");
         }
         self.evacuate_estate_occupants().await;
         Ok(true)

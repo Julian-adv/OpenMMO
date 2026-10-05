@@ -51,6 +51,15 @@ impl AuthService {
             params![character_id, account, due],
         )?;
         tx.commit()?;
+        match due {
+            Some(deletion_due_at) => tracing::info!(
+                account,
+                character_id,
+                deletion_due_at,
+                "Character deletion scheduled"
+            ),
+            None => tracing::info!(account, character_id, "Character deletion cancelled"),
+        }
         Ok(due)
     }
 
