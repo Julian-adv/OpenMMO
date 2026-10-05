@@ -1,0 +1,30 @@
+{
+  "date": "2026-10-05",
+  "url": "https://localhost:10004/modular-character-preview.html?outfit=ranger&fit=v4",
+  "loaded": {
+    "ready": true,
+    "top": "ranger",
+    "pants": "cloth",
+    "camera": "top",
+    "stats": "조합 21,940삼각형 · 표시 14,779 · 얼굴 1,505"
+  },
+  "asset": {
+    "triangles": 4896,
+    "hash": "ec8e9638833ad4f60ba66c1a36fb00cd66521c601977b0fa6d7d389ebfaf3623"
+  },
+  "clips": [
+    "idle1",
+    "walk",
+    "run",
+    "jump",
+    "slash1",
+    "combat_idle",
+    "sit_idle"
+  ],
+  "exceptions": [],
+  "screenshots": [
+    "tripo-top-workshop-v4.png",
+    "tripo-top-workshop-v4-run.png",
+    "tripo-top-workshop-v4-slash1.png"
+  ]
+}

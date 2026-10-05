@@ -1,0 +1,36 @@
+{
+  "status": "Raw source only; no body fit",
+  "date": "2026-10-05",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/ranger_tripo_top_v4/source.glb",
+    "sha256": "f4988d1e5d44ffbd5a8af3ec9cb9f1f601de416611ebb37a928b61a940a74ce5"
+  },
+  "triangles": 5033,
+  "mesh_count": 1,
+  "meshes": [
+    {
+      "name": "tripo_node_05fcc4ec-8589-4e44-8df1-52657e8e317c",
+      "components_vertex_counts": [
+        2367,
+        25,
+        25,
+        25,
+        25,
+        25,
+        25,
+        25,
+        25
+      ],
+      "boundary_edges": 101,
+      "nonmanifold_edges": 108,
+      "degenerate_faces": 0,
+      "collapsed_uv_triangles": 0
+    }
+  ],
+  "source_extent_blender": [
+    0.99951171875,
+    0.31884765625,
+    0.71337890625
+  ],
+  "rigged": false
+}

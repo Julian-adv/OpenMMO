@@ -71,6 +71,7 @@ export interface ModularOutfit {
     | 'barbarian'
     | 'rogue'
     | 'caveman'
+    | 'ranger'
     | 'none'
   pants: 'cloth' | 'plate' | 'barbarian' | 'rogue' | 'caveman' | 'none'
   gloves: 'none' | 'leather' | 'plate' | 'barbarian' | 'rogue' | 'caveman'
@@ -288,7 +289,17 @@ export const CAVEMAN_MODULAR_OUTFIT: ModularOutfit = {
   helmet: 'none',
 }
 
-const proxied = (style: string) => style === 'rogue' || style === 'caveman'
+export const RANGER_MODULAR_OUTFIT: ModularOutfit = {
+  hair: 'hair_crop',
+  top: 'ranger',
+  pants: 'cloth',
+  gloves: 'none',
+  boots: 'none',
+  helmet: 'none',
+}
+
+const proxied = (style: string) =>
+  style === 'rogue' || style === 'caveman' || style === 'ranger'
 
 export function showModularOutfit(
   body: THREE.SkinnedMesh[],
@@ -340,7 +351,11 @@ export function showModularOutfit(
   for (const [slot, style] of Object.entries({ top, pants, gloves, boots })) {
     if (proxied(style)) selected.add(`${slot}_${style}`)
   }
-  for (const id of [...ROGUE_MODULAR_PARTS, ...CAVEMAN_MODULAR_PARTS])
+  for (const id of [
+    ...ROGUE_MODULAR_PARTS,
+    ...CAVEMAN_MODULAR_PARTS,
+    'top_ranger',
+  ])
     for (const mesh of parts.get(id) ?? []) mesh.visible = selected.has(id)
   if (boots === 'caveman')
     for (const mesh of parts.get('pants_plate') ?? [])
@@ -362,14 +377,22 @@ export function showModularOutfit(
       true
     )
   const hidden = new Set([
-    ...(top === 'rogue' ? ['torso', 'upper_arms'] : []),
+    ...(top === 'rogue' || top === 'ranger' ? ['torso', 'upper_arms'] : []),
     ...(pants === 'rogue' ? ['legs', 'ankles', 'boot_ankles'] : []),
     ...(boots === 'caveman' ? ['feet', 'ankles', 'boot_ankles'] : []),
   ])
   for (const mesh of body) {
     const bodyRegion = region(mesh)
     if (bodyRegion === 'neck')
-      trimModularClothing(mesh, top === 'rogue' ? collar : undefined, true)
+      trimModularClothing(
+        mesh,
+        top === 'ranger'
+          ? 'tripo_collar'
+          : top === 'rogue'
+            ? collar
+            : undefined,
+        true
+      )
     if (hidden.has(bodyRegion ?? '')) mesh.visible = false
     if (gloves === 'caveman' && bodyRegion === 'forearms')
       trimModularClothing(mesh, 'bracers')

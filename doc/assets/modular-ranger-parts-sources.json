@@ -1,0 +1,88 @@
+{
+  "generated_on": "2026-10-05",
+  "tool": "OpenAI Codex built-in ImageGen",
+  "subscription_tier": "ChatGPT Pro 20x",
+  "use_terms": "OpenAI generated-output terms; inherited source terms in doc/assets/characters.md. No new third-party reference art.",
+  "status": "Concept references; user-supplied Tripo top received and fitted as a candidate. Runtime masks and mixed equipment acceptance pending.",
+  "proposed_top_generation_target": {
+    "topology": "quad",
+    "quads": 2500,
+    "approximate_triangles": 5000,
+    "notes": "Initial generation target; actual exported triangles and assembled 15000–20000 triangle budget must be measured. Preserve collar, sleeves, arm openings and hem; use textures/normal maps for fine leather grain and shallow leaf decoration."
+  },
+  "references": [
+    {
+      "path": "client/public/character_concepts/ranger.webp",
+      "sha256": "a7be7a2469ddd87556033ca07e05bbe4b055df6b52871fa6a006bd1e4bce7f71",
+      "role": "Approved existing ranger design; both generations use this image."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/base-front.png",
+      "sha256": "5b9fa90790195fd9f85892452eee13c7daeb1d691bf2acbe65bbbde52502d7a8",
+      "role": "Inspected for torso proportions and A-pose planning; not submitted to ImageGen; picture hand orientation is not the production rig pose."
+    }
+  ],
+  "outputs": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/top_ranger-front-v1.png",
+      "sha256": "ca27f387731b62409755e17a02fad6c86a3de3d14d9bc16826110fa2b3da49c7",
+      "size": [
+        1536,
+        1024
+      ],
+      "mode": "RGBA",
+      "input_images": [
+        "client/public/character_concepts/ranger.webp"
+      ],
+      "prompt": "Use case: stylized-concept.\nAsset type: OpenMMO modular male ranger starter armor top, single FRONT reference for Tripo image-to-3D.\nInput image 1 is the approved ranger character concept and is the design authority. Extract and faithfully redraw ONLY the wearable upper garment, not the character.\nCreate exactly ONE isolated hollow garment seen straight from the FRONT, orthographic camera, centered, full silhouette visible with ample margin, high quality realistic game concept / product render on a genuinely transparent background. No text or labels. Sleeves extended diagonally down in a symmetrical neutral A pose, matching the reference.\nPreserve the olive muted moss-green woven linen shirt, pointed folded collar, small visible shirt buttons at the neckline, soft naturally creased three-quarter sleeves rolled to just below the elbows. Preserve the fitted dark brown leather sleeveless vest with low V neck, slim shoulder panels, rich subtle worn leather grain, warm brown stitched edging and raised embossed branching leaf-and-vine decoration across the FRONT chest. Preserve the front overlapping curved decorative leather seams, understated antique brass studs and small leather-covered front closure buttons. Tailored male torso, broad chest, tapered waist, vest reaches upper hips with the original short two leather front skirt tabs and central opening.\nSeparate garment from wearer: absolutely NO head, neck, skin, body, arms, hands, mannequin, trousers, legs, belt, buckle, pouches, dagger, bracers, gloves, boots, cape, shoulder armor, weapons, scenery or ground shadow. The belt and pouches are reserved for the future pants part, so show uninterrupted vest material where the reference belt obscures it. Shirt and vest are worn together as ONE upper armor assembly.\nMake the empty neck opening, empty sleeve cuff openings and open bottom plausible with discreet dark fabric/leather inner surfaces, never flesh or a solid torso filling. Cuffs end below elbows and are rolled linen only; leather bracers belong to a separate hands item. Crisp construction and seams, neutral diffuse studio lighting, restrained highlights, consistent bilateral shape. Do not redesign or add new ornaments. One view only, no turnaround sheet, no duplicate object."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/top_ranger-back-v1.png",
+      "sha256": "3421f873e70508b1b9b5c34e305a397d068627a4d4f884bfc12fea3baaf34e23",
+      "size": [
+        1536,
+        1024
+      ],
+      "mode": "RGBA",
+      "input_images": [
+        "doc/images/characters/modular_human_male_01/parts/ranger/top_ranger-front-v1.png",
+        "client/public/character_concepts/ranger.webp"
+      ],
+      "prompt": "Use case: stylized-concept.\nAsset type: OpenMMO modular male ranger starter armor top, single BACK reference for Tripo multi-view image-to-3D.\nInput image 1 is the newly approved FRONT garment render; it controls the exact garment shape, collar, sleeve lengths, leather color, cloth color, scale and construction. Input image 2 is the original ranger character concept for supporting material and style.\nCreate exactly ONE isolated hollow wearable garment viewed squarely from the BACK, strict orthographic rear view, centered on a genuinely transparent background with no scenery or gradient. Same 1536x1024 landscape framing and neutral A pose as input image 1, sleeves angled diagonally down, entire silhouette in frame with ample margins. This is the rear of the exact same garment from image 1, not a new top or a front view. High quality realistic game concept / product render, neutral diffuse studio lighting, restrained highlights, no text.\nThe upper armor assembly consists of a muted moss/olive-green woven linen shirt with pointed folded collar, three-quarter sleeves rolled immediately below the elbows, and a fitted dark brown leather sleeveless vest with warm stitched edge piping, broad shoulders, tapered waist and short upper-hip length. Preserve exact front-view sleeve angle, cuff shape, vest shoulder width, torso proportions and hem length.\nDesign the unseen back conservatively: a continuous dark brown leather back panel with central vertical stitched seam, two subtle curved tailoring seams from shoulder blades down toward waist, stitched shoulder yoke just below neckline. Add a modest shallow embossed branching leaf/vine ornament only on the upper back yoke, matching the front's craftsmanship but simpler. Back of folded olive collar is visible above leather neckline. Rear vest hem is mostly continuous with a short center-back mobility slit; same length as front tails. No front buttons, V-neck, crossed chest trim or front opening on the back. No laces, straps, belt, buckle, pouches, backpack, cape, new accessories.\nAbsolutely no head, neck, skin, mannequin, human body, hands, leather bracers, gloves, trousers, legs, weapons or boots. Empty shirt sleeves and neckline with discreet fabric lining; body stays hollow with an open bottom. Shirt and vest are one item. One rear view only, no diagram, labels, duplicate garments or sheet. True transparent cutout, clean silhouette."
+    }
+  ],
+  "review": {
+    "alpha": "Both PNGs contain genuine transparent pixels; images copied without processing.",
+    "design": "Front follows existing olive shirt and brown leaf-embossed vest. Back is a new inferred design using simpler yoke ornament, center seam and short rear hem slit.",
+    "part_ownership": {
+      "top": [
+        "olive linen shirt",
+        "rolled sleeves below elbows",
+        "leather vest and hip-length hem tabs"
+      ],
+      "reserved_for_pants": [
+        "belt",
+        "buckle",
+        "pouches"
+      ],
+      "reserved_for_hands": [
+        "leather bracers",
+        "fingerless gloves"
+      ],
+      "separate_weapon": [
+        "dagger",
+        "scabbard"
+      ]
+    },
+    "limitations": [
+      "Generated views share broad construction and silhouette but are not calibrated orthographic measurement drawings.",
+      "Exact seam alignment, garment interior clearance and supported mixed equipment require 3D review.",
+      "No Tripo task submitted; API/UI availability not tested in user's account."
+    ]
+  },
+  "tripo_sources_checked_on": "2026-10-05",
+  "tripo_official_sources": [
+    "https://www.tripo3d.ai/blog/tripo-segmentation-v2",
+    "https://www.tripo3d.ai/help/getting-started/what-features-does-tripo-have"
+  ]
+}

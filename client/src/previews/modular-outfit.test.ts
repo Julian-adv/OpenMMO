@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   CAVEMAN_MODULAR_OUTFIT,
   KNIGHT_MODULAR_OUTFIT,
+  RANGER_MODULAR_OUTFIT,
   ROGUE_MODULAR_OUTFIT,
   ROGUE_MODULAR_PARTS,
   showModularOutfit,
@@ -45,6 +46,49 @@ const undressed: ModularOutfit = {
   boots: 'none',
   helmet: 'none',
 }
+
+describe('ranger workshop preview', () => {
+  it('keeps exposed arms and restores skin and neck when removed', () => {
+    const { body, parts, visible } = fixture()
+    const top = new THREE.SkinnedMesh()
+    parts.set('top_ranger', [top])
+    const neck = body.find((mesh) => mesh.userData.region === 'neck')!
+    const original = new THREE.PlaneGeometry(0.2, 0.2, 4, 4)
+    original.translate(0, 1.54, 0)
+    neck.geometry = original
+    const selected = showModularOutfit(body, parts, RANGER_MODULAR_OUTFIT)
+    expect(selected.has('top_ranger')).toBe(true)
+    expect(selected.has('pants_cloth')).toBe(true)
+    expect(top.visible).toBe(true)
+    for (const region of ['torso', 'upper_arms'])
+      expect(visible(region)).toBe(false)
+    for (const region of ['neck', 'forearms', 'hands'])
+      expect(visible(region)).toBe(true)
+    const points = neck.geometry.attributes.position
+    expect(points.count).toBeGreaterThan(0)
+    for (let i = 0; i < points.count; i++) {
+      expect(points.getY(i)).toBeGreaterThanOrEqual(1.54 - 1e-6)
+      expect(Math.abs(points.getX(i))).toBeLessThanOrEqual(0.075 + 1e-6)
+    }
+    showModularOutfit(body, parts, undressed)
+    expect(top.visible).toBe(false)
+    expect(neck.geometry).toBe(original)
+    for (const region of ['torso', 'upper_arms', 'neck', 'forearms', 'hands'])
+      expect(visible(region)).toBe(true)
+    showModularOutfit(body, parts, RANGER_MODULAR_OUTFIT)
+    expect(top.visible).toBe(true)
+    expect(visible('torso')).toBe(false)
+  })
+
+  it('preserves exposed skin when the ranger top is unavailable', () => {
+    const { body, parts, visible } = fixture()
+    const selected = showModularOutfit(body, parts, RANGER_MODULAR_OUTFIT)
+    expect(selected.has('top_ranger')).toBe(false)
+    expect(selected.has('pants_cloth')).toBe(true)
+    for (const region of ['torso', 'upper_arms', 'neck', 'forearms', 'hands'])
+      expect(visible(region)).toBe(true)
+  })
+})
 
 describe('caveman workshop preview', () => {
   it('tucks plate pants inside caveman boots and restores the pants for other boots', () => {

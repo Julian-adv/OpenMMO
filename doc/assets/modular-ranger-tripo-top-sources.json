@@ -1,0 +1,111 @@
+{
+  "delivery_date": "2026-10-05",
+  "generation_date": null,
+  "provider": "User-confirmed Tripo Studio",
+  "subscription": {
+    "previous_user_report": "Approximately USD 20/month Studio subscription",
+    "previous_source_record": "doc/assets/modular-rogue-tripo-sources.json",
+    "current_file_tier_separately_confirmed": false
+  },
+  "license": "Subject to the original Tripo Studio output terms and recorded account provenance.",
+  "delivery_path_windows": "Y:\\public\\web_downloads\\leather+embroidered+vest+3d+model.glb",
+  "delivery_path_linux": "/mnt/y/web_downloads/leather+embroidered+vest+3d+model.glb",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/ranger_tripo_top_v4/source.glb",
+    "sha256": "f4988d1e5d44ffbd5a8af3ec9cb9f1f601de416611ebb37a928b61a940a74ce5",
+    "bytes": 2070660,
+    "byte_identical_to_delivery": true
+  },
+  "generation_task_id": null,
+  "generation_model_version": null,
+  "submitted_prompt": null,
+  "submitted_images_confirmed": false,
+  "requested_polygon_count_confirmed": null,
+  "discussion_target_quads": 2500,
+  "discussion_approximate_triangles": 5000,
+  "export_observed": {
+    "format": "GLB 2.0",
+    "generator": "Tripo",
+    "triangles": 5033,
+    "vertices_including_uv_splits": 5389,
+    "mesh_count": 1,
+    "material_count": 1,
+    "textures": [
+      {
+        "size": [
+          2048,
+          2048
+        ],
+        "format": "JPEG"
+      }
+    ],
+    "rigged": false,
+    "animations": 0
+  },
+  "reference_artwork": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/top_ranger-front-v1.png",
+      "sha256": "ca27f387731b62409755e17a02fad6c86a3de3d14d9bc16826110fa2b3da49c7",
+      "bytes": 2347830
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/top_ranger-back-v1.png",
+      "sha256": "3421f873e70508b1b9b5c34e305a397d068627a4d4f884bfc12fea3baaf34e23",
+      "bytes": 2276917
+    }
+  ],
+  "base": {
+    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
+    "bytes": 22214236
+  },
+  "source_review": {
+    "path": "doc/assets/modular-ranger-tripo-top-source-review-v1.json",
+    "sha256": "782d26a5b8484911128e5d392df6fdf37079a15c6cb6f2511f06b3ed485b6f2a",
+    "bytes": 775
+  },
+  "fitting": {
+    "revision": 4,
+    "request": "Remove concealed green shirt lining under the leather vest",
+    "glb": {
+      "path": "assets/modular_human_male_01/parts/ranger_tripo_top_v4/top_ranger.glb",
+      "sha256": "ec8e9638833ad4f60ba66c1a36fb00cd66521c601977b0fa6d7d389ebfaf3623",
+      "bytes": 2240256
+    },
+    "report": {
+      "path": "doc/assets/modular-ranger-tripo-top-fitting-v4.json",
+      "sha256": "e6719f0306449fb1eb196d307757fc9afa44741581f6bf8cdc5394e5fda5e31e",
+      "bytes": 5438
+    },
+    "rig_id": "human_male_01_mixamo_candidate_v2",
+    "preserved_uv_and_embedded_texture": true,
+    "animation": {
+      "path": "doc/assets/modular-ranger-tripo-top-animation-v4.json",
+      "sha256": "f01f2a0492eb60b85962af7ebb84de1f10847f7700db5869c0a6afe995681b4f",
+      "bytes": 5837
+    },
+    "visual_review": {
+      "path": "doc/assets/modular-ranger-tripo-top-fitted-review-v4.json",
+      "sha256": "8c8d77404a00b00c4d92b7a0a0b3b49e0e2f20f6f4c8937ff682159bedc95bc6",
+      "bytes": 2068
+    },
+    "editable": {
+      "path": "assets/modular_human_male_01/parts/ranger_tripo_top_v4/ranger-top-fitting.blend",
+      "sha256": "b298ff4af107125f276593d90dbda8182a8f75803514309a01bb55b590467bf5",
+      "bytes": 45712722
+    },
+    "waist_review": {
+      "path": "doc/assets/modular-ranger-tripo-top-waist-review-v4.json",
+      "sha256": "4cc95a3345b9f2fe175eab8d78c49d257d460cfe4ccc24e65f7cc07b6fe3d0c6",
+      "bytes": 119544
+    },
+    "workshop": {
+      "path": "doc/assets/modular-ranger-tripo-top-workshop-v4.json",
+      "sha256": "7b6d6268b84bcac2a4ffaa87b8ff7e283c2f09bf3380372b5de07e37c931dee9",
+      "bytes": 675
+    },
+    "new_ai_generation_or_paid_calls": false,
+    "status": "Current dev workshop candidate; concealed lining trimmed and waist overlap retained; other mixed equipment pending"
+  },
+  "cleanup": "Original source moved into final v4 directory; prior models and reviews removed. Failed trials remain summarized in modular-ranger-tripo-top-fitting-history.json."
+}

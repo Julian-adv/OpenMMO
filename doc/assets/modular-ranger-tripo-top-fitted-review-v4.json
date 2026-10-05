@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-05",
+  "status": "Fitting candidate with sampled animations; production skin masks and mixed equipment acceptance pending",
+  "blender_version": "5.2.0 LTS",
+  "rest_view": "Torso, upper arms, neck and forearms remain visible for clearance review",
+  "animation_views": "Provisional review-scene skin mask; forearms and hands fully preserved",
+  "scene_skin_mask": {
+    "hidden_regions": [
+      "boot_ankles",
+      "legs",
+      "upper_arms"
+    ],
+    "torso_maximum_y": 1.05,
+    "neck_minimum_y": 1.54,
+    "neck_maximum_abs_x": 0.075,
+    "canonical_base_glb_unchanged": true,
+    "runtime_mask_implemented": false
+  },
+  "context": "Existing crop hair and cloth pants; no new ranger pants created",
+  "budget": {
+    "top": 4896,
+    "base_including_hidden": 13891,
+    "crop_hair": 933,
+    "body_hair_top_including_hidden": 19720,
+    "body_hair_top_visible": 13238,
+    "blender_top_triangles": 4976,
+    "context_cloth_pants": 2636,
+    "face_allocation": 1505,
+    "scope": "Current body, crop hair and top; final ranger pants, gloves, boots, weapon and cape not included"
+  },
+  "editable": {
+    "path": "assets/modular_human_male_01/parts/ranger_tripo_top_v4/ranger-top-fitting.blend",
+    "sha256": "b298ff4af107125f276593d90dbda8182a8f75803514309a01bb55b590467bf5"
+  },
+  "images": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/tripo-top-fitted-v4-rest.png",
+      "sha256": "2a59f82f691d3d0d66087e91c3d7650370ac1683d9bd6772a39bf045c0eecdbd"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/tripo-top-fitted-v4-motion.png",
+      "sha256": "03d2cd944688b58a3f92bc47dedd8ef23a4b1b9c12c29b6c51a681a6651aff39"
+    }
+  ],
+  "fitting": {
+    "path": "doc/assets/modular-ranger-tripo-top-fitting-v4.json",
+    "sha256": "e6719f0306449fb1eb196d307757fc9afa44741581f6bf8cdc5394e5fda5e31e"
+  },
+  "animation": {
+    "path": "doc/assets/modular-ranger-tripo-top-animation-v4.json",
+    "sha256": "f01f2a0492eb60b85962af7ebb84de1f10847f7700db5869c0a6afe995681b4f"
+  }
+}

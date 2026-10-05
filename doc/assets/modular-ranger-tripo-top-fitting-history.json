@@ -1,0 +1,123 @@
+{
+  "date": "2026-10-05",
+  "attempts": [
+    {
+      "attempt": 1,
+      "status": "Rejected skin-weight trial",
+      "fitted_sha256": "73295bf011548cd7504dddb29cf993d2b344052e83942ad3efdec6baa97ffac1",
+      "reason": "Large edge stretch at underarm and side seams during sampled game animations; diffuse surface weights over geometric edge lengths and bind detached buttons consistently.",
+      "maximum_stretch_by_clip": {
+        "idle1": 2.715865207840198,
+        "walk": 4.337238097660959,
+        "run": 8.785493670101014,
+        "jump": 13.645832128070019,
+        "slash1": 15.570055687651683,
+        "combat_idle": 5.268382704012966,
+        "sit_idle": 7.188681996768488
+      }
+    },
+    {
+      "attempt": 2,
+      "status": "Previous fitting; user requested a tighter revision",
+      "fitted_sha256": "3b0ef68d69f52b03f2274f20b4556cba9f998781b483947de3f2b4066ce13913",
+      "correction": "Distance-weighted graph diffusion, smooth torso spine blend, common attachment weights for each detached button",
+      "maximum_stretch_by_clip": {
+        "idle1": 1.5383021659380105,
+        "walk": 1.37568897835807,
+        "run": 1.8545094396765398,
+        "jump": 2.594289578095608,
+        "slash1": 2.4085400866955244,
+        "combat_idle": 1.6046165593846466,
+        "sit_idle": 1.7468529302107283
+      },
+      "remaining": "Unmasked animation reveals body intersections; review scene uses provisional covered-skin masking. Runtime masks and mixed equipment acceptance pending."
+    },
+    {
+      "attempt": 3,
+      "status": "Rejected tighter-fit trial",
+      "fitted_sha256": "ec5a963b026201248a275bfdaa13db2dc73e21f089d733f68629743c03546cc7",
+      "reason": "Nearest normals from inner cloth-pants faces pushed the vest hem into the body. Replaced with an outward-only waist envelope from body and pants sections."
+    },
+    {
+      "attempt": 4,
+      "revision": 2,
+      "status": "Superseded tighter fitting: user observed cloth waist protrusion",
+      "fitted_sha256": "c5ac6263f934708779693efe9e587d3b381d04c7e25f617e519c1c60eed7a5a7",
+      "correction": "Taper torso and hem, match body section depth, reduce sleeve radial volume, then preserve outward waist overlap against existing cloth pants.",
+      "maximum_stretch_by_clip": {
+        "idle1": 1.530857045439515,
+        "walk": 1.3574169227372832,
+        "run": 1.7726545241690754,
+        "jump": 2.493961466634947,
+        "slash1": 2.436804493087865,
+        "combat_idle": 1.6235384016081877,
+        "sit_idle": 1.7318124956303118
+      },
+      "remaining": "Dev skin masks implemented, but waist geometry and deformation differed from cloth pants"
+    },
+    {
+      "attempt": 5,
+      "status": "Rejected expansion-only trial",
+      "fitted_sha256": "78ccc866df21b4881c02e361d44257d2e6993e6f4d8d8c807e5189093ed6f02c",
+      "reason": "9mm waist expansion alone left about 11mm negative radial clearance in idle due to different skin weights",
+      "intermediate_files_removed": true
+    },
+    {
+      "attempt": 6,
+      "status": "Rejected broad hip-weight transition",
+      "fitted_sha256": "4ee30192fd9e72e45874edaea2cd0495c6f0f5fac3e6331770f4c5a552a4f528",
+      "reason": "Waist clearance improved, but transition included inner sleeve vertices and increased jump edge stretch to 8.23; restricted correction to torso width"
+    },
+    {
+      "attempt": 7,
+      "revision": 3,
+      "status": "Superseded: user observed concealed green lining at leather hem",
+      "fitted_sha256": "2450d323ec749f95506900c7e25d289ab7b76495c111c8c72fa7098c356b83be",
+      "correction": "9mm local radial expansion plus pelvis-following hem weights with torso-only smooth transitions",
+      "maximum_stretch_by_clip": {
+        "idle1": 1.530857045439515,
+        "walk": 1.5805342545712473,
+        "run": 2.844445453044226,
+        "jump": 2.8789072956495367,
+        "slash1": 3.0530643301779525,
+        "combat_idle": 2.0378564590910964,
+        "sit_idle": 1.7318124956303118
+      },
+      "remaining": "Other equipment combinations and complete inner-layer intersection acceptance pending",
+      "intermediate_files_removed": true
+    },
+    {
+      "attempt": 8,
+      "status": "Incomplete pure-cloth removal trial",
+      "fitted_sha256": "d8aa7b6bc2d0493fe4fa976732cf4dc55ee129cc0c0bc8c951c5080a2edece36",
+      "removed_triangles": 117,
+      "reason": "Mixed UV cloth faces still left a small green fragment near the front hem",
+      "intermediate_files_removed": true
+    },
+    {
+      "attempt": 9,
+      "revision": 4,
+      "status": "Current concealed-lining cleanup candidate",
+      "fitted_sha256": "ec8e9638833ad4f60ba66c1a36fb00cd66521c601977b0fa6d7d389ebfaf3623",
+      "removed_triangles": 137,
+      "correction": "Remove low concealed lining and four-probe-covered mixed cloth faces; preserve exterior leather, collar, sleeves and surviving vertex attributes",
+      "waist_review": "doc/assets/modular-ranger-tripo-top-waist-review-v4.json",
+      "maximum_stretch_by_clip": {
+        "idle1": 1.530857045439515,
+        "walk": 1.5805342545712473,
+        "run": 2.844445453044226,
+        "jump": 2.8789072956495367,
+        "slash1": 3.0530643301779525,
+        "combat_idle": 2.0378564590910964,
+        "sit_idle": 1.7318124956303118
+      },
+      "remaining": "Other mixed equipment and full inner-layer intersection acceptance pending"
+    }
+  ],
+  "cleanup": {
+    "date": "2026-10-05",
+    "removed_files": 35,
+    "removed_bytes": 159645802,
+    "policy": "Keep original Tripo source, final v4, final review artifacts and generation references; preserve failures as this summary. Rebuild intermediate fitting stages in a temporary directory."
+  }
+}
