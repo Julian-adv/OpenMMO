@@ -89,8 +89,7 @@ const UNAUTH_MAX_MESSAGES: u32 = 30;
 const INSTRUMENT_BATCHES_PER_SEC: f32 = 4.0;
 const INSTRUMENT_BATCH_BURST: f32 = 4.0;
 
-/// A refused client retries, so one stale build can bury the log in identical
-/// lines. Log the first of each window in full and fold the rest into its tail.
+/// Log the first event and summarize repeats every minute.
 const REFUSAL_LOG_WINDOW: Duration = Duration::from_secs(60);
 
 struct LogWindow {
@@ -128,8 +127,7 @@ impl InstrumentBatchLimiter {
     }
 }
 
-/// One throttle per reason, so a flood of one kind can't hide the first
-/// occurrence of another.
+/// Separate refusal reasons keep unrelated first events visible.
 struct LogThrottle(Mutex<Option<LogWindow>>);
 
 impl LogThrottle {
@@ -137,8 +135,7 @@ impl LogThrottle {
         Self(Mutex::new(None))
     }
 
-    /// `Some(suffix)` when this event should be logged — the suffix names how
-    /// many were folded in since the last line. `None` while a window is open.
+    /// Return the repeat summary, or None inside an open window.
     fn claim(&self) -> Option<String> {
         let now = Instant::now();
         let mut guard = self.0.lock().unwrap_or_else(|e| e.into_inner());
@@ -547,8 +544,16 @@ pub async fn handle_connection(
                             }
                             Err(e) => {
                                 error!(ip = %state.client_ip, account = state.account_name.as_deref(),
+                                    character = state.character_name.as_deref(),
                                     player_id = state.player_id.map(PlayerId::get), error = %e,
-                                    "Error handling client message");
+                                    "Closing connection: undecodable client message");
+                                let _ = ws_sender
+                                    .send(close_frame(
+                                        onlinerpg_shared::CLOSE_CODE_CLIENT_DESYNC,
+                                        "undecodable message",
+                                    ))
+                                    .await;
+                                break;
                             }
                         }
                     }
@@ -2766,6 +2771,59 @@ mod tests {
                 .await
                 .is_err(),
             "the token dies with the connection"
+        );
+    }
+
+    #[tokio::test]
+    async fn undecodable_client_message_closes_as_desync() {
+        use futures_util::{SinkExt, StreamExt};
+        use tokio::net::TcpListener;
+        use tokio_tungstenite::connect_async;
+
+        let context = Arc::new(ServerContext {
+            geoip: Default::default(),
+            game_state: Arc::new(crate::game_state::tests::make_test_game_state(
+                "undecodable_message",
+            )),
+            auth_service: Arc::new(crate::game_state::tests::make_test_auth(
+                "undecodable_message",
+            )),
+            auth_ctx: test_auth_ctx(),
+            connect_limiter: Default::default(),
+        });
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let (_shutdown_tx, shutdown) = watch::channel(());
+        tokio::spawn(async move {
+            let (stream, peer) = listener.accept().await.unwrap();
+            handle_connection(stream, peer, context, shutdown.clone(), shutdown).await;
+        });
+        let (mut socket, _) = connect_async(format!("ws://{address}")).await.unwrap();
+        let handshake = onlinerpg_shared::serialize_client_msg(&client_info(
+            onlinerpg_shared::PROTOCOL_VERSION,
+            "web",
+        ))
+        .unwrap();
+        socket
+            .send(Message::Binary(handshake.into()))
+            .await
+            .unwrap();
+        socket
+            .send(Message::Binary(vec![0xc1].into()))
+            .await
+            .unwrap();
+        let close = tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                if let Message::Close(frame) = socket.next().await.unwrap().unwrap() {
+                    return frame;
+                }
+            }
+        })
+        .await
+        .expect("server did not close");
+        assert_eq!(
+            close.map(|f| u16::from(f.code)),
+            Some(onlinerpg_shared::CLOSE_CODE_CLIENT_DESYNC)
         );
     }
 

@@ -256,8 +256,8 @@ pub const CLOSE_CODE_PROTOCOL_MISMATCH: u16 = 4001;
 pub const CLOSE_CODE_RATE_LIMITED: u16 = 4002;
 
 /// WebSocket close code sent when a session ends because the client's world
-/// disagrees with the server's — today, grinding dungeon walls only its own
-/// build generated. Unlike a protocol refusal this is found mid-session, and
+/// disagrees with the server's: grinding dungeon walls only its own build
+/// generated, or sending a message the server cannot decode. Unlike a protocol refusal this is found mid-session, and
 /// clients should reload rather than reconnect: the same build lands in the
 /// same disagreement.
 pub const CLOSE_CODE_CLIENT_DESYNC: u16 = 4004;
