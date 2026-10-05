@@ -1,25 +1,38 @@
 use super::*;
-use crate::state::tests::{p, test_player, test_state};
+use crate::state::tests::{house, p, room, test_player, test_state};
+use onlinerpg_shared::housing::{WallConfig, WallDirection, WallVariant};
+use onlinerpg_shared::interest::{InterestChange, WorldEvent};
 use onlinerpg_shared::messages::MoveStatus;
 use onlinerpg_shared::ServerMessage;
 use tokio::sync::mpsc;
 use tokio::time::{timeout, Duration};
 
 fn walker() -> (Arc<Mutex<SharedState>>, mpsc::Receiver<ClientMessage>) {
+    walker_on_floor(0)
+}
+
+fn walker_on_floor(floor: i8) -> (Arc<Mutex<SharedState>>, mpsc::Receiver<ClientMessage>) {
     let (mut s, rx) = test_state();
-    let me = test_player(0.5, 0.5);
+    let mut me = test_player(0.5, 0.5);
+    me.floor_level = floor;
+    me.position.y = 1.3 + floor as f32 * 3.1;
     s.self_player_id = Some(me.id);
     s.self_player = Some(me);
+    s.self_floor_level = floor;
     (Arc::new(Mutex::new(s)), rx)
 }
 
 fn progress(request_id: u32, x: f32, status: MoveStatus) -> ServerMessage {
+    progress_on_floor(request_id, x, 0, status)
+}
+
+fn progress_on_floor(request_id: u32, x: f32, floor: i8, status: MoveStatus) -> ServerMessage {
     ServerMessage::PlayerMoveProgress {
         request_id,
         server_time_ms: 1,
-        position: p(x, 1.3, 0.5),
+        position: p(x, 1.3 + floor as f32 * 3.1, 0.5),
         rotation: 0.0,
-        floor_level: 0,
+        floor_level: floor,
         next_waypoint: 1,
         speed: if status == MoveStatus::Moving {
             3.0
@@ -28,6 +41,46 @@ fn progress(request_id: u32, x: f32, status: MoveStatus) -> ServerMessage {
         },
         status,
     }
+}
+
+async fn add_closed_door(state: &Arc<Mutex<SharedState>>) {
+    let s = state.lock().await;
+    let mut room = room(1, s.self_floor_level as u8, Default::default());
+    room.size_x = 1;
+    room.size_z = 1;
+    room.wall_east = vec![WallConfig {
+        variant: WallVariant::WithDoor,
+        texture: 0,
+        is_open: false,
+    }];
+    s.world_cache.write().unwrap().apply_house_event(
+        s.self_player_id.unwrap(),
+        "test",
+        &WorldEvent {
+            subject: "house:door-house".into(),
+            revision: 1,
+            change: InterestChange::Enter,
+            messages: vec![ServerMessage::HouseUpdated {
+                house: house("door-house", p(0.0, 0.0, 0.0), vec![room]),
+            }],
+        },
+    );
+}
+
+async fn next_door_toggle(rx: &mut mpsc::Receiver<ClientMessage>) {
+    let command = timeout(Duration::from_secs(1), rx.recv())
+        .await
+        .expect("door toggle")
+        .expect("open command channel");
+    assert!(matches!(
+        command,
+        ClientMessage::ToggleDoor {
+            house_id,
+            room_index: 0,
+            wall_dir: WallDirection::East,
+            segment_index: 0,
+        } if house_id == "door-house"
+    ));
 }
 
 fn spawn_move(
@@ -61,6 +114,7 @@ async fn schedule_keeps_the_server_destination_without_relocation_or_retry() {
         MoveStatus::Blocked,
     ] {
         let (state, mut rx) = walker();
+        add_closed_door(&state).await;
         let task = spawn_move(
             &state,
             ScheduleEntry {
@@ -336,4 +390,120 @@ async fn long_schedule_moves_finish_each_server_segment_before_requesting_the_ne
         Ok(ClientMessage::PlayerFace { .. })
     ));
     assert!(rx.try_recv().is_err());
+}
+
+#[tokio::test(start_paused = true)]
+async fn blocked_schedule_opens_a_door_and_resumes_the_target() {
+    for (start_floor, target_x, target_floor) in
+        [(0, 10.5, 0), (0, 10.5, 1), (1, 10.5, 0), (0, 70.5, 0)]
+    {
+        for status in [
+            MoveStatus::Partial,
+            MoveStatus::Blocked,
+            MoveStatus::Arrived,
+        ] {
+            if target_x == 70.5 && status == MoveStatus::Arrived {
+                continue;
+            }
+            let (state, mut rx) = walker_on_floor(start_floor);
+            add_closed_door(&state).await;
+            let task = spawn_move(
+                &state,
+                ScheduleEntry {
+                    pos: [target_x, 0.0, 0.5],
+                    floor_level: target_floor,
+                    action: Some("bed".into()),
+                    object_id: Some(23),
+                    ..Default::default()
+                },
+            );
+            let id = next_goal(&mut rx, target_x.min(48.5)).await;
+            state
+                .lock()
+                .await
+                .push_event(progress_on_floor(id, 0.5, start_floor, status));
+            let approach = next_goal(&mut rx, 1.5).await;
+            state.lock().await.push_event(progress_on_floor(
+                approach,
+                1.5,
+                start_floor,
+                MoveStatus::Arrived,
+            ));
+            next_door_toggle(&mut rx).await;
+            state.lock().await.push_event(ServerMessage::DoorToggled {
+                house_id: "door-house".into(),
+                room_index: 0,
+                wall_dir: WallDirection::East,
+                segment_index: 0,
+                is_open: true,
+            });
+            let mut id = next_goal(&mut rx, target_x.min(49.5)).await;
+            if target_x > 49.5 {
+                state
+                    .lock()
+                    .await
+                    .push_event(progress(id, 49.5, MoveStatus::Arrived));
+                id = next_goal(&mut rx, target_x).await;
+            }
+            state.lock().await.push_event(progress_on_floor(
+                id,
+                target_x - 0.4,
+                target_floor as i8,
+                MoveStatus::Partial,
+            ));
+            timeout(Duration::from_secs(1), task)
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(
+                rx.try_recv(),
+                Ok(ClientMessage::PlayerFace { .. })
+            ));
+            assert!(matches!(
+                rx.try_recv(),
+                Ok(ClientMessage::InteractObject { object_id: 23, .. })
+            ));
+            assert!(rx.try_recv().is_err());
+            assert_eq!(state.lock().await.relocations, 0);
+        }
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn schedule_door_retries_are_bounded_when_the_door_stays_closed() {
+    let (state, mut rx) = walker();
+    add_closed_door(&state).await;
+    let task = spawn_move(
+        &state,
+        ScheduleEntry {
+            pos: [10.5, 0.0, 0.5],
+            action: Some("bed".into()),
+            object_id: Some(23),
+            ..Default::default()
+        },
+    );
+    for _ in 0..walk::MAX_DOORS_PER_WALK {
+        let id = next_goal(&mut rx, 10.5).await;
+        state
+            .lock()
+            .await
+            .push_event(progress(id, 0.5, MoveStatus::Blocked));
+        let approach = next_goal(&mut rx, 1.5).await;
+        state
+            .lock()
+            .await
+            .push_event(progress(approach, 1.5, MoveStatus::Arrived));
+        next_door_toggle(&mut rx).await;
+    }
+    let id = next_goal(&mut rx, 10.5).await;
+    state
+        .lock()
+        .await
+        .push_event(progress(id, 1.5, MoveStatus::Blocked));
+    timeout(Duration::from_secs(1), task)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(rx.try_recv().is_err());
+    assert_eq!(state.lock().await.relocations, 0);
 }

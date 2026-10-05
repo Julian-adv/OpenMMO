@@ -36,7 +36,7 @@ const MAX_PICKUP_WALK_SECS: f32 = 12.0;
 
 const MAX_POINT_WALK_SECS: f32 = 15.0;
 
-const MAX_DOORS_PER_WALK: usize = 6;
+pub(super) const MAX_DOORS_PER_WALK: usize = 6;
 
 const MAX_CHASE_DOORS: usize = 2;
 
@@ -282,40 +282,39 @@ async fn walk_inner(
         }
         let terminal = status
             .is_some_and(|status| !matches!(status, MoveStatus::Moving | MoveStatus::Searching));
-        if schedule && terminal {
-            if request_is_final
-                && delta.dist <= SCHEDULE_ARRIVAL_RADIUS
-                && s.passability_floor() == target_floor
-                && matches!(
-                    status,
-                    Some(MoveStatus::Arrived | MoveStatus::Partial | MoveStatus::Blocked)
-                )
-            {
-                if status != Some(MoveStatus::Arrived) {
-                    tracing::info!(
-                        npc = me.name,
-                        player_id = s.self_player_id.map(PlayerId::get),
-                        status = status.map(tracing::field::debug),
-                        requested_x = target.x,
-                        requested_z = target.z,
-                        requested_floor = target_floor,
-                        x = me.position.x,
-                        y = me.position.y,
-                        z = me.position.z,
-                        floor = s.self_floor_level,
-                        "Schedule move completed near the target"
-                    );
-                }
-                return Walked::Arrived;
+        if schedule
+            && terminal
+            && request_is_final
+            && delta.dist <= SCHEDULE_ARRIVAL_RADIUS
+            && s.passability_floor() == target_floor
+            && matches!(
+                status,
+                Some(MoveStatus::Arrived | MoveStatus::Partial | MoveStatus::Blocked)
+            )
+        {
+            if status != Some(MoveStatus::Arrived) {
+                tracing::info!(
+                    npc = me.name,
+                    player_id = s.self_player_id.map(PlayerId::get),
+                    status = status.map(tracing::field::debug),
+                    requested_x = target.x,
+                    requested_z = target.z,
+                    requested_floor = target_floor,
+                    x = me.position.x,
+                    y = me.position.y,
+                    z = me.position.z,
+                    floor = s.self_floor_level,
+                    "Schedule move completed near the target"
+                );
             }
-            if request_is_final || status != Some(MoveStatus::Arrived) {
-                return Walked::Lost(LostReason::NoPath);
-            }
+            return Walked::Arrived;
         }
+        let schedule_failed =
+            schedule && terminal && (request_is_final || status != Some(MoveStatus::Arrived));
         if !fixed || request_id.is_none() || terminal {
             let mut goal = (target.x, target.z);
             let mut final_goal = true;
-            if s.passability_floor() != target_floor {
+            if !schedule_failed && s.passability_floor() != target_floor {
                 let route = s.find_path_to(target.x, target.z, target_floor);
                 if let Some(point) = route
                     .waypoints
@@ -337,7 +336,7 @@ async fn walk_inner(
             let changed = last_goal.is_none_or(|(x, z)| {
                 PlanarDelta::xz(x, z, goal.0, goal.1).dist > REROUTE_THRESHOLD
             });
-            if terminal && status != Some(MoveStatus::Arrived) && !changed {
+            if schedule_failed || (terminal && status != Some(MoveStatus::Arrived) && !changed) {
                 drop(s);
                 if doors_opened < tuning.max_doors
                     && open_blocking_door(state, background, sprint, owned_request).await

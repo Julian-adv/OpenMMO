@@ -96,7 +96,7 @@ impl BrainSample {
             behavior = self.behavior, state = ?self.state,
             target_player_id = self.target.map(PlayerId::get),
             observed_at = self.observed_at, brain_ms = self.elapsed_ms,
-            pathfinds = self.paths.count,
+            pathfinds = self.paths.count(),
             reached = self.paths.reached, unreachable = self.paths.unreachable,
             node_limit = self.paths.node_limit, partial = self.paths.partial,
             expanded_nodes = self.paths.expanded_nodes,
@@ -125,7 +125,6 @@ struct PathSample {
 
 #[derive(Default, Clone, Copy)]
 struct PathDiagnostics {
-    count: u64,
     reached: u64,
     unreachable: u64,
     node_limit: u64,
@@ -135,8 +134,11 @@ struct PathDiagnostics {
 }
 
 impl PathDiagnostics {
+    fn count(&self) -> u64 {
+        self.reached + self.unreachable + self.node_limit
+    }
+
     fn record(&mut self, sample: PathSample) {
-        self.count += 1;
         match sample.termination {
             PathTermination::Reached => self.reached += 1,
             PathTermination::Unreachable => self.unreachable += 1,
@@ -590,7 +592,7 @@ impl super::GameState {
                 );
                 let elapsed_ms = brain_started.elapsed().as_secs_f32() * 1000.0;
                 let paths = path.diagnostics.get();
-                stats.pathfinds += paths.count;
+                stats.pathfinds += paths.count();
                 if stats
                     .slowest
                     .as_ref()
@@ -898,7 +900,7 @@ mod path_budget_tests {
             expanded_nodes: 0,
             ..sample
         });
-        assert_eq!(paths.count, 3);
+        assert_eq!(paths.count(), 3);
         assert_eq!(
             (paths.reached, paths.unreachable, paths.node_limit),
             (1, 1, 1)
