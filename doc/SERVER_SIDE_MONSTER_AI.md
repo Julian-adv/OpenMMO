@@ -217,6 +217,7 @@ C가 들어가면 통째로 삭제되므로 단순하게 유지한다.
 - `Attack` 적용: `monster_attack(None, ..)` — 기존 클라 경로와 같은 쿨다운·사거리·벽 검사.
 - 훅: `broadcast_player_attack`의 명중/빗나감 모두 `brain_hit` (빗나감도 어그로), 사망 시 `brain_death`.
 - 메트릭: 30 s마다 `info!("monster ai: brains .. active .. ticked/tick .. pathfinds/s .. commands/s .. over_budget .. worst ms")` → journald에서 `grep "monster ai:"`.
+- 같은 집계 창의 `monster ai slowest brain`은 가장 오래 걸린 개체의 ID·틱 시작 좌표·층·행동·대상·소요 시간과 관측 시각(`observed_at`, Unix 초)을 남긴다. 탐색의 성공·도달 불가·노드 한도·부분 경로 수와 확장 노드 수, 그 틱에서 가장 느린 탐색의 출발·목표·결과를 함께 기록한다. 탐색이 없으면 탐색 상세 필드는 생략한다. `over_budget`에는 마지막 개체를 처리하다 40 ms를 넘긴 틱도 포함한다.
 - 미해결/후속: 레지스트리 전체 순회가 틱마다 O(전체 몬스터). 지금 규모엔 무관, 40k에서 문제 되면 플레이어 셀 주변만 순회하도록. §6.1의 표적별 경로 공유는 메트릭 보고 결정.
 
 ## 11. 결정 (2026-08-25)

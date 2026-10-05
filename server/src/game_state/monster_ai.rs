@@ -3,11 +3,12 @@
 use crate::types::{Monster, MonsterState, PlayerId, Position, ServerMessage};
 use onlinerpg_shared::dungeon::passability_floor_for_level;
 use onlinerpg_shared::monster_ai::{
-    self, AiCommand, BehaviorTree, CachePathProvider, ChaseAim, MonsterBrain, NearbyMonster,
-    NearbyPlayer, PathProvider, AGGRESSIVE_BEHAVIOR, DEFAULT_BEHAVIOR,
+    self, AiCommand, AiState, BehaviorTree, CachePathProvider, ChaseAim, MonsterBrain,
+    NearbyMonster, NearbyPlayer, PathProvider, AGGRESSIVE_BEHAVIOR, DEFAULT_BEHAVIOR,
 };
 use onlinerpg_shared::pathfinding::{
-    find_and_smooth_path_avoiding_with_budget, is_movement_blocked, segment_touches_box, PathResult,
+    find_and_smooth_path_avoiding_with_budget, is_movement_blocked, segment_touches_box,
+    PathResult, PathTermination,
 };
 use onlinerpg_shared::shortest_world_delta_x;
 use std::cell::Cell;
@@ -18,15 +19,12 @@ use tracing::{debug, info, warn};
 /// CPU spent on brains per tick before the rest wait for the next one.
 const TICK_BUDGET: Duration = Duration::from_millis(40);
 const BRAIN_PATH_NODE_BUDGET: usize = 20_000;
-/// A brain skipped for long (budget starvation, or nobody near it) resumes
-/// with at most this much simulated time, so it can't leap a whole path.
+/// Cap catch-up movement after skipped ticks.
 const MAX_BRAIN_DELTA_MS: f32 = 1000.0;
 const STATS_LOG_PERIOD: Duration = Duration::from_secs(30);
-/// How long a brain keeps its target after a wall last hid them, so a chase
-/// survives the doorway corner clipping the sight line for a tick.
+/// Keep targets briefly when corners obscure sight.
 const SIGHT_MEMORY: Duration = Duration::from_secs(5);
-/// Within this a monster senses a player regardless of walls — scent and
-/// footfall, not sight.
+/// Sense players within this range even behind walls.
 const SENSE_RANGE: f32 = 5.0;
 
 struct Entry {
@@ -73,6 +71,87 @@ struct Stats {
     commands: u64,
     over_budget: u32,
     worst_ms: f32,
+    slowest: Option<BrainSample>,
+}
+
+struct BrainSample {
+    monster_id: String,
+    position: Position,
+    floor_level: i8,
+    behavior: String,
+    state: AiState,
+    target: Option<PlayerId>,
+    observed_at: i64,
+    elapsed_ms: f32,
+    paths: PathDiagnostics,
+}
+
+impl BrainSample {
+    fn log(&self) {
+        let path = self.paths.slowest;
+        info!(
+            monster_id = self.monster_id,
+            x = self.position.x, y = self.position.y, z = self.position.z,
+            floor_level = self.floor_level,
+            behavior = self.behavior, state = ?self.state,
+            target_player_id = self.target.map(PlayerId::get),
+            observed_at = self.observed_at, brain_ms = self.elapsed_ms,
+            pathfinds = self.paths.count,
+            reached = self.paths.reached, unreachable = self.paths.unreachable,
+            node_limit = self.paths.node_limit, partial = self.paths.partial,
+            expanded_nodes = self.paths.expanded_nodes,
+            path_ms = path.map(|p| p.elapsed_ms),
+            path_start_x = path.map(|p| p.start.0), path_start_z = path.map(|p| p.start.1),
+            path_start_floor = path.map(|p| p.start.2),
+            path_goal_x = path.map(|p| p.goal.0), path_goal_z = path.map(|p| p.goal.1),
+            path_goal_floor = path.map(|p| p.goal.2),
+            path_termination = path.map(|p| tracing::field::debug(p.termination)),
+            path_waypoints = path.map(|p| p.waypoints),
+            path_expanded_nodes = path.map(|p| p.expanded_nodes),
+            "monster ai slowest brain"
+        );
+    }
+}
+
+#[derive(Clone, Copy)]
+struct PathSample {
+    start: (f32, f32, u8),
+    goal: (f32, f32, u8),
+    elapsed_ms: f32,
+    termination: PathTermination,
+    waypoints: usize,
+    expanded_nodes: usize,
+}
+
+#[derive(Default, Clone, Copy)]
+struct PathDiagnostics {
+    count: u64,
+    reached: u64,
+    unreachable: u64,
+    node_limit: u64,
+    partial: u64,
+    expanded_nodes: usize,
+    slowest: Option<PathSample>,
+}
+
+impl PathDiagnostics {
+    fn record(&mut self, sample: PathSample) {
+        self.count += 1;
+        match sample.termination {
+            PathTermination::Reached => self.reached += 1,
+            PathTermination::Unreachable => self.unreachable += 1,
+            PathTermination::NodeLimit => self.node_limit += 1,
+        }
+        self.partial +=
+            u64::from(sample.termination != PathTermination::Reached && sample.waypoints > 0);
+        self.expanded_nodes += sample.expanded_nodes;
+        if self
+            .slowest
+            .is_none_or(|p| sample.elapsed_ms > p.elapsed_ms)
+        {
+            self.slowest = Some(sample);
+        }
+    }
 }
 
 pub(crate) struct ServerBrains {
@@ -108,11 +187,11 @@ impl ServerBrains {
     }
 }
 
-/// Counts path queries for the tick stats.
+/// Records path query diagnostics for the tick stats.
 struct CountingPath<'a> {
     inner: CachePathProvider<'a>,
-    count: Cell<u64>,
     remaining: Cell<usize>,
+    diagnostics: Cell<PathDiagnostics>,
 }
 
 impl PathProvider for CountingPath<'_> {
@@ -140,8 +219,9 @@ impl PathProvider for CountingPath<'_> {
         blocked: &[(i32, i32)],
         max_nodes: usize,
     ) -> PathResult {
-        self.count.set(self.count.get() + 1);
-        find_and_smooth_path_avoiding_with_budget(
+        let started = Instant::now();
+        let remaining = self.remaining.get();
+        let result = find_and_smooth_path_avoiding_with_budget(
             sx,
             sz,
             sf,
@@ -152,7 +232,20 @@ impl PathProvider for CountingPath<'_> {
             max_nodes,
             blocked,
             &self.remaining,
-        )
+        );
+        let sample = PathSample {
+            start: (sx, sz, sf),
+            goal: (gx, gz, gf),
+            elapsed_ms: started.elapsed().as_secs_f32() * 1000.0,
+            termination: result.termination,
+            waypoints: result.waypoints.len(),
+            expanded_nodes: remaining - self.remaining.get(),
+        };
+        self.diagnostics.update(|mut d| {
+            d.record(sample);
+            d
+        });
+        result
     }
 }
 
@@ -449,12 +542,12 @@ impl super::GameState {
             return;
         }
 
-        let pathfinds = {
+        {
             let cache = self.passability_read();
             let path = CountingPath {
                 inner: CachePathProvider { cache: &cache },
-                count: Cell::new(0),
                 remaining: Cell::new(BRAIN_PATH_NODE_BUDGET),
+                diagnostics: Cell::default(),
             };
             let mut rng = rand::thread_rng();
             let mut ticked = 0usize;
@@ -462,20 +555,26 @@ impl super::GameState {
             let start = brains.cursor % n.max(1);
             let mut over_budget = false;
             for i in 0..n {
-                if started.elapsed() > TICK_BUDGET {
+                let brain_started = Instant::now();
+                if brain_started - started > TICK_BUDGET {
                     over_budget = true;
                     brains.cursor = (start + i) % n;
                     break;
                 }
                 let a = &active[(start + i) % n];
-                let ServerBrains { entries, trees, .. } = &mut *brains;
+                let ServerBrains {
+                    entries,
+                    trees,
+                    stats,
+                    ..
+                } = &mut *brains;
                 let Some(entry) = entries.get_mut(&a.id) else {
                     continue;
                 };
                 let Some(tree) = monster_ai::behavior_tree_for(trees, &entry.brain.behavior) else {
                     continue;
                 };
-                let delta_ms = entry.owed_ms(Instant::now(), forced_delta_ms);
+                let delta_ms = entry.owed_ms(brain_started, forced_delta_ms);
                 let monsters: Vec<NearbyMonster> =
                     super::SpatialCell::within_radius(&entry.brain.position, radius)
                         .filter_map(|cell| standing.get(&cell))
@@ -484,25 +583,45 @@ impl super::GameState {
                         .cloned()
                         .collect();
                 path.remaining.set(BRAIN_PATH_NODE_BUDGET);
+                path.diagnostics.set(PathDiagnostics::default());
+                let position = entry.brain.position;
                 let result = entry.brain.tick_with_behavior_tree(
                     delta_ms, &a.players, &monsters, tree, &path, &mut rng,
                 );
+                let elapsed_ms = brain_started.elapsed().as_secs_f32() * 1000.0;
+                let paths = path.diagnostics.get();
+                stats.pathfinds += paths.count;
+                if stats
+                    .slowest
+                    .as_ref()
+                    .is_none_or(|s| elapsed_ms > s.elapsed_ms)
+                {
+                    stats.slowest = Some(BrainSample {
+                        monster_id: a.id.clone(),
+                        position,
+                        floor_level: a.floor_level,
+                        behavior: entry.brain.behavior.clone(),
+                        state: entry.brain.state(),
+                        target: entry.brain.target_player_id(),
+                        observed_at: crate::auth::unix_now(),
+                        elapsed_ms,
+                        paths,
+                    });
+                }
                 ticked += 1;
                 commands.extend(result.into_iter().map(|c| (a.id.clone(), a.floor_level, c)));
             }
             if !over_budget {
                 brains.cursor = 0;
             }
+            let tick_elapsed = started.elapsed();
             let s = &mut brains.stats;
             s.ticks += 1;
             s.ticked += ticked as u64;
             s.commands += commands.len() as u64;
-            s.over_budget += over_budget as u32;
-            path.count.get()
-        };
-        brains.stats.pathfinds += pathfinds;
-        let elapsed_ms = started.elapsed().as_secs_f32() * 1000.0;
-        brains.stats.worst_ms = brains.stats.worst_ms.max(elapsed_ms);
+            s.over_budget += (over_budget || tick_elapsed > TICK_BUDGET) as u32;
+            s.worst_ms = s.worst_ms.max(tick_elapsed.as_secs_f32() * 1000.0);
+        }
         if brains.stats_since.elapsed() >= STATS_LOG_PERIOD {
             let s = std::mem::take(&mut brains.stats);
             info!(
@@ -516,6 +635,9 @@ impl super::GameState {
                 s.over_budget,
                 s.worst_ms
             );
+            if let Some(slowest) = &s.slowest {
+                slowest.log();
+            }
             brains.stats_since = Instant::now();
         }
         drop(brains);
@@ -721,8 +843,8 @@ mod path_budget_tests {
         let cache = PassabilityCache::from([("obstacle".into(), obstacle)]);
         let path = CountingPath {
             inner: CachePathProvider { cache: &cache },
-            count: Cell::new(0),
             remaining: Cell::new(20),
+            diagnostics: Cell::default(),
         };
         let first = path.find_path_avoiding(10.5, 0.5, 0, 0.5, 0.5, 0, &[], 6);
         assert_eq!(first.termination, PathTermination::NodeLimit);
@@ -737,11 +859,145 @@ mod path_budget_tests {
         assert_eq!(fourth.termination, PathTermination::NodeLimit);
         assert!(fourth.waypoints.is_empty());
         assert_eq!(path.remaining.get(), 0);
+        assert_eq!(path.diagnostics.get().expanded_nodes, 20);
 
         path.remaining.set(20);
+        path.diagnostics.set(PathDiagnostics::default());
         let reached = path.find_path(-1.5, 0.5, 0, 2.5, 0.5, 0);
         assert!(reached.found);
         assert!(path.remaining.get() > 0 && path.remaining.get() < 20);
+        assert_eq!(
+            path.diagnostics.get().expanded_nodes,
+            20 - path.remaining.get()
+        );
+    }
+
+    #[test]
+    fn slow_brain_diagnostics_preserve_the_costliest_path_and_all_outcomes() {
+        let mut paths = PathDiagnostics::default();
+        let sample = PathSample {
+            start: (-1036.5, 4265.0, 1),
+            goal: (-1035.0, 4263.0, 1),
+            elapsed_ms: 12.0,
+            termination: PathTermination::NodeLimit,
+            waypoints: 2,
+            expanded_nodes: 20_000,
+        };
+        paths.record(sample);
+        paths.record(PathSample {
+            elapsed_ms: 1.0,
+            termination: PathTermination::Unreachable,
+            waypoints: 0,
+            expanded_nodes: 50,
+            ..sample
+        });
+        paths.record(PathSample {
+            elapsed_ms: 0.1,
+            termination: PathTermination::Reached,
+            waypoints: 1,
+            expanded_nodes: 0,
+            ..sample
+        });
+        assert_eq!(paths.count, 3);
+        assert_eq!(
+            (paths.reached, paths.unreachable, paths.node_limit),
+            (1, 1, 1)
+        );
+        assert_eq!(paths.partial, 1);
+        assert_eq!(paths.expanded_nodes, 20_050);
+        assert_eq!(paths.slowest.unwrap().elapsed_ms, 12.0);
+        let brain = BrainSample {
+            monster_id: "m123".into(),
+            position: Position {
+                x: -1036.5,
+                y: -4.0,
+                z: 4265.0,
+            },
+            floor_level: -1,
+            behavior: "aggressive".into(),
+            state: AiState::Hold,
+            target: Some(PlayerId::from(42)),
+            observed_at: 123456,
+            elapsed_ms: 13.5,
+            paths,
+        };
+        let (subscriber, buffer) = crate::test_util::capture_logs();
+        tracing::subscriber::with_default(subscriber, || brain.log());
+        let logs = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
+        for field in [
+            "monster ai slowest brain",
+            "monster_id=\"m123\"",
+            "x=-1036.5",
+            "floor_level=-1",
+            "state=Hold",
+            "target_player_id=42",
+            "pathfinds=3",
+            "path_termination=NodeLimit",
+            "path_goal_x=-1035",
+            "path_expanded_nodes=20000",
+        ] {
+            assert!(logs.contains(field), "{logs}");
+        }
+        assert!(!logs.contains("Some("), "{logs}");
+        assert!(!logs.contains("Position {"), "{logs}");
+    }
+
+    #[tokio::test]
+    async fn slowest_brain_is_logged_once_per_stats_window_and_reset() {
+        use tracing::instrument::WithSubscriber;
+
+        let game = super::super::tests::make_flat_world_game_state("brain_stats");
+        game.add_player(super::super::tests::make_player("prey", 0.0, 0.0))
+            .await;
+        let monster = game
+            .spawn_monster(
+                "goblin".into(),
+                Position {
+                    x: 12.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                0.0,
+                0,
+                crate::types::MonsterLifecycle::Ambient,
+                None,
+                true,
+            )
+            .await
+            .unwrap();
+        game.tick_monster_ai_by(200.0).await;
+        {
+            let mut brains = game.monster_brains.lock().await;
+            assert_eq!(
+                brains.stats.slowest.as_ref().unwrap().monster_id,
+                monster.id
+            );
+            brains.stats_since = Instant::now() - STATS_LOG_PERIOD;
+        }
+        let (subscriber, buffer) = crate::test_util::capture_logs();
+        async {
+            game.tick_monster_ai_by(200.0).await;
+            {
+                let brains = game.monster_brains.lock().await;
+                assert!(brains.stats.slowest.is_none());
+                assert_eq!(brains.stats.ticks, 0);
+            }
+            game.tick_monster_ai_by(200.0).await;
+        }
+        .with_subscriber(subscriber)
+        .await;
+        let logs = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
+        assert_eq!(logs.matches("monster ai:").count(), 1, "{logs}");
+        assert_eq!(
+            logs.matches("monster ai slowest brain").count(),
+            1,
+            "{logs}"
+        );
+        assert!(
+            logs.contains(&format!("monster_id=\"{}\"", monster.id)),
+            "{logs}"
+        );
+        assert!(logs.contains("floor_level=0"), "{logs}");
     }
 
     #[test]
