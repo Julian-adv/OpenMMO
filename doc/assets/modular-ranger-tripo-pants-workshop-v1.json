@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-05",
+  "url": "https://localhost:10004/modular-character-preview.html?outfit=ranger&fit=pants-v1",
+  "loaded": {
+    "ready": true,
+    "top": "ranger",
+    "pants": "ranger",
+    "camera": "full",
+    "stats": "\uc870\ud569 23,098\uc0bc\uac01\ud615 \u00b7 \ud45c\uc2dc 16,584 \u00b7 \uc5bc\uad74 1,505"
+  },
+  "asset": {
+    "triangles": 3714,
+    "hash": "8529da4370e10d74228c1aafc790cc1c1684d1eb8737ad19d993d8f938594883"
+  },
+  "clips": [
+    "idle1",
+    "walk",
+    "run",
+    "jump",
+    "slash1",
+    "combat_idle",
+    "sit_idle"
+  ],
+  "exceptions": [],
+  "screenshots": [
+    "tripo-pants-workshop-v1.png"
+  ],
+  "cleanup": "Duplicate motion captures removed on 2026-10-06; final motion contact sheets retained."
+}

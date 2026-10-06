@@ -1,0 +1,543 @@
+{
+  "status": "Fitted candidate; dynamic and waist review required after rebuilding",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/ranger_tripo_pants_v1/source.glb",
+    "sha256": "9491f2305bc99920599041ed121d220ff57bc1cb0bb9184dce77ca04d9d57e92",
+    "bytes": 1851828,
+    "byte_identical_to_delivery": true
+  },
+  "base": {
+    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
+    "bytes": 22214236
+  },
+  "interfaces": {
+    "path": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+    "sha256": "f3fc3aed9c5080cf26a294dac496293c89bce8f67466add18a7ef72b326f006b",
+    "bytes": 310940
+  },
+  "rig_id": "human_male_01_mixamo_candidate_v2",
+  "source_triangles": 3714,
+  "preserved_source_topology_uv_and_embedded_texture": true,
+  "method": "Ranger crotch and knee alignment; current v1 ankle sections, radial waist fit and surface-transferred leg weights",
+  "anatomical_mapping": {
+    "source_y": [
+      0,
+      0.4,
+      0.75,
+      0.99951171875
+    ],
+    "target_y_m": [
+      0.181,
+      0.553,
+      0.87,
+      1.15
+    ]
+  },
+  "welded_components": 20,
+  "rigid_hip_accessory_vertices": 621,
+  "cuffs": [
+    {
+      "side": "Left",
+      "skin_radial_clearance_m": 0.004,
+      "transition_interval_y_m": [
+        0.26,
+        0.43
+      ],
+      "minimum_hem_y_m": 0.17636095380320738,
+      "method": "Current v1 ankle contours; no repeated calf slimming"
+    },
+    {
+      "side": "Right",
+      "skin_radial_clearance_m": 0.004,
+      "transition_interval_y_m": [
+        0.26,
+        0.43
+      ],
+      "minimum_hem_y_m": 0.17640851279836933,
+      "method": "Current v1 ankle contours; no repeated calf slimming"
+    }
+  ],
+  "waist": {
+    "section_y_m": [
+      1.0,
+      1.005,
+      1.01,
+      1.015,
+      1.02,
+      1.025,
+      1.03,
+      1.035,
+      1.04,
+      1.045,
+      1.05,
+      1.055,
+      1.06,
+      1.065,
+      1.07,
+      1.075,
+      1.08,
+      1.085,
+      1.0899999999999999,
+      1.095
+    ],
+    "cloth_clearance_m": 0.009,
+    "method": "Closed sections below sloping open waist; accessory offsets retained",
+    "maximum_displacement_m": 0.06526387443559878
+  },
+  "ankle_connections": [
+    {
+      "side": "Left",
+      "interface": "shoe_ankle_Left",
+      "center": [
+        0.15926159918308258,
+        0.23499998450279236,
+        -0.03282027319073677
+      ],
+      "axis": [
+        -0.05732715403881295,
+        0.9980521083118923,
+        0.024608667253572837
+      ],
+      "basis": [
+        [
+          0.9983554464266773,
+          0.05730973588289026,
+          0.0014130687255574281
+        ],
+        [
+          -2.168404344971009e-19,
+          -0.024649204190403725,
+          0.9996961622076879
+        ]
+      ],
+      "weights": {
+        "LeftLeg": 0.9591349695661484,
+        "LeftFoot": 0.04086503043385167
+      },
+      "sample_heights_m": [
+        -0.03,
+        -0.024999999999999998,
+        -0.019999999999999997,
+        -0.015,
+        -0.009999999999999998,
+        -0.0049999999999999975,
+        0.0
+      ]
+    },
+    {
+      "side": "Right",
+      "interface": "shoe_ankle_Right",
+      "center": [
+        -0.15926215052604675,
+        0.23499999940395355,
+        -0.03594214841723442
+      ],
+      "axis": [
+        0.05730302665267743,
+        0.997607654189585,
+        0.038669515626602424
+      ],
+      "basis": [
+        [
+          0.9983568315669715,
+          -0.05726002586391477,
+          -0.002219527341861716
+        ],
+        [
+          0.0,
+          -0.03873316073363134,
+          0.999249589571886
+        ]
+      ],
+      "weights": {
+        "RightLeg": 0.940803562814493,
+        "RightFoot": 0.05919643718550703
+      },
+      "sample_heights_m": [
+        -0.03,
+        -0.024999999999999998,
+        -0.019999999999999997,
+        -0.015,
+        -0.009999999999999998,
+        -0.0049999999999999975,
+        0.0
+      ]
+    }
+  ],
+  "vest_overlap": {
+    "top_path": "assets/modular_human_male_01/parts/ranger_tripo_top_v4/top_ranger.glb",
+    "top_sha256": "ec8e9638833ad4f60ba66c1a36fb00cd66521c601977b0fa6d7d389ebfaf3623",
+    "method": "Constrain waist vertices, triangle centers and edge midpoints beneath ranger vest sections; translate detached accessories rigidly and preserve open slit visibility",
+    "target_clearance_m": 0.009,
+    "section_y_m": [
+      1.065,
+      1.155
+    ],
+    "iterations": [
+      {
+        "step": 0,
+        "maximum_correction_m": 0.031208538847428136
+      },
+      {
+        "step": 1,
+        "maximum_correction_m": 0.0036326992844858824
+      },
+      {
+        "step": 2,
+        "maximum_correction_m": 0.0015059552629348577
+      },
+      {
+        "step": 3,
+        "maximum_correction_m": 0.001005609948436112
+      },
+      {
+        "step": 4,
+        "maximum_correction_m": 0.0006715089431552773
+      },
+      {
+        "step": 5,
+        "maximum_correction_m": 0.0004484120132830366
+      },
+      {
+        "step": 6,
+        "maximum_correction_m": 0.00029943656023485865
+      },
+      {
+        "step": 7,
+        "maximum_correction_m": 0.00019995572864260625
+      },
+      {
+        "step": 8,
+        "maximum_correction_m": 0.0001335253855490326
+      },
+      {
+        "step": 9,
+        "maximum_correction_m": 8.916501255185061e-05
+      },
+      {
+        "step": 10,
+        "maximum_correction_m": 5.9542290937714126e-05
+      },
+      {
+        "step": 11,
+        "maximum_correction_m": 3.976096296141873e-05
+      },
+      {
+        "step": 12,
+        "maximum_correction_m": 2.6551462015939054e-05
+      },
+      {
+        "step": 13,
+        "maximum_correction_m": 1.773046453999727e-05
+      },
+      {
+        "step": 14,
+        "maximum_correction_m": 1.1840004696214712e-05
+      },
+      {
+        "step": 15,
+        "maximum_correction_m": 7.9064893873243e-06
+      },
+      {
+        "step": 16,
+        "maximum_correction_m": 5.279776617336807e-06
+      },
+      {
+        "step": 17,
+        "maximum_correction_m": 3.5257168391061855e-06
+      },
+      {
+        "step": 18,
+        "maximum_correction_m": 2.3543950093407595e-06
+      },
+      {
+        "step": 19,
+        "maximum_correction_m": 1.5722124772493684e-06
+      }
+    ],
+    "corrected_vertices": 558,
+    "maximum_displacement_m": 0.032302414793718114
+  },
+  "clearance_iterations": [
+    {
+      "step": 0,
+      "minimum_signed_distance_m": -0.04762322871900031,
+      "maximum_correction_m": 0.016883295540266876
+    },
+    {
+      "step": 1,
+      "minimum_signed_distance_m": -0.03712616712282209,
+      "maximum_correction_m": 0.014477650601220289
+    },
+    {
+      "step": 2,
+      "minimum_signed_distance_m": -0.02828613043689384,
+      "maximum_correction_m": 0.013023744159310804
+    },
+    {
+      "step": 3,
+      "minimum_signed_distance_m": -0.01928594208634229,
+      "maximum_correction_m": 0.00985453187991095
+    },
+    {
+      "step": 4,
+      "minimum_signed_distance_m": -0.010749938677405717,
+      "maximum_correction_m": 0.0070103856945690456
+    },
+    {
+      "step": 5,
+      "minimum_signed_distance_m": -0.005761611230290399,
+      "maximum_correction_m": 0.0041344520596777136
+    },
+    {
+      "step": 6,
+      "minimum_signed_distance_m": -0.002468916904542706,
+      "maximum_correction_m": 0.0026541041215747286
+    },
+    {
+      "step": 7,
+      "minimum_signed_distance_m": -0.0001210313780983656,
+      "maximum_correction_m": 0.0017796640189964277
+    },
+    {
+      "step": 8,
+      "minimum_signed_distance_m": 0.0016148217514501614,
+      "maximum_correction_m": 0.001322908897730974
+    },
+    {
+      "step": 9,
+      "minimum_signed_distance_m": 0.0021206806700324217,
+      "maximum_correction_m": 0.0010171456531035664
+    },
+    {
+      "step": 10,
+      "minimum_signed_distance_m": 0.0023065770982371118,
+      "maximum_correction_m": 0.0007911622043015954
+    },
+    {
+      "step": 11,
+      "minimum_signed_distance_m": 0.0024529259852333098,
+      "maximum_correction_m": 0.0006318551507857855
+    },
+    {
+      "step": 12,
+      "minimum_signed_distance_m": 0.0025682601554858527,
+      "maximum_correction_m": 0.0005096177971966733
+    },
+    {
+      "step": 13,
+      "minimum_signed_distance_m": 0.002659195034701802,
+      "maximum_correction_m": 0.0004112602484315061
+    },
+    {
+      "step": 14,
+      "minimum_signed_distance_m": 0.002730934802332278,
+      "maximum_correction_m": 0.00033179183604346255
+    },
+    {
+      "step": 15,
+      "minimum_signed_distance_m": 0.0027875773203000845,
+      "maximum_correction_m": 0.00026789472913950856
+    },
+    {
+      "step": 16,
+      "minimum_signed_distance_m": 0.002832296853312842,
+      "maximum_correction_m": 0.0002163242290970515
+    },
+    {
+      "step": 17,
+      "minimum_signed_distance_m": -0.012436540605700253,
+      "maximum_correction_m": 0.0034666364941144767
+    },
+    {
+      "step": 18,
+      "minimum_signed_distance_m": -0.008969904241254064,
+      "maximum_correction_m": 0.002682071243089979
+    },
+    {
+      "step": 19,
+      "minimum_signed_distance_m": -0.006287833296244593,
+      "maximum_correction_m": 0.0020803650111659647
+    },
+    {
+      "step": 20,
+      "minimum_signed_distance_m": -0.004207469095587332,
+      "maximum_correction_m": 0.0016138925879370814
+    },
+    {
+      "step": 21,
+      "minimum_signed_distance_m": -0.0025935777326669823,
+      "maximum_correction_m": 0.0012521793597320774
+    },
+    {
+      "step": 22,
+      "minimum_signed_distance_m": -0.0013413998403629841,
+      "maximum_correction_m": 0.0009716446683853217
+    },
+    {
+      "step": 23,
+      "minimum_signed_distance_m": -0.0003697567145968389,
+      "maximum_correction_m": 0.0007540333278816517
+    },
+    {
+      "step": 24,
+      "minimum_signed_distance_m": 0.00038427510920644933,
+      "maximum_correction_m": 0.0005852075997420851
+    },
+    {
+      "step": 25,
+      "minimum_signed_distance_m": 0.0009694813153282612,
+      "maximum_correction_m": 0.00045421423574489446
+    },
+    {
+      "step": 26,
+      "minimum_signed_distance_m": 0.0014236943060068029,
+      "maximum_correction_m": 0.0003525645305504539
+    },
+    {
+      "step": 27,
+      "minimum_signed_distance_m": 0.0017762577539094764,
+      "maximum_correction_m": 0.00027367801674414564
+    },
+    {
+      "step": 28,
+      "minimum_signed_distance_m": 0.0020499348484968594,
+      "maximum_correction_m": 0.0002124523167944161
+    },
+    {
+      "step": 29,
+      "minimum_signed_distance_m": 0.0022623863924008565,
+      "maximum_correction_m": 0.00016493034868129397
+    }
+  ],
+  "face_clearance": {
+    "method": "Cloth triangle centers and three edge midpoints against current body surfaces; boot interface below .30m remains fixed",
+    "reviewed_sample_minimum_y_m": 0.36,
+    "samples_per_iteration": 10384,
+    "iterations": [
+      {
+        "step": 0,
+        "minimum_sample_signed_distance_m": -0.018852765597325495,
+        "maximum_correction_m": 0.00660198668360428
+      },
+      {
+        "step": 1,
+        "minimum_sample_signed_distance_m": -0.009653096680451643,
+        "maximum_correction_m": 0.00676973354869646
+      },
+      {
+        "step": 2,
+        "minimum_sample_signed_distance_m": -0.004081238483607608,
+        "maximum_correction_m": 0.0047985657354121325
+      },
+      {
+        "step": 3,
+        "minimum_sample_signed_distance_m": -0.01617129022753655,
+        "maximum_correction_m": 0.005107640768445508
+      },
+      {
+        "step": 4,
+        "minimum_sample_signed_distance_m": 0.0005728879559950243,
+        "maximum_correction_m": 0.0017854772979403733
+      },
+      {
+        "step": 5,
+        "minimum_sample_signed_distance_m": -0.009047507533986249,
+        "maximum_correction_m": 0.001800583636098846
+      },
+      {
+        "step": 6,
+        "minimum_sample_signed_distance_m": 0.0032723043882198774,
+        "maximum_correction_m": 0.0013562233077170894
+      },
+      {
+        "step": 7,
+        "minimum_sample_signed_distance_m": 0.004613746701627123,
+        "maximum_correction_m": 0.0007064847677228814
+      },
+      {
+        "step": 8,
+        "minimum_sample_signed_distance_m": 0.00493190498845714,
+        "maximum_correction_m": 0.0005260699452228095
+      },
+      {
+        "step": 9,
+        "minimum_sample_signed_distance_m": 0.005306953191014087,
+        "maximum_correction_m": 0.000483320060327161
+      },
+      {
+        "step": 10,
+        "minimum_sample_signed_distance_m": -0.00046690175023199896,
+        "maximum_correction_m": 0.0009639800070127241
+      },
+      {
+        "step": 11,
+        "minimum_sample_signed_distance_m": 0.000382449669859558,
+        "maximum_correction_m": 0.0008198984583753211
+      },
+      {
+        "step": 12,
+        "minimum_sample_signed_distance_m": 0.001113350313314445,
+        "maximum_correction_m": 0.000731441807073929
+      },
+      {
+        "step": 13,
+        "minimum_sample_signed_distance_m": 0.0017658221703745047,
+        "maximum_correction_m": 0.0006575753248093758
+      },
+      {
+        "step": 14,
+        "minimum_sample_signed_distance_m": 0.002351486558120416,
+        "maximum_correction_m": 0.0005919755777537065
+      },
+      {
+        "step": 15,
+        "minimum_sample_signed_distance_m": 0.0028783067740210527,
+        "maximum_correction_m": 0.0005328802402208626
+      },
+      {
+        "step": 16,
+        "minimum_sample_signed_distance_m": 0.003352080304795233,
+        "maximum_correction_m": 0.0004797679646892567
+      },
+      {
+        "step": 17,
+        "minimum_sample_signed_distance_m": 0.0037782146000287097,
+        "maximum_correction_m": 0.00043203933571830824
+      },
+      {
+        "step": 18,
+        "minimum_sample_signed_distance_m": 0.004161502009335502,
+        "maximum_correction_m": 0.00038901803156159484
+      },
+      {
+        "step": 19,
+        "minimum_sample_signed_distance_m": 0.0045061392665803855,
+        "maximum_correction_m": 0.00035038875177549833
+      }
+    ]
+  },
+  "validation": {
+    "path": "assets/modular_human_male_01/parts/ranger_tripo_pants_v1/pants_ranger.glb",
+    "sha256": "8529da4370e10d74228c1aafc790cc1c1684d1eb8737ad19d993d8f938594883",
+    "triangles": 3714,
+    "bones": 65,
+    "exact_rest_hierarchy_and_inverse_bind_match": true,
+    "maximum_weight_sum_error": 1.1920928955078125e-07,
+    "active_bones": [
+      "Hips",
+      "LeftFoot",
+      "LeftLeg",
+      "LeftUpLeg",
+      "RightFoot",
+      "RightLeg",
+      "RightUpLeg"
+    ]
+  },
+  "remaining_review": [
+    "Waist overlap with ranger vest",
+    "Posed silhouette and skin coverage",
+    "Other tops and boots; production gameplay"
+  ]
+}

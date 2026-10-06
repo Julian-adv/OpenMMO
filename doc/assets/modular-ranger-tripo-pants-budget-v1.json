@@ -1,0 +1,20 @@
+{
+  "assembled_including_hidden_triangles": 23434,
+  "visible_triangles": 16584,
+  "face_allocation": 1505,
+  "parts": [
+    {
+      "id": "hair_crop",
+      "triangles": 933
+    },
+    {
+      "id": "top_ranger",
+      "triangles": 4896
+    },
+    {
+      "id": "pants_ranger",
+      "triangles": 3714
+    }
+  ],
+  "scope": "Canonical body, crop hair, ranger top v4 and ranger pants v1; bare feet, no gloves, boots, weapons or cape."
+}

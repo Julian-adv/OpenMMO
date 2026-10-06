@@ -1,4 +1,4 @@
-"""Verify posed cloth-waist clearance against the final ranger top."""
+"""Verify posed pants-waist clearance against the final ranger top."""
 import importlib.util
 import argparse
 import json
@@ -13,7 +13,7 @@ spec.loader.exec_module(ranger)
 fit, io = ranger.fit, ranger.io
 
 
-def load(path, waist=False):
+def load(path, waist=False, minimum_y=None):
     doc, binary = fit.read_glb(ROOT / path)
     result = []
     for node in doc['nodes']:
@@ -23,8 +23,11 @@ def load(path, waist=False):
             continue
         for primitive in doc['meshes'][node['mesh']]['primitives']:
             attrs = primitive['attributes']
-            result.append((io.accessor(doc, binary, attrs['POSITION']),
-                           io.accessor(doc, binary, primitive['indices']).reshape(-1, 3),
+            vertices = io.accessor(doc, binary, attrs['POSITION'])
+            faces = io.accessor(doc, binary, primitive['indices']).reshape(-1, 3)
+            if minimum_y is not None:
+                faces = faces[vertices[faces, 1].min(1) >= minimum_y]
+            result.append((vertices, faces,
                            io.accessor(doc, binary, attrs['JOINTS_0']),
                            io.accessor(doc, binary, attrs['WEIGHTS_0'])))
     assert result
@@ -76,11 +79,18 @@ def radii(triangles, height):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--revision', type=int, default=4)
-    revision = parser.parse_args().revision
-    pants_path = 'assets/modular_human_male_01/parts/fitted/pants_cloth.glb'
-    poses_path = f'assets/modular_human_male_01/parts/ranger_tripo_top_v{revision}/validation-poses.json'
+    parser.add_argument('--pants', default='assets/modular_human_male_01/parts/fitted/pants_cloth.glb')
+    parser.add_argument('--poses')
+    parser.add_argument('--report')
+    parser.add_argument('--heights', type=float, nargs='+', default=[1.08, 1.10, 1.12, 1.13, 1.14])
+    args = parser.parse_args()
+    revision = args.revision
+    pants_path = args.pants
+    cloth_waist = pants_path == 'assets/modular_human_male_01/parts/fitted/pants_cloth.glb'
+    assert cloth_waist or args.report, 'Custom pants require a separate --report path'
+    poses_path = args.poses or f'assets/modular_human_male_01/parts/ranger_tripo_top_v{revision}/validation-poses.json'
     poses = json.loads((ROOT / poses_path).read_text())
-    pants = load(pants_path, waist=True)
+    pants = load(pants_path, waist=cloth_waist, minimum_y=None if cloth_waist else 1.0)
     sources = [pants_path, poses_path]
     revisions = []
     for candidate in [revision]:
@@ -90,7 +100,7 @@ def main():
         for pose in poses:
             matrices = np.asarray(pose['matrices']).reshape(-1, 4, 4).transpose(0, 2, 1)
             inside, outside = posed(pants, matrices), posed(top, matrices)
-            for height in [1.08, 1.10, 1.12, 1.13, 1.14]:
+            for height in args.heights:
                 gap = radii(outside, height) - radii(inside, height)
                 valid = np.isfinite(gap)
                 assert valid.any()
@@ -100,14 +110,15 @@ def main():
                                     negative_rays=int((gap[valid] < 0).sum())))
         minimum = min(sample['minimum_clearance_m'] for sample in samples)
         if candidate == revision:
-            assert minimum > .003
+            assert minimum > .003, min(samples, key=lambda sample: sample['minimum_clearance_m'])
         revisions.append(dict(revision=candidate, minimum_clearance_m=minimum,
                               negative_rays=sum(sample['negative_rays'] for sample in samples), samples=samples))
     report = dict(date='2026-10-05', method='Outer section radii in inverse Hips deformation frame',
-                  scope='Existing cloth waist only; compare rays that intersect both surfaces. Unmatched rays include garment openings and incomplete upper pants sections; this is not a full triangle intersection test.',
-                  angles_per_plane=120, poses_per_revision=len(poses), planes_per_pose=5,
+                  scope='Selected pants outer waist including accessories; custom pants use faces entirely above rest Y=1.0m so raised legs do not contaminate the waist measurement. Compare rays that intersect both surfaces. Unmatched rays include garment openings; this is not a full triangle intersection test.',
+                  angles_per_plane=120, poses_per_revision=len(poses), planes_per_pose=len(args.heights),
                   sources=[dict(path=path, sha256=fit.digest(ROOT / path)) for path in sources], revisions=revisions)
-    (ROOT / f'doc/assets/modular-ranger-tripo-top-waist-review-v{revision}.json').write_text(json.dumps(report, indent=2) + '\n')
+    report_path = args.report or f'doc/assets/modular-ranger-tripo-top-waist-review-v{revision}.json'
+    (ROOT / report_path).write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps([dict(revision=row['revision'], minimum_clearance_m=row['minimum_clearance_m'],
                            negative_rays=row['negative_rays']) for row in revisions], indent=2))
 

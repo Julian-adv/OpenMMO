@@ -52,15 +52,19 @@ describe('ranger workshop preview', () => {
     const { body, parts, visible } = fixture()
     const top = new THREE.SkinnedMesh()
     parts.set('top_ranger', [top])
+    const pants = new THREE.SkinnedMesh()
+    parts.set('pants_ranger', [pants])
     const neck = body.find((mesh) => mesh.userData.region === 'neck')!
     const original = new THREE.PlaneGeometry(0.2, 0.2, 4, 4)
     original.translate(0, 1.54, 0)
     neck.geometry = original
     const selected = showModularOutfit(body, parts, RANGER_MODULAR_OUTFIT)
     expect(selected.has('top_ranger')).toBe(true)
-    expect(selected.has('pants_cloth')).toBe(true)
+    expect(selected.has('pants_ranger')).toBe(true)
+    expect(selected.has('pants_cloth')).toBe(false)
+    expect(pants.visible).toBe(true)
     expect(top.visible).toBe(true)
-    for (const region of ['torso', 'upper_arms'])
+    for (const region of ['torso', 'upper_arms', 'legs', 'ankles'])
       expect(visible(region)).toBe(false)
     for (const region of ['neck', 'forearms', 'hands'])
       expect(visible(region)).toBe(true)
@@ -72,8 +76,17 @@ describe('ranger workshop preview', () => {
     }
     showModularOutfit(body, parts, undressed)
     expect(top.visible).toBe(false)
+    expect(pants.visible).toBe(false)
     expect(neck.geometry).toBe(original)
-    for (const region of ['torso', 'upper_arms', 'neck', 'forearms', 'hands'])
+    for (const region of [
+      'torso',
+      'upper_arms',
+      'neck',
+      'forearms',
+      'hands',
+      'legs',
+      'ankles',
+    ])
       expect(visible(region)).toBe(true)
     showModularOutfit(body, parts, RANGER_MODULAR_OUTFIT)
     expect(top.visible).toBe(true)
@@ -84,9 +97,34 @@ describe('ranger workshop preview', () => {
     const { body, parts, visible } = fixture()
     const selected = showModularOutfit(body, parts, RANGER_MODULAR_OUTFIT)
     expect(selected.has('top_ranger')).toBe(false)
-    expect(selected.has('pants_cloth')).toBe(true)
-    for (const region of ['torso', 'upper_arms', 'neck', 'forearms', 'hands'])
+    expect(selected.has('pants_ranger')).toBe(false)
+    expect(selected.has('pants_cloth')).toBe(false)
+    for (const region of [
+      'torso',
+      'upper_arms',
+      'neck',
+      'forearms',
+      'hands',
+      'legs',
+      'ankles',
+    ])
       expect(visible(region)).toBe(true)
+  })
+
+  it('masks legs only when ranger pants load and restores them on replacement', () => {
+    const { body, parts, visible } = fixture()
+    const pants = new THREE.SkinnedMesh()
+    parts.set('pants_ranger', [pants])
+    showModularOutfit(body, parts, RANGER_MODULAR_OUTFIT)
+    expect(visible('torso')).toBe(true)
+    expect(visible('legs')).toBe(false)
+    expect(visible('feet')).toBe(true)
+    showModularOutfit(body, parts, { ...undressed, pants: 'cloth' })
+    expect(pants.visible).toBe(false)
+    expect(parts.get('pants_cloth')![0].visible).toBe(true)
+    showModularOutfit(body, parts, undressed)
+    expect(visible('legs')).toBe(true)
+    expect(visible('ankles')).toBe(true)
   })
 })
 

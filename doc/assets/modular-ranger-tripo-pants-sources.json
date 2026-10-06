@@ -1,0 +1,125 @@
+{
+  "delivery_date": "2026-10-05",
+  "generation_date": null,
+  "provider": "User-confirmed Tripo Studio",
+  "subscription": {
+    "previous_user_report": "Approximately USD 20/month Studio subscription",
+    "previous_source_record": "doc/assets/modular-rogue-tripo-sources.json",
+    "current_file_tier_separately_confirmed": false
+  },
+  "license": "Subject to the original Tripo Studio output terms and recorded account provenance.",
+  "delivery_path_windows": "Y:\\public\\web_downloads\\leather+pants+3d+model.glb",
+  "delivery_path_linux": "/mnt/y/web_downloads/leather+pants+3d+model.glb",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/ranger_tripo_pants_v1/source.glb",
+    "sha256": "9491f2305bc99920599041ed121d220ff57bc1cb0bb9184dce77ca04d9d57e92",
+    "bytes": 1851828,
+    "byte_identical_to_delivery": true
+  },
+  "base": {
+    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
+    "bytes": 22214236
+  },
+  "interfaces": {
+    "path": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+    "sha256": "f3fc3aed9c5080cf26a294dac496293c89bce8f67466add18a7ef72b326f006b",
+    "bytes": 310940
+  },
+  "rig_id": "human_male_01_mixamo_candidate_v2",
+  "generation_task_id": null,
+  "generation_model_version": null,
+  "submitted_prompt": null,
+  "submitted_images_confirmed": false,
+  "requested_polygon_count_confirmed": null,
+  "discussion_target_quads": 1500,
+  "discussion_approximate_triangles": 3000,
+  "export_observed": {
+    "format": "GLB 2.0",
+    "generator": "Tripo",
+    "triangles": 3714,
+    "vertices_including_uv_splits": 4242,
+    "mesh_count": 1,
+    "material_count": 1,
+    "textures": [
+      {
+        "size": [
+          2048,
+          2048
+        ],
+        "format": "JPEG"
+      }
+    ],
+    "rigged": false,
+    "animations": 0
+  },
+  "reference_artwork": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/pants_ranger-front-v1.png",
+      "sha256": "edc7d1b845d39964c2bdd26897027bd5b960491745e3b8dc24c2f0e2ff3f6972",
+      "bytes": 2099565
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/pants_ranger-back-v1.png",
+      "sha256": "b9666cfca085489dbd3cd8ae8846e1a00dc98f469943d0fe3c6c637c2cc9bdc7",
+      "bytes": 2115561
+    }
+  ],
+  "local_fitting": "Local fitting and rig transfer; no new AI generation or paid API calls.",
+  "fitting": {
+    "status": "Dev workshop candidate; ranger top v4 and bare feet reviewed; other mixed outfits and production gameplay pending",
+    "glb": {
+      "path": "assets/modular_human_male_01/parts/ranger_tripo_pants_v1/pants_ranger.glb",
+      "sha256": "8529da4370e10d74228c1aafc790cc1c1684d1eb8737ad19d993d8f938594883",
+      "bytes": 1972216
+    },
+    "editable": {
+      "path": "assets/modular_human_male_01/parts/ranger_tripo_pants_v1/ranger-pants-fitting.blend",
+      "sha256": "a27177ec4ad839a5917e03c7adc3cbb69620fcf9bb9c0715fcce2606d676e79e",
+      "bytes": 40848855
+    },
+    "report": {
+      "path": "doc/assets/modular-ranger-tripo-pants-fitting-v1.json",
+      "sha256": "b674954e48a76e96811e92319b0915c80162d8335d4674e713843ee002f62088",
+      "bytes": 14699
+    },
+    "animation": {
+      "path": "doc/assets/modular-ranger-tripo-pants-animation-v1.json",
+      "sha256": "1084007a17ccf8721e84831e1b9d9649891c106421167f89f60ec0864f845b35",
+      "bytes": 5872
+    },
+    "waist_review": {
+      "path": "doc/assets/modular-ranger-tripo-pants-waist-review-v1.json",
+      "sha256": "429a5467a78904fad56a916d034b7625f161f9f7a62686c816eae0810eb68b4f",
+      "bytes": 119744
+    },
+    "visual_review": {
+      "path": "doc/assets/modular-ranger-tripo-pants-review-v1.json",
+      "sha256": "123c535fad14385702a69e14690ddb035d6aeb31f650748ab127cf389ea21f04",
+      "bytes": 1335
+    },
+    "workshop": {
+      "path": "doc/assets/modular-ranger-tripo-pants-workshop-v1.json",
+      "sha256": "15ad83173d1a8b9b270675f835fc20d6e4a439a57a56ca39b453d49a2f7f1bb1",
+      "bytes": 746
+    },
+    "budget": {
+      "path": "doc/assets/modular-ranger-tripo-pants-budget-v1.json",
+      "sha256": "6e0778e8dafb399b03fe7c25e1b86f405ca17a2d7c66d7cf29a92809137a9e5a",
+      "bytes": 437
+    },
+    "source_review": {
+      "path": "doc/assets/modular-ranger-tripo-pants-source-review-v1.json",
+      "sha256": "2282341f0eff05e4608f576031a40fc4c6aeea975f143512ea31db9bfd30dcc4",
+      "bytes": 889
+    },
+    "history": {
+      "path": "doc/assets/modular-ranger-tripo-pants-fitting-history.json",
+      "sha256": "f0edbe041f2ea0fcd0ff478a40df201dfcb9066c24394739066cc618b0154d72",
+      "bytes": 2777
+    },
+    "preserved_source_topology_uv_and_embedded_texture": true,
+    "new_ai_generation_or_paid_calls": false
+  },
+  "cleanup": "2026-10-06: Removed raw source preview and three duplicate workshop motion images; final reviewed outputs and numeric records retained."
+}

@@ -1,0 +1,46 @@
+{
+  "status": "Raw source; not fitted or rigged",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/ranger_tripo_pants_v1/source.glb",
+    "sha256": "9491f2305bc99920599041ed121d220ff57bc1cb0bb9184dce77ca04d9d57e92"
+  },
+  "triangles": 3714,
+  "mesh_count": 1,
+  "meshes": [
+    {
+      "name": "tripo_node_d88f318d-eefe-48bd-a1e1-9d3e3894ca28",
+      "components_vertex_counts": [
+        1330,
+        49,
+        49,
+        49,
+        49,
+        47,
+        47,
+        44,
+        44,
+        44,
+        44,
+        22,
+        17,
+        17,
+        17,
+        17,
+        17,
+        16,
+        16,
+        16
+      ],
+      "boundary_edges": 130,
+      "nonmanifold_edges": 130,
+      "degenerate_faces": 0,
+      "collapsed_uv_triangles": 0
+    }
+  ],
+  "source_extent_blender": [
+    0.46337890625,
+    0.28955078125,
+    0.99951171875
+  ],
+  "rigged": false
+}

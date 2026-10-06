@@ -52,7 +52,7 @@ try {
   const restBones = skeleton.bones.map((bone) => ({ bone, p: bone.position.clone(), q: bone.quaternion.clone(), s: bone.scale.clone() }))
   const positions = (part = mesh) => Array.from({ length: part.geometry.attributes.position.count }, (_, i) => part.getVertexPosition(i, new THREE.Vector3()).applyMatrix4(part.matrixWorld))
   const rest = positions()
-  const leatherCore = rest.map((p) => values.part === 'pants_rogue'
+  const leatherCore = rest.map((p) => values.part.startsWith('pants_')
     ? Math.abs(p.x) > .075 && p.y > .49 && p.y < .66 && p.z > .015
     : values.part === 'glove_rogue_right'
     ? p.x < -.46 && p.y > .84 && p.y < .97
@@ -76,7 +76,7 @@ try {
     status: 'Numeric runtime bind and skinning review; visual review is separate',
     sources: [bodyPath, partPath].map((path) => ({ path, sha256: hash(path) })),
     bind_modular_part_passed: true, samples_per_clip: 13, clips: [],
-    strain_region: values.part === 'pants_rogue' ? 'Front knee region, including leather patches'
+    strain_region: values.part.startsWith('pants_') ? 'Front knee region, including leather patches'
       : values.part === 'glove_rogue_right' ? 'Right palm and short finger sleeves'
       : values.part === 'wrap_rogue_left' ? 'Left wrist cloth wrap' : 'Central torso leather',
   }

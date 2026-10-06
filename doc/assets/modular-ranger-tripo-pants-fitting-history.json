@@ -1,0 +1,57 @@
+{
+  "date": "2026-10-05",
+  "retained_candidate": "assets/modular_human_male_01/parts/ranger_tripo_pants_v1/pants_ranger.glb",
+  "trials": [
+    {
+      "stage": "Anatomical alignment and body clearance",
+      "issue": "Rear belt holders pierced the ranger vest in the rest view; minimum common-ray gap was about -19mm.",
+      "correction": "Constrain waist and belt under the actual ranger top v4 sections."
+    },
+    {
+      "stage": "Vertex-only vest constraint",
+      "issue": "Triangles crossing the sloping vest hem still protruded between corrected vertices; minimum rest waist gap about -13mm.",
+      "correction": "Include triangle centers and edge midpoints in the overlap correction."
+    },
+    {
+      "stage": "Face correction of detached holders",
+      "issue": "Per-vertex corrections folded the lower rear holder ends.",
+      "correction": "Translate each detached accessory component inward rigidly while allowing the main trousers to deform."
+    },
+    {
+      "stage": "Dynamic waist measurement",
+      "issue": "Raised legs contaminated outer waist rays when all trouser faces were measured; apparent error exceeded 0.4m.",
+      "correction": "Measure faces entirely above rest Y=1.0m, retaining waist and belt accessories. Do not interpret knee intersections as waist failure."
+    }
+  ],
+  "retention": "Keep original source, final candidate and review files; intermediate GLBs and Blender variants were not stored.",
+  "cleanup": {
+    "date": "2026-10-06",
+    "removed_images": [
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/ranger/tripo-pants-source-v1-rest.png",
+        "sha256": "0618ffc400278dca9248a8876a88023b1de3d8173046fb9dcb4ffe256220e449",
+        "bytes": 378988,
+        "retained": false
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/ranger/tripo-pants-workshop-v1-run.png",
+        "sha256": "485a704e33e922f13f8fb6e33053dac2ede04e8613efc428308c4d437ff90293",
+        "bytes": 138743,
+        "retained": false
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/ranger/tripo-pants-workshop-v1-sit_idle.png",
+        "sha256": "ba634bda925b33bfeee1989f05aafd0599d3ed37022d620b2910d6c8ddaf8ff0",
+        "bytes": 138980,
+        "retained": false
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/ranger/tripo-pants-workshop-v1-slash1.png",
+        "sha256": "b54251940df27e96e987ac10076832c80ffac40f54ec68f756e30d57b0808353",
+        "bytes": 157248,
+        "retained": false
+      }
+    ],
+    "retained": "Original source, final GLB, editable Blender, pose data, front/back concepts, final fitting and motion sheets, one workshop screenshot, numeric reviews and reproduction tools."
+  }
+}

@@ -132,7 +132,7 @@ async function main() {
   const ranger = requestedOutfit === 'ranger'
   if (tripo || caveman || ranger) showWeapon.checked = false
   if (caveman) cameraSelect.value = 'full'
-  if (ranger) cameraSelect.value = 'top'
+  if (ranger) cameraSelect.value = 'full'
   const load = async (url: string) => {
     const gltf = await loader.loadAsync(url)
     if (disposed) {
@@ -169,6 +169,7 @@ async function main() {
     'gloves_caveman',
     'hair_wavy_bone',
     'top_ranger',
+    'pants_ranger',
   ]
   const [base, sources, animations, sword, profile, candidateSources, social] =
     await Promise.all([
@@ -209,7 +210,9 @@ async function main() {
     .slice(ROGUE_MODULAR_PARTS.length, ROGUE_MODULAR_PARTS.length + 4)
     .every((result) => result.status === 'fulfilled')
   el<HTMLButtonElement>('caveman-outfit').disabled = !cavemanAvailable
-  const rangerAvailable = ids.includes('top_ranger')
+  const rangerAvailable = ['top_ranger', 'pants_ranger'].every((id) =>
+    ids.includes(id)
+  )
   el<HTMLButtonElement>('ranger-outfit').disabled = !rangerAvailable
   const clips = [
     ...modularAnimationClips(base.scene, animations, 'corrected'),
@@ -300,7 +303,7 @@ async function main() {
       !inspectingCaveman &&
       !inspectingRanger
     note.textContent = inspectingRanger
-      ? '순찰자 상의 · 밑단 정리'
+      ? '순찰자 가죽 복장'
       : inspectingCaveman
         ? '원시전사 모피와 뼈 장식'
         : !rogueAvailable

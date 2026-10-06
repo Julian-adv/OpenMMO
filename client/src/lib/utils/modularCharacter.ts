@@ -73,7 +73,14 @@ export interface ModularOutfit {
     | 'caveman'
     | 'ranger'
     | 'none'
-  pants: 'cloth' | 'plate' | 'barbarian' | 'rogue' | 'caveman' | 'none'
+  pants:
+    | 'cloth'
+    | 'plate'
+    | 'barbarian'
+    | 'rogue'
+    | 'caveman'
+    | 'ranger'
+    | 'none'
   gloves: 'none' | 'leather' | 'plate' | 'barbarian' | 'rogue' | 'caveman'
   boots: (typeof MODULAR_BOOTS)[number]
   helmet: 'none' | 'plate' | 'barbarian'
@@ -292,7 +299,7 @@ export const CAVEMAN_MODULAR_OUTFIT: ModularOutfit = {
 export const RANGER_MODULAR_OUTFIT: ModularOutfit = {
   hair: 'hair_crop',
   top: 'ranger',
-  pants: 'cloth',
+  pants: 'ranger',
   gloves: 'none',
   boots: 'none',
   helmet: 'none',
@@ -326,7 +333,11 @@ export function showModularOutfit(
       ...outfit,
       top: proxied(top) ? 'none' : top,
       pants:
-        pants === 'rogue' ? 'cloth' : pants === 'caveman' ? 'barbarian' : pants,
+        pants === 'rogue' || pants === 'ranger'
+          ? 'cloth'
+          : pants === 'caveman'
+            ? 'barbarian'
+            : pants,
       gloves:
         gloves === 'rogue'
           ? 'none'
@@ -339,7 +350,7 @@ export function showModularOutfit(
   )
   if (![top, pants, gloves, boots].some(proxied)) return selected
   for (const [shown, proxy] of [
-    [pants === 'rogue', 'pants_cloth'],
+    [pants === 'rogue' || pants === 'ranger', 'pants_cloth'],
     [pants === 'caveman', 'pants_barbarian'],
     [gloves === 'caveman', 'gloves_barbarian'],
     [proxied(boots), 'boots_leather'],
@@ -355,6 +366,7 @@ export function showModularOutfit(
     ...ROGUE_MODULAR_PARTS,
     ...CAVEMAN_MODULAR_PARTS,
     'top_ranger',
+    'pants_ranger',
   ])
     for (const mesh of parts.get(id) ?? []) mesh.visible = selected.has(id)
   if (boots === 'caveman')
@@ -378,7 +390,9 @@ export function showModularOutfit(
     )
   const hidden = new Set([
     ...(top === 'rogue' || top === 'ranger' ? ['torso', 'upper_arms'] : []),
-    ...(pants === 'rogue' ? ['legs', 'ankles', 'boot_ankles'] : []),
+    ...(pants === 'rogue' || pants === 'ranger'
+      ? ['legs', 'ankles', 'boot_ankles']
+      : []),
     ...(boots === 'caveman' ? ['feet', 'ankles', 'boot_ankles'] : []),
   ])
   for (const mesh of body) {

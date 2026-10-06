@@ -1,0 +1,38 @@
+{
+  "status": "Dev fitting candidate; sampled game poses reviewed, other mixed outfits pending",
+  "editable": {
+    "path": "assets/modular_human_male_01/parts/ranger_tripo_pants_v1/ranger-pants-fitting.blend",
+    "sha256": "a27177ec4ad839a5917e03c7adc3cbb69620fcf9bb9c0715fcce2606d676e79e"
+  },
+  "images": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/tripo-pants-fitted-v1-rest.png",
+      "sha256": "dda2e3cbb0ada1439c13c99409855804a4a89d0882d96ec9ebf1ee9a32012f7f"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/tripo-pants-fitted-v1-connections.png",
+      "sha256": "4022c16fff153a75b7fef8e1420e30d972328193d9e3c57457ed77024631b31a"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/tripo-pants-fitted-v1-motion.png",
+      "sha256": "b408eb8a2a420865b6e1785648027ed5a0222f26dabb5e8323527353791ea3e1"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/tripo-pants-fitted-v1-rear-motion.png",
+      "sha256": "0c0d43c8035ed138c592f83cb2976d867b1172ed00b3e89ed9ab7b87327df012"
+    }
+  ],
+  "context": [
+    "canonical base",
+    "ranger top v4",
+    "crop hair",
+    "bare feet"
+  ],
+  "hidden_regions": [
+    "torso",
+    "upper_arms",
+    "legs",
+    "ankles",
+    "boot_ankles"
+  ]
+}

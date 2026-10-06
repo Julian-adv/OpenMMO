@@ -3,18 +3,18 @@
   "tool": "OpenAI Codex built-in ImageGen",
   "subscription_tier": "ChatGPT Pro 20x",
   "use_terms": "OpenAI generated-output terms; inherited source terms in doc/assets/characters.md. No new third-party reference art.",
-  "status": "Concept references; user-supplied Tripo top received and fitted as a candidate. Runtime masks and mixed equipment acceptance pending.",
+  "status": "Top and pants concept references; user-supplied Tripo top v4 and pants v1 fitted and connected to dev workshop. Other mixed equipment and production acceptance pending.",
   "proposed_top_generation_target": {
     "topology": "quad",
     "quads": 2500,
     "approximate_triangles": 5000,
-    "notes": "Initial generation target; actual exported triangles and assembled 15000–20000 triangle budget must be measured. Preserve collar, sleeves, arm openings and hem; use textures/normal maps for fine leather grain and shallow leaf decoration."
+    "notes": "Initial generation target; actual exported triangles and assembled 15000\u201320000 triangle budget must be measured. Preserve collar, sleeves, arm openings and hem; use textures/normal maps for fine leather grain and shallow leaf decoration."
   },
   "references": [
     {
       "path": "client/public/character_concepts/ranger.webp",
       "sha256": "a7be7a2469ddd87556033ca07e05bbe4b055df6b52871fa6a006bd1e4bce7f71",
-      "role": "Approved existing ranger design; both generations use this image."
+      "role": "Approved existing ranger design; used for top and pants concepts."
     },
     {
       "path": "doc/images/characters/modular_human_male_01/base-front.png",
@@ -49,6 +49,48 @@
         "client/public/character_concepts/ranger.webp"
       ],
       "prompt": "Use case: stylized-concept.\nAsset type: OpenMMO modular male ranger starter armor top, single BACK reference for Tripo multi-view image-to-3D.\nInput image 1 is the newly approved FRONT garment render; it controls the exact garment shape, collar, sleeve lengths, leather color, cloth color, scale and construction. Input image 2 is the original ranger character concept for supporting material and style.\nCreate exactly ONE isolated hollow wearable garment viewed squarely from the BACK, strict orthographic rear view, centered on a genuinely transparent background with no scenery or gradient. Same 1536x1024 landscape framing and neutral A pose as input image 1, sleeves angled diagonally down, entire silhouette in frame with ample margins. This is the rear of the exact same garment from image 1, not a new top or a front view. High quality realistic game concept / product render, neutral diffuse studio lighting, restrained highlights, no text.\nThe upper armor assembly consists of a muted moss/olive-green woven linen shirt with pointed folded collar, three-quarter sleeves rolled immediately below the elbows, and a fitted dark brown leather sleeveless vest with warm stitched edge piping, broad shoulders, tapered waist and short upper-hip length. Preserve exact front-view sleeve angle, cuff shape, vest shoulder width, torso proportions and hem length.\nDesign the unseen back conservatively: a continuous dark brown leather back panel with central vertical stitched seam, two subtle curved tailoring seams from shoulder blades down toward waist, stitched shoulder yoke just below neckline. Add a modest shallow embossed branching leaf/vine ornament only on the upper back yoke, matching the front's craftsmanship but simpler. Back of folded olive collar is visible above leather neckline. Rear vest hem is mostly continuous with a short center-back mobility slit; same length as front tails. No front buttons, V-neck, crossed chest trim or front opening on the back. No laces, straps, belt, buckle, pouches, backpack, cape, new accessories.\nAbsolutely no head, neck, skin, mannequin, human body, hands, leather bracers, gloves, trousers, legs, weapons or boots. Empty shirt sleeves and neckline with discreet fabric lining; body stays hollow with an open bottom. Shirt and vest are one item. One rear view only, no diagram, labels, duplicate garments or sheet. True transparent cutout, clean silhouette."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/pants_ranger-front-v1.png",
+      "sha256": "edc7d1b845d39964c2bdd26897027bd5b960491745e3b8dc24c2f0e2ff3f6972",
+      "size": [
+        1024,
+        1536
+      ],
+      "mode": "RGBA",
+      "generated_on": "2026-10-05",
+      "input_images": [
+        "client/public/character_concepts/ranger.webp",
+        "doc/images/characters/modular_human_male_01/parts/ranger/top_ranger-front-v1.png"
+      ],
+      "prompt": "Use case: stylized-concept.\nAsset type: OpenMMO modular male ranger starter armor pants; ONE FRONT reference image for Tripo image-to-3D.\nInput image 1: approved original ranger character, the design authority for trousers, leather belt, brass buckle and hip holders. Input image 2: approved isolated ranger upper garment, supporting reference only for material and craftsmanship; DO NOT include the top.\nDraw exactly one isolated hollow pair of wearable men's leather trousers from a strict straight-on FRONT orthographic view, fully visible from waist to ankle hems. Neutral relaxed straight legs slightly apart, equal weight, clean gap separating both legs. Centered portrait framing, 1024x1536 preferred, ample transparent margins, no cropping. Realistic fantasy game asset concept/product render, neutral diffuse light, restrained highlights, crisp construction.\nFaithfully extract the original's fitted dark walnut brown supple leather trousers: natural wrinkles around upper thighs and knees, warm worn leather grain, subtly stitched long thigh panel seams and curved knee tailoring. Keep the practical slim ranger silhouette, comfortable hips and thighs, tapered calves, plain narrow ankle cuffs intended to tuck INSIDE separate boots. Boots obscure the original lower trousers; conservatively extend the same plain leather trouser material to ankles. No rigid knee armor and no new ornamental patterns.\nInclude the original broad brown leather belt as part of this pants item: central antique brass rectangular buckle with the original circular medallion motif, small brass rivets, compact leather belt loops and small flat flap hip pouches/holders like those at the original's waist. Match source side placement, keep these compact. The waist sits beneath the outside-worn short leather vest; make a low-profile waistband with no tall fabric or leather rim projecting above the belt. Preserve a simple stitched center front fly below buckle. Belt, buckle, hip holders and pants form one coherent wearable assembly.\nAbsolutely NO person, skin, torso, legs/body inside trousers, mannequin, shirt, leather vest, vest skirt tabs, green cloth, coat, gloves, bracers, boots, feet, dagger, knife, scabbard, weapons, backpack, scenery, ground plane or cast shadow. The dagger AND its long sheath are separate equipment and must be excluded. No modern jeans pockets, zippers or denim. No text or labels. Empty waist and ankle openings with discreet dark leather inner surfaces, not flesh or black mannequin. Genuinely transparent RGBA background, no gradients or checkerboard painted into image. Only one front view, not a sheet or two views.",
+      "transparent_pixels": 965948,
+      "alpha_extrema": [
+        0,
+        254
+      ],
+      "processing": "Copied generated PNG unchanged."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/pants_ranger-back-v1.png",
+      "sha256": "b9666cfca085489dbd3cd8ae8846e1a00dc98f469943d0fe3c6c637c2cc9bdc7",
+      "size": [
+        1024,
+        1536
+      ],
+      "mode": "RGBA",
+      "generated_on": "2026-10-05",
+      "input_images": [
+        "doc/images/characters/modular_human_male_01/parts/ranger/pants_ranger-front-v1.png",
+        "client/public/character_concepts/ranger.webp"
+      ],
+      "prompt": "Use case: stylized-concept.\nAsset type: OpenMMO modular male ranger starter armor pants; ONE BACK reference for Tripo multi-view image-to-3D.\nInput image 1: the approved isolated FRONT pants concept, authoritative for exact shape, belt, compact hip pouches/holders, colors, seam style, leather grain and proportions. Input image 2: original full ranger concept, supporting style reference only.\nDraw the REAR of the EXACT same pair of hollow wearable leather trousers in image 1. Strict orthographic camera squarely from behind, no three-quarter rotation. One object, same 1024x1536 portrait frame, same waist-to-ankle extent, same generous transparent margins, same straight legs slightly apart, leg width, calf taper, trouser length and ankle cuff size as image 1. Full silhouette visible, centered, no cropping. Realistic fantasy game asset concept/product render, same diffuse lighting and restrained highlights.\nMatch fitted dark walnut brown supple worn leather and warm stitched seams from the front. Rear construction inferred conservatively: low-profile rear waistband, simple shallow curved rear yoke seam below the belt, center seat seam joining the inseam, practical outer leg seams, natural leather folds across seat and behind knees. Keep the seat visually smooth and close-fitting but allow movement. No modern back jeans patch pockets. Narrow plain ankle hems tuck inside separate boots. Preserve front's subtle knee tailoring and outer side panel lines at the correct heights; rear knees have cloth/leather folds rather than armored pads.\nBelt belongs to this pants assembly. Show the same brown leather belt continuing across the rear at the identical height and width. Maintain EXACT same compact hip pouch/holder count and attachment positions as input image 1, on the same wearer sides; left/right image locations reverse when viewing from behind. Only rear/side portions of the existing hip holders are visible; DO NOT add a rear pouch, backpack or tools. The brass center buckle and circular medallion are FRONT ONLY and must NOT appear on the back. Rear belt has simple loops and small matching brass rivets. Rear waistband sits low beneath an outside-worn vest; no tall projecting rim.\nNO human, mannequin, skin, body inside trousers, shirt, vest, skirt tails, green cloth, boots, feet, dagger, scabbard, weapons, bracers or extra accessories. Empty waist and ankle openings with discreet leather interior surfaces. No FRONT fly, front buckle or front view on the rear. No scenery, floor, shadow, gradient, text or labels. Genuinely transparent RGBA background. One rear view only; not a turnaround sheet.",
+      "transparent_pixels": 1000702,
+      "alpha_extrema": [
+        0,
+        254
+      ],
+      "processing": "Copied generated PNG unchanged."
     }
   ],
   "review": {
@@ -84,5 +126,43 @@
   "tripo_official_sources": [
     "https://www.tripo3d.ai/blog/tripo-segmentation-v2",
     "https://www.tripo3d.ai/help/getting-started/what-features-does-tripo-have"
-  ]
+  ],
+  "pants_review": {
+    "design": "Front extracts brown leather trousers and belt from the existing ranger design. Rear yoke, seat seam and previously boot-covered ankle hems are inferred. Back is generated using the isolated front to maintain proportions, materials and hip holders.",
+    "part_ownership": {
+      "pants": [
+        "leather trousers",
+        "belt",
+        "brass buckle",
+        "compact hip holders/pouches"
+      ],
+      "separate_feet": [
+        "boots"
+      ],
+      "separate_weapon": [
+        "dagger",
+        "scabbard"
+      ]
+    },
+    "fitting_target": {
+      "base": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "base_sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
+      "interfaces": "interfaces/v1",
+      "rig": "human_male_01_mixamo_candidate_v2",
+      "waist": "Low waistband beneath outside-worn vest; belt and hip holders require actual top clearance review.",
+      "ankle": "Narrow cuffs tucked inside separate boots; fit to current slim-calf base."
+    },
+    "limitations": [
+      "Concept views are not calibrated measurement drawings or fitting acceptance evidence.",
+      "Exact front/back seam and holder alignment requires 3D review.",
+      "Rear construction and ankle sections are newly inferred; user design review pending.",
+      "No paid pants task submitted by Codex; user supplied a Tripo model later. See modular-ranger-tripo-pants-sources.json for delivered source and fitted candidate."
+    ]
+  },
+  "proposed_pants_generation_target": {
+    "topology": "quad",
+    "quads": 1500,
+    "approximate_triangles": 3000,
+    "notes": "Recommendation only; actual user-submitted Tripo settings unknown. Received pants GLB contains 3714 triangles."
+  }
 }
