@@ -16,6 +16,30 @@ function colorsIn(node: Node): string[] {
 }
 
 describe('character appearance colors', () => {
+  it('tints ranger hair and irises', () => {
+    const skin = new MeshStandardMaterial({ map: new Texture() })
+    const hair = new MeshStandardMaterial({ map: new Texture() })
+    const root = new Group()
+    const head = new SkinnedMesh(undefined, skin)
+    head.userData.region = 'head'
+    const rangerHair = new SkinnedMesh(undefined, hair)
+    rangerHair.userData.part_id = 'hair_ranger'
+    root.add(head, rangerHair)
+    applyAppearanceColors(root, [head, rangerHair], {
+      face: 'ranger',
+      hair: 'ranger',
+      hair_color: '#ff0000',
+      eye_color: '#0000ff',
+    })
+    const tintedSkin = head.material as unknown as NodeMaterial
+    const tintedHair = rangerHair.material as unknown as NodeMaterial
+    expect(colorsIn(tintedSkin.colorNode!)).toContain('0000ff')
+    expect(colorsIn(tintedHair.colorNode!)).toContain('ff0000')
+    disposeAppearanceColors(root)
+    expect(head.material).toBe(skin)
+    expect(rangerHair.material).toBe(hair)
+  })
+
   it('isolates per-character colors, reuses uniforms and restores shared materials', () => {
     const skin = new MeshStandardMaterial({ map: new Texture() })
     const hair = new MeshStandardMaterial({ map: new Texture() })

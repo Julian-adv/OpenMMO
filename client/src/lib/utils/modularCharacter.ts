@@ -99,6 +99,12 @@ export interface ModularOutfit {
   helmet: 'none' | 'plate' | 'barbarian'
 }
 
+export const SELECTABLE_HAIR_PARTS = new Set<ModularOutfit['hair']>([
+  'hair_crop',
+  'hair_wavy_bone',
+  'hair_ranger',
+])
+
 export const DEFAULT_MODULAR_OUTFIT: ModularOutfit = {
   hair: 'hair_crop',
   top: 'linen',

@@ -22,6 +22,7 @@ import {
   ROGUE_MODULAR_OUTFIT,
   CAVEMAN_MODULAR_OUTFIT,
   RANGER_MODULAR_OUTFIT,
+  SELECTABLE_HAIR_PARTS,
   type ModularOutfit,
   bindModularPart,
   modularAnimationClips,
@@ -36,7 +37,7 @@ import {
 export const MODULAR_SWORD_ATTACHMENT = 'modularSwordAttachment'
 const maleModels = new Map<string, Promise<GLTF>>()
 const animations = new Map<string, Promise<GLTF>>()
-// Every other set is bound per player on first use, so clients only fetch what they see.
+// Load other parts when equipped.
 const eagerParts = modularOutfitParts(DEFAULT_MODULAR_OUTFIT)
 const lazyParts = new Set(
   [
@@ -47,7 +48,7 @@ const lazyParts = new Set(
     RANGER_MODULAR_OUTFIT,
   ]
     .flatMap((outfit) => [...modularOutfitParts(outfit)])
-    .concat('hair_wavy_bone')
+    .concat(...SELECTABLE_HAIR_PARTS)
     .filter((id) => !eagerParts.has(id))
 )
 const outfitParts = new Set([...eagerParts, ...lazyParts])
@@ -68,7 +69,7 @@ export function loadCharacterModel(
     const ids = [...eagerParts]
     maleModel = Promise.all([
       loadGLB(
-        face === 'rugged' ? `${MODULAR_MALE_DIRECTORY}/base_rugged.glb` : path
+        face === 'default' ? path : `${MODULAR_MALE_DIRECTORY}/base_${face}.glb`
       ),
       ...ids.map((id) => loadGLB(`${MODULAR_MALE_DIRECTORY}/${id}.glb`)),
     ])
@@ -143,7 +144,7 @@ function bindLazyPart(
   return load
 }
 
-/** Keeps the current outfit until unbound parts load; only the latest call shows. */
+/** Keep the current outfit until the latest selection loads. */
 export async function applyCharacterArmor(
   root: THREE.Object3D,
   armor?: ArmorEquipment,
@@ -154,11 +155,7 @@ export async function applyCharacterArmor(
   const outfit = modularOutfitForArmor(armor)
   if (appearance) {
     outfit.hair =
-      appearance.hair === 'none'
-        ? 'none'
-        : appearance.hair === 'wavy_bone'
-          ? 'hair_wavy_bone'
-          : 'hair_crop'
+      appearance.hair === 'none' ? 'none' : `hair_${appearance.hair}`
   }
   let state = lazyStates.get(scene)
   if (!state)

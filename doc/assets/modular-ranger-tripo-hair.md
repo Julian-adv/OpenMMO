@@ -30,7 +30,12 @@
 원본 텍스처를 사용하는 후보이므로 제작실 머리색 제어는 비활성화했다.
 이 헤어 검수 당시에는 기존 남성 얼굴을 사용했다.
 2026-10-08 새 머리를 받아 [순찰자 얼굴 피팅](modular-ranger-tripo-face.md)과 `face=ranger` 선택을 추가했다.
-게임 기본 헤어·외모 카탈로그에는 등록하지 않았다.
+2026-10-08 게임 외모 카탈로그와 캐릭터 생성 화면에 선택값 `ranger`를 등록했다.
+기본 헤어는 유지하며, 게임에서는 새 장발의 머리색도 선택할 수 있다.
+원본 텍스처의 명암을 보존하며 선택한 색을 적용한다. 제작실은 원본 텍스처를 표시한다.
+선택 버튼 `client/src/assets/character-appearance/hair-ranger.png`는 공통 기본 몸체에
+위 피팅 `hair_ranger.glb`를 조립해 Blender 5.2 Cycles로 렌더한 128×128 투명 PNG다.
+새 AI 생성 없이 기존 모델에서 파생했으며 두 모델의 기존 출처·이용 조건을 따른다.
 
 ```bash
 .venv/bin/python tools/fit-tripo-ranger-hair.py

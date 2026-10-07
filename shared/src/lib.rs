@@ -205,7 +205,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v113: account character IDs for shared estate editing.
 /// v114: scheduled, cancellable character deletion.
 /// v115: saved character face and hairstyle.
-pub const PROTOCOL_VERSION: u32 = 116;
+/// v116: saved hair and eye colors.
+/// v117: selectable ranger face and hair.
+pub const PROTOCOL_VERSION: u32 = 117;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

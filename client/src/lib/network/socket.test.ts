@@ -5,7 +5,7 @@ vi.mock('../wasm/onlinerpg_shared', () => ({
   serialize_client_message: (message: unknown) =>
     new TextEncoder().encode(JSON.stringify(message)),
   deserialize_server_message: vi.fn(),
-  protocol_version: () => 116,
+  protocol_version: () => 117,
   stamp_layout_version: (version: string) => version,
   close_code_protocol_mismatch: () => 4001,
   close_code_client_desync: () => 4004,

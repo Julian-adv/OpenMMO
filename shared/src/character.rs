@@ -17,6 +17,7 @@ pub enum FaceStyle {
     #[default]
     Default,
     Rugged,
+    Ranger,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -26,6 +27,7 @@ pub enum HairStyle {
     Crop,
     WavyBone,
     None,
+    Ranger,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -145,6 +147,19 @@ mod appearance_tests {
             assert!(AppearanceColor::try_from(invalid.to_owned()).is_err());
         }
     }
+
+    #[test]
+    fn ranger_styles_roundtrip() {
+        let appearance: CharacterAppearance =
+            serde_json::from_str(r#"{"face":"ranger","hair":"ranger"}"#).unwrap();
+        assert_eq!(appearance.face, FaceStyle::Ranger);
+        assert_eq!(appearance.hair, HairStyle::Ranger);
+        let bytes = rmp_serde::to_vec(&appearance).unwrap();
+        assert_eq!(
+            rmp_serde::from_slice::<CharacterAppearance>(&bytes).unwrap(),
+            appearance
+        );
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -208,12 +223,7 @@ impl CharacterClass {
         }
     }
 
-    /// Whether a player may create a character of this class. Merchant,
-    /// Guard and Maid belong to operator-run NPCs: Merchant's CHA +3 widens
-    /// the haggling band, Guard is a d10 hit die with STR/CON +2, and Maid is
-    /// a town-role class with no player niche — balance decisions rather than
-    /// security ones; the same rule applies to human and agent players alike
-    /// (`doc/REMOTE_AGENT_CLIENT.md`).
+    /// Exclude operator NPC classes from player creation.
     pub fn is_player_selectable(&self) -> bool {
         !matches!(
             self,

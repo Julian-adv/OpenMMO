@@ -21,7 +21,11 @@ import {
   createCharacterModelRoot,
   computeSoleGroundOffset,
 } from './characterAnimationUtils'
-import { MODULAR_BOOTS, skinnedParts } from './modularCharacter'
+import {
+  MODULAR_BOOTS,
+  SELECTABLE_HAIR_PARTS,
+  skinnedParts,
+} from './modularCharacter'
 import type { ArmorEquipment } from '../network/networkTypes'
 
 vi.mock('./gltfCache', async (importOriginal) => {
@@ -79,7 +83,7 @@ describe.skipIf(
     expect(modelRoot.getObjectByName('face_rugged')).toBeDefined()
     expect(other.getObjectByName('face_rugged')).toBeUndefined()
     await applyCharacterArmor(modelRoot, {}, appearance)
-    await applyCharacterArmor(other, {}, { hair: 'wavy_bone' })
+    await applyCharacterArmor(other, {}, { face: 'default', hair: 'wavy_bone' })
     for (const id of ['hair_crop', 'hair_wavy_bone']) {
       const shared = (root: THREE.Object3D) =>
         skinnedParts(root).find((mesh) => mesh.userData.part_id === id)!
@@ -127,7 +131,11 @@ describe.skipIf(
     const raw = skinnedParts(original.scene)[0].geometry
     const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
     const { modelRoot } = createCharacterModelRoot(source.scene)
-    await applyCharacterArmor(modelRoot, {}, { hair: 'wavy_bone' })
+    await applyCharacterArmor(
+      modelRoot,
+      {},
+      { face: 'default', hair: 'wavy_bone' }
+    )
     const hair = skinnedParts(modelRoot).find(
       (mesh) => mesh.userData.part_id === 'hair_wavy_bone'
     )!
@@ -145,6 +153,35 @@ describe.skipIf(
     const materials = hair.material as THREE.Material[]
     expect(materials[0].userData.appearance_color_fixed).not.toBe(true)
     expect(materials[1].userData.appearance_color_fixed).toBe(true)
+  })
+
+  it('loads ranger customization with every face and restores hair after removing helmets', async () => {
+    for (const face of ['default', 'rugged', 'ranger'] as const) {
+      const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH, { face })
+      const { modelRoot } = createCharacterModelRoot(source.scene)
+      if (face === 'ranger') {
+        expect(modelRoot.getObjectByName('face_ranger')).toBeDefined()
+        expect(modelRoot.getObjectByName('face_rugged')).toBeUndefined()
+      }
+      for (const hair of ['crop', 'wavy_bone', 'ranger', 'none'] as const) {
+        const appearance = { face, hair }
+        await applyCharacterArmor(modelRoot, {}, appearance)
+        for (const id of SELECTABLE_HAIR_PARTS)
+          expect(visible(modelRoot, id), `${face} ${hair} ${id}`).toBe(
+            id === `hair_${hair}`
+          )
+        await applyCharacterArmor(
+          modelRoot,
+          { head: 'worn_plate_helmet' },
+          appearance
+        )
+        expect(visible(modelRoot, 'helmet_plate')).toBe(true)
+        for (const id of SELECTABLE_HAIR_PARTS)
+          expect(visible(modelRoot, id)).toBe(false)
+        await applyCharacterArmor(modelRoot, {}, appearance)
+        expect(visible(modelRoot, `hair_${hair}`)).toBe(hair !== 'none')
+      }
+    }
   })
 
   it('keeps shared cropped hair clear of the rugged rear scalp after runtime compression', async () => {
@@ -689,7 +726,7 @@ describe.skipIf(
     expect(visible(modelRoot, 'top_rogue')).toBe(true)
   })
 
-  it('grounds every boot style on both faces with the baked sole offsets', async () => {
+  it('grounds every boot style on all faces with the baked sole offsets', async () => {
     const boots = {
       none: null,
       leather: 'unlisted_boots',
@@ -699,7 +736,7 @@ describe.skipIf(
       caveman: 'worn_caveman_boots',
       ranger: 'worn_ranger_boots',
     } satisfies Record<(typeof MODULAR_BOOTS)[number], string | null>
-    for (const face of ['default', 'rugged'] as const) {
+    for (const face of ['default', 'rugged', 'ranger'] as const) {
       const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH, {
         face,
       })
