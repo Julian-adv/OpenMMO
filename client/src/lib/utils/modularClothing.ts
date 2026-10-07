@@ -11,7 +11,7 @@ type Cut =
   | 'gauntlets'
   | 'gloves'
   | 'ranger_gloves'
-  | 'ranger_gloves_skin'
+  | 'ranger_sleeves'
   | 'greaves'
   | 'leather_boots'
   | 'tall_boots'
@@ -22,8 +22,8 @@ type Cut =
   | 'tripo_waist'
   | 'tripo_covered_waist'
   | 'ranger_plate_waist'
-  | 'ranger_plate_waist_boots'
-  | 'rogue_waist_ranger_boots'
+  | 'tripo_pants_waist'
+type MaybeCut = Cut | false | undefined
 type Distance = (point: THREE.Vector3) => number
 
 function sleeveCut(fraction: number): Distance {
@@ -42,18 +42,14 @@ function sleeveCut(fraction: number): Distance {
     )
 }
 
-const rangerPlateWaist: Distance = (point) => {
-  const rear = 1 - THREE.MathUtils.smoothstep(point.z, -0.06, -0.02)
-  const drop = Math.max(0, 0.09 - Math.abs(point.x) * 0.5)
-  return 1.06 - rear * drop - point.y
-}
+const rangerGloves = sleeveCut(0.4)
 
 const cuts: Record<Cut, Distance | Distance[]> = {
   bracers: sleeveCut(0.23),
   gauntlets: sleeveCut(0.85),
   gloves: sleeveCut(0.89),
-  ranger_gloves: sleeveCut(0.4),
-  ranger_gloves_skin: sleeveCut(0.4),
+  ranger_gloves: rangerGloves,
+  ranger_sleeves: rangerGloves,
   greaves: (point) => point.y - 0.46,
   leather_boots: (point) => point.y - 0.235,
   tall_boots: (point) => point.y - 0.43,
@@ -69,12 +65,12 @@ const cuts: Record<Cut, Distance | Distance[]> = {
   ],
   tripo_waist: (point) => point.y - 1.14,
   tripo_covered_waist: (point) => point.y - 1.105,
-  ranger_plate_waist: rangerPlateWaist,
-  ranger_plate_waist_boots: [rangerPlateWaist, rangerPantsBootDistance],
-  rogue_waist_ranger_boots: [
-    (point) => 1.105 - point.y,
-    rangerPantsBootDistance,
-  ],
+  ranger_plate_waist: (point) => {
+    const rear = 1 - THREE.MathUtils.smoothstep(point.z, -0.06, -0.02)
+    const drop = Math.max(0, 0.09 - Math.abs(point.x) * 0.5)
+    return 1.06 - rear * drop - point.y
+  },
+  tripo_pants_waist: (point) => 1.105 - point.y,
 }
 
 export function clipSkinnedGeometry(
@@ -228,11 +224,12 @@ function setGeometry(mesh: THREE.SkinnedMesh, geometry: THREE.BufferGeometry) {
 
 export function trimModularClothing(
   mesh: THREE.SkinnedMesh,
-  cut?: Cut,
+  cut?: MaybeCut | readonly MaybeCut[],
   skin = false
 ) {
+  const applied = [cut ?? []].flat().filter((name): name is Cut => !!name)
   let cached = variants.get(mesh.geometry)
-  if (!cut) {
+  if (!applied.length) {
     if (cached) setGeometry(mesh, cached.source)
     return
   }
@@ -250,23 +247,34 @@ export function trimModularClothing(
       variants.delete(owned.source)
     })
   }
-  const key = `${cut}:${skin}`
+  const key = `${applied.join('+')}:${skin}`
   let geometry = cached.cuts.get(key)
   if (!geometry) {
-    geometry = cached.source
-    const distances = [cuts[cut]].flat()
-    for (const distance of distances) {
+    geometry = applyCuts(cached.source, applied, skin)
+    cached.cuts.set(key, geometry)
+    variants.set(geometry, cached)
+  }
+  setGeometry(mesh, geometry)
+}
+
+function applyCuts(
+  source: THREE.BufferGeometry,
+  applied: Cut[],
+  skin: boolean
+): THREE.BufferGeometry {
+  let geometry = source
+  for (const name of applied) {
+    for (const distance of [cuts[name]].flat()) {
       const previous = geometry
       geometry = clipSkinnedGeometry(
         previous,
         (point) => distance(point) * (skin ? -1 : 1),
-        distance === rangerPantsBootDistance
+        name === 'ranger_pants_boots'
       )
-      if (previous !== cached.source) previous.dispose()
+      if (previous !== source) previous.dispose()
     }
-    if (distances.includes(rangerPantsBootDistance))
-      tuckPantsIntoRangerBoots(geometry)
-    if (cut === 'ranger_gloves' && !skin) {
+    if (name === 'ranger_pants_boots') tuckPantsIntoRangerBoots(geometry)
+    if (name === 'ranger_sleeves' && !skin) {
       const transition = sleeveCut(0.2)
       const halves = [
         clipSkinnedGeometry(geometry, transition),
@@ -288,8 +296,6 @@ export function trimModularClothing(
       geometry = merged
       tuckSleevesIntoRangerGloves(geometry)
     }
-    cached.cuts.set(key, geometry)
-    variants.set(geometry, cached)
   }
-  setGeometry(mesh, geometry)
+  return geometry
 }

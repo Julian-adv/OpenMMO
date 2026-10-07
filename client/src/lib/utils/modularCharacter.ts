@@ -191,7 +191,7 @@ function showBaseModularOutfit(
       none: undefined,
       rogue: undefined,
       caveman: undefined,
-      ranger: 'ranger_gloves',
+      ranger: 'ranger_sleeves',
       leather: 'gloves',
       plate: 'gauntlets',
       barbarian: 'bracers',
@@ -310,6 +310,13 @@ export const CAVEMAN_MODULAR_OUTFIT: ModularOutfit = {
   helmet: 'none',
 }
 
+export const RANGER_MODULAR_PARTS = [
+  'top_ranger',
+  'pants_ranger',
+  'gloves_ranger',
+  'boots_ranger',
+] as const
+
 export const RANGER_MODULAR_OUTFIT: ModularOutfit = {
   hair: 'hair_crop',
   top: 'ranger',
@@ -335,6 +342,8 @@ export function showModularOutfit(
   const pants = available('pants')
   const gloves = available('gloves')
   const boots = available('boots')
+  const clothPants = pants === 'rogue' || pants === 'ranger'
+  const tallBoots = boots === 'caveman' || boots === 'ranger'
   const collar = parts
     .get('top_rogue')
     ?.some((mesh) => mesh.userData.fitting_status === 'candidate_tripo_v1')
@@ -346,12 +355,7 @@ export function showModularOutfit(
     {
       ...outfit,
       top: proxied(top) ? 'none' : top,
-      pants:
-        pants === 'rogue' || pants === 'ranger'
-          ? 'cloth'
-          : pants === 'caveman'
-            ? 'barbarian'
-            : pants,
+      pants: clothPants ? 'cloth' : pants === 'caveman' ? 'barbarian' : pants,
       gloves:
         gloves === 'rogue'
           ? 'none'
@@ -364,7 +368,7 @@ export function showModularOutfit(
   )
   if (![top, pants, gloves, boots].some(proxied)) return selected
   for (const [shown, proxy] of [
-    [pants === 'rogue' || pants === 'ranger', 'pants_cloth'],
+    [clothPants, 'pants_cloth'],
     [pants === 'caveman', 'pants_barbarian'],
     [gloves === 'caveman', 'gloves_barbarian'],
     [proxied(boots), 'boots_leather'],
@@ -379,17 +383,15 @@ export function showModularOutfit(
   for (const id of [
     ...ROGUE_MODULAR_PARTS,
     ...CAVEMAN_MODULAR_PARTS,
-    'top_ranger',
-    'pants_ranger',
-    'gloves_ranger',
-    'boots_ranger',
+    ...RANGER_MODULAR_PARTS,
   ])
     for (const mesh of parts.get(id) ?? []) mesh.visible = selected.has(id)
-  if (boots === 'caveman' || boots === 'ranger')
-    for (const mesh of parts.get('pants_plate') ?? [])
-      if (mesh.visible) trimModularClothing(mesh, 'tall_boots')
-  if (boots === 'ranger')
-    for (const mesh of parts.get('pants_cloth') ?? [])
+  for (const id of boots === 'ranger'
+    ? ['pants_plate', 'pants_cloth']
+    : boots === 'caveman'
+      ? ['pants_plate']
+      : [])
+    for (const mesh of parts.get(id) ?? [])
       if (mesh.visible) trimModularClothing(mesh, 'tall_boots')
   const coveredWaist =
     pants === 'rogue' &&
@@ -401,40 +403,21 @@ export function showModularOutfit(
       ?.some(
         (mesh) => mesh.userData.fitting_status === 'candidate_tripo_pants_v1'
       )
-  const rogueRangerBoots = pants === 'rogue' && boots === 'ranger'
+  const bootHem = boots === 'ranger' && 'ranger_pants_boots'
   for (const mesh of parts.get('pants_rogue') ?? [])
     trimModularClothing(
       mesh,
-      rogueRangerBoots
-        ? coveredWaist
-          ? 'rogue_waist_ranger_boots'
-          : 'ranger_pants_boots'
-        : coveredWaist
-          ? 'tripo_covered_waist'
-          : undefined,
-      !rogueRangerBoots
+      pants === 'rogue' && [coveredWaist && 'tripo_pants_waist', bootHem]
     )
   for (const mesh of parts.get('pants_ranger') ?? [])
     trimModularClothing(
       mesh,
-      pants === 'ranger'
-        ? top === 'plate'
-          ? boots === 'ranger'
-            ? 'ranger_plate_waist_boots'
-            : 'ranger_plate_waist'
-          : boots === 'ranger'
-            ? 'ranger_pants_boots'
-            : undefined
-        : undefined
+      pants === 'ranger' && [top === 'plate' && 'ranger_plate_waist', bootHem]
     )
   const hidden = new Set([
     ...(top === 'rogue' || top === 'ranger' ? ['torso', 'upper_arms'] : []),
-    ...(pants === 'rogue' || pants === 'ranger'
-      ? ['legs', 'ankles', 'boot_ankles']
-      : []),
-    ...(boots === 'caveman' || boots === 'ranger'
-      ? ['feet', 'ankles', 'boot_ankles']
-      : []),
+    ...(clothPants ? ['legs', 'ankles', 'boot_ankles'] : []),
+    ...(tallBoots ? ['feet', 'ankles', 'boot_ankles'] : []),
   ])
   const rangerSleeves =
     gloves === 'ranger' &&
@@ -461,10 +444,10 @@ export function showModularOutfit(
     if (gloves === 'caveman' && bodyRegion === 'forearms')
       trimModularClothing(mesh, 'bracers')
     if (gloves === 'ranger' && bodyRegion === 'forearms') {
-      trimModularClothing(mesh, 'ranger_gloves_skin')
+      trimModularClothing(mesh, 'ranger_gloves')
       if (rangerSleeves) mesh.visible = false
     }
-    if ((boots === 'caveman' || boots === 'ranger') && bodyRegion === 'legs')
+    if (tallBoots && bodyRegion === 'legs')
       trimModularClothing(mesh, 'tall_boots')
     if (
       bodyRegion === 'torso' &&

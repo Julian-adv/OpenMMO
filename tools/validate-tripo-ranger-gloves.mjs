@@ -35,7 +35,7 @@ try {
   const forearms = []
   body.traverse(mesh => {
     if (mesh.isSkinnedMesh && mesh.userData.region === 'forearms') {
-      trimModularClothing(mesh, 'ranger_gloves_skin')
+      trimModularClothing(mesh, 'ranger_gloves')
       forearms.push(mesh)
     }
   })

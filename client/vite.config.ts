@@ -63,55 +63,12 @@ function modularCharacterPreview(): Plugin {
     import.meta.url
   )
   const files = new Set(['hand-grips.json', 'animations.glb'])
-  const fitted = new URL(
-    '../assets/modular_human_male_01/parts/fitted/',
-    import.meta.url
-  )
-  const caveman = new URL(
-    '../assets/modular_human_male_01/parts/caveman_tripo_top_v1/top_caveman.glb',
-    import.meta.url
-  )
-  const ranger = new URL(
-    '../assets/modular_human_male_01/parts/ranger_tripo_top_v4/top_ranger.glb',
-    import.meta.url
-  )
-  const rangerPants = new URL(
-    '../assets/modular_human_male_01/parts/ranger_tripo_pants_v1/pants_ranger.glb',
-    import.meta.url
-  )
-  const rangerBoots = new URL(
-    '../assets/modular_human_male_01/parts/ranger_tripo_boots_v1/boots_ranger.glb',
-    import.meta.url
-  )
-  const rangerGloves = new URL(
-    '../assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/gloves_ranger.glb',
-    import.meta.url
-  )
-  const cavemanPants = new URL(
-    '../assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb',
-    import.meta.url
-  )
-  const cavemanBoots = new URL(
-    '../assets/modular_human_male_01/parts/caveman_tripo_boots_v1/boots_caveman.glb',
-    import.meta.url
-  )
-  const cavemanGloves = new URL(
-    '../assets/modular_human_male_01/parts/caveman_tripo_bracer_v1/gloves_caveman.glb',
-    import.meta.url
-  )
-  const wavyHair = new URL(
-    '../assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb',
-    import.meta.url
-  )
+  const part = (path: string) =>
+    new URL(`../assets/modular_human_male_01/parts/${path}`, import.meta.url)
+  const fitted = part('fitted/')
   const faces: Record<string, URL> = {
-    rugged: new URL(
-      '../assets/modular_human_male_01/parts/face_tripo_rugged_v1/base_rugged.glb',
-      import.meta.url
-    ),
-    ranger: new URL(
-      '../assets/modular_human_male_01/parts/face_tripo_ranger_v1/base_ranger.glb',
-      import.meta.url
-    ),
+    rugged: part('face_tripo_rugged_v1/base_rugged.glb'),
+    ranger: part('face_tripo_ranger_v1/base_ranger.glb'),
   }
   const selection = JSON.parse(
     fs.readFileSync(
@@ -153,19 +110,16 @@ function modularCharacterPreview(): Plugin {
     'helmet_barbarian',
   ])
   const fixed: Record<string, URL> = {
-    top_ranger: ranger,
-    pants_ranger: rangerPants,
-    boots_ranger: rangerBoots,
-    gloves_ranger: rangerGloves,
-    top_caveman: caveman,
-    pants_caveman: cavemanPants,
-    boots_caveman: cavemanBoots,
-    gloves_caveman: cavemanGloves,
-    hair_wavy_bone: wavyHair,
-    hair_ranger: new URL(
-      '../assets/modular_human_male_01/parts/hair_tripo_ranger_v1/hair_ranger.glb',
-      import.meta.url
-    ),
+    top_ranger: part('ranger_tripo_top_v4/top_ranger.glb'),
+    pants_ranger: part('ranger_tripo_pants_v1/pants_ranger.glb'),
+    boots_ranger: part('ranger_tripo_boots_v1/boots_ranger.glb'),
+    gloves_ranger: part('ranger_tripo_gloves_v1/gloves_ranger.glb'),
+    top_caveman: part('caveman_tripo_top_v1/top_caveman.glb'),
+    pants_caveman: part('caveman_tripo_pants_v1/pants_caveman.glb'),
+    boots_caveman: part('caveman_tripo_boots_v1/boots_caveman.glb'),
+    gloves_caveman: part('caveman_tripo_bracer_v1/gloves_caveman.glb'),
+    hair_wavy_bone: part('hair_tripo_wavy_v1/hair_wavy_bone.glb'),
+    hair_ranger: part('hair_tripo_ranger_v1/hair_ranger.glb'),
   }
   return {
     name: 'modular-character-preview',

@@ -74,18 +74,18 @@
   "runtime_sources": [
     {
       "path": "client/src/lib/utils/modularCharacter.ts",
-      "sha256": "37b026b032e3398e4af79ea41a8a03b7bd107c9dbd41bb4a545ced98c590010f",
-      "bytes": 26301
+      "sha256": "5789bb344260c4456d78cc31c9f97509d21c176e2dab7246b978e14e9840a82b",
+      "bytes": 25744
     },
     {
       "path": "client/src/lib/utils/modularClothing.ts",
-      "sha256": "aca2b00bbd8c293a712d157aa5f5e6649d66c35a1f2007ba2ebb947862613d2f",
-      "bytes": 9630
+      "sha256": "6e1688199b906ceef8cf05786224e164cb502fefaa2359ff6594bddf0eef4689",
+      "bytes": 9814
     },
     {
       "path": "client/src/lib/utils/rangerGloveCuff.ts",
-      "sha256": "0197e07cc154f11a926f104fab4fe13ddde580f20b76ad573fdfbd20a50fa0ef",
-      "bytes": 3100
+      "sha256": "483ffe546af9e69663ad3e0086f229f7c67dd44aa77f7ae5d8a4f40d93481349",
+      "bytes": 2608
     },
     {
       "path": "client/src/lib/data/rangerGloveCuff.json",

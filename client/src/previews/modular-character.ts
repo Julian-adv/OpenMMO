@@ -16,6 +16,7 @@ import {
   modularSwordTracks,
   parseModularHandProfile,
   RANGER_MODULAR_OUTFIT,
+  RANGER_MODULAR_PARTS,
   ROGUE_MODULAR_OUTFIT,
   ROGUE_MODULAR_PARTS,
   showModularOutfit,
@@ -54,6 +55,7 @@ const pause = el<HTMLButtonElement>('pause')
 const sequence = el<HTMLButtonElement>('sequence')
 const clockLabel = el<HTMLOutputElement>('time')
 const host = el('viewport')
+const TEXTURED_HAIR = ['hair_wavy_bone', 'hair_ranger']
 const scene = new THREE.Scene()
 const resources: THREE.Object3D[] = [scene]
 const cleanup: (() => void)[] = []
@@ -168,12 +170,8 @@ async function main() {
     'pants_caveman',
     'boots_caveman',
     'gloves_caveman',
-    'hair_wavy_bone',
-    'hair_ranger',
-    'top_ranger',
-    'pants_ranger',
-    'gloves_ranger',
-    'boots_ranger',
+    ...TEXTURED_HAIR,
+    ...RANGER_MODULAR_PARTS,
   ]
   const [base, sources, animations, sword, profile, candidateSources, social] =
     await Promise.all([
@@ -284,9 +282,7 @@ async function main() {
   eyeColor.oninput = () => irisColor.value.set(eyeColor.value)
   let equipped = new Set<string>()
   const dress = () => {
-    hairColor.disabled = ['hair_wavy_bone', 'hair_ranger'].includes(
-      hairSelect.value
-    )
+    hairColor.disabled = TEXTURED_HAIR.includes(hairSelect.value)
     equipped = showModularOutfit(bodyMeshes, parts, {
       hair: hairSelect.value as ModularOutfit['hair'],
       top: topSelect.value as ModularOutfit['top'],
@@ -658,7 +654,7 @@ async function main() {
   const requestedHair = params.get('hair')
   if (
     requestedHair &&
-    ['hair_wavy_bone', 'hair_ranger'].includes(requestedHair) &&
+    TEXTURED_HAIR.includes(requestedHair) &&
     parts.has(requestedHair)
   ) {
     hairSelect.value = requestedHair
