@@ -108,3 +108,9 @@ Khronos glTF Validator 오류·경고 0이며, meshopt 미지원 안내 1개가 
 ```sh
 node tools/prepare-modular-character.mjs --part pants_rogue
 ```
+
+## 순찰자 부츠 조합 — 2026-10-07
+
+순찰자 부츠와 함께 입을 때만 실제 입구 곡선에 맞춰 바짓단을 절단하고 안쪽으로 넣는다.
+기존 상의에 따른 허리 절단과 함께 적용하며, 부츠 제거·로딩 실패 시 바지 아래쪽은 원본으로 복원한다.
+원본 에셋은 유지한다. [혼합 조합 검사·출처·파생 검토본](modular-ranger-tripo-boots.md#로그-바지--순찰자-부츠)을 참고한다.

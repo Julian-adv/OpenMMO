@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-07",
+  "combination": "Ranger top or plate top + rogue pants + ranger boots",
+  "stats": "조합 24,283삼각형 · 표시 16,471 · 얼굴 1,505",
+  "motion": [
+    {
+      "clip": "run",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "slash1",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "sit_idle",
+      "normalized_time": 0.4
+    }
+  ],
+  "errors": [],
+  "checks": [
+    "cuff trim and covered waist coexist",
+    "boots removed: lower pant legs restored",
+    "re-equipment and trouser reattach"
+  ],
+  "scope": "Sampled closeups; remaining mixed equipment is unverified.",
+  "image_retention": "Intermediate screenshots removed at user request after review; validation results retained. Final fitted front/back/side render is retained."
+}

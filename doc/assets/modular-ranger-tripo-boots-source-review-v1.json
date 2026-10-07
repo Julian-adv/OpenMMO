@@ -1,0 +1,38 @@
+{
+  "source": {
+    "path": "assets/modular_human_male_01/parts/ranger_tripo_boots_v1/source.glb",
+    "sha256": "dae9a86260d61e3b38d743715d957de4c16854544b2170ddad880278638a4862"
+  },
+  "status": "Raw single boot; not fitted or rigged",
+  "triangles": 1823,
+  "mesh_count": 1,
+  "meshes": [
+    {
+      "name": "tripo_node_d5bbd64d-97ae-4303-a59b-7fb766ebd734",
+      "components_vertex_counts": [
+        554,
+        164,
+        130,
+        43,
+        40,
+        25,
+        20,
+        17,
+        17,
+        8,
+        8,
+        5
+      ],
+      "boundary_edges": 217,
+      "nonmanifold_edges": 217,
+      "degenerate_faces": 0,
+      "collapsed_uv_triangles": 0
+    }
+  ],
+  "source_extent_blender": [
+    0.31396484375,
+    0.67431640625,
+    0.99951171875
+  ],
+  "rigged": false
+}

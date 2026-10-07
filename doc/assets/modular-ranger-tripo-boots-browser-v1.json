@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-07",
+  "stats": "조합 25,713삼각형 · 표시 17,901 · 얼굴 1,505",
+  "errors": [],
+  "checks": [
+    "ranger boots preset",
+    "boots cut",
+    "plate waist and boots cut together",
+    "reattach preserves both cuts",
+    "boot removal restores pant legs"
+  ],
+  "motion": [
+    {
+      "clip": "run",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "slash1",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "sit_idle",
+      "normalized_time": 0.4
+    }
+  ],
+  "revision": "Replaced ranger pant horizontal cut with actual boot-rim curve, inward hem taper and Leg weight correction after repeated user cuff-overlap reports.",
+  "scope": "Sampled front/back/both-side cuff and ankle closeups, plus actual 75-hem-vertex wall and 175-pose checks in modular-ranger-tripo-boots-hem-v2.json; does not certify every garment triangle or equipment combination.",
+  "image_retention": "Intermediate screenshots removed at user request after review; validation results retained. Final fitted front/back/side render is retained."
+}

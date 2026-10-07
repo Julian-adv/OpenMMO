@@ -170,6 +170,7 @@ async function main() {
     'hair_wavy_bone',
     'top_ranger',
     'pants_ranger',
+    'boots_ranger',
   ]
   const [base, sources, animations, sword, profile, candidateSources, social] =
     await Promise.all([

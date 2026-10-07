@@ -1,4 +1,8 @@
 import * as THREE from 'three'
+import {
+  rangerPantsBootDistance,
+  tuckPantsIntoRangerBoots,
+} from './rangerBootCuff'
 
 type Cut =
   | 'bracers'
@@ -7,11 +11,15 @@ type Cut =
   | 'greaves'
   | 'leather_boots'
   | 'caveman_boots'
+  | 'ranger_boots'
+  | 'ranger_pants_boots'
   | 'collar'
   | 'tripo_collar'
   | 'tripo_waist'
   | 'tripo_covered_waist'
   | 'ranger_plate_waist'
+  | 'ranger_plate_waist_boots'
+  | 'rogue_waist_ranger_boots'
 type Distance = (point: THREE.Vector3) => number
 
 function sleeveCut(fraction: number): Distance {
@@ -30,27 +38,38 @@ function sleeveCut(fraction: number): Distance {
     )
 }
 
-const cuts: Record<Cut, Distance> = {
+const rangerPlateWaist: Distance = (point) => {
+  const rear = 1 - THREE.MathUtils.smoothstep(point.z, -0.06, -0.02)
+  const drop = Math.max(0, 0.09 - Math.abs(point.x) * 0.5)
+  return 1.06 - rear * drop - point.y
+}
+const rangerBoots: Distance = (point) => point.y - 0.43
+
+const cuts: Record<Cut, Distance | Distance[]> = {
   bracers: sleeveCut(0.23),
   gauntlets: sleeveCut(0.85),
   gloves: sleeveCut(0.89),
   greaves: (point) => point.y - 0.46,
   leather_boots: (point) => point.y - 0.235,
   caveman_boots: (point) => point.y - 0.43,
+  ranger_boots: rangerBoots,
+  ranger_pants_boots: rangerPantsBootDistance,
   collar: (point) => Math.max(1.61 - point.y, Math.abs(point.x) - 0.075),
   tripo_collar: (point) => Math.max(1.54 - point.y, Math.abs(point.x) - 0.075),
   tripo_waist: (point) => point.y - 1.14,
   tripo_covered_waist: (point) => point.y - 1.105,
-  ranger_plate_waist: (point) => {
-    const rear = 1 - THREE.MathUtils.smoothstep(point.z, -0.06, -0.02)
-    const drop = Math.max(0, 0.09 - Math.abs(point.x) * 0.5)
-    return 1.06 - rear * drop - point.y
-  },
+  ranger_plate_waist: rangerPlateWaist,
+  ranger_plate_waist_boots: [rangerPlateWaist, rangerPantsBootDistance],
+  rogue_waist_ranger_boots: [
+    (point) => 1.105 - point.y,
+    rangerPantsBootDistance,
+  ],
 }
 
 export function clipSkinnedGeometry(
   source: THREE.BufferGeometry,
-  distance: Distance
+  distance: Distance,
+  refineIntersection = false
 ): THREE.BufferGeometry {
   const attributes = Object.entries(source.attributes)
   const values = Object.fromEntries(
@@ -82,7 +101,19 @@ export function clipSkinnedGeometry(
     const existing = edges.get(key)
     if (existing !== undefined) return existing
     const next = values.position.length / 3
-    const t = distances[a] / (distances[a] - distances[b])
+    let t = distances[a] / (distances[a] - distances[b])
+    if (refineIntersection) {
+      const first = new THREE.Vector3().fromBufferAttribute(position, a)
+      const last = new THREE.Vector3().fromBufferAttribute(position, b)
+      let low = 0,
+        high = 1
+      for (let i = 0; i < 20; i++) {
+        t = (low + high) / 2
+        const inside = distance(point.copy(first).lerp(last, t)) >= 0
+        if (inside === distances[a] >= 0) low = t
+        else high = t
+      }
+    }
     for (const [name, attribute] of attributes) {
       if (name === 'skinIndex' || name === 'skinWeight') continue
       const interpolated = Array.from({ length: attribute.itemSize }, (_, i) =>
@@ -209,10 +240,23 @@ export function trimModularClothing(
   const key = `${cut}:${skin}`
   let geometry = cached.cuts.get(key)
   if (!geometry) {
-    geometry = clipSkinnedGeometry(
-      cached.source,
-      (point) => cuts[cut](point) * (skin ? -1 : 1)
+    geometry = cached.source
+    const distances = cuts[cut]
+    for (const distance of Array.isArray(distances) ? distances : [distances]) {
+      const previous = geometry
+      geometry = clipSkinnedGeometry(
+        previous,
+        (point) => distance(point) * (skin ? -1 : 1),
+        distance === rangerPantsBootDistance
+      )
+      if (previous !== cached.source) previous.dispose()
+    }
+    if (
+      cut === 'ranger_pants_boots' ||
+      cut === 'ranger_plate_waist_boots' ||
+      cut === 'rogue_waist_ranger_boots'
     )
+      tuckPantsIntoRangerBoots(geometry)
     cached.cuts.set(key, geometry)
     variants.set(geometry, cached)
   }

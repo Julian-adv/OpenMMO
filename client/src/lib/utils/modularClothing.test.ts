@@ -47,6 +47,113 @@ function area(geometry: THREE.BufferGeometry) {
 }
 
 describe('modular clothing cuts', () => {
+  it('fits rogue pants into ranger boots while preserving the waist cut and restoring each independently', () => {
+    const source = cloth()
+    const position = source.attributes.position
+    for (let i = 0; i < position.count; i++)
+      position.setXYZ(
+        i,
+        0.159 + position.getX(i) * 0.07,
+        0.1 + position.getY(i) * 1.1,
+        0.05
+      )
+    const pants = new THREE.SkinnedMesh(source)
+    pants.userData.fitting_status = 'candidate_tripo_pants_v1'
+    const parts = new Map([
+      ['pants_rogue', [pants]],
+      ['boots_ranger', [new THREE.SkinnedMesh()]],
+    ])
+    const outfit = {
+      ...DEFAULT_MODULAR_OUTFIT,
+      pants: 'rogue',
+      boots: 'ranger',
+      top: 'plate',
+    } as const
+    const bounds = () => {
+      pants.geometry.computeBoundingBox()
+      return pants.geometry.boundingBox!
+    }
+    showModularOutfit([], parts, outfit)
+    expect(bounds().min.y).toBeGreaterThan(0.455)
+    expect(bounds().max.y).toBeCloseTo(1.105)
+    showModularOutfit([], parts, { ...outfit, top: 'none' })
+    expect(bounds().min.y).toBeGreaterThan(0.455)
+    expect(bounds().max.y).toBeCloseTo(1.2)
+    showModularOutfit([], parts, { ...outfit, boots: 'none' })
+    expect(bounds().min.y).toBeCloseTo(0.1)
+    expect(bounds().max.y).toBeCloseTo(1.105)
+    parts.delete('boots_ranger')
+    showModularOutfit([], parts, outfit)
+    expect(bounds().min.y).toBeCloseTo(0.1)
+    expect(bounds().max.y).toBeCloseTo(1.105)
+    showModularOutfit([], parts, { ...outfit, top: 'none', boots: 'none' })
+    expect(pants.geometry).toBe(source)
+  })
+
+  it('combines ranger boot and plate waist cuts and restores each independently', () => {
+    const source = cloth()
+    const position = source.attributes.position
+    for (let i = 0; i < position.count; i++)
+      position.setXYZ(
+        i,
+        position.getX(i) * 0.01,
+        0.1 + position.getY(i) * 1.06,
+        0.1
+      )
+    const pants = new THREE.SkinnedMesh(source)
+    const boots = new THREE.SkinnedMesh()
+    const parts = new Map([
+      ['pants_ranger', [pants]],
+      ['boots_ranger', [boots]],
+    ])
+    const outfit = { ...DEFAULT_MODULAR_OUTFIT, pants: 'ranger' } as const
+    const bounds = () => {
+      pants.geometry.computeBoundingBox()
+      return pants.geometry.boundingBox!
+    }
+    showModularOutfit([], parts, { ...outfit, top: 'plate', boots: 'ranger' })
+    const hem = bounds().min.y
+    expect(hem).toBeGreaterThan(0.455)
+    expect(hem).toBeLessThan(0.482)
+    expect(bounds().max.y).toBeCloseTo(1.06)
+    showModularOutfit([], parts, { ...outfit, top: 'none', boots: 'ranger' })
+    expect(bounds().min.y).toBeCloseTo(hem)
+    expect(bounds().max.y).toBeCloseTo(1.16)
+    showModularOutfit([], parts, { ...outfit, top: 'plate', boots: 'none' })
+    expect(bounds().min.y).toBeCloseTo(0.1)
+    expect(bounds().max.y).toBeCloseTo(1.06)
+    expect(boots.visible).toBe(false)
+    parts.delete('boots_ranger')
+    showModularOutfit([], parts, { ...outfit, top: 'none', boots: 'ranger' })
+    expect(pants.geometry).toBe(source)
+  })
+
+  it('restores exposed skin after removing ranger boots or failing to load them', () => {
+    const legs = new THREE.SkinnedMesh(cloth())
+    const feet = new THREE.SkinnedMesh(cloth())
+    legs.userData.region = 'legs'
+    feet.userData.region = 'feet'
+    const source = legs.geometry
+    const parts = new Map([['boots_ranger', [new THREE.SkinnedMesh()]]])
+    const outfit = {
+      ...DEFAULT_MODULAR_OUTFIT,
+      pants: 'none',
+      boots: 'ranger',
+    } as const
+    showModularOutfit([legs, feet], parts, outfit)
+    legs.geometry.computeBoundingBox()
+    expect(legs.geometry.boundingBox!.min.y).toBeCloseTo(0.43)
+    expect(legs.visible).toBe(true)
+    expect(feet.visible).toBe(false)
+    showModularOutfit([legs, feet], parts, { ...outfit, boots: 'none' })
+    expect(legs.geometry).toBe(source)
+    expect(feet.visible).toBe(true)
+    parts.delete('boots_ranger')
+    showModularOutfit([legs, feet], parts, outfit)
+    expect(legs.geometry).toBe(source)
+    expect(feet.visible).toBe(true)
+  })
+
   it('follows the rear plate hem while preserving the front waist height', () => {
     const samples = [
       { x: 0.01, z: 0.1 },

@@ -3,12 +3,12 @@
   "tool": "OpenAI Codex built-in ImageGen",
   "subscription_tier": "ChatGPT Pro 20x",
   "use_terms": "OpenAI generated-output terms; inherited source terms in doc/assets/characters.md. No new third-party reference art.",
-  "status": "Top and pants concept references; user-supplied Tripo top v4 and pants v1 fitted and connected to dev workshop. Other mixed equipment and production acceptance pending.",
+  "status": "Top, pants and fitted mirrored ranger boots connected to dev workshop; production and remaining mixed equipment validation pending.",
   "proposed_top_generation_target": {
     "topology": "quad",
     "quads": 2500,
     "approximate_triangles": 5000,
-    "notes": "Initial generation target; actual exported triangles and assembled 15000\u201320000 triangle budget must be measured. Preserve collar, sleeves, arm openings and hem; use textures/normal maps for fine leather grain and shallow leaf decoration."
+    "notes": "Initial generation target; actual exported triangles and assembled 15000–20000 triangle budget must be measured. Preserve collar, sleeves, arm openings and hem; use textures/normal maps for fine leather grain and shallow leaf decoration."
   },
   "references": [
     {
@@ -91,6 +91,155 @@
         254
       ],
       "processing": "Copied generated PNG unchanged."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/boots_ranger-front-v1.png",
+      "sha256": "574d0fa140a5a8ff3a1868ad56854c483771695c4661a54e68a728d4ed258089",
+      "size": [
+        1024,
+        1536
+      ],
+      "mode": "RGBA",
+      "generated_on": "2026-10-07",
+      "subscription_tier": "ChatGPT Pro 20x",
+      "input_images": [
+        "client/public/character_concepts/ranger.webp",
+        "doc/images/characters/modular_human_male_01/parts/ranger/pants_ranger-front-v1.png"
+      ],
+      "prompt": "Use case: stylized-concept.\nAsset type: OpenMMO modular male ranger boots, one FRONT orthographic reference for image-to-3D.\nInput image 1 is the approved existing ranger character design and controls the boots. Input image 2 is the approved isolated ranger trousers for matching leather craftsmanship only. Produce ONLY the footwear.\nDraw exactly ONE matching left/right pair of hollow wearable men's boots, viewed directly from the FRONT, parallel feet with toes pointing straight toward the viewer, upright empty shafts, separated by a clean gap, same scale and aligned sole baseline. Both boots fully visible with generous transparent margins. Portrait 1024x1536 framing. This is one front view, not a multi-view sheet.\nFaithfully extract the reference's practical fantasy ranger boots: tall brown leather shafts ending below the knees at upper calf, supple dark walnut/chestnut worn leather, long front crisscross brown leather lacing through small antique brass eyelets, modest reinforced upper cuff bands with small brass rivets, curved stitched vamp panels, rounded restrained antique brass toe caps with worn highlights, dark layered leather soles and low sturdy block heels. Keep the shaft narrow and anatomically plausible for the current slim-calf male. Preserve the original's restrained functional design and natural ankle creasing, no redesign or added ornaments.\nEmpty boot openings with dark leather lining; NO legs, feet, skin, mannequin, body, trousers, belt, gloves, weapon, ground plane or cast shadow. The trousers tuck inside these separate boots. Neutral diffuse studio lighting, realistic detailed game concept/product render matching the references. Actual transparent RGBA background, no painted checkerboard, gradient or scenery. No text, labels, logos, extra objects, rear view or side view.",
+      "transparent_pixels": 869063,
+      "alpha_extrema": [
+        0,
+        254
+      ],
+      "bytes": 2413563,
+      "processing": "Copied built-in generated PNG unchanged; original alpha preserved.",
+      "retention": "[미사용] Intermediate pair reference removed at user request after final single-boot inputs were retained; prompt and hash preserved."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/boots_ranger-back-v1.png",
+      "sha256": "8191741fe11ab1ae912f86ee629d02d420565a48bd7bf9ebdd8062d8dd916db7",
+      "size": [
+        1024,
+        1536
+      ],
+      "mode": "RGBA",
+      "generated_on": "2026-10-07",
+      "subscription_tier": "ChatGPT Pro 20x",
+      "input_images": [
+        "doc/images/characters/modular_human_male_01/parts/ranger/boots_ranger-front-v1.png",
+        "client/public/character_concepts/ranger.webp"
+      ],
+      "prompt": "Use case: stylized-concept.\nAsset type: OpenMMO modular male ranger boots, ONE BACK orthographic reference for multi-image image-to-3D.\nInput image 1 is the newly created isolated FRONT pair of ranger boots. It is authoritative for the exact objects: shaft height, silhouette, cuff width and rivets, materials, leather tone, stitching thickness, toe shape, low block heels, soles and left/right spacing. Input image 2 is the original ranger character for supporting style only.\nDraw the REAR of the EXACT same hollow left/right pair of boots from image 1. Strict straight-on BACK view, shafts vertical, feet parallel pointing away from viewer, rear heels closest to viewer, clean visible gap between the boots, same size and sole baseline. Same portrait 1024x1536 framing and generous transparent margins. Both boots complete from upper cuffs to heel soles. One rear view only, NOT a turnaround or multi-view sheet.\nMatch the tall below-knee brown leather ranger boots, dark walnut/chestnut worn leather grain, slender calf taper, natural soft ankle creasing, broad upper cuff bands with the same small antique brass SIDE rivets, warm stitched edging, dark layered soles and low sturdy block heels. Infer the unseen rear conservatively: one continuous leather rear shaft with a neat stitched central vertical seam leading into a simple reinforced heel counter. Back of the upper cuff is continuous leather. The FRONT lacing, front opening, knots and brass toe caps must NOT be relocated onto the BACK. Existing front toe caps may at most be concealed forward of the heels, not on rear heels. No rear buckles, straps, zippers, additional studs, ornaments, spikes, pull loops or rear laces. Do not redesign or change proportions.\nEmpty upper openings with subtle dark leather lining, NO legs, feet, skin, mannequin, trousers, person, other clothing or equipment. Neutral diffuse studio lighting and realistic game asset concept/product rendering, identical craftsmanship to front. Genuinely transparent RGBA background, no scenery, gradient, ground, cast shadow, painted checkerboard, text or labels.",
+      "transparent_pixels": 870809,
+      "alpha_extrema": [
+        0,
+        254
+      ],
+      "bytes": 2470404,
+      "processing": "Copied built-in generated PNG unchanged; original alpha preserved.",
+      "retention": "[미사용] Intermediate pair reference removed at user request after final single-boot inputs were retained; prompt and hash preserved."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/boot_ranger_left-front-v1.png",
+      "sha256": "1df191b7c2e5dbed05f47b376352273face8eed7d80e89962f552dc4bba6e9c7",
+      "size": [
+        1024,
+        1536
+      ],
+      "mode": "RGBA",
+      "generated_on": "2026-10-07",
+      "subscription_tier": "ChatGPT Pro 20x",
+      "transparent_pixels": 1221268,
+      "alpha_extrema": [
+        0,
+        254
+      ],
+      "bytes": 1616595,
+      "input_images": [
+        "doc/images/characters/modular_human_male_01/parts/ranger/boots_ranger-front-v1.png"
+      ],
+      "processing": "FFmpeg technical extraction without scaling or redrawing; crop wearer-left boot and add transparent horizontal padding. Extracted RGBA pixels verified identical to the source region.",
+      "crop": [
+        512,
+        0,
+        512,
+        1536
+      ],
+      "pad": {
+        "size": [
+          1024,
+          1536
+        ],
+        "offset": [
+          256,
+          0
+        ],
+        "color": "transparent"
+      },
+      "reproduction_filter": "crop=512:1536:512:0,pad=1024:1536:256:0:color=black@0"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/boot_ranger_left-back-v1.png",
+      "sha256": "a93ff64ed03212a782e72375936fc8ee366954453f82fbf4ff19556d3ddd0a04",
+      "size": [
+        1024,
+        1536
+      ],
+      "mode": "RGBA",
+      "generated_on": "2026-10-07",
+      "subscription_tier": "ChatGPT Pro 20x",
+      "transparent_pixels": 1221584,
+      "alpha_extrema": [
+        0,
+        254
+      ],
+      "bytes": 1604584,
+      "input_images": [
+        "doc/images/characters/modular_human_male_01/parts/ranger/boots_ranger-back-v1.png"
+      ],
+      "processing": "FFmpeg technical extraction without scaling or redrawing; crop wearer-left boot and add transparent horizontal padding. Extracted RGBA pixels verified identical to the source region.",
+      "crop": [
+        0,
+        0,
+        512,
+        1536
+      ],
+      "pad": {
+        "size": [
+          1024,
+          1536
+        ],
+        "offset": [
+          256,
+          0
+        ],
+        "color": "transparent"
+      },
+      "reproduction_filter": "crop=512:1536:0:0,pad=1024:1536:256:0:color=black@0"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/boot_ranger_left-side-v1.png",
+      "sha256": "b3348c74a5d82294bdbc2fee79bbf5acd8fa9aa943b0fb6f6509a36cf4c4d101",
+      "size": [
+        1024,
+        1536
+      ],
+      "mode": "RGBA",
+      "generated_on": "2026-10-07",
+      "subscription_tier": "ChatGPT Pro 20x",
+      "transparent_pixels": 913771,
+      "alpha_extrema": [
+        0,
+        254
+      ],
+      "bytes": 2331952,
+      "input_images": [
+        "doc/images/characters/modular_human_male_01/parts/ranger/boot_ranger_left-front-v1.png",
+        "doc/images/characters/modular_human_male_01/parts/ranger/boot_ranger_left-back-v1.png"
+      ],
+      "prompt": "Use case: stylized-concept.\nAsset type: OpenMMO modular male ranger LEFT boot, ONE OUTER SIDE view for image-to-3D.\nInput image 1 is the isolated front view of ONE selected left boot; it is the design authority. Input image 2 is the isolated rear view of that same left boot, supporting the rear seam and heel counter. These are references for one object, not objects to duplicate.\nDraw exactly ONE hollow wearable LEFT boot in a strict 90-degree OUTER SIDE PROFILE. Toe points to the LEFT of the image; heel is on the RIGHT. Camera level and orthographic, no three-quarter angle, no second boot, no multi-view sheet. Entire boot from upper cuff to sole fully in frame, centered with generous transparent margins, portrait 1024x1536. Keep the shaft vertical and sole level.\nPreserve the same tall below-knee slim-calf shaft, dark walnut/chestnut worn brown leather, warm double stitching, broad reinforced top cuff with its small antique brass side rivet, front long leather lacing and brass eyelets, gently rounded worn brass toe cap, layered dark leather outsole, modest low sturdy stacked block heel, natural ankle folds and rear stitched heel-counter panel. Maintain the proportions and functional understated style of the two supplied views. In this strict side view, the front lacing is visible only along the front-facing LEFT edge of the shaft, never as new lacing covering the broad lateral panel. Rear center seam lies on the RIGHT/back edge. The broad side leather panel is mostly plain with conservative construction seams. The toe cap belongs only over the toe, and the heel counter is leather. Keep the shaft slender but not pinched at the ankle. Do not add buckles, zippers, straps, ornaments, fur, spikes or extra hardware.\nEmpty boot opening with discreet dark leather lining, absolutely NO leg, foot, skin, mannequin, body, trousers or other equipment. Realistic detailed game concept/product render, neutral diffuse studio light matching the input references. Genuinely transparent RGBA background, no painted checkerboard, gradient, floor, cast shadow, scenery, text, labels or logo. This is a single-left-boot production reference; the opposite boot will be mirrored later in 3D.",
+      "processing": "Copied built-in generated PNG unchanged; original alpha preserved."
     }
   ],
   "review": {
@@ -164,5 +313,45 @@
     "quads": 1500,
     "approximate_triangles": 3000,
     "notes": "Recommendation only; actual user-submitted Tripo settings unknown. Received pants GLB contains 3714 triangles."
+  },
+  "last_generated_on": "2026-10-07",
+  "boots_review": {
+    "design": "Front follows original tall brown leather ranger boots, front lacing, brass eyelets, upper cuff bands and worn brass toe caps. Rear is an inferred continuous shaft with central stitched seam and reinforced heel counter, generated from isolated front.",
+    "part_ownership": {
+      "feet": [
+        "left and right boots",
+        "front laces and eyelets",
+        "upper cuff bands and side rivets",
+        "toe caps",
+        "soles and low block heels"
+      ],
+      "excluded": [
+        "body and legs",
+        "pants",
+        "other clothing",
+        "weapons"
+      ]
+    },
+    "fitting_target": {
+      "base": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "interfaces": "interfaces/v1",
+      "rig": "human_male_01_mixamo_candidate_v2",
+      "connection": "Actual boot rim at Y≈0.462–0.482m; ranger pant hem follows rim with 3mm overlap and inward taper. Hem shares own Leg with cuff. Skin cut stays at Y=0.43m."
+    },
+    "limitations": [
+      "User design review pending; rear construction inferred from front.",
+      "Concept views are not calibrated measurement drawings; exact cuff, seam and heel alignment needs 3D review.",
+      "Tripo source delivered and fitted; seven-clip numeric checks and sampled workshop visual checks completed. Remaining mixed equipment and production game path unverified."
+    ],
+    "production_inputs": [
+      "doc/images/characters/modular_human_male_01/parts/ranger/boot_ranger_left-front-v1.png",
+      "doc/images/characters/modular_human_male_01/parts/ranger/boot_ranger_left-back-v1.png",
+      "doc/images/characters/modular_human_male_01/parts/ranger/boot_ranger_left-side-v1.png"
+    ],
+    "pair_reference_role": "Intermediate pair front/back references removed at user request; final wearer-left front/back/side inputs retained.",
+    "mirroring_plan": "User selected single-boot generation on 2026-10-07. Fit the left boot to the canonical body; mirror across X in 3D, correct triangle winding/normals and remap skin weights to the opposite leg/foot/toe bones, following caveman boot workflow. Executed after source delivery; see mirroring_result.",
+    "side_review": "Single outer left profile, toe points image-left. Front laces stay at the front edge, rear heel counter and cuff rivet follow prior references; no added hardware.",
+    "mirroring_result": "Executed 2026-10-07; X mirror, reversed winding, recomputed normals, own-side Leg/Foot/ToeBase weights. Two boots total 3646 triangles.",
+    "tripo_source_record": "doc/assets/modular-ranger-tripo-boots-sources.json"
   }
 }
