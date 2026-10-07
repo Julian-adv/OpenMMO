@@ -170,6 +170,7 @@ async function main() {
     'hair_wavy_bone',
     'top_ranger',
     'pants_ranger',
+    'gloves_ranger',
     'boots_ranger',
   ]
   const [base, sources, animations, sword, profile, candidateSources, social] =
@@ -543,6 +544,11 @@ async function main() {
       bone: hand,
       offsetY: -0.08,
       position: new THREE.Vector3(-0.44, 0.18, 0.55),
+    },
+    left_hand: {
+      bone: body.getObjectByName('LeftHand')!,
+      offsetY: -0.08,
+      position: new THREE.Vector3(0.44, 0.18, 0.55),
     },
     calf: {
       bone: knee,

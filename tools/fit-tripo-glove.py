@@ -156,22 +156,22 @@ def contour_fit(source, positions, source_triangles, alignment):
     return result
 
 
-def hand_shell():
-    body, faces, dense = fit.body_surface(('hands', 'forearms'), -1)
+def hand_shell(side='Right'):
+    body, faces, dense = fit.body_surface(('hands', 'forearms'), -1 if side == 'Right' else 1)
     positions = body + io.smooth_normals(body, faces) * .003
-    wrist = fit.BONES['RightHand']
-    axis = io.unit(wrist - fit.BONES['RightForeArm'])
+    wrist = fit.BONES[side + 'Hand']
+    axis = io.unit(wrist - fit.BONES[side + 'ForeArm'])
     distance = -.02 - (positions - wrist) @ axis
-    field = np.array([dense[:, [j for j, name in enumerate(fit.NAMES) if name.startswith('RightHand' + finger)]].sum(1) for finger in FINGERS]).T
+    field = np.array([dense[:, [j for j, name in enumerate(fit.NAMES) if name.startswith(side + 'Hand' + finger)]].sum(1) for finger in FINGERS]).T
     labels = field.argmax(1)
     for i, finger in enumerate(FINGERS):
-        root, middle, end = [fit.BONES[f'RightHand{finger}{j}'] for j in [1, 2, 3]]
+        root, middle, end = [fit.BONES[f'{side}Hand{finger}{j}'] for j in [1, 2, 3]]
         opening = middle * .85 + end * .15
         axis = io.unit(opening - root)
         mask = (labels == i) & (field[:, i] > .05)
         cut = (positions[mask] - opening) @ axis
         if finger == 'Thumb':
-            web = fit.BONES['RightHandIndex1'] - root
+            web = fit.BONES[side + 'HandIndex1'] - root
             web = io.unit(web - axis * (web @ axis))
             cut -= .020 * io.smoothstep(((positions[mask] - opening) @ web - .012) / .016)
         distance[mask] = np.maximum(distance[mask], cut)
@@ -184,9 +184,9 @@ def hand_shell():
     loops = edge_loops(welded)
     assert len(loops) == 6
     regions = {}
-    labels = np.array([dense[:, [j for j, name in enumerate(fit.NAMES) if name.startswith('RightHand' + finger)]].sum(1) for finger in FINGERS]).T.argmax(1)
+    labels = np.array([dense[:, [j for j, name in enumerate(fit.NAMES) if name.startswith(side + 'Hand' + finger)]].sum(1) for finger in FINGERS]).T.argmax(1)
     for i, finger in enumerate(FINGERS):
-        own = [fit.NAMES.index('RightHand')] + [fit.NAMES.index(f'RightHand{finger}{j}') for j in range(1, 5)]
+        own = [fit.NAMES.index(side + 'Hand')] + [fit.NAMES.index(f'{side}Hand{finger}{j}') for j in range(1, 5)]
         forbidden = [j for j in range(len(fit.NAMES)) if j not in own]
         rows = np.where((labels == i) & (dense[:, forbidden].sum(1) < 1e-6) & (dense[:, own[1:]].sum(1) > .5))[0]
         regions[finger] = dict(vertices=rows.tolist(), allowed_bones=[fit.NAMES[j] for j in own])
@@ -211,7 +211,7 @@ def bake_texture(shell, faces, source, source_faces, source_uv, image, alignment
         for key in ['root', 'opening']:
             for sign in [-1, 1]:
                 perimeter.append((np.array(info['target_' + key]) - wrist) @ basis.T + width * sign * .010)
-                source_perimeter.append(np.array(info['source_' + key])[:2] + [sign * .075, 0])
+                source_perimeter.append(np.array(info['source_' + key])[:2] + [sign * alignment.get('source_finger_half_width', .075), 0])
     landmarks = np.vstack([landmarks, perimeter])
     source_landmarks = np.vstack([source_landmarks, source_perimeter])
     triangulation = Delaunay(landmarks)

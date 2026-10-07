@@ -1,0 +1,178 @@
+{
+  "date": "2026-10-07",
+  "scope": "Right 14 and left 13 canonical index/thumb web skin triangles, three barycentric samples per triangle in 175 actual animation poses; outward rays within 30mm",
+  "base_sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
+  "validation_poses_sha256": "4b22ceadd92b6f27abdcd16528a2a8bb76dbd8a745d5244e8f6ab78fd61c1aa4",
+  "poses": 175,
+  "sides": [
+    {
+      "side": "Right",
+      "skin_triangles": [
+        [
+          2324,
+          1560,
+          1464
+        ],
+        [
+          1464,
+          1560,
+          1468
+        ],
+        [
+          1464,
+          2449,
+          2324
+        ],
+        [
+          1568,
+          1566,
+          1561
+        ],
+        [
+          2450,
+          2448,
+          1554
+        ],
+        [
+          2450,
+          1566,
+          1572
+        ],
+        [
+          1593,
+          1572,
+          1566
+        ],
+        [
+          1568,
+          1593,
+          1566
+        ],
+        [
+          1572,
+          2448,
+          2450
+        ],
+        [
+          1559,
+          2324,
+          2449
+        ],
+        [
+          2324,
+          1559,
+          1560
+        ],
+        [
+          1464,
+          1555,
+          2449
+        ],
+        [
+          2450,
+          1554,
+          1566
+        ],
+        [
+          1572,
+          1557,
+          2448
+        ]
+      ],
+      "sha256": "939e2f3cbfebae19fab284053898b435e73a38993bd09a627f2e59df3dad7220",
+      "sampled_skin_points": 7350,
+      "uncovered_skin_points": 0,
+      "uncovered_by_clip": {
+        "idle1": 0,
+        "walk": 0,
+        "run": 0,
+        "jump": 0,
+        "combat_idle": 0,
+        "slash1": 0,
+        "sit_idle": 0
+      }
+    },
+    {
+      "side": "Left",
+      "skin_triangles": [
+        [
+          2609,
+          2610,
+          790
+        ],
+        [
+          2611,
+          764,
+          2556
+        ],
+        [
+          789,
+          2518,
+          795
+        ],
+        [
+          789,
+          2610,
+          2611
+        ],
+        [
+          790,
+          2612,
+          2609
+        ],
+        [
+          793,
+          2612,
+          797
+        ],
+        [
+          797,
+          2271,
+          793
+        ],
+        [
+          781,
+          2609,
+          2612
+        ],
+        [
+          767,
+          2611,
+          2610
+        ],
+        [
+          789,
+          2611,
+          2556
+        ],
+        [
+          789,
+          790,
+          2610
+        ],
+        [
+          790,
+          797,
+          2612
+        ],
+        [
+          767,
+          2610,
+          2609
+        ]
+      ],
+      "sha256": "939e2f3cbfebae19fab284053898b435e73a38993bd09a627f2e59df3dad7220",
+      "sampled_skin_points": 6825,
+      "uncovered_skin_points": 0,
+      "uncovered_by_clip": {
+        "idle1": 0,
+        "walk": 0,
+        "run": 0,
+        "jump": 0,
+        "combat_idle": 0,
+        "slash1": 0,
+        "sit_idle": 0
+      }
+    }
+  ]
+}

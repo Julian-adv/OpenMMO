@@ -82,7 +82,14 @@ export interface ModularOutfit {
     | 'caveman'
     | 'ranger'
     | 'none'
-  gloves: 'none' | 'leather' | 'plate' | 'barbarian' | 'rogue' | 'caveman'
+  gloves:
+    | 'none'
+    | 'leather'
+    | 'plate'
+    | 'barbarian'
+    | 'rogue'
+    | 'caveman'
+    | 'ranger'
   boots: (typeof MODULAR_BOOTS)[number]
   helmet: 'none' | 'plate' | 'barbarian'
 }
@@ -179,6 +186,7 @@ function showBaseModularOutfit(
       none: undefined,
       rogue: undefined,
       caveman: undefined,
+      ranger: 'ranger_gloves',
       leather: 'gloves',
       plate: 'gauntlets',
       barbarian: 'bracers',
@@ -301,7 +309,7 @@ export const RANGER_MODULAR_OUTFIT: ModularOutfit = {
   hair: 'hair_crop',
   top: 'ranger',
   pants: 'ranger',
-  gloves: 'none',
+  gloves: 'ranger',
   boots: 'ranger',
   helmet: 'none',
 }
@@ -368,6 +376,7 @@ export function showModularOutfit(
     ...CAVEMAN_MODULAR_PARTS,
     'top_ranger',
     'pants_ranger',
+    'gloves_ranger',
     'boots_ranger',
   ])
     for (const mesh of parts.get(id) ?? []) mesh.visible = selected.has(id)
@@ -426,6 +435,15 @@ export function showModularOutfit(
       ? ['feet', 'ankles', 'boot_ankles']
       : []),
   ])
+  const rangerSleeves =
+    gloves === 'ranger' &&
+    (top === 'plate' || top === 'linen' || top === 'leather') &&
+    parts
+      .get(top === 'plate' ? 'top_plate' : 'top_linen')
+      ?.some(
+        (mesh) =>
+          mesh.visible && (top === 'plate' || region(mesh) === 'sleeves')
+      )
   for (const mesh of body) {
     const bodyRegion = region(mesh)
     if (bodyRegion === 'neck')
@@ -441,6 +459,10 @@ export function showModularOutfit(
     if (hidden.has(bodyRegion ?? '')) mesh.visible = false
     if (gloves === 'caveman' && bodyRegion === 'forearms')
       trimModularClothing(mesh, 'bracers')
+    if (gloves === 'ranger' && bodyRegion === 'forearms') {
+      trimModularClothing(mesh, 'ranger_gloves_skin')
+      if (rangerSleeves) mesh.visible = false
+    }
     if ((boots === 'caveman' || boots === 'ranger') && bodyRegion === 'legs')
       trimModularClothing(
         mesh,

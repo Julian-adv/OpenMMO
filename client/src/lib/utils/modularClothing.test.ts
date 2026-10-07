@@ -288,6 +288,82 @@ describe('modular clothing cuts', () => {
     }
   )
 
+  it.each([
+    { side: -1, top: 'plate' },
+    { side: 1, top: 'plate' },
+    { side: -1, top: 'linen' },
+    { side: 1, top: 'linen' },
+    { side: -1, top: 'leather' },
+    { side: 1, top: 'leather' },
+  ] as const)(
+    'hides covered skin and overlaps the $top sleeve with a ranger cuff (side: $side)',
+    ({ side, top }) => {
+      const source = cloth()
+      const position = source.attributes.position
+      for (let i = 0; i < position.count; i++)
+        position.setXY(
+          i,
+          side * (0.4 + position.getX(i) * 0.1),
+          0.95 + position.getY(i) * 0.4
+        )
+      const sleeve = new THREE.SkinnedMesh(source)
+      sleeve.userData.region = 'sleeves'
+      const arm = new THREE.SkinnedMesh(source)
+      arm.userData.region = 'forearms'
+      const hand = new THREE.SkinnedMesh()
+      hand.userData.region = 'hands'
+      const sleeveId = top === 'plate' ? 'top_plate' : 'top_linen'
+      const gloves = [new THREE.SkinnedMesh()]
+      const parts = new Map([
+        [sleeveId, [sleeve]],
+        ['gloves_ranger', gloves],
+        ['top_leather', [new THREE.SkinnedMesh()]],
+        ['top_ranger', [new THREE.SkinnedMesh()]],
+      ])
+      const outfit = {
+        ...DEFAULT_MODULAR_OUTFIT,
+        top,
+        gloves: 'ranger' as const,
+      }
+      const body = [arm, hand]
+      showModularOutfit(body, parts, { ...outfit, top: 'none' })
+      const bareGeometry = arm.geometry
+      showModularOutfit(body, parts, outfit)
+      expect(arm.visible).toBe(false)
+      expect(hand.visible).toBe(true)
+      expect(sleeve.visible).toBe(true)
+      const wrist = new THREE.Vector3(side * 0.445653, 0.993593, -0.045557)
+      const axis = wrist
+        .clone()
+        .sub(new THREE.Vector3(side * 0.311339, 1.247962, -0.056036))
+        .normalize()
+      const points = sleeve.geometry.attributes.position
+      const end = Math.max(
+        ...Array.from({ length: points.count }, (_, i) =>
+          new THREE.Vector3()
+            .fromBufferAttribute(points, i)
+            .sub(wrist)
+            .dot(axis)
+        )
+      )
+      expect(end + 0.208).toBeGreaterThan(0.015)
+      showModularOutfit(body, parts, { ...outfit, top: 'ranger' })
+      expect(arm.visible).toBe(true)
+      expect(arm.geometry).toBe(bareGeometry)
+      showModularOutfit(body, parts, { ...outfit, gloves: 'plate' })
+      expect(arm.visible).toBe(true)
+      parts.delete('gloves_ranger')
+      showModularOutfit(body, parts, outfit)
+      expect(arm.visible).toBe(false)
+      expect(sleeve.geometry).toBe(source)
+      parts.set('gloves_ranger', gloves)
+      parts.delete(sleeveId)
+      showModularOutfit(body, parts, outfit)
+      expect(arm.visible).toBe(true)
+      expect(arm.geometry).toBe(bareGeometry)
+    }
+  )
+
   it('preserves the lower torso when trimming one-piece plate armor', () => {
     const source = cloth()
     const position = source.attributes.position

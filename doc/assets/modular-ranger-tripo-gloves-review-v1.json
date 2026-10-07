@@ -1,0 +1,32 @@
+{
+  "date": "2026-10-07",
+  "blender_version": "5.2.0 LTS",
+  "editable": {
+    "path": "assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/ranger-gloves-fitting.blend",
+    "sha256": "2b9ef27036fd95b23f358e4e2c5943820519fa5ff131512278b8a42954407197"
+  },
+  "fitting": {
+    "path": "doc/assets/modular-ranger-tripo-gloves-fitting-v1.json",
+    "sha256": "2deef90fd4d833c9acd464a148c9c6b1b6360999456fe4b8a8d64dbe95821020",
+    "bytes": 50834
+  },
+  "images": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/tripo-gloves-source-v1.png",
+      "sha256": "7172fa705dfd7445a1e2242143ddebf4059e4fc57102595788378846560e2f49"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/tripo-gloves-fitted-v1.png",
+      "sha256": "019cc9323723205bfdd4291e1281ff874d2a0bf89fafe7ca0c6c71c7a1e28ecb"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/tripo-gloves-set-v1.png",
+      "sha256": "2b3e28504774038dcf7bd4c8aa69a2ae83b424998256bd9b8d71768a929cd55f"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/tripo-gloves-motion-v1.png",
+      "sha256": "4e738b26f54d897feac1070c7b3b48fd2038c12b43c2d0f61b1380d03317bed7"
+    }
+  ],
+  "scope": "Rest front/back/side and seven sampled actual animation poses; editable scene contains canonical rig, outfit, source, textures and connection guides"
+}

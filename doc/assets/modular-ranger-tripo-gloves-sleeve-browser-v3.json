@@ -1,0 +1,165 @@
+{
+  "date": "2026-10-07",
+  "clip": "sit_idle",
+  "normalized_time": 0.4,
+  "stats": "\uc870\ud569 27,385\uc0bc\uac01\ud615 \u00b7 \ud45c\uc2dc 18,640 \u00b7 \uc5bc\uad74 1,505",
+  "errors": [],
+  "cases": [
+    {
+      "top": "plate",
+      "camera": "hand",
+      "screenshot": {
+        "path": "doc/images/characters/modular_human_male_01/parts/ranger/tripo-gloves-sleeve-plate-hand-v3.png",
+        "sha256": "b35d0e311de6996b03a90a9ec431f1fbb7da3ea04b59a00b03e2c38b2b612c1f",
+        "bytes": 731678
+      },
+      "state": {
+        "forearms": [
+          {
+            "visible": false,
+            "vertices": 302
+          }
+        ],
+        "gloves": true
+      },
+      "screenshot_review": "Captured and inspected for plate cuffs; other combinations checked for mask state and retained exposed ranger skin."
+    },
+    {
+      "top": "plate",
+      "camera": "left_hand",
+      "screenshot": null,
+      "state": {
+        "forearms": [
+          {
+            "visible": false,
+            "vertices": 302
+          }
+        ],
+        "gloves": true
+      },
+      "screenshot_review": "Captured and inspected for plate cuffs; other combinations checked for mask state and retained exposed ranger skin."
+    },
+    {
+      "top": "linen",
+      "camera": "hand",
+      "screenshot": null,
+      "state": {
+        "forearms": [
+          {
+            "visible": false,
+            "vertices": 302
+          }
+        ],
+        "gloves": true
+      },
+      "screenshot_review": "Captured and inspected for plate cuffs; other combinations checked for mask state and retained exposed ranger skin."
+    },
+    {
+      "top": "linen",
+      "camera": "left_hand",
+      "screenshot": null,
+      "state": {
+        "forearms": [
+          {
+            "visible": false,
+            "vertices": 302
+          }
+        ],
+        "gloves": true
+      },
+      "screenshot_review": "Captured and inspected for plate cuffs; other combinations checked for mask state and retained exposed ranger skin."
+    },
+    {
+      "top": "leather",
+      "camera": "hand",
+      "screenshot": null,
+      "state": {
+        "forearms": [
+          {
+            "visible": false,
+            "vertices": 302
+          }
+        ],
+        "gloves": true
+      },
+      "screenshot_review": "Captured and inspected for plate cuffs; other combinations checked for mask state and retained exposed ranger skin."
+    },
+    {
+      "top": "leather",
+      "camera": "left_hand",
+      "screenshot": null,
+      "state": {
+        "forearms": [
+          {
+            "visible": false,
+            "vertices": 302
+          }
+        ],
+        "gloves": true
+      },
+      "screenshot_review": "Captured and inspected for plate cuffs; other combinations checked for mask state and retained exposed ranger skin."
+    },
+    {
+      "top": "ranger",
+      "camera": "hand",
+      "screenshot": null,
+      "state": {
+        "forearms": [
+          {
+            "visible": true,
+            "vertices": 302
+          }
+        ],
+        "gloves": true
+      },
+      "screenshot_review": "Captured and inspected for plate cuffs; other combinations checked for mask state and retained exposed ranger skin."
+    },
+    {
+      "top": "ranger",
+      "camera": "left_hand",
+      "screenshot": null,
+      "state": {
+        "forearms": [
+          {
+            "visible": true,
+            "vertices": 302
+          }
+        ],
+        "gloves": true
+      },
+      "screenshot_review": "Captured and inspected for plate cuffs; other combinations checked for mask state and retained exposed ranger skin."
+    }
+  ],
+  "scope": "Both cuffs with plate, linen, leather and ranger tops at sit_idle 40%; covered forearm visibility asserted, plus plate side view at idle1 0%. Ranger retains exposed skin; long sleeves hide it.",
+  "runtime_sources": [
+    {
+      "path": "client/src/lib/utils/modularCharacter.ts",
+      "sha256": "37b026b032e3398e4af79ea41a8a03b7bd107c9dbd41bb4a545ced98c590010f",
+      "bytes": 26301
+    },
+    {
+      "path": "client/src/lib/utils/modularClothing.ts",
+      "sha256": "aca2b00bbd8c293a712d157aa5f5e6649d66c35a1f2007ba2ebb947862613d2f",
+      "bytes": 9630
+    },
+    {
+      "path": "client/src/lib/utils/rangerGloveCuff.ts",
+      "sha256": "0197e07cc154f11a926f104fab4fe13ddde580f20b76ad573fdfbd20a50fa0ef",
+      "bytes": 3100
+    },
+    {
+      "path": "client/src/lib/data/rangerGloveCuff.json",
+      "sha256": "73c163c612cc70c09163933b677588961522b01d37c5f177ecfbbb214dd0c0ac",
+      "bytes": 8232
+    }
+  ],
+  "sleeve_trim": {
+    "elbow_to_wrist_fraction": 0.4,
+    "transition_split_fraction": 0.2,
+    "inner_clearance_m": 0.004,
+    "covered_forearms_hidden": true,
+    "exposed_ranger_skin_preserved": true
+  },
+  "additional_screenshots": [],
+  "cleanup": "Removed superseded and duplicate captures after user acceptance; retained the final plate/ranger cuff comparison and numerical validation."
+}

@@ -83,6 +83,10 @@ function modularCharacterPreview(): Plugin {
     '../assets/modular_human_male_01/parts/ranger_tripo_boots_v1/boots_ranger.glb',
     import.meta.url
   )
+  const rangerGloves = new URL(
+    '../assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/gloves_ranger.glb',
+    import.meta.url
+  )
   const cavemanPants = new URL(
     '../assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb',
     import.meta.url
@@ -162,30 +166,32 @@ function modularCharacterPreview(): Plugin {
                 ? rangerPants
                 : part?.[1] === 'boots_ranger'
                   ? rangerBoots
-                  : part?.[1] === 'top_caveman'
-                    ? caveman
-                    : part?.[1] === 'pants_caveman'
-                      ? cavemanPants
-                      : part?.[1] === 'boots_caveman'
-                        ? cavemanBoots
-                        : part?.[1] === 'gloves_caveman'
-                          ? cavemanGloves
-                          : part?.[1] === 'hair_wavy_bone'
-                            ? wavyHair
-                            : part && rogueParts.has(part[1])
-                              ? selection.fitting_candidate.part_overrides?.[
-                                  part[1]
-                                ]
-                                ? new URL(
-                                    `../${selection.fitting_candidate.part_overrides[part[1]]}`,
-                                    import.meta.url
-                                  )
-                                : new URL(`${part[1]}.glb`, rogue)
-                              : part && parts.has(part[1])
-                                ? new URL(`${part[1]}.glb`, fitted)
-                                : files.has(name)
-                                  ? new URL(name, directory)
-                                  : null
+                  : part?.[1] === 'gloves_ranger'
+                    ? rangerGloves
+                    : part?.[1] === 'top_caveman'
+                      ? caveman
+                      : part?.[1] === 'pants_caveman'
+                        ? cavemanPants
+                        : part?.[1] === 'boots_caveman'
+                          ? cavemanBoots
+                          : part?.[1] === 'gloves_caveman'
+                            ? cavemanGloves
+                            : part?.[1] === 'hair_wavy_bone'
+                              ? wavyHair
+                              : part && rogueParts.has(part[1])
+                                ? selection.fitting_candidate.part_overrides?.[
+                                    part[1]
+                                  ]
+                                  ? new URL(
+                                      `../${selection.fitting_candidate.part_overrides[part[1]]}`,
+                                      import.meta.url
+                                    )
+                                  : new URL(`${part[1]}.glb`, rogue)
+                                : part && parts.has(part[1])
+                                  ? new URL(`${part[1]}.glb`, fitted)
+                                  : files.has(name)
+                                    ? new URL(name, directory)
+                                    : null
         if (req.method !== 'GET' || !url) {
           res.statusCode = 404
           res.end('Unknown preview asset')

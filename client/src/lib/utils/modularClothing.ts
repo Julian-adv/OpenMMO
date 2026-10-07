@@ -1,4 +1,6 @@
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { tuckSleevesIntoRangerGloves } from './rangerGloveCuff'
 import {
   rangerPantsBootDistance,
   tuckPantsIntoRangerBoots,
@@ -8,6 +10,8 @@ type Cut =
   | 'bracers'
   | 'gauntlets'
   | 'gloves'
+  | 'ranger_gloves'
+  | 'ranger_gloves_skin'
   | 'greaves'
   | 'leather_boots'
   | 'caveman_boots'
@@ -49,6 +53,8 @@ const cuts: Record<Cut, Distance | Distance[]> = {
   bracers: sleeveCut(0.23),
   gauntlets: sleeveCut(0.85),
   gloves: sleeveCut(0.89),
+  ranger_gloves: sleeveCut(0.4),
+  ranger_gloves_skin: sleeveCut(0.4),
   greaves: (point) => point.y - 0.46,
   leather_boots: (point) => point.y - 0.235,
   caveman_boots: (point) => point.y - 0.43,
@@ -257,6 +263,28 @@ export function trimModularClothing(
       cut === 'rogue_waist_ranger_boots'
     )
       tuckPantsIntoRangerBoots(geometry)
+    if (cut === 'ranger_gloves' && !skin) {
+      const transition = sleeveCut(0.2)
+      const halves = [
+        clipSkinnedGeometry(geometry, transition),
+        clipSkinnedGeometry(geometry, (point) => -transition(point)),
+      ]
+      const merged = mergeGeometries(halves)!
+      let offset = 0
+      for (const half of halves) {
+        for (const group of half.groups)
+          merged.addGroup(
+            offset + group.start,
+            group.count,
+            group.materialIndex
+          )
+        offset += half.index!.count
+        half.dispose()
+      }
+      geometry.dispose()
+      geometry = merged
+      tuckSleevesIntoRangerGloves(geometry)
+    }
     cached.cuts.set(key, geometry)
     variants.set(geometry, cached)
   }

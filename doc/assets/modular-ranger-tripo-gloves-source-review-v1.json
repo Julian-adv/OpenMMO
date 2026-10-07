@@ -1,0 +1,28 @@
+{
+  "source": {
+    "path": "assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/source.glb",
+    "sha256": "fd92c1f98c71e56a10b63741a0e029733a5cac560fa3edf7effbcc0d7f185bb2"
+  },
+  "status": "Raw single glove; not fitted or rigged",
+  "triangles": 2140,
+  "mesh_count": 1,
+  "meshes": [
+    {
+      "name": "tripo_node_319f80ac-49ed-4a18-bab8-a5e21b4b8539",
+      "components_vertex_counts": [
+        1059,
+        20
+      ],
+      "boundary_edges": 12,
+      "nonmanifold_edges": 12,
+      "degenerate_faces": 0,
+      "collapsed_uv_triangles": 0
+    }
+  ],
+  "source_extent_blender": [
+    0.44384765625,
+    0.28369140625,
+    0.99951171875
+  ],
+  "rigged": false
+}

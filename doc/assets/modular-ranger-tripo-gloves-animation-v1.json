@@ -1,0 +1,112 @@
+{
+  "date": "2026-10-07",
+  "sources": [
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/gloves_ranger.glb",
+      "sha256": "939e2f3cbfebae19fab284053898b435e73a38993bd09a627f2e59df3dad7220"
+    },
+    {
+      "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+      "sha256": "76eeb462770754895834271423b4ef7f33efdbd34bdfb9830beba4ba84e7569f"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/social.glb",
+      "sha256": "a9efe7a2d388011cdc039ca6778c2b3a929b07953941ee7bb7c50a511d4b083d"
+    }
+  ],
+  "exact_rig_binding": true,
+  "normalized_weights": true,
+  "opposite_side_influences": false,
+  "finger_bone_isolation": true,
+  "triangles": 4208,
+  "clips": [
+    {
+      "clip": "idle1",
+      "samples": 25,
+      "maximum_edge_stretch_ratio": 3.1889239670729337,
+      "maximum_rigid_bracer_length_error_relative": 2.1289056251205807e-7,
+      "maximum_seam_gap_m": 1.846350060360181e-9
+    },
+    {
+      "clip": "walk",
+      "samples": 25,
+      "maximum_edge_stretch_ratio": 5.206815013097051,
+      "maximum_rigid_bracer_length_error_relative": 2.652400616920403e-7,
+      "maximum_seam_gap_m": 1.824165783068567e-9
+    },
+    {
+      "clip": "run",
+      "samples": 25,
+      "maximum_edge_stretch_ratio": 3.188933506068968,
+      "maximum_rigid_bracer_length_error_relative": 2.966188277220283e-7,
+      "maximum_seam_gap_m": 1.8430567929492587e-9
+    },
+    {
+      "clip": "jump",
+      "samples": 25,
+      "maximum_edge_stretch_ratio": 4.7692318907359,
+      "maximum_rigid_bracer_length_error_relative": 2.369959741788108e-7,
+      "maximum_seam_gap_m": 1.8491407977202813e-9
+    },
+    {
+      "clip": "combat_idle",
+      "samples": 25,
+      "maximum_edge_stretch_ratio": 5.462417118670337,
+      "maximum_rigid_bracer_length_error_relative": 2.6261882402067727e-7,
+      "maximum_seam_gap_m": 1.8386343721869234e-9
+    },
+    {
+      "clip": "slash1",
+      "samples": 25,
+      "maximum_edge_stretch_ratio": 5.654449277817997,
+      "maximum_rigid_bracer_length_error_relative": 2.8802257645565987e-7,
+      "maximum_seam_gap_m": 1.8339113639149472e-9
+    },
+    {
+      "clip": "sit_idle",
+      "samples": 25,
+      "maximum_edge_stretch_ratio": 3.912957844304083,
+      "maximum_rigid_bracer_length_error_relative": 2.2711250169393793e-7,
+      "maximum_seam_gap_m": 1.862644863139994e-9
+    }
+  ],
+  "meshes": [
+    {
+      "name": "ranger_glove_right",
+      "rigid_bracer_vertices": 2781,
+      "maximum_edge_stretch_ratio": 3.188941646830451,
+      "maximum_rigid_bracer_length_error_relative": 2.966188277220283e-7,
+      "maximum_seam_gap_m": 1.862644863139994e-9,
+      "maximum_animated_motion_m": 1.6100673981316431
+    },
+    {
+      "name": "ranger_glove_left",
+      "rigid_bracer_vertices": 2781,
+      "maximum_edge_stretch_ratio": 5.654449277817997,
+      "maximum_rigid_bracer_length_error_relative": 2.8802257645565987e-7,
+      "maximum_seam_gap_m": 1.8491407977202813e-9,
+      "maximum_animated_motion_m": 1.5955307615854852
+    }
+  ],
+  "cuff_overlap": [
+    {
+      "name": "ranger_glove_right",
+      "boundary_vertices": 48,
+      "angular_windows": 16,
+      "shortest_cuff_proximal_distance_from_wrist_m": 0.20906999954747527,
+      "minimum_skin_overlap_m": 0.01622329001815459
+    },
+    {
+      "name": "ranger_glove_left",
+      "boundary_vertices": 54,
+      "angular_windows": 16,
+      "shortest_cuff_proximal_distance_from_wrist_m": 0.2090532866435865,
+      "minimum_skin_overlap_m": 0.027905811925147572
+    }
+  ],
+  "scope": "Actual modular binding, seven clips and 25 samples per clip. Cuff overlap uses 16 overlapping angular vertex windows and the clipped skin boundary, measured in the moving ForeArm frame. Forearm protection is rigid; wrist and hand deform. This does not certify all equipment combinations, every animation frame or all body intersections."
+}

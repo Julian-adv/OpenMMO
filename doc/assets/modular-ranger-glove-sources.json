@@ -1,0 +1,56 @@
+{
+  "generated_on": "2026-10-07",
+  "tool": "OpenAI Codex built-in ImageGen",
+  "subscription_tier": "ChatGPT Pro 20x",
+  "use_terms": "OpenAI generated-output terms; original ranger concept provenance and use terms inherited from doc/assets/characters.md.",
+  "status": "Right glove dorsal and palmar concept candidates for Tripo; no 3D generation, fitting or runtime changes.",
+  "user_decision": "Generate only one glove; mirror the fitted 3D mesh later to make the opposite hand.",
+  "part_ownership": "One connected fingerless glove and below-elbow leather forearm bracer, hands slot.",
+  "reference": {
+    "path": "client/public/character_concepts/ranger.webp",
+    "sha256": "a7be7a2469ddd87556033ca07e05bbe4b055df6b52871fa6a006bd1e4bce7f71"
+  },
+  "outputs": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/glove_ranger_right-dorsal-v1.png",
+      "sha256": "d804c006c8520ee32263e525daa97950952e7d06119175706b05b6c9750e6e49",
+      "size": [
+        1024,
+        1536
+      ],
+      "mode": "RGBA",
+      "view": "dorsal",
+      "input_images": [
+        "client/public/character_concepts/ranger.webp"
+      ],
+      "prompt": "Use case: stylized-concept.\nAsset type: OpenMMO modular ranger RIGHT glove, single dorsal/front reference for Tripo image-to-3D.\nInput image 1 is the existing ranger character concept, the design authority. Faithfully extract and redraw ONLY the wearer's RIGHT fingerless leather glove AND its attached long forearm bracer as ONE hollow wearable piece. This is the glove on the LEFT side of the supplied character image.\nCreate exactly ONE right glove, back-of-hand facing the camera in a straight-on orthographic product view, forearm opening at the TOP, fingers pointing DOWN in a relaxed straight slightly spread pose. Keep the entire item uncropped centered with generous transparent margins. Portrait canvas approximately 1024x1536.\nMatch the reference: dark espresso brown worn leather, a supple fingerless hand section with FOUR separate short hollow finger sleeves and ONE short hollow thumb sleeve, each open at its tip. All five openings must be legible, with empty dark leather interiors and realistic thin leather rims. No actual fingers inside. The thumb branches naturally diagonally away from the hand, anatomically RIGHT-handed.\nThe glove continues into a tapered long leather forearm guard reaching below the elbow, flared at its upper opening. Preserve the reference's overlapping transverse slightly diagonal leather bands along the outer forearm, stitched narrow edging, the warm brown wrist strap with small aged brass buckle and restrained brass rivets. Bracer and glove form one continuous wearable assembly, flexible wrist section, no gap that would disconnect them. Understated realistic leather grain and wear; no metal armor plates or invented vine ornament.\nNeutral soft studio lighting, detailed realistic game concept / product render, actual transparent alpha background, no floor or cast shadow.\nStrictly NO wearer, skin, hand, arm, mannequin, fingers, nails, bone, shirt, body, weapons, opposite glove, second viewpoint, diagram, text, labels or watermark. The large upper forearm cuff is empty and open; the five finger sleeves are hollow and open. One single object, one view only."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/glove_ranger_right-palmar-v1.png",
+      "sha256": "5021438749d918cb6104c1987d684a5df4b6281151150b6e6c6652492bb65665",
+      "size": [
+        1024,
+        1536
+      ],
+      "mode": "RGBA",
+      "view": "palmar",
+      "input_images": [
+        "doc/images/characters/modular_human_male_01/parts/ranger/glove_ranger_right-dorsal-v1.png",
+        "client/public/character_concepts/ranger.webp"
+      ],
+      "prompt": "Use case: stylized-concept.\nAsset type: OpenMMO modular ranger RIGHT glove, single palmar/back reference for Tripo image-to-3D.\nInput image 1 is the newly generated DORSAL view of a RIGHT glove: it is the exact design and proportions authority. Input image 2 is the original ranger character, supporting material/style only.\nDraw the PALM side of exactly the SAME ONE RIGHT glove and attached long forearm bracer from image 1. Rotate the actual item 180 degrees around its long vertical axis to show the reverse side; do not merely mirror its dorsal face and do not create a left glove. Keep the forearm cuff at TOP, fingers pointing DOWN, same 1024x1536 portrait framing, scale, length, silhouette, centered position and slightly spread relaxed straight finger pose. Since image 1 has the thumb on the RIGHT of the image, the palm-side view of that SAME right glove must have its thumb on the LEFT of the image.\nPreserve the espresso-brown leather, flared hollow upper forearm cuff, tapered long bracer, same width and positions of the overlapping diagonal leather bands, warm brown wrist strap and aged brass hardware. Show how these existing bands wrap around onto the reverse. The brass buckle that was on the right edge of image 1 lies on the left edge in this reverse view, partly around the side rather than inventing a second front-facing buckle. Forearm protection and glove must stay connected as one continuous wearable item.\nDesign the unseen palm conservatively: supple relatively smooth leather gripping panel, modest reinforced palm and thumb-base stitched seams, gentle flex creases across the palm, no knuckle armor or dorsal decorative panel on the palm. Exactly FOUR distinct short hollow finger sleeves and ONE short hollow thumb sleeve, corresponding one-for-one to image 1. All five tips are OPEN, with empty dark leather interiors and thin leather rims, no skin. The forearm cuff is OPEN and empty. The hand section is short fingerless leather, not full closed fingers.\nStrict orthographic straight-on palm product view, neutral diffuse lighting, realistic leather grain and restrained wear matching image 1. Actual transparent alpha background, no gradient backdrop, no halo, no floor, no cast shadow. Full item inside frame with generous transparent padding.\nAbsolutely NO wearer, skin, hand, arm, mannequin, flesh, fingers, nails, bone, second glove, additional view, clothes, weapons, text, labels, diagram or watermark. One hollow wearable object, one palm view only."
+    }
+  ],
+  "validation": {
+    "transparent_background": "RGBA alpha range 0–254; all four corners and sampled exterior background have alpha 0. Generated alpha preserved without postprocessing.",
+    "visual_review": "One glove per image; empty forearm cuff, four short open finger sleeves and one open thumb sleeve; dorsal thumb on image right, palmar thumb on image left; reverse has palm creases and thumb-base seam.",
+    "limits": "Unseen palm construction is newly designed. Band continuity, buckle placement and dimensions need reconciliation in 3D; these images do not certify fit.",
+    "priority_view": "dorsal"
+  },
+  "future_fitting": {
+    "body": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "interfaces": "interfaces/v1",
+    "rig_id": "human_male_01_mixamo_candidate_v2",
+    "mirroring": "Mirror fitted right glove in 3D, correct face winding/normals and map right hand/finger/forearm weights to left counterparts. Validate both sides in motion."
+  }
+}

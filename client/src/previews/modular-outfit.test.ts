@@ -48,6 +48,66 @@ const undressed: ModularOutfit = {
 }
 
 describe('ranger workshop preview', () => {
+  it.each([
+    'none',
+    'linen',
+    'leather',
+    'plate',
+    'barbarian',
+    'rogue',
+    'caveman',
+    'ranger',
+  ] as const)(
+    'keeps forearm overlap with a %s top and restores skin when gloves are unavailable',
+    (top) => {
+      const { body, parts, visible } = fixture()
+      const forearms = body.find((mesh) => mesh.userData.region === 'forearms')!
+      const original = new THREE.PlaneGeometry(0.1, 0.3, 2, 6)
+      original.translate(-0.38, 1.12, 0)
+      forearms.geometry = original
+      const gloves = [new THREE.SkinnedMesh(), new THREE.SkinnedMesh()]
+      parts.set('gloves_ranger', gloves)
+      parts.set(`top_${top}`, [new THREE.SkinnedMesh()])
+      const outfit = { ...undressed, top, gloves: 'ranger' as const }
+      const selected = showModularOutfit(body, parts, outfit)
+      expect(selected.has('gloves_ranger')).toBe(true)
+      expect(gloves.every((mesh) => mesh.visible)).toBe(true)
+      expect(visible('hands')).toBe(true)
+      expect(forearms.geometry).not.toBe(original)
+      const position = forearms.geometry.attributes.position
+      expect(position.count).toBeGreaterThan(0)
+      expect(
+        Math.min(
+          ...Array.from({ length: position.count }, (_, i) => position.getY(i))
+        )
+      ).toBeGreaterThan(1.12)
+      const wrist = new THREE.Vector3(-0.445653, 0.993593, -0.045557)
+      const axis = wrist
+        .clone()
+        .sub(new THREE.Vector3(-0.311339, 1.247962, -0.056036))
+        .normalize()
+      const skinEnd = Math.max(
+        ...Array.from({ length: position.count }, (_, i) =>
+          new THREE.Vector3()
+            .fromBufferAttribute(position, i)
+            .sub(wrist)
+            .dot(axis)
+        )
+      )
+      expect(skinEnd + 0.208).toBeGreaterThan(0.015)
+      showModularOutfit(body, parts, undressed)
+      expect(gloves.every((mesh) => !mesh.visible)).toBe(true)
+      expect(forearms.geometry).toBe(original)
+      showModularOutfit(body, parts, outfit)
+      parts.delete('gloves_ranger')
+      expect(showModularOutfit(body, parts, outfit).has('gloves_ranger')).toBe(
+        false
+      )
+      expect(forearms.geometry).toBe(original)
+      expect(visible('hands')).toBe(true)
+    }
+  )
+
   it('keeps exposed arms and restores skin and neck when removed', () => {
     const { body, parts, visible } = fixture()
     const top = new THREE.SkinnedMesh()

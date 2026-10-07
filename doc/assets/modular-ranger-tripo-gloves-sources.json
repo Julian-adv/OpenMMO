@@ -1,0 +1,137 @@
+{
+  "delivery_date": "2026-10-07",
+  "generation_date": null,
+  "provider": "Tripo Studio",
+  "subscription": {
+    "previous_user_report": "Approximately USD 20/month Studio subscription",
+    "current_file_tier_separately_confirmed": false
+  },
+  "license": "Tripo Studio generated-output terms and inherited project concept provenance.",
+  "delivery_path_windows": "Y:\\public\\web_downloads\\leather+gauntlet+3d+model.glb",
+  "delivery_path_linux": "/mnt/y/web_downloads/leather+gauntlet+3d+model.glb",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/source.glb",
+    "sha256": "fd92c1f98c71e56a10b63741a0e029733a5cac560fa3edf7effbcc0d7f185bb2",
+    "bytes": 1783664,
+    "byte_identical_to_delivery": true
+  },
+  "base": {
+    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
+    "bytes": 22214236
+  },
+  "interfaces": {
+    "path": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+    "sha256": "f3fc3aed9c5080cf26a294dac496293c89bce8f67466add18a7ef72b326f006b",
+    "bytes": 310940
+  },
+  "rig_id": "human_male_01_mixamo_candidate_v2",
+  "generation_task_id": null,
+  "submitted_images_confirmed": false,
+  "proposed_generation_target": {
+    "quads_per_glove": 1000,
+    "approximate_triangles_per_glove": 2000
+  },
+  "requested_polygon_count_confirmed": null,
+  "reference_artwork": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/glove_ranger_right-dorsal-v1.png",
+      "sha256": "d804c006c8520ee32263e525daa97950952e7d06119175706b05b6c9750e6e49",
+      "bytes": 2000948
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/glove_ranger_right-palmar-v1.png",
+      "sha256": "5021438749d918cb6104c1987d684a5df4b6281151150b6e6c6652492bb65665",
+      "bytes": 2059816
+    }
+  ],
+  "artwork_record": "doc/assets/modular-ranger-glove-sources.json",
+  "export_observed": {
+    "triangles": 2140,
+    "original_quad_count": null,
+    "vertices_including_uv_splits": 2275,
+    "mesh_count": 1,
+    "material_count": 1,
+    "rigged": false,
+    "textures": [
+      {
+        "size": [
+          2048,
+          2048
+        ],
+        "format": "JPEG",
+        "embedded_sha256": "18572a39c583105075f1dbfa5a9b821c8871f0de4bbc438c7d9ca3827ca5842d"
+      }
+    ]
+  },
+  "status": "User accepted the fitted workshop gloves and mixed-sleeve corrections. Seven-clip numerical checks completed; production registration remains separate.",
+  "outputs": [
+    {
+      "path": "assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/gloves_ranger.glb",
+      "sha256": "939e2f3cbfebae19fab284053898b435e73a38993bd09a627f2e59df3dad7220",
+      "bytes": 3382812
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/ranger-gloves-fitting.blend",
+      "sha256": "2b9ef27036fd95b23f358e4e2c5943820519fa5ff131512278b8a42954407197",
+      "bytes": 43910639
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/animation-snapshots.json",
+      "sha256": "3cef5fefa806c74c0bf61812d14a25fa69d7a5c25657eada75c1e754cf62cb9d",
+      "bytes": 119927
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/validation-poses.json",
+      "sha256": "4b22ceadd92b6f27abdcd16528a2a8bb76dbd8a745d5244e8f6ab78fd61c1aa4",
+      "bytes": 2824931
+    }
+  ],
+  "assembled_budget": {
+    "scope": "Canonical body, crop hair, ranger top/pants/boots/gloves; no weapon or cape",
+    "original_glb_including_hidden_triangles": 31288,
+    "runtime_including_hidden_triangles": 29884,
+    "runtime_drawn_triangles": 22072,
+    "face_triangles": 1505,
+    "note": "Drawn triangles include occluded faces of visible meshes. Above the approximate 15000\u201320000 target; no budget-only decimation."
+  },
+  "validation_records": [
+    {
+      "path": "doc/assets/modular-ranger-tripo-gloves-fitting-v1.json",
+      "sha256": "2deef90fd4d833c9acd464a148c9c6b1b6360999456fe4b8a8d64dbe95821020",
+      "bytes": 50834
+    },
+    {
+      "path": "doc/assets/modular-ranger-tripo-gloves-animation-v1.json",
+      "sha256": "9784c07ea075c5212dd958ed1f9c33d15e195b1f5baca97dccde06a67165ce10",
+      "bytes": 4082
+    },
+    {
+      "path": "doc/assets/modular-ranger-tripo-gloves-coverage-v1.json",
+      "sha256": "d8cf368dc4906bba661dc77f2fa6227b26a3163d4f58fb629fd8fdef716376d8",
+      "bytes": 3041
+    },
+    {
+      "path": "doc/assets/modular-ranger-tripo-gloves-review-v1.json",
+      "sha256": "417f134ea9901793cd3ca92c6da649a3b17a2e92c178b317c7accc4d23e96aa4",
+      "bytes": 1421
+    },
+    {
+      "path": "doc/assets/modular-ranger-tripo-gloves-sleeve-coverage-v3.json",
+      "sha256": "297f76ba69b32b9a610d48a5b754941a60e240823578c97530d13761d6790cee",
+      "bytes": 3316
+    },
+    {
+      "path": "doc/assets/modular-ranger-tripo-gloves-sleeve-browser-v3.json",
+      "sha256": "ed1e253cb719434b940a1ac653870d5c800a15accdd583073dfeeb753da8293a",
+      "bytes": 4947
+    }
+  ],
+  "runtime_derivatives": [
+    {
+      "path": "client/src/lib/data/rangerGloveCuff.json",
+      "sha256": "73c163c612cc70c09163933b677588961522b01d37c5f177ecfbbb214dd0c0ac",
+      "bytes": 8232
+    }
+  ]
+}
