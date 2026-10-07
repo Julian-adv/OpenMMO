@@ -43,4 +43,4 @@ blender -b -t 6 --python-exit-code 1 --python tools/blender-scripts/export_range
 [등록·검수 기록](modular-ranger-runtime.json)에 있다. 무기·망토는 예산에서 제외했다.
 기존 15,000–20,000 목표를 초과하며 이번 등록에서 형상을 축소하지 않았다.
 
-![게임용 순찰자 기본 복장](../images/characters/modular_human_male_01/parts/ranger/runtime-starter-idle.png)
+등록 후 보정한 목 경계와 최종 동작 화면은 [목 검수 기록](modular-ranger-neck-review.json)을 참고한다.

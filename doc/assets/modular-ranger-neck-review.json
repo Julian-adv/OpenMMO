@@ -94,7 +94,6 @@
     "lint": "pass"
   },
   "screenshots": {
-    "before": "doc/images/characters/modular_human_male_01/parts/ranger/neck-before.png",
     "after": "doc/images/characters/modular_human_male_01/parts/ranger/neck-after.png",
     "attack": "doc/images/characters/modular_human_male_01/parts/ranger/neck-attack.png",
     "sitting": "doc/images/characters/modular_human_male_01/parts/ranger/neck-sitting.png"

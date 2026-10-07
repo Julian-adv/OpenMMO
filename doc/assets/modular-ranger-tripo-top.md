@@ -83,7 +83,6 @@ Blender 동작 검수는 별도의 검수용 가림 사본을 사용한다.
 화면은 기존 Tripo 자산을 사용한 로컬 브라우저 캡처다.
 [수치·시도·검수 기록](modular-ranger-neck-review.json).
 
-![목 가림 수정 전](../images/characters/modular_human_male_01/parts/ranger/neck-before.png)
 ![목 가림 수정 후](../images/characters/modular_human_male_01/parts/ranger/neck-after.png)
 
 ## 출처와 이용 조건

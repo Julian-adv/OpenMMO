@@ -16,7 +16,6 @@
   "browser": {
     "renderer": "Workshop WebGL renderer; appearance NodeMaterials restored to original textures for renderer compatibility. Clothing uses game loadCharacterModel/applyCharacterArmor and game animation packs.",
     "errors": [],
-    "screenshot": "doc/images/characters/modular_human_male_01/parts/ranger/runtime-starter-idle.png",
     "poses": [
       {
         "clip": "idle1",
