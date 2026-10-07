@@ -7,7 +7,10 @@ import { GLTFLoader } from '../client/node_modules/three/examples/jsm/loaders/GL
 import { createServer } from '../client/node_modules/vite/dist/node/index.js'
 
 const root = new URL('../', import.meta.url)
-const output = 'assets/modular_human_male_01/parts/hair_tripo_wavy_v1/'
+const ranger = process.argv.includes('--ranger')
+const style = ranger ? 'ranger' : 'wavy'
+const part = ranger ? 'hair_ranger' : 'hair_wavy_bone'
+const output = `assets/modular_human_male_01/parts/hair_tripo_${style}_v1/`
 const server = await createServer({
   root: fileURLToPath(new URL('client/', root)), configFile: false,
   optimizeDeps: { noDiscovery: true, include: [] },
@@ -26,7 +29,7 @@ async function load(path) {
 try {
   const { bindModularPart, modularAnimationClips } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
   const body = (await load('assets/modular_human_male_01/parts/fitted/base.glb')).scene
-  const meshes = bindModularPart(body, (await load(output + 'hair_wavy_bone.glb')).scene)
+  const meshes = bindModularPart(body, (await load(output + part + '.glb')).scene)
   assert.equal(meshes.length, 1)
   const mesh = meshes[0]
   const geometry = mesh.geometry
@@ -85,13 +88,15 @@ try {
     clips.push({ clip: name, samples: 25, maximum_head_binding_error_m: headError, maximum_edge_length_error_relative: edgeError })
   }
   assert.ok(maximumMotion > .1)
-  const report = { date: '2026-10-04', sources, rig_id: 'human_male_01_mixamo_candidate_v2',
+  const report = { date: ranger ? '2026-10-08' : '2026-10-04', sources, rig_id: 'human_male_01_mixamo_candidate_v2',
     triangles: geometry.index.count / 3, bones: bones.length, normalized_weights: true,
     exact_head_following: true, maximum_animated_motion_m: maximumMotion, clips,
     scope: 'Canonical modular binding and 200 sampled poses. Head-fixed hair; no secondary hair physics. Intersections and equipment compatibility require separate review.',
   }
-  writeFileSync(new URL('doc/assets/modular-wavy-hair-animation-v1.json', root), JSON.stringify(report, null, 2) + '\n')
-  writeFileSync(new URL(output + 'animation-snapshots.json', root), JSON.stringify(snapshots, null, 2) + '\n')
+  const reportPath = ranger ? 'doc/assets/modular-ranger-tripo-hair-animation-v1.json' : 'doc/assets/modular-wavy-hair-animation-v1.json'
+  writeFileSync(new URL(reportPath, root), JSON.stringify(report, null, 2) + '\n')
+  if (!ranger)
+    writeFileSync(new URL(output + 'animation-snapshots.json', root), JSON.stringify(snapshots, null, 2) + '\n')
   console.log(JSON.stringify(report))
 } finally {
   await server.close()

@@ -64,7 +64,12 @@ export const MODULAR_BOOTS = [
 ] as const
 
 export interface ModularOutfit {
-  hair: 'hair_crop' | 'hair_sidepart' | 'hair_wavy_bone' | 'none'
+  hair:
+    | 'hair_crop'
+    | 'hair_sidepart'
+    | 'hair_wavy_bone'
+    | 'hair_ranger'
+    | 'none'
   top:
     | 'linen'
     | 'leather'

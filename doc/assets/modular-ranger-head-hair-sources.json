@@ -1,0 +1,166 @@
+{
+  "generated_on": "2026-10-07",
+  "tool": "OpenAI Codex built-in ImageGen",
+  "subscription_tier": "ChatGPT Pro 20x",
+  "use_terms": "OpenAI generated-output terms; original ranger concept source and use terms inherited from doc/assets/characters.md.",
+  "status": "Separate head and hair concept references for user review and Tripo input; no 3D generation, fitting or runtime changes.",
+  "reference": {
+    "path": "client/public/character_concepts/ranger.webp",
+    "role": "Original ranger concept, facial identity and hairstyle authority.",
+    "sha256": "a7be7a2469ddd87556033ca07e05bbe4b055df6b52871fa6a006bd1e4bce7f71"
+  },
+  "outputs": [
+    {
+      "id": "face_front",
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/head_ranger-front-v1.png",
+      "input_images": [
+        "client/public/character_concepts/ranger.webp"
+      ],
+      "prompt": "Use case: stylized-concept.\nAsset type: modular game character HEAD/FACE reference for Tripo image-to-3D, separate from hair.\nInput image 1 is the existing male ranger concept, the identity and visual design authority. Enlarge and faithfully redraw this exact adult man's HEAD AND SHORT NECK ONLY, but remove all scalp hair so his head can be modeled separately from a modular hair piece. Preserve his facial identity: young adult around late twenties, light lightly sun-warmed skin, long angular oval face, defined cheekbones and jaw, straight narrow nose, thick dark brown fairly straight eyebrows, pale gray-green eyes, medium lips, faint short brown mustache and chin/jaw stubble, serious calm neutral expression. Keep eyebrows, eyelashes and fine facial stubble; scalp is clean bald natural skin, not shaved dark hair or painted hair shadow. Do not turn him into the unrelated short-haired game preview model.\nExactly ONE head, strict straight-on FRONT view, eye-level orthographic camera, bilateral neutral relaxed pose, eyes looking straight ahead, lips closed, ears unobstructed. Whole scalp, both ears, chin and entire short straight neck fully visible with generous margins, portrait canvas approximately 1024x1536. Neck ends with a clean horizontal cut at its base; no shoulders, chest, bust pedestal, clothing or torso.\nRealistic high-quality game character production concept, anatomically credible facial volumes, fine natural skin detail, diffuse neutral studio lighting, restrained shading that reveals forms, consistent warm natural skin tone. Genuinely transparent RGBA background. No hair, wig, hat, ears ornaments, equipment, jewelry, costume, scenery, text, labels, arrows, watermark, dramatic lighting, cast shadow or multi-view sheet. Single isolated bald head only.",
+      "size": [
+        1024,
+        1536
+      ],
+      "mode": "RGBA",
+      "alpha_range": [
+        0,
+        254
+      ],
+      "subject_bounds_alpha_ge_128": [
+        128,
+        130,
+        892,
+        1334
+      ],
+      "sha256": "3c37d7e43feecb1e091abc241a43e8d59918576767d289d8a9e5f6ba992d5727"
+    },
+    {
+      "id": "face_side",
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/head_ranger-side-v1.png",
+      "input_images": [
+        "doc/images/characters/modular_human_male_01/parts/ranger/head_ranger-front-v1.png",
+        "client/public/character_concepts/ranger.webp"
+      ],
+      "prompt": "Use case: stylized-concept.\nAsset type: isolated bald male ranger HEAD, one SIDE reference for Tripo multi-image-to-3D.\nInput image 1 is the generated bald FRONT head and controls exact facial identity, head proportions, neck length, skin color, eyebrows, eye color, facial stubble and materials. Input image 2 is the original ranger concept for supporting identity only; its hair must NOT appear.\nDraw the SAME head rotated exactly 90 degrees, strict LEFT-FACING side profile: nose points toward the LEFT edge of the canvas, back of skull on the RIGHT. Eye-level orthographic camera, head upright, neutral relaxed face, lips closed. Only the near eye and near ear are visible; no three-quarter view and no second portrait. Preserve the long angular oval head, defined jaw, straight narrow nose, forehead slope, chin projection and light gray-green eye. Anatomically consistent complete smooth BALD scalp, realistic near ear, faint short brown mustache and jaw/chin stubble, thick dark brown eyebrow. Full skull, ear, jaw and short straight neck entirely in frame, same scale and similar vertical placement as front, with generous transparent margins, portrait approximately 1024x1536. Clean horizontal neck cut, no shoulders or chest.\nMatch input 1's realistic game character production concept detail and diffuse neutral studio light. Genuinely transparent RGBA background; no colored glow or backdrop. Absolutely no scalp hair, hair shadow, wig, clothing, mannequin, body, pedestal, jewelry, accessories, text, labels, graphics, scenery, ground shadow or multi-view layout. This is a consistent side-view reconstruction of one head, not a redesign.",
+      "size": [
+        1024,
+        1536
+      ],
+      "mode": "RGBA",
+      "alpha_range": [
+        0,
+        254
+      ],
+      "subject_bounds_alpha_ge_128": [
+        58,
+        139,
+        964,
+        1341
+      ],
+      "sha256": "3efd7945389741b08c04930d56d1bae4ce84711dd394c1223ca98aa98730e94b"
+    },
+    {
+      "id": "hair_front",
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/hair_ranger-front-v1.png",
+      "input_images": [
+        "client/public/character_concepts/ranger.webp"
+      ],
+      "prompt": "Use case: stylized-concept.\nAsset type: separate modular HAIR mesh concept reference for Tripo image-to-3D.\nInput image 1 is the original male ranger character design and hairstyle authority. Faithfully extract and enlarge ONLY his dark chestnut-brown medium-long hair as an isolated wearable 3D hair piece, keeping the recognizable hairline, slightly off-center near-middle part, naturally swept-back raised crown, layered locks swept behind the ears, loose narrow temple/face-framing strands descending toward the jaw and the longer softly wavy nape reaching the base of the neck. Natural leather-fantasy ranger hairstyle; no ponytail or tie visible in the reference, do not invent one. Preserve the dense natural silhouette and restrained brown strand highlights.\nExactly ONE complete hairstyle, strict straight-on FRONT view, eye-level orthographic camera, neutral symmetric orientation. Show the entire hairstyle with generous margins, portrait approximately 1024x1536. The absent head is NOT rendered: the face-shaped gap between the side locks and the opening below the hairline are genuinely transparent. Show a plausible subtly dark inner hair cap surface only where actual hair exists, with open underside. Hair has clear sculptable layered lock volumes, fine strand texture on surfaces, naturally tapered tips and tidy coherent clusters; no floating disconnected strands or wire-thin flyaways.\nAbsolutely NO face, forehead, scalp skin, skull, head, neck, ears, mannequin, bust, shoulders, body, pedestal, clothing, jewelry, accessories or equipment. Hair only as a hollow wearable wig-like modular part. Realistic high-quality game asset concept/product render, diffuse neutral studio light, muted dark chestnut palette matching the source, no wet or metallic gloss. Genuinely transparent RGBA background, no painted checkerboard, scenery, floor, ground shadow, text, labels or multi-view sheet.",
+      "size": [
+        1024,
+        1536
+      ],
+      "mode": "RGBA",
+      "alpha_range": [
+        0,
+        254
+      ],
+      "subject_bounds_alpha_ge_128": [
+        57,
+        107,
+        994,
+        1430
+      ],
+      "sha256": "4ba09de1074a426a91148f1f2bf57ba67165dabd9676152d5b97fc66d1e17e71"
+    },
+    {
+      "id": "hair_side",
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/hair_ranger-side-v1.png",
+      "input_images": [
+        "doc/images/characters/modular_human_male_01/parts/ranger/hair_ranger-front-v1.png",
+        "client/public/character_concepts/ranger.webp"
+      ],
+      "prompt": "Use case: stylized-concept.\nAsset type: isolated modular ranger HAIR, one SIDE reference for Tripo multi-image-to-3D.\nInput image 1 is the isolated FRONT hair design and controls the exact hairstyle, hairline, length, volume, colors, layered locks, two slender face-framing temple strands and materials. Input image 2 is the original ranger for supporting style only.\nDraw the SAME complete hollow wearable hairstyle rotated exactly 90 degrees into a strict LEFT-FACING side profile. The absent face would point toward the LEFT edge, the back of the head and nape are on the RIGHT. Eye-level orthographic camera. Keep swept-back crown volume, near-middle part on top, brown layered side locks swept behind where the ear would be, the one near-side narrow front lock toward jaw level, and softly wavy loose nape ending at the base of the neck. The opening for the absent forehead/face below the front hairline must be transparent. A coherent hair-covered dome forms the top and back, with clear sculptable layered lock volumes and fine strand detail on the surfaces. Open underside of a wearable hair cap, no solid skin-colored fill. No ponytail, tie, bun or braid.\nExactly one hair piece, whole silhouette uncropped with generous margins, same scale and vertical framing as input 1, portrait approximately 1024x1536. Realistic game concept/product render, diffuse neutral studio lighting, same dark chestnut color and restrained sheen.\nGenuinely transparent RGBA background, no colored glow or backdrop. Absolutely no face, eyes, nose, scalp, skull, ears, skin, neck, mannequin, body, pedestal, clothing, jewelry, equipment, scenery, floor, cast shadow, text, labels or duplicate views. No floating strands, exaggerated wind, metallic gloss or redesign.",
+      "size": [
+        1024,
+        1536
+      ],
+      "mode": "RGBA",
+      "alpha_range": [
+        0,
+        254
+      ],
+      "subject_bounds_alpha_ge_128": [
+        65,
+        113,
+        992,
+        1419
+      ],
+      "sha256": "566c7f44c4bbfe9a746ed25d4bb335de202bb49bc428834a830b0499de3ea533"
+    },
+    {
+      "id": "hair_back",
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/hair_ranger-back-v1.png",
+      "input_images": [
+        "doc/images/characters/modular_human_male_01/parts/ranger/hair_ranger-front-v1.png",
+        "client/public/character_concepts/ranger.webp"
+      ],
+      "prompt": "Use case: stylized-concept.\nAsset type: isolated modular ranger HAIR, one BACK reference for Tripo multi-image-to-3D.\nInput image 1 is the isolated FRONT hair design and controls exact silhouette, dark chestnut color, crown volume, layers, length, part and materials. Input image 2 is the original ranger for supporting style only.\nDraw exactly the SAME complete hollow wearable hairstyle viewed squarely from the BACK, strict eye-level orthographic camera, no three-quarter angle. Since the original hides the back, reconstruct a simple plausible continuation of the accepted front: near-middle part blending into swept-back naturally raised crown, layered locks following the rounded back of the skull, softly wavy loose nape reaching the base of the neck, subtly tapered and irregular lock ends. Hair is loose and unbound, absolutely no ponytail, hair tie, braid, bun or added accessories. Hair-covered rear dome is continuous and opaque hair, with no holes in the rear scalp area. No skin backing or wearer. Keep the same volume and full nape length as input 1, believable coherent sculptable layered lock masses with fine strand detail on their surfaces.\nExactly one complete hairstyle, fully visible with generous transparent margins, same scale and vertical framing as front, portrait approximately 1024x1536. Match the realistic game asset concept/product rendering, diffuse neutral studio light, restrained strand highlights and dark chestnut brown palette. No wet or metallic gloss.\nGenuinely transparent RGBA background, no colored glow or backdrop. Absolutely no head, face, scalp skin, ears, neck, mannequin, torso, shoulders, pedestal, clothing, ornaments, equipment, floor, scenery, cast shadow, text, labels or multi-view sheet.",
+      "size": [
+        1024,
+        1536
+      ],
+      "mode": "RGBA",
+      "alpha_range": [
+        0,
+        254
+      ],
+      "subject_bounds_alpha_ge_128": [
+        82,
+        102,
+        944,
+        1398
+      ],
+      "sha256": "2722499b20637ce0f2ff09b5ca9806fd8d68f9fcbaa655ab0891715ab0ecd2c7"
+    }
+  ],
+  "review": {
+    "accepted_for_delivery": [
+      "One subject and one view per image",
+      "Head has no scalp hair; eyebrows and short facial stubble retained",
+      "Hair isolated without head, face, skin, clothing or mannequin",
+      "Full silhouettes and actual transparent alpha backgrounds"
+    ],
+    "inferred_design": "Scalp, side-profile anatomy and hairstyle rear are reconstructed from the original frontal concept and are candidates, not additional views of an existing 3D model.",
+    "input_groups": {
+      "head": [
+        "doc/images/characters/modular_human_male_01/parts/ranger/head_ranger-front-v1.png",
+        "doc/images/characters/modular_human_male_01/parts/ranger/head_ranger-side-v1.png"
+      ],
+      "hair": [
+        "doc/images/characters/modular_human_male_01/parts/ranger/hair_ranger-front-v1.png",
+        "doc/images/characters/modular_human_male_01/parts/ranger/hair_ranger-side-v1.png",
+        "doc/images/characters/modular_human_male_01/parts/ranger/hair_ranger-back-v1.png"
+      ]
+    },
+    "priority_views": {
+      "head": "doc/images/characters/modular_human_male_01/parts/ranger/head_ranger-front-v1.png",
+      "hair": "doc/images/characters/modular_human_male_01/parts/ranger/hair_ranger-front-v1.png"
+    },
+    "limitations": [
+      "Generated views are visual references, not metrically calibrated orthographic projections.",
+      "Head/hair interface and nape/collar clearance require 3D fitting to the current modular male body.",
+      "Fine hair strands should be texture detail over coherent hair masses; image generation does not establish topology or rig compatibility."
+    ]
+  }
+}

@@ -168,6 +168,7 @@ async function main() {
     'boots_caveman',
     'gloves_caveman',
     'hair_wavy_bone',
+    'hair_ranger',
     'top_ranger',
     'pants_ranger',
     'gloves_ranger',
@@ -282,7 +283,9 @@ async function main() {
   eyeColor.oninput = () => irisColor.value.set(eyeColor.value)
   let equipped = new Set<string>()
   const dress = () => {
-    hairColor.disabled = hairSelect.value === 'hair_wavy_bone'
+    hairColor.disabled = ['hair_wavy_bone', 'hair_ranger'].includes(
+      hairSelect.value
+    )
     equipped = showModularOutfit(bodyMeshes, parts, {
       hair: hairSelect.value as ModularOutfit['hair'],
       top: topSelect.value as ModularOutfit['top'],
@@ -651,8 +654,13 @@ async function main() {
     topSelect.value = requestedTop!
     dress()
   }
-  if (params.get('hair') === 'hair_wavy_bone' && parts.has('hair_wavy_bone')) {
-    hairSelect.value = 'hair_wavy_bone'
+  const requestedHair = params.get('hair')
+  if (
+    requestedHair &&
+    ['hair_wavy_bone', 'hair_ranger'].includes(requestedHair) &&
+    parts.has(requestedHair)
+  ) {
+    hairSelect.value = requestedHair
     helmet.value = 'none'
     dress()
   }

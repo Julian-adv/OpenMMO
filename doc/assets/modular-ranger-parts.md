@@ -1,5 +1,7 @@
 # Modular Ranger — 상의·바지·부츠·장갑 제작 원화
 
+얼굴과 헤어의 별도 Tripo 입력은 [얼굴·헤어 제작 원화](modular-ranger-head-hair.md)를 참고한다.
+
 2026-10-05. 사용자가 선택한 기존 [순찰자 원화](../../client/public/character_concepts/ranger.webp)를 바탕으로 상의 앞면과 뒷면을 제작했다.
 상의는 올리브색 리넨 셔츠와 갈색 가죽 조끼를 한 장비로 구성한다. 등판은 기존 원화에 보이지 않아 새로 설계한 후보이며, 사용자 검수 전이다.
 

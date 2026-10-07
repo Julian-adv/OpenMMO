@@ -1,0 +1,94 @@
+{
+  "date": "2026-10-08",
+  "views": [
+    {
+      "name": "front"
+    },
+    {
+      "name": "side"
+    },
+    {
+      "name": "back"
+    },
+    {
+      "name": "three-quarter"
+    }
+  ],
+  "poses": [
+    {
+      "clip": "idle1",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "walk",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "run",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "jump",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "slash1",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "sit_idle",
+      "normalized_time": 0.4
+    }
+  ],
+  "errors": [],
+  "stats": "\uc870\ud569 30,399\uc0bc\uac01\ud615 \u00b7 \ud45c\uc2dc 22,587 \u00b7 \uc5bc\uad74 1,505",
+  "checks": [
+    "URL selects ranger hair",
+    "None and crop switching",
+    "Helmet hides hair; removing helmet restores hair",
+    "Texture color control disabled for ranger hair"
+  ],
+  "screenshots": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/tripo-hair-workshop-front-v1.png",
+      "sha256": "197e6bc0e215e0aff43e38032a2bc4a02ee14c3731367c8de0299cc417fed7f7"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/tripo-hair-workshop-back-v1.png",
+      "sha256": "35117b7b94854c064b352a95155813a06fb57a8ae477beb2e2cc41a3ee796357"
+    }
+  ],
+  "scope": "Uncompressed fitted candidate in workshop WebGL renderer, existing male face, ranger outfit. Four views and six sampled poses at normalized time 0.4; all-frame and mixed-outfit intersections not certified.",
+  "assembled_budget": {
+    "exported_triangles_with_hidden_regions": 31728,
+    "face_allocation": 1505,
+    "weapon_equipped": false,
+    "cape_equipped": false,
+    "target_triangles": [
+      15000,
+      20000
+    ],
+    "note": "Existing ranger set exceeds the target; no decimation performed to force a numeric budget."
+  },
+  "validation": {
+    "animation_samples": 200,
+    "animation_clips": 8,
+    "frontend_tests": 50,
+    "type_check": "pass",
+    "lint": "pass"
+  },
+  "files": {
+    "assets/modular_human_male_01/parts/hair_tripo_ranger_v1/hair_ranger.glb": {
+      "sha256": "d368897d6f04325c68f47cb159ae2d4df66a7cc7ffc63ceed7ecfa73655b1584",
+      "bytes": 1673344
+    },
+    "assets/modular_human_male_01/parts/hair_tripo_ranger_v1/ranger-hair-fitting.blend": {
+      "sha256": "f306210f46ca3467e1324ec9e27311c873a90edf5c49bb65816ddbe1968e8e8c",
+      "bytes": 25401550
+    },
+    "client/public/models/characters/modular_male/hair_ranger.glb": {
+      "sha256": "0ab748171d9c7352084411817f1e8bff4e42f67947f49d4bd559384efc824564",
+      "bytes": 151584
+    }
+  }
+}

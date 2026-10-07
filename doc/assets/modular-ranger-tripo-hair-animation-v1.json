@@ -1,0 +1,78 @@
+{
+  "date": "2026-10-08",
+  "sources": [
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/hair_tripo_ranger_v1/hair_ranger.glb",
+      "sha256": "d368897d6f04325c68f47cb159ae2d4df66a7cc7ffc63ceed7ecfa73655b1584"
+    },
+    {
+      "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+      "sha256": "76eeb462770754895834271423b4ef7f33efdbd34bdfb9830beba4ba84e7569f"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/social.glb",
+      "sha256": "a9efe7a2d388011cdc039ca6778c2b3a929b07953941ee7bb7c50a511d4b083d"
+    }
+  ],
+  "rig_id": "human_male_01_mixamo_candidate_v2",
+  "triangles": 1373,
+  "bones": 65,
+  "normalized_weights": true,
+  "exact_head_following": true,
+  "maximum_animated_motion_m": 2.569348780179979,
+  "clips": [
+    {
+      "clip": "idle1",
+      "samples": 25,
+      "maximum_head_binding_error_m": 1.1113716847140492e-15,
+      "maximum_edge_length_error_relative": 8.74646355342179e-10
+    },
+    {
+      "clip": "walk",
+      "samples": 25,
+      "maximum_head_binding_error_m": 1.1134276380627811e-15,
+      "maximum_edge_length_error_relative": 2.0573298620263358e-10
+    },
+    {
+      "clip": "run",
+      "samples": 25,
+      "maximum_head_binding_error_m": 1.1106566208239272e-15,
+      "maximum_edge_length_error_relative": 3.003909787580028e-9
+    },
+    {
+      "clip": "jump",
+      "samples": 25,
+      "maximum_head_binding_error_m": 1.1657341758564144e-15,
+      "maximum_edge_length_error_relative": 1.6091478149959926e-8
+    },
+    {
+      "clip": "combat_idle",
+      "samples": 25,
+      "maximum_head_binding_error_m": 9.053594779595603e-16,
+      "maximum_edge_length_error_relative": 1.2805648763603017e-8
+    },
+    {
+      "clip": "slash1",
+      "samples": 25,
+      "maximum_head_binding_error_m": 9.566618574882216e-16,
+      "maximum_edge_length_error_relative": 1.844470021161726e-8
+    },
+    {
+      "clip": "dying",
+      "samples": 25,
+      "maximum_head_binding_error_m": 1.1202392386283935e-15,
+      "maximum_edge_length_error_relative": 5.323697283010631e-8
+    },
+    {
+      "clip": "sit_idle",
+      "samples": 25,
+      "maximum_head_binding_error_m": 1.113881599822381e-15,
+      "maximum_edge_length_error_relative": 1.4764695022151386e-9
+    }
+  ],
+  "scope": "Canonical modular binding and 200 sampled poses. Head-fixed hair; no secondary hair physics. Intersections and equipment compatibility require separate review."
+}

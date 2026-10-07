@@ -40,7 +40,8 @@
     "assets/modular_human_male_01/parts/ranger_tripo_top_v4/top_ranger.glb": "ec8e9638833ad4f60ba66c1a36fb00cd66521c601977b0fa6d7d389ebfaf3623",
     "assets/modular_human_male_01/parts/ranger_tripo_pants_v1/pants_ranger.glb": "8529da4370e10d74228c1aafc790cc1c1684d1eb8737ad19d993d8f938594883",
     "assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/gloves_ranger.glb": "939e2f3cbfebae19fab284053898b435e73a38993bd09a627f2e59df3dad7220",
-    "assets/modular_human_male_01/parts/ranger_tripo_boots_v1/boots_ranger.glb": "916c13a55b4fb5fc15fdf4a017b3ed5977983210a776bc91977eaa138b9b1db6"
+    "assets/modular_human_male_01/parts/ranger_tripo_boots_v1/boots_ranger.glb": "916c13a55b4fb5fc15fdf4a017b3ed5977983210a776bc91977eaa138b9b1db6",
+    "assets/modular_human_male_01/parts/hair_tripo_ranger_v1/hair_ranger.glb": "d368897d6f04325c68f47cb159ae2d4df66a7cc7ffc63ceed7ecfa73655b1584"
   },
   "outputs": {
     "base.glb": "048ebb21caca9a224b1dadecc6faf53b89f270da212791dc2af3088d92509af1",
@@ -152,6 +153,7 @@
     "top_ranger.glb": "7b707c1d136474a06a57e0f14680ea1b78dca4243f1ee06c957036489cb48b99",
     "pants_ranger.glb": "1421e06d71df97cde1be857987979b592251dd47d32abaac3b51e31aa511b05d",
     "gloves_ranger.glb": "78d9d3612af4b8c3bfaf748b294b2d70d3db58aaa3edc048ce50c93cb0f9c313",
-    "boots_ranger.glb": "e24771106acfc6daa858621eee2d40dc61206392cdc0baf46a8e298f4edc8907"
+    "boots_ranger.glb": "e24771106acfc6daa858621eee2d40dc61206392cdc0baf46a8e298f4edc8907",
+    "hair_ranger.glb": "0ab748171d9c7352084411817f1e8bff4e42f67947f49d4bd559384efc824564"
   }
 }

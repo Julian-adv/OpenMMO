@@ -156,6 +156,10 @@ function modularCharacterPreview(): Plugin {
     boots_caveman: cavemanBoots,
     gloves_caveman: cavemanGloves,
     hair_wavy_bone: wavyHair,
+    hair_ranger: new URL(
+      '../assets/modular_human_male_01/parts/hair_tripo_ranger_v1/hair_ranger.glb',
+      import.meta.url
+    ),
   }
   return {
     name: 'modular-character-preview',

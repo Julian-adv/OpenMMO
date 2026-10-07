@@ -66,6 +66,8 @@ const appearanceSources = {
     "assets/modular_human_male_01/parts/face_tripo_rugged_v1/base_rugged.glb",
   hair_wavy_bone:
     "assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb",
+  hair_ranger:
+    "assets/modular_human_male_01/parts/hair_tripo_ranger_v1/hair_ranger.glb",
 };
 const appearanceParts = Object.keys(appearanceSources);
 parts.push(...appearanceParts);

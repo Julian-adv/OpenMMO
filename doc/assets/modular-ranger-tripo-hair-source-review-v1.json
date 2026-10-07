@@ -1,0 +1,26 @@
+{
+  "source": {
+    "path": "assets/modular_human_male_01/parts/hair_tripo_ranger_v1/source.glb",
+    "sha256": "399e2fee54b1fb3c3f002d95c4faae20f7be56795a309025bb30c40e02f4d9de"
+  },
+  "triangles": 1373,
+  "mesh_count": 1,
+  "meshes": [
+    {
+      "name": "tripo_node_5ce6d2bb-6924-4545-8220-a4c5666e30e8",
+      "components_vertex_counts": [
+        1023
+      ],
+      "boundary_edges": 707,
+      "nonmanifold_edges": 729,
+      "degenerate_faces": 0,
+      "collapsed_uv_triangles": 0
+    }
+  ],
+  "source_extent_blender": [
+    0.66552734375,
+    0.73388671875,
+    0.99951171875
+  ],
+  "rigged": false
+}
