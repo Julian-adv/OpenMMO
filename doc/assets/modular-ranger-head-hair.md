@@ -26,6 +26,7 @@ Tripo에서는 얼굴 정면·측면을 한 제작 묶음으로, 헤어 정면·
 가는 모발 표현은 큰 머리 다발의 표면 디테일로 처리하고, 토폴로지·리깅·동작 호환은 별도로 검수한다.
 원화 제작 단계에서는 Tripo 생성 요청, 3D 피팅, 게임 모델 교체를 진행하지 않았다.
 2026-10-08 사용자 전달 헤어를 [기존 두상에 피팅해 제작 미리보기](modular-ranger-tripo-hair.md)에 연결했다.
+같은 날 전달한 새 머리도 [순찰자 얼굴 피팅](modular-ranger-tripo-face.md)을 거쳐 제작실 얼굴 선택에 추가했다.
 
 생성 도구는 OpenAI Codex built-in ImageGen, 등급은 **ChatGPT Pro 20x**다.
 기존 원화는 Gemini 생성 후 ChatGPT Pro 20x로 배경을 투명화한 2026-08-28 기록을 따른다.

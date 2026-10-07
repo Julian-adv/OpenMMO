@@ -1,0 +1,77 @@
+{
+  "date": "2026-10-08",
+  "meshopt_decoded": true,
+  "meshes": [
+    {
+      "name": "bodymesh.004",
+      "triangles": 1429
+    },
+    {
+      "name": "bodymesh.002",
+      "triangles": 388
+    },
+    {
+      "name": "bodymesh.001",
+      "triangles": 2403
+    },
+    {
+      "name": "bodymesh.005",
+      "triangles": 2350
+    },
+    {
+      "name": "bodymesh.007",
+      "triangles": 582
+    },
+    {
+      "name": "bodymesh.006",
+      "triangles": 1813
+    },
+    {
+      "name": "bodymesh.003",
+      "triangles": 1774
+    },
+    {
+      "name": "body_ankles",
+      "triangles": 206
+    },
+    {
+      "name": "body_boot_ankles",
+      "triangles": 371
+    },
+    {
+      "name": "face_ranger",
+      "triangles": 3781
+    },
+    {
+      "name": "face_neck_bridge",
+      "triangles": 1743
+    },
+    {
+      "name": "face_neck_lower",
+      "triangles": 113
+    }
+  ],
+  "triangles": 16953,
+  "joints": [
+    65
+  ],
+  "face_texture": {
+    "width": 2048,
+    "height": 2048,
+    "format": "webp"
+  },
+  "scope": "Decoded compressed GLB topology, rig, face texture and browser close-up. Animation seam tests use uncompressed fitted source.",
+  "browser": {
+    "method": "Meshopt decoded with NodeIO, compression extension removed without texture or geometry edits, then served in place of the workshop body",
+    "capture": null,
+    "stats": "\uc870\ud569 33,460\uc0bc\uac01\ud615 \u00b7 \ud45c\uc2dc 25,648 \u00b7 \ub450\uc0c1 3,781",
+    "errors": []
+  },
+  "crop_browser": {
+    "method": "Meshopt decoded with NodeIO, compression extension removed without texture or geometry edits, then served in place of the workshop body",
+    "capture": null,
+    "stats": "\uc870\ud569 33,020\uc0bc\uac01\ud615 \u00b7 \ud45c\uc2dc 25,208 \u00b7 \ub450\uc0c1 3,781",
+    "errors": []
+  },
+  "capture_cleanup": "Redundant captures removed after acceptance; final ranger front/side and crop temple views for all three faces retained."
+}

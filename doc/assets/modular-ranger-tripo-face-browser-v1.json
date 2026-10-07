@@ -1,0 +1,82 @@
+{
+  "date": "2026-10-08",
+  "url": "https://localhost:10004/modular-character-preview.html?outfit=ranger&hair=hair_ranger&face=ranger",
+  "controls": {
+    "face": "ranger",
+    "hair": "hair_ranger",
+    "eye_disabled": true,
+    "hair_disabled": true
+  },
+  "stats": "\uc870\ud569 33,461\uc0bc\uac01\ud615 \u00b7 \ud45c\uc2dc 25,649 \u00b7 \ub450\uc0c1 3,781",
+  "captures": [
+    {
+      "view": "front",
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/tripo-face-workshop-front-v1.png"
+    },
+    {
+      "view": "left",
+      "path": "doc/images/characters/modular_human_male_01/parts/ranger/tripo-face-workshop-left-v1.png"
+    },
+    {
+      "view": "back",
+      "path": null
+    },
+    {
+      "view": "right",
+      "capture_retained": false
+    }
+  ],
+  "poses": [
+    {
+      "clip": "idle1",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "walk",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "run",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "jump",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "slash1",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "sit_idle",
+      "normalized_time": 0.4
+    }
+  ],
+  "face_switches": [
+    {
+      "face": "original",
+      "hair": "hair_ranger",
+      "eye_disabled": false
+    },
+    {
+      "face": "rugged",
+      "hair": "hair_ranger",
+      "eye_disabled": true
+    },
+    {
+      "face": "ranger",
+      "hair": "hair_ranger",
+      "eye_disabled": true
+    }
+  ],
+  "helmet_hair_restore": true,
+  "neck_without_top_reviewed": true,
+  "compressed": {
+    "path": "client/public/models/characters/modular_male/base_ranger.glb",
+    "bytes": 7203940,
+    "sha256": "6a3bfaea87f7d4508d8a496ffa6d5b4eefb7e539aa1ae9498cc4701f97a15990"
+  },
+  "errors": [],
+  "scope": "Workshop source fitting preview and listed sampled poses; all equipment intersections and facial expressions are not validated.",
+  "capture_cleanup": "Redundant captures removed after acceptance; final ranger front/side and crop temple views for all three faces retained."
+}

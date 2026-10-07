@@ -103,10 +103,16 @@ function modularCharacterPreview(): Plugin {
     '../assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb',
     import.meta.url
   )
-  const ruggedFace = new URL(
-    '../assets/modular_human_male_01/parts/face_tripo_rugged_v1/',
-    import.meta.url
-  )
+  const faces: Record<string, URL> = {
+    rugged: new URL(
+      '../assets/modular_human_male_01/parts/face_tripo_rugged_v1/base_rugged.glb',
+      import.meta.url
+    ),
+    ranger: new URL(
+      '../assets/modular_human_male_01/parts/face_tripo_ranger_v1/base_ranger.glb',
+      import.meta.url
+    ),
+  }
   const selection = JSON.parse(
     fs.readFileSync(
       new URL(
@@ -174,9 +180,10 @@ function modularCharacterPreview(): Plugin {
         const part = /^parts\/(\w+)\.glb$/.exec(name)
         const id = part?.[1]
         const override = id && selection.fitting_candidate.part_overrides?.[id]
+        const face = request.searchParams.get('face') ?? ''
         const url =
-          request.searchParams.get('face') === 'rugged' && id === 'base'
-            ? new URL('base_rugged.glb', ruggedFace)
+          id === 'base' && Object.hasOwn(faces, face)
+            ? faces[face]
             : id && Object.hasOwn(fixed, id)
               ? fixed[id]
               : id && rogueParts.has(id)

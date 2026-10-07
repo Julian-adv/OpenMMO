@@ -62,6 +62,8 @@ const rangerSources = {
 const rangerParts = Object.keys(rangerSources);
 parts.push(...rangerParts);
 const appearanceSources = {
+  base_ranger:
+    "assets/modular_human_male_01/parts/face_tripo_ranger_v1/base_ranger.glb",
   base_rugged:
     "assets/modular_human_male_01/parts/face_tripo_rugged_v1/base_rugged.glb",
   hair_wavy_bone:
@@ -133,7 +135,7 @@ for (const name of selectedParts) {
       resolve(root, "tools/optimize-modular-part.mjs"),
       resolve(root, source),
       resolve(root, output, `${name}.glb`),
-      ...(["base", "base_rugged"].includes(name) ? ["--body"] : []),
+      ...(["base", "base_rugged", "base_ranger"].includes(name) ? ["--body"] : []),
     ],
     { stdio: "inherit" },
   );

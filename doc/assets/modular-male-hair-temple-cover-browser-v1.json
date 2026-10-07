@@ -1,0 +1,583 @@
+{
+  "date": "2026-10-08",
+  "url": "https://localhost:10004/modular-character-preview.html?outfit=ranger&hair=hair_crop&face=rugged",
+  "method": "Raycast five interior samples of the added temple triangle through the actual preview camera, then review front, left, right and back for all three faces. Compressed hair decoded only to supply the workshop loader; game textures and mesh preserved.",
+  "compressed": {
+    "path": "client/public/models/characters/modular_male/hair_crop.glb",
+    "bytes": 420968,
+    "sha256": "e032074e7cd852f574da7d91ba511320b59fcbbf3d22c79fa3115eb510641edb",
+    "triangles": 934,
+    "vertices": 1981,
+    "bones": 65,
+    "textures": "Three 512x512 JPEGs",
+    "vertex_attributes_equal_to_fitted": true,
+    "triangles_equal_up_to_cyclic_index_rotation": true,
+    "inverse_bind_equal_to_fitted": true
+  },
+  "results": [
+    {
+      "face": "original",
+      "compressed_hair": false,
+      "coverage": [
+        {
+          "weights": [
+            0.3333333333333333,
+            0.3333333333333333,
+            0.3333333333333333
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.5,
+            0.25,
+            0.25
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.25,
+            0.5,
+            0.25
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.25,
+            0.25,
+            0.5
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.4,
+            0.4,
+            0.2
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        }
+      ],
+      "views": [
+        "left",
+        "front",
+        "right",
+        "back"
+      ],
+      "capture": null,
+      "poses": []
+    },
+    {
+      "face": "rugged",
+      "compressed_hair": false,
+      "coverage": [
+        {
+          "weights": [
+            0.3333333333333333,
+            0.3333333333333333,
+            0.3333333333333333
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.5,
+            0.25,
+            0.25
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.25,
+            0.5,
+            0.25
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.25,
+            0.25,
+            0.5
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.4,
+            0.4,
+            0.2
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        }
+      ],
+      "views": [
+        "left",
+        "front",
+        "right",
+        "back"
+      ],
+      "capture": null,
+      "poses": []
+    },
+    {
+      "face": "ranger",
+      "compressed_hair": false,
+      "coverage": [
+        {
+          "weights": [
+            0.3333333333333333,
+            0.3333333333333333,
+            0.3333333333333333
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.5,
+            0.25,
+            0.25
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.25,
+            0.5,
+            0.25
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.25,
+            0.25,
+            0.5
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.4,
+            0.4,
+            0.2
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        }
+      ],
+      "views": [
+        "left",
+        "front",
+        "right",
+        "back"
+      ],
+      "capture": null,
+      "poses": [
+        {
+          "clip": "idle1",
+          "normalized_time": 0.4,
+          "patch_vertices_finite": true
+        },
+        {
+          "clip": "walk",
+          "normalized_time": 0.4,
+          "patch_vertices_finite": true
+        },
+        {
+          "clip": "run",
+          "normalized_time": 0.4,
+          "patch_vertices_finite": true
+        },
+        {
+          "clip": "jump",
+          "normalized_time": 0.4,
+          "patch_vertices_finite": true
+        },
+        {
+          "clip": "slash1",
+          "normalized_time": 0.4,
+          "patch_vertices_finite": true
+        },
+        {
+          "clip": "sit_idle",
+          "normalized_time": 0.4,
+          "patch_vertices_finite": true
+        }
+      ]
+    },
+    {
+      "face": "original",
+      "compressed_hair": true,
+      "coverage": [
+        {
+          "weights": [
+            0.3333333333333333,
+            0.3333333333333333,
+            0.3333333333333333
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.5,
+            0.25,
+            0.25
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.25,
+            0.5,
+            0.25
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.25,
+            0.25,
+            0.5
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.4,
+            0.4,
+            0.2
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        }
+      ],
+      "views": [
+        "left",
+        "front",
+        "right",
+        "back"
+      ],
+      "capture": "doc/images/characters/modular_human_male_01/parts/hair/crop-temple-original-v1.png",
+      "poses": []
+    },
+    {
+      "face": "rugged",
+      "compressed_hair": true,
+      "coverage": [
+        {
+          "weights": [
+            0.3333333333333333,
+            0.3333333333333333,
+            0.3333333333333333
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.5,
+            0.25,
+            0.25
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.25,
+            0.5,
+            0.25
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.25,
+            0.25,
+            0.5
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.4,
+            0.4,
+            0.2
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        }
+      ],
+      "views": [
+        "left",
+        "front",
+        "right",
+        "back"
+      ],
+      "capture": "doc/images/characters/modular_human_male_01/parts/hair/crop-temple-rugged-v1.png",
+      "poses": []
+    },
+    {
+      "face": "ranger",
+      "compressed_hair": true,
+      "coverage": [
+        {
+          "weights": [
+            0.3333333333333333,
+            0.3333333333333333,
+            0.3333333333333333
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.5,
+            0.25,
+            0.25
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.25,
+            0.5,
+            0.25
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.25,
+            0.25,
+            0.5
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        },
+        {
+          "weights": [
+            0.4,
+            0.4,
+            0.2
+          ],
+          "first_mesh": "hair_crop",
+          "first_triangle": [
+            780,
+            821,
+            774
+          ]
+        }
+      ],
+      "views": [
+        "left",
+        "front",
+        "right",
+        "back"
+      ],
+      "capture": "doc/images/characters/modular_human_male_01/parts/hair/crop-temple-ranger-v1.png",
+      "poses": [
+        {
+          "clip": "idle1",
+          "normalized_time": 0.4,
+          "patch_vertices_finite": true
+        },
+        {
+          "clip": "walk",
+          "normalized_time": 0.4,
+          "patch_vertices_finite": true
+        },
+        {
+          "clip": "run",
+          "normalized_time": 0.4,
+          "patch_vertices_finite": true
+        },
+        {
+          "clip": "jump",
+          "normalized_time": 0.4,
+          "patch_vertices_finite": true
+        },
+        {
+          "clip": "slash1",
+          "normalized_time": 0.4,
+          "patch_vertices_finite": true
+        },
+        {
+          "clip": "sit_idle",
+          "normalized_time": 0.4,
+          "patch_vertices_finite": true
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "scope": "Listed views and sampled animation poses; not exhaustive intersection validation.",
+  "regression_tests": {
+    "command": "npx vitest run src/lib/utils/modularCharacter.test.ts src/lib/utils/modularClothing.test.ts",
+    "passed": 44
+  },
+  "other_existing_assets_unchanged": [
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/face_tripo_rugged_v1/base_rugged.glb",
+      "sha256": "4a55f83d90e2c6370ef9d13f17a75c0cbc98e5a4a6ecefbe1e33b591313ce954"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/hair_tripo_ranger_v1/hair_ranger.glb",
+      "sha256": "d368897d6f04325c68f47cb159ae2d4df66a7cc7ffc63ceed7ecfa73655b1584"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/face_tripo_ranger_v1/face_ranger.glb",
+      "sha256": "86066779f55a7cfb95e005dc37f3641c968d02c4ede0a5c5300c5094aac51a32"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/face_tripo_ranger_v1/base_ranger.glb",
+      "sha256": "02d2281c668668cde77ab59e4ef4190a73c80d625e5601ca25569b258ba123cc"
+    }
+  ]
+}

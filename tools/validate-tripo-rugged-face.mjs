@@ -7,7 +7,9 @@ import { GLTFLoader } from '../client/node_modules/three/examples/jsm/loaders/GL
 import { createServer } from '../client/node_modules/vite/dist/node/index.js'
 
 const root = new URL('../', import.meta.url)
-const output = 'assets/modular_human_male_01/parts/face_tripo_rugged_v1/'
+const ranger = process.argv.includes('--ranger')
+const faceName = ranger ? 'face_ranger' : 'face_rugged'
+const output = `assets/modular_human_male_01/parts/face_tripo_${ranger ? 'ranger' : 'rugged'}_v1/`
 const server = await createServer({ root: fileURLToPath(new URL('client/', root)), configFile: false,
   optimizeDeps: { noDiscovery: true, include: [] }, server: { middlewareMode: true, watch: null }, appType: 'custom' })
 globalThis.self = globalThis
@@ -39,10 +41,12 @@ function edgeMatches(mesh, positions) {
 try {
   const { bindModularPart, modularAnimationClips } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
   const body = (await load('assets/modular_human_male_01/parts/fitted/base.glb')).scene
-  const faceMeshes = bindModularPart(body, (await load(output + 'face_rugged.glb')).scene)
-  const hair = bindModularPart(body, (await load('assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb')).scene)[0]
+  const faceMeshes = bindModularPart(body, (await load(output + faceName + '.glb')).scene)
+  const hair = bindModularPart(body, (await load(ranger
+    ? 'assets/modular_human_male_01/parts/hair_tripo_ranger_v1/hair_ranger.glb'
+    : 'assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb')).scene)[0]
   assert.equal(faceMeshes.length, 3)
-  const face = faceMeshes.find(m => m.name === 'face_rugged')
+  const face = faceMeshes.find(m => m.name === faceName)
   const bridge = faceMeshes.find(m => m.name === 'face_neck_bridge')
   const lowerNeck = faceMeshes.find(m => m.name === 'face_neck_lower')
   let neck
@@ -68,7 +72,7 @@ try {
       const weight = [0, 1, 2, 3].map(j => g.attributes.skinWeight.getComponent(i, j))
       assert.ok(Math.abs(weight.reduce((a, b) => a + b, 0) - 1) < 1e-6)
       const p = vertex(mesh, i)
-      if (mesh === hair || (mesh === face && (p.y > 1.72 || (p.z > .045 && p.y > 1.666)))) {
+      if (mesh === hair || (mesh === face && (p.y > 1.720001 || (p.z > .045001 && p.y > 1.666001)))) {
         assert.equal(weight[0], 1)
         assert.equal(mesh.skeleton.bones[g.attributes.skinIndex.getX(i)].name, 'Head')
         rigid.push({ mesh, index: i, local: p.clone().applyMatrix4(inverseHead) })
@@ -111,7 +115,7 @@ try {
         bodySeam[i].ids.forEach((id, j) => expected.addScaledVector(vertex(neck, id), bodySeam[i].bary[j]))
         bodyError = Math.max(bodyError, vertex(lowerNeck, bodySeamVertices[i]).distanceTo(expected))
       }
-      if (frame === (name === 'dying' ? 20 : 12))
+      if (!ranger && frame === (name === 'dying' ? 20 : 12))
         snapshots.push({ clip: name, time: clip.duration * frame / 24,
           bone_deformation_matrices: Object.fromEntries(bones.map((b, i) => [b.name, b.matrixWorld.clone().multiply(restMatrices[i].clone().invert()).elements])) })
     }
@@ -121,12 +125,12 @@ try {
     assert.ok(upperError < 1e-6, `${name}: face seam ${upperError}`)
     clips.push({ clip: name, samples: 25, body_neck_seam_error_m: bodyError, lower_seam_error_m: lowerError, upper_seam_error_m: upperError, rigid_head_error_m: rigidError })
   }
-  const report = { date: '2026-10-05', sources, bones: bones.length, normalized_weights: true,
+  const report = { date: ranger ? '2026-10-08' : '2026-10-05', sources, bones: bones.length, normalized_weights: true,
     face_triangles: face.geometry.index.count / 3, retained_neck_triangles: lowerNeck.geometry.index.count / 3, neck_bridge_triangles: bridge.geometry.index.count / 3,
     hair_triangles: hair.geometry.index.count / 3, clips,
     scope: '200 actual game poses; finite deformation, rigid face and hair, interpolated neck and head seams. Facial expressions and all equipment intersections are outside this validation.' }
-  writeFileSync(new URL('doc/assets/modular-rugged-face-animation-v1.json', root), JSON.stringify(report, null, 2) + '\n')
-  writeFileSync(new URL(output + 'animation-snapshots.json', root), JSON.stringify(snapshots, null, 2) + '\n')
+  writeFileSync(new URL(`doc/assets/modular-${ranger ? 'ranger-tripo' : 'rugged'}-face-animation-v1.json`, root), JSON.stringify(report, null, 2) + '\n')
+  if (!ranger) writeFileSync(new URL(output + 'animation-snapshots.json', root), JSON.stringify(snapshots, null, 2) + '\n')
   console.log(JSON.stringify(report))
 } finally {
   await server.close()

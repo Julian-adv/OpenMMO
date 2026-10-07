@@ -1,0 +1,28 @@
+{
+  "source": {
+    "path": "assets/modular_human_male_01/parts/face_tripo_ranger_v1/source.glb",
+    "sha256": "6a2558b17963363726f4a798b6b0bd2fabd6c8f242597487100fda0a8223d4d8"
+  },
+  "triangles": 4026,
+  "mesh_count": 1,
+  "meshes": [
+    {
+      "name": "tripo_node_d4c49e34-26b6-4a38-983a-88bb34b1a0fd",
+      "components_vertex_counts": [
+        1872,
+        98,
+        98
+      ],
+      "boundary_edges": 108,
+      "nonmanifold_edges": 108,
+      "degenerate_faces": 0,
+      "collapsed_uv_triangles": 0
+    }
+  ],
+  "source_extent_blender": [
+    0.64697265625,
+    0.78076171875,
+    0.99951171875
+  ],
+  "rigged": false
+}

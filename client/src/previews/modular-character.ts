@@ -118,8 +118,9 @@ async function main() {
     throw new Error('개발 서버에서 여는 제작용 미리보기입니다.')
   const loader = new GLTFLoader()
   const params = new URLSearchParams(location.search)
-  const ruggedFace = params.get('face') === 'rugged'
-  faceSelect.value = ruggedFace ? 'rugged' : 'original'
+  const requestedFace = params.get('face')
+  const customFace = requestedFace === 'rugged' || requestedFace === 'ranger'
+  faceSelect.value = customFace ? requestedFace : 'original'
   faceSelect.onchange = () => {
     const query = new URLSearchParams(location.search)
     query.set('face', faceSelect.value)
@@ -177,7 +178,7 @@ async function main() {
   const [base, sources, animations, sword, profile, candidateSources, social] =
     await Promise.all([
       load(
-        `/__modular-character/parts/base.glb${ruggedFace ? '?face=rugged' : ''}`
+        `/__modular-character/parts/base.glb${customFace ? `?face=${requestedFace}` : ''}`
       ),
       Promise.all(
         ids.map((id) => load(`/__modular-character/parts/${id}.glb`))
@@ -245,9 +246,9 @@ async function main() {
         : mesh.material.clone()
     }
   const irisColor = { value: new THREE.Color(eyeColor.value) }
-  eyeColor.disabled = ruggedFace
+  eyeColor.disabled = customFace
   for (const mesh of bodyMeshes.filter(
-    (mesh) => !ruggedFace && mesh.userData.region === 'head'
+    (mesh) => !customFace && mesh.userData.region === 'head'
   )) {
     const tint = (source: THREE.Material) => {
       if (!(source instanceof THREE.MeshStandardMaterial)) return source
@@ -626,7 +627,7 @@ async function main() {
       (showWeapon.checked ? 302 : 0)
     el('stats').textContent =
       `조합 ${total.toLocaleString()}삼각형 · 표시 ${visible.toLocaleString()} · ${
-        ruggedFace
+        customFace
           ? `두상 ${bodyMeshes
               .filter((mesh) => mesh.userData.region === 'head')
               .reduce((sum, mesh) => sum + triangles(mesh, false), 0)

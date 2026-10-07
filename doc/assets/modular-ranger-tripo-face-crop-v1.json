@@ -1,0 +1,83 @@
+{
+  "date": "2026-10-08",
+  "url": "https://localhost:10004/modular-character-preview.html?outfit=ranger&hair=hair_crop&face=ranger",
+  "scalp_fitting": {
+    "method": "Taper only crown and rear scalp inside the canonical head by 1mm; separate ear components and facial vertices outside the scalp mask preserved",
+    "adjusted_vertices": 1066,
+    "maximum_displacement_mm": 9.330607100575126,
+    "maximum_outward_distance_before_mm": 8.320385277896365,
+    "maximum_outward_distance_after_mm": -0.35563508246115944,
+    "vertex_and_triangle_center_samples": 1532,
+    "face_and_ear_positions_outside_mask_preserved": true,
+    "crop_hair_sha256": "5aea523e5de994b8a2b6e15aef1589a3cbe7413514bc429194e1f0a940141686"
+  },
+  "protected_files_sha256": {
+    "assets/modular_human_male_01/parts/fitted/hair_crop.glb": "5aea523e5de994b8a2b6e15aef1589a3cbe7413514bc429194e1f0a940141686",
+    "client/public/models/characters/modular_male/hair_crop.glb": "92cbf595f01534c694ed1f5eba344da84bf2c06fca7d3f2072bfa39c0b044ae3",
+    "assets/modular_human_male_01/parts/fitted/base.glb": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
+    "assets/modular_human_male_01/parts/face_tripo_rugged_v1/base_rugged.glb": "4a55f83d90e2c6370ef9d13f17a75c0cbc98e5a4a6ecefbe1e33b591313ce954",
+    "assets/modular_human_male_01/parts/hair_tripo_ranger_v1/hair_ranger.glb": "d368897d6f04325c68f47cb159ae2d4df66a7cc7ffc63ceed7ecfa73655b1584"
+  },
+  "all_protected_files_unchanged": true,
+  "views": [
+    {
+      "view": "front",
+      "capture": null
+    },
+    {
+      "view": "left",
+      "capture": null
+    },
+    {
+      "view": "back",
+      "capture": null
+    },
+    {
+      "view": "right",
+      "capture": null
+    },
+    {
+      "view": "crown",
+      "capture": null
+    }
+  ],
+  "poses": [
+    {
+      "clip": "idle1",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "walk",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "run",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "jump",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "slash1",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "sit_idle",
+      "normalized_time": 0.4
+    }
+  ],
+  "errors": [],
+  "scope": "Crop scalp overlap reproduced at back before correction; listed final views and sampled poses reviewed. Canonical head constraint sampled at vertices and triangle centers; not an exhaustive surface intersection proof.",
+  "canonical_crop_crown_comparison": "Small triangular side opening in crop mesh also appears with the original canonical head; crop geometry preserved. Large rear scalp protrusion on ranger head removed.",
+  "compressed_back_reviewed": true,
+  "followup_shared_crop_repair": {
+    "date": "2026-10-08",
+    "reason": "The same left temple triangle opening appeared with original, rugged and ranger faces.",
+    "change": "Added one triangle to shared crop hair using existing vertices; no additional face changes or runtime face masking.",
+    "report": "doc/assets/modular-male-hair-temple-cover-v1.json",
+    "browser_report": "doc/assets/modular-male-hair-temple-cover-browser-v1.json",
+    "historical_hashes": "Hashes above describe the earlier scalp fitting; the shared crop files were subsequently repaired."
+  },
+  "capture_cleanup": "Redundant captures removed after acceptance; final ranger front/side and crop temple views for all three faces retained."
+}

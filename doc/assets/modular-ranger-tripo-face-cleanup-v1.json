@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-08",
+  "reason": "Keep accepted face and hair references; remove redundant fitting and browser captures before committing.",
+  "removed": [
+    "doc/images/characters/modular_human_male_01/parts/ranger/tripo-face-workshop-back-v1.png",
+    "doc/images/characters/modular_human_male_01/parts/ranger/tripo-face-compressed-front-v1.png",
+    "doc/images/characters/modular_human_male_01/parts/ranger/tripo-face-crop-front-v1.png",
+    "doc/images/characters/modular_human_male_01/parts/ranger/tripo-face-crop-back-v1.png",
+    "doc/images/characters/modular_human_male_01/parts/ranger/tripo-face-fitted-v1.png"
+  ],
+  "preserved": [
+    "Original Tripo head and fitted face/body GLBs",
+    "Final editable Blender files",
+    "Pre-repair crop source required by the repair script",
+    "Generation, fitting, compression and validation scripts and reports",
+    "Final ranger front/side and crop temple views for original, rugged and ranger faces"
+  ],
+  "assets_publication": "Upload only reviewed new/modified assets, preserving unrelated remote files and existing lock entries.",
+  "editable_refreshed_from_final_face": {
+    "path": "assets/modular_human_male_01/parts/face_tripo_ranger_v1/ranger-face-fitting.blend",
+    "sha256": "614e5f47001b9c9c166315b630f32fc5d72c82d4ca107275b29c486b3c7b387a",
+    "base_sha256": "02d2281c668668cde77ab59e4ef4190a73c80d625e5601ca25569b258ba123cc"
+  },
+  "checks": {
+    "commit_workflow": "format, lint and type checks passed",
+    "regression_tests": 44,
+    "asset_inventory": "774 locked files present; 8 additions and 3 changes; unrelated assets preserved"
+  }
+}

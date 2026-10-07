@@ -7,7 +7,7 @@ import numpy as np
 source, output, projection = sys.argv[sys.argv.index('--') + 1:]
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=source)
-head = next(o for o in bpy.data.objects if o.type == 'MESH' and o.name.startswith('face_rugged'))
+head = next(o for o in bpy.data.objects if o.type == 'MESH' and o.name.startswith('face_') and not o.name.startswith('face_neck_'))
 neck = next(o for o in bpy.data.objects if o.type == 'MESH' and o.name.startswith('face_neck_bridge'))
 def base_color_image(obj):
     nodes = obj.data.materials[0].node_tree.nodes

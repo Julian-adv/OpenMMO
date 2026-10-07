@@ -13,6 +13,8 @@ from lib.glb import view_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / 'assets/modular_human_male_01/parts/face_tripo_rugged_v1'
+FACE_NAME = 'face_rugged'
+FIT_VERSION = 'rugged_face_v1'
 spec = importlib.util.spec_from_file_location('fit', ROOT / 'tools/fit-modular-rogue.py')
 fit = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fit)
@@ -238,7 +240,7 @@ def face_document(source, raw, geometry, neck, lower_neck, lower_material, mater
     body_material = len(doc['materials'])
     doc['materials'].append(lower_skin)
     meshes = []
-    for name, data, index in [('face_rugged', geometry, 0), ('face_neck_bridge', neck, material), ('face_neck_lower', lower_neck, body_material)]:
+    for name, data, index in [(FACE_NAME, geometry, 0), ('face_neck_bridge', neck, material), ('face_neck_lower', lower_neck, body_material)]:
         joints, weights = skin(data['dense'])
         attrs = io.add_skin_attributes(doc, binary, data['points'], data['normals'], joints, weights)
         attrs['TEXCOORD_0'] = io.add_accessor(doc, binary, data['uv'], 'VEC2')
@@ -249,7 +251,7 @@ def face_document(source, raw, geometry, neck, lower_neck, lower_material, mater
         meshes.append(dict(name=name, primitives=[dict(attributes=attrs, material=index,
             indices=io.add_accessor(doc, binary, data['faces'].reshape(-1, 1), 'SCALAR', 5125))]))
     doc['meshes'] = meshes
-    fit.with_rig(doc, binary, 'face_rugged', 'rugged_face_v1')
+    fit.with_rig(doc, binary, FACE_NAME, FIT_VERSION)
     return doc, io.compact(doc, binary)
 
 
@@ -280,9 +282,9 @@ def assemble(face, raw, neck_normals):
             primitive['material'] += material_offset
         kept.append(mesh)
     doc['meshes'] = kept
-    fit.with_rig(doc, binary, 'base', 'rugged_face_v1')
+    fit.with_rig(doc, binary, 'base', FIT_VERSION)
     for node in doc['nodes']:
-        if node.get('name') == 'face_rugged':
+        if node.get('name') == FACE_NAME:
             node['extras']['region'] = 'head'
             node['extras']['face_triangle_count'] = face['accessors'][face['meshes'][0]['primitives'][0]['indices']]['count'] // 3
         elif node.get('name') in ['face_neck_bridge', 'face_neck_lower']:
@@ -354,21 +356,7 @@ def neck_projection(neck, geometry, body_surface, path):
         head_uv=np.array(head_uv).reshape(size, size, 2), donor_uv=np.array(donor_uv).reshape(size, size, 2), blend=blend)
 
 
-def main():
-    source_path = OUTPUT / 'source.glb'
-    assert fit.digest(source_path) == '939d8c700ba5a33ae3818bc8b2c89947080ab94b7a9f4634ed19daafe8f36d3f'
-    source, raw = fit.read_glb(source_path)
-    primitive = source['meshes'][0]['primitives'][0]
-    attrs = primitive['attributes']
-    original = io.accessor(source, raw, attrs['POSITION'])
-    uv = io.accessor(source, raw, attrs['TEXCOORD_0'])
-    normals = io.accessor(source, raw, attrs['NORMAL'])
-    faces = io.accessor(source, raw, primitive['indices']).reshape(-1, 3)
-    curve = PchipInterpolator([.18, .65265, .99951171875], [1.663, 1.7825, 1.9])
-    points = original * [.30, 1, .29] + [-.0593262 * .30, 0, .010]
-    points[:, 1] = curve(original[:, 1])
-    normals = io.unit(normals / np.column_stack([np.full(len(points), .30), curve.derivative()(original[:, 1]), np.full(len(points), .29)]))
-    points, uv, normals, faces = clip(points, uv, normals, faces)
+def build_face(source, raw, points, uv, normals, faces):
     _, _, dense = fit.nearest_surface(points, fit.body_surface(('head', 'neck')))
     rigid = ((points[:, 2] > .045) & (points[:, 1] > 1.666)) | (points[:, 1] > 1.72)
     dense[rigid] = 0
@@ -404,13 +392,33 @@ def main():
         subprocess.run(['blender', '-b', '--python-exit-code', '1', '--python', str(ROOT / 'tools/blender-scripts/bake_tripo_face_neck.py'), '--', str(work_path), str(OUTPUT / 'neck-transition.png'), str(projection)], check=True)
     doc, binary = face_document(source, raw, geometry, neck, lower_neck, lower_material, 'final')
     assert view_bytes(source, raw, source['images'][0]['bufferView']) == view_bytes(doc, binary, doc['images'][0]['bufferView'])
-    fit.write_glb(OUTPUT / 'face_rugged.glb', doc, binary)
+    fit.write_glb(OUTPUT / f'{FACE_NAME}.glb', doc, binary)
     assembled, assembled_raw = assemble(doc, binary, body_normals)
     body_preserved = validate_body_preservation(assembled, assembled_raw)
-    fit.write_glb(OUTPUT / 'base_rugged.glb', assembled, assembled_raw)
+    fit.write_glb(OUTPUT / f'base_{FACE_NAME.removeprefix("face_")}.glb', assembled, assembled_raw)
     (OUTPUT / 'neck-seam-validation.json').write_text(json.dumps(dict(body_seam=body_seam.tolist(), lower=neck['points'][:seam['lower_row_count']].tolist(), upper=neck['points'][seam['upper_row_start']:].tolist(), upper_start=seam['upper_row_start']), indent=2) + '\n')
+    return dict(fitted_head_triangles=len(faces), collar_triangles=len(neck['faces']), retained_neck_triangles=len(lower_neck['faces']), neck_seam=seam, body_preserved=body_preserved)
+
+
+def main():
+    source_path = OUTPUT / 'source.glb'
+    assert fit.digest(source_path) == '939d8c700ba5a33ae3818bc8b2c89947080ab94b7a9f4634ed19daafe8f36d3f'
+    source, raw = fit.read_glb(source_path)
+    primitive = source['meshes'][0]['primitives'][0]
+    attrs = primitive['attributes']
+    original = io.accessor(source, raw, attrs['POSITION'])
+    uv = io.accessor(source, raw, attrs['TEXCOORD_0'])
+    normals = io.accessor(source, raw, attrs['NORMAL'])
+    faces = io.accessor(source, raw, primitive['indices']).reshape(-1, 3)
+    curve = PchipInterpolator([.18, .65265, .99951171875], [1.663, 1.7825, 1.9])
+    points = original * [.30, 1, .29] + [-.0593262 * .30, 0, .010]
+    points[:, 1] = curve(original[:, 1])
+    normals = io.unit(normals / np.column_stack([np.full(len(points), .30), curve.derivative()(original[:, 1]), np.full(len(points), .29)]))
+    points, uv, normals, faces = clip(points, uv, normals, faces)
+    built = build_face(source, raw, points, uv, normals, faces)
+    seam, body_preserved = built['neck_seam'], built['body_preserved']
     report = dict(date='2026-10-04', source_sha256=fit.digest(source_path), base_sha256=fit.digest(io.PARTS / 'fitted/base.glb'),
-        source_triangles=4046, fitted_head_triangles=len(faces), collar_triangles=len(neck['faces']), retained_neck_triangles=len(lower_neck['faces']), neck_seam=seam,
+        source_triangles=4046, fitted_head_triangles=built['fitted_head_triangles'], collar_triangles=built['collar_triangles'], retained_neck_triangles=built['retained_neck_triangles'], neck_seam=seam,
         canonical_rig_preserved=True, face_texture_bytes_preserved=True, shared_hair='assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb',
         non_head_body_geometry_uv_weights_and_normals_outside_upper_neck_preserved=body_preserved,
         neck_surface=dict(revision=5, retained_canonical_lower_neck=True, shared_boundary_normals=True,

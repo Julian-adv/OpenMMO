@@ -2,7 +2,7 @@
   "source": "Modular male body, knight, barbarian, rogue, caveman and ranger equipment and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md",
   "inputs": {
     "assets/modular_human_male_01/parts/fitted/base.glb": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
-    "assets/modular_human_male_01/parts/fitted/hair_crop.glb": "5aea523e5de994b8a2b6e15aef1589a3cbe7413514bc429194e1f0a940141686",
+    "assets/modular_human_male_01/parts/fitted/hair_crop.glb": "5e8acb389f575331008c36dd94afcbf3831c90f53ca21ab0a7bbe666539f2472",
     "assets/modular_human_male_01/parts/fitted/top_linen.glb": "188ae91799541ff6563a176058695a0c398039d60bc2ee28d97b56b199094a43",
     "assets/modular_human_male_01/parts/fitted/pants_cloth.glb": "2352b8bbdfe08c1c7c43fff9be88e4283ad61b57c2219fbbde2d0c1e3ae41964",
     "assets/modular_human_male_01/parts/fitted/boots_leather.glb": "ab8906e4936b9e1572d66a825eeedc15515fdb5aa0da53c1e495965af45b763b",
@@ -41,11 +41,12 @@
     "assets/modular_human_male_01/parts/ranger_tripo_pants_v1/pants_ranger.glb": "8529da4370e10d74228c1aafc790cc1c1684d1eb8737ad19d993d8f938594883",
     "assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/gloves_ranger.glb": "939e2f3cbfebae19fab284053898b435e73a38993bd09a627f2e59df3dad7220",
     "assets/modular_human_male_01/parts/ranger_tripo_boots_v1/boots_ranger.glb": "916c13a55b4fb5fc15fdf4a017b3ed5977983210a776bc91977eaa138b9b1db6",
-    "assets/modular_human_male_01/parts/hair_tripo_ranger_v1/hair_ranger.glb": "d368897d6f04325c68f47cb159ae2d4df66a7cc7ffc63ceed7ecfa73655b1584"
+    "assets/modular_human_male_01/parts/hair_tripo_ranger_v1/hair_ranger.glb": "d368897d6f04325c68f47cb159ae2d4df66a7cc7ffc63ceed7ecfa73655b1584",
+    "assets/modular_human_male_01/parts/face_tripo_ranger_v1/base_ranger.glb": "02d2281c668668cde77ab59e4ef4190a73c80d625e5601ca25569b258ba123cc"
   },
   "outputs": {
     "base.glb": "048ebb21caca9a224b1dadecc6faf53b89f270da212791dc2af3088d92509af1",
-    "hair_crop.glb": "92cbf595f01534c694ed1f5eba344da84bf2c06fca7d3f2072bfa39c0b044ae3",
+    "hair_crop.glb": "e032074e7cd852f574da7d91ba511320b59fcbbf3d22c79fa3115eb510641edb",
     "top_linen.glb": "c90d4840fbe428db95513842eda3c4ec4c5164fa416ccef5e0357791767aadd7",
     "pants_cloth.glb": "2de09c1ba08b87c5a0b96760384d4e074ae972560d3c9e8cae18bcb0adfa984a",
     "boots_leather.glb": "8aa4803b80738fcd968b906b9591f8d9218ce185dd6755a3c0d1a51fd544256e",
@@ -154,6 +155,7 @@
     "pants_ranger.glb": "1421e06d71df97cde1be857987979b592251dd47d32abaac3b51e31aa511b05d",
     "gloves_ranger.glb": "78d9d3612af4b8c3bfaf748b294b2d70d3db58aaa3edc048ce50c93cb0f9c313",
     "boots_ranger.glb": "e24771106acfc6daa858621eee2d40dc61206392cdc0baf46a8e298f4edc8907",
-    "hair_ranger.glb": "0ab748171d9c7352084411817f1e8bff4e42f67947f49d4bd559384efc824564"
+    "hair_ranger.glb": "0ab748171d9c7352084411817f1e8bff4e42f67947f49d4bd559384efc824564",
+    "base_ranger.glb": "6a3bfaea87f7d4508d8a496ffa6d5b4eefb7e539aa1ae9498cc4701f97a15990"
   }
 }

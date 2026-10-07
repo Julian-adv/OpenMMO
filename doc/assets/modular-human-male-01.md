@@ -499,3 +499,34 @@ node tools/prepare-modular-character.mjs --part pants_cloth
 확인했으며, 사용자가 장식 유지를 선택해 바바리안 메시와 기존 절단 처리는 수정하지 않았다.
 혼합 착용 검수의 임시 이미지·스크립트·로그는 [정리 기록](modular-caveman-tripo-boots-cleanup.json)에
 범위를 남기고 삭제했다.
+
+## 짧은 크롭 왼쪽 관자놀이 틈 보수 — 2026-10-08
+
+기본·각진·순찰자 얼굴에서 같은 위치에 보이던 삼각형 두피 노출은 공통 `hair_crop`의
+관자놀이 면 사이 틈이었다. 같은 UV 영역의 기존 정점 세 개를 연결하는 삼각형 한 면을
+추가해 **933 → 934 triangles**로 보수했다. 정점을 추가하거나 이동하지 않았으며,
+기존 면·노멀·UV·텍스처·본 가중치·65본 계층과 헤어 윤곽을 보존했다.
+이 보수에서는 얼굴 GLB와 얼굴 표시 코드를 추가 변경하지 않았다.
+
+수정 전 GLB는 `assets/modular_human_male_01/parts/hair_shape_sources/hair_crop-before-temple-cover-v1.glb`에
+보관한다. 제작용 `parts/fitted/hair_crop.glb`, 편집용 `parts/fitted/character_parts.blend`,
+게임용 `client/public/models/characters/modular_male/hair_crop.glb`에 반영했다.
+기존 Meshy Premium·ChatGPT Pro 20x 제작 자산의 출처와 이용 조건을 유지한다.
+수정일은 2026-10-08이며 이번 보수에는 새 AI 생성이나 유료 호출이 없다.
+[원본·출력 해시와 속성 보존 검사](modular-male-hair-temple-cover-v1.json).
+
+기본·각진·순찰자 얼굴에 제작용 헤어와 게임용 압축 헤어를 각각 착용해 앞·좌·우·뒤를
+확인했다. 틈 내부 다섯 지점의 카메라 광선이 여섯 조합 모두에서 헤어에 먼저 닿는지 검사했다.
+순찰자 얼굴에서는 대기·걷기·달리기·점프·공격·앉기 동작의 정규화 시간 0.4도 확인했다.
+게임용 헤어는 **420,968바이트**, 934 triangles·65본·512px JPEG 텍스처 세 장이다.
+[브라우저·압축 검수](modular-male-hair-temple-cover-browser-v1.json).
+
+```sh
+.venv/bin/python tools/repair-modular-hair-temple.py
+blender -b -t 4 --python-exit-code 1 --python tools/blender-scripts/sync_modular_hair_temple.py
+node tools/prepare-modular-character.mjs --part hair_crop
+```
+
+![기본 얼굴 크롭 측면](../images/characters/modular_human_male_01/parts/hair/crop-temple-original-v1.png)
+![각진 얼굴 크롭 측면](../images/characters/modular_human_male_01/parts/hair/crop-temple-rugged-v1.png)
+![순찰자 얼굴 크롭 측면](../images/characters/modular_human_male_01/parts/hair/crop-temple-ranger-v1.png)
