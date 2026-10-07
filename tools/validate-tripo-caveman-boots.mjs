@@ -2,10 +2,12 @@ import assert from 'node:assert/strict'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
+import { parseArgs } from 'node:util'
 import * as THREE from '../client/node_modules/three/build/three.module.js'
 import { GLTFLoader } from '../client/node_modules/three/examples/jsm/loaders/GLTFLoader.js'
 import { createServer } from '../client/node_modules/vite/dist/node/index.js'
 
+const { values: { part } } = parseArgs({ options: { part: { type: 'string', default: 'caveman' } } })
 const root = new URL('../', import.meta.url)
 const server = await createServer({
   root: fileURLToPath(new URL('client/', root)), configFile: false,
@@ -25,7 +27,7 @@ async function load(path) {
 try {
   const { bindModularPart, modularAnimationClips } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
   const body = (await load('assets/modular_human_male_01/parts/fitted/base.glb')).scene
-  const meshes = bindModularPart(body, (await load('assets/modular_human_male_01/parts/caveman_tripo_boots_v1/boots_caveman.glb')).scene)
+  const meshes = bindModularPart(body, (await load(`assets/modular_human_male_01/parts/${part}_tripo_boots_v1/boots_${part}.glb`)).scene)
   assert.equal(meshes.length, 2)
   const records = meshes.map(mesh => {
     const geometry = mesh.geometry
@@ -101,13 +103,13 @@ try {
   }
   assert.ok(records.every(record => record.motion > .1), 'Boots did not follow animation')
   const report = {
-    date: '2026-10-04', method: 'Actual canonical animation clips and modular binding; 25 evenly spaced skinned geometry samples per clip', sources,
+    date: new Date().toISOString().slice(0, 10), method: 'Actual canonical animation clips and modular binding; 25 evenly spaced skinned geometry samples per clip', sources,
     triangles: meshes.reduce((sum, mesh) => sum + mesh.geometry.index.count / 3, 0), exact_rig_binding: true, normalized_weights: true, opposite_leg_influences: false,
     clips, meshes: records.map(r => ({ name: r.mesh.name, rigid_calf_vertices: r.rigidCalf, maximum_edge_extension_relative: r.extension,
       maximum_rigid_calf_length_error_relative: r.calfError, maximum_animated_motion_m: r.motion })),
     scope: 'Calf shape is rigid to its own Leg bone. Ankle and toe are deliberately deformable leather, with no cloth physics. Numeric checks do not certify every body intersection or equipment combination.',
   }
-  writeFileSync(new URL('doc/assets/modular-caveman-tripo-boots-animation-v1.json', root), JSON.stringify(report, null, 2) + '\n')
+  writeFileSync(new URL(`doc/assets/modular-${part}-tripo-boots-animation-v1.json`, root), JSON.stringify(report, null, 2) + '\n')
   console.log(JSON.stringify(report.clips))
 } finally {
   await server.close()

@@ -21,6 +21,7 @@ import {
   BARBARIAN_MODULAR_OUTFIT,
   ROGUE_MODULAR_OUTFIT,
   CAVEMAN_MODULAR_OUTFIT,
+  RANGER_MODULAR_OUTFIT,
   MODULAR_BOOTS,
   type ModularOutfit,
   bindModularPart,
@@ -42,6 +43,7 @@ const outfitParts = new Set([
   ...modularOutfitParts(BARBARIAN_MODULAR_OUTFIT),
   ...modularOutfitParts(ROGUE_MODULAR_OUTFIT),
   ...modularOutfitParts(CAVEMAN_MODULAR_OUTFIT),
+  ...modularOutfitParts(RANGER_MODULAR_OUTFIT),
 ])
 
 export function loadCharacterModel(

@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { blendSkinToJoint } from './skinWeights'
 import cuff from '../data/rangerBootCuff.json'
 
 export function rangerBootRim(point: THREE.Vector3) {
@@ -45,24 +46,14 @@ export function tuckPantsIntoRangerBoots(geometry: THREE.BufferGeometry) {
       Math.max(point.y, hem),
       cuff.origin[1] + rim.z * scale
     )
-    if (skinIndex && skinWeight) {
-      const leg = side === 1 ? cuff.leftLeg : cuff.rightLeg
-      const weights = new Map<number, number>([[leg, blend]])
-      for (let j = 0; j < 4; j++) {
-        const joint = skinIndex.getComponent(i, j)
-        weights.set(
-          joint,
-          (weights.get(joint) ?? 0) +
-            skinWeight.getComponent(i, j) * (1 - blend)
-        )
-      }
-      const sorted = [...weights].sort((a, b) => b[1] - a[1]).slice(0, 4)
-      const total = sorted.reduce((sum, [, weight]) => sum + weight, 0)
-      for (let j = 0; j < 4; j++) {
-        skinIndex.setComponent(i, j, sorted[j]?.[0] ?? 0)
-        skinWeight.setComponent(i, j, (sorted[j]?.[1] ?? 0) / total)
-      }
-    }
+    if (skinIndex && skinWeight)
+      blendSkinToJoint(
+        skinIndex,
+        skinWeight,
+        i,
+        side === 1 ? cuff.leftLeg : cuff.rightLeg,
+        blend
+      )
   }
   geometry.computeVertexNormals()
 }

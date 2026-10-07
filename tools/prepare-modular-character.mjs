@@ -49,6 +49,18 @@ const cavemanSources = {
 };
 const cavemanParts = Object.keys(cavemanSources);
 parts.push(...cavemanParts);
+const rangerSources = {
+  top_ranger:
+    "assets/modular_human_male_01/parts/ranger_tripo_top_v4/top_ranger.glb",
+  pants_ranger:
+    "assets/modular_human_male_01/parts/ranger_tripo_pants_v1/pants_ranger.glb",
+  gloves_ranger:
+    "assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/gloves_ranger.glb",
+  boots_ranger:
+    "assets/modular_human_male_01/parts/ranger_tripo_boots_v1/boots_ranger.glb",
+};
+const rangerParts = Object.keys(rangerSources);
+parts.push(...rangerParts);
 const appearanceSources = {
   base_rugged:
     "assets/modular_human_male_01/parts/face_tripo_rugged_v1/base_rugged.glb",
@@ -74,7 +86,7 @@ const hash = (path) =>
     .digest("hex");
 const report = {
   source:
-    "Modular male body, knight, barbarian, rogue and caveman equipment and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md",
+    "Modular male body, knight, barbarian, rogue, caveman and ranger equipment and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md",
   inputs: {},
   outputs: {},
 };
@@ -100,6 +112,7 @@ const selectedPart = option("--part", parts);
 const selectedPack = option("--pack", packs);
 let selectedParts = process.argv.includes("--rogue-only") ? rogueParts : parts;
 if (process.argv.includes("--caveman-only")) selectedParts = cavemanParts;
+if (process.argv.includes("--ranger-only")) selectedParts = rangerParts;
 if (process.argv.includes("--appearance-only")) selectedParts = appearanceParts;
 if (selectedPart) selectedParts = [selectedPart];
 if (selectedPack) selectedParts = [];
@@ -107,6 +120,7 @@ for (const name of selectedParts) {
   const source =
     appearanceSources[name] ??
     cavemanSources[name] ??
+    rangerSources[name] ??
     (rogueParts.includes(name)
       ? (rogue.part_overrides[name] ?? `${rogue.directory}/${name}.glb`)
       : `${fitted}/${name}.glb`);
@@ -129,6 +143,7 @@ if (
   process.argv.includes("--parts-only") ||
   process.argv.includes("--rogue-only") ||
   process.argv.includes("--caveman-only") ||
+  process.argv.includes("--ranger-only") ||
   process.argv.includes("--appearance-only")
 ) {
   writeManifest(true);

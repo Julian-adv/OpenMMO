@@ -271,6 +271,77 @@ describe.skipIf(
       )
   })
 
+  it('equips ranger starter clothing, removes slots and restores skin independently', async () => {
+    const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
+    const { modelRoot } = createCharacterModelRoot(source.scene)
+    const { modelRoot: other } = createCharacterModelRoot(source.scene)
+    const armor = {
+      chest: 'worn_ranger_top',
+      pants: 'worn_ranger_pants',
+      hands: 'worn_ranger_gloves',
+      boots: 'worn_ranger_boots',
+    }
+    const parts = {
+      chest: 'top_ranger',
+      pants: 'pants_ranger',
+      hands: 'gloves_ranger',
+      boots: 'boots_ranger',
+    } as const
+    applyCharacterArmor(modelRoot, armor)
+    for (const part of Object.values(parts)) {
+      expect(visible(modelRoot, part)).toBe(true)
+      expect(visible(other, part)).toBe(false)
+      expect(visible(source.scene, part)).toBe(false)
+    }
+    expect(visible(modelRoot, 'top_rogue')).toBe(false)
+    expect(visible(modelRoot, 'pants_rogue')).toBe(false)
+    expect(visible(modelRoot, 'hair_crop')).toBe(true)
+    const meshes = skinnedParts(modelRoot)
+    for (const region of ['torso', 'upper_arms', 'feet', 'ankles'])
+      expect(bodyRegion(meshes, region).every((mesh) => !mesh.visible)).toBe(
+        true
+      )
+    expect(bodyRegion(meshes, 'forearms').every((mesh) => mesh.visible)).toBe(
+      true
+    )
+    const neck = bodyRegion(meshes, 'neck')[0]
+    neck.geometry.computeBoundingBox()
+    expect(neck.geometry.boundingBox!.min.x).toBeCloseTo(-0.09)
+    expect(neck.geometry.boundingBox!.max.x).toBeCloseTo(0.09)
+    expect(neck.geometry.boundingBox!.min.y).toBeCloseTo(1.54)
+    for (const slot of Object.keys(parts) as (keyof typeof parts)[]) {
+      applyCharacterArmor(modelRoot, { ...armor, [slot]: null })
+      for (const [otherSlot, part] of Object.entries(parts))
+        expect(visible(modelRoot, part)).toBe(otherSlot !== slot)
+    }
+    applyCharacterArmor(modelRoot, {
+      ...armor,
+      chest: 'worn_breastplate',
+      pants: 'worn_rogue_pants',
+    })
+    expect(visible(modelRoot, 'top_plate')).toBe(true)
+    expect(visible(modelRoot, 'pants_rogue')).toBe(true)
+    expect(visible(modelRoot, 'top_ranger')).toBe(false)
+    expect(visible(modelRoot, 'pants_ranger')).toBe(false)
+    applyCharacterArmor(modelRoot, armor)
+    for (const part of Object.values(parts))
+      expect(visible(modelRoot, part)).toBe(true)
+    applyCharacterArmor(modelRoot, {})
+    for (const part of Object.values(parts))
+      expect(visible(modelRoot, part)).toBe(false)
+    for (const region of [
+      'torso',
+      'upper_arms',
+      'forearms',
+      'feet',
+      'ankles',
+      'legs',
+    ])
+      expect(bodyRegion(meshes, region).every((mesh) => mesh.visible)).toBe(
+        true
+      )
+  })
+
   it('equips the current rogue set, removes each slot and switches mixed equipment', async () => {
     const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
     const { modelRoot: rogue } = createCharacterModelRoot(source.scene)

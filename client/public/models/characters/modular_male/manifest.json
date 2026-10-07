@@ -1,5 +1,5 @@
 {
-  "source": "Modular male body, knight, barbarian, rogue and caveman equipment and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md",
+  "source": "Modular male body, knight, barbarian, rogue, caveman and ranger equipment and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md",
   "inputs": {
     "assets/modular_human_male_01/parts/fitted/base.glb": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
     "assets/modular_human_male_01/parts/fitted/hair_crop.glb": "5aea523e5de994b8a2b6e15aef1589a3cbe7413514bc429194e1f0a940141686",
@@ -36,7 +36,11 @@
     "assets/modular_human_male_01/parts/caveman_tripo_boots_v1/boots_caveman.glb": "816349031a0c5bcac6efd7bb1320b8cd3d27f77ec86c47a10e6f9ccee72e4a48",
     "assets/modular_human_male_01/parts/caveman_tripo_bracer_v1/gloves_caveman.glb": "cbf5af0d066dd2f805fdee6e94661d31c38f07afc68492ecb65ebe509f0faf86",
     "assets/modular_human_male_01/parts/face_tripo_rugged_v1/base_rugged.glb": "4a55f83d90e2c6370ef9d13f17a75c0cbc98e5a4a6ecefbe1e33b591313ce954",
-    "assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb": "01090fcaaf447686b1fe57410e1667aed0df7ee705c7503b053b28a3478c9f5b"
+    "assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb": "01090fcaaf447686b1fe57410e1667aed0df7ee705c7503b053b28a3478c9f5b",
+    "assets/modular_human_male_01/parts/ranger_tripo_top_v4/top_ranger.glb": "ec8e9638833ad4f60ba66c1a36fb00cd66521c601977b0fa6d7d389ebfaf3623",
+    "assets/modular_human_male_01/parts/ranger_tripo_pants_v1/pants_ranger.glb": "8529da4370e10d74228c1aafc790cc1c1684d1eb8737ad19d993d8f938594883",
+    "assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/gloves_ranger.glb": "939e2f3cbfebae19fab284053898b435e73a38993bd09a627f2e59df3dad7220",
+    "assets/modular_human_male_01/parts/ranger_tripo_boots_v1/boots_ranger.glb": "916c13a55b4fb5fc15fdf4a017b3ed5977983210a776bc91977eaa138b9b1db6"
   },
   "outputs": {
     "base.glb": "048ebb21caca9a224b1dadecc6faf53b89f270da212791dc2af3088d92509af1",
@@ -144,6 +148,10 @@
     "boots_caveman.glb": "e73a046cdebbcbb6bde88aac91b69ded8fc106f35c9ef368daf839ea33c60f91",
     "gloves_caveman.glb": "6993bae6459b2ec63f4cfe5c8b350bc5150f565e6eb2902f8e3774a2427f49f8",
     "base_rugged.glb": "ced727720b858153480712512d2669d97c5626e2f11b6ad81bdd547203239a98",
-    "hair_wavy_bone.glb": "c2702a92b821789ffceaabbc5bd345f212b29105f02aa8224e27e42a6f64cf12"
+    "hair_wavy_bone.glb": "c2702a92b821789ffceaabbc5bd345f212b29105f02aa8224e27e42a6f64cf12",
+    "top_ranger.glb": "7b707c1d136474a06a57e0f14680ea1b78dca4243f1ee06c957036489cb48b99",
+    "pants_ranger.glb": "1421e06d71df97cde1be857987979b592251dd47d32abaac3b51e31aa511b05d",
+    "gloves_ranger.glb": "78d9d3612af4b8c3bfaf748b294b2d70d3db58aaa3edc048ce50c93cb0f9c313",
+    "boots_ranger.glb": "e24771106acfc6daa858621eee2d40dc61206392cdc0baf46a8e298f4edc8907"
   }
 }

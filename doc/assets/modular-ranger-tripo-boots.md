@@ -103,7 +103,7 @@ Blender 검토본은 같은 런타임 형상을 저장해 사용하며 별도 �
 .venv/bin/python tools/fit-tripo-ranger-boots.py
 .venv/bin/python tools/measure-ranger-boot-cuff.py
 .venv/bin/python tools/validate-tripo-ranger-boots-sections.py
-node tools/validate-tripo-ranger-boots.mjs
+node tools/validate-tripo-caveman-boots.mjs --part ranger
 node tools/validate-ranger-boot-hem.mjs
 blender -b --python-exit-code 1 --python tools/blender-scripts/review_tripo_ranger_boots.py
 ```

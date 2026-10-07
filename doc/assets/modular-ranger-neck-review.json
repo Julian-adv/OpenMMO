@@ -1,0 +1,108 @@
+{
+  "date": "2026-10-07",
+  "before": {
+    "triangles": 246,
+    "bounds": {
+      "isBox3": true,
+      "min": {
+        "x": -0.07500000298023224,
+        "y": 1.5399999618530273,
+        "z": -0.126098170876503
+      },
+      "max": {
+        "x": 0.07500000298023224,
+        "y": 1.6568950414657593,
+        "z": 0.0524582639336586
+      }
+    }
+  },
+  "after": {
+    "triangles": 321,
+    "bounds": {
+      "isBox3": true,
+      "min": {
+        "x": -0.09000000357627869,
+        "y": 1.5399999618530273,
+        "z": -0.126098170876503
+      },
+      "max": {
+        "x": 0.09000000357627869,
+        "y": 1.6568950414657593,
+        "z": 0.0524582639336586
+      }
+    }
+  },
+  "views": [
+    "front",
+    "left",
+    "back",
+    "right"
+  ],
+  "poses": [
+    {
+      "clip": "idle1",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "walk",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "run",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "jump",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "slash1",
+      "normalized_time": 0.4
+    },
+    {
+      "clip": "sit_idle",
+      "normalized_time": 0.4
+    }
+  ],
+  "errors": [],
+  "checks": [
+    "Exposed lateral neck restored; lower cut remains 1.54m",
+    "Original geometry restored when removing the top",
+    "Ranger top can be re-equipped"
+  ],
+  "rule": {
+    "minimum_y_m": 1.54,
+    "half_width_m": 0.09,
+    "side_rise_start_abs_x_m": 0.04,
+    "side_rise_slope": 0.8,
+    "method": "Sequential clipping against five planes; original geometry and skin weights restored when unequipped."
+  },
+  "rejected": [
+    {
+      "method": "Untrimmed neck",
+      "reason": "Chest skin protrudes through the shirt."
+    },
+    {
+      "method": "Height-only mask and broad parabolic mask",
+      "reason": "Lateral shoulder skin is exposed during attacks."
+    }
+  ],
+  "source_license": "Existing fitted Tripo and modular body assets; see modular-ranger-tripo-top.md and modular-human-male-01.md. Local browser screenshots, no new AI generation.",
+  "validation": {
+    "frontend_tests": 66,
+    "type_check": "pass",
+    "lint": "pass"
+  },
+  "screenshots": {
+    "before": "doc/images/characters/modular_human_male_01/parts/ranger/neck-before.png",
+    "after": "doc/images/characters/modular_human_male_01/parts/ranger/neck-after.png",
+    "attack": "doc/images/characters/modular_human_male_01/parts/ranger/neck-attack.png",
+    "sitting": "doc/images/characters/modular_human_male_01/parts/ranger/neck-sitting.png"
+  },
+  "source_hashes": {
+    "client/src/lib/utils/modularClothing.ts": "cc9ec0f8552203566bfb8200ca24967de84764a81b17afa14a404456d4c23613",
+    "client/src/lib/utils/modularCharacter.ts": "1dcef2ee0e8b5f11981f7a6605cb3b823b11ed61660fba4819ffbc3c33bf25bd",
+    "assets/modular_human_male_01/parts/ranger_tripo_top_v4/top_ranger.glb": "ec8e9638833ad4f60ba66c1a36fb00cd66521c601977b0fa6d7d389ebfaf3623",
+    "assets/modular_human_male_01/parts/fitted/base.glb": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
+  }
+}

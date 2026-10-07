@@ -47,6 +47,37 @@ function area(geometry: THREE.BufferGeometry) {
 }
 
 describe('modular clothing cuts', () => {
+  it('preserves the exposed neck width with a ranger top and restores skin after removal or a missing top', () => {
+    const source = cloth()
+    const position = source.attributes.position
+    for (let i = 0; i < position.count; i++)
+      position.setXYZ(
+        i,
+        position.getX(i) * 0.12,
+        1.5 + position.getY(i) * 0.12,
+        0
+      )
+    const neck = new THREE.SkinnedMesh(source)
+    neck.userData.region = 'neck'
+    const top = new THREE.SkinnedMesh()
+    const parts = new Map([['top_ranger', [top]]])
+    const outfit = { ...DEFAULT_MODULAR_OUTFIT, top: 'ranger' } as const
+    showModularOutfit([neck], parts, outfit)
+    neck.geometry.computeBoundingBox()
+    const bounds = neck.geometry.boundingBox!
+    expect(bounds.min.x).toBeCloseTo(-0.09)
+    expect(bounds.max.x).toBeCloseTo(0.09)
+    expect(bounds.min.y).toBeCloseTo(1.54)
+    expect(bounds.max.y).toBeCloseTo(1.62)
+    expect(area(neck.geometry)).toBeCloseTo(0.18 * 0.08 - 0.05 * 0.04)
+    showModularOutfit([neck], parts, { ...outfit, top: 'none' })
+    expect(neck.geometry).toBe(source)
+    showModularOutfit([neck], parts, outfit)
+    parts.delete('top_ranger')
+    showModularOutfit([neck], parts, outfit)
+    expect(neck.geometry).toBe(source)
+  })
+
   it('fits rogue pants into ranger boots while preserving the waist cut and restoring each independently', () => {
     const source = cloth()
     const position = source.attributes.position

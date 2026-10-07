@@ -130,10 +130,11 @@ describe('ranger workshop preview', () => {
       expect(visible(region)).toBe(true)
     const points = neck.geometry.attributes.position
     expect(points.count).toBeGreaterThan(0)
-    for (let i = 0; i < points.count; i++) {
+    for (let i = 0; i < points.count; i++)
       expect(points.getY(i)).toBeGreaterThanOrEqual(1.54 - 1e-6)
-      expect(Math.abs(points.getX(i))).toBeLessThanOrEqual(0.075 + 1e-6)
-    }
+    neck.geometry.computeBoundingBox()
+    expect(neck.geometry.boundingBox!.min.x).toBeCloseTo(-0.09)
+    expect(neck.geometry.boundingBox!.max.x).toBeCloseTo(0.09)
     showModularOutfit(body, parts, undressed)
     expect(top.visible).toBe(false)
     expect(pants.visible).toBe(false)

@@ -26,6 +26,10 @@ async fn unpriced_starter_gear_cannot_mint_gold_from_single_or_batch_sales() {
         "worn_caveman_pants",
         "worn_caveman_boots",
         "worn_caveman_bracers",
+        "worn_ranger_top",
+        "worn_ranger_pants",
+        "worn_ranger_gloves",
+        "worn_ranger_boots",
         "worn_iron_sword",
         "worn_torch",
     ];

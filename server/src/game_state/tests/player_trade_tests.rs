@@ -307,6 +307,10 @@ async fn untradeable_starter_gear_cannot_be_offered() {
         "worn_caveman_pants",
         "worn_caveman_boots",
         "worn_caveman_bracers",
+        "worn_ranger_top",
+        "worn_ranger_pants",
+        "worn_ranger_gloves",
+        "worn_ranger_boots",
     ]
     .into_iter()
     .enumerate()

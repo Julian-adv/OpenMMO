@@ -14,11 +14,11 @@ type Cut =
   | 'ranger_gloves_skin'
   | 'greaves'
   | 'leather_boots'
-  | 'caveman_boots'
-  | 'ranger_boots'
+  | 'tall_boots'
   | 'ranger_pants_boots'
   | 'collar'
   | 'tripo_collar'
+  | 'ranger_collar'
   | 'tripo_waist'
   | 'tripo_covered_waist'
   | 'ranger_plate_waist'
@@ -47,7 +47,6 @@ const rangerPlateWaist: Distance = (point) => {
   const drop = Math.max(0, 0.09 - Math.abs(point.x) * 0.5)
   return 1.06 - rear * drop - point.y
 }
-const rangerBoots: Distance = (point) => point.y - 0.43
 
 const cuts: Record<Cut, Distance | Distance[]> = {
   bracers: sleeveCut(0.23),
@@ -57,11 +56,17 @@ const cuts: Record<Cut, Distance | Distance[]> = {
   ranger_gloves_skin: sleeveCut(0.4),
   greaves: (point) => point.y - 0.46,
   leather_boots: (point) => point.y - 0.235,
-  caveman_boots: (point) => point.y - 0.43,
-  ranger_boots: rangerBoots,
+  tall_boots: (point) => point.y - 0.43,
   ranger_pants_boots: rangerPantsBootDistance,
   collar: (point) => Math.max(1.61 - point.y, Math.abs(point.x) - 0.075),
   tripo_collar: (point) => Math.max(1.54 - point.y, Math.abs(point.x) - 0.075),
+  ranger_collar: [
+    (point) => 1.54 - point.y,
+    (point) => 1.54 + 0.8 * (point.x - 0.04) - point.y,
+    (point) => 1.54 + 0.8 * (-point.x - 0.04) - point.y,
+    (point) => point.x - 0.09,
+    (point) => -point.x - 0.09,
+  ],
   tripo_waist: (point) => point.y - 1.14,
   tripo_covered_waist: (point) => point.y - 1.105,
   ranger_plate_waist: rangerPlateWaist,
@@ -85,6 +90,8 @@ export function clipSkinnedGeometry(
   const edges = new Map<string, number>()
   const indices: number[] = []
   const point = new THREE.Vector3()
+  const first = new THREE.Vector3()
+  const last = new THREE.Vector3()
   const position = source.getAttribute('position')
   const distances = Array.from({ length: position.count }, (_, i) =>
     distance(point.fromBufferAttribute(position, i))
@@ -109,8 +116,8 @@ export function clipSkinnedGeometry(
     const next = values.position.length / 3
     let t = distances[a] / (distances[a] - distances[b])
     if (refineIntersection) {
-      const first = new THREE.Vector3().fromBufferAttribute(position, a)
-      const last = new THREE.Vector3().fromBufferAttribute(position, b)
+      first.fromBufferAttribute(position, a)
+      last.fromBufferAttribute(position, b)
       let low = 0,
         high = 1
       for (let i = 0; i < 20; i++) {
@@ -247,8 +254,8 @@ export function trimModularClothing(
   let geometry = cached.cuts.get(key)
   if (!geometry) {
     geometry = cached.source
-    const distances = cuts[cut]
-    for (const distance of Array.isArray(distances) ? distances : [distances]) {
+    const distances = [cuts[cut]].flat()
+    for (const distance of distances) {
       const previous = geometry
       geometry = clipSkinnedGeometry(
         previous,
@@ -257,11 +264,7 @@ export function trimModularClothing(
       )
       if (previous !== cached.source) previous.dispose()
     }
-    if (
-      cut === 'ranger_pants_boots' ||
-      cut === 'ranger_plate_waist_boots' ||
-      cut === 'rogue_waist_ranger_boots'
-    )
+    if (distances.includes(rangerPantsBootDistance))
       tuckPantsIntoRangerBoots(geometry)
     if (cut === 'ranger_gloves' && !skin) {
       const transition = sleeveCut(0.2)

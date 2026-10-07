@@ -1,0 +1,117 @@
+{
+  "date": "2026-10-07",
+  "source_records": [
+    "modular-ranger-tripo-top.md",
+    "modular-ranger-tripo-pants.md",
+    "modular-ranger-tripo-gloves.md",
+    "modular-ranger-tripo-boots.md"
+  ],
+  "pipeline": "Existing fitted Tripo assets; local compression and Blender inventory render; no new AI generation or paid API calls.",
+  "checks": [
+    "Character creation stores four equipped items and character list equipment",
+    "Starter items cannot be sold individually or in batches or offered in player trades",
+    "65 frontend tests and 8 server tests pass; cargo fmt/check and npm check/lint pass",
+    "Compressed runtime assets load and equip in Chromium; slot removal and idle/run/jump/slash1/sit_idle poses verified"
+  ],
+  "browser": {
+    "renderer": "Workshop WebGL renderer; appearance NodeMaterials restored to original textures for renderer compatibility. Clothing uses game loadCharacterModel/applyCharacterArmor and game animation packs.",
+    "errors": [],
+    "screenshot": "doc/images/characters/modular_human_male_01/parts/ranger/runtime-starter-idle.png",
+    "poses": [
+      {
+        "clip": "idle1",
+        "normalized_time": 0.4
+      },
+      {
+        "clip": "run",
+        "normalized_time": 0.4
+      },
+      {
+        "clip": "jump",
+        "normalized_time": 0.4
+      },
+      {
+        "clip": "slash1",
+        "normalized_time": 0.4
+      },
+      {
+        "clip": "sit_idle",
+        "normalized_time": 0.4
+      }
+    ]
+  },
+  "budget": {
+    "exported_assembled_triangles": 31288,
+    "runtime_equipped_with_hidden": 25481,
+    "runtime_visible": 22072,
+    "face_allocation": 1505,
+    "face_allocation_reference": "modular-ranger-tripo-pants-budget-v1.json",
+    "weapon_and_cape_included": false
+  },
+  "files": {
+    "client/public/models/characters/modular_male/base.glb": {
+      "sha256": "048ebb21caca9a224b1dadecc6faf53b89f270da212791dc2af3088d92509af1",
+      "triangles": 13891
+    },
+    "client/public/models/characters/modular_male/hair_crop.glb": {
+      "sha256": "92cbf595f01534c694ed1f5eba344da84bf2c06fca7d3f2072bfa39c0b044ae3",
+      "triangles": 933
+    },
+    "client/public/models/characters/modular_male/top_ranger.glb": {
+      "sha256": "7b707c1d136474a06a57e0f14680ea1b78dca4243f1ee06c957036489cb48b99",
+      "triangles": 4896
+    },
+    "client/public/models/characters/modular_male/pants_ranger.glb": {
+      "sha256": "1421e06d71df97cde1be857987979b592251dd47d32abaac3b51e31aa511b05d",
+      "triangles": 3714
+    },
+    "client/public/models/characters/modular_male/gloves_ranger.glb": {
+      "sha256": "78d9d3612af4b8c3bfaf748b294b2d70d3db58aaa3edc048ce50c93cb0f9c313",
+      "triangles": 4208
+    },
+    "client/public/models/characters/modular_male/boots_ranger.glb": {
+      "sha256": "e24771106acfc6daa858621eee2d40dc61206392cdc0baf46a8e298f4edc8907",
+      "triangles": 3646
+    },
+    "client/public/models/armor/ranger_top.glb": {
+      "sha256": "27b58c201b209345baa35030484eb957f84d421aee55e405b39dc9043dfc09ea",
+      "triangles": 4896
+    },
+    "client/public/items/armor/ranger_top.png": {
+      "sha256": "b61555f23781f6bf33ce2c353b6ca7bbc13a3b023394d852b804ff9d38bec11c"
+    },
+    "assets/ranger_top/ranger_top.blend": {
+      "sha256": "1cb9202cce1f62ce93eb85b4a46fd9695e6380c191f16a6c87aeace1a503a8c9"
+    },
+    "client/public/models/armor/ranger_pants.glb": {
+      "sha256": "c197512653e2d874c75a05f5dc37a127b3366644b9a409d60f547a9df2713e52",
+      "triangles": 3714
+    },
+    "client/public/items/armor/ranger_pants.png": {
+      "sha256": "0666831b2528a152f02fdcf3b842bd446c150e5b01e1d5d35f36a174d8a28b50"
+    },
+    "assets/ranger_pants/ranger_pants.blend": {
+      "sha256": "5a678fd5a2fa0f7089819460f150d284492601da67a44e93fb02f760605553ff"
+    },
+    "client/public/models/armor/ranger_gloves.glb": {
+      "sha256": "219ff7528ec51a69ec0fa3d94952f501b6ecbda6a6a47b9acfa81e7f7195347b",
+      "triangles": 2088
+    },
+    "client/public/items/armor/ranger_gloves.png": {
+      "sha256": "850b89777892e932f795d9a5f12ffb1498d0be6974de464ae361fab5065677fe"
+    },
+    "assets/ranger_gloves/ranger_gloves.blend": {
+      "sha256": "f08ab4c2d26312e863fe1c7d54cc12087efc28e06cc656400042f89d2eb8e8e4"
+    },
+    "client/public/models/armor/ranger_boots.glb": {
+      "sha256": "e2a948695643221241b3bcab86202efd9e59245ea17381349a11403717cfb565",
+      "triangles": 3646
+    },
+    "client/public/items/armor/ranger_boots.png": {
+      "sha256": "bfd692ac832dd9e5724b4396b620e83ccb589b3bf4139618dde253ad996865eb"
+    },
+    "assets/ranger_boots/ranger_boots.blend": {
+      "sha256": "9891bd69e118090b0b0168ac913e69ddce405283684a613f4ddafe3f21ee7935"
+    }
+  }
+}
