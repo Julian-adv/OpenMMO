@@ -388,6 +388,11 @@ export function showModularOutfit(
       coveredWaist ? 'tripo_covered_waist' : undefined,
       true
     )
+  for (const mesh of parts.get('pants_ranger') ?? [])
+    trimModularClothing(
+      mesh,
+      pants === 'ranger' && top === 'plate' ? 'ranger_plate_waist' : undefined
+    )
   const hidden = new Set([
     ...(top === 'rogue' || top === 'ranger' ? ['torso', 'upper_arms'] : []),
     ...(pants === 'rogue' || pants === 'ranger'

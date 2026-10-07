@@ -639,6 +639,11 @@ async function main() {
   else if (requestedOutfit === 'rogue' && rogueAvailable)
     wearOutfit(ROGUE_MODULAR_OUTFIT)
   else dress()
+  const requestedTop = params.get('top')
+  if ([...topSelect.options].some((option) => option.value === requestedTop)) {
+    topSelect.value = requestedTop!
+    dress()
+  }
   if (params.get('hair') === 'hair_wavy_bone' && parts.has('hair_wavy_bone')) {
     hairSelect.value = 'hair_wavy_bone'
     helmet.value = 'none'

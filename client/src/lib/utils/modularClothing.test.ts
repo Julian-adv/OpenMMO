@@ -47,6 +47,92 @@ function area(geometry: THREE.BufferGeometry) {
 }
 
 describe('modular clothing cuts', () => {
+  it('follows the rear plate hem while preserving the front waist height', () => {
+    const samples = [
+      { x: 0.01, z: 0.1 },
+      { x: 0.01, z: -0.12 },
+      { x: 0.165, z: -0.08 },
+    ].map(({ x, z }) => {
+      const geometry = cloth()
+      const positions = geometry.attributes.position
+      for (let i = 0; i < positions.count; i++)
+        positions.setXYZ(
+          i,
+          x + positions.getX(i) * 0.005,
+          0.9 + positions.getY(i) * 0.26,
+          z
+        )
+      return new THREE.SkinnedMesh(geometry)
+    })
+    const originals = samples.map((mesh) => mesh.geometry)
+    const parts = new Map([['pants_ranger', samples]])
+    showModularOutfit([], parts, {
+      ...DEFAULT_MODULAR_OUTFIT,
+      top: 'plate',
+      pants: 'ranger',
+    })
+    const bounds = samples.map((mesh) => {
+      mesh.geometry.computeBoundingBox()
+      return mesh.geometry.boundingBox!
+    })
+    expect(bounds[0].max.y).toBeCloseTo(1.06)
+    expect(bounds[1].max.y).toBeLessThan(1)
+    expect(bounds[2].max.y).toBeGreaterThan(1.05)
+    expect(bounds.every((box) => Math.abs(box.min.y - 0.9) < 1e-6)).toBe(true)
+    showModularOutfit([], parts, {
+      ...DEFAULT_MODULAR_OUTFIT,
+      top: 'none',
+      pants: 'ranger',
+    })
+    expect(samples.map((mesh) => mesh.geometry)).toEqual(originals)
+  })
+
+  it('trims the ranger waist only with plate armor and restores it on outfit changes', () => {
+    const source = cloth()
+    const positions = source.attributes.position
+    for (let i = 0; i < positions.count; i++)
+      positions.setY(i, 0.98 + positions.getY(i) * 0.18)
+    const originalPositions = positions.array.slice()
+    const pants = new THREE.SkinnedMesh(source)
+    const parts = new Map([['pants_ranger', [pants]]])
+    const outfit = { ...DEFAULT_MODULAR_OUTFIT, pants: 'ranger' } as const
+    showModularOutfit([], parts, { ...outfit, top: 'plate' })
+    const trimmed = pants.geometry
+    expect(pants.visible).toBe(true)
+    expect(area(trimmed)).toBeCloseTo(2 * (1.06 - 0.98))
+    for (let i = 0; i < trimmed.attributes.position.count; i++) {
+      expect(trimmed.attributes.position.getY(i)).toBeLessThanOrEqual(1.060001)
+      const weights = trimmed.attributes.skinWeight
+      expect(
+        [0, 1, 2, 3].reduce((sum, j) => sum + weights.getComponent(i, j), 0)
+      ).toBeCloseTo(1)
+    }
+    for (const top of [
+      'none',
+      'linen',
+      'leather',
+      'barbarian',
+      'rogue',
+      'caveman',
+      'ranger',
+    ] as const) {
+      if (top === 'rogue' || top === 'caveman' || top === 'ranger')
+        parts.set(`top_${top}`, [new THREE.SkinnedMesh()])
+      showModularOutfit([], parts, { ...outfit, top })
+      expect(pants.geometry).toBe(source)
+      showModularOutfit([], parts, { ...outfit, top: 'plate' })
+      expect(pants.geometry).toBe(trimmed)
+    }
+    showModularOutfit([], parts, { ...outfit, top: 'plate', pants: 'cloth' })
+    expect(pants.visible).toBe(false)
+    expect(pants.geometry).toBe(source)
+    const replacement = new THREE.SkinnedMesh(source)
+    parts.set('pants_ranger', [replacement])
+    showModularOutfit([], parts, { ...outfit, top: 'plate' })
+    expect(replacement.geometry).toBe(trimmed)
+    expect(source.attributes.position.array).toEqual(originalPositions)
+  })
+
   it.each([
     { side: -1, top: 'linen' },
     { side: 1, top: 'linen' },
