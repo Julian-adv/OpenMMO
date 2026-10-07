@@ -1,25 +1,12 @@
 import assert from 'node:assert/strict'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { createHash } from 'node:crypto'
-import { fileURLToPath } from 'node:url'
 import * as THREE from '../client/node_modules/three/build/three.module.js'
-import { GLTFLoader } from '../client/node_modules/three/examples/jsm/loaders/GLTFLoader.js'
-import { createServer } from '../client/node_modules/vite/dist/node/index.js'
+import { CANONICAL_CLIPS_WITH_DYING, clipSampler, headlessThree, loadClips, root } from './lib/headless-three.mjs'
 
-const root = new URL('../', import.meta.url)
 const ranger = process.argv.includes('--ranger')
 const faceName = ranger ? 'face_ranger' : 'face_rugged'
 const output = `assets/modular_human_male_01/parts/face_tripo_${ranger ? 'ranger' : 'rugged'}_v1/`
-const server = await createServer({ root: fileURLToPath(new URL('client/', root)), configFile: false,
-  optimizeDeps: { noDiscovery: true, include: [] }, server: { middlewareMode: true, watch: null }, appType: 'custom' })
-globalThis.self = globalThis
-const loader = new GLTFLoader().register(() => ({ name: 'headless-materials', loadMaterial: async () => new THREE.MeshBasicMaterial() }))
-const sources = []
-async function load(path) {
-  const data = readFileSync(new URL(path, root))
-  sources.push({ path, sha256: createHash('sha256').update(data).digest('hex') })
-  return loader.parseAsync(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), '')
-}
+const { server, sources, load } = await headlessThree()
 const vertex = (mesh, i) => mesh.getVertexPosition(i, new THREE.Vector3())
 function edgeMatches(mesh, positions) {
   const indices = mesh.geometry.index
@@ -79,23 +66,15 @@ try {
       }
     }
   }
-  const corrected = modularAnimationClips(body, await load('assets/modular_human_male_01/rigged_hand_tuned/animations.glb'), 'corrected')
-  const social = modularAnimationClips(body, await load('client/public/models/characters/modular_male/animations/social.glb'), 'corrected')
-  const mixer = new THREE.AnimationMixer(body)
+  const animations = await loadClips(body, load, modularAnimationClips, CANONICAL_CLIPS_WITH_DYING)
+  const poses = clipSampler(body)
   const bones = face.skeleton.bones
   const restMatrices = bones.map(b => b.matrixWorld.clone())
   const clips = [], snapshots = []
-  for (const name of ['idle1', 'walk', 'run', 'jump', 'combat_idle', 'slash1', 'dying', 'sit_idle']) {
-    mixer.stopAllAction()
-    const clip = [...corrected, ...social].find(c => c.name === name)
-    assert.ok(clip, name)
-    const action = mixer.clipAction(clip).reset().setLoop(THREE.LoopOnce, 1)
-    action.clampWhenFinished = true
-    action.play()
+  for (const clip of animations) {
+    const name = clip.name
     let lowerError = 0, upperError = 0, rigidError = 0, bodyError = 0
-    for (let frame = 0; frame <= 24; frame++) {
-      mixer.setTime(clip.duration * frame / 24)
-      body.updateMatrixWorld(true)
+    for (const { sample: frame, time } of poses(clip)) {
       for (const mesh of [...faceMeshes, hair])
         for (let i = 0; i < mesh.geometry.attributes.position.count; i++)
           assert.ok(vertex(mesh, i).toArray().every(Number.isFinite))
@@ -116,7 +95,7 @@ try {
         bodyError = Math.max(bodyError, vertex(lowerNeck, bodySeamVertices[i]).distanceTo(expected))
       }
       if (!ranger && frame === (name === 'dying' ? 20 : 12))
-        snapshots.push({ clip: name, time: clip.duration * frame / 24,
+        snapshots.push({ clip: name, time,
           bone_deformation_matrices: Object.fromEntries(bones.map((b, i) => [b.name, b.matrixWorld.clone().multiply(restMatrices[i].clone().invert()).elements])) })
     }
     assert.ok(bodyError < 1e-6, `${name}: retained neck seam ${bodyError}`)

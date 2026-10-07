@@ -10,7 +10,7 @@ import type {
 import { modularOutfitForArmor } from './modularEquipment'
 import { disposePeltPhysics } from '../effects/pelt-rig'
 import { separateWavyHairMaterials } from './wavyHairMaterials'
-import { computeSoleGroundOffset } from './characterAnimationUtils'
+import modularSoleOffsets from './modularSoleOffsets.json'
 import {
   applyAppearanceColors,
   disposeAppearanceColors,
@@ -22,7 +22,6 @@ import {
   ROGUE_MODULAR_OUTFIT,
   CAVEMAN_MODULAR_OUTFIT,
   RANGER_MODULAR_OUTFIT,
-  MODULAR_BOOTS,
   type ModularOutfit,
   bindModularPart,
   modularAnimationClips,
@@ -37,14 +36,26 @@ import {
 export const MODULAR_SWORD_ATTACHMENT = 'modularSwordAttachment'
 const maleModels = new Map<string, Promise<GLTF>>()
 const animations = new Map<string, Promise<GLTF>>()
-const outfitParts = new Set([
-  ...modularOutfitParts(DEFAULT_MODULAR_OUTFIT),
-  ...modularOutfitParts(KNIGHT_MODULAR_OUTFIT),
-  ...modularOutfitParts(BARBARIAN_MODULAR_OUTFIT),
-  ...modularOutfitParts(ROGUE_MODULAR_OUTFIT),
-  ...modularOutfitParts(CAVEMAN_MODULAR_OUTFIT),
-  ...modularOutfitParts(RANGER_MODULAR_OUTFIT),
-])
+// Every other set is bound per player on first use, so clients only fetch what they see.
+const eagerParts = modularOutfitParts(DEFAULT_MODULAR_OUTFIT)
+const lazyParts = new Set(
+  [
+    KNIGHT_MODULAR_OUTFIT,
+    BARBARIAN_MODULAR_OUTFIT,
+    ROGUE_MODULAR_OUTFIT,
+    CAVEMAN_MODULAR_OUTFIT,
+    RANGER_MODULAR_OUTFIT,
+  ]
+    .flatMap((outfit) => [...modularOutfitParts(outfit)])
+    .concat('hair_wavy_bone')
+    .filter((id) => !eagerParts.has(id))
+)
+const outfitParts = new Set([...eagerParts, ...lazyParts])
+const lazyStates = new WeakMap<
+  THREE.Object3D,
+  { generation: number; loads: Map<string, Promise<void>> }
+>()
+const soleOffsets: Record<ModularOutfit['boots'], number> = modularSoleOffsets
 
 export function loadCharacterModel(
   path: string,
@@ -54,7 +65,7 @@ export function loadCharacterModel(
   const face = appearance?.face ?? 'default'
   let maleModel = maleModels.get(face)
   if (!maleModel) {
-    const ids = [...outfitParts, 'hair_wavy_bone']
+    const ids = [...eagerParts]
     maleModel = Promise.all([
       loadGLB(
         face === 'rugged' ? `${MODULAR_MALE_DIRECTORY}/base_rugged.glb` : path
@@ -68,14 +79,6 @@ export function loadCharacterModel(
         const parts = new Map(
           ids.map((id, i) => [id, bindModularPart(scene, sources[i].scene)])
         )
-        for (const mesh of parts.get('hair_wavy_bone') ?? [])
-          separateWavyHairMaterials(mesh)
-        const soleOffsets = {} as Record<ModularOutfit['boots'], number>
-        for (const boots of MODULAR_BOOTS) {
-          showModularOutfit(body, parts, { ...DEFAULT_MODULAR_OUTFIT, boots })
-          soleOffsets[boots] = computeSoleGroundOffset(scene)
-        }
-        scene.userData.modular_sole_offsets = soleOffsets
         showModularOutfit(body, parts, DEFAULT_MODULAR_OUTFIT)
         for (const mesh of skinnedParts(scene)) mesh.frustumCulled = false
         const socket = new THREE.Group()
@@ -94,39 +97,89 @@ export function loadCharacterModel(
   return maleModel
 }
 
-export function applyCharacterArmor(
-  root: THREE.Object3D,
-  armor?: ArmorEquipment,
-  appearance?: CharacterAppearance
-): void {
-  const meshes = skinnedParts(root)
+function modularScene(root: THREE.Object3D): THREE.Object3D | undefined {
+  return root.userData.modular_character
+    ? root
+    : root.children.find((child) => child.userData.modular_character)
+}
+
+function outfitMeshes(scene: THREE.Object3D) {
+  const meshes = skinnedParts(scene)
   const body: THREE.SkinnedMesh[] = []
   const parts = new Map<string, THREE.SkinnedMesh[]>()
   for (const mesh of meshes) {
     const id = mesh.userData.part_id
-    if (outfitParts.has(id) || id === 'hair_wavy_bone') {
+    if (outfitParts.has(id)) {
       const group = parts.get(id) ?? []
       group.push(mesh)
       parts.set(id, group)
     } else body.push(mesh)
   }
-  if (parts.size) {
-    const outfit = modularOutfitForArmor(armor)
-    if (appearance) {
-      outfit.hair =
-        appearance.hair === 'none'
-          ? 'none'
-          : appearance.hair === 'wavy_bone'
-            ? 'hair_wavy_bone'
-            : 'hair_crop'
-    }
-    showModularOutfit(body, parts, outfit)
-    applyAppearanceColors(root, meshes, appearance)
-    root.traverse((node) => {
-      const offsets = node.userData.modular_sole_offsets
-      if (offsets) node.position.y = offsets[outfit.boots]
-    })
+  return { meshes, body, parts }
+}
+
+function bindLazyPart(
+  scene: THREE.Object3D,
+  state: NonNullable<ReturnType<typeof lazyStates.get>>,
+  id: string
+): Promise<void> {
+  let load = state.loads.get(id)
+  if (!load) {
+    load = loadGLB(`${MODULAR_MALE_DIRECTORY}/${id}.glb`).then(
+      (gltf) => {
+        if (lazyStates.get(scene) !== state) return
+        for (const mesh of bindModularPart(scene, gltf.scene)) {
+          mesh.frustumCulled = false
+          if (id === 'hair_wavy_bone') separateWavyHairMaterials(mesh)
+        }
+      },
+      (error) => {
+        state.loads.delete(id)
+        throw error
+      }
+    )
+    state.loads.set(id, load)
   }
+  return load
+}
+
+/** Keeps the current outfit until unbound parts load; only the latest call shows. */
+export async function applyCharacterArmor(
+  root: THREE.Object3D,
+  armor?: ArmorEquipment,
+  appearance?: CharacterAppearance
+): Promise<void> {
+  const scene = modularScene(root)
+  if (!scene) return
+  const outfit = modularOutfitForArmor(armor)
+  if (appearance) {
+    outfit.hair =
+      appearance.hair === 'none'
+        ? 'none'
+        : appearance.hair === 'wavy_bone'
+          ? 'hair_wavy_bone'
+          : 'hair_crop'
+  }
+  let state = lazyStates.get(scene)
+  if (!state)
+    lazyStates.set(scene, (state = { generation: 0, loads: new Map() }))
+  const generation = ++state.generation
+  let { meshes, body, parts } = outfitMeshes(scene)
+  const missing = [...modularOutfitParts(outfit)].filter((id) => !parts.has(id))
+  if (missing.length) {
+    try {
+      await Promise.all(missing.map((id) => bindLazyPart(scene, state, id)))
+    } catch (error) {
+      console.error('Failed to load modular outfit parts', error)
+      return
+    }
+    if (state.generation !== generation || lazyStates.get(scene) !== state)
+      return
+    ;({ meshes, body, parts } = outfitMeshes(scene))
+  }
+  showModularOutfit(body, parts, outfit)
+  applyAppearanceColors(root, meshes, appearance)
+  scene.position.y = soleOffsets[outfit.boots]
 }
 
 export function loadCharacterAnimationPack(
@@ -183,6 +236,8 @@ export function modularSwordAttachment(
 }
 
 export function disposeCharacterSkeletons(root: THREE.Object3D): void {
+  const scene = modularScene(root)
+  if (scene) lazyStates.delete(scene)
   disposeAppearanceColors(root)
   disposePeltPhysics(root)
   const skeletons = new Set(skinnedParts(root).map((mesh) => mesh.skeleton))

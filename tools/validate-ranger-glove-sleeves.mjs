@@ -1,22 +1,11 @@
 import assert from 'node:assert/strict'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { createHash } from 'node:crypto'
-import { fileURLToPath } from 'node:url'
 import * as THREE from '../client/node_modules/three/build/three.module.js'
-import { GLTFLoader } from '../client/node_modules/three/examples/jsm/loaders/GLTFLoader.js'
-import { createServer } from '../client/node_modules/vite/dist/node/index.js'
+import { hash, headlessThree, root } from './lib/headless-three.mjs'
 
-const root = new URL('../', import.meta.url)
-const server = await createServer({ root: fileURLToPath(new URL('client/', root)), configFile: false,
-  optimizeDeps: { noDiscovery: true, include: [] }, server: { middlewareMode: true, watch: null }, appType: 'custom' })
-globalThis.self = globalThis
-const loader = new GLTFLoader().register(() => ({ name: 'headless-materials', loadMaterial: async () => new THREE.MeshBasicMaterial() }))
-const sources = []
-async function load(path) {
-  const data = readFileSync(new URL(path, root))
-  sources.push({ path, sha256: createHash('sha256').update(data).digest('hex') })
-  return (await loader.parseAsync(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), '')).scene
-}
+const headless = await headlessThree()
+const { server, sources } = headless
+const load = async path => (await headless.load(path)).scene
 try {
   const { bindModularPart, skinnedParts, showModularOutfit, RANGER_MODULAR_OUTFIT } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
   const body = await load('assets/modular_human_male_01/parts/fitted/base.glb')
@@ -39,9 +28,8 @@ try {
     return { side, wrist, forearm, axis, triangles }
   })
   const posePath = 'assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/validation-poses.json'
-  const data = readFileSync(new URL(posePath, root))
-  sources.push({ path: posePath, sha256: createHash('sha256').update(data).digest('hex') })
-  const poses = JSON.parse(data).map(p => ({ ...p, matrices: p.matrices.map(v => new THREE.Matrix4().fromArray(v)) }))
+  sources.push({ path: posePath, sha256: hash(posePath) })
+  const poses = JSON.parse(readFileSync(new URL(posePath, root))).map(p => ({ ...p, matrices: p.matrices.map(v => new THREE.Matrix4().fromArray(v)) }))
   const records = []
   const ray = new THREE.Ray(), hit = new THREE.Vector3()
   for (const top of ['plate', 'linen', 'leather']) {
@@ -93,7 +81,7 @@ try {
   }
   const runtime_sources = ['client/src/lib/utils/modularCharacter.ts', 'client/src/lib/utils/modularClothing.ts',
     'client/src/lib/utils/rangerGloveCuff.ts', 'client/src/lib/data/rangerGloveCuff.json'].map(path =>
-      ({ path, sha256: createHash('sha256').update(readFileSync(new URL(path, root))).digest('hex') }))
+      ({ path, sha256: hash(path) }))
   const report = { date: '2026-10-07', sources, runtime_sources, records, scope: 'Actual clipped and tucked sleeve vertices and three barycentric points per triangle in the cuff overlap, checked radially against the fitted glove outer surface in the moving ForeArm frame over 175 stored poses. Does not certify every surface point, all sleeve regions or every animation frame.' }
   writeFileSync(new URL('doc/assets/modular-ranger-tripo-gloves-sleeve-coverage-v3.json', root), JSON.stringify(report, null, 2) + '\n')
   console.log(JSON.stringify(records))

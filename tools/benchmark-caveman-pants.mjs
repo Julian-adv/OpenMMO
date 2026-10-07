@@ -1,27 +1,9 @@
 import assert from 'node:assert/strict'
-import { createHash } from 'node:crypto'
-import { readFileSync, writeFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { writeFileSync } from 'node:fs'
 import * as THREE from '../client/node_modules/three/build/three.module.js'
-import { GLTFLoader } from '../client/node_modules/three/examples/jsm/loaders/GLTFLoader.js'
-import { createServer } from '../client/node_modules/vite/dist/node/index.js'
+import { headlessThree } from './lib/headless-three.mjs'
 
-const root = new URL('../', import.meta.url)
-const server = await createServer({
-  root: fileURLToPath(new URL('client/', root)), configFile: false,
-  optimizeDeps: { noDiscovery: true, include: [] },
-  server: { middlewareMode: true, watch: null }, appType: 'custom',
-})
-globalThis.self = globalThis
-const loader = new GLTFLoader().register(() => ({
-  name: 'headless-materials', loadMaterial: async () => new THREE.MeshBasicMaterial(),
-}))
-const sources = []
-async function load(path) {
-  const data = readFileSync(new URL(path, root))
-  sources.push({ path, sha256: createHash('sha256').update(data).digest('hex') })
-  return loader.parseAsync(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), '')
-}
+const { server, sources, load } = await headlessThree()
 try {
   const { bindModularPart, modularAnimationClips } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
   const { updatePeltPhysics, resetPeltPhysics, disposePeltPhysics } = await server.ssrLoadModule('/src/lib/effects/pelt-rig.ts')

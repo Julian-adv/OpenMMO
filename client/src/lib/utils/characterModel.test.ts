@@ -21,7 +21,7 @@ import {
   createCharacterModelRoot,
   computeSoleGroundOffset,
 } from './characterAnimationUtils'
-import { skinnedParts } from './modularCharacter'
+import { MODULAR_BOOTS, skinnedParts } from './modularCharacter'
 import type { ArmorEquipment } from '../network/networkTypes'
 
 vi.mock('./gltfCache', async (importOriginal) => {
@@ -78,6 +78,8 @@ describe.skipIf(
     const { modelRoot: other } = createCharacterModelRoot(standard.scene)
     expect(modelRoot.getObjectByName('face_rugged')).toBeDefined()
     expect(other.getObjectByName('face_rugged')).toBeUndefined()
+    await applyCharacterArmor(modelRoot, {}, appearance)
+    await applyCharacterArmor(other, {}, { hair: 'wavy_bone' })
     for (const id of ['hair_crop', 'hair_wavy_bone']) {
       const shared = (root: THREE.Object3D) =>
         skinnedParts(root).find((mesh) => mesh.userData.part_id === id)!
@@ -96,18 +98,22 @@ describe.skipIf(
           second.getAttribute(name).array
         )
     }
-    applyCharacterArmor(modelRoot, {}, appearance)
-    applyCharacterArmor(other, {})
+    await applyCharacterArmor(modelRoot, {}, appearance)
+    await applyCharacterArmor(other, {})
     expect(visible(modelRoot, 'hair_wavy_bone')).toBe(true)
     expect(visible(modelRoot, 'hair_crop')).toBe(false)
     expect(visible(other, 'hair_wavy_bone')).toBe(false)
     expect(visible(other, 'hair_crop')).toBe(true)
-    applyCharacterArmor(modelRoot, { head: 'worn_plate_helmet' }, appearance)
+    await applyCharacterArmor(
+      modelRoot,
+      { head: 'worn_plate_helmet' },
+      appearance
+    )
     expect(visible(modelRoot, 'hair_wavy_bone')).toBe(false)
     expect(visible(modelRoot, 'helmet_plate')).toBe(true)
-    applyCharacterArmor(modelRoot, {}, appearance)
+    await applyCharacterArmor(modelRoot, {}, appearance)
     expect(visible(modelRoot, 'hair_wavy_bone')).toBe(true)
-    applyCharacterArmor(modelRoot, {}, { ...appearance, hair: 'none' })
+    await applyCharacterArmor(modelRoot, {}, { ...appearance, hair: 'none' })
     expect(visible(modelRoot, 'hair_wavy_bone')).toBe(false)
     expect(visible(modelRoot, 'hair_crop')).toBe(false)
     expect(visible(other, 'hair_crop')).toBe(true)
@@ -120,7 +126,9 @@ describe.skipIf(
     )
     const raw = skinnedParts(original.scene)[0].geometry
     const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
-    const hair = skinnedParts(source.scene).find(
+    const { modelRoot } = createCharacterModelRoot(source.scene)
+    await applyCharacterArmor(modelRoot, {}, { hair: 'wavy_bone' })
+    const hair = skinnedParts(modelRoot).find(
       (mesh) => mesh.userData.part_id === 'hair_wavy_bone'
     )!
     const geometry = hair.geometry
@@ -143,7 +151,7 @@ describe.skipIf(
     const appearance = { face: 'rugged', hair: 'crop' } as const
     const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH, appearance)
     const { modelRoot } = createCharacterModelRoot(source.scene)
-    applyCharacterArmor(modelRoot, {}, appearance)
+    await applyCharacterArmor(modelRoot, {}, appearance)
     modelRoot.updateMatrixWorld(true)
     const face = modelRoot.getObjectByName('face_rugged') as THREE.SkinnedMesh
     const hair = skinnedParts(modelRoot).find(
@@ -231,7 +239,7 @@ describe.skipIf(
       hands: 'gloves_caveman',
       boots: 'boots_caveman',
     } as const
-    applyCharacterArmor(modelRoot, armor)
+    await applyCharacterArmor(modelRoot, armor)
     for (const part of Object.values(parts)) {
       expect(visible(modelRoot, part)).toBe(true)
       expect(visible(other, part)).toBe(false)
@@ -247,11 +255,14 @@ describe.skipIf(
         true
       )
     for (const slot of Object.keys(parts) as (keyof typeof parts)[]) {
-      applyCharacterArmor(modelRoot, { ...armor, [slot]: null })
+      await applyCharacterArmor(modelRoot, { ...armor, [slot]: null })
       for (const [otherSlot, part] of Object.entries(parts))
         expect(visible(modelRoot, part)).toBe(otherSlot !== slot)
     }
-    applyCharacterArmor(modelRoot, { ...armor, pants: 'worn_plate_greaves' })
+    await applyCharacterArmor(modelRoot, {
+      ...armor,
+      pants: 'worn_plate_greaves',
+    })
     expect(visible(modelRoot, 'pants_plate')).toBe(true)
     expect(visible(modelRoot, 'pants_caveman')).toBe(false)
     for (const mesh of skinnedParts(modelRoot).filter(
@@ -262,7 +273,7 @@ describe.skipIf(
         0.43 - 1e-5
       )
     }
-    applyCharacterArmor(modelRoot, {})
+    await applyCharacterArmor(modelRoot, {})
     for (const part of Object.values(parts))
       expect(visible(modelRoot, part)).toBe(false)
     for (const region of ['torso', 'forearms', 'feet', 'legs'])
@@ -287,7 +298,7 @@ describe.skipIf(
       hands: 'gloves_ranger',
       boots: 'boots_ranger',
     } as const
-    applyCharacterArmor(modelRoot, armor)
+    await applyCharacterArmor(modelRoot, armor)
     for (const part of Object.values(parts)) {
       expect(visible(modelRoot, part)).toBe(true)
       expect(visible(other, part)).toBe(false)
@@ -310,11 +321,11 @@ describe.skipIf(
     expect(neck.geometry.boundingBox!.max.x).toBeCloseTo(0.09)
     expect(neck.geometry.boundingBox!.min.y).toBeCloseTo(1.54)
     for (const slot of Object.keys(parts) as (keyof typeof parts)[]) {
-      applyCharacterArmor(modelRoot, { ...armor, [slot]: null })
+      await applyCharacterArmor(modelRoot, { ...armor, [slot]: null })
       for (const [otherSlot, part] of Object.entries(parts))
         expect(visible(modelRoot, part)).toBe(otherSlot !== slot)
     }
-    applyCharacterArmor(modelRoot, {
+    await applyCharacterArmor(modelRoot, {
       ...armor,
       chest: 'worn_breastplate',
       pants: 'worn_rogue_pants',
@@ -323,10 +334,10 @@ describe.skipIf(
     expect(visible(modelRoot, 'pants_rogue')).toBe(true)
     expect(visible(modelRoot, 'top_ranger')).toBe(false)
     expect(visible(modelRoot, 'pants_ranger')).toBe(false)
-    applyCharacterArmor(modelRoot, armor)
+    await applyCharacterArmor(modelRoot, armor)
     for (const part of Object.values(parts))
       expect(visible(modelRoot, part)).toBe(true)
-    applyCharacterArmor(modelRoot, {})
+    await applyCharacterArmor(modelRoot, {})
     for (const part of Object.values(parts))
       expect(visible(modelRoot, part)).toBe(false)
     for (const region of [
@@ -358,7 +369,7 @@ describe.skipIf(
       hands: 'gloves_rogue',
       boots: 'boots_rogue',
     } as const
-    applyCharacterArmor(rogue, armor)
+    await applyCharacterArmor(rogue, armor)
     for (const part of Object.values(parts)) {
       expect(visible(rogue, part)).toBe(true)
       expect(visible(other, part)).toBe(false)
@@ -388,11 +399,11 @@ describe.skipIf(
     expect(handJoints.has('LeftHand')).toBe(true)
     expect(handJoints.has('RightHand')).toBe(true)
     for (const slot of Object.keys(parts) as (keyof typeof parts)[]) {
-      applyCharacterArmor(rogue, { ...armor, [slot]: null })
+      await applyCharacterArmor(rogue, { ...armor, [slot]: null })
       for (const [otherSlot, part] of Object.entries(parts))
         expect(visible(rogue, part)).toBe(otherSlot !== slot)
     }
-    applyCharacterArmor(rogue, {
+    await applyCharacterArmor(rogue, {
       ...armor,
       chest: 'worn_breastplate',
       head: 'worn_plate_helmet',
@@ -400,10 +411,10 @@ describe.skipIf(
     expect(visible(rogue, 'top_plate')).toBe(true)
     expect(visible(rogue, 'top_rogue')).toBe(false)
     expect(visible(rogue, 'hair_crop')).toBe(false)
-    applyCharacterArmor(rogue, armor)
+    await applyCharacterArmor(rogue, armor)
     expect(visible(rogue, 'top_rogue')).toBe(true)
     expect(visible(rogue, 'hair_crop')).toBe(true)
-    applyCharacterArmor(rogue, {})
+    await applyCharacterArmor(rogue, {})
     for (const part of Object.values(parts))
       expect(visible(rogue, part)).toBe(false)
     for (const region of ['torso', 'legs', 'hands', 'feet'])
@@ -430,7 +441,7 @@ describe.skipIf(
       hands: 'gloves',
       head: 'helmet',
     } as const
-    applyCharacterArmor(barbarian, armor)
+    await applyCharacterArmor(barbarian, armor)
     for (const part of Object.values(parts)) {
       expect(visible(barbarian, `${part}_barbarian`)).toBe(true)
       expect(visible(other, `${part}_barbarian`)).toBe(false)
@@ -449,17 +460,17 @@ describe.skipIf(
       meshes.some((mesh) => mesh.visible && mesh.userData.pelt_physics)
     ).toBe(true)
     for (const slot of Object.keys(parts) as (keyof typeof parts)[]) {
-      applyCharacterArmor(barbarian, { ...armor, [slot]: null })
+      await applyCharacterArmor(barbarian, { ...armor, [slot]: null })
       for (const [otherSlot, part] of Object.entries(parts))
         expect(visible(barbarian, `${part}_barbarian`)).toBe(otherSlot !== slot)
       expect(visible(barbarian, 'hair_crop')).toBe(slot === 'head')
     }
     const mixed: ArmorEquipment = { ...armor, chest: 'worn_breastplate' }
-    applyCharacterArmor(barbarian, mixed)
+    await applyCharacterArmor(barbarian, mixed)
     expect(visible(barbarian, 'top_plate')).toBe(true)
     expect(visible(barbarian, 'top_barbarian')).toBe(false)
     expect(visible(barbarian, 'gloves_barbarian')).toBe(true)
-    applyCharacterArmor(barbarian, {})
+    await applyCharacterArmor(barbarian, {})
     for (const part of Object.values(parts))
       expect(visible(barbarian, `${part}_barbarian`)).toBe(false)
     expect(visible(other, 'top_linen')).toBe(true)
@@ -476,7 +487,7 @@ describe.skipIf(
       hands: 'worn_plate_gauntlets',
       head: 'worn_plate_helmet',
     }
-    applyCharacterArmor(knight, armor)
+    await applyCharacterArmor(knight, armor)
     for (const part of ['top', 'pants', 'boots', 'gloves', 'helmet']) {
       expect(visible(knight, part + '_plate')).toBe(true)
       expect(visible(other, part + '_plate')).toBe(false)
@@ -495,12 +506,12 @@ describe.skipIf(
     expect(legs.every((mesh) => !mesh.visible)).toBe(true)
     expect(bootAnkles.every((mesh) => !mesh.visible)).toBe(true)
 
-    applyCharacterArmor(knight, { ...armor, head: null })
+    await applyCharacterArmor(knight, { ...armor, head: null })
     expect(visible(knight, 'helmet_plate')).toBe(false)
     expect(visible(knight, 'hair_crop')).toBe(true)
     expect(visible(knight, 'top_plate')).toBe(true)
 
-    applyCharacterArmor(knight, { ...armor, pants: null })
+    await applyCharacterArmor(knight, { ...armor, pants: null })
     expect(visible(knight, 'pants_plate')).toBe(false)
     expect(visible(knight, 'pants_cloth')).toBe(false)
     expect(legs.every((mesh) => mesh.visible)).toBe(true)
@@ -510,7 +521,7 @@ describe.skipIf(
     expect(visible(knight, 'boots_plate')).toBe(true)
     expect(visible(other, 'pants_cloth')).toBe(true)
 
-    applyCharacterArmor(knight, { ...armor, chest: null })
+    await applyCharacterArmor(knight, { ...armor, chest: null })
     expect(visible(knight, 'top_plate')).toBe(false)
     expect(visible(knight, 'top_linen')).toBe(false)
     expect(visible(knight, 'pants_plate')).toBe(true)
@@ -523,23 +534,23 @@ describe.skipIf(
     }
     expect(visible(other, 'top_linen')).toBe(true)
 
-    applyCharacterArmor(knight, armor)
+    await applyCharacterArmor(knight, armor)
     expect(visible(knight, 'top_plate')).toBe(true)
     expect(visible(knight, 'top_linen')).toBe(false)
 
-    applyCharacterArmor(knight, { ...armor, chest: 'leather_armor' })
+    await applyCharacterArmor(knight, { ...armor, chest: 'leather_armor' })
     expect(visible(knight, 'top_plate')).toBe(false)
     expect(visible(knight, 'top_rogue')).toBe(true)
     expect(visible(knight, 'top_linen')).toBe(false)
     expect(visible(knight, 'pants_plate')).toBe(true)
 
-    applyCharacterArmor(knight, { ...armor, pants: 'leather_pants' })
+    await applyCharacterArmor(knight, { ...armor, pants: 'leather_pants' })
     expect(visible(knight, 'pants_plate')).toBe(false)
     expect(visible(knight, 'pants_rogue')).toBe(true)
     expect(visible(knight, 'pants_cloth')).toBe(false)
     expect(legs.every((mesh) => !mesh.visible)).toBe(true)
 
-    applyCharacterArmor(knight, {})
+    await applyCharacterArmor(knight, {})
     for (const part of ['top', 'pants', 'boots', 'gloves', 'helmet'])
       expect(visible(knight, part + '_plate')).toBe(false)
     expect(visible(knight, 'top_linen')).toBe(false)
@@ -550,7 +561,10 @@ describe.skipIf(
       meshes.some((mesh) => mesh.userData.region === 'hands' && mesh.visible)
     ).toBe(true)
 
-    applyCharacterArmor(other, { chest: 'breastplate', head: 'plate_helmet' })
+    await applyCharacterArmor(other, {
+      chest: 'breastplate',
+      head: 'plate_helmet',
+    })
     expect(visible(other, 'top_plate')).toBe(true)
     expect(visible(other, 'helmet_plate')).toBe(true)
     expect(visible(knight, 'top_plate')).toBe(false)
@@ -560,7 +574,7 @@ describe.skipIf(
   it('renders legacy leather and metal equipment with existing modular parts', async () => {
     const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
     const { modelRoot } = createCharacterModelRoot(source.scene)
-    applyCharacterArmor(modelRoot, {
+    await applyCharacterArmor(modelRoot, {
       chest: 'leather_armor',
       pants: 'leather_pants',
       boots: 'leather_boots',
@@ -572,7 +586,7 @@ describe.skipIf(
     expect(visible(modelRoot, 'helmet_plate')).toBe(true)
     expect(visible(modelRoot, 'hair_crop')).toBe(false)
 
-    applyCharacterArmor(modelRoot, {
+    await applyCharacterArmor(modelRoot, {
       chest: 'chain_mail',
       pants: 'plate_greaves',
       boots: 'iron_boots',
@@ -584,7 +598,7 @@ describe.skipIf(
       expect(visible(modelRoot, `${part}_rogue`)).toBe(false)
     }
 
-    applyCharacterArmor(modelRoot, {})
+    await applyCharacterArmor(modelRoot, {})
     for (const part of ['top', 'pants', 'boots', 'gloves', 'helmet'])
       expect(visible(modelRoot, `${part}_plate`)).toBe(false)
     expect(visible(modelRoot, 'hair_crop')).toBe(true)
@@ -621,18 +635,87 @@ describe.skipIf(
     const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
     const { modelRoot, clonedScene } = createCharacterModelRoot(source.scene)
     const { modelRoot: other } = createCharacterModelRoot(source.scene)
-    applyCharacterArmor(modelRoot, { boots: 'worn_barbarian_boots' })
+    await applyCharacterArmor(modelRoot, { boots: 'worn_barbarian_boots' })
     expect(computeSoleGroundOffset(modelRoot)).toBeCloseTo(0, 6)
     const hips = modelRoot.getObjectByName('Hips')!
     hips.position.y += 0.25
     const posed = hips.position.clone()
-    applyCharacterArmor(modelRoot, { boots: 'worn_plate_boots' })
+    await applyCharacterArmor(modelRoot, { boots: 'worn_plate_boots' })
     expect(hips.position).toEqual(posed)
     expect(computeSoleGroundOffset(modelRoot)).toBeCloseTo(-0.25, 5)
     const offset = clonedScene.position.y
-    applyCharacterArmor(modelRoot, { boots: 'worn_plate_boots' })
+    await applyCharacterArmor(modelRoot, { boots: 'worn_plate_boots' })
     expect(clonedScene.position.y).toBe(offset)
     expect(other.children[0].position.y).toBe(0)
+  })
+
+  it('binds non-default parts only to players that wear them', async () => {
+    const lazy = /_(plate|barbarian|rogue|caveman|ranger)$|^hair_wavy_bone$/
+    const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
+    const { modelRoot: ranger } = createCharacterModelRoot(source.scene)
+    const { modelRoot: other } = createCharacterModelRoot(source.scene)
+    const has = (root: THREE.Object3D, id: string) =>
+      skinnedParts(root).some((mesh) => mesh.userData.part_id === id)
+    expect(
+      skinnedParts(source.scene).some((mesh) =>
+        lazy.test(mesh.userData.part_id ?? '')
+      )
+    ).toBe(false)
+    const pending = applyCharacterArmor(ranger, {
+      chest: 'worn_ranger_top',
+      boots: 'worn_ranger_boots',
+    })
+    expect(visible(ranger, 'top_ranger')).toBe(false)
+    expect(visible(ranger, 'boots_leather')).toBe(true)
+    await pending
+    expect(visible(ranger, 'top_ranger')).toBe(true)
+    expect(visible(ranger, 'boots_ranger')).toBe(true)
+    expect(has(ranger, 'pants_ranger')).toBe(false)
+    expect(has(other, 'top_ranger')).toBe(false)
+    expect(has(source.scene, 'top_ranger')).toBe(false)
+  })
+
+  it('shows the latest armor when an earlier outfit finishes loading', async () => {
+    const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
+    const { modelRoot } = createCharacterModelRoot(source.scene)
+    const first = applyCharacterArmor(modelRoot, {
+      chest: 'worn_caveman_top',
+      pants: 'worn_caveman_pants',
+    })
+    const second = applyCharacterArmor(modelRoot, { chest: 'worn_rogue_top' })
+    await Promise.all([first, second])
+    expect(visible(modelRoot, 'top_caveman')).toBe(false)
+    expect(visible(modelRoot, 'pants_caveman')).toBe(false)
+    expect(visible(modelRoot, 'top_rogue')).toBe(true)
+  })
+
+  it('grounds every boot style on both faces with the baked sole offsets', async () => {
+    const boots = {
+      none: null,
+      leather: 'unlisted_boots',
+      plate: 'worn_plate_boots',
+      barbarian: 'worn_barbarian_boots',
+      rogue: 'worn_rogue_boots',
+      caveman: 'worn_caveman_boots',
+      ranger: 'worn_ranger_boots',
+    } satisfies Record<(typeof MODULAR_BOOTS)[number], string | null>
+    for (const face of ['default', 'rugged'] as const) {
+      const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH, {
+        face,
+      })
+      const { modelRoot } = createCharacterModelRoot(source.scene)
+      for (const [style, item] of Object.entries(boots)) {
+        await applyCharacterArmor(modelRoot, {
+          chest: 'unlisted_shirt',
+          pants: 'unlisted_pants',
+          boots: item,
+        })
+        expect(
+          computeSoleGroundOffset(modelRoot),
+          `${face} ${style}`
+        ).toBeCloseTo(0, 6)
+      }
+    }
   })
 
   it('keeps the corrected movement and sword grip through crossfades', async () => {

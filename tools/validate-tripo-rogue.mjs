@@ -1,14 +1,10 @@
 import assert from 'node:assert/strict'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
-import { createHash } from 'node:crypto'
 import { parseArgs } from 'node:util'
 import { measureAnkleConnections } from './outfits/ankle-section.mjs'
 import * as THREE from '../client/node_modules/three/build/three.module.js'
-import { GLTFLoader } from '../client/node_modules/three/examples/jsm/loaders/GLTFLoader.js'
-import { createServer } from '../client/node_modules/vite/dist/node/index.js'
+import { hash, headlessThree, root } from './lib/headless-three.mjs'
 
-const root = new URL('../', import.meta.url)
 const { values } = parseArgs({ options: {
   directory: { type: 'string', default: 'assets/modular_human_male_01/parts/rogue_tripo_v1' },
   part: { type: 'string', default: 'top_rogue' },
@@ -17,20 +13,7 @@ const { values } = parseArgs({ options: {
   fitting: { type: 'string' },
 } })
 const directory = values.directory.replace(/\/$/, '') + '/'
-const hash = (path) => createHash('sha256').update(readFileSync(new URL(path, root))).digest('hex')
-const server = await createServer({
-  root: fileURLToPath(new URL('client/', root)), configFile: false,
-  optimizeDeps: { noDiscovery: true, include: [] },
-  server: { middlewareMode: true, watch: null }, appType: 'custom',
-})
-globalThis.self = globalThis
-const loader = new GLTFLoader().register(() => ({
-  name: 'headless-materials', loadMaterial: async () => new THREE.MeshBasicMaterial(),
-}))
-async function load(path) {
-  const data = readFileSync(new URL(path, root))
-  return loader.parseAsync(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), '')
-}
+const { server, load } = await headlessThree()
 try {
   const { bindModularPart, modularAnimationClips } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
   const bodyPath = 'assets/modular_human_male_01/parts/fitted/base.glb'

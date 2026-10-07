@@ -1,29 +1,11 @@
 import assert from 'node:assert/strict'
-import { readFileSync, writeFileSync } from 'node:fs'
-import { createHash } from 'node:crypto'
-import { fileURLToPath } from 'node:url'
+import { writeFileSync } from 'node:fs'
 import { parseArgs } from 'node:util'
 import * as THREE from '../client/node_modules/three/build/three.module.js'
-import { GLTFLoader } from '../client/node_modules/three/examples/jsm/loaders/GLTFLoader.js'
-import { createServer } from '../client/node_modules/vite/dist/node/index.js'
+import { clipSampler, headlessThree, loadClips, root } from './lib/headless-three.mjs'
 
 const { values: { part } } = parseArgs({ options: { part: { type: 'string', default: 'caveman' } } })
-const root = new URL('../', import.meta.url)
-const server = await createServer({
-  root: fileURLToPath(new URL('client/', root)), configFile: false,
-  optimizeDeps: { noDiscovery: true, include: [] },
-  server: { middlewareMode: true, watch: null }, appType: 'custom',
-})
-globalThis.self = globalThis
-const loader = new GLTFLoader().register(() => ({
-  name: 'headless-materials', loadMaterial: async () => new THREE.MeshBasicMaterial(),
-}))
-const sources = []
-async function load(path) {
-  const data = readFileSync(new URL(path, root))
-  sources.push({ path, sha256: createHash('sha256').update(data).digest('hex') })
-  return loader.parseAsync(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), '')
-}
+const { server, sources, load } = await headlessThree()
 try {
   const { bindModularPart, modularAnimationClips } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
   const body = (await load('assets/modular_human_male_01/parts/fitted/base.glb')).scene
@@ -61,24 +43,12 @@ try {
     }
     return { mesh, rest, edges: [...edges.values()], rigidCalf, extension: 0, calfError: 0, motion: 0 }
   })
-  const packs = []
-  for (const [path, names] of [
-    ['assets/modular_human_male_01/rigged_hand_tuned/animations.glb', ['idle1', 'walk', 'run', 'jump', 'combat_idle', 'slash1']],
-    ['client/public/models/characters/modular_male/animations/social.glb', ['sit_idle']],
-  ]) packs.push({ animations: modularAnimationClips(body, await load(path), 'corrected'), names })
-  const mixer = new THREE.AnimationMixer(body)
+  const poses = clipSampler(body)
   const clips = []
-  for (const { animations, names } of packs) for (const name of names) {
-    mixer.stopAllAction()
-    const clip = animations.find(c => c.name === name)
-    assert.ok(clip, name)
-    const action = mixer.clipAction(clip).reset().setLoop(THREE.LoopOnce, 1)
-    action.clampWhenFinished = true
-    action.play()
+  for (const clip of await loadClips(body, load, modularAnimationClips)) {
+    const name = clip.name
     let extension = 0, calfError = 0
-    for (let frame = 0; frame <= 24; frame++) {
-      mixer.setTime(clip.duration * frame / 24)
-      body.updateMatrixWorld(true)
+    for (const _ of poses(clip)) {
       for (const record of records) {
         const { mesh, rest, edges } = record
         const points = rest.map((_, i) => mesh.getVertexPosition(i, new THREE.Vector3()))

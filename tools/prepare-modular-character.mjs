@@ -118,6 +118,7 @@ let selectedParts = process.argv.includes("--rogue-only") ? rogueParts : parts;
 if (process.argv.includes("--caveman-only")) selectedParts = cavemanParts;
 if (process.argv.includes("--ranger-only")) selectedParts = rangerParts;
 if (process.argv.includes("--appearance-only")) selectedParts = appearanceParts;
+if (process.argv.includes("--sole-offsets")) selectedParts = [];
 if (selectedPart) selectedParts = [selectedPart];
 if (selectedPack) selectedParts = [];
 for (const name of selectedParts) {
@@ -142,17 +143,14 @@ for (const name of selectedParts) {
   report.outputs[`${name}.glb`] = hash(`${output}/${name}.glb`);
 }
 
-if (
-  selectedPart ||
-  process.argv.includes("--parts-only") ||
-  process.argv.includes("--rogue-only") ||
-  process.argv.includes("--caveman-only") ||
-  process.argv.includes("--ranger-only") ||
-  process.argv.includes("--appearance-only")
-) {
-  writeManifest(true);
-  process.exit(0);
-}
+const partsOnly = [
+  "--parts-only",
+  "--rogue-only",
+  "--caveman-only",
+  "--ranger-only",
+  "--appearance-only",
+  "--sole-offsets",
+].some((flag) => process.argv.includes(flag));
 
 globalThis.self = globalThis;
 globalThis.FileReader = class {
@@ -189,6 +187,69 @@ try {
   const modular = await server.ssrLoadModule(
     "/src/lib/utils/modularCharacter.ts",
   );
+  if (!selectedPack)
+    await writeSoleOffsets(
+      runtime,
+      modular,
+      await server.ssrLoadModule("/src/lib/utils/headless-glb.fixture.ts"),
+    );
+  if (selectedPart || partsOnly) {
+    if (selectedParts.length) writeManifest(true);
+  } else await preparePacks(runtime, modular);
+} finally {
+  await server.close();
+}
+
+// Measured once per boot style here so clients don't skin every boots GLB at load.
+async function writeSoleOffsets(runtime, modular, headless) {
+  const loadOutput = async (name) =>
+    (
+      await headless.loadHeadlessGlb(
+        `${output.replace("client/public/", "")}/${name}.glb`,
+      )
+    ).scene;
+  const ids = new Set(
+    modular.modularOutfitParts(modular.DEFAULT_MODULAR_OUTFIT),
+  );
+  for (const style of modular.MODULAR_BOOTS)
+    if (style !== "none") ids.add(`boots_${style}`);
+  const sources = new Map(
+    await Promise.all([...ids].map(async (id) => [id, await loadOutput(id)])),
+  );
+  const faces = ["base", "base_rugged"];
+  const scenes = await Promise.all(faces.map(loadOutput));
+  let offsets;
+  for (const [i, scene] of scenes.entries()) {
+    const face = faces[i];
+    const body = modular.skinnedParts(scene);
+    const parts = new Map(
+      [...sources].map(([id, source]) => [
+        id,
+        modular.bindModularPart(scene, source),
+      ]),
+    );
+    const measured = {};
+    for (const style of modular.MODULAR_BOOTS) {
+      modular.showModularOutfit(body, parts, {
+        ...modular.DEFAULT_MODULAR_OUTFIT,
+        boots: style,
+      });
+      measured[style] = runtime.computeSoleGroundOffset(scene);
+    }
+    if (offsets) {
+      for (const style of modular.MODULAR_BOOTS)
+        if (Math.abs(offsets[style] - measured[style]) > 1e-6)
+          throw new Error(`${face} sole offset differs for ${style} boots`);
+    } else offsets = measured;
+  }
+  writeFileSync(
+    resolve(root, "client/src/lib/utils/modularSoleOffsets.json"),
+    JSON.stringify(offsets, null, 2) + "\n",
+  );
+  console.log("sole offsets:", offsets);
+}
+
+async function preparePacks(runtime, modular) {
   const base = await load(`${fitted}/base.glb`);
   const baked = await load(`${tuned}/animations.glb`);
   const corrected = new Map(
@@ -273,6 +334,4 @@ try {
     );
   }
   writeManifest(Boolean(selectedPack));
-} finally {
-  await server.close();
 }

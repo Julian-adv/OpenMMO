@@ -1352,10 +1352,14 @@
       const { clonedScene: cloned, modelRoot: newModelRoot } =
         createCharacterModelRoot(activeGltf.scene)
 
-      applyCharacterArmor(newModelRoot, visibleArmor, appearance)
+      await applyCharacterArmor(newModelRoot, visibleArmor, appearance)
+      if (destroyed) {
+        disposeCharacterSkeletons(newModelRoot)
+        return
+      }
 
       // Modular models take their footwear offset from applyCharacterArmor.
-      if (!cloned.userData.modular_sole_offsets)
+      if (!cloned.userData.modular_character)
         cloned.position.y = computeSoleGroundOffset(newModelRoot)
       // Compiles alongside the retargeting below; awaited before mounting.
       const warmed = warmupPipelines(

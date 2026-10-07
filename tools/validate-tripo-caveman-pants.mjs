@@ -1,29 +1,10 @@
 import assert from 'node:assert/strict'
-import { readFileSync, writeFileSync } from 'node:fs'
-import { createHash } from 'node:crypto'
-import { fileURLToPath } from 'node:url'
+import { writeFileSync } from 'node:fs'
 import * as THREE from '../client/node_modules/three/build/three.module.js'
-import { GLTFLoader } from '../client/node_modules/three/examples/jsm/loaders/GLTFLoader.js'
-import { MeshoptDecoder } from '../client/node_modules/three/examples/jsm/libs/meshopt_decoder.module.js'
-import { createServer } from '../client/node_modules/vite/dist/node/index.js'
+import { headlessThree, loadClips, root } from './lib/headless-three.mjs'
 
-const root = new URL('../', import.meta.url)
-const server = await createServer({
-  root: fileURLToPath(new URL('client/', root)), configFile: false,
-  optimizeDeps: { noDiscovery: true, include: [] },
-  server: { middlewareMode: true, watch: null }, appType: 'custom',
-})
-globalThis.self = globalThis
 const runtime = process.argv.includes('--runtime')
-const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).register(() => ({
-  name: 'headless-materials', loadMaterial: async () => new THREE.MeshBasicMaterial(),
-}))
-const sources = []
-async function load(path) {
-  const data = readFileSync(new URL(path, root))
-  sources.push({ path, sha256: createHash('sha256').update(data).digest('hex') })
-  return loader.parseAsync(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), '')
-}
+const { server, sources, load } = await headlessThree({ meshopt: true })
 try {
   const { bindModularPart, modularAnimationClips } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
   const { updatePeltPhysics, resetPeltPhysics, disposePeltPhysics } = await server.ssrLoadModule('/src/lib/effects/pelt-rig.ts')
@@ -54,66 +35,55 @@ try {
   })
   const mixer = new THREE.AnimationMixer(body)
   const clips = []
-  const packs = []
-  for (const [path, names] of [
-    ['assets/modular_human_male_01/rigged_hand_tuned/animations.glb', ['idle1', 'walk', 'run', 'jump', 'combat_idle', 'slash1']],
-    ['client/public/models/characters/modular_male/animations/social.glb', ['sit_idle']],
-  ]) {
-    const animations = modularAnimationClips(body, await load(path), 'corrected')
-    packs.push({ animations, names })
-  }
-  for (const { animations, names } of packs) {
-    for (const name of names) {
-      mixer.stopAllAction()
-      const clip = animations.find(c => c.name === name)
-      assert.ok(clip, name)
-      const action = mixer.clipAction(clip).reset().setLoop(THREE.LoopOnce, 1)
-      action.clampWhenFinished = true
-      action.play()
-      mixer.update(0)
-      body.updateMatrixWorld(true)
-      updatePeltPhysics(body, 0)
-      resetPeltPhysics(body)
-      const frames = Math.ceil(clip.duration * 60)
-      let extension = 0
-      for (let frame = 0; frame <= frames; frame++) {
-        if (frame) {
-          mixer.update(1 / 60)
-          body.updateMatrixWorld(true)
-          updatePeltPhysics(body, 1 / 60)
+  for (const clip of await loadClips(body, load, modularAnimationClips)) {
+    const name = clip.name
+    mixer.stopAllAction()
+    const action = mixer.clipAction(clip).reset().setLoop(THREE.LoopOnce, 1)
+    action.clampWhenFinished = true
+    action.play()
+    mixer.update(0)
+    body.updateMatrixWorld(true)
+    updatePeltPhysics(body, 0)
+    resetPeltPhysics(body)
+    const frames = Math.ceil(clip.duration * 60)
+    let extension = 0
+    for (let frame = 0; frame <= frames; frame++) {
+      if (frame) {
+        mixer.update(1 / 60)
+        body.updateMatrixWorld(true)
+        updatePeltPhysics(body, 1 / 60)
+      }
+      if (frame % Math.max(1, Math.floor(frames / 12)) && frame !== frames) continue
+      for (const record of records) {
+        const { mesh, rest, edges } = record
+        const position = mesh.geometry.attributes.position
+        const points = rest.map((_, i) => new THREE.Vector3().fromBufferAttribute(position, i))
+        const cloth = mesh.userData.pelt_physics?.cloth
+        if (cloth) {
+          const count = cloth.columns * cloth.rows, pinned = cloth.columns * cloth.pinned_rows
+          for (let i = 0; i < pinned; i++) for (const index of [i, i + count])
+            assert.ok(points[index].distanceTo(rest[index]) < 1e-7, `${name}: ${mesh.name} pin moved`)
+          for (let i = pinned; i < count; i++) {
+            const a = i - cloth.columns
+            const error = points[i].distanceTo(points[a]) / rest[i].distanceTo(rest[a]) - 1
+            assert.ok(error <= .04002, `${name}: ${mesh.name} vertical extension ${error}`)
+            record.verticalExtension = Math.max(record.verticalExtension, error)
+            assert.ok(Math.abs(points[i].distanceTo(points[i + count]) - rest[i].distanceTo(rest[i + count])) < 1e-6, `${name}: cloth thickness changed`)
+          }
         }
-        if (frame % Math.max(1, Math.floor(frames / 12)) && frame !== frames) continue
-        for (const record of records) {
-          const { mesh, rest, edges } = record
-          const position = mesh.geometry.attributes.position
-          const points = rest.map((_, i) => new THREE.Vector3().fromBufferAttribute(position, i))
-          const cloth = mesh.userData.pelt_physics?.cloth
-          if (cloth) {
-            const count = cloth.columns * cloth.rows, pinned = cloth.columns * cloth.pinned_rows
-            for (let i = 0; i < pinned; i++) for (const index of [i, i + count])
-              assert.ok(points[index].distanceTo(rest[index]) < 1e-7, `${name}: ${mesh.name} pin moved`)
-            for (let i = pinned; i < count; i++) {
-              const a = i - cloth.columns
-              const error = points[i].distanceTo(points[a]) / rest[i].distanceTo(rest[a]) - 1
-              assert.ok(error <= .04002, `${name}: ${mesh.name} vertical extension ${error}`)
-              record.verticalExtension = Math.max(record.verticalExtension, error)
-              assert.ok(Math.abs(points[i].distanceTo(points[i + count]) - rest[i].distanceTo(rest[i + count])) < 1e-6, `${name}: cloth thickness changed`)
-            }
-          }
-          for (let i = 0; i < points.length; i++) {
-            assert.ok(points[i].toArray().every(Number.isFinite), `${name}: nonfinite point`)
-            record.motion = Math.max(record.motion, points[i].distanceTo(rest[i]))
-          }
-          for (const { a, b, length } of edges) {
-            const error = Math.max(0, points[a].distanceTo(points[b]) / length - 1)
-            if (!cloth) assert.ok(Math.abs(points[a].distanceTo(points[b]) - length) < 1e-6, `${name}: ${mesh.name} rigid edge changed`)
-            extension = Math.max(extension, error)
-            record.extension = Math.max(record.extension, error)
-          }
+        for (let i = 0; i < points.length; i++) {
+          assert.ok(points[i].toArray().every(Number.isFinite), `${name}: nonfinite point`)
+          record.motion = Math.max(record.motion, points[i].distanceTo(rest[i]))
+        }
+        for (const { a, b, length } of edges) {
+          const error = Math.max(0, points[a].distanceTo(points[b]) / length - 1)
+          if (!cloth) assert.ok(Math.abs(points[a].distanceTo(points[b]) - length) < 1e-6, `${name}: ${mesh.name} rigid edge changed`)
+          extension = Math.max(extension, error)
+          record.extension = Math.max(record.extension, error)
         }
       }
-      clips.push({ clip: name, frames, maximum_edge_extension_relative: extension })
     }
+    clips.push({ clip: name, frames, maximum_edge_extension_relative: extension })
   }
   const panels = records.filter(r => r.mesh.userData.pelt_physics)
   assert.equal(panels.length, 4)

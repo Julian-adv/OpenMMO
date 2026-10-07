@@ -1,30 +1,12 @@
 import assert from 'node:assert/strict'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { createHash } from 'node:crypto'
-import { fileURLToPath } from 'node:url'
 import * as THREE from '../client/node_modules/three/build/three.module.js'
-import { GLTFLoader } from '../client/node_modules/three/examples/jsm/loaders/GLTFLoader.js'
-import { createServer } from '../client/node_modules/vite/dist/node/index.js'
+import { clipSampler, headlessThree, loadClips, root } from './lib/headless-three.mjs'
 
-const root = new URL('../', import.meta.url)
 const directory = 'assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/'
 const fittingPath = 'doc/assets/modular-ranger-tripo-gloves-fitting-v1.json'
 const fitting = JSON.parse(readFileSync(new URL(fittingPath, root)))
-const server = await createServer({
-  root: fileURLToPath(new URL('client/', root)), configFile: false,
-  optimizeDeps: { noDiscovery: true, include: [] },
-  server: { middlewareMode: true, watch: null }, appType: 'custom',
-})
-globalThis.self = globalThis
-const loader = new GLTFLoader().register(() => ({
-  name: 'headless-materials', loadMaterial: async () => new THREE.MeshBasicMaterial(),
-}))
-const sources = []
-async function load(path) {
-  const data = readFileSync(new URL(path, root))
-  sources.push({ path, sha256: createHash('sha256').update(data).digest('hex') })
-  return loader.parseAsync(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), '')
-}
+const { server, sources, load } = await headlessThree()
 try {
   const { bindModularPart, modularAnimationClips } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
   const { trimModularClothing } = await server.ssrLoadModule('/src/lib/utils/modularClothing.ts')
@@ -107,71 +89,52 @@ try {
       cuff: { elbow, wrist, axis, cuffEnd, boundary, inverseRest: elbow.matrixWorld.clone().invert(), minimumOverlap: Infinity },
       rigidVertices: rigid.filter(Boolean).length, stretch: 1, rigidError: 0, seamGap: 0, motion: 0 }
   })
-  const mixer = new THREE.AnimationMixer(body)
   const skeleton = meshes[0].skeleton
-  const restBones = skeleton.bones.map(bone => ({ bone, p: bone.position.clone(), q: bone.quaternion.clone(), s: bone.scale.clone() }))
+  const sampler = clipSampler(body, { restore: skeleton.bones })
   const clips = [], snapshots = [], poses = []
-  for (const [path, names] of [
-    ['assets/modular_human_male_01/rigged_hand_tuned/animations.glb', ['idle1', 'walk', 'run', 'jump', 'combat_idle', 'slash1']],
-    ['client/public/models/characters/modular_male/animations/social.glb', ['sit_idle']],
-  ]) {
-    const animations = modularAnimationClips(body, await load(path), 'corrected')
-    for (const name of names) {
-      mixer.stopAllAction()
-      const clip = animations.find(c => c.name === name)
-      assert.ok(clip, name)
-      const action = mixer.clipAction(clip).reset().setLoop(THREE.LoopOnce, 1)
-      action.clampWhenFinished = true
-      action.play()
-      let stretch = 1, rigidError = 0, seamGap = 0
-      for (let sample = 0; sample <= 24; sample++) {
-        const time = clip.duration * sample / 24
-        mixer.setTime(time)
-        body.updateMatrixWorld(true)
-        skeleton.update()
-        for (const skin of forearms) skin.skeleton.update()
-        for (const record of records) {
-          const { cuff } = record
-          const undoForearm = cuff.inverseRest.clone().invert().multiply(cuff.elbow.matrixWorld.clone().invert())
-          for (const { skin, i } of cuff.boundary) {
-            const point = skin.getVertexPosition(i, new THREE.Vector3()).applyMatrix4(skin.matrixWorld).applyMatrix4(undoForearm)
-            const overlap = point.sub(cuff.wrist).dot(cuff.axis) - cuff.cuffEnd
-            cuff.minimumOverlap = Math.min(cuff.minimumOverlap, overlap)
-            assert.ok(overlap > .015, `${name}: ${record.mesh.name} skin ends before cuff overlap (${overlap})`)
-          }
-          const points = record.rest.map((_, i) => record.mesh.getVertexPosition(i, new THREE.Vector3()))
-          for (let i = 0; i < points.length; i++) {
-            assert.ok(points[i].toArray().every(Number.isFinite), `${name}: nonfinite vertex`)
-            record.motion = Math.max(record.motion, points[i].distanceTo(record.rest[i]))
-          }
-          for (const { a, b, length, rigid } of record.edges) {
-            const ratio = points[a].distanceTo(points[b]) / length
-            stretch = Math.max(stretch, ratio)
-            record.stretch = Math.max(record.stretch, ratio)
-            if (rigid) {
-              const error = Math.abs(ratio - 1)
-              assert.ok(error < 1e-4, `${name}: rigid bracer changed length`)
-              rigidError = Math.max(rigidError, error)
-              record.rigidError = Math.max(record.rigidError, error)
-            }
-          }
-          for (const group of record.seams) for (const i of group.slice(1)) {
-            const gap = points[group[0]].distanceTo(points[i])
-            seamGap = Math.max(seamGap, gap)
-            record.seamGap = Math.max(record.seamGap, gap)
-            assert.ok(gap < 1e-5, `${name}: split UV seam`)
+  for (const clip of await loadClips(body, load, modularAnimationClips)) {
+    const name = clip.name
+    let stretch = 1, rigidError = 0, seamGap = 0
+    for (const { sample, time } of sampler(clip)) {
+      skeleton.update()
+      for (const skin of forearms) skin.skeleton.update()
+      for (const record of records) {
+        const { cuff } = record
+        const undoForearm = cuff.inverseRest.clone().invert().multiply(cuff.elbow.matrixWorld.clone().invert())
+        for (const { skin, i } of cuff.boundary) {
+          const point = skin.getVertexPosition(i, new THREE.Vector3()).applyMatrix4(skin.matrixWorld).applyMatrix4(undoForearm)
+          const overlap = point.sub(cuff.wrist).dot(cuff.axis) - cuff.cuffEnd
+          cuff.minimumOverlap = Math.min(cuff.minimumOverlap, overlap)
+          assert.ok(overlap > .015, `${name}: ${record.mesh.name} skin ends before cuff overlap (${overlap})`)
+        }
+        const points = record.rest.map((_, i) => record.mesh.getVertexPosition(i, new THREE.Vector3()))
+        for (let i = 0; i < points.length; i++) {
+          assert.ok(points[i].toArray().every(Number.isFinite), `${name}: nonfinite vertex`)
+          record.motion = Math.max(record.motion, points[i].distanceTo(record.rest[i]))
+        }
+        for (const { a, b, length, rigid } of record.edges) {
+          const ratio = points[a].distanceTo(points[b]) / length
+          stretch = Math.max(stretch, ratio)
+          record.stretch = Math.max(record.stretch, ratio)
+          if (rigid) {
+            const error = Math.abs(ratio - 1)
+            assert.ok(error < 1e-4, `${name}: rigid bracer changed length`)
+            rigidError = Math.max(rigidError, error)
+            record.rigidError = Math.max(record.rigidError, error)
           }
         }
-        const matrices = skeleton.bones.map((bone, i) => new THREE.Matrix4().multiplyMatrices(bone.matrixWorld, skeleton.boneInverses[i]).toArray())
-        poses.push({ clip: name, time, matrices })
-        if (sample === 10) snapshots.push({ clip: name, time, bone_deformation_matrices: Object.fromEntries(skeleton.bones.map((bone, i) => [bone.name, matrices[i]])) })
+        for (const group of record.seams) for (const i of group.slice(1)) {
+          const gap = points[group[0]].distanceTo(points[i])
+          seamGap = Math.max(seamGap, gap)
+          record.seamGap = Math.max(record.seamGap, gap)
+          assert.ok(gap < 1e-5, `${name}: split UV seam`)
+        }
       }
-      clips.push({ clip: name, samples: 25, maximum_edge_stretch_ratio: stretch, maximum_rigid_bracer_length_error_relative: rigidError, maximum_seam_gap_m: seamGap })
-      action.stop()
-      mixer.uncacheClip(clip)
-      for (const { bone, p, q, s } of restBones) { bone.position.copy(p); bone.quaternion.copy(q); bone.scale.copy(s) }
-      body.updateMatrixWorld(true)
+      const matrices = skeleton.bones.map((bone, i) => new THREE.Matrix4().multiplyMatrices(bone.matrixWorld, skeleton.boneInverses[i]).toArray())
+      poses.push({ clip: name, time, matrices })
+      if (sample === 10) snapshots.push({ clip: name, time, bone_deformation_matrices: Object.fromEntries(skeleton.bones.map((bone, i) => [bone.name, matrices[i]])) })
     }
+    clips.push({ clip: name, samples: 25, maximum_edge_stretch_ratio: stretch, maximum_rigid_bracer_length_error_relative: rigidError, maximum_seam_gap_m: seamGap })
   }
   assert.ok(records.every(r => r.motion > .1), 'Gloves did not animate')
   const report = { date: '2026-10-07', sources, exact_rig_binding: true, normalized_weights: true,

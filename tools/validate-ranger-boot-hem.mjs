@@ -1,26 +1,16 @@
 import assert from 'node:assert/strict'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import * as THREE from '../client/node_modules/three/build/three.module.js'
-import { GLTFLoader } from '../client/node_modules/three/examples/jsm/loaders/GLTFLoader.js'
-import { createServer } from '../client/node_modules/vite/dist/node/index.js'
+import { clipSampler, hash, headlessThree, loadClips, root } from './lib/headless-three.mjs'
 
-const root = new URL('../', import.meta.url)
 const style = process.argv.includes('--rogue') ? 'rogue' : 'ranger'
 const outfit = { pants: style, top: 'none' }
 const pantsPath = `assets/modular_human_male_01/parts/${style}_tripo_pants_v1/pants_${style}.glb`
 const cuff = JSON.parse(readFileSync(new URL('client/src/lib/data/rangerBootCuff.json', root)))
-assert.equal(createHash('sha256').update(readFileSync(new URL(cuff.source, root))).digest('hex'), cuff.sha256)
-const server = await createServer({ root: fileURLToPath(new URL('client/', root)), configFile: false,
-  optimizeDeps: { noDiscovery: true, include: [] }, server: { middlewareMode: true, watch: null }, appType: 'custom' })
-globalThis.self = globalThis
-const loader = new GLTFLoader().register(() => ({ name: 'headless-materials', loadMaterial: async () => new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }) }))
-async function load(path) {
-  const data = readFileSync(new URL(path, root))
-  return loader.parseAsync(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), '')
-}
+assert.equal(hash(cuff.source), cuff.sha256)
+const { server, load } = await headlessThree({ material: () => new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }) })
 try {
   const { bindModularPart, showModularOutfit, RANGER_MODULAR_OUTFIT, modularAnimationClips } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
   const { rangerBootRim } = await server.ssrLoadModule('/src/lib/utils/rangerBootCuff.ts')
@@ -63,35 +53,18 @@ try {
     ]))), encoding: 'utf8', maxBuffer: 8 * 1024 * 1024,
   }))
   const clips = []
-  const packs = []
-  for (const [path, names] of [
-    ['assets/modular_human_male_01/rigged_hand_tuned/animations.glb', ['idle1', 'walk', 'run', 'jump', 'combat_idle', 'slash1']],
-    ['client/public/models/characters/modular_male/animations/social.glb', ['sit_idle']],
-  ]) {
-    packs.push({ animations: modularAnimationClips(body, await load(path), 'corrected'), names })
-  }
-  const mixer = new THREE.AnimationMixer(body)
+  const poses = clipSampler(body)
   let maximumHemMotionError = 0
-  for (const { animations, names } of packs) {
-    for (const name of names) {
-      mixer.stopAllAction()
-      const clip = animations.find(c => c.name === name)
-      assert.ok(clip)
-      const action = mixer.clipAction(clip).reset().setLoop(THREE.LoopOnce, 1)
-      action.clampWhenFinished = true
-      action.play()
-      for (let frame = 0; frame <= 24; frame++) {
-        mixer.setTime(clip.duration * frame / 24)
-        body.updateMatrixWorld(true)
-        for (const { i, leg, local } of hems) {
-          const posed = pants[0].getVertexPosition(i, new THREE.Vector3()).applyMatrix4(leg.matrixWorld.clone().invert())
-          const error = posed.distanceTo(local)
-          assert.ok(error < 1e-5)
-          maximumHemMotionError = Math.max(maximumHemMotionError, error)
-        }
+  for (const clip of await loadClips(body, load, modularAnimationClips)) {
+    for (const _ of poses(clip)) {
+      for (const { i, leg, local } of hems) {
+        const posed = pants[0].getVertexPosition(i, new THREE.Vector3()).applyMatrix4(leg.matrixWorld.clone().invert())
+        const error = posed.distanceTo(local)
+        assert.ok(error < 1e-5)
+        maximumHemMotionError = Math.max(maximumHemMotionError, error)
       }
-      clips.push({ name, samples: 25 })
     }
+    clips.push({ name: clip.name, samples: 25 })
   }
   showModularOutfit([], parts, { ...RANGER_MODULAR_OUTFIT, ...outfit, top: 'plate' })
   const plate = pants[0].geometry.attributes.position
@@ -99,7 +72,7 @@ try {
   showModularOutfit([], parts, { ...RANGER_MODULAR_OUTFIT, ...outfit, boots: 'none' })
   assert.equal(pants[0].geometry, original)
   assert.deepEqual(Array.from(original.attributes.uv.array), originalUV)
-  const report = { date: '2026-10-07', pants_source: pantsPath, pants_sha256: createHash('sha256').update(readFileSync(new URL(pantsPath, root))).digest('hex'), cuff_source: cuff.source, cuff_sha256: cuff.sha256,
+  const report = { date: '2026-10-07', pants_source: pantsPath, pants_sha256: hash(pantsPath), cuff_source: cuff.source, cuff_sha256: cuff.sha256,
     rim_height_range_m: [Math.min(...cuff.profile.map(p => p[0])), Math.max(...cuff.profile.map(p => p[0]))],
     overlap_m: cuff.overlap, inset_m: cuff.inset, hem_vertices: hems.length, minimum_actual_inner_wall_clearance_m: minimumClearance,
     maximum_hem_relative_to_leg_motion_error_m: maximumHemMotionError, clips, snapshot,

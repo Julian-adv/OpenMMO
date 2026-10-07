@@ -7,6 +7,7 @@ import {
 } from 'three'
 
 const separated = new WeakMap<BufferGeometry, BufferGeometry>()
+const ornamentMaterials = new WeakMap<Material, Material>()
 
 export function separateWavyHairMaterials(mesh: SkinnedMesh): void {
   const source = mesh.geometry
@@ -75,9 +76,13 @@ export function separateWavyHairMaterials(mesh: SkinnedMesh): void {
   const original: Material = Array.isArray(mesh.material)
     ? mesh.material[0]
     : mesh.material
-  const ornament = original.clone()
-  ornament.name = 'wavy_hair_bone_ornaments'
-  ornament.userData.appearance_color_fixed = true
+  let ornament = ornamentMaterials.get(original)
+  if (!ornament) {
+    ornament = original.clone()
+    ornament.name = 'wavy_hair_bone_ornaments'
+    ornament.userData.appearance_color_fixed = true
+    ornamentMaterials.set(original, ornament)
+  }
   mesh.geometry = geometry
   mesh.material = [original, ornament]
 }

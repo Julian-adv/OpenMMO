@@ -370,7 +370,11 @@
     const sourceScene = characterGltfData.scene
     const { clonedScene: newClonedScene, modelRoot: newModelRoot } =
       createCharacterModelRoot(sourceScene)
-    applyCharacterArmor(newModelRoot, equipment?.armor, appearance)
+    const armored = applyCharacterArmor(
+      newModelRoot,
+      equipment?.armor,
+      appearance
+    )
     const generation = ++setupGeneration
 
     const orderedAnims = selectOrderedCharacterAnimations(
@@ -391,7 +395,7 @@
               combatMelee: combatMeleeGltfData.scene,
             }
           )
-    animations.then((clips) => {
+    Promise.all([animations, armored]).then(([clips]) => {
       if (generation !== setupGeneration) {
         disposeCharacterSkeletons(newModelRoot)
         return

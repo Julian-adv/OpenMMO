@@ -92,13 +92,17 @@
       loadCharacterModel(path, { face }),
       loadCharacterAnimationPack(path, CHARACTER_ANIMATION_PACK_PATHS.social),
     ])
-      .then(([charGltf, socialGltf]) => {
+      .then(async ([charGltf, socialGltf]) => {
         if (cancelled) return
+        const { modelRoot: root } = createCharacterModelRoot(charGltf.scene)
+        await applyCharacterArmor(root, $equippedArmor, appearance)
+        if (cancelled) {
+          disposeCharacterSkeletons(root)
+          return
+        }
         for (const clip of getGltfAnimations(socialGltf)) {
           clipsByName.set(clip.name, clip)
         }
-        const { modelRoot: root } = createCharacterModelRoot(charGltf.scene)
-        applyCharacterArmor(root, $equippedArmor, appearance)
         root.position.y = computeSoleGroundOffset(root)
         mixer = new THREE.AnimationMixer(root)
         modelRoot = root
@@ -123,7 +127,9 @@
 
   $effect(() => {
     if (modelRoot) {
-      applyCharacterArmor(modelRoot, $equippedArmor, appearance)
+      applyCharacterArmor(modelRoot, $equippedArmor, appearance).then(
+        invalidate
+      )
       invalidate()
     }
   })

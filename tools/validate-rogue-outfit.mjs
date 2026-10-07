@@ -1,34 +1,14 @@
 import assert from 'node:assert/strict'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
-import { createHash } from 'node:crypto'
 import * as THREE from '../client/node_modules/three/build/three.module.js'
-import { GLTFLoader } from '../client/node_modules/three/examples/jsm/loaders/GLTFLoader.js'
 import { measureAnkleConnections } from './outfits/ankle-section.mjs'
-import { createServer } from '../client/node_modules/vite/dist/node/index.js'
+import { hash, headlessThree, root } from './lib/headless-three.mjs'
 
-const root = new URL('../', import.meta.url)
 const selection = JSON.parse(readFileSync(new URL('doc/assets/modular-rogue-source-selection.json', root), 'utf8'))
 const candidate = selection.fitting_candidate
 const directory = candidate.directory + '/'
 const fitting = JSON.parse(readFileSync(new URL(candidate.report, root), 'utf8'))
-const server = await createServer({
-  root: fileURLToPath(new URL('client/', root)),
-  configFile: false,
-  optimizeDeps: { noDiscovery: true, include: [] },
-  server: { middlewareMode: true, watch: null },
-  appType: 'custom',
-})
-const hash = (path) => createHash('sha256').update(readFileSync(new URL(path, root))).digest('hex')
-globalThis.self = globalThis
-const loader = new GLTFLoader().register(() => ({
-  name: 'headless-materials',
-  loadMaterial: async () => new THREE.MeshBasicMaterial(),
-}))
-async function load(path) {
-  const data = readFileSync(new URL(path, root))
-  return loader.parseAsync(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), '')
-}
+const { server, load } = await headlessThree()
 function checkAnkles(ankles, label) {
   for (const ankle of ankles) for (const plane of ankle.planes) {
     assert.equal(plane.missing_rays, 0, `${label} ${ankle.side}: open ankle section at ${plane.height_m}`)

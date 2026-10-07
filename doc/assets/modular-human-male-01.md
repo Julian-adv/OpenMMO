@@ -67,6 +67,8 @@ node tools/prepare-modular-character.mjs
 
 프로젝트 `.venv`의 Pillow·NumPy와 클라이언트 Node 의존성이 필요하다.
 출력과 입력 해시는 [게임 manifest](../../client/public/models/characters/modular_male/manifest.json)에 기록한다.
+파츠를 만들 때 신발별 접지 높이를 [modularSoleOffsets.json](../../client/src/lib/utils/modularSoleOffsets.json)에 함께 기록한다.
+GLB를 다시 만들지 않고 높이만 다시 재려면 `--sole-offsets`를 쓴다.
 완성된 전용 애니메이션은 다시 리타게팅하거나 접지·손가락 보정을 중복 적용하지 않는다.
 검 부착 트랙은 `hand-grips.json`에서 가져와 캐릭터 믹서에서 함께 혼합한다.
 
