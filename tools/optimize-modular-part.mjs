@@ -1,8 +1,8 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { gzipSync } from 'node:zlib'
-import { NodeIO } from '@gltf-transform/core'
+import { NodeIO, PropertyType } from '@gltf-transform/core'
 import { ALL_EXTENSIONS, EXTMeshoptCompression, EXTTextureWebP } from '@gltf-transform/extensions'
-import { prune } from '@gltf-transform/functions'
+import { dedup, prune } from '@gltf-transform/functions'
 import { MeshoptDecoder, MeshoptEncoder } from 'meshoptimizer'
 import sharp from 'sharp'
 
@@ -25,7 +25,10 @@ const document = await io.readBinary(original)
 if (document.hasExtension('EXT_meshopt_compression')) {
   throw new Error('Use the uncompressed source to avoid repeated texture compression.')
 }
-await document.transform(prune({ keepLeaves: true, keepAttributes: true, keepIndices: true }))
+await document.transform(
+  prune({ keepLeaves: true, keepAttributes: true, keepIndices: true }),
+  dedup({ propertyTypes: [PropertyType.TEXTURE] })
+)
 const materials = document.getRoot().listMaterials()
 const webp = new Set(body ? materials.map(material => material.getBaseColorTexture()) : [])
 const normals = new Set(body ? materials.map(material => material.getNormalTexture()) : [])
@@ -35,13 +38,13 @@ for (const texture of document.getRoot().listTextures()) {
   if (!image) throw new Error('An embedded part texture is required.')
   const input = sharp(image)
   const hasAlpha = (await input.metadata()).hasAlpha
+  if (body || !hasAlpha)
+    input.resize({ width: size, height: size, fit: 'inside', withoutEnlargement: true })
   const [encoded, mimeType] = hasAlpha
     ? [input.webp({ lossless: true, effort: 6 }), 'image/webp']
     : webp.has(texture)
-    ? [input.webp({ quality: 95, effort: 6 }), 'image/webp']
-    : [input
-        .resize({ width: size, height: size, fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: normals.has(texture) ? 92 : 90, chromaSubsampling: '4:4:4' }), 'image/jpeg']
+    ? [input.webp({ quality: 90, effort: 6 }), 'image/webp']
+    : [input.jpeg({ quality: normals.has(texture) ? 92 : 90, chromaSubsampling: '4:4:4' }), 'image/jpeg']
   texture.setImage(await encoded.toBuffer()).setMimeType(mimeType)
 }
 if (document.getRoot().listTextures().some(texture => texture.getMimeType() === 'image/webp'))

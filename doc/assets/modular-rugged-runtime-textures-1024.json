@@ -1,0 +1,152 @@
+{
+  "date": "2026-10-08",
+  "before": {
+    "file": "client/public/models/characters/modular_male/base_rugged.glb",
+    "bytes": 7146752,
+    "gzip_bytes": 7012949,
+    "sha256": "ced727720b858153480712512d2669d97c5626e2f11b6ad81bdd547203239a98",
+    "meshes": 12,
+    "nodes": 78,
+    "skins": 1,
+    "textures": [
+      {
+        "name": "normal",
+        "width": 1024,
+        "height": 1024,
+        "mime": "image/jpeg",
+        "bytes": 211639,
+        "sha256": "7aba52eda8e950854b83725dafb5239d95f605070ec3a9c935f4b41d7da38c63"
+      },
+      {
+        "name": "base_color",
+        "width": 4096,
+        "height": 4096,
+        "mime": "image/webp",
+        "bytes": 2500636,
+        "sha256": "cccf1cb8f945dce6e276a07a98e3c403b9c436875e79842daebc946720e37fb4"
+      },
+      {
+        "name": "Image_1",
+        "width": 1024,
+        "height": 1024,
+        "mime": "image/jpeg",
+        "bytes": 167818,
+        "sha256": "d80d702eee0342eb74d11fed5600df00edc33d4c30e7a8a4ea8fdd5ac1ad2e3c"
+      },
+      {
+        "name": "tripo_image_f50d69d2-6ab9-4218-8ea1-cffab12edec2_0_0",
+        "width": 2048,
+        "height": 2048,
+        "mime": "image/webp",
+        "bytes": 1035560,
+        "sha256": "857c960d08be0e0236817eb9ab7d59e391bbf44ed1f037cf46c977c732bfa0f4"
+      },
+      {
+        "name": "base_color",
+        "width": 4096,
+        "height": 4096,
+        "mime": "image/webp",
+        "bytes": 2500636,
+        "sha256": "cccf1cb8f945dce6e276a07a98e3c403b9c436875e79842daebc946720e37fb4"
+      },
+      {
+        "name": "",
+        "width": 512,
+        "height": 512,
+        "mime": "image/webp",
+        "bytes": 78264,
+        "sha256": "f3fa375b477d608069fbd8aa3905ae6f76adfc3439a665268c9f0566002a5f51"
+      }
+    ]
+  },
+  "after": {
+    "file": "client/public/models/characters/modular_male/base_rugged.glb",
+    "bytes": 1547448,
+    "gzip_bytes": 1412783,
+    "sha256": "77e8f37b9b319c38c8ad6aa31a476d579d767d70082147d93375dba3a2b48a7b",
+    "meshes": 12,
+    "nodes": 78,
+    "skins": 1,
+    "textures": [
+      {
+        "name": "normal",
+        "width": 1024,
+        "height": 1024,
+        "mime": "image/jpeg",
+        "bytes": 211639,
+        "sha256": "7aba52eda8e950854b83725dafb5239d95f605070ec3a9c935f4b41d7da38c63"
+      },
+      {
+        "name": "base_color",
+        "width": 1024,
+        "height": 1024,
+        "mime": "image/webp",
+        "bytes": 231184,
+        "sha256": "d6cf5611514a9a6ff143dcc8163b5e79a5d2fb1cd88286d8f4fad19fca7fed03"
+      },
+      {
+        "name": "Image_1",
+        "width": 1024,
+        "height": 1024,
+        "mime": "image/jpeg",
+        "bytes": 167818,
+        "sha256": "d80d702eee0342eb74d11fed5600df00edc33d4c30e7a8a4ea8fdd5ac1ad2e3c"
+      },
+      {
+        "name": "tripo_image_f50d69d2-6ab9-4218-8ea1-cffab12edec2_0_0",
+        "width": 1024,
+        "height": 1024,
+        "mime": "image/webp",
+        "bytes": 206542,
+        "sha256": "f4770cdf37a6685f8527f65a10e56402d8baa9269d5ec1f0e4f1945fc7eb5f89"
+      },
+      {
+        "name": "",
+        "width": 512,
+        "height": 512,
+        "mime": "image/webp",
+        "bytes": 78264,
+        "sha256": "f3fa375b477d608069fbd8aa3905ae6f76adfc3439a665268c9f0566002a5f51"
+      }
+    ]
+  },
+  "geometry_and_rig_identical": true,
+  "unique_textures": true,
+  "source": {
+    "file": "assets/modular_human_male_01/parts/face_tripo_rugged_v1/base_rugged.glb",
+    "sha256": "4a55f83d90e2c6370ef9d13f17a75c0cbc98e5a4a6ecefbe1e33b591313ce954",
+    "record": "doc/assets/modular-rugged-face-wavy-hair.md",
+    "license": "Existing user-provided Tripo face and shared modular male source; no new generation or source changes."
+  },
+  "settings": {
+    "max_body_texture_size": 1024,
+    "base_color": "WebP quality 90, effort 6",
+    "normal": "JPEG quality 92, 4:4:4",
+    "other_opaque": "JPEG quality 90, 4:4:4",
+    "alpha": "Lossless WebP",
+    "deduplication": "Identical texture bytes only; materials retained"
+  },
+  "reproduce": "node tools/prepare-modular-character.mjs --part base_rugged",
+  "reduction_percent": 78.35,
+  "browser": {
+    "method": "Actual before/after meshopt GLBs loaded through loadCharacterModel in the workshop scene, with the workshop body hidden.",
+    "views": [
+      "face close-up",
+      "full body"
+    ],
+    "poses": [
+      "idle1",
+      "run",
+      "jump",
+      "slash1",
+      "sit_idle"
+    ],
+    "errors": [],
+    "observation": "Face features remain readable at 1024; fine skin and neck texture is softer in the enlarged view."
+  },
+  "validation": {
+    "character_tests": 62,
+    "check": "passed; 0 errors, 0 warnings",
+    "lint": "passed"
+  }
+}
