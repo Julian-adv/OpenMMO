@@ -186,6 +186,7 @@ impl GameState {
             return;
         }
         if ability == AbilityId::Auscultation {
+            self.bump_action_version(player_id).await;
             self.stop_bed_rest(player_id).await;
             let result = self
                 .try_auscultation(player_id, monster_id, target_player_id)

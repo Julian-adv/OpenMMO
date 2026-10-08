@@ -63,6 +63,9 @@ impl GameState {
                 let now = Instant::now();
                 if direction.request_id == request_id && now < direction.expires_at {
                     direction.expires_at = now + INPUT_LEASE;
+                    drop(goals);
+                    // A lease refresh doesn't bump the version, but walking still ends an attack.
+                    self.stop_player_attack(&id).await;
                     return;
                 }
             }
@@ -107,12 +110,7 @@ impl GameState {
         let sprinting = direction.sprinting && allowed;
         state.direction = Some(direction);
         let prediction = DirectionPrediction::new(player, state, mult, sprinting);
-        *self
-            .player_movement_versions
-            .write()
-            .await
-            .entry(id)
-            .or_default() += 1;
+        self.bump_action_version(&id).await;
         drop(goals);
         self.send_direction_prediction(prediction).await;
     }

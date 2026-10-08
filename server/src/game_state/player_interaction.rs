@@ -179,6 +179,9 @@ impl GameState {
         object_type: Option<String>,
         object_id: Option<u32>,
     ) {
+        if object_type.is_some() {
+            self.bump_action_version(player_id).await;
+        }
         let Some(mut movement) = self
             .lock_player_movement(*player_id, &[], INTERACTION_RANGE + 0.5, true, None)
             .await

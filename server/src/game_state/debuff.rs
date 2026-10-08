@@ -69,6 +69,13 @@ impl HungerData {
         })
     }
 
+    pub(super) fn next_attack_mult_change(&self, now: Instant) -> Option<Duration> {
+        self.active(now)
+            .filter(|d| d.def.attack_mult != 1.0)
+            .map(|d| d.until.duration_since(now))
+            .min()
+    }
+
     pub(super) fn debuff_hit_mod(&self, now: Instant) -> i32 {
         self.active(now).map(|d| d.def.hit_mod).sum()
     }
@@ -164,6 +171,7 @@ impl super::GameState {
                 }
             }
         };
+        self.wake_player_attack(player_id).await;
         for msg in msgs {
             self.send_direct_message(player_id, msg).await;
         }
@@ -215,6 +223,7 @@ impl super::GameState {
             data.debuffs.clear();
             (data.status_msgs(now), was_wet)
         };
+        self.wake_player_attack(player_id).await;
         for msg in msgs {
             self.send_direct_message(player_id, msg).await;
         }
@@ -270,6 +279,7 @@ impl super::GameState {
             }
         }
         for (pid, msgs) in updates {
+            self.wake_player_attack(&pid).await;
             for msg in msgs {
                 self.send_direct_message(&pid, msg).await;
             }
@@ -551,6 +561,7 @@ impl super::GameState {
                 .collect()
         };
         for (pid, msg) in updates {
+            self.wake_player_attack(&pid).await;
             self.send_direct_message(&pid, msg).await;
         }
     }

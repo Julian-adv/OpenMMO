@@ -2,9 +2,7 @@ import { derived, get, writable } from 'svelte/store'
 
 export const daggerSkillState = writable({
   queued: false,
-  pending: false,
   cooldownUntil: 0,
-  requestAt: 0,
 })
 export const daggerSkillCasts = writable(new Map<number, number>())
 
@@ -25,20 +23,8 @@ export const daggerSkillClock = derived(
 
 export function queueDaggerSkill(now = Date.now()) {
   const state = get(daggerSkillState)
-  if (state.pending || state.cooldownUntil > now) return false
+  if (state.cooldownUntil > now) return false
   daggerSkillState.set({ ...state, queued: !state.queued })
-  return true
-}
-
-export function consumeDaggerSkill(now = Date.now()) {
-  const state = get(daggerSkillState)
-  if (!state.queued || state.pending || state.cooldownUntil > now) return false
-  daggerSkillState.set({
-    ...state,
-    queued: false,
-    pending: true,
-    requestAt: now,
-  })
   return true
 }
 
@@ -60,12 +46,7 @@ export function clearDaggerCast(playerId: number) {
 }
 
 export function acknowledgeDaggerSkill(cooldownMs: number, now = Date.now()) {
-  daggerSkillState.set({
-    queued: false,
-    pending: false,
-    cooldownUntil: now + cooldownMs,
-    requestAt: 0,
-  })
+  daggerSkillState.set({ queued: false, cooldownUntil: now + cooldownMs })
 }
 
 export function syncDaggerSkillCooldown(cooldownMs: number, now = Date.now()) {
@@ -77,11 +58,6 @@ export function syncDaggerSkillCooldown(cooldownMs: number, now = Date.now()) {
 }
 
 export function resetDaggerSkill() {
-  daggerSkillState.set({
-    queued: false,
-    pending: false,
-    cooldownUntil: 0,
-    requestAt: 0,
-  })
+  daggerSkillState.set({ queued: false, cooldownUntil: 0 })
   daggerSkillCasts.set(new Map())
 }

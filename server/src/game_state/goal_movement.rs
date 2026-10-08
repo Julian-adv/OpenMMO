@@ -116,7 +116,7 @@ impl GameState {
             .as_ref()
             .is_none_or(|state| state.newer(request_id));
         if fresh {
-            self.clear_pose_on_move(&id, "move").await;
+            self.clear_player_pose(&id, "move").await;
         }
     }
 
@@ -187,12 +187,7 @@ impl GameState {
         if !state.accept(request_id) {
             return;
         }
-        *self
-            .player_movement_versions
-            .write()
-            .await
-            .entry(id)
-            .or_default() += 1;
+        self.bump_action_version(&id).await;
         state.pending = Some(Goal {
             request_id,
             x,
@@ -224,17 +219,30 @@ impl GameState {
         if !state.accept(request_id) {
             return;
         }
-        *self
-            .player_movement_versions
-            .write()
-            .await
-            .entry(id)
-            .or_default() += 1;
+        self.bump_action_version(&id).await;
         self.send_direct_message(
             &id,
             progress(&player, request_id, 0, 0.0, MoveStatus::Stopped),
         )
         .await;
+    }
+
+    /// Invalidate delayed attacks and wake the affected auto-attack.
+    pub(super) async fn bump_action_version(&self, id: &PlayerId) {
+        let mut versions = self.player_action_versions.write().await;
+        let version = versions.entry(*id).or_default();
+        *version = version.wrapping_add(1);
+        drop(versions);
+        self.wake_player_attack(id).await;
+    }
+
+    pub(super) async fn action_version(&self, id: &PlayerId) -> u64 {
+        self.player_action_versions
+            .read()
+            .await
+            .get(id)
+            .copied()
+            .unwrap_or(0)
     }
 
     pub(super) async fn cancel_goal_movement(&self, id: &PlayerId) {
@@ -247,11 +255,7 @@ impl GameState {
         id: &PlayerId,
         goals: &mut Option<GoalMovement>,
     ) {
-        {
-            let mut versions = self.player_movement_versions.write().await;
-            let version = versions.entry(*id).or_default();
-            *version = version.wrapping_add(1);
-        }
+        self.bump_action_version(id).await;
         if let Some(state) = goals.as_mut() {
             state.generation = state.generation.wrapping_add(1);
             state.pending = None;

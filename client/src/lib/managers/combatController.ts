@@ -1,5 +1,6 @@
 import type { Position } from '../utils/movementUtils'
 import { startBattleMusic, stopBattleMusic } from './bgmManager'
+import { createEvent } from '../network/networkEvents'
 
 export interface MonsterInfo {
   state?: string
@@ -13,13 +14,31 @@ export type CombatUpdateResult =
   | { action: 'chasing'; newTarget?: Position }
   | { action: 'reached_attack_range' }
   | { action: 'attacking'; rotation: number }
-  | { action: 'attack_cycle'; monsterId: string; rotation: number }
+  | { action: 'attack_cycle'; rotation: number }
+
+export interface CombatStart {
+  attackCounter: number
+  startRequested: boolean
+}
 
 export class CombatController {
   private _targetMonsterId: string | null = null
   private _attackTimer = 0
   private _attackCounter = 0
   private _lastChaseUpdate = 0
+  private _attackRequested = false
+  private _attackRequestId = 0
+  private _pendingSwing = false
+  private _serverStopped = false
+  readonly attackStopRequested = createEvent<(requestId: number) => void>()
+
+  get attackRequested(): boolean {
+    return this._attackRequested
+  }
+
+  get attackRequestId(): number {
+    return this._attackRequestId
+  }
 
   get targetMonsterId(): string | null {
     return this._targetMonsterId
@@ -51,33 +70,69 @@ export class CombatController {
     return null
   }
 
-  /** Returns the counter the opening swing carries. */
-  beginCombat(monsterId: string, inRange: boolean): number {
-    const wasInCombat = this._targetMonsterId !== null
-    this._targetMonsterId = monsterId
-    this._attackTimer = 0
-    if (inRange) {
-      this._attackCounter = 1
-    } else {
-      this._attackCounter = 0
+  beginCombat(monsterId: string, inRange: boolean): CombatStart {
+    const wasInCombat = this.isInCombat
+    const targetChanged = monsterId !== this._targetMonsterId
+    const startRequested = inRange && (targetChanged || !this._attackRequested)
+    if (!inRange) {
+      this.stopAttack(false)
       this._lastChaseUpdate = Date.now()
     }
+    if (targetChanged) {
+      this._attackCounter = 0
+      this._attackTimer = 0
+      this._pendingSwing = false
+    }
+    this._targetMonsterId = monsterId
+    this._serverStopped = false
+    if (startRequested) {
+      this._attackRequested = true
+      this._attackRequestId = (this._attackRequestId + 1) >>> 0
+    }
     if (!wasInCombat) startBattleMusic()
-    return this._attackCounter
+    return { attackCounter: this._attackCounter, startRequested }
   }
 
-  cancelCombat() {
-    const wasInCombat = this._targetMonsterId !== null
+  private stopAttack(notifyServer = true) {
+    if (!this._attackRequested) return
+    this._attackRequested = false
+    if (notifyServer) this.attackStopRequested.emit(this._attackRequestId)
+  }
+
+  cancelCombat({ notifyServer = true } = {}) {
+    const wasInCombat = this.isInCombat
+    this.stopAttack(notifyServer)
     this._targetMonsterId = null
     this._attackCounter = 0
     this._attackTimer = 0
+    this._pendingSwing = false
+    this._serverStopped = false
     if (wasInCombat) stopBattleMusic()
+  }
+
+  attackConfirmed(monsterId: string) {
+    if (!this._attackRequested || monsterId !== this._targetMonsterId) return
+    this._attackCounter++
+    this._attackTimer = 0
+    this._pendingSwing = true
+  }
+
+  attackStopped(monsterId: string, requestId: number) {
+    if (
+      !this._attackRequested ||
+      monsterId !== this._targetMonsterId ||
+      requestId !== this._attackRequestId
+    )
+      return
+    this.stopAttack(false)
+    this._serverStopped = true
   }
 
   private startChase(
     monsterObjPos: Position,
     now = Date.now()
   ): CombatUpdateResult {
+    this.stopAttack(false)
     this._lastChaseUpdate = now
     return {
       action: 'chasing',
@@ -89,10 +144,6 @@ export class CombatController {
     }
   }
 
-  /** A `lineBlocked` target counts as out of range: the server refuses a blow
-   *  through a wall, so keep chasing rather than swing into rejections.
-   *  `attackRange` is the equipped weapon's reach, so a bow stops the chase at
-   *  its own distance and shoots from there. */
   update(
     deltaTime: number,
     playerPos: Position,
@@ -105,17 +156,21 @@ export class CombatController {
     attackRange: number
   ): CombatUpdateResult {
     if (!this._targetMonsterId) return { action: 'none' }
+    if (this._serverStopped) {
+      this.cancelCombat({ notifyServer: false })
+      return { action: 'idle' }
+    }
 
     const isFinishingAttack =
-      currentPlayerState === 'attack' && this._attackTimer < cooldownMs
+      currentPlayerState === 'attack' &&
+      this._attackCounter > 0 &&
+      this._attackTimer < cooldownMs
 
-    // Monster data missing or dead (and not finishing attack)
     if (!monsterInfo || (monsterInfo.state === 'dead' && !isFinishingAttack)) {
       this.cancelCombat()
       return { action: 'idle' }
     }
 
-    // Monster mesh not found
     if (!monsterObjPos) {
       this.cancelCombat()
       return { action: 'idle' }
@@ -127,12 +182,10 @@ export class CombatController {
     const inRange = dist <= attackRange && !lineBlocked
 
     if (isMoving) {
-      // CHASING phase
       if (inRange) {
         return { action: 'reached_attack_range' }
       }
 
-      // Throttled chase target update
       const now = Date.now()
       if (now - this._lastChaseUpdate >= 1000) {
         return this.startChase(monsterObjPos, now)
@@ -140,38 +193,23 @@ export class CombatController {
       return { action: 'chasing' }
     }
 
-    // COMBAT phase (in range)
     if (!inRange && !isFinishingAttack) {
       return this.startChase(monsterObjPos)
     }
 
-    // Still in range - rotate and attack
     const rotation = Math.atan2(dx, dz)
     this._attackTimer += deltaTime
 
-    const isMonsterAlive =
-      monsterInfo.state !== 'dead' && !monsterInfo.isDeadPending
-
-    if (this._attackTimer >= cooldownMs) {
-      // A new attack cycle is about to fire: unlike the break check above this
-      // applies even mid-finish, so a target that fled during the swing ends
-      // the current swing and re-approaches instead of attacking out of range.
-      if (!inRange) {
-        return this.startChase(monsterObjPos)
-      }
-
-      if (isMonsterAlive) {
-        this._attackTimer = 0
-        this._attackCounter++
-        return {
-          action: 'attack_cycle',
-          monsterId: this._targetMonsterId,
-          rotation,
-        }
-      } else {
-        this.cancelCombat()
-        return { action: 'idle' }
-      }
+    if (this._pendingSwing) {
+      this._pendingSwing = false
+      return { action: 'attack_cycle', rotation }
+    }
+    if (!inRange && this._attackTimer >= cooldownMs) {
+      return this.startChase(monsterObjPos)
+    }
+    if (monsterInfo.state === 'dead' && this._attackTimer >= cooldownMs) {
+      this.cancelCombat()
+      return { action: 'idle' }
     }
 
     return { action: 'attacking', rotation }

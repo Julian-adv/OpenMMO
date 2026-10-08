@@ -1541,6 +1541,41 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::StartPlayerAttack {
+            monster_id,
+            dagger_skill,
+            request_id,
+        } => {
+            if let Some(id) = state.require_in_game("attack") {
+                game_state
+                    .start_player_attack(
+                        id,
+                        monster_id,
+                        dagger_skill,
+                        request_id,
+                        Some(Arc::clone(auth_service)),
+                    )
+                    .await;
+            }
+        }
+        ClientMessage::StopPlayerAttack { request_id } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .stop_player_attack_request(id, Some(request_id))
+                    .await;
+            }
+        }
+        ClientMessage::SetPlayerAttackSkill {
+            request_id,
+            dagger_skill,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .set_player_attack_skill(id, request_id, dagger_skill)
+                    .await;
+            }
+        }
+
         ClientMessage::FishingCast { position } => {
             if let Some(id) = &state.require_in_game("fishing cast") {
                 game_state.start_fishing(id, position).await;

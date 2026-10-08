@@ -17,6 +17,7 @@ use tokio::sync::mpsc::error::TryRecvError as MpscTryRecvError;
 mod ability_request_tests;
 mod ability_tests;
 mod ambient_spawn_tests;
+mod auto_attack_tests;
 mod bed_rest_tests;
 mod cape_dye_tests;
 mod cape_texture_tests;
@@ -449,6 +450,14 @@ fn drain(rx: &mut DirectRx) -> Vec<ServerMessage> {
         msgs.push(msg);
     }
     msgs
+}
+
+async fn ready(game: &GameState, id: PlayerId) {
+    game.last_player_attacks.write().await.insert(
+        id,
+        GameState::now_ms() - *super::combat::PLAYER_ATTACK_INTERVAL_MS,
+    );
+    game.wake_player_attack(&id).await;
 }
 
 /// Walk a player to (x, z) through the real move path — queued waypoint plus

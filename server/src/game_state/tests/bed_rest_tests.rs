@@ -169,7 +169,9 @@ async fn bed_rest_ends_for_actions_and_disconnect() {
         match action {
             "item" => game.use_item(&id, 999).await,
             "ability" => game.use_ability(&id, AbilityId::GuardianWard).await,
-            "attack" => game.player_attack(&id, "missing".into(), None).await,
+            "attack" => {
+                game.player_attack(&id, "missing".into(), None).await;
+            }
             "teleport" => {
                 game.teleport_player(
                     &id,

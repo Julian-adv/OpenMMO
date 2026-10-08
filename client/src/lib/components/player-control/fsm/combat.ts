@@ -1,4 +1,5 @@
 import type { Position, PlayerState } from '../../../utils/movementUtils'
+import type { CombatStart } from '../../../managers/combatController'
 import {
   buildAttackState,
   buildIdleAfterAttack,
@@ -15,10 +16,9 @@ interface BeginAttackInput {
   currentPosition: Position | null
   playerRotation: number
   previousPlayerState: PlayerState
-  /** Starts combat and returns the counter for this swing. */
-  beginCombat: (monsterId: string, inRange: boolean) => number
+  beginCombat: (monsterId: string, inRange: boolean) => CombatStart
   stopAndFace: (rotation: number) => void
-  sendPlayerAttack: (monsterId: string) => void
+  startPlayerAttack: (monsterId: string) => void
 }
 
 export type BeginAttackOutcome =
@@ -36,7 +36,7 @@ export function beginAttack({
   previousPlayerState,
   beginCombat,
   stopAndFace,
-  sendPlayerAttack,
+  startPlayerAttack,
 }: BeginAttackInput): BeginAttackOutcome {
   if (
     !monsterInfo ||
@@ -46,13 +46,13 @@ export function beginAttack({
     return { kind: 'ignored_unattackable_target' }
   }
 
-  const attackCounter = beginCombat(monsterId, true)
+  const { attackCounter, startRequested } = beginCombat(monsterId, true)
 
   if (currentPosition) {
     stopAndFace(playerRotation)
   }
 
-  sendPlayerAttack(monsterId)
+  if (startRequested) startPlayerAttack(monsterId)
 
   return {
     kind: 'started',

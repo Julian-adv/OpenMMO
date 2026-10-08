@@ -792,15 +792,14 @@ impl super::GameState {
     }
 
     pub async fn remove_player(&self, player_id: &PlayerId) {
+        self.stop_player_attack(player_id).await;
+        self.auto_attacks.write().await.remove(player_id);
         self.bed_rest_started.write().await.remove(player_id);
         let mut movement = self.goal_moves.lock(*player_id).await;
         self.cancel_goal_movement_locked(player_id, &mut movement)
             .await;
         *movement = None;
-        self.player_movement_versions
-            .write()
-            .await
-            .remove(player_id);
+        self.player_action_versions.write().await.remove(player_id);
         self.music_performances.write().await.remove(player_id);
         self.remove_live_instrument(player_id).await;
         if !self.stall_owner_is_offline(player_id).await {
@@ -1344,8 +1343,8 @@ impl super::GameState {
         }
     }
 
-    /// Movement also ends a pose when StopInteraction was omitted.
-    pub(super) async fn clear_pose_on_move(&self, player_id: &PlayerId, source: &str) {
+    /// End a pose without requiring StopInteraction from the client.
+    pub(super) async fn clear_player_pose(&self, player_id: &PlayerId, source: &str) {
         let posed = {
             let players = self.players.read().await;
             players

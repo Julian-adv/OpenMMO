@@ -2104,11 +2104,13 @@ impl super::GameState {
     }
 
     pub async fn pickup_item(&self, player_id: &PlayerId, instance_id: u64) {
+        self.bump_action_version(player_id).await;
         self.pickup_item_with_range(player_id, instance_id, MAX_PICKUP_DISTANCE)
             .await;
     }
 
     pub async fn pickup_nearby_items(&self, player_id: &PlayerId) {
+        self.bump_action_version(player_id).await;
         let Some((position, _, floor_level, _)) = self.player_pose(player_id).await else {
             return;
         };
@@ -2318,16 +2320,9 @@ impl super::GameState {
         .await;
     }
 
-    /// Show the pickup crouch on nearby clients. Driven by `PickupStarted` at
-    /// the clip's first frame, so remotes play it from the top rather than
-    /// joining at the grab moment and finishing a third of a clip late.
-    ///
-    /// Transient: it bypasses the player's stored `object_type`, so no
-    /// `StopInteraction` follows and a late joiner never sees a held pickup
-    /// pose — remotes end the clip on their own. Not gated on the pickup
-    /// succeeding: the player performed the motion either way, and the
-    /// animation carries no item.
+    /// Broadcast the transient pickup pose, even if collection later fails.
     pub async fn broadcast_pickup_animation(&self, player_id: &PlayerId) {
+        self.bump_action_version(player_id).await;
         let (position, rotation, floor_level) = {
             let players = self.players.read().await;
             match players.get(player_id) {

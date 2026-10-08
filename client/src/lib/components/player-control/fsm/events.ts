@@ -52,6 +52,7 @@ export interface PlayerControlEventActions extends CanvasClickActions {
       approach?: PendingApproach | null
       sprinting?: boolean
       stopAtHouseEntrance?: boolean
+      preserveCombatTarget?: boolean
     }
   ): void
   onInteractionFinished(): void
@@ -83,6 +84,9 @@ export function dispatchPlayerControlEvent(
         ...(event.stopAtHouseEntrance === undefined
           ? {}
           : { stopAtHouseEntrance: event.stopAtHouseEntrance }),
+        ...(event.preserveCombatTarget === undefined
+          ? {}
+          : { preserveCombatTarget: event.preserveCombatTarget }),
       })
       return
     case 'anim_interaction_finished':

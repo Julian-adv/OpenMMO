@@ -1147,7 +1147,7 @@ async fn direction_renewal_only_extends_the_lease_without_waiting_for_movement()
         .as_ref()
         .unwrap()
         .advanced_at;
-    let version = game.player_movement_versions.read().await[&id];
+    let version = game.player_action_versions.read().await[&id];
     tokio::time::advance(Duration::from_secs(1)).await;
     let keys = game.movement_region_keys(before.position, before.position, 2.0);
     let gate = game.movement_regions.lock(&keys, true).await;
@@ -1156,7 +1156,7 @@ async fn direction_renewal_only_extends_the_lease_without_waiting_for_movement()
     assert!(futures_util::poll!(renewal.as_mut()).is_ready());
     drop(gate);
     assert_eq!(game.players.read().await[&id].position, before.position);
-    assert_eq!(game.player_movement_versions.read().await[&id], version);
+    assert_eq!(game.player_action_versions.read().await[&id], version);
     assert!(rx.try_recv().is_err());
     {
         let goals = game.goal_moves.lock(id).await;

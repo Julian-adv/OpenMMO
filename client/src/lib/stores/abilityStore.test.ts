@@ -25,7 +25,6 @@ import {
 import { initSharedWasm, testItem } from '../utils/ability.fixture'
 import {
   acknowledgeDaggerSkill,
-  consumeDaggerSkill,
   daggerSkillClock,
   daggerSkillState,
   queueDaggerSkill,
@@ -69,21 +68,19 @@ it('restores the Double Slash countdown on reconnect and blocks queuing until ex
   unsubscribe()
 })
 
-it('keeps a queued or pending Double Slash when another ability sends a snapshot', () => {
+it('keeps a queued Double Slash until a snapshot reports its cooldown', () => {
   queueDaggerSkill(100)
   applyAbilityCooldowns(
     [{ ability: 'dagger_double_slash', remaining_ms: 0 }],
     150
   )
-  expect(consumeDaggerSkill(200)).toBe(true)
+  expect(get(daggerSkillState).queued).toBe(true)
   applyAbilityCooldowns(
     [{ ability: 'dagger_double_slash', remaining_ms: 9_000 }],
     250
   )
-  expect(get(daggerSkillState).pending).toBe(true)
+  expect(get(daggerSkillState).queued).toBe(false)
   expect(queueDaggerSkill(300)).toBe(false)
-  acknowledgeDaggerSkill(8_900, 350)
-  expect(get(daggerSkillState).pending).toBe(false)
 })
 
 it('ticks through the longest cooldown, buff or pending deadline and stops when cleared', () => {

@@ -42,10 +42,8 @@
   import { groundItemManager } from '../managers/groundItemManager'
   import { combatController } from '../managers/combatController'
   import {
-    consumeDaggerSkill,
     daggerSkillState,
     daggerSkillCasts,
-    playDaggerSkill,
     clearDaggerCast,
   } from '../stores/daggerSkillStore'
   import { DAGGER_SKILL } from '../data/daggerSkill'
@@ -655,6 +653,13 @@
     return weaponRangeMeters($inventoryStore.equipped.main_hand?.item_def_id)
   }
 
+  function attackCooldownMs(): number {
+    return (
+      (attackCooldown ? attackCooldown * 1000 : 1500) /
+      ($hungerState?.attackMult ?? 1)
+    )
+  }
+
   /** Shared by click attacks and the chase tick. */
   function attackLineBlocked(from: Position, to: Position, floor: number) {
     return housingManager.attackLineBlocked(
@@ -667,25 +672,32 @@
     )
   }
 
+  // The server already ends the attack for these actions.
+  function clearCombat() {
+    combatController.cancelCombat({ notifyServer: false })
+  }
+
   /** Take the monster as a target and walk at it, attacking on arrival. */
   function chaseAndAttack(monsterId: string, goal: Position) {
     combatController.beginCombat(monsterId, false)
-    handleClickToMove(goal)
+    handleClickToMove(goal, { preserveCombatTarget: true })
   }
 
-  function sendCombatAttack(monsterId: string) {
+  let lastQueuedDaggerSkill = false
+
+  function startCombatAttack(monsterId: string) {
     const canUseDaggerSkill =
       isAbilityAvailable(DAGGER_SKILL.clip, currentPlayer?.characterClass) &&
       abilityEquipmentAllowed(DAGGER_SKILL.clip, $inventoryStore.equipped)
-    if (canUseDaggerSkill && currentPlayer && consumeDaggerSkill()) {
-      playDaggerSkill(currentPlayer.id)
-      networkManager.sendUseAbility(DAGGER_SKILL.clip, monsterId)
-    } else {
-      if (!canUseDaggerSkill)
-        daggerSkillState.update((state) => ({ ...state, queued: false }))
-      if (currentPlayer) clearDaggerCast(currentPlayer.id)
-      networkManager.sendPlayerAttack(monsterId)
-    }
+    const daggerSkill = canUseDaggerSkill && get(daggerSkillState).queued
+    lastQueuedDaggerSkill = daggerSkill
+    networkManager.startPlayerAttack(
+      monsterId,
+      combatController.attackRequestId,
+      daggerSkill
+    )
+    if (!canUseDaggerSkill)
+      daggerSkillState.update((state) => ({ ...state, queued: false }))
   }
 
   // Initiate attack on a monster
@@ -731,7 +743,7 @@
       previousPlayerState: playerState,
       beginCombat: (id, inRange) => combatController.beginCombat(id, inRange),
       stopAndFace,
-      sendPlayerAttack: sendCombatAttack,
+      startPlayerAttack: startCombatAttack,
     })
 
     if (result.kind === 'ignored_unattackable_target') return
@@ -854,8 +866,7 @@
       monster,
       target,
       serverMovement.active,
-      (attackCooldown ? attackCooldown * 1000 : 1500) /
-        ($hungerState?.attackMult ?? 1),
+      attackCooldownMs(),
       playerState.state,
       blocked,
       equippedAttackRange()
@@ -877,7 +888,7 @@
             !serverMovement.active)
         ) {
           chaseGoal = { ...result.newTarget }
-          startServerMove(chaseGoal, null, true)
+          startServerMove(chaseGoal, null, true, { preserveCombatTarget: true })
         }
         break
       case 'attacking': {
@@ -895,7 +906,6 @@
       case 'attack_cycle':
         playerRotation = result.rotation
         networkManager.sendPlayerFace(playerRotation)
-        sendCombatAttack(result.monsterId)
         setPlayerState(
           buildAttackState(
             playerState,
@@ -922,14 +932,14 @@
     if (input) {
       cancelAutoTravel()
       clearDoorInteractionRetry()
-      combatController.cancelCombat()
-      chaseGoal = null
       const interaction = getInteractionExitKind(playerState)
       if (interaction === 'pickup') exitPickupInteraction()
       if (interaction === 'object') {
         exitObjectInteraction()
         return
       }
+      clearCombat()
+      chaseGoal = null
       if (playerControlMachine.stateName !== 'keyboard_moving')
         transitionTo('keyboard_moving')
     }
@@ -956,8 +966,12 @@
     target: Position,
     approach: PendingApproach | null,
     sprinting: boolean,
-    stopAtEntrance = false
+    { stopAtEntrance = false, preserveCombatTarget = false } = {}
   ) {
+    if (!preserveCombatTarget) {
+      clearCombat()
+      chaseGoal = null
+    }
     interactionRevision++
     keyboardSender.reset()
     clickSprinting = sprinting
@@ -972,6 +986,7 @@
       approach?: PendingApproach | null
       sprinting?: boolean
       stopAtHouseEntrance?: boolean
+      preserveCombatTarget?: boolean
     }
   ) {
     return {
@@ -990,6 +1005,7 @@
               approach: options.approach ?? null,
               sprinting: options.sprinting,
               stopAtHouseEntrance: options.stopAtHouseEntrance,
+              preserveCombatTarget: options.preserveCombatTarget,
             })
           }, STAND_UP_DURATION)
         })
@@ -1008,6 +1024,7 @@
       approach?: PendingApproach | null
       sprinting?: boolean
       stopAtHouseEntrance?: boolean
+      preserveCombatTarget?: boolean
     } = {}
   ) {
     cancelAutoTravel()
@@ -1055,12 +1072,10 @@
       )
     )
       return
-    startServerMove(
-      clickPosition,
-      options.approach ?? null,
-      clickSprinting,
-      options.stopAtHouseEntrance
-    )
+    startServerMove(clickPosition, options.approach ?? null, clickSprinting, {
+      stopAtEntrance: options.stopAtHouseEntrance,
+      preserveCombatTarget: options.preserveCombatTarget,
+    })
   }
 
   function enterInteraction(
@@ -1074,7 +1089,7 @@
     pendingExit = null
     clearStandUpTimer()
     if (claim) {
-      combatController.cancelCombat()
+      clearCombat()
       serverMovement.clear()
       keyboardSender.reset()
       transitionTo('idle')
@@ -1085,7 +1100,7 @@
     const result = beginObjectInteraction({
       intent,
       previousPlayerState: playerState,
-      cancelCombat: () => combatController.cancelCombat(),
+      cancelCombat: clearCombat,
     })
     playerRotation = result.playerRotation
     setPlayerState(result.nextPlayerState)
@@ -1197,7 +1212,7 @@
         rotation: playerRotation,
       },
       previousPlayerState: playerState,
-      cancelCombat: () => combatController.cancelCombat(),
+      cancelCombat: clearCombat,
     })
 
     setPlayerState(result.nextPlayerState)
@@ -1276,7 +1291,7 @@
       beginPickup: (id) => {
         if (!pickupNearby) groundItemManager.beginPickup(id)
       },
-      cancelCombat: () => combatController.cancelCombat(),
+      cancelCombat: clearCombat,
     })
 
     if (result.kind === 'ignored') return
@@ -1330,7 +1345,6 @@
       return 'act_now'
     }
 
-    combatController.cancelCombat()
     handleClickToMove(plan.target, {
       approach: { spec, depth: get(currentDungeonDepth), canAct, act },
     })
@@ -1543,7 +1557,6 @@
     )
     if (plan.kind === 'unreachable') return
     if (plan.kind === 'walk') {
-      combatController.cancelCombat()
       handleClickToMove(plan.target)
     }
     setPending({
@@ -1872,7 +1885,6 @@
       breakProp,
       openProp,
       moveToGround: (position, sprinting, viaHousingStair) => {
-        combatController.cancelCombat()
         const snapped = dungeonManager.snapDescentWallClick(
           position.x,
           position.z,
@@ -1919,7 +1931,7 @@
         }
         cancelFishingTargeting()
         // Movement would cancel the cast on the next waypoint send.
-        combatController.cancelCombat()
+        clearCombat()
         stopMovement()
         if (!boating) faceTowards(intent.position.x, intent.position.z)
         setPlayerState({ ...playerState, rotation: playerRotation })
@@ -1996,10 +2008,6 @@
         daggerSkillState.update((state) => ({ ...state, queued: false }))
       if (currentPlayer && get(daggerSkillCasts).has(currentPlayer.id))
         clearDaggerCast(currentPlayer.id)
-    }
-    if (skillState.pending && Date.now() - skillState.requestAt > 4000) {
-      daggerSkillState.update((state) => ({ ...state, pending: false }))
-      if (currentPlayer) clearDaggerCast(currentPlayer.id)
     }
     playerControlMachine.update(deltaTime, options)
   }
@@ -2102,6 +2110,18 @@
   currentDungeonDepth.subscribe(() => clearHover())
 
   onMount(() => {
+    const unsubscribeAttackStop = combatController.attackStopRequested.on(
+      (requestId) => networkManager.stopPlayerAttack(requestId)
+    )
+    const unsubscribeDaggerQueue = daggerSkillState.subscribe(({ queued }) => {
+      if (queued === lastQueuedDaggerSkill) return
+      lastQueuedDaggerSkill = queued
+      if (combatController.attackRequested)
+        networkManager.setPlayerAttackSkill(
+          combatController.attackRequestId,
+          queued
+        )
+    })
     const unsubscribeTeleportEffect = localTeleportActive.subscribe(
       (active) => {
         if (!active) return
@@ -2148,7 +2168,6 @@
           stopAndFace(playerRotation)
       }
       if (!destination) return
-      combatController.cancelCombat()
       clearStandUpTimer()
       clearPropSwingTimers()
       clearDoorInteractionRetry()
@@ -2157,6 +2176,8 @@
       const interaction = getInteractionExitKind(playerState)
       if (interaction === 'pickup') exitPickupInteraction()
       if (interaction === 'object') exitObjectInteraction()
+      updateAutoTravel(0)
+      combatController.cancelCombat()
     })
     const unsubscribeTeleport = teleportLoading.subscribe((loading) => {
       if (loading) {
@@ -2289,6 +2310,7 @@
     )
     const unsubscribeMoveConnection = gameStore.subscribe((state) => {
       if (!state.isConnected || !state.currentPlayer) {
+        combatController.cancelCombat()
         serverMovement.clear(false)
         keyboardSender.reset()
         inputHandler.clearTransientInput()
@@ -2327,6 +2349,9 @@
     })
 
     return () => {
+      combatController.cancelCombat()
+      unsubscribeAttackStop()
+      unsubscribeDaggerQueue()
       unsubscribeTargeting()
       cancelInspection()
       cancelFishingTargeting()

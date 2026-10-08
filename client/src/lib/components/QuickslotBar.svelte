@@ -171,10 +171,8 @@
               : ($abilityCooldowns[entry.skill.id] ?? 0) - $abilityClock
         )}
         {@const pending =
-          entry.skill.id === DOUBLE_SLASH.id
-            ? $daggerSkillState.pending
-            : entry.skill.id !== FISHING.id &&
-              ($abilityPending[entry.skill.id] ?? 0) > $abilityClock}
+          entry.skill.id !== FISHING.id &&
+          ($abilityPending[entry.skill.id] ?? 0) > $abilityClock}
         <img
           class="item-icon skill-icon"
           class:depleted={!abilityEquipmentAllowed(

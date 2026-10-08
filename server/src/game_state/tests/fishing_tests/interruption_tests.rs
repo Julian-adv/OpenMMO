@@ -1,5 +1,62 @@
 use super::*;
 
+#[tokio::test(start_paused = true)]
+async fn fishing_and_auto_attack_replace_each_other_without_client_stop_requests() {
+    let game = make_test_game_state("fishing_auto_attack");
+    let (id, mut rx) = make_angler(&game, "angler_attacker").await;
+    let position = game.players.read().await[&id].position;
+    let mut monster = make_monster(
+        "fishing_target",
+        Position {
+            x: position.x + 1.0,
+            ..position
+        },
+        0,
+    );
+    monster.health = 10000;
+    monster.max_health = 10000;
+    game.monsters
+        .write()
+        .await
+        .insert("fishing_target".into(), monster);
+    game.start_player_attack(id, "fishing_target".into(), false, 1, None)
+        .await;
+    assert!(drain(&mut rx)
+        .iter()
+        .any(|m| matches!(m, ServerMessage::PlayerAttacked { .. })));
+
+    game.start_fishing(&id, water_target()).await;
+    game.process_due_player_attacks(None).await;
+    let messages = drain(&mut rx);
+    assert!(messages
+        .iter()
+        .any(|m| matches!(m, ServerMessage::PlayerAttackStopped { request_id: 1, .. })));
+    assert!(messages
+        .iter()
+        .any(|m| matches!(m, ServerMessage::FishingCasted { .. })));
+    ready(&game, id).await;
+    game.process_due_player_attacks(None).await;
+    assert!(!drain(&mut rx)
+        .iter()
+        .any(|m| matches!(m, ServerMessage::PlayerAttacked { .. })));
+    assert!(game.fishing_sessions.read().await.contains_key(&id));
+
+    game.start_player_attack(id, "fishing_target".into(), false, 2, None)
+        .await;
+    let messages = drain(&mut rx);
+    assert!(messages.iter().any(|m| matches!(
+        m,
+        ServerMessage::FishingEnded {
+            outcome: FishingOutcome::Aborted,
+            ..
+        }
+    )));
+    assert!(messages
+        .iter()
+        .any(|m| matches!(m, ServerMessage::PlayerAttacked { .. })));
+    assert!(!game.fishing_sessions.read().await.contains_key(&id));
+}
+
 /// The real kill chain: a lethal monster blow must run the death chokepoint
 /// and abort the victim's fishing session. This drives `did_die` through
 /// `broadcast_monster_attack`, so rewiring the combat path away from

@@ -1190,6 +1190,9 @@
         validAnimations[selectMovementAnimation(movementMode)]
     } else if (playerState === 'attack') {
       clip =
+        (isCurrentPlayer && attackCounter === 0
+          ? validAnimations[AnimationIndex.COMBAT_IDLE]
+          : undefined) ??
         (daggerCastAt() !== undefined &&
         getItemDef(equippedMainHandItemId ?? '')?.weaponType ===
           DAGGER_SKILL.weaponType

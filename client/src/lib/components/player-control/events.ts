@@ -12,6 +12,7 @@ export type PlayerControlEvent =
       approach?: PendingApproach | null
       sprinting?: boolean
       stopAtHouseEntrance?: boolean
+      preserveCombatTarget?: boolean
     }
   | { type: 'anim_interaction_finished' }
   | { type: 'anim_pickup_grab' }

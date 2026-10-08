@@ -194,6 +194,7 @@ pub(crate) fn encode_server_msg(msg: &ServerMessage) -> Option<Bytes> {
 pub(crate) mod ambient_spawn;
 mod chat;
 pub(crate) use chat::{parse_admin_command, parse_notice_command};
+mod auto_attack;
 mod combat;
 mod combat_audit;
 mod consent;
@@ -345,9 +346,12 @@ pub struct GameState {
     player_ids_by_name: Arc<RwLock<HashMap<String, PlayerId>>>,
     movement_regions: Arc<MovementRegions>,
     goal_moves: Arc<MovementStates>,
-    player_movement_versions: Arc<RwLock<HashMap<PlayerId, u64>>>,
+    player_action_versions: Arc<RwLock<HashMap<PlayerId, u64>>>,
     path_search: Arc<path_search::PathSearchPool>,
     last_player_attacks: Arc<RwLock<HashMap<PlayerId, u64>>>,
+    auto_attacks: Arc<RwLock<HashMap<PlayerId, auto_attack::AttackSession>>>,
+    attack_schedule: Arc<Mutex<auto_attack::AttackSchedule>>,
+    attack_wakeup: Arc<tokio::sync::Notify>,
     last_dagger_skills: Arc<RwLock<HashMap<i64, u64>>>,
     player_spatial_cells: Arc<RwLock<SpatialIndex<PlayerId>>>,
     monsters: Arc<RwLock<monster::MonsterRegistry>>,
@@ -684,9 +688,12 @@ impl GameState {
             player_ids_by_name: Arc::new(RwLock::new(HashMap::new())),
             movement_regions: Arc::default(),
             goal_moves: Arc::default(),
-            player_movement_versions: Arc::new(RwLock::new(HashMap::new())),
+            player_action_versions: Arc::new(RwLock::new(HashMap::new())),
             path_search: Arc::new(path_search::PathSearchPool::default()),
             last_player_attacks: Arc::new(RwLock::new(HashMap::new())),
+            auto_attacks: Arc::new(RwLock::new(HashMap::new())),
+            attack_schedule: Arc::default(),
+            attack_wakeup: Arc::default(),
             last_dagger_skills: Arc::new(RwLock::new(HashMap::new())),
             player_spatial_cells: Arc::new(RwLock::new(SpatialIndex::default())),
             monsters: Arc::new(RwLock::new(monster::MonsterRegistry::default())),

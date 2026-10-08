@@ -207,7 +207,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v115: saved character face and hairstyle.
 /// v116: saved hair and eye colors.
 /// v117: selectable ranger face and hair.
-pub const PROTOCOL_VERSION: u32 = 117;
+/// v118: server-driven player auto-attacks.
+pub const PROTOCOL_VERSION: u32 = 118;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

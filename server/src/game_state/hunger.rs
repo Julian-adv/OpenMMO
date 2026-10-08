@@ -94,6 +94,8 @@ impl super::GameState {
                 gear_drain_mult: 1.0,
             },
         );
+        drop(hunger);
+        self.wake_player_attack(player_id).await;
     }
 
     /// Recache the equipment drain factor from the caller's own snapshot.
@@ -261,6 +263,7 @@ impl super::GameState {
             self.dirty_players.write().await.extend(dirty);
         }
         for (pid, msg) in updates {
+            self.wake_player_attack(&pid).await;
             self.send_direct_message(&pid, msg).await;
         }
     }
@@ -288,7 +291,10 @@ impl super::GameState {
         };
         let before = data.satiation;
         data.satiation = onlinerpg_shared::hunger::apply_nutrition(data.satiation, nutrition);
-        (Some(data.hunger_msg(now)), data.satiation - before)
+        let outcome = (Some(data.hunger_msg(now)), data.satiation - before);
+        drop(hunger);
+        self.wake_player_attack(player_id).await;
+        outcome
     }
 
     /// What follows any meal once its satiation is applied: HP regeneration

@@ -170,7 +170,15 @@ export type ClientMessage =
   | { EnterGame: { character_id: number } }
   | 'WorldReady'
   | { ChatMessage: { message: string } }
-  | { PlayerAttack: { monster_id: string } }
+  | {
+      StartPlayerAttack: {
+        monster_id: string
+        dagger_skill: boolean
+        request_id: number
+      }
+    }
+  | { StopPlayerAttack: { request_id: number } }
+  | { SetPlayerAttackSkill: { request_id: number; dagger_skill: boolean } }
   | {
       UseAbility: {
         ability: AbilityId

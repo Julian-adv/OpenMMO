@@ -1574,3 +1574,196 @@ async fn re_equipping_a_bow_keeps_the_chosen_round() {
         Some("iron_arrow")
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn auto_attack_uses_a_queued_dagger_skill_then_resumes_basic_attacks() {
+    let game = make_test_game_state("auto_attack_dagger");
+    let mut rx = setup_dagger_skill(&game, "dagger").await;
+    let id = pid("archer");
+    game.start_player_attack(id, "skill_target".into(), true, 1, None)
+        .await;
+    let messages = drain(&mut rx);
+    assert!(messages
+        .iter()
+        .any(|m| matches!(m, ServerMessage::DaggerDoubleSlashStarted { .. })));
+    assert!(!messages
+        .iter()
+        .any(|m| matches!(m, ServerMessage::PlayerAttacked { .. })));
+    tokio::time::sleep(Duration::from_millis(450)).await;
+    let messages = drain(&mut rx);
+    assert_eq!(
+        messages
+            .iter()
+            .filter(|m| matches!(
+                m,
+                ServerMessage::PlayerAttacked {
+                    dagger_strike: Some(_),
+                    ..
+                }
+            ))
+            .count(),
+        2
+    );
+    ready(&game, id).await;
+    game.process_due_player_attacks(None).await;
+    let messages = drain(&mut rx);
+    assert_eq!(
+        messages
+            .iter()
+            .filter(|m| matches!(
+                m,
+                ServerMessage::PlayerAttacked {
+                    dagger_strike: None,
+                    ..
+                }
+            ))
+            .count(),
+        1
+    );
+    assert!(!messages
+        .iter()
+        .any(|m| matches!(m, ServerMessage::DaggerDoubleSlashStarted { .. })));
+}
+
+#[tokio::test]
+async fn auto_attack_allows_cancelling_a_queued_dagger_skill() {
+    let game = make_test_game_state("auto_attack_cancel_skill");
+    let mut rx = setup_dagger_skill(&game, "dagger").await;
+    let id = pid("archer");
+    game.start_player_attack(id, "skill_target".into(), false, 1, None)
+        .await;
+    drain(&mut rx);
+    game.set_player_attack_skill(&id, 1, true).await;
+    game.set_player_attack_skill(&id, 1, false).await;
+    game.set_player_attack_skill(&id, 0, true).await;
+    ready(&game, id).await;
+    game.process_due_player_attacks(None).await;
+    let messages = drain(&mut rx);
+    assert_eq!(
+        messages
+            .iter()
+            .filter(|m| matches!(
+                m,
+                ServerMessage::PlayerAttacked {
+                    dagger_strike: None,
+                    ..
+                }
+            ))
+            .count(),
+        1
+    );
+    assert!(!messages
+        .iter()
+        .any(|m| matches!(m, ServerMessage::DaggerDoubleSlashStarted { .. })));
+}
+
+#[tokio::test(start_paused = true)]
+async fn other_actions_cancel_pending_auto_attack_skill_hits() {
+    for action in ["inspection", "pickup", "fishing", "emote"] {
+        let game = make_test_game_state(&format!("dagger_interrupted_{action}"));
+        let mut rx = setup_dagger_skill(&game, "dagger").await;
+        let id = pid("archer");
+        game.start_player_attack(id, "skill_target".into(), true, 1, None)
+            .await;
+        assert!(drain(&mut rx)
+            .iter()
+            .any(|m| matches!(m, ServerMessage::DaggerDoubleSlashStarted { .. })));
+        match action {
+            "inspection" => {
+                game.use_targeted_ability(
+                    &id,
+                    AbilityId::Auscultation,
+                    Some("skill_target"),
+                    None,
+                    None,
+                )
+                .await
+            }
+            "pickup" => game.broadcast_pickup_animation(&id).await,
+            "fishing" => game.start_fishing(&id, at(2.0)).await,
+            "emote" => {
+                game.set_player_interaction(&id, Some("excited".into()), None)
+                    .await;
+                game.set_player_interaction(&id, None, None).await;
+            }
+            _ => unreachable!(),
+        }
+        game.process_due_player_attacks(None).await;
+        assert!(
+            drain(&mut rx)
+                .iter()
+                .any(|m| matches!(m, ServerMessage::PlayerAttackStopped { .. })),
+            "{action}"
+        );
+        tokio::time::sleep(Duration::from_millis(450)).await;
+        let messages = drain(&mut rx);
+        assert!(
+            !messages
+                .iter()
+                .any(|m| matches!(m, ServerMessage::PlayerAttacked { .. })),
+            "{action}"
+        );
+        assert_eq!(messages.iter().filter(|m| matches!(m, ServerMessage::DaggerDoubleSlashSkipped { reason, .. } if reason == "interrupted")).count(), 2, "{action}");
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn auto_attack_skill_does_not_block_movement_or_other_attackers() {
+    let game = make_test_game_state("auto_attack_skill_movement");
+    let mut rx = setup_dagger_skill(&game, "dagger").await;
+    let id = pid("archer");
+    game.start_player_attack(id, "skill_target".into(), true, 1, None)
+        .await;
+    drain(&mut rx);
+    game.add_player(make_player("other", 0.0, 0.5)).await;
+    let other_id = pid("other");
+    let mut other_rx = game.register_direct_channel(&other_id).await;
+    game.start_player_attack(other_id, "skill_target".into(), false, 1, None)
+        .await;
+    assert!(drain(&mut other_rx).iter().any(
+        |m| matches!(m, ServerMessage::PlayerAttacked { player_id, .. } if *player_id == other_id)
+    ));
+    game.request_move_direction(id, 1, 0.0, 1, 0, false).await;
+    game.process_due_player_attacks(None).await;
+    assert!(drain(&mut rx)
+        .iter()
+        .any(|m| matches!(m, ServerMessage::PlayerAttackStopped { .. })));
+    tokio::time::sleep(Duration::from_millis(450)).await;
+    let messages = drain(&mut rx);
+    assert!(!messages
+        .iter()
+        .any(|m| matches!(m, ServerMessage::PlayerAttacked { player_id, .. } if *player_id == id)));
+    assert_eq!(messages.iter().filter(|m| matches!(m, ServerMessage::DaggerDoubleSlashSkipped { reason, .. } if reason == "interrupted")).count(), 2);
+}
+
+#[tokio::test]
+async fn auto_attack_stops_when_the_last_arrow_is_spent() {
+    let game = make_test_game_state("auto_attack_last_arrow");
+    let mut rx =
+        setup_archer_with_ammo(&game, "bow", attrs_with(10, 30), &[("iron_arrow", 1)]).await;
+    let id = pid("archer");
+    let mut monster = make_monster("target", at(8.0), 0);
+    monster.health = 1000;
+    monster.max_health = 1000;
+    game.monsters.write().await.insert("target".into(), monster);
+    game.start_player_attack(id, "target".into(), false, 1, None)
+        .await;
+    assert!(drain(&mut rx)
+        .iter()
+        .any(|m| matches!(m, ServerMessage::PlayerAttacked { .. })));
+    ready(&game, id).await;
+    game.process_due_player_attacks(None).await;
+    let messages = drain(&mut rx);
+    assert!(messages.iter().any(|m| matches!(
+        m,
+        ServerMessage::PlayerAttackRejected {
+            reason: AttackRejectReason::OutOfAmmo,
+            ..
+        }
+    )));
+    assert!(messages
+        .iter()
+        .any(|m| matches!(m, ServerMessage::PlayerAttackStopped { .. })));
+    game.process_due_player_attacks(None).await;
+    assert!(drain(&mut rx).is_empty());
+}

@@ -470,6 +470,18 @@ pub enum ClientMessage {
     PlayerAttack {
         monster_id: String,
     },
+    StartPlayerAttack {
+        monster_id: String,
+        dagger_skill: bool,
+        request_id: u32,
+    },
+    StopPlayerAttack {
+        request_id: u32,
+    },
+    SetPlayerAttackSkill {
+        request_id: u32,
+        dagger_skill: bool,
+    },
     RequestRespawn,
     /// Open the treasure chest on a dungeon's final floor. The server
     /// validates proximity, boss state and the per-player cooldown.
@@ -1300,6 +1312,10 @@ pub enum ServerMessage {
         monster_id: String,
         reason: AttackRejectReason,
     },
+    PlayerAttackStopped {
+        monster_id: String,
+        request_id: u32,
+    },
     MonsterAttackedPlayer {
         monster_id: String,
         player_id: PlayerId,
@@ -2030,6 +2046,7 @@ impl ServerMessage {
             | Self::PricingNotice(..)
             | Self::DaggerDoubleSlashRejected { .. }
             | Self::PlayerAttackRejected { .. }
+            | Self::PlayerAttackStopped { .. }
             | Self::ManaUpdate { .. }
             | Self::XpGained { .. }
             | Self::SkillsUpdate { .. }

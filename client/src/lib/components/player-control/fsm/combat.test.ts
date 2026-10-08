@@ -16,9 +16,9 @@ describe('beginAttack', () => {
     overrides: Partial<Parameters<typeof beginAttack>[0]>
   ) {
     const calls = {
-      beginCombat: vi.fn(() => 1),
+      beginCombat: vi.fn(() => ({ attackCounter: 1, startRequested: true })),
       stopAndFace: vi.fn(),
-      sendPlayerAttack: vi.fn(),
+      startPlayerAttack: vi.fn(),
     }
     const result = beginAttack({
       monsterId: 'm1',
@@ -42,23 +42,23 @@ describe('beginAttack', () => {
   })
 
   it('ignores targets with no local data', () => {
-    const { beginCombat, sendPlayerAttack, result } = runBeginAttack({
+    const { beginCombat, startPlayerAttack, result } = runBeginAttack({
       monsterInfo: undefined,
     })
 
     expect(result.kind).toBe('ignored_unattackable_target')
     expect(beginCombat).not.toHaveBeenCalled()
-    expect(sendPlayerAttack).not.toHaveBeenCalled()
+    expect(startPlayerAttack).not.toHaveBeenCalled()
   })
 
   it('starts combat, stops movement, sends attack, and returns attack state', () => {
     const currentPosition = { x: 1, y: 0, z: 2 }
-    const { beginCombat, stopAndFace, sendPlayerAttack, result } =
+    const { beginCombat, stopAndFace, startPlayerAttack, result } =
       runBeginAttack({ currentPosition })
 
     expect(beginCombat).toHaveBeenCalledWith('m1', true)
     expect(stopAndFace).toHaveBeenCalledWith(0.5)
-    expect(sendPlayerAttack).toHaveBeenCalledWith('m1')
+    expect(startPlayerAttack).toHaveBeenCalledWith('m1')
     expect(result).toEqual({
       kind: 'started',
       nextPlayerState: {
@@ -67,6 +67,19 @@ describe('beginAttack', () => {
         rotation: 0.5,
         attackCounter: 1,
       },
+    })
+  })
+
+  it('does not resend a start request for an active attack', () => {
+    const { startPlayerAttack, stopAndFace, result } = runBeginAttack({
+      beginCombat: vi.fn(() => ({ attackCounter: 3, startRequested: false })),
+    })
+
+    expect(startPlayerAttack).not.toHaveBeenCalled()
+    expect(stopAndFace).toHaveBeenCalledWith(0.5)
+    expect(result).toMatchObject({
+      kind: 'started',
+      nextPlayerState: { state: 'attack', attackCounter: 3 },
     })
   })
 })

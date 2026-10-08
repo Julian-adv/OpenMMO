@@ -110,6 +110,22 @@ async fn run_ticks<F, Fut>(
     }
 }
 
+async fn run_player_attacks(
+    game: Arc<GameState>,
+    auth: Option<Arc<AuthService>>,
+    mut shutdown: watch::Receiver<()>,
+) {
+    loop {
+        tokio::select! {
+            biased;
+            _ = shutdown.changed() => break,
+            _ = game.wait_for_player_attack() => {
+                guard_tick("player attacks", game.process_due_player_attacks(auth.clone())).await;
+            }
+        }
+    }
+}
+
 async fn time_sync_tick(game_state: &GameState, auth_service: &Arc<AuthService>, tick_count: u64) {
     // Regenerate player health every 2 ticks (16 seconds)
     if tick_count.is_multiple_of(2) {
@@ -617,8 +633,13 @@ async fn main() -> ExitCode {
         },
     ));
 
-    // Push party positions to members whose party relocated since the last
-    // tick; 3s matches the freshness of the world map's former poll.
+    background.spawn(run_player_attacks(
+        Arc::clone(&game_state),
+        Some(Arc::clone(&auth_service)),
+        drain_shutdown.clone(),
+    ));
+
+    // Push party positions every 3s after relocation.
     let game_state_for_party_positions = Arc::clone(&game_state);
     background.spawn(run_ticks(
         "party positions",

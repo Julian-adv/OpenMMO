@@ -508,8 +508,27 @@ class NetworkManager {
     })
   }
 
-  sendPlayerAttack(monsterId: string) {
-    this.sendMessage({ PlayerAttack: { monster_id: monsterId } })
+  startPlayerAttack(monsterId: string, requestId: number, daggerSkill = false) {
+    this.sendMessage({
+      StartPlayerAttack: {
+        monster_id: monsterId,
+        dagger_skill: daggerSkill,
+        request_id: requestId,
+      },
+    })
+  }
+
+  stopPlayerAttack(requestId: number) {
+    this.sendMessage({ StopPlayerAttack: { request_id: requestId } })
+  }
+
+  setPlayerAttackSkill(requestId: number, daggerSkill: boolean) {
+    this.sendMessage({
+      SetPlayerAttackSkill: {
+        request_id: requestId,
+        dagger_skill: daggerSkill,
+      },
+    })
   }
 
   requestRespawn() {

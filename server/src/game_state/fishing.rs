@@ -394,6 +394,7 @@ impl GameState {
     /// Handle `ClientMessage::FishingCast`: validate everything the design
     /// requires (rod, floor, range, water, liveness) and open the session.
     pub async fn start_fishing(&self, player_id: &PlayerId, target: Position) {
+        self.bump_action_version(player_id).await;
         if self.fishing_sessions.read().await.contains_key(player_id) {
             self.send_fishing_error(player_id, "You are already fishing.")
                 .await;

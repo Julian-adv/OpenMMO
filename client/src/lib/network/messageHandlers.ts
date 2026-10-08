@@ -1348,13 +1348,14 @@ export function handleServerMessage(
       break
 
     case 'PlayerAttacked': {
+      const gameState = get(gameStore)
+      const isLocalAttacker = gameState.currentPlayer?.id === data.player_id
       if (data.dagger_strike == null) {
         clearDaggerCast(data.player_id)
         remotePlayerManager.handleAttack(data.player_id)
+        if (isLocalAttacker) combatController.attackConfirmed(data.monster_id)
       }
 
-      const gameState = get(gameStore)
-      const isLocalAttacker = gameState.currentPlayer?.id === data.player_id
       const attackerName = isLocalAttacker
         ? translate('chat.you')
         : gameState.otherPlayers.get(data.player_id)?.name ||
@@ -1380,10 +1381,11 @@ export function handleServerMessage(
 
     case 'DaggerDoubleSlashStarted': {
       const local = get(gameStore).currentPlayer?.id === data.player_id
+      playDaggerSkill(data.player_id)
       if (local) {
         acknowledgeDaggerSkill(data.cooldown_ms)
+        combatController.attackConfirmed(data.monster_id)
       } else {
-        playDaggerSkill(data.player_id)
         remotePlayerManager.handleAttack(data.player_id)
       }
       break
@@ -1408,12 +1410,7 @@ export function handleServerMessage(
       const playerId = get(gameStore).currentPlayer?.id
       if (playerId !== undefined) clearDaggerCast(playerId)
       if (data.cooldown_ms > 0) acknowledgeDaggerSkill(data.cooldown_ms)
-      else
-        daggerSkillState.update((state) => ({
-          ...state,
-          pending: false,
-          queued: false,
-        }))
+      else daggerSkillState.update((state) => ({ ...state, queued: false }))
       const reasonKey = DAGGER_REJECTION_MESSAGES[data.reason]
       reportSkillFailure(
         data.reason === 'dagger_required' || data.reason === 'rogue_required'
@@ -1427,17 +1424,11 @@ export function handleServerMessage(
 
     case 'PlayerAttackRejected': {
       if (data.reason === 'invalid_target') {
-        if (combatController.targetMonsterId === data.monster_id) {
-          combatController.cancelCombat()
-        }
         const monster = monsterManager.monsters.get(data.monster_id)
         // Corpse rejections must not cut short impact or death animations.
         if (monster && monster.state !== 'dead' && !monster.isDeadPending) {
           monsterManager.remove(data.monster_id)
         }
-      }
-      if (data.reason === 'out_of_ammo') {
-        combatController.cancelCombat()
       }
       const reasonKey = ATTACK_REJECTION_MESSAGES[data.reason]
       addCombatMessage({
@@ -1450,6 +1441,10 @@ export function handleServerMessage(
       })
       break
     }
+
+    case 'PlayerAttackStopped':
+      combatController.attackStopped(data.monster_id, data.request_id)
+      break
 
     case 'MonsterAttackedPlayer': {
       const gameState = get(gameStore)

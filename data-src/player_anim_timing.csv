@@ -1,6 +1,6 @@
 id,delayMs,comment
 player_attack_impact,540,slash1 blade lands - hit/miss sfx and monster flinch
-player_attack_interval,1380,slash1 cadence with server-arrival jitter allowance
+player_attack_interval,1533,server-driven slash1 cadence
 dagger_skill_first_hit,190,dagger double slash first strike
 dagger_skill_second_hit,425,dagger double slash second strike
 dagger_skill_duration,820,dagger double slash animation duration

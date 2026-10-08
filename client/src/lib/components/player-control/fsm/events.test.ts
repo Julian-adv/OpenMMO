@@ -105,6 +105,23 @@ describe('dispatchPlayerControlEvent', () => {
     )
   })
 
+  it('preserves a chase target through a deferred move after standing up', () => {
+    const actions = makeActions()
+    dispatchPlayerControlEvent(
+      {
+        type: 'delayed_request_move',
+        position: { x: 1, y: 2, z: 3 },
+        preserveCombatTarget: true,
+      },
+      actions,
+      2
+    )
+    expect(actions.requestMove).toHaveBeenCalledWith(
+      { x: 1, y: 2, z: 3 },
+      { approach: null, preserveCombatTarget: true }
+    )
+  })
+
   it('routes animation events', () => {
     const actions = makeActions()
 

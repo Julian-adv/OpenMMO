@@ -76,7 +76,6 @@ pub(super) static PLAYER_RANGED_IMPACT_DELAY: LazyLock<Duration> = LazyLock::new
     )
 });
 
-// Slash1 cadence (clip lasts 1,533ms) minus a server-arrival jitter allowance.
 pub(super) static PLAYER_ATTACK_INTERVAL_MS: LazyLock<u64> =
     LazyLock::new(|| anim_delay_ms("player_attack_interval"));
 
@@ -187,6 +186,16 @@ impl Default for EquippedWeapon {
     }
 }
 
+pub(super) struct DaggerAttack {
+    monster_id: String,
+    character_id: i64,
+    weapon_instance: u64,
+    origin: Position,
+    floor: i8,
+    action_version: u64,
+    started: tokio::time::Instant,
+}
+
 struct PlayerAttackTarget {
     state: MonsterState,
     monster_type: String,
@@ -221,34 +230,51 @@ impl super::GameState {
         });
     }
 
-    async fn claim_player_attack_window(&self, player_id: &PlayerId) -> PlayerAttackWindow {
-        let now = Self::now_ms();
-        // Hunger only lengthens the interval, so an attack still inside the
-        // base window never needs the hunger lookup — spam-clicks stay cheap.
-        if let Some(last) = self
-            .last_player_attacks
+    async fn player_attack_interval_ms(&self, player_id: &PlayerId) -> u64 {
+        let attack_mult = self.hunger_attack_mult(player_id).await.max(f32::EPSILON);
+        (*PLAYER_ATTACK_INTERVAL_MS as f32 / attack_mult).ceil() as u64
+    }
+
+    async fn last_player_attack(&self, player_id: &PlayerId) -> u64 {
+        self.last_player_attacks
             .read()
             .await
             .get(player_id)
             .copied()
-            .filter(|last| now.saturating_sub(*last) < *PLAYER_ATTACK_INTERVAL_MS)
-        {
-            return PlayerAttackWindow {
-                checked_at_ms: now,
-                since_accepted_ms: Some(now.saturating_sub(last)),
-                checked_interval_ms: *PLAYER_ATTACK_INTERVAL_MS,
-                accepted: false,
-            };
-        }
-        let attack_mult = self.hunger_attack_mult(player_id).await.max(f32::EPSILON);
-        let required_interval = (*PLAYER_ATTACK_INTERVAL_MS as f32 / attack_mult).ceil() as u64;
+            .unwrap_or(0)
+    }
+
+    pub(super) async fn player_attack_ready(&self, player_id: &PlayerId) -> bool {
+        let since = Self::now_ms().saturating_sub(self.last_player_attack(player_id).await);
+        since >= self.player_attack_interval_ms(player_id).await
+    }
+
+    pub(super) async fn player_attack_remaining_ms(&self, player_id: &PlayerId) -> u64 {
+        let last = self.last_player_attack(player_id).await;
+        let remaining = self
+            .player_attack_interval_ms(player_id)
+            .await
+            .saturating_sub(Self::now_ms().saturating_sub(last));
+        let next_change = self
+            .hunger
+            .read()
+            .await
+            .get(player_id)
+            .and_then(|data| data.next_attack_mult_change(tokio::time::Instant::now()))
+            .map(|until| until.as_millis() as u64 + 1);
+        remaining.min(next_change.unwrap_or(remaining))
+    }
+
+    async fn claim_player_attack_window(&self, player_id: &PlayerId) -> PlayerAttackWindow {
+        let now = Self::now_ms();
+        let checked_interval_ms = self.player_attack_interval_ms(player_id).await;
         let mut last_attacks = self.last_player_attacks.write().await;
         let last = last_attacks.entry(*player_id).or_insert(0);
         let result = PlayerAttackWindow {
             checked_at_ms: now,
             since_accepted_ms: (*last != 0).then(|| now.saturating_sub(*last)),
-            checked_interval_ms: required_interval,
-            accepted: now.saturating_sub(*last) >= required_interval,
+            checked_interval_ms,
+            accepted: now.saturating_sub(*last) >= checked_interval_ms,
         };
         if result.accepted {
             *last = now;
@@ -549,13 +575,13 @@ impl super::GameState {
     }
 
     /// `auth` persists boss-kill titles; tests pass None and keep them in
-    /// memory.
+    /// memory. False when the attack is invalid, not merely on cooldown.
     pub async fn player_attack(
         &self,
         player_id: &PlayerId,
         monster_id: String,
         auth: Option<&crate::auth::AuthService>,
-    ) {
+    ) -> bool {
         self.stop_bed_rest(player_id).await;
         let audit = self.combat_audit.player_attack(*player_id, &monster_id);
         let context = match self.validate_player_attack(player_id, &monster_id).await {
@@ -573,7 +599,7 @@ impl super::GameState {
                     ServerMessage::PlayerAttackRejected { monster_id, reason },
                 )
                 .await;
-                return;
+                return false;
             }
         };
         let timing = self.claim_player_attack_window(player_id).await;
@@ -586,10 +612,11 @@ impl super::GameState {
             );
         }
         if !accepted {
-            return;
+            return true;
         }
         self.resolve_player_attack(player_id, monster_id, context, auth, None)
             .await;
+        true
     }
 
     pub(super) async fn dagger_skill_cooldown_ms(&self, character_id: i64) -> u64 {
@@ -621,6 +648,20 @@ impl super::GameState {
         monster_id: String,
         auth: Option<&crate::auth::AuthService>,
     ) {
+        if let Some(attack) = self
+            .prepare_dagger_double_slash(player_id, monster_id)
+            .await
+        {
+            self.resolve_dagger_double_slash(player_id, attack, auth)
+                .await;
+        }
+    }
+
+    pub(super) async fn prepare_dagger_double_slash(
+        &self,
+        player_id: &PlayerId,
+        monster_id: String,
+    ) -> Option<DaggerAttack> {
         self.stop_bed_rest(player_id).await;
         let character_id = self
             .player_characters
@@ -631,7 +672,7 @@ impl super::GameState {
         let Some(character_id) = character_id else {
             self.reject_dagger_skill(player_id, monster_id, "not_in_game", 0)
                 .await;
-            return;
+            return None;
         };
         if !self
             .players
@@ -642,20 +683,20 @@ impl super::GameState {
         {
             self.reject_dagger_skill(player_id, monster_id, "rogue_required", 0)
                 .await;
-            return;
+            return None;
         }
         let context = match self.validate_player_attack(player_id, &monster_id).await {
             Ok(context) => context,
             Err((reason, _)) => {
                 self.reject_dagger_skill(player_id, monster_id, &reason.to_string(), 0)
                     .await;
-                return;
+                return None;
             }
         };
         let Some(weapon_instance) = context.weapon.dagger_instance else {
             self.reject_dagger_skill(player_id, monster_id, "dagger_required", 0)
                 .await;
-            return;
+            return None;
         };
         let origin = self
             .players
@@ -667,15 +708,9 @@ impl super::GameState {
         let Some((origin, floor)) = origin else {
             self.reject_dagger_skill(player_id, monster_id, "busy", 0)
                 .await;
-            return;
+            return None;
         };
-        let movement_version = self
-            .player_movement_versions
-            .read()
-            .await
-            .get(player_id)
-            .copied()
-            .unwrap_or(0);
+        let action_version = self.action_version(player_id).await;
         let mut cooldowns = self.last_dagger_skills.write().await;
         let now = Self::now_ms();
         let cooldown_ms = anim_delay_ms("dagger_skill_cooldown");
@@ -684,13 +719,13 @@ impl super::GameState {
             drop(cooldowns);
             self.reject_dagger_skill(player_id, monster_id, "cooldown", remaining)
                 .await;
-            return;
+            return None;
         }
         if !self.claim_player_attack_window(player_id).await.accepted {
             drop(cooldowns);
             self.reject_dagger_skill(player_id, monster_id, "attack_cooldown", 0)
                 .await;
-            return;
+            return None;
         }
         cooldowns.insert(character_id, now);
         drop(cooldowns);
@@ -707,7 +742,32 @@ impl super::GameState {
         )
         .await;
 
-        let started = tokio::time::Instant::now();
+        Some(DaggerAttack {
+            monster_id,
+            character_id,
+            weapon_instance,
+            origin,
+            floor,
+            action_version,
+            started: tokio::time::Instant::now(),
+        })
+    }
+
+    pub(super) async fn resolve_dagger_double_slash(
+        &self,
+        player_id: &PlayerId,
+        attack: DaggerAttack,
+        auth: Option<&crate::auth::AuthService>,
+    ) {
+        let DaggerAttack {
+            monster_id,
+            character_id,
+            weapon_instance,
+            origin,
+            floor,
+            action_version,
+            started,
+        } = attack;
         let mut interrupted = false;
         for (index, impact) in ["dagger_skill_first_hit", "dagger_skill_second_hit"]
             .into_iter()
@@ -728,15 +788,8 @@ impl super::GameState {
             let ready = self.players.read().await.get(player_id).is_some_and(|p| {
                 p.health > 0 && !p.is_mounted() && p.object_type.is_none() && p.floor_level == floor
             });
-            let moved = self
-                .player_movement_versions
-                .read()
-                .await
-                .get(player_id)
-                .copied()
-                .unwrap_or(0)
-                != movement_version;
-            interrupted |= !ready || moved;
+            let action_changed = self.action_version(player_id).await != action_version;
+            interrupted |= !ready || action_changed;
             let target_dead = self
                 .monsters
                 .read()
@@ -811,6 +864,7 @@ impl super::GameState {
         }
         // A landed attack (not a rejected one) breaks concentration.
         self.cancel_concentration_if_active(player_id).await;
+        self.clear_player_pose(player_id, "attack").await;
         debug!("Player {} attacking monster {}", player_name, monster_id);
 
         // A ranged weapon rolls on the ability it declares (DEX for the bow);
@@ -1524,6 +1578,7 @@ impl super::GameState {
     /// then the XP penalty. One chokepoint so future death sources can't
     /// forget a side effect.
     pub(super) async fn on_player_died(&self, player_id: &PlayerId, cause: &str) {
+        self.stop_player_attack(player_id).await;
         self.stop_bed_rest(player_id).await;
         self.combat_audit.death(player_id);
         if let Some((position, _, floor_level, name)) = self.player_pose(player_id).await {
