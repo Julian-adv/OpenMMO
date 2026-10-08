@@ -201,6 +201,33 @@
 
 플레이어 클래스 아님.
 
+### Cocoly 게임용 텍스처 최적화 — 2026-10-08
+
+`pink_maid.01484073.glb`의 색상맵을 **2048² JPEG → 1024² WebP q90·effort 6**으로
+줄이고 meshopt 메시 압축을 적용했다. 법선·금속성/거칠기 맵은 기존 1024² JPEG 바이트를 유지한다.
+파일은 **3,179,372 → 1,384,240바이트(56.46% 감소)**,
+gzip level 6 전송량은 **2,762,113 → 1,303,835바이트**다.
+새 빌드 파일명은 `pink_maid.0a61b699.glb`다.
+
+13,070 triangles·33본 계층·역바인드 행렬과 모든 정점 속성을 유지했다.
+인덱스는 각 삼각형의 시작 꼭짓점만 순환하며 방향과 순서는 같다.
+GLB 작성기가 항등 회전에 가까운 본 쿼터니언 성분을 생략하는 차이는 0.00001 미만이다.
+같은 대기 자세·조명에서 전신과 얼굴 확대를 비교했고, 사용자가 일반 게임 거리의 품질을 승인했다.
+적용한 파일은 승인한 후보와 SHA-256이 동일하다. 실제 게임 로더의 텍스처 디코딩과
+대기 애니메이션을 확인했으며 브라우저 오류는 없었다.
+관련 테스트 34개와 `npm run check`, `npm run lint`가 통과했다.
+
+최적화 전 게임 파일은 `assets/pink_maid/pink_maid-before-textures-1024.glb`에 보존했다.
+기존 Meshy 유료 등급·Mixamo 출처와 라이선스를 유지하며 새 AI 생성이나 유료 호출은 없다.
+최적화한 게임 파일과 보존 원본은 Hugging Face에 게시했으며 `assets.lock`에 리비전과 해시를 고정했다.
+[해상도·용량·해시·검증 기록](pink-maid-runtime-textures-1024.json).
+
+```sh
+node tools/optimize-character-textures.mjs assets/pink_maid/pink_maid-before-textures-1024.glb client/public/models/characters/pink_maid.glb 1024
+```
+
+### NPC 출처
+
 - guard — 경비병 NPC Karl (`guard.glb`, CharacterClass::Guard); 원화 `../images/characters/karl-concept.png`, 3D는 Meshy.ai (라이센스는 위 License 표 참조); 거래 창 초상화 `../images/characters/karl-portrait.png` (ChatGPT, 2026-06-12, `doc/assets/ui.md` 참조)
 - npc_woman — 상인 NPC Rica (`npc_woman.glb`); 원화 `../images/characters/rica-concept.png` (Gemini) (커밋 fb299e7); 거래 창 초상화 `../images/characters/rica-portrait.png` (ChatGPT, 2026-06-10, `doc/assets/ui.md` 참조)
 - maid — 여관 직원 NPC용 메이드 (`maid.glb`, NPC Miriel); 원화 `../images/characters/maid-concept.png` (ComfyUI krea2_turbo_fp8_scaled, 2026-08-31); 거래 창 초상화 `../images/characters/miriel-portrait.png` (2026-09-02, `doc/assets/ui.md` 참조); 3D는 Meshy.ai Image to 3D (유료 등급, 생성 2026-08-30), Meshy 원본 `assets/Meshy_AI_Elegant_Maid_Pose_0830152239_texture_obj.zip`(OBJ, Mixamo 업로드용) + `assets/Meshy_AI_Elegant_Maid_Pose_0830151822_texture (1).glb`(같은 모델의 GLB 재다운로드, 노멀·MR 맵 포함), Mixamo 리깅 65본 `assets/maid_mixamo.fbx` (2026-08-31, Stand To Sit 스킨째). 헤드리스 Blender에서 `fix_mixamo_transforms` → 애니 제거 → 키 1.90m(npc_woman 1.91m 기준), 발 원점 → `mixamorig:` 접두 제거 → 머티리얼은 Meshy GLB 것을 통째로 이식(UV 동일: baseColor 픽셀 일치 확인), emissive/specular 제거 → GLB export → 후처리로 본 노드의 float 오차 scale 제거·노멀/MR 1024² 축소. baseColor 2048² JPEG q94 4:4:4(exporter 기본 q92 4:2:0은 얼굴이 뭉개져 상향; q97 백업 `~/assets_original/maid/maid_q97.glb`), normal·metallicRoughness 1024² JPEG

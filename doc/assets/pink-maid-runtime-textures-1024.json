@@ -1,0 +1,121 @@
+{
+  "date": "2026-10-08",
+  "source": "assets/pink_maid/pink_maid-before-textures-1024.glb",
+  "source_record": "doc/assets/characters.md#npc-models",
+  "license": "Existing user-provided Meshy paid-tier model and Mixamo rig; no generation or license changes.",
+  "before": {
+    "bytes": 3179372,
+    "gzip_bytes": 2762113,
+    "sha256": "84fbe837b00e1de9499d2e688b137029ef74ca61f1a766491f0c92aa55589ed8",
+    "textures": [
+      {
+        "name": "pink_maid_normal",
+        "width": 1024,
+        "height": 1024,
+        "mime": "image/jpeg",
+        "bytes": 293815
+      },
+      {
+        "name": "pink_maid_baseColor",
+        "width": 2048,
+        "height": 2048,
+        "mime": "image/jpeg",
+        "bytes": 1722666
+      },
+      {
+        "name": "pink_maid_metallicRoughness",
+        "width": 1024,
+        "height": 1024,
+        "mime": "image/jpeg",
+        "bytes": 307571
+      }
+    ]
+  },
+  "after": {
+    "bytes": 1384240,
+    "gzip_bytes": 1303835,
+    "sha256": "490943c35f9fc37151393c751ebc0dc8eacee53cc84d5084ae708a41e19750ba",
+    "textures": [
+      {
+        "name": "pink_maid_normal",
+        "width": 1024,
+        "height": 1024,
+        "mime": "image/jpeg",
+        "bytes": 293815
+      },
+      {
+        "name": "pink_maid_baseColor",
+        "width": 1024,
+        "height": 1024,
+        "mime": "image/webp",
+        "bytes": 225034
+      },
+      {
+        "name": "pink_maid_metallicRoughness",
+        "width": 1024,
+        "height": 1024,
+        "mime": "image/jpeg",
+        "bytes": 307571
+      }
+    ]
+  },
+  "vertex_attributes_identical": true,
+  "triangle_winding_and_order_identical": true,
+  "index_change": "Cyclic permutation of triangle corners only",
+  "normal_and_metallic_roughness_bytes_identical": true,
+  "browser": {
+    "method": "Before GLB compared against the applied /models/characters/pink_maid.glb through loadCharacterModel, using the game meshopt decoder and idle animation retargeting.",
+    "variants": [
+      {
+        "variant": "before",
+        "bounds": {
+          "min": [
+            -0.2450799659837236, -0.00724369948007884, -0.2449436751944234
+          ],
+          "max": [0.29388693341564814, 1.8957179845357428, 0.27564524706001303]
+        },
+        "head": "Head",
+        "clips": ["idle1"],
+        "decoded_textures": 3
+      },
+      {
+        "variant": "after",
+        "bounds": {
+          "min": [
+            -0.2450799659837236, -0.00724369948007884, -0.2449436751944234
+          ],
+          "max": [0.29388693341564814, 1.8957179845357428, 0.27564524706001303]
+        },
+        "head": "Head",
+        "clips": ["idle1"],
+        "decoded_textures": 3
+      }
+    ],
+    "errors": [],
+    "failedRequests": []
+  },
+  "output": "client/public/models/characters/pink_maid.glb",
+  "application": "Applied to game asset and published to Hugging Face; assets.lock pins the verified revision and file hashes.",
+  "rig_hierarchy_and_inverse_bind_matrices_identical": true,
+  "node_transform_max_component_delta": 0.000004817789886146784,
+  "node_transform_note": "NodeIO omits quaternion rotations within 1e-5 of identity; all other transform components retained.",
+  "triangles": 13070,
+  "joints": 33,
+  "reproduce": "node tools/optimize-character-textures.mjs assets/pink_maid/pink_maid-before-textures-1024.glb client/public/models/characters/pink_maid.glb 1024",
+  "runtime_filename": "pink_maid.0a61b699.glb",
+  "reduction_percent": 56.46,
+  "validation": {
+    "character_tests": 34,
+    "check": "passed; 0 errors, 0 warnings",
+    "lint": "passed",
+    "approved_candidate_sha256_matches": true
+  },
+  "publication": {
+    "repo": "jake-song-openmmo/onlinerpg-assets",
+    "revision": "02c0dc322b9526116e8463dc3258db124f005579",
+    "verified_files": [
+      "assets/pink_maid/pink_maid-before-textures-1024.glb",
+      "client/public/models/characters/pink_maid.glb"
+    ]
+  }
+}
