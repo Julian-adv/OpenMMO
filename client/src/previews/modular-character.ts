@@ -15,6 +15,7 @@ import {
   modularRigId,
   modularSwordTracks,
   parseModularHandProfile,
+  PRIEST_MODULAR_OUTFIT,
   RANGER_MODULAR_OUTFIT,
   RANGER_MODULAR_PARTS,
   ROGUE_MODULAR_OUTFIT,
@@ -24,12 +25,10 @@ import {
   type ModularOutfit,
 } from '../lib/utils/modularCharacter'
 import './modular-character.css'
-import { trimModularClothing } from '../lib/utils/modularClothing'
 import {
   updatePeltPhysics,
   resetPeltPhysics,
   disposePeltPhysics,
-  setPeltPhysicsEnabled,
 } from '../lib/effects/pelt-rig'
 
 const el = <T extends HTMLElement>(id: string): T => {
@@ -58,17 +57,6 @@ const sequence = el<HTMLButtonElement>('sequence')
 const clockLabel = el<HTMLOutputElement>('time')
 const host = el('viewport')
 const TEXTURED_HAIR = ['hair_wavy_bone', 'hair_ranger']
-type PreviewOutfit = Omit<ModularOutfit, 'top'> & {
-  top: ModularOutfit['top'] | 'priest'
-}
-const PRIEST_PREVIEW_OUTFIT: PreviewOutfit = {
-  hair: 'hair_crop',
-  top: 'priest',
-  pants: 'cloth',
-  gloves: 'none',
-  boots: 'none',
-  helmet: 'none',
-}
 const scene = new THREE.Scene()
 const resources: THREE.Object3D[] = [scene]
 const cleanup: (() => void)[] = []
@@ -298,65 +286,15 @@ async function main() {
   let equipped = new Set<string>()
   const dress = () => {
     hairColor.disabled = TEXTURED_HAIR.includes(hairSelect.value)
-    const priestTop = topSelect.value === 'priest' && parts.has('top_priest')
-    for (const id of ['pants_barbarian', 'pants_caveman'])
-      for (const mesh of parts.get(id) ?? [])
-        setPeltPhysicsEnabled(mesh, !priestTop)
     equipped = showModularOutfit(bodyMeshes, parts, {
       hair: hairSelect.value as ModularOutfit['hair'],
-      top:
-        topSelect.value === 'priest'
-          ? priestTop
-            ? 'linen'
-            : 'none'
-          : (topSelect.value as ModularOutfit['top']),
+      top: topSelect.value as ModularOutfit['top'],
       pants: pants.value as ModularOutfit['pants'],
       gloves: gloves.value as ModularOutfit['gloves'],
       boots: boots.value as ModularOutfit['boots'],
       helmet: helmet.value as ModularOutfit['helmet'],
     })
-    if (priestTop) {
-      equipped.delete('top_linen')
-      for (const mesh of parts.get('top_linen') ?? []) mesh.visible = false
-      equipped.add('top_priest')
-      for (const mesh of parts.get('top_priest')!) mesh.visible = true
-      for (const mesh of bodyMeshes)
-        if (mesh.userData.region === 'neck')
-          trimModularClothing(mesh, 'collar', true)
-      const bootCut =
-        equipped.has('boots_ranger') || equipped.has('boots_caveman')
-          ? 'tall_boots'
-          : equipped.has('boots_barbarian')
-            ? 'greaves'
-            : equipped.has('boots_leather') &&
-                parts.get('boots_leather')?.some((mesh) => mesh.visible)
-              ? 'leather_boots'
-              : undefined
-      for (const mesh of parts.get('pants_plate') ?? [])
-        if (mesh.visible)
-          trimModularClothing(mesh, [bootCut, 'priest_plate_waist'])
-      for (const mesh of parts.get('pants_ranger') ?? [])
-        if (mesh.visible)
-          trimModularClothing(mesh, [
-            equipped.has('boots_ranger') && 'ranger_pants_boots',
-            'priest_plate_waist',
-          ])
-      for (const mesh of parts.get('pants_rogue') ?? [])
-        if (mesh.visible)
-          trimModularClothing(mesh, [
-            'priest_rogue_pockets',
-            mesh.userData.fitting_status === 'candidate_tripo_pants_v1' &&
-              'tripo_pants_waist',
-            equipped.has('boots_ranger') && 'ranger_pants_boots',
-          ])
-      for (const id of ['pants_barbarian', 'pants_caveman'])
-        for (const mesh of parts.get(id) ?? [])
-          if (mesh.visible)
-            trimModularClothing(
-              mesh,
-              mesh.userData.pelt_physics ? 'priest_fur' : 'priest_plate_waist'
-            )
-    }
+    const priestTop = equipped.has('top_priest')
     const note = el('outfit-note')
     const inspectingRogue = ROGUE_MODULAR_PARTS.some((id) => equipped.has(id))
     const inspectingCaveman =
@@ -391,7 +329,7 @@ async function main() {
   }
   for (const element of [hairSelect, topSelect, pants, gloves, boots, helmet])
     element.onchange = dress
-  const wearOutfit = (outfit: PreviewOutfit) => {
+  const wearOutfit = (outfit: ModularOutfit) => {
     hairSelect.value = outfit.hair
     topSelect.value = outfit.top
     pants.value = outfit.pants
@@ -700,7 +638,7 @@ async function main() {
           : '얼굴 1,505'
       }`
   }
-  if (priest && parts.has('top_priest')) wearOutfit(PRIEST_PREVIEW_OUTFIT)
+  if (priest && parts.has('top_priest')) wearOutfit(PRIEST_MODULAR_OUTFIT)
   else if (ranger && rangerAvailable) wearOutfit(RANGER_MODULAR_OUTFIT)
   else if (caveman && cavemanAvailable) wearOutfit(CAVEMAN_MODULAR_OUTFIT)
   else if (tripo && parts.has('top_rogue'))

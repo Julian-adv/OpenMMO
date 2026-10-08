@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { createPeltCloth } from './pelt-cloth'
 import { createPeltBend } from './pelt-bend'
-import { createRobeRig, type RobePhysics } from './robe-rig'
+import { createRobeRig, type RobePhysics, type RobeRig } from './robe-rig'
 import type { WindSample } from '../shaders/grass-material'
 
 export interface PeltPhysics {
@@ -47,10 +47,7 @@ export interface PeltPhysics {
 const STEP = 1 / 60
 const MAX_ANGLE = 1.35
 const disabled = new WeakSet<THREE.SkinnedMesh>()
-const rigs = new WeakMap<
-  THREE.SkinnedMesh,
-  PeltRig | ReturnType<typeof createRobeRig>
->()
+const rigs = new WeakMap<THREE.SkinnedMesh, PeltRig | RobeRig>()
 
 export function createPeltRig(
   mesh: THREE.SkinnedMesh,
@@ -469,7 +466,9 @@ export function updatePeltPhysics(
     let rig = rigs.get(node)
     if (!rig && node.visible) {
       rig = node.userData.robe_physics
-        ? createRobeRig(node, node.userData.robe_physics as RobePhysics)
+        ? createRobeRig(node, node.userData.robe_physics as RobePhysics, () =>
+            rigs.delete(node)
+          )
         : createPeltRig(node, node.userData.pelt_physics as PeltPhysics, false)
       rigs.set(node, rig)
     }

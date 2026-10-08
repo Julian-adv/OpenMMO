@@ -57,7 +57,11 @@ function sharedGeometry(
   return shared
 }
 
-export function createRobeRig(mesh: THREE.SkinnedMesh, config: RobePhysics) {
+export function createRobeRig(
+  mesh: THREE.SkinnedMesh,
+  config: RobePhysics,
+  onDispose?: () => void
+) {
   const original = mesh.geometry
   const originalSkeleton = mesh.skeleton
   const hips = originalSkeleton.bones.findIndex((bone) => bone.name === 'Hips')
@@ -96,9 +100,8 @@ export function createRobeRig(mesh: THREE.SkinnedMesh, config: RobePhysics) {
     bone.position.copy(pivot)
     hip.add(bone)
     const inverse = new THREE.Matrix4()
-      .makeTranslation(pivot)
-      .premultiply(originalSkeleton.boneInverses[hips].clone().invert())
-      .invert()
+      .makeTranslation(pivot.clone().negate())
+      .multiply(originalSkeleton.boneInverses[hips])
     return {
       bone,
       inverse,
@@ -237,7 +240,10 @@ export function createRobeRig(mesh: THREE.SkinnedMesh, config: RobePhysics) {
       geometries.delete(original)
     }
     mesh.removeEventListener('removed', dispose)
+    onDispose?.()
   }
   mesh.addEventListener('removed', dispose)
   return { update, reset, dispose }
 }
+
+export type RobeRig = ReturnType<typeof createRobeRig>

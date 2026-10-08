@@ -5,6 +5,7 @@ import {
   rangerPantsBootDistance,
   tuckPantsIntoRangerBoots,
 } from './rangerBootCuff'
+import { meshIslands } from './meshIslands'
 
 type Cut =
   | 'bracers'
@@ -28,6 +29,9 @@ type Cut =
   | 'tripo_pants_waist'
 type MaybeCut = Cut | false | undefined
 type Distance = (point: THREE.Vector3) => number
+type Reshape = {
+  reshape: (geometry: THREE.BufferGeometry) => THREE.BufferGeometry
+}
 
 function sleeveCut(fraction: number): Distance {
   const planes = [1, -1].map((side) => {
@@ -47,7 +51,7 @@ function sleeveCut(fraction: number): Distance {
 
 const rangerGloves = sleeveCut(0.4)
 
-const cuts: Record<Cut, Distance | Distance[]> = {
+const cuts: Record<Cut, Distance | Distance[] | Reshape> = {
   bracers: sleeveCut(0.23),
   gauntlets: sleeveCut(0.85),
   gloves: sleeveCut(0.89),
@@ -73,9 +77,9 @@ const cuts: Record<Cut, Distance | Distance[]> = {
     const drop = Math.max(0, 0.09 - Math.abs(point.x) * 0.5)
     return 1.06 - rear * drop - point.y
   },
-  priest_plate_waist: [],
-  priest_fur: [],
-  priest_rogue_pockets: [],
+  priest_plate_waist: { reshape: tuckWaist(-0.035, 0.23, [0.17, 0.1], false) },
+  priest_fur: { reshape: tuckWaist(-0.015, 0.22, [0.145, 0.145], true) },
+  priest_rogue_pockets: { reshape: removeRoguePockets },
   tripo_pants_waist: (point) => 1.105 - point.y,
 }
 
@@ -263,50 +267,44 @@ export function trimModularClothing(
   setGeometry(mesh, geometry)
 }
 
+function tuckWaist(
+  centerZ: number,
+  hipWidth: number,
+  depth: [number, number],
+  tuckBelowWaist: boolean
+) {
+  return (source: THREE.BufferGeometry) => {
+    const geometry = source.clone()
+    const positions = geometry.getAttribute('position') as THREE.BufferAttribute
+    for (let i = 0; i < positions.count; i++) {
+      const y = positions.getY(i)
+      const amount = THREE.MathUtils.smoothstep(y, 0.92, 1.04)
+      if (!amount && !tuckBelowWaist) continue
+      const x = positions.getX(i)
+      const z = positions.getZ(i) - centerZ
+      const radius = Math.hypot(
+        x / THREE.MathUtils.lerp(hipWidth, 0.16, amount),
+        z / THREE.MathUtils.lerp(depth[0], depth[1], amount)
+      )
+      if (radius > 1) positions.setXYZ(i, x / radius, y, z / radius + centerZ)
+    }
+    geometry.deleteAttribute('tangent')
+    geometry.computeVertexNormals()
+    return geometry
+  }
+}
+
 function removeRoguePockets(source: THREE.BufferGeometry) {
-  const positions = source.getAttribute('position')
-  const parents = Array.from({ length: positions.count }, (_, i) => i)
-  const welded = new Map<string, number>()
-  const point = new THREE.Vector3()
-  const key = (p: THREE.Vector3) =>
-    `${Math.round(p.x * 1e5)},${Math.round(p.y * 1e5)},${Math.round(p.z * 1e5)}`
-  const find = (i: number): number => {
-    while (parents[i] !== i) {
-      parents[i] = parents[parents[i]]
-      i = parents[i]
-    }
-    return i
-  }
-  for (let i = 0; i < positions.count; i++) {
-    const id = key(point.fromBufferAttribute(positions, i))
-    const previous = welded.get(id)
-    if (previous === undefined) welded.set(id, i)
-    else parents[find(i)] = find(previous)
-  }
-  const count = source.index?.count ?? positions.count
-  for (let i = 0; i < count; i += 3) {
-    const first = source.index?.getX(i) ?? i
-    for (let j = 1; j < 3; j++)
-      parents[find(source.index?.getX(i + j) ?? i + j)] = find(first)
-  }
-  const bounds = new Map<number, THREE.Box3>()
-  for (let i = 0; i < positions.count; i++) {
-    const root = find(i)
-    let box = bounds.get(root)
-    if (!box) {
-      box = new THREE.Box3()
-      bounds.set(root, box)
-    }
-    box.expandByPoint(point.fromBufferAttribute(positions, i))
-  }
+  const { islands, islandAt } = meshIslands(source, 1e5)
   const pockets = new Set(
-    [...bounds]
-      .filter(([, box]) => box.min.y > 0.9 && box.min.y < 1 && box.max.y > 1.05)
+    [...islands]
+      .filter(
+        ([, { bounds }]) =>
+          bounds.min.y > 0.9 && bounds.min.y < 1 && bounds.max.y > 1.05
+      )
       .map(([root]) => root)
   )
-  return clipSkinnedGeometry(source, (p) =>
-    pockets.has(find(welded.get(key(p))!)) ? -1 : 1
-  )
+  return clipSkinnedGeometry(source, (p) => (pockets.has(islandAt(p)) ? -1 : 1))
 }
 
 function applyCuts(
@@ -315,44 +313,22 @@ function applyCuts(
   skin: boolean
 ): THREE.BufferGeometry {
   let geometry = source
+  const replace = (next: THREE.BufferGeometry) => {
+    if (geometry !== source) geometry.dispose()
+    geometry = next
+  }
   for (const name of applied) {
-    if (name === 'priest_rogue_pockets') {
-      const previous = geometry
-      geometry = removeRoguePockets(previous)
-      if (previous !== source) previous.dispose()
-    }
-    if (name === 'priest_plate_waist' || name === 'priest_fur') {
-      const previous = geometry
-      geometry = previous.clone()
-      const positions = geometry.getAttribute(
-        'position'
-      ) as THREE.BufferAttribute
-      for (let i = 0; i < positions.count; i++) {
-        const y = positions.getY(i)
-        const amount = THREE.MathUtils.smoothstep(y, 0.92, 1.04)
-        const fur = name === 'priest_fur'
-        if (!amount && !fur) continue
-        const x = positions.getX(i)
-        const centerZ = fur ? -0.015 : -0.035
-        const z = positions.getZ(i) - centerZ
-        const width = THREE.MathUtils.lerp(fur ? 0.22 : 0.23, 0.16, amount)
-        const depth = fur ? 0.145 : THREE.MathUtils.lerp(0.17, 0.1, amount)
-        const radius = Math.hypot(x / width, z / depth)
-        if (radius > 1) positions.setXYZ(i, x / radius, y, z / radius + centerZ)
-      }
-      geometry.deleteAttribute('tangent')
-      geometry.computeVertexNormals()
-      if (previous !== source) previous.dispose()
-    }
-    for (const distance of [cuts[name]].flat()) {
-      const previous = geometry
-      geometry = clipSkinnedGeometry(
-        previous,
-        (point) => distance(point) * (skin ? -1 : 1),
-        name === 'ranger_pants_boots'
-      )
-      if (previous !== source) previous.dispose()
-    }
+    const cut = cuts[name]
+    if ('reshape' in cut) replace(cut.reshape(geometry))
+    else
+      for (const distance of [cut].flat())
+        replace(
+          clipSkinnedGeometry(
+            geometry,
+            (point) => distance(point) * (skin ? -1 : 1),
+            name === 'ranger_pants_boots'
+          )
+        )
     if (name === 'ranger_pants_boots') tuckPantsIntoRangerBoots(geometry)
     if (name === 'ranger_sleeves' && !skin) {
       const transition = sleeveCut(0.2)

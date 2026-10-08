@@ -84,23 +84,23 @@
     "measured_frames": 240,
     "frame_hz": 60,
     "simulation_hz": 30,
-    "average_ms_per_100_actor_frame": 0.8639109875000001,
-    "p95_ms_per_100_actor_frame": 0.9458329999999933,
+    "average_ms_per_100_actor_frame": 0.9215216208333346,
+    "p95_ms_per_100_actor_frame": 1.0118230000000494,
     "shared_robe_geometries": 1,
     "independent_robe_skeletons": 100
   },
   "code": [
     {
       "path": "client/src/lib/effects/robe-rig.ts",
-      "sha256": "3fd3b39ef8fa52f9843d37f2f5647f16258f96acb88db6913198c18983022b71"
+      "sha256": "2f73c92bf900a74e2a89d09a83db1d868bc007132a1ca8ef4ba807ae09a3dcc2"
     },
     {
       "path": "client/src/lib/effects/pelt-rig.ts",
-      "sha256": "f07b1d7eebf3512b309ba30160be29905130513a5d517d6a98653447104ec21c"
+      "sha256": "4addfb840cdbe539d08924623cd174f6052fa8c2c2e42af75ec012741d4fb46c"
     },
     {
       "path": "client/src/lib/utils/modularCharacter.ts",
-      "sha256": "18c57e47be88ea1d1de4e26a9f812297efb7e800431ed6166ae508abe42c7782"
+      "sha256": "1acbf61e48e124902f1ad74c2083ff2152fd4ed91ff404e5e5c5236a0a5eff2a"
     }
   ],
   "limits": "Approximate thigh-direction clearance; no cloth mesh contacts, self-collision or wrinkle solver. Extreme raised-leg poses and mixed equipment need further visual acceptance. CPU timings exclude rendering."
