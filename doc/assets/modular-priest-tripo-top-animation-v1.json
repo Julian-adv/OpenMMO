@@ -1,0 +1,212 @@
+{
+  "status": "Numeric runtime bind and skinning review; visual review is separate",
+  "sources": [
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/top_priest.glb",
+      "sha256": "d150bb102c4aa61a2f1a4107e48f09f39241b524de2541a45d37116809a205ed"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/locomotion.glb",
+      "sha256": "d4aa8d7369c6396f7455b7066d2342ef7662fa2ef46595c42de76f3f3855055d"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/combat_melee.glb",
+      "sha256": "c70372c773f9613646ef5e2c01e138db682449bc50d353ee23567bb2007d16fc"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/social.glb",
+      "sha256": "a9efe7a2d388011cdc039ca6778c2b3a929b07953941ee7bb7c50a511d4b083d"
+    }
+  ],
+  "bind_modular_part_passed": true,
+  "samples_per_clip": 13,
+  "clips": [
+    {
+      "name": "idle1",
+      "maximum_edge_stretch_ratio": 1.5260796516718318,
+      "stretch_p99": 1.158511344603396,
+      "leather_core_strain_p95": 0.23312691273548114,
+      "worst_time": 6.249999761581421,
+      "worst_edge": {
+        "a": 4391,
+        "b": 2197,
+        "length": 0.0514130738978022,
+        "rest": [
+          [
+            0.00011240721029254886,
+            1.503062650166636,
+            -0.17240480549729992
+          ],
+          [
+            -0.05071939979723805,
+            1.5072755804021996,
+            -0.17886102597063466
+          ]
+        ]
+      },
+      "maximum_seam_gap_m": 0,
+      "all_vertices_finite": true
+    },
+    {
+      "name": "walk",
+      "maximum_edge_stretch_ratio": 1.6926634120371438,
+      "stretch_p99": 1.1935616580709194,
+      "leather_core_strain_p95": 0.12967769595455492,
+      "worst_time": 0.25833332538604736,
+      "worst_edge": {
+        "a": 636,
+        "b": 637,
+        "length": 0.0356390352444102,
+        "rest": [
+          [
+            -0.2337570830860272,
+            1.2978520164041694,
+            0.008797236808514516
+          ],
+          [
+            -0.21597698000399998,
+            1.2807440169573743,
+            -0.016919005577830694
+          ]
+        ]
+      },
+      "maximum_seam_gap_m": 0,
+      "all_vertices_finite": true
+    },
+    {
+      "name": "run",
+      "maximum_edge_stretch_ratio": 2.5485252481633394,
+      "stretch_p99": 1.4247036317602522,
+      "leather_core_strain_p95": 0.2797149347072114,
+      "worst_time": 0.36944443980852765,
+      "worst_edge": {
+        "a": 1957,
+        "b": 1785,
+        "length": 0.024013387528605233,
+        "rest": [
+          [
+            -0.1849302362389797,
+            1.364380086558963,
+            -0.12926727318064044
+          ],
+          [
+            -0.20045003738246003,
+            1.3691911404481645,
+            -0.14694868470633599
+          ]
+        ]
+      },
+      "maximum_seam_gap_m": 0,
+      "all_vertices_finite": true
+    },
+    {
+      "name": "jump",
+      "maximum_edge_stretch_ratio": 3.9190867451992455,
+      "stretch_p99": 1.4750781678195608,
+      "leather_core_strain_p95": 0.4811921356550042,
+      "worst_time": 0.6333333253860474,
+      "worst_edge": {
+        "a": 3194,
+        "b": 3233,
+        "length": 0.03896696470563863,
+        "rest": [
+          [
+            0.03432134217502686,
+            1.3788862553237378,
+            0.11810632772714226
+          ],
+          [
+            0.07310976114669607,
+            1.3760221872991656,
+            0.1157230513270237
+          ]
+        ]
+      },
+      "maximum_seam_gap_m": 0,
+      "all_vertices_finite": true
+    },
+    {
+      "name": "slash1",
+      "maximum_edge_stretch_ratio": 3.266140558432063,
+      "stretch_p99": 1.4793031097552813,
+      "leather_core_strain_p95": 0.33242059703812266,
+      "worst_time": 0.38333332538604736,
+      "worst_edge": {
+        "a": 636,
+        "b": 637,
+        "length": 0.0356390352444102,
+        "rest": [
+          [
+            -0.2337570830860272,
+            1.2978520164041694,
+            0.008797236808514516
+          ],
+          [
+            -0.21597698000399998,
+            1.2807440169573743,
+            -0.016919005577830694
+          ]
+        ]
+      },
+      "maximum_seam_gap_m": 0,
+      "all_vertices_finite": true
+    },
+    {
+      "name": "combat_idle",
+      "maximum_edge_stretch_ratio": 1.7826212888484074,
+      "stretch_p99": 1.3274549080187938,
+      "leather_core_strain_p95": 0.23966701567169602,
+      "worst_time": 1.4972221851348877,
+      "worst_edge": {
+        "a": 1114,
+        "b": 1143,
+        "length": 0.038599207093416736,
+        "rest": [
+          [
+            -0.07182119679850206,
+            1.3768883295603658,
+            0.11671075625181244
+          ],
+          [
+            -0.03324343264102936,
+            1.3781265140259218,
+            0.11636175756966101
+          ]
+        ]
+      },
+      "maximum_seam_gap_m": 0,
+      "all_vertices_finite": true
+    },
+    {
+      "name": "sit_idle",
+      "maximum_edge_stretch_ratio": 1.98864520702563,
+      "stretch_p99": 1.4241686383774441,
+      "leather_core_strain_p95": 0.2677009981686096,
+      "worst_time": 1.4444444974263508,
+      "worst_edge": {
+        "a": 636,
+        "b": 637,
+        "length": 0.0356390352444102,
+        "rest": [
+          [
+            -0.2337570830860272,
+            1.2978520164041694,
+            0.008797236808514516
+          ],
+          [
+            -0.21597698000399998,
+            1.2807440169573743,
+            -0.016919005577830694
+          ]
+        ]
+      },
+      "maximum_seam_gap_m": 0,
+      "all_vertices_finite": true
+    }
+  ],
+  "strain_region": "Central torso leather"
+}

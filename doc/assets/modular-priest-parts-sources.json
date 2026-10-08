@@ -1,0 +1,138 @@
+{
+  "date": "2026-10-08",
+  "status": "[미사용] Current priest chest-slot front/back concept pair v2 for review; lower central chainmail removed at user request. No 3D generation, fitting, simulation or runtime registration.",
+  "service": "OpenAI Codex built-in ImageGen",
+  "tier": "ChatGPT Pro 20x",
+  "license": "OpenAI generated output terms; existing reference image license retained as documented in doc/assets/characters.md.",
+  "concept_reference": {
+    "path": "client/public/character_concepts/priest.webp",
+    "sha256": "246f17efa93e362513703c1055268a8cc9d1f7f02b6bcf68d132eb97129eadf6",
+    "source_record": "doc/assets/characters.md",
+    "source": "Male priest Gemini original; transparent-background edit with ChatGPT Pro 20x on 2026-08-28."
+  },
+  "planned_body_reference": {
+    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
+    "rig_id": "human_male_01_mixamo_candidate_v2",
+    "joints": 65,
+    "interfaces": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+    "status": "Future fitting reference only. Body geometry was not supplied to ImageGen. interfaces/v1 records an older base hash; reconcile contours with the current base before fitting."
+  },
+  "parts": [
+    {
+      "id": "top_priest",
+      "proposed_slot": "chest",
+      "includes": [
+        "White and gold sleeveless surcoat to above knees, including hanging cloth below waist",
+        "Long-sleeved chainmail shirt and standing collar; no hanging lower chainmail skirt",
+        "Silver bead necklace and pendant",
+        "Brown double waist belt with front silver fittings, chains, two hanging reliquaries and red cords"
+      ],
+      "excludes": [
+        "Mitre",
+        "Body",
+        "Chainmail trousers",
+        "Hands and gloves",
+        "Sandals"
+      ],
+      "versions": [
+        {
+          "version": 1,
+          "view": "front",
+          "status": "[미사용] Superseded by v2; intermediate image removed at user request before commit. Prompt and hash retained as provenance.",
+          "reference_images": [
+            "client/public/character_concepts/priest.webp"
+          ],
+          "prompt": "Use case: precise-object-edit.\nAsset type: isolated front-view modular male priest upper garment concept for fantasy RPG 3D modeling.\nInput image 1: design reference and extraction target, the existing male priest concept. Extract and redraw ONLY his complete upper outfit as one naturally assembled empty wearable garment. Faithfully preserve the reference design, proportions, white fabric, gold woven floral borders, dark silver chainmail, brown leather and silver religious ornaments. This is concept art, not a fitted or rigged model.\nSubject: knee-above-length white sleeveless open-front priest surcoat worn over a dark silver chainmail long-sleeved shirt with its small standing V collar, long narrow sleeves ending at wrists, and short chainmail shirt skirt ending slightly above the white surcoat hem. Retain the silver bead necklace with silver pendant. Retain the broad double brown waist belt with the original silver round fittings, short chains and two small silver hanging reliquaries with blue accents and short dark red cords, as part of this chest-slot assembly. Keep the white surcoat length and silhouette as in the reference: it is NOT ankle-length and NOT cropped at the waist. The white front has two gold-edged panels; below the belt a narrow center-front slit extends to the hem, with a darker chainmail skirt subtly visible inside. Slightly relaxed fabric below the belt, simple readable vertical folds, pliable textile rather than armor plates. Preserve the original gold hem border.\nPose and framing: one garment only, direct FRONT view, centered and near orthographic with full sleeves and full hem visible, generous clean margin. Empty sleeves in lowered A pose, approximately 27 degrees outward from downward vertical, symmetrical. Hollow neck opening and hollow wrist openings, believable worn three-dimensional volume with no body or mannequin present.\nBackdrop: solid clean white, no floor or cast shadow outside the garment. Realistic high-detail fantasy equipment concept rendering, even soft studio lighting, clear fabric weave and chainmail rings, readable construction.\nConstraints: NO head, mitre, hair, skin, person, arms or hands, mannequin, legs, chainmail trousers, sandals, boots, gloves, weapons, cape, separate loose items, text, annotations, labels, logo or watermark. Chainmail below the belt must be a single short hanging shirt skirt, NEVER a pair of trouser legs. Do not invent large plate pauldrons or a hood. Do not shorten the robe to the belt. Do not change the reference palette or redesign the outfit. Output exactly one front view, no collage.",
+          "path": "doc/images/characters/modular_human_male_01/parts/priest/top_priest-front-v1.png",
+          "sha256": "7771345b7eccdf17003406ff1d76b10ce14c43199ed2eb845b0a720b3640e782",
+          "resolution": [
+            1024,
+            1536
+          ],
+          "background": "solid white RGB",
+          "retained": false
+        },
+        {
+          "version": 1,
+          "view": "back",
+          "status": "[미사용] Superseded by v2; intermediate image removed at user request before commit. Prompt and hash retained as provenance.",
+          "reference_images": [
+            "doc/images/characters/modular_human_male_01/parts/priest/top_priest-front-v1.png",
+            "client/public/character_concepts/priest.webp"
+          ],
+          "prompt": "Use case: precise-object-edit.\nAsset type: isolated BACK view of an existing male priest upper garment, companion reference for fantasy RPG 3D modeling.\nInput 1 is the accepted FRONT view of the exact garment to turn around. Input 2 is the original character design for supporting style only. Create one direct BACK view of the SAME empty upper outfit from input 1, matching every material, silhouette, garment length, waist height, belt width, sleeve length and lowered A pose. Do not produce another front view.\nComplete assembled outfit: white knee-above-length sleeveless surcoat with gold embroidered floral edging worn over dark silver long-sleeved chainmail shirt with standing collar; broad double dark brown leather waist belt. Back of surcoat is mostly plain white woven cloth with natural restrained vertical folds. Gold borders continue around the armholes, rear neckline and bottom hem. A subtle central back construction seam; a functional short center-back vent from hem to lower thigh, edged simply and minimally, otherwise back fabric continuous. Chainmail short skirt is barely visible inside the vent and remains a SINGLE skirt, not trouser legs. Neck opening is hollow, seen from behind with the rear chainmail standing collar; absolutely no V neckline or chest pendant on the back. Back belt has plain brown leather bands, small understated join hardware, NO duplicated decorative front buckle. The silver bead necklace only has the small short continuation around the back of the neck, not a second hanging pendant. The two front hanging silver reliquaries and red cords may be barely visible around the outer hip silhouettes, but must NEVER be duplicated across the rear.\nComposition: one centered full BACK view, nearly orthographic, equal scale to input 1, both entire empty sleeves and full hem visible with ample white margins. Sleeves hang about 27 degrees outward from vertical in symmetrical lowered A pose. Hollow wrist openings. Worn 3D garment volume with no wearer.\nStyle and backdrop: detailed realistic fantasy equipment concept rendering, soft even studio lighting, solid clean white background. Preserve the silver chainmail texture, warm gold embroidered textile borders and ivory-white fabric. Soft flexible textile, not armor plate. No floor or exterior cast shadow.\nAvoid: human, mannequin, head, hat, hair, skin, arms or hands inside sleeves, legs, trousers, boots, sandals, gloves, weapons, cape, hood, plate pauldrons, text, labels, arrows, watermark, multi-view sheet, copied front necklace or copied front buckle on the back. This is pre-modeling concept art; no dimensions or technical annotation.",
+          "path": "doc/images/characters/modular_human_male_01/parts/priest/top_priest-back-v1.png",
+          "sha256": "ff8cf2390782159831991be87d54b88e8746e316e5c76351a138ae7bfa35c88e",
+          "resolution": [
+            1024,
+            1536
+          ],
+          "background": "solid white RGB",
+          "retained": false,
+          "reference_images_status": "Historical generation inputs; superseded v1 files removed at user request"
+        },
+        {
+          "version": 2,
+          "view": "front",
+          "status": "Current concept candidate; not in game",
+          "reference_images": [
+            "doc/images/characters/modular_human_male_01/parts/priest/top_priest-front-v1.png"
+          ],
+          "prompt": "Use case: precise-object-edit.\nEdit target: the supplied FRONT-view male priest upper outfit concept on white background.\nMake ONLY this local correction: remove the narrow dark chainmail strip visible in the vertical central gap BETWEEN the two white robe panels BELOW the brown waist belt, all the way from directly under the belt to the bottom hem. Remove the hanging lower chainmail shirt skirt completely. The front slit remains OPEN, with empty clean white background visible through that gap; no replacement fabric, body, legs, trousers, metal, dark backing or extra layer. Preserve the existing two white cloth front panels and their gold embroidered edges exactly; do not close or stitch together the slit.\nKeep ALL other details unchanged: chainmail long sleeves and chainmail standing collar/chest ABOVE the belt remain exactly as they are, white surcoat and gold embroidery, brown belt, silver bead necklace and pendant, belt fittings, short silver chain across the belt, silver hanging reliquaries, red cords, robe length, folds, lowered A pose, front camera, garment proportions, image framing and white background. Specifically do NOT remove the small decorative SILVER CHAIN ON THE BELT: the removed material is ONLY the dark CHAINMAIL FABRIC INSIDE THE LOWER CENTRAL ROBE GAP. One front view only. No person, mannequin, text or watermark. Preserve original 1024x1536 portrait composition.",
+          "path": "doc/images/characters/modular_human_male_01/parts/priest/top_priest-front-v2.png",
+          "sha256": "45b19b73cf47ae004213659b2cc91c6816de27fbc1a0af9fe8aaae8c8dbe18ec",
+          "resolution": [
+            1024,
+            1536
+          ],
+          "background": "solid white RGB",
+          "retained": true,
+          "reference_images_status": "Historical generation inputs; superseded v1 files removed at user request"
+        },
+        {
+          "version": 2,
+          "view": "back",
+          "status": "Current concept candidate; not in game",
+          "reference_images": [
+            "doc/images/characters/modular_human_male_01/parts/priest/top_priest-back-v1.png"
+          ],
+          "prompt": "Use case: precise-object-edit.\nEdit target: the supplied BACK-view male priest upper outfit concept on white background.\nMake ONLY this local correction: remove the narrow dark chainmail strip visible in the central rear vent BETWEEN the white robe panels BELOW the brown waist belt, all the way to the bottom hem. Remove the lower hanging chainmail shirt skirt completely. The rear vent remains OPEN with empty clean white background visible through the gap; no replacement fabric, body, legs, trousers, metal, dark lining or additional layer. Preserve the existing white cloth panels, vent shape and gold hem embroidery; do not close or stitch together the vent.\nKeep ALL other details unchanged: chainmail long sleeves and chainmail standing collar ABOVE the belt remain exactly as they are, white surcoat and gold embroidery, brown rear belt and small join fittings, bead necklace continuation across rear neck, side glimpses of silver hanging reliquaries and red cords, robe length, folds, center back seam, lowered A pose, BACK camera, garment proportions, framing and white background. One back view only. No person, mannequin, text or watermark. Preserve original 1024x1536 portrait composition. No redesign beyond removing chainmail fabric from inside the lower central robe gap.",
+          "path": "doc/images/characters/modular_human_male_01/parts/priest/top_priest-back-v2.png",
+          "sha256": "4887f805bb3a3250eec90e2274be91941d73ba3fc242548598f3177b9aa2dabd",
+          "resolution": [
+            1024,
+            1536
+          ],
+          "background": "solid white RGB",
+          "retained": true,
+          "reference_images_status": "Historical generation inputs; superseded v1 files removed at user request"
+        }
+      ],
+      "selected_version": 2
+    }
+  ],
+  "review": {
+    "front": "v2: lower central slit contains no chainmail. White background visible through open gap. Collar and sleeve chainmail, belt chain and ornaments retained.",
+    "back": "v2: rear vent contains no chainmail. Rear seam and vent retained. Collar and sleeve chainmail retained; unify front/rear neck construction before 3D.",
+    "physics": "Proposed only: skinned torso/sleeves with low-density cloth below a pinned waist and body/leg contacts. Lower hanging chainmail layer removed in v2, so no separate chainmail skirt simulation is planned. Existing pelt cloth is a starting point; rigid front/back panels and unconnected grid boundaries are not a finished continuous robe simulation.",
+    "remaining": [
+      "User design review",
+      "Resolve front/back collar and seam construction",
+      "Allocate assembled-character triangle budget",
+      "Reconcile current body with provisional interface contours",
+      "3D generation and fitting",
+      "Low-density simulation topology and seamless transition at waist",
+      "Skin and underlayer occlusion",
+      "Animation, mixed-equipment and performance checks"
+    ]
+  },
+  "revisions": [
+    {
+      "date": "2026-10-08",
+      "version": 2,
+      "user_request": "몸 가운데 허리 아래 천과 천 사이에 사슬이 살짝 보이는걸 지워야 할 듯",
+      "result": "Removed dark lower chainmail between cloth panels in both front and back. Kept sleeve/collar chainmail and decorative belt chain."
+    }
+  ]
+}

@@ -1,0 +1,106 @@
+{
+  "top_sha256": "d150bb102c4aa61a2f1a4107e48f09f39241b524de2541a45d37116809a205ed",
+  "region": "Robe triangles wholly below 1.10m against torso and legs",
+  "method": "AABB candidate pairs and bidirectional triangle-edge intersection; rest and 13 sampled idle poses",
+  "samples": [
+    {
+      "clip": "rest",
+      "time": 0,
+      "intersection_pairs": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 0,
+      "intersection_pairs": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 0.6944444179534912,
+      "intersection_pairs": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 1.3888888359069824,
+      "intersection_pairs": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 2.0833332538604736,
+      "intersection_pairs": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 2.777777671813965,
+      "intersection_pairs": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 3.472222089767456,
+      "intersection_pairs": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 4.166666507720947,
+      "intersection_pairs": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 4.8611109256744385,
+      "intersection_pairs": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 5.55555534362793,
+      "intersection_pairs": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 6.249999761581421,
+      "intersection_pairs": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 6.944444179534912,
+      "intersection_pairs": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 7.638888597488403,
+      "intersection_pairs": 0
+    },
+    {
+      "clip": "idle1",
+      "time": 8.333333015441895,
+      "intersection_pairs": 0
+    }
+  ],
+  "date": "2026-10-08",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/top_priest.glb",
+    "sha256": "d150bb102c4aa61a2f1a4107e48f09f39241b524de2541a45d37116809a205ed",
+    "bytes": 2028360
+  },
+  "body": {
+    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
+    "bytes": 22214236
+  },
+  "pose_source": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/idle-fitting-poses.json",
+    "sha256": "52d09623eb4a56eff620eb992926dc38b4fbd3de7e26c2602c94d3aaccd6f6f0",
+    "bytes": 210697
+  },
+  "browser_review": {
+    "url": "https://localhost:10004/modular-character-preview.html?outfit=priest",
+    "pants": "none",
+    "clip": "idle1",
+    "sampled_frames": 13,
+    "views_per_sample": 4,
+    "leg_skin_visible": true,
+    "cloth_to_underwear_restoration_passed": true,
+    "page_errors": [],
+    "image_status": "Intermediate baseline contact sheet removed at user request; numeric results retained"
+  },
+  "limitations": "Rest and 13 sampled idle baseline poses only; current lightweight runtime is reviewed in modular-priest-tripo-top-runtime-v1.json.",
+  "status": "Exported hip-anchored skinning baseline. Browser screenshots in this record predate the lightweight auxiliary-bone runtime."
+}

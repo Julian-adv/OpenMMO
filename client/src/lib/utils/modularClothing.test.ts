@@ -47,6 +47,138 @@ function area(geometry: THREE.BufferGeometry) {
 }
 
 describe('modular clothing cuts', () => {
+  it('removes detached rogue pockets while retaining UV-split trousers, belt loops and skinning', () => {
+    const source = new THREE.BufferGeometry()
+    source.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(
+        [
+          -0.1, 0.3, 0, 0.1, 0.95, 0, -0.1, 0.95, 0, -0.1, 0.95, 0, 0.1, 0.95,
+          0, 0.1, 1.1, 0, 0.19, 0.94, 0.1, 0.25, 0.94, 0.1, 0.25, 1.08, 0.1,
+          0.19, 1.08, 0.1, 0.05, 1.02, 0.1, 0.07, 1.02, 0.1, 0.05, 1.1, 0.1,
+        ],
+        3
+      )
+    )
+    const count = source.attributes.position.count
+    source.setAttribute(
+      'uv',
+      new THREE.Float32BufferAttribute(
+        Array.from({ length: count }, (_, i) => [i, 0]).flat(),
+        2
+      )
+    )
+    source.setAttribute(
+      'skinIndex',
+      new THREE.Uint16BufferAttribute(
+        Array.from({ length: count }, () => [1, 2, 0, 0]).flat(),
+        4
+      )
+    )
+    source.setAttribute(
+      'skinWeight',
+      new THREE.Float32BufferAttribute(
+        Array.from({ length: count }, () => [0.7, 0.3, 0, 0]).flat(),
+        4
+      )
+    )
+    source.setIndex([0, 1, 2, 3, 4, 5, 6, 7, 8, 6, 8, 9, 10, 11, 12])
+    const mesh = new THREE.SkinnedMesh(source)
+    const second = new THREE.SkinnedMesh(source)
+    const originalIndex = source.index!.array.slice()
+    trimModularClothing(mesh, 'priest_rogue_pockets')
+    expect(mesh.geometry.index!.count).toBe(9)
+    const retained = Array.from(mesh.geometry.attributes.uv.array).filter(
+      (_, i) => i % 2 === 0
+    )
+    expect(retained).toEqual([0, 1, 2, 3, 4, 5, 10, 11, 12])
+    for (const [i, original] of retained.entries())
+      for (const name of ['position', 'skinIndex', 'skinWeight']) {
+        const attr = mesh.geometry.attributes[name]
+        for (let j = 0; j < attr.itemSize; j++)
+          expect(attr.getComponent(i, j)).toBe(
+            source.attributes[name].getComponent(original, j)
+          )
+      }
+    trimModularClothing(second, 'priest_rogue_pockets')
+    expect(second.geometry).toBe(mesh.geometry)
+    trimModularClothing(mesh)
+    expect(mesh.geometry).toBe(source)
+    expect(source.index!.array).toEqual(originalIndex)
+  })
+
+  it('tucks both the belt and lower fur under a priest robe without changing topology or the source', () => {
+    const source = cloth()
+    const positions = source.attributes.position
+    for (let i = 0; i < positions.count; i++)
+      positions.setXYZ(
+        i,
+        positions.getX(i) * 0.24,
+        0.7 + positions.getY(i) * 0.44,
+        0.17
+      )
+    const mesh = new THREE.SkinnedMesh(source)
+    const originalPositions = positions.array.slice()
+    trimModularClothing(mesh, 'priest_fur')
+    const fitted = mesh.geometry.attributes.position
+    for (const name of ['uv', 'skinIndex', 'skinWeight'])
+      expect(mesh.geometry.attributes[name].array).toEqual(
+        source.attributes[name].array
+      )
+    expect(mesh.geometry.index!.array).toEqual(source.index!.array)
+    for (let i = 0; i < fitted.count; i++) {
+      expect(fitted.getY(i)).toBeCloseTo(positions.getY(i))
+      expect(Math.abs(fitted.getX(i))).toBeLessThan(Math.abs(positions.getX(i)))
+      expect(fitted.getZ(i)).toBeLessThan(0.13)
+    }
+    trimModularClothing(mesh)
+    expect(mesh.geometry).toBe(source)
+    expect(positions.array).toEqual(originalPositions)
+  })
+
+  it('tucks plate hips under a priest robe while preserving skinning, lower armor and independent boot cuts', () => {
+    const source = cloth()
+    const positions = source.attributes.position
+    for (let i = 0; i < positions.count; i++)
+      positions.setXYZ(
+        i,
+        positions.getX(i) * 0.22,
+        0.3 + positions.getY(i) * 0.74,
+        0.08
+      )
+    const first = new THREE.SkinnedMesh(source)
+    const second = new THREE.SkinnedMesh(source)
+    const originalPositions = positions.array.slice()
+    trimModularClothing(first, 'priest_plate_waist')
+    const tucked = first.geometry
+    for (const name of ['uv', 'skinIndex', 'skinWeight'])
+      expect(tucked.attributes[name].array).toEqual(
+        source.attributes[name].array
+      )
+    expect(tucked.index!.array).toEqual(source.index!.array)
+    for (let i = 0; i < positions.count; i++) {
+      const fitted = tucked.attributes.position
+      expect(fitted.getY(i)).toBeCloseTo(positions.getY(i))
+      if (positions.getY(i) < 0.92) {
+        expect(fitted.getX(i)).toBeCloseTo(positions.getX(i))
+        expect(fitted.getZ(i)).toBeCloseTo(positions.getZ(i))
+      } else expect(Math.abs(fitted.getX(i))).toBeLessThan(0.16)
+    }
+    trimModularClothing(second, 'priest_plate_waist')
+    expect(second.geometry).toBe(tucked)
+    trimModularClothing(first, ['greaves', 'priest_plate_waist'])
+    first.geometry.computeBoundingBox()
+    expect(first.geometry.boundingBox!.min.y).toBeCloseTo(0.46)
+    trimModularClothing(first, 'greaves')
+    first.geometry.computeBoundingBox()
+    expect(first.geometry.boundingBox!.min.y).toBeCloseTo(0.46)
+    expect(first.geometry.boundingBox!.max.x).toBeCloseTo(0.22)
+    expect(second.geometry).toBe(tucked)
+    trimModularClothing(first)
+    expect(first.geometry).toBe(source)
+    expect(source.attributes.position.array).toEqual(originalPositions)
+  })
+
   it('preserves the exposed neck width with a ranger top and restores skin after removal or a missing top', () => {
     const source = cloth()
     const position = source.attributes.position

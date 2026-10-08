@@ -24,10 +24,12 @@ import {
   type ModularOutfit,
 } from '../lib/utils/modularCharacter'
 import './modular-character.css'
+import { trimModularClothing } from '../lib/utils/modularClothing'
 import {
   updatePeltPhysics,
   resetPeltPhysics,
   disposePeltPhysics,
+  setPeltPhysicsEnabled,
 } from '../lib/effects/pelt-rig'
 
 const el = <T extends HTMLElement>(id: string): T => {
@@ -56,6 +58,17 @@ const sequence = el<HTMLButtonElement>('sequence')
 const clockLabel = el<HTMLOutputElement>('time')
 const host = el('viewport')
 const TEXTURED_HAIR = ['hair_wavy_bone', 'hair_ranger']
+type PreviewOutfit = Omit<ModularOutfit, 'top'> & {
+  top: ModularOutfit['top'] | 'priest'
+}
+const PRIEST_PREVIEW_OUTFIT: PreviewOutfit = {
+  hair: 'hair_crop',
+  top: 'priest',
+  pants: 'cloth',
+  gloves: 'none',
+  boots: 'none',
+  helmet: 'none',
+}
 const scene = new THREE.Scene()
 const resources: THREE.Object3D[] = [scene]
 const cleanup: (() => void)[] = []
@@ -133,7 +146,8 @@ async function main() {
   const tripo = requestedOutfit === 'tripo'
   const caveman = requestedOutfit === 'caveman'
   const ranger = requestedOutfit === 'ranger'
-  if (tripo || caveman || ranger) showWeapon.checked = false
+  const priest = requestedOutfit === 'priest'
+  if (tripo || caveman || ranger || priest) showWeapon.checked = false
   if (caveman) cameraSelect.value = 'full'
   if (ranger) cameraSelect.value = 'full'
   const load = async (url: string) => {
@@ -172,6 +186,7 @@ async function main() {
     'gloves_caveman',
     ...TEXTURED_HAIR,
     ...RANGER_MODULAR_PARTS,
+    'top_priest',
   ]
   const [base, sources, animations, sword, profile, candidateSources, social] =
     await Promise.all([
@@ -283,14 +298,65 @@ async function main() {
   let equipped = new Set<string>()
   const dress = () => {
     hairColor.disabled = TEXTURED_HAIR.includes(hairSelect.value)
+    const priestTop = topSelect.value === 'priest' && parts.has('top_priest')
+    for (const id of ['pants_barbarian', 'pants_caveman'])
+      for (const mesh of parts.get(id) ?? [])
+        setPeltPhysicsEnabled(mesh, !priestTop)
     equipped = showModularOutfit(bodyMeshes, parts, {
       hair: hairSelect.value as ModularOutfit['hair'],
-      top: topSelect.value as ModularOutfit['top'],
+      top:
+        topSelect.value === 'priest'
+          ? priestTop
+            ? 'linen'
+            : 'none'
+          : (topSelect.value as ModularOutfit['top']),
       pants: pants.value as ModularOutfit['pants'],
       gloves: gloves.value as ModularOutfit['gloves'],
       boots: boots.value as ModularOutfit['boots'],
       helmet: helmet.value as ModularOutfit['helmet'],
     })
+    if (priestTop) {
+      equipped.delete('top_linen')
+      for (const mesh of parts.get('top_linen') ?? []) mesh.visible = false
+      equipped.add('top_priest')
+      for (const mesh of parts.get('top_priest')!) mesh.visible = true
+      for (const mesh of bodyMeshes)
+        if (mesh.userData.region === 'neck')
+          trimModularClothing(mesh, 'collar', true)
+      const bootCut =
+        equipped.has('boots_ranger') || equipped.has('boots_caveman')
+          ? 'tall_boots'
+          : equipped.has('boots_barbarian')
+            ? 'greaves'
+            : equipped.has('boots_leather') &&
+                parts.get('boots_leather')?.some((mesh) => mesh.visible)
+              ? 'leather_boots'
+              : undefined
+      for (const mesh of parts.get('pants_plate') ?? [])
+        if (mesh.visible)
+          trimModularClothing(mesh, [bootCut, 'priest_plate_waist'])
+      for (const mesh of parts.get('pants_ranger') ?? [])
+        if (mesh.visible)
+          trimModularClothing(mesh, [
+            equipped.has('boots_ranger') && 'ranger_pants_boots',
+            'priest_plate_waist',
+          ])
+      for (const mesh of parts.get('pants_rogue') ?? [])
+        if (mesh.visible)
+          trimModularClothing(mesh, [
+            'priest_rogue_pockets',
+            mesh.userData.fitting_status === 'candidate_tripo_pants_v1' &&
+              'tripo_pants_waist',
+            equipped.has('boots_ranger') && 'ranger_pants_boots',
+          ])
+      for (const id of ['pants_barbarian', 'pants_caveman'])
+        for (const mesh of parts.get(id) ?? [])
+          if (mesh.visible)
+            trimModularClothing(
+              mesh,
+              mesh.userData.pelt_physics ? 'priest_fur' : 'priest_plate_waist'
+            )
+    }
     const note = el('outfit-note')
     const inspectingRogue = ROGUE_MODULAR_PARTS.some((id) => equipped.has(id))
     const inspectingCaveman =
@@ -303,14 +369,17 @@ async function main() {
       rogueAvailable &&
       !inspectingRogue &&
       !inspectingCaveman &&
-      !inspectingRanger
-    note.textContent = inspectingRanger
-      ? '순찰자 가죽 복장'
-      : inspectingCaveman
-        ? '원시전사 모피와 뼈 장식'
-        : !rogueAvailable
-          ? '일부 로그 파츠를 불러오지 못했습니다. 새로고침해 다시 시도하세요.'
-          : '기본 로그 상의를 적용했습니다. 다른 장비와의 혼합 호환은 검수 중입니다.'
+      !inspectingRanger &&
+      !priestTop
+    note.textContent = priestTop
+      ? '사제 상의 착용 후보 · 보조 본 8개의 간단한 옷자락 움직임'
+      : inspectingRanger
+        ? '순찰자 가죽 복장'
+        : inspectingCaveman
+          ? '원시전사 모피와 뼈 장식'
+          : !rogueAvailable
+            ? '일부 로그 파츠를 불러오지 못했습니다. 새로고침해 다시 시도하세요.'
+            : '기본 로그 상의를 적용했습니다. 다른 장비와의 혼합 호환은 검수 중입니다.'
     for (const id of ['hair_crop', 'hair_sidepart'])
       for (const mesh of parts.get(id)!)
         for (const mat of Array.isArray(mesh.material)
@@ -322,7 +391,7 @@ async function main() {
   }
   for (const element of [hairSelect, topSelect, pants, gloves, boots, helmet])
     element.onchange = dress
-  const wearOutfit = (outfit: ModularOutfit) => {
+  const wearOutfit = (outfit: PreviewOutfit) => {
     hairSelect.value = outfit.hair
     topSelect.value = outfit.top
     pants.value = outfit.pants
@@ -417,7 +486,7 @@ async function main() {
     if (!fade || !playing) resetPeltPhysics(modelRoot)
     status.textContent = clipSelect.selectedOptions[0].textContent
   }
-  play(caveman || ranger ? 'idle1' : 'combat_idle', false)
+  play(caveman || ranger || priest ? 'idle1' : 'combat_idle', false)
   preview = {
     modelRoot,
     mixer,
@@ -631,7 +700,8 @@ async function main() {
           : '얼굴 1,505'
       }`
   }
-  if (ranger && rangerAvailable) wearOutfit(RANGER_MODULAR_OUTFIT)
+  if (priest && parts.has('top_priest')) wearOutfit(PRIEST_PREVIEW_OUTFIT)
+  else if (ranger && rangerAvailable) wearOutfit(RANGER_MODULAR_OUTFIT)
   else if (caveman && cavemanAvailable) wearOutfit(CAVEMAN_MODULAR_OUTFIT)
   else if (tripo && parts.has('top_rogue'))
     wearOutfit({

@@ -4,6 +4,7 @@ import {
   createPeltRig,
   disposePeltPhysics,
   resetPeltPhysics,
+  setPeltPhysicsEnabled,
   updatePeltPhysics,
   type PeltPhysics,
 } from './pelt-rig'
@@ -83,6 +84,33 @@ function worldVertex(mesh: THREE.SkinnedMesh, i: number) {
 }
 
 describe('pelt physics', () => {
+  it('releases a covered pelt before fitting and resumes its original simulation after uncovering', () => {
+    const { root, mesh } = softFixture('fur')
+    const original = mesh.geometry
+    updatePeltPhysics(root, 1 / 30)
+    expect(mesh.geometry).not.toBe(original)
+    setPeltPhysicsEnabled(mesh, false)
+    expect(mesh.geometry).toBe(original)
+    const fitted = original.clone()
+    fitted.scale(0.8, 1, 0.7)
+    mesh.geometry = fitted
+    const positions = fitted.attributes.position.array.slice()
+    for (let i = 0; i < 60; i++) {
+      root.position.z = i / 30
+      updatePeltPhysics(root, 1 / 30)
+    }
+    resetPeltPhysics(root)
+    expect(mesh.geometry).toBe(fitted)
+    expect(fitted.attributes.position.array).toEqual(positions)
+    mesh.geometry = original
+    setPeltPhysicsEnabled(mesh, true)
+    updatePeltPhysics(root, 1 / 30)
+    expect(mesh.geometry).not.toBe(original)
+    disposePeltPhysics(root)
+    expect(mesh.geometry).toBe(original)
+    fitted.dispose()
+  })
+
   it.each(['strap', 'fur'] as const)(
     'keeps %s cloth pinned and unstretched at a 30 Hz physics step',
     (kind) => {

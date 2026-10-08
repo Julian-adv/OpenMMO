@@ -1,0 +1,503 @@
+{
+  "supplied_date": "2026-10-08",
+  "service": "Tripo; user-generated and supplied GLB",
+  "generation_date": null,
+  "subscription_tier": null,
+  "generation_task_id": null,
+  "license": "User-supplied Tripo output; exact subscription/output terms not independently verified. Reference-art provenance retained in modular-priest-parts-sources.json.",
+  "original_path": "/mnt/y/web_downloads/medieval+robe+3d+model.glb",
+  "mapped_public_root": "/mnt/y",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/source.glb",
+    "sha256": "63fb9fbe3d1f811bb223eff2fd0a6a7a56e0bb06efbb59461c6e44bd2c2f5859",
+    "bytes": 1891628
+  },
+  "generator": "Tripo",
+  "submitted_images": {
+    "status": "Not independently verified",
+    "available_concept_record": "doc/assets/modular-priest-parts-sources.json"
+  },
+  "source_geometry": {
+    "triangles": 3913,
+    "vertices_including_uv_seams": 4743,
+    "quad_count": null,
+    "rigged": false,
+    "embedded_texture": {
+      "format": "JPEG",
+      "width": 2048,
+      "height": 2048
+    }
+  },
+  "status": "[미사용] Development preview candidate with lightweight eight-spring GPU hem. Extreme-pose clearance and mixed equipment acceptance remain pending. No game registration or paid generation performed.",
+  "files": [
+    {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/animation-snapshots.json",
+      "sha256": "1f724097e1f9eda5924244a075e4967d7fba2455ace130a02b2273ffb9e53e8c",
+      "bytes": 119927
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/priest-top-fitting.blend",
+      "sha256": "e82ced29279b065f8c110ed8d842cd598b4d0635b1ee362001e9b9438a40a825",
+      "bytes": 45246124
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/source.glb",
+      "sha256": "63fb9fbe3d1f811bb223eff2fd0a6a7a56e0bb06efbb59461c6e44bd2c2f5859",
+      "bytes": 1891628
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/top_priest.glb",
+      "sha256": "d150bb102c4aa61a2f1a4107e48f09f39241b524de2541a45d37116809a205ed",
+      "bytes": 2028360
+    },
+    {
+      "path": "doc/assets/modular-priest-tripo-top-animation-v1.json",
+      "sha256": "dbee27e6fc0622665febf49b0b990ed79195ca087f924562a02fae7e8e59fd0a",
+      "bytes": 5835
+    },
+    {
+      "path": "doc/assets/modular-priest-tripo-top-fitting-v1.json",
+      "sha256": "3227eb5fd6043635d64df9e445055cca750ba9f3bef51bf97e6619e4b7484889",
+      "bytes": 17470
+    },
+    {
+      "path": "doc/assets/modular-priest-tripo-top-idle-clearance-v1.json",
+      "sha256": "0e93120c2a570e1483fee9ea9c6f44164f14619c7e0e5131ca3a126b2e15de86",
+      "bytes": 2992
+    },
+    {
+      "path": "doc/assets/modular-priest-tripo-top-runtime-v1.json",
+      "sha256": "5cacc3d92c51566cdf7e29e9931c5435300e05e984e654b514b0dcd6957c0015",
+      "bytes": 3284
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-top-lightweight-motion-v1.png",
+      "sha256": "da007c6d33eb16af12524b0c30ce041db6f3b9a7804b076107a867bf237a466b",
+      "bytes": 806930
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/idle-fitting-poses.json",
+      "sha256": "52d09623eb4a56eff620eb992926dc38b4fbd3de7e26c2602c94d3aaccd6f6f0",
+      "bytes": 210697
+    }
+  ],
+  "history": [
+    {
+      "stage": "First alignment",
+      "issue": "Sleeve depth axis misaligned and lower sleeve blend leaked hip weights",
+      "correction": "Use observed source sleeve depth axis, complete sleeve influence at cuffs and weighted surface diffusion"
+    },
+    {
+      "stage": "Current candidate",
+      "result": "Original triangle indices, UV and embedded texture retained; exact canonical rest/bind match and numeric seven-clip seam/finite checks",
+      "remaining": "Raised legs intersect hip-anchored cloth. Short shoulder edges still stretch in extreme poses. Preview masking is provisional; no production compatibility claimed."
+    },
+    {
+      "stage": "Underwear thigh clearance",
+      "issue": "Thigh skin protruded through the robe side during idle when pants were removed",
+      "correction": "Expand lower robe outward to a 35mm margin around rest and 13 sampled idle torso/thigh sections in Hips space; retain leg skin and front/back slits",
+      "result": "Zero lower-robe/body triangle crossings at rest and 13 idle samples; four browser views per sample; cloth/underwear visibility restoration verified",
+      "remaining": "Walking, jumping and other raised-leg poses still require cloth collision work"
+    },
+    {
+      "stage": "Lightweight runtime hem",
+      "user_constraint": "Minimal simulation and vertices for many simultaneous priests",
+      "implementation": "Eight angular springs at at most 30 Hz; auxiliary GPU bones with one shared geometry; zero added render vertices",
+      "validation": "Seven clips at 13 sampled poses remain finite with zero UV seam gap. Independent 100-character states share one geometry. 50 targeted tests plus typecheck and lint pass.",
+      "remaining": "Some raised-leg poses retain clipping and coarse folds; no precise cloth collision acceptance. Game equipment registration remains separate."
+    },
+    {
+      "stage": "Plate pants under priest robe",
+      "issue": "Upper hip armor protruded through the robe at the sides",
+      "correction": "Taper only the priest/plate combination inward with a shared cached geometry variant; preserve independent boot hem cuts",
+      "validation": "Front/side/back browser review, top replacement restoration, cached reuse, leather/barbarian/ranger/caveman boot cut composition, UV/weights/indices preservation and source immutability"
+    },
+    {
+      "stage": "Barbarian belt and fur under priest robe",
+      "issue": "Belt and independently simulated pelts protruded through the robe",
+      "correction": "Tuck belt, pelts and straps inward only with the priest top; release the eight covered pelt simulations; preserve fur visible through the slits",
+      "validation": "Five browser views, six clips at 13 samples, stable cached positions, top/pants restoration, original plate/boot combinations, 76 targeted tests, typecheck and lint",
+      "remaining": "Extreme-pose robe clipping remains outside precise collision acceptance"
+    },
+    {
+      "stage": "Caveman belt and fur under priest robe",
+      "issue": "Bone ornaments, leather panels and side fur protruded through the robe",
+      "correction": "Reuse the cached priest belt/fur fitting and release four covered pelt simulations; retain leather and fur inside the slits",
+      "validation": "Five browser views, six clips at 13 samples, stable fitted positions, top/pants restoration and cached reuse; 76 targeted tests, typecheck and lint pass",
+      "remaining": "No precise extreme-pose collision acceptance"
+    },
+    {
+      "stage": "Rogue pockets under priest robe",
+      "issue": "Four detached hip pouches protruded through the robe",
+      "correction": "Remove complete pocket components only in the priest combination; preserve trousers, belt loops, skinning and existing waist/boot cuts; cache and restore variants",
+      "validation": "346 source triangles removed; front/side/back views, six clips at 13 samples, top/pants restoration, cached reuse, ranger boot cut, 47 targeted tests, typecheck and lint"
+    },
+    {
+      "stage": "Ranger belt under priest robe",
+      "issue": "Leather trouser belt protruded at the robe waist",
+      "correction": "Reuse the cached priest waist taper above 0.92m; retain lower trousers and compose with the existing ranger boot hem",
+      "validation": "Front/side/back views, six clips at 13 samples, 3714 triangles retained, UV/weights/indices/heights preservation, top/pants restoration, cached reuse, boot hem matching, typecheck and lint"
+    }
+  ],
+  "runtime": {
+    "method": "Eight damped angular springs driven by thigh direction; GPU auxiliary bones; no mesh contacts, self-collision or wrinkle solver",
+    "maximum_hz": 30,
+    "added_render_vertices": 0,
+    "shared_geometry": true,
+    "review": "doc/assets/modular-priest-tripo-top-runtime-v1.json",
+    "browser_image": "doc/images/characters/modular_human_male_01/parts/priest/tripo-top-lightweight-motion-v1.png"
+  },
+  "plate_pants_variant": {
+    "source": {
+      "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+      "sha256": "aa95a9f1b85aa881df47e6e37ecbfebc7c168b352fcf0f4a9941208962eeff04"
+    },
+    "method": "Priest-only cached inward taper; preserve vertex heights, indices, UV and skinning; original restored when changing the top",
+    "transition_height_m": [
+      0.92,
+      1.04
+    ],
+    "upper_half_width_m": 0.16,
+    "upper_half_depth_m": 0.1,
+    "center_z_m": -0.035,
+    "source_triangles": 1600,
+    "added_render_vertices": 0,
+    "code": "client/src/lib/utils/modularClothing.ts"
+  },
+  "barbarian_pants_variant": {
+    "source": {
+      "path": "assets/modular_human_male_01/parts/fitted/pants_barbarian.glb",
+      "sha256": "2c0de6c3bec60219f8369467f21edcaef42b3a5e7939691470500661d106001c"
+    },
+    "method": "Priest-only shared cached inward fitting; belt uses priest_plate_waist, pelts and straps use priest_fur; restore original geometry and physics after changing the top",
+    "fur_center_z_m": -0.015,
+    "fur_half_depth_m": 0.145,
+    "fur_half_width_m": [
+      0.22,
+      0.16
+    ],
+    "transition_height_m": [
+      0.92,
+      1.04
+    ],
+    "source_triangles": 3323,
+    "added_render_vertices": 0,
+    "covered_pelt_simulations_disabled": 8,
+    "code": [
+      "client/src/lib/utils/modularClothing.ts",
+      "client/src/lib/effects/pelt-rig.ts",
+      "client/src/previews/modular-character.ts"
+    ],
+    "validation": {
+      "browser_views": [
+        "idle front",
+        "idle side",
+        "idle back",
+        "walk front",
+        "walk side"
+      ],
+      "finite_vertex_and_static_geometry_clips": [
+        "idle1",
+        "walk",
+        "run",
+        "jump",
+        "slash1",
+        "sit_idle"
+      ],
+      "samples_per_clip": 13,
+      "restoration_and_cached_reuse": true,
+      "unit_tests_passed": 76,
+      "typecheck_and_lint": "pass",
+      "limit": "No precise garment/garment or extreme-pose collision acceptance"
+    }
+  },
+  "caveman_pants_variant": {
+    "source": {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb",
+      "sha256": "1fc3a92b29c8b5e37931cda6b32966754e1f3b1f33fe478a528179fc739a2db4"
+    },
+    "method": "Priest-only cached inward fitting; belt and bone ornaments use priest_plate_waist, leather panels and side fur use priest_fur; restore original geometry and physics after changing the top",
+    "fur_center_z_m": -0.015,
+    "fur_half_depth_m": 0.145,
+    "fur_half_width_m": [
+      0.22,
+      0.16
+    ],
+    "transition_height_m": [
+      0.92,
+      1.04
+    ],
+    "source_triangles": 5239,
+    "added_render_vertices": 0,
+    "covered_pelt_simulations_disabled": 4,
+    "code": [
+      "client/src/lib/utils/modularClothing.ts",
+      "client/src/lib/effects/pelt-rig.ts",
+      "client/src/previews/modular-character.ts"
+    ],
+    "validation": {
+      "browser_views": [
+        "idle front",
+        "idle side",
+        "idle back",
+        "walk front",
+        "walk side"
+      ],
+      "finite_vertex_and_static_geometry_clips": [
+        "idle1",
+        "walk",
+        "run",
+        "jump",
+        "slash1",
+        "sit_idle"
+      ],
+      "samples_per_clip": 13,
+      "restoration_and_cached_reuse": true,
+      "unit_tests_passed": 76,
+      "typecheck_and_lint": "pass",
+      "limit": "No precise garment/garment or extreme-pose collision acceptance"
+    }
+  },
+  "rogue_pants_variant": {
+    "source": {
+      "path": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/pants_rogue.glb",
+      "sha256": "7178d06a9b2e18953e2c3fb0672df8424b688d6f4ccc47affc856a9084e8e81c"
+    },
+    "method": "Priest-only removal of four detached pocket components; retain trousers and belt loops; compose with existing waist and ranger boot cuts in the shared geometry cache",
+    "component_weld_grid_m": 1e-05,
+    "pocket_component_min_y_range_exclusive_m": [
+      0.9,
+      1.0
+    ],
+    "pocket_component_max_y_min_exclusive_m": 1.05,
+    "removed_pockets": 4,
+    "source_triangles": 2022,
+    "removed_pocket_triangles": 346,
+    "triangles_after_pocket_removal_only": 1676,
+    "triangles_with_existing_covered_waist_cut": 1598,
+    "added_render_vertices": 0,
+    "source_unchanged": true,
+    "code": [
+      "client/src/lib/utils/modularClothing.ts",
+      "client/src/previews/modular-character.ts"
+    ],
+    "validation": {
+      "unit_tests_passed": 47,
+      "typecheck_and_lint": "pass",
+      "browser_views": [
+        "idle front",
+        "idle side",
+        "idle back"
+      ],
+      "finite_vertex_clips": [
+        "idle1",
+        "walk",
+        "run",
+        "jump",
+        "slash1",
+        "sit_idle"
+      ],
+      "samples_per_clip": 13,
+      "original_outfit_restoration_and_cached_reuse": true,
+      "ranger_boot_min_y_m": 0.4629151523113251,
+      "limit": "Pocket removal verified; no precise extreme-pose collision acceptance"
+    }
+  },
+  "ranger_pants_variant": {
+    "source": {
+      "path": "assets/modular_human_male_01/parts/ranger_tripo_pants_v1/pants_ranger.glb",
+      "sha256": "8529da4370e10d74228c1aafc790cc1c1684d1eb8737ad19d993d8f938594883"
+    },
+    "method": "Reuse priest_plate_waist cached inward taper for ranger trousers only with the priest top; compose with ranger_pants_boots; restore the original outfit after changing top or pants",
+    "transition_height_m": [
+      0.92,
+      1.04
+    ],
+    "upper_half_width_m": 0.16,
+    "upper_half_depth_m": 0.1,
+    "center_z_m": -0.035,
+    "source_triangles": 3714,
+    "added_render_vertices": 0,
+    "code": "client/src/lib/utils/modularClothing.ts",
+    "validation": {
+      "browser_views": [
+        "idle front",
+        "idle side",
+        "idle back"
+      ],
+      "finite_vertex_clips": [
+        "idle1",
+        "walk",
+        "run",
+        "jump",
+        "slash1",
+        "sit_idle"
+      ],
+      "samples_per_clip": 13,
+      "uv_skinning_indices_and_heights_preserved": true,
+      "positions_below_0_92m_preserved": true,
+      "source_unchanged": true,
+      "restoration_and_cached_reuse": true,
+      "ranger_boot_min_y_m": 0.4593124985694885,
+      "typecheck_and_lint": "pass",
+      "limit": "No precise extreme-pose collision acceptance"
+    }
+  },
+  "source_mesh_review": {
+    "date": "2026-10-08",
+    "source": {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/source.glb",
+      "sha256": "63fb9fbe3d1f811bb223eff2fd0a6a7a56e0bb06efbb59461c6e44bd2c2f5859"
+    },
+    "status": "Raw Tripo mesh; not fitted",
+    "blender_version": "5.2.0 LTS",
+    "triangles": 3913,
+    "mesh_count": 1,
+    "meshes": [
+      {
+        "name": "tripo_node_9b2366f3-f044-466b-a519-424af6f5223d",
+        "components_vertex_counts": [
+          1246,
+          461,
+          145,
+          73,
+          73,
+          61,
+          61,
+          28,
+          24,
+          20,
+          20
+        ],
+        "boundary_edges": 495,
+        "nonmanifold_edges": 495,
+        "degenerate_faces": 0,
+        "collapsed_uv_triangles": 0
+      }
+    ],
+    "source_extent_blender": [
+      0.79638671875,
+      0.39111328125,
+      0.99951171875
+    ],
+    "rigged": false
+  },
+  "fitted_mesh_review": {
+    "date": "2026-10-08",
+    "source": {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/top_priest.glb",
+      "sha256": "d150bb102c4aa61a2f1a4107e48f09f39241b524de2541a45d37116809a205ed"
+    },
+    "status": "Exported skinning baseline; runtime auxiliary robe bones are shown separately in browser reviews",
+    "blender_version": "5.2.0 LTS",
+    "triangles": 3993,
+    "mesh_count": 2,
+    "meshes": [
+      {
+        "name": "top_priest_tripo",
+        "components_vertex_counts": [
+          1246,
+          461,
+          145,
+          73,
+          73,
+          61,
+          61,
+          28,
+          24,
+          20,
+          20
+        ],
+        "boundary_edges": 495,
+        "nonmanifold_edges": 495,
+        "degenerate_faces": 0,
+        "collapsed_uv_triangles": 0
+      },
+      {
+        "name": "Icosphere.001",
+        "components_vertex_counts": [
+          42
+        ],
+        "boundary_edges": 0,
+        "nonmanifold_edges": 0,
+        "degenerate_faces": 0,
+        "collapsed_uv_triangles": 0
+      }
+    ],
+    "source_extent_blender": [
+      1.9021157026290894,
+      1.9999998807907104,
+      2.6550180912017822
+    ],
+    "rigged": true,
+    "animation_report": {
+      "path": "doc/assets/modular-priest-tripo-top-animation-v1.json",
+      "sha256": "dbee27e6fc0622665febf49b0b990ed79195ca087f924562a02fae7e8e59fd0a"
+    },
+    "animation_status": "Exported 65-bone skinning baseline; browser runtime adds eight auxiliary hem bones not included in these images",
+    "editable": {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/priest-top-fitting.blend",
+      "sha256": "e82ced29279b065f8c110ed8d842cd598b4d0635b1ee362001e9b9438a40a825"
+    },
+    "body_mask": "Review-scene garment mask only; canonical body and runtime unchanged",
+    "budget": {
+      "body": 13891,
+      "context": 3490,
+      "top": 3913,
+      "assembled_including_hidden": 21294,
+      "preview_scene_visible": 14851,
+      "head": 2575,
+      "face_subset": null,
+      "visible_count_status": "Blender preview with temporary skin cuts; final runtime-visible budget pending",
+      "scope": "Body, crop hair, existing cloth trousers and priest top; no shoes, gloves, mitre, weapon or cape"
+    }
+  },
+  "cleanup": {
+    "date": "2026-10-08",
+    "reason": "User requested deletion of intermediate images and other artifacts before commit",
+    "removed": [
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-top-fitted-v1-masked-motion.png",
+        "sha256": "bd673ddb502ab6528bc27072fc1e927449cc728542853bfe1622eec47689a19d"
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/top_priest-front-v1.png",
+        "sha256": "7771345b7eccdf17003406ff1d76b10ce14c43199ed2eb845b0a720b3640e782"
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/top_priest-back-v1.png",
+        "sha256": "ff8cf2390782159831991be87d54b88e8746e316e5c76351a138ae7bfa35c88e"
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-top-raw-review-v1.png",
+        "sha256": "d0d2cf762f9b00cc42f7cc3f6848f04a6aa7210169ba04cc8a9b3455f9b9fa8b"
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-top-underwear-idle-v1.png",
+        "sha256": "724f8bf8524216ad208a137b99aafa19a85640311e57dacfadf152c76812f6ad"
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-top-fitted-v1.png",
+        "sha256": "a60220e046f9be75fb3000578d3cea8dd08ac3351a1a19b210f3b76ff0d1d922"
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-top-fitted-v1-masked.png",
+        "sha256": "110bb4d3dc290e312740cfecd1dec0b914df77c0184430f391f6c9aede1f08cb"
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/validation-poses.json",
+        "sha256": "e4725b853463a8551dfec2e12b87bd596fe336c9afbb17f7509906a07923ab33"
+      },
+      {
+        "path": "doc/assets/modular-priest-tripo-top-source-review-v1.json",
+        "sha256": "bdbb3b40802f9a09b4d4e2d8ef070ae6295e5b366e2e0fdb3e3d663aeabd3279"
+      },
+      {
+        "path": "doc/assets/modular-priest-tripo-top-fitted-review-v1.json",
+        "sha256": "95bc3efaec08b0a922555e70776f49744117cfbfce9da6ef0b0961911189aee6"
+      }
+    ],
+    "retained": "Current v2 front/back concepts, final runtime motion sheet, source/fitted GLBs, editable Blender, compact idle fitting input and numeric validation records",
+    "pose_reduction": "Retain only 13 idle fitting poses from the reproducible seven-clip validation output"
+  }
+}

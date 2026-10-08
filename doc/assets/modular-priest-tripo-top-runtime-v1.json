@@ -1,0 +1,107 @@
+{
+  "sources": [
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/top_priest.glb",
+      "sha256": "d150bb102c4aa61a2f1a4107e48f09f39241b524de2541a45d37116809a205ed"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/locomotion.glb",
+      "sha256": "d4aa8d7369c6396f7455b7066d2342ef7662fa2ef46595c42de76f3f3855055d"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/combat_melee.glb",
+      "sha256": "c70372c773f9613646ef5e2c01e138db682449bc50d353ee23567bb2007d16fc"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/social.glb",
+      "sha256": "a9efe7a2d388011cdc039ca6778c2b3a929b07953941ee7bb7c50a511d4b083d"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/hair_crop.glb",
+      "sha256": "5e8acb389f575331008c36dd94afcbf3831c90f53ca21ab0a7bbe666539f2472"
+    }
+  ],
+  "simulation": {
+    "controls": 8,
+    "maximum_hz": 30,
+    "added_render_vertices": 0,
+    "exported_bones": 65,
+    "runtime_bones": 73
+  },
+  "clips": [
+    {
+      "name": "idle1",
+      "samples": 13,
+      "all_vertices_finite": true,
+      "maximum_seam_gap_m": 0
+    },
+    {
+      "name": "walk",
+      "samples": 13,
+      "all_vertices_finite": true,
+      "maximum_seam_gap_m": 0
+    },
+    {
+      "name": "run",
+      "samples": 13,
+      "all_vertices_finite": true,
+      "maximum_seam_gap_m": 0
+    },
+    {
+      "name": "jump",
+      "samples": 13,
+      "all_vertices_finite": true,
+      "maximum_seam_gap_m": 0
+    },
+    {
+      "name": "slash1",
+      "samples": 13,
+      "all_vertices_finite": true,
+      "maximum_seam_gap_m": 0
+    },
+    {
+      "name": "combat_idle",
+      "samples": 13,
+      "all_vertices_finite": true,
+      "maximum_seam_gap_m": 0
+    },
+    {
+      "name": "sit_idle",
+      "samples": 13,
+      "all_vertices_finite": true,
+      "maximum_seam_gap_m": 0
+    }
+  ],
+  "late_part_bind_preserves_robe": true,
+  "disposal_restores_canonical_geometry_and_skeleton": true,
+  "benchmark": {
+    "environment": "Node v25.2.1; headless CPU-only; no rendering or animation mixers",
+    "actors": 100,
+    "measured_frames": 240,
+    "frame_hz": 60,
+    "simulation_hz": 30,
+    "average_ms_per_100_actor_frame": 0.8639109875000001,
+    "p95_ms_per_100_actor_frame": 0.9458329999999933,
+    "shared_robe_geometries": 1,
+    "independent_robe_skeletons": 100
+  },
+  "code": [
+    {
+      "path": "client/src/lib/effects/robe-rig.ts",
+      "sha256": "3fd3b39ef8fa52f9843d37f2f5647f16258f96acb88db6913198c18983022b71"
+    },
+    {
+      "path": "client/src/lib/effects/pelt-rig.ts",
+      "sha256": "f07b1d7eebf3512b309ba30160be29905130513a5d517d6a98653447104ec21c"
+    },
+    {
+      "path": "client/src/lib/utils/modularCharacter.ts",
+      "sha256": "18c57e47be88ea1d1de4e26a9f812297efb7e800431ed6166ae508abe42c7782"
+    }
+  ],
+  "limits": "Approximate thigh-direction clearance; no cloth mesh contacts, self-collision or wrinkle solver. Extreme raised-leg poses and mixed equipment need further visual acceptance. CPU timings exclude rendering."
+}

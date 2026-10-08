@@ -22,6 +22,9 @@ type Cut =
   | 'tripo_waist'
   | 'tripo_covered_waist'
   | 'ranger_plate_waist'
+  | 'priest_plate_waist'
+  | 'priest_fur'
+  | 'priest_rogue_pockets'
   | 'tripo_pants_waist'
 type MaybeCut = Cut | false | undefined
 type Distance = (point: THREE.Vector3) => number
@@ -70,6 +73,9 @@ const cuts: Record<Cut, Distance | Distance[]> = {
     const drop = Math.max(0, 0.09 - Math.abs(point.x) * 0.5)
     return 1.06 - rear * drop - point.y
   },
+  priest_plate_waist: [],
+  priest_fur: [],
+  priest_rogue_pockets: [],
   tripo_pants_waist: (point) => 1.105 - point.y,
 }
 
@@ -257,6 +263,52 @@ export function trimModularClothing(
   setGeometry(mesh, geometry)
 }
 
+function removeRoguePockets(source: THREE.BufferGeometry) {
+  const positions = source.getAttribute('position')
+  const parents = Array.from({ length: positions.count }, (_, i) => i)
+  const welded = new Map<string, number>()
+  const point = new THREE.Vector3()
+  const key = (p: THREE.Vector3) =>
+    `${Math.round(p.x * 1e5)},${Math.round(p.y * 1e5)},${Math.round(p.z * 1e5)}`
+  const find = (i: number): number => {
+    while (parents[i] !== i) {
+      parents[i] = parents[parents[i]]
+      i = parents[i]
+    }
+    return i
+  }
+  for (let i = 0; i < positions.count; i++) {
+    const id = key(point.fromBufferAttribute(positions, i))
+    const previous = welded.get(id)
+    if (previous === undefined) welded.set(id, i)
+    else parents[find(i)] = find(previous)
+  }
+  const count = source.index?.count ?? positions.count
+  for (let i = 0; i < count; i += 3) {
+    const first = source.index?.getX(i) ?? i
+    for (let j = 1; j < 3; j++)
+      parents[find(source.index?.getX(i + j) ?? i + j)] = find(first)
+  }
+  const bounds = new Map<number, THREE.Box3>()
+  for (let i = 0; i < positions.count; i++) {
+    const root = find(i)
+    let box = bounds.get(root)
+    if (!box) {
+      box = new THREE.Box3()
+      bounds.set(root, box)
+    }
+    box.expandByPoint(point.fromBufferAttribute(positions, i))
+  }
+  const pockets = new Set(
+    [...bounds]
+      .filter(([, box]) => box.min.y > 0.9 && box.min.y < 1 && box.max.y > 1.05)
+      .map(([root]) => root)
+  )
+  return clipSkinnedGeometry(source, (p) =>
+    pockets.has(find(welded.get(key(p))!)) ? -1 : 1
+  )
+}
+
 function applyCuts(
   source: THREE.BufferGeometry,
   applied: Cut[],
@@ -264,6 +316,34 @@ function applyCuts(
 ): THREE.BufferGeometry {
   let geometry = source
   for (const name of applied) {
+    if (name === 'priest_rogue_pockets') {
+      const previous = geometry
+      geometry = removeRoguePockets(previous)
+      if (previous !== source) previous.dispose()
+    }
+    if (name === 'priest_plate_waist' || name === 'priest_fur') {
+      const previous = geometry
+      geometry = previous.clone()
+      const positions = geometry.getAttribute(
+        'position'
+      ) as THREE.BufferAttribute
+      for (let i = 0; i < positions.count; i++) {
+        const y = positions.getY(i)
+        const amount = THREE.MathUtils.smoothstep(y, 0.92, 1.04)
+        const fur = name === 'priest_fur'
+        if (!amount && !fur) continue
+        const x = positions.getX(i)
+        const centerZ = fur ? -0.015 : -0.035
+        const z = positions.getZ(i) - centerZ
+        const width = THREE.MathUtils.lerp(fur ? 0.22 : 0.23, 0.16, amount)
+        const depth = fur ? 0.145 : THREE.MathUtils.lerp(0.17, 0.1, amount)
+        const radius = Math.hypot(x / width, z / depth)
+        if (radius > 1) positions.setXYZ(i, x / radius, y, z / radius + centerZ)
+      }
+      geometry.deleteAttribute('tangent')
+      geometry.computeVertexNormals()
+      if (previous !== source) previous.dispose()
+    }
     for (const distance of [cuts[name]].flat()) {
       const previous = geometry
       geometry = clipSkinnedGeometry(

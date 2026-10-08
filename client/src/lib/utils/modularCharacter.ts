@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js'
-import type { PeltPhysics } from '../effects/pelt-rig'
+import { robeBaseSkeleton } from '../effects/robe-rig'
 import { trimModularClothing } from './modularClothing'
 
 interface SwordTransform {
@@ -525,13 +525,13 @@ export function bindModularPart(
     throw new Error('몸체와 파츠의 리그 ID가 다릅니다.')
   }
   const bodyMeshes = skinnedParts(body)
-  const skeleton = bodyMeshes[0]?.skeleton
+  const skeleton = bodyMeshes[0] && robeBaseSkeleton(bodyMeshes[0])
   const sourceMeshes = skinnedParts(source)
   if (!skeleton || sourceMeshes.length === 0) {
     throw new Error('몸체 또는 파츠에 스킨 골격이 없습니다.')
   }
   for (const mesh of [...bodyMeshes, ...sourceMeshes]) {
-    const candidate = mesh.skeleton
+    const candidate = robeBaseSkeleton(mesh)
     if (
       candidate.bones.length !== skeleton.bones.length ||
       candidate.bones.some(
@@ -550,24 +550,26 @@ export function bindModularPart(
   const discarded = new Set([
     ...meshes.map((mesh) => mesh.skeleton),
     ...bodyMeshes
-      .map((mesh) => mesh.skeleton)
+      .map(robeBaseSkeleton)
       .filter((candidate) => candidate !== skeleton),
   ])
-  for (const mesh of bodyMeshes) mesh.bind(skeleton, mesh.bindMatrix.clone())
+  for (const mesh of bodyMeshes)
+    if (mesh.skeleton === robeBaseSkeleton(mesh))
+      mesh.bind(skeleton, mesh.bindMatrix.clone())
   const inverseRoot = part.matrixWorld.clone().invert()
   for (const mesh of meshes) {
     mesh.matrix.multiplyMatrices(inverseRoot, mesh.matrixWorld)
     mesh.matrix.decompose(mesh.position, mesh.quaternion, mesh.scale)
-    let peltPhysics: PeltPhysics | undefined
-    for (let node: THREE.Object3D | null = mesh; node; node = node.parent) {
-      if (node.userData.pelt_physics) {
-        peltPhysics = node.userData.pelt_physics as PeltPhysics
-        break
+    for (const key of ['pelt_physics', 'robe_physics']) {
+      for (let node: THREE.Object3D | null = mesh; node; node = node.parent) {
+        if (node.userData[key]) {
+          mesh.userData[key] = node.userData[key]
+          break
+        }
       }
     }
     body.add(mesh)
     mesh.bind(skeleton, mesh.bindMatrix.clone())
-    if (peltPhysics) mesh.userData.pelt_physics = peltPhysics
     mesh.castShadow = mesh.receiveShadow = true
   }
   for (const unused of discarded) unused.dispose()
