@@ -1,0 +1,131 @@
+{
+  "date": "2026-10-08",
+  "before": {
+    "file": "client/public/models/characters/modular_male/base.glb",
+    "bytes": 3478968,
+    "gzip_bytes": 3359887,
+    "sha256": "048ebb21caca9a224b1dadecc6faf53b89f270da212791dc2af3088d92509af1",
+    "meshes": 10,
+    "nodes": 76,
+    "skins": 1,
+    "textures": [
+      {
+        "name": "normal",
+        "width": 1024,
+        "height": 1024,
+        "mime": "image/jpeg",
+        "bytes": 211639,
+        "sha256": "7aba52eda8e950854b83725dafb5239d95f605070ec3a9c935f4b41d7da38c63"
+      },
+      {
+        "name": "base_color",
+        "width": 4096,
+        "height": 4096,
+        "mime": "image/webp",
+        "bytes": 2500636,
+        "sha256": "cccf1cb8f945dce6e276a07a98e3c403b9c436875e79842daebc946720e37fb4"
+      },
+      {
+        "name": "Image_1",
+        "width": 1024,
+        "height": 1024,
+        "mime": "image/jpeg",
+        "bytes": 167818,
+        "sha256": "d80d702eee0342eb74d11fed5600df00edc33d4c30e7a8a4ea8fdd5ac1ad2e3c"
+      }
+    ]
+  },
+  "after": {
+    "file": "client/public/models/characters/modular_male/base.glb",
+    "bytes": 1209468,
+    "gzip_bytes": 1090351,
+    "sha256": "795f234ddc4f369d2a022cc734a590f3801212c5c75ebbb6c6d5f63b73dcded2",
+    "meshes": 10,
+    "nodes": 76,
+    "skins": 1,
+    "textures": [
+      {
+        "name": "normal",
+        "width": 1024,
+        "height": 1024,
+        "mime": "image/jpeg",
+        "bytes": 211639,
+        "sha256": "7aba52eda8e950854b83725dafb5239d95f605070ec3a9c935f4b41d7da38c63"
+      },
+      {
+        "name": "base_color",
+        "width": 1024,
+        "height": 1024,
+        "mime": "image/webp",
+        "bytes": 231184,
+        "sha256": "d6cf5611514a9a6ff143dcc8163b5e79a5d2fb1cd88286d8f4fad19fca7fed03"
+      },
+      {
+        "name": "Image_1",
+        "width": 1024,
+        "height": 1024,
+        "mime": "image/jpeg",
+        "bytes": 167818,
+        "sha256": "d80d702eee0342eb74d11fed5600df00edc33d4c30e7a8a4ea8fdd5ac1ad2e3c"
+      }
+    ]
+  },
+  "geometry_and_rig_identical": true,
+  "source": {
+    "file": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
+    "record": "doc/assets/modular-human-male-01.md",
+    "license": "Existing modular male source; Meshy Premium and ChatGPT Pro 20x records unchanged. No new generation."
+  },
+  "settings": {
+    "max_body_texture_size": 1024,
+    "base_color": "WebP quality 90, effort 6",
+    "normal": "JPEG quality 92, 4:4:4",
+    "other_opaque": "JPEG quality 90, 4:4:4",
+    "alpha": "Lossless WebP",
+    "deduplication": "Identical texture bytes only; materials retained"
+  },
+  "reproduce": "node tools/prepare-modular-character.mjs --part base",
+  "reduction_percent": 65.23,
+  "runtime_filename": "base.49426eea.glb",
+  "validation": {
+    "character_tests": 64,
+    "check": "passed; 0 errors, 0 warnings",
+    "lint": "passed"
+  },
+  "publication": {
+    "status": "local-only",
+    "asset_lock": "Unchanged; upload the optimized GLB and pin its revision when committing assets."
+  },
+  "browser": {
+    "method": "Before and after meshopt GLBs loaded through loadCharacterModel in the workshop scene, with the workshop body hidden.",
+    "views": [
+      "face close-up",
+      "full body"
+    ],
+    "poses": [
+      "idle1",
+      "run",
+      "jump",
+      "slash1",
+      "sit_idle"
+    ],
+    "reviews": [
+      {
+        "variant": "before",
+        "decoded_textures": 15,
+        "animation_clips": 37,
+        "errors": [],
+        "failedRequests": []
+      },
+      {
+        "variant": "after",
+        "decoded_textures": 15,
+        "animation_clips": 37,
+        "errors": [],
+        "failedRequests": []
+      }
+    ],
+    "observation": "Face features remain readable at 1024; fine skin and neck texture is softer in the enlarged view."
+  }
+}

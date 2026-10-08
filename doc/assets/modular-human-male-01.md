@@ -373,7 +373,7 @@ node tools/prepare-modular-character.mjs --part hair_crop
 
 ## 게임용 몸체 전송량 최적화 — 2026-10-03
 
-`base.974ed1c2.glb`의 얼굴·전신 공용 색상맵은 **4096×4096 해상도**를 유지하며,
+`base.974ed1c2.glb`의 얼굴·전신 공용 색상맵은 **4096×4096 해상도**를 유지하며(2026-10-08 최적화에서 1024²로 축소),
 제작용 PNG에서 WebP q95·effort 6으로 저장했다. 법선은 1024px JPEG q92,
 금속성/거칠기는 1024px JPEG q90·4:4:4로 처리해 기존 게임용 해상도를 유지한다.
 `EXT_texture_webp`와 `EXT_meshopt_compression`을 사용하며 게임 로더의 지원을 확인했다.
@@ -532,3 +532,24 @@ node tools/prepare-modular-character.mjs --part hair_crop
 ![기본 얼굴 크롭 측면](../images/characters/modular_human_male_01/parts/hair/crop-temple-original-v1.png)
 ![각진 얼굴 크롭 측면](../images/characters/modular_human_male_01/parts/hair/crop-temple-rugged-v1.png)
 ![순찰자 얼굴 크롭 측면](../images/characters/modular_human_male_01/parts/hair/crop-temple-ranger-v1.png)
+
+## 기본 몸체 게임용 텍스처 최적화 — 2026-10-08
+
+`base.1ad71121.glb`에 해당하는 게임용 `base.glb`를 확정 원본에서 다시 압축했다.
+얼굴·전신 공용 색상맵을 **4096² → 1024² WebP quality 90·effort 6**으로 줄였다.
+법선(1024² JPEG q92)과 금속성/거칠기(1024² JPEG q90·4:4:4)는 바이트 단위로 동일하고,
+메시 인덱스·정점 속성·UV·노드 변환·본 계층·역바인드 행렬도 동일하다.
+
+게임 파일은 **3,478,968 → 1,209,468바이트(65.23% 감소)**,
+gzip level 6 기준은 **3,359,887 → 1,090,351바이트**다.
+색상 텍스처는 **2,500,636 → 231,184바이트**다. 새 빌드 파일명은 `base.49426eea.glb`이며 manifest를 갱신했다.
+
+기존 최적화 스크립트를 그대로 썼다. 제작 원본·출처·라이선스(Meshy Premium·ChatGPT Pro 20x)는 위 기록을 따르며,
+새 생성이나 유료 호출은 없다. 게임용 바이너리는 에셋 커밋 때 Hugging Face에 게시하고 `assets.lock`으로 고정한다.
+
+실제 게임 로더로 압축 전후 GLB를 불러와 얼굴 확대·전신과 대기·달리기·점프·공격·앉기를 확인했다.
+얼굴 특징은 유지되며 확대 시 피부·목의 미세 질감은 부드러워진다. 브라우저 예외와 요청 오류는 없었다.
+관련 테스트 **64개**, `npm run check`, `npm run lint`가 통과했다.
+
+재현: `node tools/prepare-modular-character.mjs --part base`.
+[해상도·용량·해시·검사 기록](modular-base-runtime-textures-1024.json).
