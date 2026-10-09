@@ -76,6 +76,7 @@ fn class_starter_items(
             ("worn_ranger_boots", 1, Some("boots")),
         ],
         CharacterClass::Priest if gender == Gender::Male => &[
+            ("worn_priest_helmet", 1, Some("head")),
             ("worn_priest_top", 1, Some("chest")),
             ("worn_priest_pants", 1, Some("pants")),
             ("worn_priest_boots", 1, Some("boots")),
@@ -2756,7 +2757,7 @@ mod tests {
     }
 
     #[test]
-    fn priests_start_with_three_equipped_unpriced_pieces() {
+    fn priests_start_with_four_equipped_unpriced_pieces() {
         let (auth, _) = temp_auth("auth_priest_armor");
         for (name, gender) in [("Priest", Gender::Male), ("Shadow", Gender::Female)] {
             let account = auth.login_google(&format!("sub-{name}")).unwrap();
@@ -2780,6 +2781,7 @@ mod tests {
                 continue;
             }
             for (id, slot) in [
+                ("worn_priest_helmet", "head"),
                 ("worn_priest_top", "chest"),
                 ("worn_priest_pants", "pants"),
                 ("worn_priest_boots", "boots"),
@@ -2794,11 +2796,11 @@ mod tests {
                 assert_eq!(def.guard, Some(1));
                 assert!(def.chest_tier.is_none());
             }
-            assert_eq!(items.len(), STARTER_ITEMS.len() + 3);
+            assert_eq!(items.len(), STARTER_ITEMS.len() + 4);
             let worn = auth.load_character_equipment(character.id).unwrap();
             assert_eq!(worn.main_hand.as_deref(), Some("worn_iron_sword"));
             assert!(items.iter().any(|item| item.item_def_id == "worn_torch"));
-            assert_eq!(worn.armor.head, None);
+            assert_eq!(worn.armor.head.as_deref(), Some("worn_priest_helmet"));
             assert_eq!(worn.armor.chest.as_deref(), Some("worn_priest_top"));
             assert_eq!(worn.armor.pants.as_deref(), Some("worn_priest_pants"));
             assert_eq!(worn.armor.hands, None);

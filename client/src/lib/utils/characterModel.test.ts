@@ -23,6 +23,7 @@ import {
 } from './characterAnimationUtils'
 import { SELECTABLE_HAIR_PARTS, skinnedParts } from './modularCharacter'
 import type { ArmorEquipment } from '../network/networkTypes'
+import { disposePeltPhysics, updatePeltPhysics } from '../effects/pelt-rig'
 
 vi.mock('./gltfCache', async (importOriginal) => {
   const original = await importOriginal<typeof import('./gltfCache')>()
@@ -319,11 +320,13 @@ describe.skipIf(
     const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
     const { modelRoot } = createCharacterModelRoot(source.scene)
     const armor = {
+      head: 'worn_priest_helmet',
       chest: 'worn_priest_top',
       pants: 'worn_priest_pants',
       boots: 'worn_priest_boots',
     }
     const parts = {
+      head: 'helmet_priest',
       chest: 'top_priest',
       pants: 'pants_priest',
       boots: 'boots_priest',
@@ -716,6 +719,50 @@ describe.skipIf(
     await applyCharacterArmor(modelRoot, { boots: 'worn_plate_boots' })
     expect(clonedScene.position.y).toBe(offset)
     expect(other.children[0].position.y).toBe(0)
+  })
+
+  it('keeps render bindings when the same armor is reapplied while running', async () => {
+    const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
+    const pack = await loadCharacterAnimationPack(
+      MODULAR_MALE_MODEL_PATH,
+      CHARACTER_ANIMATION_PACK_PATHS.locomotion
+    )
+    const { modelRoot } = createCharacterModelRoot(source.scene)
+    const bare = {
+      head: 'worn_priest_helmet',
+      boots: 'worn_priest_boots',
+    }
+    const dressed = {
+      ...bare,
+      chest: 'worn_priest_top',
+      pants: 'worn_priest_pants',
+    }
+    await applyCharacterArmor(modelRoot, bare)
+    await applyCharacterArmor(modelRoot, dressed)
+    updatePeltPhysics(modelRoot, 1 / 60)
+    await applyCharacterArmor(modelRoot, bare)
+    const mixer = new THREE.AnimationMixer(modelRoot)
+    const run = pack.animations.find((clip) => clip.name === 'run')!
+    mixer.clipAction(run).play()
+    const legs = bodyRegion(skinnedParts(modelRoot), 'legs')
+    expect(legs.length).toBeGreaterThan(0)
+    const released = vi.fn()
+    for (const mesh of skinnedParts(modelRoot))
+      mesh.addEventListener('dispose', released)
+    for (let i = 0; i < 10; i++) {
+      await applyCharacterArmor(modelRoot, { ...bare })
+      mixer.update(1 / 60)
+      updatePeltPhysics(modelRoot, 1 / 60)
+      expect(legs.every((mesh) => mesh.visible)).toBe(true)
+    }
+    expect(released).not.toHaveBeenCalled()
+    await applyCharacterArmor(modelRoot, dressed)
+    expect(legs.every((mesh) => !mesh.visible)).toBe(true)
+    await applyCharacterArmor(modelRoot, bare)
+    expect(legs.every((mesh) => mesh.visible)).toBe(true)
+    expect(released).toHaveBeenCalled()
+    mixer.stopAllAction()
+    disposePeltPhysics(modelRoot)
   })
 
   it('binds non-default parts only to players that wear them', async () => {

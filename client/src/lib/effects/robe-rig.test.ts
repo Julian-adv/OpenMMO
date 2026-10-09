@@ -72,6 +72,32 @@ function fixture(shared?: THREE.BufferGeometry) {
 }
 
 describe('lightweight robe motion', () => {
+  it('releases render bindings when the skeleton size changes without disposing shared assets', () => {
+    const f = fixture()
+    f.rig.dispose()
+    const releaseBindings = vi.fn()
+    const disposeMaterial = vi.fn()
+    const disposeGeometry = vi.fn()
+    f.mesh.addEventListener('dispose', releaseBindings)
+    f.mesh.material.addEventListener('dispose', disposeMaterial)
+    f.geometry.addEventListener('dispose', disposeGeometry)
+    const originalBytes = f.mesh.skeleton.boneMatrices!.byteLength
+
+    const rig = createRobeRig(f.mesh, config)
+    expect(f.mesh.skeleton.boneMatrices!.byteLength).toBe(originalBytes + 8 * 64)
+    expect(releaseBindings).toHaveBeenCalledTimes(1)
+
+    rig.update(1 / 30)
+    expect(releaseBindings).toHaveBeenCalledTimes(1)
+
+    rig.dispose()
+    expect(f.mesh.skeleton.boneMatrices!.byteLength).toBe(originalBytes)
+    expect(releaseBindings).toHaveBeenCalledTimes(2)
+    expect(disposeMaterial).not.toHaveBeenCalled()
+    expect(disposeGeometry).not.toHaveBeenCalled()
+    expect(f.mesh.parent).toBe(f.root)
+  })
+
   it('lifts the hem ahead of a raised thigh while preserving the waist and upper body', () => {
     const f = fixture()
     const before = [f.vertex(0), f.vertex(2), f.vertex(3), f.vertex(5)]

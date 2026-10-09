@@ -29,6 +29,7 @@ worn_ranger_top,Worn Ranger Top,Well-used clothing issued to new rangers. Mercha
 worn_ranger_pants,Worn Ranger Pants,Well-used clothing issued to new rangers. Merchants will not buy it.,3,pants,false,armor/ranger_pants.png,armor/ranger_pants.glb,armor,,,leather,,1,,,,,,,,,,,,true,,,,,,,,,
 worn_ranger_gloves,Worn Ranger Gloves,Well-used leather gloves issued to new rangers. Merchants will not buy them.,0.5,hands,false,armor/ranger_gloves.png,armor/ranger_gloves.glb,armor,,,leather,,1,,,,,,,,,,,,true,,,,,,,,,
 worn_ranger_boots,Worn Ranger Boots,Well-used clothing issued to new rangers. Merchants will not buy it.,3,boots,false,armor/ranger_boots.png,armor/ranger_boots.glb,armor,,,leather,,1,,,,,,,,,,,,true,,,,,,,,,
+worn_priest_helmet,Worn Priest Mitre,Well-used clothing issued to new priests. Merchants will not buy it.,1,head,false,armor/priest_helmet.png,armor/priest_helmet.glb,armor,,,cloth,,1,,,,,,,,,,,,true,,,,,,,,,
 worn_priest_top,Worn Priest Robe,Well-used clothing issued to new priests. Merchants will not buy it.,5,chest,false,armor/priest_top.png,armor/priest_top.glb,armor,,,cloth,,1,,,,,,,,,,,,true,,,,,,,,,
 worn_priest_pants,Worn Priest Chainmail Pants,Well-used clothing issued to new priests. Merchants will not buy it.,3,pants,false,armor/priest_pants.png,armor/priest_pants.glb,armor,,,metal,,1,,,,,,,,,,,,true,,,,,,,,,
 worn_priest_boots,Worn Priest Boots,Well-used clothing issued to new priests. Merchants will not buy it.,3,boots,false,armor/priest_boots.png,armor/priest_boots.glb,armor,,,leather,,1,,,,,,,,,,,,true,,,,,,,,,

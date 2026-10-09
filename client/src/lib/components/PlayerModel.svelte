@@ -1397,10 +1397,10 @@
         locomotionAnimations,
         combatMeleeAnimations
       )
-      validAnimations =
+      const animations =
         modelPath === MODULAR_MALE_MODEL_PATH
           ? orderedSelections.map((selection) => selection.clip)
-          : await retargetOrderedCharacterAnimationsForModel(
+          : retargetOrderedCharacterAnimationsForModel(
               newModelRoot,
               orderedSelections,
               {
@@ -1409,6 +1409,13 @@
                 combatMelee: combatMeleeGltfData?.scene,
               }
             )
+
+      const [clips] = await Promise.all([animations, warmed])
+      if (destroyed) {
+        disposeCharacterSkeletons(newModelRoot)
+        return
+      }
+      validAnimations = clips
 
       for (const selection of orderedSelections) {
         if (selection.fromFallback) {
@@ -1486,13 +1493,6 @@
         }
       }
 
-      await warmed
-      if (destroyed) {
-        mixer?.stopAllAction()
-        mixer = null
-        disposeCharacterSkeletons(newModelRoot)
-        return
-      }
       clonedScene = cloned
       modelRoot = newModelRoot
       effectAnchors = new PlayerEffectAnchors(cloned)
@@ -1522,7 +1522,7 @@
       .then(() => setupRealAnimation())
       .catch((error) => console.error('Failed to load player model', error))
       .finally(() => {
-        isLoading = false
+        if (!destroyed) isLoading = false
       })
 
     // Cleanup on unmount

@@ -1,0 +1,69 @@
+{
+  "date": "2026-10-10",
+  "encoding": "KTX2 UASTC quality 3, RDO 0.5, Zstd 18, sRGB, mipmaps",
+  "parts": [
+    {
+      "part": "helmet",
+      "bytes": 379936,
+      "texture_bytes": 302195,
+      "width": 512,
+      "height": 512,
+      "mip_levels": 10,
+      "extensions": [
+        "EXT_meshopt_compression",
+        "KHR_texture_basisu"
+      ],
+      "triangles": 1924
+    },
+    {
+      "part": "top",
+      "bytes": 454832,
+      "texture_bytes": 288507,
+      "width": 512,
+      "height": 512,
+      "mip_levels": 10,
+      "extensions": [
+        "EXT_meshopt_compression",
+        "KHR_texture_basisu"
+      ],
+      "triangles": 3913
+    },
+    {
+      "part": "pants",
+      "bytes": 373852,
+      "texture_bytes": 308431,
+      "width": 512,
+      "height": 512,
+      "mip_levels": 10,
+      "extensions": [
+        "EXT_meshopt_compression",
+        "KHR_texture_basisu"
+      ],
+      "triangles": 1513
+    },
+    {
+      "part": "boots",
+      "bytes": 381328,
+      "texture_bytes": 295579,
+      "width": 512,
+      "height": 512,
+      "mip_levels": 10,
+      "extensions": [
+        "EXT_meshopt_compression",
+        "KHR_texture_basisu"
+      ],
+      "triangles": 2278
+    }
+  ],
+  "browser": {
+    "renderer": "WebGPURenderer",
+    "backend": "WebGLBackend",
+    "gpu_format": "ASTC 4x4",
+    "bytes_per_texture": 349552,
+    "total_texture_bytes": 1398208,
+    "slot_removal_and_reequip": "passed",
+    "page_errors": [],
+    "asset_request_failures": [],
+    "webgpu_hardware_tested": false
+  }
+}

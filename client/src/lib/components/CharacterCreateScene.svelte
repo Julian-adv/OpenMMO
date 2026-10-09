@@ -27,6 +27,7 @@
   const STARTER_EQUIPMENT: Partial<Record<CharacterClass, VisibleEquipment>> = {
     priest: {
       armor: {
+        head: 'worn_priest_helmet',
         chest: 'worn_priest_top',
         pants: 'worn_priest_pants',
         boots: 'worn_priest_boots',

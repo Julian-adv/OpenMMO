@@ -58,6 +58,37 @@ function area(geometry: THREE.BufferGeometry) {
   return result
 }
 
+it('rebuilds render bindings when a clothing variant removes or restores tangents', () => {
+  const source = cloth()
+  source.computeVertexNormals()
+  source.computeTangents()
+  const mesh = new THREE.SkinnedMesh(source, new THREE.MeshStandardMaterial())
+  const other = new THREE.SkinnedMesh(source, mesh.material)
+  const releaseBindings = vi.fn()
+  const releaseOtherBindings = vi.fn()
+  const disposeSource = vi.fn()
+  const disposeMaterial = vi.fn()
+  mesh.addEventListener('dispose', releaseBindings)
+  other.addEventListener('dispose', releaseOtherBindings)
+  source.addEventListener('dispose', disposeSource)
+  mesh.material.addEventListener('dispose', disposeMaterial)
+
+  trimModularClothing(mesh, 'priest_fur')
+  expect(mesh.geometry.hasAttribute('tangent')).toBe(false)
+  expect(releaseBindings).toHaveBeenCalledTimes(1)
+  trimModularClothing(mesh, 'priest_fur')
+  expect(releaseBindings).toHaveBeenCalledTimes(1)
+
+  trimModularClothing(mesh)
+  expect(mesh.geometry).toBe(source)
+  expect(mesh.geometry.hasAttribute('tangent')).toBe(true)
+  expect(releaseBindings).toHaveBeenCalledTimes(2)
+  expect(other.geometry).toBe(source)
+  expect(releaseOtherBindings).not.toHaveBeenCalled()
+  expect(disposeSource).not.toHaveBeenCalled()
+  expect(disposeMaterial).not.toHaveBeenCalled()
+})
+
 describe('modular clothing cuts', () => {
   it.each([1, -1])(
     'fits the priest hem to the caveman boot rim on side %s',

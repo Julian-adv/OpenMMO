@@ -35,6 +35,7 @@ const ARMOR_STYLES = {
     'armor/barbarian_bracers.glb': 'barbarian',
   },
   head: {
+    'armor/priest_helmet.glb': 'priest',
     'armor/plate_helmet.glb': 'plate',
     'armor/barbarian_helmet.glb': 'barbarian',
   },

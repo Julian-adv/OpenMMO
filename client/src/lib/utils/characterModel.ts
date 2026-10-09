@@ -56,7 +56,11 @@ const lazyParts = new Set(
 const outfitParts = new Set([...eagerParts, ...lazyParts])
 const lazyStates = new WeakMap<
   THREE.Object3D,
-  { generation: number; loads: Map<string, Promise<void>> }
+  {
+    generation: number
+    loads: Map<string, Promise<void>>
+    outfitKey?: string
+  }
 >()
 const soleOffsets: Record<ModularOutfit['boots'], number> = {
   ...modularSoleOffsets,
@@ -134,9 +138,11 @@ function bindLazyPart(
       (gltf) => {
         if (lazyStates.get(scene) !== state) return
         for (const mesh of bindModularPart(scene, gltf.scene)) {
+          mesh.visible = false
           mesh.frustumCulled = false
           if (id === 'hair_wavy_bone') separateWavyHairMaterials(mesh)
         }
+        state.outfitKey = undefined
       },
       (error) => {
         state.loads.delete(id)
@@ -178,7 +184,11 @@ export async function applyCharacterArmor(
       return
     ;({ meshes, body, parts } = outfitMeshes(scene))
   }
-  showModularOutfit(body, parts, outfit)
+  const outfitKey = JSON.stringify(outfit)
+  if (state.outfitKey !== outfitKey) {
+    showModularOutfit(body, parts, outfit)
+    state.outfitKey = outfitKey
+  }
   applyAppearanceColors(root, meshes, appearance)
   scene.position.y = soleOffsets[outfit.boots]
 }

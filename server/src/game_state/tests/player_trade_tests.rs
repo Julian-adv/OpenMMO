@@ -307,6 +307,7 @@ async fn untradeable_starter_gear_cannot_be_offered() {
         "worn_caveman_pants",
         "worn_caveman_boots",
         "worn_caveman_bracers",
+        "worn_priest_helmet",
         "worn_priest_top",
         "worn_priest_pants",
         "worn_priest_boots",

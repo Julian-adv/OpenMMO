@@ -1,15 +1,13 @@
 import * as THREE from 'three'
 import { WebGPURenderer } from 'three/webgpu'
+import { configureGLTFRenderer } from './gltfCache'
 import {
   applyInitialAntialias,
   getAppliedAntialias,
   getCurrentPreset,
 } from '../stores/graphicsSettings'
 
-// Patch Material.dispose to catch WebGPU backend race conditions.
-// When Threlte disposes materials before the WebGPU backend finishes
-// async init, internal Nodes.delete() crashes on undefined nodeData.
-// This is a known Three.js WebGPU issue — safe to swallow.
+// Disposal can race WebGPU initialization.
 const _origMaterialDispose = THREE.Material.prototype.dispose
 THREE.Material.prototype.dispose = function () {
   try {
@@ -23,22 +21,20 @@ export function createWebGPURenderer(canvas: HTMLCanvasElement) {
   const preset = getCurrentPreset()
   const antialias = applyInitialAntialias()
   const renderer = new WebGPURenderer({ canvas, antialias })
+  configureGLTFRenderer(renderer)
   renderer.setPixelRatio(
     Math.min(window.devicePixelRatio, preset.pixelRatioCap)
   )
   return renderer
 }
 
-/** Renderer for the small secondary preview canvases. Reuses the main
- *  renderer's applied antialias without re-recording it (that record drives
- *  the settings restart notice), and defers dispose past init() so the GPU
- *  device is actually released. Cap the pixel ratio via the Canvas `dpr`
- *  prop — Threlte overwrites anything set here. */
+// Preview canvases reuse antialias settings and dispose after initialization.
 export function createPreviewWebGPURenderer(canvas: HTMLCanvasElement) {
   const renderer = new WebGPURenderer({
     canvas,
     antialias: getAppliedAntialias(),
   })
+  configureGLTFRenderer(renderer)
 
   const _origDispose = renderer.dispose.bind(renderer)
   renderer.dispose = () =>

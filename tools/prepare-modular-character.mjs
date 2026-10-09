@@ -62,6 +62,8 @@ const rangerSources = {
 const rangerParts = Object.keys(rangerSources);
 parts.push(...rangerParts);
 const priestSources = {
+  helmet_priest:
+    "assets/modular_human_male_01/priest/tripo_helmet_v1/helmet_priest.glb",
   top_priest:
     "assets/modular_human_male_01/priest/tripo_top_v1/top_priest.glb",
   pants_priest:
@@ -148,6 +150,7 @@ for (const name of selectedParts) {
       resolve(root, "tools/optimize-modular-part.mjs"),
       resolve(root, source),
       resolve(root, output, `${name}.glb`),
+      ...(priestParts.includes(name) ? ["--ktx2"] : []),
       ...(["base", "base_rugged", "base_ranger"].includes(name)
         ? ["--body"]
         : []),

@@ -21,6 +21,12 @@ export function robeBaseSkeleton(mesh: THREE.SkinnedMesh) {
   return baseSkeletons.get(mesh) ?? mesh.skeleton
 }
 
+function bindSkeleton(mesh: THREE.SkinnedMesh, skeleton: THREE.Skeleton) {
+  mesh.bind(skeleton, mesh.bindMatrix.clone())
+  // Rebuild main and shadow passes for the new bone-buffer size.
+  mesh.dispose()
+}
+
 function sharedGeometry(
   original: THREE.BufferGeometry,
   config: RobePhysics,
@@ -131,7 +137,7 @@ export function createRobeRig(
   mesh.boundingSphere.radius +=
     2 * (config.waist_height_m - config.hem_height_m)
   mesh.geometry = geometry
-  mesh.bind(skeleton, mesh.bindMatrix.clone())
+  bindSkeleton(mesh, skeleton)
   baseSkeletons.set(mesh, originalSkeleton)
   const inverseHip = new THREE.Matrix4()
   const point = new THREE.Vector3()
@@ -230,7 +236,7 @@ export function createRobeRig(
     if (!active) return
     active = false
     mesh.geometry = original
-    mesh.bind(originalSkeleton, mesh.bindMatrix.clone())
+    bindSkeleton(mesh, originalSkeleton)
     baseSkeletons.delete(mesh)
     mesh.boundingSphere = originalBounds
     for (const control of controls) control.bone.removeFromParent()

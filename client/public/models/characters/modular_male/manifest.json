@@ -45,7 +45,8 @@
     "assets/modular_human_male_01/faces/tripo_ranger_v1/base_ranger.glb": "02d2281c668668cde77ab59e4ef4190a73c80d625e5601ca25569b258ba123cc",
     "assets/modular_human_male_01/priest/tripo_top_v1/top_priest.glb": "d150bb102c4aa61a2f1a4107e48f09f39241b524de2541a45d37116809a205ed",
     "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b",
-    "assets/modular_human_male_01/priest/tripo_boots_v1/boots_priest.glb": "995e83d5cd5e41413024b4ab8a522c724b1d078f49232b81460e3d8cf26f4ba0"
+    "assets/modular_human_male_01/priest/tripo_boots_v1/boots_priest.glb": "995e83d5cd5e41413024b4ab8a522c724b1d078f49232b81460e3d8cf26f4ba0",
+    "assets/modular_human_male_01/priest/tripo_helmet_v1/helmet_priest.glb": "3d6a6d38362626069099b13d183ec6064b1fbf245b65a3397405e76f16119237"
   },
   "outputs": {
     "base.glb": "795f234ddc4f369d2a022cc734a590f3801212c5c75ebbb6c6d5f63b73dcded2",
@@ -160,8 +161,9 @@
     "boots_ranger.glb": "e24771106acfc6daa858621eee2d40dc61206392cdc0baf46a8e298f4edc8907",
     "hair_ranger.glb": "0ab748171d9c7352084411817f1e8bff4e42f67947f49d4bd559384efc824564",
     "base_ranger.glb": "6a3bfaea87f7d4508d8a496ffa6d5b4eefb7e539aa1ae9498cc4701f97a15990",
-    "top_priest.glb": "bbf90b8458a28853e3713b25a8e8af0b61af9dbd4f2636346c7b8ce4d8218ca5",
-    "pants_priest.glb": "a4cca4081c193a1cee118a1600a5dc2b5c9bd0659974f57ddb4358298fee2c96",
-    "boots_priest.glb": "7a944d6e3e780c56323672433f75ef7b124b3ec4e1d7972fd1cbb5e9e3f720cb"
+    "top_priest.glb": "3ba1fa2162fb7ed9c1e65e253dcc6fbdba8fcf8aa535f644338ba0205a590b29",
+    "pants_priest.glb": "0189d0271b320fd8b098312a9f3b77c3c8af0a46fcf772d2b6a7d349836c7d3e",
+    "boots_priest.glb": "c6234b4ce80bbc0a8cd26176c8aa6248b04b11c48864a84b5a0d989e25a53258",
+    "helmet_priest.glb": "2aa304e1ecc74b04989a4f3bf26749f274b3e445879bee6019a874ddcbebc32e"
   }
 }

@@ -11,11 +11,12 @@ import bpy
 SCRIPTS = Path(__file__).resolve().parent
 REPO = SCRIPTS.parents[1]
 SOURCES = {
+    "helmet": "priest/tripo_helmet_v1",
     "top": "priest/tripo_top_v1",
     "pants": "priest/tripo_pants_v1",
     "boots": "priest/tripo_boots_v1",
 }
-PARTS = ("top", "pants", "boots")
+PARTS = tuple(SOURCES)
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--parts", nargs="+", choices=PARTS, default=PARTS)
 args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
@@ -53,12 +54,12 @@ with tempfile.TemporaryDirectory(prefix="priest-items-") as temporary:
             filepath=str(static), export_format="GLB", use_selection=True,
             export_animations=False, export_skins=False, export_extras=False,
         )
-        icon_rotation = (
-            25 if name in ("top", "pants") else -65, -8, -12)
+        upright = name != "boots"
+        icon_rotation = (25 if upright else -65, -8, -12)
         sys.argv = [str(SCRIPTS / "export_item_asset.py"), "--",
                     "--source", str(static), "--name", f"priest_{name}",
                     "--category", "armor", "--size", str(size),
-                    "--rotation", "-90" if name in ("top", "pants") else "0", "0", "0",
+                    "--rotation", "-90" if upright else "0", "0", "0",
                     "--icon-rotation", *(str(angle) for angle in icon_rotation),
                     "--exposure", "-1.2"]
         bpy.context.preferences.filepaths.save_version = 0

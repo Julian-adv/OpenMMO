@@ -307,7 +307,10 @@ const variants = new WeakMap<THREE.BufferGeometry, Variants>()
 
 function setGeometry(mesh: THREE.SkinnedMesh, geometry: THREE.BufferGeometry) {
   if (mesh.geometry === geometry) return
+  const layout = Object.keys(mesh.geometry.attributes).join()
   mesh.geometry = geometry
+  // Pipelines are keyed by attribute names; rebuild only when they change.
+  if (Object.keys(geometry.attributes).join() !== layout) mesh.dispose()
   const bounds: {
     boundingBox: THREE.Box3 | null
     boundingSphere: THREE.Sphere | null

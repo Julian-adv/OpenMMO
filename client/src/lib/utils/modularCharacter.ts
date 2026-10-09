@@ -376,7 +376,7 @@ export const PRIEST_MODULAR_OUTFIT: ModularOutfit = {
   pants: 'priest',
   gloves: 'none',
   boots: 'priest',
-  helmet: 'none',
+  helmet: 'priest',
 }
 
 const proxied = (style: string) =>
