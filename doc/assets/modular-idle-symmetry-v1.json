@@ -1,0 +1,112 @@
+{
+  "date": "2026-10-09",
+  "sources": [
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
+    },
+    {
+      "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+      "sha256": "fc47d9613bd1fbc9f0d61ce0cc95a5c540d16ab8430bcf34ee7ddcd9cd958ac3"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/locomotion.glb",
+      "sha256": "b99c491b2c66f47a98fc03da923c892d59d62b240317203ec699c5b2d70d47ae"
+    }
+  ],
+  "before": [
+    {
+      "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+      "sha256": "76eeb462770754895834271423b4ef7f33efdbd34bdfb9830beba4ba84e7569f",
+      "repository": "jake-song-openmmo/onlinerpg-assets",
+      "revision": "2d0dbb5ecc9fdf97908adcdf3483b2ed33d98f7b"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/locomotion.glb",
+      "sha256": "d4aa8d7369c6396f7455b7066d2342ef7662fa2ef46595c42de76f3f3855055d",
+      "repository": "jake-song-openmmo/onlinerpg-assets",
+      "revision": "2d0dbb5ecc9fdf97908adcdf3483b2ed33d98f7b"
+    }
+  ],
+  "checks": [
+    {
+      "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+      "unchangedTracks": 445,
+      "clip": "idle1",
+      "samples": 501,
+      "maximumShoulderHeightDifferenceMm": 0.031098233272075504,
+      "maximumMirroredArmJointErrorMm": 0.5820107062152273,
+      "maximumTorsoYawRollDegrees": 0.0000141173022343259,
+      "armAbductionDegrees": [
+        12.848883580303117,
+        13.517057159031616
+      ]
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/locomotion.glb",
+      "unchangedTracks": 525,
+      "clip": "idle1",
+      "samples": 501,
+      "maximumShoulderHeightDifferenceMm": 0.031098233272075504,
+      "maximumMirroredArmJointErrorMm": 0.5820107062152273,
+      "maximumTorsoYawRollDegrees": 0.0000141173022343259,
+      "armAbductionDegrees": [
+        12.848883580303117,
+        13.517057159031616
+      ]
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/locomotion.glb",
+      "unchangedTracks": 525,
+      "clip": "idle2",
+      "samples": 501,
+      "maximumShoulderHeightDifferenceMm": 0.031098233272075504,
+      "maximumMirroredArmJointErrorMm": 0.5820107062152273,
+      "maximumTorsoYawRollDegrees": 0.0000141173022343259,
+      "armAbductionDegrees": [
+        12.848883580303117,
+        13.517057159031616
+      ]
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/locomotion.glb",
+      "unchangedTracks": 525,
+      "clip": "idle3",
+      "samples": 501,
+      "maximumShoulderHeightDifferenceMm": 0.031098233272075504,
+      "maximumMirroredArmJointErrorMm": 0.5820107062152273,
+      "maximumTorsoYawRollDegrees": 0.0000141173022343259,
+      "armAbductionDegrees": [
+        12.848883580303117,
+        13.517057159031616
+      ]
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/locomotion.glb",
+      "unchangedTracks": 525,
+      "clip": "idle4",
+      "samples": 501,
+      "maximumShoulderHeightDifferenceMm": 0.031098233272075504,
+      "maximumMirroredArmJointErrorMm": 0.5820107062152273,
+      "maximumTorsoYawRollDegrees": 0.0000141173022343259,
+      "armAbductionDegrees": [
+        12.848883580303117,
+        13.517057159031616
+      ]
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/locomotion.glb",
+      "unchangedTracks": 525,
+      "clip": "idle5",
+      "samples": 501,
+      "maximumShoulderHeightDifferenceMm": 0.031098233272075504,
+      "maximumMirroredArmJointErrorMm": 0.5820107062152273,
+      "maximumTorsoYawRollDegrees": 0.0000141173022343259,
+      "armAbductionDegrees": [
+        12.848883580303117,
+        13.517057159031616
+      ]
+    }
+  ],
+  "scope": "Exported canonical/runtime idle clips; chest-relative mirrored arm joints, world shoulder heights, torso yaw/roll, and unchanged other animation tracks."
+}

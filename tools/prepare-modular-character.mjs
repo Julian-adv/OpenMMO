@@ -136,7 +136,9 @@ for (const name of selectedParts) {
       resolve(root, "tools/optimize-modular-part.mjs"),
       resolve(root, source),
       resolve(root, output, `${name}.glb`),
-      ...(["base", "base_rugged", "base_ranger"].includes(name) ? ["--body"] : []),
+      ...(["base", "base_rugged", "base_ranger"].includes(name)
+        ? ["--body"]
+        : []),
     ],
     { stdio: "inherit" },
   );
@@ -305,9 +307,12 @@ async function preparePacks(runtime, modular) {
       variant: "corrected",
       hand_profile: profile,
     };
-    if (animations.some((clip) => /^idle[1-5]$/.test(clip.name)))
+    if (animations.some((clip) => /^idle[1-5]$/.test(clip.name))) {
       scene.userData.idle_shoulder_retraction_degrees =
         baked.scene.userData.idle_shoulder_retraction_degrees ?? 0;
+      scene.userData.idle_upper_body_symmetry_revision =
+        baked.scene.userData.idle_upper_body_symmetry_revision;
+    }
     const rig = base.scene.clone(true);
     const meshes = [];
     rig.traverse((node) => {

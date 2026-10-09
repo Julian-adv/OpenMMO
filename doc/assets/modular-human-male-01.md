@@ -100,6 +100,36 @@ node tools/prepare-modular-character.mjs --pack locomotion
 복장 미리보기 7동작·21자세, GLB 2파일 검증 오류·경고 0, 관련 테스트 33개를 통과했다.
 해시와 관절 위치 차이는 [검증 기록](modular-idle-shoulders.json)에 있다.
 
+## 일반 대기 자세의 좌우 대칭 — 2026-10-09
+
+사용자가 대기 중 캐릭터 왼쪽 어깨가 올라가고 오른쪽 어깨가 내려가는 차이를 확인했다.
+기존 자세는 상체의 옆 기울기 약 3°와 양팔 벌림 약 7°/19°가 겹쳐 있었다.
+40% 시점의 상완 관절 높이 차이는 몸통 좌표에서 약 6.4mm, 실제 모델 좌표에서는 약 29.4mm였다.
+
+`idle1`의 양쪽 쇄골·상완·팔뚝·손 회전은 좌우 반전한 쿼터니언의 중간값으로 맞췄다.
+`Spine2`는 월드 기준 좌우 기울기·비틀림을 제거하고 앞뒤 회전 성분을 유지한다.
+골반·하체·손가락·머리 트랙과 기준 골격·inverse bind·의상 형상은 유지한다.
+기존 6° 어깨 뒤로 열기도 유지한다. 이 보정은 본 자세의 대칭이며 메시·가중치의 완전 대칭은 아니다.
+
+제작용 `rigged_hand_tuned/animations.glb`와 게임용 `locomotion.glb`에 반영했다.
+게임의 `idle2`~`idle5`도 같은 보정된 `idle1` 복제다. 다른 동작·키 시간·길이는 바꾸지 않았다.
+각 대기를 501시점 검사해 상완 관절 높이 차이 최대 **0.032mm**, 좌우 반전 팔 관절 오차
+최대 **0.583mm**, 양팔 벌림 **12.85–13.52°**를 확인했다.
+기준 골격 일치·가중치 기준 유지·회전 정규화·재실행 시 결과 불변도 확인했다.
+
+```sh
+.venv/bin/python tools/symmetrize-modular-idle.py
+node tools/prepare-modular-character.mjs --pack locomotion
+node tools/validate-modular-idle-symmetry.mjs
+```
+
+기존 사용자 제공 Mixamo 애니메이션을 로컬에서 편집했으며 추가 생성·유료 호출은 없다.
+수정 전 파일의 보관 revision과 입력·출력 해시는 [대칭 검사](modular-idle-symmetry-v1.json),
+변경한 9개 회전 트랙과 출처·검증은 [편집 기록](modular-idle-symmetry-edit-v1.json)에 있다.
+정면 정투영 비교의 왼쪽 열은 수정 전, 오른쪽 열은 수정 후다. 주황색은 캐릭터 오른팔이다.
+
+![대기 자세 수정 전후](../images/characters/modular_human_male_01/idle-symmetric-shoulders-v1.png)
+
 ## 검 그립 보정 — 2026-09-29
 
 대기·걷기·달리기·점프·전투 대기·공격의 오른손을 같은 손잡이 둘레에 맞췄다.

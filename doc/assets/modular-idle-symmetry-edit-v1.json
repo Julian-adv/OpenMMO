@@ -1,0 +1,166 @@
+{
+  "revision": "2026-10-09-v1",
+  "source_sha256": "76eeb462770754895834271423b4ef7f33efdbd34bdfb9830beba4ba84e7569f",
+  "output_sha256": "fc47d9613bd1fbc9f0d61ce0cc95a5c540d16ab8430bcf34ee7ddcd9cd958ac3",
+  "clip": "idle1",
+  "changed_tracks": [
+    {
+      "bone": "LeftShoulder",
+      "keys": 251,
+      "maximum_change_degrees": 1.6906232099105114
+    },
+    {
+      "bone": "RightShoulder",
+      "keys": 251,
+      "maximum_change_degrees": 1.690624754456499
+    },
+    {
+      "bone": "LeftArm",
+      "keys": 251,
+      "maximum_change_degrees": 9.42491551289647
+    },
+    {
+      "bone": "RightArm",
+      "keys": 251,
+      "maximum_change_degrees": 9.424914080845577
+    },
+    {
+      "bone": "LeftForeArm",
+      "keys": 251,
+      "maximum_change_degrees": 2.66936928066128
+    },
+    {
+      "bone": "RightForeArm",
+      "keys": 251,
+      "maximum_change_degrees": 2.6693694262306282
+    },
+    {
+      "bone": "LeftHand",
+      "keys": 251,
+      "maximum_change_degrees": 6.086642502521459
+    },
+    {
+      "bone": "RightHand",
+      "keys": 251,
+      "maximum_change_degrees": 6.0866452965543365
+    },
+    {
+      "bone": "Spine2",
+      "keys": 251,
+      "maximum_change_degrees": 4.64945899981288
+    }
+  ],
+  "method": "Average mirrored clavicle, upper arm, forearm and hand rotations; remove world torso yaw/roll at Spine2 while retaining its X-axis twist.",
+  "rest_rig_unchanged": true,
+  "other_clips_and_tracks_unchanged": true,
+  "validation": {
+    "idempotent_reapplication": true,
+    "rest_nodes_and_skins_identical": true,
+    "maximum_quaternion_norm_error": 5.960464477539063e-08,
+    "client_check": "passed: 0 errors, 0 warnings",
+    "client_lint": "passed",
+    "related_tests_passed": 83
+  },
+  "source_license": "Existing user-provided Mixamo animations and modular male rig; no new generated assets or paid calls.",
+  "comparison_image": {
+    "path": "doc/images/characters/modular_human_male_01/idle-symmetric-shoulders-v1.png",
+    "sha256": "d97fb31a606881921e2b3c5be5918b385cecee6c3baeb55525a9dfe42c011ce7",
+    "tool": "Local Chromium/Three.js orthographic render of existing licensed character and priest assets; before and after idle at 40 percent",
+    "bytes": 801344
+  },
+  "preserved_inputs": [
+    {
+      "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+      "sha256": "76eeb462770754895834271423b4ef7f33efdbd34bdfb9830beba4ba84e7569f",
+      "repository": "jake-song-openmmo/onlinerpg-assets",
+      "revision": "2d0dbb5ecc9fdf97908adcdf3483b2ed33d98f7b"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/locomotion.glb",
+      "sha256": "d4aa8d7369c6396f7455b7066d2342ef7662fa2ef46595c42de76f3f3855055d",
+      "repository": "jake-song-openmmo/onlinerpg-assets",
+      "revision": "2d0dbb5ecc9fdf97908adcdf3483b2ed33d98f7b"
+    }
+  ],
+  "browser": {
+    "url": "https://localhost:10004/modular-character-preview.html?outfit=priest&fit=boots-v1&idle=symmetric-v1",
+    "tops": [
+      {
+        "top": "none",
+        "finite": true,
+        "visibleMeshes": 12
+      },
+      {
+        "top": "priest",
+        "finite": true,
+        "visibleMeshes": 9
+      },
+      {
+        "top": "linen",
+        "finite": true,
+        "visibleMeshes": 11
+      },
+      {
+        "top": "leather",
+        "finite": true,
+        "visibleMeshes": 12
+      },
+      {
+        "top": "plate",
+        "finite": true,
+        "visibleMeshes": 8
+      },
+      {
+        "top": "barbarian",
+        "finite": true,
+        "visibleMeshes": 13
+      },
+      {
+        "top": "caveman",
+        "finite": true,
+        "visibleMeshes": 13
+      },
+      {
+        "top": "ranger",
+        "finite": true,
+        "visibleMeshes": 10
+      },
+      {
+        "top": "rogue",
+        "finite": true,
+        "visibleMeshes": 12
+      }
+    ],
+    "transitionClips": [
+      "walk",
+      "idle1",
+      "combat_idle",
+      "idle1"
+    ],
+    "final": {
+      "shoulderHeightDifferenceMm": 0.014276074836061525,
+      "clip": "idle1"
+    },
+    "errors": [],
+    "failed": []
+  },
+  "cleanup": {
+    "date": "2026-10-09",
+    "user_requested": true,
+    "deleted": [
+      {
+        "temporary_directory": "/tmp/shoulder-investigation",
+        "files_removed": 11
+      },
+      {
+        "temporary_directory": "/tmp/idle-symmetry-before",
+        "files_removed": 8
+      },
+      {
+        "temporary_directory": "/tmp/idle-symmetry-review",
+        "files_removed": 7
+      }
+    ],
+    "retained": "Final source/runtime animation packs, reproducible tools, before/after comparison image and validation/provenance reports. Pre-edit originals remain at preserved_inputs HF revisions."
+  }
+}

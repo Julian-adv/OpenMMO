@@ -16,7 +16,7 @@
     "assets/modular_human_male_01/parts/fitted/gloves_barbarian.glb": "6dbd8f4fbed0c463a07fa8b0b0b35ba221677f584b31eb082e84365fb18a272b",
     "assets/modular_human_male_01/parts/fitted/boots_barbarian.glb": "32d4a9f8e469c671be01dfdefb9bd84bb5b731ea308b66ade878ba505ac945a9",
     "assets/modular_human_male_01/parts/fitted/helmet_barbarian.glb": "a01e6155007cda2447c87926fabf5ccc8187782d8005f861c4f98debebd8eee1",
-    "assets/modular_human_male_01/rigged_hand_tuned/animations.glb": "76eeb462770754895834271423b4ef7f33efdbd34bdfb9830beba4ba84e7569f",
+    "assets/modular_human_male_01/rigged_hand_tuned/animations.glb": "fc47d9613bd1fbc9f0d61ce0cc95a5c540d16ab8430bcf34ee7ddcd9cd958ac3",
     "assets/modular_human_male_01/rigged_hand_tuned/hand-grips.json": "c34d315d2794038dc44ee68ef4c4bc9b36133fb2d1895727dfddec5b2ad1ca89",
     "client/public/models/animations/locomotion.glb": "cfa79f5b5f82f3b26d0d0bc86e4293a919fbc28829a2c6192f19a4a488271da8",
     "client/public/models/animations/combat_melee.glb": "b29f34de8cf7523d176a634ceac7ab4791084994493adbfac5f59dda686a057b",
@@ -61,7 +61,7 @@
     "boots_barbarian.glb": "eff9f04c59c498283686aa06ce1ac952317bfa2fec954496fa5e20506920d8f4",
     "helmet_barbarian.glb": "1a6f5a3dae7a7e653de503e21c32980e95d077e5265049b45675bd1a072d6b42",
     "animations/locomotion.glb": {
-      "sha256": "d4aa8d7369c6396f7455b7066d2342ef7662fa2ef46595c42de76f3f3855055d",
+      "sha256": "b99c491b2c66f47a98fc03da923c892d59d62b240317203ec699c5b2d70d47ae",
       "clips": [
         "idle1",
         "idle2",
