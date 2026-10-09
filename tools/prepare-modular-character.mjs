@@ -85,6 +85,10 @@ const appearanceSources = {
 };
 const appearanceParts = Object.keys(appearanceSources);
 parts.push(...appearanceParts);
+const bodyParts = ["base", "base_rugged", "base_ranger"];
+const outfitParts = parts.filter(
+  (name) => !bodyParts.includes(name) && !name.startsWith("hair_"),
+);
 const packs = [
   "locomotion",
   "combat_melee",
@@ -126,12 +130,19 @@ function writeManifest(merge) {
 }
 const selectedPart = option("--part", parts);
 const selectedPack = option("--pack", packs);
-let selectedParts = process.argv.includes("--rogue-only") ? rogueParts : parts;
-if (process.argv.includes("--caveman-only")) selectedParts = cavemanParts;
-if (process.argv.includes("--ranger-only")) selectedParts = rangerParts;
-if (process.argv.includes("--priest-only")) selectedParts = priestParts;
-if (process.argv.includes("--appearance-only")) selectedParts = appearanceParts;
-if (process.argv.includes("--sole-offsets")) selectedParts = [];
+const partSets = {
+  "--sole-offsets": [],
+  "--appearance-only": appearanceParts,
+  "--priest-only": priestParts,
+  "--ranger-only": rangerParts,
+  "--caveman-only": cavemanParts,
+  "--outfits-only": outfitParts,
+  "--rogue-only": rogueParts,
+};
+const partSetFlag = Object.keys(partSets).find((flag) =>
+  process.argv.includes(flag),
+);
+let selectedParts = partSetFlag ? partSets[partSetFlag] : parts;
 if (selectedPart) selectedParts = [selectedPart];
 if (selectedPack) selectedParts = [];
 for (const name of selectedParts) {
@@ -150,25 +161,16 @@ for (const name of selectedParts) {
       resolve(root, "tools/optimize-modular-part.mjs"),
       resolve(root, source),
       resolve(root, output, `${name}.glb`),
-      ...(priestParts.includes(name) ? ["--ktx2"] : []),
-      ...(["base", "base_rugged", "base_ranger"].includes(name)
-        ? ["--body"]
-        : []),
+      ...(outfitParts.includes(name) ? ["--ktx2"] : []),
+      ...(bodyParts.includes(name) ? ["--body"] : []),
     ],
     { stdio: "inherit" },
   );
   report.outputs[`${name}.glb`] = hash(`${output}/${name}.glb`);
 }
 
-const partsOnly = [
-  "--parts-only",
-  "--rogue-only",
-  "--caveman-only",
-  "--ranger-only",
-  "--priest-only",
-  "--appearance-only",
-  "--sole-offsets",
-].some((flag) => process.argv.includes(flag));
+const partsOnly =
+  partSetFlag !== undefined || process.argv.includes("--parts-only");
 
 globalThis.self = globalThis;
 globalThis.FileReader = class {

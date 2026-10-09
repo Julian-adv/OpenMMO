@@ -1,0 +1,817 @@
+{
+  "date": "2026-10-10",
+  "encoding": "KTX2 UASTC quality 3, RDO 0.5, Zstd 18, sRGB color / linear data, mipmaps",
+  "parts": [
+    {
+      "part": "boots_barbarian",
+      "changed": true,
+      "previous_bytes": 792532,
+      "bytes": 1686012,
+      "triangles": 3416,
+      "textures": [
+        {
+          "bytes": 298522,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        },
+        {
+          "bytes": 325144,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        },
+        {
+          "bytes": 238845,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        },
+        {
+          "bytes": 317659,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        },
+        {
+          "bytes": 301773,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "0582be6d1c49e6fd45ae50fa458a43f2206a18fa76c0e4f04428aa3fd76b5713"
+    },
+    {
+      "part": "boots_caveman",
+      "changed": true,
+      "previous_bytes": 294024,
+      "bytes": 491816,
+      "triangles": 5178,
+      "textures": [
+        {
+          "bytes": 319150,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "8df467a2a842133499c697d24ed0bb3211a68e862aa8d13b56aabd0497211794"
+    },
+    {
+      "part": "boots_leather",
+      "changed": true,
+      "previous_bytes": 294256,
+      "bytes": 737936,
+      "triangles": 1455,
+      "textures": [
+        {
+          "bytes": 266556,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        },
+        {
+          "bytes": 236192,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        },
+        {
+          "bytes": 151487,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "99de54a01123b70949b079965f90c86c36ec9b22daccd814fede3be7763f9739"
+    },
+    {
+      "part": "boots_plate",
+      "changed": true,
+      "previous_bytes": 411224,
+      "bytes": 911436,
+      "triangles": 709,
+      "textures": [
+        {
+          "bytes": 292046,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        },
+        {
+          "bytes": 304603,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        },
+        {
+          "bytes": 233405,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "d363e9f34b063f63ce22725fbfc62db1464a3bf7706cc9ad6c78a80d1677a156"
+    },
+    {
+      "part": "boots_priest",
+      "changed": false,
+      "previous_bytes": 381328,
+      "bytes": 381328,
+      "triangles": 2278,
+      "textures": [
+        {
+          "bytes": 295579,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "c6234b4ce80bbc0a8cd26176c8aa6248b04b11c48864a84b5a0d989e25a53258"
+    },
+    {
+      "part": "boots_ranger",
+      "changed": true,
+      "previous_bytes": 232328,
+      "bytes": 435440,
+      "triangles": 3646,
+      "textures": [
+        {
+          "bytes": 305583,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "e4066494f42a178603b2ceb99e04845bd88355a8fb5950a8bdfab9fecaa36eb1"
+    },
+    {
+      "part": "boots_rogue",
+      "changed": true,
+      "previous_bytes": 401644,
+      "bytes": 889048,
+      "triangles": 896,
+      "textures": [
+        {
+          "bytes": 302645,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        },
+        {
+          "bytes": 320803,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        },
+        {
+          "bytes": 164249,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "8721698741e2abfb19a565de518201c40baecdb63f3e2b356f0b8822696cdad9"
+    },
+    {
+      "part": "gloves_barbarian",
+      "changed": true,
+      "previous_bytes": 664764,
+      "bytes": 1385452,
+      "triangles": 2098,
+      "textures": [
+        {
+          "bytes": 321863,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        },
+        {
+          "bytes": 332123,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        },
+        {
+          "bytes": 284289,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        },
+        {
+          "bytes": 301773,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "fde1c64087d50c35efb5f9a4a0328eeefb3400a4696b12a9daa33bae4136a856"
+    },
+    {
+      "part": "gloves_caveman",
+      "changed": true,
+      "previous_bytes": 249204,
+      "bytes": 442284,
+      "triangles": 3628,
+      "textures": [
+        {
+          "bytes": 312409,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "ed1708b11558c369162a2e663a0b8ecbef7a0c376218fe532a48b1a1f0610678"
+    },
+    {
+      "part": "gloves_plate",
+      "changed": true,
+      "previous_bytes": 493004,
+      "bytes": 1009432,
+      "triangles": 1404,
+      "textures": [
+        {
+          "bytes": 316052,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        },
+        {
+          "bytes": 308043,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        },
+        {
+          "bytes": 257014,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "d8ab70bab6750ac1fc553ba4dd07a72226fe8df706d6ac6e70bc0d8fb83529c1"
+    },
+    {
+      "part": "gloves_ranger",
+      "changed": true,
+      "previous_bytes": 521472,
+      "bytes": 665756,
+      "triangles": 4208,
+      "textures": [
+        {
+          "bytes": 218573,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "9bbd1f08665e76471894014e2d250ebfe5aa496cfa76d8d5ea6b93dde358f235"
+    },
+    {
+      "part": "gloves_rogue",
+      "changed": true,
+      "previous_bytes": 553244,
+      "bytes": 830540,
+      "triangles": 3495,
+      "textures": [
+        {
+          "bytes": 119089,
+          "width": 512,
+          "height": 256,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        },
+        {
+          "bytes": 320249,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "26acb4500741a3f522b12e9280eec8947e6eb93f95c2e682245a37e0ef759b5a"
+    },
+    {
+      "part": "helmet_barbarian",
+      "changed": true,
+      "previous_bytes": 476736,
+      "bytes": 1006500,
+      "triangles": 1453,
+      "textures": [
+        {
+          "bytes": 307247,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        },
+        {
+          "bytes": 328598,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        },
+        {
+          "bytes": 260555,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "56e6e2b638c4d5af8a8eb8889b88b804ee4ea57ddbcd02d74635a35f9fd963a7"
+    },
+    {
+      "part": "helmet_plate",
+      "changed": true,
+      "previous_bytes": 401536,
+      "bytes": 908276,
+      "triangles": 2299,
+      "textures": [
+        {
+          "bytes": 285980,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        },
+        {
+          "bytes": 284633,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        },
+        {
+          "bytes": 215350,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "7dc2e1e7b03193c9f5f08ed810fa6f963419ac72a8d2bbd23a12b94aa5ba89e1"
+    },
+    {
+      "part": "helmet_priest",
+      "changed": false,
+      "previous_bytes": 379936,
+      "bytes": 379936,
+      "triangles": 1924,
+      "textures": [
+        {
+          "bytes": 302195,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "2aa304e1ecc74b04989a4f3bf26749f274b3e445879bee6019a874ddcbebc32e"
+    },
+    {
+      "part": "pants_barbarian",
+      "changed": true,
+      "previous_bytes": 903296,
+      "bytes": 1749700,
+      "triangles": 3323,
+      "textures": [
+        {
+          "bytes": 320060,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        },
+        {
+          "bytes": 324392,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        },
+        {
+          "bytes": 221728,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        },
+        {
+          "bytes": 301773,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        },
+        {
+          "bytes": 317659,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "5c32b0bf9d2255f2fbae39964f9167a60175559da2de99a935a46f70e38172a5"
+    },
+    {
+      "part": "pants_caveman",
+      "changed": true,
+      "previous_bytes": 473828,
+      "bytes": 880140,
+      "triangles": 5239,
+      "textures": [
+        {
+          "bytes": 319136,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        },
+        {
+          "bytes": 317659,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "3f09cb575d85b2772abe9fa8f298394b093cb513da79e4c229d6a2fafb4265d3"
+    },
+    {
+      "part": "pants_cloth",
+      "changed": true,
+      "previous_bytes": 310604,
+      "bytes": 645000,
+      "triangles": 2556,
+      "textures": [
+        {
+          "bytes": 291926,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        },
+        {
+          "bytes": 111758,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        },
+        {
+          "bytes": 91875,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "452a421268d163acca7dfb763c4bacff7e24e6a714b1075dea1feaff20e1401c"
+    },
+    {
+      "part": "pants_plate",
+      "changed": true,
+      "previous_bytes": 482252,
+      "bytes": 982032,
+      "triangles": 1600,
+      "textures": [
+        {
+          "bytes": 301186,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        },
+        {
+          "bytes": 313202,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        },
+        {
+          "bytes": 234635,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "0f8709c0d5a7076cc00a840fd7b115053dc4cd3c07bf948ffe0bba97378f262e"
+    },
+    {
+      "part": "pants_priest",
+      "changed": false,
+      "previous_bytes": 373852,
+      "bytes": 373852,
+      "triangles": 1513,
+      "textures": [
+        {
+          "bytes": 308431,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "0189d0271b320fd8b098312a9f3b77c3c8af0a46fcf772d2b6a7d349836c7d3e"
+    },
+    {
+      "part": "pants_ranger",
+      "changed": true,
+      "previous_bytes": 240880,
+      "bytes": 446136,
+      "triangles": 3714,
+      "textures": [
+        {
+          "bytes": 313266,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "777db89fa1ca2b177ea1c400ff9d01c80ffe1de7bf59b9a9096d342320d388da"
+    },
+    {
+      "part": "pants_rogue",
+      "changed": true,
+      "previous_bytes": 193816,
+      "bytes": 396664,
+      "triangles": 2022,
+      "textures": [
+        {
+          "bytes": 313975,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "d6f3e11d85c1da1814e7416b66f0b752cf7180c821b5e727784a13014a6f717e"
+    },
+    {
+      "part": "top_barbarian",
+      "changed": true,
+      "previous_bytes": 576528,
+      "bytes": 1108992,
+      "triangles": 1860,
+      "textures": [
+        {
+          "bytes": 312079,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        },
+        {
+          "bytes": 329731,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        },
+        {
+          "bytes": 270717,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "115dad2a98a3e9bbb36855404983aa5fe6c81100fe66890fb3624a36d6d7a673"
+    },
+    {
+      "part": "top_caveman",
+      "changed": true,
+      "previous_bytes": 214824,
+      "bytes": 414840,
+      "triangles": 2110,
+      "textures": [
+        {
+          "bytes": 326779,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "d2ddf1c34e807df5c2a903ae5577fb85895bc80051eb884626c5d5ddba1daeb2"
+    },
+    {
+      "part": "top_linen",
+      "changed": true,
+      "previous_bytes": 418852,
+      "bytes": 811944,
+      "triangles": 4744,
+      "textures": [
+        {
+          "bytes": 289349,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        },
+        {
+          "bytes": 185438,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        },
+        {
+          "bytes": 99601,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "a189251ee7d09b7a4203925458da46d78cffa08540db713256ddd65971aaabb7"
+    },
+    {
+      "part": "top_plate",
+      "changed": true,
+      "previous_bytes": 687684,
+      "bytes": 1167940,
+      "triangles": 3101,
+      "textures": [
+        {
+          "bytes": 306514,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        },
+        {
+          "bytes": 304205,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        },
+        {
+          "bytes": 261118,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "linear"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "696431f6228a40158de967a837c94ba351728b63046083b87db05327ee2264a1"
+    },
+    {
+      "part": "top_priest",
+      "changed": false,
+      "previous_bytes": 454832,
+      "bytes": 454832,
+      "triangles": 3913,
+      "textures": [
+        {
+          "bytes": 288507,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "3ba1fa2162fb7ed9c1e65e253dcc6fbdba8fcf8aa535f644338ba0205a590b29"
+    },
+    {
+      "part": "top_ranger",
+      "changed": true,
+      "previous_bytes": 302112,
+      "bytes": 514416,
+      "triangles": 4896,
+      "textures": [
+        {
+          "bytes": 317664,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "575f088a95cae45b34e38fea99cbe4bd4cc75734ef4451f5d80d655be94991ba"
+    },
+    {
+      "part": "top_rogue",
+      "changed": true,
+      "previous_bytes": 326160,
+      "bytes": 534640,
+      "triangles": 4862,
+      "textures": [
+        {
+          "bytes": 325072,
+          "width": 512,
+          "height": 512,
+          "mip_levels": 10,
+          "color_space": "sRGB"
+        }
+      ],
+      "geometry_uv_skin_materials_unchanged": true,
+      "sha256": "d32623aa4e007c4b406d8450134e8ad7952d5cf04034abf1f0eb6189ce1401ee"
+    }
+  ],
+  "total": {
+    "parts": 29,
+    "changed_parts": 25,
+    "changed_textures": 60,
+    "previous_bytes": 10916804,
+    "bytes": 21052372
+  },
+  "validation": {
+    "geometry_uv_skin_materials": "Exact before/after equality for all 29 runtime parts",
+    "manifest_sha256": "passed",
+    "client_tests": 118,
+    "client_check": "passed: 0 errors, 0 warnings",
+    "client_lint": "passed",
+    "browser": [
+      {
+        "backend": "WebGPUBackend",
+        "device": "Chromium SwiftShader",
+        "parts": 29,
+        "changed_textures": 60,
+        "gpu_formats": [
+          37808
+        ],
+        "changed_texture_bytes": 20798368,
+        "slot_removal_and_reequip": "passed",
+        "page_and_asset_errors": [],
+        "gpu_errors": [],
+        "hardware_tested": false
+      },
+      {
+        "backend": "WebGLBackend",
+        "device": "Chromium SwiftShader",
+        "parts": 29,
+        "changed_textures": 60,
+        "gpu_formats": [
+          37808
+        ],
+        "changed_texture_bytes": 20798368,
+        "slot_removal_and_reequip": "passed",
+        "page_and_asset_errors": [],
+        "gpu_errors": [],
+        "hardware_tested": false
+      }
+    ]
+  }
+}
