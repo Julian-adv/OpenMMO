@@ -2,27 +2,27 @@
   "date": "2026-10-07",
   "exported_equipped_parts": [
     {
-      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "path": "assets/modular_human_male_01/fitted/base.glb",
       "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
       "triangles": 13891
     },
     {
-      "path": "assets/modular_human_male_01/parts/fitted/hair_crop.glb",
+      "path": "assets/modular_human_male_01/fitted/hair_crop.glb",
       "sha256": "5aea523e5de994b8a2b6e15aef1589a3cbe7413514bc429194e1f0a940141686",
       "triangles": 933
     },
     {
-      "path": "assets/modular_human_male_01/parts/ranger_tripo_top_v4/top_ranger.glb",
+      "path": "assets/modular_human_male_01/ranger/tripo_top_v4/top_ranger.glb",
       "sha256": "ec8e9638833ad4f60ba66c1a36fb00cd66521c601977b0fa6d7d389ebfaf3623",
       "triangles": 4896
     },
     {
-      "path": "assets/modular_human_male_01/parts/ranger_tripo_pants_v1/pants_ranger.glb",
+      "path": "assets/modular_human_male_01/ranger/tripo_pants_v1/pants_ranger.glb",
       "sha256": "8529da4370e10d74228c1aafc790cc1c1684d1eb8737ad19d993d8f938594883",
       "triangles": 3714
     },
     {
-      "path": "assets/modular_human_male_01/parts/ranger_tripo_boots_v1/boots_ranger.glb",
+      "path": "assets/modular_human_male_01/ranger/tripo_boots_v1/boots_ranger.glb",
       "sha256": "916c13a55b4fb5fc15fdf4a017b3ed5977983210a776bc91977eaa138b9b1db6",
       "triangles": 3646
     }

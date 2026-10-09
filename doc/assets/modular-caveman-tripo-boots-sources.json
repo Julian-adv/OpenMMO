@@ -11,7 +11,7 @@
   "delivery_path_windows": "Y:\\public\\web_downloads\\fur-lined+boot+3d+model.glb",
   "delivery_path_linux": "/mnt/y/web_downloads/fur-lined+boot+3d+model.glb",
   "source": {
-    "path": "assets/modular_human_male_01/parts/caveman_tripo_boots_v1/source.glb",
+    "path": "assets/modular_human_male_01/caveman/tripo_boots_v1/source.glb",
     "sha256": "5c5077cf8a67480c2edba22fd0af0c7f3cbe19e124f9ed463983b71ef7934d46",
     "bytes": 1979480,
     "byte_identical_to_delivery": true
@@ -78,11 +78,11 @@
     "validation_tool": "tools/validate-tripo-caveman-boots.mjs",
     "rig_id": "human_male_01_mixamo_candidate_v2",
     "output": {
-      "path": "assets/modular_human_male_01/parts/caveman_tripo_boots_v1/boots_caveman.glb",
+      "path": "assets/modular_human_male_01/caveman/tripo_boots_v1/boots_caveman.glb",
       "sha256": "816349031a0c5bcac6efd7bb1320b8cd3d27f77ec86c47a10e6f9ccee72e4a48"
     },
     "editable": {
-      "path": "assets/modular_human_male_01/parts/caveman_tripo_boots_v1/caveman-boots-fitting.blend",
+      "path": "assets/modular_human_male_01/caveman/tripo_boots_v1/caveman-boots-fitting.blend",
       "sha256": "85adbbf9ded78988bbb61bbf654c5098273afb9e277a0648db892d379e8f879c"
     },
     "reports": [

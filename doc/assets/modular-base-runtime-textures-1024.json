@@ -72,7 +72,7 @@
   },
   "geometry_and_rig_identical": true,
   "source": {
-    "file": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "file": "assets/modular_human_male_01/fitted/base.glb",
     "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
     "record": "doc/assets/modular-human-male-01.md",
     "license": "Existing modular male source; Meshy Premium and ChatGPT Pro 20x records unchanged. No new generation."

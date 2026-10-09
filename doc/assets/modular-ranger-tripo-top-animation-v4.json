@@ -2,11 +2,11 @@
   "status": "Numeric runtime bind and skinning review; visual review is separate",
   "sources": [
     {
-      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "path": "assets/modular_human_male_01/fitted/base.glb",
       "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
     },
     {
-      "path": "assets/modular_human_male_01/parts/ranger_tripo_top_v4/top_ranger.glb",
+      "path": "assets/modular_human_male_01/ranger/tripo_top_v4/top_ranger.glb",
       "sha256": "ec8e9638833ad4f60ba66c1a36fb00cd66521c601977b0fa6d7d389ebfaf3623"
     },
     {

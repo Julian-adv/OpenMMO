@@ -8,10 +8,10 @@
 
 원본은 **2,140삼각형**, UV 분할 포함 2,275정점, 1개 메시·재질과 내장 2048×2048 JPEG를 갖는다.
 리그는 없다. 제안했던 한쪽 1,000쿼드 설정의 실제 적용 여부와 원래 쿼드 수는 미확인이다.
-원본은 전달 파일과 바이트가 같은 `ranger_tripo_gloves_v1/source.glb`로 보관한다.
+원본은 전달 파일과 바이트가 같은 `ranger/tripo_gloves_v1/source.glb`로 보관한다.
 [원본 형상 검사](modular-ranger-tripo-gloves-source-review-v1.json)에 연결 성분과 열린 경계를 기록했다.
 
-몸체 `parts/fitted/base.glb`, `interfaces/v1`, 리그 `human_male_01_mixamo_candidate_v2`를 사용했다.
+몸체 `fitted/base.glb`, `interfaces/v1`, 리그 `human_male_01_mixamo_candidate_v2`를 사용했다.
 65본의 계층·기준 자세·inverse bind를 보존했고 몸체와 손 자세를 바꾸지 않았다.
 
 전체 원본 손을 단면 기준점으로 변형한 첫 후보는 손바닥 피부가 뚫리고 손가락 안감이 접혔다.
@@ -92,7 +92,7 @@
 
 ## 파일과 재현
 
-`assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/`에 원본, `gloves_ranger.glb`,
+`assets/modular_human_male_01/ranger/tripo_gloves_v1/`에 원본, `gloves_ranger.glb`,
 `ranger-gloves-fitting.blend`, 표본 자세와 본 행렬을 보관했다.
 Blender 파일은 몸체·복장·내장 텍스처·연결 곡선과 숨긴 원본을 포함한다.
 타임라인의 실제 동작 표본은 연속 애니메이션이 아닌 정지 자세다.

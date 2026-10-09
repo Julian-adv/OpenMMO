@@ -11,7 +11,7 @@
   "delivery_path_windows": "Y:\\public\\web_downloads\\bone+necklace+3d+model.glb",
   "delivery_path_linux": "/mnt/y/web_downloads/bone+necklace+3d+model.glb",
   "source": {
-    "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/source.glb",
+    "path": "assets/modular_human_male_01/caveman/tripo_top_v1/source.glb",
     "sha256": "6332d1538f9db297dcc62f307a330b2853f8e9e11bd300d3a0014cf57f146e89",
     "bytes": 1979540,
     "byte_identical_to_delivery": true
@@ -66,7 +66,7 @@
     ],
     "new_ai_generation_or_paid_calls": false,
     "deleted_review_scene": {
-      "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/source-review.blend",
+      "path": "assets/modular_human_male_01/caveman/tripo_top_v1/source-review.blend",
       "sha256": "46200f5ff4e1574b2d3ca17d88689f3147d36a4a8c6d590a4717f56ec1e7ee5a",
       "retained": false,
       "deleted_on": "2026-10-04",
@@ -77,7 +77,7 @@
   "retained": true,
   "fitting": {
     "date": "2026-10-04",
-    "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/top_caveman.glb",
+    "path": "assets/modular_human_male_01/caveman/tripo_top_v1/top_caveman.glb",
     "sha256": "e495478ffdcf1d018a9c1faed604d91e92b6b2df91e1baf1599544800ad9ab9f",
     "rig_id": "human_male_01_mixamo_candidate_v2",
     "preserved_original_uv_and_texture": true,
@@ -102,7 +102,7 @@
       "source_glb_unchanged": true
     },
     "discarded_trial": {
-      "directory": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/unused-clearance-trial",
+      "directory": "assets/modular_human_male_01/caveman/tripo_top_v1/unused-clearance-trial",
       "reason": "User selected the earlier fitting and requested deletion of unnecessary intermediate files; trial history retained here",
       "retained": false,
       "deleted_on": "2026-10-04"

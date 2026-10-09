@@ -12,7 +12,7 @@ from lib.glb import view_bytes
 from outfits.rogue_layers import clip_garment, edge_loops
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / 'assets/modular_human_male_01/parts/priest_tripo_pants_v1'
+OUTPUT = ROOT / 'assets/modular_human_male_01/priest/tripo_pants_v1'
 spec = importlib.util.spec_from_file_location('pants', ROOT / 'tools/fit-tripo-pants.py')
 pants = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pants)

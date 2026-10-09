@@ -3,7 +3,7 @@
   "date": "2026-10-02",
   "blender_version": "5.2.0 LTS",
   "editable": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_glove_v1/tripo-glove-fitting.blend",
+    "path": "assets/modular_human_male_01/rogue/tripo_glove_v1/tripo-glove-fitting.blend",
     "sha256": "6c88e5e67e320a2efbb6761d6f26038812d24ad67cead45082fa6b7acecbcf84",
     "retained": false,
     "status": "[\ubbf8\uc0ac\uc6a9] Replaced by final wrap/glove combination and shared editable scene"
@@ -40,6 +40,6 @@
     },
     "renderer": "Chromium WebGL, existing workshop scene; same idle1 pose and camera before/after; reference skin triangle located within 2.1e-8m"
   },
-  "current_combination": "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/gloves_rogue.glb",
-  "current_editable": "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/tripo-wrap-fitting.blend"
+  "current_combination": "assets/modular_human_male_01/rogue/tripo_wrap_v1/gloves_rogue.glb",
+  "current_editable": "assets/modular_human_male_01/rogue/tripo_wrap_v1/tripo-wrap-fitting.blend"
 }

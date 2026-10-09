@@ -11,7 +11,7 @@ from lib.glb import view_bytes
 from outfits.rogue_layers import clip_garment, wrist_section
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / 'assets/modular_human_male_01/parts/ranger_tripo_gloves_v1'
+OUTPUT = ROOT / 'assets/modular_human_male_01/ranger/tripo_gloves_v1'
 spec = importlib.util.spec_from_file_location('glove', ROOT / 'tools/fit-tripo-glove.py')
 glove = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(glove)

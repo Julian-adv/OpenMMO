@@ -7,10 +7,10 @@
 
 | 파일 | 용도 | 삼각형 |
 | --- | --- | ---: |
-| `assets/modular_human_male_01/parts/ranger_tripo_boots_v1/source.glb` | 전달 파일과 바이트가 같은 원본 한쪽 | 1,823 |
-| `assets/modular_human_male_01/parts/ranger_tripo_boots_v1/boots_ranger.glb` | 좌우 두 짝, 공통 리그 | 3,646 |
-| `assets/modular_human_male_01/parts/ranger_tripo_boots_v1/pants_ranger_boots-review.glb` | 런타임 바짓단을 그대로 저장한 Blender 검토용 | 2,814 |
-| `assets/modular_human_male_01/parts/ranger_tripo_boots_v1/ranger-boots-fitting.blend` | 몸체·복장·연결 곡선·숨긴 원본·내장 텍스처 | — |
+| `assets/modular_human_male_01/ranger/tripo_boots_v1/source.glb` | 전달 파일과 바이트가 같은 원본 한쪽 | 1,823 |
+| `assets/modular_human_male_01/ranger/tripo_boots_v1/boots_ranger.glb` | 좌우 두 짝, 공통 리그 | 3,646 |
+| `assets/modular_human_male_01/ranger/tripo_boots_v1/pants_ranger_boots-review.glb` | 런타임 바짓단을 그대로 저장한 Blender 검토용 | 2,814 |
+| `assets/modular_human_male_01/ranger/tripo_boots_v1/ranger-boots-fitting.blend` | 몸체·복장·연결 곡선·숨긴 원본·내장 텍스처 | — |
 
 제안했던 생성 목표는 한쪽 1,000쿼드, 약 2,000삼각형이다. 실제 제출 설정과 원래 쿼드 수는
 확인되지 않았다. 생성일·작업 ID는 미상이며 전달일은 2026-10-07이다.
@@ -25,7 +25,7 @@ Tripo 생성 출력물 이용 조건과 기존 프로젝트 원화의 출처·�
 
 ## 피팅과 가림
 
-`parts/fitted/base.glb`, `interfaces/v1`, `human_male_01_mixamo_candidate_v2`를 기준으로
+`fitted/base.glb`, `interfaces/v1`, `human_male_01_mixamo_candidate_v2`를 기준으로
 실제 왼쪽 종아리 단면과 방사선 교점을 측정해 부츠 축과 둘레를 맞췄다.
 발의 기본 형상은 보존하고 종아리 부분을 보정했다. X축 대칭 후 면 방향·법선을 보정했으며,
 각 부츠는 해당 쪽 Leg/Foot/ToeBase에만 가중치를 갖는다. 65개 본의 계층·rest/bind 행렬은 기준 리그와 같다.
@@ -92,9 +92,11 @@ Blender 검토본은 같은 런타임 형상을 저장해 사용하며 별도 �
 런타임 절단 후 숨김 포함 24,283, 표시 16,471, 얼굴 1,505다. 무기·망토는 없다.
 판금 상의 조합에서도 허리 절단 유지와 부츠 재착용을 확인했다.
 
-`pants_rogue_ranger_boots-review.glb`는 원본 로그 바지에서 런타임 형상만 저장한 검토용 파생본이다.
+**[미사용]** `pants_rogue_ranger_boots-review.glb`는 원본 로그 바지에서 런타임 형상만 저장한 검토용 파생본으로, 2026-10-09 정리했다.
 텍스처 바이트와 기준 리그는 원본과 같으며, Tripo 출처와 이용 조건은
 [원본 기록](modular-rogue-tripo-pants.md)을 따른다. 추가 생성은 없다.
+
+원본 로그 바지와 `tools/export-ranger-boot-pants.py`는 보존한다. 현재 부츠·장갑 Blender 검수에서 읽는 `pants_ranger_boots-review.glb`도 유지한다.
 `node tools/validate-ranger-boot-hem.mjs --rogue`로 검사와 검토용 GLB를 재현한다.
 
 ## 재현

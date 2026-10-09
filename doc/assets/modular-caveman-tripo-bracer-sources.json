@@ -11,7 +11,7 @@
   "delivery_path_windows": "Y:\\public\\web_downloads\\fur+boot+3d+model.glb",
   "delivery_path_linux": "/mnt/y/web_downloads/fur+boot+3d+model.glb",
   "source": {
-    "path": "assets/modular_human_male_01/parts/caveman_tripo_bracer_v1/source.glb",
+    "path": "assets/modular_human_male_01/caveman/tripo_bracer_v1/source.glb",
     "sha256": "17ef57be917df0988f0e1f41ca19e759a9a305b3fc2135de5dc58a155a0b9ad0",
     "bytes": 1742696,
     "byte_identical_to_delivery": true
@@ -76,12 +76,12 @@
     "validation_tool": "tools/validate-tripo-caveman-bracer.mjs",
     "rig_id": "human_male_01_mixamo_candidate_v2",
     "output": {
-      "path": "assets/modular_human_male_01/parts/caveman_tripo_bracer_v1/gloves_caveman.glb",
+      "path": "assets/modular_human_male_01/caveman/tripo_bracer_v1/gloves_caveman.glb",
       "sha256": "cbf5af0d066dd2f805fdee6e94661d31c38f07afc68492ecb65ebe509f0faf86",
       "bytes": 1970920
     },
     "editable": {
-      "path": "assets/modular_human_male_01/parts/caveman_tripo_bracer_v1/caveman-bracer-fitting.blend",
+      "path": "assets/modular_human_male_01/caveman/tripo_bracer_v1/caveman-bracer-fitting.blend",
       "sha256": "8665e2b7760b713ad9129325c9bab1aef3c528484f2cf57d6cbc60394a32a35e",
       "bytes": 44369326
     },

@@ -1,19 +1,19 @@
 [
   {
     "output": {
-      "path": "assets/modular_human_male_01/parts/fitted/character_parts.blend",
+      "path": "assets/modular_human_male_01/fitted/character_parts.blend",
       "sha256": "ea34729c40d96d01d58e6d2fe32736ffd33f435c5c59e05391a9418fc11a52f9"
     }
   },
   {
     "output": {
-      "path": "assets/modular_human_male_01/parts/fitted/plate_parts.blend",
+      "path": "assets/modular_human_male_01/fitted/plate_parts.blend",
       "sha256": "640b537c5c976e61494b66adc8e5b23c6e3fe91be2efbc8a9f6e4179ae6a6a84"
     }
   },
   {
     "output": {
-      "path": "assets/modular_human_male_01/parts/fitted/barbarian_parts.blend",
+      "path": "assets/modular_human_male_01/fitted/barbarian_parts.blend",
       "sha256": "75a2bb18d84f002af545e4f923eef43037e13ee5fb619e5d553b6cbced4d52e7"
     }
   }

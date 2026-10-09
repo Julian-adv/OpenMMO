@@ -11,7 +11,7 @@ import export_animations as exporter
 from import_mixamo_animation import import_mixamo_animation
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE = ROOT / "assets/great_sword/animations"
+SOURCE = ROOT / "assets/animations/great_sword"
 CLIPS = {
     "great_sword_idle": "Great Sword Idle (1).fbx",
     "great_sword_walk": "Great Sword Walk.fbx",

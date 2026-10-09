@@ -6,7 +6,7 @@
   - 원화·텍스처: [hearthbound_rug.png](../images/props/hearthbound_rug.png), Codex 내장 ImageGen, **ChatGPT Pro 20x**, 생성일 2026-10-03. AI 생성 출력물이며 OpenAI 이용약관 적용. [전체 생성 프롬프트](hearthbound-rug-prompt.txt).
   - 모델·아이콘: 프로젝트 자체 제작 Blender 메시·렌더, 프로젝트와 동일 라이선스. Meshy 미사용. `client/public/models/objects/hearthbound_rug.glb`, `client/public/items/objects/hearthbound_rug.png`.
   - 2.4×1.6m 평면, 2삼각형, 바닥에서 1.2cm 높이, 중심 원점, 상향 법선. 평면 소품이므로 일반 아이템의 약 4,000폴리곤 목표보다 단순하게 제작했다. 1024×683 RGBA 텍스처, alpha MASK 0.5, 양면·거친 직물 재질. 술 사이 투명도 유지, 이동 충돌 없음.
-  - 재생성: `blender -b -t 4 -P tools/blender-scripts/build_hearthbound_rug.py`. 소스·생성 기록·미리보기는 `assets/hearthbound_rug/`에 저장. 아이콘은 공통 Cycles 직교 렌더 512²→128².
+  - 재생성: `blender -b -t 4 -P tools/blender-scripts/build_hearthbound_rug.py`. 소스·생성 기록·미리보기는 `assets/items/hearthbound_rug/`에 저장. 아이콘은 공통 Cycles 직교 렌더 512²→128².
   - `hearthbound_rug` 맵 에디터 오브젝트와 `furniture_hearthbound_rug` 실내·야외 배치 아이템 등록. ORKEA 전시물 ID 112와 점원 메뉴에서 2,000동화(20은화)에 판매한다. 바닥 전시는 운영자가 직접 배치했다. 영지에 설치하면 영지 귀환 주문서의 도착 지점이 되며, 설치 위치·층·방향을 사용한다. 여러 개면 먼저 설치한 안전한 러그를 선택한다.
 
 - bed.glb https://sketchfab.com/3d-models/old-wooden-bed-frame-and-dirty-sheets-79c856755e6a44a3bcf19671e5c70d2d
@@ -15,8 +15,8 @@
 ## Objects
 
 - Shop Sign 변형 (`shop_sign_plank`, `shop_sign_oval`, `shop_sign_weathered`) — `client/src/lib/utils/shop-sign.ts`에서 생성하는 각진 판형·타원형·완만한 아치형 메시 (2026-09-06). 메시 출처: 프로젝트 자체 코드, 프로젝트와 동일 라이선스. 텍스처는 기존 Poly Haven `wood_planks`, `dark_wooden_planks`, `weathered_planks` 재사용 (CC0, 아래 House 항목). 간판 문구는 맵에디터에서 수정하며 형태에 맞춰 렌더링한다.
-  - `client/public/items/objects/shop_sign.png`, `shop_sign_plank.png`, `shop_sign_oval.png`, `shop_sign_weathered.png` — ORKEA 간판 4종 아이콘 (2026-09-19). 게임의 `buildShopSignBoard`가 만든 메시·UV와 각 스타일의 기존 Poly Haven 나무 텍스처를 그대로 사용해 Blender 5.2.0 LTS에서 투명 128² PNG로 렌더. 메시·렌더 스크립트는 프로젝트와 동일 라이선스, `wood_shutter`, `wood_planks`, `dark_wooden_planks`, `weathered_planks` 텍스처는 CC0. `node tools/export-shop-sign-icons.mjs` 실행 후 `blender -b -P tools/blender-scripts/render_furniture_icon.py -- MODEL --geometry assets/shop-sign-icons/MODEL.json --yaw -10 --tilt -80`으로 재생성한다. 간판 문구는 포함하지 않는다.
-- empty_plate.glb — Meshy AI "Sunlit Ceramic Plate" (Pro 요금제, 2026-09-02 생성, 소스 `assets/Meshy_AI_Sunlit_Ceramic_Plate_0902163541_texture.glb`). 완전 소유권·상업 OK (characters.md License 참조). 여관 테이블에서 손님이 다 먹은 접시 — `Meal.eaten`이면 클라이언트가 요리 모델 대신 이걸 그린다 (HUNGER.md "여관 식사"). Blender에서 chicken_rice.glb와 같은 지름 0.35m로 스케일 적용(0.35×0.03×0.35 W×H×D), 원점=바닥 중심, 텍스처 2048→512 축소, 검은 emissive 제거 (2026-09-03). 아이콘 없음(월드 전용)
+  - `client/public/items/objects/shop_sign.png`, `shop_sign_plank.png`, `shop_sign_oval.png`, `shop_sign_weathered.png` — ORKEA 간판 4종 아이콘 (2026-09-19). 게임의 `buildShopSignBoard`가 만든 메시·UV와 각 스타일의 기존 Poly Haven 나무 텍스처를 그대로 사용해 Blender 5.2.0 LTS에서 투명 128² PNG로 렌더. 메시·렌더 스크립트는 프로젝트와 동일 라이선스, `wood_shutter`, `wood_planks`, `dark_wooden_planks`, `weathered_planks` 텍스처는 CC0. `node tools/export-shop-sign-icons.mjs` 실행 후 `blender -b -P tools/blender-scripts/render_furniture_icon.py -- MODEL --geometry assets/shop-sign-icons/MODEL.json --yaw -10 --tilt -80`으로 재생성한다. 간판 문구는 포함하지 않는다. `assets/shop-sign-icons/`의 중간 메시 JSON 4개는 2026-10-09 삭제했으며, 아이콘 재생성 시 내보내기 도구로 다시 만든다.
+- empty_plate.glb — Meshy AI "Sunlit Ceramic Plate" (Pro 요금제, 2026-09-02 생성, 소스 `assets/objects/empty_plate/Meshy_AI_Sunlit_Ceramic_Plate_0902163541_texture.glb`). 완전 소유권·상업 OK (characters.md License 참조). 여관 테이블에서 손님이 다 먹은 접시 — `Meal.eaten`이면 클라이언트가 요리 모델 대신 이걸 그린다 (HUNGER.md "여관 식사"). Blender에서 chicken_rice.glb와 같은 지름 0.35m로 스케일 적용(0.35×0.03×0.35 W×H×D), 원점=바닥 중심, 텍스처 2048→512 축소, 검은 emissive 제거 (2026-09-03). 아이콘 없음(월드 전용)
     - 원화는 ChatGPT 이미지 생성 (ChatGPT Pro 20x, 2026-09-03) ![원화](../images/props/empty_plate.png)
 - stone bridge https://sketchfab.com/3d-models/stone-bridge-a5d380cd08654b508b4b643056038605
 - bridge wood https://sketchfab.com/3d-models/bridge-wood-20c090db0a7345898e20e2621fc2ba4c
@@ -40,18 +40,18 @@
 - river rock https://sketchfab.com/3d-models/river-rocks-model-2dc354c1f84a43f493343f54e05eaed9
 - campfire.glb — Meshy AI "Crimson Ember Stack" (Pro 요금제, 2026-08-02 생성). Meshy 유닛큐브를 지름 0.6m로 스케일 적용, 원점을 바닥 중앙으로 이동. 텍스처 2048→512 축소, metallic 맵은 전부 0이라 제거하고 metallicFactor=0. emissive는 잔불 발광이라 유지
     - 원화는 ChatGPT 이미지 생성 (ChatGPT Pro 20x, 2026-08-03) ![원화](../images/props/campfire.png)
-- black_market_table.glb — Meshy AI "Bottles and Scrolls" (Pro 요금제, 2026-08-09 생성, 소스 `assets/Meshy_AI_Bottles_and_Scrolls_o_0809151940_texture.glb`). 완전 소유권·상업 OK (characters.md License 참조). 암시장 상인이 앞에 펼쳐 놓는 매대 — 병·두루마리·빵·상자가 놓인 좌판형 테이블. Blender에서 기존 table.glb(W 1.6m) 기준 너비 1.6m로 스케일 적용(1.60×0.96×0.89 W×H×D), 원점=바닥 중심, 텍스처 2048→512 축소, 검은 emissive 제거 (2026-08-10). 상인 `/lay_stall` 좌판으로 사용 (GameSceneStallsLayer)
+- black_market_table.glb — Meshy AI "Bottles and Scrolls" (Pro 요금제, 2026-08-09 생성, 소스 `assets/items/black_market_table/Meshy_AI_Bottles_and_Scrolls_o_0809151940_texture.glb`). 완전 소유권·상업 OK (characters.md License 참조). 암시장 상인이 앞에 펼쳐 놓는 매대 — 병·두루마리·빵·상자가 놓인 좌판형 테이블. Blender에서 기존 table.glb(W 1.6m) 기준 너비 1.6m로 스케일 적용(1.60×0.96×0.89 W×H×D), 원점=바닥 중심, 텍스처 2048→512 축소, 검은 emissive 제거 (2026-08-10). 상인 `/lay_stall` 좌판으로 사용 (GameSceneStallsLayer)
     - 원화는 ChatGPT 이미지 생성 (ChatGPT Pro 20x, 2026-08-09) ![원화](../images/props/black_market_table.png)
-- stone_hearth.glb — Meshy AI "Ancient Stone Hearth" (Pro 요금제, 2026-08-27 생성, 소스 `assets/Meshy_AI_Ancient_Stone_Hearth_0827182508_texture.glb`). 완전 소유권·상업 OK (characters.md License 참조). 집 안에 놓는 돌 벽난로 가구 — 아치 화구·방패 문장 목재 선반·굴뚝. Blender에서 층 높이(DEFAULT_WALL_HEIGHT 3m) 기준 높이 2.9m로 스케일 적용(1.93×2.90×0.70 W×H×D, 벽 붙이는 얕은 형태), 원점=바닥 중심, 텍스처는 베이스 컬러 2048 유지·metallic/roughness·normal 1024, JPEG q85로 export(3.2MB; 층 높이 프롭이라 512는 흐림), emissive 없음 확인. 아이콘은 Cycles 직교 측면·위 각도 렌더 512²→128² `client/public/items/objects/stone_hearth.png` (2026-08-28). items.csv `stone_hearth` furniture, catalog.json solid
+- stone_hearth.glb — Meshy AI "Ancient Stone Hearth" (Pro 요금제, 2026-08-27 생성, 소스 `assets/items/stone_hearth/Meshy_AI_Ancient_Stone_Hearth_0827182508_texture.glb`). 완전 소유권·상업 OK (characters.md License 참조). 집 안에 놓는 돌 벽난로 가구 — 아치 화구·방패 문장 목재 선반·굴뚝. Blender에서 층 높이(DEFAULT_WALL_HEIGHT 3m) 기준 높이 2.9m로 스케일 적용(1.93×2.90×0.70 W×H×D, 벽 붙이는 얕은 형태), 원점=바닥 중심, 텍스처는 베이스 컬러 2048 유지·metallic/roughness·normal 1024, JPEG q85로 export(3.2MB; 층 높이 프롭이라 512는 흐림), emissive 없음 확인. 아이콘은 Cycles 직교 측면·위 각도 렌더 512²→128² `client/public/items/objects/stone_hearth.png` (2026-08-28). items.csv `stone_hearth` furniture, catalog.json solid
     - 원화는 ChatGPT 이미지 생성 (ChatGPT Pro 20x, 2026-08-28) ![원화](../images/props/stone_hearth.png)
-- rustic_bed.glb — Meshy AI "Rustic Wooden Bed" (Pro 요금제, 2026-08-30 생성, 소스 `assets/Meshy_AI_Rustic_Wooden_Bed_0830120934_texture.glb`). 완전 소유권·상업 OK (characters.md License 참조). 집 안에 놓는 소박한 나무 침대 — 둥근 손잡이 기둥 4개·아치 헤드보드·베개·갈색 담요. Blender에서 긴 쪽(길이) 2.2m로 스케일 적용(0.91×0.98×2.20 W×H×D, 기존 bed.glb 2.58m보다 작게), 원점=바닥·발끝(bed.glb처럼 눕는 위치가 원점이라 머리판이 -Z 끝, 발끝이 z 0), 텍스처 2048→1024(2m 가구라 512는 흐림), JPEG q85로 export(0.37MB), 검은 emissive 제거. 아이콘은 Cycles 직교 측면·위 각도 렌더 512²→128² `client/public/items/objects/rustic_bed.png` (2026-08-30). items.csv `rustic_bed` furniture, catalog.json sleep(offset y 0.56)·solid
+- rustic_bed.glb — Meshy AI "Rustic Wooden Bed" (Pro 요금제, 2026-08-30 생성, 소스 `assets/items/rustic_bed/Meshy_AI_Rustic_Wooden_Bed_0830120934_texture.glb`). 완전 소유권·상업 OK (characters.md License 참조). 집 안에 놓는 소박한 나무 침대 — 둥근 손잡이 기둥 4개·아치 헤드보드·베개·갈색 담요. Blender에서 긴 쪽(길이) 2.2m로 스케일 적용(0.91×0.98×2.20 W×H×D, 기존 bed.glb 2.58m보다 작게), 원점=바닥·발끝(bed.glb처럼 눕는 위치가 원점이라 머리판이 -Z 끝, 발끝이 z 0), 텍스처 2048→1024(2m 가구라 512는 흐림), JPEG q85로 export(0.37MB), 검은 emissive 제거. 아이콘은 Cycles 직교 측면·위 각도 렌더 512²→128² `client/public/items/objects/rustic_bed.png` (2026-08-30). items.csv `rustic_bed` furniture, catalog.json sleep(offset y 0.56)·solid
     - 원화는 ChatGPT 이미지 생성 (ChatGPT Pro 20x, 2026-08-30) ![원화](../images/props/rustic_bed.png)
 
 ## Mounts
 
 - rowboat.glb — `tools/blender-scripts/build_rowboat.py`가 절차적으로 생성하는 노 젓는 배 (2026-09-14,
   Blender 5.2.1 LTS). 메시의 라이선스는 저장소를 따르며, 나무 텍스처 출처와 이용 조건은 아래에 기록한다.
-  스크립트와 `assets/rowboat/wood_albedo.png`로 재생성한다 (`blender -b -P tools/blender-scripts/build_rowboat.py`).
+  스크립트와 `assets/items/rowboat/wood_albedo.png`로 재생성한다 (`blender -b -P tools/blender-scripts/build_rowboat.py`).
   선체는 단면 19점 × 길이 37 스테이션을 5cm 판재 두께로 안팎 두 겹 로프팅한 닫힌 셸이다.
   선미는 선체와 이어진 5cm 두께의 평판으로 막고, 안쪽 끝단을 그만큼 앞당겼다.
   선수 끝은 양쪽 꼭짓점을 중심선에서 용접해 틈 없이 만나며, 안쪽 선수는 5cm 뒤에서 닫힌다
@@ -69,13 +69,13 @@
   아이콘 `client/public/items/objects/rowboat.png`는
   같은 스크립트가 `icon_render` 공용 레시피로 렌더한다.
   말 출처는 [animals.md](animals.md), 게임 규칙은 [MOUNTS.md](../MOUNTS.md).
-- `assets/rowboat/wood_albedo.png` — 나룻배용 따뜻한 갈색 오크 판재 텍스처 원본, 1254² PNG.
+- `assets/items/rowboat/wood_albedo.png` — 나룻배용 따뜻한 갈색 오크 판재 텍스처 원본, 1254² PNG.
   - 출처: OpenAI 내장 `image_gen`으로 생성, 2026-09-17 (KST).
   - 생성 도구/티어: Codex 내장 이미지 생성; 계정 요금제와 서비스 티어는 도구에서 미노출.
   - 라이선스: OpenAI 생성 출력물에 적용되는 서비스 약관. 별도 제3자 stock/CC 에셋을 사용하지 않음.
   - 프롬프트: [rowboat-wood-prompt.txt](rowboat-wood-prompt.txt). 수평 나뭇결·판재 5줄, 균일한 조명,
     무광의 가벼운 풍화, 좁은 이음새를 요청했다. 생성 원본은 보존하고 빌드에서 1024²로 축소해
-    GLB에 내장하며, `assets/rowboat/rowboat.blend`에도 텍스처를 포함한다.
+    GLB에 내장하며, `assets/items/rowboat/rowboat.blend`에도 텍스처를 포함한다.
 
 ## House
 
@@ -100,7 +100,7 @@ Poly Haven에서 받은 .gltf를 Blender에서 .glb로 다시 export
 - beige_wall_001.glb -> https://polyhaven.com/a/beige_wall_001
 - rough_linen.glb -> https://polyhaven.com/a/rough_linen
 - wooden_garage_door_1k.glb -> https://polyhaven.com/a/wooden_garage_door (던전 입구 문)
-- rusty_metal_grid_1k.glb -> https://polyhaven.com/a/rusty_metal_grid (CC0, 2026-08-30) — 열쇠가 있어야 열리는 잠긴 층 문(doc/DUNGEON_REWARD.md). Poly Haven glTF zip을 Blender로 임포트해 GLB로 export(원본 zip은 assets/rusty_metal_grid_1k.gltf.zip)
+- rusty_metal_grid_1k.glb -> https://polyhaven.com/a/rusty_metal_grid (CC0, 2026-08-30) — 열쇠가 있어야 열리는 잠긴 층 문(doc/DUNGEON_REWARD.md). Poly Haven glTF ZIP을 Blender로 임포트해 GLB로 export. 제작용 원본은 `assets/textures-src/dungeon/rusty_metal_grid_1k.glb`에 보관하며, 다운로드 ZIP은 사용자 요청으로 2026-10-10 삭제했다.
 - grey_stone_path_1k.glb -> https://polyhaven.com/a/grey_stone_path (던전 바닥/계단)
 
 ## Dungeon Textures

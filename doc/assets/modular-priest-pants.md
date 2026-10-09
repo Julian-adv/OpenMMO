@@ -20,7 +20,7 @@
 - 흰 성의·늘어지는 옷자락·외부 벨트·성물 장식은 상의 소속이다. 신발·발·인체는 포함하지 않는다.
 - 허리는 성의 안쪽에 들어간다. 발목은 열린 좁은 끝단이며 발등을 덮지 않는다.
   원본 캐릭터의 사슬 발등 부분은 이번 바지 원화에 포함하지 않았다.
-- 향후 피팅 기준은 현재 `assets/modular_human_male_01/parts/fitted/base.glb`,
+- 향후 피팅 기준은 현재 `assets/modular_human_male_01/fitted/base.glb`,
   `human_male_01_mixamo_candidate_v2` 65본이다.
   몸체는 이미지 생성 입력이 아니며, `interfaces/v1`과 현재 몸체의 단면을 피팅 전에 대조한다.
 - 겹침 깊이·가림 범위·다른 상의 및 신발과의 호환은 미검증이다.

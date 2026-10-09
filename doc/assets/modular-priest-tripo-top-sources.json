@@ -8,7 +8,7 @@
   "original_path": "/mnt/y/web_downloads/medieval+robe+3d+model.glb",
   "mapped_public_root": "/mnt/y",
   "source": {
-    "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/source.glb",
+    "path": "assets/modular_human_male_01/priest/tripo_top_v1/source.glb",
     "sha256": "63fb9fbe3d1f811bb223eff2fd0a6a7a56e0bb06efbb59461c6e44bd2c2f5859",
     "bytes": 1891628
   },
@@ -31,22 +31,22 @@
   "status": "[미사용] Development preview candidate with lightweight eight-spring GPU hem. Extreme-pose clearance and mixed equipment acceptance remain pending. No game registration or paid generation performed.",
   "files": [
     {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/animation-snapshots.json",
+      "path": "assets/modular_human_male_01/priest/tripo_top_v1/animation-snapshots.json",
       "sha256": "1f724097e1f9eda5924244a075e4967d7fba2455ace130a02b2273ffb9e53e8c",
       "bytes": 119927
     },
     {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/priest-top-fitting.blend",
+      "path": "assets/modular_human_male_01/priest/tripo_top_v1/priest-top-fitting.blend",
       "sha256": "e82ced29279b065f8c110ed8d842cd598b4d0635b1ee362001e9b9438a40a825",
       "bytes": 45246124
     },
     {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/source.glb",
+      "path": "assets/modular_human_male_01/priest/tripo_top_v1/source.glb",
       "sha256": "63fb9fbe3d1f811bb223eff2fd0a6a7a56e0bb06efbb59461c6e44bd2c2f5859",
       "bytes": 1891628
     },
     {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/top_priest.glb",
+      "path": "assets/modular_human_male_01/priest/tripo_top_v1/top_priest.glb",
       "sha256": "d150bb102c4aa61a2f1a4107e48f09f39241b524de2541a45d37116809a205ed",
       "bytes": 2028360
     },
@@ -76,7 +76,7 @@
       "bytes": 806930
     },
     {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/idle-fitting-poses.json",
+      "path": "assets/modular_human_male_01/priest/tripo_top_v1/idle-fitting-poses.json",
       "sha256": "52d09623eb4a56eff620eb992926dc38b4fbd3de7e26c2602c94d3aaccd6f6f0",
       "bytes": 210697
     }
@@ -149,7 +149,7 @@
   },
   "plate_pants_variant": {
     "source": {
-      "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+      "path": "assets/modular_human_male_01/fitted/pants_plate.glb",
       "sha256": "aa95a9f1b85aa881df47e6e37ecbfebc7c168b352fcf0f4a9941208962eeff04"
     },
     "method": "Priest-only cached inward taper; preserve vertex heights, indices, UV and skinning; original restored when changing the top",
@@ -166,7 +166,7 @@
   },
   "barbarian_pants_variant": {
     "source": {
-      "path": "assets/modular_human_male_01/parts/fitted/pants_barbarian.glb",
+      "path": "assets/modular_human_male_01/fitted/pants_barbarian.glb",
       "sha256": "2c0de6c3bec60219f8369467f21edcaef42b3a5e7939691470500661d106001c"
     },
     "method": "Priest-only shared cached inward fitting; belt uses priest_plate_waist, pelts and straps use priest_fur; restore original geometry and physics after changing the top",
@@ -213,7 +213,7 @@
   },
   "caveman_pants_variant": {
     "source": {
-      "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb",
+      "path": "assets/modular_human_male_01/caveman/tripo_pants_v1/pants_caveman.glb",
       "sha256": "1fc3a92b29c8b5e37931cda6b32966754e1f3b1f33fe478a528179fc739a2db4"
     },
     "method": "Priest-only cached inward fitting; belt and bone ornaments use priest_plate_waist, leather panels and side fur use priest_fur; restore original geometry and physics after changing the top",
@@ -260,7 +260,7 @@
   },
   "rogue_pants_variant": {
     "source": {
-      "path": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/pants_rogue.glb",
+      "path": "assets/modular_human_male_01/rogue/tripo_pants_v1/pants_rogue.glb",
       "sha256": "7178d06a9b2e18953e2c3fb0672df8424b688d6f4ccc47affc856a9084e8e81c"
     },
     "method": "Priest-only removal of four detached pocket components; retain trousers and belt loops; compose with existing waist and ranger boot cuts in the shared geometry cache",
@@ -305,7 +305,7 @@
   },
   "ranger_pants_variant": {
     "source": {
-      "path": "assets/modular_human_male_01/parts/ranger_tripo_pants_v1/pants_ranger.glb",
+      "path": "assets/modular_human_male_01/ranger/tripo_pants_v1/pants_ranger.glb",
       "sha256": "8529da4370e10d74228c1aafc790cc1c1684d1eb8737ad19d993d8f938594883"
     },
     "method": "Reuse priest_plate_waist cached inward taper for ranger trousers only with the priest top; compose with ranger_pants_boots; restore the original outfit after changing top or pants",
@@ -346,7 +346,7 @@
   "source_mesh_review": {
     "date": "2026-10-08",
     "source": {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/source.glb",
+      "path": "assets/modular_human_male_01/priest/tripo_top_v1/source.glb",
       "sha256": "63fb9fbe3d1f811bb223eff2fd0a6a7a56e0bb06efbb59461c6e44bd2c2f5859"
     },
     "status": "Raw Tripo mesh; not fitted",
@@ -385,7 +385,7 @@
   "fitted_mesh_review": {
     "date": "2026-10-08",
     "source": {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/top_priest.glb",
+      "path": "assets/modular_human_male_01/priest/tripo_top_v1/top_priest.glb",
       "sha256": "d150bb102c4aa61a2f1a4107e48f09f39241b524de2541a45d37116809a205ed"
     },
     "status": "Exported skinning baseline; runtime auxiliary robe bones are shown separately in browser reviews",
@@ -436,7 +436,7 @@
     },
     "animation_status": "Exported 65-bone skinning baseline; browser runtime adds eight auxiliary hem bones not included in these images",
     "editable": {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/priest-top-fitting.blend",
+      "path": "assets/modular_human_male_01/priest/tripo_top_v1/priest-top-fitting.blend",
       "sha256": "e82ced29279b065f8c110ed8d842cd598b4d0635b1ee362001e9b9438a40a825"
     },
     "body_mask": "Review-scene garment mask only; canonical body and runtime unchanged",
@@ -485,7 +485,7 @@
         "sha256": "110bb4d3dc290e312740cfecd1dec0b914df77c0184430f391f6c9aede1f08cb"
       },
       {
-        "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/validation-poses.json",
+        "path": "assets/modular_human_male_01/priest/tripo_top_v1/validation-poses.json",
         "sha256": "e4725b853463a8551dfec2e12b87bd596fe336c9afbb17f7509906a07923ab33"
       },
       {

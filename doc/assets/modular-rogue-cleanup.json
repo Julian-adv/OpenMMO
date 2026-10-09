@@ -4,13 +4,13 @@
   "files_removed": 113,
   "bytes_removed": 1481730729,
   "removed_paths": [
-    "assets/modular_human_male_01/parts/rogue_fitted_v1",
-    "assets/modular_human_male_01/parts/rogue_fitted_v2",
-    "assets/modular_human_male_01/parts/rogue_fitted_v3/review",
-    "assets/modular_human_male_01/parts/interfaces/v0/outfit-reference.blend",
-    "assets/modular_human_male_01/parts/body_shape_sources/barbarian_parts-before-calf-v1.blend",
-    "assets/modular_human_male_01/parts/body_shape_sources/plate_parts-before-calf-v1.blend",
-    "assets/modular_human_male_01/parts/body_shape_sources/character_parts-before-calf-v1.blend",
+    "assets/modular_human_male_01/rogue/fitted_v1",
+    "assets/modular_human_male_01/rogue/fitted_v2",
+    "assets/modular_human_male_01/rogue/fitted_v3/review",
+    "assets/modular_human_male_01/interfaces/v0/outfit-reference.blend",
+    "assets/modular_human_male_01/body_shape_sources/barbarian_parts-before-calf-v1.blend",
+    "assets/modular_human_male_01/body_shape_sources/plate_parts-before-calf-v1.blend",
+    "assets/modular_human_male_01/body_shape_sources/character_parts-before-calf-v1.blend",
     "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v1-motion.png",
     "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v1-rest.png",
     "doc/assets/modular-rogue-fitting-v1.json",
@@ -22,9 +22,9 @@
     "doc/assets/modular-rogue-fitting-v2.json",
     "doc/assets/modular-rogue-animation-review-v2.json",
     "doc/assets/modular-rogue-fitting-review-v2.json",
-    "assets/modular_human_male_01/parts/rogue_sources/rogue-source-review.blend",
-    "assets/modular_human_male_01/parts/rogue_fitted_v3",
-    "assets/modular_human_male_01/parts/rogue_fitted_v4",
+    "assets/modular_human_male_01/rogue/sources/rogue-source-review.blend",
+    "assets/modular_human_male_01/rogue/fitted_v3",
+    "assets/modular_human_male_01/rogue/fitted_v4",
     "doc/assets/modular-rogue-fitting-v3.json",
     "doc/assets/modular-rogue-animation-review-v3.json",
     "doc/assets/modular-rogue-fitting-review-v3.json",
@@ -36,20 +36,20 @@
     "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v4-motion.png",
     "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v4-rest.png",
     "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v4-sleeves.png",
-    "assets/modular_human_male_01/parts/rogue_fitted_v5/animation-snapshots.json",
-    "assets/modular_human_male_01/parts/rogue_fitted_v5/boots_rogue.glb",
-    "assets/modular_human_male_01/parts/rogue_fitted_v5/gloves_rogue.glb",
-    "assets/modular_human_male_01/parts/rogue_fitted_v5/pants_rogue.glb",
-    "assets/modular_human_male_01/parts/rogue_fitted_v5/rogue-fitting.blend",
-    "assets/modular_human_male_01/parts/rogue_fitted_v5/top_rogue.glb",
-    "assets/modular_human_male_01/parts/rogue_fitted_v5/validation-poses.json",
-    "assets/modular_human_male_01/parts/rogue_fitted_v6/animation-snapshots.json",
-    "assets/modular_human_male_01/parts/rogue_fitted_v6/boots_rogue.glb",
-    "assets/modular_human_male_01/parts/rogue_fitted_v6/gloves_rogue.glb",
-    "assets/modular_human_male_01/parts/rogue_fitted_v6/pants_rogue.glb",
-    "assets/modular_human_male_01/parts/rogue_fitted_v6/rogue-fitting.blend",
-    "assets/modular_human_male_01/parts/rogue_fitted_v6/top_rogue.glb",
-    "assets/modular_human_male_01/parts/rogue_fitted_v6/validation-poses.json",
+    "assets/modular_human_male_01/rogue/fitted_v5/animation-snapshots.json",
+    "assets/modular_human_male_01/rogue/fitted_v5/boots_rogue.glb",
+    "assets/modular_human_male_01/rogue/fitted_v5/gloves_rogue.glb",
+    "assets/modular_human_male_01/rogue/fitted_v5/pants_rogue.glb",
+    "assets/modular_human_male_01/rogue/fitted_v5/rogue-fitting.blend",
+    "assets/modular_human_male_01/rogue/fitted_v5/top_rogue.glb",
+    "assets/modular_human_male_01/rogue/fitted_v5/validation-poses.json",
+    "assets/modular_human_male_01/rogue/fitted_v6/animation-snapshots.json",
+    "assets/modular_human_male_01/rogue/fitted_v6/boots_rogue.glb",
+    "assets/modular_human_male_01/rogue/fitted_v6/gloves_rogue.glb",
+    "assets/modular_human_male_01/rogue/fitted_v6/pants_rogue.glb",
+    "assets/modular_human_male_01/rogue/fitted_v6/rogue-fitting.blend",
+    "assets/modular_human_male_01/rogue/fitted_v6/top_rogue.glb",
+    "assets/modular_human_male_01/rogue/fitted_v6/validation-poses.json",
     "doc/assets/modular-rogue-animation-review-v5.json",
     "doc/assets/modular-rogue-animation-review-v6.json",
     "doc/assets/modular-rogue-fitting-review-v5.json",
@@ -67,7 +67,7 @@
     "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v6-sleeves.png"
   ],
   "retained": [
-    "rogue_fitted_v7 GLBs, editable blend, animation snapshots and validation poses (superseded and removed in the Tripo follow-up cleanup below)",
+    "rogue/fitted_v7 GLBs, editable blend, animation snapshots and validation poses (superseded and removed in the Tripo follow-up cleanup below)",
     "selected raw Meshy GLBs and PBR maps",
     "canonical body and current editable outfit files",
     "base-before-calf-v1.glb required for reproducible geometry edit",
@@ -80,13 +80,13 @@
       "files_removed": 61,
       "bytes_removed": 767917772,
       "removed_paths": [
-        "assets/modular_human_male_01/parts/rogue_fitted_v1",
-        "assets/modular_human_male_01/parts/rogue_fitted_v2",
-        "assets/modular_human_male_01/parts/rogue_fitted_v3/review",
-        "assets/modular_human_male_01/parts/interfaces/v0/outfit-reference.blend",
-        "assets/modular_human_male_01/parts/body_shape_sources/barbarian_parts-before-calf-v1.blend",
-        "assets/modular_human_male_01/parts/body_shape_sources/plate_parts-before-calf-v1.blend",
-        "assets/modular_human_male_01/parts/body_shape_sources/character_parts-before-calf-v1.blend",
+        "assets/modular_human_male_01/rogue/fitted_v1",
+        "assets/modular_human_male_01/rogue/fitted_v2",
+        "assets/modular_human_male_01/rogue/fitted_v3/review",
+        "assets/modular_human_male_01/interfaces/v0/outfit-reference.blend",
+        "assets/modular_human_male_01/body_shape_sources/barbarian_parts-before-calf-v1.blend",
+        "assets/modular_human_male_01/body_shape_sources/plate_parts-before-calf-v1.blend",
+        "assets/modular_human_male_01/body_shape_sources/character_parts-before-calf-v1.blend",
         "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v1-motion.png",
         "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v1-rest.png",
         "doc/assets/modular-rogue-fitting-v1.json",
@@ -98,9 +98,9 @@
         "doc/assets/modular-rogue-fitting-v2.json",
         "doc/assets/modular-rogue-animation-review-v2.json",
         "doc/assets/modular-rogue-fitting-review-v2.json",
-        "assets/modular_human_male_01/parts/rogue_sources/rogue-source-review.blend",
-        "assets/modular_human_male_01/parts/rogue_fitted_v3",
-        "assets/modular_human_male_01/parts/rogue_fitted_v4",
+        "assets/modular_human_male_01/rogue/sources/rogue-source-review.blend",
+        "assets/modular_human_male_01/rogue/fitted_v3",
+        "assets/modular_human_male_01/rogue/fitted_v4",
         "doc/assets/modular-rogue-fitting-v3.json",
         "doc/assets/modular-rogue-animation-review-v3.json",
         "doc/assets/modular-rogue-fitting-review-v3.json",
@@ -120,62 +120,62 @@
       "bytes_removed": 382236057,
       "files": [
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v3/animation-snapshots.json",
+          "path": "assets/modular_human_male_01/rogue/fitted_v3/animation-snapshots.json",
           "bytes": 102720,
           "sha256": "187950ec6f60d3788c7fbf7f1c0d3bdf426bced80f3ac992c21abff368f92a97"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v3/boots_rogue.glb",
+          "path": "assets/modular_human_male_01/rogue/fitted_v3/boots_rogue.glb",
           "bytes": 9769204,
           "sha256": "8551e3829f646c365b54fdbffeb6f3e165b649afb62788e2af3b78fd97eb0e74"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v3/gloves_rogue.glb",
+          "path": "assets/modular_human_male_01/rogue/fitted_v3/gloves_rogue.glb",
           "bytes": 19841652,
           "sha256": "5b2c23d3bd4d13c3f351a29e8435052b7907cd4b54c2c9285376a03107488d47"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v3/pants_rogue.glb",
+          "path": "assets/modular_human_male_01/rogue/fitted_v3/pants_rogue.glb",
           "bytes": 10851792,
           "sha256": "33d77cd0676d9318ad5ee66e19040528f31898e23b2097dc9cf18026a829a579"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v3/rogue-fitting.blend",
+          "path": "assets/modular_human_male_01/rogue/fitted_v3/rogue-fitting.blend",
           "bytes": 137323200,
           "sha256": "06e9134cd77fbef084304f0efc7aadd7246707b39801116b5d2cfbd6db324777"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v3/top_rogue.glb",
+          "path": "assets/modular_human_male_01/rogue/fitted_v3/top_rogue.glb",
           "bytes": 11378704,
           "sha256": "23c989ba60822633b12fe9833aad0edc8bc5e2c97196638bbe13bd4584f21b6f"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v4/animation-snapshots.json",
+          "path": "assets/modular_human_male_01/rogue/fitted_v4/animation-snapshots.json",
           "bytes": 102720,
           "sha256": "187950ec6f60d3788c7fbf7f1c0d3bdf426bced80f3ac992c21abff368f92a97"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v4/boots_rogue.glb",
+          "path": "assets/modular_human_male_01/rogue/fitted_v4/boots_rogue.glb",
           "bytes": 9769204,
           "sha256": "c68eba44a69f0573b6b2a7b71071aaef22faa09d65fb6fef1e6edba2d89f1f22"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v4/gloves_rogue.glb",
+          "path": "assets/modular_human_male_01/rogue/fitted_v4/gloves_rogue.glb",
           "bytes": 19841652,
           "sha256": "eb14b0578c4bb0bb4017218c005ce43bfae91712d16273d807df50109dbc4fdc"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v4/pants_rogue.glb",
+          "path": "assets/modular_human_male_01/rogue/fitted_v4/pants_rogue.glb",
           "bytes": 10851792,
           "sha256": "339be7c005daac5b08b1a12879d03235c4dd0de1c6302451aa041fb23d8e8347"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v4/rogue-fitting.blend",
+          "path": "assets/modular_human_male_01/rogue/fitted_v4/rogue-fitting.blend",
           "bytes": 137357714,
           "sha256": "5e8e343875bde23aa317ec033b6058377a4ceaa7d2ea6943ea26538e94343098"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v4/top_rogue.glb",
+          "path": "assets/modular_human_male_01/rogue/fitted_v4/top_rogue.glb",
           "bytes": 11392384,
           "sha256": "7fbd831217caf822431c47e2b94e02cd0e85221fc10dfa309e93303daf6d0b7e"
         },
@@ -242,72 +242,72 @@
       "bytes_removed": 331576900,
       "files": [
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v5/animation-snapshots.json",
+          "path": "assets/modular_human_male_01/rogue/fitted_v5/animation-snapshots.json",
           "bytes": 102720,
           "sha256": "187950ec6f60d3788c7fbf7f1c0d3bdf426bced80f3ac992c21abff368f92a97"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v5/boots_rogue.glb",
+          "path": "assets/modular_human_male_01/rogue/fitted_v5/boots_rogue.glb",
           "bytes": 9769204,
           "sha256": "c800a7a8e1571c43fd22681352241058bf7102ec08f01cdbbd41075ddc0ea874"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v5/gloves_rogue.glb",
+          "path": "assets/modular_human_male_01/rogue/fitted_v5/gloves_rogue.glb",
           "bytes": 13972508,
           "sha256": "db245a132da1517f7612675c3a2bdc43a621cde6e2fa250e31303fd8fc397e06"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v5/pants_rogue.glb",
+          "path": "assets/modular_human_male_01/rogue/fitted_v5/pants_rogue.glb",
           "bytes": 10851792,
           "sha256": "1756e99ece012ec9fcbd5466f7b1c0065c97d308b7c7ada32b68526f6969b929"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v5/rogue-fitting.blend",
+          "path": "assets/modular_human_male_01/rogue/fitted_v5/rogue-fitting.blend",
           "bytes": 121558158,
           "sha256": "5f1bc70154535743b4cd57acabf81c18da42267b9fd550c9c0a267e9dc6de22b"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v5/top_rogue.glb",
+          "path": "assets/modular_human_male_01/rogue/fitted_v5/top_rogue.glb",
           "bytes": 4788728,
           "sha256": "7696c05484e45df856045c4438dd31416cf089d150d7632f79b9d6b182d51a49"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v5/validation-poses.json",
+          "path": "assets/modular_human_male_01/rogue/fitted_v5/validation-poses.json",
           "bytes": 1468466,
           "sha256": "bb193bfb9035e9e6f6c708725e45ec0584ff148030289cc523417291284e20fc"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v6/animation-snapshots.json",
+          "path": "assets/modular_human_male_01/rogue/fitted_v6/animation-snapshots.json",
           "bytes": 102720,
           "sha256": "187950ec6f60d3788c7fbf7f1c0d3bdf426bced80f3ac992c21abff368f92a97"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v6/boots_rogue.glb",
+          "path": "assets/modular_human_male_01/rogue/fitted_v6/boots_rogue.glb",
           "bytes": 9769204,
           "sha256": "e86b2952cd27f4c6e816ea6c9b476e0c9b2fbae9df1ab905219787ea5817c500"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v6/gloves_rogue.glb",
+          "path": "assets/modular_human_male_01/rogue/fitted_v6/gloves_rogue.glb",
           "bytes": 13972508,
           "sha256": "daeba55b21e336bd96fdaca04e5b9d91228646396631b8b4d5863df1b7cee0b9"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v6/pants_rogue.glb",
+          "path": "assets/modular_human_male_01/rogue/fitted_v6/pants_rogue.glb",
           "bytes": 10851792,
           "sha256": "5f832e66db075a0bfe4c06ec36f923f7f0ee040aecd1d03e067a8335174bd107"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v6/rogue-fitting.blend",
+          "path": "assets/modular_human_male_01/rogue/fitted_v6/rogue-fitting.blend",
           "bytes": 121557553,
           "sha256": "0d5439817222d702278d7531c8cdc7ebd1e862c5a7d58c2b8da29b90e00e5c87"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v6/top_rogue.glb",
+          "path": "assets/modular_human_male_01/rogue/fitted_v6/top_rogue.glb",
           "bytes": 4792484,
           "sha256": "38834905b11ebf043887d820165971b004cd4daef28dea95601f8df8d5ed8bc4"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v6/validation-poses.json",
+          "path": "assets/modular_human_male_01/rogue/fitted_v6/validation-poses.json",
           "bytes": 1468466,
           "sha256": "bb193bfb9035e9e6f6c708725e45ec0584ff148030289cc523417291284e20fc"
         },
@@ -396,12 +396,12 @@
       "files_removed": 63,
       "bytes_removed": 521975947,
       "removed_paths": [
-        "assets/modular_human_male_01/parts/rogue_tripo_v1/before-leather-stiffness",
-        "assets/modular_human_male_01/parts/rogue_tripo_v1/before-right-armhole",
-        "assets/modular_human_male_01/parts/rogue_tripo_v1/before-side-laces",
-        "assets/modular_human_male_01/parts/rogue_tripo_v1/before-waist-taper",
-        "assets/modular_human_male_01/parts/rogue_fitted_v7",
-        "assets/modular_human_male_01/parts/rogue_fitted_v8/other-parts.blend",
+        "assets/modular_human_male_01/rogue/tripo_v1/before-leather-stiffness",
+        "assets/modular_human_male_01/rogue/tripo_v1/before-right-armhole",
+        "assets/modular_human_male_01/rogue/tripo_v1/before-side-laces",
+        "assets/modular_human_male_01/rogue/tripo_v1/before-waist-taper",
+        "assets/modular_human_male_01/rogue/fitted_v7",
+        "assets/modular_human_male_01/rogue/fitted_v8/other-parts.blend",
         "tmp/tripo-fitting",
         "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v8-body-alignment.png",
         "doc/images/characters/modular_human_male_01/parts/rogue/fitting-v8-fixes.png",
@@ -426,19 +426,19 @@
       "bytes_removed": 269396462,
       "removed": [
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/pants_rogue.glb",
+          "path": "assets/modular_human_male_01/rogue/fitted_v8/pants_rogue.glb",
           "files": 1,
           "bytes": 10851792,
           "sha256": "2db79af871d61d3a350a96191db80d5b38674a70d153af2bce40728702d27017"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/rogue-fitting.blend",
+          "path": "assets/modular_human_male_01/rogue/fitted_v8/rogue-fitting.blend",
           "files": 1,
           "bytes": 109668725,
           "sha256": "c705874e34bead479caf044c68fb746c2808ff65c99b274540ff7eff0d17017e"
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/validation-poses.json",
+          "path": "assets/modular_human_male_01/rogue/tripo_pants_v1/validation-poses.json",
           "files": 1,
           "bytes": 1468466,
           "sha256": "bb193bfb9035e9e6f6c708725e45ec0584ff148030289cc523417291284e20fc"

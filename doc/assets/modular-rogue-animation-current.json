@@ -6,21 +6,21 @@
       "sha256": "577d36244539eec21b2b258858c3490adec3bc20d2c9652bced6993a06aa65fb"
     },
     {
-      "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+      "path": "assets/modular_human_male_01/rogue/tripo_v1/top_rogue.glb",
       "sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83"
     },
     {
-      "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/pants_rogue.glb",
+      "path": "assets/modular_human_male_01/rogue/fitted_v8/pants_rogue.glb",
       "sha256": "2db79af871d61d3a350a96191db80d5b38674a70d153af2bce40728702d27017",
       "retained": false,
-      "replacement": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/pants_rogue.glb"
+      "replacement": "assets/modular_human_male_01/rogue/tripo_pants_v1/pants_rogue.glb"
     },
     {
-      "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/gloves_rogue.glb",
+      "path": "assets/modular_human_male_01/rogue/fitted_v8/gloves_rogue.glb",
       "sha256": "060932d4b013d1f0d5f069c8d512e0210a2685b3ab13d4bba887628090c14fa2"
     },
     {
-      "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/boots_rogue.glb",
+      "path": "assets/modular_human_male_01/rogue/fitted_v8/boots_rogue.glb",
       "sha256": "dfefa61608f8359837b7e4b746424b18042f538d191438774663bed394097f16"
     },
     {

@@ -7,8 +7,8 @@
 - 라이선스: [Creative Commons Attribution 4.0 (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
   Sketchfab 모델 API에서 확인. 제작자·원본 링크·라이선스·변경 내용을 함께 표시한다.
 - 게시일: 2021-07-11. 사용자 제공 및 게임용 가공: 2026-09-08.
-- 원본 ZIP: `assets/horse.zip` (변경 없음). 추출본: `assets/horse/source/full.fbx`,
-  `assets/horse/textures/{difuse,normal,Horse_PCB}.png`.
+- 제작 원본: `assets/horse/source/full.fbx`, `assets/horse/textures/{difuse,normal,Horse_PCB}.png`.
+  `prepare_horse_mount.py`는 추출본을 직접 사용한다. 내용이 동일한 다운로드 ZIP `assets/horse.zip`은 사용자 요청으로 2026-10-10 삭제했다.
 - 게임 모델: `client/public/models/mounts/horse.glb`.
 - packed Blender 작업 파일: `assets/horse/horse.blend`.
 - **[미사용]** 기승 비교 장면 `riding-preview.blend`와 기승·달리기 미리보기 PNG는 2026-10-09 정리했다. 기승 애니메이션 작업 파일 `assets/horse/rider.blend`는 보존한다.

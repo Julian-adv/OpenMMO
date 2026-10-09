@@ -6,8 +6,8 @@ from pathlib import Path
 import bpy
 
 ROOT = Path(__file__).resolve().parents[2]
-PARTS = ROOT / 'assets/modular_human_male_01/parts'
-OUTPUT = PARTS / 'priest_tripo_boots_v1'
+PARTS = ROOT / 'assets/modular_human_male_01'
+OUTPUT = PARTS / 'priest/tripo_boots_v1'
 
 
 def helper(name, path):

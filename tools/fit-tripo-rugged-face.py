@@ -12,7 +12,7 @@ from scipy.spatial import cKDTree
 from lib.glb import view_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / 'assets/modular_human_male_01/parts/face_tripo_rugged_v1'
+OUTPUT = ROOT / 'assets/modular_human_male_01/faces/tripo_rugged_v1'
 FACE_NAME = 'face_rugged'
 FIT_VERSION = 'rugged_face_v1'
 spec = importlib.util.spec_from_file_location('fit', ROOT / 'tools/fit-modular-rogue.py')
@@ -419,7 +419,7 @@ def main():
     seam, body_preserved = built['neck_seam'], built['body_preserved']
     report = dict(date='2026-10-04', source_sha256=fit.digest(source_path), base_sha256=fit.digest(io.PARTS / 'fitted/base.glb'),
         source_triangles=4046, fitted_head_triangles=built['fitted_head_triangles'], collar_triangles=built['collar_triangles'], retained_neck_triangles=built['retained_neck_triangles'], neck_seam=seam,
-        canonical_rig_preserved=True, face_texture_bytes_preserved=True, shared_hair='assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb',
+        canonical_rig_preserved=True, face_texture_bytes_preserved=True, shared_hair='assets/modular_human_male_01/hair/tripo_wavy_v1/hair_wavy_bone.glb',
         non_head_body_geometry_uv_weights_and_normals_outside_upper_neck_preserved=body_preserved,
         neck_surface=dict(revision=5, retained_canonical_lower_neck=True, shared_boundary_normals=True,
             retained_neck_band_height_m=.004, original_chin_shelf_removed=True,

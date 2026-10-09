@@ -48,7 +48,7 @@
     "priority_view": "dorsal"
   },
   "future_fitting": {
-    "body": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "body": "assets/modular_human_male_01/fitted/base.glb",
     "interfaces": "interfaces/v1",
     "rig_id": "human_male_01_mixamo_candidate_v2",
     "mirroring": "Mirror fitted right glove in 3D, correct face winding/normals and map right hand/finger/forearm weights to left counterparts. Validate both sides in motion."

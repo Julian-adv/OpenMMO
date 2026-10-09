@@ -6,8 +6,8 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-PARTS = ROOT / 'assets/modular_human_male_01/parts'
-DIRECTORY = PARTS / 'face_tripo_rugged_v1'
+PARTS = ROOT / 'assets/modular_human_male_01'
+DIRECTORY = PARTS / 'faces/tripo_rugged_v1'
 SOURCE = DIRECTORY / 'face-rugged-before-standard-scalp.glb'
 REPORT = ROOT / 'doc/assets/modular-rugged-standard-scalp.json'
 spec = importlib.util.spec_from_file_location('fit', ROOT / 'tools/fit-modular-rogue.py')
@@ -78,7 +78,7 @@ def main():
         'source': {'path': str(SOURCE.relative_to(ROOT)), 'sha256': fit.digest(SOURCE)},
         'canonical_head_sha256': fit.digest(PARTS / 'fitted/base.glb'),
         'shared_crop_sha256': fit.digest(PARTS / 'fitted/hair_crop.glb'),
-        'shared_wavy_hair_sha256': fit.digest(PARTS / 'hair_tripo_wavy_v1/hair_wavy_bone.glb'),
+        'shared_wavy_hair_sha256': fit.digest(PARTS / 'hair/tripo_wavy_v1/hair_wavy_bone.glb'),
         'changed_vertices': int((np.linalg.norm(result - points, axis=1) > 1e-6).sum()),
         'maximum_displacement_m': float(np.linalg.norm(result - points, axis=1).max()),
         'preserved': ['facial features below upper forehead', 'jaw', 'neck seams', 'UV', 'textures', 'topology', 'rig', 'skin weights', 'shared hair geometry'],

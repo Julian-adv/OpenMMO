@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / 'assets/modular_human_male_01/parts/ranger_tripo_top_v4'
+OUTPUT = ROOT / 'assets/modular_human_male_01/ranger/tripo_top_v4'
 
 
 def helper(name, filename):

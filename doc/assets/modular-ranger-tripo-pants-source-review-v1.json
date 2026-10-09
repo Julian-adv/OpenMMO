@@ -1,7 +1,7 @@
 {
   "status": "Raw source; not fitted or rigged",
   "source": {
-    "path": "assets/modular_human_male_01/parts/ranger_tripo_pants_v1/source.glb",
+    "path": "assets/modular_human_male_01/ranger/tripo_pants_v1/source.glb",
     "sha256": "9491f2305bc99920599041ed121d220ff57bc1cb0bb9184dce77ca04d9d57e92"
   },
   "triangles": 3714,

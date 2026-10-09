@@ -3,15 +3,15 @@
   "method": "Actual barbarian runtime physics at 60 Hz, about 13 geometry samples per clip; rigid edges, side-grid pins, thickness and vertical length limits measured against original GLB positions",
   "sources": [
     {
-      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "path": "assets/modular_human_male_01/fitted/base.glb",
       "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
     },
     {
-      "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb",
+      "path": "assets/modular_human_male_01/caveman/tripo_pants_v1/pants_caveman.glb",
       "sha256": "1fc3a92b29c8b5e37931cda6b32966754e1f3b1f33fe478a528179fc739a2db4"
     },
     {
-      "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+      "path": "assets/modular_human_male_01/animations/animations.glb",
       "sha256": "76eeb462770754895834271423b4ef7f33efdbd34bdfb9830beba4ba84e7569f"
     },
     {

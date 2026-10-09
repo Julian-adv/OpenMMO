@@ -27,7 +27,7 @@ rogue v2에서는 `shoe_ankle_Left/Right`를 바지·부츠에 함께 적용하�
 그림의 픽셀 위치·기울기·손 자세를 그대로 3D 치수나 기준 자세로 사용하지 않는다.
 기반 캐릭터 이미지의 출처는 [캐릭터 제작 기록](characters.md)을 참고한다.
 
-- 기준 형상: `assets/modular_human_male_01/parts/fitted/base.glb`.
+- 기준 형상: `assets/modular_human_male_01/fitted/base.glb`.
 - 기준 리그: `human_male_01_mixamo_candidate_v2`, 손가락을 포함한 기존 65본.
 - 게임 내 좌표: 미터 단위, Y 위, +Z 전방, 발밑 원점. 현재 기준 몸체 높이는 1.90m.
 - 기준 자세: 기존 몸체의 A 자세와 손바닥이 아래·몸통 쪽을 향하는 자세를 유지한다.

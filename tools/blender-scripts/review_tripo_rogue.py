@@ -11,8 +11,8 @@ import bpy
 from mathutils import Matrix, Vector
 
 ROOT = Path(__file__).resolve().parents[2]
-PARTS = ROOT / 'assets/modular_human_male_01/parts'
-OUTPUT = PARTS / 'rogue_tripo_v1'
+PARTS = ROOT / 'assets/modular_human_male_01'
+OUTPUT = PARTS / 'rogue/tripo_v1'
 spec = importlib.util.spec_from_file_location('rogue_review', ROOT / 'tools/blender-scripts/review_rogue_fitting.py')
 review = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(review)

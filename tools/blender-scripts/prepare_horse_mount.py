@@ -1,7 +1,6 @@
 """Build the horse and rider pose with Blender's background Python runner."""
 import math
 import sys
-import zipfile
 from pathlib import Path
 
 import bpy
@@ -97,13 +96,6 @@ def horse_turns(arm):
 
 def horse():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    SOURCE.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(ROOT / 'assets/horse.zip') as archive:
-        for name in ['source/full.fbx', 'textures/difuse.png', 'textures/normal.png', 'textures/Horse_PCB.png']:
-            path = SOURCE / name
-            if not path.exists():
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(archive.read(name))
     bpy.ops.import_scene.fbx(filepath=str(SOURCE / 'source/full.fbx'))
     scene = bpy.context.scene
     scene.render.fps = 30

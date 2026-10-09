@@ -10,8 +10,8 @@ import bpy
 from mathutils import Matrix, Vector
 
 ROOT = Path(__file__).resolve().parents[2]
-PARTS = ROOT / 'assets/modular_human_male_01/parts'
-SOURCE = PARTS / 'ranger_tripo_top_v4/source.glb'
+PARTS = ROOT / 'assets/modular_human_male_01'
+SOURCE = PARTS / 'ranger/tripo_top_v4/source.glb'
 IMAGES = ROOT / 'doc/images/characters/modular_human_male_01/parts/ranger'
 
 
@@ -34,7 +34,7 @@ def main(directory):
     parser.add_argument('--unmasked', action='store_true')
     parser.add_argument('--revision', type=int, default=4)
     args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else [])
-    output = PARTS / f'ranger_tripo_top_v{args.revision}'
+    output = PARTS / f'ranger/tripo_top_v{args.revision}'
     fitting_report = ROOT / f'doc/assets/modular-ranger-tripo-top-fitting-v{args.revision}.json'
     animation_report = ROOT / f'doc/assets/modular-ranger-tripo-top-animation-v{args.revision}.json'
     bpy.ops.wm.read_factory_settings(use_empty=True)

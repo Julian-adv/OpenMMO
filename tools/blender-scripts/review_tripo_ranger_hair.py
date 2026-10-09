@@ -9,8 +9,8 @@ import bpy
 from mathutils import Vector
 
 ROOT = Path(__file__).resolve().parents[2]
-PARTS = ROOT / 'assets/modular_human_male_01/parts'
-OUTPUT = PARTS / 'hair_tripo_ranger_v1'
+PARTS = ROOT / 'assets/modular_human_male_01'
+OUTPUT = PARTS / 'hair/tripo_ranger_v1'
 IMAGES = ROOT / 'doc/images/characters/modular_human_male_01/parts/ranger'
 spec = importlib.util.spec_from_file_location('studio', ROOT / 'tools/blender-scripts/review_tripo_pants.py')
 studio = importlib.util.module_from_spec(spec)

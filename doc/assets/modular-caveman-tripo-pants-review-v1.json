@@ -16,7 +16,7 @@
   ],
   "source_extent_blender": [0.90185546875, 0.72216796875, 0.99951171875],
   "rigged": false,
-  "source": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/source.glb",
+  "source": "assets/modular_human_male_01/caveman/tripo_pants_v1/source.glb",
   "sha256": "a7b5cb922f7c117352a45b013054103905aad9eb0b0e3ec473b17b82f575bba3",
   "vertices_including_uv_splits": 6575,
   "status": "Raw user-delivered Tripo mesh; not fitted or rigged",

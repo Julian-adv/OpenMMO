@@ -1,7 +1,7 @@
 # 남성 사제 상의 — Tripo 원본과 착용 후보
 
 2026-10-08 사용자 전달 `/mnt/y/web_downloads/medieval+robe+3d+model.glb`를
-`assets/modular_human_male_01/parts/priest_tripo_top_v1/source.glb`에 원형 그대로 보관했다.
+`assets/modular_human_male_01/priest/tripo_top_v1/source.glb`에 원형 그대로 보관했다.
 `/mnt/y`는 사용자가 알려준 `Y:\public` 경로다. 추가 생성·유료 API 호출은 없다.
 
 ## 원본 검수
@@ -16,7 +16,7 @@
 ## 피팅 후보
 
 **[미사용]** 착용 형태 검토용이며 게임용 완성 복장이 아니다.
-현재 `parts/fitted/base.glb`와 기존 `human_male_01_mixamo_candidate_v2` 65본에 맞췄다.
+현재 `fitted/base.glb`와 기존 `human_male_01_mixamo_candidate_v2` 65본에 맞췄다.
 목·허리·손목의 `interfaces/v1` 단면은 기록된 몸체 해시가 달라 이번 피팅의 확정 치수로 쓰지 않았다.
 원본의 삼각형 인덱스·UV·내장 텍스처를 유지하며 최종 GLB도 **3,913 triangles**다.
 
@@ -125,7 +125,7 @@ Blender 기준 검수는 GLB의 골반 고정 스키닝 기준으로, 현재 브
 사제 상의 선택·해제·재선택과 오류 없음, `npm run check`·`npm run lint`를 확인했다.
 이 연결은 개발 미리보기 전용이며 게임 장비 등록은 아니다.
 
-- 원본: `assets/modular_human_male_01/parts/priest_tripo_top_v1/source.glb`.
+- 원본: `assets/modular_human_male_01/priest/tripo_top_v1/source.glb`.
 - 착용 후보: 같은 폴더의 `top_priest.glb`.
 - 편집본: 같은 폴더의 `priest-top-fitting.blend`; 원본 참조는 숨김 컬렉션으로 보관한다.
 - [출처·파일 해시](modular-priest-tripo-top-sources.json).
@@ -136,7 +136,7 @@ Blender 기준 검수는 GLB의 골반 고정 스키닝 기준으로, 현재 브
 
 ```bash
 .venv/bin/python tools/fit-tripo-priest-top.py
-node tools/validate-tripo-rogue.mjs --directory assets/modular_human_male_01/parts/priest_tripo_top_v1 --part top_priest --report doc/assets/modular-priest-tripo-top-animation-v1.json
+node tools/validate-tripo-rogue.mjs --directory assets/modular_human_male_01/priest/tripo_top_v1 --part top_priest --report doc/assets/modular-priest-tripo-top-animation-v1.json
 node tools/validate-priest-robe.mjs
 blender -b -t 6 --python-exit-code 1 --python tools/blender-scripts/review_tripo_priest_top.py -- --raw
 blender -b -t 6 --python-exit-code 1 --python tools/blender-scripts/review_tripo_priest_top.py

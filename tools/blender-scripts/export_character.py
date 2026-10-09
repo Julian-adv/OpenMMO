@@ -6,11 +6,11 @@ Mixamo가 baseColor 한 장만 남기고 경로도 깨져 있다.
 
 헤드리스:
   blender -b -P tools/blender-scripts/export_character.py -- \
-      --fbx "assets/steward/Sitting Laughing.fbx" \
-      --glb assets/steward/Meshy_AI_The_Master_Keykeeper_0905051902_texture.glb \
+      --fbx "assets/npcs/steward/Sitting Laughing.fbx" \
+      --glb assets/npcs/steward/Meshy_AI_The_Master_Keykeeper_0905051902_texture.glb \
       --name steward --height 1.90 \
       --out client/public/models/characters/steward.glb \
-      --blend assets/steward/steward.blend
+      --blend assets/npcs/steward/steward.blend
 
 세션 안에서:
   ARGS = ["--fbx", ..., "--out", ...]; exec(open(__file__).read())

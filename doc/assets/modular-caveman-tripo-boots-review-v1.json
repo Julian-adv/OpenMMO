@@ -19,7 +19,7 @@
     0.99951171875
   ],
   "rigged": false,
-  "source": "assets/modular_human_male_01/parts/caveman_tripo_boots_v1/source.glb",
+  "source": "assets/modular_human_male_01/caveman/tripo_boots_v1/source.glb",
   "sha256": "5c5077cf8a67480c2edba22fd0af0c7f3cbe19e124f9ed463983b71ef7934d46",
   "status": "Raw Tripo source normalized for visual review; no body fitting or rigging.",
   "vertices_including_uv_splits": 2462

@@ -8,13 +8,13 @@ const { server, sources } = headless
 const load = async path => (await headless.load(path)).scene
 try {
   const { bindModularPart, skinnedParts, showModularOutfit, RANGER_MODULAR_OUTFIT } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
-  const body = await load('assets/modular_human_male_01/parts/fitted/base.glb')
+  const body = await load('assets/modular_human_male_01/fitted/base.glb')
   const bodyMeshes = skinnedParts(body)
-  const gloves = bindModularPart(body, await load('assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/gloves_ranger.glb'))
+  const gloves = bindModularPart(body, await load('assets/modular_human_male_01/ranger/tripo_gloves_v1/gloves_ranger.glb'))
   const cuff = JSON.parse(readFileSync(new URL('client/src/lib/data/rangerGloveCuff.json', root)))
   assert.equal(sources.find(s => s.path === cuff.source)?.sha256, cuff.sha256)
   const parts = new Map([['gloves_ranger', gloves]])
-  for (const top of ['plate', 'linen', 'leather']) parts.set('top_' + top, bindModularPart(body, await load('assets/modular_human_male_01/parts/fitted/top_' + top + '.glb')))
+  for (const top of ['plate', 'linen', 'leather']) parts.set('top_' + top, bindModularPart(body, await load('assets/modular_human_male_01/fitted/top_' + top + '.glb')))
   body.updateMatrixWorld(true)
   const skeleton = gloves[0].skeleton
   const frames = ['Right', 'Left'].map(side => {
@@ -27,7 +27,7 @@ try {
     for (let i = 0; i < index.count; i += 3) triangles.push([0, 1, 2].map(k => new THREE.Vector3().fromBufferAttribute(p, index.getX(i + k))))
     return { side, wrist, forearm, axis, triangles }
   })
-  const posePath = 'assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/validation-poses.json'
+  const posePath = 'assets/modular_human_male_01/ranger/tripo_gloves_v1/validation-poses.json'
   sources.push({ path: posePath, sha256: hash(posePath) })
   const poses = JSON.parse(readFileSync(new URL(posePath, root))).map(p => ({ ...p, matrices: p.matrices.map(v => new THREE.Matrix4().fromArray(v)) }))
   const records = []

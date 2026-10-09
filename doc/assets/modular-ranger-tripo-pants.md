@@ -7,7 +7,7 @@
 
 ## 보관 파일과 재현
 
-- 원본: `assets/modular_human_male_01/parts/ranger_tripo_pants_v1/source.glb`.
+- 원본: `assets/modular_human_male_01/ranger/tripo_pants_v1/source.glb`.
 - 피팅·리깅: 같은 폴더의 `pants_ranger.glb`.
 - 편집본: 같은 폴더의 `ranger-pants-fitting.blend`.
 - 게임 동작 표본: 같은 폴더의 `animation-snapshots.json`, `validation-poses.json`.
@@ -18,18 +18,18 @@
 ```bash
 .venv/bin/python tools/fit-tripo-ranger-pants.py
 node tools/validate-tripo-rogue.mjs \
-  --directory assets/modular_human_male_01/parts/ranger_tripo_pants_v1 \
+  --directory assets/modular_human_male_01/ranger/tripo_pants_v1 \
   --part pants_ranger --report doc/assets/modular-ranger-tripo-pants-animation-v1.json
 .venv/bin/python tools/review-ranger-waist.py \
-  --pants assets/modular_human_male_01/parts/ranger_tripo_pants_v1/pants_ranger.glb \
-  --poses assets/modular_human_male_01/parts/ranger_tripo_pants_v1/validation-poses.json \
+  --pants assets/modular_human_male_01/ranger/tripo_pants_v1/pants_ranger.glb \
+  --poses assets/modular_human_male_01/ranger/tripo_pants_v1/validation-poses.json \
   --report doc/assets/modular-ranger-tripo-pants-waist-review-v1.json \
   --heights 1.07 1.09 1.11 1.13 1.14
 blender -b --python-exit-code 1 --python tools/blender-scripts/review_tripo_ranger_pants.py
 ```
 
 원본 면·UV·텍스처를 보존한다. 원본의 허리와 발목은 열려 있으므로 막힌 면을 제거하지 않았다.
-현재 몸체 `parts/fitted/base.glb`, `interfaces/v1`, `human_male_01_mixamo_candidate_v2`의
+현재 몸체 `fitted/base.glb`, `interfaces/v1`, `human_male_01_mixamo_candidate_v2`의
 65본·rest 계층·inverse bind를 그대로 사용했다. 기존 바지의 종아리 축소를 중복 적용하지 않는다.
 무릎과 가랑이 높이를 별도로 정렬하고 피부 단면에 여유를 준다. 발목은 현행 공통 단면과 가중치를 적용한다.
 벨트·버클·작은 주머니는 바지 파츠다. 분리된 장식은 골반에 고정하고,

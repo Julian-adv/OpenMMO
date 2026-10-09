@@ -2,11 +2,11 @@
   "status": "Numeric runtime bind and skinning review; visual review is separate",
   "sources": [
     {
-      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "path": "assets/modular_human_male_01/fitted/base.glb",
       "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
     },
     {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+      "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb",
       "sha256": "0a69d996d3432055d60402913809b01635b1f8960baa2bf0941f472a568f6d51"
     },
     {

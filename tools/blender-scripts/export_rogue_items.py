@@ -78,4 +78,4 @@ with tempfile.TemporaryDirectory(prefix="rogue-items-") as temporary:
                     "--exposure", "-1.2"]
         bpy.context.preferences.filepaths.save_version = 0
         runpy.run_path(str(SCRIPTS / "export_item_asset.py"), run_name="__main__")
-        (REPO / f"assets/rogue_{name}/rogue_{name}-render.png").unlink()
+        (REPO / f"assets/items/rogue_{name}/rogue_{name}-render.png").unlink()

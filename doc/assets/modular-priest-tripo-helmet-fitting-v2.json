@@ -1,7 +1,7 @@
 {
   "date": "2026-10-09",
   "source": {
-    "path": "assets/modular_human_male_01/parts/priest_tripo_helmet_v1/source.glb",
+    "path": "assets/modular_human_male_01/priest/tripo_helmet_v1/source.glb",
     "sha256": "c67ff9ff51ff8a6f44193cd9d93dae6d70c446ebd4be11bfdc92afa0006c831f",
     "original_path": "Y:\\public\\web_downloads\\bishop+mitre+3d+model.glb",
     "mounted_path": "/mnt/y/web_downloads/bishop+mitre+3d+model.glb",
@@ -12,11 +12,11 @@
     "license": "Original Tripo output terms; see doc/assets/characters.md"
   },
   "base": {
-    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "path": "assets/modular_human_male_01/fitted/base.glb",
     "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
   },
   "output": {
-    "path": "assets/modular_human_male_01/parts/priest_tripo_helmet_v1/helmet_priest.glb",
+    "path": "assets/modular_human_male_01/priest/tripo_helmet_v1/helmet_priest.glb",
     "sha256": "3d6a6d38362626069099b13d183ec6064b1fbf245b65a3397405e76f16119237"
   },
   "initial_transform": {
@@ -53,7 +53,7 @@
     "skinning": "Head to Neck to Spine2 blend; no cloth simulation"
   },
   "validation": {
-    "path": "assets/modular_human_male_01/parts/priest_tripo_helmet_v1/helmet_priest.glb",
+    "path": "assets/modular_human_male_01/priest/tripo_helmet_v1/helmet_priest.glb",
     "sha256": "3d6a6d38362626069099b13d183ec6064b1fbf245b65a3397405e76f16119237",
     "triangles": 1924,
     "bones": 65,

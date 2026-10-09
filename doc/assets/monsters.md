@@ -1,20 +1,22 @@
 # Monster Assets
 
+몬스터 제작 원본과 작업본은 `assets/monsters/<name>/`에 보관한다. 전용 애니메이션은 해당 몬스터 폴더에 함께 두며, 게임용 모델은 `client/public/models/monsters/`에 유지한다.
+
 ## Monster
 
 - skeleton_warrior — Tripo 모델, 2026-09-12 수령. 사용자는 앞선 스켈레톤 작업에서 Pro 요금제를 확인했다.
   이번 모델의 정확한 생성일은 미확인(로컬 다운로드 파일 생성 시각: 2026-09-12).
-  - 사용자 제공 `skeleton+armor+3d+model.glb`; 원본은 `assets/skeleton_warrior/source.glb`에 보관.
+  - 사용자 제공 `skeleton+armor+3d+model.glb`; 원본은 `assets/monsters/skeleton_warrior/source.glb`에 보관.
     라이선스는 Tripo 유료 생성물 서비스 이용 조건을 따른다. 10,000 triangles, Tripo 41본 리그와
     1024² base color·normal·metallic/roughness 텍스처를 유지하며 높이 1.9m로 맞췄다.
   - 원화 `doc/images/monsters/skeleton_warrior_concept.png`는 이 작업의 ChatGPT 이미지 생성 도구로 만든
     낡고 부서진 갑옷의 스켈레톤 전사 T-pose 시안(플랜 미확인, 2026-09-12).
   - `tools/blender-scripts/build_skeleton_warrior.py`로 원본에서 재생성한다. 편집본은
-    `assets/skeleton_warrior/skeleton_warrior.blend`, 게임 모델은
+    `assets/monsters/skeleton_warrior/skeleton_warrior.blend`, 게임 모델은
     `client/public/models/monsters/skeleton_warrior.glb`.
   - Idle·Walk·Run·Death는 기존 스켈레톤에 사용한 사용자 제공 Mixamo 65본 FBX와 동일한 파일을 재사용한다.
     Attack은 사용자 제공 `Sword And Shield Slash.fbx`(Mixamo, 2026-09-12 수령)로 교체했다. Mixamo 서비스
-    이용 조건 적용. 원본은 `assets/skeleton_warrior/fbx/`에 보관하고 Tripo 리그로 리타게팅했다.
+    이용 조건 적용. 원본은 `assets/monsters/skeleton_warrior/fbx/`에 보관하고 Tripo 리그로 리타게팅했다.
   - 게임 GLB에는 `Idle`, `Walk`, `Run`, `Attack`, `Death` 5개 클립만 포함한다. 걷기·달리기는 제자리 이동,
     Attack은 1.5초이고 오른손의 수평 도달 거리가 최대인 625ms를 타격 시점으로 사용한다. 쿨다운은 2000ms.
   - 기존 `morningstar` 아이템 모델을 `R_Hand`에 장착하고 손 가중치 정점의 중심에 맞춰 본 로컬 오프셋을
@@ -30,17 +32,17 @@
     일반 스켈레톤보다 체력은 25% 높고 갑옷으로 방어 +4, 무기로 추가 피해를 얻는다.
     던전 출현 설정은 비워 두며 관리자가 추후 배치한다. `material=metal`, `corpseAutoGround=false`.
 - skeleton — Tripo Pro (유료), 사용자 생성일 2026-09-11.
-  - 사용자 제공 `skeleton+3d+model.glb`; 원본은 `assets/skeleton/source.glb`에 보관.
+  - 사용자 제공 `skeleton+3d+model.glb`; 원본은 `assets/monsters/skeleton/source.glb`에 보관.
   - 이용권: 사용자 확인 Tripo Pro 유료 생성물. 별도 CC 라이선스 표시는 없으며 Tripo 서비스 이용 조건 적용.
   - 원화 `doc/images/monsters/skelleton_concept.png`는 이 작업의 ChatGPT 이미지 생성 도구로 제작한 스켈레톤 T-pose 시안 (2026-09-11, 이용 플랜 미확인).
   - 8,375 triangles, Tripo 41본 리그와 2048² 텍스처를 유지. 키 1.8m, 스케일은 메시·리그·이동 키에 베이크.
-  - `tools/blender-scripts/build_skeleton_monster.py`로 원본에서 재생성. 편집본은 `assets/skeleton/skeleton.blend`, 게임 모델은 `client/public/models/monsters/skeleton.glb`.
-  - 애니메이션: 사용자 제공 Mixamo 65본 FBX `Idle`, `Walk`, `Run`, `Attack`, `Death` (2026-09-11 수령). Mixamo 서비스 이용 조건 적용; 원본은 `assets/skeleton/fbx/`에 보관하고 Tripo 리그로 리타게팅.
+  - `tools/blender-scripts/build_skeleton_monster.py`로 원본에서 재생성. 편집본은 `assets/monsters/skeleton/skeleton.blend`, 게임 모델은 `client/public/models/monsters/skeleton.glb`.
+  - 애니메이션: 사용자 제공 Mixamo 65본 FBX `Idle`, `Walk`, `Run`, `Attack`, `Death` (2026-09-11 수령). Mixamo 서비스 이용 조건 적용; 원본은 `assets/monsters/skeleton/fbx/`에 보관하고 Tripo 리그로 리타게팅.
   - 게임 GLB에는 새 FBX에서 변환한 5개 클립만 포함. 걷기·달리기는 제자리 이동으로 변환. 공격 2.625초, 타격 시점 1042ms, 쿨다운 3000ms.
   - `Death` 접지 보정 (2026-09-12): Blender에서 Root 위치 키를 36~48프레임 (1.5~2초)에 걸쳐 부드럽게 원본보다 총 10cm 낮추고 마지막 71프레임까지 유지. `skeleton.blend`와 게임 GLB에 베이크하며 빌드 스크립트에도 반영.
   - 왼발 접지 보정 (2026-09-12): `Death`의 48~60프레임 (2~2.5초)에 왼쪽 고관절 회전을 추가해 발끝을 바닥에 내려놓고 마지막 자세까지 접지 유지. 최종 회전 약 15.3°, 발 메시 최저점 약 2mm. 몸통 높이와 오른쪽 다리는 유지하며 Blender 키프레임으로 베이크.
   - 이동 속도는 리타게팅 빌드 보고서의 측정값에 맞춰 걷기 0.78m/s, 달리기 3.00m/s로 설정 (2026-09-12). 클립은 원래 속도로 재생.
-  - 모델·편집본·원본·FBX 5개와 기여자 제공 시연 영상 `assets/skeleton/skeleton_gameplay.mp4`는 [Hugging Face 에셋 PR #7](https://huggingface.co/datasets/jake-song-openmmo/onlinerpg-assets/discussions/7)에서 받아 `assets.lock`에 등록.
+  - 모델·편집본·원본·FBX 5개는 [Hugging Face 에셋 PR #7](https://huggingface.co/datasets/jake-song-openmmo/onlinerpg-assets/discussions/7)에서 받아 `assets.lock`에 등록. 함께 제공된 시연 영상 `assets/skeleton/skeleton_gameplay.mp4`는 게임·제작 도구에서 사용하지 않아 사용자 요청으로 2026-10-09 삭제했다.
   - **[미사용]** 원본 Tripo 클립과 기존 idle / walk / pursuit / combat_idle / attack_swipe / death 클립은 게임 모델에서 제거.
   - 공용 캐릭터 애니메이션을 사용하지 않음. 무기·출혈 효과 없음. `material=bone`은 금속·나무 무기 피격 시 `armored-bone-hit.ogg`를 재생 ([효과음 출처](sfx.md#combat)).
   - 사망 시작 시 뼈가 부서져 흩어지는 `skeleton-death.ogg`를 재생 ([효과음 출처](sfx.md#monsters)).
@@ -52,15 +54,15 @@
   - [컨셉아트](../images/monsters/skeleton_knight_concept.png): 이 대화에서 OpenAI 이미지 생성으로
     제작한 정예 스켈레톤 기사, 2026-09-12 생성. OpenAI 서비스 이용 조건 적용(이용 요금제 미확인).
   Tripo 서비스 이용 조건 적용. 원본 `skeleton+knight+3d+model.glb`는
-  `assets/skeleton_knight/source.glb`에 보관한다. 10,002 triangles, Tripo 41본 리그,
+  `assets/monsters/skeleton_knight/source.glb`에 보관한다. 10,002 triangles, Tripo 41본 리그,
   1024² base color·normal·metallic/roughness 텍스처를 유지하고 장식 포함 높이 2.05m로 맞췄다.
   - `tools/blender-scripts/build_skeleton_knight.py`로 재생성한다. 편집본은
-    `assets/skeleton_knight/skeleton_knight.blend`, 게임 모델은
+    `assets/monsters/skeleton_knight/skeleton_knight.blend`, 게임 모델은
     `client/public/models/monsters/skeleton_knight.glb`.
   - Idle·Walk·Run은 기존 스켈레톤에 사용한 사용자 제공 Mixamo FBX를 재사용한다.
     Attack은 `Great Sword Slash.fbx`, Death는 `Two Handed Sword Death (1).fbx`
     (2026-09-12 수령). Mixamo 서비스 이용 조건 적용.
-    원본 5개는 `assets/skeleton_knight/fbx/`에 보관하며 Tripo 리그로 리타게팅했다.
+    원본 5개는 `assets/monsters/skeleton_knight/fbx/`에 보관하며 Tripo 리그로 리타게팅했다.
   - 대기·이동 중 오른팔을 낮춰 대검 칼날을 뒤쪽 지면에 끌도록 보정했다. 공격에서는 두 손으로
     손잡이를 잡고, 지면 관통 방지와 양손 그립을 보정한다. 24fps 원본을 72fps로 베이크해
     프레임 사이의 그립 이탈을 줄였다. 손가락 본이 없어 손가락 개별 움켜쥠은 포함하지 않는다.
@@ -115,8 +117,8 @@
   - Blender: Mixamo FBX가 metallic=1 / specular 2배로 들어와 검은 크롬처럼 보이므로 되돌리고,
     텍스처는 Mixamo FBX에 임베드된 PNG(2048², 1024²·JPEG q88로 export)로 재연결. 본 이름의 `mixamorig:` 접두사를 떼어
     캐릭터 리그(knight.glb) 규약에 맞춤. 높이 1.90m(사람 크기)로 스케일 적용, 원점=바닥 중심,
-    `export_yup=True`로 GLB export. 작업 blend는 `assets/hobgoblin.blend`(HF 동기화)
-  - 소스는 `assets/`의 Mixamo FBX 하나만 보관한다. Meshy obj zip은 리깅 없는 메시 + 동일한 PNG라 삭제 (2026-08-15)
+    `export_yup=True`로 GLB export. 작업 blend는 `assets/monsters/hobgoblin/hobgoblin.blend`(HF 동기화)
+  - 소스는 `assets/monsters/hobgoblin/`의 Mixamo FBX 하나만 보관한다. Meshy obj zip은 리깅 없는 메시 + 동일한 PNG라 삭제 (2026-08-15)
   - Meshy가 베이스 컬러만 주므로 metallic-roughness 맵은 albedo의 채도·명도에서 유도해 만들었다
     (어둡고 무채색인 판금 → metallic 0.85 / roughness 0.54, 피부는 metallic 0 / roughness 0.92). 정확한 PBR이
     필요하면 Meshy에서 PBR 맵 세트를 다시 받아 교체할 것
@@ -130,20 +132,20 @@
   mixamo.com에서 auto-rig (57본, 새끼손가락 없음). 원화는 chatgpt.com에서 생성 ![원화](../images/monsters/gnoll-concept.png)
   - hobgoblin과 같은 Blender 파이프라인(Mixamo 재질 되돌리기, `mixamorig:` 접두사 제거, albedo에서 유도한
     metallic-roughness 맵, 1024²·JPEG q88, `export_yup=True`). 높이 2.15m — D&D 놀은 7~7.5ft로 사람보다 크다.
-    Meshy 원본이 1cm 크기로 들어와 mesh/armature data를 직접 스케일했다. 작업 blend는 `assets/gnoll.blend`(HF 동기화)
-  - 소스는 `assets/`의 Mixamo FBX 하나만 보관한다
+    Meshy 원본이 1cm 크기로 들어와 mesh/armature data를 직접 스케일했다. 작업 blend는 `assets/monsters/gnoll/gnoll.blend`(HF 동기화)
+  - 소스는 `assets/monsters/gnoll/`의 Mixamo FBX 하나만 보관한다
 - bugbear Meshy.ai (유료 생성, 2026-08-16, "Fanghide Warlord") 에서 2d -> 3d 생성 후
   mixamo.com에서 auto-rig (65본). 원화는 chatgpt.com에서 생성 ![원화](../images/monsters/bugbear-concept.png)
   - gnoll과 같은 Blender 파이프라인. 높이 2.20m — D&D 버그베어는 7ft 이상으로 놀(2.15m)보다 조금 크게.
     Meshy 원본이 1cm 크기로 들어와 mesh/armature data를 직접 스케일했다(`Mesh.transform`/`Armature.transform`).
-    작업 blend는 `assets/bugbear.blend`(HF 동기화). 소스는 `assets/bugbear.fbx` 하나만 보관
+    작업 blend는 `assets/monsters/bugbear/bugbear.blend`(HF 동기화). 소스는 `assets/monsters/bugbear/bugbear.fbx` 하나만 보관
   - 무기는 기존 iron_sword를 들려줬다(D&D 버그베어의 모닝스타 모델이 없음)
 - ogre Meshy.ai (유료 생성, 2026-08-16, "Ironhide Brute") 에서 2d -> 3d 생성 후
   mixamo.com에서 auto-rig. 원화는 chatgpt.com에서 생성 ![원화](../images/monsters/ogre-concept.png)
   - bugbear와 같은 Blender 파이프라인(Mixamo 재질 되돌리기, `mixamorig:` 접두사 제거, albedo에서 유도한
     metallic-roughness 맵, 1024²·JPEG q88, 원점=바닥 중심, `export_yup=True`). 높이 2.4m.
     Meshy 원본이 1cm 크기로 들어와 mesh/armature data를 직접 스케일했다.
-    작업 blend는 `assets/ogre.blend`(HF 동기화). 소스는 `assets/ogre.fbx` 하나만 보관
+    작업 blend는 `assets/monsters/ogre/ogre.blend`(HF 동기화). 소스는 `assets/monsters/ogre/ogre.fbx` 하나만 보관
   - 리그가 33본뿐이라(손가락은 검지 체인만) 공용 팩을 리타게팅해도 나머지 손가락은 움직이지 않는다.
     무기는 `RightHand`에 greatclub(1.5m, 오거 키에 맞춰 sword 1.20m보다 길게).
     손 본이 손목에 있어 `weaponOffset`(본 로컬 +Y)으로 손가락 밑동까지 0.24m 밀어야 쥔 모양이 된다.
@@ -161,8 +163,8 @@
   mixamo.com에서 auto-rig (65본). 원화는 chatgpt.com에서 생성 ![원화](../images/monsters/troll-concept.png)
   - ogre와 같은 Blender 파이프라인(Mixamo 재질 되돌리기, `mixamorig:` 접두사 제거, 1024²·JPEG q88,
     원점=바닥 중심, `export_yup=True`). 높이 2.7m — D&D 트롤은 9ft. Meshy 원본이 1cm 크기로 들어와
-    mesh/armature data를 직접 스케일했다. 작업 blend는 `assets/troll.blend`(HF 동기화),
-    소스는 `assets/troll.fbx` 하나만 보관
+    mesh/armature data를 직접 스케일했다. 작업 blend는 `assets/monsters/troll/troll.blend`(HF 동기화),
+    소스는 `assets/monsters/troll/troll.fbx` 하나만 보관
   - 금속 부위가 없는 모델(맨살·천 요포·머리카락·발톱)이라 metallic-roughness 맵을 만들지 않고
     metallic 0 / roughness 0.9 상수로 뒀다. albedo에서 유도하는 기존 공식은 어두운 머리카락과
     발톱을 금속으로 오인한다
@@ -179,13 +181,13 @@
     22~36프레임 사이에 서서히 적용 (`tools/shift-glb-clip-hips.py ... --ramp 22 36`), `corpseAutoGround=false`
 
 - stone_golem Meshy.ai (유료 생성, 2026-08-20, "Stone Golem") 에서 2d -> 3d 생성 후
-  mixamo.com에서 auto-rig (24본). 소스는 `assets/stone_golem.fbx` 하나만 보관
+  mixamo.com에서 auto-rig (24본). 소스는 `assets/monsters/stone_golem/stone_golem.fbx` 하나만 보관
   - troll과 같은 Blender 파이프라인(Mixamo 재질 되돌리기, `mixamorig:` 접두사 제거,
     원점=바닥 중심, `export_yup=True`). 높이 2.5m — 오거(2.4m)와 트롤(2.7m) 사이.
     금속 부위가 없어 metallic 0 / roughness 상수로 뒀다
   - 리그가 24본뿐이라(손가락/눈 본 없음) 공용 팩 대신 Meshy가 준 자체 클립 5개를
     T-pose 리그로 리타게팅해 GLB에 bake한다 — idle/walk/run/slap/dead.
-    소스는 `assets/Meshy_AI_Stone_Golem/`의 Mixamo FBX 5개
+    소스는 `assets/monsters/stone_golem/animations/`의 Mixamo FBX 5개
   - 리타게팅이 루트 변위를 두 리그의 Hips 높이 비로 스케일하는 탓에 몸이 떠서
     idle 26cm, slap 42cm가 공중에 뜬다. 홉고블린과 같이 T-pose base의 발바닥
     높이로 프레임마다 Hips를 내려 접지시킨다. run(체공)·dead(넘어짐)는 프레임별로
@@ -210,6 +212,6 @@
   - 무기는 `RightHand`에 greatclub. 손 본이 손목에 있어 `weaponOffset` 0.315로 손가락 밑동까지 밀었다 (RightHand 가중치 정점이 본 축으로 뻗은 길이의 80%). 손바닥에 맞추려고 X 0.13, Z 0.005, 회전 -75|24|74(도) 추가 조정
 - lizardfolk (Lizardfolk) 2026-08-24 임포트 후 mixamo.com에서 auto-rig (24본)
   - 외부 리그 임포터(기여자 로컬 도구, 리포에 없음)로 임포트. 높이 2.30m, 원점=바닥 중심, 본 이름 표준화(23/24본 매핑), 텍스처 1024²·JPEG q88 1장, 10,160 tri
-  - 소스는 `assets/lizardfolk.glb` 하나만 보관 (HF 동기화) (원본 파일명 `Meshy_AI_Meshy_Merged_Animations.glb`)
+  - 소스는 `assets/monsters/lizardfolk/lizardfolk.glb` 하나만 보관 (HF 동기화) (원본 파일명 `Meshy_AI_Meshy_Merged_Animations.glb`)
   - 모델에 포함된 클립을 그대로 쓴다 (`sharedAnims` 미사용)
   - 무기는 `RightHand`에 steel_longsword. 손 본이 손목에 있어 `weaponOffset` 0.23로 손가락 밑동까지 밀었다 (RightHand 가중치 정점이 본 축으로 뻗은 길이의 80%). 손바닥에 맞추려고 X 0.063, Z -0.042, 회전 36|83|-28(도) 추가 조정

@@ -107,12 +107,12 @@
   },
   "source_assets": [
     {
-      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "path": "assets/modular_human_male_01/fitted/base.glb",
       "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
       "bytes": 22214236
     },
     {
-      "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+      "path": "assets/modular_human_male_01/fitted/pants_plate.glb",
       "sha256": "aa95a9f1b85aa881df47e6e37ecbfebc7c168b352fcf0f4a9941208962eeff04",
       "bytes": 11524492
     }

@@ -1,19 +1,19 @@
 {
   "date": "2026-10-07",
   "source": {
-    "path": "assets/modular_human_male_01/parts/ranger_tripo_boots_v1/source.glb",
+    "path": "assets/modular_human_male_01/ranger/tripo_boots_v1/source.glb",
     "sha256": "dae9a86260d61e3b38d743715d957de4c16854544b2170ddad880278638a4862",
     "bytes": 1882028,
     "byte_identical_to_delivery": true
   },
   "base": {
-    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "path": "assets/modular_human_male_01/fitted/base.glb",
     "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
     "bytes": 22214236
   },
   "interfaces": {
-    "path": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
-    "sha256": "f3fc3aed9c5080cf26a294dac496293c89bce8f67466add18a7ef72b326f006b",
+    "path": "assets/modular_human_male_01/interfaces/v1/interfaces.json",
+    "sha256": "52cbd59252b2c80740553182f347273afd3706adf1da3f26b9a11d79400eb23e",
     "bytes": 310940
   },
   "method": "Fit shaft to actual left calf sections; preserve source topology, UV and texture; mirror X and reverse triangle winding; bind each boot to its own Leg/Foot/ToeBase.",
@@ -32,7 +32,7 @@
   "source_triangles": 1823,
   "mirrored_triangles": 3646,
   "validation": {
-    "path": "assets/modular_human_male_01/parts/ranger_tripo_boots_v1/boots_ranger.glb",
+    "path": "assets/modular_human_male_01/ranger/tripo_boots_v1/boots_ranger.glb",
     "sha256": "916c13a55b4fb5fc15fdf4a017b3ed5977983210a776bc91977eaa138b9b1db6",
     "triangles": 3646,
     "bones": 65,

@@ -14,13 +14,17 @@
   텍스처는 종횡비를 유지하며 최대 512px로 축소하고, WebP q90 GLB와 투명 128px 아이콘,
   512px 미리보기 및 packed `.blend`를 만든다. 리깅·shape key 모델과 손잡이 원점이 필요한 무기는 별도 작업한다.
   모델은 `client/public/models/CATEGORY/NAME.glb`, 아이콘은 `client/public/items/CATEGORY/NAME.png`,
-  작업 파일은 `assets/NAME/`에 저장한다. 원본은 수정하지 않는다.
+  작업 파일은 `assets/items/NAME/`에 저장한다. 원본은 수정하지 않는다.
+
+  아이템별 원본 모델·텍스처·제작 기록도 같은 폴더에 둔다.
+  캐릭터 착용 파츠는 `assets/modular_human_male_01/`, 대검 전용 애니메이션은
+  `assets/animations/great_sword/`에 보관한다.
 
   Land Deed 재현 명령 (저장소 루트에서 실행):
 
   ```bash
   blender -b --python-exit-code 1 -P tools/blender-scripts/export_item_asset.py -- \
-    --source assets/land_deed/Meshy_AI_Blackridge_Estate_Dee_0905071232_texture.glb \
+    --source assets/items/land_deed/Meshy_AI_Blackridge_Estate_Dee_0905071232_texture.glb \
     --name land_deed --size 0.5 --rotation -90 0 0 \
     --icon-rotation 28 -8 -12 --exposure -1.2
   ```

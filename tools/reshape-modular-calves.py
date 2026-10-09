@@ -12,7 +12,7 @@ from lib.glb import read_glb, write_glb
 from outfits.body_shape import slim_calves
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE = ROOT / 'assets/modular_human_male_01/parts/fitted/base.glb'
+BASE = ROOT / 'assets/modular_human_male_01/fitted/base.glb'
 SOURCE = BASE.parents[1] / 'body_shape_sources/base-before-calf-v1.glb'
 SOURCE_HASH = '99016ab4311f8fb4256b7a42bdb0d404e2d991154c6ff18c3acb3da76a43f7f0'
 

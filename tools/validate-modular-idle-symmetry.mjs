@@ -8,12 +8,12 @@ const root = new URL("../", import.meta.url);
 try {
   const mod = await server.ssrLoadModule("/src/lib/utils/modularCharacter.ts");
   const body = (
-    await load("assets/modular_human_male_01/parts/fitted/base.glb")
+    await load("assets/modular_human_male_01/fitted/base.glb")
   ).scene;
   const bones = mod.skinnedParts(body)[0].skeleton.bones;
   const sampler = clipSampler(body, { samples: 501, restore: bones });
   const packs = [
-    "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+    "assets/modular_human_male_01/animations/animations.glb",
     "client/public/models/characters/modular_male/animations/locomotion.glb",
   ];
   const beforeIndex = process.argv.indexOf("--before-dir");

@@ -1,6 +1,6 @@
 {
   "date": "2026-10-08",
-  "source": "assets/pink_maid/pink_maid-before-textures-1024.glb",
+  "source": "assets/npcs/pink_maid/pink_maid-before-textures-1024.glb",
   "source_record": "doc/assets/characters.md#npc-models",
   "license": "Existing user-provided Meshy paid-tier model and Mixamo rig; no generation or license changes.",
   "before": {
@@ -101,7 +101,7 @@
   "node_transform_note": "NodeIO omits quaternion rotations within 1e-5 of identity; all other transform components retained.",
   "triangles": 13070,
   "joints": 33,
-  "reproduce": "node tools/optimize-character-textures.mjs assets/pink_maid/pink_maid-before-textures-1024.glb client/public/models/characters/pink_maid.glb 1024",
+  "reproduce": "node tools/optimize-character-textures.mjs assets/npcs/pink_maid/pink_maid-before-textures-1024.glb client/public/models/characters/pink_maid.glb 1024",
   "runtime_filename": "pink_maid.0a61b699.glb",
   "reduction_percent": 56.46,
   "validation": {
@@ -114,7 +114,7 @@
     "repo": "jake-song-openmmo/onlinerpg-assets",
     "revision": "02c0dc322b9526116e8463dc3258db124f005579",
     "verified_files": [
-      "assets/pink_maid/pink_maid-before-textures-1024.glb",
+      "assets/npcs/pink_maid/pink_maid-before-textures-1024.glb",
       "client/public/models/characters/pink_maid.glb"
     ]
   }

@@ -12,7 +12,7 @@
     "scope": "Review scene only; canonical base GLB unchanged"
   },
   "editable": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/tripo-fitting.blend",
+    "path": "assets/modular_human_male_01/rogue/tripo_v1/tripo-fitting.blend",
     "sha256": "814d0ece44b12afa4ecb1c47afe1c3f4bedf3588496396d1c6375b3a760af439",
     "retained": false,
     "storage_status": "[미사용] Deleted at user request; hash retained for provenance."

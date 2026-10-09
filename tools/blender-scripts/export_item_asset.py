@@ -63,7 +63,7 @@ def parse_args():
 
 
 args = parse_args()
-source_dir = args.output_root / "assets" / args.name
+source_dir = args.output_root / "assets/items" / args.name
 model = args.output_root / "client/public/models" / args.category / f"{args.name}.glb"
 icon = args.output_root / "client/public/items" / args.category / f"{args.name}.png"
 if args.source.resolve() == model.resolve():

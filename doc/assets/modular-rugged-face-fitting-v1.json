@@ -123,7 +123,7 @@
   },
   "validations": [
     {
-      "path": "assets/modular_human_male_01/parts/face_tripo_rugged_v1/face_rugged.glb",
+      "path": "assets/modular_human_male_01/faces/tripo_rugged_v1/face_rugged.glb",
       "sha256": "69bf72e0170cf0770b7b9b555c5d73d67d5f163af13df3261c03fe3228c7a18a",
       "triangles": 5611,
       "bones": 65,
@@ -137,7 +137,7 @@
       ]
     },
     {
-      "path": "assets/modular_human_male_01/parts/face_tripo_rugged_v1/base_rugged.glb",
+      "path": "assets/modular_human_male_01/faces/tripo_rugged_v1/base_rugged.glb",
       "sha256": "235f60f52fa4fa8ff87796b349943dfb0549112a7c94474ce862137a3284be1a",
       "triangles": 16927,
       "bones": 65,
@@ -199,7 +199,7 @@
       ]
     },
     {
-      "path": "assets/modular_human_male_01/parts/face_tripo_rugged_v1/hair_wavy_bone_rugged.glb",
+      "path": "assets/modular_human_male_01/faces/tripo_rugged_v1/hair_wavy_bone_rugged.glb",
       "sha256": "a070ca393c0446bb66fe2eb076da702b0d98e48d76d4b61dd0d8fe75f1add9c9",
       "triangles": 3621,
       "bones": 65,
@@ -211,7 +211,7 @@
     }
   ],
   "editing_file": {
-    "path": "assets/modular_human_male_01/parts/face_tripo_rugged_v1/rugged-face-fitting.blend",
+    "path": "assets/modular_human_male_01/faces/tripo_rugged_v1/rugged-face-fitting.blend",
     "sha256": "c08bd8fb26c6174f2d650d94ed46766bf68ee98a210a2d2d23a034c0cd75a3a7"
   },
   "workshop_validation": {

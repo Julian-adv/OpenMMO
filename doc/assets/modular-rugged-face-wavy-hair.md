@@ -62,8 +62,8 @@ roughness 0.5와 specular 재질 효과도 포함되므로 모두 텍스처 오�
 
 ### 웨이브 장발 피팅·리깅 v1
 
-사용자의 세 번째 파일은 수정하지 않고 `parts/hair_tripo_wavy_v1/source.glb`에 그대로 보관했다.
-공통 몸체 `parts/fitted/base.glb`의 실제 머리 표면을 기준으로 크기·가르마·얼굴 입구를 맞췄다.
+사용자의 세 번째 파일은 수정하지 않고 `hair/tripo_wavy_v1/source.glb`에 그대로 보관했다.
+공통 몸체 `fitted/base.glb`의 실제 머리 표면을 기준으로 크기·가르마·얼굴 입구를 맞췄다.
 가닥 정점과 삼각형 중심의 두피 관통을 보정하고 작은 뼈 장식은 형태를 유지하며 배치했다.
 원본의 각진 가닥 끝과 일부 들뜬 층은 남아 있다.
 
@@ -109,8 +109,8 @@ Head 연결 오차는 최대 약 1.2e-15m, 모서리 길이 상대 오차는 약
 
 ![실제 동작에 연결한 헤어](../images/characters/modular_human_male_01/customization/hair-wavy-bone-fitted-v1-motion.png)
 
-- 최종 메시: `assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb`
-- 편집본: `assets/modular_human_male_01/parts/hair_tripo_wavy_v1/wavy-hair-fitting.blend`
+- 최종 메시: `assets/modular_human_male_01/hair/tripo_wavy_v1/hair_wavy_bone.glb`
+- 편집본: `assets/modular_human_male_01/hair/tripo_wavy_v1/wavy-hair-fitting.blend`
   — 공통 몸체·리그·피팅 헤어·숨긴 원본·8개 동작 자세와 텍스처를 포함한다.
 - [앞머리 피팅 후 정면·측면](../images/characters/modular_human_male_01/customization/hair-wavy-bone-fitted-v1-front-fit.png)
 - [앞머리 피팅 후 실제 미리보기](../images/characters/modular_human_male_01/customization/hair-wavy-bone-fitted-v1-front-workshop.png)
@@ -144,7 +144,7 @@ Head 연결 오차는 최대 약 1.2e-15m, 모서리 길이 상대 오차는 약
 ### Tripo 얼굴 원본 검수 — 2026-10-04
 
 사용자가 전달한 `Y:\public\web_downloads\human+head+3d+model.glb`를 원본 그대로
-`assets/modular_human_male_01/parts/face_tripo_rugged_v1/source.glb`에 보관했다.
+`assets/modular_human_male_01/faces/tripo_rugged_v1/source.glb`에 보관했다.
 **4,046 triangles**, UV 분리 정점 **3,597개**, 메시·재질 각 1개, 내장 **2048² JPEG**다.
 리그·애니메이션은 없다. 이 수치는 쿼드 수가 아닌 실제 내보낸 삼각형 수다.
 
@@ -203,7 +203,7 @@ Head 연결 오차는 최대 약 1.2e-15m, 모서리 길이 상대 오차는 약
 몸체 목·하부 띠·연결부·두상의 접촉 면에서 면적과 거리에 따라 법선을 보간한다.
 새 얼굴용 `base_rugged.glb`의 기존 목은 높이 1.59–1.62m에서 새 법선으로 이어지고,
 재질도 연결부와 같은 roughness 0.9로 맞춰 기존 노멀맵의 경계 차이를 제거했다.
-몸체 원본 `parts/fitted/base.glb`, 목의 위치·UV·스킨 가중치, 다른 몸체 부위는 보존한다.
+몸체 원본 `fitted/base.glb`, 목의 위치·UV·스킨 가중치, 다른 몸체 부위는 보존한다.
 독립 얼굴을 사용할 때는 이 목 음영 보정이 포함된 새 얼굴용 몸체와 조합한다.
 정면·사선·측면 게임 조명과 200개 동작 자세를 확인했다. 삼각형 수는 v4와 같다.
 일부 목 피부의 색 변화와 생성 원본의 작은 각진 면은 남는다.
@@ -215,7 +215,7 @@ Head 연결 오차는 최대 약 1.2e-15m, 모서리 길이 상대 오차는 약
 눈·입·코·턱의 앞쪽과 두상 위쪽은 **Head 100%**, 목과 뒤쪽 하부는 기존 몸체의 가중치를 전달했다.
 몸체→하부 목, 하부 목→연결부, 연결부→두상 경계를 각각 검사한다.
 별도 얼굴 표정 본·입 모양 애니메이션은 추가하지 않았다.
-기존 몸체의 머리 이외 형상·UV·가중치와 원본 `parts/fitted/base.glb`는 보존했다.
+기존 몸체의 머리 이외 형상·UV·가중치와 원본 `fitted/base.glb`는 보존했다.
 v5의 새 얼굴용 몸체에서 목 위쪽 법선·재질만 함께 보정했으며 다른 부위의 법선은 유지한다.
 
 기존 웨이브 헤어는 새 두상에서만 사용하는 변형본으로 만들었다.
@@ -233,7 +233,7 @@ v5의 새 얼굴용 몸체에서 목 위쪽 법선·재질만 함께 보정했�
 
 ![8개 실제 게임 동작](../images/characters/modular_human_male_01/customization/face-rugged-fitted-v1-motion.png)
 
-- 독립 얼굴·목 연결부: `assets/modular_human_male_01/parts/face_tripo_rugged_v1/face_rugged.glb`.
+- 독립 얼굴·목 연결부: `assets/modular_human_male_01/faces/tripo_rugged_v1/face_rugged.glb`.
 - 조립 몸체: 같은 폴더의 `base_rugged.glb`; 기존 `body_head`만 교체한 제작 후보.
 - **[미사용]** 이전 새 두상용 헤어 `hair_wavy_bone_rugged.glb`는 표준 두상 보정 후 삭제했고 공용 헤어로 교체했다.
 - 편집본 재생성: `review_tripo_rugged_face.py`로 원본·리그·몸체·공용 헤어·8개 동작 자세·텍스처를 포함한 `rugged-face-fitting.blend`를 만들 수 있다.
@@ -311,7 +311,7 @@ Meshopt로 형상을 압축하고, 얼굴 색상 텍스처는 아래 2026-10-08 
 
 기존 사용자 제공 Tripo 얼굴과 표준 모듈 두상의 로컬 형상 편집이다.
 출처·라이선스·구독 등급은 위 원본 기록을 따르며 추가 생성은 없다.
-보정 전 얼굴은 `assets/modular_human_male_01/parts/face_tripo_rugged_v1/face-rugged-before-standard-scalp.glb`에 보존했다.
+보정 전 얼굴은 `assets/modular_human_male_01/faces/tripo_rugged_v1/face-rugged-before-standard-scalp.glb`에 보존했다.
 이전 전용 웨이브 헤어와 낡은 Blender 편집본은 **[미사용]** 이전 피팅 자료로 삭제했다.
 현재 GLB와 공용 헤어로 편집본을 다시 생성할 수 있다. 피팅 스크립트에서도 전용 헤어 생성을 제거했다.
 

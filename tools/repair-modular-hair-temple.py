@@ -8,8 +8,8 @@ import numpy as np
 from lib.glb import read_glb, view_bytes, write_glb
 
 ROOT = Path(__file__).resolve().parents[1]
-PARTS = ROOT / 'assets/modular_human_male_01/parts'
-SOURCE = PARTS / 'hair_shape_sources/hair_crop-before-temple-cover-v1.glb'
+PARTS = ROOT / 'assets/modular_human_male_01'
+SOURCE = PARTS / 'hair/shape_sources/hair_crop-before-temple-cover-v1.glb'
 OUTPUT = PARTS / 'fitted/hair_crop.glb'
 SOURCE_HASH = '5aea523e5de994b8a2b6e15aef1589a3cbe7413514bc429194e1f0a940141686'
 spec = importlib.util.spec_from_file_location('plate_io', ROOT / 'tools/fit-modular-plate.py')

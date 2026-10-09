@@ -30,7 +30,7 @@ blender -b -t 6 --python-exit-code 1 --python tools/blender-scripts/export_range
 상의·바지는 바닥에 눕히고 장갑은 오른손 한쪽으로 표시한다.
 게임 출력은 `client/public/models/armor/ranger_{top,pants,gloves,boots}.glb`,
 `client/public/items/armor/ranger_{top,pants,gloves,boots}.png`이며,
-편집본은 `assets/ranger_{top,pants,gloves,boots}/`에 보관한다.
+편집본은 `assets/items/ranger_{top,pants,gloves,boots}/`에 보관한다.
 게임용 GLB와 편집본은 기존 바이너리 보관 정책을 따른다.
 
 생성·목록 장비·판매·거래 서버 테스트 8개와 관련 프런트엔드 테스트 65개가 통과했다.

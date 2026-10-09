@@ -11,9 +11,9 @@ import bpy
 SCRIPTS = Path(__file__).resolve().parent
 REPO = SCRIPTS.parents[1]
 SOURCES = {
-    "top": "priest_tripo_top_v1",
-    "pants": "priest_tripo_pants_v1",
-    "boots": "priest_tripo_boots_v1",
+    "top": "priest/tripo_top_v1",
+    "pants": "priest/tripo_pants_v1",
+    "boots": "priest/tripo_boots_v1",
 }
 PARTS = ("top", "pants", "boots")
 parser = argparse.ArgumentParser(description=__doc__)
@@ -24,7 +24,7 @@ with tempfile.TemporaryDirectory(prefix="priest-items-") as temporary:
     for name in args.parts:
         bpy.ops.wm.read_factory_settings(use_empty=True)
         part_id = f"{name}_priest"
-        source = REPO / f"assets/modular_human_male_01/parts/{SOURCES[name]}/{part_id}.glb"
+        source = REPO / f"assets/modular_human_male_01/{SOURCES[name]}/{part_id}.glb"
         bpy.ops.import_scene.gltf(filepath=str(source))
         meshes = [obj for obj in bpy.context.scene.objects
                   if obj.type == "MESH" and obj.get("part_id") == part_id]
@@ -63,4 +63,4 @@ with tempfile.TemporaryDirectory(prefix="priest-items-") as temporary:
                     "--exposure", "-1.2"]
         bpy.context.preferences.filepaths.save_version = 0
         runpy.run_path(str(SCRIPTS / "export_item_asset.py"), run_name="__main__")
-        (REPO / f"assets/priest_{name}/priest_{name}-render.png").unlink()
+        (REPO / f"assets/items/priest_{name}/priest_{name}-render.png").unlink()

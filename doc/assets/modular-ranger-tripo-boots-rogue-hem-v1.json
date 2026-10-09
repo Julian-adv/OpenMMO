@@ -1,8 +1,8 @@
 {
   "date": "2026-10-07",
-  "pants_source": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/pants_rogue.glb",
+  "pants_source": "assets/modular_human_male_01/rogue/tripo_pants_v1/pants_rogue.glb",
   "pants_sha256": "7178d06a9b2e18953e2c3fb0672df8424b688d6f4ccc47affc856a9084e8e81c",
-  "cuff_source": "assets/modular_human_male_01/parts/ranger_tripo_boots_v1/boots_ranger.glb",
+  "cuff_source": "assets/modular_human_male_01/ranger/tripo_boots_v1/boots_ranger.glb",
   "cuff_sha256": "916c13a55b4fb5fc15fdf4a017b3ed5977983210a776bc91977eaa138b9b1db6",
   "rim_height_range_m": [
     0.46231249,
@@ -44,7 +44,7 @@
     }
   ],
   "snapshot": {
-    "path": "assets/modular_human_male_01/parts/ranger_tripo_boots_v1/pants_rogue_ranger_boots-review.glb",
+    "path": "assets/modular_human_male_01/ranger/tripo_boots_v1/pants_rogue_ranger_boots-review.glb",
     "sha256": "4bc9d675aed2234460d0ed3867e9cd74495d67c1cccd038a02a9584d91fc3656",
     "triangles": 1462,
     "bones": 65,

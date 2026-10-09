@@ -9,11 +9,11 @@
       "sha256": "6035c2f765325d9eee2a1423b7f0dcc63a7fe171450bac6466571e312ba6a722",
       "bytes": 11307
     },
-    "assets/modular_human_male_01/parts/skin_sources/color.png": {
+    "assets/modular_human_male_01/skin_sources/color.png": {
       "sha256": "f55b554d4877dc6913b5290615bf7d2f2d8a45fbbac9cf6606c4c5366bdf36c5",
       "bytes": 17576316
     },
-    "assets/modular_human_male_01/parts/fitted/base.glb": {
+    "assets/modular_human_male_01/fitted/base.glb": {
       "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
       "bytes": 22214236
     },
@@ -46,7 +46,7 @@
     "color_pixels_changed": 1428824
   },
   "gltf_validation": {
-    "assets/modular_human_male_01/parts/skin_sources/caveman-match-2026-10-04/runtime-before.glb": {
+    "assets/modular_human_male_01/skin_sources/caveman-match-2026-10-04/runtime-before.glb": {
       "errors": 0,
       "warnings": 17,
       "messages": [

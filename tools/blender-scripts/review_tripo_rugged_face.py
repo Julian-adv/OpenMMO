@@ -7,8 +7,8 @@ import bpy
 from mathutils import Matrix, Vector
 
 ROOT = Path(__file__).resolve().parents[2]
-PARTS = ROOT / 'assets/modular_human_male_01/parts'
-OUTPUT = PARTS / 'face_tripo_rugged_v1'
+PARTS = ROOT / 'assets/modular_human_male_01'
+OUTPUT = PARTS / 'faces/tripo_rugged_v1'
 IMAGES = ROOT / 'doc/images/characters/modular_human_male_01/customization'
 spec = importlib.util.spec_from_file_location('review', ROOT / 'tools/blender-scripts/review_rogue_fitting.py')
 review = importlib.util.module_from_spec(spec)
@@ -51,7 +51,7 @@ def main(directory):
     for name, location in views:
         render(name, location)
     review.contact_sheet(directory, [n for n, _ in views], ['FRONT', 'THREE QUARTER', 'SIDE', 'BACK'], 4, IMAGES / 'face-rugged-fitted-v1-review.png')
-    review.import_part(PARTS / 'hair_tripo_wavy_v1/hair_wavy_bone.glb', rig)
+    review.import_part(PARTS / 'hair/tripo_wavy_v1/hair_wavy_bone.glb', rig)
     for name, location in views:
         render('hair-' + name, location)
     review.contact_sheet(directory, ['hair-' + n for n, _ in views], ['FRONT', 'THREE QUARTER', 'SIDE', 'BACK'], 4, IMAGES / 'face-rugged-wavy-hair-v1-review.png')

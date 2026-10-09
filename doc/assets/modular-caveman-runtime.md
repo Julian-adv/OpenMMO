@@ -35,7 +35,7 @@
 손목 보호대는 한쪽만 분리하고 어깨 덮개·하의는 바닥에 눕힌다.
 `client/public/models/armor/caveman_{top,pants,boots,bracers}.glb`와
 `client/public/items/armor/caveman_{top,pants,boots,bracers}.png`가 게임용 출력이다.
-텍스처는 512px로 줄였으며 작업용 Blender 파일은 `assets/caveman_{top,pants,boots,bracers}/`에 보관한다.
+텍스처는 512px로 줄였으며 작업용 Blender 파일은 `assets/items/caveman_{top,pants,boots,bracers}/`에 보관한다.
 
 ```bash
 blender -b -t 6 --python-exit-code 1 --python tools/blender-scripts/export_caveman_items.py
@@ -66,8 +66,9 @@ blender -b -t 6 --python-exit-code 1 --python tools/blender-scripts/export_cavem
 몸체 위치·삼각형·UV·리그·본 가중치·장비 형상은 유지한다. 얼굴 영역의 원본 텍스처
 1,248,558픽셀이 일치하며, 기존 노멀·거칠기 텍스처도 유지한다.
 게임용 몸체는 `node tools/prepare-modular-character.mjs --part base`로 다시 압축한다.
-전후 원본과 압축본은 `assets/modular_human_male_01/parts/skin_sources/caveman-match-2026-10-04/`에
-**[미사용]** 비교용 이전 버전으로 보관한다. 수정된 몸체 GLB와 변경 도구가 현재 재생성 기준이다.
+보정 전 비교용 `base-before.glb`와 `runtime-before.glb`는 사용자 요청으로 2026-10-09 삭제했다.
+현재 재생성은 수정된 몸체 GLB, 피부 원본 텍스처와 `tools/restore-modular-skin.py`를 사용한다.
+[삭제 목록·해시](cleanup-2026-10-09.json).
 
 같은 대기 자세·조명에서 수정 전후를 비교했고 원본 데이터 보존 검사가 통과했다. 게임용 몸체 GLB는 오류 0이며 기존 경고 17개와 같다.
 [입출력 해시·검증 기록](modular-caveman-skin-match.json).

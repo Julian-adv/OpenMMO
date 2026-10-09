@@ -20,7 +20,7 @@ PARTS = {
 with tempfile.TemporaryDirectory(prefix="barbarian-items-") as temporary:
     for name, part in PARTS.items():
         bpy.ops.wm.read_factory_settings(use_empty=True)
-        source = REPO / f"assets/modular_human_male_01/parts/fitted/{part}_barbarian.glb"
+        source = REPO / f"assets/modular_human_male_01/fitted/{part}_barbarian.glb"
         bpy.ops.import_scene.gltf(filepath=str(source))
         meshes = [obj for obj in bpy.context.scene.objects
                   if obj.type == "MESH" and obj.get("part_id") == f"{part}_barbarian"]

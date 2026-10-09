@@ -112,12 +112,12 @@
   "rejected_iteration": "Waist trim alone removed the raised edge but left the wider trousers intersecting the armor rim; added waist inset before trimming.",
   "source_assets": [
     {
-      "path": "assets/modular_human_male_01/parts/fitted/top_plate.glb",
+      "path": "assets/modular_human_male_01/fitted/top_plate.glb",
       "sha256": "c29b772b91d9c7d6b5622758edc707ea2caea4d69618e5729f126d3f88ea47ce",
       "bytes": 11941912
     },
     {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+      "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb",
       "sha256": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b",
       "bytes": 2466144
     }

@@ -6,8 +6,8 @@ import { clipSampler, headlessThree, loadClips, root } from './lib/headless-thre
 const { server, sources, load } = await headlessThree()
 try {
   const { bindModularPart, modularAnimationClips } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
-  const body = (await load('assets/modular_human_male_01/parts/fitted/base.glb')).scene
-  const meshes = bindModularPart(body, (await load('assets/modular_human_male_01/parts/caveman_tripo_bracer_v1/gloves_caveman.glb')).scene)
+  const body = (await load('assets/modular_human_male_01/fitted/base.glb')).scene
+  const meshes = bindModularPart(body, (await load('assets/modular_human_male_01/caveman/tripo_bracer_v1/gloves_caveman.glb')).scene)
   assert.equal(meshes.length, 2)
   const records = meshes.map(mesh => {
     const geometry = mesh.geometry

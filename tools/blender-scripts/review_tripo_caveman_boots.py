@@ -8,8 +8,8 @@ import bmesh
 from mathutils import Vector
 
 ROOT = Path(__file__).resolve().parents[2]
-PARTS = ROOT / 'assets/modular_human_male_01/parts'
-OUTPUT = PARTS / 'caveman_tripo_boots_v1'
+PARTS = ROOT / 'assets/modular_human_male_01'
+OUTPUT = PARTS / 'caveman/tripo_boots_v1'
 spec = importlib.util.spec_from_file_location('review', ROOT / 'tools/blender-scripts/review_rogue_fitting.py')
 review = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(review)
@@ -33,7 +33,7 @@ for obj in bpy.data.objects:
         mesh.to_mesh(obj.data)
         mesh.free()
 boots = review.import_part(OUTPUT / 'boots_caveman.glb', rig)
-for path in ['caveman_tripo_top_v1/top_caveman.glb', 'caveman_tripo_pants_v1/pants_caveman.glb', 'fitted/hair_crop.glb']:
+for path in ['caveman/tripo_top_v1/top_caveman.glb', 'caveman/tripo_pants_v1/pants_caveman.glb', 'fitted/hair_crop.glb']:
     review.import_part(PARTS / path, rig)
 interfaces = json.loads((PARTS / 'interfaces/v1/interfaces.json').read_text())
 guides = bpy.data.collections.new('Boot and ankle interfaces v1')

@@ -1,6 +1,6 @@
 {
   "source": {
-    "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+    "path": "assets/modular_human_male_01/fitted/pants_plate.glb",
     "sha256": "aa95a9f1b85aa881df47e6e37ecbfebc7c168b352fcf0f4a9941208962eeff04"
   },
   "method": "Symmetric plate rear depth; 12mm weighted smoothing; 90 percent depth about Z=-25mm",

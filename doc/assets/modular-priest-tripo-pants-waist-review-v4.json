@@ -7,15 +7,15 @@
   "planes_per_pose": 6,
   "sources": [
     {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+      "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb",
       "sha256": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b"
     },
     {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/validation-poses.json",
+      "path": "assets/modular_human_male_01/priest/tripo_pants_v1/validation-poses.json",
       "sha256": "e4725b853463a8551dfec2e12b87bd596fe336c9afbb17f7509906a07923ab33"
     },
     {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/top_priest.glb",
+      "path": "assets/modular_human_male_01/priest/tripo_top_v1/top_priest.glb",
       "sha256": "d150bb102c4aa61a2f1a4107e48f09f39241b524de2541a45d37116809a205ed"
     }
   ],

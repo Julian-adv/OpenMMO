@@ -1,11 +1,11 @@
 {
   "status": "Fitted mirrored boots; open shaft liners, unchanged current body and hidden original source",
   "editable": {
-    "path": "assets/modular_human_male_01/parts/priest_tripo_boots_v1/priest-boots-fitting-v1.blend",
+    "path": "assets/modular_human_male_01/priest/tripo_boots_v1/priest-boots-fitting-v1.blend",
     "sha256": "7459a321cc2231c32b02a2a81e93f015806ca770d6730af345d883dfa7d805df"
   },
   "glb": {
-    "path": "assets/modular_human_male_01/parts/priest_tripo_boots_v1/boots_priest.glb",
+    "path": "assets/modular_human_male_01/priest/tripo_boots_v1/boots_priest.glb",
     "sha256": "995e83d5cd5e41413024b4ab8a522c724b1d078f49232b81460e3d8cf26f4ba0"
   },
   "triangles": 2278,

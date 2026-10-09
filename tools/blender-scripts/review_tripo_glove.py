@@ -11,7 +11,7 @@ import bpy
 from mathutils import Matrix, Vector
 
 ROOT = Path(__file__).resolve().parents[2]
-PARTS = ROOT / 'assets/modular_human_male_01/parts'
+PARTS = ROOT / 'assets/modular_human_male_01'
 spec = importlib.util.spec_from_file_location('pants_review', ROOT / 'tools/blender-scripts/review_tripo_pants.py')
 pants = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pants)
@@ -25,7 +25,7 @@ def main(images):
     parser.add_argument('--part', choices=['glove', 'wrap'], default='glove')
     args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else [])
     kind = args.part
-    output = PARTS / f'rogue_tripo_{kind}_v1'
+    output = PARTS / f'rogue/tripo_{kind}_v1'
     prefix = ROOT / f'doc/images/characters/modular_human_male_01/parts/rogue/tripo-{kind}-v1'
     record = ROOT / f'doc/assets/modular-rogue-tripo-{kind}'
     side = 'Right' if kind == 'glove' else 'Left'
@@ -65,7 +65,7 @@ def main(images):
     for name, offset in [('dorsal', (-4, -1, 2)), ('palm', (4, 1, -2)), ('cuff', (-3, -3, 3))]:
         render(name, target, offset, .31)
     review.contact_sheet(images, ['dorsal', 'palm', 'cuff'], [f'{side.upper()} WRIST / OUTER', f'{side.upper()} WRIST / INNER', 'WRIST / SKIN VISIBLE'], 3, Path(str(prefix) + '-hand.png'))
-    for path in ['rogue_tripo_v1/top_rogue.glb', 'rogue_tripo_pants_v1/pants_rogue.glb', 'rogue_fitted_v8/boots_rogue.glb', 'fitted/hair_crop.glb']:
+    for path in ['rogue/tripo_v1/top_rogue.glb', 'rogue/tripo_pants_v1/pants_rogue.glb', 'rogue/fitted_v8/boots_rogue.glb', 'fitted/hair_crop.glb']:
         review.import_part(PARTS / path, rig)
     if kind == 'wrap':
         for obj in bpy.data.objects:

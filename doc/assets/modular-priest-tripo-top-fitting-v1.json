@@ -2,11 +2,11 @@
   "date": "2026-10-08",
   "status": "Fitting candidate with lightweight eight-bone runtime hem; extreme-pose clearance and mixed equipment acceptance pending",
   "source": {
-    "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/source.glb",
+    "path": "assets/modular_human_male_01/priest/tripo_top_v1/source.glb",
     "sha256": "63fb9fbe3d1f811bb223eff2fd0a6a7a56e0bb06efbb59461c6e44bd2c2f5859"
   },
   "base": {
-    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "path": "assets/modular_human_male_01/fitted/base.glb",
     "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
   },
   "rig_id": "human_male_01_mixamo_candidate_v2",
@@ -225,11 +225,11 @@
   "lower_robe_clearance": {
     "method": "Outward-only fit to torso/thigh sections in rest and sampled idle poses relative to Hips; preserve the front and rear slits",
     "idle_samples": 13,
-    "pose_source": "assets/modular_human_male_01/parts/priest_tripo_top_v1/idle-fitting-poses.json",
+    "pose_source": "assets/modular_human_male_01/priest/tripo_top_v1/idle-fitting-poses.json",
     "pose_sha256": "52d09623eb4a56eff620eb992926dc38b4fbd3de7e26c2602c94d3aaccd6f6f0",
     "pose_inputs": [
       {
-        "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+        "path": "assets/modular_human_male_01/fitted/base.glb",
         "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
       },
       {
@@ -987,7 +987,7 @@
     "warning": "GPU spring hem requires separate runtime motion review; source skinning validators do not run the spring rig"
   },
   "validation": {
-    "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/top_priest.glb",
+    "path": "assets/modular_human_male_01/priest/tripo_top_v1/top_priest.glb",
     "sha256": "d150bb102c4aa61a2f1a4107e48f09f39241b524de2541a45d37116809a205ed",
     "triangles": 3913,
     "bones": 65,

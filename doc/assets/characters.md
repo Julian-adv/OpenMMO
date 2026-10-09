@@ -1,5 +1,7 @@
 # Character Assets
 
+NPC 제작 원본과 작업본은 `assets/npcs/<name>/`에 보관한다. 게임용 모델은 `client/public/models/characters/`에 유지한다.
+
 ## 모듈형 복장 공통 제작 기준
 
 - [절단선과 연결 기준](modular-outfit-connections.md): 목·허리·장갑·신발의 연결 위치,
@@ -77,7 +79,7 @@
   기사는 이후 위 판금 세트로 변경했다.
   방어구 인벤토리와 개인별 머리·눈 선택값 저장은 아직 연결하지 않았다.
 - 게임 파일: `client/public/models/characters/modular_male/`. 아래 기록의
-  `parts/fitted/` 5파일과 `rigged_hand_tuned/animations.glb`, `hand-grips.json`,
+  `fitted/` 5파일과 `animations/animations.glb`, `hand-grips.json`,
   기존 Mixamo 공용 팩을 가공했다. 새 AI 생성·리깅·구매는 없다.
   원본의 ImageGen **ChatGPT Pro 20x**, Meshy 유료 생성물 이용 조건과 Mixamo 라이선스를
   유지한다. 원본 파츠의 Meshy 구독은 아래에 기록된 **Premium**이다.
@@ -217,44 +219,44 @@ GLB 작성기가 항등 회전에 가까운 본 쿼터니언 성분을 생략하
 대기 애니메이션을 확인했으며 브라우저 오류는 없었다.
 관련 테스트 34개와 `npm run check`, `npm run lint`가 통과했다.
 
-최적화 전 게임 파일은 `assets/pink_maid/pink_maid-before-textures-1024.glb`에 보존했다.
+최적화 전 게임 파일은 `assets/npcs/pink_maid/pink_maid-before-textures-1024.glb`에 보존했다.
 기존 Meshy 유료 등급·Mixamo 출처와 라이선스를 유지하며 새 AI 생성이나 유료 호출은 없다.
 최적화한 게임 파일과 보존 원본은 Hugging Face에 게시했으며 `assets.lock`에 리비전과 해시를 고정했다.
 [해상도·용량·해시·검증 기록](pink-maid-runtime-textures-1024.json).
 
 ```sh
-node tools/optimize-character-textures.mjs assets/pink_maid/pink_maid-before-textures-1024.glb client/public/models/characters/pink_maid.glb 1024
+node tools/optimize-character-textures.mjs assets/npcs/pink_maid/pink_maid-before-textures-1024.glb client/public/models/characters/pink_maid.glb 1024
 ```
 
 ### NPC 출처
 
 - guard — 경비병 NPC Karl (`guard.glb`, CharacterClass::Guard); 원화 `../images/characters/karl-concept.png`, 3D는 Meshy.ai (라이센스는 위 License 표 참조); 거래 창 초상화 `../images/characters/karl-portrait.png` (ChatGPT, 2026-06-12, `doc/assets/ui.md` 참조)
 - npc_woman — 상인 NPC Rica (`npc_woman.glb`); 원화 `../images/characters/rica-concept.png` (Gemini) (커밋 fb299e7); 거래 창 초상화 `../images/characters/rica-portrait.png` (ChatGPT, 2026-06-10, `doc/assets/ui.md` 참조)
-- maid — 여관 직원 NPC용 메이드 (`maid.glb`, NPC Miriel); 원화 `../images/characters/maid-concept.png` (ComfyUI krea2_turbo_fp8_scaled, 2026-08-31); 거래 창 초상화 `../images/characters/miriel-portrait.png` (2026-09-02, `doc/assets/ui.md` 참조); 3D는 Meshy.ai Image to 3D (유료 등급, 생성 2026-08-30), Meshy 원본 `assets/Meshy_AI_Elegant_Maid_Pose_0830152239_texture_obj.zip`(OBJ, Mixamo 업로드용) + `assets/Meshy_AI_Elegant_Maid_Pose_0830151822_texture (1).glb`(같은 모델의 GLB 재다운로드, 노멀·MR 맵 포함), Mixamo 리깅 65본 `assets/maid_mixamo.fbx` (2026-08-31, Stand To Sit 스킨째). 헤드리스 Blender에서 `fix_mixamo_transforms` → 애니 제거 → 키 1.90m(npc_woman 1.91m 기준), 발 원점 → `mixamorig:` 접두 제거 → 머티리얼은 Meshy GLB 것을 통째로 이식(UV 동일: baseColor 픽셀 일치 확인), emissive/specular 제거 → GLB export → 후처리로 본 노드의 float 오차 scale 제거·노멀/MR 1024² 축소. baseColor 2048² JPEG q94 4:4:4(exporter 기본 q92 4:2:0은 얼굴이 뭉개져 상향; q97 백업 `~/assets_original/maid/maid_q97.glb`), normal·metallicRoughness 1024² JPEG
-- pink_maid — 여관 메이드 NPC Cocoly (`pink_maid.glb`); 원화 `../images/characters/pink-maid-concept.png` (ComfyUI krea2_turbo_fp8_scaled, 2026-08-31 이전 생성); 거래 창 초상화 `../images/characters/cocoly-portrait.png` (2026-09-02, `doc/assets/ui.md` 참조); 3D는 Meshy.ai Image to 3D (유료 등급, 생성 2026-08-31, 프롬프트명 "Pink Porcelain Maid"), Meshy 원본 `assets/Meshy_AI_Pink_Porcelain_Maid_0831180703_texture_obj.zip`(OBJ, Mixamo 업로드용) + `..._0831180550_texture.glb`(GLB, 머티리얼 이식용) + `..._0831180601_texture_fbx.zip`(FBX, 미사용), Mixamo 리깅 `assets/Taunt.fbx` (2026-09-01, 검지만 있는 33본 스킨째 — Meshy 메시의 손가락이 붙어 있어 Mixamo가 풀 스켈레톤을 못 만듦; 나머지 손가락 애니 트랙은 무시됨). 가공은 maid 항목과 동일 파이프라인 (키 1.90m, `mixamorig:` 제거, Meshy GLB 머티리얼 이식, baseColor 2048² JPEG q94 4:4:4, normal·MR 1024², q97 백업 `~/assets_original/pink_maid/pink_maid_q97.glb`)
+- maid — 여관 직원 NPC용 메이드 (`maid.glb`, NPC Miriel); 원화 `../images/characters/maid-concept.png` (ComfyUI krea2_turbo_fp8_scaled, 2026-08-31); 거래 창 초상화 `../images/characters/miriel-portrait.png` (2026-09-02, `doc/assets/ui.md` 참조); 3D는 Meshy.ai Image to 3D (유료 등급, 생성 2026-08-30), Meshy 원본 `assets/npcs/maid/Meshy_AI_Elegant_Maid_Pose_0830152239_texture_obj.zip`(OBJ, Mixamo 업로드용) + `assets/npcs/maid/Meshy_AI_Elegant_Maid_Pose_0830151822_texture (1).glb`(같은 모델의 GLB 재다운로드, 노멀·MR 맵 포함), Mixamo 리깅 65본 `assets/npcs/maid/maid_mixamo.fbx` (2026-08-31, Stand To Sit 스킨째). 헤드리스 Blender에서 `fix_mixamo_transforms` → 애니 제거 → 키 1.90m(npc_woman 1.91m 기준), 발 원점 → `mixamorig:` 접두 제거 → 머티리얼은 Meshy GLB 것을 통째로 이식(UV 동일: baseColor 픽셀 일치 확인), emissive/specular 제거 → GLB export → 후처리로 본 노드의 float 오차 scale 제거·노멀/MR 1024² 축소. baseColor 2048² JPEG q94 4:4:4(exporter 기본 q92 4:2:0은 얼굴이 뭉개져 상향; q97 백업 `~/assets_original/maid/maid_q97.glb`), normal·metallicRoughness 1024² JPEG
+- pink_maid — 여관 메이드 NPC Cocoly (`pink_maid.glb`); 원화 `../images/characters/pink-maid-concept.png` (ComfyUI krea2_turbo_fp8_scaled, 2026-08-31 이전 생성); 거래 창 초상화 `../images/characters/cocoly-portrait.png` (2026-09-02, `doc/assets/ui.md` 참조); 3D는 Meshy.ai Image to 3D (유료 등급, 생성 2026-08-31, 프롬프트명 "Pink Porcelain Maid"), Meshy 원본 `assets/npcs/pink_maid/Meshy_AI_Pink_Porcelain_Maid_0831180703_texture_obj.zip`(OBJ, Mixamo 업로드용) + `..._0831180550_texture.glb`(GLB, 머티리얼 이식용) + `..._0831180601_texture_fbx.zip`(FBX, 미사용), Mixamo 리깅 `assets/npcs/pink_maid/Taunt.fbx` (2026-09-01, 검지만 있는 33본 스킨째 — Meshy 메시의 손가락이 붙어 있어 Mixamo가 풀 스켈레톤을 못 만듦; 나머지 손가락 애니 트랙은 무시됨). 가공은 maid 항목과 동일 파이프라인 (키 1.90m, `mixamorig:` 제거, Meshy GLB 머티리얼 이식, baseColor 2048² JPEG q94 4:4:4, normal·MR 1024², q97 백업 `~/assets_original/pink_maid/pink_maid_q97.glb`)
 - night_merchant — 야간 상인 NPC Wick (`night_merchant.glb`); 거래 창 초상화 `../images/characters/wick-portrait.png` (ChatGPT, 2026-08-27, `doc/assets/ui.md` 참조); Meshy.ai Premium 등급, 생성 2026-08-08 (프롬프트명 "The Jolly Buccaneer"). OBJ로 받아 Mixamo 리깅(Excited) — Mixamo에서 텍스처가 하얗게 깨져 Blender에서 baseColor 재연결. 손가락 본 없는 33본 스켈레톤(기존 65본과 달리 손가락 애니 안 먹음, 런타임 리타게팅이 없는 본 트랙은 무시). baseColor 2048² JPEG, 노멀맵 없음. .blend 소스 `~/assets_original/night_merchant.blend` (텍스처 팩 포함)
-- steward — 영지 관리인 NPC용 (`steward.glb`); 거래 창 초상화 `../images/characters/steward-portrait.png` (사용자 제공 ChatGPT 이미지, 2026-09-07, ChatGPT Pro x20 등급; `doc/assets/ui.md` 참조); 원화 `../images/characters/steward-concept.png` (ChatGPT 이미지 생성, 2026-09-05); 3D는 Meshy.ai Image to 3D (Premium 등급, 생성 2026-09-05, 프롬프트명 "The Master Keykeeper"), Meshy 원본 `assets/steward/Meshy_AI_The_Master_Keykeeper_0905051902_texture.glb`(GLB, 머티리얼 이식용) + `..._0905051916_texture_obj.zip`(OBJ, Mixamo 업로드용), Mixamo 리깅 65본 `assets/steward/Sitting Laughing.fbx` (2026-09-05, 스킨째). `tools/blender-scripts/export_character.py`로 가공 (Blender 5.2.1, 2026-09-05): 애니 제거, 키 1.90m(maid 기준), 발 원점, `mixamorig:` 제거, Meshy GLB 머티리얼 이식(면 단위 UV 일치 검증), emissive 제거, 본 노드 float 오차 scale 제거. 텍스처는 maid의 JPEG 대신 WebP q90 — baseColor 2048², normal·MR 1024² (GLB 1.59MB). 작업 blend `assets/steward/steward.blend`. Land Registrar NPC `Aldwin`에 연결 (2026-09-05), Land Deed 판매. 2026-09-06부터 낮에는 집 1층 61번 의자에 앉고 밤에는 같은 집 2층 60번 침대에서 수면
+- steward — 영지 관리인 NPC용 (`steward.glb`); 거래 창 초상화 `../images/characters/steward-portrait.png` (사용자 제공 ChatGPT 이미지, 2026-09-07, ChatGPT Pro x20 등급; `doc/assets/ui.md` 참조); 원화 `../images/characters/steward-concept.png` (ChatGPT 이미지 생성, 2026-09-05); 3D는 Meshy.ai Image to 3D (Premium 등급, 생성 2026-09-05, 프롬프트명 "The Master Keykeeper"), Meshy 원본 `assets/npcs/steward/Meshy_AI_The_Master_Keykeeper_0905051902_texture.glb`(GLB, 머티리얼 이식용) + `..._0905051916_texture_obj.zip`(OBJ, Mixamo 업로드용), Mixamo 리깅 65본 `assets/npcs/steward/Sitting Laughing.fbx` (2026-09-05, 스킨째). `tools/blender-scripts/export_character.py`로 가공 (Blender 5.2.1, 2026-09-05): 애니 제거, 키 1.90m(maid 기준), 발 원점, `mixamorig:` 제거, Meshy GLB 머티리얼 이식(면 단위 UV 일치 검증), emissive 제거, 본 노드 float 오차 scale 제거. 텍스처는 maid의 JPEG 대신 WebP q90 — baseColor 2048², normal·MR 1024² (GLB 1.59MB). 작업 blend `assets/npcs/steward/steward.blend`. Land Registrar NPC `Aldwin`에 연결 (2026-09-05), Land Deed 판매. 2026-09-06부터 낮에는 집 1층 61번 의자에 앉고 밤에는 같은 집 2층 60번 침대에서 수면
 
 ### Estate Architect (2026-09-06)
 
 - 영지 건축가용 모델 `client/public/models/characters/estate_architect.glb` (NPC `Rowan`, merchant). 2026-09-06 광장에 배치하고 목책·조경 도구함·바닥 재질 견본집 7종 판매를 연결.
 - 거래 창 초상화 `../images/characters/estate-architect-portrait.png` — 사용자 제공 ChatGPT 이미지, ChatGPT Pro x20 등급, 2026-09-07; `doc/assets/ui.md` 참조.
 - 원화: [estate-architect-concept.png](../images/characters/estate-architect-concept.png). ChatGPT Pro 20x, 생성 2026-09-06, OpenAI 이용약관 적용. 제공된 `assets/ChatGPT Image 2026년 9월 6일 오후 10_22_31.png`를 이동.
-- 3D 원본: `assets/Meshy_AI__0906132418_texture.glb`. Meshy.ai Premium, 생성 2026-09-06, 유료 생성물 라이선스 적용(아래 License 참조).
-- 리깅 원본: `assets/Defeated.fbx`. Mixamo, 2026-09-06 제공, 손가락 포함 65본. Mixamo 라이선스 적용(아래 License 참조).
+- 3D 원본: `assets/npcs/estate_architect/Meshy_AI__0906132418_texture.glb`. Meshy.ai Premium, 생성 2026-09-06, 유료 생성물 라이선스 적용(아래 License 참조).
+- 리깅 원본: `assets/npcs/estate_architect/Defeated.fbx`. Mixamo, 2026-09-06 제공, 손가락 포함 65본. Mixamo 라이선스 적용(아래 License 참조).
 - Blender 5.2.0 LTS에서 기존 캐릭터 내보내기 스크립트로 키 1.90m, 발 원점, 회전·스케일 적용, `mixamorig:` 접두 제거. Meshy 재질을 이식하고 면 단위 UV 일치 확인(최대 오차 0). emissive와 원본 Defeated 애니메이션 제거.
 - 텍스처: WebP q90, baseColor 2048², normal·metallicRoughness 1024². GLB 1,676,780바이트, 65본, 노드 scale 없음. 기존 클라이언트 리타게팅으로 걷기·달리기·slash1을 적용해 포즈 렌더 확인.
-- 작업 파일: `assets/estate_architect/estate_architect.blend` (텍스처 포함). **[미사용]** 작업용 `preview.png`는 2026-10-09 정리했다.
+- 작업 파일: `assets/npcs/estate_architect/estate_architect.blend` (텍스처 포함). **[미사용]** 작업용 `preview.png`는 2026-10-09 정리했다.
 
 재생성:
 
 ```sh
 blender -b --python-exit-code 1 -P tools/blender-scripts/export_character.py -- \
-  --fbx assets/Defeated.fbx \
-  --glb assets/Meshy_AI__0906132418_texture.glb \
+  --fbx assets/npcs/estate_architect/Defeated.fbx \
+  --glb assets/npcs/estate_architect/Meshy_AI__0906132418_texture.glb \
   --name estate_architect --height 1.90 \
   --out client/public/models/characters/estate_architect.glb \
-  --blend assets/estate_architect/estate_architect.blend
+  --blend assets/npcs/estate_architect/estate_architect.blend
 ```
 
 ### Grida / 그리다 — ORKEA 점원 (2026-09-20)
@@ -264,13 +266,13 @@ blender -b --python-exit-code 1 -P tools/blender-scripts/export_character.py -- 
 - 상점 창 초상화: [grida-portrait.png](../images/characters/grida-portrait.png) → `client/public/portraits/grida.webp`(원본 상단 2/3 크롭, 512×341, alpha 유지). 기존 원화의 얼굴·머리·의상을 참조한 상반신 구도. OpenAI Codex built-in ImageGen, ChatGPT Pro x20 등급(사용자 확인), 2026-09-20; 출력물 이용 조건과 프롬프트는 [UI 에셋 문서](ui.md#npc-거래-초상화) 참조.
 - 3D 생성: Meshy.ai **Premium** 등급(사용자 확인), Image to 3D API, 2026-09-20. [Meshy 유료 생성물 소유권 조건](https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models) 적용. Meshy Community에 공개 게시하지 않음.
 - 생성 설정: `ai_model=meshy-7.1`, `model_type=standard`, `should_remesh=true`, `topology=triangle`, `target_polycount=10000`, A 포즈, PBR 텍스처 2048², `image_enhancement=false`로 원화 외형 유지. GLB·FBX·OBJ 요청.
-- 작업 ID: `01a0ba74-d31f-7744-bc58-31ef8c01e280`. 요청·결과 기록은 `assets/grida/generation.json`, 원화 출처는 위 원화 항목에 기록한다.
-- Meshy 원본: `assets/grida/grida_meshy.glb` 및 `texture_0_*.png`. 최종 재생성에 필요한 원본과 PBR 텍스처를 보존한다.
+- 작업 ID: `01a0ba74-d31f-7744-bc58-31ef8c01e280`. 요청·결과 기록은 `assets/npcs/grida/generation.json`, 원화 출처는 위 원화 항목에 기록한다.
+- Meshy 원본: `assets/npcs/grida/grida_meshy.glb` 및 `texture_0_*.png`. 최종 재생성에 필요한 원본과 PBR 텍스처를 보존한다.
 - **[미사용]** 리깅 전 검토본, 중복 Meshy FBX·OBJ·MTL, Mixamo 업로드 ZIP, 미리보기·포즈 데이터·일회성 검사 스크립트·중복 API 응답은 2026-09-21에 삭제했다.
 - 게임 모델: `client/public/models/characters/grida.glb` — **9,812 triangles**, 손가락 포함 **65본**, 키 1.90m, 발밑 원점, 1,972,300바이트. `Grida` 이름의 NPC 모델로 연결.
-- 리깅 원본: 사용자 제공 `/mnt/y/web_downloads/Idle (5).fbx` → `assets/grida/grida_mixamo.fbx` (Mixamo, 2026-09-20, 무료 서비스; 아래 Mixamo 라이선스 참조). 포함된 Idle 애니메이션은 제거하고 기존 게임 애니메이션 팩을 사용.
-- Blender 5.2.0 LTS에서 `tools/blender-scripts/export_character.py`로 변환. Meshy 텍스처 이름만 역할별로 정규화한 임시 GLB를 사용해 재질 이식, 면 단위 UV 최대 오차 0 확인. 키·발 원점 적용, `mixamorig:` 접두·emissive·본 scale 오차 제거. WebP q90, baseColor 2048², normal·metallicRoughness 1024². 작업 파일: `assets/grida/grida_rigged.blend`. 재현: `.venv/bin/python assets/grida/export_rig.py`.
-- 검증: GLB 본 이름·스킨 가중치·내장 텍스처·키·원점 확인. 실제 클라이언트 리타게팅으로 idle1·walk·run을 각각 12개 시점에서 검사하고 포즈 렌더를 확인했다. 검증 요약과 원본·결과 해시는 `assets/grida/generation.json`의 `rigging`에 보존한다.
+- 리깅 원본: 사용자 제공 `/mnt/y/web_downloads/Idle (5).fbx` → `assets/npcs/grida/grida_mixamo.fbx` (Mixamo, 2026-09-20, 무료 서비스; 아래 Mixamo 라이선스 참조). 포함된 Idle 애니메이션은 제거하고 기존 게임 애니메이션 팩을 사용.
+- Blender 5.2.0 LTS에서 `tools/blender-scripts/export_character.py`로 변환. Meshy 텍스처 이름만 역할별로 정규화한 임시 GLB를 사용해 재질 이식, 면 단위 UV 최대 오차 0 확인. 키·발 원점 적용, `mixamorig:` 접두·emissive·본 scale 오차 제거. WebP q90, baseColor 2048², normal·metallicRoughness 1024². 작업 파일: `assets/npcs/grida/grida_rigged.blend`. 재현: `.venv/bin/python assets/npcs/grida/export_rig.py`.
+- 검증: GLB 본 이름·스킨 가중치·내장 텍스처·키·원점 확인. 실제 클라이언트 리타게팅으로 idle1·walk·run을 각각 12개 시점에서 검사하고 포즈 렌더를 확인했다. 검증 요약과 원본·결과 해시는 `assets/npcs/grida/generation.json`의 `rigging`에 보존한다.
 - NPC 레지스트리 `grida` / `Grida`, 한국어 별칭 `그리다`. ORKEA 서쪽 계산 구역 옆 `(-1452.0, 1.0, 4777.0)` 근무 일정과 전시품·카트·출입구 결제 안내를 연결. 근무 일정과 안내 문구는 `agent-client/data/npcs/grida/`에 있다. 별도 개인 상점은 없으며 ORKEA의 기존 결제 흐름을 사용.
 - 생성 비용: **30 API 크레딧**(5,096 → 5,066).
 
@@ -281,16 +283,16 @@ blender -b --python-exit-code 1 -P tools/blender-scripts/export_character.py -- 
 - 상점 창 초상화: [tobin-portrait.png](../images/characters/tobin-portrait.png) → `client/public/portraits/tobin.webp`(512², alpha 유지). 기존 원화의 얼굴·복장을 유지한 가슴까지의 투명 배경 초상화. OpenAI Codex built-in ImageGen 편집, ChatGPT Pro 20x, 2026-09-21. 출처·출력물 이용 조건과 편집 프롬프트는 [UI 에셋 문서](ui.md#npc-거래-초상화) 참조.
 - 햇볕에 그을린 얼굴과 짧은 희끗한 수염의 친근한 중년 낚시꾼. 리넨 튜닉·가죽 조끼·모직 바지·챙 없는 모직 모자·가죽 신발의 중세풍 복장. 청바지와 현대적인 모자가 있던 초안은 **[미사용]**이며, 사용자 요청으로 복장을 수정했다.
 - Meshy 변환과 Mixamo 리깅을 위해 빈손의 정면 A포즈로 제작했다. 낚싯대는 별도 장착 아이템으로 사용한다.
-- 실제 생성·편집 프롬프트와 출처·해시: [concept-source.json](../../assets/tobin/concept-source.json).
+- 실제 생성·편집 프롬프트와 출처·해시: [concept-source.json](../../assets/npcs/tobin/concept-source.json).
 - 3D 생성: Meshy.ai **Premium**(사용자 확인), Image to 3D API, `meshy-7.1`, 2026-09-21. [Meshy 유료 생성물 소유권 조건](https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models) 적용. Meshy Community에 공개 게시하지 않았다.
-- 10,000 polygons 목표로 생성한 **10,370 triangles**, 빈손 A포즈, PBR 텍스처 2048². 추가 폴리곤 감면 없이 GLB·FBX·OBJ와 텍스처를 다운로드했다. 작업 ID `01a0bfbf-24c2-74cb-aebb-2a24c7a883dc`, 비용 **30 API 크레딧**(4,976 → 4,946). [생성 설정·결과·해시](../../assets/tobin/generation.json).
-- 재생성에 필요한 [PBR 원본 GLB](../../assets/tobin/tobin_meshy.glb), Mixamo 리깅 FBX, Blender 작업 파일, 원본 `texture_0_*.png`를 보존한다. GLB의 베이스컬러·metallicRoughness는 JPEG이므로 원본 PNG도 유지한다. 사용 완료한 업로드 ZIP과 리깅 전 FBX·OBJ·MTL, 이전 미리보기·임시 로그·중복 검증 JSON은 사용자 요청으로 삭제했다(2026-09-21). [파일 안내](../../assets/tobin/README.md).
+- 10,000 polygons 목표로 생성한 **10,370 triangles**, 빈손 A포즈, PBR 텍스처 2048². 추가 폴리곤 감면 없이 GLB·FBX·OBJ와 텍스처를 다운로드했다. 작업 ID `01a0bfbf-24c2-74cb-aebb-2a24c7a883dc`, 비용 **30 API 크레딧**(4,976 → 4,946). [생성 설정·결과·해시](../../assets/npcs/tobin/generation.json).
+- 재생성에 필요한 [PBR 원본 GLB](../../assets/npcs/tobin/tobin_meshy.glb), Mixamo 리깅 FBX, Blender 작업 파일, 원본 `texture_0_*.png`를 보존한다. GLB의 베이스컬러·metallicRoughness는 JPEG이므로 원본 PNG도 유지한다. 사용 완료한 업로드 ZIP과 리깅 전 FBX·OBJ·MTL, 이전 미리보기·임시 로그·중복 검증 JSON은 사용자 요청으로 삭제했다(2026-09-21). 폴더의 중복 README는 2026-10-09 이 항목으로 통합했다.
 - Mixamo 업로드 후 **텍스처 정상 표시를 사용자 확인**(2026-09-21). ZIP 루트의 OBJ·MTL·베이스컬러와 재질 참조를 맞춘 구성이며, 이후 캐릭터에도 같은 [업로드 준비 방식](creation-guidelines.md#mixamo-upload-preparation)을 사용한다.
-- 리깅 전 GLB·FBX·OBJ는 메시 1개·10,370 triangles·UV 1개·2048² 텍스처·본 0개로 검증했다. 검사 결과와 삭제 파일 기록은 [generation.json](../../assets/tobin/generation.json)의 `validation`·`cleanup`에 보존한다.
-- 리깅 원본: 사용자 제공 `/mnt/y/web_downloads/Idle (6).fbx` → [tobin_mixamo.fbx](../../assets/tobin/tobin_mixamo.fbx). Mixamo(Adobe), 2026-09-21, 무료 서비스; 아래 Mixamo 라이선스 참조. 포함된 Idle 애니메이션은 제거하고 기존 게임 애니메이션 팩을 사용한다.
+- 리깅 전 GLB·FBX·OBJ는 메시 1개·10,370 triangles·UV 1개·2048² 텍스처·본 0개로 검증했다. 검사 결과와 삭제 파일 기록은 [generation.json](../../assets/npcs/tobin/generation.json)의 `validation`·`cleanup`에 보존한다.
+- 리깅 원본: 사용자 제공 `/mnt/y/web_downloads/Idle (6).fbx` → [tobin_mixamo.fbx](../../assets/npcs/tobin/tobin_mixamo.fbx). Mixamo(Adobe), 2026-09-21, 무료 서비스; 아래 Mixamo 라이선스 참조. 포함된 Idle 애니메이션은 제거하고 기존 게임 애니메이션 팩을 사용한다.
 - 게임 모델: [tobin.glb](../../client/public/models/characters/tobin.glb) — **10,370 triangles, 33본**, 키 1.90m, 발밑 원점, WebP q90. 베이스컬러 2048², 노멀·metallicRoughness 1024². 양손에 검지 체인만 있는 간소화된 리그로, 엄지·중지·약지·소지를 각각 제어할 수는 없다.
-- Blender 5.2.0 LTS에서 공용 `tools/blender-scripts/export_character.py`로 원본 재질을 이식했다. 면 단위 UV 최대 오차 0, `mixamorig:` 접두·본 scale 오차 제거. 텍스처를 내장한 [Blender 작업 파일](../../assets/tobin/tobin_rigged.blend), 재현: `.venv/bin/python assets/tobin/export_rig.py`.
-- 실제 클라이언트 리타게팅으로 `idle1`·`walk`·`run`·`fishing_cast`·`fishing_idle`을 각각 12개 시점에서 검사하고 동작 렌더를 검토했다. 검증 JSON 3개는 [generation.json](../../assets/tobin/generation.json)의 `rigging.export_report`·`rigging.validation`·`npc_placement.verification`에 통합하고 동작 미리보기는 삭제했다. Grida와 같은 보관 기준으로 폴더에 11개 파일을 유지한다. 클라이언트 모델 경로를 NPC 이름 `Tobin`에 연결했다.
+- Blender 5.2.0 LTS에서 공용 `tools/blender-scripts/export_character.py`로 원본 재질을 이식했다. 면 단위 UV 최대 오차 0, `mixamorig:` 접두·본 scale 오차 제거. 텍스처를 내장한 [Blender 작업 파일](../../assets/npcs/tobin/tobin_rigged.blend), 재현: `.venv/bin/python assets/npcs/tobin/export_rig.py`.
+- 실제 클라이언트 리타게팅으로 `idle1`·`walk`·`run`·`fishing_cast`·`fishing_idle`을 각각 12개 시점에서 검사하고 동작 렌더를 검토했다. 검증 JSON 3개는 [generation.json](../../assets/npcs/tobin/generation.json)의 `rigging.export_report`·`rigging.validation`·`npc_placement.verification`에 통합하고 동작 미리보기는 삭제했다. README 통합 후 폴더에는 원본·스크립트·기록 10개를 유지한다. 클라이언트 모델 경로를 NPC 이름 `Tobin`에 연결했다.
 - NPC 레지스트리 `tobin` / `Tobin`, 한국어 별칭 `토빈`. **world(-1499.9, 0.6, 4728.4), 방향 -89.0°**, tile(-23, 74), cell(4, 24)의 강가에 배치. `fishing_rod`를 작업 장비로 장착하고 캐스팅·입질 대응·실제 물고기 획득을 반복한다. 찌·바깥 낚싯줄은 실제 낚시 중에만 표시하며, 매 시도 사이에는 잠시 쉰다. [일정](../../agent-client/data/npcs/tobin/schedule.json), [낚시 연출과 구현 범위](../FISHING.md#토빈-배치-2026-09-21-구현). 상점에서 낚싯대를 기본 가격 3실버에 판매하며, 6m 이내에서 캐스팅부터 포획까지 관찰하면 낚시 스킬을 영구 습득한다.
 
 ## 텍스처 재패킹 (2026-08-06)

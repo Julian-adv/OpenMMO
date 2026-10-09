@@ -18,7 +18,7 @@
 
 ## 보관 파일
 
-- [전달 파일과 바이트가 같은 원본](../../assets/modular_human_male_01/parts/caveman_tripo_top_v1/source.glb).
+- [전달 파일과 바이트가 같은 원본](../../assets/modular_human_male_01/caveman/tripo_top_v1/source.glb).
 - [출처·SHA-256·생성 정보](modular-caveman-tripo-top-sources.json),
   [원본 메시 진단](modular-caveman-tripo-top-review-v1.json),
   [피팅 후보 선택 명세](modular-caveman-source-selection.json).
@@ -34,8 +34,8 @@
 동작 여유 공간 변경은 미채택으로 기록하고, 선택한 GLB를 바이트까지 동일하게 복원했다.
 선택 파일 SHA-256은 `e495478ffdcf1d018a9c1faed604d91e92b6b2df91e1baf1599544800ad9ab9f`다.
 
-- [피팅·리깅 GLB](../../assets/modular_human_male_01/parts/caveman_tripo_top_v1/top_caveman.glb).
-- [텍스처·몸체·샘플 자세를 포함한 편집용 Blender](../../assets/modular_human_male_01/parts/caveman_tripo_top_v1/caveman-top-fitting.blend).
+- [피팅·리깅 GLB](../../assets/modular_human_male_01/caveman/tripo_top_v1/top_caveman.glb).
+- [텍스처·몸체·샘플 자세를 포함한 편집용 Blender](../../assets/modular_human_male_01/caveman/tripo_top_v1/caveman-top-fitting.blend).
 - [피팅과 본 검증](modular-caveman-tripo-top-fitting-v1.json),
   [런타임·91개 자세의 수치 검수](modular-caveman-tripo-top-animation-v1.json),
   [렌더·Blender 보관 기록](modular-caveman-tripo-top-fitted-review-v1.json).

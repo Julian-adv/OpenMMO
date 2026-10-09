@@ -1,7 +1,7 @@
 {
   "date": "2026-10-04",
   "reports": {
-    "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb": {
+    "assets/modular_human_male_01/caveman/tripo_pants_v1/pants_caveman.glb": {
       "sha256": "1fc3a92b29c8b5e37931cda6b32966754e1f3b1f33fe478a528179fc739a2db4",
       "bytes": 4812332,
       "errors": 0,

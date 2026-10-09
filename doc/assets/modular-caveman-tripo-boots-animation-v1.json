@@ -3,15 +3,15 @@
   "method": "Actual canonical animation clips and modular binding; 25 evenly spaced skinned geometry samples per clip",
   "sources": [
     {
-      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "path": "assets/modular_human_male_01/fitted/base.glb",
       "sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b"
     },
     {
-      "path": "assets/modular_human_male_01/parts/caveman_tripo_boots_v1/boots_caveman.glb",
+      "path": "assets/modular_human_male_01/caveman/tripo_boots_v1/boots_caveman.glb",
       "sha256": "816349031a0c5bcac6efd7bb1320b8cd3d27f77ec86c47a10e6f9ccee72e4a48"
     },
     {
-      "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+      "path": "assets/modular_human_male_01/animations/animations.glb",
       "sha256": "76eeb462770754895834271423b4ef7f33efdbd34bdfb9830beba4ba84e7569f"
     },
     {

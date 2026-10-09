@@ -2,10 +2,10 @@
   "status": "Historical v8 garment review; selected Tripo top and pants have separate current reviews",
   "blender_version": "5.2.0 LTS",
   "editable": {
-    "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/rogue-fitting.blend",
+    "path": "assets/modular_human_male_01/rogue/fitted_v8/rogue-fitting.blend",
     "sha256": "c705874e34bead479caf044c68fb746c2808ff65c99b274540ff7eff0d17017e",
     "retained": false,
-    "replacement": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/tripo-pants-fitting.blend"
+    "replacement": "assets/modular_human_male_01/rogue/tripo_pants_v1/tripo-pants-fitting.blend"
   },
   "images": [
     {
@@ -34,7 +34,7 @@
     "sha256": "8d5c7ac55e9899fbca40c1d460fc4e58944889c1feaf33aa49ce57a46f1eaa0f"
   },
   "snapshots": {
-    "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/animation-snapshots.json",
+    "path": "assets/modular_human_male_01/rogue/fitted_v8/animation-snapshots.json",
     "sha256": "187950ec6f60d3788c7fbf7f1c0d3bdf426bced80f3ac992c21abff368f92a97"
   }
 }

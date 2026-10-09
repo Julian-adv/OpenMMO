@@ -232,7 +232,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-root", type=Path, default=ROOT)
     args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
-    source = args.output_root / "assets/fishing_rod"
+    source = args.output_root / "assets/items/fishing_rod"
     model = args.output_root / "client/public/models/weapons/fishing_rod.glb"
     icon = args.output_root / "client/public/items/weapons/fishing_rod.png"
     for path in (source, model.parent, icon.parent):

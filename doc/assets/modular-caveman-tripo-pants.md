@@ -62,7 +62,7 @@ blender -b -t 6 --python-exit-code 1 --python tools/blender-scripts/export_cavem
 
 ### v1 피팅·리깅
 
-기준은 `parts/fitted/base.glb`, `interfaces/v1`, `human_male_01_mixamo_candidate_v2`의 기존 65본이다. 실제 몸체 허리 단면에 맞추고 내부 몸체와의 간격을 보정했다. 원본, 공통 몸체와 사용자가 선택한 상의는 변경하지 않았다.
+기준은 `fitted/base.glb`, `interfaces/v1`, `human_male_01_mixamo_candidate_v2`의 기존 65본이다. 실제 몸체 허리 단면에 맞추고 내부 몸체와의 간격을 보정했다. 원본, 공통 몸체와 사용자가 선택한 상의는 변경하지 않았다.
 
 허리띠·뼈 장식 2개 메시와 앞·뒤·왼쪽·오른쪽 모피 4개 메시로 분리했다. 분할선 UV를 보간하고 허리 아래에 17mm 겹침을 남겼다. 분할·겹침으로 최종 **5,797 triangles**다. 모든 정점은 **Hips 100%**이며 허벅지 본에 끌려 다리 사이로 늘어나는 가중치는 없다.
 

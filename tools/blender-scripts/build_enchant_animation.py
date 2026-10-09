@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import export_animations as exporter
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE = ROOT / "assets/enchant_weapon"
+SOURCE = ROOT / "assets/animations/enchant_weapon"
 PACK = ROOT / "client/public/models/animations/social.glb"
 CLIPS = {"enchant_weapon": "Right", "enchant_weapon_left": "Left"}
 

@@ -102,7 +102,7 @@ OpenAI 생성 출력물 이용 조건과 기존 캐릭터 원화의 출처·이�
 - 무기 별도: 단검·칼집.
 
 몸체와 손은 생성 입력에서 제외했다. 소매와 팔 보호대 사이의 피부 노출을 유지한다.
-현재 기준은 `assets/modular_human_male_01/parts/fitted/base.glb`, `interfaces/v1`, 리그 `human_male_01_mixamo_candidate_v2`다.
+현재 기준은 `assets/modular_human_male_01/fitted/base.glb`, `interfaces/v1`, 리그 `human_male_01_mixamo_candidate_v2`다.
 [제작 워크플로우](modular-outfit-workflow.md)와 [연결 규칙](modular-outfit-connections.md)에 따라 실제 몸체에서 목·소매·허리 여유를 검수한다.
 그림을 치수나 피팅 합격 증거로 사용하지 않는다. 상의 생성 목표는 **2,500쿼드, 약 5,000트라이앵글**로 제안한다.
 소매·옷깃·밑단에 형상을 배분하고 가죽 결·얕은 나뭇가지 장식은 주로 텍스처와 노멀맵으로 표현한다.

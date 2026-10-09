@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('priest', ROOT / 'tools/fit-tripo-priest-pants.py')
 priest = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(priest)
-reference = ROOT / 'assets/modular_human_male_01/parts/fitted/pants_plate.glb'
+reference = ROOT / 'assets/modular_human_male_01/fitted/pants_plate.glb'
 doc, raw = priest.fit.read_glb(reference)
 triangles = []
 for mesh in doc['meshes']:

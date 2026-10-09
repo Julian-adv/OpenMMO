@@ -10,9 +10,9 @@ spec = importlib.util.spec_from_file_location('boots', ROOT / 'tools/fit-tripo-r
 boots = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(boots)
 fit, io = boots.fit, boots.io
-parts = ROOT / 'assets/modular_human_male_01/parts'
-files = ['fitted/base.glb', 'fitted/hair_crop.glb', 'ranger_tripo_top_v4/top_ranger.glb',
-         'ranger_tripo_pants_v1/pants_ranger.glb', 'ranger_tripo_boots_v1/boots_ranger.glb']
+parts = ROOT / 'assets/modular_human_male_01'
+files = ['fitted/base.glb', 'fitted/hair_crop.glb', 'ranger/tripo_top_v4/top_ranger.glb',
+         'ranger/tripo_pants_v1/pants_ranger.glb', 'ranger/tripo_boots_v1/boots_ranger.glb']
 counts = []
 for file in files:
     doc, binary = fit.read_glb(parts / file)

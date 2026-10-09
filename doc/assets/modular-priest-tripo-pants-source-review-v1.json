@@ -1,7 +1,7 @@
 {
   "status": "Raw source; not fitted or rigged",
   "source": {
-    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/source.glb",
+    "path": "assets/modular_human_male_01/priest/tripo_pants_v1/source.glb",
     "sha256": "61fa5f6ed6f68d4e121e1a3d9bac12385a9781d778cfeea952ba52cc09cd4885"
   },
   "triangles": 2034,

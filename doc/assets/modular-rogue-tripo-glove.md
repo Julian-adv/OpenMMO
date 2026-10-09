@@ -16,7 +16,7 @@
 
 ## 형상과 리깅
 
-원본은 2,043삼각형이며 리그가 없다. 현재 공통 몸체 `parts/fitted/base.glb`와
+원본은 2,043삼각형이며 리그가 없다. 현재 공통 몸체 `fitted/base.glb`와
 `interfaces/v1`을 기준으로 기존 65본의 계층·기준 자세·inverse bind를 그대로 사용한다.
 몸체나 손 자세를 바꾸지 않았다.
 
@@ -39,18 +39,18 @@
 
 ## 파일과 재현
 
-`assets/modular_human_male_01/parts/rogue_tripo_glove_v1/`에 보관한다.
+`assets/modular_human_male_01/rogue/tripo_glove_v1/`에 보관한다.
 
 - `source.glb`: 다운로드한 무수정 원본.
 - `glove_rogue_right.glb`: 오른손만 분리한 리깅 검사 파일.
 - **[미사용]** `gloves_rogue.glb`: 기존 왼손 천과 합친 중간 파일은 새 Tripo 천으로 교체 후 삭제했다.
-- **[미사용]** `tripo-glove-fitting.blend`: 중복 편집본은 삭제하고 `rogue_tripo_wrap_v1/tripo-wrap-fitting.blend`에 현재 조합을 통합했다.
+- **[미사용]** `tripo-glove-fitting.blend`: 중복 편집본은 삭제하고 `rogue/tripo_wrap_v1/tripo-wrap-fitting.blend`에 현재 조합을 통합했다.
 - `animation-snapshots.json`: Blender 검수에 사용하는 게임 동작 표본.
 - `validation-poses.json`: 수치 검사에 사용한 7동작 × 13자세.
 
 ```bash
 .venv/bin/python tools/fit-tripo-glove.py
-node tools/validate-tripo-rogue.mjs --directory assets/modular_human_male_01/parts/rogue_tripo_glove_v1 --part glove_rogue_right --fitting doc/assets/modular-rogue-tripo-glove-fitting-v1.json --report doc/assets/modular-rogue-tripo-glove-animation-v1.json
+node tools/validate-tripo-rogue.mjs --directory assets/modular_human_male_01/rogue/tripo_glove_v1 --part glove_rogue_right --fitting doc/assets/modular-rogue-tripo-glove-fitting-v1.json --report doc/assets/modular-rogue-tripo-glove-animation-v1.json
 .venv/bin/python tools/validate-tripo-glove-coverage.py
 blender -b -t 4 --python-exit-code 1 --python tools/blender-scripts/review_tripo_glove.py
 ```

@@ -21,7 +21,7 @@ SAMPLES = {
     "paving": 8,
 }
 OUTPUT = REPO / "client/public/items/objects"
-PREVIEWS = REPO / "assets/landscaping_samples"
+PREVIEWS = REPO / "assets/items/landscaping_samples"
 
 
 def render_sample(name, slot):

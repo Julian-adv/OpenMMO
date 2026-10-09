@@ -8,7 +8,7 @@ import numpy as np
 from lib.glb import read_glb, write_glb
 
 ROOT = Path(__file__).resolve().parents[1]
-PARTS = ROOT / 'assets/modular_human_male_01/parts'
+PARTS = ROOT / 'assets/modular_human_male_01'
 BASE, BASE_BIN = read_glb(PARTS / 'fitted/base.glb')
 DTYPES = {5121: '<u1', 5123: '<u2', 5125: '<u4', 5126: '<f4'}
 WIDTHS = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4, 'MAT4': 16}
@@ -135,7 +135,7 @@ def section_bounds(triangles, center, axis, cross_axes):
 
 @cache
 def plate_arm_triangles():
-    source, binary = read_glb(PARTS / 'plate_sources/top_plate.glb')
+    source, binary = read_glb(PARTS / 'knight/sources/top_plate.glb')
     primitive = source['meshes'][0]['primitives'][0]
     points = accessor(source, binary, primitive['attributes']['POSITION'])
     faces = accessor(source, binary, primitive['indices']).reshape(-1, 3)
@@ -316,7 +316,7 @@ def fit_ankle_clearance(positions, width=.55, depth=.45, back=.022):
 
 @cache
 def plate_boot_triangles():
-    doc, binary = read_glb(PARTS / 'plate_sources/boots_plate.glb')
+    doc, binary = read_glb(PARTS / 'knight/sources/boots_plate.glb')
     triangles = []
     for primitive in doc['meshes'][0]['primitives']:
         positions = boots_fit(accessor(doc, binary, primitive['attributes']['POSITION']))
@@ -661,7 +661,7 @@ def validate_closed_gloves(doc, binary):
 
 
 def build(name, fit):
-    doc, raw = read_glb(PARTS / 'plate_sources' / f'{name}.glb')
+    doc, raw = read_glb(PARTS / 'knight/sources' / f'{name}.glb')
     for material in doc['materials']:
         material['normalTexture']['scale'] = .3
     binary = bytearray(raw)

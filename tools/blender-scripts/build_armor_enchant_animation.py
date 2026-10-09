@@ -12,7 +12,7 @@ import export_animations as exporter
 from build_enchant_animation import aim
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE = ROOT / "assets/enchant_armor/enchant_armor.blend"
+SOURCE = ROOT / "assets/animations/enchant_armor/enchant_armor.blend"
 PACK = ROOT / "client/public/models/animations/enchant_armor.glb"
 CLIPS = {"enchant_armor": "Left", "enchant_armor_left": "Right"}
 

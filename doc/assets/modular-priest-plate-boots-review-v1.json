@@ -58,12 +58,12 @@
     "bytes": 629953
   },
   "pants": {
-    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+    "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb",
     "sha256": "0a69d996d3432055d60402913809b01635b1f8960baa2bf0941f472a568f6d51",
     "bytes": 2466148
   },
   "boots": {
-    "path": "assets/modular_human_male_01/parts/fitted/boots_plate.glb",
+    "path": "assets/modular_human_male_01/fitted/boots_plate.glb",
     "sha256": "60839b7c0b9b94cd97bb6463fa385c6b65443695e176028abe4c10cec7ec3650",
     "bytes": 11053696
   }

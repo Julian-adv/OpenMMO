@@ -27,7 +27,7 @@ Smart Mesh 옵션은 사용자가 확인했다. 구독은 기존 사용자 기�
 텍스처 바이트를 그대로 복사해 통합 손 파츠 3,495삼각형으로 내보냈다. 수를 맞추기 위한 데시메이션은 없다.
 작업실은 [선택 명세](modular-rogue-source-selection.json)의 새 통합 GLB를 읽는다.
 
-`assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/`에 무수정 `source.glb`,
+`assets/modular_human_male_01/rogue/tripo_wrap_v1/`에 무수정 `source.glb`,
 왼손 단독 `wrap_rogue_left.glb`, 최종 통합 `gloves_rogue.glb`, 표본 자세 파일과
 원본·현재 몸체·착용 파츠·검사 자세를 포함한 `tripo-wrap-fitting.blend`를 보관한다.
 **[미사용]** 이전 v8 왼손 천과 합친 중간 GLB와 중복 장갑 편집본은 삭제했다.
@@ -35,7 +35,7 @@ Smart Mesh 옵션은 사용자가 확인했다. 구독은 기존 사용자 기�
 
 ```bash
 .venv/bin/python tools/fit-tripo-wrap.py
-node tools/validate-tripo-rogue.mjs --directory assets/modular_human_male_01/parts/rogue_tripo_wrap_v1 --part wrap_rogue_left --report doc/assets/modular-rogue-tripo-wrap-animation-v1.json
+node tools/validate-tripo-rogue.mjs --directory assets/modular_human_male_01/rogue/tripo_wrap_v1 --part wrap_rogue_left --report doc/assets/modular-rogue-tripo-wrap-animation-v1.json
 .venv/bin/python tools/validate-tripo-glove-coverage.py --part wrap
 blender -b --python-exit-code 1 --python tools/blender-scripts/review_tripo_glove.py -- --part wrap
 ```

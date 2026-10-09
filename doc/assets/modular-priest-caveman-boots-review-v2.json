@@ -86,12 +86,12 @@
     "bytes": 756419
   },
   "pants": {
-    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+    "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb",
     "sha256": "0a69d996d3432055d60402913809b01635b1f8960baa2bf0941f472a568f6d51",
     "bytes": 2466148
   },
   "boots": {
-    "path": "assets/modular_human_male_01/parts/caveman_tripo_boots_v1/boots_caveman.glb",
+    "path": "assets/modular_human_male_01/caveman/tripo_boots_v1/boots_caveman.glb",
     "sha256": "816349031a0c5bcac6efd7bb1320b8cd3d27f77ec86c47a10e6f9ccee72e4a48",
     "bytes": 2290316
   }

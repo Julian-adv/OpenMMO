@@ -24,7 +24,9 @@
 
 ## 파일
 
-아래 파일명은 제작용 `assets/modular_human_male_01/parts/fitted/`와
+2026-10-10 클래스별 폴더 이름을 맞추기 위해 원본 폴더를 `plate/`에서 `knight/`로 변경했다. 판금 장비의 파일명과 파츠 ID는 `*_plate`를 사용한다.
+
+아래 파일명은 제작용 `assets/modular_human_male_01/fitted/`와
 게임용 `client/public/models/characters/modular_male/`에서 같다.
 
 | 파일 | 구성 | Triangles |
@@ -35,9 +37,9 @@
 | `gloves_plate.glb` | 손가락 관절을 따르는 좌우 판금 장갑과 손목 테두리·안감 | 1,404 |
 | `helmet_plate.glb` | 기존 볼 보호대가 입·턱 밑·목을 감싸는 헬멧 | 2,299 |
 
-- 편집 원본: `assets/modular_human_male_01/parts/fitted/plate_parts.blend`.
+- 편집 원본: `assets/modular_human_male_01/fitted/plate_parts.blend`.
   몸체와 새 파츠를 한 리그에 연결하고 텍스처를 내장했다. 기존 `character_parts.blend`는 별도로 유지한다.
-- 재가공 입력: `assets/modular_human_male_01/parts/plate_sources/`의 같은 이름 GLB 5개.
+- 재가공 입력: `assets/modular_human_male_01/knight/sources/`의 같은 이름 GLB 5개.
 - 원화: `doc/images/characters/modular_human_male_01/parts/*_plate.png` 5개.
 - 실제 생성 프롬프트·설정·작업 ID·크레딧·SHA-256: [출처 기록](modular-knight-plate-sources.json).
 - 배포 압축본의 입력·출력 해시: [게임 manifest](../../client/public/models/characters/modular_male/manifest.json).

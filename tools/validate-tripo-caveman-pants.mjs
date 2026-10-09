@@ -8,8 +8,8 @@ const { server, sources, load } = await headlessThree({ meshopt: true })
 try {
   const { bindModularPart, modularAnimationClips } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
   const { updatePeltPhysics, resetPeltPhysics, disposePeltPhysics } = await server.ssrLoadModule('/src/lib/effects/pelt-rig.ts')
-  const body = (await load(runtime ? 'client/public/models/characters/modular_male/base.glb' : 'assets/modular_human_male_01/parts/fitted/base.glb')).scene
-  const meshes = bindModularPart(body, (await load(runtime ? 'client/public/models/characters/modular_male/pants_caveman.glb' : 'assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb')).scene)
+  const body = (await load(runtime ? 'client/public/models/characters/modular_male/base.glb' : 'assets/modular_human_male_01/fitted/base.glb')).scene
+  const meshes = bindModularPart(body, (await load(runtime ? 'client/public/models/characters/modular_male/pants_caveman.glb' : 'assets/modular_human_male_01/caveman/tripo_pants_v1/pants_caveman.glb')).scene)
   assert.equal(meshes.length, 6)
   const records = meshes.map(mesh => {
     const geometry = mesh.geometry

@@ -13,10 +13,10 @@ from mathutils import Matrix, Vector
 SCRIPTS = Path(__file__).resolve().parent
 REPO = SCRIPTS.parents[1]
 SOURCES = {
-    "top": "ranger_tripo_top_v4",
-    "pants": "ranger_tripo_pants_v1",
-    "gloves": "ranger_tripo_gloves_v1",
-    "boots": "ranger_tripo_boots_v1",
+    "top": "ranger/tripo_top_v4",
+    "pants": "ranger/tripo_pants_v1",
+    "gloves": "ranger/tripo_gloves_v1",
+    "boots": "ranger/tripo_boots_v1",
 }
 PARTS = ("top", "pants", "boots", "gloves")
 parser = argparse.ArgumentParser(description=__doc__)
@@ -27,7 +27,7 @@ with tempfile.TemporaryDirectory(prefix="ranger-items-") as temporary:
     for name in args.parts:
         bpy.ops.wm.read_factory_settings(use_empty=True)
         part_id = f"{name}_ranger"
-        source = REPO / f"assets/modular_human_male_01/parts/{SOURCES[name]}/{part_id}.glb"
+        source = REPO / f"assets/modular_human_male_01/{SOURCES[name]}/{part_id}.glb"
         bpy.ops.import_scene.gltf(filepath=str(source))
         orientation = Matrix.Identity(4)
         if name == "gloves":
@@ -78,4 +78,4 @@ with tempfile.TemporaryDirectory(prefix="ranger-items-") as temporary:
                     "--exposure", "-1.2"]
         bpy.context.preferences.filepaths.save_version = 0
         runpy.run_path(str(SCRIPTS / "export_item_asset.py"), run_name="__main__")
-        (REPO / f"assets/ranger_{name}/ranger_{name}-render.png").unlink()
+        (REPO / f"assets/items/ranger_{name}/ranger_{name}-render.png").unlink()

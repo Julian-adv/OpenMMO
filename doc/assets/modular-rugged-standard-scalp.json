@@ -1,7 +1,7 @@
 {
   "date": "2026-10-05",
   "source": {
-    "path": "assets/modular_human_male_01/parts/face_tripo_rugged_v1/face-rugged-before-standard-scalp.glb",
+    "path": "assets/modular_human_male_01/faces/tripo_rugged_v1/face-rugged-before-standard-scalp.glb",
     "sha256": "69bf72e0170cf0770b7b9b555c5d73d67d5f163af13df3261c03fe3228c7a18a"
   },
   "canonical_head_sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",

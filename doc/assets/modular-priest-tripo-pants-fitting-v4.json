@@ -1,19 +1,19 @@
 {
   "status": "Fitted candidate; animation and visual review required after rebuilding",
   "source": {
-    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/source.glb",
+    "path": "assets/modular_human_male_01/priest/tripo_pants_v1/source.glb",
     "sha256": "61fa5f6ed6f68d4e121e1a3d9bac12385a9781d778cfeea952ba52cc09cd4885",
     "bytes": 2424628,
     "byte_identical_to_delivery": true
   },
   "base": {
-    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "path": "assets/modular_human_male_01/fitted/base.glb",
     "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
     "bytes": 22214236
   },
   "interfaces": {
-    "path": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
-    "sha256": "f3fc3aed9c5080cf26a294dac496293c89bce8f67466add18a7ef72b326f006b",
+    "path": "assets/modular_human_male_01/interfaces/v1/interfaces.json",
+    "sha256": "52cbd59252b2c80740553182f347273afd3706adf1da3f26b9a11d79400eb23e",
     "bytes": 310940
   },
   "rig_id": "human_male_01_mixamo_candidate_v2",
@@ -23,7 +23,7 @@
   "seat": {
     "method": "Loft the rear waist, seat and upper thigh along the smoothed plate trouser rear surface, with 90-percent rear depth about Z=-0.025m; retain body clearance",
     "reference": {
-      "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+      "path": "assets/modular_human_male_01/fitted/pants_plate.glb",
       "sha256": "aa95a9f1b85aa881df47e6e37ecbfebc7c168b352fcf0f4a9941208962eeff04"
     },
     "smoothing_xy_m": 0.012,
@@ -514,7 +514,7 @@
     ]
   },
   "validation": {
-    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+    "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb",
     "sha256": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b",
     "triangles": 1513,
     "bones": 65,

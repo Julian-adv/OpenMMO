@@ -2,7 +2,7 @@
   "date": "2026-10-07",
   "blender_version": "5.2.0 LTS",
   "editable": {
-    "path": "assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/ranger-gloves-fitting.blend",
+    "path": "assets/modular_human_male_01/ranger/tripo_gloves_v1/ranger-gloves-fitting.blend",
     "sha256": "2b9ef27036fd95b23f358e4e2c5943820519fa5ff131512278b8a42954407197"
   },
   "fitting": {

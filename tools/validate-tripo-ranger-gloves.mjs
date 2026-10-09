@@ -3,14 +3,14 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import * as THREE from '../client/node_modules/three/build/three.module.js'
 import { clipSampler, headlessThree, loadClips, root } from './lib/headless-three.mjs'
 
-const directory = 'assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/'
+const directory = 'assets/modular_human_male_01/ranger/tripo_gloves_v1/'
 const fittingPath = 'doc/assets/modular-ranger-tripo-gloves-fitting-v1.json'
 const fitting = JSON.parse(readFileSync(new URL(fittingPath, root)))
 const { server, sources, load } = await headlessThree()
 try {
   const { bindModularPart, modularAnimationClips } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
   const { trimModularClothing } = await server.ssrLoadModule('/src/lib/utils/modularClothing.ts')
-  const body = (await load('assets/modular_human_male_01/parts/fitted/base.glb')).scene
+  const body = (await load('assets/modular_human_male_01/fitted/base.glb')).scene
   const meshes = bindModularPart(body, (await load(directory + 'gloves_ranger.glb')).scene)
   assert.equal(meshes.length, 2)
   body.updateMatrixWorld(true)

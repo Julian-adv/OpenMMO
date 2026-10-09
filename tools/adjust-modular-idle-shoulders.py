@@ -8,7 +8,7 @@ from pathlib import Path
 from lib.glb import read_glb, write_glb
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT = ROOT / 'assets/modular_human_male_01/rigged_hand_tuned/animations.glb'
+DEFAULT = ROOT / 'assets/modular_human_male_01/animations/animations.glb'
 
 
 def adjust(source, output, degrees):

@@ -3,7 +3,7 @@
   "date": "2026-10-02",
   "blender_version": "5.2.0 LTS",
   "editable": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/tripo-wrap-fitting.blend",
+    "path": "assets/modular_human_male_01/rogue/tripo_wrap_v1/tripo-wrap-fitting.blend",
     "sha256": "453b34ea6a7b1e1e6e10a934c609536930cc98c07d66d29f51348f1a83fff196"
   },
   "fitting": {

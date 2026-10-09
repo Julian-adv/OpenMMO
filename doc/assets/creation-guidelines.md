@@ -17,6 +17,8 @@ These guidelines were confirmed by the user on 2026-09-20 and apply until the us
 
 ## Hugging Face Uploads
 
+- Store item models' Blender files, source models, textures, and generation records under `assets/items/<item-name>/`. Keep character fitting parts and shared animations in their existing directories.
+
 - Exclude Blender `.blend1` backups from all HF uploads, including targeted uploads, and from `assets.lock` (user-confirmed 2026-10-09).
 - Preserve the current `.blend` source file.
 
@@ -54,4 +56,4 @@ These guidelines were confirmed by the user on 2026-09-20 and apply until the us
 - Match the OBJ's `mtllib` to the MTL filename and its `usemtl` to the MTL's `newmtl` name. Set `map_Kd` to the exact base-color filename using a relative path; match filename case.
 - Use a simple base-color-only material in the upload ZIP. Preserve the original GLB and all PBR textures separately for material restoration after rigging.
 - Preserve the original geometry. Check ZIP integrity, included files, and material references before handing off the upload.
-- Tobin's ZIP used `tobin.obj`, `model.mtl`, and `texture_0_base_color.png`. The user confirmed that its texture displayed correctly in Mixamo on 2026-09-21. Use this packaging method for future characters. See the [Tobin asset record](characters.md) and [file guide](../../assets/tobin/README.md).
+- Tobin's ZIP used `tobin.obj`, `model.mtl`, and `texture_0_base_color.png`. The user confirmed that its texture displayed correctly in Mixamo on 2026-09-21. Use this packaging method for future characters. See the [Tobin asset record](characters.md#tobin--토빈--강가의-낚시꾼-2026-09-21).

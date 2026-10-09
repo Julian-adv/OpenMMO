@@ -65,7 +65,7 @@
       "status": "SUCCEEDED",
       "consumed_credits": 35,
       "source": {
-        "path": "assets/modular_human_male_01/parts/plate_sources/top_plate.glb",
+        "path": "assets/modular_human_male_01/knight/sources/top_plate.glb",
         "bytes": 11702088,
         "sha256": "ad6eda044a97e53ce5d00573b28b256e71c36ba1e2013f2503b87b5495f95775"
       }
@@ -97,7 +97,7 @@
       "status": "SUCCEEDED",
       "consumed_credits": 35,
       "source": {
-        "path": "assets/modular_human_male_01/parts/plate_sources/pants_plate.glb",
+        "path": "assets/modular_human_male_01/knight/sources/pants_plate.glb",
         "bytes": 11401004,
         "sha256": "dd3d248be2569b3aaf3a30cca3af4db9e297ec4f5a6392bef91af020d0007636"
       }
@@ -129,7 +129,7 @@
       "status": "SUCCEEDED",
       "consumed_credits": 35,
       "source": {
-        "path": "assets/modular_human_male_01/parts/plate_sources/boots_plate.glb",
+        "path": "assets/modular_human_male_01/knight/sources/boots_plate.glb",
         "bytes": 10982452,
         "sha256": "cf4ffe64abf03534d4137e57d78c81e7daee531cc3c1c9a57323f6a4486b7723"
       }
@@ -161,7 +161,7 @@
       "status": "SUCCEEDED",
       "consumed_credits": 35,
       "source": {
-        "path": "assets/modular_human_male_01/parts/plate_sources/gloves_plate.glb",
+        "path": "assets/modular_human_male_01/knight/sources/gloves_plate.glb",
         "bytes": 11691532,
         "sha256": "052edd2423c1cb3e366bf0d2050d20effe92cee77b63c504f2d29ec504844891"
       }
@@ -193,7 +193,7 @@
       "status": "SUCCEEDED",
       "consumed_credits": 35,
       "source": {
-        "path": "assets/modular_human_male_01/parts/plate_sources/helmet_plate.glb",
+        "path": "assets/modular_human_male_01/knight/sources/helmet_plate.glb",
         "bytes": 11287380,
         "sha256": "a95d8887c638a7bd8ab7fffabb25980762a47f3f794ad113b01324325fe5b762"
       }
@@ -240,7 +240,7 @@
       "tools/prepare-modular-character.mjs"
     ],
     "body": {
-      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "path": "assets/modular_human_male_01/fitted/base.glb",
       "bytes": 27423040,
       "sha256": "3e776c750293a36f06d95145d3d7585b715b4cfcdc1dd65a2b9f38d37c27263d"
     },
@@ -248,7 +248,7 @@
     "method": "Fit to original 65-bone A pose, adjust gorget and wrist openings, align knees/ankles, fit five finger landmarks and mirror gauntlet; transfer body weights, rigid Head binding for helmet. Smooth normals, rebuild tangent space, compact GLB data, compress runtime textures. No geometry decimation after generation.",
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/parts/fitted/top_plate.glb",
+        "path": "assets/modular_human_male_01/fitted/top_plate.glb",
         "bytes": 11941912,
         "sha256": "ef1e43ee4ac37aed9d54c77eaa2a0286d1165235ae8b5ea01b00a564fa861637",
         "triangles": 3101
@@ -260,7 +260,7 @@
         "triangles": 3101
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+        "path": "assets/modular_human_male_01/fitted/pants_plate.glb",
         "bytes": 11524488,
         "sha256": "0802ccf5513a75f7ecdfd1f4d58e293a2bb7659ddc1314eb3bfb66c5e5b4e52d",
         "triangles": 1600
@@ -272,7 +272,7 @@
         "triangles": 1600
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/boots_plate.glb",
+        "path": "assets/modular_human_male_01/fitted/boots_plate.glb",
         "bytes": 11053696,
         "sha256": "776ce32c25c37f7513ba55287e74eb1c8be96eb631ff686c9f9f052313c0e92c",
         "triangles": 709
@@ -284,7 +284,7 @@
         "triangles": 709
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/gloves_plate.glb",
+        "path": "assets/modular_human_male_01/fitted/gloves_plate.glb",
         "bytes": 11834532,
         "sha256": "9f533effca5d082daddc179971540a372a328c3caa95c934eb8092fbbffd7792",
         "triangles": 1404
@@ -296,7 +296,7 @@
         "triangles": 1404
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/helmet_plate.glb",
+        "path": "assets/modular_human_male_01/fitted/helmet_plate.glb",
         "bytes": 11457340,
         "sha256": "46ef09da43e0217720f98c95941d2a678fe1789a3d813855e0010443feb851ee",
         "triangles": 2299
@@ -308,7 +308,7 @@
         "triangles": 2299
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/plate_parts.blend",
+        "path": "assets/modular_human_male_01/fitted/plate_parts.blend",
         "bytes": 84773394,
         "sha256": "f01b1297211c136307f03688efb7fe1b6fba8322f641c32fe4f9008c914dd9dc"
       }
@@ -854,17 +854,17 @@
       "additional_generation_credits": 0,
       "inputs": [
         {
-          "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+          "path": "assets/modular_human_male_01/fitted/pants_plate.glb",
           "sha256": "cd85cd6d3aa04d4cb125c1734f4768249ab038df2d9f83bdc9a92ca7a552724e"
         },
         {
-          "path": "assets/modular_human_male_01/parts/fitted/top_plate.glb",
+          "path": "assets/modular_human_male_01/fitted/top_plate.glb",
           "sha256": "be78efe4efa48b89be05402d77548bc0de77e34c4c22e9b405e90467ae9bf059"
         }
       ],
       "outputs": [
         {
-          "path": "assets/modular_human_male_01/parts/fitted/top_plate.glb",
+          "path": "assets/modular_human_male_01/fitted/top_plate.glb",
           "bytes": 11941912,
           "sha256": "ef1e43ee4ac37aed9d54c77eaa2a0286d1165235ae8b5ea01b00a564fa861637"
         },
@@ -874,7 +874,7 @@
           "sha256": "a4dbb9b46c12dd8fd57935ec444251ad107a191b5dab55023f0b9b5f7a47eabd"
         },
         {
-          "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+          "path": "assets/modular_human_male_01/fitted/pants_plate.glb",
           "bytes": 11524488,
           "sha256": "0802ccf5513a75f7ecdfd1f4d58e293a2bb7659ddc1314eb3bfb66c5e5b4e52d"
         },
@@ -884,7 +884,7 @@
           "sha256": "5a096691398686e6c51c6ccf411f73dceff1ee838e8bf988a15b92fc88a3b9b0"
         },
         {
-          "path": "assets/modular_human_male_01/parts/fitted/plate_parts.blend",
+          "path": "assets/modular_human_male_01/fitted/plate_parts.blend",
           "bytes": 84773394,
           "sha256": "f01b1297211c136307f03688efb7fe1b6fba8322f641c32fe4f9008c914dd9dc"
         }
@@ -918,7 +918,7 @@
     "record": "modular-human-male-01-sources.json#boot_ankle_width",
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/parts/fitted/boots_plate.glb",
+        "path": "assets/modular_human_male_01/fitted/boots_plate.glb",
         "bytes": 11053696,
         "sha256": "60839b7c0b9b94cd97bb6463fa385c6b65443695e176028abe4c10cec7ec3650"
       },
@@ -928,7 +928,7 @@
         "sha256": "8af7545df1054659e93176c4162c1f6e6c8ad40a19b477b01ff9ccf70d5fedc8"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+        "path": "assets/modular_human_male_01/fitted/pants_plate.glb",
         "bytes": 11524492,
         "sha256": "7c9d5bc7510d3038695e1e3543b968f382c33d9de0ee5238603249bfe0f19002"
       },
@@ -938,7 +938,7 @@
         "sha256": "46bbbe88b4c57159fa5178af68f4904901fe74584405cd8804114585a66c336b"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/plate_parts.blend",
+        "path": "assets/modular_human_male_01/fitted/plate_parts.blend",
         "bytes": 84778188,
         "sha256": "befeda3626c020508e79a3b5c8377fa4ccfb3b88e127a3e0f966d983a5d82038"
       }
@@ -975,7 +975,7 @@
     },
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+        "path": "assets/modular_human_male_01/fitted/pants_plate.glb",
         "bytes": 11524492,
         "sha256": "aa95a9f1b85aa881df47e6e37ecbfebc7c168b352fcf0f4a9941208962eeff04"
       },
@@ -985,14 +985,14 @@
         "sha256": "6df47c2263b9d515dabeebc80844711c0284668cfc4dc64eb8779beb1a2a7c0a"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/plate_parts.blend",
+        "path": "assets/modular_human_male_01/fitted/plate_parts.blend",
         "bytes": 84779174,
         "sha256": "f797f27dcf24c33a49dad2bd210eeb49d281d48a12fd395f2caf27bfa89c74fa"
       }
     ],
     "unchanged_boots": [
       {
-        "path": "assets/modular_human_male_01/parts/fitted/boots_plate.glb",
+        "path": "assets/modular_human_male_01/fitted/boots_plate.glb",
         "bytes": 11053696,
         "sha256": "60839b7c0b9b94cd97bb6463fa385c6b65443695e176028abe4c10cec7ec3650"
       },
@@ -1050,19 +1050,19 @@
     "additional_credits": 0,
     "inputs": [
       {
-        "path": "assets/modular_human_male_01/parts/plate_sources/top_plate.glb",
+        "path": "assets/modular_human_male_01/knight/sources/top_plate.glb",
         "bytes": 11702088,
         "sha256": "ad6eda044a97e53ce5d00573b28b256e71c36ba1e2013f2503b87b5495f95775"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+        "path": "assets/modular_human_male_01/fitted/base.glb",
         "bytes": 22024012,
         "sha256": "99016ab4311f8fb4256b7a42bdb0d404e2d991154c6ff18c3acb3da76a43f7f0"
       }
     ],
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/parts/fitted/top_plate.glb",
+        "path": "assets/modular_human_male_01/fitted/top_plate.glb",
         "bytes": 11941912,
         "sha256": "c29b772b91d9c7d6b5622758edc707ea2caea4d69618e5729f126d3f88ea47ce"
       },
@@ -1072,7 +1072,7 @@
         "sha256": "4c74d12f405b3947c46556bd17ea06d800b1dd177591a46a3cf4f7fa553ffb91"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/plate_parts.blend",
+        "path": "assets/modular_human_male_01/fitted/plate_parts.blend",
         "bytes": 79277392,
         "sha256": "afe60edd0916ae540ccfc8cf426d7c07c2aa11b28c9e3af1a20642086e616d28"
       }

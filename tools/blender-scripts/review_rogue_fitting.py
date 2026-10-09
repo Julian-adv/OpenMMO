@@ -12,7 +12,7 @@ import bmesh
 from mathutils import Matrix, Vector
 
 ROOT = Path(__file__).resolve().parents[2]
-PARTS = ROOT / 'assets/modular_human_male_01/parts'
+PARTS = ROOT / 'assets/modular_human_male_01'
 
 
 def import_part(path, rig):

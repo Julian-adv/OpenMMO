@@ -20,7 +20,7 @@ spec = importlib.util.spec_from_file_location('rogue_fit', ROOT / 'tools/fit-mod
 fit = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fit)
 io = fit.io
-OUTPUT = ROOT / 'assets/modular_human_male_01/parts/rogue_tripo_v1'
+OUTPUT = ROOT / 'assets/modular_human_male_01/rogue/tripo_v1'
 REPORT = ROOT / 'doc/assets/modular-rogue-tripo-fitting-v1.json'
 
 
@@ -33,7 +33,7 @@ def initial_fit(points):
 
 
 def fit_waist(points, faces, joints, weights):
-    plate = ROOT / 'assets/modular_human_male_01/parts/fitted/top_plate.glb'
+    plate = ROOT / 'assets/modular_human_male_01/fitted/top_plate.glb'
     doc, binary = fit.read_glb(plate)
     triangles = np.concatenate([
         io.accessor(doc, binary, primitive['attributes']['POSITION'])[
@@ -152,7 +152,7 @@ def bind_side_laces(points, faces, joints, weights, uv, inverse, texture, laplac
 
 def main():
     source = OUTPUT / 'source.glb'
-    base = ROOT / 'assets/modular_human_male_01/parts/fitted/base.glb'
+    base = ROOT / 'assets/modular_human_male_01/fitted/base.glb'
     sources = json.loads((ROOT / 'doc/assets/modular-rogue-tripo-sources.json').read_text())
     assert fit.digest(base) == sources['base']['sha256']
     assert fit.digest(source) == sources['source']['sha256']

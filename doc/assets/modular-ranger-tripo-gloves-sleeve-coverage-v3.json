@@ -2,27 +2,27 @@
   "date": "2026-10-07",
   "sources": [
     {
-      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "path": "assets/modular_human_male_01/fitted/base.glb",
       "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
     },
     {
-      "path": "assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/gloves_ranger.glb",
+      "path": "assets/modular_human_male_01/ranger/tripo_gloves_v1/gloves_ranger.glb",
       "sha256": "939e2f3cbfebae19fab284053898b435e73a38993bd09a627f2e59df3dad7220"
     },
     {
-      "path": "assets/modular_human_male_01/parts/fitted/top_plate.glb",
+      "path": "assets/modular_human_male_01/fitted/top_plate.glb",
       "sha256": "c29b772b91d9c7d6b5622758edc707ea2caea4d69618e5729f126d3f88ea47ce"
     },
     {
-      "path": "assets/modular_human_male_01/parts/fitted/top_linen.glb",
+      "path": "assets/modular_human_male_01/fitted/top_linen.glb",
       "sha256": "188ae91799541ff6563a176058695a0c398039d60bc2ee28d97b56b199094a43"
     },
     {
-      "path": "assets/modular_human_male_01/parts/fitted/top_leather.glb",
+      "path": "assets/modular_human_male_01/fitted/top_leather.glb",
       "sha256": "1aaf9549c30cd9fa1c82033d6e3de8fcc21664e1d8f53c93ba12262d62ac5ff2"
     },
     {
-      "path": "assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/validation-poses.json",
+      "path": "assets/modular_human_male_01/ranger/tripo_gloves_v1/validation-poses.json",
       "sha256": "4b22ceadd92b6f27abdcd16528a2a8bb76dbd8a745d5244e8f6ab78fd61c1aa4"
     }
   ],

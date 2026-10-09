@@ -5,7 +5,7 @@ import { CANONICAL_CLIPS_WITH_DYING, clipSampler, headlessThree, loadClips, root
 
 const ranger = process.argv.includes('--ranger')
 const faceName = ranger ? 'face_ranger' : 'face_rugged'
-const output = `assets/modular_human_male_01/parts/face_tripo_${ranger ? 'ranger' : 'rugged'}_v1/`
+const output = `assets/modular_human_male_01/faces/tripo_${ranger ? 'ranger' : 'rugged'}_v1/`
 const { server, sources, load } = await headlessThree()
 const vertex = (mesh, i) => mesh.getVertexPosition(i, new THREE.Vector3())
 function edgeMatches(mesh, positions) {
@@ -27,11 +27,11 @@ function edgeMatches(mesh, positions) {
 }
 try {
   const { bindModularPart, modularAnimationClips } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
-  const body = (await load('assets/modular_human_male_01/parts/fitted/base.glb')).scene
+  const body = (await load('assets/modular_human_male_01/fitted/base.glb')).scene
   const faceMeshes = bindModularPart(body, (await load(output + faceName + '.glb')).scene)
   const hair = bindModularPart(body, (await load(ranger
-    ? 'assets/modular_human_male_01/parts/hair_tripo_ranger_v1/hair_ranger.glb'
-    : 'assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb')).scene)[0]
+    ? 'assets/modular_human_male_01/hair/tripo_ranger_v1/hair_ranger.glb'
+    : 'assets/modular_human_male_01/hair/tripo_wavy_v1/hair_wavy_bone.glb')).scene)[0]
   assert.equal(faceMeshes.length, 3)
   const face = faceMeshes.find(m => m.name === faceName)
   const bridge = faceMeshes.find(m => m.name === 'face_neck_bridge')

@@ -9,7 +9,7 @@
       "part_id": "top_rogue",
       "inputs": [
         {
-          "path": "assets/modular_human_male_01/parts/rogue_sources/inputs/top-front.png",
+          "path": "assets/modular_human_male_01/rogue/sources/inputs/top-front.png",
           "sha256": "5c75e22c3e9ff034a4f9c682d35cf4c6cd8ba09bc87cc638d6c407310cbef059"
         }
       ],
@@ -39,65 +39,70 @@
       "task_error": null,
       "files": [
         {
-          "path": "assets/modular_human_male_01/parts/rogue_sources_v3/top_rogue/source.glb",
+          "path": "assets/modular_human_male_01/rogue/sources_v3/top_rogue/source.glb",
           "sha256": "3baa541c6e93d2aafb449f58bc2cbe2e565d009df899e5b0b4f342e924779375",
-          "retained": true
+          "retained": false
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_sources_v3/top_rogue/preview.png",
+          "path": "assets/modular_human_male_01/rogue/sources_v3/top_rogue/preview.png",
           "sha256": "f973358edab20c62856f9b62502e7f58071f65b19b2913c9be298aad6492b6e5",
           "retained": false
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_sources_v3/top_rogue/preview-back.png",
+          "path": "assets/modular_human_male_01/rogue/sources_v3/top_rogue/preview-back.png",
           "sha256": "cf4e4b290c76f091e15762692394237ce648c3b8873e34c7578f5248ad5ea128",
           "retained": false
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_sources_v3/top_rogue/preview-front.png",
+          "path": "assets/modular_human_male_01/rogue/sources_v3/top_rogue/preview-front.png",
           "sha256": "f973358edab20c62856f9b62502e7f58071f65b19b2913c9be298aad6492b6e5",
           "retained": false
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_sources_v3/top_rogue/preview-left.png",
+          "path": "assets/modular_human_male_01/rogue/sources_v3/top_rogue/preview-left.png",
           "sha256": "e1672ee14785e8d3b2c126145ccc33ee95fa5692c04813e9218a8036fa078543",
           "retained": false
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_sources_v3/top_rogue/preview-right.png",
+          "path": "assets/modular_human_male_01/rogue/sources_v3/top_rogue/preview-right.png",
           "sha256": "024940cff0df546a0940bd3247cbaef078a98be55ee34af5371bc9f3ed6bbb2f",
           "retained": false
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_sources_v3/top_rogue/texture-0-base_color.png",
+          "path": "assets/modular_human_male_01/rogue/sources_v3/top_rogue/texture-0-base_color.png",
           "sha256": "dcebb14b4bdae82b0c4ccef10140083495f6bd23a5835ad063a02e9f448270df",
-          "retained": true
+          "retained": false
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_sources_v3/top_rogue/texture-0-metallic.png",
+          "path": "assets/modular_human_male_01/rogue/sources_v3/top_rogue/texture-0-metallic.png",
           "sha256": "4d4eeeedddd109dd6b269f258386a0b81e599b24160ca8685e03014610e94e7f",
-          "retained": true
+          "retained": false
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_sources_v3/top_rogue/texture-0-roughness.png",
+          "path": "assets/modular_human_male_01/rogue/sources_v3/top_rogue/texture-0-roughness.png",
           "sha256": "f7e587a0732b1b52c9389354d35e85d18ac0eaba5f7c8dbbb62084a66dfc8686",
-          "retained": true
+          "retained": false
         },
         {
-          "path": "assets/modular_human_male_01/parts/rogue_sources_v3/top_rogue/texture-0-normal.png",
+          "path": "assets/modular_human_male_01/rogue/sources_v3/top_rogue/texture-0-normal.png",
           "sha256": "6ecb9a580023c95b8e0e7e4d5d02e9efebedea28f7a59e44eefa1b48fb312443",
-          "retained": true
+          "retained": false
         }
       ],
-      "selected_for_fitting": true
+      "selected_for_fitting": false,
+      "cleanup": {
+        "date": "2026-10-09",
+        "reason": "Superseded by the approved Tripo top; historical generation records retained.",
+        "replacement": "assets/modular_human_male_01/rogue/tripo_v1/source.glb"
+      }
     }
   ],
-  "status": "Raw generation; not fitted, rigged or game-ready",
+  "status": "Historical Meshy generation; superseded by the approved Tripo top. All generated binaries removed.",
   "reference": {
-    "base": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "base": "assets/modular_human_male_01/fitted/base.glb",
     "base_sha256": "99016ab4311f8fb4256b7a42bdb0d404e2d991154c6ff18c3acb3da76a43f7f0",
     "rig_id": "human_male_01_mixamo_candidate_v2",
-    "interfaces": "assets/modular_human_male_01/parts/interfaces/v0/interfaces.json",
+    "interfaces": "assets/modular_human_male_01/interfaces/v0/interfaces.json",
     "interfaces_status": "provisional"
   },
   "cleanup": {
@@ -105,6 +110,7 @@
     "reason": "User requested removal of unnecessary intermediate files before checkpoint commit.",
     "retained": "Selected GLBs and original PBR texture maps; task settings, hashes, costs and diagnostics.",
     "discarded": "Rejected generation binaries and redundant API previews. Entries with retained=false are historical records, not missing deliverables.",
-    "inputs": "Cropped input images removed; reproduce from retained concepts and versioned build configs with prepare."
+    "inputs": "Cropped input images removed; reproduce from retained concepts and versioned build configs with prepare.",
+    "superseded_by": "2026-10-09 task cleanup; no generated GLBs or PBR maps retained."
   }
 }

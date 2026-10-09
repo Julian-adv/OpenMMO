@@ -2,16 +2,16 @@
   "date": "2026-10-04",
   "status": "Barbarian-style rigid front/back hinges and 9x11 side cloth; runtime and visual validation required",
   "source": {
-    "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/source.glb",
+    "path": "assets/modular_human_male_01/caveman/tripo_pants_v1/source.glb",
     "sha256": "a7b5cb922f7c117352a45b013054103905aad9eb0b0e3ec473b17b82f575bba3"
   },
   "base": {
-    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "path": "assets/modular_human_male_01/fitted/base.glb",
     "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
   },
   "interfaces": {
-    "path": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
-    "sha256": "f3fc3aed9c5080cf26a294dac496293c89bce8f67466add18a7ef72b326f006b"
+    "path": "assets/modular_human_male_01/interfaces/v1/interfaces.json",
+    "sha256": "52cbd59252b2c80740553182f347273afd3706adf1da3f26b9a11d79400eb23e"
   },
   "rig_id": "human_male_01_mixamo_candidate_v2",
   "preserved_original_embedded_texture": true,
@@ -505,7 +505,7 @@
     ]
   },
   "validation": {
-    "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb",
+    "path": "assets/modular_human_male_01/caveman/tripo_pants_v1/pants_caveman.glb",
     "sha256": "1fc3a92b29c8b5e37931cda6b32966754e1f3b1f33fe478a528179fc739a2db4",
     "triangles": 5239,
     "bones": 65,

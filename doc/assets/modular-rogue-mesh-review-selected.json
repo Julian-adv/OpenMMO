@@ -3,7 +3,7 @@
   "parts": [
     {
       "id": "top_rogue",
-      "source": "assets/modular_human_male_01/parts/rogue_sources_v3/top_rogue/source.glb",
+      "source": "assets/modular_human_male_01/rogue/sources_v3/top_rogue/source.glb",
       "sha256": "3baa541c6e93d2aafb449f58bc2cbe2e565d009df899e5b0b4f342e924779375",
       "target_triangles": 2200,
       "triangles": 1799,
@@ -29,7 +29,7 @@
     },
     {
       "id": "pants_rogue",
-      "source": "assets/modular_human_male_01/parts/rogue_sources/pants_rogue/source.glb",
+      "source": "assets/modular_human_male_01/rogue/sources/pants_rogue/source.glb",
       "sha256": "f1e4b59d7751438abe2caaa78ec04027d66bb38486a8d4fb58e5096a861f9b6c",
       "target_triangles": 1300,
       "triangles": 1274,
@@ -55,7 +55,7 @@
     },
     {
       "id": "glove_rogue_right",
-      "source": "assets/modular_human_male_01/parts/rogue_sources_v2/glove_rogue_right/source.glb",
+      "source": "assets/modular_human_male_01/rogue/sources_v2/glove_rogue_right/source.glb",
       "sha256": "7aa8a5a81cfdc83aadd2c91be13ff4204aaec7f8398b13a23470ee822babf56a",
       "target_triangles": 700,
       "triangles": 645,
@@ -81,7 +81,7 @@
     },
     {
       "id": "wrap_rogue_left",
-      "source": "assets/modular_human_male_01/parts/rogue_sources/wrap_rogue_left/source.glb",
+      "source": "assets/modular_human_male_01/rogue/sources/wrap_rogue_left/source.glb",
       "sha256": "6e5c582da5d58643e4acdad68ace576e163fa87a8e69258e33a46b761327cb85",
       "target_triangles": 200,
       "triangles": 156,
@@ -107,7 +107,7 @@
     },
     {
       "id": "boot_rogue_left",
-      "source": "assets/modular_human_male_01/parts/rogue_sources/boot_rogue_left/source.glb",
+      "source": "assets/modular_human_male_01/rogue/sources/boot_rogue_left/source.glb",
       "sha256": "a6c57d7dc34b580173c717422ba706c6b00b3692d8165de50fa6e72fc87330bc",
       "target_triangles": 350,
       "triangles": 352,

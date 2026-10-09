@@ -1,9 +1,11 @@
 # Animation Assets
 
+공용 Mixamo 동작 FBX는 `assets/animations/`에 모으고, 단검·대검·인챈트 동작은 같은 폴더의 `dagger/`, `great_sword/`, `enchant_armor/`, `enchant_weapon/`에 보관한다. 캐릭터 리깅 원본과 나머지 전용 애니메이션은 각 제작 폴더에 유지한다. 통합 작업본 `assets/all_animation.blend`는 내부 상대경로를 보존하기 위해 기존 위치에 둔다.
+
 ## Modular Human Male 01 — Baked Animation Preview (2026-09-28)
 
 - Final files and restoration: [asset guide](modular-human-male-01.md).
-  `rigged_hand_tuned/animations.glb` contains seven clips: `idle1`, `walk`, `run`, `jump`,
+  `animations/animations.glb` contains seven clips: `idle1`, `walk`, `run`, `jump`,
   `combat_idle`, `slash1`, and `dying`. The retained version includes the 2026-09-29 refinements.
 - Source: existing Adobe Mixamo game packs and the user-provided palms-down rig,
   `Idle (11).fbx`, confirmed 2026-09-28. Free service; the [Mixamo license record](characters.md#license)
@@ -77,13 +79,13 @@ tip followed the handle. Other rigs and offhand props kept their previous placem
 - Source: Adobe [Mixamo](https://www.mixamo.com/), confirmed by the contributor
   on 2026-09-13 for `Stable Sword Inward Slash.fbx` and
   `Stable Sword Outward Slash.fbx`. Originals are preserved in
-  `assets/dagger/animations/`; both contain a `mixamo.com` action and a 67-bone rig.
+  `assets/animations/dagger/`; both contain a `mixamo.com` action and a 67-bone rig.
   License: Adobe/Mixamo terms. Adobe's [Mixamo FAQ](https://helpx.adobe.com/creative-cloud/faq/mixamo-faq.html)
   permits royalty-free use in personal, commercial, and nonprofit game projects.
   Mixamo is free; no AI generation. The original download date was not recorded.
 - Derived pack: `client/public/models/animations/dagger_preview.glb`,
   containing `dagger_inward` (53/24 seconds) and `dagger_outward` (49/24 seconds).
-  Built with `tools/blender-scripts/build_dagger_preview.py -- --source assets/dagger/animations`
+  Built with `tools/blender-scripts/build_dagger_preview.py -- --source assets/animations/dagger`
   through Blender, using the existing combat armature. Horizontal root motion is
   removed; the existing animation packs and source blend are unchanged.
 - Runtime: `PlayerModel.svelte` loads this separate pack for dagger weapons,
@@ -130,7 +132,7 @@ tip followed the handle. Other rigs and offhand props kept their previous placem
 - Dwarf Idle
 - Offensive Idle https://www.mixamo.com/#/?page=2&query=idle&type=Motion%2CMotionPack
 - Sword And Shield Idle (combat_melee pack, `combat_idle`, 몬스터 `animAttackIdle` + 플레이어 스윙 사이 쿨다운)
-  - 2026-08-15에 gnoll 스킨째 받은 FBX(`assets/Sword And Shield Idle.fbx`, 57본, 새끼손가락 없음)를
+  - 2026-08-15에 gnoll 스킨째 받은 FBX(`assets/animations/Sword And Shield Idle.fbx`, 57본, 새끼손가락 없음)를
     `import_mixamo_animation(..., target_armature_name="Armature_combat")`로 bake하고
     `export_animations.py -- --packs combat_melee`로 재export. 힙 흔들림 포함(bake_root_location 기본값).
     액션에 fake user를 켜지 않으면 저장 시 사라진다 (`import_mixamo_animation`은 켜지 않음).
@@ -138,8 +140,8 @@ tip followed the handle. Other rigs and offhand props kept their previous placem
 
 - Sword and Shield Slash https://www.mixamo.com/#/?page=1&query=slash&type=Motion%2CMotionPack
 - Zombie Attack ×2 (combat_melee pack, `claw1`/`claw2`, gnoll `animAttack` — 맨손 발톱 공격, 매 스윙마다 랜덤)
-  - 2026-08-15 Mixamo, Without Skin(57본). `assets/Zombie Attack.fbx`(140f, 양손 내려찍기) → `claw1`,
-    `assets/Zombie Attack (1).fbx`(80f, 오른손 휘두르기) → `claw2`.
+  - 2026-08-15 Mixamo, Without Skin(57본). `assets/animations/Zombie Attack.fbx`(140f, 양손 내려찍기) → `claw1`,
+    `assets/animations/Zombie Attack (1).fbx`(80f, 오른손 휘두르기) → `claw2`.
     `import_mixamo_animation(..., target_armature_name="Armature_combat")`로 bake한 뒤 좀비 속도라 잘라내고
     빨리 감았다: claw1은 원본 12–75f를 ×1.5(43f, 1.43s), claw2는 1–56f를 ×1.4(40f, 1.33s)로 정수 프레임에 재샘플.
     두 클립 다 타격 시점이 ≈0.75–0.8s라 gnoll `attackImpactDelay` 750 / `attackDamageTextDelay` 850.
@@ -147,7 +149,7 @@ tip followed the handle. Other rigs and offhand props kept their previous placem
 
 - 활 쏘기 (combat_ranged pack, `bow_shoot`, 원거리 무기 공격 — [COMBAT.md](../COMBAT.md) 원거리 전투)
   - Standing Aim Recoil https://www.mixamo.com/#/?query=standing+aim&type=Motion%2CMotionPack
-    2026-09-04 Mixamo. `assets/bow_shoot.fbx`(22f @30fps = 0.73s).
+    2026-09-04 Mixamo. `assets/animations/bow_shoot.fbx`(22f @30fps = 0.73s).
   - 이 FBX의 리그는 24본에 `Spine01`·`Spine02`·`neck`·`headfront` 같은 비표준 이름을 쓰고 척추가
     `Hips→Spine02→Spine01→Spine` 순서라 Mixamo 표준과 반대다. 이름이 아니라 계층 위치로 짝지어야 해서
     `import_mixamo_animation(..., bone_aliases=...)`로 33본 `Armature`에 bake했다 (23/33 매칭;
@@ -158,7 +160,7 @@ tip followed the handle. Other rigs and offhand props kept their previous placem
 
 - Standing React Small From Front 02 https://www.mixamo.com/#/?query=standing+react&type=Motion%2CMotionPack
   (combat_melee pack, `hit`, 플레이어 피격 리액션 + 공용 팩 몬스터 `animHit`)
-  - 2026-08-23 Mixamo, Without Skin(65본), 24f/0.8s. `assets/Standing React Small From Front 02.fbx`를
+  - 2026-08-23 Mixamo, Without Skin(65본), 24f/0.8s. `assets/animations/Standing React Small From Front 02.fbx`를
     `import_mixamo_animation(..., target_armature_name="Armature_combat")`로 bake하고
     (fake user를 켜야 저장된다) `export_animations.py -- --packs combat_melee`로 뽑은 도너에서
     `graft-glb-clip.py`로 `hit` 클립만 배포본 `combat_melee.glb`에 이식했다 — 기존 8개 클립과
@@ -187,7 +189,7 @@ tip followed the handle. Other rigs and offhand props kept their previous placem
     `graft-glb-clip.py`로 social 팩에 이어붙였다.
 
 - Clapping https://www.mixamo.com/#/?query=clapping&type=Motion%2CMotionPack (social pack, `clap`, `/emote clap`)
-  - Excited와 같은 방식: `assets/Clapping.fbx`(버커니어 스킨, 33본)에서 리타겟 →
+  - Excited와 같은 방식: `assets/animations/Clapping.fbx`(버커니어 스킨, 33본)에서 리타겟 →
     `graft-glb-clip.py`로 이식.
 
 - Twist Dance https://www.mixamo.com/#/?query=twist+dance&type=Motion%2CMotionPack (social pack, `twist`, `/emote twist`)
@@ -197,14 +199,14 @@ tip followed the handle. Other rigs and offhand props kept their previous placem
     `graft-glb-clip.py`로 이식 (2026-08-14).
 
 - Excited https://www.mixamo.com/#/?query=excited&type=Motion%2CMotionPack (social pack, `excited`, `/emote excited`)
-  - 예외적으로 Without Skin이 아니라 night_merchant(버커니어) 스킨째 받은 FBX(`assets/Excited.fbx`,
+  - 예외적으로 Without Skin이 아니라 night_merchant(버커니어) 스킨째 받은 FBX(`assets/animations/Excited.fbx`,
     손가락 본 없는 33본)에서 리타겟했다 — social 팩 스킨 조인트도 33개라 손실 없음.
     social.glb를 타겟 armature로 임포트해 retarget bake 후 `graft-glb-clip.py`로 이식.
     작업 blend: `~/assets_original/excited_social_work.blend`.
 
 - Stand To Sit / Sitting Idle / Sitting Talking / Sit To Stand https://www.mixamo.com/#/?query=sit&type=Motion%2CMotionPack
   (social pack, `stand_to_sit` / `sit_idle` / `sit_talk` / `sit_to_stand` — 의자 `interaction: "sit"`)
-  - 2026-08-30 Mixamo, Without Skin(65본)/30fps, `assets/Stand To Sit.fbx` 등 4개를
+  - 2026-08-30 Mixamo, Without Skin(65본)/30fps, `assets/animations/Stand To Sit.fbx` 등 4개를
     `import_mixamo_animation`으로 `Armature`에 bake(fake user)한 뒤 `all_animation.blend`에서
     손봤다: `stand_to_sit`는 끝 자세가 `sit_idle`보다 0.58m 뒤라 Hips를 -Y 0.58 이동(끝 = `sit_idle`
     첫 프레임), 네 클립 모두 Hips를 +Y 0.10 옮겨 등받이 쪽으로 붙였고, `sit_talk`는 44초짜리를 `sit_idle`과 가장 가까운 자세인 1–301f(10초)로 잘랐다.
@@ -218,7 +220,7 @@ tip followed the handle. Other rigs and offhand props kept their previous placem
 - Weight Shift https://www.mixamo.com/#/?query=weight+shift&type=Motion%2CMotionPack
   (social pack, `weight_shift`, `/emote weight_shift` — 루프 이모트)
 - Yawn https://www.mixamo.com/#/?query=yawn&type=Motion%2CMotionPack (social pack, `yawn`, `/emote yawn` — 원샷 이모트)
-  - 2026-08-31 Mixamo, Without Skin(65본)/30fps. `assets/Female Standing Pose (2).fbx`→`stand_pose2` 식으로
+  - 2026-08-31 Mixamo, Without Skin(65본)/30fps. `assets/animations/Female Standing Pose (2).fbx`→`stand_pose2` 식으로
     FBX 번호를 클립 이름에 유지. `import_mixamo_animation`으로 `Armature`에 bake(fake user).
     Standing Pose 3개는 2프레임짜리 정지 포즈라 두 번째 키를 180f로 밀어 6초 홀드로 늘렸다.
     도너는 임시 팩으로 export 후 `graft-glb-clip.py`로 5개를 social.glb에 이식 (sit 클립과 동일 절차).
@@ -371,7 +373,7 @@ tip followed the handle. Other rigs and offhand props kept their previous placem
 - 척추와 허리를 직립으로 세우고 주손 팔을 어깨 바로 위로 편다. 반대 팔은 어깨 아래로 자연스럽게 내린다. 게임에서 관절을 계산하던 `EnchantWeaponPose`는 제거했다. 무기 소품의 장착 회전만 클립 가중치에 맞춰 보정한다.
 - 목과 머리에 시선 회전을 나눠 검을 든 쪽으로 20° 돌리고 32° 위를 바라보도록 키프레임을 조정했다. 왼손 클립은 반대쪽을 바라본다.
 - 출처: 기존 `assets/all_animation.blend`의 33본 `Armature`에 자체 제작한 키프레임. 리그와 작업용 메시의 Mixamo 라이선스는 위 항목과 [characters.md](characters.md)를 따른다. 신규 AI 이미지·모션 생성 및 유료 도구 사용은 없다. 작업 파일에는 외부 텍스처가 필요하지 않다.
-- 편집 파일: `assets/enchant_weapon/enchant_weapon.blend`. 원본 소셜 팩 스냅샷은 같은 폴더의 `social-source.glb`에 보존한다. `graft-glb-clip.py`로 새 클립만 이식하며, 기존 17개 클립의 키프레임 데이터와 스켈레톤이 그대로임을 확인했다. 런타임은 캐릭터별 리타게팅과 접지 보정 후 캐시한다.
+- 편집 파일: `assets/animations/enchant_weapon/enchant_weapon.blend`. 원본 소셜 팩 스냅샷은 같은 폴더의 `social-source.glb`에 보존한다. `graft-glb-clip.py`로 새 클립만 이식하며, 기존 17개 클립의 키프레임 데이터와 스켈레톤이 그대로임을 확인했다. 런타임은 캐릭터별 리타게팅과 접지 보정 후 캐시한다.
 - 재생성: `blender -b --python-exit-code 1 -P tools/blender-scripts/build_enchant_animation.py`.
 - Blender에서 편집한 파일을 재내보내기: 같은 명령 뒤에 `-- --export-only`를 붙인다. 원본 `all_animation.blend`는 수정하지 않는다.
 
@@ -381,14 +383,14 @@ tip followed the handle. Other rigs and offhand props kept their previous placem
 - 왼팔을 몸 옆에서 살짝 벌리고 팔꿈치를 굽혀 손바닥을 위로 연다. 검을 든 오른팔도 몸에서 살짝 벌리고 팔꿈치를 굽혀 받아들이는 느낌을 주며, 목과 머리는 열린 손 쪽으로 약간 기울인다. 이동·공격·상호작용·기승이 우선한다. 무기의 장착 회전은 내려든 자세에 맞춰 보정한다.
 - 출처: 기존 `assets/all_animation.blend`의 33본 `Armature`에 자체 제작한 키프레임. Blender 5.2.0 LTS에서 2026-09-13 KST 제작. 리그와 작업용 메시의 Mixamo 라이선스는 위 항목과 [characters.md](characters.md)를 따른다. 신규 AI 모션 생성·유료 도구 사용은 없다.
 - 참고: 사용자 제공 `codex-clipboard-0eb57ed9-770d-465f-bf89-80e3e7382b81.png`. 제작자·생성 도구·생성일·계정 등급·라이선스는 미제공이며, 자세 참고용으로만 사용하고 배포하지 않는다.
-- 편집 파일: `assets/enchant_armor/enchant_armor.blend`. 소스와 출력 GLB는 HF 관리 대상이다. 기존 `all_animation.blend`와 `social.glb`를 덮어쓰지 않는다.
+- 편집 파일: `assets/animations/enchant_armor/enchant_armor.blend`. 소스와 출력 GLB는 HF 관리 대상이다. 기존 `all_animation.blend`와 `social.glb`를 덮어쓰지 않는다.
 - 재생성: `blender -b --python-exit-code 1 -P tools/blender-scripts/build_armor_enchant_animation.py`. 편집한 blend를 재내보낼 때는 `-- --export-only`를 붙인다.
 
 ## Great Sword (2026-09-12)
 
 - 제공된 걷기 원본은 뒷걸음질 동작이므로 `great_sword_walk`의 키프레임 순서를 역전해 전진 걷기로 사용한다. 변환 스크립트에서 적용하며 원본 FBX는 보존한다.
 - 사용자 제공 FBX: `Great Sword Idle (1).fbx`, `Great Sword Walk.fbx`, `Great Sword Run.fbx`, `Great Sword Slash.fbx`. 출처: Adobe Mixamo(사용자 확인, 2026-09-12). 라이선스 기록은 [characters.md의 Mixamo 항목](characters.md)을 따른다. 모델의 Pro 생성 출처와 구분한다.
-- 원본은 `assets/great_sword/animations/`에 보존. `build_great_sword_animations.py`가 기존 `all_animation.blend`의 `Armature_combat`에 리타게팅하고 별도 작업 파일로 저장한다. 기존 애니메이션 팩은 변경하지 않는다.
+- 원본은 `assets/animations/great_sword/`에 보존. `build_great_sword_animations.py`가 기존 `all_animation.blend`의 `Armature_combat`에 리타게팅하고 별도 작업 파일로 저장한다. 기존 애니메이션 팩은 변경하지 않는다.
 - 출력: `client/public/models/animations/great_sword.glb`. `great_sword_idle` 7.542초, `great_sword_walk` 1.292초, `great_sword_run` 0.583초, `great_sword_slash` 1.250초(24fps 원본). 수평 루트 이동 제거, 수직 움직임 유지, 시작 프레임 0 정렬. 배포 팩의 캐릭터 메시·재질은 기존 exporter로 제거한다.
 - 캐릭터별 리타게팅·지면 보정 후 대검에만 적용한다. Slash의 0.625초 타격 자세를 기존 근접 판정 0.540초에 맞춰 재생 시간을 조정한다(전체 약 1.08초). 종료 후 대검 Idle로 전환한다. 캐릭터 선택 화면도 같은 Idle을 사용한다.
 - 재현: `blender -b --python-exit-code 1 -P tools/blender-scripts/build_great_sword_animations.py`. 원본 `all_animation.blend`를 덮어쓰지 않는다.

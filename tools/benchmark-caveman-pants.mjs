@@ -11,10 +11,10 @@ try {
   const baseline = process.argv[2]
   for (const [name, path] of [
     ...(baseline ? [['previous_caveman', baseline]] : []),
-    ['barbarian', 'assets/modular_human_male_01/parts/fitted/pants_barbarian.glb'],
-    ['rebuilt_caveman', 'assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb'],
+    ['barbarian', 'assets/modular_human_male_01/fitted/pants_barbarian.glb'],
+    ['rebuilt_caveman', 'assets/modular_human_male_01/caveman/tripo_pants_v1/pants_caveman.glb'],
   ]) {
-    const body = (await load('assets/modular_human_male_01/parts/fitted/base.glb')).scene
+    const body = (await load('assets/modular_human_male_01/fitted/base.glb')).scene
     const meshes = bindModularPart(body, (await load(path)).scene)
     if (name === 'rebuilt_caveman') {
       assert.ok(meshes.every(mesh => !mesh.userData.pelt_physics?.bend))
@@ -23,8 +23,8 @@ try {
     const mixer = new THREE.AnimationMixer(body)
     const timings = []
     for (const [pack, clipName] of [
-      ['assets/modular_human_male_01/rigged_hand_tuned/animations.glb', 'walk'],
-      ['assets/modular_human_male_01/rigged_hand_tuned/animations.glb', 'run'],
+      ['assets/modular_human_male_01/animations/animations.glb', 'walk'],
+      ['assets/modular_human_male_01/animations/animations.glb', 'run'],
       ['client/public/models/characters/modular_male/animations/social.glb', 'sit_idle'],
     ]) {
       mixer.stopAllAction()

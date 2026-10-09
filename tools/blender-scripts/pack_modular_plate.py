@@ -5,7 +5,7 @@ from pathlib import Path
 import bpy
 
 ROOT = Path(__file__).resolve().parents[2]
-PARTS = ROOT / 'assets/modular_human_male_01/parts/fitted'
+PARTS = ROOT / 'assets/modular_human_male_01/fitted'
 parser = argparse.ArgumentParser()
 parser.add_argument('--outfit', choices=['plate', 'barbarian'], default='plate')
 args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else [])

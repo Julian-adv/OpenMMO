@@ -8,7 +8,7 @@
 하의도 사용자가 승인한 [Tripo Smart Mesh 바지](modular-rogue-tripo-pants.md)를 기본으로 사용하며,
 작업실 장갑은 [승인된 Smart Mesh 오른손 장갑](modular-rogue-tripo-glove.md)과 [새 Tripo 왼손목 천](modular-rogue-tripo-wrap.md)을 사용하고,
 부츠는 v8을 유지한다. **[미사용] 이전 v7/v8 상의 GLB는 삭제했다.**
-현재 혼합 세트의 편집본은 `rogue_tripo_wrap_v1/tripo-wrap-fitting.blend`다. **[미사용]** 기존 왼손 천과 합친 중간 GLB·중복 장갑 편집본은 삭제했다.
+현재 혼합 세트의 편집본은 `rogue/tripo_wrap_v1/tripo-wrap-fitting.blend`다. **[미사용]** 기존 왼손 천과 합친 중간 GLB·중복 장갑 편집본은 삭제했다.
 중간 백업과 이전 v7 파일은 정리하고 검수 이력을 보존했다.
 일반 로그 상의 선택과 `?outfit=rogue`, `?outfit=tripo`가 같은 승인 상의를 사용한다.
 아래 v8 상의 제작 내용은 과거 기록이며 런타임 등록·혼합 호환 검수는 별도다.
@@ -89,7 +89,7 @@ AI 배경 제거 편집으로 무손실 크롭과는 구분한다.
 공통 제작 원칙은 [모듈형 복장 절단선과 연결 기준](modular-outfit-connections.md)을 따른다.
 아래 수치는 도적 복장의 모델링 시작값이며, 공통 규격의 확정 치수는 아니다.
 
-`assets/modular_human_male_01/parts/fitted/base.glb`의 현재 형상을 직접 렌더해
+`assets/modular_human_male_01/fitted/base.glb`의 현재 형상을 직접 렌더해
 [정면](../images/characters/modular_human_male_01/parts/rogue/rig-front.png)과
 [측면](../images/characters/modular_human_male_01/parts/rogue/rig-side.png)을 생성 입력에 함께 제공했다.
 회색 재질은 체형 확인용 렌더에서만 사용했으며 기존 몸체 파일은 수정하지 않았다.
@@ -149,7 +149,7 @@ AI 배경 제거 편집으로 무손실 크롭과는 구분한다.
 ## 연결 원칙에 따른 원화 재검토 — 2026-10-01
 
 원화 5종의 디자인은 유지하고 다음 조건으로 Meshy 제작을 진행했다.
-공통 테두리는 `assets/modular_human_male_01/parts/interfaces/v1`의 최신 몸체 단면을 사용한다.
+공통 테두리는 `assets/modular_human_male_01/interfaces/v1`의 최신 몸체 단면을 사용한다.
 의상 내부 여유 공간과 최종 겹침 깊이는 아직 확정하지 않았다.
 
 | 파츠 | 연결 규격·안팎 순서 | 피팅·가림에서 해결할 항목 |
@@ -236,6 +236,8 @@ Meshy 자동 프리뷰, 분할 입력 이미지, 이전 검수 화면·독립 �
 `interfaces/v0/outfit-reference.blend`와 `interfaces.json`, 선택 원본 검수 이미지·측정 결과,
 연결 기준 이미지는 남겼다. 분할 입력은 원화와 제작 명세로 `prepare`에서 재현할 수 있다.
 선택 원본의 열람·검수에는 `modular-rogue-source-selection.json`을 사용한다.
+
+2026-10-10 후속 정리: 당시 보존했던 **[미사용]** `interfaces/v0/interfaces.json`도 삭제했다. 현재 제작 기준은 `interfaces/v1`이며, 이전 제작 기록의 v0 참조는 이력으로 남긴다. [삭제 기록](modular-interfaces-cleanup-2026-10-10.json).
 
 ## 이전 피팅과 정리 이력 — 2026-10-01
 
@@ -359,7 +361,7 @@ v6의 상세 산출물은 정리하고 수정 전후 비교 화면과 피팅 이
 출처·라이선스는 v6/v5와 기존 원본 기록을 따른다. 2026-10-01 Codex의 기존 메시 편집이며
 새 AI 생성이나 유료 호출은 없다. 비교 화면은 실제 Three.js 미리보기의 같은 전투 대기
 시점·카메라에서 렌더하고 FFmpeg로 배치했다. 편집본은
-`assets/modular_human_male_01/parts/rogue_fitted_v7/rogue-fitting.blend`였으며,
+`assets/modular_human_male_01/rogue/fitted_v7/rogue-fitting.blend`였으며,
 기본 상의 교체 후 삭제했다.
 
 ## 베이스 몸체 윤곽에 정렬 v8 — 2026-10-01
@@ -393,8 +395,8 @@ Blender 검수본에도 같은 가림 범위를 적용했다. 소매 연결의 �
 목 가림을 적용한 제작 미리보기의 조립 수는 21,422, 표시 수는 13,479이며 얼굴은 1,505다.
 출처·라이선스는 기존 v7/v5와 몸체의 기록을 따른다. 2026-10-01 Codex의 기존 메시 편집이며
 새 AI 생성이나 유료 호출은 없다. 기존 v7/v8 상의와 비교용 편집본은 삭제했다.
-**[미사용]** v8 하의와 `rogue_fitted_v8/rogue-fitting.blend`는 Tripo 하의 승인 후 삭제했다.
-현재 전체 조합은 `rogue_tripo_pants_v1/tripo-pants-fitting.blend`에서 편집한다.
+**[미사용]** v8 하의와 `rogue/fitted_v8/rogue-fitting.blend`는 Tripo 하의 승인 후 삭제했다.
+현재 전체 조합은 `rogue/tripo_pants_v1/tripo-pants-fitting.blend`에서 편집한다.
 전체 게임 및 다른 장비와의 호환 합격은 별도 검수 범위로 남아 있다.
 
 ### 제작용 미리보기와 재현
@@ -445,7 +447,7 @@ blender -b -t 6 --python-exit-code 1 --python tools/blender-scripts/review_rogue
 메시 2개·896 triangles, 재질 2개, 정점 속성 10개, UV·스킨 가중치·65본 순서·
 역바인드 행렬·장비 메타데이터를 유지한다. 안쪽 커프의 어두운 무텍스처 재질도
 보존한다. 삼각형 인덱스는 시작 꼭짓점만 순환하며 형상과 방향은 같다.
-제작용 `assets/modular_human_male_01/parts/rogue_fitted_v8/boots_rogue.glb`와
+제작용 `assets/modular_human_male_01/rogue/fitted_v8/boots_rogue.glb`와
 기존 출처·라이선스·이미지 원본을 보존하며, 추가 AI 생성이나 유료 호출은 없다.
 
 파일은 **3,958,724 → 401,644바이트(89.9% 감소)**, gzip level 6 전송량은
@@ -470,7 +472,7 @@ node tools/prepare-modular-character.mjs --part boots_rogue
 상의는 4,877→4,862 triangles이며 원본 Tripo 출력 조건과 기존 사용자 보고 약 USD 20/월 구독 기록을 따른다.
 새 AI 생성·유료 호출은 없다.
 
-현재 제작 파일은 `rogue_tripo_v1/rogue-undershirt-fitting-v1.blend`, 출력은 같은 폴더의 `top_rogue.glb`다.
+현재 제작 파일은 `rogue/tripo_v1/rogue-undershirt-fitting-v1.blend`, 출력은 같은 폴더의 `top_rogue.glb`다.
 `top_rogue-undershirt-before-v1.glb`는 재현 도구 입력으로 보존한다. [미사용] 이전 `tripo-fitting.blend`는 사용자 요청으로 2026-10-09 삭제했다.
 재현 도구는 `tools/fix-rogue-undershirt.py`이며 [수정 기록](modular-rogue-undershirt-fitting-v1.json),
 [동작 검사](modular-rogue-undershirt-animation-v1.json), [게임용 압축 검사](modular-rogue-undershirt-game-validation-v1.json),

@@ -1,7 +1,7 @@
 {
   "status": "Dev fitting candidate; sampled game poses reviewed, other mixed outfits pending",
   "editable": {
-    "path": "assets/modular_human_male_01/parts/ranger_tripo_pants_v1/ranger-pants-fitting.blend",
+    "path": "assets/modular_human_male_01/ranger/tripo_pants_v1/ranger-pants-fitting.blend",
     "sha256": "a27177ec4ad839a5917e03c7adc3cbb69620fcf9bb9c0715fcce2606d676e79e"
   },
   "images": [

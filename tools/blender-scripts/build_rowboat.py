@@ -260,7 +260,7 @@ def add_oar(name, side, material):
 
 def main():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    source = ROOT / 'assets/rowboat'
+    source = ROOT / 'assets/items/rowboat'
     texture = bpy.data.images.load(str(source / 'wood_albedo.png'))
     texture.scale(1024, 1024)
     texture.pack()

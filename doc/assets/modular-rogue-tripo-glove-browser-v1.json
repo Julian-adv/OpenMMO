@@ -2,7 +2,7 @@
   "status": "Historical passed Chromium check before left-wrap replacement",
   "date": "2026-10-02",
   "gloves": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_glove_v1/gloves_rogue.glb",
+    "path": "assets/modular_human_male_01/rogue/tripo_glove_v1/gloves_rogue.glb",
     "sha256": "776b502afcdc543452329ba002a236f2da7032765a84509d1a2012ad81696be6",
     "retained": false
   },

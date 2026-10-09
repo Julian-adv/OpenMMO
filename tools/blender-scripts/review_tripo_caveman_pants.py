@@ -7,8 +7,8 @@ import bpy
 from mathutils import Vector
 
 ROOT = Path(__file__).resolve().parents[2]
-PARTS = ROOT / 'assets/modular_human_male_01/parts'
-OUTPUT = PARTS / 'caveman_tripo_pants_v1'
+PARTS = ROOT / 'assets/modular_human_male_01'
+OUTPUT = PARTS / 'caveman/tripo_pants_v1'
 spec = importlib.util.spec_from_file_location('review', ROOT / 'tools/blender-scripts/review_rogue_fitting.py')
 review = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(review)
@@ -21,7 +21,7 @@ for obj in bpy.data.objects:
         obj.hide_render = True
         obj.hide_set(True)
 pants = review.import_part(OUTPUT / 'pants_caveman.glb', rig)
-review.import_part(PARTS / 'caveman_tripo_top_v1/top_caveman.glb', rig)
+review.import_part(PARTS / 'caveman/tripo_top_v1/top_caveman.glb', rig)
 review.import_part(PARTS / 'fitted/hair_crop.glb', rig)
 interfaces = json.loads((PARTS / 'interfaces/v1/interfaces.json').read_text())
 waist = next(item for item in interfaces['interfaces'] if item['name'] == 'waist')

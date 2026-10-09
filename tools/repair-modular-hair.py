@@ -8,8 +8,8 @@ import numpy as np
 from lib.glb import read_glb, write_glb
 
 ROOT = Path(__file__).resolve().parents[1]
-PARTS = ROOT / 'assets/modular_human_male_01/parts'
-SOURCE = PARTS / 'hair_shape_sources/hair_crop-before-rear-clearance-v1.glb'
+PARTS = ROOT / 'assets/modular_human_male_01'
+SOURCE = PARTS / 'hair/shape_sources/hair_crop-before-rear-clearance-v1.glb'
 OUTPUT = PARTS / 'fitted/hair_crop.glb'
 SOURCE_HASH = '6d754801583d1ae6147ac98cb55fac5237d5b43329e7273d5cb8977c91a0364a'
 REPORT = ROOT / 'doc/assets/modular-male-hair-rear-clearance-v1.json'

@@ -6,7 +6,7 @@ import * as THREE from '../client/node_modules/three/build/three.module.js'
 import { hash, headlessThree, root } from './lib/headless-three.mjs'
 
 const { values } = parseArgs({ options: {
-  directory: { type: 'string', default: 'assets/modular_human_male_01/parts/rogue_tripo_v1' },
+  directory: { type: 'string', default: 'assets/modular_human_male_01/rogue/tripo_v1' },
   part: { type: 'string', default: 'top_rogue' },
   report: { type: 'string', default: 'doc/assets/modular-rogue-tripo-animation-v1.json' },
   boots: { type: 'string' },
@@ -16,7 +16,7 @@ const directory = values.directory.replace(/\/$/, '') + '/'
 const { server, load } = await headlessThree()
 try {
   const { bindModularPart, modularAnimationClips } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
-  const bodyPath = 'assets/modular_human_male_01/parts/fitted/base.glb'
+  const bodyPath = 'assets/modular_human_male_01/fitted/base.glb'
   const body = (await load(bodyPath)).scene
   const partPath = directory + values.part + '.glb'
   const meshes = bindModularPart(body, (await load(partPath)).scene)

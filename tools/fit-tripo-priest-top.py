@@ -19,7 +19,7 @@ spec = importlib.util.spec_from_file_location('modular_fit', ROOT / 'tools/fit-m
 fit = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fit)
 io = fit.io
-OUTPUT = ROOT / 'assets/modular_human_male_01/parts/priest_tripo_top_v1'
+OUTPUT = ROOT / 'assets/modular_human_male_01/priest/tripo_top_v1'
 
 
 def align(original):
@@ -112,7 +112,7 @@ def fit_lower_robe(points, garment):
 
 def main():
     source = OUTPUT / 'source.glb'
-    base = ROOT / 'assets/modular_human_male_01/parts/fitted/base.glb'
+    base = ROOT / 'assets/modular_human_male_01/fitted/base.glb'
     assert fit.digest(source) == '63fb9fbe3d1f811bb223eff2fd0a6a7a56e0bb06efbb59461c6e44bd2c2f5859'
     assert fit.digest(base) == '0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a'
     doc, raw = fit.read_glb(source)

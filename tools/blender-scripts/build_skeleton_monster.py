@@ -218,7 +218,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--preview', action='store_true')
     args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else [])
-    directory = ROOT / 'assets/skeleton'
+    directory = ROOT / 'assets/monsters/skeleton'
     audit = ROOT / '.codex/skeleton-fbx'
     audit.mkdir(parents=True, exist_ok=True)
     bpy.ops.wm.read_factory_settings(use_empty=True)

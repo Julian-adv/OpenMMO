@@ -43,12 +43,12 @@
       "bytes": 282658
     },
     {
-      "path": "assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone-before-front-fit.glb",
+      "path": "assets/modular_human_male_01/hair/tripo_wavy_v1/hair_wavy_bone-before-front-fit.glb",
       "sha256": "fc59c008c33e92aa10eb30afd8cb964cb5baceb913058dc56674a107b4950922",
       "bytes": 1147496
     },
     {
-      "path": "assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone-before-rear-fill.glb",
+      "path": "assets/modular_human_male_01/hair/tripo_wavy_v1/hair_wavy_bone-before-rear-fill.glb",
       "sha256": "f9299483f510b4786889b7728a610f0fbcb97fbc8e3c695e90921baca9bae1cb",
       "bytes": 1128480
     }

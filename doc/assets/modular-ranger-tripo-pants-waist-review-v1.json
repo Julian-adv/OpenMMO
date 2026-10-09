@@ -7,15 +7,15 @@
   "planes_per_pose": 5,
   "sources": [
     {
-      "path": "assets/modular_human_male_01/parts/ranger_tripo_pants_v1/pants_ranger.glb",
+      "path": "assets/modular_human_male_01/ranger/tripo_pants_v1/pants_ranger.glb",
       "sha256": "8529da4370e10d74228c1aafc790cc1c1684d1eb8737ad19d993d8f938594883"
     },
     {
-      "path": "assets/modular_human_male_01/parts/ranger_tripo_pants_v1/validation-poses.json",
+      "path": "assets/modular_human_male_01/ranger/tripo_pants_v1/validation-poses.json",
       "sha256": "e4725b853463a8551dfec2e12b87bd596fe336c9afbb17f7509906a07923ab33"
     },
     {
-      "path": "assets/modular_human_male_01/parts/ranger_tripo_top_v4/top_ranger.glb",
+      "path": "assets/modular_human_male_01/ranger/tripo_top_v4/top_ranger.glb",
       "sha256": "ec8e9638833ad4f60ba66c1a36fb00cd66521c601977b0fa6d7d389ebfaf3623"
     }
   ],

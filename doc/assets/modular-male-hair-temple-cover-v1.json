@@ -1,11 +1,11 @@
 {
   "date": "2026-10-08",
   "source": {
-    "path": "assets/modular_human_male_01/parts/hair_shape_sources/hair_crop-before-temple-cover-v1.glb",
+    "path": "assets/modular_human_male_01/hair/shape_sources/hair_crop-before-temple-cover-v1.glb",
     "sha256": "5aea523e5de994b8a2b6e15aef1589a3cbe7413514bc429194e1f0a940141686"
   },
   "output": {
-    "path": "assets/modular_human_male_01/parts/fitted/hair_crop.glb",
+    "path": "assets/modular_human_male_01/fitted/hair_crop.glb",
     "sha256": "5e8acb389f575331008c36dd94afcbf3831c90f53ca21ab0a7bbe666539f2472"
   },
   "source_triangles": 933,
@@ -31,7 +31,7 @@
   ],
   "source_and_license": "Existing modular male crop, local mesh repair; original Meshy Premium and ChatGPT Pro 20x asset records apply. No new AI generation.",
   "editable": {
-    "path": "assets/modular_human_male_01/parts/fitted/character_parts.blend",
+    "path": "assets/modular_human_male_01/fitted/character_parts.blend",
     "sha256": "cf677c44b0f3c798688b06f8ac989a37b65fa7bb0c05a94cdf9bdbcd7560dfff",
     "added_faces": 1,
     "positions_preserved": true

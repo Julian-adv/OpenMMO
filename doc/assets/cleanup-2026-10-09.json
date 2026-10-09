@@ -1,0 +1,440 @@
+{
+  "date": "2026-10-09",
+  "request": "Remove unnecessary assets while preserving runtime assets, rebuild inputs, source materials, and provenance.",
+  "asset_revision_before_cleanup": "62533994a99b062ac47c7073c44dd484b7bce3d3",
+  "files_scanned": 460,
+  "removed_count": 69,
+  "removed_bytes": 202856249,
+  "removed": [
+    {
+      "path": "assets/modular_human_male_01/ranger_tripo_boots_v1/pants_rogue_ranger_boots-review.glb",
+      "bytes": 2123532,
+      "sha256": "4bc9d675aed2234460d0ed3867e9cd74495d67c1cccd038a02a9584d91fc3656",
+      "reason": "Unused review-only export of runtime trouser geometry; original pants, fitting records, and export-ranger-boot-pants.py retained. Current Blender reviewers use pants_ranger_boots-review.glb, which is retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/skin_sources/caveman-match-2026-10-04/runtime-before.glb",
+      "bytes": 3455684,
+      "sha256": "126a395b8d32b3ed69fe5b014815fe28b6be758bca9fad493cbb7e625a0208e6",
+      "reason": "Old compressed runtime comparison copy; uncompressed base-before.glb and current body retained. No current tool reads this file."
+    },
+    {
+      "path": "assets/sfx/dungeon-drips-2026-09-17/dungeon-drip_take1_2026-09-17.mp3",
+      "bytes": 12164,
+      "sha256": "cc3fb4f6e094a2335eef813be7dd3f2a07d83beaa99c710f7f0df08d5c626925",
+      "reason": "Unused dungeon drip candidate or superseded procedural implementation; current Ocons source audio and generation metadata retained."
+    },
+    {
+      "path": "assets/sfx/dungeon-drips-2026-09-17/dungeon-drip_take2_2026-09-17.mp3",
+      "bytes": 12164,
+      "sha256": "1952e9f8c51b4899c43619202339d87805ecf67696872351f97def7fd989e08b",
+      "reason": "Unused dungeon drip candidate or superseded procedural implementation; current Ocons source audio and generation metadata retained."
+    },
+    {
+      "path": "assets/sfx/dungeon-drips-2026-09-17/unused-procedural-drip.ogg",
+      "bytes": 5112,
+      "sha256": "70f57cb81e37c6dbc99f379b1f1656870f211ad34bcf5c26ef01ef47d925c5c4",
+      "reason": "Unused dungeon drip candidate or superseded procedural implementation; current Ocons source audio and generation metadata retained."
+    },
+    {
+      "path": "assets/sfx/dungeon-drips-2026-09-17/unused-procedural-generator.mjs",
+      "bytes": 1715,
+      "sha256": "2026357f67ffd20814d9bea01db1665c3f5ae3abc9b8209eb3d1dbb1881cb4b4",
+      "reason": "Unused dungeon drip candidate or superseded procedural implementation; current Ocons source audio and generation metadata retained."
+    },
+    {
+      "path": "assets/sfx/dungeon-drips-2026-09-18/dungeon-drip-stone_take1_2026-09-18.mp3",
+      "bytes": 12164,
+      "sha256": "052880e52e01e1cbd08d752a1b701c9c70173b2e4202e5e59cf1c3532b91fe21",
+      "reason": "Unused dungeon drip candidate or superseded procedural implementation; current Ocons source audio and generation metadata retained."
+    },
+    {
+      "path": "assets/sfx/dungeon-drips-2026-09-18/dungeon-drip-stone_take2_2026-09-18.mp3",
+      "bytes": 12164,
+      "sha256": "e1ceed66a00f3bdf9ee950fa09b4336835700a31869a78e5d206eddba083f433",
+      "reason": "Unused dungeon drip candidate or superseded procedural implementation; current Ocons source audio and generation metadata retained."
+    },
+    {
+      "path": "assets/sfx/dungeon-drips-2026-09-18/dungeon-drip-stone_take3_2026-09-18.mp3",
+      "bytes": 12164,
+      "sha256": "c274ac231357ba53fb94707d06bd5be9f6629c9d6168b53837fbf4741fd510bf",
+      "reason": "Unused dungeon drip candidate or superseded procedural implementation; current Ocons source audio and generation metadata retained."
+    },
+    {
+      "path": "assets/sfx/dungeon-drips-2026-09-18/dungeon-drip-stone_take4_2026-09-18.mp3",
+      "bytes": 12164,
+      "sha256": "c2db1fd3b5bcb9ddef7e1180eaea981aa6182609bdf3123d19a257c18c38b8d5",
+      "reason": "Unused dungeon drip candidate or superseded procedural implementation; current Ocons source audio and generation metadata retained."
+    },
+    {
+      "path": "assets/sfx/dungeon-drips-2026-09-18/dungeon-drip-wet-stone_take1_2026-09-18.mp3",
+      "bytes": 17180,
+      "sha256": "90898b6f50c1cc27d5bcef80e36685aaa554f85155952bb1628624f4fa416043",
+      "reason": "Unused dungeon drip candidate or superseded procedural implementation; current Ocons source audio and generation metadata retained."
+    },
+    {
+      "path": "assets/sfx/dungeon-drips-2026-09-18/dungeon-drip-wet-stone_take2_2026-09-18.mp3",
+      "bytes": 17180,
+      "sha256": "72ca1c6954a75ff8ec8acf55c9b9d69b737f0b92024c8bf82b31ef75dfdb583e",
+      "reason": "Unused dungeon drip candidate or superseded procedural implementation; current Ocons source audio and generation metadata retained."
+    },
+    {
+      "path": "assets/sfx/dungeon-drips-2026-09-18/dungeon-drip-wet-stone_take3_2026-09-18.mp3",
+      "bytes": 17180,
+      "sha256": "cccfd52ecb237e6bd122868e0068a26688e42fdd4c4e280b362bcd3243478637",
+      "reason": "Unused dungeon drip candidate or superseded procedural implementation; current Ocons source audio and generation metadata retained."
+    },
+    {
+      "path": "assets/sfx/dungeon-drips-2026-09-18/dungeon-drip-wet-stone_take4_2026-09-18.mp3",
+      "bytes": 17180,
+      "sha256": "bed349f97d8856db36534fc94c5e29d2bde5a37928a4cdb82da4adfafb46e9ce",
+      "reason": "Unused dungeon drip candidate or superseded procedural implementation; current Ocons source audio and generation metadata retained."
+    },
+    {
+      "path": "assets/sfx/dungeon-drips-2026-09-18/unused-percussive-drip.ogg",
+      "bytes": 7285,
+      "sha256": "23b7a865c21f22942bc3493e8a4bf1a661c3c7defb87a1e5488402889b628760",
+      "reason": "Unused dungeon drip candidate or superseded procedural implementation; current Ocons source audio and generation metadata retained."
+    },
+    {
+      "path": "assets/sfx/skeleton-hits-2026-09-15/armored-bone-hit_candidate2_2026-09-15.mp3",
+      "bytes": 12164,
+      "sha256": "0a4428c4b96561d01be7cc3ddbb13a7f2f1097bc34706c5a80ba9f9ae2bd7e70",
+      "reason": "Rejected sound candidate; selected take and all generation metadata retained."
+    },
+    {
+      "path": "assets/sfx/skeleton-hits-2026-09-15/armored-bone-hit_candidate3_2026-09-15.mp3",
+      "bytes": 20106,
+      "sha256": "1deb487ce755b06fb554843a0584934853dd25ec235f7ea0afa2c467adf2ab1d",
+      "reason": "Rejected sound candidate; selected take and all generation metadata retained."
+    },
+    {
+      "path": "assets/sfx/skeleton-hits-2026-09-15/armored-bone-hit_candidate4_2026-09-15.mp3",
+      "bytes": 20106,
+      "sha256": "0902862198f05b0f924e4642ac52ca7f3c48e0ab274e9d6e5878c2c73674e8f4",
+      "reason": "Rejected sound candidate; selected take and all generation metadata retained."
+    },
+    {
+      "path": "assets/sfx/skeleton-hits-2026-09-15/bone-hit-heavy_take2_2026-09-15.mp3",
+      "bytes": 12164,
+      "sha256": "89358666a92dee017cdf9d3503c18ade3d020f5800a6ffcde1b826d5e9061512",
+      "reason": "Rejected sound candidate; selected take and all generation metadata retained."
+    },
+    {
+      "path": "assets/skeleton_warrior/sfx/metal-hit.mp3",
+      "bytes": 12164,
+      "sha256": "41484d93388067b0da61b7f4ec921ea1fb4f8d5433e596bb4d7581713efe0fc1",
+      "reason": "Superseded metal hit source; current heavy bone hit source retained."
+    },
+    {
+      "path": "assets/stethoscope/README.md",
+      "bytes": 1690,
+      "sha256": "9e34347431fc443b2f330403ee72a5b39adff04e0a21fc5a9f0079e093e27836",
+      "reason": "Redundant file guide; source, reproduction, and validation recorded in doc/assets/items.md and generation.json."
+    },
+    {
+      "path": "assets/tobin/README.md",
+      "bytes": 5149,
+      "sha256": "e2f23629137c5890d63027a9693fa32ac074ce47b36bb7cf6e6ce7426f055ca6",
+      "reason": "Redundant file guide; source, reproduction, validation, and NPC setup recorded in doc/assets/characters.md and generation.json."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_sources_v2/glove_rogue_right/source.glb",
+      "bytes": 9464068,
+      "sha256": "7aa8a5a81cfdc83aadd2c91be13ff4204aaec7f8398b13a23470ee822babf56a",
+      "reason": "Superseded Meshy right glove source and textures; user requested removal. Current Tripo source, fitted glove, and final combined gloves retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_sources_v2/glove_rogue_right/texture-0-base_color.png",
+      "bytes": 5286649,
+      "sha256": "67fdf4d31b29a9b46b8a4e4e4e16659f1ad2b37b8c01fe63172e47377de44211",
+      "reason": "Superseded Meshy right glove source and textures; user requested removal. Current Tripo source, fitted glove, and final combined gloves retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_sources_v2/glove_rogue_right/texture-0-metallic.png",
+      "bytes": 552490,
+      "sha256": "c68046c3999561461794e6b6fcb65d49681dcea055570179c9d1e2aea4e26b2b",
+      "reason": "Superseded Meshy right glove source and textures; user requested removal. Current Tripo source, fitted glove, and final combined gloves retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_sources_v2/glove_rogue_right/texture-0-normal.png",
+      "bytes": 5113933,
+      "sha256": "161c062367a9c23db27b8bd27df142f2a4810ae63a71d1e0d6e1c09c52f93c41",
+      "reason": "Superseded Meshy right glove source and textures; user requested removal. Current Tripo source, fitted glove, and final combined gloves retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_sources_v2/glove_rogue_right/texture-0-roughness.png",
+      "bytes": 1794512,
+      "sha256": "9e1df3adac4ddc9f0a984fe2096b4a5965b894c65f0bc0dd55f0381ae5c2b3f5",
+      "reason": "Superseded Meshy right glove source and textures; user requested removal. Current Tripo source, fitted glove, and final combined gloves retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_sources_v3/top_rogue/source.glb",
+      "bytes": 11181936,
+      "sha256": "3baa541c6e93d2aafb449f58bc2cbe2e565d009df899e5b0b4f342e924779375",
+      "reason": "Superseded Meshy rogue top source and textures; user requested removal. Current Tripo source and fitted top retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_sources_v3/top_rogue/texture-0-base_color.png",
+      "bytes": 5460526,
+      "sha256": "dcebb14b4bdae82b0c4ccef10140083495f6bd23a5835ad063a02e9f448270df",
+      "reason": "Superseded Meshy rogue top source and textures; user requested removal. Current Tripo source and fitted top retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_sources_v3/top_rogue/texture-0-metallic.png",
+      "bytes": 698886,
+      "sha256": "4d4eeeedddd109dd6b269f258386a0b81e599b24160ca8685e03014610e94e7f",
+      "reason": "Superseded Meshy rogue top source and textures; user requested removal. Current Tripo source and fitted top retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_sources_v3/top_rogue/texture-0-normal.png",
+      "bytes": 5964453,
+      "sha256": "6ecb9a580023c95b8e0e7e4d5d02e9efebedea28f7a59e44eefa1b48fb312443",
+      "reason": "Superseded Meshy rogue top source and textures; user requested removal. Current Tripo source and fitted top retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_sources_v3/top_rogue/texture-0-roughness.png",
+      "bytes": 2095045,
+      "sha256": "f7e587a0732b1b52c9389354d35e85d18ac0eaba5f7c8dbbb62084a66dfc8686",
+      "reason": "Superseded Meshy rogue top source and textures; user requested removal. Current Tripo source and fitted top retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_rebuild_v5/leather.png",
+      "bytes": 1155490,
+      "sha256": "b220177be5a0107828dea8ea5f06017f886ca216ef1f3eb8e5336466863d1508",
+      "reason": "Obsolete procedural rogue outfit textures replaced by Tripo parts; removed with legacy top, sleeve, and wrap builders. Shared fitting helpers retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_rebuild_v5/linen.png",
+      "bytes": 1106856,
+      "sha256": "e9ce51b1ca0b7b8056a9c1f861bba438df7fc892572c3f3de249e740aa188ea0",
+      "reason": "Obsolete procedural rogue outfit textures replaced by Tripo parts; removed with legacy top, sleeve, and wrap builders. Shared fitting helpers retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_rebuild_v5/material-atlas.png",
+      "bytes": 4046797,
+      "sha256": "233fcdd9f3edafd2d5f9dfff9f0c8ba59c7f1906503d0d748a92b7cc47a935ac",
+      "reason": "Obsolete procedural rogue outfit textures replaced by Tripo parts; removed with legacy top, sleeve, and wrap builders. Shared fitting helpers retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_rebuild_v5/scarf.png",
+      "bytes": 1047124,
+      "sha256": "de53c61dce4d733c2ac7d2fe943396b34ec27a6a96f86d6d53b00ccd7d5aa643",
+      "reason": "Obsolete procedural rogue outfit textures replaced by Tripo parts; removed with legacy top, sleeve, and wrap builders. Shared fitting helpers retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_rebuild_v5/trim.png",
+      "bytes": 1088407,
+      "sha256": "0535191263efb1843440b6f29b141787a5844855f63af2fdb04854d7497f9fc0",
+      "reason": "Obsolete procedural rogue outfit textures replaced by Tripo parts; removed with legacy top, sleeve, and wrap builders. Shared fitting helpers retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_sources/pants_rogue/source.glb",
+      "bytes": 10708204,
+      "sha256": "f1e4b59d7751438abe2caaa78ec04027d66bb38486a8d4fb58e5096a861f9b6c",
+      "reason": "Superseded Meshy rogue trousers or wrist wrap source and textures; user requested removal. Current Tripo parts and Meshy boot source retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_sources/pants_rogue/texture-0-base_color.png",
+      "bytes": 5823686,
+      "sha256": "704e0e254e7b109c3f06d4d8c107781acad03ec1d84f248f8a036ed4d1485376",
+      "reason": "Superseded Meshy rogue trousers or wrist wrap source and textures; user requested removal. Current Tripo parts and Meshy boot source retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_sources/pants_rogue/texture-0-metallic.png",
+      "bytes": 248051,
+      "sha256": "9642564b691ea085b7067cb05700d0dc717a6c75f4a7e424ada6bbd0cc6c04e8",
+      "reason": "Superseded Meshy rogue trousers or wrist wrap source and textures; user requested removal. Current Tripo parts and Meshy boot source retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_sources/pants_rogue/texture-0-normal.png",
+      "bytes": 5694928,
+      "sha256": "96221b92cd95d79b3fbd18b3671f4991aa507f1d4b776769560d3e8d43e27ac1",
+      "reason": "Superseded Meshy rogue trousers or wrist wrap source and textures; user requested removal. Current Tripo parts and Meshy boot source retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_sources/pants_rogue/texture-0-roughness.png",
+      "bytes": 1806450,
+      "sha256": "6e1d9deddf8413a35a0983af5591bdb38946ff6334434afac11c99672df0c114",
+      "reason": "Superseded Meshy rogue trousers or wrist wrap source and textures; user requested removal. Current Tripo parts and Meshy boot source retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_sources/wrap_rogue_left/source.glb",
+      "bytes": 10280120,
+      "sha256": "6e5c582da5d58643e4acdad68ace576e163fa87a8e69258e33a46b761327cb85",
+      "reason": "Superseded Meshy rogue trousers or wrist wrap source and textures; user requested removal. Current Tripo parts and Meshy boot source retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_sources/wrap_rogue_left/texture-0-base_color.png",
+      "bytes": 6107563,
+      "sha256": "eb3a7058e725ced7a98ce250ec3c66ba503aa8bf669055209bcd2201d80dd6c6",
+      "reason": "Superseded Meshy rogue trousers or wrist wrap source and textures; user requested removal. Current Tripo parts and Meshy boot source retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_sources/wrap_rogue_left/texture-0-metallic.png",
+      "bytes": 229111,
+      "sha256": "1abbe169825fe8319a8d375e5454d4163a2d727b7cccd8e42255a619e2c6615d",
+      "reason": "Superseded Meshy rogue trousers or wrist wrap source and textures; user requested removal. Current Tripo parts and Meshy boot source retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_sources/wrap_rogue_left/texture-0-normal.png",
+      "bytes": 5962521,
+      "sha256": "05d1959c02a0393b2fb738824d75f7932b14120505a7cee2cd0526716612cac3",
+      "reason": "Superseded Meshy rogue trousers or wrist wrap source and textures; user requested removal. Current Tripo parts and Meshy boot source retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/rogue_sources/wrap_rogue_left/texture-0-roughness.png",
+      "bytes": 1677836,
+      "sha256": "3c86dd43118aa895835b12d480849bb9ebe4c88ae0cd022454dd4ed79b6478df",
+      "reason": "Superseded Meshy rogue trousers or wrist wrap source and textures; user requested removal. Current Tripo parts and Meshy boot source retained."
+    },
+    {
+      "path": "assets/modular_human_male_01/skin_sources/caveman-match-2026-10-04/base-before.glb",
+      "bytes": 22041196,
+      "sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b",
+      "reason": "Pre-correction body comparison backup; user requested deletion. Current skin restoration uses the fitted body and retained skin textures, not this file."
+    },
+    {
+      "path": "assets/sfx/dungeon-drips-2026-09-17/dungeon-drip_take1_2026-09-17.json",
+      "bytes": 890,
+      "sha256": "6e5688fdf184a5986747197e60249e5116241d04900b6d1cc7fbd2a4f5a95807",
+      "reason": "User requested deletion of the obsolete ElevenLabs drip take 1 generation record after its unused audio was removed."
+    },
+    {
+      "path": "assets/sfx/dungeon-drips-2026-09-17/dungeon-drip_take2_2026-09-17.json",
+      "bytes": 890,
+      "sha256": "9b9c056452a3e8ac3c0e53ffa1bf984666ff3bf1b79a248d45cebbf05caa3c79",
+      "reason": "User requested deletion of the obsolete ElevenLabs drip take 2 generation record after its unused audio was removed."
+    },
+    {
+      "path": "assets/sfx/dungeon-drips-2026-09-18/dungeon-drip-stone_take1_2026-09-18.json",
+      "bytes": 875,
+      "sha256": "4176014522d8a08d02cd018aa56a6177025f3acafa933227250fe2585496bcc0",
+      "reason": "User requested removal of unused ElevenLabs stone and wet-stone drip generation records; associated audio was already deleted and current Ocons audio is retained."
+    },
+    {
+      "path": "assets/sfx/dungeon-drips-2026-09-18/dungeon-drip-stone_take2_2026-09-18.json",
+      "bytes": 875,
+      "sha256": "15a6a1d274399203fdb1db1b23db18ffac02b86fc26d160a8310a711427cde04",
+      "reason": "User requested removal of unused ElevenLabs stone and wet-stone drip generation records; associated audio was already deleted and current Ocons audio is retained."
+    },
+    {
+      "path": "assets/sfx/dungeon-drips-2026-09-18/dungeon-drip-stone_take3_2026-09-18.json",
+      "bytes": 862,
+      "sha256": "e2ef496affabddadae96e6bfab0af1487f98e5a7702ab4bf35ba748265b7e68a",
+      "reason": "User requested removal of unused ElevenLabs stone and wet-stone drip generation records; associated audio was already deleted and current Ocons audio is retained."
+    },
+    {
+      "path": "assets/sfx/dungeon-drips-2026-09-18/dungeon-drip-stone_take4_2026-09-18.json",
+      "bytes": 1693,
+      "sha256": "712535c1dc1261baf861efaf841ffb79f7e4ac00be3c17b0958bb4f562813499",
+      "reason": "User requested removal of unused ElevenLabs stone and wet-stone drip generation records; associated audio was already deleted and current Ocons audio is retained."
+    },
+    {
+      "path": "assets/sfx/dungeon-drips-2026-09-18/dungeon-drip-wet-stone_take1_2026-09-18.json",
+      "bytes": 868,
+      "sha256": "b734486c4aee8cb384fbf02de0fcf3db570378918eef0099abcd78c46d515845",
+      "reason": "User requested removal of unused ElevenLabs stone and wet-stone drip generation records; associated audio was already deleted and current Ocons audio is retained."
+    },
+    {
+      "path": "assets/sfx/dungeon-drips-2026-09-18/dungeon-drip-wet-stone_take2_2026-09-18.json",
+      "bytes": 868,
+      "sha256": "1bafcf9774c042bd0a19e60ceb99bee7994ca23f6ef2c8326b442c3e21d77424",
+      "reason": "User requested removal of unused ElevenLabs stone and wet-stone drip generation records; associated audio was already deleted and current Ocons audio is retained."
+    },
+    {
+      "path": "assets/sfx/dungeon-drips-2026-09-18/dungeon-drip-wet-stone_take3_2026-09-18.json",
+      "bytes": 1032,
+      "sha256": "f18bf08263431eb17e903a4ff358c60436b66b6e41865403c68961026e8ff323",
+      "reason": "User requested removal of unused ElevenLabs stone and wet-stone drip generation records; associated audio was already deleted and current Ocons audio is retained."
+    },
+    {
+      "path": "assets/sfx/dungeon-drips-2026-09-18/dungeon-drip-wet-stone_take4_2026-09-18.json",
+      "bytes": 1687,
+      "sha256": "3898aef47e7cf34e10f4b02bdc511cf360fd8d6fafea4988a8445c937706e050",
+      "reason": "User requested removal of unused ElevenLabs stone and wet-stone drip generation records; associated audio was already deleted and current Ocons audio is retained."
+    },
+    {
+      "path": "assets/sfx/skeleton-hits-2026-09-15/armored-bone-hit_candidate2_2026-09-15.json",
+      "bytes": 648,
+      "sha256": "97dcd01687977d148bc4851692e51c83e13dfaaf62fa2e783f7399fdc9075e21",
+      "reason": "User requested deletion of unselected skeleton hit generation records; associated candidate audio was already removed. Selected audio sources and processing records retained."
+    },
+    {
+      "path": "assets/sfx/skeleton-hits-2026-09-15/armored-bone-hit_candidate3_2026-09-15.json",
+      "bytes": 667,
+      "sha256": "52c327f6bf3344d6a3e22534745c1890367dff552ab8dfbc6ecf962da8192d04",
+      "reason": "User requested deletion of unselected skeleton hit generation records; associated candidate audio was already removed. Selected audio sources and processing records retained."
+    },
+    {
+      "path": "assets/sfx/skeleton-hits-2026-09-15/armored-bone-hit_candidate4_2026-09-15.json",
+      "bytes": 667,
+      "sha256": "bdefde02a0efdf86bbc688b25845e440e1e1f6b800d0c2c5224cb0fd094bca05",
+      "reason": "User requested deletion of unselected skeleton hit generation records; associated candidate audio was already removed. Selected audio sources and processing records retained."
+    },
+    {
+      "path": "assets/sfx/skeleton-hits-2026-09-15/bone-hit-heavy_take2_2026-09-15.json",
+      "bytes": 646,
+      "sha256": "da9bd4ff103a8554a0dff8553719a7f8f25ee4e1a12eb1faef0e8da0657e03ad",
+      "reason": "User requested deletion of unselected skeleton hit generation records; associated candidate audio was already removed. Selected audio sources and processing records retained."
+    },
+    {
+      "path": "assets/shop-sign-icons/shop_sign.json",
+      "bytes": 69062,
+      "sha256": "0d4692141db1cad9e8cdbf6dc36f4b46599160224b54a861d57de130fb96e926",
+      "reason": "Regenerable shop sign icon geometry export; user requested deletion. Procedural geometry code, exporter, renderer, textures, and final icons retained."
+    },
+    {
+      "path": "assets/shop-sign-icons/shop_sign_oval.json",
+      "bytes": 73926,
+      "sha256": "00b82e4c220db237da8931e7a53d1bcc0620e4fa406dda7531d54a5de99e97e1",
+      "reason": "Regenerable shop sign icon geometry export; user requested deletion. Procedural geometry code, exporter, renderer, textures, and final icons retained."
+    },
+    {
+      "path": "assets/shop-sign-icons/shop_sign_plank.json",
+      "bytes": 7419,
+      "sha256": "ef1e9df8a88c5e7bd5b9b0e9ccf20ba9624f0249ed8f1d90e1a103634507ad0f",
+      "reason": "Regenerable shop sign icon geometry export; user requested deletion. Procedural geometry code, exporter, renderer, textures, and final icons retained."
+    },
+    {
+      "path": "assets/shop-sign-icons/shop_sign_weathered.json",
+      "bytes": 68982,
+      "sha256": "da4086eeae64bd2c5e9271e8a866ed7b8e31421aebba0eca8275172917411b70",
+      "reason": "Regenerable shop sign icon geometry export; user requested deletion. Procedural geometry code, exporter, renderer, textures, and final icons retained."
+    },
+    {
+      "path": "assets/skeleton/skeleton_gameplay.mp4",
+      "bytes": 31276680,
+      "sha256": "5afe67333910de4d249748d81dc4e54bfa565e5113321f7a41606817e4a69328",
+      "reason": "Contributor-provided gameplay demonstration video; user requested deletion. Not used by runtime or asset build tools."
+    },
+    {
+      "path": "assets/rusty_metal_grid_1k.gltf.zip",
+      "bytes": 4212967,
+      "sha256": "1bdf30ad78a7624e2420c06dfc46558f314d948b5625aaaca31543aac08cbba2",
+      "removed_date": "2026-10-10",
+      "reason": "User requested deletion of the original download ZIP; converted source GLB and runtime material retained. No current build tool reads the ZIP."
+    },
+    {
+      "path": "assets/horse.zip",
+      "bytes": 34678632,
+      "sha256": "df8d425630611126d6e9b594639d1c1802d30a07ad15b976d92e9615abe35299",
+      "removed_date": "2026-10-10",
+      "reason": "Duplicate download archive; all four extracted files verified byte-identical and retained. Horse builder updated to use extracted sources directly."
+    }
+  ],
+  "preserved": [
+    "Original model, texture, rig, and animation sources; current Blender files and runtime models.",
+    "base-before-calf-v1.glb, hair shape sources, face-rugged-before-standard-scalp.glb, top_rogue-undershirt-before-v1.glb, and pink_maid-before-textures-1024.glb are documented rebuild inputs.",
+    "Both neck-seam-validation.json files contain input coordinates used by animation validation.",
+    "Validation poses and animation snapshots are consumed by coverage checks and Blender review scripts even when their bytes match other outfit data.",
+    "pants_ranger_boots-review.glb is read by the ranger boots and gloves Blender review scripts.",
+    "Current and historical interface definitions, source hashes, generation prompts, licenses, and rejected-audio generation metadata.",
+    "Duplicate skeleton FBX clips and greatsword source GLBs remain at the paths used by their respective asset pipelines."
+  ],
+  "validation": [
+    "All 460 asset files inventoried and hashed; deletions match their existing assets.lock SHA-256 values.",
+    "Removed files are not current runtime or rebuild inputs; retained alternate sources checked separately.",
+    "No runtime models, icons, animation packs, or client/server code changed."
+  ]
+}

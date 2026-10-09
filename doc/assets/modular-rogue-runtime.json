@@ -3,25 +3,25 @@
   "source_selection": "doc/assets/modular-rogue-source-selection.json",
   "inputs": [
     {
-      "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+      "path": "assets/modular_human_male_01/rogue/tripo_v1/top_rogue.glb",
       "sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
       "bytes": 2150516,
       "triangles": 4877
     },
     {
-      "path": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/pants_rogue.glb",
+      "path": "assets/modular_human_male_01/rogue/tripo_pants_v1/pants_rogue.glb",
       "sha256": "7178d06a9b2e18953e2c3fb0672df8424b688d6f4ccc47affc856a9084e8e81c",
       "bytes": 2169748,
       "triangles": 2022
     },
     {
-      "path": "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/gloves_rogue.glb",
+      "path": "assets/modular_human_male_01/rogue/tripo_wrap_v1/gloves_rogue.glb",
       "sha256": "80107110dabfcbd0c6bda685550e52b0133e6c62272c6ab660a6b24f11eb835a",
       "bytes": 14889824,
       "triangles": 3495
     },
     {
-      "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/boots_rogue.glb",
+      "path": "assets/modular_human_male_01/rogue/fitted_v8/boots_rogue.glb",
       "sha256": "dfefa61608f8359837b7e4b746424b18042f538d191438774663bed394097f16",
       "bytes": 9769204,
       "triangles": 896
@@ -167,7 +167,7 @@
       ]
     },
     "gloves": {
-      "source": "assets/modular_human_male_01/parts/rogue_tripo_glove_v1/glove_rogue_right.glb",
+      "source": "assets/modular_human_male_01/rogue/tripo_glove_v1/glove_rogue_right.glb",
       "source_sha256": "409a4a231c02c8efd6d7e615d73ced1b7740d90c47334682ccaee764b1d9cb47",
       "includes": "Right half-glove only; the wearable model still includes the left wrist cloth",
       "triangles": 1591,

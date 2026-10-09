@@ -1,11 +1,11 @@
 {
   "date": "2026-10-09",
   "source": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue-undershirt-before-v1.glb",
+    "path": "assets/modular_human_male_01/rogue/tripo_v1/top_rogue-undershirt-before-v1.glb",
     "sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83"
   },
   "output": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+    "path": "assets/modular_human_male_01/rogue/tripo_v1/top_rogue.glb",
     "sha256": "299e5e8d681810315e5f32673f8d3a5f6a57c2a6154e2613c8dabdf1fc08e638"
   },
   "method": "Inset front linen layer up to 12mm, remove overlapping inward-facing front leather caps, and remap the shadow-baked front linen UV patch to existing clean linen in the same unchanged atlas",
@@ -45,7 +45,7 @@
     "Normals and tangents outside the affected neighborhood"
   ],
   "validation": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+    "path": "assets/modular_human_male_01/rogue/tripo_v1/top_rogue.glb",
     "sha256": "299e5e8d681810315e5f32673f8d3a5f6a57c2a6154e2613c8dabdf1fc08e638",
     "triangles": 4862,
     "bones": 65,

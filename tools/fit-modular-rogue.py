@@ -4,7 +4,6 @@ import copy
 import hashlib
 import importlib.util
 import json
-import sys
 from pathlib import Path
 from functools import cache
 
@@ -14,7 +13,6 @@ from scipy.spatial import cKDTree
 
 from lib.glb import read_glb, write_glb
 from outfits.body_shape import slim_calves
-from outfits.rogue_layers import build_top, build_wrap
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('plate_io', ROOT / 'tools/fit-modular-plate.py')
@@ -525,6 +523,8 @@ def main():
             report['outputs'].append(validate(ROOT / selected))
             report['sources'].append(dict(id=name, path=selected, sha256=digest(ROOT / selected), role='User-selected fitted part'))
             continue
+        if name in ['top_rogue', 'gloves_rogue']:
+            raise ValueError(f'{name} requires a selected fitted Tripo part')
         doc = dict(asset={'version': '2.0', 'generator': 'OpenMMO rogue fitting ' + version}, accessors=[], bufferViews=[], meshes=[])
         binary = bytearray()
         for part_id in ids:
@@ -532,14 +532,7 @@ def main():
             path = ROOT / part['source_glb']
             assert digest(path) == hashes[part_id], f'Source changed: {path}'
             report['sources'].append(dict(id=part_id, path=part['source_glb'], sha256=hashes[part_id],
-                role='design reference; geometry replaced in v5' if part_id in ['top_rogue', 'wrap_rogue_left'] else 'fitted source geometry'))
-            if part_id == 'top_rogue':
-                report['layer_rebuild'] = build_top(sys.modules[__name__], doc, binary)
-                report['sleeve_connections'] = report['layer_rebuild']['sleeves']
-                continue
-            if part_id == 'wrap_rogue_left':
-                report['wrist_wrap'] = build_wrap(sys.modules[__name__], doc, binary)
-                continue
+                role='fitted source geometry'))
             src, raw = read_glb(path)
             assert len(src['nodes']) == 1 and not any(k in src['nodes'][0] for k in ['matrix', 'translation', 'rotation', 'scale'])
             offset = append_source(doc, binary, src, raw)

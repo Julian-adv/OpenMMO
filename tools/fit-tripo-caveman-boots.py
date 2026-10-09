@@ -8,7 +8,7 @@ import numpy as np
 from lib.glb import view_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / 'assets/modular_human_male_01/parts/caveman_tripo_boots_v1'
+OUTPUT = ROOT / 'assets/modular_human_male_01/caveman/tripo_boots_v1'
 SHAFT_OUTER_CLEARANCE = .012
 FUR_EXTRA_RADIUS = .027
 CUFF_ROUND_START = .395
@@ -123,7 +123,7 @@ def round_cuff(points, uv, faces):
 
 def main():
     source = OUTPUT / 'source.glb'
-    base = ROOT / 'assets/modular_human_male_01/parts/fitted/base.glb'
+    base = ROOT / 'assets/modular_human_male_01/fitted/base.glb'
     assert fit.digest(source) == '5c5077cf8a67480c2edba22fd0af0c7f3cbe19e124f9ed463983b71ef7934d46'
     assert fit.digest(base) == 'ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b'
     doc, raw = fit.read_glb(source)
@@ -163,7 +163,7 @@ def main():
     assert images == [view_bytes(doc, binary, im['bufferView']) for im in doc['images']]
     report = dict(date='2026-10-04', source=dict(path=str(source.relative_to(ROOT)), sha256=fit.digest(source)),
         base=dict(path=str(base.relative_to(ROOT)), sha256=fit.digest(base)),
-        interfaces=dict(path='assets/modular_human_male_01/parts/interfaces/v1/interfaces.json', sha256=fit.digest(ROOT / 'assets/modular_human_male_01/parts/interfaces/v1/interfaces.json')),
+        interfaces=dict(path='assets/modular_human_male_01/interfaces/v1/interfaces.json', sha256=fit.digest(ROOT / 'assets/modular_human_male_01/interfaces/v1/interfaces.json')),
         method='Fit shaft and fur around actual body cross-sections; preserve original UV/texture and mirror with reversed triangle winding. Calf rigid to Leg, smooth ankle transition limited to shaft, instep rigid to Foot, modest smooth toe bend.',
         raw_initial_transform=dict(scale=[.48, .48, .48], translation=[.1664, .004, .048]),
         shaft_clearance_m=.006, shaft_outer_clearance_m=SHAFT_OUTER_CLEARANCE,

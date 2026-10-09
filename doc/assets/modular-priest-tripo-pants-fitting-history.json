@@ -30,7 +30,7 @@
       "status": "[미사용] Superseded at user request: black ankle cuff and folded inner rim removed in v2.",
       "waist_section_review": "Failed 3mm criterion in exported baseline. Report retained; runtime auxiliary robe movement is not included.",
       "retained_glb": {
-        "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest-black-cuffs-v1.glb",
+        "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest-black-cuffs-v1.glb",
         "sha256": "ed5b528b20e2f6c955120c5b9de57b5676153797a6704dea0a4175bd7952ddfa",
         "retained": false,
         "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
@@ -41,7 +41,7 @@
       "date": "2026-10-08",
       "user_request": "Remove the black ankle band and folded rim; continue the chainmail to the hem.",
       "glb": {
-        "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+        "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb",
         "sha256": "0a69d996d3432055d60402913809b01635b1f8960baa2bf0941f472a568f6d51",
         "bytes": 2466148
       },
@@ -56,7 +56,7 @@
       "validation": "65-bone rig/bind matched; seven clips at 13 samples each passed finite-position and closed-UV-seam checks. Front/back/side ankle renders and five browser motion samples reviewed.",
       "status": "[미사용] Superseded by v3 rear silhouette flattening; retained for comparison.",
       "retained_glb": {
-        "path": "/home/jake/work/OnlineRPG/assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest-seat-before-v2.glb",
+        "path": "/home/jake/work/OnlineRPG/assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest-seat-before-v2.glb",
         "sha256": "0a69d996d3432055d60402913809b01635b1f8960baa2bf0941f472a568f6d51",
         "bytes": 2466148,
         "retained": false,
@@ -68,12 +68,12 @@
       "date": "2026-10-08",
       "user_request": "Flatten the pointed buttock silhouette when wearing only the chainmail trousers.",
       "glb": {
-        "path": "/home/jake/work/OnlineRPG/assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+        "path": "/home/jake/work/OnlineRPG/assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb",
         "sha256": "5552f2c077b3ab6fa62f994e41f9919e3159871697de428eda1d3374850a4684",
         "bytes": 2466148
       },
       "editable": {
-        "path": "/home/jake/work/OnlineRPG/assets/modular_human_male_01/parts/priest_tripo_pants_v1/priest-pants-fitting-v3.blend",
+        "path": "/home/jake/work/OnlineRPG/assets/modular_human_male_01/priest/tripo_pants_v1/priest-pants-fitting-v3.blend",
         "sha256": "6c5f5edfae06f092bdbe872a2cb0326876fc72a26128eebf135973225c47f153",
         "bytes": 41675818,
         "retained": false,
@@ -116,7 +116,7 @@
       "validation": "65-bone rest hierarchy and inverse bind matched; 91 animation samples passed finite-position and UV-seam checks. Shirtless four views, seven browser motion samples, five boot cuts and skin-on rear reviewed.",
       "status": "[미사용] Superseded at user request: pinched waist above flattened seat still produces an abrupt rear silhouette.",
       "retained_glb": {
-        "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest-seat-before-v3.glb",
+        "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest-seat-before-v3.glb",
         "sha256": "5552f2c077b3ab6fa62f994e41f9919e3159871697de428eda1d3374850a4684",
         "bytes": 2466148,
         "retained": false,
@@ -128,17 +128,17 @@
       "date": "2026-10-08",
       "user_request": "Use the smoother plate trouser waist-to-buttock silhouette as the chainmail reference.",
       "glb": {
-        "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+        "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb",
         "sha256": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b",
         "bytes": 2466144
       },
       "editable": {
-        "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/priest-pants-fitting-v4.blend",
+        "path": "assets/modular_human_male_01/priest/tripo_pants_v1/priest-pants-fitting-v4.blend",
         "sha256": "bdc5285a774f5ced145720d12c16fcd2f84c52b38ed5cc4e47634447aef43894",
         "bytes": 41675324
       },
       "plate_reference": {
-        "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+        "path": "assets/modular_human_male_01/fitted/pants_plate.glb",
         "sha256": "aa95a9f1b85aa881df47e6e37ecbfebc7c168b352fcf0f4a9941208962eeff04",
         "bytes": 11524492
       },
@@ -152,7 +152,7 @@
       "correction": {
         "method": "Loft the rear waist, seat and upper thigh along the smoothed plate trouser rear surface, with 90-percent rear depth about Z=-0.025m; retain body clearance",
         "reference": {
-          "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+          "path": "assets/modular_human_male_01/fitted/pants_plate.glb",
           "sha256": "aa95a9f1b85aa881df47e6e37ecbfebc7c168b352fcf0f4a9941208962eeff04"
         },
         "smoothing_xy_m": 0.012,

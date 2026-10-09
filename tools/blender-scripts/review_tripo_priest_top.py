@@ -11,8 +11,8 @@ import bmesh
 from mathutils import Matrix, Vector
 
 ROOT = Path(__file__).resolve().parents[2]
-PARTS = ROOT / 'assets/modular_human_male_01/parts'
-OUTPUT = PARTS / 'priest_tripo_top_v1'
+PARTS = ROOT / 'assets/modular_human_male_01'
+OUTPUT = PARTS / 'priest/tripo_top_v1'
 IMAGES = ROOT / 'doc/images/characters/modular_human_male_01/parts/priest'
 
 

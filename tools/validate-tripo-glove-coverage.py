@@ -67,7 +67,7 @@ def main():
         along = (body[faces] - fit.BONES['LeftHand']) @ axis
         patch = faces[(along.min(1) > .017) & (along.max(1) < .077)]
         assert len(patch) > 0
-        output = ROOT / 'assets/modular_human_male_01/parts/rogue_tripo_wrap_v1'
+        output = ROOT / 'assets/modular_human_male_01/rogue/tripo_wrap_v1'
         part = 'wrap_rogue_left'
         scope = 'Canonical left wrist skin triangles fully inside the wrap band; three interior points per triangle, outward rays to wrap within 30mm'
     else:
@@ -90,7 +90,7 @@ def main():
     assert len(poses) == 91
     target = output / (part + '.glb')
     report = dict(date='2026-10-02', scope=scope,
-        base_sha256=fit.digest(ROOT / 'assets/modular_human_male_01/parts/fitted/base.glb'),
+        base_sha256=fit.digest(ROOT / 'assets/modular_human_male_01/fitted/base.glb'),
         validation_poses_sha256=fit.digest(poses_path), poses=len(poses), skin_triangles=patch.tolist(),
         after=check(target, body, dense, patch, poses, part))
     if args.before:

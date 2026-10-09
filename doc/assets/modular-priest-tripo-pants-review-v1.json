@@ -1,7 +1,7 @@
 {
   "status": "Dev fitting candidate; dynamic robe overlap and mixed outfits pending",
   "editable": {
-    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/priest-pants-fitting.blend",
+    "path": "assets/modular_human_male_01/priest/tripo_pants_v1/priest-pants-fitting.blend",
     "sha256": "732da86bb982d8b27c9a7a1b3773d3a075603a5c83dcd2252237c1a24f61c824",
     "retained": false,
     "storage_status": "[미사용] Deleted at user request; hash retained for provenance."

@@ -21,7 +21,7 @@
 복제 시 발·발가락 본 대응과 면 방향·노멀을 함께 보정한다.
 정확한 좌우 발바닥 형태와 끈·뒤꿈치 연결은 모델링에서 확인한다.
 
-현재 기준 몸체는 `assets/modular_human_male_01/parts/fitted/base.glb`,
+현재 기준 몸체는 `assets/modular_human_male_01/fitted/base.glb`,
 SHA-256 `0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a`,
 리그는 `human_male_01_mixamo_candidate_v2`다.
 몸체를 이미지 생성에 넣지 않았으므로 원화 비율은 피팅 치수가 아니다.

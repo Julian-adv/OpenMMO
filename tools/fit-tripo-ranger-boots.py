@@ -8,7 +8,7 @@ import numpy as np
 from lib.glb import view_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / 'assets/modular_human_male_01/parts/ranger_tripo_boots_v1'
+OUTPUT = ROOT / 'assets/modular_human_male_01/ranger/tripo_boots_v1'
 
 
 def helper(name, path):

@@ -6,7 +6,7 @@
   "license": "OpenAI generated output terms; existing source body and concept licenses retained.",
   "concept": "doc/images/characters/modular_human_male_01/concepts/rogue-dungeon-delver-v3.png",
   "body_reference": {
-    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "path": "assets/modular_human_male_01/fitted/base.glb",
     "sha256": "99016ab4311f8fb4256b7a42bdb0d404e2d991154c6ff18c3acb3da76a43f7f0",
     "source_record": "doc/assets/modular-human-male-01.md",
     "rig_id": "human_male_01_mixamo_candidate_v2",

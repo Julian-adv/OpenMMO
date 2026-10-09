@@ -2,11 +2,11 @@
   "status": "Numeric runtime bind and skinning review; visual review is separate",
   "sources": [
     {
-      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "path": "assets/modular_human_male_01/fitted/base.glb",
       "sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b"
     },
     {
-      "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+      "path": "assets/modular_human_male_01/rogue/tripo_v1/top_rogue.glb",
       "sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83"
     },
     {

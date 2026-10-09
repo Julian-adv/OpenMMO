@@ -41,7 +41,7 @@
     0.99951171875
   ],
   "rigged": false,
-  "source": "assets/modular_human_male_01/parts/caveman_tripo_bracer_v1/source.glb",
+  "source": "assets/modular_human_male_01/caveman/tripo_bracer_v1/source.glb",
   "sha256": "17ef57be917df0988f0e1f41ca19e759a9a305b3fc2135de5dc58a155a0b9ad0",
   "vertices_including_uv_splits": 2192,
   "status": "Unmodified raw Tripo bracer source; no body fitting or rigging."

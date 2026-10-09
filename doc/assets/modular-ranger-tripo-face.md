@@ -2,7 +2,7 @@
 
 2026-10-08. 사용자가 `Y:\public\web_downloads\bald+male+head+3d+model.glb`로 전달한
 새 머리를 기존 남성 몸체와 순찰자 헤어에 맞췄다. `/mnt/y`가 Windows의 `Y:\public`이다.
-원본은 `assets/modular_human_male_01/parts/face_tripo_ranger_v1/source.glb`에 보존했다.
+원본은 `assets/modular_human_male_01/faces/tripo_ranger_v1/source.glb`에 보존했다.
 SHA-256은 `6a2558b17963363726f4a798b6b0bd2fabd6c8f242597487100fda0a8223d4d8`이다.
 
 ## 원본과 연결
@@ -44,7 +44,7 @@ SHA-256 불변을 확인했다.
 
 ## 출력과 검수
 
-편집·재생성 파일은 `assets/modular_human_male_01/parts/face_tripo_ranger_v1/`에 있다.
+편집·재생성 파일은 `assets/modular_human_male_01/faces/tripo_ranger_v1/`에 있다.
 
 | 파일 | 용도 |
 | --- | --- |

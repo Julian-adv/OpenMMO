@@ -80,7 +80,7 @@ def radii(triangles, height):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--revision', type=int, default=4)
-    parser.add_argument('--pants', default='assets/modular_human_male_01/parts/fitted/pants_cloth.glb')
+    parser.add_argument('--pants', default='assets/modular_human_male_01/fitted/pants_cloth.glb')
     parser.add_argument('--top')
     parser.add_argument('--poses')
     parser.add_argument('--report')
@@ -88,15 +88,15 @@ def main():
     args = parser.parse_args()
     revision = args.revision
     pants_path = args.pants
-    cloth_waist = pants_path == 'assets/modular_human_male_01/parts/fitted/pants_cloth.glb'
+    cloth_waist = pants_path == 'assets/modular_human_male_01/fitted/pants_cloth.glb'
     assert cloth_waist or args.report, 'Custom pants require a separate --report path'
-    poses_path = args.poses or f'assets/modular_human_male_01/parts/ranger_tripo_top_v{revision}/validation-poses.json'
+    poses_path = args.poses or f'assets/modular_human_male_01/ranger/tripo_top_v{revision}/validation-poses.json'
     poses = json.loads((ROOT / poses_path).read_text())
     pants = load(pants_path, waist=cloth_waist, minimum_y=None if cloth_waist else 1.0)
     sources = [pants_path, poses_path]
     revisions = []
     for candidate in [revision]:
-        top_path = args.top or f'assets/modular_human_male_01/parts/ranger_tripo_top_v{candidate}/top_ranger.glb'
+        top_path = args.top or f'assets/modular_human_male_01/ranger/tripo_top_v{candidate}/top_ranger.glb'
         sources.append(top_path)
         top, samples = load(top_path), []
         for pose in poses:

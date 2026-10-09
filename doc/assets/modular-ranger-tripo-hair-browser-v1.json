@@ -78,11 +78,11 @@
     "lint": "pass"
   },
   "files": {
-    "assets/modular_human_male_01/parts/hair_tripo_ranger_v1/hair_ranger.glb": {
+    "assets/modular_human_male_01/hair/tripo_ranger_v1/hair_ranger.glb": {
       "sha256": "d368897d6f04325c68f47cb159ae2d4df66a7cc7ffc63ceed7ecfa73655b1584",
       "bytes": 1673344
     },
-    "assets/modular_human_male_01/parts/hair_tripo_ranger_v1/ranger-hair-fitting.blend": {
+    "assets/modular_human_male_01/hair/tripo_ranger_v1/ranger-hair-fitting.blend": {
       "sha256": "f306210f46ca3467e1324ec9e27311c873a90edf5c49bb65816ddbe1968e8e8c",
       "bytes": 25401550
     },

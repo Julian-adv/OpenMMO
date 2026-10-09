@@ -9,7 +9,7 @@ from lib.glb import view_bytes
 from outfits.rogue_layers import wrist_section
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / 'assets/modular_human_male_01/parts/caveman_tripo_bracer_v1'
+OUTPUT = ROOT / 'assets/modular_human_male_01/caveman/tripo_bracer_v1'
 spec = importlib.util.spec_from_file_location('fit', ROOT / 'tools/fit-modular-rogue.py')
 fit = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fit)
@@ -65,7 +65,7 @@ def fitted_points(points, faces):
 
 def main():
     source = OUTPUT / 'source.glb'
-    base = ROOT / 'assets/modular_human_male_01/parts/fitted/base.glb'
+    base = ROOT / 'assets/modular_human_male_01/fitted/base.glb'
     assert fit.digest(source) == '17ef57be917df0988f0e1f41ca19e759a9a305b3fc2135de5dc58a155a0b9ad0'
     assert fit.digest(base) == 'ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b'
     doc, raw = fit.read_glb(source)
@@ -97,8 +97,8 @@ def main():
         assert np.array_equal(uv, io.accessor(doc, binary, mesh['primitives'][0]['attributes']['TEXCOORD_0']))
     report = dict(date='2026-10-04', source=dict(path=str(source.relative_to(ROOT)), sha256=fit.digest(source)),
         base=dict(path=str(base.relative_to(ROOT)), sha256=fit.digest(base)),
-        interfaces=dict(path='assets/modular_human_male_01/parts/interfaces/v1/interfaces.json',
-            sha256=fit.digest(ROOT / 'assets/modular_human_male_01/parts/interfaces/v1/interfaces.json')),
+        interfaces=dict(path='assets/modular_human_male_01/interfaces/v1/interfaces.json',
+            sha256=fit.digest(ROOT / 'assets/modular_human_male_01/interfaces/v1/interfaces.json')),
         method='Fit hollow bracer against actual forearm radial sections, retaining layered fur/ties and original topology/UV/texture. Mirror X and reverse winding. Both bracers follow their own ForeArm rigidly; wrists and fingers remain exposed and independently animated.',
         alignment=alignment, source_triangles=len(faces), skin_cut_fraction=SKIN_CUT_FRACTION,
         original_topology_uv_and_embedded_texture_preserved=True, canonical_body_unchanged=True, validation=fit.validate(target))

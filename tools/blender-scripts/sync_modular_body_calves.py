@@ -6,7 +6,7 @@ from pathlib import Path
 import bpy
 
 ROOT = Path(__file__).resolve().parents[2]
-PARTS = ROOT / 'assets/modular_human_male_01/parts'
+PARTS = ROOT / 'assets/modular_human_male_01'
 
 
 def record(path):

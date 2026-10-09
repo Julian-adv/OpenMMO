@@ -1,7 +1,7 @@
 {
   "date": "2026-10-08",
   "source": {
-    "path": "assets/modular_human_male_01/parts/face_tripo_ranger_v1/source.glb",
+    "path": "assets/modular_human_male_01/faces/tripo_ranger_v1/source.glb",
     "sha256": "6a2558b17963363726f4a798b6b0bd2fabd6c8f242597487100fda0a8223d4d8",
     "original_path": "Y:\\public\\web_downloads\\bald+male+head+3d+model.glb",
     "mounted_path": "/mnt/y/web_downloads/bald+male+head+3d+model.glb",
@@ -12,7 +12,7 @@
     "license": "Original Tripo output terms; see doc/assets/characters.md"
   },
   "base": {
-    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "path": "assets/modular_human_male_01/fitted/base.glb",
     "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
   },
   "source_triangles": 4026,
@@ -81,7 +81,7 @@
   },
   "validations": [
     {
-      "path": "assets/modular_human_male_01/parts/face_tripo_ranger_v1/face_ranger.glb",
+      "path": "assets/modular_human_male_01/faces/tripo_ranger_v1/face_ranger.glb",
       "sha256": "86066779f55a7cfb95e005dc37f3641c968d02c4ede0a5c5300c5094aac51a32",
       "triangles": 5637,
       "bones": 65,
@@ -95,7 +95,7 @@
       ]
     },
     {
-      "path": "assets/modular_human_male_01/parts/face_tripo_ranger_v1/base_ranger.glb",
+      "path": "assets/modular_human_male_01/faces/tripo_ranger_v1/base_ranger.glb",
       "sha256": "02d2281c668668cde77ab59e4ef4190a73c80d625e5601ca25569b258ba123cc",
       "triangles": 16953,
       "bones": 65,

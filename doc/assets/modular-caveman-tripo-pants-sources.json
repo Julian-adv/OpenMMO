@@ -11,7 +11,7 @@
   "delivery_path_windows": "Y:\\public\\web_downloads\\skeletal+belt+3d+model.glb",
   "delivery_path_linux": "/mnt/y/web_downloads/skeletal+belt+3d+model.glb",
   "source": {
-    "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/source.glb",
+    "path": "assets/modular_human_male_01/caveman/tripo_pants_v1/source.glb",
     "sha256": "a7b5cb922f7c117352a45b013054103905aad9eb0b0e3ec473b17b82f575bba3",
     "bytes": 1850908,
     "byte_identical_to_delivery": true
@@ -77,12 +77,12 @@
     "validation_tool": "tools/validate-tripo-caveman-pants.mjs",
     "rig_id": "human_male_01_mixamo_candidate_v2",
     "output": {
-      "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb",
+      "path": "assets/modular_human_male_01/caveman/tripo_pants_v1/pants_caveman.glb",
       "sha256": "1fc3a92b29c8b5e37931cda6b32966754e1f3b1f33fe478a528179fc739a2db4",
       "bytes": 4812332
     },
     "editable": {
-      "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/caveman-pants-fitting.blend",
+      "path": "assets/modular_human_male_01/caveman/tripo_pants_v1/caveman-pants-fitting.blend",
       "sha256": "e47aef0f9f779b682557c656ba1388aa4c8de77f5c9c275c9207893cc7b2f1ef",
       "bytes": 43268743
     },
@@ -155,13 +155,13 @@
       "validation_tool": "tools/validate-tripo-caveman-pants.mjs",
       "rig_id": "human_male_01_mixamo_candidate_v2",
       "output": {
-        "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/unused-bending-v1/pants_caveman.glb",
+        "path": "assets/modular_human_male_01/caveman/tripo_pants_v1/unused-bending-v1/pants_caveman.glb",
         "sha256": "3be3265a6d2e203098a63d599636d49c33498ef748f2745aa5d278ad04392ad6",
         "bytes": 2379844,
         "retained": false
       },
       "editable": {
-        "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/unused-bending-v1/caveman-pants-fitting.blend",
+        "path": "assets/modular_human_male_01/caveman/tripo_pants_v1/unused-bending-v1/caveman-pants-fitting.blend",
         "sha256": "eb0e06922bd3f28d8285285ebeeefee96c17226ae606815e89df7291dc97d619",
         "bytes": 40502018,
         "retained": false
@@ -190,25 +190,25 @@
     "reason": "User requested removal of intermediate generated files before committing",
     "removed": [
       {
-        "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/unused-bending-v1/pants_caveman.glb",
+        "path": "assets/modular_human_male_01/caveman/tripo_pants_v1/unused-bending-v1/pants_caveman.glb",
         "sha256": "3be3265a6d2e203098a63d599636d49c33498ef748f2745aa5d278ad04392ad6",
         "bytes": 2379844,
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/unused-bending-v1/pants_caveman-runtime.glb",
+        "path": "assets/modular_human_male_01/caveman/tripo_pants_v1/unused-bending-v1/pants_caveman-runtime.glb",
         "sha256": "3405c90a0d1f0df55424adef515f23272ae361a9e554e48ef6721d79df3301ae",
         "bytes": 454496,
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/unused-bending-v1/caveman-pants-fitting.blend",
+        "path": "assets/modular_human_male_01/caveman/tripo_pants_v1/unused-bending-v1/caveman-pants-fitting.blend",
         "sha256": "eb0e06922bd3f28d8285285ebeeefee96c17226ae606815e89df7291dc97d619",
         "bytes": 40502018,
         "retained": false
       },
       {
-        "path": "assets/caveman_pants/caveman_pants.blend1",
+        "path": "assets/items/caveman_pants/caveman_pants.blend1",
         "sha256": "5b6215d1d033c401136518f87f60c516e030553e35153d77c923f1205aa8670d",
         "bytes": 1346545,
         "retained": false

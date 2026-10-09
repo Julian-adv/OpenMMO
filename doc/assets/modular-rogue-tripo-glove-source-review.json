@@ -1,7 +1,7 @@
 {
   "status": "Raw Tripo source; not fitted or rigged",
   "source": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_glove_v1/source.glb",
+    "path": "assets/modular_human_male_01/rogue/tripo_glove_v1/source.glb",
     "sha256": "4609f42e762219126c0005cbbc45b746644a35b85b78df982ffada213a3dabdb"
   },
   "triangles": 2043,

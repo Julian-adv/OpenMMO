@@ -29,7 +29,7 @@
     "scope": "Current body, crop hair and top; final ranger pants, gloves, boots, weapon and cape not included"
   },
   "editable": {
-    "path": "assets/modular_human_male_01/parts/ranger_tripo_top_v4/ranger-top-fitting.blend",
+    "path": "assets/modular_human_male_01/ranger/tripo_top_v4/ranger-top-fitting.blend",
     "sha256": "b298ff4af107125f276593d90dbda8182a8f75803514309a01bb55b590467bf5"
   },
   "images": [

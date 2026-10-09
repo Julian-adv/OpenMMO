@@ -8,7 +8,7 @@ Tripo 구독 등급·생성일·작업 ID·실제 제출한 시점 조합은 확
 
 ## 원본과 피팅
 
-- 원본·출력: `assets/modular_human_male_01/parts/priest_tripo_helmet_v1/{source,helmet_priest}.glb`.
+- 원본·출력: `assets/modular_human_male_01/priest/tripo_helmet_v1/{source,helmet_priest}.glb`.
 - 편집본: 같은 폴더의 `priest-helmet-fitting.blend`. 원본은 숨김 컬렉션에 보관하고,
   현재 기본 남성 몸체·사제 상의와 게임 동작 표본을 함께 넣었다.
 - 원본과 피팅 모델 모두 **1,924 triangles**. 예산을 맞추기 위한 감면은 하지 않았다.
@@ -48,7 +48,7 @@ Tripo 구독 등급·생성일·작업 ID·실제 제출한 시점 조합은 확
 
 ```bash
 .venv/bin/python tools/fit-tripo-priest-helmet.py
-node tools/validate-tripo-rogue.mjs --directory assets/modular_human_male_01/parts/priest_tripo_helmet_v1 --part helmet_priest --report doc/assets/modular-priest-tripo-helmet-animation-v2.json
+node tools/validate-tripo-rogue.mjs --directory assets/modular_human_male_01/priest/tripo_helmet_v1 --part helmet_priest --report doc/assets/modular-priest-tripo-helmet-animation-v2.json
 blender -b -t 6 --python-exit-code 1 --python tools/blender-scripts/review_tripo_priest_helmet.py -- --raw
 blender -b -t 6 --python-exit-code 1 --python tools/blender-scripts/review_tripo_priest_helmet.py
 ```

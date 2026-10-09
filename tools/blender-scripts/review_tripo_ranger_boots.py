@@ -10,8 +10,8 @@ import bpy
 from mathutils import Vector
 
 ROOT = Path(__file__).resolve().parents[2]
-PARTS = ROOT / 'assets/modular_human_male_01/parts'
-OUTPUT = PARTS / 'ranger_tripo_boots_v1'
+PARTS = ROOT / 'assets/modular_human_male_01'
+OUTPUT = PARTS / 'ranger/tripo_boots_v1'
 IMAGES = ROOT / 'doc/images/characters/modular_human_male_01/parts/ranger'
 
 
@@ -46,7 +46,7 @@ def main(directory):
         rig = next(o for o in bpy.data.objects if o.type == 'ARMATURE')
         body = [o for o in bpy.data.objects if o.type == 'MESH']
         review.import_part(OUTPUT / 'boots_ranger.glb', rig)
-        for part in ['ranger_tripo_top_v4/top_ranger.glb', 'ranger_tripo_boots_v1/pants_ranger_boots-review.glb', 'fitted/hair_crop.glb']:
+        for part in ['ranger/tripo_top_v4/top_ranger.glb', 'ranger/tripo_boots_v1/pants_ranger_boots-review.glb', 'fitted/hair_crop.glb']:
             review.import_part(PARTS / part, rig)
         for obj in body:
             obj.hide_render = obj.get('region') in ['torso', 'upper_arms', 'legs', 'ankles', 'boot_ankles', 'feet']

@@ -1,11 +1,11 @@
 {
   "status": "Fitted and rigged candidate; rerun animation and visual review after rebuilding",
   "source": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/source.glb",
+    "path": "assets/modular_human_male_01/rogue/tripo_v1/source.glb",
     "sha256": "70584277a1701b0072c54578aaedb223cfc8b68e46f27e1c4a98d2020504b17d"
   },
   "base": {
-    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "path": "assets/modular_human_male_01/fitted/base.glb",
     "sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b"
   },
   "rig_id": "human_male_01_mixamo_candidate_v2",
@@ -76,7 +76,7 @@
     }
   ],
   "validation": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+    "path": "assets/modular_human_male_01/rogue/tripo_v1/top_rogue.glb",
     "sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
     "triangles": 4877,
     "bones": 65,
@@ -97,7 +97,7 @@
   "waist_taper": {
     "method": "Smooth section scales follow the plate waist silhouette with body clearance; shared layer deformation preserves cloth overlap",
     "reference": {
-      "path": "assets/modular_human_male_01/parts/fitted/top_plate.glb",
+      "path": "assets/modular_human_male_01/fitted/top_plate.glb",
       "sha256": "c29b772b91d9c7d6b5622758edc707ea2caea4d69618e5729f126d3f88ea47ce"
     },
     "maximum_contour_blend": 0.85,

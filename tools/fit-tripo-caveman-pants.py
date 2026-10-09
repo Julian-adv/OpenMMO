@@ -11,7 +11,7 @@ from scipy.sparse.linalg import factorized
 from lib.glb import view_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / 'assets/modular_human_male_01/parts/caveman_tripo_pants_v1'
+OUTPUT = ROOT / 'assets/modular_human_male_01/caveman/tripo_pants_v1'
 spec = importlib.util.spec_from_file_location('fit', ROOT / 'tools/fit-modular-rogue.py')
 fit = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fit)
@@ -85,7 +85,7 @@ def cloth_side(panel, belt, body, sign):
 
 def main():
     source = OUTPUT / 'source.glb'
-    base = ROOT / 'assets/modular_human_male_01/parts/fitted/base.glb'
+    base = ROOT / 'assets/modular_human_male_01/fitted/base.glb'
     assert fit.digest(source) == 'a7b5cb922f7c117352a45b013054103905aad9eb0b0e3ec473b17b82f575bba3'
     assert len(fit.NAMES) == 65 and 'Hips' in fit.NAMES
     doc, raw = fit.read_glb(source)
@@ -189,7 +189,7 @@ def main():
     report = dict(date='2026-10-04', status='Barbarian-style rigid front/back hinges and 9x11 side cloth; runtime and visual validation required',
         source={'path': str(source.relative_to(ROOT)), 'sha256': fit.digest(source)},
         base={'path': str(base.relative_to(ROOT)), 'sha256': fit.digest(base)},
-        interfaces={'path': 'assets/modular_human_male_01/parts/interfaces/v1/interfaces.json', 'sha256': fit.digest(ROOT / 'assets/modular_human_male_01/parts/interfaces/v1/interfaces.json')},
+        interfaces={'path': 'assets/modular_human_male_01/interfaces/v1/interfaces.json', 'sha256': fit.digest(ROOT / 'assets/modular_human_male_01/interfaces/v1/interfaces.json')},
         rig_id='human_male_01_mixamo_candidate_v2', preserved_original_embedded_texture=True,
         side_fur_texture=dict(path='doc/images/characters/modular_human_male_01/parts/barbarian_fur.png',
             sha256=fit.digest(ROOT / 'doc/images/characters/modular_human_male_01/parts/barbarian_fur.png'),

@@ -17,7 +17,7 @@
   ],
   "assets_publication": "Upload only reviewed new/modified assets, preserving unrelated remote files and existing lock entries.",
   "editable_refreshed_from_final_face": {
-    "path": "assets/modular_human_male_01/parts/face_tripo_ranger_v1/ranger-face-fitting.blend",
+    "path": "assets/modular_human_male_01/faces/tripo_ranger_v1/ranger-face-fitting.blend",
     "sha256": "614e5f47001b9c9c166315b630f32fc5d72c82d4ca107275b29c486b3c7b387a",
     "base_sha256": "02d2281c668668cde77ab59e4ef4190a73c80d625e5601ca25569b258ba123cc"
   },

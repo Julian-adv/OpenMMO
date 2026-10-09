@@ -77,12 +77,12 @@
   ],
   "sources": [
     {
-      "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+      "path": "assets/modular_human_male_01/rogue/tripo_v1/top_rogue.glb",
       "sha256": "299e5e8d681810315e5f32673f8d3a5f6a57c2a6154e2613c8dabdf1fc08e638",
       "bytes": 2179600
     },
     {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+      "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb",
       "sha256": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b",
       "bytes": 2466144
     }

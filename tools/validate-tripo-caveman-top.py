@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT / 'tools'))
 spec = importlib.util.spec_from_file_location('fit', ROOT / 'tools/fit-modular-rogue.py')
 fit = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fit)
-OUTPUT = ROOT / 'assets/modular_human_male_01/parts/caveman_tripo_top_v1'
+OUTPUT = ROOT / 'assets/modular_human_male_01/caveman/tripo_top_v1'
 REPORT = ROOT / 'doc/assets/modular-caveman-tripo-top-animation-v1.json'
 FITTING = ROOT / 'doc/assets/modular-caveman-tripo-top-fitting-v1.json'
 

@@ -2,11 +2,11 @@
   "status": "Fitted and rigged candidate; animation and visual review must match the exported hash",
   "date": "2026-10-04",
   "source": {
-    "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/source.glb",
+    "path": "assets/modular_human_male_01/caveman/tripo_top_v1/source.glb",
     "sha256": "6332d1538f9db297dcc62f307a330b2853f8e9e11bd300d3a0014cf57f146e89"
   },
   "base": {
-    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "path": "assets/modular_human_male_01/fitted/base.glb",
     "sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b"
   },
   "rig_id": "human_male_01_mixamo_candidate_v2",
@@ -2472,7 +2472,7 @@
     ]
   },
   "validation": {
-    "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/top_caveman.glb",
+    "path": "assets/modular_human_male_01/caveman/tripo_top_v1/top_caveman.glb",
     "sha256": "e495478ffdcf1d018a9c1faed604d91e92b6b2df91e1baf1599544800ad9ab9f",
     "triangles": 2110,
     "bones": 65,

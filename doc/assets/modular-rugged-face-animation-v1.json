@@ -2,19 +2,19 @@
   "date": "2026-10-05",
   "sources": [
     {
-      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "path": "assets/modular_human_male_01/fitted/base.glb",
       "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
     },
     {
-      "path": "assets/modular_human_male_01/parts/face_tripo_rugged_v1/face_rugged.glb",
+      "path": "assets/modular_human_male_01/faces/tripo_rugged_v1/face_rugged.glb",
       "sha256": "74e8ea33407511876559a68d57a24a88576a4b4f5ab21a7afbb2a0c616483589"
     },
     {
-      "path": "assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb",
+      "path": "assets/modular_human_male_01/hair/tripo_wavy_v1/hair_wavy_bone.glb",
       "sha256": "01090fcaaf447686b1fe57410e1667aed0df7ee705c7503b053b28a3478c9f5b"
     },
     {
-      "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+      "path": "assets/modular_human_male_01/animations/animations.glb",
       "sha256": "76eeb462770754895834271423b4ef7f33efdbd34bdfb9830beba4ba84e7569f"
     },
     {

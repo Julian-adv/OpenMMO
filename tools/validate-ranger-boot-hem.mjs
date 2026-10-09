@@ -7,14 +7,14 @@ import { clipSampler, hash, headlessThree, loadClips, root } from './lib/headles
 
 const style = process.argv.includes('--rogue') ? 'rogue' : 'ranger'
 const outfit = { pants: style, top: 'none' }
-const pantsPath = `assets/modular_human_male_01/parts/${style}_tripo_pants_v1/pants_${style}.glb`
+const pantsPath = `assets/modular_human_male_01/${style}_tripo_pants_v1/pants_${style}.glb`
 const cuff = JSON.parse(readFileSync(new URL('client/src/lib/data/rangerBootCuff.json', root)))
 assert.equal(hash(cuff.source), cuff.sha256)
 const { server, load } = await headlessThree({ material: () => new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }) })
 try {
   const { bindModularPart, showModularOutfit, RANGER_MODULAR_OUTFIT, modularAnimationClips } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
   const { rangerBootRim } = await server.ssrLoadModule('/src/lib/utils/rangerBootCuff.ts')
-  const body = (await load('assets/modular_human_male_01/parts/fitted/base.glb')).scene
+  const body = (await load('assets/modular_human_male_01/fitted/base.glb')).scene
   const pants = bindModularPart(body, (await load(pantsPath)).scene)
   const boots = bindModularPart(body, (await load(cuff.source)).scene)
   const parts = new Map([[`pants_${style}`, pants], ['boots_ranger', boots]])

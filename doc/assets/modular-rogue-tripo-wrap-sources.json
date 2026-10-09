@@ -7,16 +7,16 @@
   "license": "Subject to original Tripo Studio output terms; original source retained.",
   "delivery_path_windows": "Y:\\public\\web_downloads\\cloth+wrapped+tube+3d+model.glb",
   "source": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/source.glb",
+    "path": "assets/modular_human_male_01/rogue/tripo_wrap_v1/source.glb",
     "sha256": "594950bbdf39e3f3e816c54b47b0cbbed5563645a68020ff2c042a6ac2fc997b"
   },
   "base": {
-    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "path": "assets/modular_human_male_01/fitted/base.glb",
     "sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b"
   },
   "rig_id": "human_male_01_mixamo_candidate_v2",
   "previous_gloves": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_glove_v1/gloves_rogue.glb",
+    "path": "assets/modular_human_male_01/rogue/tripo_glove_v1/gloves_rogue.glb",
     "sha256": "776b502afcdc543452329ba002a236f2da7032765a84509d1a2012ad81696be6",
     "retained": false,
     "status": "Unused combined intermediate; replaced by the final wrap/glove combination"
@@ -27,7 +27,7 @@
   "local_fitting": "Open the capped tube, fit 32 actual canonical left wrist/forearm sections, retain original texture/UVs, transfer local ForeArm/Hand/Thumb-root weights, combine with approved right glove exactly",
   "retained": true,
   "right_glove": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_glove_v1/glove_rogue_right.glb",
+    "path": "assets/modular_human_male_01/rogue/tripo_glove_v1/glove_rogue_right.glb",
     "sha256": "409a4a231c02c8efd6d7e615d73ced1b7740d90c47334682ccaee764b1d9cb47"
   },
   "generation_date": null,

@@ -78,19 +78,19 @@
   "visual_review_scope": "Sampled views and poses; full-motion collision validation not performed.",
   "revision": 4,
   "pants": {
-    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+    "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb",
     "sha256": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b",
     "bytes": 2466144
   },
   "previous_pants": {
-    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest-seat-before-v3.glb",
+    "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest-seat-before-v3.glb",
     "sha256": "5552f2c077b3ab6fa62f994e41f9919e3159871697de428eda1d3374850a4684",
     "bytes": 2466148,
     "retained": false,
     "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
   },
   "plate_reference": {
-    "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+    "path": "assets/modular_human_male_01/fitted/pants_plate.glb",
     "sha256": "aa95a9f1b85aa881df47e6e37ecbfebc7c168b352fcf0f4a9941208962eeff04",
     "bytes": 11524492
   },
@@ -104,7 +104,7 @@
   "method": {
     "method": "Loft the rear waist, seat and upper thigh along the smoothed plate trouser rear surface, with 90-percent rear depth about Z=-0.025m; retain body clearance",
     "reference": {
-      "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+      "path": "assets/modular_human_male_01/fitted/pants_plate.glb",
       "sha256": "aa95a9f1b85aa881df47e6e37ecbfebc7c168b352fcf0f4a9941208962eeff04"
     },
     "smoothing_xy_m": 0.012,
@@ -158,7 +158,7 @@
   "rest_unmasked_skin_review": "Blender front/back skin-on review shows no visible rear skin leaks.",
   "validation": {
     "rig": {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+      "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb",
       "sha256": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b",
       "triangles": 1513,
       "bones": 65,

@@ -2,11 +2,11 @@
   "date": "2026-10-02",
   "status": "Fitted and rigged; animation and visual review required",
   "source": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/source.glb",
+    "path": "assets/modular_human_male_01/rogue/tripo_wrap_v1/source.glb",
     "sha256": "594950bbdf39e3f3e816c54b47b0cbbed5563645a68020ff2c042a6ac2fc997b"
   },
   "base": {
-    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "path": "assets/modular_human_male_01/fitted/base.glb",
     "sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b"
   },
   "rig_id": "human_male_01_mixamo_candidate_v2",
@@ -43,7 +43,7 @@
     "minimum_triangle_area_m2": 1.8622528747822072e-08
   },
   "left_wrap": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/wrap_rogue_left.glb",
+    "path": "assets/modular_human_male_01/rogue/tripo_wrap_v1/wrap_rogue_left.glb",
     "sha256": "e76ef7aef73122ebcecca8c7d82ee46c697789c55be8a75fec431efc1aff1889",
     "triangles": 1904,
     "bones": 65,
@@ -57,7 +57,7 @@
     ]
   },
   "combined_gloves": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/gloves_rogue.glb",
+    "path": "assets/modular_human_male_01/rogue/tripo_wrap_v1/gloves_rogue.glb",
     "sha256": "80107110dabfcbd0c6bda685550e52b0133e6c62272c6ab660a6b24f11eb835a",
     "triangles": 3495,
     "bones": 65,
@@ -89,7 +89,7 @@
     ]
   },
   "preserved_right_glove": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_glove_v1/glove_rogue_right.glb",
+    "path": "assets/modular_human_male_01/rogue/tripo_glove_v1/glove_rogue_right.glb",
     "sha256": "409a4a231c02c8efd6d7e615d73ced1b7740d90c47334682ccaee764b1d9cb47",
     "geometry_uv_skin_weights_material_and_texture_exact": true
   },

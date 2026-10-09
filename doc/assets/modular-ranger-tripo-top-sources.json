@@ -11,7 +11,7 @@
   "delivery_path_windows": "Y:\\public\\web_downloads\\leather+embroidered+vest+3d+model.glb",
   "delivery_path_linux": "/mnt/y/web_downloads/leather+embroidered+vest+3d+model.glb",
   "source": {
-    "path": "assets/modular_human_male_01/parts/ranger_tripo_top_v4/source.glb",
+    "path": "assets/modular_human_male_01/ranger/tripo_top_v4/source.glb",
     "sha256": "f4988d1e5d44ffbd5a8af3ec9cb9f1f601de416611ebb37a928b61a940a74ce5",
     "bytes": 2070660,
     "byte_identical_to_delivery": true
@@ -55,7 +55,7 @@
     }
   ],
   "base": {
-    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "path": "assets/modular_human_male_01/fitted/base.glb",
     "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
     "bytes": 22214236
   },
@@ -68,7 +68,7 @@
     "revision": 4,
     "request": "Remove concealed green shirt lining under the leather vest",
     "glb": {
-      "path": "assets/modular_human_male_01/parts/ranger_tripo_top_v4/top_ranger.glb",
+      "path": "assets/modular_human_male_01/ranger/tripo_top_v4/top_ranger.glb",
       "sha256": "ec8e9638833ad4f60ba66c1a36fb00cd66521c601977b0fa6d7d389ebfaf3623",
       "bytes": 2240256
     },
@@ -90,7 +90,7 @@
       "bytes": 2068
     },
     "editable": {
-      "path": "assets/modular_human_male_01/parts/ranger_tripo_top_v4/ranger-top-fitting.blend",
+      "path": "assets/modular_human_male_01/ranger/tripo_top_v4/ranger-top-fitting.blend",
       "sha256": "b298ff4af107125f276593d90dbda8182a8f75803514309a01bb55b590467bf5",
       "bytes": 45712722
     },

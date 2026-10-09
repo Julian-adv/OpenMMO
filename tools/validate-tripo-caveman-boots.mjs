@@ -8,8 +8,8 @@ const { values: { part } } = parseArgs({ options: { part: { type: 'string', defa
 const { server, sources, load } = await headlessThree()
 try {
   const { bindModularPart, modularAnimationClips } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
-  const body = (await load('assets/modular_human_male_01/parts/fitted/base.glb')).scene
-  const meshes = bindModularPart(body, (await load(`assets/modular_human_male_01/parts/${part}_tripo_boots_v1/boots_${part}.glb`)).scene)
+  const body = (await load('assets/modular_human_male_01/fitted/base.glb')).scene
+  const meshes = bindModularPart(body, (await load(`assets/modular_human_male_01/${part}_tripo_boots_v1/boots_${part}.glb`)).scene)
   assert.equal(meshes.length, 2)
   const records = meshes.map(mesh => {
     const geometry = mesh.geometry

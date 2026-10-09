@@ -1,16 +1,16 @@
 {
   "status": "Fitted and rigged candidate; animation and visual review required after rebuilding",
   "source": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/source.glb",
+    "path": "assets/modular_human_male_01/rogue/tripo_pants_v1/source.glb",
     "sha256": "3e3274fa3f6995904d29ba0ea3fa46ca18782b2b7fa5b24e2d550a51f272b524"
   },
   "base": {
-    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "path": "assets/modular_human_male_01/fitted/base.glb",
     "sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b"
   },
   "interfaces": {
-    "path": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
-    "sha256": "f3fc3aed9c5080cf26a294dac496293c89bce8f67466add18a7ef72b326f006b"
+    "path": "assets/modular_human_male_01/interfaces/v1/interfaces.json",
+    "sha256": "52cbd59252b2c80740553182f347273afd3706adf1da3f26b9a11d79400eb23e"
   },
   "rig_id": "human_male_01_mixamo_candidate_v2",
   "source_triangles": 2066,
@@ -2530,7 +2530,7 @@
     }
   ],
   "validation": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/pants_rogue.glb",
+    "path": "assets/modular_human_male_01/rogue/tripo_pants_v1/pants_rogue.glb",
     "sha256": "7178d06a9b2e18953e2c3fb0672df8424b688d6f4ccc47affc856a9084e8e81c",
     "triangles": 2022,
     "bones": 65,

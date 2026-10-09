@@ -1,12 +1,12 @@
 {
   "sources": [
     {
-      "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/before-leather-stiffness/top_rogue.glb",
+      "path": "assets/modular_human_male_01/rogue/tripo_v1/before-leather-stiffness/top_rogue.glb",
       "sha256": "f6748b5d66f10332530c3c93d78e24eaaee4586f9d98826bc43c3b1ecf7ef026",
       "retained": false
     },
     {
-      "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/before-right-armhole/top_rogue.glb",
+      "path": "assets/modular_human_male_01/rogue/tripo_v1/before-right-armhole/top_rogue.glb",
       "sha256": "3878f6579141b09551f54c5bf58184324c8f8baba71f2a3e24a0ba6ff2b98061",
       "retained": false
     }

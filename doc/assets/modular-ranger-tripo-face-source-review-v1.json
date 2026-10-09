@@ -1,6 +1,6 @@
 {
   "source": {
-    "path": "assets/modular_human_male_01/parts/face_tripo_ranger_v1/source.glb",
+    "path": "assets/modular_human_male_01/faces/tripo_ranger_v1/source.glb",
     "sha256": "6a2558b17963363726f4a798b6b0bd2fabd6c8f242597487100fda0a8223d4d8"
   },
   "triangles": 4026,

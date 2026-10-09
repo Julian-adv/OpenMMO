@@ -11,8 +11,8 @@ import bmesh
 from mathutils import Matrix, Vector
 
 ROOT = Path(__file__).resolve().parents[2]
-PARTS = ROOT / 'assets/modular_human_male_01/parts'
-OUTPUT = PARTS / 'ranger_tripo_gloves_v1'
+PARTS = ROOT / 'assets/modular_human_male_01'
+OUTPUT = PARTS / 'ranger/tripo_gloves_v1'
 IMAGES = ROOT / 'doc/images/characters/modular_human_male_01/parts/ranger'
 
 
@@ -90,8 +90,8 @@ def main(directory):
         scene.render.filepath = str(directory / f'{name}.png')
         bpy.ops.render.render(write_still=True)
 
-    for part in ['ranger_tripo_top_v4/top_ranger.glb', 'ranger_tripo_boots_v1/pants_ranger_boots-review.glb',
-                 'ranger_tripo_boots_v1/boots_ranger.glb', 'fitted/hair_crop.glb']:
+    for part in ['ranger/tripo_top_v4/top_ranger.glb', 'ranger/tripo_boots_v1/pants_ranger_boots-review.glb',
+                 'ranger/tripo_boots_v1/boots_ranger.glb', 'fitted/hair_crop.glb']:
         review.import_part(PARTS / part, rig)
     for obj in body:
         obj.hide_render = obj.get('region') in ['torso', 'upper_arms', 'legs', 'ankles', 'boot_ankles', 'feet']

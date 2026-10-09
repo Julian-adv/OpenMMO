@@ -4,7 +4,7 @@
   "tier": "Premium",
   "license_url": "https://help.meshy.ai/en/articles/10137554-what-is-the-ownership-of-the-generated-models",
   "record": "doc/assets/modular-rogue-meshy-sources.json",
-  "output_dir": "assets/modular_human_male_01/parts/rogue_sources",
+  "output_dir": "assets/modular_human_male_01/rogue/sources",
   "parameters": {
     "ai_model": "meshy-7.1",
     "geometry_resolution": "standard",
@@ -29,7 +29,7 @@
         {
           "source": "doc/images/characters/modular_human_male_01/parts/rogue/top_rogue-v1.png",
           "source_sha256": "e00a212371b643d94c210b26242460d57be2fd2b714485e6bb4cd25049e0faec",
-          "path": "assets/modular_human_male_01/parts/rogue_sources/inputs/top-front.png",
+          "path": "assets/modular_human_male_01/rogue/sources/inputs/top-front.png",
           "crop": [
             0,
             0,
@@ -40,7 +40,7 @@
         {
           "source": "doc/images/characters/modular_human_male_01/parts/rogue/top_rogue-v1.png",
           "source_sha256": "e00a212371b643d94c210b26242460d57be2fd2b714485e6bb4cd25049e0faec",
-          "path": "assets/modular_human_male_01/parts/rogue_sources/inputs/top-back.png",
+          "path": "assets/modular_human_male_01/rogue/sources/inputs/top-back.png",
           "crop": [
             790,
             0,
@@ -57,7 +57,7 @@
         {
           "source": "doc/images/characters/modular_human_male_01/parts/rogue/pants_rogue-v2.png",
           "source_sha256": "255db35d31ed8c697e196a7115f342db3ff3b476167822cd519424a006296a4a",
-          "path": "assets/modular_human_male_01/parts/rogue_sources/inputs/pants-front.png",
+          "path": "assets/modular_human_male_01/rogue/sources/inputs/pants-front.png",
           "crop": [
             0,
             0,
@@ -68,7 +68,7 @@
         {
           "source": "doc/images/characters/modular_human_male_01/parts/rogue/pants_rogue-v2.png",
           "source_sha256": "255db35d31ed8c697e196a7115f342db3ff3b476167822cd519424a006296a4a",
-          "path": "assets/modular_human_male_01/parts/rogue_sources/inputs/pants-back.png",
+          "path": "assets/modular_human_male_01/rogue/sources/inputs/pants-back.png",
           "crop": [
             768,
             0,
@@ -85,7 +85,7 @@
         {
           "source": "doc/images/characters/modular_human_male_01/parts/rogue/glove_rogue_right-v2.png",
           "source_sha256": "583af2809a3f710426fc977dd4d8c997d712413575a25ae62f7a366fcd8712f8",
-          "path": "assets/modular_human_male_01/parts/rogue_sources/inputs/glove-dorsal.png",
+          "path": "assets/modular_human_male_01/rogue/sources/inputs/glove-dorsal.png",
           "crop": [
             0,
             0,
@@ -96,7 +96,7 @@
         {
           "source": "doc/images/characters/modular_human_male_01/parts/rogue/glove_rogue_right-v2.png",
           "source_sha256": "583af2809a3f710426fc977dd4d8c997d712413575a25ae62f7a366fcd8712f8",
-          "path": "assets/modular_human_male_01/parts/rogue_sources/inputs/glove-palm.png",
+          "path": "assets/modular_human_male_01/rogue/sources/inputs/glove-palm.png",
           "crop": [
             768,
             0,
@@ -113,7 +113,7 @@
         {
           "source": "doc/images/characters/modular_human_male_01/parts/rogue/wrap_rogue_left-v1.png",
           "source_sha256": "51a10630b323eb528f5d74f52209984d4eb2a665b5e3d42215c071d5c9e98802",
-          "path": "assets/modular_human_male_01/parts/rogue_sources/inputs/wrap.png"
+          "path": "assets/modular_human_male_01/rogue/sources/inputs/wrap.png"
         }
       ]
     },
@@ -124,7 +124,7 @@
         {
           "source": "doc/images/characters/modular_human_male_01/parts/rogue/boot_rogue_left-v1.png",
           "source_sha256": "de597c68f2c090d29eb21e05d8065ed4ac1c02adb2505c6ef2ebfdb18b40d6f7",
-          "path": "assets/modular_human_male_01/parts/rogue_sources/inputs/boot-front.png",
+          "path": "assets/modular_human_male_01/rogue/sources/inputs/boot-front.png",
           "crop": [
             0,
             0,
@@ -136,10 +136,10 @@
     }
   ],
   "reference": {
-    "base": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "base": "assets/modular_human_male_01/fitted/base.glb",
     "base_sha256": "99016ab4311f8fb4256b7a42bdb0d404e2d991154c6ff18c3acb3da76a43f7f0",
     "rig_id": "human_male_01_mixamo_candidate_v2",
-    "interfaces": "assets/modular_human_male_01/parts/interfaces/v0/interfaces.json",
+    "interfaces": "assets/modular_human_male_01/interfaces/v0/interfaces.json",
     "interfaces_status": "provisional"
   }
 }

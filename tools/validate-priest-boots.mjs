@@ -14,21 +14,21 @@ try {
     "/src/lib/utils/priestBootCuff.ts",
   );
   const body = (
-    await load("assets/modular_human_male_01/parts/fitted/base.glb")
+    await load("assets/modular_human_male_01/fitted/base.glb")
   ).scene;
   const skin = mod.skinnedParts(body),
     parts = new Map();
   for (const [id, path] of Object.entries({
     hair_crop: "fitted/hair_crop.glb",
-    top_priest: "priest_tripo_top_v1/top_priest.glb",
-    pants_priest: "priest_tripo_pants_v1/pants_priest.glb",
-    boots_priest: "priest_tripo_boots_v1/boots_priest.glb",
+    top_priest: "priest/tripo_top_v1/top_priest.glb",
+    pants_priest: "priest/tripo_pants_v1/pants_priest.glb",
+    boots_priest: "priest/tripo_boots_v1/boots_priest.glb",
   }))
     parts.set(
       id,
       mod.bindModularPart(
         body,
-        (await load("assets/modular_human_male_01/parts/" + path)).scene,
+        (await load("assets/modular_human_male_01/" + path)).scene,
       ),
     );
   const tris = (ms) => ms.reduce((n, m) => n + m.geometry.index.count / 3, 0);

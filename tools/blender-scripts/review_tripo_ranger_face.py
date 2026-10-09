@@ -9,8 +9,8 @@ import bpy
 from mathutils import Vector
 
 ROOT = Path(__file__).resolve().parents[2]
-PARTS = ROOT / 'assets/modular_human_male_01/parts'
-OUTPUT = PARTS / 'face_tripo_ranger_v1'
+PARTS = ROOT / 'assets/modular_human_male_01'
+OUTPUT = PARTS / 'faces/tripo_ranger_v1'
 IMAGES = ROOT / 'doc/images/characters/modular_human_male_01/parts/ranger'
 spec = importlib.util.spec_from_file_location('studio', ROOT / 'tools/blender-scripts/review_tripo_pants.py')
 studio = importlib.util.module_from_spec(spec)
@@ -36,7 +36,7 @@ def main(directory):
         for obj in bpy.data.objects:
             if obj.type == 'MESH':
                 obj.hide_render = obj.get('region') not in ['head', 'neck', 'face_neck_bridge']
-        review.import_part(PARTS / 'hair_tripo_ranger_v1/hair_ranger.glb', rig)
+        review.import_part(PARTS / 'hair/tripo_ranger_v1/hair_ranger.glb', rig)
         center, scale = Vector((0, 0, 1.75)), .52
     scene, camera = studio.setup(True)
     scene.render.resolution_percentage = 100

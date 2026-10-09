@@ -48,20 +48,24 @@ peak-normalized to ≈ −3 dB, with a short tail fade.
   Starter 유료 플랜(API 구독 조회로 확인),
   [유료 플랜 상업 이용 라이선스](https://help.elevenlabs.io/hc/en-us/articles/13313564601361-Can-I-publish-the-content-I-generate-on-the-platform) 적용.
   `eleven_text_to_sound_v2`, 1초, 총 40크레딧. take 1·2는 `prompt_influence=0.7`,
-  take 3·4는 0.6. 각 프롬프트와 take 4의 이전 가공 정보는 동명 `.json`에 기록.
+  take 3·4는 0.6. 생성·가공 기록 JSON 4개도 사용자 요청으로 2026-10-09 삭제했다.
 - **[미사용]** 같은 폴더의 `dungeon-drip-stone_take1`~`take4` 및
   `unused-percussive-drip.ogg` — 타격음이 강했던 이전 후보·게임용 음원.
   위와 동일한 ElevenLabs Starter 라이선스·생성일 적용. 0.7초, 총 28크레딧.
-  take 1·2는 `prompt_influence=0.85`, take 3·4는 0.75. 원본 및 가공 정보는 동명 `.json`에 기록.
+  take 1·2는 `prompt_influence=0.85`, take 3·4는 0.75. 생성·가공 기록 JSON 4개도 사용자 요청으로 2026-10-09 삭제했다.
 - **[미사용]** `assets/sfx/dungeon-drips-2026-09-17/`의
   `dungeon-drip_take1_2026-09-17.mp3` 및 `dungeon-drip_take2_2026-09-17.mp3` —
   이전 물웅덩이 낙수음 후보와 사용 원본. ElevenLabs Starter 유료 플랜으로
   2026-09-17 생성, 위 유료 플랜 상업 이용 라이선스 적용.
   `eleven_text_to_sound_v2`, 0.7초, `prompt_influence=0.75`, 총 14크레딧.
-  기포 꼬리음을 포함한 기존 프롬프트는 동명 `.json`에 보관.
+  take 1·2의 생성 기록 JSON도 사용자 요청으로 2026-10-09 삭제했다.
 - **[미사용]** 2026-09-17 폴더의 `unused-procedural-drip.ogg` 및
   `unused-procedural-generator.mjs` — 2026-09-17 직접 절차적 합성한 이전 버전.
   외부 샘플·생성 API 없음(유료 도구/플랜 해당 없음), [프로젝트 라이선스](../../LICENSE) 적용.
+
+위 2026-09-17·18 미사용 후보의 MP3, 이전 OGG 2개와 절차적 생성 스크립트는
+2026-10-09 삭제했다. 해당 후보들의 생성·가공 기록 JSON 10개와 빈 폴더도 사용자 요청으로 삭제했다.
+현재 사용하는 오콘스 원음 WAV·출처 JSON·재생성 스크립트는 보존한다. [삭제 목록·해시](cleanup-2026-10-09.json).
 
 ## Weather
 
@@ -101,14 +105,14 @@ changes and are attenuated indoors.
   선택한 프롬프트는 `tools/gen-death-sfx.py`의 `armored_bone_hit`에 기록.
   원본과 생성·가공 메타데이터는 `assets/sfx/skeleton-hits-2026-09-15/`의
   `armored-bone-hit_candidate1_2026-09-15.mp3` 및 같은 이름의 `.json`에 보관.
-  **[미사용]** 후보는 같은 폴더의 `candidate2`~`candidate4`로 보관.
+  **[미사용]** `candidate2`~`candidate4`의 MP3와 동명 생성 기록 JSON은 사용자 요청으로 2026-10-09 삭제했다.
   클리핑 없이 float PCM으로 가공하며 재생 속도·피치를 0.88배로 낮추고,
   55 Hz 하이패스·250 Hz 저음 +4 dB·1.8 kHz 고음 −5 dB·3.8 kHz 로우패스를 적용.
   0.5초, 시작 2 ms·끝 70 ms 페이드, 인코딩 전 피크 −3 dB, 44.1 kHz 모노 Ogg Vorbis q5.
 - metal-hit.ogg — **[미사용]** 기존 금속 갑옷 피격음. 2026-09-15 `bone-hit-heavy.ogg`로 교체.
   ElevenLabs Sound Effects API, Starter 유료 플랜으로 2026-09-12 직접 생성.
   유료 플랜 상업 이용 라이선스 적용. `tools/gen-death-sfx.py`의 `metal_hit`,
-  0.7초·prompt_influence 0.6·1테이크. 원본은 `assets/skeleton_warrior/sfx/metal-hit.mp3`에 보관.
+  0.7초·prompt_influence 0.6·1테이크. 이전 원본 `assets/skeleton_warrior/sfx/metal-hit.mp3`는 2026-10-09 삭제했다.
   44.1 kHz 모노 Ogg q5, 피크 −3 dB, 100 ms 테일 페이드로 가공.
 - bone-hit-heavy.ogg — 해골 워리어·나이트의 갑옷 피격음 (`metal` / `wood` → `metal`).
   [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) API로 2026-09-15 직접 생성.
@@ -118,7 +122,7 @@ changes and are attenuated indoors.
   프롬프트는 `tools/gen-death-sfx.py`의 `bone_hit_heavy`에 기록.
   원본과 생성·가공 메타데이터는 `assets/sfx/skeleton-hits-2026-09-15/`의
   `bone-hit-heavy_take1_2026-09-15.mp3` 및 같은 이름의 `.json`에 보관.
-  **[미사용]** 후보는 같은 폴더의 `take2`로 보관.
+  **[미사용]** `take2`의 MP3와 동명 생성 기록 JSON은 사용자 요청으로 2026-10-09 삭제했다.
   float PCM으로 가공하며 재생 속도·피치를 0.9배로 낮추고, 65 Hz 하이패스·220 Hz 저음 +3.5 dB·
   2.2 kHz 고음 −3 dB·5 kHz 로우패스를 적용. 첫 100 ms RMS를 기존보다 5 dB 높게 맞춤.
   0.42초, 시작 2 ms·끝 65 ms 페이드, 44.1 kHz 모노 Ogg Vorbis q5, 디코딩 피크 −6.09 dB.

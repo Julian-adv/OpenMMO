@@ -5,10 +5,10 @@
   "subscription_tier": "Current file tier unconfirmed; prior recorded subscription approximately USD 20/month",
   "license": "Subject to original Tripo Studio output terms; original source and account provenance retained; no additional paid generation",
   "original_path": "Y:\\public\\web_downloads\\human+head+3d+model.glb",
-  "preserved_source": "assets/modular_human_male_01/parts/face_tripo_rugged_v1/source.glb",
+  "preserved_source": "assets/modular_human_male_01/faces/tripo_rugged_v1/source.glb",
   "source_sha256": "939d8c700ba5a33ae3818bc8b2c89947080ab94b7a9f4634ed19daafe8f36d3f",
   "submitted_reference_images": "Unconfirmed; do not infer exact generation inputs from prior face concepts",
-  "status": "Source preserved unchanged; trimmed, fitted and rigged candidate in face_tripo_rugged_v1; workshop preview available; production catalog not registered",
+  "status": "Source preserved unchanged; trimmed, fitted and rigged candidate in faces/tripo_rugged_v1; workshop preview available; production catalog not registered",
   "metadata": {
     "sha256": "939d8c700ba5a33ae3818bc8b2c89947080ab94b7a9f4634ed19daafe8f36d3f",
     "mesh_count": 1,

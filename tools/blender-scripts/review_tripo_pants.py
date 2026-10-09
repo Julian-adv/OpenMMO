@@ -10,8 +10,8 @@ import bpy
 from mathutils import Matrix, Vector
 
 ROOT = Path(__file__).resolve().parents[2]
-PARTS = ROOT / 'assets/modular_human_male_01/parts'
-OUTPUT = PARTS / 'rogue_tripo_pants_v1'
+PARTS = ROOT / 'assets/modular_human_male_01'
+OUTPUT = PARTS / 'rogue/tripo_pants_v1'
 PREFIX = ROOT / 'doc/images/characters/modular_human_male_01/parts/rogue/tripo-pants-v1'
 spec = importlib.util.spec_from_file_location('rogue_review', ROOT / 'tools/blender-scripts/review_rogue_fitting.py')
 review = importlib.util.module_from_spec(spec)
@@ -64,8 +64,8 @@ def main(images):
         body = [obj for obj in bpy.data.objects if obj.type == 'MESH']
         meshes = review.import_part(OUTPUT / 'pants_rogue.glb', rig)
         appearance = body + meshes
-        for path in ['rogue_tripo_v1/top_rogue.glb', 'rogue_fitted_v8/gloves_rogue.glb',
-                     'rogue_fitted_v8/boots_rogue.glb', 'fitted/hair_crop.glb']:
+        for path in ['rogue/tripo_v1/top_rogue.glb', 'rogue/fitted_v8/gloves_rogue.glb',
+                     'rogue/fitted_v8/boots_rogue.glb', 'fitted/hair_crop.glb']:
             appearance.extend(review.import_part(PARTS / path, rig))
         for obj in body:
             review.clip_top_skin(obj, True)

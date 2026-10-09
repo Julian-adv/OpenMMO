@@ -2,7 +2,7 @@
   "status": "Candidate: provisional body-region hiding only; hand/short-sleeve runtime masks pending",
   "blender_version": "5.2.0 LTS",
   "editable": {
-    "path": "assets/modular_human_male_01/parts/rogue_fitted_v7/rogue-fitting.blend",
+    "path": "assets/modular_human_male_01/rogue/fitted_v7/rogue-fitting.blend",
     "sha256": "2a170dfb3727f24dada02cc607a2733f868735738129802f2774298720224e52",
     "retained": false
   },
@@ -44,7 +44,7 @@
     "retained": false
   },
   "snapshots": {
-    "path": "assets/modular_human_male_01/parts/rogue_fitted_v7/animation-snapshots.json",
+    "path": "assets/modular_human_male_01/rogue/fitted_v7/animation-snapshots.json",
     "sha256": "187950ec6f60d3788c7fbf7f1c0d3bdf426bced80f3ac992c21abff368f92a97",
     "retained": false
   },
@@ -78,7 +78,7 @@
   },
   "connection_comparison": {
     "baseline": {
-      "path": "assets/modular_human_male_01/parts/rogue_fitted_v6/top_rogue.glb",
+      "path": "assets/modular_human_male_01/rogue/fitted_v6/top_rogue.glb",
       "sha256": "38834905b11ebf043887d820165971b004cd4daef28dea95601f8df8d5ed8bc4",
       "retained": false
     },

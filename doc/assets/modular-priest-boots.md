@@ -24,7 +24,7 @@
 왼발 한 짝을 제작하고 오른발은 3D에서 대칭 복제한다.
 복제 시 발·발가락 본 대응과 면 방향·노멀을 보정한다.
 
-기준 몸체는 `assets/modular_human_male_01/parts/fitted/base.glb`,
+기준 몸체는 `assets/modular_human_male_01/fitted/base.glb`,
 SHA-256 `0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a`,
 리그는 `human_male_01_mixamo_candidate_v2`다.
 몸체는 이미지 생성 입력에 포함하지 않았다. 부츠목과 발바닥의 실제 비율·봉제선 연결은

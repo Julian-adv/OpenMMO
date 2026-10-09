@@ -8,8 +8,8 @@ const { server, load, sources } = await headlessThree()
 try {
   const { bindModularPart, modularAnimationClips } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
   const { updatePeltPhysics, resetPeltPhysics, disposePeltPhysics } = await server.ssrLoadModule('/src/lib/effects/pelt-rig.ts')
-  const base = await load('assets/modular_human_male_01/parts/fitted/base.glb')
-  const robe = await load('assets/modular_human_male_01/parts/priest_tripo_top_v1/top_priest.glb')
+  const base = await load('assets/modular_human_male_01/fitted/base.glb')
+  const robe = await load('assets/modular_human_male_01/priest/tripo_top_v1/top_priest.glb')
   const body = clone(base.scene)
   const [mesh] = bindModularPart(body, robe.scene)
   const originalGeometry = mesh.geometry, originalSkeleton = mesh.skeleton
@@ -42,7 +42,7 @@ try {
     report.clips.push({ name: clip.name, samples: 13, all_vertices_finite: true, maximum_seam_gap_m: maximumSeamGap })
   }
   assert.deepEqual(mesh.geometry.attributes.position.array, originalGeometry.attributes.position.array)
-  const hair = await load('assets/modular_human_male_01/parts/fitted/hair_crop.glb')
+  const hair = await load('assets/modular_human_male_01/fitted/hair_crop.glb')
   bindModularPart(body, hair.scene)
   assert.equal(mesh.skeleton.bones.length, 73)
   report.late_part_bind_preserves_robe = true

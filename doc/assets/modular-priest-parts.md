@@ -21,7 +21,7 @@
   은색 목걸이, 갈색 이중 벨트와 은색 장식·붉은 끈.
 - 허리 아래 성의도 상의 소속이다. 허리선에서 외형을 자르지 않는다.
 - 제외: 사제관, 손·장갑, 사슬 바지, 샌들, 인체.
-- 기준 몸체: `assets/modular_human_male_01/parts/fitted/base.glb`,
+- 기준 몸체: `assets/modular_human_male_01/fitted/base.glb`,
   SHA-256 `0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a`.
   리그는 `human_male_01_mixamo_candidate_v2`, 기존 65본이다.
   몸체 메시를 이미지 생성 입력으로 사용하지 않았으므로 그림의 비율은 실제 피팅 결과가 아니다.
@@ -79,6 +79,6 @@ OpenAI 생성 출력물 이용 조건과 [입력 원화 출처](characters.md#ot
   같은 피팅 모델에서 정적 아이템 모델과 투명 128×128 아이콘을 만든다.
   출력은 `client/public/models/armor/priest_{top,pants,boots}.glb` 및
   `client/public/items/armor/priest_{top,pants,boots}.png`다.
-  텍스처는 최대 512px, 편집본은 `assets/priest_{top,pants,boots}/`에 보관한다.
+  텍스처는 최대 512px, 편집본은 `assets/items/priest_{top,pants,boots}/`에 보관한다.
 - 기존 사제 복장 가림·옷자락·혼합 장비 처리를 게임 장비 경로에서도 사용하며,
   사제 부츠의 지면 보정값은 내보낸 모델에서 측정한다.

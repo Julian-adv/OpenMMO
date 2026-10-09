@@ -2,7 +2,7 @@
   "status": "Passed headless Chromium workshop check",
   "date": "2026-10-02",
   "gloves": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/gloves_rogue.glb",
+    "path": "assets/modular_human_male_01/rogue/tripo_wrap_v1/gloves_rogue.glb",
     "sha256": "80107110dabfcbd0c6bda685550e52b0133e6c62272c6ab660a6b24f11eb835a"
   },
   "served_asset_matches": true,

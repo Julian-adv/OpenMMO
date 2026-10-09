@@ -6,11 +6,11 @@ import { CANONICAL_CLIPS_WITH_DYING, clipSampler, headlessThree, loadClips, root
 const ranger = process.argv.includes('--ranger')
 const style = ranger ? 'ranger' : 'wavy'
 const part = ranger ? 'hair_ranger' : 'hair_wavy_bone'
-const output = `assets/modular_human_male_01/parts/hair_tripo_${style}_v1/`
+const output = `assets/modular_human_male_01/hair/tripo_${style}_v1/`
 const { server, sources, load } = await headlessThree()
 try {
   const { bindModularPart, modularAnimationClips } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
-  const body = (await load('assets/modular_human_male_01/parts/fitted/base.glb')).scene
+  const body = (await load('assets/modular_human_male_01/fitted/base.glb')).scene
   const meshes = bindModularPart(body, (await load(output + part + '.glb')).scene)
   assert.equal(meshes.length, 1)
   const mesh = meshes[0]

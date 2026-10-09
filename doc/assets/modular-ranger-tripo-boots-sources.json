@@ -10,19 +10,19 @@
   "delivery_path_windows": "Y:\\public\\web_downloads\\leather+boot+3d+model.glb",
   "delivery_path_linux": "/mnt/y/web_downloads/leather+boot+3d+model.glb",
   "source": {
-    "path": "assets/modular_human_male_01/parts/ranger_tripo_boots_v1/source.glb",
+    "path": "assets/modular_human_male_01/ranger/tripo_boots_v1/source.glb",
     "sha256": "dae9a86260d61e3b38d743715d957de4c16854544b2170ddad880278638a4862",
     "bytes": 1882028,
     "byte_identical_to_delivery": true
   },
   "base": {
-    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "path": "assets/modular_human_male_01/fitted/base.glb",
     "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
     "bytes": 22214236
   },
   "interfaces": {
-    "path": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
-    "sha256": "f3fc3aed9c5080cf26a294dac496293c89bce8f67466add18a7ef72b326f006b",
+    "path": "assets/modular_human_male_01/interfaces/v1/interfaces.json",
+    "sha256": "52cbd59252b2c80740553182f347273afd3706adf1da3f26b9a11d79400eb23e",
     "bytes": 310940
   },
   "rig_id": "human_male_01_mixamo_candidate_v2",
@@ -71,30 +71,30 @@
   "status": "Fitted and mirrored candidate connected to dev workshop; seven-clip numeric validation and sampled visual review completed. Production and remaining mixed equipment review pending.",
   "outputs": [
     {
-      "path": "assets/modular_human_male_01/parts/ranger_tripo_boots_v1/boots_ranger.glb",
+      "path": "assets/modular_human_male_01/ranger/tripo_boots_v1/boots_ranger.glb",
       "bytes": 2094028,
       "sha256": "916c13a55b4fb5fc15fdf4a017b3ed5977983210a776bc91977eaa138b9b1db6"
     },
     {
-      "path": "assets/modular_human_male_01/parts/ranger_tripo_boots_v1/ranger-boots-fitting.blend",
+      "path": "assets/modular_human_male_01/ranger/tripo_boots_v1/ranger-boots-fitting.blend",
       "bytes": 42770706,
       "sha256": "487c5fa8d38bf78a7f7c812f1f26e98aa932efb257b755b65c45ef7b43e918a6"
     },
     {
-      "path": "assets/modular_human_male_01/parts/ranger_tripo_boots_v1/pants_ranger_boots-review.glb",
+      "path": "assets/modular_human_male_01/ranger/tripo_boots_v1/pants_ranger_boots-review.glb",
       "role": "Runtime geometry snapshot for editable review; original ranger pants remain runtime source",
       "bytes": 1928148,
       "sha256": "54a8e9a52c943eedc3446d57c5a4b05f9a9655c233a486ee59ff1f211f165203"
     },
     {
-      "path": "assets/modular_human_male_01/parts/ranger_tripo_boots_v1/pants_rogue_ranger_boots-review.glb",
+      "path": "assets/modular_human_male_01/ranger/tripo_boots_v1/pants_rogue_ranger_boots-review.glb",
       "bytes": 2123532,
       "sha256": "4bc9d675aed2234460d0ed3867e9cd74495d67c1cccd038a02a9584d91fc3656",
       "role": "Rogue pants runtime geometry snapshot for review; inherits original Tripo source and license; no additional generation."
     }
   ],
   "compatibility_pants_source": {
-    "path": "assets/modular_human_male_01/parts/ranger_tripo_pants_v1/pants_ranger.glb",
+    "path": "assets/modular_human_male_01/ranger/tripo_pants_v1/pants_ranger.glb",
     "sha256": "8529da4370e10d74228c1aafc790cc1c1684d1eb8737ad19d993d8f938594883",
     "provenance": "doc/assets/modular-ranger-tripo-pants.md"
   },
@@ -104,7 +104,7 @@
     "method": "Measured fitted boot upper envelope and inner rim radius at 128 radial angles; mirrored for right side."
   },
   "compatibility_rogue_pants_source": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/pants_rogue.glb",
+    "path": "assets/modular_human_male_01/rogue/tripo_pants_v1/pants_rogue.glb",
     "sha256": "7178d06a9b2e18953e2c3fb0672df8424b688d6f4ccc47affc856a9084e8e81c",
     "provenance": "doc/assets/modular-rogue-tripo-pants.md",
     "review_date": "2026-10-07"

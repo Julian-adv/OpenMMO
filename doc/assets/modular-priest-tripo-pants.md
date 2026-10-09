@@ -7,7 +7,7 @@
 
 ## 보관과 피팅
 
-- 원본: `assets/modular_human_male_01/parts/priest_tripo_pants_v1/source.glb`.
+- 원본: `assets/modular_human_male_01/priest/tripo_pants_v1/source.glb`.
 - 피팅·리깅: 같은 폴더의 `pants_priest.glb`, 현재 v4 **1,513 triangles**.
 - 편집본: 같은 폴더의 `priest-pants-fitting-v4.blend`.
 - [출처·해시](modular-priest-tripo-pants-sources.json), [피팅 수치](modular-priest-tripo-pants-fitting-v4.json).
@@ -29,7 +29,7 @@
 
 ![발목 마감 앞·뒤·옆](../images/characters/modular_human_male_01/parts/priest/tripo-pants-fitted-v4-ankles.png)
 
-현재 `parts/fitted/base.glb`, `interfaces/v1`, `human_male_01_mixamo_candidate_v2` 65본을 사용한다.
+현재 `fitted/base.glb`, `interfaces/v1`, `human_male_01_mixamo_candidate_v2` 65본을 사용한다.
 허리·가랑이·무릎 높이를 각각 정렬하고 몸체 표면에서 가중치를 전사했다.
 발목의 단면·가중치는 기존 공통 절차를 사용하며 종아리 축소를 중복 적용하지 않았다.
 초기 피부 표시 검사에서 나타난 발목 위 관통은 면 중심·모서리 표본 보정을 0.215m 위까지
@@ -62,7 +62,7 @@ v1/v2 검수와 아래 부츠별 화면은 해당 보정 당시 기록이다. v3
 사용자 비교 사진에서 v3의 허리가 급히 들어간 뒤 엉덩이가 다시 불룩해 보이는 문제가 남았다.
 **[미사용]** v3 GLB는 `pants_priest-seat-before-v3.glb`, 편집본 `priest-pants-fitting-v3.blend`는 중간 결과물 정리 때 삭제했다.
 
-현재 v4는 기존 `parts/fitted/pants_plate.glb`의 후면 곡선을 기준으로 허리부터 엉덩이·위쪽 허벅지까지 연결했다.
+현재 v4는 기존 `fitted/pants_plate.glb`의 후면 곡선을 기준으로 허리부터 엉덩이·위쪽 허벅지까지 연결했다.
 기준 표면을 XY ±12mm에서 평활화하고 Z=-25mm를 중심으로 뒤쪽 깊이의 90%를 사용했다.
 위쪽 허리에서 보정이 사라지던 전환을 없애 잘록하게 들어간 부분도 함께 펴고, 하단은 Y=0.76–0.86m에서 점진적으로 연결한다.
 면 중심·모서리 중점의 몸체 여유 4mm를 유지한다. X/Y, 앞면, 아래쪽 다리·발목, 토폴로지·UV·내장 JPEG는 그대로다.
@@ -284,9 +284,9 @@ UV·가중치는 보간하고 원본 GLB는 보존한다. 부츠 벗기·교체�
 
 ```bash
 .venv/bin/python tools/fit-tripo-priest-pants.py
-node tools/validate-tripo-rogue.mjs --directory assets/modular_human_male_01/parts/priest_tripo_pants_v1 --part pants_priest --report doc/assets/modular-priest-tripo-pants-animation-v4.json
+node tools/validate-tripo-rogue.mjs --directory assets/modular_human_male_01/priest/tripo_pants_v1 --part pants_priest --report doc/assets/modular-priest-tripo-pants-animation-v4.json
 blender -b -t 6 --python-exit-code 1 --python tools/blender-scripts/review_tripo_priest_pants.py -- --rest-only --revision 4
-.venv/bin/python tools/review-ranger-waist.py --top assets/modular_human_male_01/parts/priest_tripo_top_v1/top_priest.glb --pants assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb --poses assets/modular_human_male_01/parts/priest_tripo_pants_v1/validation-poses.json --report doc/assets/modular-priest-tripo-pants-waist-review-v4.json --revision 4 --heights 1.04 1.06 1.08 1.10 1.11 1.12
+.venv/bin/python tools/review-ranger-waist.py --top assets/modular_human_male_01/priest/tripo_top_v1/top_priest.glb --pants assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb --poses assets/modular_human_male_01/priest/tripo_pants_v1/validation-poses.json --report doc/assets/modular-priest-tripo-pants-waist-review-v4.json --revision 4 --heights 1.04 1.06 1.08 1.10 1.11 1.12
 ```
 
 마지막 허리 검사는 현재 후보에서 실패로 종료하며, 실패 수치가 포함된 보고서를 저장한다.

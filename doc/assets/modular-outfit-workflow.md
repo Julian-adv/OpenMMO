@@ -18,7 +18,7 @@
 - 시도별 선택과 남은 보정: [원본 선택 명세](modular-rogue-source-selection.json). 이 파일은
   생성 요청용 명세가 아니라 검수 도구의 입력이다. `source_glb`로 서로 다른 시도의 파츠를 조합한다.
 
-**모든 신규 바지의 피팅 기준은 현재 `assets/modular_human_male_01/parts/fitted/base.glb`다.**
+**모든 신규 바지의 피팅 기준은 현재 `assets/modular_human_male_01/fitted/base.glb`다.**
 2026-10-01 종아리 실루엣을 줄인 공통 원본과 `interfaces/v1`을 사용한다.
 [공통 몸체 변경 기록](modular-human-male-01.md#공통-몸체-종아리-실루엣--2026-10-01)을 확인하고,
 이전 생성 명세의 몸체 해시·v0 단면·오래된 편집본을 새 복장에 복사하지 않는다.
@@ -84,7 +84,7 @@ API 필드는 [Meshy 공식 문서](https://docs.meshy.ai/en/api/multi-image-to-
 blender -b --python-exit-code 1 --python tools/blender-scripts/build_outfit_reference.py -- --preview
 ```
 
-기본 출력은 `assets/modular_human_male_01/parts/interfaces/v1/` 아래의
+기본 출력은 `assets/modular_human_male_01/interfaces/v1/` 아래의
 `outfit-reference.blend`와 `interfaces.json`이다. 다른 체형은 `-- --base <GLB> --output <폴더>`로
 명시한다. 현 스크립트의 높이와 본 이름은 현재 1.90m 남성 전용이며 다른 체형에는 그대로 쓰지 않는다.
 

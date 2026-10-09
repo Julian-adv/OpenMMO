@@ -10,7 +10,7 @@ from scipy.spatial import ConvexHull, cKDTree
 from lib.glb import read_glb, write_glb
 
 ROOT = Path(__file__).resolve().parents[1]
-PARTS = ROOT / 'assets/modular_human_male_01/parts'
+PARTS = ROOT / 'assets/modular_human_male_01'
 spec = importlib.util.spec_from_file_location('plate', ROOT / 'tools/fit-modular-plate.py')
 plate = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(plate)
@@ -45,7 +45,7 @@ def with_rig(doc, binary, name):
 
 
 def build(name, fit, skinning, mirror=False):
-    doc, raw = read_glb(PARTS / 'barbarian_sources' / f'{name}.glb')
+    doc, raw = read_glb(PARTS / 'barbarian/sources' / f'{name}.glb')
     if len(doc['meshes']) != 1:
         raise ValueError(f'{name}: expected a single source mesh')
     binary = bytearray(raw)
@@ -436,7 +436,7 @@ def boots_fit(points):
 
 @cache
 def source_points(name):
-    doc, raw = read_glb(PARTS / 'barbarian_sources' / f'{name}.glb')
+    doc, raw = read_glb(PARTS / 'barbarian/sources' / f'{name}.glb')
     return np.concatenate([plate.accessor(doc, raw, p['attributes']['POSITION'])
                            for p in doc['meshes'][0]['primitives']])
 

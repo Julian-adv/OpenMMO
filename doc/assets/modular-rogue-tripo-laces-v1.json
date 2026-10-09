@@ -1,12 +1,12 @@
 {
   "sources": [
     {
-      "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/before-side-laces/top_rogue.glb",
+      "path": "assets/modular_human_male_01/rogue/tripo_v1/before-side-laces/top_rogue.glb",
       "sha256": "0f0794165a3e984d37bf1c7c637b7c4c4c1eb28deed2da5229c0dd7c2d3ae69a",
       "retained": false
     },
     {
-      "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+      "path": "assets/modular_human_male_01/rogue/tripo_v1/top_rogue.glb",
       "sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
       "retained": true
     }

@@ -28,17 +28,17 @@
       "bytes": 15148145
     },
     {
-      "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/source-review.blend",
+      "path": "assets/modular_human_male_01/caveman/tripo_top_v1/source-review.blend",
       "sha256": "46200f5ff4e1574b2d3ca17d88689f3147d36a4a8c6d590a4717f56ec1e7ee5a",
       "bytes": 2069914
     },
     {
-      "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/animation-snapshots.json",
+      "path": "assets/modular_human_male_01/caveman/tripo_top_v1/animation-snapshots.json",
       "sha256": "fa296885ee2db0250d2a866ccced54a56ddbe9de7b06d53e6e4ecfccb404ee09",
       "bytes": 119888
     },
     {
-      "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/validation-poses.json",
+      "path": "assets/modular_human_male_01/caveman/tripo_top_v1/validation-poses.json",
       "sha256": "bb193bfb9035e9e6f6c708725e45ec0584ff148030289cc523417291284e20fc",
       "bytes": 1468466
     },
@@ -63,37 +63,37 @@
       "bytes": 1126189
     },
     {
-      "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/unused-clearance-trial/README.txt",
+      "path": "assets/modular_human_male_01/caveman/tripo_top_v1/unused-clearance-trial/README.txt",
       "sha256": "5f1d0f2fb5e4596a26cd8e01d277c8251717404a0d014f5c2c2e5a14f8c1a4aa",
       "bytes": 247
     },
     {
-      "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/unused-clearance-trial/fit-tripo-caveman-top.py",
+      "path": "assets/modular_human_male_01/caveman/tripo_top_v1/unused-clearance-trial/fit-tripo-caveman-top.py",
       "sha256": "1a24126c9a72ca8c857065470f1966a62499e82919882e52bb5a133a16f10d26",
       "bytes": 11795
     },
     {
-      "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/unused-clearance-trial/modular-caveman-tripo-top-animation-v1.json",
+      "path": "assets/modular_human_male_01/caveman/tripo_top_v1/unused-clearance-trial/modular-caveman-tripo-top-animation-v1.json",
       "sha256": "bcb04490309cac45a7872afc3e83337cfd2dd0501a58c3d0bf76a1f4d6f7e871",
       "bytes": 34358
     },
     {
-      "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/unused-clearance-trial/modular-caveman-tripo-top-fitting-v1.json",
+      "path": "assets/modular_human_male_01/caveman/tripo_top_v1/unused-clearance-trial/modular-caveman-tripo-top-fitting-v1.json",
       "sha256": "f09481389a2a9979927d439aa9b44256ad44e5ade27ebf6ee45631f080be49b7",
       "bytes": 34233
     },
     {
-      "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/unused-clearance-trial/top_caveman.glb",
+      "path": "assets/modular_human_male_01/caveman/tripo_top_v1/unused-clearance-trial/top_caveman.glb",
       "sha256": "748238e2e1d259de8559c91042a407800d35f71dd9fd9b4ca31f74d604faffbf",
       "bytes": 2065640
     },
     {
-      "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/unused-clearance-trial/tripo-top-fitted-v1-motion.png",
+      "path": "assets/modular_human_male_01/caveman/tripo_top_v1/unused-clearance-trial/tripo-top-fitted-v1-motion.png",
       "sha256": "21e3e62e8f2c4bc4728b1eab2e03364851c64e99f3a9e10b20502b003ff89c54",
       "bytes": 940770
     },
     {
-      "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/unused-clearance-trial/tripo-top-fitted-v1-rest.png",
+      "path": "assets/modular_human_male_01/caveman/tripo_top_v1/unused-clearance-trial/tripo-top-fitted-v1-rest.png",
       "sha256": "fe40d66022d506a7622c097f1122d5b3ba03cace39a4278f06ec4f33eb73c662",
       "bytes": 461280
     }

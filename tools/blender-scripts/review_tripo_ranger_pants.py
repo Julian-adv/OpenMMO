@@ -10,8 +10,8 @@ import bpy
 from mathutils import Matrix, Vector
 
 ROOT = Path(__file__).resolve().parents[2]
-PARTS = ROOT / 'assets/modular_human_male_01/parts'
-OUTPUT = PARTS / 'ranger_tripo_pants_v1'
+PARTS = ROOT / 'assets/modular_human_male_01'
+OUTPUT = PARTS / 'ranger/tripo_pants_v1'
 IMAGES = ROOT / 'doc/images/characters/modular_human_male_01/parts/ranger'
 
 
@@ -50,7 +50,7 @@ def main(directory):
         body = [o for o in bpy.data.objects if o.type == 'MESH']
         pants = review.import_part(OUTPUT / 'pants_ranger.glb', rig)
         appearance = body + pants
-        for path in ['ranger_tripo_top_v4/top_ranger.glb', 'fitted/hair_crop.glb']:
+        for path in ['ranger/tripo_top_v4/top_ranger.glb', 'fitted/hair_crop.glb']:
             appearance.extend(review.import_part(PARTS / path, rig))
         for obj in body:
             review.clip_top_skin(obj, True, waist_height=1.05)

@@ -1,17 +1,17 @@
 {
   "status": "User-selected upper-equipment fitting and rigging saved; remaining part models pending.",
   "reference": {
-    "base": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "base": "assets/modular_human_male_01/fitted/base.glb",
     "base_sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b",
     "rig_id": "human_male_01_mixamo_candidate_v2",
-    "interfaces": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
-    "interfaces_sha256": "f3fc3aed9c5080cf26a294dac496293c89bce8f67466add18a7ef72b326f006b",
+    "interfaces": "assets/modular_human_male_01/interfaces/v1/interfaces.json",
+    "interfaces_sha256": "52cbd59252b2c80740553182f347273afd3706adf1da3f26b9a11d79400eb23e",
     "interfaces_status": "provisional"
   },
   "parts": [
     {
       "id": "top_caveman",
-      "source_glb": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/source.glb",
+      "source_glb": "assets/modular_human_male_01/caveman/tripo_top_v1/source.glb",
       "source_sha256": "6332d1538f9db297dcc62f307a330b2853f8e9e11bd300d3a0014cf57f146e89",
       "target_triangles": 2000,
       "actual_triangles": 2110,
@@ -20,7 +20,7 @@
         "Review retained intersections in extreme animation poses while preserving the selected shape.",
         "Register the top and verify mixed equipment in gameplay when requested."
       ],
-      "fitted_glb": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/top_caveman.glb",
+      "fitted_glb": "assets/modular_human_male_01/caveman/tripo_top_v1/top_caveman.glb",
       "fitted_sha256": "e495478ffdcf1d018a9c1faed604d91e92b6b2df91e1baf1599544800ad9ab9f"
     }
   ],
@@ -30,10 +30,10 @@
     "boots"
   ],
   "fitting_candidate": {
-    "directory": "assets/modular_human_male_01/parts/caveman_tripo_top_v1",
+    "directory": "assets/modular_human_male_01/caveman/tripo_top_v1",
     "report": "doc/assets/modular-caveman-tripo-top-fitting-v1.json",
     "part_overrides": {
-      "top_caveman": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/top_caveman.glb"
+      "top_caveman": "assets/modular_human_male_01/caveman/tripo_top_v1/top_caveman.glb"
     },
     "shape_selected_date": "2026-10-04"
   }

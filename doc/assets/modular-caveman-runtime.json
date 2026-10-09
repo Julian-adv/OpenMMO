@@ -39,19 +39,19 @@
       "sha256": "9e6261a9cf1dccc05e8226d15acd80845dbc8f42cef765aa6bf4407615bb4bbb",
       "bytes": 10854
     },
-    "assets/caveman_top/caveman_top.blend": {
+    "assets/items/caveman_top/caveman_top.blend": {
       "sha256": "4dd397326fecb2b4f57f19391524587023697edc3a31f643404669699159fe17",
       "bytes": 738367
     },
-    "assets/caveman_pants/caveman_pants.blend": {
+    "assets/items/caveman_pants/caveman_pants.blend": {
       "sha256": "fcf7eae53e05ffaccc768741dc0e1c883db0968d39a1997708a3a08e1f05cdc0",
       "bytes": 1346537
     },
-    "assets/caveman_boots/caveman_boots.blend": {
+    "assets/items/caveman_boots/caveman_boots.blend": {
       "sha256": "290cf954c3b430aef7ceac22adfbca20d4ed2933909142f3443f840f15fa61f1",
       "bytes": 846667
     },
-    "assets/caveman_bracers/caveman_bracers.blend": {
+    "assets/items/caveman_bracers/caveman_bracers.blend": {
       "sha256": "6880b3b7900e9c570f29cc593185109193d440306b11ce4216d22facbc363062",
       "bytes": 691686
     }
@@ -147,7 +147,7 @@
     "date": "2026-10-04",
     "source_record": "doc/assets/modular-caveman-tripo-pants-sources.json",
     "native": {
-      "path": "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb",
+      "path": "assets/modular_human_male_01/caveman/tripo_pants_v1/pants_caveman.glb",
       "sha256": "1fc3a92b29c8b5e37931cda6b32966754e1f3b1f33fe478a528179fc739a2db4",
       "bytes": 4812332
     },

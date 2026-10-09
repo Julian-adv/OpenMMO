@@ -2,7 +2,7 @@
 
 2026-10-08. 사용자 전달 `Y:\public\web_downloads\hair+wig+3d+model.glb`를
 `/mnt/y/web_downloads/hair+wig+3d+model.glb`에서 읽었다. `/mnt/y`는 `public` 공유 루트다.
-원본을 변경하지 않고 `assets/modular_human_male_01/parts/hair_tripo_ranger_v1/source.glb`에 보관했다.
+원본을 변경하지 않고 `assets/modular_human_male_01/hair/tripo_ranger_v1/source.glb`에 보관했다.
 원본 SHA-256은 `399e2fee54b1fb3c3f002d95c4faae20f7be56795a309025bb30c40e02f4d9de`다.
 
 원본은 **1,373 triangles**, 메시·재질 각 1개, 2048² JPEG 색상맵, 리그 없음이다.
@@ -13,7 +13,7 @@
 
 ## 피팅과 제작 미리보기
 
-현재 공통 남성 몸체 `parts/fitted/base.glb`의 실제 머리 표면에 크기·높이·앞뒤 위치를 맞췄다.
+현재 공통 남성 몸체 `fitted/base.glb`의 실제 머리 표면에 크기·높이·앞뒤 위치를 맞췄다.
 정점과 삼각형 중심에서 두피 여유를 보정하고, 같은 65본 계층·bind 행렬에 `Head` 가중치 1로 연결했다.
 삼각형 연결·원본 UV·내장 JPEG·재질은 유지했다. 물리 기반 머리카락 흔들림은 없다.
 
@@ -45,7 +45,7 @@ blender -b -t 6 --python-exit-code 1 --python tools/blender-scripts/review_tripo
 node tools/prepare-modular-character.mjs --part hair_ranger
 ```
 
-피팅 GLB·텍스처 내장 Blender 편집본은 `parts/hair_tripo_ranger_v1/`에 있다.
+피팅 GLB·텍스처 내장 Blender 편집본은 `hair/tripo_ranger_v1/`에 있다.
 512px 텍스처·Meshopt 압축을 적용한 게임용 후보는
 `client/public/models/characters/modular_male/hair_ranger.glb`이며 **151,584바이트**다.
 원본 텍스처를 쓰는 피팅 GLB는 1,673,344바이트다. 압축본 해시는 게임 manifest와

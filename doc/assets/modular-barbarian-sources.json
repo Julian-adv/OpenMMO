@@ -104,7 +104,7 @@
       "progress": 100,
       "consumed_credits": 35,
       "source": {
-        "path": "assets/modular_human_male_01/parts/barbarian_sources/helmet_barbarian.glb",
+        "path": "assets/modular_human_male_01/barbarian/sources/helmet_barbarian.glb",
         "bytes": 12689492,
         "sha256": "dda94e18f478a9d9845e6ff5a4f4c440680c080cb22b1d6639d6588c7e27dc2e"
       }
@@ -137,7 +137,7 @@
       "progress": 100,
       "consumed_credits": 35,
       "source": {
-        "path": "assets/modular_human_male_01/parts/barbarian_sources/top_barbarian.glb",
+        "path": "assets/modular_human_male_01/barbarian/sources/top_barbarian.glb",
         "bytes": 11661908,
         "sha256": "ad771e885ea576e757d81b9059479ea743b3a2b934b03ca91af90d93d22533ef"
       }
@@ -170,7 +170,7 @@
       "progress": 100,
       "consumed_credits": 35,
       "source": {
-        "path": "assets/modular_human_male_01/parts/barbarian_sources/pants_barbarian.glb",
+        "path": "assets/modular_human_male_01/barbarian/sources/pants_barbarian.glb",
         "bytes": 11080472,
         "sha256": "cf64af53269fa827b38ceb4e1fdad2a35d8851c7cf73c3a1f3e87c10f52b2866"
       }
@@ -203,7 +203,7 @@
       "progress": 100,
       "consumed_credits": 35,
       "source": {
-        "path": "assets/modular_human_male_01/parts/barbarian_sources/boots_barbarian.glb",
+        "path": "assets/modular_human_male_01/barbarian/sources/boots_barbarian.glb",
         "bytes": 11872588,
         "sha256": "2f21c0db9e1705d9a8244700df25ef7037669940b9c2c88f791affbca1916895"
       }
@@ -236,7 +236,7 @@
       "progress": 100,
       "consumed_credits": 35,
       "source": {
-        "path": "assets/modular_human_male_01/parts/barbarian_sources/gloves_barbarian.glb",
+        "path": "assets/modular_human_male_01/barbarian/sources/gloves_barbarian.glb",
         "bytes": 12527696,
         "sha256": "8c610a6276166909c66cc9a81ededd357151525f43c5a1a679d7b726963a036a"
       }
@@ -271,7 +271,7 @@
       "progress": 100,
       "consumed_credits": 35,
       "source": {
-        "path": "assets/modular_human_male_01/parts/barbarian_sources/boots_barbarian-unused-v1.glb",
+        "path": "assets/modular_human_male_01/barbarian/sources/boots_barbarian-unused-v1.glb",
         "bytes": 11607484,
         "sha256": "65da28fbf50d1d3eb3dca09543f8836c6f28883f30cfd7004688b1bcc5e156fd",
         "file_status": "removed during intermediate cleanup on 2026-09-30; provenance retained"
@@ -307,7 +307,7 @@
       "progress": 100,
       "consumed_credits": 35,
       "source": {
-        "path": "assets/modular_human_male_01/parts/barbarian_sources/gloves_barbarian-unused-v1.glb",
+        "path": "assets/modular_human_male_01/barbarian/sources/gloves_barbarian-unused-v1.glb",
         "bytes": 10196292,
         "sha256": "12a1299a50735fd0388e873ce95ca09ddcaa56d3cc5eda5124c721c7705eac57",
         "file_status": "removed during intermediate cleanup on 2026-09-30; provenance retained"
@@ -337,7 +337,7 @@
     ],
     "tile_resampling": "FFmpeg Lanczos; 1254px generated originals retained",
     "outputs": {
-      "assets/modular_human_male_01/parts/fitted/helmet_barbarian.glb": {
+      "assets/modular_human_male_01/fitted/helmet_barbarian.glb": {
         "sha256": "a01e6155007cda2447c87926fabf5ccc8187782d8005f861c4f98debebd8eee1",
         "bytes": 12802820
       },
@@ -345,7 +345,7 @@
         "sha256": "75ade3f8b261c0ad026900368180ddc6bfdb2a5cc46aa3035e4f57308a0ff192",
         "bytes": 5387940
       },
-      "assets/modular_human_male_01/parts/fitted/top_barbarian.glb": {
+      "assets/modular_human_male_01/fitted/top_barbarian.glb": {
         "sha256": "a78ade539b6c13d0dca57f3100867d1cfbe90c87c3a6eb45724cebbfd21b5ee9",
         "bytes": 11822932
       },
@@ -353,7 +353,7 @@
         "sha256": "366c328ba96cd1ba283f541193b5b39c647cb8f5ad324d3bb01e854dc4cf77e1",
         "bytes": 5099440
       },
-      "assets/modular_human_male_01/parts/fitted/pants_barbarian.glb": {
+      "assets/modular_human_male_01/fitted/pants_barbarian.glb": {
         "sha256": "2c0de6c3bec60219f8369467f21edcaef42b3a5e7939691470500661d106001c",
         "bytes": 16687240
       },
@@ -361,7 +361,7 @@
         "sha256": "b8a1c89893d254ee9431e41878fd01bb37961ec8775735012c4931c7e3a98f32",
         "bytes": 5878192
       },
-      "assets/modular_human_male_01/parts/fitted/boots_barbarian.glb": {
+      "assets/modular_human_male_01/fitted/boots_barbarian.glb": {
         "sha256": "32d4a9f8e469c671be01dfdefb9bd84bb5b731ea308b66ade878ba505ac945a9",
         "bytes": 17419012
       },
@@ -369,7 +369,7 @@
         "sha256": "364f746404eaf6c981d4a546eec20ee467fdbb04285c132792365c44cdb2b058",
         "bytes": 6324680
       },
-      "assets/modular_human_male_01/parts/fitted/gloves_barbarian.glb": {
+      "assets/modular_human_male_01/fitted/gloves_barbarian.glb": {
         "sha256": "6dbd8f4fbed0c463a07fa8b0b0b35ba221677f584b31eb082e84365fb18a272b",
         "bytes": 15340628
       },
@@ -377,7 +377,7 @@
         "sha256": "69db82f1d4fcc34535cab53d0915e19e1bdb8d754c4ca7166002d7817f739270",
         "bytes": 6073356
       },
-      "assets/modular_human_male_01/parts/fitted/barbarian_parts.blend": {
+      "assets/modular_human_male_01/fitted/barbarian_parts.blend": {
         "sha256": "b7729b02dc61d637f8c7bfeaec9f0560378e5a7905c2fecdd70bf0d15d989dd5",
         "bytes": 95147208
       }
@@ -831,9 +831,9 @@
         "repo": "jake-song-openmmo/onlinerpg-assets",
         "revision": "7cddbc8496bed33ff409c9b87736f5eb0e1cfaee",
         "changed_files": [
-          "assets/modular_human_male_01/parts/fitted/barbarian_parts.blend",
-          "assets/modular_human_male_01/parts/fitted/boots_barbarian.glb",
-          "assets/modular_human_male_01/parts/fitted/pants_barbarian.glb",
+          "assets/modular_human_male_01/fitted/barbarian_parts.blend",
+          "assets/modular_human_male_01/fitted/boots_barbarian.glb",
+          "assets/modular_human_male_01/fitted/pants_barbarian.glb",
           "client/public/models/characters/modular_male/boots_barbarian.glb",
           "client/public/models/characters/modular_male/pants_barbarian.glb"
         ],
@@ -1438,19 +1438,19 @@
       ]
     },
     "source_maps": {
-      "assets/modular_human_male_01/parts/skin_sources/color.png": {
+      "assets/modular_human_male_01/skin_sources/color.png": {
         "sha256": "f55b554d4877dc6913b5290615bf7d2f2d8a45fbbac9cf6606c4c5366bdf36c5",
         "bytes": 17576316
       },
-      "assets/modular_human_male_01/parts/skin_sources/normal.png": {
+      "assets/modular_human_male_01/skin_sources/normal.png": {
         "sha256": "5ec898265198fe42f95c6686b2ee4d1be1e766e8ab429e535abadee3467dcdaf",
         "bytes": 8018849
       },
-      "assets/modular_human_male_01/parts/skin_sources/original-uv.json": {
+      "assets/modular_human_male_01/skin_sources/original-uv.json": {
         "sha256": "4e59d9006687bc9adec5add713a6286f9be0a4daa3377f16afd522a6b87ec9ea",
         "bytes": 46499
       },
-      "assets/modular_human_male_01/parts/skin_sources/roughness.png": {
+      "assets/modular_human_male_01/skin_sources/roughness.png": {
         "sha256": "761e0ded1d0feec64aea73c94892d096469fea5244566d1704a7c45437cbb527",
         "bytes": 1081739
       }
@@ -1484,7 +1484,7 @@
       ]
     },
     "outputs": {
-      "assets/modular_human_male_01/parts/fitted/base.glb": {
+      "assets/modular_human_male_01/fitted/base.glb": {
         "sha256": "99016ab4311f8fb4256b7a42bdb0d404e2d991154c6ff18c3acb3da76a43f7f0",
         "bytes": 22024012
       },
@@ -1492,15 +1492,15 @@
         "sha256": "b52890caa647ba7d9fdb35640e1e3d3c84f6a4744f830f440fac116c29e3bf15",
         "bytes": 4861248
       },
-      "assets/modular_human_male_01/parts/fitted/character_parts.blend": {
+      "assets/modular_human_male_01/fitted/character_parts.blend": {
         "sha256": "89863715496c9c0a74d748657852f0c337672cd10ae20b5e68f91de01e9c23a3",
         "bytes": 116197201
       },
-      "assets/modular_human_male_01/parts/fitted/plate_parts.blend": {
+      "assets/modular_human_male_01/fitted/plate_parts.blend": {
         "sha256": "8981a356ec9d493bfcb948bc3297e9afdb1be88d92d5520f3e92fd252b5191e6",
         "bytes": 79278628
       },
-      "assets/modular_human_male_01/parts/fitted/barbarian_parts.blend": {
+      "assets/modular_human_male_01/fitted/barbarian_parts.blend": {
         "sha256": "cdc2f35f810c579ddfde658aae4b3544c516c02cc1e9ecfe4f13eb678b29b022",
         "bytes": 95139216
       }

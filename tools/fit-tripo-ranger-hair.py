@@ -7,7 +7,7 @@ import numpy as np
 from lib.glb import view_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / 'assets/modular_human_male_01/parts/hair_tripo_ranger_v1'
+OUTPUT = ROOT / 'assets/modular_human_male_01/hair/tripo_ranger_v1'
 spec = importlib.util.spec_from_file_location('fit', ROOT / 'tools/fit-modular-rogue.py')
 fit = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fit)
@@ -36,7 +36,7 @@ def clearance(points, faces):
 
 
 def collar_clearance(points, faces):
-    path = io.PARTS / 'ranger_tripo_top_v4/top_ranger.glb'
+    path = io.PARTS / 'ranger/tripo_top_v4/top_ranger.glb'
     doc, binary = fit.read_glb(path)
     triangles = []
     for mesh in doc['meshes']:

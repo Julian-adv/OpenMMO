@@ -101,7 +101,7 @@
   "source_hashes": {
     "client/src/lib/utils/modularClothing.ts": "cc9ec0f8552203566bfb8200ca24967de84764a81b17afa14a404456d4c23613",
     "client/src/lib/utils/modularCharacter.ts": "1dcef2ee0e8b5f11981f7a6605cb3b823b11ed61660fba4819ffbc3c33bf25bd",
-    "assets/modular_human_male_01/parts/ranger_tripo_top_v4/top_ranger.glb": "ec8e9638833ad4f60ba66c1a36fb00cd66521c601977b0fa6d7d389ebfaf3623",
-    "assets/modular_human_male_01/parts/fitted/base.glb": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
+    "assets/modular_human_male_01/ranger/tripo_top_v4/top_ranger.glb": "ec8e9638833ad4f60ba66c1a36fb00cd66521c601977b0fa6d7d389ebfaf3623",
+    "assets/modular_human_male_01/fitted/base.glb": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
   }
 }

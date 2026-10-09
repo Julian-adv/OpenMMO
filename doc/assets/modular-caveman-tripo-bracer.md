@@ -17,7 +17,7 @@
 
 ## 피팅·리깅 후보 v1 — 2026-10-04
 
-현재 몸체 `parts/fitted/base.glb`와 `interfaces/v1`을 기준으로 48개 팔 단면·128개 둘레 방향을
+현재 몸체 `fitted/base.glb`와 `interfaces/v1`을 기준으로 48개 팔 단면·128개 둘레 방향을
 샘플링했다. 손목에서 팔꿈치 방향으로 8–238mm 구간에 배치하며, 단면상 피부에서 최소 4mm 여유를 두고
 원본 가죽·모피·끈의 높낮이를 유지한다. 피부 가림선 위로 약 16.4mm 겹친다.
 원본 삼각형·UV·2048 텍스처는 변경하지 않았으며 쌍은 **3,628 triangles**다.
@@ -44,8 +44,8 @@ rest 변환·inverse bind를 그대로 사용한다. 왼쪽·오른쪽 ForeArm�
 예산 범위 15,000–20,000보다 크지만 숫자를 맞추기 위한 데시메이션은 하지 않았다.
 사용자가 원시전사 세트의 착용 결과를 승인했다. 다른 소매와의 혼합 조합·게임 등록은 남아 있다.
 
-- 최종 메시: `assets/modular_human_male_01/parts/caveman_tripo_bracer_v1/gloves_caveman.glb`
-- 편집본: `assets/modular_human_male_01/parts/caveman_tripo_bracer_v1/caveman-bracer-fitting.blend`
+- 최종 메시: `assets/modular_human_male_01/caveman/tripo_bracer_v1/gloves_caveman.glb`
+- 편집본: `assets/modular_human_male_01/caveman/tripo_bracer_v1/caveman-bracer-fitting.blend`
 - 편집본에는 공통 몸체와 리그, 피팅 쌍, 손목·팔뚝 기준 곡선과 숨긴 원본이 있으며 텍스처를 포함했다.
   하의 펠트 물리는 미리보기에서 실행되며 Blender에는 기준 자세를 보관한다.
 - [피팅 치수·리그 검사](modular-caveman-tripo-bracer-fitting-v1.json)

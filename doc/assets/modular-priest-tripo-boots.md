@@ -4,7 +4,7 @@
 `/mnt/y/web_downloads/brown+leather+boot+3d+model.glb`에서 회수했다.
 현재는 좌우 대칭 제작·피팅·리깅을 마친 **개발용 미리보기 후보**다. 게임 출시 장비로는 등록하지 않았다.
 
-- 원본: `assets/modular_human_male_01/parts/priest_tripo_boots_v1/source.glb`.
+- 원본: `assets/modular_human_male_01/priest/tripo_boots_v1/source.glb`.
 - 한 짝 **1,112 triangles**, UV 이음 포함 **1,109 vertices**. 좌우 복제 시 보정 전 **2,224 triangles**다.
 - 메시·재질 각 1개, 내장 2048×2048 JPEG 1개. 리깅·애니메이션 없음.
 - 논의한 생성 목표는 한 짝 500쿼드다. 실제 생성 설정과 원래 쿼드 수는 GLB로 확정할 수 없다.
@@ -28,12 +28,12 @@
 
 ## 피팅·리깅과 미리보기
 
-- 착용 사본: `assets/modular_human_male_01/parts/priest_tripo_boots_v1/boots_priest.glb`.
+- 착용 사본: `assets/modular_human_male_01/priest/tripo_boots_v1/boots_priest.glb`.
 - 편집본: 같은 폴더의 `priest-boots-fitting-v1.blend`. 현재 몸체와 숨긴 원본을 포함한다.
 - 한 짝 1,139, 좌우 **2,278 triangles**. 막힌 면 27개를 빼고 한 짝당 54면의 열린 안쪽 마감을 추가했다.
 - [피팅 수치](modular-priest-tripo-boots-fitting-v1.json), [Blender 검수](modular-priest-tripo-boots-review-v1.json).
 
-현재 몸체 `parts/fitted/base.glb`와 `human_male_01_mixamo_candidate_v2` 65본을 사용했다.
+현재 몸체 `fitted/base.glb`와 `human_male_01_mixamo_candidate_v2` 65본을 사용했다.
 `interfaces/v1`의 기록된 몸체 해시는 이전 버전이므로 현재 몸체와 발목 윤곽을 다시 대조했다.
 최대 표면 차이는 약 2.1mm이며 피팅은 현재 몸체의 실제 단면을 사용했다.
 오른발은 X 대칭과 삼각형 방향 반전으로 만들고 각 발의 `Leg`·`Foot`·`ToeBase`만 연결했다.

@@ -10,7 +10,7 @@ from scipy.sparse.csgraph import connected_components
 from lib.glb import view_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / 'assets/modular_human_male_01/parts/priest_tripo_helmet_v1'
+OUTPUT = ROOT / 'assets/modular_human_male_01/priest/tripo_helmet_v1'
 spec = importlib.util.spec_from_file_location('fit', ROOT / 'tools/fit-modular-rogue.py')
 fit = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fit)

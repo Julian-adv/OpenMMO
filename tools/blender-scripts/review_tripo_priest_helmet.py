@@ -9,8 +9,8 @@ import bpy
 from mathutils import Matrix, Vector
 
 ROOT = Path(__file__).resolve().parents[2]
-PARTS = ROOT / 'assets/modular_human_male_01/parts'
-OUTPUT = PARTS / 'priest_tripo_helmet_v1'
+PARTS = ROOT / 'assets/modular_human_male_01'
+OUTPUT = PARTS / 'priest/tripo_helmet_v1'
 IMAGES = ROOT / 'doc/images/characters/modular_human_male_01/parts/priest'
 spec = importlib.util.spec_from_file_location('studio', ROOT / 'tools/blender-scripts/review_tripo_pants.py')
 studio = importlib.util.module_from_spec(spec)
@@ -53,7 +53,7 @@ def main(directory):
         for obj in bpy.data.objects:
             if obj.type == 'MESH' and obj.get('part_id') == 'base':
                 obj.hide_render = obj.get('region') not in ['head', 'neck', 'hands']
-        review.import_part(PARTS / 'priest_tripo_top_v1/top_priest.glb', rig)
+        review.import_part(PARTS / 'priest/tripo_top_v1/top_priest.glb', rig)
         conversion = Matrix(((1, 0, 0, 0), (0, 0, -1, 0), (0, 1, 0, 0), (0, 0, 0, 1)))
         to_blender = rig.matrix_world.inverted() @ conversion
         from_blender = conversion.inverted() @ rig.matrix_world

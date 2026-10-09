@@ -3,7 +3,7 @@
   "reason": "User requested deletion of intermediate results before commit.",
   "deleted": [
     {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest-black-cuffs-v1.glb",
+      "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest-black-cuffs-v1.glb",
       "sha256": "ed5b528b20e2f6c955120c5b9de57b5676153797a6704dea0a4175bd7952ddfa",
       "bytes": 2496176,
       "status": "[미사용] Deleted at user request on 2026-10-09",
@@ -11,7 +11,7 @@
       "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
     },
     {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest-seat-before-v2.glb",
+      "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest-seat-before-v2.glb",
       "sha256": "0a69d996d3432055d60402913809b01635b1f8960baa2bf0941f472a568f6d51",
       "bytes": 2466148,
       "status": "[미사용] Deleted at user request on 2026-10-09",
@@ -19,7 +19,7 @@
       "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
     },
     {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest-seat-before-v3.glb",
+      "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest-seat-before-v3.glb",
       "sha256": "5552f2c077b3ab6fa62f994e41f9919e3159871697de428eda1d3374850a4684",
       "bytes": 2466148,
       "status": "[미사용] Deleted at user request on 2026-10-09",
@@ -27,7 +27,7 @@
       "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
     },
     {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/priest-pants-black-cuffs-v1.blend",
+      "path": "assets/modular_human_male_01/priest/tripo_pants_v1/priest-pants-black-cuffs-v1.blend",
       "sha256": "db8f602dac78f3d512264ae23425c8ea40ae44bb0da56b1244bc7a5fc7b24c47",
       "bytes": 41775227,
       "status": "[미사용] Deleted at user request on 2026-10-09",
@@ -35,7 +35,7 @@
       "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
     },
     {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/priest-pants-fitting-v3.blend",
+      "path": "assets/modular_human_male_01/priest/tripo_pants_v1/priest-pants-fitting-v3.blend",
       "sha256": "6c5f5edfae06f092bdbe872a2cb0326876fc72a26128eebf135973225c47f153",
       "bytes": 41675818,
       "status": "[미사용] Deleted at user request on 2026-10-09",
@@ -43,7 +43,7 @@
       "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
     },
     {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/priest-pants-fitting.blend",
+      "path": "assets/modular_human_male_01/priest/tripo_pants_v1/priest-pants-fitting.blend",
       "sha256": "732da86bb982d8b27c9a7a1b3773d3a075603a5c83dcd2252237c1a24f61c824",
       "bytes": 41738660,
       "status": "[미사용] Deleted at user request on 2026-10-09",
@@ -51,7 +51,7 @@
       "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
     },
     {
-      "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/tripo-fitting.blend",
+      "path": "assets/modular_human_male_01/rogue/tripo_v1/tripo-fitting.blend",
       "sha256": "814d0ece44b12afa4ecb1c47afe1c3f4bedf3588496396d1c6375b3a760af439",
       "bytes": 60514065,
       "status": "[미사용] Deleted at user request on 2026-10-09",

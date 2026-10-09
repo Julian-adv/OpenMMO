@@ -2,7 +2,7 @@
   "date": "2026-10-04",
   "revision": "front_fit_v3",
   "source": {
-    "path": "assets/modular_human_male_01/parts/hair_tripo_wavy_v1/source.glb",
+    "path": "assets/modular_human_male_01/hair/tripo_wavy_v1/source.glb",
     "sha256": "0f9fe4473895d187ee08b659585d6c3b8c58bf4c72b97444bb4ebc9939af2a9f",
     "original_path": "Y:\\public\\web_downloads\\brown wavy hair 3d model.glb",
     "provider": "User-supplied Tripo Studio output",
@@ -12,16 +12,16 @@
     "received_date": "2026-10-04"
   },
   "base": {
-    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "path": "assets/modular_human_male_01/fitted/base.glb",
     "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
   },
   "output": {
-    "path": "assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb",
+    "path": "assets/modular_human_male_01/hair/tripo_wavy_v1/hair_wavy_bone.glb",
     "sha256": "01090fcaaf447686b1fe57410e1667aed0df7ee705c7503b053b28a3478c9f5b"
   },
   "method": "Fit crown/side locks onto actual canonical head surface with 6mm vertex clearance. Canonical Head weighting and unchanged 65-bone bind matrices.",
   "validation": {
-    "path": "assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb",
+    "path": "assets/modular_human_male_01/hair/tripo_wavy_v1/hair_wavy_bone.glb",
     "sha256": "01090fcaaf447686b1fe57410e1667aed0df7ee705c7503b053b28a3478c9f5b",
     "triangles": 3621,
     "bones": 65,
@@ -47,13 +47,13 @@
     "method": "Smooth local forehead taper toward the canonical head, retaining a 9mm target volume and limiting movement to 18mm"
   },
   "previous_front_shape": {
-    "path": "assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone-before-front-fit.glb",
+    "path": "assets/modular_human_male_01/hair/tripo_wavy_v1/hair_wavy_bone-before-front-fit.glb",
     "sha256": "fc59c008c33e92aa10eb30afd8cb964cb5baceb913058dc56674a107b4950922",
     "status": "unused; loose forehead gap reported by user",
     "retained": false
   },
   "superseded_candidate": {
-    "path": "assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone-before-rear-fill.glb",
+    "path": "assets/modular_human_male_01/hair/tripo_wavy_v1/hair_wavy_bone-before-rear-fill.glb",
     "sha256": "f9299483f510b4786889b7728a610f0fbcb97fbc8e3c695e90921baca9bae1cb",
     "status": "unused; rear gaps reported by user",
     "retained": false

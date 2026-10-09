@@ -1,10 +1,10 @@
 {
   "source": {
-    "path": "assets/modular_human_male_01/parts/hair_shape_sources/hair_crop-before-rear-clearance-v1.glb",
+    "path": "assets/modular_human_male_01/hair/shape_sources/hair_crop-before-rear-clearance-v1.glb",
     "sha256": "6d754801583d1ae6147ac98cb55fac5237d5b43329e7273d5cb8977c91a0364a"
   },
   "output": {
-    "path": "assets/modular_human_male_01/parts/fitted/hair_crop.glb",
+    "path": "assets/modular_human_male_01/fitted/hair_crop.glb",
     "sha256": "5aea523e5de994b8a2b6e15aef1589a3cbe7413514bc429194e1f0a940141686"
   },
   "vertices_changed": 659,
@@ -20,7 +20,7 @@
   ],
   "source_and_license": "Existing modular male hair; local geometry edit, no additional generation",
   "editable": {
-    "path": "assets/modular_human_male_01/parts/fitted/character_parts.blend",
+    "path": "assets/modular_human_male_01/fitted/character_parts.blend",
     "sha256": "3aa263560882997f3f166c4d36c4318117193fbe3eba6e57ce91e398012003df",
     "maximum_position_error_m": 7.450580596923828e-09
   },

@@ -12,11 +12,11 @@
     "crop_hair_sha256": "5aea523e5de994b8a2b6e15aef1589a3cbe7413514bc429194e1f0a940141686"
   },
   "protected_files_sha256": {
-    "assets/modular_human_male_01/parts/fitted/hair_crop.glb": "5aea523e5de994b8a2b6e15aef1589a3cbe7413514bc429194e1f0a940141686",
+    "assets/modular_human_male_01/fitted/hair_crop.glb": "5aea523e5de994b8a2b6e15aef1589a3cbe7413514bc429194e1f0a940141686",
     "client/public/models/characters/modular_male/hair_crop.glb": "92cbf595f01534c694ed1f5eba344da84bf2c06fca7d3f2072bfa39c0b044ae3",
-    "assets/modular_human_male_01/parts/fitted/base.glb": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
-    "assets/modular_human_male_01/parts/face_tripo_rugged_v1/base_rugged.glb": "4a55f83d90e2c6370ef9d13f17a75c0cbc98e5a4a6ecefbe1e33b591313ce954",
-    "assets/modular_human_male_01/parts/hair_tripo_ranger_v1/hair_ranger.glb": "d368897d6f04325c68f47cb159ae2d4df66a7cc7ffc63ceed7ecfa73655b1584"
+    "assets/modular_human_male_01/fitted/base.glb": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
+    "assets/modular_human_male_01/faces/tripo_rugged_v1/base_rugged.glb": "4a55f83d90e2c6370ef9d13f17a75c0cbc98e5a4a6ecefbe1e33b591313ce954",
+    "assets/modular_human_male_01/hair/tripo_ranger_v1/hair_ranger.glb": "d368897d6f04325c68f47cb159ae2d4df66a7cc7ffc63ceed7ecfa73655b1584"
   },
   "all_protected_files_unchanged": true,
   "views": [

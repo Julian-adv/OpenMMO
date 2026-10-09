@@ -24,7 +24,7 @@ with tempfile.TemporaryDirectory(prefix="caveman-items-") as temporary:
     for name in args.parts:
         part, source_part = PARTS[name]
         bpy.ops.wm.read_factory_settings(use_empty=True)
-        source = REPO / f"assets/modular_human_male_01/parts/caveman_tripo_{source_part}_v1/{part}_caveman.glb"
+        source = REPO / f"assets/modular_human_male_01/caveman/tripo_{source_part}_v1/{part}_caveman.glb"
         bpy.ops.import_scene.gltf(filepath=str(source))
         meshes = [obj for obj in bpy.context.scene.objects
                   if obj.type == "MESH" and obj.get("part_id") == f"{part}_caveman"
@@ -62,4 +62,4 @@ with tempfile.TemporaryDirectory(prefix="caveman-items-") as temporary:
                     "--exposure", "-1.2"]
         bpy.context.preferences.filepaths.save_version = 0
         runpy.run_path(str(SCRIPTS / "export_item_asset.py"), run_name="__main__")
-        (REPO / f"assets/caveman_{name}/caveman_{name}-render.png").unlink()
+        (REPO / f"assets/items/caveman_{name}/caveman_{name}-render.png").unlink()

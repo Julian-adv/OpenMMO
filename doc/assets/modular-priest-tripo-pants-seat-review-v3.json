@@ -77,12 +77,12 @@
   ],
   "visual_review_scope": "Sampled views and poses; full-motion collision validation not performed.",
   "pants": {
-    "path": "/home/jake/work/OnlineRPG/assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+    "path": "/home/jake/work/OnlineRPG/assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb",
     "sha256": "5552f2c077b3ab6fa62f994e41f9919e3159871697de428eda1d3374850a4684",
     "bytes": 2466148
   },
   "previous_pants": {
-    "path": "/home/jake/work/OnlineRPG/assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest-seat-before-v2.glb",
+    "path": "/home/jake/work/OnlineRPG/assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest-seat-before-v2.glb",
     "sha256": "0a69d996d3432055d60402913809b01635b1f8960baa2bf0941f472a568f6d51",
     "bytes": 2466148,
     "retained": false,
@@ -149,7 +149,7 @@
   ],
   "validation": {
     "rig": {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+      "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb",
       "sha256": "5552f2c077b3ab6fa62f994e41f9919e3159871697de428eda1d3374850a4684",
       "triangles": 1513,
       "bones": 65,

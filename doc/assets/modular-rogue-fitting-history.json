@@ -3,15 +3,15 @@
     "version": "v1",
     "retained": false,
     "reference": {
-      "base": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "base": "assets/modular_human_male_01/fitted/base.glb",
       "base_sha256": "99016ab4311f8fb4256b7a42bdb0d404e2d991154c6ff18c3acb3da76a43f7f0",
       "rig_id": "human_male_01_mixamo_candidate_v2",
-      "interfaces": "assets/modular_human_male_01/parts/interfaces/v0/interfaces.json",
+      "interfaces": "assets/modular_human_male_01/interfaces/v0/interfaces.json",
       "interfaces_status": "provisional"
     },
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v1/top_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v1/top_rogue.glb",
         "sha256": "3468966234e9a36a436fce3381ae37bc5d397f37d8e5218ea0001a85f56f56a3",
         "triangles": 1799,
         "bones": 65,
@@ -32,7 +32,7 @@
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v1/pants_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v1/pants_rogue.glb",
         "sha256": "bd6277659ad121db72114b1bf12ac4aa39c71db62c26d232076fa4f871ac4a93",
         "triangles": 1274,
         "bones": 65,
@@ -51,7 +51,7 @@
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v1/gloves_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v1/gloves_rogue.glb",
         "sha256": "fbfa4c42bccab334ab37e996a203eb8e30fa8fa9264d45efb69f4ef19c531424",
         "triangles": 801,
         "bones": 65,
@@ -81,7 +81,7 @@
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v1/boots_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v1/boots_rogue.glb",
         "sha256": "7cda2ce582ebeba3cc9afedf4c0e18cfbf4b3a1a615c2e69b4711e8a96f513e1",
         "triangles": 704,
         "bones": 65,
@@ -120,15 +120,15 @@
     "version": "v2",
     "retained": false,
     "reference": {
-      "base": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "base": "assets/modular_human_male_01/fitted/base.glb",
       "base_sha256": "99016ab4311f8fb4256b7a42bdb0d404e2d991154c6ff18c3acb3da76a43f7f0",
       "rig_id": "human_male_01_mixamo_candidate_v2",
-      "interfaces": "assets/modular_human_male_01/parts/interfaces/v0/interfaces.json",
+      "interfaces": "assets/modular_human_male_01/interfaces/v0/interfaces.json",
       "interfaces_status": "provisional"
     },
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v2/top_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v2/top_rogue.glb",
         "sha256": "842a726ea976fe7dea098af36a2b9ddb9c5528f268f59c8d2277697da8bc3dde",
         "triangles": 1799,
         "bones": 65,
@@ -149,7 +149,7 @@
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v2/pants_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v2/pants_rogue.glb",
         "sha256": "e3077d3d9b9de0e3623b462512613d55b2b2f4543af36244d981fe476fb9f40c",
         "triangles": 1402,
         "bones": 65,
@@ -168,7 +168,7 @@
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v2/gloves_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v2/gloves_rogue.glb",
         "sha256": "3770b0ac4a7a6516eeaba6624b773cf814cfa8035b8a8daf3dd9f08bbfac406f",
         "triangles": 801,
         "bones": 65,
@@ -198,7 +198,7 @@
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v2/boots_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v2/boots_rogue.glb",
         "sha256": "8aad96e8bb13ef6ce4fefdc33f8e250b445956e5585a71f363df14cfa6325656",
         "triangles": 896,
         "bones": 65,
@@ -246,15 +246,15 @@
     "retained": false,
     "status": "[미사용] Superseded by v5; intermediate files removed on 2026-10-01",
     "reference": {
-      "base": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "base": "assets/modular_human_male_01/fitted/base.glb",
       "base_sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b",
       "rig_id": "human_male_01_mixamo_candidate_v2",
-      "interfaces": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+      "interfaces": "assets/modular_human_male_01/interfaces/v1/interfaces.json",
       "interfaces_status": "provisional"
     },
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v3/top_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v3/top_rogue.glb",
         "sha256": "23c989ba60822633b12fe9833aad0edc8bc5e2c97196638bbe13bd4584f21b6f",
         "triangles": 1799,
         "bones": 65,
@@ -275,7 +275,7 @@
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v3/pants_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v3/pants_rogue.glb",
         "sha256": "33d77cd0676d9318ad5ee66e19040528f31898e23b2097dc9cf18026a829a579",
         "triangles": 1402,
         "bones": 65,
@@ -294,7 +294,7 @@
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v3/gloves_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v3/gloves_rogue.glb",
         "sha256": "5b2c23d3bd4d13c3f351a29e8435052b7907cd4b54c2c9285376a03107488d47",
         "triangles": 801,
         "bones": 65,
@@ -324,7 +324,7 @@
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v3/boots_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v3/boots_rogue.glb",
         "sha256": "8551e3829f646c365b54fdbffeb6f3e165b649afb62788e2af3b78fd97eb0e74",
         "triangles": 896,
         "bones": 65,
@@ -372,7 +372,7 @@
     "review": {
       "blender_version": "5.2.0 LTS",
       "editable": {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v3/rogue-fitting.blend",
+        "path": "assets/modular_human_male_01/rogue/fitted_v3/rogue-fitting.blend",
         "sha256": "06e9134cd77fbef084304f0efc7aadd7246707b39801116b5d2cfbd6db324777",
         "retained": false
       },
@@ -395,15 +395,15 @@
     "retained": false,
     "status": "[미사용] Superseded by v5; intermediate files removed on 2026-10-01",
     "reference": {
-      "base": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "base": "assets/modular_human_male_01/fitted/base.glb",
       "base_sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b",
       "rig_id": "human_male_01_mixamo_candidate_v2",
-      "interfaces": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+      "interfaces": "assets/modular_human_male_01/interfaces/v1/interfaces.json",
       "interfaces_status": "provisional"
     },
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v4/top_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v4/top_rogue.glb",
         "sha256": "7fbd831217caf822431c47e2b94e02cd0e85221fc10dfa309e93303daf6d0b7e",
         "triangles": 3262,
         "bones": 65,
@@ -424,7 +424,7 @@
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v4/pants_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v4/pants_rogue.glb",
         "sha256": "339be7c005daac5b08b1a12879d03235c4dd0de1c6302451aa041fb23d8e8347",
         "triangles": 1402,
         "bones": 65,
@@ -443,7 +443,7 @@
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v4/gloves_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v4/gloves_rogue.glb",
         "sha256": "eb14b0578c4bb0bb4017218c005ce43bfae91712d16273d807df50109dbc4fdc",
         "triangles": 801,
         "bones": 65,
@@ -473,7 +473,7 @@
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v4/boots_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v4/boots_rogue.glb",
         "sha256": "c68eba44a69f0573b6b2a7b71071aaef22faa09d65fb6fef1e6edba2d89f1f22",
         "triangles": 896,
         "bones": 65,
@@ -531,7 +531,7 @@
     "review": {
       "blender_version": "5.2.0 LTS",
       "editable": {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v4/rogue-fitting.blend",
+        "path": "assets/modular_human_male_01/rogue/fitted_v4/rogue-fitting.blend",
         "sha256": "5e8e343875bde23aa317ec033b6058377a4ceaa7d2ea6943ea26538e94343098",
         "retained": false
       },
@@ -565,7 +565,7 @@
     "review": {
       "blender_version": "5.2.0 LTS",
       "editable": {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v5/rogue-fitting.blend",
+        "path": "assets/modular_human_male_01/rogue/fitted_v5/rogue-fitting.blend",
         "sha256": "5f1bc70154535743b4cd57acabf81c18da42267b9fd550c9c0a267e9dc6de22b",
         "retained": false
       },
@@ -593,15 +593,15 @@
       ]
     },
     "reference": {
-      "base": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "base": "assets/modular_human_male_01/fitted/base.glb",
       "base_sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b",
       "rig_id": "human_male_01_mixamo_candidate_v2",
-      "interfaces": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+      "interfaces": "assets/modular_human_male_01/interfaces/v1/interfaces.json",
       "interfaces_status": "provisional"
     },
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v5/top_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v5/top_rogue.glb",
         "sha256": "7696c05484e45df856045c4438dd31416cf089d150d7632f79b9d6b182d51a49",
         "triangles": 3277,
         "bones": 65,
@@ -622,7 +622,7 @@
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v5/pants_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v5/pants_rogue.glb",
         "sha256": "1756e99ece012ec9fcbd5466f7b1c0065c97d308b7c7ada32b68526f6969b929",
         "triangles": 1402,
         "bones": 65,
@@ -641,7 +641,7 @@
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v5/gloves_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v5/gloves_rogue.glb",
         "sha256": "db245a132da1517f7612675c3a2bdc43a621cde6e2fa250e31303fd8fc397e06",
         "triangles": 1157,
         "bones": 65,
@@ -674,7 +674,7 @@
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v5/boots_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v5/boots_rogue.glb",
         "sha256": "c800a7a8e1571c43fd22681352241058bf7102ec08f01cdbbd41075ddc0ea874",
         "triangles": 896,
         "bones": 65,
@@ -743,7 +743,7 @@
     "review": {
       "blender_version": "5.2.0 LTS",
       "editable": {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v6/rogue-fitting.blend",
+        "path": "assets/modular_human_male_01/rogue/fitted_v6/rogue-fitting.blend",
         "sha256": "0d5439817222d702278d7531c8cdc7ebd1e862c5a7d58c2b8da29b90e00e5c87",
         "retained": false
       },
@@ -776,15 +776,15 @@
       ]
     },
     "reference": {
-      "base": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "base": "assets/modular_human_male_01/fitted/base.glb",
       "base_sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b",
       "rig_id": "human_male_01_mixamo_candidate_v2",
-      "interfaces": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+      "interfaces": "assets/modular_human_male_01/interfaces/v1/interfaces.json",
       "interfaces_status": "provisional"
     },
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v6/top_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v6/top_rogue.glb",
         "sha256": "38834905b11ebf043887d820165971b004cd4daef28dea95601f8df8d5ed8bc4",
         "triangles": 3293,
         "bones": 65,
@@ -805,7 +805,7 @@
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v6/pants_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v6/pants_rogue.glb",
         "sha256": "5f832e66db075a0bfe4c06ec36f923f7f0ee040aecd1d03e067a8335174bd107",
         "triangles": 1402,
         "bones": 65,
@@ -824,7 +824,7 @@
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v6/gloves_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v6/gloves_rogue.glb",
         "sha256": "daeba55b21e336bd96fdaca04e5b9d91228646396631b8b4d5863df1b7cee0b9",
         "triangles": 1157,
         "bones": 65,
@@ -857,7 +857,7 @@
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v6/boots_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v6/boots_rogue.glb",
         "sha256": "e86b2952cd27f4c6e816ea6c9b476e0c9b2fbae9df1ab905219787ea5817c500",
         "triangles": 896,
         "bones": 65,
@@ -916,7 +916,7 @@
     "correction": "Fit sections and collar to the canonical body; preserve exposed neck skin",
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v7/top_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v7/top_rogue.glb",
         "sha256": "793af48bdde245342aa4667940e4109ae34fbf132d5243f490f1431a60238b88",
         "triangles": 3270,
         "bones": 65,
@@ -937,7 +937,7 @@
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v7/pants_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v7/pants_rogue.glb",
         "sha256": "d4632e37fc7c0e6ea17ad02f85f5dc009bf9b59429261e17c797735c54cd82e8",
         "triangles": 1402,
         "bones": 65,
@@ -956,7 +956,7 @@
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v7/gloves_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v7/gloves_rogue.glb",
         "sha256": "ceb87fb5034b1ce5ac49fc4ef0c7a0833442bc684fc3216b956af1db3bdb9b79",
         "triangles": 1157,
         "bones": 65,
@@ -989,7 +989,7 @@
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v7/boots_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v7/boots_rogue.glb",
         "sha256": "36abd9aef0d715e7532b4e1b92d03829e22bf6a21b971a5a235aaffcaa8a8f1c",
         "triangles": 896,
         "bones": 65,
@@ -1023,15 +1023,15 @@
     ],
     "correction": "Canonical body section fitting and exposed-neck clipping; later replaced by the approved Tripo top",
     "reference": {
-      "base": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "base": "assets/modular_human_male_01/fitted/base.glb",
       "base_sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b",
       "rig_id": "human_male_01_mixamo_candidate_v2",
-      "interfaces": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+      "interfaces": "assets/modular_human_male_01/interfaces/v1/interfaces.json",
       "interfaces_status": "provisional"
     },
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/top_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v8/top_rogue.glb",
         "sha256": "9e53c94bf5fcb5aaef0deaecd02407f2b9fb37886c85ecc2a093de1059940d6e",
         "triangles": 3270,
         "bones": 65,
@@ -1054,7 +1054,7 @@
         "retained": false
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/pants_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v8/pants_rogue.glb",
         "sha256": "2db79af871d61d3a350a96191db80d5b38674a70d153af2bce40728702d27017",
         "triangles": 1402,
         "bones": 65,
@@ -1073,7 +1073,7 @@
         "retained": true
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/gloves_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v8/gloves_rogue.glb",
         "sha256": "060932d4b013d1f0d5f069c8d512e0210a2685b3ab13d4bba887628090c14fa2",
         "triangles": 1157,
         "bones": 65,
@@ -1106,7 +1106,7 @@
         "retained": true
       },
       {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/boots_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/fitted_v8/boots_rogue.glb",
         "sha256": "dfefa61608f8359837b7e4b746424b18042f538d191438774663bed394097f16",
         "triangles": 896,
         "bones": 65,
@@ -1133,7 +1133,7 @@
       "status": "Body-aligned v8 fitting candidate reviewed in the development preview; full gameplay and mixed equipment acceptance pending",
       "blender_version": "5.2.0 LTS",
       "editable": {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/rogue-fitting.blend",
+        "path": "assets/modular_human_male_01/rogue/fitted_v8/rogue-fitting.blend",
         "sha256": "0b9639474458373a24f94909abfd740086f4cc2197e66070f7505e5d96ad661a",
         "retained": false
       },
@@ -1165,7 +1165,7 @@
         }
       ],
       "snapshots": {
-        "path": "assets/modular_human_male_01/parts/rogue_fitted_v8/animation-snapshots.json",
+        "path": "assets/modular_human_male_01/rogue/fitted_v8/animation-snapshots.json",
         "sha256": "187950ec6f60d3788c7fbf7f1c0d3bdf426bced80f3ac992c21abff368f92a97",
         "retained": true
       },
@@ -1225,7 +1225,7 @@
       },
       "body_alignment_comparison": {
         "baseline": {
-          "path": "assets/modular_human_male_01/parts/rogue_fitted_v7/top_rogue.glb",
+          "path": "assets/modular_human_male_01/rogue/fitted_v7/top_rogue.glb",
           "sha256": "793af48bdde245342aa4667940e4109ae34fbf132d5243f490f1431a60238b88",
           "retained": false
         },

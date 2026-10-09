@@ -7,20 +7,20 @@ const topStyle = process.argv[2] ?? 'plate'
 assert.ok(['plate', 'rogue'].includes(topStyle))
 const topId = `top_${topStyle}`
 const topPath = topStyle === 'plate'
-  ? 'assets/modular_human_male_01/parts/fitted/top_plate.glb'
-  : 'assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb'
+  ? 'assets/modular_human_male_01/fitted/top_plate.glb'
+  : 'assets/modular_human_male_01/rogue/tripo_v1/top_rogue.glb'
 const waistHeight = topStyle === 'plate' ? 1.06 : 1.105
 const { server, load, sources } = await headlessThree()
 try {
   const { skinnedParts, bindModularPart, showModularOutfit, modularAnimationClips, region } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
-  const body = (await load('assets/modular_human_male_01/parts/fitted/base.glb')).scene
+  const body = (await load('assets/modular_human_male_01/fitted/base.glb')).scene
   const skin = skinnedParts(body), parts = new Map()
   for (const [id, path] of [
     [topId, topPath],
-    ['pants_priest', 'assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb'],
-    ...['leather', 'plate', 'barbarian'].map(id => [`boots_${id}`, `assets/modular_human_male_01/parts/fitted/boots_${id}.glb`]),
-    ['boots_caveman', 'assets/modular_human_male_01/parts/caveman_tripo_boots_v1/boots_caveman.glb'],
-    ['boots_ranger', 'assets/modular_human_male_01/parts/ranger_tripo_boots_v1/boots_ranger.glb'],
+    ['pants_priest', 'assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb'],
+    ...['leather', 'plate', 'barbarian'].map(id => [`boots_${id}`, `assets/modular_human_male_01/fitted/boots_${id}.glb`]),
+    ['boots_caveman', 'assets/modular_human_male_01/caveman/tripo_boots_v1/boots_caveman.glb'],
+    ['boots_ranger', 'assets/modular_human_male_01/ranger/tripo_boots_v1/boots_ranger.glb'],
   ]) parts.set(id, bindModularPart(body, (await load(path)).scene))
   const pants = parts.get('pants_priest')[0], original = pants.geometry
   const originalSkin = skin.map(mesh => mesh.geometry)

@@ -11,7 +11,7 @@ from scipy.spatial import cKDTree
 from lib.glb import view_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / 'assets/modular_human_male_01/parts/hair_tripo_wavy_v1'
+OUTPUT = ROOT / 'assets/modular_human_male_01/hair/tripo_wavy_v1'
 spec = importlib.util.spec_from_file_location('fit', ROOT / 'tools/fit-modular-rogue.py')
 fit = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fit)

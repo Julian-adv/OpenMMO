@@ -6,11 +6,11 @@ import { headlessThree, loadClips, clipSampler, root } from './lib/headless-thre
 const { server, load, sources } = await headlessThree()
 try {
   const { skinnedParts, bindModularPart, showModularOutfit, modularAnimationClips, region } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
-  const body = (await load('assets/modular_human_male_01/parts/fitted/base.glb')).scene
+  const body = (await load('assets/modular_human_male_01/fitted/base.glb')).scene
   const skin = skinnedParts(body)
   const parts = new Map()
   for (const name of ['top_linen', 'pants_cloth', 'pants_plate', 'pants_barbarian'])
-    parts.set(name, bindModularPart(body, (await load(`assets/modular_human_male_01/parts/fitted/${name}.glb`)).scene))
+    parts.set(name, bindModularPart(body, (await load(`assets/modular_human_male_01/fitted/${name}.glb`)).scene))
   const originals = skin.map(mesh => mesh.geometry)
   const outfit = { hair: 'none', top: 'none', pants: 'none', gloves: 'none', boots: 'none', helmet: 'none' }
   showModularOutfit(skin, parts, outfit)

@@ -2,11 +2,11 @@
   "repo": "jake-song-openmmo/onlinerpg-assets",
   "revision": "513344baf8f91e3d71fca46490bfa17715d91e2e",
   "files": {
-    "assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/animation-snapshots.json": "3cef5fefa806c74c0bf61812d14a25fa69d7a5c25657eada75c1e754cf62cb9d",
-    "assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/gloves_ranger.glb": "939e2f3cbfebae19fab284053898b435e73a38993bd09a627f2e59df3dad7220",
-    "assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/ranger-gloves-fitting.blend": "2b9ef27036fd95b23f358e4e2c5943820519fa5ff131512278b8a42954407197",
-    "assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/source.glb": "fd92c1f98c71e56a10b63741a0e029733a5cac560fa3edf7effbcc0d7f185bb2",
-    "assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/validation-poses.json": "4b22ceadd92b6f27abdcd16528a2a8bb76dbd8a745d5244e8f6ab78fd61c1aa4"
+    "assets/modular_human_male_01/ranger/tripo_gloves_v1/animation-snapshots.json": "3cef5fefa806c74c0bf61812d14a25fa69d7a5c25657eada75c1e754cf62cb9d",
+    "assets/modular_human_male_01/ranger/tripo_gloves_v1/gloves_ranger.glb": "939e2f3cbfebae19fab284053898b435e73a38993bd09a627f2e59df3dad7220",
+    "assets/modular_human_male_01/ranger/tripo_gloves_v1/ranger-gloves-fitting.blend": "2b9ef27036fd95b23f358e4e2c5943820519fa5ff131512278b8a42954407197",
+    "assets/modular_human_male_01/ranger/tripo_gloves_v1/source.glb": "fd92c1f98c71e56a10b63741a0e029733a5cac560fa3edf7effbcc0d7f185bb2",
+    "assets/modular_human_male_01/ranger/tripo_gloves_v1/validation-poses.json": "4b22ceadd92b6f27abdcd16528a2a8bb76dbd8a745d5244e8f6ab78fd61c1aa4"
   },
   "remote_sha256_verified": true
 }

@@ -15,7 +15,7 @@
     "scope": "Base, crop hair and top only; pants, bracer, boots and weapons not included"
   },
   "editable": {
-    "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/caveman-top-fitting.blend",
+    "path": "assets/modular_human_male_01/caveman/tripo_top_v1/caveman-top-fitting.blend",
     "sha256": "8f69c54fe2c8bbf5731e6a572caf45215f32ce31eb5e077ed0a3778bbd2a34cd"
   },
   "images": [

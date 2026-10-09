@@ -1,19 +1,32 @@
 # Modular Human Male 01 — 최종 보관 파일
 
+얼굴별 원본·피팅 자료는 `faces/tripo_ranger_v1/`, `faces/tripo_rugged_v1/`에 모은다. 각 폴더에 생성 원본, 얼굴 메시, 얼굴을 적용한 몸체와 연결부 검증 자료를 함께 보관한다.
+
+헤어별 원본·피팅 자료는 `hair/tripo_ranger_v1/`, `hair/tripo_wavy_v1/`에, 형태 보정 전 원본은 `hair/shape_sources/`에 모은다. 공통 파츠 통합 출력인 크롭·옆가르마 헤어는 `fitted/`에 보관한다.
+
+2026-10-10 `parts/` 중간 단계를 없애고 클래스별 원본·피팅 자료를 `{barbarian,caveman,knight,priest,ranger,rogue}/`에 배치했다. 각 폴더 안에서 `sources`, `tripo_*`, `fitted_*` 버전을 구분한다. 공용 몸체·얼굴·헤어·인터페이스와 통합 출력 `fitted/`도 캐릭터 폴더 바로 아래에 둔다. 공용 동작과 손 그립 설정은 `animations/`에 보관한다.
+
+`interfaces/`는 의상 연결부를 맞추는 제작 참고 자료다. `interfaces.json`에 목·허리·손목·다리의 몸체 단면과 겹침 구간 후보를 기록하고, `outfit-reference.blend`에서 확인한다. 현재 기준인 `v1`은 종아리를 줄인 몸체에서 추출했다. **[미사용]** `v0/interfaces.json`은 현재 도구의 사용처가 없어 2026-10-10 삭제했다. 과거 제작 기록의 v0 참조와 [삭제 경로·해시](modular-interfaces-cleanup-2026-10-10.json)는 보존한다. 모든 의상 조합의 호환성을 보장하는 확정 규격은 아니므로 현재 몸체와 대조하고 동작을 검증한다.
+
 2026-09-29 사용자 요청으로 중간 작업물과 검증·테스트 파일을 정리했다.
 기본 파츠, 편집용 원본, 애니메이션과 검 그립 설정 11파일을 남겼다.
 같은 날 [기사 판금 세트](modular-knight-plate.md)의 파츠·입력 원본·편집 파일 11개를 추가했다.
 게임과 미리보기에서 사용하는 기존 경로는 유지한다.
 
+2026-10-09 **[미사용]** 피부색 보정 전 게임용 비교본
+`skin_sources/caveman-match-2026-10-04/runtime-before.glb`는 정리했다.
+같은 폴더의 보정 전 몸체 백업 `base-before.glb`도 사용자 요청으로 삭제했다. 현재 몸체와 피부 복원용 텍스처는 보존한다.
+[삭제 목록·해시와 보존 기준](cleanup-2026-10-09.json).
+
 2026-09-30 [바바리안 복장](modular-barbarian.md)의 5종 파츠와
-`barbarian_parts.blend`, `parts/barbarian_sources/`의 생성 원본을 추가했다.
+`barbarian_parts.blend`, `barbarian/sources/`의 생성 원본을 추가했다.
 같은 리그를 사용하며 제작 미리보기에서 부위별로 교체한다.
 
 같은 날 바바리안 착용 시 보이던 속옷 영역을 사용자의 요청으로 피부 재질로 변경했다.
 최초의 1,180 triangles·71개 UV 조각 재배치는 피부 경계선이 남아 대체했다.
 원래 UV를 복원하고 새 피부 소재를 골반·허벅지에 연속 베이크한 `restored_skin`을 사용한다.
 경계의 색·법선·거칠기와 정점 법선을 함께 연결하며 얼굴 텍스처, 몸체 정점 위치·삼각형·
-스킨 가중치·리그는 유지한다. 보존 원본은 `parts/skin_sources/`에 있다.
+스킨 가중치·리그는 유지한다. 보존 원본은 `skin_sources/`에 있다.
 몸체 GLB 제작용·게임용과 `character_parts.blend`, `plate_parts.blend`,
 `barbarian_parts.blend`에 반영했다. 재처리 도구는 `tools/restore-modular-skin.py`이며,
 세부 내용은 [바바리안 복장 기록](modular-barbarian.md)을 따른다.
@@ -24,20 +37,20 @@
 
 | 경로 (`assets/modular_human_male_01/` 기준) | 용도 |
 | --- | --- |
-| `parts/fitted/base.glb` | 영역별로 분리한 최종 몸체 |
-| `parts/fitted/hair_crop.glb` | 짧은 크롭 헤어 |
-| `parts/fitted/hair_sidepart.glb` | 짧은 옆가르마 헤어 |
-| `parts/fitted/top_linen.glb` | 천 셔츠와 갑옷용 목깃·앞트임 안감 |
-| `parts/fitted/top_leather.glb` | 가죽 갑옷 |
-| `parts/fitted/pants_cloth.glb` | 천 바지와 부츠 착용용 끝단 |
-| `parts/fitted/gloves_leather.glb` | 가죽 장갑 |
-| `parts/fitted/boots_leather.glb` | 가죽 부츠 |
-| `parts/fitted/character_parts.blend` | 최종 파츠 편집 원본; 24개 이미지 내장, 외부 라이브러리 없음 |
-| `rigged_hand_tuned/animations.glb` | 손가락·어깨·대기 자세·접지 보정을 저장한 7동작 |
-| `rigged_hand_tuned/hand-grips.json` | 동작별 검 부착 위치·회전과 손 자세 프로파일 |
-| `parts/fitted/*_plate.glb` | 기사 판금 갑옷·바지·장갑·신발·헬멧 5종 |
-| `parts/fitted/plate_parts.blend` | 한 리그와 내장 텍스처를 사용하는 판금 편집 원본 |
-| `parts/plate_sources/*_plate.glb` | 판금 재가공용 Meshy 입력 GLB 5종 |
+| `fitted/base.glb` | 영역별로 분리한 최종 몸체 |
+| `fitted/hair_crop.glb` | 짧은 크롭 헤어 |
+| `fitted/hair_sidepart.glb` | 짧은 옆가르마 헤어 |
+| `fitted/top_linen.glb` | 천 셔츠와 갑옷용 목깃·앞트임 안감 |
+| `fitted/top_leather.glb` | 가죽 갑옷 |
+| `fitted/pants_cloth.glb` | 천 바지와 부츠 착용용 끝단 |
+| `fitted/gloves_leather.glb` | 가죽 장갑 |
+| `fitted/boots_leather.glb` | 가죽 부츠 |
+| `fitted/character_parts.blend` | 최종 파츠 편집 원본; 24개 이미지 내장, 외부 라이브러리 없음 |
+| `animations/animations.glb` | 손가락·어깨·대기 자세·접지 보정을 저장한 7동작 |
+| `animations/hand-grips.json` | 동작별 검 부착 위치·회전과 손 자세 프로파일 |
+| `fitted/*_plate.glb` | 기사 판금 갑옷·바지·장갑·신발·헬멧 5종 |
+| `fitted/plate_parts.blend` | 한 리그와 내장 텍스처를 사용하는 판금 편집 원본 |
+| `knight/sources/*_plate.glb` | 판금 재가공용 Meshy 입력 GLB 5종 |
 
 최종 파츠는 `human_male_01_mixamo_candidate_v2`의 같은 65본과 기준 자세를 사용한다.
 몸체는 숨김 영역을 포함해 13,891 triangles, 얼굴 지정 영역은 1,505 triangles다.
@@ -80,7 +93,7 @@ GLB를 다시 만들지 않고 높이만 다시 재려면 `--sole-offsets`를 �
 기존 호흡·몸통·머리·하체·손가락 트랙, 기준 골격과 의상 형상은 유지한다.
 전투 대기를 포함한 다른 동작은 변경하지 않았다.
 
-제작 미리보기용 `rigged_hand_tuned/animations.glb`에 보정값을 저장하고
+제작 미리보기용 `animations/animations.glb`에 보정값을 저장하고
 게임용 `locomotion.glb`를 다시 만들었다. 게임의 `idle2`~`idle5`는 기존에도
 `idle1`의 복제이므로 같은 보정을 받는다. 나머지 8개 동작 팩은 파일 해시가 동일하다.
 기존 사용자 제공 Mixamo 애니메이션을 로컬에서 편집했으며 출처·라이선스는 유지한다.
@@ -111,7 +124,7 @@ node tools/prepare-modular-character.mjs --pack locomotion
 골반·하체·손가락·머리 트랙과 기준 골격·inverse bind·의상 형상은 유지한다.
 기존 6° 어깨 뒤로 열기도 유지한다. 이 보정은 본 자세의 대칭이며 메시·가중치의 완전 대칭은 아니다.
 
-제작용 `rigged_hand_tuned/animations.glb`와 게임용 `locomotion.glb`에 반영했다.
+제작용 `animations/animations.glb`와 게임용 `locomotion.glb`에 반영했다.
 게임의 `idle2`~`idle5`도 같은 보정된 `idle1` 복제다. 다른 동작·키 시간·길이는 바꾸지 않았다.
 각 대기를 501시점 검사해 상완 관절 높이 차이 최대 **0.032mm**, 좌우 반전 팔 관절 오차
 최대 **0.583mm**, 양팔 벌림 **12.85–13.52°**를 확인했다.
@@ -366,7 +379,7 @@ Blender 위치 차이는 0.004mm 미만이며 추가 AI 생성·크레딧 사용
 ## 공통 몸체 종아리 실루엣 — 2026-10-01
 
 사용자가 지정한 측면 실루엣에 맞춰 양쪽 종아리 뒤쪽 돌출을 줄였다. 앞으로 제작할 모든
-바지가 이 체형을 기준으로 피팅되도록 **공통 제작 원본 `parts/fitted/base.glb` 자체를 갱신**했다.
+바지가 이 체형을 기준으로 피팅되도록 **공통 제작 원본 `fitted/base.glb` 자체를 갱신**했다.
 게임용 `base.glb`와 manifest, `character_parts.blend`, `plate_parts.blend`,
 `barbarian_parts.blend`, 새 기준 제작 파일 `interfaces/v1/outfit-reference.blend`에도 반영했다.
 신규 바지는 이 최신 몸체를 불러와 피팅한다. 이미 내보낸 다른 복장의 바지 메시는 자동으로
@@ -391,7 +404,7 @@ Blender 위치 차이는 0.004mm 미만이며 추가 AI 생성·크레딧 사용
   원본 텍스처 바이트 보존, 검사한 GLB 4종 오류 0. 몸체의 기존 구조 관련 경고 17개는 남아 있다.
 - [편집본 동기화 기록](modular-male-calf-editable-v1.json): 기존 편집 파일의 해당 메시 정점과
   노멀만 갱신했다. 리그·편집 구성을 유지했다.
-- 재현에 필요한 수정 전 몸체는 `parts/body_shape_sources/base-before-calf-v1.glb`에 보관한다.
+- 재현에 필요한 수정 전 몸체는 `body_shape_sources/base-before-calf-v1.glb`에 보관한다.
   수정 전 Blender 백업 3개는 사용자 요청으로 삭제했고 현재 편집본은 유지했다.
   과거 제작 기록의 `99016ab…` 몸체 해시는 이 보존본을 가리킨다.
 - 재현 도구는 `tools/reshape-modular-calves.py`, 편집본 동기화는
@@ -446,7 +459,7 @@ Blender 원본과 제작용 GLB의 위치 차이는 0.000008mm 미만이다.
 `hair_crop.217fa2c1.glb`다. 입력·출력 해시는 게임 manifest와
 [보정 기록](modular-male-hair-rear-clearance-v1.json)에 남겼다.
 
-보정 전 제작용 원본은 `parts/hair_shape_sources/hair_crop-before-rear-clearance-v1.glb`에
+보정 전 제작용 원본은 `hair/shape_sources/hair_crop-before-rear-clearance-v1.glb`에
 보존한다. 재생성은 저장소 루트에서 실행한다.
 
 ```sh
@@ -594,8 +607,8 @@ node tools/prepare-modular-character.mjs --part pants_cloth
 기존 면·노멀·UV·텍스처·본 가중치·65본 계층과 헤어 윤곽을 보존했다.
 이 보수에서는 얼굴 GLB와 얼굴 표시 코드를 추가 변경하지 않았다.
 
-수정 전 GLB는 `assets/modular_human_male_01/parts/hair_shape_sources/hair_crop-before-temple-cover-v1.glb`에
-보관한다. 제작용 `parts/fitted/hair_crop.glb`, 편집용 `parts/fitted/character_parts.blend`,
+수정 전 GLB는 `assets/modular_human_male_01/hair/shape_sources/hair_crop-before-temple-cover-v1.glb`에
+보관한다. 제작용 `fitted/hair_crop.glb`, 편집용 `fitted/character_parts.blend`,
 게임용 `client/public/models/characters/modular_male/hair_crop.glb`에 반영했다.
 기존 Meshy Premium·ChatGPT Pro 20x 제작 자산의 출처와 이용 조건을 유지한다.
 수정일은 2026-10-08이며 이번 보수에는 새 AI 생성이나 유료 호출이 없다.

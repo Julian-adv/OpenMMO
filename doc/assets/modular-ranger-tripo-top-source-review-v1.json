@@ -2,7 +2,7 @@
   "status": "Raw source only; no body fit",
   "date": "2026-10-05",
   "source": {
-    "path": "assets/modular_human_male_01/parts/ranger_tripo_top_v4/source.glb",
+    "path": "assets/modular_human_male_01/ranger/tripo_top_v4/source.glb",
     "sha256": "f4988d1e5d44ffbd5a8af3ec9cb9f1f601de416611ebb37a928b61a940a74ce5"
   },
   "triangles": 5033,

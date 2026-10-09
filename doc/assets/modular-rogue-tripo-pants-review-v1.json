@@ -2,7 +2,7 @@
   "status": "User-approved default rogue trousers; full gameplay and mixed-equipment acceptance pending",
   "blender_version": "5.2.0 LTS",
   "editable": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/tripo-pants-fitting.blend",
+    "path": "assets/modular_human_male_01/rogue/tripo_pants_v1/tripo-pants-fitting.blend",
     "sha256": "487ecfb82db8c17d732f8e3fa53c7ac0474db14c8274e567f8795bab720e0db4"
   },
   "images": [

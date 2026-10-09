@@ -7,9 +7,9 @@
 
 ## 보관 파일과 재현
 
-- [최종 상의 GLB](../../assets/modular_human_male_01/parts/ranger_tripo_top_v4/top_ranger.glb).
-- [편집용 Blender](../../assets/modular_human_male_01/parts/ranger_tripo_top_v4/ranger-top-fitting.blend).
-- [사용자 전달 원본](../../assets/modular_human_male_01/parts/ranger_tripo_top_v4/source.glb).
+- [최종 상의 GLB](../../assets/modular_human_male_01/ranger/tripo_top_v4/top_ranger.glb).
+- [편집용 Blender](../../assets/modular_human_male_01/ranger/tripo_top_v4/ranger-top-fitting.blend).
+- [사용자 전달 원본](../../assets/modular_human_male_01/ranger/tripo_top_v4/source.glb).
 - [앞뒤 제작 원화와 입력 기록](modular-ranger-parts.md).
 
 중간 v1–v3 모델·Blender·검수 그림과 시험용 모델은 커밋 전 정리했다.
@@ -19,7 +19,7 @@
 
 ```sh
 .venv/bin/python tools/build-ranger-top.py
-node tools/validate-tripo-rogue.mjs --directory assets/modular_human_male_01/parts/ranger_tripo_top_v4 --part top_ranger --report doc/assets/modular-ranger-tripo-top-animation-v4.json
+node tools/validate-tripo-rogue.mjs --directory assets/modular_human_male_01/ranger/tripo_top_v4 --part top_ranger --report doc/assets/modular-ranger-tripo-top-animation-v4.json
 .venv/bin/python tools/review-ranger-waist.py
 blender -b --python-exit-code 1 --python tools/blender-scripts/review_tripo_ranger_top.py
 ```
@@ -30,7 +30,7 @@ Blender 타임라인은 연속 애니메이션이 아닌 표본 자세다. 원�
 
 ## 피팅과 가림
 
-기준 몸체는 `parts/fitted/base.glb`, 리그는 `human_male_01_mixamo_candidate_v2`의 65본이다.
+기준 몸체는 `fitted/base.glb`, 리그는 `human_male_01_mixamo_candidate_v2`의 65본이다.
 본 계층·기준 자세·inverse bind 행렬이 일치하고 가중치 합계 오차는 0.000001 미만이다.
 `interfaces/v1`과 현재 몸체는 피부 색상 수정으로 해시만 다르며,
 [몸체 색상 수정 기록](modular-caveman-skin-match.json)에 따라 형상과 본 정보는 유지됐다.

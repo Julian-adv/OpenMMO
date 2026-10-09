@@ -9,7 +9,7 @@ from scipy.sparse.csgraph import connected_components
 from scipy.spatial import cKDTree
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / 'assets/modular_human_male_01/parts/face_tripo_ranger_v1'
+OUTPUT = ROOT / 'assets/modular_human_male_01/faces/tripo_ranger_v1'
 spec = importlib.util.spec_from_file_location('face', ROOT / 'tools/fit-tripo-rugged-face.py')
 face = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(face)

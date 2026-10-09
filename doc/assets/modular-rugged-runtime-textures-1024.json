@@ -113,7 +113,7 @@
   "geometry_and_rig_identical": true,
   "unique_textures": true,
   "source": {
-    "file": "assets/modular_human_male_01/parts/face_tripo_rugged_v1/base_rugged.glb",
+    "file": "assets/modular_human_male_01/faces/tripo_rugged_v1/base_rugged.glb",
     "sha256": "4a55f83d90e2c6370ef9d13f17a75c0cbc98e5a4a6ecefbe1e33b591313ce954",
     "record": "doc/assets/modular-rugged-face-wavy-hair.md",
     "license": "Existing user-provided Tripo face and shared modular male source; no new generation or source changes."

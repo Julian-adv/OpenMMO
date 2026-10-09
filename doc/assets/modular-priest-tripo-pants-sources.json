@@ -11,19 +11,19 @@
   "delivery_path_windows": "Y:\\public\\web_downloads\\chainmail+pants+3d+model.glb",
   "delivery_path_linux": "/mnt/y/web_downloads/chainmail+pants+3d+model.glb",
   "source": {
-    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/source.glb",
+    "path": "assets/modular_human_male_01/priest/tripo_pants_v1/source.glb",
     "sha256": "61fa5f6ed6f68d4e121e1a3d9bac12385a9781d778cfeea952ba52cc09cd4885",
     "bytes": 2424628,
     "byte_identical_to_delivery": true
   },
   "base": {
-    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "path": "assets/modular_human_male_01/fitted/base.glb",
     "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
     "bytes": 22214236
   },
   "interfaces": {
-    "path": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
-    "sha256": "f3fc3aed9c5080cf26a294dac496293c89bce8f67466add18a7ef72b326f006b",
+    "path": "assets/modular_human_male_01/interfaces/v1/interfaces.json",
+    "sha256": "52cbd59252b2c80740553182f347273afd3706adf1da3f26b9a11d79400eb23e",
     "bytes": 310940
   },
   "rig_id": "human_male_01_mixamo_candidate_v2",
@@ -69,12 +69,12 @@
   "fitting": {
     "status": "Dev workshop candidate v4; continuous waist-to-seat rear curve follows the smoothed plate reference. Linen and shirtless silhouettes, seven motion samples and five boot hem trims reviewed. Previously recorded priest top waist overlap remains; other mixed equipment pending.",
     "glb": {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+      "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb",
       "sha256": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b",
       "bytes": 2466144
     },
     "editable": {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/priest-pants-fitting-v4.blend",
+      "path": "assets/modular_human_male_01/priest/tripo_pants_v1/priest-pants-fitting-v4.blend",
       "sha256": "bdc5285a774f5ced145720d12c16fcd2f84c52b38ed5cc4e47634447aef43894",
       "bytes": 41675324
     },
@@ -335,7 +335,7 @@
       "method": "Remove recessed caps and black folded cuffs; interpolate original UVs at clean open ankle cuts, then extend the remaining chainmail to the original fitted hem height"
     },
     "editable_previous_v2": {
-      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/priest-pants-fitting.blend",
+      "path": "assets/modular_human_male_01/priest/tripo_pants_v1/priest-pants-fitting.blend",
       "sha256": "732da86bb982d8b27c9a7a1b3773d3a075603a5c83dcd2252237c1a24f61c824",
       "bytes": 41738660,
       "retained": false,
@@ -344,7 +344,7 @@
     "seat_cleanup": {
       "method": "Loft the rear waist, seat and upper thigh along the smoothed plate trouser rear surface, with 90-percent rear depth about Z=-0.025m; retain body clearance",
       "reference": {
-        "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+        "path": "assets/modular_human_male_01/fitted/pants_plate.glb",
         "sha256": "aa95a9f1b85aa881df47e6e37ecbfebc7c168b352fcf0f4a9941208962eeff04"
       },
       "smoothing_xy_m": 0.012,
@@ -364,7 +364,7 @@
       "maximum_rear_expansion_m": 0.021092644913624357
     },
     "editable_previous_v3": {
-      "path": "/home/jake/work/OnlineRPG/assets/modular_human_male_01/parts/priest_tripo_pants_v1/priest-pants-fitting-v3.blend",
+      "path": "/home/jake/work/OnlineRPG/assets/modular_human_male_01/priest/tripo_pants_v1/priest-pants-fitting-v3.blend",
       "sha256": "6c5f5edfae06f092bdbe872a2cb0326876fc72a26128eebf135973225c47f153",
       "bytes": 41675818,
       "retained": false,
@@ -372,21 +372,21 @@
     }
   },
   "previous_fitted_candidate": {
-    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest-black-cuffs-v1.glb",
+    "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest-black-cuffs-v1.glb",
     "sha256": "ed5b528b20e2f6c955120c5b9de57b5676153797a6704dea0a4175bd7952ddfa",
     "bytes": 2496176,
     "retained": false,
     "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
   },
   "previous_fitted_candidate_v2": {
-    "path": "/home/jake/work/OnlineRPG/assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest-seat-before-v2.glb",
+    "path": "/home/jake/work/OnlineRPG/assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest-seat-before-v2.glb",
     "sha256": "0a69d996d3432055d60402913809b01635b1f8960baa2bf0941f472a568f6d51",
     "bytes": 2466148,
     "retained": false,
     "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
   },
   "previous_fitted_candidate_v3": {
-    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest-seat-before-v3.glb",
+    "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest-seat-before-v3.glb",
     "sha256": "5552f2c077b3ab6fa62f994e41f9919e3159871697de428eda1d3374850a4684",
     "bytes": 2466148,
     "retained": false,
@@ -398,12 +398,12 @@
     "method": "Reuse priest_plate_waist reshape followed by ranger_plate_waist trim only with a visible plate top. Waist radius transitions from .23m to .16m and rear/front depth from .17m to .10m about Z=-.035m at Y=.92–1.04m. Cut at Y=1.06m, dropping up to 9cm toward the rear center.",
     "source_assets": [
       {
-        "path": "assets/modular_human_male_01/parts/fitted/top_plate.glb",
+        "path": "assets/modular_human_male_01/fitted/top_plate.glb",
         "sha256": "c29b772b91d9c7d6b5622758edc707ea2caea4d69618e5729f126d3f88ea47ce",
         "bytes": 11941912
       },
       {
-        "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+        "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb",
         "sha256": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b",
         "bytes": 2466144
       }
@@ -488,19 +488,19 @@
     "method": "Priest trousers and covered torso cut at Y=1.105m; rogue top front underside repaired with local cap removal, linen inset and UV correction.",
     "source_assets": [
       {
-        "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/tripo_v1/top_rogue.glb",
         "sha256": "299e5e8d681810315e5f32673f8d3a5f6a57c2a6154e2613c8dabdf1fc08e638",
         "bytes": 2179600
       },
       {
-        "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+        "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb",
         "sha256": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b",
         "bytes": 2466144
       }
     ],
     "priest_source_glb_unchanged": true,
     "rogue_source_archive": {
-      "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue-undershirt-before-v1.glb",
+      "path": "assets/modular_human_male_01/rogue/tripo_v1/top_rogue-undershirt-before-v1.glb",
       "sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
       "bytes": 2150516
     },
@@ -581,12 +581,12 @@
     "method": "Apply existing tripo_pants_waist cut at rest Y=1.105m only with an actually visible loaded rogue top, lowering the 1.14m chainmail waistband by 35mm. Source geometry preserved; boot cuts compose after the waist cut.",
     "source_assets": [
       {
-        "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+        "path": "assets/modular_human_male_01/rogue/tripo_v1/top_rogue.glb",
         "sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
         "bytes": 2150516
       },
       {
-        "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+        "path": "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb",
         "sha256": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b",
         "bytes": 2466144
       }

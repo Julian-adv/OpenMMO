@@ -9,8 +9,8 @@ import { GLTFExporter } from "../client/node_modules/three/examples/jsm/exporter
 import { createServer } from "../client/node_modules/vite/dist/node/index.js";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-const fitted = "assets/modular_human_male_01/parts/fitted";
-const tuned = "assets/modular_human_male_01/rigged_hand_tuned";
+const fitted = "assets/modular_human_male_01/fitted";
+const tuned = "assets/modular_human_male_01/animations";
 const output = "client/public/models/characters/modular_male";
 const parts = [
   "base",
@@ -39,47 +39,47 @@ const rogueParts = ["top_rogue", "pants_rogue", "gloves_rogue", "boots_rogue"];
 parts.push(...rogueParts);
 const cavemanSources = {
   top_caveman:
-    "assets/modular_human_male_01/parts/caveman_tripo_top_v1/top_caveman.glb",
+    "assets/modular_human_male_01/caveman/tripo_top_v1/top_caveman.glb",
   pants_caveman:
-    "assets/modular_human_male_01/parts/caveman_tripo_pants_v1/pants_caveman.glb",
+    "assets/modular_human_male_01/caveman/tripo_pants_v1/pants_caveman.glb",
   boots_caveman:
-    "assets/modular_human_male_01/parts/caveman_tripo_boots_v1/boots_caveman.glb",
+    "assets/modular_human_male_01/caveman/tripo_boots_v1/boots_caveman.glb",
   gloves_caveman:
-    "assets/modular_human_male_01/parts/caveman_tripo_bracer_v1/gloves_caveman.glb",
+    "assets/modular_human_male_01/caveman/tripo_bracer_v1/gloves_caveman.glb",
 };
 const cavemanParts = Object.keys(cavemanSources);
 parts.push(...cavemanParts);
 const rangerSources = {
   top_ranger:
-    "assets/modular_human_male_01/parts/ranger_tripo_top_v4/top_ranger.glb",
+    "assets/modular_human_male_01/ranger/tripo_top_v4/top_ranger.glb",
   pants_ranger:
-    "assets/modular_human_male_01/parts/ranger_tripo_pants_v1/pants_ranger.glb",
+    "assets/modular_human_male_01/ranger/tripo_pants_v1/pants_ranger.glb",
   gloves_ranger:
-    "assets/modular_human_male_01/parts/ranger_tripo_gloves_v1/gloves_ranger.glb",
+    "assets/modular_human_male_01/ranger/tripo_gloves_v1/gloves_ranger.glb",
   boots_ranger:
-    "assets/modular_human_male_01/parts/ranger_tripo_boots_v1/boots_ranger.glb",
+    "assets/modular_human_male_01/ranger/tripo_boots_v1/boots_ranger.glb",
 };
 const rangerParts = Object.keys(rangerSources);
 parts.push(...rangerParts);
 const priestSources = {
   top_priest:
-    "assets/modular_human_male_01/parts/priest_tripo_top_v1/top_priest.glb",
+    "assets/modular_human_male_01/priest/tripo_top_v1/top_priest.glb",
   pants_priest:
-    "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+    "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb",
   boots_priest:
-    "assets/modular_human_male_01/parts/priest_tripo_boots_v1/boots_priest.glb",
+    "assets/modular_human_male_01/priest/tripo_boots_v1/boots_priest.glb",
 };
 const priestParts = Object.keys(priestSources);
 parts.push(...priestParts);
 const appearanceSources = {
   base_ranger:
-    "assets/modular_human_male_01/parts/face_tripo_ranger_v1/base_ranger.glb",
+    "assets/modular_human_male_01/faces/tripo_ranger_v1/base_ranger.glb",
   base_rugged:
-    "assets/modular_human_male_01/parts/face_tripo_rugged_v1/base_rugged.glb",
+    "assets/modular_human_male_01/faces/tripo_rugged_v1/base_rugged.glb",
   hair_wavy_bone:
-    "assets/modular_human_male_01/parts/hair_tripo_wavy_v1/hair_wavy_bone.glb",
+    "assets/modular_human_male_01/hair/tripo_wavy_v1/hair_wavy_bone.glb",
   hair_ranger:
-    "assets/modular_human_male_01/parts/hair_tripo_ranger_v1/hair_ranger.glb",
+    "assets/modular_human_male_01/hair/tripo_ranger_v1/hair_ranger.glb",
 };
 const appearanceParts = Object.keys(appearanceSources);
 parts.push(...appearanceParts);

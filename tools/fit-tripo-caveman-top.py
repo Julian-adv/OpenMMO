@@ -19,13 +19,13 @@ spec = importlib.util.spec_from_file_location('modular_fit', ROOT / 'tools/fit-m
 fit = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fit)
 io = fit.io
-OUTPUT = ROOT / 'assets/modular_human_male_01/parts/caveman_tripo_top_v1'
+OUTPUT = ROOT / 'assets/modular_human_male_01/caveman/tripo_top_v1'
 REPORT = ROOT / 'doc/assets/modular-caveman-tripo-top-fitting-v1.json'
 
 
 def main():
     source = OUTPUT / 'source.glb'
-    base = ROOT / 'assets/modular_human_male_01/parts/fitted/base.glb'
+    base = ROOT / 'assets/modular_human_male_01/fitted/base.glb'
     assert fit.digest(source) == '6332d1538f9db297dcc62f307a330b2853f8e9e11bd300d3a0014cf57f146e89'
     assert fit.digest(base) == 'ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b'
     doc, raw = fit.read_glb(source)

@@ -10,10 +10,10 @@
 
 ## 파일과 재현
 
-- 원본: `assets/modular_human_male_01/parts/rogue_tripo_pants_v1/source.glb`.
-- 피팅·리깅: `assets/modular_human_male_01/parts/rogue_tripo_pants_v1/pants_rogue.glb`.
-- 편집본: `assets/modular_human_male_01/parts/rogue_tripo_pants_v1/tripo-pants-fitting.blend`.
-- 기준 몸체: `assets/modular_human_male_01/parts/fitted/base.glb`, `human_male_01_mixamo_candidate_v2`.
+- 원본: `assets/modular_human_male_01/rogue/tripo_pants_v1/source.glb`.
+- 피팅·리깅: `assets/modular_human_male_01/rogue/tripo_pants_v1/pants_rogue.glb`.
+- 편집본: `assets/modular_human_male_01/rogue/tripo_pants_v1/tripo-pants-fitting.blend`.
+- 기준 몸체: `assets/modular_human_male_01/fitted/base.glb`, `human_male_01_mixamo_candidate_v2`.
 - 연결부: 현재 몸체에서 추출한 `interfaces/v1`; 이전 종아리 축소를 중복 적용하지 않았다.
 - [생성 출처·원화·원본·기준 몸체 해시](modular-rogue-tripo-pants-sources.json).
 - [원본 메시 검사](modular-rogue-tripo-pants-source-review.json), [피팅·리깅 검사](modular-rogue-tripo-pants-fitting-v1.json).
@@ -22,7 +22,7 @@
 
 ```bash
 .venv/bin/python tools/fit-tripo-pants.py
-node tools/validate-tripo-rogue.mjs --directory assets/modular_human_male_01/parts/rogue_tripo_pants_v1 --part pants_rogue --report doc/assets/modular-rogue-tripo-pants-animation-v1.json --boots assets/modular_human_male_01/parts/rogue_fitted_v8/boots_rogue.glb --fitting doc/assets/modular-rogue-tripo-pants-fitting-v1.json
+node tools/validate-tripo-rogue.mjs --directory assets/modular_human_male_01/rogue/tripo_pants_v1 --part pants_rogue --report doc/assets/modular-rogue-tripo-pants-animation-v1.json --boots assets/modular_human_male_01/rogue/fitted_v8/boots_rogue.glb --fitting doc/assets/modular-rogue-tripo-pants-fitting-v1.json
 blender -b -t 6 --python-exit-code 1 --python tools/blender-scripts/review_tripo_pants.py
 ```
 

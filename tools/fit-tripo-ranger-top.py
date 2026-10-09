@@ -73,7 +73,7 @@ def tighten(points, faces):
 
 
 def main(source, output, report_path):
-    base = ROOT / 'assets/modular_human_male_01/parts/fitted/base.glb'
+    base = ROOT / 'assets/modular_human_male_01/fitted/base.glb'
     assert fit.digest(source) == 'f4988d1e5d44ffbd5a8af3ec9cb9f1f601de416611ebb37a928b61a940a74ce5'
     assert fit.digest(base) == '0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a'
     doc, raw = fit.read_glb(source)
@@ -113,7 +113,7 @@ def main(source, output, report_path):
         correction = normals * np.clip(.006 - signed, 0, .010)[:, None]
         correction = np.column_stack([smooth(correction[:, i]) for i in range(3)])
         points += correction
-    pants_path = ROOT / 'assets/modular_human_male_01/parts/fitted/pants_cloth.glb'
+    pants_path = ROOT / 'assets/modular_human_male_01/fitted/pants_cloth.glb'
     pants_doc, pants_binary = fit.read_glb(pants_path)
     pants_points, pants_faces = [], []
     for mesh in pants_doc['meshes']:

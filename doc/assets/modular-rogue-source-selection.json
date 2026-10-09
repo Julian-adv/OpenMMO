@@ -1,22 +1,22 @@
 {
   "status": "User-approved Tripo top, trousers and corrected right glove; Smart Mesh left wrist wrap workshop candidate; full gameplay compatibility pending",
   "reference": {
-    "base": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "base": "assets/modular_human_male_01/fitted/base.glb",
     "base_sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b",
     "rig_id": "human_male_01_mixamo_candidate_v2",
-    "interfaces": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+    "interfaces": "assets/modular_human_male_01/interfaces/v1/interfaces.json",
     "interfaces_status": "provisional"
   },
   "parts": [
     {
       "id": "top_rogue",
-      "source_glb": "assets/modular_human_male_01/parts/rogue_tripo_v1/source.glb",
+      "source_glb": "assets/modular_human_male_01/rogue/tripo_v1/source.glb",
       "target_triangles": 2200,
       "status": "User-approved default rogue top",
       "remaining_work": [
         "Mixed-equipment and full gameplay compatibility review"
       ],
-      "selected_glb": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+      "selected_glb": "assets/modular_human_male_01/rogue/tripo_v1/top_rogue.glb",
       "selected_sha256": "299e5e8d681810315e5f32673f8d3a5f6a57c2a6154e2613c8dabdf1fc08e638",
       "selected_date": "2026-10-01",
       "actual_triangles": 4862,
@@ -25,7 +25,7 @@
     },
     {
       "id": "pants_rogue",
-      "source_glb": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/source.glb",
+      "source_glb": "assets/modular_human_male_01/rogue/tripo_pants_v1/source.glb",
       "target_triangles": 1300,
       "status": "User-approved default rogue trousers",
       "remaining_work": [
@@ -33,23 +33,25 @@
         "Barefoot hem and other boot variants",
         "Small rear calf skin intersections above boots in the unmasked review"
       ],
-      "previous_source_glb": "assets/modular_human_male_01/parts/rogue_sources/pants_rogue/source.glb",
-      "selected_glb": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/pants_rogue.glb",
+      "previous_source_glb": "assets/modular_human_male_01/rogue/sources/pants_rogue/source.glb",
+      "selected_glb": "assets/modular_human_male_01/rogue/tripo_pants_v1/pants_rogue.glb",
       "selected_sha256": "7178d06a9b2e18953e2c3fb0672df8424b688d6f4ccc47affc856a9084e8e81c",
       "actual_triangles": 2022,
-      "selected_date": "2026-10-02"
+      "selected_date": "2026-10-02",
+      "previous_source_retained": false,
+      "previous_source_removed_date": "2026-10-09"
     },
     {
       "id": "glove_rogue_right",
-      "source_glb": "assets/modular_human_male_01/parts/rogue_tripo_glove_v1/source.glb",
+      "source_glb": "assets/modular_human_male_01/rogue/tripo_glove_v1/source.glb",
       "target_triangles": 700,
       "status": "User-approved right glove including the localized index/thumb web correction",
       "remaining_work": [
         "Full gameplay and mixed-equipment review"
       ],
-      "previous_source_glb": "assets/modular_human_male_01/parts/rogue_sources_v2/glove_rogue_right/source.glb",
+      "previous_source_glb": "assets/modular_human_male_01/rogue/sources_v2/glove_rogue_right/source.glb",
       "actual_triangles": 1591,
-      "fitted_glb": "assets/modular_human_male_01/parts/rogue_tripo_glove_v1/glove_rogue_right.glb",
+      "fitted_glb": "assets/modular_human_male_01/rogue/tripo_glove_v1/glove_rogue_right.glb",
       "fitted_sha256": "409a4a231c02c8efd6d7e615d73ced1b7740d90c47334682ccaee764b1d9cb47",
       "appearance_feedback": {
         "date": "2026-10-02",
@@ -57,24 +59,28 @@
         "scope": "User approved the corrected glove appearance on 2026-10-02",
         "previous_combined_sha256": "4b649c00f29c44986dd4dc35ae49d8790cd4b201deccf4fb3be06ce4b573e968",
         "approved_sha256": "409a4a231c02c8efd6d7e615d73ced1b7740d90c47334682ccaee764b1d9cb47"
-      }
+      },
+      "previous_source_retained": false,
+      "previous_source_removed_date": "2026-10-09"
     },
     {
       "id": "wrap_rogue_left",
-      "source_glb": "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/source.glb",
+      "source_glb": "assets/modular_human_male_01/rogue/tripo_wrap_v1/source.glb",
       "target_triangles": 200,
       "status": "Tripo Smart Mesh fitted left wrist wrap candidate",
       "remaining_work": [
         "User appearance review and full gameplay/mixed-equipment review"
       ],
-      "previous_source_glb": "assets/modular_human_male_01/parts/rogue_sources/wrap_rogue_left/source.glb",
+      "previous_source_glb": "assets/modular_human_male_01/rogue/sources/wrap_rogue_left/source.glb",
       "actual_triangles": 1904,
-      "fitted_glb": "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/wrap_rogue_left.glb",
-      "fitted_sha256": "e76ef7aef73122ebcecca8c7d82ee46c697789c55be8a75fec431efc1aff1889"
+      "fitted_glb": "assets/modular_human_male_01/rogue/tripo_wrap_v1/wrap_rogue_left.glb",
+      "fitted_sha256": "e76ef7aef73122ebcecca8c7d82ee46c697789c55be8a75fec431efc1aff1889",
+      "previous_source_retained": false,
+      "previous_source_removed_date": "2026-10-09"
     },
     {
       "id": "boot_rogue_left",
-      "source_glb": "assets/modular_human_male_01/parts/rogue_sources/boot_rogue_left/source.glb",
+      "source_glb": "assets/modular_human_male_01/rogue/sources/boot_rogue_left/source.glb",
       "target_triangles": 350,
       "status": "raw fitting candidate; no rig or runtime compatibility approval",
       "remaining_work": [
@@ -105,16 +111,16 @@
   "consumed_credits_all_attempts": 255,
   "fitting_candidate": {
     "status": "Approved Tripo top/trousers/right glove with new left wrist wrap and retained v8 boots",
-    "directory": "assets/modular_human_male_01/parts/rogue_fitted_v8",
+    "directory": "assets/modular_human_male_01/rogue/fitted_v8",
     "report": "doc/assets/modular-rogue-fitting-current.json",
     "animation_report": "doc/assets/modular-rogue-animation-current.json",
     "runtime_registered": true,
     "review_report": "doc/assets/modular-rogue-review-current.json",
     "review_image_prefix": "doc/images/characters/modular_human_male_01/parts/rogue/fitting-current",
     "part_overrides": {
-      "top_rogue": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
-      "pants_rogue": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/pants_rogue.glb",
-      "gloves_rogue": "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/gloves_rogue.glb"
+      "top_rogue": "assets/modular_human_male_01/rogue/tripo_v1/top_rogue.glb",
+      "pants_rogue": "assets/modular_human_male_01/rogue/tripo_pants_v1/pants_rogue.glb",
+      "gloves_rogue": "assets/modular_human_male_01/rogue/tripo_wrap_v1/gloves_rogue.glb"
     },
     "pants_review": "doc/assets/modular-rogue-tripo-pants-review-v1.json",
     "glove_review": "doc/assets/modular-rogue-tripo-glove-review-v1.json",
@@ -130,9 +136,9 @@
     "undershirt_cleanup": "doc/assets/modular-rogue-undershirt-fitting-v1.json"
   },
   "default_top": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+    "path": "assets/modular_human_male_01/rogue/tripo_v1/top_rogue.glb",
     "sha256": "299e5e8d681810315e5f32673f8d3a5f6a57c2a6154e2613c8dabdf1fc08e638",
-    "editable": "assets/modular_human_male_01/parts/rogue_tripo_v1/rogue-undershirt-fitting-v1.blend",
+    "editable": "assets/modular_human_male_01/rogue/tripo_v1/rogue-undershirt-fitting-v1.blend",
     "review": "doc/assets/modular-rogue-tripo-review-v1.json",
     "approved_by": "user",
     "date": "2026-10-01",
@@ -140,17 +146,17 @@
     "modified_date": "2026-10-09"
   },
   "default_pants": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/pants_rogue.glb",
+    "path": "assets/modular_human_male_01/rogue/tripo_pants_v1/pants_rogue.glb",
     "sha256": "7178d06a9b2e18953e2c3fb0672df8424b688d6f4ccc47affc856a9084e8e81c",
-    "editable": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/tripo-pants-fitting.blend",
+    "editable": "assets/modular_human_male_01/rogue/tripo_pants_v1/tripo-pants-fitting.blend",
     "review": "doc/assets/modular-rogue-tripo-pants-review-v1.json",
     "approved_by": "user",
     "date": "2026-10-02"
   },
   "default_top_before_undershirt_cleanup": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue-undershirt-before-v1.glb",
+    "path": "assets/modular_human_male_01/rogue/tripo_v1/top_rogue-undershirt-before-v1.glb",
     "sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
-    "editable": "assets/modular_human_male_01/parts/rogue_tripo_v1/tripo-fitting.blend",
+    "editable": "assets/modular_human_male_01/rogue/tripo_v1/tripo-fitting.blend",
     "review": "doc/assets/modular-rogue-tripo-review-v1.json",
     "approved_by": "user",
     "date": "2026-10-01",

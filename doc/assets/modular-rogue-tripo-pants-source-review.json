@@ -1,7 +1,7 @@
 {
   "status": "Raw source review; not fitted or rigged",
   "source": {
-    "path": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/source.glb",
+    "path": "assets/modular_human_male_01/rogue/tripo_pants_v1/source.glb",
     "sha256": "3e3274fa3f6995904d29ba0ea3fa46ca18782b2b7fa5b24e2d550a51f272b524"
   },
   "triangles": 2066,

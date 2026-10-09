@@ -10,7 +10,7 @@ spec = importlib.util.spec_from_file_location('coverage', ROOT / 'tools/validate
 coverage = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(coverage)
 fit, io = coverage.fit, coverage.io
-OUTPUT = ROOT / 'assets/modular_human_male_01/parts/ranger_tripo_gloves_v1'
+OUTPUT = ROOT / 'assets/modular_human_male_01/ranger/tripo_gloves_v1'
 
 
 def main():
@@ -35,7 +35,7 @@ def main():
         assert result['uncovered_skin_points'] == 0, result
         sides.append(dict(side=side, skin_triangles=patch.tolist(), **result))
     report = dict(date='2026-10-07', scope='Right 14 and left 13 canonical index/thumb web skin triangles, three barycentric samples per triangle in 175 actual animation poses; outward rays within 30mm',
-                  base_sha256=fit.digest(ROOT / 'assets/modular_human_male_01/parts/fitted/base.glb'),
+                  base_sha256=fit.digest(ROOT / 'assets/modular_human_male_01/fitted/base.glb'),
                   validation_poses_sha256=fit.digest(poses_path), poses=len(poses), sides=sides)
     (ROOT / 'doc/assets/modular-ranger-tripo-gloves-coverage-v1.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps([{key: side[key] for key in ['side', 'sampled_skin_points', 'uncovered_skin_points']} for side in sides]))

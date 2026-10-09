@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from icon_render import add_light, render_icon
 
 REPO = Path(__file__).resolve().parents[2]
-SOURCE = REPO / "assets/hearthbound_rug"
+SOURCE = REPO / "assets/items/hearthbound_rug"
 MODEL = REPO / "client/public/models/objects/hearthbound_rug.glb"
 ICON = REPO / "client/public/items/objects/hearthbound_rug.png"
 ART = REPO / "doc/images/props/hearthbound_rug.png"

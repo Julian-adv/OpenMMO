@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-10",
+  "removed": [
+    {
+      "path": "assets/modular_human_male_01/interfaces/v0/interfaces.json",
+      "bytes": 310618,
+      "sha256": "1473fbf24dd4e47e4be87a3bb852d7041d929e75c07ea5d3210a92ddebf1db19",
+      "reason": "Unused v0 body interface contours; current fitting tools and the selected rogue reference use v1. References to v0 remain only in historical production records."
+    }
+  ],
+  "current_reference": "assets/modular_human_male_01/interfaces/v1/interfaces.json",
+  "historical_references": "Preserved as records of previous builds; the referenced v0 JSON is no longer retained locally."
+}

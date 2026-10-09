@@ -312,52 +312,52 @@
       "consumed_credits": 35,
       "outputs": [
         {
-          "path": "assets/modular_human_male_01/parts/hair_crop/meshy_glb.glb",
+          "path": "assets/modular_human_male_01/hair_crop/meshy_glb.glb",
           "bytes": 12730744,
           "sha256": "d5a318939d4a5096746c009b33c870f5ae3abc00b72f2195b969aee3e6a56d17"
         },
         {
-          "path": "assets/modular_human_male_01/parts/hair_crop/meshy_fbx.fbx",
+          "path": "assets/modular_human_male_01/hair_crop/meshy_fbx.fbx",
           "bytes": 15112268,
           "sha256": "23f991a3e61b62de451fa06472ce6f2b109d7b8a6d6be9cc15d1dba5a634ae8f"
         },
         {
-          "path": "assets/modular_human_male_01/parts/hair_crop/meshy_obj.obj",
+          "path": "assets/modular_human_male_01/hair_crop/meshy_obj.obj",
           "bytes": 114723,
           "sha256": "e39ff545790a44f30b57c0a46a3bf6f336f50ba82234af2e402d0e7aba18ab28"
         },
         {
-          "path": "assets/modular_human_male_01/parts/hair_crop/meshy_mtl.mtl",
+          "path": "assets/modular_human_male_01/hair_crop/meshy_mtl.mtl",
           "bytes": 228,
           "sha256": "10a40817a5422a70fbfd161ad86c915d2bfb81cee153f166b379c118f8fd1fbe"
         },
         {
-          "path": "assets/modular_human_male_01/parts/hair_crop/meshy_pre_remeshed_glb.glb",
+          "path": "assets/modular_human_male_01/hair_crop/meshy_pre_remeshed_glb.glb",
           "bytes": 189378860,
           "sha256": "c6bc617017df162230b21c52edc7d800a915d84182698984597f3b6f14f1a2bd"
         },
         {
-          "path": "assets/modular_human_male_01/parts/hair_crop/texture_0_base_color.png",
+          "path": "assets/modular_human_male_01/hair_crop/texture_0_base_color.png",
           "bytes": 6219390,
           "sha256": "c719a966387656154f4931e038f12b6e0c14c4374781b9cc3b26c6cec08cf1c6"
         },
         {
-          "path": "assets/modular_human_male_01/parts/hair_crop/texture_0_metallic.png",
+          "path": "assets/modular_human_male_01/hair_crop/texture_0_metallic.png",
           "bytes": 25271,
           "sha256": "e532d9ac85110941f426babdb4a178dce18098f38c046df346e382b83edfaefc"
         },
         {
-          "path": "assets/modular_human_male_01/parts/hair_crop/texture_0_roughness.png",
+          "path": "assets/modular_human_male_01/hair_crop/texture_0_roughness.png",
           "bytes": 1585910,
           "sha256": "77453f27852e753eec594b4357a00fc13ba01f1cd000bdd276cf2e1b9d63cae8"
         },
         {
-          "path": "assets/modular_human_male_01/parts/hair_crop/texture_0_normal.png",
+          "path": "assets/modular_human_male_01/hair_crop/texture_0_normal.png",
           "bytes": 7208196,
           "sha256": "52956f9090bf1c8ef34dbba9e18ee79e8235398ccebb611b58e6f366748e85a4"
         },
         {
-          "path": "assets/modular_human_male_01/parts/hair_crop/meshy-preview.png",
+          "path": "assets/modular_human_male_01/hair_crop/meshy-preview.png",
           "bytes": 122134,
           "sha256": "d77434e0778ebc84e1d0d4953ddf0c942ca63c0d0d274708afc936084870bbd1"
         }
@@ -397,52 +397,52 @@
       "consumed_credits": 35,
       "outputs": [
         {
-          "path": "assets/modular_human_male_01/parts/hair_sidepart/meshy_glb.glb",
+          "path": "assets/modular_human_male_01/hair_sidepart/meshy_glb.glb",
           "bytes": 12133284,
           "sha256": "018d8aa1de2d3e0b685c9e50d4c9f49900abb9b7d8b5c3ebffd75978fd5f2307"
         },
         {
-          "path": "assets/modular_human_male_01/parts/hair_sidepart/meshy_fbx.fbx",
+          "path": "assets/modular_human_male_01/hair_sidepart/meshy_fbx.fbx",
           "bytes": 14411500,
           "sha256": "7bd0154e6ef1641022ef9c06d540c59734a6a90788804cf99727c2004b84b456"
         },
         {
-          "path": "assets/modular_human_male_01/parts/hair_sidepart/meshy_obj.obj",
+          "path": "assets/modular_human_male_01/hair_sidepart/meshy_obj.obj",
           "bytes": 122552,
           "sha256": "377edef5cd7ef6c4b9d857c9d26d3d1fd3ed2b9c08c0fc252f2a20b9d9af40b3"
         },
         {
-          "path": "assets/modular_human_male_01/parts/hair_sidepart/meshy_mtl.mtl",
+          "path": "assets/modular_human_male_01/hair_sidepart/meshy_mtl.mtl",
           "bytes": 224,
           "sha256": "bbc4c2c5908a6fc3ce2a7757e18d2d938fb9254a98a3316614e04b9b36f53d10"
         },
         {
-          "path": "assets/modular_human_male_01/parts/hair_sidepart/meshy_pre_remeshed_glb.glb",
+          "path": "assets/modular_human_male_01/hair_sidepart/meshy_pre_remeshed_glb.glb",
           "bytes": 184947404,
           "sha256": "736006fd9c780fdc6ea066eea1dfa755b3aa43ad69f4941ed99c41e7445d54a0"
         },
         {
-          "path": "assets/modular_human_male_01/parts/hair_sidepart/texture_0_base_color.png",
+          "path": "assets/modular_human_male_01/hair_sidepart/texture_0_base_color.png",
           "bytes": 5904262,
           "sha256": "eb7bbb906eb5ee5b6a49643394df47c30c8e078ec11311a2ca26baed756eb8f6"
         },
         {
-          "path": "assets/modular_human_male_01/parts/hair_sidepart/texture_0_metallic.png",
+          "path": "assets/modular_human_male_01/hair_sidepart/texture_0_metallic.png",
           "bytes": 29487,
           "sha256": "5c5f40643c145b4b328a5edd5172051b439c34a52a9f55557b2aded680a77d59"
         },
         {
-          "path": "assets/modular_human_male_01/parts/hair_sidepart/texture_0_roughness.png",
+          "path": "assets/modular_human_male_01/hair_sidepart/texture_0_roughness.png",
           "bytes": 1556731,
           "sha256": "665d14e0fcd52e1943cc5a32031417ba076f899339929e09b5da573c4aa9860d"
         },
         {
-          "path": "assets/modular_human_male_01/parts/hair_sidepart/texture_0_normal.png",
+          "path": "assets/modular_human_male_01/hair_sidepart/texture_0_normal.png",
           "bytes": 6843925,
           "sha256": "e0a45a8a78451ed2121f0e2953dd4905c62495a76d7f6a66fa31b1053e1db752"
         },
         {
-          "path": "assets/modular_human_male_01/parts/hair_sidepart/meshy-preview.png",
+          "path": "assets/modular_human_male_01/hair_sidepart/meshy-preview.png",
           "bytes": 146356,
           "sha256": "a2e800c0010972f4725277049d4eaae8cab924a552b97ad3f6d3f3b5f4b638e3"
         }
@@ -482,52 +482,52 @@
       "consumed_credits": 35,
       "outputs": [
         {
-          "path": "assets/modular_human_male_01/parts/top_linen/meshy_glb.glb",
+          "path": "assets/modular_human_male_01/top_linen/meshy_glb.glb",
           "bytes": 7469584,
           "sha256": "e88630e1d33ee5c79ec60e2d2a17ac8f1db8f8a0805422665b0caee71a8ec1f0"
         },
         {
-          "path": "assets/modular_human_male_01/parts/top_linen/meshy_fbx.fbx",
+          "path": "assets/modular_human_male_01/top_linen/meshy_fbx.fbx",
           "bytes": 9800348,
           "sha256": "73c6f8da6a2f38b6ba78b76187900cd8003f73985214060bfb238187d2f587a4"
         },
         {
-          "path": "assets/modular_human_male_01/parts/top_linen/meshy_obj.obj",
+          "path": "assets/modular_human_male_01/top_linen/meshy_obj.obj",
           "bytes": 228398,
           "sha256": "3f9e71354accf478ce43f8ce3c05f7279daad60667aed971155de167f3b8a09f"
         },
         {
-          "path": "assets/modular_human_male_01/parts/top_linen/meshy_mtl.mtl",
+          "path": "assets/modular_human_male_01/top_linen/meshy_mtl.mtl",
           "bytes": 228,
           "sha256": "be49deb48b81c3f7aaae863ed758d661cf68ee674a52a02884a03ebd76c3b443"
         },
         {
-          "path": "assets/modular_human_male_01/parts/top_linen/meshy_pre_remeshed_glb.glb",
+          "path": "assets/modular_human_male_01/top_linen/meshy_pre_remeshed_glb.glb",
           "bytes": 13959684,
           "sha256": "7539951e54588e62f86d88a4052d902d0c1db3771c67535ccb8d1b2b2cf7d1b3"
         },
         {
-          "path": "assets/modular_human_male_01/parts/top_linen/texture_0_base_color.png",
+          "path": "assets/modular_human_male_01/top_linen/texture_0_base_color.png",
           "bytes": 4366068,
           "sha256": "d89803ab28b77e3d44ff73cdbf1ee18c7ee2307175b593622343e249399bf1c1"
         },
         {
-          "path": "assets/modular_human_male_01/parts/top_linen/texture_0_metallic.png",
+          "path": "assets/modular_human_male_01/top_linen/texture_0_metallic.png",
           "bytes": 21639,
           "sha256": "7bf60bce9d97e2a4c800808c57901833a5cbc2ad5e8da5367da2445193e2d2ad"
         },
         {
-          "path": "assets/modular_human_male_01/parts/top_linen/texture_0_roughness.png",
+          "path": "assets/modular_human_male_01/top_linen/texture_0_roughness.png",
           "bytes": 1125021,
           "sha256": "77742a9fd3420658107c328c05e44624ee83db30319902c417a223dad9469ad8"
         },
         {
-          "path": "assets/modular_human_male_01/parts/top_linen/texture_0_normal.png",
+          "path": "assets/modular_human_male_01/top_linen/texture_0_normal.png",
           "bytes": 4165989,
           "sha256": "3c888506552060d6dcd516ba47ebf487df45f26ab37f51332a68d9cf8333e584"
         },
         {
-          "path": "assets/modular_human_male_01/parts/top_linen/meshy-preview.png",
+          "path": "assets/modular_human_male_01/top_linen/meshy-preview.png",
           "bytes": 105567,
           "sha256": "91f57923c9b4c676ed9a6b0f3a9bd58f727528d28884e104cc3b05d8e9f423d5"
         }
@@ -567,52 +567,52 @@
       "consumed_credits": 35,
       "outputs": [
         {
-          "path": "assets/modular_human_male_01/parts/top_leather/meshy_glb.glb",
+          "path": "assets/modular_human_male_01/top_leather/meshy_glb.glb",
           "bytes": 10144172,
           "sha256": "350e37c760c06c52dace4e449f3040f88559da56201358271f646fc8dceef156"
         },
         {
-          "path": "assets/modular_human_male_01/parts/top_leather/meshy_fbx.fbx",
+          "path": "assets/modular_human_male_01/top_leather/meshy_fbx.fbx",
           "bytes": 12552716,
           "sha256": "4bb6ffa32261082f6415592aeec9c9aec6b2cd3fd796215679040f9428e813b6"
         },
         {
-          "path": "assets/modular_human_male_01/parts/top_leather/meshy_obj.obj",
+          "path": "assets/modular_human_male_01/top_leather/meshy_obj.obj",
           "bytes": 273420,
           "sha256": "dee77609b46369b1009b9685fa1ff06f4437b1becc4ed8193f589640300150ca"
         },
         {
-          "path": "assets/modular_human_male_01/parts/top_leather/meshy_mtl.mtl",
+          "path": "assets/modular_human_male_01/top_leather/meshy_mtl.mtl",
           "bytes": 224,
           "sha256": "bbc4c2c5908a6fc3ce2a7757e18d2d938fb9254a98a3316614e04b9b36f53d10"
         },
         {
-          "path": "assets/modular_human_male_01/parts/top_leather/meshy_pre_remeshed_glb.glb",
+          "path": "assets/modular_human_male_01/top_leather/meshy_pre_remeshed_glb.glb",
           "bytes": 18625044,
           "sha256": "ef5d7a4c805c4344083e7cae2acf6c11584ab0cbd87078226f7ab7478f1af3fc"
         },
         {
-          "path": "assets/modular_human_male_01/parts/top_leather/texture_0_base_color.png",
+          "path": "assets/modular_human_male_01/top_leather/texture_0_base_color.png",
           "bytes": 5904683,
           "sha256": "12be648153da1ab0d6005f7f1d83087a2a9b63b033533561cbea40239a18f69f"
         },
         {
-          "path": "assets/modular_human_male_01/parts/top_leather/texture_0_metallic.png",
+          "path": "assets/modular_human_male_01/top_leather/texture_0_metallic.png",
           "bytes": 57543,
           "sha256": "b6be226683fad3ea147f9e1018adb392c8124b2bd1b1c90e6f661aa1e6c5f7f9"
         },
         {
-          "path": "assets/modular_human_male_01/parts/top_leather/texture_0_roughness.png",
+          "path": "assets/modular_human_male_01/top_leather/texture_0_roughness.png",
           "bytes": 1496849,
           "sha256": "b834c137c4ddfcbf52caafce11914ac56b48de9aa5ab43a1d3169cfcc7efa851"
         },
         {
-          "path": "assets/modular_human_male_01/parts/top_leather/texture_0_normal.png",
+          "path": "assets/modular_human_male_01/top_leather/texture_0_normal.png",
           "bytes": 4952631,
           "sha256": "88fb55ec526e0ed3311726b3393e68254d5d7eda92693ac0b2319bb2172f16ca"
         },
         {
-          "path": "assets/modular_human_male_01/parts/top_leather/meshy-preview.png",
+          "path": "assets/modular_human_male_01/top_leather/meshy-preview.png",
           "bytes": 230610,
           "sha256": "82acd618d2c610c076ae4b024463637b4ae9a8be680598b873d999604a09e5f7"
         }
@@ -652,52 +652,52 @@
       "consumed_credits": 35,
       "outputs": [
         {
-          "path": "assets/modular_human_male_01/parts/pants_cloth/meshy_glb.glb",
+          "path": "assets/modular_human_male_01/pants_cloth/meshy_glb.glb",
           "bytes": 6552540,
           "sha256": "57f13e74720e1b262e0c2af96953858d173c2eab6677b58f2772be68f6e8d433"
         },
         {
-          "path": "assets/modular_human_male_01/parts/pants_cloth/meshy_fbx.fbx",
+          "path": "assets/modular_human_male_01/pants_cloth/meshy_fbx.fbx",
           "bytes": 9077964,
           "sha256": "b3eaa4cd201af7354ebc536d026bad3fac31f989dfca86a23aa1d8f0507fa5b1"
         },
         {
-          "path": "assets/modular_human_male_01/parts/pants_cloth/meshy_obj.obj",
+          "path": "assets/modular_human_male_01/pants_cloth/meshy_obj.obj",
           "bytes": 169868,
           "sha256": "0fafe13604463d1e43f8f4a3a7a4ec86394dc070d7b345e70db86d00d03309da"
         },
         {
-          "path": "assets/modular_human_male_01/parts/pants_cloth/meshy_mtl.mtl",
+          "path": "assets/modular_human_male_01/pants_cloth/meshy_mtl.mtl",
           "bytes": 228,
           "sha256": "be49deb48b81c3f7aaae863ed758d661cf68ee674a52a02884a03ebd76c3b443"
         },
         {
-          "path": "assets/modular_human_male_01/parts/pants_cloth/meshy_pre_remeshed_glb.glb",
+          "path": "assets/modular_human_male_01/pants_cloth/meshy_pre_remeshed_glb.glb",
           "bytes": 11406516,
           "sha256": "20a008f5aa90ba86bb5319d86e085ee912803cbe84bd59f11445dd9c8e1aaabd"
         },
         {
-          "path": "assets/modular_human_male_01/parts/pants_cloth/texture_0_base_color.png",
+          "path": "assets/modular_human_male_01/pants_cloth/texture_0_base_color.png",
           "bytes": 4094718,
           "sha256": "61b5a16dc8b01870a96d05e6d8eba8ab404b63f59dc57fb7db2390a9d91a522f"
         },
         {
-          "path": "assets/modular_human_male_01/parts/pants_cloth/texture_0_metallic.png",
+          "path": "assets/modular_human_male_01/pants_cloth/texture_0_metallic.png",
           "bytes": 18849,
           "sha256": "1edd7d95e967dead7263dc9f4fea9e70362eca339579c207c53ed70fa8b7e545"
         },
         {
-          "path": "assets/modular_human_male_01/parts/pants_cloth/texture_0_roughness.png",
+          "path": "assets/modular_human_male_01/pants_cloth/texture_0_roughness.png",
           "bytes": 1020383,
           "sha256": "f3c9ddc6ebb18ce1f136936a15f7280d143ee86336ed1f1a0eb45f529459d918"
         },
         {
-          "path": "assets/modular_human_male_01/parts/pants_cloth/texture_0_normal.png",
+          "path": "assets/modular_human_male_01/pants_cloth/texture_0_normal.png",
           "bytes": 3846215,
           "sha256": "d56922c0f2ef9821c18f383c7b06406751f5d5b832f96c9b102c0115e1786ba2"
         },
         {
-          "path": "assets/modular_human_male_01/parts/pants_cloth/meshy-preview.png",
+          "path": "assets/modular_human_male_01/pants_cloth/meshy-preview.png",
           "bytes": 80565,
           "sha256": "20d05edc3a174efa281e0037fc931c56a769409a97456216acda0014101961db"
         }
@@ -737,52 +737,52 @@
       "consumed_credits": 35,
       "outputs": [
         {
-          "path": "assets/modular_human_male_01/parts/gloves_leather/meshy_glb.glb",
+          "path": "assets/modular_human_male_01/gloves_leather/meshy_glb.glb",
           "bytes": 10138432,
           "sha256": "79891a6b3ec62ec53448fa74fdce4f85017dcf77000b179735809707955a3e26"
         },
         {
-          "path": "assets/modular_human_male_01/parts/gloves_leather/meshy_fbx.fbx",
+          "path": "assets/modular_human_male_01/gloves_leather/meshy_fbx.fbx",
           "bytes": 12448956,
           "sha256": "d7484738d11d275a5b860afa43b253ad11e30a6ece0fc44302bbbf5485aae3fc"
         },
         {
-          "path": "assets/modular_human_male_01/parts/gloves_leather/meshy_obj.obj",
+          "path": "assets/modular_human_male_01/gloves_leather/meshy_obj.obj",
           "bytes": 113712,
           "sha256": "23038f4e8442b74db49fc10dc6bab3ff019e0cdaf04bc8753f695861a9b7eb15"
         },
         {
-          "path": "assets/modular_human_male_01/parts/gloves_leather/meshy_mtl.mtl",
+          "path": "assets/modular_human_male_01/gloves_leather/meshy_mtl.mtl",
           "bytes": 228,
           "sha256": "bc72e4d25746121a1a8e4ab70b706a20c7c748152b3ad54a67c76b017d0ead3e"
         },
         {
-          "path": "assets/modular_human_male_01/parts/gloves_leather/meshy_pre_remeshed_glb.glb",
+          "path": "assets/modular_human_male_01/gloves_leather/meshy_pre_remeshed_glb.glb",
           "bytes": 13298340,
           "sha256": "a7fb63a26d96b9d7012aa2085d11c17a656a3c735f84f9a10ea2d92b5cf5a7e5"
         },
         {
-          "path": "assets/modular_human_male_01/parts/gloves_leather/texture_0_base_color.png",
+          "path": "assets/modular_human_male_01/gloves_leather/texture_0_base_color.png",
           "bytes": 5952044,
           "sha256": "59d6c73d51097964c9626c6ce023cd35451e549bbd0a5396b60e8517124ad953"
         },
         {
-          "path": "assets/modular_human_male_01/parts/gloves_leather/texture_0_metallic.png",
+          "path": "assets/modular_human_male_01/gloves_leather/texture_0_metallic.png",
           "bytes": 34479,
           "sha256": "9a0813023d21750b1cc83ab6fdca7ecbb1a4392aeb7a72c29c1aeff82a4044aa"
         },
         {
-          "path": "assets/modular_human_male_01/parts/gloves_leather/texture_0_roughness.png",
+          "path": "assets/modular_human_male_01/gloves_leather/texture_0_roughness.png",
           "bytes": 1346954,
           "sha256": "705c23dbd01b16e5aa137e91d5e7dd8bd41421205c74dfb1bd8d5233f7b9bfdd"
         },
         {
-          "path": "assets/modular_human_male_01/parts/gloves_leather/texture_0_normal.png",
+          "path": "assets/modular_human_male_01/gloves_leather/texture_0_normal.png",
           "bytes": 5043416,
           "sha256": "8c9ef3a3a93331ab900e9ab74750d5f0e52461fcf210943b15f18f5442cd2455"
         },
         {
-          "path": "assets/modular_human_male_01/parts/gloves_leather/meshy-preview.png",
+          "path": "assets/modular_human_male_01/gloves_leather/meshy-preview.png",
           "bytes": 184774,
           "sha256": "f389888353f5ce7bad4ac0786126ed5510a3befd7459717e2617b29a82ae79e0"
         }
@@ -822,52 +822,52 @@
       "consumed_credits": 35,
       "outputs": [
         {
-          "path": "assets/modular_human_male_01/parts/boots_leather/meshy_glb.glb",
+          "path": "assets/modular_human_male_01/boots_leather/meshy_glb.glb",
           "bytes": 8165692,
           "sha256": "d91ffb65e6e58c0691fd9720c3d62d245c8001eec043d495de0b80caa85e947c"
         },
         {
-          "path": "assets/modular_human_male_01/parts/boots_leather/meshy_fbx.fbx",
+          "path": "assets/modular_human_male_01/boots_leather/meshy_fbx.fbx",
           "bytes": 10411084,
           "sha256": "6f4b5c2a9ea15b588b85e0b9e4d9a0f72570fe66be63503707805751229c0fa4"
         },
         {
-          "path": "assets/modular_human_male_01/parts/boots_leather/meshy_obj.obj",
+          "path": "assets/modular_human_male_01/boots_leather/meshy_obj.obj",
           "bytes": 150739,
           "sha256": "a8117343ef6803b17470acf7a79dbe67b7cec04ef8fcc76d08e218d2855d70c5"
         },
         {
-          "path": "assets/modular_human_male_01/parts/boots_leather/meshy_mtl.mtl",
+          "path": "assets/modular_human_male_01/boots_leather/meshy_mtl.mtl",
           "bytes": 228,
           "sha256": "be49deb48b81c3f7aaae863ed758d661cf68ee674a52a02884a03ebd76c3b443"
         },
         {
-          "path": "assets/modular_human_male_01/parts/boots_leather/meshy_pre_remeshed_glb.glb",
+          "path": "assets/modular_human_male_01/boots_leather/meshy_pre_remeshed_glb.glb",
           "bytes": 8904036,
           "sha256": "6203184e7f546ae5aacd18ad27894dc5bf2cd24b034979d46763df7a414c0f0f"
         },
         {
-          "path": "assets/modular_human_male_01/parts/boots_leather/texture_0_base_color.png",
+          "path": "assets/modular_human_male_01/boots_leather/texture_0_base_color.png",
           "bytes": 4985184,
           "sha256": "f40c540228e3ffcb9117647f62cddaf1f425ba21004467dae0a0d78f17a7abdc"
         },
         {
-          "path": "assets/modular_human_male_01/parts/boots_leather/texture_0_metallic.png",
+          "path": "assets/modular_human_male_01/boots_leather/texture_0_metallic.png",
           "bytes": 30409,
           "sha256": "ebb562db3786fed1e52457ef73bf74e7c5d84e088cc404476e9f3d6cb06b408f"
         },
         {
-          "path": "assets/modular_human_male_01/parts/boots_leather/texture_0_roughness.png",
+          "path": "assets/modular_human_male_01/boots_leather/texture_0_roughness.png",
           "bytes": 1295112,
           "sha256": "6fd37ee7890994adc0cecde120d663a37dde290375f9c2165a6494a083480a77"
         },
         {
-          "path": "assets/modular_human_male_01/parts/boots_leather/texture_0_normal.png",
+          "path": "assets/modular_human_male_01/boots_leather/texture_0_normal.png",
           "bytes": 4011709,
           "sha256": "363852080b3c8e836217d89a68e8874ffccef78c3411d46c30cc41ee2a97eda3"
         },
         {
-          "path": "assets/modular_human_male_01/parts/boots_leather/meshy-preview.png",
+          "path": "assets/modular_human_male_01/boots_leather/meshy-preview.png",
           "bytes": 113893,
           "sha256": "912664e61b659282d15d5edf09d0ca738fa320ab739a6b9e815427d6727bdd7f"
         }
@@ -926,15 +926,15 @@
       "slash1"
     ],
     "method": "Fit the four fingers to one handle surface, close the thumb around the index-side web, and bake the final right-hand rotations. Move the walking attachment rotation to RightHand to preserve the blade heading with a stable grip.",
-    "profile_record": "sword_grip in assets/modular_human_male_01/rigged_hand_tuned/hand-grips.json",
+    "profile_record": "sword_grip in assets/modular_human_male_01/animations/hand-grips.json",
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+        "path": "assets/modular_human_male_01/animations/animations.glb",
         "bytes": 873340,
         "sha256": "773e16688af0bf205d2f56c6dce7b947a3d74ee6d55b1bb76a92a9d6b993b10a"
       },
       {
-        "path": "assets/modular_human_male_01/rigged_hand_tuned/hand-grips.json",
+        "path": "assets/modular_human_male_01/animations/hand-grips.json",
         "bytes": 4490,
         "sha256": "c94ab8d01ef40bd57c46e7beab045f1d86906a6d4013523227ee611d619151ab"
       }
@@ -978,12 +978,12 @@
     ],
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/parts/fitted/top_linen.glb",
+        "path": "assets/modular_human_male_01/fitted/top_linen.glb",
         "bytes": 7696420,
         "sha256": "2c7b1c591e90be8ed2aeaefd045051c3698be8043cfcfd8d3c13a61b5b15e64a"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/character_parts.blend",
+        "path": "assets/modular_human_male_01/fitted/character_parts.blend",
         "bytes": 94812925,
         "sha256": "28aa40fc3510f5800cd10809a1596ba2bbcad97e4ce961421a7ac917f2dab36e"
       },
@@ -1048,17 +1048,17 @@
     },
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/parts/fitted/top_leather.glb",
+        "path": "assets/modular_human_male_01/fitted/top_leather.glb",
         "bytes": 10293652,
         "sha256": "db72b0be772e3874c67d493121cbfb3b24639077dc0de6d07e2034bf2061bffb"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/top_linen.glb",
+        "path": "assets/modular_human_male_01/fitted/top_linen.glb",
         "bytes": 7704036,
         "sha256": "188ae91799541ff6563a176058695a0c398039d60bc2ee28d97b56b199094a43"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/character_parts.blend",
+        "path": "assets/modular_human_male_01/fitted/character_parts.blend",
         "bytes": 94843679,
         "sha256": "6f04f96b3c68fc04ccb3133ba6f85e31a20cee6351d2b886d522510b4fbb00a3"
       },
@@ -1124,12 +1124,12 @@
     ],
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/parts/fitted/top_leather.glb",
+        "path": "assets/modular_human_male_01/fitted/top_leather.glb",
         "bytes": 10293652,
         "sha256": "1aaf9549c30cd9fa1c82033d6e3de8fcc21664e1d8f53c93ba12262d62ac5ff2"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/character_parts.blend",
+        "path": "assets/modular_human_male_01/fitted/character_parts.blend",
         "bytes": 94844023,
         "sha256": "8d2ce16bc3327476420a31860399c4ea97882fc4b2221f7cb52e519780fd00f5"
       }
@@ -1192,7 +1192,7 @@
     ],
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+        "path": "assets/modular_human_male_01/fitted/base.glb",
         "bytes": 27462596,
         "sha256": "85c0ce49e2cd2488cdaa5dfaebb718fc476f3e8ea657f387ae20c08e06fd9ead"
       },
@@ -1202,12 +1202,12 @@
         "sha256": "6b9c7cfd1bd81436b201d9ca1ee122a67655ec87f0702151cb36dd8bf04d9904"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/character_parts.blend",
+        "path": "assets/modular_human_male_01/fitted/character_parts.blend",
         "bytes": 94889468,
         "sha256": "84a8eb24d3dc721df96858bb6d05cfec22060da9f543266fcaca7f29946e16fc"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/plate_parts.blend",
+        "path": "assets/modular_human_male_01/fitted/plate_parts.blend",
         "bytes": 84782299,
         "sha256": "f688f3e48609db3f6cf5b08224e4d376c4ddf6079f94c04e3a4661386ce81244"
       }
@@ -1250,19 +1250,19 @@
     "reason": "User found the previous ankle taper too thin. Restore the visible anatomical width and widen the boot collars to fit it.",
     "inputs": [
       {
-        "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+        "path": "assets/modular_human_male_01/fitted/base.glb",
         "sha256": "85c0ce49e2cd2488cdaa5dfaebb718fc476f3e8ea657f387ae20c08e06fd9ead"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/boots_plate.glb",
+        "path": "assets/modular_human_male_01/fitted/boots_plate.glb",
         "sha256": "776ce32c25c37f7513ba55287e74eb1c8be96eb631ff686c9f9f052313c0e92c"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/boots_leather.glb",
+        "path": "assets/modular_human_male_01/fitted/boots_leather.glb",
         "sha256": "aec7de43d7e47b6000e6aff2138289d780a454106c68ccbceee0c023b938df2f"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+        "path": "assets/modular_human_male_01/fitted/pants_plate.glb",
         "sha256": "0802ccf5513a75f7ecdfd1f4d58e293a2bb7659ddc1314eb3bfb66c5e5b4e52d"
       }
     ],
@@ -1284,7 +1284,7 @@
     },
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+        "path": "assets/modular_human_male_01/fitted/base.glb",
         "bytes": 27462596,
         "sha256": "2d2903c5de9ae524016dff8525fab2b06ed3c91deeb916bb8c42d491c938955a"
       },
@@ -1294,7 +1294,7 @@
         "sha256": "5bdb24243450d52e1f4699cdd0bdca29f7ed5fa9d1c8d08f6d0c7a4b8ff5fa5c"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/boots_plate.glb",
+        "path": "assets/modular_human_male_01/fitted/boots_plate.glb",
         "bytes": 11053696,
         "sha256": "60839b7c0b9b94cd97bb6463fa385c6b65443695e176028abe4c10cec7ec3650"
       },
@@ -1304,7 +1304,7 @@
         "sha256": "8af7545df1054659e93176c4162c1f6e6c8ad40a19b477b01ff9ccf70d5fedc8"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/boots_leather.glb",
+        "path": "assets/modular_human_male_01/fitted/boots_leather.glb",
         "bytes": 8228176,
         "sha256": "ab8906e4936b9e1572d66a825eeedc15515fdb5aa0da53c1e495965af45b763b"
       },
@@ -1314,7 +1314,7 @@
         "sha256": "c2b652053566653dbd01997299211883ac6de9ecf565ab2d8aba66bbf95a8c78"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+        "path": "assets/modular_human_male_01/fitted/pants_plate.glb",
         "bytes": 11524492,
         "sha256": "7c9d5bc7510d3038695e1e3543b968f382c33d9de0ee5238603249bfe0f19002"
       },
@@ -1324,12 +1324,12 @@
         "sha256": "46bbbe88b4c57159fa5178af68f4904901fe74584405cd8804114585a66c336b"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/character_parts.blend",
+        "path": "assets/modular_human_male_01/fitted/character_parts.blend",
         "bytes": 94903759,
         "sha256": "dfc09a47aa1461c2840385ee6b0f2136afb9ed5b0cbbf1ee0222dc4437fc22ff"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/plate_parts.blend",
+        "path": "assets/modular_human_male_01/fitted/plate_parts.blend",
         "bytes": 84778188,
         "sha256": "befeda3626c020508e79a3b5c8377fa4ccfb3b88e127a3e0f966d983a5d82038"
       }
@@ -1413,7 +1413,7 @@
     },
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/parts/fitted/pants_cloth.glb",
+        "path": "assets/modular_human_male_01/fitted/pants_cloth.glb",
         "bytes": 6711308,
         "sha256": "4b35eaae5e5704a312fe0d936cdfd8405528012d5c123ea281df6c4dd8947cce"
       },
@@ -1423,7 +1423,7 @@
         "sha256": "fae53879bbe4fddada68160705181dd4bddd078fc4ce7ffda24d0cad1101fd0c"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/character_parts.blend",
+        "path": "assets/modular_human_male_01/fitted/character_parts.blend",
         "bytes": 94917446,
         "sha256": "4e89744a88fd3802d1a74caa5c3aeda70351140abead95d1e0accc6ed745ba66"
       }
@@ -1513,7 +1513,7 @@
     },
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/parts/fitted/pants_cloth.glb",
+        "path": "assets/modular_human_male_01/fitted/pants_cloth.glb",
         "bytes": 6711308,
         "sha256": "397e7c87c855caa3fb390e685ae7183547eee33c78d6db922d734207323572aa"
       },
@@ -1523,7 +1523,7 @@
         "sha256": "d8942e2dcbf8d50908f8fe064969f4306b894221ac0bcdce3062bc07e0ab8c46"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/character_parts.blend",
+        "path": "assets/modular_human_male_01/fitted/character_parts.blend",
         "bytes": 94916785,
         "sha256": "3bf5a50eb4c28640969b1e31bf968853aa0629754de8c3fb3f5d7eaf7b1a1083"
       }
@@ -1611,7 +1611,7 @@
     },
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/parts/fitted/pants_cloth.glb",
+        "path": "assets/modular_human_male_01/fitted/pants_cloth.glb",
         "bytes": 6711308,
         "sha256": "1045da1c8b6cb60803851029f98d6794e6f0009393797bc443244945d74409d7"
       },
@@ -1621,7 +1621,7 @@
         "sha256": "dd72fabb8332d9efc56f9acf746dcd0be4dd5fb44ab4950de9d2982f664248e3"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/character_parts.blend",
+        "path": "assets/modular_human_male_01/fitted/character_parts.blend",
         "bytes": 94917331,
         "sha256": "a247d5bb8fa9c899e514883f4a239a166391b27c849b68c47981f0e482e07f98"
       }
@@ -1710,7 +1710,7 @@
     },
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/parts/fitted/pants_cloth.glb",
+        "path": "assets/modular_human_male_01/fitted/pants_cloth.glb",
         "bytes": 6711308,
         "sha256": "e3e3831f9a48801ca2d9892180ab4b506c1e2cb771058d906245b8c080ef3208"
       },
@@ -1720,7 +1720,7 @@
         "sha256": "95e14ac76a365b81197a163f1221d7d98fb7d6649e98b8955bbefc885639e72b"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/character_parts.blend",
+        "path": "assets/modular_human_male_01/fitted/character_parts.blend",
         "bytes": 94917350,
         "sha256": "354d3f1bb3c49d4dc3292cb126e2cc8419daa94edec9b5c4e27c0b282602bcf3"
       }
@@ -1792,7 +1792,7 @@
     },
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/parts/fitted/pants_cloth.glb",
+        "path": "assets/modular_human_male_01/fitted/pants_cloth.glb",
         "bytes": 6711308,
         "sha256": "25467d8d5621dbbe813b254f347ed7f3fc1fe162e8019f1f55afe55cf79f457b"
       },
@@ -1802,7 +1802,7 @@
         "sha256": "85ccb4843522151ce31a9fa79f3a8e5556a81897ceb6fa82904fd7a29ae4c6a3"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/character_parts.blend",
+        "path": "assets/modular_human_male_01/fitted/character_parts.blend",
         "bytes": 94917579,
         "sha256": "6464e6f7d6e5c961e0e24c946c9d68224c6179942e4c0a34548fe0844ce83c18"
       }
@@ -1871,7 +1871,7 @@
     },
     "outputs": [
       {
-        "path": "assets/modular_human_male_01/parts/fitted/pants_cloth.glb",
+        "path": "assets/modular_human_male_01/fitted/pants_cloth.glb",
         "bytes": 6711308,
         "sha256": "2352b8bbdfe08c1c7c43fff9be88e4283ad61b57c2219fbbde2d0c1e3ae41964"
       },
@@ -1881,7 +1881,7 @@
         "sha256": "de6c18ebe7bee66f180c9968d80fc08bf767f42e16b7e7fc76a98dacc7777297"
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/character_parts.blend",
+        "path": "assets/modular_human_male_01/fitted/character_parts.blend",
         "bytes": 94917532,
         "sha256": "855022d747a69b2316494790ac92f0089dce2074099f67fecfc76cd7a86e3bdf"
       }
@@ -1942,7 +1942,7 @@
     "image_bytes_preserved": true,
     "geometry_and_skin_preserved": true,
     "outputs": {
-      "assets/modular_human_male_01/parts/fitted/base.glb": {
+      "assets/modular_human_male_01/fitted/base.glb": {
         "sha256": "9ef374b220b0000499af2f69b8a6c7b306e8db554beac79089b47ab818b5777e",
         "bytes": 27462588
       },
@@ -1950,15 +1950,15 @@
         "sha256": "34cead01b819f2866e4d1345cf87797717dd7519eb768bd85b9fff265f523865",
         "bytes": 4958008
       },
-      "assets/modular_human_male_01/parts/fitted/character_parts.blend": {
+      "assets/modular_human_male_01/fitted/character_parts.blend": {
         "sha256": "b221d13afadf06e75cf53262675963a051cbdf5864fcdbd58b275fce4aa2c048",
         "bytes": 94923940
       },
-      "assets/modular_human_male_01/parts/fitted/plate_parts.blend": {
+      "assets/modular_human_male_01/fitted/plate_parts.blend": {
         "sha256": "0910b1c6a2b42f2a04c510d011ed821735da558d21bd1bda53d3076bfed11ebf",
         "bytes": 84779748
       },
-      "assets/modular_human_male_01/parts/fitted/barbarian_parts.blend": {
+      "assets/modular_human_male_01/fitted/barbarian_parts.blend": {
         "sha256": "d837f73e066689d9d8076c52fa46aa6fbd1bfc1b13f8ded1958d510dc6a018a3",
         "bytes": 100621857
       }
@@ -1990,19 +1990,19 @@
       ]
     },
     "source_maps": {
-      "assets/modular_human_male_01/parts/skin_sources/color.png": {
+      "assets/modular_human_male_01/skin_sources/color.png": {
         "sha256": "f55b554d4877dc6913b5290615bf7d2f2d8a45fbbac9cf6606c4c5366bdf36c5",
         "bytes": 17576316
       },
-      "assets/modular_human_male_01/parts/skin_sources/normal.png": {
+      "assets/modular_human_male_01/skin_sources/normal.png": {
         "sha256": "5ec898265198fe42f95c6686b2ee4d1be1e766e8ab429e535abadee3467dcdaf",
         "bytes": 8018849
       },
-      "assets/modular_human_male_01/parts/skin_sources/original-uv.json": {
+      "assets/modular_human_male_01/skin_sources/original-uv.json": {
         "sha256": "4e59d9006687bc9adec5add713a6286f9be0a4daa3377f16afd522a6b87ec9ea",
         "bytes": 46499
       },
-      "assets/modular_human_male_01/parts/skin_sources/roughness.png": {
+      "assets/modular_human_male_01/skin_sources/roughness.png": {
         "sha256": "761e0ded1d0feec64aea73c94892d096469fea5244566d1704a7c45437cbb527",
         "bytes": 1081739
       }
@@ -2036,7 +2036,7 @@
       ]
     },
     "outputs": {
-      "assets/modular_human_male_01/parts/fitted/base.glb": {
+      "assets/modular_human_male_01/fitted/base.glb": {
         "sha256": "99016ab4311f8fb4256b7a42bdb0d404e2d991154c6ff18c3acb3da76a43f7f0",
         "bytes": 22024012
       },
@@ -2044,15 +2044,15 @@
         "sha256": "b52890caa647ba7d9fdb35640e1e3d3c84f6a4744f830f440fac116c29e3bf15",
         "bytes": 4861248
       },
-      "assets/modular_human_male_01/parts/fitted/character_parts.blend": {
+      "assets/modular_human_male_01/fitted/character_parts.blend": {
         "sha256": "89863715496c9c0a74d748657852f0c337672cd10ae20b5e68f91de01e9c23a3",
         "bytes": 116197201
       },
-      "assets/modular_human_male_01/parts/fitted/plate_parts.blend": {
+      "assets/modular_human_male_01/fitted/plate_parts.blend": {
         "sha256": "8981a356ec9d493bfcb948bc3297e9afdb1be88d92d5520f3e92fd252b5191e6",
         "bytes": 79278628
       },
-      "assets/modular_human_male_01/parts/fitted/barbarian_parts.blend": {
+      "assets/modular_human_male_01/fitted/barbarian_parts.blend": {
         "sha256": "cdc2f35f810c579ddfde658aae4b3544c516c02cc1e9ecfe4f13eb678b29b022",
         "bytes": 95139216
       }
@@ -2198,7 +2198,7 @@
     "method": "Local geometry edit; maximum posterior displacement 21.8mm; rig and weights preserved",
     "report": "doc/assets/modular-male-calf-shape-v1.json",
     "editable_report": "doc/assets/modular-male-calf-editable-v1.json",
-    "current_interfaces": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+    "current_interfaces": "assets/modular_human_male_01/interfaces/v1/interfaces.json",
     "source_license": "Same as the existing modular male body; no new AI generation",
     "additional_credits": 0
   },
@@ -2289,12 +2289,12 @@
     },
     "source_assets": [
       {
-        "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+        "path": "assets/modular_human_male_01/fitted/base.glb",
         "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
         "bytes": 22214236
       },
       {
-        "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+        "path": "assets/modular_human_male_01/fitted/pants_plate.glb",
         "sha256": "aa95a9f1b85aa881df47e6e37ecbfebc7c168b352fcf0f4a9941208962eeff04",
         "bytes": 11524492
       }

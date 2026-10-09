@@ -1,7 +1,7 @@
 {
   "status": "Raw single boot; not fitted, mirrored or rigged",
   "source": {
-    "path": "assets/modular_human_male_01/parts/priest_tripo_boots_v1/source.glb",
+    "path": "assets/modular_human_male_01/priest/tripo_boots_v1/source.glb",
     "sha256": "6efea573830860d16c79273cea42d6565c96ad90dceb299b76d1ef05716364f5"
   },
   "triangles": 1112,

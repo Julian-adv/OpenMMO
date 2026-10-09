@@ -12,7 +12,7 @@ from lib.glb import view_bytes
 from outfits.rogue_layers import wrist_section
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / 'assets/modular_human_male_01/parts/ranger_tripo_pants_v1'
+OUTPUT = ROOT / 'assets/modular_human_male_01/ranger/tripo_pants_v1'
 spec = importlib.util.spec_from_file_location('pants', ROOT / 'tools/fit-tripo-pants.py')
 pants = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pants)
@@ -65,7 +65,7 @@ def fit_waist(points, faces, main_component):
 
 
 def tuck_belt_under_vest(points, faces, component, main_component):
-    top_path = 'assets/modular_human_male_01/parts/ranger_tripo_top_v4/top_ranger.glb'
+    top_path = 'assets/modular_human_male_01/ranger/tripo_top_v4/top_ranger.glb'
     top = waist_review.load(top_path)
     triangles = np.concatenate([vertices[faces] for vertices, faces, _, _ in top])
     heights = np.arange(1.065, 1.156, .002)

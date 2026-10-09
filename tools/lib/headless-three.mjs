@@ -12,7 +12,7 @@ export const root = new URL('../../', import.meta.url)
 export const hash = (path) => createHash('sha256').update(readFileSync(new URL(path, root))).digest('hex')
 
 export const CANONICAL_CLIPS = [
-  ['assets/modular_human_male_01/rigged_hand_tuned/animations.glb', ['idle1', 'walk', 'run', 'jump', 'combat_idle', 'slash1']],
+  ['assets/modular_human_male_01/animations/animations.glb', ['idle1', 'walk', 'run', 'jump', 'combat_idle', 'slash1']],
   ['client/public/models/characters/modular_male/animations/social.glb', ['sit_idle']],
 ]
 export const CANONICAL_CLIPS_WITH_DYING = [[CANONICAL_CLIPS[0][0], [...CANONICAL_CLIPS[0][1], 'dying']], CANONICAL_CLIPS[1]]

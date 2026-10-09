@@ -13,7 +13,7 @@ from scipy.spatial import cKDTree
 from lib.glb import write_glb
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE = ROOT / 'assets/modular_human_male_01/parts/fitted/base.glb'
+BASE = ROOT / 'assets/modular_human_male_01/fitted/base.glb'
 SOURCES = BASE.parents[1] / 'skin_sources'
 SURFACE = ROOT / 'doc/images/characters/modular_human_male_01/parts/body_skin_surface.png'
 

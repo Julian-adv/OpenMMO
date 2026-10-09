@@ -34,7 +34,7 @@ for obj in objects:
     obj.select_set(True)
 bpy.context.view_layer.objects.active=objects[0]
 bpy.ops.object.transform_apply(location=True,rotation=True,scale=True)
-source=ROOT/'assets/horse_reins';source.mkdir(parents=True,exist_ok=True)
+source=ROOT/'assets/items/horse_reins';source.mkdir(parents=True,exist_ok=True)
 bpy.ops.wm.save_as_mainfile(filepath=str(source/'horse_reins.blend'))
 bpy.ops.export_scene.gltf(filepath=str(ROOT/'client/public/models/objects/horse_reins.glb'),export_format='GLB',use_selection=True,export_animations=False)
 world=bpy.data.worlds.new('World');world.use_nodes=True;world.node_tree.nodes['Background'].inputs[0].default_value=(0.3,0.3,0.3,1);bpy.context.scene.world=world

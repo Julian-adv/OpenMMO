@@ -3,7 +3,7 @@
   "revision": 4,
   "method": "Delete concealed olive cloth faces; retain leather and exposed shirt",
   "source": {
-    "path": "assets/modular_human_male_01/parts/ranger_tripo_top_v4/source.glb",
+    "path": "assets/modular_human_male_01/ranger/tripo_top_v4/source.glb",
     "sha256": "f4988d1e5d44ffbd5a8af3ec9cb9f1f601de416611ebb37a928b61a940a74ce5"
   },
   "removed_triangles": 137,
@@ -168,7 +168,7 @@
     "Skeleton and bind matrices"
   ],
   "validation": {
-    "path": "assets/modular_human_male_01/parts/ranger_tripo_top_v4/top_ranger.glb",
+    "path": "assets/modular_human_male_01/ranger/tripo_top_v4/top_ranger.glb",
     "sha256": "ec8e9638833ad4f60ba66c1a36fb00cd66521c601977b0fa6d7d389ebfaf3623",
     "triangles": 4896,
     "bones": 65,
@@ -204,7 +204,7 @@
         "maximum_vertex_displacement_m": 0.05915376972032794,
         "changed_vertices": 2049,
         "context_waist_clearance": {
-          "path": "assets/modular_human_male_01/parts/fitted/pants_cloth.glb",
+          "path": "assets/modular_human_male_01/fitted/pants_cloth.glb",
           "sha256": "2352b8bbdfe08c1c7c43fff9be88e4283ad61b57c2219fbbde2d0c1e3ae41964",
           "envelope_margin_m": 0.008,
           "scope": "Lower hem versus existing cloth pants; other pants unverified"

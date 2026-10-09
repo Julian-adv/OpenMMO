@@ -263,7 +263,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--preview", action="store_true")
     args = parser.parse_args(sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else [])
-    directory = ROOT / "assets/skeleton_warrior"
+    directory = ROOT / "assets/monsters/skeleton_warrior"
     audit = ROOT / ".codex/skeleton-warrior"
     audit.mkdir(parents=True, exist_ok=True)
     bpy.ops.wm.read_factory_settings(use_empty=True)

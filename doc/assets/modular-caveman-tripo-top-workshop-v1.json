@@ -95,7 +95,7 @@
     "tool": "Headless Chrome / Playwright; captured from the actual Three.js preview"
   },
   "source": {
-    "path": "assets/modular_human_male_01/parts/caveman_tripo_top_v1/top_caveman.glb",
+    "path": "assets/modular_human_male_01/caveman/tripo_top_v1/top_caveman.glb",
     "sha256": "e495478ffdcf1d018a9c1faed604d91e92b6b2df91e1baf1599544800ad9ab9f"
   },
   "date": "2026-10-04",

@@ -6,7 +6,7 @@
 
 ## 파일과 미리보기
 
-제작용은 `assets/modular_human_male_01/parts/fitted/`, 게임용은
+제작용은 `assets/modular_human_male_01/fitted/`, 게임용은
 `client/public/models/characters/modular_male/`에 같은 이름으로 저장한다.
 
 | 파일 | 구성 | Triangles |
@@ -17,9 +17,9 @@
 | `boots_barbarian.glb` | 양쪽 정강이 보호대·모피 커프·가죽 안감·샌들 | 3,416 |
 | `gloves_barbarian.glb` | 양쪽 손목 보호대·가죽 커프, 손은 노출 | 2,098 |
 
-- 편집 원본: `assets/modular_human_male_01/parts/fitted/barbarian_parts.blend`.
+- 편집 원본: `assets/modular_human_male_01/fitted/barbarian_parts.blend`.
   몸체와 다섯 파츠가 한 리그를 공유하며 텍스처를 내장한다.
-- Meshy 입력 모델: `assets/modular_human_male_01/parts/barbarian_sources/`.
+- Meshy 입력 모델: `assets/modular_human_male_01/barbarian/sources/`.
 - 파츠 원화: `doc/images/characters/modular_human_male_01/parts/*_barbarian.png`.
 - 추가 소재 원본: 같은 폴더의 `barbarian_leather.png`, `barbarian_fur.png`.
   생성 원본을 보존하고 GLB에는 Lanczos로 축소한 1024² 텍스처를 내장한다.
@@ -56,7 +56,7 @@
 아이템에는 리그·애니메이션·천 물리 메타데이터를 포함하지 않는다.
 텍스처는 최대 512px WebP, 투명 아이콘은 Cycles 512px 렌더를 128px로 축소한다.
 부위별 폴리곤 수는 위 착용 파츠와 같으며, 아이템 목표를 맞추기 위한 추가 감축은 없다.
-편집 원본은 `assets/barbarian_*/*.blend`에 보존한다.
+편집 원본은 `assets/items/barbarian_*/*.blend`에 보존한다.
 중간 고해상도 렌더와 `.blend1` 백업은 삭제했다.
 기존 Meshy Premium·ChatGPT Pro 20x 원본의 라이선스를 그대로 따르는 로컬 가공이며
 추가 AI 생성·유료 API 사용은 없다. 출처와 생성일은 아래 출처 기록을 따른다.
@@ -131,7 +131,7 @@ Meshy 결과에서 부족했던 가죽 둘레·안감과 모피 커프는 로컬
 높이 0.61~1.21m 사이에서 기존 피부와 부드럽게 섞고, 속옷 테두리의 색·법선·거칠기 흔적을
 함께 제거했다. 해당 영역의 겹치는 정점 법선도 연결한다. 기존 얼굴 텍스처 픽셀,
 몸체 정점 위치·삼각형·스킨 가중치·65본 리그는 그대로다.
-원래 색·법선·거칠기 이미지와 UV는 `assets/modular_human_male_01/parts/skin_sources/`에 보존한다.
+원래 색·법선·거칠기 이미지와 UV는 `assets/modular_human_male_01/skin_sources/`에 보존한다.
 새 소재는 `parts/body_skin_surface.png`의 중앙 영역을 사용하며 기존 피부색에 맞춰 베이크한다.
 샌들은 기존 가죽 소재로 밑창과 두 줄의 넓은 발등 끈을 만들고 발·발가락의 가중치를 옮겼다.
 발가락은 노출하며, 최초 양쪽 샌들에 488 triangles를 추가했다.
