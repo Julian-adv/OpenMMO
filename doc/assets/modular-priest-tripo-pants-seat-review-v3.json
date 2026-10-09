@@ -1,0 +1,175 @@
+{
+  "date": "2026-10-08",
+  "source": "Local Chromium workshop screenshots; existing asset licenses apply; no AI generation.",
+  "views": [
+    "front",
+    "back",
+    "side",
+    "rear-quarter"
+  ],
+  "motion": [
+    {
+      "clip": "idle1",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "walk",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "run",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "jump",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "slash1",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "combat_idle",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "sit_idle",
+      "time_fraction": 0.4
+    }
+  ],
+  "boots": [
+    {
+      "boot": "leather",
+      "minimum_y": 0.23499999940395355,
+      "triangles": 1451
+    },
+    {
+      "boot": "plate",
+      "minimum_y": 0.2199999988079071,
+      "triangles": 1466
+    },
+    {
+      "boot": "barbarian",
+      "minimum_y": 0.4790000021457672,
+      "triangles": 1288
+    },
+    {
+      "boot": "caveman",
+      "minimum_y": 0.4336927533149719,
+      "triangles": 1297
+    },
+    {
+      "boot": "ranger",
+      "minimum_y": 0.4593124985694885,
+      "triangles": 1288
+    }
+  ],
+  "bare": {
+    "minimum_y": 0.17453673481941223,
+    "triangles": 1513
+  },
+  "errors": [],
+  "checks": [
+    "Shirtless rear silhouette reviewed before and after",
+    "Seven motion samples inspected at 40 percent",
+    "Five boot trims, barefoot restore and reattachment passed",
+    "Priest top restored for combination review"
+  ],
+  "visual_review_scope": "Sampled views and poses; full-motion collision validation not performed.",
+  "pants": {
+    "path": "/home/jake/work/OnlineRPG/assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+    "sha256": "5552f2c077b3ab6fa62f994e41f9919e3159871697de428eda1d3374850a4684",
+    "bytes": 2466148
+  },
+  "previous_pants": {
+    "path": "/home/jake/work/OnlineRPG/assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest-seat-before-v2.glb",
+    "sha256": "0a69d996d3432055d60402913809b01635b1f8960baa2bf0941f472a568f6d51",
+    "bytes": 2466148,
+    "retained": false,
+    "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+  },
+  "preservation": {
+    "triangles": 1513,
+    "vertices_including_uv_splits": 1361,
+    "topology_uv_embedded_texture_preserved": true,
+    "unchanged_xy_front_lower_legs_and_upper_waist": true,
+    "modified_vertices_including_uv_splits": 154,
+    "rear_depth_before_m": -0.17027492821216583,
+    "rear_depth_after_m": -0.15845638513565063,
+    "maximum_depth_reduction_m": 0.050028733909130096
+  },
+  "images": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-seat-v3-before-side.png",
+      "sha256": "968a0a1de119b4649d0a83d900ff8adefb320a893a1b0b8852e238179732eeac",
+      "bytes": 324408,
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-seat-v3-before-back.png",
+      "sha256": "ac49187982dc5f280d6ff98b084600ff4dccb5ac4596c42ccd5e3f0a468db8ca",
+      "bytes": 513327,
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-seat-v3-before-rear-quarter.png",
+      "sha256": "508ef288afc1c9d39003a47179f738602480f16d5ab80cb500d6ee275636a61d",
+      "bytes": 498189,
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-seat-v3-after-side.png",
+      "sha256": "d58e232850b3189e029e41c78f29d515189cb41ec7132a1baefd94bc83a19c41",
+      "bytes": 321645,
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-seat-v3-after-back.png",
+      "sha256": "8b78eb80d2ee4ce9bdc2a363a6ab60612c59b9d0f9a660d741e0b0190fe0d64c",
+      "bytes": 511991,
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-seat-v3-after-rear-quarter.png",
+      "sha256": "095f7a8448d2d65a3a52a073919ef370528398397d94cc6a568b54a2c2b36681",
+      "bytes": 496284,
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    }
+  ],
+  "rest_unmasked_skin_review": "Final Blender front/back skin-on review shows no visible buttock skin leaks.",
+  "iteration_history": [
+    "Initial vertex-only flattening left two skin leaks through coarse rear triangles; rejected.",
+    "Added rear triangle center and edge midpoint clearance; final skin-on review has no visible rear skin leaks."
+  ],
+  "validation": {
+    "rig": {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+      "sha256": "5552f2c077b3ab6fa62f994e41f9919e3159871697de428eda1d3374850a4684",
+      "triangles": 1513,
+      "bones": 65,
+      "exact_rest_hierarchy_and_inverse_bind_match": true,
+      "maximum_weight_sum_error": 5.960464477539063e-08,
+      "active_bones": [
+        "Hips",
+        "LeftFoot",
+        "LeftLeg",
+        "LeftUpLeg",
+        "RightFoot",
+        "RightLeg",
+        "RightUpLeg"
+      ]
+    },
+    "animation": {
+      "path": "doc/assets/modular-priest-tripo-pants-animation-v3.json",
+      "sha256": "d7cc08cace49535b4a58ec559bace47e2bdedf814635b7b0cdbd3169a773597d",
+      "bytes": 5849
+    },
+    "known_top_waist_overlap": "Existing priest top waist comparison still fails 3mm criterion; maximum radius inversion 19.6mm. See waist-review-v3."
+  }
+}

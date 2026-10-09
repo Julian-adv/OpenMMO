@@ -2,6 +2,18 @@ import * as THREE from 'three'
 import { describe, expect, it, vi } from 'vitest'
 import { clipSkinnedGeometry, trimModularClothing } from './modularClothing'
 import { DEFAULT_MODULAR_OUTFIT, showModularOutfit } from './modularCharacter'
+import { cavemanBootRim, cavemanPantsBootDistance } from './cavemanBootCuff'
+
+it('disposes unchanged underwear geometry once', () => {
+  const geometry = new THREE.PlaneGeometry(0.2, 0.2)
+  const mesh = new THREE.SkinnedMesh(geometry)
+  const dispose = vi.fn()
+  geometry.addEventListener('dispose', dispose)
+  trimModularClothing(mesh, 'underwear_seat', true)
+  expect(mesh.geometry).toBe(geometry)
+  geometry.dispose()
+  expect(dispose).toHaveBeenCalledTimes(1)
+})
 
 function cloth() {
   const geometry = new THREE.BufferGeometry()
@@ -47,6 +59,59 @@ function area(geometry: THREE.BufferGeometry) {
 }
 
 describe('modular clothing cuts', () => {
+  it.each([1, -1])(
+    'fits the priest hem to the caveman boot rim on side %s',
+    (side) => {
+      const source = new THREE.CylinderGeometry(0.1, 0.1, 0.25, 32, 3, true)
+      source.translate(side * 0.1664, 0.5, -0.045)
+      const count = source.attributes.position.count
+      source.setAttribute(
+        'skinIndex',
+        new THREE.Uint16BufferAttribute(
+          Array.from({ length: count }, () => [1, 6, 0, 0]).flat(),
+          4
+        )
+      )
+      source.setAttribute(
+        'skinWeight',
+        new THREE.Float32BufferAttribute(
+          Array.from({ length: count }, () => [0.5, 0.5, 0, 0]).flat(),
+          4
+        )
+      )
+      const mesh = new THREE.SkinnedMesh(source)
+      trimModularClothing(mesh, 'caveman_pants_boots')
+      const { position, uv, skinIndex, skinWeight } = mesh.geometry.attributes
+      const point = new THREE.Vector3()
+      let boundary = 0
+      for (let i = 0; i < position.count; i++) {
+        point.fromBufferAttribute(position, i)
+        expect(cavemanPantsBootDistance(point)).toBeGreaterThanOrEqual(-1e-6)
+        const rim = cavemanBootRim(point)
+        if (Math.abs(cavemanPantsBootDistance(point)) < 1e-5) {
+          boundary++
+          expect(rim.radius).toBeLessThanOrEqual(rim.innerRadius + 1e-6)
+          expect(skinIndex.getX(i)).toBe(side === 1 ? 2 : 7)
+          expect(skinWeight.getX(i)).toBeCloseTo(1)
+        }
+        expect(
+          skinWeight.getX(i) +
+            skinWeight.getY(i) +
+            skinWeight.getZ(i) +
+            skinWeight.getW(i)
+        ).toBeCloseTo(1)
+        expect(Number.isFinite(uv.getX(i)) && Number.isFinite(uv.getY(i))).toBe(
+          true
+        )
+      }
+      expect(boundary).toBeGreaterThan(16)
+      source.computeBoundingBox()
+      expect(source.boundingBox!.min.y).toBeCloseTo(0.375)
+      trimModularClothing(mesh)
+      expect(mesh.geometry).toBe(source)
+    }
+  )
+
   it('removes detached rogue pockets while retaining UV-split trousers, belt loops and skinning', () => {
     const source = new THREE.BufferGeometry()
     source.setAttribute(

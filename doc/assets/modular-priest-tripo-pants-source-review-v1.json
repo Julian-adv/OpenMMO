@@ -1,0 +1,27 @@
+{
+  "status": "Raw source; not fitted or rigged",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/source.glb",
+    "sha256": "61fa5f6ed6f68d4e121e1a3d9bac12385a9781d778cfeea952ba52cc09cd4885"
+  },
+  "triangles": 2034,
+  "mesh_count": 1,
+  "meshes": [
+    {
+      "name": "tripo_node_4d330077-bceb-4315-b282-a06f98b7f4f0",
+      "components_vertex_counts": [
+        1019
+      ],
+      "boundary_edges": 0,
+      "nonmanifold_edges": 0,
+      "degenerate_faces": 0,
+      "collapsed_uv_triangles": 0
+    }
+  ],
+  "source_extent_blender": [
+    0.47802734375,
+    0.27685546875,
+    0.99951171875
+  ],
+  "rigged": false
+}

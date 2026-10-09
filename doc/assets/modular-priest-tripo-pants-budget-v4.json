@@ -1,0 +1,41 @@
+{
+  "date": "2026-10-08",
+  "preserved_glb_including_hidden_regions": [
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
+      "bytes": 22214236,
+      "triangles": 13891
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/hair_crop.glb",
+      "sha256": "5e8acb389f575331008c36dd94afcbf3831c90f53ca21ab0a7bbe666539f2472",
+      "bytes": 12794188,
+      "triangles": 934
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_top_v1/top_priest.glb",
+      "sha256": "d150bb102c4aa61a2f1a4107e48f09f39241b524de2541a45d37116809a205ed",
+      "bytes": 2028360,
+      "triangles": 3913
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+      "sha256": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b",
+      "bytes": 2466144,
+      "triangles": 1513
+    }
+  ],
+  "preserved_glb_total_triangles": 20251,
+  "workshop_combination_triangles": 19822,
+  "workshop_visible_triangles": 12920,
+  "face_allocation_triangles": 1505,
+  "scope": "Canonical body, crop hair, priest top and chainmail trousers; no shoes, gloves, mitre, weapon or cape. Workshop total uses neck-clipped geometry, so it differs from preserved GLB sum.",
+  "target_assembled_triangles": [
+    15000,
+    20000
+  ],
+  "numeric_decimation_performed": false,
+  "revision": 4,
+  "measurement_note": "v4 preserves all indices, vertex count and X/Y coordinates; upper-body assets and masks unchanged. Workshop triangle totals remain equal to v3; five boot cuts separately checked in seat-review-v4."
+}

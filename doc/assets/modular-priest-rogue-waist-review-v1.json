@@ -1,0 +1,61 @@
+{
+  "date": "2026-10-09",
+  "status": "Historical v1 waist-cut review; superseded by v2 undershirt cleanup",
+  "source": "Local Chromium workshop captures; original Tripo output terms apply.",
+  "record_note": "Reconstructed from retained v1 screenshots and numerical validation after the v2 browser script reused this report filename.",
+  "images": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v1-before-front.png",
+      "sha256": "38288ee347f94d070f281a8b69ee7f17c6747c081045ce5e29f2b1960db7248b",
+      "bytes": 602601,
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v1-after-front.png",
+      "sha256": "dbf9eeae7c9fdd803e96c781229ea5ae1c175996ce4eae7c2ec91f9d850fb5ac",
+      "bytes": 602598,
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v1-after-back.png",
+      "sha256": "dbca4d5852e97094256cbd6485a134de7094e3c2f4624deb569b4104d740b96f",
+      "bytes": 591549,
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v1-after-side.png",
+      "sha256": "d4a3e40cdc911d279c1bbb418d12000b2339ca734ea6c0011321b31f001afc10",
+      "bytes": 367487,
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v1-motion.png",
+      "sha256": "a9834a31479e4de7f606cd9aae2bd7cbcad84dcebd94a6290a39764b1d44164e",
+      "bytes": 651317,
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    }
+  ],
+  "validation": {
+    "path": "doc/assets/modular-priest-rogue-waist-validation-v1.json",
+    "sha256": "ed7132de0929ee3b98583b5d62dbf9d1967f066a356ac958155dc39022020730",
+    "bytes": 4057
+  },
+  "source_assets": [
+    {
+      "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+      "sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
+      "bytes": 2150516
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+      "sha256": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b",
+      "bytes": 2466144
+    }
+  ],
+  "scope": "V1 trousers waist cut only; skin-like undershirt triangles remained. No new generation or paid calls."
+}

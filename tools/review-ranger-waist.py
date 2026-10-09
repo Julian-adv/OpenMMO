@@ -2,6 +2,7 @@
 import importlib.util
 import argparse
 import json
+from datetime import date
 from pathlib import Path
 
 import numpy as np
@@ -80,6 +81,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--revision', type=int, default=4)
     parser.add_argument('--pants', default='assets/modular_human_male_01/parts/fitted/pants_cloth.glb')
+    parser.add_argument('--top')
     parser.add_argument('--poses')
     parser.add_argument('--report')
     parser.add_argument('--heights', type=float, nargs='+', default=[1.08, 1.10, 1.12, 1.13, 1.14])
@@ -94,7 +96,7 @@ def main():
     sources = [pants_path, poses_path]
     revisions = []
     for candidate in [revision]:
-        top_path = f'assets/modular_human_male_01/parts/ranger_tripo_top_v{candidate}/top_ranger.glb'
+        top_path = args.top or f'assets/modular_human_male_01/parts/ranger_tripo_top_v{candidate}/top_ranger.glb'
         sources.append(top_path)
         top, samples = load(top_path), []
         for pose in poses:
@@ -109,11 +111,10 @@ def main():
                                     minimum_clearance_m=float(gap[valid].min()),
                                     negative_rays=int((gap[valid] < 0).sum())))
         minimum = min(sample['minimum_clearance_m'] for sample in samples)
-        if candidate == revision:
-            assert minimum > .003, min(samples, key=lambda sample: sample['minimum_clearance_m'])
         revisions.append(dict(revision=candidate, minimum_clearance_m=minimum,
+                              passed=minimum > .003,
                               negative_rays=sum(sample['negative_rays'] for sample in samples), samples=samples))
-    report = dict(date='2026-10-05', method='Outer section radii in inverse Hips deformation frame',
+    report = dict(date=date.today().isoformat(), method='Outer section radii in inverse Hips deformation frame',
                   scope='Selected pants outer waist including accessories; custom pants use faces entirely above rest Y=1.0m so raised legs do not contaminate the waist measurement. Compare rays that intersect both surfaces. Unmatched rays include garment openings; this is not a full triangle intersection test.',
                   angles_per_plane=120, poses_per_revision=len(poses), planes_per_pose=len(args.heights),
                   sources=[dict(path=path, sha256=fit.digest(ROOT / path)) for path in sources], revisions=revisions)
@@ -121,6 +122,9 @@ def main():
     (ROOT / report_path).write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps([dict(revision=row['revision'], minimum_clearance_m=row['minimum_clearance_m'],
                            negative_rays=row['negative_rays']) for row in revisions], indent=2))
+    assert all(row['passed'] for row in revisions), min(
+        (sample for row in revisions for sample in row['samples']),
+        key=lambda sample: sample['minimum_clearance_m'])
 
 
 if __name__ == '__main__':

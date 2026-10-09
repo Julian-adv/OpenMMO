@@ -1,0 +1,189 @@
+{
+  "date": "2026-10-08",
+  "source": "Local Chromium workshop screenshots; existing asset licenses apply; no AI generation.",
+  "views": [
+    "front",
+    "back",
+    "side",
+    "rear-quarter"
+  ],
+  "motion": [
+    {
+      "clip": "idle1",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "walk",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "run",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "jump",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "slash1",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "combat_idle",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "sit_idle",
+      "time_fraction": 0.4
+    }
+  ],
+  "boots": [
+    {
+      "boot": "leather",
+      "minimum_y": 0.23499999940395355,
+      "triangles": 1451
+    },
+    {
+      "boot": "plate",
+      "minimum_y": 0.2199999988079071,
+      "triangles": 1466
+    },
+    {
+      "boot": "barbarian",
+      "minimum_y": 0.4790000021457672,
+      "triangles": 1288
+    },
+    {
+      "boot": "caveman",
+      "minimum_y": 0.4336927533149719,
+      "triangles": 1297
+    },
+    {
+      "boot": "ranger",
+      "minimum_y": 0.4593124985694885,
+      "triangles": 1288
+    }
+  ],
+  "bare": {
+    "minimum_y": 0.17453673481941223,
+    "triangles": 1513
+  },
+  "errors": [],
+  "checks": [
+    "Linen shirt and shirtless rear silhouettes reviewed against plate trousers before and after",
+    "Seven motion samples inspected at 40 percent",
+    "Five boot trims, barefoot restore and reattachment passed",
+    "Priest top restored for combination review"
+  ],
+  "visual_review_scope": "Sampled views and poses; full-motion collision validation not performed.",
+  "revision": 4,
+  "pants": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+    "sha256": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b",
+    "bytes": 2466144
+  },
+  "previous_pants": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest-seat-before-v3.glb",
+    "sha256": "5552f2c077b3ab6fa62f994e41f9919e3159871697de428eda1d3374850a4684",
+    "bytes": 2466148,
+    "retained": false,
+    "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+  },
+  "plate_reference": {
+    "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+    "sha256": "aa95a9f1b85aa881df47e6e37ecbfebc7c168b352fcf0f4a9941208962eeff04",
+    "bytes": 11524492
+  },
+  "preservation": {
+    "triangles": 1513,
+    "vertices_including_uv_splits": 1361,
+    "topology_uv_embedded_texture_preserved": true,
+    "unchanged_xy_front_and_lower_legs": true,
+    "modified_vertices_including_uv_splits": 302
+  },
+  "method": {
+    "method": "Loft the rear waist, seat and upper thigh along the smoothed plate trouser rear surface, with 90-percent rear depth about Z=-0.025m; retain body clearance",
+    "reference": {
+      "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+      "sha256": "aa95a9f1b85aa881df47e6e37ecbfebc7c168b352fcf0f4a9941208962eeff04"
+    },
+    "smoothing_xy_m": 0.012,
+    "rear_depth_scale": 0.9,
+    "affected_welded_vertices": 190,
+    "transition_y_m": [
+      0.76,
+      0.86
+    ],
+    "waist_fade_out": false,
+    "face_sample_clearance_m": 0.004,
+    "face_clearance_corrections_m": [
+      0.012393824622638577,
+      1.3877787807814457e-17
+    ],
+    "maximum_depth_reduction_m": 0.02381986538540748,
+    "maximum_rear_expansion_m": 0.021092644913624357
+  },
+  "images": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-seat-v4-before-side.png",
+      "sha256": "a49dc08ab399ed53313e24914723ee9ba5c4d51eb34dcccb7c5ec229c97d5379",
+      "bytes": 333926
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-seat-v4-after-side.png",
+      "sha256": "6e11a758c1744893472a6e05587f6dbbf315d3d14e41e0769ba4c1b768d273e3",
+      "bytes": 335107
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-seat-v4-after-back.png",
+      "sha256": "73de831bdf554d6048a53a47d84523d54390d6556b21b49ff2e7489c07295453",
+      "bytes": 534232
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-seat-v4-after-shirtless-side.png",
+      "sha256": "800a8df665b15906428998f9c73f2318ec7b6749a7e941fcd36955f1c6f672fb",
+      "bytes": 333480
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-seat-v4-motion.png",
+      "sha256": "07c6262920ca62dbe446c2a638d97f29b7b8e6ae46a189776e15b134f7990917",
+      "bytes": 600749
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-seat-v4-plate-reference-side.png",
+      "sha256": "3f38fb4a8b304403f6b02a52ee516d266a9b8900f8b0e5322b3f338cec5221d8",
+      "bytes": 278317
+    }
+  ],
+  "rest_unmasked_skin_review": "Blender front/back skin-on review shows no visible rear skin leaks.",
+  "validation": {
+    "rig": {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+      "sha256": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b",
+      "triangles": 1513,
+      "bones": 65,
+      "exact_rest_hierarchy_and_inverse_bind_match": true,
+      "maximum_weight_sum_error": 1.1920928955078125e-07,
+      "active_bones": [
+        "Hips",
+        "LeftFoot",
+        "LeftLeg",
+        "LeftUpLeg",
+        "RightFoot",
+        "RightLeg",
+        "RightUpLeg"
+      ]
+    },
+    "animation": {
+      "path": "doc/assets/modular-priest-tripo-pants-animation-v4.json",
+      "sha256": "42e5071f81829ba56f6968669abfa7ced0824e4436965f1800fdef1b000c00f9",
+      "bytes": 5857
+    },
+    "profile": {
+      "path": "doc/assets/modular-priest-tripo-pants-seat-profile-v4.json",
+      "sha256": "e778eb88f5b01e6e561480885d9daa70e08cb0bd58bf877899fc90ff6f50fb61",
+      "bytes": 16317
+    },
+    "known_top_waist_overlap": "Existing priest top waist comparison still fails 3mm criterion; maximum radius inversion 19.6mm. See waist-review-v4."
+  }
+}

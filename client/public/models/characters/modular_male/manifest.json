@@ -27,7 +27,7 @@
     "client/public/models/animations/enchant_armor.glb": "77178f2ea299e1ebd73351c290285442347134c8519723e37c07ce722c409568",
     "client/public/models/animations/great_sword.glb": "ff7e995994d4f95298c1dd444e0e16dd5f93b7c6728de1fe6d8077a2624c366d",
     "client/public/models/animations/riding.glb": "e0d76b9900e0f9bf76425c4165ebba8fd9e350895f9d99779a085af6dc51c9f8",
-    "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
+    "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb": "299e5e8d681810315e5f32673f8d3a5f6a57c2a6154e2613c8dabdf1fc08e638",
     "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/pants_rogue.glb": "7178d06a9b2e18953e2c3fb0672df8424b688d6f4ccc47affc856a9084e8e81c",
     "assets/modular_human_male_01/parts/rogue_tripo_wrap_v1/gloves_rogue.glb": "80107110dabfcbd0c6bda685550e52b0133e6c62272c6ab660a6b24f11eb835a",
     "assets/modular_human_male_01/parts/rogue_fitted_v8/boots_rogue.glb": "dfefa61608f8359837b7e4b746424b18042f538d191438774663bed394097f16",
@@ -141,7 +141,7 @@
       "sha256": "232453e2837721ac30c7185bd21ce7fc65960adf8f5f017eb8ff3661011176f6",
       "clips": ["ride"]
     },
-    "top_rogue.glb": "6026de2994f041e4ac707cbafcb3d3651e23ba22f38e986e8352dc1b45d4e04e",
+    "top_rogue.glb": "dbfa499cea207c96d01520665e9486f55c5b200877f85de54852fabf39972990",
     "pants_rogue.glb": "6e8c5720f3c6fa783962599584985493c5a708d34c1f7395d36a51d4108ae1a1",
     "gloves_rogue.glb": "59024889a206492b9f1d11a5aafe73adda6e905e43956354abd527b6bf43b4bf",
     "boots_rogue.glb": "4f4dc7fc9e81eb1390ed2c7bad1653fab29d342dca95773000498db7633d0059",

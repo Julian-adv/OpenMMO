@@ -1,0 +1,662 @@
+{
+  "delivery_date": "2026-10-08",
+  "generation_date": null,
+  "provider": "User-confirmed Tripo Studio",
+  "subscription": {
+    "previous_user_report": "Approximately USD 20/month Studio subscription",
+    "previous_source_record": "doc/assets/modular-rogue-tripo-sources.json",
+    "current_file_tier_separately_confirmed": false
+  },
+  "license": "Subject to the original Tripo Studio output terms and recorded account provenance.",
+  "delivery_path_windows": "Y:\\public\\web_downloads\\chainmail+pants+3d+model.glb",
+  "delivery_path_linux": "/mnt/y/web_downloads/chainmail+pants+3d+model.glb",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/source.glb",
+    "sha256": "61fa5f6ed6f68d4e121e1a3d9bac12385a9781d778cfeea952ba52cc09cd4885",
+    "bytes": 2424628,
+    "byte_identical_to_delivery": true
+  },
+  "base": {
+    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
+    "bytes": 22214236
+  },
+  "interfaces": {
+    "path": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+    "sha256": "f3fc3aed9c5080cf26a294dac496293c89bce8f67466add18a7ef72b326f006b",
+    "bytes": 310940
+  },
+  "rig_id": "human_male_01_mixamo_candidate_v2",
+  "generation_task_id": null,
+  "generation_model_version": null,
+  "submitted_prompt": null,
+  "submitted_images_confirmed": false,
+  "requested_polygon_count_confirmed": null,
+  "discussion_target_quads": 1000,
+  "discussion_approximate_triangles": 2000,
+  "export_observed": {
+    "format": "GLB 2.0",
+    "generator": "Tripo",
+    "triangles": 2034,
+    "vertices_including_uv_splits": 1851,
+    "mesh_count": 1,
+    "material_count": 1,
+    "textures": [
+      {
+        "size": [
+          2048,
+          2048
+        ],
+        "format": "JPEG"
+      }
+    ],
+    "rigged": false,
+    "animations": 0
+  },
+  "reference_artwork": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/pants_priest-front-v1.png",
+      "sha256": "01841f5235c4a22c272d34dc2efef233f5d99f9df7071f7f320b55a03ca1cda0",
+      "bytes": 2391779
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/pants_priest-back-v1.png",
+      "sha256": "5cca3b4e6ab101d4a3eed9b9c28bc410960c38037ce2f3ff1f4eafd50ae95975",
+      "bytes": 2570357
+    }
+  ],
+  "local_fitting": "Local fitting and rig transfer; no new AI generation or paid API calls.",
+  "fitting": {
+    "status": "Dev workshop candidate v4; continuous waist-to-seat rear curve follows the smoothed plate reference. Linen and shirtless silhouettes, seven motion samples and five boot hem trims reviewed. Previously recorded priest top waist overlap remains; other mixed equipment pending.",
+    "glb": {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+      "sha256": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b",
+      "bytes": 2466144
+    },
+    "editable": {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/priest-pants-fitting-v4.blend",
+      "sha256": "bdc5285a774f5ced145720d12c16fcd2f84c52b38ed5cc4e47634447aef43894",
+      "bytes": 41675324
+    },
+    "retained_source_uv_and_embedded_texture_preserved": true,
+    "source_cap_triangles_removed": 72,
+    "final_triangles": 1513,
+    "new_ai_generation_or_paid_calls": false,
+    "reports": {
+      "source_review": {
+        "path": "doc/assets/modular-priest-tripo-pants-source-review-v1.json",
+        "sha256": "4f4a4f0aa4e5f316f43651b72ac45e9323681645f67f43b241b1c0718552592b",
+        "bytes": 657
+      },
+      "fitting": {
+        "path": "doc/assets/modular-priest-tripo-pants-fitting-v4.json",
+        "sha256": "1941985c05c20be7a47094725ef6f8f10af0822d35765fb1ac015a0d71711614",
+        "bytes": 13991
+      },
+      "animation": {
+        "path": "doc/assets/modular-priest-tripo-pants-animation-v4.json",
+        "sha256": "42e5071f81829ba56f6968669abfa7ced0824e4436965f1800fdef1b000c00f9",
+        "bytes": 5857
+      },
+      "visual_review": {
+        "path": "doc/assets/modular-priest-tripo-pants-review-v4.json",
+        "sha256": "7d2838358842d6ccf3277ab75ce170792d7e0a0dc33da6de503371b2ddef40d2",
+        "bytes": 1402
+      },
+      "waist_review": {
+        "path": "doc/assets/modular-priest-tripo-pants-waist-review-v4.json",
+        "sha256": "0e81d54d84d4d7279b6ff92e4cb3747d08a9ddd457e98cffb4ced362622753a1",
+        "bytes": 143644
+      },
+      "workshop": {
+        "path": "doc/assets/modular-priest-tripo-pants-workshop-v1.json",
+        "sha256": "48288575347488b66b5a295015ae1d49a44aa45b44a73599e8037774df4d76fb",
+        "bytes": 1146
+      },
+      "history": {
+        "path": "doc/assets/modular-priest-tripo-pants-fitting-history.json",
+        "sha256": "c28c8a8bd5063db1d36620687a05549b0b4444a63eba5a2556aa9ae5c1f848d0",
+        "bytes": 8784
+      },
+      "budget": {
+        "path": "doc/assets/modular-priest-tripo-pants-budget-v4.json",
+        "sha256": "bc136c2b311bb335ba048cb54f47f5aa6ae9bbfd7455805f0208f6445ef66402",
+        "bytes": 1677
+      },
+      "leather_boots": {
+        "path": "doc/assets/modular-priest-leather-boots-review-v1.json",
+        "sha256": "f68c372e067539e6f4b2d4f07e0c3961b708363d09b8b1311bf98855b5598dfb",
+        "bytes": 1531
+      },
+      "plate_boots": {
+        "path": "doc/assets/modular-priest-plate-boots-review-v1.json",
+        "sha256": "df4106789042855010acbc53028f9d1f462aa126528335e0f0b26d94373cfae3",
+        "bytes": 1936
+      },
+      "barbarian_boots": {
+        "path": "doc/assets/modular-priest-barbarian-boots-review-v1.json",
+        "sha256": "47010de943109393081b35cb383115ed4c5b335b86b9ea8c01affd57feffd221",
+        "bytes": 2343
+      },
+      "caveman_boots": {
+        "path": "doc/assets/modular-priest-caveman-boots-review-v2.json",
+        "sha256": "b2533680a42c5a8a1b71be36dfbaacc1dd4e00dae13f0b0b03f4c6822ba581e6",
+        "bytes": 2742
+      },
+      "caveman_boots_previous": {
+        "path": "doc/assets/modular-priest-caveman-boots-review-v1.json",
+        "sha256": "7e3b1730b5e4d1d67e7087b27ee77712543b6a2425e933c4dda8846b4d027a4f",
+        "bytes": 2174
+      },
+      "ranger_boots": {
+        "path": "doc/assets/modular-priest-ranger-boots-review-v1.json",
+        "sha256": "09d77d268744f69fd93abcaa7c2004124782ac1bccc4ead12ab57b729df37282",
+        "bytes": 2343
+      },
+      "fitting_previous_v2": {
+        "path": "doc/assets/modular-priest-tripo-pants-fitting-v1.json",
+        "sha256": "3fb8392ee95b7381920c35b709b50d5ed4056fce241dfd3266a13e93da2daaeb",
+        "bytes": 13192
+      },
+      "animation_previous_v2": {
+        "path": "doc/assets/modular-priest-tripo-pants-animation-v1.json",
+        "sha256": "f31912c003c29334a30062245c3612c9149c7e15fcc8414565b151533e85762d",
+        "bytes": 5850
+      },
+      "visual_review_previous_v2": {
+        "path": "doc/assets/modular-priest-tripo-pants-review-v1.json",
+        "sha256": "be32ec1a5ad6902d3a6f46dc1ef2f56126e574a3af38439f22d2c17d2ce9d591",
+        "bytes": 2639
+      },
+      "waist_review_previous_v2": {
+        "path": "doc/assets/modular-priest-tripo-pants-waist-review-v1.json",
+        "sha256": "10ccc9172f5b04ef369db710f11434ec1d52303f99b37ae0f7d121894b3481e2",
+        "bytes": 143599
+      },
+      "budget_previous_v2": {
+        "path": "doc/assets/modular-priest-tripo-pants-budget-v1.json",
+        "sha256": "77020e0676ec3bd7a8eff8b98b9291080e3090b145c703fd7704b2b9d4198c23",
+        "bytes": 1455
+      },
+      "seat_review": {
+        "path": "doc/assets/modular-priest-tripo-pants-seat-review-v4.json",
+        "sha256": "31bf5205a1a9f6cf61ec94506c9e394ef8b19a85dfbf508ee1075f84f7c7194f",
+        "bytes": 6099
+      },
+      "fitting_previous_v3": {
+        "path": "doc/assets/modular-priest-tripo-pants-fitting-v3.json",
+        "sha256": "452eebc569cb9c9a8eab67539505598731c4b06f1b89483a814b26393973b72b",
+        "bytes": 13818
+      },
+      "animation_previous_v3": {
+        "path": "doc/assets/modular-priest-tripo-pants-animation-v3.json",
+        "sha256": "d7cc08cace49535b4a58ec559bace47e2bdedf814635b7b0cdbd3169a773597d",
+        "bytes": 5849
+      },
+      "visual_review_previous_v3": {
+        "path": "doc/assets/modular-priest-tripo-pants-review-v3.json",
+        "sha256": "d67746f1c1becbe3d79b3a10b663cd9b808e2ce813993b7e857a6e6b6e80d7a0",
+        "bytes": 1993
+      },
+      "waist_review_previous_v3": {
+        "path": "doc/assets/modular-priest-tripo-pants-waist-review-v3.json",
+        "sha256": "70462b776a1a632430e9580a231722ffc888acae78ee23edaf66014519190402",
+        "bytes": 143574
+      },
+      "budget_previous_v3": {
+        "path": "doc/assets/modular-priest-tripo-pants-budget-v3.json",
+        "sha256": "50fc35a9a9bb93ed149f25eae0b7450e69834704594a35c467f89a12a845a143",
+        "bytes": 1660
+      },
+      "seat_review_previous_v3": {
+        "path": "doc/assets/modular-priest-tripo-pants-seat-review-v3.json",
+        "sha256": "33604f60a1738e893f02017fb0dc24989867c894303dfd384ee00ca5a7b77239",
+        "bytes": 6016
+      },
+      "seat_profile": {
+        "path": "doc/assets/modular-priest-tripo-pants-seat-profile-v4.json",
+        "sha256": "e778eb88f5b01e6e561480885d9daa70e08cb0bd58bf877899fc90ff6f50fb61",
+        "bytes": 16317
+      },
+      "plate_top": {
+        "path": "doc/assets/modular-priest-plate-waist-review-v1.json",
+        "sha256": "80bb6c6b39487d76231bcdad99f708d559c7c40887c8a5fad6552b7ef176891f",
+        "bytes": 4081
+      },
+      "plate_top_validation": {
+        "path": "doc/assets/modular-priest-plate-waist-validation-v1.json",
+        "sha256": "04b89efbea9c3557cebbce24e4858cb6e0c7602b9f57fa61021bb47d9b871825",
+        "bytes": 3884
+      },
+      "rogue_top": {
+        "path": "doc/assets/modular-priest-rogue-waist-review-v2.json",
+        "sha256": "14f4fdd4c5a6eece6d9fe3d34a092c27b501a82863459c7de2275cd154bb6a59",
+        "bytes": 3972
+      },
+      "rogue_top_validation": {
+        "path": "doc/assets/modular-priest-rogue-waist-validation-v2.json",
+        "sha256": "b3b2e07d83b0fa0c196c5b8689e88076e3a18631d0d394813e98cfe9b109baf2",
+        "bytes": 4019
+      },
+      "rogue_top_previous_v1": {
+        "path": "doc/assets/modular-priest-rogue-waist-review-v1.json",
+        "sha256": "8d489d940eeb0c3652279367d037314dc657671cea4abe8b1a12310fa8a64315",
+        "bytes": 2874
+      },
+      "rogue_top_validation_previous_v1": {
+        "path": "doc/assets/modular-priest-rogue-waist-validation-v1.json",
+        "sha256": "ed7132de0929ee3b98583b5d62dbf9d1967f066a356ac958155dc39022020730",
+        "bytes": 4057
+      }
+    },
+    "revision": 4,
+    "boundary_uv": "New cut-edge UVs interpolated from source triangles; retained UVs and embedded texture bytes preserved.",
+    "cuff_cleanup": {
+      "removed_waist_cap_triangles": 30,
+      "removed_ankle_cap_triangles": 42,
+      "removed_source_cap_face_indices": [
+        3,
+        4,
+        5,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        104,
+        105,
+        106,
+        107,
+        108,
+        109,
+        110,
+        111,
+        112,
+        113,
+        114,
+        115,
+        116,
+        117,
+        118,
+        119,
+        120,
+        121,
+        155,
+        156,
+        157,
+        198,
+        199,
+        200,
+        201,
+        202,
+        203,
+        204,
+        205,
+        206,
+        207,
+        208,
+        209,
+        210,
+        211,
+        212,
+        213,
+        214,
+        215
+      ],
+      "removed_cuff_triangles_after_caps": 478,
+      "split_cuff_triangles": 57,
+      "source_cuff_cutoff_y": 0.09,
+      "open_loops": 3,
+      "method": "Remove recessed caps and black folded cuffs; interpolate original UVs at clean open ankle cuts, then extend the remaining chainmail to the original fitted hem height"
+    },
+    "editable_previous_v2": {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/priest-pants-fitting.blend",
+      "sha256": "732da86bb982d8b27c9a7a1b3773d3a075603a5c83dcd2252237c1a24f61c824",
+      "bytes": 41738660,
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    "seat_cleanup": {
+      "method": "Loft the rear waist, seat and upper thigh along the smoothed plate trouser rear surface, with 90-percent rear depth about Z=-0.025m; retain body clearance",
+      "reference": {
+        "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+        "sha256": "aa95a9f1b85aa881df47e6e37ecbfebc7c168b352fcf0f4a9941208962eeff04"
+      },
+      "smoothing_xy_m": 0.012,
+      "rear_depth_scale": 0.9,
+      "affected_welded_vertices": 190,
+      "transition_y_m": [
+        0.76,
+        0.86
+      ],
+      "waist_fade_out": false,
+      "face_sample_clearance_m": 0.004,
+      "face_clearance_corrections_m": [
+        0.012393824622638577,
+        1.3877787807814457e-17
+      ],
+      "maximum_depth_reduction_m": 0.02381986538540748,
+      "maximum_rear_expansion_m": 0.021092644913624357
+    },
+    "editable_previous_v3": {
+      "path": "/home/jake/work/OnlineRPG/assets/modular_human_male_01/parts/priest_tripo_pants_v1/priest-pants-fitting-v3.blend",
+      "sha256": "6c5f5edfae06f092bdbe872a2cb0326876fc72a26128eebf135973225c47f153",
+      "bytes": 41675818,
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    }
+  },
+  "previous_fitted_candidate": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest-black-cuffs-v1.glb",
+    "sha256": "ed5b528b20e2f6c955120c5b9de57b5676153797a6704dea0a4175bd7952ddfa",
+    "bytes": 2496176,
+    "retained": false,
+    "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+  },
+  "previous_fitted_candidate_v2": {
+    "path": "/home/jake/work/OnlineRPG/assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest-seat-before-v2.glb",
+    "sha256": "0a69d996d3432055d60402913809b01635b1f8960baa2bf0941f472a568f6d51",
+    "bytes": 2466148,
+    "retained": false,
+    "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+  },
+  "previous_fitted_candidate_v3": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest-seat-before-v3.glb",
+    "sha256": "5552f2c077b3ab6fa62f994e41f9919e3159871697de428eda1d3374850a4684",
+    "bytes": 2466148,
+    "retained": false,
+    "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+  },
+  "plate_top_connection": {
+    "date": "2026-10-09",
+    "condition": "Priest chainmail trousers with an actually visible loaded plate top",
+    "method": "Reuse priest_plate_waist reshape followed by ranger_plate_waist trim only with a visible plate top. Waist radius transitions from .23m to .16m and rear/front depth from .17m to .10m about Z=-.035m at Y=.92–1.04m. Cut at Y=1.06m, dropping up to 9cm toward the rear center.",
+    "source_assets": [
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/top_plate.glb",
+        "sha256": "c29b772b91d9c7d6b5622758edc707ea2caea4d69618e5729f126d3f88ea47ce",
+        "bytes": 11941912
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+        "sha256": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b",
+        "bytes": 2466144
+      }
+    ],
+    "source_glbs_unchanged": true,
+    "new_ai_generation_or_paid_calls": false,
+    "implementation": [
+      {
+        "path": "client/src/lib/utils/modularCharacter.ts",
+        "sha256": "daa6b459fd4942dfaf1d4b7d12310577e9196857fe4b5ffa58851f06bde40b3a",
+        "bytes": 29210
+      },
+      {
+        "path": "client/src/previews/modular-outfit.test.ts",
+        "sha256": "b39f59e95f5d29746e69081d34ee853040a6aa0fdd2642787df17487a7080345",
+        "bytes": 34020
+      },
+      {
+        "path": "tools/validate-priest-plate-waist.mjs",
+        "sha256": "ff6e715c787693ec786e9e3b8dbc2b532ee68ba545e0b3d17c451c61fd72e6b1",
+        "bytes": 5001
+      }
+    ],
+    "review": {
+      "path": "doc/assets/modular-priest-plate-waist-review-v1.json",
+      "sha256": "80bb6c6b39487d76231bcdad99f708d559c7c40887c8a5fad6552b7ef176891f",
+      "bytes": 4081
+    },
+    "validation": {
+      "path": "doc/assets/modular-priest-plate-waist-validation-v1.json",
+      "sha256": "04b89efbea9c3557cebbce24e4858cb6e0c7602b9f57fa61021bb47d9b871825",
+      "bytes": 3884
+    },
+    "images": [
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-plate-waist-v1-before-front.png",
+        "sha256": "f321413960a5f259dd21585d30546906d55d450e06b829bded907602256c16fc",
+        "bytes": 578696
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-plate-waist-v1-after-front.png",
+        "sha256": "b1aec07cc5098fff73346b7cae6924d7b0c6b44bac00ee2c0d27a33896d3a91e",
+        "bytes": 566039
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-plate-waist-v1-after-back.png",
+        "sha256": "55ede358a8984f7b67f81ca89cf5c6a89340d430604f0fa1480106721fbae473",
+        "bytes": 558142
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-plate-waist-v1-after-side.png",
+        "sha256": "851d16ed960be749d7ced9759bc13d00cca9efa71f6676025e525ba4c1f21a01",
+        "bytes": 369197
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-plate-waist-v1-motion.png",
+        "sha256": "95a9fe0366f341d72eb3a18cd2614be3eeecd5f1575a226ddc8726efe7226506",
+        "bytes": 605682
+      }
+    ],
+    "implementation_previous_plate_only": [
+      {
+        "path": "client/src/lib/utils/modularCharacter.ts",
+        "sha256": "bcb84ff43456e342ba073adf38f8b0d2f582d3169a3a4e40ee5d0bda82985884",
+        "bytes": 29086
+      },
+      {
+        "path": "client/src/previews/modular-outfit.test.ts",
+        "sha256": "e91dd0dadc5ff6c975376ff2c4e1d0e77b462748828243cc00058936c9ed9fde",
+        "bytes": 32695
+      },
+      {
+        "path": "tools/validate-priest-plate-waist.mjs",
+        "sha256": "180ccce3f3b4af74de786fe44389a424c12d26e8d86424b06b1aa30f06e4de6d",
+        "bytes": 4696
+      }
+    ]
+  },
+  "rogue_top_connection": {
+    "date": "2026-10-09",
+    "condition": "Priest chainmail trousers with an actually visible loaded rogue top",
+    "method": "Priest trousers and covered torso cut at Y=1.105m; rogue top front underside repaired with local cap removal, linen inset and UV correction.",
+    "source_assets": [
+      {
+        "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+        "sha256": "299e5e8d681810315e5f32673f8d3a5f6a57c2a6154e2613c8dabdf1fc08e638",
+        "bytes": 2179600
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+        "sha256": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b",
+        "bytes": 2466144
+      }
+    ],
+    "priest_source_glb_unchanged": true,
+    "rogue_source_archive": {
+      "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue-undershirt-before-v1.glb",
+      "sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
+      "bytes": 2150516
+    },
+    "new_ai_generation_or_paid_calls": false,
+    "implementation": [
+      {
+        "path": "client/src/lib/utils/modularCharacter.ts",
+        "sha256": "3d4cd6756b27d1c0511538f55f50c112ac8a6a6024a67bbd49c010bdee0d7e99",
+        "bytes": 29308
+      },
+      {
+        "path": "client/src/previews/modular-outfit.test.ts",
+        "sha256": "5c7a2c622b3c78742a79f0fd9072fcb79a386abd2374e5683454a1d0809e5c54",
+        "bytes": 35443
+      },
+      {
+        "path": "tools/validate-priest-plate-waist.mjs",
+        "sha256": "6fd365f0ce5232b709b72fcd0524d9693abdc39e79d6670ab4d4e986bc5a3bf2",
+        "bytes": 5864
+      },
+      {
+        "path": "tools/fix-rogue-undershirt.py",
+        "sha256": "90bd67b51dc617247993a8b8e5a0ff39eabeb9219388f677d0918006d4c7b5c0",
+        "bytes": 4815
+      }
+    ],
+    "review": {
+      "path": "doc/assets/modular-priest-rogue-waist-review-v2.json",
+      "sha256": "14f4fdd4c5a6eece6d9fe3d34a092c27b501a82863459c7de2275cd154bb6a59",
+      "bytes": 3972
+    },
+    "validation": {
+      "path": "doc/assets/modular-priest-rogue-waist-validation-v2.json",
+      "sha256": "b3b2e07d83b0fa0c196c5b8689e88076e3a18631d0d394813e98cfe9b109baf2",
+      "bytes": 4019
+    },
+    "images": [
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v2-before-front.png",
+        "sha256": "dbf9eeae7c9fdd803e96c781229ea5ae1c175996ce4eae7c2ec91f9d850fb5ac",
+        "bytes": 602598
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v2-after-front.png",
+        "sha256": "843d8ff01323988bd19f75f17b87a8e13fab4a12b114829c107996df7a4fba37",
+        "bytes": 602828
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v2-after-back.png",
+        "sha256": "d5cf0db811e2be2621094fbb0ccde8a1a7071f051a4077a7b8de5604fd5ef65d",
+        "bytes": 591554
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v2-after-side.png",
+        "sha256": "bce14b6ef476785f1a490f1b0cf8d9704ad3e33428cd25649ff6bc9ffca5c34f",
+        "bytes": 367658
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v2-motion.png",
+        "sha256": "d9cc25a79470b84d06f6c4795b9949e37c79e9dbc95a999aab518505367b9b52",
+        "bytes": 651241
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v2-game-front.png",
+        "sha256": "2f657b1cb909409f244614d54c3e1843d13e559c8a12ddf7786f74acc2e0cc7d",
+        "bytes": 585075
+      }
+    ],
+    "rogue_cleanup": {
+      "path": "doc/assets/modular-rogue-undershirt-fitting-v1.json",
+      "sha256": "d86c9cf92282de1830d6cc2de6d8d2c42851c636b45c48c24b7309c14999709e",
+      "bytes": 1829
+    }
+  },
+  "rogue_top_connection_previous_v1": {
+    "date": "2026-10-09",
+    "condition": "Priest chainmail trousers with an actually visible loaded rogue top",
+    "method": "Apply existing tripo_pants_waist cut at rest Y=1.105m only with an actually visible loaded rogue top, lowering the 1.14m chainmail waistband by 35mm. Source geometry preserved; boot cuts compose after the waist cut.",
+    "source_assets": [
+      {
+        "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+        "sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
+        "bytes": 2150516
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+        "sha256": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b",
+        "bytes": 2466144
+      }
+    ],
+    "source_glbs_unchanged": true,
+    "new_ai_generation_or_paid_calls": false,
+    "implementation": [
+      {
+        "path": "client/src/lib/utils/modularCharacter.ts",
+        "sha256": "daa6b459fd4942dfaf1d4b7d12310577e9196857fe4b5ffa58851f06bde40b3a",
+        "bytes": 29210
+      },
+      {
+        "path": "client/src/previews/modular-outfit.test.ts",
+        "sha256": "b39f59e95f5d29746e69081d34ee853040a6aa0fdd2642787df17487a7080345",
+        "bytes": 34020
+      },
+      {
+        "path": "tools/validate-priest-plate-waist.mjs",
+        "sha256": "ff6e715c787693ec786e9e3b8dbc2b532ee68ba545e0b3d17c451c61fd72e6b1",
+        "bytes": 5001
+      }
+    ],
+    "review": {
+      "path": "doc/assets/modular-priest-rogue-waist-review-v1.json",
+      "sha256": "8d489d940eeb0c3652279367d037314dc657671cea4abe8b1a12310fa8a64315",
+      "bytes": 2874
+    },
+    "validation": {
+      "path": "doc/assets/modular-priest-rogue-waist-validation-v1.json",
+      "sha256": "ed7132de0929ee3b98583b5d62dbf9d1967f066a356ac958155dc39022020730",
+      "bytes": 4057
+    },
+    "images": [
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v1-before-front.png",
+        "sha256": "38288ee347f94d070f281a8b69ee7f17c6747c081045ce5e29f2b1960db7248b",
+        "bytes": 602601,
+        "retained": false,
+        "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v1-after-front.png",
+        "sha256": "dbf9eeae7c9fdd803e96c781229ea5ae1c175996ce4eae7c2ec91f9d850fb5ac",
+        "bytes": 602598,
+        "retained": false,
+        "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v1-after-back.png",
+        "sha256": "dbca4d5852e97094256cbd6485a134de7094e3c2f4624deb569b4104d740b96f",
+        "bytes": 591549,
+        "retained": false,
+        "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v1-after-side.png",
+        "sha256": "d4a3e40cdc911d279c1bbb418d12000b2339ca734ea6c0011321b31f001afc10",
+        "bytes": 367487,
+        "retained": false,
+        "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v1-motion.png",
+        "sha256": "a9834a31479e4de7f606cd9aae2bd7cbcad84dcebd94a6290a39764b1d44164e",
+        "bytes": 651317,
+        "retained": false,
+        "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+      }
+    ],
+    "status": "[미사용] Historical v1 connection; see rogue_top_connection for v2."
+  }
+}

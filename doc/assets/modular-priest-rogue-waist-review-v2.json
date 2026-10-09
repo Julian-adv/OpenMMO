@@ -1,0 +1,117 @@
+{
+  "date": "2026-10-09",
+  "source": "Local Chromium workshop captures; existing Tripo output terms apply; no new generation.",
+  "views": [
+    "front",
+    "back",
+    "side",
+    "rear-quarter"
+  ],
+  "motion": [
+    {
+      "clip": "idle1",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "walk",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "run",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "jump",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "slash1",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "combat_idle",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "sit_idle",
+      "time_fraction": 0.4
+    }
+  ],
+  "errors": [],
+  "checks": [
+    "Five boot trims, barefoot restore and reattachment passed"
+  ],
+  "visual_review_scope": "Sampled views and poses; full-motion surface collisions not certified.",
+  "version": 2,
+  "images": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v2-before-front.png",
+      "sha256": "dbf9eeae7c9fdd803e96c781229ea5ae1c175996ce4eae7c2ec91f9d850fb5ac",
+      "bytes": 602598
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v2-after-front.png",
+      "sha256": "843d8ff01323988bd19f75f17b87a8e13fab4a12b114829c107996df7a4fba37",
+      "bytes": 602828
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v2-after-back.png",
+      "sha256": "d5cf0db811e2be2621094fbb0ccde8a1a7071f051a4077a7b8de5604fd5ef65d",
+      "bytes": 591554
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v2-after-side.png",
+      "sha256": "bce14b6ef476785f1a490f1b0cf8d9704ad3e33428cd25649ff6bc9ffca5c34f",
+      "bytes": 367658
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v2-motion.png",
+      "sha256": "d9cc25a79470b84d06f6c4795b9949e37c79e9dbc95a999aab518505367b9b52",
+      "bytes": 651241
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v2-game-front.png",
+      "sha256": "2f657b1cb909409f244614d54c3e1843d13e559c8a12ddf7786f74acc2e0cc7d",
+      "bytes": 585075
+    }
+  ],
+  "sources": [
+    {
+      "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+      "sha256": "299e5e8d681810315e5f32673f8d3a5f6a57c2a6154e2613c8dabdf1fc08e638",
+      "bytes": 2179600
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+      "sha256": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b",
+      "bytes": 2466144
+    }
+  ],
+  "fitting": {
+    "path": "doc/assets/modular-rogue-undershirt-fitting-v1.json",
+    "sha256": "d86c9cf92282de1830d6cc2de6d8d2c42851c636b45c48c24b7309c14999709e",
+    "bytes": 1829
+  },
+  "validation": {
+    "path": "doc/assets/modular-priest-rogue-waist-validation-v2.json",
+    "sha256": "b3b2e07d83b0fa0c196c5b8689e88076e3a18631d0d394813e98cfe9b109baf2",
+    "bytes": 4019
+  },
+  "animation_validation": {
+    "path": "doc/assets/modular-rogue-undershirt-animation-v1.json",
+    "sha256": "69996cee1ad3e01cb2348a979617ecfa14c94479004dd39d04e46ee2fd60c82c",
+    "bytes": 5823
+  },
+  "game_validation": {
+    "path": "doc/assets/modular-rogue-undershirt-game-validation-v1.json",
+    "sha256": "9ee1dfa4fb449e256cc5178aa950a8fb5bd8d2085f0588f8456b48e2a5f0b481",
+    "bytes": 1549
+  },
+  "findings": [
+    "Hiding body alone retained the triangles: artifact belonged to the rogue top.",
+    "Body mask matches priest waist cut at Y=1.105m.",
+    "Removed 15 inward leather caps; inset 22 linen vertices up to 12mm; remapped 15 UV vertices to clean linen in the unchanged atlas.",
+    "Final front/back/side and seven motion samples inspected; compressed game GLB front inspected."
+  ],
+  "new_ai_generation_or_paid_calls": false
+}

@@ -1,0 +1,81 @@
+{
+  "date": "2026-10-08",
+  "sources": [
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/top_linen.glb",
+      "sha256": "188ae91799541ff6563a176058695a0c398039d60bc2ee28d97b56b199094a43"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/pants_cloth.glb",
+      "sha256": "2352b8bbdfe08c1c7c43fff9be88e4283ad61b57c2219fbbde2d0c1e3ae41964"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+      "sha256": "aa95a9f1b85aa881df47e6e37ecbfebc7c168b352fcf0f4a9941208962eeff04"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/pants_barbarian.glb",
+      "sha256": "2c0de6c3bec60219f8369467f21edcaef42b3a5e7939691470500661d106001c"
+    },
+    {
+      "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+      "sha256": "76eeb462770754895834271423b4ef7f33efdbd34bdfb9830beba4ba84e7569f"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/social.glb",
+      "sha256": "a9efe7a2d388011cdc039ca6778c2b3a929b07953941ee7bb7c50a511d4b083d"
+    }
+  ],
+  "motion": [
+    {
+      "clip": "idle1",
+      "finite_vertices": true,
+      "samples": 13
+    },
+    {
+      "clip": "walk",
+      "finite_vertices": true,
+      "samples": 13
+    },
+    {
+      "clip": "run",
+      "finite_vertices": true,
+      "samples": 13
+    },
+    {
+      "clip": "jump",
+      "finite_vertices": true,
+      "samples": 13
+    },
+    {
+      "clip": "combat_idle",
+      "finite_vertices": true,
+      "samples": 13
+    },
+    {
+      "clip": "slash1",
+      "finite_vertices": true,
+      "samples": 13
+    },
+    {
+      "clip": "sit_idle",
+      "finite_vertices": true,
+      "samples": 13
+    }
+  ],
+  "modified_vertices": 821,
+  "maximum_rest_seam_separation_m": 0,
+  "preserved_body_triangles": 13891,
+  "checks": [
+    "UV, indices, skin attributes and X/Y coordinates preserved",
+    "Front, lower legs, upper torso and other body regions preserved",
+    "Cloth, plate and barbarian restore source body geometry",
+    "Underwear reselection reuses the same geometry",
+    "Linen waist clipping composes with seat shaping"
+  ],
+  "scope": "91 finite-vertex animation samples and rest seam continuity; full surface collisions not certified."
+}

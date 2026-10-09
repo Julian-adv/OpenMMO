@@ -1,0 +1,49 @@
+{
+  "status": "Dev fitting candidate; dynamic robe overlap and mixed outfits pending",
+  "editable": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/priest-pants-fitting-v3.blend",
+    "sha256": "6c5f5edfae06f092bdbe872a2cb0326876fc72a26128eebf135973225c47f153",
+    "retained": false,
+    "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+  },
+  "images": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-fitted-v3-rest.png",
+      "sha256": "14fef0330411f60aa3c2943fa18579a6462551562a30aa7e751d5c5ed252a52d",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-fitted-v3-skin.png",
+      "sha256": "2a9401e7c56a8789f2f0dda26331051996cca2483b6416b2abd3cebf79b8e14d",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-fitted-v3-ankles.png",
+      "sha256": "f93700be4b4d90f92d6142a4e597a8d9b3e47a382d6925a04e9fcbb3c0ca20d1",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-fitted-v3-connections.png",
+      "sha256": "8e97ee0d96ba2297f43bcdb196f6b5b24ee6f0b93af0341f0eff806269048dc7",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    }
+  ],
+  "context": [
+    "canonical base",
+    "priest top v1, exported skinning baseline without runtime auxiliary robe bones",
+    "crop hair",
+    "bare feet"
+  ],
+  "hidden_regions": [
+    "torso",
+    "upper_arms",
+    "forearms",
+    "legs",
+    "ankles",
+    "boot_ankles"
+  ]
+}

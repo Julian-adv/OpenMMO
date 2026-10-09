@@ -1,0 +1,538 @@
+{
+  "status": "Fitted candidate; animation and visual review required after rebuilding",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/source.glb",
+    "sha256": "61fa5f6ed6f68d4e121e1a3d9bac12385a9781d778cfeea952ba52cc09cd4885",
+    "bytes": 2424628,
+    "byte_identical_to_delivery": true
+  },
+  "base": {
+    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
+    "bytes": 22214236
+  },
+  "interfaces": {
+    "path": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+    "sha256": "f3fc3aed9c5080cf26a294dac496293c89bce8f67466add18a7ef72b326f006b",
+    "bytes": 310940
+  },
+  "rig_id": "human_male_01_mixamo_candidate_v2",
+  "source_triangles": 2034,
+  "preserved_retained_vertex_uv_and_embedded_texture": true,
+  "revision": 4,
+  "seat": {
+    "method": "Loft the rear waist, seat and upper thigh along the smoothed plate trouser rear surface, with 90-percent rear depth about Z=-0.025m; retain body clearance",
+    "reference": {
+      "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+      "sha256": "aa95a9f1b85aa881df47e6e37ecbfebc7c168b352fcf0f4a9941208962eeff04"
+    },
+    "smoothing_xy_m": 0.012,
+    "rear_depth_scale": 0.9,
+    "affected_welded_vertices": 190,
+    "transition_y_m": [
+      0.76,
+      0.86
+    ],
+    "waist_fade_out": false,
+    "face_sample_clearance_m": 0.004,
+    "face_clearance_corrections_m": [
+      0.012393824622638577,
+      1.3877787807814457e-17
+    ],
+    "maximum_depth_reduction_m": 0.02381986538540748,
+    "maximum_rear_expansion_m": 0.021092644913624357
+  },
+  "topology_changes": {
+    "removed_waist_cap_triangles": 30,
+    "removed_ankle_cap_triangles": 42,
+    "removed_source_cap_face_indices": [
+      3,
+      4,
+      5,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      104,
+      105,
+      106,
+      107,
+      108,
+      109,
+      110,
+      111,
+      112,
+      113,
+      114,
+      115,
+      116,
+      117,
+      118,
+      119,
+      120,
+      121,
+      155,
+      156,
+      157,
+      198,
+      199,
+      200,
+      201,
+      202,
+      203,
+      204,
+      205,
+      206,
+      207,
+      208,
+      209,
+      210,
+      211,
+      212,
+      213,
+      214,
+      215
+    ],
+    "removed_cuff_triangles_after_caps": 478,
+    "split_cuff_triangles": 57,
+    "source_cuff_cutoff_y": 0.09,
+    "open_loops": 3,
+    "method": "Remove recessed caps and black folded cuffs; interpolate original UVs at clean open ankle cuts, then extend the remaining chainmail to the original fitted hem height"
+  },
+  "anatomical_mapping": {
+    "source_y": [
+      0.09,
+      0.22,
+      0.4,
+      0.628,
+      0.99951171875
+    ],
+    "target_y_m": [
+      0.181,
+      0.3856,
+      0.553,
+      0.862,
+      1.14
+    ]
+  },
+  "welded_components": 1,
+  "cuffs": [
+    {
+      "side": "Left",
+      "skin_radial_clearance_m": 0.004,
+      "transition_interval_y_m": [
+        0.26,
+        0.43
+      ],
+      "minimum_hem_y_m": 0.1751590747229024,
+      "method": "Current v1 ankle contours; no repeated calf slimming"
+    },
+    {
+      "side": "Right",
+      "skin_radial_clearance_m": 0.004,
+      "transition_interval_y_m": [
+        0.26,
+        0.43
+      ],
+      "minimum_hem_y_m": 0.1748820993560509,
+      "method": "Current v1 ankle contours; no repeated calf slimming"
+    }
+  ],
+  "waist": {
+    "method": "Actual trouser and body radial waist sections; accessories retain their offset from the cloth",
+    "section_y_m": [
+      1.0,
+      1.095
+    ],
+    "cloth_clearance_m": 0.009,
+    "maximum_displacement_m": 0.05996865123406611
+  },
+  "ankle_connections": [
+    {
+      "side": "Left",
+      "interface": "shoe_ankle_Left",
+      "center": [
+        0.15926159918308258,
+        0.23499998450279236,
+        -0.03282027319073677
+      ],
+      "axis": [
+        -0.05732715403881295,
+        0.9980521083118923,
+        0.024608667253572837
+      ],
+      "basis": [
+        [
+          0.9983554464266773,
+          0.05730973588289026,
+          0.0014130687255574281
+        ],
+        [
+          -2.168404344971009e-19,
+          -0.024649204190403725,
+          0.9996961622076879
+        ]
+      ],
+      "weights": {
+        "LeftLeg": 0.9591349695661484,
+        "LeftFoot": 0.04086503043385167
+      },
+      "sample_heights_m": [
+        -0.03,
+        -0.024999999999999998,
+        -0.019999999999999997,
+        -0.015,
+        -0.009999999999999998,
+        -0.0049999999999999975,
+        0.0
+      ]
+    },
+    {
+      "side": "Right",
+      "interface": "shoe_ankle_Right",
+      "center": [
+        -0.15926215052604675,
+        0.23499999940395355,
+        -0.03594214841723442
+      ],
+      "axis": [
+        0.05730302665267743,
+        0.997607654189585,
+        0.038669515626602424
+      ],
+      "basis": [
+        [
+          0.9983568315669715,
+          -0.05726002586391477,
+          -0.002219527341861716
+        ],
+        [
+          0.0,
+          -0.03873316073363134,
+          0.999249589571886
+        ]
+      ],
+      "weights": {
+        "RightLeg": 0.940803562814493,
+        "RightFoot": 0.05919643718550703
+      },
+      "sample_heights_m": [
+        -0.03,
+        -0.024999999999999998,
+        -0.019999999999999997,
+        -0.015,
+        -0.009999999999999998,
+        -0.0049999999999999975,
+        0.0
+      ]
+    }
+  ],
+  "clearance_iterations": [
+    {
+      "step": 0,
+      "minimum_signed_distance_m": -0.05447487271374545,
+      "maximum_correction_m": 0.017836031267807563
+    },
+    {
+      "step": 1,
+      "minimum_signed_distance_m": -0.04436360437170017,
+      "maximum_correction_m": 0.013617924046672608
+    },
+    {
+      "step": 2,
+      "minimum_signed_distance_m": -0.034382373909582986,
+      "maximum_correction_m": 0.011900093137099336
+    },
+    {
+      "step": 3,
+      "minimum_signed_distance_m": -0.025344336560283863,
+      "maximum_correction_m": 0.009479626560717198
+    },
+    {
+      "step": 4,
+      "minimum_signed_distance_m": -0.017419448676061225,
+      "maximum_correction_m": 0.008031274589357956
+    },
+    {
+      "step": 5,
+      "minimum_signed_distance_m": -0.010299961726997476,
+      "maximum_correction_m": 0.005611278567013799
+    },
+    {
+      "step": 6,
+      "minimum_signed_distance_m": -0.004764024373768798,
+      "maximum_correction_m": 0.003665642911358667
+    },
+    {
+      "step": 7,
+      "minimum_signed_distance_m": -0.0011480765383197799,
+      "maximum_correction_m": 0.0024861820168069204
+    },
+    {
+      "step": 8,
+      "minimum_signed_distance_m": 0.0013070557157994762,
+      "maximum_correction_m": 0.0017568630514961144
+    },
+    {
+      "step": 9,
+      "minimum_signed_distance_m": 0.0025366196492287996,
+      "maximum_correction_m": 0.0012561228593399917
+    },
+    {
+      "step": 10,
+      "minimum_signed_distance_m": 0.0026340453730802037,
+      "maximum_correction_m": 0.0009085874281162069
+    },
+    {
+      "step": 11,
+      "minimum_signed_distance_m": 0.002710999745040729,
+      "maximum_correction_m": 0.000666577379949383
+    },
+    {
+      "step": 12,
+      "minimum_signed_distance_m": 0.0027717912904055408,
+      "maximum_correction_m": 0.0004947300972845169
+    },
+    {
+      "step": 13,
+      "minimum_signed_distance_m": 0.002819808634484503,
+      "maximum_correction_m": 0.0003766158405254522
+    },
+    {
+      "step": 14,
+      "minimum_signed_distance_m": 0.002857731728644208,
+      "maximum_correction_m": 0.00029688483463473505
+    },
+    {
+      "step": 15,
+      "minimum_signed_distance_m": 0.002887679780441266,
+      "maximum_correction_m": 0.0002340674614661791
+    },
+    {
+      "step": 16,
+      "minimum_signed_distance_m": 0.0029113280242459016,
+      "maximum_correction_m": 0.0001845391567345321
+    },
+    {
+      "step": 17,
+      "minimum_signed_distance_m": 0.002930000285460796,
+      "maximum_correction_m": 0.00014548980006310165
+    },
+    {
+      "step": 18,
+      "minimum_signed_distance_m": 0.0029447426407577266,
+      "maximum_correction_m": 0.00011470245347403252
+    },
+    {
+      "step": 19,
+      "minimum_signed_distance_m": 0.0029563815542310527,
+      "maximum_correction_m": 9.042877696959588e-05
+    },
+    {
+      "step": 20,
+      "minimum_signed_distance_m": 0.0029655697950101787,
+      "maximum_correction_m": 0.00011707369827412289
+    },
+    {
+      "step": 21,
+      "minimum_signed_distance_m": 0.002972822948335282,
+      "maximum_correction_m": 5.620290988945136e-05
+    },
+    {
+      "step": 22,
+      "minimum_signed_distance_m": 0.0029785484338206714,
+      "maximum_correction_m": 4.4308298728774874e-05
+    },
+    {
+      "step": 23,
+      "minimum_signed_distance_m": 0.0029830679251926437,
+      "maximum_correction_m": 3.49310598830122e-05
+    },
+    {
+      "step": 24,
+      "minimum_signed_distance_m": 0.0029866353870162607,
+      "maximum_correction_m": 2.972121685609464e-05
+    },
+    {
+      "step": 25,
+      "minimum_signed_distance_m": 0.002989451320082581,
+      "maximum_correction_m": 9.520057355638659e-05
+    },
+    {
+      "step": 26,
+      "minimum_signed_distance_m": -0.023852810881965295,
+      "maximum_correction_m": 0.004723997463291154
+    },
+    {
+      "step": 27,
+      "minimum_signed_distance_m": 0.0029934332206284307,
+      "maximum_correction_m": 0.00018639613608780487
+    },
+    {
+      "step": 28,
+      "minimum_signed_distance_m": 0.0029948160852332102,
+      "maximum_correction_m": 0.00014249986383024454
+    },
+    {
+      "step": 29,
+      "minimum_signed_distance_m": 0.0029959078555288447,
+      "maximum_correction_m": 0.0001089436011343966
+    }
+  ],
+  "face_clearance": {
+    "method": "Cloth triangle centers and three edge midpoints against current body surfaces; lower ankle interface remains fixed",
+    "fixed_below_y_m": 0.215,
+    "reviewed_sample_minimum_y_m": 0.275,
+    "samples_per_iteration": 6052,
+    "iterations": [
+      {
+        "step": 0,
+        "minimum_sample_signed_distance_m": -0.013649611676545563,
+        "maximum_correction_m": 0.007018305711788569
+      },
+      {
+        "step": 1,
+        "minimum_sample_signed_distance_m": -0.010330596265610607,
+        "maximum_correction_m": 0.0062878446163038984
+      },
+      {
+        "step": 2,
+        "minimum_sample_signed_distance_m": -0.007631828152369058,
+        "maximum_correction_m": 0.003894880580951293
+      },
+      {
+        "step": 3,
+        "minimum_sample_signed_distance_m": -0.004822196202667578,
+        "maximum_correction_m": 0.002401296099624627
+      },
+      {
+        "step": 4,
+        "minimum_sample_signed_distance_m": -0.006482007989081579,
+        "maximum_correction_m": 0.0024158665262982316
+      },
+      {
+        "step": 5,
+        "minimum_sample_signed_distance_m": -0.004860637875219551,
+        "maximum_correction_m": 0.001192903977294666
+      },
+      {
+        "step": 6,
+        "minimum_sample_signed_distance_m": -0.004278811788092123,
+        "maximum_correction_m": 0.0010957875784744654
+      },
+      {
+        "step": 7,
+        "minimum_sample_signed_distance_m": -0.003899820800200287,
+        "maximum_correction_m": 0.002136199030745568
+      },
+      {
+        "step": 8,
+        "minimum_sample_signed_distance_m": -0.0035461085248694245,
+        "maximum_correction_m": 0.0014820729472247295
+      },
+      {
+        "step": 9,
+        "minimum_sample_signed_distance_m": -0.0030576984311190165,
+        "maximum_correction_m": 0.0014072363489037183
+      },
+      {
+        "step": 10,
+        "minimum_sample_signed_distance_m": -0.003928948304130937,
+        "maximum_correction_m": 0.000980252757361974
+      },
+      {
+        "step": 11,
+        "minimum_sample_signed_distance_m": -0.0033595389242633703,
+        "maximum_correction_m": 0.0006826912368268977
+      },
+      {
+        "step": 12,
+        "minimum_sample_signed_distance_m": -0.00205746416553462,
+        "maximum_correction_m": 0.0007372673799667786
+      },
+      {
+        "step": 13,
+        "minimum_sample_signed_distance_m": -0.003613971921856296,
+        "maximum_correction_m": 0.0006915178072863254
+      },
+      {
+        "step": 14,
+        "minimum_sample_signed_distance_m": -0.0014363823019974597,
+        "maximum_correction_m": 0.0007075954838074419
+      },
+      {
+        "step": 15,
+        "minimum_sample_signed_distance_m": -0.003584598266957845,
+        "maximum_correction_m": 0.000870667735213767
+      },
+      {
+        "step": 16,
+        "minimum_sample_signed_distance_m": 0.0030860018150936286,
+        "maximum_correction_m": 0.0006847192851586936
+      },
+      {
+        "step": 17,
+        "minimum_sample_signed_distance_m": -0.005321649871262196,
+        "maximum_correction_m": 0.003582801741535352
+      },
+      {
+        "step": 18,
+        "minimum_sample_signed_distance_m": -0.003975453980201838,
+        "maximum_correction_m": 0.0011668281968785592
+      },
+      {
+        "step": 19,
+        "minimum_sample_signed_distance_m": -0.0030179339493248943,
+        "maximum_correction_m": 0.0010101251307746942
+      }
+    ]
+  },
+  "validation": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+    "sha256": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b",
+    "triangles": 1513,
+    "bones": 65,
+    "exact_rest_hierarchy_and_inverse_bind_match": true,
+    "maximum_weight_sum_error": 1.1920928955078125e-07,
+    "active_bones": [
+      "Hips",
+      "LeftFoot",
+      "LeftLeg",
+      "LeftUpLeg",
+      "RightFoot",
+      "RightLeg",
+      "RightUpLeg"
+    ]
+  },
+  "remaining_review": [
+    "Posed garment/body intersections",
+    "Priest top overlap",
+    "Other tops and boots"
+  ]
+}

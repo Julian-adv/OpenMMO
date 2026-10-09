@@ -1,0 +1,246 @@
+{
+  "date": "2026-10-09",
+  "reason": "User requested deletion of intermediate results before commit.",
+  "deleted": [
+    {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest-black-cuffs-v1.glb",
+      "sha256": "ed5b528b20e2f6c955120c5b9de57b5676153797a6704dea0a4175bd7952ddfa",
+      "bytes": 2496176,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest-seat-before-v2.glb",
+      "sha256": "0a69d996d3432055d60402913809b01635b1f8960baa2bf0941f472a568f6d51",
+      "bytes": 2466148,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest-seat-before-v3.glb",
+      "sha256": "5552f2c077b3ab6fa62f994e41f9919e3159871697de428eda1d3374850a4684",
+      "bytes": 2466148,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/priest-pants-black-cuffs-v1.blend",
+      "sha256": "db8f602dac78f3d512264ae23425c8ea40ae44bb0da56b1244bc7a5fc7b24c47",
+      "bytes": 41775227,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/priest-pants-fitting-v3.blend",
+      "sha256": "6c5f5edfae06f092bdbe872a2cb0326876fc72a26128eebf135973225c47f153",
+      "bytes": 41675818,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/priest-pants-fitting.blend",
+      "sha256": "732da86bb982d8b27c9a7a1b3773d3a075603a5c83dcd2252237c1a24f61c824",
+      "bytes": 41738660,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/tripo-fitting.blend",
+      "sha256": "814d0ece44b12afa4ecb1c47afe1c3f4bedf3588496396d1c6375b3a760af439",
+      "bytes": 60514065,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-caveman-boots-v1.png",
+      "sha256": "f887803d2146cde70cb941a36762de0ff8a9c5db134158af28ccdff230953b98",
+      "bytes": 679256,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-fitted-v1-ankles.png",
+      "sha256": "9617a41b6c3b35a6e3279ee14ecf1826a9bb12a227e0ea4820447dd9ac63863f",
+      "bytes": 432676,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-fitted-v1-connections.png",
+      "sha256": "0c81431d77553bf1cf605308a4d5a6a75459ac473a57699e67b2a146be13c58f",
+      "bytes": 596703,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-fitted-v1-motion.png",
+      "sha256": "421795e31cfeb89b25426177395f6bcf4feb185dd002431fbd3f6018171d2553",
+      "bytes": 312181,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-fitted-v1-rear-motion.png",
+      "sha256": "9e41782fa42d5930029548ad622678a290c308a25aafdfee292fa15b30a08d32",
+      "bytes": 199993,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-fitted-v1-rest.png",
+      "sha256": "6713ee9fa582d041db20000da0be8c40bea4bce6df7ee335ad8458bc1cfa1f03",
+      "bytes": 257709,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-fitted-v1-skin.png",
+      "sha256": "b19f4c57745a5cfc8eb7fc9b814797da117f5a42d2a663cf20482cf98c00dd54",
+      "bytes": 190482,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-fitted-v3-ankles.png",
+      "sha256": "f93700be4b4d90f92d6142a4e597a8d9b3e47a382d6925a04e9fcbb3c0ca20d1",
+      "bytes": 432723,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-fitted-v3-connections.png",
+      "sha256": "8e97ee0d96ba2297f43bcdb196f6b5b24ee6f0b93af0341f0eff806269048dc7",
+      "bytes": 595427,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-fitted-v3-rest.png",
+      "sha256": "14fef0330411f60aa3c2943fa18579a6462551562a30aa7e751d5c5ed252a52d",
+      "bytes": 257015,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-fitted-v3-skin.png",
+      "sha256": "2a9401e7c56a8789f2f0dda26331051996cca2483b6416b2abd3cebf79b8e14d",
+      "bytes": 190539,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v1-after-back.png",
+      "sha256": "dbca4d5852e97094256cbd6485a134de7094e3c2f4624deb569b4104d740b96f",
+      "bytes": 591549,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v1-after-front.png",
+      "sha256": "dbf9eeae7c9fdd803e96c781229ea5ae1c175996ce4eae7c2ec91f9d850fb5ac",
+      "bytes": 602598,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v1-after-side.png",
+      "sha256": "d4a3e40cdc911d279c1bbb418d12000b2339ca734ea6c0011321b31f001afc10",
+      "bytes": 367487,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v1-before-front.png",
+      "sha256": "38288ee347f94d070f281a8b69ee7f17c6747c081045ce5e29f2b1960db7248b",
+      "bytes": 602601,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-rogue-waist-v1-motion.png",
+      "sha256": "a9834a31479e4de7f606cd9aae2bd7cbcad84dcebd94a6290a39764b1d44164e",
+      "bytes": 651317,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-seat-v3-after-back.png",
+      "sha256": "8b78eb80d2ee4ce9bdc2a363a6ab60612c59b9d0f9a660d741e0b0190fe0d64c",
+      "bytes": 511991,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-seat-v3-after-rear-quarter.png",
+      "sha256": "095f7a8448d2d65a3a52a073919ef370528398397d94cc6a568b54a2c2b36681",
+      "bytes": 496284,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-seat-v3-after-side.png",
+      "sha256": "d58e232850b3189e029e41c78f29d515189cb41ec7132a1baefd94bc83a19c41",
+      "bytes": 321645,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-seat-v3-before-back.png",
+      "sha256": "ac49187982dc5f280d6ff98b084600ff4dccb5ac4596c42ccd5e3f0a468db8ca",
+      "bytes": 513327,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-seat-v3-before-rear-quarter.png",
+      "sha256": "508ef288afc1c9d39003a47179f738602480f16d5ab80cb500d6ee275636a61d",
+      "bytes": 498189,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-seat-v3-before-side.png",
+      "sha256": "968a0a1de119b4649d0a83d900ff8adefb320a893a1b0b8852e238179732eeac",
+      "bytes": 324408,
+      "status": "[미사용] Deleted at user request on 2026-10-09",
+      "retained": false,
+      "storage_status": "[미사용] Deleted at user request; hash retained for provenance."
+    }
+  ],
+  "deleted_files": 29,
+  "deleted_bytes": 202758342,
+  "retained": [
+    "Original concept art and Tripo source.glb files",
+    "Current priest v4 and corrected rogue GLBs with current editable Blender files",
+    "Pre-cleanup rogue GLB required as input to fix-rogue-undershirt.py",
+    "Final comparison screenshots and numerical validation/provenance records"
+  ]
+}

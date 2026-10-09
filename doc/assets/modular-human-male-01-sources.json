@@ -2201,5 +2201,173 @@
     "current_interfaces": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
     "source_license": "Same as the existing modular male body; no new AI generation",
     "additional_credits": 0
+  },
+  "linen_underwear_waist": {
+    "date": "2026-10-08",
+    "source": "Runtime geometry variants of existing Meshy/Mixamo assets; source licenses and subscription records above apply. No new AI generation, paid API calls or source GLB changes.",
+    "condition": "Basic linen shirt with underwear only",
+    "review": {
+      "path": "doc/assets/modular-linen-underwear-waist-review-v1.json",
+      "sha256": "691f1c38e28b96862adebd4c704d073c348aeb30f812e7373164cb975441ef64",
+      "bytes": 4117
+    },
+    "numeric_validation": {
+      "path": "doc/assets/modular-linen-underwear-waist-validation-v1.json",
+      "sha256": "37f9030f62fd9ca4a5b3d0d88b40270a28fd18fc26d0965e551102274729c76d",
+      "bytes": 2602
+    },
+    "runtime_sources": [
+      {
+        "path": "client/src/lib/utils/modularCharacter.ts",
+        "sha256": "6a64d01eaef6386a3e11727aebad113ec7d52543dd5dc98f1a81a5d90c2bbdde",
+        "bytes": 28870
+      },
+      {
+        "path": "client/src/lib/utils/modularClothing.ts",
+        "sha256": "5f392f49bb93ab9c75d7f35ee9ba5c45646155c040b0ce0f30629f833a87339f",
+        "bytes": 15575
+      }
+    ],
+    "images": [
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/linen/linen-underwear-waist-v1-before-front.png",
+        "sha256": "bff5584313884f42d4dfb03006335ff52e4b46bb3848852477f6a350f1e6288d",
+        "bytes": 337535
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/linen/linen-underwear-waist-v1-before-back.png",
+        "sha256": "a044b416c84672896689b376dd636aaed4058f0c24ebe68fdba00c3d343cb04e",
+        "bytes": 349572
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/linen/linen-underwear-waist-v1-after-front.png",
+        "sha256": "a6272f956c1cf80df6d2823a6df718451b8d92bf8eee14035e205c9ae009c7c0",
+        "bytes": 335744
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/linen/linen-underwear-waist-v1-after-back.png",
+        "sha256": "78be709fd23c17e2e40fda956d378d97c70c91ff4cd1b372b5f1b6b1320aeb16",
+        "bytes": 351560
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/linen/linen-underwear-waist-v1-motion.png",
+        "sha256": "5d45b0027c9758450b7143f130371125d5cde736436a16320f22d953fdbf4678",
+        "bytes": 834259
+      }
+    ],
+    "underwear_seat_regression": {
+      "path": "doc/assets/modular-linen-underwear-waist-validation-v2.json",
+      "sha256": "d7defbf889a2e010dbbd809e1b1569d8719b1d1c1c61a377548b36f6f3ebe59f",
+      "bytes": 2632
+    },
+    "underwear_seat_regression_note": "Seat reshape now composes with linen waist clipping; shirt removal restores the complete underwear-shaped torso. Original v1 records remain historical.",
+    "runtime_sources_previous_v1": [
+      {
+        "path": "client/src/lib/utils/modularCharacter.ts",
+        "sha256": "e5ba0e9ef62c37d6b89522e22c78c38a8637694cd3317446ead0c7b2e5e26e35",
+        "bytes": 28694
+      },
+      {
+        "path": "client/src/lib/utils/modularClothing.ts",
+        "sha256": "482e59f754cf2d3780e3b5e0e537bdc5d9f6b0126009205f534e700d3943bf55",
+        "bytes": 13355
+      }
+    ]
+  },
+  "underwear_seat": {
+    "date": "2026-10-08",
+    "status": "Runtime silhouette correction for pants=none; source GLBs unchanged.",
+    "source": "Existing canonical Meshy/Mixamo body and fitted plate trousers; see original records in this file and modular-knight-plate-sources.json.",
+    "license": "Original source asset terms apply to this local derivative.",
+    "new_ai_generation_or_paid_calls": false,
+    "method": "Plate rear curve sampled in a symmetric XY grid, 12mm weighted smoothing, 90 percent depth about Z=-25mm. Smooth transition from .76 to .86m and back to the original torso from 1.14 to 1.20m; sides and front preserved.",
+    "scope": "Torso and legs while underwear is selected; other trousers restore the original geometry.",
+    "profile": {
+      "path": "client/src/lib/data/underwearSeat.json",
+      "sha256": "da49f428390de9e026d75f01756e03f63f719441c3c0d3be3a0e17027b188f91",
+      "bytes": 7047
+    },
+    "source_assets": [
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+        "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
+        "bytes": 22214236
+      },
+      {
+        "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+        "sha256": "aa95a9f1b85aa881df47e6e37ecbfebc7c168b352fcf0f4a9941208962eeff04",
+        "bytes": 11524492
+      }
+    ],
+    "review": {
+      "path": "doc/assets/modular-underwear-seat-review-v1.json",
+      "sha256": "426c53af925e33aceffa26a9a2b36b592e858e854a1f9fe279eec4c77988afa0",
+      "bytes": 4133
+    },
+    "validation": {
+      "path": "doc/assets/modular-underwear-seat-validation-v1.json",
+      "sha256": "09e7c118e04ab31a70b7cffbd931bde83ed92c7e6128078033c8376ee005ee1d",
+      "bytes": 2429
+    },
+    "implementation": [
+      {
+        "path": "client/src/lib/utils/modularCharacter.ts",
+        "sha256": "6a64d01eaef6386a3e11727aebad113ec7d52543dd5dc98f1a81a5d90c2bbdde",
+        "bytes": 28870
+      },
+      {
+        "path": "client/src/lib/utils/modularClothing.ts",
+        "sha256": "5f392f49bb93ab9c75d7f35ee9ba5c45646155c040b0ce0f30629f833a87339f",
+        "bytes": 15575
+      },
+      {
+        "path": "tools/measure-underwear-seat.py",
+        "sha256": "7d8cd2ce78808d8c6ab3069211605d6d34578b7a241d7b8350ef5d7ad8ae1818",
+        "bytes": 1902
+      },
+      {
+        "path": "tools/validate-underwear-seat.mjs",
+        "sha256": "be884ff2db0f19284b96b83a50b4681c002ffac7c1d748a74f122fccfe447778",
+        "bytes": 4659
+      },
+      {
+        "path": "client/src/lib/utils/modularClothing.test.ts",
+        "sha256": "30826a48faeeda70a531ca308df5e6f3f4056f2b0a28c2f8e2e49cb0eef66aa3",
+        "bytes": 27290
+      }
+    ],
+    "images": [
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/underwear/underwear-seat-v1-before-side.png",
+        "sha256": "3f3fe025a144cfd35eca5f12d6cdb220b15fe6faba085fd2c046f8bd1afcb2aa",
+        "bytes": 220317
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/underwear/underwear-seat-v1-after-side.png",
+        "sha256": "d632f7fd5a2d28ae88b18d93c876970a6aab35a2c1649c1f741881665e3614bb",
+        "bytes": 221365
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/underwear/underwear-seat-v1-after-back.png",
+        "sha256": "510757eb8b7a1c16c23e326835c18c51d3be5f4f926ef0fc5101d15ec38e34be",
+        "bytes": 323954
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/underwear/underwear-seat-v1-linen-side.png",
+        "sha256": "33b69246a6ead42993954be15bfe86858f406fb6d06d8a5985d6e0e4c1d726b4",
+        "bytes": 232788
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/underwear/underwear-seat-v1-plate-side.png",
+        "sha256": "f3d85a12eee4222f7256e5d6c477e186f80978e0292f5f86dfe7addffef753a9",
+        "bytes": 274688
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/underwear/underwear-seat-v1-motion.png",
+        "sha256": "3a347e56c5d48ce064c02fd86da99695e7c50e56854c18a87430c105446f6440",
+        "bytes": 492895
+      }
+    ],
+    "budget": "Original base total 13,891 triangles, including hidden body regions; unchanged topology and face allocation (1,505). No new character part or decimation."
   }
 }

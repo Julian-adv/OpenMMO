@@ -461,3 +461,19 @@ Khronos glTF Validator 오류·경고 0이며, meshopt 미지원 안내 1개가 
 ```sh
 node tools/prepare-modular-character.mjs --part boots_rogue
 ```
+
+## 로그 속셔츠 앞 밑단 보정 — 2026-10-09
+
+사제 사슬 하의와 함께 입었을 때 조끼 아래의 삼각형 얼룩이 흰 속셔츠를 가리는 문제를 수정했다.
+몸체 숨김만으로는 사라지지 않아 상의 내부 가죽 면 15개를 제거하고 리넨 정점 22개를 최대 12mm 안으로 이동했다.
+앞쪽 UV 정점 15개를 같은 아틀라스의 깨끗한 리넨 영역에 연결했다. 텍스처 바이트·리그·가중치는 유지했다.
+상의는 4,877→4,862 triangles이며 원본 Tripo 출력 조건과 기존 사용자 보고 약 USD 20/월 구독 기록을 따른다.
+새 AI 생성·유료 호출은 없다.
+
+현재 제작 파일은 `rogue_tripo_v1/rogue-undershirt-fitting-v1.blend`, 출력은 같은 폴더의 `top_rogue.glb`다.
+`top_rogue-undershirt-before-v1.glb`는 재현 도구 입력으로 보존한다. [미사용] 이전 `tripo-fitting.blend`는 사용자 요청으로 2026-10-09 삭제했다.
+재현 도구는 `tools/fix-rogue-undershirt.py`이며 [수정 기록](modular-rogue-undershirt-fitting-v1.json),
+[동작 검사](modular-rogue-undershirt-animation-v1.json), [게임용 압축 검사](modular-rogue-undershirt-game-validation-v1.json),
+[착용 화면](modular-priest-rogue-waist-review-v2.json)에 해시와 검사 범위를 기록했다.
+게임용 출력은 326,160 bytes이며 리그 결합·압축 해제·7종 동작 91시점 검사를 통과했다.
+원본 포함 예산은 사제 조합 기록에 별도로 정리했으며 전체 게임플레이 충돌 승인을 의미하지 않는다.

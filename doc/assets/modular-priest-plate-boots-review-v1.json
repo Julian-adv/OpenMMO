@@ -1,0 +1,70 @@
+{
+  "date": "2026-10-08",
+  "cut": {
+    "min": 0.2199999988079071,
+    "max": 1.132834553718567,
+    "triangles": 1466
+  },
+  "errors": [],
+  "motion": [
+    {
+      "clip": "idle1",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "walk",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "run",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "jump",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "slash1",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "combat_idle",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "sit_idle",
+      "time_fraction": 0.4
+    }
+  ],
+  "checks": [
+    "Plate boots trim priest trousers",
+    "Barefoot restores full trousers",
+    "Reselection and reattachment preserve the cut",
+    "Ankle front/back/side and seven motion samples inspected"
+  ],
+  "source": "Local Chromium workshop screenshots; existing asset licenses apply; no AI generation.",
+  "cutoff_y_m": 0.22,
+  "plate_boot_maximum_y_m": 0.2321803,
+  "original_glb_modified": false,
+  "visual_review": "Front/back/side and seven 40-percent animation samples inspected; long hem protrusion removed. Full-motion collision validation not performed.",
+  "validation": {
+    "type_check": "passed: 0 errors, 0 warnings",
+    "lint": "passed",
+    "related_tests_passed": 54
+  },
+  "image": {
+    "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-plate-boots-v1.png",
+    "sha256": "cd4fd1d46d7c00cdac456cc3d104f41da1393da4867a23c9b84cff9011ad035d",
+    "bytes": 629953
+  },
+  "pants": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+    "sha256": "0a69d996d3432055d60402913809b01635b1f8960baa2bf0941f472a568f6d51",
+    "bytes": 2466148
+  },
+  "boots": {
+    "path": "assets/modular_human_male_01/parts/fitted/boots_plate.glb",
+    "sha256": "60839b7c0b9b94cd97bb6463fa385c6b65443695e176028abe4c10cec7ec3650",
+    "bytes": 11053696
+  }
+}

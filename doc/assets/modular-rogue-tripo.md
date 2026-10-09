@@ -54,7 +54,7 @@ UV·텍스처·본·가중치를 유지했다. 웹 미리보기의 앉은 자세
 
 - 원본: `assets/modular_human_male_01/parts/rogue_tripo_v1/source.glb`.
 - 피팅·리깅 상의: `assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb`.
-- 편집본: `assets/modular_human_male_01/parts/rogue_tripo_v1/tripo-fitting.blend`.
+- 이전 편집본: [미사용] `tripo-fitting.blend`는 2026-10-09 사용자 요청으로 삭제했다. 현재 편집본은 같은 폴더의 `rogue-undershirt-fitting-v1.blend`다.
 - 기준 몸체: `assets/modular_human_male_01/parts/fitted/base.glb`, `human_male_01_mixamo_candidate_v2`.
 - [원본·기준 몸체·원화 해시와 출처](modular-rogue-tripo-sources.json).
 - [피팅·리깅 검사](modular-rogue-tripo-fitting-v1.json), [동작 검사](modular-rogue-tripo-animation-v1.json), [편집본·이미지 해시](modular-rogue-tripo-review-v1.json).

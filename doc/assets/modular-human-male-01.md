@@ -130,6 +130,60 @@ node tools/prepare-modular-character.mjs --pack locomotion
 GLB 2종의 검증 오류와 브라우저 오류는 0이며, GLB별 기존 경고 8개는 변경 전과 같다.
 Blender 원본과 제작 GLB의 셔츠 정점 위치도 일치한다.
 
+## 기본 천 셔츠와 속옷의 허리 연결 — 2026-10-08
+
+기본 천 셔츠(`top=linen`)와 속옷(`pants=none`) 조합에서 조여진 셔츠 밑단과
+함께 숨겨진 허리 몸체 때문에 허리 사이가 비어 보이던 문제를 수정했다.
+이 조합에서는 하단 몸통을 바깥쪽으로 펴고 Y=1.135–1.20m에서 원래 형상으로 부드럽게 연결한다.
+완전히 펼친 기준 단면은 좌우 반경 0.185m·앞뒤 반경 0.14m, 중심 Z=-0.015m다.
+셔츠 Y 좌표·UV·인덱스·스킨 가중치는 유지한다. 아래쪽 법선을 다시 계산하고
+Y=1.20m 위의 원래 사용자 법선, 소매·목깃은 유지한다.
+
+허리 몸체는 Y=1.09m 아래를 복원해 약 1.065m의 셔츠 밑단 안쪽에서 겹친다.
+천·판금·사제 바지로 교체하면 원래 넣어 입는 형상과 피부 가림으로 복원한다.
+상의 제거 시 몸체 전체를 복원하며, 셔츠 몸통이 없으면 허리 몸체를 자르지 않는다.
+사제 상의의 내부 대리 셔츠에는 이 보정을 적용하지 않는다. 원본 GLB는 수정하지 않았다.
+
+네 방향의 기본 자세와 대표 동작 7종의 각 40% 시점을 앞뒤에서 확인했다.
+실제 자산의 91시점 검사에서 셔츠 정점이 유한하며, 움직이는 골반 기준에서 허리 상단이
+셔츠 밑단을 보수적으로 최소 약 21.2mm 덮는다. 전체 표면의 충돌 합격은 아니다.
+원본 인덱스·UV·가중치, 상단 형상·법선과 착탈 복원을 확인했고,
+타입 검사·린트·관련 테스트 88개가 통과했다.
+[브라우저 검사](modular-linen-underwear-waist-review-v1.json),
+[실제 자산 동작 검사](modular-linen-underwear-waist-validation-v1.json).
+
+![기본 천 셔츠와 속옷의 허리 연결](../images/characters/modular_human_male_01/parts/linen/linen-underwear-waist-v1-after-front.png)
+
+위 이미지는 기존 자산을 표시한 로컬 Chromium 제작실 화면 캡처다. 원본 Meshy·Mixamo
+출처와 이용 조건을 따르며 새 AI 생성·크레딧 사용은 없다.
+재현: `node tools/validate-linen-waist.mjs`.
+
+## 속옷 허리–엉덩이 실루엣 — 2026-10-08
+
+속옷의 잘록한 허리에서 엉덩이로 갑자기 튀어나오던 후면을 기존 판금 하의의 부드러운 곡선에 맞췄다.
+속옷은 기본 몸체의 재질 영역이므로 `pants=none`일 때 몸통과 다리의 뒤쪽 형상을 함께 보정한다.
+판금 후면을 좌우 대칭·XY ±12mm로 평활화하고 Z=-25mm를 중심으로 깊이의 90%를 사용한다.
+Y=0.76–0.86m에서 보정을 시작하고 Y=1.14–1.20m에서 원래 몸통으로 부드럽게 연결한다.
+앞면·X/Y·하단 다리·상체·얼굴과 UV·인덱스·가중치를 유지하며 다른 하의로 교체하면 원래 형상을 복원한다.
+원본 GLB는 수정하지 않는다. 셔츠 허리 절단과 함께 적용되며 상의 제거 시 속옷 형상으로 복원한다.
+
+![속옷 허리와 엉덩이 보정 후](../images/characters/modular_human_male_01/parts/underwear/underwear-seat-v1-after-side.png)
+
+[수정 전](../images/characters/modular_human_male_01/parts/underwear/underwear-seat-v1-before-side.png),
+[판금 기준](../images/characters/modular_human_male_01/parts/underwear/underwear-seat-v1-plate-side.png),
+[셔츠 착용](../images/characters/modular_human_male_01/parts/underwear/underwear-seat-v1-linen-side.png).
+네 방향과 대표 동작 7종의 앞뒤 각 40% 시점을 확인했다.
+실제 자산 91시점 검사에서 유한 정점과 기본 자세의 몸통·다리 이음 위치 일치를 확인했고,
+다른 하의 교체·반복 선택·셔츠 착탈도 통과했다. 타입 검사·린트·관련 테스트 68개가 통과했다.
+[실루엣 검수](modular-underwear-seat-review-v1.json), [형상·동작 검사](modular-underwear-seat-validation-v1.json).
+[셔츠 허리 회귀 검사](modular-linen-underwear-waist-validation-v2.json)의 보수적 수직 겹침은 최소 약 21.2mm다.
+이 검사는 전체 표면 충돌의 합격을 뜻하지 않는다.
+
+기본 몸체의 숨김 포함 **13,891 triangles**, 얼굴 배분 **1,505**를 유지한다.
+이미지는 로컬 Chromium 화면 캡처이며 기존 Meshy·Mixamo 몸체와 판금 하의의 출처·이용 조건을 따른다.
+새 AI 생성·크레딧 사용은 없다. **[미사용]** 보정 전 속옷 실루엣은 수정하지 않은 원본 GLB에서 비교할 수 있다.
+재현: `.venv/bin/python tools/measure-underwear-seat.py`, `node tools/validate-underwear-seat.mjs`.
+
 ## 가죽 갑옷 길이·허리 보정 — 2026-09-29
 
 가죽 갑옷의 앞자락 최저점을 0.96m에서 1.10m로 올려 허리띠 윗부분을 살짝 덮도록 줄였다.

@@ -1,0 +1,131 @@
+{
+  "date": "2026-10-08",
+  "source": "Local Chromium workshop screenshots; existing asset licenses apply; no AI generation.",
+  "views": [
+    "front",
+    "back",
+    "side",
+    "rear-quarter"
+  ],
+  "motion": [
+    {
+      "clip": "idle1",
+      "time_fraction": 0.4,
+      "views": [
+        "front",
+        "back"
+      ]
+    },
+    {
+      "clip": "walk",
+      "time_fraction": 0.4,
+      "views": [
+        "front",
+        "back"
+      ]
+    },
+    {
+      "clip": "run",
+      "time_fraction": 0.4,
+      "views": [
+        "front",
+        "back"
+      ]
+    },
+    {
+      "clip": "jump",
+      "time_fraction": 0.4,
+      "views": [
+        "front",
+        "back"
+      ]
+    },
+    {
+      "clip": "slash1",
+      "time_fraction": 0.4,
+      "views": [
+        "front",
+        "back"
+      ]
+    },
+    {
+      "clip": "combat_idle",
+      "time_fraction": 0.4,
+      "views": [
+        "front",
+        "back"
+      ]
+    },
+    {
+      "clip": "sit_idle",
+      "time_fraction": 0.4,
+      "views": [
+        "front",
+        "back"
+      ]
+    }
+  ],
+  "errors": [],
+  "scope": "Four rest views and two views of each of seven animation samples. Full-motion triangle collisions are not certified.",
+  "method": {
+    "condition": "top=linen, pants=none, actual linen torso loaded",
+    "shirt": "Expand the pinched lower torso outward toward an ellipse of half-width 0.185m and half-depth 0.14m centered at Z=-0.015m; full correction below Y=1.135m, smooth transition ending at Y=1.2m. No inward displacement.",
+    "skin": "Show the torso below Y=1.09m, overlapping the shirt hem at Y approximately 1.065m.",
+    "normals": "Recompute lower torso normals; retain original custom normals above Y=1.2m; remove stale tangents.",
+    "restoration": "Restore source geometry and normal body masking with other pants or tops; a missing linen torso keeps the complete waist body."
+  },
+  "original_glb_modified": false,
+  "new_ai_generation_or_paid_calls": false,
+  "images": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/linen/linen-underwear-waist-v1-before-front.png",
+      "sha256": "bff5584313884f42d4dfb03006335ff52e4b46bb3848852477f6a350f1e6288d",
+      "bytes": 337535
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/linen/linen-underwear-waist-v1-before-back.png",
+      "sha256": "a044b416c84672896689b376dd636aaed4058f0c24ebe68fdba00c3d343cb04e",
+      "bytes": 349572
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/linen/linen-underwear-waist-v1-after-front.png",
+      "sha256": "a6272f956c1cf80df6d2823a6df718451b8d92bf8eee14035e205c9ae009c7c0",
+      "bytes": 335744
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/linen/linen-underwear-waist-v1-after-back.png",
+      "sha256": "78be709fd23c17e2e40fda956d378d97c70c91ff4cd1b372b5f1b6b1320aeb16",
+      "bytes": 351560
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/linen/linen-underwear-waist-v1-motion.png",
+      "sha256": "5d45b0027c9758450b7143f130371125d5cde736436a16320f22d953fdbf4678",
+      "bytes": 834259
+    }
+  ],
+  "source_assets": [
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/top_linen.glb",
+      "sha256": "188ae91799541ff6563a176058695a0c398039d60bc2ee28d97b56b199094a43",
+      "bytes": 7704036
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
+      "bytes": 22214236
+    }
+  ],
+  "validation": {
+    "type_check": "passed: 0 errors, 0 warnings",
+    "lint": "passed",
+    "related_tests_passed": 88,
+    "actual_asset_animation_check": {
+      "path": "doc/assets/modular-linen-underwear-waist-validation-v1.json",
+      "sha256": "37f9030f62fd9ca4a5b3d0d88b40270a28fd18fc26d0965e551102274729c76d",
+      "bytes": 2602
+    }
+  },
+  "rejected_attempts": [
+    "Undoing only the earlier plate waistband shrink left the generated shirt hem too narrow; the waist body pierced it. Replaced with an outward-only lower-shirt shape."
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "date": "2026-10-08",
+  "cut": {
+    "min": 0.4593124985694885,
+    "max": 1.132834553718567,
+    "triangles": 1288
+  },
+  "skin": [
+    {
+      "region": "ankles",
+      "visible": false
+    }
+  ],
+  "errors": [],
+  "motion": [
+    {
+      "clip": "idle1",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "walk",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "run",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "jump",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "slash1",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "combat_idle",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "sit_idle",
+      "time_fraction": 0.4
+    }
+  ],
+  "checks": [
+    "Ranger boots trim priest trousers",
+    "Barefoot restores full trousers",
+    "Reselection and reattachment preserve the cut",
+    "Four calf views and seven motion samples inspected"
+  ],
+  "source": "Local Chromium workshop screenshots; existing asset licenses apply; no AI generation.",
+  "method": "Reuse measured ranger angular rim profile with 3mm overlap; taper inward to inner radius minus 3mm over 45mm and blend hem to same Leg as boot.",
+  "rim_height_m": {
+    "minimum": 0.46231249,
+    "maximum": 0.48176563
+  },
+  "profile": {
+    "path": "client/src/lib/data/rangerBootCuff.json",
+    "sha256": "7556db11e18ffc6f37ac713828891db28d06f4fc58773a603ee2996338ab2e0d",
+    "bytes": 4116
+  },
+  "original_glb_modified": false,
+  "visual_review": "Four angles and seven 40-percent animation samples inspected. Full-motion collision validation not performed.",
+  "validation": {
+    "type_check": "passed: 0 errors, 0 warnings",
+    "lint": "passed",
+    "related_tests_passed": 86
+  },
+  "image": {
+    "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-ranger-boots-v1.png",
+    "sha256": "f0a94ef2125a05d4c0fc9470bb03912b6279810b0616af526657335183c896cc",
+    "bytes": 690829
+  },
+  "pants": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+    "sha256": "0a69d996d3432055d60402913809b01635b1f8960baa2bf0941f472a568f6d51",
+    "bytes": 2466148
+  },
+  "boots": {
+    "path": "assets/modular_human_male_01/parts/ranger_tripo_boots_v1/boots_ranger.glb",
+    "sha256": "916c13a55b4fb5fc15fdf4a017b3ed5977983210a776bc91977eaa138b9b1db6",
+    "bytes": 2094028
+  }
+}

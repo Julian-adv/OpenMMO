@@ -1,0 +1,39 @@
+{
+  "status": "Dev fitting candidate; dynamic robe overlap and mixed outfits pending",
+  "editable": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/priest-pants-fitting-v4.blend",
+    "sha256": "bdc5285a774f5ced145720d12c16fcd2f84c52b38ed5cc4e47634447aef43894"
+  },
+  "images": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-fitted-v4-rest.png",
+      "sha256": "014700880d3d70785e7f6611e345a57eb4de85594b8a86066b89fd0af31967c1"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-fitted-v4-skin.png",
+      "sha256": "2a42752b21856748ead7e170d490fe590de13128a10424f24bdc523c6d946fe6"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-fitted-v4-ankles.png",
+      "sha256": "5a5102aa14ab90aead5f440ef7a3b0e7287fdc1bed284fa1fbb08713cdfe93c8"
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-fitted-v4-connections.png",
+      "sha256": "cbe0c173c7ba37c9695a2565322df863550952e9eef1fa5f43f69983f6033cf8"
+    }
+  ],
+  "context": [
+    "canonical base",
+    "priest top v1, exported skinning baseline without runtime auxiliary robe bones",
+    "crop hair",
+    "bare feet"
+  ],
+  "hidden_regions": [
+    "torso",
+    "upper_arms",
+    "forearms",
+    "legs",
+    "ankles",
+    "boot_ankles"
+  ]
+}

@@ -1,0 +1,89 @@
+{
+  "date": "2026-10-08",
+  "cut": {
+    "min": 0.4790000021457672,
+    "max": 1.132834553718567,
+    "triangles": 1288
+  },
+  "skin": [
+    {
+      "region": "ankles",
+      "visible": true
+    }
+  ],
+  "errors": [],
+  "motion": [
+    {
+      "clip": "idle1",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "walk",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "run",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "jump",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "slash1",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "combat_idle",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "sit_idle",
+      "time_fraction": 0.4
+    }
+  ],
+  "checks": [
+    "Barbarian greaves trim priest trousers",
+    "Barefoot restores full trousers",
+    "Reselection and reattachment preserve the cut",
+    "Ankle front/back/side and seven motion samples inspected"
+  ],
+  "source": "Local Chromium workshop screenshots; existing asset licenses apply; no AI generation.",
+  "cutoff_y_m": 0.479,
+  "fur_rim_y_m": {
+    "inner": 0.478,
+    "outer": 0.482
+  },
+  "original_glb_modified": false,
+  "attempts": [
+    {
+      "cutoff_y_m": 0.46,
+      "result": "Rejected: hem extended below the fur rim in close-up."
+    },
+    {
+      "cutoff_y_m": 0.479,
+      "result": "Hem ends at fur rim; lower skin retained beneath same cutoff."
+    }
+  ],
+  "visual_review": "Three angles and seven 40-percent animation samples inspected. Long hem protrusion removed; some skin at rim is visible in bent poses. Full-motion collision validation not performed.",
+  "validation": {
+    "type_check": "passed: 0 errors, 0 warnings",
+    "lint": "passed",
+    "related_tests_passed": 56
+  },
+  "image": {
+    "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-barbarian-boots-v1.png",
+    "sha256": "18d1eae58903aa923c68426c7fb56d389f9c7aa09a60bbffbcab314139799655",
+    "bytes": 617343
+  },
+  "pants": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+    "sha256": "0a69d996d3432055d60402913809b01635b1f8960baa2bf0941f472a568f6d51",
+    "bytes": 2466148
+  },
+  "boots": {
+    "path": "assets/modular_human_male_01/parts/fitted/boots_barbarian.glb",
+    "sha256": "32d4a9f8e469c671be01dfdefb9bd84bb5b731ea308b66ade878ba505ac945a9",
+    "bytes": 17419012
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "date": "2026-10-08",
+  "cut": {
+    "min": 0.4336927533149719,
+    "max": 1.132834553718567,
+    "triangles": 1297
+  },
+  "skin": [
+    {
+      "region": "ankles",
+      "visible": false
+    }
+  ],
+  "errors": [],
+  "motion": [
+    {
+      "clip": "idle1",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "walk",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "run",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "jump",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "slash1",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "combat_idle",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "sit_idle",
+      "time_fraction": 0.4
+    }
+  ],
+  "checks": [
+    "Caveman boots trim priest trousers",
+    "Barefoot restores full trousers",
+    "Reselection and reattachment preserve the cut",
+    "Four calf views and seven motion samples inspected"
+  ],
+  "source": "Local Chromium workshop screenshots; existing asset licenses apply; no AI generation.",
+  "method": "Clip to measured angular rim profile with 3mm overlap; taper inward to inner radius minus 3mm over 45mm and blend hem to same Leg as boot.",
+  "rim_height_m": {
+    "minimum": 0.43579662,
+    "maximum": 0.478081
+  },
+  "profile": {
+    "path": "client/src/lib/data/cavemanBootCuff.json",
+    "sha256": "77d4175c422c6738edee39c630e6bfcefacec9f52537467cb3ca3f0b3d13128c",
+    "bytes": 4111
+  },
+  "original_glb_modified": false,
+  "attempts": [
+    {
+      "cutoff_y_m": 0.43,
+      "result": "User rejected: hem still covers outer fur rim."
+    },
+    {
+      "cutoff_y_m": 0.465,
+      "result": "Rejected in close-up: horizontal cut leaves gap over lower rim."
+    },
+    {
+      "method": "Angular measured rim and inward taper",
+      "result": "Four views and seven motion samples reviewed; hem fits inside rim."
+    }
+  ],
+  "visual_review": "Four angles and seven 40-percent animation samples inspected. Full-motion collision validation not performed.",
+  "validation": {
+    "type_check": "passed: 0 errors, 0 warnings",
+    "lint": "passed",
+    "related_tests_passed": 85
+  },
+  "image": {
+    "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-caveman-boots-v2.png",
+    "sha256": "d52a68f3d25032c73941a02b78fb559429bb9276cceb7d5b6e2864b615c699b3",
+    "bytes": 756419
+  },
+  "pants": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+    "sha256": "0a69d996d3432055d60402913809b01635b1f8960baa2bf0941f472a568f6d51",
+    "bytes": 2466148
+  },
+  "boots": {
+    "path": "assets/modular_human_male_01/parts/caveman_tripo_boots_v1/boots_caveman.glb",
+    "sha256": "816349031a0c5bcac6efd7bb1320b8cd3d27f77ec86c47a10e6f9ccee72e4a48",
+    "bytes": 2290316
+  }
+}

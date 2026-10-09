@@ -17,9 +17,11 @@
         "Mixed-equipment and full gameplay compatibility review"
       ],
       "selected_glb": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
-      "selected_sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
+      "selected_sha256": "299e5e8d681810315e5f32673f8d3a5f6a57c2a6154e2613c8dabdf1fc08e638",
       "selected_date": "2026-10-01",
-      "actual_triangles": 4877
+      "actual_triangles": 4862,
+      "modified_date": "2026-10-09",
+      "cleanup_report": "doc/assets/modular-rogue-undershirt-fitting-v1.json"
     },
     {
       "id": "pants_rogue",
@@ -87,11 +89,17 @@
     "existing_crop_hair_triangles": 933,
     "existing_sword_triangles": 302,
     "raw_assembled_projection_including_hidden_triangles": 19704,
-    "actual_fitted_assembled_triangles": 26416,
-    "visible_triangles": 18397,
+    "actual_fitted_assembled_triangles": 26401,
+    "visible_triangles": 18382,
     "face_triangles": 1505,
-    "preview_assembled_after_skin_trim_triangles": 24527,
-    "visible_count_scope": "Measured in Chromium workshop: approved Tripo top/trousers/right glove, new Tripo left wrap, v8 boots, crop hair and sword; conditional waistband/torso cut applied, canonical body source unchanged"
+    "preview_assembled_after_skin_trim_triangles": 24512,
+    "visible_count_scope": "Measured in Chromium workshop: approved Tripo top/trousers/right glove, new Tripo left wrap, v8 boots, crop hair and sword; conditional waistband/torso cut applied, canonical body source unchanged",
+    "before_undershirt_cleanup": {
+      "actual_fitted_assembled_triangles": 26416,
+      "visible_triangles": 18397,
+      "preview_assembled_after_skin_trim_triangles": 24527
+    },
+    "undershirt_cleanup_delta_triangles": -15
   },
   "supported_combinations": [],
   "consumed_credits_all_attempts": 255,
@@ -118,15 +126,18 @@
     "wrap_browser_report": "doc/assets/modular-rogue-tripo-wrap-browser-v1.json",
     "wrap_coverage_report": "doc/assets/modular-rogue-tripo-wrap-coverage-v1.json",
     "waist_trim": "Conditional rest-pose Y <= 1.105 m for Tripo trousers and covered torso when a full top is worn; original trousers/skin restored when unequipped",
-    "runtime_report": "doc/assets/modular-rogue-runtime.json"
+    "runtime_report": "doc/assets/modular-rogue-runtime.json",
+    "undershirt_cleanup": "doc/assets/modular-rogue-undershirt-fitting-v1.json"
   },
   "default_top": {
     "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
-    "sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
-    "editable": "assets/modular_human_male_01/parts/rogue_tripo_v1/tripo-fitting.blend",
+    "sha256": "299e5e8d681810315e5f32673f8d3a5f6a57c2a6154e2613c8dabdf1fc08e638",
+    "editable": "assets/modular_human_male_01/parts/rogue_tripo_v1/rogue-undershirt-fitting-v1.blend",
     "review": "doc/assets/modular-rogue-tripo-review-v1.json",
     "approved_by": "user",
-    "date": "2026-10-01"
+    "date": "2026-10-01",
+    "cleanup_review": "doc/assets/modular-priest-rogue-waist-review-v2.json",
+    "modified_date": "2026-10-09"
   },
   "default_pants": {
     "path": "assets/modular_human_male_01/parts/rogue_tripo_pants_v1/pants_rogue.glb",
@@ -135,5 +146,15 @@
     "review": "doc/assets/modular-rogue-tripo-pants-review-v1.json",
     "approved_by": "user",
     "date": "2026-10-02"
+  },
+  "default_top_before_undershirt_cleanup": {
+    "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue-undershirt-before-v1.glb",
+    "sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
+    "editable": "assets/modular_human_male_01/parts/rogue_tripo_v1/tripo-fitting.blend",
+    "review": "doc/assets/modular-rogue-tripo-review-v1.json",
+    "approved_by": "user",
+    "date": "2026-10-01",
+    "status": "[미사용] Archived before cleanup",
+    "editable_retained": false
   }
 }

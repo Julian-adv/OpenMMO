@@ -83,11 +83,11 @@ def surface_clearance(samples):
     return correction, signed
 
 
-def clear_faces(points, faces, main_component, smoother):
+def clear_faces(points, faces, main_component, smoother, fixed_below=.30):
     cloth_faces = faces[np.all(main_component[faces], axis=1)]
     sample_weights = np.array([[1 / 3, 1 / 3, 1 / 3], [.5, .5, 0], [0, .5, .5], [.5, 0, .5]])
     iterations = []
-    movable = io.smoothstep((points[:, 1] - .30) / .06)
+    movable = io.smoothstep((points[:, 1] - fixed_below) / .06)
     for step in range(20):
         samples = np.einsum('sk,fkj->fsj', sample_weights, points[cloth_faces]).reshape(-1, 3)
         corrections, signed = surface_clearance(samples)
@@ -102,20 +102,20 @@ def clear_faces(points, faces, main_component, smoother):
         delta = accumulated / np.maximum(total, 1)[:, None]
         delta = smoother(delta) * movable[:, None]
         points += delta
-        reviewed = samples[:, 1] > .36
+        reviewed = samples[:, 1] > fixed_below + .06
         iterations.append(dict(step=step, minimum_sample_signed_distance_m=float(signed[reviewed].min()),
             maximum_correction_m=float(np.linalg.norm(delta, axis=1).max())))
-    return points, dict(method='Cloth triangle centers and three edge midpoints against current body surfaces; boot interface below .30m remains fixed',
-        reviewed_sample_minimum_y_m=.36,
+    return points, dict(method='Cloth triangle centers and three edge midpoints against current body surfaces; lower ankle interface remains fixed',
+        fixed_below_y_m=fixed_below, reviewed_sample_minimum_y_m=fixed_below + .06,
         samples_per_iteration=len(cloth_faces) * 4, iterations=iterations)
 
 
-def fit_waist(points, faces, main_component):
+def fit_waist(points, faces, main_component, maximum_y=1.13, clearance=.012):
     result = points.copy()
     surface = fit.body_surface(('torso', 'legs'))
     body_triangles = surface[0][surface[1]]
     triangles = points[faces[np.all(main_component[faces], axis=1)]]
-    heights = np.linspace(1.0, 1.13, 25)
+    heights = np.linspace(1.0, maximum_y, 25)
     theta = np.arange(96) * 2 * np.pi / 96
     radial = np.column_stack([np.cos(theta), np.sin(theta)])
     source_radius, body_radius, centers = [], [], []
@@ -139,12 +139,12 @@ def fit_waist(points, faces, main_component):
     body = np.array([np.interp(angle, theta, row, period=2 * np.pi) for row in body_radius])
     source = np.array([np.interp(y, heights, source[:, i]) for i, y in enumerate(local[:, 1])])
     body = np.array([np.interp(y, heights, body[:, i]) for i, y in enumerate(local[:, 1])])
-    target = body + .012 + (radius - source)
+    target = body + clearance + (radius - source)
     amount = io.smoothstep((local[:, 1] - .99) / .09)
     fitted = center + offset * (1 + (target / radius - 1) * amount)[:, None]
     result[np.ix_(mask, [0, 2])] = fitted
     return result, dict(method='Actual trouser and body radial waist sections; accessories retain their offset from the cloth',
-        section_y_m=[float(heights[0]), float(heights[-1])], cloth_clearance_m=.012,
+        section_y_m=[float(heights[0]), float(heights[-1])], cloth_clearance_m=clearance,
         maximum_displacement_m=float(np.linalg.norm(result - points, axis=1).max()))
 
 

@@ -6,6 +6,11 @@ import {
   tuckPantsIntoRangerBoots,
 } from './rangerBootCuff'
 import { meshIslands } from './meshIslands'
+import underwearSeat from '../data/underwearSeat.json'
+import {
+  cavemanPantsBootDistance,
+  tuckPantsIntoCavemanBoots,
+} from './cavemanBootCuff'
 
 type Cut =
   | 'bracers'
@@ -15,6 +20,9 @@ type Cut =
   | 'ranger_sleeves'
   | 'greaves'
   | 'leather_boots'
+  | 'plate_boots'
+  | 'barbarian_pants_boots'
+  | 'caveman_pants_boots'
   | 'tall_boots'
   | 'ranger_pants_boots'
   | 'collar'
@@ -27,6 +35,9 @@ type Cut =
   | 'priest_fur'
   | 'priest_rogue_pockets'
   | 'tripo_pants_waist'
+  | 'linen_untucked'
+  | 'linen_waist'
+  | 'underwear_seat'
 type MaybeCut = Cut | false | undefined
 type Distance = (point: THREE.Vector3) => number
 type Reshape = {
@@ -59,6 +70,9 @@ const cuts: Record<Cut, Distance | Distance[] | Reshape> = {
   ranger_sleeves: rangerGloves,
   greaves: (point) => point.y - 0.46,
   leather_boots: (point) => point.y - 0.235,
+  plate_boots: (point) => point.y - 0.22,
+  barbarian_pants_boots: (point) => point.y - 0.479,
+  caveman_pants_boots: cavemanPantsBootDistance,
   tall_boots: (point) => point.y - 0.43,
   ranger_pants_boots: rangerPantsBootDistance,
   collar: (point) => Math.max(1.61 - point.y, Math.abs(point.x) - 0.075),
@@ -81,6 +95,66 @@ const cuts: Record<Cut, Distance | Distance[] | Reshape> = {
   priest_fur: { reshape: tuckWaist(-0.015, 0.22, [0.145, 0.145], true) },
   priest_rogue_pockets: { reshape: removeRoguePockets },
   tripo_pants_waist: (point) => 1.105 - point.y,
+  linen_untucked: { reshape: untuckLinen },
+  linen_waist: (point) => point.y - 1.09,
+  underwear_seat: { reshape: reshapeUnderwearSeat },
+}
+
+function reshapeUnderwearSeat(source: THREE.BufferGeometry) {
+  const geometry = source.clone()
+  const positions = geometry.getAttribute('position') as THREE.BufferAttribute
+  const { depths, x_step: stepX, y_min: minY, y_step: stepY } = underwearSeat
+  let changed = false
+  for (let i = 0; i < positions.count; i++) {
+    const x = positions.getX(i),
+      y = positions.getY(i),
+      z = positions.getZ(i)
+    const amount =
+      THREE.MathUtils.smoothstep(y, 0.76, 0.86) *
+      (1 - THREE.MathUtils.smoothstep(y, 1.14, 1.2)) *
+      THREE.MathUtils.smoothstep(-z, 0.005, 0.065) *
+      (1 - THREE.MathUtils.smoothstep(Math.abs(x), 0.13, 0.2))
+    if (!amount) continue
+    const gx = Math.min(Math.abs(x) / stepX, depths[0].length - 1)
+    const gy = THREE.MathUtils.clamp((y - minY) / stepY, 0, depths.length - 1)
+    const ix = Math.min(Math.floor(gx), depths[0].length - 2)
+    const iy = Math.min(Math.floor(gy), depths.length - 2)
+    const values = [
+      depths[iy][ix],
+      depths[iy][ix + 1],
+      depths[iy + 1][ix],
+      depths[iy + 1][ix + 1],
+    ]
+    if (values.some((value) => value === null)) continue
+    const [a, b, c, d] = values as number[]
+    const target = THREE.MathUtils.lerp(
+      THREE.MathUtils.lerp(a, b, gx - ix),
+      THREE.MathUtils.lerp(c, d, gx - ix),
+      gy - iy
+    )
+    positions.setZ(i, THREE.MathUtils.lerp(z, target, amount))
+    changed ||= positions.getZ(i) !== z
+  }
+  if (!changed) {
+    geometry.dispose()
+    return source
+  }
+  geometry.deleteAttribute('tangent')
+  geometry.computeVertexNormals()
+  const normals = geometry.getAttribute('normal')
+  const originalNormals = source.getAttribute('normal')
+  if (originalNormals)
+    for (let i = 0; i < positions.count; i++)
+      if (positions.getZ(i) === source.attributes.position.getZ(i))
+        normals.setXYZ(
+          i,
+          originalNormals.getX(i),
+          originalNormals.getY(i),
+          originalNormals.getZ(i)
+        )
+  geometry.boundingBox = null
+  geometry.boundingSphere = null
+  return geometry
 }
 
 export function clipSkinnedGeometry(
@@ -250,6 +324,7 @@ export function trimModularClothing(
     const owned = cached
     mesh.geometry.addEventListener('dispose', () => {
       for (const geometry of owned.cuts.values()) {
+        if (geometry === owned.source) continue
         variants.delete(geometry)
         geometry.dispose()
       }
@@ -265,6 +340,38 @@ export function trimModularClothing(
     variants.set(geometry, cached)
   }
   setGeometry(mesh, geometry)
+}
+
+function untuckLinen(source: THREE.BufferGeometry) {
+  const geometry = source.clone()
+  const positions = geometry.getAttribute('position')
+  for (let i = 0; i < positions.count; i++) {
+    const y = positions.getY(i)
+    const amount = 1 - THREE.MathUtils.smoothstep(y, 1.135, 1.2)
+    if (!amount) continue
+    const x = positions.getX(i)
+    const z = positions.getZ(i) + 0.015
+    const radius = Math.hypot(x / 0.185, z / 0.14)
+    if (radius < 1e-6 || radius >= 1) continue
+    const scale = THREE.MathUtils.lerp(1, 1 / radius, amount)
+    positions.setXYZ(i, x * scale, y, z * scale - 0.015)
+  }
+  geometry.deleteAttribute('tangent')
+  geometry.computeVertexNormals()
+  const originalNormals = source.getAttribute('normal')
+  const normals = geometry.getAttribute('normal')
+  if (originalNormals)
+    for (let i = 0; i < positions.count; i++)
+      if (positions.getY(i) >= 1.2)
+        normals.setXYZ(
+          i,
+          originalNormals.getX(i),
+          originalNormals.getY(i),
+          originalNormals.getZ(i)
+        )
+  geometry.boundingBox = null
+  geometry.boundingSphere = null
+  return geometry
 }
 
 function tuckWaist(
@@ -326,10 +433,11 @@ function applyCuts(
           clipSkinnedGeometry(
             geometry,
             (point) => distance(point) * (skin ? -1 : 1),
-            name === 'ranger_pants_boots'
+            name === 'ranger_pants_boots' || name === 'caveman_pants_boots'
           )
         )
     if (name === 'ranger_pants_boots') tuckPantsIntoRangerBoots(geometry)
+    if (name === 'caveman_pants_boots') tuckPantsIntoCavemanBoots(geometry)
     if (name === 'ranger_sleeves' && !skin) {
       const transition = sleeveCut(0.2)
       const halves = [

@@ -1,0 +1,72 @@
+{
+  "date": "2026-10-08",
+  "status": "[미사용] Front/back lower-garment concept v1 for design review; no 3D generation, fitting or runtime registration.",
+  "service": "OpenAI Codex built-in ImageGen",
+  "tier": "ChatGPT Pro 20x",
+  "license": "OpenAI generated output terms; reference image source and terms retained in doc/assets/characters.md.",
+  "id": "pants_priest",
+  "proposed_slot": "legs",
+  "includes": [
+    "Dark silver chainmail trousers from waist to ankles",
+    "Narrow dark waistband with small front fastening",
+    "Narrow open ankle cuffs"
+  ],
+  "excludes": [
+    "White surcoat and its hanging panels",
+    "External belt and religious ornaments belonging to top_priest",
+    "Body, feet, sandals and boots"
+  ],
+  "planned_body_reference": {
+    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
+    "rig_id": "human_male_01_mixamo_candidate_v2",
+    "interfaces": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+    "status": "Future fitting reference; not supplied to ImageGen. Reconcile current body with provisional interface contours before fitting."
+  },
+  "versions": [
+    {
+      "version": 1,
+      "view": "front",
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/pants_priest-front-v1.png",
+      "sha256": "01841f5235c4a22c272d34dc2efef233f5d99f9df7071f7f320b55a03ca1cda0",
+      "resolution": [
+        1024,
+        1536
+      ],
+      "background": "solid white RGB",
+      "reference_images": [
+        "client/public/character_concepts/priest.webp",
+        "doc/images/characters/modular_human_male_01/parts/priest/top_priest-front-v2.png"
+      ],
+      "prompt": "Use case: stylized-concept.\nAsset type: isolated FRONT-view modular male priest trousers concept for fantasy RPG 3D modeling.\nInput image 1: existing full male priest character, design reference. Input image 2: accepted priest upper outfit, material reference only. Draw ONLY the chainmail TROUSERS that go underneath this priest's white surcoat. Preserve the original dark silver chainmail appearance and practical fitted silhouette; this is a faithful matching lower garment, not a redesign.\nSubject: one complete empty pair of waist-to-ankle chainmail trousers, two anatomically proportioned long legs with a clear crotch and gap between legs. Adult male proportions, moderately fitted thighs and narrower calves, straight relaxed neutral stance with feet modestly separated; no excessive bow legs. Fine clearly readable interlocking steel rings, muted dark iron with silver edge glints, supple heavy mail with slight natural folds at hips and knees, no plate armor. Discreet narrow dark charcoal textile/leather binding at the open waist, a simple unobtrusive center-front fastening integral to the waistband, no external belt. Waist construction slim enough to sit underneath the existing surcoat and its separate belt. Both legs terminate in narrow open ankle cuffs slightly above the ankle joint with minimal dark binding. Interior dark fabric visible only at open waist/cuff edges; there are no feet or foot coverings. Empty wearable three-dimensional volume, hollow open waist and hollow ankle openings, no wearer, skin or mannequin.\nComposition: exactly ONE centered direct FRONT view, near orthographic, full waistband and both complete leg ends visible with generous clean margins. Portrait equipment reference, uniform solid white background, no floor or exterior cast shadow. Detailed realistic fantasy equipment concept rendering matching reference materials, soft even studio illumination, readable ring texture and garment construction.\nConstraints: trousers ONLY. Exclude white or gold robe panels, skirt, tunic, torso, head, hands, sandals, boots, shoes, feet, body, mannequin, decorative belt, chains hanging from belt, reliquaries, red cords, weapons, loose accessories. No ornate gold patterns, no new plate knee guards, no pockets, no text, arrows, labels, watermark, or collage. One front view only. This is concept art, not verified fitted geometry.",
+      "retained": true
+    },
+    {
+      "version": 1,
+      "view": "back",
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/pants_priest-back-v1.png",
+      "sha256": "5cca3b4e6ab101d4a3eed9b9c28bc410960c38037ce2f3ff1f4eafd50ae95975",
+      "resolution": [
+        1024,
+        1536
+      ],
+      "background": "solid white RGB",
+      "reference_images": [
+        "doc/images/characters/modular_human_male_01/parts/priest/pants_priest-front-v1.png"
+      ],
+      "prompt": "Use case: precise-object-edit.\nAsset type: isolated BACK-view modular male priest trousers concept, matching the supplied accepted FRONT image for fantasy RPG 3D modeling.\nInput image 1 is the exact trousers to rotate. Create one direct BACK view of this SAME empty pair of dark silver chainmail trousers. Preserve garment proportions, waist height and width, leg length, stance, taper, ankle opening diameter, tiny dark binding, iron ring size, material and lighting. Show the rear seat and back of the knees, no front fly or front waist button visible on the back. The rear waistband is a narrow uninterrupted plain dark binding with an unobtrusive rear center construction join; do not add an ornate belt, pockets or extra hardware. Natural shallow chainmail drape across seat and rear knees, no exaggerated balloon shape. The mail covers the seat continuously. Empty waist-to-ankle garment with two distinct long trouser legs and an open gap between them; slim ankles with hollow open cuffs, no feet. Worn three-dimensional volume without any body or mannequin.\nComposition: exactly one centered full BACK view, near orthographic, portrait equipment reference, full waist and both entire ankle ends visible with clean margins, approximately identical scale and positioning to reference. Pure white background, soft even studio lighting, no exterior shadow, detailed realistic fantasy equipment rendering and clear interlocking steel rings matching reference.\nConstraints: trousers ONLY; no torso, skin, person, mannequin, feet, sandals, boots, robe, skirt, tunic, white/gold fabric, external belt, reliquaries, red cords, weapons, plates, labels, text, arrows, watermark or collage. Never copy the front button or fly onto the back. No redesign. This is concept art only.",
+      "retained": true
+    }
+  ],
+  "review": {
+    "front": "Complete two-leg chainmail trousers, hollow waist and ankle cuffs, no body, robe or shoes; small fastening at center front.",
+    "back": "Rear seat and knee folds, uninterrupted rear waistband with small center join, no duplicated front button. Rear is a proposed construction because original character reference has no rear view.",
+    "remaining": [
+      "User design review",
+      "Unify ring scale, waist height and cuff widths in 3D; images are not dimensional references",
+      "Allocate assembled-character triangle budget",
+      "Fit waist under priest top and ankle cuffs to current body/interfaces",
+      "Skin and underlayer occlusion, animation and mixed-equipment validation"
+    ]
+  }
+}

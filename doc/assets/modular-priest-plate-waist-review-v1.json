@@ -1,0 +1,127 @@
+{
+  "date": "2026-10-09",
+  "source": "Local Chromium workshop screenshots; existing asset licenses apply; no AI generation.",
+  "views": [
+    "front",
+    "back",
+    "side",
+    "rear-quarter"
+  ],
+  "motion": [
+    {
+      "clip": "idle1",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "walk",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "run",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "jump",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "slash1",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "combat_idle",
+      "time_fraction": 0.4
+    },
+    {
+      "clip": "sit_idle",
+      "time_fraction": 0.4
+    }
+  ],
+  "boots": [
+    {
+      "boot": "leather",
+      "minimum_y": 0.23499999940395355,
+      "triangles": 1019
+    },
+    {
+      "boot": "plate",
+      "minimum_y": 0.2199999988079071,
+      "triangles": 1034
+    },
+    {
+      "boot": "barbarian",
+      "minimum_y": 0.4790000021457672,
+      "triangles": 856
+    },
+    {
+      "boot": "caveman",
+      "minimum_y": 0.4336927533149719,
+      "triangles": 865
+    },
+    {
+      "boot": "ranger",
+      "minimum_y": 0.4593124985694885,
+      "triangles": 856
+    }
+  ],
+  "bare": {
+    "minimum_y": 0.17453673481941223,
+    "triangles": 1081
+  },
+  "errors": [],
+  "checks": [
+    "Four rest directions and seven browser motion samples reviewed",
+    "Five boot trims compose with waist correction",
+    "Top removal/replacement/missing top restore full waist",
+    "Typecheck and lint passed; 69 related tests passed"
+  ],
+  "visual_review_scope": "Sampled views and poses; full-motion collision validation not performed.",
+  "images": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-plate-waist-v1-before-front.png",
+      "sha256": "f321413960a5f259dd21585d30546906d55d450e06b829bded907602256c16fc",
+      "bytes": 578696
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-plate-waist-v1-after-front.png",
+      "sha256": "b1aec07cc5098fff73346b7cae6924d7b0c6b44bac00ee2c0d27a33896d3a91e",
+      "bytes": 566039
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-plate-waist-v1-after-back.png",
+      "sha256": "55ede358a8984f7b67f81ca89cf5c6a89340d430604f0fa1480106721fbae473",
+      "bytes": 558142
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-plate-waist-v1-after-side.png",
+      "sha256": "851d16ed960be749d7ced9759bc13d00cca9efa71f6676025e525ba4c1f21a01",
+      "bytes": 369197
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-plate-waist-v1-motion.png",
+      "sha256": "95a9fe0366f341d72eb3a18cd2614be3eeecd5f1575a226ddc8726efe7226506",
+      "bytes": 605682
+    }
+  ],
+  "validation": {
+    "path": "doc/assets/modular-priest-plate-waist-validation-v1.json",
+    "sha256": "04b89efbea9c3557cebbce24e4858cb6e0c7602b9f57fa61021bb47d9b871825",
+    "bytes": 3884
+  },
+  "method": "Reuse priest_plate_waist reshape followed by ranger_plate_waist trim only with a visible plate top. Waist radius transitions from .23m to .16m and rear/front depth from .17m to .10m about Z=-.035m at Y=.92–1.04m. Cut at Y=1.06m, dropping up to 9cm toward the rear center.",
+  "rejected_iteration": "Waist trim alone removed the raised edge but left the wider trousers intersecting the armor rim; added waist inset before trimming.",
+  "source_assets": [
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/top_plate.glb",
+      "sha256": "c29b772b91d9c7d6b5622758edc707ea2caea4d69618e5729f126d3f88ea47ce",
+      "bytes": 11941912
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+      "sha256": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b",
+      "bytes": 2466144
+    }
+  ],
+  "license": "Local derivative and Chromium screenshots of existing plate and Tripo assets; original provenance and terms apply.",
+  "new_ai_generation_or_paid_calls": false
+}

@@ -46,5 +46,62 @@
     "rigged": false
   },
   "local_fitting": "Existing mesh and UVs preserved; no AI generation or paid API calls during fitting.",
-  "retained": true
+  "retained": true,
+  "undershirt_cleanup": {
+    "date": "2026-10-09",
+    "method": "Removed 15 inward leather caps; inset 22 linen vertices up to 12mm; remapped 15 UV vertices to clean linen in the unchanged atlas.",
+    "previous": {
+      "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue-undershirt-before-v1.glb",
+      "sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83",
+      "bytes": 2150516
+    },
+    "output": {
+      "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+      "sha256": "299e5e8d681810315e5f32673f8d3a5f6a57c2a6154e2613c8dabdf1fc08e638",
+      "bytes": 2179600
+    },
+    "editable": {
+      "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/rogue-undershirt-fitting-v1.blend",
+      "sha256": "d01226b0210d6102702272eebc60214f735d9df3f7b6cadf46c6567af886167e",
+      "bytes": 2179851
+    },
+    "tool": {
+      "path": "tools/fix-rogue-undershirt.py",
+      "sha256": "90bd67b51dc617247993a8b8e5a0ff39eabeb9219388f677d0918006d4c7b5c0",
+      "bytes": 4815
+    },
+    "fitting": {
+      "path": "doc/assets/modular-rogue-undershirt-fitting-v1.json",
+      "sha256": "d86c9cf92282de1830d6cc2de6d8d2c42851c636b45c48c24b7309c14999709e",
+      "bytes": 1829
+    },
+    "animation": {
+      "path": "doc/assets/modular-rogue-undershirt-animation-v1.json",
+      "sha256": "69996cee1ad3e01cb2348a979617ecfa14c94479004dd39d04e46ee2fd60c82c",
+      "bytes": 5823
+    },
+    "game": {
+      "path": "client/public/models/characters/modular_male/top_rogue.glb",
+      "sha256": "dbfa499cea207c96d01520665e9486f55c5b200877f85de54852fabf39972990",
+      "bytes": 326160
+    },
+    "game_validation": {
+      "path": "doc/assets/modular-rogue-undershirt-game-validation-v1.json",
+      "sha256": "9ee1dfa4fb449e256cc5178aa950a8fb5bd8d2085f0588f8456b48e2a5f0b481",
+      "bytes": 1549
+    },
+    "review": {
+      "path": "doc/assets/modular-priest-rogue-waist-review-v2.json",
+      "sha256": "14f4fdd4c5a6eece6d9fe3d34a092c27b501a82863459c7de2275cd154bb6a59",
+      "bytes": 3972
+    },
+    "license": "Derivative of original Tripo Studio output; existing subscription and output terms apply. Embedded atlas unchanged.",
+    "new_ai_generation_or_paid_calls": false,
+    "attempts": [
+      "Body mask alone did not remove the garment triangles.",
+      "Linen inset alone retained inward leather caps and shadow-baked atlas patches.",
+      "Final local cap removal, inset and UV correction accepted for sampled visual review."
+    ],
+    "archived_status": "Pre-cleanup GLB retained as reproducible repair input; [미사용] previous tripo-fitting.blend deleted at user request on 2026-10-09."
+  }
 }

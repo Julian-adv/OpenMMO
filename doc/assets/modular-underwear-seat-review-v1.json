@@ -1,0 +1,137 @@
+{
+  "date": "2026-10-08",
+  "source": "Local Chromium workshop screenshots; existing asset licenses apply; no AI generation.",
+  "views": [
+    "front",
+    "back",
+    "side",
+    "rear-quarter"
+  ],
+  "motion": [
+    {
+      "clip": "idle1",
+      "time_fraction": 0.4,
+      "views": [
+        "front",
+        "back"
+      ]
+    },
+    {
+      "clip": "walk",
+      "time_fraction": 0.4,
+      "views": [
+        "front",
+        "back"
+      ]
+    },
+    {
+      "clip": "run",
+      "time_fraction": 0.4,
+      "views": [
+        "front",
+        "back"
+      ]
+    },
+    {
+      "clip": "jump",
+      "time_fraction": 0.4,
+      "views": [
+        "front",
+        "back"
+      ]
+    },
+    {
+      "clip": "slash1",
+      "time_fraction": 0.4,
+      "views": [
+        "front",
+        "back"
+      ]
+    },
+    {
+      "clip": "combat_idle",
+      "time_fraction": 0.4,
+      "views": [
+        "front",
+        "back"
+      ]
+    },
+    {
+      "clip": "sit_idle",
+      "time_fraction": 0.4,
+      "views": [
+        "front",
+        "back"
+      ]
+    }
+  ],
+  "errors": [],
+  "scope": "Four rest views and two views of each of seven animation samples. Full-motion triangle collisions are not certified.",
+  "images": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/underwear/underwear-seat-v1-before-side.png",
+      "sha256": "3f3fe025a144cfd35eca5f12d6cdb220b15fe6faba085fd2c046f8bd1afcb2aa",
+      "bytes": 220317
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/underwear/underwear-seat-v1-after-side.png",
+      "sha256": "d632f7fd5a2d28ae88b18d93c876970a6aab35a2c1649c1f741881665e3614bb",
+      "bytes": 221365
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/underwear/underwear-seat-v1-after-back.png",
+      "sha256": "510757eb8b7a1c16c23e326835c18c51d3be5f4f926ef0fc5101d15ec38e34be",
+      "bytes": 323954
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/underwear/underwear-seat-v1-linen-side.png",
+      "sha256": "33b69246a6ead42993954be15bfe86858f406fb6d06d8a5985d6e0e4c1d726b4",
+      "bytes": 232788
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/underwear/underwear-seat-v1-plate-side.png",
+      "sha256": "f3d85a12eee4222f7256e5d6c477e186f80978e0292f5f86dfe7addffef753a9",
+      "bytes": 274688
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/underwear/underwear-seat-v1-motion.png",
+      "sha256": "3a347e56c5d48ce064c02fd86da99695e7c50e56854c18a87430c105446f6440",
+      "bytes": 492895
+    }
+  ],
+  "method": "Plate rear curve sampled in a symmetric XY grid, 12mm weighted smoothing, 90 percent depth about Z=-25mm. Smooth transition from .76 to .86m and back to the original torso from 1.14 to 1.20m; sides and front preserved.",
+  "profile": {
+    "path": "client/src/lib/data/underwearSeat.json",
+    "sha256": "da49f428390de9e026d75f01756e03f63f719441c3c0d3be3a0e17027b188f91",
+    "bytes": 7047
+  },
+  "source_assets": [
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
+      "bytes": 22214236
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/pants_plate.glb",
+      "sha256": "aa95a9f1b85aa881df47e6e37ecbfebc7c168b352fcf0f4a9941208962eeff04",
+      "bytes": 11524492
+    }
+  ],
+  "validation": {
+    "path": "doc/assets/modular-underwear-seat-validation-v1.json",
+    "sha256": "09e7c118e04ab31a70b7cffbd931bde83ed92c7e6128078033c8376ee005ee1d",
+    "bytes": 2429
+  },
+  "linen_regression": {
+    "path": "doc/assets/modular-linen-underwear-waist-validation-v2.json",
+    "sha256": "d7defbf889a2e010dbbd809e1b1569d8719b1d1c1c61a377548b36f6f3ebe59f",
+    "bytes": 2632
+  },
+  "frontend_checks": {
+    "typecheck": "passed; zero errors and warnings",
+    "lint": "passed",
+    "related_tests": 68
+  },
+  "license": "Local derivative and screenshots of existing Meshy/Mixamo body and plate assets; original asset provenance and terms apply.",
+  "new_ai_generation_or_paid_calls": false
+}

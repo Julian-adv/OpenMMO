@@ -1,0 +1,132 @@
+{
+  "date": "2026-10-09",
+  "sources": [
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+      "sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+      "sha256": "3ff9f0768c899b404eeecdaae3f382da9250fd0584795a12358ecfc8a40f880b"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/boots_leather.glb",
+      "sha256": "ab8906e4936b9e1572d66a825eeedc15515fdb5aa0da53c1e495965af45b763b"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/boots_plate.glb",
+      "sha256": "60839b7c0b9b94cd97bb6463fa385c6b65443695e176028abe4c10cec7ec3650"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/boots_barbarian.glb",
+      "sha256": "32d4a9f8e469c671be01dfdefb9bd84bb5b731ea308b66ade878ba505ac945a9"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/caveman_tripo_boots_v1/boots_caveman.glb",
+      "sha256": "816349031a0c5bcac6efd7bb1320b8cd3d27f77ec86c47a10e6f9ccee72e4a48"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/ranger_tripo_boots_v1/boots_ranger.glb",
+      "sha256": "916c13a55b4fb5fc15fdf4a017b3ed5977983210a776bc91977eaa138b9b1db6"
+    },
+    {
+      "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+      "sha256": "76eeb462770754895834271423b4ef7f33efdbd34bdfb9830beba4ba84e7569f"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/social.glb",
+      "sha256": "a9efe7a2d388011cdc039ca6778c2b3a929b07953941ee7bb7c50a511d4b083d"
+    }
+  ],
+  "motion": [
+    {
+      "clip": "idle1",
+      "finite_vertices": true,
+      "samples": 13
+    },
+    {
+      "clip": "walk",
+      "finite_vertices": true,
+      "samples": 13
+    },
+    {
+      "clip": "run",
+      "finite_vertices": true,
+      "samples": 13
+    },
+    {
+      "clip": "jump",
+      "finite_vertices": true,
+      "samples": 13
+    },
+    {
+      "clip": "combat_idle",
+      "finite_vertices": true,
+      "samples": 13
+    },
+    {
+      "clip": "slash1",
+      "finite_vertices": true,
+      "samples": 13
+    },
+    {
+      "clip": "sit_idle",
+      "finite_vertices": true,
+      "samples": 13
+    }
+  ],
+  "boots": [
+    {
+      "boot": "leather",
+      "min_y": 0.23499999940395355,
+      "max_y": 1.1050000190734863,
+      "triangles": 1295
+    },
+    {
+      "boot": "plate",
+      "min_y": 0.2199999988079071,
+      "max_y": 1.1050000190734863,
+      "triangles": 1310
+    },
+    {
+      "boot": "barbarian",
+      "min_y": 0.4790000021457672,
+      "max_y": 1.1050000190734863,
+      "triangles": 1132
+    },
+    {
+      "boot": "caveman",
+      "min_y": 0.4336927533149719,
+      "max_y": 1.1050000190734863,
+      "triangles": 1141
+    },
+    {
+      "boot": "ranger",
+      "min_y": 0.4593124985694885,
+      "max_y": 1.1050000190734863,
+      "triangles": 1132
+    }
+  ],
+  "budget": {
+    "scope": "Canonical body, rogue top and priest chainmail trousers; no hair, gloves, boots, helmet, weapon or cape",
+    "preserved_glb_triangles": 20281,
+    "runtime_including_hidden_triangles": 18423,
+    "visible_triangles": 13722,
+    "face_triangles": 1505,
+    "correction": "Corrected preserved source sum: original body 13891 + top 4877 + trousers 1513. Earlier 18579 incorrectly counted runtime-trimmed body."
+  },
+  "original_triangles": 1513,
+  "waist_trimmed_triangles": 1357,
+  "checks": [
+    "rogue top must be loaded and visible",
+    "Waist correction composes with all five boot trims",
+    "Top removal, replacement and missing top restore full waist",
+    "Repeated selection reuses geometry",
+    "Interpolated skin weights remain normalized and normals finite"
+  ],
+  "scope": "91 finite-vertex motion samples and combination/restore checks; full surface collisions not certified."
+}

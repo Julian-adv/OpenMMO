@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-08",
+  "url": "https://localhost:10004/modular-character-preview.html?outfit=priest&fit=pants-v1",
+  "stats": "조합 19,822삼각형 · 표시 12,920 · 얼굴 1,505",
+  "errors": [],
+  "checks": [
+    "Priest top and pants preset",
+    "Removal, cloth replacement and reselection",
+    "Reattachment",
+    "Five sampled motions with auxiliary robe bones active",
+    "Ankle front, back and side after cuff removal"
+  ],
+  "poses": [
+    {
+      "clip": "walk",
+      "normalized_time": 0.4,
+      "finite": true,
+      "triangles": 1513
+    },
+    {
+      "clip": "run",
+      "normalized_time": 0.4,
+      "finite": true,
+      "triangles": 1513
+    },
+    {
+      "clip": "jump",
+      "normalized_time": 0.4,
+      "finite": true,
+      "triangles": 1513
+    },
+    {
+      "clip": "slash1",
+      "normalized_time": 0.4,
+      "finite": true,
+      "triangles": 1513
+    },
+    {
+      "clip": "sit_idle",
+      "normalized_time": 0.4,
+      "finite": true,
+      "triangles": 1513
+    }
+  ],
+  "image": "/home/jake/work/OnlineRPG/doc/images/characters/modular_human_male_01/parts/priest/tripo-pants-workshop-v1.png"
+}

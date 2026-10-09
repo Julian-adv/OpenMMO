@@ -1,0 +1,67 @@
+{
+  "date": "2026-10-09",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue-undershirt-before-v1.glb",
+    "sha256": "8fe1cbf6c51b8e9e0b47a5c565390aca257972086c1f02dd65f7fce4e869dc83"
+  },
+  "output": {
+    "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+    "sha256": "299e5e8d681810315e5f32673f8d3a5f6a57c2a6154e2613c8dabdf1fc08e638"
+  },
+  "method": "Inset front linen layer up to 12mm, remove overlapping inward-facing front leather caps, and remap the shadow-baked front linen UV patch to existing clean linen in the same unchanged atlas",
+  "modified_vertices": 22,
+  "remapped_uv_vertices": 15,
+  "removed_face_indices": [
+    65,
+    72,
+    77,
+    86,
+    109,
+    119,
+    604,
+    606,
+    607,
+    1297,
+    1298,
+    1303,
+    1304,
+    2961,
+    2962
+  ],
+  "final_triangles": 4862,
+  "linen_atlas_patch": [
+    0.69921875,
+    0.49365234375,
+    0.74609375,
+    0.54052734375
+  ],
+  "preservation": [
+    "X/Y coordinates",
+    "Skin indices and weights",
+    "Rig and bind matrices",
+    "Embedded image bytes and material",
+    "UVs outside the front linen patch",
+    "Upper torso, sleeves, collar and back geometry",
+    "Normals and tangents outside the affected neighborhood"
+  ],
+  "validation": {
+    "path": "assets/modular_human_male_01/parts/rogue_tripo_v1/top_rogue.glb",
+    "sha256": "299e5e8d681810315e5f32673f8d3a5f6a57c2a6154e2613c8dabdf1fc08e638",
+    "triangles": 4862,
+    "bones": 65,
+    "exact_rest_hierarchy_and_inverse_bind_match": true,
+    "maximum_weight_sum_error": 1.1920928955078125e-07,
+    "active_bones": [
+      "Hips",
+      "LeftArm",
+      "LeftForeArm",
+      "Neck",
+      "RightArm",
+      "RightForeArm",
+      "Spine",
+      "Spine1",
+      "Spine2"
+    ]
+  },
+  "new_ai_generation_or_paid_calls": false
+}

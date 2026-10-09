@@ -137,7 +137,7 @@ async function main() {
   const priest = requestedOutfit === 'priest'
   if (tripo || caveman || ranger || priest) showWeapon.checked = false
   if (caveman) cameraSelect.value = 'full'
-  if (ranger) cameraSelect.value = 'full'
+  if (ranger || priest) cameraSelect.value = 'full'
   const load = async (url: string) => {
     const gltf = await loader.loadAsync(url)
     if (disposed) {
@@ -175,6 +175,7 @@ async function main() {
     ...TEXTURED_HAIR,
     ...RANGER_MODULAR_PARTS,
     'top_priest',
+    'pants_priest',
   ]
   const [base, sources, animations, sword, profile, candidateSources, social] =
     await Promise.all([
@@ -294,7 +295,8 @@ async function main() {
       boots: boots.value as ModularOutfit['boots'],
       helmet: helmet.value as ModularOutfit['helmet'],
     })
-    const priestTop = equipped.has('top_priest')
+    const inspectingPriest =
+      equipped.has('top_priest') || equipped.has('pants_priest')
     const note = el('outfit-note')
     const inspectingRogue = ROGUE_MODULAR_PARTS.some((id) => equipped.has(id))
     const inspectingCaveman =
@@ -308,9 +310,9 @@ async function main() {
       !inspectingRogue &&
       !inspectingCaveman &&
       !inspectingRanger &&
-      !priestTop
-    note.textContent = priestTop
-      ? '사제 상의 착용 후보 · 보조 본 8개의 간단한 옷자락 움직임'
+      !inspectingPriest
+    note.textContent = inspectingPriest
+      ? '사제 성의·사슬 바지'
       : inspectingRanger
         ? '순찰자 가죽 복장'
         : inspectingCaveman
