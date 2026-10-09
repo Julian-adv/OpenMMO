@@ -61,6 +61,16 @@ const rangerSources = {
 };
 const rangerParts = Object.keys(rangerSources);
 parts.push(...rangerParts);
+const priestSources = {
+  top_priest:
+    "assets/modular_human_male_01/parts/priest_tripo_top_v1/top_priest.glb",
+  pants_priest:
+    "assets/modular_human_male_01/parts/priest_tripo_pants_v1/pants_priest.glb",
+  boots_priest:
+    "assets/modular_human_male_01/parts/priest_tripo_boots_v1/boots_priest.glb",
+};
+const priestParts = Object.keys(priestSources);
+parts.push(...priestParts);
 const appearanceSources = {
   base_ranger:
     "assets/modular_human_male_01/parts/face_tripo_ranger_v1/base_ranger.glb",
@@ -90,7 +100,7 @@ const hash = (path) =>
     .digest("hex");
 const report = {
   source:
-    "Modular male body, knight, barbarian, rogue, caveman and ranger equipment and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md",
+    "Modular male body, knight, barbarian, rogue, caveman, ranger and priest equipment and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md",
   inputs: {},
   outputs: {},
 };
@@ -117,6 +127,7 @@ const selectedPack = option("--pack", packs);
 let selectedParts = process.argv.includes("--rogue-only") ? rogueParts : parts;
 if (process.argv.includes("--caveman-only")) selectedParts = cavemanParts;
 if (process.argv.includes("--ranger-only")) selectedParts = rangerParts;
+if (process.argv.includes("--priest-only")) selectedParts = priestParts;
 if (process.argv.includes("--appearance-only")) selectedParts = appearanceParts;
 if (process.argv.includes("--sole-offsets")) selectedParts = [];
 if (selectedPart) selectedParts = [selectedPart];
@@ -126,6 +137,7 @@ for (const name of selectedParts) {
     appearanceSources[name] ??
     cavemanSources[name] ??
     rangerSources[name] ??
+    priestSources[name] ??
     (rogueParts.includes(name)
       ? (rogue.part_overrides[name] ?? `${rogue.directory}/${name}.glb`)
       : `${fitted}/${name}.glb`);
@@ -150,6 +162,7 @@ const partsOnly = [
   "--rogue-only",
   "--caveman-only",
   "--ranger-only",
+  "--priest-only",
   "--appearance-only",
   "--sole-offsets",
 ].some((flag) => process.argv.includes(flag));

@@ -1,0 +1,69 @@
+{
+  "date": "2026-10-09",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_helmet_v1/source.glb",
+    "sha256": "c67ff9ff51ff8a6f44193cd9d93dae6d70c446ebd4be11bfdc92afa0006c831f",
+    "original_path": "Y:\\public\\web_downloads\\bishop+mitre+3d+model.glb",
+    "mounted_path": "/mnt/y/web_downloads/bishop+mitre+3d+model.glb",
+    "provider": "User-supplied Tripo output",
+    "received_date": "2026-10-09",
+    "generation_date": null,
+    "subscription_tier": "Unconfirmed for this file",
+    "license": "Original Tripo output terms; see doc/assets/characters.md"
+  },
+  "base": {
+    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
+  },
+  "output": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_helmet_v1/helmet_priest.glb",
+    "sha256": "3d6a6d38362626069099b13d183ec6064b1fbf245b65a3397405e76f16119237"
+  },
+  "initial_transform": {
+    "scale": [
+      0.43,
+      0.465,
+      0.44
+    ],
+    "translation_m": [
+      0,
+      1.628,
+      -0.003
+    ]
+  },
+  "inner_band_clearance": {
+    "samples": 60,
+    "minimum_mm": 2.0225364825010654,
+    "median_mm": 3.464589633963956,
+    "maximum_mm": 6.13361379472798,
+    "method": "Signed nearest-head distances at inner band triangle centers; 3mm vertex and 2mm triangle targets"
+  },
+  "source_triangles": 1924,
+  "fitted_triangles": 1924,
+  "texture_bytes_preserved": true,
+  "exterior_uv_preserved": true,
+  "triangle_count_preserved": true,
+  "material_preserved": true,
+  "lining": {
+    "remapped_interior_triangles": 211,
+    "method": "Split inward shell UVs onto an existing plain ivory cloth patch; no added triangles"
+  },
+  "lappets": {
+    "vertices": 306,
+    "skinning": "Head to Neck to Spine2 blend; no cloth simulation"
+  },
+  "validation": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_helmet_v1/helmet_priest.glb",
+    "sha256": "3d6a6d38362626069099b13d183ec6064b1fbf245b65a3397405e76f16119237",
+    "triangles": 1924,
+    "bones": 65,
+    "exact_rest_hierarchy_and_inverse_bind_match": true,
+    "maximum_weight_sum_error": 5.960464477539063e-08,
+    "active_bones": [
+      "Head",
+      "Neck",
+      "Spine2"
+    ]
+  },
+  "scope": "Fitting candidate; animation and collar intersections reviewed separately"
+}

@@ -100,7 +100,7 @@ export interface ModularOutfit {
     | 'caveman'
     | 'ranger'
   boots: (typeof MODULAR_BOOTS)[number]
-  helmet: 'none' | 'plate' | 'barbarian'
+  helmet: 'none' | 'plate' | 'barbarian' | 'priest'
 }
 
 export const SELECTABLE_HAIR_PARTS = new Set<ModularOutfit['hair']>([
@@ -139,7 +139,10 @@ export const BARBARIAN_MODULAR_OUTFIT: ModularOutfit = {
 export function modularOutfitParts(outfit: ModularOutfit): Set<string> {
   const selected = new Set<string>()
   if (outfit.pants !== 'none') selected.add(`pants_${outfit.pants}`)
-  if (outfit.hair !== 'none' && outfit.helmet === 'none')
+  if (
+    outfit.hair !== 'none' &&
+    (outfit.helmet === 'none' || outfit.helmet === 'priest')
+  )
     selected.add(outfit.hair)
   if (outfit.top === 'linen' || outfit.top === 'leather')
     selected.add('top_linen')
@@ -262,18 +265,27 @@ function showBaseModularOutfit(
     for (const mesh of meshes) {
       const partRegion = region(mesh)
       const cut =
-        linenWaist && id === 'top_linen' && partRegion === 'torso'
-          ? 'linen_untucked'
-          : (id === 'top_linen' && partRegion === 'sleeves') ||
-              id === 'top_plate'
-            ? sleeveCut
-            : id === 'pants_plate' && leatherBoots
-              ? 'leather_boots'
-              : shortPants &&
-                  (id === 'pants_plate' ||
-                    (id === 'pants_cloth' && partRegion === 'main'))
-                ? 'greaves'
-                : undefined
+        id.startsWith('hair_') &&
+        outfit.helmet === 'priest' &&
+        !!parts.get('helmet_priest')?.length
+          ? 'priest_hat_hair'
+          : id === 'helmet_priest' &&
+              (outfit.hair === 'hair_ranger' ||
+                outfit.hair === 'hair_wavy_bone') &&
+              !!parts.get(outfit.hair)?.length
+            ? 'priest_hat_lappets'
+            : linenWaist && id === 'top_linen' && partRegion === 'torso'
+              ? 'linen_untucked'
+              : (id === 'top_linen' && partRegion === 'sleeves') ||
+                  id === 'top_plate'
+                ? sleeveCut
+                : id === 'pants_plate' && leatherBoots
+                  ? 'leather_boots'
+                  : shortPants &&
+                      (id === 'pants_plate' ||
+                        (id === 'pants_cloth' && partRegion === 'main'))
+                    ? 'greaves'
+                    : undefined
       mesh.visible =
         selected.has(id) &&
         !(

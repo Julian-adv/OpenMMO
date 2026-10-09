@@ -48,6 +48,72 @@ const undressed: ModularOutfit = {
   helmet: 'none',
 }
 
+describe('hair below the priest mitre', () => {
+  it.each(['hair_ranger', 'hair_wavy_bone'] as const)(
+    'keeps lower %s visible and restores it after removing the hat',
+    (hairId) => {
+      const { body, parts } = fixture()
+      const source = new THREE.CylinderGeometry(0.11, 0.13, 0.4, 12, 4, true)
+      source.translate(0, 1.75, 0)
+      const hair = new THREE.SkinnedMesh(source)
+      const other = new THREE.SkinnedMesh(source)
+      parts.set(hairId, [hair])
+      const hatSource = new THREE.PlaneGeometry(0.2, 0.3, 2, 4)
+      hatSource.translate(0, 1.75, -0.1)
+      const hat = new THREE.SkinnedMesh(hatSource)
+      parts.set('helmet_priest', [hat])
+      const outfit: ModularOutfit = {
+        ...undressed,
+        hair: hairId,
+        helmet: 'priest',
+      }
+      const selected = showModularOutfit(body, parts, outfit)
+      expect(selected.has(hairId)).toBe(true)
+      expect(hair.visible).toBe(true)
+      hair.geometry.computeBoundingBox()
+      expect(hair.geometry.boundingBox!.max.y).toBeCloseTo(1.82)
+      expect(hair.geometry.boundingBox!.min.y).toBeCloseTo(1.55)
+      expect(other.geometry).toBe(source)
+      source.computeBoundingBox()
+      expect(source.boundingBox!.max.y).toBeCloseTo(1.95)
+      const clipped = hair.geometry
+      expect(hat.geometry).not.toBe(hatSource)
+      hat.geometry.computeBoundingBox()
+      expect(hat.geometry.boundingBox!.min.z).toBeLessThan(-0.13)
+      const hatPositions = hat.geometry.getAttribute('position')
+      for (let i = 0; i < hatPositions.count; i++)
+        if (hatPositions.getY(i) > 1.82)
+          expect(hatPositions.getZ(i)).toBeCloseTo(-0.1)
+      showModularOutfit(body, parts, { ...outfit, helmet: 'none' })
+      expect(hair.visible).toBe(true)
+      expect(hair.geometry).toBe(source)
+      expect(hat.geometry).toBe(hatSource)
+      showModularOutfit(body, parts, outfit)
+      expect(hair.geometry).toBe(clipped)
+      showModularOutfit(body, parts, { ...outfit, helmet: 'plate' })
+      expect(hair.visible).toBe(false)
+      expect(hair.geometry).toBe(source)
+      showModularOutfit(body, parts, { ...outfit, hair: 'none' })
+      expect(hair.visible).toBe(false)
+      expect(hat.geometry).toBe(hatSource)
+    }
+  )
+
+  it('keeps the full hairstyle if the mitre is unavailable', () => {
+    const { body, parts } = fixture()
+    const hair = new THREE.SkinnedMesh(new THREE.BoxGeometry())
+    const source = hair.geometry
+    parts.set('hair_ranger', [hair])
+    showModularOutfit(body, parts, {
+      ...undressed,
+      hair: 'hair_ranger',
+      helmet: 'priest',
+    })
+    expect(hair.visible).toBe(true)
+    expect(hair.geometry).toBe(source)
+  })
+})
+
 describe('linen shirt with underwear', () => {
   it('opens the hem, fills the waist gap and restores both when equipment changes', () => {
     const { body, parts, visible } = fixture()

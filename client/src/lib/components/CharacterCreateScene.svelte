@@ -25,6 +25,13 @@
   }: Props = $props()
 
   const STARTER_EQUIPMENT: Partial<Record<CharacterClass, VisibleEquipment>> = {
+    priest: {
+      armor: {
+        chest: 'worn_priest_top',
+        pants: 'worn_priest_pants',
+        boots: 'worn_priest_boots',
+      },
+    },
     ranger: {
       armor: {
         chest: 'worn_ranger_top',

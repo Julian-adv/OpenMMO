@@ -174,6 +174,7 @@ async function main() {
     'gloves_caveman',
     ...TEXTURED_HAIR,
     ...RANGER_MODULAR_PARTS,
+    'helmet_priest',
     'top_priest',
     'pants_priest',
     'boots_priest',
@@ -297,6 +298,7 @@ async function main() {
       helmet: helmet.value as ModularOutfit['helmet'],
     })
     const inspectingPriest =
+      equipped.has('helmet_priest') ||
       equipped.has('top_priest') ||
       equipped.has('pants_priest') ||
       equipped.has('boots_priest')
@@ -643,7 +645,8 @@ async function main() {
           : '얼굴 1,505'
       }`
   }
-  if (priest && parts.has('top_priest')) wearOutfit(PRIEST_MODULAR_OUTFIT)
+  if (priest && parts.has('top_priest'))
+    wearOutfit({ ...PRIEST_MODULAR_OUTFIT, helmet: 'priest' })
   else if (ranger && rangerAvailable) wearOutfit(RANGER_MODULAR_OUTFIT)
   else if (caveman && cavemanAvailable) wearOutfit(CAVEMAN_MODULAR_OUTFIT)
   else if (tripo && parts.has('top_rogue'))

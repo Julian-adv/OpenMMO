@@ -110,6 +110,7 @@ function modularCharacterPreview(): Plugin {
     'helmet_barbarian',
   ])
   const fixed: Record<string, URL> = {
+    helmet_priest: part('priest_tripo_helmet_v1/helmet_priest.glb'),
     top_priest: part('priest_tripo_top_v1/top_priest.glb'),
     pants_priest: part('priest_tripo_pants_v1/pants_priest.glb'),
     boots_priest: part('priest_tripo_boots_v1/boots_priest.glb'),

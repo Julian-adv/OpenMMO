@@ -315,6 +315,42 @@ describe.skipIf(
       )
   })
 
+  it('loads priest starter clothing and removes each slot independently', async () => {
+    const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
+    const { modelRoot } = createCharacterModelRoot(source.scene)
+    const armor = {
+      chest: 'worn_priest_top',
+      pants: 'worn_priest_pants',
+      boots: 'worn_priest_boots',
+    }
+    const parts = {
+      chest: 'top_priest',
+      pants: 'pants_priest',
+      boots: 'boots_priest',
+    } as const
+    await applyCharacterArmor(modelRoot, armor)
+    for (const part of Object.values(parts)) {
+      expect(visible(modelRoot, part)).toBe(true)
+      expect(visible(source.scene, part)).toBe(false)
+    }
+    expect(visible(modelRoot, 'hair_crop')).toBe(true)
+    expect(computeSoleGroundOffset(modelRoot)).toBeCloseTo(0, 6)
+    for (const slot of Object.keys(parts) as (keyof typeof parts)[]) {
+      await applyCharacterArmor(modelRoot, { ...armor, [slot]: null })
+      for (const [otherSlot, part] of Object.entries(parts))
+        expect(visible(modelRoot, part)).toBe(otherSlot !== slot)
+    }
+    await applyCharacterArmor(modelRoot, {})
+    for (const part of Object.values(parts))
+      expect(visible(modelRoot, part)).toBe(false)
+    for (const region of ['torso', 'forearms', 'feet', 'legs'])
+      expect(
+        bodyRegion(skinnedParts(modelRoot), region).every(
+          (mesh) => mesh.visible
+        )
+      ).toBe(true)
+  })
+
   it('equips ranger starter clothing, removes slots and restores skin independently', async () => {
     const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
     const { modelRoot } = createCharacterModelRoot(source.scene)
@@ -683,7 +719,8 @@ describe.skipIf(
   })
 
   it('binds non-default parts only to players that wear them', async () => {
-    const lazy = /_(plate|barbarian|rogue|caveman|ranger)$|^hair_wavy_bone$/
+    const lazy =
+      /_(plate|barbarian|rogue|caveman|ranger|priest)$|^hair_wavy_bone$/
     const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
     const { modelRoot: ranger } = createCharacterModelRoot(source.scene)
     const { modelRoot: other } = createCharacterModelRoot(source.scene)
@@ -731,6 +768,7 @@ describe.skipIf(
       rogue: 'worn_rogue_boots',
       caveman: 'worn_caveman_boots',
       ranger: 'worn_ranger_boots',
+      priest: 'worn_priest_boots',
     } satisfies Record<
       keyof typeof import('./modularSoleOffsets.json'),
       string | null

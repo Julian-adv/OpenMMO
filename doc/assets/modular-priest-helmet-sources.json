@@ -1,0 +1,66 @@
+{
+  "date": "2026-10-09",
+  "asset": "helmet_priest",
+  "scope": "Isolated front, rear and right-side concept images for user-operated Tripo modeling; no 3D generation or game registration.",
+  "service": "OpenAI Codex built-in ImageGen",
+  "tier": "ChatGPT Pro 20x",
+  "license": "OpenAI generated output terms; original reference provenance retained in doc/assets/characters.md.",
+  "reference": {
+    "path": "client/public/character_concepts/priest.webp",
+    "sha256": "246f17efa93e362513703c1055268a8cc9d1f7f02b6bcf68d132eb97129eadf6",
+    "source": "Existing male priest Gemini concept; transparent-background edit with ChatGPT Pro 20x on 2026-08-28."
+  },
+  "outputs": [
+    {
+      "view": "front",
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/helmet_priest-front-v1.png",
+      "sha256": "b987deae6e034bb6ff4001304d1501f00f8c4817df0c30fb2a9a2ca0f8142991",
+      "resolution": [
+        1254,
+        1254
+      ],
+      "background": "white RGB",
+      "reference_images": [
+        "client/public/character_concepts/priest.webp"
+      ],
+      "prompt": "Use case: precise-object-edit.\nAsset type: standalone FRONT reference image for Tripo multi-view image-to-3D, one fantasy priest mitre, derived faithfully from the supplied existing male priest concept.\nInput image 1 is the original design reference. Extract and redraw ONLY the priest's hat as an empty wearable object. Preserve its exact recognizable design: tall white ivory textile bishop's mitre with a pointed Gothic arch outline, curved widening sides, narrow gold embroidered scrolling border around the pointed panel, large centered gold sunburst emblem with round ruby-red cabochon, broad embossed gold brow band with three blue cabochons (larger central round sapphire and two smaller side stones). Keep proportions and ornament placement as in the original; white textile, warm antique gold, saturated red center jewel and blue brow stones. It is a mitre with front and rear stiff pointed cloth panels connected at their sides, not a conical wizard hat or metal helmet. Behind the brow band are two broad muted gold fabric lappets dropping vertically to upper-shoulder length as suggested behind the head in the original, part of the same hat.\nView: exact straight-on FRONT view, centered, symmetric, orthographic product/concept rendering, eye level with the middle of the hat. Hat is upright as worn, but NO wearer, head, hair, face, neck, body or mannequin. Empty space below the brow band and between the two rear cloth lappets. Front panel occludes rear panel appropriately. Show the complete hat including rear lappet ends, no crop, clean margin all around. One object and one view only, square canvas.\nStyle: realistic fantasy equipment concept art matching the source, clear three-dimensional construction with readable textile texture and shallow gold embroidery, soft even neutral studio lighting, no excessive microdetail or theatrical shading.\nBackdrop: perfectly solid white, no cast shadow or horizon. No text, labels, view names, layout borders, arrows, stand, extra equipment, loose ornaments, watermark or collage. Do not include any robe, chainmail, necklace, shoulders or hair. The requested deliverable is ONLY the isolated hat front view."
+    },
+    {
+      "view": "back",
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/helmet_priest-back-v1.png",
+      "sha256": "951473578c513d6af5952c8ae6256224153cafc487a3e7082748411f22e07bc9",
+      "resolution": [
+        1254,
+        1254
+      ],
+      "background": "white RGB",
+      "reference_images": [
+        "doc/images/characters/modular_human_male_01/parts/priest/helmet_priest-front-v1.png",
+        "client/public/character_concepts/priest.webp"
+      ],
+      "prompt": "Use case: precise-object-edit.\nAsset type: standalone BACK reference image for Tripo multi-view image-to-3D, the exact same priest mitre as input image 1.\nInput image 1 is the completed isolated FRONT view of the hat and is the strict geometry, materials, dimensions, framing and ornament reference. Input image 2 is the original character concept, supporting reference only. Turn the hat from image 1 exactly 180 degrees around the vertical axis to show its BACK. It must be unmistakably a rear view, NOT another front view.\nPreserve exactly the pointed arch silhouette, height-to-width ratio, panel curvature, narrow raised gold scrolling edge trim, white ivory woven cloth and thick embossed gold lower band. This is a traditional two-panel mitre: front and rear stiff pointed textile panels meet at the sides; front and rear tips align in this orthographic view. The rear panel is plain ivory woven cloth with a subtle vertical construction seam; its pointed perimeter has the same gold embroidered border. Continue the same gold scrolling pattern around the rear of the lower band, with a small discreet center join. The ruby sunburst emblem and three sapphires belong ONLY on the FRONT and must not appear on this rear face. Do not invent another rear emblem, gemstones, cross, extra decoration, buckles or projecting structures.\nExactly TWO gold textile lappets hang down from beneath the rear lower band, one on each side of the center gap, with the SAME length, width, outward slight flare, flat ends, embossed scrolling edge borders, muted gold weave and vertical drape as image 1. They are attached directly to the hat at the rear band. Show them fully. No additional ribbon, hood, veil, fabric cap below the band, hair or neck. Preserve the white negative space between them.\nCamera: exact straight-on BACK orthographic view at the same scale and vertical framing as input 1; upright, symmetric, centered, entire item visible with margin, square canvas, only one view of one complete object.\nRendering: realistic fantasy equipment concept art matching input 1, readable textile texture and shallow raised gold embroidery, soft even neutral studio light, perfectly solid white background, no floor shadow or horizon.\nNo person, head, skin, mannequin, stand, clothing, chainmail, necklace, weapons, text, labels, view names, watermark, collage or diagram. This requested image is the geometrically consistent reverse of input 1."
+    },
+    {
+      "view": "right side; front faces image left",
+      "date": "2026-10-09",
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/helmet_priest-side-v1.png",
+      "sha256": "b5138a1c6df0205ab6276688ef0659e0961fe01dc624697b8b11e8c44a2c6723",
+      "resolution": [
+        1254,
+        1254
+      ],
+      "background": "white RGB",
+      "reference_images": [
+        "doc/images/characters/modular_human_male_01/parts/priest/helmet_priest-front-v1.png",
+        "doc/images/characters/modular_human_male_01/parts/priest/helmet_priest-back-v1.png"
+      ],
+      "prompt": "Use case: precise-object-edit.\nAsset type: a standalone strict SIDE elevation concept of the SAME priest mitre in the two provided images, for Tripo multi-view 3D reconstruction.\nReference 1 is the exact FRONT of the hat. Reference 2 is its exact BACK. Create one true right-side profile, turned precisely 90 degrees from reference 1, with the wearer facing image LEFT (front of hat on image left; back and hanging cloth on image right). No wearer present. Match the same physical object, materials, ornament scale, panel height, brow-band height and lappet length. Do not draw another front or rear view or a three-quarter view.\nCRITICAL CONSTRUCTION: this is a hollow wearable traditional mitre with TWO separate stiff pointed textile panels, one at the forehead and one at the rear, each with the gold pointed arch border from the references. The front and rear pointed peaks are at the SAME height and separated front-to-back above an oval head-sized opening. In side profile BOTH peaks are clearly readable, one toward image left and one toward image right, with a recessed folded ivory cloth side gusset joining the panels lower down, creating the characteristic deep V-shaped dip between the two peaks. There is real head-sized depth between the front and back panels. It must NOT be a single flat cardboard shape, a cone, a wizard hat, a single triangular slab or two separate disconnected hats. Continuous embossed antique-gold oval brow band around the entire lower circumference, with the same shallow curling foliage pattern. Front and back panel thickness is modest, stiffened textile edged with gold embroidery, not thick metal armor.\nThe ruby sunburst is on the outward FRONT-facing surface only (left edge in this view), so show at most its physically correct shallow edge projection; NEVER move it onto the broad side gusset. The three blue gems remain on the FRONT arc of the lower band only: at most a foreshortened edge glimpse of the near lateral front stone, no new side jewel or side medallion. The rear panel has no gems.\nExactly two long gold embroidered cloth lappets attach under the REAR portion of the band at image right and hang down freely, same width, length, flared flat ends and border pattern as the references. Since this is a true side view they substantially overlap; the far one may show only a narrow offset edge. Do NOT move one ribbon to the forehead or split them to front and back. There is no veil or fabric stretched across the empty space below the headband. Preserve the empty underside head opening with a narrow believable shadow at its rim, no head, hair, neck, face, bust, mannequin or support.\nComposition: one complete isolated hat, upright as worn, strict orthographic SIDE elevation, no perspective exaggeration, full silhouette and lappet ends visible, centered on square canvas with white margins, same total vertical size as references.\nRendering: realistic fantasy equipment concept art matching the references, ivory woven cloth, antique warm gold embroidered borders and lappets, even soft neutral studio lighting, clear physical construction. Solid clean WHITE background without floor shadow. No annotations, labels, lettering, arrows, dimensions, frame, inset, collage, extra objects or watermark."
+    }
+  ],
+  "review": {
+    "front": "White pointed mitre with gold border, ruby sunburst and three blue brow stones; isolated without wearer.",
+    "back": "Matching outline and lappets; plain rear panel and gold band without front jewels. Rear construction is inferred because original concept shows only the front.",
+    "remaining": "Head opening, panel depth, lappet attachment and fit require confirmation in the generated 3D model; concept views are not measured orthographic drawings.",
+    "side": "Two equal-height front/rear peaks, recessed ivory side gusset, continuous gold brow band and two overlapping lappets attached at the rear. Front faces image left; front ornaments remain on the curved front portion. Side depth is inferred from the existing front and back concepts."
+  }
+}

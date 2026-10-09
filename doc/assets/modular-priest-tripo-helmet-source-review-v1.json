@@ -1,0 +1,37 @@
+{
+  "source": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_helmet_v1/source.glb",
+    "sha256": "c67ff9ff51ff8a6f44193cd9d93dae6d70c446ebd4be11bfdc92afa0006c831f"
+  },
+  "triangles": 1924,
+  "mesh_count": 1,
+  "meshes": [
+    {
+      "name": "tripo_node_2946e518-85bf-4059-8b55-dd02b690da78",
+      "components_vertex_counts": [
+        422,
+        100,
+        100,
+        89,
+        49,
+        49,
+        49,
+        41,
+        41,
+        41,
+        33,
+        33
+      ],
+      "boundary_edges": 148,
+      "nonmanifold_edges": 148,
+      "degenerate_faces": 0,
+      "collapsed_uv_triangles": 0
+    }
+  ],
+  "source_extent_blender": [
+    0.56982421875,
+    0.55419921875,
+    0.99951171875
+  ],
+  "rigged": false
+}

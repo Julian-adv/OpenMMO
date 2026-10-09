@@ -17,6 +17,8 @@ import {
 } from './cavemanBootCuff'
 
 type Cut =
+  | 'priest_hat_hair'
+  | 'priest_hat_lappets'
   | 'bracers'
   | 'gauntlets'
   | 'gloves'
@@ -68,6 +70,8 @@ function sleeveCut(fraction: number): Distance {
 const rangerGloves = sleeveCut(0.4)
 
 const cuts: Record<Cut, Distance | Distance[] | Reshape> = {
+  priest_hat_hair: (point) => 1.82 - point.y,
+  priest_hat_lappets: { reshape: drapePriestLappetsOverHair },
   bracers: sleeveCut(0.23),
   gauntlets: sleeveCut(0.85),
   gloves: sleeveCut(0.89),
@@ -348,6 +352,62 @@ export function trimModularClothing(
   setGeometry(mesh, geometry)
 }
 
+function drapePriestLappetsOverHair(source: THREE.BufferGeometry) {
+  const geometry = source.clone()
+  const positions = geometry.getAttribute('position')
+  for (let i = 0; i < positions.count; i++) {
+    const y = positions.getY(i)
+    const z = positions.getZ(i)
+    if (z < 0)
+      positions.setZ(
+        i,
+        z - 0.045 * THREE.MathUtils.smoothstep(1.815 - y, 0, 0.065)
+      )
+  }
+  geometry.deleteAttribute('tangent')
+  geometry.computeVertexNormals()
+  geometry.boundingBox = null
+  geometry.boundingSphere = null
+  return geometry
+}
+
+function tuckHairUnderPriestHat(geometry: THREE.BufferGeometry) {
+  const positions = geometry.getAttribute('position')
+  const originalNormals = geometry.getAttribute('normal')?.clone()
+  const originalPositions = positions.clone()
+  for (let i = 0; i < positions.count; i++) {
+    const y = positions.getY(i)
+    const x = positions.getX(i)
+    let z = positions.getZ(i)
+    const rearLimit = -0.1 - 0.3 * Math.max(0, 1.82 - y)
+    z = THREE.MathUtils.lerp(
+      z,
+      Math.max(z, rearLimit),
+      THREE.MathUtils.smoothstep(y, 1.58, 1.65)
+    )
+    const amount = THREE.MathUtils.smoothstep(y, z > 0.03 ? 1.79 : 1.74, 1.815)
+    const radius = Math.hypot(x / 0.084, z / (z > 0 ? 0.105 : 0.102))
+    const scale = radius > 1 ? THREE.MathUtils.lerp(1, 1 / radius, amount) : 1
+    positions.setXYZ(i, x * scale, y, z * scale)
+  }
+  geometry.deleteAttribute('tangent')
+  geometry.computeVertexNormals()
+  if (originalNormals) {
+    const normals = geometry.getAttribute('normal')
+    for (let i = 0; i < positions.count; i++)
+      if (
+        positions.getX(i) === originalPositions.getX(i) &&
+        positions.getZ(i) === originalPositions.getZ(i)
+      )
+        normals.setXYZ(
+          i,
+          originalNormals.getX(i),
+          originalNormals.getY(i),
+          originalNormals.getZ(i)
+        )
+  }
+}
+
 function untuckLinen(source: THREE.BufferGeometry) {
   const geometry = source.clone()
   const positions = geometry.getAttribute('position')
@@ -444,6 +504,7 @@ function applyCuts(
               name === 'priest_pants_boots'
           )
         )
+    if (name === 'priest_hat_hair') tuckHairUnderPriestHat(geometry)
     if (name === 'ranger_pants_boots') tuckPantsIntoRangerBoots(geometry)
     if (name === 'caveman_pants_boots') tuckPantsIntoCavemanBoots(geometry)
     if (name === 'priest_pants_boots') tuckPantsIntoPriestBoots(geometry)

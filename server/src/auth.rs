@@ -75,6 +75,11 @@ fn class_starter_items(
             ("worn_ranger_gloves", 1, Some("hands")),
             ("worn_ranger_boots", 1, Some("boots")),
         ],
+        CharacterClass::Priest if gender == Gender::Male => &[
+            ("worn_priest_top", 1, Some("chest")),
+            ("worn_priest_pants", 1, Some("pants")),
+            ("worn_priest_boots", 1, Some("boots")),
+        ],
         CharacterClass::Bard => &[("worn_mandolin", 1, None)],
         _ => &[],
     }
@@ -2569,22 +2574,22 @@ mod tests {
         assert_eq!(listed[0].worn.armor, worn.armor);
         assert_eq!(knight.gold, 0);
 
-        let priest = auth
+        let wizard = auth
             .create_character(
                 &account,
                 "Unarmored",
                 &plain_attributes(),
                 10,
-                CharacterClass::Priest,
+                CharacterClass::Wizard,
                 Gender::Male,
             )
             .unwrap();
         assert_eq!(
-            auth.load_inventory(priest.id).unwrap().len(),
+            auth.load_inventory(wizard.id).unwrap().len(),
             STARTER_ITEMS.len()
         );
         assert_eq!(
-            auth.load_character_equipment(priest.id).unwrap().armor,
+            auth.load_character_equipment(wizard.id).unwrap().armor,
             Default::default()
         );
     }
@@ -2745,6 +2750,59 @@ mod tests {
             assert_eq!(worn.armor.pants.as_deref(), Some("worn_ranger_pants"));
             assert_eq!(worn.armor.hands.as_deref(), Some("worn_ranger_gloves"));
             assert_eq!(worn.armor.boots.as_deref(), Some("worn_ranger_boots"));
+            let listed = auth.list_characters_with_equipment(&account).unwrap();
+            assert_eq!(listed[0].worn.armor, worn.armor);
+        }
+    }
+
+    #[test]
+    fn priests_start_with_three_equipped_unpriced_pieces() {
+        let (auth, _) = temp_auth("auth_priest_armor");
+        for (name, gender) in [("Priest", Gender::Male), ("Shadow", Gender::Female)] {
+            let account = auth.login_google(&format!("sub-{name}")).unwrap();
+            let character = auth
+                .create_character(
+                    &account,
+                    name,
+                    &plain_attributes(),
+                    10,
+                    CharacterClass::Priest,
+                    gender,
+                )
+                .unwrap();
+            let items = auth.load_inventory(character.id).unwrap();
+            if gender == Gender::Female {
+                assert_eq!(items.len(), STARTER_ITEMS.len());
+                assert_eq!(
+                    auth.load_character_equipment(character.id).unwrap().armor,
+                    Default::default()
+                );
+                continue;
+            }
+            for (id, slot) in [
+                ("worn_priest_top", "chest"),
+                ("worn_priest_pants", "pants"),
+                ("worn_priest_boots", "boots"),
+            ] {
+                let item = items.iter().find(|item| item.item_def_id == id).unwrap();
+                assert_eq!(item.quantity, 1);
+                assert_eq!(item.equip_slot.as_deref(), Some(slot));
+                let def = crate::item_defs::item_defs().get(id).unwrap();
+                assert_eq!(def.equip_slot.as_ref().map(EquipSlot::as_str), Some(slot));
+                assert_eq!(def.base_price, None);
+                assert!(def.untradeable);
+                assert_eq!(def.guard, Some(1));
+                assert!(def.chest_tier.is_none());
+            }
+            assert_eq!(items.len(), STARTER_ITEMS.len() + 3);
+            let worn = auth.load_character_equipment(character.id).unwrap();
+            assert_eq!(worn.main_hand.as_deref(), Some("worn_iron_sword"));
+            assert!(items.iter().any(|item| item.item_def_id == "worn_torch"));
+            assert_eq!(worn.armor.head, None);
+            assert_eq!(worn.armor.chest.as_deref(), Some("worn_priest_top"));
+            assert_eq!(worn.armor.pants.as_deref(), Some("worn_priest_pants"));
+            assert_eq!(worn.armor.hands, None);
+            assert_eq!(worn.armor.boots.as_deref(), Some("worn_priest_boots"));
             let listed = auth.list_characters_with_equipment(&account).unwrap();
             assert_eq!(listed[0].worn.armor, worn.armor);
         }
