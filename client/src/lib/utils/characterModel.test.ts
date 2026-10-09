@@ -21,11 +21,7 @@ import {
   createCharacterModelRoot,
   computeSoleGroundOffset,
 } from './characterAnimationUtils'
-import {
-  MODULAR_BOOTS,
-  SELECTABLE_HAIR_PARTS,
-  skinnedParts,
-} from './modularCharacter'
+import { SELECTABLE_HAIR_PARTS, skinnedParts } from './modularCharacter'
 import type { ArmorEquipment } from '../network/networkTypes'
 
 vi.mock('./gltfCache', async (importOriginal) => {
@@ -735,7 +731,10 @@ describe.skipIf(
       rogue: 'worn_rogue_boots',
       caveman: 'worn_caveman_boots',
       ranger: 'worn_ranger_boots',
-    } satisfies Record<(typeof MODULAR_BOOTS)[number], string | null>
+    } satisfies Record<
+      keyof typeof import('./modularSoleOffsets.json'),
+      string | null
+    >
     for (const face of ['default', 'rugged', 'ranger'] as const) {
       const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH, {
         face,

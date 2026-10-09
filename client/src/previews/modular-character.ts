@@ -176,6 +176,7 @@ async function main() {
     ...RANGER_MODULAR_PARTS,
     'top_priest',
     'pants_priest',
+    'boots_priest',
   ]
   const [base, sources, animations, sword, profile, candidateSources, social] =
     await Promise.all([
@@ -296,7 +297,9 @@ async function main() {
       helmet: helmet.value as ModularOutfit['helmet'],
     })
     const inspectingPriest =
-      equipped.has('top_priest') || equipped.has('pants_priest')
+      equipped.has('top_priest') ||
+      equipped.has('pants_priest') ||
+      equipped.has('boots_priest')
     const note = el('outfit-note')
     const inspectingRogue = ROGUE_MODULAR_PARTS.some((id) => equipped.has(id))
     const inspectingCaveman =
@@ -312,7 +315,7 @@ async function main() {
       !inspectingRanger &&
       !inspectingPriest
     note.textContent = inspectingPriest
-      ? '사제 성의·사슬 바지'
+      ? '사제 성의·사슬 바지·가죽 앵클부츠'
       : inspectingRanger
         ? '순찰자 가죽 복장'
         : inspectingCaveman

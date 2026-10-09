@@ -1,0 +1,75 @@
+{
+  "date": "2026-10-09",
+  "status": "Accepted ankle-boot concept retained as reference for fitted Tripo boots; user approved compatibility with all trouser options on 2026-10-09. Development preview only.",
+  "service": "OpenAI Codex built-in ImageGen",
+  "tier": "ChatGPT Pro 20x",
+  "license": "OpenAI generated output terms; reference source and license as recorded in doc/assets/characters.md.",
+  "design_decision": "User approved brown leather ankle boots with enclosed toes and heels, one silver buckle, and chainmail trouser hems tucked inside after rejecting the sandal/chainmail combination.",
+  "concept_reference": {
+    "path": "client/public/character_concepts/priest.webp",
+    "sha256": "246f17efa93e362513703c1055268a8cc9d1f7f02b6bcf68d132eb97129eadf6",
+    "role": "Palette/material context only; reference sandals explicitly replaced."
+  },
+  "part": {
+    "id": "boot_priest_left",
+    "proposed_slot": "feet",
+    "side": "wearer's left",
+    "includes": [
+      "Closed brown leather toe, vamp, heel and short shaft",
+      "One ankle strap and outer silver buckle",
+      "Layered leather sole and low heel"
+    ],
+    "excludes": [
+      "Body or foot",
+      "Chainmail trousers"
+    ],
+    "opposite_side": "Mirror eventual 3D left boot to right; remap foot/toe bones and correct winding/normals."
+  },
+  "planned_body_reference": {
+    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
+    "rig_id": "human_male_01_mixamo_candidate_v2",
+    "status": "Not supplied to ImageGen; final Tripo fitting uses this current body. See modular-priest-tripo-boots-sources.json."
+  },
+  "images": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/boot_priest_left-front-v1.png",
+      "view": "Front, slightly elevated",
+      "resolution": [
+        1024,
+        1536
+      ],
+      "sha256": "191e7dcf11b90c316f033a2dff33704de75c8d452f005951e6fab49b72557480",
+      "reference_images": [
+        "client/public/character_concepts/priest.webp"
+      ],
+      "prompt": "Use case: stylized-concept.\nAsset type: FRONT-view concept art of one LEFT brown leather ankle boot, starter priest footwear for a modular fantasy RPG.\nInput image 1: existing priest character, palette and material context ONLY. The user has explicitly rejected the sandals in this reference and approved replacing them with practical CLOSED brown leather ankle boots, a single silver buckle, and room for chainmail trouser hems tucked inside.\nPrimary request: draw exactly one empty LEFT-foot ankle boot, straight frontal elevation, toe pointing directly at the viewer. A simple modest medieval fantasy traveling boot that complements the reference's brown belt and silver fittings. Fully enclosed rounded toe and heel, supple medium-dark brown leather upper, restrained natural grain and subtle creases, tidy tonal edge stitching, plain overlapping front shaft closure with a continuous gusset underneath. One narrow leather strap encircles the upper ankle and fastens with exactly ONE small plain rectangular silver buckle on the wearer's OUTER ankle (image RIGHT in the front view). No other decorative metal. Low stacked dark brown leather sole, low broad walking heel, no modern tread.\nThe short shaft ends a little above the ankle bones, below the lower calf, with an adequately wide hollow opening to accommodate tucked-in chainmail trouser hems. No chainmail itself in the image. Short practical ankle boot, not a tall calf boot. Closed leather vamp covering the entire foot, no cutouts or exposed toes. All parts naturally connected as a single wearable object. Anatomical left-foot last for later mirroring in 3D.\nComposition: one boot only, centered large with generous white margins, direct straight FRONT view, near orthographic, no side rotation, no three-quarter view, no top-down view. Slight visibility of the empty shaft opening is fine. Whole boot from sole to shaft rim visible, no crop.\nStyle: polished realistic fantasy equipment concept illustration, clearly readable construction, soft even studio lighting, solid pure white background, no floor or exterior cast shadow.\nAvoid: sandals, open toes, holes in upper, bare foot, toes, skin, legs, human, mannequin, socks, trousers or chainmail inside boot, second boot, multiple views, laces, zippers, elastic panels, modern rubber sole, high heels, metal toe caps, gold, jewels, medallions, religious symbols, extra buckles, studs, spikes, text, annotations, dimensions, logos, watermark."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/boot_priest_left-side-v1.png",
+      "view": "Outer left side, toe to image left",
+      "resolution": [
+        1536,
+        1024
+      ],
+      "sha256": "7f09c04cedf2583fc0f305003d10c5c21670d092e1fca019c0541f3ae3320dd8",
+      "reference_images": [
+        "doc/images/characters/modular_human_male_01/parts/priest/boot_priest_left-front-v1.png"
+      ],
+      "prompt": "Use case: precise-object-edit.\nAsset type: OUTER SIDE-view companion concept of the same single LEFT priest ankle boot, for modular fantasy RPG modeling.\nInput image 1 is the primary design authority, the just-created front view of the exact boot. Rotate this ONE empty boot to its outer side, keeping the same design and materials; no redesign.\nShow a strict outer lateral elevation of a LEFT-foot boot, toe pointing image LEFT and heel image RIGHT, camera perpendicular to the side, level with the ankle, nearly orthographic, no three-quarter view. Whole boot centered large with generous white margins on a landscape canvas, sole horizontal.\nPreserve image 1's plain medium-dark brown leather, completely enclosed rounded toe and heel, soft natural ankle creases, restrained tonal stitching, overlapping front shaft closure with enclosed gusset, and single leather strap with exactly ONE small plain rectangular silver buckle on the OUTER ankle, facing the viewer in this side view. Keep the strap at precisely the same proportional shaft height as in image 1. Its visible outer buckle is the SAME buckle from the front view, not an additional one. Match the short shaft ending a little above ankle bones, empty broad shaft opening for tucked chainmail hems, dark stacked leather sole and low broad walking heel. Boot proportions must suit a natural foot; retain the same shaft-to-foot proportions as the first image. No pull tabs or added seams unless needed to continue the existing construction.\nPolished realistic fantasy equipment illustration matching image 1, soft even studio lighting, pure white background, no floor or exterior cast shadow. Boot only, hollow upper opening and worn volume without wearer or stuffing.\nAvoid: open toes, sandals, perforations, exposed feet, toes, skin, ankle, leg, mannequin, humans, chainmail, socks, trousers, second boot, multiple views, laces, zippers, elastic, modern rubber soles, high heel, metal armor, gold, symbols, medallions, extra buckles, studs, spikes, text, labels, dimensions, arrows, logos, watermark."
+    }
+  ],
+  "visual_review": {
+    "checked": [
+      "One empty boot per image",
+      "Enclosed toe and heel; no feet or trousers",
+      "Brown leather and single outer silver buckle consistent across views"
+    ],
+    "limitations": [
+      "Concept images are not dimensioned orthographic drawings",
+      "Exact sole anatomy, seam continuation and shaft proportions must be reconciled in 3D",
+      "Fitting, occlusion and sampled animation checks recorded in modular-priest-tripo-boots-sources.json."
+    ]
+  },
+  "supersedes": "doc/assets/modular-priest-sandals.md"
+}

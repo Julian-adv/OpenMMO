@@ -56,7 +56,10 @@ const lazyStates = new WeakMap<
   THREE.Object3D,
   { generation: number; loads: Map<string, Promise<void>> }
 >()
-const soleOffsets: Record<ModularOutfit['boots'], number> = modularSoleOffsets
+const soleOffsets: Record<ModularOutfit['boots'], number> = {
+  ...modularSoleOffsets,
+  priest: modularSoleOffsets.none,
+}
 
 export function loadCharacterModel(
   path: string,

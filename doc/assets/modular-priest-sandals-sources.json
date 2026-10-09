@@ -1,0 +1,80 @@
+{
+  "date": "2026-10-09",
+  "status": "[미사용] Rejected sandal/chainmail combination; superseded by closed ankle boots in doc/assets/modular-priest-boots.md. No 3D generation, fitting or runtime registration.",
+  "service": "OpenAI Codex built-in ImageGen",
+  "tier": "ChatGPT Pro 20x",
+  "license": "OpenAI generated output terms; existing reference image source and license retained as documented in doc/assets/characters.md.",
+  "concept_reference": {
+    "path": "client/public/character_concepts/priest.webp",
+    "sha256": "246f17efa93e362513703c1055268a8cc9d1f7f02b6bcf68d132eb97129eadf6",
+    "source_record": "doc/assets/characters.md#other-classes"
+  },
+  "part": {
+    "id": "sandal_priest_left",
+    "proposed_slot": "feet",
+    "side": "wearer's left",
+    "opposite_side": "Mirror the eventual left 3D sandal to produce the right; remap foot/toe bones and correct winding and normals.",
+    "includes": [
+      "Brown leather sole",
+      "Three forefoot/instep straps and central connector",
+      "Ankle cuff, heel retention straps and silver fittings"
+    ],
+    "excludes": [
+      "Foot and toes",
+      "Body",
+      "Chainmail trousers"
+    ]
+  },
+  "planned_body_reference": {
+    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
+    "rig_id": "human_male_01_mixamo_candidate_v2",
+    "status": "Future fitting only; body geometry not supplied to ImageGen; reconcile current body with interfaces/v1 before fitting."
+  },
+  "images": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/sandal_priest_left-front-v1.png",
+      "view": "Front, slightly elevated for strap readability",
+      "resolution": [
+        1024,
+        1536
+      ],
+      "sha256": "37ec1f4b3b35564381ffa9b5293bee9db05ec2570798102bc163500dadee3bc7",
+      "reference_images": [
+        "client/public/character_concepts/priest.webp"
+      ],
+      "prompt": "Use case: stylized-concept.\nAsset type: isolated FRONT-view concept of one left-foot priest sandal for modular fantasy RPG 3D modeling.\nInput image 1 is the existing male priest full-character concept, DESIGN REFERENCE ONLY. Extract and redraw his brown leather sandal faithfully, as a single empty wearable sandal with convincing foot-shaped volume. Keep the original modest functional fantasy design, warm medium brown leather, dark layered flat leather sole, multiple broad leather straps crossing over the forefoot and instep, narrow central longitudinal connector with small silver rivets, heel retention strap, and broad ankle cuff with a small round silver medallion centered on its FRONT. The ankle cuff has a rounded leather backing tab behind the medallion as in the reference. Preserve the silver rivets and small attachment fittings, restraint of ornament, original palette, strap layout and exposed open toe. Do not redesign into a boot or add gold priest insignia.\nComposition: exactly ONE sandal, for the wearer's LEFT foot only, direct straight FRONT elevation, toe pointing directly toward camera, heel behind, nearly orthographic with no rotation or 3/4 angle. Full ankle cuff and whole sole visible, centered large with ample clean margin. Camera at instep height, just high enough to make the front straps readable without becoming a top-down view. Anatomically shaped left-foot sole suitable for later mirrored duplication to the right foot; do not draw a pair. Preserve naturally arched straps and hollow ankle cuff, clearly empty openings. The same single sandal will later be shown from its outer side in a separate image.\nStyle: polished realistic fantasy equipment concept rendering with crisp readable construction, leather grain and edge stitching, subdued silver hardware, soft even studio lighting on pure white background; no floor and no exterior cast shadow.\nConstraints: sandal ONLY, NO foot, toes, toenails, skin, leg, ankle, human, mannequin, trousers, chainmail, socks or inserts. All spaces previously occupied by foot or chainmail are empty, with white backdrop visible through open straps. Keep believable leather thickness and coherent connected construction, not a flattened pile. No second sandal, no multi-view sheet, no text, dimensions, annotations, arrows, logos or watermark. No additions of weapons, robes, mitre, jewelry or ornate armor.",
+      "retained": false,
+      "removal_reason": "Intermediate image removed at user request on 2026-10-09; provenance retained."
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/sandal_priest_left-side-v1.png",
+      "view": "Left outer side, toe to image left",
+      "resolution": [
+        1536,
+        1024
+      ],
+      "sha256": "3c9d860801656ae660a121b4a3a1769e63ab3c058a9b58ec069e0795e7f953e7",
+      "reference_images": [
+        "doc/images/characters/modular_human_male_01/parts/priest/sandal_priest_left-front-v1.png",
+        "client/public/character_concepts/priest.webp"
+      ],
+      "prompt": "Use case: precise-object-edit.\nAsset type: isolated OUTER SIDE-view companion concept of one LEFT priest sandal for fantasy RPG 3D modeling.\nInput image 1 is the just-created FRONT view of the exact single empty sandal to rotate, primary design authority. Input image 2 is the original male priest concept for supporting context only. Turn the sandal from image 1 to a strict outer-side elevation; preserve its exact design, all strap counts, material thickness, warm brown leather and stitching, dark layered sole, silver rivets, loop fittings and ankle-cuff medallion. Same object, not a redesign.\nComposition: show exactly ONE LEFT-foot sandal from its OUTER (lateral) side, toe pointing LEFT, heel on RIGHT. Camera perpendicular to the outer side, nearly orthographic, level with the footbed, no front or three-quarter angle and no top-down perspective. Whole sandal visible large, centered on a landscape canvas with generous white margins. Flat sole lies horizontally. Ankle cuff height, foot length, straps and front medallion positions must remain physically consistent with image 1. The forefoot has THREE broad straps attached to the single narrow longitudinal central connector; show their true side profiles and attachment to the sole. The frontmost strap sits behind the open toe area. A broad stitched ankle cuff surrounds an empty ankle opening, supported by the same slim heel/side retention straps. Its round silver medallion is centered at the FRONT of the ankle, on the toe-facing LEFT edge in this side view, so show only its narrow side profile, NEVER move it onto the outer side facing the camera. Preserve a small outer-side loop fitting and rivet if visible. All brown straps retain plausible arches and open empty interior volume. No newly invented closed leather heel cup or panels.\nStyle: match input 1's realistic detailed fantasy equipment illustration, leather grain, restrained silver metal, soft even studio lighting, solid pure white background. No floor, no exterior cast shadow.\nConstraints: one sandal only, never a pair or multi-view sheet. NO foot, toes, skin, ankle, leg, person, mannequin, socks, trousers, chainmail or stuffing; white backdrop visible through the strap gaps. Do not fill open spaces. No boot, gold decorations, new accessories, text, labels, dimensions, arrows, logos or watermark.",
+      "retained": false,
+      "removal_reason": "Intermediate image removed at user request on 2026-10-09; provenance retained."
+    }
+  ],
+  "visual_review": {
+    "checked": [
+      "One empty sandal per image; no skin or trousers",
+      "Brown leather, silver hardware and three broad straps preserved across views",
+      "Ankle medallion remains on front of cuff in side view"
+    ],
+    "limitations": [
+      "Original character reference has no direct side view; side and hidden construction are inferred",
+      "Front view is slightly elevated, not a dimensioned orthographic drawing",
+      "Left-foot sole anatomy and exact strap/heel continuity need confirmation in 3D"
+    ],
+    "fitting": "Not performed; preserve exposed feet and trouser gaps when defining occlusion. Ankle cuff clearance and chainmail overlap remain unverified."
+  }
+}

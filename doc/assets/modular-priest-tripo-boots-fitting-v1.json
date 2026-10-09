@@ -1,0 +1,86 @@
+{
+  "date": "2026-10-09",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_boots_v1/source.glb",
+    "sha256": "6efea573830860d16c79273cea42d6565c96ad90dceb299b76d1ef05716364f5"
+  },
+  "base": {
+    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
+  },
+  "interfaces": {
+    "path": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+    "sha256": "f3fc3aed9c5080cf26a294dac496293c89bce8f67466add18a7ef72b326f006b",
+    "recorded_base_sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b",
+    "ankle_contour_maximum_distance_to_current_body_m": 0.002088142924041495
+  },
+  "method": "Remove recessed cap, fit actual body sections, retain UV and embedded JPEG, add 25mm open inner lining, mirror X with reversed winding and side-specific Leg/Foot/ToeBase weights.",
+  "initial_transform": {
+    "scale": [
+      0.34,
+      0.36,
+      0.32
+    ],
+    "translation": [
+      0.1664,
+      0.003,
+      0.045
+    ]
+  },
+  "source_triangles": 1112,
+  "removed_cap_triangles": [
+    71,
+    72,
+    74,
+    75,
+    76,
+    77,
+    78,
+    79,
+    80,
+    81,
+    82,
+    83,
+    84,
+    85,
+    86,
+    87,
+    88,
+    89,
+    90,
+    91,
+    92,
+    93,
+    94,
+    95,
+    96,
+    97,
+    98
+  ],
+  "triangles_per_boot": 1139,
+  "mirrored_triangles": 2278,
+  "skin_cut_height_m": 0.235,
+  "cuff": {
+    "minimum_rim_height_m": 0.2438203125,
+    "maximum_rim_height_m": 0.25876171875,
+    "overlap_m": 0.008,
+    "inset_m": 0.005,
+    "profile": "client/src/lib/data/priestBootCuff.json"
+  },
+  "validation": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_boots_v1/boots_priest.glb",
+    "sha256": "995e83d5cd5e41413024b4ab8a522c724b1d078f49232b81460e3d8cf26f4ba0",
+    "triangles": 2278,
+    "bones": 65,
+    "exact_rest_hierarchy_and_inverse_bind_match": true,
+    "maximum_weight_sum_error": 0,
+    "active_bones": [
+      "LeftFoot",
+      "LeftLeg",
+      "LeftToeBase",
+      "RightFoot",
+      "RightLeg",
+      "RightToeBase"
+    ]
+  }
+}

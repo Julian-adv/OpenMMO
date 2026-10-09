@@ -1,0 +1,88 @@
+{
+  "status": "Raw single boot; not fitted, mirrored or rigged",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_boots_v1/source.glb",
+    "sha256": "6efea573830860d16c79273cea42d6565c96ad90dceb299b76d1ef05716364f5"
+  },
+  "triangles": 1112,
+  "mesh_count": 1,
+  "meshes": [
+    {
+      "name": "tripo_node_2099b5e1-e328-485c-b33f-6ab476c9d37b",
+      "components_vertex_counts": [
+        558
+      ],
+      "boundary_edges": 0,
+      "nonmanifold_edges": 0,
+      "degenerate_faces": 0,
+      "collapsed_uv_triangles": 0
+    }
+  ],
+  "source_extent_blender": [
+    0.42724609375,
+    0.99951171875,
+    0.71044921875
+  ],
+  "rigged": false,
+  "opening_probe": {
+    "shaft_center_blender": [
+      -0.0007324516773223877,
+      0.242919921875,
+      0.71044921875
+    ],
+    "downward_probes": [
+      {
+        "offset": [
+          0,
+          0
+        ],
+        "hit_z": 0.5055023431777954,
+        "depth_below_rim": 0.2049468755722046,
+        "face": 79
+      },
+      {
+        "offset": [
+          -0.04,
+          0
+        ],
+        "hit_z": 0.5560019612312317,
+        "depth_below_rim": 0.1544472575187683,
+        "face": 71
+      },
+      {
+        "offset": [
+          0.04,
+          0
+        ],
+        "hit_z": 0.5555537939071655,
+        "depth_below_rim": 0.15489542484283447,
+        "face": 92
+      },
+      {
+        "offset": [
+          0,
+          -0.04
+        ],
+        "hit_z": 0.5525274276733398,
+        "depth_below_rim": 0.15792179107666016,
+        "face": 79
+      },
+      {
+        "offset": [
+          0,
+          0.04
+        ],
+        "hit_z": 0.5212495923042297,
+        "depth_below_rim": 0.18919962644577026,
+        "face": 85
+      }
+    ]
+  },
+  "visual_review": {
+    "single_boot": true,
+    "brown_leather_and_single_silver_buckle": true,
+    "opening": "Shallow recessed cavity closes inside upper shaft; center downward ray hits at source height 0.5055 of maximum 0.7104. Remove recessed cap during later fitting.",
+    "left_right": "Front buckle is on image right, consistent with intended left outer ankle. Sole anatomy requires body fitting.",
+    "status": "Raw source inspected only; no topology changes, mirroring, fitting or rigging."
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "date": "2026-10-09",
+  "method": "Actual canonical animation clips and modular binding; 25 evenly spaced skinned geometry samples per clip",
+  "sources": [
+    {
+      "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+      "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
+    },
+    {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_boots_v1/boots_priest.glb",
+      "sha256": "995e83d5cd5e41413024b4ab8a522c724b1d078f49232b81460e3d8cf26f4ba0"
+    },
+    {
+      "path": "assets/modular_human_male_01/rigged_hand_tuned/animations.glb",
+      "sha256": "76eeb462770754895834271423b4ef7f33efdbd34bdfb9830beba4ba84e7569f"
+    },
+    {
+      "path": "client/public/models/characters/modular_male/animations/social.glb",
+      "sha256": "a9efe7a2d388011cdc039ca6778c2b3a929b07953941ee7bb7c50a511d4b083d"
+    }
+  ],
+  "triangles": 2278,
+  "exact_rig_binding": true,
+  "normalized_weights": true,
+  "opposite_leg_influences": false,
+  "clips": [
+    {
+      "clip": "idle1",
+      "samples": 25,
+      "maximum_edge_extension_relative": 0.0980571606252214,
+      "maximum_rigid_calf_length_error_relative": 1.1512150632775331e-7
+    },
+    {
+      "clip": "walk",
+      "samples": 25,
+      "maximum_edge_extension_relative": 0.6259965166185935,
+      "maximum_rigid_calf_length_error_relative": 1.8254782419013793e-7
+    },
+    {
+      "clip": "run",
+      "samples": 25,
+      "maximum_edge_extension_relative": 0.7857317906571313,
+      "maximum_rigid_calf_length_error_relative": 1.8524499689753782e-7
+    },
+    {
+      "clip": "jump",
+      "samples": 25,
+      "maximum_edge_extension_relative": 0.7352003114822896,
+      "maximum_rigid_calf_length_error_relative": 1.728632632591598e-7
+    },
+    {
+      "clip": "combat_idle",
+      "samples": 25,
+      "maximum_edge_extension_relative": 0.3208778522492859,
+      "maximum_rigid_calf_length_error_relative": 1.7541665342513113e-7
+    },
+    {
+      "clip": "slash1",
+      "samples": 25,
+      "maximum_edge_extension_relative": 0.990047700732418,
+      "maximum_rigid_calf_length_error_relative": 1.5070635472902438e-7
+    },
+    {
+      "clip": "sit_idle",
+      "samples": 25,
+      "maximum_edge_extension_relative": 0.1574161445607214,
+      "maximum_rigid_calf_length_error_relative": 2.039239546114402e-7
+    }
+  ],
+  "meshes": [
+    {
+      "name": "priest_boot_left",
+      "rigid_calf_vertices": 351,
+      "maximum_edge_extension_relative": 0.7352003114822896,
+      "maximum_rigid_calf_length_error_relative": 1.5716624690575998e-7,
+      "maximum_animated_motion_m": 1.3035080934183647
+    },
+    {
+      "name": "priest_boot_right",
+      "rigid_calf_vertices": 351,
+      "maximum_edge_extension_relative": 0.990047700732418,
+      "maximum_rigid_calf_length_error_relative": 2.039239546114402e-7,
+      "maximum_animated_motion_m": 1.2799029643849114
+    }
+  ],
+  "scope": "Calf shape is rigid to its own Leg bone. Ankle and toe are deliberately deformable leather, with no cloth physics. Numeric checks do not certify every body intersection or equipment combination."
+}

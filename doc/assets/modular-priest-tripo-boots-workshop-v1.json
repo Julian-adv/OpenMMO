@@ -1,0 +1,49 @@
+{
+  "url": "https://localhost:10004/modular-character-preview.html?outfit=priest&fit=boots-v1",
+  "selected": "priest",
+  "boots": [
+    {
+      "name": "priest_boot_left",
+      "visible": true,
+      "triangles": 1139,
+      "textureWidth": 2048
+    },
+    {
+      "name": "priest_boot_right",
+      "visible": true,
+      "triangles": 1139,
+      "textureWidth": 2048
+    }
+  ],
+  "stats": "조합 22,021삼각형 · 표시 13,690 · 얼굴 1,505",
+  "errors": [],
+  "failed": [],
+  "views": [
+    "full",
+    "front",
+    "side",
+    "back"
+  ],
+  "clips": [
+    "idle1",
+    "walk",
+    "run",
+    "jump",
+    "combat_idle",
+    "slash1",
+    "sit_idle"
+  ],
+  "motion_time_fraction": 0.4,
+  "scope": "Browser texture decoding, visible mirrored boots and sampled motions; full animation collision not certified.",
+  "validation": {
+    "type_check": "passed: 0 errors, 0 warnings",
+    "lint": "passed",
+    "related_tests_passed": 91,
+    "boot_motion_samples": 175,
+    "assembled_motion_samples": 91
+  },
+  "user_acceptance": {
+    "date": "2026-10-09",
+    "all_trouser_fits_approved": true
+  }
+}

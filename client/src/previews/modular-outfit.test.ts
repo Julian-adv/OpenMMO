@@ -125,6 +125,55 @@ describe('linen shirt with underwear', () => {
 })
 
 describe('priest trousers preview', () => {
+  it('tucks chainmail into priest boots and restores it when removed or unavailable', () => {
+    const { body, parts, visible } = fixture()
+    const original = new THREE.PlaneGeometry(0.08, 0.4, 2, 8)
+    original.translate(0.17, 0.35, -0.03)
+    const pants = new THREE.SkinnedMesh(original)
+    parts.set('pants_priest', [pants])
+    parts.set('boots_priest', [new THREE.SkinnedMesh()])
+    const outfit = {
+      ...undressed,
+      pants: 'priest' as const,
+      boots: 'priest' as const,
+    }
+    const selected = showModularOutfit(body, parts, outfit)
+    expect(selected.has('boots_priest')).toBe(true)
+    expect(selected.has('boots_leather')).toBe(false)
+    expect(visible('feet')).toBe(false)
+    const tucked = pants.geometry
+    tucked.computeBoundingBox()
+    expect(tucked.boundingBox!.min.y).toBeGreaterThan(0.23)
+    expect(tucked.boundingBox!.min.y).toBeLessThan(0.26)
+    showModularOutfit(body, parts, { ...outfit, boots: 'none' })
+    expect(pants.geometry).toBe(original)
+    expect(visible('feet')).toBe(true)
+    showModularOutfit(body, parts, outfit)
+    expect(pants.geometry).toBe(tucked)
+    parts.delete('boots_priest')
+    showModularOutfit(body, parts, outfit)
+    expect(pants.geometry).toBe(original)
+    expect(visible('feet')).toBe(true)
+    expect(parts.get('boots_leather')![0].visible).toBe(false)
+  })
+
+  it('trims bare lower legs inside priest boots and restores skin after removal', () => {
+    const { body, parts, visible } = fixture()
+    const legs = body.find((mesh) => mesh.userData.region === 'legs')!
+    const source = new THREE.PlaneGeometry(0.1, 0.4, 2, 8)
+    source.translate(0.17, 0.3, -0.03)
+    legs.geometry = source
+    parts.set('boots_priest', [new THREE.SkinnedMesh()])
+    showModularOutfit(body, parts, { ...undressed, boots: 'priest' })
+    legs.geometry.computeBoundingBox()
+    expect(legs.geometry.boundingBox!.min.y).toBeCloseTo(0.235)
+    expect(visible('legs')).toBe(true)
+    expect(visible('feet')).toBe(false)
+    showModularOutfit(body, parts, undressed)
+    expect(legs.geometry).toBe(source)
+    expect(visible('feet')).toBe(true)
+  })
+
   it('hides skin behind the rogue undershirt and restores it with equipment changes', () => {
     const { body, parts } = fixture()
     parts.get('top_rogue')![0].userData.fitting_status = 'candidate_tripo_v1'

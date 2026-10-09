@@ -1,0 +1,178 @@
+{
+  "delivery_date": "2026-10-09",
+  "generation_date": null,
+  "provider": "User-confirmed Tripo Studio",
+  "subscription": {
+    "previous_user_report": "Approximately USD 20/month Studio subscription",
+    "previous_source_record": "doc/assets/modular-rogue-tripo-sources.json",
+    "current_file_tier_separately_confirmed": false
+  },
+  "license": "Subject to original Tripo Studio output terms and recorded account provenance.",
+  "delivery_path_windows": "Y:\\public\\web_downloads\\brown+leather+boot+3d+model.glb",
+  "delivery_path_linux": "/mnt/y/web_downloads/brown+leather+boot+3d+model.glb",
+  "source": {
+    "path": "assets/modular_human_male_01/parts/priest_tripo_boots_v1/source.glb",
+    "sha256": "6efea573830860d16c79273cea42d6565c96ad90dceb299b76d1ef05716364f5",
+    "bytes": 1884460,
+    "byte_identical_to_delivery": true
+  },
+  "generation_task_id": null,
+  "generation_model_version": null,
+  "submitted_prompt": null,
+  "submitted_images_confirmed": false,
+  "requested_polygon_count_confirmed": null,
+  "discussion_target_quads_per_boot": 500,
+  "export_observed": {
+    "format": "GLB 2.0",
+    "generator": "Tripo",
+    "triangles": 1112,
+    "original_quad_count": null,
+    "vertices_including_uv_splits": 1109,
+    "mesh_count": 1,
+    "material_count": 1,
+    "textures": [
+      {
+        "size": [
+          2048,
+          2048
+        ],
+        "format": "JPEG",
+        "sha256": "20fe74ab158292d7a331a7bb72f75b22ef97b7c50aee45ad166caf29c0d4f9bc"
+      }
+    ],
+    "rigged": false,
+    "animations": 0
+  },
+  "reference_artwork": [
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/boot_priest_left-front-v1.png",
+      "sha256": "191e7dcf11b90c316f033a2dff33704de75c8d452f005951e6fab49b72557480",
+      "bytes": 1747247
+    },
+    {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/boot_priest_left-side-v1.png",
+      "sha256": "7f09c04cedf2583fc0f305003d10c5c21670d092e1fca019c0541f3ae3320dd8",
+      "bytes": 2164066
+    }
+  ],
+  "review": {
+    "date": "2026-10-09",
+    "tool": "Blender 5.2.0 LTS; existing review_outfit_sources.py diagnostics and review_rogue_fitting.py contact-sheet helper, plus downward BVH probes",
+    "report": {
+      "path": "doc/assets/modular-priest-tripo-boots-source-review-v1.json",
+      "sha256": "f1918ca13fdc014d7b599614610d3b2af8b56ecab698ca45945f9ac802d4caa7",
+      "bytes": 2242
+    },
+    "image": {
+      "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-boots-raw-review-v1.png",
+      "sha256": "cc6e1ebaa15d619eda371b6b627b3f1f82c57b461da083bd6a82003cb374197f",
+      "bytes": 321273,
+      "retained": false,
+      "removal_reason": "Intermediate image removed at user request on 2026-10-09; provenance retained."
+    },
+    "observations": {
+      "single_boot": true,
+      "brown_leather_and_single_silver_buckle": true,
+      "opening": "Shallow recessed cavity closes inside upper shaft; center downward ray hits at source height 0.5055 of maximum 0.7104. Remove recessed cap during later fitting.",
+      "left_right": "Front buckle is on image right, consistent with intended left outer ankle. Sole anatomy requires body fitting.",
+      "status": "Raw source inspected only; no topology changes, mirroring, fitting or rigging."
+    }
+  },
+  "status": "Dev preview candidate: mirrored, opened and lined, fitted and rigged to the current 65-bone male body; priest trouser tuck and sampled animations verified. Gameplay asset registration and full collision certification not performed.",
+  "new_ai_generation_or_paid_calls": false,
+  "base": {
+    "path": "assets/modular_human_male_01/parts/fitted/base.glb",
+    "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
+  },
+  "interfaces": {
+    "path": "assets/modular_human_male_01/parts/interfaces/v1/interfaces.json",
+    "sha256": "f3fc3aed9c5080cf26a294dac496293c89bce8f67466add18a7ef72b326f006b",
+    "recorded_base_sha256": "ae72eb53953dd86b716859a402700eab536863e245c5261acb2592e5ef87ea5b",
+    "ankle_contour_maximum_distance_to_current_body_m": 0.002088142924041495
+  },
+  "rig_id": "human_male_01_mixamo_candidate_v2",
+  "fitting": {
+    "date": "2026-10-09",
+    "method": "Remove recessed cap, fit actual body sections, retain UV and embedded JPEG, add 25mm open inner lining, mirror X with reversed winding and side-specific Leg/Foot/ToeBase weights.",
+    "tool": {
+      "path": "tools/fit-tripo-priest-boots.py",
+      "sha256": "500324f95c5a4e80774eb4503204d2dc9134ca47341826b1e4a30c7d94d82e5c",
+      "bytes": 8452
+    },
+    "output": {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_boots_v1/boots_priest.glb",
+      "sha256": "995e83d5cd5e41413024b4ab8a522c724b1d078f49232b81460e3d8cf26f4ba0",
+      "bytes": 2013120
+    },
+    "editable": {
+      "path": "assets/modular_human_male_01/parts/priest_tripo_boots_v1/priest-boots-fitting-v1.blend",
+      "sha256": "7459a321cc2231c32b02a2a81e93f015806ca770d6730af345d883dfa7d805df",
+      "bytes": 26009917
+    },
+    "triangles_per_boot": 1139,
+    "mirrored_triangles": 2278,
+    "removed_source_cap_triangles": 27,
+    "added_lining_triangles_per_boot": 54,
+    "source_and_original_jpeg_preserved": true,
+    "reports": [
+      {
+        "path": "doc/assets/modular-priest-tripo-boots-fitting-v1.json",
+        "sha256": "cc168f1bbfdea7f8304088b6af7bb0d8273c8b1b9ae3c68a8ed211bee45151c6",
+        "bytes": 2119
+      },
+      {
+        "path": "doc/assets/modular-priest-tripo-boots-review-v1.json",
+        "sha256": "b975363c064d544c13b0012da0e3a12a4544d94d0573693434bfd73565e9caef",
+        "bytes": 1136
+      },
+      {
+        "path": "doc/assets/modular-priest-tripo-boots-animation-v1.json",
+        "sha256": "7ad242c12068f462df4b3d2a2a35e9ae46dba1a1271ab912e662badb5d0e7540",
+        "bytes": 3102
+      },
+      {
+        "path": "doc/assets/modular-priest-tripo-boots-assembly-v1.json",
+        "sha256": "06740188c75f41322a263e5a68fc146af16fdfe6c09cc87ab3065a493c193332",
+        "bytes": 2161
+      },
+      {
+        "path": "doc/assets/modular-priest-tripo-boots-sections-v1.json",
+        "sha256": "b972d0132e0986f891f6a73027dc0d6fb46e5843c3fa4601784101cf85b58334",
+        "bytes": 1391
+      }
+    ],
+    "runtime_cuff": {
+      "path": "client/src/lib/data/priestBootCuff.json",
+      "sha256": "d496dcc9946e9fc41c21281feac0d54250524e729bdc95f6ec278baa97b93a37",
+      "bytes": 4129
+    },
+    "images": [
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-boots-fitted-full-v1.png",
+        "sha256": "fd28a610dae4cb01fac40fb5ab1b554cb868ccaf4c445dfd527b478896eb09da",
+        "bytes": 113122,
+        "retained": false,
+        "removal_reason": "Intermediate image removed at user request on 2026-10-09; provenance retained."
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-boots-fitted-rest-v1.png",
+        "sha256": "ff1835312bb53eecdf8538330c8dbd4c0f8519b6cbdb15f4fce59a16df535353",
+        "bytes": 484608
+      },
+      {
+        "path": "doc/images/characters/modular_human_male_01/parts/priest/tripo-boots-fitted-motion-v1.png",
+        "sha256": "b85116157cb20f5d706277399377ce94696a7f97ed347968232f8bf563892a03",
+        "bytes": 590403
+      }
+    ],
+    "browser_review": {
+      "path": "doc/assets/modular-priest-tripo-boots-workshop-v1.json",
+      "sha256": "94df5ad8cc309813f405fd4e02963821c0a0c0555f873473a174ca9e769aff7b",
+      "bytes": 1106
+    }
+  },
+  "user_acceptance": {
+    "date": "2026-10-09",
+    "scope": "User confirmed fitting with all trouser options in character preview and requested intermediate cleanup and commit."
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-09",
+  "sections": [
+    {
+      "side": "Left",
+      "height_m": 0.14,
+      "rays": 48,
+      "minimum_outer_boot_to_skin_gap_m": 0.008909323984546198,
+      "maximum_outer_boot_to_skin_gap_m": 0.03626815354323726
+    },
+    {
+      "side": "Left",
+      "height_m": 0.18,
+      "rays": 48,
+      "minimum_outer_boot_to_skin_gap_m": 0.009129870847853883,
+      "maximum_outer_boot_to_skin_gap_m": 0.01634820908672742
+    },
+    {
+      "side": "Left",
+      "height_m": 0.23,
+      "rays": 48,
+      "minimum_outer_boot_to_skin_gap_m": 0.009430636123047655,
+      "maximum_outer_boot_to_skin_gap_m": 0.015454818747114851
+    },
+    {
+      "side": "Right",
+      "height_m": 0.14,
+      "rays": 48,
+      "minimum_outer_boot_to_skin_gap_m": 0.008468809667142377,
+      "maximum_outer_boot_to_skin_gap_m": 0.0368205710763796
+    },
+    {
+      "side": "Right",
+      "height_m": 0.18,
+      "rays": 48,
+      "minimum_outer_boot_to_skin_gap_m": 0.00739526196402554,
+      "maximum_outer_boot_to_skin_gap_m": 0.016212079913329944
+    },
+    {
+      "side": "Right",
+      "height_m": 0.23,
+      "rays": 48,
+      "minimum_outer_boot_to_skin_gap_m": 0.009000163161074208,
+      "maximum_outer_boot_to_skin_gap_m": 0.015812225950815856
+    }
+  ],
+  "scope": "Static radial outside surface gaps on both current legs; does not measure every wall or animated collision."
+}

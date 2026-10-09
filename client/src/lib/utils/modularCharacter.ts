@@ -62,6 +62,7 @@ export const MODULAR_BOOTS = [
   'rogue',
   'caveman',
   'ranger',
+  'priest',
 ] as const
 
 export interface ModularOutfit {
@@ -351,14 +352,18 @@ export const RANGER_MODULAR_OUTFIT: ModularOutfit = {
   helmet: 'none',
 }
 
-const PRIEST_MODULAR_PARTS = ['top_priest', 'pants_priest'] as const
+const PRIEST_MODULAR_PARTS = [
+  'top_priest',
+  'pants_priest',
+  'boots_priest',
+] as const
 
 export const PRIEST_MODULAR_OUTFIT: ModularOutfit = {
   hair: 'hair_crop',
   top: 'priest',
   pants: 'priest',
   gloves: 'none',
-  boots: 'none',
+  boots: 'priest',
   helmet: 'none',
 }
 
@@ -439,6 +444,10 @@ export function showModularOutfit(
       : [])
     for (const mesh of parts.get(id) ?? [])
       if (mesh.visible) trimModularClothing(mesh, 'tall_boots')
+  if (boots === 'priest')
+    for (const id of ['pants_plate', 'pants_cloth'])
+      for (const mesh of parts.get(id) ?? [])
+        if (mesh.visible) trimModularClothing(mesh, 'priest_pants_boots')
   if (priest) {
     const bootCut = tallBoots
       ? 'tall_boots'
@@ -468,7 +477,10 @@ export function showModularOutfit(
       ?.some(
         (mesh) => mesh.userData.fitting_status === 'candidate_tripo_pants_v1'
       )
-  const bootHem = boots === 'ranger' && 'ranger_pants_boots'
+  const bootHem =
+    boots === 'ranger'
+      ? 'ranger_pants_boots'
+      : boots === 'priest' && 'priest_pants_boots'
   for (const mesh of parts.get('pants_rogue') ?? [])
     trimModularClothing(
       mesh,
@@ -496,6 +508,7 @@ export function showModularOutfit(
       barbarian: 'barbarian_pants_boots',
       caveman: 'caveman_pants_boots',
       ranger: 'ranger_pants_boots',
+      priest: 'priest_pants_boots',
     } as const
   )[boots]
   const priestPlateWaist =
@@ -563,6 +576,8 @@ export function showModularOutfit(
     }
     if (tallBoots && bodyRegion === 'legs')
       trimModularClothing(mesh, 'tall_boots')
+    if (boots === 'priest' && bodyRegion === 'legs')
+      trimModularClothing(mesh, 'leather_boots')
     if (
       bodyRegion === 'torso' &&
       top === 'rogue' &&
