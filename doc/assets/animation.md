@@ -179,7 +179,7 @@ tip followed the handle. Other rigs and offhand props kept their previous placem
     저장소 LICENSE(PolyForm Noncommercial 1.0.0)를 적용하며 기존 Mixamo 동작은 기존 라이선스를 따른다.
   - 낚시 성공 연출 (2026-09-21): `fishingReel.ts`·`fishingCatch.ts`가 기존 idle 위에
     낚싯대 들어 올리기 → 오른손으로 줄 잡기 → 매달린 생선 들어 보이기를 3.6초 동안 적용한다.
-    실제 캐릭터 포즈 검증 미리보기: `assets/fishing_rod/fishing_rod-catch.gif`와 `fishing_rod-catch*.png`.
+    **[미사용]** 실제 캐릭터 포즈 검증용 GIF와 정지 화면 PNG는 2026-10-09 정리했다.
     자체 제작 절차적 동작이며 저장소 LICENSE(PolyForm Noncommercial 1.0.0)를 적용한다.
 
 - Guitar Playing https://www.mixamo.com/#/?page=1&query=Guitar+Playing&type=Motion%2CMotionPack (social pack, `guitar_playing`)

@@ -11,7 +11,7 @@ repo=$(awk '$1 == "repo" {print $2; exit}' assets.lock)
 mapfile -d '' files < <({
     find client/public -type f \
         \( -name '*.glb' -o -name '*.mp3' -o -name '*.m4a' -o -name '*.blend' \) -print0
-    # Blender writes a .blend1 backup on every save — 180MB of nothing.
+    # Exclude Blender backups.
     if [[ -d assets ]]; then find assets -type f ! -name '*.blend1' -print0; fi
 } | sort -z)
 
@@ -26,6 +26,7 @@ done
 # bare wildcard argument against the cwd, which blows the pattern up into a file
 # list. Attached to the flag it no longer matches anything and survives intact.
 hf upload "$repo" "$stage" . --repo-type dataset \
+    --exclude='*.blend1' \
     --delete='client/**' --delete='assets/**' \
     --commit-message "Sync assets from working tree"
 

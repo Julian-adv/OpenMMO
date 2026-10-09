@@ -11,7 +11,7 @@
   `assets/horse/textures/{difuse,normal,Horse_PCB}.png`.
 - 게임 모델: `client/public/models/mounts/horse.glb`.
 - packed Blender 작업 파일: `assets/horse/horse.blend`.
-- 기승 비교 장면: `assets/horse/riding-preview.blend`, `assets/horse/riding-preview.png`.
+- **[미사용]** 기승 비교 장면 `riding-preview.blend`와 기승·달리기 미리보기 PNG는 2026-10-09 정리했다. 기승 애니메이션 작업 파일 `assets/horse/rider.blend`는 보존한다.
 - 게임 규칙: [MOUNTS.md](../MOUNTS.md). 고삐 아이템 출처는 [items.md](items.md).
 - 기승 중 손과 입을 연결하는 고삐 줄은 자체 절차 생성(2026-09-08).
   `horseReins.ts`에서 갈색 재질·원통 구간으로 처진 곡선 두 가닥을 그린다.

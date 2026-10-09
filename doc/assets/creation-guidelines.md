@@ -15,6 +15,11 @@ These guidelines were confirmed by the user on 2026-09-20 and apply until the us
 - For AI or paid tools, also record the subscription tier and generation date.
 - Mark assets that are no longer used with **[미사용]** (unused).
 
+## Hugging Face Uploads
+
+- Exclude Blender `.blend1` backups from all HF uploads, including targeted uploads, and from `assets.lock` (user-confirmed 2026-10-09).
+- Preserve the current `.blend` source file.
+
 ## Image Generation Tier
 
 - Record **ChatGPT Pro 20x** as the tier for ChatGPT/Codex ImageGen assets.

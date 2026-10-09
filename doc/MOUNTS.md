@@ -96,7 +96,7 @@
 - 말의 출처·CC BY 4.0 크레딧·구간표: [animals.md](assets/animals.md).
 - 고삐 모델과 아이콘: [items.md](assets/items.md).
 - 캐릭터 기승 포즈: [animation.md](assets/animation.md#riding).
-- Blender 비교 장면: `assets/horse/riding-preview.blend`, `assets/horse/riding-preview.png`.
+- **[미사용]** 기승 비교 장면 `riding-preview.blend`와 기승·달리기 미리보기 PNG는 2026-10-09 정리했다. 기승 애니메이션 작업 파일 `assets/horse/rider.blend`는 보존한다.
 - 브라우저의 실제 PlayerModel로 남녀 기사 탑승·달리기·하차를 확인했다.
 - 좌우 급회전·회전 중 반대 방향 재입력·하차를 같은 브라우저 모델로 확인했다.
 - 남녀 모델에서 말머리를 따르는 상체·양손과 고삐 연결을 확인했다. 손 높이·하체 유지, ±30도 제한과 부드러운 보정 복귀를 테스트한다.
