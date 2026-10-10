@@ -654,6 +654,36 @@ export function modularAnimationClips(
   return pack.animations
 }
 
+export function bindModularFace(
+  body: THREE.Object3D,
+  source: THREE.Object3D
+): THREE.SkinnedMesh[] {
+  const torso = skinnedParts(body).find((mesh) => region(mesh) === 'torso')
+  const skin = (
+    Array.isArray(torso?.material) ? torso.material[0] : torso?.material
+  ) as THREE.MeshStandardMaterial | undefined
+  const meshes = bindModularPart(body, source)
+  for (const mesh of meshes) {
+    for (const material of Array.isArray(mesh.material)
+      ? mesh.material
+      : [mesh.material]) {
+      if (!(material instanceof THREE.MeshStandardMaterial)) continue
+      for (const slot of [
+        'map',
+        'normalMap',
+        'metalnessMap',
+        'roughnessMap',
+      ] as const) {
+        if (!material.userData.modular_body_textures?.includes(slot)) continue
+        if (!skin?.[slot])
+          throw new Error(`Missing shared body texture: ${slot}`)
+        material[slot] = skin[slot]
+      }
+    }
+  }
+  return meshes
+}
+
 export function bindModularPart(
   body: THREE.Object3D,
   source: THREE.Object3D

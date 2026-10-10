@@ -333,6 +333,11 @@ impl ServerGroundItem {
     }
 }
 
+/// Lock order for guards held together, outermost first:
+/// `character_session_lock` → `persistence_lock` → `players` →
+/// `player_characters` → `stalls`/`fences` → `player_gold` → `hunger` →
+/// `inventories` → `mana`. tokio's fair `RwLock` turns one inversion into a
+/// server-wide stall.
 #[derive(Clone)]
 pub struct GameState {
     interest: Arc<std::sync::Mutex<interest::Interest>>,

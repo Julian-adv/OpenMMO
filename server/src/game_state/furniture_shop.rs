@@ -172,10 +172,6 @@ impl GameState {
         let mut next_id = self
             .reserve_instance_ids(items.iter().map(|i| u64::from(i.quantity)).sum())
             .await;
-        let mut inventories = self.inventories.write().await;
-        let inventory = inventories
-            .get_mut(player_id)
-            .ok_or("Inventory not found.")?;
         let mut gold = self.player_gold.write().await;
         let balance = gold.get_mut(player_id).ok_or("Gold balance not found.")?;
         if *balance != expected_gold {
@@ -184,6 +180,10 @@ impl GameState {
         if *balance < total {
             return Err("Not enough gold.");
         }
+        let mut inventories = self.inventories.write().await;
+        let inventory = inventories
+            .get_mut(player_id)
+            .ok_or("Inventory not found.")?;
         let mut updated = inventory.clone();
         for (line, product) in &order {
             for _ in 0..line.quantity {
@@ -216,8 +216,8 @@ impl GameState {
         })?;
         *balance -= total;
         *inventory = updated.clone();
-        drop(gold);
         drop(inventories);
+        drop(gold);
         self.mark_dirty(player_id).await;
         self.mark_inventory_dirty(player_id).await;
         self.send_inventory_snapshot(player_id, updated).await;

@@ -485,6 +485,15 @@ impl super::GameState {
         gold_map.get(player_id).copied().unwrap_or(0)
     }
 
+    pub(super) async fn gold_balance(&self, player_id: &PlayerId) -> Result<i64, &'static str> {
+        self.player_gold
+            .read()
+            .await
+            .get(player_id)
+            .copied()
+            .ok_or("Gold balance not found.")
+    }
+
     /// Online player id for a typed name, ignoring ASCII case — names are
     /// unique ignoring case, so at most one player matches. The caller still
     /// validates the id against `players` under its own lock.

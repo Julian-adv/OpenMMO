@@ -1,0 +1,188 @@
+{
+  "date": "2026-10-10",
+  "parts": [
+    {
+      "name": "base",
+      "bytes": 1097744,
+      "sha256": "abf1a12178d5df11269afed6793e46ed16796c47174e356708ee73bdf590bdad",
+      "meshes": 8,
+      "triangles": 10734,
+      "texture_count": 3,
+      "shared_body_materials": []
+    },
+    {
+      "name": "face_default",
+      "bytes": 127932,
+      "sha256": "11475885360ea39850453821a3644c172236d999010de3718b52d75545a0e5ca",
+      "meshes": 2,
+      "triangles": 3157,
+      "texture_count": 0,
+      "shared_body_materials": [
+        {
+          "name": "Material_0",
+          "slots": [
+            "map",
+            "normalMap",
+            "metalnessMap",
+            "roughnessMap"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "face_rugged",
+      "bytes": 465328,
+      "sha256": "c64aec5a878967b1233a7411513c8fa7d8d5ddbbe46b0dda311b9c41b333ea1d",
+      "meshes": 4,
+      "triangles": 6193,
+      "texture_count": 2,
+      "shared_body_materials": [
+        {
+          "name": "rugged_body_neck_skin",
+          "slots": [
+            "map"
+          ]
+        },
+        {
+          "name": "retained_neck_skin",
+          "slots": [
+            "map"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "face_ranger",
+      "bytes": 1351552,
+      "sha256": "e2fd52b467f0c5627fa12448602592dce71652f3fc0ebb8731bd985ef74656f8",
+      "meshes": 4,
+      "triangles": 6219,
+      "texture_count": 2,
+      "shared_body_materials": [
+        {
+          "name": "rugged_body_neck_skin",
+          "slots": [
+            "map"
+          ]
+        },
+        {
+          "name": "retained_neck_skin",
+          "slots": [
+            "map"
+          ]
+        }
+      ]
+    }
+  ],
+  "faces": [
+    {
+      "face": "default",
+      "geometry_uv_weights_metadata_transforms_identical": true,
+      "face_image_identical": true
+    },
+    {
+      "face": "rugged",
+      "geometry_uv_weights_metadata_transforms_identical": true,
+      "face_image_identical": true
+    },
+    {
+      "face": "ranger",
+      "geometry_uv_weights_metadata_transforms_identical": true,
+      "face_image_identical": true
+    }
+  ],
+  "source": "Existing fitted modular male sources; source and license records unchanged; no new generation.",
+  "total_bytes": 3042556,
+  "previous_total_bytes": 9960856,
+  "validation": {
+    "tests": 122,
+    "browser": [
+      {
+        "backend": "WebGPUBackend",
+        "device": "Chromium SwiftShader",
+        "body_requests": 1,
+        "face_requests": [
+          "face_default.glb",
+          "face_rugged.glb",
+          "face_ranger.glb"
+        ],
+        "shared_geometry_and_texture_objects": true,
+        "shared_texture_slots": [
+          {
+            "face": "default",
+            "slots": 8
+          },
+          {
+            "face": "rugged",
+            "slots": 2
+          },
+          {
+            "face": "ranger",
+            "slots": 2
+          }
+        ],
+        "faces": 3,
+        "hairstyles": 4,
+        "helmets": [
+          "none",
+          "plate",
+          "priest"
+        ],
+        "animation_clips": [
+          "idle1",
+          "walk",
+          "run",
+          "jump"
+        ],
+        "errors": [],
+        "gpu_errors": [],
+        "hardware_tested": false
+      },
+      {
+        "backend": "WebGLBackend",
+        "device": "Chromium SwiftShader",
+        "body_requests": 1,
+        "face_requests": [
+          "face_default.glb",
+          "face_rugged.glb",
+          "face_ranger.glb"
+        ],
+        "shared_geometry_and_texture_objects": true,
+        "shared_texture_slots": [
+          {
+            "face": "default",
+            "slots": 8
+          },
+          {
+            "face": "rugged",
+            "slots": 2
+          },
+          {
+            "face": "ranger",
+            "slots": 2
+          }
+        ],
+        "faces": 3,
+        "hairstyles": 4,
+        "helmets": [
+          "none",
+          "plate",
+          "priest"
+        ],
+        "animation_clips": [
+          "idle1",
+          "walk",
+          "run",
+          "jump"
+        ],
+        "errors": [],
+        "gpu_errors": [],
+        "hardware_tested": false
+      }
+    ],
+    "check": "passed: 0 errors, 0 warnings",
+    "lint": "passed",
+    "vite_build": "passed",
+    "triangle_comparison": "Oriented triangle equality; cyclic rotations from Meshopt normalized"
+  }
+}

@@ -5,6 +5,7 @@ import {
   DEFAULT_MODULAR_OUTFIT,
   KNIGHT_MODULAR_OUTFIT,
   applyModularFingerPose,
+  bindModularFace,
   bindModularPart,
   modularAnimationClips,
   parseModularHandProfile,
@@ -35,7 +36,10 @@ function rig(id = 'test-rig', height = 1) {
     'skinWeight',
     new THREE.Float32BufferAttribute([1, 0, 0, 0], 4)
   )
-  const mesh = new THREE.SkinnedMesh(geometry, new THREE.MeshBasicMaterial())
+  const mesh: THREE.SkinnedMesh = new THREE.SkinnedMesh(
+    geometry,
+    new THREE.MeshBasicMaterial()
+  )
   root.add(mesh)
   root.updateMatrixWorld(true)
   mesh.bind(new THREE.Skeleton([bone]))
@@ -372,6 +376,58 @@ describe('baked modular animations', () => {
 })
 
 describe('modular parts', () => {
+  it('shares body textures with face parts while preserving their own maps and material settings', () => {
+    const body = rig()
+    body.mesh.userData.region = 'torso'
+    const skin = new THREE.MeshStandardMaterial({
+      map: new THREE.Texture(),
+      normalMap: new THREE.Texture(),
+      metalnessMap: new THREE.Texture(),
+      roughnessMap: new THREE.Texture(),
+    })
+    body.mesh.material = skin
+    const part = rig()
+    const ownMap = new THREE.Texture()
+    const face = new THREE.MeshStandardMaterial({ map: ownMap })
+    part.mesh.material = face
+    const neck = part.mesh.clone()
+    const neckMaterial = new THREE.MeshStandardMaterial({
+      roughness: 0.9,
+      metalness: 0,
+    })
+    neckMaterial.userData.modular_body_textures = ['map']
+    neck.material = neckMaterial
+    part.root.add(neck)
+    const head = part.mesh.clone()
+    const headMaterial = new THREE.MeshStandardMaterial()
+    headMaterial.userData.modular_body_textures = [
+      'map',
+      'normalMap',
+      'metalnessMap',
+      'roughnessMap',
+    ]
+    head.material = headMaterial
+    part.root.add(head)
+
+    const attached = bindModularFace(body.root, part.root)
+    expect(attached).toHaveLength(3)
+    expect(attached.every((mesh) => mesh.skeleton === body.mesh.skeleton)).toBe(
+      true
+    )
+    expect(face.map).toBe(ownMap)
+    expect(neckMaterial.map).toBe(skin.map)
+    expect(neckMaterial.normalMap).toBeNull()
+    expect(neckMaterial.roughness).toBe(0.9)
+    expect(neckMaterial.metalness).toBe(0)
+    for (const slot of [
+      'map',
+      'normalMap',
+      'metalnessMap',
+      'roughnessMap',
+    ] as const)
+      expect(headMaterial[slot]).toBe(skin[slot])
+  })
+
   it('carries pelt physics settings to attached primitives without changing cached assets', () => {
     const body = rig()
     const part = rig()

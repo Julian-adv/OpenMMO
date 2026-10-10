@@ -23,6 +23,8 @@ jobs:
       # LFS assets (models, audio) are not needed to compile or test — plain
       # checkout keeps CI fast and off the LFS bandwidth quota.
       - uses: actions/checkout@v5
+      - name: Lock-order scan
+        run: python3 -I tools/lockscan.py --check server/src
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt

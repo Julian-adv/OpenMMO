@@ -13,8 +13,17 @@ const [source, output] = process.argv.slice(2)
 const flags = process.argv.slice(4)
 const body = flags.includes('--body')
 const ktx2 = flags.includes('--ktx2')
-if (!source || !output || flags.some(flag => !['--body', '--ktx2'].includes(flag))) {
-  console.error('Usage: node tools/optimize-modular-part.mjs SOURCE.glb OUTPUT.glb [--body] [--ktx2]')
+const sizeFlag = flags.find(flag => flag.startsWith('--size='))
+const size = sizeFlag ? Number(sizeFlag.slice(7)) : body ? 1024 : 512
+const qualityFlag = flags.find(flag => flag.startsWith('--quality='))
+const quality = qualityFlag ? Number(qualityFlag.slice(10)) : 90
+if (
+  !source || !output ||
+  !Number.isSafeInteger(size) || size <= 0 ||
+  !Number.isSafeInteger(quality) || quality < 1 || quality > 100 ||
+  flags.some(flag => !['--body', '--ktx2', sizeFlag, qualityFlag].includes(flag))
+) {
+  console.error('Usage: node tools/optimize-modular-part.mjs SOURCE.glb OUTPUT.glb [--body] [--ktx2] [--size=PIXELS] [--quality=1..100]')
   process.exit(1)
 }
 
@@ -38,7 +47,6 @@ const materials = document.getRoot().listMaterials()
 const colors = new Set(materials.flatMap(material => [material.getBaseColorTexture(), material.getEmissiveTexture()]))
 const webp = new Set(body ? materials.map(material => material.getBaseColorTexture()) : [])
 const normals = new Set(body ? materials.map(material => material.getNormalTexture()) : [])
-const size = body ? 1024 : 512
 const temporary = ktx2 ? await mkdtemp(join(tmpdir(), 'modular-ktx2-')) : undefined
 async function toKtx2(input, srgb) {
   const png = join(temporary, 'texture.png')
@@ -67,8 +75,8 @@ try {
     const [encoded, mimeType] = hasAlpha
       ? [input.webp({ lossless: true, effort: 6 }), 'image/webp']
       : webp.has(texture)
-      ? [input.webp({ quality: 90, effort: 6 }), 'image/webp']
-      : [input.jpeg({ quality: normals.has(texture) ? 92 : 90, chromaSubsampling: '4:4:4' }), 'image/jpeg']
+      ? [input.webp({ quality, effort: 6 }), 'image/webp']
+      : [input.jpeg({ quality: normals.has(texture) ? Math.max(92, quality) : quality, chromaSubsampling: '4:4:4' }), 'image/jpeg']
     texture.setImage(await encoded.toBuffer()).setMimeType(mimeType)
   }
 } finally {

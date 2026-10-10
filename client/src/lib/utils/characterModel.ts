@@ -25,6 +25,7 @@ import {
   PRIEST_MODULAR_OUTFIT,
   SELECTABLE_HAIR_PARTS,
   type ModularOutfit,
+  bindModularFace,
   bindModularPart,
   modularAnimationClips,
   modularRigId,
@@ -76,14 +77,14 @@ export function loadCharacterModel(
   if (!maleModel) {
     const ids = [...eagerParts]
     maleModel = Promise.all([
-      loadGLB(
-        face === 'default' ? path : `${MODULAR_MALE_DIRECTORY}/base_${face}.glb`
-      ),
+      loadGLB(path),
+      loadGLB(`${MODULAR_MALE_DIRECTORY}/face_${face}.glb`),
       ...ids.map((id) => loadGLB(`${MODULAR_MALE_DIRECTORY}/${id}.glb`)),
     ])
-      .then(([base, ...sources]) => {
+      .then(([base, faceSource, ...sources]) => {
         const scene = clone(base.scene) as THREE.Group
         scene.userData.modular_character = true
+        bindModularFace(scene, faceSource.scene)
         const body = skinnedParts(scene)
         const parts = new Map(
           ids.map((id, i) => [id, bindModularPart(scene, sources[i].scene)])

@@ -2497,8 +2497,8 @@ impl super::GameState {
             return (Vec::new(), Vec::new());
         }
 
-        let inventories = self.inventories.read().await;
         let player_chars = self.player_characters.read().await;
+        let inventories = self.inventories.read().await;
 
         let mut result = Vec::with_capacity(dirty_ids.len());
         for pid in &dirty_ids {

@@ -49,7 +49,7 @@
     "assets/modular_human_male_01/priest/tripo_helmet_v1/helmet_priest.glb": "3d6a6d38362626069099b13d183ec6064b1fbf245b65a3397405e76f16119237"
   },
   "outputs": {
-    "base.glb": "795f234ddc4f369d2a022cc734a590f3801212c5c75ebbb6c6d5f63b73dcded2",
+    "base.glb": "abf1a12178d5df11269afed6793e46ed16796c47174e356708ee73bdf590bdad",
     "hair_crop.glb": "e032074e7cd852f574da7d91ba511320b59fcbbf3d22c79fa3115eb510641edb",
     "top_linen.glb": "a189251ee7d09b7a4203925458da46d78cffa08540db713256ddd65971aaabb7",
     "pants_cloth.glb": "452a421268d163acca7dfb763c4bacff7e24e6a714b1075dea1feaff20e1401c",
@@ -153,17 +153,18 @@
     "pants_caveman.glb": "3f09cb575d85b2772abe9fa8f298394b093cb513da79e4c229d6a2fafb4265d3",
     "boots_caveman.glb": "8df467a2a842133499c697d24ed0bb3211a68e862aa8d13b56aabd0497211794",
     "gloves_caveman.glb": "ed1708b11558c369162a2e663a0b8ecbef7a0c376218fe532a48b1a1f0610678",
-    "base_rugged.glb": "77e8f37b9b319c38c8ad6aa31a476d579d767d70082147d93375dba3a2b48a7b",
     "hair_wavy_bone.glb": "c2702a92b821789ffceaabbc5bd345f212b29105f02aa8224e27e42a6f64cf12",
     "top_ranger.glb": "575f088a95cae45b34e38fea99cbe4bd4cc75734ef4451f5d80d655be94991ba",
     "pants_ranger.glb": "777db89fa1ca2b177ea1c400ff9d01c80ffe1de7bf59b9a9096d342320d388da",
     "gloves_ranger.glb": "9bbd1f08665e76471894014e2d250ebfe5aa496cfa76d8d5ea6b93dde358f235",
     "boots_ranger.glb": "e4066494f42a178603b2ceb99e04845bd88355a8fb5950a8bdfab9fecaa36eb1",
     "hair_ranger.glb": "0ab748171d9c7352084411817f1e8bff4e42f67947f49d4bd559384efc824564",
-    "base_ranger.glb": "6a3bfaea87f7d4508d8a496ffa6d5b4eefb7e539aa1ae9498cc4701f97a15990",
     "top_priest.glb": "3ba1fa2162fb7ed9c1e65e253dcc6fbdba8fcf8aa535f644338ba0205a590b29",
     "pants_priest.glb": "0189d0271b320fd8b098312a9f3b77c3c8af0a46fcf772d2b6a7d349836c7d3e",
     "boots_priest.glb": "c6234b4ce80bbc0a8cd26176c8aa6248b04b11c48864a84b5a0d989e25a53258",
-    "helmet_priest.glb": "2aa304e1ecc74b04989a4f3bf26749f274b3e445879bee6019a874ddcbebc32e"
+    "helmet_priest.glb": "2aa304e1ecc74b04989a4f3bf26749f274b3e445879bee6019a874ddcbebc32e",
+    "face_default.glb": "11475885360ea39850453821a3644c172236d999010de3718b52d75545a0e5ca",
+    "face_rugged.glb": "c64aec5a878967b1233a7411513c8fa7d8d5ddbbe46b0dda311b9c41b333ea1d",
+    "face_ranger.glb": "e2fd52b467f0c5627fa12448602592dce71652f3fc0ebb8731bd985ef74656f8"
   }
 }

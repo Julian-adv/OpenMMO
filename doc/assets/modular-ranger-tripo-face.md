@@ -86,7 +86,7 @@ SHA-256 불변을 확인했다.
 .venv/bin/python tools/fit-tripo-ranger-face.py
 node tools/validate-tripo-rugged-face.mjs --ranger
 blender -b -t 4 --python-exit-code 1 --python tools/blender-scripts/review_tripo_ranger_face.py
-node tools/prepare-modular-character.mjs --part base_ranger
+node tools/prepare-modular-character.mjs --part face_ranger
 ```
 
 ![순찰자 새 얼굴 착용](../images/characters/modular_human_male_01/parts/ranger/tripo-face-workshop-front-v1.png)

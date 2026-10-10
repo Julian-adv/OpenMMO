@@ -341,7 +341,9 @@ gzip level 6 기준은 **7,012,949 → 1,412,783바이트**다.
 얼굴 특징은 유지되며 확대 시 피부·목의 미세 질감은 부드러워진다. 브라우저 예외는 없었다.
 관련 테스트 **62개**, `npm run check`, `npm run lint`가 통과했다.
 
-재현: `node tools/prepare-modular-character.mjs --part base_rugged`.
+2026-10-10부터 게임용 출력은 공통 몸체와 얼굴 파츠로 분리한다.
+재현: `node tools/prepare-modular-character.mjs --part face_rugged`.
+[현재 구성과 검증](modular-face-runtime-split.md).
 [해상도·용량·해시·검사 기록](modular-rugged-runtime-textures-1024.json).
 
 검수용 비교 이미지·임시 스크린샷·이전 게임 파일 사본은 사용자 요청으로 삭제했다.

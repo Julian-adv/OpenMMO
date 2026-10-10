@@ -1,5 +1,13 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
@@ -7,6 +15,7 @@ import * as THREE from "../client/node_modules/three/build/three.module.js";
 import { GLTFLoader } from "../client/node_modules/three/examples/jsm/loaders/GLTFLoader.js";
 import { GLTFExporter } from "../client/node_modules/three/examples/jsm/exporters/GLTFExporter.js";
 import { createServer } from "../client/node_modules/vite/dist/node/index.js";
+import { splitModularBody } from "./split-modular-body.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const fitted = "assets/modular_human_male_01/fitted";
@@ -50,8 +59,7 @@ const cavemanSources = {
 const cavemanParts = Object.keys(cavemanSources);
 parts.push(...cavemanParts);
 const rangerSources = {
-  top_ranger:
-    "assets/modular_human_male_01/ranger/tripo_top_v4/top_ranger.glb",
+  top_ranger: "assets/modular_human_male_01/ranger/tripo_top_v4/top_ranger.glb",
   pants_ranger:
     "assets/modular_human_male_01/ranger/tripo_pants_v1/pants_ranger.glb",
   gloves_ranger:
@@ -64,8 +72,7 @@ parts.push(...rangerParts);
 const priestSources = {
   helmet_priest:
     "assets/modular_human_male_01/priest/tripo_helmet_v1/helmet_priest.glb",
-  top_priest:
-    "assets/modular_human_male_01/priest/tripo_top_v1/top_priest.glb",
+  top_priest: "assets/modular_human_male_01/priest/tripo_top_v1/top_priest.glb",
   pants_priest:
     "assets/modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb",
   boots_priest:
@@ -74,9 +81,10 @@ const priestSources = {
 const priestParts = Object.keys(priestSources);
 parts.push(...priestParts);
 const appearanceSources = {
-  base_ranger:
+  face_default: `${fitted}/base.glb`,
+  face_ranger:
     "assets/modular_human_male_01/faces/tripo_ranger_v1/base_ranger.glb",
-  base_rugged:
+  face_rugged:
     "assets/modular_human_male_01/faces/tripo_rugged_v1/base_rugged.glb",
   hair_wavy_bone:
     "assets/modular_human_male_01/hair/tripo_wavy_v1/hair_wavy_bone.glb",
@@ -85,7 +93,7 @@ const appearanceSources = {
 };
 const appearanceParts = Object.keys(appearanceSources);
 parts.push(...appearanceParts);
-const bodyParts = ["base", "base_rugged", "base_ranger"];
+const bodyParts = ["base", "face_default", "face_rugged", "face_ranger"];
 const outfitParts = parts.filter(
   (name) => !bodyParts.includes(name) && !name.startsWith("hair_"),
 );
@@ -126,12 +134,17 @@ function writeManifest(merge) {
     report.inputs = { ...previous.inputs, ...report.inputs };
     report.outputs = { ...previous.outputs, ...report.outputs };
   }
+  delete report.outputs["base_rugged.glb"];
+  delete report.outputs["base_ranger.glb"];
   writeFileSync(manifest, JSON.stringify(report, null, 2) + "\n");
+  for (const name of ["base_rugged", "base_ranger"])
+    rmSync(resolve(root, output, `${name}.glb`), { force: true });
 }
 const selectedPart = option("--part", parts);
 const selectedPack = option("--pack", packs);
 const partSets = {
   "--sole-offsets": [],
+  "--body-only": bodyParts,
   "--appearance-only": appearanceParts,
   "--priest-only": priestParts,
   "--ranger-only": rangerParts,
@@ -155,17 +168,37 @@ for (const name of selectedParts) {
       ? (rogue.part_overrides[name] ?? `${rogue.directory}/${name}.glb`)
       : `${fitted}/${name}.glb`);
   report.inputs[source] = hash(source);
-  execFileSync(
-    process.execPath,
-    [
-      resolve(root, "tools/optimize-modular-part.mjs"),
-      resolve(root, source),
-      resolve(root, output, `${name}.glb`),
-      ...(outfitParts.includes(name) ? ["--ktx2"] : []),
-      ...(bodyParts.includes(name) ? ["--body"] : []),
-    ],
-    { stdio: "inherit" },
-  );
+  const temporary = bodyParts.includes(name)
+    ? mkdtempSync(resolve(tmpdir(), "modular-body-"))
+    : undefined;
+  try {
+    const input = temporary
+      ? resolve(temporary, `${name}.glb`)
+      : resolve(root, source);
+    if (temporary) {
+      report.inputs[`${fitted}/base.glb`] = hash(`${fitted}/base.glb`);
+      await splitModularBody(
+        resolve(root, source),
+        resolve(root, fitted, "base.glb"),
+        input,
+        name,
+      );
+    }
+    execFileSync(
+      process.execPath,
+      [
+        resolve(root, "tools/optimize-modular-part.mjs"),
+        input,
+        resolve(root, output, `${name}.glb`),
+        ...(outfitParts.includes(name) ? ["--ktx2"] : []),
+        ...(bodyParts.includes(name) ? ["--body"] : []),
+        ...(name === "face_ranger" ? ["--size=2048", "--quality=95"] : []),
+      ],
+      { stdio: "inherit" },
+    );
+  } finally {
+    if (temporary) rmSync(temporary, { recursive: true, force: true });
+  }
   report.outputs[`${name}.glb`] = hash(`${output}/${name}.glb`);
 }
 
@@ -236,8 +269,14 @@ async function writeSoleOffsets(runtime, modular, headless) {
   const sources = new Map(
     await Promise.all([...ids].map(async (id) => [id, await loadOutput(id)])),
   );
-  const faces = ["base", "base_rugged"];
-  const scenes = await Promise.all(faces.map(loadOutput));
+  const faces = ["default", "rugged", "ranger"];
+  const scenes = await Promise.all(
+    faces.map(async (face) => {
+      const scene = await loadOutput("base");
+      modular.bindModularFace(scene, await loadOutput(`face_${face}`));
+      return scene;
+    }),
+  );
   let offsets;
   for (const [i, scene] of scenes.entries()) {
     const face = faces[i];

@@ -278,12 +278,17 @@ impl GameState {
             .get(player_id)
             .map(|(id, _, _)| *id)
             .ok_or("Character not found.")?;
-        let inventories = self.inventories.read().await;
-        if !inventories.get(player_id).is_some_and(|inv| {
-            inv.bag
-                .iter()
-                .any(|item| item.item_def_id == TOOLBOX_ITEM && item.quantity > 0)
-        }) {
+        let has_toolbox = self
+            .inventories
+            .read()
+            .await
+            .get(player_id)
+            .is_some_and(|inv| {
+                inv.bag
+                    .iter()
+                    .any(|item| item.item_def_id == TOOLBOX_ITEM && item.quantity > 0)
+            });
+        if !has_toolbox {
             return Err("Carry a Landscaper's Toolbox to paint your estate.");
         }
         let auth = auth.clone();
@@ -381,7 +386,6 @@ impl GameState {
             saved.push(tile);
         }
         drop(players);
-        drop(inventories);
         let tiles: Vec<_> = saved
             .iter()
             .map(|tile| (tile.tile_x, tile.tile_z))

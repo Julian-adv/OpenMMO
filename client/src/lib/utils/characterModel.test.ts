@@ -24,6 +24,7 @@ import {
 import { SELECTABLE_HAIR_PARTS, skinnedParts } from './modularCharacter'
 import type { ArmorEquipment } from '../network/networkTypes'
 import { disposePeltPhysics, updatePeltPhysics } from '../effects/pelt-rig'
+import { loadGLB } from './gltfCache'
 
 vi.mock('./gltfCache', async (importOriginal) => {
   const original = await importOriginal<typeof import('./gltfCache')>()
@@ -70,6 +71,61 @@ describe.skipIf(
         (mesh.userData.part_id ?? mesh.parent?.userData.part_id) === 'base' &&
         (mesh.userData.region ?? mesh.parent?.userData.region) === region
     )
+
+  it('assembles every face onto the common body without loading full body variants', async () => {
+    const { loadHeadlessGlb } = await import('./headless-glb.fixture')
+    const common = await loadHeadlessGlb(MODULAR_MALE_MODEL_PATH.slice(1))
+    const commonMeshes = skinnedParts(common.scene)
+    expect(commonMeshes.length).toBeGreaterThan(0)
+    expect(
+      commonMeshes.some((mesh) =>
+        ['head', 'neck', 'face_neck_bridge'].includes(mesh.userData.region)
+      )
+    ).toBe(false)
+    for (const face of ['default', 'rugged', 'ranger'] as const) {
+      const facePath = `models/characters/modular_male/face_${face}.glb`
+      const faceSource = await loadHeadlessGlb(facePath)
+      const faceMeshes = skinnedParts(faceSource.scene)
+      expect(faceMeshes.some((mesh) => mesh.userData.region === 'head')).toBe(
+        true
+      )
+      expect(faceMeshes.some((mesh) => mesh.userData.region === 'neck')).toBe(
+        true
+      )
+      expect(
+        faceMeshes.every((mesh) =>
+          ['head', 'neck', 'face_neck_bridge'].includes(mesh.userData.region)
+        )
+      ).toBe(true)
+      const model = await loadCharacterModel(MODULAR_MALE_MODEL_PATH, { face })
+      expect(await loadCharacterModel(MODULAR_MALE_MODEL_PATH, { face })).toBe(
+        model
+      )
+      const meshes = skinnedParts(model.scene)
+      for (const original of [...commonMeshes, ...faceMeshes]) {
+        const attached = meshes.find((mesh) => mesh.name === original.name)!
+        expect(attached, `${face}: ${original.name}`).toBeDefined()
+        expect(attached.geometry.index!.array).toEqual(
+          original.geometry.index!.array
+        )
+        expect(attached.geometry.getAttribute('position').array).toEqual(
+          original.geometry.getAttribute('position').array
+        )
+        expect(attached.skeleton).toBe(meshes[0].skeleton)
+      }
+    }
+    const paths = vi.mocked(loadGLB).mock.calls.map(([path]) => path)
+    for (const face of ['default', 'rugged', 'ranger'])
+      expect(paths).toContain(
+        `/models/characters/modular_male/face_${face}.glb`
+      )
+    expect(paths).not.toContain(
+      '/models/characters/modular_male/base_rugged.glb'
+    )
+    expect(paths).not.toContain(
+      '/models/characters/modular_male/base_ranger.glb'
+    )
+  })
 
   it('keeps selected faces and hair independent across players and armor changes', async () => {
     const appearance = { face: 'rugged', hair: 'wavy_bone' } as const

@@ -545,6 +545,7 @@ impl GameState {
                 None,
             )
             .await?;
+        character.gold = self.gold_balance(player_id).await?;
         let mut inventories = self.inventories.write().await;
         let inventory = inventories
             .get_mut(player_id)
@@ -560,8 +561,6 @@ impl GameState {
         } else {
             updated.bag.remove(index);
         }
-        let gold = self.player_gold.read().await;
-        character.gold = *gold.get(player_id).ok_or("Gold balance not found.")?;
         let rows = serialize_inventory(&updated);
         let auth = auth.clone();
         let placed_item_def_id = item_def_id.clone();
@@ -587,7 +586,6 @@ impl GameState {
         let group = chests.group(key);
         drop(chests);
         self.sync_estate_chest_bucket(key, &group);
-        drop(gold);
         drop(inventories);
         self.publish_subject_change(ServerMessage::EstateChestVisibility {
             added: vec![chest],
@@ -972,6 +970,7 @@ impl GameState {
             .get_player_save_data(player_id)
             .await
             .ok_or("Character not found.")?;
+        character.gold = self.gold_balance(player_id).await?;
         let mut inventories = self.inventories.write().await;
         let inventory = inventories
             .get_mut(player_id)
@@ -1115,8 +1114,6 @@ impl GameState {
             );
             next_id += inserted.ids_used;
         }
-        let gold = self.player_gold.read().await;
-        character.gold = *gold.get(player_id).ok_or("Gold balance not found.")?;
         let rows = serialize_inventory(&updated);
         let auth = auth.clone();
         let deposits = deposit_plans;
@@ -1137,7 +1134,6 @@ impl GameState {
             "The items could not be transferred. Your inventory was not changed."
         })??;
         *inventory = updated.clone();
-        drop(gold);
         drop(inventories);
         let furniture = {
             let mut chests = self.estate_chests.write().await;
@@ -1196,6 +1192,7 @@ impl GameState {
         }) {
             return Err("Someone is using this furniture. Wait until they get up.");
         }
+        character.gold = self.gold_balance(player_id).await?;
         let mut inventories = self.inventories.write().await;
         let inventory = inventories
             .get_mut(player_id)
@@ -1210,8 +1207,6 @@ impl GameState {
                 BagInsert::one(false, &chest.item_def_id, 0, next_id),
             );
         }
-        let gold = self.player_gold.read().await;
-        character.gold = *gold.get(player_id).ok_or("Gold balance not found.")?;
         let rows = serialize_inventory(&updated);
         let auth = auth.clone();
         auth_db(move || auth.recover_estate_chest(&character, &rows, chest_id))
@@ -1227,7 +1222,6 @@ impl GameState {
         let group = chests.group(key);
         drop(chests);
         self.sync_estate_chest_bucket(key, &group);
-        drop(gold);
         drop(inventories);
         drop(players);
         self.publish_subject_change(ServerMessage::EstateChestVisibility {
