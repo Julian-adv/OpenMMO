@@ -15,6 +15,7 @@ WEBROOT=${WEBROOT:-/var/www/openmmo}
 DASHBOARD_WEBROOT=${DASHBOARD_WEBROOT:-/var/www/openmmo-dashboard}
 export DASHBOARD_BASE=${DASHBOARD_BASE:-/dashboard/}
 SERVICE=${SERVICE:-openmmo-server}
+SYSTEMD_DIR=${SYSTEMD_DIR:-/etc/systemd/system}
 AGENT_SERVICE=${AGENT_SERVICE:-openmmo-agent-client}
 
 cd "$REPO"
@@ -113,6 +114,11 @@ fi
 echo "==> publish to $WEBROOT"
 sudo rsync -a --delete client/dist/ "$WEBROOT/"
 sudo chown -R www-data:www-data "$WEBROOT"
+
+echo "==> install server watchdog"
+sudo install -D -m 644 tools/systemd/openmmo-server.service.d/watchdog.conf \
+    "$SYSTEMD_DIR/${SERVICE%.service}.service.d/watchdog.conf"
+sudo systemctl daemon-reload
 
 echo "==> restart $SERVICE"
 sudo systemctl restart "$SERVICE"

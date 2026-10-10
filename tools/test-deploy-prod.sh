@@ -8,6 +8,7 @@ trap 'rm -rf "$work"' EXIT
 export TEST_DEPLOY_EVENTS="$work/events"
 export TEST_DASHBOARD_WEBROOT="$work/dashboard-web"
 mkdir -p "$work/bin" "$work/repo/client" "$work/repo/dashboard" "$work/repo/tools" "$work/repo/target/release" "$work/repo/data/terrain"
+cp -r "$project_root/tools/systemd" "$work/repo/tools/systemd"
 test -d "$project_root/client/node_modules/vite" || {
     echo "Install client dependencies before running this test" >&2
     exit 1
@@ -59,7 +60,9 @@ case "$name" in
         shift
         case "$command" in
             chown) ;;
-            install) mkdir -p "${@: -1}" ;;
+            install)
+                if [[ "$1" == -d ]]; then mkdir -p "${@: -1}"; else install "$@"; fi
+                ;;
             rsync)
                 if [[ "$*" == *'dashboard/dist/'* && ${TEST_FAIL_PUBLISH:-0} == 1 ]]; then exit 1; fi
                 rsync "$@"
@@ -78,6 +81,7 @@ deploy() {
     : > "$TEST_DEPLOY_EVENTS"
     PATH="$work/bin:$PATH" REPO="$work/repo" WEBROOT="$work/game-web" \
         DASHBOARD_WEBROOT="${TEST_DASHBOARD_WEBROOT}" \
+        SYSTEMD_DIR="${TEST_SYSTEMD_DIR:-$work/systemd}" \
         bash "$project_root/tools/deploy-prod.sh" > "$work/deploy.log" 2>&1
 }
 
@@ -106,9 +110,21 @@ commit_fixture() {
 deploy
 assert_event 'npm dashboard run build'
 assert_event "terrain-manifests $work/repo/data/terrain"
+cmp "$project_root/tools/systemd/openmmo-server.service.d/watchdog.conf" "$work/systemd/openmmo-server.service.d/watchdog.conf"
+assert_event 'systemctl repo restart openmmo-server'
+awk '/systemctl repo daemon-reload/ { reloaded=1 } /systemctl repo restart/ { if (!reloaded) exit 1 }' "$TEST_DEPLOY_EVENTS"
 test -s "$work/dashboard-web/.deploy-fingerprint"
 test "$(cat "$work/dashboard-web/build-inputs")" == $'/dashboard/\ngame-client'
 echo 'PASS first deployment and game login configuration fallback'
+
+if TEST_SYSTEMD_DIR=/dev/null deploy; then exit 1; fi
+assert_no_event 'systemctl repo restart'
+echo 'PASS watchdog installation failure prevents server restart'
+
+SERVICE=custom-game.service deploy
+test -f "$work/systemd/custom-game.service.d/watchdog.conf"
+assert_event 'systemctl repo restart custom-game.service'
+echo 'PASS watchdog drop-in follows the configured service name'
 
 deploy
 assert_no_event 'npm dashboard'

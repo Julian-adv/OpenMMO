@@ -14,6 +14,7 @@ mod game_state;
 mod geoip;
 mod google_auth;
 mod hardware;
+mod health;
 mod housing;
 mod item_defs;
 mod land_grades;
@@ -88,24 +89,35 @@ async fn guard_tick(name: &str, tick: impl std::future::Future<Output = ()>) {
     }
 }
 
-/// Runs `tick` every `period` until shutdown fires. Owning the loop is what
-/// makes every background task drainable: a task spawned any other way would
-/// never break, and the shutdown drain would hang on it forever.
-async fn run_ticks<F, Fut>(
+/// Runs periodic work until shutdown, then lets the current tick drain.
+/// Registers with the health registry synchronously so the monitor never
+/// samples before a loop exists.
+fn run_ticks<F, Fut>(
     name: &'static str,
     period: Duration,
     mut shutdown: watch::Receiver<()>,
+    health: &Arc<health::Health>,
+    deadline: health::Deadline,
     mut tick: F,
-) where
+) -> impl std::future::Future<Output = ()>
+where
     F: FnMut() -> Fut,
     Fut: std::future::Future<Output = ()>,
 {
-    let mut interval = tokio::time::interval(period);
-    loop {
-        tokio::select! {
-            biased;
-            _ = shutdown.changed() => break,
-            _ = interval.tick() => guard_tick(name, tick()).await,
+    let checkpoint = health.register(name, period, deadline);
+    async move {
+        let mut interval = tokio::time::interval(period);
+        loop {
+            tokio::select! {
+                biased;
+                _ = shutdown.changed() => break,
+                _ = interval.tick() => {
+                    guard_tick(name, tick()).await;
+                    if let Some(checkpoint) = &checkpoint {
+                        checkpoint.completed();
+                    }
+                }
+            }
         }
     }
 }
@@ -151,11 +163,6 @@ async fn time_sync_tick(game_state: &GameState, auth_service: &Arc<AuthService>,
 
     // Sunset closes the dungeon day: evict occupants, wake the guardians.
     game_state.tick_dungeon_reset().await;
-
-    // Batch-save dirty character states and inventories every 4 ticks (32s)
-    if tick_count.is_multiple_of(4) {
-        game_state.flush_dirty_saves(auth_service).await;
-    }
 
     let datetime = game_state.broadcast_game_time();
     if let Err(err) = auth_service.save_world_time(&datetime) {
@@ -582,6 +589,14 @@ async fn main() -> ExitCode {
     // outlive it so players still see the shutdown notice.
     let (drain_shutdown_tx, drain_shutdown) = watch::channel(());
     let (connection_shutdown_tx, connection_shutdown) = watch::channel(());
+    let health = health::Health::new();
+    let notifier = match health::Notifier::from_env() {
+        Ok(notifier) => Arc::new(notifier),
+        Err(error) => {
+            error!("Failed to configure systemd notifications: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
     let mut background = JoinSet::new();
     let hardware = hardware::HardwareMetrics::new(args.state_dir.join("hardware_metrics.db"));
     background.spawn(hardware.clone().run(drain_shutdown.clone()));
@@ -602,9 +617,11 @@ async fn main() -> ExitCode {
     let audit_state_dir = args.state_dir.clone();
     let audit_retention_days = args.combat_audit_retention_days;
     background.spawn(run_ticks(
-        "combat audit",
+        "combat_audit",
         Duration::from_secs(1),
         drain_shutdown.clone(),
+        &health,
+        health::Deadline::Fixed(Duration::from_secs(120)),
         move || {
             let game_state = Arc::clone(&audit_game_state);
             let state_dir = audit_state_dir.clone();
@@ -621,9 +638,11 @@ async fn main() -> ExitCode {
     let game_state_for_movement = Arc::clone(&game_state);
     let mut last = std::time::Instant::now();
     background.spawn(run_ticks(
-        "player movement",
+        "player_movement",
         Duration::from_millis(200),
         drain_shutdown.clone(),
+        &health,
+        health::Deadline::FromPeriod,
         move || {
             let now = std::time::Instant::now();
             let dt = (now - last).as_secs_f32();
@@ -642,9 +661,11 @@ async fn main() -> ExitCode {
     // Push party positions every 3s after relocation.
     let game_state_for_party_positions = Arc::clone(&game_state);
     background.spawn(run_ticks(
-        "party positions",
+        "party_positions",
         Duration::from_secs(3),
         drain_shutdown.clone(),
+        &health,
+        health::Deadline::FromPeriod,
         move || {
             let game_state = Arc::clone(&game_state_for_party_positions);
             async move { game_state.tick_party_positions().await }
@@ -654,9 +675,11 @@ async fn main() -> ExitCode {
     // Faster than positions: a party HP bar lagging mid-fight reads as wrong.
     let game_state_for_party_vitals = Arc::clone(&game_state);
     background.spawn(run_ticks(
-        "party vitals",
+        "party_vitals",
         Duration::from_secs(1),
         drain_shutdown.clone(),
+        &health,
+        health::Deadline::FromPeriod,
         move || {
             let game_state = Arc::clone(&game_state_for_party_vitals);
             async move { game_state.tick_party_vitals().await }
@@ -667,9 +690,11 @@ async fn main() -> ExitCode {
     // cadence as player movement.
     let game_state_for_monster_ai = Arc::clone(&game_state);
     background.spawn(run_ticks(
-        "monster ai",
+        "monster_ai",
         Duration::from_millis(200),
         drain_shutdown.clone(),
+        &health,
+        health::Deadline::FromPeriod,
         move || {
             let game_state = Arc::clone(&game_state_for_monster_ai);
             async move { game_state.tick_monster_ai().await }
@@ -678,9 +703,11 @@ async fn main() -> ExitCode {
 
     let game_state_for_abandoned = Arc::clone(&game_state);
     background.spawn(run_ticks(
-        "unattended monster cleanup",
+        "monster_cleanup",
         Duration::from_secs(60),
         drain_shutdown.clone(),
+        &health,
+        health::Deadline::FromPeriod,
         move || {
             let game_state = Arc::clone(&game_state_for_abandoned);
             async move { game_state.tick_monster_despawns().await }
@@ -690,9 +717,11 @@ async fn main() -> ExitCode {
     // Dungeon spawn-slot refill tick (respawns on occupied floors)
     let game_state_for_dungeons = Arc::clone(&game_state);
     background.spawn(run_ticks(
-        "dungeon refill",
+        "dungeon_refill",
         Duration::from_secs(30),
         drain_shutdown.clone(),
+        &health,
+        health::Deadline::FromPeriod,
         move || {
             let game_state = Arc::clone(&game_state_for_dungeons);
             async move { game_state.tick_dungeons().await }
@@ -701,9 +730,11 @@ async fn main() -> ExitCode {
 
     let game_state_for_ground = Arc::clone(&game_state);
     background.spawn(run_ticks(
-        "ground item despawn",
+        "ground_item_despawn",
         Duration::from_secs(30),
         drain_shutdown.clone(),
+        &health,
+        health::Deadline::FromPeriod,
         move || {
             let game_state = Arc::clone(&game_state_for_ground);
             async move { game_state.tick_ground_item_despawn().await }
@@ -714,9 +745,11 @@ async fn main() -> ExitCode {
     // filter expiry inline, so this only has to beat memory growth.
     let game_state_for_buybacks = Arc::clone(&game_state);
     background.spawn(run_ticks(
-        "buyback expiry",
+        "buyback_expiry",
         game_state::BUYBACK_SWEEP_PERIOD,
         drain_shutdown.clone(),
+        &health,
+        health::Deadline::FromPeriod,
         move || {
             let game_state = Arc::clone(&game_state_for_buybacks);
             async move { game_state.tick_buyback_expiry().await }
@@ -727,9 +760,11 @@ async fn main() -> ExitCode {
     // live working set.
     let game_state_for_terrain_sweep = Arc::clone(&game_state);
     background.spawn(run_ticks(
-        "terrain cache sweep",
+        "terrain_cache_sweep",
         onlinerpg_terrain::TILE_CACHE_SWEEP_PERIOD,
         drain_shutdown.clone(),
+        &health,
+        health::Deadline::FromPeriod,
         move || {
             let game_state = Arc::clone(&game_state_for_terrain_sweep);
             async move {
@@ -749,6 +784,8 @@ async fn main() -> ExitCode {
         "fishing",
         Duration::from_millis(250),
         drain_shutdown.clone(),
+        &health,
+        health::Deadline::FromPeriod,
         move || {
             let game_state = Arc::clone(&game_state_for_fishing);
             let auth = Arc::clone(&auth_for_fishing);
@@ -764,6 +801,8 @@ async fn main() -> ExitCode {
         "hunger",
         Duration::from_millis(250),
         drain_shutdown.clone(),
+        &health,
+        health::Deadline::FromPeriod,
         move || {
             hunger_tick_count = hunger_tick_count.wrapping_add(1);
             let game_state = Arc::clone(&game_state_for_hunger);
@@ -790,6 +829,8 @@ async fn main() -> ExitCode {
         "weather",
         Duration::from_secs(30),
         drain_shutdown.clone(),
+        &health,
+        health::Deadline::FromPeriod,
         move || {
             let game_state = Arc::clone(&game_state_for_weather);
             async move { game_state.broadcast_weather() }
@@ -800,14 +841,33 @@ async fn main() -> ExitCode {
     let auth_service_for_time_sync = Arc::clone(&auth_service);
     let mut tick_count = 0u64;
     background.spawn(run_ticks(
-        "time sync",
+        "time_sync",
         Duration::from_secs(8),
         drain_shutdown.clone(),
+        &health,
+        health::Deadline::FromPeriod,
         move || {
             tick_count = tick_count.wrapping_add(1);
             let game_state = Arc::clone(&game_state_for_time_sync);
             let auth = Arc::clone(&auth_service_for_time_sync);
             async move { time_sync_tick(&game_state, &auth, tick_count).await }
+        },
+    ));
+
+    // Batch-save dirty character states and inventories. Its own loop so a
+    // slow flush under load cannot push time sync past the watchdog deadline.
+    let game_state_for_batch_save = Arc::clone(&game_state);
+    let auth_service_for_batch_save = Arc::clone(&auth_service);
+    background.spawn(run_ticks(
+        "batch_save",
+        Duration::from_secs(32),
+        drain_shutdown.clone(),
+        &health,
+        health::Deadline::Fixed(Duration::from_secs(120)),
+        move || {
+            let game_state = Arc::clone(&game_state_for_batch_save);
+            let auth = Arc::clone(&auth_service_for_batch_save);
+            async move { game_state.flush_dirty_saves(&auth).await }
         },
     ));
 
@@ -838,6 +898,7 @@ async fn main() -> ExitCode {
     ))
     .merge(npc_router(npc_io, Arc::clone(&game_state)))
     .merge(announcements_router(announcement_store))
+    .merge(health::router(Arc::clone(&health)))
     .merge(metrics::metrics_router(
         Arc::clone(&game_state),
         Arc::clone(&auth_service),
@@ -882,9 +943,11 @@ async fn main() -> ExitCode {
     let concurrent_game = Arc::clone(&game_state);
     let concurrent_auth = Arc::clone(&auth_service);
     background.spawn(run_ticks(
-        "concurrent metrics",
+        "concurrent_metrics",
         Duration::from_secs(metrics::CONCURRENT_SAMPLE_INTERVAL_SECONDS as u64),
         drain_shutdown.clone(),
+        &health,
+        health::Deadline::Fixed(Duration::from_secs(300)),
         move || {
             let game = Arc::clone(&concurrent_game);
             let auth = Arc::clone(&concurrent_auth);
@@ -930,6 +993,11 @@ async fn main() -> ExitCode {
     });
     let signal = shutdown_signal();
     tokio::pin!(signal);
+    background.spawn(
+        health
+            .clone()
+            .monitor(notifier.clone(), drain_shutdown.clone()),
+    );
 
     let exit_code = loop {
         tokio::select! {
@@ -939,9 +1007,7 @@ async fn main() -> ExitCode {
                 break ExitCode::SUCCESS;
             }
             result = api_task.join_next(), if !api_task.is_empty() => {
-                // A dead REST API behind a live game listener is a partial
-                // outage systemd cannot see; drain and exit non-zero so
-                // Restart=on-failure restarts us.
+                // Exit so systemd restarts both listeners.
                 error!("Terrain REST API stopped unexpectedly ({result:?}); draining for restart");
                 break ExitCode::FAILURE;
             }
@@ -970,6 +1036,8 @@ async fn main() -> ExitCode {
         }
     };
 
+    health.stop();
+    notifier.send("STOPPING=1\nSTATUS=Draining game state for shutdown");
     game_state
         .set_server_notice(Some(SHUTDOWN_NOTICE.to_string()))
         .await;
