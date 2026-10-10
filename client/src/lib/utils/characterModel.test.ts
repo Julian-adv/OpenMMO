@@ -1,4 +1,5 @@
-import { existsSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import * as THREE from 'three'
 import { describe, expect, it, vi } from 'vitest'
@@ -38,6 +39,37 @@ vi.mock('./gltfCache', async (importOriginal) => {
 })
 
 describe('male player model selection', () => {
+  it('pins the split body, faces and priest helmets in the deployment assets', () => {
+    const lock = new Map(
+      readFileSync(resolve('../assets.lock'), 'utf8')
+        .split('\n')
+        .filter((line) => line.startsWith('file '))
+        .map((line) => {
+          const [, hash, path] = line.split(' ')
+          return [path, hash]
+        })
+    )
+    const paths = [
+      MODULAR_MALE_MODEL_PATH,
+      ...['default', 'rugged', 'ranger'].map(
+        (face) => `/models/characters/modular_male/face_${face}.glb`
+      ),
+      '/models/characters/modular_male/helmet_priest.glb',
+      '/models/armor/priest_helmet.glb',
+    ]
+    for (const path of paths) {
+      const key = `client/public${path}`
+      expect(lock.get(key), key).toMatch(/^[0-9a-f]{64}$/)
+      const local = resolve(`public${path}`)
+      if (existsSync(local)) {
+        const hash = createHash('sha256')
+          .update(readFileSync(local))
+          .digest('hex')
+        expect(lock.get(key), key).toBe(hash)
+      }
+    }
+  })
+
   it('uses the modular body for every available male player class and keeps NPC models', () => {
     for (const cls of PLAYER_CLASSES) {
       if (getAvailableGenders(cls).includes('male')) {
