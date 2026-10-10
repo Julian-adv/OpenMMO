@@ -1,6 +1,6 @@
 use super::{
     auth_db,
-    inventory::{consume_one, serialize_inventory},
+    inventory::{hold_from_bag, serialize_inventory},
     GameState,
 };
 use crate::{
@@ -175,48 +175,48 @@ impl GameState {
             .get_player_save_data(player_id)
             .await
             .ok_or("Character not found.")?;
-        let players = self.players.read().await;
-        let player = players.get(player_id).ok_or("Character not found.")?;
-        if player.health == 0 {
+        let health = self
+            .players
+            .read()
+            .await
+            .get(player_id)
+            .ok_or("Character not found.")?
+            .health;
+        if health == 0 {
             return Err("You must be alive to learn a landscaping palette.");
         }
-        let gold = self.player_gold.read().await;
-        character.gold = gold
-            .get(player_id)
-            .copied()
-            .ok_or("Gold balance not found.")?;
-        let mut inventories = self.inventories.write().await;
-        let inventory = inventories
-            .get_mut(player_id)
-            .ok_or("Inventory not found.")?;
-        let item = inventory
-            .bag
-            .iter()
-            .find(|item| item.instance_id == instance_id && item.quantity > 0)
-            .ok_or("That palette is no longer in your bag.")?;
-        let slot = landscaping::palette_for_item(&item.item_def_id)
-            .ok_or("That item is not a landscaping palette.")?;
-        let name = self.item_name(&item.item_def_id);
-        let mut updated = inventory.clone();
-        consume_one(&mut updated, instance_id);
-        let rows = serialize_inventory(&updated);
+        character.gold = self.gold_balance(player_id).await?;
+        let missing = "That palette is no longer in your bag.";
+        let (hold, rows, slot, name) = {
+            let mut inventories = self.inventories.write().await;
+            let inventory = inventories
+                .get_mut(player_id)
+                .ok_or("Inventory not found.")?;
+            let item = inventory
+                .bag
+                .iter()
+                .find(|item| item.instance_id == instance_id && item.quantity > 0)
+                .ok_or(missing)?;
+            let slot = landscaping::palette_for_item(&item.item_def_id)
+                .ok_or("That item is not a landscaping palette.")?;
+            let name = self.item_name(&item.item_def_id);
+            let hold = hold_from_bag(&mut inventory.bag, [(instance_id, 1)]).ok_or(missing)?;
+            (hold, serialize_inventory(inventory), slot, name)
+        };
         let auth_copy = auth.clone();
-        let learned =
+        let outcome =
             auth_db(move || auth_copy.unlock_landscaping_palette(&character, &rows, slot))
                 .await
                 .map_err(|error| {
                     tracing::warn!(%error, "Failed to save landscaping palette");
                     "The palette could not be learned. Your inventory was not changed."
-                })?;
-        if !learned {
-            return Err("You already know this palette. The sample book was not consumed.");
-        }
-        *inventory = updated.clone();
-        drop(inventories);
-        drop(gold);
-        drop(players);
-        self.mark_inventory_dirty(player_id).await;
-        self.send_inventory_snapshot(player_id, updated).await;
+                })
+                .and_then(|learned| {
+                    learned
+                        .then_some(())
+                        .ok_or("You already know this palette. The sample book was not consumed.")
+                });
+        self.finish_bag_write(player_id, hold, &[], outcome).await?;
         let owner = self
             .player_characters
             .read()

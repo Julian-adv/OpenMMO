@@ -494,6 +494,15 @@ impl super::GameState {
             .ok_or("Gold balance not found.")
     }
 
+    /// Credit (or debit, negative) the live balance after a DB write settled
+    /// the same amount, so credits that landed meanwhile are kept.
+    pub(super) async fn adjust_gold(&self, player_id: &PlayerId, delta: i64) {
+        match self.player_gold.write().await.get_mut(player_id) {
+            Some(balance) => *balance = balance.saturating_add(delta),
+            None => tracing::warn!(?player_id, delta, "gold balance vanished during a DB write"),
+        }
+    }
+
     /// Online player id for a typed name, ignoring ASCII case — names are
     /// unique ignoring case, so at most one player matches. The caller still
     /// validates the id against `players` under its own lock.

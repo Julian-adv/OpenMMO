@@ -1,6 +1,6 @@
 use super::{
     auth_db,
-    inventory::{consume_one, serialize_inventory, stack_into_bag, BagInsert},
+    inventory::{hold_one, rows_with_inserts, BagHold, BagInsert},
     GameState,
 };
 use crate::auth::{AuthError, AuthService};
@@ -323,13 +323,14 @@ impl GameState {
         let max_weight = self.max_carry_weight(player_id).await;
         let armor_mult = self.armor_weight_mult(player_id).await;
         let next_id = self.next_instance_id().await;
-        let players = self.players.read().await;
-        let player = players.get(player_id).ok_or("Character not found.")?;
-        if player.health == 0 || player.floor_level != 0 {
-            return Err("Stand on outdoor ground while alive to edit fences.");
+        {
+            let players = self.players.read().await;
+            let player = players.get(player_id).ok_or("Character not found.")?;
+            if player.health == 0 || player.floor_level != 0 {
+                return Err("Stand on outdoor ground while alive to edit fences.");
+            }
         }
-        let mut fences = self.fences.write().await;
-        let existing = fences.get(&edge).cloned();
+        let existing = self.fences.read().await.get(&edge).cloned();
         if place && existing.is_some() {
             return Err("A fence is already on that edge.");
         }
@@ -364,52 +365,53 @@ impl GameState {
             y,
             owner_id: character.character_id,
         };
-        let gold = self.player_gold.read().await;
-        character.gold = gold
-            .get(player_id)
-            .copied()
-            .ok_or("Gold balance not found.")?;
-        let mut inventories = self.inventories.write().await;
-        let inventory = inventories
-            .get_mut(player_id)
-            .ok_or("Inventory not found.")?;
-        let mut updated = inventory.clone();
-        if place {
-            let instance_id = updated
-                .bag
-                .iter()
-                .find(|i| i.item_def_id == fence::ITEM_ID && i.quantity > 0)
-                .map(|i| i.instance_id)
-                .ok_or("You have no wooden fences left. Recover one or leave placement mode.")?;
-            consume_one(&mut updated, instance_id);
+        character.gold = self.gold_balance(player_id).await?;
+        let inserts = if place {
+            Vec::new()
         } else {
-            if self.calc_total_weight(&updated, armor_mult) + self.item_defs.weight(fence::ITEM_ID)
-                > max_weight
-            {
-                return Err("Your bag is too heavy to recover this fence.");
-            }
-            if updated
-                .bag
-                .iter()
-                .any(|i| i.item_def_id == fence::ITEM_ID && i.quantity == u32::MAX)
-            {
-                return Err("Your fence stack is full.");
-            }
-            stack_into_bag(
-                &mut updated.bag,
-                BagInsert::one(true, fence::ITEM_ID, 0, next_id),
-            );
-        }
-        let rows = serialize_inventory(&updated);
+            vec![BagInsert::one(true, fence::ITEM_ID, 0, next_id)]
+        };
+        let (hold, rows) = {
+            let mut inventories = self.inventories.write().await;
+            let inventory = inventories
+                .get_mut(player_id)
+                .ok_or("Inventory not found.")?;
+            let hold = if place {
+                hold_one(&mut inventory.bag, |i| {
+                    i.item_def_id == fence::ITEM_ID && i.quantity > 0
+                })
+                .ok_or("You have no wooden fences left. Recover one or leave placement mode.")?
+            } else {
+                if self.calc_total_weight(inventory, armor_mult)
+                    + self.item_defs.weight(fence::ITEM_ID)
+                    > max_weight
+                {
+                    return Err("Your bag is too heavy to recover this fence.");
+                }
+                if inventory
+                    .bag
+                    .iter()
+                    .any(|i| i.item_def_id == fence::ITEM_ID && i.quantity == u32::MAX)
+                {
+                    return Err("Your fence stack is full.");
+                }
+                BagHold::default()
+            };
+            (hold, rows_with_inserts(inventory, &inserts))
+        };
         let auth = auth.clone();
         let saved = fence.clone();
-        auth_db(move || auth.save_fence_edit(&character, &rows, &saved, place, is_admin))
-            .await
-            .map_err(|error| {
-                tracing::warn!(%error, "Failed to save fence edit");
-                "The fence edit could not be saved. Your inventory was not changed."
-            })??;
-        *inventory = updated.clone();
+        let outcome =
+            auth_db(move || auth.save_fence_edit(&character, &rows, &saved, place, is_admin))
+                .await
+                .map_err(|error| {
+                    tracing::warn!(%error, "Failed to save fence edit");
+                    "The fence edit could not be saved. Your inventory was not changed."
+                })
+                .flatten();
+        self.finish_bag_write(player_id, hold, &inserts, outcome)
+            .await?;
+        let mut fences = self.fences.write().await;
         if place {
             fences.insert(fence.clone());
         } else {
@@ -418,16 +420,11 @@ impl GameState {
         let key = edge.cache_key();
         let group = fences.group(edge);
         fence::sync_passability(&mut self.passability_write(), &key, &group);
-        drop(inventories);
-        drop(gold);
-        drop(players);
         self.publish_subject_change(ServerMessage::FenceVisibility {
             added: if place { vec![fence] } else { vec![] },
             removed: if place { vec![] } else { vec![edge] },
         });
         drop(fences);
-        self.mark_inventory_dirty(player_id).await;
-        self.send_inventory_snapshot(player_id, updated).await;
         Ok(())
     }
 }

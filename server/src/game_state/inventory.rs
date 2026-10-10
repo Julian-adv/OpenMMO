@@ -102,6 +102,7 @@ pub(super) fn normalize_hex_color(color: &str) -> Option<String> {
 
 /// One unit-insert request: `quantity` units of one def at one enchant level,
 /// backed by ids starting at `first_instance_id`.
+#[derive(Clone)]
 pub(super) struct BagInsert<'a> {
     pub locked: bool,
     pub stackable: bool,
@@ -117,6 +118,15 @@ pub(super) struct BagInsert<'a> {
 }
 
 impl<'a> BagInsert<'a> {
+    /// Upper bound on the ids an insert consumes; callers reserve one per unit.
+    pub(super) fn ids_reserved(&self) -> u64 {
+        if self.stackable {
+            1
+        } else {
+            u64::from(self.quantity)
+        }
+    }
+
     fn matches_stack(&self, item: &ItemInstance) -> bool {
         item.item_def_id == self.item_def_id
             && item.locked == self.locked
@@ -167,7 +177,7 @@ pub(super) fn stack_into_bag(bag: &mut Vec<ItemInstance>, insert: BagInsert) -> 
     }
     if insert.stackable {
         if let Some(stack) = bag.iter_mut().find(|item| insert.matches_stack(item)) {
-            stack.quantity += insert.quantity;
+            stack.quantity = stack.quantity.saturating_add(insert.quantity);
             return BagInsertResult {
                 ids_used: 0,
                 first_instance_id: Some(stack.instance_id),
@@ -302,6 +312,83 @@ pub(super) fn consume_one(inv: &mut PlayerInventory, instance_id: u64) -> Option
         inv.bag.remove(idx);
     }
     Some(def_id)
+}
+
+pub(super) fn apply_inserts(bag: &mut Vec<ItemInstance>, inserts: &[BagInsert<'_>]) {
+    for insert in inserts {
+        stack_into_bag(bag, insert.clone());
+    }
+}
+
+pub(super) fn rows_with_inserts(
+    inventory: &PlayerInventory,
+    inserts: &[BagInsert<'_>],
+) -> Vec<ItemRow> {
+    if inserts.is_empty() {
+        return serialize_inventory(inventory);
+    }
+    let mut updated = inventory.clone();
+    apply_inserts(&mut updated.bag, inserts);
+    serialize_inventory(&updated)
+}
+
+/// Units taken out of the live bag before a DB write commits them elsewhere.
+/// Taking them first keeps a concurrent consumer (grill tick, award) from
+/// spending a unit the DB is about to move; `restore` puts them back exactly
+/// if the write fails. Nothing may bail between the hold and
+/// `finish_bag_write`, or the held units are lost.
+#[derive(Default)]
+pub(super) struct BagHold {
+    taken: Vec<(usize, ItemInstance)>,
+}
+
+impl BagHold {
+    pub(super) fn restore(self, bag: &mut Vec<ItemInstance>) {
+        for (index, unit) in self.taken.into_iter().rev() {
+            match bag
+                .iter_mut()
+                .find(|item| item.instance_id == unit.instance_id)
+            {
+                Some(item) => item.quantity = item.quantity.saturating_add(unit.quantity),
+                None => bag.insert(index.min(bag.len()), unit),
+            }
+        }
+    }
+}
+
+/// Take `quantity` units of each instance; `None` (bag untouched) when a line
+/// is missing or short.
+pub(super) fn hold_from_bag(
+    bag: &mut Vec<ItemInstance>,
+    lines: impl IntoIterator<Item = (u64, u32)>,
+) -> Option<BagHold> {
+    let mut hold = BagHold::default();
+    for (instance_id, quantity) in lines {
+        let Some(index) = bag
+            .iter()
+            .position(|item| item.instance_id == instance_id && item.quantity >= quantity)
+        else {
+            hold.restore(bag);
+            return None;
+        };
+        let mut unit = bag[index].clone();
+        unit.quantity = quantity;
+        if bag[index].quantity == quantity {
+            bag.remove(index);
+        } else {
+            bag[index].quantity -= quantity;
+        }
+        hold.taken.push((index, unit));
+    }
+    Some(hold)
+}
+
+pub(super) fn hold_one(
+    bag: &mut Vec<ItemInstance>,
+    matches: impl Fn(&ItemInstance) -> bool,
+) -> Option<BagHold> {
+    let instance_id = bag.iter().find(|item| matches(item))?.instance_id;
+    hold_from_bag(bag, [(instance_id, 1)])
 }
 
 /// Serialize a PlayerInventory into the flat row format used by AuthService
@@ -526,6 +613,36 @@ impl super::GameState {
     pub async fn get_player_inventory(&self, player_id: &PlayerId) -> Option<PlayerInventory> {
         let inventories = self.inventories.read().await;
         inventories.get(player_id).cloned()
+    }
+
+    /// Settle a bag change after its DB round trip. A failed write pushes
+    /// the bag too: a concurrent writer may have shown the client a bag
+    /// without the held units.
+    pub(super) async fn finish_bag_write<T>(
+        &self,
+        player_id: &PlayerId,
+        hold: BagHold,
+        inserts: &[BagInsert<'_>],
+        outcome: Result<T, &'static str>,
+    ) -> Result<T, &'static str> {
+        let snapshot = {
+            let mut inventories = self.inventories.write().await;
+            let Some(inv) = inventories.get_mut(player_id) else {
+                warn!(?player_id, "inventory vanished during a DB write");
+                return outcome;
+            };
+            if outcome.is_ok() {
+                apply_inserts(&mut inv.bag, inserts);
+            } else {
+                hold.restore(&mut inv.bag);
+            }
+            inv.clone()
+        };
+        if outcome.is_ok() {
+            self.mark_inventory_dirty(player_id).await;
+        }
+        self.send_inventory_snapshot(player_id, snapshot).await;
+        outcome
     }
 
     /// Push the player's current inventory, for mutations that happen behind
@@ -2535,6 +2652,47 @@ mod tests {
         assert_eq!(enchant_success_bp(12), 100);
         assert_eq!(enchant_success_bp(50), 100);
         assert_eq!(enchant_success_bp(i32::MAX), 100);
+    }
+
+    fn unit(instance_id: u64, def: &str, quantity: u32) -> ItemInstance {
+        ItemInstance {
+            locked: false,
+            instance_id,
+            item_def_id: def.to_string(),
+            quantity,
+            enchant: 0,
+            cape_color: None,
+            cape_texture: None,
+        }
+    }
+
+    #[test]
+    fn bag_hold_restores_exact_positions_and_keeps_concurrent_changes() {
+        let original = vec![unit(1, "a", 1), unit(2, "b", 5), unit(3, "c", 1)];
+        let mut bag = original.clone();
+        let hold = hold_from_bag(&mut bag, [(1, 1), (2, 2)]).unwrap();
+        assert_eq!(bag, vec![unit(2, "b", 3), unit(3, "c", 1)]);
+        bag.push(unit(9, "fish", 1));
+        hold.restore(&mut bag);
+        assert_eq!(
+            bag,
+            vec![
+                unit(1, "a", 1),
+                unit(2, "b", 5),
+                unit(3, "c", 1),
+                unit(9, "fish", 1)
+            ]
+        );
+
+        let mut bag = original.clone();
+        let hold = hold_from_bag(&mut bag, [(2, 2), (3, 1)]).unwrap();
+        bag.retain(|item| item.instance_id != 2);
+        hold.restore(&mut bag);
+        assert_eq!(bag, vec![unit(1, "a", 1), unit(2, "b", 2), unit(3, "c", 1)]);
+
+        let mut bag = original.clone();
+        assert!(hold_from_bag(&mut bag, [(1, 1), (2, 6)]).is_none());
+        assert_eq!(bag, original);
     }
 
     #[test]

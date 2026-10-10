@@ -1,6 +1,8 @@
 use super::{
     auth_db,
-    inventory::{serialize_inventory, stack_into_bag, BagInsert},
+    inventory::{
+        hold_from_bag, hold_one, rows_with_inserts, serialize_inventory, BagHold, BagInsert,
+    },
     GameState,
 };
 use crate::auth::{AuthError, AuthService, EstateDeposit};
@@ -252,8 +254,7 @@ impl GameState {
                 Some(furniture_id),
             )
             .await?;
-        let players = self.players.read().await;
-        if players.values().any(|player| {
+        if self.players.read().await.values().any(|player| {
             player.object_type.as_deref() == Some(furniture.item_def_id.as_str())
                 && player.object_id.map(i64::from) == Some(furniture_id)
         }) {
@@ -295,7 +296,6 @@ impl GameState {
         if new_key != old_key {
             self.sync_estate_chest_bucket(new_key, &new_group);
         }
-        drop(players);
         self.publish_subject_change(ServerMessage::EstateChestVisibility {
             added: vec![furniture],
             removed: vec![],
@@ -546,25 +546,20 @@ impl GameState {
             )
             .await?;
         character.gold = self.gold_balance(player_id).await?;
-        let mut inventories = self.inventories.write().await;
-        let inventory = inventories
-            .get_mut(player_id)
-            .ok_or("Inventory not found.")?;
-        let mut updated = inventory.clone();
-        let index = updated
-            .bag
-            .iter()
-            .position(|item| item.instance_id == instance_id && item.item_def_id == item_def_id)
+        let (hold, rows) = {
+            let mut inventories = self.inventories.write().await;
+            let inventory = inventories
+                .get_mut(player_id)
+                .ok_or("Inventory not found.")?;
+            let hold = hold_one(&mut inventory.bag, |item| {
+                item.instance_id == instance_id && item.item_def_id == item_def_id
+            })
             .ok_or("That furnishing is no longer in your bag.")?;
-        if updated.bag[index].quantity > 1 {
-            updated.bag[index].quantity -= 1;
-        } else {
-            updated.bag.remove(index);
-        }
-        let rows = serialize_inventory(&updated);
+            (hold, serialize_inventory(inventory))
+        };
         let auth = auth.clone();
         let placed_item_def_id = item_def_id.clone();
-        let chest = auth_db(move || {
+        let outcome = auth_db(move || {
             auth.place_estate_chest(
                 &character,
                 &rows,
@@ -578,21 +573,19 @@ impl GameState {
         .map_err(|error| {
             tracing::warn!(%error, "Failed to place estate chest");
             "The furniture could not be saved. Your inventory was not changed."
-        })??;
-        *inventory = updated.clone();
+        })
+        .flatten();
+        let chest = self.finish_bag_write(player_id, hold, &[], outcome).await?;
         let key = EstateChestIndex::bucket(&chest.position);
         let mut chests = self.estate_chests.write().await;
         chests.insert(chest.clone());
         let group = chests.group(key);
         drop(chests);
         self.sync_estate_chest_bucket(key, &group);
-        drop(inventories);
         self.publish_subject_change(ServerMessage::EstateChestVisibility {
             added: vec![chest],
             removed: vec![],
         });
-        self.mark_inventory_dirty(player_id).await;
-        self.send_inventory_snapshot(player_id, updated).await;
         Ok(())
     }
 
@@ -1073,22 +1066,10 @@ impl GameState {
             return Err("Your bag cannot hold that much weight.");
         }
 
-        let mut updated = inventory.clone();
-        for plan in &deposit_plans {
-            let index = updated
-                .bag
-                .iter()
-                .position(|entry| entry.instance_id == plan.item.instance_id)
-                .ok_or("An item is no longer in your bag.")?;
-            if updated.bag[index].quantity == plan.quantity {
-                updated.bag.remove(index);
-            } else {
-                updated.bag[index].quantity -= plan.quantity;
-            }
-        }
+        let mut inserts = Vec::with_capacity(withdrawal_plans.len());
         for (item, quantity, stackable) in &withdrawal_plans {
             if *stackable
-                && updated.bag.iter().any(|entry| {
+                && inventory.bag.iter().any(|entry| {
                     entry.item_def_id == item.item_def_id
                         && entry.locked == item.locked
                         && entry.enchant == item.enchant
@@ -1099,26 +1080,32 @@ impl GameState {
             {
                 return Err("A bag stack is full.");
             }
-            let inserted = stack_into_bag(
-                &mut updated.bag,
-                BagInsert {
-                    locked: item.locked,
-                    stackable: *stackable,
-                    item_def_id: &item.item_def_id,
-                    enchant: item.enchant,
-                    cape_color: item.cape_color.clone(),
-                    cape_texture: item.cape_texture.clone(),
-                    first_instance_id: next_id,
-                    quantity: *quantity,
-                },
-            );
-            next_id += inserted.ids_used;
+            let insert = BagInsert {
+                locked: item.locked,
+                stackable: *stackable,
+                item_def_id: &item.item_def_id,
+                enchant: item.enchant,
+                cape_color: item.cape_color.clone(),
+                cape_texture: item.cape_texture.clone(),
+                first_instance_id: next_id,
+                quantity: *quantity,
+            };
+            next_id += insert.ids_reserved();
+            inserts.push(insert);
         }
-        let rows = serialize_inventory(&updated);
+        let hold = hold_from_bag(
+            &mut inventory.bag,
+            deposit_plans
+                .iter()
+                .map(|plan| (plan.item.instance_id, plan.quantity)),
+        )
+        .ok_or("An item is no longer in your bag.")?;
+        let rows = rows_with_inserts(inventory, &inserts);
+        drop(inventories);
         let auth = auth.clone();
         let deposits = deposit_plans;
         let withdrawals = withdrawals.to_vec();
-        let revision = auth_db(move || {
+        let outcome = auth_db(move || {
             auth.transfer_estate_items(
                 &character,
                 &rows,
@@ -1132,9 +1119,11 @@ impl GameState {
         .map_err(|error| {
             tracing::warn!(%error, "Failed to transfer estate items");
             "The items could not be transferred. Your inventory was not changed."
-        })??;
-        *inventory = updated.clone();
-        drop(inventories);
+        })
+        .flatten();
+        let revision = self
+            .finish_bag_write(player_id, hold, &inserts, outcome)
+            .await?;
         let furniture = {
             let mut chests = self.estate_chests.write().await;
             chests.by_id.get_mut(&chest_id).map(|chest| {
@@ -1148,8 +1137,6 @@ impl GameState {
                 removed: vec![],
             });
         }
-        self.mark_inventory_dirty(player_id).await;
-        self.send_inventory_snapshot(player_id, updated).await;
         Ok(())
     }
 
@@ -1185,45 +1172,47 @@ impl GameState {
             .get_player_save_data(player_id)
             .await
             .ok_or("Character not found.")?;
-        let players = self.players.read().await;
-        if players.values().any(|player| {
+        if self.players.read().await.values().any(|player| {
             player.object_type.as_deref() == Some(chest.item_def_id.as_str())
                 && player.object_id.map(i64::from) == Some(chest_id)
         }) {
             return Err("Someone is using this furniture. Wait until they get up.");
         }
         character.gold = self.gold_balance(player_id).await?;
-        let mut inventories = self.inventories.write().await;
-        let inventory = inventories
-            .get_mut(player_id)
-            .ok_or("Inventory not found.")?;
-        let drop_recovered_chest = self.calc_total_weight(inventory, armor_mult)
-            + self.item_defs.weight(&chest.item_def_id)
-            > max_weight;
-        let mut updated = inventory.clone();
-        if !drop_recovered_chest {
-            stack_into_bag(
-                &mut updated.bag,
-                BagInsert::one(false, &chest.item_def_id, 0, next_id),
-            );
-        }
-        let rows = serialize_inventory(&updated);
+        let recovered = [BagInsert::one(false, &chest.item_def_id, 0, next_id)];
+        let (drop_recovered_chest, rows) = {
+            let inventories = self.inventories.read().await;
+            let inventory = inventories.get(player_id).ok_or("Inventory not found.")?;
+            let drop_recovered_chest = self.calc_total_weight(inventory, armor_mult)
+                + self.item_defs.weight(&chest.item_def_id)
+                > max_weight;
+            let rows = if drop_recovered_chest {
+                serialize_inventory(inventory)
+            } else {
+                rows_with_inserts(inventory, &recovered)
+            };
+            (drop_recovered_chest, rows)
+        };
         let auth = auth.clone();
-        auth_db(move || auth.recover_estate_chest(&character, &rows, chest_id))
+        let outcome = auth_db(move || auth.recover_estate_chest(&character, &rows, chest_id))
             .await
             .map_err(|error| {
                 tracing::warn!(%error, "Failed to recover estate chest");
                 "The chest could not be recovered. Your inventory was not changed."
-            })??;
-        *inventory = updated.clone();
+            })
+            .flatten();
+        if drop_recovered_chest {
+            outcome?;
+        } else {
+            self.finish_bag_write(player_id, BagHold::default(), &recovered, outcome)
+                .await?;
+        }
         let key = EstateChestIndex::bucket(&chest.position);
         let mut chests = self.estate_chests.write().await;
         chests.remove(chest_id);
         let group = chests.group(key);
         drop(chests);
         self.sync_estate_chest_bucket(key, &group);
-        drop(inventories);
-        drop(players);
         self.publish_subject_change(ServerMessage::EstateChestVisibility {
             added: vec![],
             removed: vec![chest_id],
@@ -1241,9 +1230,6 @@ impl GameState {
                 dropped_by: Some(*player_id),
             })
             .await;
-        } else {
-            self.mark_inventory_dirty(player_id).await;
-            self.send_inventory_snapshot(player_id, updated).await;
         }
         Ok(())
     }

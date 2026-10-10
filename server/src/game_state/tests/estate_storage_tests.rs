@@ -1240,6 +1240,49 @@ async fn furniture_checkout_failures_leave_gold_and_inventory_unchanged() {
 }
 
 #[tokio::test]
+async fn failed_furniture_checkout_save_refunds_gold_and_keeps_the_bag() {
+    use onlinerpg_shared::furniture_shop::FurnitureOrderLine;
+    let game = make_flat_world_game_state("furniture_checkout_db_failure");
+    let (auth, path) = make_test_auth_with_path("furniture_checkout_db_failure");
+    let character_id = storage_owner(&game, &auth, "Shopper").await;
+    add_furniture_clerk(&game).await;
+    let id = pid("Shopper");
+    game.players.write().await.get_mut(&id).unwrap().position = Position {
+        x: -1453.0,
+        y: 1.0,
+        z: 4778.0,
+    };
+    game.player_gold.write().await.insert(id, 5000);
+    game.terrain_io.write_object(-2, 4, &serde_json::json!({"placements": [
+        {"id":103,"type":"scroll","x":-1450.6,"y":1.8,"z":4781.3,"rotation":270,"floorLevel":0}
+    ]})).await.unwrap();
+    let original = game.get_player_inventory(&id).await.unwrap();
+    let db = rusqlite::Connection::open(path).unwrap();
+    db.execute_batch("CREATE TRIGGER fail_items BEFORE INSERT ON character_items BEGIN SELECT RAISE(ABORT, 'test failure'); END;").unwrap();
+    game.checkout_furniture(
+        &id,
+        vec![FurnitureOrderLine {
+            display_id: 103,
+            quantity: 2,
+        }],
+        5000,
+        400,
+        &auth,
+    )
+    .await;
+    assert_eq!(game.get_player_gold(&id).await, 5000);
+    assert_eq!(
+        game.get_player_inventory(&id).await.unwrap().bag,
+        original.bag
+    );
+    assert!(auth
+        .load_inventory(character_id)
+        .unwrap()
+        .iter()
+        .all(|row| row.item_def_id != "furniture_scroll"));
+}
+
+#[tokio::test]
 async fn decoration_sign_text_is_saved_and_only_editable_by_its_owner() {
     let game = make_flat_world_game_state("furniture_sign");
     let auth = make_test_auth("furniture_sign");

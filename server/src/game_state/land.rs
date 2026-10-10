@@ -1,4 +1,8 @@
-use super::{auth_db, inventory::serialize_inventory, GameState};
+use super::{
+    auth_db,
+    inventory::{hold_one, serialize_inventory},
+    GameState,
+};
 use crate::auth::AuthService;
 use crate::types::{Player, PlayerId, ServerMessage};
 use onlinerpg_shared::land::LAND_CLAIM_MIN_LEVEL;
@@ -144,25 +148,42 @@ impl GameState {
             .get_player_save_data(player_id)
             .await
             .ok_or("Character not found.")?;
-        let mut gold = self.player_gold.write().await;
-        let balance = gold.get_mut(player_id).ok_or("Gold balance not found.")?;
-        character.gold = *balance;
-        let inventories = self.inventories.read().await;
-        let inventory = inventories.get(player_id).ok_or("Inventory not found.")?;
-        let rows = serialize_inventory(inventory);
-        let (updated, account) =
-            auth_db(move || auth.transfer_land_gold(character, &rows, amount, deposit))
-                .await
-                .map_err(|error| {
-                    tracing::warn!(%error, "Failed to transfer land gold");
-                    "Transfer could not be saved. Your gold was not moved."
-                })??;
-        *balance = updated;
-        drop(inventories);
-        drop(gold);
+        // A deposit leaves the live balance before the write and is refunded
+        // if the write fails; a withdrawal lands after it. The DB re-checks
+        // the amount against the pre-deposit balance it is handed.
+        let held = if deposit && amount > 0 { amount } else { 0 };
+        {
+            let mut gold = self.player_gold.write().await;
+            let balance = gold.get_mut(player_id).ok_or("Gold balance not found.")?;
+            if *balance < held {
+                return Err("You do not have enough gold.");
+            }
+            character.gold = *balance;
+            *balance -= held;
+        }
+        let rows = {
+            let inventories = self.inventories.read().await;
+            serialize_inventory(inventories.get(player_id).ok_or("Inventory not found.")?)
+        };
+        let outcome = auth_db(move || auth.transfer_land_gold(character, &rows, amount, deposit))
+            .await
+            .map_err(|error| {
+                tracing::warn!(%error, "Failed to transfer land gold");
+                "Transfer could not be saved. Your gold was not moved."
+            })
+            .flatten();
+        let account = match outcome {
+            Ok((_, account)) => account,
+            Err(error) => {
+                self.adjust_gold(player_id, held).await;
+                return Err(error);
+            }
+        };
+        if !deposit {
+            self.adjust_gold(player_id, amount).await;
+        }
         self.mark_dirty(player_id).await;
-        self.send_direct_message(player_id, ServerMessage::GoldUpdate { gold: updated })
-            .await;
+        self.send_gold_update(player_id).await;
         Ok(account)
     }
 
@@ -315,49 +336,45 @@ impl GameState {
             .get_player_save_data(player_id)
             .await
             .ok_or("Character not found.")?;
-        let players = self.players.read().await;
-        let player = players.get(player_id).ok_or("Character not found.")?;
-        let addr = claim_location(player, plot)?;
+        let addr = {
+            let players = self.players.read().await;
+            let player = players.get(player_id).ok_or("Character not found.")?;
+            claim_location(player, plot)?
+        };
         self.check_land_grade(addr).await?;
         let houses = self
             .abandoned_houses_for_claim(character.character_id, plot, auth)
             .await?;
-        let mut inventories = self.inventories.write().await;
-        let inventory = inventories
-            .get_mut(player_id)
-            .ok_or("Inventory not found.")?;
-        let index = inventory
-            .bag
-            .iter()
-            .position(|item| {
+        let (hold, rows) = {
+            let mut inventories = self.inventories.write().await;
+            let inventory = inventories
+                .get_mut(player_id)
+                .ok_or("Inventory not found.")?;
+            let hold = hold_one(&mut inventory.bag, |item| {
                 item.instance_id == instance_id
                     && item.item_def_id == "land_deed"
                     && item.quantity == 1
             })
             .ok_or("Land Deed not found in your bag.")?;
-        let mut updated = inventory.clone();
-        updated.bag.remove(index);
-        let rows = serialize_inventory(&updated);
+            (hold, serialize_inventory(inventory))
+        };
         let auth_copy = auth.clone();
         let month = self
             .current_game_day()
             .div_euclid(super::time::GAME_DAYS_PER_MONTH);
-        let estate_id =
+        let outcome =
             auth_db(move || auth_copy.claim_homestead(&character, plot, &rows, month, &houses))
                 .await
                 .map_err(|error| {
                     tracing::warn!(%error, "Failed to commit land claim");
                     "Land registration could not be saved. Your Land Deed was not consumed."
-                })??;
-        *inventory = updated.clone();
-        drop(inventories);
-        drop(players);
+                })
+                .flatten();
+        let estate_id = self.finish_bag_write(player_id, hold, &[], outcome).await?;
         if let Err(error) = self.apply_estate_house_claims(auth).await {
             tracing::warn!(%error, "Failed to apply abandoned house claims; will retry");
         }
         drop(persistence);
-        self.mark_inventory_dirty(player_id).await;
-        self.send_inventory_snapshot(player_id, updated).await;
         Ok(estate_id)
     }
 

@@ -1,6 +1,6 @@
 use super::{
     auth_db,
-    inventory::{serialize_inventory, stack_into_bag, BagInsert},
+    inventory::{apply_inserts, serialize_inventory, BagHold, BagInsert},
     GameState,
 };
 use crate::{
@@ -169,38 +169,40 @@ impl GameState {
         }
         let max_weight = self.max_carry_weight(player_id).await;
         let armor_mult = self.armor_weight_mult(player_id).await;
-        let mut next_id = self
+        let next_id = self
             .reserve_instance_ids(items.iter().map(|i| u64::from(i.quantity)).sum())
             .await;
-        let mut gold = self.player_gold.write().await;
-        let balance = gold.get_mut(player_id).ok_or("Gold balance not found.")?;
-        if *balance != expected_gold {
-            return Err("Your gold balance changed. Review your basket and try again.");
-        }
-        if *balance < total {
-            return Err("Not enough gold.");
-        }
-        let mut inventories = self.inventories.write().await;
-        let inventory = inventories
-            .get_mut(player_id)
-            .ok_or("Inventory not found.")?;
-        let mut updated = inventory.clone();
-        for (line, product) in &order {
-            for _ in 0..line.quantity {
-                stack_into_bag(
-                    &mut updated.bag,
-                    BagInsert::one(false, &product.item_def_id, 0, next_id),
-                );
-                next_id += 1;
+        let inserts: Vec<_> = order
+            .iter()
+            .flat_map(|(line, product)| {
+                std::iter::repeat_n(&product.item_def_id, line.quantity as usize)
+            })
+            .zip(next_id..)
+            .map(|(item_def_id, id)| BagInsert::one(false, item_def_id, 0, id))
+            .collect();
+        // Gold leaves the live balance before the write; a failed write refunds it.
+        let rows = {
+            let mut gold = self.player_gold.write().await;
+            let balance = gold.get_mut(player_id).ok_or("Gold balance not found.")?;
+            if *balance != expected_gold {
+                return Err("Your gold balance changed. Review your basket and try again.");
             }
-        }
-        if self.calc_total_weight(&updated, armor_mult) > max_weight {
-            return Err("Your bag is too heavy. Remove some furniture or make room first.");
-        }
-        character.gold = *balance - total;
-        let rows = serialize_inventory(&updated);
+            if *balance < total {
+                return Err("Not enough gold.");
+            }
+            let inventories = self.inventories.read().await;
+            let inventory = inventories.get(player_id).ok_or("Inventory not found.")?;
+            let mut updated = inventory.clone();
+            apply_inserts(&mut updated.bag, &inserts);
+            if self.calc_total_weight(&updated, armor_mult) > max_weight {
+                return Err("Your bag is too heavy. Remove some furniture or make room first.");
+            }
+            *balance -= total;
+            character.gold = *balance;
+            serialize_inventory(&updated)
+        };
         let auth = auth.clone();
-        auth_db(move || {
+        let saved = auth_db(move || {
             auth.save_batch(
                 std::slice::from_ref(&character),
                 &[(character.character_id, rows)],
@@ -209,18 +211,17 @@ impl GameState {
                 None,
             )
         })
-        .await
-        .map_err(|error| {
+        .await;
+        let outcome = saved.map_err(|error| {
             tracing::warn!(%error, "Furniture checkout failed");
             "Payment could not be saved. Your gold and inventory were not changed."
-        })?;
-        *balance -= total;
-        *inventory = updated.clone();
-        drop(inventories);
-        drop(gold);
+        });
+        if outcome.is_err() {
+            self.adjust_gold(player_id, total).await;
+        }
+        self.finish_bag_write(player_id, BagHold::default(), &inserts, outcome)
+            .await?;
         self.mark_dirty(player_id).await;
-        self.mark_inventory_dirty(player_id).await;
-        self.send_inventory_snapshot(player_id, updated).await;
         self.send_gold_update(player_id).await;
         for (line, product) in &order {
             self.record_gold_sink(
