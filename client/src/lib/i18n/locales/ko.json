@@ -480,6 +480,7 @@
   "command.help.weather": "서버 날씨 변경: /weather rain [0..1] (기본 1), /weather snow [0..1] (기본 1), /weather clear, /weather auto",
   "command.help.spawnmob": "주변에 몬스터 생성: /spawnmob <종류> [수량]",
   "command.help.notice": "서버 공지 설정, /notice만 입력하면 삭제",
+  "command.help.announce": "접속 중인 모두에게 {{seconds}}초간 공지 표시: /announce <내용> (최대 {{max}}자)",
   "command.help.kick": "접속 중인 플레이어 추방: /kick <이름>",
   "command.help.ban": "계정 차단, 기간 생략 시 영구: /ban <이름> [분]",
   "command.help.unban": "캐릭터 또는 계정 이름으로 차단 해제: /unban <이름>",

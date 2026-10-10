@@ -565,6 +565,11 @@ pub fn land_claim_min_level() -> u32 {
 }
 
 #[wasm_bindgen]
+pub fn announcement_max_chars() -> usize {
+    crate::messages::ANNOUNCEMENT_MAX_CHARS
+}
+
+#[wasm_bindgen]
 pub fn world_constants() -> Result<JsValue, JsError> {
     #[derive(Serialize)]
     #[serde(rename_all = "camelCase")]

@@ -1,6 +1,8 @@
 import { MathUtils } from 'three'
 import { get } from 'svelte/store'
-import { translate, type MessageKey } from './i18n'
+import { translate, type MessageKey, type MessageValues } from './i18n'
+import { announcement_max_chars } from './wasm/onlinerpg_shared'
+import { ANNOUNCEMENT_DURATION_MS } from './stores/announcementStore'
 import { gameStore, addChatMessage, isAdminUser } from './stores/gameStore'
 import { worldToTileCell } from './components/game-scene/terrain-utils'
 import { networkManager } from './network/socket'
@@ -43,6 +45,7 @@ function teleportTo(x: number, y: number, z: number) {
 /** Command help, permissions, and optional client handler. */
 type Command = {
   desc: MessageKey
+  values?: () => MessageValues
   admin?: boolean
   /** Client-side handler. Omit it to let the text through to the server. */
   run?: (args: string) => void
@@ -59,7 +62,7 @@ const COMMANDS: Record<string, Command> = {
       }
       const line = (name: string) =>
         addChatMessage({
-          text: `${name} — ${translate(COMMANDS[name].desc)}`,
+          text: `${name} — ${translate(COMMANDS[name].desc, COMMANDS[name].values?.())}`,
           sender: 'system',
         })
 
@@ -174,6 +177,14 @@ const COMMANDS: Record<string, Command> = {
   },
   '/notice': {
     desc: 'command.help.notice',
+    admin: true,
+  },
+  '/announce': {
+    desc: 'command.help.announce',
+    values: () => ({
+      seconds: ANNOUNCEMENT_DURATION_MS / 1000,
+      max: announcement_max_chars(),
+    }),
     admin: true,
   },
   '/kick': { desc: 'command.help.kick', admin: true },

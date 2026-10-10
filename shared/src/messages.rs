@@ -200,6 +200,9 @@ pub struct PartyMemberVitals {
     pub max_hp: u32,
 }
 
+/// Cap on `/announce` text; the web client reads it through `wasm_api`.
+pub const ANNOUNCEMENT_MAX_CHARS: usize = 500;
+
 /// How long a party invite stays acceptable. Shared so the server's
 /// enforcement and the agent-client's pruning are guaranteed equal; the web
 /// client mirrors it (`INVITE_TTL_MS` in `partyStore.ts`).
@@ -1400,6 +1403,9 @@ pub enum ServerMessage {
     ServerNotice {
         message: Option<String>,
     },
+    ServerAnnouncement {
+        message: String,
+    },
     PlayerTorchToggled {
         player_id: PlayerId,
         enabled: bool,
@@ -2100,9 +2106,10 @@ impl ServerMessage {
             | Self::AbilityRejected { .. }
             | Self::InspectionResult { .. }
             | Self::BowMarkUpdate { .. } => DeliveryClass::Participants,
-            Self::GameTimeSync { .. } | Self::WeatherSync { .. } | Self::ServerNotice { .. } => {
-                DeliveryClass::Global
-            }
+            Self::GameTimeSync { .. }
+            | Self::WeatherSync { .. }
+            | Self::ServerNotice { .. }
+            | Self::ServerAnnouncement { .. } => DeliveryClass::Global,
             Self::WorldUpdate { .. } => DeliveryClass::Control,
         }
     }

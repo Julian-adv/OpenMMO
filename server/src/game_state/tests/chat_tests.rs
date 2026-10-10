@@ -1,4 +1,5 @@
 use super::*;
+use onlinerpg_shared::messages::ANNOUNCEMENT_MAX_CHARS;
 
 #[tokio::test]
 async fn chat_uses_direct_spatial_fanout_instead_of_global_broadcast() {
@@ -723,6 +724,67 @@ async fn server_notice_is_stored_broadcast_and_clearable() {
 }
 
 #[tokio::test]
+async fn announcement_is_broadcast_without_changing_the_banner() {
+    let game_state = make_test_game_state("announcement_global");
+    let auth = make_test_auth("announcement_global");
+    let admin_id = pid("admin");
+    game_state
+        .set_server_notice(Some("Existing banner".into()))
+        .await;
+    let mut admin_rx = game_state.register_direct_channel(&admin_id).await;
+    let mut broadcast_rx = game_state.subscribe();
+    let text = "전부 재접속 부탁드립니다";
+
+    game_state
+        .send_chat_message(&admin_id, format!("/announce {text}"), &auth)
+        .await;
+
+    let broadcast = broadcast_rx.try_recv().expect("global announcement");
+    assert!(
+        matches!(rmp_serde::from_slice::<ServerMessage>(&broadcast.bytes), Ok(ServerMessage::ServerAnnouncement { message }) if message == text)
+    );
+    assert!(broadcast_rx.try_recv().is_err());
+    assert_eq!(
+        game_state.server_notice().await.as_deref(),
+        Some("Existing banner")
+    );
+    assert!(
+        matches!(admin_rx.try_recv(), Ok(ServerMessage::SystemMessage { message, .. }) if message.contains("sent"))
+    );
+}
+
+#[tokio::test]
+async fn announcement_rejects_empty_and_oversized_messages_but_accepts_the_cap() {
+    let game_state = make_test_game_state("announcement_validation");
+    let auth = make_test_auth("announcement_validation");
+    let admin_id = pid("admin");
+    let mut admin_rx = game_state.register_direct_channel(&admin_id).await;
+    let mut broadcast_rx = game_state.subscribe();
+
+    for command in [
+        "/announce".to_string(),
+        format!("/announce {}", "가".repeat(ANNOUNCEMENT_MAX_CHARS + 1)),
+    ] {
+        game_state
+            .send_chat_message(&admin_id, command, &auth)
+            .await;
+        assert!(
+            matches!(admin_rx.try_recv(), Ok(ServerMessage::SystemMessage { message, .. }) if message.starts_with("Announce:"))
+        );
+        assert!(broadcast_rx.try_recv().is_err());
+    }
+
+    let text = "가".repeat(ANNOUNCEMENT_MAX_CHARS);
+    game_state
+        .send_chat_message(&admin_id, format!("/announce {text}"), &auth)
+        .await;
+    let broadcast = broadcast_rx.try_recv().expect("announcement at the cap");
+    assert!(
+        matches!(rmp_serde::from_slice::<ServerMessage>(&broadcast.bytes), Ok(ServerMessage::ServerAnnouncement { message }) if message == text)
+    );
+}
+
+#[tokio::test]
 async fn escape_command_returns_a_stuck_player_to_spawn() {
     let game_state = make_test_game_state("escape_to_spawn");
     let auth = make_test_auth("escape_to_spawn");
@@ -771,6 +833,16 @@ async fn escape_command_returns_a_stuck_player_to_spawn() {
 #[test]
 fn admin_command_parses_actions() {
     use super::chat::{parse_admin_command, AdminCommand};
+
+    assert_eq!(
+        parse_admin_command("  /announce 전부 재접속 부탁드립니다  "),
+        Some(AdminCommand::Announce("전부 재접속 부탁드립니다"))
+    );
+    assert_eq!(
+        parse_admin_command("/announce"),
+        Some(AdminCommand::Announce(""))
+    );
+    assert_eq!(parse_admin_command("/announcement hello"), None);
 
     assert_eq!(
         parse_admin_command("/kick Abuser"),

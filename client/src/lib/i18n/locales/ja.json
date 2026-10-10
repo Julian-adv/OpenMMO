@@ -480,6 +480,7 @@
   "command.help.weather": "サーバーの天候を変更：/weather rain [0..1]（既定1）、/weather snow [0..1]（既定1）、/weather clear、/weather auto",
   "command.help.spawnmob": "周囲にモンスターを生成：/spawnmob <種類> [数]",
   "command.help.notice": "サーバーのお知らせを設定。/noticeのみで削除",
+  "command.help.announce": "接続中の全員に{{seconds}}秒間お知らせを表示：/announce <内容>（最大{{max}}文字）",
   "command.help.kick": "オンラインのプレイヤーを切断：/kick <名前>",
   "command.help.ban": "アカウントを停止（期間省略で永久）：/ban <名前> [分]",
   "command.help.unban": "キャラクター名またはアカウント名で停止解除：/unban <名前>",

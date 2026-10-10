@@ -1,7 +1,7 @@
 use super::auth_db;
 use crate::auth::{ban_message, unix_now, AuthService, DEFAULT_BAN_REASON};
 use crate::types::{ClientKind, Player, PlayerId, ServerMessage};
-use onlinerpg_shared::messages::strip_command;
+use onlinerpg_shared::messages::{strip_command, ANNOUNCEMENT_MAX_CHARS};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tracing::{error, info, warn};
@@ -219,6 +219,7 @@ pub(crate) fn parse_say_command(message: &str) -> Option<&str> {
 /// Shared by dispatch and the admin gate; malformed arguments still require admin.
 #[derive(Debug, PartialEq)]
 pub(crate) enum AdminCommand<'a> {
+    Announce(&'a str),
     Give {
         item_def_id: &'a str,
         count: Option<&'a str>,
@@ -244,6 +245,9 @@ pub(crate) enum AdminCommand<'a> {
 }
 
 pub(crate) fn parse_admin_command(message: &str) -> Option<AdminCommand<'_>> {
+    if let Some(rest) = strip_command(message, "/announce") {
+        return Some(AdminCommand::Announce(rest));
+    }
     if let Some(rest) = strip_command(message, "/give") {
         let (item_def_id, count) = split_name_and_arg(rest);
         return Some(AdminCommand::Give { item_def_id, count });
@@ -957,6 +961,7 @@ impl super::GameState {
         auth: &AuthService,
     ) {
         let reply = match command {
+            AdminCommand::Announce(message) => self.announce_command(admin_id, message),
             AdminCommand::Give { item_def_id, count } => {
                 self.give_command(admin_id, item_def_id, count).await
             }
@@ -979,6 +984,22 @@ impl super::GameState {
         }
         .unwrap_or_else(std::convert::identity);
         self.send_system_message(admin_id, reply).await;
+    }
+
+    fn announce_command(&self, admin_id: &PlayerId, message: &str) -> Result<String, String> {
+        if message.is_empty() {
+            return Err("Announce: /announce <message>".to_string());
+        }
+        if message.chars().count() > ANNOUNCEMENT_MAX_CHARS {
+            return Err(format!(
+                "Announce: message must be {ANNOUNCEMENT_MAX_CHARS} characters or fewer."
+            ));
+        }
+        self.broadcast(ServerMessage::ServerAnnouncement {
+            message: message.to_string(),
+        });
+        info!(player = ?admin_id, len = message.len(), "server announcement sent");
+        Ok("Announcement sent to all online players.".to_string())
     }
 
     async fn give_command(

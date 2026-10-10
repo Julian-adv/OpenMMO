@@ -525,6 +525,7 @@ pub fn feed_kind(msg: &onlinerpg_shared::ServerMessage) -> Option<&'static str> 
         | M::Kicked { .. }
         | M::SystemMessage { .. }
         | M::ServerNotice { .. }
+        | M::ServerAnnouncement { .. }
         | M::PlayerJoined { .. }
         | M::PlayerLeft { .. }
         | M::PlayerAppeared { .. }

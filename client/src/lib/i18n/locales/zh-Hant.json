@@ -480,6 +480,7 @@
   "command.help.weather": "更改伺服器天氣：/weather rain [0..1]（預設1）、/weather snow [0..1]（預設1）、/weather clear、/weather auto",
   "command.help.spawnmob": "在附近生成怪物：/spawnmob <類型> [數量]",
   "command.help.notice": "設定伺服器公告，單獨輸入 /notice 可清除",
+  "command.help.announce": "向所有線上玩家顯示{{seconds}}秒公告：/announce <內容>（最多{{max}}字）",
   "command.help.kick": "踢出線上玩家：/kick <名字>",
   "command.help.ban": "封禁帳號，省略時長則永久封禁：/ban <名字> [分鐘]",
   "command.help.unban": "按角色名或帳號名解封：/unban <名字>",

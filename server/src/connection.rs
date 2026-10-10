@@ -3067,6 +3067,9 @@ mod tests {
             message: "/notice".into()
         }));
         for admin_command in [
+            "/announce",
+            "/announce 전부 재접속 부탁드립니다",
+            "  /announce   Maintenance soon  ",
             "/give",
             "/give iron_arrow 100",
             "  /give iron_arrow 100  ",
@@ -3104,5 +3107,44 @@ mod tests {
         assert!(!requires_admin(&ClientMessage::ChatMessage {
             message: "/weathering".into()
         }));
+    }
+
+    #[tokio::test]
+    async fn announcement_dispatch_rejects_non_admin_and_broadcasts_for_admin() {
+        let game = Arc::new(crate::game_state::tests::make_test_game_state(
+            "announcement_gate",
+        ));
+        let auth = Arc::new(crate::game_state::tests::make_test_auth(
+            "announcement_gate",
+        ));
+        let auth_ctx = test_auth_ctx();
+        let mut state = ConnectionState::new(Ipv4Addr::LOCALHOST.into());
+        handle_handshake(
+            &client_info(onlinerpg_shared::PROTOCOL_VERSION, "web"),
+            &mut state,
+        );
+        state.player_id = Some(PlayerId::from(42));
+        let mut receiver = game.subscribe();
+        let request = onlinerpg_shared::serialize_client_msg(&ClientMessage::ChatMessage {
+            message: "/announce 전부 재접속 부탁드립니다".into(),
+        })
+        .unwrap();
+
+        let refused = handle_client_message(&request, &game, &auth, &auth_ctx, &mut state)
+            .await
+            .unwrap();
+        assert!(
+            matches!(refused.as_slice(), [ServerMessage::SystemMessage { message, .. }] if message == "Admin only")
+        );
+        assert!(receiver.try_recv().is_err());
+
+        state.is_admin = true;
+        handle_client_message(&request, &game, &auth, &auth_ctx, &mut state)
+            .await
+            .unwrap();
+        let broadcast = receiver.try_recv().expect("admin announcement");
+        assert!(
+            matches!(onlinerpg_shared::deserialize_server_msg(&broadcast.bytes), Ok(ServerMessage::ServerAnnouncement { message }) if message == "전부 재접속 부탁드립니다")
+        );
     }
 }

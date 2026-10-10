@@ -208,7 +208,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v116: saved hair and eye colors.
 /// v117: selectable ranger face and hair.
 /// v118: server-driven player auto-attacks.
-pub const PROTOCOL_VERSION: u32 = 118;
+/// v119: transient global announcements via `/announce`.
+pub const PROTOCOL_VERSION: u32 = 119;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from
@@ -770,6 +771,9 @@ mod tests {
                 message: Some("restart soon".to_string()),
             },
             ServerMessage::ServerNotice { message: None },
+            ServerMessage::ServerAnnouncement {
+                message: "전부 재접속 부탁드립니다".to_string(),
+            },
         ];
         for msg in messages {
             let bytes = serialize_server_msg(&msg).unwrap();

@@ -480,6 +480,7 @@
   "command.help.weather": "Set weather server-wide: /weather rain [0..1] (default 1), /weather snow [0..1] (default 1), /weather clear, /weather auto",
   "command.help.spawnmob": "Spawn monsters beside you: /spawnmob <type> [count]",
   "command.help.notice": "Set the server banner, or clear it with a bare /notice",
+  "command.help.announce": "Show a {{seconds}}-second announcement to everyone online: /announce <message> (up to {{max}} characters)",
   "command.help.kick": "Disconnect an online player: /kick <name>",
   "command.help.ban": "Ban an account, permanently unless timed: /ban <name> [minutes]",
   "command.help.unban": "Lift a ban by character or account name: /unban <name>",

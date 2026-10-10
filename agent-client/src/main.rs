@@ -512,6 +512,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::FishingError { .. } => "FishingError",
         ServerMessage::Kicked { .. } => "Kicked",
         ServerMessage::ServerNotice { .. } => "ServerNotice",
+        ServerMessage::ServerAnnouncement { .. } => "ServerAnnouncement",
         ServerMessage::PlayerTorchToggled { .. } => "PlayerTorchToggled",
         ServerMessage::PlayerMountChanged { .. } => "PlayerMountChanged",
         ServerMessage::PlayerWetToggled { .. } => "PlayerWetToggled",

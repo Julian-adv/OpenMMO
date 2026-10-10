@@ -27,6 +27,7 @@ import { resetDebuffStore } from './debuffStore'
 import { resetAbilities } from './abilityStore'
 import { resetInspection } from './inspectionStore'
 import { clearSkillFailure, showSkillFailure } from './skillFailureStore'
+import { clearAnnouncements } from './announcementStore'
 import { resetHousingStore } from './housingStore'
 import { resetInstrumentStore } from './instrumentStore'
 import { stopAllInstrumentAudio } from '../managers/instrumentAudio'
@@ -215,6 +216,7 @@ export const resetGameStore = () => {
   resetAbilities()
   resetInspection()
   clearSkillFailure()
+  clearAnnouncements()
   resetHousingStore()
   resetInstrumentStore()
   stopAllInstrumentAudio()

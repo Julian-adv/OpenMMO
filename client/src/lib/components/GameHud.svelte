@@ -48,6 +48,7 @@
   import WorldMapDialog from './WorldMapDialog.svelte'
   import ServerNotice from './ServerNotice.svelte'
   import SkillFailureToast from './SkillFailureToast.svelte'
+  import AnnouncementToasts from './AnnouncementToasts.svelte'
   import {
     mapEditorMode,
     worldMapVisible,
@@ -166,6 +167,7 @@
 <div class="game-hud" style:--cluster-width="{clusterWidth}px">
   <ServerNotice />
   <SkillFailureToast />
+  <AnnouncementToasts />
   <InspectionPanel />
   <div class="top-left-hud">
     {#if selectedCharacter && !$mapEditorMode}
