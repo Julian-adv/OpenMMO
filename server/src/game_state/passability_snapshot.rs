@@ -9,6 +9,12 @@ pub(super) struct Read<'a>(RwLockReadGuard<'a, Arc<PassabilityCache>>);
 
 pub(super) struct Write<'a>(RwLockWriteGuard<'a, Arc<PassabilityCache>>);
 
+impl Read<'_> {
+    pub(super) fn token(&self) -> Weak<PassabilityCache> {
+        Arc::downgrade(&self.0)
+    }
+}
+
 impl PassabilityStore {
     pub(super) fn read(&self) -> Read<'_> {
         Read(self.0.read().unwrap_or_else(|e| e.into_inner()))

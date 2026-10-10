@@ -13,7 +13,7 @@ use crate::pathfinding::PathWaypoint;
 use crate::{MonsterState, PlayerId, Position};
 use rand::Rng;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MonsterBrain {
     pub monster_id: String,
     pub behavior: String,

@@ -30,7 +30,7 @@ pub enum Deadline {
     None,
 }
 
-pub fn timeout_for(period: Duration) -> Duration {
+fn timeout_for(period: Duration) -> Duration {
     (period * 3).max(MIN_TIMEOUT)
 }
 
@@ -134,7 +134,7 @@ impl Health {
             .filter_map(|slot| {
                 let &(name, timeout_ms) = slot.meta.get()?;
                 let stored = slot.completed.load(Ordering::Relaxed);
-                let last = (stored != 0).then(|| stored - 1);
+                let last = stored.checked_sub(1);
                 let age_ms = now_ms.saturating_sub(last.unwrap_or(0));
                 Some(Progress {
                     name,

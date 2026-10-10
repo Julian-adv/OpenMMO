@@ -3,22 +3,23 @@
 use crate::types::{Monster, MonsterState, PlayerId, Position, ServerMessage};
 use onlinerpg_shared::dungeon::passability_floor_for_level;
 use onlinerpg_shared::monster_ai::{
-    self, AiCommand, AiState, BehaviorTree, CachePathProvider, ChaseAim, MonsterBrain,
-    NearbyMonster, NearbyPlayer, PathProvider, AGGRESSIVE_BEHAVIOR, DEFAULT_BEHAVIOR,
+    self, AiCommand, AiState, BehaviorTree, ChaseAim, MonsterBrain, NearbyMonster, NearbyPlayer,
+    AGGRESSIVE_BEHAVIOR, DEFAULT_BEHAVIOR,
 };
-use onlinerpg_shared::pathfinding::{
-    find_and_smooth_path_avoiding_with_budget, is_movement_blocked, segment_touches_box,
-    PathResult, PathTermination,
-};
+use onlinerpg_shared::pathfinding::{is_movement_blocked, segment_touches_box, PathTermination};
 use onlinerpg_shared::shortest_world_delta_x;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 use tracing::{debug, info, warn};
 
-/// CPU spent on brains per tick before the rest wait for the next one.
+mod path_budget;
+use path_budget::{CountingPath, FailedPaths};
+
+/// Budget checked before each brain.
 const TICK_BUDGET: Duration = Duration::from_millis(40);
 const BRAIN_PATH_NODE_BUDGET: usize = 20_000;
+const TICK_PATH_NODE_BUDGET: usize = 20_000;
 /// Cap catch-up movement after skipped ticks.
 const MAX_BRAIN_DELTA_MS: f32 = 1000.0;
 const STATS_LOG_PERIOD: Duration = Duration::from_secs(30);
@@ -29,6 +30,7 @@ const SENSE_RANGE: f32 = 5.0;
 
 struct Entry {
     brain: MonsterBrain,
+    failed_paths: RefCell<FailedPaths>,
     last_tick: Instant,
     /// Tick generation this brain last had a player in view.
     watched_gen: u64,
@@ -39,6 +41,18 @@ struct Entry {
 }
 
 impl Entry {
+    fn new(brain: MonsterBrain, now: Instant) -> Self {
+        Self {
+            brain,
+            failed_paths: RefCell::default(),
+            last_tick: now,
+            watched_gen: 0,
+            target_seen: None,
+            closed_doors: Vec::new(),
+            door_hidden_target: None,
+        }
+    }
+
     /// Simulated time owed to the brain up to `now`, and mark it paid.
     fn owed_ms(&mut self, now: Instant, forced: Option<f32>) -> f32 {
         let delta = forced.unwrap_or_else(|| (now - self.last_tick).as_secs_f32() * 1000.0);
@@ -68,6 +82,10 @@ struct Stats {
     ticks: u32,
     ticked: u64,
     pathfinds: u64,
+    expanded_nodes: usize,
+    cache_hits: u64,
+    deferred_brains: u64,
+    node_budget_ticks: u32,
     commands: u64,
     over_budget: u32,
     worst_ms: f32,
@@ -100,6 +118,8 @@ impl BrainSample {
             reached = self.paths.reached, unreachable = self.paths.unreachable,
             node_limit = self.paths.node_limit, partial = self.paths.partial,
             expanded_nodes = self.paths.expanded_nodes,
+            cached_paths = self.paths.cache_hits,
+            deferred = self.paths.deferred,
             path_ms = path.map(|p| p.elapsed_ms),
             path_start_x = path.map(|p| p.start.0), path_start_z = path.map(|p| p.start.1),
             path_start_floor = path.map(|p| p.start.2),
@@ -125,6 +145,8 @@ struct PathSample {
 
 #[derive(Default, Clone, Copy)]
 struct PathDiagnostics {
+    cache_hits: u64,
+    deferred: bool,
     reached: u64,
     unreachable: u64,
     node_limit: u64,
@@ -186,68 +208,6 @@ impl ServerBrains {
     #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
         self.entries.len()
-    }
-}
-
-/// Records path query diagnostics for the tick stats.
-struct CountingPath<'a> {
-    inner: CachePathProvider<'a>,
-    remaining: Cell<usize>,
-    diagnostics: Cell<PathDiagnostics>,
-}
-
-impl PathProvider for CountingPath<'_> {
-    fn find_path(&self, sx: f32, sz: f32, sf: u8, gx: f32, gz: f32, gf: u8) -> PathResult {
-        let max_nodes = onlinerpg_shared::dungeon::path_max_nodes(sf, gf);
-        self.find_path_avoiding(sx, sz, sf, gx, gz, gf, &[], max_nodes)
-    }
-
-    fn attack_line_blocked(&self, fx: f32, fz: f32, tx: f32, tz: f32, floor: u8) -> bool {
-        self.inner.attack_line_blocked(fx, fz, tx, tz, floor)
-    }
-
-    fn cell_passable(&self, x: f32, z: f32, floor: u8) -> bool {
-        self.inner.cell_passable(x, z, floor)
-    }
-
-    fn find_path_avoiding(
-        &self,
-        sx: f32,
-        sz: f32,
-        sf: u8,
-        gx: f32,
-        gz: f32,
-        gf: u8,
-        blocked: &[(i32, i32)],
-        max_nodes: usize,
-    ) -> PathResult {
-        let started = Instant::now();
-        let remaining = self.remaining.get();
-        let result = find_and_smooth_path_avoiding_with_budget(
-            sx,
-            sz,
-            sf,
-            gx,
-            gz,
-            gf,
-            self.inner.cache,
-            max_nodes,
-            blocked,
-            &self.remaining,
-        );
-        let sample = PathSample {
-            start: (sx, sz, sf),
-            goal: (gx, gz, gf),
-            elapsed_ms: started.elapsed().as_secs_f32() * 1000.0,
-            termination: result.termination,
-            waypoints: result.waypoints.len(),
-            expanded_nodes: remaining - self.remaining.get(),
-        };
-        self.diagnostics.update(|mut d| {
-            d.record(sample);
-            d
-        });
-        result
     }
 }
 
@@ -444,17 +404,9 @@ impl super::GameState {
                         });
                 }
                 if !brains.entries.contains_key(&m.id) {
-                    brains.entries.insert(
-                        m.id.clone(),
-                        Entry {
-                            brain: self.new_brain(m),
-                            last_tick: started,
-                            watched_gen: 0,
-                            target_seen: None,
-                            closed_doors: Vec::new(),
-                            door_hidden_target: None,
-                        },
-                    );
+                    brains
+                        .entries
+                        .insert(m.id.clone(), Entry::new(self.new_brain(m), started));
                 }
                 active.push(Active {
                     id: m.id.clone(),
@@ -533,6 +485,7 @@ impl super::GameState {
             }
             active.retain(|a| !a.players.is_empty());
         }
+        active.sort_unstable_by(|a, b| a.id.cmp(&b.id));
         brains.tick_gen += 1;
         let gen = brains.tick_gen;
         for a in &active {
@@ -546,20 +499,19 @@ impl super::GameState {
 
         {
             let cache = self.passability_read();
-            let path = CountingPath {
-                inner: CachePathProvider { cache: &cache },
-                remaining: Cell::new(BRAIN_PATH_NODE_BUDGET),
-                diagnostics: Cell::default(),
-            };
+            let geometry = cache.token();
+            let tick_remaining = Cell::new(TICK_PATH_NODE_BUDGET);
             let mut rng = rand::thread_rng();
             let mut ticked = 0usize;
             let n = active.len();
             let start = brains.cursor % n.max(1);
-            let mut over_budget = false;
+            brains.cursor = 0;
+            let mut node_budget_exhausted = false;
             for i in 0..n {
                 let brain_started = Instant::now();
-                if brain_started - started > TICK_BUDGET {
-                    over_budget = true;
+                let out_of_nodes = tick_remaining.get() == 0;
+                if out_of_nodes || brain_started - started > TICK_BUDGET {
+                    node_budget_exhausted = out_of_nodes;
                     brains.cursor = (start + i) % n;
                     break;
                 }
@@ -576,6 +528,13 @@ impl super::GameState {
                 let Some(tree) = monster_ai::behavior_tree_for(trees, &entry.brain.behavior) else {
                     continue;
                 };
+                if entry.failed_paths.borrow_mut().synchronize(&geometry) {
+                    entry.brain.retry_chase();
+                }
+                // Only a brain that starts below the full budget can be deferred.
+                let previous_brain =
+                    (tick_remaining.get() < BRAIN_PATH_NODE_BUDGET).then(|| entry.brain.clone());
+                let previous_tick = entry.last_tick;
                 let delta_ms = entry.owed_ms(brain_started, forced_delta_ms);
                 let monsters: Vec<NearbyMonster> =
                     super::SpatialCell::within_radius(&entry.brain.position, radius)
@@ -584,8 +543,8 @@ impl super::GameState {
                         .filter(|m| m.id != a.id)
                         .cloned()
                         .collect();
-                path.remaining.set(BRAIN_PATH_NODE_BUDGET);
-                path.diagnostics.set(PathDiagnostics::default());
+                let path =
+                    CountingPath::new(&cache, &tick_remaining, &entry.failed_paths, brain_started);
                 let position = entry.brain.position;
                 let result = entry.brain.tick_with_behavior_tree(
                     delta_ms, &a.players, &monsters, tree, &path, &mut rng,
@@ -593,6 +552,8 @@ impl super::GameState {
                 let elapsed_ms = brain_started.elapsed().as_secs_f32() * 1000.0;
                 let paths = path.diagnostics.get();
                 stats.pathfinds += paths.count();
+                stats.expanded_nodes += paths.expanded_nodes;
+                stats.cache_hits += paths.cache_hits;
                 if stats
                     .slowest
                     .as_ref()
@@ -610,24 +571,31 @@ impl super::GameState {
                         paths,
                     });
                 }
+                if paths.deferred {
+                    // Discard speculative movement and failed-chase backoff.
+                    entry.brain = previous_brain.expect("deferred below the full budget");
+                    entry.last_tick = previous_tick;
+                    stats.deferred_brains += 1;
+                    node_budget_exhausted = true;
+                    brains.cursor = (start + i) % n;
+                    break;
+                }
                 ticked += 1;
                 commands.extend(result.into_iter().map(|c| (a.id.clone(), a.floor_level, c)));
-            }
-            if !over_budget {
-                brains.cursor = 0;
             }
             let tick_elapsed = started.elapsed();
             let s = &mut brains.stats;
             s.ticks += 1;
             s.ticked += ticked as u64;
             s.commands += commands.len() as u64;
-            s.over_budget += (over_budget || tick_elapsed > TICK_BUDGET) as u32;
+            s.over_budget += (tick_elapsed > TICK_BUDGET) as u32;
+            s.node_budget_ticks += node_budget_exhausted as u32;
             s.worst_ms = s.worst_ms.max(tick_elapsed.as_secs_f32() * 1000.0);
         }
         if brains.stats_since.elapsed() >= STATS_LOG_PERIOD {
             let s = std::mem::take(&mut brains.stats);
             info!(
-                "monster ai: brains {} active {} ticks {} ticked/tick {:.0} pathfinds/s {:.1} commands/s {:.1} over_budget {} worst {:.1}ms",
+                "monster ai: brains {} active {} ticks {} ticked/tick {:.0} pathfinds/s {:.1} commands/s {:.1} over_budget {} worst {:.1}ms expanded_nodes {} cached_paths {} deferred_brains {} node_budget_ticks {}",
                 brains.entries.len(),
                 active.len(),
                 s.ticks,
@@ -635,7 +603,11 @@ impl super::GameState {
                 s.pathfinds as f32 / STATS_LOG_PERIOD.as_secs_f32(),
                 s.commands as f32 / STATS_LOG_PERIOD.as_secs_f32(),
                 s.over_budget,
-                s.worst_ms
+                s.worst_ms,
+                s.expanded_nodes,
+                s.cache_hits,
+                s.deferred_brains,
+                s.node_budget_ticks
             );
             if let Some(slowest) = &s.slowest {
                 slowest.log();
@@ -827,52 +799,8 @@ impl super::GameState {
 }
 
 #[cfg(test)]
-mod path_budget_tests {
+mod tests {
     use super::*;
-    use onlinerpg_shared::pathfinding::{
-        build_furniture_passability, FurniturePiece, PassabilityCache, PathTermination,
-    };
-
-    #[test]
-    fn all_path_queries_share_the_brains_node_budget() {
-        let obstacle = build_furniture_passability(&[FurniturePiece {
-            cells: vec![(0, 0)],
-            floor_level: 0,
-            y_base: 0.0,
-            wall_height: 3.0,
-        }])
-        .unwrap();
-        let cache = PassabilityCache::from([("obstacle".into(), obstacle)]);
-        let path = CountingPath {
-            inner: CachePathProvider { cache: &cache },
-            remaining: Cell::new(20),
-            diagnostics: Cell::default(),
-        };
-        let first = path.find_path_avoiding(10.5, 0.5, 0, 0.5, 0.5, 0, &[], 6);
-        assert_eq!(first.termination, PathTermination::NodeLimit);
-        assert_eq!(path.remaining.get(), 14);
-        let second = path.find_path_avoiding(10.5, 0.5, 0, 0.5, 0.5, 0, &[], 7);
-        assert_eq!(second.termination, PathTermination::NodeLimit);
-        assert_eq!(path.remaining.get(), 7);
-        let third = path.find_path(10.5, 0.5, 0, 0.5, 0.5, 0);
-        assert_eq!(third.termination, PathTermination::NodeLimit);
-        assert_eq!(path.remaining.get(), 0);
-        let fourth = path.find_path(10.5, 0.5, 0, 0.5, 0.5, 0);
-        assert_eq!(fourth.termination, PathTermination::NodeLimit);
-        assert!(fourth.waypoints.is_empty());
-        assert_eq!(path.remaining.get(), 0);
-        assert_eq!(path.diagnostics.get().expanded_nodes, 20);
-
-        path.remaining.set(20);
-        path.diagnostics.set(PathDiagnostics::default());
-        let reached = path.find_path(-1.5, 0.5, 0, 2.5, 0.5, 0);
-        assert!(reached.found);
-        assert!(path.remaining.get() > 0 && path.remaining.get() < 20);
-        assert_eq!(
-            path.diagnostics.get().expanded_nodes,
-            20 - path.remaining.get()
-        );
-    }
 
     #[test]
     fn slow_brain_diagnostics_preserve_the_costliest_path_and_all_outcomes() {
@@ -1036,3 +964,6 @@ mod path_budget_tests {
         assert!(door_blocks_sense(&from, &to, &[[0.0, 0.0, 1.0, 0.0]]));
     }
 }
+
+#[cfg(test)]
+mod scheduling_tests;

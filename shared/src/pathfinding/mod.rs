@@ -96,14 +96,14 @@ pub struct RuntimePassability {
     pub is_ground: bool,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PathWaypoint {
     pub x: f32,
     pub z: f32,
     pub floor: u8,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PathResult {
     pub waypoints: Vec<PathWaypoint>,
     pub found: bool,

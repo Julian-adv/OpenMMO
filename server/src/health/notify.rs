@@ -88,6 +88,18 @@ mod tests {
         unix::net::{SocketAddr, UnixDatagram},
     };
 
+    fn recv_str<'a>(receiver: &UnixDatagram, buffer: &'a mut [u8]) -> &'a str {
+        let count = receiver.recv(buffer).unwrap();
+        std::str::from_utf8(&buffer[..count]).unwrap()
+    }
+
+    fn assert_silent(receiver: &UnixDatagram) {
+        assert_eq!(
+            receiver.recv(&mut [0u8; 256]).unwrap_err().kind(),
+            io::ErrorKind::WouldBlock
+        );
+    }
+
     fn pair() -> (Notifier, UnixDatagram) {
         let name = format!("openmmo-notify-test-{}", uuid::Uuid::new_v4());
         let receiver =
@@ -117,42 +129,28 @@ mod tests {
         let task = tokio::spawn(health.clone().monitor(std::sync::Arc::new(notifier), rx));
         tokio::task::yield_now().await;
         let mut buffer = [0u8; 256];
-        assert_eq!(
-            receiver.recv(&mut buffer).unwrap_err().kind(),
-            io::ErrorKind::WouldBlock
-        );
+        assert_silent(&receiver);
         complete_all(&checkpoints);
         tokio::time::advance(Duration::from_secs(5)).await;
         tokio::task::yield_now().await;
-        let count = receiver.recv(&mut buffer).unwrap();
-        assert!(std::str::from_utf8(&buffer[..count])
-            .unwrap()
-            .contains("READY=1\nWATCHDOG=1"));
+        assert!(recv_str(&receiver, &mut buffer).contains("READY=1\nWATCHDOG=1"));
         tokio::time::advance(Duration::from_secs(25)).await;
         checkpoints[2].completed();
         tokio::task::yield_now().await;
-        let count = receiver.recv(&mut buffer).unwrap();
-        let message = std::str::from_utf8(&buffer[..count]).unwrap();
+        let message = recv_str(&receiver, &mut buffer);
         assert!(message.starts_with("STATUS=Server progress stalled:"));
         assert!(!message.contains("WATCHDOG=1"));
-        assert_eq!(
-            receiver.recv(&mut buffer).unwrap_err().kind(),
-            io::ErrorKind::WouldBlock
-        );
+        assert_silent(&receiver);
         complete_all(&checkpoints);
         tokio::time::advance(Duration::from_secs(5)).await;
         tokio::task::yield_now().await;
-        let count = receiver.recv(&mut buffer).unwrap();
-        let message = std::str::from_utf8(&buffer[..count]).unwrap();
+        let message = recv_str(&receiver, &mut buffer);
         assert!(message.starts_with("WATCHDOG=1"));
         assert!(!message.contains("READY=1"));
         health.stop();
         shutdown.send(()).unwrap();
         task.await.unwrap();
-        assert_eq!(
-            receiver.recv(&mut buffer).unwrap_err().kind(),
-            io::ErrorKind::WouldBlock
-        );
+        assert_silent(&receiver);
     }
 
     #[test]
