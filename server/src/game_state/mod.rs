@@ -400,6 +400,7 @@ pub struct GameState {
         Arc<RwLock<HashMap<(i64, crate::metrics::GoldSink), crate::metrics::GoldSinkRecord>>>,
     pending_loot_tally: Arc<std::sync::Mutex<crate::metrics::LootTally>>,
     pending_field_raid_events: Arc<std::sync::Mutex<Vec<crate::metrics::FieldRaidEvent>>>,
+    pending_field_raid_records: Arc<std::sync::Mutex<Vec<crate::metrics::FieldRaidRecord>>>,
     next_account_session: Arc<std::sync::atomic::AtomicU64>,
     direct_channels: Arc<RwLock<HashMap<PlayerId, mpsc::UnboundedSender<Bytes>>>>,
     // player_id → (character_id, current_xp, attributes)
@@ -779,6 +780,7 @@ impl GameState {
             pending_gold_sinks: Arc::new(RwLock::new(HashMap::new())),
             pending_loot_tally: Arc::default(),
             pending_field_raid_events: Arc::default(),
+            pending_field_raid_records: Arc::default(),
             next_account_session: Arc::new(std::sync::atomic::AtomicU64::new(1)),
             direct_channels: Arc::new(RwLock::new(HashMap::new())),
             player_characters: Arc::new(RwLock::new(HashMap::new())),

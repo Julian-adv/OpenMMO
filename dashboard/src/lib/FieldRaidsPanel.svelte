@@ -2,7 +2,9 @@
   import MetricsError from './MetricsError.svelte'
   import { formatCount, formatDateTime, formatPercent } from './metrics'
   import type { MetricsResource } from './metricsResource.svelte'
-  import { failures, successRate, type FieldRaids } from './fieldRaids'
+  import {
+    bossHealthLeft, failures, outcomeLabels, raiderTags, raidMinutes, successRate, type FieldRaids,
+  } from './fieldRaids'
 
   let { resource }: { resource: MetricsResource<FieldRaids> } = $props()
   let { history: raids, loading, refreshing, error, refresh } = $derived(resource)
@@ -34,11 +36,53 @@
               <td class="num strong">{formatCount(boss.defeated)}회</td>
               <td class="num">
                 {formatCount(failures(boss))}회
-                <span class="sub">전멸 {formatCount(boss.wiped)} · 달 짐 {formatCount(boss.moon_set)} · 새벽 {formatCount(boss.dawn)}</span>
+                <span class="sub">
+                  {outcomeLabels.wiped} {formatCount(boss.wiped)} · {outcomeLabels.moon_set} {formatCount(boss.moon_set)}
+                  · {outcomeLabels.dawn} {formatCount(boss.dawn)}
+                </span>
               </td>
               <td class="num">{formatPercent(successRate(boss))}</td>
               <td>{boss.last_defeated_at === null ? '—' : `${formatDateTime(boss.last_defeated_at)} KST`}</td>
             </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+    <h3 id="recent-raids-title" class="sub-heading">최근 레이드</h3>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+    <div class="table-scroll" tabindex="0" role="region" aria-label="최근 레이드 표">
+      <table aria-labelledby="recent-raids-title">
+        <thead>
+          <tr>
+            <th scope="col">끝난 시각</th><th scope="col">보스</th><th scope="col">결과</th>
+            <th scope="col" class="num">걸린 시간</th><th scope="col" class="num">남은 HP</th><th scope="col">참가자</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each raids.recent as raid (`${raid.boss}-${raid.ended_at}-${raid.summoned_at}`)}
+            <tr>
+              <td>{formatDateTime(raid.ended_at)} KST</td>
+              <th scope="row" class="name">{raid.name}</th>
+              <td class="strong">{outcomeLabels[raid.outcome]}</td>
+              <td class="num">{formatCount(raidMinutes(raid))}분</td>
+              <td class="num">{formatPercent(bossHealthLeft(raid))}</td>
+              <td>
+                {#if raid.raiders.length === 0}—{/if}
+                <ul class="raiders">
+                  {#each raid.raiders as raider (raider.character_id)}
+                    <li>
+                      <span class="name">{raider.name}</span>
+                      {#each raiderTags(raid, raider) as tag (tag)}<span class="tag">{tag}</span>{/each}
+                      <span class="sub">
+                        준 피해 {formatCount(raider.dealt)} · 받은 피해 {formatCount(raider.taken)} · 사망 {formatCount(raider.deaths)}
+                      </span>
+                    </li>
+                  {/each}
+                </ul>
+              </td>
+            </tr>
+          {:else}
+            <tr><td colspan="6" class="empty-row">아직 끝난 레이드 기록이 없어요</td></tr>
           {/each}
         </tbody>
       </table>
@@ -65,5 +109,9 @@
   .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .strong { font-weight: 600; }
   .sub { display: block; margin-top: 3px; color: #74857d; font-size: 11px; }
+  .sub-heading { margin: 0; font-size: 13px; font-weight: 600; }
+  .raiders { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+  .tag { margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: #edf1ee; color: #4f6158; font-size: 11px; }
+  .empty-row { color: #74857d; text-align: center; }
   .chart-empty { min-height: 140px; }
 </style>

@@ -71,16 +71,12 @@ impl super::GameState {
         }
     }
 
-    pub(super) fn record_field_raid_event(
-        &self,
-        boss: &str,
-        outcome: Option<onlinerpg_shared::messages::FieldRaidOutcome>,
-    ) {
+    pub(super) fn record_field_raid_summon(&self, boss: &str, at: i64) {
         self.pending_field_raid_events()
             .push(crate::metrics::FieldRaidEvent {
-                timestamp: unix_now(),
+                timestamp: at,
                 boss: boss.to_owned(),
-                outcome,
+                outcome: None,
             });
     }
 
@@ -92,16 +88,49 @@ impl super::GameState {
             .unwrap_or_else(|e| e.into_inner())
     }
 
+    pub(crate) fn pending_field_raid_records(
+        &self,
+    ) -> std::sync::MutexGuard<'_, Vec<crate::metrics::FieldRaidRecord>> {
+        self.pending_field_raid_records
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Saves summons and finished raids alike.
     pub(crate) async fn flush_field_raid_events(&self, auth: &AuthService) {
-        let events = std::mem::take(&mut *self.pending_field_raid_events());
-        if events.is_empty() {
+        self.flush_field_raid_queue(
+            Self::pending_field_raid_events,
+            auth,
+            AuthService::record_field_raid_events,
+            "event",
+        )
+        .await;
+        self.flush_field_raid_queue(
+            Self::pending_field_raid_records,
+            auth,
+            AuthService::record_field_raids,
+            "record",
+        )
+        .await;
+    }
+
+    /// Save what `pending` holds, putting it back in front if the save fails.
+    async fn flush_field_raid_queue<T: Clone + Send + Sync + 'static>(
+        &self,
+        pending: impl for<'a> Fn(&'a Self) -> std::sync::MutexGuard<'a, Vec<T>>,
+        auth: &AuthService,
+        save: fn(&AuthService, &[T]) -> Result<(), crate::auth::AuthError>,
+        what: &str,
+    ) {
+        let items = std::mem::take(&mut *pending(self));
+        if items.is_empty() {
             return;
         }
-        let saved = events.clone();
+        let saved = items.clone();
         let auth = auth.clone();
-        if let Err(error) = super::auth_db(move || auth.record_field_raid_events(&saved)).await {
-            warn!("Field raid event save failed: {error}");
-            self.pending_field_raid_events().splice(0..0, events);
+        if let Err(error) = super::auth_db(move || save(&auth, &saved)).await {
+            warn!("Field raid {what} save failed: {error}");
+            pending(self).splice(0..0, items);
         }
     }
 

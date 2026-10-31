@@ -23,7 +23,9 @@ mod heroic_tales;
 mod rare_drops;
 
 pub use dungeon_population::{DungeonBandCount, DungeonFloorCount, DungeonPopulationSample};
-pub use field_raids::{FieldRaidEvent, FieldRaidTally};
+pub use field_raids::{
+    outcome_from_key, outcome_key, FieldRaidEvent, FieldRaidRaider, FieldRaidRecord, FieldRaidTally,
+};
 pub use rare_drops::LootTally;
 
 pub const SAMPLE_INTERVAL_SECONDS: i64 = 3600;

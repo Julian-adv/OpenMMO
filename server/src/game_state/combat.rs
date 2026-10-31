@@ -109,6 +109,7 @@ struct MonsterAttackSnapshot {
     monster_type: String,
     rotation: f32,
     body: Option<onlinerpg_shared::monster_body::BodyFootprint>,
+    field_raid: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -1561,6 +1562,7 @@ impl super::GameState {
             monster_type: monster.monster_type.clone(),
             rotation: monster.rotation,
             body: def.and_then(|d| d.body),
+            field_raid: monster.lifecycle == MonsterLifecycle::FieldRaid,
         }
     }
 
@@ -2000,6 +2002,7 @@ impl super::GameState {
 
         // Update player HP and combat timestamp
         let mut current_health = 0;
+        let mut lost = 0;
         let mut shield_hit = false;
         let mut target_loc: Option<(Position, i8)> = None;
         let mut strumming = false;
@@ -2019,6 +2022,7 @@ impl super::GameState {
                     shield_hit = player.absorb_damage(result.damage);
                 }
                 current_health = player.health;
+                lost = old_health.saturating_sub(player.health);
                 audit.resolved(old_health, player, result.hit);
                 target_loc = Some((player.position, player.floor_level));
                 strumming =
@@ -2027,6 +2031,9 @@ impl super::GameState {
         }
 
         self.stop_bed_rest(target_player_id).await;
+        if snapshot.field_raid {
+            self.record_field_raid_taken(target_player_id, lost).await;
+        }
         if shield_hit {
             self.send_temp_health(target_player_id).await;
         }
@@ -2183,6 +2190,7 @@ impl super::GameState {
                 position.x, position.z
             );
         }
+        self.record_field_raid_death(player_id).await;
         self.clear_player_movement(player_id, "death").await;
         self.cancel_concentration_if_active(player_id).await;
         self.cancel_food_regeneration(player_id).await;

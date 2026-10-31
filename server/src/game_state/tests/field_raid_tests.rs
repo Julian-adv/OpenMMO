@@ -114,7 +114,10 @@ async fn wake(game: &GameState, id: &PlayerId) -> crate::types::Monster {
 }
 
 async fn kill(game: &GameState, boss: &crate::types::Monster) {
-    game.monsters.write().await.get_mut(&boss.id).unwrap().state = MonsterState::Dead;
+    if let Some(boss) = game.monsters.write().await.get_mut(&boss.id) {
+        boss.state = MonsterState::Dead;
+        boss.health = 0;
+    }
     game.end_field_raid(FieldRaidOutcome::Defeated, None).await;
 }
 
@@ -218,11 +221,19 @@ async fn the_boss_wakes_at_the_altar_spawn_and_its_death_ends_the_raid() {
     assert_eq!(raid_events(&game), ["summoned", "defeated"]);
 }
 
+/// Summons, then finished raids by outcome.
 fn raid_events(game: &GameState) -> Vec<&'static str> {
-    game.pending_field_raid_events()
+    let mut events: Vec<_> = game
+        .pending_field_raid_events()
         .iter()
         .map(crate::metrics::FieldRaidEvent::storage_key)
-        .collect()
+        .collect();
+    events.extend(
+        game.pending_field_raid_records()
+            .iter()
+            .map(|r| crate::metrics::outcome_key(r.outcome)),
+    );
+    events
 }
 
 #[tokio::test]
@@ -521,4 +532,144 @@ async fn the_final_blow_needs_no_place_among_the_raiders() {
 fn the_raid_boss_shrugs_off_hit_stagger() {
     let game = make_test_game_state("field_raid_stagger");
     assert!(game.monster_defs.get("terraclash").unwrap().stagger_immune);
+}
+
+fn raider<'a>(
+    record: &'a crate::metrics::FieldRaidRecord,
+    name: &str,
+) -> &'a crate::metrics::FieldRaidRaider {
+    record
+        .raiders
+        .iter()
+        .find(|r| r.name == name)
+        .expect("raider in the record")
+}
+
+#[tokio::test]
+async fn a_failed_raid_records_who_was_there_and_what_each_did() {
+    let (game, summoner, _rx) = setup(full_moon(), 1).await;
+    let (early, _) = join_raid(&game, "early", 12).await;
+    let boss = wake(&game, &summoner).await;
+    let (late, _) = join_raid(&game, "late", 13).await;
+    game.tick_field_raid().await;
+    game.record_field_raid_hit(&summoner, 500).await;
+    game.record_field_raid_hit(&late, 200).await;
+    game.record_field_raid_taken(&early, 300).await;
+    game.record_field_raid_death(&early).await;
+    for (dx, floor_level) in [(200.0, 0), (-200.0, -3)] {
+        let mut players = game.players.write().await;
+        let player = players.get_mut(&early).unwrap();
+        player.position.x += dx;
+        player.floor_level = floor_level;
+        drop(players);
+        game.record_field_raid_death(&early).await;
+    }
+    game.players.write().await.get_mut(&early).unwrap().health = 0;
+    let (passer, _) = join_raid(&game, "passer", 14).await;
+    game.record_field_raid_taken(&passer, 50).await;
+    game.players.write().await.get_mut(&passer).unwrap().health = 0;
+    game.monsters
+        .write()
+        .await
+        .get_mut(&boss.id)
+        .unwrap()
+        .health = boss.max_health - 700;
+    game.end_field_raid(FieldRaidOutcome::Dawn, None).await;
+
+    let records = game.pending_field_raid_records().clone();
+    let [record] = records.as_slice() else {
+        panic!("one record per raid: {records:?}");
+    };
+    assert_eq!(record.boss, "terraclash");
+    assert_eq!(record.outcome, FieldRaidOutcome::Dawn);
+    assert_eq!(record.summoner_id, Some(SUMMONER_CHARACTER));
+    assert_eq!(
+        (record.boss_health, record.boss_max_health),
+        (boss.max_health - 700, boss.max_health)
+    );
+    assert!(record.ended_at >= record.summoned_at);
+    let names: Vec<_> = record.raiders.iter().map(|r| r.name.as_str()).collect();
+    assert_eq!(
+        names,
+        ["summoner", "late", "early", "passer"],
+        "by damage dealt"
+    );
+    let facts = |r: &crate::metrics::FieldRaidRaider| {
+        (
+            r.dealt,
+            r.taken,
+            r.deaths,
+            r.near_at_summon,
+            r.in_zone,
+            r.in_zone_at_end,
+        )
+    };
+    assert_eq!(
+        facts(raider(record, "summoner")),
+        (500, 0, 0, true, true, true)
+    );
+    assert_eq!(
+        facts(raider(record, "late")),
+        (200, 0, 0, false, true, true)
+    );
+    assert_eq!(
+        facts(raider(record, "early")),
+        (0, 300, 1, true, true, false),
+        "a death counts only in the battle zone on the surface"
+    );
+    assert_eq!(
+        facts(raider(record, "passer")),
+        (0, 50, 0, false, true, false),
+        "a blow between ticks still puts the raider in the zone"
+    );
+}
+
+#[tokio::test]
+async fn a_raider_who_never_hit_the_boss_earns_nothing() {
+    let (game, summoner, _rx) = setup(full_moon(), 1).await;
+    let boss = wake(&game, &summoner).await;
+    let (watcher, _) = join_raid(&game, "watcher", 12).await;
+    game.tick_field_raid().await;
+    game.record_field_raid_hit(&summoner, 40).await;
+    kill(&game, &boss).await;
+
+    assert_eq!(tokens(&game, &watcher).await, 0);
+    assert_eq!(titles_of(&game, "watcher").await, (vec![], None));
+    let records = game.pending_field_raid_records().clone();
+    assert_eq!(records[0].boss_health, 0);
+    assert!(raider(&records[0], "watcher").in_zone_at_end);
+}
+
+#[tokio::test]
+async fn the_raid_boss_s_blows_count_as_damage_taken() {
+    let (game, summoner, _rx) = setup(full_moon(), 1).await;
+    let boss = wake(&game, &summoner).await;
+    {
+        let mut players = game.players.write().await;
+        let player = players.get_mut(&summoner).unwrap();
+        player.position = Position {
+            x: boss.position.x + 5.0,
+            ..boss.position
+        };
+        player.health = 10_000;
+        player.max_health = 10_000;
+        player.ready_at = 0;
+    }
+    for _ in 0..50 {
+        game.monsters
+            .write()
+            .await
+            .get_mut(&boss.id)
+            .unwrap()
+            .last_attack_at = 0;
+        game.monster_attack(&boss.id, &summoner).await;
+        if game.players.read().await[&summoner].health < 10_000 {
+            break;
+        }
+    }
+    let lost = 10_000 - game.players.read().await[&summoner].health;
+    assert!(lost > 0, "terraclash lands a blow");
+    game.end_field_raid(FieldRaidOutcome::Dawn, None).await;
+    let records = game.pending_field_raid_records().clone();
+    assert_eq!(raider(&records[0], "summoner").taken, u64::from(lost));
 }

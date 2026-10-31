@@ -7,7 +7,8 @@ use super::passability::region_of;
 use super::passability::regions_around;
 use super::player_interaction::placement_position;
 use super::GameState;
-use crate::auth::AuthService;
+use crate::auth::{unix_now, AuthService};
+use crate::metrics::{outcome_key, FieldRaidRaider, FieldRaidRecord};
 use crate::types::{MonsterLifecycle, PlayerId};
 use onlinerpg_shared::celestial::is_full_daylight;
 use onlinerpg_shared::field_boss::{field_boss_by_altar, field_boss_defs, AltarDef, FieldBossDef};
@@ -48,18 +49,34 @@ pub(crate) struct FieldRaid {
     /// The offering character, by character id since a reconnect changes
     /// the player id mid-raid.
     summoner: Option<i64>,
-    /// HP each character took off the boss, by character id for the same
+    /// Who was around and what each did, by character id for the same
     /// reason.
-    damage: HashMap<i64, u64>,
+    raiders: HashMap<i64, FieldRaidRaider>,
     /// Whose hit brought the boss to 0 HP; official NPCs never count.
     last_hit: Option<i64>,
     /// The full moons in the sky at the offering; the raid lasts until all
     /// have set or the sky turns fully blue, through the dawn glow and the
     /// waning past full.
     moons: Vec<Moon>,
+    summoned_at: i64,
 }
 
 impl FieldRaid {
+    /// Apply `update` to each of `who`, adding those not yet among the raiders.
+    fn mark(&mut self, who: Vec<(i64, String)>, update: impl Fn(&mut FieldRaidRaider)) {
+        for (character_id, name) in who {
+            update(
+                self.raiders
+                    .entry(character_id)
+                    .or_insert_with(|| FieldRaidRaider {
+                        character_id,
+                        name,
+                        ..FieldRaidRaider::default()
+                    }),
+            );
+        }
+    }
+
     /// How the sky ends the raid, if it has.
     fn sky_outcome(&self, now: &GameDateTime) -> Option<FieldRaidOutcome> {
         self.boss.condition?;
@@ -82,6 +99,7 @@ enum Phase {
     },
     Fighting {
         monster_id: String,
+        max_health: u32,
     },
 }
 
@@ -262,6 +280,7 @@ impl GameState {
         }
         let summoner = self.character_id_of(player_id).await;
         let moons = full_moons_up(&self.current_game_datetime()).collect();
+        let summoned_at = unix_now();
         // Raid state and the item go together, so a valid offering always
         // opens exactly one raid and a refused one keeps its item.
         let snapshot = {
@@ -284,9 +303,10 @@ impl GameState {
                         ticks_left: WAKE_TICKS,
                     },
                     summoner,
-                    damage: HashMap::new(),
+                    raiders: HashMap::new(),
                     last_hit: None,
                     moons,
+                    summoned_at,
                 });
             }
             consumed
@@ -299,14 +319,23 @@ impl GameState {
         self.mark_inventory_dirty(player_id).await;
         self.send_inventory_snapshot(player_id, snapshot).await;
         self.log_consumed(player_id, [def.offering.as_str()]).await;
-        self.record_field_raid_event(&boss.id, None);
-        info!(
-            "{player_id} offered at {} ({:.1},{:.1}); {} wakes at ({:.1},{:.1})",
-            altar.type_id, altar.x, altar.z, boss.monster, position.x, position.z,
-        );
+        self.record_field_raid_summon(&boss.id, summoned_at);
         let nearby = self
             .player_ids_within_position(&position, 0, NOTICE_RADIUS_M)
             .await;
+        self.mark_raiders(&nearby, |r| r.near_at_summon = true)
+            .await;
+        info!(
+            "{player_id} offered at {} ({:.1},{:.1}); {} wakes at ({:.1},{:.1}); summoner {}, {} nearby",
+            altar.type_id,
+            altar.x,
+            altar.z,
+            boss.monster,
+            position.x,
+            position.z,
+            self.player_name_of(player_id).await,
+            nearby.len(),
+        );
         self.send_direct_message_to_players(
             &nearby,
             ServerMessage::FieldBossWaking {
@@ -318,16 +347,58 @@ impl GameState {
         .await;
     }
 
+    /// Character id and name of each player who plays a character.
+    async fn raider_identities(&self, ids: &[PlayerId]) -> Vec<(i64, String)> {
+        let players = self.players.read().await;
+        let characters = self.player_characters.read().await;
+        ids.iter()
+            .filter_map(|id| Some((characters.get(id)?.0, players.get(id)?.name.clone())))
+            .collect()
+    }
+
+    async fn mark_raiders(&self, ids: &[PlayerId], update: impl Fn(&mut FieldRaidRaider)) {
+        let who = self.raider_identities(ids).await;
+        if let Some(raid) = self.field_raid.lock().await.as_mut() {
+            raid.mark(who, update);
+        }
+    }
+
     /// HP a hit took off the raid boss.
     pub(super) async fn record_field_raid_hit(&self, player_id: &PlayerId, damage: u32) {
-        if damage == 0 {
-            return;
+        if damage > 0 {
+            self.mark_raiders(&[*player_id], |r| r.dealt += u64::from(damage))
+                .await;
         }
-        let Some(character) = self.character_id_of(player_id).await else {
+    }
+
+    /// HP the raid boss took off a player, who stood in its reach and so in
+    /// the battle zone.
+    pub(super) async fn record_field_raid_taken(&self, player_id: &PlayerId, lost: u32) {
+        if lost > 0 {
+            self.mark_raiders(&[*player_id], |r| {
+                r.taken += u64::from(lost);
+                r.in_zone = true;
+            })
+            .await;
+        }
+    }
+
+    /// A death, whatever its cause, in an open raid's battle zone.
+    pub(super) async fn record_field_raid_death(&self, player_id: &PlayerId) {
+        let center = self.field_raid.lock().await.as_ref().map(|r| r.position);
+        let Some(center) = center else {
             return;
         };
-        if let Some(raid) = self.field_raid.lock().await.as_mut() {
-            *raid.damage.entry(character).or_default() += u64::from(damage);
+        if self
+            .player_ids_within_position(&center, 0, BATTLE_ZONE_RADIUS_M)
+            .await
+            .contains(player_id)
+        {
+            self.mark_raiders(&[*player_id], |r| {
+                r.deaths += 1;
+                r.in_zone = true;
+            })
+            .await;
         }
     }
 
@@ -370,9 +441,12 @@ impl GameState {
                 }
             }
             Phase::Waking { .. } => match self.wake_field_boss(&raid).await {
-                Some(monster_id) => {
+                Some((monster_id, max_health)) => {
                     if let Some(raid) = self.field_raid.lock().await.as_mut() {
-                        raid.phase = Phase::Fighting { monster_id };
+                        raid.phase = Phase::Fighting {
+                            monster_id,
+                            max_health,
+                        };
                     }
                     self.set_stand_in_woken(raid.boss, true);
                 }
@@ -384,18 +458,22 @@ impl GameState {
                     *self.field_raid.lock().await = None;
                 }
             },
-            Phase::Fighting { ref monster_id } => {
+            Phase::Fighting { ref monster_id, .. } => {
                 let dead = self
                     .monsters
                     .read()
                     .await
                     .get(monster_id)
                     .is_some_and(|m| m.state == MonsterState::Dead);
-                let outcome = if dead {
+                if dead {
                     return;
-                } else if let Some(outcome) = raid.sky_outcome(&self.current_game_datetime()) {
+                }
+                let living = self.living_near(&raid.position).await;
+                self.mark_raiders(&living, |r| r.in_zone = true).await;
+                let outcome = if let Some(outcome) = raid.sky_outcome(&self.current_game_datetime())
+                {
                     outcome
-                } else if self.living_near(&raid.position).await.is_empty() {
+                } else if living.is_empty() {
                     FieldRaidOutcome::Wiped
                 } else {
                     return;
@@ -450,7 +528,7 @@ impl GameState {
         ids
     }
 
-    async fn wake_field_boss(&self, raid: &FieldRaid) -> Option<String> {
+    async fn wake_field_boss(&self, raid: &FieldRaid) -> Option<(String, u32)> {
         self.spawn_monster(
             raid.boss.monster.clone(),
             raid.position,
@@ -461,7 +539,7 @@ impl GameState {
             true,
         )
         .await
-        .map(|m| m.id)
+        .map(|m| (m.id, m.max_health))
     }
 
     /// Taking the raid ends it once, whichever of the tick and the kill gets
@@ -472,7 +550,7 @@ impl GameState {
         outcome: FieldRaidOutcome,
         auth: Option<&AuthService>,
     ) {
-        let Some(raid) = self
+        let Some(mut raid) = self
             .field_raid
             .lock()
             .await
@@ -480,9 +558,20 @@ impl GameState {
         else {
             return;
         };
-        let Phase::Fighting { monster_id } = &raid.phase else {
+        let Phase::Fighting {
+            monster_id,
+            max_health,
+        } = raid.phase.clone()
+        else {
             unreachable!("taken only while fighting");
         };
+        // A defeated boss lies at 0 HP until its corpse is swept.
+        let health = self
+            .monsters
+            .read()
+            .await
+            .get(&monster_id)
+            .map_or(0, |m| m.health);
         // The raiders gathered before the offering; only those around hear it.
         let nearby = self
             .player_ids_within_position(&raid.position, 0, NOTICE_RADIUS_M)
@@ -493,19 +582,24 @@ impl GameState {
             self.send_direct_message_to_players(
                 &nearby,
                 ServerMessage::FieldBossSleeping {
-                    monster_id: monster_id.to_string(),
+                    monster_id: monster_id.clone(),
                     monster: raid.boss.monster.clone(),
                     position: raid.position,
                 },
             )
             .await;
-            self.despawn_monsters(vec![monster_id.to_string()]).await;
+            self.despawn_monsters(vec![monster_id]).await;
         }
         self.set_stand_in_woken(raid.boss, false);
         info!("Field raid {} ended: {outcome:?}", raid.boss.monster);
-        self.record_field_raid_event(&raid.boss.id, Some(outcome));
+        let living = self.living_near(&raid.position).await;
+        raid.mark(self.raider_identities(&living).await, |r| {
+            r.in_zone = true;
+            r.in_zone_at_end = true;
+        });
+        self.record_finished_raid(&raid, outcome, health, max_health);
         let rewarded = match outcome {
-            FieldRaidOutcome::Defeated => self.reward_raiders(&raid, auth).await,
+            FieldRaidOutcome::Defeated => self.reward_raiders(&raid, living, auth).await,
             _ => HashSet::new(),
         };
         let bystanders: Vec<_> = nearby
@@ -529,14 +623,20 @@ impl GameState {
     async fn reward_raiders(
         &self,
         raid: &FieldRaid,
+        living: Vec<PlayerId>,
         auth: Option<&AuthService>,
     ) -> HashSet<PlayerId> {
         let mut raiders = Vec::new();
-        for player_id in self.living_near(&raid.position).await {
+        for player_id in living {
             let Some(character) = self.character_id_of(&player_id).await else {
                 continue;
             };
-            if let Some(&damage) = raid.damage.get(&character) {
+            if let Some(damage) = raid
+                .raiders
+                .get(&character)
+                .map(|r| r.dealt)
+                .filter(|&d| d > 0)
+            {
                 raiders.push((player_id, character, damage));
             }
         }
@@ -579,6 +679,56 @@ impl GameState {
         self.grant_field_raid_titles(&raid.boss.monster, &titled, raid.last_hit, auth)
             .await;
         rewarded
+    }
+
+    /// One summary line and one line per raider, then the record for the DB,
+    /// which also stores the end event.
+    fn record_finished_raid(
+        &self,
+        raid: &FieldRaid,
+        outcome: FieldRaidOutcome,
+        boss_health: u32,
+        boss_max_health: u32,
+    ) {
+        let ended_at = unix_now();
+        let mut raiders: Vec<_> = raid.raiders.values().cloned().collect();
+        raiders.sort_by(|a, b| {
+            (b.dealt, b.taken, a.character_id).cmp(&(a.dealt, a.taken, b.character_id))
+        });
+        let boss = raid.boss.id.as_str();
+        info!(
+            boss,
+            outcome = outcome_key(outcome),
+            lasted_s = ended_at - raid.summoned_at,
+            boss_health,
+            boss_max_health,
+            raiders = raiders.len(),
+            "Field raid summary"
+        );
+        for r in &raiders {
+            info!(
+                boss,
+                name = r.name.as_str(),
+                character_id = r.character_id,
+                dealt = r.dealt,
+                taken = r.taken,
+                deaths = r.deaths,
+                near_at_summon = r.near_at_summon,
+                in_zone = r.in_zone,
+                in_zone_at_end = r.in_zone_at_end,
+                "Field raid raider"
+            );
+        }
+        self.pending_field_raid_records().push(FieldRaidRecord {
+            boss: raid.boss.id.clone(),
+            summoned_at: raid.summoned_at,
+            ended_at,
+            outcome,
+            summoner_id: raid.summoner,
+            boss_health,
+            boss_max_health,
+            raiders,
+        });
     }
 
     pub(super) fn full_moon_command(&self) -> Result<String, String> {
