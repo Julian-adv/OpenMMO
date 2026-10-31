@@ -1045,8 +1045,13 @@ fn build_llm_backend(
         LlmType::Codex => (
             "Codex app-server",
             &npc.codex.model,
-            codex::CodexInvoker::new(&npc.codex, system_prompt, shared.codex_app_server.clone())
-                .map(|i| Arc::new(i) as Arc<dyn driver::LlmBackend>),
+            codex::CodexInvoker::new(
+                &npc.codex,
+                system_prompt,
+                shared.codex_app_server.clone(),
+                label,
+            )
+            .map(|i| Arc::new(i) as Arc<dyn driver::LlmBackend>),
         ),
         LlmType::Openai => (
             "OpenAI-compatible API",
