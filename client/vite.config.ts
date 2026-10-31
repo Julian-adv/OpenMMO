@@ -165,6 +165,14 @@ function modularCharacterPreview(): Plugin {
       '../assets/items/female_barbarian_top/tripo_v1/fitted_v1/top_female_barbarian.glb',
       import.meta.url
     ),
+    female_caveman_bottom: new URL(
+      '../assets/items/female_caveman_bottom/tripo_v1/fitted_v9/bottom_female_caveman.glb',
+      import.meta.url
+    ),
+    'female-caveman-bottom-occlusion.json': new URL(
+      '../assets/items/female_caveman_bottom/tripo_v1/fitted_v9/body-occlusion.json',
+      import.meta.url
+    ),
     female_caveman_top: new URL(
       '../assets/items/female_caveman_top/tripo_v1/fitted_v7/top_female_caveman.glb',
       import.meta.url

@@ -64,6 +64,7 @@ export async function showFemaleBase(
         <option value="none">없음</option>
         <option value="knight">은빛 기사 골반 갑옷</option>
         <option value="barbarian">야만전사 모피 허리치마</option>
+        <option value="caveman">원시전사 모피 하의 (피팅 검수 중)</option>
         <option value="rogue">로그 벨트 미니스커트</option>
       </select>
       <label for="female-boots">신발</label>
@@ -596,7 +597,10 @@ export async function showFemaleBase(
         outfitMask.setEquipped(maskName(name), name === outfit)
         for (const mesh of entry.meshes) mesh.visible = name === outfit
       }
-      underwearColor(!!model.getObjectByName('bottom_female_rogue')?.visible)
+      underwearColor(
+        !!model.getObjectByName('bottom_female_rogue')?.visible,
+        !!model.getObjectByName('bottom_female_caveman')?.visible
+      )
     }
     const update = async () => {
       const requested = select.value

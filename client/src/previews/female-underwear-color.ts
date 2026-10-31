@@ -36,6 +36,15 @@ export function femaleUnderwearColor(base: GLTF) {
     if (underwear.has(find(i))) colors.setXYZ(i, 0.008, 0.009, 0.012)
   }
   const tint = { value: 0 }
+  const skinTint = { value: 0 }
+  const skinColor = {
+    value: new THREE.Color().setRGB(
+      194 / 255,
+      151 / 255,
+      125 / 255,
+      THREE.SRGBColorSpace
+    ),
+  }
   for (const { material } of materials) {
     const compile = material.onBeforeCompile
     const cacheKey = material.customProgramCacheKey()
@@ -43,13 +52,15 @@ export function femaleUnderwearColor(base: GLTF) {
     material.onBeforeCompile = (shader, renderer) => {
       compile.call(material, shader, renderer)
       shader.uniforms.rogueUnderwearTint = tint
+      shader.uniforms.cavemanUnderwearTint = skinTint
+      shader.uniforms.cavemanSkinColor = skinColor
       shader.vertexShader =
         `varying float rogueUnderwearHeight;\n${shader.vertexShader}`.replace(
           '#include <begin_vertex>',
           '#include <begin_vertex>\nrogueUnderwearHeight = position.y;'
         )
       shader.fragmentShader =
-        `uniform float rogueUnderwearTint;\nvarying float rogueUnderwearHeight;\n${shader.fragmentShader}`
+        `uniform float rogueUnderwearTint;\nuniform float cavemanUnderwearTint;\nuniform vec3 cavemanSkinColor;\nvarying float rogueUnderwearHeight;\n${shader.fragmentShader}`
           .replace(
             '#include <map_fragment>',
             `#include <map_fragment>
@@ -63,6 +74,11 @@ export function femaleUnderwearColor(base: GLTF) {
             underwearPrint *= step(0.02, vColor.r);
           #endif
           diffuseColor.rgb *= mix(vec3(1.0), vec3(0.008, 0.009, 0.012), underwearPrint);
+          float cavemanPrint = cavemanUnderwearTint
+            * step(0.88, rogueUnderwearHeight) * step(rogueUnderwearHeight, 1.13)
+            * smoothstep(0.24, 0.42, palest)
+            * smoothstep(0.52, 0.72, palest / max(brightest, 0.001));
+          diffuseColor.rgb = mix(diffuseColor.rgb, cavemanSkinColor, cavemanPrint);
           float underwearFinish = max(underwearPrint, rogueUnderwearTint
             * smoothstep(1.06, 1.075, rogueUnderwearHeight)
             * (1.0 - smoothstep(1.125, 1.14, rogueUnderwearHeight)));
@@ -75,12 +91,13 @@ export function femaleUnderwearColor(base: GLTF) {
             '#include <roughnessmap_fragment>',
             `#include <roughnessmap_fragment>
           roughnessFactor = mix(roughnessFactor, max(roughnessFactor, 0.85), underwearFinish);
+          roughnessFactor = mix(roughnessFactor, 0.65, cavemanPrint);
         `
           )
           .replace(
             '#include <metalnessmap_fragment>',
             `#include <metalnessmap_fragment>
-          metalnessFactor *= 1.0 - underwearFinish;
+          metalnessFactor *= 1.0 - max(underwearFinish, cavemanPrint);
         `
           )
           .replace(
@@ -92,8 +109,9 @@ export function femaleUnderwearColor(base: GLTF) {
     }
     material.needsUpdate = true
   }
-  return (black: boolean) => {
+  return (black: boolean, skin = false) => {
     tint.value = black ? 1 : 0
+    skinTint.value = skin && !black ? 1 : 0
     for (const geometry of new Set([source, mesh.geometry])) {
       if (black || original)
         geometry.setAttribute('color', black ? colors : original)
