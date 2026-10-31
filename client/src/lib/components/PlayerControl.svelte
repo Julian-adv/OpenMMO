@@ -1382,7 +1382,7 @@
 
     let nearestId: number | null = null
     let nearestDistanceSq = Infinity
-    let tooHeavy: GroundItemData | null = null
+    let refused: { item: GroundItemData; reason: string } | null = null
     const floorLevel = get(ownPlayerFloor)
     for (const item of groundItemManager.items.values()) {
       if (item.instanceId < 0 || item.inHand || item.floorLevel !== floorLevel)
@@ -1394,10 +1394,11 @@
       const dz = item.position.z - currentPlayer.position.z
       const distanceSq = dx * dx + dz * dz
       if (distanceSq > 4) continue
-      // The server takes every nearby item that fits, so a heavy one is
-      // refused only when nothing in reach fits.
-      if (!canCarryOne(item.itemDefId)) {
-        tooHeavy ??= item
+      // The server takes every nearby item it can, so one it would not hand
+      // over is refused only when nothing in reach is ours to take.
+      const reason = pickupRefusal(item)
+      if (reason) {
+        refused ??= { item, reason }
         continue
       }
       if (distanceSq < nearestDistanceSq) {
@@ -1406,12 +1407,23 @@
       }
     }
     if (nearestId !== null) enterPickup(nearestId, true)
-    else if (tooHeavy) refusePickup(tooHeavy)
+    else if (refused) refusePickup(refused.item, refused.reason)
   }
 
-  function refusePickup(item: GroundItemData) {
+  /** Why the server would not hand this item over, or null when it would. */
+  function pickupRefusal(item: GroundItemData): string | null {
+    if (item.claimedBy != null && item.claimedBy !== currentPlayer?.id) {
+      const owner = ownerName(item.claimedBy)
+      return owner
+        ? translate('server.lootReserved', { name: owner })
+        : translate('server.lootReservedAway')
+    }
+    return canCarryOne(item.itemDefId) ? null : translate('server.tooHeavy')
+  }
+
+  function refusePickup(item: GroundItemData, reason: string) {
     cancelAutoTravel()
-    addChatMessage({ text: translate('server.tooHeavy'), sender: 'system' })
+    addChatMessage({ text: reason, sender: 'system' })
     if (playerState.state === 'interact' || isMounted(currentPlayer)) return
     faceTowards(item.position.x, item.position.z)
     stopAndFace(playerRotation)
@@ -1496,8 +1508,9 @@
   ) {
     if (playerState.state === 'dead') return
     const item = groundItemManager.items.get(intent.instanceId)
-    if (item && !canCarryOne(item.itemDefId)) {
-      refusePickup(item)
+    const reason = item && pickupRefusal(item)
+    if (item && reason) {
+      refusePickup(item, reason)
       return
     }
     // Never pick up straight from an interaction: re-entering picking_up would

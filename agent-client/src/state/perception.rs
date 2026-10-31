@@ -207,24 +207,10 @@ impl SharedState {
         self.ground_items.get(&instance_id)
     }
 
-    /// A pickup refused as someone else's loot: the refusal names the item
-    /// and the seconds its claim has left.
-    pub(crate) fn note_loot_reserved(&mut self, params: &HashMap<String, String>) {
-        let param = |key: &str| params.get(key).and_then(|v| v.parse::<u64>().ok());
-        let (Some(instance_id), Some(seconds)) = (param("item"), param("seconds")) else {
-            return;
-        };
-        let now = tokio::time::Instant::now();
-        self.reserved_loot.retain(|_, until| *until > now);
-        self.reserved_loot
-            .insert(instance_id, now + std::time::Duration::from_secs(seconds));
-    }
-
-    /// Whole seconds until a refused item is worth trying again.
-    pub fn loot_reserved_secs(&self, instance_id: u64) -> Option<u64> {
-        let until = self.reserved_loot.get(&instance_id)?;
-        let left = until.saturating_duration_since(tokio::time::Instant::now());
-        (!left.is_zero()).then(|| left.as_secs().max(1))
+    /// Who else alone may pick this ground item up for now.
+    pub fn loot_claimant(&self, item: &GroundItem) -> Option<String> {
+        let owner = item.claimed_by?;
+        (self.self_player_id != Some(owner)).then(|| self.visible_name(&owner))
     }
 
     /// Active ground items on our floor, closest first.
@@ -252,7 +238,11 @@ impl SharedState {
             .map(|(_, i)| i.item_def_id.as_str())
             .collect();
         let def_id = crate::item_defs::resolve_named(&ids, asked)?;
-        let (_, item) = in_sight.iter().find(|(_, i)| i.item_def_id == def_id)?;
+        // The nearest one we may take, else the nearest at all.
+        let (_, item) = in_sight
+            .iter()
+            .filter(|(_, i)| i.item_def_id == def_id)
+            .min_by_key(|(_, i)| self.loot_claimant(i).is_some())?;
         Some((item.instance_id, item.item_def_id.clone()))
     }
 }

@@ -651,8 +651,8 @@ Use the readiness status above. Wait for server success or failure feedback."#,
             } else {
                 String::new()
             };
-            let note = if let Some(secs) = self.loot_reserved_secs(i.instance_id) {
-                format!(" — someone else's loot for {secs}s more")
+            let note = if let Some(owner) = self.loot_claimant(i) {
+                format!(" — {owner}'s loot for now, leave it")
             } else if crate::item_defs::get(&i.item_def_id).is_some_and(|d| d.is_dungeon_key()) {
                 " — DUNGEON KEY, pick it up first".to_string()
             } else {

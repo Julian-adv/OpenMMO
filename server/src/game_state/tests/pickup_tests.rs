@@ -15,8 +15,16 @@ fn ground_item(instance_id: u64, item_def_id: &str, quantity: u32) -> GroundItem
         quantity,
         enchant: 0,
         dropped_by: None,
+        claimed_by: None,
         cape_color: None,
         cape_texture: None,
+    }
+}
+
+fn claimed_item(instance_id: u64, item_def_id: &str, quantity: u32, owner: &str) -> GroundItem {
+    GroundItem {
+        claimed_by: Some(pid(owner)),
+        ..ground_item(instance_id, item_def_id, quantity)
     }
 }
 
@@ -31,11 +39,8 @@ async fn chest_loot_is_reserved_for_its_opener_then_becomes_public() {
             .insert(pid(name), Default::default());
     }
     for instance_id in [41, 42] {
-        game.spawn_ground_item_with_owner(
-            ground_item(instance_id, "test_item", 1),
-            Some(pid("opener")),
-        )
-        .await;
+        game.spawn_ground_item(claimed_item(instance_id, "test_item", 1, "opener"))
+            .await;
     }
 
     game.pickup_item(&pid("rival"), 41).await;
@@ -45,15 +50,7 @@ async fn chest_loot_is_reserved_for_its_opener_then_becomes_public() {
 
     game.pickup_item(&pid("opener"), 41).await;
     assert!(!game.ground_items.read().await.contains_key(&41));
-    game.ground_items
-        .write()
-        .await
-        .get_mut(&42)
-        .unwrap()
-        .reservation
-        .as_mut()
-        .unwrap()
-        .until_ms = GameState::now_ms();
+    game.end_loot_claim(42).await;
     game.pickup_nearby_items(&pid("rival")).await;
     assert!(game.ground_items.read().await.is_empty());
     assert_eq!(game.inventories.read().await[&pid("rival")].bag.len(), 1);
@@ -65,7 +62,7 @@ async fn chest_coins_are_reserved_before_any_wallet_is_credited() {
     for name in ["opener", "rival"] {
         game.add_player(make_player(name, 0.0, 0.0)).await;
     }
-    game.spawn_ground_item_with_owner(ground_item(42, COIN_PILE_ITEM_ID, 1), Some(pid("opener")))
+    game.spawn_ground_item(claimed_item(42, COIN_PILE_ITEM_ID, 1, "opener"))
         .await;
     game.pickup_item(&pid("rival"), 42).await;
     assert_eq!(game.get_player_gold(&pid("rival")).await, 0);
@@ -77,19 +74,31 @@ async fn chest_coins_are_reserved_before_any_wallet_is_credited() {
     assert!(game.ground_items.read().await.is_empty());
 }
 
-#[test]
-fn loot_reservation_expires_at_the_deadline() {
-    let entry = ServerGroundItem {
-        item: ground_item(42, "test_item", 1),
-        dropped_at_ms: 1_000,
-        reservation: Some(LootReservation {
-            player_id: pid("opener"),
-            until_ms: 31_000,
-        }),
-    };
-    assert!(entry.can_pickup(&pid("opener"), 1_000));
-    assert!(!entry.can_pickup(&pid("rival"), 30_999));
-    assert!(entry.can_pickup(&pid("rival"), 31_000));
+/// The claim rides on the item, so clients can refuse before reaching for
+/// it, and ends for everyone nearby after 30 seconds.
+#[tokio::test(start_paused = true)]
+async fn a_loot_claim_is_announced_and_ends_after_30_seconds() {
+    let game = make_test_game_state("loot_claim_ends");
+    game.add_player(make_player("rival", 0.0, 0.0)).await;
+    let mut rival_rx = game.register_direct_channel(&pid("rival")).await;
+    game.spawn_ground_item(claimed_item(42, "test_item", 1, "opener"))
+        .await;
+    assert!(drain(&mut rival_rx).iter().any(|msg| matches!(
+        msg,
+        ServerMessage::GroundItemSpawned { item } if item.claimed_by == Some(pid("opener"))
+    )));
+    assert!(game.ground_items.read().await[&42]
+        .claim_against(&pid("rival"))
+        .is_some());
+
+    tokio::time::sleep(std::time::Duration::from_millis(30_001)).await;
+
+    assert!(game.ground_items.read().await[&42]
+        .claim_against(&pid("rival"))
+        .is_none());
+    assert!(drain(&mut rival_rx)
+        .iter()
+        .any(|msg| matches!(msg, ServerMessage::GroundItemClaimEnded { instance_id: 42 })));
 }
 
 #[tokio::test]
@@ -110,7 +119,8 @@ async fn nearby_pickup_obeys_radius_floor_and_reservations() {
         let mut item = ground_item(instance_id, "test_item", 1);
         item.position.x = x;
         item.floor_level = floor;
-        game.spawn_ground_item_with_owner(item, owner).await;
+        item.claimed_by = owner;
+        game.spawn_ground_item(item).await;
     }
     game.pickup_nearby_items(&pid("picker")).await;
     let ground_items = game.ground_items.read().await;
@@ -134,15 +144,15 @@ async fn nearby_pickup_takes_nearest_items_and_leaves_excess_weight_reserved() {
     );
     let mut near = ground_item(41, "apple", 3);
     near.position.x = 0.25;
-    game.spawn_ground_item_with_owner(near, Some(pid("picker")))
-        .await;
-    game.spawn_ground_item_with_owner(ground_item(42, "apple", 12), Some(pid("picker")))
+    near.claimed_by = Some(pid("picker"));
+    game.spawn_ground_item(near).await;
+    game.spawn_ground_item(claimed_item(42, "apple", 12, "picker"))
         .await;
     game.pickup_nearby_items(&pid("picker")).await;
     let ground_items = game.ground_items.read().await;
     assert!(!ground_items.contains_key(&41));
     assert_eq!(ground_items[&42].item.quantity, 10);
-    assert!(!ground_items[&42].can_pickup(&pid("rival"), GameState::now_ms()));
+    assert!(ground_items[&42].claim_against(&pid("rival")).is_some());
     assert_eq!(
         game.inventories.read().await[&pid("picker")].bag[0].quantity,
         500
@@ -214,7 +224,6 @@ async fn pickup_broadcasts_the_pickup_animation() {
         ServerGroundItem {
             item: ground_item(42, "test_item", 1),
             dropped_at_ms: 0,
-            reservation: None,
         },
     );
     let mut watcher_rx = game_state.register_direct_channel(&pid("watcher")).await;
@@ -347,7 +356,7 @@ async fn kill_loot_is_reserved_for_its_owner() {
             .insert(pid(name), Default::default());
     }
     game.spawn_kill_loot_after_impact(
-        Some(ground_item(7, "test_item", 1)),
+        Some(claimed_item(7, "test_item", 1, "dealer")),
         vec!["test_item".to_string()],
         Position {
             x: 0.5,
@@ -364,9 +373,9 @@ async fn kill_loot_is_reserved_for_its_owner() {
     {
         let ground = game.ground_items.read().await;
         assert_eq!(ground.len(), 2);
-        assert!(ground.values().all(|entry| entry
-            .reservation
-            .is_some_and(|r| r.player_id == pid("dealer"))));
+        assert!(ground
+            .values()
+            .all(|entry| entry.item.claimed_by == Some(pid("dealer"))));
     }
     let mut finisher_rx = game.register_direct_channel(&pid("finisher")).await;
     game.pickup_item(&pid("finisher"), 7).await;
@@ -376,10 +385,8 @@ async fn kill_loot_is_reserved_for_its_owner() {
             ServerMessage::SystemMessage { localization: Some(l), .. }
                 if l.code == "server.lootReserved"
                     && l.params.get("name").map(String::as_str) == Some("dealer")
-                    && l.params.get("item").map(String::as_str) == Some("7")
-                    && l.params.get("seconds").map(String::as_str) == Some("30")
         )),
-        "the refusal names the owner, the item and the seconds left"
+        "the refusal names whose loot it is"
     );
     game.pickup_nearby_items(&pid("finisher")).await;
     assert!(game.inventories.read().await[&pid("finisher")]
@@ -494,7 +501,6 @@ async fn place_apple_pile(game_state: &GameState, instance_id: u64, quantity: u3
         ServerGroundItem {
             item: ground_item(instance_id, "apple", quantity),
             dropped_at_ms: 0,
-            reservation: None,
         },
     );
     seed_subjects(game_state).await;

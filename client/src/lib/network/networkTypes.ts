@@ -488,6 +488,8 @@ export type ServerGroundItem = {
   enchant: number
   /** The player who put it there, if one did; null for loot and world drops. */
   dropped_by: number | null
+  /** Who alone may pick it up until GroundItemClaimEnded. */
+  claimed_by: number | null
 }
 
 export type PlayerInteraction = {

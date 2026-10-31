@@ -201,6 +201,10 @@ pub struct GroundItem {
     /// its tip after a reconnect.
     #[serde(default)]
     pub dropped_by: Option<PlayerId>,
+    /// Who alone may pick it up for now: kill loot's top damage dealer, a
+    /// chest's opener. `GroundItemClaimEnded` frees it for anyone.
+    #[serde(default)]
+    pub claimed_by: Option<PlayerId>,
 }
 
 #[cfg(test)]

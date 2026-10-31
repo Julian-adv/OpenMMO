@@ -1796,6 +1796,10 @@ pub enum ServerMessage {
         /// taken count from the quantity they had cached.
         picked_up_by: Option<PlayerId>,
     },
+    /// A claimed item's 30 seconds ran out: anyone may pick it up now.
+    GroundItemClaimEnded {
+        instance_id: u64,
+    },
     /// Response to OpenShop (or pushed by an NPC's OpenTrade): the trader's
     /// goods. Display prices come from item definitions; the server
     /// re-validates them on Buy/Sell.
@@ -2216,6 +2220,7 @@ impl ServerMessage {
             | Self::GroundItemAppeared { .. }
             | Self::GroundItemRemoved { .. }
             | Self::GroundItemQuantityChanged { .. }
+            | Self::GroundItemClaimEnded { .. }
             | Self::CampfireSpawned { .. }
             | Self::CampfireAppeared { .. }
             | Self::CampfireRemoved { .. }

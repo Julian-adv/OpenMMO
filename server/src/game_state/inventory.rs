@@ -21,7 +21,7 @@ const GROUND_ITEM_LIFETIME_MS: u64 = 30 * 60 * 1000;
 const MAX_PICKUP_DISTANCE: f32 = 2.5;
 const NEARBY_PICKUP_DISTANCE: f32 = 2.0;
 /// How long kill, chest and prop loot stays its earner's alone.
-const LOOT_RESERVATION_MS: u64 = 30_000;
+const LOOT_CLAIM: std::time::Duration = std::time::Duration::from_secs(30);
 const COIN_PILE_COPPER: RangeInclusive<i64> = 1..=10;
 /// A rare pile worth about 1g, so breaking props is worth a gamble.
 const COIN_PILE_JACKPOT_COPPER: RangeInclusive<i64> = 5_000..=15_000;
@@ -799,6 +799,7 @@ impl super::GameState {
                     quantity,
                     enchant: 0,
                     dropped_by: Some(*player_id),
+                    claimed_by: None,
                     cape_color: None,
                     cape_texture: None,
                 };
@@ -1943,28 +1944,19 @@ impl super::GameState {
     /// Insert a ground item into the world and announce it to nearby players.
     /// Visible and pickable the moment this runs; a caller that owes the drop
     /// an animation beat delays this call (`spawn_kill_loot_after_impact`).
+    /// A claimed item frees up for anyone after `LOOT_CLAIM`.
     pub(super) async fn spawn_ground_item(&self, ground_item: GroundItem) {
-        self.spawn_ground_item_with_owner(ground_item, None).await;
-    }
-
-    pub(super) async fn spawn_ground_item_with_owner(
-        &self,
-        ground_item: GroundItem,
-        reserved_for: Option<PlayerId>,
-    ) {
         let position = ground_item.position;
         let floor_level = ground_item.floor_level;
+        let instance_id = ground_item.instance_id;
+        let claimed = ground_item.claimed_by.is_some();
         {
             let mut ground_items = self.ground_items.write().await;
             ground_items.insert(
-                ground_item.instance_id,
+                instance_id,
                 ServerGroundItem {
                     item: ground_item.clone(),
                     dropped_at_ms: Self::now_ms(),
-                    reservation: reserved_for.map(|player_id| super::LootReservation {
-                        player_id,
-                        until_ms: Self::now_ms() + LOOT_RESERVATION_MS,
-                    }),
                 },
             );
         }
@@ -1972,6 +1964,34 @@ impl super::GameState {
             &position,
             floor_level,
             ServerMessage::GroundItemSpawned { item: ground_item },
+            None,
+        )
+        .await;
+        if claimed {
+            let game_state = self.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(LOOT_CLAIM).await;
+                game_state.end_loot_claim(instance_id).await;
+            });
+        }
+    }
+
+    /// Free a claimed item for anyone, if it still lies there.
+    pub(super) async fn end_loot_claim(&self, instance_id: u64) {
+        let (position, floor_level) = {
+            let mut ground_items = self.ground_items.write().await;
+            let Some(entry) = ground_items.get_mut(&instance_id) else {
+                return;
+            };
+            if entry.item.claimed_by.take().is_none() {
+                return;
+            }
+            (entry.item.position, entry.item.floor_level)
+        };
+        self.publish_nearby(
+            &position,
+            floor_level,
+            ServerMessage::GroundItemClaimEnded { instance_id },
             None,
         )
         .await;
@@ -2022,12 +2042,12 @@ impl super::GameState {
             floor_level,
             WORLD_DROP_OFFSET_METERS,
             WORLD_DROP_OFFSET_METERS,
-            Some(owner),
+            owner,
         )
         .await;
     }
 
-    /// Scatter drops onto walkable floor, optionally reserving them for their opener.
+    /// Scatter drops onto walkable floor, claimed by `owner`.
     pub(super) async fn spawn_scattered_items(
         &self,
         item_def_ids: Vec<String>,
@@ -2035,7 +2055,7 @@ impl super::GameState {
         floor_level: i8,
         min_r: f32,
         max_r: f32,
-        reserved_for: Option<PlayerId>,
+        owner: PlayerId,
     ) {
         use std::f32::consts::TAU;
 
@@ -2048,20 +2068,18 @@ impl super::GameState {
                 .await;
 
             let instance_id = self.next_instance_id().await;
-            self.spawn_ground_item_with_owner(
-                GroundItem {
-                    instance_id,
-                    item_def_id,
-                    position,
-                    floor_level,
-                    quantity: 1,
-                    enchant: 0,
-                    dropped_by: None,
-                    cape_color: None,
-                    cape_texture: None,
-                },
-                reserved_for,
-            )
+            self.spawn_ground_item(GroundItem {
+                instance_id,
+                item_def_id,
+                position,
+                floor_level,
+                quantity: 1,
+                enchant: 0,
+                dropped_by: None,
+                claimed_by: Some(owner),
+                cape_color: None,
+                cape_texture: None,
+            })
             .await;
         }
     }
@@ -2235,6 +2253,7 @@ impl super::GameState {
                     cape_color: plan.cape_color.clone(),
                     cape_texture: plan.cape_texture.clone(),
                     dropped_by: Some(*player_id),
+                    claimed_by: None,
                 };
                 audit_actor.log_transfer("drop", &ground_item, quantity, Some(plan.instance_id));
                 self.spawn_ground_item(ground_item).await;
@@ -2268,6 +2287,7 @@ impl super::GameState {
             quantity: 1,
             enchant: 0,
             dropped_by: Some(*player_id),
+            claimed_by: None,
             cape_color: None,
             cape_texture: None,
         })
@@ -2287,11 +2307,12 @@ impl super::GameState {
         };
         let mut candidates = {
             let ground_items = self.ground_items.read().await;
-            let now = Self::now_ms();
             ground_items
                 .values()
                 .filter_map(|entry| {
-                    if entry.item.floor_level != floor_level || !entry.can_pickup(player_id, now) {
+                    if entry.item.floor_level != floor_level
+                        || entry.claim_against(player_id).is_some()
+                    {
                         return None;
                     }
                     let distance_sq = entry.item.position.dist_xz_sq(&position);
@@ -2325,10 +2346,9 @@ impl super::GameState {
             let ground_items = self.ground_items.read().await;
             match ground_items.get(&instance_id) {
                 Some(sgi) => {
-                    if let Some(claim) = sgi.reserved_against(player_id, Self::now_ms()) {
+                    if let Some(claim) = sgi.claim_against(player_id) {
                         drop(ground_items);
-                        self.send_loot_reserved_message(player_id, instance_id, claim)
-                            .await;
+                        self.send_loot_claimed_message(player_id, claim).await;
                         return;
                     }
                     sgi.item.clone()
@@ -2388,10 +2408,9 @@ impl super::GameState {
                 .await;
                 return;
             };
-            if let Some(claim) = entry.reserved_against(player_id, Self::now_ms()) {
+            if let Some(claim) = entry.claim_against(player_id) {
                 drop(ground_items);
-                self.send_loot_reserved_message(player_id, instance_id, claim)
-                    .await;
+                self.send_loot_claimed_message(player_id, claim).await;
                 return;
             }
             // Re-read under the lock: another picker may have thinned the pile
@@ -2484,19 +2503,13 @@ impl super::GameState {
         }
     }
 
-    /// Names whose loot it is (an owner who has left goes unnamed); the item
-    /// and seconds left let a bot client wait it out.
-    async fn send_loot_reserved_message(
-        &self,
-        player_id: &PlayerId,
-        instance_id: u64,
-        claim: super::LootReservation,
-    ) {
+    /// Names whose loot it is; an owner who has left goes unnamed.
+    async fn send_loot_claimed_message(&self, player_id: &PlayerId, owner: PlayerId) {
         let owner_name = self
             .players
             .read()
             .await
-            .get(&claim.player_id)
+            .get(&owner)
             .map(|p| p.name.clone());
         let message = match owner_name {
             Some(name) => localized(
@@ -2509,10 +2522,6 @@ impl super::GameState {
                 "Another player has first claim on this item.",
             ),
         };
-        let seconds = claim.until_ms.saturating_sub(Self::now_ms()).div_ceil(1000);
-        let message = message
-            .with_param("item", instance_id.to_string())
-            .with_param("seconds", seconds.to_string());
         self.send_system_message(player_id, message).await;
     }
 
@@ -2590,11 +2599,10 @@ impl super::GameState {
             let mut ground_items = self.ground_items.write().await;
             if let Some(claim) = ground_items
                 .get(&instance_id)
-                .and_then(|entry| entry.reserved_against(player_id, Self::now_ms()))
+                .and_then(|entry| entry.claim_against(player_id))
             {
                 drop(ground_items);
-                self.send_loot_reserved_message(player_id, instance_id, claim)
-                    .await;
+                self.send_loot_claimed_message(player_id, claim).await;
                 return;
             }
             if ground_items.remove(&instance_id).is_none() {

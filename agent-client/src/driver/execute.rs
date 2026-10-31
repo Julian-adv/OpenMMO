@@ -1390,9 +1390,9 @@ pub(super) async fn handle_response(
             };
             {
                 let mut s = state.lock().await;
-                if let Some(secs) = s.loot_reserved_secs(instance_id) {
+                if let Some(owner) = s.ground_item(instance_id).and_then(|i| s.loot_claimant(i)) {
                     s.push_agent_event(format!(
-                        "[PickupFailed] The {def_id} is someone else's loot for {secs}s more."
+                        "[PickupFailed] The {def_id} is {owner}'s loot for now."
                     ));
                     continue;
                 }

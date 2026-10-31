@@ -9,6 +9,8 @@ export interface GroundItemData {
   enchant: number
   position: { x: number; y: number; z: number }
   floorLevel: number
+  /** Who alone may pick it up for now. */
+  claimedBy: number | null
   inHand?: boolean
   restingRotationY: number
   spawnAnimation?: GroundItemSpawnAnimation
@@ -107,6 +109,7 @@ class GroundItemManager {
       enchant: item.enchant,
       position: { ...item.position },
       floorLevel: item.floor_level,
+      claimedBy: item.claimed_by,
       restingRotationY,
       spawnAnimation,
     })
@@ -166,6 +169,12 @@ class GroundItemManager {
     const item = this.items.get(instanceId)
     if (!item) return
     this.items.set(instanceId, { ...item, quantity })
+  }
+
+  endClaim(instanceId: number) {
+    const item = this.items.get(instanceId)
+    if (!item) return
+    this.items.set(instanceId, { ...item, claimedBy: null })
   }
 
   reset() {

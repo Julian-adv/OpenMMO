@@ -237,7 +237,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// unless the viewer wears a stethoscope.
 /// v134: Bard Battle Hymn (`AbilityId::BattleHymn`, `BattleHymnStarted`,
 /// `AbilityRejectReason::Interrupted`).
-pub const PROTOCOL_VERSION: u32 = 134;
+/// v135: `GroundItem.claimed_by` and `GroundItemClaimEnded`, so clients refuse
+/// another player's loot before reaching for it.
+pub const PROTOCOL_VERSION: u32 = 135;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

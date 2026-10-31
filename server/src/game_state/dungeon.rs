@@ -954,7 +954,7 @@ impl GameState {
                     floor_level,
                     CHEST_LOOT_SCATTER_MIN,
                     CHEST_LOOT_SCATTER_MAX,
-                    Some(player_id),
+                    player_id,
                 )
                 .await;
             game_state
@@ -968,7 +968,7 @@ impl GameState {
     /// cell walkable (client-side, on receipt) and broadcasts it to nearby
     /// players (the breaker included). On a fresh break, has a small chance to
     /// spill the same loose coin pile that an opened chest prop uses; its
-    /// drops are reserved for the breaker. No-op if it's already broken.
+    /// drops are claimed by the breaker. No-op if it's already broken.
     pub async fn break_dungeon_prop(
         &self,
         player_id: &PlayerId,
@@ -1008,7 +1008,7 @@ impl GameState {
         }
     }
 
-    /// Open a chest prop once and reserve its drops for the opener.
+    /// Open a chest prop once; its drops are claimed by the opener.
     pub async fn open_dungeon_prop(
         &self,
         player_id: &PlayerId,
@@ -1044,7 +1044,7 @@ impl GameState {
         }
     }
 
-    /// A prop's key roll and world drops, reserved for whoever broke or opened it.
+    /// A prop's key roll and world drops, claimed by whoever broke or opened it.
     async fn spawn_prop_drops(
         &self,
         player_id: &PlayerId,
@@ -1065,20 +1065,18 @@ impl GameState {
 
     async fn spawn_dungeon_coin_pile(&self, position: Position, floor_level: i8, owner: PlayerId) {
         let instance_id = self.next_instance_id().await;
-        self.spawn_ground_item_with_owner(
-            GroundItem {
-                instance_id,
-                item_def_id: super::COIN_PILE_ITEM_ID.to_string(),
-                position,
-                floor_level,
-                quantity: 1,
-                enchant: 0,
-                dropped_by: None,
-                cape_color: None,
-                cape_texture: None,
-            },
-            Some(owner),
-        )
+        self.spawn_ground_item(GroundItem {
+            instance_id,
+            item_def_id: super::COIN_PILE_ITEM_ID.to_string(),
+            position,
+            floor_level,
+            quantity: 1,
+            enchant: 0,
+            dropped_by: None,
+            claimed_by: Some(owner),
+            cape_color: None,
+            cape_texture: None,
+        })
         .await;
     }
 

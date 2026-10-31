@@ -1228,6 +1228,7 @@ impl GameState {
                 cape_color: None,
                 cape_texture: None,
                 dropped_by: Some(*player_id),
+                claimed_by: None,
             })
             .await;
         }

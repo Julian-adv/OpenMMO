@@ -323,24 +323,12 @@ pub(crate) struct GameClock {
 pub(crate) struct ServerGroundItem {
     pub item: onlinerpg_shared::inventory::GroundItem,
     pub dropped_at_ms: u64,
-    pub reservation: Option<LootReservation>,
-}
-
-#[derive(Clone, Copy)]
-pub(crate) struct LootReservation {
-    pub player_id: PlayerId,
-    pub until_ms: u64,
 }
 
 impl ServerGroundItem {
-    /// Someone else's live claim that keeps `player_id` waiting.
-    fn reserved_against(&self, player_id: &PlayerId, now_ms: u64) -> Option<LootReservation> {
-        self.reservation
-            .filter(|r| r.player_id != *player_id && now_ms < r.until_ms)
-    }
-
-    fn can_pickup(&self, player_id: &PlayerId, now_ms: u64) -> bool {
-        self.reserved_against(player_id, now_ms).is_none()
+    /// Someone else's claim that keeps `player_id` waiting.
+    fn claim_against(&self, player_id: &PlayerId) -> Option<PlayerId> {
+        self.item.claimed_by.filter(|owner| owner != player_id)
     }
 }
 

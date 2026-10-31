@@ -257,6 +257,15 @@ impl Interest {
                     }
                 }
             }),
+            ServerMessage::GroundItemClaimEnded { instance_id } => {
+                self.update_snapshot(&format!("item:{instance_id}"), msg.clone(), |snapshot| {
+                    for entry in snapshot {
+                        if let ServerMessage::GroundItemAppeared { item } = entry {
+                            item.claimed_by = None;
+                        }
+                    }
+                })
+            }
             ServerMessage::MealEaten { meal_id, .. } => {
                 self.update_snapshot(&format!("meal:{meal_id}"), msg.clone(), |snapshot| {
                     for entry in snapshot {

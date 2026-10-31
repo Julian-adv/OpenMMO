@@ -90,6 +90,7 @@ pub(crate) fn ground_item(id: u64, def: &str, x: f32, z: f32, floor: i8) -> Grou
         quantity: 1,
         enchant: 0,
         dropped_by: None,
+        claimed_by: None,
         cape_color: None,
         cape_texture: None,
     }

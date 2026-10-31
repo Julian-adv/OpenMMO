@@ -146,6 +146,7 @@ impl SharedState {
             | ServerMessage::GroundItemAppeared { .. }
             | ServerMessage::GroundItemRemoved { .. }
             | ServerMessage::GroundItemQuantityChanged { .. }
+            | ServerMessage::GroundItemClaimEnded { .. }
             | ServerMessage::TradeBusy { .. } => EventUrgency::Noise,
             ServerMessage::FenceVisibility { .. }
             | ServerMessage::EstateChestVisibility { .. } => EventUrgency::Noise,
@@ -979,21 +980,10 @@ impl SharedState {
             ServerMessage::GroundItemAppeared { item } => {
                 self.remember_ground_item(item.clone());
             }
-            ServerMessage::SystemMessage {
-                localization: Some(localization),
-                ..
-            } if matches!(
-                localization.code.as_str(),
-                "server.lootReserved" | "server.lootReservedAway"
-            ) =>
-            {
-                self.note_loot_reserved(&localization.params);
-            }
             ServerMessage::GroundItemRemoved {
                 instance_id,
                 picked_up_by,
             } => {
-                self.reserved_loot.remove(instance_id);
                 let removed = self.ground_items.remove(instance_id);
                 self.pending_tips.retain(|(id, _)| id != instance_id);
                 // Only player-dropped items are worth a line — see note_pickup.
@@ -1011,6 +1001,11 @@ impl SharedState {
             } => {
                 if let Some(item) = self.ground_items.get_mut(instance_id) {
                     item.quantity = *quantity;
+                }
+            }
+            ServerMessage::GroundItemClaimEnded { instance_id } => {
+                if let Some(item) = self.ground_items.get_mut(instance_id) {
+                    item.claimed_by = None;
                 }
             }
             ServerMessage::CharacterCreated { ref character } => {
@@ -1467,7 +1462,8 @@ impl SharedState {
             ServerMessage::GroundItemSpawned { .. }
             | ServerMessage::GroundItemAppeared { .. }
             | ServerMessage::GroundItemRemoved { .. }
-            | ServerMessage::GroundItemQuantityChanged { .. } => return urgency,
+            | ServerMessage::GroundItemQuantityChanged { .. }
+            | ServerMessage::GroundItemClaimEnded { .. } => return urgency,
             // Campfires likewise live in the world state, and the grill start
             // is answered by GrillEnded a few seconds later.
             ServerMessage::CampfireSpawned { .. }

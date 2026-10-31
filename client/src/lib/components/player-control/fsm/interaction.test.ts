@@ -247,6 +247,7 @@ describe('handlePickupGrab', () => {
         position: { x: 0, y: 0, z: 0 },
         floor_level: 0,
         dropped_by: null,
+        claimed_by: null,
       })
       beginPickupInteraction({
         instanceId: 42,

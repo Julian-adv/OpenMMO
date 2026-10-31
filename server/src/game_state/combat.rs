@@ -298,7 +298,7 @@ struct PlayerAttackTarget {
 
 impl super::GameState {
     /// Put a kill's loot — the weapon drop and any rare world drops — on the
-    /// ground once the killing blow lands, reserved for `owner`. The wait
+    /// ground once the killing blow lands, claimed by `owner`. The wait
     /// lives server-side: a ground item is pickable the moment it exists, so
     /// a client that skips the animation must not reach it early.
     #[allow(clippy::too_many_arguments)]
@@ -316,9 +316,7 @@ impl super::GameState {
         tokio::spawn(async move {
             tokio::time::sleep(impact_delay).await;
             if let Some(item) = weapon_drop {
-                game_state
-                    .spawn_ground_item_with_owner(item, Some(owner))
-                    .await;
+                game_state.spawn_ground_item(item).await;
             }
             game_state
                 .spawn_world_drops(origin, floor_level, monster_level, monster_drops, owner)
@@ -1357,6 +1355,7 @@ impl super::GameState {
                     quantity: 1,
                     enchant: 0,
                     dropped_by: None,
+                    claimed_by: Some(loot_owner),
                     cape_color: None,
                     cape_texture: None,
                 })

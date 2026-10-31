@@ -2395,6 +2395,10 @@ export function handleServerMessage(
       break
     }
 
+    case 'GroundItemClaimEnded':
+      groundItemManager.endClaim(data.instance_id)
+      break
+
     case 'ShopState': {
       const session = {
         merchantPlayerId: data.merchant_player_id,
