@@ -2,7 +2,8 @@
 """Generate sound-effect candidates with the ElevenLabs SFX API, or short
 music with the Music API (--music).
 
-Usage: gen-death-sfx.py [--music] [--takes N] [--duration S] [subject ...]
+Usage: gen-death-sfx.py [--music [--length S] [--model M] [--format F]]
+                        [--takes N] [--duration S] [subject ...]
 Key is read from ~/.config/elevenlabs/key (or $ELEVENLABS_API_KEY).
 Candidates land in sfx-candidates/<subject>-<n>.mp3 (gitignored).
 """
@@ -205,7 +206,7 @@ PROMPTS = {
     ),
 }
 
-# The Music API ignored a requested length (doc/assets/sfx.md), so none is sent.
+# --length sets music_length_ms; a 180 s music_v2_5 take was cut off mid-phrase at that mark.
 MUSIC_PROMPTS = {
     "battle_hymn_march": (
         "A rousing medieval fantasy battle march played by a bard as an army "
@@ -215,10 +216,21 @@ MUSIC_PROMPTS = {
         "building. It ends on one strong final drum hit and chord at about nine "
         "seconds, then a brief ring-out. Instrumental only: no vocals, no choir."
     ),
+    "hearthside_tavern": (
+        "Warm and relaxed medieval tavern music. Gentle lute fingerpicking sets a "
+        "cozy mood. Soft fiddle plays a slow, sweet melody. Harp adds delicate "
+        "touches. Feels like resting by the fireplace with a mug of ale after a "
+        "long journey. Calm and inviting. Slow, gentle tempo around 84 BPM in "
+        "B-flat major. Warm, mellow, intimate acoustic sound with soft rounded "
+        "highs. Steady, gentle dynamics from start to finish with no big climax; "
+        "no drums, at most a very soft hand drum. A simple memorable melody that "
+        "returns with small variations. Ends softly on a resolved chord so it can "
+        "loop back to the beginning. Instrumental only, no vocals."
+    ),
 }
 
 API = "https://api.elevenlabs.io/v1/sound-generation"
-MUSIC_API = "https://api.elevenlabs.io/v1/music?output_format=mp3_44100_128"
+MUSIC_API = "https://api.elevenlabs.io/v1/music?output_format="
 SUB = "https://api.elevenlabs.io/v1/user/subscription"
 
 
@@ -263,8 +275,11 @@ def generate(k, text, duration, influence, loop=False):
     return post(k, API, params)
 
 
-def compose(k, prompt):
-    return post(k, MUSIC_API, {"prompt": prompt, "model_id": "music_v1", "force_instrumental": True})
+def compose(k, prompt, length, model, fmt):
+    params = {"prompt": prompt, "model_id": model, "force_instrumental": True}
+    if length:
+        params["music_length_ms"] = int(length * 1000)
+    return post(k, MUSIC_API + fmt, params)
 
 
 def main():
@@ -275,6 +290,9 @@ def main():
     ap.add_argument("--influence", type=float, default=0.4)
     ap.add_argument("--loop", action="store_true")
     ap.add_argument("--music", action="store_true")
+    ap.add_argument("--length", type=float)
+    ap.add_argument("--model", default="music_v1")
+    ap.add_argument("--format", default="mp3_44100_128")
     ap.add_argument("--out", default="sfx-candidates")
     args = ap.parse_args()
 
@@ -298,7 +316,7 @@ def main():
                 print(f"skip {dest}")
                 continue
             if args.music:
-                audio = compose(k, prompts[m])
+                audio = compose(k, prompts[m], args.length, args.model, args.format)
             else:
                 audio = generate(k, prompts[m], args.duration, args.influence, args.loop)
             dest.write_bytes(audio)

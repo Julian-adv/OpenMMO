@@ -148,3 +148,23 @@ seamless loop, game BGM
 - Radiant Vanguard Overdrive
 - The Abyssal March
 - Triumph of the Vanguard
+
+### ElevenLabs Music BGM (.m4a)
+
+**Field BGM**
+
+- Embers After the Journey
+
+  Hearthside Respite와 비슷한 분위기를 목표로 [ElevenLabs Music](https://elevenlabs.io/music-api)
+  API(`POST /v1/music`, `music_v2_5`, `music_length_ms=180000`, `force_instrumental`,
+  `mp3_48000_192`)로 2026-11-01 생성. Starter 유료 플랜,
+  [유료 플랜 상업 이용 라이선스](https://help.elevenlabs.io/hc/en-us/articles/13313564601361-Can-I-publish-the-content-I-generate-on-the-platform) 적용.
+  1테이크, 2,250크레딧. `tools/gen-death-sfx.py --music --takes 1 --length 180 --model music_v2_5 --format mp3_48000_192 hearthside_tavern`.
+  요청 길이(180 s)에서 연주가 끊긴 채 끝나서 끝 8초 페이드아웃(`afade curve=qua`, 시작은 10 ms 페이드인)을 넣고
+  AAC-LC 128 kbps 48 kHz .m4a로 인코딩했다(`-movflags +faststart`, 4.3 MB → 2.9 MB).
+  112 kbps는 16–18 kHz 대역이 줄어 128 kbps를 골랐다. 원본 mp3와 생성·가공 기록 JSON은
+  `~/assets_original/bgm/Embers After the Journey.{mp3,json}`에 있다.
+
+  ```
+  Warm and relaxed medieval tavern music. Gentle lute fingerpicking sets a cozy mood. Soft fiddle plays a slow, sweet melody. Harp adds delicate touches. Feels like resting by the fireplace with a mug of ale after a long journey. Calm and inviting. Slow, gentle tempo around 84 BPM in B-flat major. Warm, mellow, intimate acoustic sound with soft rounded highs. Steady, gentle dynamics from start to finish with no big climax; no drums, at most a very soft hand drum. A simple memorable melody that returns with small variations. Ends softly on a resolved chord so it can loop back to the beginning. Instrumental only, no vocals.
+  ```

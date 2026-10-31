@@ -1,5 +1,5 @@
 repo jake-song-openmmo/onlinerpg-assets
-revision 66fdab9b429e0d0aede18ed993b3c995b11d006e
+revision c1103e6280295cd591df031d5a25c74d21b17d29
 file 74b7a9f450eb4c14e99f037b1cfe735eabdc64b3a94023418dabb24b6889e6f7 assets/all_animation.blend
 file 1043a18aae65ebfcca9aeb7ba70acd97be2886d2b9f51c608624372f2417ba86 assets/animations/Annoyed Head Shake.fbx
 file 5edac6dfec09f450747fa2d9ad9dc64b10e717f2fa5a01729f0d4ebc00396cdd assets/animations/Clapping.fbx
@@ -1181,6 +1181,7 @@ file 99527f23fa7f8ea392786ce5fd4561f2714793315ae5868859d2e10535b0aa39 client/pub
 file e010dcf36533028c32c3ee4fe25b945c596d8d61668278e3598b1bf2ea4b3475 client/public/bgm/Echoes of a Distant Summer.mp3
 file 6a20d9dd06c6c7a77a908450e8b85f56779473eaf173c4a4ad6c51d65ae065fe client/public/bgm/Echoes of the Horizon.m4a
 file 7c6a3e04f0789345e635954839776c1c2d5540a7c63ff8fd313045e22ec7e490 client/public/bgm/Echoes of the Old Realm.m4a
+file f2962158609945aa379c7ce3a8194d458020061b75ccbb3e139768348c0ac7db client/public/bgm/Embers After the Journey.m4a
 file cc24b67035f32ae30953dc3053a07af2ea91ee7aac511dd2c68640bd71c32c20 client/public/bgm/Festival in the Lantern Square.mp3
 file d1f3b57c69f3cc7242c3db8377aa1606ed82d3df77b3218d266265077eb36517 client/public/bgm/First Light Waltz.m4a
 file 8940d02e3147302b31eac68b20a5ec86253edad9ec0466164d3c246fc1ae873f client/public/bgm/Grief in the Green Vale.mp3
