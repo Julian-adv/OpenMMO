@@ -97,11 +97,6 @@ pub fn locked_depths(total: u8) -> impl Iterator<Item = u8> {
     (1..=total).filter(|d| is_locked_depth(*d))
 }
 
-/// The deepest locked floor — its key is what the treasure chest takes.
-pub fn last_locked_depth(total: u8) -> Option<u8> {
-    locked_depths(total).last()
-}
-
 /// The locked floor whose key the monsters of `depth` carry: the next locked
 /// floor down, unless `depth` is itself locked (or nothing is locked below).
 pub fn key_depth_for(depth: u8, total: u8) -> Option<u8> {
@@ -507,17 +502,7 @@ pub fn world_to_cell(entrance: &Position, x: f32, z: f32) -> (i32, i32) {
 
 /// Passability cache key for a dungeon (one entry covers every floor).
 pub fn dungeon_cache_key(entrance_id: &str) -> String {
-    format!("{DUNGEON_KEY_PREFIX}{entrance_id}")
-}
-
-/// Namespace `dungeon_cache_key` builds, so callers can recognise its keys
-/// without re-deriving the prefix.
-pub const DUNGEON_KEY_PREFIX: &str = "dungeon:";
-
-/// Whether a passability block key names a dungeon (rather than furniture or
-/// a house).
-pub fn is_dungeon_cache_key(key: &str) -> bool {
-    key.starts_with(DUNGEON_KEY_PREFIX)
+    format!("dungeon:{entrance_id}")
 }
 
 /// One weighted entry in a depth's spawn table. `aggressive` makes that dungeon

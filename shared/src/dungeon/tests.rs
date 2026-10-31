@@ -314,8 +314,7 @@ fn locked_floors_have_one_keyed_exit_and_stair_rooms_stay_quiet() {
 fn key_depths_follow_the_locked_floors() {
     assert_eq!(locked_depths(15).collect::<Vec<_>>(), [5, 10, 15]);
     assert_eq!(locked_depths(7).collect::<Vec<_>>(), [5]);
-    assert_eq!(last_locked_depth(10), Some(10));
-    assert_eq!(last_locked_depth(4), None);
+    assert_eq!(locked_depths(4).count(), 0);
     assert_eq!(key_depth_for(1, 5), Some(5));
     assert_eq!(key_depth_for(4, 5), Some(5));
     assert_eq!(key_depth_for(5, 10), None, "a locked floor drops no key");
