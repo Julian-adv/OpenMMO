@@ -430,6 +430,8 @@ pub struct SharedState {
     /// prop is a silent no-op, and without the record we would target it
     /// forever), so a rejection has to take that record back.
     pending_chest_open: Option<(String, u8, crate::dungeon::ChestKind)>,
+    /// Ground items refused as someone else's loot, until that claim ends.
+    reserved_loot: HashMap<u64, tokio::time::Instant>,
     /// Dungeons whose treasure chest we have already emptied. The server
     /// refuses the next open until nightfall, so the world state says so
     /// rather than sending us back to a chest that has nothing for us.
@@ -554,6 +556,7 @@ impl SharedState {
             move_request_id: 0,
             move_status: None,
             pending_chest_open: None,
+            reserved_loot: HashMap::new(),
             treasure_chests_spent: HashSet::new(),
             cmd_tx,
             attack_cooldown: DEFAULT_ATTACK_COOLDOWN,

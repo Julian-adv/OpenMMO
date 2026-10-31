@@ -171,6 +171,42 @@ fn world_state_lists_nearby_ground_items() {
     );
 }
 
+/// A pickup refused as someone else's loot is marked for as long as the
+/// refusal says the claim lasts, and forgotten once the item is gone.
+#[tokio::test(start_paused = true)]
+async fn refused_loot_is_marked_until_its_claim_ends() {
+    let refused = |item: u64, seconds: u64| ServerMessage::SystemMessage {
+        message: "reserved".to_string(),
+        localization: Some(
+            onlinerpg_shared::messages::LocalizedMessage::new("server.lootReserved")
+                .with_param("item", item.to_string())
+                .with_param("seconds", seconds.to_string()),
+        ),
+    };
+    let (mut s, _rx) = test_state();
+    s.self_player = Some(test_player(0.0, 0.0));
+    s.remember_ground_item(ground_item(7, "crypt_key_5", 1.0, 0.0, 0));
+    s.remember_ground_item(ground_item(8, "small_sword", 2.0, 0.0, 0));
+    s.push_event(refused(7, 12));
+    s.push_event(refused(8, 30));
+
+    assert_eq!(s.loot_reserved_secs(7), Some(12));
+    assert!(s
+        .format_world_state()
+        .contains("[id 7] — someone else's loot for 12s more"));
+    s.push_event(ServerMessage::GroundItemRemoved {
+        instance_id: 8,
+        picked_up_by: None,
+    });
+    assert_eq!(s.loot_reserved_secs(8), None);
+
+    tokio::time::advance(std::time::Duration::from_secs(12)).await;
+    assert_eq!(s.loot_reserved_secs(7), None);
+    assert!(s
+        .format_world_state()
+        .contains("[id 7] — DUNGEON KEY, pick it up first"));
+}
+
 /// An announced item is loot the agent may go for right away — the
 /// server does any withholding.
 #[test]

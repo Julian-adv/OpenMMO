@@ -48,7 +48,7 @@ async fn skeleton_crypt_early_floors_spawn_weaker_skeletons() {
 }
 
 #[tokio::test]
-async fn skeleton_crypt_spawns_its_boss_and_rewards_the_twentieth_floor_key() {
+async fn skeleton_crypt_spawns_its_boss_and_rewards_every_floor_key() {
     let auth = make_test_auth("skeleton_crypt_rewards");
     let account = auth.login_npc("npc_skeleton_crypt_rewards").unwrap();
     let character = create_test_character(&auth, &account, "Delver");
@@ -93,7 +93,14 @@ async fn skeleton_crypt_spawns_its_boss_and_rewards_the_twentieth_floor_key() {
         assert!(boss.aggressive);
     }
 
-    give_bag(&game_state, &id, Some("skeleton_key_15")).await;
+    give_bag(&game_state, &id, None).await;
+    for depth in onlinerpg_shared::dungeon::locked_depths(20).filter(|&depth| depth != 20) {
+        assert!(
+            game_state
+                .give_item(&id, &entrance.key_item_id(depth))
+                .await
+        );
+    }
     let mut rx = game_state.register_direct_channel(&id).await;
     game_state
         .open_dungeon_chest(&id, &entrance.id, &auth)
@@ -104,7 +111,7 @@ async fn skeleton_crypt_spawns_its_boss_and_rewards_the_twentieth_floor_key() {
     ));
     assert_eq!(game_state.get_player_gold(&id).await, 0);
 
-    assert!(game_state.give_item(&id, "skeleton_key_20").await);
+    assert!(game_state.give_item(&id, &entrance.key_item_id(20)).await);
     game_state
         .open_dungeon_chest(&id, &entrance.id, &auth)
         .await;

@@ -207,6 +207,26 @@ impl SharedState {
         self.ground_items.get(&instance_id)
     }
 
+    /// A pickup refused as someone else's loot: the refusal names the item
+    /// and the seconds its claim has left.
+    pub(crate) fn note_loot_reserved(&mut self, params: &HashMap<String, String>) {
+        let param = |key: &str| params.get(key).and_then(|v| v.parse::<u64>().ok());
+        let (Some(instance_id), Some(seconds)) = (param("item"), param("seconds")) else {
+            return;
+        };
+        let now = tokio::time::Instant::now();
+        self.reserved_loot.retain(|_, until| *until > now);
+        self.reserved_loot
+            .insert(instance_id, now + std::time::Duration::from_secs(seconds));
+    }
+
+    /// Whole seconds until a refused item is worth trying again.
+    pub fn loot_reserved_secs(&self, instance_id: u64) -> Option<u64> {
+        let until = self.reserved_loot.get(&instance_id)?;
+        let left = until.saturating_duration_since(tokio::time::Instant::now());
+        (!left.is_zero()).then(|| left.as_secs().max(1))
+    }
+
     /// Active ground items on our floor, closest first.
     pub fn ground_items_in_sight(&self) -> Vec<(f32, &GroundItem)> {
         let Some(sp) = self.self_player.as_ref() else {

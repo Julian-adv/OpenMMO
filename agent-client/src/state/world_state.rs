@@ -651,14 +651,15 @@ Use the readiness status above. Wait for server success or failure feedback."#,
             } else {
                 String::new()
             };
-            let key_note =
-                if crate::item_defs::get(&i.item_def_id).is_some_and(|d| d.is_dungeon_key()) {
-                    " — DUNGEON KEY, pick it up first"
-                } else {
-                    ""
-                };
+            let note = if let Some(secs) = self.loot_reserved_secs(i.instance_id) {
+                format!(" — someone else's loot for {secs}s more")
+            } else if crate::item_defs::get(&i.item_def_id).is_some_and(|d| d.is_dungeon_key()) {
+                " — DUNGEON KEY, pick it up first".to_string()
+            } else {
+                String::new()
+            };
             lines.push(format!(
-                "Item on ground: {}{amount} ({:.1}m away) [id {}]{dropped_by}{key_note}",
+                "Item on ground: {}{amount} ({:.1}m away) [id {}]{dropped_by}{note}",
                 i.item_def_id,
                 d_sq.sqrt(),
                 i.instance_id

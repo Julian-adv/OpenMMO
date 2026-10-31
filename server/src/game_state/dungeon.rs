@@ -6,8 +6,8 @@ use std::time::Duration;
 
 use onlinerpg_shared::dungeon::{
     cell_center, dungeon_origin, floor_world_y, generate_dungeon_for, interior_doors,
-    key_depth_for, last_locked_depth, locked_depths, locked_door_ids, world_to_cell, FloorLayout,
-    PropKind, ENTRANCE_DOOR_ID, GRID,
+    key_depth_for, locked_depths, locked_door_ids, world_to_cell, FloorLayout, PropKind,
+    ENTRANCE_DOOR_ID, GRID,
 };
 use onlinerpg_shared::inventory::GroundItem;
 use onlinerpg_shared::{wrap_world_x, Position, ServerMessage};
@@ -393,8 +393,6 @@ impl GameState {
                 (is_open, opening)
             };
             if let Some(opening) = opening {
-                self.record_key_door_unlock(player_id, entrance_id, depth)
-                    .await;
                 self.send_system_message(
                     player_id,
                     format!(
@@ -538,40 +536,6 @@ impl GameState {
         false
     }
 
-    async fn record_key_door_unlock(&self, player_id: &PlayerId, entrance_id: &str, depth: u8) {
-        let Some(character_id) = self.character_id_of(player_id).await else {
-            return;
-        };
-        let tonight = Self::night_epoch(self.current_total_game_seconds());
-        let mut unlocks = self.key_door_unlocks.write().await;
-        unlocks.retain(|_, &mut night| night >= tonight);
-        unlocks.insert((character_id, entrance_id.to_string(), depth), tonight);
-    }
-
-    /// Locked floors whose door this character unlocked tonight, while the
-    /// chest is still unclaimed: their keys must be carried to the chest.
-    async fn keys_owed_to_chest(
-        &self,
-        character_id: i64,
-        entrance_id: &str,
-        total: u8,
-        now_seconds: i64,
-    ) -> Vec<u8> {
-        let tonight = Self::night_epoch(now_seconds);
-        if self
-            .chest_opened_tonight(character_id, entrance_id, tonight)
-            .await
-        {
-            return Vec::new();
-        }
-        let unlocks = self.key_door_unlocks.read().await;
-        locked_depths(total)
-            .filter(|&depth| {
-                unlocks.get(&(character_id, entrance_id.to_string(), depth)) == Some(&tonight)
-            })
-            .collect()
-    }
-
     async fn chest_opened_tonight(
         &self,
         character_id: i64,
@@ -587,9 +551,8 @@ impl GameState {
         )
     }
 
-    /// Spend one of each of the dungeon's floor keys the player carries and
-    /// push the bag. The deepest one and any used on a door tonight are
-    /// required (checked by the caller); the rest just go with it.
+    /// Spend one of each of the dungeon's floor keys and push the bag; the
+    /// caller has checked the player carries them all.
     async fn take_dungeon_keys(
         &self,
         player_id: &PlayerId,
@@ -868,10 +831,10 @@ impl GameState {
             .await;
             return;
         }
-        if let Some(depth) = last_locked_depth(total) {
+        for depth in locked_depths(total) {
             if !self
                 .require_key(player_id, entrance, depth, |key| {
-                    format!("The chest is locked. It takes a {key}.")
+                    format!("The chest is locked. It takes every floor key; you lack a {key}.")
                 })
                 .await
             {
@@ -879,19 +842,6 @@ impl GameState {
             }
         }
         let now_seconds = self.current_total_game_seconds();
-        for depth in self
-            .keys_owed_to_chest(character_id, entrance_id, total, now_seconds)
-            .await
-        {
-            if !self
-                .require_key(player_id, entrance, depth, |key| {
-                    format!("You unlocked a door with your {key} tonight. Bring it to the chest.")
-                })
-                .await
-            {
-                return;
-            }
-        }
         if !self
             .claim_chest_open(character_id, entrance_id, now_seconds)
             .await
@@ -1008,13 +958,7 @@ impl GameState {
                 )
                 .await;
             game_state
-                .spawn_world_drops_with_owner(
-                    chest_pos,
-                    floor_level,
-                    None,
-                    Vec::new(),
-                    Some(player_id),
-                )
+                .spawn_world_drops(chest_pos, floor_level, None, Vec::new(), player_id)
                 .await;
         });
     }
@@ -1023,8 +967,8 @@ impl GameState {
     /// next to it on its floor. Records the break for the instance, makes the
     /// cell walkable (client-side, on receipt) and broadcasts it to nearby
     /// players (the breaker included). On a fresh break, has a small chance to
-    /// spill the same loose coin pile that an opened chest prop uses. No-op if
-    /// it's already broken.
+    /// spill the same loose coin pile that an opened chest prop uses; its
+    /// drops are reserved for the breaker. No-op if it's already broken.
     pub async fn break_dungeon_prop(
         &self,
         player_id: &PlayerId,
@@ -1056,11 +1000,10 @@ impl GameState {
                 let drop_pos = self
                     .prop_wall_opposite_drop_position(entrance_id, depth, prop_id, prop_pos)
                     .await;
-                self.spawn_dungeon_coin_pile(drop_pos, -(depth as i8), None)
+                self.spawn_dungeon_coin_pile(drop_pos, -(depth as i8), *player_id)
                     .await;
             }
-            let key = self.roll_prop_key_drop(player_id, entrance_id, depth).await;
-            self.spawn_world_drops(prop_pos, -(depth as i8), None, key.into_iter().collect())
+            self.spawn_prop_drops(player_id, entrance_id, depth, prop_pos)
                 .await;
         }
     }
@@ -1094,26 +1037,33 @@ impl GameState {
             let drop_pos = self
                 .prop_wall_opposite_drop_position(entrance_id, depth, prop_id, chest_pos)
                 .await;
-            self.spawn_dungeon_coin_pile(drop_pos, -(depth as i8), Some(*player_id))
+            self.spawn_dungeon_coin_pile(drop_pos, -(depth as i8), *player_id)
                 .await;
-            let key = self.roll_prop_key_drop(player_id, entrance_id, depth).await;
-            self.spawn_world_drops_with_owner(
-                chest_pos,
-                -(depth as i8),
-                None,
-                key.into_iter().collect(),
-                Some(*player_id),
-            )
-            .await;
+            self.spawn_prop_drops(player_id, entrance_id, depth, chest_pos)
+                .await;
         }
     }
 
-    async fn spawn_dungeon_coin_pile(
+    /// A prop's key roll and world drops, reserved for whoever broke or opened it.
+    async fn spawn_prop_drops(
         &self,
+        player_id: &PlayerId,
+        entrance_id: &str,
+        depth: u8,
         position: Position,
-        floor_level: i8,
-        reserved_for: Option<PlayerId>,
     ) {
+        let key = self.roll_prop_key_drop(player_id, entrance_id, depth).await;
+        self.spawn_world_drops(
+            position,
+            -(depth as i8),
+            None,
+            key.into_iter().collect(),
+            *player_id,
+        )
+        .await;
+    }
+
+    async fn spawn_dungeon_coin_pile(&self, position: Position, floor_level: i8, owner: PlayerId) {
         let instance_id = self.next_instance_id().await;
         self.spawn_ground_item_with_owner(
             GroundItem {
@@ -1127,7 +1077,7 @@ impl GameState {
                 cape_color: None,
                 cape_texture: None,
             },
-            reserved_for,
+            Some(owner),
         )
         .await;
     }
@@ -1613,13 +1563,13 @@ impl GameState {
     }
 
     /// Mark a dungeon monster's slot for respawn after it dies, and roll the
-    /// floor key the monster may carry (returned for the killer's loot
-    /// scatter). Called from the combat death path; `None` for non-dungeon
-    /// monsters, bosses and locked floors.
+    /// floor key the monster may carry for `finder`, the kill's loot owner.
+    /// Called from the combat death path; `None` for non-dungeon monsters,
+    /// bosses and locked floors.
     pub(super) async fn on_dungeon_monster_dead(
         &self,
         monster_id: &str,
-        killer: &PlayerId,
+        finder: &PlayerId,
         auth: Option<&crate::auth::AuthService>,
     ) -> Option<String> {
         let entry = {
@@ -1667,7 +1617,7 @@ impl GameState {
             return None;
         }
         self.roll_dungeon_key_drop(
-            killer,
+            finder,
             &entry.entrance_id,
             entry.depth,
             total,
@@ -1712,17 +1662,17 @@ impl GameState {
     /// The key a kill at `depth` is eligible to drop, before the chance roll.
     pub(super) async fn dungeon_key_candidate(
         &self,
-        killer: &PlayerId,
+        finder: &PlayerId,
         entrance_id: &str,
         depth: u8,
         total: u8,
     ) -> Option<String> {
         let entrance = self.dungeon_defs.get(entrance_id)?;
         let key = entrance.key_item_id(key_depth_for(depth, total)?);
-        if self.holds_item(killer, &key).await {
+        if self.holds_item(finder, &key).await {
             return None;
         }
-        let character_id = self.character_id_of(killer).await?;
+        let character_id = self.character_id_of(finder).await?;
         let tonight = Self::night_epoch(self.current_total_game_seconds());
         (!self
             .chest_opened_tonight(character_id, entrance_id, tonight)

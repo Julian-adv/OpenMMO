@@ -333,9 +333,14 @@ pub(crate) struct LootReservation {
 }
 
 impl ServerGroundItem {
-    fn can_pickup(&self, player_id: &PlayerId, now_ms: u64) -> bool {
+    /// Someone else's live claim that keeps `player_id` waiting.
+    fn reserved_against(&self, player_id: &PlayerId, now_ms: u64) -> Option<LootReservation> {
         self.reservation
-            .is_none_or(|r| r.player_id == *player_id || now_ms >= r.until_ms)
+            .filter(|r| r.player_id != *player_id && now_ms < r.until_ms)
+    }
+
+    fn can_pickup(&self, player_id: &PlayerId, now_ms: u64) -> bool {
+        self.reserved_against(player_id, now_ms).is_none()
     }
 }
 
@@ -552,10 +557,6 @@ pub struct GameState {
     /// would race the session replacement that clears it.
     #[allow(clippy::type_complexity)]
     chest_opens: Arc<RwLock<HashMap<(i64, String), i64>>>,
-    /// (character_id, entrance id, depth) → night epoch of the character's
-    /// last keyed unlock there; the chest wants those keys back. In-memory.
-    #[allow(clippy::type_complexity)]
-    key_door_unlocks: Arc<RwLock<HashMap<(i64, String, u8), i64>>>,
     /// Dungeon boss monster id → character id → damage dealt (doc/TITLES.md).
     boss_damage: Arc<RwLock<HashMap<String, HashMap<i64, u64>>>>,
     /// player_id → earned title ids in definition order; the shown one is
@@ -845,7 +846,6 @@ impl GameState {
             whisper_partners: Arc::new(RwLock::new(HashMap::new())),
             muted_until: Arc::new(RwLock::new(HashMap::new())),
             chest_opens: Arc::new(RwLock::new(HashMap::new())),
-            key_door_unlocks: Arc::new(RwLock::new(HashMap::new())),
             boss_damage: Arc::new(RwLock::new(HashMap::new())),
             player_titles: Arc::new(RwLock::new(HashMap::new())),
             dungeon_discoveries: Arc::new(RwLock::new(HashMap::new())),

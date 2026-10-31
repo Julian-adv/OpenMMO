@@ -97,6 +97,16 @@ fn dropped_weapon_position(monster_position: Position) -> Position {
     offset_position_at_angle(monster_position, angle, WEAPON_DROP_OFFSET_METERS)
 }
 
+/// Who a kill's loot and key roll belong to: the most damage dealt, the
+/// earliest hitter on a tie (`max_by_key` keeps the last of equals).
+pub(super) fn top_damage_dealer(damage_by: &[(PlayerId, u32)]) -> Option<PlayerId> {
+    damage_by
+        .iter()
+        .rev()
+        .max_by_key(|(_, dealt)| *dealt)
+        .map(|(id, _)| *id)
+}
+
 struct MonsterAttackSnapshot {
     attack_bonus: i32,
     damage_roll: String,
@@ -288,9 +298,10 @@ struct PlayerAttackTarget {
 
 impl super::GameState {
     /// Put a kill's loot — the weapon drop and any rare world drops — on the
-    /// ground once the killing blow lands. The wait lives server-side: a
-    /// ground item is pickable the moment it exists, so a client that skips
-    /// the animation must not reach it early.
+    /// ground once the killing blow lands, reserved for `owner`. The wait
+    /// lives server-side: a ground item is pickable the moment it exists, so
+    /// a client that skips the animation must not reach it early.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn spawn_kill_loot_after_impact(
         &self,
         weapon_drop: Option<GroundItem>,
@@ -298,16 +309,19 @@ impl super::GameState {
         origin: Position,
         floor_level: i8,
         monster_level: Option<u8>,
+        owner: PlayerId,
         impact_delay: Duration,
     ) {
         let game_state = self.clone();
         tokio::spawn(async move {
             tokio::time::sleep(impact_delay).await;
             if let Some(item) = weapon_drop {
-                game_state.spawn_ground_item(item).await;
+                game_state
+                    .spawn_ground_item_with_owner(item, Some(owner))
+                    .await;
             }
             game_state
-                .spawn_world_drops(origin, floor_level, monster_level, monster_drops)
+                .spawn_world_drops(origin, floor_level, monster_level, monster_drops, owner)
                 .await;
         });
     }
@@ -1294,9 +1308,16 @@ impl super::GameState {
                 .and_then(|def| def.weapon.as_deref())
                 .and_then(|weapon| self.item_defs.item_def_id_for_weapon_ref(weapon));
 
+            let loot_owner = top_damage_dealer(&damage_by).unwrap_or(*player_id);
+            let owner_name = if loot_owner == *player_id {
+                player_name.to_string()
+            } else {
+                self.player_name_of(&loot_owner).await
+            };
+            // The loot owner, not the final blow: audits read this as the kill's.
             info!(
                 "Player {} killed {} (lvl {}) at ({:.1},{:.1}) {}; weapon drop: {}",
-                player_name,
+                owner_name,
                 monster_type,
                 effective_level.unwrap_or(0),
                 corpse_position.x,
@@ -1349,7 +1370,7 @@ impl super::GameState {
                 )
             });
             monster_drops.extend(
-                self.on_dungeon_monster_dead(monster_id, player_id, auth)
+                self.on_dungeon_monster_dead(monster_id, &loot_owner, auth)
                     .await,
             );
             // All kill loot waits for the blow to land.
@@ -1359,6 +1380,7 @@ impl super::GameState {
                 corpse_position,
                 monster_floor_level,
                 effective_level,
+                loot_owner,
                 loot_delay,
             );
 

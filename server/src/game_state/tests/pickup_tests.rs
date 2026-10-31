@@ -293,6 +293,7 @@ async fn monster_loot_is_withheld_until_the_killing_blow_lands() {
         drop_position,
         0,
         None,
+        pid("killer"),
         *super::combat::PLAYER_ATTACK_IMPACT_DELAY,
     );
 
@@ -332,6 +333,74 @@ async fn monster_loot_is_withheld_until_the_killing_blow_lands() {
         }),
         "the drop must be announced once the blade has landed"
     );
+}
+
+/// Kill loot, the weapon and the rolled drops alike, waits for its owner.
+#[tokio::test(start_paused = true)]
+async fn kill_loot_is_reserved_for_its_owner() {
+    let game = make_test_game_state("reserved_kill_loot");
+    for name in ["dealer", "finisher"] {
+        game.add_player(make_player(name, 0.0, 0.0)).await;
+        game.inventories
+            .write()
+            .await
+            .insert(pid(name), Default::default());
+    }
+    game.spawn_kill_loot_after_impact(
+        Some(ground_item(7, "test_item", 1)),
+        vec!["test_item".to_string()],
+        Position {
+            x: 0.5,
+            y: 0.0,
+            z: 0.0,
+        },
+        0,
+        None,
+        pid("dealer"),
+        std::time::Duration::ZERO,
+    );
+    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+
+    {
+        let ground = game.ground_items.read().await;
+        assert_eq!(ground.len(), 2);
+        assert!(ground.values().all(|entry| entry
+            .reservation
+            .is_some_and(|r| r.player_id == pid("dealer"))));
+    }
+    let mut finisher_rx = game.register_direct_channel(&pid("finisher")).await;
+    game.pickup_item(&pid("finisher"), 7).await;
+    assert!(
+        drain(&mut finisher_rx).iter().any(|msg| matches!(
+            msg,
+            ServerMessage::SystemMessage { localization: Some(l), .. }
+                if l.code == "server.lootReserved"
+                    && l.params.get("name").map(String::as_str) == Some("dealer")
+                    && l.params.get("item").map(String::as_str) == Some("7")
+                    && l.params.get("seconds").map(String::as_str) == Some("30")
+        )),
+        "the refusal names the owner, the item and the seconds left"
+    );
+    game.pickup_nearby_items(&pid("finisher")).await;
+    assert!(game.inventories.read().await[&pid("finisher")]
+        .bag
+        .is_empty());
+    game.pickup_item(&pid("dealer"), 7).await;
+    assert!(!game.ground_items.read().await.contains_key(&7));
+}
+
+#[test]
+fn kill_loot_goes_to_the_top_damage_dealer_the_first_on_a_tie() {
+    use super::combat::top_damage_dealer;
+    assert_eq!(
+        top_damage_dealer(&[(pid("a"), 1), (pid("b"), 4), (pid("c"), 2)]),
+        Some(pid("b"))
+    );
+    assert_eq!(
+        top_damage_dealer(&[(pid("a"), 3), (pid("b"), 3)]),
+        Some(pid("a"))
+    );
+    assert_eq!(top_damage_dealer(&[]), None);
 }
 
 /// A hand-dropped item owes nobody an animation, so it lands at once — and

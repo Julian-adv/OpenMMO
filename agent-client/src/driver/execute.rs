@@ -1388,6 +1388,15 @@ pub(super) async fn handle_response(
                 ));
                 continue;
             };
+            {
+                let mut s = state.lock().await;
+                if let Some(secs) = s.loot_reserved_secs(instance_id) {
+                    s.push_agent_event(format!(
+                        "[PickupFailed] The {def_id} is someone else's loot for {secs}s more."
+                    ));
+                    continue;
+                }
+            }
             match walk_to_ground_item(state, instance_id, *sprint).await {
                 ChaseResult::InRange => {
                     let mut s = state.lock().await;

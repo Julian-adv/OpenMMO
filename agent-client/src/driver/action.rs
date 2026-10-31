@@ -562,10 +562,11 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
   Deeper floors hold stronger monsters, so descend one floor at a time and
   only while you can still win your fights. Every fifth floor's stair room is
   locked: its key drops from monsters and clutter on the floors above it, and
-  the deepest key also opens the great chest. A key on the ground is the most
-  important thing in the dungeon — pick it up before anything else, anyone
-  may take it first. The world state says which key you need and whether you
-  have it. To come back up to the surface:
+  the great chest takes one of every key the dungeon has. A kill's drops are
+  kept 30 seconds for whoever dealt the most damage, then anyone may take
+  them. A key on the ground is the most important thing in the dungeon — pick
+  it up before anything else. The world state says which key you need and
+  whether you have it. To come back up to the surface:
   {"type": "move", "depth": 0}"#,
     },
     ActionSpec {

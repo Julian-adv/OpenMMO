@@ -979,10 +979,21 @@ impl SharedState {
             ServerMessage::GroundItemAppeared { item } => {
                 self.remember_ground_item(item.clone());
             }
+            ServerMessage::SystemMessage {
+                localization: Some(localization),
+                ..
+            } if matches!(
+                localization.code.as_str(),
+                "server.lootReserved" | "server.lootReservedAway"
+            ) =>
+            {
+                self.note_loot_reserved(&localization.params);
+            }
             ServerMessage::GroundItemRemoved {
                 instance_id,
                 picked_up_by,
             } => {
+                self.reserved_loot.remove(instance_id);
                 let removed = self.ground_items.remove(instance_id);
                 self.pending_tips.retain(|(id, _)| id != instance_id);
                 // Only player-dropped items are worth a line — see note_pickup.

@@ -20,7 +20,8 @@ const GROUND_ITEM_LIFETIME_MS: u64 = 30 * 60 * 1000;
 
 const MAX_PICKUP_DISTANCE: f32 = 2.5;
 const NEARBY_PICKUP_DISTANCE: f32 = 2.0;
-const CHEST_LOOT_RESERVATION_MS: u64 = 30_000;
+/// How long kill, chest and prop loot stays its earner's alone.
+const LOOT_RESERVATION_MS: u64 = 30_000;
 const COIN_PILE_COPPER: RangeInclusive<i64> = 1..=10;
 /// A rare pile worth about 1g, so breaking props is worth a gamble.
 const COIN_PILE_JACKPOT_COPPER: RangeInclusive<i64> = 5_000..=15_000;
@@ -1962,7 +1963,7 @@ impl super::GameState {
                     dropped_at_ms: Self::now_ms(),
                     reservation: reserved_for.map(|player_id| super::LootReservation {
                         player_id,
-                        until_ms: Self::now_ms() + CHEST_LOOT_RESERVATION_MS,
+                        until_ms: Self::now_ms() + LOOT_RESERVATION_MS,
                     }),
                 },
             );
@@ -1987,25 +1988,15 @@ impl super::GameState {
     /// `source_level` is the killed monster's effective level, which some
     /// entries pay out less on when it is low (`world_drop.csv`). Chests and
     /// props have no level and pass `None` — they roll at full chance, since
-    /// each one only yields loot once per dungeon instance.
+    /// each one only yields loot once per dungeon instance. Everything is
+    /// reserved for `owner`, who earned the loot event.
     pub(super) async fn spawn_world_drops(
         &self,
         origin: crate::types::Position,
         floor_level: i8,
         source_level: Option<u8>,
         bonus_item_ids: Vec<String>,
-    ) {
-        self.spawn_world_drops_with_owner(origin, floor_level, source_level, bonus_item_ids, None)
-            .await;
-    }
-
-    pub(super) async fn spawn_world_drops_with_owner(
-        &self,
-        origin: crate::types::Position,
-        floor_level: i8,
-        source_level: Option<u8>,
-        bonus_item_ids: Vec<String>,
-        reserved_for: Option<PlayerId>,
+        owner: PlayerId,
     ) {
         /// How far from the loot origin a world drop scatters.
         const WORLD_DROP_OFFSET_METERS: f32 = 1.5;
@@ -2031,7 +2022,7 @@ impl super::GameState {
             floor_level,
             WORLD_DROP_OFFSET_METERS,
             WORLD_DROP_OFFSET_METERS,
-            reserved_for,
+            Some(owner),
         )
         .await;
     }
@@ -2333,11 +2324,14 @@ impl super::GameState {
         let ground_item = {
             let ground_items = self.ground_items.read().await;
             match ground_items.get(&instance_id) {
-                Some(sgi) if sgi.can_pickup(player_id, Self::now_ms()) => sgi.item.clone(),
-                Some(_) => {
-                    drop(ground_items);
-                    self.send_loot_reserved_message(player_id).await;
-                    return;
+                Some(sgi) => {
+                    if let Some(claim) = sgi.reserved_against(player_id, Self::now_ms()) {
+                        drop(ground_items);
+                        self.send_loot_reserved_message(player_id, instance_id, claim)
+                            .await;
+                        return;
+                    }
+                    sgi.item.clone()
                 }
                 None => {
                     self.send_system_message(
@@ -2394,9 +2388,10 @@ impl super::GameState {
                 .await;
                 return;
             };
-            if !entry.can_pickup(player_id, Self::now_ms()) {
+            if let Some(claim) = entry.reserved_against(player_id, Self::now_ms()) {
                 drop(ground_items);
-                self.send_loot_reserved_message(player_id).await;
+                self.send_loot_reserved_message(player_id, instance_id, claim)
+                    .await;
                 return;
             }
             // Re-read under the lock: another picker may have thinned the pile
@@ -2489,15 +2484,36 @@ impl super::GameState {
         }
     }
 
-    async fn send_loot_reserved_message(&self, player_id: &PlayerId) {
-        self.send_system_message(
-            player_id,
-            localized(
+    /// Names whose loot it is (an owner who has left goes unnamed); the item
+    /// and seconds left let a bot client wait it out.
+    async fn send_loot_reserved_message(
+        &self,
+        player_id: &PlayerId,
+        instance_id: u64,
+        claim: super::LootReservation,
+    ) {
+        let owner_name = self
+            .players
+            .read()
+            .await
+            .get(&claim.player_id)
+            .map(|p| p.name.clone());
+        let message = match owner_name {
+            Some(name) => localized(
                 "server.lootReserved",
-                "This loot is reserved for the chest opener for 30 seconds.",
+                format!("{name} has first claim on this item."),
+            )
+            .with_param("name", name),
+            None => localized(
+                "server.lootReservedAway",
+                "Another player has first claim on this item.",
             ),
-        )
-        .await;
+        };
+        let seconds = claim.until_ms.saturating_sub(Self::now_ms()).div_ceil(1000);
+        let message = message
+            .with_param("item", instance_id.to_string())
+            .with_param("seconds", seconds.to_string());
+        self.send_system_message(player_id, message).await;
     }
 
     /// Broadcast the transient pickup pose, even if collection later fails.
@@ -2572,12 +2588,13 @@ impl super::GameState {
         // the same pile can't both be paid.
         {
             let mut ground_items = self.ground_items.write().await;
-            if ground_items
+            if let Some(claim) = ground_items
                 .get(&instance_id)
-                .is_some_and(|entry| !entry.can_pickup(player_id, Self::now_ms()))
+                .and_then(|entry| entry.reserved_against(player_id, Self::now_ms()))
             {
                 drop(ground_items);
-                self.send_loot_reserved_message(player_id).await;
+                self.send_loot_reserved_message(player_id, instance_id, claim)
+                    .await;
                 return;
             }
             if ground_items.remove(&instance_id).is_none() {

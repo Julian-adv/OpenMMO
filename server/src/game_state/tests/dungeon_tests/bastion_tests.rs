@@ -43,7 +43,7 @@ async fn sundered_bastion_floors_spawn_their_own_pool() {
 }
 
 #[tokio::test]
-async fn sundered_bastion_spawns_barkan_and_rewards_the_last_key() {
+async fn sundered_bastion_spawns_barkan_and_rewards_every_floor_key() {
     let auth = make_test_auth("sundered_bastion_rewards");
     let account = auth.login_npc("npc_sundered_bastion_rewards").unwrap();
     let character = create_test_character(&auth, &account, "Delver");
@@ -87,7 +87,14 @@ async fn sundered_bastion_spawns_barkan_and_rewards_the_last_key() {
         assert!(boss.aggressive);
     }
 
-    give_bag(&game_state, &id, Some("bastion_key_25")).await;
+    give_bag(&game_state, &id, None).await;
+    for depth in onlinerpg_shared::dungeon::locked_depths(25) {
+        assert!(
+            game_state
+                .give_item(&id, &entrance.key_item_id(depth))
+                .await
+        );
+    }
     let mut rx = game_state.register_direct_channel(&id).await;
     game_state
         .open_dungeon_chest(&id, &entrance.id, &auth)
@@ -98,7 +105,7 @@ async fn sundered_bastion_spawns_barkan_and_rewards_the_last_key() {
             ServerMessage::DungeonChestOpened { gold, .. } => Some(gold),
             _ => None,
         })
-        .expect("the 25th floor key opens the chest while the boss is alive");
+        .expect("the floor keys open the chest while the boss is alive");
     assert!((12_500..=37_500).contains(&gold));
     let table: HashMap<_, _> = game_state
         .item_defs

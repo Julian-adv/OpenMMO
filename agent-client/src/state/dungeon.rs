@@ -92,18 +92,12 @@ impl SharedState {
     /// Which key this floor turns on and whether we carry it, so the LLM
     /// knows what to hunt for before it walks into a locked door.
     fn format_key_state(&self, d: &crate::dungeon::Dungeon, depth: u8) -> String {
-        use onlinerpg_shared::dungeon::{key_drop_floors, last_locked_depth, relevant_key_depth};
-        let total = d.max_depth();
-        let Some(key_depth) = relevant_key_depth(depth, total) else {
+        use onlinerpg_shared::dungeon::{key_drop_floors, relevant_key_depth};
+        let Some(key_depth) = relevant_key_depth(depth, d.max_depth()) else {
             return String::new();
         };
         let key = d.key_item_id(key_depth);
         let name = crate::item_defs::get(&key).map_or(key.as_str(), |i| i.name.as_str());
-        let chest = if last_locked_depth(total) == Some(key_depth) {
-            " and the great chest takes it too"
-        } else {
-            ""
-        };
         let drops = key_drop_floors(key_depth);
         let have = if self.holds_item(&key) {
             "you carry it".to_string()
@@ -114,11 +108,12 @@ impl SharedState {
                 drops.end()
             )
         };
-        if key_depth == depth {
-            format!("\nThe stair room's door here is locked: it takes a {name}{chest}; {have}")
+        let door = if key_depth == depth {
+            "The stair room's door here".to_string()
         } else {
-            format!("\nFloor {key_depth}'s stair room is locked: it takes a {name}{chest}; {have}")
-        }
+            format!("Floor {key_depth}'s stair room")
+        };
+        format!("\n{door} is locked: it takes a {name} and the great chest takes it too; {have}")
     }
 
     /// Where we stand relative to the dungeons: the floor we are on when
