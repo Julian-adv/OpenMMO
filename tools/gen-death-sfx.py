@@ -2,10 +2,13 @@
 """Generate sound-effect candidates with the ElevenLabs SFX API, or short
 music with the Music API (--music).
 
-Usage: gen-death-sfx.py [--music [--length S] [--model M] [--format F]]
+Usage: gen-death-sfx.py [--music [--length S] [--model M] [--format F]
+                         [--plan [--plan-only] [--seed N]]]
                         [--takes N] [--duration S] [subject ...]
 Key is read from ~/.config/elevenlabs/key (or $ELEVENLABS_API_KEY).
 Candidates land in sfx-candidates/<subject>-<n>.mp3 (gitignored).
+--plan composes from <subject>-<n>.plan.json, fetching it first (free) if
+missing; edit it between a --plan-only run and the real one.
 """
 import argparse, json, os, pathlib, sys, time, urllib.error, urllib.request
 
@@ -207,6 +210,7 @@ PROMPTS = {
 }
 
 # --length sets music_length_ms; a 180 s music_v2_5 take was cut off mid-phrase at that mark.
+# A --plan ending in an [Outro] chunk decayed to silence on its own.
 MUSIC_PROMPTS = {
     "battle_hymn_march": (
         "A rousing medieval fantasy battle march played by a bard as an army "
@@ -231,6 +235,7 @@ MUSIC_PROMPTS = {
 
 API = "https://api.elevenlabs.io/v1/sound-generation"
 MUSIC_API = "https://api.elevenlabs.io/v1/music?output_format="
+PLAN_API = "https://api.elevenlabs.io/v1/music/plan"
 SUB = "https://api.elevenlabs.io/v1/user/subscription"
 
 
@@ -282,6 +287,20 @@ def compose(k, prompt, length, model, fmt):
     return post(k, MUSIC_API + fmt, params)
 
 
+def plan(k, prompt, length, model):
+    params = {"prompt": prompt, "model_id": model}
+    if length:
+        params["music_length_ms"] = int(length * 1000)
+    return json.loads(post(k, PLAN_API, params))
+
+
+def compose_plan(k, composition_plan, model, fmt, seed):
+    params = {"composition_plan": composition_plan, "model_id": model}
+    if seed is not None:
+        params["seed"] = seed
+    return post(k, MUSIC_API + fmt, params)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("subjects", nargs="*")
@@ -293,6 +312,9 @@ def main():
     ap.add_argument("--length", type=float)
     ap.add_argument("--model", default="music_v1")
     ap.add_argument("--format", default="mp3_44100_128")
+    ap.add_argument("--plan", action="store_true")
+    ap.add_argument("--plan-only", action="store_true")
+    ap.add_argument("--seed", type=int)
     ap.add_argument("--out", default="sfx-candidates")
     args = ap.parse_args()
 
@@ -315,7 +337,15 @@ def main():
             if dest.exists():
                 print(f"skip {dest}")
                 continue
-            if args.music:
+            if args.plan:
+                plan_path = out / f"{m}-{n}.plan.json"
+                if not plan_path.exists():
+                    plan_path.write_text(json.dumps(plan(k, prompts[m], args.length, args.model), indent=2) + "\n")
+                    print(plan_path)
+                if args.plan_only:
+                    continue
+                audio = compose_plan(k, json.loads(plan_path.read_text()), args.model, args.format, args.seed)
+            elif args.music:
                 audio = compose(k, prompts[m], args.length, args.model, args.format)
             else:
                 audio = generate(k, prompts[m], args.duration, args.influence, args.loop)
