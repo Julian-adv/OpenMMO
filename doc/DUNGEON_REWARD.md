@@ -115,6 +115,20 @@
   `pickup`을 고르게 한다. 열쇠 없는 잠긴 문은 우회 후보에서 빼고 "잠긴 문, 열쇠 없음"으로 보고한다.
   바닥 아이템의 `claimed_by`가 다른 캐릭터면 "NAME's loot"로 표시하고 줍기를 보내지 않는다.
 
+### 상자 보상 구성 (2026-11-01)
+
+상자 보상은 세 갈래를 합친다(`ItemDefs::dungeon_chest_chances`).
+
+1. **확정 보상:** dungeons.csv `chestDrops`.
+2. **전용 롤:** dungeons.csv `chestRolls`, `아이템:확률;…` 형식. 그 던전 상자만 굴린다.
+3. **티어 풀:** items.csv `chestTier`·`chestChance`. 같은 티어 던전이 함께 쓴다. 1·2에 든 아이템과 확률 0인 행은 뺀다.
+
+전용 롤은 티어 4·5에 던전이 둘씩 생기면서 넣었다. 확률이 붙은 티어 5 아이템이 모든 티어 5 던전에서 나오게 되기 때문이다. 그래서 `rune_blade` 20%와 `earth_amulet` 10%(테라클래시 소환 재료)를 Sundered Bastion 전용 롤로 옮겼다. 확률은 바꾸지 않았다. Shadow Guild는 `shadowfang` 20%를 굴린다.
+
+- 부팅 검증(`DungeonDefs::load`): 전용 롤 아이템은 던전과 같은 `chestTier`이고 `chestChance`가 비어 있어야 한다. 확률은 (0, 1]이고 같은 던전의 확정 보상과 겹치면 안 된다.
+- 어디서도 나오지 않는 아이템을 찾는 검사에 전용 롤도 포함한다.
+- 하위 티어 이월(10%)은 확정 보상과 마찬가지로 전용 롤 아이템에도 적용된다.
+
 ### 서버 변경 범위
 
 - 생성(`shared/src/dungeon/gen.rs`): 잠긴 층의 `rooms[0]` 출구에 문을 강제 배치, 복도가

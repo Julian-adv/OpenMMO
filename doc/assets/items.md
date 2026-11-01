@@ -354,6 +354,47 @@
     모듈형 남자 `(0.02, 0.12, 0.05)`, `female_priest.glb` `(0.03, 0.07, 0.03)`.
     여자 사제의 대기·걷기·달리기 클립은 손을 편 채라 주먹을 쥐지 않는다.
 
+## Cutthroat Dirk — 칼잡이의 단검 (2026-11-01)
+
+- `cutthroat_dirk`: 도적 소굴(T4) 상자의 확정 보상인 단검. dagger 타입·1d6·한손·기준가 11,000.
+- 원화 `assets/items/cutthroat_dirk/concepts/cutthroat_dirk.png`(`doc/images/items/cutthroat_dirk.png`), 1536×1024:
+  OpenAI Codex built-in ImageGen(`codex exec`, codex-cli 0.164.0), **ChatGPT Pro 20x**, 2026-11-01. OpenAI 생성 출력물 이용 조건 적용.
+  기존 단검 원화를 스타일 참조로 넣었다. [프롬프트·해시](../../assets/items/cutthroat_dirk/concepts/generation.json).
+  ![원화](../images/items/cutthroat_dirk.png)
+- 3D 모델: 사용자가 위 원화로 **Tripo 웹 앱(Max 등급)**에서 생성, 2026-11-01. Tripo 서비스 이용 조건 적용.
+  결과 2,545 triangles를 유지했다. PBR로 생성해 base color·roughness-metallic·normal 각 2048²를 받았다.
+  처음 받은 base color 단독본은 같은 메시라 PBR본으로 교체했다.
+  원본 `assets/items/cutthroat_dirk/tripo_v1/source.glb`, [생성 기록](../../assets/items/cutthroat_dirk/tripo_v1/generation.json).
+- 칼날 평면이 길이 축 기준으로 약 52° 기울어져 있어 X축으로 38° 굴려 Blender XZ에 맞췄다. 칼등(홈)이 위, 날이 아래다.
+  전장 0.42m(0.420×0.040×0.088m), 칼날 +X. 그립 원점은 포멜에서 전장의 15%로, `dagger.glb`처럼 가드 6.3cm 뒤다.
+  그래서 기존 단검의 손 파지와 Double Slash 칼날 궤적(0.19–0.42m)을 그대로 쓴다. PBR 텍스처 3장 512² WebP, 발광 없음.
+- 게임 모델 `client/public/models/weapons/cutthroat_dirk.glb`(226,144 bytes),
+  투명 128² 아이콘 `client/public/items/weapons/cutthroat_dirk.png`,
+  패킹한 Blender 편집본 `assets/items/cutthroat_dirk/cutthroat_dirk.blend`.
+  [제작 기록](cutthroat_dirk-model.json). 재현: `blender -b -t 6 --python-exit-code 1 --python tools/blender-scripts/build_cutthroat_dirk.py`.
+- 손 장착: 여성은 `handProps.ts`에서 `weaponType=dagger` 공용 파지를 쓰므로 단검 모델마다 항목을 더할 필요가 없다. 남성은 기본 파지를 쓴다.
+
+## Shadowfang — 그림자 송곳니 (2026-11-01)
+
+- `shadowfang`: 그림자 길드(T5) 상자 전용 롤 20%로 나오는 단검. dagger 타입·1d8·한손·기준가 20,000.
+- 원화 `assets/items/shadowfang/concepts/shadowfang.png`(`doc/images/items/shadowfang.png`), 1536×1024:
+  OpenAI Codex built-in ImageGen(`codex exec`, codex-cli 0.164.0), **ChatGPT Pro 20x**, 2026-11-01. OpenAI 생성 출력물 이용 조건 적용.
+  기존 단검 원화를 스타일 참조로 넣었다. [프롬프트·해시](../../assets/items/shadowfang/concepts/generation.json).
+  ![원화](../images/items/shadowfang.png)
+- 3D 모델: 사용자가 위 원화로 **Tripo 웹 앱(Max 등급)**에서 PBR로 생성, 2026-11-01. Tripo 서비스 이용 조건 적용.
+  결과 2,985 triangles를 유지했다. base color·roughness-metallic·normal 각 2048². 먼저 받은 base color 단독본은 같은 메시라 PBR본으로 교체했다.
+  원본 `assets/items/shadowfang/tripo_v1/source.glb`, [생성 기록](../../assets/items/shadowfang/tripo_v1/generation.json).
+- 칼날 평면이 이미 Blender XZ라 회전 없이 썼다. 전장 0.42m(0.420×0.049×0.108m), 칼날 +X.
+  그립 원점은 포멜에서 전장의 18%로, `dagger.glb`처럼 가드 6.3cm 뒤다. 기존 단검 손 파지와 칼날 궤적을 그대로 쓴다.
+- 룬 발광: Tripo가 발광 맵을 주지 않아, base color에서 밝은 보라색 텍셀만 골라 발광 맵을 만들었다.
+  가드 앞쪽 칼날 면의 UV 영역 안으로 한정해 자수정 포멜은 빛나지 않는다. 색 (0.55, 0.3, 1.0), 강도 1.5.
+  PBR 텍스처 3장과 발광 맵 모두 512² WebP라, 가드 가까운 룬 문양만 또렷하고 칼날 중간의 룬은 은은한 보랏빛으로 번진다.
+- 게임 모델 `client/public/models/weapons/shadowfang.glb`(253,020 bytes),
+  투명 128² 아이콘 `client/public/items/weapons/shadowfang.png`,
+  패킹한 Blender 편집본 `assets/items/shadowfang/shadowfang.blend`.
+  [제작 기록](shadowfang-model.json). 재현: `blender -b -t 6 --python-exit-code 1 --python tools/blender-scripts/build_shadowfang.py`.
+- 손 장착: 칼잡이의 단검과 같다.
+
 ## 로그 기본 장비 — 2026-10-02
 
 새 로그 캐릭터는 `worn_rogue_top`, `worn_rogue_pants`, `worn_rogue_gloves`,

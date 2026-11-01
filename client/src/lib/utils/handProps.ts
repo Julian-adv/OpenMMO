@@ -12,6 +12,7 @@ const HAND_GRIP_OFFSET = new THREE.Vector3(0, 0.08, 0)
 
 type HandFit = { position: THREE.Vector3; rotation?: THREE.Euler }
 
+// Keyed by world model, or by weaponType for a family built to one grip origin.
 export const FEMALE_HAND_FITS: Record<string, HandFit> = {
   'weapons/sword.glb': {
     position: new THREE.Vector3(0.0652, 0.0422, -0.0282),
@@ -21,7 +22,8 @@ export const FEMALE_HAND_FITS: Record<string, HandFit> = {
     position: new THREE.Vector3(0.0504, 0.1152, 0.0198),
     rotation: new THREE.Euler(0, 0, 0.2),
   },
-  'weapons/dagger.glb': {
+  // Every dagger model puts its grip origin 6.3 cm behind the guard.
+  dagger: {
     position: new THREE.Vector3(-0.012, 0.112, 0.02),
     rotation: new THREE.Euler(0, 0, 0.2),
   },
@@ -49,12 +51,13 @@ const MODEL_HAND_FITS: Record<string, Record<string, HandFit>> = {
 function fitHandProp(
   prop: THREE.Object3D,
   worldModel?: string,
-  modelPath?: string
+  modelPath?: string,
+  weaponType?: string
 ) {
+  const fits = modelPath ? MODEL_HAND_FITS[modelPath] : undefined
   const fit =
-    modelPath && worldModel
-      ? MODEL_HAND_FITS[modelPath]?.[worldModel]
-      : undefined
+    (worldModel ? fits?.[worldModel] : undefined) ??
+    (weaponType ? fits?.[weaponType] : undefined)
   if (!fit) return
   prop.position.copy(fit.position)
   if (fit.rotation) prop.rotation.copy(fit.rotation)
@@ -108,7 +111,8 @@ export function poseMainHandProp(
     if (forearm && forearm > 0) prop.position.y = forearm * BOW_FOREARM_RATIO
     prop.rotation.copy(BOW_ROTATION)
   }
-  fitHandProp(prop, getItemDef(itemDefId)?.worldModel, modelPath)
+  const def = getItemDef(itemDefId)
+  fitHandProp(prop, def?.worldModel, modelPath, def?.weaponType)
 }
 
 const forearmCache = new Map<string, number>()

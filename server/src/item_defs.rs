@@ -700,17 +700,20 @@ impl ItemDefs {
         rows
     }
 
-    /// Final-floor chest loot: signature drops at 1.0, then the tier roll table.
+    /// Final-floor chest loot: signature drops at 1.0, the dungeon's own
+    /// `chestRolls`, then the rest of the tier roll table. Dungeon rolls keep
+    /// a blank chestChance, so their zero-chance tier rows drop out here.
     pub fn dungeon_chest_chances(
         &self,
         entrance: &crate::dungeon_defs::DungeonEntranceDef,
     ) -> Vec<(String, f32)> {
         let signatures = entrance.chest_drops.iter().map(|id| (id.clone(), 1.0));
-        let rolls = self
+        let own_rolls = entrance.chest_rolls.iter().cloned();
+        let tier_rolls = self
             .chest_roll_table(entrance.chest_tier)
             .into_iter()
-            .filter(|(id, _)| !entrance.chest_drops.contains(id));
-        signatures.chain(rolls).collect()
+            .filter(|(id, chance)| *chance > 0.0 && !entrance.chest_drops.contains(id));
+        signatures.chain(own_rolls).chain(tier_rolls).collect()
     }
 
     pub fn weight(&self, item_def_id: &str) -> f32 {
@@ -784,13 +787,17 @@ mod tests {
     }
 
     #[test]
-    fn earth_amulet_adds_max_hp_and_drops_from_tier_five_chests() {
+    fn earth_amulet_adds_max_hp_and_drops_only_from_the_bastion_chest() {
         let defs = ItemDefs::load();
         let amulet = defs.get("earth_amulet").expect("amulet def");
         assert_eq!(amulet.equip_slot, Some(EquipSlot::Neck));
         assert_eq!(amulet.effects, vec![ItemEffect::MaxHpPerLevel(1)]);
-        let table: HashMap<_, _> = defs.chest_roll_table(5).into_iter().collect();
-        assert_eq!(table["earth_amulet"], 0.1);
+        let chances = |id: &str| -> HashMap<_, _> {
+            let entrance = onlinerpg_shared::dungeon::entrance(id).unwrap();
+            defs.dungeon_chest_chances(entrance).into_iter().collect()
+        };
+        assert_eq!(chances("sundered_bastion")["earth_amulet"], 0.1);
+        assert!(!chances("shadow_guild").contains_key("earth_amulet"));
     }
 
     #[test]
@@ -830,6 +837,8 @@ mod tests {
         for (id, ability) in [
             ("dagger", Ability::Dex),
             ("worn_dagger", Ability::Dex),
+            ("cutthroat_dirk", Ability::Dex),
+            ("shadowfang", Ability::Dex),
             ("iron_sword", Ability::Str),
             ("bow", Ability::Dex),
         ] {
@@ -903,6 +912,8 @@ mod tests {
         assert_eq!(debut("goblin_sword"), Some(1));
         assert_eq!(debut("iron_sword"), Some(2));
         assert_eq!(debut("steel_longsword"), Some(3));
+        assert_eq!(debut("cutthroat_dirk"), Some(4));
+        assert_eq!(debut("shadowfang"), Some(5));
         for id in ["small_sword", "healing_potion"] {
             assert_eq!(debut(id), None, "{id} must stay out of chest pools");
         }
@@ -1137,6 +1148,8 @@ mod tests {
             ("goblin_sword", WeaponType::Sword),
             ("small_sword", WeaponType::Sword),
             ("dagger", WeaponType::Dagger),
+            ("cutthroat_dirk", WeaponType::Dagger),
+            ("shadowfang", WeaponType::Dagger),
             ("morningstar", WeaponType::Mace),
             ("worn_mace", WeaponType::Mace),
             ("greatclub", WeaponType::Club),

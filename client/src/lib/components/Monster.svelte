@@ -46,6 +46,7 @@
 
   import type { MonsterData } from '../types/Monster'
   import { withBarkanRuneGrip } from '../utils/barkanRuneGrip'
+  import { seatMonsterWeapon } from '../utils/monsterWeapon'
   import {
     MONSTER_SKILLS,
     type MonsterSkillEffects,
@@ -53,7 +54,6 @@
   import {
     attackClipNames,
     getMonsterDef,
-    parseWeaponRotation,
     splitClipNames,
   } from '../data/monsterDefs'
   import { getItemDef } from '../data/itemDefs'
@@ -161,20 +161,7 @@
     ? useLoader(GLTFLoader).load(`/models/${initialWeaponModel}`)
     : undefined
 
-  // Weapon grip transform relative to the attach bone. The bone sits at the
-  // wrist, so weaponOffset slides the grip out to the palm; x/z and the
-  // rotation settle it into the fist on rigs whose hand bone is not aligned
-  // with the grip. Fitted per rig against the real weapon model.
-  const WEAPON_OFFSET = new THREE.Vector3(
-    initialDef?.weaponOffsetX ?? 0,
-    initialDef?.weaponOffset ?? 0,
-    initialDef?.weaponOffsetZ ?? 0
-  )
-  const WEAPON_ROTATION = new THREE.Euler(
-    ...parseWeaponRotation(initialDef?.weaponRotation)
-  )
   const WEAPON_SCALE = 1
-  const WEAPON_SOCKET = 'WeaponSocket'
   let weaponAttached = false
   let weaponObject: THREE.Object3D | undefined
 
@@ -736,12 +723,7 @@
 
     const weapon = $weaponGltf.scene.clone(true)
     weaponObject = weapon
-    // A baked socket carries the grip that skill clips turn; the csv grip
-    // stays authoritative for its rest pose.
-    const socket = bone.getObjectByName(WEAPON_SOCKET)
-    const grip = socket ?? weapon
-    grip.position.copy(WEAPON_OFFSET)
-    grip.rotation.copy(WEAPON_ROTATION)
+    const attachBone = seatMonsterWeapon(bone, weapon, initialDef ?? {})
     weaponObject.scale.setScalar(WEAPON_SCALE)
     // Skill effects find the blade again in their clones by this name.
     weapon.name = 'MonsterWeapon'
@@ -759,7 +741,6 @@
       }
     })
     weaponAttached = true
-    const attachBone = socket ?? bone
     void warmupPipelines(
       threlte,
       `monster-weapon:${initialWeaponModel}`,

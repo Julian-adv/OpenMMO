@@ -3,7 +3,6 @@ use super::*;
 #[tokio::test]
 async fn skeleton_crypt_early_floors_spawn_weaker_skeletons() {
     let game_state = make_test_game_state("skeleton_crypt_early_floors");
-    let entrance = game_state.dungeon_defs.get("skeleton_crypt").unwrap();
     let weak = game_state.monster_defs.get("skeleton_weak").unwrap();
     let regular = game_state.monster_defs.get("skeleton").unwrap();
     assert_eq!(weak.model, regular.model);
@@ -17,27 +16,9 @@ async fn skeleton_crypt_early_floors_spawn_weaker_skeletons() {
         (6, "skeleton", 17, 77),
         (10, "skeleton", 19, 86),
     ] {
-        let mut player = make_player(&format!("delver{depth}"), entrance.x, entrance.z);
-        player.floor_level = -(depth as i8);
-        player.position.y = onlinerpg_shared::dungeon::floor_world_y(entrance.y, depth);
-        let id = player.id;
-        let at = player.position;
-        game_state.add_player(player).await;
-        game_state
-            .handle_player_floor_change(&id, 0, -(depth as i8), &at, &at)
-            .await;
-        let ids: Vec<_> = game_state
-            .dungeon_monsters
-            .read()
-            .await
-            .iter()
-            .filter(|(_, entry)| entry.entrance_id == entrance.id && entry.depth == depth)
-            .map(|(id, _)| id.clone())
-            .collect();
-        assert!(!ids.is_empty());
-        let monsters = game_state.monsters.read().await;
-        for id in ids {
-            let monster = monsters.get(&id).unwrap();
+        let monsters = floor_monsters(&game_state, "skeleton_crypt", depth).await;
+        assert!(!monsters.is_empty());
+        for monster in monsters {
             assert_eq!(monster.monster_type, expected_type);
             assert_eq!(monster.level_override, Some(expected_level));
             assert_eq!(monster.health, expected_health);

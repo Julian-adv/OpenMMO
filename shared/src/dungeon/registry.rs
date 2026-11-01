@@ -48,6 +48,9 @@ pub struct DungeonEntranceDef {
     /// (doc/DUNGEON_REWARD.md). Validated by the server on load.
     pub key_prefix: String,
     pub spawn_group: String,
+    /// `(item id, chance)` rolls only this dungeon's chest makes. Their items
+    /// keep a blank `chestChance` so other dungeons of the tier skip them.
+    pub chest_rolls: Vec<(String, f32)>,
 }
 
 impl DungeonEntranceDef {
@@ -118,18 +121,19 @@ fn parse_entrances(csv: &str) -> Vec<DungeonEntranceDef> {
                         .unwrap_or_else(|_| panic!("dungeon '{id}' has a non-numeric {name}"))
                 })
             };
+            let chest_drops: Vec<String> = field("chestDrops")
+                .split(';')
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+                .collect();
             Some(DungeonEntranceDef {
                 id: id.to_string(),
                 name: field("name").to_string(),
                 x: coord("x"),
                 y: coord("y"),
                 z: coord("z"),
-                chest_drops: field("chestDrops")
-                    .split(';')
-                    .map(str::trim)
-                    .filter(|s| !s.is_empty())
-                    .map(str::to_string)
-                    .collect(),
+                chest_drops: chest_drops.clone(),
                 floors: opt_u8("floors"),
                 boss: match field("boss") {
                     "" => super::BOSS_MONSTER_TYPE.to_string(),
@@ -146,6 +150,23 @@ fn parse_entrances(csv: &str) -> Vec<DungeonEntranceDef> {
                 },
                 key_prefix: field("keyPrefix").to_string(),
                 spawn_group: field("spawnGroup").to_string(),
+                chest_rolls: field("chestRolls")
+                    .split(';')
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(|roll| {
+                        roll.split_once(':')
+                            .and_then(|(item, chance)| {
+                                Some((item.trim().to_string(), chance.trim().parse().ok()?))
+                            })
+                            .filter(|(item, chance): &(String, f32)| {
+                                *chance > 0.0 && *chance <= 1.0 && !chest_drops.contains(item)
+                            })
+                            .unwrap_or_else(|| {
+                                panic!("dungeon '{id}' has an invalid chestRolls entry '{roll}' (needs item:chance in (0, 1], not a signature)")
+                            })
+                    })
+                    .collect(),
             })
         })
         .collect()
@@ -172,9 +193,9 @@ mod tests {
     #[test]
     fn parses_drops_lists_and_optional_floor_override() {
         let csv =
-            "id,name,x,y,z,chestDrops,floors,boss,chestTier,entranceDir,keyPrefix,spawnGroup\n\
-                   a,A Place,-1450,0.7,4720,shield;armor,5,orc_boss,2,s,a_key,skeleton\n\
-                   b,B Place,10,0,20,,,,,,,\n";
+            "id,name,x,y,z,chestDrops,floors,boss,chestTier,entranceDir,keyPrefix,spawnGroup,chestRolls\n\
+                   a,A Place,-1450,0.7,4720,shield;armor,5,orc_boss,2,s,a_key,skeleton,ring:0.2; amulet:0.1\n\
+                   b,B Place,10,0,20,,,,,,,,\n";
         let defs = parse_entrances(csv);
         assert_eq!(defs.len(), 2);
         assert_eq!(defs[0].chest_drops, ["shield", "armor"]);
@@ -185,7 +206,12 @@ mod tests {
         assert_eq!(defs[0].key_item_id(5), "a_key_5");
         assert_eq!(defs[0].spawn_group, "skeleton");
         assert!(defs[1].spawn_group.is_empty());
+        assert_eq!(
+            defs[0].chest_rolls,
+            [("ring".to_string(), 0.2), ("amulet".to_string(), 0.1)]
+        );
         assert!(defs[1].chest_drops.is_empty());
+        assert!(defs[1].chest_rolls.is_empty());
         assert_eq!(defs[1].floors, None, "blank floors = seed-derived depth");
         assert_eq!(defs[1].boss, super::super::BOSS_MONSTER_TYPE);
         assert_eq!(defs[1].chest_tier, 1, "blank chestTier = tier 1");

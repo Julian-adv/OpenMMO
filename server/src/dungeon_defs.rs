@@ -6,7 +6,7 @@
 //! mid-descent.
 //!
 //! What stays here is the one genuinely server-side part: validating
-//! `chestDrops` against the item table.
+//! `chestDrops` and `chestRolls` against the item table.
 
 use tracing::info;
 
@@ -20,8 +20,8 @@ use onlinerpg_shared::Position;
 pub struct DungeonDefs;
 
 impl DungeonDefs {
-    /// Validate against the item and monster tables: every `chestDrops` entry
-    /// must name a real item and `boss` a real monster; a typo'd entry panics
+    /// Validate against the item and monster tables: every `chestDrops` and
+    /// `chestRolls` entry must name a real item and `boss` a real monster; a typo'd entry panics
     /// at startup rather than silently handing out a broken item or spawning
     /// nothing (mirrors the world-drop table).
     pub fn load(
@@ -47,6 +47,20 @@ impl DungeonDefs {
                     "dungeon '{}' signature '{}' must carry the dungeon's chestTier",
                     def.id,
                     chest_drop
+                );
+            }
+            for (roll, _) in &def.chest_rolls {
+                let item = item_defs.get(roll).unwrap_or_else(|| {
+                    panic!(
+                        "dungeon '{}' chestRolls entry '{}' has no matching item definition",
+                        def.id, roll
+                    )
+                });
+                assert!(
+                    item.chest_tier == Some(def.chest_tier) && item.chest_chance.is_none(),
+                    "dungeon '{}' roll '{}' needs the dungeon's chestTier and a blank chestChance",
+                    def.id,
+                    roll
                 );
             }
             assert!(
@@ -85,13 +99,18 @@ impl DungeonDefs {
         }
 
         // An opted-in item at or below the deepest built dungeon must drop
-        // somewhere — as a signature or via a positive roll chance. Items
-        // tiered above every built dungeon are legitimately parked for a
-        // future dungeon (doc/ITEM_TIERS.md).
+        // somewhere — as a signature, a dungeon roll or via a positive roll
+        // chance. Items tiered above every built dungeon are legitimately
+        // parked for a future dungeon (doc/ITEM_TIERS.md).
         let max_tier = entrances().iter().map(|d| d.chest_tier).max().unwrap_or(0);
-        let signatures: std::collections::HashSet<&str> = entrances()
+        let chest_items: std::collections::HashSet<&str> = entrances()
             .iter()
-            .flat_map(|d| d.chest_drops.iter().map(String::as_str))
+            .flat_map(|d| {
+                d.chest_drops
+                    .iter()
+                    .chain(d.chest_rolls.iter().map(|(id, _)| id))
+                    .map(String::as_str)
+            })
             .collect();
         for item in item_defs.all() {
             let Some(tier) = item.chest_tier else {
@@ -99,9 +118,9 @@ impl DungeonDefs {
             };
             assert!(
                 tier > max_tier
-                    || signatures.contains(item.id.as_str())
+                    || chest_items.contains(item.id.as_str())
                     || item.chest_chance.is_some_and(|c| c > 0.0),
-                "item '{}' (chestTier {tier}) is neither a signature drop nor has a chestChance — it can never drop",
+                "item '{}' (chestTier {tier}) is no signature, dungeon roll or chestChance — it can never drop",
                 item.id
             );
         }

@@ -12,7 +12,9 @@
 | 2 | Orc Warrens | 가죽 세트 완성 (몸통·장갑·부츠) + 체인 세트 일부 (철 부츠·철 투구) + iron_sword | 운영 중 |
 | 3 | Ogre Stronghold (15층, ogre_boss) | 체인 세트 완성 (체인 메일·건틀릿) + 판금 세트 일부 (부츠·그리브) + 기본 망토 + steel_longsword | 운영 중 |
 | 4 | Skeleton Crypt (20층, skeleton_knight) | 판금 세트 완성 (흉갑·투구·건틀릿) + great_sword | 구현 완료·운영 배포 대기 |
+| 4 | Thieves' Den (20층, thief_king) | 판금 세트 완성 (흉갑 확정·투구·건틀릿 롤) + cutthroat_dirk | 구현 완료, 단검·보스 모델 완료 |
 | 5 | Sundered Bastion (25층, barkan) · [필드 레이드 연계 설계](TIER5_FIELD_RAID.md) | ring_of_protection + rune_blade + 대지의 아뮬렛 (가칭) | 던전 본체·rune_blade·아뮬렛 착용 효과 구현, 봉헌 미구현 |
+| 5 | Shadow Guild (25층, shadow_master) | ring_of_protection + shadowfang | 구현 완료, 단검 모델 완료, 보스 임시 모델 |
 
 특수 망토(투명·보호 등)·셔츠·amulet_of_life_saving·ring_of_regeneration은 던전 풀에 넣지 않는다 — **월드 드랍 전용 희소템**으로 유저 간 거래의 축을 만든다 (아래 참조).
 
@@ -66,9 +68,9 @@
 
 | 아이템 | 효과 (`effects`) | 획득처 | 상태 |
 |--------|------|--------|------|
-| ring_of_protection | guard +1 (guard 열) | 티어 5 던전 (20% 롤) | 있음 |
+| ring_of_protection | guard +1 (guard 열) | 티어 5 던전 공용 (20% 롤) | 있음 |
 | rift_ring (균열의 반지) | 치명타 확률 +5%p (`crit+5%`), 동일 반지 효과 중복 불가 | 이졸데에게 테라클래시 파편 30개로 교환 | 있음 (2026-10-25). 기본 5%에서 착용 시 총 10% |
-| earth_amulet (대지의 아뮬렛, 가칭) | 목 장비. 레벨당 최대 HP +1 (`maxhp+1/lv`), 제단 봉헌 시 소모하여 필드 보스 소환 | 티어 5 던전 (10% 롤) | 있음. 봉헌은 [설계](TIER5_FIELD_RAID.md)만 |
+| earth_amulet (대지의 아뮬렛, 가칭) | 목 장비. 레벨당 최대 HP +1 (`maxhp+1/lv`), 제단 봉헌 시 소모하여 필드 보스 소환 | Sundered Bastion 전용 (10% 롤) | 있음. 봉헌은 [설계](TIER5_FIELD_RAID.md)만 |
 | gold_ring | CHA +1 (`cha+1`) | 티어 3 던전 (10% 롤) | 있음 |
 | silver_necklace | 허기 감소 ×0.75 (`sustenance`) | 티어 2 던전 (10% 롤) | 있음 (아이콘 필요) |
 | amulet_of_life_saving | 사망 1회 방지 후 소모 | **월드 드랍 전용** | 소모품 `phoenix_talisman`(죽은 뒤 사용해 제자리 부활, Rica 5,000c + 월드 드랍 0.2%)으로 대체 구현 (2026-08-20). 착용형 자동 발동판은 보류 |
@@ -92,8 +94,9 @@ amulet_of_life_saving·ring_of_regeneration은 성능이 강력해 확정 파밍
 
 ### 드랍 방식: 시그니처 + 아이템별 독립 롤
 
-- 던전당 시그니처(확정) 드랍: **각 세트의 몸통(핵심) 파츠 + 보스 무기** — Old Crypt는 leather_helmet·goblin_sword, Orc Warrens는 leather_armor·iron_sword, 티어 3은 chain_mail·steel_longsword, 티어 4는 breastplate·great_sword. 보스 무기는 보스가 떨구지 않고 상자에서만 나온다(2026-08-30, 보스 생사와 상자를 분리한 결과). 티어 5는 시그니처 없음 (확정이면 1회 만에 끝나므로 ring_of_protection은 20% 롤).
+- 던전당 시그니처(확정) 드랍: **각 세트의 몸통(핵심) 파츠 + 보스 무기** — Old Crypt는 leather_helmet·goblin_sword, Orc Warrens는 leather_armor·iron_sword, 티어 3은 chain_mail·steel_longsword, Skeleton Crypt는 breastplate·great_sword, Thieves' Den은 breastplate·cutthroat_dirk. 보스 무기는 보스가 떨구지 않고 상자에서만 나온다(2026-08-30, 보스 생사와 상자를 분리한 결과). 티어 5는 시그니처 없음 (확정이면 1회 만에 끝나므로 ring_of_protection은 20% 롤).
 - 풀의 나머지 아이템은 **아이템별 확률(`chestChance`)로 독립 롤**. 시그니처는 독립 롤에서 제외해 중복을 막는다.
+- 한 던전에서만 나와야 하는 확률 보상은 dungeons.csv `chestRolls`(전용 롤)에 둔다. 같은 티어의 다른 던전은 굴리지 않는다. 규칙은 [DUNGEON_REWARD.md](DUNGEON_REWARD.md).
 - 하위 티어 이월템(chestTier < 던전 티어)은 각 10% 보너스 롤 — 놓친 파츠를 상위 던전에서 메꾼다.
 - 골드는 `깊이 × 500 ~ 깊이 × 1500`.
 - 열 자격은 **마지막 잠긴 층 열쇠 소지**뿐이다(doc/DUNGEON_REWARD.md). 보스 생사는 보지 않는다.
@@ -110,7 +113,9 @@ amulet_of_life_saving·ring_of_regeneration은 성능이 강력해 확정 파밍
 | Orc Warrens (T2) | leather_armor | leather_gloves·leather_boots·iron_boots·iron_helmet 각 37% | ≈5.0회 |
 | Ogre Stronghold (T3) | chain_mail | iron_gauntlets·plate_greaves·plate_boots·기본 망토 각 37% | ≈5.0회 |
 | Skeleton Crypt (T4) | breastplate·great_sword | plate_helmet·plate_gauntlets 각 30% | ≈4.7회 |
-| 티어 5 던전 | (시그니처 없음) | ring_of_protection 20% | ≈5.0회 |
+| Thieves' Den (T4) | breastplate·cutthroat_dirk | plate_helmet·plate_gauntlets 각 30% | ≈4.7회 |
+| Sundered Bastion (T5) | (시그니처 없음) | ring_of_protection 20%, 전용 rune_blade 20%·earth_amulet 10% | ≈5.0회 (반지 기준) |
+| Shadow Guild (T5) | (시그니처 없음) | ring_of_protection 20%, 전용 shadowfang 20% | ≈5.0회 (반지 기준) |
 
 확률 상수는 아이템 데이터에 `chestChance`로 명시하고, 완성 기대 횟수는 테스트로 고정(시뮬레이션 또는 닫힌식 검증).
 
@@ -161,10 +166,18 @@ amulet_of_life_saving·ring_of_regeneration은 성능이 강력해 확정 파밍
 | 2 | iron_sword | 1d8 | 10,000 | Orc Warrens 상자 확정, 월드 드랍 0.5% (상점 비판매) | 있음 |
 | 3 | steel_longsword | 1d10 | 16,000 | 티어 3 던전 무장 몬스터 + Ogre Stronghold 상자 확정 | 있음. 일반 오거는 아직 greatclub(600c) 10% |
 | 4 | great_sword | 2d8 | 28,000 | 티어 4 던전 무장 몬스터 + 상자 확정 | 모델·아이콘 등록; 양손무기; 던전 미구현 |
-| 5 | rune_blade | 2d10 | 50,000 | 티어 5 상자 20% 롤 (ring_of_protection과 동일 철학) | 있음. 양손무기, 바르칸도 들고 싸운다 |
+| 5 | rune_blade | 2d10 | 50,000 | Sundered Bastion 상자 전용 롤 20% (ring_of_protection과 동일 철학) | 있음. 양손무기, 바르칸도 들고 싸운다 |
 
-- basePrice는 평균 피해당 가격이 방어구의 guard당 가격 곡선과 나란히 오르도록 책정 (2,200 → 2,900 → 4,000 → 5,600/pt).
-- 몬스터가 드랍하는 환금 무기는 **무게당 가격을 동일하게** (티어 1은 1,000c/kg: small_sword 1,500/w1.5, goblin_sword 2,000/w2) — 인벤토리가 무게로 차므로 무게당 가격이 다르면 그 무기를 주는 몬스터만 파밍하게 된다. dagger(2,500/w1)는 드랍 없는 상점 전용이라 예외.
+단검(`weaponType=dagger`, DEX 판정, 한손, 사거리 1.5, 1,200ms)은 별도 사다리다. 상점 단검 뒤로 도적 던전 두 곳에서 한 자루씩 오른다.
+
+| 티어 | 단검 | dice | basePrice | 획득처 | 상태 |
+|------|------|------|-----------|--------|------|
+| 1 | dagger | 1d4 | 2,500 | 상점 | 있음 |
+| 4 | cutthroat_dirk | 1d6 | 11,000 | Thieves' Den 상자 확정, 티어 5 상자 이월 10% | 있음 |
+| 5 | shadowfang | 1d8 | 20,000 | Shadow Guild 상자 전용 롤 20% | 있음 |
+
+- basePrice는 평균 피해당 가격이 티어마다 오르도록 책정했다. iron_sword 2,200, steel_longsword 2,900, great_sword 3,100, rune_blade 4,500c/pt. 단검도 같은 티어의 값을 따른다(cutthroat_dirk 3,100, shadowfang 4,400c/pt). 대검 가격에 맞추면 두 티어 4 던전을 매일 도는 캐릭터의 상자 수입이 크게 늘어서다.
+- 몬스터가 드랍하는 환금 무기는 **무게당 가격을 동일하게** (티어 1은 1,000c/kg: small_sword 1,500/w1.5, goblin_sword 2,000/w2) — 인벤토리가 무게로 차므로 무게당 가격이 다르면 그 무기를 주는 몬스터만 파밍하게 된다. 단검은 예외다. dagger(2,500/w1)는 상점에서만 팔고, 상위 단검은 상자에서만 나온다.
 - 이름은 전부 가칭. 몬스터 애니메이션이 Sword 계열뿐이라 날붙이 형태로 제한.
 
 ### 드랍 방식: worn 이원화 (티어 3+)

@@ -3,12 +3,13 @@ use axum::{extract::State, response::Response};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-const TRACKED_ITEMS: [&str; 5] = [
+const TRACKED_ITEMS: [&str; 6] = [
     "scroll_of_enchant_weapon",
     "scroll_of_enchant_armor",
     "stethoscope",
     "rune_blade",
     "earth_amulet",
+    "shadowfang",
 ];
 
 /// Counts keyed by hour, waiting for the next save.
@@ -261,5 +262,14 @@ mod tests {
         assert_eq!(amulet.chest_drops.len(), 1);
         assert_eq!(amulet.chest_drops[0].dungeon, "Sundered Bastion");
         assert_eq!(amulet.chest_drops[0].chance, 0.1);
+
+        let fang = data
+            .items
+            .iter()
+            .find(|item| item.item_def_id == "shadowfang")
+            .unwrap();
+        assert_eq!(fang.chest_drops.len(), 1);
+        assert_eq!(fang.chest_drops[0].dungeon, "Shadow Guild");
+        assert_eq!(fang.chest_drops[0].chance, 0.2);
     }
 }

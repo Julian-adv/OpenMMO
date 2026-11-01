@@ -33,8 +33,35 @@ node tools/reserve-dungeon-land.mjs --dungeon skeleton_crypt --ownership /tmp/ow
 - 몬스터는 `data-src/dungeon_spawns.csv`의 `bastion` 그룹이다. 모든 던전의 스폰은 이 파일에서 그룹·몬스터·깊이 범위별 행으로 정의하므로, 같은 몬스터를 던전마다 다른 깊이에 둘 수 있다. 모두 선공형이다.
 - 층수 상한은 `MAX_FLOORS`(25)이고, `floors`가 비어 있는 던전의 무작위 층수 범위 `MIN_DRAWN_FLOORS..=MAX_DRAWN_FLOORS`(5–20)는 기존 배치를 지키기 위해 그대로 둔다. 깊이 보정 몬스터 레벨 상한은 25다.
 - 5·10·15·20·25층 문에 `bastion_key_5…25`. 아이콘·모델은 기존 열쇠를 재사용한다.
-- 최종 상자: 확정 보상 없음, 티어 5 확률 보상(`ring_of_protection` 20%)과 하위 티어 장비, 12,500–37,500c.
+- 최종 상자: 확정 보상 없음, 전용 롤(`chestRolls`) `rune_blade` 20%·`earth_amulet` 10%, 티어 5 확률 보상(`ring_of_protection` 20%)과 하위 티어 장비, 12,500–37,500c.
 - 바르칸 처치 칭호: `barkan_slayer`, 단독 처치 `barkan_slayer_solo`.
+
+## Thieves' Den — 티어 4
+
+- 입구: `world(-862, 1.2, 3822)`, 서쪽 도로를 향한다(`entranceDir=w`). Skeleton Crypt에서 북동쪽으로 약 470m. 20층, 최종 보스 `thief_king`(레벨 25·HP 350·guard 32).
+- 보스 모델은 2.1m `monsters/thief_king.glb`다. 동작 6종과 오른손 단검 파지를 GLB에 구웠고 `slash1`로 공격한다([애셋 기록](assets/monsters.md)).
+- 몬스터는 `den` 그룹이다. 기존 모델에 Skeleton Crypt 같은 층 몬스터의 레벨·guard·명중·피해를 입힌 변형이다. 무기와 드롭은 원래 몬스터를 따른다.
+  - 1–5층: Kobold Cutpurse(`kobold_cutpurse`). 잊힌 망자 수치(레벨 8·HP 40·guard 14·2d6).
+  - 6–10층: Hobgoblin Thug·Gnoll Stalker. Skeleton 수치(레벨 16·guard 20·명중 +20·3d6). Stalker는 출혈 공격을 유지한다.
+  - 11–15층: Thug·Stalker와 Bugbear Enforcer를 3:2. Enforcer는 Skeleton Warrior 수치(레벨 20·guard 24·3d6).
+  - 16–20층: Enforcer.
+- 5·10·15·20층 문에 `den_key_5…20`. 아이콘·모델은 기존 열쇠를 재사용한다.
+- 최종 상자: `breastplate`·`cutthroat_dirk` 확정, `plate_helmet`·`plate_gauntlets` 각 30%, 하위 티어 장비 각 10%, 10,000–30,000c. `great_sword`는 Skeleton Crypt의 확정 보상이라 여기서는 나오지 않는다.
+- 처치 칭호: `thief_king_slayer`, 단독 처치 `thief_king_slayer_solo`.
+
+## Shadow Guild — 티어 5
+
+- 입구: `world(-2384, 1.05, 5962)`, 남향(`entranceDir=s`). Sundered Bastion에서 도로를 따라 남서쪽으로 약 670m. 25층, 최종 보스 `shadow_master`(레벨 30·HP 600·guard 36). 보스는 임시로 `characters/rogue.glb`를 1.2배로 쓰고 공용 동작 팩(`sharedAnims`)으로 움직인다. 새 모델이 오면 도적 왕과 같은 방식으로 교체한다.
+- 몬스터는 `guild` 그룹이다. Sundered Bastion 같은 층 몬스터의 수치를 입힌 변형이고, 층별 비율도 같다.
+  - Stone Golem 자리: Orc Bruiser(레벨 10·guard 17·2d10).
+  - Lizardfolk 자리: Lizardfolk Assassin(같은 수치).
+  - Cyclop 자리: Ogre Smuggler(레벨 15·guard 20·3d8).
+  - Skeleton 자리: Thug·Stalker. Skeleton Warrior 자리: Enforcer.
+- 5·10·15·20·25층 문에 `guild_key_5…25`.
+- 최종 상자: 확정 보상 없음, 전용 롤 `shadowfang` 20%, 티어 5 확률 보상(`ring_of_protection` 20%), 하위 티어 장비 각 10%(`cutthroat_dirk`·`great_sword` 포함), 12,500–37,500c. `rune_blade`와 `earth_amulet`은 Sundered Bastion 전용 롤이라 나오지 않는다([DUNGEON_REWARD.md](DUNGEON_REWARD.md)).
+- 처치 칭호: `shadow_master_slayer`, 단독 처치 `shadow_master_slayer_solo`.
+
+두 입구 모두 80×80m 범위 전체가 입구 높이 − 1m 이상이다(Thieves' Den 0.3–1.75m, Shadow Guild 0.7–1.5m). 2026-11-01 운영 `land_plots` 기준으로 150m 안에 소유지가 없었고, 운영에는 두 지역(`r-01_+03`, `r-03_+05`)의 토지 등급 파일이 없어 등록하면 기본 링이 적용된다. 배포 때 최신 추출로 `--dungeon thieves_den`과 `--dungeon shadow_guild`를 다시 돌린다.
 
 ## 리셋과 재접속
 

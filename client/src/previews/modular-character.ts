@@ -111,6 +111,12 @@ async function main() {
     await showBarkan(scene, resources, cleanup, () => disposed)
     return
   }
+  const monster = new URLSearchParams(location.search).get('monster')
+  if (monster) {
+    const { showMonster } = await import('./monster')
+    await showMonster(monster, scene, resources, cleanup, () => disposed)
+    return
+  }
   if (
     ['female-knight-bob', 'female-rogue-glove'].includes(
       new URLSearchParams(location.search).get('asset') ?? ''

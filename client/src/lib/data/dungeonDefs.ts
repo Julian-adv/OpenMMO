@@ -16,6 +16,8 @@ export interface DungeonEntranceDef {
   entranceDir?: string
   keyPrefix?: string
   spawnGroup?: string
+  /** Semicolon-separated `item:chance` rolls only this chest makes. */
+  chestRolls?: string
 }
 
 export const DUNGEON_ENTRANCES: DungeonEntranceDef[] = Object.values(

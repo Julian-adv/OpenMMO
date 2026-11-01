@@ -115,28 +115,12 @@ fn skeleton_crypt_has_twenty_floors_and_its_own_monsters() {
         floors.iter().filter(|floor| floor.chest.is_some()).count(),
         1
     );
-    let mut bosses = Vec::new();
-    for floor in &floors {
-        let mut regular = 0;
-        for spawn in &floor.spawns {
-            assert!(spawn.aggressive);
-            if spawn.is_boss {
-                bosses.push((floor.depth, spawn.monster_type.as_str()));
-                continue;
-            }
-            regular += 1;
-            match floor.depth {
-                1..=5 => assert_eq!(spawn.monster_type, "skeleton_weak"),
-                6..=10 => assert_eq!(spawn.monster_type, "skeleton"),
-                11..=15 => assert!(matches!(
-                    spawn.monster_type.as_str(),
-                    "skeleton" | "skeleton_warrior"
-                )),
-                _ => assert_eq!(spawn.monster_type, "skeleton_warrior"),
-            }
-        }
-        assert!(regular > 0, "empty floor {}", floor.depth);
-    }
+    let bosses = bosses_with_allowed_spawns(&floors, |depth| match depth {
+        1..=5 => &["skeleton_weak"],
+        6..=10 => &["skeleton"],
+        11..=15 => &["skeleton", "skeleton_warrior"],
+        _ => &["skeleton_warrior"],
+    });
     assert_eq!(bosses, [(20, "skeleton_knight")]);
     assert_eq!(
         layout_hash(&floors),
@@ -159,8 +143,23 @@ fn sundered_bastion_has_twenty_five_floors_and_its_own_monsters() {
         locked_depths(floors.len() as u8).collect::<Vec<_>>(),
         [5, 10, 15, 20, 25]
     );
+    let bosses = bosses_with_allowed_spawns(&floors, |depth| match depth {
+        1..=5 => &["stone_golem", "lizardfolk"],
+        6..=10 => &["lizardfolk", "cyclop", "skeleton"],
+        11..=20 => &["cyclop", "skeleton", "skeleton_warrior"],
+        _ => &["stone_golem", "cyclop", "skeleton_warrior"],
+    });
+    assert_eq!(bosses, [(25, "barkan")]);
+}
+
+/// Every floor's regular spawns, checked against the allowed types for its
+/// depth, plus the bosses found on the way down.
+fn bosses_with_allowed_spawns<'a>(
+    floors: &'a [FloorLayout],
+    allowed: impl Fn(u8) -> &'static [&'static str],
+) -> Vec<(u8, &'a str)> {
     let mut bosses = Vec::new();
-    for floor in &floors {
+    for floor in floors {
         let mut regular = 0;
         for spawn in &floor.spawns {
             assert!(spawn.aggressive);
@@ -169,14 +168,8 @@ fn sundered_bastion_has_twenty_five_floors_and_its_own_monsters() {
                 continue;
             }
             regular += 1;
-            let allowed: &[&str] = match floor.depth {
-                1..=5 => &["stone_golem", "lizardfolk"],
-                6..=10 => &["lizardfolk", "cyclop", "skeleton"],
-                11..=20 => &["cyclop", "skeleton", "skeleton_warrior"],
-                _ => &["stone_golem", "cyclop", "skeleton_warrior"],
-            };
             assert!(
-                allowed.contains(&spawn.monster_type.as_str()),
+                allowed(floor.depth).contains(&spawn.monster_type.as_str()),
                 "{} on floor {}",
                 spawn.monster_type,
                 floor.depth
@@ -184,11 +177,61 @@ fn sundered_bastion_has_twenty_five_floors_and_its_own_monsters() {
         }
         assert!(regular > 0, "empty floor {}", floor.depth);
     }
-    assert_eq!(bosses, [(25, "barkan")]);
+    bosses
+}
+
+#[test]
+fn thieves_den_has_twenty_floors_and_its_own_monsters() {
+    let floors = generate_dungeon_for("thieves_den");
+    assert_eq!(floors.len(), 20);
+    assert!(!floors[0].up_shaft.along_z && !floors[0].up_shaft.reversed);
+    assert_eq!(
+        locked_depths(floors.len() as u8).collect::<Vec<_>>(),
+        [5, 10, 15, 20]
+    );
+    let bosses = bosses_with_allowed_spawns(&floors, |depth| match depth {
+        1..=5 => &["kobold_cutpurse"],
+        6..=10 => &["hobgoblin_thug", "gnoll_stalker"],
+        11..=15 => &["hobgoblin_thug", "gnoll_stalker", "bugbear_enforcer"],
+        _ => &["bugbear_enforcer"],
+    });
+    assert_eq!(bosses, [(20, "thief_king")]);
+    assert_eq!(layout_hash(&floors), GOLDEN_THIEVES_DEN_HASH);
+}
+
+#[test]
+fn shadow_guild_has_twenty_five_floors_and_its_own_monsters() {
+    let floors = generate_dungeon_for("shadow_guild");
+    assert_eq!(floors.len(), 25);
+    assert!(floors[0].up_shaft.along_z && floors[0].up_shaft.reversed);
+    assert_eq!(
+        locked_depths(floors.len() as u8).collect::<Vec<_>>(),
+        [5, 10, 15, 20, 25]
+    );
+    let bosses = bosses_with_allowed_spawns(&floors, |depth| match depth {
+        1..=5 => &["orc_bruiser", "lizardfolk_assassin"],
+        6..=10 => &[
+            "lizardfolk_assassin",
+            "ogre_smuggler",
+            "hobgoblin_thug",
+            "gnoll_stalker",
+        ],
+        11..=20 => &[
+            "ogre_smuggler",
+            "hobgoblin_thug",
+            "gnoll_stalker",
+            "bugbear_enforcer",
+        ],
+        _ => &["orc_bruiser", "ogre_smuggler", "bugbear_enforcer"],
+    });
+    assert_eq!(bosses, [(25, "shadow_master")]);
+    assert_eq!(layout_hash(&floors), GOLDEN_SHADOW_GUILD_HASH);
 }
 
 // Updated for chest flank and front clearance.
 const GOLDEN_OLD_CRYPT_HASH: u64 = 0x216b_8cee_51ff_2b67;
+const GOLDEN_THIEVES_DEN_HASH: u64 = 0x1d9e_c735_df9d_e607;
+const GOLDEN_SHADOW_GUILD_HASH: u64 = 0x2e1f_1554_a751_5c10;
 
 #[test]
 fn structure_invariants_many_seeds() {

@@ -4,6 +4,26 @@
 
 ## Monster
 
+- thief_king — 도적 소굴 보스. [원화](../images/monsters/thief-king-concept.png)는 OpenAI Codex ImageGen,
+  ChatGPT Pro 20x로 2026-11-01 제작했다. OpenAI 생성 출력물 이용 조건을 따른다.
+  - 3D 원본은 사용자가 2026-11-01 Tripo 웹 앱 Max 요금제로 원화에서 생성했다. Tripo 서비스 이용 조건 적용.
+    원본과 생성 기록은 `assets/monsters/thief_king/tripo_v1/`에 보관한다.
+  - 프로젝트 모듈형 남성의 Mixamo 호환 65본 계층과 가중치를 로컬에서 피팅했다. 메시 축소 없이
+    10,823 triangles를 유지하고 바인드 포즈 높이 2.1m, 바닥 중심 원점, 스케일 1로 저장했다.
+    base color·metallic/roughness·normal은 1024² WebP로 저장했다. 작업본은
+    `assets/monsters/thief_king/rig_v1/`, 게임 모델은 `client/public/models/monsters/thief_king.glb`다.
+  - 공용 locomotion·combat_melee 팩의 `idle1`, `walk`, `run`, `slash1`, `combat_idle`, `dying`을
+    클라이언트 리타게팅 코드로 오프라인 변환해 게임 GLB에 넣었다. 힙 높이는 60Hz로 접지 보정했으며
+    `sharedAnims=false`로 사용한다. 검증 수치·재현 절차·해시는 [리깅 보고서](thief-king-rig-v1.json)에 있다.
+    공용 팩에는 hit 클립이 없다.
+  - 오른손 손가락·엄지를 닫는 자세를 여섯 클립에 베이크했다. 오른손 로컬 부착값은
+    `weaponOffset=0.118293`, `weaponOffsetX=0.008057`, `weaponOffsetZ=0.028002`,
+    `weaponRotation=0.427|-17.064|18.818`(도)이다. dagger·cutthroat_dirk·shadowfang을 같은 값으로
+    검사했으며 `monsters.csv`의 thief_king 행에 넣었다.
+  - 캐릭터 미리보기 `modular-character-preview.html?monster=thief_king`에서 게임과 같은 모델·동작·손 무기로 볼 수 있다.
+  - 정리(2026-11-01): 검토 렌더·상세 검증 JSON, 베이크 중간 GLB `game_v1/`, 쓰지 않은 Mixamo 업로드 ZIP을 삭제했다.
+    Tripo 원본·리그 GLB·Blender 파일·파지 설정·게임 모델과 보고서의 검증 수치는 보존했다.
+
 - skeleton_warrior — Tripo 모델, 2026-09-12 수령. 사용자는 앞선 스켈레톤 작업에서 Pro 요금제를 확인했다.
   이번 모델의 정확한 생성일은 미확인(로컬 다운로드 파일 생성 시각: 2026-09-12).
   - 사용자 제공 `skeleton+armor+3d+model.glb`; 원본은 `assets/monsters/skeleton_warrior/source.glb`에 보관.

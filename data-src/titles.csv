@@ -10,5 +10,9 @@ skeleton_slayer,Slayer of the Skeleton Knight,스켈레톤 기사를 쓰러뜨�
 skeleton_slayer_solo,Who Slew the Skeleton Knight Alone,홀로 스켈레톤 기사를 쓰러뜨린 자,boss_kill,skeleton_knight,,true,51,skeleton_slayer
 barkan_slayer,Slayer of Barkan,바르칸을 쓰러뜨린 자,boss_kill,barkan,,false,52,
 barkan_slayer_solo,Who Slew Barkan Alone,홀로 바르칸을 쓰러뜨린 자,boss_kill,barkan,,true,53,barkan_slayer
+thief_king_slayer,Slayer of the Thief King,도적 왕을 쓰러뜨린 자,boss_kill,thief_king,,false,54,
+thief_king_slayer_solo,Who Slew the Thief King Alone,홀로 도적 왕을 쓰러뜨린 자,boss_kill,thief_king,,true,55,thief_king_slayer
+shadow_master_slayer,Slayer of the Shadow Master,그림자 길드장을 쓰러뜨린 자,boss_kill,shadow_master,,false,56,
+shadow_master_slayer_solo,Who Slew the Shadow Master Alone,홀로 그림자 길드장을 쓰러뜨린 자,boss_kill,shadow_master,,true,57,shadow_master_slayer
 terraclash_raider,Who Brought Down Terraclash,테라클래시를 무너뜨린 자,field_raid,terraclash,,false,60,
 terraclash_final_blow,Who Dealt Terraclash the Final Blow,테라클래시에 마지막 일격을 가한 자,field_raid_last_hit,terraclash,,false,61,terraclash_raider
