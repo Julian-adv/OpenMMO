@@ -51,7 +51,7 @@ node tools/reserve-dungeon-land.mjs --dungeon skeleton_crypt --ownership /tmp/ow
 
 ## Shadow Guild — 티어 5
 
-- 입구: `world(-2384, 1.05, 5962)`, 남향(`entranceDir=s`). Sundered Bastion에서 도로를 따라 남서쪽으로 약 670m. 25층, 최종 보스 `shadow_master`(레벨 30·HP 600·guard 36). 보스는 임시로 `characters/rogue.glb`를 1.2배로 쓰고 공용 동작 팩(`sharedAnims`)으로 움직인다. 새 모델이 오면 도적 왕과 같은 방식으로 교체한다.
+- 입구: `world(-2384, 1.05, 5962)`, 남향(`entranceDir=s`). Sundered Bastion에서 도로를 따라 남서쪽으로 약 670m. 25층, 최종 보스 `shadow_master`(레벨 30·HP 600·guard 36). 보스 모델은 [애셋 기록](assets/monsters.md)을 참고한다.
 - 몬스터는 `guild` 그룹이다. Sundered Bastion 같은 층 몬스터의 수치를 입힌 변형이고, 층별 비율도 같다.
   - Stone Golem 자리: Orc Bruiser(레벨 10·guard 17·2d10).
   - Lizardfolk 자리: Lizardfolk Assassin(같은 수치).

@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { gzipSync } from "node:zlib";
 import { NodeIO, PropertyType } from "@gltf-transform/core";
-import { prune } from "@gltf-transform/functions";
+import { dedup, prune, resample } from "@gltf-transform/functions";
 import {
   ALL_EXTENSIONS,
   EXTMeshoptCompression,
@@ -13,6 +13,7 @@ import sharp from "sharp";
 const [source, output, sizeArg, ...flags] = process.argv.slice(2);
 const size = Number(sizeArg);
 const resizeAll = flags.includes("--all-textures");
+const lossyMaps = flags.includes("--lossy-maps");
 const animationFlag = flags.find((flag) =>
   flag.startsWith("--keep-animations="),
 );
@@ -26,6 +27,8 @@ if (
     (flag) =>
       flag !== "--lossless-png" &&
       flag !== "--all-textures" &&
+      flag !== "--lossy-maps" &&
+      flag !== "--resample-animations" &&
       flag !== animationFlag,
   ) ||
   new Set(flags).size !== flags.length ||
@@ -34,7 +37,7 @@ if (
   size <= 0
 ) {
   console.error(
-    "Usage: node tools/optimize-character-textures.mjs SOURCE.glb OUTPUT.glb BASE_MAX_SIZE [--lossless-png] [--all-textures] [--keep-animations=NAME,...]",
+    "Usage: node tools/optimize-character-textures.mjs SOURCE.glb OUTPUT.glb BASE_MAX_SIZE [--lossless-png] [--all-textures] [--lossy-maps] [--resample-animations] [--keep-animations=NAME,...]",
   );
   process.exit(1);
 }
@@ -76,6 +79,9 @@ if (animationNames) {
 await document.transform(
   prune({ propertyTypes: [PropertyType.ACCESSOR], keepAttributes: false }),
 );
+if (flags.includes("--resample-animations")) {
+  await document.transform(resample({ tolerance: 1e-5 }), dedup({ propertyTypes: [PropertyType.ACCESSOR] }));
+}
 const textures = new Set(
   document
     .getRoot()
@@ -123,7 +129,7 @@ if (flags.includes("--lossless-png") || resizeAll) {
       });
     }
     const compressed = await input
-      .webp({ lossless: true, effort: 6 })
+      .webp(lossyMaps ? { quality: 90, effort: 6 } : { lossless: true, effort: 6 })
       .toBuffer();
     if (resizeAll || compressed.length < image.length) {
       texture.setImage(compressed).setMimeType("image/webp");

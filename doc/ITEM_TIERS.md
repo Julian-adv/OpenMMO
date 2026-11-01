@@ -14,7 +14,7 @@
 | 4 | Skeleton Crypt (20층, skeleton_knight) | 판금 세트 완성 (흉갑·투구·건틀릿) + great_sword | 구현 완료·운영 배포 대기 |
 | 4 | Thieves' Den (20층, thief_king) | 판금 세트 완성 (흉갑 확정·투구·건틀릿 롤) + cutthroat_dirk | 구현 완료, 단검·보스 모델 완료 |
 | 5 | Sundered Bastion (25층, barkan) · [필드 레이드 연계 설계](TIER5_FIELD_RAID.md) | ring_of_protection + rune_blade + 대지의 아뮬렛 (가칭) | 던전 본체·rune_blade·아뮬렛 착용 효과 구현, 봉헌 미구현 |
-| 5 | Shadow Guild (25층, shadow_master) | ring_of_protection + shadowfang | 구현 완료, 단검 모델 완료, 보스 임시 모델 |
+| 5 | Shadow Guild (25층, shadow_master) | ring_of_protection + shadowfang | 구현 완료, 단검·보스 모델 완료 |
 
 특수 망토(투명·보호 등)·셔츠·amulet_of_life_saving·ring_of_regeneration은 던전 풀에 넣지 않는다 — **월드 드랍 전용 희소템**으로 유저 간 거래의 축을 만든다 (아래 참조).
 

@@ -5,46 +5,13 @@ import { readFileSync, writeFileSync } from "node:fs";
 import * as THREE from "../client/node_modules/three/build/three.module.js";
 import { hash, headlessThree, root } from "./lib/headless-three.mjs";
 import { buildBarkanRuneSlash } from "./lib/barkan-rune-slash.mjs";
+import { readGlb, writeGlb } from "./lib/glb.mjs";
 
 const SOURCE = "assets/monsters/barkan/game_v1/barkan.glb";
 const OUTPUT = "client/public/models/monsters/barkan.glb";
 const REPORT = "doc/assets/barkan-rune-slash-bake.json";
 const SOCKET = "WeaponSocket";
 const TIP = 1.617;
-
-function readGlb(bytes) {
-  assert.equal(bytes.readUInt32LE(0), 0x46546c67);
-  const jsonLength = bytes.readUInt32LE(12);
-  const json = JSON.parse(bytes.toString("utf8", 20, 20 + jsonLength));
-  const binStart = 20 + jsonLength;
-  const binLength = bytes.readUInt32LE(binStart);
-  return {
-    json,
-    bin: bytes.subarray(binStart + 8, binStart + 8 + binLength),
-  };
-}
-
-function writeGlb(json, bin) {
-  const pad = (buffer, fill) =>
-    Buffer.concat([buffer, Buffer.alloc((4 - (buffer.length % 4)) % 4, fill)]);
-  const jsonChunk = pad(Buffer.from(JSON.stringify(json)), 0x20);
-  const binChunk = pad(bin, 0);
-  const header = Buffer.alloc(12);
-  header.writeUInt32LE(0x46546c67, 0);
-  header.writeUInt32LE(2, 4);
-  header.writeUInt32LE(12 + 8 + jsonChunk.length + 8 + binChunk.length, 8);
-  const chunk = (data, type) => {
-    const head = Buffer.alloc(8);
-    head.writeUInt32LE(data.length, 0);
-    head.writeUInt32LE(type, 4);
-    return Buffer.concat([head, data]);
-  };
-  return Buffer.concat([
-    header,
-    chunk(jsonChunk, 0x4e4f534a),
-    chunk(binChunk, 0x004e4942),
-  ]);
-}
 
 const { server, load } = await headlessThree();
 try {

@@ -181,7 +181,7 @@ export function computeCorpseGroundOffset(
   return Number.isFinite(lowest) ? -lowest + CORPSE_GROUND_CLEARANCE : 0
 }
 
-function findPrimarySkinnedMesh(
+export function findPrimarySkinnedMesh(
   root: THREE.Object3D
 ): THREE.SkinnedMesh | null {
   let bestMatch: THREE.SkinnedMesh | null = null

@@ -24,7 +24,7 @@
       "sha256": "4e73ca31e4019af6bba8a1e9c72b43acb6a0730caa6d12bbbcde82f63a92c118"
     }
   ],
-  "method": "Local fit of the modular male 65-joint Mixamo-compatible hierarchy and surface weight transfer from the proportion-fitted donor, with fitted finger chains and articulated right-finger weights, a smooth hood-to-head transition and topology-based weight smoothing and identical weights for coincident seam vertices.",
+  "method": "Locally fit the modular male skeleton and transfer its surface weights, then refine finger and hood weights.",
   "joints": 65,
   "triangles": 10823,
   "vertices": 15723,
@@ -363,301 +363,113 @@
   "outputs": [
     {
       "path": "assets/monsters/thief_king/rig_v1/thief_king.glb",
-      "sha256": "d9c41efb627ef348972814d606b2f17d5df08addbc43a5b17d96d73ff43e158c",
-      "bytes": 4275068
+      "sha256": "3f28717da09cd26acbc7469f5d6e27a1393ce1a031962de185cd33372563c8ac",
+      "bytes": 4275064
     },
     {
       "path": "client/public/models/monsters/thief_king.glb",
-      "sha256": "c0db41e33adb4e4b69c2f71178f6de58786d8a7f9ee9e379e28c3ec82a0bd34e",
-      "bytes": 3209152
+      "sha256": "73a306858a299061a583e68aca998ef2a53bfa646bbf736f64635e445ab36cb9",
+      "bytes": 1263124
     }
   ],
   "validation": {
-    "method": "GLTFLoader plays the baked game clips without runtime retargeting or grounding; sole heights sampled at 120 Hz and full geometry at 49 poses per clip.",
-    "max_bind_drift_m": 1.3576672038386532e-07,
-    "coincident_vertex_pairs": 17431,
-    "max_seam_weight_difference": 0.0,
+    "method": "Grounding sampled at 120 Hz; grip, opposition and weapon clearance checked at 49 poses per clip.",
+    "joints": 65,
+    "triangles": 10823,
+    "vertices": 15723,
+    "height_m": 2.0999999050437506,
+    "unweighted_vertices": 0,
+    "max_weight_sum_error": 4.086177796125412e-08,
+    "max_bind_position_difference_m": 0,
     "clips": [
       {
         "name": "idle1",
         "duration_s": 8.333333015441895,
-        "samples": 49,
-        "lowest_vertex_y_m": [
-          0.003999887619149427,
-          0.004000047479348421
-        ],
-        "sole_height_m": [
-          0.0039998785533912565,
-          0.004000058952576574
-        ],
-        "sole_samples": 1001,
-        "edge_samples": 9,
-        "edge_stretch_p99_9": 2.84990929712219,
-        "max_edge_growth_m": 0.02963577061759058
+        "sole_height_range_m": [
+          -7.98371406338652e-05,
+          6.069740723424163e-05
+        ]
       },
       {
         "name": "walk",
         "duration_s": 1.0333333015441895,
-        "samples": 49,
-        "lowest_vertex_y_m": [
-          0.003630012027320387,
-          0.005514392943017678
-        ],
-        "sole_height_m": [
-          0.002844764996546993,
-          0.009913631175139924
-        ],
-        "sole_samples": 125,
-        "edge_samples": 9,
-        "edge_stretch_p99_9": 2.512929227035938,
-        "max_edge_growth_m": 0.046868373137090635
+        "sole_height_range_m": [
+          -2.02954282988454e-05,
+          7.106046038431852e-08
+        ]
       },
       {
         "name": "run",
         "duration_s": 0.6333333253860474,
-        "samples": 49,
-        "lowest_vertex_y_m": [
-          4.923585416774395e-05,
-          0.11822227604810735
-        ],
-        "sole_height_m": [
-          -6.569797595715784e-05,
-          0.11990475007234315
-        ],
-        "sole_samples": 77,
-        "edge_samples": 9,
-        "edge_stretch_p99_9": 3.124943020540257,
-        "max_edge_growth_m": 0.05735705828745416
+        "sole_height_range_m": [
+          6.573182669911484e-08,
+          0.18030833651483175
+        ]
       },
       {
         "name": "slash1",
         "duration_s": 1.5333333015441895,
-        "samples": 49,
-        "lowest_vertex_y_m": [
-          0.0036074788084918433,
-          0.004862594611504796
-        ],
-        "sole_height_m": [
-          0.0026239011583098788,
-          0.005831842622698873
-        ],
-        "sole_samples": 185,
-        "edge_samples": 9,
-        "edge_stretch_p99_9": 3.1195232412350897,
-        "max_edge_growth_m": 0.07874549246359802
+        "sole_height_range_m": [
+          -1.0618611805616367e-05,
+          6.079138977102105e-07
+        ]
       },
       {
         "name": "dying",
         "duration_s": 2.633333444595337,
-        "samples": 49,
-        "lowest_vertex_y_m": [
-          0.0007023611175359459,
-          0.002494600114990797
+        "sole_height_range_m": [
+          -0.0038263058730815228,
+          0.8491263293149992
         ],
-        "sole_height_m": [
-          0.0005359027140401355,
-          0.8293323750513697
-        ],
-        "sole_samples": 318,
-        "edge_samples": 9,
-        "edge_stretch_p99_9": 3.113313673396805,
-        "max_edge_growth_m": 0.06431391502683426
+        "rest_lowest_m": -4.6509886116507995e-07
       },
       {
         "name": "combat_idle",
         "duration_s": 2.566666603088379,
-        "samples": 49,
-        "lowest_vertex_y_m": [
-          0.003979560391171106,
-          0.00401210978167524
-        ],
-        "sole_height_m": [
-          0.003977954906488469,
-          0.004011285735904672
-        ],
-        "sole_samples": 309,
-        "edge_samples": 9,
-        "edge_stretch_p99_9": 3.163557155400164,
-        "max_edge_growth_m": 0.07415293507733797
+        "sole_height_range_m": [
+          -1.7054868936862042e-05,
+          2.495951363626044e-05
+        ]
       }
     ],
-    "gltf_validator": {
-      "assets/monsters/thief_king/rig_v1/thief_king.glb": {
-        "numErrors": 0,
-        "numWarnings": 1,
-        "numInfos": 1,
-        "numHints": 0,
-        "messages": [
-          {
-            "code": "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE",
-            "message": "Material requires a tangent space but the mesh primitive does not provide it. Runtime-generated tangent space may be non-portable across implementations.",
-            "severity": 1,
-            "pointer": "/meshes/0/primitives/0/material"
-          },
-          {
-            "code": "UNUSED_OBJECT",
-            "message": "This object may be unused.",
-            "severity": 2,
-            "pointer": "/accessors/0"
-          }
-        ],
-        "truncated": false
+    "weapons": [
+      {
+        "path": "weapons/dagger.glb",
+        "samples": 294,
+        "collisions": 0,
+        "minimum_clearance_m": 0.008500021639367089
       },
-      "client/public/models/monsters/thief_king.glb": {
-        "numErrors": 0,
-        "numWarnings": 1,
-        "numInfos": 1,
-        "numHints": 0,
-        "messages": [
-          {
-            "code": "UNSUPPORTED_EXTENSION",
-            "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
-            "severity": 2,
-            "pointer": "/extensionsUsed/0"
-          },
-          {
-            "code": "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE",
-            "message": "Material requires a tangent space but the mesh primitive does not provide it. Runtime-generated tangent space may be non-portable across implementations.",
-            "severity": 1,
-            "pointer": "/meshes/0/primitives/0/material"
-          }
-        ],
-        "truncated": false
-      }
-    },
-    "grip_collision": {
-      "method": "FCL triangle-mesh collision against faces with more than 5% right-hand or right-finger influence; 49 poses per baked clip; monster attachment transform.",
-      "fit": {
-        "offset_m": [
-          0.008057,
-          0.118293,
-          0.028002
-        ],
-        "rotation_degrees_xyz": [
-          0.427,
-          -17.064,
-          18.818
-        ],
-        "fingers_degrees_x": {
-          "Index": [
-            44.435,
-            53.323,
-            52.068
-          ],
-          "Middle": [
-            44.435,
-            53.323,
-            52.068
-          ],
-          "Ring": [
-            44.435,
-            53.323,
-            52.068
-          ],
-          "Pinky": [
-            44.435,
-            53.323,
-            52.068
-          ],
-          "Thumb": [
-            28.561,
-            -1.888,
-            -1.001
-          ]
-        },
-        "thumb_degrees_z": [
-          53.548,
-          -0.022,
-          -1.833
-        ],
-        "thumb_degrees_y": [
-          -5.537,
-          26.581,
-          -53.075
-        ]
+      {
+        "path": "weapons/cutthroat_dirk.glb",
+        "samples": 294,
+        "collisions": 0,
+        "minimum_clearance_m": 0.0036103064506314195
       },
-      "weapons": {
-        "dagger": {
-          "sha256": "6022552356cc01071557597b44c4903568fd346e0558e633a87d797c31478e5f",
-          "samples": 294,
-          "colliding_samples": 0,
-          "minimum_clearance_m": 0.0075535258165800295,
-          "max_penetration_m": 0.0
-        },
-        "cutthroat_dirk": {
-          "sha256": "b6d6c77432f5ee7d61c73d626e21864674aa1713f5956105e0811f2991038c92",
-          "samples": 294,
-          "colliding_samples": 0,
-          "minimum_clearance_m": 0.0017842721208549638,
-          "max_penetration_m": 0.0
-        },
-        "shadowfang": {
-          "sha256": "1281686b881ea5711422a2a148dc00408f906901846a8ae0b06a9020c2d778f4",
-          "samples": 294,
-          "colliding_samples": 0,
-          "minimum_clearance_m": 0.00104865430558304,
-          "max_penetration_m": 0.0
-        }
+      {
+        "path": "weapons/shadowfang.glb",
+        "samples": 294,
+        "collisions": 0,
+        "minimum_clearance_m": 0.0015889305343283818
       }
+    ],
+    "thumb": {
+      "collision_samples": 0,
+      "opposing_gap_range_m": [
+        0.0014547752194571833,
+        0.0014548179274934956
+      ],
+      "min_surface_tip_rise_m": 0.011656608045689049,
+      "min_surface_side_separation_m": 0.012260233945155685
     },
-    "thumb_opposition": {
-      "coordinate_system": "weapon-local; +X toward blade; Y and Z across handle",
-      "thumb_joint_centres_m": [
-        [
-          0.004649723854526468,
-          -0.06342991770311898,
-          -0.010796591226154006
-        ],
-        [
-          0.014127724658940027,
-          -0.041950227522311985,
-          0.010197551063734968
-        ],
-        [
-          0.02362302597922299,
-          -0.019728933972849114,
-          0.030396980902857387
-        ],
-        [
-          0.033133140194697035,
-          0.0005700471773122206,
-          0.04979294676883169
-        ]
-      ],
-      "index_tip_joint_m": [
-        0.042624939378443236,
-        0.005453664236121815,
-        0.03902252617584514
-      ],
-      "middle_tip_joint_m": [
-        0.013572753324709181,
-        0.014807568980921075,
-        0.04853811807890357
-      ],
-      "samples": 294,
-      "thumb_index_middle_collision_samples": 0,
-      "thumb_to_index_middle_gap_m": [
-        0.0017092819661734054,
-        0.0017093214662861412
-      ],
-      "thumb_triangle_area_ratio_percentiles": [
-        0.31179243543193785,
-        0.5119675029763143,
-        0.8732929182981111,
-        1.37733777406516
-      ]
-    },
-    "limitations": [
-      "The source has no tangents; the validator warns that the runtime must generate a tangent basis. The validator does not decode EXT_meshopt_compression.",
-      "The minimum sampled hand clearance is approximately 1.05 mm on Shadowfang; preserve the fitted transform precision."
-    ]
+    "samples_per_clip": 49
   },
   "weapon_attachment": {
-    "weaponOffset": 0.118293,
-    "weaponOffsetX": 0.008057,
-    "weaponOffsetZ": 0.028002,
-    "weaponRotation": "0.427|-17.064|18.818",
+    "weaponOffset": 0.112541,
+    "weaponOffsetX": 0.000897,
+    "weaponOffsetZ": 0.024227,
+    "weaponRotation": "-14.538|-15.400|2.844",
     "rotation_units": "degrees, XYZ Euler",
+    "source": "data/monsters.json, generated from data-src/monsters.csv",
     "weapons": [
       "weapons/dagger.glb",
       "weapons/cutthroat_dirk.glb",
@@ -674,33 +486,51 @@
       "sha256": "b29f34de8cf7523d176a634ceac7ab4791084994493adbfac5f59dda686a057b"
     }
   ],
-  "bake_method": "Offline client retargetAnimationsForCharacterModel; right fingers and the opposed thumb chain, including its base, are baked for a hammer grip; 60 Hz hips translation sampled from the skinned soles; run flight follows source foot-bone clearance, and death is grounded at rest. No client load-time animation changes.",
+  "bake_method": "Offline client retargeting and runtime grounding, with fitted female idle_armed grip; textures use lossy WebP and animation keys are resampled and deduplicated.",
   "reproduction": [
-    ".venv/bin/python tools/rig-thief-king.py",
-    "~/opt/blender/blender -b --python-exit-code 1 --python tools/blender-scripts/save_thief_king_rig.py",
-    "client/node_modules/.bin/vitest run --config tools/bake-thief-king.vitest.config.mjs",
-    ".venv/bin/python tools/bake-thief-king.py",
-    "node tools/optimize-character-textures.mjs assets/monsters/thief_king/game_v1/thief_king.glb client/public/models/monsters/thief_king.glb 1024 --all-textures",
-    "client/node_modules/.bin/vitest run --config tools/validate-thief-king.vitest.config.mjs",
-    "NODE_PATH=<directory containing gltf-validator> node tools/validate-thief-king-gltf.mjs",
-    ".venv/bin/python tools/validate-thief-king-grip.py",
-    ".venv/bin/python tools/validate-thief-king-thumb.py",
-    "~/opt/blender/blender -b --python-exit-code 1 --python tools/blender-scripts/review_thief_king.py -- --weapon dagger",
-    "~/opt/blender/blender -b --python-exit-code 1 --python tools/blender-scripts/review_thief_king_grip.py -- dagger combat_idle 0",
-    "~/opt/blender/blender -b --python-exit-code 1 --python tools/blender-scripts/review_thief_king_grip.py -- dagger slash1 4"
+    ".venv/bin/python tools/rig-humanoid-monster.py thief_king",
+    "~/opt/blender/blender -b --python-exit-code 1 --python tools/blender-scripts/save_humanoid_monster_rig.py -- thief_king",
+    "node tools/bake-humanoid-monster.mjs thief_king",
+    "node tools/validate-humanoid-monster.mjs thief_king",
+    "~/opt/blender/blender -b --python-exit-code 1 --python tools/blender-scripts/review_humanoid_monster.py -- thief_king"
   ],
-  "thumb_review": {
-    "poses": {
-      "combat_idle": 0,
-      "slash1": 0.5
+  "cleanup": "Review images, validation details and intermediate baked GLBs are written under /tmp, not assets.",
+  "grip_reference": {
+    "path": "assets/modular_human_female_01/rig_v1/female-base.glb",
+    "sha256": "3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5",
+    "clip": "idle_armed",
+    "method": "Match each source finger segment direction in hand coordinates, then apply per-finger pose blends and thumb corrections for the dagger meshes.",
+    "pose_blend": {
+      "Thumb": 0.962781,
+      "Index": 0.756403,
+      "Middle": 0.76667,
+      "Ring": 0.722634,
+      "Pinky": 0.698151
     },
-    "camera_directions": [
-      "plus_y",
-      "plus_z",
-      "thumb_side",
-      "minus_z"
+    "thumb_correction_degrees_xyz": [
+      [
+        4.435,
+        -25.486,
+        17.489
+      ],
+      [
+        18.687,
+        28.39,
+        3.789
+      ],
+      [
+        19.216,
+        54.852,
+        -49.378
+      ]
     ],
-    "note": "Views use the posed hand surface and fitted weapon transform; surrounding body geometry is cropped for inspection."
+    "reference_sword": "client/public/models/weapons/steel_longsword.glb",
+    "reference_sword_fit": "FEMALE_HAND_FITS in client/src/lib/utils/handProps.ts",
+    "note": "The final grip is fitted from the reference and is not an exact joint-for-joint copy."
   },
-  "cleanup": "2026-11-01: review renders, detailed validation JSON, the bake intermediate assets/monsters/thief_king/game_v1/ and the unused Mixamo upload ZIP were deleted; the summary numbers above are the retained record. The bake step recreates game_v1."
+  "limitations": [
+    "The reference finger pose was adjusted to fit the dagger grips and preserve clearance."
+  ],
+  "rig_spec": "assets/monsters/thief_king/rig_spec.json",
+  "grip_fit": "assets/monsters/thief_king/grip_v1/fit.json"
 }
