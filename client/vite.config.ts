@@ -112,6 +112,10 @@ function modularCharacterPreview(): Plugin {
     'helmet_barbarian',
   ])
   const fixed: Record<string, URL> = {
+    female_valkyrie_wings: new URL(
+      '../assets/items/valkyrie_starter/tripo_wing_v1/fitted_patch_v1/wings-front-normals-preview.glb',
+      import.meta.url
+    ),
     ysolde_ground_mattress: new URL(
       '../assets/items/ysolde_camp_bed/ground-mattress.glb',
       import.meta.url

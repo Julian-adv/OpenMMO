@@ -42,6 +42,7 @@ export async function showFemaleBase(
         <option value="none">없음</option>
         <option value="knight">긴 금발 (보관본)</option>
       </select>
+      <label class="toggle"><input id="female-wings" type="checkbox" /> 발키리 날개 (피팅 시안)</label>
       <a href="?asset=female-knight-bob">단발 원본 단독 보기</a>
       <label for="female-helmet">투구</label>
       <select id="female-helmet">
@@ -736,7 +737,7 @@ export async function showFemaleBase(
   floor.rotation.x = -Math.PI / 2
   floor.position.y = -0.0036
   scene.add(floor)
-  const camera = new THREE.PerspectiveCamera(35, 1, 0.0018, 36)
+  const camera = new THREE.PerspectiveCamera(35, 1, 0.03, 36)
   const controls = new OrbitControls(camera, renderer.domElement)
   controls.enableDamping = true
   controls.minDistance = 0.144
@@ -760,6 +761,11 @@ export async function showFemaleBase(
     },
   }
   const select = document.getElementById('female-camera') as HTMLSelectElement
+  const wingsToggle = document.getElementById(
+    'female-wings'
+  ) as HTMLInputElement
+  wingsToggle.checked =
+    new URLSearchParams(location.search).get('wings') === '1'
   const requested = new URLSearchParams(location.search).get('camera')
   select.value =
     requested && Object.hasOwn(views, requested) ? requested : 'full'
@@ -768,6 +774,11 @@ export async function showFemaleBase(
     const aspect = host.clientWidth / host.clientHeight
     controls.target.fromArray(view.target)
     camera.position.fromArray(view.position)
+    if (wingsToggle.checked && ['full', 'back'].includes(select.value)) {
+      controls.target.y = 1.1
+      camera.position.y = 1.1
+      camera.position.z *= 1.4
+    }
     if (select.value === 'face' && helmetEquipped) {
       controls.target.set(0, 1.7478, 0)
       camera.position.set(0, 1.7658, 0.864)
@@ -857,8 +868,47 @@ export async function showFemaleBase(
   const fieldset = document.getElementById(
     'female-controls'
   ) as HTMLFieldSetElement
+  let wingMeshes: THREE.SkinnedMesh[] | undefined
+  let pendingWings: Promise<void> | undefined
+  const updateWings = async () => {
+    try {
+      if (wingsToggle.checked && !wingMeshes) {
+        status.textContent = '날개를 불러오는 중…'
+        pendingWings ??= loader
+          .loadAsync('/__modular-character/parts/female_valkyrie_wings.glb')
+          .then(({ scene: source }) => {
+            if (disposed()) {
+              disposeObjects([source])
+              return
+            }
+            resources.push(source)
+            wingMeshes = bindModularPart(model, source)
+            for (const mesh of wingMeshes) {
+              mesh.frustumCulled = false
+              collectMaterials(mesh)
+            }
+            for (const material of materials)
+              material.wireframe = wireframe.checked
+          })
+          .finally(() => {
+            pendingWings = undefined
+          })
+        await pendingWings
+      }
+      if (disposed()) return
+      for (const mesh of wingMeshes ?? []) mesh.visible = wingsToggle.checked
+      reset()
+      updateStats()
+      updateStatus()
+    } catch {
+      if (disposed()) return
+      wingsToggle.checked = false
+      status.textContent = '날개를 불러오지 못했습니다.'
+    }
+  }
+  wingsToggle.onchange = updateWings
   fieldset.disabled = false
-  await Promise.all(outfitUpdates.map((update) => update()))
+  await Promise.all([...outfitUpdates.map((update) => update()), updateWings()])
   if (disposed()) return
   document.body.dataset.ready = 'true'
 }
