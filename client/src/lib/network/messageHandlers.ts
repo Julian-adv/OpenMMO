@@ -1527,7 +1527,7 @@ export function handleServerMessage(
     }
 
     case 'PlayerAttackRejected': {
-      combatController.attackRejected(data.monster_id)
+      combatController.attackRejected(data.monster_id, data.reason)
       if (data.reason === 'invalid_target') {
         const monster = monsterManager.monsters.get(data.monster_id)
         // Corpse rejections must not cut short impact or death animations.

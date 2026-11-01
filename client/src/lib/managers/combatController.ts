@@ -21,6 +21,11 @@ export interface CombatStart {
   startRequested: boolean
 }
 
+/** Out-of-range retries per target; a landed swing refills them. */
+const RANGE_RETRIES = 2
+/** Retries swing from this much closer so the same view lag cannot miss again. */
+const RETRY_CLOSER_M = 0.5
+
 export class CombatController {
   private _targetMonsterId: string | null = null
   private _attackTimer = 0
@@ -30,7 +35,9 @@ export class CombatController {
   private _attackRequestId = 0
   private _pendingSwing = false
   private _serverStopped = false
-  private _rejectedMonsterId: string | null = null
+  private _rejected: { monsterId: string; reason: string } | null = null
+  private _rangeRejected = false
+  private _rangeRetries = RANGE_RETRIES
   readonly attackStopRequested = createEvent<(requestId: number) => void>()
 
   get attackRequested(): boolean {
@@ -83,6 +90,7 @@ export class CombatController {
       this._attackCounter = 0
       this._attackTimer = 0
       this._pendingSwing = false
+      this.resetRangeRetries()
     }
     this._targetMonsterId = monsterId
     this._serverStopped = false
@@ -115,7 +123,13 @@ export class CombatController {
     this._attackTimer = 0
     this._pendingSwing = false
     this._serverStopped = false
+    this.resetRangeRetries()
     if (wasInCombat) stopBattleMusic()
+  }
+
+  private resetRangeRetries() {
+    this._rangeRejected = false
+    this._rangeRetries = RANGE_RETRIES
   }
 
   attackConfirmed(monsterId: string) {
@@ -123,18 +137,20 @@ export class CombatController {
     this._attackCounter++
     this._attackTimer = 0
     this._pendingSwing = true
+    this.resetRangeRetries()
   }
 
-  attackRejected(monsterId: string) {
-    this._rejectedMonsterId = monsterId
+  attackRejected(monsterId: string, reason: string) {
+    this._rejected = { monsterId, reason }
   }
 
   attackStopped(monsterId: string, requestId: number) {
     // The server follows a rejection with the stop for that request. A chase
     // drops the request locally, but a rejected one must still end combat, or
     // reaching range re-sends it every goal interval.
-    const rejected = this._rejectedMonsterId === monsterId
-    this._rejectedMonsterId = null
+    const rejected =
+      this._rejected?.monsterId === monsterId ? this._rejected.reason : null
+    this._rejected = null
     if (
       (!this._attackRequested && !rejected) ||
       monsterId !== this._targetMonsterId ||
@@ -142,6 +158,11 @@ export class CombatController {
     )
       return
     this.stopAttack(false)
+    if (rejected === 'out_of_range' && this._rangeRetries > 0) {
+      this._rangeRetries--
+      this._rangeRejected = true
+      return
+    }
     this._serverStopped = true
   }
 
@@ -193,10 +214,24 @@ export class CombatController {
       return { action: 'idle' }
     }
 
+    if (this._rangeRejected && !isFinishingAttack) {
+      this._rangeRejected = false
+      // A wall we can see explains the rejection; chasing would not help.
+      if (lineBlocked) {
+        this.cancelCombat({ notifyServer: false })
+        return { action: 'idle' }
+      }
+      return this.startChase(monsterObjPos)
+    }
+
+    const reach =
+      this._rangeRetries < RANGE_RETRIES
+        ? attackRange - RETRY_CLOSER_M
+        : attackRange
     const dx = monsterObjPos.x - playerPos.x
     const dz = monsterObjPos.z - playerPos.z
     const dist = Math.sqrt(dx * dx + dz * dz)
-    const inRange = dist <= attackRange && !lineBlocked
+    const inRange = dist <= reach && !lineBlocked
 
     if (isMoving) {
       if (inRange) {

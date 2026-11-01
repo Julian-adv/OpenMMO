@@ -172,17 +172,18 @@ describe('CombatController', () => {
     const tick = (
       controller: CombatController,
       deltaTime = 16,
-      monsterPos = monster
+      monsterPos = monster,
+      { moving = false, blocked = false } = {}
     ) =>
       controller.update(
         deltaTime,
         player,
         { state: 'idle' },
         monsterPos,
-        false,
+        moving,
         1533,
-        'attack',
-        false,
+        moving ? 'run' : 'attack',
+        blocked,
         2
       )
 
@@ -254,13 +255,65 @@ describe('CombatController', () => {
       expect(controller.beginCombat('m1', true).startRequested).toBe(true)
     })
 
+    const reject = (controller: CombatController, reason = 'out_of_range') => {
+      controller.attackRejected('m1', reason)
+      controller.attackStopped('m1', controller.attackRequestId)
+    }
+
     it('ends the chase when the server rejects and stops its attack', () => {
       const { controller } = attacking()
       expect(tick(controller, 16, { x: 4, y: 0, z: 0 }).action).toBe('chasing')
-      controller.attackRejected('m1')
-      controller.attackStopped('m1', controller.attackRequestId)
+      reject(controller, 'invalid_target')
       expect(tick(controller).action).toBe('idle')
       expect(controller.targetMonsterId).toBeNull()
+    })
+
+    it('chases a target the server found out of range and swings from closer', () => {
+      const { controller } = attacking()
+      reject(controller)
+      expect(tick(controller)).toEqual({
+        action: 'chasing',
+        newTarget: monster,
+      })
+      expect(controller.targetMonsterId).toBe('m1')
+      const closer = (x: number) =>
+        tick(controller, 16, { x, y: 0, z: 0 }, { moving: true }).action
+      expect(closer(1.8)).toBe('chasing')
+      expect(closer(1.4)).toBe('reached_attack_range')
+      expect(controller.beginCombat('m1', true).startRequested).toBe(true)
+    })
+
+    it('stops when its own view shows a wall behind the rejection', () => {
+      const { controller } = attacking()
+      reject(controller)
+      expect(tick(controller, 16, monster, { blocked: true }).action).toBe(
+        'idle'
+      )
+      expect(controller.targetMonsterId).toBeNull()
+    })
+
+    it('gives up after repeated range rejections until a swing lands', () => {
+      const { controller } = attacking()
+      for (let retry = 0; retry < 2; retry++) {
+        reject(controller)
+        expect(tick(controller).action).toBe('chasing')
+        controller.beginCombat('m1', true)
+      }
+      reject(controller)
+      expect(tick(controller).action).toBe('idle')
+
+      controller.beginCombat('m1', true)
+      reject(controller)
+      expect(tick(controller).action).toBe('chasing')
+      controller.beginCombat('m1', true)
+      controller.attackConfirmed('m1')
+      expect(tick(controller).action).toBe('attack_cycle')
+      reject(controller)
+      expect(tick(controller, 2000).action).toBe('attacking')
+      expect(tick(controller).action).toBe('chasing')
+      controller.beginCombat('m1', true)
+      reject(controller)
+      expect(tick(controller).action).toBe('chasing')
     })
 
     it('lets movement stop the old attack when chasing a different monster', () => {
