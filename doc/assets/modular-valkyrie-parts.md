@@ -15,7 +15,7 @@
 ## 제작 기준과 남은 작업
 
 - 여성 공통 몸체: `assets/modular_human_female_01/rig_v1/female-base.glb`, 리그 `human_female_01_local_v1`, 약 1.8m. 피팅에 사용한 몸체의 SHA-256은 `3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5`다.
-- 상의·하의·손목 보호대·부츠·머리 장식의 슬롯 소속과 안팎 순서는 미정이다. 견갑과 허리 판금의 소속, 가림과 속옷 노출을 정해야 한다.
+- 상의·하의·손목 보호대·부츠·머리 장식의 슬롯 소속과 안팎 순서는 미정이다. 견갑은 상의에 포함한다. 허리 판금의 소속, 가림과 속옷 노출을 정해야 한다.
 - 날개, 헤어 및 머리 장식의 착탈 관계와 다른 장비와의 호환은 미정이다.
 - 여성 몸체의 실제 연결부를 확인한다. 남성용 테두리와 수치를 그대로 사용하지 않는다.
 - 앞·옆·뒤와 파츠별 원화를 검토한 뒤 생성, 피팅 및 게임 동작을 각각 검증한다. 동작과 혼합 장비 검증 전에는 런타임 호환을 선언하지 않는다.
@@ -92,3 +92,52 @@ PYTHONPATH=tools .venv/bin/python assets/items/valkyrie_starter/tripo_wing_v1/fi
 PYTHONPATH=tools .venv/bin/python assets/items/valkyrie_starter/tripo_wing_v1/fitted_patch_v1/repair-front-normals.py
 blender -b --python-exit-code 1 --python assets/items/valkyrie_starter/tripo_wing_v1/fitted_patch_v1/save-final-scene.py
 ```
+
+## 상의 정면 원화 — 2026-11-01
+
+![상의 정면 원화](../../assets/items/valkyrie_starter/concepts/upper-front-v1.png)
+
+- 이미지: `assets/items/valkyrie_starter/concepts/upper-front-v1.png`, 1024×1536 RGB PNG, SHA-256 `beb13f965b3b26f079c8ffc44bfced3ebefd23b13a03415e69ebf7ba8b324cf0`.
+- 참조: 위 복장 정면 시안 `front-v1.png` 및 기존 `client/public/character_concepts/valkyrie.webp`.
+- 생성: OpenAI Codex built-in ImageGen, **ChatGPT Pro 20x**, 2026-11-01. OpenAI 생성 출력물 이용 조건 및 참조 에셋의 기존 이용 조건을 따른다.
+- 은색 흉갑, 금색 장식, 견갑을 포함한 정면 디자인 후보다. 견갑은 사용자의 결정에 따라 상의에 포함한다. 하의와의 연결, 목 장식과 날개의 간섭은 아직 정하지 않았다. 후면·측면 구조와 실제 몸체 피팅을 검증하지 않았다.
+
+### 상의 생성 프롬프트
+
+```text
+Use case: stylized-concept. Asset type: front-view concept for a modular 3D game character's Valkyrie upper-body armor. Image 1 is the existing full-body front outfit concept and primary authoritative design reference; image 2 is the original Valkyrie for consistency. Draw ONLY the upper-body armor as a single isolated wearable object, straight-on front view, centered and large, like a clean 3D reconstruction reference. Preserve the specific design and proportions of image 1: polished silver sculpted breastplate with two rounded plates, crossing silver trim below the bust, the restrained gold central branching motif, the smooth fitted silver waist and pointed lower hem, and matching layered silver shoulder pauldrons with small gold fasteners. Include the small silver neckline connector only where necessary to match the reference. Shape it as a plausible hollow wearable piece with clearly defined arm openings, neckline and lower edge; show open empty space where the body would go. The bottom ends around the waist/upper hip; do not include the reference's long front tabard, hip flaps or skirt panels. Shoulder pieces are shown as part of this preliminary concept; do not invent complex straps or new decoration. Bright neutral matte light-gray background, even soft studio lighting with controlled reflections to make silhouette and panel seams legible, polished realistic fantasy game concept render matching the reference. One view of exactly one object, symmetric and untwisted, no perspective distortion, full object visible with margin. No character, face, skin, mannequin, arms, hands, hair, wings, skirt, bracers, weapon, text, diagrams, inset, labels, watermark, or extra views. This is a design candidate, not a verified 3D fitting.
+```
+
+## 상의 후면 원화 — 2026-11-01
+
+![상의 후면 원화](../../assets/items/valkyrie_starter/concepts/upper-back-v1.png)
+
+- 이미지: `assets/items/valkyrie_starter/concepts/upper-back-v1.png`, 1024×1536 RGB PNG, SHA-256 `537dbada8c76a43d91d66b03f68021bbbec90f9013be13fcdb06f237334453ad`.
+- 참조: 상의 정면 원화 `upper-front-v1.png`, SHA-256 `beb13f965b3b26f079c8ffc44bfced3ebefd23b13a03415e69ebf7ba8b324cf0`.
+- 생성: OpenAI Codex built-in ImageGen, **ChatGPT Pro 20x**, 2026-11-01. OpenAI 생성 출력물 이용 조건 및 참조 에셋의 기존 이용 조건을 따른다.
+- 사용자의 결정에 따라 견갑을 상의에 포함한다. 날개는 그리지 않았으며 등판과 날개 연결 위치·간섭은 실제 피팅에서 확인한다. 후면은 새로 제안한 디자인으로 정면·측면의 연결과 몸체 착용 상태는 아직 검증하지 않았다.
+
+### 상의 후면 생성 프롬프트
+
+```text
+Use case: stylized-concept. Asset type: rear-view concept for the same modular Valkyrie upper-body armor. Input image is the authoritative FRONT view of this exact armor, including the shoulder pauldrons, which are part of the upper-body piece. Draw a single straight-on BACK view of the same wearable object in isolation, as if it were turned 180 degrees vertically; this is not another front view. Match the front image's exact outer silhouette, waist height, width, proportions, pointed lower hem, layered silver pauldrons with small gold fasteners, restrained gold accents, bright polished silver material and scale. The rear chest must be a plausible smooth contoured back plate, with coherent panel seams continuing from the sides of the front armor and shoulder attachments; do not repeat the breastplate cups or gold front chest ornament. Leave the upper back clean and readable for later fitting of a separate pair of wings; do not invent mounting holes, sockets, straps, or wing fixtures. Show neckline and arm openings and a plausible wearable construction. Symmetrical, no distortion, centered and fully visible with generous margins. Match the neutral light-gray background, controlled studio lighting and realistic fantasy game concept rendering of the reference. Show exactly one rear view of one object only. No person, mannequin, body, skin, hair, wings, skirt, tabard, forearm armor, diagram, labels, text or watermark. This is a preliminary rear design candidate and not an established fitted 3D model.
+```
+
+## Tripo 상의 원본 검토 — 2026-11-01
+
+사용자가 전달한 `fantasy armor 3d model.glb`를 [원본 GLB](../../assets/items/valkyrie_starter/tripo_top_v1/source.glb)로 보관했다. SHA-256은 `73114c6ca023eccc4f785a1d34688fc29845c6782baa9ca41284ded5eaa1e9ea`다. Tripo 생성 날짜·설정·입력 이미지·작업 ID·요금제·이용 조건은 확인되지 않았다.
+
+- 원본은 2,836삼각형, 정점 2,082개, 메시와 재질 각 1개이며 리그가 없다. 목표 3,000삼각형은 생성 전 제안값이고 실제 설정은 확인되지 않았다.
+- [원본 정면](../../assets/items/valkyrie_starter/tripo_top_v1/source-front.png), [원본 후면](../../assets/items/valkyrie_starter/tripo_top_v1/source-back.png): Blender에서 원본을 불러와 렌더한 검사 이미지다.
+- 정면의 흉갑·견갑은 원화와 유사하지만 후면 상부 등판은 넓게 비어 앞쪽 갑옷의 안쪽이 보인다. 후면 원화의 완전한 등판과 다르므로 생성 입력 및 보정 방법을 검토해야 한다.
+- 여성 몸체에 원본을 단순 배치해 크기와 형태만 임시 확인했다. 피부·속옷과 관통하며 등판과 가림 처리, 몸체 곡면 보정 및 리깅은 하지 않았다. 피팅이나 게임 호환으로 간주하지 않는다.
+
+### 열린 등 상의 피팅 — 2026-11-01
+
+사용자는 원본처럼 등이 열린 형태를 선택했다. 여성 몸체와 기사 상의를 참고해 흉갑과 허리 간격을 조정하고 견갑을 상의에 포함했다. 가슴 중앙 피부를 보존하고 갑옷에 가려지는 부분은 숨긴다. 대기 동작에서 흉갑 옆이 접히지 않도록 흉갑은 몸통 본을, 분리된 견갑은 어깨 본을 따르게 했다.
+
+- [피팅 GLB](../../assets/items/valkyrie_starter/tripo_top_v1/fitted_v7/top_female_valkyrie.glb), SHA-256 `0601e4f460d94152dd700b2df09599930706040862d16681b0db856cd97da465`, 2,836삼각형. [Blender 장면](../../assets/items/valkyrie_starter/tripo_top_v1/fitted_v7/fitting.blend), [피팅 스크립트](../../assets/items/valkyrie_starter/tripo_top_v1/fit-v7.py), [몸체 가림 정보](../../assets/items/valkyrie_starter/tripo_top_v1/fitted_v7/body-occlusion.json). 원본·몸체 및 기사 갑옷의 기존 출처와 이용 조건을 따른다.
+- 여성 리그 `human_female_01_local_v1`, 몸체 SHA-256 `3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5`. 기사 상의 GLB SHA-256 `410e32a90e4a1216cb7634329e907883d6879aaa2b91f31fe50170573fb824a7`.
+- 대기 동작의 61개 시점에서 옆가슴 메시의 변형을 측정하고 미리보기에서 여러 시점과 좌우 단면을 확인했다. 본 이름과 역바인드 행렬, 정규화된 가중치와 퇴화 삼각형이 없음을 검사했다. 다른 동작의 전 구간과 장비 조합은 검증하지 않았다.
+
+재생성: `blender -b --python-exit-code 1 --python assets/items/valkyrie_starter/tripo_top_v1/fit-v7.py`. 최종 가림 정보와 원본 GLB가 필요하다.

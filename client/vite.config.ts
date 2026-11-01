@@ -165,6 +165,14 @@ function modularCharacterPreview(): Plugin {
       '../assets/items/female_knight_top/tripo_v1/fitted_v3/top_female_knight.glb',
       import.meta.url
     ),
+    female_valkyrie_top: new URL(
+      '../assets/items/valkyrie_starter/tripo_top_v1/fitted_v7/top_female_valkyrie.glb',
+      import.meta.url
+    ),
+    'female-valkyrie-top-occlusion.json': new URL(
+      '../assets/items/valkyrie_starter/tripo_top_v1/fitted_v7/body-occlusion.json',
+      import.meta.url
+    ),
     female_barbarian_top: new URL(
       '../assets/items/female_barbarian_top/tripo_v1/fitted_v1/top_female_barbarian.glb',
       import.meta.url
