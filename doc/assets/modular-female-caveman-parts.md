@@ -1,6 +1,6 @@
 # 여성 원시전사 시작 장비
 
-상태: 상의 v7과 하의 v9 피팅·리깅 후보를 미리보기에 연결했다. 일부 동작에서 관통이 남아 있으며 게임 적용은 완료되지 않았다.
+상태: 상의 v7, 하의 v9, 부츠 v4 피팅·리깅 후보를 미리보기에 연결했다. 일부 동작에서 관통이 남아 있으며 게임 적용은 완료되지 않았다.
 
 여성 원시전사도 남성 원시전사와 같은 네 슬롯의 시작 장비를 사용한다.
 외형은 [여성 원시전사 통합 원화](../../client/public/character_concepts/cavewoman.webp)를 기준으로 한다.
@@ -11,7 +11,7 @@
 | chest | `worn_caveman_top` | 가죽 상의와 뼈 장식. 목걸이의 소속과 뒷면 연결은 미확정. |
 | pants | `worn_caveman_pants` | 벨트, 주머니, 앞뒤와 옆의 모피 하의. |
 | hands | `worn_caveman_bracers` | 손가락이 노출되는 좌우 손목 보호대. |
-| boots | `worn_caveman_boots` | 원화의 한쪽 다리 모피를 참고한 좌우 부츠. 원화는 맨발이므로 발등, 뒤꿈치, 밑창 디자인은 미확정. |
+| boots | `worn_caveman_boots` | 종아리 모피를 참고한 두 후보 중 하이힐 모피 부츠 원화를 선택했다. |
 
 투구는 시작 장비에 포함하지 않는다. 실제 형상과 장식의 안팎 순서는 부위 원화에서 결정한다.
 여성 공통 몸체와 리그는 [여성 몸체 기록](modular-human-female-01.md)을 따른다.
@@ -21,7 +21,7 @@
 ## 현재 상태와 남은 작업
 
 - 기존 여성 원시전사는 통합 모델을 사용하며 신규 캐릭터에 위 네 장비를 지급하지 않는다.
-- 상의와 하의의 동작 중 관통 보정, 나머지 파츠 원화·3D 생성 및 연결부 검증이 필요하다.
+- 상의와 하의의 동작 중 관통 보정, 손목 보호대 원화·3D 생성 및 연결부 검증이 필요하다.
 - 같은 세트와 다른 장비 혼합, 장착·해제, 동작 중 관통, 게임 성능을 검증해야 한다.
 - 검증된 파츠가 준비된 후 여성 캐릭터의 모듈형 모델 선택, 시작 장비 지급과 게임 연결을 구현한다.
 - 기존 여성 캐릭터에 대한 소급 지급은 범위와 데이터 처리 방법이 아직 정해지지 않았다.
@@ -46,6 +46,53 @@
 - 출력: [하의 앞·뒤 원화 초안](../../assets/items/female_caveman_bottom/concept_v1/sheet.png), SHA-256 `a3870c9025b992e30193ecc0b14bddf29bf438f4698516dec752ca23ef446451`.
 - 생성: OpenAI Codex 내장 ImageGen, **ChatGPT Pro 20x**, 2026-11-01. OpenAI 출력물 이용 조건 적용. [프롬프트](../../assets/items/female_caveman_bottom/concept_v1/prompt.txt).
 - 3D 생성과 몸체 피팅·리깅은 아직 진행하지 않았다.
+
+## 신발 원화 후보 두 가지 — 2026-11-01
+
+기존 여성 원시전사 원화의 한쪽 종아리 모피와 맨발 부위를 잘라 참조했다. 양발에 사용할 신발로 두 가지를 제안했고, 사용자가 후보 2를 선택했다. 3D 제작과 피팅은 아래에 기록한다.
+
+- 공통 참조: FFmpeg `crop=220:440:300:1030`, [종아리 모피 크롭](../../assets/items/female_caveman_boots/concept_v1/reference-crop.png), SHA-256 `a40769bf8c863930556ecedc728dc81e7c1b564fa2b75716d63c1e6f83bae25f`. 기존 여성 원화의 출처와 이용 조건은 [캐릭터 기록](characters.md#other-classes)을 따른다.
+- 후보 1: 기존 야만전사 하이힐 샌들에 종아리 모피를 덧댄 [앞·옆·뒤 원화](../../assets/items/female_caveman_boots/concept_v1/sandal-fur.png), SHA-256 `b452cd6573fc7c0d29b90ee291b0068bc13341ff3e960aa4fed6cad87d464f40`. 기존 [야만전사 샌들 원화](../../assets/items/female_barbarian_boots/concept_v1/sheet.png)를 추가 참조했다. [프롬프트](../../assets/items/female_caveman_boots/concept_v1/prompt-sandal.txt).
+- 후보 2: 발끝부터 종아리까지 덮는 하이힐 모피 부츠의 [앞·옆·뒤 원화](../../assets/items/female_caveman_boots/concept_v1/fur-boot.png), SHA-256 `3419417175e6df416fbcf53c6b8685703b1e902c1aee432aeafac393f4026b93`. [프롬프트](../../assets/items/female_caveman_boots/concept_v1/prompt-boot.txt).
+- 두 원화는 OpenAI Codex 내장 ImageGen, **ChatGPT Pro 20x**, 2026-11-01 생성이며 OpenAI 출력물 이용 조건을 따른다.
+- 선택한 후보 2의 원본 시트를 FFmpeg로 분리했다: [앞](../../assets/items/female_caveman_boots/concept_v1/fur-boot-views/front.png) `crop=464:1024:0:0`, [옆](../../assets/items/female_caveman_boots/concept_v1/fur-boot-views/side.png) `crop=640:1024:464:0`, [뒤](../../assets/items/female_caveman_boots/concept_v1/fur-boot-views/back.png) `crop=432:1024:1104:0`. 원본 시트는 보존한다.
+- 사용자 피드백에 따라 옆면의 버클과 끈을 앞쪽 가장자리로 옮기고 옆·뒷면 굽을 야만전사 샌들처럼 가는 스틸레토로 수정했다. 현재 원화는 기존 [앞면](../../assets/items/female_caveman_boots/concept_v1/fur-boot-views/front.png), [수정 옆면](../../assets/items/female_caveman_boots/concept_v1/fur-boot-views/side-v2.png), [수정 뒷면](../../assets/items/female_caveman_boots/concept_v1/fur-boot-views/back-v2.png)이다. 각 이미지는 독립적인 2D 원화이므로 3D 제작 시 시점 간 형상을 확인해야 한다.
+- 수정 생성: OpenAI Codex 내장 ImageGen, **ChatGPT Pro 20x**, 2026-11-01. OpenAI 출력물 이용 조건 적용. [옆면 프롬프트](../../assets/items/female_caveman_boots/concept_v1/prompt-side-v2.txt), [뒷면 프롬프트](../../assets/items/female_caveman_boots/concept_v1/prompt-back-v2.txt).
+- 수정 입력 SHA-256: 기존 앞면 `ab452d0be226cf3407ce2a73f5622804014fc98aa24fe2a0dd74bb89d0ce8937`, 기존 옆면 `cd600ac7e55ccc84cf3e10d542ddfadd0ee86b8151f1fb1b3f152e64d2ea3bf8`, 기존 뒷면 `eea5af720ec789d27bf323a9bbe31657a8aeb553d49c1a8774d845148624e03b`, [야만전사 샌들 원화](../../assets/items/female_barbarian_boots/concept_v1/sheet.png) `c7ce930968e26c4f983e19ad0772dbb03d2b3b4cd1eddcc8f7a10c0363863ae7`. 수정 옆면은 뒷면 수정에도 참조했다.
+- 수정 출력 SHA-256: 옆면 `3db6eeebfec57749a2503a6ecb44466ca9e6158a67f24ad11618726a412474b4`, 뒷면 `e2002c4ec897273ebd31aba59ea3fd7b0839e25375b385b809cec07c16dd615a`.
+
+## 신발 3D 및 초기 피팅 — 2026-11-01
+
+- 사용자가 Tripo에서 생성한 한 짝 GLB를 2026-11-01에 전달했다. 생성 날짜, 이용 요금제, 정확한 생성 모델, 입력 이미지, 설정, 작업 ID와 비용은 확인되지 않았다. [Tripo 이용 조건](https://developers.tripo3d.ai/en/terms). [원본 GLB](../../assets/items/female_caveman_boots/tripo_v1/source/model_url.glb), SHA-256 `8f88cd3c636b86d7da24c8efced835ace5182c57bcc89682e10d62a2ba24614f`. 원본은 1,520 triangles다.
+- 원본을 대칭하고 양쪽 종아리에 각각 맞춘 뒤 여성 공통 몸체의 65본에 연결했다. 사용자 피드백에 따라 종아리 둘레를 좁혔다. 높이 0.43m 단면에서 피부와 부츠 표면의 거리 중앙값은 오른쪽 약 13.6 → 8.4mm, 왼쪽 약 14.4 → 7.9mm였다. 모피 두께가 포함된 방사형 표본이며 전체 간격을 뜻하지 않는다.
+- 중간 피팅본과 검수 렌더는 정리하고 사용자 수정의 기준인 v3, 사용자가 수정한 원본, 최종 v4는 보존한다. 미리보기의 신발 메뉴에서 확인할 수 있으며 게임 장비에는 아직 연결하지 않았다.
+
+## 신발 발 부분 피팅 조정 v3 — 2026-11-01
+
+- 사용자 피드백에 따라 종아리 윗단의 v2 피팅은 유지하고 발 부분의 폭을 12%, 길이를 10% 줄인 뒤 앞뒤 위치를 조정했다. [피팅 GLB](../../assets/items/female_caveman_boots/tripo_v1/fitted_v3/boots_female_caveman.glb), [편집용 Blender](../../assets/items/female_caveman_boots/tripo_v1/fitted_v3/female-caveman-boots-fitted.blend), [가림 정보](../../assets/items/female_caveman_boots/tripo_v1/fitted_v3/body-occlusion.json).
+- 굽 기준 자세에서 오른쪽 부츠의 발 부분과 굽을 함께 측정한 투영 바운딩 폭·길이는 v2 약 134.3×265.1mm, v3 약 118.2×238.6mm다. 같은 방법으로 측정한 기존 야만전사 샌들은 약 115.8×241.3mm다. 단면이 아닌 전체 외곽 범위이므로 피부와의 간격은 나타내지 않는다.
+- 14개 동작 각 61시점에서 본 연결, 가중치, 발바닥 변형과 접지를 확인했다. 윗단 표본 검사에서 보이는 피부가 1mm 넘게 겹친 표본은 없었다. 발 부분은 착용 시 몸체를 가린다. 발 표면의 최근접 면 부호 거리 진단에서 피부와 부츠의 겹침 후보가 있으며, 이 근사값으로 전체 실제 관통을 확정할 수 없다.
+
+```sh
+.venv/bin/python tools/fit-female-caveman-boots-v3.py
+node tools/validate-female-caveman-boots.mjs assets/items/female_caveman_boots/tripo_v1/fitted_v3
+blender -b -t 4 --python-exit-code 1 --python tools/blender-scripts/validate_female_caveman_boots_v3.py
+blender -b -t 4 --python-exit-code 1 --python tools/blender-scripts/review_female_caveman_boots_v3.py
+```
+
+## 사용자 메시 수정 반영 v4 — 2026-11-01
+
+- 사용자가 PC4090의 Blender에서 오른쪽 부츠를 직접 수정했다. [저장한 원본 Blender](../../assets/items/female_caveman_boots/manual_edit_v1/user-edited.blend), SHA-256 `2f2914add8ef3117466745670b85d1c1ec8515e13f1c4cb5d41941fee0ca28cc`. 편집 모드로 저장된 파일을 별도로 읽어 변경 사항을 추출했다.
+- 변경된 오른쪽 정점 18개의 위치를 반영하고, 하이힐 기준 자세에서 변경량을 대칭한 뒤 왼쪽 기존 리그에 역변환해 적용했다. 겹쳐 있던 정점의 수정량도 일치한다. 원본 UV·텍스처·토폴로지·가중치·모프는 유지하고 변경 부근의 노멀을 갱신했다. [피팅 GLB](../../assets/items/female_caveman_boots/tripo_v1/fitted_v4/boots_female_caveman.glb), [편집용 Blender](../../assets/items/female_caveman_boots/tripo_v1/fitted_v4/female-caveman-boots-fitted.blend), [제작 기록](../../assets/items/female_caveman_boots/tripo_v1/fitted_v4/fitting.json).
+- [동작 검사](../../assets/items/female_caveman_boots/tripo_v1/fitted_v4/runtime-validation.json)는 14개 동작 각 61시점의 본 연결, 가중치, 밑창 변형과 접지를 확인했다. [윗단 표본 검사](../../assets/items/female_caveman_boots/tripo_v1/fitted_v4/clearance-validation.json)에서 보이는 피부와 1mm 넘게 겹친 표본은 없었다. v3의 가려진 발 피부와 부츠 간 겹침 가능성은 그대로 남는다.
+
+```sh
+blender -b -t 2 --python-exit-code 1 --python tools/blender-scripts/extract_female_caveman_boot_edit.py
+.venv/bin/python tools/apply-female-caveman-boot-edit.py
+node tools/validate-female-caveman-boots.mjs assets/items/female_caveman_boots/tripo_v1/fitted_v4
+blender -b -t 4 --python-exit-code 1 --python tools/blender-scripts/validate_female_caveman_boots_v4.py
+blender -b -t 4 --python-exit-code 1 --python tools/blender-scripts/review_female_caveman_boots_v4.py
+```
 
 ## 하의 3D 생성 — 2026-11-01
 

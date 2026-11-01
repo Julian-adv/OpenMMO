@@ -71,6 +71,7 @@ export async function showFemaleBase(
       <select id="female-boots">
         <option value="none">없음</option>
         <option value="knight">은빛 기사 판금 부츠</option>
+        <option value="caveman">원시전사 모피 하이힐 부츠 (피팅 검수 중)</option>
         <option value="rogue">로그 빨간 밑창 가죽 부츠</option>
         <option value="barbarian">야만전사 가죽 하이힐 샌들</option>
       </select>
