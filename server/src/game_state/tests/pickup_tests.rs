@@ -372,7 +372,15 @@ async fn kill_loot_is_reserved_for_its_owner() {
 
     {
         let ground = game.ground_items.read().await;
-        assert_eq!(ground.len(), 2);
+        // The world-drop roll may add more; those must be reserved too.
+        assert!(ground.contains_key(&7));
+        assert_eq!(
+            ground
+                .values()
+                .filter(|entry| entry.item.item_def_id == "test_item")
+                .count(),
+            2
+        );
         assert!(ground
             .values()
             .all(|entry| entry.item.claimed_by == Some(pid("dealer"))));
