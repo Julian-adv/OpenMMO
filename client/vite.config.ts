@@ -170,7 +170,7 @@ function modularCharacterPreview(): Plugin {
       import.meta.url
     ),
     'female-valkyrie-top-occlusion.json': new URL(
-      '../assets/items/valkyrie_starter/tripo_top_v1/fitted_v7/body-occlusion.json',
+      '../assets/items/valkyrie_starter/tripo_top_v1/fitted_v8/body-occlusion.json',
       import.meta.url
     ),
     female_barbarian_top: new URL(

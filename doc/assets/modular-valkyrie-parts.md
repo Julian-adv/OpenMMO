@@ -141,3 +141,12 @@ Use case: stylized-concept. Asset type: rear-view concept for the same modular V
 - 대기 동작의 61개 시점에서 옆가슴 메시의 변형을 측정하고 미리보기에서 여러 시점과 좌우 단면을 확인했다. 본 이름과 역바인드 행렬, 정규화된 가중치와 퇴화 삼각형이 없음을 검사했다. 다른 동작의 전 구간과 장비 조합은 검증하지 않았다.
 
 재생성: `blender -b --python-exit-code 1 --python assets/items/valkyrie_starter/tripo_top_v1/fit-v7.py`. 최종 가림 정보와 원본 GLB가 필요하다.
+
+### 대기 자세 가슴 피부 복원 v8 — 2026-11-01
+
+대기 자세에서 상의 안쪽의 몸체가 잘려 갑옷 내부가 드러나는 부위에 피부 삼각형 18개를 복원했다. 속옷과 나머지 몸체 가림은 유지하며 상의 GLB는 v7을 사용한다.
+
+- [가림 정보](../../assets/items/valkyrie_starter/tripo_top_v1/fitted_v8/body-occlusion.json), SHA-256 `162927bc7b7732fa3611322f2c967448c149a285d7d9e47c59736ed13b7245ac`. [복원 스크립트](../../assets/items/valkyrie_starter/tripo_top_v1/restore-idle-chest.py)는 기존 가림과 몸체 해시를 확인한다.
+- 대기 동작의 정면·양옆·위쪽 미리보기를 확인했다. 다른 동작의 전체 구간과 장비 조합은 검증하지 않았다.
+
+재생성: `PYTHONPATH=tools .venv/bin/python assets/items/valkyrie_starter/tripo_top_v1/restore-idle-chest.py`.
