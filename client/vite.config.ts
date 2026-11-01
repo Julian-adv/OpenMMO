@@ -113,7 +113,7 @@ function modularCharacterPreview(): Plugin {
   ])
   const fixed: Record<string, URL> = {
     female_valkyrie_wings: new URL(
-      '../assets/items/valkyrie_starter/tripo_wing_v1/fitted_patch_v1/wings-front-normals-preview.glb',
+      '../assets/items/valkyrie_starter/tripo_wing_v1/fitted_patch_v3/wings-armor-fit.glb',
       import.meta.url
     ),
     ysolde_ground_mattress: new URL(
@@ -166,7 +166,7 @@ function modularCharacterPreview(): Plugin {
       import.meta.url
     ),
     female_valkyrie_top: new URL(
-      '../assets/items/valkyrie_starter/tripo_top_v1/fitted_v7/top_female_valkyrie.glb',
+      '../assets/items/valkyrie_starter/tripo_top_v1/fitted_v11/top_female_valkyrie.glb',
       import.meta.url
     ),
     'female-valkyrie-top-occlusion.json': new URL(

@@ -150,3 +150,21 @@ Use case: stylized-concept. Asset type: rear-view concept for the same modular V
 - 대기 동작의 정면·양옆·위쪽 미리보기를 확인했다. 다른 동작의 전체 구간과 장비 조합은 검증하지 않았다.
 
 재생성: `PYTHONPATH=tools .venv/bin/python assets/items/valkyrie_starter/tripo_top_v1/restore-idle-chest.py`.
+
+### 등 쪽 갑옷·날개 간격 보정 v11 — 2026-11-01
+
+가슴 앞쪽 갑옷을 몸 방향으로 최대 8mm 옮기고 흉갑 밑의 각진 정면 윤곽을 둥글게 보정했다. 이어 견갑과 등 쪽 갑옷을 몸 방향으로 최대 26mm 당겼으며, 팔과 목 주변에서는 이동량을 점진적으로 줄였다. 날개가 갑옷과 겹쳐 후면에 장식이 드러나 한때 뒤로 15mm 옮겼으나, 등 쪽 갑옷을 조정한 후 이전 날개 피팅보다 몸 쪽으로 5mm 옮긴 최종 위치에서 함께 확인했다.
+
+- [상의 GLB](../../assets/items/valkyrie_starter/tripo_top_v1/fitted_v11/top_female_valkyrie.glb), SHA-256 `ab61e50c9c539efb053da7f5813aabbf30433ea84a8efc8d30c387811874a6d8`. [상의 Blender 장면](../../assets/items/valkyrie_starter/tripo_top_v1/fitted_v11/fitting.blend), [피팅 스크립트](../../assets/items/valkyrie_starter/tripo_top_v1/fit-v11.py).
+- [날개 GLB](../../assets/items/valkyrie_starter/tripo_wing_v1/fitted_patch_v3/wings-armor-fit.glb), SHA-256 `00c720ec208607ad618abab5001b33957d657ba2c643662f4001fa1b48ebb940`. [날개 Blender 장면](../../assets/items/valkyrie_starter/tripo_wing_v1/fitted_patch_v3/wings-armor-fit.blend), [피팅 스크립트](../../assets/items/valkyrie_starter/tripo_wing_v1/fit-armor-clearance-v3.py). 출처와 이용 조건은 위 원본 기록을 따른다.
+- 실제 `idle1`의 7개 시점에서 선택한 등·견갑 뒤쪽 정점과 몸체의 최근접 법선 방향 간격을 측정했다. 중앙값은 보정 전 39.7mm→보정 후 26.5mm, 90백분위는 60.4mm→37.7mm다. 선택 조건에 들어온 표본은 각각 2,662개와 2,561개이므로 같은 점의 쌍별 비교나 모든 부위의 최소 간격 보장은 아니다. [측정 스크립트](../../assets/items/valkyrie_starter/tripo_top_v1/measure-idle-back-gap.py).
+- 같은 7개 시점의 이동된 갑옷 정점에서 새 피부 관통을 검사하고, 후면의 대기 동작 다섯 시점 및 머리 두 종류를 시각 확인했다. 상의 4,028삼각형과 날개 7,272삼각형, UV·리깅 및 가중치를 유지한다. 다른 동작 전 구간과 장비 조합은 미검증이다.
+
+재생성 및 측정:
+
+```sh
+blender -b --python-exit-code 1 --python assets/items/valkyrie_starter/tripo_top_v1/fit-v11.py
+blender -b --python-exit-code 1 --python assets/items/valkyrie_starter/tripo_wing_v1/fit-armor-clearance-v3.py
+node tools/export-female-rogue-seated-poses.mjs /tmp/valkyrie-gap-v9 idle1
+blender -b --python-exit-code 1 --python assets/items/valkyrie_starter/tripo_top_v1/measure-idle-back-gap.py -- fitted_v11
+```
