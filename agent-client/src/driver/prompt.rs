@@ -243,6 +243,9 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
         }
         ServerMessage::SystemMessage { message, .. } => Some(format!("[System] {message}")),
         ServerMessage::ServerAnnouncement { message } => Some(format!("[Announcement] {message}")),
+        ServerMessage::ServerNotice { message } => {
+            message.as_ref().map(|message| format!("[Notice] {message}"))
+        }
         ServerMessage::InteractionRejected { reason } => {
             Some(format!("[InteractionRejected] {reason}"))
         }

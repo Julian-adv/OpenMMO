@@ -790,12 +790,21 @@ async fn update_notice_is_broadcast_and_pauses_logins() {
     let mut broadcast_rx = game_state.subscribe();
     let text = "잠시 후 업데이트가 있을 예정입니다.\nAn update is coming shortly.";
 
-    game_state.pause_logins_for_update(text);
+    game_state.pause_logins_for_update(text).await;
     let broadcast = broadcast_rx.try_recv().expect("update notice");
     assert!(
-        matches!(rmp_serde::from_slice::<ServerMessage>(&broadcast.bytes), Ok(ServerMessage::ServerAnnouncement { message }) if message == text)
+        matches!(rmp_serde::from_slice::<ServerMessage>(&broadcast.bytes), Ok(ServerMessage::ServerNotice { message: Some(message) }) if message == text)
     );
+    assert_eq!(game_state.server_notice().await.as_deref(), Some(text));
     assert!(game_state.logins_paused());
+    game_state.resume_logins().await;
+    let broadcast = broadcast_rx.try_recv().expect("update notice cleared");
+    assert!(matches!(
+        rmp_serde::from_slice::<ServerMessage>(&broadcast.bytes),
+        Ok(ServerMessage::ServerNotice { message: None })
+    ));
+    assert_eq!(game_state.server_notice().await, None);
+    assert!(!game_state.logins_paused());
 }
 
 #[tokio::test]

@@ -3060,7 +3060,7 @@ mod tests {
             onlinerpg_shared::serialize_client_msg(&ClientMessage::EnterGame { character_id })
                 .unwrap();
 
-        game.pause_logins_for_update("update soon");
+        game.pause_logins_for_update("update soon").await;
         let responses = handle_client_message(&encoded, &game, &auth, &auth_ctx, &mut state)
             .await
             .unwrap();
@@ -3070,7 +3070,7 @@ mod tests {
         );
         assert_eq!(state.player_id, None);
 
-        game.resume_logins();
+        game.resume_logins().await;
         let responses = handle_client_message(&encoded, &game, &auth, &auth_ctx, &mut state)
             .await
             .unwrap();

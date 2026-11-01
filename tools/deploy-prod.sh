@@ -36,7 +36,7 @@ if [[ "$game_root/" == "$dashboard_root/"* || "$dashboard_root/" == "$game_root/
     exit 1
 fi
 
-# SIGUSR1 broadcasts data/announce.txt and refuses new entries until restart.
+# SIGUSR1 shows data/announce.txt as the server notice and refuses new entries until restart.
 echo "==> update notice"
 if signal_server SIGUSR1; then
     logins_paused=1

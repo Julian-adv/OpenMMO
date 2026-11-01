@@ -1026,17 +1026,21 @@ impl super::GameState {
         Ok(())
     }
 
-    /// Pre-deploy notice: broadcasts `notice` and refuses new entries.
-    pub fn pause_logins_for_update(&self, notice: &str) {
+    /// Pre-deploy: holds `notice` as the server notice until restart and
+    /// refuses new entries.
+    pub async fn pause_logins_for_update(&self, notice: &str) {
         self.logins_paused.store(true, Ordering::Relaxed);
-        if let Err(e) = self.broadcast_announcement(notice) {
-            warn!(error = %e, "update notice not broadcast");
+        if notice.is_empty() {
+            warn!("update notice is empty");
+        } else {
+            self.set_server_notice(Some(notice.to_string())).await;
         }
         info!("logins paused for update");
     }
 
-    pub fn resume_logins(&self) {
+    pub async fn resume_logins(&self) {
         self.logins_paused.store(false, Ordering::Relaxed);
+        self.set_server_notice(None).await;
         info!("logins resumed");
     }
 

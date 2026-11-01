@@ -222,9 +222,9 @@ fn listen_for_update_notice(game_state: Arc<GameState>, notice_path: PathBuf) {
                         warn!("Failed to read {}: {}", notice_path.display(), e);
                         String::new()
                     });
-                    game_state.pause_logins_for_update(notice.trim());
+                    game_state.pause_logins_for_update(notice.trim()).await;
                 }
-                Some(()) = resume.recv() => game_state.resume_logins(),
+                Some(()) = resume.recv() => game_state.resume_logins().await,
                 else => return,
             }
         }
