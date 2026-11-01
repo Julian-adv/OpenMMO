@@ -181,6 +181,14 @@ function modularCharacterPreview(): Plugin {
       '../assets/items/female_caveman_boots/tripo_v1/fitted_v4/body-occlusion.json',
       import.meta.url
     ),
+    female_caveman_gloves: new URL(
+      '../assets/items/female_caveman_bracers/tripo_v1/fitted_v1/gloves_female_caveman.glb',
+      import.meta.url
+    ),
+    'female-caveman-gloves-occlusion.json': new URL(
+      '../assets/items/female_caveman_bracers/tripo_v1/fitted_v1/body-occlusion.json',
+      import.meta.url
+    ),
     female_caveman_top: new URL(
       '../assets/items/female_caveman_top/tripo_v1/fitted_v7/top_female_caveman.glb',
       import.meta.url

@@ -1,0 +1,98 @@
+{
+  "date": "2026-11-01",
+  "source": {
+    "path": "assets/items/female_caveman_bracers/tripo_v1/source/model_url.glb",
+    "sha256": "4272c6f0eedf3057f69de43e5dd80fca8718b105333f9b2181958adf0a4a6351"
+  },
+  "body": {
+    "path": "assets/modular_human_female_01/rig_v1/female-base.glb",
+    "sha256": "3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5"
+  },
+  "output": {
+    "path": "assets/items/female_caveman_bracers/tripo_v1/fitted_v1/gloves_female_caveman.glb",
+    "sha256": "b8e3f54b9d1bfc56d675752ce7bbdbb6313a7d9a88c9094edfdd0e480cf62539"
+  },
+  "rig_id": "human_female_01_local_v1",
+  "wrist_offset_m": 0.028,
+  "length_m": 0.153,
+  "clearance_m": 0.00396,
+  "sides": {
+    "Right": {
+      "wrist": [
+        -0.47437193989753723,
+        1.0815119743347168,
+        -0.005057991947978735
+      ],
+      "axis": [
+        0.6541098952293396,
+        0.7353191375732422,
+        -0.17733006179332733
+      ],
+      "basis": [
+        [
+          -0.020459018647670746,
+          0.25155311822891235,
+          0.967627227306366
+        ],
+        [
+          -0.7561228275299072,
+          0.6293065547943115,
+          -0.17958730459213257
+        ]
+      ],
+      "scale": 0.17596082546190406,
+      "axial_interval_m": [
+        0.028,
+        0.181
+      ],
+      "forearm_length_m": 0.23539160192012787,
+      "minimum_offset_m": 0.003960000000664138,
+      "maximum_offset_m": 0.020091951804048824,
+      "rest_skin_gap_min_m": 0.003960000000664137,
+      "triangles": 1575,
+      "vertices": 1259,
+      "hidden_body_triangles": 100
+    },
+    "Left": {
+      "wrist": [
+        0.4734000563621521,
+        1.0817999839782715,
+        -0.03420000523328781
+      ],
+      "axis": [
+        -0.6619245409965515,
+        0.747585654258728,
+        -0.05451139062643051
+      ],
+      "basis": [
+        [
+          0.12886448204517365,
+          0.18513603508472443,
+          0.9742271304130554
+        ],
+        [
+          0.7384103536605835,
+          0.6378403306007385,
+          -0.21888335049152374
+        ]
+      ],
+      "scale": 0.17596082546190406,
+      "axial_interval_m": [
+        0.028,
+        0.181
+      ],
+      "forearm_length_m": 0.23114416003227234,
+      "minimum_offset_m": 0.003960000000664138,
+      "maximum_offset_m": 0.020091951804048824,
+      "rest_skin_gap_min_m": 0.003960000000664137,
+      "triangles": 1575,
+      "vertices": 1259,
+      "hidden_body_triangles": 104
+    }
+  },
+  "hidden_body_triangles": 204,
+  "method": "Map the source inner wall per height and angle onto 48 actual forearm sections plus clearance, keeping relief above the inner wall at the uniform length scale. The source flare toward the elbow follows the forearm. Left uses the mirrored frame on its own bones with reversed winding. Each bracer follows its ForeArm rigidly.",
+  "removed_interior_cap_faces_per_side": 25,
+  "original_uv_and_embedded_textures_preserved": true,
+  "status": "Candidate; see animation-validation.json for sampled diagnostics"
+}

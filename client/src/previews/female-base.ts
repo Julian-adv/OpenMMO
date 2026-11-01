@@ -80,6 +80,7 @@ export async function showFemaleBase(
         <option value="none">없음</option>
         <option value="knight">은빛 기사 판금 장갑</option>
         <option value="barbarian">야만전사 손목 보호대</option>
+        <option value="caveman">원시전사 가죽 손목 보호대 (피팅 검수 중)</option>
         <option value="rogue">로그 검은 가죽 반장갑</option>
       </select>
       <label for="female-motion">동작</label>

@@ -1,6 +1,6 @@
 # 여성 원시전사 시작 장비
 
-상태: 상의 v7, 하의 v9, 부츠 v4 피팅·리깅 후보를 미리보기에 연결했다. 일부 동작에서 관통이 남아 있으며 게임 적용은 완료되지 않았다.
+상태: 상의 v7, 하의 v9, 부츠 v4, 손목 보호대 v1 피팅·리깅 후보를 미리보기에 연결했다. 일부 동작에서 관통이 남아 있으며 게임 적용은 완료되지 않았다.
 
 여성 원시전사도 남성 원시전사와 같은 네 슬롯의 시작 장비를 사용한다.
 외형은 [여성 원시전사 통합 원화](../../client/public/character_concepts/cavewoman.webp)를 기준으로 한다.
@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | chest | `worn_caveman_top` | 가죽 상의와 뼈 장식. 목걸이의 소속과 뒷면 연결은 미확정. |
 | pants | `worn_caveman_pants` | 벨트, 주머니, 앞뒤와 옆의 모피 하의. |
-| hands | `worn_caveman_bracers` | 손가락이 노출되는 좌우 손목 보호대. |
+| hands | `worn_caveman_bracers` | 손가락이 노출되는 좌우 가죽 손목 보호대. 미리보기 피팅 검수 중. |
 | boots | `worn_caveman_boots` | 종아리 모피를 참고한 두 후보 중 하이힐 모피 부츠 원화를 선택했다. |
 
 투구는 시작 장비에 포함하지 않는다. 실제 형상과 장식의 안팎 순서는 부위 원화에서 결정한다.
@@ -21,7 +21,7 @@
 ## 현재 상태와 남은 작업
 
 - 기존 여성 원시전사는 통합 모델을 사용하며 신규 캐릭터에 위 네 장비를 지급하지 않는다.
-- 상의와 하의의 동작 중 관통 보정, 손목 보호대 원화·3D 생성 및 연결부 검증이 필요하다.
+- 상의와 하의의 동작 중 관통 보정, 손목 보호대 동작·다른 장비와의 연결부 검증이 필요하다.
 - 같은 세트와 다른 장비 혼합, 장착·해제, 동작 중 관통, 게임 성능을 검증해야 한다.
 - 검증된 파츠가 준비된 후 여성 캐릭터의 모듈형 모델 선택, 시작 장비 지급과 게임 연결을 구현한다.
 - 기존 여성 캐릭터에 대한 소급 지급은 범위와 데이터 처리 방법이 아직 정해지지 않았다.
@@ -46,6 +46,28 @@
 - 출력: [하의 앞·뒤 원화 초안](../../assets/items/female_caveman_bottom/concept_v1/sheet.png), SHA-256 `a3870c9025b992e30193ecc0b14bddf29bf438f4698516dec752ca23ef446451`.
 - 생성: OpenAI Codex 내장 ImageGen, **ChatGPT Pro 20x**, 2026-11-01. OpenAI 출력물 이용 조건 적용. [프롬프트](../../assets/items/female_caveman_bottom/concept_v1/prompt.txt).
 - 3D 생성과 몸체 피팅·리깅은 아직 진행하지 않았다.
+
+## 손목 보호대 원화 초안 — 2026-11-01
+
+- 여성 원시전사 통합 원화의 양쪽 손목 보호대만 잘라 참고해 가죽과 감은 끈, 늘어진 끈을 살린 보호대 단품의 바깥쪽·안쪽 초안을 그렸다. 뒤쪽 끈의 세부 배치는 원화에서 확인되지 않아 제안한 형태다.
+- 참조: FFmpeg `crop=160:160:70:330,scale=960:960:flags=lanczos`, [이미지 왼쪽 손목](../../assets/items/female_caveman_bracers/concept_v1/reference-wrist-left.png), SHA-256 `745fadbeb06f8844240276deeaaf8b0635380671e9bd2acd202943decd7dadfe`; `crop=160:160:805:330,scale=960:960:flags=lanczos`, [이미지 오른쪽 손목](../../assets/items/female_caveman_bracers/concept_v1/reference-wrist-right.png), SHA-256 `547ebbf78694f0f3edeecbfb2071ac02879e321d74943b3da27bb16fb13b2f53`. 원본 출처와 이용 조건은 [캐릭터 기록](characters.md#other-classes)을 따른다.
+- 출력: [보호대 원화](../../assets/items/female_caveman_bracers/concept_v1/sheet.png), SHA-256 `239703ba889325500a2ed9615cf7f6133b01513ef598b96b9a85d354a6f55f28`. OpenAI Codex 내장 ImageGen, **ChatGPT Pro 20x**, 2026-11-01 생성. OpenAI 출력물 이용 조건 적용. [프롬프트](../../assets/items/female_caveman_bracers/concept_v1/prompt.txt).
+- 사용자 요청으로 합본과 손목 크롭을 참조해 [앞면](../../assets/items/female_caveman_bracers/concept_v1/front.png)을 따로 그렸고, 앞면과 합본을 참조해 [뒷면](../../assets/items/female_caveman_bracers/concept_v1/back.png)을 그렸다. 각각 SHA-256 `1c664690cc9ad6162dfb8b7667117778123b4bfe515a0275373fc5491e0ce7d8`, `dafb382553c6b7428eafedca1ddb3a4ab38bf4774f7ce11237c5081d2efc9a73`. OpenAI Codex 내장 ImageGen, **ChatGPT Pro 20x**, 2026-11-01 생성. OpenAI 출력물 이용 조건 적용. [앞면 프롬프트](../../assets/items/female_caveman_bracers/concept_v1/prompt-front.txt), [뒷면 프롬프트](../../assets/items/female_caveman_bracers/concept_v1/prompt-back.txt). 두 시점은 각각 생성한 2D 원화로, 끈 연결과 형상의 정확한 일치는 3D 제작 시 확인해야 한다.
+
+## 손목 보호대 3D와 피팅 후보 — 2026-11-01
+
+- 사용자가 Tripo에서 만든 [한쪽 원본 GLB](../../assets/items/female_caveman_bracers/tripo_v1/source/model_url.glb)를 전달했다. SHA-256 `4272c6f0eedf3057f69de43e5dd80fca8718b105333f9b2181958adf0a4a6351`, 1,600 triangles. 정확한 생성 날짜, 요금제, 입력 이미지, 설정과 비용은 확인되지 않았다. [Tripo 이용 조건](https://developers.tripo3d.ai/en/terms).
+- 원본의 막힌 안쪽 면 25개를 각 짝에서 제거하고, 늘어진 끈을 포함한 나머지 메시를 양팔에 맞췄다. 한쪽 1,575개, 양쪽 합계 3,150 triangles다. UV와 원본 텍스처를 보존하고 각 팔의 `ForeArm` 본에 연결했다. [피팅 GLB](../../assets/items/female_caveman_bracers/tripo_v1/fitted_v1/gloves_female_caveman.glb), [Blender 편집 파일](../../assets/items/female_caveman_bracers/tripo_v1/fitted_v1/female-caveman-bracers-fitted.blend), [피팅 기록](modular-female-caveman-bracers-fitting-v1.json).
+- 손은 유지하고 보호대 안쪽 팔뚝 피부 204면만 가린다. [가림 정보](../../assets/items/female_caveman_bracers/tripo_v1/fitted_v1/body-occlusion.json)는 해제 시 원래 피부를 복원한다. 기본 자세에서 각 보호대 면당 7개 표본을 최근접 피부 면과 비교했을 때 보이는 피부 쪽 1mm 초과 겹침 표본은 없었다.
+- [동작 검사](../../assets/items/female_caveman_bracers/tripo_v1/fitted_v1/animation-validation.json)는 14개 동작 각 33시점에서 본 연결과 피부 가림 복원을 확인했다. 광선 패리티 검사에서는 팔과의 겹침 후보가 모든 동작에서, 허벅지와의 후보가 걷기 등에서 검출됐다. 열린 메시의 광선 패리티와 최근접 면 표본은 근사 검사이며 실제 관통의 유무나 모든 장비 조합을 보장하지 않는다.
+- 미리보기 신발과 별도로 장갑 메뉴의 `원시전사 가죽 손목 보호대 (피팅 검수 중)`에서 볼 수 있다. 게임 장비 연결은 아직 하지 않았다.
+
+```sh
+.venv/bin/python tools/fit-female-caveman-bracers.py
+node tools/validate-female-caveman-bracers.mjs
+.venv/bin/python tools/validate-female-caveman-bracer-clearance.py
+blender -b -t 4 --python-exit-code 1 --python tools/blender-scripts/review_female_caveman_bracers.py
+```
 
 ## 신발 원화 후보 두 가지 — 2026-11-01
 
