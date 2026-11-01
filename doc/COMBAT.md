@@ -39,8 +39,8 @@ NetHack/D&D 스타일의 스탯 기반 전투 시스템. 모든 전투 계산은
 
 | 스탯 | 약자 | 쓰임 |
 |------|------|------|
-| Strength     | STR | 근접 공격의 명중·피해 보정 |
-| Dexterity    | DEX | 생성 시 GUARD, 활(`rangedAbility dex`)의 명중·피해 보정 |
+| Strength     | STR | 단검을 뺀 근접 공격의 명중·피해 보정 |
+| Dexterity    | DEX | 생성 시 GUARD, 활(`rangedAbility dex`)과 단검의 명중·피해 보정 |
 | Constitution | CON | 최대 HP(레벨 1·레벨업), HP 재생량 |
 | Intelligence | INT | 아직 쓰지 않는다 (INT 마법은 후속 설계) |
 | Wisdom       | WIS | 최대 MP, MP 회복량 |
@@ -186,6 +186,7 @@ regeneration_amount = max(1, 1 + floor(Level / 5) + con_mod)
 
 - 플레이어 `attack_bonus = level / 2`(내림) + STR modifier + 무기 인챈트 + 디버프 `hitMod` 합(취기, [DEBUFF.md](DEBUFF.md))
   — 무기가 `rangedAbility`를 선언하면 STR 대신 그 능력치를 쓴다(아래 "원거리 전투").
+  단검(`weaponType dagger`)은 STR 대신 DEX를 쓴다.
   능력치 modifier는 `floor((score − 10) / 2)`로, `con_mod`와 달리 음수 쪽으로 내린다(STR 9 → −1).
 - 몬스터 `attack_bonus = level` + 장소 명중 보너스. 플레이어보다 가파르다. 플레이어 guard는
   레벨이 아니라 장비로 오르기 때문이다. monsters.csv의 `attackBonus`가 있으면 그 값이
@@ -358,7 +359,7 @@ guard 40짜리 플레이어를 코볼트가 한 번 맞히려면 평균 400회, 
 |------|------|------|
 | `range` | f32? | 리치(m). 비우면 근접 리치 2m. 단검은 1.5m |
 | `attackIntervalMs` | u64? | 공격 간격(ms). 비우면 `player_attack_interval`(1533ms). 단검은 1200ms |
-| `rangedAbility` | string? | 명중·대미지 보너스를 읽을 능력치 (`dex`, `int`, ...). 비우면 STR |
+| `rangedAbility` | string? | 명중·대미지 보너스를 읽을 능력치 (`dex`, `int`, ...). 비우면 STR, 단검은 DEX |
 | `hands` | u8? | 무기가 차지하는 손. 비우면 1, `2`면 오프핸드를 봉인한다 |
 
 활(`bow`): `main_hand`, `hands 2`, `range 10`, `rangedAbility dex`, `1d1`(피해는 화살이 정한다, 아래 "탄약").

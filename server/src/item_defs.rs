@@ -402,6 +402,15 @@ impl ItemDefinition {
         }
     }
 
+    /// The ability the hit and damage bonus read: the ranged one declared,
+    /// DEX for a dagger, STR otherwise.
+    pub fn attack_ability(&self) -> Ability {
+        self.ranged_ability().unwrap_or(match self.weapon_type {
+            Some(WeaponType::Dagger) => Ability::Dex,
+            _ => Ability::Str,
+        })
+    }
+
     /// Occupies both hands, so the off-hand slot must stay empty.
     pub fn is_two_handed(&self) -> bool {
         self.hands.unwrap_or(1) >= 2
@@ -813,6 +822,19 @@ mod tests {
         assert_eq!(sword.weapon_range(), None);
         assert_eq!(sword.ranged_ability(), None);
         assert!(!sword.is_two_handed());
+    }
+
+    #[test]
+    fn daggers_attack_on_dex_and_other_melee_weapons_on_str() {
+        let defs = ItemDefs::load();
+        for (id, ability) in [
+            ("dagger", Ability::Dex),
+            ("worn_dagger", Ability::Dex),
+            ("iron_sword", Ability::Str),
+            ("bow", Ability::Dex),
+        ] {
+            assert_eq!(defs.get(id).unwrap().attack_ability(), ability, "{id}");
+        }
     }
 
     #[test]

@@ -1548,7 +1548,7 @@ async fn rage_ends_on_death() {
 
 #[tokio::test]
 async fn rage_adds_level_scaled_damage_to_melee_hits() {
-    // Level 50, STR 10, 1d4 dagger: a plain hit deals at most 8 even when
+    // Level 50, DEX 10, 1d4 dagger: a plain hit deals at most 8 even when
     // critical; Rage adds +8, so a raging hit deals at least 9.
     for raging in [false, true] {
         let mut hits = 0;

@@ -248,8 +248,10 @@ struct EquippedWeapon {
     /// Reach in meters, or `None` for melee.
     range: Option<f32>,
     attack_interval_ms: Option<u64>,
-    /// Ability the hit and damage bonus read, or `None` to keep STR.
-    ability: Option<crate::item_defs::Ability>,
+    /// Declares `rangedAbility`, so it shoots over fences.
+    ranged: bool,
+    /// Ability the hit and damage bonus read.
+    attack_ability: crate::item_defs::Ability,
     /// What this weapon spends per shot, or `None` when firing is free.
     ammo_kind: Option<String>,
 }
@@ -271,7 +273,8 @@ impl Default for EquippedWeapon {
             enchant: 0,
             range: None,
             attack_interval_ms: None,
-            ability: None,
+            ranged: false,
+            attack_ability: crate::item_defs::Ability::Str,
             ammo_kind: None,
         }
     }
@@ -591,7 +594,8 @@ impl super::GameState {
                         enchant: item.enchant,
                         range: def.weapon_range(),
                         attack_interval_ms: def.weapon_attack_interval_ms(),
-                        ability: def.ranged_ability(),
+                        ranged: def.ranged_ability().is_some(),
+                        attack_ability: def.attack_ability(),
                         ammo_kind: def.ammo_kind.clone(),
                     })
                 })
@@ -746,7 +750,7 @@ impl super::GameState {
                 player_position,
                 gate_position,
                 player_floor,
-                weapon.ability.is_some(),
+                weapon.ranged,
             )
         };
         if distance_sq > attack_range.powi(2) {
@@ -1105,18 +1109,11 @@ impl super::GameState {
         self.clear_player_pose(player_id, "attack").await;
         debug!("Player {} attacking monster {}", player_name, monster_id);
 
-        // A ranged weapon rolls on the ability it declares (DEX for the bow);
-        // everything else keeps STR.
         let ability_mod = {
             let chars = self.player_characters.read().await;
             chars
                 .get(player_id)
-                .map(|(_, _, attrs)| {
-                    combat::ability_modifier(match weapon.ability {
-                        Some(ability) => ability.score(attrs),
-                        None => attrs.r#str,
-                    })
-                })
+                .map(|(_, _, attrs)| combat::ability_modifier(weapon.attack_ability.score(attrs)))
                 .unwrap_or(0)
         };
 
@@ -1190,7 +1187,7 @@ impl super::GameState {
         }
         let loot_delay = if dagger_strike.is_some() || charge {
             Duration::ZERO
-        } else if weapon.ability.is_some() {
+        } else if weapon.ranged {
             *PLAYER_RANGED_IMPACT_DELAY
         } else {
             *PLAYER_ATTACK_IMPACT_DELAY

@@ -553,14 +553,7 @@ fn at(x: f32) -> Position {
     Position { x, y: 0.0, z: 0.5 }
 }
 
-async fn setup_dagger_skill(game: &GameState, weapon: &str) -> DirectRx {
-    let rx = setup_archer(game, weapon, attrs_with(30, 10)).await;
-    game.players
-        .write()
-        .await
-        .get_mut(&pid("archer"))
-        .unwrap()
-        .class = CharacterClass::Rogue;
+async fn set_main_hand_enchant(game: &GameState, enchant: i32) {
     game.inventories
         .write()
         .await
@@ -569,7 +562,18 @@ async fn setup_dagger_skill(game: &GameState, weapon: &str) -> DirectRx {
         .equipped
         .get_mut(&EquipSlot::MainHand)
         .unwrap()
-        .enchant = 9;
+        .enchant = enchant;
+}
+
+async fn setup_dagger_skill(game: &GameState, weapon: &str) -> DirectRx {
+    let rx = setup_archer(game, weapon, attrs_with(10, 30)).await;
+    game.players
+        .write()
+        .await
+        .get_mut(&pid("archer"))
+        .unwrap()
+        .class = CharacterClass::Rogue;
+    set_main_hand_enchant(game, 9).await;
     let mut monster = make_monster("skill_target", at(1.0), 0);
     monster.health = 500;
     monster.max_health = 500;
@@ -644,7 +648,7 @@ async fn dagger_skill_reconnect_reports_and_enforces_remaining_cooldown() {
     let mut player = make_player("reconnected", 0.0, 0.5);
     player.class = CharacterClass::Rogue;
     game.add_player(player).await;
-    game.register_player_character(&id, 1, 0, attrs_with(30, 10), 0, None)
+    game.register_player_character(&id, 1, 0, attrs_with(10, 30), 0, None)
         .await;
     game.inventories.write().await.insert(id, inventory);
     let mut rx = game.register_direct_channel(&id).await;
@@ -671,7 +675,7 @@ async fn dagger_skill_reconnect_reports_and_enforces_remaining_cooldown() {
         .any(|message| matches!(message, ServerMessage::PlayerAttacked { .. })));
 
     let other_id = pid("other_character");
-    game.register_player_character(&other_id, 2, 0, attrs_with(30, 10), 0, None)
+    game.register_player_character(&other_id, 2, 0, attrs_with(10, 30), 0, None)
         .await;
     assert_eq!(remaining(game.ability_cooldown_message(&other_id).await), 0);
     game.last_dagger_skills
@@ -757,7 +761,7 @@ async fn dagger_skill_deals_two_full_hits_and_shares_the_attack_window() {
                 let base = if critical { damage / 2 } else { damage };
                 assert!(
                     (20..=23).contains(&base) && (!critical || damage % 2 == 0),
-                    "1d4 + STR 10 + enchant 9 (critical {critical}), got {damage}"
+                    "1d4 + DEX 10 + enchant 9 (critical {critical}), got {damage}"
                 );
                 Some((dagger_strike.unwrap(), damage))
             }
@@ -1018,17 +1022,24 @@ async fn dagger_skill_new_movement_command_cancels_the_second_hit() {
 /// This monster's attack result, skipping whatever else the swing sent first
 /// — spending a round pushes an inventory update ahead of the broadcast.
 fn expect_attacked(rx: &mut DirectRx, expected_id: &str) -> (bool, u32) {
+    let (hit, damage, _) = expect_attack_roll(rx, expected_id);
+    (hit, damage)
+}
+
+/// `expect_attacked` plus whether the hit was critical.
+fn expect_attack_roll(rx: &mut DirectRx, expected_id: &str) -> (bool, u32, bool) {
     let mut seen = Vec::new();
     while let Ok(message) = rx.try_recv() {
         if let ServerMessage::PlayerAttacked {
             monster_id,
             hit,
             damage,
+            critical,
             ..
         } = &message
         {
             assert_eq!(monster_id, expected_id);
-            return (*hit, *damage);
+            return (*hit, *damage, *critical);
         }
         seen.push(message);
     }
@@ -1138,7 +1149,7 @@ async fn a_bow_shot_at_its_range_survives_the_lag_the_server_trails_by() {
 #[tokio::test]
 async fn a_dagger_refuses_a_swing_past_its_reach() {
     let game_state = make_test_game_state("dagger_reach_gate");
-    let mut rx = setup_archer(&game_state, "dagger", attrs_with(30, 10)).await;
+    let mut rx = setup_archer(&game_state, "dagger", attrs_with(10, 30)).await;
     game_state
         .monsters
         .write()
@@ -1161,7 +1172,7 @@ async fn melee_reach_is_measured_at_a_body_surface() {
         (8.0, -std::f32::consts::FRAC_PI_2, false),
     ] {
         let game_state = make_test_game_state(&format!("body_reach_{center_x}"));
-        let mut rx = setup_archer(&game_state, "dagger", attrs_with(30, 10)).await;
+        let mut rx = setup_archer(&game_state, "dagger", attrs_with(10, 30)).await;
         let boss = game_state
             .spawn_monster(
                 "terraclash".into(),
@@ -1214,7 +1225,7 @@ async fn a_bow_shoots_over_a_fence_at_close_and_long_range() {
 #[tokio::test]
 async fn a_melee_attack_through_a_fence_is_rejected() {
     let game_state = make_test_game_state("melee_blocked_by_fence");
-    let mut rx = setup_archer(&game_state, "dagger", attrs_with(30, 10)).await;
+    let mut rx = setup_archer(&game_state, "dagger", attrs_with(10, 30)).await;
     add_combat_fence(&game_state);
     game_state
         .monsters
@@ -1287,11 +1298,12 @@ async fn a_ranged_hit_rolls_on_the_weapons_ability() {
     assert!(damage >= 11, "1d1 + 1d6 arrow + DEX(+10), got {damage}");
 }
 
-/// The mirror image: STR 30 (+10) with DEX 10 (+0) on a melee weapon.
-#[tokio::test]
-async fn a_melee_hit_still_rolls_on_str() {
-    let game_state = make_test_game_state("melee_rolls_str");
-    let mut rx = setup_archer(&game_state, "dagger", attrs_with(30, 10)).await;
+/// One melee hit on a guard-10 target as damage before any critical
+/// doubling. A +10 modifier or enchant makes the hit certain.
+async fn melee_hit_base(name: &str, weapon: &str, attrs: CharacterAttributes, enchant: i32) -> u32 {
+    let game_state = make_test_game_state(name);
+    let mut rx = setup_archer(&game_state, weapon, attrs).await;
+    set_main_hand_enchant(&game_state, enchant).await;
     game_state
         .monsters
         .write()
@@ -1302,9 +1314,45 @@ async fn a_melee_hit_still_rolls_on_str() {
         .broadcast_player_attack(&pid("archer"), "near".to_string())
         .await;
 
-    let (hit, damage) = expect_attacked(&mut rx, "near");
+    let (hit, damage, critical) = expect_attack_roll(&mut rx, "near");
     assert!(hit);
-    assert!(damage >= 11, "1d4 + STR(+10), got {damage}");
+    if critical {
+        damage / 2
+    } else {
+        damage
+    }
+}
+
+/// The mirror image: STR 30 (+10) with DEX 10 (+0) on a melee weapon.
+#[tokio::test]
+async fn a_melee_hit_still_rolls_on_str() {
+    let base = melee_hit_base("melee_rolls_str", "small_sword", attrs_with(30, 10), 0).await;
+    assert!(base >= 11, "1d4 + STR(+10), got {base}");
+}
+
+#[tokio::test]
+async fn a_dagger_hit_rolls_on_dex() {
+    let base = melee_hit_base("dagger_rolls_dex", "dagger", attrs_with(10, 30), 0).await;
+    assert!(base >= 11, "1d4 + DEX(+10), got {base}");
+}
+
+/// DEX(+10) would lift 1d4 + enchant 10 past 14.
+#[tokio::test]
+async fn a_sword_hit_ignores_dex() {
+    let base = melee_hit_base("sword_ignores_dex", "small_sword", attrs_with(10, 30), 10).await;
+    assert!(
+        (11..=14).contains(&base),
+        "1d4 + STR(+0) + enchant 10, got {base}"
+    );
+}
+
+#[tokio::test]
+async fn a_dagger_hit_ignores_str() {
+    let base = melee_hit_base("dagger_ignores_str", "dagger", attrs_with(30, 10), 10).await;
+    assert!(
+        (11..=14).contains(&base),
+        "1d4 + DEX(+0) + enchant 10, got {base}"
+    );
 }
 
 /// A landed ranged shot wakes the server brain onto the shooter.
@@ -1385,7 +1433,7 @@ async fn an_empty_quiver_refuses_the_shot() {
 #[tokio::test]
 async fn a_melee_swing_needs_no_ammunition() {
     let game_state = make_test_game_state("melee_needs_no_ammo");
-    let mut rx = setup_archer_with_ammo(&game_state, "dagger", attrs_with(30, 10), &[]).await;
+    let mut rx = setup_archer_with_ammo(&game_state, "dagger", attrs_with(10, 30), &[]).await;
     game_state
         .monsters
         .write()
