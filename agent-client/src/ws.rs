@@ -57,9 +57,9 @@ pub async fn connect_ws(
     }
 }
 
-/// The server refused something only a config or client change can fix
-/// (protocol version, token, account, character name). The session loop
-/// gives up instead of reconnecting forever.
+/// The server refused something only a config change can fix (token,
+/// account, character name). The session loop gives up instead of
+/// reconnecting forever.
 #[derive(Debug)]
 pub struct AuthRejected(pub String);
 
@@ -70,6 +70,45 @@ impl std::fmt::Display for AuthRejected {
 }
 
 impl std::error::Error for AuthRejected {}
+
+/// The server refused this build itself (protocol, dungeon layout, desync):
+/// only a new binary fixes it.
+#[derive(Debug)]
+pub struct BuildRefused(pub String);
+
+impl std::fmt::Display for BuildRefused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::error::Error for BuildRefused {}
+
+/// How long to wait after an AuthError for the close that says why.
+const REFUSAL_CLOSE_GRACE: Duration = Duration::from_secs(3);
+
+fn is_build_refusal(close_code: u16) -> bool {
+    matches!(
+        close_code,
+        onlinerpg_shared::CLOSE_CODE_PROTOCOL_MISMATCH | onlinerpg_shared::CLOSE_CODE_CLIENT_DESYNC
+    )
+}
+
+/// A build refusal's AuthError is followed by the protocol-mismatch close;
+/// an account or token refusal's is not.
+async fn closes_as_build_refusal(rx: &mut WsRx) -> bool {
+    let wait = async {
+        while let Some(Ok(frame)) = rx.next().await {
+            if let Message::Close(Some(f)) = frame {
+                return is_build_refusal(u16::from(f.code));
+            }
+        }
+        false
+    };
+    tokio::time::timeout(REFUSAL_CLOSE_GRACE, wait)
+        .await
+        .unwrap_or(false)
+}
 
 /// Announce the protocol version and which client this is. Must be the first
 /// message on the connection; the server refuses everything else until it
@@ -107,7 +146,12 @@ pub async fn wait_for_auth(
                 return Ok(characters);
             }
             ServerMessage::AuthError { message } => {
-                return Err(AuthRejected(format!("Auth failed: {message}")).into());
+                let reason = format!("Auth failed: {message}");
+                return Err(if closes_as_build_refusal(ws_rx).await {
+                    BuildRefused(reason).into()
+                } else {
+                    AuthRejected(reason).into()
+                });
             }
             other => {
                 warn!(
@@ -179,14 +223,8 @@ pub async fn recv(rx: &mut WsRx) -> anyhow::Result<ServerMessage> {
             // A desync close means the same thing one step later: this build
             // and the server disagree about the world, so the next connection
             // lands in the same place. Both are for a new binary to fix.
-            Some(Ok(Message::Close(Some(f))))
-                if matches!(
-                    u16::from(f.code),
-                    onlinerpg_shared::CLOSE_CODE_PROTOCOL_MISMATCH
-                        | onlinerpg_shared::CLOSE_CODE_CLIENT_DESYNC
-                ) =>
-            {
-                return Err(AuthRejected(format!(
+            Some(Ok(Message::Close(Some(f)))) if is_build_refusal(u16::from(f.code)) => {
+                return Err(BuildRefused(format!(
                     "Server refused this build: {} — update agent-client",
                     f.reason
                 ))
@@ -206,5 +244,54 @@ pub async fn recv(rx: &mut WsRx) -> anyhow::Result<ServerMessage> {
             Some(Err(e)) => anyhow::bail!("WebSocket error: {e}"),
             None => anyhow::bail!("WebSocket stream ended"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
+    use tokio_tungstenite::tungstenite::protocol::CloseFrame;
+
+    async fn auth_against(close_code: u16, notice_first: bool) -> anyhow::Error {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (tcp, _) = listener.accept().await.unwrap();
+            let mut ws = tokio_tungstenite::accept_async(tcp).await.unwrap();
+            let error = ServerMessage::AuthError {
+                message: "refused".into(),
+            };
+            let bytes = onlinerpg_shared::serialize_server_msg(&error).unwrap();
+            ws.send(Message::Binary(bytes.into())).await.unwrap();
+            if notice_first {
+                ws.send(Message::Binary(vec![0xc1].into())).await.unwrap();
+            }
+            let _ = ws
+                .send(Message::Close(Some(CloseFrame {
+                    code: CloseCode::from(close_code),
+                    reason: "test".into(),
+                })))
+                .await;
+        });
+        let (ws, _) = tokio_tungstenite::connect_async(format!("ws://{addr}"))
+            .await
+            .unwrap();
+        let (_tx, mut rx) = ws.split();
+        let err = wait_for_auth(&mut rx, "test").await.unwrap_err();
+        server.await.unwrap();
+        err
+    }
+
+    #[tokio::test]
+    async fn protocol_close_after_auth_error_is_a_build_refusal() {
+        let err = auth_against(onlinerpg_shared::CLOSE_CODE_PROTOCOL_MISMATCH, true).await;
+        assert!(err.is::<BuildRefused>(), "{err}");
+    }
+
+    #[tokio::test]
+    async fn plain_close_after_auth_error_is_an_account_refusal() {
+        let err = auth_against(1000, false).await;
+        assert!(err.is::<AuthRejected>(), "{err}");
     }
 }

@@ -92,9 +92,9 @@ struct Config {
     #[serde(default)]
     watch_port: u16,
 
-    /// Check GitHub releases at startup and self-update (default on).
-    #[serde(default = "default_true")]
-    auto_update: bool,
+    /// Self-update from GitHub releases: true, false, or "ask" (default).
+    #[serde(default)]
+    auto_update: update::AutoUpdate,
 
     /// Full prompt/response transcripts, one file per NPC per day ("" = off).
     #[serde(default = "default_transcript_dir")]
@@ -184,10 +184,6 @@ fn default_request_timeout_secs() -> u64 {
     120
 }
 
-fn default_true() -> bool {
-    true
-}
-
 fn default_transcript_dir() -> String {
     "logs/transcripts".into()
 }
@@ -246,9 +242,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     update::cleanup_old_binary();
-    if config.auto_update {
-        update::check().await;
-    }
+    update::check(config.auto_update).await;
 
     // NPCs inherit root-level backend configs when they don't override them
     let mut npcs = config.npcs;
@@ -337,6 +331,7 @@ async fn main() -> anyhow::Result<()> {
             }
         },
         watch: watch_hub,
+        auto_update: config.auto_update,
     });
 
     orchestrator::run_orchestrator(config.server, npcs, shared).await

@@ -64,3 +64,21 @@ fn worn_only_item_is_not_a_bag_copy() {
     };
     assert_eq!(def_id, "iron_sword");
 }
+
+/// Mirrors the server's `loaded_ammo`: only ammo of the weapon's kind counts,
+/// and a spare bow in the bag is not a round.
+#[test]
+fn a_bow_needs_arrows_of_its_kind_in_the_bag() {
+    use onlinerpg_shared::inventory::EquipSlot;
+    let (mut s, _rx) = test_state();
+    assert_eq!(s.missing_ammo(), None);
+    s.self_equipped
+        .insert(EquipSlot::MainHand, bag_item(1, "iron_sword", 1));
+    assert_eq!(s.missing_ammo(), None);
+    s.self_equipped
+        .insert(EquipSlot::MainHand, bag_item(1, "bow", 1));
+    s.self_bag = vec![bag_item(2, "bow", 1)];
+    assert_eq!(s.missing_ammo(), Some("arrow"));
+    s.self_bag.push(bag_item(3, "steel_arrow", 5));
+    assert_eq!(s.missing_ammo(), None);
+}

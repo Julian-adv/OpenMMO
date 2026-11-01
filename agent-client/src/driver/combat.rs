@@ -59,6 +59,15 @@ pub(super) fn load_attack_cooldown() -> Duration {
     }
 }
 
+/// The server refuses every swing of an ammo weapon with an empty bag, so
+/// the attack is refused here instead of sent.
+pub(super) fn no_ammo_note(monster_id: &str, kind: &str) -> String {
+    format!(
+        "[AttackRejected] {monster_id}: out_of_ammo — your weapon fires {kind}s and your \
+         bag holds none. Get {kind}s or wield a melee weapon before attacking."
+    )
+}
+
 /// Execute one combat tick: check if target is alive and in range, chase or attack.
 /// Returns whether to keep targeting; false means combat ended.
 pub(super) async fn tick_combat(
@@ -68,6 +77,14 @@ pub(super) async fn tick_combat(
 ) -> bool {
     if state.lock().await.player_trade_in_progress() {
         return false;
+    }
+    {
+        let mut s = state.lock().await;
+        if let Some(kind) = s.missing_ammo() {
+            info!("Combat ended: no {kind} left for monster {monster_id}");
+            s.push_agent_event(no_ammo_note(monster_id, kind));
+            return false;
+        }
     }
     // Chase until in range (handles monster movement during chase)
     match chase_monster(state, monster_id, sprint).await {

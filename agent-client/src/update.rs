@@ -5,6 +5,7 @@
 
 use anyhow::Context;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tracing::{error, info, warn};
 
@@ -21,6 +22,47 @@ const TAG_PREFIX: &str = "agent-client-v";
 const MARKER_PATH: &str = "data/cache/installed_update_tag";
 const CHECK_TIMEOUT: Duration = Duration::from_secs(10);
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);
+/// The matching release can go up minutes after the server restart.
+const REFUSAL_POLL: Duration = Duration::from_secs(300);
+
+/// `auto_update` in config.toml: `true` installs without asking, `"ask"`
+/// prompts first (skipped without a terminal), `false` never checks.
+#[derive(Debug, Clone, Copy, Default, PartialEq, serde::Deserialize)]
+#[serde(try_from = "AutoUpdateSetting")]
+pub enum AutoUpdate {
+    Off,
+    #[default]
+    Ask,
+    Always,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+enum AutoUpdateSetting {
+    Flag(bool),
+    Word(String),
+}
+
+impl TryFrom<AutoUpdateSetting> for AutoUpdate {
+    type Error = String;
+
+    fn try_from(setting: AutoUpdateSetting) -> Result<Self, String> {
+        match setting {
+            AutoUpdateSetting::Flag(true) => Ok(Self::Always),
+            AutoUpdateSetting::Flag(false) => Ok(Self::Off),
+            AutoUpdateSetting::Word(w) if w == "ask" => Ok(Self::Ask),
+            AutoUpdateSetting::Word(w) => Err(format!(
+                "auto_update must be true, false or \"ask\", not \"{w}\""
+            )),
+        }
+    }
+}
+
+struct Installed {
+    tag: String,
+    #[cfg_attr(windows, allow(dead_code))]
+    exe: PathBuf,
+}
 
 #[derive(serde::Deserialize)]
 struct Release {
@@ -43,13 +85,35 @@ pub fn cleanup_old_binary() {
 }
 
 /// Never fails the program: any error just means running the current build.
-pub async fn check() {
-    if let Err(e) = try_check().await {
-        warn!("Update check skipped: {e:#}");
+pub async fn check(mode: AutoUpdate) {
+    if mode == AutoUpdate::Off {
+        return;
+    }
+    match try_check(mode).await {
+        Ok(Some(installed)) => restart(mode, &installed),
+        Ok(None) => {}
+        Err(e) => warn!("Update check skipped: {e:#}"),
     }
 }
 
-async fn try_check() -> anyhow::Result<()> {
+/// The server refused this build: poll until a newer release installs, then
+/// restart into it. Every refused session awaits this; only the first polls.
+pub async fn install_after_refusal() {
+    static POLLING: AtomicBool = AtomicBool::new(false);
+    if POLLING.swap(true, Ordering::SeqCst) {
+        return std::future::pending().await;
+    }
+    loop {
+        match try_check(AutoUpdate::Always).await {
+            Ok(Some(installed)) => restart(AutoUpdate::Always, &installed),
+            Ok(None) => {}
+            Err(e) => warn!("Update check failed: {e:#}"),
+        }
+        tokio::time::sleep(REFUSAL_POLL).await;
+    }
+}
+
+async fn try_check(mode: AutoUpdate) -> anyhow::Result<Option<Installed>> {
     let client = reqwest::Client::builder()
         .user_agent(concat!("agent-client/", env!("CARGO_PKG_VERSION")))
         .build()?;
@@ -71,13 +135,13 @@ async fn try_check() -> anyhow::Result<()> {
             .is_some_and(|v| v > current)
     }) else {
         info!("Up to date (v{})", env!("CARGO_PKG_VERSION"));
-        return Ok(());
+        return Ok(None);
     };
     let tag = &release.tag_name;
 
     if std::fs::read_to_string(MARKER_PATH).is_ok_and(|m| m.trim() == tag) {
         warn!("{tag} was already installed; still running v{} — restart, or the release forgot its version bump", env!("CARGO_PKG_VERSION"));
-        return Ok(());
+        return Ok(None);
     }
 
     let Some(asset) = release.assets.iter().find(|a| matches_platform(&a.name)) else {
@@ -88,21 +152,48 @@ async fn try_check() -> anyhow::Result<()> {
         "새 버전 {tag} 이 있습니다 (현재 v{}).",
         env!("CARGO_PKG_VERSION")
     );
-    if !confirm("지금 업데이트할까요?") {
+    if mode == AutoUpdate::Ask && !confirm("지금 업데이트할까요?") {
         // Headless runs cannot answer; either way the server may refuse an
         // outdated protocol, and the operator updates by hand.
         error!("업데이트를 건너뜁니다. 수동 다운로드: {RELEASES_PAGE}");
-        return Ok(());
+        return Ok(None);
     }
     info!("Downloading {tag} ({})", asset.name);
 
+    // Before the swap: afterwards the running exe resolves to the `.old` copy.
+    let exe = std::env::current_exe()?;
     install(&client, asset).await?;
     std::fs::create_dir_all(Path::new(MARKER_PATH).parent().unwrap())?;
     std::fs::write(MARKER_PATH, tag)?;
 
-    println!("업데이트 {tag} 설치 완료 — 다시 실행하세요.");
+    Ok(Some(Installed {
+        tag: tag.clone(),
+        exe,
+    }))
+}
+
+fn restart(mode: AutoUpdate, installed: &Installed) -> ! {
+    if mode == AutoUpdate::Always {
+        reexec(installed);
+    }
+    println!("업데이트 {} 설치 완료 — 다시 실행하세요.", installed.tag);
     std::process::exit(0);
 }
+
+#[cfg(unix)]
+fn reexec(installed: &Installed) {
+    use std::os::unix::process::CommandExt;
+    info!("Restarting into {}", installed.tag);
+    let e = std::process::Command::new(&installed.exe)
+        .args(std::env::args_os().skip(1))
+        .exec();
+    error!("Restarting into {} failed: {e}", installed.tag);
+}
+
+/// No exec on Windows, and a spawned copy would run beside the one a
+/// supervisor restarts: exit and let the operator or supervisor rerun it.
+#[cfg(windows)]
+fn reexec(_: &Installed) {}
 
 fn parse_version(s: &str) -> Option<(u64, u64, u64)> {
     let mut it = s.split('.').map(|p| p.parse::<u64>().ok());
@@ -238,6 +329,25 @@ fn copy_tree(root: &Path, dir: &Path) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[derive(serde::Deserialize)]
+    struct Setting {
+        #[serde(default)]
+        auto_update: AutoUpdate,
+    }
+
+    fn setting(toml_text: &str) -> Result<AutoUpdate, toml::de::Error> {
+        toml::from_str::<Setting>(toml_text).map(|s| s.auto_update)
+    }
+
+    #[test]
+    fn auto_update_takes_true_false_or_ask() {
+        assert_eq!(setting("").unwrap(), AutoUpdate::Ask);
+        assert_eq!(setting("auto_update = true").unwrap(), AutoUpdate::Always);
+        assert_eq!(setting("auto_update = false").unwrap(), AutoUpdate::Off);
+        assert_eq!(setting("auto_update = \"ask\"").unwrap(), AutoUpdate::Ask);
+        assert!(setting("auto_update = \"yes\"").is_err());
+    }
 
     #[test]
     fn version_ordering() {

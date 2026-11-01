@@ -284,3 +284,66 @@ async fn failed_double_slash_dispatch_does_not_consume_attack_recovery() {
     assert!(state.player_attack_wait().is_zero());
     assert!(state.double_slash_wait().is_zero());
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_bow_without_arrows_refuses_the_attack_instead_of_sending_it() {
+    let (state, mut rx) = combat_state();
+    state
+        .lock()
+        .await
+        .self_equipped
+        .insert(EquipSlot::MainHand, bag_item(1, "bow", 1));
+    let target = handle_response(
+        &state,
+        r#"{"actions":[{"type":"attack","monster_id":"first"}]}"#,
+        &None,
+        &None,
+        false,
+    )
+    .await;
+    assert!(target.is_none());
+    assert!(!tick_combat(&state, "first", None).await);
+    assert!(attacks(&mut rx).is_empty());
+    let events = state.lock().await.drain_agent_events();
+    assert!(
+        events
+            .iter()
+            .any(|e| e.starts_with("[AttackRejected] first: out_of_ammo")),
+        "{events:?}"
+    );
+    assert!(
+        !events.iter().any(|e| e.starts_with("[NoResult]")),
+        "{events:?}"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn combat_ends_once_the_last_arrow_is_gone() {
+    let (state, mut rx) = combat_state();
+    {
+        let mut s = state.lock().await;
+        s.self_equipped
+            .insert(EquipSlot::MainHand, bag_item(1, "bow", 1));
+        s.self_bag = vec![bag_item(2, "iron_arrow", 1)];
+    }
+    assert!(tick_combat(&state, "first", None).await);
+    assert_eq!(attacks(&mut rx), ["first"]);
+
+    // The server spends the round and syncs the bag without it.
+    state
+        .lock()
+        .await
+        .push_event(ServerMessage::InventoryUpdated {
+            inventory: onlinerpg_shared::inventory::PlayerInventory {
+                bag: Vec::new(),
+                equipped: std::collections::HashMap::from([(
+                    EquipSlot::MainHand,
+                    bag_item(1, "bow", 1),
+                )]),
+                active_ammo: Some("iron_arrow".into()),
+            },
+        });
+    tokio::time::advance(Duration::from_millis(1533)).await;
+    assert!(!tick_combat(&state, "first", None).await);
+    assert!(attacks(&mut rx).is_empty());
+}

@@ -70,6 +70,22 @@ impl SharedState {
         Some((carried, f32::from(str) * 15.0 * self.self_carry_mult))
     }
 
+    /// The ammo kind our main-hand weapon fires when the bag holds none of
+    /// it, mirroring the server's `loaded_ammo` gate.
+    pub fn missing_ammo(&self) -> Option<&'static str> {
+        let kind = self
+            .self_equipped
+            .get(&onlinerpg_shared::inventory::EquipSlot::MainHand)
+            .and_then(|i| crate::item_defs::get(&i.item_def_id))?
+            .ammo_kind
+            .as_deref()?;
+        let loaded = self.self_bag.iter().any(|i| {
+            crate::item_defs::get(&i.item_def_id)
+                .is_some_and(|d| d.is_ammo() && d.ammo_kind.as_deref() == Some(kind))
+        });
+        (!loaded).then_some(kind)
+    }
+
     /// Whether we carry `item_def_id`, bag or worn — the server's own test.
     pub fn holds_item(&self, item_def_id: &str) -> bool {
         self.self_bag

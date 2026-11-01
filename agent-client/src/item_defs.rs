@@ -41,6 +41,9 @@ pub struct ItemDef {
     pub range: Option<f32>,
     #[serde(rename = "attackIntervalMs", default)]
     pub attack_interval_ms: Option<u64>,
+    /// On a weapon, the ammo it fires; on ammo, the weapons it fits.
+    #[serde(rename = "ammoKind", default)]
+    pub ammo_kind: Option<String>,
 }
 
 impl ItemDef {
@@ -81,6 +84,10 @@ impl ItemDef {
     /// A dungeon floor key (doc/DUNGEON_REWARD.md): worth grabbing on sight.
     pub fn is_dungeon_key(&self) -> bool {
         self.category.as_deref() == Some("dungeon_key")
+    }
+
+    pub fn is_ammo(&self) -> bool {
+        self.category.as_deref() == Some("ammo")
     }
 }
 

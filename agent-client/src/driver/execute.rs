@@ -21,8 +21,8 @@ use super::action::{
     AgentAction, GoalError, PickupRef, Qty,
 };
 use super::combat::{
-    approach_player, chase_monster, chest_arrive_range, follow_player, walk_to_ground_item,
-    walk_to_point, ChaseResult,
+    approach_player, chase_monster, chest_arrive_range, follow_player, no_ammo_note,
+    walk_to_ground_item, walk_to_point, ChaseResult,
 };
 use super::movement::{execute_move, MoveResult};
 #[cfg(test)]
@@ -529,6 +529,14 @@ pub(super) async fn handle_response(
             monster_id, sprint, ..
         } = action
         {
+            {
+                let mut s = state.lock().await;
+                if let Some(kind) = s.missing_ammo() {
+                    info!("Agent has no {kind}, skipping attack on {monster_id}");
+                    s.push_agent_event(no_ammo_note(monster_id, kind));
+                    continue;
+                }
+            }
             info!("Agent attacking monster {monster_id}, chasing...");
             match chase_monster(state, monster_id, *sprint).await {
                 ChaseResult::InRange => {

@@ -195,6 +195,7 @@ pub struct SharedResources {
     pub auth: AuthSource,
     /// `None` when the spectator panel is off, so nothing is recorded for it.
     pub watch: Option<Arc<crate::watch::WatchHub>>,
+    pub auto_update: crate::update::AutoUpdate,
 }
 
 /// How sessions prove who they are. Operator NPCs share one secret; a
@@ -328,10 +329,27 @@ async fn run_npc_loop(server_url: &str, index: usize, npc: &NpcConfig, shared: &
             Err(e) => {
                 // A refused login stays refused: reconnecting would just spin
                 // and bury the reason (e.g. "protocol vN required, update").
-                if let Some(rejection) = e.downcast_ref::<ws::AuthRejected>() {
-                    error!("[{label}] {rejection} — giving up");
+                let refusal = e
+                    .downcast_ref::<ws::BuildRefused>()
+                    .map(|r| (r.0.as_str(), true))
+                    .or_else(|| {
+                        e.downcast_ref::<ws::AuthRejected>()
+                            .map(|r| (r.0.as_str(), false))
+                    });
+                if let Some((reason, build_refused)) = refusal {
+                    let waits =
+                        build_refused && shared.auto_update == crate::update::AutoUpdate::Always;
+                    let outcome = if waits {
+                        "waiting for a release to install"
+                    } else {
+                        "giving up"
+                    };
+                    error!("[{label}] {reason} — {outcome}");
                     if let Some(w) = &watch {
-                        w.push("system", format!("{rejection} — giving up"));
+                        w.push("system", format!("{reason} — {outcome}"));
+                    }
+                    if waits {
+                        crate::update::install_after_refusal().await;
                     }
                     return;
                 }
