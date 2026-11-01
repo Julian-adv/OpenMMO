@@ -165,6 +165,38 @@ function modularCharacterPreview(): Plugin {
       '../assets/items/female_barbarian_top/tripo_v1/fitted_v1/top_female_barbarian.glb',
       import.meta.url
     ),
+    female_caveman_bottom: new URL(
+      '../assets/items/female_caveman_bottom/tripo_v1/fitted_v9/bottom_female_caveman.glb',
+      import.meta.url
+    ),
+    'female-caveman-bottom-occlusion.json': new URL(
+      '../assets/items/female_caveman_bottom/tripo_v1/fitted_v9/body-occlusion.json',
+      import.meta.url
+    ),
+    female_caveman_boots: new URL(
+      '../assets/items/female_caveman_boots/tripo_v1/fitted_v4/boots_female_caveman.glb',
+      import.meta.url
+    ),
+    'female-caveman-boots-occlusion.json': new URL(
+      '../assets/items/female_caveman_boots/tripo_v1/fitted_v4/body-occlusion.json',
+      import.meta.url
+    ),
+    female_caveman_gloves: new URL(
+      '../assets/items/female_caveman_bracers/tripo_v1/fitted_v1/gloves_female_caveman.glb',
+      import.meta.url
+    ),
+    'female-caveman-gloves-occlusion.json': new URL(
+      '../assets/items/female_caveman_bracers/tripo_v1/fitted_v1/body-occlusion.json',
+      import.meta.url
+    ),
+    female_caveman_top: new URL(
+      '../assets/items/female_caveman_top/tripo_v1/fitted_v7/top_female_caveman.glb',
+      import.meta.url
+    ),
+    'female-caveman-top-occlusion.json': new URL(
+      '../assets/items/female_caveman_top/tripo_v1/fitted_v7/body-occlusion.json',
+      import.meta.url
+    ),
     female_rogue_top: new URL(
       '../assets/items/female_rogue_top/tripo_v1/fitted_v6/top_female_rogue.glb',
       import.meta.url
