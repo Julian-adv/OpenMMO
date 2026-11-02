@@ -449,6 +449,9 @@ export default defineConfig(({ mode }) => {
       wasm(),
       svelte(),
     ],
+    // Worktrees symlink node_modules, so the default node_modules/.vite would
+    // let another checkout's dev server rewrite this one's optimized deps.
+    cacheDir: '.vite',
     define: { __APP_VERSION__: JSON.stringify(appVersion) },
     server: {
       host: true,
