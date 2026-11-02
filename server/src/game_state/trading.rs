@@ -1310,6 +1310,7 @@ impl super::GameState {
         let Some(base_price) = self
             .item_defs
             .get(&item_def_id)
+            .filter(|item| !item.untradeable)
             .and_then(|item| item.base_price)
         else {
             return self
@@ -1693,7 +1694,11 @@ impl super::GameState {
                     )
                     .await;
             }
-            let Some(base_price) = self.item_defs.get(&item_def_id).and_then(|d| d.base_price)
+            let Some(base_price) = self
+                .item_defs
+                .get(&item_def_id)
+                .filter(|item| !item.untradeable)
+                .and_then(|d| d.base_price)
             else {
                 drop(inventories);
                 drop(gold_map);

@@ -154,10 +154,10 @@ fn sundered_bastion_has_twenty_five_floors_and_its_own_monsters() {
 
 /// Every floor's regular spawns, checked against the allowed types for its
 /// depth, plus the bosses found on the way down.
-fn bosses_with_allowed_spawns<'a>(
-    floors: &'a [FloorLayout],
+fn bosses_with_allowed_spawns(
+    floors: &[FloorLayout],
     allowed: impl Fn(u8) -> &'static [&'static str],
-) -> Vec<(u8, &'a str)> {
+) -> Vec<(u8, &str)> {
     let mut bosses = Vec::new();
     for floor in floors {
         let mut regular = 0;

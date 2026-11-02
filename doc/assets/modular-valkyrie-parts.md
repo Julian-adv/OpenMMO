@@ -286,3 +286,46 @@ blender -b --python-exit-code 1 --python tools/blender-scripts/save_female_valky
 ## 날개 투구 — 2026-11-03
 
 `fantasy warrior 3d model (2).glb`의 `tripo_part_6`을 추출한 1,343삼각형 장식이다. 사용자 확인본은 v2이며 사슬과 펜던트의 곡선을 유지한 채 이마 쪽으로 12mm 옮겼다. 양옆 날개는 고정했다. [파일·출처·피팅·검증 기록](valkyrie-helmet.md)을 참고한다.
+
+## 게임 시작 외형 — 2026-11-03
+
+여성 발키리 플레이어는 `modular_female/valkyrie.glb` 프로필로 공통 여성 몸체를 사용한다.
+긴 머리는 `tripo_warrior_v1/fitted_v1`, 등 날개는 `tripo_wing_v1/fitted_patch_v3`의 승인본을
+그대로 사용하며 직업 기본 외형으로 고정한다. 아이템 정의·장착 슬롯·교체 UI를 만들지 않는다.
+다른 투구를 쓰거나 모든 장비를 벗어도 머리와 날개는 유지한다. NPC의 기존 발키리 모델은 유지한다.
+출처·라이선스는 이 문서의 기존 파츠 기록과 [투구 기록](valkyrie-helmet.md)을 따른다.
+새 생성 요청은 없으며 승인된 피팅 형상과 리그를 재사용한다.
+
+| 시작 아이템 | 슬롯 | 승인 원본 |
+| --- | --- | --- |
+| `worn_valkyrie_helmet` | head | `valkyrie_helmet/fitted_v2` |
+| `worn_valkyrie_top` | chest | `valkyrie_starter/tripo_top_v1/fitted_v11` |
+| `worn_valkyrie_pants` | pants | `valkyrie_starter/tripo_bottom_v1/fitted_v8` |
+| `worn_valkyrie_gloves` | hands | `valkyrie_gloves/fitted_v3` |
+| `worn_valkyrie_boots` | boots | `valkyrie_boots/fitted_v1` |
+
+캐릭터 생성 미리보기와 서버 신규 생성이 같은 5종을 착용한다. 각 아이템은 가격 0원,
+거래 불가이며 상점 단품·일괄 판매와 플레이어 간 거래 모두 거절한다. 기존 캐릭터의
+인벤토리는 이 작업에서 자동 변경하지 않는다. 장비 자체는 일반 방어구 슬롯에서 교체·해제할 수 있다.
+
+승인된 손목 보호대 위치와 피부 가림은 baked GLB/정적 마스크를 사용한다. 상의는 기존 미리보기와
+동일하게 v11 형상과 v8 몸체 마스크를 조합한다. 장비는 최초 착용 시에만 로드하고 GLB 캐시를
+공유한다. 하이힐 보정은 공통 여성 기본 동작과 10개 애니메이션 팩에 네 번째 부츠 변형으로 굽는다.
+게임 프레임마다 피팅·발바닥 정점 검사를 실행하지 않는다.
+
+생성 화면 조립은 숨김 전 46,554삼각형, 피부 가림 후 40,257삼각형이다. 얼굴은 공통 몸체를
+유지하며 별도 얼굴 삼각형 배분은 미측정이다. 이 수치는 무기·망토가 없는 생성 화면 기준이며
+기존 15,000–20,000삼각형 목표를 넘는다. 형상 축소는 수행하지 않았다. 5,000명 동시 접속의
+부하 시험은 수행하지 않았다.
+
+재현:
+
+- `node tools/prepare-female-knight.mjs`: 전체 여성 런타임 파츠·기본 동작·팩 생성.
+- `--part valkyrie_<부위>`: 승인 원본에서 특정 파츠만 생성. 부츠 변경 후에는 동작도 다시 굽는다.
+- `--bake-existing`: 이미 배포된 여성 기본 동작·팩의 맨발 트랙을 유지하고 부츠 변형만 재생성.
+- `blender -b --python-exit-code 1 --python tools/blender-scripts/export_valkyrie_items.py`:
+  승인 원본에서 지면 배치용 모델과 128px 아이콘 생성. 리그 표시용 숨은 메시를 제외한다.
+
+검증은 `femaleCharacter.test.ts`, `valkyrieCharacter.test.ts`에서 고정 외형·장비 변경·개체 간 가림
+분리·비동기 선택 경쟁·전체 게임 동작의 유한 좌표와 날개 형태·부츠 접지를 확인한다.
+서버 테스트는 신규 지급·장착 정보·단품/일괄 판매 거절·플레이어 거래 거절을 확인한다.

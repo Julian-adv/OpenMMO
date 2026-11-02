@@ -394,5 +394,15 @@
   "worn_rogue_top.description": "新米盗賊に支給される古びた衣服。商人は買い取りません。",
   "worn_rogue_top.name": "古びた盗賊の上着",
   "worn_torch.description": "半分ほど燃え尽きた短い松明。商人は買い取ってくれません。",
-  "worn_torch.name": "使い古した松明"
+  "worn_torch.name": "使い古した松明",
+  "worn_valkyrie_boots.description": "ヴァルキリーに支給される初期装備。取引・売却できません。",
+  "worn_valkyrie_boots.name": "使い古したヴァルキリーのブーツ",
+  "worn_valkyrie_gloves.description": "ヴァルキリーに支給される初期装備。取引・売却できません。",
+  "worn_valkyrie_gloves.name": "使い古したヴァルキリーの腕当て",
+  "worn_valkyrie_helmet.description": "ヴァルキリーに支給される初期装備。取引・売却できません。",
+  "worn_valkyrie_helmet.name": "使い古したヴァルキリーの兜",
+  "worn_valkyrie_pants.description": "ヴァルキリーに支給される初期装備。取引・売却できません。",
+  "worn_valkyrie_pants.name": "使い古したヴァルキリーのスカート",
+  "worn_valkyrie_top.description": "ヴァルキリーに支給される初期装備。取引・売却できません。",
+  "worn_valkyrie_top.name": "使い古したヴァルキリーの胸当て"
 }

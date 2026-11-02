@@ -394,5 +394,15 @@
   "worn_rogue_top.description": "새내기 도적에게 지급되는 낡은 의복. 상인은 사들이지 않습니다.",
   "worn_rogue_top.name": "낡은 도적 상의",
   "worn_torch.description": "반쯤 타 버린 짧은 횃불. 상인은 사들이지 않습니다.",
-  "worn_torch.name": "낡은 횃불"
+  "worn_torch.name": "낡은 횃불",
+  "worn_valkyrie_boots.description": "발키리에게 지급되는 시작 장비. 거래하거나 판매할 수 없습니다.",
+  "worn_valkyrie_boots.name": "낡은 발키리 부츠",
+  "worn_valkyrie_gloves.description": "발키리에게 지급되는 시작 장비. 거래하거나 판매할 수 없습니다.",
+  "worn_valkyrie_gloves.name": "낡은 발키리 팔 보호대",
+  "worn_valkyrie_helmet.description": "발키리에게 지급되는 시작 장비. 거래하거나 판매할 수 없습니다.",
+  "worn_valkyrie_helmet.name": "낡은 발키리 투구",
+  "worn_valkyrie_pants.description": "발키리에게 지급되는 시작 장비. 거래하거나 판매할 수 없습니다.",
+  "worn_valkyrie_pants.name": "낡은 발키리 치마",
+  "worn_valkyrie_top.description": "발키리에게 지급되는 시작 장비. 거래하거나 판매할 수 없습니다.",
+  "worn_valkyrie_top.name": "낡은 발키리 흉갑"
 }

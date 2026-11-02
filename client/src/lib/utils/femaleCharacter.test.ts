@@ -12,6 +12,7 @@ import { createCharacterModelRoot } from './characterAnimationUtils'
 import {
   MODULAR_FEMALE_DIRECTORY,
   MODULAR_FEMALE_MODEL_PATH,
+  MODULAR_VALKYRIE_MODEL_PATH,
   getCharacterModelPath,
   CHARACTER_ANIMATION_PACK_PATHS,
 } from './modelPaths'
@@ -128,6 +129,12 @@ describe('female modular starter outfits', () => {
     expect(getCharacterModelPath('rogue', 'female', true)).toBe(
       '/models/characters/female_rogue.glb'
     )
+    expect(getCharacterModelPath('valkyrie', 'female')).toBe(
+      MODULAR_VALKYRIE_MODEL_PATH
+    )
+    expect(getCharacterModelPath('valkyrie', 'female', true)).toBe(
+      '/models/characters/valkyrie.glb'
+    )
     expect(getCharacterModelPath('priest', 'female')).toBe(
       '/models/characters/female_priest.glb'
     )
@@ -237,16 +244,19 @@ describe('female modular starter outfits', () => {
         const barbarianStyle =
           item.material === 'leather' || id.startsWith('worn_barbarian_')
         const brilliance = id === 'helm_of_brilliance'
+        const valkyrie = id.startsWith('worn_valkyrie_')
         const rogueStyle =
           item.worldModel?.startsWith('armor/rogue_') ||
           ['leather_armor', 'leather_gloves', 'leather_boots'].includes(id)
-        const [shown, hidden] = rogueStyle
-          ? [`rogue_${part}`, part]
-          : brilliance
-            ? ['brilliance_helmet', part]
-            : barbarianStyle
-              ? [`barbarian_${part}`, part]
-              : [part, `barbarian_${part}`]
+        const [shown, hidden] = valkyrie
+          ? [`valkyrie_${part}`, part]
+          : rogueStyle
+            ? [`rogue_${part}`, part]
+            : brilliance
+              ? ['brilliance_helmet', part]
+              : barbarianStyle
+                ? [`barbarian_${part}`, part]
+                : [part, `barbarian_${part}`]
         await applyCharacterArmor(modelRoot, { [slot]: id } as ArmorEquipment)
         expect(count(modelRoot, shown), id).toBeGreaterThan(0)
         expect(count(modelRoot, hidden), id).toBe(0)
@@ -255,7 +265,7 @@ describe('female modular starter outfits', () => {
           expect(count(modelRoot, 'barbarian_hair') > 0, id).toBe(
             barbarianStyle
           )
-          expect(count(modelRoot, 'hair'), id).toBe(0)
+          expect(count(modelRoot, 'hair') > 0, id).toBe(valkyrie)
         }
       }
       await applyCharacterArmor(modelRoot, {})
@@ -523,12 +533,21 @@ describe('female modular starter outfits', () => {
       const source = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH)
       const { modelRoot } = createCharacterModelRoot(source.scene)
       await applyCharacterArmor(modelRoot, armor)
-      const { heel_pose } = source.scene.userData.female_parts.boots
+      const { loadHeadlessGlb } = await import('./headless-glb.fixture')
+      const offsets = await Promise.all(
+        FEMALE_BOOTS_PARTS.map(async (name) => {
+          const gltf = await loadHeadlessGlb(
+            `${MODULAR_FEMALE_DIRECTORY.slice(1)}/${name}.glb`
+          )
+          return new THREE.Quaternion().fromArray(
+            gltf.scene.userData.heel_pose.local_quaternion_offsets.LeftFoot
+          )
+        })
+      )
       const pack = await loadCharacterAnimationPack(
         MODULAR_FEMALE_MODEL_PATH,
         CHARACTER_ANIMATION_PACK_PATHS.locomotion
       )
-      const { loadHeadlessGlb } = await import('./headless-glb.fixture')
       const raw = (
         await loadHeadlessGlb(
           `${MODULAR_FEMALE_DIRECTORY.slice(1)}/animations/locomotion.glb`
@@ -537,9 +556,6 @@ describe('female modular starter outfits', () => {
       const walk = pack.animations.find((clip) => clip.name === 'walk')!
       const track = (clip: THREE.AnimationClip, name: string) =>
         clip.tracks.find((track) => track.name === name)!
-      const offset = new THREE.Quaternion().fromArray(
-        heel_pose.local_quaternion_offsets.LeftFoot
-      )
       const foot = track(walk, `LeftFoot.${FEMALE_BOOTS_PROPERTY}`).values
       const bare = track(raw, 'LeftFoot.quaternion').values
       const q = new THREE.Quaternion()
@@ -551,7 +567,11 @@ describe('female modular starter outfits', () => {
               foot,
               (i * (FEMALE_BOOTS_PARTS.length + 1) + variant) * 4
             )
-            .angleTo(variant ? expected.clone().multiply(offset) : expected)
+            .angleTo(
+              variant
+                ? expected.clone().multiply(offsets[variant - 1])
+                : expected
+            )
         for (let v = 0; v <= FEMALE_BOOTS_PARTS.length; v++)
           expect(angle(v)).toBeLessThan(1e-3)
       }
@@ -593,6 +613,7 @@ describe('female modular starter outfits', () => {
         for (const [boots, part] of [
           [armor.boots, 'boots'],
           [barbarian.boots, 'barbarian_boots'],
+          ['worn_valkyrie_boots', 'valkyrie_boots'],
         ]) {
           await applyCharacterArmor(modelRoot, { ...armor, boots })
           mixer.setTime(time)
