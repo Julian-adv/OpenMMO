@@ -85,6 +85,19 @@ export function femaleBootGround(
   }
   const feet = sample(body, 0.144)
   const soles = boots.map((mesh) => sample(mesh, 0.324))
+  const solesBySide = Object.fromEntries(
+    ['Left', 'Right'].map((side) => [
+      side,
+      soles.map(({ mesh, indices }) => ({
+        mesh,
+        indices: indices.filter((index) =>
+          side === 'Left'
+            ? mesh.geometry.attributes.position.getX(index) > 0
+            : mesh.geometry.attributes.position.getX(index) < 0
+        ),
+      })),
+    ])
+  )
   const point = new THREE.Vector3()
   const aim = (bone: THREE.Bone, child: THREE.Bone, target: THREE.Vector3) => {
     const origin = bone.getWorldPosition(new THREE.Vector3())
@@ -170,10 +183,7 @@ export function femaleBootGround(
     pose(motion)
     if (seatOffset !== undefined) {
       for (const side of ['Left', 'Right']) {
-        const entries = soles.filter(({ mesh }) => {
-          const x = mesh.geometry.attributes.position.getX(0)
-          return side === 'Left' ? x > 0 : x < 0
-        })
+        const entries = solesBySide[side]
         const amount = Math.max(0, -minimum(entries) - seatOffset)
         if (amount > 0)
           liftChain(

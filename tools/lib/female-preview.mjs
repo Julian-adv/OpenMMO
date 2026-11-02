@@ -6,6 +6,7 @@ export const sources = {
   base: 'assets/modular_human_female_01/rig_v1/female-base.glb',
   bob: 'assets/modular_human_female_01/hair/tripo_knight_bob_v1/fitted_v1/hair_female_knight_bob.glb',
   knight: 'assets/modular_human_female_01/hair/tripo_knight_v1/fitted_v1/hair_female_knight.glb',
+  valkyrie: 'assets/items/valkyrie_boots/fitted_v1/boots_female_valkyrie.glb',
   animations: 'assets/modular_human_female_01/rig_v1/female-base.glb',
 }
 

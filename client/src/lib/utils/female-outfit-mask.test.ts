@@ -13,6 +13,78 @@ const earFit = {
 }
 
 describe('femaleOutfitMask vertex fitting', () => {
+  it('splits the skin at the cut, blends skin weights, and restores on removal', () => {
+    const geometry = new THREE.PlaneGeometry()
+    geometry.setAttribute(
+      'skinIndex',
+      new THREE.Uint16BufferAttribute(
+        [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+        4
+      )
+    )
+    geometry.setAttribute(
+      'skinWeight',
+      new THREE.Float32BufferAttribute(
+        [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
+        4
+      )
+    )
+    const mesh = new THREE.Mesh(geometry)
+    const masks = femaleOutfitMask()
+    masks.register(
+      'boots',
+      {
+        mesh_index: 0,
+        primitive_index: 0,
+        primitive_triangles: 2,
+        hide_triangle_indices: [],
+        clip_below_y: { height: 0, triangle_indices: [0, 1] },
+      },
+      mesh
+    )
+    masks.setEquipped('boots', true)
+    const clipped = mesh.geometry
+    expect(clipped).not.toBe(geometry)
+    const indices = clipped.index!
+    const positions = clipped.attributes.position
+    for (let i = 0; i < indices.count; i++)
+      expect(positions.getY(indices.getX(i))).toBeGreaterThanOrEqual(-1e-6)
+    expect(positions.count).toBeGreaterThan(geometry.attributes.position.count)
+    for (let i = geometry.attributes.position.count; i < positions.count; i++) {
+      const weights = clipped.attributes.skinWeight
+      expect(
+        weights.getX(i) + weights.getY(i) + weights.getZ(i) + weights.getW(i)
+      ).toBeCloseTo(1)
+    }
+    expect(
+      Array.from(
+        { length: positions.count - geometry.attributes.position.count },
+        (_, i) =>
+          clipped.attributes.skinWeight.getY(
+            geometry.attributes.position.count + i
+          )
+      ).some((value) => value > 0)
+    ).toBe(true)
+    masks.register(
+      'cover',
+      {
+        mesh_index: 0,
+        primitive_index: 0,
+        primitive_triangles: 2,
+        hide_triangle_indices: [0, 1],
+      },
+      mesh
+    )
+    masks.setEquipped('cover', true)
+    expect(mesh.geometry.index!.count).toBe(0)
+    masks.setEquipped('cover', false)
+    expect(mesh.geometry.index!.count).toBeGreaterThan(0)
+    masks.setEquipped('boots', false)
+    expect(mesh.geometry).toBe(geometry)
+    masks.dispose()
+    geometry.dispose()
+  })
+
   it('combines fitting with clothing masks and restores each independently', () => {
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry())
     const original = mesh.geometry

@@ -74,6 +74,7 @@ export async function showFemaleBase(
         <option value="caveman">원시전사 모피 하이힐 부츠 (피팅 검수 중)</option>
         <option value="rogue">로그 빨간 밑창 가죽 부츠</option>
         <option value="barbarian">야만전사 가죽 하이힐 샌들</option>
+        <option value="valkyrie">발키리 부츠 (초기 피팅 검수 중)</option>
       </select>
       <label for="female-gloves">장갑</label>
       <select id="female-gloves">
@@ -516,6 +517,7 @@ export async function showFemaleBase(
       if (!entry.pending) {
         let source: THREE.Object3D | undefined
         const sleeves = slot === 'top' && outfit === 'knight'
+        const valkyrie = slot === 'boots' && outfit === 'valkyrie'
         entry.pending = (async () => {
           const response = await fetch(
             `/__modular-character/female-${outfit}-${slot}-occlusion.json`
@@ -533,7 +535,9 @@ export async function showFemaleBase(
             sleeveMask = await response.json()
           }
           const asset = await loader.loadAsync(
-            `/__modular-character/parts/female_${outfit}_${slot}.glb`
+            valkyrie
+              ? '/__female-preview/valkyrie.glb'
+              : `/__modular-character/parts/female_${outfit}_${slot}.glb`
           )
           source = asset.scene
           if (disposed()) {
