@@ -1335,6 +1335,12 @@ pub enum ServerMessage {
         monster_id: String,
         dropped_weapon_item_def_id: Option<String>,
     },
+    /// HP left after a hit that did not kill.
+    MonsterHealthUpdate {
+        monster_id: String,
+        health: u32,
+        max_health: u32,
+    },
     PlayerAttacked {
         player_id: PlayerId,
         monster_id: String,
@@ -2192,6 +2198,7 @@ impl ServerMessage {
             | Self::MonsterMoved { .. }
             | Self::MonsterRemoved { .. }
             | Self::MonsterDead { .. }
+            | Self::MonsterHealthUpdate { .. }
             | Self::PlayerDead { .. }
             | Self::PlayerRespawned { .. }
             | Self::PlayerHealthUpdate { .. }

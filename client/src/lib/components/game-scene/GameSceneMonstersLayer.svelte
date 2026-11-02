@@ -9,6 +9,8 @@
   import Monster from '../Monster.svelte'
   import { monsterManager } from '../../managers/monsterManager'
   import { currentDungeonDepth } from '../../stores/dungeonStore'
+  import { inventoryStore } from '../../stores/inventoryStore'
+  import { abilityEquipmentAllowed, AUSCULTATION } from '../../data/abilities'
   import { OFFSCREEN_Y } from '../../utils/house-geo-utils'
   import { unwrapWorldXNear, WORLD_WIDTH_X } from '../../terrain/world-wrap'
   import type { LocalPlayer } from '../../stores/gameStore'
@@ -28,6 +30,10 @@
     heightManager = null,
     monsterModels = $bindable<(Monster | undefined)[]>([]),
   }: Props = $props()
+
+  const showHealth = $derived(
+    abilityEquipmentAllowed(AUSCULTATION.id, $inventoryStore.equipped)
+  )
 
   const { camera, renderer, scene } = useThrelte()
   const markEffect = new BowMarkEffect()
@@ -133,6 +139,9 @@
     lastDamageInfo={monster.lastDamageInfo}
     droppedWeaponItemDefId={monster.droppedWeaponItemDefId}
     sinkAt={monster.sinkAt}
+    health={monster.health}
+    maxHealth={monster.maxHealth}
+    {showHealth}
     onHitFinished={() => monsterManager.handleMonsterHitFinished(monster.id)}
   />
 {/each}

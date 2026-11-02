@@ -36,6 +36,7 @@
 <script lang="ts">
   import { T, useLoader, useThrelte } from '@threlte/core'
   import TextLabel from './TextLabel.svelte'
+  import ResourceBar, { RESOURCE_BAR_HEIGHT } from './ResourceBar.svelte'
   import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
   import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
   import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
@@ -91,6 +92,9 @@
     lastDamageInfo?: MonsterData['lastDamageInfo']
     droppedWeaponItemDefId?: string
     sinkAt?: number
+    health: number
+    maxHealth: number
+    showHealth?: boolean
     onHitFinished?: () => void
   }
 
@@ -110,6 +114,9 @@
     lastDamageInfo,
     droppedWeaponItemDefId,
     sinkAt,
+    health,
+    maxHealth,
+    showHealth = false,
     onHitFinished,
   }: Props = $props()
 
@@ -858,6 +865,13 @@
             depthTest: false,
             renderOrder: 4,
           }}
+    />
+  {/if}
+  {#if showHealth && monsterState !== 'dead' && maxHealth > 0}
+    <ResourceBar
+      y={-RESOURCE_BAR_HEIGHT}
+      ratio={Math.max(0.001, health / maxHealth)}
+      color="#ff0000"
     />
   {/if}
   {#if animDebugInfo}

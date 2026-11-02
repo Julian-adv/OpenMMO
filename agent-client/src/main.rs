@@ -490,6 +490,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::MonsterMoved { .. } => "MonsterMoved",
         ServerMessage::MonsterRemoved { .. } => "MonsterRemoved",
         ServerMessage::MonsterDead { .. } => "MonsterDead",
+        ServerMessage::MonsterHealthUpdate { .. } => "MonsterHealthUpdate",
         ServerMessage::PlayerAttacked { .. } => "PlayerAttacked",
         ServerMessage::DaggerDoubleSlashStarted { .. } => "DaggerDoubleSlashStarted",
         ServerMessage::DaggerDoubleSlashRejected { .. } => "DaggerDoubleSlashRejected",

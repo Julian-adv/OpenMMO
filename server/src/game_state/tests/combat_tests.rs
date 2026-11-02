@@ -931,6 +931,35 @@ async fn dagger_skill_first_hit_kill_reports_skipped_second_strike_without_dupli
 }
 
 #[tokio::test]
+async fn non_lethal_hits_publish_the_monster_health_left() {
+    let game = make_test_game_state("monster_health_update");
+    let mut rx = setup_dagger_skill(&game, "dagger").await;
+    seed_subjects(&game).await;
+    drain(&mut rx);
+    use_dagger_skill(&game, &pid("archer")).await;
+    let updates: Vec<(u32, u32)> = drain(&mut rx)
+        .into_iter()
+        .filter_map(|message| match message {
+            ServerMessage::MonsterHealthUpdate {
+                monster_id,
+                health,
+                max_health,
+            } if monster_id == "skill_target" => Some((health, max_health)),
+            _ => None,
+        })
+        .collect();
+    let left = game
+        .monsters
+        .read()
+        .await
+        .get("skill_target")
+        .unwrap()
+        .health;
+    assert!(left < 500);
+    assert_eq!(updates.last(), Some(&(left, 500)));
+}
+
+#[tokio::test]
 async fn dagger_skill_rechecks_range_and_serializes_concurrent_casts() {
     let game = make_test_game_state("dagger_skill_race");
     let mut rx = setup_dagger_skill(&game, "dagger").await;

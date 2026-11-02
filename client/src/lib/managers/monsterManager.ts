@@ -306,6 +306,12 @@ class MonsterManager {
     }
   }
 
+  handleMonsterHealth(id: string, health: number, maxHealth: number) {
+    const monster = this.monsters.get(id)
+    if (!monster) return
+    this.monsters.set(id, { ...monster, health, maxHealth })
+  }
+
   handleMonsterHitFinished(id: string) {
     const monster = this.monsters.get(id)
     if (!monster?.isDeadPending || monster.state !== 'hit') return

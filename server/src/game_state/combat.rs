@@ -1233,6 +1233,7 @@ impl super::GameState {
         // Damage and the kill claim share one guard, so a second attacker
         // landing at the same instant sees Dead and stops.
         let mut dealt = 0;
+        let mut health_update = None;
         let mut field_raid_boss = false;
         let mut damage_by = Vec::new();
         let is_dead = {
@@ -1247,6 +1248,13 @@ impl super::GameState {
                 dealt = damage.min(monster.health);
                 field_raid_boss = monster.lifecycle == MonsterLifecycle::FieldRaid;
                 monster.health = monster.health.saturating_sub(damage);
+                if dealt > 0 && monster.health > 0 {
+                    health_update = Some(ServerMessage::MonsterHealthUpdate {
+                        monster_id: monster_id.to_string(),
+                        health: monster.health,
+                        max_health: monster.max_health,
+                    });
+                }
                 self.interest_lock().refresh_monster(monster);
                 debug!(
                     "Monster {} HP: {}/{}",
@@ -1283,6 +1291,10 @@ impl super::GameState {
             self.record_field_raid_hit(player_id, dealt).await;
         }
         if !is_dead {
+            if let Some(update) = health_update {
+                self.publish_nearby(&monster_position, monster_floor_level, update, None)
+                    .await;
+            }
             self.brain_hit(monster_id, player_id, true, damage).await;
         } else {
             // Loot lands where the monster fell, which is not where the

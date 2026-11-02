@@ -1443,6 +1443,14 @@ export function handleServerMessage(
       )
       break
 
+    case 'MonsterHealthUpdate':
+      monsterManager.handleMonsterHealth(
+        data.monster_id,
+        data.health,
+        data.max_health
+      )
+      break
+
     case 'PlayerAttacked': {
       const gameState = get(gameStore)
       const isLocalAttacker = gameState.currentPlayer?.id === data.player_id

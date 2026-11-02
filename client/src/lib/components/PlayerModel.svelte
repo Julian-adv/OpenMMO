@@ -3,9 +3,6 @@
   import { HOVER_SCALE_IDLE, stickyHoverScale } from '../utils/stickyHover'
   import { FEMALE_BOOTS_PROPERTY } from '../utils/femaleCharacter'
 
-  const HEALTH_BAR_WIDTH = 1.0
-  const HEALTH_BAR_HEIGHT = 0.08
-  const TEMP_HEALTH_COLOR = '#faf089'
   const LOCAL_NAMETAG_RENDER_ORDER = 1000
   const LOCAL_NAMETAG_OFFSET_PX = 8
 
@@ -19,14 +16,6 @@
   )
   const HOVER_MATERIAL = new THREE.MeshBasicMaterial()
   const HOVER_SCALE_STICKY = stickyHoverScale(HOVER_BOX)
-
-  // Shared across all PlayerModel instances — the fill geometry never changes.
-  // Left-anchored via translate so the mesh only needs scale.x to grow/shrink.
-  const healthBarFillGeometry = new THREE.PlaneGeometry(
-    HEALTH_BAR_WIDTH,
-    HEALTH_BAR_HEIGHT
-  )
-  healthBarFillGeometry.translate(HEALTH_BAR_WIDTH / 2, 0, 0)
 
   // Retargeted clips are shared per character profile, so the additive
   // rebuild runs once per source clip instead of once per player.
@@ -86,6 +75,7 @@
   import { titleName } from '../data/titleDefs'
   import { T, useThrelte } from '@threlte/core'
   import TextLabel from './TextLabel.svelte'
+  import ResourceBar, { RESOURCE_BAR_HEIGHT } from './ResourceBar.svelte'
   import type { Vector3 } from 'three'
   import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
   import { onDestroy, onMount, untrack } from 'svelte'
@@ -2241,61 +2231,6 @@
     <T is={torchFireGroup} />
   {/if}
 
-  {#snippet resourceBar(
-    y: number,
-    ratio: number,
-    color: string,
-    shieldRatio = 0
-  )}
-    <T.Group
-      position.y={y}
-      renderOrder={isCurrentPlayer ? LOCAL_NAMETAG_RENDER_ORDER : 0}
-    >
-      <T.Mesh>
-        <T.PlaneGeometry args={[HEALTH_BAR_WIDTH, HEALTH_BAR_HEIGHT]} />
-        <T.MeshBasicMaterial
-          color="#000000"
-          transparent
-          opacity={0.5}
-          depthTest={!isCurrentPlayer}
-          depthWrite={false}
-        />
-      </T.Mesh>
-      {#if ratio > 0}
-        <T.Mesh
-          position.x={-HEALTH_BAR_WIDTH / 2}
-          position.z={0.001}
-          scale.x={ratio}
-          renderOrder={1}
-        >
-          <T is={healthBarFillGeometry} />
-          <T.MeshBasicMaterial
-            {color}
-            transparent
-            depthTest={!isCurrentPlayer}
-            depthWrite={false}
-          />
-        </T.Mesh>
-      {/if}
-      {#if shieldRatio > 0}
-        <T.Mesh
-          position.x={HEALTH_BAR_WIDTH * (ratio - 0.5)}
-          position.z={0.002}
-          scale.x={shieldRatio}
-          renderOrder={2}
-        >
-          <T is={healthBarFillGeometry} />
-          <T.MeshBasicMaterial
-            color={TEMP_HEALTH_COLOR}
-            transparent
-            depthTest={false}
-            depthWrite={false}
-          />
-        </T.Mesh>
-      {/if}
-    </T.Group>
-  {/snippet}
-
   <!-- Name tag (separate from character to avoid rotation inheritance) -->
   <T.Group
     bind:ref={nametagGroup}
@@ -2327,26 +2262,30 @@
     />
 
     {#if isCurrentPlayer}
-      {@render resourceBar(
-        -0.42 + HEALTH_BAR_HEIGHT,
-        Math.max(0.001, displayedHealthRatio),
-        '#ff0000',
-        tempHealthRatio
-      )}
+      <ResourceBar
+        y={-0.42 + RESOURCE_BAR_HEIGHT}
+        ratio={Math.max(0.001, displayedHealthRatio)}
+        color="#ff0000"
+        shieldRatio={tempHealthRatio}
+        onTop
+        renderOrder={LOCAL_NAMETAG_RENDER_ORDER}
+      />
       {#if $visibleMana}
-        {@render resourceBar(
-          -0.42,
-          $visibleMana.mana / $visibleMana.max_mana,
-          '#4299e1'
-        )}
+        <ResourceBar
+          y={-0.42}
+          ratio={$visibleMana.mana / $visibleMana.max_mana}
+          color="#4299e1"
+          onTop
+          renderOrder={LOCAL_NAMETAG_RENDER_ORDER}
+        />
       {/if}
     {:else if maxHealth > 0 && health > 0}
       <!-- Other players' HP reaches only stethoscope wearers. -->
-      {@render resourceBar(
-        -0.38 + HEALTH_BAR_HEIGHT,
-        Math.max(0.001, displayedHealthRatio),
-        '#ff0000'
-      )}
+      <ResourceBar
+        y={-0.38 + RESOURCE_BAR_HEIGHT}
+        ratio={Math.max(0.001, displayedHealthRatio)}
+        color="#ff0000"
+      />
     {/if}
 
     {#if animDebugInfo}
