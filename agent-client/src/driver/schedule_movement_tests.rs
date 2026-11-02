@@ -296,7 +296,7 @@ fn spawn_move(
     tokio::spawn(async move { execute_schedule_move(&state, &entry).await })
 }
 
-async fn next_goal(rx: &mut mpsc::Receiver<ClientMessage>, expected_x: f32) -> u32 {
+async fn goal(rx: &mut mpsc::Receiver<ClientMessage>) -> (u32, f32, f32) {
     let command = timeout(Duration::from_secs(1), rx.recv())
         .await
         .expect("movement request")
@@ -307,6 +307,11 @@ async fn next_goal(rx: &mut mpsc::Receiver<ClientMessage>, expected_x: f32) -> u
     else {
         panic!("expected a movement goal, got {command:?}");
     };
+    (request_id, x, z)
+}
+
+async fn next_goal(rx: &mut mpsc::Receiver<ClientMessage>, expected_x: f32) -> u32 {
+    let (request_id, x, z) = goal(rx).await;
     assert_eq!((x, z), (expected_x, 0.5));
     request_id
 }
@@ -711,4 +716,71 @@ async fn schedule_door_retries_are_bounded_when_the_door_stays_closed() {
         .unwrap();
     assert!(rx.try_recv().is_err());
     assert_eq!(state.lock().await.relocations, 0);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_long_walk_goes_round_a_known_fence_and_replans_after_a_dead_end() {
+    use onlinerpg_shared::fence::{Fence, FenceAxis, FenceEdge};
+    let (state, mut rx) = walker();
+    let cache = {
+        let s = state.lock().await;
+        let wall: Vec<_> = (-40..40)
+            .map(|z| Fence {
+                edge: FenceEdge {
+                    x: 20,
+                    z,
+                    axis: FenceAxis::Z,
+                },
+                y: 0.0,
+                owner_id: 0,
+            })
+            .collect();
+        let mut world = s.world_cache.write().unwrap();
+        world.update_fences(s.self_player_id.unwrap(), &wall, &[]);
+        world.passability_cache().clone()
+    };
+    let task = {
+        let state = Arc::clone(&state);
+        tokio::spawn(async move { execute_move(&state, 200.5, 0.5, 0, None).await })
+    };
+    let blocked = |x: f32, z: f32| {
+        onlinerpg_shared::pathfinding::is_movement_blocked(&cache, 0.5, 0.5, x, z, 0, None)
+    };
+    let (first, x, z) = goal(&mut rx).await;
+    assert!(!blocked(x, z), "first leg ({x}, {z}) runs into the fence");
+    state
+        .lock()
+        .await
+        .push_event(progress(first, 0.5, MoveStatus::NodeLimit));
+    let (_, x2, z2) = goal(&mut rx).await;
+    assert!(
+        !blocked(x2, z2),
+        "replanned leg ({x2}, {z2}) runs into the fence"
+    );
+    assert!(
+        (x2 - x).hypot(z2 - z) > 1.5,
+        "the dead end was offered again"
+    );
+    task.abort();
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_straight_leg_into_an_unseen_obstacle_is_replanned_not_abandoned() {
+    let (state, mut rx) = walker();
+    let task = {
+        let state = Arc::clone(&state);
+        tokio::spawn(async move { execute_move(&state, 200.5, 0.5, 0, None).await })
+    };
+    let first = next_goal(&mut rx, 48.5).await;
+    state
+        .lock()
+        .await
+        .push_event(progress(first, 0.5, MoveStatus::Partial));
+    let (_, x, z) = goal(&mut rx).await;
+    assert!(
+        (x - 48.5).hypot(z - 0.5) > 1.5,
+        "the failed leg ({x}, {z}) was sent again"
+    );
+    assert!(!task.is_finished());
+    task.abort();
 }

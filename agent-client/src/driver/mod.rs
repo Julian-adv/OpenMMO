@@ -27,6 +27,7 @@ mod combat;
 #[cfg(test)]
 mod combat_timing_tests;
 mod execute;
+mod long_route;
 mod movement;
 mod outcome;
 #[cfg(test)]

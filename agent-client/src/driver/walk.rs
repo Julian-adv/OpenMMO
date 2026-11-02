@@ -12,6 +12,7 @@ use onlinerpg_shared::pathfinding;
 use onlinerpg_shared::{ClientMessage, PlayerId, Position};
 use tokio::sync::Mutex;
 
+use super::long_route::{toward, LongRoute, MAX_LEG};
 use crate::dungeon::{DoorApproach, Dungeon};
 use crate::geom::PlanarDelta;
 use crate::state::SharedState;
@@ -240,6 +241,8 @@ async fn walk_inner(
     let mut request_is_final = false;
     let mut sent_at = Instant::now();
     let mut doors_opened = 0;
+    let mut long_route = LongRoute::default();
+    let mut request_is_planned = false;
     let relocations = state.lock().await.relocations;
     loop {
         if started.elapsed().as_secs_f32() > tuning.max_secs {
@@ -341,23 +344,30 @@ async fn walk_inner(
                     final_goal = false;
                 }
             }
-            let to_goal = PlanarDelta::to_xz(&me.position, goal.0, goal.1);
-            if to_goal.dist > 48.0 {
-                goal = (
-                    me.position.x + to_goal.dx * 48.0 / to_goal.dist,
-                    me.position.z + to_goal.dz * 48.0 / to_goal.dist,
-                );
+            let stalled = terminal && status != Some(MoveStatus::Arrived);
+            if let Some(leg) = last_goal.filter(|_| stalled && request_is_planned && !schedule) {
+                long_route.leg_failed(s.world_cache.read().unwrap().passability_cache(), leg);
+            }
+            let here = (me.position.x, me.position.z);
+            let mut planned = None;
+            if PlanarDelta::to_xz(&me.position, goal.0, goal.1).dist > MAX_LEG {
+                if fixed && target_floor == 0 && s.passability_floor() == 0 {
+                    let world = s.world_cache.read().unwrap();
+                    planned = long_route.leg(world.passability_cache(), here, goal);
+                }
+                goal = planned.unwrap_or_else(|| toward(here, goal));
                 final_goal = false;
             }
             let changed = last_goal.is_none_or(|(x, z)| {
                 PlanarDelta::xz(x, z, goal.0, goal.1).dist > REROUTE_THRESHOLD
             });
-            if schedule_failed || (terminal && status != Some(MoveStatus::Arrived) && !changed) {
+            if schedule_failed || (stalled && !changed) {
                 drop(s);
                 if doors_opened < tuning.max_doors
                     && open_blocking_door(state, background, sprint, owned_request).await
                 {
                     doors_opened += 1;
+                    long_route = LongRoute::default();
                     request_id = None;
                     last_goal = None;
                     continue;
@@ -378,6 +388,7 @@ async fn walk_inner(
                         request_id = Some(id);
                         *owned_request = Some(id);
                         request_is_final = final_goal;
+                        request_is_planned = planned.is_some();
                     }
                     Err(_) => return Walked::Error,
                 }
