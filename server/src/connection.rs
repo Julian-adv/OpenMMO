@@ -4,7 +4,7 @@ use crate::game::character_attributes::roll_character_attributes;
 use crate::game::character_hp::{level_one_max_hp, DEFAULT_CHARACTER_RACE};
 use crate::game_state::{
     encode_server_msg, parse_admin_command, parse_notice_command, restored_floor_level,
-    EstateFurnitureMove, GameState, KickNotice,
+    EstateFurnitureMove, GameState, KickNotice, GOD_ON_MESSAGE,
 };
 use crate::google_auth::GoogleAuthVerifier;
 use crate::item_defs::AuthenticatedUseAction;
@@ -1489,6 +1489,7 @@ async fn handle_client_message(
             );
             player.appearance = selected_character.appearance;
             player.title = titles.1.clone();
+            player.invulnerable = state.is_admin;
 
             // Health is restored once gear sets max HP, below.
             let saved_floor = selected_character.floor_level;
@@ -1656,6 +1657,12 @@ async fn handle_client_message(
             }];
             if player.invisible {
                 responses.push(ServerMessage::InvisibilityChanged { invisible: true });
+            }
+            if player.invulnerable {
+                responses.push(ServerMessage::SystemMessage {
+                    localization: None,
+                    message: GOD_ON_MESSAGE.to_string(),
+                });
             }
             responses.extend(game_state.owner_state_messages(&id).await);
             responses.extend(entry_notices(game_state, state, auth_service).await);
@@ -3377,6 +3384,64 @@ mod tests {
             let mut saved_inventory = auth.load_inventory(character.id).unwrap();
             saved_inventory.sort_by(|a, b| a.item_def_id.cmp(&b.item_def_id));
             assert_eq!(saved_inventory, inventory);
+        }
+    }
+
+    #[tokio::test]
+    async fn admin_characters_enter_in_god_mode() {
+        let (auth, db_path) = crate::game_state::tests::make_test_auth_with_path("enter_god");
+        let auth = Arc::new(auth);
+        let account = auth.login_npc("npc_enter_god").unwrap();
+        let character = auth
+            .create_character(
+                &account,
+                "Warden",
+                &roll_character_attributes(&CharacterClass::Knight, crate::types::Gender::Male),
+                16,
+                CharacterClass::Knight,
+                crate::types::Gender::Male,
+            )
+            .unwrap();
+        rusqlite::Connection::open(&db_path)
+            .unwrap()
+            .execute(
+                "UPDATE characters SET admin_role = 1 WHERE id = ?1",
+                [character.id],
+            )
+            .unwrap();
+        for admin in [false, true] {
+            let game = Arc::new(crate::game_state::tests::make_test_game_state(&format!(
+                "enter_god_{admin}"
+            )));
+            let mut state = ConnectionState::new(Ipv4Addr::LOCALHOST.into());
+            handle_handshake(
+                &client_info(onlinerpg_shared::PROTOCOL_VERSION, "web"),
+                &mut state,
+            );
+            finish_auth(&game, &auth, &mut state, account.clone(), false).await;
+            state.admin_eligible = admin;
+            let request = onlinerpg_shared::serialize_client_msg(&ClientMessage::EnterGame {
+                character_id: character.id,
+            })
+            .unwrap();
+            let responses =
+                handle_client_message(&request, &game, &auth, &test_auth_ctx(), &mut state)
+                    .await
+                    .unwrap();
+            let player = responses
+                .iter()
+                .find_map(|message| match message {
+                    ServerMessage::JoinSuccess { player, .. } => Some(player),
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("expected game entry, got {responses:?}"));
+            assert_eq!(player.invulnerable, admin);
+            assert_eq!(
+                responses.iter().any(|message| matches!(message,
+                    ServerMessage::SystemMessage { message, .. } if message == GOD_ON_MESSAGE
+                )),
+                admin
+            );
         }
     }
 

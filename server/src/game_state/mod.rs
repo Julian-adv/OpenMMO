@@ -193,7 +193,7 @@ pub(crate) fn encode_server_msg(msg: &ServerMessage) -> Option<Bytes> {
 
 pub(crate) mod ambient_spawn;
 mod chat;
-pub(crate) use chat::{parse_admin_command, parse_notice_command};
+pub(crate) use chat::{parse_admin_command, parse_notice_command, GOD_ON_MESSAGE};
 mod auto_attack;
 mod combat;
 mod combat_audit;

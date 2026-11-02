@@ -25,6 +25,8 @@ const SPAWNMOB_MAX_COUNT: u32 = 10;
 /// Meters from the admin to each spawned monster.
 const SPAWNMOB_RING_RADIUS: f32 = 3.0;
 const GIVE_MAX_COUNT: u32 = 10_000;
+pub(crate) const GOD_ON_MESSAGE: &str =
+    "God: on — blows land but take no health. /god again to turn off.";
 
 /// `/who` breakdown. Splits by client program rather than by "human vs bot":
 /// the server cannot tell whether a person or an LLM is driving a web client,
@@ -1275,7 +1277,7 @@ impl super::GameState {
         player.invulnerable = !player.invulnerable;
         info!(admin = ?admin_id, on = player.invulnerable, "admin god mode");
         Ok(if player.invulnerable {
-            "God: on — blows land but take no health. /god again to turn off.".to_string()
+            GOD_ON_MESSAGE.to_string()
         } else {
             "God: off.".to_string()
         })

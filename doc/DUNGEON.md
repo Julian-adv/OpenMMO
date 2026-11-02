@@ -39,7 +39,7 @@ node tools/reserve-dungeon-land.mjs --dungeon skeleton_crypt --ownership /tmp/ow
 ## Thieves' Den — 티어 4
 
 - 입구: `world(-862, 1.2, 3822)`, 서쪽 도로를 향한다(`entranceDir=w`). Skeleton Crypt에서 북동쪽으로 약 470m. 20층, 최종 보스 `thief_king`(레벨 25·HP 350·guard 32).
-- 보스 모델은 2.1m `monsters/thief_king.glb`다. 동작 6종과 오른손 단검 파지를 GLB에 구웠고 `slash1`로 공격한다([애셋 기록](assets/monsters.md)).
+- 보스 모델은 2.1m `monsters/thief_king.glb`다. 동작 6종과 오른손 단검 파지를 GLB에 구웠고 2초마다 단검으로 찌른다(`dagger_stab`)([애셋 기록](assets/monsters.md)).
 - 몬스터는 `den` 그룹이다. 기존 모델에 Skeleton Crypt 같은 층 몬스터의 레벨·guard·명중·피해를 입힌 변형이다. 무기와 드롭은 원래 몬스터를 따른다.
   - 1–5층: Kobold Cutpurse(`kobold_cutpurse`). 잊힌 망자 수치(레벨 8·HP 40·guard 14·2d6).
   - 6–10층: Hobgoblin Thug·Gnoll Stalker. Skeleton 수치(레벨 16·guard 20·명중 +20·3d6). Stalker는 출혈 공격을 유지한다.

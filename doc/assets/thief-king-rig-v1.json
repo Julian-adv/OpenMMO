@@ -368,8 +368,8 @@
     },
     {
       "path": "client/public/models/monsters/thief_king.glb",
-      "sha256": "73a306858a299061a583e68aca998ef2a53bfa646bbf736f64635e445ab36cb9",
-      "bytes": 1263124
+      "sha256": "0f4418161cf8cfc4136989a3a1e299293e2cd290f93c80536115fac762e7df77",
+      "bytes": 1263688
     }
   ],
   "validation": {
@@ -407,14 +407,6 @@
         ]
       },
       {
-        "name": "slash1",
-        "duration_s": 1.5333333015441895,
-        "sole_height_range_m": [
-          -1.0618611805616367e-05,
-          6.079138977102105e-07
-        ]
-      },
-      {
         "name": "dying",
         "duration_s": 2.633333444595337,
         "sole_height_range_m": [
@@ -430,6 +422,14 @@
           -1.7054868936862042e-05,
           2.495951363626044e-05
         ]
+      },
+      {
+        "name": "dagger_stab",
+        "duration_s": 1.0200001001358032,
+        "sole_height_range_m": [
+          -9.799455979867585e-06,
+          1.73623048626208e-05
+        ]
       }
     ],
     "weapons": [
@@ -437,13 +437,13 @@
         "path": "weapons/dagger.glb",
         "samples": 294,
         "collisions": 0,
-        "minimum_clearance_m": 0.008500021639367089
+        "minimum_clearance_m": 0.008500021498269937
       },
       {
         "path": "weapons/cutthroat_dirk.glb",
         "samples": 294,
         "collisions": 0,
-        "minimum_clearance_m": 0.0036103064506314195
+        "minimum_clearance_m": 0.0036103238586294743
       },
       {
         "path": "weapons/shadowfang.glb",
@@ -458,8 +458,8 @@
         0.0014547752194571833,
         0.0014548179274934956
       ],
-      "min_surface_tip_rise_m": 0.011656608045689049,
-      "min_surface_side_separation_m": 0.012260233945155685
+      "min_surface_tip_rise_m": 0.011656607058678124,
+      "min_surface_side_separation_m": 0.012260236376903488
     },
     "samples_per_clip": 49
   },
@@ -484,9 +484,13 @@
     {
       "path": "client/public/models/animations/combat_melee.glb",
       "sha256": "b29f34de8cf7523d176a634ceac7ab4791084994493adbfac5f59dda686a057b"
+    },
+    {
+      "path": "client/public/models/animations/dagger_preview.glb",
+      "sha256": "59bc09327351ef0b16cf4c08cfc094e0e3a7e8a3e1c407f50f99532179902827"
     }
   ],
-  "bake_method": "Offline client retargeting and runtime grounding, with fitted female idle_armed grip; textures use lossy WebP and animation keys are resampled and deduplicated.",
+  "bake_method": "Offline client retargeting and runtime grounding, with fitted female idle_armed grip; textures use lossy WebP and animation keys are resampled and deduplicated. dagger_stab is cut at the dagger's 1.2 s interval with the last 0.25 s eased into combat_idle, sped up 1.5x before impact so it lands at attackImpactDelay (360 ms), and the extension is retimed by reach to speed up from the cocked pose and stop dead at full extension, and the right hand is turned so the blade points level at a spot 1.5 m ahead while the arm is thrust out.",
   "reproduction": [
     ".venv/bin/python tools/rig-humanoid-monster.py thief_king",
     "~/opt/blender/blender -b --python-exit-code 1 --python tools/blender-scripts/save_humanoid_monster_rig.py -- thief_king",

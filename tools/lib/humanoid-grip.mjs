@@ -3,10 +3,18 @@ import { readFileSync } from 'node:fs'
 import * as THREE from '../../client/node_modules/three/build/three.module.js'
 import { root } from './headless-three.mjs'
 
+const readData = name => JSON.parse(readFileSync(new URL(`data/${name}.json`, root)))
+
 export function monsterRow(id) {
-  const row = JSON.parse(readFileSync(new URL('data/monsters.json', root)))[id]
+  const row = readData('monsters')[id]
   assert.ok(row, `Unknown monster ${id}`)
   return row
+}
+
+export function monsterPacks(row, basePaths) {
+  const weapon = readData('items')[row.weapon], pack = weapon && readData('weapon_animations')[weapon.weaponType]
+  const attack = pack && { clip: pack.attack, model: weapon.worldModel, end: weapon.attackIntervalMs / 1000, impact: pack.attackImpactMs / 1000, landing: row.attackImpactDelay / 1000 }
+  return { paths: [basePaths.locomotion, basePaths.combatMelee, ...(pack ? [`/models/${pack.pack}`] : [])], attack }
 }
 
 export function packClipNames(row, packs, splitClipNames) {

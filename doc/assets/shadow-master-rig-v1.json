@@ -28,6 +28,10 @@
     {
       "path": "client/public/models/animations/combat_melee.glb",
       "sha256": "b29f34de8cf7523d176a634ceac7ab4791084994493adbfac5f59dda686a057b"
+    },
+    {
+      "path": "client/public/models/animations/dagger_preview.glb",
+      "sha256": "59bc09327351ef0b16cf4c08cfc094e0e3a7e8a3e1c407f50f99532179902827"
     }
   ],
   "method": "Locally fit the modular male skeleton and transfer its surface weights, then refine finger and hood weights.",
@@ -36,7 +40,7 @@
   "rig_output": "assets/monsters/shadow_master/rig_v1/shadow_master.glb",
   "blender_file": "assets/monsters/shadow_master/rig_v1/shadow_master.blend",
   "game_output": "client/public/models/monsters/shadow_master.glb",
-  "bake_method": "Offline client retargeting and runtime grounding, with fitted female idle_armed grip; textures use lossy WebP and animation keys are resampled and deduplicated.",
+  "bake_method": "Offline client retargeting and runtime grounding, with fitted female idle_armed grip; textures use lossy WebP and animation keys are resampled and deduplicated. dagger_stab is cut at the dagger's 1.2 s interval with the last 0.25 s eased into combat_idle, sped up 1.5x before impact so it lands at attackImpactDelay (360 ms), and the extension is retimed by reach to speed up from the cocked pose and stop dead at full extension, and the right hand is turned so the blade points level at a spot 1.5 m ahead while the arm is thrust out.",
   "weapon_attachment": {
     "weaponOffset": 0.111172,
     "weaponOffsetX": 0.014375,
@@ -85,14 +89,6 @@
         ]
       },
       {
-        "name": "slash1",
-        "duration_s": 1.5333333015441895,
-        "sole_height_range_m": [
-          -1.0389371475918682e-05,
-          4.64394546339299e-07
-        ]
-      },
-      {
         "name": "dying",
         "duration_s": 2.633333444595337,
         "sole_height_range_m": [
@@ -108,6 +104,14 @@
           -1.3581799663772026e-05,
           1.3304243727693074e-05
         ]
+      },
+      {
+        "name": "dagger_stab",
+        "duration_s": 1.0200001001358032,
+        "sole_height_range_m": [
+          -7.708570049966508e-06,
+          1.4841429923913673e-05
+        ]
       }
     ],
     "weapons": [
@@ -115,28 +119,28 @@
         "path": "weapons/dagger.glb",
         "samples": 294,
         "collisions": 0,
-        "minimum_clearance_m": 0.008403520670618659
+        "minimum_clearance_m": 0.008403519986308398
       },
       {
         "path": "weapons/cutthroat_dirk.glb",
         "samples": 294,
         "collisions": 0,
-        "minimum_clearance_m": 0.0024634318433022695
+        "minimum_clearance_m": 0.0024634519274470924
       },
       {
         "path": "weapons/shadowfang.glb",
         "samples": 294,
         "collisions": 0,
-        "minimum_clearance_m": 0.0014963603076127213
+        "minimum_clearance_m": 0.0014963814374040916
       }
     ],
     "thumb": {
       "collision_samples": 0,
       "opposing_gap_range_m": [
-        0.002092298745177319,
-        0.0020923393598027986
+        0.0020922974582966553,
+        0.002092323076265543
       ],
-      "min_surface_tip_rise_m": 0.01674506752045856,
+      "min_surface_tip_rise_m": 0.016745067455196622,
       "min_surface_side_separation_m": 0.008821589905244731
     },
     "samples_per_clip": 49
@@ -159,8 +163,8 @@
     },
     {
       "path": "client/public/models/monsters/shadow_master.glb",
-      "sha256": "256df7bbe7e9d949b35c4c71942d7ef7863e565d296764bd95dc5e8e12279cea",
-      "bytes": 1268344
+      "sha256": "a2c209e5169d308dd89be1337385f9a0249db05febb7dac2d0b50baf840c0071",
+      "bytes": 1268960
     }
   ],
   "grip_reference": {

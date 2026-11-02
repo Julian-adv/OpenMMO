@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import * as THREE from '../client/node_modules/three/build/three.module.js'
 import { MeshBVH } from '../client/node_modules/three-mesh-bvh/src/index.js'
 import { headlessThree, root } from './lib/headless-three.mjs'
-import { monsterRow, packClipNames, gripRotations } from './lib/humanoid-grip.mjs'
+import { monsterRow, monsterPacks, packClipNames, gripRotations } from './lib/humanoid-grip.mjs'
 
 const id = process.argv[2]; assert.match(id ?? '', /^[a-z0-9_]+$/)
 const samples = 49
@@ -39,13 +39,14 @@ try {
   assert.equal(unweighted, 0); assert.ok(maxError < 1e-6); assert.ok(maxBindDifference < 1e-6)
   const box = new THREE.Box3().setFromObject(mesh); assert.ok(Math.abs(box.min.y) < 1e-5 && Math.abs(box.max.y - spec.height_m) < 1e-5)
   const grip = gripRotations(rest, fit, await load(fit.reference_model))
-  const packs = await Promise.all([CHARACTER_ANIMATION_PACK_PATHS.locomotion, CHARACTER_ANIMATION_PACK_PATHS.combatMelee].map(p => load(`client/public${p}`)))
+  const { paths, attack } = monsterPacks(row, CHARACTER_ANIMATION_PACK_PATHS)
+  const packs = await Promise.all(paths.map(p => load(`client/public${p}`)))
   const names = packClipNames(row, packs, splitClipNames)
   assert.deepEqual(target.animations.map(c => c.name).sort(), names.sort())
   for (const clip of target.animations) {
     assert.ok(clip.validate())
     const original = packs.flatMap(pack => pack.animations).find(c => c.name === clip.name)
-    assert.ok(original && Math.abs(clip.duration - original.duration) < 1e-4, `${clip.name} duration`)
+    assert.ok(original && Math.abs(clip.duration - (clip.name === attack?.clip ? attack.end - attack.impact + attack.landing : original.duration)) < 1e-4, `${clip.name} duration`)
     for (const [name, q] of grip) {
       const track = clip.tracks.find(t => t.name === `${name}.quaternion`); assert.ok(track, `${clip.name} ${name}`)
       for (let i = 0; i < track.values.length; i += 4) assert.ok(1 - Math.abs(new THREE.Quaternion().fromArray(track.values, i).dot(q)) < 1e-6)

@@ -14,10 +14,15 @@
     10,823 triangles를 유지하고 바인드 포즈 높이 2.1m, 바닥 중심 원점, 스케일 1로 저장했다.
     base color·metallic/roughness·normal은 1024² WebP로 저장했다. 작업본은
     `assets/monsters/thief_king/rig_v1/`, 게임 모델은 `client/public/models/monsters/thief_king.glb`다.
-  - 공용 locomotion·combat_melee 팩의 `idle1`, `walk`, `run`, `slash1`, `combat_idle`, `dying`을
+  - 공용 locomotion·combat_melee 팩의 `idle1`, `walk`, `run`, `combat_idle`, `dying`과 단검 팩의 `dagger_stab`을
     클라이언트 리타게팅과 접지 코드로 오프라인 변환해 게임 GLB에 넣었으며
     `sharedAnims=false`로 사용한다. 검증 수치·재현 절차·해시는 [리깅 보고서](thief-king-rig-v1.json)에 있다.
     게임 GLB에는 hit 클립을 넣지 않았다.
+  - `dagger_stab`은 단검 공격 간격 1.2초에서 자르고 마지막 0.25초를 `combat_idle` 첫 자세로 이었다.
+    찌르기 전 구간을 1.5배 빠르게 해 0.36초(`attackImpactDelay` 360)에 닿게 했다. 팔을 펴는 구간은
+    손의 전진 거리 기준으로 다시 배치해 천천히 출발해 점점 빨라지다가 다 뻗은 순간 멈춘다.
+    팔을 뻗은 동안은 손목을 돌려 칼날이 1.5m 앞을 수평으로 겨누게 했고, 거둘 때는 이 보정을 일찍 풀어
+    손목이 손잡이 쪽으로 접히지 않게 했다. 클립 길이는 1.02초, 공격 간격은 2초다.
   - 세 단검의 부착 검증과 부착값은 리깅 보고서에 기록했다.
   - 캐릭터 미리보기 `modular-character-preview.html?monster=thief_king`에서 게임과 같은 모델·동작·손 무기로 볼 수 있다.
   - `tools/rig-humanoid-monster.py`, `tools/bake-humanoid-monster.mjs`,
@@ -29,7 +34,8 @@
   - 프로젝트 모듈형 남성의 Mixamo 호환 65본 계층과 가중치를 로컬에서 피팅했다. 10,530 triangles,
     높이 2.1m, 스케일 1이며 텍스처는 1024² WebP다. 원본과 작업본은 `assets/monsters/shadow_master/`,
     게임 모델은 `client/public/models/monsters/shadow_master.glb`에 있다.
-  - `idle1`, `walk`, `run`, `slash1`, `combat_idle`, `dying`을 접지 및 오른손 파지 자세와 함께 베이크했다.
+  - `idle1`, `walk`, `run`, `dagger_stab`, `combat_idle`, `dying`을 접지 및 오른손 파지 자세와 함께 베이크했다.
+    `dagger_stab`은 도적 왕과 같은 방식으로 다듬었다.
     새 부착값과 검증·재현 절차는 [리깅 보고서](shadow-master-rig-v1.json)에 기록했다.
 
 - skeleton_warrior — Tripo 모델, 2026-09-12 수령. 사용자는 앞선 스켈레톤 작업에서 Pro 요금제를 확인했다.

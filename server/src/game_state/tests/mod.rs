@@ -717,7 +717,9 @@ pub(crate) fn make_test_auth(test_name: &str) -> crate::auth::AuthService {
 }
 
 /// Variant exposing the DB path for tests that open a second connection.
-fn make_test_auth_with_path(test_name: &str) -> (crate::auth::AuthService, std::path::PathBuf) {
+pub(crate) fn make_test_auth_with_path(
+    test_name: &str,
+) -> (crate::auth::AuthService, std::path::PathBuf) {
     let db_path = std::env::temp_dir().join(format!(
         "onlinerpg_{test_name}_auth_{}.db",
         uuid::Uuid::new_v4()
