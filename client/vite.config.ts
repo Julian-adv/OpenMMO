@@ -305,8 +305,28 @@ function modularCharacterPreview(): Plugin {
       '../assets/items/female_barbarian_helmet/tripo_v2/fitted_v1/body-occlusion.json',
       import.meta.url
     ),
+    female_valkyrie_gloves: new URL(
+      '../assets/items/valkyrie_gloves/fitted_v3/bracers_female_valkyrie.glb',
+      import.meta.url
+    ),
+    female_valkyrie_gloves_source: new URL(
+      '../assets/items/valkyrie_gloves/fitted_v2/bracers_female_valkyrie.glb',
+      import.meta.url
+    ),
+    'female-valkyrie-gloves-occlusion.json': new URL(
+      '../assets/items/valkyrie_gloves/fitted_v3/body-occlusion.json',
+      import.meta.url
+    ),
     female_knight_gloves: new URL(
       '../assets/items/female_knight_gloves/tripo_v1/fitted_v3/gloves_female_knight.glb',
+      import.meta.url
+    ),
+    female_valkyrie_helmet: new URL(
+      '../assets/items/valkyrie_helmet/fitted_v2/helmet_female_valkyrie.glb',
+      import.meta.url
+    ),
+    'female-valkyrie-helmet-occlusion.json': new URL(
+      '../assets/items/valkyrie_helmet/fitted_v2/body-occlusion.json',
       import.meta.url
     ),
     female_knight_helmet: new URL(

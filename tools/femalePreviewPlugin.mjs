@@ -1,6 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import { sources, output } from './lib/female-preview.mjs'
 import { ensureFemalePreview } from './lib/ensure-female-preview.mjs'
+import { valkyriePreviewFit } from './lib/valkyrie-preview-fit.mjs'
 
 const pending = new Map()
 
@@ -10,7 +11,19 @@ export function femalePreviewPlugin() {
     apply: 'serve',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        const match = /^\/__female-preview\/(base|bob|knight|valkyrie)\.glb$|^\/__female-preview\/(animations)\.json$/.exec(req.url?.split('?')[0] ?? '')
+        if (req.url !== '/__female-preview/capture-valkyrie-fit') return next()
+        if (req.method !== 'POST' || req.headers['sec-fetch-site'] === 'cross-site') {
+          res.writeHead(400)
+          res.end()
+          return
+        }
+        server.ws.send({ type: 'custom', event: 'valkyrie-save-fit' })
+        res.writeHead(202, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+        res.end(JSON.stringify({ requested: true }))
+      })
+      server.middlewares.use(valkyriePreviewFit())
+      server.middlewares.use((req, res, next) => {
+        const match = /^\/__female-preview\/(base|bob|knight|warrior|valkyrie)\.glb$|^\/__female-preview\/(animations)\.json$/.exec(req.url?.split('?')[0] ?? '')
         if (req.method !== 'GET' || !match) return next()
         const name = match[1] ?? match[2]
         if (!Object.hasOwn(sources, name)) return next()
