@@ -74,6 +74,7 @@ export async function showFemaleBase(
       <select id="female-boots">
         <option value="none">없음</option>
         <option value="knight">은빛 기사 판금 부츠</option>
+        <option value="valkyrie">발키리 부츠 (피팅 검수 중)</option>
         <option value="caveman">원시전사 모피 하이힐 부츠 (피팅 검수 중)</option>
         <option value="rogue">로그 빨간 밑창 가죽 부츠</option>
         <option value="barbarian">야만전사 가죽 하이힐 샌들</option>
@@ -122,6 +123,7 @@ export async function showFemaleBase(
         <option value="side">전신 측면</option>
         <option value="back">전신 후면</option>
         <option value="feet">발 확대</option>
+        <option value="boots">부츠 확대</option>
         <option value="right-hand">오른손 확대</option>
         <option value="left-hand">왼손 확대</option>
       </select>
@@ -755,6 +757,7 @@ export async function showFemaleBase(
     side: { target: [0, 0.9, 0], position: [3.42, 0.99, 0] },
     back: { target: [0, 0.9, 0], position: [0, 0.99, -3.42] },
     feet: { target: [0, 0.117, 0], position: [0.432, 0.288, 0.81] },
+    boots: { target: [0, 0.36, 0], position: [0.25, 0.42, 1.65] },
     'right-hand': {
       target: [-0.216, 0.864, 0.027],
       position: [-0.81, 0.882, 0.234],

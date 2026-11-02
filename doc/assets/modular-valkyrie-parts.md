@@ -245,3 +245,53 @@ Generate an isolated FRONT-VIEW 3D modeling reference for ONLY the lower-body ar
 - [리깅 검증](../../assets/items/valkyrie_starter/tripo_bottom_v1/fitted_v8/rig-validation.json)은 공통 골격, 가중치 정규화와 대기·걷기·달리기 각 13개 시점의 유한 좌표를 확인한다.
 
 재생성: `PYTHONPATH=tools .venv/bin/python tools/outfits/fit_female_valkyrie_rear_panel_v8.py`, `node tools/export-female-rogue-seated-poses.mjs /tmp/valkyrie-bottom-waist-measure idle1`, `blender -b --python-exit-code 1 --python tools/blender-scripts/measure_female_valkyrie_rear_panel_v8.py`, `blender -b --python-exit-code 1 --python tools/blender-scripts/save_female_valkyrie_rear_fitting.py -- v8`, `node tools/validate-female-valkyrie-bottom.mjs`.
+
+## 부츠 원화 — 2026-11-02
+
+![오른쪽 부츠 원화](../../assets/items/valkyrie_starter/concepts/boot-right-v1.png)
+
+- [오른쪽 부츠 원화](../../assets/items/valkyrie_starter/concepts/boot-right-v1.png): 1024×1536 RGB PNG, SHA-256 `314c493dcbece87248ded660f7c2182daa2c98aade3dedf051112c62109b8e9f`.
+- 전신 원화 `front-v1.png`의 무릎 보호대·정강이 판금·굽과 `lower-front-v3.png`의 은색 판금 및 금색 장식을 참고했다. 한쪽 부츠만 그린 이미지이며 실제 몸체 피팅, 좌우 대칭, 굽 높이, 발목과 무릎의 동작은 아직 검증하지 않았다.
+- 생성: OpenAI Codex built-in ImageGen, **ChatGPT Pro 20x**, 2026-11-02. OpenAI 생성 출력물 이용 조건 및 참조 에셋의 기존 이용 조건을 따른다.
+
+```text
+Create a single isolated 3D-modeling concept reference of the RIGHT BOOT of the same female Valkyrie armor set shown in the references. Reference image 1 is the authoritative full-body concept: faithfully interpret its tall silver armored boot, integral articulated knee guard and shin greave, pointed armored toe, ankle plates and slender high heel. Reference image 2 is the final separate lower armor: match its bright polished silver, simple raised silver borders, restrained small round gold rivets, clean layered curves and realistic fantasy-game material language. Show exactly ONE complete wearable right boot, isolated from just above the knee down to the sole, no leg or foot inside; open hollow top with believable thickness for later fitting over a character mesh. The shin guard flows into overlapping ankle armor and a complete enclosed armored shoe with a modest narrow heel and subtle dark red sole, echoing the original outfit. Include a softly pointed knee cap and a few restrained gold fittings; avoid excessive tiny dangling ornaments. A single three-quarter FRONT view with a slight side angle, toe and heel both clearly readable, vertical upright orientation, entirety of knee guard, boot, toe and heel in frame with ample space around it. Neutral pale-gray studio background, even soft lighting, distinct readable forms without harsh blown-out mirror reflections, polished silver rather than white. Concept art for later Tripo image-to-3D and modular game rigging; show a coherent, physically plausible single boot with no fused objects or separate floating fragments. No character, skin, mannequin, human leg, leg silhouettes, second boot, pair, duplicate view, diagram, text, labels, arrows, logos, props, weapons or wings.
+```
+
+### 부츠 밑창 수정 — 2026-11-02
+
+- [수정 원화](../../assets/items/valkyrie_starter/concepts/boot-right-v2.png): 1024×1536 RGB PNG, SHA-256 `95d129d51d4ad049590092a344fefc545707ebd2100778167b4845594e0f6768`. `boot-right-v1.png`를 편집해 발끝과 옆면의 가는 빨간 밑창 테두리를 없앴다. 밑창 바닥면은 빨간색으로 유지하도록 지시했지만, 이 각도에서는 바닥이 보이지 않아 이미지에서 직접 확인할 수 없다. 굽의 빨간색은 유지했다.
+- 생성: OpenAI Codex built-in ImageGen, **ChatGPT Pro 20x**, 2026-11-02. OpenAI 생성 출력물 이용 조건 및 참조 에셋의 기존 이용 조건을 따른다.
+
+```text
+Edit the provided Valkyrie single right boot concept image with a precise, localized change only to the sole. Remove the very thin red stripe that is currently visible around the front toe and along the outer side edge of the sole. In front and side views the exposed sole edge and welt must be a thin neutral dark gray or matching silver edge with no red rim at all. KEEP the actual underside/bottom face of the outsole red; the red color is only on the ground-facing underside and must not wrap up onto the visible toe or side edge. Keep the existing red-colored vertical heel and black heel tip unchanged, as they are separate from the thin outsole stripe. Preserve the boot's exact silhouette, knee armor, shin, ankle, pointed toe, heel shape and height, polished silver material, gold fittings, lighting, camera angle, gray background, framing, and all other design details without alteration. One isolated boot, no extra objects, people, text, or additional views.
+```
+
+### 부츠 정면·측면·후면 원화 — 2026-11-02
+
+- [정면](../../assets/items/valkyrie_starter/concepts/boot-right-front-v1.png), 1024×1536 RGB PNG, SHA-256 `69627e14af7eeccf1cc27555375d41637e8a1564b7d1f391e30c4a41ffcf7e7b`.
+- [측면](../../assets/items/valkyrie_starter/concepts/boot-right-side-v1.png), 1024×1536 RGB PNG, SHA-256 `799e0f122b080e4ad7ad4c18a50411ea69d37d2e35e55d10a90d929148cf4c83`.
+- [후면](../../assets/items/valkyrie_starter/concepts/boot-right-back-v1.png), 1024×1536 RGB PNG, SHA-256 `408e6d22076c55f2d890234bac18305c2ce1b9c469a6fe404000b8dfee3b9da5`.
+- `boot-right-v2.png`를 참조해 같은 오른쪽 부츠의 정면·측면·후면을 각각 생성했다. 후면은 원본에 보이지 않는 구조를 추정한 것이며, 세 이미지는 각각 생성한 원화이므로 장식·비율이 동일한 3D 모델에서 투영된 도면은 아니다. 빨간 밑창의 바닥면은 보이지 않는다.
+- 생성: OpenAI Codex built-in ImageGen, **ChatGPT Pro 20x**, 2026-11-02. OpenAI 생성 출력물 이용 조건 및 참조 에셋의 기존 이용 조건을 따른다.
+
+공통 프롬프트:
+
+```text
+Create a single isolated orthographic 3D modeling reference image of the EXACT SAME right Valkyrie armored boot shown in the reference image. Preserve the original object's proportions, knee height, hollow top, silver knee guard and shin plates, layered ankle bands, pointed metal toe, slender high heel, small gold fittings, and neutral gray studio background. This is ONE AND THE SAME right boot seen from a new direction, not a redesign. Preserve the dark neutral sole edge: no visible thin red stripe around the toe or sole side. The ground-facing sole underside is red but hidden from this view; the original red vertical heel may remain red. Show one complete boot only, from its upper opening to the floor, centered, vertical, with generous space, clear metal shading and no cropping. Orthographic camera, no perspective, no three-quarter angle. No person, skin, mannequin, leg, second boot, mirrored pair, extra views, text, labels, inset, dimensions, arrows, weapons or wings.
+```
+
+시점별 추가 지시:
+
+```text
+Front: Show the EXACT STRAIGHT-ON FRONT VIEW, camera looking directly at the boot's toe, level view, bilateral placement and all front armor visible. The foot points directly toward the camera. Maintain the same tall boot, heel and knee armor as the reference.
+Side: Show the EXACT 90-DEGREE SIDE PROFILE, camera level and perpendicular to the outer side of the same right boot, the toe points LEFT and the heel points RIGHT. The entire pointed shoe profile, heel, calf contour and side armor should be clear without any three-quarter perspective.
+Back: Show the EXACT STRAIGHT-ON BACK VIEW, camera looking directly at the rear of the same right boot, level view, with the back of the heel centered. Interpret the unseen rear conservatively as a coherent wraparound continuation of the existing silver plates, rear calf panel and ankle armor; preserve the same silhouette and restrained gold accents. The original reference shows only the front and side, so do not invent elaborate new decorations.
+```
+
+### Tripo 부츠 피팅 v1 — 2026-11-02
+
+- 사용자가 제공한 `assets/armored boot 3d model.glb`의 [원본 사본](../../assets/items/valkyrie_starter/tripo_boots_v1/source.glb)은 SHA-256 `33c7a55c25c760a84827445480510e408da5484afeed2e83df360bdbf7f43eee`, 정점 1,138개와 삼각형 1,474개다. Tripo 생성일·설정·입력 이미지·작업 ID·요금제와 이용 조건은 확인되지 않았다.
+- [양쪽 피팅 GLB](../../assets/items/valkyrie_starter/tripo_boots_v1/fitted_v1/boots_female_valkyrie.glb), [피팅 스크립트](../../tools/fit-female-valkyrie-boots.py), [몸체 가림 정보](../../assets/items/valkyrie_starter/tripo_boots_v1/fitted_v1/body-occlusion.json), [리깅 검사](../../assets/items/valkyrie_starter/tripo_boots_v1/fitted_v1/rig-validation.json). 원본 곡면과 텍스처를 유지하며 부드러운 단면 보정과 좌우 대칭으로 피팅하고, 65개 본의 여성 공통 뼈대와 하이힐 자세를 사용한다. 양쪽 합계는 2,948삼각형이다.
+- 기본 상의·하의·단발·날개 및 부츠를 조합하면 숨김 포함 42,336삼각형이며, 미리보기 표시 기준은 35,913삼각형이다. 얼굴은 공통 몸체 메시의 일부이므로 별도 메시 삼각형 수는 측정하지 않았다. 이는 조립 캐릭터 권장 예산을 초과한다.
+- 대기·걷기·달리기 각 13개 시점의 뼈대 연결과 유한한 정점 변형을 수치 검사하고, 세 동작을 미리보기에서 확인했다. 이 수치 검사는 피부 관통이나 모든 동작의 충돌을 검사하지 않는다.
