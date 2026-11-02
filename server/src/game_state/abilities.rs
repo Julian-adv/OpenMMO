@@ -5,9 +5,10 @@ use onlinerpg_shared::ability::{
     AbilityId, AbilityRejectReason, AbilityTimer, InspectedEquipment, InspectionResult,
     InspectionTarget, AUSCULTATION_COOLDOWN_MS, AUSCULTATION_RANGE, BOW_MARK_COOLDOWN_MS,
     BOW_MARK_DURATION_MS, GUARDIAN_WARD_COOLDOWN_MS, GUARDIAN_WARD_DURATION_MS,
-    GUARDIAN_WARD_RADIUS, PRIMAL_ROAR_CAST_MS, PRIMAL_ROAR_COOLDOWN_MS, PRIMAL_ROAR_DURATION_MS,
-    PRIMAL_ROAR_RADIUS, PRIMAL_ROAR_STAGGER_MS, PRIMAL_ROAR_STOMP_MS, RADIANCE_COOLDOWN_MS,
-    RADIANCE_DURATION_MS, RAGE_COOLDOWN_MS, RAGE_DURATION_MS, RAGE_GUARD_PENALTY,
+    GUARDIAN_WARD_GUARD_BONUS, GUARDIAN_WARD_RADIUS, PRIMAL_ROAR_CAST_MS, PRIMAL_ROAR_COOLDOWN_MS,
+    PRIMAL_ROAR_DURATION_MS, PRIMAL_ROAR_RADIUS, PRIMAL_ROAR_STAGGER_MS, PRIMAL_ROAR_STOMP_MS,
+    RADIANCE_COOLDOWN_MS, RADIANCE_DURATION_MS, RAGE_COOLDOWN_MS, RAGE_DURATION_MS,
+    RAGE_GUARD_PENALTY,
 };
 use onlinerpg_shared::inventory::{EquipSlot, PlayerInventory};
 use std::collections::{HashMap, HashSet};
@@ -73,7 +74,7 @@ impl Abilities {
             .wards
             .get(player_id)
             .is_some_and(|until| *until > Instant::now());
-        let ward = if warded { base.max(0) / 10 } else { 0 };
+        let ward = if warded { GUARDIAN_WARD_GUARD_BONUS } else { 0 };
         let rage = if self.raging(player_id) {
             RAGE_GUARD_PENALTY
         } else {

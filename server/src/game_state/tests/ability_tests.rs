@@ -521,7 +521,7 @@ async fn radiance_expires_at_two_minutes_without_clearing_a_later_ward() {
     tokio::time::advance(Duration::from_secs(1)).await;
     gs.tick_buffs().await;
     assert!(!gs.get_all_players().await[&pid("caster")].radiance_on);
-    assert_eq!(gs.effective_guard(&pid("caster")).await, 34);
+    assert_eq!(gs.effective_guard(&pid("caster")).await, 33);
     assert!(drain(&mut rx).iter().any(|m| matches!(m, ServerMessage::BuffUpdate { buffs } if buffs.len() == 1 && buffs[0].ability == WARD)));
     gs.use_ability(&pid("caster"), RADIANCE).await;
     assert!(gs.get_all_players().await[&pid("caster")].radiance_on);
@@ -711,7 +711,7 @@ async fn ward_rejects_insufficient_mana_without_buff_cost_or_cooldown() {
         gs.mana.write().await.get_mut(&id).unwrap().mana = 2;
         gs.use_ability(&id, WARD).await;
         assert_eq!(gs.mana.read().await[&id].mana, 0);
-        assert_eq!(gs.effective_guard(&id).await, 34);
+        assert_eq!(gs.effective_guard(&id).await, 33);
     }
 }
 
@@ -767,7 +767,7 @@ async fn ward_rejects_other_classes_without_buff_or_cooldown() {
     }
     gs.players.write().await.get_mut(&id).unwrap().class = CharacterClass::Knight;
     gs.use_targeted_ability(&id, WARD, None, None, None).await;
-    assert_eq!(gs.effective_guard(&id).await, 34);
+    assert_eq!(gs.effective_guard(&id).await, 33);
     assert!(drain(&mut rx).iter().any(|message| matches!(message,
         ServerMessage::AbilityUsed { ability, .. } if *ability == WARD)));
 }
@@ -801,7 +801,10 @@ async fn ward_checks_weapon_classification_and_off_hand_armor_type() {
         let before = gs.effective_guard(&pid(&name)).await;
         gs.use_ability(&pid(&name), WARD).await;
         if allowed {
-            assert_eq!(gs.effective_guard(&pid(&name)).await, before + before / 10);
+            assert_eq!(
+                gs.effective_guard(&pid(&name)).await,
+                before + onlinerpg_shared::ability::GUARDIAN_WARD_GUARD_BONUS
+            );
             assert!(drain(&mut rx)
                 .iter()
                 .any(|m| matches!(m, ServerMessage::AbilityUsed { .. })));
@@ -849,7 +852,7 @@ async fn ward_affects_caster_and_living_party_members_within_twenty_meters_on_sa
     }
     gs.use_ability(&pid("caster"), WARD).await;
     for name in ["caster", "edge"] {
-        assert_eq!(gs.effective_guard(&pid(name)).await, 34);
+        assert_eq!(gs.effective_guard(&pid(name)).await, 33);
     }
     assert_eq!(gs.mana.read().await[&pid("caster")].mana, 13);
     assert_eq!(gs.mana.read().await[&pid("edge")].mana, 15);
@@ -871,9 +874,9 @@ async fn ward_expires_at_sixty_seconds_and_restores_reported_guard() {
     let gs = make_test_game_state("ward_expiry");
     let mut rx = add_ward_player(&gs, "caster", 0.0, 1).await;
     gs.use_ability(&pid("caster"), WARD).await;
-    assert_eq!(gs.effective_guard(&pid("caster")).await, 34);
+    assert_eq!(gs.effective_guard(&pid("caster")).await, 33);
     tokio::time::advance(Duration::from_secs(59)).await;
-    assert_eq!(gs.effective_guard(&pid("caster")).await, 34);
+    assert_eq!(gs.effective_guard(&pid("caster")).await, 33);
     drain(&mut rx);
     tokio::time::advance(Duration::from_secs(1)).await;
     assert_eq!(gs.effective_guard(&pid("caster")).await, 31);
@@ -914,9 +917,9 @@ async fn ward_cooldown_is_atomic_and_recast_refreshes_without_stacking() {
     tokio::time::advance(Duration::from_secs(1)).await;
     gs.use_ability(&pid("caster"), WARD).await;
     assert_eq!(gs.mana.read().await[&caster].mana, 11);
-    assert_eq!(gs.effective_guard(&pid("caster")).await, 34);
+    assert_eq!(gs.effective_guard(&pid("caster")).await, 33);
     tokio::time::advance(Duration::from_secs(59)).await;
-    assert_eq!(gs.effective_guard(&pid("caster")).await, 34);
+    assert_eq!(gs.effective_guard(&pid("caster")).await, 33);
     tokio::time::advance(Duration::from_secs(1)).await;
     assert_eq!(gs.effective_guard(&pid("caster")).await, 31);
 }
@@ -933,7 +936,7 @@ async fn ward_from_another_caster_refreshes_and_uses_current_equipment_guard() {
     gs.unequip_item(&pid("first"), EquipSlot::OffHand).await;
     assert_eq!(gs.effective_guard(&pid("first")).await, 22);
     tokio::time::advance(Duration::from_secs(31)).await;
-    assert_eq!(gs.effective_guard(&pid("second")).await, 34);
+    assert_eq!(gs.effective_guard(&pid("second")).await, 33);
     tokio::time::advance(Duration::from_secs(29)).await;
     assert_eq!(gs.effective_guard(&pid("second")).await, 31);
 }
@@ -960,7 +963,7 @@ async fn dead_or_loading_caster_cannot_apply_ward_or_consume_cooldown() {
     rejected(&mut rx, AbilityRejectReason::Unavailable);
     gs.mark_world_ready(&pid("caster")).await;
     gs.use_ability(&pid("caster"), WARD).await;
-    assert_eq!(gs.effective_guard(&pid("caster")).await, 34);
+    assert_eq!(gs.effective_guard(&pid("caster")).await, 33);
     gs.players
         .write()
         .await
@@ -983,7 +986,7 @@ async fn reconnect_removes_ward_but_preserves_character_cooldown() {
     rejected(&mut rx, AbilityRejectReason::Cooldown);
     tokio::time::advance(Duration::from_secs(45)).await;
     gs.use_ability(&pid("new"), WARD).await;
-    assert_eq!(gs.effective_guard(&pid("new")).await, 34);
+    assert_eq!(gs.effective_guard(&pid("new")).await, 33);
 }
 
 async fn add_examiner(gs: &GameState) -> DirectRx {
@@ -1499,9 +1502,9 @@ async fn rage_guard_penalty_comes_off_the_warded_guard() {
     add_ward_player(&gs, "knight", 1.0, 2).await;
     party(&gs, "knight", "barbarian").await;
     gs.use_ability(&pid("knight"), WARD).await;
-    assert_eq!(gs.effective_guard(&pid("barbarian")).await, 34);
+    assert_eq!(gs.effective_guard(&pid("barbarian")).await, 33);
     gs.use_ability(&pid("barbarian"), RAGE).await;
-    assert_eq!(gs.effective_guard(&pid("barbarian")).await, 32);
+    assert_eq!(gs.effective_guard(&pid("barbarian")).await, 31);
 }
 
 #[tokio::test]
