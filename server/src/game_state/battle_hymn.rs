@@ -159,6 +159,8 @@ impl GameState {
         self.send_mana_update(bard).await;
         let listeners = self.hymn_listeners(bard, position, floor_level).await;
         self.hear_battle_hymn(&listeners).await;
+        self.log_ability_use(bard, AbilityId::BattleHymn, listeners.len())
+            .await;
         self.publish_nearby(
             &position,
             floor_level,

@@ -14,6 +14,7 @@ use onlinerpg_shared::inventory::{EquipSlot, PlayerInventory};
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use tokio::time::Instant;
+use tracing::info;
 
 #[derive(Default)]
 pub(super) struct Abilities {
@@ -122,6 +123,25 @@ impl Abilities {
 }
 
 impl GameState {
+    /// One journal line per successful cast, so skill use can be counted.
+    pub(super) async fn log_ability_use(
+        &self,
+        player_id: &PlayerId,
+        ability: AbilityId,
+        targets: usize,
+    ) {
+        let Some((name, floor)) = self
+            .players
+            .read()
+            .await
+            .get(player_id)
+            .map(|p| (p.name.clone(), p.floor_level))
+        else {
+            return;
+        };
+        info!(target: "ability_use", %name, ?ability, targets, floor, "ability cast");
+    }
+
     pub async fn ability_cooldown_message(&self, player_id: &PlayerId) -> ServerMessage {
         let character = self
             .player_characters
@@ -220,6 +240,8 @@ impl GameState {
                 {
                     return;
                 }
+                self.log_ability_use(player_id, ability, targets.len())
+                    .await;
                 self.publish_nearby(
                     &position,
                     floor_level,
@@ -282,7 +304,10 @@ impl GameState {
                 .try_auscultation(player_id, monster_id, target_player_id)
                 .await;
             let message = match result {
-                Ok(inspection) => ServerMessage::InspectionResult { inspection },
+                Ok(inspection) => {
+                    self.log_ability_use(player_id, ability, 1).await;
+                    ServerMessage::InspectionResult { inspection }
+                }
                 Err(reason) => ServerMessage::AbilityRejected { ability, reason },
             };
             self.send_direct_message(player_id, message).await;
@@ -297,6 +322,7 @@ impl GameState {
         self.stop_bed_rest(player_id).await;
         match self.try_bow_mark(player_id, monster_id).await {
             Ok(()) => {
+                self.log_ability_use(player_id, ability, 1).await;
                 self.reveal(player_id).await;
                 self.send_bow_mark_state(player_id).await;
                 self.send_buff_state(player_id).await;

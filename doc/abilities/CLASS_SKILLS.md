@@ -44,6 +44,10 @@
 | 발할라의 돌격 | 10초 | 마리당 1회 |
 | 치유의 기도 | 8초 | 마리당 약 1회 |
 
+### 사용 로그
+
+시전이 성공할 때마다 서버가 `ability_use` INFO 로그를 한 줄 남긴다: `ability cast name=<캐릭터> ability=<AbilityId> targets=<버프를 받은 인원, 단일 대상은 1> floor=<층>`. 스킬 사용 빈도를 journald에서 세는 용도다([이슈 #200](https://github.com/Julian-adv/OpenMMO/issues/200)). 거절된 요청은 남기지 않는다. 전투의 찬가는 연주가 끝나 효과가 걸릴 때, Radiance는 켤 때만 남긴다.
+
 ## 2. 광폭화 (Rage) — Barbarian
 
 | 항목 | 규칙 |

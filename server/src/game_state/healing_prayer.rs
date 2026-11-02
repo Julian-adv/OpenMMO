@@ -35,6 +35,8 @@ impl GameState {
             .await
         {
             Ok(prayer) => {
+                self.log_ability_use(player_id, AbilityId::HealingPrayer, 1)
+                    .await;
                 self.mark_dirty(player_id).await;
                 self.send_mana_update(player_id).await;
                 self.answer_prayer(player_id, prayer, auth).await;

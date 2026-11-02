@@ -34,7 +34,11 @@ impl GameState {
     ) {
         self.stop_bed_rest(player_id).await;
         match self.try_valhalla_charge(player_id, monster_id).await {
-            Ok(charge) => self.run_valhalla_charge(player_id, charge, auth).await,
+            Ok(charge) => {
+                self.log_ability_use(player_id, AbilityId::ValhallaCharge, 1)
+                    .await;
+                self.run_valhalla_charge(player_id, charge, auth).await
+            }
             Err(reason) => {
                 self.send_direct_message(
                     player_id,

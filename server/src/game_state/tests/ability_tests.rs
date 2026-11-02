@@ -1496,6 +1496,35 @@ async fn rage_has_a_twenty_second_character_cooldown() {
 }
 
 #[tokio::test]
+async fn each_successful_cast_logs_one_ability_use_line() {
+    use tracing::instrument::WithSubscriber;
+    let gs = make_test_game_state("ability_use_log");
+    add_ward_player(&gs, "knight", 0.0, 1).await;
+    add_ward_player(&gs, "squire", 1.0, 2).await;
+    party(&gs, "knight", "squire").await;
+    let (subscriber, buffer) = crate::test_util::capture_logs();
+    async {
+        gs.use_ability(&pid("knight"), WARD).await;
+        gs.use_ability(&pid("knight"), WARD).await;
+    }
+    .with_subscriber(subscriber)
+    .await;
+    let logs = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
+    let casts: Vec<_> = logs
+        .lines()
+        .filter(|l| l.contains("ability cast"))
+        .collect();
+    assert_eq!(casts.len(), 1, "{logs}");
+    assert!(
+        casts[0].contains(
+            "ability_use: ability cast name=knight ability=GuardianWard targets=2 floor=0"
+        ),
+        "{}",
+        casts[0]
+    );
+}
+
+#[tokio::test]
 async fn rage_guard_penalty_comes_off_the_warded_guard() {
     let gs = make_test_game_state("rage_with_ward");
     add_rage_player(&gs, "barbarian", 1).await;

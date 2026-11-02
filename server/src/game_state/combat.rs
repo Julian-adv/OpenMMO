@@ -26,6 +26,7 @@ use crate::types::{
     AttackRejectReason, CharacterClass, MonsterLifecycle, MonsterState, PlayerId, Position,
     ServerMessage,
 };
+use onlinerpg_shared::ability::AbilityId;
 use onlinerpg_shared::interest::{Bounds, Space, SubjectArea};
 use onlinerpg_shared::inventory::{EquipSlot, GroundItem, ItemInstance, PlayerInventory};
 use onlinerpg_shared::messages::SkillVictim;
@@ -968,6 +969,8 @@ impl super::GameState {
         }
         cooldowns.insert(character_id, now);
         drop(cooldowns);
+        self.log_ability_use(player_id, AbilityId::DaggerDoubleSlash, 1)
+            .await;
         self.cancel_concentration_if_active(player_id).await;
         self.reveal(player_id).await;
         self.publish_nearby(
