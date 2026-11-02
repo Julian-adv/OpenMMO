@@ -65,6 +65,13 @@ fn class_starter_items(
             ("worn_plate_boots", 1, Some("boots")),
             ("worn_plate_gauntlets", 1, Some("hands")),
         ],
+        CharacterClass::Valkyrie => &[
+            ("worn_valkyrie_helmet", 1, Some("head")),
+            ("worn_valkyrie_top", 1, Some("chest")),
+            ("worn_valkyrie_pants", 1, Some("pants")),
+            ("worn_valkyrie_gloves", 1, Some("hands")),
+            ("worn_valkyrie_boots", 1, Some("boots")),
+        ],
         CharacterClass::Barbarian => &[
             ("worn_barbarian_helmet", 1, Some("head")),
             ("worn_barbarian_armor", 1, Some("chest")),
@@ -2995,6 +3002,49 @@ mod tests {
                 .iter()
                 .any(|item| item.item_def_id == weapon));
         }
+    }
+
+    #[test]
+    fn valkyries_start_with_five_equipped_zero_price_untradeable_pieces() {
+        let (auth, _) = temp_auth("auth_valkyrie_armor");
+        let account = auth.login_google("sub-valkyrie").unwrap();
+        let character = auth
+            .create_character(
+                &account,
+                "Valkyrie",
+                &plain_attributes(),
+                10,
+                CharacterClass::Valkyrie,
+                Gender::Female,
+            )
+            .unwrap();
+        let items = auth.load_inventory(character.id).unwrap();
+        for (id, _, slot) in class_starter_items(&CharacterClass::Valkyrie, Gender::Female) {
+            let item = items.iter().find(|item| item.item_def_id == *id).unwrap();
+            assert_eq!(item.quantity, 1);
+            assert_eq!(item.equip_slot.as_deref(), *slot);
+            let def = crate::item_defs::item_defs().get(id).unwrap();
+            assert_eq!(def.equip_slot.as_ref().map(EquipSlot::as_str), *slot);
+            assert_eq!(def.base_price, Some(0));
+            assert!(def.untradeable);
+            assert!(def.chest_tier.is_none());
+        }
+        assert_eq!(items.len(), STARTER_ITEMS.len() + 5);
+        assert!(!items
+            .iter()
+            .any(|item| item.item_def_id.contains("hair") || item.item_def_id.contains("wing")));
+        let worn = auth.load_character_equipment(character.id).unwrap();
+        assert_eq!(worn.armor.head.as_deref(), Some("worn_valkyrie_helmet"));
+        assert_eq!(worn.armor.chest.as_deref(), Some("worn_valkyrie_top"));
+        assert_eq!(worn.armor.pants.as_deref(), Some("worn_valkyrie_pants"));
+        assert_eq!(worn.armor.hands.as_deref(), Some("worn_valkyrie_gloves"));
+        assert_eq!(worn.armor.boots.as_deref(), Some("worn_valkyrie_boots"));
+        assert_eq!(
+            auth.list_characters_with_equipment(&account).unwrap()[0]
+                .worn
+                .armor,
+            worn.armor
+        );
     }
 
     #[test]

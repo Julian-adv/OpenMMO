@@ -11,6 +11,11 @@ import { MODULAR_FEMALE_MODEL_PATH } from '../lib/utils/modelPaths'
 import { bindModularPart } from '../lib/utils/modularCharacter'
 import { updateModularPoseCorrectives } from '../lib/utils/modularPoseCorrectives'
 import { femaleOutfitMask } from '../lib/utils/female-outfit-mask'
+import { femaleBracerMask } from './female-bracer-mask'
+import {
+  applyFemaleBracerFit,
+  type BracerFitGeometry,
+} from './female-bracer-fit'
 import { femaleBootGround } from '../lib/utils/female-boot-ground'
 import {
   updatePeltPhysics,
@@ -41,6 +46,7 @@ export async function showFemaleBase(
         <option value="bob">금발 단발</option>
         <option value="none">없음</option>
         <option value="knight">긴 금발 (보관본)</option>
+        <option value="warrior">전사 긴 헤어 (피팅 검수 중)</option>
       </select>
       <label class="toggle"><input id="female-wings" type="checkbox" /> 발키리 날개 (피팅 시안)</label>
       <a href="?asset=female-knight-bob">단발 원본 단독 보기</a>
@@ -48,10 +54,11 @@ export async function showFemaleBase(
       <select id="female-helmet">
         <option value="none">없음</option>
         <option value="knight">은빛 기사 투구</option>
+        <option value="valkyrie">발키리 날개 투구 (피팅 검수 중)</option>
         <option value="barbarian">야만전사 뿔 투구</option>
         <option value="brilliance">광휘의 투구</option>
       </select>
-      <p class="details">뿔 투구 아래로 보이는 헤어는 남기고, 은빛 기사 투구와 광휘의 투구는 헤어를 숨깁니다. 투구를 벗으면 원래 헤어를 복원합니다.</p>
+      <p class="details">뿔 투구 아래로 보이는 헤어는 남깁니다. 발키리 투구는 헤어와 함께 표시합니다. 전사 긴 헤어는 다른 투구에서 숨기고, 투구를 벗으면 복원합니다.</p>
       <label for="female-top">상의</label>
       <select id="female-top">
         <option value="none">없음</option>
@@ -84,9 +91,62 @@ export async function showFemaleBase(
         <option value="none">없음</option>
         <option value="knight">은빛 기사 판금 장갑</option>
         <option value="barbarian">야만전사 손목 보호대</option>
+        <option value="valkyrie">발키리 손목 보호대 (초기 피팅)</option>
         <option value="caveman">원시전사 가죽 손목 보호대 (피팅 검수 중)</option>
         <option value="rogue">로그 검은 가죽 반장갑</option>
       </select>
+      <div id="valkyrie-bracer-fit" hidden>
+        <p><strong>발키리 손목 보호대</strong></p>
+        <a id="bracer-edit-link">추가 피팅 조절</a>
+        <label class="toggle"><input id="bracer-hide-skin" type="checkbox" checked /> 보호대 아래 팔 피부 가리기</label>
+        <div id="bracer-fit-editor" hidden>
+        <button id="bracer-save" type="button">현재 피팅 저장</button>
+        <button id="bracer-load" type="button">저장한 피팅 불러오기</button>
+        <p id="bracer-save-status" class="details" aria-live="polite"></p>
+        <label for="bracer-move-arm-outward">팔에 수직 · 바깥쪽 축 이동 <output id="bracer-move-arm-outward-value">0</output> cm</label>
+        <input id="bracer-move-arm-outward" type="range" min="-15" max="15" step="0.1" value="0" />
+        <label for="bracer-move-arm-across">팔에 수직 · 몸과 평행한 축 이동 <output id="bracer-move-arm-across-value">0</output> cm</label>
+        <input id="bracer-move-arm-across" type="range" min="-15" max="15" step="0.1" value="0" />
+        <label for="bracer-move-arm-length">팔 방향 축 이동 <output id="bracer-move-arm-length-value">0</output> cm</label>
+        <input id="bracer-move-arm-length" type="range" min="-15" max="15" step="0.1" value="0" />
+        <label for="bracer-outward">좌우 바깥쪽 이동 <output id="bracer-outward-value">0</output> cm</label>
+        <input id="bracer-outward" type="range" min="-10" max="10" step="0.1" value="0" />
+        <label for="bracer-height">위아래 이동 <output id="bracer-height-value">0</output> cm</label>
+        <input id="bracer-height" type="range" min="-15" max="15" step="0.1" value="0" />
+        <label for="bracer-depth">앞뒤 이동 <output id="bracer-depth-value">0</output> cm</label>
+        <input id="bracer-depth" type="range" min="-10" max="10" step="0.1" value="0" />
+        <label for="bracer-scale">크기 <output id="bracer-scale-value">100</output>%</label>
+        <input id="bracer-scale" type="range" min="50" max="180" step="1" value="100" />
+        <label for="bracer-arm-outward">팔에 수직 · 바깥쪽 축 회전 <output id="bracer-arm-outward-value">0</output>°</label>
+        <input id="bracer-arm-outward" type="range" min="-180" max="180" step="1" value="0" />
+        <label for="bracer-arm-across">팔에 수직 · 몸과 평행한 축 회전 <output id="bracer-arm-across-value">0</output>°</label>
+        <input id="bracer-arm-across" type="range" min="-180" max="180" step="1" value="0" />
+        <label for="bracer-arm-twist">팔 방향 축 회전 <output id="bracer-arm-twist-value">0</output>°</label>
+        <input id="bracer-arm-twist" type="range" min="-180" max="180" step="1" value="0" />
+        <label for="bracer-rotate-x">X축 회전 <output id="bracer-rotate-x-value">0</output>°</label>
+        <input id="bracer-rotate-x" type="range" min="-180" max="180" step="1" value="0" />
+        <label for="bracer-rotate-y">Y축 회전 <output id="bracer-rotate-y-value">0</output>°</label>
+        <input id="bracer-rotate-y" type="range" min="-180" max="180" step="1" value="0" />
+        <label for="bracer-rotate-z">Z축 회전 <output id="bracer-rotate-z-value">0</output>°</label>
+        <input id="bracer-rotate-z" type="range" min="-180" max="180" step="1" value="0" />
+        <button id="bracer-reset" type="button">보호대 전체 조절 초기화</button>
+        <p><strong>왼쪽만 추가 보정</strong></p>
+        <label for="bracer-left-move-outward">바깥쪽 축 이동 <output id="bracer-left-move-outward-value">0</output> cm</label>
+        <input id="bracer-left-move-outward" type="range" min="-10" max="10" step="0.1" value="0" />
+        <label for="bracer-left-move-across">몸과 평행한 축 이동 <output id="bracer-left-move-across-value">0</output> cm</label>
+        <input id="bracer-left-move-across" type="range" min="-10" max="10" step="0.1" value="0" />
+        <label for="bracer-left-move-length">팔 방향 축 이동 <output id="bracer-left-move-length-value">0</output> cm</label>
+        <input id="bracer-left-move-length" type="range" min="-10" max="10" step="0.1" value="0" />
+        <label for="bracer-left-rotate-outward">바깥쪽 축 회전 <output id="bracer-left-rotate-outward-value">0</output>°</label>
+        <input id="bracer-left-rotate-outward" type="range" min="-90" max="90" step="1" value="0" />
+        <label for="bracer-left-rotate-across">몸과 평행한 축 회전 <output id="bracer-left-rotate-across-value">0</output>°</label>
+        <input id="bracer-left-rotate-across" type="range" min="-90" max="90" step="1" value="0" />
+        <label for="bracer-left-rotate-length">팔 방향 축 회전 <output id="bracer-left-rotate-length-value">0</output>°</label>
+        <input id="bracer-left-rotate-length" type="range" min="-90" max="90" step="1" value="0" />
+        <button id="bracer-left-reset" type="button">왼쪽 추가 보정만 초기화</button>
+        <p class="details">게이지 위에서 마우스 휠을 돌려 한 단계씩 조절할 수 있습니다. 이동은 1mm 단위입니다. 공통 조절은 양쪽에 대칭으로 적용되고 왼쪽 추가 보정은 왼쪽에만 적용됩니다. 조절값은 이 브라우저에 저장됩니다. 조절값은 미리보기에서만 적용됩니다.</p>
+        </div>
+      </div>
       <label for="female-motion">동작</label>
       <select id="female-motion">
         <option value="rest">기본 A 포즈</option>
@@ -141,7 +201,8 @@ export async function showFemaleBase(
   const hairSelect = document.getElementById('female-hair') as HTMLSelectElement
   const requestedHair = new URLSearchParams(location.search).get('hair')
   hairSelect.value =
-    requestedHair && ['bob', 'knight', 'none'].includes(requestedHair)
+    requestedHair &&
+    ['bob', 'knight', 'warrior', 'none'].includes(requestedHair)
       ? requestedHair
       : 'bob'
   const initialHair = hairSelect.value
@@ -184,7 +245,11 @@ export async function showFemaleBase(
   const hairOptions: Record<string, THREE.SkinnedMesh[]> = { none: [] }
   let helmetOutfit = 'none'
   const hairKey = (name: string, helmet = helmetOutfit) =>
-    helmet === 'barbarian' && name !== 'none' ? `barbarian-${name}` : name
+    name === 'warrior' && helmet !== 'none' && helmet !== 'valkyrie'
+      ? 'none'
+      : helmet === 'barbarian' && name !== 'none'
+        ? `barbarian-${name}`
+        : name
   if (initialHairAsset)
     hairOptions[initialHair] = bindModularPart(model, initialHairAsset.scene)
   const pendingHair = new Map<string, Promise<THREE.SkinnedMesh[]>>()
@@ -221,7 +286,9 @@ export async function showFemaleBase(
     for (const [name, meshes] of Object.entries(hairOptions))
       for (const mesh of meshes)
         mesh.visible =
-          (!helmetEquipped || helmetOutfit === 'barbarian') &&
+          (!helmetEquipped ||
+            helmetOutfit === 'barbarian' ||
+            helmetOutfit === 'valkyrie') &&
           hairKey(hairSelect.value) === name
   }
   updateHair()
@@ -496,6 +563,227 @@ export async function showFemaleBase(
   }
   cleanup.push(() => outfitMask.dispose())
   cleanup.push(() => disposePeltPhysics(model))
+  const bracerPanel = document.getElementById('valkyrie-bracer-fit')!
+  const bracerEditing =
+    new URLSearchParams(location.search).get('bracer-edit') === '1'
+  document.getElementById('bracer-fit-editor')!.hidden = !bracerEditing
+  const bracerEditLink = document.getElementById(
+    'bracer-edit-link'
+  ) as HTMLAnchorElement
+  const bracerEditUrl = new URL(location.href)
+  if (bracerEditing) bracerEditUrl.searchParams.delete('bracer-edit')
+  else bracerEditUrl.searchParams.set('bracer-edit', '1')
+  bracerEditLink.href = bracerEditUrl.href
+  bracerEditLink.textContent = bracerEditing
+    ? '저장된 피팅으로 보기'
+    : '추가 피팅 조절'
+  const bracerKeys = [
+    'outward',
+    'height',
+    'depth',
+    'scale',
+    'rotate-x',
+    'rotate-y',
+    'rotate-z',
+    'arm-outward',
+    'arm-across',
+    'arm-twist',
+    'move-arm-outward',
+    'move-arm-across',
+    'move-arm-length',
+    'left-move-outward',
+    'left-move-across',
+    'left-move-length',
+    'left-rotate-outward',
+    'left-rotate-across',
+    'left-rotate-length',
+  ] as const
+  const bracerInputs = Object.fromEntries(
+    bracerKeys.map((key) => [
+      key,
+      document.getElementById(`bracer-${key}`) as HTMLInputElement,
+    ])
+  ) as Record<(typeof bracerKeys)[number], HTMLInputElement>
+  const bracerStorageKey = 'female-valkyrie-bracer-fit-v1'
+  let hasStoredBracerFit = false
+  let bracerSnapshotSent = false
+  try {
+    const saved: unknown = JSON.parse(
+      localStorage.getItem(bracerStorageKey) ?? 'null'
+    )
+    if (saved && typeof saved === 'object') {
+      hasStoredBracerFit =
+        typeof (saved as Record<string, unknown>).scale === 'number'
+      for (const key of bracerKeys) {
+        const value = (saved as Record<string, unknown>)[key]
+        if (typeof value === 'number' && Number.isFinite(value))
+          bracerInputs[key].value = String(value)
+      }
+    }
+  } catch {
+    // Storage is optional.
+  }
+  let bracerAxes: THREE.Vector3[] = []
+  let bracerSegments: [THREE.Vector3, THREE.Vector3][] = []
+  let bracerBones: number[][] = []
+  let bracerMaskTimer: ReturnType<typeof setTimeout> | undefined
+  let bracerMaskBody: THREE.BufferGeometry | undefined
+  base.scene.traverse((node) => {
+    const association = base.parser.associations.get(node)
+    if (
+      node instanceof THREE.Mesh &&
+      association?.meshes === 0 &&
+      association.primitives === 0
+    )
+      bracerMaskBody = node.geometry
+  })
+  const bracerHideSkin = document.getElementById(
+    'bracer-hide-skin'
+  ) as HTMLInputElement
+  let bracerMaskEnabled = false
+  let bracerStaticMask: unknown
+  const refreshBracerMask = () => {
+    if (!bracerMaskEnabled || !bracerMaskBody) return
+    if (bracerStaticMask) {
+      outfitMask.unregister('gloves-valkyrie')
+      outfitMask.register('gloves-valkyrie', bracerStaticMask)
+      outfitMask.setEquipped('gloves-valkyrie', true)
+      return
+    }
+    if (!bracerGeometry.length) return
+    const mask = femaleBracerMask(
+      bracerMaskBody,
+      bracerGeometry.map(({ mesh }) => mesh),
+      bracerSegments,
+      bracerBones
+    )
+    outfitMask.unregister('gloves-valkyrie')
+    outfitMask.register('gloves-valkyrie', mask)
+    outfitMask.setEquipped('gloves-valkyrie', true)
+  }
+  cleanup.push(() => clearTimeout(bracerMaskTimer))
+  let bracerGeometry: BracerFitGeometry[] = []
+  const updateBracerFit = () => {
+    const values = Object.fromEntries(
+      bracerKeys.map((key) => [key, Number(bracerInputs[key].value)])
+    ) as Record<(typeof bracerKeys)[number], number>
+    for (const key of bracerKeys)
+      document.getElementById(`bracer-${key}-value`)!.textContent = String(
+        values[key]
+      )
+    applyFemaleBracerFit(bracerGeometry, bracerAxes, values)
+    clearTimeout(bracerMaskTimer)
+    if (bracerMaskEnabled) bracerMaskTimer = setTimeout(refreshBracerMask, 250)
+    try {
+      localStorage.setItem(bracerStorageKey, JSON.stringify(values))
+    } catch {
+      // Storage is optional.
+    }
+  }
+  const bracerSaveStatus = document.getElementById('bracer-save-status')!
+  const saveBracerFit = async (automatic = false) => {
+    const button = document.getElementById('bracer-save') as HTMLButtonElement
+    button.disabled = true
+    bracerSaveStatus.textContent = '피팅을 저장하는 중…'
+    try {
+      const response = await fetch('/__female-preview/valkyrie-fit.json', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          settings: Object.fromEntries(
+            bracerKeys.map((key) => [key, Number(bracerInputs[key].value)])
+          ),
+          hide_skin: bracerHideSkin.checked,
+          automatic,
+        }),
+      })
+      const result = (await response.json()) as {
+        saved?: boolean
+        error?: string
+      }
+      if (!response.ok)
+        throw new Error(result.error ?? '피팅을 저장하지 못했습니다.')
+      bracerSaveStatus.textContent = result.saved
+        ? '현재 피팅을 파일에 저장했습니다.'
+        : '기존 저장본을 유지했습니다.'
+    } catch (error) {
+      bracerSaveStatus.textContent =
+        error instanceof Error ? error.message : '피팅을 저장하지 못했습니다.'
+    } finally {
+      button.disabled = false
+    }
+  }
+  if (import.meta.hot) {
+    const captureBracerFit = () => {
+      if (bracerEditing) void saveBracerFit()
+    }
+    import.meta.hot.on('valkyrie-save-fit', captureBracerFit)
+    cleanup.push(() =>
+      import.meta.hot?.off('valkyrie-save-fit', captureBracerFit)
+    )
+  }
+  document.getElementById('bracer-save')!.onclick = () => {
+    void saveBracerFit()
+  }
+  document.getElementById('bracer-load')!.onclick = async () => {
+    try {
+      const response = await fetch('/__female-preview/valkyrie-fit.json')
+      const result = (await response.json()) as {
+        settings?: Record<string, number>
+        hide_skin?: boolean
+        error?: string
+      }
+      if (!response.ok || !result.settings)
+        throw new Error(result.error ?? '저장된 피팅을 불러오지 못했습니다.')
+      for (const key of bracerKeys) {
+        const value = result.settings[key]
+        if (typeof value === 'number' && Number.isFinite(value))
+          bracerInputs[key].value = String(value)
+      }
+      bracerHideSkin.checked = result.hide_skin === true
+      updateBracerFit()
+      bracerHideSkin.dispatchEvent(new Event('change'))
+      bracerSaveStatus.textContent = '저장한 피팅을 불러왔습니다.'
+    } catch (error) {
+      bracerSaveStatus.textContent =
+        error instanceof Error ? error.message : '피팅을 불러오지 못했습니다.'
+    }
+  }
+  bracerHideSkin.onchange = () => {
+    bracerMaskEnabled =
+      bracerHideSkin.checked &&
+      (document.getElementById('female-gloves') as HTMLSelectElement).value ===
+        'valkyrie'
+    clearTimeout(bracerMaskTimer)
+    if (bracerMaskEnabled) refreshBracerMask()
+    else outfitMask.unregister('gloves-valkyrie')
+  }
+  for (const key of bracerKeys) {
+    const input = bracerInputs[key]
+    input.oninput = updateBracerFit
+    input.addEventListener(
+      'wheel',
+      (event) => {
+        if (event.deltaY === 0) return
+        event.preventDefault()
+        if (event.deltaY < 0) input.stepUp()
+        else input.stepDown()
+        updateBracerFit()
+      },
+      { passive: false }
+    )
+  }
+  document.getElementById('bracer-reset')!.onclick = () => {
+    for (const key of bracerKeys)
+      bracerInputs[key].value = key === 'scale' ? '100' : '0'
+    updateBracerFit()
+  }
+  document.getElementById('bracer-left-reset')!.onclick = () => {
+    for (const key of bracerKeys)
+      if (key.startsWith('left-')) bracerInputs[key].value = '0'
+    updateBracerFit()
+  }
+  updateBracerFit()
   const outfitSlots = ['top', 'bottom', 'boots', 'gloves', 'helmet']
   const outfitUpdates = outfitSlots.map((slot) => {
     const select = document.getElementById(
@@ -525,13 +813,18 @@ export async function showFemaleBase(
         let source: THREE.Object3D | undefined
         const sleeves = slot === 'top' && outfit === 'knight'
         const valkyrie = slot === 'boots' && outfit === 'valkyrie'
+        const bracer = slot === 'gloves' && outfit === 'valkyrie'
+        const bakedBracer = bracer && !bracerEditing
         entry.pending = (async () => {
-          const response = await fetch(
-            `/__modular-character/female-${outfit}-${slot}-occlusion.json`
-          )
-          if (!response.ok)
-            throw new Error('의상 가림 정보를 불러오지 못했습니다.')
-          const mask: unknown = await response.json()
+          let mask: unknown
+          if (!bracer || bakedBracer) {
+            const response = await fetch(
+              `/__modular-character/female-${outfit}-${slot}-occlusion.json`
+            )
+            if (!response.ok)
+              throw new Error('의상 가림 정보를 불러오지 못했습니다.')
+            mask = await response.json()
+          }
           let sleeveMask: unknown
           if (sleeves) {
             const response = await fetch(
@@ -544,15 +837,87 @@ export async function showFemaleBase(
           const asset = await loader.loadAsync(
             valkyrie
               ? '/__female-preview/valkyrie.glb'
-              : `/__modular-character/parts/female_${outfit}_${slot}.glb`
+              : bracer && bracerEditing
+                ? '/__modular-character/parts/female_valkyrie_gloves_source.glb'
+                : `/__modular-character/parts/female_${outfit}_${slot}.glb`
           )
           source = asset.scene
           if (disposed()) {
             disposeObjects([source])
             return
           }
-          outfitMask.register(maskName(outfit), mask)
+          if (!bracer) outfitMask.register(maskName(outfit), mask)
+          if (bracer) bracerStaticMask = bakedBracer ? mask : undefined
           const meshes = (entry.meshes = bindModularPart(model, source))
+          if (bracer && bracerEditing) {
+            const skeleton = meshes[0].skeleton
+            const bindPosition = (name: string) => {
+              const index = skeleton.bones.findIndex(
+                (bone) => bone.name === name
+              )
+              if (index < 0) throw new Error(`팔 본을 찾지 못했습니다: ${name}`)
+              return new THREE.Vector3().setFromMatrixPosition(
+                skeleton.boneInverses[index].clone().invert()
+              )
+            }
+            const arm = bindPosition('LeftHand')
+              .sub(bindPosition('LeftForeArm'))
+              .normalize()
+            const outward = new THREE.Vector3(1, 0, 0)
+              .addScaledVector(arm, -arm.x)
+              .normalize()
+            const across = new THREE.Vector3()
+              .crossVectors(arm, outward)
+              .normalize()
+            bracerAxes = [outward, across, arm]
+            if (!bracerMaskBody)
+              throw new Error('보호대의 기준 몸체를 찾지 못했습니다.')
+            const sides = meshes.map((mesh) => {
+              mesh.geometry.computeBoundingBox()
+              return mesh.geometry.boundingBox!.getCenter(new THREE.Vector3())
+                .x < 0
+                ? 'Right'
+                : 'Left'
+            })
+            bracerSegments = sides.map((side) => [
+              bindPosition(`${side}ForeArm`),
+              bindPosition(`${side}Hand`),
+            ])
+            bracerBones = sides.map((side) =>
+              [`${side}Arm`, `${side}ForeArm`, `${side}Hand`].map((name) =>
+                skeleton.bones.findIndex((bone) => bone.name === name)
+              )
+            )
+            bracerGeometry = meshes.map((mesh) => {
+              mesh.geometry = mesh.geometry.clone()
+              mesh.geometry.computeBoundingBox()
+              const fitCenter: unknown = mesh.userData.fit_center
+              const center =
+                Array.isArray(fitCenter) &&
+                fitCenter.length === 3 &&
+                fitCenter.every(Number.isFinite)
+                  ? new THREE.Vector3().fromArray(fitCenter as number[])
+                  : mesh.geometry.boundingBox!.getCenter(new THREE.Vector3())
+              const attribute = mesh.geometry.getAttribute(
+                'position'
+              ) as THREE.BufferAttribute
+              const normal = mesh.geometry.getAttribute('normal') as
+                | THREE.BufferAttribute
+                | undefined
+              const tangent = mesh.geometry.getAttribute('tangent') as
+                | THREE.BufferAttribute
+                | undefined
+              return {
+                mesh,
+                positions: new Float32Array(attribute.array),
+                normals: normal && new Float32Array(normal.array),
+                tangents: tangent && new Float32Array(tangent.array),
+                center,
+                side: center.x < 0 ? -1 : 1,
+              }
+            })
+            updateBracerFit()
+          }
           if (sleeves) {
             outfitMask.register('glove-sleeves', sleeveMask, meshes[0])
             sleeveMaskRegistered = true
@@ -605,9 +970,25 @@ export async function showFemaleBase(
         bootGround?.restore()
         bootGround = loaded.get(outfit)?.ground
       }
+      if (slot === 'gloves') {
+        bracerMaskEnabled = outfit === 'valkyrie' && bracerHideSkin.checked
+        clearTimeout(bracerMaskTimer)
+        if (bracerMaskEnabled) refreshBracerMask()
+        else outfitMask.unregister('gloves-valkyrie')
+        if (
+          outfit === 'valkyrie' &&
+          bracerEditing &&
+          hasStoredBracerFit &&
+          !bracerSnapshotSent
+        ) {
+          bracerSnapshotSent = true
+          void saveBracerFit(true)
+        }
+      }
       for (const [name, entry] of loaded) {
         if (!entry.meshes) continue
-        outfitMask.setEquipped(maskName(name), name === outfit)
+        if (!(slot === 'gloves' && name === 'valkyrie'))
+          outfitMask.setEquipped(maskName(name), name === outfit)
         for (const mesh of entry.meshes) mesh.visible = name === outfit
       }
       underwearColor(
@@ -617,6 +998,7 @@ export async function showFemaleBase(
     }
     const update = async () => {
       const requested = select.value
+      if (slot === 'gloves') bracerPanel.hidden = requested !== 'valkyrie'
       try {
         if (requested !== 'none' && !loaded.get(requested)?.meshes) {
           status.textContent = '갑옷을 불러오는 중…'
@@ -659,6 +1041,7 @@ export async function showFemaleBase(
       } catch {
         if (disposed() || select.value !== requested) return
         select.value = 'none'
+        if (slot === 'gloves') bracerPanel.hidden = true
         if (slot === 'boots') bootsEquipped = false
         if (slot === 'helmet') {
           helmetOutfit = 'none'
