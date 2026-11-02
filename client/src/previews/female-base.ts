@@ -42,6 +42,7 @@ export async function showFemaleBase(
         <option value="none">없음</option>
         <option value="knight">긴 금발 (보관본)</option>
       </select>
+      <label class="toggle"><input id="female-wings" type="checkbox" /> 발키리 날개 (피팅 시안)</label>
       <a href="?asset=female-knight-bob">단발 원본 단독 보기</a>
       <label for="female-helmet">투구</label>
       <select id="female-helmet">
@@ -56,6 +57,7 @@ export async function showFemaleBase(
         <option value="none">없음</option>
         <option value="knight">은빛 기사 갑옷</option>
         <option value="barbarian">야만전사 가죽 철갑</option>
+        <option value="valkyrie">발키리 상의 (피팅 검수 중)</option>
         <option value="caveman">원시전사 상의 (피팅 검수 중)</option>
         <option value="rogue">로그 가죽 코르셋</option>
       </select>
@@ -64,6 +66,7 @@ export async function showFemaleBase(
         <option value="none">없음</option>
         <option value="knight">은빛 기사 골반 갑옷</option>
         <option value="barbarian">야만전사 모피 허리치마</option>
+        <option value="valkyrie">발키리 하의 (피팅 검수 중)</option>
         <option value="caveman">원시전사 모피 하의 (피팅 검수 중)</option>
         <option value="rogue">로그 벨트 미니스커트</option>
       </select>
@@ -115,10 +118,14 @@ export async function showFemaleBase(
         <option value="face">얼굴 확대</option>
         <option value="upper">상의 확대</option>
         <option value="lower">하의 확대</option>
+        <option value="lower-back">하의 후면 확대</option>
         <option value="full">전신 정면</option>
         <option value="side">전신 측면</option>
         <option value="back">전신 후면</option>
         <option value="feet">발 확대</option>
+        <option value="boots">부츠 확대</option>
+        <option value="boots-back">부츠 후면</option>
+        <option value="boots-side">부츠 측면</option>
         <option value="right-hand">오른손 확대</option>
         <option value="left-hand">왼손 확대</option>
       </select>
@@ -740,7 +747,7 @@ export async function showFemaleBase(
   floor.rotation.x = -Math.PI / 2
   floor.position.y = -0.0036
   scene.add(floor)
-  const camera = new THREE.PerspectiveCamera(35, 1, 0.0018, 36)
+  const camera = new THREE.PerspectiveCamera(35, 1, 0.03, 36)
   const controls = new OrbitControls(camera, renderer.domElement)
   controls.enableDamping = true
   controls.minDistance = 0.144
@@ -750,10 +757,14 @@ export async function showFemaleBase(
     face: { target: [0, 1.6488, 0], position: [0, 1.6668, 0.648] },
     upper: { target: [0, 1.368, 0], position: [0, 1.404, 1.44] },
     lower: { target: [0, 0.936, 0], position: [0, 0.99, 1.44] },
+    'lower-back': { target: [0, 0.936, 0], position: [0, 0.99, -1.44] },
     full: { target: [0, 0.9, 0], position: [0, 0.99, 3.42] },
     side: { target: [0, 0.9, 0], position: [3.42, 0.99, 0] },
     back: { target: [0, 0.9, 0], position: [0, 0.99, -3.42] },
     feet: { target: [0, 0.117, 0], position: [0.432, 0.288, 0.81] },
+    boots: { target: [0, 0.36, 0], position: [0.25, 0.42, 1.65] },
+    'boots-back': { target: [0, 0.36, 0], position: [0, 0.42, -1.65] },
+    'boots-side': { target: [0, 0.36, 0], position: [1.65, 0.42, 0] },
     'right-hand': {
       target: [-0.216, 0.864, 0.027],
       position: [-0.81, 0.882, 0.234],
@@ -764,6 +775,11 @@ export async function showFemaleBase(
     },
   }
   const select = document.getElementById('female-camera') as HTMLSelectElement
+  const wingsToggle = document.getElementById(
+    'female-wings'
+  ) as HTMLInputElement
+  wingsToggle.checked =
+    new URLSearchParams(location.search).get('wings') === '1'
   const requested = new URLSearchParams(location.search).get('camera')
   select.value =
     requested && Object.hasOwn(views, requested) ? requested : 'full'
@@ -772,6 +788,11 @@ export async function showFemaleBase(
     const aspect = host.clientWidth / host.clientHeight
     controls.target.fromArray(view.target)
     camera.position.fromArray(view.position)
+    if (wingsToggle.checked && ['full', 'back'].includes(select.value)) {
+      controls.target.y = 1.1
+      camera.position.y = 1.1
+      camera.position.z *= 1.4
+    }
     if (select.value === 'face' && helmetEquipped) {
       controls.target.set(0, 1.7478, 0)
       camera.position.set(0, 1.7658, 0.864)
@@ -861,8 +882,47 @@ export async function showFemaleBase(
   const fieldset = document.getElementById(
     'female-controls'
   ) as HTMLFieldSetElement
+  let wingMeshes: THREE.SkinnedMesh[] | undefined
+  let pendingWings: Promise<void> | undefined
+  const updateWings = async () => {
+    try {
+      if (wingsToggle.checked && !wingMeshes) {
+        status.textContent = '날개를 불러오는 중…'
+        pendingWings ??= loader
+          .loadAsync('/__modular-character/parts/female_valkyrie_wings.glb')
+          .then(({ scene: source }) => {
+            if (disposed()) {
+              disposeObjects([source])
+              return
+            }
+            resources.push(source)
+            wingMeshes = bindModularPart(model, source)
+            for (const mesh of wingMeshes) {
+              mesh.frustumCulled = false
+              collectMaterials(mesh)
+            }
+            for (const material of materials)
+              material.wireframe = wireframe.checked
+          })
+          .finally(() => {
+            pendingWings = undefined
+          })
+        await pendingWings
+      }
+      if (disposed()) return
+      for (const mesh of wingMeshes ?? []) mesh.visible = wingsToggle.checked
+      reset()
+      updateStats()
+      updateStatus()
+    } catch {
+      if (disposed()) return
+      wingsToggle.checked = false
+      status.textContent = '날개를 불러오지 못했습니다.'
+    }
+  }
+  wingsToggle.onchange = updateWings
   fieldset.disabled = false
-  await Promise.all(outfitUpdates.map((update) => update()))
+  await Promise.all([...outfitUpdates.map((update) => update()), updateWings()])
   if (disposed()) return
   document.body.dataset.ready = 'true'
 }

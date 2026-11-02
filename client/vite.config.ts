@@ -112,6 +112,10 @@ function modularCharacterPreview(): Plugin {
     'helmet_barbarian',
   ])
   const fixed: Record<string, URL> = {
+    female_valkyrie_wings: new URL(
+      '../assets/items/valkyrie_starter/tripo_wing_v1/fitted_patch_v3/wings-armor-fit.glb',
+      import.meta.url
+    ),
     ysolde_ground_mattress: new URL(
       '../assets/items/ysolde_camp_bed/ground-mattress.glb',
       import.meta.url
@@ -157,12 +161,28 @@ function modularCharacterPreview(): Plugin {
       '../assets/items/female_knight_bottom/tripo_v1/fitted_v42/bottom_female_knight.glb',
       import.meta.url
     ),
+    female_valkyrie_bottom: new URL(
+      '../assets/items/valkyrie_starter/tripo_bottom_v1/fitted_v8/bottom_female_valkyrie.glb',
+      import.meta.url
+    ),
+    'female-valkyrie-bottom-occlusion.json': new URL(
+      '../assets/items/valkyrie_starter/tripo_bottom_v1/fitted_v8/body-occlusion.json',
+      import.meta.url
+    ),
     'female-knight-bottom-occlusion.json': new URL(
       '../assets/items/female_knight_bottom/tripo_v1/fitted_v42/body-occlusion.json',
       import.meta.url
     ),
     female_knight_top: new URL(
       '../assets/items/female_knight_top/tripo_v1/fitted_v3/top_female_knight.glb',
+      import.meta.url
+    ),
+    female_valkyrie_top: new URL(
+      '../assets/items/valkyrie_starter/tripo_top_v1/fitted_v11/top_female_valkyrie.glb',
+      import.meta.url
+    ),
+    'female-valkyrie-top-occlusion.json': new URL(
+      '../assets/items/valkyrie_starter/tripo_top_v1/fitted_v8/body-occlusion.json',
       import.meta.url
     ),
     female_barbarian_top: new URL(
