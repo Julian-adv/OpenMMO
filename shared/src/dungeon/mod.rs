@@ -36,7 +36,9 @@ pub use doors::{
     closed_door_segs, door_position, interior_doors, locked_door_ids, InteriorDoorSpec,
     ENTRANCE_DOOR_ID,
 };
-pub use registry::{entrance, entrance_at, entrances, footprint_contains, DungeonEntranceDef};
+pub use registry::{
+    entrance, entrance_at, entrances, footprint_contains, DungeonEntranceDef, LayoutStyle,
+};
 pub use stairs::{
     entrance_ramp_height_at, floor_height_at, ground_y_for_floor, leg_touches_shaft,
     on_stair_shaft, shaft_run_pos, FLOOR_CHANGE_LEG_MAX, LANDING_CELLS, SHAFT_CHANGE_MARGIN,
@@ -416,7 +418,7 @@ pub(crate) fn dungeon_depth(seed: u64) -> u8 {
 /// Seed-only generation for property tests; real dungeons use the registry.
 #[cfg(test)]
 pub(crate) fn generate_dungeon(seed: u64) -> Vec<FloorLayout> {
-    gen::generate_dungeon_with(seed, None, BOSS_MONSTER_TYPE, None, "")
+    gen::generate_dungeon_with(seed, None, BOSS_MONSTER_TYPE, None, "", LayoutStyle::Rooms)
 }
 
 /// Generate a dungeon by entrance id: seed derived from the id, floor count,
@@ -429,7 +431,8 @@ pub fn generate_dungeon_for(entrance_id: &str) -> Vec<FloorLayout> {
     let boss = def.map_or(BOSS_MONSTER_TYPE, |d| d.boss.as_str());
     let dir = def.and_then(|d| d.entrance_dir);
     let group = def.map_or("", |d| d.spawn_group.as_str());
-    gen::generate_dungeon_with(dungeon_seed(entrance_id), floors, boss, dir, group)
+    let style = def.map_or(LayoutStyle::Rooms, |d| d.layout_style);
+    gen::generate_dungeon_with(dungeon_seed(entrance_id), floors, boss, dir, group, style)
 }
 
 pub fn passability_floor_for_depth(depth: u8) -> u8 {

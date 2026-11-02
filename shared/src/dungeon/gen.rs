@@ -4,10 +4,13 @@
 //! fine; changing the *algorithm* shifts the stream and is gated by the
 //! golden-hash test).
 
+use std::ops::RangeInclusive;
+
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use super::doors::wall_openings;
+use super::registry::LayoutStyle;
 use super::{
     is_locked_depth, FloorLayout, PropKind, PropSpec, Room, SpawnEntry, SpawnSpec, StairShaft,
     BOSS_MONSTER_TYPE, GRID, MAX_DRAWN_FLOORS, MAX_FLOORS, MIN_DRAWN_FLOORS, SHAFT_LEN, SHAFT_W,
@@ -38,6 +41,8 @@ const PROP_STACK_PCT: i32 = 35;
 
 const DEPTH_SALT: u64 = 0x9e37_79b9_7f4a_7c15;
 
+pub(super) mod mine;
+
 #[cfg(test)]
 pub fn dungeon_depth(seed: u64) -> u8 {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
@@ -50,6 +55,7 @@ pub fn generate_dungeon_with(
     boss: &str,
     entrance_dir: Option<WallDirection>,
     spawn_group: &str,
+    style: LayoutStyle,
 ) -> Vec<FloorLayout> {
     let mut meta = ChaCha8Rng::seed_from_u64(seed);
     // Always draw every seed-derived value so the meta stream is identical
@@ -91,7 +97,7 @@ pub fn generate_dungeon_with(
     let mut up = entrance_shaft;
     for depth in 1..=total {
         let table = super::spawn_table_for(spawn_group, depth);
-        let layout = generate_floor(seed, depth, total, up, table);
+        let layout = generate_floor(seed, depth, total, up, table, style);
         let dead_end = layout.down_shaft.is_none();
         if let Some(down) = layout.down_shaft {
             up = down;
@@ -119,12 +125,23 @@ fn generate_floor(
     total: u8,
     up_shaft: StairShaft,
     table: &[SpawnEntry],
+    style: LayoutStyle,
 ) -> FloorLayout {
     let mut rng = ChaCha8Rng::seed_from_u64(seed ^ (depth as u64).wrapping_mul(DEPTH_SALT));
     let is_last = depth == total;
 
-    for _ in 0..FLOOR_ATTEMPTS {
-        if let Some(layout) = try_generate_floor(&mut rng, depth, is_last, up_shaft, table) {
+    let attempts = match style {
+        LayoutStyle::Rooms => FLOOR_ATTEMPTS,
+        LayoutStyle::Mine => mine::FLOOR_ATTEMPTS,
+    };
+    for _ in 0..attempts {
+        let layout = match style {
+            LayoutStyle::Rooms => try_generate_floor(&mut rng, depth, is_last, up_shaft, table),
+            LayoutStyle::Mine => {
+                mine::try_generate_floor(&mut rng, depth, is_last, up_shaft, table)
+            }
+        };
+        if let Some(layout) = layout {
             return layout;
         }
     }
@@ -147,41 +164,111 @@ fn try_generate_floor(
     // (or the boss + chest on the final floor — same generous sizing).
     let down_along_z = rng.gen_range(0..2) == 1;
     while rooms.len() < room_count {
-        let hosts_shaft = rooms.len() == room_count - 1;
-        let (w, d) = if hosts_shaft {
-            if down_along_z {
-                (
-                    rng.gen_range(ROOM_MIN..=ROOM_MAX),
-                    rng.gen_range(SHAFT_ROOM_AXIAL..=ROOM_MAX),
-                )
-            } else {
-                (
-                    rng.gen_range(SHAFT_ROOM_AXIAL..=ROOM_MAX),
-                    rng.gen_range(ROOM_MIN..=ROOM_MAX),
-                )
-            }
+        let (w, d) = if rooms.len() == room_count - 1 {
+            shaft_room_size(
+                rng,
+                down_along_z,
+                ROOM_MIN..=ROOM_MAX,
+                SHAFT_ROOM_AXIAL..=ROOM_MAX,
+            )
         } else {
             (
                 rng.gen_range(ROOM_MIN..=ROOM_MAX),
                 rng.gen_range(ROOM_MIN..=ROOM_MAX),
             )
         };
-        let room = place_room_free(rng, w, d, &rooms, &up_shaft)?;
+        let room = place_room_free(rng, w, d, &rooms, &up_shaft, Spacing::LOOSE)?;
         rooms.push(room);
     }
 
-    // Down shaft inside the last room.
+    let corridors = route_chain(depth, &rooms)?;
+    let end_room = rooms.len() - 1;
+    let plan = FloorPlan {
+        rooms,
+        corridors,
+        end_room,
+        down_along_z,
+        extra_spawns: 0,
+        max_mouths: None,
+    };
+    finish_floor(rng, depth, is_last, up_shaft, table, plan)
+}
+
+/// Joins each room to the next. A locked floor's stair room keeps a single
+/// exit: no later corridor may pass through or hug it, or the locked door
+/// would have a way around.
+fn route_chain(depth: u8, rooms: &[Room]) -> Option<Vec<Corridor>> {
+    let keep_out = is_locked_depth(depth).then(|| rooms[0].expanded(1));
+    (0..rooms.len() - 1)
+        .map(|a| {
+            let (from, to) = (rooms[a].center(), rooms[a + 1].center());
+            let blocked = |x_first| {
+                keep_out
+                    .filter(|_| a > 0)
+                    .is_some_and(|r| corridor_intersects(from, to, x_first, &r))
+            };
+            let x_first = [true, false].into_iter().find(|&x| !blocked(x))?;
+            Some((a, a + 1, x_first))
+        })
+        .collect()
+}
+
+/// `(w, d)` of a room that hosts a shaft running along Z (or X): the long
+/// side follows the shaft. Draws `w` first.
+fn shaft_room_size(
+    rng: &mut ChaCha8Rng,
+    along_z: bool,
+    cross: RangeInclusive<i32>,
+    axial: RangeInclusive<i32>,
+) -> (i32, i32) {
+    if along_z {
+        (rng.gen_range(cross), rng.gen_range(axial))
+    } else {
+        (rng.gen_range(axial), rng.gen_range(cross))
+    }
+}
+
+/// An L corridor between two room centers: `(from, to, x leg first)`.
+type Corridor = (usize, usize, bool);
+
+/// Rooms and the routed corridors between them, before carving.
+struct FloorPlan {
+    /// Room 0 wraps the up shaft.
+    rooms: Vec<Room>,
+    corridors: Vec<Corridor>,
+    /// Holds the down shaft, or the chest on the final floor.
+    end_room: usize,
+    down_along_z: bool,
+    extra_spawns: usize,
+    /// Most corridor mouths each room may show.
+    max_mouths: Option<Vec<usize>>,
+}
+
+/// Carve a plan, reject it if a door or the stair room breaks, then roll
+/// spawns and props.
+fn finish_floor(
+    rng: &mut ChaCha8Rng,
+    depth: u8,
+    is_last: bool,
+    up_shaft: StairShaft,
+    table: &[SpawnEntry],
+    plan: FloorPlan,
+) -> Option<FloorLayout> {
+    let FloorPlan {
+        rooms,
+        corridors,
+        end_room,
+        down_along_z,
+        extra_spawns,
+        max_mouths,
+    } = plan;
     let down_shaft = if is_last {
         None
     } else {
-        Some(place_shaft_in_room(
-            rng,
-            rooms.last().unwrap(),
-            down_along_z,
-        ))
+        Some(place_shaft_in_room(rng, &rooms[end_room], down_along_z))
     };
 
-    // Carve rooms, shafts, then room-chain corridors.
+    // Carve rooms, shafts, then corridors.
     let mut carved = vec![false; (GRID * GRID) as usize];
     for room in &rooms {
         carve_rect(&mut carved, room);
@@ -190,24 +277,11 @@ fn try_generate_floor(
     if let Some(ref down) = down_shaft {
         carve_rect(&mut carved, &down.rect());
     }
-    // A locked floor's stair room keeps a single exit: no later corridor may
-    // pass through or hug it, or the locked door would have a way around.
-    let keep_out = is_locked_depth(depth).then(|| rooms[0].expanded(1));
-    for i in 0..rooms.len() - 1 {
-        let (from, to) = (rooms[i].center(), rooms[i + 1].center());
-        let avoid = keep_out.filter(|_| i > 0);
-        let x_first = avoid.is_none_or(|r| !corridor_intersects(from, to, true, &r));
-        if !x_first && avoid.is_some_and(|r| corridor_intersects(from, to, false, &r)) {
-            return None;
-        }
-        carve_corridor(&mut carved, from, to, x_first);
+    for &(a, b, x_first) in &corridors {
+        carve_corridor(&mut carved, rooms[a].center(), rooms[b].center(), x_first);
     }
 
-    let chest = if is_last {
-        Some(rooms.last().unwrap().center())
-    } else {
-        None
-    };
+    let chest = is_last.then(|| rooms[end_room].center());
 
     let mut layout = FloorLayout {
         depth,
@@ -221,14 +295,16 @@ fn try_generate_floor(
     };
 
     let openings = wall_openings(&layout);
-    if openings.iter().any(|o| o.len > CORRIDOR_MOUTH_MAX) || !floor_is_connected(&layout) {
-        return None;
-    }
-    if is_locked_depth(depth) && openings.iter().filter(|o| o.room == 0).count() != 1 {
+    let mouths = |room| openings.iter().filter(|o| o.room == room).count();
+    if openings.iter().any(|o| o.len > CORRIDOR_MOUTH_MAX)
+        || (is_locked_depth(depth) && mouths(0) != 1)
+        || max_mouths.is_some_and(|max| max.iter().enumerate().any(|(r, &m)| mouths(r) > m))
+        || !floor_is_connected(&layout)
+    {
         return None;
     }
 
-    layout.spawns = roll_spawns(rng, &layout, table);
+    layout.spawns = roll_spawns(rng, &layout, table, extra_spawns);
     layout.props = roll_props(rng, &layout);
     layout.props.extend(roll_wall_torches(rng, &layout));
     Some(layout)
@@ -255,19 +331,41 @@ fn place_room_around_shaft(rng: &mut ChaCha8Rng, shaft: &StairShaft) -> Option<R
     Some(Room { x, z, w, d })
 }
 
+/// Where [`place_room_free`] may put a room: its center at least `min` cells
+/// (Manhattan) from `anchor`, and `gap` cells clear of other rooms.
+#[derive(Clone, Copy)]
+struct Spacing {
+    anchor: (i32, i32),
+    min: i32,
+    gap: i32,
+}
+
+impl Spacing {
+    const LOOSE: Spacing = Spacing {
+        anchor: (0, 0),
+        min: 0,
+        gap: 1,
+    };
+}
+
 fn place_room_free(
     rng: &mut ChaCha8Rng,
     w: i32,
     d: i32,
     rooms: &[Room],
     up_shaft: &StairShaft,
+    Spacing { anchor, min, gap }: Spacing,
 ) -> Option<Room> {
     let shaft_zone = up_shaft.rect().expanded(1);
     for _ in 0..ROOM_PLACE_ATTEMPTS {
         let x = rng.gen_range(1..=GRID - 1 - w);
         let z = rng.gen_range(1..=GRID - 1 - d);
         let candidate = Room { x, z, w, d };
-        let grown = candidate.expanded(1);
+        let (cx, cz) = candidate.center();
+        if (cx - anchor.0).abs() + (cz - anchor.1).abs() < min {
+            continue;
+        }
+        let grown = candidate.expanded(gap);
         if grown.intersects(&shaft_zone) {
             continue;
         }
@@ -341,16 +439,24 @@ fn corridor_intersects(from: (i32, i32), to: (i32, i32), x_first: bool, rect: &R
         .any(|leg| leg.intersects(rect))
 }
 
-/// 2-cell-wide L corridor.
+/// Grid cells of a 2-cell-wide L corridor.
+fn corridor_cells(
+    from: (i32, i32),
+    to: (i32, i32),
+    x_first: bool,
+) -> impl Iterator<Item = (i32, i32)> {
+    corridor_legs(from, to, x_first)
+        .into_iter()
+        .flat_map(|leg| {
+            (leg.z..leg.z + leg.d)
+                .flat_map(move |z| (leg.x..leg.x + leg.w).map(move |x| (x, z)))
+                .filter(|&(x, z)| (1..GRID - 1).contains(&x) && (1..GRID - 1).contains(&z))
+        })
+}
+
 fn carve_corridor(carved: &mut [bool], from: (i32, i32), to: (i32, i32), x_first: bool) {
-    for leg in corridor_legs(from, to, x_first) {
-        for z in leg.z..leg.z + leg.d {
-            for x in leg.x..leg.x + leg.w {
-                if (1..GRID - 1).contains(&x) && (1..GRID - 1).contains(&z) {
-                    carved[(x + z * GRID) as usize] = true;
-                }
-            }
-        }
+    for (x, z) in corridor_cells(from, to, x_first) {
+        carved[(x + z * GRID) as usize] = true;
     }
 }
 
@@ -474,7 +580,12 @@ fn floor_is_connected(layout: &FloorLayout) -> bool {
     floor_targets_reachable(layout, &visited)
 }
 
-fn roll_spawns(rng: &mut ChaCha8Rng, layout: &FloorLayout, table: &[SpawnEntry]) -> Vec<SpawnSpec> {
+fn roll_spawns(
+    rng: &mut ChaCha8Rng,
+    layout: &FloorLayout,
+    table: &[SpawnEntry],
+    extra: usize,
+) -> Vec<SpawnSpec> {
     let in_shaft = |x: i32, z: i32| cell_in_any_shaft(layout, x, z);
 
     // Deterministic candidate order: row-major scan.
@@ -522,7 +633,7 @@ fn roll_spawns(rng: &mut ChaCha8Rng, layout: &FloorLayout, table: &[SpawnEntry])
         rng.gen_range(3..=5) as usize
     } else {
         rng.gen_range(5..=9) as usize
-    };
+    } + extra;
 
     for _ in 0..count.min(candidates.len()) {
         // `as u32`: `usize` is u32 on wasm32 but u64 on native, and
@@ -970,7 +1081,7 @@ fn fallback_floor(
         spawns: Vec::new(),
         props: Vec::new(),
     };
-    layout.spawns = roll_spawns(rng, &layout, table);
+    layout.spawns = roll_spawns(rng, &layout, table, 0);
     layout.props = roll_props(rng, &layout);
     layout.props.extend(roll_wall_torches(rng, &layout));
     layout

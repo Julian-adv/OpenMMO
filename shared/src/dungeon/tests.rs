@@ -259,7 +259,102 @@ fn blackvein_mine_has_twenty_five_floors_and_its_own_monsters() {
 const GOLDEN_OLD_CRYPT_HASH: u64 = 0x216b_8cee_51ff_2b67;
 const GOLDEN_THIEVES_DEN_HASH: u64 = 0x1d9e_c735_df9d_e607;
 const GOLDEN_SHADOW_GUILD_HASH: u64 = 0x2e1f_1554_a751_5c10;
-const GOLDEN_BLACKVEIN_MINE_HASH: u64 = 0x1684_5adb_3dce_5414;
+const GOLDEN_BLACKVEIN_MINE_HASH: u64 = 0x59fa_9a79_433b_78f5;
+
+/// Mine floors never fall back to the single wrap room: plain floors are a
+/// corridor of chambers, and every locked floor but the last forks into three
+/// work rooms with the way down in exactly one.
+#[test]
+fn mine_floors_keep_their_shape_over_many_seeds() {
+    for seed in 0..200u64 {
+        let floors = super::gen::generate_dungeon_with(
+            seed,
+            Some(25),
+            BOSS_MONSTER_TYPE,
+            None,
+            "",
+            super::LayoutStyle::Mine,
+        );
+        assert_eq!(floors.len(), 25, "seed {seed}");
+        for (f, next) in floors.iter().zip(floors.iter().skip(1)) {
+            assert_eq!(next.up_shaft, f.down_shaft.unwrap(), "seed {seed}");
+        }
+        for f in &floors {
+            let at = format!("seed {seed} depth {}", f.depth);
+            for (i, a) in f.rooms.iter().enumerate() {
+                for b in &f.rooms[i + 1..] {
+                    assert!(
+                        !a.expanded(super::gen::mine::ROOM_GAP).intersects(b),
+                        "{at}: rooms touch"
+                    );
+                }
+            }
+            let n = f.rooms.len();
+            let fork = is_locked_depth(f.depth) && f.depth < 25;
+            if fork {
+                assert_eq!(n, 5, "{at}");
+                let down = f.down_shaft.unwrap();
+                let holders = f.rooms[2..]
+                    .iter()
+                    .filter(|r| r.contains(down.x, down.z))
+                    .count();
+                assert_eq!(holders, 1, "{at}");
+            } else {
+                assert!((4..=5).contains(&n), "{at}");
+            }
+            // Corridors never meet outside rooms: one piece per corridor.
+            let links = if fork { 4 } else { n - 1 };
+            assert_eq!(corridor_pieces(f), links, "{at}: corridors meet");
+            // A corridor through a room would open extra mouths in it.
+            let openings = super::doors::wall_openings(f);
+            for room in 0..n {
+                let corridors = match (fork, room) {
+                    (true, 1) => 4,
+                    (false, r) if r > 0 && r < n - 1 => 2,
+                    _ => 1,
+                };
+                let mouths = openings.iter().filter(|o| o.room == room).count();
+                assert!(mouths <= corridors, "{at}: room {room} has {mouths} mouths");
+            }
+        }
+        let last = floors.last().unwrap();
+        let (cx, cz) = last.chest.unwrap();
+        assert!(last.rooms.last().unwrap().contains(cx, cz), "seed {seed}");
+    }
+}
+
+/// Connected pieces of carved cells away from every room; corridors may
+/// meet only within `ISOLATION` cells of a room.
+fn corridor_pieces(f: &FloorLayout) -> usize {
+    let near = |x, z| {
+        f.rooms
+            .iter()
+            .any(|r| r.expanded(super::gen::mine::ISOLATION).contains(x, z))
+    };
+    let open = |x: i32, z: i32| f.is_carved(x, z) && !near(x, z);
+    let mut seen = vec![false; (GRID * GRID) as usize];
+    let mut pieces = 0;
+    for start in 0..GRID * GRID {
+        if seen[start as usize] || !open(start % GRID, start / GRID) {
+            continue;
+        }
+        pieces += 1;
+        let mut stack = vec![(start % GRID, start / GRID)];
+        seen[start as usize] = true;
+        while let Some((x, z)) = stack.pop() {
+            for (nx, nz) in DIRS.map(|(dx, dz)| (x + dx, z + dz)) {
+                if (0..GRID).contains(&nx) && (0..GRID).contains(&nz) && open(nx, nz) {
+                    let i = (nx + nz * GRID) as usize;
+                    if !seen[i] {
+                        seen[i] = true;
+                        stack.push((nx, nz));
+                    }
+                }
+            }
+        }
+    }
+    pieces
+}
 
 #[test]
 fn structure_invariants_many_seeds() {
