@@ -18,6 +18,11 @@ import {
 } from './female-bracer-fit'
 import { femaleBootGround } from '../lib/utils/female-boot-ground'
 import {
+  attachValkyrieWings,
+  disposeValkyrieWings,
+  updateValkyrieWings,
+} from '../lib/effects/valkyrie-wings'
+import {
   updatePeltPhysics,
   resetPeltPhysics,
   disposePeltPhysics,
@@ -1259,13 +1264,15 @@ export async function showFemaleBase(
     }
     controls.update()
     updateGround()
+    updateValkyrieWings(model, paused ? 0 : delta, action)
     updatePeltPhysics(model, paused ? 0 : delta)
     renderer.render(scene, camera)
   })
   const fieldset = document.getElementById(
     'female-controls'
   ) as HTMLFieldSetElement
-  let wingMeshes: THREE.SkinnedMesh[] | undefined
+  let wingMeshes: THREE.Mesh[] | undefined
+  cleanup.push(() => disposeValkyrieWings(model))
   let pendingWings: Promise<void> | undefined
   const updateWings = async () => {
     try {
@@ -1279,7 +1286,8 @@ export async function showFemaleBase(
               return
             }
             resources.push(source)
-            wingMeshes = bindModularPart(model, source)
+            const meshes = bindModularPart(model, source)
+            wingMeshes = attachValkyrieWings(model, meshes)
             for (const mesh of wingMeshes) {
               mesh.frustumCulled = false
               collectMaterials(mesh)

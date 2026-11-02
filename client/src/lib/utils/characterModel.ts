@@ -20,6 +20,7 @@ import type {
 } from '../network/networkTypes'
 import { modularOutfitForArmor } from './modularEquipment'
 import { disposePeltPhysics } from '../effects/pelt-rig'
+import { disposeValkyrieWings } from '../effects/valkyrie-wings'
 import { separateWavyHairMaterials } from './wavyHairMaterials'
 import { femaleOutfitMask } from './female-outfit-mask'
 import modularSoleOffsets from './modularSoleOffsets.json'
@@ -293,6 +294,7 @@ export function modularSwordAttachment(
 }
 
 export function disposeCharacterSkeletons(root: THREE.Object3D): void {
+  disposeValkyrieWings(root)
   disposeFemaleCharacter(root)
   const scene = modularScene(root)
   if (scene) {

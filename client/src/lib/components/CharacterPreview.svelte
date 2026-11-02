@@ -2,6 +2,7 @@
   import type { CharacterAppearance } from '../network/networkTypes'
   import { T } from '@threlte/core'
   import { updatePeltPhysics } from '../effects/pelt-rig'
+  import { updateValkyrieWings } from '../effects/valkyrie-wings'
   import * as THREE from 'three'
   import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
   import { onDestroy, untrack } from 'svelte'
@@ -488,7 +489,10 @@
     // Update cloth and flames after the pose, even for unselected slots.
     weaponGrip?.update(currentAction?.getClip() === weaponIdle)
     capeRig?.update(delta, null)
-    if (modelRoot) updatePeltPhysics(modelRoot, delta)
+    if (modelRoot) {
+      updateValkyrieWings(modelRoot, delta, currentAction)
+      updatePeltPhysics(modelRoot, delta)
+    }
     updateTorch(delta)
     grayscale.sync(modelRoot, torchFireGroup)
   }

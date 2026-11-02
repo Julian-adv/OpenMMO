@@ -64,7 +64,7 @@ Use case: precise-object-edit. Asset type: one isolated wing concept for image-t
 
 사용자가 Tripo에서 생성한 `angel wing 3d model.glb`를 제공했다. [원본 GLB](../../assets/items/valkyrie_starter/tripo_wing_v1/source.glb)의 SHA-256은 `1c4068664f8849c77bd6e1d3f39a06d745d1415e1337781013aade6c90fc8839`이다. 생성 설정·작업 ID·비용·요금제·이용 조건과 실제 입력 이미지는 미확인이다. 원본은 한쪽 2,629삼각형이며 리그가 없다. 1,500개는 제작 목표였고 실제 Tripo 설정값은 확인되지 않았다.
 
-[여성 공통 몸체](modular-human-female-01.md)의 `human_female_01_local_v1` 리그와 [긴 헤어](modular-female-knight-hair.md)를 사용했다. 미러 복제 후 사용자의 요청에 따라 폭을 원래의 60%로 줄였다. 현재 전체 폭은 약 1.445m다. 각 날개는 `Spine2`에 100%로 고정되며 독립적인 접기·펄럭임 동작은 없다.
+[여성 공통 몸체](modular-human-female-01.md)의 `human_female_01_local_v1` 리그와 [긴 헤어](modular-female-knight-hair.md)를 사용했다. 미러 복제 후 사용자의 요청에 따라 폭을 원래의 60%로 줄였다. 현재 전체 폭은 약 1.445m다. 원본 GLB는 각 날개가 `Spine2`에 100%로 고정돼 있다. 2026-11-03에 아래의 런타임 접기 동작을 추가했다.
 
 - [수정 원본 Blender](../../assets/items/valkyrie_starter/tripo_wing_v1/source-patch-v1.blend)와 [수정 원본 GLB](../../assets/items/valkyrie_starter/tripo_wing_v1/source-patch-v1.glb) (`d1320d7d36c3f8dac6a5d2aac95fc472de7fe56e6cc76164ba39a6c9d33ce891`).
 - [피팅 Blender 장면](../../assets/items/valkyrie_starter/tripo_wing_v1/fitted_patch_v1/wings-final.blend): 몸체·긴 헤어·노멀 보정된 날개. 몸체와 헤어는 각 원본 기록의 출처와 이용 조건을 따른다.
@@ -325,7 +325,35 @@ blender -b --python-exit-code 1 --python tools/blender-scripts/save_female_valky
 - `--bake-existing`: 이미 배포된 여성 기본 동작·팩의 맨발 트랙을 유지하고 부츠 변형만 재생성.
 - `blender -b --python-exit-code 1 --python tools/blender-scripts/export_valkyrie_items.py`:
   승인 원본에서 지면 배치용 모델과 128px 아이콘 생성. 리그 표시용 숨은 메시를 제외한다.
+  `-- --icons-only`를 붙이면 모델은 그대로 두고 아이콘만 다시 렌더한다.
+
+아이콘은 Breastplate(`armor/plate_armor.png`)처럼 약간 위·옆에서 보는 구도로 변경했다
+(2026-11-03). 수직 축 회전 30°, 투영 회전 `(-65, 0, -8)°`, 노출 -0.6을 사용한다.
+보호대와 부츠는 좌우 한 쌍의 긴 축을 수직으로 맞추고, 두 개를 가까이 나란히 배치한다.
+지면 모델과 착용 모델은 기존 피팅 위치를 유지한다.
+두 아이콘만 다시 만들 때는 `-- --icons-only --parts gloves boots`를 사용한다.
 
 검증은 `femaleCharacter.test.ts`, `valkyrieCharacter.test.ts`에서 고정 외형·장비 변경·개체 간 가림
 분리·비동기 선택 경쟁·전체 게임 동작의 유한 좌표와 날개 형태·부츠 접지를 확인한다.
 서버 테스트는 신규 지급·장착 정보·단품/일괄 판매 거절·플레이어 거래 거절을 확인한다.
+
+### 날개 대기·보행 동작 — 2026-11-03
+
+`client/src/lib/effects/valkyrie-wings.ts`에서 좌우 날개를 등뼈의 회전축에 연결한다.
+피팅 원본의 뿌리 위치는 미터 단위 `(±0.033, 1.4333, -0.129)`다. 기존 Spine2 스키닝의
+기준 행렬을 사용하므로 펼친 상태의 형상과 몸통 동작을 유지한다. 깃털별 변형은 추가하지 않는다.
+
+- 대기: 4.5초 주기로 뒤쪽으로 4–10° 접었다 편다.
+- 걷기·조깅·달리기: 현재 동작의 실제 재생 시간에 맞춰 한 보행 주기당 두 번 8–40° 접었다 편다.
+  보행 중에는 보간 응답을 높여 빠른 발걸음에도 접힘 폭이 줄어들지 않게 한다. 대기 동작은 유지한다.
+- 동작 전환은 부드럽게 보간한다. 미리보기 일시정지 때 멈추며, 시간 슬라이더로 보행 자세를 고르면
+  날개도 같은 보행 시점에 맞춘다. 기준 자세에서는 원래 펼친 상태로 돌아간다.
+- 게임, 캐릭터 생성·선택 화면과 여성 몸체 미리보기에 같은 구현을 사용한다.
+
+날개 두 개는 정적 메시로 그리며 원래 정점 버퍼와 재질을 공유한다. 프레임마다 두 회전축의
+쿼터니언만 변경한다. 새 골격·정점 변형·정점 버퍼 업로드는 없으며, 게임에서는 기존 보조 동작
+스케줄러를 따라 화면 밖에서 갱신을 멈추고 원격 캐릭터는 30Hz로 갱신한다.
+형상과 텍스처는 앞서 승인된 GLB를 재사용하며 새 에셋 생성이나 라이선스 변경은 없다.
+
+`valkyrie-wings.test.ts`는 기존 스키닝과 펼친 자세의 일치, 몸통 추적, 좌우 대칭, 대기 주기,
+보행 동기화, 정지·전환, 캐릭터별 독립 상태와 정적 버퍼 공유를 확인한다.

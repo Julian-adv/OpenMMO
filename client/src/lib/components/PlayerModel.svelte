@@ -55,6 +55,7 @@
 <script lang="ts">
   import type { CharacterAppearance } from '../network/networkTypes'
   import { updatePeltPhysics } from '../effects/pelt-rig'
+  import { updateValkyrieWings } from '../effects/valkyrie-wings'
   import { createSecondaryMotionScheduler } from '../effects/secondary-motion-scheduler'
   import { translate } from '../i18n'
   import { visibleMana } from '../stores/gameStore'
@@ -1908,7 +1909,10 @@
     const { deltaTime: dt, reset, step } = physics
     if (reset) capeRig?.reset()
     capeRig?.update(dt, wind, step)
-    if (modelRoot) updatePeltPhysics(modelRoot, dt, wind, step, reset)
+    if (modelRoot) {
+      updateValkyrieWings(modelRoot, dt, currentAction)
+      updatePeltPhysics(modelRoot, dt, wind, step, reset)
+    }
   }
 
   // Function to update mixer and animation state and nametag

@@ -36,8 +36,14 @@ const armor = {
   boots: 'worn_valkyrie_boots',
 }
 const hasAssets = existsSync(`public${MODULAR_VALKYRIE_MODEL_PATH}`)
-const parts = (root: THREE.Object3D, name: string) =>
-  skinnedParts(root).filter((mesh) => mesh.userData.female_part === name)
+const parts = (root: THREE.Object3D, name: string) => {
+  const meshes: THREE.Mesh[] = []
+  root.traverse((node) => {
+    if (node instanceof THREE.Mesh && node.userData.female_part === name)
+      meshes.push(node)
+  })
+  return meshes
+}
 const shown = (root: THREE.Object3D, name: string) =>
   parts(root, name).some((mesh) => mesh.visible)
 
@@ -166,8 +172,8 @@ describe('Valkyrie base appearance', () => {
           for (const time of [0, clip.duration / 2]) {
             mixer.setTime(time)
             modelRoot.updateMatrixWorld(true)
-            wing.getVertexPosition(0, point)
-            wing.getVertexPosition(20, other)
+            wing.localToWorld(wing.getVertexPosition(0, point))
+            wing.localToWorld(wing.getVertexPosition(20, other))
             expect(point.toArray().every(Number.isFinite)).toBe(true)
             span ??= point.distanceTo(other)
             expect(point.distanceTo(other)).toBeCloseTo(span, 5)

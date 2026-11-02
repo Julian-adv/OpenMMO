@@ -13,6 +13,7 @@ import { bindModularPart, skinnedParts } from './modularCharacter'
 import { femaleUnderwearColor } from './femaleUnderwearColor'
 import { femaleOutfitMask } from './female-outfit-mask'
 import { modularOutfitForArmor } from './modularEquipment'
+import { attachValkyrieWings } from '../effects/valkyrie-wings'
 
 const slots = ['top', 'bottom', 'boots', 'gloves', 'helmet'] as const
 type Slot = (typeof slots)[number]
@@ -74,12 +75,14 @@ export function assembleFemaleCharacter(
   scene.userData.female_parts = {}
   for (const [i, name] of names.entries()) {
     scene.userData.female_parts[name] = sources[i].scene.userData
-    for (const mesh of bindModularPart(scene, sources[i].scene)) {
+    const meshes = bindModularPart(scene, sources[i].scene)
+    for (const mesh of meshes) {
       mesh.userData.female_part = name
       mesh.visible =
         (name === 'hair' && scene.userData.female_class !== 'valkyrie') ||
         FIXED_VALKYRIE_PARTS.includes(name)
     }
+    if (name === 'valkyrie_wings') attachValkyrieWings(scene, meshes)
   }
   for (const mesh of skinnedParts(scene)) mesh.frustumCulled = false
   scene.userData.female_grip = Object.fromEntries(
