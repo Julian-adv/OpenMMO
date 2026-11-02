@@ -6,7 +6,7 @@ import bpy
 ROOT = Path(__file__).resolve().parents[2]
 BODY = ROOT / 'assets/modular_human_female_01/rig_v1/female-base.glb'
 TOP = ROOT / 'assets/items/valkyrie_starter/tripo_top_v1/fitted_v11/top_female_valkyrie.glb'
-version = sys.argv[sys.argv.index('--') + 1] if '--' in sys.argv else 'v7'
+version = sys.argv[sys.argv.index('--') + 1] if '--' in sys.argv else 'v8'
 BOTTOM = ROOT / f'assets/items/valkyrie_starter/tripo_bottom_v1/fitted_{version}/bottom_female_valkyrie.glb'
 OUTPUT = BOTTOM.parent / 'fitting.blend'
 

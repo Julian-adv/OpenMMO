@@ -235,4 +235,13 @@ Generate an isolated FRONT-VIEW 3D modeling reference for ONLY the lower-body ar
 - 뒤쪽 속옷 364면과 갑옷에 파고드는 몸체 58면을 하의 착용 시 가린다. 대기 자세의 정면·후면·양쪽에서 확인했고, 걷기와 달리기 각 다섯 시점의 후면 및 상의 없이 입은 대기 자세도 확인했다. 달리기 일부 시점에는 옆 판금 가장자리에 작은 흰 부분이 남는다. 다른 동작이나 모든 조합의 교차가 해결됐다는 뜻은 아니다.
 - [리깅 검증](../../assets/items/valkyrie_starter/tripo_bottom_v1/fitted_v7/rig-validation.json)은 공통 골격, 정규화된 가중치와 대기·걷기·달리기 각 13개 시점의 좌표를 확인한다.
 
-재생성 순서: `blender -b --python-exit-code 1 --python tools/blender-scripts/fit_female_valkyrie_bottom.py -- v4`, `PYTHONPATH=tools .venv/bin/python tools/outfits/build_female_valkyrie_rear_panel.py`, `PYTHONPATH=tools .venv/bin/python tools/outfits/refit_female_valkyrie_rear_panel.py`, `blender -b --python-exit-code 1 --python tools/blender-scripts/save_female_valkyrie_rear_fitting.py -- v7`, `node tools/validate-female-valkyrie-bottom.mjs`. 앞의 두 명령이 중간 피팅 v4와 v5를 만든다.
+재생성 순서: `blender -b --python-exit-code 1 --python tools/blender-scripts/fit_female_valkyrie_bottom.py -- v4`, `PYTHONPATH=tools .venv/bin/python tools/outfits/build_female_valkyrie_rear_panel.py`, `PYTHONPATH=tools .venv/bin/python tools/outfits/refit_female_valkyrie_rear_panel.py`, `blender -b --python-exit-code 1 --python tools/blender-scripts/save_female_valkyrie_rear_fitting.py -- v7`, `node tools/validate-female-valkyrie-bottom.mjs assets/items/valkyrie_starter/tripo_bottom_v1/fitted_v7`. 앞의 두 명령이 중간 피팅 v4와 v5를 만든다.
+
+### 하의 뒷가리개 윗부분 피팅 v8 (2026-11-02)
+
+- [피팅 GLB](../../assets/items/valkyrie_starter/tripo_bottom_v1/fitted_v8/bottom_female_valkyrie.glb), SHA-256 `c3a58fa21fbfc7ce7242e0f6f3a0230821e9229ce55f15c8f0f6329bc4690752`, 3,477삼각형. [Blender 장면](../../assets/items/valkyrie_starter/tripo_bottom_v1/fitted_v8/fitting.blend), [피팅 스크립트](../../tools/outfits/fit_female_valkyrie_rear_panel_v8.py), [몸체 가림 정보](../../assets/items/valkyrie_starter/tripo_bottom_v1/fitted_v8/body-occlusion.json). 원본과 몸체의 기존 출처와 이용 조건을 따른다.
+- v7 가리개의 윗부분을 몸쪽으로 최대 15mm 이동하고 아래로 갈수록 이동량이 줄어들게 했다. 노멀과 접선을 보정하고 장식의 형태는 유지했다.
+- 대기 동작 일곱 시점의 윗부분 정점 262개를 같은 몸체 표면과 비교했다. 최근접 표면 방향 간격 중앙값은 26.72mm에서 15.35mm로 줄었고, 새로 몸 안으로 들어간 정점 표본은 없었다. [측정 결과](../../assets/items/valkyrie_starter/tripo_bottom_v1/fitted_v8/clearance-report.json)는 면 사이의 교차나 모든 동작을 보장하지 않는다. 정면·측면·후면의 대기 동작과 걷기·달리기 후면의 일부 시점을 별도로 확인했다.
+- [리깅 검증](../../assets/items/valkyrie_starter/tripo_bottom_v1/fitted_v8/rig-validation.json)은 공통 골격, 가중치 정규화와 대기·걷기·달리기 각 13개 시점의 유한 좌표를 확인한다.
+
+재생성: `PYTHONPATH=tools .venv/bin/python tools/outfits/fit_female_valkyrie_rear_panel_v8.py`, `node tools/export-female-rogue-seated-poses.mjs /tmp/valkyrie-bottom-waist-measure idle1`, `blender -b --python-exit-code 1 --python tools/blender-scripts/measure_female_valkyrie_rear_panel_v8.py`, `blender -b --python-exit-code 1 --python tools/blender-scripts/save_female_valkyrie_rear_fitting.py -- v8`, `node tools/validate-female-valkyrie-bottom.mjs`.

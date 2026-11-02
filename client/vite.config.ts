@@ -158,11 +158,11 @@ function modularCharacterPreview(): Plugin {
       import.meta.url
     ),
     female_valkyrie_bottom: new URL(
-      '../assets/items/valkyrie_starter/tripo_bottom_v1/fitted_v7/bottom_female_valkyrie.glb',
+      '../assets/items/valkyrie_starter/tripo_bottom_v1/fitted_v8/bottom_female_valkyrie.glb',
       import.meta.url
     ),
     'female-valkyrie-bottom-occlusion.json': new URL(
-      '../assets/items/valkyrie_starter/tripo_bottom_v1/fitted_v7/body-occlusion.json',
+      '../assets/items/valkyrie_starter/tripo_bottom_v1/fitted_v8/body-occlusion.json',
       import.meta.url
     ),
     'female-knight-bottom-occlusion.json': new URL(
