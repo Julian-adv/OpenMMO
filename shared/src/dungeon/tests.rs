@@ -237,14 +237,21 @@ fn blackvein_mine_has_twenty_five_floors_and_its_own_monsters() {
         locked_depths(floors.len() as u8).collect::<Vec<_>>(),
         [5, 10, 15, 20, 25]
     );
-    let bosses = bosses_with_allowed_spawns(&floors, |depth| match depth {
+    let (last, rest) = floors.split_last().unwrap();
+    let bosses = bosses_with_allowed_spawns(rest, |depth| match depth {
         1..=5 => &["mine_remnant"],
         6..=10 => &["mine_crystal"],
         11..=15 => &["mine_twisted"],
         16..=20 => &["mine_veinfused"],
         _ => &["mine_predator"],
     });
-    assert_eq!(bosses, [(25, "mine_foreman")]);
+    assert!(bosses.is_empty());
+    let alone: Vec<_> = last
+        .spawns
+        .iter()
+        .map(|s| (s.is_boss, s.monster_type.as_str()))
+        .collect();
+    assert_eq!(alone, [(true, "mine_foreman")]);
     assert_eq!(layout_hash(&floors), GOLDEN_BLACKVEIN_MINE_HASH);
 }
 
@@ -252,7 +259,7 @@ fn blackvein_mine_has_twenty_five_floors_and_its_own_monsters() {
 const GOLDEN_OLD_CRYPT_HASH: u64 = 0x216b_8cee_51ff_2b67;
 const GOLDEN_THIEVES_DEN_HASH: u64 = 0x1d9e_c735_df9d_e607;
 const GOLDEN_SHADOW_GUILD_HASH: u64 = 0x2e1f_1554_a751_5c10;
-const GOLDEN_BLACKVEIN_MINE_HASH: u64 = 0xd55b_9882_d8b1_3ca0;
+const GOLDEN_BLACKVEIN_MINE_HASH: u64 = 0x1684_5adb_3dce_5414;
 
 #[test]
 fn structure_invariants_many_seeds() {

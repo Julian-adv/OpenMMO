@@ -30,6 +30,9 @@ async fn blackvein_mine_floors_spawn_one_kind_per_band() {
     ] {
         assert_floor_pool(&game_state, "blackvein_mine", depth, &[kind]).await;
     }
+    let last = floor_monsters(&game_state, "blackvein_mine", 25).await;
+    let kinds: Vec<_> = last.iter().map(|m| m.monster_type.as_str()).collect();
+    assert_eq!(kinds, ["mine_foreman"]);
 }
 
 #[tokio::test]

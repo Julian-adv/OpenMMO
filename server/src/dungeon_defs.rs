@@ -73,8 +73,9 @@ impl DungeonDefs {
             let total = generate_dungeon_for(&def.id).len() as u8;
             for depth in 1..=total {
                 let table = spawn_table_for(&def.spawn_group, depth);
+                // An empty final floor leaves the boss alone.
                 assert!(
-                    !table.is_empty(),
+                    depth == total || !table.is_empty(),
                     "dungeon '{}' has no spawn group '{}' entries at depth {depth}",
                     def.id,
                     def.spawn_group

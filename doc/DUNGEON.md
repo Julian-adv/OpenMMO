@@ -74,12 +74,13 @@ node tools/reserve-dungeon-land.mjs --dungeon skeleton_crypt --ownership /tmp/ow
   - 6–10층: Crystallized Miner(결정화 광부, `mine_crystal`). Orc 모델, Cyclop 수치.
   - 11–15층: Twisted Miner(뒤틀린 광부, `mine_twisted`). Troll 모델, Skeleton 수치. 출혈 공격을 유지한다.
   - 16–20층: Veinfused(광맥 융합체, `mine_veinfused`). Stone Golem 모델, Skeleton Warrior 수치.
-  - 21–25층: Deep Predator(심층 포식자, `mine_predator`). SCP-939 모델, Skeleton Warrior 수치.
+  - 21–24층: Deep Predator(심층 포식자, `mine_predator`). SCP-939 모델, Skeleton Warrior 수치.
+  - 25층: 보스만 나온다. 서버는 마지막 층에 한해 빈 스폰 표를 허용한다.
   - 보스: Cyclop 모델, Shadow Master 수치.
 - 5·10·15·20·25층 문에 `mine_key_5…25`. 아이콘·모델은 기존 열쇠를 재사용한다.
 - 최종 상자: 확정 보상·전용 롤 없음. 티어 5 확률 보상(`ring_of_protection` 20%)과 하위 티어 장비, 12,500–37,500c.
 - 처치 칭호: `foreman_slayer`, 단독 처치 `foreman_slayer_solo`.
-- 제안서에서 남은 것: 좁고 긴 통로형 맵, 5·10·15·20층의 세 갈래 분기, 광산 소품, 전용 몬스터·보스 모델, 25층 보스 단독 배치. 서버는 모든 층에 스폰 표를 요구하므로 지금은 25층에도 Deep Predator가 나온다.
+- 제안서에서 남은 것: 좁고 긴 통로형 맵, 5·10·15·20층의 세 갈래 분기, 광산 소품, 전용 몬스터·보스 모델.
 
 ## 리셋과 재접속
 
