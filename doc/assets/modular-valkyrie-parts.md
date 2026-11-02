@@ -168,3 +168,71 @@ blender -b --python-exit-code 1 --python assets/items/valkyrie_starter/tripo_win
 node tools/export-female-rogue-seated-poses.mjs /tmp/valkyrie-gap-v9 idle1
 blender -b --python-exit-code 1 --python assets/items/valkyrie_starter/tripo_top_v1/measure-idle-back-gap.py -- fitted_v11
 ```
+
+## 하의 정면 원화 — 2026-11-01
+
+![하의 정면 원화](../../assets/items/valkyrie_starter/concepts/lower-front-v1.png)
+
+- 이미지: `assets/items/valkyrie_starter/concepts/lower-front-v1.png`, 1145×1374 RGB PNG, SHA-256 `1496848ba5e34a523da5896db1bd8fda3e870ef6c86ac480fef5d63db0506270`.
+- 참조: 위 발키리 전신 정면 원화 `front-v1.png`와 상의 정면 원화 `upper-front-v1.png`. 생성: OpenAI Codex built-in ImageGen, **ChatGPT Pro 20x**, 2026-11-01. OpenAI 생성 출력물 이용 조건 및 참조 에셋의 기존 이용 조건을 따른다.
+- 층진 은색 옆 판금과 중앙 앞가리개를 포함하는 독립 하의의 정면 디자인 후보다. 상의 밑단과의 겹침, 후면 구조, 몸체·동작 및 속옷과의 실제 피팅은 검증하지 않았다.
+
+### 하의 정면 생성 프롬프트
+
+```text
+Create a single front-view concept-art reference of the LOWER-BODY armor for the same Valkyrie costume shown in the supplied references. Image 1 is the authoritative full-body design: isolate and faithfully reinterpret its lower outfit at the waist and hips, including the layered flared polished-silver hip tassets, a long pointed central front tabard/armor panel with small gold rivets, subtle gold fasteners, and a plausible fitted high-cut silver lower garment beneath, connected as one wearable lower-body equipment piece. Image 2 is the matching upper armor: the lower piece's top edge must plausibly fit beneath its pointed waist hem without duplicating the upper armor. Match their bright silver, restrained gold accents, realistic fantasy game aesthetic, and clean shapes. Draw the lower armor OBJECT ONLY, isolated with no human or mannequin, centered on a plain light neutral gray background, straight-on front view, full silhouette visible with generous margin, clear left and right leg openings and a hollow waist opening; make the shorts/brief structure and connections of the side plates and central panel understandable as a single 3D wearable object. Preserve the high-cut open-thigh silhouette and balanced proportions from image 1. The front panel ends high on the thighs, with separate openings for both legs. No torso, breastplate, shoulders, arms, skin, legs, boots, hair, wings, weapon, character, body, mannequin, text, labels, extra views, inset images, or watermark. Even studio illumination with restrained highlights so the silhouette and seams are readable. One object, one front view. This is a preliminary concept for later 3D modeling, not a fitted model.
+```
+
+### 하의와 상의 연결 재검토 — 2026-11-02
+
+기존 하의 정면의 큰 허리 V 판금이 피팅된 상의의 뾰족한 밑단과 겹칠 수 있다는 사용자의 지적에 따라 연결을 다시 그렸다. 실제 상의 착용 미리보기를 참조해 허리띠를 낮추고 상의의 V 끝 뒤로 넣으며 중앙 앞가리개는 그 아래에서 시작하도록 제안했다. 이 이미지는 착용 관계를 보여 주는 원화이며 실제 3D 간섭이나 연결을 검증한 결과가 아니다.
+
+- [최종 착용 관계 원화](../../assets/items/valkyrie_starter/concepts/lower-fit-v2.png): 1144×1375 RGB PNG, SHA-256 `c7525fd5ce3111c7318ba8e17527c386d0c2de3c0cbfd09c7f3080ed983df290`.
+- [실제 상의 참조 이미지](../../assets/items/valkyrie_starter/concepts/lower-fit-upper-reference.png), SHA-256 `55831180bb64ea560c4816f5d67299a0449f711c61754f9d6072a19cdfcf9193`: 여성 공통 몸체와 피팅 상의 v11의 대기 자세 미리보기다. 복장 정면 원화 `lower-front-v1.png`도 참조했다.
+- [미사용: 파인 허리 하의 후보](../../assets/items/valkyrie_starter/concepts/lower-front-v2.png), SHA-256 `26c01d8ad94393029a02f91d213ea357a52a87952d6d40afbb70119b2b1b625e`: 허리 양쪽 연결 구조가 불명확했다. [미사용: 착용 관계 첫 후보](../../assets/items/valkyrie_starter/concepts/lower-fit-v1.png), SHA-256 `39cd26d40690237214c870565ad16a48d9795332fc30d35e9a07c77623f44a33`: 상의 밑에 V 판금이 중복되어 최종 후보에서 제거했다.
+- 생성: OpenAI Codex built-in ImageGen, **ChatGPT Pro 20x**, 2026-11-02. OpenAI 생성 출력물 이용 조건 및 참조 에셋의 기존 이용 조건을 따른다. 독립 하의의 후면·허리띠 연결과 기존 상의·몸체의 동작 중 간섭은 후속 검토가 필요하다.
+
+#### 파인 허리 하의 후보 생성 프롬프트
+
+```text
+Edit image 1, the isolated Valkyrie lower armor concept, to fix its WAIST CONNECTION for the actual already-fitted upper armor shown on the person in image 2. The lower edge of the actual upper armor is a downward-pointing V that reaches low at center and rises at both hips. The current lower image wrongly adds a large second central V-shaped waist plate, which would collide with the real upper armor. REDESIGN ONLY THE TOP CONNECTION AND UPPER CENTER OF THE LOWER ITEM: remove the large stacked V waist plate completely. Make the hollow upper opening of this lower garment have a clearly visible deep downward V-shaped FRONT NOTCH, with the two sides starting at hip height and the middle of the opening dipping down to the crotch-level base of the front tabard. This is a concave V cutout in the garment's upper edge: empty neutral-gray space inside/above the V so the existing upper armor's pointed hem can fit there in front of the body; it is NOT another large triangular plate, not a chevron overlay, and not an additional breastplate. Join the left and right sides only low below the notch by a short modest solid silver front core that supports the long pointed central front tabard. There must be a physically plausible continuous waistband in depth around the hips, but the front center must stay visibly open as the deep V notch. Keep the original silver layered tassets at both hips, the high-cut leg openings, the long central pointed tabard, small gold rivets, restrained fantasy style and studio gray background. The top side panels should sit on the hips, not extend up the torso. ONE complete lower-armor object alone, no body or upper armor in the image, straight-on front view with generous blank space ABOVE the V notch so the negative-space contour is unmistakable. Do not depict the existing upper armor, mannequin, skin, torso, legs, boots, wings, character, explanatory graphics, labels, or text. Image 2 is reference only and must not be reproduced. This is a concept for 3D modeling, not a proven fit.
+```
+
+#### 착용 관계 첫 후보 생성 프롬프트
+
+```text
+Create a precise FRONT-VIEW OUTFIT FITTING CONCEPT showing a female game character WEARING the exact existing Valkyrie upper armor from reference image 1 together with the proposed separate lower armor from reference image 2. The purpose is to verify their waist connection visually. Image 1 is a screenshot of the ACTUAL finished upper armor: faithfully preserve its silver bust, gold center ornament, tapered silver torso, and especially its LOW DOWNWARD-POINTING V-SHAPED LOWER HEM ending at the front of the pelvis. Do not redesign or duplicate this upper armor. Image 2 is the isolated lower outfit reference: preserve its layered silver hip tassets, two side flaps, central pointed front tabard, gold rivets, and high-cut thigh openings, but FIX ITS WAIST. The lower armor is worn below image 1's existing pointed hem, with a narrow, low-profile hip belt around the pelvis, the center belt and any attachments tucked behind the existing V-shaped upper hem. Keep the upper armor's V tip clearly outside/in front of that belt and fully visible, with no second overlapping V armor panel or doubled point. The lower piece starts at the hips and uppermost pelvis, not at the narrow waist or mid-abdomen; its side tassets descend naturally from the belt, and the centered long tabard begins BELOW the upper armor tip and hangs down between the thighs. Show a coherent wearable arrangement, no floating pieces. Distinguish the actual upper and new lower parts by their border, without labels. Crop a single front view of the character from base of neck to mid thigh, including shoulders, waist, pelvis and upper thighs; keep arms relaxed away from hips or outside crop so they do not obscure the fit. Natural realistic fantasy game rendering, polished silver and restrained gold, plain light neutral gray background and even soft lighting, geometrically clear waist shape and connection. No wings, hair obscuring torso, cape, hands covering the belt, weapon, text, arrows, labels, diagrams, insets, additional views or watermark. This is a proposed visual integration and not a verified 3D fit.
+```
+
+#### 최종 착용 관계 원화 수정 프롬프트
+
+```text
+Edit the supplied fitting concept. Preserve the existing upper armor, pointed V-shaped upper-armor hem with its gold tip stud, hip tassets, central hanging tabard, woman's body, camera angle, materials, lighting, and all other shapes. Change ONLY the overlapping waist connection immediately BELOW the upper armor's pointed tip. Remove the two extra stacked V-shaped silver chevron plates and every extra gold center stud under the existing upper armor tip. Replace that entire duplicated central V plate zone with a simple very narrow, unobtrusive low hip belt running behind the upper armor tip, partly hidden by the upper piece. Attach the existing long flat central tabard directly beneath that pointed upper tip, starting from the narrow belt; its upper edge must be short, low and simple with no large waist plate. Keep the center of the upper armor fully visible, covering the front of the belt. Preserve the flared side tassets and their small gold fittings. The real upper armor tip should visually be the one and only large downward V shape at the waist. Result: plausible assembly of separate upper and lower equipment, front view, no duplicated torso armor, no labels, arrows, insets or additional views.
+```
+
+#### 하의 단독 정면 재작성 — 2026-11-02
+
+[하의 단독 원화](../../assets/items/valkyrie_starter/concepts/lower-front-v3.png): 1312×1199 RGB PNG, SHA-256 `103add667c4d17519100248948c28da8db450cd73f791db880ff47cf93316f5d`. 위 착용 관계 원화 `lower-fit-v2.png`를 참조해 낮은 허리띠와 앞가리개·옆 판금을 독립 하의로 다시 그렸다. 실제 상의·몸체와의 위치 및 후면 연결은 아직 검증하지 않았다. 생성: OpenAI Codex built-in ImageGen, **ChatGPT Pro 20x**, 2026-11-02. OpenAI 생성 출력물 이용 조건 및 참조 에셋의 기존 이용 조건을 따른다.
+
+```text
+Generate an isolated FRONT-VIEW 3D modeling reference for ONLY the lower-body armor visible in the attached fitting reference. The reference shows the intended lower part worn with a separate silver upper torso armor. Carefully isolate ONLY the lower equipment from the reference: a narrow low-rise silver hip waistband with a shallow center dip that can sit behind the separate upper armor's downward pointed hem; matching layered flared silver hip tassets with small gold rivets; a modest high-cut silver fitted lower brief with two clearly separated leg openings; and the long narrow pointed central silver tabard hanging from the waistband, with its small gold rivets. At the very top, show a plausible continuous hollow waist opening encircling a real body, with a thin low-profile rim, not two disconnected tubes and not a high triangular plate. The waistband is low, compact, and unobtrusive. The central tabard starts below the top rim of the waistband and is separate in form from any upper armor. Preserve proportions, materials, side shapes and gold details from the lower half of the reference. Entire isolated lower object centered with generous margins on a plain light-gray background, exact straight-on front view, even soft studio lighting, visually clear enough for image-to-3D reconstruction. No torso armor, upper body's V-shaped hem, chest, shoulders, arms, legs, skin, person, mannequin, boots, wings, hair, labels, text, arrows, diagrams, extra views or watermarks. Only one continuous wearable lower garment. This is a proposed standalone reference, actual fit remains to be checked in 3D.
+```
+
+## Tripo 하의 원본 검토 — 2026-11-02
+
+사용자가 제공한 `ornate armor 3d model.glb`를 [원본 GLB](../../assets/items/valkyrie_starter/tripo_bottom_v1/source.glb)로 보관했다. SHA-256은 `5b7cb257a1d3607e53a7a1cb39909f297619d7f6116488bb8516f17b662495f9`이다. 메시 하나, 머티리얼 하나, 3,508개 정점과 2,805개 삼각형으로 구성되며 리그는 없다. 생성 설정·작업 ID·비용·요금제·이용 조건과 실제 입력 이미지는 미확인이다.
+
+앞쪽 허리 중앙이 깊게 파여 있어 상의 끝과 하의 허리 연결을 피팅하면서 확인해야 한다. 몸체 피팅, 리깅, 가림 처리와 대기 동작 검증은 아직 하지 않았다.
+
+## 하의 피팅 이력 — 2026-11-02
+
+원본의 파인 중앙 실루엣을 유지해 골반에 피팅하고 공통 골격에 바인딩했다. 앞 허리와 중앙 연결부를 옮겨 속옷에 묻힌 앞판을 드러내고, 뒤쪽 허리 판금을 몸에 맞춘 뒤 앞판을 확장했다. 같은 뒤쪽 판금 정점 541개의 대기 동작 일곱 시점을 비교했을 때 몸체와의 중앙 간격은 50.8mm에서 19.7mm로 줄었다. 이후 앞가리개의 소재와 장식을 이용해 골반 뼈에 연결된 뒷가리개를 만들었다. 중간 피팅 파일은 정리했으며 아래 명령으로 재생성할 수 있다.
+
+### 하의 후면 재피팅 v7 (2026-11-02)
+
+- v5의 뒷가리개 윗부분을 좁히고 올렸다. 가리개와 겹치던 기존 중앙 뒷판은 경계를 잘라 정리하고, 양옆의 가늘고 밝은 중복 면 7개를 제거했다. 사용자가 Blender에서 보여준 배치를 참고했으며 모델은 v5에서 다시 생성했다.
+- [피팅 GLB](../../assets/items/valkyrie_starter/tripo_bottom_v1/fitted_v7/bottom_female_valkyrie.glb), SHA-256 `8ea403f7956167d89c8c7bc57ef38d473870cf733bafde0fb42b06a9191fcf4d`, 3,477삼각형. [Blender 장면](../../assets/items/valkyrie_starter/tripo_bottom_v1/fitted_v7/fitting.blend), [피팅 스크립트](../../tools/outfits/refit_female_valkyrie_rear_panel.py), [몸체 가림 정보](../../assets/items/valkyrie_starter/tripo_bottom_v1/fitted_v7/body-occlusion.json). 출처와 이용 조건은 위의 Tripo 원본을 따른다.
+- 뒤쪽 속옷 364면과 갑옷에 파고드는 몸체 58면을 하의 착용 시 가린다. 대기 자세의 정면·후면·양쪽에서 확인했고, 걷기와 달리기 각 다섯 시점의 후면 및 상의 없이 입은 대기 자세도 확인했다. 달리기 일부 시점에는 옆 판금 가장자리에 작은 흰 부분이 남는다. 다른 동작이나 모든 조합의 교차가 해결됐다는 뜻은 아니다.
+- [리깅 검증](../../assets/items/valkyrie_starter/tripo_bottom_v1/fitted_v7/rig-validation.json)은 공통 골격, 정규화된 가중치와 대기·걷기·달리기 각 13개 시점의 좌표를 확인한다.
+
+재생성 순서: `blender -b --python-exit-code 1 --python tools/blender-scripts/fit_female_valkyrie_bottom.py -- v4`, `PYTHONPATH=tools .venv/bin/python tools/outfits/build_female_valkyrie_rear_panel.py`, `PYTHONPATH=tools .venv/bin/python tools/outfits/refit_female_valkyrie_rear_panel.py`, `blender -b --python-exit-code 1 --python tools/blender-scripts/save_female_valkyrie_rear_fitting.py -- v7`, `node tools/validate-female-valkyrie-bottom.mjs`. 앞의 두 명령이 중간 피팅 v4와 v5를 만든다.

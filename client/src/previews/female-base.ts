@@ -66,6 +66,7 @@ export async function showFemaleBase(
         <option value="none">없음</option>
         <option value="knight">은빛 기사 골반 갑옷</option>
         <option value="barbarian">야만전사 모피 허리치마</option>
+        <option value="valkyrie">발키리 하의 (피팅 검수 중)</option>
         <option value="caveman">원시전사 모피 하의 (피팅 검수 중)</option>
         <option value="rogue">로그 벨트 미니스커트</option>
       </select>
@@ -116,6 +117,7 @@ export async function showFemaleBase(
         <option value="face">얼굴 확대</option>
         <option value="upper">상의 확대</option>
         <option value="lower">하의 확대</option>
+        <option value="lower-back">하의 후면 확대</option>
         <option value="full">전신 정면</option>
         <option value="side">전신 측면</option>
         <option value="back">전신 후면</option>
@@ -748,6 +750,7 @@ export async function showFemaleBase(
     face: { target: [0, 1.6488, 0], position: [0, 1.6668, 0.648] },
     upper: { target: [0, 1.368, 0], position: [0, 1.404, 1.44] },
     lower: { target: [0, 0.936, 0], position: [0, 0.99, 1.44] },
+    'lower-back': { target: [0, 0.936, 0], position: [0, 0.99, -1.44] },
     full: { target: [0, 0.9, 0], position: [0, 0.99, 3.42] },
     side: { target: [0, 0.9, 0], position: [3.42, 0.99, 0] },
     back: { target: [0, 0.9, 0], position: [0, 0.99, -3.42] },
