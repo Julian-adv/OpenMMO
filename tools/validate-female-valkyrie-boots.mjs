@@ -6,7 +6,7 @@ import { ensureFemalePreview } from './lib/ensure-female-preview.mjs'
 
 await ensureFemalePreview('animations')
 const bodyPath = 'assets/modular_human_female_01/rig_v1/female-base.glb'
-const directory = 'assets/items/valkyrie_starter/tripo_boots_v1/fitted_v1'
+const directory = process.argv[2] ?? 'assets/items/valkyrie_starter/tripo_boots_v1/fitted_v4'
 const partPath = `${directory}/boots_female_valkyrie.glb`
 const { server, load } = await headlessThree()
 try {

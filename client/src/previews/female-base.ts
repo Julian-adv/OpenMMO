@@ -124,6 +124,8 @@ export async function showFemaleBase(
         <option value="back">전신 후면</option>
         <option value="feet">발 확대</option>
         <option value="boots">부츠 확대</option>
+        <option value="boots-back">부츠 후면</option>
+        <option value="boots-side">부츠 측면</option>
         <option value="right-hand">오른손 확대</option>
         <option value="left-hand">왼손 확대</option>
       </select>
@@ -758,6 +760,8 @@ export async function showFemaleBase(
     back: { target: [0, 0.9, 0], position: [0, 0.99, -3.42] },
     feet: { target: [0, 0.117, 0], position: [0.432, 0.288, 0.81] },
     boots: { target: [0, 0.36, 0], position: [0.25, 0.42, 1.65] },
+    'boots-back': { target: [0, 0.36, 0], position: [0, 0.42, -1.65] },
+    'boots-side': { target: [0, 0.36, 0], position: [1.65, 0.42, 0] },
     'right-hand': {
       target: [-0.216, 0.864, 0.027],
       position: [-0.81, 0.882, 0.234],

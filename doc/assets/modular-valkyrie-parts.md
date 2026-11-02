@@ -295,3 +295,13 @@ Back: Show the EXACT STRAIGHT-ON BACK VIEW, camera looking directly at the rear 
 - [양쪽 피팅 GLB](../../assets/items/valkyrie_starter/tripo_boots_v1/fitted_v1/boots_female_valkyrie.glb), [피팅 스크립트](../../tools/fit-female-valkyrie-boots.py), [몸체 가림 정보](../../assets/items/valkyrie_starter/tripo_boots_v1/fitted_v1/body-occlusion.json), [리깅 검사](../../assets/items/valkyrie_starter/tripo_boots_v1/fitted_v1/rig-validation.json). 원본 곡면과 텍스처를 유지하며 부드러운 단면 보정과 좌우 대칭으로 피팅하고, 65개 본의 여성 공통 뼈대와 하이힐 자세를 사용한다. 양쪽 합계는 2,948삼각형이다.
 - 기본 상의·하의·단발·날개 및 부츠를 조합하면 숨김 포함 42,336삼각형이며, 미리보기 표시 기준은 35,913삼각형이다. 얼굴은 공통 몸체 메시의 일부이므로 별도 메시 삼각형 수는 측정하지 않았다. 이는 조립 캐릭터 권장 예산을 초과한다.
 - 대기·걷기·달리기 각 13개 시점의 뼈대 연결과 유한한 정점 변형을 수치 검사하고, 세 동작을 미리보기에서 확인했다. 이 수치 검사는 피부 관통이나 모든 동작의 충돌을 검사하지 않는다.
+
+### 부츠 입구 피팅 중간 검토 — 2026-11-02
+
+- v2에서는 입구 좌우를 좁힌 뒤 피부가 관통했고, v3에서는 앞뒤까지 고르게 줄였으나 입구 한 곳에 피부가 남아 있었다. 두 중간 후보는 정리하고 v1을 바탕으로 v4를 만들었다.
+
+### 부츠 입구 미세 확장 v4 — 2026-11-02
+
+- [피팅 GLB](../../assets/items/valkyrie_starter/tripo_boots_v1/fitted_v4/boots_female_valkyrie.glb), [피팅 스크립트](../../tools/refine-female-valkyrie-boots-v4.py), [몸체 가림 정보](../../assets/items/valkyrie_starter/tripo_boots_v1/fitted_v4/body-occlusion.json), [리깅 검사](../../assets/items/valkyrie_starter/tripo_boots_v1/fitted_v4/rig-validation.json). 원본과 이용 조건은 v1과 같다.
+- v3 입구에 피부가 일부 관통해 좌우와 앞뒤를 동일한 비율로 서서히 넓혔다. 입구 단면은 v1 대비 0.92배이며 v3의 0.80배와 비교해 둘레 전체를 1.15배로 확장한다. 발끝 형상과 몸체 가림, UV, 정점 연결 및 가중치는 유지한다.
+- 대기 동작의 여덟 시점에서 앞면을 확대하고 피부와 부츠에 서로 다른 단색을 적용해 겹침을 시각적으로 검토했다. 공통 뼈대와 가중치, 대기·걷기·달리기 각 13개 시점의 유한한 정점 변형을 수치 검사했다. 모든 동작의 충돌은 검증하지 않았다.

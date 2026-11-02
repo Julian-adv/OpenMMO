@@ -158,11 +158,11 @@ function modularCharacterPreview(): Plugin {
       import.meta.url
     ),
     female_valkyrie_boots: new URL(
-      '../assets/items/valkyrie_starter/tripo_boots_v1/fitted_v1/boots_female_valkyrie.glb',
+      '../assets/items/valkyrie_starter/tripo_boots_v1/fitted_v4/boots_female_valkyrie.glb',
       import.meta.url
     ),
     'female-valkyrie-boots-occlusion.json': new URL(
-      '../assets/items/valkyrie_starter/tripo_boots_v1/fitted_v1/body-occlusion.json',
+      '../assets/items/valkyrie_starter/tripo_boots_v1/fitted_v4/body-occlusion.json',
       import.meta.url
     ),
     female_valkyrie_bottom: new URL(
