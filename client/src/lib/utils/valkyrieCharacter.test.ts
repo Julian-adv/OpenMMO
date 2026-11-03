@@ -35,7 +35,7 @@ const armor = {
   hands: 'worn_valkyrie_gloves',
   boots: 'worn_valkyrie_boots',
 }
-const hasAssets = existsSync(`public${MODULAR_VALKYRIE_MODEL_PATH}`)
+const hasAssets = existsSync(`public${MODULAR_FEMALE_MODEL_PATH}`)
 const parts = (root: THREE.Object3D, name: string) => {
   const meshes: THREE.Mesh[] = []
   root.traverse((node) => {
@@ -59,7 +59,7 @@ describe('Valkyrie base appearance', () => {
         })
     )
     const paths = [
-      'characters/modular_female/valkyrie.glb',
+      'characters/modular_female/base.glb',
       ...['hair', 'wings', 'top', 'bottom', 'gloves', 'boots', 'helmet'].map(
         (part) => `characters/modular_female/valkyrie_${part}.glb`
       ),

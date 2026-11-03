@@ -266,10 +266,5 @@ try {
   }
   await bakeBootsAndGrip(path => server.ssrLoadModule(path), load)
 } finally { await server.close() }
-const valkyrie = await io.read(`${output}/base.glb`)
-const valkyrieScene = valkyrie.getRoot().listScenes()[0]
-valkyrieScene.setExtras({ ...valkyrieScene.getExtras(), female_class: 'valkyrie' })
-await write(`${output}/valkyrie.glb`, valkyrie)
-report.outputs[`${output}/valkyrie.glb`] = hash(`${output}/valkyrie.glb`)
 for (const path of [...Object.keys(sources).map(name => `${output}/${name}.glb`), ...packs.map(name => `${output}/animations/${name}.glb`)]) report.outputs[path] = hash(path)
 writeReport()

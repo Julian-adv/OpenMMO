@@ -289,7 +289,7 @@ blender -b --python-exit-code 1 --python tools/blender-scripts/save_female_valky
 
 ## 게임 시작 외형 — 2026-11-03
 
-여성 발키리 플레이어는 `modular_female/valkyrie.glb` 프로필로 공통 여성 몸체를 사용한다.
+여성 발키리 플레이어는 공통 여성 몸체 `modular_female/base.glb`를 사용한다. 코드가 고정 파츠를 붙이고 `female_class`를 지정한다.
 긴 머리는 `tripo_warrior_v1/fitted_v1`, 등 날개는 `tripo_wing_v1/fitted_patch_v3`의 승인본을
 그대로 사용하며 직업 기본 외형으로 고정한다. 아이템 정의·장착 슬롯·교체 UI를 만들지 않는다.
 다른 투구를 쓰거나 모든 장비를 벗어도 머리와 날개는 유지한다. NPC의 기존 발키리 모델은 유지한다.

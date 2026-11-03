@@ -6,7 +6,7 @@ export const MODULAR_MALE_MODEL_PATH = `${MODULAR_MALE_DIRECTORY}/base.glb`
 export const MODULAR_FEMALE_DIRECTORY = '/models/characters/modular_female'
 export const MODULAR_FEMALE_MODEL_PATH = `${MODULAR_FEMALE_DIRECTORY}/base.glb`
 
-export const MODULAR_VALKYRIE_MODEL_PATH = `${MODULAR_FEMALE_DIRECTORY}/valkyrie.glb`
+export const MODULAR_VALKYRIE_MODEL_PATH = `${MODULAR_FEMALE_MODEL_PATH}#valkyrie`
 
 export function isModularFemaleModel(path: string): boolean {
   return (

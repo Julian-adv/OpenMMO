@@ -55,6 +55,16 @@ export const femaleBootsClipName = (clip: string, boots: string) =>
   `${clip}|${FEMALE_BOOTS_PROPERTY}:${boots}`
 const models = new Map<string, Promise<GLTF>>()
 const packs = new Map<string, Promise<GLTF>>()
+const pairedBaseClips = new WeakMap<GLTF, THREE.AnimationClip[]>()
+
+function baseClips(base: GLTF): THREE.AnimationClip[] {
+  let clips = pairedBaseClips.get(base)
+  if (!clips) {
+    clips = pairFemaleClips(base.scene, base.animations)
+    pairedBaseClips.set(base, clips)
+  }
+  return clips
+}
 
 export function assembleFemaleCharacter(
   base: GLTF,
@@ -62,6 +72,8 @@ export function assembleFemaleCharacter(
   names = FEMALE_PARTS
 ): THREE.Group {
   const scene = clone(base.scene) as THREE.Group
+  if (names.some((name) => FIXED_VALKYRIE_PARTS.includes(name)))
+    scene.userData.female_class = 'valkyrie'
   base.scene.traverse((node) => {
     const association = base.parser.associations.get(node)
     if (
@@ -110,15 +122,14 @@ export function loadFemaleCharacter(
       path === MODULAR_VALKYRIE_MODEL_PATH ? FIXED_VALKYRIE_PARTS : []
     const names = [...FEMALE_PARTS, ...fixed]
     pending = Promise.all([
-      loadGLB(path),
+      loadGLB(MODULAR_FEMALE_MODEL_PATH),
       ...names.map((name) =>
         loadGLB(`${MODULAR_FEMALE_DIRECTORY}/${name}.glb`)
       ),
     ])
       .then(([base, ...sources]) => {
         const scene = assembleFemaleCharacter(base, sources, names)
-        const animations = pairFemaleClips(scene, base.animations)
-        return { ...base, scene, scenes: [scene], animations }
+        return { ...base, scene, scenes: [scene], animations: baseClips(base) }
       })
       .catch((error) => {
         models.delete(path)
@@ -132,10 +143,10 @@ export function loadFemaleCharacter(
 export function loadFemaleAnimationPack(path: string): Promise<GLTF> {
   let pending = packs.get(path)
   if (!pending) {
-    pending = Promise.all([loadFemaleCharacter(), loadGLB(path)])
-      .then(([{ scene }, pack]) => ({
+    pending = Promise.all([loadGLB(MODULAR_FEMALE_MODEL_PATH), loadGLB(path)])
+      .then(([base, pack]) => ({
         ...pack,
-        animations: pairFemaleClips(scene, pack.animations),
+        animations: pairFemaleClips(base.scene, pack.animations),
       }))
       .catch((error) => {
         packs.delete(path)
