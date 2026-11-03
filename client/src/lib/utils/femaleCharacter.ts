@@ -17,25 +17,27 @@ import { attachValkyrieWings } from '../effects/valkyrie-wings'
 
 const slots = ['top', 'bottom', 'boots', 'gloves', 'helmet'] as const
 type Slot = (typeof slots)[number]
-type Style = 'plate' | 'barbarian' | 'rogue' | 'valkyrie'
+type Style = 'plate' | 'barbarian' | 'rogue' | 'valkyrie' | 'caveman'
 const prefixes: Record<Style, string> = {
   plate: '',
   barbarian: 'barbarian_',
   rogue: 'rogue_',
   valkyrie: 'valkyrie_',
+  caveman: 'caveman_',
 }
 const styles = Object.keys(prefixes) as Style[]
-type Helmet = Exclude<Style, 'rogue'> | 'brilliance'
+type Helmet = Exclude<Style, 'rogue' | 'caveman'> | 'brilliance'
 const LAZY_HELMET = 'brilliance_helmet'
 const FIXED_VALKYRIE_PARTS = ['valkyrie_hair', 'valkyrie_wings']
 const lazyParts = new Set([
   LAZY_HELMET,
   ...slots.map((slot) => `valkyrie_${slot}`),
+  ...slots.filter((slot) => slot !== 'helmet').map((slot) => `caveman_${slot}`),
 ])
 const partName = (style: Style, slot: Slot | 'hair') =>
   `${prefixes[style]}${slot}`
 export const FEMALE_PARTS = styles
-  .filter((style) => style !== 'valkyrie')
+  .filter((style) => style !== 'valkyrie' && style !== 'caveman')
   .flatMap((style) =>
     (['hair', ...slots] as const)
       .filter(
@@ -296,6 +298,7 @@ const femaleStyle = (itemId: string | null | undefined): Style | null => {
   const item = getItemDef(itemId)
   const model = item?.worldModel ?? ''
   if (model.startsWith('armor/valkyrie_')) return 'valkyrie'
+  if (model.startsWith('armor/caveman_')) return 'caveman'
   if (model.startsWith('armor/rogue_') || ROGUE_LEATHER_MODELS.has(model))
     return 'rogue'
   return item?.material === 'leather' || model.startsWith('armor/barbarian_')
@@ -307,7 +310,7 @@ const femaleHelmet = (itemId: string | null | undefined): Helmet | null => {
   if (modularOutfitForArmor({ head: itemId }).helmet === 'brilliance')
     return 'brilliance'
   const style = femaleStyle(itemId)
-  return style === 'rogue' ? 'barbarian' : style
+  return style === 'rogue' || style === 'caveman' ? 'barbarian' : style
 }
 
 function bindLazyFemalePart(
@@ -457,7 +460,10 @@ export function applyFemaleArmor(
   for (const mesh of part('rogue_garters'))
     mesh.visible = equipped.bottom === 'rogue' && equipped.boots === 'rogue'
   state.mask.setEquippedAll(shown)
-  state.underwearColor(equipped.bottom === 'rogue')
+  state.underwearColor(
+    equipped.bottom === 'rogue',
+    equipped.bottom === 'caveman'
+  )
   const bootsChanged = state.equipped?.boots !== equipped.boots
   state.equipped = equipped
   if (bootsChanged) state.refreshBoots()

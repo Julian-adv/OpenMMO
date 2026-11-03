@@ -95,6 +95,7 @@
       },
     },
     rogue: STARTER_EQUIPMENT.rogue,
+    caveman: STARTER_EQUIPMENT.caveman,
     priest: { main_hand: STARTER_EQUIPMENT.priest?.main_hand },
     knight: {
       armor: { ...STARTER_EQUIPMENT.knight?.armor, head: 'worn_plate_helmet' },

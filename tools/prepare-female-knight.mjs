@@ -59,6 +59,10 @@ const sources = {
   rogue_boots: 'assets/items/female_rogue_boots/tripo_v1/fitted_v5/boots_female_rogue.glb',
   rogue_gloves: 'assets/items/female_rogue_gloves/tripo_v1/fitted_v1/gloves_female_rogue.glb',
   rogue_garters: 'assets/items/female_rogue_garters/fitted_v1/garters_female_rogue.glb',
+  caveman_top: 'assets/items/female_caveman_top/tripo_v1/fitted_v7/top_female_caveman.glb',
+  caveman_bottom: 'assets/items/female_caveman_bottom/tripo_v1/fitted_v9/bottom_female_caveman.glb',
+  caveman_boots: 'assets/items/female_caveman_boots/tripo_v1/fitted_v4/boots_female_caveman.glb',
+  caveman_gloves: 'assets/items/female_caveman_bracers/tripo_v1/fitted_v1/gloves_female_caveman.glb',
   valkyrie_hair: 'assets/modular_human_female_01/hair/tripo_warrior_v1/fitted_v1/hair_female_warrior.glb',
   valkyrie_wings: 'assets/items/valkyrie_starter/tripo_wing_v1/fitted_patch_v3/wings-armor-fit.glb',
   valkyrie_top: 'assets/items/valkyrie_starter/tripo_top_v1/fitted_v11/top_female_valkyrie.glb',
@@ -97,7 +101,7 @@ async function write(path, doc, pack = false) {
   const bottom = path === `${output}/bottom.glb`
   // Packs share each clip's key times.
   if (pack) await doc.transform(dedup())
-  if (path === `${output}/base.glb` || bottom || pack) {
+  if (path === `${output}/base.glb` || bottom || pack || path.startsWith(`${output}/caveman_`)) {
     await doc.transform(prune({ propertyTypes: [PropertyType.MATERIAL, PropertyType.TEXTURE] }))
     // Preserve vertex and triangle numbering for outfit masks; do not quantize.
     doc.createExtension(EXTMeshoptCompression).setRequired(true)
@@ -148,7 +152,7 @@ for (const [name, source] of Object.entries(sources)) {
   for (const texture of doc.getRoot().listTextures()) {
     if (/eyelash/i.test(texture.getName())) continue
     const color = colors.has(texture)
-    const size = color && !['bottom', 'rogue_bottom', 'rogue_top'].includes(name) ? 2048 : 1024
+    const size = color && !name.startsWith('caveman_') && !['bottom', 'rogue_bottom', 'rogue_top'].includes(name) ? 2048 : 1024
     const image = await sharp(texture.getImage()).resize({ width: size, height: size, fit: 'inside', withoutEnlargement: true })
       .webp(color ? { quality: 94, effort: 5 } : { quality: 90, smartSubsample: true, effort: 5 }).toBuffer()
     texture.setImage(image).setMimeType('image/webp')
@@ -165,7 +169,7 @@ for (const [name, source] of Object.entries(sources)) {
 async function bakeBootsAndGrip(module, load) {
   const female = await module('/src/lib/utils/femaleCharacter.ts')
   const { bakeFemaleClips } = await module('/src/lib/utils/female-clip-bake.ts')
-  const partNames = [...female.FEMALE_PARTS, 'valkyrie_boots']
+  const partNames = [...new Set([...female.FEMALE_PARTS, ...female.FEMALE_BOOTS_PARTS])]
   const [base, ...parts] = await Promise.all(['base', ...partNames].map(name => load(`${output}/${name}.glb`)))
   const scene = female.assembleFemaleCharacter(base, parts, partNames)
   for (const path of [...(selectedPack ? [] : [`${output}/base.glb`]), ...builtPacks.map(name => `${output}/animations/${name}.glb`)]) {

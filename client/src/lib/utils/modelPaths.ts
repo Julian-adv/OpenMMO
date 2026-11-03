@@ -153,7 +153,8 @@ export function getCharacterModelPath(
     !isNpc &&
     (characterClass === 'knight' ||
       characterClass === 'barbarian' ||
-      characterClass === 'rogue') &&
+      characterClass === 'rogue' ||
+      characterClass === 'caveman') &&
     effectiveGender === 'female'
   )
     return MODULAR_FEMALE_MODEL_PATH

@@ -79,7 +79,7 @@ fn class_starter_items(
             ("worn_barbarian_boots", 1, Some("boots")),
             ("worn_barbarian_bracers", 1, Some("hands")),
         ],
-        CharacterClass::Caveman if gender == Gender::Male => &[
+        CharacterClass::Caveman => &[
             ("worn_caveman_top", 1, Some("chest")),
             ("worn_caveman_pants", 1, Some("pants")),
             ("worn_caveman_boots", 1, Some("boots")),
@@ -3294,14 +3294,6 @@ mod tests {
                 )
                 .unwrap();
             let items = auth.load_inventory(character.id).unwrap();
-            if gender == Gender::Female {
-                assert_eq!(items.len(), STARTER_ITEMS.len());
-                assert_eq!(
-                    auth.load_character_equipment(character.id).unwrap().armor,
-                    Default::default()
-                );
-                continue;
-            }
             for (id, slot) in [
                 ("worn_caveman_top", "chest"),
                 ("worn_caveman_pants", "pants"),
