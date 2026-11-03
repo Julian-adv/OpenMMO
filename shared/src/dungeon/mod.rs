@@ -264,15 +264,21 @@ pub enum PropKind {
     /// Mine support post standing against a corridor wall, in facing pairs.
     /// Placed by the mine generator's own pass.
     MineTimberPost,
+    /// Two-metre mine rail piece lying down a corridor's middle, covering the
+    /// 2×2 cells from its own; pieces join end to end.
+    MineRail,
 }
 
 impl PropKind {
-    /// Wall decor: no collision, no break/open state.
+    /// Decor: no collision, no break/open state.
     pub fn is_decor(self) -> bool {
-        matches!(self, PropKind::TorchWall | PropKind::MineTimberPost)
+        matches!(
+            self,
+            PropKind::TorchWall | PropKind::MineTimberPost | PropKind::MineRail
+        )
     }
 
-    /// Every kind but wall decor seals its cell.
+    /// Every kind but decor seals its cell.
     pub fn is_solid(self) -> bool {
         !self.is_decor()
     }
@@ -291,7 +297,8 @@ pub struct PropSpec {
     /// back-wall yaw the client seats the hinge by (N 0, S 180, W 90, E 270);
     /// for `TorchWall` it's the room-facing direction the client mounts it by
     /// (north wall → 0, east wall → 270); for `MineTimberPost` it's the
-    /// corridor-facing direction (wall on −Z → 0, +X → 270, +Z → 180, −X → 90).
+    /// corridor-facing direction (wall on −Z → 0, +X → 270, +Z → 180, −X → 90);
+    /// for `MineRail` it's 0 along Z and 90 along X.
     pub rotation: u16,
 }
 
@@ -441,6 +448,24 @@ pub fn generate_dungeon_for(entrance_id: &str) -> Vec<FloorLayout> {
     let group = def.map_or("", |d| d.spawn_group.as_str());
     let style = def.map_or(LayoutStyle::Rooms, |d| d.layout_style);
     gen::generate_dungeon_with(dungeon_seed(entrance_id), floors, boss, dir, group, style)
+}
+
+/// FNV-1a over every floor's `Debug` form: a fingerprint of the whole
+/// layout, the same on wasm and native when generation is deterministic.
+pub fn layout_hash(floors: &[FloorLayout]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for f in floors {
+        for b in format!("{f:?}").bytes() {
+            h ^= u64::from(b);
+            h = h.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    }
+    h
+}
+
+/// [`layout_hash`] as `0x`-prefixed hex; a u64 does not fit a JS number.
+pub fn layout_hash_hex(floors: &[FloorLayout]) -> String {
+    format!("{:#018x}", layout_hash(floors))
 }
 
 pub fn passability_floor_for_depth(depth: u8) -> u8 {

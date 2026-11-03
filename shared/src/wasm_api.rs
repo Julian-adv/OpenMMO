@@ -695,6 +695,13 @@ pub fn dungeon_layout(entrance_id: &str) -> Result<JsValue, JsError> {
     to_js(&*dungeon_layouts(entrance_id))
 }
 
+/// Fingerprint of a dungeon's generated layout (`dungeon::layout_hash_hex`),
+/// for checking the wasm build against the native one.
+#[wasm_bindgen]
+pub fn dungeon_layout_hash(entrance_id: &str) -> String {
+    crate::dungeon::layout_hash_hex(&dungeon_layouts(entrance_id))
+}
+
 /// Interior-door specs for one floor: wall side, opening span, wall line and
 /// door id (see `dungeon::doors`).
 #[wasm_bindgen]

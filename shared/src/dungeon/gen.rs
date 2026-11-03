@@ -394,6 +394,15 @@ fn place_shaft_in_room(rng: &mut ChaCha8Rng, room: &Room, along_z: bool) -> Stai
     }
 }
 
+/// A uniform index below `len`. Every index draw goes through here: `usize` is
+/// u32 on wasm32 but u64 on native, and `gen_range` over each width consumes a
+/// different amount of the RNG stream, so a bare `usize` draw desyncs the
+/// client's (wasm) layout from the server's (native) here and in every draw
+/// after.
+pub(super) fn pick_index(rng: &mut ChaCha8Rng, len: usize) -> usize {
+    rng.gen_range(0..len as u32) as usize
+}
+
 fn range_pick(rng: &mut ChaCha8Rng, lo: i32, hi: i32) -> Option<i32> {
     if lo > hi {
         return None;
@@ -636,11 +645,7 @@ fn roll_spawns(
     } + extra;
 
     for _ in 0..count.min(candidates.len()) {
-        // `as u32`: `usize` is u32 on wasm32 but u64 on native, and
-        // `gen_range` over each width consumes a different amount of the RNG
-        // stream — desyncing client (wasm) from server (native) here, and in
-        // every draw after. Fixed-width keeps the layout identical on both.
-        let idx = rng.gen_range(0..candidates.len() as u32) as usize;
+        let idx = pick_index(rng, candidates.len());
         let (x, z) = candidates.swap_remove(idx);
         let mut roll = rng.gen_range(0..total_weight);
         let mut chosen = &table[0];
@@ -929,11 +934,7 @@ fn roll_props(rng: &mut ChaCha8Rng, layout: &FloorLayout) -> Vec<PropSpec> {
             if pool.is_empty() {
                 break;
             }
-            // `as u32`: see roll_spawns — `gen_range` over `usize` (u32 on
-            // wasm, u64 on native) draws differently per platform, desyncing the
-            // RNG. This is the draw whose divergence shows up as props sitting in
-            // different cells on the client vs the server.
-            let (x, z) = pool.swap_remove(rng.gen_range(0..pool.len() as u32) as usize);
+            let (x, z) = pool.swap_remove(pick_index(rng, pool.len()));
             let idx = (x + z * GRID) as usize;
             taken[idx] = true;
 

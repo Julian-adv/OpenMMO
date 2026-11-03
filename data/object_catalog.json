@@ -274,6 +274,11 @@
     "model": "objects/mine_timber_post.glb"
   },
   {
+    "id": "mine_rail",
+    "name": "Mine Rail",
+    "model": "objects/mine_rail.glb"
+  },
+  {
     "id": "health_potion",
     "name": "Greater Healing Potion",
     "model": "objects/greater_healing_potion.glb"

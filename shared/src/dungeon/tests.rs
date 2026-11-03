@@ -10,21 +10,6 @@ use crate::pathfinding::{find_and_smooth_path, PassabilityCache};
 /// on each: `(high_cell, low_cell, high_bit, low_bit)`.
 type DoorCellPair = ((i32, i32), (i32, i32), u8, u8);
 
-fn fnv1a64_bytes(h: &mut u64, bytes: &[u8]) {
-    for b in bytes {
-        *h ^= *b as u64;
-        *h = h.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-}
-
-fn layout_hash(floors: &[FloorLayout]) -> u64 {
-    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for f in floors {
-        fnv1a64_bytes(&mut h, &format!("{f:?}").into_bytes());
-    }
-    h
-}
-
 fn test_entrance() -> Position {
     Position {
         x: 100.0,
@@ -259,7 +244,32 @@ fn blackvein_mine_has_twenty_five_floors_and_its_own_monsters() {
 const GOLDEN_OLD_CRYPT_HASH: u64 = 0x216b_8cee_51ff_2b67;
 const GOLDEN_THIEVES_DEN_HASH: u64 = 0x1d9e_c735_df9d_e607;
 const GOLDEN_SHADOW_GUILD_HASH: u64 = 0x2e1f_1554_a751_5c10;
-const GOLDEN_BLACKVEIN_MINE_HASH: u64 = 0xa568_92aa_8e92_b64e;
+const GOLDEN_BLACKVEIN_MINE_HASH: u64 = 0xfccc_70f3_823e_e6ae;
+
+/// The client's wasm build checks the same fixture (`dungeonLayouts.test.ts`),
+/// so any draw that differs between wasm32 and native fails one side.
+/// Regenerate with `UPDATE_LAYOUT_FIXTURE=1 cargo test -p onlinerpg-shared layouts_match`.
+#[test]
+fn layouts_match_the_shared_fixture() {
+    const PATH: &str = "src/dungeon/layout_hashes.fixture.json";
+    let actual: serde_json::Value = entrances()
+        .iter()
+        .map(|e| {
+            (
+                e.id.clone(),
+                layout_hash_hex(&generate_dungeon_for(&e.id)).into(),
+            )
+        })
+        .collect::<serde_json::Map<_, _>>()
+        .into();
+    if std::env::var_os("UPDATE_LAYOUT_FIXTURE").is_some() {
+        let text = serde_json::to_string_pretty(&actual).unwrap() + "\n";
+        std::fs::write(format!("{}/{PATH}", env!("CARGO_MANIFEST_DIR")), text).unwrap();
+    }
+    let expected: serde_json::Value =
+        serde_json::from_str(include_str!("layout_hashes.fixture.json")).unwrap();
+    assert_eq!(actual, expected, "{PATH} is stale; see this test's doc");
+}
 
 /// Mine floors never fall back to the single wrap room: plain floors are a
 /// corridor of chambers, and every locked floor but the last forks into three
@@ -326,6 +336,19 @@ fn mine_floors_keep_their_shape_over_many_seeds() {
             assert_eq!(posts.len() % 2, 0, "{at}");
             if f.depth > 20 {
                 assert!(posts.is_empty(), "{at}");
+            }
+            // Rail pieces lie only in corridors, on floors 6–15.
+            for r in f.props.iter().filter(|p| p.kind == PropKind::MineRail) {
+                assert!(
+                    super::gen::mine::RAIL_DEPTHS.contains(&f.depth),
+                    "{at}: rail"
+                );
+                for (dx, dz) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                    assert!(
+                        super::gen::cell_is_corridor(f, r.x + dx, r.z + dz),
+                        "{at}: rail off the corridor"
+                    );
+                }
             }
             for p in posts {
                 let (bx, bz) = match p.rotation {

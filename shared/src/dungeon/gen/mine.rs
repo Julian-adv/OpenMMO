@@ -8,8 +8,9 @@ use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 
 use super::{
-    cell_is_corridor, corridor_cells, corridor_intersects, finish_floor, place_room_around_shaft,
-    place_room_free, shaft_room_size, wall_yaw, Corridor, FloorPlan, Spacing, SHAFT_ROOM_AXIAL,
+    cell_is_corridor, corridor_cells, corridor_intersects, finish_floor, pick_index,
+    place_room_around_shaft, place_room_free, shaft_room_size, wall_yaw, Corridor, FloorPlan,
+    Spacing, SHAFT_ROOM_AXIAL,
 };
 use crate::dungeon::{
     is_locked_depth, FloorLayout, PropKind, PropSpec, Room, SpawnEntry, StairShaft, DIRS, GRID,
@@ -64,9 +65,70 @@ pub(super) fn try_generate_floor(
         max_mouths: Some(max_mouths),
     };
     let mut layout = finish_floor(rng, depth, is_last, up_shaft, table, plan)?;
-    let posts = timber_posts(&layout);
-    layout.props.extend(posts);
+    let decor = [timber_posts(&layout), rails(&layout)].concat();
+    layout.props.extend(decor);
     Some(layout)
+}
+
+/// Straight two-wide corridor stretches, sampled every `every` cells along
+/// them: `(x, z, along_x)` where the cell pair from `(x, z)` across the
+/// corridor has rock on both sides for each step in `span` along it, so
+/// nothing lands at a bend or a room mouth.
+fn straight_runs(
+    layout: &FloorLayout,
+    every: i32,
+    span: RangeInclusive<i32>,
+) -> Vec<(i32, i32, bool)> {
+    let corridor = |x, z| cell_is_corridor(layout, x, z);
+    let rock = |x, z| !layout.is_carved(x, z);
+    let straight = |x: i32, z: i32, along_x: bool| {
+        let ((dx, dz), (sx, sz)) = if along_x {
+            ((1, 0), (0, 1))
+        } else {
+            ((0, 1), (1, 0))
+        };
+        span.clone().all(|k| {
+            let (cx, cz) = (x + k * dx, z + k * dz);
+            corridor(cx, cz)
+                && corridor(cx + sx, cz + sz)
+                && rock(cx - sx, cz - sz)
+                && rock(cx + 2 * sx, cz + 2 * sz)
+        })
+    };
+    let mut runs = Vec::new();
+    for z in 1..GRID - 2 {
+        for x in 1..GRID - 2 {
+            for along_x in [true, false] {
+                let step = if along_x { x } else { z };
+                if step % every == 0 && straight(x, z, along_x) {
+                    runs.push((x, z, along_x));
+                }
+            }
+        }
+    }
+    runs
+}
+
+/// Floors whose corridors carry ore-cart rails.
+pub(in crate::dungeon) const RAIL_DEPTHS: RangeInclusive<u8> = 6..=15;
+
+/// Rail pieces down the middle of straight corridor stretches, one per two
+/// cells so they join end to end. Each piece covers the 2×2 cells from its
+/// own `(x, z)`.
+fn rails(layout: &FloorLayout) -> Vec<PropSpec> {
+    if !RAIL_DEPTHS.contains(&layout.depth) {
+        return Vec::new();
+    }
+    straight_runs(layout, 2, -1..=2)
+        .into_iter()
+        .map(|(x, z, along_x)| PropSpec {
+            x,
+            z,
+            kind: PropKind::MineRail,
+            stack: 1,
+            rotation: if along_x { 90 } else { 0 },
+        })
+        .collect()
 }
 
 /// Cells between support post pairs; the deeper, the fewer human traces.
@@ -79,24 +141,11 @@ fn post_spacing(depth: u8) -> Option<i32> {
     }
 }
 
-/// Facing pairs of support posts on straight two-wide corridor stretches,
-/// one on each wall, every `post_spacing` cells. Needs walls on both sides
-/// for three cells running, so no pair stands at a bend or a room mouth.
+/// Facing pairs of support posts on straight corridor stretches, one on each
+/// wall, every `post_spacing` cells.
 fn timber_posts(layout: &FloorLayout) -> Vec<PropSpec> {
     let Some(spacing) = post_spacing(layout.depth) else {
         return Vec::new();
-    };
-    let corridor = |x, z| cell_is_corridor(layout, x, z);
-    let rock = |x, z| !layout.is_carved(x, z);
-    // `(dx, dz)` steps along the corridor, `(sx, sz)` across it.
-    let straight = |x: i32, z: i32, (dx, dz): (i32, i32), (sx, sz): (i32, i32)| {
-        (-1..=1).all(|k| {
-            let (cx, cz) = (x + k * dx, z + k * dz);
-            corridor(cx, cz)
-                && corridor(cx + sx, cz + sz)
-                && rock(cx - sx, cz - sz)
-                && rock(cx + 2 * sx, cz + 2 * sz)
-        })
     };
     let post = |x, z, back| PropSpec {
         x,
@@ -105,18 +154,16 @@ fn timber_posts(layout: &FloorLayout) -> Vec<PropSpec> {
         stack: 1,
         rotation: wall_yaw(back),
     };
-    let mut posts = Vec::new();
-    for z in 1..GRID - 2 {
-        for x in 1..GRID - 2 {
-            if x % spacing == 0 && straight(x, z, (1, 0), (0, 1)) {
-                posts.extend([post(x, z, (0, -1)), post(x, z + 1, (0, 1))]);
+    straight_runs(layout, spacing, -1..=1)
+        .into_iter()
+        .flat_map(|(x, z, along_x)| {
+            if along_x {
+                [post(x, z, (0, -1)), post(x, z + 1, (0, 1))]
+            } else {
+                [post(x, z, (-1, 0)), post(x + 1, z, (1, 0))]
             }
-            if z % spacing == 0 && straight(x, z, (0, 1), (1, 0)) {
-                posts.extend([post(x, z, (-1, 0)), post(x + 1, z, (1, 0))]);
-            }
-        }
-    }
-    posts
+        })
+        .collect()
 }
 
 /// Two or three chambers, then the stair room (or the boss room), each a
@@ -128,7 +175,7 @@ fn tunnel_rooms(
     down_along_z: bool,
     is_last: bool,
 ) -> Option<(Vec<(usize, usize)>, usize)> {
-    for _ in 0..rng.gen_range(2..=3) {
+    for _ in 0..rng.gen_range(2..=3_i32) {
         let size = (rng.gen_range(CHAMBER), rng.gen_range(CHAMBER));
         push_far(rng, rooms, up_shaft, size, HOP)?;
     }
@@ -151,7 +198,7 @@ fn fork_rooms(
 ) -> Option<(Vec<(usize, usize)>, usize)> {
     let size = (rng.gen_range(CHAMBER), rng.gen_range(CHAMBER));
     push_far(rng, rooms, up_shaft, size, HOP)?;
-    let way_down = rng.gen_range(0..BRANCHES);
+    let way_down = pick_index(rng, BRANCHES);
     for _ in 0..BRANCHES {
         let size = (rng.gen_range(WORK_ROOM), rng.gen_range(WORK_ROOM));
         push_near(rng, rooms, up_shaft, size, 1, BRANCH_HOP)?;

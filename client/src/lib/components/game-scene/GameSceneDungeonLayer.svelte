@@ -331,11 +331,11 @@
     return m
   }
 
-  /** Strip shadows on, raycast off for a decorative (non-interactive) clone. */
-  function tagDecorative(clone: THREE.Object3D) {
+  /** Shadows on, raycast off for a decorative (non-interactive) clone. */
+  function tagDecorative(clone: THREE.Object3D, castShadow = true) {
     clone.traverse((o) => {
       if (o instanceof THREE.Mesh) {
-        o.castShadow = true
+        o.castShadow = castShadow
         o.receiveShadow = true
         o.raycast = () => {} // never intercept click-to-move
       }
@@ -429,15 +429,29 @@
     // yaw (wall on −Z → 0°, +X → 270°, +Z → 180°, −X → 90°); seat the back on
     // that wall edge. Torches hang high on north/east room walls; mine posts
     // stand on the corridor floor, sunk a little into the rock.
+    // Decor clones: no clicks, no state, recorded so the floor can track them.
+    const addDecor = (x: number, y: number, z: number, castShadow = true) => {
+      const clone = template.clone()
+      clone.rotation.y = (prop.rotation * Math.PI) / 180
+      clone.position.set(x, y, z)
+      tagDecorative(clone, castShadow)
+      group.add(clone)
+      entries.set(index, {
+        clones: [clone],
+        kind: prop.kind,
+        propId: index,
+        cellX: prop.x,
+        cellZ: prop.z,
+        rotationDeg: prop.rotation,
+        broken: false,
+        opened: false,
+      })
+      return clone
+    }
     const wallMount = WALL_MOUNTS[prop.kind]
     if (wallMount) {
-      const clone = template.clone()
-      const yawDeg = prop.rotation
-      clone.rotation.y = (yawDeg * Math.PI) / 180
-      const [px, pz] = wallSeat(prop.x, prop.z, yawDeg, wallMount.inset)
-      clone.position.set(px, wallMount.y, pz)
-      tagDecorative(clone)
-      group.add(clone)
+      const [px, pz] = wallSeat(prop.x, prop.z, prop.rotation, wallMount.inset)
+      const clone = addDecor(px, wallMount.y, pz)
       if (prop.kind === 'torch_wall') {
         // Record the flame's world position for the players-layer light pool.
         // The flame rises off the bracket and reaches off the wall along the
@@ -451,16 +465,14 @@
           )
         )
       }
-      entries.set(index, {
-        clones: [clone],
-        kind: prop.kind,
-        propId: index,
-        cellX: prop.x,
-        cellZ: prop.z,
-        rotationDeg: prop.rotation,
-        broken: false,
-        opened: false,
-      })
+      return
+    }
+
+    // Mine rail: a 2 m piece along its local Z, lying on the floor at the
+    // center of the 2×2 cells from its own; yaw 90 turns it along X. Too flat
+    // to cast a shadow worth its extra draw.
+    if (prop.kind === 'mine_rail') {
+      addDecor(prop.x + 1, 0, prop.z + 1, false)
       return
     }
 
