@@ -210,7 +210,7 @@ GET /api/metrics/countries?hours=24
 
 DB와 API의 모든 금액 필드(`gold`, `total_gold`, `peak_gold`, `gold_per_account`, `peak_gold_per_account`)는 코퍼 단위입니다. `1골드 = 100실버 = 10,000코퍼`이며 순위 표·요약·그래프 축·툴팁은 `8g 61s 34c` 형식으로 표시합니다. g·s·c 금액에는 각각 금색·은색·구리색을 적용합니다. 0인 단위는 생략하고 전체가 0이면 `0c`를 표시하며 평균값은 가장 가까운 1코퍼로 반올림합니다. 저장된 데이터와 순위 계산에는 원래 코퍼 값을 사용합니다.
 
-모든 캐릭터의 보유 골드와 영지 세금 계좌(`land_estates.treasury`) 잔액의 합계를 표시합니다. 접속 여부·최근 활동 여부와 관계없이 오프라인 캐릭터와 공식 NPC도 포함합니다. 아이템의 환산 가치는 포함하지 않습니다. 세금 계좌는 `total_gold`에만 더하며, 물가 지수가 읽는 활성 캐릭터 1인당 골드(`active_gold`)에는 포함하지 않습니다. 적용 전 기록은 소급하지 않으므로 적용 시점에 그래프가 세금 계좌 잔액만큼 한 번 올라갑니다.
+모든 캐릭터의 보유 골드와 영지 세금 계좌(`land_estates.treasury`) 잔액의 합계를 표시합니다. 접속 여부·최근 활동 여부와 관계없이 오프라인 캐릭터와 공식 NPC도 포함합니다. 아이템의 환산 가치는 포함하지 않습니다. 세금 계좌는 `total_gold`에만 더하며, `active_gold`와 물가 지수가 읽는 활성 계정 1인당 골드에는 포함하지 않습니다. 적용 전 기록은 소급하지 않으므로 적용 시점에 그래프가 세금 계좌 잔액만큼 한 번 올라갑니다.
 
 [물가 시스템](PRICING.md)의 기존 `gold_snapshots.total_gold` 시간별 기록을 재사용합니다. 서버는 캐릭터 변경 사항을 DB에 저장한 뒤 해당 시간의 집계를 한 번 기록하며, `ts`는 시간을 내림한 Unix 초입니다. 같은 시간의 기록을 덮어쓰지 않고, 대시보드 조회도 새 기록을 만들지 않습니다. 이미 저장된 과거 기록은 그대로 표시하고, 기록이 없는 표시 구간에서는 선을 끊습니다.
 
@@ -256,7 +256,7 @@ GET /api/metrics/gold-per-account?hours=24&active_hours=168
 GET /api/metrics/price-index?hours=168
 ```
 
-`hours`는 `168 / 720 / 4320 / 8760`(기본 168)이며 잘못된 값은 HTTP 400, DB 조회 실패는 HTTP 503입니다. 성공·DB 오류 응답에 `Cache-Control: no-store`를 지정합니다. 응답은 `from`, `until`, `current_index_percent`, `baseline_index_percent`, `meetings`입니다. `current_index_percent`는 `pricing_state`의 현재 지수, `baseline_index_percent`는 `from` 시점의 지수로 기간 내 첫 회의의 `index_before`, 기간에 회의가 없으면 현재 지수입니다. 지수는 회의 행을 남기면서만 바뀌므로 두 값은 그 시점의 실제 지수와 같습니다. 각 회의는 `{ timestamp, game_day, m_prev, m_now, growth, index_before, index_after }`이며 `m_*`는 활성 캐릭터 1인당 골드(코퍼)입니다. 첫 회의는 측정값만 기록하고 행을 남기지 않으므로 그래프에 나타나지 않습니다. 조회는 회의를 열거나 지수를 바꾸지 않습니다.
+`hours`는 `168 / 720 / 4320 / 8760`(기본 168)이며 잘못된 값은 HTTP 400, DB 조회 실패는 HTTP 503입니다. 성공·DB 오류 응답에 `Cache-Control: no-store`를 지정합니다. 응답은 `from`, `until`, `current_index_percent`, `baseline_index_percent`, `meetings`입니다. `current_index_percent`는 `pricing_state`의 현재 지수, `baseline_index_percent`는 `from` 시점의 지수로 기간 내 첫 회의의 `index_before`, 기간에 회의가 없으면 현재 지수입니다. 지수는 회의 행을 남기면서만 바뀌므로 두 값은 그 시점의 실제 지수와 같습니다. 각 회의는 `{ timestamp, game_day, m_prev, m_now, growth, index_before, index_after }`이며 `m_now`는 회의 때의 1인당 골드(코퍼), `m_prev`는 비교 기준, `growth`는 기준 대비 차이입니다([PRICING.md](PRICING.md#조정-serin의-삭이-되는-저녁)). 측정값이 없는 회의는 행을 남기지 않으므로 그래프에 나타나지 않습니다. 조회는 회의를 열거나 지수를 바꾸지 않습니다.
 
 ## 서버 시작과 배포 표시
 

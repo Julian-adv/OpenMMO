@@ -26,9 +26,9 @@ pub struct WorldConfig {
 #[derive(Debug, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct PricingConfig {
-    /// A character seen within this many real days counts as active.
+    /// Window for the snapshot's reference `active_gold`; `M` uses 30 days.
     pub active_days: u32,
-    /// Wanted growth of per-active-character gold, per game day.
+    /// Wanted growth of gold per active account, per game day.
     pub target_daily_growth: f64,
     pub gain: f64,
     pub max_step_per_meeting: f64,
@@ -40,7 +40,7 @@ impl Default for PricingConfig {
     fn default() -> Self {
         Self {
             active_days: 30,
-            target_daily_growth: 0.002,
+            target_daily_growth: 0.0003,
             gain: 0.5,
             max_step_per_meeting: 0.1,
             index_min: 0.9,

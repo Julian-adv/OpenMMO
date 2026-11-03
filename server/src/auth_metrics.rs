@@ -705,9 +705,9 @@ impl AuthService {
                     timestamp: row.get(0)?,
                     meeting: PricingMeeting {
                         game_day: row.get(1)?,
-                        m_prev: row.get(2)?,
+                        reference: row.get(2)?,
                         m_now: row.get(3)?,
-                        growth: row.get(4)?,
+                        gap: row.get(4)?,
                         index_before: row.get(5)?,
                         index_after: row.get(6)?,
                     },

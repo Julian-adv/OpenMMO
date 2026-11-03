@@ -16,7 +16,7 @@
   "maxNearbyMonsters": 8,
   "pricing": {
     "activeDays": 30,
-    "targetDailyGrowth": 0.002,
+    "targetDailyGrowth": 0.0003,
     "gain": 0.5,
     "maxStepPerMeeting": 0.1,
     "indexMin": 0.5,

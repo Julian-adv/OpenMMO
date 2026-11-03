@@ -228,12 +228,13 @@ pub fn ban_message(reason: Option<&str>, until_unix: Option<i64>) -> String {
     }
 }
 
-/// doc/PRICING.md; `m_prev` is the reading at the last meeting.
+/// doc/PRICING.md; `target_m` is the target path at game day `target_day`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PricingState {
     pub index_percent: u32,
     pub last_meeting_day: Option<i64>,
-    pub m_prev: Option<f64>,
+    pub target_m: Option<f64>,
+    pub target_day: Option<i64>,
 }
 
 impl Default for PricingState {
@@ -241,7 +242,8 @@ impl Default for PricingState {
         Self {
             index_percent: 100,
             last_meeting_day: None,
-            m_prev: None,
+            target_m: None,
+            target_day: None,
         }
     }
 }
@@ -249,9 +251,12 @@ impl Default for PricingState {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PricingMeeting {
     pub game_day: i64,
-    pub m_prev: f64,
+    /// The comparison: the target path, or before it the last meeting.
+    #[serde(rename = "m_prev")]
+    pub reference: f64,
     pub m_now: f64,
-    pub growth: f64,
+    #[serde(rename = "growth")]
+    pub gap: f64,
     pub index_before: u32,
     pub index_after: u32,
 }
@@ -1483,7 +1488,8 @@ impl AuthService {
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 index_percent INTEGER NOT NULL,
                 last_meeting_day INTEGER,
-                m_prev REAL
+                target_m REAL,
+                target_day INTEGER
             );
             CREATE TABLE IF NOT EXISTS pricing_history (
                 ts INTEGER NOT NULL,
@@ -1494,20 +1500,29 @@ impl AuthService {
                 index_before INTEGER NOT NULL,
                 index_after INTEGER NOT NULL
             );",
-        )
+        )?;
+        if !Self::table_columns(conn, "pricing_state")?.contains("target_m") {
+            conn.execute_batch(
+                "ALTER TABLE pricing_state ADD COLUMN target_m REAL;
+                 ALTER TABLE pricing_state ADD COLUMN target_day INTEGER;",
+            )?;
+        }
+        Ok(())
     }
 
     pub fn load_pricing_state(&self) -> Result<PricingState, AuthError> {
         let conn = self.open_connection()?;
         Ok(conn
             .query_row(
-                "SELECT index_percent, last_meeting_day, m_prev FROM pricing_state WHERE id = 1",
+                "SELECT index_percent, last_meeting_day, target_m, target_day
+                 FROM pricing_state WHERE id = 1",
                 [],
                 |row| {
                     Ok(PricingState {
                         index_percent: row.get(0)?,
                         last_meeting_day: row.get(1)?,
-                        m_prev: row.get(2)?,
+                        target_m: row.get(2)?,
+                        target_day: row.get(3)?,
                     })
                 },
             )
@@ -1525,9 +1540,14 @@ impl AuthService {
         let mut conn = self.open_connection()?;
         let tx = conn.transaction()?;
         tx.execute(
-            "INSERT OR REPLACE INTO pricing_state (id, index_percent, last_meeting_day, m_prev) \
-             VALUES (1, ?1, ?2, ?3)",
-            params![state.index_percent, state.last_meeting_day, state.m_prev],
+            "INSERT OR REPLACE INTO pricing_state \
+             (id, index_percent, last_meeting_day, target_m, target_day) VALUES (1, ?1, ?2, ?3, ?4)",
+            params![
+                state.index_percent,
+                state.last_meeting_day,
+                state.target_m,
+                state.target_day
+            ],
         )?;
         if let Some(m) = meeting {
             tx.execute(
@@ -1537,9 +1557,9 @@ impl AuthService {
                 params![
                     unix_now(),
                     m.game_day,
-                    m.m_prev,
+                    m.reference,
                     m.m_now,
-                    m.growth,
+                    m.gap,
                     m.index_before,
                     m.index_after
                 ],
@@ -1549,9 +1569,9 @@ impl AuthService {
         Ok(())
     }
 
-    /// Notice inputs: last meeting's index change (points) and gold per
-    /// active character from the latest hourly snapshot.
-    pub fn pricing_notice_inputs(&self) -> Result<(i32, Option<f64>), AuthError> {
+    /// Notice inputs: last meeting's index change (points) and `M` over the
+    /// past day.
+    pub fn pricing_notice_inputs(&self, now: i64) -> Result<(i32, Option<f64>), AuthError> {
         let conn = self.open_connection()?;
         let change = conn
             .query_row(
@@ -1561,37 +1581,29 @@ impl AuthService {
             )
             .optional()?
             .unwrap_or(0) as i32;
-        let reading = conn
-            .query_row(
-                "SELECT active_gold, active_characters FROM gold_snapshots ORDER BY ts DESC LIMIT 1",
-                [],
-                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
-            )
-            .optional()?
-            .and_then(|(gold, count)| (count > 0).then(|| gold as f64 / count as f64));
-        Ok((change, reading))
+        let day = crate::metrics::DAY_SECONDS;
+        Ok((change, self.average_gold_per_account(now - day, now)?))
     }
 
-    /// Gold per active character, or None with no active characters.
-    pub fn active_gold_per_character(
+    /// Mean hourly 30-day wallets per active account in `(from, until]`, or
+    /// None without a sample.
+    pub fn average_gold_per_account(
         &self,
-        now: i64,
-        active_days: u32,
+        from: i64,
+        until: i64,
     ) -> Result<Option<f64>, AuthError> {
-        let cutoff = active_cutoff(now, active_days);
-        let conn = self.open_connection()?;
-        let (gold, count): (i64, i64) = conn.query_row(
-            "SELECT COALESCE(SUM(gold), 0), COUNT(*) FROM characters WHERE last_seen_at >= ?1",
-            params![cutoff],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )?;
-        Ok((count > 0).then(|| gold as f64 / count as f64))
+        Ok(self.open_connection()?.query_row(
+            "SELECT AVG(month_gold * 1.0 / month_accounts) FROM account_gold_samples
+             WHERE timestamp > ?1 AND timestamp <= ?2 AND month_accounts > 0",
+            params![from, until],
+            |row| row.get(0),
+        )?)
     }
 
     /// Inserts this hour's gold totals; returns the hour, or None if it
     /// already had a row. Active = seen within `active_days`. Estate
     /// treasuries count toward the total only: they are escrowed, so the
-    /// per-active-character reading that drives pricing leaves them out.
+    /// per-active reading leaves them out.
     pub fn record_gold_snapshot(
         &self,
         now: i64,
@@ -2646,7 +2658,28 @@ mod tests {
         assert_eq!(row, (197, 3, 7, 107, 2));
 
         assert_eq!(auth.record_gold_snapshot(now + 60, 30).unwrap(), None);
-        assert_eq!(auth.active_gold_per_character(now, 30).unwrap(), Some(53.5));
+    }
+
+    #[test]
+    fn pricing_averages_month_wallets_per_active_account() {
+        let (auth, _) = temp_auth("auth_gold_per_account");
+        assert_eq!(auth.average_gold_per_account(0, 10_800).unwrap(), None);
+        let conn = auth.open_connection().unwrap();
+        conn.execute_batch(
+            "INSERT INTO account_gold_samples VALUES (3600, 1, 1, 1, 1, 300, 3);
+             INSERT INTO account_gold_samples VALUES (7200, 1, 1, 1, 1, 500, 4);
+             INSERT INTO account_gold_samples VALUES (10800, 0, 0, 0, 0, 0, 0);",
+        )
+        .unwrap();
+        assert_eq!(
+            auth.average_gold_per_account(0, 10_800).unwrap(),
+            Some(112.5)
+        );
+        assert_eq!(
+            auth.average_gold_per_account(3600, 7200).unwrap(),
+            Some(125.0)
+        );
+        assert_eq!(auth.pricing_notice_inputs(7200).unwrap(), (0, Some(112.5)));
     }
 
     #[test]
@@ -2711,13 +2744,14 @@ mod tests {
         let state = PricingState {
             index_percent: 104,
             last_meeting_day: Some(34),
-            m_prev: Some(120.5),
+            target_m: Some(98.5),
+            target_day: Some(-86),
         };
         let meeting = PricingMeeting {
             game_day: 34,
-            m_prev: 100.0,
+            reference: 100.0,
             m_now: 120.5,
-            growth: 0.205,
+            gap: 0.205,
             index_before: 100,
             index_after: 104,
         };

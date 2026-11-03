@@ -1863,7 +1863,8 @@ mod tests {
             &crate::auth::PricingState {
                 index_percent: 75,
                 last_meeting_day: Some(1620),
-                m_prev: Some(150.0),
+                target_m: Some(150.0),
+                target_day: Some(1500),
             },
             None,
         )
