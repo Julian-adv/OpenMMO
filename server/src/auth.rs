@@ -794,7 +794,18 @@ impl AuthService {
         Self::ensure_pricing_schema(&conn)?;
         Self::ensure_migrations_schema(&conn)?;
         Self::migrate_level_curve(&conn)?;
-        Self::migrate_female_rogue_starter_outfit(&conn)?;
+        Self::migrate_starter_outfit(
+            &conn,
+            "female_rogue_starter_outfit_20261027",
+            CharacterClass::Rogue,
+            Gender::Female,
+        )?;
+        Self::migrate_starter_outfit(
+            &conn,
+            "valkyrie_starter_outfit_20261103",
+            CharacterClass::Valkyrie,
+            Gender::Female,
+        )?;
         Self::migrate_starter_weapon(
             &conn,
             "rogue_starter_dagger_20261027",
@@ -1098,22 +1109,31 @@ impl AuthService {
         Ok(())
     }
 
-    fn migrate_female_rogue_starter_outfit(conn: &Connection) -> Result<(), rusqlite::Error> {
-        const NAME: &str = "female_rogue_starter_outfit_20261027";
+    /// Gives existing characters the outfit new ones start with; worn slots stay as is.
+    fn migrate_starter_outfit(
+        conn: &Connection,
+        name: &str,
+        class: CharacterClass,
+        gender: Gender,
+    ) -> Result<(), rusqlite::Error> {
         let tx = conn.unchecked_transaction()?;
         let done: bool = tx.query_row(
             "SELECT EXISTS(SELECT 1 FROM migrations WHERE name = ?1)",
-            [NAME],
+            [name],
             |row| row.get(0),
         )?;
         if done {
             return Ok(());
         }
+        let gender_str = match gender {
+            Gender::Male => "male",
+            Gender::Female => "female",
+        };
         let mut characters = tx.prepare(
             "SELECT id, account_name, character_name FROM characters \
-             WHERE gender = 'female' AND class = 'rogue'",
+             WHERE gender = ?1 AND class = ?2",
         )?;
-        for character in characters.query_map([], |row| {
+        for character in characters.query_map(params![gender_str, class.as_str()], |row| {
             Ok((
                 row.get::<_, i64>(0)?,
                 row.get::<_, String>(1)?,
@@ -1126,9 +1146,7 @@ impl AuthService {
             {
                 continue;
             }
-            for (item, quantity, slot) in
-                class_starter_items(&CharacterClass::Rogue, Gender::Female)
-            {
+            for (item, quantity, slot) in class_starter_items(&class, gender) {
                 tx.execute(
                     "INSERT INTO character_items (character_id, item_def_id, quantity) \
                      SELECT ?1, ?2, ?3 WHERE NOT EXISTS \
@@ -1145,7 +1163,7 @@ impl AuthService {
             }
         }
         drop(characters);
-        tx.execute("INSERT INTO migrations (name) VALUES (?1)", [NAME])?;
+        tx.execute("INSERT INTO migrations (name) VALUES (?1)", [name])?;
         tx.commit()
     }
 
@@ -2894,6 +2912,57 @@ mod tests {
             .unwrap()
             .iter()
             .any(|item| item.item_def_id == "worn_rogue_boots"));
+    }
+
+    #[test]
+    fn valkyrie_outfit_migration_fills_empty_slots_and_runs_once() {
+        let (auth, path) = temp_auth("valkyrie_outfit_migration");
+        let account = auth.login_google("sub-legacy-valkyrie").unwrap();
+        let valkyrie = auth
+            .create_character(
+                &account,
+                "LegacyValkyrie",
+                &plain_attributes(),
+                10,
+                CharacterClass::Valkyrie,
+                Gender::Female,
+            )
+            .unwrap();
+        let conn = auth.open_connection().unwrap();
+        conn.execute(
+            "DELETE FROM migrations WHERE name = 'valkyrie_starter_outfit_20261103'",
+            [],
+        )
+        .unwrap();
+        conn.execute("DELETE FROM character_items WHERE character_id = ?1 AND item_def_id LIKE 'worn_valkyrie_%'", [valkyrie.id]).unwrap();
+        conn.execute("INSERT INTO character_items (character_id, item_def_id, quantity, equip_slot) VALUES (?1, 'chain_mail', 1, 'chest')", [valkyrie.id]).unwrap();
+        drop(conn);
+        drop(auth);
+        let auth = AuthService::new(path.clone()).unwrap();
+        let items = auth.load_inventory(valkyrie.id).unwrap();
+        for (id, _, _) in class_starter_items(&CharacterClass::Valkyrie, Gender::Female) {
+            assert_eq!(
+                items.iter().filter(|item| item.item_def_id == *id).count(),
+                1,
+                "{id}"
+            );
+        }
+        let armor = auth.load_character_equipment(valkyrie.id).unwrap().armor;
+        assert_eq!(armor.head.as_deref(), Some("worn_valkyrie_helmet"));
+        assert_eq!(armor.chest.as_deref(), Some("chain_mail"));
+        assert_eq!(armor.pants.as_deref(), Some("worn_valkyrie_pants"));
+        assert_eq!(armor.hands.as_deref(), Some("worn_valkyrie_gloves"));
+        assert_eq!(armor.boots.as_deref(), Some("worn_valkyrie_boots"));
+        let conn = auth.open_connection().unwrap();
+        conn.execute("DELETE FROM character_items WHERE character_id = ?1 AND item_def_id = 'worn_valkyrie_boots'", [valkyrie.id]).unwrap();
+        drop(conn);
+        drop(auth);
+        let auth = AuthService::new(path).unwrap();
+        assert!(!auth
+            .load_inventory(valkyrie.id)
+            .unwrap()
+            .iter()
+            .any(|item| item.item_def_id == "worn_valkyrie_boots"));
     }
 
     #[test]
