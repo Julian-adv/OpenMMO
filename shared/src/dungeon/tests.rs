@@ -259,7 +259,7 @@ fn blackvein_mine_has_twenty_five_floors_and_its_own_monsters() {
 const GOLDEN_OLD_CRYPT_HASH: u64 = 0x216b_8cee_51ff_2b67;
 const GOLDEN_THIEVES_DEN_HASH: u64 = 0x1d9e_c735_df9d_e607;
 const GOLDEN_SHADOW_GUILD_HASH: u64 = 0x2e1f_1554_a751_5c10;
-const GOLDEN_BLACKVEIN_MINE_HASH: u64 = 0x59fa_9a79_433b_78f5;
+const GOLDEN_BLACKVEIN_MINE_HASH: u64 = 0xa568_92aa_8e92_b64e;
 
 /// Mine floors never fall back to the single wrap room: plain floors are a
 /// corridor of chambers, and every locked floor but the last forks into three
@@ -315,6 +315,28 @@ fn mine_floors_keep_their_shape_over_many_seeds() {
                 };
                 let mouths = openings.iter().filter(|o| o.room == room).count();
                 assert!(mouths <= corridors, "{at}: room {room} has {mouths} mouths");
+            }
+            // Support posts stand in corridors with rock behind, in facing
+            // pairs, and none below floor 20.
+            let posts: Vec<_> = f
+                .props
+                .iter()
+                .filter(|p| p.kind == PropKind::MineTimberPost)
+                .collect();
+            assert_eq!(posts.len() % 2, 0, "{at}");
+            if f.depth > 20 {
+                assert!(posts.is_empty(), "{at}");
+            }
+            for p in posts {
+                let (bx, bz) = match p.rotation {
+                    0 => (p.x, p.z - 1),
+                    180 => (p.x, p.z + 1),
+                    90 => (p.x - 1, p.z),
+                    270 => (p.x + 1, p.z),
+                    r => panic!("{at}: post yaw {r}"),
+                };
+                assert!(super::gen::cell_is_corridor(f, p.x, p.z), "{at}");
+                assert!(!f.is_carved(bx, bz), "{at}: post off the wall");
             }
         }
         let last = floors.last().unwrap();
@@ -1113,7 +1135,7 @@ fn props_are_well_placed() {
                     let back = gen::chest_back_delta(layout, p.x, p.z);
                     assert_eq!(
                         p.rotation,
-                        gen::chest_yaw(back),
+                        gen::wall_yaw(back),
                         "seed {seed}: chest rotation is not its back-wall yaw"
                     );
                     // Loot spilled from the opening must not roll down stairs.

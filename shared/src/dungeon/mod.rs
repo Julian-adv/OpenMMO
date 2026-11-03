@@ -245,13 +245,13 @@ pub struct SpawnSpec {
     pub aggressive: bool,
 }
 
-/// Clutter prop dropped into a room. Every kind but [`PropKind::TorchWall`]
-/// becomes a 1×1 collision pillar in the passability grid (see
+/// Clutter prop dropped into a room. Every kind but the decor ones
+/// ([`PropKind::is_decor`]) becomes a 1×1 collision pillar in the passability grid (see
 /// [`floor_passability_cells_full`]), so a mover routes around it and a path
 /// can never end on its cell (the treasure chest is sealed the same way).
 /// Breaking a barrel or crate opens its cell again. The string
-/// variants match the object-catalog ids (`barrel`/`crate`/`chest`/`torch_wall`)
-/// the client loads the GLB for.
+/// variants match the object-catalog ids (`barrel`/`crate`/`chest`/`torch_wall`/
+/// `mine_timber_post`) the client loads the GLB for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PropKind {
@@ -261,13 +261,20 @@ pub enum PropKind {
     /// Wall-mounted torch: hangs on a room's north or east wall (one per room).
     /// Never spawned by [`PropKind`] clutter rolls — placed by its own pass.
     TorchWall,
+    /// Mine support post standing against a corridor wall, in facing pairs.
+    /// Placed by the mine generator's own pass.
+    MineTimberPost,
 }
 
 impl PropKind {
-    /// Wall torches hang high on the wall, not on the floor; every other kind
-    /// seals its cell.
+    /// Wall decor: no collision, no break/open state.
+    pub fn is_decor(self) -> bool {
+        matches!(self, PropKind::TorchWall | PropKind::MineTimberPost)
+    }
+
+    /// Every kind but wall decor seals its cell.
     pub fn is_solid(self) -> bool {
-        !matches!(self, PropKind::TorchWall)
+        !self.is_decor()
     }
 }
 
@@ -283,7 +290,8 @@ pub struct PropSpec {
     /// barrel/crate it's a random jitter for variety; for `Chest` it's the
     /// back-wall yaw the client seats the hinge by (N 0, S 180, W 90, E 270);
     /// for `TorchWall` it's the room-facing direction the client mounts it by
-    /// (north wall → 0, east wall → 270).
+    /// (north wall → 0, east wall → 270); for `MineTimberPost` it's the
+    /// corridor-facing direction (wall on −Z → 0, +X → 270, +Z → 180, −X → 90).
     pub rotation: u16,
 }
 

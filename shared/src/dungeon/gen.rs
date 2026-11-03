@@ -730,9 +730,9 @@ pub(super) fn chest_clearance_cells(x: i32, z: i32, back: (i32, i32)) -> [(i32, 
     ]
 }
 
-/// Yaw the client renders a chest with: hinge onto the backed wall
-/// (N → 0°, S → 180°, W → 90°, E → 270°).
-pub(super) fn chest_yaw(back: (i32, i32)) -> u16 {
+/// Yaw the client renders a wall-backed prop with, its back on the wall at
+/// cell offset `back` (N → 0°, S → 180°, W → 90°, E → 270°).
+pub(super) fn wall_yaw(back: (i32, i32)) -> u16 {
     match back {
         (0, -1) => 0,
         (0, 1) => 180,
@@ -982,7 +982,7 @@ fn roll_props(rng: &mut ChaCha8Rng, layout: &FloorLayout) -> Vec<PropSpec> {
             // the stream layout-independent.
             let mut rotation = rng.gen_range(0..360) as u16;
             if let Some(back) = chest_back {
-                rotation = chest_yaw(back);
+                rotation = wall_yaw(back);
             }
             props.push(PropSpec {
                 x,

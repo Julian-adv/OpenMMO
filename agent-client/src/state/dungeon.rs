@@ -297,7 +297,10 @@ impl SharedState {
             .map(|b| {
                 let kind = match b.kind {
                     PropKind::Crate => "crate",
-                    PropKind::Barrel | PropKind::Chest | PropKind::TorchWall => "barrel",
+                    PropKind::Barrel
+                    | PropKind::Chest
+                    | PropKind::TorchWall
+                    | PropKind::MineTimberPost => "barrel",
                 };
                 let dist = crate::geom::PlanarDelta::between(&p.position, &b.position).dist;
                 format!("{kind} [prop {}] {dist:.0}m away", b.prop_id)

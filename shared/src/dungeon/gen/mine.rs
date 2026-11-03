@@ -8,10 +8,12 @@ use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 
 use super::{
-    corridor_cells, corridor_intersects, finish_floor, place_room_around_shaft, place_room_free,
-    shaft_room_size, Corridor, FloorPlan, Spacing, SHAFT_ROOM_AXIAL,
+    cell_is_corridor, corridor_cells, corridor_intersects, finish_floor, place_room_around_shaft,
+    place_room_free, shaft_room_size, wall_yaw, Corridor, FloorPlan, Spacing, SHAFT_ROOM_AXIAL,
 };
-use crate::dungeon::{is_locked_depth, FloorLayout, Room, SpawnEntry, StairShaft, DIRS, GRID};
+use crate::dungeon::{
+    is_locked_depth, FloorLayout, PropKind, PropSpec, Room, SpawnEntry, StairShaft, DIRS, GRID,
+};
 
 /// Plans are redrawn whole when a corridor cannot keep clear, so they fail
 /// often.
@@ -61,7 +63,60 @@ pub(super) fn try_generate_floor(
         extra_spawns: if fork { FORK_EXTRA_SPAWNS } else { 0 },
         max_mouths: Some(max_mouths),
     };
-    finish_floor(rng, depth, is_last, up_shaft, table, plan)
+    let mut layout = finish_floor(rng, depth, is_last, up_shaft, table, plan)?;
+    let posts = timber_posts(&layout);
+    layout.props.extend(posts);
+    Some(layout)
+}
+
+/// Cells between support post pairs; the deeper, the fewer human traces.
+fn post_spacing(depth: u8) -> Option<i32> {
+    match depth {
+        1..=10 => Some(6),
+        11..=15 => Some(9),
+        16..=20 => Some(14),
+        _ => None,
+    }
+}
+
+/// Facing pairs of support posts on straight two-wide corridor stretches,
+/// one on each wall, every `post_spacing` cells. Needs walls on both sides
+/// for three cells running, so no pair stands at a bend or a room mouth.
+fn timber_posts(layout: &FloorLayout) -> Vec<PropSpec> {
+    let Some(spacing) = post_spacing(layout.depth) else {
+        return Vec::new();
+    };
+    let corridor = |x, z| cell_is_corridor(layout, x, z);
+    let rock = |x, z| !layout.is_carved(x, z);
+    // `(dx, dz)` steps along the corridor, `(sx, sz)` across it.
+    let straight = |x: i32, z: i32, (dx, dz): (i32, i32), (sx, sz): (i32, i32)| {
+        (-1..=1).all(|k| {
+            let (cx, cz) = (x + k * dx, z + k * dz);
+            corridor(cx, cz)
+                && corridor(cx + sx, cz + sz)
+                && rock(cx - sx, cz - sz)
+                && rock(cx + 2 * sx, cz + 2 * sz)
+        })
+    };
+    let post = |x, z, back| PropSpec {
+        x,
+        z,
+        kind: PropKind::MineTimberPost,
+        stack: 1,
+        rotation: wall_yaw(back),
+    };
+    let mut posts = Vec::new();
+    for z in 1..GRID - 2 {
+        for x in 1..GRID - 2 {
+            if x % spacing == 0 && straight(x, z, (1, 0), (0, 1)) {
+                posts.extend([post(x, z, (0, -1)), post(x, z + 1, (0, 1))]);
+            }
+            if z % spacing == 0 && straight(x, z, (0, 1), (1, 0)) {
+                posts.extend([post(x, z, (-1, 0)), post(x + 1, z, (1, 0))]);
+            }
+        }
+    }
+    posts
 }
 
 /// Two or three chambers, then the stair room (or the boss room), each a

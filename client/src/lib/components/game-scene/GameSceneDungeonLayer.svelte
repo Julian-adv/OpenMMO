@@ -38,6 +38,7 @@
   import { generateDungeonPuddles } from '../../utils/dungeon-puddles'
   import { DungeonPuddles } from '../../effects/dungeon-puddles'
   import { disposeObjectTree } from '../../utils/disposeObjectTree'
+  import { translucentClone } from '../../utils/translucentMaterial'
   import {
     playDungeonDripSound,
     stopDungeonDripSounds,
@@ -143,6 +144,33 @@
   /** Wall torch: how far the mount's back face seats *into* the wall from its
    *  room-facing boundary. 0 = back face flush on the wall surface. */
   const TORCH_WALL_INSET = 0
+  /** Mine support post: how far its back sinks into the corridor wall. */
+  const MINE_POST_WALL_INSET = 0.02
+  /** Wall decor kinds: mount height and how far the back sinks into the wall. */
+  const WALL_MOUNTS: Partial<Record<string, { y: number; inset: number }>> = {
+    torch_wall: { y: TORCH_MOUNT_Y, inset: TORCH_WALL_INSET },
+    mine_timber_post: { y: 0, inset: MINE_POST_WALL_INSET },
+  }
+
+  /** Floor-local `[x, z]` of a wall decor's back: the cell's wall edge named
+   *  by the facing yaw, pushed `inset` into the wall. */
+  function wallSeat(
+    x: number,
+    z: number,
+    yawDeg: number,
+    inset: number
+  ): [number, number] {
+    switch (yawDeg) {
+      case 0:
+        return [x + 0.5, z - inset]
+      case 180:
+        return [x + 0.5, z + 1 + inset]
+      case 90:
+        return [x - inset, z + 0.5]
+      default:
+        return [x + 1 + inset, z + 0.5]
+    }
+  }
   /** A crate is left crooked when its random yaw lands more than this many
    *  degrees off a right angle (≈ a quarter of crates). */
   const CRATE_ASKEW_THRESH = 34
@@ -184,8 +212,23 @@
     aabb: THREE.Box3
     fadeGroup: number
     occluded?: boolean
+    /** Ghosted this frame, alone or with its group. */
+    faded?: boolean
   }
   let wallRuns: WallRunFade[] = []
+  /** A mine post fades with the wall run it stands against. */
+  interface WallPostFade {
+    root: THREE.Object3D
+    meshes: GhostMesh[]
+    /** Undefined until linked; null when no run holds the post. */
+    wall?: WallRunFade | null
+  }
+  let wallPosts: WallPostFade[] = []
+  // Shared GLB material → its ghost; never rendered as a key.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const postGhosts = new Map<THREE.Material, THREE.Material>()
+  const POST_GHOST_OPACITY = 0.4
+  const postProbe = new THREE.Vector3()
   // Per-frame scratch, never rendered from.
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const fadedWallGroups = new Set<number>()
@@ -237,9 +280,36 @@
       disposeObjectTree(c)
     }
     propEntries = new Map()
+    wallPosts = []
     wallTorchPositions = []
     for (const m of propMixers) m.stopAllAction()
     propMixers = []
+  }
+
+  function postFade(root: THREE.Object3D): WallPostFade {
+    const meshes: WallPostFade['meshes'] = []
+    root.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh)) return
+      const base = obj.material as THREE.Material
+      let ghost = postGhosts.get(base)
+      if (!ghost) {
+        ghost = translucentClone(base, POST_GHOST_OPACITY)
+        postGhosts.set(base, ghost)
+      }
+      meshes.push({ mesh: obj, base, ghost })
+    })
+    return { root, meshes }
+  }
+
+  /** The wall run whose footprint holds a post's back, or null. */
+  function postWallRun(root: THREE.Object3D): WallRunFade | null {
+    const p = root.getWorldPosition(postProbe)
+    return (
+      wallRuns.find(
+        ({ aabb: { min, max } }) =>
+          p.x >= min.x && p.x <= max.x && p.z >= min.z && p.z <= max.z
+      ) ?? null
+    )
   }
 
   /** Measure (and cache) a model's seat offset, height and half-extents. */
@@ -354,36 +424,33 @@
     if (key !== builtKey) return // floor changed mid-load — abandon
     const m = measureProp(prop.kind, template)
 
-    // Wall torch: hangs high on a room's north/east wall, decorative only. The
-    // model's wall side is its local −Z=0 face (the bracket back) with the torch
-    // body reaching into the room along +Z and the base at local y=0. The
-    // generator hands us the room-facing yaw (north wall → 0°, east wall → 270°);
-    // we seat the back face flush against that wall and raise it up the wall.
-    if (prop.kind === 'torch_wall') {
+    // Wall decor: the model's wall side is its local −Z=0 face, reaching into
+    // the room along +Z, base at local y=0. The generator hands us the facing
+    // yaw (wall on −Z → 0°, +X → 270°, +Z → 180°, −X → 90°); seat the back on
+    // that wall edge. Torches hang high on north/east room walls; mine posts
+    // stand on the corridor floor, sunk a little into the rock.
+    const wallMount = WALL_MOUNTS[prop.kind]
+    if (wallMount) {
       const clone = template.clone()
       const yawDeg = prop.rotation
       clone.rotation.y = (yawDeg * Math.PI) / 180
-      let px = prop.x + 0.5
-      let pz = prop.z + 0.5
-      // Push the back face onto the mounted wall. The generator only ever emits
-      // a north (0°) or east (270°) facing — one per room.
-      if (yawDeg === 0)
-        pz = prop.z - TORCH_WALL_INSET // faces +Z, wall on −Z (N)
-      else if (yawDeg === 270) px = prop.x + 1 + TORCH_WALL_INSET // wall on +X (E)
-      clone.position.set(px, TORCH_MOUNT_Y, pz)
+      const [px, pz] = wallSeat(prop.x, prop.z, yawDeg, wallMount.inset)
+      clone.position.set(px, wallMount.y, pz)
       tagDecorative(clone)
       group.add(clone)
-      // Record the flame's world position for the players-layer light pool. The
-      // flame rises off the bracket and reaches off the wall along the model's
-      // local +Z (here baked into the clone yaw), so push the light out there.
-      const yaw = clone.rotation.y
-      torchPositions.push(
-        new THREE.Vector3(
-          dungeonManager.originX + px + Math.sin(yaw) * TORCH_FLAME_REACH,
-          dungeonManager.floorY(depth) + TORCH_MOUNT_Y + TORCH_FLAME_RISE,
-          dungeonManager.originZ + pz + Math.cos(yaw) * TORCH_FLAME_REACH
+      if (prop.kind === 'torch_wall') {
+        // Record the flame's world position for the players-layer light pool.
+        // The flame rises off the bracket and reaches off the wall along the
+        // model's local +Z (baked into the clone yaw), so push the light out.
+        const yaw = clone.rotation.y
+        torchPositions.push(
+          new THREE.Vector3(
+            dungeonManager.originX + px + Math.sin(yaw) * TORCH_FLAME_REACH,
+            dungeonManager.floorY(depth) + TORCH_MOUNT_Y + TORCH_FLAME_RISE,
+            dungeonManager.originZ + pz + Math.cos(yaw) * TORCH_FLAME_REACH
+          )
         )
-      )
+      }
       entries.set(index, {
         clones: [clone],
         kind: prop.kind,
@@ -666,6 +733,9 @@
     propsGroup.position.copy(group.position)
     while (group.children.length) propsGroup.add(group.children[0])
     propEntries = entries
+    wallPosts = [...entries.values()]
+      .filter((e) => e.kind === 'mine_timber_post')
+      .map((e) => postFade(e.clones[0]))
     wallTorchPositions = torchPositions
     // Catch any breaks/opens that landed while the GLBs were loading. Chests
     // already open at build time snap to the open pose (no entrance swing).
@@ -1071,12 +1141,22 @@
     }
     for (const w of wallRuns) {
       const occ = w.occluded || fadedWallGroups.has(w.fadeGroup)
+      w.faded = occ
       if (w.weathering) w.weathering.visible = !occ
       if (w.ghostMesh) {
         w.mesh.visible = !occ
         w.ghostMesh.visible = occ
       } else if (occ !== (w.mesh.material === w.ghost)) {
         w.mesh.material = occ ? w.ghost : w.base
+      }
+    }
+    for (const p of wallPosts) {
+      if (p.wall === undefined && wallRuns.length > 0)
+        p.wall = postWallRun(p.root)
+      const occ = !!p.wall?.faded
+      for (const m of p.meshes) {
+        if (occ !== (m.mesh.material === m.ghost))
+          m.mesh.material = occ ? m.ghost : m.base
       }
     }
 
