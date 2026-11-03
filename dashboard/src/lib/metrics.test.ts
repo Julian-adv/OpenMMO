@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { connectionParts, formatAxisTime, formatDateTime, formatGold, goldSegments, goldPeriods, kstDayStart, nearestSample, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parsePriceIndexHistory, parseServerStarts, parseUniqueHistory, periods, uniquePeriods, splitSegments, summarize, deployMarkers } from './metrics'
+import { accountGoldPeriods, connectionParts, formatAxisTime, formatDateTime, formatGold, goldSegments, goldPeriods, nearestSample, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parsePriceIndexHistory, parseServerStarts, parseUniqueHistory, periods, uniquePeriods, splitSegments, summarize, deployMarkers } from './metrics'
 
 describe('gold display units', () => {
   it.each([
@@ -27,7 +27,7 @@ describe('gold per active account history', () => {
     window_seconds: 86400, collection_started_at: 0, latest, samples: [sample] }
 
   it.each(goldPeriods)('accepts each active window independently of the $label chart range', ({ hours, interval }) => {
-    for (const activePeriod of uniquePeriods) {
+    for (const activePeriod of accountGoldPeriods) {
       const history = { ...data, from: midnight - hours * 3600, sample_interval_seconds: interval,
         window_seconds: activePeriod.hours * 3600,
         samples: [{ ...sample, timestamp: Math.floor(midnight / interval) * interval }] }
@@ -57,10 +57,8 @@ describe('gold per active account history', () => {
     expect(() => parsePerAccountGoldHistory(data, 24, 168)).toThrow()
     expect(() => parsePerAccountGoldHistory({ ...data, samples: [] }, 24, 24)).toThrow()
     expect(() => parsePerAccountGoldHistory({ ...data, samples: [sample, sample] }, 24, 24)).toThrow()
-    expect(() => parsePerAccountGoldHistory({ ...data, collection_started_at: midnight }, 24, 24)).toThrow()
-    expect(kstDayStart(midnight - 1)).toBe(midnight - 86400)
-    expect(kstDayStart(midnight)).toBe(midnight)
-    expect(kstDayStart(midnight + 86399)).toBe(midnight)
+    expect(parsePerAccountGoldHistory({ ...data, collection_started_at: midnight }, 24, 24).latest).toEqual(latest)
+    expect(() => parsePerAccountGoldHistory({ ...data, collection_started_at: midnight + 1 }, 24, 24)).toThrow()
   })
 
   it('allows floating point rounding in bucket averages', () => {

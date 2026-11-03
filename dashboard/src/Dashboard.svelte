@@ -33,7 +33,7 @@
   import PeriodFilter from './lib/PeriodFilter.svelte'
   import { createMetricsResource } from './lib/metricsResource.svelte'
   import { useDashboardAuth } from './lib/auth.svelte'
-  import { formatDateTime, formatTime, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseLevelLeaderboard, parseGoldLeaderboard, parseWeaponEnchantLeaderboard, parseArmorEnchantLeaderboard, parseLandLeaderboard, parsePriceIndexHistory, parseServerStarts, parseUniqueHistory, periods, uniquePeriods, uniqueRangePeriods, summarize, deployMarkers, type GoldHours, type Hours, type LeaderboardHours, type UniqueHours } from './lib/metrics'
+  import { formatDateTime, formatTime, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseLevelLeaderboard, parseGoldLeaderboard, parseWeaponEnchantLeaderboard, parseArmorEnchantLeaderboard, parseLandLeaderboard, parsePriceIndexHistory, parseServerStarts, parseUniqueHistory, periods, uniquePeriods, uniqueRangePeriods, summarize, deployMarkers, type AccountGoldHours, type GoldHours, type Hours, type LeaderboardHours, type UniqueHours } from './lib/metrics'
 
   const auth = useDashboardAuth()
   let hours = $state<Hours>(24)
@@ -53,9 +53,9 @@
     '유니크 계정 현황', () => ({ window_hours: String(uniqueWindowHours) }))
   let goldHours = $state<GoldHours>(24)
   const gold = createMetricsResource(() => goldHours, 'gold', parseGoldHistory, '골드 현황')
-  let activeHours = $state<UniqueHours>(24)
+  let activeHours = $state<AccountGoldHours>(24)
   const perAccountGold = createMetricsResource(() => goldHours, 'gold-per-account',
-    (value, hours, query) => parsePerAccountGoldHistory(value, hours, Number(query.active_hours) as UniqueHours),
+    (value, hours, query) => parsePerAccountGoldHistory(value, hours, Number(query.active_hours) as AccountGoldHours),
     '1인당 골드 현황', () => ({ active_hours: String(activeHours) }))
   let priceIndexHours = $state<LeaderboardHours>(168)
   const priceIndex = createMetricsResource(() => priceIndexHours, 'price-index', parsePriceIndexHistory, '물가 지수 현황')

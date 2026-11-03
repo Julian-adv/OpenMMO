@@ -199,6 +199,8 @@ export const uniquePeriods = [
 ] as const
 export type UniqueHours = typeof uniquePeriods[number]['hours']
 export const uniqueRangePeriods = uniquePeriods.filter((period) => period.hours > 24)
+export const accountGoldPeriods = [uniquePeriods[0], uniquePeriods[1], uniquePeriods[2]] as const
+export type AccountGoldHours = typeof accountGoldPeriods[number]['hours']
 export const formatPeriod = (hours: number) => periods.find((period) => period.hours === hours)?.label ?? `${hours}시간`
 
 export function connectionParts(sample: Sample) {
@@ -322,7 +324,7 @@ export function parseGoldHistory(value: unknown, hours: GoldHours): GoldHistory 
   return data
 }
 
-export function parsePerAccountGoldHistory(value: unknown, hours: GoldHours, activeHours: UniqueHours): PerAccountGoldHistory {
+export function parsePerAccountGoldHistory(value: unknown, hours: GoldHours, activeHours: AccountGoldHours): PerAccountGoldHistory {
   if (!value || typeof value !== 'object') throw new Error('Invalid per-account gold metrics response')
   const data = value as PerAccountGoldHistory
   const interval = goldPeriods.find((period) => period.hours === hours)!.interval
@@ -332,7 +334,7 @@ export function parsePerAccountGoldHistory(value: unknown, hours: GoldHours, act
     data.window_seconds !== activeHours * 3600 ||
     !Number.isSafeInteger(data.collection_started_at) || data.collection_started_at < 0 ||
     (latest !== null && (!isGoldSample(latest, data.until) ||
-      kstDayStart(latest.timestamp) <= data.collection_started_at ||
+      latest.timestamp < data.collection_started_at ||
       !Number.isSafeInteger(latest.accounts) || latest.accounts <= 0 ||
       !Number.isFinite(latest.gold_per_account) || latest.gold_per_account < 0 ||
       Math.abs(latest.gold_per_account - latest.total_gold / latest.accounts) > Math.max(1, latest.gold_per_account) * 1e-9)) ||
@@ -386,7 +388,6 @@ export function parsePriceIndexHistory(value: unknown, hours: LeaderboardHours):
   return data
 }
 
-export const kstDayStart = (timestamp: number) => Math.floor((timestamp + 9 * 3600) / 86400) * 86400 - 9 * 3600
 
 export function axisStep(span: number) {
   const raw = Math.max(1, span / 4)
