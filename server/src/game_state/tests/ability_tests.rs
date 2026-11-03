@@ -801,10 +801,7 @@ async fn ward_checks_weapon_classification_and_off_hand_armor_type() {
         let before = gs.effective_guard(&pid(&name)).await;
         gs.use_ability(&pid(&name), WARD).await;
         if allowed {
-            assert_eq!(
-                gs.effective_guard(&pid(&name)).await,
-                before + onlinerpg_shared::ability::GUARDIAN_WARD_GUARD_BONUS
-            );
+            assert_eq!(gs.effective_guard(&pid(&name)).await, before + 2);
             assert!(drain(&mut rx)
                 .iter()
                 .any(|m| matches!(m, ServerMessage::AbilityUsed { .. })));
@@ -939,6 +936,30 @@ async fn ward_from_another_caster_refreshes_and_uses_current_equipment_guard() {
     assert_eq!(gs.effective_guard(&pid("second")).await, 33);
     tokio::time::advance(Duration::from_secs(29)).await;
     assert_eq!(gs.effective_guard(&pid("second")).await, 31);
+}
+
+#[tokio::test(start_paused = true)]
+async fn ward_bonus_follows_caster_level_and_a_weaker_recast_keeps_it() {
+    let gs = make_test_game_state("ward_caster_level");
+    add_ward_player(&gs, "veteran", 0.0, 1).await;
+    add_ward_player(&gs, "novice", 1.0, 2).await;
+    party(&gs, "veteran", "novice").await;
+    gs.players
+        .write()
+        .await
+        .get_mut(&pid("veteran"))
+        .unwrap()
+        .level = 40;
+    gs.use_ability(&pid("veteran"), WARD).await;
+    assert_eq!(gs.effective_guard(&pid("novice")).await, 35);
+    tokio::time::advance(Duration::from_secs(30)).await;
+    gs.use_ability(&pid("novice"), WARD).await;
+    tokio::time::advance(Duration::from_secs(31)).await;
+    assert_eq!(gs.effective_guard(&pid("novice")).await, 35);
+    tokio::time::advance(Duration::from_secs(29)).await;
+    assert_eq!(gs.effective_guard(&pid("novice")).await, 31);
+    gs.use_ability(&pid("novice"), WARD).await;
+    assert_eq!(gs.effective_guard(&pid("veteran")).await, 33);
 }
 
 #[tokio::test]

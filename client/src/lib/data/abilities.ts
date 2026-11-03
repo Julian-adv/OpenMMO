@@ -19,10 +19,10 @@ export const GUARDIAN_WARD = {
   name: 'Guardian Ward',
   icon: '/icons/skills/guardian-ward.png',
   description: 'Protect yourself and nearby party members.',
-  buffDescription: 'Guard +2',
+  buffDescription: 'Guard up',
   get stats() {
     return [
-      { label: 'Guard', value: '+2' },
+      { label: 'Guard', value: '+2, +1 per 20 levels' },
       { label: 'Class', value: 'Knight' },
       { label: 'Weapon', value: 'Sword or Mace' },
       { label: 'Off hand', value: 'Shield' },
