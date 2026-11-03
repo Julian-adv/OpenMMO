@@ -398,6 +398,7 @@
   "login.googleInit": "無法初始化 Google 登入",
   "login.unavailable": "目前無法登入。",
   "login.repository": "GitHub 倉庫",
+  "login.devlog": "開發日誌",
   "slot.chest": "胸部",
   "slot.ear": "耳部",
   "slot.belt": "腰部",

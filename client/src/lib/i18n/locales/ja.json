@@ -398,6 +398,7 @@
   "login.googleInit": "Googleログインを開始できませんでした",
   "login.unavailable": "現在ログインできません。",
   "login.repository": "GitHubリポジトリ",
+  "login.devlog": "開発ログ",
   "slot.chest": "胸",
   "slot.ear": "耳",
   "slot.belt": "腰",

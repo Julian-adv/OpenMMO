@@ -398,6 +398,7 @@
   "login.googleInit": "Google Sign-In failed to initialize",
   "login.unavailable": "Sign-in is currently unavailable.",
   "login.repository": "GitHub repository",
+  "login.devlog": "Devlog",
   "slot.chest": "chest",
   "slot.ear": "ear",
   "slot.belt": "belt",

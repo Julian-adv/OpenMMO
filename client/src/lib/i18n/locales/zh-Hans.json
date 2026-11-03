@@ -398,6 +398,7 @@
   "login.googleInit": "无法初始化 Google 登录",
   "login.unavailable": "当前无法登录。",
   "login.repository": "GitHub 仓库",
+  "login.devlog": "开发日志",
   "slot.chest": "胸部",
   "slot.ear": "耳部",
   "slot.belt": "腰部",

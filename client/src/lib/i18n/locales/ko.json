@@ -398,6 +398,7 @@
   "login.googleInit": "Google 로그인을 시작하지 못했습니다",
   "login.unavailable": "현재 로그인할 수 없습니다.",
   "login.repository": "GitHub 저장소",
+  "login.devlog": "개발일지",
   "slot.chest": "가슴",
   "slot.ear": "귀",
   "slot.belt": "허리",
