@@ -16,6 +16,11 @@
 - Chat expand/collapse outline icons — original inline SVG circles and chevrons authored with OpenAI Codex in `ChatPanel.svelte`; workspace-provided tier (exact tier not exposed), 2026-09-06; project-owned, no external source. Transparent fill with strokes matching the surrounding text colors, displayed at 16px.
 - Chat translation dropdown chevrons — original SVG chevrons authored with OpenAI Codex as CSS backgrounds in `ChatPanel.svelte`; workspace-provided tier (exact tier not exposed), 2026-09-06; project-owned, no external source. Right when closed, down when open, displayed at 12px.
 
+## Login screen
+
+- `client/public/landing/{village,inn,world,dungeon}-{640,960}.webp` — 로그인 화면 슬라이드용 게임 스크린샷. 2026-11-03 로컬 dev 서버에서 jake5로 접속해 xvfb 위 Chrome(WebGPU)으로 1920×1080 캡처하고 HUD를 숨겼다. 16:9로 잘라 640/960px WebP(q70/q72)로 저장했으며, 장당 19–86KB다. 프로젝트 자체 화면이라 외부 라이선스가 없다.
+- 배경(밤하늘·두 달·산·성)과 금빛 타이틀은 `LoginBackdrop.svelte`의 캔버스와 SVG 그라데이션으로 그려 이미지 파일이 없다. 로그인 화면은 2026-11-03부터 `textures/flowerx4.png`를 쓰지 않는다(풀 셰이더는 계속 사용).
+
 ## Skill icons
 
 - `client/public/icons/skills/healing-prayer.png` — 치유의 기도(Healing Prayer) Priest 스킬·퀵슬롯 아이콘. 원래 `radiance.png`로 만든 Radiance 조명 버프 아이콘이며, 2026-10-30 사용자 결정으로 치유의 기도로 옮겼다. Radiance는 새 아이콘을 그릴 때까지 이 파일을 함께 쓴다. 생성 기록: OpenAI Codex built-in ImageGen, workspace-provided tier (정확한 등급은 도구에서 공개되지 않음), 생성 2026-09-13. 프로젝트용 생성 이미지이며 OpenAI 서비스 약관의 출력물 이용 조건에 따른다. 기존 Double Slash와 공통 생성 프롬프트의 은백색·옅은 아이보리 붓선 스타일을 사용했다. 사용자가 공격 스킬로 오인할 수 있다고 지적한 원형 궤적을 제거하고, 검은 바탕 위에 빛 문양 하나만 남겼다. [생성·수정 프롬프트](radiance-icon-prompt.txt).
