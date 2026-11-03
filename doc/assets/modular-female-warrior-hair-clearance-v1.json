@@ -1,0 +1,80 @@
+{
+  "rest": {
+    "-1": {
+      "samples": 2122,
+      "minimum_horizontal_clearance_m": 0.005482017993927002
+    },
+    "1": {
+      "samples": 2236,
+      "minimum_horizontal_clearance_m": 0.005128681659698486
+    }
+  },
+  "motion_vertices": 411,
+  "clips": [
+    {
+      "name": "idle1",
+      "frames_sampled": 13,
+      "frames_with_penetration": 0,
+      "penetrating_vertex_samples": 0,
+      "minimum_signed_distance_m": 0.0
+    },
+    {
+      "name": "idle_armed",
+      "frames_sampled": 13,
+      "frames_with_penetration": 0,
+      "penetrating_vertex_samples": 0,
+      "minimum_signed_distance_m": 0.0
+    },
+    {
+      "name": "walk",
+      "frames_sampled": 13,
+      "frames_with_penetration": 0,
+      "penetrating_vertex_samples": 0,
+      "minimum_signed_distance_m": 0.0
+    },
+    {
+      "name": "run",
+      "frames_sampled": 13,
+      "frames_with_penetration": 0,
+      "penetrating_vertex_samples": 0,
+      "minimum_signed_distance_m": 0.0
+    },
+    {
+      "name": "jump",
+      "frames_sampled": 13,
+      "frames_with_penetration": 3,
+      "penetrating_vertex_samples": 41,
+      "minimum_signed_distance_m": -0.006509765651571797
+    },
+    {
+      "name": "combat_idle",
+      "frames_sampled": 13,
+      "frames_with_penetration": 0,
+      "penetrating_vertex_samples": 0,
+      "minimum_signed_distance_m": 0.0
+    },
+    {
+      "name": "slash1",
+      "frames_sampled": 13,
+      "frames_with_penetration": 7,
+      "penetrating_vertex_samples": 223,
+      "minimum_signed_distance_m": -0.030032940208911896
+    },
+    {
+      "name": "dying",
+      "frames_sampled": 13,
+      "frames_with_penetration": 1,
+      "penetrating_vertex_samples": 1,
+      "minimum_signed_distance_m": -0.0028773536905646324
+    },
+    {
+      "name": "sit_idle",
+      "frames_sampled": 13,
+      "frames_with_penetration": 0,
+      "penetrating_vertex_samples": 0,
+      "minimum_signed_distance_m": 0.0
+    }
+  ],
+  "method": "Rest pose: sample triangle surfaces and measure horizontal clearance against the body. Motion: sample the same front-hair vertices against the nearest evaluated body surface, counting signed distances below -1mm.",
+  "limitations": "Motion samples are not exhaustive and include contacts with arms. Nearest-surface signs may be unreliable near open or overlapping surfaces. Garments and helmet are not checked."
+}

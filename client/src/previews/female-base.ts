@@ -53,6 +53,16 @@ export async function showFemaleBase(
         <option value="knight">긴 금발 (보관본)</option>
         <option value="warrior">전사 긴 헤어 (피팅 검수 중)</option>
       </select>
+      <div id="warrior-hair-fit" hidden>
+        <p class="details">처음 피팅한 헤어를 기준으로 조절합니다. 변경값은 미리보기에만 적용됩니다.</p>
+        <label for="warrior-hair-scale">전체 크기 <output id="warrior-hair-scale-value">115%</output></label>
+        <input id="warrior-hair-scale" type="range" min="80" max="160" step="1" value="115" />
+        <label for="warrior-hair-height">높이 <output id="warrior-hair-height-value">118%</output></label>
+        <input id="warrior-hair-height" type="range" min="70" max="150" step="1" value="118" />
+        <label for="warrior-hair-offset">위아래 위치 <output id="warrior-hair-offset-value">-5.1cm</output></label>
+        <input id="warrior-hair-offset" type="range" min="-10" max="10" step="0.1" value="-5.1" />
+        <button id="warrior-hair-reset" type="button">헤어 조정 초기화</button>
+      </div>
       <label class="toggle"><input id="female-wings" type="checkbox" /> 발키리 날개 (피팅 시안)</label>
       <a href="?asset=female-knight-bob">단발 원본 단독 보기</a>
       <label for="female-helmet">투구</label>
@@ -257,6 +267,104 @@ export async function showFemaleBase(
         : name
   if (initialHairAsset)
     hairOptions[initialHair] = bindModularPart(model, initialHairAsset.scene)
+  const hairFitControls = document.getElementById('warrior-hair-fit')!
+  const hairScale = document.getElementById(
+    'warrior-hair-scale'
+  ) as HTMLInputElement
+  const hairHeight = document.getElementById(
+    'warrior-hair-height'
+  ) as HTMLInputElement
+  const hairOffset = document.getElementById(
+    'warrior-hair-offset'
+  ) as HTMLInputElement
+  const hairFitOriginals = new WeakMap<
+    THREE.SkinnedMesh,
+    {
+      position: Float32Array
+      normal?: Float32Array
+      tangent?: Float32Array
+    }
+  >()
+  const readAttribute = (
+    attribute: THREE.BufferAttribute | THREE.InterleavedBufferAttribute
+  ) => {
+    const values = new Float32Array(attribute.count * attribute.itemSize)
+    for (let i = 0; i < attribute.count; i++) {
+      values[i * attribute.itemSize] = attribute.getX(i)
+      values[i * attribute.itemSize + 1] = attribute.getY(i)
+      values[i * attribute.itemSize + 2] = attribute.getZ(i)
+      if (attribute.itemSize === 4)
+        values[i * attribute.itemSize + 3] = attribute.getW(i)
+    }
+    return values
+  }
+  const updateHairFit = () => {
+    const scale = Number(hairScale.value) / 115
+    const vertical = (scale * Number(hairHeight.value)) / 118
+    const offset = Number(hairOffset.value) / 100
+    document.getElementById('warrior-hair-scale-value')!.textContent =
+      `${hairScale.value}%`
+    document.getElementById('warrior-hair-height-value')!.textContent =
+      `${hairHeight.value}%`
+    document.getElementById('warrior-hair-offset-value')!.textContent =
+      `${Number(hairOffset.value).toFixed(1)}cm`
+    for (const mesh of hairOptions.warrior ?? []) {
+      const { position, normal, tangent } = mesh.geometry.attributes
+      let original = hairFitOriginals.get(mesh)
+      if (!original) {
+        original = {
+          position: readAttribute(position),
+          normal: normal && readAttribute(normal),
+          tangent: tangent && readAttribute(tangent),
+        }
+        hairFitOriginals.set(mesh, original)
+      }
+      for (let i = 0; i < position.count; i++) {
+        const j = i * 3
+        position.setXYZ(
+          i,
+          original.position[j] * scale,
+          1.69 + (original.position[j + 1] - 1.639) * vertical + offset,
+          -0.012 + (original.position[j + 2] + 0.012) * scale
+        )
+        if (normal && original.normal) {
+          const x = original.normal[j] / scale
+          const y = original.normal[j + 1] / vertical
+          const z = original.normal[j + 2] / scale
+          const length = Math.hypot(x, y, z) || 1
+          normal.setXYZ(i, x / length, y / length, z / length)
+        }
+        if (tangent && original.tangent) {
+          const k = i * 4
+          const x = original.tangent[k] * scale
+          const y = original.tangent[k + 1] * vertical
+          const z = original.tangent[k + 2] * scale
+          const length = Math.hypot(x, y, z) || 1
+          tangent.setXYZW(
+            i,
+            x / length,
+            y / length,
+            z / length,
+            original.tangent[k + 3]
+          )
+        }
+      }
+      position.needsUpdate = true
+      if (normal) normal.needsUpdate = true
+      if (tangent) tangent.needsUpdate = true
+      mesh.geometry.computeBoundingSphere()
+      mesh.frustumCulled = false
+    }
+  }
+  hairScale.oninput = hairHeight.oninput = hairOffset.oninput = updateHairFit
+  document.getElementById('warrior-hair-reset')!.onclick = () => {
+    hairScale.value = '115'
+    hairHeight.value = '118'
+    hairOffset.value = '-5.1'
+    updateHairFit()
+  }
+  hairFitControls.hidden = initialHair !== 'warrior'
+  updateHairFit()
   const pendingHair = new Map<string, Promise<THREE.SkinnedMesh[]>>()
   const loadHair = (
     name: string,
@@ -280,6 +388,7 @@ export async function showFemaleBase(
         const meshes = bindModularPart(model, source)
         for (const mesh of meshes) mesh.visible = false
         hairOptions[key] = meshes
+        if (key === 'warrior') updateHairFit()
         return meshes
       })
       .finally(() => pendingHair.delete(key))
@@ -1094,6 +1203,7 @@ export async function showFemaleBase(
       for (const material of materials) material.wireframe = wireframe.checked
       if (hairSelect.value !== requested) return
       appliedHair = requested
+      hairFitControls.hidden = requested !== 'warrior'
       updateHair()
       updateStats()
       updateStatus()
