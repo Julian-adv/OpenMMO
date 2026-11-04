@@ -96,6 +96,7 @@
     },
     rogue: STARTER_EQUIPMENT.rogue,
     caveman: STARTER_EQUIPMENT.caveman,
+    ranger: STARTER_EQUIPMENT.ranger,
     priest: {
       ...STARTER_EQUIPMENT.priest,
       armor: {

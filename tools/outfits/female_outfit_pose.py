@@ -1,9 +1,8 @@
-"""Move the Tripo priest outfit from its generated body pose onto the female base rest pose."""
+"""Move a Tripo female outfit from its generated body pose onto the female base rest pose."""
 import numpy as np
 from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 
-SCALE = 1.8
 ELBOW_BLEND = .035
 WRIST_BLEND = .025
 GLOVE_CLEARANCE = .004

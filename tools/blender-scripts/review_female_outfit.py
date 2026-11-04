@@ -1,6 +1,6 @@
-"""Render fitted female priest parts on the female base, at rest and in sampled animation frames.
+"""Render fitted female outfit parts on the female base, at rest and in sampled animation frames.
 
-blender -b --python tools/blender-scripts/review_female_priest.py -- --parts gloves top --out DIR [--views hands] [--clip walk:8]
+blender -b --python tools/blender-scripts/review_female_outfit.py -- --outfit ranger --parts gloves top --out DIR [--views hands] [--clip walk:8]
 """
 import json
 import sys
@@ -10,7 +10,6 @@ import bpy
 from mathutils import Vector
 
 ROOT = Path(__file__).resolve().parents[2]
-DIRECTORY = ROOT / 'assets/items/female_priest_outfit'
 BODY = ROOT / 'assets/modular_human_female_01/rig_v1/female-base.glb'
 argv = sys.argv[sys.argv.index('--') + 1:]
 
@@ -27,6 +26,7 @@ def values(flag):
 
 
 parts = values('--parts')
+DIRECTORY = ROOT / f"assets/items/female_{values('--outfit')[0]}_outfit"
 out = Path(values('--out')[0])
 views = values('--views') or ['full']
 clips = values('--clip')

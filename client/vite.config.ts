@@ -214,22 +214,29 @@ function modularCharacterPreview(): Plugin {
       import.meta.url
     ),
     ...Object.fromEntries(
-      ['top', 'bottom', 'gloves', 'boots', 'helmet'].flatMap((slot) => [
+      (
         [
-          `female_priest_${slot}`,
-          new URL(
-            `../assets/items/female_priest_outfit/${slot}/fitted_v1/${slot}_female_priest.glb`,
-            import.meta.url
-          ),
-        ],
-        [
-          `female-priest-${slot}-occlusion.json`,
-          new URL(
-            `../assets/items/female_priest_outfit/${slot}/fitted_v1/body-occlusion.json`,
-            import.meta.url
-          ),
-        ],
-      ])
+          ['priest', ['top', 'bottom', 'gloves', 'boots', 'helmet']],
+          ['ranger', ['top', 'bottom', 'gloves', 'boots', 'hair']],
+        ] as const
+      ).flatMap(([outfit, slots]) =>
+        slots.flatMap((slot) => [
+          [
+            `female_${outfit}_${slot}`,
+            new URL(
+              `../assets/items/female_${outfit}_outfit/${slot}/fitted_v1/${slot}_female_${outfit}.glb`,
+              import.meta.url
+            ),
+          ],
+          [
+            `female-${outfit}-${slot}-occlusion.json`,
+            new URL(
+              `../assets/items/female_${outfit}_outfit/${slot}/fitted_v1/body-occlusion.json`,
+              import.meta.url
+            ),
+          ],
+        ])
+      )
     ),
     female_caveman_top: new URL(
       '../assets/items/female_caveman_top/tripo_v1/fitted_v7/top_female_caveman.glb',

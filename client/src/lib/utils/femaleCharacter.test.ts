@@ -13,6 +13,7 @@ import {
   MODULAR_FEMALE_DIRECTORY,
   MODULAR_FEMALE_MODEL_PATH,
   MODULAR_VALKYRIE_MODEL_PATH,
+  MODULAR_FEMALE_RANGER_MODEL_PATH,
   getCharacterModelPath,
   CHARACTER_ANIMATION_PACK_PATHS,
 } from './modelPaths'
@@ -256,22 +257,25 @@ describe('female modular starter outfits', () => {
         const valkyrie = id.startsWith('worn_valkyrie_')
         const caveman = item.worldModel?.startsWith('armor/caveman_')
         const priest = item.worldModel?.startsWith('armor/priest_')
+        const ranger = item.worldModel?.startsWith('armor/ranger_')
         const rogueStyle =
           item.worldModel?.startsWith('armor/rogue_') ||
           ['leather_armor', 'leather_gloves', 'leather_boots'].includes(id)
         const [shown, hidden] = priest
           ? [`priest_${part}`, part]
-          : caveman
-            ? [`caveman_${part}`, part]
-            : valkyrie
-              ? [`valkyrie_${part}`, part]
-              : rogueStyle
-                ? [`rogue_${part}`, part]
-                : brilliance
-                  ? ['brilliance_helmet', part]
-                  : barbarianStyle
-                    ? [`barbarian_${part}`, part]
-                    : [part, `barbarian_${part}`]
+          : ranger
+            ? [`ranger_${part}`, `barbarian_${part}`]
+            : caveman
+              ? [`caveman_${part}`, part]
+              : valkyrie
+                ? [`valkyrie_${part}`, part]
+                : rogueStyle
+                  ? [`rogue_${part}`, part]
+                  : brilliance
+                    ? ['brilliance_helmet', part]
+                    : barbarianStyle
+                      ? [`barbarian_${part}`, part]
+                      : [part, `barbarian_${part}`]
         await applyCharacterArmor(modelRoot, { [slot]: id } as ArmorEquipment)
         expect(count(modelRoot, shown), id).toBeGreaterThan(0)
         expect(count(modelRoot, hidden), id).toBe(0)
@@ -289,6 +293,39 @@ describe('female modular starter outfits', () => {
         expect(count(modelRoot, `barbarian_${part}`)).toBe(0)
         expect(count(modelRoot, `rogue_${part}`)).toBe(0)
       }
+      expect(count(modelRoot, 'hair')).toBeGreaterThan(0)
+      disposeCharacterSkeletons(modelRoot)
+    }
+  )
+  it.skipIf(!hasAssets)(
+    'gives female rangers their outfit and a ponytail that helmets replace',
+    async () => {
+      expect(getCharacterModelPath('ranger', 'female')).toBe(
+        MODULAR_FEMALE_RANGER_MODEL_PATH
+      )
+      const source = await loadCharacterModel(MODULAR_FEMALE_RANGER_MODEL_PATH)
+      const { modelRoot } = createCharacterModelRoot(source.scene)
+      const armor = {
+        chest: 'worn_ranger_top',
+        pants: 'worn_ranger_pants',
+        hands: 'worn_ranger_gloves',
+        boots: 'worn_ranger_boots',
+      }
+      await applyCharacterArmor(modelRoot, armor)
+      for (const part of ['top', 'bottom', 'gloves', 'boots'])
+        expect(count(modelRoot, `ranger_${part}`), part).toBeGreaterThan(0)
+      expect(count(modelRoot, 'ranger_hair')).toBeGreaterThan(0)
+      expect(count(modelRoot, 'hair')).toBe(0)
+      await applyCharacterArmor(modelRoot, {
+        ...armor,
+        head: 'worn_plate_helmet',
+      })
+      expect(count(modelRoot, 'ranger_hair')).toBe(0)
+      await applyCharacterArmor(modelRoot, {
+        ...armor,
+        head: 'worn_priest_helmet',
+      })
+      expect(count(modelRoot, 'ranger_hair')).toBe(0)
       expect(count(modelRoot, 'hair')).toBeGreaterThan(0)
       disposeCharacterSkeletons(modelRoot)
     }
@@ -628,12 +665,19 @@ describe('female modular starter outfits', () => {
         for (const [boots, part] of [
           [armor.boots, 'boots'],
           [barbarian.boots, 'barbarian_boots'],
+          ['worn_ranger_boots', 'ranger_boots'],
           ['worn_valkyrie_boots', 'valkyrie_boots'],
         ]) {
           await applyCharacterArmor(modelRoot, { ...armor, boots })
           mixer.setTime(time)
           modelRoot.updateMatrixWorld(true)
-          expect(Math.abs(lowest(soles(part)) - floor)).toBeLessThan(0.01)
+          const gap = lowest(soles(part)) - floor
+          // Heels sharing the plate boots' lift may float a little but never sink.
+          if (part === 'boots') expect(Math.abs(gap)).toBeLessThan(0.01)
+          else {
+            expect(gap).toBeGreaterThan(-0.01)
+            expect(gap).toBeLessThan(0.06)
+          }
         }
         expect(scene.position.y).toBe(0)
       }

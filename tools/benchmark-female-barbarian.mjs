@@ -42,9 +42,9 @@ try {
   const timings = []
   for (const name of ['idle1', 'walk', 'run', 'combat_idle', 'slash1', 'sit_idle']) {
     const raw = base.animations.find(clip => clip.name === name)
-    const companion = base.animations.find(clip => clip.name === femaleBootsClipName(name, 'barbarian_boots'))
+    const companion = base.animations.find(clip => clip.name === femaleBootsClipName(name, 'boots'))
     assert.ok(raw, name)
-    assert.ok(companion, `${name}: barbarian boots`)
+    assert.ok(companion, `${name}: heeled boots`)
     const replacements = new Map(companion.tracks.map(track => [track.name, track]))
     const clip = new THREE.AnimationClip(name, raw.duration, raw.tracks.map(track => replacements.get(track.name) ?? track))
     for (const { body, mixer } of characters) {

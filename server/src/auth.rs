@@ -91,7 +91,7 @@ fn class_starter_items(
             ("worn_rogue_gloves", 1, Some("hands")),
             ("worn_rogue_boots", 1, Some("boots")),
         ],
-        CharacterClass::Ranger if gender == Gender::Male => &[
+        CharacterClass::Ranger => &[
             ("worn_ranger_top", 1, Some("chest")),
             ("worn_ranger_pants", 1, Some("pants")),
             ("worn_ranger_gloves", 1, Some("hands")),
@@ -3214,7 +3214,7 @@ mod tests {
     }
 
     #[test]
-    fn rangers_start_with_four_equipped_unpriced_pieces_and_no_helmet() {
+    fn rangers_of_both_genders_start_with_four_equipped_unpriced_pieces_and_no_helmet() {
         let (auth, _) = temp_auth("auth_ranger_armor");
         for (name, gender) in [("Ranger", Gender::Male), ("Shadow", Gender::Female)] {
             let account = auth.login_google(&format!("sub-{name}")).unwrap();
@@ -3229,14 +3229,6 @@ mod tests {
                 )
                 .unwrap();
             let items = auth.load_inventory(character.id).unwrap();
-            if gender == Gender::Female {
-                assert_eq!(items.len(), STARTER_ITEMS.len());
-                assert_eq!(
-                    auth.load_character_equipment(character.id).unwrap().armor,
-                    Default::default()
-                );
-                continue;
-            }
             for (id, slot) in [
                 ("worn_ranger_top", "chest"),
                 ("worn_ranger_pants", "pants"),
