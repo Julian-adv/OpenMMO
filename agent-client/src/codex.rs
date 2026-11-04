@@ -30,7 +30,7 @@ pub struct CodexConfig {
     pub fallback_model: String,
     #[serde(default = "default_fallback_after_secs")]
     pub fallback_after_secs: u64,
-    /// After the fallback answers, every turn goes to it for this long.
+    /// After the fallback answers, every turn leads with it for this long.
     #[serde(default = "default_fallback_cooldown_secs")]
     pub fallback_cooldown_secs: u64,
 }
@@ -199,23 +199,7 @@ async fn send_with_fallback(
     let after = Duration::from_secs(config.fallback_after_secs);
     let route = window.route(after);
     if route == Window::Open {
-        return match session
-            .run_turn(spec.on(fallback_model), prompt, None)
-            .await
-        {
-            Ok(text) => {
-                info!("[{}] Codex turn answered by {fallback_model}", spec.label);
-                Ok(text)
-            }
-            Err(error) => {
-                warn!(
-                    "[{}] Codex fallback {fallback_model} failed; back to {primary_model}: {error:#}",
-                    spec.label
-                );
-                window.close();
-                session.run_turn(spec, prompt, None).await
-            }
-        };
+        return send_pinned(session, window, spec, prompt, fallback_model, after).await;
     }
     let primary_won = |text: String| {
         if route == Window::Expired {
@@ -276,6 +260,70 @@ async fn send_with_fallback(
         result = &mut backup => match fallback_done(result) {
             Ok(text) => Ok(text),
             Err(_) => primary.await.map(primary_won),
+        },
+    }
+}
+
+/// Inside the window: run on the fallback, racing the primary once the
+/// fallback passes `after`; a primary answer closes the window.
+async fn send_pinned(
+    session: &Arc<AppServerSession>,
+    window: &FallbackWindow,
+    spec: TurnSpec<'_>,
+    prompt: &str,
+    fallback_model: &str,
+    after: Duration,
+) -> anyhow::Result<String> {
+    let primary_model = spec.config.model.as_str();
+    let fallback_won = |text: String| {
+        info!("[{}] Codex turn answered by {fallback_model}", spec.label);
+        text
+    };
+    let fallback_failed = |error: &anyhow::Error| {
+        warn!(
+            "[{}] Codex fallback {fallback_model} failed; back to {primary_model}: {error:#}",
+            spec.label
+        );
+        window.close();
+    };
+
+    let pinned = session.run_turn(spec.on(fallback_model), prompt, None);
+    tokio::pin!(pinned);
+    if let Ok(result) = tokio::time::timeout(after, &mut pinned).await {
+        return match result {
+            Ok(text) => Ok(fallback_won(text)),
+            Err(error) => {
+                fallback_failed(&error);
+                session.run_turn(spec, prompt, None).await
+            }
+        };
+    }
+    info!(
+        "[{}] Codex {fallback_model} gave no answer in {}s; racing {primary_model}",
+        spec.label,
+        after.as_secs()
+    );
+
+    let primary = session.run_turn(spec, prompt, None);
+    tokio::pin!(primary);
+    tokio::select! {
+        result = &mut primary => match result {
+            Ok(text) => {
+                window.close();
+                info!(
+                    "[{}] Codex {primary_model} beat the slow {fallback_model}; fallback closed",
+                    spec.label
+                );
+                Ok(text)
+            }
+            Err(_) => pinned.await.map(fallback_won).inspect_err(fallback_failed),
+        },
+        result = &mut pinned => match result {
+            Ok(text) => Ok(fallback_won(text)),
+            Err(error) => {
+                fallback_failed(&error);
+                primary.await
+            }
         },
     }
 }
@@ -1516,6 +1564,41 @@ mod tests {
             [PRIMARY, FALLBACK, FALLBACK, PRIMARY, FALLBACK]
         );
         assert_eq!(window.state(), Window::Closed);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_slow_pinned_fallback_races_the_primary_and_closes_the_window() {
+        let (session, mut seen) = scripted(vec![
+            (PRIMARY, vec![Act::Answer("primary quick")]),
+            (
+                FALLBACK,
+                vec![Act::AnswerAfter(Duration::from_secs(60), "late")],
+            ),
+        ]);
+        let window = FallbackWindow::default();
+        let config = CodexConfig::default();
+        window.open(Duration::from_secs(config.fallback_cooldown_secs));
+        let started = Instant::now();
+
+        assert_eq!(
+            send(&session, &window, &config).await.unwrap(),
+            "primary quick"
+        );
+        assert!(started.elapsed() >= Duration::from_secs(config.fallback_after_secs));
+        assert_eq!(window.state(), Window::Closed);
+        assert_eq!(started_models(&mut seen), [FALLBACK, PRIMARY]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_prompt_pinned_fallback_never_starts_the_primary() {
+        let (session, mut seen) = scripted(vec![(FALLBACK, vec![Act::Answer("fast")])]);
+        let window = FallbackWindow::default();
+        let config = CodexConfig::default();
+        window.open(Duration::from_secs(config.fallback_cooldown_secs));
+
+        assert_eq!(send(&session, &window, &config).await.unwrap(), "fast");
+        assert_eq!(started_models(&mut seen), [FALLBACK]);
+        assert_eq!(window.state(), Window::Open);
     }
 
     #[tokio::test(start_paused = true)]
