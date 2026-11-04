@@ -12,6 +12,8 @@ import { dependencies, output as previewOutput } from './lib/female-preview.mjs'
 import { ensureFemalePreview } from './lib/ensure-female-preview.mjs'
 
 const output = 'client/public/models/characters/modular_female'
+// Parts the client loads on first equip: packed separately with 1024 px colour textures.
+const separatePart = name => /^(caveman|priest)_/.test(name)
 // Fur panels share the waist rig and colliders.
 function bakeSkirtRobe(doc) {
   const panels = doc.getRoot().listNodes().filter(node => node.getExtras().pelt_physics)
@@ -63,6 +65,8 @@ const sources = {
   caveman_bottom: 'assets/items/female_caveman_bottom/tripo_v1/fitted_v9/bottom_female_caveman.glb',
   caveman_boots: 'assets/items/female_caveman_boots/tripo_v1/fitted_v4/boots_female_caveman.glb',
   caveman_gloves: 'assets/items/female_caveman_bracers/tripo_v1/fitted_v1/gloves_female_caveman.glb',
+  ...Object.fromEntries(['top', 'bottom', 'boots', 'gloves', 'helmet'].map(slot =>
+    [`priest_${slot}`, `assets/items/female_priest_outfit/${slot}/fitted_v1/${slot}_female_priest.glb`])),
   valkyrie_hair: 'assets/modular_human_female_01/hair/tripo_warrior_v1/fitted_v1/hair_female_warrior.glb',
   valkyrie_wings: 'assets/items/valkyrie_starter/tripo_wing_v1/fitted_patch_v3/wings-armor-fit.glb',
   valkyrie_top: 'assets/items/valkyrie_starter/tripo_top_v1/fitted_v11/top_female_valkyrie.glb',
@@ -101,7 +105,7 @@ async function write(path, doc, pack = false) {
   const bottom = path === `${output}/bottom.glb`
   // Packs share each clip's key times.
   if (pack) await doc.transform(dedup())
-  if (path === `${output}/base.glb` || bottom || pack || path.startsWith(`${output}/caveman_`)) {
+  if (path === `${output}/base.glb` || bottom || pack || separatePart(path.slice(output.length + 1))) {
     await doc.transform(prune({ propertyTypes: [PropertyType.MATERIAL, PropertyType.TEXTURE] }))
     // Preserve vertex and triangle numbering for outfit masks; do not quantize.
     doc.createExtension(EXTMeshoptCompression).setRequired(true)
@@ -152,7 +156,7 @@ for (const [name, source] of Object.entries(sources)) {
   for (const texture of doc.getRoot().listTextures()) {
     if (/eyelash/i.test(texture.getName())) continue
     const color = colors.has(texture)
-    const size = color && !name.startsWith('caveman_') && !['bottom', 'rogue_bottom', 'rogue_top'].includes(name) ? 2048 : 1024
+    const size = color && !separatePart(name) && !['bottom', 'rogue_bottom', 'rogue_top'].includes(name) ? 2048 : 1024
     const image = await sharp(texture.getImage()).resize({ width: size, height: size, fit: 'inside', withoutEnlargement: true })
       .webp(color ? { quality: 94, effort: 5 } : { quality: 90, smartSubsample: true, effort: 5 }).toBuffer()
     texture.setImage(image).setMimeType('image/webp')

@@ -1,4 +1,7 @@
-"""Export static inventory assets from a fitted priest or bard outfit."""
+"""Export static inventory assets from a fitted priest or bard outfit.
+
+Priest icons now come from export_outfit_items.py --outfit priest; rerun it after this script.
+"""
 
 import argparse
 from pathlib import Path

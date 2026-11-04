@@ -103,6 +103,13 @@ fn class_starter_items(
             ("worn_priest_pants", 1, Some("pants")),
             ("worn_priest_boots", 1, Some("boots")),
         ],
+        CharacterClass::Priest => &[
+            ("worn_priest_helmet", 1, Some("head")),
+            ("worn_priest_top", 1, Some("chest")),
+            ("worn_priest_pants", 1, Some("pants")),
+            ("worn_priest_gloves", 1, Some("hands")),
+            ("worn_priest_boots", 1, Some("boots")),
+        ],
         CharacterClass::Bard if gender == Gender::Male => &[
             ("worn_bard_helmet", 1, Some("head")),
             ("worn_bard_top", 1, Some("chest")),
@@ -3261,7 +3268,7 @@ mod tests {
     }
 
     #[test]
-    fn priests_start_with_four_equipped_unpriced_pieces() {
+    fn priests_start_with_equipped_unpriced_outfit_and_gloves_for_women() {
         let (auth, _) = temp_auth("auth_priest_armor");
         for (name, gender) in [("Priest", Gender::Male), ("Shadow", Gender::Female)] {
             let account = auth.login_google(&format!("sub-{name}")).unwrap();
@@ -3279,17 +3286,17 @@ mod tests {
             let worn = auth.load_character_equipment(character.id).unwrap();
             assert_eq!(worn.main_hand.as_deref(), Some("worn_mace"));
             let starter = starter_items(&CharacterClass::Priest).len();
-            if gender == Gender::Female {
-                assert_eq!(items.len(), starter);
-                assert_eq!(worn.armor, Default::default());
-                continue;
-            }
-            for (id, slot) in [
+            let female = gender == Gender::Female;
+            let mut outfit = vec![
                 ("worn_priest_helmet", "head"),
                 ("worn_priest_top", "chest"),
                 ("worn_priest_pants", "pants"),
                 ("worn_priest_boots", "boots"),
-            ] {
+            ];
+            if female {
+                outfit.push(("worn_priest_gloves", "hands"));
+            }
+            for &(id, slot) in &outfit {
                 let item = items.iter().find(|item| item.item_def_id == id).unwrap();
                 assert_eq!(item.quantity, 1);
                 assert_eq!(item.equip_slot.as_deref(), Some(slot));
@@ -3300,12 +3307,15 @@ mod tests {
                 assert_eq!(def.guard, Some(1));
                 assert!(def.chest_tier.is_none());
             }
-            assert_eq!(items.len(), starter + 4);
+            assert_eq!(items.len(), starter + outfit.len());
             assert!(items.iter().any(|item| item.item_def_id == "worn_torch"));
             assert_eq!(worn.armor.head.as_deref(), Some("worn_priest_helmet"));
             assert_eq!(worn.armor.chest.as_deref(), Some("worn_priest_top"));
             assert_eq!(worn.armor.pants.as_deref(), Some("worn_priest_pants"));
-            assert_eq!(worn.armor.hands, None);
+            assert_eq!(
+                worn.armor.hands.as_deref(),
+                female.then_some("worn_priest_gloves")
+            );
             assert_eq!(worn.armor.boots.as_deref(), Some("worn_priest_boots"));
             let listed = auth.list_characters_with_equipment(&account).unwrap();
             assert_eq!(listed[0].worn.armor, worn.armor);

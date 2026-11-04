@@ -80,5 +80,8 @@ OpenAI 생성 출력물 이용 조건과 [입력 원화 출처](characters.md#ot
   출력은 `client/public/models/armor/priest_{top,pants,boots}.glb` 및
   `client/public/items/armor/priest_{top,pants,boots}.png`다.
   텍스처는 최대 512px, 편집본은 `assets/items/priest_{top,pants,boots}/`에 보관한다.
+- 아이콘은 2026-11-04 똑바로 세워 약간 옆에서 본 구도(수직 축 −30° 회전(Breastplate처럼 화면 왼쪽을 봄), 투영 회전 `(-72, 0, 0)°`(18° 위에서), 부츠·장갑은 나란히)로 다시 렌더했다. 위에서 25° 내려다보고 화면을 8° 돌린 기본값은 앞으로 기울어 보였다.
+  모델은 그대로 두고 `blender -b --python-exit-code 1 --python tools/blender-scripts/export_outfit_items.py -- --outfit priest --icons-only --icon-rotation -72 0 0 --turn -30`으로 만든다.
+  사제 아이템은 남녀 공용이라 아이콘은 남성 복장 모델을 쓰고, 장갑만 여성 복장에서 만든다.
 - 기존 사제 복장 가림·옷자락·혼합 장비 처리를 게임 장비 경로에서도 사용하며,
   사제 부츠의 지면 보정값은 내보낸 모델에서 측정한다.

@@ -213,6 +213,24 @@ function modularCharacterPreview(): Plugin {
       '../assets/items/female_caveman_bracers/tripo_v1/fitted_v1/body-occlusion.json',
       import.meta.url
     ),
+    ...Object.fromEntries(
+      ['top', 'bottom', 'gloves', 'boots', 'helmet'].flatMap((slot) => [
+        [
+          `female_priest_${slot}`,
+          new URL(
+            `../assets/items/female_priest_outfit/${slot}/fitted_v1/${slot}_female_priest.glb`,
+            import.meta.url
+          ),
+        ],
+        [
+          `female-priest-${slot}-occlusion.json`,
+          new URL(
+            `../assets/items/female_priest_outfit/${slot}/fitted_v1/body-occlusion.json`,
+            import.meta.url
+          ),
+        ],
+      ])
+    ),
     female_caveman_top: new URL(
       '../assets/items/female_caveman_top/tripo_v1/fitted_v7/top_female_caveman.glb',
       import.meta.url
