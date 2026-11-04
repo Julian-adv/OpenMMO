@@ -2106,6 +2106,20 @@ async fn handle_client_message(
 
         ClientMessage::UseItem { instance_id } => {
             if let Some(id) = &state.player_id {
+                if game_state.teleports_on_use(id, instance_id).await {
+                    let (id, auth_service) = (*id, Arc::clone(auth_service));
+                    game_state.depart_then(id, move |game| async move {
+                        if game.authenticated_use_action(&id, instance_id).await
+                            == Some(AuthenticatedUseAction::EstateReturn)
+                        {
+                            game.use_estate_return_scroll(&id, instance_id, &auth_service)
+                                .await;
+                        } else {
+                            game.use_item(&id, instance_id).await;
+                        }
+                    });
+                    return Ok(vec![]);
+                }
                 match game_state.authenticated_use_action(id, instance_id).await {
                     Some(AuthenticatedUseAction::EstateReturn) => {
                         game_state
@@ -2551,10 +2565,16 @@ async fn handle_client_message(
         }
 
         ClientMessage::PartySummonRespond { caster_id, accept } => {
-            if let Some(id) = &state.player_id {
-                game_state
-                    .respond_to_party_summon(id, &caster_id, accept)
-                    .await;
+            if let Some(id) = state.player_id {
+                if accept {
+                    game_state.depart_then(id, move |game| async move {
+                        game.respond_to_party_summon(&id, &caster_id, true).await;
+                    });
+                } else {
+                    game_state
+                        .respond_to_party_summon(&id, &caster_id, false)
+                        .await;
+                }
             }
         }
 

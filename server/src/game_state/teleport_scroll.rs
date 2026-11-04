@@ -223,15 +223,17 @@ impl GameState {
         let Some((origin, _, origin_floor)) = self.get_player_position(player_id).await else {
             return;
         };
-        self.publish_teleport_effect(player_id, origin, origin_floor, TeleportPhase::Departing)
-            .await;
+        if !self.take_shown_departure(player_id) {
+            self.publish_teleport_effect(player_id, origin, origin_floor, TeleportPhase::Departing)
+                .await;
+        }
         self.publish_teleport_effect(player_id, destination, floor_level, TeleportPhase::Arriving)
             .await;
         self.teleport_player(player_id, destination, rotation, floor_level)
             .await;
     }
 
-    async fn publish_teleport_effect(
+    pub(super) async fn publish_teleport_effect(
         &self,
         player_id: &PlayerId,
         position: Position,

@@ -246,6 +246,7 @@ mod pricing;
 pub(crate) use player::restored_floor_level;
 mod salary;
 mod skills;
+mod teleport_departure;
 mod teleport_scroll;
 pub(crate) use skills::skills_from_rows;
 mod meal;
@@ -587,6 +588,7 @@ pub struct GameState {
     /// Live player-to-player trade sessions and pending requests
     /// (doc/TRADE.md). Ranked above `player_gold`/`inventories`.
     player_trades: Arc<RwLock<player_trade::PlayerTrades>>,
+    teleport_departures: Arc<std::sync::Mutex<HashSet<PlayerId>>>,
 }
 
 impl GameState {
@@ -849,6 +851,7 @@ impl GameState {
             tip_hats: Arc::new(RwLock::new(HashMap::new())),
             meals: Arc::new(RwLock::new(HashMap::new())),
             player_trades: Arc::new(RwLock::new(player_trade::PlayerTrades::default())),
+            teleport_departures: Arc::default(),
         }
     }
 

@@ -21,8 +21,6 @@ import {
   playTeleportEffect,
   finishTeleportArrival,
   resetTeleportEffects,
-  deferRemoteTeleportUpdate,
-  cancelLocalTeleportRequest,
 } from '../stores/teleportEffectStore'
 import { playGroundEruption } from '../stores/groundEruptionStore'
 import { MONSTER_SKILL_DEFS } from '../data/monsterSkills'
@@ -722,23 +720,6 @@ export function handleServerMessage(
   const type = isBare ? raw : Object.keys(raw)[0]
   const data = isBare ? undefined : raw[type]
 
-  const remoteId =
-    type === 'PlayerAppeared'
-      ? data.player.id
-      : ['PlayerTeleported', 'PlayerMoved', 'PlayerDisappeared'].includes(type)
-        ? data.player_id
-        : null
-  if (remoteId !== null && remoteId !== get(gameStore).currentPlayer?.id) {
-    const { epoch, generation } = worldView
-    if (
-      deferRemoteTeleportUpdate(remoteId, () => {
-        if (worldView.epoch === epoch && worldView.generation === generation)
-          handleServerMessage(raw, events, disconnect, resync)
-      })
-    )
-      return
-  }
-
   requestResync = resync
   switch (type) {
     case 'TerrainTileVersion': {
@@ -1075,7 +1056,6 @@ export function handleServerMessage(
       finishTeleportArrival(data.player_id)
       const state = get(gameStore)
       if (state.currentPlayer && state.currentPlayer.id === data.player_id) {
-        cancelLocalTeleportRequest()
         // Through the store, not a bare mutation: subscribers that live
         // across a teleport (HUD widgets) otherwise keep the old position.
         gameStore.update((s) => {
