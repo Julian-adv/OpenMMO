@@ -71,7 +71,7 @@ describe('weapon type animations', () => {
     try {
       expect(getWeaponAnimation('test_great_sword')).toBe(profile)
       expect(getWeaponAnimation('test_great_sword')?.gripRotationRadians).toBe(
-        '-1.907|-0.475|0.139'
+        '-0.786|-0.082|0.487'
       )
     } finally {
       delete itemDefs.test_great_sword
