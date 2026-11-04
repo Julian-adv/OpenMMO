@@ -4,7 +4,6 @@ import { getWeaponAnimation } from '../data/weaponAnimationDefs'
 import {
   MODULAR_MALE_MODEL_PATH,
   MODULAR_FEMALE_MODEL_PATH,
-  MODULAR_VALKYRIE_MODEL_PATH,
   FEMALE_PRIEST_CHARACTER_MODEL_PATH,
 } from './modelPaths'
 
@@ -40,7 +39,6 @@ export const FEMALE_HAND_FITS: Record<string, HandFit> = {
 // Per-rig grips for props that HAND_GRIP_OFFSET does not seat.
 const MODEL_HAND_FITS: Record<string, Record<string, HandFit>> = {
   [MODULAR_FEMALE_MODEL_PATH]: FEMALE_HAND_FITS,
-  [MODULAR_VALKYRIE_MODEL_PATH]: FEMALE_HAND_FITS,
   [MODULAR_MALE_MODEL_PATH]: {
     'weapons/mace.glb': { position: new THREE.Vector3(0.02, 0.12, 0.05) },
     'weapons/torch.glb': { position: new THREE.Vector3(0.025, 0.08, 0.012) },
@@ -56,7 +54,8 @@ function fitHandProp(
   modelPath?: string,
   weaponType?: string
 ) {
-  const fits = modelPath ? MODEL_HAND_FITS[modelPath] : undefined
+  // Female variants (#fragment) share the female grips.
+  const fits = modelPath ? MODEL_HAND_FITS[modelPath.split('#')[0]] : undefined
   const fit =
     (worldModel ? fits?.[worldModel] : undefined) ??
     (weaponType ? fits?.[weaponType] : undefined)

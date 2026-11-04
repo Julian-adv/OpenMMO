@@ -7,11 +7,12 @@ export const MODULAR_FEMALE_DIRECTORY = '/models/characters/modular_female'
 export const MODULAR_FEMALE_MODEL_PATH = `${MODULAR_FEMALE_DIRECTORY}/base.glb`
 
 export const MODULAR_VALKYRIE_MODEL_PATH = `${MODULAR_FEMALE_MODEL_PATH}#valkyrie`
+// The shared female body with the ranger's ponytail in place of the bob.
+export const MODULAR_FEMALE_RANGER_MODEL_PATH = `${MODULAR_FEMALE_MODEL_PATH}#ranger`
 
 export function isModularFemaleModel(path: string): boolean {
-  return (
-    path === MODULAR_FEMALE_MODEL_PATH || path === MODULAR_VALKYRIE_MODEL_PATH
-  )
+  // Variants share the body and differ by a #fragment.
+  return path.split('#')[0] === MODULAR_FEMALE_MODEL_PATH
 }
 
 export function isModularModel(path: string): boolean {
@@ -88,7 +89,10 @@ const CLASS_GENDER_MODELS: Partial<
     female: CAVEWOMAN_CHARACTER_MODEL_PATH,
   },
   valkyrie: { female: VALKYRIE_CHARACTER_MODEL_PATH },
-  ranger: { male: RANGER_CHARACTER_MODEL_PATH },
+  ranger: {
+    male: RANGER_CHARACTER_MODEL_PATH,
+    female: MODULAR_FEMALE_RANGER_MODEL_PATH,
+  },
   priest: {
     male: PRIEST_CHARACTER_MODEL_PATH,
     female: FEMALE_PRIEST_CHARACTER_MODEL_PATH,
