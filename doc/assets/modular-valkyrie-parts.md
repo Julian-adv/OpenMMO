@@ -323,7 +323,7 @@ blender -b --python-exit-code 1 --python tools/blender-scripts/save_female_valky
 - `node tools/prepare-female-knight.mjs`: 전체 여성 런타임 파츠·기본 동작·팩 생성.
 - `--part valkyrie_<부위>`: 승인 원본에서 특정 파츠만 생성. 부츠 변경 후에는 동작도 다시 굽는다.
 - `--bake-existing`: 이미 배포된 여성 기본 동작·팩의 맨발 트랙을 유지하고 부츠 변형만 재생성.
-- `blender -b --python-exit-code 1 --python tools/blender-scripts/export_valkyrie_items.py`:
+- `blender -b --python-exit-code 1 --python tools/blender-scripts/export_outfit_items.py`:
   승인 원본에서 지면 배치용 모델과 128px 아이콘 생성. 리그 표시용 숨은 메시를 제외한다.
   `-- --icons-only`를 붙이면 모델은 그대로 두고 아이콘만 다시 렌더한다.
 

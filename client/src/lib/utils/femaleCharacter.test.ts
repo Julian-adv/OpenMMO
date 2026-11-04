@@ -135,14 +135,17 @@ describe('female modular starter outfits', () => {
     expect(getCharacterModelPath('caveman', 'female', true)).toBe(
       '/models/characters/cavewoman.glb'
     )
+    expect(getCharacterModelPath('priest', 'female')).toBe(
+      MODULAR_FEMALE_MODEL_PATH
+    )
+    expect(getCharacterModelPath('priest', 'female', true)).toBe(
+      '/models/characters/female_priest.glb'
+    )
     expect(getCharacterModelPath('valkyrie', 'female')).toBe(
       MODULAR_VALKYRIE_MODEL_PATH
     )
     expect(getCharacterModelPath('valkyrie', 'female', true)).toBe(
       '/models/characters/valkyrie.glb'
-    )
-    expect(getCharacterModelPath('priest', 'female')).toBe(
-      '/models/characters/female_priest.glb'
     )
   })
   it.skipIf(!hasAssets)(
@@ -252,20 +255,23 @@ describe('female modular starter outfits', () => {
         const brilliance = id === 'helm_of_brilliance'
         const valkyrie = id.startsWith('worn_valkyrie_')
         const caveman = item.worldModel?.startsWith('armor/caveman_')
+        const priest = item.worldModel?.startsWith('armor/priest_')
         const rogueStyle =
           item.worldModel?.startsWith('armor/rogue_') ||
           ['leather_armor', 'leather_gloves', 'leather_boots'].includes(id)
-        const [shown, hidden] = caveman
-          ? [`caveman_${part}`, part]
-          : valkyrie
-            ? [`valkyrie_${part}`, part]
-            : rogueStyle
-              ? [`rogue_${part}`, part]
-              : brilliance
-                ? ['brilliance_helmet', part]
-                : barbarianStyle
-                  ? [`barbarian_${part}`, part]
-                  : [part, `barbarian_${part}`]
+        const [shown, hidden] = priest
+          ? [`priest_${part}`, part]
+          : caveman
+            ? [`caveman_${part}`, part]
+            : valkyrie
+              ? [`valkyrie_${part}`, part]
+              : rogueStyle
+                ? [`rogue_${part}`, part]
+                : brilliance
+                  ? ['brilliance_helmet', part]
+                  : barbarianStyle
+                    ? [`barbarian_${part}`, part]
+                    : [part, `barbarian_${part}`]
         await applyCharacterArmor(modelRoot, { [slot]: id } as ArmorEquipment)
         expect(count(modelRoot, shown), id).toBeGreaterThan(0)
         expect(count(modelRoot, hidden), id).toBe(0)
@@ -274,7 +280,7 @@ describe('female modular starter outfits', () => {
           expect(count(modelRoot, 'barbarian_hair') > 0, id).toBe(
             barbarianStyle
           )
-          expect(count(modelRoot, 'hair') > 0, id).toBe(valkyrie)
+          expect(count(modelRoot, 'hair') > 0, id).toBe(valkyrie || priest)
         }
       }
       await applyCharacterArmor(modelRoot, {})

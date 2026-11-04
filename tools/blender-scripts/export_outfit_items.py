@@ -11,17 +11,35 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from icon_render import add_light, export_glb, render_icon
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCES = {
-    "helmet": "valkyrie_helmet/fitted_v2/helmet_female_valkyrie.glb",
-    "top": "valkyrie_starter/tripo_top_v1/fitted_v11/top_female_valkyrie.glb",
-    "pants": "valkyrie_starter/tripo_bottom_v1/fitted_v8/bottom_female_valkyrie.glb",
-    "gloves": "valkyrie_gloves/fitted_v3/bracers_female_valkyrie.glb",
-    "boots": "valkyrie_boots/fitted_v1/boots_female_valkyrie.glb",
+OUTFITS = {
+    "valkyrie": {
+        "helmet": "valkyrie_helmet/fitted_v2/helmet_female_valkyrie.glb",
+        "top": "valkyrie_starter/tripo_top_v1/fitted_v11/top_female_valkyrie.glb",
+        "pants": "valkyrie_starter/tripo_bottom_v1/fitted_v8/bottom_female_valkyrie.glb",
+        "gloves": "valkyrie_gloves/fitted_v3/bracers_female_valkyrie.glb",
+        "boots": "valkyrie_boots/fitted_v1/boots_female_valkyrie.glb",
+    },
+    # The gloves come from the female outfit; the shared items keep their male models.
+    "priest": {
+        "helmet": "../modular_human_male_01/priest/tripo_helmet_v1/helmet_priest.glb",
+        "top": "../modular_human_male_01/priest/tripo_top_v1/top_priest.glb",
+        "pants": "../modular_human_male_01/priest/tripo_pants_v1/pants_priest.glb",
+        "gloves": "female_priest_outfit/gloves/fitted_v1/gloves_female_priest.glb",
+        "boots": "../modular_human_male_01/priest/tripo_boots_v1/boots_priest.glb",
+    },
 }
 parser = argparse.ArgumentParser()
+parser.add_argument("--outfit", choices=OUTFITS, default="valkyrie")
 parser.add_argument("--icons-only", action="store_true")
-parser.add_argument("--parts", nargs="+", choices=SOURCES)
+# Degrees about X, Y, Z; -90 about X is a level front view. The default leans the top toward the camera.
+parser.add_argument("--icon-rotation", nargs=3, type=float, default=(-65, 0, -8))
+# Degrees about the item's vertical axis before the shot; the sign sets which way it faces.
+parser.add_argument("--turn", type=float, default=30)
+parser.add_argument("--parts", nargs="+", choices=sorted({part for parts in OUTFITS.values() for part in parts}))
 args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
+SOURCES = OUTFITS[args.outfit]
+if args.parts and not set(args.parts) <= set(SOURCES):
+    parser.error(f"{args.outfit} has parts {sorted(SOURCES)}")
 
 
 def arrange_pair(meshes, armature, part):
@@ -91,7 +109,7 @@ for part, source in SOURCES.items():
     center.z = minimum.z
     for obj in meshes:
         obj.data.transform(Matrix.Translation(-center))
-    model = ROOT / f"client/public/models/armor/valkyrie_{part}.glb"
+    model = ROOT / f"client/public/models/armor/{args.outfit}_{part}.glb"
     if not args.icons_only:
         export_glb(meshes, str(model))
     if part in {"gloves", "boots"}:
@@ -100,7 +118,7 @@ for part, source in SOURCES.items():
     minimum = Vector(tuple(min(v[i] for v in vertices) for i in range(3)))
     maximum = Vector(tuple(max(v[i] for v in vertices) for i in range(3)))
     center = (minimum + maximum) / 2
-    turn = Matrix.Rotation(math.radians(30), 4, "Z")
+    turn = Matrix.Rotation(math.radians(args.turn), 4, "Z")
     for obj in meshes:
         obj.data.transform(turn @ Matrix.Translation(-center))
     size = max(maximum - minimum)
@@ -115,5 +133,5 @@ for part, source in SOURCES.items():
     background.inputs["Color"].default_value = (0.55, 0.57, 0.62, 1)
     background.inputs["Strength"].default_value = 1.2
     bpy.context.scene.view_settings.exposure = -0.6
-    icon = ROOT / f"client/public/items/armor/valkyrie_{part}.png"
-    render_icon(meshes, str(icon), tuple(math.radians(a) for a in (-65, 0, -8)), margin=1.08)
+    icon = ROOT / f"client/public/items/armor/{args.outfit}_{part}.png"
+    render_icon(meshes, str(icon), tuple(math.radians(a) for a in args.icon_rotation), margin=1.08)

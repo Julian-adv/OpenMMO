@@ -17,27 +17,35 @@ import { attachValkyrieWings } from '../effects/valkyrie-wings'
 
 const slots = ['top', 'bottom', 'boots', 'gloves', 'helmet'] as const
 type Slot = (typeof slots)[number]
-type Style = 'plate' | 'barbarian' | 'rogue' | 'valkyrie' | 'caveman'
+type Style = 'plate' | 'barbarian' | 'rogue' | 'valkyrie' | 'caveman' | 'priest'
 const prefixes: Record<Style, string> = {
   plate: '',
   barbarian: 'barbarian_',
   rogue: 'rogue_',
   valkyrie: 'valkyrie_',
   caveman: 'caveman_',
+  priest: 'priest_',
 }
 const styles = Object.keys(prefixes) as Style[]
 type Helmet = Exclude<Style, 'rogue' | 'caveman'> | 'brilliance'
 const LAZY_HELMET = 'brilliance_helmet'
 const FIXED_VALKYRIE_PARTS = ['valkyrie_hair', 'valkyrie_wings']
-const lazyParts = new Set([
-  LAZY_HELMET,
-  ...slots.map((slot) => `valkyrie_${slot}`),
-  ...slots.filter((slot) => slot !== 'helmet').map((slot) => `caveman_${slot}`),
-])
+// Styles loaded on first equip rather than with the character, and the slots each one has.
+const LAZY_STYLES: Partial<Record<Style, readonly Slot[]>> = {
+  valkyrie: slots,
+  caveman: slots.filter((slot) => slot !== 'helmet'),
+  priest: slots,
+}
 const partName = (style: Style, slot: Slot | 'hair') =>
   `${prefixes[style]}${slot}`
+const lazyParts = new Set([
+  LAZY_HELMET,
+  ...Object.entries(LAZY_STYLES).flatMap(([style, styleSlots]) =>
+    styleSlots.map((slot) => partName(style as Style, slot))
+  ),
+])
 export const FEMALE_PARTS = styles
-  .filter((style) => style !== 'valkyrie' && style !== 'caveman')
+  .filter((style) => !(style in LAZY_STYLES))
   .flatMap((style) =>
     (['hair', ...slots] as const)
       .filter(
@@ -299,6 +307,7 @@ const femaleStyle = (itemId: string | null | undefined): Style | null => {
   const model = item?.worldModel ?? ''
   if (model.startsWith('armor/valkyrie_')) return 'valkyrie'
   if (model.startsWith('armor/caveman_')) return 'caveman'
+  if (model.startsWith('armor/priest_')) return 'priest'
   if (model.startsWith('armor/rogue_') || ROGUE_LEATHER_MODELS.has(model))
     return 'rogue'
   return item?.material === 'leather' || model.startsWith('armor/barbarian_')
@@ -437,7 +446,12 @@ export function applyFemaleArmor(
     ? null
     : helmet === 'plate' || helmet === 'brilliance'
       ? null
-      : partName(helmet === 'valkyrie' ? 'plate' : (helmet ?? 'plate'), 'hair')
+      : partName(
+          helmet === 'valkyrie' || helmet === 'priest'
+            ? 'plate'
+            : (helmet ?? 'plate'),
+          'hair'
+        )
   for (const style of styles) {
     if (style === 'valkyrie') continue
     const name = partName(style, 'hair')
