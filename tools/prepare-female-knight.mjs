@@ -221,6 +221,8 @@ async function bakeBootsAndGrip(module, load) {
         }
       }
     }
+    // Replaced companion clips leave their keyframe accessors behind.
+    await doc.transform(prune({ propertyTypes: [PropertyType.ACCESSOR], keepAttributes: true, keepIndices: true }))
     await write(path, doc, path.includes('/animations/'))
     console.log(`${path}: baked ${bakes.length} clips`)
   }

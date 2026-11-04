@@ -665,12 +665,19 @@ describe('female modular starter outfits', () => {
         for (const [boots, part] of [
           [armor.boots, 'boots'],
           [barbarian.boots, 'barbarian_boots'],
+          ['worn_ranger_boots', 'ranger_boots'],
           ['worn_valkyrie_boots', 'valkyrie_boots'],
         ]) {
           await applyCharacterArmor(modelRoot, { ...armor, boots })
           mixer.setTime(time)
           modelRoot.updateMatrixWorld(true)
-          expect(Math.abs(lowest(soles(part)) - floor)).toBeLessThan(0.01)
+          const gap = lowest(soles(part)) - floor
+          // Heels sharing the plate boots' lift may float a little but never sink.
+          if (part === 'boots') expect(Math.abs(gap)).toBeLessThan(0.01)
+          else {
+            expect(gap).toBeGreaterThan(-0.01)
+            expect(gap).toBeLessThan(0.06)
+          }
         }
         expect(scene.position.y).toBe(0)
       }

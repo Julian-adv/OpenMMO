@@ -80,10 +80,11 @@ export const FEMALE_PARTS = styles
       .map((slot) => partName(style, slot))
   )
   .concat('rogue_garters')
-/** Boots parts in the order their baked variants follow the bare value. */
-export const FEMALE_BOOTS_PARTS = styles.map((style) =>
-  partName(style, 'boots')
-)
+/**
+ * Boots parts whose baked variants follow the bare value. Every heel shares the plate boots' variant
+ * (user decision 2026-11-05: the lifts looked alike; the valkyrie's 36° fit is shown at 30°).
+ */
+export const FEMALE_BOOTS_PARTS = ['boots']
 // Baked tracks carry [bare, ...boots] values; this property picks one per character.
 export const FEMALE_BOOTS_PROPERTY = 'femaleBoots'
 // glTF allows one channel per node and path, so boots values ship as companion animations.
@@ -294,7 +295,7 @@ function installBootsSwitch(scene: THREE.Object3D, state: FemaleState) {
     const select = () => {
       if (!ready) return
       const boots = state.equipped?.boots
-      const variant = boots ? styles.indexOf(boots) + 1 : 0
+      const variant = boots ? 1 : 0
       target.fromArray(values, variant * size)
       if (target instanceof THREE.Quaternion) target.normalize()
     }

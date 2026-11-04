@@ -100,7 +100,7 @@ blender -b --python tools/blender-scripts/review_female_outfit.py -- --outfit pr
 
 - 남성 사제의 기존 네 아이템을 같이 쓰고, 외형은 아이템 `worldModel`의 `armor/priest_` 접두어로 고른다. 남성은 장갑을 지급받지 않으며, 착용하면 맨손으로 보인다(남성 사제 장갑 모델 없음).
 - `worn_priest_gloves`: 무게 0.5, 천, 거래·판매 불가. 바닥 모델 `client/public/models/armor/priest_gloves.glb`와 128px 아이콘 `client/public/items/armor/priest_gloves.png`는 피팅된 장갑에서 만들었다(새 생성 요청 없음, 원본 출처는 위 Tripo 기록).
-- 사제 하이힐 장화를 새 부츠 변형으로 추가해 여성 기본 동작과 10개 애니메이션 팩의 부츠 보정을 다시 구웠다.
+- 사제 하이힐 장화를 새 부츠 변형으로 추가해 여성 기본 동작과 10개 애니메이션 팩의 부츠 보정을 다시 구웠다. 2026-11-05부터는 기사 판금 부츠의 보정을 함께 쓴다([여성 순찰자 기록](modular-female-ranger-tripo.md)).
 - 기존 여성 사제는 자동으로 바뀌지 않는다. 배포 때 서비스를 멈추고 아래 도구로 빠진 장비만 가방에 넣는다(장착 상태는 그대로).
 
 ```sh
