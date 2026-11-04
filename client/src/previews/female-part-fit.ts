@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 
-// Keep in sync with tools/outfits/female_priest_adjust.py, which bakes the same transform.
+// Keep in sync with tools/outfits/female_outfit_adjust.py, which bakes the same transform.
 export const PART_FIT_KEYS = [
   'move-x',
   'move-y',
@@ -18,6 +18,9 @@ export type PartFit = Record<PartFitKey, number>
 // 1 is the character's left (+x), -1 the right.
 export type PartSide = 1 | -1
 export type PartFitter = (fitFor: (side: PartSide) => PartFit) => void
+// Sleeve-end offsets in cm across the upper arm: forward, and outward from the body.
+export type SleeveEnd = { forward: number; out: number }
+export const SLEEVE_END_KEYS = ['forward', 'out'] as const
 
 export const PART_FIT_RANGES: Record<PartFitKey, [number, number, number]> = {
   'move-x': [-10, 10, 0],
@@ -69,10 +72,68 @@ type Source = {
   normals?: Float32Array
 }
 
+// Keep in sync with sleeve_end in tools/outfits/female_outfit_adjust.py.
+const SLEEVE_START = 0.09
+const SLEEVE_RADIUS = 0.07
+const SLEEVE_END_INSET = 0.015
+
+/**
+ * Moves each sleeve's end across the upper arm, linearly from the shoulder; `joints[side]` is the
+ * shoulder and elbow bind position. `positions` are the unmoved vertices, which fix each sleeve's end.
+ */
+export function sleeveEndDeformer(
+  positions: Float32Array[],
+  joints: Record<PartSide, [THREE.Vector3, THREE.Vector3]>
+) {
+  const frames = ([1, -1] as const).map((side) => {
+    const [shoulder, elbow] = joints[side]
+    const axis = elbow.clone().sub(shoulder).normalize()
+    const forward = new THREE.Vector3(0, 0, 1)
+      .addScaledVector(axis, -axis.z)
+      .normalize()
+    const out = new THREE.Vector3()
+      .crossVectors(forward, axis)
+      .multiplyScalar(side)
+    return { side, shoulder, axis, forward, out, end: -Infinity }
+  })
+  const point = new THREE.Vector3()
+  const d = new THREE.Vector3()
+  const along = (frame: (typeof frames)[number], p: THREE.Vector3) => {
+    if (p.x * frame.side <= frame.shoulder.x * frame.side) return undefined
+    d.subVectors(p, frame.shoulder)
+    const s = d.dot(frame.axis)
+    const r = d.addScaledVector(frame.axis, -s).length()
+    return r < SLEEVE_RADIUS && s > SLEEVE_START ? s : undefined
+  }
+  for (const array of positions)
+    for (let i = 0; i < array.length; i += 3) {
+      point.fromArray(array, i)
+      for (const frame of frames) {
+        const s = along(frame, point)
+        if (s !== undefined) frame.end = Math.max(frame.end, s)
+      }
+    }
+  for (const frame of frames) frame.end -= SLEEVE_END_INSET
+  return (p: THREE.Vector3, endFor: (side: PartSide) => SleeveEnd) => {
+    for (const frame of frames) {
+      const s = along(frame, p)
+      if (s === undefined) continue
+      const t = (s - SLEEVE_START) / (frame.end - SLEEVE_START)
+      const { forward, out } = endFor(frame.side)
+      p.addScaledVector(frame.forward, (t * forward) / 100).addScaledVector(
+        frame.out,
+        (t * out) / 100
+      )
+    }
+  }
+}
+
 // Paired parts split by the sign of x and mirror the transform for the right side (x < 0).
+// `after` deforms each vertex once the fit is applied.
 export function partFitter(
   meshes: THREE.SkinnedMesh[],
-  paired: boolean
+  paired: boolean,
+  after?: (point: THREE.Vector3) => void
 ): PartFitter {
   const sources: Source[] = meshes.map((mesh) => {
     const normal = mesh.geometry.getAttribute('normal')
@@ -121,6 +182,7 @@ export function partFitter(
         point.fromArray(positions, i)
         const transform = matrices.get(sideOf(point.x))!
         point.applyMatrix4(transform.matrix)
+        after?.(point)
         position.setXYZ(i / 3, point.x, point.y, point.z)
         if (normals && normalAttribute) {
           normal

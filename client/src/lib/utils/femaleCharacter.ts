@@ -8,6 +8,7 @@ import {
   MODULAR_FEMALE_DIRECTORY,
   MODULAR_FEMALE_MODEL_PATH,
   MODULAR_VALKYRIE_MODEL_PATH,
+  MODULAR_FEMALE_RANGER_MODEL_PATH,
 } from './modelPaths'
 import { bindModularPart, skinnedParts } from './modularCharacter'
 import { femaleUnderwearColor } from './femaleUnderwearColor'
@@ -17,7 +18,14 @@ import { attachValkyrieWings } from '../effects/valkyrie-wings'
 
 const slots = ['top', 'bottom', 'boots', 'gloves', 'helmet'] as const
 type Slot = (typeof slots)[number]
-type Style = 'plate' | 'barbarian' | 'rogue' | 'valkyrie' | 'caveman' | 'priest'
+type Style =
+  | 'plate'
+  | 'barbarian'
+  | 'rogue'
+  | 'valkyrie'
+  | 'caveman'
+  | 'priest'
+  | 'ranger'
 const prefixes: Record<Style, string> = {
   plate: '',
   barbarian: 'barbarian_',
@@ -25,16 +33,34 @@ const prefixes: Record<Style, string> = {
   valkyrie: 'valkyrie_',
   caveman: 'caveman_',
   priest: 'priest_',
+  ranger: 'ranger_',
 }
 const styles = Object.keys(prefixes) as Style[]
-type Helmet = Exclude<Style, 'rogue' | 'caveman'> | 'brilliance'
+type Helmet = Exclude<Style, 'rogue' | 'caveman' | 'ranger'> | 'brilliance'
 const LAZY_HELMET = 'brilliance_helmet'
-const FIXED_VALKYRIE_PARTS = ['valkyrie_hair', 'valkyrie_wings']
+// Model-path variants of the shared body: parts always loaded, and the hair worn without a helmet
+// (null: the variant's fixed hair is always shown).
+type Variant = { fixed: string[]; hair: Style | null }
+const VARIANTS: Record<string, Variant> = {
+  [MODULAR_VALKYRIE_MODEL_PATH]: {
+    fixed: ['valkyrie_hair', 'valkyrie_wings'],
+    hair: null,
+  },
+  [MODULAR_FEMALE_RANGER_MODEL_PATH]: {
+    fixed: ['ranger_hair'],
+    hair: 'ranger',
+  },
+}
+const variantOf = (names: string[]) =>
+  Object.values(VARIANTS).find((variant) =>
+    variant.fixed.every((name) => names.includes(name))
+  )
 // Styles loaded on first equip rather than with the character, and the slots each one has.
 const LAZY_STYLES: Partial<Record<Style, readonly Slot[]>> = {
   valkyrie: slots,
   caveman: slots.filter((slot) => slot !== 'helmet'),
   priest: slots,
+  ranger: slots.filter((slot) => slot !== 'helmet'),
 }
 const partName = (style: Style, slot: Slot | 'hair') =>
   `${prefixes[style]}${slot}`
@@ -82,8 +108,8 @@ export function assembleFemaleCharacter(
   names = FEMALE_PARTS
 ): THREE.Group {
   const scene = clone(base.scene) as THREE.Group
-  if (names.some((name) => FIXED_VALKYRIE_PARTS.includes(name)))
-    scene.userData.female_class = 'valkyrie'
+  const variant = variantOf(names)
+  scene.userData.female_hair = variant ? variant.hair : 'plate'
   base.scene.traverse((node) => {
     const association = base.parser.associations.get(node)
     if (
@@ -100,9 +126,7 @@ export function assembleFemaleCharacter(
     const meshes = bindModularPart(scene, sources[i].scene)
     for (const mesh of meshes) {
       mesh.userData.female_part = name
-      mesh.visible =
-        (name === 'hair' && scene.userData.female_class !== 'valkyrie') ||
-        FIXED_VALKYRIE_PARTS.includes(name)
+      mesh.visible = variant ? variant.fixed.includes(name) : name === 'hair'
     }
     if (name === 'valkyrie_wings') attachValkyrieWings(scene, meshes)
   }
@@ -128,9 +152,7 @@ export function loadFemaleCharacter(
 ): Promise<GLTF> {
   let pending = models.get(path)
   if (!pending) {
-    const fixed =
-      path === MODULAR_VALKYRIE_MODEL_PATH ? FIXED_VALKYRIE_PARTS : []
-    const names = [...FEMALE_PARTS, ...fixed]
+    const names = [...FEMALE_PARTS, ...(VARIANTS[path]?.fixed ?? [])]
     pending = Promise.all([
       loadGLB(MODULAR_FEMALE_MODEL_PATH),
       ...names.map((name) =>
@@ -308,6 +330,7 @@ const femaleStyle = (itemId: string | null | undefined): Style | null => {
   if (model.startsWith('armor/valkyrie_')) return 'valkyrie'
   if (model.startsWith('armor/caveman_')) return 'caveman'
   if (model.startsWith('armor/priest_')) return 'priest'
+  if (model.startsWith('armor/ranger_')) return 'ranger'
   if (model.startsWith('armor/rogue_') || ROGUE_LEATHER_MODELS.has(model))
     return 'rogue'
   return item?.material === 'leather' || model.startsWith('armor/barbarian_')
@@ -319,7 +342,9 @@ const femaleHelmet = (itemId: string | null | undefined): Helmet | null => {
   if (modularOutfitForArmor({ head: itemId }).helmet === 'brilliance')
     return 'brilliance'
   const style = femaleStyle(itemId)
-  return style === 'rogue' || style === 'caveman' ? 'barbarian' : style
+  return style === 'rogue' || style === 'caveman' || style === 'ranger'
+    ? 'barbarian'
+    : style
 }
 
 function bindLazyFemalePart(
@@ -441,15 +466,14 @@ export function applyFemaleArmor(
     states.set(scene, state)
   }
   const { helmet } = equipped
-  const fixed = scene.userData.female_class === 'valkyrie'
-  const hair = fixed
-    ? null
-    : helmet === 'plate' || helmet === 'brilliance'
+  const bare: Style | null = scene.userData.female_hair
+  const hair =
+    bare === null || helmet === 'plate' || helmet === 'brilliance'
       ? null
       : partName(
           helmet === 'valkyrie' || helmet === 'priest'
             ? 'plate'
-            : (helmet ?? 'plate'),
+            : (helmet ?? bare),
           'hair'
         )
   for (const style of styles) {

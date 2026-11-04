@@ -2,7 +2,7 @@ import { readFile, stat } from 'node:fs/promises'
 import { sources, output } from './lib/female-preview.mjs'
 import { ensureFemalePreview } from './lib/ensure-female-preview.mjs'
 import { valkyriePreviewFit } from './lib/valkyrie-preview-fit.mjs'
-import { priestPreviewFit } from './lib/priest-preview-fit.mjs'
+import { outfitPreviewFit } from './lib/outfit-preview-fit.mjs'
 
 const pending = new Map()
 
@@ -23,7 +23,7 @@ export function femalePreviewPlugin() {
         res.end(JSON.stringify({ requested: true }))
       })
       server.middlewares.use(valkyriePreviewFit())
-      server.middlewares.use(priestPreviewFit())
+      server.middlewares.use(outfitPreviewFit())
       server.middlewares.use((req, res, next) => {
         const match = /^\/__female-preview\/(base|bob|knight|warrior|valkyrie)\.glb$|^\/__female-preview\/(animations)\.json$/.exec(req.url?.split('?')[0] ?? '')
         if (req.method !== 'GET' || !match) return next()

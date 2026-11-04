@@ -21,10 +21,13 @@ import {
   PART_FIT_KEYS,
   PART_FIT_RANGES,
   partFitter,
+  SLEEVE_END_KEYS,
+  sleeveEndDeformer,
   type PartFit,
   type PartFitKey,
   type PartFitter,
   type PartSide,
+  type SleeveEnd,
 } from './female-part-fit'
 import {
   applyFemaleBracerFit,
@@ -66,6 +69,7 @@ export async function showFemaleBase(
         <option value="none">없음</option>
         <option value="knight">긴 금발 (보관본)</option>
         <option value="warrior">전사 긴 헤어 (피팅 검수 중)</option>
+        <option value="ranger">순찰자 갈색 포니테일 (피팅 검수 중)</option>
       </select>
       <div id="warrior-hair-fit" hidden>
         <p class="details">처음 피팅한 헤어를 기준으로 조절합니다. 변경값은 미리보기에만 적용됩니다.</p>
@@ -97,6 +101,7 @@ export async function showFemaleBase(
         <option value="valkyrie">발키리 상의 (피팅 검수 중)</option>
         <option value="caveman">원시전사 상의 (피팅 검수 중)</option>
         <option value="priest">사제 상의 (피팅 검수 중)</option>
+        <option value="ranger">순찰자 조끼와 셔츠 (피팅 검수 중)</option>
         <option value="rogue">로그 가죽 코르셋</option>
       </select>
       <label for="female-bottom">하의</label>
@@ -107,6 +112,7 @@ export async function showFemaleBase(
         <option value="valkyrie">발키리 하의 (피팅 검수 중)</option>
         <option value="caveman">원시전사 모피 하의 (피팅 검수 중)</option>
         <option value="priest">사제 치마 (피팅 검수 중)</option>
+        <option value="ranger">순찰자 가죽 치마 (피팅 검수 중)</option>
         <option value="rogue">로그 벨트 미니스커트</option>
       </select>
       <label for="female-boots">신발</label>
@@ -115,6 +121,7 @@ export async function showFemaleBase(
         <option value="knight">은빛 기사 판금 부츠</option>
         <option value="caveman">원시전사 모피 하이힐 부츠 (피팅 검수 중)</option>
         <option value="priest">사제 하이힐 장화 (피팅 검수 중)</option>
+        <option value="ranger">순찰자 스틸레토 부츠 (피팅 검수 중)</option>
         <option value="rogue">로그 빨간 밑창 가죽 부츠</option>
         <option value="barbarian">야만전사 가죽 하이힐 샌들</option>
         <option value="valkyrie">발키리 부츠 (초기 피팅 검수 중)</option>
@@ -127,58 +134,70 @@ export async function showFemaleBase(
         <option value="valkyrie">발키리 손목 보호대 (초기 피팅)</option>
         <option value="caveman">원시전사 가죽 손목 보호대 (피팅 검수 중)</option>
         <option value="priest">사제 장갑 (피팅 검수 중)</option>
+        <option value="ranger">순찰자 반장갑 (피팅 검수 중)</option>
         <option value="rogue">로그 검은 가죽 반장갑</option>
       </select>
-      <div id="priest-fit" hidden>
-        <p><strong>사제 복장 피팅 조절</strong></p>
-        <label for="priest-fit-part">조절할 부위</label>
-        <select id="priest-fit-part"></select>
-        <div id="priest-fit-side-row" hidden>
-          <label for="priest-fit-side">조절할 쪽</label>
-          <select id="priest-fit-side">
+      <div id="outfit-fit" hidden>
+        <p><strong>복장 피팅 조절</strong></p>
+        <label for="outfit-fit-part">조절할 부위</label>
+        <select id="outfit-fit-part"></select>
+        <div id="outfit-fit-side-row" hidden>
+          <label for="outfit-fit-side">조절할 쪽</label>
+          <select id="outfit-fit-side">
             <option value="both">양쪽 함께 (대칭)</option>
             <option value="left">캐릭터 왼쪽만</option>
             <option value="right">캐릭터 오른쪽만</option>
           </select>
           <p class="details">정면에서 볼 때 캐릭터 왼쪽은 화면 오른쪽입니다. 양쪽 함께에서 움직인 값은 두 쪽에 같게 들어갑니다. 좌우 이동은 바깥쪽이 +입니다.</p>
         </div>
-        <label for="priest-fit-move-x">좌우 이동 <output id="priest-fit-move-x-value"></output> cm</label>
-        <input id="priest-fit-move-x" type="range" min="-10" max="10" step="0.1" />
-        <label for="priest-fit-move-y">위아래 이동 <output id="priest-fit-move-y-value"></output> cm</label>
-        <input id="priest-fit-move-y" type="range" min="-10" max="10" step="0.1" />
-        <label for="priest-fit-move-z">앞뒤 이동 <output id="priest-fit-move-z-value"></output> cm</label>
-        <input id="priest-fit-move-z" type="range" min="-10" max="10" step="0.1" />
-        <label for="priest-fit-scale">전체 크기 <output id="priest-fit-scale-value"></output>%</label>
-        <input id="priest-fit-scale" type="range" min="70" max="130" step="0.5" />
-        <label for="priest-fit-scale-x">너비 <output id="priest-fit-scale-x-value"></output>%</label>
-        <input id="priest-fit-scale-x" type="range" min="70" max="130" step="0.5" />
-        <label for="priest-fit-scale-y">높이 <output id="priest-fit-scale-y-value"></output>%</label>
-        <input id="priest-fit-scale-y" type="range" min="70" max="130" step="0.5" />
-        <label for="priest-fit-scale-z">두께 <output id="priest-fit-scale-z-value"></output>%</label>
-        <input id="priest-fit-scale-z" type="range" min="70" max="130" step="0.5" />
-        <label for="priest-fit-rotate-x">앞뒤 기울기 <output id="priest-fit-rotate-x-value"></output>°</label>
-        <input id="priest-fit-rotate-x" type="range" min="-45" max="45" step="0.5" />
-        <label for="priest-fit-rotate-y">좌우 회전 <output id="priest-fit-rotate-y-value"></output>°</label>
-        <input id="priest-fit-rotate-y" type="range" min="-45" max="45" step="0.5" />
-        <label for="priest-fit-rotate-z">옆 기울기 <output id="priest-fit-rotate-z-value"></output>°</label>
-        <input id="priest-fit-rotate-z" type="range" min="-45" max="45" step="0.5" />
-        <label class="toggle"><input id="priest-fit-show-skin" type="checkbox" /> 이 부위가 가린 피부 보이기 (맞춘 뒤 끄기)</label>
-        <label class="toggle"><input id="priest-brush" type="checkbox" /> 피부 브러시 (화면 클릭으로 칠하기)</label>
-        <div id="priest-brush-controls" hidden>
-          <label for="priest-brush-mode">브러시</label>
-          <select id="priest-brush-mode">
+        <label for="outfit-fit-move-x">좌우 이동 <output id="outfit-fit-move-x-value"></output> cm</label>
+        <input id="outfit-fit-move-x" type="range" min="-10" max="10" step="0.1" />
+        <label for="outfit-fit-move-y">위아래 이동 <output id="outfit-fit-move-y-value"></output> cm</label>
+        <input id="outfit-fit-move-y" type="range" min="-10" max="10" step="0.1" />
+        <label for="outfit-fit-move-z">앞뒤 이동 <output id="outfit-fit-move-z-value"></output> cm</label>
+        <input id="outfit-fit-move-z" type="range" min="-10" max="10" step="0.1" />
+        <label for="outfit-fit-scale">전체 크기 <output id="outfit-fit-scale-value"></output>%</label>
+        <input id="outfit-fit-scale" type="range" min="70" max="130" step="0.5" />
+        <label for="outfit-fit-scale-x">너비 <output id="outfit-fit-scale-x-value"></output>%</label>
+        <input id="outfit-fit-scale-x" type="range" min="70" max="130" step="0.5" />
+        <label for="outfit-fit-scale-y">높이 <output id="outfit-fit-scale-y-value"></output>%</label>
+        <input id="outfit-fit-scale-y" type="range" min="70" max="130" step="0.5" />
+        <label for="outfit-fit-scale-z">두께 <output id="outfit-fit-scale-z-value"></output>%</label>
+        <input id="outfit-fit-scale-z" type="range" min="70" max="130" step="0.5" />
+        <label for="outfit-fit-rotate-x">앞뒤 기울기 <output id="outfit-fit-rotate-x-value"></output>°</label>
+        <input id="outfit-fit-rotate-x" type="range" min="-45" max="45" step="0.5" />
+        <label for="outfit-fit-rotate-y">좌우 회전 <output id="outfit-fit-rotate-y-value"></output>°</label>
+        <input id="outfit-fit-rotate-y" type="range" min="-45" max="45" step="0.5" />
+        <label for="outfit-fit-rotate-z">옆 기울기 <output id="outfit-fit-rotate-z-value"></output>°</label>
+        <input id="outfit-fit-rotate-z" type="range" min="-45" max="45" step="0.5" />
+        <div id="sleeve-end-fit" hidden>
+          <p class="details">소매 끝점을 상완 축 기준으로 옮깁니다. 어깨에서 끝까지 선형으로 따라갑니다.</p>
+          <label for="sleeve-end-left-forward">왼쪽 소매 끝 앞뒤 <output id="sleeve-end-left-forward-value"></output> cm</label>
+          <input id="sleeve-end-left-forward" type="range" min="-5" max="5" step="0.1" />
+          <label for="sleeve-end-left-out">왼쪽 소매 끝 좌우 (바깥 +) <output id="sleeve-end-left-out-value"></output> cm</label>
+          <input id="sleeve-end-left-out" type="range" min="-5" max="5" step="0.1" />
+          <label for="sleeve-end-right-forward">오른쪽 소매 끝 앞뒤 <output id="sleeve-end-right-forward-value"></output> cm</label>
+          <input id="sleeve-end-right-forward" type="range" min="-5" max="5" step="0.1" />
+          <label for="sleeve-end-right-out">오른쪽 소매 끝 좌우 (바깥 +) <output id="sleeve-end-right-out-value"></output> cm</label>
+          <input id="sleeve-end-right-out" type="range" min="-5" max="5" step="0.1" />
+        </div>
+        <label class="toggle"><input id="outfit-fit-show-skin" type="checkbox" /> 이 부위가 가린 피부 보이기 (맞춘 뒤 끄기)</label>
+        <label class="toggle"><input id="outfit-brush" type="checkbox" /> 피부 브러시 (화면 클릭으로 칠하기)</label>
+        <div id="outfit-brush-controls" hidden>
+          <label for="outfit-brush-mode">브러시</label>
+          <select id="outfit-brush-mode">
             <option value="hide">가리기</option>
             <option value="show">되살리기</option>
           </select>
-          <label for="priest-brush-radius">반경 <output id="priest-brush-radius-value">1.5</output> cm</label>
-          <input id="priest-brush-radius" type="range" min="0.3" max="5" step="0.1" value="1.5" />
-          <button id="priest-brush-undo" type="button">한 번 되돌리기</button>
-          <button id="priest-brush-clear" type="button">이 부위 브러시 지우기</button>
+          <label for="outfit-brush-radius">반경 <output id="outfit-brush-radius-value">1.5</output> cm</label>
+          <input id="outfit-brush-radius" type="range" min="0.3" max="5" step="0.1" value="1.5" />
+          <button id="outfit-brush-undo" type="button">한 번 되돌리기</button>
+          <button id="outfit-brush-clear" type="button">이 부위 브러시 지우기</button>
           <p class="details">드래그는 회전, 짧은 클릭은 칠하기입니다. 옷 뒤의 피부도 칠해집니다. 되살릴 곳은 '가린 피부 보이기'를 켜고 칠하세요. '이 부위 피팅 저장'으로 함께 저장됩니다.</p>
         </div>
-        <button id="priest-fit-save" type="button">이 부위 피팅 저장</button>
-        <button id="priest-fit-reset" type="button">이 부위 조절 초기화</button>
-        <p id="priest-fit-status" class="details" aria-live="polite"></p>
+        <button id="outfit-fit-save" type="button">이 부위 피팅 저장</button>
+        <button id="outfit-fit-reset" type="button">이 부위 조절 초기화</button>
+        <p id="outfit-fit-status" class="details" aria-live="polite"></p>
       </div>
       <div id="valkyrie-bracer-fit" hidden>
         <p><strong>발키리 손목 보호대</strong></p>
@@ -287,10 +306,15 @@ export async function showFemaleBase(
   const requestedHair = new URLSearchParams(location.search).get('hair')
   hairSelect.value =
     requestedHair &&
-    ['bob', 'knight', 'warrior', 'none'].includes(requestedHair)
+    ['bob', 'knight', 'warrior', 'ranger', 'none'].includes(requestedHair)
       ? requestedHair
       : 'bob'
   const initialHair = hairSelect.value
+  // Outfit hair is fitted with its outfit; the rest are prepared by the female preview plugin.
+  const hairUrl = (name: string) =>
+    name === 'ranger'
+      ? '/__modular-character/parts/female_ranger_hair.glb'
+      : `/__female-preview/${name}.glb`
   loader.manager.onProgress = (_url, loaded, total) => {
     if (!disposed())
       status.textContent = `미리보기 에셋을 불러오는 중… (${loaded}/${total})`
@@ -315,9 +339,7 @@ export async function showFemaleBase(
         clips: ReturnType<typeof THREE.AnimationClip.toJSON>[]
       }
     }),
-    initialHair === 'none'
-      ? null
-      : loader.loadAsync(`/__female-preview/${initialHair}.glb`),
+    initialHair === 'none' ? null : loader.loadAsync(hairUrl(initialHair)),
   ])
   const { scene: model, animations } = base
   loader.manager.onProgress = () => {}
@@ -330,7 +352,9 @@ export async function showFemaleBase(
   const hairOptions: Record<string, THREE.SkinnedMesh[]> = { none: [] }
   let helmetOutfit = 'none'
   const hairKey = (name: string, helmet = helmetOutfit) =>
-    name === 'warrior' && helmet !== 'none' && helmet !== 'valkyrie'
+    (name === 'warrior' || name === 'ranger') &&
+    helmet !== 'none' &&
+    helmet !== 'valkyrie'
       ? 'none'
       : helmet === 'barbarian' && name !== 'none'
         ? `barbarian-${name}`
@@ -447,7 +471,7 @@ export async function showFemaleBase(
     const promise = loader
       .loadAsync(
         key === name
-          ? `/__female-preview/${name}.glb`
+          ? hairUrl(name)
           : `/__modular-character/parts/female_barbarian_helmet_hair_${name}.glb`
       )
       .then(({ scene: source }) => {
@@ -974,151 +998,200 @@ export async function showFemaleBase(
     updateBracerFit()
   }
   updateBracerFit()
-  const priestPanel = document.getElementById('priest-fit')!
-  const priestPart = document.getElementById(
-    'priest-fit-part'
+  const fitPanel = document.getElementById('outfit-fit')!
+  const fitPart = document.getElementById(
+    'outfit-fit-part'
   ) as HTMLSelectElement
-  const priestStatus = document.getElementById('priest-fit-status')!
-  const priestNames: Record<string, string> = {
-    helmet: '사제관',
+  const fitStatus = document.getElementById('outfit-fit-status')!
+  // Outfits whose parts are fitted by hand here; state is keyed by part (`${slot}-${outfit}`).
+  const fittableOutfits: Record<string, string> = {
+    priest: '사제',
+    ranger: '순찰자',
+  }
+  const fitSlotNames: Record<string, string> = {
+    helmet: '투구',
     top: '상의',
     bottom: '치마',
     gloves: '장갑',
     boots: '부츠',
   }
-  const priestFitters = new Map<string, PartFitter>()
+  const partSlot = (part: string) => part.split('-')[0]
+  const partOutfit = (part: string) => part.split('-')[1]
+  const partName = (part: string) =>
+    `${fittableOutfits[partOutfit(part)]} ${fitSlotNames[partSlot(part)]}`
+  const fitters = new Map<string, PartFitter>()
   // Paired parts keep a fit per side; side 1 is the character's left (+x).
-  const priestFits = new Map<string, Record<PartSide, PartFit>>()
+  const partFits = new Map<string, Record<PartSide, PartFit>>()
   const pairedSlots = ['gloves', 'boots']
-  const priestSide = document.getElementById(
-    'priest-fit-side'
+  const fitSide = document.getElementById(
+    'outfit-fit-side'
   ) as HTMLSelectElement
-  const priestSideRow = document.getElementById('priest-fit-side-row')!
+  const fitSideRow = document.getElementById('outfit-fit-side-row')!
   const defaultPartFit = () =>
     Object.fromEntries(
       PART_FIT_KEYS.map((key) => [key, PART_FIT_RANGES[key][2]])
     ) as PartFit
-  const sidesOf = (slot: string) => {
-    let sides = priestFits.get(slot)
+  const sidesOf = (part: string) => {
+    let sides = partFits.get(part)
     if (!sides) {
       sides = { 1: defaultPartFit(), [-1]: defaultPartFit() }
-      priestFits.set(slot, sides)
+      partFits.set(part, sides)
     }
     return sides
   }
-  const editedSides = (slot: string): PartSide[] =>
-    !pairedSlots.includes(slot) || priestSide.value === 'both'
+  const editedSides = (part: string): PartSide[] =>
+    !pairedSlots.includes(partSlot(part)) || fitSide.value === 'both'
       ? [1, -1]
-      : priestSide.value === 'left'
+      : fitSide.value === 'left'
         ? [1]
         : [-1]
-  const priestInputs = Object.fromEntries(
+  const fitInputs = Object.fromEntries(
     PART_FIT_KEYS.map((key) => [
       key,
-      document.getElementById(`priest-fit-${key}`) as HTMLInputElement,
+      document.getElementById(`outfit-fit-${key}`) as HTMLInputElement,
     ])
   ) as Record<PartFitKey, HTMLInputElement>
-  // Slots whose hidden body skin is shown again for lining the part up against the body.
-  const priestSkinShown = new Set<string>()
-  const priestShowSkin = document.getElementById(
-    'priest-fit-show-skin'
+  // Parts whose hidden body skin is shown again for lining the part up against the body.
+  const skinShown = new Set<string>()
+  const showSkinToggle = document.getElementById(
+    'outfit-fit-show-skin'
   ) as HTMLInputElement
-  priestShowSkin.onchange = () => {
-    const slot = priestPart.value
-    if (priestShowSkin.checked) priestSkinShown.add(slot)
-    else priestSkinShown.delete(slot)
-    if (priestFitters.has(slot))
-      outfitMask.setEquipped(`${slot}-priest`, !priestShowSkin.checked)
+  showSkinToggle.onchange = () => {
+    const part = fitPart.value
+    if (showSkinToggle.checked) skinShown.add(part)
+    else skinShown.delete(part)
+    if (fitters.has(part)) outfitMask.setEquipped(part, !showSkinToggle.checked)
   }
-  const showPriestFit = () => {
-    priestSideRow.hidden = !pairedSlots.includes(priestPart.value)
-    priestShowSkin.checked = priestSkinShown.has(priestPart.value)
-    const fit = sidesOf(priestPart.value)[editedSides(priestPart.value)[0]]
+  // Parts whose sleeves are aligned as one tube, so their ends can be moved by hand.
+  const sleeveEndParts = new Set(['top-ranger'])
+  const sleeveEnds = new Map<string, Record<PartSide, SleeveEnd>>()
+  const sleeveEndsOf = (part: string) => {
+    let ends = sleeveEnds.get(part)
+    if (!ends) {
+      ends = { 1: { forward: 0, out: 0 }, [-1]: { forward: 0, out: 0 } }
+      sleeveEnds.set(part, ends)
+    }
+    return ends
+  }
+  const sleeveEndInputs = ([1, -1] as const).flatMap((side) =>
+    SLEEVE_END_KEYS.map((key) => {
+      const id = `sleeve-end-${side === 1 ? 'left' : 'right'}-${key}`
+      return {
+        side,
+        key,
+        input: document.getElementById(id) as HTMLInputElement,
+        output: document.getElementById(`${id}-value`)!,
+      }
+    })
+  )
+  const showFit = () => {
+    const sleeveEnd = sleeveEndParts.has(fitPart.value)
+    document.getElementById('sleeve-end-fit')!.hidden = !sleeveEnd
+    if (sleeveEnd)
+      for (const { side, key, input, output } of sleeveEndInputs)
+        input.value = output.textContent = String(
+          sleeveEndsOf(fitPart.value)[side][key]
+        )
+    fitSideRow.hidden = !pairedSlots.includes(partSlot(fitPart.value))
+    showSkinToggle.checked = skinShown.has(fitPart.value)
+    const fit = sidesOf(fitPart.value)[editedSides(fitPart.value)[0]]
     for (const key of PART_FIT_KEYS) {
-      priestInputs[key].value = String(fit[key])
-      document.getElementById(`priest-fit-${key}-value`)!.textContent = String(
+      fitInputs[key].value = String(fit[key])
+      document.getElementById(`outfit-fit-${key}-value`)!.textContent = String(
         fit[key]
       )
     }
   }
-  type SavedFit = PartFit | { left: PartFit; right: PartFit }
-  const priestBrush = new Map<string, SkinBrushEdits>()
-  const priestMasks = new Map<string, { hide_triangle_indices: number[] }>()
-  const brushOf = (slot: string) => {
-    let edits = priestBrush.get(slot)
+  type SavedFit = (PartFit | { left: PartFit; right: PartFit }) & {
+    'sleeve-end'?: { left: SleeveEnd; right: SleeveEnd }
+  }
+  const brushEdits = new Map<string, SkinBrushEdits>()
+  const fitMasks = new Map<string, { hide_triangle_indices: number[] }>()
+  const brushOf = (part: string) => {
+    let edits = brushEdits.get(part)
     if (!edits) {
       edits = { hide: new Set(), show: new Set() }
-      priestBrush.set(slot, edits)
+      brushEdits.set(part, edits)
     }
     return edits
   }
-  // Re-registers a priest part's mask with its brush edits, keeping its equipped state.
   // The part's baked mask with the brush strokes applied.
-  const brushedPriestMask = (slot: string) => {
-    const mask = priestMasks.get(slot)!
+  const brushedMask = (part: string) => {
+    const mask = fitMasks.get(part)!
     return {
       ...mask,
       hide_triangle_indices: applySkinBrush(
         mask.hide_triangle_indices,
-        brushOf(slot)
+        brushOf(part)
       ),
     }
   }
-  const applyPriestMask = (slot: string) => {
-    if (!priestMasks.has(slot)) return
-    const name = `${slot}-priest`
-    outfitMask.unregister(name)
-    outfitMask.register(name, brushedPriestMask(slot))
+  // Re-registers a part's mask with its brush edits, keeping its equipped state.
+  const applyFitMask = (part: string) => {
+    if (!fitMasks.has(part)) return
+    outfitMask.unregister(part)
+    outfitMask.register(part, brushedMask(part))
     outfitMask.setEquipped(
-      name,
-      (document.getElementById(`female-${slot}`) as HTMLSelectElement).value ===
-        'priest' && !priestSkinShown.has(slot)
+      part,
+      (document.getElementById(`female-${partSlot(part)}`) as HTMLSelectElement)
+        .value === partOutfit(part) && !skinShown.has(part)
     )
   }
-  const savedPriestFits = fetch('/__female-preview/priest-fit.json')
-    .then((response) => (response.ok ? response.json() : { parts: {} }))
-    .then(
-      (saved: {
-        parts: Record<
-          string,
-          { pending?: SavedFit; brush?: { hide: number[]; show: number[] } }
-        >
-      }) => {
-        for (const [slot, entry] of Object.entries(saved.parts)) {
-          if (entry.brush && !priestBrush.has(slot))
-            priestBrush.set(slot, {
-              hide: new Set(entry.brush.hide),
-              show: new Set(entry.brush.show),
-            })
-          const pending = entry.pending
-          if (!pending || priestFits.has(slot)) continue
-          const [left, right] =
-            'left' in pending
-              ? [pending.left, pending.right]
-              : [pending, pending]
-          priestFits.set(slot, {
-            1: { ...defaultPartFit(), ...left },
-            [-1]: { ...defaultPartFit(), ...right },
-          })
-        }
-      }
+  const fitUrl = (outfit: string) => `/__female-preview/${outfit}-fit.json`
+  const savedFits = Promise.all(
+    Object.keys(fittableOutfits).map((outfit) =>
+      fetch(fitUrl(outfit))
+        .then((response) => (response.ok ? response.json() : { parts: {} }))
+        .then(
+          (saved: {
+            parts: Record<
+              string,
+              { pending?: SavedFit; brush?: { hide: number[]; show: number[] } }
+            >
+          }) => {
+            for (const [slot, entry] of Object.entries(saved.parts)) {
+              const part = `${slot}-${outfit}`
+              if (entry.brush && !brushEdits.has(part))
+                brushEdits.set(part, {
+                  hide: new Set(entry.brush.hide),
+                  show: new Set(entry.brush.show),
+                })
+              const pending = entry.pending
+              if (!pending || partFits.has(part)) continue
+              const ends = pending['sleeve-end']
+              if (ends) sleeveEnds.set(part, { 1: ends.left, [-1]: ends.right })
+              const [left, right] =
+                'left' in pending
+                  ? [pending.left, pending.right]
+                  : [pending, pending]
+              partFits.set(part, {
+                1: { ...defaultPartFit(), ...left },
+                [-1]: { ...defaultPartFit(), ...right },
+              })
+            }
+          }
+        )
+        .catch(() => undefined)
     )
-    .catch(() => undefined)
-  const applyPriestFit = (slot: string) => {
-    const sides = sidesOf(slot)
-    priestFitters.get(slot)?.((side) => sides[side])
+  )
+  const applyFit = (part: string) => {
+    const sides = sidesOf(part)
+    fitters.get(part)?.((side) => sides[side])
   }
   for (const key of PART_FIT_KEYS)
-    priestInputs[key].oninput = () => {
-      const sides = sidesOf(priestPart.value)
-      for (const side of editedSides(priestPart.value))
-        sides[side][key] = Number(priestInputs[key].value)
-      showPriestFit()
-      applyPriestFit(priestPart.value)
-      priestStatus.textContent = '저장하지 않은 조절이 있습니다.'
+    fitInputs[key].oninput = () => {
+      const sides = sidesOf(fitPart.value)
+      for (const side of editedSides(fitPart.value))
+        sides[side][key] = Number(fitInputs[key].value)
+      showFit()
+      applyFit(fitPart.value)
+      fitStatus.textContent = '저장하지 않은 조절이 있습니다.'
     }
   // One wheel notch moves a slider by one step (1 mm for the move sliders).
-  for (const input of Object.values(priestInputs))
+  for (const input of [
+    ...Object.values(fitInputs),
+    ...sleeveEndInputs.map(({ input }) => input),
+  ])
     input.addEventListener(
       'wheel',
       (event) => {
@@ -1130,26 +1203,43 @@ export async function showFemaleBase(
       },
       { passive: false }
     )
-  priestPart.onchange = priestSide.onchange = showPriestFit
-  document.getElementById('priest-fit-reset')!.onclick = () => {
-    const sides = sidesOf(priestPart.value)
-    for (const side of editedSides(priestPart.value))
-      sides[side] = defaultPartFit()
-    showPriestFit()
-    applyPriestFit(priestPart.value)
+  fitPart.onchange = fitSide.onchange = showFit
+  for (const { side, key, input } of sleeveEndInputs) {
+    input.oninput = () => {
+      sleeveEndsOf(fitPart.value)[side][key] = Number(input.value)
+      showFit()
+      applyFit(fitPart.value)
+      fitStatus.textContent = '저장하지 않은 조절이 있습니다.'
+    }
   }
-  document.getElementById('priest-fit-save')!.onclick = async () => {
-    const part = priestPart.value
-    priestStatus.textContent = '저장하는 중…'
+  document.getElementById('outfit-fit-reset')!.onclick = () => {
+    const sides = sidesOf(fitPart.value)
+    for (const side of editedSides(fitPart.value))
+      sides[side] = defaultPartFit()
+    sleeveEnds.delete(fitPart.value)
+    showFit()
+    applyFit(fitPart.value)
+  }
+  document.getElementById('outfit-fit-save')!.onclick = async () => {
+    const part = fitPart.value
+    fitStatus.textContent = '저장하는 중…'
     try {
-      const response = await fetch('/__female-preview/priest-fit.json', {
+      const response = await fetch(fitUrl(partOutfit(part)), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          part,
-          settings: pairedSlots.includes(part)
+          part: partSlot(part),
+          settings: pairedSlots.includes(partSlot(part))
             ? { left: sidesOf(part)[1], right: sidesOf(part)[-1] }
-            : sidesOf(part)[1],
+            : {
+                ...sidesOf(part)[1],
+                ...(sleeveEndParts.has(part) && {
+                  'sleeve-end': {
+                    left: sleeveEndsOf(part)[1],
+                    right: sleeveEndsOf(part)[-1],
+                  },
+                }),
+              },
           brush: {
             hide: [...brushOf(part).hide],
             show: [...brushOf(part).show],
@@ -1157,49 +1247,49 @@ export async function showFemaleBase(
         }),
       })
       const result = (await response.json()) as { error?: string }
-      priestStatus.textContent = response.ok
-        ? `${priestNames[part]} 피팅을 저장했습니다. 베이크하면 모델에 반영됩니다.`
+      fitStatus.textContent = response.ok
+        ? `${partName(part)} 피팅을 저장했습니다. 베이크하면 모델에 반영됩니다.`
         : (result.error ?? '저장하지 못했습니다.')
     } catch {
-      priestStatus.textContent = '저장하지 못했습니다.'
+      fitStatus.textContent = '저장하지 못했습니다.'
     }
   }
   const brushToggle = document.getElementById(
-    'priest-brush'
+    'outfit-brush'
   ) as HTMLInputElement
   const brushMode = document.getElementById(
-    'priest-brush-mode'
+    'outfit-brush-mode'
   ) as HTMLSelectElement
   const brushRadius = document.getElementById(
-    'priest-brush-radius'
+    'outfit-brush-radius'
   ) as HTMLInputElement
-  const brushHistory: { slot: string; hide: number[]; show: number[] }[] = []
+  const brushHistory: { part: string; hide: number[]; show: number[] }[] = []
   brushToggle.onchange = () => {
-    document.getElementById('priest-brush-controls')!.hidden =
+    document.getElementById('outfit-brush-controls')!.hidden =
       !brushToggle.checked
   }
   brushRadius.oninput = () => {
-    document.getElementById('priest-brush-radius-value')!.textContent =
+    document.getElementById('outfit-brush-radius-value')!.textContent =
       brushRadius.value
   }
-  document.getElementById('priest-brush-undo')!.onclick = () => {
+  document.getElementById('outfit-brush-undo')!.onclick = () => {
     const last = brushHistory.pop()
     if (!last) return
-    priestBrush.set(last.slot, {
+    brushEdits.set(last.part, {
       hide: new Set(last.hide),
       show: new Set(last.show),
     })
-    applyPriestMask(last.slot)
+    applyFitMask(last.part)
   }
-  document.getElementById('priest-brush-clear')!.onclick = () => {
-    const slot = priestPart.value
-    const edits = brushOf(slot)
-    brushHistory.push({ slot, hide: [...edits.hide], show: [...edits.show] })
-    priestBrush.set(slot, { hide: new Set(), show: new Set() })
-    applyPriestMask(slot)
-    priestStatus.textContent = '저장하지 않은 조절이 있습니다.'
+  document.getElementById('outfit-brush-clear')!.onclick = () => {
+    const part = fitPart.value
+    const edits = brushOf(part)
+    brushHistory.push({ part, hide: [...edits.hide], show: [...edits.show] })
+    brushEdits.set(part, { hide: new Set(), show: new Set() })
+    applyFitMask(part)
+    fitStatus.textContent = '저장하지 않은 조절이 있습니다.'
   }
-  function setupPriestBrush() {
+  function setupSkinBrush() {
     if (!brushBody || !brushRestIndex) return
     const body = brushBody
     const pick = skinBrush(
@@ -1215,7 +1305,7 @@ export async function showFemaleBase(
     const onUp = (event: PointerEvent) => {
       const start = down
       down = undefined
-      if (!start || !brushToggle.checked || priestPanel.hidden) return
+      if (!start || !brushToggle.checked || fitPanel.hidden) return
       if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4)
         return
       const rect = canvas.getBoundingClientRect()
@@ -1239,11 +1329,11 @@ export async function showFemaleBase(
           (candidate.object as THREE.Mesh).material !== undefined
       )
       const hit = hits.find((candidate) => candidate.object === body)
-      priestStatus.textContent = `클릭한 곳 맨 앞: ${front ? front.object.name || '(이름 없음)' : '없음'}${front?.object === body ? ' (몸 피부)' : ''}`
+      fitStatus.textContent = `클릭한 곳 맨 앞: ${front ? front.object.name || '(이름 없음)' : '없음'}${front?.object === body ? ' (몸 피부)' : ''}`
       if (!hit?.face || !hit.barycoord) return
-      const slot = priestPart.value
-      const edits = brushOf(slot)
-      brushHistory.push({ slot, hide: [...edits.hide], show: [...edits.show] })
+      const part = fitPart.value
+      const edits = brushOf(part)
+      brushHistory.push({ part, hide: [...edits.hide], show: [...edits.show] })
       const [add, remove] =
         brushMode.value === 'hide'
           ? [edits.hide, edits.show]
@@ -1256,8 +1346,8 @@ export async function showFemaleBase(
         add.add(triangle)
         remove.delete(triangle)
       }
-      applyPriestMask(slot)
-      priestStatus.textContent += ' · 저장하지 않은 조절이 있습니다.'
+      applyFitMask(part)
+      fitStatus.textContent += ' · 저장하지 않은 조절이 있습니다.'
     }
     canvas.addEventListener('pointerdown', onDown)
     canvas.addEventListener('pointerup', onUp)
@@ -1266,19 +1356,20 @@ export async function showFemaleBase(
       canvas.removeEventListener('pointerup', onUp)
     })
   }
-  const updatePriestPanel = () => {
-    const equipped = Object.keys(priestNames).filter(
-      (slot) =>
-        (document.getElementById(`female-${slot}`) as HTMLSelectElement)
-          .value === 'priest' && priestFitters.has(slot)
+  const updateFitPanel = () => {
+    const equipped = Object.keys(fitSlotNames)
+      .map(
+        (slot) =>
+          `${slot}-${(document.getElementById(`female-${slot}`) as HTMLSelectElement).value}`
+      )
+      .filter((part) => fitters.has(part))
+    fitPanel.hidden = !equipped.length
+    const current = fitPart.value
+    fitPart.replaceChildren(
+      ...equipped.map((part) => new Option(partName(part), part))
     )
-    priestPanel.hidden = !equipped.length
-    const current = priestPart.value
-    priestPart.replaceChildren(
-      ...equipped.map((slot) => new Option(priestNames[slot], slot))
-    )
-    if (equipped.includes(current)) priestPart.value = current
-    showPriestFit()
+    if (equipped.includes(current)) fitPart.value = current
+    showFit()
   }
   const outfitSlots = ['top', 'bottom', 'boots', 'gloves', 'helmet']
   const outfitUpdates = outfitSlots.map((slot) => {
@@ -1342,32 +1433,51 @@ export async function showFemaleBase(
             disposeObjects([source])
             return
           }
-          if (outfit === 'priest') {
-            await savedPriestFits
+          const fittable = outfit in fittableOutfits
+          const part = maskName(outfit)
+          if (fittable) {
+            await savedFits
             if (disposed()) return
-            priestMasks.set(slot, mask as { hide_triangle_indices: number[] })
-            outfitMask.register(maskName(outfit), brushedPriestMask(slot))
-          } else if (!bracer) outfitMask.register(maskName(outfit), mask)
+            fitMasks.set(part, mask as { hide_triangle_indices: number[] })
+            outfitMask.register(part, brushedMask(part))
+          } else if (!bracer) outfitMask.register(part, mask)
           if (bracer) bracerStaticMask = bakedBracer ? mask : undefined
           const meshes = (entry.meshes = bindModularPart(model, source))
-          if (outfit === 'priest') {
-            priestFitters.set(
-              slot,
-              partFitter(meshes, pairedSlots.includes(slot))
+          const skeleton = meshes[0].skeleton
+          const bindPosition = (name: string) => {
+            const index = skeleton.bones.findIndex((bone) => bone.name === name)
+            if (index < 0) throw new Error(`팔 본을 찾지 못했습니다: ${name}`)
+            return new THREE.Vector3().setFromMatrixPosition(
+              skeleton.boneInverses[index].clone().invert()
             )
-            applyPriestFit(slot)
+          }
+          if (fittable) {
+            let after: ((point: THREE.Vector3) => void) | undefined
+            if (sleeveEndParts.has(part)) {
+              // Read before the fitter moves them: the unmoved positions fix each sleeve's end.
+              const deform = sleeveEndDeformer(
+                meshes.map(
+                  (mesh) =>
+                    mesh.geometry.getAttribute('position').array as Float32Array
+                ),
+                {
+                  1: [bindPosition('LeftArm'), bindPosition('LeftForeArm')],
+                  [-1]: [
+                    bindPosition('RightArm'),
+                    bindPosition('RightForeArm'),
+                  ],
+                }
+              )
+              after = (point) =>
+                deform(point, (side) => sleeveEndsOf(part)[side])
+            }
+            fitters.set(
+              part,
+              partFitter(meshes, pairedSlots.includes(slot), after)
+            )
+            applyFit(part)
           }
           if (bracer && bracerEditing) {
-            const skeleton = meshes[0].skeleton
-            const bindPosition = (name: string) => {
-              const index = skeleton.bones.findIndex(
-                (bone) => bone.name === name
-              )
-              if (index < 0) throw new Error(`팔 본을 찾지 못했습니다: ${name}`)
-              return new THREE.Vector3().setFromMatrixPosition(
-                skeleton.boneInverses[index].clone().invert()
-              )
-            }
             const arm = bindPosition('LeftHand')
               .sub(bindPosition('LeftForeArm'))
               .normalize()
@@ -1498,7 +1608,7 @@ export async function showFemaleBase(
         if (!(slot === 'gloves' && name === 'valkyrie'))
           outfitMask.setEquipped(
             maskName(name),
-            name === outfit && !(name === 'priest' && priestSkinShown.has(slot))
+            name === outfit && !skinShown.has(maskName(name))
           )
         for (const mesh of entry.meshes) mesh.visible = name === outfit
       }
@@ -1543,7 +1653,7 @@ export async function showFemaleBase(
             outfitMask.setEquipped('glove-sleeves', knightGlovesEquipped)
         }
         show(requested)
-        updatePriestPanel()
+        updateFitPanel()
         await updateGarters()
         if (disposed() || select.value !== requested) return
         updateModularPoseCorrectives(model, motion.value)
@@ -1571,7 +1681,7 @@ export async function showFemaleBase(
             outfitMask.setEquipped('glove-sleeves', false)
         }
         show('none')
-        updatePriestPanel()
+        updateFitPanel()
         await updateGarters()
         updateGround()
         updateStats()
@@ -1647,7 +1757,7 @@ export async function showFemaleBase(
   const camera = new THREE.PerspectiveCamera(35, 1, 0.03, 36)
   const controls = new OrbitControls(camera, renderer.domElement)
   controls.enableDamping = true
-  setupPriestBrush()
+  setupSkinBrush()
   controls.minDistance = 0.144
   controls.maxDistance = 9
   cleanup.push(() => controls.dispose())

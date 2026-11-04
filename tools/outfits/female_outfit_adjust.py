@@ -58,3 +58,42 @@ def bake(path, part, points, paired, keep_pending=False):
     for fit in history:
         points = apply(points, fit, paired)
     return points, history
+
+
+# Sleeve-end offsets move a sleeve's end across the upper arm, linearly from this far below the shoulder
+# joint; sleeve vertices lie within SLEEVE_RADIUS of the upper-arm axis. Same as sleeveEndDeformer in female-part-fit.ts.
+SLEEVE_START = .09
+SLEEVE_RADIUS = .07
+SLEEVE_END_INSET = .015
+
+
+def sleeve_end(points, joints, ends):
+    """`joints[side]` is the (shoulder, elbow) bind position in glTF space; `ends` holds cm offsets per side."""
+    p = points @ TO_GLTF.T
+    for side, key in ((1, 'left'), (-1, 'right')):
+        shoulder, elbow = (np.asarray(v, dtype=float) for v in joints[side])
+        axis = (elbow - shoulder) / np.linalg.norm(elbow - shoulder)
+        forward = np.array([0., 0., 1.]) - axis[2] * axis
+        forward /= np.linalg.norm(forward)
+        out = np.cross(forward, axis) * side
+        d = p - shoulder
+        s = d @ axis
+        r = np.linalg.norm(d - s[:, None] * axis, axis=1)
+        sleeve = (p[:, 0] * side > shoulder[0] * side) & (r < SLEEVE_RADIUS) & (s > SLEEVE_START)
+        if not sleeve.any():
+            continue
+        end = s[sleeve].max() - SLEEVE_END_INSET
+        t = (s[sleeve] - SLEEVE_START) / (end - SLEEVE_START)
+        offset = ends[key]
+        p[sleeve] += t[:, None] * (offset['forward'] / 100 * forward + offset['out'] / 100 * out)
+    return p @ TO_GLTF
+
+
+def sleeve_end_total(history):
+    """Sum the sleeve-end offsets saved with each baked or pending fit."""
+    total = {key: {'forward': 0., 'out': 0.} for key in ('left', 'right')}
+    for fit in history:
+        for key, offset in fit.get('sleeve-end', {}).items():
+            for axis in ('forward', 'out'):
+                total[key][axis] += offset[axis]
+    return total

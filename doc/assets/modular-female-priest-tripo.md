@@ -39,7 +39,7 @@ SHA-256 `2baf723d6fad2117159e6e369032711808f7a9a17b95b7819ffefbca7ae21bfe`.
 
 생성 몸체가 1.8배에서 여성 공통 몸체와 거의 겹친다. 위팔·몸통·다리 차이는 10mm 안팎이고, 팔꿈치 아래만 앞으로 15–21° 굽어 장갑이 20–33mm 어긋났다.
 
-- 자세: 1.8배 균일 확대 후 팔꿈치 기준 아래팔 회전과 손 ICP 정렬([female_priest_pose.py](../../tools/outfits/female_priest_pose.py)). 장갑 중앙 거리는 3.4mm가 됐다.
+- 자세: 1.8배 균일 확대 후 팔꿈치 기준 아래팔 회전과 손 ICP 정렬([female_outfit_pose.py](../../tools/outfits/female_outfit_pose.py)). 장갑 중앙 거리는 3.4mm가 됐다.
 - 피팅: 사용자 결정(2026-11-04)으로 어느 부위도 피부 밖으로 밀어내지 않는다. 생성 형상을 그대로 두고 크기 차이는 미리보기 조절로 맞춘다. 가장 가까운 몸체 피부의 가중치를 이웃 정점과 평균해 옮겼다. 몸체는 미리보기가 쓰는 glTF primitive 0(피부)이다.
 - 장갑은 손 ICP 변환 하나로 커프까지 통째로 옮긴다. 손목에서 아래팔·손 변환을 섞으면 커프 위아래가 다르게 움직여 꼬였다.
 - 팔 정점은 가장 가까운 피부의 팔·손 가중치로 고른다. x 좌표로 고르면 장화·치마 가장자리까지 팔로 돌아갔다.
@@ -72,19 +72,19 @@ SHA-256 `2baf723d6fad2117159e6e369032711808f7a9a17b95b7819ffefbca7ae21bfe`.
 수치는 각 `fitting.json`에 있다.
 
 ```sh
-blender -b --python-exit-code 1 --python tools/blender-scripts/fit_female_priest.py -- --part top
-blender -b --python tools/blender-scripts/review_female_priest.py -- --parts top bottom gloves helmet --out /tmp/review --views torso --clip walk:8
+blender -b --python-exit-code 1 --python tools/blender-scripts/fit_female_outfit.py -- --outfit priest --part top
+blender -b --python tools/blender-scripts/review_female_outfit.py -- --outfit priest --parts top bottom gloves helmet --out /tmp/review --views torso --clip walk:8
 ```
 
 ### 미리보기 수동 조절
 
-여성 미리보기(`?character=female&top=priest&bottom=priest&gloves=priest&helmet=priest`)에서 사제 부위를 고르면 `사제 복장 피팅 조절`이 나온다.
+여성 미리보기(`?character=female&top=priest&bottom=priest&gloves=priest&helmet=priest`)에서 사제 부위를 고르면 `복장 피팅 조절`이 나온다.
 이동·크기·너비/높이/두께·회전을 조절하고 `이 부위 피팅 저장`을 누르면 `doc/assets/female-priest-preview-fit.json`의 `pending`에 저장된다.
 장갑·부츠는 `조절할 쪽`에서 양쪽 함께(대칭)·캐릭터 왼쪽만·오른쪽만을 고른다. 저장값은 `{left, right}`이고, 예전의 한 값은 양쪽에 같게 적용한다. 좌우 이동은 바깥쪽이 +다. 마우스 휠 한 칸은 이동 1mm, 크기·회전 0.5다.
 `피부 브러시`를 켜면 화면을 짧게 클릭해(드래그는 회전) 반경 안의 몸체 삼각형을 가리거나 되살린다. 정지 자세 기준 위치로 고르므로 옷 뒤 피부도 칠해진다. 클릭한 삼각형은 항상 포함하고, 중심이나 꼭짓점 하나라도 반경 안이면 고른다(긴 삼각형 끝만 비칠 때 중심 기준으로는 안 잡혔다). 클릭할 때 맨 앞 물체 이름을 상태 줄에 보여 준다. 저장하면 `brush.hide`/`brush.show`로 남고, 굽기는 자동 가림 계산 뒤에 매번 다시 적용한다(굽기 뒤에도 지워지지 않음).
 `이 부위가 가린 피부 보이기`를 켜면 고른 부위의 몸체 가림을 잠시 끄고 원래 피부·속옷을 보여 준다. 굽기에서 가림은 새 형상 기준으로 다시 계산한다.
 `--keep-pending`을 붙이면 저장값을 굽지 않고 남겨 미리보기가 계속 그 위에 적용한다. 붙이지 않고 피팅 명령을 다시 실행하면 저장값을 가중치 계산 뒤 바인드 공간에서 같은 변환으로 적용하고 `baked` 목록으로 옮긴다. 이후 실행도 `baked`를 순서대로 다시 적용한다.
-변환은 [female-part-fit.ts](../../client/src/previews/female-part-fit.ts)와 [female_priest_adjust.py](../../tools/outfits/female_priest_adjust.py)가 같고, 테스트가 두 결과를 맞춘다.
+변환은 [female-part-fit.ts](../../client/src/previews/female-part-fit.ts)와 [female_outfit_adjust.py](../../tools/outfits/female_outfit_adjust.py)가 같고, 테스트가 두 결과를 맞춘다.
 
 ## 게임 시작 복장 — 2026-11-04
 

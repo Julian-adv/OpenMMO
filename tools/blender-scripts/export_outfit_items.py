@@ -27,6 +27,10 @@ OUTFITS = {
         "gloves": "female_priest_outfit/gloves/fitted_v1/gloves_female_priest.glb",
         "boots": "../modular_human_male_01/priest/tripo_boots_v1/boots_priest.glb",
     },
+    "ranger": {
+        part: f"../modular_human_male_01/ranger/tripo_{part}_v{4 if part == 'top' else 1}/{part}_ranger.glb"
+        for part in ("top", "pants", "gloves", "boots")
+    },
 }
 parser = argparse.ArgumentParser()
 parser.add_argument("--outfit", choices=OUTFITS, default="valkyrie")

@@ -1,8 +1,12 @@
 import { readFile, writeFile, rename } from 'node:fs/promises'
 
 const root = new URL('../../', import.meta.url)
-const target = new URL('doc/assets/female-priest-preview-fit.json', root)
-const parts = ['top', 'bottom', 'gloves', 'boots', 'helmet']
+// Parts each hand-fitted outfit has; keep in sync with OUTFITS in tools/blender-scripts/fit_female_outfit.py.
+const outfits = {
+  priest: ['top', 'bottom', 'gloves', 'boots', 'helmet'],
+  ranger: ['top', 'bottom', 'gloves', 'boots'],
+}
+const route = /^\/__female-preview\/([a-z]+)-fit\.json$/
 // Paired parts save { left, right }; left is the character's left (+x).
 const paired = ['gloves', 'boots']
 // Keep in sync with PART_FIT_RANGES in client/src/previews/female-part-fit.ts.
@@ -12,7 +16,7 @@ const ranges = {
   'rotate-x': [-45, 45], 'rotate-y': [-45, 45], 'rotate-z': [-45, 45],
 }
 
-async function load() {
+async function load(target) {
   try {
     return JSON.parse(await readFile(target, 'utf8'))
   } catch (error) {
@@ -21,15 +25,18 @@ async function load() {
   }
 }
 
-export function priestPreviewFit() {
+export function outfitPreviewFit() {
   return (req, res, next) => {
-    if (req.url?.split('?')[0] !== '/__female-preview/priest-fit.json') return next()
+    const outfit = req.url?.split('?')[0].match(route)?.[1]
+    if (!outfit || !Object.hasOwn(outfits, outfit)) return next()
+    const parts = outfits[outfit]
+    const target = new URL(`doc/assets/female-${outfit}-preview-fit.json`, root)
     const reply = (status, value) => {
       res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
       res.end(JSON.stringify(value))
     }
     void (async () => {
-      if (req.method === 'GET') return reply(200, await load())
+      if (req.method === 'GET') return reply(200, await load(target))
       if (req.method !== 'POST') return reply(405, { error: '지원하지 않는 요청입니다.' })
       if (req.headers['sec-fetch-site'] === 'cross-site' ||
           !req.headers['content-type']?.startsWith('application/json'))
@@ -59,11 +66,22 @@ export function priestPreviewFit() {
       const error = checked.find(value => typeof value === 'string')
       if (error) return reply(400, { error })
       const settings = sides[0] ? { left: checked[0], right: checked[1] } : checked[0]
+      // Sleeve-end offsets (cm) of a top whose sleeves are aligned as one tube.
+      const ends = input.settings['sleeve-end']
+      if (ends !== undefined) {
+        const valid = ['left', 'right'].every(side => ['forward', 'out'].every(key => {
+          const value = ends?.[side]?.[key]
+          return typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= 5
+        }))
+        if (sides[0] || !valid) return reply(400, { error: '소매 끝 값이 올바르지 않습니다.' })
+        settings['sleeve-end'] = Object.fromEntries(['left', 'right'].map(side =>
+          [side, { forward: ends[side].forward, out: ends[side].out }]))
+      }
       // Brush strokes stay across bakes: the bake reapplies them after its own skin hiding.
       const triangles = (list) => Array.isArray(list) && list.every(t => Number.isInteger(t) && t >= 0 && t < 1e6)
       const brush = input.brush ?? { hide: [], show: [] }
       if (!triangles(brush.hide) || !triangles(brush.show)) return reply(400, { error: '브러시 값이 올바르지 않습니다.' })
-      const saved = await load()
+      const saved = await load(target)
       saved.parts[input.part] = { ...saved.parts[input.part], pending: settings, saved_at: new Date().toISOString(),
                                   brush: { hide: [...new Set(brush.hide)].sort((a, b) => a - b),
                                            show: [...new Set(brush.show)].sort((a, b) => a - b) } }
