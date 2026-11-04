@@ -22,6 +22,7 @@
   import { loadGLB } from '../../utils/gltfCache'
   import { getObjectModelPath } from '../../utils/modelPaths'
   import { applyCrystalGlow } from '../../effects/crystal-glow'
+  import { translate } from '../../i18n'
   import { rotatedRectAabb } from '../../utils/objectFootprint'
   import type { DoorLeaf, InteriorDoor } from '../../utils/dungeon-geometry'
   import { networkManager } from '../../network/socket'
@@ -56,8 +57,16 @@
       x: number,
       z: number
     ) => void
+    /** Fired the frame the player reaches a clicked ore heap or crystal. */
+    onMineReady?: (
+      entranceId: string,
+      depth: number,
+      propId: number,
+      x: number,
+      z: number
+    ) => void
   }
-  let { onPropReady, animatePuddles = true }: Props = $props()
+  let { onPropReady, onMineReady, animatePuddles = true }: Props = $props()
 
   /** Once the player walking up to a clicked prop is within this range, the
    *  break/open is requested. Kept inside the server's 2.5m so a borderline
@@ -69,6 +78,7 @@
     crate: 'crate_pieces',
   }
   const isBreakable = (kind: string) => kind in BROKEN_VARIANT
+  const MINABLE_KINDS = new Set(['mine_ore_heap', 'mine_crystal_cluster'])
   /** Dungeon chest props render from this catalog id (the animated GLB, not the
    *  static `chest.glb`) so a click can play the lid-open clip. */
   const CHEST_ANIMATED_ID = 'chest_animated'
@@ -358,7 +368,7 @@
     kind: string,
     depth: number,
     m: PropMetrics,
-    opts: { breakable?: boolean; openable?: boolean }
+    opts: { breakable?: boolean; openable?: boolean; minable?: boolean }
   ) {
     clone.userData.dungeonProp = true
     clone.userData.propId = propId
@@ -367,12 +377,20 @@
     clone.userData.propEntranceId = dungeonManager.dungeonId
     if (opts.breakable) clone.userData.propBreakable = true
     if (opts.openable) clone.userData.propOpenable = true
+    if (opts.minable) clone.userData.propMinable = true
     // Hover label + target ring, chests only: loot is gameplay, while barrels
     // and crates stay unannounced discovery toys. hoverCenter drops to the
     // dungeon floor (clone.position must already be set), so the label spans
     // the full model height above it.
-    if (opts.openable) {
-      clone.userData.hoverName = 'Chest'
+    const hoverName = opts.openable
+      ? 'Chest'
+      : opts.minable
+        ? translate(
+            kind === 'mine_ore_heap' ? 'prop.oreHeap' : 'prop.crystalCluster'
+          )
+        : null
+    if (hoverName) {
+      clone.userData.hoverName = hoverName
       clone.userData.hoverLabelY = m.height
       clone.userData.hoverRingRadius = m.hover.ringRadius
       clone.userData.hoverCenter = {
@@ -490,12 +508,19 @@
 
     // Multi-cell fixtures: centered on the cells they seal; no state.
     // Crystals grow with depth.
+    // Ore heaps and crystals are clicked to mine.
     if (prop.w > 1 || prop.d > 1) {
       const clone = addDecor(prop.x + prop.w / 2, 0, prop.z + prop.d / 2)
       if (prop.kind === 'mine_crystal_cluster')
         clone.scale.setScalar(
           1 + Math.max(0, depth - 6) * CRYSTAL_GROWTH_PER_FLOOR
         )
+      if (MINABLE_KINDS.has(prop.kind)) {
+        tagInteractiveProp(clone, index, prop.kind, depth, m, { minable: true })
+        clone.traverse((o) => {
+          if (o instanceof THREE.Mesh) o.raycast = THREE.Mesh.prototype.raycast
+        })
+      }
       return
     }
 
@@ -772,8 +797,17 @@
       .filter((e) => e.kind === 'mine_timber_post')
       .map((e) => postFade(e.clones[0]))
     wallTorchPositions = torchPositions
-    crystalGlowPositions = [...entries.values()]
-      .filter((e) => e.kind === 'mine_crystal_cluster')
+    refreshCrystalGlow(depth)
+    // Catch any breaks/opens that landed while the GLBs were loading. Chests
+    // already open at build time snap to the open pose (no entrance swing).
+    reconcileBrokenProps(depth, key)
+    reconcileOpenedProps(depth, key, true)
+    reconcileTreasureChest(true)
+  }
+
+  function refreshCrystalGlow(depth: number) {
+    crystalGlowPositions = [...propEntries.values()]
+      .filter((e) => e.kind === 'mine_crystal_cluster' && !e.broken)
       .map(
         ({ clones: [c] }) =>
           new THREE.Vector3(
@@ -782,21 +816,27 @@
             dungeonManager.originZ + c.position.z
           )
       )
-    // Catch any breaks/opens that landed while the GLBs were loading. Chests
-    // already open at build time snap to the open pose (no entrance swing).
-    reconcileBrokenProps(depth, key)
-    reconcileOpenedProps(depth, key, true)
-    reconcileTreasureChest(true)
   }
 
-  /** Swap every prop the server says is broken but that's still rendered whole. */
+  /** Swap every prop the server says is broken but that's still rendered
+   *  whole; mined ones just disappear. */
   function reconcileBrokenProps(depth: number, key: string) {
     if (key !== builtKey) return
     const broken = dungeonManager.brokenPropsForDepth(depth)
+    let mined = false
     for (const index of broken) {
       const entry = propEntries.get(index)
-      if (entry && !entry.broken) void swapPropToBroken(index, key)
+      if (!entry || entry.broken) continue
+      if (MINABLE_KINDS.has(entry.kind)) {
+        entry.broken = true
+        for (const c of entry.clones) propsGroup.remove(c)
+        entry.clones = []
+        mined = true
+      } else {
+        void swapPropToBroken(index, key)
+      }
     }
+    if (mined) refreshCrystalGlow(depth)
   }
 
   /** Replace one prop's whole-model clones with its broken debris variant. */
@@ -1248,36 +1288,21 @@
     if (!dungeonManager.active) return
     const depth = $currentDungeonDepth
 
-    // Pending prop break: the player walked up to a barrel/crate they clicked —
-    // request the break once within range. The server validates and broadcasts;
-    // the visual swap happens on receipt (handles other players' breaks too).
-    const pending = dungeonManager.pendingBreak
+    // Pending prop action: once the player is within range of the clicked
+    // prop, hand off to the swing (break), the server (open), or the mining
+    // cast. The server validates and broadcasts; visuals follow on receipt.
+    // The final-floor treasure chest shares the open walk-up under its
+    // sentinel id.
+    const pending = dungeonManager.pendingProp
     if (pending && pendingPropReached(pending, depth, playerX, playerZ)) {
-      // Reached the prop — hand off to the player swing, which breaks it at the
-      // contact frame. Clear pending first so this fires once.
       const id = dungeonManager.dungeonId!
-      const { depth: d, propId, x, z } = pending
-      dungeonManager.clearPendingBreak()
-      onPropReady?.(id, d, propId, x, z)
-    }
-
-    // Pending chest open: the player walked up to a chest they clicked — request
-    // the open once within range. The server validates and broadcasts; the lid
-    // animation plays on receipt (handles other players' opens too). The
-    // final-floor treasure chest shares this walk-up under its sentinel id.
-    const pendingOpen = dungeonManager.pendingOpen
-    if (
-      pendingOpen &&
-      pendingPropReached(pendingOpen, depth, playerX, playerZ)
-    ) {
-      const id = dungeonManager.dungeonId!
-      const { depth: d, propId } = pendingOpen
-      dungeonManager.clearPendingOpen()
-      if (propId === TREASURE_CHEST_PROP_ID) {
+      const { action, depth: d, propId, x, z } = pending
+      dungeonManager.clearPendingProp()
+      if (action === 'break') onPropReady?.(id, d, propId, x, z)
+      else if (action === 'mine') onMineReady?.(id, d, propId, x, z)
+      else if (propId === TREASURE_CHEST_PROP_ID)
         networkManager.sendOpenDungeonChest(id)
-      } else {
-        networkManager.sendOpenDungeonProp(id, d, propId)
-      }
+      else networkManager.sendOpenDungeonProp(id, d, propId)
     }
   }
 

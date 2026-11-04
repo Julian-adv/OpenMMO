@@ -538,6 +538,14 @@ pub enum ClientMessage {
         depth: u8,
         prop_id: u32,
     },
+    /// Start mining an ore heap or crystal cluster with a pickaxe in the bag.
+    /// The server checks it like `BreakDungeonProp`, then runs a
+    /// `MINING_CAST_MS` cast that movement or combat cancels.
+    MineDungeonProp {
+        entrance_id: String,
+        depth: u8,
+        prop_id: u32,
+    },
     /// Open an interactive dungeon chest prop (plays its lid animation). The
     /// server validates floor, proximity and prop kind, records the open for
     /// the dungeon instance and broadcasts it nearby. The chest stays solid
@@ -2022,6 +2030,14 @@ pub enum ServerMessage {
     },
     /// Direct to each dungeon occupant before the sunset reset puts them out.
     DungeonReset,
+    /// Nearby: a player began mining a prop. The mined prop arrives as
+    /// `DungeonPropBroken`; `MiningEnded` stops the swing either way.
+    MiningStarted {
+        player_id: PlayerId,
+    },
+    MiningEnded {
+        player_id: PlayerId,
+    },
     AbilityCooldowns {
         cooldowns: Vec<crate::ability::AbilityTimer>,
     },
@@ -2262,7 +2278,9 @@ impl ServerMessage {
             | Self::MonsterStunned { .. }
             | Self::MonsterSlowed { .. }
             | Self::HealingPrayed { .. }
-            | Self::BattleHymnStarted { .. } => DeliveryClass::NearbyEffect,
+            | Self::BattleHymnStarted { .. }
+            | Self::MiningStarted { .. }
+            | Self::MiningEnded { .. } => DeliveryClass::NearbyEffect,
             Self::TerrainTileVersion { .. }
             | Self::LandscapeChanged { .. }
             | Self::LandscapeInvalidated { .. }

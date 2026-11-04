@@ -10,6 +10,7 @@ import {
   showOperatorNotice,
 } from '../stores/announcementStore'
 import { translate, type MessageKey } from '../i18n'
+import { setMining } from '../stores/miningStore'
 import { isCoinPileJackpot } from './coinPileJackpot'
 import {
   handleAltarStatus,
@@ -87,7 +88,10 @@ import {
   playBattleHymn,
   stopBattleHymn,
 } from '../managers/sfxManager'
-import { FISHING_CAST_SWING_DELAY_MS } from '../data/combatTiming'
+import {
+  FISHING_CAST_SWING_DELAY_MS,
+  MINING_SWING_MS,
+} from '../data/combatTiming'
 import { monsterManager } from '../managers/monsterManager'
 import { housingManager } from '../managers/housingManager'
 import { bridgeManager } from '../managers/bridgeManager'
@@ -492,6 +496,7 @@ export type MessageEvents = {
   kicked: NetworkEvent<(reason: string) => void>
   playerRespawned: NetworkEvent<(playerId: number) => void>
   interactionRejected: NetworkEvent<(reason: string) => void>
+  miningEnded: NetworkEvent<() => void>
   interactionChanged: NetworkEvent<(interaction: PlayerInteraction) => void>
   movePath: NetworkEvent<(path: MovePath) => void>
   moveProgress: NetworkEvent<(progress: MoveProgress) => void>
@@ -2133,6 +2138,7 @@ export function handleServerMessage(
       // machine codes mapped here (same pattern as PlayerAttackRejected).
       const reasonText: Record<string, string> = {
         occupied: translate('system.occupied'),
+        no_pickaxe: translate('system.noPickaxe'),
       }
       addChatMessage({
         text: reasonText[data.reason] ?? data.reason,
@@ -2895,6 +2901,18 @@ export function handleServerMessage(
       grilling.set(true)
       break
 
+    // The miner swings on their own client; others see swings until it ends.
+    case 'MiningStarted':
+      setMining(data.player_id, true)
+      if (!isSelfPlayer(data.player_id)) startRemoteMining(data.player_id)
+      break
+
+    case 'MiningEnded':
+      setMining(data.player_id, false)
+      if (isSelfPlayer(data.player_id)) events.miningEnded.emit()
+      else stopRemoteMining(data.player_id)
+      break
+
     case 'GrillEnded':
       grilling.set(false)
       if (data.grilled_item_def_id == null) {
@@ -2994,6 +3012,29 @@ export function markMonsterSkillSpots(
       sound: marks.sound,
     })
   }
+}
+
+const remoteMiningSwings = new Map<number, ReturnType<typeof setInterval>>()
+
+/** Swing until `MiningEnded`, or until the miner drops out of view and that
+ *  message can no longer reach us. */
+function startRemoteMining(playerId: number) {
+  stopRemoteMining(playerId)
+  const swing = () => {
+    if (remotePlayerManager.players.has(playerId)) {
+      remotePlayerManager.handleAttack(playerId)
+      return
+    }
+    stopRemoteMining(playerId)
+    setMining(playerId, false)
+  }
+  swing()
+  remoteMiningSwings.set(playerId, setInterval(swing, MINING_SWING_MS))
+}
+
+function stopRemoteMining(playerId: number) {
+  clearInterval(remoteMiningSwings.get(playerId))
+  remoteMiningSwings.delete(playerId)
 }
 
 /** Healing Prayer seen nearby; the HP itself arrives in `PlayerHealthUpdate`. */

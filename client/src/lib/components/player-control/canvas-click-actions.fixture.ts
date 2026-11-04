@@ -11,6 +11,7 @@ export function makeCanvasClickActions() {
     pickupItem: vi.fn(),
     interactNpc: vi.fn(),
     breakProp: vi.fn(),
+    mineProp: vi.fn(),
     openProp: vi.fn(),
     moveToGround: vi.fn(),
     castFishing: vi.fn(),

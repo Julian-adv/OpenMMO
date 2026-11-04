@@ -53,3 +53,73 @@ async fn blackvein_mine_spawns_the_foreman_without_signature_rolls() {
         assert!(!mine.contains_key(id), "{id}");
     }
 }
+
+/// A pickaxe in the bag mines an ore heap away, sometimes into ore; sunset
+/// refills it.
+#[tokio::test]
+async fn pickaxe_mines_ore_heaps_until_sunset() {
+    let game_state = make_test_game_state("blackvein_mine_mining");
+    let entrance = game_state.dungeon_defs.get("blackvein_mine").unwrap();
+    game_state.ensure_dungeon_runtime(&entrance.id).await;
+    let (depth, prop_id, at) = {
+        let dungeons = game_state.dungeons.read().await;
+        dungeons[&entrance.id]
+            .layouts
+            .iter()
+            .find_map(|l| {
+                let i = l
+                    .props
+                    .iter()
+                    .position(|p| p.kind == onlinerpg_shared::dungeon::PropKind::MineOreHeap)?;
+                let p = l.props[i];
+                Some((
+                    l.depth,
+                    i as u32,
+                    cell_center(&entrance.position(), l.depth, (p.x, p.z)),
+                ))
+            })
+            .unwrap()
+    };
+    let mut player = make_player("Miner", at.x, at.z);
+    player.position = at;
+    player.floor_level = -(depth as i8);
+    let id = player.id;
+    game_state.add_player(player).await;
+    let mined = || async {
+        let dungeons = game_state.dungeons.read().await;
+        dungeons[&entrance.id]
+            .broken_props
+            .get(&depth)
+            .is_some_and(|ids| ids.contains(&prop_id))
+    };
+
+    give_bag(&game_state, &id, None).await;
+    game_state
+        .start_mining(&id, &entrance.id, depth, prop_id)
+        .await;
+    assert!(game_state.mining_sessions.read().await.is_empty());
+
+    assert!(game_state.give_item(&id, "miner_pickaxe").await);
+    game_state
+        .start_mining(&id, &entrance.id, depth, prop_id)
+        .await;
+    game_state
+        .mining_sessions
+        .write()
+        .await
+        .get_mut(&id)
+        .expect("a pickaxe starts the cast")
+        .until = std::time::Instant::now();
+    game_state.tick_mining().await;
+    assert!(mined().await);
+    let ore: u32 = game_state.inventories.read().await[&id]
+        .bag
+        .iter()
+        .filter(|i| i.item_def_id == "blackvein_ore")
+        .map(|i| i.quantity)
+        .sum();
+    assert!(ore == 0 || ore == 2 + u32::from(depth) / 8, "{ore}");
+
+    game_state.refill_mined_props().await;
+    assert!(!mined().await);
+}

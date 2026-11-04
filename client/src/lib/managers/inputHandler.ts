@@ -162,6 +162,13 @@ export type ClickIntent =
       position: Position
     }
   | {
+      type: 'mine_prop'
+      entranceId: string
+      depth: number
+      propId: number
+      position: Position
+    }
+  | {
       type: 'move_to_ground'
       position: Position
       sprinting: boolean
@@ -640,6 +647,9 @@ class InputHandler {
           }
           if (owner.userData.propBreakable) {
             return { type: 'break_prop', ...target }
+          }
+          if (owner.userData.propMinable) {
+            return { type: 'mine_prop', ...target }
           }
         }
       }

@@ -154,6 +154,7 @@
   } from '../stores/chargeStrikeStore'
   import { PLAYER_ATTACK_IMPACT_DELAY_MS } from '../data/combatTiming'
   import { gameStore } from '../stores/gameStore'
+  import { miningPlayers, PICKAXE_ITEM } from '../stores/miningStore'
   import { pickRandom } from '../utils/randomUtils'
   import {
     equippedArmor,
@@ -717,9 +718,13 @@
   })
 
   const equippedMainHandItemId = $derived(
-    isCurrentPlayer
-      ? ($inventoryStore.equipped.main_hand?.item_def_id ?? null)
-      : mainHand
+    $miningPlayers.has(
+      (isCurrentPlayer ? $gameStore.currentPlayer?.id : remotePlayerId) ?? -1
+    )
+      ? PICKAXE_ITEM
+      : isCurrentPlayer
+        ? ($inventoryStore.equipped.main_hand?.item_def_id ?? null)
+        : mainHand
   )
 
   let attachedWeaponItemId: string | null = null

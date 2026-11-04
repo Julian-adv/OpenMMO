@@ -1446,6 +1446,8 @@
   animatePuddles={graphicsPreset.enablePuddleRipples}
   onPropReady={(entranceId, depth, propId, x, z) =>
     playerControl?.swingAndBreakProp(entranceId, depth, propId, x, z)}
+  onMineReady={(entranceId, depth, propId, x, z) =>
+    playerControl?.startMining(entranceId, depth, propId, x, z)}
 />
 
 {#if graphicsPreset.enableGrassLayer}

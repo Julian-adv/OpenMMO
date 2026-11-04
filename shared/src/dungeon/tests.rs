@@ -353,7 +353,10 @@ fn mine_floors_keep_their_shape_over_many_seeds() {
             // Fork floors theme their work rooms: a tool store, an ore yard
             // and a rest area without mine fixtures. Elsewhere each fixture
             // keeps to its depth bands, all its cells within one room.
-            let fixture = |p: &&PropSpec| p.kind.is_solid() && !p.kind.is_interactive();
+            let fixture = |p: &&PropSpec| {
+                p.kind.is_solid()
+                    && !matches!(p.kind, PropKind::Barrel | PropKind::Crate | PropKind::Chest)
+            };
             let in_room = |p: &PropSpec, rooms: &[Room]| {
                 rooms
                     .iter()

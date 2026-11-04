@@ -250,6 +250,7 @@ mod teleport_departure;
 mod teleport_scroll;
 pub(crate) use skills::skills_from_rows;
 mod meal;
+mod mining;
 mod stall;
 pub(crate) mod time;
 mod tip_hat;
@@ -577,6 +578,10 @@ pub struct GameState {
     campfires: Arc<RwLock<HashMap<u64, hunger::CampfireEntry>>>,
     /// One grill cast per player, resolved by `tick_grills`.
     grill_sessions: Arc<RwLock<HashMap<PlayerId, hunger::GrillSession>>>,
+    /// One mining cast per player, resolved by `tick_mining`.
+    mining_sessions: Arc<RwLock<HashMap<PlayerId, mining::MiningSession>>>,
+    /// `mining_sessions.len()` mirror for the per-move cancel check.
+    mining_active: Arc<std::sync::atomic::AtomicUsize>,
     /// Laid-out stalls keyed by owner: every owner move checks the leash, and
     /// one stall per owner is the rule anyway.
     stalls: Arc<RwLock<HashMap<PlayerId, stall::StallEntry>>>,
@@ -598,10 +603,11 @@ impl GameState {
     }
 
     /// Movement, a landed attack, death and disconnect all break cast-type
-    /// concentration (fishing, grilling) at the same chokepoints.
+    /// concentration (fishing, grilling, mining) at the same chokepoints.
     pub(crate) async fn cancel_concentration_if_active(&self, player_id: &PlayerId) {
         self.cancel_fishing_if_active(player_id).await;
         self.cancel_grill_if_active(player_id).await;
+        self.cancel_mining_if_active(player_id).await;
         self.cancel_live_instrument_if_active(player_id).await;
     }
 
@@ -847,6 +853,8 @@ impl GameState {
             regen_ticks: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             campfires: Arc::new(RwLock::new(HashMap::new())),
             grill_sessions: Arc::new(RwLock::new(HashMap::new())),
+            mining_sessions: Arc::new(RwLock::new(HashMap::new())),
+            mining_active: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             stalls: Arc::new(RwLock::new(HashMap::new())),
             tip_hats: Arc::new(RwLock::new(HashMap::new())),
             meals: Arc::new(RwLock::new(HashMap::new())),

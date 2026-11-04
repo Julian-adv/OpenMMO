@@ -932,6 +932,7 @@ impl GameState {
                         | WeaponType::Club
                         | WeaponType::Spear
                         | WeaponType::Dagger
+                        | WeaponType::Pickaxe
                 )
             )
         })

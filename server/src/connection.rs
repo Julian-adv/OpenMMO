@@ -1894,6 +1894,18 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::MineDungeonProp {
+            entrance_id,
+            depth,
+            prop_id,
+        } => {
+            if let Some(id) = &state.require_in_game("mining") {
+                game_state
+                    .start_mining(id, &entrance_id, depth, prop_id)
+                    .await;
+            }
+        }
+
         ClientMessage::OpenDungeonProp {
             entrance_id,
             depth,

@@ -619,6 +619,8 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::MealEaten { .. } => "MealEaten",
         ServerMessage::MealRemoved { .. } => "MealRemoved",
         ServerMessage::GrillStarted => "GrillStarted",
+        ServerMessage::MiningStarted { .. } => "MiningStarted",
+        ServerMessage::MiningEnded { .. } => "MiningEnded",
         ServerMessage::GrillEnded { .. } => "GrillEnded",
         ServerMessage::PlayerTradeRequested { .. } => "PlayerTradeRequested",
         ServerMessage::PlayerTradeRequestResult { .. } => "PlayerTradeRequestResult",

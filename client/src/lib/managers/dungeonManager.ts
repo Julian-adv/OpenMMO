@@ -86,13 +86,17 @@ export interface DungeonProp {
   d: number
 }
 
-/** A pending click-to-interact (break a barrel/crate, or open a chest): which
- *  prop, and the world XZ to close in on. */
+/** A pending click-to-interact (break a barrel/crate, open a chest, mine
+ *  ore): which prop, and the world XZ to close in on. */
 export interface PendingPropBreak {
   depth: number
   propId: number
   x: number
   z: number
+}
+
+export type PendingPropAction = PendingPropBreak & {
+  action: 'break' | 'open' | 'mine'
 }
 
 /** Depth/id under which the surface entrance door's open state is keyed in the
@@ -411,16 +415,12 @@ class DungeonManager {
    *  lifetime/scope as `brokenProps`; drives the lid-open animation, not
    *  passability (chests stay solid when open). */
   private openedProps = new Map<number, Set<number>>()
-  /** A barrel/crate the player clicked and is walking toward; the dungeon layer
-   *  fires the break once the player is within range (see GameSceneDungeonLayer
+  /** A prop the player clicked and is walking toward; the dungeon layer fires
+   *  the action once the player is within range (see GameSceneDungeonLayer
    *  update). Cleared on arrival, a new movement click, or leaving the dungeon. */
-  private pendingBreakState: PendingPropBreak | null = null
+  private pendingPropState: PendingPropAction | null = null
   /** Self-initiated breaks awaiting their server echo, keyed `depth:propId`. */
   private selfBrokenProps = new Set<string>()
-  /** A chest the player clicked and is walking toward; the dungeon layer sends
-   *  the open once the player is within range. Same lifecycle as
-   *  `pendingBreakState`. */
-  private pendingOpenState: PendingPropBreak | null = null
   /** Whether this session saw the treasure chest open (DungeonChestOpened
    *  broadcast). Drives the lid pose across floor rebuilds. Kept out of
    *  `openedProps` because the chest claim is per-character per night, not
@@ -651,8 +651,7 @@ class DungeonManager {
     this.selfBrokenProps.clear()
     this.treasureChestOpenedState = false
     this.openDoors.clear()
-    this.pendingBreakState = null
-    this.pendingOpenState = null
+    this.pendingPropState = null
     currentDungeonId.set(null)
     currentDungeonDepth.set(0)
   }
@@ -770,28 +769,16 @@ class DungeonManager {
     dungeon_rebuild_floor(this.id, depth, broken, open)
   }
 
-  get pendingBreak(): PendingPropBreak | null {
-    return this.pendingBreakState
+  get pendingProp(): PendingPropAction | null {
+    return this.pendingPropState
   }
 
-  setPendingBreak(pending: PendingPropBreak) {
-    this.pendingBreakState = pending
+  setPendingProp(pending: PendingPropAction) {
+    this.pendingPropState = pending
   }
 
-  clearPendingBreak() {
-    this.pendingBreakState = null
-  }
-
-  get pendingOpen(): PendingPropBreak | null {
-    return this.pendingOpenState
-  }
-
-  setPendingOpen(pending: PendingPropBreak) {
-    this.pendingOpenState = pending
-  }
-
-  clearPendingOpen() {
-    this.pendingOpenState = null
+  clearPendingProp() {
+    this.pendingPropState = null
   }
 
   setDepth(depth: number) {

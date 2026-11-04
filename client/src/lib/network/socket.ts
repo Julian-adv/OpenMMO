@@ -163,6 +163,7 @@ class NetworkManager {
   readonly characterError = createEvent<(message: string) => void>()
   readonly kicked = createEvent<(reason: string) => void>()
   readonly interactionRejected = createEvent<(reason: string) => void>()
+  readonly miningEnded = createEvent<() => void>()
   readonly interactionChanged =
     createEvent<(interaction: PlayerInteraction) => void>()
   private moveRequestId = 0
@@ -211,6 +212,7 @@ class NetworkManager {
       kicked: this.kicked,
       playerRespawned: this.playerRespawned,
       interactionRejected: this.interactionRejected,
+      miningEnded: this.miningEnded,
       interactionChanged: this.interactionChanged,
       movePath: this.movePath,
       moveProgress: this.moveProgress,
@@ -604,6 +606,16 @@ class NetworkManager {
   sendBreakDungeonProp(entranceId: string, depth: number, propId: number) {
     this.sendMessage({
       BreakDungeonProp: {
+        entrance_id: entranceId,
+        depth,
+        prop_id: propId,
+      },
+    })
+  }
+
+  sendMineDungeonProp(entranceId: string, depth: number, propId: number) {
+    this.sendMessage({
+      MineDungeonProp: {
         entrance_id: entranceId,
         depth,
         prop_id: propId,

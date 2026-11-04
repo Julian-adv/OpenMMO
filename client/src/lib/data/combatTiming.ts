@@ -19,6 +19,7 @@ export const DAMAGE_TEXT_AFTER_IMPACT_MS =
 // the loose instead of being stretched to fit.
 export const PLAYER_RANGED_DRAW_DELAY_MS = animTiming.player_ranged_draw.delayMs
 export const PROP_SWING_IMPACT_MS = animTiming.prop_swing_impact.delayMs
+export const MINING_SWING_MS = animTiming.mining_swing.delayMs
 export const SWORD_MISS_DELAY_MS = animTiming.sword_miss.delayMs
 // The whoosh (and the splash CAST_MS after it) waits out the cast clip's wind-up.
 export const FISHING_CAST_SWING_DELAY_MS = animTiming.fishing_cast_swing.delayMs

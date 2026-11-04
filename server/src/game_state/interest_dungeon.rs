@@ -1,4 +1,6 @@
-use onlinerpg_shared::dungeon::{cell_center, door_position, interior_doors, FloorLayout};
+use onlinerpg_shared::dungeon::{
+    cell_center, door_position, interior_doors, FloorLayout, PropKind,
+};
 use onlinerpg_shared::interest::{Bounds, Space, SubjectArea};
 use onlinerpg_shared::{Position, ServerMessage};
 
@@ -19,10 +21,15 @@ fn area(id: &str, depth: u8, position: Position) -> SubjectArea {
 }
 
 impl Interest {
-    pub(super) fn reset_dungeon_props(&mut self, id: &str, layouts: &[FloorLayout]) {
+    pub(super) fn reset_dungeon_props(
+        &mut self,
+        id: &str,
+        layouts: &[FloorLayout],
+        kinds: impl Fn(PropKind) -> bool,
+    ) {
         for layout in layouts {
             for (index, prop) in layout.props.iter().enumerate() {
-                if !prop.kind.is_interactive() {
+                if !kinds(prop.kind) {
                     continue;
                 }
                 let state = ServerMessage::DungeonPropState {

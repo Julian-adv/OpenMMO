@@ -245,6 +245,9 @@ pub struct SpawnSpec {
     pub aggressive: bool,
 }
 
+/// How long mining a prop takes.
+pub const MINING_CAST_MS: u64 = 3000;
+
 /// Clutter prop dropped into a room. Every kind but the decor ones
 /// ([`PropKind::is_decor`]) seals its [`PropSpec::cells`] in the passability grid (see
 /// [`floor_passability_cells_full`]), so a mover routes around it and a path
@@ -295,9 +298,14 @@ impl PropKind {
         !self.is_decor()
     }
 
-    /// Breaks or opens, so the server tracks its state.
+    /// Breaks, opens or is mined, so the server tracks its state.
     pub fn is_interactive(self) -> bool {
-        matches!(self, PropKind::Barrel | PropKind::Crate | PropKind::Chest)
+        matches!(self, PropKind::Barrel | PropKind::Crate | PropKind::Chest) || self.is_minable()
+    }
+
+    /// Mined with a pickaxe; refills at the sunset reset.
+    pub fn is_minable(self) -> bool {
+        matches!(self, PropKind::MineOreHeap | PropKind::MineCrystalCluster)
     }
 
     /// Cells covered along X and Z at yaw 0.

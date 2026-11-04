@@ -16,6 +16,7 @@ export const WEAPON_TYPE_LABELS = {
   bow: 'Bow',
   crossbow: 'Crossbow',
   torch: 'Torch',
+  pickaxe: 'Pickaxe',
 } as const
 
 export type WeaponType = keyof typeof WEAPON_TYPE_LABELS

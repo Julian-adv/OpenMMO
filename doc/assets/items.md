@@ -443,6 +443,10 @@
 
 ## 원시전사 기본 복장 — 2026-10-04
 
+- miner_pickaxe.png — 검은맥 광산 채굴용 광부의 곡괭이 아이콘 (2026-11-04). OpenAI Codex built-in ImageGen(`codex exec`, codex-cli 0.164.0), **ChatGPT Pro 20x**. OpenAI 출력물 이용 조건 적용. 흰 배경 원화를 모서리 flood fill로 따내 128² 투명 PNG로 줄였다. 원화·프롬프트는 `assets/items/miner_pickaxe/`. 가방에 있으면 채굴할 수 있는 도구(items.csv tool·무게 3·basePrice 250), Tobin 카탈로그 판매.
+- miner_pickaxe.glb — 채굴하는 동안 손에 드는 광부의 곡괭이 (2026-11-05). 정면 원화(아이콘 원화를 참조로 Codex ImageGen, ChatGPT Pro 20x, 2026-11-04)를 Tripo API로 생성했다(사용자 구매 API 크레딧 120, Tripo 이용 약관 적용, 모델 P2-20260801·PBR·detailed 텍스처, face_limit 4000). 원본과 작업 기록은 `assets/items/miner_pickaxe/tripo_v1/`(4049 triangles, 4096² PBR 3장), 원화는 `assets/items/miner_pickaxe/concept/`. Blender 5.2.0 LTS로 자루 길이 0.85m에 맞춰 균일 스케일하고, sword.glb 손 소켓 규약대로 자루 +X·곡괭이 머리 +X 끝·날 끝 ±Y(게임에서 날로 내리치도록 ±Z에서 90° 돌리고, 대검 베기 동작에서 날이 휘두르는 방향을 보게 손잡이 쪽에서 봐서 반시계로 25° 더 돌림), 원점=그립(자루 중심선, 자루 끝에서 길이의 13.6%)으로 맞췄다(0.85×0.11×0.55m). 텍스처 512² WebP q90. items.csv `worldModel`.
+- blackvein_ore.png / blackvein_crystal_shard.png — 채굴로 얻는 검은맥 광석·수정 조각 아이콘 (2026-11-04). 광산 소품 `mine_ore_heap.glb`·`mine_crystal_cluster.glb`(출처는 [props.md](props.md))를 Blender 5.2.0 LTS EEVEE로 투명 배경 직교 렌더해 128²로 줄였다. 둘 다 상점에 파는 잡동사니(basePrice 8·30).
+
 신규 남성 원시전사에 낡은 어깨 덮개·모피 하의·모피 부츠·손목 보호대를 지급하고 자동 장착한다.
 각 부위는 방어 1이며 상점 판매와 플레이어 거래를 차단한다. 승인된 Tripo 피팅 모델을
 재사용해 게임용 착용 파츠와 바닥 모델·인벤토리 아이콘을 만들었다.

@@ -416,5 +416,11 @@
   "worn_valkyrie_pants.description": "腰を包み、幾重にも垂れる銀の甲板。その縁には、畳まれた翼の曲線が残る。取引・売却できません。",
   "worn_valkyrie_pants.name": "使い古したヴァルキリーの腰当て",
   "worn_valkyrie_top.description": "銀色に輝く胸当て。幾多の戦場を越えた表面を、暁の光が静かに流れる。取引・売却できません。",
-  "worn_valkyrie_top.name": "使い古したヴァルキリーの胸当て"
+  "worn_valkyrie_top.name": "使い古したヴァルキリーの胸当て",
+  "miner_pickaxe.description": "トネリコの柄に重い鉄の頭をつけたつるはし。鞄に入れておけば黒脈鉱山の鉱石の山や水晶の群れを掘れます。いざという時は頼りない武器にもなります。",
+  "miner_pickaxe.name": "鉱夫のつるはし",
+  "blackvein_ore.description": "紫の筋が走る黒い鉱石の塊。商人が重さで買い取ります。",
+  "blackvein_ore.name": "黒脈鉱石",
+  "blackvein_crystal_shard.description": "芯にかすかな青い光を宿す冷たい黒紫の欠片。収集家が高く買います。",
+  "blackvein_crystal_shard.name": "黒脈水晶の欠片"
 }

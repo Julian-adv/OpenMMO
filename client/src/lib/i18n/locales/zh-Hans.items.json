@@ -416,5 +416,11 @@
   "worn_valkyrie_pants.description": "层叠的银色甲片垂落腰间。边缘仍留着收拢羽翼的弧线。无法交易或出售。",
   "worn_valkyrie_pants.name": "破旧的女武神腰甲",
   "worn_valkyrie_top.description": "泛着银辉的胸甲。历经无数战场的表面上，晨光静静流淌。无法交易或出售。",
-  "worn_valkyrie_top.name": "破旧的女武神胸甲"
+  "worn_valkyrie_top.name": "破旧的女武神胸甲",
+  "miner_pickaxe.description": "白蜡木柄配沉重铁头的镐。放在背包里就能开采黑脉矿坑的矿石堆和水晶簇。情急之下也能当作一件弱武器。",
+  "miner_pickaxe.name": "矿工镐",
+  "blackvein_ore.description": "带紫色纹路的黑色矿石块。商人按重量收购。",
+  "blackvein_ore.name": "黑脉矿石",
+  "blackvein_crystal_shard.description": "核心透着微弱蓝光的冰冷黑紫碎片。收藏家愿出好价钱。",
+  "blackvein_crystal_shard.name": "黑脉水晶碎片"
 }

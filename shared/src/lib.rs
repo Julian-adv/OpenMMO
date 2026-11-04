@@ -239,7 +239,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// `AbilityRejectReason::Interrupted`).
 /// v135: `GroundItem.claimed_by` and `GroundItemClaimEnded`, so clients refuse
 /// another player's loot before reaching for it.
-/// v136: `MonsterHealthUpdate`, so stethoscope wearers see monster HP.
+/// v136: `MonsterHealthUpdate`, so stethoscope wearers see monster HP;
+/// pickaxe mining (`MineDungeonProp`, `MiningStarted`, `MiningEnded`).
 pub const PROTOCOL_VERSION: u32 = 136;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
