@@ -4,27 +4,48 @@ import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { ArmorEquipment } from '../network/networkTypes'
 import { getItemDef } from '../data/itemDefs'
 import { loadGLB } from './gltfCache'
-import { MODULAR_FEMALE_DIRECTORY } from './modelPaths'
+import {
+  MODULAR_FEMALE_DIRECTORY,
+  MODULAR_FEMALE_MODEL_PATH,
+  MODULAR_VALKYRIE_MODEL_PATH,
+} from './modelPaths'
 import { bindModularPart, skinnedParts } from './modularCharacter'
 import { femaleUnderwearColor } from './femaleUnderwearColor'
 import { femaleOutfitMask } from './female-outfit-mask'
 import { modularOutfitForArmor } from './modularEquipment'
+import { attachValkyrieWings } from '../effects/valkyrie-wings'
 
 const slots = ['top', 'bottom', 'boots', 'gloves', 'helmet'] as const
 type Slot = (typeof slots)[number]
-type Style = 'plate' | 'barbarian' | 'rogue'
+type Style = 'plate' | 'barbarian' | 'rogue' | 'valkyrie' | 'caveman' | 'priest'
 const prefixes: Record<Style, string> = {
   plate: '',
   barbarian: 'barbarian_',
   rogue: 'rogue_',
+  valkyrie: 'valkyrie_',
+  caveman: 'caveman_',
+  priest: 'priest_',
 }
 const styles = Object.keys(prefixes) as Style[]
-type Helmet = Exclude<Style, 'rogue'> | 'brilliance'
-// Worn by few, so it loads on first equip instead of with the body.
+type Helmet = Exclude<Style, 'rogue' | 'caveman'> | 'brilliance'
 const LAZY_HELMET = 'brilliance_helmet'
+const FIXED_VALKYRIE_PARTS = ['valkyrie_hair', 'valkyrie_wings']
+// Styles loaded on first equip rather than with the character, and the slots each one has.
+const LAZY_STYLES: Partial<Record<Style, readonly Slot[]>> = {
+  valkyrie: slots,
+  caveman: slots.filter((slot) => slot !== 'helmet'),
+  priest: slots,
+}
 const partName = (style: Style, slot: Slot | 'hair') =>
   `${prefixes[style]}${slot}`
+const lazyParts = new Set([
+  LAZY_HELMET,
+  ...Object.entries(LAZY_STYLES).flatMap(([style, styleSlots]) =>
+    styleSlots.map((slot) => partName(style as Style, slot))
+  ),
+])
 export const FEMALE_PARTS = styles
+  .filter((style) => !(style in LAZY_STYLES))
   .flatMap((style) =>
     (['hair', ...slots] as const)
       .filter(
@@ -42,14 +63,27 @@ export const FEMALE_BOOTS_PROPERTY = 'femaleBoots'
 // glTF allows one channel per node and path, so boots values ship as companion animations.
 export const femaleBootsClipName = (clip: string, boots: string) =>
   `${clip}|${FEMALE_BOOTS_PROPERTY}:${boots}`
-let model: Promise<GLTF> | undefined
+const models = new Map<string, Promise<GLTF>>()
 const packs = new Map<string, Promise<GLTF>>()
+const pairedBaseClips = new WeakMap<GLTF, THREE.AnimationClip[]>()
+
+function baseClips(base: GLTF): THREE.AnimationClip[] {
+  let clips = pairedBaseClips.get(base)
+  if (!clips) {
+    clips = pairFemaleClips(base.scene, base.animations)
+    pairedBaseClips.set(base, clips)
+  }
+  return clips
+}
 
 export function assembleFemaleCharacter(
   base: GLTF,
-  sources: GLTF[]
+  sources: GLTF[],
+  names = FEMALE_PARTS
 ): THREE.Group {
   const scene = clone(base.scene) as THREE.Group
+  if (names.some((name) => FIXED_VALKYRIE_PARTS.includes(name)))
+    scene.userData.female_class = 'valkyrie'
   base.scene.traverse((node) => {
     const association = base.parser.associations.get(node)
     if (
@@ -61,12 +95,16 @@ export function assembleFemaleCharacter(
   })
   scene.userData.modular_character = true
   scene.userData.female_parts = {}
-  for (const [i, name] of FEMALE_PARTS.entries()) {
+  for (const [i, name] of names.entries()) {
     scene.userData.female_parts[name] = sources[i].scene.userData
-    for (const mesh of bindModularPart(scene, sources[i].scene)) {
+    const meshes = bindModularPart(scene, sources[i].scene)
+    for (const mesh of meshes) {
       mesh.userData.female_part = name
-      mesh.visible = name === 'hair'
+      mesh.visible =
+        (name === 'hair' && scene.userData.female_class !== 'valkyrie') ||
+        FIXED_VALKYRIE_PARTS.includes(name)
     }
+    if (name === 'valkyrie_wings') attachValkyrieWings(scene, meshes)
   }
   for (const mesh of skinnedParts(scene)) mesh.frustumCulled = false
   scene.userData.female_grip = Object.fromEntries(
@@ -85,30 +123,40 @@ export function assembleFemaleCharacter(
   return scene
 }
 
-export function loadFemaleCharacter(): Promise<GLTF> {
-  return (model ??= Promise.all(
-    ['base', ...FEMALE_PARTS].map((name) =>
-      loadGLB(`${MODULAR_FEMALE_DIRECTORY}/${name}.glb`)
-    )
-  )
-    .then(([base, ...sources]) => {
-      const scene = assembleFemaleCharacter(base, sources)
-      const animations = pairFemaleClips(scene, base.animations)
-      return { ...base, scene, scenes: [scene], animations }
-    })
-    .catch((error) => {
-      model = undefined
-      throw error
-    }))
+export function loadFemaleCharacter(
+  path = MODULAR_FEMALE_MODEL_PATH
+): Promise<GLTF> {
+  let pending = models.get(path)
+  if (!pending) {
+    const fixed =
+      path === MODULAR_VALKYRIE_MODEL_PATH ? FIXED_VALKYRIE_PARTS : []
+    const names = [...FEMALE_PARTS, ...fixed]
+    pending = Promise.all([
+      loadGLB(MODULAR_FEMALE_MODEL_PATH),
+      ...names.map((name) =>
+        loadGLB(`${MODULAR_FEMALE_DIRECTORY}/${name}.glb`)
+      ),
+    ])
+      .then(([base, ...sources]) => {
+        const scene = assembleFemaleCharacter(base, sources, names)
+        return { ...base, scene, scenes: [scene], animations: baseClips(base) }
+      })
+      .catch((error) => {
+        models.delete(path)
+        throw error
+      })
+    models.set(path, pending)
+  }
+  return pending
 }
 
 export function loadFemaleAnimationPack(path: string): Promise<GLTF> {
   let pending = packs.get(path)
   if (!pending) {
-    pending = Promise.all([loadFemaleCharacter(), loadGLB(path)])
-      .then(([{ scene }, pack]) => ({
+    pending = Promise.all([loadGLB(MODULAR_FEMALE_MODEL_PATH), loadGLB(path)])
+      .then(([base, pack]) => ({
         ...pack,
-        animations: pairFemaleClips(scene, pack.animations),
+        animations: pairFemaleClips(base.scene, pack.animations),
       }))
       .catch((error) => {
         packs.delete(path)
@@ -197,7 +245,7 @@ interface FemaleState {
 }
 
 const states = new WeakMap<THREE.Object3D, FemaleState>()
-const helmetLoads = new WeakMap<THREE.Object3D, Promise<void>>()
+const partLoads = new WeakMap<THREE.Object3D, Map<string, Promise<void>>>()
 const latestArmor = new WeakMap<THREE.Object3D, ArmorEquipment | undefined>()
 
 function femaleScene(root: THREE.Object3D) {
@@ -257,6 +305,9 @@ const femaleStyle = (itemId: string | null | undefined): Style | null => {
   if (!itemId) return null
   const item = getItemDef(itemId)
   const model = item?.worldModel ?? ''
+  if (model.startsWith('armor/valkyrie_')) return 'valkyrie'
+  if (model.startsWith('armor/caveman_')) return 'caveman'
+  if (model.startsWith('armor/priest_')) return 'priest'
   if (model.startsWith('armor/rogue_') || ROGUE_LEATHER_MODELS.has(model))
     return 'rogue'
   return item?.material === 'leather' || model.startsWith('armor/barbarian_')
@@ -268,41 +319,57 @@ const femaleHelmet = (itemId: string | null | undefined): Helmet | null => {
   if (modularOutfitForArmor({ head: itemId }).helmet === 'brilliance')
     return 'brilliance'
   const style = femaleStyle(itemId)
-  return style === 'rogue' ? 'barbarian' : style
+  return style === 'rogue' || style === 'caveman' ? 'barbarian' : style
 }
 
-function bindLazyHelmet(scene: THREE.Object3D): Promise<void> {
-  let load = helmetLoads.get(scene)
+function bindLazyFemalePart(
+  scene: THREE.Object3D,
+  name: string
+): Promise<void> {
+  let loads = partLoads.get(scene)
+  if (!loads) partLoads.set(scene, (loads = new Map()))
+  let load = loads.get(name)
   if (!load) {
-    load = loadGLB(`${MODULAR_FEMALE_DIRECTORY}/${LAZY_HELMET}.glb`).then(
+    const current = loads
+    load = loadGLB(`${MODULAR_FEMALE_DIRECTORY}/${name}.glb`).then(
       (gltf) => {
-        if (helmetLoads.get(scene) !== load) return
-        scene.userData.female_parts[LAZY_HELMET] = gltf.scene.userData
+        if (partLoads.get(scene) !== current) return
+        scene.userData.female_parts[name] = gltf.scene.userData
         for (const mesh of bindModularPart(scene, gltf.scene)) {
-          mesh.userData.female_part = LAZY_HELMET
+          mesh.userData.female_part = name
           mesh.visible = false
           mesh.frustumCulled = false
         }
         const state = states.get(scene)
-        if (state) registerLazyHelmet(scene, state)
+        if (state) registerLazyPart(scene, state, name)
       },
       (error) => {
-        helmetLoads.delete(scene)
+        current.delete(name)
         throw error
       }
     )
-    helmetLoads.set(scene, load)
+    loads.set(name, load)
   }
   return load
 }
 
-function registerLazyHelmet(scene: THREE.Object3D, state: FemaleState) {
+function registerLazyPart(
+  scene: THREE.Object3D,
+  state: FemaleState,
+  name: string
+) {
   const body = skinnedParts(scene).find((mesh) => mesh.userData.female_body)!
-  state.mask.register(
-    LAZY_HELMET,
-    scene.userData.female_parts[LAZY_HELMET].body_mask,
-    body
-  )
+  state.mask.register(name, scene.userData.female_parts[name].body_mask, body)
+}
+
+function femaleOutfit(armor?: ArmorEquipment): Outfit {
+  return {
+    top: femaleStyle(armor?.chest),
+    bottom: femaleStyle(armor?.pants),
+    boots: femaleStyle(armor?.boots),
+    gloves: femaleStyle(armor?.hands),
+    helmet: femaleHelmet(armor?.head),
+  }
 }
 
 export async function applyFemaleArmorAsync(
@@ -312,15 +379,23 @@ export async function applyFemaleArmorAsync(
   const scene = femaleScene(root)
   if (!scene) return false
   latestArmor.set(scene, armor)
-  if (
-    femaleHelmet(armor?.head) === 'brilliance' &&
-    !scene.userData.female_parts[LAZY_HELMET]
-  ) {
-    try {
-      await bindLazyHelmet(scene)
-    } catch (error) {
-      console.error('Failed to load female helmet', error)
-    }
+  const outfit = femaleOutfit(armor)
+  const missing = slots.flatMap((slot) => {
+    const style = outfit[slot]
+    const name =
+      style === 'brilliance' ? LAZY_HELMET : style && partName(style, slot)
+    return name && lazyParts.has(name) && !scene.userData.female_parts[name]
+      ? [name]
+      : []
+  })
+  if (missing.length) {
+    await Promise.all(
+      missing.map((name) =>
+        bindLazyFemalePart(scene, name).catch((error) => {
+          console.error(`Failed to load female part: ${name}`, error)
+        })
+      )
+    )
     if (!latestArmor.has(scene)) return true
   }
   return applyFemaleArmor(root, latestArmor.get(scene))
@@ -332,19 +407,13 @@ export function applyFemaleArmor(
 ): boolean {
   const scene = femaleScene(root)
   if (!scene) return false
-  const equipped: Outfit = {
-    top: femaleStyle(armor?.chest),
-    bottom: femaleStyle(armor?.pants),
-    boots: femaleStyle(armor?.boots),
-    gloves: femaleStyle(armor?.hands),
-    helmet: femaleHelmet(armor?.head),
+  const equipped = femaleOutfit(armor)
+  for (const slot of slots) {
+    const style = equipped[slot]
+    const name =
+      style === 'brilliance' ? LAZY_HELMET : style && partName(style, slot)
+    if (name && !scene.userData.female_parts[name]) equipped[slot] = null
   }
-  // Keep the hair if the helmet failed to load rather than leaving a bare head.
-  if (
-    equipped.helmet === 'brilliance' &&
-    !scene.userData.female_parts[LAZY_HELMET]
-  )
-    equipped.helmet = null
   let state = states.get(scene)
   if (
     state?.equipped &&
@@ -367,16 +436,24 @@ export function applyFemaleArmor(
       }
     mask.register('sleeves', female_parts.gloves.sleeve_mask, part('top')[0])
     state = { mask, underwearColor, refreshBoots: () => {} }
-    if (female_parts[LAZY_HELMET]) registerLazyHelmet(scene, state)
+    if (female_parts[LAZY_HELMET]) registerLazyPart(scene, state, LAZY_HELMET)
     state.refreshBoots = installBootsSwitch(scene, state)
     states.set(scene, state)
   }
   const { helmet } = equipped
-  const hair =
-    helmet === 'plate' || helmet === 'brilliance'
+  const fixed = scene.userData.female_class === 'valkyrie'
+  const hair = fixed
+    ? null
+    : helmet === 'plate' || helmet === 'brilliance'
       ? null
-      : partName(helmet ?? 'plate', 'hair')
+      : partName(
+          helmet === 'valkyrie' || helmet === 'priest'
+            ? 'plate'
+            : (helmet ?? 'plate'),
+          'hair'
+        )
   for (const style of styles) {
+    if (style === 'valkyrie') continue
     const name = partName(style, 'hair')
     for (const mesh of part(name)) mesh.visible = name === hair
   }
@@ -397,7 +474,10 @@ export function applyFemaleArmor(
   for (const mesh of part('rogue_garters'))
     mesh.visible = equipped.bottom === 'rogue' && equipped.boots === 'rogue'
   state.mask.setEquippedAll(shown)
-  state.underwearColor(equipped.bottom === 'rogue')
+  state.underwearColor(
+    equipped.bottom === 'rogue',
+    equipped.bottom === 'caveman'
+  )
   const bootsChanged = state.equipped?.boots !== equipped.boots
   state.equipped = equipped
   if (bootsChanged) state.refreshBoots()
@@ -411,6 +491,6 @@ export function disposeFemaleCharacter(root: THREE.Object3D) {
   state?.mask.dispose()
   state?.underwearColor.dispose()
   states.delete(scene)
-  helmetLoads.delete(scene)
+  partLoads.delete(scene)
   latestArmor.delete(scene)
 }

@@ -1,6 +1,6 @@
 # 여성 원시전사 시작 장비
 
-상태: 상의 v7, 하의 v9, 부츠 v4, 손목 보호대 v1 피팅·리깅 후보를 미리보기에 연결했다. 일부 동작에서 관통이 남아 있으며 게임 적용은 완료되지 않았다.
+상태: 2026-11-03 상의 v7, 하의 v9, 부츠 v4, 손목 보호대 v1을 여성 플레이어의 모듈형 시작 복장에 연결했다. 기존 피팅의 관통 진단과 미검증 혼합 조합은 아래 기록을 따른다.
 
 여성 원시전사도 남성 원시전사와 같은 네 슬롯의 시작 장비를 사용한다.
 외형은 [여성 원시전사 통합 원화](../../client/public/character_concepts/cavewoman.webp)를 기준으로 한다.
@@ -20,11 +20,11 @@
 
 ## 현재 상태와 남은 작업
 
-- 기존 여성 원시전사는 통합 모델을 사용하며 신규 캐릭터에 위 네 장비를 지급하지 않는다.
-- 상의와 하의의 동작 중 관통 보정, 손목 보호대 동작·다른 장비와의 연결부 검증이 필요하다.
-- 같은 세트와 다른 장비 혼합, 장착·해제, 동작 중 관통, 게임 성능을 검증해야 한다.
-- 검증된 파츠가 준비된 후 여성 캐릭터의 모듈형 모델 선택, 시작 장비 지급과 게임 연결을 구현한다.
-- 기존 여성 캐릭터에 대한 소급 지급은 범위와 데이터 처리 방법이 아직 정해지지 않았다.
+- 여성 플레이어는 공통 여성 몸체와 장비별 여성 원시전사 파츠를 사용한다. NPC는 기존 통합 모델을 사용한다.
+- 신규 여성 원시전사에게 남성과 같은 위 네 장비를 지급·장착한다. 투구는 지급하지 않는다.
+- 착탈·다른 캐릭터의 가림 분리·로딩 실패 복구·일부 혼합 장비와 10개 게임 애니메이션 팩을 검사했다.
+- 기존 여성 캐릭터의 인벤토리는 자동 변경하지 않는다. 배포 시 누락된 장비만 가방에 추가하는 별도 도구를 아래에 기록했다.
+- 기존 피팅의 관통 진단, 모든 자세·혼합 조합의 시각 검사와 5,000명 동시 접속 부하 시험은 남아 있다.
 
 ## 참조 및 생성 시도
 
@@ -179,3 +179,65 @@ blender -b -t 4 --python-exit-code 1 --python tools/blender-scripts/validate_fem
 [미리보기 전용 가림 정보](../../assets/items/female_caveman_top/tripo_v1/fitted_v7/body-occlusion.json)는
 기준 몸체의 상체 속옷 2,488삼각형을 숨기고 피부는 유지한다. 장비를 벗거나 바꾸면 기존 속옷을 복원한다.
 가림 정보는 정확한 몸체와 상의 해시를 기록한다. 게임 모델이나 시작 장비에는 아직 연결하지 않았다.
+
+## 게임 연결 — 2026-11-03
+
+여성 원시전사 플레이어는 `modular_female/base.glb`를 사용한다. 생성 화면과 서버 신규 생성은
+위 네 시작 장비를 같은 슬롯에 장착한다. 남성용 아이템 정의·능력치·거래 불가 속성을 재사용하고,
+성별에 따라 여성 피팅 파츠를 표시한다. 무기는 기존 `worn_iron_sword`를 사용한다.
+헤어는 공통 여성 단발이며 투구 착용 시 기존 여성 장비 규칙을 따른다.
+
+| 런타임 파츠 | 피팅 원본 | 삼각형 |
+| --- | --- | ---: |
+| `caveman_top` | `female_caveman_top/tripo_v1/fitted_v7` | 2,996 |
+| `caveman_bottom` | `female_caveman_bottom/tripo_v1/fitted_v9` | 2,564 |
+| `caveman_gloves` | `female_caveman_bracers/tripo_v1/fitted_v1` | 3,150 |
+| `caveman_boots` | `female_caveman_boots/tripo_v1/fitted_v4` | 3,040 |
+
+기존 원본·출처·이용 조건은 이 문서의 각 파츠 기록을 따른다. 새 AI 생성이나 유료 호출은 없다.
+`tools/prepare-female-knight.mjs`가 원본의 UV·리그·피팅 형상과 가림 정보를 유지하며
+1024px 이하 WebP와 meshopt로 런타임 파일을 만든다. 네 파츠는 합계 2,368,332바이트다.
+[입출력 해시](female-knight-runtime-sources.json)와 `assets.lock`에 기록했다.
+
+파츠는 최초 착용 시 불러오고 GLB 캐시와 정점 버퍼를 공유한다. 각 캐릭터의 가림은 독립적이며,
+로딩 실패 시 해당 파츠의 피부를 가리지 않는다. 장비 교체와 해제 시 피부·속옷을 복원한다.
+하의 착용 시 미리보기와 같은 피부색 인쇄 보정을 적용하고, 다른 하의로 바꾸면 해제한다.
+굽 자세와 접지 보정은 여성 기본 동작과 10개 애니메이션 팩에 다섯 번째 부츠 변형으로 구웠다.
+게임 프레임마다 굽 피팅이나 발바닥 정점 검사를 실행하지 않는다.
+
+![게임 로더로 조립한 여성 원시전사](../images/characters/modular_human_female_01/caveman/runtime-front-v1.png)
+
+위 이미지는 로컬 Chromium의 WebGPURenderer(WebGL fallback)에서 실제 게임 로더와 장비·동작
+구현으로 조립한 화면이다. 게임 서버에 로그인한 화면은 아니다.
+정면·측면·후면, 걷기·달리기·점프·공격·앉기와 장비 해제를 확인했고 브라우저 오류는 없었다.
+공통 몸체와 헤어, 네 복장의 합계는 숨김 포함 36,361삼각형, 가림 후 30,106삼각형이다.
+무기·망토는 이 측정에 포함하지 않았다. 얼굴은 공통 몸체를 유지하며 별도 배분은 미측정이다.
+15,000–20,000삼각형 목표를 초과하며 형상을 줄이기 위한 데시메이션은 하지 않았다.
+
+`cavemanCharacter.test.ts`는 네 슬롯 착탈, 캐릭터별 가림 분리, 정점 버퍼 공유,
+로딩 실패 후 재시도, 비동기 선택 경쟁, 10개 팩의 유한 정점과 굽 전환·대기 접지를 검사한다.
+기존 여성 장비 검사에 원시전사 분기를 추가했다. 판금 상의·도적 장갑과의 표시·가림 전환도
+검사했지만 모든 혼합 조합의 관통이 없음을 보장하지 않는다. 앞선 피팅의 표본 관통 진단은
+그대로 남아 있으며 이번 연결에서 원본 피팅 형상을 수정하지 않았다. 5,000명 부하 시험은 하지 않았다.
+
+재생성:
+
+```sh
+node tools/prepare-female-knight.mjs --part caveman_top
+node tools/prepare-female-knight.mjs --part caveman_bottom
+node tools/prepare-female-knight.mjs --part caveman_gloves
+node tools/prepare-female-knight.mjs --part caveman_boots
+node tools/prepare-female-knight.mjs --bake-existing
+```
+
+### 기존 여성 캐릭터의 장비 지급
+
+`tools/grant-female-caveman-starter-outfit-20261103.py`는 기존 여성 원시전사에게 누락된 네 장비만
+가방에 추가한다. 이미 가진 품목과 장착·강화는 유지하고, NPC와 다른 성별·클래스는 제외한다.
+인메모리 SQLite에서 미리보기 무변경, 필터, 기존 장비 보존과 재실행 시 중복 방지를 검사했다.
+실제 운영 DB에는 적용하지 않았다. 배포 시 게임·NPC 서비스를 멈춘 뒤 미리보기와 적용을 진행한다.
+
+```sh
+.venv/bin/python tools/grant-female-caveman-starter-outfit-20261103.py /path/to/game.db > /tmp/female-caveman-grants.json
+.venv/bin/python tools/grant-female-caveman-starter-outfit-20261103.py /path/to/game.db --apply --expected-preview /tmp/female-caveman-grants.json
+```

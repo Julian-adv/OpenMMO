@@ -21,48 +21,15 @@ const arrivals = new Map<
   { event: Omit<TeleportEffect, 'startedAt'>; local: boolean }
 >()
 let pending: TeleportEffect[] = []
-const departures = new Map<
-  number,
-  {
-    timer: ReturnType<typeof setTimeout>
-    updates: (() => void)[]
-  }
->()
-let localRequest: {
-  event: Omit<TeleportEffect, 'startedAt'>
-  timer: ReturnType<typeof setTimeout>
-} | null = null
 
+/** Sends at once; the server holds the teleport for the departure and
+ * cancels it if the player moves. */
 export function beginLocalTeleport(
   event: Omit<TeleportEffect, 'startedAt' | 'phase'>,
   request: () => boolean
 ) {
-  if (get(localTeleportActive)) return false
-  const departure = { ...event, phase: 'Departing' as const }
-  playTeleportEffect(departure, true)
-  localRequest = {
-    event: departure,
-    timer: setTimeout(() => {
-      localRequest = null
-      if (!request())
-        playTeleportEffect({ ...departure, phase: 'Cancelled' }, true)
-    }, TELEPORT_DEPARTURE_MS),
-  }
-  return true
-}
-
-export function cancelLocalTeleportRequest() {
-  if (!localRequest) return
-  playTeleportEffect({ ...localRequest.event, phase: 'Cancelled' }, true)
-}
-
-export function deferRemoteTeleportUpdate(
-  playerId: number,
-  update: () => void
-) {
-  const departure = departures.get(playerId)
-  if (!departure) return false
-  departure.updates.push(update)
+  if (get(localTeleportActive) || !request()) return false
+  playTeleportEffect({ ...event, phase: 'Departing' }, true)
   return true
 }
 
@@ -84,14 +51,6 @@ export function playTeleportEffect(
   event: Omit<TeleportEffect, 'startedAt'>,
   local: boolean
 ) {
-  if (event.phase === 'Arriving' && departures.has(event.playerId)) {
-    arrivals.set(event.playerId, { event, local })
-    return
-  }
-  if (local && event.phase !== 'Departing' && localRequest) {
-    clearTimeout(localRequest.timer)
-    localRequest = null
-  }
   clearTimers(event.playerId)
   arrivals.delete(event.playerId)
   const release = () => {
@@ -101,9 +60,6 @@ export function playTeleportEffect(
     if (local) localTeleportActive.set(false)
   }
   if (event.phase === 'Cancelled') {
-    const departure = departures.get(event.playerId)
-    if (departure) clearTimeout(departure.timer)
-    departures.delete(event.playerId)
     pending.push({ ...event, startedAt: Date.now() })
     release()
     return
@@ -116,18 +72,6 @@ export function playTeleportEffect(
     return
   }
   pending.push({ ...event, startedAt: Date.now() })
-  if (!local) {
-    const previous = departures.get(event.playerId)
-    if (previous) clearTimeout(previous.timer)
-    const updates = previous?.updates ?? []
-    departures.set(event.playerId, {
-      updates,
-      timer: setTimeout(() => {
-        departures.delete(event.playerId)
-        for (const update of updates) update()
-      }, TELEPORT_DEPARTURE_MS),
-    })
-  }
   timers.set(event.playerId, [
     setTimeout(() => setHidden(event.playerId, true), TELEPORT_VANISH_MS),
     setTimeout(release, 3000),
@@ -157,10 +101,6 @@ export function takeTeleportEffects() {
 }
 
 export function resetTeleportEffects() {
-  if (localRequest) clearTimeout(localRequest.timer)
-  localRequest = null
-  for (const departure of departures.values()) clearTimeout(departure.timer)
-  departures.clear()
   for (const playerId of timers.keys()) clearTimers(playerId)
   pending = []
   arrivals.clear()

@@ -1,0 +1,93 @@
+{
+  "date": "2026-11-02",
+  "base": {
+    "path": "assets/modular_human_female_01/rig_v1/female-base.glb",
+    "sha256": "3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5"
+  },
+  "hair": {
+    "path": "assets/modular_human_female_01/hair/tripo_warrior_v1/fitted_v1/hair_female_warrior.glb",
+    "sha256": "b42cb7518b2bf3ae61706e4008b032d41f10ff516396f53392d63c3d871a89b4"
+  },
+  "triangles": 1871,
+  "bones": 65,
+  "part_count": 1,
+  "exact_bind_compatibility": true,
+  "normalized_weights": true,
+  "unchanged_rest_shape": true,
+  "crown_follows_head": true,
+  "clips": [
+    {
+      "name": "idle1",
+      "samples": 61,
+      "maximum_root_error": 8.96917464302345e-16,
+      "maximum_edge_stretch": 1.3439263580694627,
+      "stretch_review_required": false,
+      "maximum_motion": 0.04410290048998048
+    },
+    {
+      "name": "idle_armed",
+      "samples": 61,
+      "maximum_root_error": 8.96917464302345e-16,
+      "maximum_edge_stretch": 1.3439263580694627,
+      "stretch_review_required": false,
+      "maximum_motion": 0.04410290048998048
+    },
+    {
+      "name": "walk",
+      "samples": 61,
+      "maximum_root_error": 8.938052237450719e-16,
+      "maximum_edge_stretch": 1.6747056123006128,
+      "stretch_review_required": false,
+      "maximum_motion": 0.06804569462451623
+    },
+    {
+      "name": "run",
+      "samples": 61,
+      "maximum_root_error": 8.921809491438631e-16,
+      "maximum_edge_stretch": 1.6639297872310532,
+      "stretch_review_required": false,
+      "maximum_motion": 0.22387446412745654
+    },
+    {
+      "name": "jump",
+      "samples": 61,
+      "maximum_root_error": 9.813077866773594e-16,
+      "maximum_edge_stretch": 2.0521139824956784,
+      "stretch_review_required": true,
+      "maximum_motion": 0.9234445388019125
+    },
+    {
+      "name": "combat_idle",
+      "samples": 61,
+      "maximum_root_error": 9.072719869097164e-16,
+      "maximum_edge_stretch": 1.9422157159107474,
+      "stretch_review_required": false,
+      "maximum_motion": 0.28547719718008707
+    },
+    {
+      "name": "slash1",
+      "samples": 61,
+      "maximum_root_error": 1.117140368961273e-15,
+      "maximum_edge_stretch": 1.8999985181081027,
+      "stretch_review_required": false,
+      "maximum_motion": 1.0526787928937011
+    },
+    {
+      "name": "dying",
+      "samples": 61,
+      "maximum_root_error": 9.104505742017336e-16,
+      "maximum_edge_stretch": 2.712994723473563,
+      "stretch_review_required": true,
+      "maximum_motion": 2.426370335380074
+    },
+    {
+      "name": "sit_idle",
+      "samples": 61,
+      "maximum_root_error": 8.930440022589897e-16,
+      "maximum_edge_stretch": 1.770613568387327,
+      "stretch_review_required": false,
+      "maximum_motion": 0.47577221497160616
+    }
+  ],
+  "scope": "Rest binding, finite deformation, root attachment and stretching. Body collision and appearance reviewed separately; no secondary hair physics."
+}

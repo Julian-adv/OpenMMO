@@ -86,7 +86,7 @@
         <div class="chart-tooltip" style:left={`${tooltipLeft}px`}>
           <span>{formatDateTime(selected.timestamp)} KST · 게임일 {selected.game_day}</span>
           <strong>{selected.index_before}% → {selected.index_after}%</strong>
-          <span>활성 유저 1인당 골드 {signed(selected.growth)} · <GoldAmount copper={selected.m_prev} /> → <GoldAmount copper={selected.m_now} /></span>
+          <span>1인당 골드 <GoldAmount copper={selected.m_now} /> · 비교 기준 <GoldAmount copper={selected.m_prev} /> 대비 {signed(selected.growth)}</span>
           <span>{selection.hint}</span>
         </div>
       {/if}

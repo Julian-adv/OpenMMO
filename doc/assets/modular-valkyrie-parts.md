@@ -64,7 +64,7 @@ Use case: precise-object-edit. Asset type: one isolated wing concept for image-t
 
 사용자가 Tripo에서 생성한 `angel wing 3d model.glb`를 제공했다. [원본 GLB](../../assets/items/valkyrie_starter/tripo_wing_v1/source.glb)의 SHA-256은 `1c4068664f8849c77bd6e1d3f39a06d745d1415e1337781013aade6c90fc8839`이다. 생성 설정·작업 ID·비용·요금제·이용 조건과 실제 입력 이미지는 미확인이다. 원본은 한쪽 2,629삼각형이며 리그가 없다. 1,500개는 제작 목표였고 실제 Tripo 설정값은 확인되지 않았다.
 
-[여성 공통 몸체](modular-human-female-01.md)의 `human_female_01_local_v1` 리그와 [긴 헤어](modular-female-knight-hair.md)를 사용했다. 미러 복제 후 사용자의 요청에 따라 폭을 원래의 60%로 줄였다. 현재 전체 폭은 약 1.445m다. 각 날개는 `Spine2`에 100%로 고정되며 독립적인 접기·펄럭임 동작은 없다.
+[여성 공통 몸체](modular-human-female-01.md)의 `human_female_01_local_v1` 리그와 [긴 헤어](modular-female-knight-hair.md)를 사용했다. 미러 복제 후 사용자의 요청에 따라 폭을 원래의 60%로 줄였다. 현재 전체 폭은 약 1.445m다. 원본 GLB는 각 날개가 `Spine2`에 100%로 고정돼 있다. 2026-11-03에 아래의 런타임 접기 동작을 추가했다.
 
 - [수정 원본 Blender](../../assets/items/valkyrie_starter/tripo_wing_v1/source-patch-v1.blend)와 [수정 원본 GLB](../../assets/items/valkyrie_starter/tripo_wing_v1/source-patch-v1.glb) (`d1320d7d36c3f8dac6a5d2aac95fc472de7fe56e6cc76164ba39a6c9d33ce891`).
 - [피팅 Blender 장면](../../assets/items/valkyrie_starter/tripo_wing_v1/fitted_patch_v1/wings-final.blend): 몸체·긴 헤어·노멀 보정된 날개. 몸체와 헤어는 각 원본 기록의 출처와 이용 조건을 따른다.
@@ -245,3 +245,115 @@ Generate an isolated FRONT-VIEW 3D modeling reference for ONLY the lower-body ar
 - [리깅 검증](../../assets/items/valkyrie_starter/tripo_bottom_v1/fitted_v8/rig-validation.json)은 공통 골격, 가중치 정규화와 대기·걷기·달리기 각 13개 시점의 유한 좌표를 확인한다.
 
 재생성: `PYTHONPATH=tools .venv/bin/python tools/outfits/fit_female_valkyrie_rear_panel_v8.py`, `node tools/export-female-rogue-seated-poses.mjs /tmp/valkyrie-bottom-waist-measure idle1`, `blender -b --python-exit-code 1 --python tools/blender-scripts/measure_female_valkyrie_rear_panel_v8.py`, `blender -b --python-exit-code 1 --python tools/blender-scripts/save_female_valkyrie_rear_fitting.py -- v8`, `node tools/validate-female-valkyrie-bottom.mjs`.
+
+## 손목 보호대 — 2026-11-03
+
+사용자 확인본은 `valkyrie_gloves/fitted_v3`다. 왼쪽 원본을 대칭 복제하고 각 팔뚝 본에 100% 연결했다. 피부색 원본 면 40개를 한쪽에서 제거한 뒤, 사용자가 맞춘 위치·각도·121% 크기·왼팔 추가 보정을 정점·노멀·탄젠트에 적용했다. 양쪽 총 1,702삼각형이다.
+
+![현재 손목 보호대 피팅](../images/characters/modular_human_female_01/parts/valkyrie/bracers-fitting-v3.png)
+
+- [최종 GLB](../../assets/items/valkyrie_gloves/fitted_v3/bracers_female_valkyrie.glb), [Blender 편집본](../../assets/items/valkyrie_gloves/fitted_v3/fitting.blend), [피부 가림](../../assets/items/valkyrie_gloves/fitted_v3/body-occlusion.json), [적용한 피팅값](../../assets/items/valkyrie_gloves/fitted_v3/saved-fit.json), [검증 기록](../../assets/items/valkyrie_gloves/fitted_v3/baking.json).
+- [사용자 제공 원본](../../assets/items/valkyrie_gloves/source/model.glb), [게이지 편집 입력 GLB](../../assets/items/valkyrie_gloves/fitted_v2/bracers_female_valkyrie.glb), [입력 피팅 기록](../../assets/items/valkyrie_gloves/fitted_v2/fitting.json), [삭제한 원본 면 번호](valkyrie-bracer-skin-faces-v1.json), [저장·복원용 피팅값](valkyrie-bracer-preview-fit.json).
+
+기본 미리보기는 최종 GLB와 미리 계산한 314삼각형의 피부 가림 목록을 읽는다. `추가 피팅 조절`에서만 편집 입력과 게이지를 사용한다. 공통 축 이동·회전·크기와 왼팔 추가 보정을 제공하며 휠 이동은 1mm 단위다. 저장 버튼은 파일을 갱신하고 불러오기 버튼은 복원한다. 페이지 자동 캡처는 기존 저장본을 덮어쓰지 않는다.
+
+처음에는 피부를 넓게 가려 손목에 구멍이 생겼다. 최종 판정은 피부 앞뒤 4cm 교차 검사에 축·둘레 방향 6mm 여유 검사를 더하고 손목 끝 8% 구간을 남긴다. 가림은 보호대를 벗거나 해제하면 복원된다.
+
+65본 연결, UV·텍스처·가중치 보존, 미리보기와 내보낸 GLB의 일치, 가림 목록과 착탈 복원을 검사했다. 8개 동작 각각 9시점에서 두 결과의 최대 정점 위치 차이는 0m였다. 전체 연속 자세의 피부 관통과 다른 상의 조합은 미검증이며 게임에는 등록하지 않았다.
+
+기준 몸체와 보호대만 조립하면 숨김 포함 23,877삼각형, 표시 23,563삼각형이다. 얼굴은 기준 몸체 그대로이며 별도 얼굴 삼각형 배분은 측정하지 않았다. 기존 조립 목표 15,000–20,000삼각형을 초과한다.
+
+원본은 사용자 제공 Tripo GLB `fantasy warrior 3d model (1).glb`의 `tripo_part_8`이다. SHA-256은 `686212b78d9410619bbd9cf1a52e31bc7f27deb45654e8300bf8b9ecc19c2993`이며 제작자·생성 설정·요금제·생성일·라이선스는 미확인이다. 로컬 추출·피팅·리깅에는 추가 생성 비용이 없다. 몸체 출처는 [여성 기준 몸체](modular-human-female-01.md)를 따른다.
+
+재현:
+
+```sh
+blender -b --python-exit-code 1 --python tools/blender-scripts/fit_female_valkyrie_bracers.py
+node tools/bake-female-valkyrie-bracers.mjs
+blender -b --python-exit-code 1 --python tools/blender-scripts/save_female_valkyrie_baked.py
+```
+
+원본과 편집 입력, 최종 GLB·Blender, 재현 스크립트와 최종 검증 기록을 보관한다. 초기 피팅본·중복 렌더·Blender 백업은 정리했다.
+
+## 기존 전사 긴 헤어 연결 — 2026-11-03
+
+기존 작업 공간의 `hair/tripo_warrior_v1/fitted_v1/hair_female_warrior.glb`를 헤어 목록에 연결했다. 1,871삼각형이며 115% 크기·118% 높이·-5.1cm 피팅이 이미 적용돼 있다. 발키리 투구와 함께 표시하고 다른 투구에서는 숨긴다. 여성 몸체·보호대와의 리그 연결을 검사했다. 동작 중 다른 장비와의 충돌은 미검증이다.
+
+- [피팅 GLB](../../assets/modular_human_female_01/hair/tripo_warrior_v1/fitted_v1/hair_female_warrior.glb), [리깅 입력](../../assets/modular_human_female_01/hair/tripo_warrior_v1/fitted_v1/hair-fitted-unskinned.glb), [Blender](../../assets/modular_human_female_01/hair/tripo_warrior_v1/fitted_v1/female-warrior-hair-fitted.blend).
+- 원본은 사용자 제공 Tripo `tripo_part_1`이며 [원본 GLB](../../assets/fantasy%20warrior%203d%20model%20%281%29.glb)의 SHA-256은 `261cf628275f6fd7844da9b132a93418024fea6fc8331863e37b7aac137bf27d`다. 생성일·구독 등급·작업 ID·이용 조건은 미확인이다.
+- 2026-11-02 텍스처 보정은 OpenAI Codex built-in ImageGen, ChatGPT Pro 20x 작업이다. 기존 [원본 컬러](../../assets/modular_human_female_01/hair/tripo_warrior_v1/texture_v1/basecolor-original.jpg), [생성 결과 1](../../assets/modular_human_female_01/hair/tripo_warrior_v1/texture_v1/basecolor-imagegen.png)·[2](../../assets/modular_human_female_01/hair/tripo_warrior_v1/texture_v1/basecolor-imagegen-v2.png), [최종 컬러](../../assets/modular_human_female_01/hair/tripo_warrior_v1/texture_v1/basecolor-repaired-v2.png), [원본 노멀](../../assets/modular_human_female_01/hair/tripo_warrior_v1/texture_v1/normal-original.jpg)·[보정 노멀](../../assets/modular_human_female_01/hair/tripo_warrior_v1/texture_v1/normal-repaired-v2.png)을 보관한다. 이번 연결에서 새 생성은 하지 않았다.
+
+## 날개 투구 — 2026-11-03
+
+`fantasy warrior 3d model (2).glb`의 `tripo_part_6`을 추출한 1,343삼각형 장식이다. 사용자 확인본은 v2이며 사슬과 펜던트의 곡선을 유지한 채 이마 쪽으로 12mm 옮겼다. 양옆 날개는 고정했다. [파일·출처·피팅·검증 기록](valkyrie-helmet.md)을 참고한다.
+
+## 게임 시작 외형 — 2026-11-03
+
+여성 발키리 플레이어는 공통 여성 몸체 `modular_female/base.glb`를 사용한다. 코드가 고정 파츠를 붙이고 `female_class`를 지정한다.
+긴 머리는 `tripo_warrior_v1/fitted_v1`, 등 날개는 `tripo_wing_v1/fitted_patch_v3`의 승인본을
+그대로 사용하며 직업 기본 외형으로 고정한다. 아이템 정의·장착 슬롯·교체 UI를 만들지 않는다.
+다른 투구를 쓰거나 모든 장비를 벗어도 머리와 날개는 유지한다. NPC의 기존 발키리 모델은 유지한다.
+출처·라이선스는 이 문서의 기존 파츠 기록과 [투구 기록](valkyrie-helmet.md)을 따른다.
+새 생성 요청은 없으며 승인된 피팅 형상과 리그를 재사용한다.
+
+| 시작 아이템 | 슬롯 | 승인 원본 |
+| --- | --- | --- |
+| `worn_valkyrie_helmet` | head | `valkyrie_helmet/fitted_v2` |
+| `worn_valkyrie_top` | chest | `valkyrie_starter/tripo_top_v1/fitted_v11` |
+| `worn_valkyrie_pants` | pants | `valkyrie_starter/tripo_bottom_v1/fitted_v8` |
+| `worn_valkyrie_gloves` | hands | `valkyrie_gloves/fitted_v3` |
+| `worn_valkyrie_boots` | boots | `valkyrie_boots/fitted_v1` |
+
+캐릭터 생성 미리보기와 서버 신규 생성이 같은 5종을 착용한다. 각 아이템은 가격 0원,
+거래 불가이며 상점 단품·일괄 판매와 플레이어 간 거래 모두 거절한다. 기존 캐릭터의
+인벤토리는 이 작업에서 자동 변경하지 않는다. 장비 자체는 일반 방어구 슬롯에서 교체·해제할 수 있다.
+
+승인된 손목 보호대 위치와 피부 가림은 baked GLB/정적 마스크를 사용한다. 상의는 기존 미리보기와
+동일하게 v11 형상과 v8 몸체 마스크를 조합한다. 장비는 최초 착용 시에만 로드하고 GLB 캐시를
+공유한다. 하이힐 보정은 공통 여성 기본 동작과 10개 애니메이션 팩에 네 번째 부츠 변형으로 굽는다.
+게임 프레임마다 피팅·발바닥 정점 검사를 실행하지 않는다.
+
+생성 화면 조립은 숨김 전 46,554삼각형, 피부 가림 후 40,257삼각형이다. 얼굴은 공통 몸체를
+유지하며 별도 얼굴 삼각형 배분은 미측정이다. 이 수치는 무기·망토가 없는 생성 화면 기준이며
+기존 15,000–20,000삼각형 목표를 넘는다. 형상 축소는 수행하지 않았다. 5,000명 동시 접속의
+부하 시험은 수행하지 않았다.
+
+재현:
+
+- `node tools/prepare-female-knight.mjs`: 전체 여성 런타임 파츠·기본 동작·팩 생성.
+- `--part valkyrie_<부위>`: 승인 원본에서 특정 파츠만 생성. 부츠 변경 후에는 동작도 다시 굽는다.
+- `--bake-existing`: 이미 배포된 여성 기본 동작·팩의 맨발 트랙을 유지하고 부츠 변형만 재생성.
+- `blender -b --python-exit-code 1 --python tools/blender-scripts/export_outfit_items.py`:
+  승인 원본에서 지면 배치용 모델과 128px 아이콘 생성. 리그 표시용 숨은 메시를 제외한다.
+  `-- --icons-only`를 붙이면 모델은 그대로 두고 아이콘만 다시 렌더한다.
+
+아이콘은 Breastplate(`armor/plate_armor.png`)처럼 약간 위·옆에서 보는 구도로 변경했다
+(2026-11-03). 수직 축 회전 30°, 투영 회전 `(-65, 0, -8)°`, 노출 -0.6을 사용한다.
+보호대와 부츠는 좌우 한 쌍의 긴 축을 수직으로 맞추고, 두 개를 가까이 나란히 배치한다.
+지면 모델과 착용 모델은 기존 피팅 위치를 유지한다.
+두 아이콘만 다시 만들 때는 `-- --icons-only --parts gloves boots`를 사용한다.
+
+검증은 `femaleCharacter.test.ts`, `valkyrieCharacter.test.ts`에서 고정 외형·장비 변경·개체 간 가림
+분리·비동기 선택 경쟁·전체 게임 동작의 유한 좌표와 날개 형태·부츠 접지를 확인한다.
+서버 테스트는 신규 지급·장착 정보·단품/일괄 판매 거절·플레이어 거래 거절을 확인한다.
+
+### 날개 대기·보행 동작 — 2026-11-03
+
+`client/src/lib/effects/valkyrie-wings.ts`에서 좌우 날개를 등뼈의 회전축에 연결한다.
+피팅 원본의 뿌리 위치는 미터 단위 `(±0.033, 1.4333, -0.129)`다. 기존 Spine2 스키닝의
+기준 행렬을 사용하므로 펼친 상태의 형상과 몸통 동작을 유지한다. 깃털별 변형은 추가하지 않는다.
+
+- 대기: 4.5초 주기로 뒤쪽으로 4–10° 접었다 편다.
+- 걷기·조깅·달리기: 현재 동작의 실제 재생 시간에 맞춰 한 보행 주기당 두 번 8–40° 접었다 편다.
+  보행 중에는 보간 응답을 높여 빠른 발걸음에도 접힘 폭이 줄어들지 않게 한다. 대기 동작은 유지한다.
+- 동작 전환은 부드럽게 보간한다. 미리보기 일시정지 때 멈추며, 시간 슬라이더로 보행 자세를 고르면
+  날개도 같은 보행 시점에 맞춘다. 기준 자세에서는 원래 펼친 상태로 돌아간다.
+- 게임, 캐릭터 생성·선택 화면과 여성 몸체 미리보기에 같은 구현을 사용한다.
+
+날개 두 개는 정적 메시로 그리며 원래 정점 버퍼와 재질을 공유한다. 프레임마다 두 회전축의
+쿼터니언만 변경한다. 새 골격·정점 변형·정점 버퍼 업로드는 없으며, 게임에서는 기존 보조 동작
+스케줄러를 따라 화면 밖에서 갱신을 멈추고 원격 캐릭터는 30Hz로 갱신한다.
+형상과 텍스처는 앞서 승인된 GLB를 재사용하며 새 에셋 생성이나 라이선스 변경은 없다.
+
+`valkyrie-wings.test.ts`는 기존 스키닝과 펼친 자세의 일치, 몸통 추적, 좌우 대칭, 대기 주기,
+보행 동기화, 정지·전환, 캐릭터별 독립 상태와 정적 버퍼 공유를 확인한다.

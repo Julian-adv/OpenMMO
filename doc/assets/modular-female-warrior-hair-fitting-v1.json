@@ -1,0 +1,92 @@
+{
+  "date": "2026-11-02",
+  "source": "assets/fantasy warrior 3d model (1).glb",
+  "source_sha256": "261cf628275f6fd7844da9b132a93418024fea6fc8331863e37b7aac137bf27d",
+  "source_node": "tripo_part_1",
+  "body": "assets/modular_human_female_01/rig_v1/female-base.glb",
+  "body_sha256": "3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5",
+  "scale": 1.4,
+  "translation_blender_m": [
+    0,
+    0.012,
+    0.452
+  ],
+  "overall_scale_adjustment": {
+    "factor": 1.15,
+    "pivot_blender_m": [
+      0.0,
+      0.012000000104308128,
+      1.690000057220459
+    ]
+  },
+  "vertical_scale_adjustment": {
+    "factor": 1.18,
+    "pivot_blender_m": 1.690000057220459
+  },
+  "vertical_adjustment_m": -0.051,
+  "rear_scalp_fit": {
+    "method": "Move rear crown vertices outside the base scalp with depth and height falloff.",
+    "moved_vertices": 32,
+    "maximum_displacement_m": 0.008224918148452456
+  },
+  "front_body_fit": {
+    "method": "Sample front-hair triangles against the body side surface and smoothly displace each lock outward by height; transform normals with the inverse deformation Jacobian.",
+    "clearance_target_m": 0.006,
+    "constraint_bins": {
+      "-1": 67,
+      "1": 70
+    },
+    "moved_vertices": 541,
+    "maximum_displacement_m": 0.04015921092435111
+  },
+  "side_normals": {
+    "method": "Blend side corner normals toward nearby outward hair surfaces with boundary falloff.",
+    "smoothed_corners": 101
+  },
+  "basecolor_texture": {
+    "path": "assets/modular_human_female_01/hair/tripo_warrior_v1/texture_v1/basecolor-repaired-v2.png",
+    "sha256": "9d6a909c5d92c62c2993c701b162ff568c96ba6ea306b5bf2738709bdce2b0e2"
+  },
+  "normal_texture": {
+    "path": "assets/modular_human_female_01/hair/tripo_warrior_v1/texture_v1/normal-repaired-v2.png",
+    "sha256": "5f22bd64ba9e81ed778d2ff9cc8fba958ea2e864d33da5e0bccd65a5719ff09e"
+  },
+  "scalp_fit": {
+    "method": "Push nearby scalp-region vertices outside the base body using nearest surface normals with height and front falloff.",
+    "moved_vertices": 375,
+    "maximum_displacement_m": 0.03378927695033903
+  },
+  "triangles": 1871,
+  "status": "Fitting candidate; motion and mixed equipment require review.",
+  "rigging": {
+    "rig_id": "human_female_01_local_v1",
+    "bones": 65,
+    "method": "Transfer averaged female torso weights, use a more local transfer for front hair at the chest, and blend to rigid Head above the neck; exact female bind matrices and bone order.",
+    "parts": {
+      "hair_female_warrior": {
+        "vertices": 2099,
+        "rigid_head_vertices": 648,
+        "max_weight_sum_error": 2.220446049250313e-16
+      }
+    },
+    "physics": false,
+    "output": "assets/modular_human_female_01/hair/tripo_warrior_v1/fitted_v1/hair_female_warrior.glb",
+    "sha256": "b42cb7518b2bf3ae61706e4008b032d41f10ff516396f53392d63c3d871a89b4"
+  },
+  "blender": {
+    "path": "assets/modular_human_female_01/hair/tripo_warrior_v1/fitted_v1/female-warrior-hair-fitted.blend",
+    "sha256": "81e832206e126aca23a3eb97789550513a984f217c29ecabd8b0e623d086d51f",
+    "actions": [
+      "combat_idle",
+      "dying",
+      "idle1",
+      "idle_armed",
+      "jump",
+      "run",
+      "sit_idle",
+      "slash1",
+      "walk"
+    ],
+    "bones": 65
+  }
+}

@@ -339,7 +339,7 @@ async fn teleport_scroll_moves_in_combat_spends_one_and_clears_movement() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn teleport_scroll_has_no_server_animation_delay() {
+async fn teleport_scroll_use_adds_nothing_past_the_departure_wait() {
     let game = make_flat_world_game_state("teleport_scroll_no_delay");
     let id = give_scrolls(&game, make_player("Reader", 800.0, 800.0), 1).await;
     let started = tokio::time::Instant::now();

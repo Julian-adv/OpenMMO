@@ -9,23 +9,29 @@ use onlinerpg_shared::celestial::is_after_sunset;
 use onlinerpg_shared::moon::{days_until_serin_dark, is_serin_dark_day};
 use onlinerpg_shared::pricing::{PricingNotice, Trend};
 
-use crate::auth::{unix_now, AuthService, PricingMeeting};
+use super::time::REAL_DAY_DURATION_SECONDS;
+use crate::auth::{unix_now, AuthService, PricingMeeting, PricingState};
+use crate::metrics::DAY_SECONDS;
 use crate::types::{PlayerId, ServerMessage};
 use crate::world_config::{world_config, PricingConfig};
 
-/// Fractional step a meeting would take (doc/PRICING.md 조정 공식).
-fn index_step(growth: f64, elapsed_days: i64, cfg: &PricingConfig) -> f64 {
-    let target = cfg.target_daily_growth * elapsed_days.max(1) as f64;
-    (cfg.gain * (growth - target)).clamp(-cfg.max_step_per_meeting, cfg.max_step_per_meeting)
+/// The baseline averages this many real days and sits at their midpoint.
+const BASELINE_DAYS: i64 = 30;
+
+/// Fractional step for `M`'s gap above the target path (doc/PRICING.md 조정 공식).
+fn index_step(gap: f64, cfg: &PricingConfig) -> f64 {
+    (cfg.gain * gap).clamp(-cfg.max_step_per_meeting, cfg.max_step_per_meeting)
 }
 
-pub(crate) fn next_index_percent(
-    current: u32,
-    growth: f64,
-    elapsed_days: i64,
-    cfg: &PricingConfig,
-) -> u32 {
-    let step = index_step(growth, elapsed_days, cfg);
+/// The stored target grown to `game_day`; a `g` change applies only forward.
+fn target_on(state: &PricingState, game_day: i64, cfg: &PricingConfig) -> Option<f64> {
+    let (stored, day) = state.target_m.zip(state.target_day)?;
+    let target = stored * (1.0 + cfg.target_daily_growth).powf((game_day - day) as f64);
+    (target > 0.0).then_some(target)
+}
+
+pub(crate) fn next_index_percent(current: u32, gap: f64, cfg: &PricingConfig) -> u32 {
+    let step = index_step(gap, cfg);
     let index = (f64::from(current) / 100.0 * (1.0 + step)).clamp(cfg.index_min, cfg.index_max);
     (index * 100.0).round() as u32
 }
@@ -68,21 +74,18 @@ impl super::GameState {
         let state = self.pricing.read().await.clone();
         let game_day = self.current_game_day();
         let reader = Arc::clone(auth);
-        let (last_change_pct, reading) = super::auth_db(move || reader.pricing_notice_inputs())
-            .await
-            .unwrap_or_else(|err| {
-                warn!("pricing: notice fell back to defaults: {err}");
-                (0, None)
-            });
+        let (last_change_pct, reading) =
+            super::auth_db(move || reader.pricing_notice_inputs(unix_now()))
+                .await
+                .unwrap_or_else(|err| {
+                    warn!("pricing: notice fell back to defaults: {err}");
+                    (0, None)
+                });
 
-        let step = match (state.m_prev, state.last_meeting_day, reading) {
-            (Some(prev), Some(last), Some(now)) if prev > 0.0 => index_step(
-                (now - prev) / prev,
-                game_day - last,
-                &world_config().pricing,
-            ),
-            _ => 0.0,
-        };
+        let cfg = &world_config().pricing;
+        let step = reading
+            .zip(target_on(&state, game_day, cfg))
+            .map_or(0.0, |(now, target)| index_step(now / target - 1.0, cfg));
         let trend = if step > 0.01 {
             Trend::Rising
         } else if step < -0.01 {
@@ -119,7 +122,7 @@ impl super::GameState {
     }
 
     /// Holds the merchants' price meeting once per Serin dark evening. The
-    /// first meeting (or one with nobody active) only records the reading.
+    /// first one fixes the baseline; each one advances the stored target.
     pub async fn tick_pricing_meeting(&self, auth: &Arc<AuthService>) {
         let datetime = self.current_game_datetime();
         let game_day = self.current_game_day();
@@ -132,45 +135,58 @@ impl super::GameState {
         }
 
         let cfg = &world_config().pricing;
+        let now = unix_now();
         let reader = Arc::clone(auth);
-        let m_now = match super::auth_db(move || {
-            reader.active_gold_per_character(unix_now(), cfg.active_days)
+        let (base, m_now) = match super::auth_db(move || {
+            reader
+                .average_gold_per_account(now - BASELINE_DAYS * DAY_SECONDS, now)
+                .and_then(|base| {
+                    Ok((
+                        base,
+                        reader.average_gold_per_account(now - DAY_SECONDS, now)?,
+                    ))
+                })
         })
         .await
         {
-            Ok(m) => m,
+            Ok(readings) => readings,
             Err(err) => return warn!("pricing: meeting skipped, DB read failed: {err}"),
         };
+        if let Some(base) = base.filter(|_| state.target_m.is_none()) {
+            let offset = BASELINE_DAYS * DAY_SECONDS / 2;
+            state.target_m = Some(base);
+            state.target_day = Some(game_day - (offset as f64 / REAL_DAY_DURATION_SECONDS) as i64);
+            info!(
+                "pricing: baseline gold/active account {base:.1} at day {:?}",
+                state.target_day
+            );
+        }
 
-        let meeting = m_now.and_then(|now| {
-            let (prev, last) = state.m_prev.zip(state.last_meeting_day)?;
-            (prev > 0.0).then(|| {
-                let growth = (now - prev) / prev;
-                PricingMeeting {
-                    game_day,
-                    m_prev: prev,
-                    m_now: now,
-                    growth,
-                    index_before: state.index_percent,
-                    index_after: next_index_percent(
-                        state.index_percent,
-                        growth,
-                        game_day - last,
-                        cfg,
-                    ),
-                }
-            })
+        let target = target_on(&state, game_day, cfg);
+        let meeting = m_now.zip(target).map(|(now, target)| {
+            let gap = now / target - 1.0;
+            PricingMeeting {
+                game_day,
+                reference: target,
+                m_now: now,
+                gap,
+                index_before: state.index_percent,
+                index_after: next_index_percent(state.index_percent, gap, cfg),
+            }
         });
         if let Some(m) = &meeting {
             state.index_percent = m.index_after;
             info!(
-                "pricing: meeting on day {game_day}: gold/active {:.1} -> {:.1} ({:+.1}%), index {}% -> {}%",
-                m.m_prev, m.m_now, m.growth * 100.0, m.index_before, m.index_after
+                "pricing: meeting on day {game_day}: gold/active account {:.1} vs target {:.1} ({:+.1}%), index {}% -> {}%",
+                m.m_now, m.reference, m.gap * 100.0, m.index_before, m.index_after
             );
         } else {
-            info!("pricing: meeting on day {game_day} recorded reading {m_now:?}");
+            info!("pricing: meeting on day {game_day} had no reading");
         }
-        state.m_prev = m_now.or(state.m_prev);
+        if target.is_some() {
+            state.target_m = target;
+            state.target_day = Some(game_day);
+        }
         state.last_meeting_day = Some(game_day);
         let snapshot = state.clone();
         drop(state);
@@ -190,18 +206,32 @@ mod tests {
     use super::*;
 
     #[test]
-    fn index_follows_growth_against_a_day_scaled_target() {
+    fn index_follows_the_gap_above_the_target_path() {
         let cfg = PricingConfig::default();
-        // 20 days at 0.2%/day targets 4%; 4% growth holds the index.
-        assert_eq!(next_index_percent(100, 0.04, 20, &cfg), 100);
-        // 24% growth: 0.5 * (0.24 - 0.04) = +10%.
-        assert_eq!(next_index_percent(100, 0.24, 20, &cfg), 110);
+        assert_eq!(next_index_percent(100, 0.0, &cfg), 100);
+        // 0.5 * 12% = +6%.
+        assert_eq!(next_index_percent(100, 0.12, &cfg), 106);
+        assert_eq!(next_index_percent(100, -0.08, &cfg), 96);
         // Capped per meeting even on a gold flood.
-        assert_eq!(next_index_percent(100, 2.0, 20, &cfg), 110);
-        // A 40-day gap targets 8%, so 8% growth is neutral.
-        assert_eq!(next_index_percent(100, 0.08, 40, &cfg), 100);
+        assert_eq!(next_index_percent(100, 2.0, &cfg), 110);
         // Floor and ceiling.
-        assert_eq!(next_index_percent(92, -0.5, 20, &cfg), 90);
-        assert_eq!(next_index_percent(198, 1.0, 20, &cfg), 200);
+        assert_eq!(next_index_percent(92, -0.5, &cfg), 90);
+        assert_eq!(next_index_percent(198, 1.0, &cfg), 200);
+    }
+
+    #[test]
+    fn target_grows_from_the_stored_day_at_the_current_rate() {
+        let mut cfg = PricingConfig::default();
+        let mut state = PricingState::default();
+        assert_eq!(target_on(&state, 10, &cfg), None);
+        state.target_m = Some(100.0);
+        state.target_day = Some(10);
+        assert_eq!(target_on(&state, 10, &cfg), Some(100.0));
+        let whole = target_on(&state, 50, &cfg).unwrap();
+        state.target_m = target_on(&state, 30, &cfg);
+        state.target_day = Some(30);
+        assert!((target_on(&state, 50, &cfg).unwrap() - whole).abs() < 1e-9);
+        cfg.target_daily_growth = 0.0;
+        assert_eq!(target_on(&state, 50, &cfg), state.target_m);
     }
 }

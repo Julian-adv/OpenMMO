@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "saved_at": "2026-11-02T16:20:03.721Z",
+  "part_path": "assets/items/valkyrie_gloves/fitted_v2/bracers_female_valkyrie.glb",
+  "part_sha256": "5243222bba8d5645552323859e0066867eb3f439dafc18bfb7865b160f3385a8",
+  "mask_sha256": "10756e0105761a40ba3c5f9440bbdc6245f38e105361754183ce4caebacf2103",
+  "hide_skin": true,
+  "settings": {
+    "outward": 1.1,
+    "height": -0.8,
+    "depth": -2.7,
+    "scale": 121,
+    "rotate-x": -3,
+    "rotate-y": 12,
+    "rotate-z": -1,
+    "arm-outward": 0,
+    "arm-across": -5,
+    "arm-twist": 0,
+    "move-arm-outward": 0.8,
+    "move-arm-across": 0.8,
+    "move-arm-length": 0,
+    "left-move-outward": -0.2,
+    "left-move-across": 0.4,
+    "left-move-length": 0,
+    "left-rotate-outward": 3,
+    "left-rotate-across": 0,
+    "left-rotate-length": 0
+  }
+}

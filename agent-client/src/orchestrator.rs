@@ -680,7 +680,11 @@ async fn run_npc_session(
 
 /// One server message into shared state. The entry handshake reads a few
 /// before the reader task starts, so both paths go through here.
-async fn handle_incoming(state: &Arc<Mutex<SharedState>>, _label: &str, msg: ServerMessage) {
+async fn handle_incoming(state: &Arc<Mutex<SharedState>>, label: &str, msg: ServerMessage) {
+    // Meant for whoever runs this client, so set it apart from the log lines.
+    if let ServerMessage::OperatorNotice { message } = &msg {
+        println!("\n  ==== Notice from the server operator ({label}) ====\n  {message}\n");
+    }
     let mut s = state.lock().await;
     if let ServerMessage::LandscapeChanged { tiles } = &msg {
         for tile in tiles {

@@ -6,8 +6,16 @@ export const MODULAR_MALE_MODEL_PATH = `${MODULAR_MALE_DIRECTORY}/base.glb`
 export const MODULAR_FEMALE_DIRECTORY = '/models/characters/modular_female'
 export const MODULAR_FEMALE_MODEL_PATH = `${MODULAR_FEMALE_DIRECTORY}/base.glb`
 
+export const MODULAR_VALKYRIE_MODEL_PATH = `${MODULAR_FEMALE_MODEL_PATH}#valkyrie`
+
+export function isModularFemaleModel(path: string): boolean {
+  return (
+    path === MODULAR_FEMALE_MODEL_PATH || path === MODULAR_VALKYRIE_MODEL_PATH
+  )
+}
+
 export function isModularModel(path: string): boolean {
-  return path === MODULAR_MALE_MODEL_PATH || path === MODULAR_FEMALE_MODEL_PATH
+  return path === MODULAR_MALE_MODEL_PATH || isModularFemaleModel(path)
 }
 
 export const KNIGHT_CHARACTER_MODEL_PATH = '/models/characters/knight.glb'
@@ -145,10 +153,14 @@ export function getCharacterModelPath(
     !isNpc &&
     (characterClass === 'knight' ||
       characterClass === 'barbarian' ||
-      characterClass === 'rogue') &&
+      characterClass === 'rogue' ||
+      characterClass === 'caveman' ||
+      characterClass === 'priest') &&
     effectiveGender === 'female'
   )
     return MODULAR_FEMALE_MODEL_PATH
+  if (!isNpc && characterClass === 'valkyrie' && effectiveGender === 'female')
+    return MODULAR_VALKYRIE_MODEL_PATH
   if (genders) {
     if (gender && genders[gender]) return genders[gender]
     return Object.values(genders)[0]

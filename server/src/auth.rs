@@ -65,6 +65,13 @@ fn class_starter_items(
             ("worn_plate_boots", 1, Some("boots")),
             ("worn_plate_gauntlets", 1, Some("hands")),
         ],
+        CharacterClass::Valkyrie => &[
+            ("worn_valkyrie_helmet", 1, Some("head")),
+            ("worn_valkyrie_top", 1, Some("chest")),
+            ("worn_valkyrie_pants", 1, Some("pants")),
+            ("worn_valkyrie_gloves", 1, Some("hands")),
+            ("worn_valkyrie_boots", 1, Some("boots")),
+        ],
         CharacterClass::Barbarian => &[
             ("worn_barbarian_helmet", 1, Some("head")),
             ("worn_barbarian_armor", 1, Some("chest")),
@@ -72,7 +79,7 @@ fn class_starter_items(
             ("worn_barbarian_boots", 1, Some("boots")),
             ("worn_barbarian_bracers", 1, Some("hands")),
         ],
-        CharacterClass::Caveman if gender == Gender::Male => &[
+        CharacterClass::Caveman => &[
             ("worn_caveman_top", 1, Some("chest")),
             ("worn_caveman_pants", 1, Some("pants")),
             ("worn_caveman_boots", 1, Some("boots")),
@@ -94,6 +101,13 @@ fn class_starter_items(
             ("worn_priest_helmet", 1, Some("head")),
             ("worn_priest_top", 1, Some("chest")),
             ("worn_priest_pants", 1, Some("pants")),
+            ("worn_priest_boots", 1, Some("boots")),
+        ],
+        CharacterClass::Priest => &[
+            ("worn_priest_helmet", 1, Some("head")),
+            ("worn_priest_top", 1, Some("chest")),
+            ("worn_priest_pants", 1, Some("pants")),
+            ("worn_priest_gloves", 1, Some("hands")),
             ("worn_priest_boots", 1, Some("boots")),
         ],
         CharacterClass::Bard if gender == Gender::Male => &[
@@ -221,12 +235,13 @@ pub fn ban_message(reason: Option<&str>, until_unix: Option<i64>) -> String {
     }
 }
 
-/// doc/PRICING.md; `m_prev` is the reading at the last meeting.
+/// doc/PRICING.md; `target_m` is the target path at game day `target_day`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PricingState {
     pub index_percent: u32,
     pub last_meeting_day: Option<i64>,
-    pub m_prev: Option<f64>,
+    pub target_m: Option<f64>,
+    pub target_day: Option<i64>,
 }
 
 impl Default for PricingState {
@@ -234,7 +249,8 @@ impl Default for PricingState {
         Self {
             index_percent: 100,
             last_meeting_day: None,
-            m_prev: None,
+            target_m: None,
+            target_day: None,
         }
     }
 }
@@ -242,9 +258,12 @@ impl Default for PricingState {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PricingMeeting {
     pub game_day: i64,
-    pub m_prev: f64,
+    /// The comparison: the target path, or before it the last meeting.
+    #[serde(rename = "m_prev")]
+    pub reference: f64,
     pub m_now: f64,
-    pub growth: f64,
+    #[serde(rename = "growth")]
+    pub gap: f64,
     pub index_before: u32,
     pub index_after: u32,
 }
@@ -787,7 +806,18 @@ impl AuthService {
         Self::ensure_pricing_schema(&conn)?;
         Self::ensure_migrations_schema(&conn)?;
         Self::migrate_level_curve(&conn)?;
-        Self::migrate_female_rogue_starter_outfit(&conn)?;
+        Self::migrate_starter_outfit(
+            &conn,
+            "female_rogue_starter_outfit_20261027",
+            CharacterClass::Rogue,
+            Gender::Female,
+        )?;
+        Self::migrate_starter_outfit(
+            &conn,
+            "valkyrie_starter_outfit_20261103",
+            CharacterClass::Valkyrie,
+            Gender::Female,
+        )?;
         Self::migrate_starter_weapon(
             &conn,
             "rogue_starter_dagger_20261027",
@@ -1091,22 +1121,31 @@ impl AuthService {
         Ok(())
     }
 
-    fn migrate_female_rogue_starter_outfit(conn: &Connection) -> Result<(), rusqlite::Error> {
-        const NAME: &str = "female_rogue_starter_outfit_20261027";
+    /// Gives existing characters the outfit new ones start with; worn slots stay as is.
+    fn migrate_starter_outfit(
+        conn: &Connection,
+        name: &str,
+        class: CharacterClass,
+        gender: Gender,
+    ) -> Result<(), rusqlite::Error> {
         let tx = conn.unchecked_transaction()?;
         let done: bool = tx.query_row(
             "SELECT EXISTS(SELECT 1 FROM migrations WHERE name = ?1)",
-            [NAME],
+            [name],
             |row| row.get(0),
         )?;
         if done {
             return Ok(());
         }
+        let gender_str = match gender {
+            Gender::Male => "male",
+            Gender::Female => "female",
+        };
         let mut characters = tx.prepare(
             "SELECT id, account_name, character_name FROM characters \
-             WHERE gender = 'female' AND class = 'rogue'",
+             WHERE gender = ?1 AND class = ?2",
         )?;
-        for character in characters.query_map([], |row| {
+        for character in characters.query_map(params![gender_str, class.as_str()], |row| {
             Ok((
                 row.get::<_, i64>(0)?,
                 row.get::<_, String>(1)?,
@@ -1119,9 +1158,7 @@ impl AuthService {
             {
                 continue;
             }
-            for (item, quantity, slot) in
-                class_starter_items(&CharacterClass::Rogue, Gender::Female)
-            {
+            for (item, quantity, slot) in class_starter_items(&class, gender) {
                 tx.execute(
                     "INSERT INTO character_items (character_id, item_def_id, quantity) \
                      SELECT ?1, ?2, ?3 WHERE NOT EXISTS \
@@ -1138,7 +1175,7 @@ impl AuthService {
             }
         }
         drop(characters);
-        tx.execute("INSERT INTO migrations (name) VALUES (?1)", [NAME])?;
+        tx.execute("INSERT INTO migrations (name) VALUES (?1)", [name])?;
         tx.commit()
     }
 
@@ -1458,7 +1495,8 @@ impl AuthService {
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 index_percent INTEGER NOT NULL,
                 last_meeting_day INTEGER,
-                m_prev REAL
+                target_m REAL,
+                target_day INTEGER
             );
             CREATE TABLE IF NOT EXISTS pricing_history (
                 ts INTEGER NOT NULL,
@@ -1469,20 +1507,29 @@ impl AuthService {
                 index_before INTEGER NOT NULL,
                 index_after INTEGER NOT NULL
             );",
-        )
+        )?;
+        if !Self::table_columns(conn, "pricing_state")?.contains("target_m") {
+            conn.execute_batch(
+                "ALTER TABLE pricing_state ADD COLUMN target_m REAL;
+                 ALTER TABLE pricing_state ADD COLUMN target_day INTEGER;",
+            )?;
+        }
+        Ok(())
     }
 
     pub fn load_pricing_state(&self) -> Result<PricingState, AuthError> {
         let conn = self.open_connection()?;
         Ok(conn
             .query_row(
-                "SELECT index_percent, last_meeting_day, m_prev FROM pricing_state WHERE id = 1",
+                "SELECT index_percent, last_meeting_day, target_m, target_day
+                 FROM pricing_state WHERE id = 1",
                 [],
                 |row| {
                     Ok(PricingState {
                         index_percent: row.get(0)?,
                         last_meeting_day: row.get(1)?,
-                        m_prev: row.get(2)?,
+                        target_m: row.get(2)?,
+                        target_day: row.get(3)?,
                     })
                 },
             )
@@ -1500,9 +1547,14 @@ impl AuthService {
         let mut conn = self.open_connection()?;
         let tx = conn.transaction()?;
         tx.execute(
-            "INSERT OR REPLACE INTO pricing_state (id, index_percent, last_meeting_day, m_prev) \
-             VALUES (1, ?1, ?2, ?3)",
-            params![state.index_percent, state.last_meeting_day, state.m_prev],
+            "INSERT OR REPLACE INTO pricing_state \
+             (id, index_percent, last_meeting_day, target_m, target_day) VALUES (1, ?1, ?2, ?3, ?4)",
+            params![
+                state.index_percent,
+                state.last_meeting_day,
+                state.target_m,
+                state.target_day
+            ],
         )?;
         if let Some(m) = meeting {
             tx.execute(
@@ -1512,9 +1564,9 @@ impl AuthService {
                 params![
                     unix_now(),
                     m.game_day,
-                    m.m_prev,
+                    m.reference,
                     m.m_now,
-                    m.growth,
+                    m.gap,
                     m.index_before,
                     m.index_after
                 ],
@@ -1524,9 +1576,9 @@ impl AuthService {
         Ok(())
     }
 
-    /// Notice inputs: last meeting's index change (points) and gold per
-    /// active character from the latest hourly snapshot.
-    pub fn pricing_notice_inputs(&self) -> Result<(i32, Option<f64>), AuthError> {
+    /// Notice inputs: last meeting's index change (points) and `M` over the
+    /// past day.
+    pub fn pricing_notice_inputs(&self, now: i64) -> Result<(i32, Option<f64>), AuthError> {
         let conn = self.open_connection()?;
         let change = conn
             .query_row(
@@ -1536,37 +1588,29 @@ impl AuthService {
             )
             .optional()?
             .unwrap_or(0) as i32;
-        let reading = conn
-            .query_row(
-                "SELECT active_gold, active_characters FROM gold_snapshots ORDER BY ts DESC LIMIT 1",
-                [],
-                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
-            )
-            .optional()?
-            .and_then(|(gold, count)| (count > 0).then(|| gold as f64 / count as f64));
-        Ok((change, reading))
+        let day = crate::metrics::DAY_SECONDS;
+        Ok((change, self.average_gold_per_account(now - day, now)?))
     }
 
-    /// Gold per active character, or None with no active characters.
-    pub fn active_gold_per_character(
+    /// Mean hourly 30-day wallets per active account in `(from, until]`, or
+    /// None without a sample.
+    pub fn average_gold_per_account(
         &self,
-        now: i64,
-        active_days: u32,
+        from: i64,
+        until: i64,
     ) -> Result<Option<f64>, AuthError> {
-        let cutoff = active_cutoff(now, active_days);
-        let conn = self.open_connection()?;
-        let (gold, count): (i64, i64) = conn.query_row(
-            "SELECT COALESCE(SUM(gold), 0), COUNT(*) FROM characters WHERE last_seen_at >= ?1",
-            params![cutoff],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )?;
-        Ok((count > 0).then(|| gold as f64 / count as f64))
+        Ok(self.open_connection()?.query_row(
+            "SELECT AVG(month_gold * 1.0 / month_accounts) FROM account_gold_samples
+             WHERE timestamp > ?1 AND timestamp <= ?2 AND month_accounts > 0",
+            params![from, until],
+            |row| row.get(0),
+        )?)
     }
 
     /// Inserts this hour's gold totals; returns the hour, or None if it
     /// already had a row. Active = seen within `active_days`. Estate
     /// treasuries count toward the total only: they are escrowed, so the
-    /// per-active-character reading that drives pricing leaves them out.
+    /// per-active reading leaves them out.
     pub fn record_gold_snapshot(
         &self,
         now: i64,
@@ -2621,7 +2665,28 @@ mod tests {
         assert_eq!(row, (197, 3, 7, 107, 2));
 
         assert_eq!(auth.record_gold_snapshot(now + 60, 30).unwrap(), None);
-        assert_eq!(auth.active_gold_per_character(now, 30).unwrap(), Some(53.5));
+    }
+
+    #[test]
+    fn pricing_averages_month_wallets_per_active_account() {
+        let (auth, _) = temp_auth("auth_gold_per_account");
+        assert_eq!(auth.average_gold_per_account(0, 10_800).unwrap(), None);
+        let conn = auth.open_connection().unwrap();
+        conn.execute_batch(
+            "INSERT INTO account_gold_samples VALUES (3600, 1, 1, 1, 1, 300, 3);
+             INSERT INTO account_gold_samples VALUES (7200, 1, 1, 1, 1, 500, 4);
+             INSERT INTO account_gold_samples VALUES (10800, 0, 0, 0, 0, 0, 0);",
+        )
+        .unwrap();
+        assert_eq!(
+            auth.average_gold_per_account(0, 10_800).unwrap(),
+            Some(112.5)
+        );
+        assert_eq!(
+            auth.average_gold_per_account(3600, 7200).unwrap(),
+            Some(125.0)
+        );
+        assert_eq!(auth.pricing_notice_inputs(7200).unwrap(), (0, Some(112.5)));
     }
 
     #[test]
@@ -2686,13 +2751,14 @@ mod tests {
         let state = PricingState {
             index_percent: 104,
             last_meeting_day: Some(34),
-            m_prev: Some(120.5),
+            target_m: Some(98.5),
+            target_day: Some(-86),
         };
         let meeting = PricingMeeting {
             game_day: 34,
-            m_prev: 100.0,
+            reference: 100.0,
             m_now: 120.5,
-            growth: 0.205,
+            gap: 0.205,
             index_before: 100,
             index_after: 104,
         };
@@ -2890,6 +2956,57 @@ mod tests {
     }
 
     #[test]
+    fn valkyrie_outfit_migration_fills_empty_slots_and_runs_once() {
+        let (auth, path) = temp_auth("valkyrie_outfit_migration");
+        let account = auth.login_google("sub-legacy-valkyrie").unwrap();
+        let valkyrie = auth
+            .create_character(
+                &account,
+                "LegacyValkyrie",
+                &plain_attributes(),
+                10,
+                CharacterClass::Valkyrie,
+                Gender::Female,
+            )
+            .unwrap();
+        let conn = auth.open_connection().unwrap();
+        conn.execute(
+            "DELETE FROM migrations WHERE name = 'valkyrie_starter_outfit_20261103'",
+            [],
+        )
+        .unwrap();
+        conn.execute("DELETE FROM character_items WHERE character_id = ?1 AND item_def_id LIKE 'worn_valkyrie_%'", [valkyrie.id]).unwrap();
+        conn.execute("INSERT INTO character_items (character_id, item_def_id, quantity, equip_slot) VALUES (?1, 'chain_mail', 1, 'chest')", [valkyrie.id]).unwrap();
+        drop(conn);
+        drop(auth);
+        let auth = AuthService::new(path.clone()).unwrap();
+        let items = auth.load_inventory(valkyrie.id).unwrap();
+        for (id, _, _) in class_starter_items(&CharacterClass::Valkyrie, Gender::Female) {
+            assert_eq!(
+                items.iter().filter(|item| item.item_def_id == *id).count(),
+                1,
+                "{id}"
+            );
+        }
+        let armor = auth.load_character_equipment(valkyrie.id).unwrap().armor;
+        assert_eq!(armor.head.as_deref(), Some("worn_valkyrie_helmet"));
+        assert_eq!(armor.chest.as_deref(), Some("chain_mail"));
+        assert_eq!(armor.pants.as_deref(), Some("worn_valkyrie_pants"));
+        assert_eq!(armor.hands.as_deref(), Some("worn_valkyrie_gloves"));
+        assert_eq!(armor.boots.as_deref(), Some("worn_valkyrie_boots"));
+        let conn = auth.open_connection().unwrap();
+        conn.execute("DELETE FROM character_items WHERE character_id = ?1 AND item_def_id = 'worn_valkyrie_boots'", [valkyrie.id]).unwrap();
+        drop(conn);
+        drop(auth);
+        let auth = AuthService::new(path).unwrap();
+        assert!(!auth
+            .load_inventory(valkyrie.id)
+            .unwrap()
+            .iter()
+            .any(|item| item.item_def_id == "worn_valkyrie_boots"));
+    }
+
+    #[test]
     fn starter_weapon_migrations_keep_other_weapons_and_run_once() {
         for (class, migration, weapon, main_hands) in [
             (
@@ -2995,6 +3112,49 @@ mod tests {
                 .iter()
                 .any(|item| item.item_def_id == weapon));
         }
+    }
+
+    #[test]
+    fn valkyries_start_with_five_equipped_zero_price_untradeable_pieces() {
+        let (auth, _) = temp_auth("auth_valkyrie_armor");
+        let account = auth.login_google("sub-valkyrie").unwrap();
+        let character = auth
+            .create_character(
+                &account,
+                "Valkyrie",
+                &plain_attributes(),
+                10,
+                CharacterClass::Valkyrie,
+                Gender::Female,
+            )
+            .unwrap();
+        let items = auth.load_inventory(character.id).unwrap();
+        for (id, _, slot) in class_starter_items(&CharacterClass::Valkyrie, Gender::Female) {
+            let item = items.iter().find(|item| item.item_def_id == *id).unwrap();
+            assert_eq!(item.quantity, 1);
+            assert_eq!(item.equip_slot.as_deref(), *slot);
+            let def = crate::item_defs::item_defs().get(id).unwrap();
+            assert_eq!(def.equip_slot.as_ref().map(EquipSlot::as_str), *slot);
+            assert_eq!(def.base_price, Some(0));
+            assert!(def.untradeable);
+            assert!(def.chest_tier.is_none());
+        }
+        assert_eq!(items.len(), STARTER_ITEMS.len() + 5);
+        assert!(!items
+            .iter()
+            .any(|item| item.item_def_id.contains("hair") || item.item_def_id.contains("wing")));
+        let worn = auth.load_character_equipment(character.id).unwrap();
+        assert_eq!(worn.armor.head.as_deref(), Some("worn_valkyrie_helmet"));
+        assert_eq!(worn.armor.chest.as_deref(), Some("worn_valkyrie_top"));
+        assert_eq!(worn.armor.pants.as_deref(), Some("worn_valkyrie_pants"));
+        assert_eq!(worn.armor.hands.as_deref(), Some("worn_valkyrie_gloves"));
+        assert_eq!(worn.armor.boots.as_deref(), Some("worn_valkyrie_boots"));
+        assert_eq!(
+            auth.list_characters_with_equipment(&account).unwrap()[0]
+                .worn
+                .armor,
+            worn.armor
+        );
     }
 
     #[test]
@@ -3108,7 +3268,7 @@ mod tests {
     }
 
     #[test]
-    fn priests_start_with_four_equipped_unpriced_pieces() {
+    fn priests_start_with_equipped_unpriced_outfit_and_gloves_for_women() {
         let (auth, _) = temp_auth("auth_priest_armor");
         for (name, gender) in [("Priest", Gender::Male), ("Shadow", Gender::Female)] {
             let account = auth.login_google(&format!("sub-{name}")).unwrap();
@@ -3126,17 +3286,17 @@ mod tests {
             let worn = auth.load_character_equipment(character.id).unwrap();
             assert_eq!(worn.main_hand.as_deref(), Some("worn_mace"));
             let starter = starter_items(&CharacterClass::Priest).len();
-            if gender == Gender::Female {
-                assert_eq!(items.len(), starter);
-                assert_eq!(worn.armor, Default::default());
-                continue;
-            }
-            for (id, slot) in [
+            let female = gender == Gender::Female;
+            let mut outfit = vec![
                 ("worn_priest_helmet", "head"),
                 ("worn_priest_top", "chest"),
                 ("worn_priest_pants", "pants"),
                 ("worn_priest_boots", "boots"),
-            ] {
+            ];
+            if female {
+                outfit.push(("worn_priest_gloves", "hands"));
+            }
+            for &(id, slot) in &outfit {
                 let item = items.iter().find(|item| item.item_def_id == id).unwrap();
                 assert_eq!(item.quantity, 1);
                 assert_eq!(item.equip_slot.as_deref(), Some(slot));
@@ -3147,12 +3307,15 @@ mod tests {
                 assert_eq!(def.guard, Some(1));
                 assert!(def.chest_tier.is_none());
             }
-            assert_eq!(items.len(), starter + 4);
+            assert_eq!(items.len(), starter + outfit.len());
             assert!(items.iter().any(|item| item.item_def_id == "worn_torch"));
             assert_eq!(worn.armor.head.as_deref(), Some("worn_priest_helmet"));
             assert_eq!(worn.armor.chest.as_deref(), Some("worn_priest_top"));
             assert_eq!(worn.armor.pants.as_deref(), Some("worn_priest_pants"));
-            assert_eq!(worn.armor.hands, None);
+            assert_eq!(
+                worn.armor.hands.as_deref(),
+                female.then_some("worn_priest_gloves")
+            );
             assert_eq!(worn.armor.boots.as_deref(), Some("worn_priest_boots"));
             let listed = auth.list_characters_with_equipment(&account).unwrap();
             assert_eq!(listed[0].worn.armor, worn.armor);
@@ -3175,14 +3338,6 @@ mod tests {
                 )
                 .unwrap();
             let items = auth.load_inventory(character.id).unwrap();
-            if gender == Gender::Female {
-                assert_eq!(items.len(), STARTER_ITEMS.len());
-                assert_eq!(
-                    auth.load_character_equipment(character.id).unwrap().armor,
-                    Default::default()
-                );
-                continue;
-            }
             for (id, slot) in [
                 ("worn_caveman_top", "chest"),
                 ("worn_caveman_pants", "pants"),

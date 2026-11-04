@@ -12,6 +12,8 @@ import { dependencies, output as previewOutput } from './lib/female-preview.mjs'
 import { ensureFemalePreview } from './lib/ensure-female-preview.mjs'
 
 const output = 'client/public/models/characters/modular_female'
+// Parts the client loads on first equip: packed separately with 1024 px colour textures.
+const separatePart = name => /^(caveman|priest)_/.test(name)
 // Fur panels share the waist rig and colliders.
 function bakeSkirtRobe(doc) {
   const panels = doc.getRoot().listNodes().filter(node => node.getExtras().pelt_physics)
@@ -59,9 +61,23 @@ const sources = {
   rogue_boots: 'assets/items/female_rogue_boots/tripo_v1/fitted_v5/boots_female_rogue.glb',
   rogue_gloves: 'assets/items/female_rogue_gloves/tripo_v1/fitted_v1/gloves_female_rogue.glb',
   rogue_garters: 'assets/items/female_rogue_garters/fitted_v1/garters_female_rogue.glb',
+  caveman_top: 'assets/items/female_caveman_top/tripo_v1/fitted_v7/top_female_caveman.glb',
+  caveman_bottom: 'assets/items/female_caveman_bottom/tripo_v1/fitted_v9/bottom_female_caveman.glb',
+  caveman_boots: 'assets/items/female_caveman_boots/tripo_v1/fitted_v4/boots_female_caveman.glb',
+  caveman_gloves: 'assets/items/female_caveman_bracers/tripo_v1/fitted_v1/gloves_female_caveman.glb',
+  ...Object.fromEntries(['top', 'bottom', 'boots', 'gloves', 'helmet'].map(slot =>
+    [`priest_${slot}`, `assets/items/female_priest_outfit/${slot}/fitted_v1/${slot}_female_priest.glb`])),
+  valkyrie_hair: 'assets/modular_human_female_01/hair/tripo_warrior_v1/fitted_v1/hair_female_warrior.glb',
+  valkyrie_wings: 'assets/items/valkyrie_starter/tripo_wing_v1/fitted_patch_v3/wings-armor-fit.glb',
+  valkyrie_top: 'assets/items/valkyrie_starter/tripo_top_v1/fitted_v11/top_female_valkyrie.glb',
+  valkyrie_bottom: 'assets/items/valkyrie_starter/tripo_bottom_v1/fitted_v8/bottom_female_valkyrie.glb',
+  valkyrie_boots: 'assets/items/valkyrie_boots/fitted_v1/boots_female_valkyrie.glb',
+  valkyrie_gloves: 'assets/items/valkyrie_gloves/fitted_v3/bracers_female_valkyrie.glb',
+  valkyrie_helmet: 'assets/items/valkyrie_helmet/fitted_v2/helmet_female_valkyrie.glb',
   brilliance_helmet: 'assets/items/helm_of_brilliance/tripo_v2/fitted_v3/female/helmet_brilliance.glb',
 }
 const packs = ['locomotion', 'combat_melee', 'social', 'fishing', 'combat_ranged', 'offhand', 'enchant_armor', 'great_sword', 'riding', 'dagger_preview']
+const bakeExisting = process.argv.includes('--bake-existing')
 const packFlag = process.argv.indexOf('--pack')
 const selectedPack = packFlag === -1 ? undefined : process.argv[packFlag + 1]
 if (selectedPack !== undefined && !packs.includes(selectedPack)) throw new Error(`--pack requires one of: ${packs.join(', ')}`)
@@ -72,15 +88,15 @@ const selectedPart = partFlag === -1 ? undefined : process.argv[partFlag + 1]
 if (selectedPart !== undefined && !(selectedPart in sources)) throw new Error(`--part requires one of: ${Object.keys(sources).join(', ')}`)
 mkdirSync(`${output}/animations`, { recursive: true })
 const reportPath = 'doc/assets/female-knight-runtime-sources.json'
-const report = { date: '2026-10-27', inputs: {}, outputs: {} }
+const report = { date: '2026-11-03', inputs: {}, outputs: {} }
 const record = (path) => { report.inputs[path] = hash(path) }
 function writeReport() {
   const previous = existsSync(reportPath) ? JSON.parse(readFileSync(reportPath)) : {}
-  if (selectedPack || selectedPart) report.inputs = { ...previous.inputs, ...report.inputs }
+  if (bakeExisting || selectedPack || selectedPart) report.inputs = { ...previous.inputs, ...report.inputs }
   if (selectedPart) report.outputs = { ...previous.outputs, ...report.outputs }
   writeFileSync(reportPath, JSON.stringify({ ...previous, ...report }, null, 2) + '\n')
 }
-for (const path of ['tools/prepare-female-knight.mjs', 'client/src/lib/utils/female-clip-bake.ts', 'client/src/lib/utils/female-boot-ground.ts']) record(path)
+for (const path of ['tools/prepare-female-knight.mjs', 'client/src/lib/utils/femaleCharacter.ts', 'client/src/lib/utils/female-clip-bake.ts', 'client/src/lib/utils/female-boot-ground.ts']) record(path)
 await Promise.all([MeshoptEncoder.ready, MeshoptDecoder.ready])
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
   .registerDependencies({ 'meshopt.encoder': MeshoptEncoder, 'meshopt.decoder': MeshoptDecoder })
@@ -89,7 +105,7 @@ async function write(path, doc, pack = false) {
   const bottom = path === `${output}/bottom.glb`
   // Packs share each clip's key times.
   if (pack) await doc.transform(dedup())
-  if (path === `${output}/base.glb` || bottom || pack) {
+  if (path === `${output}/base.glb` || bottom || pack || separatePart(path.slice(output.length + 1))) {
     await doc.transform(prune({ propertyTypes: [PropertyType.MATERIAL, PropertyType.TEXTURE] }))
     // Preserve vertex and triangle numbering for outfit masks; do not quantize.
     doc.createExtension(EXTMeshoptCompression).setRequired(true)
@@ -105,12 +121,12 @@ sharp.cache(false)
 sharp.concurrency(2)
 for (const [name, source] of Object.entries(sources)) {
   record(source)
-  if (selectedPack || (selectedPart && name !== selectedPart)) continue
+  if (bakeExisting || selectedPack || (selectedPart && name !== selectedPart)) continue
   const doc = await io.read(source)
   const scene = doc.getRoot().listScenes()[0]
   const metadata = { ...scene.getExtras(), female_part: name }
-  if (!/^(base|(barbarian_)?hair|rogue_garters)$/.test(name)) {
-    const path = source.replace(/[^/]+$/, 'body-occlusion.json')
+  if (!/^(base|((barbarian|valkyrie)_)?hair|valkyrie_wings|rogue_garters)$/.test(name)) {
+    const path = name === 'valkyrie_top' ? source.replace('fitted_v11/top_female_valkyrie.glb', 'fitted_v8/body-occlusion.json') : source.replace(/[^/]+$/, 'body-occlusion.json')
     record(path)
     metadata.body_mask = JSON.parse(readFileSync(path))
   }
@@ -140,7 +156,7 @@ for (const [name, source] of Object.entries(sources)) {
   for (const texture of doc.getRoot().listTextures()) {
     if (/eyelash/i.test(texture.getName())) continue
     const color = colors.has(texture)
-    const size = color && !['bottom', 'rogue_bottom', 'rogue_top'].includes(name) ? 2048 : 1024
+    const size = color && !separatePart(name) && !['bottom', 'rogue_bottom', 'rogue_top'].includes(name) ? 2048 : 1024
     const image = await sharp(texture.getImage()).resize({ width: size, height: size, fit: 'inside', withoutEnlargement: true })
       .webp(color ? { quality: 94, effort: 5 } : { quality: 90, smartSubsample: true, effort: 5 }).toBuffer()
     texture.setImage(image).setMimeType('image/webp')
@@ -157,16 +173,19 @@ for (const [name, source] of Object.entries(sources)) {
 async function bakeBootsAndGrip(module, load) {
   const female = await module('/src/lib/utils/femaleCharacter.ts')
   const { bakeFemaleClips } = await module('/src/lib/utils/female-clip-bake.ts')
-  const [base, ...parts] = await Promise.all(['base', ...female.FEMALE_PARTS].map(name => load(`${output}/${name}.glb`)))
-  const scene = female.assembleFemaleCharacter(base, parts)
+  const partNames = [...new Set([...female.FEMALE_PARTS, ...female.FEMALE_BOOTS_PARTS])]
+  const [base, ...parts] = await Promise.all(['base', ...partNames].map(name => load(`${output}/${name}.glb`)))
+  const scene = female.assembleFemaleCharacter(base, parts, partNames)
   for (const path of [...(selectedPack ? [] : [`${output}/base.glb`]), ...builtPacks.map(name => `${output}/animations/${name}.glb`)]) {
     const gltf = path.endsWith('/base.glb') ? base : await load(path)
-    const bakes = bakeFemaleClips(scene, gltf.animations)
+    const bakes = bakeFemaleClips(scene, gltf.animations.filter(clip => !clip.name.includes('|femaleBoots:')))
     const doc = await io.read(path)
     const root = doc.getRoot()
     const buffer = root.listBuffers()[0]
     const nodes = new Map(root.listNodes().map(node => [THREE.PropertyBinding.sanitizeNodeName(node.getName()), node]))
     const accessor = (type, array) => doc.createAccessor().setType(type).setArray(array).setBuffer(buffer)
+    for (const animation of root.listAnimations())
+      if (animation.getName().includes('|femaleBoots:')) animation.dispose()
     const animations = root.listAnimations()
     assert.deepEqual(animations.map(a => a.getName()), bakes.map(b => b.name))
     for (const [i, animation] of animations.entries()) {
@@ -235,7 +254,7 @@ try {
   for (const name of ['idle2', 'idle3', 'idle4', 'idle5']) {
     const clip = corrected.get('idle1').clone(); clip.name = name; corrected.set(name, clip)
   }
-  for (const name of builtPacks) {
+  for (const name of bakeExisting ? [] : builtPacks) {
     const source = `client/public/models/animations/${name}.glb`
     record(source)
     const pack = await load(source)

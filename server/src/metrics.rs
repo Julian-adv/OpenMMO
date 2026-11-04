@@ -32,6 +32,7 @@ pub const SAMPLE_INTERVAL_SECONDS: i64 = 3600;
 pub const CONCURRENT_SAMPLE_INTERVAL_SECONDS: i64 = 60;
 pub const DAY_SECONDS: i64 = 86400;
 pub const UNIQUE_PERIOD_DAYS: [u32; 5] = [1, 7, 30, 180, 365];
+pub const ACCOUNT_GOLD_PERIOD_DAYS: [u32; 3] = [1, 7, 30];
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct WeaponEnchantFailure {
@@ -583,7 +584,10 @@ pub async fn record_hourly_metrics(game: &GameState, auth: Arc<AuthService>) {
     {
         warn!("Character metrics snapshot failed: {error}");
     }
-    record_account_activity_sample(game, auth).await;
+    record_account_activity_sample(game, Arc::clone(&auth)).await;
+    if let Err(error) = auth_db(move || auth.record_account_gold_samples(unix_now())).await {
+        warn!("Account gold snapshot failed: {error}");
+    }
 }
 
 pub(super) fn history_interval(hours: u32) -> Option<i64> {
@@ -596,17 +600,26 @@ pub(super) fn history_interval(hours: u32) -> Option<i64> {
     }
 }
 
-fn unique_period_days(hours: Option<u32>) -> Option<u32> {
+fn period_days(hours: Option<u32>, allowed: &[u32]) -> Option<u32> {
     let hours = hours.unwrap_or(24);
-    (hours.is_multiple_of(24) && UNIQUE_PERIOD_DAYS.contains(&(hours / 24))).then_some(hours / 24)
+    (hours.is_multiple_of(24) && allowed.contains(&(hours / 24))).then_some(hours / 24)
+}
+
+fn unique_period_days(hours: Option<u32>) -> Option<u32> {
+    period_days(hours, &UNIQUE_PERIOD_DAYS)
+}
+
+fn invalid_period_hours(parameter: &str, allowed: &[u32]) -> Response {
+    let hours: Vec<_> = allowed.iter().map(|days| (days * 24).to_string()).collect();
+    (
+        StatusCode::BAD_REQUEST,
+        format!("{parameter} must be one of {}", hours.join(", ")),
+    )
+        .into_response()
 }
 
 fn invalid_unique_hours(parameter: &str) -> Response {
-    (
-        StatusCode::BAD_REQUEST,
-        format!("{parameter} must be 24, 168, 720, 4320, or 8760"),
-    )
-        .into_response()
+    invalid_period_hours(parameter, &UNIQUE_PERIOD_DAYS)
 }
 
 fn invalid_hours() -> Response {
@@ -923,8 +936,8 @@ async fn per_account_gold_history(
         Ok(interval) => interval,
         Err(response) => return response.into_response(),
     };
-    let Some(active_days) = unique_period_days(query.active_hours) else {
-        return invalid_unique_hours("active_hours");
+    let Some(active_days) = period_days(query.active_hours, &ACCOUNT_GOLD_PERIOD_DAYS) else {
+        return invalid_period_hours("active_hours", &ACCOUNT_GOLD_PERIOD_DAYS);
     };
     metrics_response(
         auth_db(move || {
@@ -1709,7 +1722,7 @@ mod tests {
 
     #[tokio::test]
     async fn per_account_gold_endpoint_supports_independent_ranges_and_active_windows() {
-        let (path, auth, client, base) = serve_metrics("per_account_gold_endpoint").await;
+        let (path, _auth, client, base) = serve_metrics("per_account_gold_endpoint").await;
         let url = format!("{base}/api/metrics/gold-per-account");
         let empty: PerAccountGoldHistory =
             client.get(&url).send().await.unwrap().json().await.unwrap();
@@ -1717,19 +1730,14 @@ mod tests {
         assert_eq!(empty.latest, None);
         assert!(empty.samples.is_empty());
         let now = unix_now();
-        auth.record_gold_snapshot(now, 30).unwrap();
         let conn = rusqlite::Connection::open(path).unwrap();
-        conn.execute("UPDATE gold_snapshots SET total_gold = 100", [])
-            .unwrap();
-        conn.execute("UPDATE unique_account_collection SET started_at = 0", [])
-            .unwrap();
         conn.execute(
-            "INSERT INTO unique_account_daily_samples VALUES (?1, 2, 4, 5, 10, 20)",
-            [kst_day_start(now)],
+            "INSERT INTO account_gold_samples VALUES (?1, 100, 2, 100, 4, 100, 5)",
+            [now - now % 3600],
         )
         .unwrap();
         for hours in [1, 24, 168, 720, 4320, 8760] {
-            for (active_hours, accounts) in [(24, 2), (168, 4), (720, 5), (4320, 10), (8760, 20)] {
+            for (active_hours, accounts) in [(24, 2), (168, 4), (720, 5)] {
                 let response = client
                     .get(format!("{url}?hours={hours}&active_hours={active_hours}"))
                     .send()
@@ -1756,7 +1764,8 @@ mod tests {
             "active_hours=25",
             "active_hours=-24",
             "active_hours=invalid",
-            "active_hours=8761",
+            "active_hours=4320",
+            "active_hours=8760",
         ] {
             assert_eq!(
                 client
@@ -1768,8 +1777,7 @@ mod tests {
                 StatusCode::BAD_REQUEST
             );
         }
-        conn.execute("DROP TABLE unique_account_daily_samples", [])
-            .unwrap();
+        conn.execute("DROP TABLE account_gold_samples", []).unwrap();
         assert_unavailable(&client, &url).await;
     }
 
@@ -1855,7 +1863,8 @@ mod tests {
             &crate::auth::PricingState {
                 index_percent: 75,
                 last_meeting_day: Some(1620),
-                m_prev: Some(150.0),
+                target_m: Some(150.0),
+                target_day: Some(1500),
             },
             None,
         )

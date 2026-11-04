@@ -2,10 +2,10 @@ use super::GameState;
 use crate::item_defs::{ArmorType, WeaponType};
 use crate::types::{CharacterClass, PlayerId, ServerMessage};
 use onlinerpg_shared::ability::{
-    AbilityId, AbilityRejectReason, AbilityTimer, InspectedEquipment, InspectionResult,
-    InspectionTarget, AUSCULTATION_COOLDOWN_MS, AUSCULTATION_RANGE, BOW_MARK_COOLDOWN_MS,
-    BOW_MARK_DURATION_MS, GUARDIAN_WARD_COOLDOWN_MS, GUARDIAN_WARD_DURATION_MS,
-    GUARDIAN_WARD_GUARD_BONUS, GUARDIAN_WARD_RADIUS, PRIMAL_ROAR_CAST_MS, PRIMAL_ROAR_COOLDOWN_MS,
+    guardian_ward_guard_bonus, AbilityId, AbilityRejectReason, AbilityTimer, InspectedEquipment,
+    InspectionResult, InspectionTarget, AUSCULTATION_COOLDOWN_MS, AUSCULTATION_RANGE,
+    BOW_MARK_COOLDOWN_MS, BOW_MARK_DURATION_MS, GUARDIAN_WARD_COOLDOWN_MS,
+    GUARDIAN_WARD_DURATION_MS, GUARDIAN_WARD_RADIUS, PRIMAL_ROAR_CAST_MS, PRIMAL_ROAR_COOLDOWN_MS,
     PRIMAL_ROAR_DURATION_MS, PRIMAL_ROAR_RADIUS, PRIMAL_ROAR_STAGGER_MS, PRIMAL_ROAR_STOMP_MS,
     RADIANCE_COOLDOWN_MS, RADIANCE_DURATION_MS, RAGE_COOLDOWN_MS, RAGE_DURATION_MS,
     RAGE_GUARD_PENALTY,
@@ -18,7 +18,7 @@ use tracing::info;
 
 #[derive(Default)]
 pub(super) struct Abilities {
-    wards: HashMap<PlayerId, Instant>,
+    wards: HashMap<PlayerId, Ward>,
     radiances: HashMap<PlayerId, Instant>,
     marks: HashMap<PlayerId, BowMark>,
     rages: HashMap<PlayerId, Instant>,
@@ -41,6 +41,11 @@ impl MonsterTarget {
     pub(super) fn surface(&self, from: &onlinerpg_shared::Position) -> onlinerpg_shared::Position {
         onlinerpg_shared::monster_body::reach_point(self.body, self.position, self.rotation, from)
     }
+}
+
+struct Ward {
+    until: Instant,
+    bonus: i32,
 }
 
 struct BowMark {
@@ -71,17 +76,20 @@ impl Abilities {
     }
 
     pub(super) fn guard(&self, player_id: &PlayerId, base: i32) -> i32 {
-        let warded = self
-            .wards
-            .get(player_id)
-            .is_some_and(|until| *until > Instant::now());
-        let ward = if warded { GUARDIAN_WARD_GUARD_BONUS } else { 0 };
+        let ward = self.ward_bonus(player_id, Instant::now());
         let rage = if self.raging(player_id) {
             RAGE_GUARD_PENALTY
         } else {
             0
         };
         base + ward - rage
+    }
+
+    fn ward_bonus(&self, player_id: &PlayerId, now: Instant) -> i32 {
+        self.wards
+            .get(player_id)
+            .filter(|ward| ward.until > now)
+            .map_or(0, |ward| ward.bonus)
     }
 
     pub(super) fn raging(&self, player_id: &PlayerId) -> bool {
@@ -98,7 +106,10 @@ impl Abilities {
     ) -> ServerMessage {
         let now = Instant::now();
         let buffs = [
-            (AbilityId::GuardianWard, self.wards.get(player_id)),
+            (
+                AbilityId::GuardianWard,
+                self.wards.get(player_id).map(|w| &w.until),
+            ),
             (AbilityId::Radiance, self.radiances.get(player_id)),
             (
                 AbilityId::BowMark,
@@ -713,10 +724,15 @@ impl GameState {
             AbilityId::GuardianWard,
             GUARDIAN_WARD_COOLDOWN_MS,
         );
+        let bonus = guardian_ward_guard_bonus(caster.level);
         for target in &targets {
+            let held = state.ward_bonus(target, now);
             state.wards.insert(
                 *target,
-                now + Duration::from_millis(GUARDIAN_WARD_DURATION_MS),
+                Ward {
+                    until: now + Duration::from_millis(GUARDIAN_WARD_DURATION_MS),
+                    bonus: bonus.max(held),
+                },
             );
         }
         Ok((caster.position, caster.floor_level, targets))
@@ -1064,13 +1080,14 @@ impl GameState {
             let mut expired: HashSet<PlayerId> = state
                 .wards
                 .iter()
+                .map(|(id, ward)| (id, &ward.until))
                 .chain(state.radiances.iter())
                 .chain(state.rages.iter())
                 .chain(state.roars.iter())
                 .filter(|(_, until)| **until <= now)
                 .map(|(id, _)| *id)
                 .collect();
-            state.wards.retain(|_, until| *until > now);
+            state.wards.retain(|_, ward| ward.until > now);
             state.radiances.retain(|_, until| *until > now);
             state.rages.retain(|_, until| *until > now);
             state.roars.retain(|_, until| *until > now);

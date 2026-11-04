@@ -4,7 +4,6 @@ pub const GUARDIAN_WARD_RADIUS: f32 = 20.0;
 pub const GUARDIAN_WARD_DURATION_MS: u64 = 60_000;
 pub const GUARDIAN_WARD_COOLDOWN_MS: u64 = 45_000;
 pub const GUARDIAN_WARD_MANA_COST: u32 = 2;
-pub const GUARDIAN_WARD_GUARD_BONUS: i32 = 2;
 pub const RAGE_DURATION_MS: u64 = 10_000;
 pub const RAGE_COOLDOWN_MS: u64 = 20_000;
 pub const RAGE_MANA_COST: u32 = 1;
@@ -75,6 +74,10 @@ impl AbilityId {
             _ => 0,
         }
     }
+}
+
+pub fn guardian_ward_guard_bonus(caster_level: u32) -> i32 {
+    2 + (caster_level / 20) as i32
 }
 
 pub fn rage_damage_bonus(level: u32) -> i32 {

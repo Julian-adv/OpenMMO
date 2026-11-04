@@ -6,7 +6,7 @@ import {
   MODULAR_MALE_DIRECTORY,
   MODULAR_MALE_MODEL_PATH,
   MODULAR_FEMALE_DIRECTORY,
-  MODULAR_FEMALE_MODEL_PATH,
+  isModularFemaleModel,
 } from './modelPaths'
 import {
   loadFemaleCharacter,
@@ -20,6 +20,7 @@ import type {
 } from '../network/networkTypes'
 import { modularOutfitForArmor } from './modularEquipment'
 import { disposePeltPhysics } from '../effects/pelt-rig'
+import { disposeValkyrieWings } from '../effects/valkyrie-wings'
 import { separateWavyHairMaterials } from './wavyHairMaterials'
 import { femaleOutfitMask } from './female-outfit-mask'
 import modularSoleOffsets from './modularSoleOffsets.json'
@@ -86,7 +87,7 @@ export function loadCharacterModel(
   path: string,
   appearance?: Pick<CharacterAppearance, 'face'>
 ): Promise<GLTF> {
-  if (path === MODULAR_FEMALE_MODEL_PATH) return loadFemaleCharacter()
+  if (isModularFemaleModel(path)) return loadFemaleCharacter(path)
   if (path !== MODULAR_MALE_MODEL_PATH) return loadGLB(path)
   const face = appearance?.face ?? 'default'
   let maleModel = maleModels.get(face)
@@ -239,7 +240,7 @@ export function loadCharacterAnimationPack(
   packPath: string
 ): Promise<GLTF> {
   const packFile = packPath.split('/').pop()
-  if (modelPath === MODULAR_FEMALE_MODEL_PATH)
+  if (isModularFemaleModel(modelPath))
     return loadFemaleAnimationPack(
       `${MODULAR_FEMALE_DIRECTORY}/animations/${packFile}`
     )
@@ -293,6 +294,7 @@ export function modularSwordAttachment(
 }
 
 export function disposeCharacterSkeletons(root: THREE.Object3D): void {
+  disposeValkyrieWings(root)
   disposeFemaleCharacter(root)
   const scene = modularScene(root)
   if (scene) {

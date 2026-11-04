@@ -22,6 +22,12 @@ These guidelines were confirmed by the user on 2026-09-20 and apply until the us
 - Exclude Blender `.blend1` backups from all HF uploads, including targeted uploads, and from `assets.lock` (user-confirmed 2026-10-09).
 - Preserve the current `.blend` source file.
 
+## Item Icon Framing
+
+- Use a slightly elevated three-quarter view, following `client/public/items/armor/plate_armor.png` (Breastplate), rather than a straight front view (user-confirmed 2026-11-03).
+- Render gloves and boots as a close side-by-side pair, aligned upright. Do not leave paired pieces spread apart in the character's fitting pose (user-confirmed 2026-11-03).
+- Frame the item large and preserve the transparent 128×128 RGBA output.
+
 ## Image Generation Tier
 
 - Record **ChatGPT Pro 20x** as the tier for ChatGPT/Codex ImageGen assets.

@@ -11,8 +11,6 @@ import {
   TELEPORT_VANISH_MS,
   type TeleportEffect,
   beginLocalTeleport,
-  cancelLocalTeleportRequest,
-  deferRemoteTeleportUpdate,
   TELEPORT_DEPARTURE_MS,
 } from './teleportEffectStore'
 
@@ -30,15 +28,13 @@ afterEach(() => {
 })
 
 describe('teleport presentation', () => {
-  it('sends one request only after the local departure finishes', () => {
+  it('sends one request at once and plays the departure while the server holds it', () => {
     const request = vi.fn(() => true)
     expect(beginLocalTeleport(event('Departing'), request)).toBe(true)
     expect(beginLocalTeleport(event('Departing'), request)).toBe(false)
-    vi.advanceTimersByTime(TELEPORT_DEPARTURE_MS - 1)
-    expect(request).not.toHaveBeenCalled()
-    expect(get(teleportHiddenPlayers).has(1)).toBe(true)
-    vi.advanceTimersByTime(1)
     expect(request).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(TELEPORT_DEPARTURE_MS)
+    expect(get(teleportHiddenPlayers).has(1)).toBe(true)
     expect(get(localTeleportActive)).toBe(true)
     playTeleportEffect(event('Arriving'), true)
     finishTeleportArrival(1)
@@ -50,51 +46,22 @@ describe('teleport presentation', () => {
     ])
   })
 
-  it('never sends a cancelled request and restores a failed departure', () => {
-    const request = vi.fn(() => true)
-    beginLocalTeleport(event('Departing'), request)
-    cancelLocalTeleportRequest()
-    vi.runAllTimers()
-    expect(request).not.toHaveBeenCalled()
-    beginLocalTeleport(event('Departing'), () => false)
+  it('plays nothing when the request cannot be sent and restores a server cancel', () => {
+    expect(beginLocalTeleport(event('Departing'), () => false)).toBe(false)
+    expect(get(localTeleportActive)).toBe(false)
+    expect(takeTeleportEffects()).toEqual([])
+    beginLocalTeleport(event('Departing'), () => true)
     vi.advanceTimersByTime(TELEPORT_DEPARTURE_MS)
+    playTeleportEffect(event('Cancelled'), true)
     expect(get(localTeleportActive)).toBe(false)
     expect(get(teleportHiddenPlayers).size).toBe(0)
   })
 
-  it('keeps a remote departure visible when departure and arrival arrive together', () => {
-    const applied: string[] = []
+  it('clears the local departure and remote effects on disconnect', () => {
+    beginLocalTeleport(event('Departing'), () => true)
     playTeleportEffect(event('Departing', 2), false)
-    playTeleportEffect(event('Arriving', 2), false)
-    expect(
-      deferRemoteTeleportUpdate(2, () => {
-        applied.push('teleported')
-        finishTeleportArrival(2)
-      })
-    ).toBe(true)
-    deferRemoteTeleportUpdate(2, () => applied.push('moved'))
-    expect(get(teleportHiddenPlayers).has(2)).toBe(false)
-    vi.advanceTimersByTime(TELEPORT_VANISH_MS)
-    expect(get(teleportHiddenPlayers).has(2)).toBe(true)
-    expect(applied).toEqual([])
-    vi.advanceTimersByTime(TELEPORT_DEPARTURE_MS - TELEPORT_VANISH_MS)
-    expect(applied).toEqual(['teleported', 'moved'])
-    expect(get(teleportHiddenPlayers).has(2)).toBe(true)
-    vi.advanceTimersByTime(TELEPORT_REVEAL_MS)
-    expect(get(teleportHiddenPlayers).has(2)).toBe(false)
-    expect(deferRemoteTeleportUpdate(2, () => {})).toBe(false)
-  })
-
-  it('clears both the unsent request and deferred remote updates on disconnect', () => {
-    const request = vi.fn(() => true)
-    const update = vi.fn()
-    beginLocalTeleport(event('Departing'), request)
-    playTeleportEffect(event('Departing', 2), false)
-    deferRemoteTeleportUpdate(2, update)
     resetTeleportEffects()
     vi.runAllTimers()
-    expect(request).not.toHaveBeenCalled()
-    expect(update).not.toHaveBeenCalled()
     expect(get(localTeleportActive)).toBe(false)
     expect(get(teleportHiddenPlayers).size).toBe(0)
   })

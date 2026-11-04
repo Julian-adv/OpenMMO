@@ -85,8 +85,24 @@
     },
   }
   const FEMALE_STARTER_EQUIPMENT: typeof STARTER_EQUIPMENT = {
+    valkyrie: {
+      armor: {
+        head: 'worn_valkyrie_helmet',
+        chest: 'worn_valkyrie_top',
+        pants: 'worn_valkyrie_pants',
+        hands: 'worn_valkyrie_gloves',
+        boots: 'worn_valkyrie_boots',
+      },
+    },
     rogue: STARTER_EQUIPMENT.rogue,
-    priest: { main_hand: STARTER_EQUIPMENT.priest?.main_hand },
+    caveman: STARTER_EQUIPMENT.caveman,
+    priest: {
+      ...STARTER_EQUIPMENT.priest,
+      armor: {
+        ...STARTER_EQUIPMENT.priest?.armor,
+        hands: 'worn_priest_gloves',
+      },
+    },
     knight: {
       armor: { ...STARTER_EQUIPMENT.knight?.armor, head: 'worn_plate_helmet' },
     },

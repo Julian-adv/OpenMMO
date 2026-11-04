@@ -213,6 +213,24 @@ function modularCharacterPreview(): Plugin {
       '../assets/items/female_caveman_bracers/tripo_v1/fitted_v1/body-occlusion.json',
       import.meta.url
     ),
+    ...Object.fromEntries(
+      ['top', 'bottom', 'gloves', 'boots', 'helmet'].flatMap((slot) => [
+        [
+          `female_priest_${slot}`,
+          new URL(
+            `../assets/items/female_priest_outfit/${slot}/fitted_v1/${slot}_female_priest.glb`,
+            import.meta.url
+          ),
+        ],
+        [
+          `female-priest-${slot}-occlusion.json`,
+          new URL(
+            `../assets/items/female_priest_outfit/${slot}/fitted_v1/body-occlusion.json`,
+            import.meta.url
+          ),
+        ],
+      ])
+    ),
     female_caveman_top: new URL(
       '../assets/items/female_caveman_top/tripo_v1/fitted_v7/top_female_caveman.glb',
       import.meta.url
@@ -305,8 +323,28 @@ function modularCharacterPreview(): Plugin {
       '../assets/items/female_barbarian_helmet/tripo_v2/fitted_v1/body-occlusion.json',
       import.meta.url
     ),
+    female_valkyrie_gloves: new URL(
+      '../assets/items/valkyrie_gloves/fitted_v3/bracers_female_valkyrie.glb',
+      import.meta.url
+    ),
+    female_valkyrie_gloves_source: new URL(
+      '../assets/items/valkyrie_gloves/fitted_v2/bracers_female_valkyrie.glb',
+      import.meta.url
+    ),
+    'female-valkyrie-gloves-occlusion.json': new URL(
+      '../assets/items/valkyrie_gloves/fitted_v3/body-occlusion.json',
+      import.meta.url
+    ),
     female_knight_gloves: new URL(
       '../assets/items/female_knight_gloves/tripo_v1/fitted_v3/gloves_female_knight.glb',
+      import.meta.url
+    ),
+    female_valkyrie_helmet: new URL(
+      '../assets/items/valkyrie_helmet/fitted_v2/helmet_female_valkyrie.glb',
+      import.meta.url
+    ),
+    'female-valkyrie-helmet-occlusion.json': new URL(
+      '../assets/items/valkyrie_helmet/fitted_v2/body-occlusion.json',
       import.meta.url
     ),
     female_knight_helmet: new URL(

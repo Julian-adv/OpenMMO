@@ -57,7 +57,7 @@ STR·DEX에 투자한 물리 전투와 INT·WIS에 투자한 마법 전투가 �
 | 능력 | 제공 상태 | 분류 | MP 비용 | 동작 |
 | --- | --- | --- | --- | --- |
 | Double Slash | Rogue 기본 | 전투 기술 | MP 0 | 단검 필요. 다음 기본 공격을 2연격으로 대체. 쿨다운 10초 |
-| Guardian Ward | Knight 기본 | 방어 마법 | MP 2 | Sword/Mace + Shield. 즉시 발동. 자신·주변 파티원의 물리 Guard +2. 지속 60초, 쿨다운 45초 |
+| Guardian Ward | Knight 기본 | 방어 마법 | MP 2 | Sword/Mace + Shield. 즉시 발동. 자신·주변 파티원의 물리 Guard +(2 + 시전자 Level/20). 지속 60초, 쿨다운 45초 |
 | 광폭화 (Rage) | Barbarian 기본 | 전투 기술 | MP 1 | 근접 무기. 즉시 발동. 근접 피해 +(3 + Level/10), Guard -2. 지속 10초, 쿨다운 20초 |
 | 야성의 포효 (Primal Roar) | Caveman 기본 | 전투 기술 | MP 1 | 장비 무관. 시전자는 1.85초 동안 공격하지 않고, 1.05초 뒤 발 구르기에 반경 4m 몬스터 3.7초 경직, 임시 HP max(4, 최대 HP 15%) 10초. 쿨다운 30초 |
 | 발할라의 돌격 (Valhalla Charge) | Valkyrie 기본 | 전투 기술 | MP 1 | 한손 Sword·Spear. 4~10m 몬스터에게 0.4초 직선 돌진 후 기본 공격 1회. 명중하면 이동 속도 ×0.6, 3초(보스·경직 면역 1.5초). 쿨다운 10초 |

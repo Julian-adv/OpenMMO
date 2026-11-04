@@ -766,7 +766,7 @@ class NetworkManager {
       category === 'return_scroll' ||
       category === 'estate_return_scroll'
     ) {
-      this.sendAfterTeleportDeparture({
+      this.sendWithTeleportDeparture({
         UseItem: { instance_id: instanceId },
       })
       return
@@ -774,7 +774,7 @@ class NetworkManager {
     this.sendMessage({ UseItem: { instance_id: instanceId } })
   }
 
-  private sendAfterTeleportDeparture(message: ClientMessage) {
+  private sendWithTeleportDeparture(message: ClientMessage) {
     if (get(localTeleportActive)) return
     const player = get(gameStore).currentPlayer
     if (!player || player.health <= 0 || !this.isConnected()) return
@@ -787,20 +787,9 @@ class NetworkManager {
     const floorLevel =
       depth > 0 ? -depth : Math.max(0, get(playerVisualFloorLevel))
     this.sendMoveStop(this.nextMoveRequestId())
-    beginLocalTeleport({ playerId: player.id, position, floorLevel }, () => {
-      const current = get(gameStore).currentPlayer
-      if (
-        !current ||
-        current.id !== player.id ||
-        current.health <= 0 ||
-        Math.hypot(
-          current.position.x - position.x,
-          current.position.z - position.z
-        ) > 0.1
-      )
-        return false
-      return this.sendAndSerialize(message)
-    })
+    beginLocalTeleport({ playerId: player.id, position, floorLevel }, () =>
+      this.sendAndSerialize(message)
+    )
   }
 
   sendPlaceHouse(instanceId: number, origin: Position, quarterTurns: number) {
@@ -1107,7 +1096,7 @@ class NetworkManager {
   /** Answer a party summon (ServerMessage::PartySummonReceived). */
   sendPartySummonRespond(casterId: number, accept: boolean) {
     const message = { PartySummonRespond: { caster_id: casterId, accept } }
-    if (accept) this.sendAfterTeleportDeparture(message)
+    if (accept) this.sendWithTeleportDeparture(message)
     else this.sendMessage(message)
   }
 
