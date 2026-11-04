@@ -98,7 +98,10 @@
     caveman: STARTER_EQUIPMENT.caveman,
     priest: {
       ...STARTER_EQUIPMENT.priest,
-      armor: { ...STARTER_EQUIPMENT.priest?.armor, hands: 'worn_priest_gloves' },
+      armor: {
+        ...STARTER_EQUIPMENT.priest?.armor,
+        hands: 'worn_priest_gloves',
+      },
     },
     knight: {
       armor: { ...STARTER_EQUIPMENT.knight?.armor, head: 'worn_plate_helmet' },
