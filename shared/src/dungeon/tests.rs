@@ -244,7 +244,7 @@ fn blackvein_mine_has_twenty_five_floors_and_its_own_monsters() {
 const GOLDEN_OLD_CRYPT_HASH: u64 = 0x216b_8cee_51ff_2b67;
 const GOLDEN_THIEVES_DEN_HASH: u64 = 0x1d9e_c735_df9d_e607;
 const GOLDEN_SHADOW_GUILD_HASH: u64 = 0x2e1f_1554_a751_5c10;
-const GOLDEN_BLACKVEIN_MINE_HASH: u64 = 0xfccc_70f3_823e_e6ae;
+const GOLDEN_BLACKVEIN_MINE_HASH: u64 = 0x18b8_f8cd_0513_23c2;
 
 /// The client's wasm build checks the same fixture (`dungeonLayouts.test.ts`),
 /// so any draw that differs between wasm32 and native fails one side.
@@ -347,6 +347,64 @@ fn mine_floors_keep_their_shape_over_many_seeds() {
                     assert!(
                         super::gen::cell_is_corridor(f, r.x + dx, r.z + dz),
                         "{at}: rail off the corridor"
+                    );
+                }
+            }
+            // Fork floors theme their work rooms: a tool store, an ore yard
+            // and a rest area without mine fixtures. Elsewhere each fixture
+            // keeps to its depth bands, all its cells within one room.
+            let fixture = |p: &&PropSpec| p.kind.is_solid() && !p.kind.is_interactive();
+            let in_room = |p: &PropSpec, rooms: &[Room]| {
+                rooms
+                    .iter()
+                    .any(|r| p.cells().all(|(x, z)| r.contains(x, z)))
+            };
+            if fork {
+                let mut themes: Vec<_> = f.rooms[2..]
+                    .iter()
+                    .map(|r| {
+                        let kinds: Vec<_> = f
+                            .props
+                            .iter()
+                            .filter(fixture)
+                            .filter(|p| r.contains(p.x, p.z))
+                            .map(|p| p.kind)
+                            .collect();
+                        if kinds.contains(&PropKind::MineToolRack) {
+                            "tools"
+                        } else if kinds.contains(&PropKind::MineOreHeap) {
+                            "ore"
+                        } else {
+                            assert!(kinds.is_empty(), "{at}: rest area {kinds:?}");
+                            "rest"
+                        }
+                    })
+                    .collect();
+                themes.sort();
+                assert_eq!(themes, ["ore", "rest", "tools"], "{at}");
+            }
+            for p in f.props.iter().filter(fixture) {
+                assert!(in_room(p, &f.rooms), "{at}: {:?} off a room", p.kind);
+                let banded = super::gen::mine::FIXTURES
+                    .iter()
+                    .any(|x| x.kind == p.kind && x.depths.contains(&f.depth));
+                assert!(
+                    banded || (fork && in_room(p, &f.rooms[2..])),
+                    "{at}: {:?} out of its depths",
+                    p.kind
+                );
+            }
+            // Tool racks back onto a north or east wall with both cells.
+            for r in f.props.iter().filter(|p| p.kind == PropKind::MineToolRack) {
+                let back = match r.rotation {
+                    0 => (0, -1),
+                    270 => (1, 0),
+                    y => panic!("{at}: rack yaw {y}"),
+                };
+                for (x, z) in r.cells() {
+                    assert!(
+                        !f.is_carved(x + back.0, z + back.1),
+                        "{at}: rack off the wall"
                     );
                 }
             }

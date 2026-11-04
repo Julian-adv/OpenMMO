@@ -59,9 +59,9 @@ export interface DungeonSpawn {
   isBoss: boolean
 }
 
-/** Room clutter (matches shared PropSpec). Every kind but `torch_wall` is a
- *  1×1 collision pillar, as is the treasure chest. `kind` is an object-catalog
- *  id. */
+/** Room clutter (matches shared PropSpec). Solid kinds seal the `w`×`d`
+ *  cells from `x`/`z`, as does the treasure chest. `kind` is an
+ *  object-catalog id. */
 export interface DungeonProp {
   x: number
   z: number
@@ -72,10 +72,18 @@ export interface DungeonProp {
     | 'torch_wall'
     | 'mine_timber_post'
     | 'mine_rail'
+    | 'mine_cart'
+    | 'mine_tool_rack'
+    | 'mine_ore_heap'
+    | 'mine_rubble'
+    | 'mine_crystal_cluster'
   /** Vertical stack count (1 or 2); chests are always 1. */
   stack: number
   /** Yaw in whole degrees (0..360). */
   rotation: number
+  /** Cells covered along X and Z at this yaw. */
+  w: number
+  d: number
 }
 
 /** A pending click-to-interact (break a barrel/crate, or open a chest): which

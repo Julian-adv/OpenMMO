@@ -31,7 +31,9 @@ function fixture(): DungeonFloorLayout {
     downShaft: { x: 42, z: 44, alongZ: false, reversed: true },
     chest: [45, 5],
     spawns: [],
-    props: [{ x: 12, z: 12, kind: 'barrel', stack: 1, rotation: 0 }],
+    props: [
+      { x: 12, z: 12, kind: 'barrel', stack: 1, rotation: 0, w: 1, d: 1 },
+    ],
   }
 }
 

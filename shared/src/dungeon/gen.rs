@@ -808,10 +808,7 @@ fn collect_landing_cells(layout: &FloorLayout) -> Vec<(i32, i32)> {
 fn roll_wall_torches(rng: &mut ChaCha8Rng, layout: &FloorLayout) -> Vec<PropSpec> {
     let landings = collect_landing_cells(layout);
     // Seed `taken` with the clutter already placed so a torch never shares a cell.
-    let mut taken = vec![false; (GRID * GRID) as usize];
-    for p in &layout.props {
-        taken[(p.x + p.z * GRID) as usize] = true;
-    }
+    let mut taken = taken_by_props(layout);
 
     let mut torches = Vec::new();
     for room in &layout.rooms {
@@ -854,6 +851,67 @@ fn roll_wall_torches(rng: &mut ChaCha8Rng, layout: &FloorLayout) -> Vec<PropSpec
         }
     }
     torches
+}
+
+/// Cells the layout's props already stand on.
+fn taken_by_props(layout: &FloorLayout) -> Vec<bool> {
+    let mut taken = vec![false; (GRID * GRID) as usize];
+    for (x, z) in layout.props.iter().flat_map(PropSpec::cells) {
+        taken[(x + z * GRID) as usize] = true;
+    }
+    taken
+}
+
+/// Places solid props after [`roll_props`] and the torches, keeping each only
+/// if every room, the stairs and the chest stay reachable.
+pub(super) struct PropPlacer<'a> {
+    layout: &'a FloorLayout,
+    landings: Vec<(i32, i32)>,
+    taken: Vec<bool>,
+    cells: Vec<u8>,
+    visited: Vec<bool>,
+    queue: std::collections::VecDeque<(i32, i32)>,
+    pub placed: Vec<PropSpec>,
+}
+
+impl<'a> PropPlacer<'a> {
+    pub fn new(layout: &'a FloorLayout) -> Self {
+        Self {
+            layout,
+            landings: collect_landing_cells(layout),
+            taken: taken_by_props(layout),
+            cells: super::floor_passability_cells(layout),
+            visited: vec![false; (GRID * GRID) as usize],
+            queue: std::collections::VecDeque::new(),
+            placed: Vec::new(),
+        }
+    }
+
+    pub fn fits(&self, spec: &PropSpec) -> bool {
+        spec.cells()
+            .all(|(x, z)| prop_cell_ok(self.layout, &self.landings, &self.taken, x, z))
+    }
+
+    /// Keeps a fitting `spec` unless it closes a route.
+    pub fn place(&mut self, spec: PropSpec) {
+        debug_assert!(self.fits(&spec));
+        let idx: Vec<usize> = spec.cells().map(|(x, z)| (x + z * GRID) as usize).collect();
+        let saved: Vec<u8> = idx.iter().map(|&i| self.cells[i]).collect();
+        for &i in &idx {
+            self.cells[i] |= super::EDGE_ALL;
+        }
+        floor_reachable(self.layout, &self.cells, &mut self.visited, &mut self.queue);
+        if !floor_targets_reachable(self.layout, &self.visited) {
+            for (&i, &c) in idx.iter().zip(&saved) {
+                self.cells[i] = c;
+            }
+            return;
+        }
+        for i in idx {
+            self.taken[i] = true;
+        }
+        self.placed.push(spec);
+    }
 }
 
 fn pick_prop_kind(rng: &mut ChaCha8Rng) -> PropKind {

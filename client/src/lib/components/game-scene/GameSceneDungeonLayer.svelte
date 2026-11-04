@@ -21,6 +21,7 @@
   } from '../../managers/dungeonManager'
   import { loadGLB } from '../../utils/gltfCache'
   import { getObjectModelPath } from '../../utils/modelPaths'
+  import { applyCrystalGlow } from '../../effects/crystal-glow'
   import { rotatedRectAabb } from '../../utils/objectFootprint'
   import type { DoorLeaf, InteriorDoor } from '../../utils/dungeon-geometry'
   import { networkManager } from '../../network/socket'
@@ -100,6 +101,7 @@
    *  by the players layer (via a provider prop) to drive the wall-torch light
    *  pool + the unified shadow light. Swapped on floor rebuild, cleared on exit. */
   let wallTorchPositions: THREE.Vector3[] = []
+  let crystalGlowPositions: THREE.Vector3[] = []
   /** The chest lid-open clip, captured once from the animated chest GLB and
    *  shared by every chest clone (each gets its own AnimationMixer). */
   let chestOpenClip: THREE.AnimationClip | null = null
@@ -144,12 +146,17 @@
   /** Wall torch: how far the mount's back face seats *into* the wall from its
    *  room-facing boundary. 0 = back face flush on the wall surface. */
   const TORCH_WALL_INSET = 0
+  /** Crystal clusters grow by this much per floor below their first (6). */
+  const CRYSTAL_GROWTH_PER_FLOOR = 0.025
+  /** Height of a crystal cluster's glow light, at unit scale. */
+  const CRYSTAL_GLOW_RISE = 0.8
   /** Mine support post: how far its back sinks into the corridor wall. */
   const MINE_POST_WALL_INSET = 0.02
-  /** Wall decor kinds: mount height and how far the back sinks into the wall. */
+  /** Wall-backed kinds: mount height and how far the back sinks into the wall. */
   const WALL_MOUNTS: Partial<Record<string, { y: number; inset: number }>> = {
     torch_wall: { y: TORCH_MOUNT_Y, inset: TORCH_WALL_INSET },
     mine_timber_post: { y: 0, inset: MINE_POST_WALL_INSET },
+    mine_tool_rack: { y: 0, inset: 0 },
   }
 
   /** Floor-local `[x, z]` of a wall decor's back: the cell's wall edge named
@@ -282,6 +289,7 @@
     propEntries = new Map()
     wallPosts = []
     wallTorchPositions = []
+    crystalGlowPositions = []
     for (const m of propMixers) m.stopAllAction()
     propMixers = []
   }
@@ -394,6 +402,7 @@
           gltf.animations.find((a) => a.name === CHEST_OPEN_CLIP) ??
           gltf.animations[0]
       }
+      if (catalogId === 'mine_crystal_cluster') applyCrystalGlow(gltf.scene)
       return gltf.scene
     } catch {
       return null
@@ -450,7 +459,10 @@
     }
     const wallMount = WALL_MOUNTS[prop.kind]
     if (wallMount) {
-      const [px, pz] = wallSeat(prop.x, prop.z, prop.rotation, wallMount.inset)
+      // Wider mounts center on the cells they run along the wall.
+      const [sx, sz] = wallSeat(prop.x, prop.z, prop.rotation, wallMount.inset)
+      const px = sx + (prop.w - 1) / 2
+      const pz = sz + (prop.d - 1) / 2
       const clone = addDecor(px, wallMount.y, pz)
       if (prop.kind === 'torch_wall') {
         // Record the flame's world position for the players-layer light pool.
@@ -473,6 +485,17 @@
     // to cast a shadow worth its extra draw.
     if (prop.kind === 'mine_rail') {
       addDecor(prop.x + 1, 0, prop.z + 1, false)
+      return
+    }
+
+    // Multi-cell fixtures: centered on the cells they seal; no state.
+    // Crystals grow with depth.
+    if (prop.w > 1 || prop.d > 1) {
+      const clone = addDecor(prop.x + prop.w / 2, 0, prop.z + prop.d / 2)
+      if (prop.kind === 'mine_crystal_cluster')
+        clone.scale.setScalar(
+          1 + Math.max(0, depth - 6) * CRYSTAL_GROWTH_PER_FLOOR
+        )
       return
     }
 
@@ -749,6 +772,16 @@
       .filter((e) => e.kind === 'mine_timber_post')
       .map((e) => postFade(e.clones[0]))
     wallTorchPositions = torchPositions
+    crystalGlowPositions = [...entries.values()]
+      .filter((e) => e.kind === 'mine_crystal_cluster')
+      .map(
+        ({ clones: [c] }) =>
+          new THREE.Vector3(
+            dungeonManager.originX + c.position.x,
+            dungeonManager.floorY(depth) + CRYSTAL_GLOW_RISE * c.scale.y,
+            dungeonManager.originZ + c.position.z
+          )
+      )
     // Catch any breaks/opens that landed while the GLBs were loading. Chests
     // already open at build time snap to the open pose (no entrance swing).
     reconcileBrokenProps(depth, key)
@@ -1258,6 +1291,12 @@
    *  rather than caching it. */
   export function getWallTorchPositions(): THREE.Vector3[] {
     return wallTorchPositions
+  }
+
+  /** World positions of the current floor's crystal cluster glows; live array
+   *  like `getWallTorchPositions`. */
+  export function getCrystalGlowPositions(): THREE.Vector3[] {
+    return crystalGlowPositions
   }
 
   /**

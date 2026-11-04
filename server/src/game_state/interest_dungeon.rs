@@ -22,7 +22,7 @@ impl Interest {
     pub(super) fn reset_dungeon_props(&mut self, id: &str, layouts: &[FloorLayout]) {
         for layout in layouts {
             for (index, prop) in layout.props.iter().enumerate() {
-                if prop.kind.is_decor() {
+                if !prop.kind.is_interactive() {
                     continue;
                 }
                 let state = ServerMessage::DungeonPropState {
@@ -80,7 +80,7 @@ impl Interest {
                 .props
                 .iter()
                 .enumerate()
-                .filter(|(_, prop)| !prop.kind.is_decor())
+                .filter(|(_, prop)| prop.kind.is_interactive())
             {
                 let prop_id = index as u32;
                 let depth = layout.depth;

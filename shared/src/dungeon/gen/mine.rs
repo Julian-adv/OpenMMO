@@ -2,7 +2,7 @@
 //! but the last forks at a junction into three work rooms, and only one of
 //! them holds the way down.
 
-use std::ops::RangeInclusive;
+use std::ops::{Range, RangeInclusive};
 
 use rand::Rng;
 use rand_chacha::ChaCha8Rng;
@@ -10,7 +10,7 @@ use rand_chacha::ChaCha8Rng;
 use super::{
     cell_is_corridor, corridor_cells, corridor_intersects, finish_floor, pick_index,
     place_room_around_shaft, place_room_free, shaft_room_size, wall_yaw, Corridor, FloorPlan,
-    Spacing, SHAFT_ROOM_AXIAL,
+    PropPlacer, Spacing, SHAFT_ROOM_AXIAL,
 };
 use crate::dungeon::{
     is_locked_depth, FloorLayout, PropKind, PropSpec, Room, SpawnEntry, StairShaft, DIRS, GRID,
@@ -67,6 +67,9 @@ pub(super) fn try_generate_floor(
     let mut layout = finish_floor(rng, depth, is_last, up_shaft, table, plan)?;
     let decor = [timber_posts(&layout), rails(&layout)].concat();
     layout.props.extend(decor);
+    let work_rooms = if fork { 2..2 + BRANCHES } else { 0..0 };
+    let fixtures = room_fixtures(rng, &layout, work_rooms);
+    layout.props.extend(fixtures);
     Some(layout)
 }
 
@@ -129,6 +132,163 @@ fn rails(layout: &FloorLayout) -> Vec<PropSpec> {
             rotation: if along_x { 90 } else { 0 },
         })
         .collect()
+}
+
+/// A solid prop some rooms on a band of floors get one of.
+pub(in crate::dungeon) struct Fixture {
+    pub kind: PropKind,
+    pub depths: RangeInclusive<u8>,
+    room_pct: u32,
+}
+
+const fn fixture(kind: PropKind, depths: RangeInclusive<u8>, room_pct: u32) -> Fixture {
+    Fixture {
+        kind,
+        depths,
+        room_pct,
+    }
+}
+
+/// Crystals roll up to three times per room, the later rolls only deeper.
+pub(in crate::dungeon) const FIXTURES: [Fixture; 7] = [
+    fixture(PropKind::MineToolRack, 1..=10, 30),
+    fixture(PropKind::MineOreHeap, 1..=20, 35),
+    fixture(PropKind::MineCart, 6..=15, 35),
+    fixture(PropKind::MineRubble, 11..=20, 40),
+    fixture(PropKind::MineCrystalCluster, 6..=25, 30),
+    fixture(PropKind::MineCrystalCluster, 13..=25, 35),
+    fixture(PropKind::MineCrystalCluster, 20..=25, 45),
+];
+
+/// A fork floor's three work rooms take these in a shuffled order: tool
+/// store, ore yard, and a rest area kept free of mine fixtures.
+const WORK_ROOM_THEMES: [&[(PropKind, usize)]; 3] = [
+    &[(PropKind::MineToolRack, 3), (PropKind::MineCart, 1)],
+    &[(PropKind::MineOreHeap, 3), (PropKind::MineCart, 2)],
+    &[],
+];
+
+/// Solid mine props in the rooms, after the barrels and crates. Rooms in
+/// `work_rooms` get a theme instead of the depth-banded fixtures.
+fn room_fixtures(
+    rng: &mut ChaCha8Rng,
+    layout: &FloorLayout,
+    work_rooms: Range<usize>,
+) -> Vec<PropSpec> {
+    let mut placer = PropPlacer::new(layout);
+    for fixture in FIXTURES.iter().filter(|f| f.depths.contains(&layout.depth)) {
+        for (i, room) in layout.rooms.iter().enumerate() {
+            if work_rooms.contains(&i) || rng.gen_range(0..100u32) >= fixture.room_pct {
+                continue;
+            }
+            place_one(rng, &mut placer, layout, room, fixture.kind);
+        }
+    }
+    if !work_rooms.is_empty() {
+        let offset = pick_index(rng, WORK_ROOM_THEMES.len());
+        for (n, i) in work_rooms.enumerate() {
+            let theme = WORK_ROOM_THEMES[(n + offset) % WORK_ROOM_THEMES.len()];
+            for &(kind, count) in theme {
+                for _ in 0..count {
+                    place_one(rng, &mut placer, layout, &layout.rooms[i], kind);
+                }
+            }
+        }
+    }
+    placer.placed
+}
+
+/// Places one `kind` at a random free spot in `room`, turned at random where
+/// its shape allows.
+fn place_one(
+    rng: &mut ChaCha8Rng,
+    placer: &mut PropPlacer,
+    layout: &FloorLayout,
+    room: &Room,
+    kind: PropKind,
+) {
+    let spots: Vec<PropSpec> = match kind {
+        PropKind::MineCart => cart_spots(layout, room),
+        PropKind::MineToolRack => tool_rack_spots(layout, room),
+        _ => square_spots(layout, room, kind),
+    }
+    .into_iter()
+    .filter(|s| placer.fits(s))
+    .collect();
+    if spots.is_empty() {
+        return;
+    }
+    let mut spec = spots[pick_index(rng, spots.len())];
+    let turn = match kind {
+        PropKind::MineCart => 180,
+        PropKind::MineToolRack => 0,
+        _ => 90,
+    };
+    if turn > 0 {
+        spec.rotation += turn * rng.gen_range(0..u32::from(360 / turn)) as u16;
+    }
+    placer.place(spec);
+}
+
+fn room_cells(room: &Room) -> impl Iterator<Item = (i32, i32)> + '_ {
+    (room.z..room.z + room.d).flat_map(move |z| (room.x..room.x + room.w).map(move |x| (x, z)))
+}
+
+fn spec(kind: PropKind, (x, z): (i32, i32), rotation: u16) -> PropSpec {
+    PropSpec {
+        x,
+        z,
+        kind,
+        stack: 1,
+        rotation,
+    }
+}
+
+/// Carts lying along a wall of `room`, both cells against it.
+fn cart_spots(layout: &FloorLayout, room: &Room) -> Vec<PropSpec> {
+    let rock = |x, z| !layout.is_carved(x, z);
+    let mut spots = Vec::new();
+    for (x, z) in room_cells(room) {
+        let sides = [-1, 1];
+        if room.contains(x, z + 1) && sides.iter().any(|&s| rock(x + s, z) && rock(x + s, z + 1)) {
+            spots.push(spec(PropKind::MineCart, (x, z), 0));
+        }
+        if room.contains(x + 1, z) && sides.iter().any(|&s| rock(x, z + s) && rock(x + 1, z + s)) {
+            spots.push(spec(PropKind::MineCart, (x, z), 90));
+        }
+    }
+    spots
+}
+
+/// `kind` over 2×2 room cells with one side against a wall.
+fn square_spots(layout: &FloorLayout, room: &Room, kind: PropKind) -> Vec<PropSpec> {
+    let rock = |x, z| !layout.is_carved(x, z);
+    room_cells(room)
+        .filter(|&(x, z)| room.contains(x + 1, z + 1))
+        .filter(|&(x, z)| {
+            (rock(x, z - 1) && rock(x + 1, z - 1))
+                || (rock(x, z + 2) && rock(x + 1, z + 2))
+                || (rock(x - 1, z) && rock(x - 1, z + 1))
+                || (rock(x + 2, z) && rock(x + 2, z + 1))
+        })
+        .map(|c| spec(kind, c, 0))
+        .collect()
+}
+
+/// Tool racks backed onto the north or east wall of `room`, the walls the
+/// camera looks at.
+fn tool_rack_spots(layout: &FloorLayout, room: &Room) -> Vec<PropSpec> {
+    let rock = |x, z| !layout.is_carved(x, z);
+    let mut spots = Vec::new();
+    for (x, z) in room_cells(room) {
+        if room.contains(x + 1, z) && rock(x, z - 1) && rock(x + 1, z - 1) {
+            spots.push(spec(PropKind::MineToolRack, (x, z), wall_yaw((0, -1))));
+        }
+        if room.contains(x, z + 1) && rock(x + 1, z) && rock(x + 1, z + 1) {
+            spots.push(spec(PropKind::MineToolRack, (x, z), wall_yaw((1, 0))));
+        }
+    }
+    spots
 }
 
 /// Cells between support post pairs; the deeper, the fewer human traces.

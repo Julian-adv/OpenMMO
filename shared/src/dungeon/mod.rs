@@ -246,12 +246,11 @@ pub struct SpawnSpec {
 }
 
 /// Clutter prop dropped into a room. Every kind but the decor ones
-/// ([`PropKind::is_decor`]) becomes a 1×1 collision pillar in the passability grid (see
+/// ([`PropKind::is_decor`]) seals its [`PropSpec::cells`] in the passability grid (see
 /// [`floor_passability_cells_full`]), so a mover routes around it and a path
 /// can never end on its cell (the treasure chest is sealed the same way).
-/// Breaking a barrel or crate opens its cell again. The string
-/// variants match the object-catalog ids (`barrel`/`crate`/`chest`/`torch_wall`/
-/// `mine_timber_post`) the client loads the GLB for.
+/// Breaking a barrel or crate opens its cell again. The snake_case variant
+/// names are the object-catalog ids the client loads the GLB for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PropKind {
@@ -267,6 +266,19 @@ pub enum PropKind {
     /// Two-metre mine rail piece lying down a corridor's middle, covering the
     /// 2×2 cells from its own; pieces join end to end.
     MineRail,
+    /// Ore cart along a mine room wall, two cells long: along Z at yaw 0/180,
+    /// along X at 90/270.
+    MineCart,
+    /// Miner's tool rack, two cells wide, backed onto a mine room wall; yaw
+    /// faces the room like `MineTimberPost`.
+    MineToolRack,
+    /// Heap of broken ore over 2×2 mine room cells against a wall.
+    MineOreHeap,
+    /// Collapsed rock fall with snapped beams over 2×2 mine room cells.
+    MineRubble,
+    /// Black-violet crystal cluster over 2×2 mine room cells; the client
+    /// grows it with depth.
+    MineCrystalCluster,
 }
 
 impl PropKind {
@@ -278,14 +290,28 @@ impl PropKind {
         )
     }
 
-    /// Every kind but decor seals its cell.
+    /// Every kind but decor seals its cells.
     pub fn is_solid(self) -> bool {
         !self.is_decor()
     }
+
+    /// Breaks or opens, so the server tracks its state.
+    pub fn is_interactive(self) -> bool {
+        matches!(self, PropKind::Barrel | PropKind::Crate | PropKind::Chest)
+    }
+
+    /// Cells covered along X and Z at yaw 0.
+    fn footprint(self) -> (i32, i32) {
+        match self {
+            PropKind::MineCart => (1, 2),
+            PropKind::MineToolRack => (2, 1),
+            PropKind::MineOreHeap | PropKind::MineRubble | PropKind::MineCrystalCluster => (2, 2),
+            _ => (1, 1),
+        }
+    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PropSpec {
     pub x: i32,
     pub z: i32,
@@ -298,8 +324,46 @@ pub struct PropSpec {
     /// for `TorchWall` it's the room-facing direction the client mounts it by
     /// (north wall → 0, east wall → 270); for `MineTimberPost` it's the
     /// corridor-facing direction (wall on −Z → 0, +X → 270, +Z → 180, −X → 90);
-    /// for `MineRail` it's 0 along Z and 90 along X.
+    /// for `MineRail` it's 0 along Z and 90 along X; mine fixtures see their
+    /// [`PropKind`] variants.
     pub rotation: u16,
+}
+
+impl PropSpec {
+    /// Cells covered along X and Z at its yaw.
+    pub fn size(&self) -> (i32, i32) {
+        let (w, d) = self.kind.footprint();
+        if self.rotation % 180 == 90 {
+            (d, w)
+        } else {
+            (w, d)
+        }
+    }
+
+    /// Cells it stands on, from its own toward +X/+Z.
+    pub fn cells(&self) -> impl Iterator<Item = (i32, i32)> {
+        let (w, d) = self.size();
+        let (x, z) = (self.x, self.z);
+        (0..d).flat_map(move |dz| (0..w).map(move |dx| (x + dx, z + dz)))
+    }
+}
+
+/// Also sends [`PropSpec::size`] as `w`/`d`, so the client needs no copy of
+/// the footprints.
+impl Serialize for PropSpec {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let (w, d) = self.size();
+        let mut st = s.serialize_struct("PropSpec", 7)?;
+        st.serialize_field("x", &self.x)?;
+        st.serialize_field("z", &self.z)?;
+        st.serialize_field("kind", &self.kind)?;
+        st.serialize_field("stack", &self.stack)?;
+        st.serialize_field("rotation", &self.rotation)?;
+        st.serialize_field("w", &w)?;
+        st.serialize_field("d", &d)?;
+        st.end()
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -343,7 +407,7 @@ impl FloorLayout {
                     && !self
                         .props
                         .iter()
-                        .any(|p| (p.x, p.z) == (x, z) && p.kind.is_solid())
+                        .any(|p| p.kind.is_solid() && p.cells().any(|c| c == (x, z)))
             })
     }
 
@@ -753,7 +817,9 @@ fn floor_passability_cells_inner(
     // seal applied here) and rejects any prop that would close a route.
     for (i, p) in layout.props.iter().enumerate() {
         if p.kind.is_solid() && !broken.contains(&(i as u32)) {
-            or_edge_bit(&mut cells, p.x, p.z, EDGE_ALL);
+            for (x, z) in p.cells() {
+                or_edge_bit(&mut cells, x, z, EDGE_ALL);
+            }
         }
     }
 

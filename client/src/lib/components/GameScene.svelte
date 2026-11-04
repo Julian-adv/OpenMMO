@@ -1588,6 +1588,8 @@
     torchLightCastsShadow={graphicsPreset.enableTorchShadows}
     torchShadowMapSize={graphicsPreset.torchShadowMapSize}
     wallTorchPositions={() => dungeonLayerRef?.getWallTorchPositions() ?? []}
+    crystalGlowPositions={() =>
+      dungeonLayerRef?.getCrystalGlowPositions() ?? []}
     hearthFirePositions={() => [
       ...(objectOverlayRef?.getFirePositions() ?? []),
       ...(estateFurnitureRef?.getFirePositions() ?? []),
