@@ -96,6 +96,11 @@ pub struct MonsterBrain {
     pub body: Option<crate::monster_body::BodyFootprint>,
     /// Plain swings past melee reach land this far out; 0 for none.
     pub ranged_range: f32,
+    /// How long a player must stay in sight before it gives chase; 0 reacts
+    /// at once. Being hit always turns it at once.
+    pub reaction_ms: f32,
+    /// The player it has spotted and the time left before it reacts.
+    pub(super) noticing: Option<(PlayerId, f32)>,
     /// Off for raid bosses: a crowd's blows would never let one act.
     pub staggers: bool,
     /// Time left in the Hit stagger; a later blow never shortens it.
@@ -177,6 +182,8 @@ impl MonsterBrain {
             detour_goal: None,
             body: None,
             ranged_range: 0.0,
+            reaction_ms: 0.0,
+            noticing: None,
             staggers: true,
             stagger_left_ms: 0.0,
             slow_left_ms: 0.0,
@@ -287,6 +294,9 @@ impl MonsterBrain {
         self.cast_left_ms = (self.cast_left_ms - delta_ms).max(0.0);
         self.stagger_left_ms = (self.stagger_left_ms - delta_ms).max(0.0);
         self.slow_left_ms = (self.slow_left_ms - delta_ms).max(0.0);
+        if let Some((_, left)) = &mut self.noticing {
+            *left = (*left - delta_ms).max(0.0);
+        }
         if let Some(aggro) = &mut self.aggro {
             aggro.advance(delta_ms);
         }
@@ -424,7 +434,6 @@ impl MonsterBrain {
         if self.state == AiState::Dead || self.health == 0 {
             return vec![];
         }
-
         self.occupied_cells.clear();
         self.cell_yield = false;
         let my_cell = cell_of(self.position.x, self.position.z);

@@ -77,6 +77,13 @@ impl Entry {
     }
 
     /// The target still in view on memory alone.
+    /// Provoked from out of sight, it still knows its attacker for a while.
+    fn provoked_by(&mut self, attacker: &PlayerId, now: Instant) {
+        if self.brain.target_player_id() == Some(*attacker) {
+            self.target_seen = Some((*attacker, now));
+        }
+    }
+
     fn remembered(&self, target: Option<PlayerId>, now: Instant) -> Option<PlayerId> {
         self.target_seen
             .filter(|(id, at)| Some(*id) == target && now - *at < SIGHT_MEMORY)
@@ -349,6 +356,7 @@ impl super::GameState {
         brain.rotation = monster.rotation;
         brain.body = def.and_then(|d| d.body);
         brain.ranged_range = def.map_or(0.0, |d| d.ranged_attack_range);
+        brain.reaction_ms = def.map_or(0.0, |d| d.reaction_ms);
         brain.staggers = !def.is_some_and(|d| d.stagger_immune);
         brain
     }
@@ -960,10 +968,13 @@ impl super::GameState {
             };
             // A swing lands between ticks; the hit pose must not rewind the
             // monster to the last tick's step.
-            entry.catch_up(Instant::now());
-            entry
+            let now = Instant::now();
+            entry.catch_up(now);
+            let commands = entry
                 .brain
-                .handle_hit_with_behavior_tree(attacker_id, hit, damage)
+                .handle_hit_with_behavior_tree(attacker_id, hit, damage);
+            entry.provoked_by(attacker_id, now);
+            commands
         };
         self.apply_brain_commands(monster_id, commands).await;
     }
@@ -1003,6 +1014,7 @@ impl super::GameState {
                     let commands = entry
                         .brain
                         .handle_roar(roarer_id, PRIMAL_ROAR_STAGGER_MS as f32);
+                    entry.provoked_by(roarer_id, now);
                     Some((id.clone(), commands, entry.brain.state() == AiState::Hit))
                 })
                 .collect()

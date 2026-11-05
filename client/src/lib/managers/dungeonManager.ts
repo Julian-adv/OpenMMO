@@ -96,6 +96,9 @@ export interface PendingPropBreak {
   z: number
 }
 
+/** Average cart roll speed (m/s), shared with the server. */
+export const cartRollSpeed = () => constants().cartRollSpeed
+
 /** Mined with a pickaxe; they sink to a stub instead of breaking into debris. */
 export const MINABLE_PROP_KINDS: ReadonlySet<string> = new Set([
   'mine_ore_heap',
@@ -154,6 +157,7 @@ export interface DungeonConstants {
   maxDepth: number
   pathMaxNodes: number
   eventDeliveryRadius: number
+  cartRollSpeed: number
 }
 
 export interface DungeonEntrance {

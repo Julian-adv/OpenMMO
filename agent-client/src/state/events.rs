@@ -720,6 +720,7 @@ impl SharedState {
                 depth,
                 prop_id,
                 offset,
+                ..
             } => {
                 self.world_cache.write().unwrap().set_dungeon_cart(
                     entrance_id,

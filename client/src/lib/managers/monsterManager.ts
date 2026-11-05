@@ -443,17 +443,23 @@ class MonsterManager {
     this.monsters.set(monsterId, { ...monster })
   }
 
-  /** Healing Prayer searing an undead: it flinches at once, no swing. */
-  handlePrayerStruck(monsterId: string, playerId: number, damage: number) {
+  /** Struck without a swing (Healing Prayer searing an undead, a rolling
+   *  cart): it flinches `delayMs` from now. */
+  handleStruck(
+    monsterId: string,
+    playerId: number,
+    damage: number,
+    delayMs = 0
+  ) {
     const monster = this.monsters.get(monsterId)
     if (!monster || monster.state === 'dead') return
-    monster.impactDelay = 1
+    monster.impactDelay = Math.max(1, delayMs)
     monster.targetPlayerId = playerId
     monster.isLastHitSuccess = true
     monster.pendingSwordHitSoundUrl = undefined
     if (playerId === get(gameStore).currentPlayer?.id)
       monster.pendingDamageText = {
-        delay: 1 + DAMAGE_TEXT_AFTER_IMPACT_MS,
+        delay: monster.impactDelay + DAMAGE_TEXT_AFTER_IMPACT_MS,
         damage,
         hit: true,
         critical: false,

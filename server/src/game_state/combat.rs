@@ -1212,6 +1212,23 @@ impl super::GameState {
         .await
     }
 
+    /// A blow without a swing (a prayer, a rolling cart): reveals the striker,
+    /// puts them in combat and lands `damage`, its loot `loot_delay` later.
+    pub(super) async fn strike_monster(
+        &self,
+        player_id: &PlayerId,
+        player_name: &str,
+        target: StruckMonster<'_>,
+        damage: u32,
+        loot_delay: Duration,
+        auth: Option<&crate::auth::AuthService>,
+    ) -> bool {
+        self.reveal(player_id).await;
+        self.mark_in_combat(player_id).await;
+        self.damage_monster(player_id, player_name, target, damage, loot_delay, auth)
+            .await
+    }
+
     /// Take `damage` off a monster for `player_id`; a kill runs its death,
     /// loot and XP. False when it was already dead.
     pub(super) async fn damage_monster(

@@ -99,7 +99,7 @@ import { housingManager } from '../managers/housingManager'
 import { bridgeManager } from '../managers/bridgeManager'
 import { objectManager } from '../managers/objectManager'
 import { groundItemManager } from '../managers/groundItemManager'
-import { dungeonManager } from '../managers/dungeonManager'
+import { cartRollSpeed, dungeonManager } from '../managers/dungeonManager'
 import { queueXpArrival, releaseXpArrival } from '../managers/xpArrival'
 import {
   setInventory,
@@ -2235,14 +2235,30 @@ export function handleServerMessage(
       )
       break
 
-    case 'DungeonCartPushed':
+    case 'CartStruckPlayer':
+      reactToMonsterBlow(data.player_id, true, data.damage, data.health, 0)
+      break
+
+    case 'DungeonCartPushed': {
+      const rolled = Math.abs(
+        data.offset - dungeonManager.cartOffset(data.depth, data.prop_id)
+      )
       dungeonManager.setCartOffset(
         data.entrance_id,
         data.depth,
         data.prop_id,
         data.offset
       )
+      const impactMs = (rolled / cartRollSpeed()) * 1000
+      if (data.struck_monster)
+        monsterManager.handleStruck(
+          data.struck_monster,
+          data.pusher_id,
+          data.damage,
+          impactMs
+        )
       break
+    }
 
     case 'DungeonDiscoveries':
       discoveredDungeonIds.set(new Set(data.entrance_ids as string[]))
@@ -3084,7 +3100,7 @@ function handleHealingPrayed(
   const state = get(gameStore)
   const selfId = state.currentPlayer?.id
   if (monsterId) {
-    monsterManager.handlePrayerStruck(monsterId, casterId, amount)
+    monsterManager.handleStruck(monsterId, casterId, amount)
     if (casterId === selfId)
       addCombatMessage({
         text: translate('combat.prayerSeared', { damage: amount }),

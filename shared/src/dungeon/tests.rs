@@ -1697,3 +1697,29 @@ fn start_floor_ignores_other_depths_shafts_below() {
     }
     assert!(saw_overlap, "no cross-depth shaft overlap in any test seed");
 }
+
+/// A monster idling on its own spawn cell in a cart's path is struck, not
+/// treated as the empty spawn the cart otherwise stops at.
+#[test]
+fn a_rail_cart_strikes_a_monster_on_its_spawn() {
+    let floors = generate_dungeon_for("blackvein_mine");
+    let (f, id, cart, spawn) = floors
+        .iter()
+        .find_map(|f| {
+            f.props.iter().enumerate().find_map(|(i, c)| {
+                let run = cart_rail_run(f, c).filter(|_| c.kind == PropKind::MineRailCart)?;
+                let along = if c.along_x() { c.x } else { c.z };
+                (along + 2..run.end).find_map(|a| {
+                    let cell = run.cell(a);
+                    f.spawns
+                        .iter()
+                        .any(|s| (s.x, s.z) == cell)
+                        .then_some((f, i as u32, c, cell))
+                })
+            })
+        })
+        .expect("a spawn ahead of some cart");
+    let pushed =
+        cart_push_target(f, id, 0, -1, &[], &[], |c| c == spawn).expect("the push does something");
+    assert_eq!(pushed.struck, Some(spawn), "{cart:?}");
+}

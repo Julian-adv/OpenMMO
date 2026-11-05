@@ -606,7 +606,9 @@ impl super::GameState {
         }
     }
 
-    async fn apply_debuff_damage(&self, damage: Vec<(PlayerId, u32, String)>) {
+    /// Damage outside a monster's blow (debuffs, a rolling cart); `cause`
+    /// names it in the death log.
+    pub(super) async fn apply_debuff_damage(&self, damage: Vec<(PlayerId, u32, String)>) {
         struct Hit {
             pid: PlayerId,
             cause: String,

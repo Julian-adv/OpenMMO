@@ -124,15 +124,24 @@ async fn pickaxe_mines_ore_heaps_until_sunset() {
     assert!(!mined().await);
 }
 
-/// A push from behind slides a rail cart four cells on, a player on the rail
-/// stops it short, and sunset rolls it back.
-#[tokio::test]
-async fn rail_carts_slide_from_a_push_until_sunset() {
-    use onlinerpg_shared::dungeon::{cart_rail_run, PropKind, CART_PUSH_CELLS};
+/// A pushed rail cart rolls until a body stops it. A player struck at push
+/// time takes the hit when the cart arrives unless they stepped aside; a
+/// monster takes it at once. Sunset rolls the cart back.
+#[tokio::test(start_paused = true)]
+async fn rail_carts_roll_into_bodies_until_sunset() {
+    use onlinerpg_shared::dungeon::{cart_rail_run, PropKind};
     let game_state = make_test_game_state("blackvein_mine_carts");
     let entrance = game_state.dungeon_defs.get("blackvein_mine").unwrap();
     game_state.ensure_dungeon_runtime(&entrance.id).await;
-    let (depth, prop_id, cart, run) = {
+    // As at boot, so carts and walls block what monsters see.
+    game_state.passability_write().insert(
+        onlinerpg_shared::dungeon::dungeon_cache_key(&entrance.id),
+        onlinerpg_shared::dungeon::dungeon_passability(
+            &entrance.position(),
+            &onlinerpg_shared::dungeon::generate_dungeon_for(&entrance.id),
+        ),
+    );
+    let (depth, prop_id, cart) = {
         let dungeons = game_state.dungeons.read().await;
         dungeons[&entrance.id]
             .layouts
@@ -140,10 +149,13 @@ async fn rail_carts_slide_from_a_push_until_sunset() {
             .find_map(|l| {
                 l.props.iter().enumerate().find_map(|(i, p)| {
                     let run = cart_rail_run(l, p)?;
-                    let room =
-                        (if p.along_x() { p.x } else { p.z }) + 2 + 2 * CART_PUSH_CELLS <= run.end;
-                    (p.kind == PropKind::MineRailCart && room)
-                        .then_some((l.depth, i as u32, *p, run))
+                    let along = if p.along_x() { p.x } else { p.z };
+                    let clear = (along..along + 9).all(|a| {
+                        let cell = run.cell(a);
+                        !l.spawns.iter().any(|s| (s.x, s.z) == cell)
+                    });
+                    (p.kind == PropKind::MineRailCart && along + 9 <= run.end && clear)
+                        .then_some((l.depth, i as u32, *p))
                 })
             })
             .expect("a cart with room to roll")
@@ -152,11 +164,36 @@ async fn rail_carts_slide_from_a_push_until_sunset() {
         let s = cart.slid(offset);
         cell_center(&entrance.position(), depth, (s.x, s.z))
     };
-    let mut pusher = make_player("Pusher", 0.0, 0.0);
-    pusher.position = at(-1);
-    pusher.floor_level = -(depth as i8);
+    let floor = -(depth as i8);
+    let place = |name: &str, offset: i32| {
+        let mut p = make_player(name, 0.0, 0.0);
+        p.position = at(offset);
+        p.floor_level = floor;
+        p
+    };
+    let pusher = place("Pusher", -1);
     let pusher_id = pusher.id;
     game_state.add_player(pusher).await;
+    let blocker = place("Blocker", 5);
+    let blocker_id = blocker.id;
+    let full = blocker.health;
+    game_state.add_player(blocker).await;
+    let move_to = |id, offset| {
+        let game_state = &game_state;
+        async move {
+            game_state
+                .players
+                .write()
+                .await
+                .get_mut(&id)
+                .unwrap()
+                .position = at(offset);
+        }
+    };
+    let health = |id| {
+        let game_state = &game_state;
+        async move { game_state.players.read().await[&id].health }
+    };
     let offset = || async {
         let dungeons = game_state.dungeons.read().await;
         dungeons[&entrance.id]
@@ -165,28 +202,63 @@ async fn rail_carts_slide_from_a_push_until_sunset() {
             .and_then(|m| m.get(&prop_id).copied())
             .unwrap_or(0)
     };
+    let push = || game_state.push_dungeon_cart(&pusher_id, &entrance.id, depth, prop_id, None);
+    let roll_time = std::time::Duration::from_secs(10);
 
-    game_state
-        .push_dungeon_cart(&pusher_id, &entrance.id, depth, prop_id)
-        .await;
-    assert_eq!(offset().await, CART_PUSH_CELLS, "{run:?}");
-
-    let mut blocker = make_player("Blocker", 0.0, 0.0);
-    blocker.position = at(CART_PUSH_CELLS + 3);
-    blocker.floor_level = -(depth as i8);
-    game_state.add_player(blocker).await;
-    game_state
-        .players
-        .write()
-        .await
-        .get_mut(&pusher_id)
-        .unwrap()
-        .position = at(CART_PUSH_CELLS - 1);
-    game_state
-        .push_dungeon_cart(&pusher_id, &entrance.id, depth, prop_id)
-        .await;
-    assert_eq!(offset().await, CART_PUSH_CELLS + 1);
+    push().await;
+    assert_eq!(offset().await, 3, "stops before the player");
+    assert_eq!(
+        health(blocker_id).await,
+        full,
+        "not hit before the cart arrives"
+    );
+    tokio::time::sleep(roll_time).await;
+    assert!(health(blocker_id).await < full, "hit on arrival");
 
     game_state.restore_mine_props().await;
     assert_eq!(offset().await, 0);
+    let after_first = health(blocker_id).await;
+    push().await;
+    move_to(blocker_id, 9).await;
+    tokio::time::sleep(roll_time).await;
+    assert_eq!(health(blocker_id).await, after_first, "stepped aside");
+
+    game_state.restore_mine_props().await;
+    move_to(blocker_id, 20).await;
+    let monster = game_state
+        .spawn_monster(
+            "mine_crystal".to_string(),
+            at(8),
+            0.0,
+            floor,
+            crate::types::MonsterLifecycle::DungeonSlot,
+            Some(10),
+            true,
+        )
+        .await
+        .expect("a monster on the rail");
+    game_state.tick_monster_ai_by(200.0).await;
+    push().await;
+    assert_eq!(offset().await, 6, "stops against the monster");
+    let hit = game_state
+        .monsters
+        .read()
+        .await
+        .get(&monster.id)
+        .cloned()
+        .unwrap();
+    assert!(
+        hit.health < hit.max_health,
+        "{}/{}",
+        hit.health,
+        hit.max_health
+    );
+    // Struck from beyond its sensing range with the cart blocking its view,
+    // it still turns on the pusher.
+    let start = hit.position.dist_xz_sq(&at(-1));
+    for _ in 0..10 {
+        game_state.tick_monster_ai_by(200.0).await;
+    }
+    let now = game_state.monsters.read().await[&monster.id].position;
+    assert!(now.dist_xz_sq(&at(-1)) < start, "it comes for the pusher");
 }

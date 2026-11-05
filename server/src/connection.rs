@@ -1913,7 +1913,7 @@ async fn handle_client_message(
         } => {
             if let Some(id) = &state.require_in_game("cart push") {
                 game_state
-                    .push_dungeon_cart(id, &entrance_id, depth, prop_id)
+                    .push_dungeon_cart(id, &entrance_id, depth, prop_id, Some(auth_service))
                     .await;
             }
         }

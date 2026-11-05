@@ -1140,12 +1140,23 @@ pub enum ServerMessage {
         depth: u8,
         prop_id: u32,
     },
-    /// Nearby: a rail cart slid to `offset` cells from its spot along its rail.
+    /// Nearby: `pusher_id` rolled a rail cart to `offset` cells from its spot.
+    /// A monster in its path stops it and takes `damage`; a player is struck
+    /// on arrival with `CartStruckPlayer`.
     DungeonCartPushed {
         entrance_id: String,
         depth: u8,
         prop_id: u32,
         offset: i32,
+        pusher_id: PlayerId,
+        struck_monster: Option<String>,
+        damage: u32,
+    },
+    /// Nearby: a rolling cart reached `player_id`, still in its path.
+    CartStruckPlayer {
+        player_id: PlayerId,
+        damage: u32,
+        health: u32,
     },
     /// An interactive dungeon chest prop was opened: play its lid-open
     /// animation. Broadcast to nearby players (the opener included).
@@ -2300,7 +2311,8 @@ impl ServerMessage {
             | Self::HealingPrayed { .. }
             | Self::BattleHymnStarted { .. }
             | Self::MiningStarted { .. }
-            | Self::MiningEnded { .. } => DeliveryClass::NearbyEffect,
+            | Self::MiningEnded { .. }
+            | Self::CartStruckPlayer { .. } => DeliveryClass::NearbyEffect,
             Self::TerrainTileVersion { .. }
             | Self::LandscapeChanged { .. }
             | Self::LandscapeInvalidated { .. }

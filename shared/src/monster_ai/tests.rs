@@ -2423,3 +2423,27 @@ fn a_repath_that_turns_mid_leg_reports_the_turn_point_not_the_next_step() {
     );
     assert!(brain.position != turn, "the step still happens this tick");
 }
+
+/// A slow-reacting monster waits out `reaction_ms` with the player in sight
+/// before it gives chase, but a hit turns it at once.
+#[test]
+fn a_slow_reacting_brain_waits_before_it_chases() {
+    let players = attacker_at(15.0, 10.0);
+    let mut rng = SmallRng::seed_from_u64(42);
+    let mut brain = make_brain();
+    brain.reaction_ms = 1500.0;
+    let mut tick = |brain: &mut MonsterBrain, ms: f32| {
+        brain.tick_with_behavior_tree(ms, &players, &[], &chase_tree(), &DirectPath, &mut rng);
+    };
+    tick(&mut brain, 200.0);
+    tick(&mut brain, 1000.0);
+    assert_eq!(brain.target_player_id, None, "still taking it in");
+    tick(&mut brain, 600.0);
+    assert_eq!(brain.target_player_id, Some(1.into()));
+    assert_eq!(brain.state(), AiState::Chase);
+
+    let mut struck = make_brain();
+    struck.reaction_ms = 1500.0;
+    struck.handle_hit_with_behavior_tree(&1.into(), true, 1);
+    assert_eq!(struck.target_player_id, Some(1.into()));
+}

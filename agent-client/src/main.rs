@@ -474,6 +474,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::DungeonChestOpened { .. } => "DungeonChestOpened",
         ServerMessage::DungeonPropBroken { .. } => "DungeonPropBroken",
         ServerMessage::DungeonCartPushed { .. } => "DungeonCartPushed",
+        ServerMessage::CartStruckPlayer { .. } => "CartStruckPlayer",
         ServerMessage::DungeonPropOpened { .. } => "DungeonPropOpened",
         ServerMessage::DungeonPropsState { .. } => "DungeonPropsState",
         ServerMessage::DungeonDoorToggled { .. } => "DungeonDoorToggled",

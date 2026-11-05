@@ -15,6 +15,7 @@
   import {
     dungeonManager,
     ENTRANCE_DOOR_DEPTH,
+    cartRollSpeed,
     ENTRANCE_DOOR_ID,
     MINABLE_PROP_KINDS,
     TREASURE_CHEST_PROP_ID,
@@ -97,8 +98,6 @@
   const isBreakable = (kind: string) => kind in BROKEN_VARIANT
   /** Height left of a mined ore heap or crystal cluster, as a share. */
   const MINED_STUB_HEIGHT = 0.3
-  /** A pushed cart's average speed in m/s; it eases in and out of it. */
-  const CART_ROLL_SPEED = 1.8
   /** Dungeon chest props render from this catalog id (the animated GLB, not the
    *  static `chest.glb`) so a click can play the lid-open clip. */
   const CHEST_ANIMATED_ID = 'chest_animated'
@@ -1270,7 +1269,7 @@
       }
     }
 
-    // Pushed carts roll to their server-synced spot, easing in and out.
+    // Pushed carts speed up toward their synced spot and stop dead; no brakes.
     for (const cart of railCarts) {
       const to = cartSpot(
         cart.prop,
@@ -1284,12 +1283,13 @@
           from: { x: p.x, z: p.z },
           to,
           t: 0,
-          duration: Math.max(0.05, distance / CART_ROLL_SPEED),
+          duration: Math.max(0.05, distance / cartRollSpeed()),
         }
       }
       const roll = cart.roll
       roll.t += deltaMs / 1000
-      const e = THREE.MathUtils.smoothstep(roll.t, 0, roll.duration)
+      const u = Math.min(1, roll.t / roll.duration)
+      const e = u * u
       p.set(
         roll.from.x + (roll.to.x - roll.from.x) * e,
         p.y,

@@ -58,6 +58,9 @@ pub struct MonsterDefinition {
     pub ranged_attack_range: f32,
     #[serde(rename = "staggerImmune", default)]
     pub stagger_immune: bool,
+    /// How long a player must stay in sight before it gives chase.
+    #[serde(rename = "reactionMs", default)]
+    pub reaction_ms: f32,
     #[serde(default)]
     pub boss: bool,
     /// Healing Prayer harms it instead of healing.

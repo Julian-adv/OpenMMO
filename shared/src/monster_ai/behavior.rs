@@ -912,12 +912,26 @@ impl MonsterBrain {
             .min_by(|a, b| a.0.total_cmp(&b.0))
             .map(|(_, p)| p.id);
 
-        if let Some(id) = selected {
-            self.target_player_id = Some(id);
-            true
-        } else {
-            false
+        let Some(id) = selected else {
+            self.noticing = None;
+            return false;
+        };
+        if self.reaction_ms > 0.0 {
+            match self.noticing {
+                Some((seen, left)) if seen == id => {
+                    if left > 0.0 {
+                        return false;
+                    }
+                }
+                _ => {
+                    self.noticing = Some((id, self.reaction_ms));
+                    return false;
+                }
+            }
         }
+        self.noticing = None;
+        self.target_player_id = Some(id);
+        true
     }
 
     pub(super) fn current_target<'a>(

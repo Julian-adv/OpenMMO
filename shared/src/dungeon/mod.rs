@@ -377,8 +377,11 @@ impl PropSpec {
     }
 }
 
-/// How far one push slides a rail cart.
-pub const CART_PUSH_CELLS: i32 = 4;
+/// The farthest one push rolls a rail cart.
+pub const CART_ROLL_MAX_CELLS: i32 = 12;
+/// A pushed cart's average roll speed in m/s: clients speed it up from rest
+/// and stop it dead, and a struck player is hit when it arrives.
+pub const CART_ROLL_SPEED: f32 = 3.6;
 
 /// Joined rail pieces down one lane of a straight corridor stretch: cells
 /// `start..end` along the axis at `lane` across it.
@@ -452,11 +455,22 @@ pub fn cart_rail_run(layout: &FloorLayout, cart: &PropSpec) -> Option<RailRun> {
         .find(|r| r.holds(cart.along_x(), (cart.x, cart.z)))
 }
 
-/// Where a push from `pusher_side` (−1 behind the cart's low end, +1 past its
-/// high end) leaves rail cart `prop_id` now at `offset`: up to
-/// [`CART_PUSH_CELLS`] away from the pusher, stopping at the run's end, an
+/// What a push does to a rail cart: it rolls `rolled` cells to `to` cells
+/// from its spot and, when a body in its path stopped it, `struck` is that
+/// body's cell.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CartPush {
+    pub to: i32,
+    pub rolled: u32,
+    pub struck: Option<(i32, i32)>,
+}
+
+/// A push from `pusher_side` (−1 behind the cart's low end, +1 past its high
+/// end) on rail cart `prop_id` now at `offset`: it rolls up to
+/// [`CART_ROLL_MAX_CELLS`] away from the pusher, stopping at the run's end, an
 /// unbroken solid prop, a monster spawn (a monster spawning there would be
-/// sealed in) or a cell `occupied` reports.
+/// sealed in) or a body `occupied` reports, which it strikes. `None` when it
+/// neither moves nor strikes.
 pub fn cart_push_target(
     layout: &FloorLayout,
     prop_id: u32,
@@ -465,16 +479,15 @@ pub fn cart_push_target(
     broken: &[u32],
     carts: &[(u32, i32)],
     occupied: impl Fn((i32, i32)) -> bool,
-) -> Option<i32> {
+) -> Option<CartPush> {
     let cart = layout.props.get(prop_id as usize)?;
     if cart.kind != PropKind::MineRailCart {
         return None;
     }
     let run = cart_rail_run(layout, cart)?;
     let dir = -pusher_side.signum();
-    let blocked = |cell: (i32, i32)| {
-        occupied(cell)
-            || layout.spawns.iter().any(|s| (s.x, s.z) == cell)
+    let solid = |cell: (i32, i32)| {
+        layout.spawns.iter().any(|s| (s.x, s.z) == cell)
             || layout.props.iter().enumerate().any(|(i, p)| {
                 let i = i as u32;
                 i != prop_id
@@ -484,15 +497,28 @@ pub fn cart_push_target(
             })
     };
     let mut at = offset;
-    for _ in 0..CART_PUSH_CELLS {
+    let mut struck = None;
+    for _ in 0..CART_ROLL_MAX_CELLS {
         let next = cart.slid(at + dir);
         let lead = if cart.along_x() { next.x } else { next.z };
-        if lead < run.start || lead + 2 > run.end || next.cells().any(|c| blocked(c)) {
+        if lead < run.start || lead + 2 > run.end {
+            break;
+        }
+        // A body first: monsters often idle on their own spawn cell.
+        if let Some(cell) = next.cells().find(|&c| occupied(c)) {
+            struck = Some(cell);
+            break;
+        }
+        if next.cells().any(|c| solid(c)) {
             break;
         }
         at += dir;
     }
-    (at != offset).then_some(at)
+    (at != offset || struck.is_some()).then_some(CartPush {
+        to: at,
+        rolled: at.abs_diff(offset),
+        struck,
+    })
 }
 
 /// `prop` where it stands now: rail carts slid by their entry in `carts`.

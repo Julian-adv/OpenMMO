@@ -754,6 +754,7 @@ pub fn dungeon_constants() -> Result<JsValue, JsError> {
         landing_cells: f32,
         max_depth: u8,
         path_max_nodes: u32,
+        cart_roll_speed: f32,
     }
     to_js(&DungeonConstants {
         grid: crate::dungeon::GRID,
@@ -765,6 +766,7 @@ pub fn dungeon_constants() -> Result<JsValue, JsError> {
         landing_cells: crate::dungeon::LANDING_CELLS,
         max_depth: crate::dungeon::MAX_FLOORS,
         path_max_nodes: crate::dungeon::DUNGEON_PATH_MAX_NODES as u32,
+        cart_roll_speed: crate::dungeon::CART_ROLL_SPEED,
     })
 }
 
