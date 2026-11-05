@@ -87,8 +87,19 @@ export function outfitPreviewFit() {
       const triangles = (list) => Array.isArray(list) && list.every(t => Number.isInteger(t) && t >= 0 && t < 1e6)
       const brush = input.brush ?? { hide: [], show: [] }
       if (!triangles(brush.hide) || !triangles(brush.show)) return reply(400, { error: '브러시 값이 올바르지 않습니다.' })
+      // Boots with a sole colour: clicked triangle centres (bind space, m) and the colour.
+      const sole = input.sole
+      if (sole !== undefined) {
+        const centres = (list) => Array.isArray(list) && list.length <= 5000 &&
+          list.every(c => Array.isArray(c) && c.length === 3 && c.every(v => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 3))
+        if (input.part !== 'boots' || !centres(sole?.gold) || !centres(sole?.leather) ||
+            (sole.colour !== undefined && !/^#[0-9a-f]{6}$/i.test(sole.colour)))
+          return reply(400, { error: '밑창 값이 올바르지 않습니다.' })
+      }
       const saved = await load(target)
       saved.parts[input.part] = { ...saved.parts[input.part], pending: settings, saved_at: new Date().toISOString(),
+                                  ...(sole && { sole: { gold: sole.gold, leather: sole.leather,
+                                                        ...(sole.colour && { colour: sole.colour.toLowerCase() }) } }),
                                   brush: { hide: [...new Set(brush.hide)].sort((a, b) => a - b),
                                            show: [...new Set(brush.show)].sort((a, b) => a - b) } }
       await writeFile(new URL(target.href + '.tmp'), JSON.stringify(saved, null, 2) + '\n')

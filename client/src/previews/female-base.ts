@@ -35,6 +35,7 @@ import {
 } from './female-bracer-fit'
 import { femaleBootGround } from '../lib/utils/female-boot-ground'
 import { femaleBrushCursor } from './female-brush-cursor'
+import { femaleSolePaint, type SoleEdits } from './female-sole-paint'
 import {
   attachValkyrieWings,
   disposeValkyrieWings,
@@ -199,6 +200,19 @@ export async function showFemaleBase(
           <button id="outfit-brush-undo" type="button">한 번 되돌리기</button>
           <button id="outfit-brush-clear" type="button">이 부위 브러시 지우기</button>
           <p class="details">드래그는 회전, 짧은 클릭은 칠하기입니다. 옷 뒤의 피부도 칠해집니다. 되살릴 곳은 '가린 피부 보이기'를 켜고 칠하세요. '이 부위 피팅 저장'으로 함께 저장됩니다.</p>
+        </div>
+        <div id="sole-paint-row" hidden>
+          <label class="toggle"><input id="sole-paint" type="checkbox" /> 밑창 색 칠하기 (면 클릭)</label>
+          <div id="sole-paint-controls" hidden>
+            <div id="sole-paint-mode" class="segmented" role="radiogroup" aria-label="밑창 색">
+              <label><input type="radio" name="sole-paint-mode" value="gold" checked /> 밑창 색</label>
+              <label><input type="radio" name="sole-paint-mode" value="leather" /> 가죽</label>
+            </div>
+            <label for="sole-colour">밑창 색</label>
+            <input id="sole-colour" type="color" />
+            <button id="sole-paint-undo" type="button">한 번 되돌리기</button>
+            <p class="details">부츠 위 원 안을 짧게 클릭하면 밑창 색이나 가죽으로 바뀝니다. '이 부위 피팅 저장'으로 함께 저장됩니다.</p>
+          </div>
         </div>
         <button id="outfit-fit-save" type="button">이 부위 피팅 저장</button>
         <button id="outfit-fit-reset" type="button">이 부위 조절 초기화</button>
@@ -1143,6 +1157,11 @@ export async function showFemaleBase(
         )
     fitSideRow.hidden = !pairedSlots.includes(partSlot(fitPart.value))
     showSkinToggle.checked = skinShown.has(fitPart.value)
+    const painter = solePainters.get(fitPart.value)
+    document.getElementById('sole-paint-row')!.hidden = !painter
+    if (painter)
+      (document.getElementById('sole-colour') as HTMLInputElement).value =
+        soleOf(fitPart.value).colour ?? painter.colour() ?? '#000000'
     const fit = sidesOf(fitPart.value)[editedSides(fitPart.value)[0]]
     for (const key of PART_FIT_KEYS) {
       fitInputs[key].value = String(fit[key])
@@ -1155,6 +1174,17 @@ export async function showFemaleBase(
     'sleeve-end'?: { left: SleeveEnd; right: SleeveEnd }
   }
   const brushEdits = new Map<string, SkinBrushEdits>()
+  // Boots parts with a sole material: clicked triangle overrides and the colour.
+  const soleEdits = new Map<string, SoleEdits>()
+  const solePainters = new Map<string, ReturnType<typeof femaleSolePaint>>()
+  const soleOf = (part: string) => {
+    let edits = soleEdits.get(part)
+    if (!edits) {
+      edits = { gold: [], leather: [] }
+      soleEdits.set(part, edits)
+    }
+    return edits
+  }
   const fitMasks = new Map<string, { hide_triangle_indices: number[] }>()
   const brushOf = (part: string) => {
     let edits = brushEdits.get(part)
@@ -1195,11 +1225,17 @@ export async function showFemaleBase(
           (saved: {
             parts: Record<
               string,
-              { pending?: SavedFit; brush?: { hide: number[]; show: number[] } }
+              {
+                pending?: SavedFit
+                brush?: { hide: number[]; show: number[] }
+                sole?: SoleEdits
+              }
             >
           }) => {
             for (const [slot, entry] of Object.entries(saved.parts)) {
               const part = `${slot}-${outfit}`
+              if (entry.sole && !soleEdits.has(part))
+                soleEdits.set(part, entry.sole)
               if (entry.brush && !brushEdits.has(part))
                 brushEdits.set(part, {
                   hide: new Set(entry.brush.hide),
@@ -1226,6 +1262,7 @@ export async function showFemaleBase(
   const applyFit = (part: string) => {
     const sides = sidesOf(part)
     fitters.get(part)?.((side) => sides[side])
+    solePainters.get(part)?.apply(soleOf(part))
   }
   for (const key of PART_FIT_KEYS)
     fitInputs[key].oninput = () => {
@@ -1293,6 +1330,7 @@ export async function showFemaleBase(
             hide: [...brushOf(part).hide],
             show: [...brushOf(part).show],
           },
+          ...(solePainters.has(part) && { sole: soleOf(part) }),
         }),
       })
       const result = (await response.json()) as { error?: string }
@@ -1322,6 +1360,11 @@ export async function showFemaleBase(
   brushToggle.onchange = () => {
     document.getElementById('outfit-brush-controls')!.hidden =
       !brushToggle.checked
+    const solePaint = document.getElementById('sole-paint') as HTMLInputElement
+    if (brushToggle.checked && solePaint.checked) {
+      solePaint.checked = false
+      solePaint.dispatchEvent(new Event('change'))
+    }
     if (brushToggle.checked && !paused) {
       brushPaused = true
       setPaused(true)
@@ -1350,6 +1393,149 @@ export async function showFemaleBase(
     brushEdits.set(part, { hide: new Set(), show: new Set() })
     applyFitMask(part)
     fitStatus.textContent = '저장하지 않은 조절이 있습니다.'
+  }
+  function setupSolePaint() {
+    const toggle = document.getElementById('sole-paint') as HTMLInputElement
+    const modeGroup = document.getElementById('sole-paint-mode')!
+    const colour = document.getElementById('sole-colour') as HTMLInputElement
+    const history: { part: string; edits: SoleEdits }[] = []
+    const canvas = renderer.domElement
+    const raycaster = new THREE.Raycaster()
+    // Brush radius in metres; triangles whose centre lies inside it are painted.
+    const SOLE_BRUSH = 0.01
+    const paintsSole = () =>
+      modeGroup.querySelector<HTMLInputElement>('input:checked')!.value ===
+      'gold'
+    // Overlays share their primitive's material, so each material gets one cursor.
+    const cursors = new Map<
+      THREE.Material,
+      ReturnType<typeof femaleBrushCursor>
+    >()
+    const hideCursors = () => {
+      for (const cursor of cursors.values()) cursor.hide()
+    }
+    const pick = (event: PointerEvent) => {
+      const painter = solePainters.get(fitPart.value)
+      if (!toggle.checked || !painter) return undefined
+      const rect = canvas.getBoundingClientRect()
+      raycaster.setFromCamera(
+        new THREE.Vector2(
+          ((event.clientX - rect.left) / rect.width) * 2 - 1,
+          -((event.clientY - rect.top) / rect.height) * 2 + 1
+        ),
+        camera
+      )
+      const targets = painter.targets().filter((mesh) => mesh.visible)
+      for (const mesh of targets) mesh.computeBoundingSphere()
+      const hit = raycaster.intersectObjects(targets, false)[0]
+      return hit && { painter, point: painter.pointOf(hit) }
+    }
+    let hover: PointerEvent | undefined
+    let hoverFrame = 0
+    const updateCursor = () => {
+      hoverFrame = 0
+      const picked = hover && pick(hover)
+      if (!picked?.point) return hideCursors()
+      for (const mesh of picked.painter.targets()) {
+        const material = mesh.material as THREE.Material
+        if (!cursors.has(material))
+          cursors.set(material, femaleBrushCursor(mesh))
+      }
+      for (const cursor of cursors.values())
+        cursor.show(
+          picked.point,
+          SOLE_BRUSH,
+          paintsSole() ? (picked.painter.colour() ?? '#ffffff') : '#5a3420'
+        )
+    }
+    const onMove = (event: PointerEvent) => {
+      hover = event
+      hoverFrame ||= requestAnimationFrame(updateCursor)
+    }
+    const onLeave = () => {
+      hover = undefined
+      hideCursors()
+    }
+    let down: { x: number; y: number } | undefined
+    let paintPaused = false
+    toggle.onchange = () => {
+      document.getElementById('sole-paint-controls')!.hidden = !toggle.checked
+      if (toggle.checked && brushToggle.checked) {
+        brushToggle.checked = false
+        brushToggle.dispatchEvent(new Event('change'))
+      }
+      if (toggle.checked && !paused) {
+        paintPaused = true
+        setPaused(true)
+      } else if (!toggle.checked && paintPaused) {
+        paintPaused = false
+        setPaused(false)
+      }
+    }
+    const remember = (part: string) =>
+      history.push({ part, edits: structuredClone(soleOf(part)) })
+    colour.oninput = () => {
+      const part = fitPart.value
+      if (!solePainters.has(part)) return
+      soleOf(part).colour = colour.value
+      solePainters.get(part)!.apply(soleOf(part))
+      fitStatus.textContent = '저장하지 않은 조절이 있습니다.'
+    }
+    colour.onchange = () => remember(fitPart.value)
+    document.getElementById('sole-paint-undo')!.onclick = () => {
+      const last = history.pop()
+      if (!last) return
+      soleEdits.set(last.part, last.edits)
+      solePainters.get(last.part)?.apply(last.edits)
+      showFit()
+    }
+    const onDown = (event: PointerEvent) => {
+      down = { x: event.clientX, y: event.clientY }
+    }
+    const onUp = (event: PointerEvent) => {
+      const start = down
+      down = undefined
+      const part = fitPart.value
+      if (!start) return
+      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4)
+        return
+      const picked = pick(event)
+      const point = picked?.point
+      const painter = picked?.painter
+      if (!point || !painter) return
+      remember(part)
+      const edits = soleOf(part)
+      const wanted = paintsSole() ? edits.gold : edits.leather
+      const other = wanted === edits.gold ? edits.leather : edits.gold
+      for (const centre of painter.centresNear(point, SOLE_BRUSH)) {
+        const near = (values: number[]) =>
+          centre.distanceTo(new THREE.Vector3().fromArray(values)) < 0.001
+        other.splice(
+          0,
+          other.length,
+          ...other.filter((values) => !near(values))
+        )
+        if (!wanted.some(near)) wanted.push(centre.toArray())
+      }
+      painter.apply(edits)
+      updateCursor()
+      fitStatus.textContent = '저장하지 않은 조절이 있습니다.'
+    }
+    toggle.addEventListener('change', () => {
+      if (!toggle.checked) hideCursors()
+    })
+    modeGroup.addEventListener('input', () => hover && onMove(hover))
+    canvas.addEventListener('pointerdown', onDown)
+    canvas.addEventListener('pointerup', onUp)
+    canvas.addEventListener('pointermove', onMove)
+    canvas.addEventListener('pointerleave', onLeave)
+    cleanup.push(() => {
+      cancelAnimationFrame(hoverFrame)
+      canvas.removeEventListener('pointerdown', onDown)
+      canvas.removeEventListener('pointerup', onUp)
+      canvas.removeEventListener('pointermove', onMove)
+      canvas.removeEventListener('pointerleave', onLeave)
+    })
   }
   function setupSkinBrush() {
     if (!brushBody || !brushRestIndex) return
@@ -1595,6 +1781,10 @@ export async function showFemaleBase(
               )
               after = (point) =>
                 deform(point, (side) => sleeveEndsOf(part)[side])
+            }
+            if (slot === 'boots') {
+              const painter = femaleSolePaint(meshes)
+              if (painter.available) solePainters.set(part, painter)
             }
             fitters.set(
               part,
@@ -1966,6 +2156,7 @@ export async function showFemaleBase(
   const controls = new OrbitControls(camera, renderer.domElement)
   controls.enableDamping = true
   setupSkinBrush()
+  setupSolePaint()
   controls.minDistance = 0.144
   controls.maxDistance = 9
   cleanup.push(() => controls.dispose())

@@ -81,7 +81,8 @@ OUTFITS = {
             # (metres, measured in game) after stretching to the heel-pose sole. The full stretch looked too long,
             # so only half of it is used (user decision 2026-11-05).
             'boots': dict(nodes=['left_boots', 'right_boots'], version='fitted_v1', hide_bones=FEET,
-                          extend_heel={'left': .0029, 'right': .0048, 'share': .5, 'upright': .09, 'lean': .005}),
+                          extend_heel={'left': .0029, 'right': .0048, 'share': .5, 'upright': .09, 'lean': .005},
+                          sole_colour=(.72, .55, .22)),
         }),
 }
 COVER_RAY = .06
@@ -627,8 +628,56 @@ def extend_heels(posed, extra):
     return posed, record
 
 
+def paint_sole(posed, bind, colour):
+    """Give the sole, arch and heel tip (facing down) and the stiletto's toe-facing side a coloured copy of the leather,
+    in the heel pose, like the rogue boots' red sole. The heel's sides and back keep the leather."""
+    tri = posed[faces]
+    normals = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+    normals /= np.maximum(np.linalg.norm(normals, axis=1, keepdims=True), 1e-12)
+    centres = tri.mean(1)
+    painted = np.zeros(len(faces), bool)
+    for sign in (1, -1):
+        side = np.sign(centres[:, 0]) == sign
+        sole = posed[faces[side]].reshape(-1, 3)[:, 2].min()
+        y = centres[side, 1]
+        back = y > y.max() - HEEL_BACK * (y.max() - y.min())
+        rise = centres[side, 2] - sole
+        # Down-facing faces tilted sideways are the arch's edge, which shows from the side.
+        down = (normals[side, 2] < -.5) & (np.abs(normals[side, 0]) < .4) & (rise < .11)
+        inner = back & (rise < .1) & (normals[side, 1] < -.3)
+        painted[np.flatnonzero(side)[down | inner]] = True
+    # Triangles clicked in the preview, matched by their bind-space centre in glTF axes.
+    saved = json.loads(PREVIEW_FIT.read_text())['parts'].get(PART, {}).get('sole', {}) if PREVIEW_FIT.exists() else {}
+    if saved.get('colour'):
+        colour = tuple(int(saved['colour'][i:i + 2], 16) / 255 for i in (1, 3, 5))
+    centres = bind[faces].mean(1) @ TO_GLTF.T
+    for value, key in ((True, 'gold'), (False, 'leather')):
+        for point in saved.get(key, []):
+            distance = np.linalg.norm(centres - point, axis=1)
+            if distance.min() < .004:
+                painted[distance.argmin()] = value
+    material = mesh.materials[0].copy()
+    material.name = f'{PART_ID}_sole'
+    shader = next(n for n in material.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
+    # The leather's roughness and normal maps left glossy pale patches on the flat colour.
+    for name in ('Base Color', 'Roughness', 'Metallic', 'Normal'):
+        for link in list(shader.inputs[name].links):
+            material.node_tree.links.remove(link)
+    linear = [c / 12.92 if c <= .04045 else ((c + .055) / 1.055) ** 2.4 for c in colour]
+    shader.inputs['Base Color'].default_value = (*linear, 1)
+    shader.inputs['Roughness'].default_value = .6
+    shader.inputs['Metallic'].default_value = 0
+    mesh.materials.append(material)
+    for polygon in mesh.polygons:
+        if painted[polygon.index]:
+            polygon.material_index = len(mesh.materials) - 1
+    return int(painted.sum()), colour
+
+
 paired = PART in ('gloves', 'boots')
 keep_pending = '--keep-pending' in argv
+sole_faces = 0
+sole_colour = None
 # Glove fits saved in the forearm frame need the elbow and wrist.
 arms = {sign: (bones[side + 'ForeArm'] @ TO_GLTF.T, bones[side + 'Hand'] @ TO_GLTF.T)
         for side, sign in (('Left', 1), ('Right', -1))}
@@ -646,6 +695,9 @@ if heel:
         homogeneous = np.c_[points, np.ones(len(points))][..., None]
         posed, heel_extension = extend_heels((skinning @ homogeneous)[:, :3, 0], SPEC['extend_heel'])
         points = np.linalg.solve(skinning, np.c_[posed, np.ones(len(posed))][..., None])[:, :3, 0]
+    if 'sole_colour' in SPEC:
+        homogeneous = np.c_[points, np.ones(len(points))][..., None]
+        sole_faces, sole_colour = paint_sole((skinning @ homogeneous)[:, :3, 0], points, SPEC['sole_colour'])
 else:
     # Weights come last so they are sampled where the adjusted, aligned vertices end up.
     # One-tube sleeves are aligned before the saved fits, which then move them as the preview showed.
@@ -914,6 +966,7 @@ report = {'date': date.today().isoformat(), 'outfit': OUTFIT, 'part': PART, 'sou
           **({'sleeve_cut': sleeve_cut} if sleeve_cut else {}),
           **({'hem_cut': hem_cut} if hem_cut else {}),
           **({'heel_extension': heel_extension} if heel_extension else {}),
+          **({'sole_faces': sole_faces, 'sole_colour_srgb': [round(c, 4) for c in sole_colour]} if sole_faces else {}),
           'method': f'Uniform {SCALE} scale' + (', lowered by the heel pose lift' if CONFIG['on_heels'] else '') + ', forearm rotation about the elbow and rigid hand ICP from the generated body pose, '
                     'no push-out (covered and poking skin is hidden), barycentric skin weights from the nearest base skin smoothed over welded neighbours.',
           'status': 'Candidate; visual and animation review pending'}
