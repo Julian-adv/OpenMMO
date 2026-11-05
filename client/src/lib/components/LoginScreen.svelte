@@ -62,8 +62,13 @@
 
   onMount(async () => {
     const devLogin = import.meta.env.DEV && import.meta.env.VITE_DEV_LOGIN
-    if (devLogin && new URLSearchParams(location.search).has('dev_login')) {
-      await handleCredential({ credential: devLogin as string })
+    const devAccount = new URLSearchParams(location.search).get('dev_login')
+    if (devLogin && devAccount !== null) {
+      // `?dev_login=<account>` signs in as another account; the secret is shared.
+      const credential = devAccount
+        ? (devLogin as string).replace(/^dev:[^:]*:/, `dev:${devAccount}:`)
+        : (devLogin as string)
+      await handleCredential({ credential })
       return
     }
 
