@@ -120,6 +120,73 @@ async fn pickaxe_mines_ore_heaps_until_sunset() {
         .sum();
     assert!(ore == 0 || ore == 2 + u32::from(depth) / 8, "{ore}");
 
-    game_state.refill_mined_props().await;
+    game_state.restore_mine_props().await;
     assert!(!mined().await);
+}
+
+/// A push from behind slides a rail cart four cells on, a player on the rail
+/// stops it short, and sunset rolls it back.
+#[tokio::test]
+async fn rail_carts_slide_from_a_push_until_sunset() {
+    use onlinerpg_shared::dungeon::{cart_rail_run, PropKind, CART_PUSH_CELLS};
+    let game_state = make_test_game_state("blackvein_mine_carts");
+    let entrance = game_state.dungeon_defs.get("blackvein_mine").unwrap();
+    game_state.ensure_dungeon_runtime(&entrance.id).await;
+    let (depth, prop_id, cart, run) = {
+        let dungeons = game_state.dungeons.read().await;
+        dungeons[&entrance.id]
+            .layouts
+            .iter()
+            .find_map(|l| {
+                l.props.iter().enumerate().find_map(|(i, p)| {
+                    let run = cart_rail_run(l, p)?;
+                    let room =
+                        (if p.along_x() { p.x } else { p.z }) + 2 + 2 * CART_PUSH_CELLS <= run.end;
+                    (p.kind == PropKind::MineRailCart && room)
+                        .then_some((l.depth, i as u32, *p, run))
+                })
+            })
+            .expect("a cart with room to roll")
+    };
+    let at = |offset: i32| {
+        let s = cart.slid(offset);
+        cell_center(&entrance.position(), depth, (s.x, s.z))
+    };
+    let mut pusher = make_player("Pusher", 0.0, 0.0);
+    pusher.position = at(-1);
+    pusher.floor_level = -(depth as i8);
+    let pusher_id = pusher.id;
+    game_state.add_player(pusher).await;
+    let offset = || async {
+        let dungeons = game_state.dungeons.read().await;
+        dungeons[&entrance.id]
+            .cart_offsets
+            .get(&depth)
+            .and_then(|m| m.get(&prop_id).copied())
+            .unwrap_or(0)
+    };
+
+    game_state
+        .push_dungeon_cart(&pusher_id, &entrance.id, depth, prop_id)
+        .await;
+    assert_eq!(offset().await, CART_PUSH_CELLS, "{run:?}");
+
+    let mut blocker = make_player("Blocker", 0.0, 0.0);
+    blocker.position = at(CART_PUSH_CELLS + 3);
+    blocker.floor_level = -(depth as i8);
+    game_state.add_player(blocker).await;
+    game_state
+        .players
+        .write()
+        .await
+        .get_mut(&pusher_id)
+        .unwrap()
+        .position = at(CART_PUSH_CELLS - 1);
+    game_state
+        .push_dungeon_cart(&pusher_id, &entrance.id, depth, prop_id)
+        .await;
+    assert_eq!(offset().await, CART_PUSH_CELLS + 1);
+
+    game_state.restore_mine_props().await;
+    assert_eq!(offset().await, 0);
 }

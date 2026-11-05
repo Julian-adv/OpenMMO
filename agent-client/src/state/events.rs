@@ -619,13 +619,21 @@ impl SharedState {
                 active,
                 broken,
                 opened,
+                offset,
             } => {
-                self.world_cache.write().unwrap().set_dungeon_prop(
+                let mut cache = self.world_cache.write().unwrap();
+                cache.set_dungeon_prop(
                     entrance_id,
                     *depth,
                     *prop_id,
                     *active && *broken,
                     *active && *opened,
+                );
+                cache.set_dungeon_cart(
+                    entrance_id,
+                    *depth,
+                    *prop_id,
+                    if *active { *offset } else { 0 },
                 );
             }
             ServerMessage::DungeonDoorToggled {
@@ -705,6 +713,19 @@ impl SharedState {
                     entrance_id,
                     *depth,
                     *prop_id,
+                );
+            }
+            ServerMessage::DungeonCartPushed {
+                ref entrance_id,
+                depth,
+                prop_id,
+                offset,
+            } => {
+                self.world_cache.write().unwrap().set_dungeon_cart(
+                    entrance_id,
+                    *depth,
+                    *prop_id,
+                    *offset,
                 );
             }
             ServerMessage::BuybackUpdated {

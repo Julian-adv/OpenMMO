@@ -346,6 +346,16 @@ Both were generated and processed exactly like the monster cries above.
   on pc5090; prompt: "The sound of hundreds of gold coins slithering out of a
   treasure chest"). Trimmed to 1.8 s (trailing silence) with a 150 ms tail fade,
   −1.5 dB gain, resampled 48→44.1 kHz.
+- pickaxe-ore.ogg — 곡괭이로 광석을 캐는 소리. 검은맥 광산 채굴 중 스윙마다 재생한다.
+  [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) API로 2026-11-05 직접 생성. Starter 유료 플랜,
+  [유료 플랜 상업 이용 라이선스](https://help.elevenlabs.io/hc/en-us/articles/13313564601361-Can-I-publish-the-content-I-generate-on-the-platform) 적용.
+  1.0초. 첫 프롬프트 `pickaxe_ore`(`prompt_influence=0.5`) 3개는 고음 위주라 껍질이 부서지는 소리 같다는
+  사용자 평으로 미채택. 더 둔탁하게 쓴 `pickaxe_ore_thud`·`pickaxe_ore_chunk`(`prompt_influence=0.6`) 3개씩 중
+  사용자가 `pickaxe_ore_chunk` take 2를 골랐다(처음엔 `pickaxe_ore_thud` take 3을 골랐다가 바꿈). 후보 9개 총 약 90크레딧. 프롬프트는 모두 `tools/gen-death-sfx.py`에 기록.
+  모노 다운믹스, 앞 무음 −40 dB 기준 제거, 끝 무음 −38 dB 기준 트림, 마지막 60 ms 페이드, 피크 −3 dB 정규화,
+  모노 44.1 kHz OGG Vorbis q5, 0.4초. 게임 재생 볼륨 0.5.
+  스윙 시작 600 ms 뒤(`player_anim_timing.csv`의 `mining_swing_impact`, 빌린 `great_sword_slash`의 내려찍는 순간)에 재생.
+  원본과 처리 기록은 `assets/sfx/pickaxe-ore-2026-11-05/`의 `pickaxe-ore_chunk-take2_2026-11-05.mp3` 및 같은 이름의 `.json`에 보관.
 
 ## World
 

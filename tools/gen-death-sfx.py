@@ -43,6 +43,31 @@ PROMPTS = {
         "No bright ringing, bell, chime, ping, repeated hits, swoosh, voice, music, "
         "reverb, explosion or bass boom."
     ),
+    "pickaxe_ore": (
+        "One iron pickaxe strike on a hard ore vein in a mine wall. An immediate "
+        "sharp metallic clink of the steel point biting into dense rock, fused "
+        "with a crisp stone crack and a short spray of falling grit and small "
+        "rock chips. Close-up, dry, punchy mining foley, one strike only, under "
+        "one second. No ringing bell, chime, musical note, voice, music, swoosh, "
+        "reverb, echo or repeated hits."
+    ),
+    "pickaxe_ore_thud": (
+        "A heavy iron pickaxe swung hard into a solid rock wall in a mine. One "
+        "deep, dull, heavy thud of metal driving into dense stone: a solid low "
+        "chunky knock with weight and body, then a few small rocks dropping onto "
+        "the dirt floor. Muffled, earthy, low-mid close-up foley, one strike only, "
+        "under one second. No crackle, no brittle snapping, no glass, no shell, "
+        "no bright clink, ring, chime, voice, music, swoosh, reverb or repeated hits."
+    ),
+    "pickaxe_ore_chunk": (
+        "Mining ore by hand: one forceful pickaxe blow into a thick vein of iron "
+        "ore. A blunt, weighty stone impact like a sledgehammer hitting a boulder, "
+        "deep and dull with a short gritty crunch as a heavy chunk of rock breaks "
+        "loose and thumps down. Dense low-frequency body, tight decay, one strike "
+        "only, under one second. No high-pitched crackling, no eggshell or "
+        "brittle cracking, no metallic ring or ping, no voice, music, whoosh, "
+        "echo or repeated hits."
+    ),
     "orc": "The short, guttural death roar of an orc warrior cut down by a sword in battle",
     "orc_female": "A woman's very short, sharp, high-pitched death scream, a single shrill feminine cry less than half a second long, cut off instantly as a sword strikes her down. Clearly a female human-like voice, high soprano pitch, no growl, no male voice, no music.",
     "hobgoblin": "The harsh, guttural death cry of a hobgoblin soldier felled by a sword: a rough snarling humanoid war-cry choking off as he falls. Voice only, no dog, no barking, no animal, no music.",

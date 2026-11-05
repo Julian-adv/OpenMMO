@@ -1906,6 +1906,18 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::PushDungeonCart {
+            entrance_id,
+            depth,
+            prop_id,
+        } => {
+            if let Some(id) = &state.require_in_game("cart push") {
+                game_state
+                    .push_dungeon_cart(id, &entrance_id, depth, prop_id)
+                    .await;
+            }
+        }
+
         ClientMessage::OpenDungeonProp {
             entrance_id,
             depth,

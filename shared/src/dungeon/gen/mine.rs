@@ -13,7 +13,8 @@ use super::{
     PropPlacer, Spacing, SHAFT_ROOM_AXIAL,
 };
 use crate::dungeon::{
-    is_locked_depth, FloorLayout, PropKind, PropSpec, Room, SpawnEntry, StairShaft, DIRS, GRID,
+    is_locked_depth, rail_runs, FloorLayout, PropKind, PropSpec, Room, SpawnEntry, StairShaft,
+    DIRS, GRID,
 };
 
 /// Plans are redrawn whole when a corridor cannot keep clear, so they fail
@@ -67,6 +68,8 @@ pub(super) fn try_generate_floor(
     let mut layout = finish_floor(rng, depth, is_last, up_shaft, table, plan)?;
     let decor = [timber_posts(&layout), rails(&layout)].concat();
     layout.props.extend(decor);
+    let carts = rail_carts(&layout);
+    layout.props.extend(carts);
     let work_rooms = if fork { 2..2 + BRANCHES } else { 0..0 };
     let fixtures = room_fixtures(rng, &layout, work_rooms);
     layout.props.extend(fixtures);
@@ -115,21 +118,66 @@ fn straight_runs(
 /// Floors whose corridors carry ore-cart rails.
 pub(in crate::dungeon) const RAIL_DEPTHS: RangeInclusive<u8> = 6..=15;
 
-/// Rail pieces down the middle of straight corridor stretches, one per two
-/// cells so they join end to end. Each piece covers the 2×2 cells from its
-/// own `(x, z)`.
+/// Rail pieces down one lane of straight corridor stretches, one per two
+/// cells so they join end to end. Which lane depends only on where the
+/// corridor lies across, so a stretch keeps to one side.
 fn rails(layout: &FloorLayout) -> Vec<PropSpec> {
     if !RAIL_DEPTHS.contains(&layout.depth) {
         return Vec::new();
     }
     straight_runs(layout, 2, -1..=2)
         .into_iter()
-        .map(|(x, z, along_x)| PropSpec {
-            x,
-            z,
-            kind: PropKind::MineRail,
-            stack: 1,
-            rotation: if along_x { 90 } else { 0 },
+        .map(|(x, z, along_x)| {
+            let (x, z) = if along_x {
+                (x, z + z.rem_euclid(2))
+            } else {
+                (x + x.rem_euclid(2), z)
+            };
+            PropSpec {
+                x,
+                z,
+                kind: PropKind::MineRail,
+                stack: 1,
+                rotation: if along_x { 90 } else { 0 },
+            }
+        })
+        .collect()
+}
+
+/// Runs at least this long carry a cart.
+pub(in crate::dungeon) const CART_RUN_MIN: i32 = 8;
+
+/// One cart on each long enough rail run, on the piece nearest its middle
+/// that no monster spawns on: a spawn inside a cart would be sealed in.
+fn rail_carts(layout: &FloorLayout) -> Vec<PropSpec> {
+    let spawned = |c: (i32, i32)| layout.spawns.iter().any(|s| (s.x, s.z) == c);
+    rail_runs(layout)
+        .into_iter()
+        .filter(|r| r.len() >= CART_RUN_MIN)
+        .filter_map(|r| {
+            let pieces = r.len() / 2;
+            let middle = pieces / 2;
+            (0..pieces)
+                .map(|k| {
+                    let step = (k + 1) / 2;
+                    if k % 2 == 1 {
+                        middle - step
+                    } else {
+                        middle + step
+                    }
+                })
+                .filter(|p| (0..pieces).contains(p))
+                .map(|p| {
+                    let (x, z) = r.cell(r.start + 2 * p);
+                    PropSpec {
+                        x,
+                        z,
+                        kind: PropKind::MineRailCart,
+                        stack: 1,
+                        rotation: if r.along_x { 90 } else { 0 },
+                    }
+                })
+                .find(|c| !c.cells().any(spawned))
         })
         .collect()
 }

@@ -121,12 +121,33 @@ pub(super) struct DungeonRuntime {
     /// `toggle_dungeon_door` only admits ids that resolve, so this stays
     /// bounded by the layout. Same lifetime as `broken_props`.
     pub open_doors: HashMap<u8, HashSet<u32>>,
+    /// Rail carts pushed off their spot per depth: prop id → cells moved
+    /// along the rail. Same lifetime as `broken_props`; sunset puts them back.
+    pub cart_offsets: HashMap<u8, HashMap<u32, i32>>,
     /// Key-gated door ids per floor (index = depth - 1); empty on unlocked floors.
     pub locked_doors: Vec<Vec<u32>>,
     /// Which opening each open locked door is on, so the timed close can
     /// tell its own opening from a later one.
     pub locked_door_opens: HashMap<(u8, u32), u64>,
     pub locked_door_generation: u64,
+}
+
+impl DungeonRuntime {
+    /// Floor `depth`'s broken props and pushed carts, as `floor_cells` and
+    /// `cart_push_target` take them.
+    pub(super) fn floor_props(&self, depth: u8) -> (Vec<u32>, Vec<(u32, i32)>) {
+        let broken = self
+            .broken_props
+            .get(&depth)
+            .map(|s| s.iter().copied().collect())
+            .unwrap_or_default();
+        let carts = self
+            .cart_offsets
+            .get(&depth)
+            .map(|m| m.iter().map(|(&id, &offset)| (id, offset)).collect())
+            .unwrap_or_default();
+        (broken, carts)
+    }
 }
 
 pub(super) struct FloorRuntime {
@@ -284,6 +305,7 @@ impl GameState {
                 broken_props: HashMap::new(),
                 opened_props: HashMap::new(),
                 open_doors: HashMap::new(),
+                cart_offsets: HashMap::new(),
                 locked_doors,
                 locked_door_opens: HashMap::new(),
                 locked_door_generation: 0,
@@ -1252,6 +1274,7 @@ impl GameState {
             };
             rt.broken_props.clear();
             rt.opened_props.clear();
+            rt.cart_offsets.clear();
             rt.layouts.clone()
         };
         for layout in &layouts {
@@ -1262,14 +1285,15 @@ impl GameState {
             .reset_dungeon_props(entrance_id, &layouts, PropKind::is_interactive);
     }
 
-    /// Sunset: mined ore heaps and crystals fill back in.
-    pub(super) async fn refill_mined_props(&self) {
-        let refilled: Vec<(String, Vec<FloorLayout>)> = {
+    /// Sunset: mined ore heaps and crystals fill back in and pushed carts
+    /// roll back to their spots.
+    pub(super) async fn restore_mine_props(&self) {
+        let restored: Vec<(String, Vec<FloorLayout>)> = {
             let mut dungeons = self.dungeons.write().await;
             dungeons
                 .iter_mut()
                 .filter_map(|(id, rt)| {
-                    let mut layouts = Vec::new();
+                    let mut depths: HashSet<u8> = rt.cart_offsets.drain().map(|(d, _)| d).collect();
                     for (depth, ids) in rt.broken_props.iter_mut() {
                         let Some(layout) = rt.layouts.get((*depth - 1) as usize) else {
                             continue;
@@ -1282,20 +1306,26 @@ impl GameState {
                                 .is_some_and(|p| p.kind.is_minable())
                         });
                         if ids.len() != before {
-                            layouts.push(layout.clone());
+                            depths.insert(*depth);
                         }
                     }
+                    let layouts: Vec<FloorLayout> = depths
+                        .into_iter()
+                        .filter_map(|d| rt.layouts.get((d - 1) as usize).cloned())
+                        .collect();
                     (!layouts.is_empty()).then(|| (id.clone(), layouts))
                 })
                 .collect()
         };
-        for (id, layouts) in refilled {
+        for (id, layouts) in restored {
             for layout in &layouts {
                 self.rebuild_dungeon_floor_passability(&id, layout.depth)
                     .await;
             }
             self.interest_lock()
-                .reset_dungeon_props(&id, &layouts, PropKind::is_minable);
+                .reset_dungeon_props(&id, &layouts, |k| {
+                    k.is_minable() || k == PropKind::MineRailCart
+                });
         }
     }
 
@@ -1476,7 +1506,7 @@ impl GameState {
     }
 
     /// Evict occupants before clearing empty floors; props and doors persist
-    /// except mined ore, which refills.
+    /// except mined ore and pushed carts, which are restored.
     async fn reset_dungeons(&self, epoch: i64) {
         let warned: Vec<PlayerId> = {
             let dungeons = self.dungeons.read().await;
@@ -1546,7 +1576,7 @@ impl GameState {
             }
         }
         drop(dungeons);
-        self.refill_mined_props().await;
+        self.restore_mine_props().await;
         self.dungeon_reset.write().await.completed_epoch = Some(epoch);
         info!(
             "Dungeons reset for the new night; {} occupant(s) returned to the surface",

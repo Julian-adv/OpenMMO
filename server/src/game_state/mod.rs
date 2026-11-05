@@ -249,6 +249,7 @@ mod skills;
 mod teleport_departure;
 mod teleport_scroll;
 pub(crate) use skills::skills_from_rows;
+mod cart;
 mod meal;
 mod mining;
 mod stall;

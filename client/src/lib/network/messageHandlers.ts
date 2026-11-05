@@ -11,6 +11,7 @@ import {
 } from '../stores/announcementStore'
 import { translate, type MessageKey } from '../i18n'
 import { setMining } from '../stores/miningStore'
+import { showPropText } from '../effects/prop-text-queue'
 import { isCoinPileJackpot } from './coinPileJackpot'
 import {
   handleAltarStatus,
@@ -90,6 +91,7 @@ import {
 } from '../managers/sfxManager'
 import {
   FISHING_CAST_SWING_DELAY_MS,
+  MINING_SWING_IMPACT_MS,
   MINING_SWING_MS,
 } from '../data/combatTiming'
 import { monsterManager } from '../managers/monsterManager'
@@ -2187,7 +2189,9 @@ export function handleServerMessage(
         data.depth,
         data.prop_id
       )
-      if (isNew && !selfBreak) playPropSound('break')
+      // Mined ore is heard through the pickaxe swings, not a crate shattering.
+      const mined = dungeonManager.isMinableProp(data.depth, data.prop_id)
+      if (isNew && !selfBreak && !mined) playPropSound('break')
       break
     }
 
@@ -2226,7 +2230,17 @@ export function handleServerMessage(
         data.prop_id,
         data.active,
         data.broken,
-        data.opened
+        data.opened,
+        data.offset
+      )
+      break
+
+    case 'DungeonCartPushed':
+      dungeonManager.setCartOffset(
+        data.entrance_id,
+        data.depth,
+        data.prop_id,
+        data.offset
       )
       break
 
@@ -2907,11 +2921,28 @@ export function handleServerMessage(
       if (!isSelfPlayer(data.player_id)) startRemoteMining(data.player_id)
       break
 
-    case 'MiningEnded':
+    case 'MiningEnded': {
       setMining(data.player_id, false)
       if (isSelfPlayer(data.player_id)) events.miningEnded.emit()
       else stopRemoteMining(data.player_id)
+      const at =
+        data.found &&
+        dungeonManager.propAnchor(
+          get(currentDungeonDepth),
+          data.prop_id,
+          MINED_TEXT_HEIGHT
+        )
+      if (data.found && at) {
+        const [itemId, quantity] = data.found
+        const name = itemDisplayName(itemId)
+        showPropText(
+          quantity > 1 ? `+${name} ×${quantity}` : `+${name}`,
+          MINED_TEXT_COLOR,
+          at
+        )
+      }
       break
+    }
 
     case 'GrillEnded':
       grilling.set(false)
@@ -3014,6 +3045,10 @@ export function markMonsterSkillSpots(
   }
 }
 
+/** Mined ore floats up from this far over the heap's floor, in this color. */
+const MINED_TEXT_HEIGHT = 1.2
+const MINED_TEXT_COLOR = '#8fd3ff'
+
 const remoteMiningSwings = new Map<number, ReturnType<typeof setInterval>>()
 
 /** Swing until `MiningEnded`, or until the miner drops out of view and that
@@ -3023,6 +3058,7 @@ function startRemoteMining(playerId: number) {
   const swing = () => {
     if (remotePlayerManager.players.has(playerId)) {
       remotePlayerManager.handleAttack(playerId)
+      playPropSound('pickaxe', MINING_SWING_IMPACT_MS)
       return
     }
     stopRemoteMining(playerId)

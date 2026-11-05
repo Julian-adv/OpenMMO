@@ -73,6 +73,7 @@ export interface DungeonProp {
     | 'mine_timber_post'
     | 'mine_rail'
     | 'mine_cart'
+    | 'mine_rail_cart'
     | 'mine_tool_rack'
     | 'mine_ore_heap'
     | 'mine_rubble'
@@ -95,8 +96,14 @@ export interface PendingPropBreak {
   z: number
 }
 
+/** Mined with a pickaxe; they sink to a stub instead of breaking into debris. */
+export const MINABLE_PROP_KINDS: ReadonlySet<string> = new Set([
+  'mine_ore_heap',
+  'mine_crystal_cluster',
+])
+
 export type PendingPropAction = PendingPropBreak & {
-  action: 'break' | 'open' | 'mine'
+  action: 'break' | 'open' | 'mine' | 'push'
 }
 
 /** Depth/id under which the surface entrance door's open state is keyed in the
@@ -415,6 +422,9 @@ class DungeonManager {
    *  lifetime/scope as `brokenProps`; drives the lid-open animation, not
    *  passability (chests stay solid when open). */
   private openedProps = new Map<number, Set<number>>()
+  /** Pushed rail carts per depth: prop index → cells along the rail. Same
+   *  lifetime/scope as `brokenProps`. */
+  private cartOffsets = new Map<number, Map<number, number>>()
   /** A prop the player clicked and is walking toward; the dungeon layer fires
    *  the action once the player is within range (see GameSceneDungeonLayer
    *  update). Cleared on arrival, a new movement click, or leaving the dungeon. */
@@ -443,6 +453,7 @@ class DungeonManager {
       propId: number
       broken: boolean
       opened: boolean
+      offset: number
     }
   >()
 
@@ -452,6 +463,7 @@ class DungeonManager {
     this.openDoors.clear()
     this.brokenProps.clear()
     this.openedProps.clear()
+    this.cartOffsets.clear()
     this.selfBrokenProps.clear()
     for (let depth = 0; depth <= this.layouts.length; depth++)
       this.rebuildFloorPassability(depth)
@@ -490,6 +502,17 @@ class DungeonManager {
 
   floorY(depth: number): number {
     return dungeonFloorY(this.entrance!, depth)
+  }
+
+  /** World point `height` above the middle of prop `propId`'s footprint. */
+  propAnchor(depth: number, propId: number, height: number) {
+    const prop = this.layouts[depth - 1]?.props[propId]
+    if (!prop || !this.entrance) return null
+    return {
+      x: this.originX + prop.x + prop.w / 2,
+      y: this.floorY(depth) + height,
+      z: this.originZ + prop.z + prop.d / 2,
+    }
   }
 
   /** Passability floor index for path queries at a given depth. */
@@ -617,6 +640,7 @@ class DungeonManager {
     dungeon_add_passability(id, entrance.x, entrance.y, entrance.z)
     this.brokenProps.clear()
     this.openedProps.clear()
+    this.cartOffsets.clear()
     this.selfBrokenProps.clear()
     this.treasureChestOpenedState = false
     this.openDoors.clear()
@@ -635,7 +659,8 @@ class DungeonManager {
           prop.propId,
           true,
           prop.broken,
-          prop.opened
+          prop.opened,
+          prop.offset
         )
     }
   }
@@ -648,6 +673,7 @@ class DungeonManager {
     this.layouts = []
     this.brokenProps.clear()
     this.openedProps.clear()
+    this.cartOffsets.clear()
     this.selfBrokenProps.clear()
     this.treasureChestOpenedState = false
     this.openDoors.clear()
@@ -664,6 +690,48 @@ class DungeonManager {
   /** Prop indices (chests) opened on a floor (empty set when none/unknown). */
   openedPropsForDepth(depth: number): ReadonlySet<number> {
     return this.openedProps.get(depth) ?? EMPTY_BROKEN
+  }
+
+  isMinableProp(depth: number, propId: number): boolean {
+    const kind = this.layouts[depth - 1]?.props[propId]?.kind
+    return kind !== undefined && MINABLE_PROP_KINDS.has(kind)
+  }
+
+  /** Cells rail cart `propId` stands pushed along its rail. */
+  cartOffset(depth: number, propId: number): number {
+    return this.cartOffsets.get(depth)?.get(propId) ?? 0
+  }
+
+  /** Record where a rail cart now stands (live push broadcast). */
+  setCartOffset(
+    entranceId: string,
+    depth: number,
+    propId: number,
+    offset: number
+  ) {
+    if (!this.storeCartOffset(entranceId, depth, propId, offset)) return
+    this.rebuildFloorPassability(depth)
+    dungeonPropsRevision.update((n) => n + 1)
+  }
+
+  private storeCartOffset(
+    entranceId: string,
+    depth: number,
+    propId: number,
+    offset: number
+  ): boolean {
+    const subject = this.propSubjects.get(`${entranceId}:${depth}:${propId}`)
+    if (subject) subject.offset = offset
+    if (entranceId !== this.id || this.cartOffset(depth, propId) === offset)
+      return false
+    let carts = this.cartOffsets.get(depth)
+    if (!carts) {
+      carts = new Map()
+      this.cartOffsets.set(depth, carts)
+    }
+    if (offset === 0) carts.delete(propId)
+    else carts.set(propId, offset)
+    return true
   }
 
   /** Whether a specific prop is already known opened (skip a redundant walk-up). */
@@ -766,7 +834,15 @@ class DungeonManager {
     if (!this.id || depth < 1) return
     const broken = Uint32Array.from(this.brokenProps.get(depth) ?? [])
     const open = Uint32Array.from(this.openDoors.get(depth) ?? [])
-    dungeon_rebuild_floor(this.id, depth, broken, open)
+    const carts = this.cartOffsets.get(depth) ?? new Map<number, number>()
+    dungeon_rebuild_floor(
+      this.id,
+      depth,
+      broken,
+      open,
+      Uint32Array.from(carts.keys()),
+      Int32Array.from(carts.values())
+    )
   }
 
   get pendingProp(): PendingPropAction | null {
@@ -936,11 +1012,19 @@ class DungeonManager {
     propId: number,
     active: boolean,
     broken: boolean,
-    opened: boolean
+    opened: boolean,
+    offset: number
   ) {
     const key = `${entranceId}:${depth}:${propId}`
     if (active)
-      this.propSubjects.set(key, { entranceId, depth, propId, broken, opened })
+      this.propSubjects.set(key, {
+        entranceId,
+        depth,
+        propId,
+        broken,
+        opened,
+        offset,
+      })
     else this.propSubjects.delete(key)
     if (active && entranceId !== this.id) {
       const entry = DUNGEON_ENTRANCES.find((entry) => entry.id === entranceId)
@@ -953,6 +1037,8 @@ class DungeonManager {
     else brokenSet.delete(propId)
     if (active && opened) openedSet.add(propId)
     else openedSet.delete(propId)
+    // Out of interest, a cart stays where it was last seen.
+    if (active) this.storeCartOffset(entranceId, depth, propId, offset)
     this.setPropsState(entranceId, depth, [...brokenSet], [...openedSet])
   }
 

@@ -546,6 +546,12 @@ pub enum ClientMessage {
         depth: u8,
         prop_id: u32,
     },
+    /// Push a rail cart from one of its ends; it slides away along the rail.
+    PushDungeonCart {
+        entrance_id: String,
+        depth: u8,
+        prop_id: u32,
+    },
     /// Open an interactive dungeon chest prop (plays its lid animation). The
     /// server validates floor, proximity and prop kind, records the open for
     /// the dungeon instance and broadcasts it nearby. The chest stays solid
@@ -985,6 +991,8 @@ pub enum ServerMessage {
         active: bool,
         broken: bool,
         opened: bool,
+        /// Cells a rail cart stands pushed along its rail.
+        offset: i32,
     },
     TerrainTileVersion {
         tile_x: i32,
@@ -1131,6 +1139,13 @@ pub enum ServerMessage {
         entrance_id: String,
         depth: u8,
         prop_id: u32,
+    },
+    /// Nearby: a rail cart slid to `offset` cells from its spot along its rail.
+    DungeonCartPushed {
+        entrance_id: String,
+        depth: u8,
+        prop_id: u32,
+        offset: i32,
     },
     /// An interactive dungeon chest prop was opened: play its lid-open
     /// animation. Broadcast to nearby players (the opener included).
@@ -2035,8 +2050,12 @@ pub enum ServerMessage {
     MiningStarted {
         player_id: PlayerId,
     },
+    /// `found` names what a finished cast turned up from prop `prop_id`
+    /// (item id, quantity), so nearby clients float it over the prop.
     MiningEnded {
         player_id: PlayerId,
+        prop_id: u32,
+        found: Option<(String, u32)>,
     },
     AbilityCooldowns {
         cooldowns: Vec<crate::ability::AbilityTimer>,
@@ -2206,6 +2225,7 @@ impl ServerMessage {
             | Self::PlayerTeleported { .. }
             | Self::PlayerCharged { .. }
             | Self::DungeonPropBroken { .. }
+            | Self::DungeonCartPushed { .. }
             | Self::DungeonPropOpened { .. }
             | Self::DungeonPropsState { .. }
             | Self::DungeonDoorToggled { .. }

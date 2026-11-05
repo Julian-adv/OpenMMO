@@ -65,6 +65,7 @@
   import GameSceneDungeonLayer from './game-scene/GameSceneDungeonLayer.svelte'
   import { isUnderground } from '../stores/dungeonStore'
   import { damageTextPool } from '../effects/damage-text-pool'
+  import { updatePropTexts } from '../effects/prop-text'
   import { playerInsideHouseId } from '../stores/housingStore'
   import { drainTileWork } from '../utils/tileWorkQueue'
   import { isMounted } from '../utils/mounts'
@@ -793,6 +794,7 @@
           deltaTime
         )
       }
+      if (camera) updatePropTexts(deltaTime / 1000, camera)
 
       // Update tree occlusion (hide trees that block camera view of player)
       treeLayerRef?.update()
@@ -1448,6 +1450,8 @@
     playerControl?.swingAndBreakProp(entranceId, depth, propId, x, z)}
   onMineReady={(entranceId, depth, propId, x, z) =>
     playerControl?.startMining(entranceId, depth, propId, x, z)}
+  onPushReady={(entranceId, depth, propId, x, z) =>
+    playerControl?.pushCartNow(entranceId, depth, propId, x, z)}
 />
 
 {#if graphicsPreset.enableGrassLayer}

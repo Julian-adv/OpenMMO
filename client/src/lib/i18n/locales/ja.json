@@ -518,6 +518,7 @@
   "system.noPickaxe": "ここで採掘するには鉱夫のつるはしが必要です。",
   "prop.oreHeap": "鉱石の山",
   "prop.crystalCluster": "水晶の群れ",
+  "prop.railCart": "鉱石トロッコ",
   "combat.monster": "モンスター",
   "combat.monsterHit": "出目{{roll}}：{{name}}に命中！{{damage}}ダメージ！",
   "combat.skillStruck": "{{count}}人に命中！",

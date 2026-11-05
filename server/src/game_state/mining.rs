@@ -170,14 +170,15 @@ impl GameState {
                     )
                     .await
                     .is_some();
-            self.publish_mining_ended(&player_id, &s).await;
+            let found = (mined && rand::thread_rng().gen_bool(MINED_ORE_CHANCE))
+                .then(|| mining_yield(s.kind, s.depth));
+            self.publish_mining_ended(&player_id, &s, found).await;
             if mined {
                 self.rebuild_dungeon_floor_passability(&s.entrance_id, s.depth)
                     .await;
-                if rand::thread_rng().gen_bool(MINED_ORE_CHANCE) {
-                    let (item, quantity) = mining_yield(s.kind, s.depth);
-                    self.award_items(&player_id, item, quantity).await;
-                }
+            }
+            if let Some((item, quantity)) = found {
+                self.award_items(&player_id, item, quantity).await;
             }
         }
     }
@@ -192,16 +193,23 @@ impl GameState {
         let session = self.mining_sessions.write().await.remove(player_id);
         if let Some(s) = session {
             self.mining_active.fetch_sub(1, Ordering::Relaxed);
-            self.publish_mining_ended(player_id, &s).await;
+            self.publish_mining_ended(player_id, &s, None).await;
         }
     }
 
-    async fn publish_mining_ended(&self, player_id: &PlayerId, s: &MiningSession) {
+    async fn publish_mining_ended(
+        &self,
+        player_id: &PlayerId,
+        s: &MiningSession,
+        found: Option<(&str, u32)>,
+    ) {
         self.publish_nearby(
             &s.position,
             s.floor_level,
             ServerMessage::MiningEnded {
                 player_id: *player_id,
+                prop_id: s.prop_id,
+                found: found.map(|(item, quantity)| (item.to_string(), quantity)),
             },
             None,
         )

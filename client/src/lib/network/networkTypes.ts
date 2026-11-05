@@ -256,6 +256,9 @@ export type ClientMessage =
       MineDungeonProp: { entrance_id: string; depth: number; prop_id: number }
     }
   | {
+      PushDungeonCart: { entrance_id: string; depth: number; prop_id: number }
+    }
+  | {
       ToggleDungeonDoor: {
         entrance_id: string
         depth: number

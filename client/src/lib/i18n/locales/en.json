@@ -518,6 +518,7 @@
   "system.noPickaxe": "You need a miner's pickaxe to mine here.",
   "prop.oreHeap": "Ore Heap",
   "prop.crystalCluster": "Crystal Cluster",
+  "prop.railCart": "Ore Cart",
   "combat.monster": "Monster",
   "combat.monsterHit": "rolled {{roll}}: HIT {{name}} for {{damage}} damage!",
   "combat.skillStruck": "HIT {{count}} players!",

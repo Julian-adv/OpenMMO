@@ -853,12 +853,29 @@ pub fn dungeon_shaft_run_pos(entrance_id: &str, depth: u8, down: bool, x: f32, z
 /// segments are derived from the layout, same as the server). Both the
 /// broken-prop set and the open-door set route the full current state through
 /// here (on-entry snapshots and live toggles alike), so the two never clobber
-/// each other.
+/// each other. Pushed rail carts come as parallel `cart_ids`/`cart_offsets`.
 #[wasm_bindgen]
-pub fn dungeon_rebuild_floor(entrance_id: &str, depth: u8, broken: &[u32], open_door_ids: &[u32]) {
+pub fn dungeon_rebuild_floor(
+    entrance_id: &str,
+    depth: u8,
+    broken: &[u32],
+    open_door_ids: &[u32],
+    cart_ids: &[u32],
+    cart_offsets: &[i32],
+) {
     let open: HashSet<u32> = open_door_ids.iter().copied().collect();
-    let cells =
-        crate::dungeon::floor_cells(&dungeon_layouts(entrance_id), depth, broken, Some(&open));
+    let carts: Vec<(u32, i32)> = cart_ids
+        .iter()
+        .copied()
+        .zip(cart_offsets.iter().copied())
+        .collect();
+    let cells = crate::dungeon::floor_cells(
+        &dungeon_layouts(entrance_id),
+        depth,
+        broken,
+        Some(&open),
+        &carts,
+    );
     if let Some(cells) = cells {
         with_cache_mut(|c| crate::dungeon::set_floor_cells(c, entrance_id, depth, cells));
     }

@@ -518,6 +518,7 @@
   "system.noPickaxe": "채굴하려면 광부의 곡괭이가 필요합니다.",
   "prop.oreHeap": "광석 더미",
   "prop.crystalCluster": "수정 무리",
+  "prop.railCart": "광석 수레",
   "combat.monster": "몬스터",
   "combat.monsterHit": "주사위 {{roll}}: {{name}}에게 명중! 피해 {{damage}}!",
   "combat.skillStruck": "{{count}}명 명중!",

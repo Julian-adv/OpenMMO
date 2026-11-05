@@ -128,7 +128,11 @@
     wallApproachPositions,
     type ClosedHouseDoor,
   } from '../managers/housing-queries'
-  import { MINING_SWING_MS, PROP_SWING_IMPACT_MS } from '../data/combatTiming'
+  import {
+    MINING_SWING_IMPACT_MS,
+    MINING_SWING_MS,
+    PROP_SWING_IMPACT_MS,
+  } from '../data/combatTiming'
   import { PICKAXE_ITEM } from '../stores/miningStore'
   import {
     DUNGEON_DOOR_APPROACH,
@@ -137,6 +141,7 @@
     approachForInteraction,
     PICKUP_APPROACH,
     PROP_APPROACH,
+    CART_PUSH_APPROACH,
     ALTAR_APPROACH,
     STALL_TRADE_APPROACH,
     TIP_HAT_APPROACH,
@@ -1720,7 +1725,10 @@
     if (!currentPlayer) return
     const plan = planApproach(
       currentPlayer.position,
-      { position: intent.position, ...PROP_APPROACH },
+      {
+        position: intent.position,
+        ...(action === 'push' ? CART_PUSH_APPROACH : PROP_APPROACH),
+      },
       routeQuality
     )
     if (plan.kind === 'unreachable') return
@@ -1761,6 +1769,45 @@
     approachProp(intent, 'mine')
   }
 
+  /** From a rail cart's center to the cell just past its end. */
+  const CART_END_REACH = 1.5
+
+  /** Click a rail cart: walk to the end nearer the player, then push. */
+  function pushCart(intent: Extract<ClickIntent, { type: 'push_cart' }>) {
+    if (!currentPlayer) return
+    const { x, z } = intent.position
+    const me = currentPlayer.position
+    const side = intent.alongX
+      ? Math.sign(shortestWrappedDeltaX(x, me.x)) || 1
+      : Math.sign(me.z - z) || 1
+    approachProp(
+      {
+        ...intent,
+        position: {
+          ...intent.position,
+          x: intent.alongX ? x + side * CART_END_REACH : x,
+          z: intent.alongX ? z : z + side * CART_END_REACH,
+        },
+      },
+      'push'
+    )
+  }
+
+  /** At the cart's end: face it and ask the server to push. */
+  export function pushCartNow(
+    entranceId: string,
+    depth: number,
+    propId: number,
+    x: number,
+    z: number
+  ) {
+    if (!currentPlayer) return
+    faceTowards(x, z)
+    currentSpeed = 0
+    stopAndFace(playerRotation)
+    networkManager.sendPushDungeonCart(entranceId, depth, propId)
+  }
+
   function holdsPickaxe() {
     const inv = get(inventoryStore)
     return [...inv.bag, ...Object.values(inv.equipped)].some(
@@ -1779,8 +1826,12 @@
     if (!currentPlayer) return
     stopMining()
     beginPropSwing(x, z)
+    playPropSound('pickaxe', MINING_SWING_IMPACT_MS)
     networkManager.sendMineDungeonProp(entranceId, depth, propId)
-    miningSwingTimer = setInterval(swingAtProp, MINING_SWING_MS)
+    miningSwingTimer = setInterval(() => {
+      swingAtProp()
+      playPropSound('pickaxe', MINING_SWING_IMPACT_MS)
+    }, MINING_SWING_MS)
   }
 
   function beginPropSwing(x: number, z: number) {
@@ -2120,6 +2171,7 @@
       inspectAltar,
       breakProp,
       mineProp,
+      pushCart,
       openProp,
       moveToGround: (position, sprinting, viaHousingStair) => {
         const snapped = dungeonManager.snapDescentWallClick(

@@ -237,6 +237,12 @@ fn blackvein_mine_has_twenty_five_floors_and_its_own_monsters() {
         .map(|s| (s.is_boss, s.monster_type.as_str()))
         .collect();
     assert_eq!(alone, [(true, "mine_foreman")]);
+    let carts: usize = floors
+        .iter()
+        .flat_map(|f| &f.props)
+        .filter(|p| p.kind == PropKind::MineRailCart)
+        .count();
+    assert!(carts > 0, "no rail carts");
     assert_eq!(layout_hash(&floors), GOLDEN_BLACKVEIN_MINE_HASH);
 }
 
@@ -244,7 +250,7 @@ fn blackvein_mine_has_twenty_five_floors_and_its_own_monsters() {
 const GOLDEN_OLD_CRYPT_HASH: u64 = 0x216b_8cee_51ff_2b67;
 const GOLDEN_THIEVES_DEN_HASH: u64 = 0x1d9e_c735_df9d_e607;
 const GOLDEN_SHADOW_GUILD_HASH: u64 = 0x2e1f_1554_a751_5c10;
-const GOLDEN_BLACKVEIN_MINE_HASH: u64 = 0x18b8_f8cd_0513_23c2;
+const GOLDEN_BLACKVEIN_MINE_HASH: u64 = 0x0b0a_1ba4_a26e_ae61;
 
 /// The client's wasm build checks the same fixture (`dungeonLayouts.test.ts`),
 /// so any draw that differs between wasm32 and native fails one side.
@@ -343,11 +349,45 @@ fn mine_floors_keep_their_shape_over_many_seeds() {
                     super::gen::mine::RAIL_DEPTHS.contains(&f.depth),
                     "{at}: rail"
                 );
-                for (dx, dz) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                for (x, z) in r.cells() {
                     assert!(
-                        super::gen::cell_is_corridor(f, r.x + dx, r.z + dz),
+                        super::gen::cell_is_corridor(f, x, z),
                         "{at}: rail off the corridor"
                     );
+                }
+            }
+            // Each long enough run carries one cart on its rail, and the
+            // lane beside it stays open.
+            let runs = rail_runs(f);
+            let carts: Vec<_> = f
+                .props
+                .iter()
+                .filter(|p| p.kind == PropKind::MineRailCart)
+                .collect();
+            let long = runs
+                .iter()
+                .filter(|r| r.len() >= super::gen::mine::CART_RUN_MIN)
+                .count();
+            assert!(carts.len() <= long, "{at}: carts");
+            for c in carts {
+                for (x, z) in c.cells() {
+                    assert!(
+                        !f.spawns.iter().any(|s| (s.x, s.z) == (x, z)),
+                        "{at}: monster spawns inside a cart"
+                    );
+                }
+                let run = cart_rail_run(f, c).unwrap_or_else(|| panic!("{at}: cart off its rail"));
+                let (sx, sz) = if run.along_x { (0, 1) } else { (1, 0) };
+                for (x, z) in c.cells() {
+                    let open = [-1, 1].into_iter().any(|k| {
+                        let cell = (x + k * sx, z + k * sz);
+                        super::gen::cell_is_corridor(f, cell.0, cell.1)
+                            && !f
+                                .props
+                                .iter()
+                                .any(|p| p.kind.is_solid() && p.cells().any(|q| q == cell))
+                    });
+                    assert!(open, "{at}: cart blocks both lanes");
                 }
             }
             // Fork floors theme their work rooms: a tool store, an ore yard
@@ -355,7 +395,13 @@ fn mine_floors_keep_their_shape_over_many_seeds() {
             // keeps to its depth bands, all its cells within one room.
             let fixture = |p: &&PropSpec| {
                 p.kind.is_solid()
-                    && !matches!(p.kind, PropKind::Barrel | PropKind::Crate | PropKind::Chest)
+                    && !matches!(
+                        p.kind,
+                        PropKind::Barrel
+                            | PropKind::Crate
+                            | PropKind::Chest
+                            | PropKind::MineRailCart
+                    )
             };
             let in_room = |p: &PropSpec, rooms: &[Room]| {
                 rooms
@@ -934,13 +980,15 @@ fn interior_doors_seal_corridor_mouths_until_opened() {
             let doors = interior_doors(layout);
             total += doors.len();
             let base = floor_passability_cells(layout);
-            let sealed = floor_passability_cells_full(layout, &[], &closed_door_segs(layout, None));
+            let sealed =
+                floor_passability_cells_full(layout, &[], &closed_door_segs(layout, None), &[]);
             let all_open: std::collections::HashSet<u32> =
                 doors.iter().map(|d| d.door_id).collect();
             let reopened = floor_passability_cells_full(
                 layout,
                 &[],
                 &closed_door_segs(layout, Some(&all_open)),
+                &[],
             );
             assert_eq!(reopened, base, "seed {seed} depth {}", layout.depth);
 

@@ -623,6 +623,16 @@ class NetworkManager {
     })
   }
 
+  sendPushDungeonCart(entranceId: string, depth: number, propId: number) {
+    this.sendMessage({
+      PushDungeonCart: {
+        entrance_id: entranceId,
+        depth,
+        prop_id: propId,
+      },
+    })
+  }
+
   sendOpenDungeonProp(entranceId: string, depth: number, propId: number) {
     this.sendMessage({
       OpenDungeonProp: {

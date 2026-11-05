@@ -473,6 +473,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::PlayerTeleportEffect { .. } => "PlayerTeleportEffect",
         ServerMessage::DungeonChestOpened { .. } => "DungeonChestOpened",
         ServerMessage::DungeonPropBroken { .. } => "DungeonPropBroken",
+        ServerMessage::DungeonCartPushed { .. } => "DungeonCartPushed",
         ServerMessage::DungeonPropOpened { .. } => "DungeonPropOpened",
         ServerMessage::DungeonPropsState { .. } => "DungeonPropsState",
         ServerMessage::DungeonDoorToggled { .. } => "DungeonDoorToggled",

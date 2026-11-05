@@ -12,5 +12,6 @@ player_ranged_draw,460,bow-draw.ogg starts - 0.52s long so it runs under the loo
 sword_miss,450,whiff sfx on a missed slash1 swing
 prop_swing_impact,660,barrel/crate shatters as the slash1 blade lands
 mining_swing,1250,pickaxe swing cadence - the borrowed great_sword_slash clip length
+mining_swing_impact,600,pickaxe point bites the ore - the great_sword_slash chop lands
 fishing_cast_swing,1600,fishing_cast rod whips forward - whoosh plays and splash follows CAST_MS later
 chest_loot_eject,600,ChestOpen clip length - treasure loot bursts out once the lid lands open

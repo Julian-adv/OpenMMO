@@ -518,6 +518,7 @@
   "system.noPickaxe": "需要礦工鎬才能在這裡採礦。",
   "prop.oreHeap": "礦石堆",
   "prop.crystalCluster": "水晶簇",
+  "prop.railCart": "礦車",
   "combat.monster": "怪物",
   "combat.monsterHit": "擲出{{roll}}：命中{{name}}，造成{{damage}}點傷害！",
   "combat.skillStruck": "命中{{count}}人！",
