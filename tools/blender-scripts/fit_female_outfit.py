@@ -63,6 +63,26 @@ OUTFITS = {
             'boots': dict(nodes=['left_boots', 'right_boots'], version='fitted_v1', hide_bones=FEET),
             'hair': dict(nodes=['hair'], version='fitted_v1', restore_visible=True),
         }),
+    # Same heel-pose concept as the ranger; the top and skirt kept Tripo's segment names.
+    'bard': dict(
+        source='tripo_segmented_v1/original/model.glb',
+        sha256='f256e239c69c6924c3e418a97c92f692c5ebe9f93b963c79750bc30807e5984d',
+        scale=1.86, on_heels=True, snug_cover=True,
+        rename={'tripo_part_0': 'top', 'tripo_part_2': 'skirt'},
+        parts={
+            # Tripo's fingers are kept: dropping them for the base fingers left shards and empty holes.
+            'gloves': dict(nodes=['left_glove', 'right_glove'], version='fitted_v1', hide_bones=('LeftHand', 'RightHand'),
+                           hide_inside_cuff=True),
+            # The puffed sleeve is gathered into the bracer, so it is cut inside the glove cuff.
+            'top': dict(nodes=['top'], version='fitted_v1', hide_bones=ARMS, hide_underwear=(1.15, 1.55),
+                        restore_visible=True, cut_inside_glove=True, align_sleeves='rigid'),
+            'bottom': dict(nodes=['skirt'], version='fitted_v1', hide_underwear=(.8, 1.12)),
+            # Tripo made the stiletto 2.5 cm short of the sole plane. The idle toe bend left the extra gaps
+            # (metres, measured in game) after stretching to the heel-pose sole. The full stretch looked too long,
+            # so only half of it is used (user decision 2026-11-05).
+            'boots': dict(nodes=['left_boots', 'right_boots'], version='fitted_v1', hide_bones=FEET,
+                          extend_heel={'left': .0029, 'right': .0048, 'share': .5, 'upright': .09, 'lean': .005}),
+        }),
 }
 COVER_RAY = .06
 # Sleeve alignment fades in over this distance from the shoulder joint, leaving the shoulder pads in place.
@@ -83,6 +103,11 @@ HEEL_DEGREES = 30
 # The generated boots stand on a flat-height ankle. The shoe below the band moves down to the posed sole
 # as one piece and the shin tube inside the band stretches; stretching the shoe itself sheared the arch.
 ANKLE_BAND = (.18, .32)
+# `extend_heel` stretches this much of the stiletto above its tip, from the back of the boot, down to the sole plane.
+HEEL_BACK = .18
+HEEL_POST = .06
+# `upright` (stiletto height above its tip) turns the post vertical about its top; vertices this close to its axis belong to it.
+HEEL_POST_RADIUS = .012
 # No part is pushed out of the skin (user decision 2026-11-04): skin up to this deep outside a garment is hidden instead.
 POKE_DEPTH = .04
 SNUG_COVER = .003
@@ -159,7 +184,7 @@ surface = BVHTree.FromPolygons([Vector(p) for p in bp], bf.tolist())
 
 before = set(bpy.data.objects)
 bpy.ops.import_scene.gltf(filepath=str(SOURCE))
-imported = {o.name: o for o in set(bpy.data.objects) - before if o.type == 'MESH'}
+imported = {CONFIG.get('rename', {}).get(o.name, o.name): o for o in set(bpy.data.objects) - before if o.type == 'MESH'}
 placement = Matrix.Translation((0, CONFIG.get('offset_y', 0), foot_shift if CONFIG['on_heels'] else 0)) @ Matrix.Scale(SCALE, 4)
 world = {n: np.array([placement @ o.matrix_world @ v.co for v in o.data.vertices]) for n, o in imported.items()}
 top = world['top']
@@ -560,8 +585,54 @@ def cut_sleeves(points):
     return cut_points, cut_faces, record, hem, hem_height
 
 
+
+
+def extend_heels(posed, extra):
+    """Turn each stiletto upright about its top, then stretch it toward its boot's lowest sole point, in the heel pose
+    (standing feet are level there)."""
+    posed = posed.copy()
+    record = {}
+    for side, sign in (('left', 1), ('right', -1)):
+        foot = np.flatnonzero(np.sign(posed[:, 0]) == sign)
+        y = posed[foot, 1]
+        back = foot[y > y.max() - HEEL_BACK * (y.max() - y.min())]
+        record[side] = {}
+        if 'upright' in extra:
+            height = extra['upright']
+            tip = posed[back, 2].min()
+            rise = posed[back, 2] - tip
+            base = posed[back[rise < .004]].mean(0)
+            pivot = posed[back[np.abs(rise - height) < .004]].mean(0)
+            axis = base + np.clip(rise / height, 0, 1)[:, None] * (pivot - base)
+            post = back[(rise < height + .01) & (np.linalg.norm(posed[back, :2] - axis[:, :2], axis=1) < HEEL_POST_RADIUS)]
+            # Rigid turn about the top, fading out over the last centimetre so the heel cup is untouched.
+            # `lean` sets the tip that far toward the toe (-y) of plumb.
+            down = base - pivot
+            target = np.array([0, -extra.get('lean', 0), down[2]])
+            turn = np.cross(down, target)
+            angle = np.arctan2(np.linalg.norm(turn), down @ target)
+            turn /= np.linalg.norm(turn)
+            weight = np.clip((pivot[2] - posed[post, 2]) / .01, 0, 1)
+            for vertex, amount in zip(post, weight):
+                a = angle * amount
+                offset = posed[vertex] - pivot
+                posed[vertex] = pivot + offset * np.cos(a) + np.cross(turn, offset) * np.sin(a) + turn * (turn @ offset) * (1 - np.cos(a))
+            record[side].update(upright_degrees=float(np.degrees(angle)), upright_vertices=len(post))
+        sole, tip = posed[foot, 2].min(), posed[back, 2].min()
+        gap = (tip - sole + extra[side]) * extra.get('share', 1)
+        if gap > 0:
+            weight = np.clip(1 - (posed[back, 2] - tip) / HEEL_POST, 0, 1)
+            posed[back, 2] -= weight * gap
+            record[side].update(gap_m=float(gap), stretched_vertices=int((weight > 0).sum()))
+    return posed, record
+
+
 paired = PART in ('gloves', 'boots')
 keep_pending = '--keep-pending' in argv
+# Glove fits saved in the forearm frame need the elbow and wrist.
+arms = {sign: (bones[side + 'ForeArm'] @ TO_GLTF.T, bones[side + 'Hand'] @ TO_GLTF.T)
+        for side, sign in (('Left', 1), ('Right', -1))}
+heel_extension = {}
 sleeve_shift = {}
 sleeve_cut = {}
 hem_cut = hem_height = None
@@ -570,13 +641,17 @@ if heel:
     order, values = skin_weights(points)
     skinning = np.einsum('nk,nkij->nij', values, joint_matrices[order])
     points = np.linalg.solve(skinning, np.c_[points, np.ones(len(points))][..., None])[:, :3, 0]
-    points, preview_fits = bake(PREVIEW_FIT, PART, points, paired, keep_pending=keep_pending)
+    points, preview_fits = bake(PREVIEW_FIT, PART, points, paired, keep_pending=keep_pending, arms=arms)
+    if SPEC.get('extend_heel'):
+        homogeneous = np.c_[points, np.ones(len(points))][..., None]
+        posed, heel_extension = extend_heels((skinning @ homogeneous)[:, :3, 0], SPEC['extend_heel'])
+        points = np.linalg.solve(skinning, np.c_[posed, np.ones(len(posed))][..., None])[:, :3, 0]
 else:
     # Weights come last so they are sampled where the adjusted, aligned vertices end up.
     # One-tube sleeves are aligned before the saved fits, which then move them as the preview showed.
     if RIGID_SLEEVES:
         sleeve_shift = align_sleeves_rigid(points)
-    points, preview_fits = bake(PREVIEW_FIT, PART, points, paired, keep_pending=keep_pending)
+    points, preview_fits = bake(PREVIEW_FIT, PART, points, paired, keep_pending=keep_pending, arms=arms)
     if SPEC.get('align_sleeves') is True:
         sleeve_shift = align_sleeves(points)
     if SPEC.get('cut_inside_glove'):
@@ -838,6 +913,7 @@ report = {'date': date.today().isoformat(), 'outfit': OUTFIT, 'part': PART, 'sou
           **({'sleeve_end_offsets_cm': sleeve_ends} if RIGID_SLEEVES else {}),
           **({'sleeve_cut': sleeve_cut} if sleeve_cut else {}),
           **({'hem_cut': hem_cut} if hem_cut else {}),
+          **({'heel_extension': heel_extension} if heel_extension else {}),
           'method': f'Uniform {SCALE} scale' + (', lowered by the heel pose lift' if CONFIG['on_heels'] else '') + ', forearm rotation about the elbow and rigid hand ICP from the generated body pose, '
                     'no push-out (covered and poking skin is hidden), barycentric skin weights from the nearest base skin smoothed over welded neighbours.',
           'status': 'Candidate; visual and animation review pending'}

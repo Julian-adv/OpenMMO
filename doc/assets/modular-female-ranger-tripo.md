@@ -94,6 +94,7 @@ blender -b --python tools/blender-scripts/review_female_outfit.py -- --outfit ra
 여성 미리보기(`?character=female&top=ranger&bottom=ranger&gloves=ranger&boots=ranger&hair=ranger`)에서 `복장 피팅 조절`이 사제와 순찰자 부위를 함께 보여 준다. 저장값은 `doc/assets/female-{outfit}-preview-fit.json`에 차림새별로 남는다.
 순찰자 상의를 고르면 소매 끝 슬라이더(좌우 소매마다 앞뒤·좌우, 상완 축 기준, ±5cm)가 나온다. 어깨 9cm 아래에서 0, 소매 끝에서 설정값만큼 선형으로 옮긴다. 상완 축에서 7cm 안의 정점만 움직여 조끼는 그대로다.
 변환은 [female-part-fit.ts](../../client/src/previews/female-part-fit.ts)의 `sleeveEndDeformer`와 [female_outfit_adjust.py](../../tools/outfits/female_outfit_adjust.py)의 `sleeve_end`가 같고, 테스트가 두 결과를 맞춘다.
+2026-11-05부터 장갑 조절은 아래팔 좌표계를 쓴다(사용자 요청). 원점은 팔꿈치–손목 축 위에서 장갑 중심에 가장 가까운 점이고, 너비는 팔 바깥쪽, 높이는 팔 길이(팔꿈치 쪽 +), 두께는 팔 앞쪽이며 회전도 이 축 기준이다. 저장값에 `frame: "forearm"`이 붙고, 표시가 없는 예전 값(사제·순찰자 장갑)은 캐릭터 축으로 굽는다. 사제·순찰자 장갑을 다시 구워 GLB·가림 해시가 그대로임을 확인했다. 변환은 `partFitMatrix`와 `forearm_matrix`가 같다.
 
 ## 게임 시작 복장 — 2026-11-05
 

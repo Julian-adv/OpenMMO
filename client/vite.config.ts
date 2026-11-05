@@ -218,6 +218,7 @@ function modularCharacterPreview(): Plugin {
         [
           ['priest', ['top', 'bottom', 'gloves', 'boots', 'helmet']],
           ['ranger', ['top', 'bottom', 'gloves', 'boots', 'hair']],
+          ['bard', ['top', 'bottom', 'gloves', 'boots']],
         ] as const
       ).flatMap(([outfit, slots]) =>
         slots.flatMap((slot) => [
@@ -320,10 +321,6 @@ function modularCharacterPreview(): Plugin {
     ),
     female_barbarian_helmet_hair_bob: new URL(
       '../assets/items/female_barbarian_helmet/tripo_v2/fitted_v1/hair_bob_barbarian_helmet.glb',
-      import.meta.url
-    ),
-    female_barbarian_helmet_hair_knight: new URL(
-      '../assets/items/female_barbarian_helmet/tripo_v2/fitted_v1/hair_knight_barbarian_helmet.glb',
       import.meta.url
     ),
     'female-barbarian-helmet-occlusion.json': new URL(

@@ -3,7 +3,7 @@
 여성 모듈러 캐릭터(`rig_v1/female-base.glb`, 리그 `human_female_01_local_v1`)의 헤어 파츠.
 채택본은 턱 아래 길이의 금발 단발 `tripo_knight_bob_v1/fitted_v1`이며 여성 미리보기의 기본 헤어다.
 `tools/prepare-female-knight.mjs --part hair`가 이 GLB를 `client/public/models/characters/modular_female/hair.glb`로 패키징한다.
-긴 금발 `tripo_knight_v1`은 **[미사용 · 보관]**이며, 미리보기에서 `긴 금발 (보관본)`을 고를 때만 표시된다.
+긴 금발 `tripo_knight_v1`은 **[미사용 · 보관]**이다. 2026-11-05 미리보기 헤어 메뉴에서도 뺐다(사용자 요청). 파일은 보관한다.
 
 ## 최종 파일
 

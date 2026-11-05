@@ -5,6 +5,7 @@ const root = new URL('../../', import.meta.url)
 const outfits = {
   priest: ['top', 'bottom', 'gloves', 'boots', 'helmet'],
   ranger: ['top', 'bottom', 'gloves', 'boots'],
+  bard: ['top', 'bottom', 'gloves', 'boots'],
 }
 const route = /^\/__female-preview\/([a-z]+)-fit\.json$/
 // Paired parts save { left, right }; left is the character's left (+x).
@@ -58,6 +59,11 @@ export function outfitPreviewFit() {
           if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max)
             return `피팅값 범위를 확인하세요: ${key}`
           fit[key] = value
+        }
+        // Glove fits saved since 2026-11-05 work in the forearm frame.
+        if (source.frame !== undefined) {
+          if (source.frame !== 'forearm' || input.part !== 'gloves') return '피팅 기준이 올바르지 않습니다.'
+          fit.frame = 'forearm'
         }
         return fit
       }

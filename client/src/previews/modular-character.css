@@ -38,6 +38,7 @@ header nav a {
 .workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-rows: auto 1fr;
   border: 1px solid #35474e;
   border-radius: 12px;
   overflow: hidden;
@@ -63,7 +64,24 @@ canvas {
   color: #b4c8cf;
   font-size: 12px;
 }
+.side-feet-view {
+  grid-column: 1;
+  grid-row: 2;
+  min-height: 0;
+  position: relative;
+  border-top: 1px solid #35474e;
+  background: #17252d;
+}
+.side-feet-view[hidden] {
+  display: none;
+}
+.side-feet-view canvas {
+  position: absolute;
+  inset: 0;
+}
 aside {
+  grid-column: 2;
+  grid-row: 1 / span 2;
   padding: 22px;
   background: #18232a;
   border-left: 1px solid #35474e;
@@ -143,6 +161,39 @@ input[type='checkbox'] {
   align-items: center;
   gap: 8px;
 }
+.segmented {
+  display: flex;
+  margin: 6px 0 10px;
+  border: 1px solid #526d78;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.segmented label {
+  position: relative;
+  flex: 1;
+  margin: 0;
+  padding: 8px 10px;
+  text-align: center;
+  cursor: pointer;
+  background: #243740;
+}
+.segmented label + label {
+  border-left: 1px solid #526d78;
+}
+.segmented input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.segmented label:has(input:checked) {
+  background: #9dd1c5;
+  color: #10201f;
+  font-weight: 600;
+}
+.segmented label:has(input:focus-visible) {
+  outline: 2px solid #9dd1c5;
+  outline-offset: -2px;
+}
 input[type='color'] {
   width: 100%;
   height: 32px;
@@ -173,6 +224,11 @@ input[type='color'] {
   #viewport {
     height: 56vh;
     min-height: 340px;
+  }
+  .side-feet-view,
+  aside {
+    grid-column: auto;
+    grid-row: auto;
   }
   aside {
     max-height: none;
