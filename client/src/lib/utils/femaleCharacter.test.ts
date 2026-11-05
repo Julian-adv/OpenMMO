@@ -331,6 +331,31 @@ describe('female modular starter outfits', () => {
     }
   )
   it.skipIf(!hasAssets)(
+    'shows the chosen hair, with helmets keeping their own hair',
+    async () => {
+      const source = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH)
+      const { modelRoot } = createCharacterModelRoot(source.scene)
+      const look = (hair: 'bob' | 'long' | 'ponytail') => ({
+        face: 'default' as const,
+        hair,
+        hair_color: '#527baa',
+      })
+      await applyCharacterArmor(modelRoot, undefined, look('ponytail'))
+      expect(count(modelRoot, 'ranger_hair')).toBeGreaterThan(0)
+      expect(count(modelRoot, 'hair')).toBe(0)
+      await applyCharacterArmor(modelRoot, barbarian, look('ponytail'))
+      expect(count(modelRoot, 'ranger_hair')).toBe(0)
+      expect(count(modelRoot, 'barbarian_hair')).toBeGreaterThan(0)
+      await applyCharacterArmor(modelRoot, armor, look('long'))
+      expect(count(modelRoot, 'valkyrie_hair')).toBeGreaterThan(0)
+      expect(count(modelRoot, 'barbarian_hair')).toBe(0)
+      await applyCharacterArmor(modelRoot, undefined, look('bob'))
+      expect(count(modelRoot, 'hair')).toBeGreaterThan(0)
+      expect(count(modelRoot, 'valkyrie_hair')).toBe(0)
+      disposeCharacterSkeletons(modelRoot)
+    }
+  )
+  it.skipIf(!hasAssets)(
     'equips the rogue creation outfit, gates garters and restores isolated body masks',
     async () => {
       const source = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH)

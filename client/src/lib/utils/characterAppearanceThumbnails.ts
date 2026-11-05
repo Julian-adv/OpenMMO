@@ -4,6 +4,9 @@ import rangerFace from '../../assets/character-appearance/face-ranger.png'
 import cropHair from '../../assets/character-appearance/hair-crop.png'
 import wavyHair from '../../assets/character-appearance/hair-wavy-bone.png'
 import rangerHair from '../../assets/character-appearance/hair-ranger.png'
+import femaleBob from '../../assets/character-appearance/female-hair-bob.png'
+import femaleLong from '../../assets/character-appearance/female-hair-long.png'
+import femalePonytail from '../../assets/character-appearance/female-hair-ponytail.png'
 
 export const FACE_OPTIONS = [
   {
@@ -36,4 +39,14 @@ export const HAIR_OPTIONS = [
     thumbnail: rangerHair,
   },
   { value: 'none', label: 'characterCreate.hairNone', thumbnail: defaultFace },
+] as const
+
+export const FEMALE_HAIR_OPTIONS = [
+  { value: 'bob', label: 'characterCreate.hairBob', thumbnail: femaleBob },
+  { value: 'long', label: 'characterCreate.hairLong', thumbnail: femaleLong },
+  {
+    value: 'ponytail',
+    label: 'characterCreate.hairPonytail',
+    thumbnail: femalePonytail,
+  },
 ] as const

@@ -1,10 +1,13 @@
 import { Color, Group, MeshStandardMaterial, SkinnedMesh, Texture } from 'three'
-import type { Node, NodeMaterial } from 'three/webgpu'
+import { StandardNodeLibrary, type Node, type NodeMaterial } from 'three/webgpu'
+import { uniform, vec4 } from 'three/tsl'
 import { describe, expect, it, vi } from 'vitest'
 import {
   applyAppearanceColors,
   disposeAppearanceColors,
 } from './character-appearance-colors'
+
+const library = new StandardNodeLibrary()
 
 function colorsIn(node: Node): string[] {
   const values: string[] = []
@@ -38,6 +41,35 @@ describe('character appearance colors', () => {
     disposeAppearanceColors(root)
     expect(head.material).toBe(skin)
     expect(rangerHair.material).toBe(hair)
+  })
+
+  it('tints female hair and irises on top of the body node colors', () => {
+    const body = new MeshStandardMaterial({ map: new Texture() })
+    const nodeBody = library.fromMaterial(body)
+    nodeBody.colorNode = vec4(uniform(new Color('#00ff00')), 1)
+    const hair = new MeshStandardMaterial({ map: new Texture() })
+    const root = new Group()
+    const skin = new SkinnedMesh(undefined, nodeBody)
+    skin.userData.female_body = true
+    const ponytail = new SkinnedMesh(undefined, hair)
+    ponytail.userData.female_part = 'ranger_hair'
+    root.add(skin, ponytail)
+    applyAppearanceColors(root, [skin, ponytail], {
+      face: 'default',
+      hair: 'ponytail',
+      hair_color: '#ff0000',
+      eye_color: '#0000ff',
+    })
+    const tintedSkin = skin.material as unknown as NodeMaterial
+    expect(colorsIn(tintedSkin.colorNode!)).toEqual(
+      expect.arrayContaining(['0000ff', '00ff00'])
+    )
+    expect(
+      colorsIn((ponytail.material as unknown as NodeMaterial).colorNode!)
+    ).toContain('ff0000')
+    disposeAppearanceColors(root)
+    expect(skin.material).toBe(nodeBody)
+    expect(ponytail.material).toBe(hair)
   })
 
   it('isolates per-character colors, reuses uniforms and restores shared materials', () => {

@@ -28,7 +28,7 @@ export type Gender = 'male' | 'female'
 
 export type CharacterAppearance = {
   face: 'default' | 'rugged' | 'ranger'
-  hair: 'crop' | 'wavy_bone' | 'ranger' | 'none'
+  hair: 'crop' | 'wavy_bone' | 'ranger' | 'none' | 'bob' | 'long' | 'ponytail'
   hair_color?: string
   eye_color?: string
 }
