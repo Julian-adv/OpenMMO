@@ -384,7 +384,7 @@ fn class_from_row(row: &rusqlite::Row<'_>, idx: usize) -> rusqlite::Result<Chara
 }
 
 fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterRecord> {
-    Ok(CharacterRecord {
+    let record = CharacterRecord {
         id: row.get(0)?,
         name: row.get(1)?,
         created_at: row.get(2)?,
@@ -440,6 +440,12 @@ fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterR
                 )
             })?
         },
+    };
+    Ok(CharacterRecord {
+        appearance: record
+            .appearance
+            .for_character(&record.class, record.gender),
+        ..record
     })
 }
 
@@ -2601,7 +2607,15 @@ mod tests {
                 appearance,
             )
             .unwrap();
-        assert_eq!(female.appearance, CharacterAppearance::default());
+        assert_eq!(
+            female.appearance,
+            CharacterAppearance {
+                face: onlinerpg_shared::FaceStyle::Default,
+                hair: onlinerpg_shared::HairStyle::Bob,
+                hair_color: "#ceb294".to_string().try_into().unwrap(),
+                ..appearance
+            }
+        );
         drop(auth);
         let auth = AuthService::new(db_path.clone()).unwrap();
         assert_eq!(

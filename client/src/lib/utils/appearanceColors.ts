@@ -1,6 +1,19 @@
 export const DEFAULT_HAIR_COLOR = '#604332'
 export const DEFAULT_EYE_COLOR = '#786545'
 
+// Mean albedo of each female hair texture (matches the server).
+export const FEMALE_HAIR_COLORS = {
+  bob: '#ceb294',
+  long: '#d2bda2',
+  ponytail: '#432e26',
+} as const
+const FEMALE_CLASS_HAIR: Record<string, keyof typeof FEMALE_HAIR_COLORS> = {
+  ranger: 'ponytail',
+  valkyrie: 'long',
+}
+export const femaleHairFor = (characterClass: string) =>
+  FEMALE_CLASS_HAIR[characterClass] ?? 'bob'
+
 export const HAIR_COLORS = [
   { value: '#211e1b', label: 'characterCreate.colorBlack' },
   { value: DEFAULT_HAIR_COLOR, label: 'characterCreate.colorBrown' },

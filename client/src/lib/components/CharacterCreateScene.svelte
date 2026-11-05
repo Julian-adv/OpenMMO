@@ -115,6 +115,13 @@
     },
   }
 
+  // Helmets hide the chosen hair, so the preview takes them off.
+  function bareHeaded(equipment?: VisibleEquipment) {
+    if (!equipment?.armor?.head) return equipment
+    const { head: _, ...armor } = equipment.armor
+    return { ...equipment, armor }
+  }
+
   const CAMERA_FOV = 42
   const CAMERA_POSITION_Y = 1.4
   const CAMERA_POSITION_Z = 7.6
@@ -122,6 +129,7 @@
   const FACE_CAMERA_Y = 1.85
   const FACE_CAMERA_DISTANCE = 0.98
   const FACE_LOOK_AT_Y = 1.82
+  const FEMALE_FACE_DROP = 0.04
 
   const PLATFORM_RADIUS = 0.92
   const PLATFORM_THICKNESS = 0.1
@@ -175,14 +183,15 @@
 
   $effect(() => {
     if (!cameraRef) return
+    const drop = gender === 'female' ? FEMALE_FACE_DROP : 0
     cameraRef.position.set(
       0,
-      facePreview ? FACE_CAMERA_Y : CAMERA_POSITION_Y,
+      facePreview ? FACE_CAMERA_Y - drop : CAMERA_POSITION_Y,
       facePreview ? CHARACTER_Z + FACE_CAMERA_DISTANCE : CAMERA_POSITION_Z
     )
     cameraRef.lookAt(
       0,
-      facePreview ? FACE_LOOK_AT_Y : CAMERA_LOOK_AT_Y,
+      facePreview ? FACE_LOOK_AT_Y - drop : CAMERA_LOOK_AT_Y,
       CHARACTER_Z
     )
   })
@@ -296,9 +305,9 @@
     {characterClass}
     {gender}
     {appearance}
-    equipment={(gender === 'male'
-      ? STARTER_EQUIPMENT
-      : FEMALE_STARTER_EQUIPMENT)[characterClass]}
+    equipment={gender === 'male'
+      ? STARTER_EQUIPMENT[characterClass]
+      : bareHeaded(FEMALE_STARTER_EQUIPMENT[characterClass])}
     rotationY={modelRotationY}
   />
 {/key}
