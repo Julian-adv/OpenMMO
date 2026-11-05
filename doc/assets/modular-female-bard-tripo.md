@@ -124,7 +124,7 @@ Tripo 원본에서 앞코가 바닥에 닿을 때 굽 끝이 1.37cm(피팅 배�
 
 | 아이템 | 슬롯 | 여성 런타임 파츠 |
 | --- | --- | --- |
-| `worn_bard_helmet` | head | 아직 없음(모자 피팅 전까지 보이지 않고 단발이 보임) |
+| `worn_bard_helmet` | head | `bard_helmet` (아래 "모자 Tripo 원본·피팅", 단발이 같이 보임) |
 | `worn_bard_top` | chest | `bard_top` |
 | `worn_bard_pants` | pants | `bard_bottom` (짧은 주름치마) |
 | `worn_bard_gloves` | hands | `bard_gloves` (새 아이템, 여성 전용 지급) |
@@ -136,7 +136,7 @@ Tripo 원본에서 앞코가 바닥에 닿을 때 굽 끝이 1.37cm(피팅 배�
 - 기존 여성 바드는 배포 때 서비스를 멈추고 아래 도구로 빠진 장비만 가방에 넣는다(장착 상태는 그대로). 워크트리 DB 사본에서는 1명, 5품목이었다.
 
 ```sh
-for p in top bottom boots gloves; do node tools/prepare-female-knight.mjs --part bard_$p; done
+for p in top bottom boots gloves helmet; do node tools/prepare-female-knight.mjs --part bard_$p; done
 blender -b --python-exit-code 1 --python tools/blender-scripts/export_outfit_items.py -- --outfit bard --parts gloves --icon-rotation -72 0 0 --turn -30
 .venv/bin/python tools/grant-female-bard-starter-outfit-20261106.py data/game_data.db            # 미리보기
 .venv/bin/python tools/grant-female-bard-starter-outfit-20261106.py data/game_data.db --apply --expected-preview preview.json
@@ -154,3 +154,34 @@ blender -b --python-exit-code 1 --python tools/blender-scripts/export_outfit_ite
 - 사용자 요청: 여성용 바드 모자를 원화부터 만든다. 투구를 쓰면 단발이 보이는 규칙(사제관과 같음)에 맞춰 단발 위에 쓴 모습으로 그렸다.
 - 짙은 녹색 펠트 모자, 접어 올린 챙, 청동 장식의 가죽 띠, 아이보리·녹색 깃털.
 - 두 번 모두 Codex가 인물을 33px 아래로 옮겨 다시 그렸다(크기는 같음). 몸 비율은 그대로라 Tripo 입력으로 쓰고, 피팅 배치는 키 대신 몸 기준점으로 잰다.
+
+## 모자 Tripo 원본·피팅 — 2026-11-06
+
+- 사용자가 모자 원화로 Tripo에서 만들고 직접 세그먼트한 `Y:\public\web_downloads\tripo_convert_2db33eae-7eb8-4020-8eab-4bb34e2be05e.glb`(2026-11-06 01:20).
+  [보관본](../../assets/items/female_bard_outfit/tripo_hat_v1/original/model.glb),
+  SHA-256 `cf126826dc4e85d8f13f790edefaf699e22efbdc9934f1bfec44e36264bbcc25`.
+  생성일 외 요금제·작업 ID·설정은 전달되지 않았다. [Tripo 이용 조건](https://developers.tripo3d.ai/en/terms).
+- 세그먼트는 `hat` 하나만 썼다. 나머지 부위는 복장 모델(`tripo_segmented_v1`)을 그대로 쓴다.
+- 피팅 설정의 부위별 `model`로 이 모델을 따로 불러온다. 이 모델은 몸이 Tripo 단위로 약 7% 작아(부츠 윗단·치마·머리 높이 비율 1.06–1.09, 복장 모델 기준) 배율을 1.86 대신 2.0으로 둔다.
+  챙이 원화처럼 눈썹 바로 위에 오도록 4.5cm 내렸다(`offset_z` -0.045). 모델에 상의·장갑 이름이 없어 팔 자세는 그대로 둔다.
+- 출력 `helmet/fitted_v1/helmet_female_bard.glb`, 1,096 triangles, 가린 몸체 삼각형 466. 챙 높이 1.717–1.731m.
+- 사제관처럼 모자 아래로 단발이 보인다. 앞·옆·뒤 렌더에서 단발이 모자 윗부분을 뚫지 않는다.
+
+```sh
+blender -b --python-exit-code 1 --python tools/blender-scripts/fit_female_outfit.py -- --outfit bard --part helmet
+node tools/prepare-female-knight.mjs --part bard_helmet
+```
+
+여성 미리보기 `/modular-character-preview.html?character=female&helmet=bard&top=bard&bottom=bard&gloves=bard&boots=bard`에서 다섯 부위를 같이 볼 수 있다.
+
+### 미리보기 조절·헤어 브러시 — 2026-11-06
+
+- 사용자가 미리보기 `복장 피팅 조절`에서 모자를 92%로 줄이고 1.5cm 내렸다. 이어서 높이만 85%로 줄이고 1.1cm 더 내렸다. 피부 브러시로 이마·관자놀이·귀 위 몸체 삼각형 347개를 되살렸다(포니테일에서 비어 보이던 곳). 베이크 후 가린 몸체 삼각형은 603개다. 헤어 브러시로 띠 위로 나온 단발 삼각형 38개를 가렸다.
+- 단발이 띠 위로 삐져나와, 투구에 가려지는 헤어를 사용자가 직접 지우도록 했다(사용자 결정: 자동 계산보다 손으로 고르는 편이 낫다). 모든 투구에 쓰는 도구라 [투구 헤어 브러시](female-helmet-hair-brush.md)에 따로 적었다.
+- 포니테일은 머리에 붙어 있어 피부 브러시로 이마·관자놀이를 되살렸다. 뒤에서 묶은 부분은 띠를 뚫고 나오는데, 모자 뒤 구멍으로 포니테일을 빼낸 모습으로 보고 그대로 둔다(사용자 결정, 2026-11-06).
+- 크기·피부 브러시를 바꾼 뒤에는 저장하고 피팅·런타임을 다시 만든다.
+
+```sh
+blender -b --python-exit-code 1 --python tools/blender-scripts/fit_female_outfit.py -- --outfit bard --part helmet
+node tools/prepare-female-knight.mjs --part bard_helmet
+```

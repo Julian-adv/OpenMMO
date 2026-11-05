@@ -36,7 +36,7 @@ float brushDistance = distance(brushRest, brushCenter);
 float brushEdge = abs(brushDistance - brushRadius);
 float brushWidth = max(fwidth(brushDistance) * 1.5, 0.0008);
 float brushRing = 1.0 - smoothstep(brushWidth * 0.5, brushWidth, brushEdge);
-float brushFill = 0.15 * step(brushDistance, brushRadius);
+float brushFill = step(brushDistance, brushRadius);
 gl_FragColor.rgb = mix(gl_FragColor.rgb, brushColor, brushVisible * max(brushRing, brushFill));`
       )
     }

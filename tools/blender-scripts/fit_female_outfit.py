@@ -77,6 +77,12 @@ OUTFITS = {
             'top': dict(nodes=['top'], version='fitted_v1', hide_bones=ARMS, hide_underwear=(1.15, 1.55),
                         restore_visible=True, cut_inside_glove=True, align_sleeves='rigid'),
             'bottom': dict(nodes=['skirt'], version='fitted_v1', hide_underwear=(.8, 1.12)),
+            # Generated with the hat over a bob, from a model whose body is about 7% shorter in Tripo units;
+            # lowered so the brim sits just above the brows as in the concept.
+            'helmet': dict(nodes=['hat'], version='fitted_v1',
+                           model=dict(source='tripo_hat_v1/original/model.glb',
+                                      sha256='cf126826dc4e85d8f13f790edefaf699e22efbdc9934f1bfec44e36264bbcc25',
+                                      scale=2.0, offset_z=-.045)),
             # Tripo made the stiletto 2.5 cm short of the sole plane. The idle toe bend left the extra gaps
             # (metres, measured in game) after stretching to the heel-pose sole. The full stretch looked too long,
             # so only half of it is used (user decision 2026-11-05).
@@ -116,9 +122,10 @@ SNUG_COVER = .003
 argv = sys.argv[sys.argv.index('--') + 1:]
 OUTFIT = argv[argv.index('--outfit') + 1]
 PART = argv[argv.index('--part') + 1]
-CONFIG = OUTFITS[OUTFIT]
-PARTS = CONFIG['parts']
+PARTS = OUTFITS[OUTFIT]['parts']
 SPEC = PARTS[PART]
+# A part generated from its own Tripo model overrides the outfit's source and placement with `model`.
+CONFIG = {**OUTFITS[OUTFIT], **SPEC.get('model', {})}
 RIGID_SLEEVES = SPEC.get('align_sleeves') == 'rigid'
 SCALE = CONFIG['scale']
 DIRECTORY = ROOT / f'assets/items/female_{OUTFIT}_outfit'
@@ -186,13 +193,29 @@ surface = BVHTree.FromPolygons([Vector(p) for p in bp], bf.tolist())
 before = set(bpy.data.objects)
 bpy.ops.import_scene.gltf(filepath=str(SOURCE))
 imported = {CONFIG.get('rename', {}).get(o.name, o.name): o for o in set(bpy.data.objects) - before if o.type == 'MESH'}
-placement = Matrix.Translation((0, CONFIG.get('offset_y', 0), foot_shift if CONFIG['on_heels'] else 0)) @ Matrix.Scale(SCALE, 4)
+placement = (Matrix.Translation((0, CONFIG.get('offset_y', 0), (foot_shift if CONFIG['on_heels'] else 0) + CONFIG.get('offset_z', 0)))
+             @ Matrix.Scale(SCALE, 4))
 world = {n: np.array([placement @ o.matrix_world @ v.co for v in o.data.vertices]) for n, o in imported.items()}
-top = world['top']
-pose = ArmPose(bones, bp, bf, bw, names,
-               {'Left': np.vstack([top[top[:, 0] > .2], world['left_glove']]),
-                'Right': np.vstack([top[top[:, 0] < -.2], world['right_glove']])},
-               {'Left': world['left_glove'], 'Right': world['right_glove']})
+
+
+class StillArms:
+    """For a model without a named top and gloves: nothing follows the arms."""
+
+    def __call__(self, points, arms, rigid_hand=False):
+        return points
+
+    def record(self):
+        return None
+
+
+if {'top', 'left_glove', 'right_glove'} <= world.keys():
+    top = world['top']
+    pose = ArmPose(bones, bp, bf, bw, names,
+                   {'Left': np.vstack([top[top[:, 0] > .2], world['left_glove']]),
+                    'Right': np.vstack([top[top[:, 0] < -.2], world['right_glove']])},
+                   {'Left': world['left_glove'], 'Right': world['right_glove']})
+else:
+    pose = StillArms()
 for name, obj in list(imported.items()):
     if name not in SPEC['nodes']:
         bpy.data.objects.remove(obj)

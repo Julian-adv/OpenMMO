@@ -41,9 +41,7 @@ const prefixes: Record<Style, string> = {
   bard: 'bard_',
 }
 const styles = Object.keys(prefixes) as Style[]
-type Helmet =
-  | Exclude<Style, 'rogue' | 'caveman' | 'ranger' | 'bard'>
-  | 'brilliance'
+type Helmet = Exclude<Style, 'rogue' | 'caveman' | 'ranger'> | 'brilliance'
 const LAZY_HELMET = 'brilliance_helmet'
 export type FemaleHair = Extract<
   CharacterAppearance['hair'],
@@ -82,10 +80,12 @@ const LAZY_STYLES: Partial<Record<Style, readonly Slot[]>> = {
   caveman: slots.filter((slot) => slot !== 'helmet'),
   priest: slots,
   ranger: slots.filter((slot) => slot !== 'helmet'),
-  bard: slots.filter((slot) => slot !== 'helmet'),
+  bard: slots,
 }
 const partName = (style: Style, slot: Slot | 'hair') =>
   `${prefixes[style]}${slot}`
+const slotPart = (style: Style | 'brilliance' | null, slot: Slot) =>
+  style === 'brilliance' ? LAZY_HELMET : style && partName(style, slot)
 const lazyParts = new Set([
   LAZY_HELMET,
   ...Object.entries(LAZY_STYLES).flatMap(([style, styleSlots]) =>
@@ -288,6 +288,7 @@ interface FemaleState {
   underwearColor: ReturnType<typeof femaleUnderwearColor>
   equipped?: Outfit
   hair?: string
+  hairMasks: Set<string>
 }
 
 const states = new WeakMap<THREE.Object3D, FemaleState>()
@@ -296,13 +297,14 @@ const latest = new WeakMap<
   THREE.Object3D,
   { armor?: ArmorEquipment; hair?: FemaleHair }
 >()
-// Hair each helmet is fitted over; long hair stays under every helmet.
+// Hair shown for a bob under each helmet; long hair and ponytails stay as chosen.
 const HELMET_HAIR: Record<Helmet, string | null> = {
   plate: null,
   brilliance: null,
   barbarian: 'barbarian_hair',
   valkyrie: 'hair',
   priest: 'hair',
+  bard: 'hair',
 }
 const hairPart = (scene: THREE.Object3D, hair?: FemaleHair): string =>
   hair ? FEMALE_HAIR_PARTS[hair] : scene.userData.female_hair
@@ -380,8 +382,6 @@ const femaleHelmet = (itemId: string | null | undefined): Helmet | null => {
   if (modularOutfitForArmor({ head: itemId }).helmet === 'brilliance')
     return 'brilliance'
   const style = femaleStyle(itemId)
-  // The bard hat has no female fit yet, so it is not drawn.
-  if (style === 'bard') return null
   return style === 'rogue' || style === 'caveman' || style === 'ranger'
     ? 'barbarian'
     : style
@@ -448,9 +448,7 @@ export async function applyFemaleArmorAsync(
   latest.set(scene, { armor, hair })
   const outfit = femaleOutfit(armor)
   const missing = slots.flatMap((slot) => {
-    const style = outfit[slot]
-    const name =
-      style === 'brilliance' ? LAZY_HELMET : style && partName(style, slot)
+    const name = slotPart(outfit[slot], slot)
     return name && lazyParts.has(name) && !scene.userData.female_parts[name]
       ? [name]
       : []
@@ -482,9 +480,7 @@ export function applyFemaleArmor(
   const wanted = hairPart(scene, hair)
   const chosen = scene.userData.female_parts[wanted] ? wanted : 'hair'
   for (const slot of slots) {
-    const style = equipped[slot]
-    const name =
-      style === 'brilliance' ? LAZY_HELMET : style && partName(style, slot)
+    const name = slotPart(equipped[slot], slot)
     if (name && !scene.userData.female_parts[name]) equipped[slot] = null
   }
   let state = states.get(scene)
@@ -509,19 +505,37 @@ export function applyFemaleArmor(
           mask.register(name, female_parts[name].body_mask, body)
       }
     mask.register('sleeves', female_parts.gloves.sleeve_mask, part('top')[0])
-    state = { mask, underwearColor, refreshBoots: () => {} }
+    state = {
+      mask,
+      underwearColor,
+      refreshBoots: () => {},
+      hairMasks: new Set(),
+    }
     if (female_parts[LAZY_HELMET]) registerLazyPart(scene, state, LAZY_HELMET)
     state.refreshBoots = installBootsSwitch(scene, state)
     states.set(scene, state)
   }
   const { helmet } = equipped
   const shownHair =
-    chosen === FEMALE_HAIR_PARTS.long || !helmet ? chosen : HELMET_HAIR[helmet]
+    chosen !== FEMALE_HAIR_PARTS.bob || !helmet ? chosen : HELMET_HAIR[helmet]
   for (const name of HAIR_PART_NAMES)
     for (const mesh of part(name)) mesh.visible = name === shownHair
   const shown: Record<string, boolean> = {
     sleeves: equipped.top === 'plate' && equipped.gloves === 'plate',
   }
+  // Hair a helmet hides, brushed by hand in the female preview.
+  const helmetName = slotPart(helmet, 'helmet')
+  const hairMask =
+    helmetName &&
+    shownHair &&
+    scene.userData.female_parts[helmetName]?.hair_masks?.[shownHair]
+  const hairKey = hairMask && `${helmetName}:${shownHair}`
+  const [hairMesh] = shownHair ? part(shownHair) : []
+  if (hairKey && hairMesh && !state.hairMasks.has(hairKey)) {
+    state.mask.register(hairKey, hairMask, hairMesh)
+    state.hairMasks.add(hairKey)
+  }
+  for (const key of state.hairMasks) shown[key] = key === hairKey
   for (const style of styles)
     for (const slot of slots) {
       const name = partName(style, slot)

@@ -18,6 +18,7 @@ import {
   CHARACTER_ANIMATION_PACK_PATHS,
 } from './modelPaths'
 import { skinnedParts } from './modularCharacter'
+import { loadGLB } from './gltfCache'
 import { FEMALE_BOOTS_PARTS, FEMALE_BOOTS_PROPERTY } from './femaleCharacter'
 import { poseMainHandProp } from './handProps'
 import { updatePeltPhysics } from '../effects/pelt-rig'
@@ -258,13 +259,12 @@ describe('female modular starter outfits', () => {
         const caveman = item.worldModel?.startsWith('armor/caveman_')
         const priest = item.worldModel?.startsWith('armor/priest_')
         const ranger = item.worldModel?.startsWith('armor/ranger_')
-        // The bard hat has no female fit yet, so it shows nothing.
         const bard = item.worldModel?.startsWith('armor/bard_')
         const rogueStyle =
           item.worldModel?.startsWith('armor/rogue_') ||
           ['leather_armor', 'leather_gloves', 'leather_boots'].includes(id)
         const [shown, hidden] = bard
-          ? [slot === 'head' ? undefined : `bard_${part}`, part]
+          ? [`bard_${part}`, part]
           : priest
             ? [`priest_${part}`, part]
             : ranger
@@ -281,7 +281,7 @@ describe('female modular starter outfits', () => {
                         ? [`barbarian_${part}`, part]
                         : [part, `barbarian_${part}`]
         await applyCharacterArmor(modelRoot, { [slot]: id } as ArmorEquipment)
-        if (shown) expect(count(modelRoot, shown), id).toBeGreaterThan(0)
+        expect(count(modelRoot, shown), id).toBeGreaterThan(0)
         expect(count(modelRoot, hidden), id).toBe(0)
         if (brilliance) expect(count(modelRoot, 'barbarian_helmet'), id).toBe(0)
         if (slot === 'head') {
@@ -304,7 +304,7 @@ describe('female modular starter outfits', () => {
     }
   )
   it.skipIf(!hasAssets)(
-    'gives female rangers their outfit and a ponytail that helmets replace',
+    'gives female rangers their outfit and a ponytail that stays under helmets',
     async () => {
       expect(getCharacterModelPath('ranger', 'female')).toBe(
         MODULAR_FEMALE_RANGER_MODEL_PATH
@@ -326,18 +326,18 @@ describe('female modular starter outfits', () => {
         ...armor,
         head: 'worn_plate_helmet',
       })
-      expect(count(modelRoot, 'ranger_hair')).toBe(0)
+      expect(count(modelRoot, 'ranger_hair')).toBeGreaterThan(0)
       await applyCharacterArmor(modelRoot, {
         ...armor,
         head: 'worn_priest_helmet',
       })
-      expect(count(modelRoot, 'ranger_hair')).toBe(0)
-      expect(count(modelRoot, 'hair')).toBeGreaterThan(0)
+      expect(count(modelRoot, 'ranger_hair')).toBeGreaterThan(0)
+      expect(count(modelRoot, 'hair')).toBe(0)
       disposeCharacterSkeletons(modelRoot)
     }
   )
   it.skipIf(!hasAssets)(
-    'dresses female bards in their outfit and keeps the hair under the unfitted hat',
+    'dresses female bards in their outfit and keeps the hair under the hat',
     async () => {
       expect(getCharacterModelPath('bard', 'female')).toBe(
         MODULAR_FEMALE_MODEL_PATH
@@ -351,10 +351,43 @@ describe('female modular starter outfits', () => {
         hands: 'worn_bard_gloves',
         boots: 'worn_bard_boots',
       })
-      for (const part of ['top', 'bottom', 'gloves', 'boots'])
+      for (const part of ['top', 'bottom', 'gloves', 'boots', 'helmet'])
         expect(count(modelRoot, `bard_${part}`), part).toBeGreaterThan(0)
       expect(count(modelRoot, 'hair')).toBeGreaterThan(0)
       disposeCharacterSkeletons(modelRoot)
+    }
+  )
+  it.skipIf(!hasAssets)(
+    'keeps the chosen hair under the bard hat, minus brushed triangles',
+    async () => {
+      const load = vi.mocked(loadGLB)
+      const original = load.getMockImplementation()!
+      load.mockImplementation(async (path) => {
+        const gltf = await original(path)
+        if (path.endsWith('/bard_helmet.glb'))
+          gltf.scene.userData.hair_masks.hair.hide_triangle_indices = [0, 1, 2]
+        return gltf
+      })
+      try {
+        const source = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH)
+        const { modelRoot } = createCharacterModelRoot(source.scene)
+        await applyCharacterArmor(modelRoot, {})
+        const full = count(modelRoot, 'hair')
+        await applyCharacterArmor(modelRoot, { head: 'worn_bard_helmet' })
+        expect(count(modelRoot, 'hair')).toBe(full - 3)
+        await applyCharacterArmor(modelRoot, { head: 'worn_priest_helmet' })
+        expect(count(modelRoot, 'hair')).toBe(full)
+        await applyCharacterArmor(
+          modelRoot,
+          { head: 'worn_bard_helmet' },
+          { face: 'default', hair: 'ponytail', hair_color: '#527baa' }
+        )
+        expect(count(modelRoot, 'ranger_hair')).toBeGreaterThan(0)
+        expect(count(modelRoot, 'hair')).toBe(0)
+        disposeCharacterSkeletons(modelRoot)
+      } finally {
+        load.mockImplementation(original)
+      }
     }
   )
   it.skipIf(!hasAssets)(
@@ -371,8 +404,11 @@ describe('female modular starter outfits', () => {
       expect(count(modelRoot, 'ranger_hair')).toBeGreaterThan(0)
       expect(count(modelRoot, 'hair')).toBe(0)
       await applyCharacterArmor(modelRoot, barbarian, look('ponytail'))
-      expect(count(modelRoot, 'ranger_hair')).toBe(0)
+      expect(count(modelRoot, 'ranger_hair')).toBeGreaterThan(0)
+      expect(count(modelRoot, 'barbarian_hair')).toBe(0)
+      await applyCharacterArmor(modelRoot, barbarian, look('bob'))
       expect(count(modelRoot, 'barbarian_hair')).toBeGreaterThan(0)
+      expect(count(modelRoot, 'hair')).toBe(0)
       await applyCharacterArmor(modelRoot, armor, look('long'))
       expect(count(modelRoot, 'valkyrie_hair')).toBeGreaterThan(0)
       expect(count(modelRoot, 'barbarian_hair')).toBe(0)

@@ -5,7 +5,7 @@ const root = new URL('../../', import.meta.url)
 const outfits = {
   priest: ['top', 'bottom', 'gloves', 'boots', 'helmet'],
   ranger: ['top', 'bottom', 'gloves', 'boots'],
-  bard: ['top', 'bottom', 'gloves', 'boots'],
+  bard: ['top', 'bottom', 'gloves', 'boots', 'helmet'],
 }
 const route = /^\/__female-preview\/([a-z]+)-fit\.json$/
 // Paired parts save { left, right }; left is the character's left (+x).

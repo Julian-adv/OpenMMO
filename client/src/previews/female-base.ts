@@ -35,6 +35,7 @@ import {
 } from './female-bracer-fit'
 import { femaleBootGround } from '../lib/utils/female-boot-ground'
 import { femaleBrushCursor } from './female-brush-cursor'
+import { helmetHairBrush } from './female-helmet-hair-brush'
 import { femaleSolePaint, type SoleEdits } from './female-sole-paint'
 import {
   attachValkyrieWings,
@@ -92,8 +93,24 @@ export async function showFemaleBase(
         <option value="barbarian">야만전사 뿔 투구</option>
         <option value="brilliance">광휘의 투구</option>
         <option value="priest">사제관 (피팅 검수 중)</option>
+        <option value="bard">바드 깃털 모자 (피팅 검수 중)</option>
       </select>
-      <p class="details">뿔 투구 아래로 보이는 헤어는 남깁니다. 발키리 투구는 헤어와 함께 표시합니다. 전사 긴 헤어는 다른 투구에서 숨기고, 투구를 벗으면 복원합니다.</p>
+      <p class="details">긴 헤어와 포니테일은 모든 투구 아래 그대로 보입니다. 단발은 뿔 투구에서 투구용 단발로, 기사·광휘 투구에서는 숨깁니다.</p>
+      <div id="helmet-hair-brush" hidden>
+        <label class="toggle"><input id="helmet-hair-brush-on" type="checkbox" /> 투구 헤어 브러시 (화면 클릭으로 지우기)</label>
+        <div id="helmet-hair-brush-controls" hidden>
+          <div id="helmet-hair-brush-mode" class="segmented" role="radiogroup" aria-label="헤어 브러시">
+            <label><input type="radio" name="helmet-hair-brush-mode" value="hide" checked /> 지우기</label>
+            <label><input type="radio" name="helmet-hair-brush-mode" value="show" /> 되살리기</label>
+          </div>
+          <label for="helmet-hair-brush-radius">반경 <output id="helmet-hair-brush-radius-value">1.5</output> cm</label>
+          <input id="helmet-hair-brush-radius" type="range" min="0.3" max="5" step="0.1" value="1.5" />
+          <button id="helmet-hair-brush-undo" type="button">한 번 되돌리기</button>
+          <button id="helmet-hair-brush-save" type="button">이 투구의 헤어 저장</button>
+          <p class="details">저장한 뒤 <code>node tools/prepare-female-knight.mjs --part &lt;투구&gt;</code>로 런타임 투구를 다시 만들면 게임에 반영됩니다.</p>
+        </div>
+        <p id="helmet-hair-brush-status" class="details" aria-live="polite"></p>
+      </div>
       <label for="female-top">상의</label>
       <select id="female-top">
         <option value="none">없음</option>
@@ -371,13 +388,7 @@ export async function showFemaleBase(
   const hairOptions: Record<string, THREE.SkinnedMesh[]> = { none: [] }
   let helmetOutfit = 'none'
   const hairKey = (name: string, helmet = helmetOutfit) =>
-    (name === 'warrior' || name === 'ranger') &&
-    helmet !== 'none' &&
-    helmet !== 'valkyrie'
-      ? 'none'
-      : helmet === 'barbarian' && name !== 'none'
-        ? `barbarian-${name}`
-        : name
+    helmet === 'barbarian' && name === 'bob' ? 'barbarian-bob' : name
   if (initialHairAsset)
     hairOptions[initialHair] = bindModularPart(model, initialHairAsset.scene)
   const hairFitControls = document.getElementById('warrior-hair-fit')!
@@ -489,9 +500,9 @@ export async function showFemaleBase(
     if (pending) return pending
     const promise = loader
       .loadAsync(
-        key === name
-          ? hairUrl(name)
-          : `/__modular-character/parts/female_barbarian_helmet_hair_${name}.glb`
+        key.startsWith('barbarian-')
+          ? `/__modular-character/parts/female_barbarian_helmet_hair_${name}.glb`
+          : hairUrl(key)
       )
       .then(({ scene: source }) => {
         if (disposed()) {
@@ -509,15 +520,18 @@ export async function showFemaleBase(
     return promise
   }
   let helmetEquipped = false
+  // Set once the outfit masks exist.
+  let refreshHairBrush = () => {}
   const updateHair = () => {
     for (const [name, meshes] of Object.entries(hairOptions))
       for (const mesh of meshes)
         mesh.visible =
-          (!helmetEquipped ||
-            helmetOutfit === 'barbarian' ||
-            helmetOutfit === 'valkyrie' ||
-            helmetOutfit === 'priest') &&
-          hairKey(hairSelect.value) === name
+          !(
+            helmetEquipped &&
+            hairSelect.value === 'bob' &&
+            (helmetOutfit === 'knight' || helmetOutfit === 'brilliance')
+          ) && hairKey(hairSelect.value) === name
+    refreshHairBrush()
   }
   updateHair()
   const swordGrip = animations.find((clip) => clip.name === 'idle_armed')
@@ -2156,6 +2170,49 @@ export async function showFemaleBase(
   const controls = new OrbitControls(camera, renderer.domElement)
   controls.enableDamping = true
   setupSkinBrush()
+  // Runtime part names the hair brush saves under.
+  const helmetParts: Record<string, string> = {
+    knight: 'helmet',
+    barbarian: 'barbarian_helmet',
+    valkyrie: 'valkyrie_helmet',
+    priest: 'priest_helmet',
+    bard: 'bard_helmet',
+    brilliance: 'brilliance_helmet',
+  }
+  const hairParts: Record<string, string> = {
+    bob: 'hair',
+    warrior: 'valkyrie_hair',
+    ranger: 'ranger_hair',
+  }
+  let hairBrushPaused = false
+  const hairBrush = helmetHairBrush({
+    canvas: renderer.domElement,
+    camera,
+    mask: outfitMask,
+    disposed,
+    shown: () => {
+      const key = hairKey(hairSelect.value)
+      const mesh = hairOptions[key]?.[0]
+      return helmetEquipped &&
+        helmetParts[helmetOutfit] &&
+        hairParts[key] &&
+        mesh?.visible
+        ? { helmet: helmetParts[helmetOutfit], hair: hairParts[key], mesh }
+        : undefined
+    },
+    pause: (brushing) => {
+      if (brushing && !paused) {
+        hairBrushPaused = true
+        setPaused(true)
+      } else if (!brushing && hairBrushPaused) {
+        hairBrushPaused = false
+        setPaused(false)
+      }
+    },
+  })
+  cleanup.push(hairBrush.dispose)
+  refreshHairBrush = hairBrush.refresh
+  refreshHairBrush()
   setupSolePaint()
   controls.minDistance = 0.144
   controls.maxDistance = 9

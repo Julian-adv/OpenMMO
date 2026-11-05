@@ -10,6 +10,7 @@ import { GLTFExporter } from '../client/node_modules/three/examples/jsm/exporter
 import { headlessThree, hash } from './lib/headless-three.mjs'
 import { dependencies, output as previewOutput } from './lib/female-preview.mjs'
 import { ensureFemalePreview } from './lib/ensure-female-preview.mjs'
+import { loadHelmetHairBrush } from './lib/helmet-hair-brush.mjs'
 
 const output = 'client/public/models/characters/modular_female'
 // Parts the client loads on first equip: packed separately with 1024 px colour textures.
@@ -69,7 +70,7 @@ const sources = {
     [`priest_${slot}`, `assets/items/female_priest_outfit/${slot}/fitted_v1/${slot}_female_priest.glb`])),
   ...Object.fromEntries(['top', 'bottom', 'boots', 'gloves', 'hair'].map(slot =>
     [`ranger_${slot}`, `assets/items/female_ranger_outfit/${slot}/fitted_v1/${slot}_female_ranger.glb`])),
-  ...Object.fromEntries(['top', 'bottom', 'boots', 'gloves'].map(slot =>
+  ...Object.fromEntries(['top', 'bottom', 'boots', 'gloves', 'helmet'].map(slot =>
     [`bard_${slot}`, `assets/items/female_bard_outfit/${slot}/fitted_v1/${slot}_female_bard.glb`])),
   valkyrie_hair: 'assets/modular_human_female_01/hair/tripo_warrior_v1/fitted_v1/hair_female_warrior.glb',
   valkyrie_wings: 'assets/items/valkyrie_starter/tripo_wing_v1/fitted_patch_v3/wings-armor-fit.glb',
@@ -94,6 +95,14 @@ mkdirSync(`${output}/animations`, { recursive: true })
 const reportPath = 'doc/assets/female-knight-runtime-sources.json'
 const report = { date: '2026-11-03', inputs: {}, outputs: {} }
 const record = (path) => { report.inputs[path] = hash(path) }
+const helmetHairPath = 'doc/assets/female-helmet-hair-brush.json'
+const { helmets: helmetHair } = await loadHelmetHairBrush()
+const hairTriangles = new Map()
+async function hairTriangleCount(hair) {
+  if (!hairTriangles.has(hair))
+    hairTriangles.set(hair, (await io.read(sources[hair])).getRoot().listMeshes()[0].listPrimitives()[0].getIndices().getCount() / 3)
+  return hairTriangles.get(hair)
+}
 function writeReport() {
   const previous = existsSync(reportPath) ? JSON.parse(readFileSync(reportPath)) : {}
   if (bakeExisting || selectedPack || selectedPart) report.inputs = { ...previous.inputs, ...report.inputs }
@@ -133,6 +142,13 @@ for (const [name, source] of Object.entries(sources)) {
     const path = name === 'valkyrie_top' ? source.replace('fitted_v11/top_female_valkyrie.glb', 'fitted_v8/body-occlusion.json') : source.replace(/[^/]+$/, 'body-occlusion.json')
     record(path)
     metadata.body_mask = JSON.parse(readFileSync(path))
+  }
+  if (helmetHair[name]) {
+    record(helmetHairPath)
+    metadata.hair_masks = {}
+    for (const [hair, hide] of Object.entries(helmetHair[name]))
+      metadata.hair_masks[hair] = { mesh_index: 0, primitive_index: 0, primitive_triangles: await hairTriangleCount(hair),
+                                    hide_triangle_indices: hide }
   }
   if (name === 'gloves') {
     const path = source.replace(/[^/]+$/, 'top-occlusion.json')
