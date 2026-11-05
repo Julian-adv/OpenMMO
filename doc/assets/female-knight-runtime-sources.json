@@ -1,7 +1,7 @@
 {
   "date": "2026-11-03",
   "inputs": {
-    "tools/prepare-female-knight.mjs": "581319c3eee663073e53128e26118264a2ec36b78fdbace2c30ad44da3b91e26",
+    "tools/prepare-female-knight.mjs": "0ff7c21ba8057d6dd5b98973ac38bcdbe3fbbe1fa10dde5004aa440343d4084a",
     "client/src/lib/utils/female-clip-bake.ts": "ffe7b1e7dbefe8d7877efa81aba171c499bd639061246dbd8fa2c64059b71e7f",
     "client/src/lib/utils/female-boot-ground.ts": "0cd0b888f399c689ce821ec416660ca2805b12fa3f4c8d780cdc4ad28b61dc80",
     "assets/modular_human_female_01/rig_v1/female-base.glb": "3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5",
@@ -69,7 +69,7 @@
     "assets/items/valkyrie_boots/fitted_v1/body-occlusion.json": "e5fd12be641d3917f5f152681d25f310bfd7351989605636d6e0530cb75d664c",
     "assets/items/valkyrie_gloves/fitted_v3/body-occlusion.json": "2e67e4b201465d13889f5b6ea64aecfde8e63a2c347074e172c1c4c944a22448",
     "assets/items/valkyrie_helmet/fitted_v2/body-occlusion.json": "319a3f4848040f2cef370435ca95acbbdfa968c8d9544710391860dee620a7a2",
-    "client/src/lib/utils/femaleCharacter.ts": "9790d6bbeb81e0aad04b868235fe9780a4f6a59f02e2e108b99797e478872dae",
+    "client/src/lib/utils/femaleCharacter.ts": "02fa3d7efb367ca819c30dd69edfd52f8aa952a4cc1fa511cf6c58298a55625a",
     "assets/items/female_caveman_top/tripo_v1/fitted_v7/top_female_caveman.glb": "e447242db6e34cb2ab8b0f67cbb621f4dee14ad036dfee7f193be4f80a78f23f",
     "assets/items/female_caveman_top/tripo_v1/fitted_v7/body-occlusion.json": "95494be44e0f651739bf853c24e783172338fab0dcf2cd79c7a3361195c7dd9f",
     "assets/items/female_caveman_bottom/tripo_v1/fitted_v9/bottom_female_caveman.glb": "ce641e30dcebe965a0c4aac09a5e233c5887d0aa81be2218875bf3866819b6f9",
@@ -97,7 +97,15 @@
     "assets/items/female_ranger_outfit/bottom/fitted_v1/body-occlusion.json": "cb332040b9c93351b1e77af1675ac5aa683e6bf1aae2dba84a3cbc31f49b90f5",
     "assets/items/female_ranger_outfit/boots/fitted_v1/body-occlusion.json": "0163093b27cecbb305850687ff82d0104294e5cc57196f68e4d97084e4e16816",
     "assets/items/female_ranger_outfit/gloves/fitted_v1/body-occlusion.json": "bade8a6e0833dbda307e5a7bec21c217409ea99627b612acaee1385ebac4bc5d",
-    "assets/items/female_ranger_outfit/hair/fitted_v1/body-occlusion.json": "9340cd6f561b487c1ab875e8dea2bde87ef0e323a43c3cc35c629d2ea9b362b5"
+    "assets/items/female_ranger_outfit/hair/fitted_v1/body-occlusion.json": "9340cd6f561b487c1ab875e8dea2bde87ef0e323a43c3cc35c629d2ea9b362b5",
+    "assets/items/female_bard_outfit/top/fitted_v1/top_female_bard.glb": "d4c534f069f1905ade3be09399fd54d96123c344da6640aa07978b197e1196e6",
+    "assets/items/female_bard_outfit/top/fitted_v1/body-occlusion.json": "3eb540171fd23472894bcf3e94fcdd04b429ac09232d15152bf7d5e80c009815",
+    "assets/items/female_bard_outfit/bottom/fitted_v1/bottom_female_bard.glb": "f9fb24e16d9c76477361f2c3d479f7ab7a82ddd6a15ba5c13061fdb70b87bd60",
+    "assets/items/female_bard_outfit/boots/fitted_v1/boots_female_bard.glb": "2a676008595b1dab1a6deff9d9cf321c0d8c2466f1a7e9829900055e9a16c856",
+    "assets/items/female_bard_outfit/gloves/fitted_v1/gloves_female_bard.glb": "ea38e79782b1c069105d4271518678178f108ae49c6195702765d1bf18cfe913",
+    "assets/items/female_bard_outfit/bottom/fitted_v1/body-occlusion.json": "db9f4ed853c0824c541d382dabac0bc5efbc06e3651281db3e3b3169de743d5a",
+    "assets/items/female_bard_outfit/boots/fitted_v1/body-occlusion.json": "3ca82c3719b8f15b82c2814275a4f8de27b302cda38d8c010cfa58536e4473e6",
+    "assets/items/female_bard_outfit/gloves/fitted_v1/body-occlusion.json": "c9d2acdb1447efdf949ed0863149e8e962a7d372cfc0d224c79e6d606b8c7b86"
   },
   "outputs": {
     "client/public/models/characters/modular_female/base.glb": "a1887a2d633993c69ebe346119a964cb31d557834a4815ac82a998c3dc084ee9",
@@ -149,7 +157,11 @@
     "client/public/models/characters/modular_female/animations/enchant_armor.glb": "7c074b6f3051960523b13f01d5f945c8b0ce9c8beea117d9339daf88501c9548",
     "client/public/models/characters/modular_female/animations/great_sword.glb": "5e8372f8b9dcdc5583ad7498d1dcd488e360b442c5308cf45c7e4040e28d3d6b",
     "client/public/models/characters/modular_female/animations/riding.glb": "b6dc3078e6cd5a97c50e90779af303273fa86331d30598173f10040725112cbb",
-    "client/public/models/characters/modular_female/animations/dagger_preview.glb": "99725f4f9c3d3f23ce4d5399a4c7141ca983e1b6438e5e62b9e142c6a125dcd9"
+    "client/public/models/characters/modular_female/animations/dagger_preview.glb": "99725f4f9c3d3f23ce4d5399a4c7141ca983e1b6438e5e62b9e142c6a125dcd9",
+    "client/public/models/characters/modular_female/bard_top.glb": "d5d751b01e90177d1da2f6c218df94cf9fa9365adb17548d22fecbbcb0df29c5",
+    "client/public/models/characters/modular_female/bard_bottom.glb": "22ba73e2f42a6d60f0f4f9e680cb2bfe51d5d0845249651976e7846f961e2382",
+    "client/public/models/characters/modular_female/bard_boots.glb": "34aa01909c98af08207b94f93dbd64e5c22d2abab48d989703c901448058d253",
+    "client/public/models/characters/modular_female/bard_gloves.glb": "58a3b76960a8d40f2c22fac3e427d376ac7ff68f9644918473cfe3191e51ce16"
   },
   "underwear_weight_patch": {
     "date": "2026-10-15",

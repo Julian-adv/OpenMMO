@@ -97,6 +97,12 @@
     rogue: STARTER_EQUIPMENT.rogue,
     caveman: STARTER_EQUIPMENT.caveman,
     ranger: STARTER_EQUIPMENT.ranger,
+    bard: {
+      armor: {
+        ...STARTER_EQUIPMENT.bard?.armor,
+        hands: 'worn_bard_gloves',
+      },
+    },
     priest: {
       ...STARTER_EQUIPMENT.priest,
       armor: {

@@ -29,6 +29,7 @@ type Style =
   | 'caveman'
   | 'priest'
   | 'ranger'
+  | 'bard'
 const prefixes: Record<Style, string> = {
   plate: '',
   barbarian: 'barbarian_',
@@ -37,9 +38,12 @@ const prefixes: Record<Style, string> = {
   caveman: 'caveman_',
   priest: 'priest_',
   ranger: 'ranger_',
+  bard: 'bard_',
 }
 const styles = Object.keys(prefixes) as Style[]
-type Helmet = Exclude<Style, 'rogue' | 'caveman' | 'ranger'> | 'brilliance'
+type Helmet =
+  | Exclude<Style, 'rogue' | 'caveman' | 'ranger' | 'bard'>
+  | 'brilliance'
 const LAZY_HELMET = 'brilliance_helmet'
 export type FemaleHair = Extract<
   CharacterAppearance['hair'],
@@ -78,6 +82,7 @@ const LAZY_STYLES: Partial<Record<Style, readonly Slot[]>> = {
   caveman: slots.filter((slot) => slot !== 'helmet'),
   priest: slots,
   ranger: slots.filter((slot) => slot !== 'helmet'),
+  bard: slots.filter((slot) => slot !== 'helmet'),
 }
 const partName = (style: Style, slot: Slot | 'hair') =>
   `${prefixes[style]}${slot}`
@@ -363,6 +368,7 @@ const femaleStyle = (itemId: string | null | undefined): Style | null => {
   if (model.startsWith('armor/caveman_')) return 'caveman'
   if (model.startsWith('armor/priest_')) return 'priest'
   if (model.startsWith('armor/ranger_')) return 'ranger'
+  if (model.startsWith('armor/bard_')) return 'bard'
   if (model.startsWith('armor/rogue_') || ROGUE_LEATHER_MODELS.has(model))
     return 'rogue'
   return item?.material === 'leather' || model.startsWith('armor/barbarian_')
@@ -374,6 +380,8 @@ const femaleHelmet = (itemId: string | null | undefined): Helmet | null => {
   if (modularOutfitForArmor({ head: itemId }).helmet === 'brilliance')
     return 'brilliance'
   const style = femaleStyle(itemId)
+  // The bard hat has no female fit yet, so it is not drawn.
+  if (style === 'bard') return null
   return style === 'rogue' || style === 'caveman' || style === 'ranger'
     ? 'barbarian'
     : style

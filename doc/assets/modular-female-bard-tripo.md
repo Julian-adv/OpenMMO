@@ -117,3 +117,40 @@ Tripo 원본에서 앞코가 바닥에 닿을 때 굽 끝이 1.37cm(피팅 배�
 옆에서 아치 가장자리의 금색 띠가 보여(사용자 지적), 아래를 향해도 좌우로 많이 기운 면(법선 x 성분 0.4 이상)은 칠하지 않는다(233 → 188면).
 
 미리보기의 `복장 피팅 조절`에서 바드 부츠를 고르면 `밑창 색 칠하기`가 나온다. 켜면 부츠 위에 반경 1cm 원형 커서가 보이고, 짧게 클릭하면 중심이 원 안에 있는 삼각형이 밑창 색이나 가죽으로 바뀐다. 색 선택기로 밑창 색을 고른다. 저장값은 `female-bard-preview-fit.json`의 `boots.sole`(클릭한 삼각형의 바인드 공간 중심, 색 hex)이고, 피팅 스크립트가 중심에서 4mm 안의 면을 찾아 같은 색을 준다.
+
+## 게임 시작 복장 — 2026-11-06
+
+여성 바드는 예전 통짜 모델(`female_bard.glb`) 대신 공통 여성 몸체(`base.glb`)를 쓰고, 생성 화면에서 헤어·머리색·눈색을 고른다. 기본 헤어는 단발이다. 서버가 남녀 모두에게 바드 장비를 지급·장착하고, 여성은 장갑을 더 받는다.
+
+| 아이템 | 슬롯 | 여성 런타임 파츠 |
+| --- | --- | --- |
+| `worn_bard_helmet` | head | 아직 없음(모자 피팅 전까지 보이지 않고 단발이 보임) |
+| `worn_bard_top` | chest | `bard_top` |
+| `worn_bard_pants` | pants | `bard_bottom` (짧은 주름치마) |
+| `worn_bard_gloves` | hands | `bard_gloves` (새 아이템, 여성 전용 지급) |
+| `worn_bard_boots` | boots | `bard_boots` |
+
+- 모든 시작 장비는 거래·판매가 안 된다(`untradeable`, 가격 없음). 남성 바드의 기존 아이템을 같이 쓰고, 외형은 `worldModel`의 `armor/bard_` 접두어로 고른다.
+- `worn_bard_gloves` 아이콘과 바닥 모델은 여성 장갑에서 `export_outfit_items.py --outfit bard --parts gloves --icon-rotation -72 0 0 --turn -30`으로 만들었다(`client/public/items/armor/bard_gloves.png`, SHA-256 `e8ce03fc…9c29`). 설명은 다른 바드 아이템처럼 짧게 썼다.
+- 장비창 배경 `client/public/character_concepts/female_bard.webp`를 모자 원화(`hat-v1.png`)로 바꿨다. 가장자리에서 이어지는 회색 배경만 투명하게 한 RGBA WebP(q85), SHA-256 `555027e2…0cc2`. 예전 원화는 [캐릭터 기록](characters.md#bard)에 남는다.
+- 기존 여성 바드는 배포 때 서비스를 멈추고 아래 도구로 빠진 장비만 가방에 넣는다(장착 상태는 그대로). 워크트리 DB 사본에서는 1명, 5품목이었다.
+
+```sh
+for p in top bottom boots gloves; do node tools/prepare-female-knight.mjs --part bard_$p; done
+blender -b --python-exit-code 1 --python tools/blender-scripts/export_outfit_items.py -- --outfit bard --parts gloves --icon-rotation -72 0 0 --turn -30
+.venv/bin/python tools/grant-female-bard-starter-outfit-20261106.py data/game_data.db            # 미리보기
+.venv/bin/python tools/grant-female-bard-starter-outfit-20261106.py data/game_data.db --apply --expected-preview preview.json
+```
+
+워크트리 서버에서 여성 바드를 새로 만들어 생성 화면·캐릭터 선택·월드 진입을 확인했다. 만돌린 연주 동작과 다른 플레이어에게 보이는 모습은 아직 확인하지 않았다.
+
+## 모자 원화 — 2026-11-06
+
+![여성 바드 모자 원화](../../assets/items/female_bard_outfit/concepts/hat-v1.png)
+
+- 시안: `assets/items/female_bard_outfit/concepts/hat-v1.png`, 1024×1536 RGB PNG. [프롬프트](../../assets/items/female_bard_outfit/concepts/hat-v1-prompt.txt).
+- 제작: OpenAI Codex built-in ImageGen, **ChatGPT Pro 20x**, 2026-11-06. OpenAI 생성 출력물 이용 조건 및 참조 에셋의 기존 이용 조건을 따른다.
+- 참조: 바드 원화 `front-v1.png`, 단발 썸네일 `client/src/assets/character-appearance/female-hair-bob.png`, 남성 바드 모자 원화 `assets/items/bard_starter/concepts/hat/hat-bard-front-v1.png`.
+- 사용자 요청: 여성용 바드 모자를 원화부터 만든다. 투구를 쓰면 단발이 보이는 규칙(사제관과 같음)에 맞춰 단발 위에 쓴 모습으로 그렸다.
+- 짙은 녹색 펠트 모자, 접어 올린 챙, 청동 장식의 가죽 띠, 아이보리·녹색 깃털.
+- 두 번 모두 Codex가 인물을 33px 아래로 옮겨 다시 그렸다(크기는 같음). 몸 비율은 그대로라 Tripo 입력으로 쓰고, 피팅 배치는 키 대신 몸 기준점으로 잰다.

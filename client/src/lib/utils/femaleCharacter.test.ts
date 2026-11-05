@@ -258,33 +258,39 @@ describe('female modular starter outfits', () => {
         const caveman = item.worldModel?.startsWith('armor/caveman_')
         const priest = item.worldModel?.startsWith('armor/priest_')
         const ranger = item.worldModel?.startsWith('armor/ranger_')
+        // The bard hat has no female fit yet, so it shows nothing.
+        const bard = item.worldModel?.startsWith('armor/bard_')
         const rogueStyle =
           item.worldModel?.startsWith('armor/rogue_') ||
           ['leather_armor', 'leather_gloves', 'leather_boots'].includes(id)
-        const [shown, hidden] = priest
-          ? [`priest_${part}`, part]
-          : ranger
-            ? [`ranger_${part}`, `barbarian_${part}`]
-            : caveman
-              ? [`caveman_${part}`, part]
-              : valkyrie
-                ? [`valkyrie_${part}`, part]
-                : rogueStyle
-                  ? [`rogue_${part}`, part]
-                  : brilliance
-                    ? ['brilliance_helmet', part]
-                    : barbarianStyle
-                      ? [`barbarian_${part}`, part]
-                      : [part, `barbarian_${part}`]
+        const [shown, hidden] = bard
+          ? [slot === 'head' ? undefined : `bard_${part}`, part]
+          : priest
+            ? [`priest_${part}`, part]
+            : ranger
+              ? [`ranger_${part}`, `barbarian_${part}`]
+              : caveman
+                ? [`caveman_${part}`, part]
+                : valkyrie
+                  ? [`valkyrie_${part}`, part]
+                  : rogueStyle
+                    ? [`rogue_${part}`, part]
+                    : brilliance
+                      ? ['brilliance_helmet', part]
+                      : barbarianStyle
+                        ? [`barbarian_${part}`, part]
+                        : [part, `barbarian_${part}`]
         await applyCharacterArmor(modelRoot, { [slot]: id } as ArmorEquipment)
-        expect(count(modelRoot, shown), id).toBeGreaterThan(0)
+        if (shown) expect(count(modelRoot, shown), id).toBeGreaterThan(0)
         expect(count(modelRoot, hidden), id).toBe(0)
         if (brilliance) expect(count(modelRoot, 'barbarian_helmet'), id).toBe(0)
         if (slot === 'head') {
           expect(count(modelRoot, 'barbarian_hair') > 0, id).toBe(
-            barbarianStyle
+            barbarianStyle && !bard
           )
-          expect(count(modelRoot, 'hair') > 0, id).toBe(valkyrie || priest)
+          expect(count(modelRoot, 'hair') > 0, id).toBe(
+            valkyrie || priest || !!bard
+          )
         }
       }
       await applyCharacterArmor(modelRoot, {})
@@ -326,6 +332,27 @@ describe('female modular starter outfits', () => {
         head: 'worn_priest_helmet',
       })
       expect(count(modelRoot, 'ranger_hair')).toBe(0)
+      expect(count(modelRoot, 'hair')).toBeGreaterThan(0)
+      disposeCharacterSkeletons(modelRoot)
+    }
+  )
+  it.skipIf(!hasAssets)(
+    'dresses female bards in their outfit and keeps the hair under the unfitted hat',
+    async () => {
+      expect(getCharacterModelPath('bard', 'female')).toBe(
+        MODULAR_FEMALE_MODEL_PATH
+      )
+      const source = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH)
+      const { modelRoot } = createCharacterModelRoot(source.scene)
+      await applyCharacterArmor(modelRoot, {
+        head: 'worn_bard_helmet',
+        chest: 'worn_bard_top',
+        pants: 'worn_bard_pants',
+        hands: 'worn_bard_gloves',
+        boots: 'worn_bard_boots',
+      })
+      for (const part of ['top', 'bottom', 'gloves', 'boots'])
+        expect(count(modelRoot, `bard_${part}`), part).toBeGreaterThan(0)
       expect(count(modelRoot, 'hair')).toBeGreaterThan(0)
       disposeCharacterSkeletons(modelRoot)
     }

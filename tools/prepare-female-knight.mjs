@@ -13,7 +13,7 @@ import { ensureFemalePreview } from './lib/ensure-female-preview.mjs'
 
 const output = 'client/public/models/characters/modular_female'
 // Parts the client loads on first equip: packed separately with 1024 px colour textures.
-const separatePart = name => /^(caveman|priest|ranger)_/.test(name)
+const separatePart = name => /^(caveman|priest|ranger|bard)_/.test(name)
 // Fur panels share the waist rig and colliders.
 function bakeSkirtRobe(doc) {
   const panels = doc.getRoot().listNodes().filter(node => node.getExtras().pelt_physics)
@@ -69,6 +69,8 @@ const sources = {
     [`priest_${slot}`, `assets/items/female_priest_outfit/${slot}/fitted_v1/${slot}_female_priest.glb`])),
   ...Object.fromEntries(['top', 'bottom', 'boots', 'gloves', 'hair'].map(slot =>
     [`ranger_${slot}`, `assets/items/female_ranger_outfit/${slot}/fitted_v1/${slot}_female_ranger.glb`])),
+  ...Object.fromEntries(['top', 'bottom', 'boots', 'gloves'].map(slot =>
+    [`bard_${slot}`, `assets/items/female_bard_outfit/${slot}/fitted_v1/${slot}_female_bard.glb`])),
   valkyrie_hair: 'assets/modular_human_female_01/hair/tripo_warrior_v1/fitted_v1/hair_female_warrior.glb',
   valkyrie_wings: 'assets/items/valkyrie_starter/tripo_wing_v1/fitted_patch_v3/wings-armor-fit.glb',
   valkyrie_top: 'assets/items/valkyrie_starter/tripo_top_v1/fitted_v11/top_female_valkyrie.glb',
