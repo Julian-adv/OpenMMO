@@ -78,7 +78,7 @@ const sources = {
   valkyrie_helmet: 'assets/items/valkyrie_helmet/fitted_v2/helmet_female_valkyrie.glb',
   brilliance_helmet: 'assets/items/helm_of_brilliance/tripo_v2/fitted_v3/female/helmet_brilliance.glb',
 }
-const packs = ['locomotion', 'combat_melee', 'social', 'fishing', 'combat_ranged', 'offhand', 'enchant_armor', 'great_sword', 'riding', 'dagger_preview']
+const packs = ['locomotion', 'combat_melee', 'social', 'fishing', 'combat_ranged', 'offhand', 'enchant_armor', 'great_sword', 'riding', 'dagger_preview', 'cart_push']
 const bakeExisting = process.argv.includes('--bake-existing')
 const packFlag = process.argv.indexOf('--pack')
 const selectedPack = packFlag === -1 ? undefined : process.argv[packFlag + 1]

@@ -44,7 +44,9 @@
   import { disposeObjectTree } from '../../utils/disposeObjectTree'
   import { translucentClone } from '../../utils/translucentMaterial'
   import {
+    playCartRollSound,
     playDungeonDripSound,
+    stopCartSounds,
     stopDungeonDripSounds,
   } from '../../managers/sfxManager'
 
@@ -307,6 +309,7 @@
 
   function clearGroup() {
     stopDungeonDripSounds()
+    stopCartSounds()
     puddles?.dispose()
     puddles = null
     if (currentGroup) {
@@ -1285,6 +1288,14 @@
           t: 0,
           duration: Math.max(0.05, distance / cartRollSpeed()),
         }
+        if (!document.hidden)
+          playCartRollSound(
+            cart.roll.duration,
+            Math.hypot(
+              playerX - propsGroup.position.x - p.x,
+              playerZ - propsGroup.position.z - p.z
+            )
+          )
       }
       const roll = cart.roll
       roll.t += deltaMs / 1000

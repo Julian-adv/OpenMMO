@@ -155,6 +155,12 @@
   import { PLAYER_ATTACK_IMPACT_DELAY_MS } from '../data/combatTiming'
   import { gameStore } from '../stores/gameStore'
   import { miningPlayers, PICKAXE_ITEM } from '../stores/miningStore'
+  import {
+    CART_PUSH_CLIP,
+    CART_PUSH_PACK,
+    cartPushes,
+  } from '../stores/cartPushStore'
+  import { currentDungeonId } from '../stores/dungeonStore'
   import { pickRandom } from '../utils/randomUtils'
   import {
     equippedArmor,
@@ -737,6 +743,29 @@
     const id = modelPlayerId()
     return id === undefined ? undefined : get(daggerSkillCasts).get(id)
   }
+  let cartPushClip: THREE.AnimationClip | undefined
+  /** When this player's cart push was broadcast, while its clip plays. */
+  function cartPushAt() {
+    if (!cartPushClip || riding || playerState !== 'idle') return undefined
+    const id = modelPlayerId()
+    const at = id === undefined ? undefined : $cartPushes.get(id)
+    return at !== undefined && Date.now() - at < cartPushClip.duration * 1000
+      ? at
+      : undefined
+  }
+  $effect(() => {
+    const root = modelRoot
+    if (!root || !$currentDungeonId) return
+    let cancelled = false
+    void loadWeaponAnimations(modelPath, root, { pack: CART_PUSH_PACK })
+      .then((clips) => {
+        if (!cancelled) cartPushClip = clips.get(CART_PUSH_CLIP)
+      })
+      .catch((error) => console.error('Failed to load the cart push', error))
+    return () => {
+      cancelled = true
+    }
+  })
   /** When the charge's dash lands, while the stab around it plays. */
   function chargeStabLandsAt() {
     if (!chargeStabClip || riding) return undefined
@@ -772,10 +801,7 @@
     )
       return
     let cancelled = false
-    void loadWeaponAnimations(modelPath, root, {
-      id: DAGGER_SKILL.weaponType,
-      pack: DAGGER_SKILL.pack,
-    })
+    void loadWeaponAnimations(modelPath, root, { pack: DAGGER_SKILL.pack })
       .then((clips) => {
         const inward = clips.get('dagger_inward')
         const outward = clips.get('dagger_outward')
@@ -1334,6 +1360,13 @@
       )
       return
     }
+    const pushAt = cartPushAt()
+    if (pushAt !== undefined && cartPushClip) {
+      if (currentAction?.getClip() === cartPushClip) return
+      startAction(cartPushClip, true, 0.15)
+      seekCurrentAction((Date.now() - pushAt) / 1000)
+      return
+    }
     if (castClip) {
       // The idle hand-off near a clip's end must not rewind the cast.
       if (currentAction?.getClip() === castClip) return
@@ -1814,13 +1847,16 @@
         (playerState !== 'interact' || interactionAnim === EXCAVATE_EMOTE_ANIM)
     const handsOnOars =
       boating && canRow && (rowing || (boatMount?.rowingWeight ?? 0) >= 0.001)
+    const pushing = cartPushAt() !== undefined
     if (weaponObject) {
       weaponObject.visible =
         !riding &&
         !handsOnOars &&
+        !pushing &&
         (playerState !== 'interact' || fishingInteraction)
     }
-    const offhandVisible = !riding && !handsOnOars && playerState !== 'interact'
+    const offhandVisible =
+      !riding && !handsOnOars && !pushing && playerState !== 'interact'
     if (offhandObject) offhandObject.visible = offhandVisible
     if (torchFireGroup) torchFireGroup.visible = offhandVisible
   }
@@ -2143,6 +2179,7 @@
     // Update animation state
     if (validAnimations.length > 0) {
       const stabLandsAt = chargeStabLandsAt()
+      const pushAt = cartPushAt()
       const stateKey =
         boating && canRow
           ? 'boating'
@@ -2152,17 +2189,19 @@
               ? `interact:${interactionAnim}:${interactionCounter}`
               : stabLandsAt !== undefined
                 ? `charge-stab:${stabLandsAt}`
-                : playerState === 'moving'
-                  ? `moving:${movementMode}`
-                  : castPose && activeCastClip()
-                    ? `cast:${castPose.clip}`
-                    : playerState === 'attack'
-                      ? `attack:${attackCounter}:${daggerCastAt() ?? ''}`
-                      : activeArmorEnchant()
-                        ? 'enchant-armor'
-                        : activeEnchantClip()
-                          ? 'enchant-weapon'
-                          : playerState
+                : pushAt !== undefined
+                  ? `cart-push:${pushAt}`
+                  : playerState === 'moving'
+                    ? `moving:${movementMode}`
+                    : castPose && activeCastClip()
+                      ? `cast:${castPose.clip}`
+                      : playerState === 'attack'
+                        ? `attack:${attackCounter}:${daggerCastAt() ?? ''}`
+                        : activeArmorEnchant()
+                          ? 'enchant-armor'
+                          : activeEnchantClip()
+                            ? 'enchant-weapon'
+                            : playerState
       const animKey = `${equippedMainHandItemId ?? ''}:${stateKey}`
       if (lastAnimKey !== animKey) {
         lastAnimKey = animKey

@@ -52,7 +52,7 @@ export const PICKUP_APPROACH: ApproachRange = {
  *  because `range` only feeds the already-close short-circuit. */
 export const PROP_APPROACH: ApproachRange = { range: 1.6, stopShort: 1.6 }
 /** Onto the spot behind a rail cart's end, where a push counts. */
-export const CART_PUSH_APPROACH: ApproachRange = { range: 0.5, stopShort: 0 }
+export const CART_PUSH_APPROACH: ApproachRange = { range: 0.1, stopShort: 0 }
 
 export const NPC_TRADE_APPROACH = reach(NPC_TRADE_RANGE_METERS)
 export const TIP_HAT_APPROACH = reach(TIP_HAT_RANGE_METERS)

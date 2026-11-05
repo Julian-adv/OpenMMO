@@ -77,6 +77,14 @@ export type DungeonSound = keyof typeof DUNGEON_SOUNDS
 
 const DUNGEON_DRIP_SOUNDS = [DUNGEON_SOUNDS.drip, DUNGEON_SOUNDS.drip2]
 
+const CART_SOUNDS = {
+  roll: { url: '/sounds/cart-roll.ogg', volume: 0.5, pool: 2 },
+  crash: { url: '/sounds/cart-crash.ogg', volume: 0.5, pool: 2 },
+} as const
+/** From the crash file's start to its peak. */
+const CART_CRASH_LEAD_S = 0.04
+const CART_SOUND_RANGE = 16
+
 const ABILITY_SOUNDS: Partial<Record<AbilityId, SoundSpec>> = {
   guardian_ward: {
     url: '/sounds/guardian-ward.ogg',
@@ -345,26 +353,66 @@ export function playPropSound(kind: PropSound, delayMs = 0) {
 /** Load dungeon effects on entry. */
 export function preloadDungeonSounds() {
   preloadSounds(DUNGEON_SOUNDS)
+  preloadSounds(CART_SOUNDS)
 }
 
 export function playDungeonSound(kind: DungeonSound) {
   playSound(DUNGEON_SOUNDS[kind])
 }
 
+const distanceGain = (distance: number, range: number) =>
+  Math.max(0, 1 - distance / range) ** 2
+
+function pauseSounds(specs: readonly SoundSpec[]) {
+  for (const { url } of specs) {
+    for (const audio of pools.get(url)?.audios ?? []) audio.pause()
+  }
+}
+
 export function playDungeonDripSound(distance: number, seed: number) {
-  const gain = Math.max(0, 1 - distance / 10) ** 2
+  const gain = distanceGain(distance, 10)
   if (gain <= 0 || getSfxMultiplier() <= 0) return
   const { url, volume, pool } =
     DUNGEON_DRIP_SOUNDS[Math.floor(Math.random() * DUNGEON_DRIP_SOUNDS.length)]
   playAudioFromPool(url, volume * gain, pool, 0.92 + (seed % 1) * 0.16)
 }
 
-export function stopDungeonDripSounds() {
-  for (const { url } of DUNGEON_DRIP_SOUNDS) {
-    const pool = pools.get(url)
-    if (!pool) continue
-    for (const audio of pool.audios) audio.pause()
+const cartSoundTimers = new Set<number>()
+
+function laterCartSound(ms: number, fn: () => void) {
+  const id = window.setTimeout(() => {
+    cartSoundTimers.delete(id)
+    fn()
+  }, ms)
+  cartSoundTimers.add(id)
+}
+
+/** A cart rolling `seconds` and stopping dead `distance` metres away. */
+export function playCartRollSound(seconds: number, distance: number) {
+  const gain = distanceGain(distance, CART_SOUND_RANGE)
+  if (gain <= 0 || getSfxMultiplier() <= 0 || !canUseAudio()) return
+  const { roll, crash } = CART_SOUNDS
+  const rolling = playAudioFromPool(roll.url, roll.volume * gain, roll.pool)
+  if (rolling) {
+    rolling.loop = true
+    laterCartSound(seconds * 1000, () => {
+      rolling.loop = false
+      rolling.pause()
+    })
   }
+  laterCartSound(Math.max(0, seconds - CART_CRASH_LEAD_S) * 1000, () =>
+    playAudioFromPool(crash.url, crash.volume * gain, crash.pool)
+  )
+}
+
+export function stopCartSounds() {
+  for (const id of cartSoundTimers) window.clearTimeout(id)
+  cartSoundTimers.clear()
+  pauseSounds(Object.values(CART_SOUNDS))
+}
+
+export function stopDungeonDripSounds() {
+  pauseSounds(DUNGEON_DRIP_SOUNDS)
 }
 
 export function preloadAbilitySounds() {

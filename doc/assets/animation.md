@@ -117,6 +117,25 @@ tip followed the handle. Other rigs and offhand props kept their previous placem
   `node tools/prepare-female-knight.mjs --pack dagger_preview`. Clip durations stay 53/24 and 49/24 seconds.
   Animation only: no meshes or textures. Source and license are unchanged; no new generation.
 
+## Ore Cart Push (2026-11-06)
+
+- Source: Adobe [Mixamo](https://www.mixamo.com/) `Push Stop.fbx` (65 bones, 79 frames at 30 fps),
+  downloaded by the user on 2026-11-06 and kept in `assets/animations/push/`. The user picked it
+  over Mixamo `Push` and `Push Start`, which were deleted.
+  License: the Adobe/Mixamo terms recorded under Dagger Double Slash. No AI generation.
+- Pack: `client/public/models/animations/cart_push.glb` with one clip, `cart_push`
+  (frames 45–79, 34/30 s): the last shove, letting go, and standing up. Earlier frames
+  walk while pushing and tread in place once root motion is removed, so they are cut.
+  Horizontal hip motion is removed. Built with
+  `blender -b --python tools/blender-scripts/build_cart_push.py` on the existing combat armature;
+  the source blend is not saved.
+- Modular packs: `characters/modular_{male,female}/animations/cart_push.glb`, from
+  `node tools/prepare-modular-character.mjs --pack cart_push` and
+  `node tools/prepare-female-knight.mjs --pack cart_push`.
+- Runtime: `DungeonCartPushed` records the pusher (`cartPushStore.ts`), and `PlayerModel.svelte`
+  plays the clip once while that player stands idle, for the pusher and onlookers alike.
+  The pack loads on dungeon entry.
+
 - 애니메이션 파이프라인/매핑 규칙 문서: [ANIMATION.md](../ANIMATION.md)
 - 말의 애니메이션 출처·분할 구간: [Horse](animals.md#애니메이션-분할) (Sketchfab, CC BY 4.0).
 

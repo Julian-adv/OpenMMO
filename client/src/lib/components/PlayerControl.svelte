@@ -1111,6 +1111,7 @@
     keyboardSender.reset()
     clickSprinting = sprinting
     playerControlMachine.transition({ name: 'moving', approach })
+    settlingCartPush = null
     serverMovement.request(target.x, target.z, sprinting, stopAtEntrance)
     updatePlayerState()
   }
@@ -1793,6 +1794,17 @@
     )
   }
 
+  /** Face `rotation` while standing, on screen and for others. */
+  function turnInPlace(rotation: number) {
+    playerRotation = rotation
+    setPlayerState({ ...playerState, rotation })
+    stopAndFace(rotation)
+  }
+
+  /** A push held until the walk onto the cart's end settles, so the arrival
+   *  facing does not overwrite the turn toward the cart. */
+  let settlingCartPush: Parameters<typeof pushCartNow> | null = null
+
   /** At the cart's end: face it and ask the server to push. */
   export function pushCartNow(
     entranceId: string,
@@ -1802,9 +1814,13 @@
     z: number
   ) {
     if (!currentPlayer) return
+    if (serverMovement.active) {
+      settlingCartPush = [entranceId, depth, propId, x, z]
+      return
+    }
     faceTowards(x, z)
     currentSpeed = 0
-    stopAndFace(playerRotation)
+    turnInPlace(playerRotation)
     networkManager.sendPushDungeonCart(entranceId, depth, propId)
   }
 
@@ -2223,9 +2239,8 @@
         clearCombat()
         stopMovement()
         if (!boating) faceTowards(intent.position.x, intent.position.z)
-        setPlayerState({ ...playerState, rotation: playerRotation })
         // Sync heading before the server validates the cast direction.
-        stopAndFace(playerRotation)
+        turnInPlace(playerRotation)
         networkManager.sendFishingCast(intent.position)
       },
       requestMove: handleClickToMove,
@@ -2598,6 +2613,9 @@
           if (progress.status === 'rejected') serverMovement.clear()
           else serverMovement.finish()
           stopMovement()
+          const push = settlingCartPush
+          settlingCartPush = null
+          if (push && progress.status === 'arrived') pushCartNow(...push)
         }
       }
     )
@@ -2621,6 +2639,7 @@
         interactionRevision++
         clearCombat()
         dungeonManager.clearPendingProp()
+        settlingCartPush = null
         dropLocalMovement()
         officialPosition = { ...position }
         playerRotation = rotation

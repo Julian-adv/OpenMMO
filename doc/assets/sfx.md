@@ -357,6 +357,15 @@ Both were generated and processed exactly like the monster cries above.
   스윙 시작 600 ms 뒤(`player_anim_timing.csv`의 `mining_swing_impact`, 빌린 `great_sword_slash`의 내려찍는 순간)에 재생.
   원본과 처리 기록은 `assets/sfx/pickaxe-ore-2026-11-05/`의 `pickaxe-ore_chunk-take2_2026-11-05.mp3` 및 같은 이름의 `.json`에 보관.
 
+- cart-roll.ogg, cart-crash.ogg — 검은맥 광산 철로 수레가 굴러가는 소리와 멈출 때 부딪히는 소리.
+  [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) API로 2026-11-06 직접 생성. Starter 유료 플랜,
+  [유료 플랜 상업 이용 라이선스](https://help.elevenlabs.io/hc/en-us/articles/13313564601361-Can-I-publish-the-content-I-generate-on-the-platform) 적용.
+  `cart_roll`(4초) 3개와 `cart_crash`(1.2초) 3개, 총 약 156크레딧. 사용자가 `cart_roll` take 2를 골랐고,
+  그 끝에 저절로 들어간 충돌음을 부딪히는 소리로 쓴다. 나머지 후보와 `cart_crash` 프롬프트는 지웠다.
+  2.6초에서 잘라 앞부분(2.6초)은 굴러가는 소리, 뒷부분(0.76초)은 충돌음. 모노, 피크 −3 dB, 44.1 kHz OGG Vorbis q5.
+  수레가 움직이기 시작할 때 굴러가는 소리를 틀고(구르는 시간이 2.6초를 넘으면 반복), 도착 순간에 끊으며 충돌음을 낸다.
+  거리 16 m까지 줄어들며 들린다. 원본과 처리 기록은 `assets/sfx/cart-2026-11-06/`.
+
 ## World
 
 - dungeon-roar.ogg — the roar that wakes far below when sunset resets the

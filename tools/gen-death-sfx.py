@@ -68,6 +68,14 @@ PROMPTS = {
         "brittle cracking, no metallic ring or ping, no voice, music, whoosh, "
         "echo or repeated hits."
     ),
+    "cart_roll": (
+        "A loaded wooden mine cart with iron wheels rolling along old iron rails "
+        "in a mine tunnel after a hard shove: steady rumbling wheel roll, "
+        "rhythmic clack of rail joints, a little rattle of ore in the cart, "
+        "picking up speed. Starts immediately, rolls continuously the whole time "
+        "without stopping. Close, dry foley. No crash, no impact at the end, "
+        "no brakes, no squeal, no voice, music, train horn or engine."
+    ),
     "orc": "The short, guttural death roar of an orc warrior cut down by a sword in battle",
     "orc_female": "A woman's very short, sharp, high-pitched death scream, a single shrill feminine cry less than half a second long, cut off instantly as a sword strikes her down. Clearly a female human-like voice, high soprano pitch, no growl, no male voice, no music.",
     "hobgoblin": "The harsh, guttural death cry of a hobgoblin soldier felled by a sword: a rough snarling humanoid war-cry choking off as he falls. Voice only, no dog, no barking, no animal, no music.",

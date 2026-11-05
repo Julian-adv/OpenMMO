@@ -100,6 +100,7 @@ import { bridgeManager } from '../managers/bridgeManager'
 import { objectManager } from '../managers/objectManager'
 import { groundItemManager } from '../managers/groundItemManager'
 import { cartRollSpeed, dungeonManager } from '../managers/dungeonManager'
+import { recordCartPush } from '../stores/cartPushStore'
 import { queueXpArrival, releaseXpArrival } from '../managers/xpArrival'
 import {
   setInventory,
@@ -2240,6 +2241,7 @@ export function handleServerMessage(
       break
 
     case 'DungeonCartPushed': {
+      recordCartPush(data.pusher_id)
       const rolled = Math.abs(
         data.offset - dungeonManager.cartOffset(data.depth, data.prop_id)
       )
