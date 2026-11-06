@@ -6,6 +6,8 @@ const MAX_VISIBLE_ANNOUNCEMENTS = 3
 type Announcement = {
   id: number
   text: string
+  /** Heading shown instead of the default "Announcements". */
+  title?: string
   timer: ReturnType<typeof setTimeout>
 }
 
@@ -44,14 +46,14 @@ export function clearOperatorNotices() {
   operatorNotices.set([])
 }
 
-export function showAnnouncement(text: string) {
+export function showAnnouncement(text: string, title?: string) {
   const id = ++nextId
   const timer = setTimeout(
     () => dismissAnnouncement(id),
     ANNOUNCEMENT_DURATION_MS
   )
   announcements.update((entries) => {
-    const updated = [...entries, { id, text, timer }]
+    const updated = [...entries, { id, text, title, timer }]
     for (const evicted of updated.slice(0, -MAX_VISIBLE_ANNOUNCEMENTS)) {
       clearTimeout(evicted.timer)
     }

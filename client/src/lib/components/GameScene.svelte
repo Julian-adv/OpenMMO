@@ -72,6 +72,7 @@
   import { createRenderCadence } from '../utils/renderCadence'
   import { bootstrapSceneAssets } from './game-scene/asset-bootstrap'
   import { maybeSendEnvReport } from '../utils/clientEnvReport'
+  import { warnSoftwareRendering } from '../utils/softwareRenderingWarning'
   import GameScenePlayersLayer from './game-scene/GameScenePlayersLayer.svelte'
   import GameSceneMonstersLayer from './game-scene/GameSceneMonstersLayer.svelte'
   import GameSceneGroundItemsLayer from './game-scene/GameSceneGroundItemsLayer.svelte'
@@ -1257,6 +1258,7 @@
       void maybeSendEnvReport(renderer, (report) =>
         networkManager.sendEnvReport(report)
       ).catch(() => {})
+      warnSoftwareRendering()
     })
 
     // Start game loop

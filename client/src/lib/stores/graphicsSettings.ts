@@ -2,6 +2,7 @@ import { writable, derived, get } from 'svelte/store'
 import { refractionEnabled, reflectionEnabled } from './debugStore'
 import { TARGET_FPS } from '../utils/frameTiming'
 import type { GpuBenchmarkResult } from '../utils/gpuBenchmark'
+import { detectSoftwareRenderer } from '../utils/softwareRenderer'
 
 export type QualityLevel = 'high' | 'medium' | 'low'
 export type RenderBudget = 'full' | 'mobile'
@@ -307,8 +308,8 @@ export function qualityForScore(score: number): QualityLevel {
 }
 
 /** Map a conclusive probe outcome onto a preset. No WebGPU adapter means the
- *  renderer falls back to WebGL — often software rendering — so it lands on
- *  the slowest tier regardless of the actual hardware. */
+ *  renderer falls back to WebGL, so it lands on the slowest tier as a cautious
+ *  guess; software rendering itself is capped by `softwareCapsQuality`. */
 export function qualityForOutcome(
   outcome: GpuBenchmarkResult | 'no-webgpu'
 ): QualityLevel {
@@ -387,11 +388,17 @@ graphicsQuality.subscribe((level) => {
   reflectionEnabled.set(preset.reflection)
 })
 
+/** Without the GPU, presets above low run at a frame or two per second. The
+ *  cap holds for the session only, so the stored choice returns once
+ *  hardware acceleration is back on. */
+export function softwareCapsQuality(level: QualityLevel): boolean {
+  return level !== 'low' && detectSoftwareRenderer()
+}
+
 export function getEffectivePreset(level: QualityLevel): GraphicsPreset {
+  const preset = PRESETS[softwareCapsQuality(level) ? 'low' : level]
   return (_effectivePresetCache[level] ??= withSafeRenderCap(
-    getDeviceRenderBudget() === 'mobile'
-      ? getMobileSafePreset(PRESETS[level])
-      : PRESETS[level]
+    getDeviceRenderBudget() === 'mobile' ? getMobileSafePreset(preset) : preset
   ))
 }
 

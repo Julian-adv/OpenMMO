@@ -14,7 +14,7 @@
   {#each $announcements as announcement (announcement.id)}
     <div class="announcement">
       <div class="heading">
-        <strong>{$t('announcements.title')}</strong>
+        <strong>{announcement.title ?? $t('announcements.title')}</strong>
         <button
           type="button"
           aria-label={$t('common.close')}
