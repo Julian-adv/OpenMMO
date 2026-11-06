@@ -1320,6 +1320,14 @@ async fn run_prompt(
         "[{label}] LLM driver: sending current prompt ({} bytes)",
         prompt.len()
     );
+    let reply = invoker.send_message(&prompt).await?;
+    // A malformed reply would discard the whole turn; one more try on the
+    // same prompt usually comes back well formed.
+    let Err(e) = action::parse_turn_tolerant(&reply) else {
+        return Ok(reply);
+    };
+    warn!("[{label}] Unparseable reply ({e}); retrying the same prompt");
+    warn!("[{label}] Raw response: {reply}");
     invoker.send_message(&prompt).await
 }
 
@@ -1642,6 +1650,42 @@ mod tests {
             self.0.lock().unwrap().push(p.to_string());
             Ok("{}".to_string())
         }
+    }
+
+    struct Replies(std::sync::Mutex<Vec<(String, &'static str)>>);
+    #[async_trait]
+    impl LlmBackend for Replies {
+        async fn send_message(&self, p: &str) -> anyhow::Result<String> {
+            let mut sent = self.0.lock().unwrap();
+            let reply = [
+                "{\"actions\":[{\"type\":\"wait\"},\"x\":1}",
+                "{\"actions\":[]}",
+            ][sent.len().min(1)];
+            sent.push((p.to_string(), reply));
+            Ok(reply.to_string())
+        }
+    }
+
+    #[tokio::test]
+    async fn an_unparseable_reply_is_retried_on_the_same_prompt() {
+        let (s, _rx) = test_state();
+        let state = Arc::new(Mutex::new(s));
+        let backend = Arc::new(Replies(Default::default()));
+        let reply = run_prompt(
+            state,
+            Arc::clone(&backend) as Arc<dyn LlmBackend>,
+            Vec::new(),
+            None,
+            None,
+            None,
+            "npc".into(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(reply, "{\"actions\":[]}");
+        let sent = backend.0.lock().unwrap();
+        assert_eq!(sent.len(), 2);
+        assert_eq!(sent[0].0, sent[1].0);
     }
 
     #[tokio::test]
