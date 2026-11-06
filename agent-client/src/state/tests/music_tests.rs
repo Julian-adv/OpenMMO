@@ -609,3 +609,41 @@ fn a_recital_is_paced_and_ends_with_the_song() {
     s.check_music_finished();
     assert!(s.recital.is_none());
 }
+
+/// A long tale quickens during its first pass so every verse is heard
+/// before a short song ends, but never below the quickest pace.
+#[test]
+fn a_long_recital_quickens_to_fit_the_song() {
+    let (mut s, _rx) = performer();
+    let verses: Vec<String> = (1..=15).map(|n| format!("verse {n}")).collect();
+    s.begin_recital(&verses).unwrap();
+    start_song(&mut s);
+    let song_left = 90;
+    s.self_performance.as_mut().unwrap().ends_at =
+        std::time::Instant::now() + std::time::Duration::from_secs(song_left);
+    s.recital.as_mut().unwrap().next_at = std::time::Instant::now();
+    s.check_music_finished();
+    let wait = s
+        .recital
+        .as_ref()
+        .unwrap()
+        .next_at
+        .saturating_duration_since(std::time::Instant::now());
+    assert!(
+        wait <= std::time::Duration::from_secs(song_left / 15)
+            && wait >= std::time::Duration::from_secs(5),
+        "{wait:?}"
+    );
+
+    s.self_performance.as_mut().unwrap().ends_at =
+        std::time::Instant::now() + std::time::Duration::from_secs(20);
+    s.recital.as_mut().unwrap().next_at = std::time::Instant::now();
+    s.check_music_finished();
+    let wait = s
+        .recital
+        .as_ref()
+        .unwrap()
+        .next_at
+        .saturating_duration_since(std::time::Instant::now());
+    assert!(wait >= std::time::Duration::from_secs(3), "{wait:?}");
+}

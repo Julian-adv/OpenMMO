@@ -282,9 +282,13 @@ impl SharedState {
 
 /// Seconds each verse stays up before the next replaces it.
 const RECITE_LINE_SECS: u64 = 9;
+/// The quickest pace, used when a long tale must fit a short song.
+const MIN_RECITE_LINE_SECS: u64 = 4;
 /// How long a recital runs with no song of ours playing yet.
 const RECITE_GRACE_SECS: u64 = 25;
-const MAX_RECITE_LINES: usize = 12;
+/// Room for a tale that names a whole raid, at the quickest pace within the
+/// shortest song (100 s).
+const MAX_RECITE_LINES: usize = 20;
 /// The web client's bubble truncates past 300 characters.
 const MAX_RECITE_LINE_CHARS: usize = 280;
 
@@ -347,8 +351,24 @@ impl SharedState {
         let line = &recital.lines[recital.sent % recital.lines.len()];
         let message = format!("{command} {line}");
         recital.sent += 1;
-        recital.next_at = now + std::time::Duration::from_secs(RECITE_LINE_SECS);
+        recital.next_at = now
+            + recite_pace(
+                recital,
+                ends_at.map(|end| end.saturating_duration_since(now)),
+            );
         self.pending_commands
             .push(ClientMessage::ChatMessage { message });
+    }
+}
+
+/// The wait before the next verse: the usual pace, quickened during the first
+/// pass so every verse is sung once before the song ends.
+fn recite_pace(recital: &Recital, song_left: Option<std::time::Duration>) -> std::time::Duration {
+    let usual = std::time::Duration::from_secs(RECITE_LINE_SECS);
+    let unsung = recital.lines.len().saturating_sub(recital.sent);
+    match song_left {
+        Some(left) if unsung > 0 => (left / (unsung as u32 + 1))
+            .clamp(std::time::Duration::from_secs(MIN_RECITE_LINE_SECS), usual),
+        _ => usual,
     }
 }
