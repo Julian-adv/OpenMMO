@@ -36,7 +36,10 @@
     type WallRun,
   } from '../../utils/dungeon-geometry'
   import { getGhostHousingMaterial } from '../../utils/housing-textures'
-  import { isoCameraOccludesPlayer } from '../../utils/iso-occlusion'
+  import {
+    isoCameraOccludesNearPlayer,
+    isoCameraOccludesPlayer,
+  } from '../../utils/iso-occlusion'
   import { passabilityDebugVisible } from '../../stores/debugStore'
   import { pushPassabilityEdges } from '../../utils/passability-wireframe'
   import { generateDungeonPuddles } from '../../utils/dungeon-puddles'
@@ -290,6 +293,8 @@
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const fadedWallGroups = new Set<number>()
   const WALL_RUN_MIN_OCCLUSION = 0.05
+  /** Walls fade when they cover anything this close to the player on screen. */
+  const WALL_RUN_OCCLUSION_MARGIN = 1
 
   // ── Interior room doors ──────────────────────────────────
   // Double doors across corridor mouths in room walls. Click to open/close
@@ -1337,12 +1342,13 @@
     // Fade occluding walls together with their room or corridor corner group.
     fadedWallGroups.clear()
     for (const w of wallRuns) {
-      w.occluded = isoCameraOccludesPlayer(
+      w.occluded = isoCameraOccludesNearPlayer(
         w.aabb,
         playerX,
         playerY,
         playerZ,
-        WALL_RUN_MIN_OCCLUSION
+        WALL_RUN_MIN_OCCLUSION,
+        WALL_RUN_OCCLUSION_MARGIN
       )
       if (w.occluded && w.fadeGroup >= 0) fadedWallGroups.add(w.fadeGroup)
     }
