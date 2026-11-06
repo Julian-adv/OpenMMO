@@ -63,6 +63,33 @@ OUTFITS = {
             'boots': dict(nodes=['left_boots', 'right_boots'], version='fitted_v1', hide_bones=FEET),
             'hair': dict(nodes=['hair'], version='fitted_v1', restore_visible=True),
         }),
+    # Same heel-pose concept as the ranger; the top and skirt kept Tripo's segment names.
+    'bard': dict(
+        source='tripo_segmented_v1/original/model.glb',
+        sha256='f256e239c69c6924c3e418a97c92f692c5ebe9f93b963c79750bc30807e5984d',
+        scale=1.86, on_heels=True, snug_cover=True,
+        rename={'tripo_part_0': 'top', 'tripo_part_2': 'skirt'},
+        parts={
+            # Tripo's fingers are kept: dropping them for the base fingers left shards and empty holes.
+            'gloves': dict(nodes=['left_glove', 'right_glove'], version='fitted_v1', hide_bones=('LeftHand', 'RightHand'),
+                           hide_inside_cuff=True),
+            # The puffed sleeve is gathered into the bracer, so it is cut inside the glove cuff.
+            'top': dict(nodes=['top'], version='fitted_v1', hide_bones=ARMS, hide_underwear=(1.15, 1.55),
+                        restore_visible=True, cut_inside_glove=True, align_sleeves='rigid'),
+            'bottom': dict(nodes=['skirt'], version='fitted_v1', hide_underwear=(.8, 1.12)),
+            # Generated with the hat over a bob, from a model whose body is about 7% shorter in Tripo units;
+            # lowered so the brim sits just above the brows as in the concept.
+            'helmet': dict(nodes=['hat'], version='fitted_v1',
+                           model=dict(source='tripo_hat_v1/original/model.glb',
+                                      sha256='cf126826dc4e85d8f13f790edefaf699e22efbdc9934f1bfec44e36264bbcc25',
+                                      scale=2.0, offset_z=-.045)),
+            # Tripo made the stiletto 2.5 cm short of the sole plane. The idle toe bend left the extra gaps
+            # (metres, measured in game) after stretching to the heel-pose sole. The full stretch looked too long,
+            # so only half of it is used (user decision 2026-11-05).
+            'boots': dict(nodes=['left_boots', 'right_boots'], version='fitted_v1', hide_bones=FEET,
+                          extend_heel={'left': .0029, 'right': .0048, 'share': .5, 'upright': .09, 'lean': .005},
+                          sole_colour=(.72, .55, .22)),
+        }),
 }
 COVER_RAY = .06
 # Sleeve alignment fades in over this distance from the shoulder joint, leaving the shoulder pads in place.
@@ -83,6 +110,11 @@ HEEL_DEGREES = 30
 # The generated boots stand on a flat-height ankle. The shoe below the band moves down to the posed sole
 # as one piece and the shin tube inside the band stretches; stretching the shoe itself sheared the arch.
 ANKLE_BAND = (.18, .32)
+# `extend_heel` stretches this much of the stiletto above its tip, from the back of the boot, down to the sole plane.
+HEEL_BACK = .18
+HEEL_POST = .06
+# `upright` (stiletto height above its tip) turns the post vertical about its top; vertices this close to its axis belong to it.
+HEEL_POST_RADIUS = .012
 # No part is pushed out of the skin (user decision 2026-11-04): skin up to this deep outside a garment is hidden instead.
 POKE_DEPTH = .04
 SNUG_COVER = .003
@@ -90,9 +122,10 @@ SNUG_COVER = .003
 argv = sys.argv[sys.argv.index('--') + 1:]
 OUTFIT = argv[argv.index('--outfit') + 1]
 PART = argv[argv.index('--part') + 1]
-CONFIG = OUTFITS[OUTFIT]
-PARTS = CONFIG['parts']
+PARTS = OUTFITS[OUTFIT]['parts']
 SPEC = PARTS[PART]
+# A part generated from its own Tripo model overrides the outfit's source and placement with `model`.
+CONFIG = {**OUTFITS[OUTFIT], **SPEC.get('model', {})}
 RIGID_SLEEVES = SPEC.get('align_sleeves') == 'rigid'
 SCALE = CONFIG['scale']
 DIRECTORY = ROOT / f'assets/items/female_{OUTFIT}_outfit'
@@ -159,14 +192,30 @@ surface = BVHTree.FromPolygons([Vector(p) for p in bp], bf.tolist())
 
 before = set(bpy.data.objects)
 bpy.ops.import_scene.gltf(filepath=str(SOURCE))
-imported = {o.name: o for o in set(bpy.data.objects) - before if o.type == 'MESH'}
-placement = Matrix.Translation((0, CONFIG.get('offset_y', 0), foot_shift if CONFIG['on_heels'] else 0)) @ Matrix.Scale(SCALE, 4)
+imported = {CONFIG.get('rename', {}).get(o.name, o.name): o for o in set(bpy.data.objects) - before if o.type == 'MESH'}
+placement = (Matrix.Translation((0, CONFIG.get('offset_y', 0), (foot_shift if CONFIG['on_heels'] else 0) + CONFIG.get('offset_z', 0)))
+             @ Matrix.Scale(SCALE, 4))
 world = {n: np.array([placement @ o.matrix_world @ v.co for v in o.data.vertices]) for n, o in imported.items()}
-top = world['top']
-pose = ArmPose(bones, bp, bf, bw, names,
-               {'Left': np.vstack([top[top[:, 0] > .2], world['left_glove']]),
-                'Right': np.vstack([top[top[:, 0] < -.2], world['right_glove']])},
-               {'Left': world['left_glove'], 'Right': world['right_glove']})
+
+
+class StillArms:
+    """For a model without a named top and gloves: nothing follows the arms."""
+
+    def __call__(self, points, arms, rigid_hand=False):
+        return points
+
+    def record(self):
+        return None
+
+
+if {'top', 'left_glove', 'right_glove'} <= world.keys():
+    top = world['top']
+    pose = ArmPose(bones, bp, bf, bw, names,
+                   {'Left': np.vstack([top[top[:, 0] > .2], world['left_glove']]),
+                    'Right': np.vstack([top[top[:, 0] < -.2], world['right_glove']])},
+                   {'Left': world['left_glove'], 'Right': world['right_glove']})
+else:
+    pose = StillArms()
 for name, obj in list(imported.items()):
     if name not in SPEC['nodes']:
         bpy.data.objects.remove(obj)
@@ -560,8 +609,102 @@ def cut_sleeves(points):
     return cut_points, cut_faces, record, hem, hem_height
 
 
+
+
+def extend_heels(posed, extra):
+    """Turn each stiletto upright about its top, then stretch it toward its boot's lowest sole point, in the heel pose
+    (standing feet are level there)."""
+    posed = posed.copy()
+    record = {}
+    for side, sign in (('left', 1), ('right', -1)):
+        foot = np.flatnonzero(np.sign(posed[:, 0]) == sign)
+        y = posed[foot, 1]
+        back = foot[y > y.max() - HEEL_BACK * (y.max() - y.min())]
+        record[side] = {}
+        if 'upright' in extra:
+            height = extra['upright']
+            tip = posed[back, 2].min()
+            rise = posed[back, 2] - tip
+            base = posed[back[rise < .004]].mean(0)
+            pivot = posed[back[np.abs(rise - height) < .004]].mean(0)
+            axis = base + np.clip(rise / height, 0, 1)[:, None] * (pivot - base)
+            post = back[(rise < height + .01) & (np.linalg.norm(posed[back, :2] - axis[:, :2], axis=1) < HEEL_POST_RADIUS)]
+            # Rigid turn about the top, fading out over the last centimetre so the heel cup is untouched.
+            # `lean` sets the tip that far toward the toe (-y) of plumb.
+            down = base - pivot
+            target = np.array([0, -extra.get('lean', 0), down[2]])
+            turn = np.cross(down, target)
+            angle = np.arctan2(np.linalg.norm(turn), down @ target)
+            turn /= np.linalg.norm(turn)
+            weight = np.clip((pivot[2] - posed[post, 2]) / .01, 0, 1)
+            for vertex, amount in zip(post, weight):
+                a = angle * amount
+                offset = posed[vertex] - pivot
+                posed[vertex] = pivot + offset * np.cos(a) + np.cross(turn, offset) * np.sin(a) + turn * (turn @ offset) * (1 - np.cos(a))
+            record[side].update(upright_degrees=float(np.degrees(angle)), upright_vertices=len(post))
+        sole, tip = posed[foot, 2].min(), posed[back, 2].min()
+        gap = (tip - sole + extra[side]) * extra.get('share', 1)
+        if gap > 0:
+            weight = np.clip(1 - (posed[back, 2] - tip) / HEEL_POST, 0, 1)
+            posed[back, 2] -= weight * gap
+            record[side].update(gap_m=float(gap), stretched_vertices=int((weight > 0).sum()))
+    return posed, record
+
+
+def paint_sole(posed, bind, colour):
+    """Give the sole, arch and heel tip (facing down) and the stiletto's toe-facing side a coloured copy of the leather,
+    in the heel pose, like the rogue boots' red sole. The heel's sides and back keep the leather."""
+    tri = posed[faces]
+    normals = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+    normals /= np.maximum(np.linalg.norm(normals, axis=1, keepdims=True), 1e-12)
+    centres = tri.mean(1)
+    painted = np.zeros(len(faces), bool)
+    for sign in (1, -1):
+        side = np.sign(centres[:, 0]) == sign
+        sole = posed[faces[side]].reshape(-1, 3)[:, 2].min()
+        y = centres[side, 1]
+        back = y > y.max() - HEEL_BACK * (y.max() - y.min())
+        rise = centres[side, 2] - sole
+        # Down-facing faces tilted sideways are the arch's edge, which shows from the side.
+        down = (normals[side, 2] < -.5) & (np.abs(normals[side, 0]) < .4) & (rise < .11)
+        inner = back & (rise < .1) & (normals[side, 1] < -.3)
+        painted[np.flatnonzero(side)[down | inner]] = True
+    # Triangles clicked in the preview, matched by their bind-space centre in glTF axes.
+    saved = json.loads(PREVIEW_FIT.read_text())['parts'].get(PART, {}).get('sole', {}) if PREVIEW_FIT.exists() else {}
+    if saved.get('colour'):
+        colour = tuple(int(saved['colour'][i:i + 2], 16) / 255 for i in (1, 3, 5))
+    centres = bind[faces].mean(1) @ TO_GLTF.T
+    for value, key in ((True, 'gold'), (False, 'leather')):
+        for point in saved.get(key, []):
+            distance = np.linalg.norm(centres - point, axis=1)
+            if distance.min() < .004:
+                painted[distance.argmin()] = value
+    material = mesh.materials[0].copy()
+    material.name = f'{PART_ID}_sole'
+    shader = next(n for n in material.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
+    # The leather's roughness and normal maps left glossy pale patches on the flat colour.
+    for name in ('Base Color', 'Roughness', 'Metallic', 'Normal'):
+        for link in list(shader.inputs[name].links):
+            material.node_tree.links.remove(link)
+    linear = [c / 12.92 if c <= .04045 else ((c + .055) / 1.055) ** 2.4 for c in colour]
+    shader.inputs['Base Color'].default_value = (*linear, 1)
+    shader.inputs['Roughness'].default_value = .6
+    shader.inputs['Metallic'].default_value = 0
+    mesh.materials.append(material)
+    for polygon in mesh.polygons:
+        if painted[polygon.index]:
+            polygon.material_index = len(mesh.materials) - 1
+    return int(painted.sum()), colour
+
+
 paired = PART in ('gloves', 'boots')
 keep_pending = '--keep-pending' in argv
+sole_faces = 0
+sole_colour = None
+# Glove fits saved in the forearm frame need the elbow and wrist.
+arms = {sign: (bones[side + 'ForeArm'] @ TO_GLTF.T, bones[side + 'Hand'] @ TO_GLTF.T)
+        for side, sign in (('Left', 1), ('Right', -1))}
+heel_extension = {}
 sleeve_shift = {}
 sleeve_cut = {}
 hem_cut = hem_height = None
@@ -570,13 +713,20 @@ if heel:
     order, values = skin_weights(points)
     skinning = np.einsum('nk,nkij->nij', values, joint_matrices[order])
     points = np.linalg.solve(skinning, np.c_[points, np.ones(len(points))][..., None])[:, :3, 0]
-    points, preview_fits = bake(PREVIEW_FIT, PART, points, paired, keep_pending=keep_pending)
+    points, preview_fits = bake(PREVIEW_FIT, PART, points, paired, keep_pending=keep_pending, arms=arms)
+    if SPEC.get('extend_heel'):
+        homogeneous = np.c_[points, np.ones(len(points))][..., None]
+        posed, heel_extension = extend_heels((skinning @ homogeneous)[:, :3, 0], SPEC['extend_heel'])
+        points = np.linalg.solve(skinning, np.c_[posed, np.ones(len(posed))][..., None])[:, :3, 0]
+    if 'sole_colour' in SPEC:
+        homogeneous = np.c_[points, np.ones(len(points))][..., None]
+        sole_faces, sole_colour = paint_sole((skinning @ homogeneous)[:, :3, 0], points, SPEC['sole_colour'])
 else:
     # Weights come last so they are sampled where the adjusted, aligned vertices end up.
     # One-tube sleeves are aligned before the saved fits, which then move them as the preview showed.
     if RIGID_SLEEVES:
         sleeve_shift = align_sleeves_rigid(points)
-    points, preview_fits = bake(PREVIEW_FIT, PART, points, paired, keep_pending=keep_pending)
+    points, preview_fits = bake(PREVIEW_FIT, PART, points, paired, keep_pending=keep_pending, arms=arms)
     if SPEC.get('align_sleeves') is True:
         sleeve_shift = align_sleeves(points)
     if SPEC.get('cut_inside_glove'):
@@ -838,6 +988,8 @@ report = {'date': date.today().isoformat(), 'outfit': OUTFIT, 'part': PART, 'sou
           **({'sleeve_end_offsets_cm': sleeve_ends} if RIGID_SLEEVES else {}),
           **({'sleeve_cut': sleeve_cut} if sleeve_cut else {}),
           **({'hem_cut': hem_cut} if hem_cut else {}),
+          **({'heel_extension': heel_extension} if heel_extension else {}),
+          **({'sole_faces': sole_faces, 'sole_colour_srgb': [round(c, 4) for c in sole_colour]} if sole_faces else {}),
           'method': f'Uniform {SCALE} scale' + (', lowered by the heel pose lift' if CONFIG['on_heels'] else '') + ', forearm rotation about the elbow and rigid hand ICP from the generated body pose, '
                     'no push-out (covered and poking skin is hidden), barycentric skin weights from the nearest base skin smoothed over welded neighbours.',
           'status': 'Candidate; visual and animation review pending'}

@@ -25,8 +25,36 @@ def matrix(fit, center, side):
     return linear, center + move - linear @ center
 
 
-def apply(points, fit, paired):
-    """`fit` is one fit, or {'left': ..., 'right': ...} for a paired part (left is +x)."""
+def forearm_frame(arm, side):
+    """Columns: outward (width), toward the elbow (length), forward (thickness); mirrored on the right. Same as
+    forearmFrame in female-part-fit.ts."""
+    elbow, wrist = (np.asarray(v, dtype=float) for v in arm)
+    along = (elbow - wrist) / np.linalg.norm(elbow - wrist)
+    forward = np.array([0., 0., 1.]) - along[2] * along
+    forward /= np.linalg.norm(forward)
+    outward = np.cross(along, forward)
+    if outward[0] * side < 0:
+        outward = -outward
+    return np.column_stack([outward, along, forward])
+
+
+def forearm_matrix(fit, center, side, arm):
+    """A `forearm` fit moves, turns and scales in the forearm's frame about the closest point on its axis."""
+    elbow, wrist = (np.asarray(v, dtype=float) for v in arm)
+    axis = (wrist - elbow) / np.linalg.norm(wrist - elbow)
+    origin = elbow + axis * ((center - elbow) @ axis)
+    frame = forearm_frame(arm, side)
+    scale = fit['scale'] / 100
+    r = rotation(0, fit['rotate-x']) @ rotation(1, fit['rotate-y']) @ rotation(2, fit['rotate-z'])
+    local = r @ np.diag([scale * fit[f'scale-{k}'] / 100 for k in 'xyz'])
+    linear = frame @ local @ frame.T
+    move = frame @ np.array([fit['move-x'], fit['move-y'], fit['move-z']]) / 100
+    return linear, origin + move - linear @ origin
+
+
+def apply(points, fit, paired, arms=None):
+    """`fit` is one fit, or {'left': ..., 'right': ...} for a paired part (left is +x). `arms[side]` is the
+    (elbow, wrist) bind position in glTF space, used by `forearm` fits."""
     p = points @ TO_GLTF.T
     sides = np.where((p[:, 0] >= 0) | (not paired), 1, -1)
     out = p.copy()
@@ -34,12 +62,15 @@ def apply(points, fit, paired):
         selected = sides == side
         center = (p[selected].min(0) + p[selected].max(0)) / 2
         side_fit = fit[{1: 'left', -1: 'right'}[side]] if 'left' in fit else fit
-        linear, offset = matrix(side_fit, center, side)
+        if side_fit.get('frame') == 'forearm':
+            linear, offset = forearm_matrix(side_fit, center, side, arms[side])
+        else:
+            linear, offset = matrix(side_fit, center, side)
         out[selected] = p[selected] @ linear.T + offset
     return out @ TO_GLTF
 
 
-def bake(path, part, points, paired, keep_pending=False):
+def bake(path, part, points, paired, keep_pending=False, arms=None):
     """Apply every baked adjustment in order, then the pending one, which moves to the baked list.
 
     With `keep_pending` the pending adjustment is left for the preview to keep applying on top.
@@ -56,7 +87,7 @@ def bake(path, part, points, paired, keep_pending=False):
         saved['parts'][part] = entry
         path.write_text(json.dumps(saved, indent=2) + '\n')
     for fit in history:
-        points = apply(points, fit, paired)
+        points = apply(points, fit, paired, arms)
     return points, history
 
 

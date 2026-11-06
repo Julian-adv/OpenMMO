@@ -140,6 +140,7 @@ impl CharacterAppearance {
                     | CharacterClass::Valkyrie
                     | CharacterClass::Ranger
                     | CharacterClass::Priest
+                    | CharacterClass::Bard
             )
         {
             let (hair, hair_color) = if self.hair.is_female() {
@@ -206,7 +207,12 @@ mod appearance_tests {
         );
         assert_eq!(
             appearance.for_character(&CharacterClass::Bard, Gender::Female),
-            CharacterAppearance::default()
+            CharacterAppearance {
+                face: FaceStyle::Default,
+                hair: HairStyle::Bob,
+                hair_color: AppearanceColor(0xceb294),
+                ..appearance
+            }
         );
     }
 

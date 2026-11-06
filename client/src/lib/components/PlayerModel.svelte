@@ -131,6 +131,7 @@
     forearmLength,
     mainHandBoneFor,
     poseMainHandProp,
+    poseMusicProp,
     poseOffHandProp,
     resolveTipNode,
   } from '../utils/handProps'
@@ -1023,7 +1024,7 @@
       const rightHandBone = findBoneByName(clonedScene, 'RightHand')
       if (!rightHandBone) return
       musicPropObject = gltf.scene.clone()
-      poseMainHandProp(musicPropObject, MANDOLIN_ITEM_DEF_ID)
+      poseMusicProp(musicPropObject)
       rightHandBone.add(musicPropObject)
     })
   })

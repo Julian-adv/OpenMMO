@@ -97,6 +97,12 @@
     rogue: STARTER_EQUIPMENT.rogue,
     caveman: STARTER_EQUIPMENT.caveman,
     ranger: STARTER_EQUIPMENT.ranger,
+    bard: {
+      armor: {
+        ...STARTER_EQUIPMENT.bard?.armor,
+        hands: 'worn_bard_gloves',
+      },
+    },
     priest: {
       ...STARTER_EQUIPMENT.priest,
       armor: {
@@ -115,9 +121,9 @@
     },
   }
 
-  // Helmets hide the chosen hair, so the preview takes them off.
+  // Helmets hide the chosen hair, so the preview takes them off; the bard hat keeps it in view.
   function bareHeaded(equipment?: VisibleEquipment) {
-    if (!equipment?.armor?.head) return equipment
+    if (!equipment?.armor?.head || characterClass === 'bard') return equipment
     const { head: _, ...armor } = equipment.armor
     return { ...equipment, armor }
   }

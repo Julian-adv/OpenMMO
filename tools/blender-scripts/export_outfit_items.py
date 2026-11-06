@@ -31,6 +31,8 @@ OUTFITS = {
         part: f"../modular_human_male_01/ranger/tripo_{part}_v{4 if part == 'top' else 1}/{part}_ranger.glb"
         for part in ("top", "pants", "gloves", "boots")
     },
+    # Only the gloves are new; the other bard items keep their male models.
+    "bard": {"gloves": "female_bard_outfit/gloves/fitted_v1/gloves_female_bard.glb"},
 }
 parser = argparse.ArgumentParser()
 parser.add_argument("--outfit", choices=OUTFITS, default="valkyrie")

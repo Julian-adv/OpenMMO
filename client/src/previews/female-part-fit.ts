@@ -14,7 +14,11 @@ export const PART_FIT_KEYS = [
   'rotate-z',
 ] as const
 export type PartFitKey = (typeof PART_FIT_KEYS)[number]
-export type PartFit = Record<PartFitKey, number>
+// `forearm` fits move, turn and scale in the forearm's frame (gloves since 2026-11-05); others use the
+// character's axes about the part's centre.
+export type PartFit = Record<PartFitKey, number> & { frame?: 'forearm' }
+// Elbow and wrist bind positions.
+export type ArmJoints = [THREE.Vector3, THREE.Vector3]
 // 1 is the character's left (+x), -1 the right.
 export type PartSide = 1 | -1
 export type PartFitter = (fitFor: (side: PartSide) => PartFit) => void
@@ -35,11 +39,71 @@ export const PART_FIT_RANGES: Record<PartFitKey, [number, number, number]> = {
   'rotate-z': [-45, 45, 0],
 }
 
+/**
+ * Columns: outward (width, x), toward the elbow (length, y), forward (thickness, z). The right side's frame is the
+ * mirror image, so the same values mirror the transform.
+ */
+export function forearmFrame([elbow, wrist]: ArmJoints, side: PartSide) {
+  const along = elbow.clone().sub(wrist).normalize()
+  const forward = new THREE.Vector3(0, 0, 1)
+    .addScaledVector(along, -along.z)
+    .normalize()
+  const outward = new THREE.Vector3().crossVectors(along, forward)
+  if (outward.x * side < 0) outward.negate()
+  return new THREE.Matrix4().makeBasis(outward, along, forward)
+}
+
+function forearmFitMatrix(
+  fit: PartFit,
+  center: THREE.Vector3,
+  side: PartSide,
+  arm: ArmJoints
+) {
+  const [elbow, wrist] = arm
+  const axis = wrist.clone().sub(elbow).normalize()
+  const origin = elbow
+    .clone()
+    .addScaledVector(axis, center.clone().sub(elbow).dot(axis))
+  const frame = forearmFrame(arm, side)
+  const scale = fit.scale / 100
+  const rotation = new THREE.Euler(
+    THREE.MathUtils.degToRad(fit['rotate-x']),
+    THREE.MathUtils.degToRad(fit['rotate-y']),
+    THREE.MathUtils.degToRad(fit['rotate-z']),
+    'XYZ'
+  )
+  return new THREE.Matrix4()
+    .makeTranslation(origin.x, origin.y, origin.z)
+    .multiply(frame)
+    .multiply(
+      new THREE.Matrix4().makeTranslation(
+        fit['move-x'] / 100,
+        fit['move-y'] / 100,
+        fit['move-z'] / 100
+      )
+    )
+    .multiply(new THREE.Matrix4().makeRotationFromEuler(rotation))
+    .multiply(
+      new THREE.Matrix4().makeScale(
+        (scale * fit['scale-x']) / 100,
+        (scale * fit['scale-y']) / 100,
+        (scale * fit['scale-z']) / 100
+      )
+    )
+    .multiply(frame.clone().transpose())
+    .multiply(
+      new THREE.Matrix4().makeTranslation(-origin.x, -origin.y, -origin.z)
+    )
+}
+
 export function partFitMatrix(
   fit: PartFit,
   center: THREE.Vector3,
-  side: PartSide
+  side: PartSide,
+  arm?: ArmJoints
 ) {
+  if (fit.frame === 'forearm' && arm)
+    return forearmFitMatrix(fit, center, side, arm)
   const scale = fit.scale / 100
   const rotation = new THREE.Euler(
     THREE.MathUtils.degToRad(fit['rotate-x']),
@@ -129,11 +193,12 @@ export function sleeveEndDeformer(
 }
 
 // Paired parts split by the sign of x and mirror the transform for the right side (x < 0).
-// `after` deforms each vertex once the fit is applied.
+// `after` deforms each vertex once the fit is applied; `arms` enables forearm-frame fits.
 export function partFitter(
   meshes: THREE.SkinnedMesh[],
   paired: boolean,
-  after?: (point: THREE.Vector3) => void
+  after?: (point: THREE.Vector3) => void,
+  arms?: Record<PartSide, ArmJoints>
 ): PartFitter {
   const sources: Source[] = meshes.map((mesh) => {
     const normal = mesh.geometry.getAttribute('normal')
@@ -162,7 +227,8 @@ export function partFitter(
         const matrix = partFitMatrix(
           fitFor(side as PartSide),
           center,
-          side as PartSide
+          side as PartSide,
+          arms?.[side as PartSide]
         )
         return [
           side,

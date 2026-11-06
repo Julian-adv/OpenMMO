@@ -8,7 +8,7 @@ import { femaleUnderwearColor } from './female-underwear-color'
 import { femaleTorchMotions, mirroredSwordGrip } from './female-torch'
 import { FEMALE_HAND_FITS, poseOffHandProp } from '../lib/utils/handProps'
 import { MODULAR_FEMALE_MODEL_PATH } from '../lib/utils/modelPaths'
-import { bindModularPart } from '../lib/utils/modularCharacter'
+import { bindModularPart, skinnedParts } from '../lib/utils/modularCharacter'
 import { updateModularPoseCorrectives } from '../lib/utils/modularPoseCorrectives'
 import { femaleOutfitMask } from '../lib/utils/female-outfit-mask'
 import { femaleBracerMask } from './female-bracer-mask'
@@ -34,6 +34,13 @@ import {
   type BracerFitGeometry,
 } from './female-bracer-fit'
 import { femaleBootGround } from '../lib/utils/female-boot-ground'
+import { femaleBrushCursor } from './female-brush-cursor'
+import { helmetHairBrush } from './female-helmet-hair-brush'
+import {
+  instrumentCarryEditor,
+  instrumentCarryPanel,
+} from './female-instrument-carry'
+import { femaleSolePaint, type SoleEdits } from './female-sole-paint'
 import {
   attachValkyrieWings,
   disposeValkyrieWings,
@@ -67,7 +74,6 @@ export async function showFemaleBase(
       <select id="female-hair">
         <option value="bob">금발 단발</option>
         <option value="none">없음</option>
-        <option value="knight">긴 금발 (보관본)</option>
         <option value="warrior">전사 긴 헤어 (피팅 검수 중)</option>
         <option value="ranger">순찰자 갈색 포니테일 (피팅 검수 중)</option>
       </select>
@@ -91,8 +97,24 @@ export async function showFemaleBase(
         <option value="barbarian">야만전사 뿔 투구</option>
         <option value="brilliance">광휘의 투구</option>
         <option value="priest">사제관 (피팅 검수 중)</option>
+        <option value="bard">바드 깃털 모자 (피팅 검수 중)</option>
       </select>
-      <p class="details">뿔 투구 아래로 보이는 헤어는 남깁니다. 발키리 투구는 헤어와 함께 표시합니다. 전사 긴 헤어는 다른 투구에서 숨기고, 투구를 벗으면 복원합니다.</p>
+      <p class="details">긴 헤어와 포니테일은 모든 투구 아래 그대로 보입니다. 단발은 뿔 투구에서 투구용 단발로, 기사·광휘 투구에서는 숨깁니다.</p>
+      <div id="helmet-hair-brush" hidden>
+        <label class="toggle"><input id="helmet-hair-brush-on" type="checkbox" /> 투구 헤어 브러시 (화면 클릭으로 지우기)</label>
+        <div id="helmet-hair-brush-controls" hidden>
+          <div id="helmet-hair-brush-mode" class="segmented" role="radiogroup" aria-label="헤어 브러시">
+            <label><input type="radio" name="helmet-hair-brush-mode" value="hide" checked /> 지우기</label>
+            <label><input type="radio" name="helmet-hair-brush-mode" value="show" /> 되살리기</label>
+          </div>
+          <label for="helmet-hair-brush-radius">반경 <output id="helmet-hair-brush-radius-value">1.5</output> cm</label>
+          <input id="helmet-hair-brush-radius" type="range" min="0.3" max="5" step="0.1" value="1.5" />
+          <button id="helmet-hair-brush-undo" type="button">한 번 되돌리기</button>
+          <button id="helmet-hair-brush-save" type="button">이 투구의 헤어 저장</button>
+          <p class="details">저장한 뒤 <code>node tools/prepare-female-knight.mjs --part &lt;투구&gt;</code>로 런타임 투구를 다시 만들면 게임에 반영됩니다.</p>
+        </div>
+        <p id="helmet-hair-brush-status" class="details" aria-live="polite"></p>
+      </div>
       <label for="female-top">상의</label>
       <select id="female-top">
         <option value="none">없음</option>
@@ -102,6 +124,7 @@ export async function showFemaleBase(
         <option value="caveman">원시전사 상의 (피팅 검수 중)</option>
         <option value="priest">사제 상의 (피팅 검수 중)</option>
         <option value="ranger">순찰자 조끼와 셔츠 (피팅 검수 중)</option>
+        <option value="bard">바드 코르셋과 망토 (피팅 검수 중)</option>
         <option value="rogue">로그 가죽 코르셋</option>
       </select>
       <label for="female-bottom">하의</label>
@@ -113,6 +136,7 @@ export async function showFemaleBase(
         <option value="caveman">원시전사 모피 하의 (피팅 검수 중)</option>
         <option value="priest">사제 치마 (피팅 검수 중)</option>
         <option value="ranger">순찰자 가죽 치마 (피팅 검수 중)</option>
+        <option value="bard">바드 주름치마 (피팅 검수 중)</option>
         <option value="rogue">로그 벨트 미니스커트</option>
       </select>
       <label for="female-boots">신발</label>
@@ -122,10 +146,13 @@ export async function showFemaleBase(
         <option value="caveman">원시전사 모피 하이힐 부츠 (피팅 검수 중)</option>
         <option value="priest">사제 하이힐 장화 (피팅 검수 중)</option>
         <option value="ranger">순찰자 스틸레토 부츠 (피팅 검수 중)</option>
+        <option value="bard">바드 스틸레토 부츠 (피팅 검수 중)</option>
         <option value="rogue">로그 빨간 밑창 가죽 부츠</option>
         <option value="barbarian">야만전사 가죽 하이힐 샌들</option>
         <option value="valkyrie">발키리 부츠 (초기 피팅 검수 중)</option>
       </select>
+      <label class="toggle"><input id="side-feet" type="checkbox" checked /> 발 옆모습 확대 (1cm 눈금)</label>
+      <p id="sole-gap" class="details"></p>
       <label for="female-gloves">장갑</label>
       <select id="female-gloves">
         <option value="none">없음</option>
@@ -135,6 +162,7 @@ export async function showFemaleBase(
         <option value="caveman">원시전사 가죽 손목 보호대 (피팅 검수 중)</option>
         <option value="priest">사제 장갑 (피팅 검수 중)</option>
         <option value="ranger">순찰자 반장갑 (피팅 검수 중)</option>
+        <option value="bard">바드 반장갑과 팔 보호대 (피팅 검수 중)</option>
         <option value="rogue">로그 검은 가죽 반장갑</option>
       </select>
       <div id="outfit-fit" hidden>
@@ -184,16 +212,28 @@ export async function showFemaleBase(
         <label class="toggle"><input id="outfit-fit-show-skin" type="checkbox" /> 이 부위가 가린 피부 보이기 (맞춘 뒤 끄기)</label>
         <label class="toggle"><input id="outfit-brush" type="checkbox" /> 피부 브러시 (화면 클릭으로 칠하기)</label>
         <div id="outfit-brush-controls" hidden>
-          <label for="outfit-brush-mode">브러시</label>
-          <select id="outfit-brush-mode">
-            <option value="hide">가리기</option>
-            <option value="show">되살리기</option>
-          </select>
+          <div id="outfit-brush-mode" class="segmented" role="radiogroup" aria-label="브러시">
+            <label><input type="radio" name="outfit-brush-mode" value="hide" checked /> 가리기</label>
+            <label><input type="radio" name="outfit-brush-mode" value="show" /> 되살리기</label>
+          </div>
           <label for="outfit-brush-radius">반경 <output id="outfit-brush-radius-value">1.5</output> cm</label>
           <input id="outfit-brush-radius" type="range" min="0.3" max="5" step="0.1" value="1.5" />
           <button id="outfit-brush-undo" type="button">한 번 되돌리기</button>
           <button id="outfit-brush-clear" type="button">이 부위 브러시 지우기</button>
           <p class="details">드래그는 회전, 짧은 클릭은 칠하기입니다. 옷 뒤의 피부도 칠해집니다. 되살릴 곳은 '가린 피부 보이기'를 켜고 칠하세요. '이 부위 피팅 저장'으로 함께 저장됩니다.</p>
+        </div>
+        <div id="sole-paint-row" hidden>
+          <label class="toggle"><input id="sole-paint" type="checkbox" /> 밑창 색 칠하기 (면 클릭)</label>
+          <div id="sole-paint-controls" hidden>
+            <div id="sole-paint-mode" class="segmented" role="radiogroup" aria-label="밑창 색">
+              <label><input type="radio" name="sole-paint-mode" value="gold" checked /> 밑창 색</label>
+              <label><input type="radio" name="sole-paint-mode" value="leather" /> 가죽</label>
+            </div>
+            <label for="sole-colour">밑창 색</label>
+            <input id="sole-colour" type="color" />
+            <button id="sole-paint-undo" type="button">한 번 되돌리기</button>
+            <p class="details">부츠 위 원 안을 짧게 클릭하면 밑창 색이나 가죽으로 바뀝니다. '이 부위 피팅 저장'으로 함께 저장됩니다.</p>
+          </div>
         </div>
         <button id="outfit-fit-save" type="button">이 부위 피팅 저장</button>
         <button id="outfit-fit-reset" type="button">이 부위 조절 초기화</button>
@@ -271,7 +311,9 @@ export async function showFemaleBase(
         <option value="armed-torch">강철 장검 + 횃불</option>
         <option value="shield">왼손 나무 방패</option>
         <option value="armed-shield">강철 장검 + 나무 방패</option>
+        <option value="mandolin">만돌린 (들고 다니기)</option>
       </select>
+      ${instrumentCarryPanel}
       <p class="details">대기와 걷기에서 장착 상태에 따라 손 모양이 바뀝니다.</p>
       <p class="details">횃불을 장착하면 대기·걷기·달리기·전투 대기에서 왼손에 횃불을 듭니다.</p>
       <button id="female-pause" type="button">일시정지</button>
@@ -306,7 +348,7 @@ export async function showFemaleBase(
   const requestedHair = new URLSearchParams(location.search).get('hair')
   hairSelect.value =
     requestedHair &&
-    ['bob', 'knight', 'warrior', 'ranger', 'none'].includes(requestedHair)
+    ['bob', 'warrior', 'ranger', 'none'].includes(requestedHair)
       ? requestedHair
       : 'bob'
   const initialHair = hairSelect.value
@@ -352,13 +394,7 @@ export async function showFemaleBase(
   const hairOptions: Record<string, THREE.SkinnedMesh[]> = { none: [] }
   let helmetOutfit = 'none'
   const hairKey = (name: string, helmet = helmetOutfit) =>
-    (name === 'warrior' || name === 'ranger') &&
-    helmet !== 'none' &&
-    helmet !== 'valkyrie'
-      ? 'none'
-      : helmet === 'barbarian' && name !== 'none'
-        ? `barbarian-${name}`
-        : name
+    helmet === 'barbarian' && name === 'bob' ? 'barbarian-bob' : name
   if (initialHairAsset)
     hairOptions[initialHair] = bindModularPart(model, initialHairAsset.scene)
   const hairFitControls = document.getElementById('warrior-hair-fit')!
@@ -470,9 +506,9 @@ export async function showFemaleBase(
     if (pending) return pending
     const promise = loader
       .loadAsync(
-        key === name
-          ? hairUrl(name)
-          : `/__modular-character/parts/female_barbarian_helmet_hair_${name}.glb`
+        key.startsWith('barbarian-')
+          ? `/__modular-character/parts/female_barbarian_helmet_hair_${name}.glb`
+          : hairUrl(key)
       )
       .then(({ scene: source }) => {
         if (disposed()) {
@@ -490,15 +526,18 @@ export async function showFemaleBase(
     return promise
   }
   let helmetEquipped = false
+  // Set once the outfit masks exist.
+  let refreshHairBrush = () => {}
   const updateHair = () => {
     for (const [name, meshes] of Object.entries(hairOptions))
       for (const mesh of meshes)
         mesh.visible =
-          (!helmetEquipped ||
-            helmetOutfit === 'barbarian' ||
-            helmetOutfit === 'valkyrie' ||
-            helmetOutfit === 'priest') &&
-          hairKey(hairSelect.value) === name
+          !(
+            helmetEquipped &&
+            hairSelect.value === 'bob' &&
+            (helmetOutfit === 'knight' || helmetOutfit === 'brilliance')
+          ) && hairKey(hairSelect.value) === name
+    refreshHairBrush()
   }
   updateHair()
   const swordGrip = animations.find((clip) => clip.name === 'idle_armed')
@@ -516,6 +555,7 @@ export async function showFemaleBase(
     FEMALE_HAND_FITS['weapons/steel_longsword.glb'].rotation!
   )
   hand.add(weapon)
+  const mandolinCarry = instrumentCarryEditor(hand, loader, disposed)
   const leftHand = model.getObjectByName('LeftHand')
   if (!leftHand) throw new Error('횃불을 장착할 왼손 본을 찾지 못했습니다.')
   torch.name = 'femaleTorch'
@@ -549,6 +589,42 @@ export async function showFemaleBase(
   }))
   const mixer = new THREE.AnimationMixer(model)
   let bootGround: ReturnType<typeof femaleBootGround> | undefined
+  // The game lifts every heel by the plate boots' baked track, so the preview does too.
+  let plateGround: ReturnType<typeof femaleBootGround> | undefined
+  let loadPlateBoots = async () => {}
+  const soleGap = document.getElementById('sole-gap')!
+  const soleVertex = new THREE.Vector3()
+  let gapMotion = ''
+  let gapMax = 0
+  let gapShownAt = 0
+  const updateSoleGap = (now: number) => {
+    const boots = bootsEquipped
+      ? skinnedParts(model).filter(
+          (mesh) => mesh.visible && /^boots_/.test(mesh.name)
+        )
+      : []
+    if (!boots.length) {
+      soleGap.textContent = ''
+      return
+    }
+    let lowest = Infinity
+    for (const mesh of boots) {
+      const count = mesh.geometry.attributes.position.count
+      for (let i = 0; i < count; i++) {
+        mesh.getVertexPosition(i, soleVertex).applyMatrix4(mesh.matrixWorld)
+        lowest = Math.min(lowest, soleVertex.y)
+      }
+    }
+    if (gapMotion !== motion.value) {
+      gapMotion = motion.value
+      gapMax = 0
+    }
+    gapMax = Math.max(gapMax, lowest)
+    if (now - gapShownAt < 200) return
+    gapShownAt = now
+    const mm = (metres: number) => Math.round(metres * 1000) || 0
+    soleGap.textContent = `발바닥과 지면 간격: 지금 ${mm(lowest)}mm · 이 동작 최대 ${mm(gapMax)}mm`
+  }
   let bootsEquipped = false
   let action: THREE.AnimationAction | undefined
   let paused = false
@@ -596,7 +672,7 @@ export async function showFemaleBase(
       )
     )
       return
-    const pose = ['armed', 'armed-torch', 'armed-shield'].includes(
+    const pose = ['armed', 'armed-torch', 'armed-shield', 'mandolin'].includes(
       equipment.value
     )
       ? handPoses.armed
@@ -627,6 +703,7 @@ export async function showFemaleBase(
     weapon.visible = ['armed', 'armed-torch', 'armed-shield'].includes(
       equipment.value
     )
+    mandolinCarry.setShown(equipment.value === 'mandolin')
     shield.visible = ['shield', 'armed-shield'].includes(equipment.value)
     torch.visible =
       ['torch', 'armed-torch'].includes(equipment.value) &&
@@ -761,9 +838,11 @@ export async function showFemaleBase(
   let sleeveMaskRegistered = false
   const updateGround = () => {
     bootGround?.restore()
+    plateGround?.restore()
     model.position.y = chair.visible ? femaleSeatOffset : 0
-    if (bootsEquipped && bootGround) {
-      const lift = bootGround.apply(
+    const ground = plateGround ?? bootGround
+    if (bootsEquipped && ground) {
+      const lift = ground.apply(
         chair.visible ? femaleSeatOffset : undefined,
         motion.value
       )
@@ -1007,6 +1086,7 @@ export async function showFemaleBase(
   const fittableOutfits: Record<string, string> = {
     priest: '사제',
     ranger: '순찰자',
+    bard: '바드',
   }
   const fitSlotNames: Record<string, string> = {
     helmet: '투구',
@@ -1030,11 +1110,16 @@ export async function showFemaleBase(
   const defaultPartFit = () =>
     Object.fromEntries(
       PART_FIT_KEYS.map((key) => [key, PART_FIT_RANGES[key][2]])
-    ) as PartFit
+    ) as Record<PartFitKey, number> as PartFit
+  // New glove fits use the forearm frame; fits saved before it keep the character's axes.
+  const newPartFit = (part: string): PartFit => ({
+    ...defaultPartFit(),
+    ...(partSlot(part) === 'gloves' && { frame: 'forearm' as const }),
+  })
   const sidesOf = (part: string) => {
     let sides = partFits.get(part)
     if (!sides) {
-      sides = { 1: defaultPartFit(), [-1]: defaultPartFit() }
+      sides = { 1: newPartFit(part), [-1]: newPartFit(part) }
       partFits.set(part, sides)
     }
     return sides
@@ -1094,6 +1179,11 @@ export async function showFemaleBase(
         )
     fitSideRow.hidden = !pairedSlots.includes(partSlot(fitPart.value))
     showSkinToggle.checked = skinShown.has(fitPart.value)
+    const painter = solePainters.get(fitPart.value)
+    document.getElementById('sole-paint-row')!.hidden = !painter
+    if (painter)
+      (document.getElementById('sole-colour') as HTMLInputElement).value =
+        soleOf(fitPart.value).colour ?? painter.colour() ?? '#000000'
     const fit = sidesOf(fitPart.value)[editedSides(fitPart.value)[0]]
     for (const key of PART_FIT_KEYS) {
       fitInputs[key].value = String(fit[key])
@@ -1106,6 +1196,17 @@ export async function showFemaleBase(
     'sleeve-end'?: { left: SleeveEnd; right: SleeveEnd }
   }
   const brushEdits = new Map<string, SkinBrushEdits>()
+  // Boots parts with a sole material: clicked triangle overrides and the colour.
+  const soleEdits = new Map<string, SoleEdits>()
+  const solePainters = new Map<string, ReturnType<typeof femaleSolePaint>>()
+  const soleOf = (part: string) => {
+    let edits = soleEdits.get(part)
+    if (!edits) {
+      edits = { gold: [], leather: [] }
+      soleEdits.set(part, edits)
+    }
+    return edits
+  }
   const fitMasks = new Map<string, { hide_triangle_indices: number[] }>()
   const brushOf = (part: string) => {
     let edits = brushEdits.get(part)
@@ -1146,11 +1247,17 @@ export async function showFemaleBase(
           (saved: {
             parts: Record<
               string,
-              { pending?: SavedFit; brush?: { hide: number[]; show: number[] } }
+              {
+                pending?: SavedFit
+                brush?: { hide: number[]; show: number[] }
+                sole?: SoleEdits
+              }
             >
           }) => {
             for (const [slot, entry] of Object.entries(saved.parts)) {
               const part = `${slot}-${outfit}`
+              if (entry.sole && !soleEdits.has(part))
+                soleEdits.set(part, entry.sole)
               if (entry.brush && !brushEdits.has(part))
                 brushEdits.set(part, {
                   hide: new Set(entry.brush.hide),
@@ -1177,6 +1284,7 @@ export async function showFemaleBase(
   const applyFit = (part: string) => {
     const sides = sidesOf(part)
     fitters.get(part)?.((side) => sides[side])
+    solePainters.get(part)?.apply(soleOf(part))
   }
   for (const key of PART_FIT_KEYS)
     fitInputs[key].oninput = () => {
@@ -1215,7 +1323,7 @@ export async function showFemaleBase(
   document.getElementById('outfit-fit-reset')!.onclick = () => {
     const sides = sidesOf(fitPart.value)
     for (const side of editedSides(fitPart.value))
-      sides[side] = defaultPartFit()
+      sides[side] = newPartFit(fitPart.value)
     sleeveEnds.delete(fitPart.value)
     showFit()
     applyFit(fitPart.value)
@@ -1244,6 +1352,7 @@ export async function showFemaleBase(
             hide: [...brushOf(part).hide],
             show: [...brushOf(part).show],
           },
+          ...(solePainters.has(part) && { sole: soleOf(part) }),
         }),
       })
       const result = (await response.json()) as { error?: string }
@@ -1257,16 +1366,34 @@ export async function showFemaleBase(
   const brushToggle = document.getElementById(
     'outfit-brush'
   ) as HTMLInputElement
-  const brushMode = document.getElementById(
-    'outfit-brush-mode'
-  ) as HTMLSelectElement
+  const brushModeGroup = document.getElementById('outfit-brush-mode')!
+  const brushMode = {
+    get value() {
+      return brushModeGroup.querySelector<HTMLInputElement>('input:checked')!
+        .value
+    },
+  }
   const brushRadius = document.getElementById(
     'outfit-brush-radius'
   ) as HTMLInputElement
   const brushHistory: { part: string; hide: number[]; show: number[] }[] = []
+  // Brushing holds the pose still; playback resumes afterwards only if the brush paused it.
+  let brushPaused = false
   brushToggle.onchange = () => {
     document.getElementById('outfit-brush-controls')!.hidden =
       !brushToggle.checked
+    const solePaint = document.getElementById('sole-paint') as HTMLInputElement
+    if (brushToggle.checked && solePaint.checked) {
+      solePaint.checked = false
+      solePaint.dispatchEvent(new Event('change'))
+    }
+    if (brushToggle.checked && !paused) {
+      brushPaused = true
+      setPaused(true)
+    } else if (!brushToggle.checked && brushPaused) {
+      brushPaused = false
+      setPaused(false)
+    }
   }
   brushRadius.oninput = () => {
     document.getElementById('outfit-brush-radius-value')!.textContent =
@@ -1289,6 +1416,149 @@ export async function showFemaleBase(
     applyFitMask(part)
     fitStatus.textContent = '저장하지 않은 조절이 있습니다.'
   }
+  function setupSolePaint() {
+    const toggle = document.getElementById('sole-paint') as HTMLInputElement
+    const modeGroup = document.getElementById('sole-paint-mode')!
+    const colour = document.getElementById('sole-colour') as HTMLInputElement
+    const history: { part: string; edits: SoleEdits }[] = []
+    const canvas = renderer.domElement
+    const raycaster = new THREE.Raycaster()
+    // Brush radius in metres; triangles whose centre lies inside it are painted.
+    const SOLE_BRUSH = 0.01
+    const paintsSole = () =>
+      modeGroup.querySelector<HTMLInputElement>('input:checked')!.value ===
+      'gold'
+    // Overlays share their primitive's material, so each material gets one cursor.
+    const cursors = new Map<
+      THREE.Material,
+      ReturnType<typeof femaleBrushCursor>
+    >()
+    const hideCursors = () => {
+      for (const cursor of cursors.values()) cursor.hide()
+    }
+    const pick = (event: PointerEvent) => {
+      const painter = solePainters.get(fitPart.value)
+      if (!toggle.checked || !painter) return undefined
+      const rect = canvas.getBoundingClientRect()
+      raycaster.setFromCamera(
+        new THREE.Vector2(
+          ((event.clientX - rect.left) / rect.width) * 2 - 1,
+          -((event.clientY - rect.top) / rect.height) * 2 + 1
+        ),
+        camera
+      )
+      const targets = painter.targets().filter((mesh) => mesh.visible)
+      for (const mesh of targets) mesh.computeBoundingSphere()
+      const hit = raycaster.intersectObjects(targets, false)[0]
+      return hit && { painter, point: painter.pointOf(hit) }
+    }
+    let hover: PointerEvent | undefined
+    let hoverFrame = 0
+    const updateCursor = () => {
+      hoverFrame = 0
+      const picked = hover && pick(hover)
+      if (!picked?.point) return hideCursors()
+      for (const mesh of picked.painter.targets()) {
+        const material = mesh.material as THREE.Material
+        if (!cursors.has(material))
+          cursors.set(material, femaleBrushCursor(mesh))
+      }
+      for (const cursor of cursors.values())
+        cursor.show(
+          picked.point,
+          SOLE_BRUSH,
+          paintsSole() ? (picked.painter.colour() ?? '#ffffff') : '#5a3420'
+        )
+    }
+    const onMove = (event: PointerEvent) => {
+      hover = event
+      hoverFrame ||= requestAnimationFrame(updateCursor)
+    }
+    const onLeave = () => {
+      hover = undefined
+      hideCursors()
+    }
+    let down: { x: number; y: number } | undefined
+    let paintPaused = false
+    toggle.onchange = () => {
+      document.getElementById('sole-paint-controls')!.hidden = !toggle.checked
+      if (toggle.checked && brushToggle.checked) {
+        brushToggle.checked = false
+        brushToggle.dispatchEvent(new Event('change'))
+      }
+      if (toggle.checked && !paused) {
+        paintPaused = true
+        setPaused(true)
+      } else if (!toggle.checked && paintPaused) {
+        paintPaused = false
+        setPaused(false)
+      }
+    }
+    const remember = (part: string) =>
+      history.push({ part, edits: structuredClone(soleOf(part)) })
+    colour.oninput = () => {
+      const part = fitPart.value
+      if (!solePainters.has(part)) return
+      soleOf(part).colour = colour.value
+      solePainters.get(part)!.apply(soleOf(part))
+      fitStatus.textContent = '저장하지 않은 조절이 있습니다.'
+    }
+    colour.onchange = () => remember(fitPart.value)
+    document.getElementById('sole-paint-undo')!.onclick = () => {
+      const last = history.pop()
+      if (!last) return
+      soleEdits.set(last.part, last.edits)
+      solePainters.get(last.part)?.apply(last.edits)
+      showFit()
+    }
+    const onDown = (event: PointerEvent) => {
+      down = { x: event.clientX, y: event.clientY }
+    }
+    const onUp = (event: PointerEvent) => {
+      const start = down
+      down = undefined
+      const part = fitPart.value
+      if (!start) return
+      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4)
+        return
+      const picked = pick(event)
+      const point = picked?.point
+      const painter = picked?.painter
+      if (!point || !painter) return
+      remember(part)
+      const edits = soleOf(part)
+      const wanted = paintsSole() ? edits.gold : edits.leather
+      const other = wanted === edits.gold ? edits.leather : edits.gold
+      for (const centre of painter.centresNear(point, SOLE_BRUSH)) {
+        const near = (values: number[]) =>
+          centre.distanceTo(new THREE.Vector3().fromArray(values)) < 0.001
+        other.splice(
+          0,
+          other.length,
+          ...other.filter((values) => !near(values))
+        )
+        if (!wanted.some(near)) wanted.push(centre.toArray())
+      }
+      painter.apply(edits)
+      updateCursor()
+      fitStatus.textContent = '저장하지 않은 조절이 있습니다.'
+    }
+    toggle.addEventListener('change', () => {
+      if (!toggle.checked) hideCursors()
+    })
+    modeGroup.addEventListener('input', () => hover && onMove(hover))
+    canvas.addEventListener('pointerdown', onDown)
+    canvas.addEventListener('pointerup', onUp)
+    canvas.addEventListener('pointermove', onMove)
+    canvas.addEventListener('pointerleave', onLeave)
+    cleanup.push(() => {
+      cancelAnimationFrame(hoverFrame)
+      canvas.removeEventListener('pointerdown', onDown)
+      canvas.removeEventListener('pointerup', onUp)
+      canvas.removeEventListener('pointermove', onMove)
+      canvas.removeEventListener('pointerleave', onLeave)
+    })
+  }
   function setupSkinBrush() {
     if (!brushBody || !brushRestIndex) return
     const body = brushBody
@@ -1299,6 +1569,64 @@ export async function showFemaleBase(
     const raycaster = new THREE.Raycaster()
     let down: { x: number; y: number } | undefined
     const canvas = renderer.domElement
+    const cursor = femaleBrushCursor(body)
+    const position = body.geometry.getAttribute(
+      'position'
+    ) as THREE.BufferAttribute
+    const restPoint = new THREE.Vector3()
+    const corner = new THREE.Vector3()
+    let hover: PointerEvent | undefined
+    let hoverFrame = 0
+    const updateCursor = () => {
+      hoverFrame = 0
+      const event = hover
+      if (!event || !brushToggle.checked || fitPanel.hidden) {
+        cursor.hide()
+        return
+      }
+      const rect = canvas.getBoundingClientRect()
+      raycaster.setFromCamera(
+        new THREE.Vector2(
+          ((event.clientX - rect.left) / rect.width) * 2 - 1,
+          -((event.clientY - rect.top) / rect.height) * 2 + 1
+        ),
+        camera
+      )
+      if (body instanceof THREE.SkinnedMesh) body.computeBoundingSphere()
+      const hit = raycaster.intersectObject(body)[0]
+      if (!hit?.face || !hit.barycoord) {
+        cursor.hide()
+        return
+      }
+      restPoint.set(0, 0, 0)
+      for (const [vertex, weight] of [
+        [hit.face.a, hit.barycoord.x],
+        [hit.face.b, hit.barycoord.y],
+        [hit.face.c, hit.barycoord.z],
+      ])
+        restPoint.addScaledVector(
+          corner.fromBufferAttribute(position, vertex),
+          weight
+        )
+      cursor.show(
+        restPoint,
+        Number(brushRadius.value) / 100,
+        brushMode.value === 'hide' ? '#ff5050' : '#50e080'
+      )
+    }
+    const onMove = (event: PointerEvent) => {
+      hover = event
+      hoverFrame ||= requestAnimationFrame(updateCursor)
+    }
+    const onLeave = () => {
+      hover = undefined
+      cursor.hide()
+    }
+    for (const control of [brushToggle, brushModeGroup, brushRadius])
+      control.addEventListener('input', () => {
+        if (hover) onMove(hover)
+        else cursor.hide()
+      })
     const onDown = (event: PointerEvent) => {
       down = { x: event.clientX, y: event.clientY }
     }
@@ -1351,9 +1679,14 @@ export async function showFemaleBase(
     }
     canvas.addEventListener('pointerdown', onDown)
     canvas.addEventListener('pointerup', onUp)
+    canvas.addEventListener('pointermove', onMove)
+    canvas.addEventListener('pointerleave', onLeave)
     cleanup.push(() => {
+      cancelAnimationFrame(hoverFrame)
       canvas.removeEventListener('pointerdown', onDown)
       canvas.removeEventListener('pointerup', onUp)
+      canvas.removeEventListener('pointermove', onMove)
+      canvas.removeEventListener('pointerleave', onLeave)
     })
   }
   const updateFitPanel = () => {
@@ -1471,9 +1804,29 @@ export async function showFemaleBase(
               after = (point) =>
                 deform(point, (side) => sleeveEndsOf(part)[side])
             }
+            if (slot === 'boots') {
+              const painter = femaleSolePaint(meshes)
+              if (painter.available) solePainters.set(part, painter)
+            }
             fitters.set(
               part,
-              partFitter(meshes, pairedSlots.includes(slot), after)
+              partFitter(
+                meshes,
+                pairedSlots.includes(slot),
+                after,
+                slot === 'gloves'
+                  ? {
+                      1: [
+                        bindPosition('LeftForeArm'),
+                        bindPosition('LeftHand'),
+                      ],
+                      [-1]: [
+                        bindPosition('RightForeArm'),
+                        bindPosition('RightHand'),
+                      ],
+                    }
+                  : undefined
+              )
             )
             applyFit(part)
           }
@@ -1583,6 +1936,11 @@ export async function showFemaleBase(
       }
       return entry.pending
     }
+    if (slot === 'boots')
+      loadPlateBoots = async () => {
+        await load('knight')
+        plateGround = loaded.get('knight')?.ground
+      }
     const show = (outfit: string) => {
       if (slot === 'boots') {
         bootGround?.restore()
@@ -1754,10 +2112,116 @@ export async function showFemaleBase(
   floor.rotation.x = -Math.PI / 2
   floor.position.y = -0.0036
   scene.add(floor)
+  // Orthographic side view of the feet under the canvas, with a 1 cm ruler behind the boots on layer 1.
+  const sideFeet = document.getElementById('side-feet') as HTMLInputElement
+  const SIDE_HEIGHT = 0.16
+  const sideView = document.createElement('section')
+  sideView.className = 'side-feet-view'
+  sideView.setAttribute('aria-label', '발 옆모습 확대')
+  host.after(sideView)
+  const sideRenderer = new THREE.WebGLRenderer({ antialias: true })
+  sideRenderer.setPixelRatio(renderer.getPixelRatio())
+  sideRenderer.setClearColor('#17252d')
+  sideRenderer.toneMapping = renderer.toneMapping
+  sideView.append(sideRenderer.domElement)
+  cleanup.push(() => {
+    sideRenderer.dispose()
+    sideView.remove()
+  })
+  const sideCamera = new THREE.OrthographicCamera(-1, 1, 0.13, -0.03, 0.01, 6)
+  sideCamera.rotation.y = Math.PI / 2
+  sideCamera.layers.enable(1)
+  const ruler = new THREE.Group()
+  for (let cm = 0; cm <= 12; cm++) {
+    const color = cm === 0 ? '#ff4040' : cm % 5 === 0 ? '#9fb0b6' : '#3d5058'
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-0.5, cm / 100, -1),
+        new THREE.Vector3(-0.5, cm / 100, 1),
+      ]),
+      new THREE.LineBasicMaterial({ color })
+    )
+    line.layers.set(1)
+    ruler.add(line)
+  }
+  scene.add(ruler)
+  cleanup.push(() => disposeObjects([ruler]))
+  const footCenter = new THREE.Vector3()
+  const footPosition = new THREE.Vector3()
+  const sideSize = new THREE.Vector2()
+  const renderSideFeet = () => {
+    sideView.hidden = !sideFeet.checked || !bootsEquipped
+    if (sideView.hidden) return
+    const width = sideView.clientWidth
+    const height = sideView.clientHeight
+    // It only fills space the settings panel leaves under the canvas.
+    if (height < 40) return
+    if (width !== sideSize.x || height !== sideSize.y) {
+      sideSize.set(width, height)
+      sideRenderer.setSize(width, height)
+    }
+    const aspect = width / height
+    footCenter.set(0, 0, 0)
+    for (const name of ['LeftFoot', 'RightFoot'])
+      footCenter.add(
+        model.getObjectByName(name)!.getWorldPosition(footPosition)
+      )
+    footCenter.multiplyScalar(0.5)
+    sideCamera.position.set(3, 0, footCenter.z)
+    ruler.position.z = footCenter.z
+    sideCamera.left = (-SIDE_HEIGHT * aspect) / 2
+    sideCamera.right = (SIDE_HEIGHT * aspect) / 2
+    sideCamera.updateProjectionMatrix()
+    sideRenderer.render(scene, sideCamera)
+  }
   const camera = new THREE.PerspectiveCamera(35, 1, 0.03, 36)
   const controls = new OrbitControls(camera, renderer.domElement)
   controls.enableDamping = true
   setupSkinBrush()
+  // Runtime part names the hair brush saves under.
+  const helmetParts: Record<string, string> = {
+    knight: 'helmet',
+    barbarian: 'barbarian_helmet',
+    valkyrie: 'valkyrie_helmet',
+    priest: 'priest_helmet',
+    bard: 'bard_helmet',
+    brilliance: 'brilliance_helmet',
+  }
+  const hairParts: Record<string, string> = {
+    bob: 'hair',
+    warrior: 'valkyrie_hair',
+    ranger: 'ranger_hair',
+  }
+  let hairBrushPaused = false
+  const hairBrush = helmetHairBrush({
+    canvas: renderer.domElement,
+    camera,
+    mask: outfitMask,
+    disposed,
+    shown: () => {
+      const key = hairKey(hairSelect.value)
+      const mesh = hairOptions[key]?.[0]
+      return helmetEquipped &&
+        helmetParts[helmetOutfit] &&
+        hairParts[key] &&
+        mesh?.visible
+        ? { helmet: helmetParts[helmetOutfit], hair: hairParts[key], mesh }
+        : undefined
+    },
+    pause: (brushing) => {
+      if (brushing && !paused) {
+        hairBrushPaused = true
+        setPaused(true)
+      } else if (!brushing && hairBrushPaused) {
+        hairBrushPaused = false
+        setPaused(false)
+      }
+    },
+  })
+  cleanup.push(hairBrush.dispose)
+  refreshHairBrush = hairBrush.refresh
+  refreshHairBrush()
+  setupSolePaint()
   controls.minDistance = 0.144
   controls.maxDistance = 9
   cleanup.push(() => controls.dispose())
@@ -1874,6 +2338,7 @@ export async function showFemaleBase(
     time.value = String(THREE.MathUtils.clamp(requestedTime, 0, 1))
     time.dispatchEvent(new Event('input'))
   }
+  void loadPlateBoots()
   let previousTime = performance.now()
   renderer.setAnimationLoop((now) => {
     const delta = Math.min((now - previousTime) / 1000, 0.05)
@@ -1884,9 +2349,12 @@ export async function showFemaleBase(
     }
     controls.update()
     updateGround()
+    model.updateMatrixWorld(true)
+    updateSoleGap(now)
     updateValkyrieWings(model, paused ? 0 : delta, action)
     updatePeltPhysics(model, paused ? 0 : delta)
     renderer.render(scene, camera)
+    renderSideFeet()
   })
   const fieldset = document.getElementById(
     'female-controls'
