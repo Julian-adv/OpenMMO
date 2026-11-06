@@ -2447,3 +2447,45 @@ fn a_slow_reacting_brain_waits_before_it_chases() {
     struck.handle_hit_with_behavior_tree(&1.into(), true, 1);
     assert_eq!(struck.target_player_id, Some(1.into()));
 }
+
+/// While it takes in a player, a slow-reacting monster stands and turns to
+/// watch instead of wandering off.
+#[test]
+fn a_slow_reacting_brain_watches_instead_of_wandering() {
+    let players = attacker_at(15.0, 10.0);
+    let mut rng = SmallRng::seed_from_u64(42);
+    let mut idle = make_brain();
+    idle.reaction_ms = 1500.0;
+    let start = idle.position;
+    let watch_or_wander = BehaviorTree {
+        description: None,
+        root: BehaviorNode::Selector {
+            children: vec![chase_tree().root, wander_tree(0.0).root],
+        },
+    };
+    let mut tick = |brain: &mut MonsterBrain| {
+        brain.tick_with_behavior_tree(
+            200.0,
+            &players,
+            &[],
+            &watch_or_wander,
+            &DirectPath,
+            &mut rng,
+        )
+    };
+    assert_eq!(
+        tick(&mut idle).len(),
+        1,
+        "the turn toward the player is sent"
+    );
+    assert!((idle.rotation - std::f32::consts::FRAC_PI_2).abs() < 1e-4);
+    for _ in 0..6 {
+        tick(&mut idle);
+    }
+    assert_eq!(
+        idle.state(),
+        AiState::Idle,
+        "it watches instead of wandering off"
+    );
+    assert_eq!(idle.position, start);
+}

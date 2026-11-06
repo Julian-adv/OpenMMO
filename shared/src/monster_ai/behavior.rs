@@ -158,6 +158,10 @@ impl MonsterBrain {
         path_provider: &dyn PathProvider,
         rng: &mut impl Rng,
     ) -> BehaviorStatus {
+        // Taking in a player it just spotted: stand and watch, never stroll off.
+        if self.noticing.is_some() {
+            return BehaviorStatus::Failure;
+        }
         let check_ms = param(params, "checkMs", DEFAULT_IDLE_CHECK_MS);
         if self.state_timer_ms < check_ms {
             return BehaviorStatus::Failure;
@@ -903,20 +907,20 @@ impl MonsterBrain {
             });
         }
 
-        let selected = nearby_players
+        let Some((_, player)) = nearby_players
             .iter()
             .filter_map(|p| {
                 let dist_sq = self.position.dist_xz_sq(&p.position);
                 (p.health > 0 && dist_sq <= range_sq).then_some((dist_sq, p))
             })
             .min_by(|a, b| a.0.total_cmp(&b.0))
-            .map(|(_, p)| p.id);
-
-        let Some(id) = selected else {
+        else {
             self.noticing = None;
             return false;
         };
+        let id = player.id;
         if self.reaction_ms > 0.0 {
+            self.set_facing(self.position.bearing_xz_to(&player.position));
             match self.noticing {
                 Some((seen, left)) if seen == id => {
                     if left > 0.0 {

@@ -25,7 +25,8 @@ export function monsterCsvPlugin() {
     },
     configureServer(server) {
       server.middlewares.use(monsterWeaponGrip())
-      server.watcher.add(path.join(sourceDir, '*.csv'))
+      // Chokidar 4 takes no globs; watch the folder.
+      server.watcher.add(sourceDir)
       server.watcher.on('change', (changedPath) => {
         const resolved = path.resolve(changedPath)
         if (resolved.startsWith(sourceDir) && resolved.endsWith('.csv')) {

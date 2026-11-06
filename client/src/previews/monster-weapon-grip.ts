@@ -1,8 +1,5 @@
 import type * as THREE from 'three'
-import {
-  parseWeaponRotation,
-  type MonsterDefinition,
-} from '../lib/data/monsterDefs'
+import type { MonsterDefinition } from '../lib/data/monsterDefs'
 import { seatMonsterWeapon } from '../lib/utils/monsterWeapon'
 
 const url = '/__monster-preview/weapon-grip'
@@ -55,7 +52,7 @@ const sliders: {
 ]
 
 export const weaponGripPanel = `
-  <fieldset id="weapon-grip">
+  <fieldset id="weapon-grip" hidden>
     <legend>손 무기 위치</legend>
     <p class="details">무기를 쥐는 위치와 각도입니다. 저장하면 monsters.csv에 기록되고 게임은 새로고침하면 반영됩니다.</p>
     ${sliders
@@ -71,9 +68,9 @@ export const weaponGripPanel = `
   </fieldset>`
 
 const gripOf = (def: MonsterDefinition): Grip => {
-  const [x, y, z] = parseWeaponRotation(def.weaponRotation).map(
-    (r) => Math.round(((r * 180) / Math.PI) * 1000) / 1000
-  )
+  const [x = 0, y = 0, z = 0] = String(def.weaponRotation ?? '')
+    .split('|')
+    .map((part) => Number(part) || 0)
   return {
     weaponOffset: def.weaponOffset ?? 0,
     weaponOffsetX: def.weaponOffsetX ?? 0,
@@ -91,6 +88,7 @@ export function weaponGripEditor(
   hand: THREE.Object3D,
   weapon: THREE.Object3D
 ) {
+  document.getElementById('weapon-grip')!.hidden = false
   const status = document.getElementById('weapon-grip-status')!
   let saved = gripOf(def)
   const grip = { ...saved }
@@ -104,9 +102,7 @@ export function weaponGripEditor(
         : `${grip[key]}°`
     }
     seatMonsterWeapon(hand, weapon, {
-      weaponOffset: grip.weaponOffset,
-      weaponOffsetX: grip.weaponOffsetX,
-      weaponOffsetZ: grip.weaponOffsetZ,
+      ...grip,
       weaponRotation: `${grip.rotationX}|${grip.rotationY}|${grip.rotationZ}`,
     })
   }

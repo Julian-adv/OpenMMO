@@ -478,6 +478,7 @@ impl MonsterBrain {
 
         self.update_aggro_target(nearby_players, path_provider, rng);
 
+        let was_noticing = self.noticing.is_some();
         if matches!(self.state, AiState::Walk | AiState::Run) {
             self.tick_patrol(delta_ms, &mut commands, path_provider, rng);
         } else {
@@ -492,6 +493,10 @@ impl MonsterBrain {
 
             if status == BehaviorStatus::Failure && self.state != AiState::Idle {
                 self.transition_to_idle(&mut commands);
+            }
+            // Show the turn toward a player it has just spotted.
+            if !was_noticing && self.noticing.is_some() && commands.is_empty() {
+                commands.push(self.make_move_cmd());
             }
         }
 
