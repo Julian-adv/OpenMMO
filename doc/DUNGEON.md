@@ -70,7 +70,7 @@ node tools/reserve-dungeon-land.mjs --dungeon skeleton_crypt --ownership /tmp/ow
 - 입구: `world(-1884, 1.2, 6360)`, 서쪽 도로를 향한다(`entranceDir=w`). Shadow Guild에서 북동쪽으로 약 640m, 동쪽 산맥이 시작되는 기슭이다. 25층, 최종 보스 `mine_foreman`(Rampaging Foreman, 레벨 30·HP 600·guard 36).
 - 80×80m 범위는 0.55–1.95m다. 2026-11-03 운영 `land_plots` 기준 가장 가까운 소유지는 446m 밖이고, 이 범위의 운영 지형 타일은 개발과 같다. 배포 때 최신 추출로 `--dungeon blackvein_mine`을 돌린다.
 - 몬스터는 `mine` 그룹이고 5층마다 한 종이다. 수치는 Sundered Bastion 같은 층 몬스터를 따른다.
-  - 1–5층: Lingering Miner(광부 잔존자, `mine_remnant`). Hobgoblin 모델, Stone Golem 수치.
+  - 1–5층: Lingering Miner(광부 잔존자, `mine_remnant`). 전용 모델과 곡괭이, Stone Golem 수치.
   - 6–10층: Crystallized Miner(결정화 광부, `mine_crystal`). Orc 모델, Cyclop 수치.
   - 11–15층: Twisted Miner(뒤틀린 광부, `mine_twisted`). Troll 모델, Skeleton 수치. 출혈 공격을 유지한다.
   - 16–20층: Veinfused(광맥 융합체, `mine_veinfused`). Stone Golem 모델, Skeleton Warrior 수치.
