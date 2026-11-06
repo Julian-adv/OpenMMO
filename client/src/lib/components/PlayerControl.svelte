@@ -133,7 +133,7 @@
     MINING_SWING_MS,
     PROP_SWING_IMPACT_MS,
   } from '../data/combatTiming'
-  import { PICKAXE_ITEM } from '../stores/miningStore'
+  import { noteMiningSwing, PICKAXE_ITEM } from '../stores/miningStore'
   import {
     DUNGEON_DOOR_APPROACH,
     HOUSE_DOOR_APPROACH,
@@ -409,6 +409,7 @@
   }
 
   let miningSwingTimer: ReturnType<typeof setInterval> | null = null
+  let miningPutAwayTimer: ReturnType<typeof setTimeout> | null = null
   onDestroy(networkManager.miningEnded.on(stopMining))
 
   function clearPropSwingTimers() {
@@ -1844,8 +1845,10 @@
     beginPropSwing(x, z)
     playPropSound('pickaxe', MINING_SWING_IMPACT_MS)
     networkManager.sendMineDungeonProp(entranceId, depth, propId)
+    noteMiningSwing(currentPlayer.id)
     miningSwingTimer = setInterval(() => {
       swingAtProp()
+      if (currentPlayer) noteMiningSwing(currentPlayer.id)
       playPropSound('pickaxe', MINING_SWING_IMPACT_MS)
     }, MINING_SWING_MS)
   }
@@ -1868,11 +1871,19 @@
     transitionTo('attacking')
   }
 
-  function stopMining() {
+  /** Stop swinging; the swing under way finishes `swingLeftMs` later. */
+  function stopMining(swingLeftMs = 0) {
+    if (miningPutAwayTimer) clearTimeout(miningPutAwayTimer)
+    miningPutAwayTimer = null
     if (!miningSwingTimer) return
     clearInterval(miningSwingTimer)
     miningSwingTimer = null
-    if (playerState.state === 'attack') transitionToIdle()
+    const settle = () => {
+      miningPutAwayTimer = null
+      if (playerState.state === 'attack') transitionToIdle()
+    }
+    if (swingLeftMs > 0) miningPutAwayTimer = setTimeout(settle, swingLeftMs)
+    else settle()
   }
 
   /** The player has walked up to a clicked barrel/crate: swing the sword once

@@ -163,7 +163,7 @@ class NetworkManager {
   readonly characterError = createEvent<(message: string) => void>()
   readonly kicked = createEvent<(reason: string) => void>()
   readonly interactionRejected = createEvent<(reason: string) => void>()
-  readonly miningEnded = createEvent<() => void>()
+  readonly miningEnded = createEvent<(swingLeftMs: number) => void>()
   readonly interactionChanged =
     createEvent<(interaction: PlayerInteraction) => void>()
   private moveRequestId = 0

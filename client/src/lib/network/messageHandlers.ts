@@ -10,7 +10,12 @@ import {
   showOperatorNotice,
 } from '../stores/announcementStore'
 import { translate, type MessageKey } from '../i18n'
-import { setMining } from '../stores/miningStore'
+import {
+  endMining,
+  miningSwingLeftMs,
+  noteMiningSwing,
+  setMining,
+} from '../stores/miningStore'
 import { showPropText } from '../effects/prop-text-queue'
 import { isCoinPileJackpot } from './coinPileJackpot'
 import {
@@ -499,7 +504,7 @@ export type MessageEvents = {
   kicked: NetworkEvent<(reason: string) => void>
   playerRespawned: NetworkEvent<(playerId: number) => void>
   interactionRejected: NetworkEvent<(reason: string) => void>
-  miningEnded: NetworkEvent<() => void>
+  miningEnded: NetworkEvent<(swingLeftMs: number) => void>
   interactionChanged: NetworkEvent<(interaction: PlayerInteraction) => void>
   movePath: NetworkEvent<(path: MovePath) => void>
   moveProgress: NetworkEvent<(progress: MoveProgress) => void>
@@ -2940,9 +2945,10 @@ export function handleServerMessage(
       break
 
     case 'MiningEnded': {
-      setMining(data.player_id, false)
-      if (isSelfPlayer(data.player_id)) events.miningEnded.emit()
+      if (isSelfPlayer(data.player_id))
+        events.miningEnded.emit(miningSwingLeftMs(data.player_id))
       else stopRemoteMining(data.player_id)
+      endMining(data.player_id)
       const at =
         data.found &&
         dungeonManager.propAnchor(
@@ -3076,6 +3082,7 @@ function startRemoteMining(playerId: number) {
   const swing = () => {
     if (remotePlayerManager.players.has(playerId)) {
       remotePlayerManager.handleAttack(playerId)
+      noteMiningSwing(playerId)
       playPropSound('pickaxe', MINING_SWING_IMPACT_MS)
       return
     }
