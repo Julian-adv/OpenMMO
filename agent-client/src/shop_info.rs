@@ -72,6 +72,8 @@ pub struct NpcRow {
     pub class: String,
     #[serde(rename = "dialogueOnly", default)]
     dialogue_only: bool,
+    #[serde(rename = "selfDefense", default)]
+    self_defense: bool,
     #[serde(default)]
     wishlist: String,
     #[serde(rename = "wishlistRatePercent", default)]
@@ -100,10 +102,17 @@ pub fn npc_by_id(id: &str) -> Option<&'static NpcRow> {
     npcs().get(id)
 }
 
+fn npc_by_name(npc_name: &str) -> Option<&'static NpcRow> {
+    npcs().values().find(|row| row.npc_name == npc_name)
+}
+
 pub fn dialogue_only(npc_name: &str) -> bool {
-    npcs()
-        .values()
-        .any(|row| row.npc_name == npc_name && row.dialogue_only)
+    npc_by_name(npc_name).is_some_and(|row| row.dialogue_only)
+}
+
+/// Whether this NPC strikes back at monsters that hit it, without an LLM turn.
+pub fn self_defense(npc_name: &str) -> bool {
+    npc_by_name(npc_name).is_some_and(|row| row.self_defense)
 }
 
 pub fn chat_mentions(npc_name: &str, message: &str) -> bool {

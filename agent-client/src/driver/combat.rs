@@ -120,30 +120,42 @@ pub(super) async fn tick_combat(
         }
     }
 
-    // Face the monster before attacking (matches web client behavior)
-    {
-        let mut s = state.lock().await;
-        if let Some(face_cmd) = s.face_monster_command(monster_id) {
-            if let Err(e) = s.send_command(face_cmd).await {
-                error!("Failed to send face-monster move: {e}");
-                return false;
-            }
-        }
-    }
+    face_and_attack(&mut *state.lock().await, monster_id).await
+}
 
-    // Send attack
-    {
-        let mut s = state.lock().await;
-        let cmd = ClientMessage::PlayerAttack {
-            monster_id: monster_id.to_string(),
-        };
-        if let Err(e) = s.send_command(cmd).await {
-            error!("Failed to send attack: {e}");
+/// Face the monster (matches web client behavior), then swing.
+async fn face_and_attack(s: &mut SharedState, monster_id: &str) -> bool {
+    if let Some(face_cmd) = s.face_monster_command(monster_id) {
+        if let Err(e) = s.send_command(face_cmd).await {
+            error!("Failed to send face-monster move: {e}");
             return false;
         }
     }
-
+    let cmd = ClientMessage::PlayerAttack {
+        monster_id: monster_id.to_string(),
+    };
+    if let Err(e) = s.send_command(cmd).await {
+        error!("Failed to send attack: {e}");
+        return false;
+    }
     true
+}
+
+/// Strike back where the NPC stands, with no chase: a self-defending NPC
+/// keeps its post, and its LLM may not even see monsters.
+pub(super) async fn defend_self(state: &Arc<Mutex<SharedState>>) {
+    let mut s = state.lock().await;
+    // The LLM may not see combat, so an empty quiver stays silent here.
+    if !s.player_attack_wait().is_zero()
+        || s.player_trade_in_progress()
+        || s.missing_ammo().is_some()
+    {
+        return;
+    }
+    let Some(monster_id) = s.self_defense_target() else {
+        return;
+    };
+    face_and_attack(&mut s, &monster_id).await;
 }
 
 pub(super) enum ChaseResult {

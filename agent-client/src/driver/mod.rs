@@ -56,7 +56,7 @@ use onlinerpg_shared::ClientMessage;
 
 pub(crate) use action::wants_reroll;
 use backoff::PromptBackoff;
-use combat::{load_attack_cooldown, tick_combat};
+use combat::{defend_self, load_attack_cooldown, tick_combat};
 use execute::{append_memory, handle_response};
 use movement::{
     check_schedule_transition, coverage_positions, fetch_furniture_around,
@@ -732,6 +732,8 @@ pub async fn llm_driver(
             if relocated || (attack_ready && !tick_combat(&state, &monster_id, sprint).await) {
                 attack_target = None;
             }
+        } else {
+            defend_self(&state).await;
         }
 
         let sleeping_now = active_schedule.0.is_some_and(|i| schedule[i].is_sleeping());

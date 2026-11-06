@@ -246,48 +246,6 @@ struct Active {
 }
 
 impl super::GameState {
-    pub(crate) async fn tick_npc_self_defense(&self, auth: Option<&crate::auth::AuthService>) {
-        let reach = onlinerpg_shared::reach::PLAYER_MELEE_REACH_METERS
-            + onlinerpg_shared::reach::REACH_SLACK_METERS;
-        let defenders: HashMap<_, _> = self
-            .players
-            .read()
-            .await
-            .values()
-            .filter(|player| player.is_official_npc && player.health > 0)
-            .filter(|player| {
-                crate::npc_defs::npc_defs()
-                    .get_by_npc_name(&player.name)
-                    .is_some_and(|def| def.self_defense)
-            })
-            .map(|player| (player.id, (player.position, player.floor_level)))
-            .collect();
-        if defenders.is_empty() {
-            return;
-        }
-        let targets: HashMap<_, _> = {
-            let brains = self.monster_brains.lock().await;
-            brains
-                .entries
-                .iter()
-                .filter_map(|(id, entry)| {
-                    let target = entry.brain.target_player_id()?;
-                    let (position, floor) = defenders.get(&target)?;
-                    (entry.brain.path_floor
-                        == onlinerpg_shared::dungeon::passability_floor_for_level(*floor)
-                        && entry.brain.health > 0
-                        && position.dist_xz_sq(&entry.brain.position) <= reach.powi(2))
-                    .then(|| (target, id.clone()))
-                })
-                .collect()
-        };
-        for (player_id, monster_id) in targets {
-            if self.player_attack_ready(&player_id).await {
-                self.player_attack(&player_id, monster_id, auth).await;
-            }
-        }
-    }
-
     pub(super) async fn brain_in_combat(&self, monster_id: &str) -> bool {
         let brains = self.monster_brains.lock().await;
         brains

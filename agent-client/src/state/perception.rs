@@ -40,6 +40,23 @@ impl SharedState {
             .insert(monster_id.into(), tokio::time::Instant::now());
     }
 
+    /// The nearest live monster that recently struck a self-defending
+    /// official NPC and is still within weapon reach on its floor.
+    pub(crate) fn self_defense_target(&self) -> Option<String> {
+        let player = self.self_player.as_ref().filter(|p| {
+            p.is_official_npc && p.health > 0 && crate::shop_info::self_defense(&p.name)
+        })?;
+        let reach = self.attack_approach_range() + onlinerpg_shared::reach::REACH_SLACK_METERS;
+        self.recent_combat_monsters()
+            .filter_map(|(id, monster)| {
+                let monster = monster.filter(|m| live_on_floor(m, player.floor_level))?;
+                let dist_sq = player.position.dist_xz_sq(&monster.position);
+                (dist_sq <= reach.powi(2)).then_some((dist_sq, id))
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, id)| id.clone())
+    }
+
     pub(crate) fn schedule_combat_active(&self) -> bool {
         let Some(player) = self
             .self_player
@@ -48,14 +65,17 @@ impl SharedState {
         else {
             return false;
         };
-        self.combat_monsters.iter().any(|(id, at)| {
-            at.elapsed() < COMBAT_IDLE_TIMEOUT
-                && self.nearby_monsters.get(id).is_none_or(|monster| {
-                    monster.health > 0
-                        && monster.state != MonsterState::Dead
-                        && monster.floor_level == player.floor_level
-                })
-        })
+        self.recent_combat_monsters()
+            .any(|(_, monster)| monster.is_none_or(|m| live_on_floor(m, player.floor_level)))
+    }
+
+    /// Monsters in a fight with us within the idle timeout, with their
+    /// current state when still in sight.
+    fn recent_combat_monsters(&self) -> impl Iterator<Item = (&String, Option<&Monster>)> {
+        self.combat_monsters
+            .iter()
+            .filter(|(_, at)| at.elapsed() < COMBAT_IDLE_TIMEOUT)
+            .map(|(id, _)| (id, self.nearby_monsters.get(id)))
     }
 
     /// Characters on our own floor. Someone a floor above is a dot straight
@@ -245,4 +265,8 @@ impl SharedState {
             .min_by_key(|(_, i)| self.loot_claimant(i).is_some())?;
         Some((item.instance_id, item.item_def_id.clone()))
     }
+}
+
+fn live_on_floor(monster: &Monster, floor: i8) -> bool {
+    monster.health > 0 && monster.state != MonsterState::Dead && monster.floor_level == floor
 }

@@ -23,8 +23,6 @@ pub struct NpcDefinition {
     pub min_guard: u8,
     #[serde(rename = "unarmedDamageRoll", default)]
     pub unarmed_damage_roll: Option<String>,
-    #[serde(rename = "selfDefense", default)]
-    pub self_defense: bool,
     #[serde(rename = "walkSpeed", default)]
     pub walk_speed: Option<f32>,
     /// Item def ids this NPC wants to buy from players. Empty = the NPC

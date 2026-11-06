@@ -549,3 +549,35 @@ fn party_vitals_keep_member_hp_exact() {
     );
     assert!(world.contains("Player: Bob Lv.1 HP 6/20 at"), "{world}");
 }
+
+#[test]
+fn self_defense_targets_the_nearest_monster_that_struck_within_reach() {
+    let (mut s, _rx) = test_state();
+    let mut me = test_player(0.0, 0.0);
+    me.name = "Ysolde".into();
+    me.is_official_npc = true;
+    s.self_player_id = Some(me.id);
+    s.self_player = Some(me.clone());
+    for (id, x) in [("m1", 1.5), ("m2", 1.0), ("m3", 6.0), ("m4", 1.2)] {
+        let mut m = monster(id);
+        m.position = p(x, 0.0, 0.0);
+        s.nearby_monsters.insert(id.into(), m);
+    }
+    for id in ["m1", "m3", "m4"] {
+        s.push_event(ServerMessage::MonsterAttackedPlayer {
+            monster_id: id.into(),
+            player_id: me.id,
+            hit: true,
+            roll: 15,
+            damage: 1,
+            current_health: me.health,
+            ranged: false,
+        });
+    }
+    assert_eq!(s.self_defense_target().as_deref(), Some("m4"));
+    s.nearby_monsters.get_mut("m4").unwrap().health = 0;
+    assert_eq!(s.self_defense_target().as_deref(), Some("m1"));
+
+    s.self_player.as_mut().unwrap().name = "Rica".into();
+    assert_eq!(s.self_defense_target(), None);
+}

@@ -729,7 +729,6 @@ async fn main() -> ExitCode {
     // Server-driven monster brains (doc/SERVER_SIDE_MONSTER_AI.md); same
     // cadence as player movement.
     let game_state_for_monster_ai = Arc::clone(&game_state);
-    let auth_for_npc_defense = Arc::clone(&auth_service);
     background.spawn(run_ticks(
         "monster_ai",
         Duration::from_millis(200),
@@ -738,11 +737,7 @@ async fn main() -> ExitCode {
         health::Deadline::FromPeriod,
         move || {
             let game_state = Arc::clone(&game_state_for_monster_ai);
-            let auth = Arc::clone(&auth_for_npc_defense);
-            async move {
-                game_state.tick_monster_ai().await;
-                game_state.tick_npc_self_defense(Some(&auth)).await;
-            }
+            async move { game_state.tick_monster_ai().await }
         },
     ));
 

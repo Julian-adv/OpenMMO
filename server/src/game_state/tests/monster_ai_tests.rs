@@ -1,36 +1,6 @@
 //! Server-driven monster brains (doc/SERVER_SIDE_MONSTER_AI.md).
 use super::*;
 
-#[tokio::test]
-async fn ysolde_automatically_fights_monsters_targeting_her() {
-    for official in [false, true] {
-        let game = make_flat_world_game_state(&format!("ysolde_defense_{official}"));
-        let mut player = make_player("ysolde", 0.0, 0.0);
-        player.name = "Ysolde".into();
-        player.is_official_npc = official;
-        player.level = 30;
-        player.health = 360;
-        player.max_health = 360;
-        let id = player.id;
-        game.add_player(player).await;
-        let mut rx = game.register_direct_channel(&id).await;
-        let goblin = spawn_goblin(&game, 1.0).await;
-        game.tick_monster_ai_by(200.0).await;
-        assert_eq!(game.brain_target(&goblin).await, Some(id));
-        drain(&mut rx);
-        game.tick_npc_self_defense(None).await;
-        let attacks = drain(&mut rx)
-            .into_iter()
-            .filter(|message| matches!(message, ServerMessage::PlayerAttacked { player_id, .. } if *player_id == id))
-            .count();
-        assert_eq!(attacks, usize::from(official));
-        game.tick_npc_self_defense(None).await;
-        assert!(!drain(&mut rx).iter().any(|message| matches!(
-            message, ServerMessage::PlayerAttacked { player_id, .. } if *player_id == id
-        )));
-    }
-}
-
 async fn spawn_goblin(game_state: &GameState, x: f32) -> String {
     game_state
         .spawn_monster(
