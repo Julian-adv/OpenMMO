@@ -119,3 +119,15 @@ Vite가 이미지 파일을 번들에 포함하고 내용 해시를 붙인다.
 각진 얼굴은 `face_neck_bridge` 영역의 목 연결 메시도 함께 표시한다.
 이 메시를 숨긴 최초 촬영본은 턱과 몸체 사이가 끊겨 보여 최종 PNG로 대체했다.
 PNG는 게임 Git 저장소에서 직접 관리한다.
+
+여성 헤어 3장(2026-11-05)은 `tools/blender-scripts/render_female_hair_thumbnail.py`로 바인드 자세의
+`female-base.glb`에 헤어 원본 GLB를 얹어 Blender EEVEE(AgX, 노출 −0.5)로 512²를 렌더하고,
+PIL LANCZOS로 128²로 줄였다. 같은 명령으로 픽셀까지 같은 PNG가 나온다.
+
+| 파일 | 헤어 원본 |
+| --- | --- |
+| `female-hair-bob.png` | `assets/modular_human_female_01/hair/tripo_knight_bob_v1/fitted_v1/hair_female_knight_bob.glb` |
+| `female-hair-long.png` | `assets/modular_human_female_01/hair/tripo_warrior_v1/fitted_v1/hair_female_warrior.glb` |
+| `female-hair-ponytail.png` | `assets/items/female_ranger_outfit/hair/fitted_v1/hair_female_ranger.glb` |
+
+출처·라이선스는 [여성 몸체](modular-human-female-01.md)와 각 헤어 기록을 따른다. 별도 AI 생성이나 유료 호출은 없다.

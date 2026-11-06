@@ -17,7 +17,7 @@ Tripo로 생성해 여성 공통 몸체(`human_female_01_local_v1` 65본)의 머
 | 투구 Blender | [female-barbarian-helmet-fitted.blend](../../assets/items/female_barbarian_helmet/tripo_v2/fitted_v1/female-barbarian-helmet-fitted.blend) |
 | 몸체 가림 | [body-occlusion.json](../../assets/items/female_barbarian_helmet/tripo_v2/fitted_v1/body-occlusion.json) (가리는 면 없음) |
 | 단발 | [hair_bob_barbarian_helmet.glb](../../assets/items/female_barbarian_helmet/tripo_v2/fitted_v1/hair_bob_barbarian_helmet.glb) (1,805 triangles) |
-| 긴 헤어 | [hair_knight_barbarian_helmet.glb](../../assets/items/female_barbarian_helmet/tripo_v2/fitted_v1/hair_knight_barbarian_helmet.glb) (3,707 triangles) |
+| 긴 헤어 **[미사용]** (2026-11-05 미리보기에서도 제외) | [hair_knight_barbarian_helmet.glb](../../assets/items/female_barbarian_helmet/tripo_v2/fitted_v1/hair_knight_barbarian_helmet.glb) (3,707 triangles) |
 | 헤어 Blender | [female-barbarian-helmet-hair-fitted.blend](../../assets/items/female_barbarian_helmet/tripo_v2/fitted_v1/female-barbarian-helmet-hair-fitted.blend) (긴 헤어는 숨김) |
 | 기록 | [피팅](modular-female-barbarian-helmet-fitting-v1.json), [동작 검사](../../assets/items/female_barbarian_helmet/tripo_v2/fitted_v1/animation-validation.json), [헤어 절단·해시](../../assets/items/female_barbarian_helmet/tripo_v2/fitted_v1/hair-trim.json), [헤어 동작 검사](../../assets/items/female_barbarian_helmet/tripo_v2/fitted_v1/hair-animation-validation.json), [볼가리개 노출 기준점](../../assets/items/female_barbarian_helmet/tripo_v2/fitted_v1/hair-cheek-coverage-anchors.json), [노출 검사](../../assets/items/female_barbarian_helmet/tripo_v2/fitted_v1/hair-cheek-coverage-validation.json) |
 

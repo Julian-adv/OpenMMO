@@ -1,7 +1,10 @@
 import * as THREE from 'three'
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import type { ArmorEquipment } from '../network/networkTypes'
+import type {
+  ArmorEquipment,
+  CharacterAppearance,
+} from '../network/networkTypes'
 import { getItemDef } from '../data/itemDefs'
 import { loadGLB } from './gltfCache'
 import {
@@ -26,6 +29,7 @@ type Style =
   | 'caveman'
   | 'priest'
   | 'ranger'
+  | 'bard'
 const prefixes: Record<Style, string> = {
   plate: '',
   barbarian: 'barbarian_',
@@ -34,21 +38,36 @@ const prefixes: Record<Style, string> = {
   caveman: 'caveman_',
   priest: 'priest_',
   ranger: 'ranger_',
+  bard: 'bard_',
 }
 const styles = Object.keys(prefixes) as Style[]
 type Helmet = Exclude<Style, 'rogue' | 'caveman' | 'ranger'> | 'brilliance'
 const LAZY_HELMET = 'brilliance_helmet'
-// Model-path variants of the shared body: parts always loaded, and the hair worn without a helmet
-// (null: the variant's fixed hair is always shown).
-type Variant = { fixed: string[]; hair: Style | null }
+export type FemaleHair = Extract<
+  CharacterAppearance['hair'],
+  'bob' | 'long' | 'ponytail'
+>
+export const FEMALE_HAIR_PARTS: Record<FemaleHair, string> = {
+  bob: 'hair',
+  long: 'valkyrie_hair',
+  ponytail: 'ranger_hair',
+}
+const HAIR_PART_NAMES = new Set([
+  ...Object.values(FEMALE_HAIR_PARTS),
+  'barbarian_hair',
+])
+export const isFemaleHair = (hair?: string): hair is FemaleHair =>
+  !!hair && hair in FEMALE_HAIR_PARTS
+// Model-path variants of the shared body: parts always loaded, and the hair worn when none was chosen.
+type Variant = { fixed: string[]; hair: FemaleHair }
 const VARIANTS: Record<string, Variant> = {
   [MODULAR_VALKYRIE_MODEL_PATH]: {
     fixed: ['valkyrie_hair', 'valkyrie_wings'],
-    hair: null,
+    hair: 'long',
   },
   [MODULAR_FEMALE_RANGER_MODEL_PATH]: {
     fixed: ['ranger_hair'],
-    hair: 'ranger',
+    hair: 'ponytail',
   },
 }
 const variantOf = (names: string[]) =>
@@ -61,9 +80,12 @@ const LAZY_STYLES: Partial<Record<Style, readonly Slot[]>> = {
   caveman: slots.filter((slot) => slot !== 'helmet'),
   priest: slots,
   ranger: slots.filter((slot) => slot !== 'helmet'),
+  bard: slots,
 }
 const partName = (style: Style, slot: Slot | 'hair') =>
   `${prefixes[style]}${slot}`
+const slotPart = (style: Style | 'brilliance' | null, slot: Slot) =>
+  style === 'brilliance' ? LAZY_HELMET : style && partName(style, slot)
 const lazyParts = new Set([
   LAZY_HELMET,
   ...Object.entries(LAZY_STYLES).flatMap(([style, styleSlots]) =>
@@ -110,7 +132,7 @@ export function assembleFemaleCharacter(
 ): THREE.Group {
   const scene = clone(base.scene) as THREE.Group
   const variant = variantOf(names)
-  scene.userData.female_hair = variant ? variant.hair : 'plate'
+  scene.userData.female_hair = FEMALE_HAIR_PARTS[variant ? variant.hair : 'bob']
   base.scene.traverse((node) => {
     const association = base.parser.associations.get(node)
     if (
@@ -265,11 +287,27 @@ interface FemaleState {
   refreshBoots: () => void
   underwearColor: ReturnType<typeof femaleUnderwearColor>
   equipped?: Outfit
+  hair?: string
+  hairMasks: Set<string>
 }
 
 const states = new WeakMap<THREE.Object3D, FemaleState>()
 const partLoads = new WeakMap<THREE.Object3D, Map<string, Promise<void>>>()
-const latestArmor = new WeakMap<THREE.Object3D, ArmorEquipment | undefined>()
+const latest = new WeakMap<
+  THREE.Object3D,
+  { armor?: ArmorEquipment; hair?: FemaleHair }
+>()
+// Hair shown for a bob under each helmet; long hair and ponytails stay as chosen.
+const HELMET_HAIR: Record<Helmet, string | null> = {
+  plate: null,
+  brilliance: null,
+  barbarian: 'barbarian_hair',
+  valkyrie: 'hair',
+  priest: 'hair',
+  bard: 'hair',
+}
+const hairPart = (scene: THREE.Object3D, hair?: FemaleHair): string =>
+  hair ? FEMALE_HAIR_PARTS[hair] : scene.userData.female_hair
 
 function femaleScene(root: THREE.Object3D) {
   return root.userData.female_parts
@@ -332,6 +370,7 @@ const femaleStyle = (itemId: string | null | undefined): Style | null => {
   if (model.startsWith('armor/caveman_')) return 'caveman'
   if (model.startsWith('armor/priest_')) return 'priest'
   if (model.startsWith('armor/ranger_')) return 'ranger'
+  if (model.startsWith('armor/bard_')) return 'bard'
   if (model.startsWith('armor/rogue_') || ROGUE_LEATHER_MODELS.has(model))
     return 'rogue'
   return item?.material === 'leather' || model.startsWith('armor/barbarian_')
@@ -367,7 +406,8 @@ function bindLazyFemalePart(
           mesh.frustumCulled = false
         }
         const state = states.get(scene)
-        if (state) registerLazyPart(scene, state, name)
+        if (state && !HAIR_PART_NAMES.has(name))
+          registerLazyPart(scene, state, name)
       },
       (error) => {
         current.delete(name)
@@ -400,20 +440,21 @@ function femaleOutfit(armor?: ArmorEquipment): Outfit {
 
 export async function applyFemaleArmorAsync(
   root: THREE.Object3D,
-  armor?: ArmorEquipment
+  armor?: ArmorEquipment,
+  hair?: FemaleHair
 ): Promise<boolean> {
   const scene = femaleScene(root)
   if (!scene) return false
-  latestArmor.set(scene, armor)
+  latest.set(scene, { armor, hair })
   const outfit = femaleOutfit(armor)
   const missing = slots.flatMap((slot) => {
-    const style = outfit[slot]
-    const name =
-      style === 'brilliance' ? LAZY_HELMET : style && partName(style, slot)
+    const name = slotPart(outfit[slot], slot)
     return name && lazyParts.has(name) && !scene.userData.female_parts[name]
       ? [name]
       : []
   })
+  const hairName = hairPart(scene, hair)
+  if (!scene.userData.female_parts[hairName]) missing.push(hairName)
   if (missing.length) {
     await Promise.all(
       missing.map((name) =>
@@ -422,27 +463,30 @@ export async function applyFemaleArmorAsync(
         })
       )
     )
-    if (!latestArmor.has(scene)) return true
+    if (!latest.has(scene)) return true
   }
-  return applyFemaleArmor(root, latestArmor.get(scene))
+  const request = latest.get(scene)!
+  return applyFemaleArmor(root, request.armor, request.hair)
 }
 
 export function applyFemaleArmor(
   root: THREE.Object3D,
-  armor?: ArmorEquipment
+  armor?: ArmorEquipment,
+  hair?: FemaleHair
 ): boolean {
   const scene = femaleScene(root)
   if (!scene) return false
   const equipped = femaleOutfit(armor)
+  const wanted = hairPart(scene, hair)
+  const chosen = scene.userData.female_parts[wanted] ? wanted : 'hair'
   for (const slot of slots) {
-    const style = equipped[slot]
-    const name =
-      style === 'brilliance' ? LAZY_HELMET : style && partName(style, slot)
+    const name = slotPart(equipped[slot], slot)
     if (name && !scene.userData.female_parts[name]) equipped[slot] = null
   }
   let state = states.get(scene)
   if (
     state?.equipped &&
+    state.hair === chosen &&
     slots.every((slot) => state!.equipped![slot] === equipped[slot])
   )
     return true
@@ -461,30 +505,37 @@ export function applyFemaleArmor(
           mask.register(name, female_parts[name].body_mask, body)
       }
     mask.register('sleeves', female_parts.gloves.sleeve_mask, part('top')[0])
-    state = { mask, underwearColor, refreshBoots: () => {} }
+    state = {
+      mask,
+      underwearColor,
+      refreshBoots: () => {},
+      hairMasks: new Set(),
+    }
     if (female_parts[LAZY_HELMET]) registerLazyPart(scene, state, LAZY_HELMET)
     state.refreshBoots = installBootsSwitch(scene, state)
     states.set(scene, state)
   }
   const { helmet } = equipped
-  const bare: Style | null = scene.userData.female_hair
-  const hair =
-    bare === null || helmet === 'plate' || helmet === 'brilliance'
-      ? null
-      : partName(
-          helmet === 'valkyrie' || helmet === 'priest'
-            ? 'plate'
-            : (helmet ?? bare),
-          'hair'
-        )
-  for (const style of styles) {
-    if (style === 'valkyrie') continue
-    const name = partName(style, 'hair')
-    for (const mesh of part(name)) mesh.visible = name === hair
-  }
+  const shownHair =
+    chosen !== FEMALE_HAIR_PARTS.bob || !helmet ? chosen : HELMET_HAIR[helmet]
+  for (const name of HAIR_PART_NAMES)
+    for (const mesh of part(name)) mesh.visible = name === shownHair
   const shown: Record<string, boolean> = {
     sleeves: equipped.top === 'plate' && equipped.gloves === 'plate',
   }
+  // Hair a helmet hides, brushed by hand in the female preview.
+  const helmetName = slotPart(helmet, 'helmet')
+  const hairMask =
+    helmetName &&
+    shownHair &&
+    scene.userData.female_parts[helmetName]?.hair_masks?.[shownHair]
+  const hairKey = hairMask && `${helmetName}:${shownHair}`
+  const [hairMesh] = shownHair ? part(shownHair) : []
+  if (hairKey && hairMesh && !state.hairMasks.has(hairKey)) {
+    state.mask.register(hairKey, hairMask, hairMesh)
+    state.hairMasks.add(hairKey)
+  }
+  for (const key of state.hairMasks) shown[key] = key === hairKey
   for (const style of styles)
     for (const slot of slots) {
       const name = partName(style, slot)
@@ -505,6 +556,7 @@ export function applyFemaleArmor(
   )
   const bootsChanged = state.equipped?.boots !== equipped.boots
   state.equipped = equipped
+  state.hair = chosen
   if (bootsChanged) state.refreshBoots()
   return true
 }
@@ -517,5 +569,5 @@ export function disposeFemaleCharacter(root: THREE.Object3D) {
   state?.underwearColor.dispose()
   states.delete(scene)
   partLoads.delete(scene)
-  latestArmor.delete(scene)
+  latest.delete(scene)
 }

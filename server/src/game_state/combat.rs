@@ -227,6 +227,7 @@ pub(super) struct PlayerAttackContext {
     weapon: EquippedWeapon,
     /// The round this shot spends, for weapons that spend one.
     ammo: Option<LoadedAmmo>,
+    from_behind: bool,
 }
 
 /// A monster a player's blow or prayer lands on.
@@ -791,6 +792,10 @@ impl super::GameState {
             None
         };
 
+        let from_behind = monster
+            .position
+            .bearing_xz_to(&player_position)
+            .is_some_and(|bearing| combat::is_behind(monster.rotation, bearing));
         Ok(PlayerAttackContext {
             monster_type: monster.monster_type,
             monster_position: monster.position,
@@ -800,6 +805,7 @@ impl super::GameState {
             player_level,
             weapon,
             ammo,
+            from_behind,
         })
     }
 
@@ -1100,6 +1106,7 @@ impl super::GameState {
             player_level,
             weapon,
             ammo,
+            from_behind,
         } = context;
         // Spent once the swing is committed, so a shot refused by any gate
         // above — or one thrown inside the cooldown — costs nothing.
@@ -1134,13 +1141,16 @@ impl super::GameState {
             0
         };
 
-        let critical_chance_percent = self
-            .inventories
-            .read()
-            .await
-            .get(player_id)
-            .map(|inv| self.equipped_critical_chance_percent(inv))
-            .unwrap_or(combat::BASE_CRITICAL_CHANCE_PERCENT);
+        let critical_chance_percent = if from_behind && !self.brain_in_combat(&monster_id).await {
+            combat::BACK_ATTACK_CRITICAL_CHANCE_PERCENT
+        } else {
+            self.inventories
+                .read()
+                .await
+                .get(player_id)
+                .map(|inv| self.equipped_critical_chance_percent(inv))
+                .unwrap_or(combat::BASE_CRITICAL_CHANCE_PERCENT)
+        };
         let result = {
             let def = self.monster_defs.get(&monster_type);
             let target_guard = def.map(|d| i32::from(d.guard)).unwrap_or(10);

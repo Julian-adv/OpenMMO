@@ -28,6 +28,32 @@ pub enum HairStyle {
     WavyBone,
     None,
     Ranger,
+    Bob,
+    Long,
+    Ponytail,
+}
+
+impl HairStyle {
+    fn is_female(self) -> bool {
+        matches!(self, Self::Bob | Self::Long | Self::Ponytail)
+    }
+
+    fn female_default(class: &CharacterClass) -> Self {
+        match class {
+            CharacterClass::Ranger => Self::Ponytail,
+            CharacterClass::Valkyrie => Self::Long,
+            _ => Self::Bob,
+        }
+    }
+
+    /// Mean albedo of the female hair texture, so legacy rows keep their original look.
+    fn texture_color(self) -> AppearanceColor {
+        AppearanceColor(match self {
+            Self::Long => 0xd2bda2,
+            Self::Ponytail => 0x432e26,
+            _ => 0xceb294,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -98,7 +124,37 @@ impl CharacterAppearance {
                     | CharacterClass::Bard
             )
         {
-            self
+            let hair = if self.hair.is_female() {
+                HairStyle::Crop
+            } else {
+                self.hair
+            };
+            Self { hair, ..self }
+        } else if gender == Gender::Female
+            && matches!(
+                class,
+                CharacterClass::Knight
+                    | CharacterClass::Barbarian
+                    | CharacterClass::Rogue
+                    | CharacterClass::Caveman
+                    | CharacterClass::Valkyrie
+                    | CharacterClass::Ranger
+                    | CharacterClass::Priest
+                    | CharacterClass::Bard
+            )
+        {
+            let (hair, hair_color) = if self.hair.is_female() {
+                (self.hair, self.hair_color)
+            } else {
+                let hair = HairStyle::female_default(class);
+                (hair, hair.texture_color())
+            };
+            Self {
+                face: FaceStyle::Default,
+                hair,
+                hair_color,
+                ..self
+            }
         } else {
             Self::default()
         }
@@ -138,7 +194,12 @@ mod appearance_tests {
         );
         assert_eq!(
             appearance.for_character(&CharacterClass::Knight, Gender::Female),
-            CharacterAppearance::default()
+            CharacterAppearance {
+                face: FaceStyle::Default,
+                hair: HairStyle::Bob,
+                hair_color: AppearanceColor(0xceb294),
+                ..appearance
+            }
         );
         assert_eq!(
             appearance.for_character(&CharacterClass::Bard, Gender::Male),
@@ -146,7 +207,12 @@ mod appearance_tests {
         );
         assert_eq!(
             appearance.for_character(&CharacterClass::Bard, Gender::Female),
-            CharacterAppearance::default()
+            CharacterAppearance {
+                face: FaceStyle::Default,
+                hair: HairStyle::Bob,
+                hair_color: AppearanceColor(0xceb294),
+                ..appearance
+            }
         );
     }
 
@@ -155,6 +221,36 @@ mod appearance_tests {
         for invalid in ["red", "#fff", "#12345678", "#zzzzzz", "1234567", "#１２３"] {
             assert!(AppearanceColor::try_from(invalid.to_owned()).is_err());
         }
+    }
+
+    #[test]
+    fn female_hair_is_kept_per_gender() {
+        let chosen = CharacterAppearance {
+            hair: HairStyle::Ponytail,
+            ..Default::default()
+        };
+        assert_eq!(
+            chosen
+                .for_character(&CharacterClass::Knight, Gender::Female)
+                .hair,
+            HairStyle::Ponytail
+        );
+        assert_eq!(
+            chosen
+                .for_character(&CharacterClass::Knight, Gender::Male)
+                .hair,
+            HairStyle::Crop
+        );
+        let legacy = CharacterAppearance::default();
+        for (class, hair) in [
+            (CharacterClass::Knight, HairStyle::Bob),
+            (CharacterClass::Ranger, HairStyle::Ponytail),
+            (CharacterClass::Valkyrie, HairStyle::Long),
+        ] {
+            assert_eq!(legacy.for_character(&class, Gender::Female).hair, hair);
+        }
+        let hair: CharacterAppearance = serde_json::from_str(r#"{"hair":"long"}"#).unwrap();
+        assert_eq!(hair.hair, HairStyle::Long);
     }
 
     #[test]

@@ -45,6 +45,7 @@ worn_bard_helmet,Worn Bard Feathered Hat,Well-used clothing issued to new bards.
 worn_bard_top,Worn Bard Vest,Well-used clothing issued to new bards. Merchants will not buy it.,5,chest,false,armor/bard_top.png,armor/bard_top.glb,armor,,,cloth,,1,,,,,,,,,,,,true,,,,,,,,,,
 worn_bard_pants,Worn Bard Pants,Well-used clothing issued to new bards. Merchants will not buy it.,3,pants,false,armor/bard_pants.png,armor/bard_pants.glb,armor,,,cloth,,1,,,,,,,,,,,,true,,,,,,,,,,
 worn_bard_boots,Worn Bard Boots,Well-used clothing issued to new bards. Merchants will not buy it.,3,boots,false,armor/bard_boots.png,armor/bard_boots.glb,armor,,,leather,,1,,,,,,,,,,,,true,,,,,,,,,,
+worn_bard_gloves,Worn Bard Gloves,Fingerless gloves with laced bracers issued to new bards. Merchants will not buy them.,0.5,hands,false,armor/bard_gloves.png,armor/bard_gloves.glb,armor,,,leather,,1,,,,,,,,,,,,true,,,,,,,,,,
 worn_barbarian_helmet,Worn Barbarian Helmet,Well-used armor issued to new barbarians. Merchants will not buy it.,3,head,false,armor/barbarian_helmet.png,armor/barbarian_helmet.glb,armor,,,metal,,1,,,,,,,,,,,,true,,,,,,,,,,
 worn_barbarian_armor,Worn Barbarian Pauldrons,Well-used armor issued to new barbarians. Merchants will not buy it.,5,chest,false,armor/barbarian_armor.png,armor/barbarian_armor.glb,armor,,,leather,,1,,,,,,,,,,,,true,,,,,,,,,,
 worn_barbarian_pants,Worn Barbarian Fur Leggings,Well-used armor issued to new barbarians. Merchants will not buy it.,3,pants,false,armor/barbarian_pants.png,armor/barbarian_pants.glb,armor,,,leather,,1,,,,,,,,,,,,true,,,,,,,,,,

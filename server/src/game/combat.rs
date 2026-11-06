@@ -1,3 +1,4 @@
+use onlinerpg_shared::mount_movement::angle_delta;
 use rand::Rng;
 
 pub struct AttackResult {
@@ -8,6 +9,16 @@ pub struct AttackResult {
 }
 
 pub const BASE_CRITICAL_CHANCE_PERCENT: u8 = 5;
+
+/// An opening blow to an unengaged monster's back.
+pub const BACK_ATTACK_CRITICAL_CHANCE_PERCENT: u8 = 100;
+pub const BACK_ATTACK_HALF_ANGLE: f32 = std::f32::consts::FRAC_PI_4;
+
+/// Whether `bearing`, from a monster to its attacker, lies in the back cone
+/// of a monster facing `rotation`.
+pub fn is_behind(rotation: f32, bearing: f32) -> bool {
+    angle_delta(rotation + std::f32::consts::PI, bearing).abs() <= BACK_ATTACK_HALF_ANGLE
+}
 
 impl AttackResult {
     pub fn apply_critical<R: Rng>(&mut self, chance_percent: u8, rng: &mut R) {
@@ -186,6 +197,17 @@ mod tests {
         assert_eq!(result.damage, 24);
         result.apply_critical(100, &mut rand::thread_rng());
         assert_eq!(result.damage, 24);
+    }
+
+    #[test]
+    fn back_cone_spans_45_degrees_either_side() {
+        let deg = f32::to_radians;
+        assert!(is_behind(0.0, deg(180.0)));
+        assert!(is_behind(0.0, deg(-140.0)));
+        assert!(!is_behind(0.0, deg(130.0)));
+        assert!(!is_behind(0.0, deg(90.0)));
+        assert!(!is_behind(0.0, 0.0));
+        assert!(is_behind(deg(90.0), deg(-90.0)));
     }
 
     #[test]

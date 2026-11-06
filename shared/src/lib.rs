@@ -239,9 +239,11 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// `AbilityRejectReason::Interrupted`).
 /// v135: `GroundItem.claimed_by` and `GroundItemClaimEnded`, so clients refuse
 /// another player's loot before reaching for it.
-/// v136: `MonsterHealthUpdate`, so stethoscope wearers see monster HP;
-/// pickaxe mining (`MineDungeonProp`, `MiningStarted`, `MiningEnded`).
-pub const PROTOCOL_VERSION: u32 = 136;
+/// v136: female `HairStyle::Bob`/`Long`/`Ponytail`; female appearance colors are kept.
+/// v137: `MonsterHealthUpdate`, so stethoscope wearers see monster HP;
+/// pickaxe mining (`MineDungeonProp`, `MiningStarted`, `MiningEnded`) and
+/// rail carts (`PushDungeonCart`, `DungeonCartPushed`, `CartStruckPlayer`).
+pub const PROTOCOL_VERSION: u32 = 137;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

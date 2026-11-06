@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { getItemDef, isRangedWeapon } from '../data/itemDefs'
 import { getWeaponAnimation } from '../data/weaponAnimationDefs'
+import instrumentCarry from '../data/instrumentCarry.json'
 import {
   MODULAR_MALE_MODEL_PATH,
   MODULAR_FEMALE_MODEL_PATH,
@@ -81,6 +82,37 @@ export const MANDOLIN_ITEM_DEF_ID = 'mandolin'
 // Fitted with tools/fit-hand-prop.mjs --tilt 15 --push 0.06 --lift 0.04.
 const MANDOLIN_ROTATION = new THREE.Euler(-2.413, -0.409, -0.353)
 const MANDOLIN_POSITION = new THREE.Vector3(-0.03, 0.103, 0.126)
+export type InstrumentCarry = typeof instrumentCarry
+
+/**
+ * Pose a carried instrument: the neck `grip` m from the origin sits in the fist, the body hangs past the
+ * fingers, tipped forward by `tilt`° and sideways by `splay`°, turned `twist`° about the neck, then moved
+ * `front` m forward (hand +X) and `palm` m into the palm (hand +Z). Tuned in the female preview.
+ */
+export function poseInstrumentCarry(
+  prop: THREE.Object3D,
+  carry: InstrumentCarry = instrumentCarry
+) {
+  const degrees = Math.PI / 180
+  const turn = (axis: THREE.Vector3, angle: number) =>
+    new THREE.Quaternion().setFromAxisAngle(axis, angle)
+  const x = new THREE.Vector3(1, 0, 0)
+  const z = new THREE.Vector3(0, 0, 1)
+  prop.quaternion
+    .copy(turn(x, carry.splay * degrees))
+    .multiply(turn(z, -Math.PI / 2 - carry.tilt * degrees))
+    .multiply(turn(x, carry.twist * degrees))
+  prop.position
+    .copy(HAND_GRIP_OFFSET)
+    .add(new THREE.Vector3(carry.front, 0, carry.palm))
+    .sub(new THREE.Vector3(carry.grip, 0, 0).applyQuaternion(prop.quaternion))
+}
+
+/** Pose the mandolin for the `/play_music` strumming clip. */
+export function poseMusicProp(prop: THREE.Object3D) {
+  prop.position.copy(MANDOLIN_POSITION)
+  prop.rotation.copy(MANDOLIN_ROTATION)
+}
 
 // Bows sit in the left hand; other weapons lead with the right.
 export function mainHandBoneFor(
@@ -104,9 +136,8 @@ export function poseMainHandProp(
   } else if (itemDefId === 'fishing_rod') {
     prop.position.copy(FISHING_ROD_POSITION)
     prop.rotation.copy(FISHING_ROD_ROTATION)
-  } else if (itemDefId === MANDOLIN_ITEM_DEF_ID) {
-    prop.position.copy(MANDOLIN_POSITION)
-    prop.rotation.copy(MANDOLIN_ROTATION)
+  } else if (getItemDef(itemDefId)?.category === 'instrument') {
+    poseInstrumentCarry(prop)
   } else if (isRangedWeapon(itemDefId)) {
     prop.position.copy(BOW_POSITION)
     if (forearm && forearm > 0) prop.position.y = forearm * BOW_FOREARM_RATIO

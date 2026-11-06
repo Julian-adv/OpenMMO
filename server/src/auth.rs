@@ -117,7 +117,14 @@ fn class_starter_items(
             ("worn_bard_boots", 1, Some("boots")),
             ("worn_mandolin", 1, None),
         ],
-        CharacterClass::Bard => &[("worn_mandolin", 1, None)],
+        CharacterClass::Bard => &[
+            ("worn_bard_helmet", 1, Some("head")),
+            ("worn_bard_top", 1, Some("chest")),
+            ("worn_bard_pants", 1, Some("pants")),
+            ("worn_bard_gloves", 1, Some("hands")),
+            ("worn_bard_boots", 1, Some("boots")),
+            ("worn_mandolin", 1, None),
+        ],
         _ => &[],
     }
 }
@@ -384,7 +391,7 @@ fn class_from_row(row: &rusqlite::Row<'_>, idx: usize) -> rusqlite::Result<Chara
 }
 
 fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterRecord> {
-    Ok(CharacterRecord {
+    let record = CharacterRecord {
         id: row.get(0)?,
         name: row.get(1)?,
         created_at: row.get(2)?,
@@ -440,6 +447,12 @@ fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterR
                 )
             })?
         },
+    };
+    Ok(CharacterRecord {
+        appearance: record
+            .appearance
+            .for_character(&record.class, record.gender),
+        ..record
     })
 }
 
@@ -2601,7 +2614,15 @@ mod tests {
                 appearance,
             )
             .unwrap();
-        assert_eq!(female.appearance, CharacterAppearance::default());
+        assert_eq!(
+            female.appearance,
+            CharacterAppearance {
+                face: onlinerpg_shared::FaceStyle::Default,
+                hair: onlinerpg_shared::HairStyle::Bob,
+                hair_color: "#ceb294".to_string().try_into().unwrap(),
+                ..appearance
+            }
+        );
         drop(auth);
         let auth = AuthService::new(db_path.clone()).unwrap();
         assert_eq!(
@@ -3389,17 +3410,17 @@ mod tests {
             assert!(items.iter().any(|r| r.item_def_id == "worn_mandolin"));
             assert!(items.iter().any(|r| r.item_def_id == "worn_iron_sword"));
             let worn = auth.load_character_equipment(bard.id).unwrap();
-            if gender == Gender::Female {
-                assert_eq!(worn.armor, Default::default());
-                assert_eq!(items.len(), STARTER_ITEMS.len() + 1);
-                continue;
-            }
+            let female = gender == Gender::Female;
+            let gloves = female.then_some(("worn_bard_gloves", "hands"));
             for (id, slot) in [
                 ("worn_bard_helmet", "head"),
                 ("worn_bard_top", "chest"),
                 ("worn_bard_pants", "pants"),
                 ("worn_bard_boots", "boots"),
-            ] {
+            ]
+            .into_iter()
+            .chain(gloves)
+            {
                 let item = items.iter().find(|item| item.item_def_id == id).unwrap();
                 assert_eq!(item.quantity, 1);
                 assert_eq!(item.equip_slot.as_deref(), Some(slot));
@@ -3409,12 +3430,15 @@ mod tests {
                 assert!(def.untradeable);
                 assert_eq!(def.guard, Some(1));
             }
-            assert_eq!(items.len(), STARTER_ITEMS.len() + 5);
+            assert_eq!(items.len(), STARTER_ITEMS.len() + 5 + usize::from(female));
             assert_eq!(worn.armor.head.as_deref(), Some("worn_bard_helmet"));
             assert_eq!(worn.armor.chest.as_deref(), Some("worn_bard_top"));
             assert_eq!(worn.armor.pants.as_deref(), Some("worn_bard_pants"));
             assert_eq!(worn.armor.boots.as_deref(), Some("worn_bard_boots"));
-            assert!(worn.armor.hands.is_none());
+            assert_eq!(
+                worn.armor.hands.as_deref(),
+                female.then_some("worn_bard_gloves")
+            );
         }
 
         let knight = auth

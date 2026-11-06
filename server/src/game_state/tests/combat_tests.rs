@@ -1896,3 +1896,49 @@ async fn a_dagger_swings_sooner_than_a_sword() {
         );
     }
 }
+
+/// A monster at z = 1.5 facing +Z, so the archer at z = 0.5 is behind it.
+async fn back_attack_setup(name: &str) -> (GameState, DirectRx) {
+    let game_state = make_test_game_state(name);
+    let rx = setup_archer(&game_state, "small_sword", attrs_with(30, 10)).await;
+    let mut monster = make_monster("target", pos3(0.0, 0.0, 1.5), 0);
+    monster.health = 100_000;
+    monster.max_health = 100_000;
+    game_state
+        .monsters
+        .write()
+        .await
+        .insert("target".to_string(), monster);
+    game_state.insert_brain("target", false).await;
+    (game_state, rx)
+}
+
+async fn swing_crits(game_state: &GameState, rx: &mut DirectRx) -> bool {
+    drain(rx);
+    game_state.last_player_attacks.write().await.clear();
+    game_state
+        .broadcast_player_attack(&pid("archer"), "target".to_string())
+        .await;
+    let (hit, _, critical) = expect_attack_roll(rx, "target");
+    assert!(hit);
+    critical
+}
+
+#[tokio::test]
+async fn an_opening_blow_from_behind_always_crits() {
+    let (game_state, mut rx) = back_attack_setup("back_attack_opener").await;
+    assert!(swing_crits(&game_state, &mut rx).await);
+    assert_eq!(game_state.brain_target("target").await, Some(pid("archer")));
+}
+
+/// Base 5% crit: twenty guaranteed-looking crits in a row is ~1e-26.
+#[tokio::test]
+async fn back_attacks_on_an_engaged_monster_are_not_guaranteed() {
+    let (game_state, mut rx) = back_attack_setup("back_attack_engaged").await;
+    swing_crits(&game_state, &mut rx).await;
+    let mut crits = 0;
+    for _ in 0..20 {
+        crits += u32::from(swing_crits(&game_state, &mut rx).await);
+    }
+    assert!(crits < 20);
+}

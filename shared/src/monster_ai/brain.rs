@@ -623,6 +623,11 @@ impl MonsterBrain {
         self.target_player_id
     }
 
+    /// Engaged with a player, including a chase paused at a door.
+    pub fn in_combat(&self) -> bool {
+        self.target_player_id.is_some() || self.state.is_engaged()
+    }
+
     pub fn handle_death(&mut self) {
         self.state = AiState::Dead;
         self.health = 0;

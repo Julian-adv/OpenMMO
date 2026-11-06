@@ -295,6 +295,14 @@ impl super::GameState {
         }
     }
 
+    pub(super) async fn brain_in_combat(&self, monster_id: &str) -> bool {
+        let brains = self.monster_brains.lock().await;
+        brains
+            .entries
+            .get(monster_id)
+            .is_some_and(|e| e.brain.in_combat())
+    }
+
     #[cfg(test)]
     pub(crate) async fn brain_target(&self, monster_id: &str) -> Option<PlayerId> {
         let brains = self.monster_brains.lock().await;

@@ -13,6 +13,7 @@ import {
   loadFemaleAnimationPack,
   applyFemaleArmorAsync,
   disposeFemaleCharacter,
+  isFemaleHair,
 } from './femaleCharacter'
 import type {
   ArmorEquipment,
@@ -195,11 +196,16 @@ export async function applyCharacterArmor(
   armor?: ArmorEquipment,
   appearance?: CharacterAppearance
 ): Promise<void> {
-  if (await applyFemaleArmorAsync(root, armor)) return
+  const hair = appearance?.hair
+  const femaleHair = isFemaleHair(hair) ? hair : undefined
+  if (await applyFemaleArmorAsync(root, armor, femaleHair)) {
+    if (femaleHair) applyAppearanceColors(root, skinnedParts(root), appearance)
+    return
+  }
   const scene = modularScene(root)
   if (!scene) return
   const outfit = modularOutfitForArmor(armor)
-  if (appearance) {
+  if (appearance && !isFemaleHair(appearance.hair)) {
     outfit.hair =
       appearance.hair === 'none' ? 'none' : `hair_${appearance.hair}`
   }

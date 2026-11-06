@@ -1,13 +1,16 @@
 <script lang="ts">
   import {
     FACE_OPTIONS,
+    FEMALE_HAIR_OPTIONS,
     HAIR_OPTIONS,
   } from '../utils/characterAppearanceThumbnails'
   import {
     DEFAULT_EYE_COLOR,
     DEFAULT_HAIR_COLOR,
     EYE_COLORS,
+    FEMALE_HAIR_COLORS,
     HAIR_COLORS,
+    femaleHairFor,
   } from '../utils/appearanceColors'
   import type {
     AccountCharacter,
@@ -21,7 +24,7 @@
   import {
     getAvailableGenders,
     getCharacterModelPath,
-    MODULAR_MALE_MODEL_PATH,
+    isModularModel,
   } from '../utils/modelPaths'
 
   const MAX_CHARACTER_SLOTS = 3
@@ -84,23 +87,25 @@
 
   let availableGenders = $derived(getAvailableGenders(selectedClass))
   let canCustomize = $derived(
-    getCharacterModelPath(selectedClass, selectedGender) ===
-      MODULAR_MALE_MODEL_PATH
+    isModularModel(getCharacterModelPath(selectedClass, selectedGender))
   )
-  let styleFields = $derived([
-    {
+  let styleFields = $derived.by(() => {
+    const female = selectedGender === 'female'
+    const hair = {
+      key: 'hair' as const,
+      label: 'characterCreate.hair' as const,
+      value: appearance.hair,
+      options: female ? FEMALE_HAIR_OPTIONS : HAIR_OPTIONS,
+    }
+    if (female) return [hair]
+    const face = {
       key: 'face' as const,
       label: 'characterCreate.face' as const,
       value: appearance.face,
       options: FACE_OPTIONS,
-    },
-    {
-      key: 'hair' as const,
-      label: 'characterCreate.hair' as const,
-      value: appearance.hair,
-      options: HAIR_OPTIONS,
-    },
-  ])
+    }
+    return [face, hair]
+  })
   let colorFields = $derived([
     {
       key: 'hair_color' as const,
@@ -138,17 +143,51 @@
     return characters.length >= MAX_CHARACTER_SLOTS
   }
 
+  // Hair styles differ by gender; untouched female hair follows the class default.
+  function fitAppearance(
+    cls: CharacterClass,
+    gender: Gender,
+    previous = selectedClass
+  ) {
+    const female = FEMALE_HAIR_OPTIONS.some(
+      (option) => option.value === appearance.hair
+    )
+    const previousHair = femaleHairFor(previous)
+    const untouched =
+      appearance.hair === previousHair &&
+      appearance.hair_color === FEMALE_HAIR_COLORS[previousHair]
+    if (gender === 'female' && (!female || untouched)) {
+      const hair = femaleHairFor(cls)
+      onAppearanceChange({
+        ...appearance,
+        face: 'default',
+        hair,
+        hair_color: FEMALE_HAIR_COLORS[hair],
+      })
+    } else if (gender === 'male' && female) {
+      onAppearanceChange({
+        ...appearance,
+        hair: 'crop',
+        hair_color: DEFAULT_HAIR_COLOR,
+      })
+    }
+  }
+
   function selectClass(cls: CharacterClass) {
+    const previous = selectedClass
     onClassChange(cls)
     const genders = getAvailableGenders(cls)
-    if (!genders.includes(selectedGender)) {
-      onGenderChange(genders[0])
-    }
+    const gender = genders.includes(selectedGender)
+      ? selectedGender
+      : genders[0]
+    if (gender !== selectedGender) onGenderChange(gender)
+    fitAppearance(cls, gender, previous)
     rolledStats = null
   }
 
   function selectGender(g: Gender) {
     onGenderChange(g)
+    fitAppearance(selectedClass, g)
     rolledStats = null
   }
 
