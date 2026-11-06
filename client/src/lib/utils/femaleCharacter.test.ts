@@ -141,7 +141,7 @@ describe('female modular starter outfits', () => {
       MODULAR_FEMALE_MODEL_PATH
     )
     expect(getCharacterModelPath('priest', 'female', true)).toBe(
-      '/models/characters/female_priest.glb'
+      MODULAR_FEMALE_MODEL_PATH
     )
     expect(getCharacterModelPath('valkyrie', 'female')).toBe(
       MODULAR_VALKYRIE_MODEL_PATH

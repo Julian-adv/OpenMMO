@@ -111,6 +111,12 @@ async function main() {
     await showBarkan(scene, resources, cleanup, () => disposed)
     return
   }
+  const handFit = new URLSearchParams(location.search).get('handfit')
+  if (handFit !== null) {
+    const { showHandFit } = await import('./hand-fit')
+    await showHandFit(handFit, scene, resources, cleanup, () => disposed)
+    return
+  }
   const monster = new URLSearchParams(location.search).get('monster')
   if (monster) {
     const { showMonster } = await import('./monster')

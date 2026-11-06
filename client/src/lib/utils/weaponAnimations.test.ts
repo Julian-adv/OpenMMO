@@ -63,16 +63,13 @@ describe('weapon type animations', () => {
     expect(weaponAnimationClipName(profile, 'interact', 'walk')).toBeUndefined()
   })
 
-  it('gives a differently named item the same animations and grip through weaponType', () => {
+  it('gives a differently named item the same animations through weaponType', () => {
     itemDefs.test_great_sword = {
       ...itemDefs.great_sword,
       id: 'test_great_sword',
     }
     try {
       expect(getWeaponAnimation('test_great_sword')).toBe(profile)
-      expect(getWeaponAnimation('test_great_sword')?.gripRotationRadians).toBe(
-        '-0.786|-0.082|0.487'
-      )
     } finally {
       delete itemDefs.test_great_sword
     }

@@ -35,8 +35,6 @@ export const CAVEWOMAN_CHARACTER_MODEL_PATH = '/models/characters/cavewoman.glb'
 export const VALKYRIE_CHARACTER_MODEL_PATH = '/models/characters/valkyrie.glb'
 export const RANGER_CHARACTER_MODEL_PATH = '/models/characters/ranger.glb'
 export const PRIEST_CHARACTER_MODEL_PATH = '/models/characters/priest.glb'
-export const FEMALE_PRIEST_CHARACTER_MODEL_PATH =
-  '/models/characters/female_priest.glb'
 export const FEMALE_BARD_CHARACTER_MODEL_PATH =
   '/models/characters/female_bard.glb'
 export const NIGHT_MERCHANT_CHARACTER_MODEL_PATH =
@@ -95,7 +93,7 @@ const CLASS_GENDER_MODELS: Partial<
   },
   priest: {
     male: PRIEST_CHARACTER_MODEL_PATH,
-    female: FEMALE_PRIEST_CHARACTER_MODEL_PATH,
+    female: MODULAR_FEMALE_MODEL_PATH,
   },
   bard: {
     female: FEMALE_BARD_CHARACTER_MODEL_PATH,

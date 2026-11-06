@@ -457,7 +457,7 @@ tip followed the handle. Other rigs and offhand props kept their previous placem
 - `pack`: models 기준 애니메이션 GLB 경로.
 - `idle`, `walk`, `run`, `attack`: 상태별 클립 이름. 없는 상태·타입은 기존 공통 동작 사용.
 - `attackImpactMs`: 원본 공격 클립의 타격 시점. 기존 근접 판정 시점에 맞춰 재생 시간을 조정한다.
-- `gripRotationRadians`: 기준 손 로컬 XYZ 회전(rad); 세 값을 `|`로 구분한다.
+- 손에 쥐는 기준 위치·회전은 이 표가 아니라 [handFits.json](../../client/src/lib/data/handFits.json)의 `type:<weaponType>` 항목이다(2026-11-06 이전).
 - `offHandGripReach`: 양손 그립 간 거리(m)가 이 값 이내일 때 검의 손잡이(-X)를 현재 왼손 검지·엄지 사이로 향하게 보정한다. 손을 놓는 동작에서는 1.5배 거리까지 보정을 부드럽게 해제한다. 캐릭터 선택 화면과 게임에서 같은 보정을 적용하며, 해당 팩 이외의 동작에서는 기준 회전으로 돌아간다.
 
 로컬·다른 플레이어·캐릭터 선택 화면은 같은 타입 설정을 사용한다. 양손 장비 제한은 애니메이션 타입과 독립적으로 items.csv의 `hands=2`에서 결정한다. 현재 전용 설정이 등록된 타입은 `great_sword`이며 나머지 타입은 기존 동작을 유지한다.
