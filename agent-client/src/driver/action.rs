@@ -7,6 +7,7 @@
 
 use onlinerpg_shared::ClientMessage;
 use serde::Deserialize;
+use tracing::warn;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -1193,8 +1194,16 @@ pub(super) fn parse_turn_tolerant(text: &str) -> anyhow::Result<ParsedTurn> {
     // parser's complaint only, never the reply itself — a model fed its own
     // malformed output continues in that shape.
     let json_str = extract_json(text);
-    let mut value: serde_json::Value =
-        serde_json::from_str(json_str).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let mut value: serde_json::Value = match serde_json::from_str(json_str) {
+        Ok(value) => value,
+        Err(e) => {
+            let fail = || anyhow::anyhow!("{e}");
+            let (fixed, kind) = repair_misplaced_bracket(json_str, &e).ok_or_else(fail)?;
+            let value = serde_json::from_str(&fixed).map_err(|_| fail())?;
+            warn!("Repaired malformed agent response: {kind}");
+            value
+        }
+    };
     normalize_targets(&mut value);
 
     let memory_update = value
@@ -1360,6 +1369,37 @@ fn as_integer(value: &serde_json::Value) -> Option<u64> {
     }
     let f = value.as_f64()?;
     (f.fract() == 0.0 && f >= 0.0 && f <= u64::MAX as f64).then_some(f as u64)
+}
+
+/// Fix the two bracket slips models make in the envelope, at the position the
+/// parser rejected: a top-level key written inside `actions`
+/// (`{...},"memory_update":` → `{...}],"memory_update":`), or the object
+/// closed before its last field (`]},"favor":` → `],"favor":`).
+fn repair_misplaced_bracket(json: &str, err: &serde_json::Error) -> Option<(String, &'static str)> {
+    let line_start: usize = json
+        .split_inclusive('\n')
+        .take(err.line().saturating_sub(1))
+        .map(str::len)
+        .sum();
+    let pos = (line_start + err.column()).min(json.len());
+    let head = json.get(..pos)?;
+    let msg = err.to_string();
+    if msg.starts_with("trailing characters") {
+        let close = head.rfind('}')?;
+        let rest = &json[close + 1..];
+        rest.trim_start()
+            .starts_with(',')
+            .then(|| (format!("{}{rest}", &json[..close]), "object closed early"))
+    } else if msg.starts_with("expected `,` or `]`") {
+        let colon = head.rfind(':')?;
+        let key_body = json[..colon].trim_end().strip_suffix('"')?;
+        let open = key_body.rfind('"')?;
+        let before = json[..open].trim_end().strip_suffix(',')?;
+        let rest = &json[before.len()..];
+        Some((format!("{before}]{rest}"), "actions left open"))
+    } else {
+        None
+    }
 }
 
 /// Extract JSON object from text that might contain markdown code blocks.
@@ -1855,6 +1895,37 @@ mod tests {
         let turn = parse_turn_tolerant(r#"{"actions": []}"#).unwrap();
         assert!(turn.actions.is_empty());
         assert!(turn.errors.is_empty());
+    }
+
+    #[test]
+    fn key_written_inside_actions_is_repaired() {
+        let turn = parse_turn_tolerant(
+            r#"{"thought":"손님이 주문했다","actions":[{"type":"serve","player":"Bram","dish":"beer"},{"type":"say","message":"맥주 나왔어요, 브람님!"},"memory_update":"served Bram beer"}"#,
+        )
+        .unwrap();
+        assert_eq!(turn.actions.len(), 2);
+        assert!(matches!(turn.actions[0], AgentAction::Serve { .. }));
+        assert_eq!(turn.memory_update.as_deref(), Some("served Bram beer"));
+        assert!(turn.errors.is_empty());
+    }
+
+    #[test]
+    fn object_closed_before_last_field_is_repaired() {
+        let turn = parse_turn_tolerant(
+            r#"{"thought":"단골에게 할인",
+"actions":[{"type":"say","message":"브람님, 고마워요!"},{"type":"offer_deal","target":"Bram","item":"healing_potion","kind":"buy","modifier_pct":-5,"reason":"regular"}]},"favor":{"Bram":1}}"#,
+        )
+        .unwrap();
+        assert_eq!(turn.actions.len(), 2);
+        assert!(matches!(turn.actions[1], AgentAction::OfferDeal { .. }));
+        assert_eq!(turn.favor_deltas(), [("Bram".to_string(), 1)]);
+        assert!(turn.errors.is_empty());
+    }
+
+    #[test]
+    fn unrepairable_reply_still_fails() {
+        assert!(parse_turn_tolerant(r#"{"actions":[{"type":"say","message":"안녕"}"#).is_err());
+        assert!(parse_turn_tolerant(r#"{"actions":[{"type":"wait"}]} {"x":1}"#).is_err());
     }
 
     /// Favor arrives in whatever shape the LLM chose — int, string, float —
