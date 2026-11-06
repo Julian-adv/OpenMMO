@@ -1,4 +1,5 @@
 <script lang="ts" module>
+  import { applyCrystalGlow } from '../effects/crystal-glow'
   import * as THREE from 'three'
 
   // Bind-pose bounding box per model file, shared across instances. Sizes the
@@ -609,6 +610,7 @@
     if ($gltf) {
       // Clone the model for this instance
       if (!model) {
+        if (initialDef?.crystalGlow) applyCrystalGlow($gltf.scene)
         const clonedScene = SkeletonUtils.clone($gltf.scene) as THREE.Group
 
         // Enable shadows on all meshes

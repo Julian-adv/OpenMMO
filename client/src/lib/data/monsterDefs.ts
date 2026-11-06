@@ -47,6 +47,9 @@ export interface MonsterDefinition {
    * overstates the body (stone_golem).
    */
   hoverRadius?: number
+  /** Lights the model's blue-violet crystal like the mine's clusters
+   *  (`applyCrystalGlow`). */
+  crystalGlow?: boolean
   /** Solid body as `halfWidth|front|back` meters; fixes the facing and moves
    *  reach to the body surface (shared `monster_body`). */
   footprint?: string
