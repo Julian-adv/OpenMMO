@@ -43,6 +43,13 @@ PROMPTS = {
         "No bright ringing, bell, chime, ping, repeated hits, swoosh, voice, music, "
         "reverb, explosion or bass boom."
     ),
+    "meat_punch": (
+        "A heavy fist punching a hanging side of raw beef in a cold room: one "
+        "deep, muffled, wet meaty impact with a dense low thump and a slight "
+        "squish, short and solid. Boxing-movie foley, one hit, under one "
+        "second. No slap, no clap, no metal, no ring, no rubber, no bounce, "
+        "no drum, no voice, no grunt, no music, no reverb."
+    ),
     "pickaxe_ore": (
         "One iron pickaxe strike on a hard ore vein in a mine wall. An immediate "
         "sharp metallic clink of the steel point biting into dense rock, fused "

@@ -139,7 +139,8 @@ changes and are attenuated indoors.
   no flesh, no metal ringing, no reverb."
 - sword-leather.ogg, sword-miss3.ogg — predate this file; provenance not
   recorded here. Mapped in `data/material-impact-sounds.json`.
-- sword-flesh4.ogg — sword cutting into a fleshy monster (`metal` → `flesh`:
+- sword-flesh4.ogg — **[미사용]** replaced by sword-flesh5.ogg on 2026-11-07
+  (it sounded like hitting a rubber ball). Sword cutting into a fleshy monster (`metal` → `flesh`:
   ogre, troll, scp939), generated with [ElevenLabs Sound
   Effects](https://elevenlabs.io/sound-effects) via the API on 2026-08-22
   (Starter tier, own generation; original
@@ -149,6 +150,21 @@ changes and are attenuated indoors.
   no music."). Take 5 of a 0.7 s request, kept full length with a 100 ms tail
   fade, peak-normalized to −3 dB, 44.1 kHz mono.
   2026-08-24 오거 타격음이 너무 커서 게인 ×0.9 (−0.9 dB, peak −2.5 dB) — flesh 재질 전부에 걸린다.
+- sword-flesh5.ogg — a fist punching a hanging side of raw beef, used for
+  every `metal` → `flesh` hit (ogre, troll, scp939, the mine's flesh monsters)
+  since 2026-11-07. Generated with [ElevenLabs Sound
+  Effects](https://elevenlabs.io/sound-effects) via the API on 2026-11-07
+  (Starter tier, own generation), `tools/gen-death-sfx.py` `meat_punch`, 0.7 s,
+  prompt_influence 0.6, take 1 of 3; blade words were left out of the prompt
+  because they pulled in a metallic ring. Original kept at
+  `~/assets_original/sfx/sword-flesh5_meat-punch-take1_2026-11-07.mp3` on
+  pc5090. +6 dB into a limiter at −4.4 dB, cut to 0.55 s with a 100 ms tail
+  fade; mean −14.8 dB (sword-flesh4 −14.0 dB), peak −1.7 dB, 44.1 kHz mono ogg
+  q5. Prompt: "A heavy fist punching a hanging side of raw beef in a cold room:
+  one deep, muffled, wet meaty impact with a dense low thump and a slight
+  squish, short and solid. Boxing-movie foley, one hit, under one second. No
+  slap, no clap, no metal, no ring, no rubber, no bounce, no drum, no voice, no
+  grunt, no music, no reverb."
 - sword-stone.ogg — sword striking a stone golem (`metal` → `stone`),
   generated with [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects)
   via the API on 2026-08-22 (Starter tier, own generation; original
