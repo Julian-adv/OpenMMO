@@ -9,7 +9,7 @@ async fn blackvein_mine_variants_match_their_bastion_counterparts() {
         &game_state,
         &[
             ("mine_remnant", None, "stone_golem"),
-            ("mine_crystal", Some("orc"), "cyclop"),
+            ("mine_crystal", None, "cyclop"),
             ("mine_twisted", Some("troll"), "skeleton"),
             ("mine_veinfused", Some("stone_golem"), "skeleton_warrior"),
             ("mine_predator", Some("scp939"), "skeleton_warrior"),
