@@ -10,12 +10,7 @@ import {
   showOperatorNotice,
 } from '../stores/announcementStore'
 import { translate, type MessageKey } from '../i18n'
-import {
-  endMining,
-  miningSwingLeftMs,
-  noteMiningSwing,
-  setMining,
-} from '../stores/miningStore'
+import { endMining, noteMiningSwing, setMining } from '../stores/miningStore'
 import { showPropText } from '../effects/prop-text-queue'
 import { isCoinPileJackpot } from './coinPileJackpot'
 import {
@@ -2945,10 +2940,9 @@ export function handleServerMessage(
       break
 
     case 'MiningEnded': {
-      if (isSelfPlayer(data.player_id))
-        events.miningEnded.emit(miningSwingLeftMs(data.player_id))
+      const swingLeftMs = endMining(data.player_id)
+      if (isSelfPlayer(data.player_id)) events.miningEnded.emit(swingLeftMs)
       else stopRemoteMining(data.player_id)
-      endMining(data.player_id)
       const at =
         data.found &&
         dungeonManager.propAnchor(

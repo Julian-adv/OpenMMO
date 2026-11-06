@@ -14,7 +14,7 @@ describe('mining store', () => {
   it('keeps the pickaxe out until the swing under way lands', () => {
     vi.useFakeTimers()
     setMining(7, true)
-    noteMiningSwing(7, Date.now())
+    noteMiningSwing(7)
     vi.advanceTimersByTime(500)
     endMining(7)
     expect(get(miningPlayers).has(7)).toBe(true)
@@ -28,7 +28,7 @@ describe('mining store', () => {
     endMining(8)
     expect(get(miningPlayers).has(8)).toBe(false)
     setMining(8, true)
-    noteMiningSwing(8, Date.now())
+    noteMiningSwing(8)
     endMining(8)
     setMining(8, true)
     vi.advanceTimersByTime(MINING_SWING_MS)

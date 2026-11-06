@@ -409,7 +409,6 @@
   }
 
   let miningSwingTimer: ReturnType<typeof setInterval> | null = null
-  let miningPutAwayTimer: ReturnType<typeof setTimeout> | null = null
   onDestroy(networkManager.miningEnded.on(stopMining))
 
   function clearPropSwingTimers() {
@@ -1841,15 +1840,18 @@
     z: number
   ) {
     if (!currentPlayer) return
+    const playerId = currentPlayer.id
+    const swingSound = () => {
+      noteMiningSwing(playerId)
+      playPropSound('pickaxe', MINING_SWING_IMPACT_MS)
+    }
     stopMining()
     beginPropSwing(x, z)
-    playPropSound('pickaxe', MINING_SWING_IMPACT_MS)
+    swingSound()
     networkManager.sendMineDungeonProp(entranceId, depth, propId)
-    noteMiningSwing(currentPlayer.id)
     miningSwingTimer = setInterval(() => {
       swingAtProp()
-      if (currentPlayer) noteMiningSwing(currentPlayer.id)
-      playPropSound('pickaxe', MINING_SWING_IMPACT_MS)
+      swingSound()
     }, MINING_SWING_MS)
   }
 
@@ -1873,17 +1875,17 @@
 
   /** Stop swinging; the swing under way finishes `swingLeftMs` later. */
   function stopMining(swingLeftMs = 0) {
-    if (miningPutAwayTimer) clearTimeout(miningPutAwayTimer)
-    miningPutAwayTimer = null
     if (!miningSwingTimer) return
     clearInterval(miningSwingTimer)
     miningSwingTimer = null
-    const settle = () => {
-      miningPutAwayTimer = null
+    idleAfterSwing(swingLeftMs)
+  }
+
+  function idleAfterSwing(ms: number) {
+    propSwingIdleTimer = setTimeout(() => {
+      propSwingIdleTimer = null
       if (playerState.state === 'attack') transitionToIdle()
-    }
-    if (swingLeftMs > 0) miningPutAwayTimer = setTimeout(settle, swingLeftMs)
-    else settle()
+    }, ms)
   }
 
   /** The player has walked up to a clicked barrel/crate: swing the sword once
@@ -1907,10 +1909,7 @@
       dungeonManager.noteSelfBreak(depth, propId)
       networkManager.sendBreakDungeonProp(entranceId, depth, propId)
     }, PROP_SWING_IMPACT_MS)
-    propSwingIdleTimer = setTimeout(() => {
-      propSwingIdleTimer = null
-      if (playerState.state === 'attack') transitionToIdle()
-    }, PROP_SWING_RETURN_MS)
+    idleAfterSwing(PROP_SWING_RETURN_MS)
   }
 
   // Sticky hover keeps the target ring up while the pointer sits in the
