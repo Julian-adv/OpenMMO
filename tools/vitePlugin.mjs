@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { convertCsvFile } from './convert.mjs'
+import { monsterWeaponGrip } from './lib/monster-weapon-grip.mjs'
 
 const toolsDir = path.dirname(fileURLToPath(import.meta.url))
 const sourceDir = path.join(toolsDir, '..', 'data-src')
@@ -23,6 +24,7 @@ export function monsterCsvPlugin() {
       convertAllCsv()
     },
     configureServer(server) {
+      server.middlewares.use(monsterWeaponGrip())
       server.watcher.add(path.join(sourceDir, '*.csv'))
       server.watcher.on('change', (changedPath) => {
         const resolved = path.resolve(changedPath)

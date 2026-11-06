@@ -13,7 +13,7 @@ export function monsterRow(id) {
 
 export function monsterPacks(row, basePaths) {
   const weapon = readData('items')[row.weapon], pack = weapon && readData('weapon_animations')[weapon.weaponType]
-  const attack = pack && { clip: pack.attack, model: weapon.worldModel, end: weapon.attackIntervalMs / 1000, impact: pack.attackImpactMs / 1000, landing: row.attackImpactDelay / 1000 }
+  const attack = pack && { clip: pack.attack, model: weapon.worldModel, end: (weapon.attackIntervalMs ?? row.attackCooldown) / 1000, impact: pack.attackImpactMs / 1000, landing: row.attackImpactDelay / 1000 }
   return { paths: [basePaths.locomotion, basePaths.combatMelee, ...(pack ? [`/models/${pack.pack}`] : [])], attack }
 }
 

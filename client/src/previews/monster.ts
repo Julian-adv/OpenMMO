@@ -12,6 +12,7 @@ import {
 } from '../lib/data/monsterDefs'
 import { seatMonsterWeapon } from '../lib/utils/monsterWeapon'
 import { loadSharedPackClipsForModel } from '../lib/utils/characterAnimationUtils'
+import { weaponGripEditor, weaponGripPanel } from './monster-weapon-grip'
 
 const MOTIONS: [keyof MonsterDefinition, string][] = [
   ['animIdle', '대기'],
@@ -83,6 +84,7 @@ export async function showMonster(
       <label class="toggle"><input id="monster-skeleton" type="checkbox" /> 뼈대 보기</label>
       <button id="monster-reset" type="button">시점 초기화</button>
     </fieldset>
+    ${def.weapon && def.weaponBone ? weaponGripPanel : ''}
     <p id="monster-stats" class="details"></p>
     <p class="details">바닥 격자 한 칸은 1m입니다.</p>`
   )
@@ -162,6 +164,7 @@ export async function showMonster(
   if (weapon && hand) {
     seatMonsterWeapon(hand, weapon, def).add(weapon)
     weapon.visible = params.get('weapon') !== '0'
+    weaponGripEditor(id, def, hand, weapon)
   }
   weaponToggle.checked = !!weapon?.visible
   weaponToggle.disabled = !weapon || !hand

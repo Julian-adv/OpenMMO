@@ -1,0 +1,94 @@
+{
+  "date": "2026-11-06",
+  "height_m": 1.8,
+  "height_definition": "bind-pose soles to cap",
+  "units": "metres",
+  "runtime_scale": 1,
+  "sources": [
+    {
+      "path": "assets/monsters/mine_remnant/tripo_v1/model_url.glb",
+      "sha256": "e6e8a9c45091a19d114e9e8d25dc06794a22ec4afd598031ba7db0db817799cb",
+      "bytes": 12589264
+    },
+    {
+      "path": "assets/monsters/mine_remnant/tripo_v1/source.glb",
+      "sha256": "1024ed5a2a382f7f8894cbb5a262b5ee1ce6ffdcbedac06120c2b4da8b6caddd",
+      "bytes": 12882620
+    },
+    {
+      "path": "assets/modular_human_male_01/fitted/base.glb",
+      "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
+      "bytes": 22214236
+    },
+    {
+      "path": "assets/monsters/mine_remnant/concepts/mine_remnant.png",
+      "sha256": "1361ccf9709f92c5b51bde085a6e7c4dc17cb93d7de75857b49aa74911ecf45d",
+      "bytes": 1533413
+    }
+  ],
+  "orientation": "The Tripo API output faces +X with its origin at the body centre. tools/orient-tripo-api-model.py turns it to face +Z, puts the soles at y=0 and scales it to unit height; the result is source.glb.",
+  "method": "Locally fit the modular male skeleton and transfer its surface weights, then refine finger and cap weights.",
+  "joints": 65,
+  "triangles": 10363,
+  "vertices": 12212,
+  "unweighted_vertices": 0,
+  "rig_spec": "assets/monsters/mine_remnant/rig_spec.json",
+  "rig_output": "assets/monsters/mine_remnant/rig_v1/mine_remnant.glb",
+  "game_output": "client/public/models/monsters/mine_remnant.glb",
+  "outputs": [
+    {
+      "path": "assets/monsters/mine_remnant/rig_v1/mine_remnant.glb",
+      "sha256": "22d54673947f5d120c838b8ebc81ce8794987e10feb9ef635732f4ec083a4962",
+      "bytes": 13340760
+    },
+    {
+      "path": "client/public/models/monsters/mine_remnant.glb",
+      "sha256": "6a7ceae0590a7d491e4f44fc3a324a7179cd8d3a2739837ced6bf25701f99535",
+      "bytes": 1173972
+    }
+  ],
+  "weapon_attachment": {
+    "weaponOffset": 0.08,
+    "weaponOffsetX": 0,
+    "weaponOffsetZ": 0,
+    "weaponRotation": "-109.263|-27.215|7.964",
+    "rotation_units": "degrees, XYZ Euler",
+    "source": "data/monsters.json, generated from data-src/monsters.csv",
+    "seed": "The player's pickaxe hand fit (HAND_GRIP_OFFSET and the pickaxe gripRotationRadians); adjust with the slider panel in modular-character-preview.html?monster=mine_remnant",
+    "weapons": [
+      "weapons/miner_pickaxe.glb"
+    ]
+  },
+  "animation_sources": [
+    {
+      "path": "client/public/models/animations/locomotion.glb",
+      "sha256": "cfa79f5b5f82f3b26d0d0bc86e4293a919fbc28829a2c6192f19a4a488271da8",
+      "bytes": 1206184
+    },
+    {
+      "path": "client/public/models/animations/combat_melee.glb",
+      "sha256": "b29f34de8cf7523d176a634ceac7ab4791084994493adbfac5f59dda686a057b",
+      "bytes": 740008
+    },
+    {
+      "path": "client/public/models/animations/great_sword.glb",
+      "sha256": "ff7e995994d4f95298c1dd444e0e16dd5f93b7c6728de1fe6d8077a2624c366d",
+      "bytes": 351620
+    }
+  ],
+  "bake_method": "Offline client retargeting and runtime grounding with the grip fit copied from thief_king. great_sword_slash is cut at the monster's 1.7 s attack cooldown (the pickaxe has no attack interval) with the last 0.25 s eased into combat_idle, and its impact moved to attackImpactDelay (540 ms).",
+  "reproduction": [
+    ".venv/bin/python tools/orient-tripo-api-model.py assets/monsters/mine_remnant/tripo_v1/model_url.glb assets/monsters/mine_remnant/tripo_v1/source.glb",
+    ".venv/bin/python tools/rig-humanoid-monster.py mine_remnant",
+    "~/opt/blender/blender -b --python-exit-code 1 --python tools/blender-scripts/save_humanoid_monster_rig.py -- mine_remnant",
+    "node tools/bake-humanoid-monster.mjs mine_remnant",
+    "node tools/validate-humanoid-monster.mjs mine_remnant",
+    "~/opt/blender/blender -b --python-exit-code 1 --python tools/blender-scripts/review_humanoid_monster.py -- mine_remnant"
+  ],
+  "grip_fit": "assets/monsters/mine_remnant/grip_v1/fit.json",
+  "limitations": [
+    "validate-humanoid-monster.mjs does not pass yet: the grip fit is thief_king's dagger fit, so the thumb overlaps the index and middle fingers and the pickaxe haft passes through the hand in every sampled pose.",
+    "The pickaxe is held in the right hand only; the two-handed slash leaves the left hand off the haft."
+  ],
+  "cleanup": "Review images and intermediate baked GLBs are written under /tmp, not assets."
+}
