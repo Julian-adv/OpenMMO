@@ -129,10 +129,13 @@ impl GameState {
         }
         let Some(player) = ({
             let mut players = self.players.write().await;
-            players.get_mut(&id).filter(|p| p.health > 0).map(|p| {
-                p.rotation = rotation;
-                p.clone()
-            })
+            players
+                .get_mut(&id)
+                .filter(|p| p.health > 0 && !p.petrified)
+                .map(|p| {
+                    p.rotation = rotation;
+                    p.clone()
+                })
         }) else {
             return;
         };

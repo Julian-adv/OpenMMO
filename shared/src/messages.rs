@@ -976,6 +976,73 @@ pub enum ClientMessage {
     },
 }
 
+impl ClientMessage {
+    /// Acts a player turned to stone may not take (doc/DEBUFF.md
+    /// `petrifies`). Movement and facing check `Player.petrified` where they
+    /// apply, off this per-message path. Admins keep their slash commands.
+    pub fn blocked_while_petrified(&self, is_admin: bool) -> bool {
+        use ClientMessage::*;
+        match self {
+            ChatMessage { message } => message.starts_with('/') && !is_admin,
+            PlayerAttack { .. }
+            | StartPlayerAttack { .. }
+            | UseAbility { .. }
+            | OpenDungeonChest { .. }
+            | BreakDungeonProp { .. }
+            | MineDungeonProp { .. }
+            | PushDungeonCart { .. }
+            | OpenDungeonProp { .. }
+            | ToggleDungeonDoor { .. }
+            | InteractObject { .. }
+            | InspectAltar { .. }
+            | OfferAtAltar { .. }
+            | StartInstrument
+            | InstrumentNotes { .. }
+            | PlaceHouse { .. }
+            | RemoveHouse { .. }
+            | ToggleDoor { .. }
+            | EquipItem { .. }
+            | UnequipItem { .. }
+            | DropItems { .. }
+            | PickupStarted
+            | PickupItem { .. }
+            | PickupNearbyItems
+            | UseItem { .. }
+            | UseLandDocument { .. }
+            | EditFence { .. }
+            | StartLandscapingMode { .. }
+            | EditLandscape { .. }
+            | PlaceEstateChest { .. }
+            | StartEstateFurnitureMove { .. }
+            | MoveEstateFurniture { .. }
+            | OpenEstateChest { .. }
+            | TransferEstateItems { .. }
+            | DyeCape { .. }
+            | ApplyCapeTexture { .. }
+            | TipHat { .. }
+            | OpenStall { .. }
+            | BuyFromStall { .. }
+            | SellToStall { .. }
+            | ServeMeal { .. }
+            | EatMeal { .. }
+            | OpenShop { .. }
+            | BuyItem { .. }
+            | SellItem { .. }
+            | BuybackItem { .. }
+            | BuyItems { .. }
+            | SellItems { .. }
+            | BuybackItems { .. }
+            | OfferDeal { .. }
+            | OpenTrade { .. }
+            | PlayerTradeRequest { .. }
+            | PlayerTradeRespond { .. }
+            | PartySummonRespond { .. }
+            | FishingCast { .. } => true,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerMessage {
     DungeonDoorState {
@@ -1571,6 +1638,12 @@ pub enum ServerMessage {
     PlayerWetToggled {
         player_id: PlayerId,
         wet: bool,
+    },
+    /// This player turned to stone or came out of it (doc/DEBUFF.md
+    /// `petrifies`). Sent to the owner too.
+    PlayerPetrifiedToggled {
+        player_id: PlayerId,
+        petrified: bool,
     },
     /// A nearby player's shown title changed (doc/TITLES.md).
     PlayerTitleChanged {
@@ -2256,6 +2329,7 @@ impl ServerMessage {
             | Self::PlayerTorchToggled { .. }
             | Self::PlayerMountChanged { .. }
             | Self::PlayerWetToggled { .. }
+            | Self::PlayerPetrifiedToggled { .. }
             | Self::PlayerTitleChanged { .. }
             | Self::FenceVisibility { .. }
             | Self::EstateChestVisibility { .. }

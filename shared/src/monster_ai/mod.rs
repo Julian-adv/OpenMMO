@@ -28,8 +28,8 @@ pub use brain::MonsterBrain;
 pub use command::{AiCommand, AiState, ChaseAim, NearbyMonster, NearbyPlayer, SwingReach};
 pub use path::{CachePathProvider, PathProvider};
 pub use skill::{
-    skill_by_id, MonsterSkill, MonsterSkillId, SkillArea, SkillDamage, EARTHQUAKE, EARTH_ROAR,
-    FORMATION_BREAK, GROUND_STRIKE_RADIUS, REACH_SLACK, RUNE_SLASH, TERRACLASH_SKILLS,
+    skill_by_id, skills_for, MonsterSkill, MonsterSkillId, SkillArea, SkillDamage, EARTHQUAKE,
+    EARTH_ROAR, FORMATION_BREAK, GROUND_STRIKE_RADIUS, REACH_SLACK, RUNE_SLASH, TERRACLASH_SKILLS,
 };
 pub use tree::{behavior_tree_for, load_behavior_trees, BehaviorNode, BehaviorTree};
 

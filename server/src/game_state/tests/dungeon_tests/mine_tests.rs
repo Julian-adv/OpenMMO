@@ -13,7 +13,7 @@ async fn blackvein_mine_variants_match_their_bastion_counterparts() {
             ("mine_twisted", Some("troll"), "skeleton"),
             ("mine_veinfused", Some("stone_golem"), "skeleton_warrior"),
             ("mine_predator", Some("scp939"), "skeleton_warrior"),
-            ("mine_foreman", Some("cyclop"), "shadow_master"),
+            ("mine_foreman", None, "shadow_master"),
         ],
     );
 }

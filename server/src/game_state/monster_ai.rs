@@ -413,6 +413,7 @@ impl super::GameState {
                             health: p.health,
                             drank_recently: now.saturating_sub(p.drank_at)
                                 < monster_ai::DRANK_RECENTLY_MS,
+                            petrified: p.petrified,
                         },
                     ));
             }

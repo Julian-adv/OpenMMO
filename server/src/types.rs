@@ -48,6 +48,7 @@ pub fn new_player(
         radiance_on: false,
         raging: false,
         wet: false,
+        petrified: false,
         title: None,
         floor_level: 0,
         object_type: None,

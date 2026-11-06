@@ -15,7 +15,12 @@ import type {
 } from './networkTypes'
 import { hmrSingleton } from '../utils/hmr'
 import type { WallDirection } from '../utils/house-geometry'
-import { gameStore, resetGameStore, serverNotice } from '../stores/gameStore'
+import {
+  gameStore,
+  localHeldInPlace,
+  resetGameStore,
+  serverNotice,
+} from '../stores/gameStore'
 import { get } from 'svelte/store'
 import { inventoryStore } from '../stores/inventoryStore'
 import { getItemDef } from '../data/itemDefs'
@@ -549,7 +554,7 @@ class NetworkManager {
   }
 
   sendMoveGoal(goal: MoveGoal) {
-    if (get(localTeleportActive)) return
+    if (get(localHeldInPlace)) return
     this.sendMessage({ PlayerMoveGoal: goal })
   }
 
@@ -558,11 +563,12 @@ class NetworkManager {
   }
 
   sendMoveDirection(input: MoveDirection) {
-    if (get(localTeleportActive)) return
+    if (get(localHeldInPlace)) return
     this.sendMessage({ PlayerMoveDirection: input })
   }
 
   sendPlayerFace(rotation: number) {
+    if (get(localHeldInPlace)) return
     this.sendMessage({ PlayerFace: { rotation } })
   }
 
@@ -778,7 +784,7 @@ class NetworkManager {
 
   sendUseItem(instanceId: number) {
     if (!this.isNetworkableInstanceId(instanceId, 'use')) return
-    if (get(localTeleportActive)) return
+    if (get(localHeldInPlace)) return
     const item = get(inventoryStore).bag.find(
       (entry) => entry.instance_id === instanceId
     )

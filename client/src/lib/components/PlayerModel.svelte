@@ -217,7 +217,7 @@
     hoveredPlayerId,
     localInvisible,
   } from '../stores/gameStore'
-  import { SeeThrough } from '../effects/see-through'
+  import { Petrify, SeeThrough } from '../effects/see-through'
   import type { TerrainHeightManager } from '../managers/terrainHeightManager'
   import TargetRing from './TargetRing.svelte'
   import {
@@ -284,6 +284,8 @@
     remotePlayerId?: number
     /** Shown title id, drawn in smaller text above the name. */
     title?: string | null
+    /** Stone: grey and frozen in pose (doc/DEBUFF.md `petrifies`). */
+    petrified?: boolean
     /** Remote player's floor (negative = dungeon depth), for the hover ring. */
     floorLevel?: number
     heightManager?: TerrainHeightManager | null
@@ -334,6 +336,7 @@
     npcPlayerId,
     remotePlayerId,
     title = null,
+    petrified = false,
     floorLevel = 0,
     heightManager = null,
     waterSurfaceAt,
@@ -534,6 +537,8 @@
   const movementRotation = new MovementRotation()
   const seeThrough = new SeeThrough()
   onDestroy(() => seeThrough.restore())
+  const petrify = new Petrify()
+  onDestroy(() => petrify.restore())
   const smoothRotation = $derived(
     isCurrentPlayer &&
       playerState === 'moving' &&
@@ -1936,6 +1941,7 @@
     const onScreen = !teleportHidden && position.y > OFFSCREEN_Y / 2
     if (capeRig) capeRig.root.visible = onScreen
     if (isCurrentPlayer) seeThrough.update(modelGroup, $localInvisible)
+    petrify.update(modelGroup, petrified)
     const physics = secondaryMotion.next(deltaTime, onScreen, isCurrentPlayer)
     if (!physics) return
     const { deltaTime: dt, reset, step } = physics
@@ -2060,7 +2066,7 @@
 
     // Update mixer with provided deltaTime
     if (currentAction) {
-      mixer.update(deltaTime)
+      mixer.update(petrified ? 0 : deltaTime)
       if (excavationTool?.visible) {
         applyExcavationGrip(excavationGrip)
       }

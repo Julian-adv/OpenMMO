@@ -62,7 +62,10 @@ def build(monster_id):
     vertices = source_points * factor + offset
     primitive['attributes']['POSITION'] = add_accessor(doc, binary, vertices, 'VEC3')
     dense, distance = transfer_body_weights(donor, donor_binary, worlds, new_world, names, points, children, vertices)
+    rigid = spec.get('rigid_hands', {})
     for side, sign in [('Left', 1), ('Right', -1)]:
+        if side in rigid:
+            continue
         x = vertices[:, 0] * sign
         finger_names = ['Index', 'Middle', 'Ring', 'Pinky']
         chosen = np.abs(vertices[:, 2, None] - np.array([spec['finger_lanes'][f][0][2] for f in finger_names])).argmin(axis=1)
@@ -90,6 +93,16 @@ def build(monster_id):
     hood = hood * hood * (3 - 2 * hood)
     dense *= 1 - hood[:, None]
     dense[:, names.index('Head')] += hood
+    # Hands without finger rigging (a fused weapon, a mitten) move with the wrist.
+    for side, start_x in rigid.items():
+        hand = names.index(side + 'Hand')
+        for i, name in enumerate(names):
+            if name.startswith(side + 'Hand') and i != hand:
+                dense[:, hand] += dense[:, i]
+                dense[:, i] = 0
+        beyond = vertices[:, 0] * (1 if side == 'Left' else -1) > start_x
+        dense[beyond] = 0
+        dense[beyond, hand] = 1
     triangles = accessor(doc, binary, primitive['indices']).reshape(-1, 3)
     edges = np.concatenate([triangles[:, [0, 1]], triangles[:, [1, 2]], triangles[:, [2, 0]]])
     lengths = np.linalg.norm(vertices[edges[:, 0]] - vertices[edges[:, 1]], axis=1)

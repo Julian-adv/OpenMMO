@@ -60,6 +60,8 @@ export type ServerPlayer = {
   armor?: ArmorEquipment
   /** Carrying the `wet` soaking — drives the footprint trail (doc/DEBUFF.md). */
   wet?: boolean
+  /** Turned to stone by a boss skill (doc/DEBUFF.md `petrifies`). */
+  petrified?: boolean
   /** Shown title id (doc/TITLES.md). */
   title?: string | null
 }

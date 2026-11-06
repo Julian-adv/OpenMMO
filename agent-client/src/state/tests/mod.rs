@@ -148,6 +148,7 @@ pub(crate) fn test_player(x: f32, z: f32) -> Player {
         back_texture: None,
         armor: Default::default(),
         wet: false,
+        petrified: false,
         title: None,
     }
 }

@@ -242,7 +242,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v136: female `HairStyle::Bob`/`Long`/`Ponytail`; female appearance colors are kept.
 /// v137: `MonsterHealthUpdate`, so stethoscope wearers see monster HP;
 /// pickaxe mining (`MineDungeonProp`, `MiningStarted`, `MiningEnded`) and
-/// rail carts (`PushDungeonCart`, `DungeonCartPushed`, `CartStruckPlayer`).
+/// rail carts (`PushDungeonCart`, `DungeonCartPushed`, `CartStruckPlayer`);
+/// `Player.petrified` + `PlayerPetrifiedToggled` and the `crystal_eruption`
+/// skill.
 pub const PROTOCOL_VERSION: u32 = 137;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
@@ -587,6 +589,7 @@ mod tests {
             back_texture: None,
             armor: Default::default(),
             wet: false,
+            petrified: false,
             title: None,
         }];
         // A monster with every Option None guards the wire format itself:

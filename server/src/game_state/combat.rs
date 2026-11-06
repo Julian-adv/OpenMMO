@@ -121,6 +121,8 @@ struct MonsterAttackSnapshot {
     rotation: f32,
     body: Option<onlinerpg_shared::monster_body::BodyFootprint>,
     field_raid: bool,
+    /// Its plain swing breaks stone (`SkillSet::shatter`) this many times over.
+    shatter: Option<u32>,
 }
 
 #[derive(Clone, Copy)]
@@ -1623,6 +1625,9 @@ impl super::GameState {
             rotation: monster.rotation,
             body: def.and_then(|d| d.body),
             field_raid: monster.lifecycle == MonsterLifecycle::FieldRaid,
+            shatter: onlinerpg_shared::monster_ai::skills_for(&monster.monster_type)
+                .and_then(|set| set.shatter)
+                .map(|shatter| shatter.multiplier),
         }
     }
 
@@ -1879,7 +1884,7 @@ impl super::GameState {
             );
         }
         for hit in &landed {
-            self.finish_monster_hit(snapshot, hit).await;
+            self.finish_monster_hit(snapshot, hit, reach).await;
         }
     }
 
@@ -1913,15 +1918,23 @@ impl super::GameState {
             }
             None => self.send_direct_message(target_player_id, attack_msg).await,
         }
-        self.finish_monster_hit(snapshot, &landed).await;
+        self.finish_monster_hit(snapshot, &landed, reach).await;
     }
 
-    /// What follows the blow's announcement: its debuff, or the death.
-    async fn finish_monster_hit(&self, snapshot: &MonsterAttackSnapshot, hit: &LandedHit) {
-        if hit.result.hit && !hit.died() {
-            if let Some(debuff_id) = &snapshot.hit_debuff {
-                self.inflict_debuff(&hit.player_id, debuff_id, None).await;
-            }
+    /// What follows the blow's announcement: its debuff, or the death. A
+    /// skill's strike carries its own debuff in place of the swing's.
+    async fn finish_monster_hit(
+        &self,
+        snapshot: &MonsterAttackSnapshot,
+        hit: &LandedHit,
+        reach: MonsterReach<'_>,
+    ) {
+        let debuff = match reach {
+            MonsterReach::Skill { skill, .. } => skill.debuff,
+            _ => snapshot.hit_debuff.as_deref(),
+        };
+        if let Some(debuff_id) = debuff.filter(|_| hit.result.hit && !hit.died()) {
+            self.inflict_debuff(&hit.player_id, debuff_id, None).await;
         }
         if let (true, Some((position, floor))) = (hit.died(), hit.at) {
             self.announce_player_death(&hit.player_id, position, floor, &snapshot.monster_type)
@@ -1951,17 +1964,20 @@ impl super::GameState {
         } = *snapshot;
         let now = Self::now_ms();
         audit.reason = "target_not_damageable";
-        let (target_player_name, target_position, target_floor_level);
+        let (target_player_name, target_position, target_floor_level, shatters);
         {
             let players = self.players.read().await;
-            match players.get(target_player_id) {
-                Some(player) if player.is_damageable(now) => {
-                    target_player_name = player.name.clone();
-                    target_position = player.position;
-                    target_floor_level = player.floor_level;
-                }
-                _ => return None,
+            let player = players.get(target_player_id)?;
+            // Stone takes no blow but a shattering swing (`SkillSet::shatter`).
+            shatters = snapshot.shatter.filter(|_| {
+                player.petrified && player.health > 0 && matches!(reach, MonsterReach::Melee(_))
+            });
+            if !player.is_damageable(now) && shatters.is_none() {
+                return None;
             }
+            target_player_name = player.name.clone();
+            target_position = player.position;
+            target_floor_level = player.floor_level;
         }
 
         let monster_position =
@@ -2016,7 +2032,14 @@ impl super::GameState {
             );
             return None;
         }
+        if shatters.is_some() {
+            self.shatter_stone(target_player_id).await;
+        }
         let damage = match reach {
+            _ if let Some(multiplier) = shatters => SkillDamage::Scaled {
+                multiplier,
+                ignores_guard: true,
+            },
             MonsterReach::Skill { skill, .. } => skill.damage,
             MonsterReach::Burn { skill, .. } => {
                 SkillDamage::Fixed(skill.pools.map_or(0, |pools| pools.damage))

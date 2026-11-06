@@ -4,7 +4,6 @@
   import { syncOwnFloor, ownPlayerFloor } from '../network/ownFloor'
   import { translate } from '../i18n'
   import { onDestroy, onMount } from 'svelte'
-  import { localTeleportActive } from '../stores/teleportEffectStore'
   import {
     inspectionTargeting,
     cancelInspection,
@@ -27,6 +26,7 @@
     gameStore,
     hoverTarget,
     addChatMessage,
+    localHeldInPlace,
     reportSkillFailure,
     type LocalPlayer,
   } from '../stores/gameStore'
@@ -891,7 +891,7 @@
   let chargeDash: ChargeDash | null = null
 
   function serverHoldsPosition() {
-    return $localTeleportActive || chargeDash !== null
+    return $localHeldInPlace || chargeDash !== null
   }
 
   /** The server moved us: drop every local plan to walk somewhere. */
@@ -2299,7 +2299,7 @@
     deltaTime: number,
     options: PlayerControlUpdateOptions
   ) {
-    if ($localTeleportActive) return
+    if ($localHeldInPlace) return
     if (chargeDash) {
       advanceChargeDash(chargeDash)
       return
@@ -2439,17 +2439,15 @@
           queued
         )
     })
-    const unsubscribeTeleportEffect = localTeleportActive.subscribe(
-      (active) => {
-        if (!active) return
-        cancelAutoTravel()
-        combatController.cancelCombat()
-        abandonLocalActions()
-        keyboardSender.clear()
-        transitionTo('idle')
-        updatePlayerState()
-      }
-    )
+    const unsubscribeHeldInPlace = localHeldInPlace.subscribe((held) => {
+      if (!held) return
+      cancelAutoTravel()
+      combatController.cancelCombat()
+      abandonLocalActions()
+      keyboardSender.clear()
+      transitionTo('idle')
+      updatePlayerState()
+    })
     const canvasCursor = renderer.domElement.style.cursor
     const unsubscribeTargeting = derived(
       [inspectionTargeting, fishingTargeting, chargeTargeting],
@@ -2678,7 +2676,7 @@
       renderer.domElement.style.cursor = canvasCursor
       unsubscribeTravel()
       unsubscribeTeleport()
-      unsubscribeTeleportEffect()
+      unsubscribeHeldInPlace()
       unsubscribeTravelPlayer()
       travelDestination.set(null)
       removeInputListeners()

@@ -11,6 +11,8 @@ export type GroundEruption = {
   lingerMs?: number
   /** Played as it splits open, once for marks that split together. */
   sound?: string
+  /** Glowing crystal bursts up instead of basalt. */
+  crystal?: boolean
 }
 
 const NONE: readonly GroundEruption[] = []

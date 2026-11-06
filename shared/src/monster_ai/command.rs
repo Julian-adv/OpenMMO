@@ -70,6 +70,9 @@ pub struct NearbyPlayer {
     pub health: u32,
     /// Drank a potion in the last few seconds.
     pub drank_recently: bool,
+    /// Turned to stone: out of reach unless the monster shatters it
+    /// (`SkillSet::shatter`).
+    pub petrified: bool,
 }
 
 /// Other monsters' last-synced poses, for cell-occupancy separation

@@ -15,6 +15,8 @@ const id = process.argv[2]
 assert.match(id ?? '', /^[a-z0-9_]+$/)
 const row = monsterRow(id), source = `assets/monsters/${id}/rig_v1/${id}.glb`
 const fit = JSON.parse(readFileSync(new URL(`assets/monsters/${id}/grip_v1/fit.json`, root)))
+// Boss skill clips from other packs, landed at the skill's strike (rig_spec.json).
+const skillClips = JSON.parse(readFileSync(new URL(`assets/monsters/${id}/rig_spec.json`, root))).skill_clips ?? []
 
 // A weapon pack's attack only plays until the next swing restarts it, so cut it
 // at the weapon's interval and ease the tail into the first combat-stance pose.
@@ -107,6 +109,12 @@ try {
   const clips = []
   for (const pack of packs) clips.push(...await runtime.retargetAnimationsForCharacterModel(target.scene, pack.scene, pack.animations.filter(c => requested.includes(c.name))))
   assert.deepEqual(clips.map(c => c.name).sort(), [...requested].sort())
+  for (const skill of skillClips) {
+    const pack = await load(`client/public${skill.pack}`), source = pack.animations.find(c => c.name === skill.clip); assert.ok(source, skill.clip)
+    const [clip] = await runtime.retargetAnimationsForCharacterModel(target.scene, pack.scene, [source])
+    landAt(clip, skill.impact_s, skill.strike_s)
+    clips.push(clip)
+  }
   const weaponAttack = clips.find(c => c.name === attack?.clip)
   if (weaponAttack) {
     const stance = clips.find(c => c.name === splitClipNames(row.animAttackIdle)[0]); assert.ok(stance)
@@ -126,7 +134,7 @@ try {
     for (const [name, q] of grip) clip.tracks.push(new THREE.QuaternionKeyframeTrack(`${name}.quaternion`, [0, clip.duration], [...q.toArray(), ...q.toArray()]))
   }
   const output = await runtime.groundRetargetedClips(target.scene, clips, {
-    plantedClips: ['animIdle', 'animWalk', 'animAttack', 'animAttackIdle'].flatMap(key => splitClipNames(row[key])),
+    plantedClips: [...['animIdle', 'animWalk', 'animAttack', 'animAttackIdle'].flatMap(key => splitClipNames(row[key])), ...skillClips.map(s => s.clip)],
     baselineClips: splitClipNames(row.animRun), restClip: splitClipNames(row.animDie)[0], restOffset: row.corpseGroundOffset ?? 0,
   })
   for (const clip of output) {

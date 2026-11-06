@@ -341,6 +341,7 @@ function toRemotePlayer(sp: ServerPlayer): RemotePlayer {
     radianceOn: sp.radiance_on ?? false,
     raging: sp.raging ?? false,
     wet: sp.wet ?? false,
+    petrified: sp.petrified ?? false,
     title: sp.title ?? null,
     mainHand: sp.main_hand ?? null,
     armor: sp.armor,
@@ -1837,6 +1838,11 @@ export function handleServerMessage(
       break
     }
 
+    case 'PlayerPetrifiedToggled': {
+      updatePlayer(data.player_id, { petrified: data.petrified })
+      break
+    }
+
     case 'PlayerTitleChanged': {
       updatePlayer(data.player_id, { title: data.title ?? null })
       break
@@ -3059,6 +3065,7 @@ export function markMonsterSkillSpots(
       impactMs: marks.impactMs,
       lingerMs: marks.lingerMs,
       sound: marks.sound,
+      crystal: marks.crystal,
     })
   }
 }

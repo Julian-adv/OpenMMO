@@ -266,6 +266,7 @@ impl SharedState {
             | ServerMessage::GrillStarted
             // Cosmetic: only the browser's footprint trail reads it.
             | ServerMessage::PlayerWetToggled { .. }
+            | ServerMessage::PlayerPetrifiedToggled { .. }
             | ServerMessage::PlayerTradeRequestResult { .. }
             | ServerMessage::PlayerTradeUpdate { .. } => EventUrgency::Noise,
             ServerMessage::PlayerTradeRequested { .. }
@@ -882,6 +883,17 @@ impl SharedState {
                 }
                 if let Some(me) = self.self_player.as_mut().filter(|me| me.id == *player_id) {
                     me.mount = *mount;
+                }
+            }
+            ServerMessage::PlayerPetrifiedToggled {
+                player_id,
+                petrified,
+            } => {
+                if let Some(p) = self.nearby_players.get_mut(player_id) {
+                    p.petrified = *petrified;
+                }
+                if let Some(me) = self.self_player.as_mut().filter(|me| me.id == *player_id) {
+                    me.petrified = *petrified;
                 }
             }
             ServerMessage::PlayerTitleChanged { player_id, title } => {

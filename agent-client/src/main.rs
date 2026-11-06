@@ -520,6 +520,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::PlayerTorchToggled { .. } => "PlayerTorchToggled",
         ServerMessage::PlayerMountChanged { .. } => "PlayerMountChanged",
         ServerMessage::PlayerWetToggled { .. } => "PlayerWetToggled",
+        ServerMessage::PlayerPetrifiedToggled { .. } => "PlayerPetrifiedToggled",
         ServerMessage::PlayerTitleChanged { .. } => "PlayerTitleChanged",
         ServerMessage::TitleEarned { .. } => "TitleEarned",
         ServerMessage::PlayerTitles { .. } => "PlayerTitles",

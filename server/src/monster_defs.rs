@@ -186,6 +186,15 @@ impl MonsterDefs {
             if let Some(debuff) = &def.hit_debuff {
                 crate::debuff_defs::assert_debuff_exists(debuff, &format!("monster '{id}'"));
             }
+            let skills = onlinerpg_shared::monster_ai::skills_for(id);
+            for (skill, _) in skills.into_iter().flat_map(|set| set.skills) {
+                if let Some(debuff) = skill.debuff {
+                    crate::debuff_defs::assert_debuff_exists(
+                        debuff,
+                        &format!("monster '{id}' skill"),
+                    );
+                }
+            }
             for (item_id, _) in def.drop_entries() {
                 assert!(
                     crate::item_defs::item_defs().get(item_id).is_some(),

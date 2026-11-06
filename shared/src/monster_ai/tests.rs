@@ -387,6 +387,7 @@ fn attacker_at(x: f32, z: f32) -> Vec<NearbyPlayer> {
         position: Position { x, y: 0.0, z },
         health: 10,
         drank_recently: false,
+        petrified: false,
     }]
 }
 

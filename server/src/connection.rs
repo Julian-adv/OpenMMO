@@ -1069,6 +1069,10 @@ async fn handle_client_message(
             end_entry_grace(game_state, state, id, &client_msg).await;
         }
         game_state.advance_goal_players(&[id]).await;
+        if client_msg.blocked_while_petrified(state.is_admin) && game_state.is_petrified(&id).await
+        {
+            return Ok(vec![]);
+        }
     }
 
     match client_msg {

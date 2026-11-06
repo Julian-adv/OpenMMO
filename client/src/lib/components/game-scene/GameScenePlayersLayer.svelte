@@ -783,6 +783,7 @@
     mount={currentPlayer.mount}
     name={currentPlayer.name}
     title={currentPlayer.title}
+    petrified={currentPlayer.petrified}
     isCurrentPlayer={true}
     floorLevel={localFloorLevel}
     playerState={effectivePlayerState}
@@ -849,6 +850,7 @@
         )}
         name={player.name}
         title={player.title}
+        petrified={player.petrified}
         isCurrentPlayer={false}
         playerState={showingCatch ? 'interact' : remotePlayer.state}
         interactionAnim={showingCatch

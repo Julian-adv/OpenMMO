@@ -90,6 +90,10 @@ pub struct Player {
     /// footprints, and the owner's own countdown rides `DebuffUpdate`.
     #[serde(default)]
     pub wet: bool,
+    /// Turned to stone (doc/DEBUFF.md `petrifies`): can't act, takes no
+    /// damage, and monsters pass over them.
+    #[serde(default)]
+    pub petrified: bool,
     /// Active title id (doc/TITLES.md); the clients look the text up.
     #[serde(default)]
     pub title: Option<String>,
@@ -175,7 +179,7 @@ impl Player {
     }
 
     pub fn is_damageable(&self, now_ms: u64) -> bool {
-        self.health > 0 && self.is_ready(now_ms)
+        self.health > 0 && self.is_ready(now_ms) && !self.petrified
     }
 
     pub fn is_mounted(&self) -> bool {
@@ -351,6 +355,7 @@ mod tests {
             back_texture: None,
             armor: Default::default(),
             wet: false,
+            petrified: false,
             title: None,
         };
         player.set_base_max_health(94);
@@ -408,6 +413,7 @@ mod tests {
             back_texture: None,
             armor: Default::default(),
             wet: false,
+            petrified: false,
             title: None,
         };
         // rmp_serde writes the struct as a positional array, so `id` is the
@@ -470,6 +476,7 @@ mod tests {
             back_texture: None,
             armor: Default::default(),
             wet: false,
+            petrified: false,
             title: None,
         };
         let bytes = rmp_serde::to_vec(&player).unwrap();

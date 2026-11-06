@@ -86,6 +86,11 @@ impl SharedState {
         {
             return Err(anyhow::anyhow!("Waiting for teleport completion"));
         }
+        if self.self_player.as_ref().is_some_and(|me| me.petrified)
+            && msg.blocked_while_petrified(false)
+        {
+            return Err(anyhow::anyhow!("Turned to stone; wait for it to wear off"));
+        }
         if teleporting {
             self.invalidate_position();
             self.cmd_tx

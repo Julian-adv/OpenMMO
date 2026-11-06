@@ -1,7 +1,10 @@
 import { manaState } from './manaStore'
 import { tempHealth } from './playerHealthDisplay'
 import type { LocalizedMessage } from '../i18n'
-import { resetTeleportEffects } from './teleportEffectStore'
+import {
+  localTeleportActive,
+  resetTeleportEffects,
+} from './teleportEffectStore'
 import { resetGroundEruptions } from './groundEruptionStore'
 import { playerHealthDisplay } from './playerHealthDisplay'
 import { derived, get, writable } from 'svelte/store'
@@ -69,6 +72,8 @@ interface PlayerBase {
   raging?: boolean
   /** Soaked, so nearby clients draw wet footprints (doc/DEBUFF.md). */
   wet?: boolean
+  /** Turned to stone: can't act, takes no damage (doc/DEBUFF.md). */
+  petrified?: boolean
   /** Shown title id (doc/TITLES.md). */
   title?: string | null
   mainHand?: string | null
@@ -186,6 +191,18 @@ export const isAdminUser = writable(false)
 
 /** Hidden from others by the invisibility cloak; drawn see-through locally. */
 export const localInvisible = writable(false)
+
+/** The local player is stone (doc/DEBUFF.md `petrifies`). */
+export const localPetrified = derived(
+  gameStore,
+  (state) => state.currentPlayer?.petrified ?? false
+)
+
+/** Mid-teleport or stone: the server holds the local player in place. */
+export const localHeldInPlace = derived(
+  [localTeleportActive, localPetrified],
+  ([teleporting, petrified]) => teleporting || petrified
+)
 
 /** Set from ServerNotice; cleared when the socket reopens. Kept out of
  *  `gameStore` so the HUD banner doesn't resubscribe on every game update. */
