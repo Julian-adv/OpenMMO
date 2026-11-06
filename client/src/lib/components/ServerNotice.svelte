@@ -26,7 +26,7 @@
     background: rgba(24, 16, 8, 0.94);
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.55);
     color: #ffe3a3;
-    font-family: 'Courier New', monospace;
+    font-family: 'Noto Sans KR', sans-serif;
     font-size: 14px;
     line-height: 1.4;
     text-align: center;
