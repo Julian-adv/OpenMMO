@@ -121,9 +121,9 @@
     },
   }
 
-  // Helmets hide the chosen hair, so the preview takes them off.
+  // Helmets hide the chosen hair, so the preview takes them off; the bard hat keeps it in view.
   function bareHeaded(equipment?: VisibleEquipment) {
-    if (!equipment?.armor?.head) return equipment
+    if (!equipment?.armor?.head || characterClass === 'bard') return equipment
     const { head: _, ...armor } = equipment.armor
     return { ...equipment, armor }
   }

@@ -36,6 +36,10 @@ import {
 import { femaleBootGround } from '../lib/utils/female-boot-ground'
 import { femaleBrushCursor } from './female-brush-cursor'
 import { helmetHairBrush } from './female-helmet-hair-brush'
+import {
+  instrumentCarryEditor,
+  instrumentCarryPanel,
+} from './female-instrument-carry'
 import { femaleSolePaint, type SoleEdits } from './female-sole-paint'
 import {
   attachValkyrieWings,
@@ -307,7 +311,9 @@ export async function showFemaleBase(
         <option value="armed-torch">강철 장검 + 횃불</option>
         <option value="shield">왼손 나무 방패</option>
         <option value="armed-shield">강철 장검 + 나무 방패</option>
+        <option value="mandolin">만돌린 (들고 다니기)</option>
       </select>
+      ${instrumentCarryPanel}
       <p class="details">대기와 걷기에서 장착 상태에 따라 손 모양이 바뀝니다.</p>
       <p class="details">횃불을 장착하면 대기·걷기·달리기·전투 대기에서 왼손에 횃불을 듭니다.</p>
       <button id="female-pause" type="button">일시정지</button>
@@ -549,6 +555,7 @@ export async function showFemaleBase(
     FEMALE_HAND_FITS['weapons/steel_longsword.glb'].rotation!
   )
   hand.add(weapon)
+  const mandolinCarry = instrumentCarryEditor(hand, loader, disposed)
   const leftHand = model.getObjectByName('LeftHand')
   if (!leftHand) throw new Error('횃불을 장착할 왼손 본을 찾지 못했습니다.')
   torch.name = 'femaleTorch'
@@ -665,7 +672,7 @@ export async function showFemaleBase(
       )
     )
       return
-    const pose = ['armed', 'armed-torch', 'armed-shield'].includes(
+    const pose = ['armed', 'armed-torch', 'armed-shield', 'mandolin'].includes(
       equipment.value
     )
       ? handPoses.armed
@@ -696,6 +703,7 @@ export async function showFemaleBase(
     weapon.visible = ['armed', 'armed-torch', 'armed-shield'].includes(
       equipment.value
     )
+    mandolinCarry.setShown(equipment.value === 'mandolin')
     shield.visible = ['shield', 'armed-shield'].includes(equipment.value)
     torch.visible =
       ['torch', 'armed-torch'].includes(equipment.value) &&
