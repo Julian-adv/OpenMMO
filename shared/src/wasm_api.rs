@@ -384,6 +384,18 @@ pub fn monster_body_engage_point(monster_id: &str, px: f32, pz: f32) -> Option<V
 }
 
 #[wasm_bindgen]
+pub fn monster_radial_point(x: f32, z: f32, radius: f32, px: f32, pz: f32) -> Vec<f32> {
+    let at = Position { x, y: 0.0, z };
+    let toward = Position {
+        x: px,
+        y: 0.0,
+        z: pz,
+    };
+    let p = crate::monster_body::radial_point(at, radius, &toward);
+    vec![p.x, p.z]
+}
+
+#[wasm_bindgen]
 pub fn passability_remove_furniture(key: &str) {
     with_cache_mut(|cache| furniture::remove_passability(cache, key));
 }

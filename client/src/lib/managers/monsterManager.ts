@@ -29,6 +29,7 @@ import {
 import { clearXpArrival, releaseXpArrival } from './xpArrival'
 import {
   monster_body_engage_point,
+  monster_radial_point,
   passability_remove_monster_body,
   passability_set_monster_body,
 } from '../wasm/onlinerpg_shared'
@@ -81,9 +82,18 @@ class MonsterManager {
     const point =
       this.bodies.has(monsterId) &&
       monster_body_engage_point(monsterId, from.x, from.z)
-    return point
-      ? { x: point[0], y: meshPosition.y, z: point[1] }
-      : meshPosition
+    const monster = this.monsters.get(monsterId)
+    const radius = (monster && getMonsterDef(monster.type)?.bodyRadius) || 0
+    const at = radius
+      ? monster_radial_point(
+          point ? point[0] : meshPosition.x,
+          point ? point[1] : meshPosition.z,
+          radius,
+          from.x,
+          from.z
+        )
+      : point
+    return at ? { x: at[0], y: meshPosition.y, z: at[1] } : meshPosition
   }
 
   /** Keep the current height until terrain is available. */
@@ -712,13 +722,8 @@ class MonsterManager {
     }
   }
 
-  // Dungeon monsters path on their depth's passability floor; surface
-  // monsters use the open overworld (0).
   private pathFloorFor(monster: MonsterData): number {
-    const fl = monster.floorLevel ?? 0
-    return fl < 0 && dungeonManager.active
-      ? dungeonManager.passabilityFloor(-fl)
-      : 0
+    return dungeonManager.passabilityFloorFor(monster.floorLevel ?? 0)
   }
 
   private updateMoveSpeedFromState(monster: MonsterData) {

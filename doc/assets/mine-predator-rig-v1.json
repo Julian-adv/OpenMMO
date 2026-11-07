@@ -1,0 +1,205 @@
+{
+  "asset": "mine_predator",
+  "name": "Deep Predator",
+  "date": "2026-11-07",
+  "source": {
+    "concept_record": "assets/monsters/mine_predator/concepts/generation.json",
+    "mesh_tool": "Tripo API",
+    "tier": "Paid API credits (user-purchased)",
+    "model": "P2-20260801",
+    "seed": 110704,
+    "task_id": "2b38bce2-7d1b-4420-bb1b-271e10c78a93",
+    "submissions": 1,
+    "credits_consumed": 120.0,
+    "additional_credits": 0,
+    "license": "Tripo Terms of User Agreement",
+    "license_url": "https://developers.tripo3d.ai/en/terms"
+  },
+  "authoring": {
+    "tools": [
+      "Blender 5.2.0 LTS",
+      "Python / NumPy",
+      "repo Tripo recorded-job tool",
+      "repo GLB orientation helper",
+      "glTF Transform / meshoptimizer / sharp"
+    ],
+    "rig": "Custom quadruped: pelvis/spine/chest/neck/head/jaw/two tail bones and four three-bone legs",
+    "borrowed_rigs_or_animations": "walk and run retargeted from SCP-939 939_Walking / 939_Running (assets/monsters/scp939/scp939-before-optimization.glb); other clips authored locally",
+    "orientation": "Standard helper left this side-view output facing -X; prepare_source.py adds +90 degrees around glTF Y to face +Z",
+    "units": "metres; geometry and bones baked; object scales one",
+    "shoulder_height_m_approx": 1.3,
+    "snout_to_tail_length_m": 2.8,
+    "height_including_crystals_m": 1.58,
+    "triangles": 10729,
+    "runtime_deform_bones": 20,
+    "maximum_influences": 4,
+    "materials": 1,
+    "textures": "1024x1024 base color / normal / metallic roughness; WebP",
+    "compression": "EXT_meshopt_compression and EXT_texture_webp",
+    "skin_corrections": [
+      "Weld source UV-seam duplicate positions before heat skinning",
+      "Keep paw soles rigid and world aligned",
+      "Cut the fused mouth seam; bind lower jaw and add dark oral surfaces",
+      "Tint dorsal crystals black-violet with COLOR_0",
+      "Bake leg IK to the existing walk/run speeds",
+      "Fold paws inward and ground each falling frame; torso rests on its side"
+    ]
+  },
+  "clips": {
+    "attack": 1.4,
+    "death": 1.4,
+    "hit": 0.4,
+    "idle": 2.4,
+    "run": 0.5333,
+    "walk": 2.0,
+    "combat_idle": 2.0
+  },
+  "timing": {
+    "walk_speed_m_s": 1,
+    "run_speed_m_s": 6,
+    "attack_impact_s": 0.7,
+    "corpseAutoGround": false
+  },
+  "validation": {
+    "source": "$S/final_review.glb",
+    "mesh_scale": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "rig_scale": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "bones": 20,
+    "bind_bounds_blender": [
+      [
+        -0.5812644362449646,
+        -1.399999976158142,
+        -3.2232370017482026e-07
+      ],
+      [
+        0.5812644958496094,
+        1.3999998569488525,
+        1.5800000429153442
+      ]
+    ],
+    "clips": {
+      "attack": {
+        "duration_s": 1.4,
+        "minimum_ground_m": -2.4202861823141575e-05,
+        "max_planted_foot_slip_m": 0.00010315509215182867,
+        "max_planted_foot_ground_error_m": 0.004909121431410313
+      },
+      "death": {
+        "duration_s": 1.8,
+        "minimum_ground_m": -2.175569534301758e-06,
+        "max_planted_foot_slip_m": 0,
+        "max_planted_foot_ground_error_m": 0,
+        "final_body_ground_m": 0.0014227628707885742,
+        "final_body_height_m": 0.6124114990234375,
+        "final_ground_m": 1.7881393432617188e-07
+      },
+      "hit": {
+        "duration_s": 0.4,
+        "minimum_ground_m": -5.065285790806229e-08,
+        "max_planted_foot_slip_m": 4.959423825610243e-07,
+        "max_planted_foot_ground_error_m": 0.004903375171124935
+      },
+      "idle": {
+        "duration_s": 2.4,
+        "minimum_ground_m": -1.4983234905230347e-05,
+        "max_planted_foot_slip_m": 0.00014362919425331514,
+        "max_planted_foot_ground_error_m": 0.004922535736113787,
+        "loop_seam_max_m": 0.0
+      },
+      "run": {
+        "duration_s": 0.4,
+        "minimum_ground_m": -1.3139052157384867e-07,
+        "max_planted_foot_slip_m": 1.0755822186829658e-06,
+        "max_planted_foot_ground_error_m": 0.004903401713818312,
+        "loop_seam_max_m": 0.0
+      },
+      "walk": {
+        "duration_s": 1.2,
+        "minimum_ground_m": -2.4593248326709727e-07,
+        "max_planted_foot_slip_m": 1.0733981723256862e-05,
+        "max_planted_foot_ground_error_m": 0.0049042655155062675,
+        "loop_seam_max_m": 0.0
+      }
+    }
+  },
+  "checks": {
+    "cargo_fmt": "passed",
+    "cargo_check": "passed",
+    "cargo_test_mine_tests": "5 passed; 0 failed",
+    "csv_generation": "passed",
+    "attack_duration_measurement": "mine_predator 1400 ms",
+    "final_export_validation": "passed at 60 Hz; decoded final runtime GLB"
+  },
+  "known_limitations": [
+    "Mouth interior is a simple dark surface; there is no tongue or detailed oral anatomy.",
+    "No 5000-user load test was performed. Checked in game on the dev server."
+  ],
+  "files": {
+    "assets/monsters/mine_predator/tripo_v1/model_url.glb": {
+      "bytes": 13098556,
+      "sha256": "0cb66425437ebbe53a5ef3f447429b2ee13f8ba65828129c54863e1af6962751"
+    },
+    "assets/monsters/mine_predator/tripo_v1/source.glb": {
+      "bytes": 13444672,
+      "sha256": "960df384dfcba8e07c2f2aefc02f388f8ab2455f63b9108fdf49fbe1b54646a4"
+    },
+    "assets/monsters/mine_predator/rig_v1/mine_predator.blend": {
+      "bytes": 17136184,
+      "sha256": "4a02f523858ce13cdca1700c5121cfde6490645cae6945928610b2a4ecf676e9"
+    },
+    "assets/monsters/mine_predator/rig_v1/mine_predator.glb": {
+      "bytes": 13509236,
+      "sha256": "26be9b2dd4ebd8f79ef4e500cc5818bbc96ecd709ce18bf303f928b5695707a4"
+    },
+    "client/public/models/monsters/mine_predator.glb": {
+      "bytes": 965024,
+      "sha256": "a58525796e6264eacd373e3ad18327c8a6409c3b6c5e58142f03f0781e79bd09"
+    }
+  },
+  "commands": [
+    ".venv/bin/python tools/outfits/tripo.py submit assets/monsters/mine_predator/tripo_v1/build.json",
+    ".venv/bin/python tools/outfits/tripo.py poll assets/monsters/mine_predator/tripo_v1/build.json",
+    ".venv/bin/python tools/outfits/tripo.py collect assets/monsters/mine_predator/tripo_v1/build.json",
+    ".venv/bin/python assets/monsters/mine_predator/rig_v1/prepare_source.py",
+    "~/opt/blender/blender -b --python-exit-code 1 --python assets/monsters/mine_predator/rig_v1/build_rig.py",
+    "node tools/optimize-character-textures.mjs assets/monsters/mine_predator/rig_v1/mine_predator.glb client/public/models/monsters/mine_predator.glb 1024 --all-textures --lossy-maps --resample-animations",
+    "npm --prefix client run generate:csv",
+    "node tools/measure-monster-attack-clips.mjs --force",
+    "cargo fmt",
+    "cargo check",
+    "cargo test -p onlinerpg-server mine_tests",
+    "node assets/monsters/mine_predator/rig_v1/decode_for_review.mjs client/public/models/monsters/mine_predator.glb $S/final_review.glb",
+    "~/opt/blender/blender -b --python-exit-code 1 --python assets/monsters/mine_predator/rig_v1/validate.py -- $S/final_review.glb"
+  ],
+  "publication": "Local worktree only; no commit, push, deployment, Hugging Face upload or assets.lock change",
+  "created_or_changed_files": [
+    "assets/monsters/mine_predator/rig_v1/build_report.json",
+    "assets/monsters/mine_predator/rig_v1/build_rig.py",
+    "assets/monsters/mine_predator/rig_v1/decode_for_review.mjs",
+    "assets/monsters/mine_predator/rig_v1/mine_predator.blend",
+    "assets/monsters/mine_predator/rig_v1/mine_predator.glb",
+    "assets/monsters/mine_predator/rig_v1/prepare_source.py",
+    "assets/monsters/mine_predator/rig_v1/validate.py",
+    "assets/monsters/mine_predator/rig_v1/validation.json",
+    "assets/monsters/mine_predator/tripo_v1/build.json",
+    "assets/monsters/mine_predator/tripo_v1/generation.json",
+    "assets/monsters/mine_predator/tripo_v1/model_url.glb",
+    "assets/monsters/mine_predator/tripo_v1/rendered_image_url.png",
+    "assets/monsters/mine_predator/tripo_v1/source.glb",
+    "client/public/models/monsters/mine_predator.glb",
+    "data-src/monsters.csv",
+    "data/monster_attack_clips.json",
+    "data/monsters.json",
+    "doc/assets/mine-predator-rig-v1.json",
+    "doc/assets/monsters.md",
+    "server/src/game_state/tests/dungeon_tests/mine_tests.rs"
+  ]
+}

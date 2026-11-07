@@ -160,25 +160,35 @@ export function computeCorpseGroundOffset(
   model: THREE.Object3D,
   stride = 1
 ): number {
-  model.updateMatrixWorld(true)
   let lowest = Infinity
-  const v = new THREE.Vector3()
+  forEachPosedVertex(model, stride, (v) => {
+    if (v.y < lowest) lowest = v.y
+  })
+  return Number.isFinite(lowest) ? -lowest + CORPSE_GROUND_CLEARANCE : 0
+}
 
+/** Every `stride`th skinned vertex of `model`'s current pose, model-local
+ *  (independent of `model.position`). `v` is reused between calls. */
+export function forEachPosedVertex(
+  model: THREE.Object3D,
+  stride: number,
+  visit: (v: THREE.Vector3) => void
+) {
+  model.updateMatrixWorld(true)
+  const toModel = new THREE.Matrix4()
+  const modelInverse = model.matrixWorld.clone().invert()
+  const v = new THREE.Vector3()
   model.traverseVisible((child) => {
     if (!(child instanceof THREE.SkinnedMesh) || !child.skeleton) return
     const position = child.geometry.getAttribute('position')
     if (!position) return
-
+    toModel.multiplyMatrices(modelInverse, child.matrixWorld)
     for (let i = 0; i < position.count; i += stride) {
       v.fromBufferAttribute(position, i)
-      child.applyBoneTransform(i, v) // skinned position in the current pose
-      child.localToWorld(v)
-      model.worldToLocal(v) // → model-local, independent of model.position
-      if (v.y < lowest) lowest = v.y
+      child.applyBoneTransform(i, v)
+      visit(v.applyMatrix4(toModel))
     }
   })
-
-  return Number.isFinite(lowest) ? -lowest + CORPSE_GROUND_CLEARANCE : 0
 }
 
 export function findPrimarySkinnedMesh(

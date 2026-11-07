@@ -149,6 +149,22 @@ pub fn reach_point(
     })
 }
 
+/// Edge of a round body of `radius` at `at`, toward `toward` (never past it).
+pub fn radial_point(at: Position, radius: f32, toward: &Position) -> Position {
+    let dx = shortest_world_delta_x(at.x, toward.x);
+    let dz = toward.z - at.z;
+    let dist = dx.hypot(dz);
+    if radius <= 0.0 || dist <= f32::EPSILON {
+        return at;
+    }
+    let t = radius.min(dist) / dist;
+    Position {
+        x: wrap_world_x(at.x + dx * t),
+        z: at.z + dz * t,
+        ..at
+    }
+}
+
 pub fn cache_key(monster_id: &str) -> String {
     format!("monster-body:{monster_id}")
 }
@@ -163,6 +179,47 @@ mod tests {
         front: 3.0,
         back: 2.0,
     };
+
+    #[test]
+    fn radial_point_stops_short_of_the_centre_toward_the_player() {
+        let at = Position {
+            x: 0.0,
+            y: 1.0,
+            z: 0.0,
+        };
+        let p = radial_point(
+            at,
+            1.0,
+            &Position {
+                x: 0.0,
+                y: 0.0,
+                z: 3.0,
+            },
+        );
+        assert!((p.z - 1.0).abs() < 1e-5 && p.x.abs() < 1e-5 && p.y == 1.0);
+        let inside = radial_point(
+            at,
+            1.0,
+            &Position {
+                x: 0.5,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert!((inside.x - 0.5).abs() < 1e-5);
+        assert_eq!(
+            radial_point(
+                at,
+                0.0,
+                &Position {
+                    x: 3.0,
+                    y: 0.0,
+                    z: 0.0
+                }
+            ),
+            at
+        );
+    }
 
     #[test]
     fn parses_three_nonnegative_lengths() {

@@ -13,6 +13,10 @@
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const corpseGroundOffsetByType = new Map<string, number>()
 
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const corpseOutlineByType = new Map<string, THREE.Vector3[]>()
+  const CORPSE_SHIFT_SECONDS = 0.3
+
   // Primal Roar's dizzy marker: stars circling over the head, shared by every
   // stunned monster.
   const STUN_STAR_COUNT = 3
@@ -64,6 +68,9 @@
     computeCorpseGroundOffset,
     loadSharedPackClipsForModel,
   } from '../utils/characterAnimationUtils'
+  import { computeCorpseOutline, findCorpseShift } from '../utils/corpseShift'
+  import { housingManager } from '../managers/housingManager'
+  import { dungeonManager } from '../managers/dungeonManager'
   import { billboardScale } from '../utils/billboardScale'
   import { hoveredMonsterId } from '../stores/gameStore'
   import { HOVER_SCALE_IDLE, stickyHoverScale } from '../utils/stickyHover'
@@ -258,6 +265,9 @@
   let lastAppliedOpacity = 1
   let materialsCloned = false
   let deadGroundApplied = false
+  // Model-local slide keeping the corpse clear of walls.
+  let corpseShift: THREE.Vector3 | null = null
+  let corpseShiftDone = 0
   let corpseTimer = 0
   const CORPSE_FADE_START = 55
   const CORPSE_FADE_DURATION = 5
@@ -318,6 +328,56 @@
       // since model.position lives inside the scaled group.
       model.position.y += offset + (def?.corpseGroundOffset ?? 0) / initialScale
     }
+  }
+
+  function poseLastFrame(
+    action: THREE.AnimationAction,
+    clip: THREE.AnimationClip
+  ) {
+    action.play()
+    action.time = Math.max(0, clip.duration - 1e-4)
+    mixer!.update(0)
+  }
+
+  /** Slide the corpse over its fall so it doesn't lie through a wall. */
+  function planCorpseShift(
+    action: THREE.AnimationAction,
+    clip: THREE.AnimationClip
+  ) {
+    if (!model || !group || !mixer) return
+    let outline = corpseOutlineByType.get(type)
+    if (!outline) {
+      poseLastFrame(action, clip)
+      outline = computeCorpseOutline(model)
+      corpseOutlineByType.set(type, outline)
+    }
+    model.updateWorldMatrix(true, false)
+    const center = group.getWorldPosition(new THREE.Vector3())
+    const lying = outline.map((p) => model!.localToWorld(p.clone()))
+    const floor = dungeonManager.passabilityFloorFor(floorLevel)
+    const shift = findCorpseShift(center, lying, (x0, z0, x1, z1) =>
+      housingManager.isMovementBlocked(x0, z0, x1, z1, floor, position.y)
+    )
+    if (!shift) return
+    const parent = model.parent ?? model
+    const from = parent.worldToLocal(center.clone())
+    const to = parent.worldToLocal(
+      center.clone().add(new THREE.Vector3(shift.x, 0, shift.z))
+    )
+    corpseShift = to.sub(from)
+    corpseShiftDone = 0
+  }
+
+  function advanceCorpseShift(deltaTime: number) {
+    if (!corpseShift || !model) return
+    const ease = (u: number) => THREE.MathUtils.smoothstep(u, 0, 1)
+    const next = Math.min(1, corpseShiftDone + deltaTime / CORPSE_SHIFT_SECONDS)
+    model.position.addScaledVector(
+      corpseShift,
+      ease(next) - ease(corpseShiftDone)
+    )
+    corpseShiftDone = next
+    if (next >= 1) corpseShift = null
   }
 
   function settleCorpse() {
@@ -387,16 +447,18 @@
           isDeadAnimationFinished = false
         }
 
+        if (monsterState === 'dead' && clipName === (def?.animDie ?? 'Die')) {
+          planCorpseShift(newAction, clip)
+        }
         newAction.reset()
         if (monsterState === 'dead' && !currentAction) {
           // Already dead on our very first play (AOI re-entry corpse): every
           // def reuses the die clip as the dead pose, so jump to its final
           // frame instead of replaying the fall, then evaluate so the ground
           // offset measures the lying body.
-          newAction.play()
-          newAction.time = Math.max(0, clip.duration - 1e-4)
-          mixer.update(0)
+          poseLastFrame(newAction, clip)
           settleCorpse()
+          advanceCorpseShift(CORPSE_SHIFT_SECONDS)
         } else {
           newAction.fadeIn(fadeDuration).play()
         }
@@ -478,6 +540,7 @@
       group.rotation.y = rotation
       if (sink > 0) shake(group, slept / 1000, 0.12 * (1 - sink))
     }
+    advanceCorpseShift(deltaTime)
     // Nothing left of a crumbled body to animate.
     if (crumble && model && group && camera && monsterState === 'dead') {
       deadMs += deltaTime * 1000

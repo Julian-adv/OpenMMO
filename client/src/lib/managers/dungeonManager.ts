@@ -524,6 +524,13 @@ class DungeonManager {
     return constants().floorIndexBase + depth - 1
   }
 
+  /** Passability floor a monster on `floorLevel` uses; 0 above ground. */
+  passabilityFloorFor(floorLevel: number): number {
+    return floorLevel < 0 && this.active
+      ? this.passabilityFloor(-floorLevel)
+      : 0
+  }
+
   floorLevelForPassability(floor: number): number {
     return dungeon_floor_level_for_passability(floor)
   }

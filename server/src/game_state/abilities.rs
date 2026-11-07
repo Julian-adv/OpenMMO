@@ -34,12 +34,15 @@ pub(super) struct MonsterTarget {
     pub(super) level_override: Option<u8>,
     rotation: f32,
     body: Option<onlinerpg_shared::monster_body::BodyFootprint>,
+    body_radius: f32,
 }
 
 impl MonsterTarget {
     /// The nearest point of its body to `from`, where reach is measured.
     pub(super) fn surface(&self, from: &onlinerpg_shared::Position) -> onlinerpg_shared::Position {
-        onlinerpg_shared::monster_body::reach_point(self.body, self.position, self.rotation, from)
+        use onlinerpg_shared::monster_body::{radial_point, reach_point};
+        let point = reach_point(self.body, self.position, self.rotation, from);
+        radial_point(point, self.body_radius, from)
     }
 }
 
@@ -520,13 +523,17 @@ impl GameState {
             .await
             .get(monster_id)
             .filter(|m| m.state != crate::types::MonsterState::Dead && m.health > 0)
-            .map(|m| MonsterTarget {
-                position: m.position,
-                floor_level: m.floor_level,
-                monster_type: m.monster_type.clone(),
-                level_override: m.level_override,
-                rotation: m.rotation,
-                body: self.monster_defs.get(&m.monster_type).and_then(|d| d.body),
+            .map(|m| {
+                let def = self.monster_defs.get(&m.monster_type);
+                MonsterTarget {
+                    position: m.position,
+                    floor_level: m.floor_level,
+                    monster_type: m.monster_type.clone(),
+                    level_override: m.level_override,
+                    rotation: m.rotation,
+                    body: def.and_then(|d| d.body),
+                    body_radius: def.map_or(0.0, |d| d.body_radius),
+                }
             })?;
         if let Some(position) = self.brain_position_now(monster_id).await {
             target.position = position;

@@ -712,11 +712,13 @@ impl super::GameState {
         // melee; clients swing from inside it, so the slack only covers lag.
         let weapon = self.equipped_weapon(player_id).await;
         let attack_range = weapon.range.unwrap_or(PLAYER_MELEE_REACH_METERS) + REACH_SLACK_METERS;
-        let body = self
-            .monster_defs
-            .get(&monster.monster_type)
-            .and_then(|d| d.body);
-        let surface = |at: Position| reach_point(body, at, monster.rotation, &player_position);
+        let def = self.monster_defs.get(&monster.monster_type);
+        let body = def.and_then(|d| d.body);
+        let radius = def.map_or(0.0, |d| d.body_radius);
+        let surface = |at: Position| {
+            let point = reach_point(body, at, monster.rotation, &player_position);
+            onlinerpg_shared::monster_body::radial_point(point, radius, &player_position)
+        };
         let reach = |target: Position| {
             reachable_dist_sq(player_position, player_floor, target, monster.floor_level)
         };

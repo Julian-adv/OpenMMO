@@ -115,6 +115,10 @@ pub struct MonsterDefinition {
     /// Solid body, csv `footprint` "halfWidth|front|back" meters; see `monster_body`.
     #[serde(rename = "footprint", default, deserialize_with = "parse_footprint")]
     pub body: Option<BodyFootprint>,
+    /// csv `bodyRadius` m: players reach the monster this far short of its
+    /// centre, so a long body is struck from outside it.
+    #[serde(rename = "bodyRadius", default)]
+    pub body_radius: f32,
 }
 
 fn parse_footprint<'de, D: serde::Deserializer<'de>>(

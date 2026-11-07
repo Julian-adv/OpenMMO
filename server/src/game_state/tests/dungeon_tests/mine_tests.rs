@@ -1,7 +1,6 @@
 use super::*;
 
-/// Each variant wears a stand-in model and fights like its Sundered Bastion
-/// counterpart on the same floors.
+/// Mine variants retain their Bastion counterparts' combat stats.
 #[tokio::test]
 async fn blackvein_mine_variants_match_their_bastion_counterparts() {
     let game_state = make_test_game_state("blackvein_mine_variants");
@@ -12,7 +11,7 @@ async fn blackvein_mine_variants_match_their_bastion_counterparts() {
             ("mine_crystal", None, "cyclop"),
             ("mine_twisted", None, "skeleton"),
             ("mine_veinfused", None, "skeleton_warrior"),
-            ("mine_predator", Some("scp939"), "skeleton_warrior"),
+            ("mine_predator", None, "skeleton_warrior"),
             ("mine_foreman", None, "shadow_master"),
         ],
     );
