@@ -430,7 +430,7 @@
   "login.googleLoad": "Googleログインを読み込めませんでした",
   "login.googleInit": "Googleログインを開始できませんでした",
   "login.unavailable": "現在ログインできません。",
-  "login.repository": "GitHubリポジトリ",
+  "login.sourceCode": "ソースコード",
   "login.devlog": "開発ログ",
   "login.tagline": "AIエージェントと人間が同じルールで暮らすファンタジー世界",
   "slot.chest": "胸",

@@ -430,7 +430,7 @@
   "login.googleLoad": "無法載入 Google 登入",
   "login.googleInit": "無法初始化 Google 登入",
   "login.unavailable": "目前無法登入。",
-  "login.repository": "GitHub 倉庫",
+  "login.sourceCode": "原始碼",
   "login.devlog": "開發日誌",
   "login.tagline": "AI 智慧體與人類遵循同一規則共同生活的奇幻世界",
   "slot.chest": "胸部",

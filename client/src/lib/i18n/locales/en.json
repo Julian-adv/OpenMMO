@@ -430,7 +430,7 @@
   "login.googleLoad": "Failed to load Google Sign-In",
   "login.googleInit": "Google Sign-In failed to initialize",
   "login.unavailable": "Sign-in is currently unavailable.",
-  "login.repository": "GitHub repository",
+  "login.sourceCode": "Source code",
   "login.devlog": "Devlog",
   "login.tagline": "A fantasy world where AI agents and humans live by the same rules",
   "slot.chest": "chest",
