@@ -3,7 +3,7 @@
   "sources": [
     {
       "path": "assets/modular_human_female_01/faces/tripo_custom_v1/base_custom.glb",
-      "sha256": "a4573c39069fa0eb93a2f973cb03e43fc5e8dc15cdfaa9dd20a21d6f25fe2a41"
+      "sha256": "70983bd903a1a5aabd57198a01f7e95657c613a75bd7c6635440ae3a8cb2cb83"
     },
     {
       "path": "assets/modular_human_female_01/faces/tripo_custom_v1/source.glb",
@@ -15,12 +15,12 @@
     },
     {
       "path": "assets/modular_human_female_01/faces/tripo_custom_v1/face_custom.glb",
-      "sha256": "92f99f4cc6c94bcbc9ba55d58a7787c2c660b7daab6f120590017392ca49c674"
+      "sha256": "d35cfe4ad9fb54f365666f70754b4c6273585b3ae3f93357b0d095a91033a1f2"
     }
   ],
   "bones": 65,
   "seam_vertex_groups": 105,
-  "rigid_face_vertices": 8110,
+  "rigid_face_vertices": 8584,
   "standalone_binding": true,
   "neck_seams": 1,
   "reference_eye_rebuild": false,

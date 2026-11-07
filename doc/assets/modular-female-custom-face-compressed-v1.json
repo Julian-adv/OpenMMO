@@ -3,15 +3,15 @@
   "sources": [
     {
       "path": "/home/jake/.codex/worktrees/female-new-face/OnlineRPG/assets/modular_human_female_01/faces/tripo_custom_v1/base_custom.glb",
-      "sha256": "a4573c39069fa0eb93a2f973cb03e43fc5e8dc15cdfaa9dd20a21d6f25fe2a41"
+      "sha256": "70983bd903a1a5aabd57198a01f7e95657c613a75bd7c6635440ae3a8cb2cb83"
     },
     {
       "path": "/home/jake/.codex/worktrees/female-new-face/OnlineRPG/assets/modular_human_female_01/faces/tripo_custom_v1/base_custom_preview.glb",
-      "sha256": "3234e15963d5f7652d992d55d18d9eba13af08f51be44716bdcc40f7b9ca7395"
+      "sha256": "e8b23a3b7788e5d6b35957d1a3047ada26f4841976f35b7f12749cd71b47a4e7"
     }
   ],
-  "source_bytes": 27025716,
-  "output_bytes": 4601212,
+  "source_bytes": 27135836,
+  "output_bytes": 4673088,
   "triangles": 23444,
   "all_vertex_attributes_exact": true,
   "triangle_order_and_winding_preserved": true,

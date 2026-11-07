@@ -24,6 +24,22 @@
 [복원된 정면](../images/characters/modular_human_female_01/customization/face-custom-neck-only-restored-front.png),
 [눈 확대](../images/characters/modular_human_female_01/customization/face-custom-neck-only-restored-eyes.png).
 
+## 동공·홍채 텍스처 정리 v2
+
+2026-11-08, 사용자가 만족한 아래 눈꺼풀 상태를 `9f58038c`에 먼저 커밋했다.
+그 기준에서 오른눈의 흩어진 검은 동공 조각과 왼눈에 남은 흰 반사 무늬를 정리했다.
+기존 황갈색 홍채를 정면 투영해 ImageGen으로 보정하고, 원래 시선 위치에 맞춰 배치한 뒤
+홍채 영역 마스크에만 적용했다. 아틀라스의 마스크 밖 컬러는 동일하다. 아주 작은 원본 UV 조각에 흰 무늬가 남아,
+해당 홍채 면도 기존 512×512 UV1 패치에 연결했다. 정점은 UV 경계에서 복제하지만 삼각형 위치·노멀·UV0·가중치·리그·동작은 커밋 기준본과 일치한다.
+노멀·ORM·속눈썹 RGBA 이미지 바이트도 그대로다. ORM은 기존 UV1 좌표를 복사한 UV2로 샘플링해 표면 반사 특성을 유지한다.
+실제 조명 반사는 남으며 고정 반사 무늬가 제거된 것은 조명 없는 컬러 투영으로도 확인했다.
+
+원본·보정 투영 이미지와 적용 마스크, 보정 전 GLB·Blender·피팅 기록은 `iris_texture_cleanup_v2/`에 있다.
+`before/`는 **[미사용: 이번 홍채 보정 전 비교·재현용]**이다. ImageGen **ChatGPT Pro 20x**, 2026-11-08 생성.
+사용자 제공 원본 텍스처의 출처·라이선스 조건을 따른다. 새 안구·눈꺼풀 형상은 만들지 않았다.
+[실제 미리보기 전후](../images/characters/modular_human_female_01/customization/face-custom-iris-retouch-v2-comparison.png),
+[출처·보정·검증 기록](modular-female-custom-face-iris-retouch-v2.json).
+
 ## 아래 눈꺼풀 단차선 v2
 
 2026-11-08, 사용자 빨간색·파란색 표시를 기준으로 실제 메시 단차의 앞·뒤 모서리를 찾았다.
@@ -152,6 +168,7 @@ node tools/optimize-modular-part.mjs \
   assets/modular_human_female_01/faces/tripo_custom_v1/lower_lid_ridge_v2/base_custom_preview.glb \
   --body --size=2048 --quality=94 --keep-alpha-png
 .venv/bin/python tools/fit-female-eyelid-ridge.py --activate
+.venv/bin/python tools/retouch-female-irises.py
 node tools/optimize-modular-part.mjs \
   assets/modular_human_female_01/faces/tripo_custom_v1/base_custom.glb \
   assets/modular_human_female_01/faces/tripo_custom_v1/base_custom_preview.glb \

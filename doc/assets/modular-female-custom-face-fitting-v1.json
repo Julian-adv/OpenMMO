@@ -33,12 +33,12 @@
   "materials": 3,
   "preview_texture_limit": 2048,
   "files": {
-    "base_custom.glb": "a4573c39069fa0eb93a2f973cb03e43fc5e8dc15cdfaa9dd20a21d6f25fe2a41",
-    "face_custom.glb": "92f99f4cc6c94bcbc9ba55d58a7787c2c660b7daab6f120590017392ca49c674",
+    "base_custom.glb": "70983bd903a1a5aabd57198a01f7e95657c613a75bd7c6635440ae3a8cb2cb83",
+    "face_custom.glb": "d35cfe4ad9fb54f365666f70754b4c6273585b3ae3f93357b0d095a91033a1f2",
     "body-neck-albedo.png": "f4da1c4782b8a4fca22380dd99c55fb2ae080a57249e3621a99f0f23637ff8d5",
     "lash_skin_alpha_v1/original-lash-skin-alpha.png": "ac2b06eb2af0cb4d631b625a63b8ebb9a55e642a60c589adc90d3d07aa75ea2b"
   },
-  "status": "Lower eyelid ridge translated with its curve retained; original eye textures countershifted upward on UV1 patches",
+  "status": "Accepted eyelid ridge geometry retained; only iris color texture retouched for coherent pupils and reduced baked reflections",
   "original_head_alpha_only": false,
   "geometry_rig_and_animations_unchanged": false,
   "original_lash_rgb_preserved": true,
@@ -353,5 +353,53 @@
     ],
     "source": "Original user Tripo model, iris cleanup baseline and user red/blue lower eyelid annotation",
     "license": "Source license not supplied; same source conditions apply. Local geometry and UV baking; no new AI generation."
+  },
+  "iris_texture_cleanup_v2": {
+    "date": "2026-11-08",
+    "baseline_commit": "9f58038c",
+    "baseline_sha256": "a4573c39069fa0eb93a2f973cb03e43fc5e8dc15cdfaa9dd20a21d6f25fe2a41",
+    "method": "Retouch hazel irises in existing UV1 tiles; include tiny original iris UV fragments and preserve ORM coordinates on UV2",
+    "changed_albedo_texels": 28133,
+    "triangle_positions_normals_uv0_weights_rig_animations_exact": true,
+    "color_uv_mapping": {
+      "remapped_triangles": 530,
+      "duplicated_vertices": 474
+    },
+    "orm_sampling_coordinates_preserved_on_uv2": true,
+    "outside_iris_mask_exact": true,
+    "normal_orm_lash_rgba_bytes_exact": true,
+    "source_projection_sha256": "1101d60f9a4b83a7b1ad85ae96600d035264084c1e58e4301af0973442221a57",
+    "edited_projection_sha256": "0b9bf7df3e7c5f13bc16081011710118ecf259e9e681d2c33253e9f4c2111e55",
+    "albedo_sha256": "76989b4e2f849171515d163471286b3dc7767a18f150b247650be380673d1df7",
+    "mask_sha256": "af1c18874dcc176e007d801201ed0961857c613aba1da344bb0ffa236dcaac87",
+    "pupil_placement": {
+      "input_pupil_centers_px": [
+        [
+          267,
+          217
+        ],
+        [
+          756,
+          213
+        ]
+      ],
+      "sampling_offsets_px": [
+        [
+          -25.317260421577203,
+          10.72597481311874
+        ],
+        [
+          -4.8719646799116845,
+          14.88579838116263
+        ]
+      ]
+    },
+    "tool": "Built-in ImageGen",
+    "subscription": "ChatGPT Pro 20x",
+    "license": "Retouch of the user-provided Tripo texture. Original license not supplied; source conditions apply.",
+    "files": {
+      "base_custom.glb": "70983bd903a1a5aabd57198a01f7e95657c613a75bd7c6635440ae3a8cb2cb83",
+      "face_custom.glb": "d35cfe4ad9fb54f365666f70754b4c6273585b3ae3f93357b0d095a91033a1f2"
+    }
   }
 }
