@@ -1,0 +1,10 @@
+{
+  "date": "2026-11-07",
+  "tool": "Built-in OpenAI ImageGen",
+  "tier": "ChatGPT Pro 20x",
+  "asset": "assets/modular_human_female_01/faces/tripo_custom_v1/eye-iris-clean-v1.png",
+  "sha256": "88dd31c7061fb3f3d6176cc5affa07313a3e0f7f8aedb739f996b0182997bc35",
+  "source_output": "/home/jake/.codex/generated_images/01a1b4a3-c8ba-7c51-8ebf-93cb9999bfa6/exec-960a08c1-3ac2-4f5c-983c-75aaad2c0367.png",
+  "license_and_source": "Project-generated iris image; user-supplied Tripo model retains its separately recorded provenance",
+  "prompt": "Single centered circular natural hazel-brown iris and round black pupil, crisp radial fibers, pale ivory sclera background. Flat orthographic diffuse/albedo eye texture for the female game character. No skin, eyelids, eyelashes, text, shadows or painted reflections. Requested iris diameter 48% and pupil diameter 16%; generated output measured and calibrated at iris radius 0.296 of image width when baking."
+}

@@ -1,0 +1,12 @@
+{
+  "date": "2026-11-07",
+  "model_sha256": "f3f9126a5654db0dc521ff95eff6870ca29567f650041727fd9449572b6de233",
+  "width_scale": 1.35,
+  "all_geometry_uv_skin_weights_and_animation_accessors_unchanged": true,
+  "rgb_unchanged": true,
+  "upper_opaque_pixels_before": 15710,
+  "upper_opaque_pixels_after": 20061,
+  "lower_opaque_pixels_before": 3786,
+  "lower_opaque_pixels_after": 4742,
+  "fitting_mask_matches_original": true
+}

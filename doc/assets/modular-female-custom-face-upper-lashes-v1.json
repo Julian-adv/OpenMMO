@@ -1,0 +1,256 @@
+{
+  "date": "2026-11-07",
+  "source_path": "assets/modular_human_female_01/faces/tripo_custom_v1/source.glb",
+  "source_sha256": "8dbcbcb21d06cd2ed33020a9eef617e1b4396fa4e43292c95748ddbbe3152dce",
+  "models": [
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/base_custom.glb",
+      "sha256": "f3f9126a5654db0dc521ff95eff6870ca29567f650041727fd9449572b6de233"
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/base_custom_preview.glb",
+      "sha256": "fa95829eae378231d4849720c76505d8ac3e8cb66c75cc946de78434ae69794c"
+    }
+  ],
+  "source_uv_components": [
+    504,
+    1421,
+    1428
+  ],
+  "triangles": 37,
+  "source_faces_checked_in_alpha_material": [
+    1451,
+    10093,
+    10094,
+    10095,
+    10096,
+    10119,
+    10120,
+    10871,
+    10872,
+    10873,
+    10874,
+    29169,
+    29170,
+    29171,
+    29172,
+    29173,
+    29174,
+    29237,
+    29238,
+    29239,
+    29240,
+    29259,
+    29260,
+    29441,
+    29442,
+    29561,
+    29562,
+    29605,
+    29606,
+    29607,
+    29608,
+    29643,
+    29644,
+    29671,
+    29672,
+    29703,
+    29704
+  ],
+  "right_camera_position": [
+    0.095,
+    1.7925,
+    0.12
+  ],
+  "right_camera_target": [
+    0.03,
+    1.685,
+    0.06
+  ],
+  "left_camera_position": [
+    -0.0966,
+    1.7925,
+    0.12
+  ],
+  "left_camera_target": [
+    -0.0316,
+    1.685,
+    0.06
+  ],
+  "viewport": [
+    1500,
+    1100
+  ],
+  "right_after_opaque_ray_samples": [
+    {
+      "pixel": [
+        520,
+        480
+      ],
+      "component": 1407,
+      "component_triangles": 8,
+      "source_faces": [
+        29022
+      ],
+      "bounds": [
+        [
+          0.030416418370604516,
+          1.6812896728515625,
+          0.06632046544551849
+        ],
+        [
+          0.03569243339896202,
+          1.6865657567977905,
+          0.06719980159401893
+        ]
+      ]
+    },
+    {
+      "pixel": [
+        550,
+        490
+      ],
+      "component": 1410,
+      "component_triangles": 4,
+      "source_faces": [
+        1367
+      ],
+      "bounds": [
+        [
+          0.03217508880496025,
+          1.6812896728515625,
+          0.05664777526259422
+        ],
+        [
+          0.040968446564674375,
+          1.6856863498687744,
+          0.0645617968738079
+        ]
+      ]
+    },
+    {
+      "pixel": [
+        580,
+        500
+      ],
+      "component": 1410,
+      "component_triangles": 4,
+      "source_faces": [
+        29115
+      ],
+      "bounds": [
+        [
+          0.03217508880496025,
+          1.6812896728515625,
+          0.05664777526259422
+        ],
+        [
+          0.040968446564674375,
+          1.6856863498687744,
+          0.0645617968738079
+        ]
+      ]
+    },
+    {
+      "pixel": [
+        610,
+        510
+      ],
+      "component": 1233,
+      "component_triangles": 96,
+      "source_faces": [
+        29211
+      ],
+      "bounds": [
+        [
+          0.011071036142110824,
+          1.627650260925293,
+          0.05576843911409378
+        ],
+        [
+          0.05152047289609909,
+          1.6848070621490479,
+          0.0768724992275238
+        ]
+      ]
+    },
+    {
+      "pixel": [
+        620,
+        515
+      ],
+      "component": 1338,
+      "component_triangles": 325,
+      "source_faces": [
+        29187
+      ],
+      "bounds": [
+        [
+          0.029537082222104074,
+          1.602149486541748,
+          -0.046234498232603075
+        ],
+        [
+          0.08581455661058426,
+          1.777137279510498,
+          0.07511382693052292
+        ]
+      ]
+    },
+    {
+      "pixel": [
+        480,
+        453
+      ],
+      "component": 1388,
+      "component_triangles": 96,
+      "source_faces": [
+        1381
+      ],
+      "bounds": [
+        [
+          0.024261069056391717,
+          1.680410385131836,
+          0.06544112929701805
+        ],
+        [
+          0.03569243339896202,
+          1.6936004161834717,
+          0.06719980159401893
+        ]
+      ]
+    },
+    {
+      "pixel": [
+        610,
+        495
+      ],
+      "component": 1412,
+      "component_triangles": 26,
+      "source_faces": [
+        1461
+      ],
+      "bounds": [
+        [
+          0.03217508880496025,
+          1.6856863498687744,
+          0.05664777526259422
+        ],
+        [
+          0.04536512358188629,
+          1.6892037391662598,
+          0.06632046544551849
+        ]
+      ]
+    }
+  ],
+  "underlying_eye_geometry_preserved": true,
+  "draw_calls_added": 0,
+  "assembled_triangles": 23444,
+  "head_scale_translation_only": true,
+  "image": "doc/images/characters/modular_human_female_01/customization/face-custom-upper-lash-top-v1.png",
+  "upper_lash_roots_fitted": true,
+  "lower_lash_roots_fitted": true,
+  "outer_upper_lashes_swept": true,
+  "eyelash_width_scale": 1.35
+}

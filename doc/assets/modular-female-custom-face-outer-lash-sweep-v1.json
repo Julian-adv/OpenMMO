@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-07",
+  "model_sha256": "9cea28796e495670842c7796a5ecbc059c6adb0c605aa65f42f7c54123ad32cb",
+  "before_model_sha256": "775ac2e473f7a3e3a0651e3910992e76f1e67ab73db7993cc002d1ecd02bdbd1",
+  "face_body_and_lower_lash_attributes_unchanged": true,
+  "inner_upper_positions_unchanged": true,
+  "outer_upper_moves_outward_and_down": true,
+  "uv_topology_weights_and_depth_preserved": true,
+  "changed_vertices": 121,
+  "upper_root_maximum_sampled_gap_mm": 0.49433134509203924,
+  "lower_root_maximum_sampled_gap_mm": 0.32011090607972914,
+  "reference": "User-marked outward red lines; mirrored to both outer upper eyelids",
+  "image": "doc/images/characters/modular_human_female_01/customization/face-custom-outer-lash-sweep-v1.png"
+}

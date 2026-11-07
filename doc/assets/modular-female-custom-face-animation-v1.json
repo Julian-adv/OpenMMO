@@ -1,0 +1,175 @@
+{
+  "date": "2026-11-07",
+  "sources": [
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/base_custom.glb",
+      "sha256": "0ec4b7025042d8a9735cfde95a9dbb72b78854bc2904dab6fcdd9aa035f94b59"
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/source.glb",
+      "sha256": "8dbcbcb21d06cd2ed33020a9eef617e1b4396fa4e43292c95748ddbbe3152dce"
+    },
+    {
+      "path": "assets/modular_human_female_01/rig_v1/female-base.glb",
+      "sha256": "3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5"
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/face_custom.glb",
+      "sha256": "9d5fb11904676dc421dfff6ab0e78c372cc677f371967838138d5539085430ec"
+    }
+  ],
+  "bones": 65,
+  "seam_vertex_groups": 105,
+  "rigid_face_vertices": 7070,
+  "standalone_binding": true,
+  "neck_seams": 1,
+  "reference_eye_rebuild": false,
+  "neck_fit_only": false,
+  "source_lash_faces_absent_from_opaque_head": [
+    10013,
+    10014,
+    10021,
+    10023,
+    10071,
+    10072,
+    29166,
+    29179,
+    29213,
+    1451,
+    10093,
+    10094,
+    10095,
+    10096,
+    10119,
+    10120,
+    10871,
+    10872,
+    10873,
+    10874,
+    29169,
+    29170,
+    29171,
+    29172,
+    29173,
+    29174,
+    29237,
+    29238,
+    29239,
+    29240,
+    29259,
+    29260,
+    29441,
+    29442,
+    29561,
+    29562,
+    29605,
+    29606,
+    29607,
+    29608,
+    29643,
+    29644,
+    29671,
+    29672,
+    29703,
+    29704
+  ],
+  "original_eye_and_eyelash_faces_restored": true,
+  "original_head_alpha_only": true,
+  "protected_eye_source_faces": [
+    561,
+    9206,
+    10475,
+    10476,
+    10477,
+    10478,
+    10483,
+    10484,
+    10505,
+    10506,
+    10537,
+    10538,
+    10563,
+    10564,
+    10609,
+    10610,
+    10611,
+    10612,
+    10771,
+    10772,
+    10775,
+    29075,
+    29076,
+    29077,
+    29105,
+    29106,
+    29117,
+    29118,
+    29168,
+    29215,
+    29216,
+    29432,
+    29439
+  ],
+  "upper_lash_roots_fitted": false,
+  "lower_lash_roots_fitted": false,
+  "head_affine_scope": "Entire source head, including eyes and eyelashes, scalp and neck",
+  "new_head_scale_and_translation_only": true,
+  "maximum_head_affine_error_m": 2.2250491372754983e-16,
+  "clips": [
+    {
+      "name": "idle1",
+      "samples": 25,
+      "maximum_seam_error_m": 0,
+      "maximum_rigid_head_error_m": 2.7240164568819547e-8
+    },
+    {
+      "name": "idle_armed",
+      "samples": 25,
+      "maximum_seam_error_m": 0,
+      "maximum_rigid_head_error_m": 2.7240164568819547e-8
+    },
+    {
+      "name": "walk",
+      "samples": 25,
+      "maximum_seam_error_m": 0,
+      "maximum_rigid_head_error_m": 2.724016461117965e-8
+    },
+    {
+      "name": "run",
+      "samples": 25,
+      "maximum_seam_error_m": 0,
+      "maximum_rigid_head_error_m": 2.724016462637638e-8
+    },
+    {
+      "name": "jump",
+      "samples": 25,
+      "maximum_seam_error_m": 0,
+      "maximum_rigid_head_error_m": 2.7240164429141878e-8
+    },
+    {
+      "name": "combat_idle",
+      "samples": 25,
+      "maximum_seam_error_m": 0,
+      "maximum_rigid_head_error_m": 2.7240164562184244e-8
+    },
+    {
+      "name": "slash1",
+      "samples": 25,
+      "maximum_seam_error_m": 0,
+      "maximum_rigid_head_error_m": 2.7240164480375863e-8
+    },
+    {
+      "name": "dying",
+      "samples": 25,
+      "maximum_seam_error_m": 0,
+      "maximum_rigid_head_error_m": 2.724016539576966e-8
+    },
+    {
+      "name": "sit_idle",
+      "samples": 25,
+      "maximum_seam_error_m": 0,
+      "maximum_rigid_head_error_m": 2.724016448617025e-8
+    }
+  ],
+  "scope": "Rest binding, normalized weights, finite deformation, rigid head tracking and neck seams. Hair and equipment intersections require visual review."
+}

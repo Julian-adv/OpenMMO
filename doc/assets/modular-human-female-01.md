@@ -79,6 +79,12 @@ PBR·detailed 텍스처 `v3.5-20260815`, 시드 101101, **120크레딧**. 결과
 동작은 프로젝트의 Mixamo 동작(`assets/modular_human_male_01/animations/animations.glb`, `client/public/models/characters/modular_male/animations/social.glb`, `assets/all_animation.blend`의 `walk_cat`)을 리타깃했다. 로컬 작업이며 추가 구독·과금은 없다.
 [리깅](modular-human-female-01-rig-v1.json), [캣워크](modular-human-female-01-catwalk-v1.json), [앉기](modular-human-female-01-seated-v1.json) 기록.
 
+## 추가 얼굴 피팅
+
+2026-11-07 사용자 제공 전신 GLB의 머리를 분리해 이 몸체에 연결한
+[새 얼굴 시안](modular-female-custom-face.md)을 만들었다. 원본 몸체는 보존하며,
+게임 외형 목록에는 아직 등록하지 않았다.
+
 ## 제한
 
 - `female-base.blend`는 미터 전환 전 제작 단위(높이 1)이고 속옷 자국 제거 전 텍스처를 담는다. `catwalk-source.glb`는 Mixamo 자체 단위다.

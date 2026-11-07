@@ -1,0 +1,1006 @@
+{
+  "date": "2026-11-07",
+  "status": "[\ubbf8\uc0ac\uc6a9] User reverted all eye and eyelash changes to the original single-neck fit",
+  "source_model": {
+    "path": "assets/modular_human_female_01/faces/tripo_custom_v1/source.glb",
+    "sha256": "8dbcbcb21d06cd2ed33020a9eef617e1b4396fa4e43292c95748ddbbe3152dce",
+    "license": "User supplied; license and original generation tier not provided"
+  },
+  "reference": {
+    "path": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/target.png",
+    "sha256": "a4b69417fce59c613922039771c69b39507e5f7ab4c04e07bf3199c439f67cd2",
+    "source": "User attachment codex-clipboard-b637ef0c-dba1-4e1c-921f-9756c90ba659.png",
+    "license": "Not provided"
+  },
+  "generation": {
+    "date": "2026-11-07",
+    "tool": "Built-in OpenAI ImageGen",
+    "tier": "ChatGPT Pro 20x",
+    "asset": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/iris-hazel.png",
+    "sha256": "7029d3e099feaf1ae456f533b7b099be5933db6b69bb3f78400fad69bee684ba",
+    "source_output": "/home/jake/.codex/generated_images/01a1b4a3-c8ba-7c51-8ebf-93cb9999bfa6/exec-10ef1cd7-e1ce-4d2a-8d7d-f1c67d61f2c4.png",
+    "source_output_copied_without_modification": true,
+    "inputs": [
+      {
+        "path": "assets/modular_human_female_01/faces/tripo_custom_v1/eye-iris-clean-v1.png",
+        "sha256": "88dd31c7061fb3f3d6176cc5affa07313a3e0f7f8aedb739f996b0182997bc35",
+        "role": "Previous generated iris edited"
+      },
+      {
+        "path": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/target.png",
+        "sha256": "a4b69417fce59c613922039771c69b39507e5f7ab4c04e07bf3199c439f67cd2",
+        "role": "User-provided face style reference"
+      }
+    ],
+    "prompt_summary": "Edit the previous circular iris to match the reference female face: softer light hazel/golden tan, fine radial fibers, centered round black pupil about one third of iris diameter, flat diffuse/albedo texture. Preserve circular layout; no skin, eyelids, eyelashes, text, baked shadows or painted highlights.",
+    "license_and_source": "Project-generated iris using the previous generated iris and user-provided visual reference; the user did not provide separate license information for the reference or Tripo model."
+  },
+  "build": {
+    "style": {
+      "iris_radius": 0.00855,
+      "iris_center_x": 0.0332,
+      "iris_center_y": 1.689,
+      "pupil_fraction": 0.4,
+      "iris_saturation": 0.94,
+      "iris_gain": 1.06,
+      "sclera": [
+        203,
+        196,
+        178
+      ],
+      "skin": [
+        177,
+        143,
+        111
+      ],
+      "bulge": 0.0017,
+      "upper_length": 0.0032,
+      "lower_length": 0.0028,
+      "upper_count": 84,
+      "lower_count": 48,
+      "upper_band": 0.0024,
+      "lower_band": 0.00038,
+      "upper_lash_rgb": [
+        41,
+        39,
+        38
+      ],
+      "lower_lash_rgb": [
+        71,
+        42,
+        13
+      ],
+      "face_normal_scale": 0.0,
+      "skin_roughness_floor": 185,
+      "gaze_x": -0.0018,
+      "cornea_bulge": 0.0014,
+      "upper_width_scale": 1.45,
+      "lower_width_scale": 1.15,
+      "iris_roughness_byte": 58,
+      "sclera_normal_flatten": 0.16,
+      "eye_region_y_offset": -0.0045,
+      "upper_wing_length": 0.013,
+      "upper_wing_rise": 0.0036,
+      "pupil_y_offset": -0.0011,
+      "right_inner_x_shift": -0.0031,
+      "right_outer_x_shift": -0.0012,
+      "optical_bulge": 0.0017,
+      "optical_cornea_bulge": 0.0014,
+      "eye_socket_shape": "ellipsoid"
+    },
+    "source": "before-reference.glb",
+    "reference": "target.png",
+    "original_face_vertices": 7481,
+    "eye_caps_triangles": 1728,
+    "lash_triangles": 3408,
+    "face_triangles": 8963,
+    "meshes": 3,
+    "body_and_neck_geometry_preserved": true,
+    "original_head_positions_preserved": false,
+    "original_head_positions_preserved_outside_eye_region": true,
+    "eye_region_y_offset_m": -0.0045,
+    "eye_contour_knots_m": [
+      0.0182,
+      0.022,
+      0.028,
+      0.034,
+      0.0365,
+      0.041,
+      0.048,
+      0.0522
+    ],
+    "upper_contour_y_m_before_offset": [
+      1.68125,
+      1.68549,
+      1.6891,
+      1.69148,
+      1.6917,
+      1.691,
+      1.68817,
+      1.6857
+    ],
+    "eye_contour_x_by_side_m": {
+      "-1": [
+        0.0182,
+        0.022,
+        0.028,
+        0.034,
+        0.0365,
+        0.041,
+        0.048,
+        0.0522
+      ],
+      "1": [
+        0.0151,
+        0.019825894789334417,
+        0.02685344638713617,
+        0.03340408774679422,
+        0.03600766200132302,
+        0.040527322939141054,
+        0.04718619012823123,
+        0.051000000000000004
+      ]
+    },
+    "lower_contour_y_m_before_offset": [
+      1.68125,
+      1.6806,
+      1.67985,
+      1.67995,
+      1.68005,
+      1.6807,
+      1.6826,
+      1.6857
+    ],
+    "sha256": "1d98e7bd0e0879a5ac21440c19d852391c4c5e975d89de4a8cb95175e5070230"
+  },
+  "build_inputs": [
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/before-reference.glb",
+      "sha256": "96649329be2fa4eb4a19e64ccdbc0463f42b722f1a54a746a9071f2376007bbc"
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/before-reference-fitting.json",
+      "sha256": "361e64618b38ae56a47e1f682f219fd68846fbdf447bdad01e3f3464b28b1303"
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/original-face.npz",
+      "sha256": "6452b70dd5edf66254aa8f4a9f83ce7498b2595605ad204e7bc4cd3a6127c911"
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/style.json",
+      "sha256": "a3d3075090d2444af78ae7a3001649c04cd4a3fcb881640d8d444c571bc13729"
+    },
+    {
+      "path": "tools/refine-female-reference-eyes.py",
+      "sha256": "e19df797e28b7b8a39ef61f09298300ad84ab359852cb257f725b2bfa5bb5c5d"
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/shape-guide.json",
+      "sha256": "717c723df3bc6de274edae8ffa8a89b14a4ff76f1b95bd7d5ffdc18e025de2d4"
+    },
+    {
+      "path": "tools/review-female-reference-eyes.py",
+      "sha256": "30abd44aaeba696a657fdc7e3698797d82dfd076ffec005fa69543061b6827af"
+    }
+  ],
+  "geometry_validation": {
+    "date": "2026-11-07",
+    "sha256": "1d98e7bd0e0879a5ac21440c19d852391c4c5e975d89de4a8cb95175e5070230",
+    "body_attributes_and_indices_exact": true,
+    "bone_nodes_and_bind_matrices_exact": true,
+    "animation_tracks_exact": 9,
+    "original_head_triangles_joints_and_weights_exact": true,
+    "original_head_attributes_exact_outside_eye_region": true,
+    "local_eye_region_deformed_vertices": 2458,
+    "maximum_eye_region_displacement_m": 0.010884309187531471,
+    "original_eye_surface_recessed_vertices": 238,
+    "maximum_eye_region_y_displacement_m": 0.008057117462158203,
+    "minimum_eye_deformation_jacobian": 0.37806712930106245,
+    "lower_eyelid_to_eye_surface_join_error_m": 0,
+    "original_skin_albedo_pixels_exact": true,
+    "maximum_original_uv_pixel_error": 0.00011444091796875,
+    "unit_normals_and_normalized_weights": true,
+    "triangles_by_mesh": [
+      15701,
+      8963,
+      3408
+    ],
+    "assembled_triangles_including_hidden": 28072,
+    "known_original_eye_triangles_covered_in_front_view": 735,
+    "front_view_visible_geometry_upper_bound": 27337,
+    "visibility_scope": "Conservative triangle estimate using all corners and centroid behind the new caps. Other backfaces, hair occlusion and partial coverage are not subtracted.",
+    "depth_refinement": {
+      "before_sha256": "d558a47554a472974c6f5cc489ee770c4f53897d698d4bc0b46ea3b667829909",
+      "maximum_cap_retreat_m": 0.00819704681634903,
+      "median_cap_retreat_m": 0.005238030105829239,
+      "maximum_cap_edge_advance_m": 0.005544740706682205,
+      "old_foremost_cap_z_m": 0.0716848224401474,
+      "new_foremost_cap_z_m": 0.0638069212436676,
+      "foremost_cap_retreat_m": 0.007877901196479797
+    }
+  },
+  "compression_validation": {
+    "date": "2026-11-07",
+    "sources": [
+      {
+        "path": "/home/jake/.codex/worktrees/female-new-face/OnlineRPG/assets/modular_human_female_01/faces/tripo_custom_v1/base_custom.glb",
+        "sha256": "1d98e7bd0e0879a5ac21440c19d852391c4c5e975d89de4a8cb95175e5070230"
+      },
+      {
+        "path": "/home/jake/.codex/worktrees/female-new-face/OnlineRPG/assets/modular_human_female_01/faces/tripo_custom_v1/base_custom_preview.glb",
+        "sha256": "80e74d76f297373d354a5b8208fd783b152753d799c3e9db449f82cfc6463291"
+      }
+    ],
+    "source_bytes": 28009940,
+    "output_bytes": 4913220,
+    "triangles": 28072,
+    "all_vertex_attributes_exact": true,
+    "triangle_order_and_winding_preserved": true,
+    "animations_exact": 9,
+    "compressed_eyelash_rgba_exact": true,
+    "meshes": 3,
+    "materials": 3,
+    "texture_sizes": [
+      {
+        "material": "tripo_material_073e85e0-595b-4a12-9030-2dc3e30566e9",
+        "source_size": [
+          4096,
+          4096
+        ],
+        "size": [
+          2576,
+          2576
+        ],
+        "alpha": "OPAQUE"
+      },
+      {
+        "material": "Female custom face cleaned eyes",
+        "source_size": [
+          2048,
+          2576
+        ],
+        "size": [
+          2048,
+          2576
+        ],
+        "alpha": "OPAQUE"
+      },
+      {
+        "material": "Custom female eyelashes",
+        "source_size": [
+          64,
+          64
+        ],
+        "size": [
+          64,
+          64
+        ],
+        "alpha": "BLEND"
+      }
+    ],
+    "compression": "Meshopt lossless attributes; WebP base color quality 94; lossless WebP eyelash RGBA; JPEG normal/ORM; maximum dimension 2576"
+  },
+  "animation_validation": {
+    "date": "2026-11-07",
+    "sources": [
+      {
+        "path": "assets/modular_human_female_01/faces/tripo_custom_v1/base_custom.glb",
+        "sha256": "1d98e7bd0e0879a5ac21440c19d852391c4c5e975d89de4a8cb95175e5070230"
+      },
+      {
+        "path": "assets/modular_human_female_01/faces/tripo_custom_v1/source.glb",
+        "sha256": "8dbcbcb21d06cd2ed33020a9eef617e1b4396fa4e43292c95748ddbbe3152dce"
+      },
+      {
+        "path": "assets/modular_human_female_01/rig_v1/female-base.glb",
+        "sha256": "3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5"
+      },
+      {
+        "path": "assets/modular_human_female_01/faces/tripo_custom_v1/face_custom.glb",
+        "sha256": "ed7fef1753df93557d9bf488d8ac24fc55a7bae6b6665d0acedf4e59234a3b87"
+      }
+    ],
+    "bones": 65,
+    "seam_vertex_groups": 105,
+    "rigid_face_vertices": 11119,
+    "standalone_binding": true,
+    "neck_seams": 1,
+    "reference_eye_rebuild": true,
+    "source_lash_faces_absent_from_opaque_head": [
+      10013,
+      10014,
+      10021,
+      10023,
+      10071,
+      10072,
+      29166,
+      29168,
+      29179,
+      29213,
+      1451,
+      10093,
+      10094,
+      10095,
+      10096,
+      10119,
+      10120,
+      10871,
+      10872,
+      10873,
+      10874,
+      29169,
+      29170,
+      29171,
+      29172,
+      29173,
+      29174,
+      29237,
+      29238,
+      29239,
+      29240,
+      29259,
+      29260,
+      29441,
+      29442,
+      29561,
+      29562,
+      29605,
+      29606,
+      29607,
+      29608,
+      29643,
+      29644,
+      29671,
+      29672,
+      29703,
+      29704
+    ],
+    "upper_lash_roots_fitted": true,
+    "lower_lash_roots_fitted": true,
+    "head_affine_scope": "Original face, scalp and neck outside the local eye region; added eyes and eyelashes excluded",
+    "new_head_scale_and_translation_only": true,
+    "maximum_head_affine_error_m": 2.2250491372754983e-16,
+    "clips": [
+      {
+        "name": "idle1",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.7240164568819547e-08
+      },
+      {
+        "name": "idle_armed",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.7240164568819547e-08
+      },
+      {
+        "name": "walk",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.724016461117965e-08
+      },
+      {
+        "name": "run",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.724016462637638e-08
+      },
+      {
+        "name": "jump",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.7240164429141878e-08
+      },
+      {
+        "name": "combat_idle",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.7240164562184244e-08
+      },
+      {
+        "name": "slash1",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.7240164480375863e-08
+      },
+      {
+        "name": "dying",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.724016539576966e-08
+      },
+      {
+        "name": "sit_idle",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.724016448617025e-08
+      }
+    ],
+    "scope": "Rest binding, normalized weights, finite deformation, rigid head tracking and neck seams. Hair and equipment intersections require visual review."
+  },
+  "review_method": "Actual compressed-model screenshots with recorded camera parameters: front, close-up, both obliques, both exact sides and full head profile. Approximate image landmarks guide eyelid shape; no numeric perceptual similarity score.",
+  "iterations": [
+    {
+      "iteration": "01-geometry",
+      "observation": "Added smooth eye surfaces; broad skin paint and short lash stubs did not match.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/01-geometry/capture.json",
+      "model_sha256": "010fd8bc100d669e3bb4ce294b9ef0b6b926dc1c9b578dfd964f2065c073ea7d",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle"
+      ]
+    },
+    {
+      "iteration": "02-hazel-and-blend",
+      "observation": "Calibrated hazel iris and blended skin; lashes remained too faint.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/02-hazel-and-blend/capture.json",
+      "model_sha256": "c2afe01e5d28dbf0ee576a12c12aa0af05748cf380890c9e44099efddf3fa145",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle"
+      ]
+    },
+    {
+      "iteration": "03-curled-lashes",
+      "observation": "Added forward curl and alpha blending; roots and thickness still needed work.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/03-curled-lashes/capture.json",
+      "model_sha256": "fe96f0ed3ab49bc1a65104827725e10894d3b209486813cebe27fec1e16634e8",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle"
+      ]
+    },
+    {
+      "iteration": "04-mascara",
+      "observation": "Thickened lash opacity; reviewed with solid-material diagnostics.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/04-mascara/capture.json",
+      "model_sha256": "812ccd8d56675a1cbc7316bbeb0b4aa6fd139ad4f30376f520a2a321821fe1f9",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle"
+      ]
+    },
+    {
+      "iteration": "05-lid-and-wing",
+      "observation": "Fitted eyelid liner and outer wing; diagnosed depth occlusion.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/05-lid-and-wing/capture.json",
+      "model_sha256": "9c37234146189624c6bd5ff7c20a8408097bd65e6cea3823ab0068d116b8b78b",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle"
+      ]
+    },
+    {
+      "iteration": "06-shape-and-roots",
+      "observation": "Raised iris/pupil position and adjusted lower roots; broad paint still exposed borders.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/06-shape-and-roots/capture.json",
+      "model_sha256": "479bf55190b4a640281e5eb70130560c35a4514ea751dc9a91a46ddafe9f3621",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle"
+      ]
+    },
+    {
+      "iteration": "07-original-skin-and-strands",
+      "observation": "Restored original skin UV/colour and replaced cards with individual ribbons.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/07-original-skin-and-strands/capture.json",
+      "model_sha256": "bb9b3a9c3b349dcd9e4e1c548bb2b78a93df3b7632e37b314dbdf4e3cf91aba2",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle"
+      ]
+    },
+    {
+      "iteration": "08-fan-and-cornea",
+      "observation": "Grouped upper roots for a fan and added corneal gloss.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/08-fan-and-cornea/capture.json",
+      "model_sha256": "3983f1d06b1785f8cde276c979d619b1b3d5b926f95af9644d883c0a904a63ea",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle"
+      ]
+    },
+    {
+      "iteration": "09-skin-and-root-final",
+      "observation": "Restored original pre-cleanup face attributes and fitted liner depth to skin.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/09-skin-and-root-final/capture.json",
+      "model_sha256": "5144dd8891055176dfceb690838a312e3c6eb65f510a66fe8a0654cf9dbfb4b4",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle"
+      ]
+    },
+    {
+      "iteration": "10-soft-final",
+      "observation": "Softened sclera normals and upper root opacity.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/10-soft-final/capture.json",
+      "model_sha256": "5897981b156d21b8ad8283537e740042b0956d2afe63d9d90ab8d63fa883b1ac",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle"
+      ]
+    },
+    {
+      "iteration": "11-feathered-roots",
+      "observation": "Increased strand root widths and softened upper alpha falloff. Full-face comparison showed overly bright sclera and a smaller pupil than the reference.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/11-feathered-roots/capture.json",
+      "model_sha256": "518a1f189ae54dd577011c289d60ad0479c0515601a41519c763996e89a596e4",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle"
+      ]
+    },
+    {
+      "iteration": "12-warm-mascara",
+      "observation": "Warmed sclera and lower lashes, enlarged pupil and thickened roots. Superseded after user reported mismatch in eye shape.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/12-warm-mascara/capture.json",
+      "model_sha256": "5b3512a0090852591956316e902ee88a97bded71ffbe85770906d51fa80a8d17",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle"
+      ]
+    },
+    {
+      "iteration": "13-aligned-before",
+      "kind": "camera-only",
+      "observation": "Aligned head and chin framing to the reference. The previous eyes sat too high and their opening/iris proportions differed.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/13-aligned-before/capture.json",
+      "model_sha256": "5b3512a0090852591956316e902ee88a97bded71ffbe85770906d51fa80a8d17",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle"
+      ]
+    },
+    {
+      "iteration": "14-reference-contour",
+      "kind": "asset-edit",
+      "observation": "Fitted upper/lower contour anchors, shortened the nasal end, enlarged iris and moved original eye-region skin together with the new eyes.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/14-reference-contour/capture.json",
+      "model_sha256": "9a35be7b66545a0f95e3c50faabe4f2500b22e0eb116726460de88be695eb229",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle"
+      ]
+    },
+    {
+      "iteration": "15-clean-lid-contour",
+      "kind": "asset-edit",
+      "observation": "Recessed original eye surfaces where they intersected the new eye caps.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/15-clean-lid-contour/capture.json",
+      "model_sha256": "bb4645291e9d68961fdc1eda8458d66b625bcd5e36dce51ed9b78cfc388705ef",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle"
+      ]
+    },
+    {
+      "iteration": "16-inner-corner-and-gaze",
+      "kind": "asset-edit",
+      "observation": "Closed old nasal remnants, blended the upper eye-region deformation and adjusted pupil size/vertical gaze.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/16-inner-corner-and-gaze/capture.json",
+      "model_sha256": "a9b595faf7fe621d3b836369102d56f863bd322478f1a726c266933664d40fae",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle"
+      ]
+    },
+    {
+      "iteration": "17-asymmetric-apertures",
+      "kind": "asset-edit",
+      "observation": "Fitted the screen-right eye nasal and outer corners separately; warmed sclera and softened the wing tip. Changed eye close-up to the same camera position as front view.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/17-asymmetric-apertures/capture.json",
+      "model_sha256": "53a246355e45d7886fcf6d1f3017d4bd4a60d1ce7b3050703a438a426ecc8840",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle"
+      ]
+    },
+    {
+      "iteration": "18-smooth-eye-underlay",
+      "kind": "asset-edit",
+      "observation": "Expanded the original eye underlay transition. Oblique views still showed small source triangles through the caps.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/18-smooth-eye-underlay/capture.json",
+      "model_sha256": "3fa1b379ed4ed3a5a0695be7fda3ca67a615ed97b6917dc274f375dfbfcd0f1c",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle"
+      ]
+    },
+    {
+      "iteration": "19-underlay-clearance",
+      "kind": "asset-edit",
+      "observation": "Identified occluding source triangles by raycasting, increased clearance over the lower rim and verified front, close-up and both oblique views.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/19-underlay-clearance/capture.json",
+      "model_sha256": "ddc11b57acbc19dd67bc409f16d545bf3184c69f7f54a9ed955de16788c71b39",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle"
+      ]
+    },
+    {
+      "iteration": "20-before-depth",
+      "kind": "camera-only",
+      "observation": "Captured both exact side views and a full head profile before the depth correction.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/20-before-depth/capture.json",
+      "model_sha256": "ddc11b57acbc19dd67bc409f16d545bf3184c69f7f54a9ed955de16788c71b39",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle",
+        "profile",
+        "other-profile",
+        "head-profile"
+      ]
+    },
+    {
+      "iteration": "21-recessed-eye-cap",
+      "kind": "asset-edit",
+      "observation": "Recessed cap geometry and reduced geometric bulges; eye highlights weakened and the surrounding transition needed work.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/21-recessed-eye-cap/capture.json",
+      "model_sha256": "dce267e6d413fddd8b3cdae59cfa672b999e03f22c529c8a9af3a825052faee1",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle",
+        "profile",
+        "other-profile",
+        "head-profile"
+      ]
+    },
+    {
+      "iteration": "22-depth-and-optical-normals",
+      "kind": "asset-edit",
+      "observation": "Separated optical normals from physical depth and adjusted iris clearance; lateral sclera still needed a shallower profile.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/22-depth-and-optical-normals/capture.json",
+      "model_sha256": "d1628d1f32b4ceb3613b48e9535097a371e33ce84001ed9996576ac5a9622387",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle",
+        "profile",
+        "other-profile",
+        "head-profile"
+      ]
+    },
+    {
+      "iteration": "23-socket-depth",
+      "kind": "asset-edit",
+      "observation": "Stronger cap-only depth compression exposed folds in the surrounding source eyelids; rejected.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/23-socket-depth/capture.json",
+      "model_sha256": "25173616464cfe1be7ee2b35b4dad69e39a0cd9b83b5f43e8fd286a513556a45",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle",
+        "profile",
+        "other-profile",
+        "head-profile"
+      ]
+    },
+    {
+      "iteration": "24-smooth-socket-and-lid-join",
+      "kind": "asset-edit",
+      "observation": "Moved the complete eye region smoothly, connected the lower rim directly to the eye and sampled its outer edge from skin.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/24-smooth-socket-and-lid-join/capture.json",
+      "model_sha256": "5b86aa0864179372a9d021fcb2901500d9929b4115574c4c7dd92f1293cdfa76",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle",
+        "profile",
+        "other-profile",
+        "head-profile"
+      ]
+    },
+    {
+      "iteration": "25-depth-and-attached-lashes",
+      "kind": "asset-edit",
+      "observation": "Translated each lash strand by its root displacement to preserve strand shape; the eye cap still needed a coherent lateral curvature.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/25-depth-and-attached-lashes/capture.json",
+      "model_sha256": "ee543f429719bacab497c51dc21437b659bf054cdac5a941198b5aa610422ced",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle",
+        "profile",
+        "other-profile",
+        "head-profile"
+      ]
+    },
+    {
+      "iteration": "26-inset-ellipsoid",
+      "kind": "asset-edit",
+      "observation": "Fitted a shallow ellipsoid with a small corneal bulge and smoothly moved surrounding skin. Eyelids wrap the globe; reviewed front, close-up, both obliques, both sides and full profile.",
+      "capture": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/review/26-inset-ellipsoid/capture.json",
+      "model_sha256": "80e74d76f297373d354a5b8208fd783b152753d799c3e9db449f82cfc6463291",
+      "views": [
+        "front",
+        "eyes",
+        "angle",
+        "other-angle",
+        "profile",
+        "other-profile",
+        "head-profile"
+      ]
+    }
+  ],
+  "accepted_iteration": "26-inset-ellipsoid",
+  "checks": {
+    "client_check": "Previously passed; frontend unchanged in the depth revision",
+    "client_lint": "Previously passed; frontend unchanged in the depth revision",
+    "blender_editable_source_updated": true,
+    "python_compile": "passed",
+    "diff_whitespace": "passed"
+  },
+  "limits": [
+    "Lighting, eyelash feathering and facial surface detail differ from the source image; no pixel-identical match is claimed.",
+    "Original head geometry is preserved outside the local front eye/brow region; that region is deformed intentionally.",
+    "A zero lower eye-rim join verifies the 98 shared eye-edge coordinates, not every skin pixel.",
+    "No blink or expression rig was added.",
+    "The assembled triangle budget exceeds the approximate target; this local preview has not been registered as a game appearance."
+  ],
+  "outputs": [
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/base_custom.glb",
+      "sha256": "1d98e7bd0e0879a5ac21440c19d852391c4c5e975d89de4a8cb95175e5070230",
+      "bytes": 28009940
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/base_custom_preview.glb",
+      "sha256": "80e74d76f297373d354a5b8208fd783b152753d799c3e9db449f82cfc6463291",
+      "bytes": 4913220
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/face_custom.glb",
+      "sha256": "ed7fef1753df93557d9bf488d8ac24fc55a7bae6b6665d0acedf4e59234a3b87",
+      "bytes": 8303236
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/custom-face-fitting.blend",
+      "sha256": "2fc2c3b969666686077cf79d67dd3e5bd7645eba86dc3e469fcd675a437f643f",
+      "bytes": 39707006
+    },
+    {
+      "path": "doc/images/characters/modular_human_female_01/customization/face-custom-reference-v2-comparison.png",
+      "sha256": "9bd83b211185598d7a41574a9b8765f4e48b9c9d664f2d87c4ef27142921f254",
+      "bytes": 932370
+    },
+    {
+      "path": "doc/images/characters/modular_human_female_01/customization/face-custom-reference-v2-front.png",
+      "sha256": "c9b06cf3413382762992a0cf6f3f3a1ea35c50826372b7327a675c76280b5778",
+      "bytes": 364398
+    },
+    {
+      "path": "doc/images/characters/modular_human_female_01/customization/face-custom-reference-v2-eyes.png",
+      "sha256": "b7cebf7f96d77a496fd2e241c63de07545969bde2b45eb496567a449fa08c874",
+      "bytes": 340906
+    },
+    {
+      "path": "doc/images/characters/modular_human_female_01/customization/face-custom-reference-v2-angles.png",
+      "sha256": "5a16cec45ce2fc61a630318b8a133a75cb613c1ee496a0be3f8dde297518d0d9",
+      "bytes": 744910
+    },
+    {
+      "path": "doc/images/characters/modular_human_female_01/customization/face-custom-reference-v2-before-after.png",
+      "sha256": "2fbfb31c2eb6e2b14864934177e0c6558b81299bc8c62161fd9b25445f6edd77",
+      "bytes": 479581
+    },
+    {
+      "path": "doc/images/characters/modular_human_female_01/customization/face-custom-reference-v2-eye-shape-comparison.png",
+      "sha256": "e2e3df26acfc487521349fda7dc7fce7481fd35f4abefacf69ce5264efb27a32",
+      "bytes": 409282
+    },
+    {
+      "path": "doc/images/characters/modular_human_female_01/customization/face-custom-reference-v2-profile.png",
+      "sha256": "d06fbb15f3cdd1ca9111c5f7226cd823bdd1876b66f63fcbb616455d71f3c1ea",
+      "bytes": 218845
+    },
+    {
+      "path": "doc/images/characters/modular_human_female_01/customization/face-custom-reference-v2-other-profile.png",
+      "sha256": "0db53b688f4fdd7d63a892ecb0fc5fa6b164dda4926f78e29478e636b2ab98dd",
+      "bytes": 237651
+    },
+    {
+      "path": "doc/images/characters/modular_human_female_01/customization/face-custom-reference-v2-head-profile.png",
+      "sha256": "22707868c805bffadf235cc6f43797191ce5dc412563aafe6b1d8e2b34b5ffca",
+      "bytes": 249381
+    },
+    {
+      "path": "doc/images/characters/modular_human_female_01/customization/face-custom-reference-v2-depth-comparison.png",
+      "sha256": "a1ffd4a290ef53db9d718e8f9933d447ae87942c3b0c55b69aeb1fb8e3cf3f9e",
+      "bytes": 302694
+    },
+    {
+      "path": "doc/images/characters/modular_human_female_01/customization/face-custom-reference-v2-head-depth-comparison.png",
+      "sha256": "6c0ed6c474e9480aa439242497f5c89d881477d6fdb744dea1b684aee89f3828",
+      "bytes": 288197
+    }
+  ],
+  "asset_edit_iterations": 24,
+  "shape_guide": {
+    "source": "target.png",
+    "source_kind": "User-provided image; manual approximate visual landmarks",
+    "camera": {
+      "viewport": [
+        940,
+        1184
+      ],
+      "position": [
+        0.001,
+        1.6821,
+        0.813
+      ],
+      "target": [
+        0.001,
+        1.6821,
+        0
+      ],
+      "fov": 20
+    },
+    "left_upper_pixels_inner_to_outer": [
+      [
+        381,
+        616
+      ],
+      [
+        363,
+        597
+      ],
+      [
+        335,
+        581
+      ],
+      [
+        308,
+        570
+      ],
+      [
+        278,
+        571
+      ],
+      [
+        248,
+        585
+      ],
+      [
+        231,
+        596
+      ]
+    ],
+    "left_lower_pixels_inner_to_outer": [
+      [
+        381,
+        616
+      ],
+      [
+        363,
+        619
+      ],
+      [
+        335,
+        623
+      ],
+      [
+        308,
+        623
+      ],
+      [
+        278,
+        619
+      ],
+      [
+        248,
+        609
+      ],
+      [
+        231,
+        596
+      ]
+    ],
+    "right_inner_corner_pixels": [
+      530,
+      616
+    ],
+    "right_outer_corner_pixels": [
+      688,
+      596
+    ],
+    "method": "Manually fit approximate eyelid anchors to these image locations with PCHIP curves; move the original eye region and its eyelids together. Coordinates guide geometry, not a numeric perceptual similarity score."
+  },
+  "archives": [
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/rejected-12-fitting.blend",
+      "sha256": "0b6b78e54ee9cfab28b49803b695d2eacf1614ec7b0bb5f9364e13d5bdbfd464",
+      "status": "[\ubbf8\uc0ac\uc6a9] Rejected 12th revision"
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/rejected-12-review.json",
+      "sha256": "f824797c68af71008862e3ca11da23384b698383225261c4e040e27e6a2936aa",
+      "status": "[\ubbf8\uc0ac\uc6a9] Rejected 12th revision"
+    }
+  ],
+  "depth_model": {
+    "type": "shallow ellipsoid",
+    "center_abs_x_y_z_m": [
+      0.034,
+      1.6865,
+      0.0545
+    ],
+    "radii_x_y_z_m": [
+      0.023,
+      0.016,
+      0.009
+    ],
+    "geometric_corneal_bulge_m": 0.00035,
+    "skin_transition": "Smooth offset from the previous eye surface into surrounding eye-region skin; optical normals retained separately",
+    "lower_eye_rim_join_error_m": 0
+  },
+  "depth_baseline": [
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/depth_refinement/before.glb",
+      "sha256": "d558a47554a472974c6f5cc489ee770c4f53897d698d4bc0b46ea3b667829909",
+      "status": "[\ubbf8\uc0ac\uc6a9 \ub7f0\ud0c0\uc784] Depth-refinement baseline; same source/license as the user model and generated iris"
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/depth_refinement/before-preview.glb",
+      "sha256": "ddc11b57acbc19dd67bc409f16d545bf3184c69f7f54a9ed955de16788c71b39",
+      "status": "[\ubbf8\uc0ac\uc6a9 \ub7f0\ud0c0\uc784] Depth-refinement baseline; same source/license as the user model and generated iris"
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/depth_refinement/before-style.json",
+      "sha256": "21e9139005103c6de9067971236b4877d3038f0f2c7d4b93e685d2c0322dcb68",
+      "status": "[\ubbf8\uc0ac\uc6a9 \ub7f0\ud0c0\uc784] Depth-refinement baseline; same source/license as the user model and generated iris"
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/depth_refinement/before-builder.py",
+      "sha256": "28e4a34d131e317abcae4291df86aa722a3ddea45853bfe67cefc8f37cde1405",
+      "status": "[\ubbf8\uc0ac\uc6a9 \ub7f0\ud0c0\uc784] Depth-refinement baseline; same source/license as the user model and generated iris"
+    }
+  ],
+  "active": false,
+  "archived_model_directory": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/rejected-eye-edits-v2"
+}

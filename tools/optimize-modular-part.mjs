@@ -13,6 +13,7 @@ const [source, output] = process.argv.slice(2)
 const flags = process.argv.slice(4)
 const body = flags.includes('--body')
 const ktx2 = flags.includes('--ktx2')
+const keepAlphaPng = flags.includes('--keep-alpha-png')
 const sizeFlag = flags.find(flag => flag.startsWith('--size='))
 const size = sizeFlag ? Number(sizeFlag.slice(7)) : body ? 1024 : 512
 const qualityFlag = flags.find(flag => flag.startsWith('--quality='))
@@ -21,9 +22,10 @@ if (
   !source || !output ||
   !Number.isSafeInteger(size) || size <= 0 ||
   !Number.isSafeInteger(quality) || quality < 1 || quality > 100 ||
-  flags.some(flag => !['--body', '--ktx2', sizeFlag, qualityFlag].includes(flag))
+  (keepAlphaPng && ktx2) ||
+  flags.some(flag => !['--body', '--ktx2', '--keep-alpha-png', sizeFlag, qualityFlag].includes(flag))
 ) {
-  console.error('Usage: node tools/optimize-modular-part.mjs SOURCE.glb OUTPUT.glb [--body] [--ktx2] [--size=PIXELS] [--quality=1..100]')
+  console.error('Usage: node tools/optimize-modular-part.mjs SOURCE.glb OUTPUT.glb [--body] [--ktx2 | --keep-alpha-png] [--size=PIXELS] [--quality=1..100]')
   process.exit(1)
 }
 
@@ -65,7 +67,10 @@ try {
     const image = texture.getImage()
     if (!image) throw new Error('An embedded part texture is required.')
     const input = sharp(image)
-    const hasAlpha = (await input.metadata()).hasAlpha
+    const metadata = await input.metadata()
+    const hasAlpha = metadata.hasAlpha
+    if (keepAlphaPng && hasAlpha && texture.getMimeType() === 'image/png' && metadata.width <= size && metadata.height <= size)
+      continue
     if (body || !hasAlpha)
       input.resize({ width: size, height: size, fit: 'inside', withoutEnlargement: true })
     if (ktx2) {
@@ -73,7 +78,7 @@ try {
       continue
     }
     const [encoded, mimeType] = hasAlpha
-      ? [input.webp({ lossless: true, effort: 6 }), 'image/webp']
+      ? keepAlphaPng ? [input.png(), 'image/png'] : [input.webp({ lossless: true, effort: 6 }), 'image/webp']
       : webp.has(texture)
       ? [input.webp({ quality, effort: 6 }), 'image/webp']
       : [input.jpeg({ quality: normals.has(texture) ? Math.max(92, quality) : quality, chromaSubsampling: '4:4:4' }), 'image/jpeg']

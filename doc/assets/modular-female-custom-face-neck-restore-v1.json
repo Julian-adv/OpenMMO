@@ -1,0 +1,249 @@
+{
+  "date": "2026-11-07",
+  "status": "Original neck-fit baseline; current model adds only original-eyelash skin alpha",
+  "neck_fit_only": true,
+  "source_and_materials": "User-provided GLB; source/license recorded in modular-female-custom-face.md. No new generation calls.",
+  "fitting": {
+    "date": "2026-11-07",
+    "neck_fit_only": true,
+    "source_path": "assets/modular_human_female_01/faces/tripo_custom_v1/source.glb",
+    "source_sha256": "8dbcbcb21d06cd2ed33020a9eef617e1b4396fa4e43292c95748ddbbe3152dce",
+    "base_sha256": "3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5",
+    "scale": 1.8008793356130923,
+    "offset_m": [
+      -0.0008,
+      0.0,
+      0.014
+    ],
+    "neck_cut_y_m": 1.552,
+    "neck_seams": 1,
+    "neck_bridge_triangles": 0,
+    "rig_id": "human_female_01_local_v1",
+    "new_head_scale_and_translation_only": true,
+    "head_affine_scope": "Entire source head, including eyes and eyelashes, scalp and neck",
+    "maximum_head_affine_error_m": 2.2250491372754983e-16,
+    "maximum_exported_head_affine_error_m": 5.962628948665306e-08,
+    "source_triangles": 39865,
+    "head_triangles": 7743,
+    "retained_body_triangles": 15701,
+    "assembled_triangles": 23444,
+    "neck_boundary_vertices": 106,
+    "body_neck_fit_maximum_mm": 15.032832384433089,
+    "body_geometry_and_neck_color_match_initial_fit": true,
+    "source_texture_bytes_preserved": true,
+    "source_head_material_preserved": true,
+    "eye_and_eyelash_edits_applied": false,
+    "canonical_bone_nodes_bind_matrices_and_animation_tracks_preserved": true,
+    "meshes": 2,
+    "materials": 2,
+    "preview_texture_limit": 2048,
+    "files": {
+      "base_custom.glb": "a6be2048e01cd1cbddfbeb5c3fe2fcda06e5a8a7ab6efed4e26fcdb6f708c028",
+      "face_custom.glb": "68bff4f042fd4396a273e7227db9c27ec42433d965f78db96d7b4583d9baa5ec",
+      "body-neck-albedo.png": "f4da1c4782b8a4fca22380dd99c55fb2ae080a57249e3621a99f0f23637ff8d5"
+    },
+    "status": "Restored original head with single neck seam; eye and eyelash experiments are unused"
+  },
+  "animation": {
+    "date": "2026-11-07",
+    "sources": [
+      {
+        "path": "assets/modular_human_female_01/faces/tripo_custom_v1/base_custom.glb",
+        "sha256": "a6be2048e01cd1cbddfbeb5c3fe2fcda06e5a8a7ab6efed4e26fcdb6f708c028"
+      },
+      {
+        "path": "assets/modular_human_female_01/faces/tripo_custom_v1/source.glb",
+        "sha256": "8dbcbcb21d06cd2ed33020a9eef617e1b4396fa4e43292c95748ddbbe3152dce"
+      },
+      {
+        "path": "assets/modular_human_female_01/rig_v1/female-base.glb",
+        "sha256": "3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5"
+      },
+      {
+        "path": "assets/modular_human_female_01/faces/tripo_custom_v1/face_custom.glb",
+        "sha256": "68bff4f042fd4396a273e7227db9c27ec42433d965f78db96d7b4583d9baa5ec"
+      }
+    ],
+    "bones": 65,
+    "seam_vertex_groups": 105,
+    "rigid_face_vertices": 7041,
+    "standalone_binding": true,
+    "neck_seams": 1,
+    "reference_eye_rebuild": false,
+    "neck_fit_only": true,
+    "source_lash_faces_absent_from_opaque_head": [],
+    "original_eye_and_eyelash_faces_restored": true,
+    "upper_lash_roots_fitted": false,
+    "lower_lash_roots_fitted": false,
+    "head_affine_scope": "Entire source head, including eyes and eyelashes, scalp and neck",
+    "new_head_scale_and_translation_only": true,
+    "maximum_head_affine_error_m": 2.2250491372754983e-16,
+    "clips": [
+      {
+        "name": "idle1",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.7240164568819547e-08
+      },
+      {
+        "name": "idle_armed",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.7240164568819547e-08
+      },
+      {
+        "name": "walk",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.724016461117965e-08
+      },
+      {
+        "name": "run",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.724016462637638e-08
+      },
+      {
+        "name": "jump",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.7240164429141878e-08
+      },
+      {
+        "name": "combat_idle",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.7240164562184244e-08
+      },
+      {
+        "name": "slash1",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.7240164480375863e-08
+      },
+      {
+        "name": "dying",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.724016539576966e-08
+      },
+      {
+        "name": "sit_idle",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.724016448617025e-08
+      }
+    ],
+    "scope": "Rest binding, normalized weights, finite deformation, rigid head tracking and neck seams. Hair and equipment intersections require visual review."
+  },
+  "compression": {
+    "date": "2026-11-07",
+    "sources": [
+      {
+        "path": "/home/jake/.codex/worktrees/female-new-face/OnlineRPG/assets/modular_human_female_01/faces/tripo_custom_v1/base_custom.glb",
+        "sha256": "a6be2048e01cd1cbddfbeb5c3fe2fcda06e5a8a7ab6efed4e26fcdb6f708c028"
+      },
+      {
+        "path": "/home/jake/.codex/worktrees/female-new-face/OnlineRPG/assets/modular_human_female_01/faces/tripo_custom_v1/base_custom_preview.glb",
+        "sha256": "4c96097f87e07858743bfb344440d7e4a3706f671f22beda31b6c7db756ccc61"
+      }
+    ],
+    "source_bytes": 25189456,
+    "output_bytes": 4606468,
+    "triangles": 23444,
+    "all_vertex_attributes_exact": true,
+    "triangle_order_and_winding_preserved": true,
+    "animations_exact": 9,
+    "compressed_eyelash_rgba_exact": null,
+    "neck_fit_only": true,
+    "meshes": 2,
+    "materials": 2,
+    "texture_sizes": [
+      {
+        "material": "tripo_material_073e85e0-595b-4a12-9030-2dc3e30566e9",
+        "source_size": [
+          4096,
+          4096
+        ],
+        "size": [
+          2048,
+          2048
+        ],
+        "alpha": "OPAQUE"
+      },
+      {
+        "material": "Female custom face original textures",
+        "source_size": [
+          2048,
+          2048
+        ],
+        "size": [
+          2048,
+          2048
+        ],
+        "alpha": "OPAQUE"
+      }
+    ],
+    "compression": "Meshopt lossless attributes; WebP base color quality 94; lossless WebP for RGBA; JPEG normal/ORM; maximum dimension 2048"
+  },
+  "served_preview_sha256": "4c96097f87e07858743bfb344440d7e4a3706f671f22beda31b6c7db756ccc61",
+  "served_etag": "W/\"4606468-1794059032138.7483\"",
+  "active_files": [
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/base_custom.glb",
+      "sha256": "a6be2048e01cd1cbddfbeb5c3fe2fcda06e5a8a7ab6efed4e26fcdb6f708c028"
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/base_custom_preview.glb",
+      "sha256": "4c96097f87e07858743bfb344440d7e4a3706f671f22beda31b6c7db756ccc61"
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/face_custom.glb",
+      "sha256": "68bff4f042fd4396a273e7227db9c27ec42433d965f78db96d7b4583d9baa5ec"
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/custom-face-fitting.blend",
+      "sha256": "354b9132d42f2fb7bb7b9ae75c7c7df566794e623e9e8d3ccbadec02f5f262e9"
+    }
+  ],
+  "rejected_eye_edits": {
+    "status": "[\ubbf8\uc0ac\uc6a9]",
+    "directory": "assets/modular_human_female_01/faces/tripo_custom_v1/reference_v2/rejected-eye-edits-v2",
+    "files": [
+      {
+        "name": "animation-snapshots.json",
+        "sha256": "5542c37e9a92b1bb7d3247ac0064d58e9bb73508505df2569a62042779b0940e"
+      },
+      {
+        "name": "base_custom.glb",
+        "sha256": "1d98e7bd0e0879a5ac21440c19d852391c4c5e975d89de4a8cb95175e5070230"
+      },
+      {
+        "name": "base_custom_preview.glb",
+        "sha256": "80e74d76f297373d354a5b8208fd783b152753d799c3e9db449f82cfc6463291"
+      },
+      {
+        "name": "custom-face-fitting.blend",
+        "sha256": "2fc2c3b969666686077cf79d67dd3e5bd7645eba86dc3e469fcd675a437f643f"
+      },
+      {
+        "name": "face_custom.glb",
+        "sha256": "ed7fef1753df93557d9bf488d8ac24fc55a7bae6b6665d0acedf4e59234a3b87"
+      },
+      {
+        "name": "fitting.json",
+        "sha256": "f924b5812f8b7a34d29bbfa058a22dbbbe220eed0157b084ca3d7a74acc54ed7"
+      },
+      {
+        "name": "reference-v2-review.json",
+        "sha256": "5cb8d7fa4e7c5cc0ce11babd0195e9c7bbfd4987e6fcfb24e39b33a2f2a751db"
+      }
+    ]
+  },
+  "rebuild_script": {
+    "path": "tools/restore-female-neck-fit.py",
+    "sha256": "e9181d70db5ecbe70550e200543923c001f28f0c98311ec7de096b4e0bdf020c"
+  },
+  "active": false,
+  "baseline_directory": "assets/modular_human_female_01/faces/tripo_custom_v1/lash_skin_alpha_v1/before"
+}
