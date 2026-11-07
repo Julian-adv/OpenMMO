@@ -5,6 +5,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { bindModularPart } from '../lib/utils/modularCharacter'
 import { disposeObjects } from './dispose-objects'
+import { faceHairFitPanel, faceHairFitEditor } from './female-face-hair-fit'
+import type { HairFitFace, HairFitStyle } from '../lib/utils/femaleHairFit'
 
 export async function showFemaleFace(
   scene: THREE.Scene,
@@ -15,7 +17,7 @@ export async function showFemaleFace(
   document.title = '여성 새 얼굴 · 미리보기'
   document.querySelector('h1')!.textContent = '여성 얼굴 미리보기'
   document.querySelector('header p:last-child')!.textContent =
-    '새 얼굴과 기존 얼굴을 비교하고 헤어와 동작을 확인하세요.'
+    '얼굴별로 헤어를 맞추고 저장한 뒤 동작을 확인하세요.'
   const status = document.getElementById('status')!
   const aside = document.querySelector('aside')!
   aside.replaceChildren(status)
@@ -26,7 +28,7 @@ export async function showFemaleFace(
       <label for="female-face">얼굴</label>
       <select id="female-face"><option value="custom">새 얼굴</option><option value="default">기존 얼굴</option></select>
       <label for="face-hair">헤어</label>
-      <select id="face-hair"><option value="bob">금발 단발</option><option value="warrior">전사 긴 헤어</option><option value="none">없음</option></select>
+      <select id="face-hair"><option value="bob">단발</option><option value="long">긴 머리</option><option value="ponytail">묶은 머리</option><option value="none">없음</option></select>
       <label for="face-view">시점</label>
       <select id="face-view"><option value="face">얼굴 확대</option><option value="angle">얼굴 사선</option><option value="side">얼굴 측면</option><option value="back">뒤통수</option><option value="full">전신</option></select>
       <label for="face-motion">동작</label>
@@ -35,6 +37,7 @@ export async function showFemaleFace(
       <label class="toggle"><input id="face-wireframe" type="checkbox" /> 와이어프레임</label>
       <button id="face-reset" type="button">시점 초기화</button>
     </fieldset>
+    ${faceHairFitPanel}
     <p id="face-stats" class="details"></p>
     <p class="details">드래그로 회전하고 마우스 휠로 확대할 수 있습니다.</p>`
   )
@@ -46,9 +49,10 @@ export async function showFemaleFace(
   const motion = select('face-motion')
   const params = new URLSearchParams(location.search)
   face.value = params.get('face') === 'default' ? 'default' : 'custom'
-  const requestedHair = params.get('hair')
+  const requestedHair =
+    params.get('hair') === 'warrior' ? 'long' : params.get('hair')
   hair.value =
-    requestedHair && ['bob', 'warrior', 'none'].includes(requestedHair)
+    requestedHair && ['bob', 'long', 'ponytail', 'none'].includes(requestedHair)
       ? requestedHair
       : 'bob'
   const reload = () => {
@@ -74,11 +78,22 @@ export async function showFemaleFace(
     load(
       `/__female-preview/${face.value === 'custom' ? 'face-custom' : 'base'}.glb`
     ),
-    hair.value === 'none' ? null : load(`/__female-preview/${hair.value}.glb`),
+    hair.value === 'none'
+      ? null
+      : load(
+          `/models/characters/modular_female/${({ bob: 'hair', long: 'valkyrie_hair', ponytail: 'ranger_hair' } as Record<string, string>)[hair.value]}.glb`
+        ),
   ])
   if (disposed()) return
   const model = base.scene
-  if (hairstyle) bindModularPart(model, hairstyle.scene)
+  const hairMeshes = hairstyle ? bindModularPart(model, hairstyle.scene) : []
+  await faceHairFitEditor(
+    hairMeshes,
+    face.value as HairFitFace,
+    hair.value as HairFitStyle | 'none',
+    disposed
+  )
+  if (disposed()) return
   scene.add(model)
   let triangles = 0
   const materials = new Set<THREE.Material>()

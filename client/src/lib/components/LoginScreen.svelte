@@ -63,6 +63,7 @@
   onMount(async () => {
     const devLogin = import.meta.env.DEV && import.meta.env.VITE_DEV_LOGIN
     if (devLogin && new URLSearchParams(location.search).has('dev_login')) {
+      if (kickedMessage) return
       await handleCredential({ credential: devLogin as string })
       return
     }

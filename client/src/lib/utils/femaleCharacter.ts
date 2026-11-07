@@ -18,6 +18,7 @@ import { femaleUnderwearColor } from './femaleUnderwearColor'
 import { femaleOutfitMask } from './female-outfit-mask'
 import { modularOutfitForArmor } from './modularEquipment'
 import { attachValkyrieWings } from '../effects/valkyrie-wings'
+import { fitFemaleHair } from './femaleHairFit'
 
 const slots = ['top', 'bottom', 'boots', 'gloves', 'helmet'] as const
 type Slot = (typeof slots)[number]
@@ -115,6 +116,7 @@ export const femaleBootsClipName = (clip: string, boots: string) =>
 const models = new Map<string, Promise<GLTF>>()
 const packs = new Map<string, Promise<GLTF>>()
 const pairedBaseClips = new WeakMap<GLTF, THREE.AnimationClip[]>()
+let customBodyMasks: Record<string, unknown> | undefined
 
 function baseClips(base: GLTF): THREE.AnimationClip[] {
   let clips = pairedBaseClips.get(base)
@@ -128,7 +130,8 @@ function baseClips(base: GLTF): THREE.AnimationClip[] {
 export function assembleFemaleCharacter(
   base: GLTF,
   sources: GLTF[],
-  names = FEMALE_PARTS
+  names = FEMALE_PARTS,
+  face: 'default' | 'custom' = 'default'
 ): THREE.Group {
   const scene = clone(base.scene) as THREE.Group
   const variant = variantOf(names)
@@ -143,12 +146,14 @@ export function assembleFemaleCharacter(
       scene.getObjectByName(node.name)!.userData.female_body = true
   })
   scene.userData.modular_character = true
+  scene.userData.modular_face = face
   scene.userData.female_parts = {}
   for (const [i, name] of names.entries()) {
     scene.userData.female_parts[name] = sources[i].scene.userData
     const meshes = bindModularPart(scene, sources[i].scene)
     for (const mesh of meshes) {
       mesh.userData.female_part = name
+      fitFemaleHair(mesh, face, name)
       mesh.visible = variant ? variant.fixed.includes(name) : name === 'hair'
     }
     if (name === 'valkyrie_wings') attachValkyrieWings(scene, meshes)
@@ -171,26 +176,50 @@ export function assembleFemaleCharacter(
 }
 
 export function loadFemaleCharacter(
-  path = MODULAR_FEMALE_MODEL_PATH
+  path = MODULAR_FEMALE_MODEL_PATH,
+  face?: CharacterAppearance['face']
 ): Promise<GLTF> {
-  let pending = models.get(path)
+  const custom = face === 'custom'
+  const key = `${path}:${custom ? 'custom' : 'default'}`
+  let pending = models.get(key)
   if (!pending) {
     const names = [...FEMALE_PARTS, ...(VARIANTS[path]?.fixed ?? [])]
     pending = Promise.all([
       loadGLB(MODULAR_FEMALE_MODEL_PATH),
-      ...names.map((name) =>
-        loadGLB(`${MODULAR_FEMALE_DIRECTORY}/${name}.glb`)
+      custom
+        ? loadGLB(`${MODULAR_FEMALE_DIRECTORY}/base_custom.glb`)
+        : Promise.resolve(null),
+      Promise.all(
+        names.map((name) => loadGLB(`${MODULAR_FEMALE_DIRECTORY}/${name}.glb`))
       ),
     ])
-      .then(([base, ...sources]) => {
-        const scene = assembleFemaleCharacter(base, sources, names)
-        return { ...base, scene, scenes: [scene], animations: baseClips(base) }
+      .then(([canonical, customBase, sources]) => {
+        if (customBase) {
+          customBodyMasks =
+            customBase.parser.json.scenes[0].extras.female_face_body_masks
+          delete customBase.scene.userData.female_face_body_masks
+        }
+        const base = customBase
+          ? { ...customBase, animations: canonical.animations }
+          : canonical
+        const scene = assembleFemaleCharacter(
+          base,
+          sources,
+          names,
+          custom ? 'custom' : 'default'
+        )
+        return {
+          ...base,
+          scene,
+          scenes: [scene],
+          animations: baseClips(canonical),
+        }
       })
       .catch((error) => {
-        models.delete(path)
+        models.delete(key)
         throw error
       })
-    models.set(path, pending)
+    models.set(key, pending)
   }
   return pending
 }
@@ -402,6 +431,7 @@ function bindLazyFemalePart(
         scene.userData.female_parts[name] = gltf.scene.userData
         for (const mesh of bindModularPart(scene, gltf.scene)) {
           mesh.userData.female_part = name
+          fitFemaleHair(mesh, scene.userData.modular_face, name)
           mesh.visible = false
           mesh.frustumCulled = false
         }
@@ -425,7 +455,15 @@ function registerLazyPart(
   name: string
 ) {
   const body = skinnedParts(scene).find((mesh) => mesh.userData.female_body)!
-  state.mask.register(name, scene.userData.female_parts[name].body_mask, body)
+  state.mask.register(name, bodyMask(scene, name), body)
+}
+
+function bodyMask(scene: THREE.Object3D, name: string) {
+  return (
+    (scene.userData.modular_face === 'custom'
+      ? customBodyMasks?.[name]
+      : undefined) ?? scene.userData.female_parts[name].body_mask
+  )
 }
 
 function femaleOutfit(armor?: ArmorEquipment): Outfit {
@@ -501,8 +539,7 @@ export function applyFemaleArmor(
     for (const style of styles)
       for (const slot of slots) {
         const name = partName(style, slot)
-        if (female_parts[name])
-          mask.register(name, female_parts[name].body_mask, body)
+        if (female_parts[name]) mask.register(name, bodyMask(scene, name), body)
       }
     mask.register('sleeves', female_parts.gloves.sleeve_mask, part('top')[0])
     state = {

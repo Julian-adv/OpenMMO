@@ -1,0 +1,29 @@
+{
+  "default": {},
+  "custom": {
+    "bob": {
+      "move-x": 0,
+      "move-y": 0,
+      "move-z": -0.45,
+      "scale": 100,
+      "scale-x": 100,
+      "scale-y": 100,
+      "scale-z": 100,
+      "rotate-x": 0,
+      "rotate-y": 0,
+      "rotate-z": 0
+    },
+    "long": {
+      "move-x": 0,
+      "move-y": -0.1,
+      "move-z": -0.15,
+      "scale": 100.5,
+      "scale-x": 103,
+      "scale-y": 100,
+      "scale-z": 100,
+      "rotate-x": 0,
+      "rotate-y": 0,
+      "rotate-z": 0
+    }
+  }
+}

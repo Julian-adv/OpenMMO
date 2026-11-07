@@ -239,8 +239,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// `AbilityRejectReason::Interrupted`).
 /// v135: `GroundItem.claimed_by` and `GroundItemClaimEnded`, so clients refuse
 /// another player's loot before reaching for it.
-/// v136: female `HairStyle::Bob`/`Long`/`Ponytail`; female appearance colors are kept.
-pub const PROTOCOL_VERSION: u32 = 136;
+/// v138: preserve original hair and eye texture colors.
+pub const PROTOCOL_VERSION: u32 = 138;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

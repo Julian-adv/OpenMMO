@@ -7,6 +7,9 @@ export const FEMALE_HAIR_COLORS = {
   long: '#d2bda2',
   ponytail: '#432e26',
 } as const
+export const originalHairColor = (hair: string) =>
+  FEMALE_HAIR_COLORS[hair as keyof typeof FEMALE_HAIR_COLORS] ??
+  DEFAULT_HAIR_COLOR
 const FEMALE_CLASS_HAIR: Record<string, keyof typeof FEMALE_HAIR_COLORS> = {
   ranger: 'ponytail',
   valkyrie: 'long',

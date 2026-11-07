@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     FACE_OPTIONS,
+    FEMALE_FACE_OPTIONS,
     FEMALE_HAIR_OPTIONS,
     HAIR_OPTIONS,
   } from '../utils/characterAppearanceThumbnails'
@@ -11,6 +12,7 @@
     FEMALE_HAIR_COLORS,
     HAIR_COLORS,
     femaleHairFor,
+    originalHairColor,
   } from '../utils/appearanceColors'
   import type {
     AccountCharacter,
@@ -97,12 +99,11 @@
       value: appearance.hair,
       options: female ? FEMALE_HAIR_OPTIONS : HAIR_OPTIONS,
     }
-    if (female) return [hair]
     const face = {
       key: 'face' as const,
       label: 'characterCreate.face' as const,
       value: appearance.face,
-      options: FACE_OPTIONS,
+      options: female ? FEMALE_FACE_OPTIONS : FACE_OPTIONS,
     }
     return [face, hair]
   })
@@ -110,7 +111,10 @@
     {
       key: 'hair_color' as const,
       label: 'characterCreate.hairColor' as const,
-      value: appearance.hair_color ?? DEFAULT_HAIR_COLOR,
+      value: appearance.hair_color_original
+        ? originalHairColor(appearance.hair)
+        : (appearance.hair_color ?? DEFAULT_HAIR_COLOR),
+      original: appearance.hair_color_original ?? false,
       options: HAIR_COLORS,
       disabled: appearance.hair === 'none',
       zoomFace: false,
@@ -119,6 +123,7 @@
       key: 'eye_color' as const,
       label: 'characterCreate.eyeColor' as const,
       value: appearance.eye_color ?? DEFAULT_EYE_COLOR,
+      original: appearance.eye_color_original ?? false,
       options: EYE_COLORS,
       disabled: false,
       zoomFace: true,
@@ -135,8 +140,29 @@
   }
 
   function selectColor(field: (typeof colorFields)[number], value: string) {
-    onAppearanceChange({ ...appearance, [field.key]: value })
+    onAppearanceChange({
+      ...appearance,
+      [field.key]: value,
+      ...(field.key === 'hair_color' && { hair_color_original: false }),
+      ...(field.key === 'eye_color' && { eye_color_original: false }),
+    })
     if (field.zoomFace) onFacePreviewChange?.(true)
+  }
+
+  function restoreHairColor() {
+    onAppearanceChange({
+      ...appearance,
+      hair_color: originalHairColor(appearance.hair),
+      hair_color_original: true,
+    })
+  }
+
+  function restoreEyeColor() {
+    onAppearanceChange({
+      ...appearance,
+      eye_color: DEFAULT_EYE_COLOR,
+      eye_color_original: true,
+    })
   }
 
   function atSlotLimit() {
@@ -156,20 +182,27 @@
     const untouched =
       appearance.hair === previousHair &&
       appearance.hair_color === FEMALE_HAIR_COLORS[previousHair]
+    const options = gender === 'female' ? FEMALE_FACE_OPTIONS : FACE_OPTIONS
+    const face = options.some((option) => option.value === appearance.face)
+      ? appearance.face
+      : 'default'
     if (gender === 'female' && (!female || untouched)) {
       const hair = femaleHairFor(cls)
       onAppearanceChange({
         ...appearance,
-        face: 'default',
+        face,
         hair,
         hair_color: FEMALE_HAIR_COLORS[hair],
       })
     } else if (gender === 'male' && female) {
       onAppearanceChange({
         ...appearance,
+        face,
         hair: 'crop',
         hair_color: DEFAULT_HAIR_COLOR,
       })
+    } else if (face !== appearance.face) {
+      onAppearanceChange({ ...appearance, face })
     }
   }
 
@@ -321,15 +354,35 @@
             disabled={isBusy() || field.disabled}
           >
             <legend class="field-label">{$t(field.label)}</legend>
+            {#if field.key === 'hair_color'}
+              <button
+                type="button"
+                class="original-color-btn"
+                class:appearance-selected={field.original}
+                aria-pressed={field.original}
+                onclick={restoreHairColor}
+                >{$t('characterCreate.originalHairColor')}</button
+              >
+            {:else}
+              <button
+                type="button"
+                class="original-color-btn"
+                class:appearance-selected={field.original}
+                aria-pressed={field.original}
+                onclick={restoreEyeColor}
+                >{$t('characterCreate.originalEyeColor')}</button
+              >
+            {/if}
             <div class="color-grid">
               {#each field.options as option (option.value)}
                 <button
                   type="button"
                   class="color-swatch"
-                  class:appearance-selected={field.value === option.value}
+                  class:appearance-selected={!field.original &&
+                    field.value === option.value}
                   style:background-color={option.value}
                   aria-label={$t(option.label)}
-                  aria-pressed={field.value === option.value}
+                  aria-pressed={!field.original && field.value === option.value}
                   title={$t(option.label)}
                   onclick={() => selectColor(field, option.value)}
                 ></button>
@@ -636,6 +689,28 @@
     gap: 6px;
   }
 
+  .original-color-btn {
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 6px 10px;
+    border: 1px solid #61738a;
+    border-radius: 5px;
+    background: #111923;
+    color: #edf2f7;
+    cursor: pointer;
+  }
+
+  .original-color-btn.appearance-selected {
+    border-color: #2c7be5;
+    background: #162a44;
+    box-shadow: inset 0 0 0 1px #2c7be5;
+  }
+
+  .original-color-btn:focus-visible {
+    outline: 2px solid #8bbcff;
+    outline-offset: 1px;
+  }
+
   .color-swatch {
     height: 30px;
     border: 1px solid #61738a;
@@ -675,6 +750,7 @@
   }
 
   .appearance-field:disabled .color-grid,
+  .appearance-field:disabled .original-color-btn,
   .appearance-field:disabled .custom-color {
     opacity: 0.5;
   }

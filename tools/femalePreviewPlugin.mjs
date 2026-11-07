@@ -5,6 +5,7 @@ import { valkyriePreviewFit } from './lib/valkyrie-preview-fit.mjs'
 import { outfitPreviewFit } from './lib/outfit-preview-fit.mjs'
 import { helmetHairBrush } from './lib/helmet-hair-brush.mjs'
 import { instrumentCarry } from './lib/instrument-carry.mjs'
+import { femaleHairFit } from './lib/female-hair-fit.mjs'
 
 const pending = new Map()
 
@@ -14,7 +15,7 @@ export function femalePreviewPlugin() {
     apply: 'serve',
     // The preview saves the carry pose while open; Vite already invalidated the module, so skip the page reload.
     handleHotUpdate({ file }) {
-      if (file.endsWith('/client/src/lib/data/instrumentCarry.json')) return []
+      if (file.endsWith('/client/src/lib/data/instrumentCarry.json') || file.endsWith('/client/src/lib/data/femaleHairFits.json')) return []
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
@@ -49,6 +50,7 @@ export function femalePreviewPlugin() {
       server.middlewares.use(outfitPreviewFit())
       server.middlewares.use(helmetHairBrush())
       server.middlewares.use(instrumentCarry())
+      server.middlewares.use(femaleHairFit())
       server.middlewares.use((req, res, next) => {
         const match = /^\/__female-preview\/(base|bob|warrior|valkyrie)\.glb$|^\/__female-preview\/(animations)\.json$/.exec(req.url?.split('?')[0] ?? '')
         if (req.method !== 'GET' || !match) return next()

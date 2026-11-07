@@ -65,6 +65,13 @@ const FEMALE_EYE: Eye = {
   front: 0.05,
   detailCut: [0.12, 0.2],
 }
+const CUSTOM_FEMALE_EYE: Eye = {
+  x: [0.0338, 0.0322],
+  y: 1.685,
+  radius: [0.0078, 0.0058],
+  front: 0.052,
+  detailCut: [0.3, 0.5],
+}
 // Mean linear luminance of each female hair texture, so the chosen color is the mean albedo.
 const linearLuminance = (hex: string) => {
   const { r, g, b } = new Color(hex)
@@ -84,18 +91,26 @@ FEMALE_HAIR_LUMINANCE.barbarian_hair = FEMALE_HAIR_LUMINANCE.hair
 class AppearanceColors {
   readonly hair = uniform(new Color(DEFAULT_HAIR_COLOR))
   readonly eyes = uniform(new Color(DEFAULT_EYE_COLOR))
+  private readonly hairTint = uniform(1)
+  private readonly eyeTint = uniform(1)
+  private readonly customEyeTint = uniform(0)
   private readonly materials = new Map<Material, NodeMaterial>()
   private readonly originals = new WeakMap<Material, Material>()
 
   apply(meshes: SkinnedMesh[], appearance?: CharacterAppearance): void {
     this.hair.value.set(appearance?.hair_color ?? DEFAULT_HAIR_COLOR)
+    this.hairTint.value = appearance?.hair_color_original ? 0 : 1
+    this.eyeTint.value = appearance?.eye_color_original ? 0 : 1
     this.eyes.value.set(appearance?.eye_color ?? DEFAULT_EYE_COLOR)
+    this.customEyeTint.value =
+      (appearance?.eye_color ?? DEFAULT_EYE_COLOR) === DEFAULT_EYE_COLOR ? 0 : 1
     for (const mesh of meshes) {
       if (!mesh.visible) continue
       const id = mesh.userData.part_id
       const femaleHair = FEMALE_HAIR_LUMINANCE[mesh.userData.female_part]
       const hair = SELECTABLE_HAIR_PARTS.has(id) || femaleHair !== undefined
-      const female = !!mesh.userData.female_body
+      const customFace = !!mesh.userData.female_face
+      const female = !!mesh.userData.female_body || customFace
       if (!hair && !female && region(mesh) !== 'head') continue
       const tint = (current: Material) => {
         const source = this.originals.get(current) ?? current
@@ -118,13 +133,22 @@ class AppearanceColors {
                 : id === 'hair_wavy_bone'
                   ? detail.div(0.12).clamp(0, 2)
                   : detail.mul(3).clamp(0, 1.5)
-            material.colorNode = vec4(this.hair.mul(brightness), base.a)
+            const original = ((source as NodeMaterial).colorNode ??
+              convert(materialColor, 'vec4')) as Node<'vec4'>
+            material.colorNode = vec4(
+              mix(original.rgb, this.hair.mul(brightness), this.hairTint),
+              original.a
+            )
           } else {
             const skin = ((source as NodeMaterial).colorNode ??
               convert(materialColor, 'vec4')) as Node<'vec4'>
             const faceEye =
               appearance?.face === 'ranger' ? RANGER_EYE : DEFAULT_EYE
-            const eye = female ? FEMALE_EYE : faceEye
+            const eye = customFace
+              ? CUSTOM_FEMALE_EYE
+              : female
+                ? FEMALE_EYE
+                : faceEye
             const point = vec2(
               abs(positionGeometry.x).sub(
                 mix(eye.x[0], eye.x[1], step(0, positionGeometry.x))
@@ -147,7 +171,13 @@ class AppearanceColors {
             const irisMask = mask.mul(red).mul(bright)
             const iris = this.eyes.mul(detail.mul(6).clamp(0.15, 1.2))
             material.colorNode = vec4(
-              mix(skin.rgb, iris, irisMask.mul(0.9)),
+              mix(
+                skin.rgb,
+                iris,
+                irisMask
+                  .mul(customFace ? this.customEyeTint.mul(0.9) : 0.9)
+                  .mul(this.eyeTint)
+              ),
               skin.a
             )
           }
