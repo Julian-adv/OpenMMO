@@ -176,7 +176,7 @@ for (const [name, source] of Object.entries(sources)) {
   for (const texture of doc.getRoot().listTextures()) {
     if (/eyelash/i.test(texture.getName())) continue
     const color = colors.has(texture)
-    const size = color && !separatePart(name) && !['bottom', 'rogue_bottom', 'rogue_top'].includes(name) ? 2048 : 1024
+    const size = color && !separatePart(name) && !['bottom', 'rogue_bottom', 'rogue_top', 'barbarian_helmet'].includes(name) ? 2048 : 1024
     const image = await sharp(texture.getImage()).resize({ width: size, height: size, fit: 'inside', withoutEnlargement: true })
       .webp(color ? { quality: 94, effort: 5 } : { quality: 90, smartSubsample: true, effort: 5 }).toBuffer()
     texture.setImage(image).setMimeType('image/webp')
