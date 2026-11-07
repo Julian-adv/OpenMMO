@@ -269,6 +269,41 @@
     "fireKind": "torch"
   },
   {
+    "id": "mine_timber_post",
+    "name": "Mine Timber Post",
+    "model": "objects/mine_timber_post.glb"
+  },
+  {
+    "id": "mine_rail",
+    "name": "Mine Rail",
+    "model": "objects/mine_rail.glb"
+  },
+  {
+    "id": "mine_cart",
+    "name": "Mine Cart",
+    "model": "objects/mine_cart.glb"
+  },
+  {
+    "id": "mine_tool_rack",
+    "name": "Mine Tool Rack",
+    "model": "objects/mine_tool_rack.glb"
+  },
+  {
+    "id": "mine_ore_heap",
+    "name": "Ore Heap",
+    "model": "objects/mine_ore_heap.glb"
+  },
+  {
+    "id": "mine_rubble",
+    "name": "Rock Fall",
+    "model": "objects/mine_rubble.glb"
+  },
+  {
+    "id": "mine_crystal_cluster",
+    "name": "Crystal Cluster",
+    "model": "objects/mine_crystal_cluster.glb"
+  },
+  {
     "id": "health_potion",
     "name": "Greater Healing Potion",
     "model": "objects/greater_healing_potion.glb"

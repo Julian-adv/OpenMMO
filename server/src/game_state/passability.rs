@@ -456,12 +456,14 @@ impl super::GameState {
             let Some(rt) = dungeons.get(entrance_id) else {
                 return;
             };
-            let broken: Vec<u32> = rt
-                .broken_props
-                .get(&depth)
-                .map(|s| s.iter().copied().collect())
-                .unwrap_or_default();
-            floor_cells(&rt.layouts, depth, &broken, rt.open_doors.get(&depth))
+            let (broken, carts) = rt.floor_props(depth);
+            floor_cells(
+                &rt.layouts,
+                depth,
+                &broken,
+                rt.open_doors.get(&depth),
+                &carts,
+            )
         };
         let Some(cells) = cells else {
             return;

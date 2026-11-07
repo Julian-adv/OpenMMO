@@ -1069,6 +1069,10 @@ async fn handle_client_message(
             end_entry_grace(game_state, state, id, &client_msg).await;
         }
         game_state.advance_goal_players(&[id]).await;
+        if client_msg.blocked_while_petrified(state.is_admin) && game_state.is_petrified(&id).await
+        {
+            return Ok(vec![]);
+        }
     }
 
     match client_msg {
@@ -1890,6 +1894,30 @@ async fn handle_client_message(
             if let Some(id) = &state.require_in_game("prop break") {
                 game_state
                     .break_dungeon_prop(id, &entrance_id, depth, prop_id)
+                    .await;
+            }
+        }
+
+        ClientMessage::MineDungeonProp {
+            entrance_id,
+            depth,
+            prop_id,
+        } => {
+            if let Some(id) = &state.require_in_game("mining") {
+                game_state
+                    .start_mining(id, &entrance_id, depth, prop_id)
+                    .await;
+            }
+        }
+
+        ClientMessage::PushDungeonCart {
+            entrance_id,
+            depth,
+            prop_id,
+        } => {
+            if let Some(id) = &state.require_in_game("cart push") {
+                game_state
+                    .push_dungeon_cart(id, &entrance_id, depth, prop_id, Some(auth_service))
                     .await;
             }
         }

@@ -4,7 +4,6 @@
   import { syncOwnFloor, ownPlayerFloor } from '../network/ownFloor'
   import { translate } from '../i18n'
   import { onDestroy, onMount } from 'svelte'
-  import { localTeleportActive } from '../stores/teleportEffectStore'
   import {
     inspectionTargeting,
     cancelInspection,
@@ -27,6 +26,7 @@
     gameStore,
     hoverTarget,
     addChatMessage,
+    localHeldInPlace,
     reportSkillFailure,
     type LocalPlayer,
   } from '../stores/gameStore'
@@ -118,14 +118,22 @@
     playerVisualFloorLevel,
   } from '../stores/housingStore'
   import { currentDungeonDepth } from '../stores/dungeonStore'
-  import { dungeonManager } from '../managers/dungeonManager'
+  import {
+    dungeonManager,
+    type PendingPropAction,
+  } from '../managers/dungeonManager'
   import { housingManager } from '../managers/housingManager'
   import {
     shouldIgnoreImplicitHouseFloorChange,
     wallApproachPositions,
     type ClosedHouseDoor,
   } from '../managers/housing-queries'
-  import { PROP_SWING_IMPACT_MS } from '../data/combatTiming'
+  import {
+    MINING_SWING_IMPACT_MS,
+    MINING_SWING_MS,
+    PROP_SWING_IMPACT_MS,
+  } from '../data/combatTiming'
+  import { noteMiningSwing, PICKAXE_ITEM } from '../stores/miningStore'
   import {
     DUNGEON_DOOR_APPROACH,
     HOUSE_DOOR_APPROACH,
@@ -133,6 +141,7 @@
     approachForInteraction,
     PICKUP_APPROACH,
     PROP_APPROACH,
+    CART_PUSH_APPROACH,
     ALTAR_APPROACH,
     STALL_TRADE_APPROACH,
     TIP_HAT_APPROACH,
@@ -398,6 +407,9 @@
     currentSpeed = 0
     clickSprinting = false
   }
+
+  let miningSwingTimer: ReturnType<typeof setInterval> | null = null
+  onDestroy(networkManager.miningEnded.on(stopMining))
 
   function clearPropSwingTimers() {
     if (propBreakTimer) {
@@ -879,7 +891,7 @@
   let chargeDash: ChargeDash | null = null
 
   function serverHoldsPosition() {
-    return $localTeleportActive || chargeDash !== null
+    return $localHeldInPlace || chargeDash !== null
   }
 
   /** The server moved us: drop every local plan to walk somewhere. */
@@ -1099,6 +1111,7 @@
     keyboardSender.reset()
     clickSprinting = sprinting
     playerControlMachine.transition({ name: 'moving', approach })
+    settlingCartPush = null
     serverMovement.request(target.x, target.z, sprinting, stopAtEntrance)
     updatePlayerState()
   }
@@ -1151,10 +1164,9 @@
     } = {}
   ) {
     cancelAutoTravel()
-    // Any fresh movement cancels a pending prop break/open (breakProp/openProp
-    // re-arm it after their own walk-up call below).
-    dungeonManager.clearPendingBreak()
-    dungeonManager.clearPendingOpen()
+    // Any fresh movement cancels a pending prop action (approachProp re-arms
+    // it after its own walk-up call below).
+    dungeonManager.clearPendingProp()
     // Approach moves (chase, walk-up) carry no modifier: follow the preference.
     clickSprinting =
       (options.sprinting ?? sprintRequested(false)) && sprintAvailable()
@@ -1422,10 +1434,14 @@
   }
 
   function refusePickup(item: GroundItemData, reason: string) {
+    refuseAt(item.position, reason)
+  }
+
+  function refuseAt(position: Position, reason: string) {
     cancelAutoTravel()
     addChatMessage({ text: reason, sender: 'system' })
     if (playerState.state === 'interact' || isMounted(currentPlayer)) return
-    faceTowards(item.position.x, item.position.z)
+    faceTowards(position.x, position.z)
     stopAndFace(playerRotation)
     // Through the server so nearby players see it; the echo starts it here.
     networkManager.sendChatMessage(`/emote ${REFUSE_PICKUP_ANIM}`)
@@ -1705,24 +1721,23 @@
    *  the dungeon layer fires the break/open once the player is in range. */
   function approachProp(
     intent: { depth: number; propId: number; position: Position },
-    setPending: (p: {
-      depth: number
-      propId: number
-      x: number
-      z: number
-    }) => void
+    action: PendingPropAction['action']
   ) {
     if (!currentPlayer) return
     const plan = planApproach(
       currentPlayer.position,
-      { position: intent.position, ...PROP_APPROACH },
+      {
+        position: intent.position,
+        ...(action === 'push' ? CART_PUSH_APPROACH : PROP_APPROACH),
+      },
       routeQuality
     )
     if (plan.kind === 'unreachable') return
     if (plan.kind === 'walk') {
       handleClickToMove(plan.target)
     }
-    setPending({
+    dungeonManager.setPendingProp({
+      action,
       depth: intent.depth,
       propId: intent.propId,
       x: intent.position.x,
@@ -1733,7 +1748,7 @@
   /** Click a barrel/crate: walk up, then arm the break. The dungeon layer fires
    *  it via the server once the player is in range. */
   function breakProp(intent: Extract<ClickIntent, { type: 'break_prop' }>) {
-    approachProp(intent, (p) => dungeonManager.setPendingBreak(p))
+    approachProp(intent, 'break')
   }
 
   /** Click a chest: walk up, then arm the open. The dungeon layer sends the open
@@ -1742,7 +1757,135 @@
   function openProp(intent: Extract<ClickIntent, { type: 'open_prop' }>) {
     // Already open — nothing to do (avoid a pointless walk-up).
     if (dungeonManager.isPropOpened(intent.depth, intent.propId)) return
-    approachProp(intent, (p) => dungeonManager.setPendingOpen(p))
+    approachProp(intent, 'open')
+  }
+
+  /** Click an ore heap or crystal: walk up, then arm the mining. Without a
+   *  pickaxe, shake the head instead. */
+  function mineProp(intent: Extract<ClickIntent, { type: 'mine_prop' }>) {
+    if (!holdsPickaxe()) {
+      refuseAt(intent.position, translate('system.noPickaxe'))
+      return
+    }
+    approachProp(intent, 'mine')
+  }
+
+  /** From a rail cart's center to the cell just past its end. */
+  const CART_END_REACH = 1.5
+
+  /** Click a rail cart: walk to the end nearer the player, then push. */
+  function pushCart(intent: Extract<ClickIntent, { type: 'push_cart' }>) {
+    if (!currentPlayer) return
+    const { x, z } = intent.position
+    const me = currentPlayer.position
+    const side = intent.alongX
+      ? Math.sign(shortestWrappedDeltaX(x, me.x)) || 1
+      : Math.sign(me.z - z) || 1
+    approachProp(
+      {
+        ...intent,
+        position: {
+          ...intent.position,
+          x: intent.alongX ? x + side * CART_END_REACH : x,
+          z: intent.alongX ? z : z + side * CART_END_REACH,
+        },
+      },
+      'push'
+    )
+  }
+
+  /** Face `rotation` while standing, on screen and for others. */
+  function turnInPlace(rotation: number) {
+    playerRotation = rotation
+    setPlayerState({ ...playerState, rotation })
+    stopAndFace(rotation)
+  }
+
+  /** A push held until the walk onto the cart's end settles, so the arrival
+   *  facing does not overwrite the turn toward the cart. */
+  let settlingCartPush: Parameters<typeof pushCartNow> | null = null
+
+  /** At the cart's end: face it and ask the server to push. */
+  export function pushCartNow(
+    entranceId: string,
+    depth: number,
+    propId: number,
+    x: number,
+    z: number
+  ) {
+    if (!currentPlayer) return
+    if (serverMovement.active) {
+      settlingCartPush = [entranceId, depth, propId, x, z]
+      return
+    }
+    faceTowards(x, z)
+    currentSpeed = 0
+    turnInPlace(playerRotation)
+    networkManager.sendPushDungeonCart(entranceId, depth, propId)
+  }
+
+  function holdsPickaxe() {
+    const inv = get(inventoryStore)
+    return [...inv.bag, ...Object.values(inv.equipped)].some(
+      (i) => i?.item_def_id === PICKAXE_ITEM
+    )
+  }
+
+  /** Swing the pickaxe while the server's mining cast runs, until it ends. */
+  export function startMining(
+    entranceId: string,
+    depth: number,
+    propId: number,
+    x: number,
+    z: number
+  ) {
+    if (!currentPlayer) return
+    const playerId = currentPlayer.id
+    const swingSound = () => {
+      noteMiningSwing(playerId)
+      playPropSound('pickaxe', MINING_SWING_IMPACT_MS)
+    }
+    stopMining()
+    beginPropSwing(x, z)
+    swingSound()
+    networkManager.sendMineDungeonProp(entranceId, depth, propId)
+    miningSwingTimer = setInterval(() => {
+      swingAtProp()
+      swingSound()
+    }, MINING_SWING_MS)
+  }
+
+  function beginPropSwing(x: number, z: number) {
+    combatController.cancelCombat()
+    clearPropSwingTimers()
+    faceTowards(x, z)
+    currentSpeed = 0
+    swingAtProp()
+    stopAndFace(playerRotation) // others see the facing
+  }
+
+  /** A separate counter replays each prop swing outside monster combat. */
+  function swingAtProp() {
+    propSwingCounter += 1
+    setPlayerState(
+      buildAttackState(playerState, playerRotation, propSwingCounter)
+    )
+    transitionTo('attacking')
+  }
+
+  /** Stop swinging; the swing under way finishes `swingLeftMs` later. */
+  function stopMining(swingLeftMs = 0) {
+    if (!miningSwingTimer) return
+    clearInterval(miningSwingTimer)
+    miningSwingTimer = null
+    idleAfterSwing(swingLeftMs)
+  }
+
+  function idleAfterSwing(ms: number) {
+    propSwingIdleTimer = setTimeout(() => {
+      propSwingIdleTimer = null
+      if (playerState.state === 'attack') transitionToIdle()
+    }, ms)
   }
 
   /** The player has walked up to a clicked barrel/crate: swing the sword once
@@ -1758,18 +1901,7 @@
     if (!currentPlayer) return
     // Don't interrupt an in-flight swing (the layer can fire across frames).
     if (playerState.state === 'attack' && propBreakTimer) return
-    combatController.cancelCombat()
-    clearPropSwingTimers()
-
-    // Use a separate counter to replay each prop swing outside monster combat.
-    faceTowards(x, z)
-    currentSpeed = 0
-    propSwingCounter += 1
-    setPlayerState(
-      buildAttackState(playerState, playerRotation, propSwingCounter)
-    )
-    transitionTo('attacking')
-    stopAndFace(playerRotation) // others see the facing
+    beginPropSwing(x, z)
 
     propBreakTimer = setTimeout(() => {
       propBreakTimer = null
@@ -1777,10 +1909,7 @@
       dungeonManager.noteSelfBreak(depth, propId)
       networkManager.sendBreakDungeonProp(entranceId, depth, propId)
     }, PROP_SWING_IMPACT_MS)
-    propSwingIdleTimer = setTimeout(() => {
-      propSwingIdleTimer = null
-      if (playerState.state === 'attack') transitionToIdle()
-    }, PROP_SWING_RETURN_MS)
+    idleAfterSwing(PROP_SWING_RETURN_MS)
   }
 
   // Sticky hover keeps the target ring up while the pointer sits in the
@@ -2067,6 +2196,8 @@
       eatMeal,
       inspectAltar,
       breakProp,
+      mineProp,
+      pushCart,
       openProp,
       moveToGround: (position, sprinting, viaHousingStair) => {
         const snapped = dungeonManager.snapDescentWallClick(
@@ -2118,9 +2249,8 @@
         clearCombat()
         stopMovement()
         if (!boating) faceTowards(intent.position.x, intent.position.z)
-        setPlayerState({ ...playerState, rotation: playerRotation })
         // Sync heading before the server validates the cast direction.
-        stopAndFace(playerRotation)
+        turnInPlace(playerRotation)
         networkManager.sendFishingCast(intent.position)
       },
       requestMove: handleClickToMove,
@@ -2169,7 +2299,7 @@
     deltaTime: number,
     options: PlayerControlUpdateOptions
   ) {
-    if ($localTeleportActive) return
+    if ($localHeldInPlace) return
     if (chargeDash) {
       advanceChargeDash(chargeDash)
       return
@@ -2309,17 +2439,15 @@
           queued
         )
     })
-    const unsubscribeTeleportEffect = localTeleportActive.subscribe(
-      (active) => {
-        if (!active) return
-        cancelAutoTravel()
-        combatController.cancelCombat()
-        abandonLocalActions()
-        keyboardSender.clear()
-        transitionTo('idle')
-        updatePlayerState()
-      }
-    )
+    const unsubscribeHeldInPlace = localHeldInPlace.subscribe((held) => {
+      if (!held) return
+      cancelAutoTravel()
+      combatController.cancelCombat()
+      abandonLocalActions()
+      keyboardSender.clear()
+      transitionTo('idle')
+      updatePlayerState()
+    })
     const canvasCursor = renderer.domElement.style.cursor
     const unsubscribeTargeting = derived(
       [inspectionTargeting, fishingTargeting, chargeTargeting],
@@ -2354,8 +2482,7 @@
       clearStandUpTimer()
       clearPropSwingTimers()
       clearDoorInteractionRetry()
-      dungeonManager.clearPendingBreak()
-      dungeonManager.clearPendingOpen()
+      dungeonManager.clearPendingProp()
       const interaction = getInteractionExitKind(playerState)
       if (interaction === 'pickup') exitPickupInteraction()
       if (interaction === 'object') exitObjectInteraction()
@@ -2494,6 +2621,9 @@
           if (progress.status === 'rejected') serverMovement.clear()
           else serverMovement.finish()
           stopMovement()
+          const push = settlingCartPush
+          settlingCartPush = null
+          if (push && progress.status === 'arrived') pushCartNow(...push)
         }
       }
     )
@@ -2516,8 +2646,8 @@
         chargeDash = null
         interactionRevision++
         clearCombat()
-        dungeonManager.clearPendingBreak()
-        dungeonManager.clearPendingOpen()
+        dungeonManager.clearPendingProp()
+        settlingCartPush = null
         dropLocalMovement()
         officialPosition = { ...position }
         playerRotation = rotation
@@ -2546,7 +2676,7 @@
       renderer.domElement.style.cursor = canvasCursor
       unsubscribeTravel()
       unsubscribeTeleport()
-      unsubscribeTeleportEffect()
+      unsubscribeHeldInPlace()
       unsubscribeTravelPlayer()
       travelDestination.set(null)
       removeInputListeners()

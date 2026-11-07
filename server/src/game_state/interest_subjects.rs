@@ -200,6 +200,7 @@ impl Interest {
             | ServerMessage::PlayerRadianceToggled { player_id, .. }
             | ServerMessage::PlayerRageToggled { player_id, .. }
             | ServerMessage::PlayerWetToggled { player_id, .. }
+            | ServerMessage::PlayerPetrifiedToggled { player_id, .. }
             | ServerMessage::PlayerMountChanged { player_id, .. }
             | ServerMessage::PlayerTitleChanged { player_id, .. }
             | ServerMessage::PlayerMainHandChanged { player_id, .. }
@@ -216,6 +217,7 @@ impl Interest {
                                 ServerMessage::PlayerRadianceToggled { enabled, .. } => { player.radiance_on = *enabled; },
                                 ServerMessage::PlayerRageToggled { enabled, .. } => { player.raging = *enabled; },
                                 ServerMessage::PlayerWetToggled { wet, .. } => { player.wet = *wet; },
+                                ServerMessage::PlayerPetrifiedToggled { petrified, .. } => { player.petrified = *petrified; },
                                 ServerMessage::PlayerMountChanged { mount, .. } => { player.mount = *mount; },
                                 ServerMessage::PlayerTitleChanged { title, .. } => { player.title = title.clone(); },
                                 ServerMessage::PlayerMainHandChanged { item_def_id, .. } => { player.main_hand = item_def_id.clone(); },

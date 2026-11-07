@@ -29,6 +29,13 @@ export interface MonsterSkillEffects {
   dispose(): void
 }
 
+/** For a skill whose ground marks are the whole effect. */
+const NO_EFFECTS: MonsterSkillEffects = {
+  start() {},
+  update() {},
+  dispose() {},
+}
+
 // Let the last flames expire after a cast.
 const SETTLE_SECONDS = 1
 /** Telegraphed monster skills by the server's `MonsterSkillId`. */
@@ -132,6 +139,10 @@ export const MONSTER_SKILLS: Record<
         },
       }
     },
+  },
+  crystal_eruption: {
+    ...MONSTER_SKILL_DEFS.crystal_eruption,
+    createEffects: () => NO_EFFECTS,
   },
 }
 

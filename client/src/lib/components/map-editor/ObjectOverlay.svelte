@@ -71,6 +71,7 @@
   import type { Unsubscriber } from 'svelte/store'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import { disposeObjectTree } from '../../utils/disposeObjectTree'
+  import { translucentClone } from '../../utils/translucentMaterial'
 
   const PREVIEW_OPACITY = 0.5
   const GHOST_OPACITY = 0.3
@@ -268,14 +269,6 @@
       }
     })
     disposeObjectTree(obj)
-  }
-
-  function translucentClone(m: THREE.Material, opacity: number) {
-    const t = m.clone()
-    t.transparent = true
-    t.opacity = opacity
-    t.depthWrite = false
-    return t
   }
 
   function setPreviewMaterial(obj: THREE.Object3D, opacity: number) {

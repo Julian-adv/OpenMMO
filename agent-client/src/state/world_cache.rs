@@ -12,6 +12,8 @@ pub struct WorldCache {
     /// Runtime collision overlays per dungeon and depth.
     dungeon_doors: HashMap<(String, u8), HashSet<u32>>,
     dungeon_broken_props: HashMap<(String, u8), Vec<u32>>,
+    /// Pushed rail carts: prop id → cells along the rail.
+    dungeon_cart_offsets: HashMap<(String, u8), HashMap<u32, i32>>,
     /// Opened chests stay solid but are no longer offered for looting.
     dungeon_opened_props: HashMap<(String, u8), HashSet<u32>>,
     house_views: HashMap<PlayerId, HashSet<String>>,
@@ -68,6 +70,7 @@ impl WorldCache {
         self.dungeon_cached.clear();
         self.dungeon_doors.clear();
         self.dungeon_broken_props.clear();
+        self.dungeon_cart_offsets.clear();
         self.dungeon_opened_props.clear();
         for dungeon in &self.dungeons {
             self.passability_cache
@@ -209,6 +212,22 @@ impl WorldCache {
             self.rebuild_dungeon_floor(id, depth);
         }
     }
+
+    pub fn set_dungeon_cart(&mut self, id: &str, depth: u8, prop_id: u32, offset: i32) {
+        let carts = self
+            .dungeon_cart_offsets
+            .entry((id.to_owned(), depth))
+            .or_default();
+        let was = carts.get(&prop_id).copied().unwrap_or(0);
+        if offset == 0 {
+            carts.remove(&prop_id);
+        } else {
+            carts.insert(prop_id, offset);
+        }
+        if was != offset {
+            self.rebuild_dungeon_floor(id, depth);
+        }
+    }
     pub fn new() -> Self {
         Self {
             collision_revision: 0,
@@ -217,6 +236,7 @@ impl WorldCache {
             dungeons: Vec::new(),
             dungeon_doors: HashMap::new(),
             dungeon_broken_props: HashMap::new(),
+            dungeon_cart_offsets: HashMap::new(),
             dungeon_opened_props: HashMap::new(),
             house_views: HashMap::new(),
             house_revisions: HashMap::new(),
@@ -376,7 +396,13 @@ impl WorldCache {
             .get(&(id.to_string(), depth))
             .cloned()
             .unwrap_or_default();
-        let Some(cells) = floor_cells(dungeon.layouts(), depth, &broken, Some(&open)) else {
+        let carts: Vec<(u32, i32)> = self
+            .dungeon_cart_offsets
+            .get(&(id.to_string(), depth))
+            .map(|m| m.iter().map(|(&id, &o)| (id, o)).collect())
+            .unwrap_or_default();
+        let Some(cells) = floor_cells(dungeon.layouts(), depth, &broken, Some(&open), &carts)
+        else {
             return;
         };
         set_floor_cells(&mut self.passability_cache, id, depth, cells);

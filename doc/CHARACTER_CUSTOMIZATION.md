@@ -429,6 +429,16 @@ DB에는 nullable `appearance_json`을 추가하는 안을 사용한다. NULL은
 미사용 원본의 보관 용량에 한도를 둔다. 사용자가 없는 원본을 캐시에서 제거할 때만
 그 소유 자원을 해제한다. 재매핑한 지오메트리도 같은 규칙을 따른다.
 
+손에 드는 무기·악기·도구·방패의 위치는 [handFits.json](../client/src/lib/data/handFits.json)
+하나에 둔다. `all`(모든 체형)과 체형별(`modular_male`, `modular_female`)
+층이 있고, 각 층에서 맞는 항목을 `category:` → `type:` → `model:` → `item:` 순으로 덮어 써서
+위치·회전 각각 가장 구체적인 항목의 값을 쓴다. 바탕은 `hand:main`/`hand:off`이고 체형별 층이 모든 체형
+층보다 우선한다. 여성 변형(`#fragment`)은 여성 값을 쓴다. 활은 팔뚝 길이로 위치를 늘리는
+예외라 코드에 남는다. 남성 몸의 `weapons/sword.glb`는 검 동작 팩이 움직이는
+소켓에 붙어 이 값을 쓰지 않는다. 맞추기는 `modular-character-preview.html?handfit=<체형>&item=<id>`에서
+한다. 몬스터는 `monsters.csv`의 `weaponOffset`·`weaponRotation`에 두고 몬스터 미리보기에서
+같은 슬라이더 편집기로 맞춘다(회전은 XYZ 각도).
+
 최적화는 조립 모델의 드로우콜·삼각형·텍스처 메모리·최초 로딩 시간과 다수 캐릭터의
 프레임 시간을 측정한 뒤 진행한다. 첫 구현에서 조합별 통합 메시를 미리 만들거나
 매 프레임 메시를 병합하지 않는다. 필요하면 이후 장비 변경 시 병합, 아틀라스,

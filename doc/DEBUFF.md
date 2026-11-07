@@ -28,18 +28,20 @@
 | `group` | 같은 그룹의 디버프는 하나만 유지된다. 새로 걸리면 그룹의 다른 것을 지운다 (취기 단계) |
 | `staggerM` | 클라이언트가 바닥 클릭 목표를 이 거리(m)까지 무작위로 빗나가게 한다. 비어 있으면 0 |
 | `hitMod` | 플레이어 히트 롤의 `attack_bonus`에 더하는 값 ([COMBAT.md](COMBAT.md)). 비어 있으면 0 |
+| `petrifies` | true면 지속 중 돌이 된다 (아래 석화 절) |
 
 현재 값:
 
-| id | name | chance | durationSecs | dps | moveMult | attackMult | carryMult | armorWeightMult | drainMult | blocksRegen | group | staggerM | hitMod |
-|----|------|--------|------------|-----|----------|------------|-----------|-----------------|-----------|-------------|-------|----------|--------|
-| food_poisoning | Food Poisoning | 70 | 300 | | 0.6 | 0.6 | 0.6 | | 4 | true | | | |
-| bleed | Bleeding | 35 | 8 | 1 | | | | | | true | | | |
-| wet | Wet | 100 | 450 | | 0.83 | | | 1.5 | | | | | |
-| cold | Cold | 100 | 450 | | 0.9 | 0.9 | | | 1.5 | | | | |
-| tipsy | Tipsy | 100 | 300 | | 1.1 | 1.1 | | | | | alcohol | | |
-| drunk | Drunk | 100 | 300 | | 0.85 | 0.85 | 0.85 | | | | alcohol | | -2 |
-| wasted | Wasted | 100 | 300 | | 0.6 | 0.6 | 0.6 | | | | alcohol | 2.5 | -5 |
+| id | name | chance | durationSecs | dps | moveMult | attackMult | carryMult | armorWeightMult | drainMult | blocksRegen | group | staggerM | hitMod | petrifies |
+|----|------|--------|------------|-----|----------|------------|-----------|-----------------|-----------|-------------|-------|----------|--------|-----------|
+| food_poisoning | Food Poisoning | 70 | 300 | | 0.6 | 0.6 | 0.6 | | 4 | true | | | | |
+| bleed | Bleeding | 35 | 8 | 1 | | | | | | true | | | | |
+| wet | Wet | 100 | 450 | | 0.83 | | | 1.5 | | | | | | |
+| cold | Cold | 100 | 450 | | 0.9 | 0.9 | | | 1.5 | | | | | |
+| tipsy | Tipsy | 100 | 300 | | 1.1 | 1.1 | | | | | alcohol | | | |
+| drunk | Drunk | 100 | 300 | | 0.85 | 0.85 | 0.85 | | | | alcohol | | -2 | |
+| wasted | Wasted | 100 | 300 | | 0.6 | 0.6 | 0.6 | | | | alcohol | 2.5 | -5 | |
+| petrified | Petrified | 100 | 20 | | | | | | | | | | | true |
 
 아이콘과 문구는 클라이언트의 `debuffPresentation.ts`에 둔다. CSV에는 게임 수치만 적는다 (쉼표 금지, `data/debuffs.json`은 생성물).
 
@@ -52,6 +54,17 @@
 - **물 진입**: 이동 처리가 직접 건다 (`server/src/game_state/debuff.rs`의 `soak_movers`). CSV 참조가 아니라 코드에 id가 박혀 있다.
 - **비 노출**: `tick_rain_soaking`이 서버 날씨와 위치로 노출 시간을 누적해 기존 `wet`을 건다.
 - **눈 노출**: 같은 `tick_rain_soaking`이 강수 중 눈 몫(`precip_at`의 `snow`)을 따로 누적해 `cold`를 건다.
+- **보스 스킬**: `MonsterSkill.debuff` (`shared/src/monster_ai/skill.rs`). 스킬 타격이 맞은 모두에게 건다. 감독관의 수정 분출은 `petrified`.
+
+## 석화 (petrified)
+
+검은광맥 광산 25층 보스 감독관의 수정 분출(`crystal_eruption`)에 맞으면 20초간 돌이 된다. 스킬은 보스에서 14m 안에 있는 플레이어 발밑마다(최대 6곳) 표시를 깔고 2.4초 뒤 터지므로, 표시 밖으로 나가면 피한다.
+
+- 돌이 된 동안 이동·공격·기술·아이템 사용·상호작용·슬래시 명령을 할 수 없다. 채팅은 된다. 서버는 `ClientMessage::blocked_while_petrified`로 거르고, 걸리는 순간 진행 중이던 이동·공격·낚시·채광·연주를 멈춘다.
+- 피해를 받지 않고 몬스터의 표적이 되지 않는다 (`Player::is_damageable`). 그동안 HP 자연 회복과 치유도 받지 않는다.
+- 예외는 감독관이다 (`SkillSet::shatter`). 주변에 석화되지 않은 플레이어가 있으면 그쪽을 노리지만, 모두 돌이면 곁에서 10초 기다렸다가 한 명을 평타로 깨뜨린다. 그 일격은 석화를 풀고 방어를 무시한 4배 피해를 준다.
+- `Player.petrified`와 `PlayerPetrifiedToggled`로 주변 클라이언트와 본인에게 알린다. 클라이언트는 회색 돌 재질로 바꾸고 동작을 멈춘다. 분출 때 바닥에서 솟는 것은 광산 수정 덩어리처럼 푸르게 일렁이는 검보라 수정이다 (`crystalShardMaterial`).
+- 디버프와 같이 사망하면 풀리고, 접속을 끊으면 사라진다.
 
 ## 식중독 (food_poisoning)
 

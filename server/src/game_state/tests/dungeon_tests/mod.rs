@@ -7,6 +7,7 @@ mod den_tests;
 mod discovery_tests;
 mod door_tests;
 mod guild_tests;
+mod mine_tests;
 mod monster_tests;
 mod population_tests;
 mod reconnect_tests;
@@ -65,19 +66,18 @@ async fn assert_floor_pool(game_state: &GameState, entrance_id: &str, depth: u8,
     }
 }
 
-/// Each `(variant, model_of, stats_of)` wears `model_of`'s look and fights
-/// with `stats_of`'s numbers.
-fn assert_variants(game_state: &GameState, rows: &[(&str, &str, &str)]) {
+/// Each `(variant, model_of, stats_of)` wears `model_of`'s look, unless it has
+/// its own (`None`), and fights with `stats_of`'s numbers.
+fn assert_variants(game_state: &GameState, rows: &[(&str, Option<&str>, &str)]) {
     let defs = &game_state.monster_defs;
     for &(variant, model_of, stats_of) in rows {
-        let (v, m, s) = (
-            defs.get(variant).unwrap(),
-            defs.get(model_of).unwrap(),
-            defs.get(stats_of).unwrap(),
-        );
-        assert_eq!(v.model, m.model, "{variant}");
-        assert_eq!(v.weapon, m.weapon, "{variant}");
-        assert_eq!(v.hit_debuff, m.hit_debuff, "{variant}");
+        let (v, s) = (defs.get(variant).unwrap(), defs.get(stats_of).unwrap());
+        if let Some(model_of) = model_of {
+            let m = defs.get(model_of).unwrap();
+            assert_eq!(v.model, m.model, "{variant}");
+            assert_eq!(v.weapon, m.weapon, "{variant}");
+            assert_eq!(v.hit_debuff, m.hit_debuff, "{variant}");
+        }
         assert_eq!(
             (
                 v.level,

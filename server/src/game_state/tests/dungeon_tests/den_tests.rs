@@ -8,10 +8,10 @@ async fn thieves_den_variants_match_their_crypt_counterparts() {
     assert_variants(
         &game_state,
         &[
-            ("kobold_cutpurse", "kobold", "skeleton_weak"),
-            ("hobgoblin_thug", "hobgoblin", "skeleton"),
-            ("gnoll_stalker", "gnoll", "skeleton"),
-            ("bugbear_enforcer", "bugbear", "skeleton_warrior"),
+            ("kobold_cutpurse", Some("kobold"), "skeleton_weak"),
+            ("hobgoblin_thug", Some("hobgoblin"), "skeleton"),
+            ("gnoll_stalker", Some("gnoll"), "skeleton"),
+            ("bugbear_enforcer", Some("bugbear"), "skeleton_warrior"),
         ],
     );
     assert_eq!(

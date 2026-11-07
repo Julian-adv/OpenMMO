@@ -15,12 +15,16 @@
   import {
     dungeonManager,
     ENTRANCE_DOOR_DEPTH,
+    cartRollSpeed,
     ENTRANCE_DOOR_ID,
+    MINABLE_PROP_KINDS,
     TREASURE_CHEST_PROP_ID,
     type DungeonFloorLayout,
   } from '../../managers/dungeonManager'
   import { loadGLB } from '../../utils/gltfCache'
   import { getObjectModelPath } from '../../utils/modelPaths'
+  import { applyCrystalGlow } from '../../effects/crystal-glow'
+  import { translate } from '../../i18n'
   import { rotatedRectAabb } from '../../utils/objectFootprint'
   import type { DoorLeaf, InteriorDoor } from '../../utils/dungeon-geometry'
   import { networkManager } from '../../network/socket'
@@ -32,14 +36,20 @@
     type WallRun,
   } from '../../utils/dungeon-geometry'
   import { getGhostHousingMaterial } from '../../utils/housing-textures'
-  import { isoCameraOccludesPlayer } from '../../utils/iso-occlusion'
+  import {
+    isoCameraOccludesNearPlayer,
+    isoCameraOccludesPlayer,
+  } from '../../utils/iso-occlusion'
   import { passabilityDebugVisible } from '../../stores/debugStore'
   import { pushPassabilityEdges } from '../../utils/passability-wireframe'
   import { generateDungeonPuddles } from '../../utils/dungeon-puddles'
   import { DungeonPuddles } from '../../effects/dungeon-puddles'
   import { disposeObjectTree } from '../../utils/disposeObjectTree'
+  import { translucentClone } from '../../utils/translucentMaterial'
   import {
+    playCartRollSound,
     playDungeonDripSound,
+    stopCartSounds,
     stopDungeonDripSounds,
   } from '../../managers/sfxManager'
 
@@ -54,22 +64,53 @@
       x: number,
       z: number
     ) => void
+    /** Fired the frame the player reaches a clicked ore heap or crystal. */
+    onMineReady?: (
+      entranceId: string,
+      depth: number,
+      propId: number,
+      x: number,
+      z: number
+    ) => void
+    /** Fired the frame the player reaches the end of a clicked rail cart;
+     *  `x`/`z` is the cart's world position. */
+    onPushReady?: (
+      entranceId: string,
+      depth: number,
+      propId: number,
+      x: number,
+      z: number
+    ) => void
   }
-  let { onPropReady, animatePuddles = true }: Props = $props()
+  let {
+    onPropReady,
+    onMineReady,
+    onPushReady,
+    animatePuddles = true,
+  }: Props = $props()
 
   /** Once the player walking up to a clicked prop is within this range, the
    *  break/open is requested. Kept inside the server's 2.5m so a borderline
    *  float position never gets rejected. */
   const PROP_INTERACT_TRIGGER_RANGE = 2.0
+  /** A push waits until the player stands at the cart's end, not beside it. */
+  const CART_PUSH_TRIGGER_RANGE = 0.6
   /** Catalog id of the broken variant rendered when a prop is destroyed. */
   const BROKEN_VARIANT: Record<string, string> = {
     barrel: 'barrel_broken',
     crate: 'crate_pieces',
   }
   const isBreakable = (kind: string) => kind in BROKEN_VARIANT
+  /** Height left of a mined ore heap or crystal cluster, as a share. */
+  const MINED_STUB_HEIGHT = 0.3
   /** Dungeon chest props render from this catalog id (the animated GLB, not the
    *  static `chest.glb`) so a click can play the lid-open clip. */
   const CHEST_ANIMATED_ID = 'chest_animated'
+  /** Props drawn from another catalog model than their kind. */
+  const TEMPLATE_ID: Record<string, string> = {
+    chest: CHEST_ANIMATED_ID,
+    mine_rail_cart: 'mine_cart',
+  }
   const CHEST_OPEN_CLIP = 'ChestOpen'
   /** How far the open lid's rear corner reaches behind the chest origin (along
    *  local −Z): the lid swings up and ~105° back over the hinge. Measured from
@@ -99,6 +140,7 @@
    *  by the players layer (via a provider prop) to drive the wall-torch light
    *  pool + the unified shadow light. Swapped on floor rebuild, cleared on exit. */
   let wallTorchPositions: THREE.Vector3[] = []
+  let crystalGlowPositions: THREE.Vector3[] = []
   /** The chest lid-open clip, captured once from the animated chest GLB and
    *  shared by every chest clone (each gets its own AnimationMixer). */
   let chestOpenClip: THREE.AnimationClip | null = null
@@ -107,6 +149,20 @@
    *  done. Cleared with the props on a floor rebuild. The spilled coin pile is
    *  no longer rendered here — it's a pickable ground item (see groundItem). */
   let propMixers: THREE.AnimationMixer[] = []
+  /** Rail carts on the built floor; each eases toward its pushed spot. */
+  let railCarts: {
+    clone: THREE.Object3D
+    prop: DungeonFloorLayout['props'][number]
+    propId: number
+    depth: number
+    /** The roll under way: start and end spots and seconds into it. */
+    roll?: {
+      from: { x: number; z: number }
+      to: { x: number; z: number }
+      t: number
+      duration: number
+    }
+  }[] = []
 
   const root = new THREE.Group()
   let currentGroup: THREE.Group | null = null
@@ -143,6 +199,38 @@
   /** Wall torch: how far the mount's back face seats *into* the wall from its
    *  room-facing boundary. 0 = back face flush on the wall surface. */
   const TORCH_WALL_INSET = 0
+  /** Crystal clusters grow by this much per floor below their first (6). */
+  const CRYSTAL_GROWTH_PER_FLOOR = 0.025
+  /** Height of a crystal cluster's glow light, at unit scale. */
+  const CRYSTAL_GLOW_RISE = 0.8
+  /** Mine support post: how far its back sinks into the corridor wall. */
+  const MINE_POST_WALL_INSET = 0.02
+  /** Wall-backed kinds: mount height and how far the back sinks into the wall. */
+  const WALL_MOUNTS: Partial<Record<string, { y: number; inset: number }>> = {
+    torch_wall: { y: TORCH_MOUNT_Y, inset: TORCH_WALL_INSET },
+    mine_timber_post: { y: 0, inset: MINE_POST_WALL_INSET },
+    mine_tool_rack: { y: 0, inset: 0 },
+  }
+
+  /** Floor-local `[x, z]` of a wall decor's back: the cell's wall edge named
+   *  by the facing yaw, pushed `inset` into the wall. */
+  function wallSeat(
+    x: number,
+    z: number,
+    yawDeg: number,
+    inset: number
+  ): [number, number] {
+    switch (yawDeg) {
+      case 0:
+        return [x + 0.5, z - inset]
+      case 180:
+        return [x + 0.5, z + 1 + inset]
+      case 90:
+        return [x - inset, z + 0.5]
+      default:
+        return [x + 1 + inset, z + 0.5]
+    }
+  }
   /** A crate is left crooked when its random yaw lands more than this many
    *  degrees off a right angle (≈ a quarter of crates). */
   const CRATE_ASKEW_THRESH = 34
@@ -184,12 +272,29 @@
     aabb: THREE.Box3
     fadeGroup: number
     occluded?: boolean
+    /** Ghosted this frame, alone or with its group. */
+    faded?: boolean
   }
   let wallRuns: WallRunFade[] = []
+  /** A mine post fades with the wall run it stands against. */
+  interface WallPostFade {
+    root: THREE.Object3D
+    meshes: GhostMesh[]
+    /** Undefined until linked; null when no run holds the post. */
+    wall?: WallRunFade | null
+  }
+  let wallPosts: WallPostFade[] = []
+  // Shared GLB material → its ghost; never rendered as a key.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const postGhosts = new Map<THREE.Material, THREE.Material>()
+  const POST_GHOST_OPACITY = 0.4
+  const postProbe = new THREE.Vector3()
   // Per-frame scratch, never rendered from.
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const fadedWallGroups = new Set<number>()
   const WALL_RUN_MIN_OCCLUSION = 0.05
+  /** Walls fade when they cover anything this close to the player on screen. */
+  const WALL_RUN_OCCLUSION_MARGIN = 1
 
   // ── Interior room doors ──────────────────────────────────
   // Double doors across corridor mouths in room walls. Click to open/close
@@ -209,6 +314,7 @@
 
   function clearGroup() {
     stopDungeonDripSounds()
+    stopCartSounds()
     puddles?.dispose()
     puddles = null
     if (currentGroup) {
@@ -237,9 +343,51 @@
       disposeObjectTree(c)
     }
     propEntries = new Map()
+    wallPosts = []
     wallTorchPositions = []
+    crystalGlowPositions = []
     for (const m of propMixers) m.stopAllAction()
     propMixers = []
+    railCarts = []
+  }
+
+  /** Floor-local center of a rail cart slid `offset` cells along its rail. */
+  /** Rail pieces and carts run along X at yaw 90/270. */
+  const railAlongX = (prop: DungeonFloorLayout['props'][number]) =>
+    prop.rotation % 180 === 90
+
+  function cartSpot(prop: DungeonFloorLayout['props'][number], offset: number) {
+    const alongX = railAlongX(prop)
+    return {
+      x: prop.x + prop.w / 2 + (alongX ? offset : 0),
+      z: prop.z + prop.d / 2 + (alongX ? 0 : offset),
+    }
+  }
+
+  function postFade(root: THREE.Object3D): WallPostFade {
+    const meshes: WallPostFade['meshes'] = []
+    root.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh)) return
+      const base = obj.material as THREE.Material
+      let ghost = postGhosts.get(base)
+      if (!ghost) {
+        ghost = translucentClone(base, POST_GHOST_OPACITY)
+        postGhosts.set(base, ghost)
+      }
+      meshes.push({ mesh: obj, base, ghost })
+    })
+    return { root, meshes }
+  }
+
+  /** The wall run whose footprint holds a post's back, or null. */
+  function postWallRun(root: THREE.Object3D): WallRunFade | null {
+    const p = root.getWorldPosition(postProbe)
+    return (
+      wallRuns.find(
+        ({ aabb: { min, max } }) =>
+          p.x >= min.x && p.x <= max.x && p.z >= min.z && p.z <= max.z
+      ) ?? null
+    )
   }
 
   /** Measure (and cache) a model's seat offset, height and half-extents. */
@@ -261,11 +409,11 @@
     return m
   }
 
-  /** Strip shadows on, raycast off for a decorative (non-interactive) clone. */
-  function tagDecorative(clone: THREE.Object3D) {
+  /** Shadows on, raycast off for a decorative (non-interactive) clone. */
+  function tagDecorative(clone: THREE.Object3D, castShadow = true) {
     clone.traverse((o) => {
       if (o instanceof THREE.Mesh) {
-        o.castShadow = true
+        o.castShadow = castShadow
         o.receiveShadow = true
         o.raycast = () => {} // never intercept click-to-move
       }
@@ -280,7 +428,12 @@
     kind: string,
     depth: number,
     m: PropMetrics,
-    opts: { breakable?: boolean; openable?: boolean }
+    opts: {
+      breakable?: boolean
+      openable?: boolean
+      minable?: boolean
+      alongX?: boolean
+    }
   ) {
     clone.userData.dungeonProp = true
     clone.userData.propId = propId
@@ -289,12 +442,30 @@
     clone.userData.propEntranceId = dungeonManager.dungeonId
     if (opts.breakable) clone.userData.propBreakable = true
     if (opts.openable) clone.userData.propOpenable = true
+    if (opts.minable) clone.userData.propMinable = true
+    if (opts.alongX !== undefined) {
+      clone.userData.propPushable = true
+      clone.userData.propAlongX = opts.alongX
+    }
+    // Decor clones start unclickable; tagged ones answer the prop raycast.
+    clone.traverse((o) => {
+      if (o instanceof THREE.Mesh) o.raycast = THREE.Mesh.prototype.raycast
+    })
     // Hover label + target ring, chests only: loot is gameplay, while barrels
     // and crates stay unannounced discovery toys. hoverCenter drops to the
     // dungeon floor (clone.position must already be set), so the label spans
     // the full model height above it.
-    if (opts.openable) {
-      clone.userData.hoverName = 'Chest'
+    const hoverName = opts.openable
+      ? 'Chest'
+      : opts.minable
+        ? translate(
+            kind === 'mine_ore_heap' ? 'prop.oreHeap' : 'prop.crystalCluster'
+          )
+        : opts.alongX !== undefined
+          ? translate('prop.railCart')
+          : null
+    if (hoverName) {
+      clone.userData.hoverName = hoverName
       clone.userData.hoverLabelY = m.height
       clone.userData.hoverRingRadius = m.hover.ringRadius
       clone.userData.hoverCenter = {
@@ -324,6 +495,7 @@
           gltf.animations.find((a) => a.name === CHEST_OPEN_CLIP) ??
           gltf.animations[0]
       }
+      if (catalogId === 'mine_crystal_cluster') applyCrystalGlow(gltf.scene)
       return gltf.scene
     } catch {
       return null
@@ -347,43 +519,23 @@
   ) {
     // Chests render from the animated GLB (lid rigged for the open clip); the
     // other props use their own catalog model.
-    const template = await loadPropTemplate(
-      prop.kind === 'chest' ? CHEST_ANIMATED_ID : prop.kind
-    )
+    const template = await loadPropTemplate(TEMPLATE_ID[prop.kind] ?? prop.kind)
     if (!template) return
     if (key !== builtKey) return // floor changed mid-load — abandon
     const m = measureProp(prop.kind, template)
 
-    // Wall torch: hangs high on a room's north/east wall, decorative only. The
-    // model's wall side is its local −Z=0 face (the bracket back) with the torch
-    // body reaching into the room along +Z and the base at local y=0. The
-    // generator hands us the room-facing yaw (north wall → 0°, east wall → 270°);
-    // we seat the back face flush against that wall and raise it up the wall.
-    if (prop.kind === 'torch_wall') {
+    // Wall decor: the model's wall side is its local −Z=0 face, reaching into
+    // the room along +Z, base at local y=0. The generator hands us the facing
+    // yaw (wall on −Z → 0°, +X → 270°, +Z → 180°, −X → 90°); seat the back on
+    // that wall edge. Torches hang high on north/east room walls; mine posts
+    // stand on the corridor floor, sunk a little into the rock.
+    // Decor clones: no clicks, no state, recorded so the floor can track them.
+    const addDecor = (x: number, y: number, z: number, castShadow = true) => {
       const clone = template.clone()
-      const yawDeg = prop.rotation
-      clone.rotation.y = (yawDeg * Math.PI) / 180
-      let px = prop.x + 0.5
-      let pz = prop.z + 0.5
-      // Push the back face onto the mounted wall. The generator only ever emits
-      // a north (0°) or east (270°) facing — one per room.
-      if (yawDeg === 0)
-        pz = prop.z - TORCH_WALL_INSET // faces +Z, wall on −Z (N)
-      else if (yawDeg === 270) px = prop.x + 1 + TORCH_WALL_INSET // wall on +X (E)
-      clone.position.set(px, TORCH_MOUNT_Y, pz)
-      tagDecorative(clone)
+      clone.rotation.y = (prop.rotation * Math.PI) / 180
+      clone.position.set(x, y, z)
+      tagDecorative(clone, castShadow)
       group.add(clone)
-      // Record the flame's world position for the players-layer light pool. The
-      // flame rises off the bracket and reaches off the wall along the model's
-      // local +Z (here baked into the clone yaw), so push the light out there.
-      const yaw = clone.rotation.y
-      torchPositions.push(
-        new THREE.Vector3(
-          dungeonManager.originX + px + Math.sin(yaw) * TORCH_FLAME_REACH,
-          dungeonManager.floorY(depth) + TORCH_MOUNT_Y + TORCH_FLAME_RISE,
-          dungeonManager.originZ + pz + Math.cos(yaw) * TORCH_FLAME_REACH
-        )
-      )
       entries.set(index, {
         clones: [clone],
         kind: prop.kind,
@@ -394,6 +546,61 @@
         broken: false,
         opened: false,
       })
+      return clone
+    }
+    const wallMount = WALL_MOUNTS[prop.kind]
+    if (wallMount) {
+      // Wider mounts center on the cells they run along the wall.
+      const [sx, sz] = wallSeat(prop.x, prop.z, prop.rotation, wallMount.inset)
+      const px = sx + (prop.w - 1) / 2
+      const pz = sz + (prop.d - 1) / 2
+      const clone = addDecor(px, wallMount.y, pz)
+      if (prop.kind === 'torch_wall') {
+        // Record the flame's world position for the players-layer light pool.
+        // The flame rises off the bracket and reaches off the wall along the
+        // model's local +Z (baked into the clone yaw), so push the light out.
+        const yaw = clone.rotation.y
+        torchPositions.push(
+          new THREE.Vector3(
+            dungeonManager.originX + px + Math.sin(yaw) * TORCH_FLAME_REACH,
+            dungeonManager.floorY(depth) + TORCH_MOUNT_Y + TORCH_FLAME_RISE,
+            dungeonManager.originZ + pz + Math.cos(yaw) * TORCH_FLAME_REACH
+          )
+        )
+      }
+      return
+    }
+
+    // Mine rail: a 2 m piece along its local Z down one corridor lane; yaw 90
+    // turns it along X. Too flat to cast a shadow worth its extra draw.
+    if (prop.kind === 'mine_rail') {
+      addDecor(prop.x + prop.w / 2, 0, prop.z + prop.d / 2, false)
+      return
+    }
+
+    // Rail carts stand where the server last pushed them and are clicked to
+    // push again.
+    if (prop.kind === 'mine_rail_cart') {
+      const at = cartSpot(prop, dungeonManager.cartOffset(depth, index))
+      const clone = addDecor(at.x, 0, at.z)
+      tagInteractiveProp(clone, index, prop.kind, depth, m, {
+        alongX: railAlongX(prop),
+      })
+      return
+    }
+
+    // Multi-cell fixtures: centered on the cells they seal; no state.
+    // Crystals grow with depth.
+    // Ore heaps and crystals are clicked to mine.
+    if (prop.w > 1 || prop.d > 1) {
+      const clone = addDecor(prop.x + prop.w / 2, 0, prop.z + prop.d / 2)
+      if (prop.kind === 'mine_crystal_cluster')
+        clone.scale.setScalar(
+          1 + Math.max(0, depth - 6) * CRYSTAL_GROWTH_PER_FLOOR
+        )
+      if (MINABLE_PROP_KINDS.has(prop.kind)) {
+        tagInteractiveProp(clone, index, prop.kind, depth, m, { minable: true })
+      }
       return
     }
 
@@ -666,7 +873,19 @@
     propsGroup.position.copy(group.position)
     while (group.children.length) propsGroup.add(group.children[0])
     propEntries = entries
+    wallPosts = [...entries.values()]
+      .filter((e) => e.kind === 'mine_timber_post')
+      .map((e) => postFade(e.clones[0]))
+    railCarts = [...entries.values()]
+      .filter((e) => e.kind === 'mine_rail_cart')
+      .map((e) => ({
+        clone: e.clones[0],
+        prop: layout.props[e.propId],
+        propId: e.propId,
+        depth,
+      }))
     wallTorchPositions = torchPositions
+    refreshCrystalGlow(depth)
     // Catch any breaks/opens that landed while the GLBs were loading. Chests
     // already open at build time snap to the open pose (no entrance swing).
     reconcileBrokenProps(depth, key)
@@ -674,14 +893,42 @@
     reconcileTreasureChest(true)
   }
 
-  /** Swap every prop the server says is broken but that's still rendered whole. */
+  function refreshCrystalGlow(depth: number) {
+    crystalGlowPositions = [...propEntries.values()]
+      .filter((e) => e.kind === 'mine_crystal_cluster' && !e.broken)
+      .map(
+        ({ clones: [c] }) =>
+          new THREE.Vector3(
+            dungeonManager.originX + c.position.x,
+            dungeonManager.floorY(depth) + CRYSTAL_GLOW_RISE * c.scale.y,
+            dungeonManager.originZ + c.position.z
+          )
+      )
+  }
+
+  /** Swap every prop the server says is broken but that's still rendered
+   *  whole; mined ones sink to a low, unclickable stub. */
   function reconcileBrokenProps(depth: number, key: string) {
     if (key !== builtKey) return
     const broken = dungeonManager.brokenPropsForDepth(depth)
+    let mined = false
     for (const index of broken) {
       const entry = propEntries.get(index)
-      if (entry && !entry.broken) void swapPropToBroken(index, key)
+      if (!entry || entry.broken) continue
+      if (MINABLE_PROP_KINDS.has(entry.kind)) {
+        entry.broken = true
+        for (const c of entry.clones) {
+          c.scale.y *= MINED_STUB_HEIGHT
+          delete c.userData.propMinable
+          delete c.userData.hoverName
+          tagDecorative(c)
+        }
+        mined = true
+      } else {
+        void swapPropToBroken(index, key)
+      }
     }
+    if (mined) refreshCrystalGlow(depth)
   }
 
   /** Replace one prop's whole-model clones with its broken debris variant. */
@@ -995,15 +1242,13 @@
     pending: { depth: number; x: number; z: number },
     depth: number,
     playerX: number,
-    playerZ: number
+    playerZ: number,
+    range: number
   ): boolean {
     if (depth !== pending.depth) return false
     const dx = playerX - pending.x
     const dz = playerZ - pending.z
-    return (
-      dx * dx + dz * dz <=
-      PROP_INTERACT_TRIGGER_RANGE * PROP_INTERACT_TRIGGER_RANGE
-    )
+    return dx * dx + dz * dz <= range * range
   }
 
   /** Per-frame: stair-shaft floor transitions + pending prop walk-ups.
@@ -1030,6 +1275,43 @@
           playDungeonDripSound(distance, impact.seed)
         }
       }
+    }
+
+    // Pushed carts speed up toward their synced spot and stop dead; no brakes.
+    for (const cart of railCarts) {
+      const to = cartSpot(
+        cart.prop,
+        dungeonManager.cartOffset(cart.depth, cart.propId)
+      )
+      const p = cart.clone.position
+      if (!cart.roll && p.x === to.x && p.z === to.z) continue
+      if (!cart.roll || cart.roll.to.x !== to.x || cart.roll.to.z !== to.z) {
+        const distance = Math.hypot(to.x - p.x, to.z - p.z)
+        cart.roll = {
+          from: { x: p.x, z: p.z },
+          to,
+          t: 0,
+          duration: Math.max(0.05, distance / cartRollSpeed()),
+        }
+        if (!document.hidden)
+          playCartRollSound(
+            cart.roll.duration,
+            Math.hypot(
+              playerX - propsGroup.position.x - p.x,
+              playerZ - propsGroup.position.z - p.z
+            )
+          )
+      }
+      const roll = cart.roll
+      roll.t += deltaMs / 1000
+      const u = Math.min(1, roll.t / roll.duration)
+      const e = u * u
+      p.set(
+        roll.from.x + (roll.to.x - roll.from.x) * e,
+        p.y,
+        roll.from.z + (roll.to.z - roll.from.z) * e
+      )
+      if (e >= 1) cart.roll = undefined
     }
 
     // Advance one-shot GLB clips; clamped actions hold their final poses.
@@ -1060,23 +1342,34 @@
     // Fade occluding walls together with their room or corridor corner group.
     fadedWallGroups.clear()
     for (const w of wallRuns) {
-      w.occluded = isoCameraOccludesPlayer(
+      w.occluded = isoCameraOccludesNearPlayer(
         w.aabb,
         playerX,
         playerY,
         playerZ,
-        WALL_RUN_MIN_OCCLUSION
+        WALL_RUN_MIN_OCCLUSION,
+        WALL_RUN_OCCLUSION_MARGIN
       )
       if (w.occluded && w.fadeGroup >= 0) fadedWallGroups.add(w.fadeGroup)
     }
     for (const w of wallRuns) {
       const occ = w.occluded || fadedWallGroups.has(w.fadeGroup)
+      w.faded = occ
       if (w.weathering) w.weathering.visible = !occ
       if (w.ghostMesh) {
         w.mesh.visible = !occ
         w.ghostMesh.visible = occ
       } else if (occ !== (w.mesh.material === w.ghost)) {
         w.mesh.material = occ ? w.ghost : w.base
+      }
+    }
+    for (const p of wallPosts) {
+      if (p.wall === undefined && wallRuns.length > 0)
+        p.wall = postWallRun(p.root)
+      const occ = !!p.wall?.faded
+      for (const m of p.meshes) {
+        if (occ !== (m.mesh.material === m.ghost))
+          m.mesh.material = occ ? m.ghost : m.base
       }
     }
 
@@ -1123,36 +1416,34 @@
     if (!dungeonManager.active) return
     const depth = $currentDungeonDepth
 
-    // Pending prop break: the player walked up to a barrel/crate they clicked —
-    // request the break once within range. The server validates and broadcasts;
-    // the visual swap happens on receipt (handles other players' breaks too).
-    const pending = dungeonManager.pendingBreak
-    if (pending && pendingPropReached(pending, depth, playerX, playerZ)) {
-      // Reached the prop — hand off to the player swing, which breaks it at the
-      // contact frame. Clear pending first so this fires once.
-      const id = dungeonManager.dungeonId!
-      const { depth: d, propId, x, z } = pending
-      dungeonManager.clearPendingBreak()
-      onPropReady?.(id, d, propId, x, z)
-    }
-
-    // Pending chest open: the player walked up to a chest they clicked — request
-    // the open once within range. The server validates and broadcasts; the lid
-    // animation plays on receipt (handles other players' opens too). The
-    // final-floor treasure chest shares this walk-up under its sentinel id.
-    const pendingOpen = dungeonManager.pendingOpen
+    // Pending prop action: once the player is within range of the clicked
+    // prop, hand off to the swing (break), the server (open), or the mining
+    // cast. The server validates and broadcasts; visuals follow on receipt.
+    // The final-floor treasure chest shares the open walk-up under its
+    // sentinel id.
+    const pending = dungeonManager.pendingProp
+    const range =
+      pending?.action === 'push'
+        ? CART_PUSH_TRIGGER_RANGE
+        : PROP_INTERACT_TRIGGER_RANGE
     if (
-      pendingOpen &&
-      pendingPropReached(pendingOpen, depth, playerX, playerZ)
+      pending &&
+      pendingPropReached(pending, depth, playerX, playerZ, range)
     ) {
       const id = dungeonManager.dungeonId!
-      const { depth: d, propId } = pendingOpen
-      dungeonManager.clearPendingOpen()
-      if (propId === TREASURE_CHEST_PROP_ID) {
+      const { action, depth: d, propId, x, z } = pending
+      dungeonManager.clearPendingProp()
+      if (action === 'break') onPropReady?.(id, d, propId, x, z)
+      else if (action === 'mine') onMineReady?.(id, d, propId, x, z)
+      else if (action === 'push') {
+        const cart = railCarts.find((c) => c.propId === propId)?.clone
+        if (cart) {
+          const at = cart.getWorldPosition(new THREE.Vector3())
+          onPushReady?.(id, d, propId, at.x, at.z)
+        }
+      } else if (propId === TREASURE_CHEST_PROP_ID)
         networkManager.sendOpenDungeonChest(id)
-      } else {
-        networkManager.sendOpenDungeonProp(id, d, propId)
-      }
+      else networkManager.sendOpenDungeonProp(id, d, propId)
     }
   }
 
@@ -1166,6 +1457,12 @@
    *  rather than caching it. */
   export function getWallTorchPositions(): THREE.Vector3[] {
     return wallTorchPositions
+  }
+
+  /** World positions of the current floor's crystal cluster glows; live array
+   *  like `getWallTorchPositions`. */
+  export function getCrystalGlowPositions(): THREE.Vector3[] {
+    return crystalGlowPositions
   }
 
   /**

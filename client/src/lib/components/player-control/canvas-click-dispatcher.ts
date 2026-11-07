@@ -8,6 +8,8 @@ type PickupIntent = Extract<ClickIntent, { type: 'pickup_ground_item' }>
 type NpcIntent = Extract<ClickIntent, { type: 'interact_npc' }>
 type BreakPropIntent = Extract<ClickIntent, { type: 'break_prop' }>
 type OpenPropIntent = Extract<ClickIntent, { type: 'open_prop' }>
+type MinePropIntent = Extract<ClickIntent, { type: 'mine_prop' }>
+type PushCartIntent = Extract<ClickIntent, { type: 'push_cart' }>
 type CastFishingIntent = Extract<ClickIntent, { type: 'cast_fishing' }>
 type TipHatIntent = Extract<ClickIntent, { type: 'tip_hat' }>
 type StallIntent = Extract<ClickIntent, { type: 'stall' }>
@@ -34,6 +36,10 @@ export interface CanvasClickActions {
   breakProp(intent: BreakPropIntent): void
   /** Walk up to a clicked chest, opening it (lid animation) on arrival. */
   openProp(intent: OpenPropIntent): void
+  /** Walk up to a clicked ore heap or crystal, mining it on arrival. */
+  mineProp(intent: MinePropIntent): void
+  /** Walk to the nearer end of a rail cart, pushing it on arrival. */
+  pushCart(intent: PushCartIntent): void
   moveToGround(
     position: Position,
     sprinting: boolean,
@@ -89,6 +95,12 @@ export function dispatchCanvasClickIntent(
       return
     case 'open_prop':
       actions.openProp(intent)
+      return
+    case 'mine_prop':
+      actions.mineProp(intent)
+      return
+    case 'push_cart':
+      actions.pushCart(intent)
       return
     case 'move_to_ground':
       actions.moveToGround(

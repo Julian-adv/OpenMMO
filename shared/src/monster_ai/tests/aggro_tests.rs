@@ -39,6 +39,7 @@ fn player(id: u64, z: f32, drank_recently: bool) -> NearbyPlayer {
         position: Position { x: 0.0, y: 0.0, z },
         health: 100,
         drank_recently,
+        petrified: false,
     }
 }
 

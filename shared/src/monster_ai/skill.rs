@@ -15,6 +15,7 @@ pub enum MonsterSkillId {
     EarthRoar,
     FormationBreak,
     Earthquake,
+    CrystalEruption,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -55,6 +56,8 @@ pub struct MonsterSkill {
     pub damage: SkillDamage,
     pub spots: Option<SpotRule>,
     pub pools: Option<Pools>,
+    /// debuffs.csv id put on everyone the strike lands on.
+    pub debuff: Option<&'static str>,
 }
 
 /// Where a cast marks the ground, chosen when it starts so the marks are the
@@ -86,6 +89,16 @@ pub struct SkillSet {
     /// No skill starts within this long of the last cast ending.
     pub gap_ms: f32,
     pub last_stand: Option<LastStand>,
+    pub shatter: Option<Shatter>,
+}
+
+/// With every player around turned to stone, the monster waits beside them
+/// `wait_ms`, then breaks one free with a plain swing that lands
+/// `multiplier` times over, guard ignored.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Shatter {
+    pub wait_ms: f32,
+    pub multiplier: u32,
 }
 
 /// Below `health_ratio` the set gives way to `casts` of `skill`, one every
@@ -118,6 +131,7 @@ pub const RUNE_SLASH: MonsterSkill = MonsterSkill {
     },
     spots: None,
     pools: None,
+    debuff: None,
 };
 
 /// Terraclash's roar (doc/TIER5_FIELD_RAID.md 대지의 포효), as far as its
@@ -134,6 +148,7 @@ pub const EARTH_ROAR: MonsterSkill = MonsterSkill {
     damage: SkillDamage::Fixed(165),
     spots: None,
     pools: None,
+    debuff: None,
 };
 
 /// 진형 붕괴: both fists slam the fan in front, and magma wells up under
@@ -164,6 +179,7 @@ pub const FORMATION_BREAK: MonsterSkill = MonsterSkill {
         ticks: 10,
         damage: 30,
     }),
+    debuff: None,
 };
 
 /// 지진: the ground splits under most of the raid; the gaps between the marks
@@ -184,12 +200,50 @@ pub const EARTHQUAKE: MonsterSkill = MonsterSkill {
         fill: true,
     }),
     pools: None,
+    debuff: None,
+};
+
+/// The foreman's pick strikes the ground and black-violet crystal bursts up
+/// under every player in reach, turning whoever stays on it to stone.
+/// Timed to the leaping `slash3` slam baked into mine_foreman.glb
+/// (assets/monsters/mine_foreman/rig_spec.json `skill_clips`).
+pub const CRYSTAL_ERUPTION: MonsterSkill = MonsterSkill {
+    id: MonsterSkillId::CrystalEruption,
+    cast_ms: 3367.0,
+    strike_ms: 2400.0,
+    cooldown_ms: 25_000.0,
+    first_cast_ms: 10_000.0,
+    area: SkillArea::Spots,
+    damage: SkillDamage::Scaled {
+        multiplier: 1,
+        ignores_guard: true,
+    },
+    spots: Some(SpotRule {
+        count: 6,
+        radius: 2.0,
+        min_reach: 0.0,
+        max_reach: 14.0,
+        fill: false,
+    }),
+    pools: None,
+    debuff: Some("petrified"),
+};
+
+const FOREMAN_SKILLS: SkillSet = SkillSet {
+    skills: &[(&CRYSTAL_ERUPTION, 1)],
+    gap_ms: 0.0,
+    last_stand: None,
+    shatter: Some(Shatter {
+        wait_ms: 10_000.0,
+        multiplier: 4,
+    }),
 };
 
 const BARKAN_SKILLS: SkillSet = SkillSet {
     skills: &[(&RUNE_SLASH, 1)],
     gap_ms: 0.0,
     last_stand: None,
+    shatter: None,
 };
 
 /// The roar comes least often; at 5% health it roars five times in a row
@@ -203,6 +257,7 @@ pub const TERRACLASH_SKILLS: SkillSet = SkillSet {
         casts: 5,
         every_ms: 10_000.0,
     }),
+    shatter: None,
 };
 
 /// Eruption radius of a ranged plain swing (`MonsterGroundStrike`).
@@ -214,6 +269,7 @@ pub fn skill_by_id(id: MonsterSkillId) -> &'static MonsterSkill {
         MonsterSkillId::EarthRoar => &EARTH_ROAR,
         MonsterSkillId::FormationBreak => &FORMATION_BREAK,
         MonsterSkillId::Earthquake => &EARTHQUAKE,
+        MonsterSkillId::CrystalEruption => &CRYSTAL_ERUPTION,
     }
 }
 
@@ -221,6 +277,7 @@ pub fn skills_for(monster_type: &str) -> Option<&'static SkillSet> {
     match monster_type {
         "barkan" => Some(&BARKAN_SKILLS),
         "terraclash" => Some(&TERRACLASH_SKILLS),
+        "mine_foreman" => Some(&FOREMAN_SKILLS),
         _ => None,
     }
 }
@@ -273,7 +330,7 @@ impl MonsterSkill {
         };
         let mut picks: Vec<&NearbyPlayer> = players
             .iter()
-            .filter(|p| p.health > 0 && in_ring(&p.position))
+            .filter(|p| p.health > 0 && !p.petrified && in_ring(&p.position))
             .filter(|p| !self.fan_contains(&at, aim, &p.position))
             .collect();
         picks.shuffle(rng);

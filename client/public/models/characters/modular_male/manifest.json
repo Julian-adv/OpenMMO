@@ -53,7 +53,8 @@
     "assets/modular_human_male_01/bard/tripo_hat_v1/helmet_bard.glb": "f7af3a0fb126147eff50d7d744368870b2c44004e7877c0729abc4d45edd4d70",
     "client/public/models/animations/dagger_preview.glb": "59bc09327351ef0b16cf4c08cfc094e0e3a7e8a3e1c407f50f99532179902827",
     "assets/items/helm_of_brilliance/tripo_v2/fitted_v3/male/helmet_brilliance.glb": "0af2bd50efc53d764bf9435e1e4e872162081b06272644eae1ff2095b908ceb6",
-    "assets/items/helm_of_brilliance/tripo_v2/fitted_v3/male/body-occlusion.json": "ae3a896b6c36035bb1659143190b590a653d095f7de908bd2e4308ee49f4bdb3"
+    "assets/items/helm_of_brilliance/tripo_v2/fitted_v3/male/body-occlusion.json": "ae3a896b6c36035bb1659143190b590a653d095f7de908bd2e4308ee49f4bdb3",
+    "client/public/models/animations/cart_push.glb": "7f1e3507bd032bd33d98598279bb9b52fffa38be84c6537ffc3c44dfb3af6396"
   },
   "outputs": {
     "base.glb": "abf1a12178d5df11269afed6793e46ed16796c47174e356708ee73bdf590bdad",
@@ -184,6 +185,10 @@
       "sha256": "b7a5ea43f9561d1b3c628742c69b41a127db50540c4ece6b0a2e1f3e0f782ff5",
       "clips": ["dagger_inward", "dagger_outward", "dagger_stab"]
     },
-    "helmet_brilliance.glb": "312c493a742d92afee77c99098b01a01b0ef2857a7d562e20468110f8a315654"
+    "helmet_brilliance.glb": "312c493a742d92afee77c99098b01a01b0ef2857a7d562e20468110f8a315654",
+    "animations/cart_push.glb": {
+      "sha256": "acd477ce09a525ccd7f6023367f38aaccbd5438aa7f23ec9cb73f638ff9cd6ea",
+      "clips": ["cart_push"]
+    }
   }
 }

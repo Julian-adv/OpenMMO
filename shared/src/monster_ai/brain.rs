@@ -3,6 +3,8 @@
 //! evaluation lives in [`super::behavior`]; movement and state transitions in
 //! [`super::movement`].
 
+use std::borrow::Cow;
+
 use super::tree::BehaviorStatus;
 use super::{
     cell_of, AiCommand, AiState, BehaviorTree, ChaseAim, NearbyMonster, NearbyPlayer, PathProvider,
@@ -96,6 +98,11 @@ pub struct MonsterBrain {
     pub body: Option<crate::monster_body::BodyFootprint>,
     /// Plain swings past melee reach land this far out; 0 for none.
     pub ranged_range: f32,
+    /// How long a player must stay in sight before it gives chase; 0 reacts
+    /// at once. Being hit always turns it at once.
+    pub reaction_ms: f32,
+    /// The player it has spotted and the time left before it reacts.
+    pub(super) noticing: Option<(PlayerId, f32)>,
     /// Off for raid bosses: a crowd's blows would never let one act.
     pub staggers: bool,
     /// Time left in the Hit stagger; a later blow never shortens it.
@@ -104,6 +111,8 @@ pub struct MonsterBrain {
     pub(super) slow_left_ms: f32,
     pub(super) slow_mult: f32,
     pub(super) aggro: Option<Box<super::aggro::Aggro>>,
+    /// Time left standing by players who are all stone (`SkillSet::shatter`).
+    pub(super) stone_wait_left_ms: Option<f32>,
 }
 
 impl MonsterBrain {
@@ -177,12 +186,15 @@ impl MonsterBrain {
             detour_goal: None,
             body: None,
             ranged_range: 0.0,
+            reaction_ms: 0.0,
+            noticing: None,
             staggers: true,
             stagger_left_ms: 0.0,
             slow_left_ms: 0.0,
             slow_mult: 1.0,
             aggro: super::aggro_for(monster_type)
                 .map(|rules| Box::new(super::aggro::Aggro::new(rules))),
+            stone_wait_left_ms: None,
         }
     }
 
@@ -287,9 +299,46 @@ impl MonsterBrain {
         self.cast_left_ms = (self.cast_left_ms - delta_ms).max(0.0);
         self.stagger_left_ms = (self.stagger_left_ms - delta_ms).max(0.0);
         self.slow_left_ms = (self.slow_left_ms - delta_ms).max(0.0);
+        if let Some((_, left)) = &mut self.noticing {
+            *left = (*left - delta_ms).max(0.0);
+        }
         if let Some(aggro) = &mut self.aggro {
             aggro.advance(delta_ms);
         }
+        if let Some(left) = &mut self.stone_wait_left_ms {
+            *left = (*left - delta_ms).max(0.0);
+        }
+    }
+
+    /// Players this monster may go for. Stone is out of reach, unless every
+    /// living player around is stone and the monster shatters it: then it
+    /// stands by them, holding its swing until the wait runs out.
+    fn targetable<'a>(&mut self, players: &'a [NearbyPlayer]) -> Cow<'a, [NearbyPlayer]> {
+        if !players.iter().any(|p| p.petrified) {
+            self.stone_wait_left_ms = None;
+            return Cow::Borrowed(players);
+        }
+        let all_stone = !players.iter().any(|p| !p.petrified && p.health > 0);
+        if let Some(shatter) = self
+            .skills
+            .and_then(|set| set.shatter)
+            .filter(|_| all_stone)
+        {
+            let wait = *self.stone_wait_left_ms.get_or_insert(shatter.wait_ms);
+            self.attack_cooldown_left_ms = self.attack_cooldown_left_ms.max(wait);
+            return Cow::Borrowed(players);
+        }
+        self.stone_wait_left_ms = None;
+        let awake: Vec<_> = players.iter().filter(|p| !p.petrified).cloned().collect();
+        if self
+            .target_player_id
+            .is_some_and(|id| !awake.iter().any(|p| p.id == id))
+            && players.iter().any(|p| Some(p.id) == self.target_player_id)
+        {
+            self.target_player_id = None;
+            self.retry_chase();
+        }
+        Cow::Owned(awake)
     }
 
     pub fn is_casting(&self) -> bool {
@@ -315,7 +364,7 @@ impl MonsterBrain {
         rng: &mut impl Rng,
         commands: &mut Vec<AiCommand>,
     ) -> bool {
-        let Some(set) = self.skills else {
+        let Some(set) = self.skills.filter(|_| self.stone_wait_left_ms.is_none()) else {
             return false;
         };
         let mut swing_wait_ms = self.attack_cooldown_ms;
@@ -424,7 +473,6 @@ impl MonsterBrain {
         if self.state == AiState::Dead || self.health == 0 {
             return vec![];
         }
-
         self.occupied_cells.clear();
         self.cell_yield = false;
         let my_cell = cell_of(self.position.x, self.position.z);
@@ -467,8 +515,11 @@ impl MonsterBrain {
             self.state_timer_ms = 0.0;
         }
 
+        let targets = self.targetable(nearby_players);
+        let nearby_players = &*targets;
         self.update_aggro_target(nearby_players, path_provider, rng);
 
+        let was_noticing = self.noticing.is_some();
         if matches!(self.state, AiState::Walk | AiState::Run) {
             self.tick_patrol(delta_ms, &mut commands, path_provider, rng);
         } else {
@@ -483,6 +534,10 @@ impl MonsterBrain {
 
             if status == BehaviorStatus::Failure && self.state != AiState::Idle {
                 self.transition_to_idle(&mut commands);
+            }
+            // Show the turn toward a player it has just spotted.
+            if !was_noticing && self.noticing.is_some() && commands.is_empty() {
+                commands.push(self.make_move_cmd());
             }
         }
 

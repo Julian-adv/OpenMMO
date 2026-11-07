@@ -162,6 +162,22 @@ export type ClickIntent =
       position: Position
     }
   | {
+      type: 'mine_prop'
+      entranceId: string
+      depth: number
+      propId: number
+      position: Position
+    }
+  | {
+      /** `position` is the cart's center; it rolls along X or Z. */
+      type: 'push_cart'
+      entranceId: string
+      depth: number
+      propId: number
+      position: Position
+      alongX: boolean
+    }
+  | {
       type: 'move_to_ground'
       position: Position
       sprinting: boolean
@@ -640,6 +656,16 @@ class InputHandler {
           }
           if (owner.userData.propBreakable) {
             return { type: 'break_prop', ...target }
+          }
+          if (owner.userData.propMinable) {
+            return { type: 'mine_prop', ...target }
+          }
+          if (owner.userData.propPushable) {
+            return {
+              type: 'push_cart',
+              ...target,
+              alongX: owner.userData.propAlongX as boolean,
+            }
           }
         }
       }

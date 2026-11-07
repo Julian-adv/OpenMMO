@@ -871,6 +871,7 @@ async fn main() -> ExitCode {
             let count = hunger_tick_count;
             async move {
                 game_state.tick_grills().await;
+                game_state.tick_mining().await;
                 game_state.tick_battle_hymns().await;
                 if count.is_multiple_of(4) {
                     game_state.tick_campfires().await;

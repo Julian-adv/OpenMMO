@@ -49,6 +49,7 @@ mod mount_tests;
 mod movement_tests;
 mod party_tests;
 mod persistence_tests;
+mod petrify_tests;
 mod pickup_tests;
 mod player_interaction_tests;
 mod player_tests;
@@ -145,6 +146,7 @@ pub(super) fn make_player(id: &str, x: f32, z: f32) -> Player {
         radiance_on: false,
         raging: false,
         wet: false,
+        petrified: false,
         title: None,
         floor_level: 0,
         object_type: None,

@@ -6,7 +6,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { femaleSeat, femaleSeatOffset } from './female-seat'
 import { femaleUnderwearColor } from './female-underwear-color'
 import { femaleTorchMotions, mirroredSwordGrip } from './female-torch'
-import { FEMALE_HAND_FITS, poseOffHandProp } from '../lib/utils/handProps'
+import { poseMainHandProp, poseOffHandProp } from '../lib/utils/handProps'
 import { MODULAR_FEMALE_MODEL_PATH } from '../lib/utils/modelPaths'
 import { bindModularPart, skinnedParts } from '../lib/utils/modularCharacter'
 import { updateModularPoseCorrectives } from '../lib/utils/modularPoseCorrectives'
@@ -36,10 +36,6 @@ import {
 import { femaleBootGround } from '../lib/utils/female-boot-ground'
 import { femaleBrushCursor } from './female-brush-cursor'
 import { helmetHairBrush } from './female-helmet-hair-brush'
-import {
-  instrumentCarryEditor,
-  instrumentCarryPanel,
-} from './female-instrument-carry'
 import { femaleSolePaint, type SoleEdits } from './female-sole-paint'
 import {
   attachValkyrieWings,
@@ -313,7 +309,7 @@ export async function showFemaleBase(
         <option value="armed-shield">강철 장검 + 나무 방패</option>
         <option value="mandolin">만돌린 (들고 다니기)</option>
       </select>
-      ${instrumentCarryPanel}
+      <p class="details">손에 든 물건의 위치는 <a href="?handfit=modular_female">손 소지품 위치 편집</a>에서 맞춥니다.</p>
       <p class="details">대기와 걷기에서 장착 상태에 따라 손 모양이 바뀝니다.</p>
       <p class="details">횃불을 장착하면 대기·걷기·달리기·전투 대기에서 왼손에 횃불을 듭니다.</p>
       <button id="female-pause" type="button">일시정지</button>
@@ -550,12 +546,35 @@ export async function showFemaleBase(
   const hand = model.getObjectByName('RightHand')
   if (!hand) throw new Error('검을 장착할 오른손 본을 찾지 못했습니다.')
   weapon.name = 'femaleSteelLongsword'
-  weapon.position.copy(FEMALE_HAND_FITS['weapons/steel_longsword.glb'].position)
-  weapon.rotation.copy(
-    FEMALE_HAND_FITS['weapons/steel_longsword.glb'].rotation!
+  poseMainHandProp(
+    weapon,
+    'steel_longsword',
+    undefined,
+    MODULAR_FEMALE_MODEL_PATH
   )
   hand.add(weapon)
-  const mandolinCarry = instrumentCarryEditor(hand, loader, disposed)
+  let mandolin: Promise<THREE.Object3D | undefined> | undefined
+  const mandolinCarry = {
+    setShown(shown: boolean) {
+      if (!shown && !mandolin) return
+      mandolin ??= loader
+        .loadAsync('/models/weapons/mandolin.glb')
+        .then(({ scene }) => {
+          if (disposed()) return
+          poseMainHandProp(
+            scene,
+            'mandolin',
+            undefined,
+            MODULAR_FEMALE_MODEL_PATH
+          )
+          hand.add(scene)
+          return scene
+        })
+      void mandolin.then((prop) => {
+        if (prop) prop.visible = shown
+      })
+    },
+  }
   const leftHand = model.getObjectByName('LeftHand')
   if (!leftHand) throw new Error('횃불을 장착할 왼손 본을 찾지 못했습니다.')
   torch.name = 'femaleTorch'

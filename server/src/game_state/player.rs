@@ -1020,6 +1020,7 @@ impl super::GameState {
         if old_position != moved_player.position || old_floor != moved_player.floor_level {
             self.cancel_fishing_if_active(player_id).await;
             self.cancel_grill_if_active(player_id).await;
+            self.cancel_mining_if_active(player_id).await;
             if moved_player.object_type.as_deref() != Some(onlinerpg_shared::messages::MUSIC_EMOTE)
             {
                 self.remove_live_instrument(player_id).await;

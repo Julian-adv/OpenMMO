@@ -28,6 +28,44 @@
   - `tools/rig-humanoid-monster.py`, `tools/bake-humanoid-monster.mjs`,
     `tools/validate-humanoid-monster.mjs`로 재현한다.
 
+- mine_predator — Deep Predator. The side-profile concept was generated on 2026-11-04 with
+  OpenAI Codex ImageGen, ChatGPT Pro 20x, under OpenAI generated output terms.
+  Its prompt and provenance are in `assets/monsters/mine_predator/concepts/generation.json`.
+  - Mesh generated on **2026-11-07** with **Tripo API**, **paid API credits (user-purchased)**,
+    P2-20260801, detailed PBR, seed 110704. One submission consumed **120 credits**.
+    [Tripo Terms of User Agreement](https://developers.tripo3d.ai/en/terms) apply.
+    The recorded request, task, downloaded model and corrected source are in
+    `assets/monsters/mine_predator/tripo_v1/`.
+  - Blender 5.2 provides the custom quadruped skeleton, skinning and six baked animations.
+    No rigging credits were spent. `idle`, `attack`, `hit` and `death` were authored locally;
+    `walk` and `run` copy SCP-939's `939_Walking` and `939_Running` (the model this replaces,
+    `assets/monsters/scp939/scp939-before-optimization.glb`): its hip and head motion and its paw
+    paths, stride scaled to 0.7, solved onto this rig's legs.
+    Sources, build scripts and validation are in `assets/monsters/mine_predator/rig_v1/`.
+    The side-view output needed a further +90° glTF Y rotation after the standard orientation helper.
+  - The game model is `client/public/models/monsters/mine_predator.glb`: 10,729 triangles,
+    20 deform bones, one material, 1024² WebP textures and meshopt compression.
+    Geometry is in metres, about 1.3m at the shoulder and 2.8m long, feet at Y=0, facing +Z, scale 1.
+    `idle` 2.4s, `combat_idle` 2.0s, `walk` 2.0s, `run` 0.53s, `attack` 1.4s, `hit` 0.4s,
+    `death` 1.4s. `combat_idle` holds a lowered stance on bent legs between swings; the attack
+    starts and ends there: it coils, rears its chest up with the forepaws off the ground,
+    then drives forward so the paws land and the head bites at the existing 700ms impact
+    time, stepping back after. The death starts on the killing blow's impact: the legs
+    buckle and it tips over its paws onto its side at once, landing about 0.3s later and
+    bouncing once.
+    The death clip ends on its side and uses `corpseAutoGround=false`.
+    [Build and review record](mine-predator-rig-v1.json) includes hashes and commands.
+
+- mine_remnant — 검은맥 광산 1–5층 광부 잔존자. [원화](../images/monsters/mine-remnant-concept.png)는 OpenAI Codex ImageGen,
+  ChatGPT Pro 20x로 2026-11-04 제작했다(OpenAI 생성 출력물 이용 조건).
+  - 3D 원본은 2026-11-06 Tripo API(`tools/outfits/tripo.py`, P2 모델, PBR, 면 1만 개 목표)로 원화 정면 한 장에서 만들었다.
+    120크레딧, Tripo 이용 약관 적용. 요청과 결과 기록은 `assets/monsters/mine_remnant/tripo_v1/`의 `build.json`·`generation.json`.
+  - API 결과는 웹 앱과 달리 +X를 보고 원점이 몸 가운데라 `tools/orient-tripo-api-model.py`로 +Z 정면·발바닥 원점으로 돌려
+    `source.glb`를 만든 뒤 도적 왕과 같은 도구로 리깅했다. 10,363 triangles, 높이 1.8m, 텍스처 1024² WebP.
+  - 무기는 `miner_pickaxe`, 공격은 플레이어 곡괭이와 같은 `great_sword_slash`다. 손가락 파지는 도적 왕 값을 그대로 써서
+    검증 스크립트를 아직 통과하지 못한다. 무기 위치는 `modular-character-preview.html?monster=mine_remnant`의 슬라이더로 맞추고
+    저장하면 `data-src/monsters.csv`에 기록된다. 재현 절차와 해시는 [리깅 보고서](mine-remnant-rig-v1.json)에 있다.
+
 - shadow_master — 그림자 길드 보스. [원화](../images/monsters/shadow-master-concept.png)는 OpenAI Codex ImageGen,
   ChatGPT Pro 20x로 2026-11-01 제작했다(OpenAI 생성 출력물 이용 조건). 사용자가 같은 날 Tripo 웹 앱 Max 요금제로
   3D 원본을 생성했다(Tripo 서비스 이용 조건).

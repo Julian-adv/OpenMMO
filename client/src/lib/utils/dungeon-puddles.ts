@@ -79,8 +79,7 @@ export function generateDungeonPuddles(
   const excluded = [shaftRect(layout.upShaft, ctx)]
   if (layout.downShaft) excluded.push(shaftRect(layout.downShaft, ctx))
   for (const prop of layout.props)
-    if (prop.kind !== 'torch_wall')
-      excluded.push({ x: prop.x, z: prop.z, w: 1, d: 1 })
+    if (prop.kind !== 'torch_wall') excluded.push(prop)
   if (layout.chest)
     excluded.push({ x: layout.chest[0], z: layout.chest[1], w: 1, d: 1 })
 

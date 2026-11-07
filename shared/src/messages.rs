@@ -538,6 +538,20 @@ pub enum ClientMessage {
         depth: u8,
         prop_id: u32,
     },
+    /// Start mining an ore heap or crystal cluster with a pickaxe in the bag.
+    /// The server checks it like `BreakDungeonProp`, then runs a
+    /// `MINING_CAST_MS` cast that movement or combat cancels.
+    MineDungeonProp {
+        entrance_id: String,
+        depth: u8,
+        prop_id: u32,
+    },
+    /// Push a rail cart from one of its ends; it slides away along the rail.
+    PushDungeonCart {
+        entrance_id: String,
+        depth: u8,
+        prop_id: u32,
+    },
     /// Open an interactive dungeon chest prop (plays its lid animation). The
     /// server validates floor, proximity and prop kind, records the open for
     /// the dungeon instance and broadcasts it nearby. The chest stays solid
@@ -962,6 +976,73 @@ pub enum ClientMessage {
     },
 }
 
+impl ClientMessage {
+    /// Acts a player turned to stone may not take (doc/DEBUFF.md
+    /// `petrifies`). Movement and facing check `Player.petrified` where they
+    /// apply, off this per-message path. Admins keep their slash commands.
+    pub fn blocked_while_petrified(&self, is_admin: bool) -> bool {
+        use ClientMessage::*;
+        match self {
+            ChatMessage { message } => message.starts_with('/') && !is_admin,
+            PlayerAttack { .. }
+            | StartPlayerAttack { .. }
+            | UseAbility { .. }
+            | OpenDungeonChest { .. }
+            | BreakDungeonProp { .. }
+            | MineDungeonProp { .. }
+            | PushDungeonCart { .. }
+            | OpenDungeonProp { .. }
+            | ToggleDungeonDoor { .. }
+            | InteractObject { .. }
+            | InspectAltar { .. }
+            | OfferAtAltar { .. }
+            | StartInstrument
+            | InstrumentNotes { .. }
+            | PlaceHouse { .. }
+            | RemoveHouse { .. }
+            | ToggleDoor { .. }
+            | EquipItem { .. }
+            | UnequipItem { .. }
+            | DropItems { .. }
+            | PickupStarted
+            | PickupItem { .. }
+            | PickupNearbyItems
+            | UseItem { .. }
+            | UseLandDocument { .. }
+            | EditFence { .. }
+            | StartLandscapingMode { .. }
+            | EditLandscape { .. }
+            | PlaceEstateChest { .. }
+            | StartEstateFurnitureMove { .. }
+            | MoveEstateFurniture { .. }
+            | OpenEstateChest { .. }
+            | TransferEstateItems { .. }
+            | DyeCape { .. }
+            | ApplyCapeTexture { .. }
+            | TipHat { .. }
+            | OpenStall { .. }
+            | BuyFromStall { .. }
+            | SellToStall { .. }
+            | ServeMeal { .. }
+            | EatMeal { .. }
+            | OpenShop { .. }
+            | BuyItem { .. }
+            | SellItem { .. }
+            | BuybackItem { .. }
+            | BuyItems { .. }
+            | SellItems { .. }
+            | BuybackItems { .. }
+            | OfferDeal { .. }
+            | OpenTrade { .. }
+            | PlayerTradeRequest { .. }
+            | PlayerTradeRespond { .. }
+            | PartySummonRespond { .. }
+            | FishingCast { .. } => true,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerMessage {
     DungeonDoorState {
@@ -977,6 +1058,8 @@ pub enum ServerMessage {
         active: bool,
         broken: bool,
         opened: bool,
+        /// Cells a rail cart stands pushed along its rail.
+        offset: i32,
     },
     TerrainTileVersion {
         tile_x: i32,
@@ -1123,6 +1206,24 @@ pub enum ServerMessage {
         entrance_id: String,
         depth: u8,
         prop_id: u32,
+    },
+    /// Nearby: `pusher_id` rolled a rail cart to `offset` cells from its spot.
+    /// A monster in its path stops it and takes `damage`; a player is struck
+    /// on arrival with `CartStruckPlayer`.
+    DungeonCartPushed {
+        entrance_id: String,
+        depth: u8,
+        prop_id: u32,
+        offset: i32,
+        pusher_id: PlayerId,
+        struck_monster: Option<String>,
+        damage: u32,
+    },
+    /// Nearby: a rolling cart reached `player_id`, still in its path.
+    CartStruckPlayer {
+        player_id: PlayerId,
+        damage: u32,
+        health: u32,
     },
     /// An interactive dungeon chest prop was opened: play its lid-open
     /// animation. Broadcast to nearby players (the opener included).
@@ -1335,6 +1436,12 @@ pub enum ServerMessage {
         monster_id: String,
         dropped_weapon_item_def_id: Option<String>,
     },
+    /// HP left after a hit that did not kill.
+    MonsterHealthUpdate {
+        monster_id: String,
+        health: u32,
+        max_health: u32,
+    },
     PlayerAttacked {
         player_id: PlayerId,
         monster_id: String,
@@ -1531,6 +1638,12 @@ pub enum ServerMessage {
     PlayerWetToggled {
         player_id: PlayerId,
         wet: bool,
+    },
+    /// This player turned to stone or came out of it (doc/DEBUFF.md
+    /// `petrifies`). Sent to the owner too.
+    PlayerPetrifiedToggled {
+        player_id: PlayerId,
+        petrified: bool,
     },
     /// A nearby player's shown title changed (doc/TITLES.md).
     PlayerTitleChanged {
@@ -2016,6 +2129,18 @@ pub enum ServerMessage {
     },
     /// Direct to each dungeon occupant before the sunset reset puts them out.
     DungeonReset,
+    /// Nearby: a player began mining a prop. The mined prop arrives as
+    /// `DungeonPropBroken`; `MiningEnded` stops the swing either way.
+    MiningStarted {
+        player_id: PlayerId,
+    },
+    /// `found` names what a finished cast turned up from prop `prop_id`
+    /// (item id, quantity), so nearby clients float it over the prop.
+    MiningEnded {
+        player_id: PlayerId,
+        prop_id: u32,
+        found: Option<(String, u32)>,
+    },
     AbilityCooldowns {
         cooldowns: Vec<crate::ability::AbilityTimer>,
     },
@@ -2184,6 +2309,7 @@ impl ServerMessage {
             | Self::PlayerTeleported { .. }
             | Self::PlayerCharged { .. }
             | Self::DungeonPropBroken { .. }
+            | Self::DungeonCartPushed { .. }
             | Self::DungeonPropOpened { .. }
             | Self::DungeonPropsState { .. }
             | Self::DungeonDoorToggled { .. }
@@ -2192,6 +2318,7 @@ impl ServerMessage {
             | Self::MonsterMoved { .. }
             | Self::MonsterRemoved { .. }
             | Self::MonsterDead { .. }
+            | Self::MonsterHealthUpdate { .. }
             | Self::PlayerDead { .. }
             | Self::PlayerRespawned { .. }
             | Self::PlayerHealthUpdate { .. }
@@ -2202,6 +2329,7 @@ impl ServerMessage {
             | Self::PlayerTorchToggled { .. }
             | Self::PlayerMountChanged { .. }
             | Self::PlayerWetToggled { .. }
+            | Self::PlayerPetrifiedToggled { .. }
             | Self::PlayerTitleChanged { .. }
             | Self::FenceVisibility { .. }
             | Self::EstateChestVisibility { .. }
@@ -2255,7 +2383,10 @@ impl ServerMessage {
             | Self::MonsterStunned { .. }
             | Self::MonsterSlowed { .. }
             | Self::HealingPrayed { .. }
-            | Self::BattleHymnStarted { .. } => DeliveryClass::NearbyEffect,
+            | Self::BattleHymnStarted { .. }
+            | Self::MiningStarted { .. }
+            | Self::MiningEnded { .. }
+            | Self::CartStruckPlayer { .. } => DeliveryClass::NearbyEffect,
             Self::TerrainTileVersion { .. }
             | Self::LandscapeChanged { .. }
             | Self::LandscapeInvalidated { .. }

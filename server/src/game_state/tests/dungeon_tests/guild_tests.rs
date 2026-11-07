@@ -8,9 +8,9 @@ async fn shadow_guild_variants_match_their_bastion_counterparts() {
     assert_variants(
         &game_state,
         &[
-            ("orc_bruiser", "orc", "stone_golem"),
-            ("lizardfolk_assassin", "lizardfolk", "lizardfolk"),
-            ("ogre_smuggler", "ogre", "cyclop"),
+            ("orc_bruiser", Some("orc"), "stone_golem"),
+            ("lizardfolk_assassin", Some("lizardfolk"), "lizardfolk"),
+            ("ogre_smuggler", Some("ogre"), "cyclop"),
         ],
     );
 }

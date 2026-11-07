@@ -48,3 +48,8 @@ guild_bugbear_enforcer_16_20,guild,bugbear_enforcer,16,20,4,true
 guild_orc_bruiser_21_25,guild,orc_bruiser,21,25,1,true
 guild_ogre_smuggler_21_25,guild,ogre_smuggler,21,25,1,true
 guild_bugbear_enforcer_21_25,guild,bugbear_enforcer,21,25,2,true
+mine_remnant_1_5,mine,mine_remnant,1,5,1,true
+mine_crystal_6_10,mine,mine_crystal,6,10,1,true
+mine_twisted_11_15,mine,mine_twisted,11,15,1,true
+mine_veinfused_16_20,mine,mine_veinfused,16,20,1,true
+mine_predator_21_24,mine,mine_predator,21,24,1,true

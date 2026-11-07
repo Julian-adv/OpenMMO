@@ -19,12 +19,19 @@ export const FORMATION_BREAK_CAST_MS = 4400
 export const FORMATION_BREAK_POOL_MS = 10_000
 export const EARTHQUAKE_STRIKE_MS = 3500
 export const EARTHQUAKE_CAST_MS = 5000
+export const CRYSTAL_ERUPTION_STRIKE_MS = 2400
+export const CRYSTAL_ERUPTION_CAST_MS = 3367
 
 export interface MonsterSkillDefinition {
   clip: string
   durationMs: number
   sound?: { url: string; atMs: number }
-  marks?: { impactMs: number; lingerMs?: number; sound?: string }
+  marks?: {
+    impactMs: number
+    lingerMs?: number
+    sound?: string
+    crystal?: boolean
+  }
 }
 
 export const MONSTER_SKILL_DEFS: Record<string, MonsterSkillDefinition> = {
@@ -62,6 +69,15 @@ export const MONSTER_SKILL_DEFS: Record<string, MonsterSkillDefinition> = {
     marks: {
       impactMs: EARTHQUAKE_STRIKE_MS,
       sound: '/sounds/terraclash-eruption.ogg',
+    },
+  },
+  crystal_eruption: {
+    clip: 'slash3',
+    durationMs: CRYSTAL_ERUPTION_CAST_MS,
+    marks: {
+      impactMs: CRYSTAL_ERUPTION_STRIKE_MS,
+      sound: '/sounds/terraclash-eruption.ogg',
+      crystal: true,
     },
   },
 }

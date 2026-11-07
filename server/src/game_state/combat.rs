@@ -121,6 +121,8 @@ struct MonsterAttackSnapshot {
     rotation: f32,
     body: Option<onlinerpg_shared::monster_body::BodyFootprint>,
     field_raid: bool,
+    /// Its plain swing breaks stone (`SkillSet::shatter`) this many times over.
+    shatter: Option<u32>,
 }
 
 #[derive(Clone, Copy)]
@@ -710,11 +712,13 @@ impl super::GameState {
         // melee; clients swing from inside it, so the slack only covers lag.
         let weapon = self.equipped_weapon(player_id).await;
         let attack_range = weapon.range.unwrap_or(PLAYER_MELEE_REACH_METERS) + REACH_SLACK_METERS;
-        let body = self
-            .monster_defs
-            .get(&monster.monster_type)
-            .and_then(|d| d.body);
-        let surface = |at: Position| reach_point(body, at, monster.rotation, &player_position);
+        let def = self.monster_defs.get(&monster.monster_type);
+        let body = def.and_then(|d| d.body);
+        let radius = def.map_or(0.0, |d| d.body_radius);
+        let surface = |at: Position| {
+            let point = reach_point(body, at, monster.rotation, &player_position);
+            onlinerpg_shared::monster_body::radial_point(point, radius, &player_position)
+        };
         let reach = |target: Position| {
             reachable_dist_sq(player_position, player_floor, target, monster.floor_level)
         };
@@ -1222,6 +1226,23 @@ impl super::GameState {
         .await
     }
 
+    /// A blow without a swing (a prayer, a rolling cart): reveals the striker,
+    /// puts them in combat and lands `damage`, its loot `loot_delay` later.
+    pub(super) async fn strike_monster(
+        &self,
+        player_id: &PlayerId,
+        player_name: &str,
+        target: StruckMonster<'_>,
+        damage: u32,
+        loot_delay: Duration,
+        auth: Option<&crate::auth::AuthService>,
+    ) -> bool {
+        self.reveal(player_id).await;
+        self.mark_in_combat(player_id).await;
+        self.damage_monster(player_id, player_name, target, damage, loot_delay, auth)
+            .await
+    }
+
     /// Take `damage` off a monster for `player_id`; a kill runs its death,
     /// loot and XP. False when it was already dead.
     pub(super) async fn damage_monster(
@@ -1243,6 +1264,7 @@ impl super::GameState {
         // Damage and the kill claim share one guard, so a second attacker
         // landing at the same instant sees Dead and stops.
         let mut dealt = 0;
+        let mut health_update = None;
         let mut field_raid_boss = false;
         let mut damage_by = Vec::new();
         let is_dead = {
@@ -1257,6 +1279,13 @@ impl super::GameState {
                 dealt = damage.min(monster.health);
                 field_raid_boss = monster.lifecycle == MonsterLifecycle::FieldRaid;
                 monster.health = monster.health.saturating_sub(damage);
+                if dealt > 0 && monster.health > 0 {
+                    health_update = Some(ServerMessage::MonsterHealthUpdate {
+                        monster_id: monster_id.to_string(),
+                        health: monster.health,
+                        max_health: monster.max_health,
+                    });
+                }
                 self.interest_lock().refresh_monster(monster);
                 debug!(
                     "Monster {} HP: {}/{}",
@@ -1293,6 +1322,10 @@ impl super::GameState {
             self.record_field_raid_hit(player_id, dealt).await;
         }
         if !is_dead {
+            if let Some(update) = health_update {
+                self.publish_nearby(&monster_position, monster_floor_level, update, None)
+                    .await;
+            }
             self.brain_hit(monster_id, player_id, true, damage).await;
         } else {
             // Loot lands where the monster fell, which is not where the
@@ -1594,6 +1627,9 @@ impl super::GameState {
             rotation: monster.rotation,
             body: def.and_then(|d| d.body),
             field_raid: monster.lifecycle == MonsterLifecycle::FieldRaid,
+            shatter: onlinerpg_shared::monster_ai::skills_for(&monster.monster_type)
+                .and_then(|set| set.shatter)
+                .map(|shatter| shatter.multiplier),
         }
     }
 
@@ -1850,7 +1886,7 @@ impl super::GameState {
             );
         }
         for hit in &landed {
-            self.finish_monster_hit(snapshot, hit).await;
+            self.finish_monster_hit(snapshot, hit, reach).await;
         }
     }
 
@@ -1884,15 +1920,23 @@ impl super::GameState {
             }
             None => self.send_direct_message(target_player_id, attack_msg).await,
         }
-        self.finish_monster_hit(snapshot, &landed).await;
+        self.finish_monster_hit(snapshot, &landed, reach).await;
     }
 
-    /// What follows the blow's announcement: its debuff, or the death.
-    async fn finish_monster_hit(&self, snapshot: &MonsterAttackSnapshot, hit: &LandedHit) {
-        if hit.result.hit && !hit.died() {
-            if let Some(debuff_id) = &snapshot.hit_debuff {
-                self.inflict_debuff(&hit.player_id, debuff_id, None).await;
-            }
+    /// What follows the blow's announcement: its debuff, or the death. A
+    /// skill's strike carries its own debuff in place of the swing's.
+    async fn finish_monster_hit(
+        &self,
+        snapshot: &MonsterAttackSnapshot,
+        hit: &LandedHit,
+        reach: MonsterReach<'_>,
+    ) {
+        let debuff = match reach {
+            MonsterReach::Skill { skill, .. } => skill.debuff,
+            _ => snapshot.hit_debuff.as_deref(),
+        };
+        if let Some(debuff_id) = debuff.filter(|_| hit.result.hit && !hit.died()) {
+            self.inflict_debuff(&hit.player_id, debuff_id, None).await;
         }
         if let (true, Some((position, floor))) = (hit.died(), hit.at) {
             self.announce_player_death(&hit.player_id, position, floor, &snapshot.monster_type)
@@ -1922,17 +1966,20 @@ impl super::GameState {
         } = *snapshot;
         let now = Self::now_ms();
         audit.reason = "target_not_damageable";
-        let (target_player_name, target_position, target_floor_level);
+        let (target_player_name, target_position, target_floor_level, shatters);
         {
             let players = self.players.read().await;
-            match players.get(target_player_id) {
-                Some(player) if player.is_damageable(now) => {
-                    target_player_name = player.name.clone();
-                    target_position = player.position;
-                    target_floor_level = player.floor_level;
-                }
-                _ => return None,
+            let player = players.get(target_player_id)?;
+            // Stone takes no blow but a shattering swing (`SkillSet::shatter`).
+            shatters = snapshot.shatter.filter(|_| {
+                player.petrified && player.health > 0 && matches!(reach, MonsterReach::Melee(_))
+            });
+            if !player.is_damageable(now) && shatters.is_none() {
+                return None;
             }
+            target_player_name = player.name.clone();
+            target_position = player.position;
+            target_floor_level = player.floor_level;
         }
 
         let monster_position =
@@ -1987,7 +2034,14 @@ impl super::GameState {
             );
             return None;
         }
+        if shatters.is_some() {
+            self.shatter_stone(target_player_id).await;
+        }
         let damage = match reach {
+            _ if let Some(multiplier) = shatters => SkillDamage::Scaled {
+                multiplier,
+                ignores_guard: true,
+            },
             MonsterReach::Skill { skill, .. } => skill.damage,
             MonsterReach::Burn { skill, .. } => {
                 SkillDamage::Fixed(skill.pools.map_or(0, |pools| pools.damage))

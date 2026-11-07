@@ -1,7 +1,7 @@
 {
   "date": "2026-11-03",
   "inputs": {
-    "tools/prepare-female-knight.mjs": "f2e0b84a416ec21135c95a17cae8ccc99ce319b554ea77b8dfff130c75fe9c37",
+    "tools/prepare-female-knight.mjs": "fb21b30f5c216c36a76f685069e9f92359cf4b6e7d898e4586fbaeb4c1cfe0a2",
     "client/src/lib/utils/female-clip-bake.ts": "ffe7b1e7dbefe8d7877efa81aba171c499bd639061246dbd8fa2c64059b71e7f",
     "client/src/lib/utils/female-boot-ground.ts": "0cd0b888f399c689ce821ec416660ca2805b12fa3f4c8d780cdc4ad28b61dc80",
     "assets/modular_human_female_01/rig_v1/female-base.glb": "3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5",
@@ -108,7 +108,8 @@
     "assets/items/female_bard_outfit/gloves/fitted_v1/body-occlusion.json": "c9d2acdb1447efdf949ed0863149e8e962a7d372cfc0d224c79e6d606b8c7b86",
     "assets/items/female_bard_outfit/helmet/fitted_v1/helmet_female_bard.glb": "b5916215655e0a687ea43c395d874e50706f2cd8e6217b12d732a867f3d8afaa",
     "assets/items/female_bard_outfit/helmet/fitted_v1/body-occlusion.json": "5992a27880ab27e6c943e0b7f4246fdf573273300d3eac94d28ede3e9c0dd4c7",
-    "doc/assets/female-helmet-hair-brush.json": "6b8356886b3fdfc1c85b6d03aecdb25179edf07fccf1e5a9866ead550f4e4250"
+    "doc/assets/female-helmet-hair-brush.json": "6b8356886b3fdfc1c85b6d03aecdb25179edf07fccf1e5a9866ead550f4e4250",
+    "client/public/models/animations/cart_push.glb": "7f1e3507bd032bd33d98598279bb9b52fffa38be84c6537ffc3c44dfb3af6396"
   },
   "outputs": {
     "client/public/models/characters/modular_female/base.glb": "a1887a2d633993c69ebe346119a964cb31d557834a4815ac82a998c3dc084ee9",
@@ -165,7 +166,8 @@
     "client/public/models/characters/modular_female/animations/enchant_armor.glb": "7c074b6f3051960523b13f01d5f945c8b0ce9c8beea117d9339daf88501c9548",
     "client/public/models/characters/modular_female/animations/great_sword.glb": "5e8372f8b9dcdc5583ad7498d1dcd488e360b442c5308cf45c7e4040e28d3d6b",
     "client/public/models/characters/modular_female/animations/riding.glb": "0b197aed6ffc046565095c650360c83a715b644e1b2e66b0fd38c73b32b752b2",
-    "client/public/models/characters/modular_female/animations/dagger_preview.glb": "99725f4f9c3d3f23ce4d5399a4c7141ca983e1b6438e5e62b9e142c6a125dcd9"
+    "client/public/models/characters/modular_female/animations/dagger_preview.glb": "99725f4f9c3d3f23ce4d5399a4c7141ca983e1b6438e5e62b9e142c6a125dcd9",
+    "client/public/models/characters/modular_female/animations/cart_push.glb": "b36b56428b109cf3394f393fba115c0688b7bf3533c5d763328084deb44852ce"
   },
   "underwear_weight_patch": {
     "date": "2026-10-15",

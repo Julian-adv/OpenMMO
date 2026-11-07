@@ -202,7 +202,7 @@ const layout: DungeonFloorLayout = {
   rooms: [{ x: 4, z: 24, w: 4, d: 4 }],
   upShaft: { x: 4, z: 2, alongZ: true, reversed: false },
   downShaft: { x: 6, z: 2, alongZ: true, reversed: false },
-  props: [{ x: 4, z: 12, kind: 'barrel', rotation: 0, stack: 1 }],
+  props: [{ x: 4, z: 12, kind: 'barrel', rotation: 0, stack: 1, w: 1, d: 1 }],
   chest: [7, 18],
   spawns: [],
 }

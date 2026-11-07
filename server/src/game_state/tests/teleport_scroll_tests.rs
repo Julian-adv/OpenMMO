@@ -755,7 +755,7 @@ async fn teleport_scroll_rejects_dungeon_walls_props_and_stairs() {
             .props
             .iter()
             .filter(|prop| prop.kind.is_solid())
-            .map(|prop| (prop.x, prop.z)),
+            .flat_map(|prop| prop.cells()),
     );
     for cell in blocked {
         assert!(game

@@ -18,6 +18,8 @@ export interface DungeonEntranceDef {
   spawnGroup?: string
   /** Semicolon-separated `item:chance` rolls only this chest makes. */
   chestRolls?: string
+  /** Floor plan generator; blank = rooms, `mine` = corridors and forks. */
+  layoutStyle?: string
 }
 
 export const DUNGEON_ENTRANCES: DungeonEntranceDef[] = Object.values(

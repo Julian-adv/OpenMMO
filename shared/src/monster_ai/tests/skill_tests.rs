@@ -190,6 +190,7 @@ fn raider(id: u64, x: f32, z: f32) -> NearbyPlayer {
         position: Position { x, y: 0.0, z },
         health: 100,
         drank_recently: false,
+        petrified: false,
     }
 }
 
@@ -433,4 +434,73 @@ fn a_raid_boss_keeps_swinging_under_a_crowds_blows() {
         "staggered every blow"
     );
     assert!(swings_under_blows(false, 15_000.0) >= 4);
+}
+
+fn foreman_at(x: f32, z: f32) -> MonsterBrain {
+    let mut brain = MonsterBrain::new(
+        "foreman_1".into(),
+        "mine_foreman",
+        "default".into(),
+        Position { x, y: 0.0, z },
+        600,
+        600,
+        2.6,
+        7.0,
+        3.0,
+        DEFAULT_CHASE_RANGE,
+        1800.0,
+    );
+    brain.target_player_id = Some(1.into());
+    brain
+}
+
+/// Ticks the shipped `brave` tree until the first plain swing.
+fn first_swing_ms(brain: &mut MonsterBrain, players: &[NearbyPlayer]) -> Option<f32> {
+    let trees =
+        load_behavior_trees(include_str!("../../../../data-src/behavior_trees.json")).unwrap();
+    let mut rng = SmallRng::seed_from_u64(7);
+    (1..=200).find_map(|i| {
+        let commands = brain.tick_with_behavior_tree(
+            100.0,
+            players,
+            &[],
+            &trees["brave"],
+            &DirectPath,
+            &mut rng,
+        );
+        commands
+            .iter()
+            .any(|c| matches!(c, AiCommand::Attack { .. }))
+            .then_some(i as f32 * 100.0)
+    })
+}
+
+#[test]
+fn the_foreman_waits_beside_stone_then_breaks_it() {
+    let mut brain = foreman_at(0.0, 0.0);
+    brain.skill_cooldowns_ms.fill(60_000.0);
+    let mut stone = raider(1, 0.0, 2.0);
+    stone.petrified = true;
+    let at = first_swing_ms(&mut brain, &[stone]).expect("swings at the stone");
+    assert!(at >= 10_000.0, "swung after {at} ms");
+}
+
+#[test]
+fn the_foreman_goes_for_whoever_is_still_flesh() {
+    let mut brain = foreman_at(0.0, 0.0);
+    brain.skill_cooldowns_ms.fill(60_000.0);
+    let mut stone = raider(1, 0.0, 2.0);
+    stone.petrified = true;
+    let flesh = raider(2, 2.0, 0.0);
+    let at = first_swing_ms(&mut brain, &[stone, flesh]).expect("swings");
+    assert!(at < 3_000.0, "swung after {at} ms");
+    assert_eq!(brain.target_player_id(), Some(2.into()));
+}
+
+#[test]
+fn other_monsters_never_swing_at_stone() {
+    let mut brain = barkan_at(0.0, 0.0);
+    let mut stone = raider(1, 0.0, 2.0);
+    stone.petrified = true;
+    assert_eq!(first_swing_ms(&mut brain, &[stone]), None);
 }

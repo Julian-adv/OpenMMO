@@ -13,7 +13,7 @@ const packs = new Map<string, Promise<Map<string, AnimationClip>>>()
 export function loadWeaponAnimations(
   modelPath: string,
   target: Object3D,
-  profile: WeaponAnimationDefinition
+  profile: Pick<WeaponAnimationDefinition, 'pack' | 'attack' | 'attackImpactMs'>
 ) {
   const cacheKey = `${modelPath}:${JSON.stringify(profile)}`
   let pending = packs.get(cacheKey)

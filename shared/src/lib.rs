@@ -240,7 +240,12 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v135: `GroundItem.claimed_by` and `GroundItemClaimEnded`, so clients refuse
 /// another player's loot before reaching for it.
 /// v136: female `HairStyle::Bob`/`Long`/`Ponytail`; female appearance colors are kept.
-pub const PROTOCOL_VERSION: u32 = 136;
+/// v137: `MonsterHealthUpdate`, so stethoscope wearers see monster HP;
+/// pickaxe mining (`MineDungeonProp`, `MiningStarted`, `MiningEnded`) and
+/// rail carts (`PushDungeonCart`, `DungeonCartPushed`, `CartStruckPlayer`);
+/// `Player.petrified` + `PlayerPetrifiedToggled` and the `crystal_eruption`
+/// skill.
+pub const PROTOCOL_VERSION: u32 = 137;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from
@@ -584,6 +589,7 @@ mod tests {
             back_texture: None,
             armor: Default::default(),
             wet: false,
+            petrified: false,
             title: None,
         }];
         // A monster with every Option None guards the wire format itself:

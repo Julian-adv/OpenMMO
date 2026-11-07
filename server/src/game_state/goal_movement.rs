@@ -101,7 +101,7 @@ fn progress(
 }
 
 fn eligible(player: &Player) -> bool {
-    player.health > 0 && player.object_type.is_none()
+    player.health > 0 && player.object_type.is_none() && !player.petrified
 }
 
 fn move_speed(mult: f32, sprinting: bool) -> f32 {

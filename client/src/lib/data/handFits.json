@@ -1,0 +1,66 @@
+{
+  "all": {
+    "hand:main": {
+      "position": [0, 0.08, 0],
+      "rotation": [0, 0, 0]
+    },
+    "hand:off": {
+      "position": [0, 0.08, 0],
+      "rotation": [0, 3.141593, 0]
+    },
+    "item:fishing_rod": {
+      "position": [0.045, 0.01, 0.06],
+      "rotation": [0, -0.523599, -1.047198]
+    },
+    "model:armor/earth_shield.glb": {
+      "rotation": [0.170659, 0.002636, 1.657126]
+    },
+    "type:great_sword": {
+      "rotation": [-0.786, -0.082, 0.487]
+    },
+    "type:pickaxe": {
+      "rotation": [-1.907, -0.475, 0.139]
+    },
+    "category:instrument": {
+      "position": [0.413573, 0.39466, 0.0225],
+      "rotation": [-3.141593, 0.0, 2.460914]
+    }
+  },
+  "modular_female": {
+    "model:weapons/sword.glb": {
+      "position": [0.0652, 0.0422, -0.0282],
+      "rotation": [0, 0, 0.2]
+    },
+    "model:weapons/steel_longsword.glb": {
+      "position": [0.0504, 0.1152, 0.0198],
+      "rotation": [0, 0, 0.2]
+    },
+    "type:dagger": {
+      "position": [-0.012, 0.112, 0.02],
+      "rotation": [0, 0, 0.2]
+    },
+    "model:weapons/torch.glb": {
+      "position": [-0.0072, 0.0882, 0.0162],
+      "rotation": [0, 3.141593, 0.2]
+    },
+    "model:armor/shield_wooden.glb": {
+      "position": [-0.0072, 0.0558, -0.0144]
+    },
+    "model:weapons/miner_pickaxe.glb": {
+      "position": [-0.025, 0.0575, 0.0275],
+      "rotation": [-1.82042, -0.466272, 0.020861]
+    }
+  },
+  "modular_male": {
+    "model:weapons/mace.glb": {
+      "position": [0.02, 0.12, 0.05]
+    },
+    "model:weapons/torch.glb": {
+      "position": [0.025, 0.08, 0.012]
+    },
+    "model:weapons/miner_pickaxe.glb": {
+      "position": [0, 0.08, 0.045],
+      "rotation": [-1.797689, -0.471239, 0.02618]
+    }
+  }
+}

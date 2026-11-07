@@ -15,7 +15,12 @@ import type {
 } from './networkTypes'
 import { hmrSingleton } from '../utils/hmr'
 import type { WallDirection } from '../utils/house-geometry'
-import { gameStore, resetGameStore, serverNotice } from '../stores/gameStore'
+import {
+  gameStore,
+  localHeldInPlace,
+  resetGameStore,
+  serverNotice,
+} from '../stores/gameStore'
 import { get } from 'svelte/store'
 import { inventoryStore } from '../stores/inventoryStore'
 import { getItemDef } from '../data/itemDefs'
@@ -163,6 +168,7 @@ class NetworkManager {
   readonly characterError = createEvent<(message: string) => void>()
   readonly kicked = createEvent<(reason: string) => void>()
   readonly interactionRejected = createEvent<(reason: string) => void>()
+  readonly miningEnded = createEvent<(swingLeftMs: number) => void>()
   readonly interactionChanged =
     createEvent<(interaction: PlayerInteraction) => void>()
   private moveRequestId = 0
@@ -211,6 +217,7 @@ class NetworkManager {
       kicked: this.kicked,
       playerRespawned: this.playerRespawned,
       interactionRejected: this.interactionRejected,
+      miningEnded: this.miningEnded,
       interactionChanged: this.interactionChanged,
       movePath: this.movePath,
       moveProgress: this.moveProgress,
@@ -547,7 +554,7 @@ class NetworkManager {
   }
 
   sendMoveGoal(goal: MoveGoal) {
-    if (get(localTeleportActive)) return
+    if (get(localHeldInPlace)) return
     this.sendMessage({ PlayerMoveGoal: goal })
   }
 
@@ -556,11 +563,12 @@ class NetworkManager {
   }
 
   sendMoveDirection(input: MoveDirection) {
-    if (get(localTeleportActive)) return
+    if (get(localHeldInPlace)) return
     this.sendMessage({ PlayerMoveDirection: input })
   }
 
   sendPlayerFace(rotation: number) {
+    if (get(localHeldInPlace)) return
     this.sendMessage({ PlayerFace: { rotation } })
   }
 
@@ -604,6 +612,26 @@ class NetworkManager {
   sendBreakDungeonProp(entranceId: string, depth: number, propId: number) {
     this.sendMessage({
       BreakDungeonProp: {
+        entrance_id: entranceId,
+        depth,
+        prop_id: propId,
+      },
+    })
+  }
+
+  sendMineDungeonProp(entranceId: string, depth: number, propId: number) {
+    this.sendMessage({
+      MineDungeonProp: {
+        entrance_id: entranceId,
+        depth,
+        prop_id: propId,
+      },
+    })
+  }
+
+  sendPushDungeonCart(entranceId: string, depth: number, propId: number) {
+    this.sendMessage({
+      PushDungeonCart: {
         entrance_id: entranceId,
         depth,
         prop_id: propId,
@@ -756,7 +784,7 @@ class NetworkManager {
 
   sendUseItem(instanceId: number) {
     if (!this.isNetworkableInstanceId(instanceId, 'use')) return
-    if (get(localTeleportActive)) return
+    if (get(localHeldInPlace)) return
     const item = get(inventoryStore).bag.find(
       (entry) => entry.instance_id === instanceId
     )

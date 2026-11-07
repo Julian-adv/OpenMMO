@@ -22,7 +22,7 @@ use crate::world::Position;
 const DEFAULT_DUNGEON_CHEST_TIER: u8 = 1;
 
 /// One dungeon entrance: where it stands, how deep it goes, what its final
-/// chest holds. `floors`, `boss` and `entrance_dir` feed the hashed layout —
+/// chest holds. `floors`, `boss`, `entrance_dir` and `layout_style` feed the hashed layout —
 /// changing them desyncs deployed clients like any generation change.
 #[derive(Debug, Clone)]
 pub struct DungeonEntranceDef {
@@ -51,6 +51,18 @@ pub struct DungeonEntranceDef {
     /// `(item id, chance)` rolls only this dungeon's chest makes. Their items
     /// keep a blank `chestChance` so other dungeons of the tier skip them.
     pub chest_rolls: Vec<(String, f32)>,
+    /// Floor plan generator; blank = [`LayoutStyle::Rooms`].
+    pub layout_style: LayoutStyle,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LayoutStyle {
+    /// Rooms joined in a chain by short corridors.
+    #[default]
+    Rooms,
+    /// Long corridors between small chambers; every locked floor but the
+    /// last forks into three work rooms, one holding the way down.
+    Mine,
 }
 
 impl DungeonEntranceDef {
@@ -167,6 +179,11 @@ fn parse_entrances(csv: &str) -> Vec<DungeonEntranceDef> {
                             })
                     })
                     .collect(),
+                layout_style: match field("layoutStyle") {
+                    "" => LayoutStyle::Rooms,
+                    "mine" => LayoutStyle::Mine,
+                    l => panic!("dungeon '{id}' has an invalid layoutStyle '{l}'"),
+                },
             })
         })
         .collect()
@@ -193,9 +210,9 @@ mod tests {
     #[test]
     fn parses_drops_lists_and_optional_floor_override() {
         let csv =
-            "id,name,x,y,z,chestDrops,floors,boss,chestTier,entranceDir,keyPrefix,spawnGroup,chestRolls\n\
-                   a,A Place,-1450,0.7,4720,shield;armor,5,orc_boss,2,s,a_key,skeleton,ring:0.2; amulet:0.1\n\
-                   b,B Place,10,0,20,,,,,,,,\n";
+            "id,name,x,y,z,chestDrops,floors,boss,chestTier,entranceDir,keyPrefix,spawnGroup,chestRolls,layoutStyle\n\
+                   a,A Place,-1450,0.7,4720,shield;armor,5,orc_boss,2,s,a_key,skeleton,ring:0.2; amulet:0.1,mine\n\
+                   b,B Place,10,0,20,,,,,,,,,\n";
         let defs = parse_entrances(csv);
         assert_eq!(defs.len(), 2);
         assert_eq!(defs[0].chest_drops, ["shield", "armor"]);
@@ -216,6 +233,8 @@ mod tests {
         assert_eq!(defs[1].boss, super::super::BOSS_MONSTER_TYPE);
         assert_eq!(defs[1].chest_tier, 1, "blank chestTier = tier 1");
         assert_eq!(defs[1].entrance_dir, None, "blank = seed-derived");
+        assert_eq!(defs[0].layout_style, LayoutStyle::Mine);
+        assert_eq!(defs[1].layout_style, LayoutStyle::Rooms);
     }
 
     /// Half-open on both axes, and the embedded csv parses at all. The server

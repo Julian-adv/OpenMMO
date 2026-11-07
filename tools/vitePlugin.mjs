@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { convertCsvFile } from './convert.mjs'
+import { monsterWeaponGrip } from './lib/monster-weapon-grip.mjs'
 
 const toolsDir = path.dirname(fileURLToPath(import.meta.url))
 const sourceDir = path.join(toolsDir, '..', 'data-src')
@@ -23,7 +24,9 @@ export function monsterCsvPlugin() {
       convertAllCsv()
     },
     configureServer(server) {
-      server.watcher.add(path.join(sourceDir, '*.csv'))
+      server.middlewares.use(monsterWeaponGrip())
+      // Chokidar 4 takes no globs; watch the folder.
+      server.watcher.add(sourceDir)
       server.watcher.on('change', (changedPath) => {
         const resolved = path.resolve(changedPath)
         if (resolved.startsWith(sourceDir) && resolved.endsWith('.csv')) {

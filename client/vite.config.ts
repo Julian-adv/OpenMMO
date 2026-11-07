@@ -9,6 +9,8 @@ import wasm from 'vite-plugin-wasm'
 import { monsterCsvPlugin } from '../tools/vitePlugin.mjs'
 // @ts-expect-error no type declarations for .mjs
 import { femalePreviewPlugin } from '../tools/femalePreviewPlugin.mjs'
+// @ts-expect-error no type declarations for .mjs
+import { handFitPlugin } from '../tools/lib/hand-fit.mjs'
 
 // https://vite.dev/config/
 function gitShortHash(): string {
@@ -511,6 +513,7 @@ export default defineConfig(({ mode }) => {
       landOwnershipPreview(),
       modularCharacterPreview(),
       femalePreviewPlugin(),
+      handFitPlugin(),
       monsterCsvPlugin(),
       wasm(),
       svelte(),

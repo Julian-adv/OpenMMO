@@ -29,6 +29,7 @@ import {
 import { clearXpArrival, releaseXpArrival } from './xpArrival'
 import {
   monster_body_engage_point,
+  monster_radial_point,
   passability_remove_monster_body,
   passability_set_monster_body,
 } from '../wasm/onlinerpg_shared'
@@ -81,9 +82,18 @@ class MonsterManager {
     const point =
       this.bodies.has(monsterId) &&
       monster_body_engage_point(monsterId, from.x, from.z)
-    return point
-      ? { x: point[0], y: meshPosition.y, z: point[1] }
-      : meshPosition
+    const monster = this.monsters.get(monsterId)
+    const radius = (monster && getMonsterDef(monster.type)?.bodyRadius) || 0
+    const at = radius
+      ? monster_radial_point(
+          point ? point[0] : meshPosition.x,
+          point ? point[1] : meshPosition.z,
+          radius,
+          from.x,
+          from.z
+        )
+      : point
+    return at ? { x: at[0], y: meshPosition.y, z: at[1] } : meshPosition
   }
 
   /** Keep the current height until terrain is available. */
@@ -306,6 +316,12 @@ class MonsterManager {
     }
   }
 
+  handleMonsterHealth(id: string, health: number, maxHealth: number) {
+    const monster = this.monsters.get(id)
+    if (!monster) return
+    this.monsters.set(id, { ...monster, health, maxHealth })
+  }
+
   handleMonsterHitFinished(id: string) {
     const monster = this.monsters.get(id)
     if (!monster?.isDeadPending || monster.state !== 'hit') return
@@ -437,17 +453,23 @@ class MonsterManager {
     this.monsters.set(monsterId, { ...monster })
   }
 
-  /** Healing Prayer searing an undead: it flinches at once, no swing. */
-  handlePrayerStruck(monsterId: string, playerId: number, damage: number) {
+  /** Struck without a swing (Healing Prayer searing an undead, a rolling
+   *  cart): it flinches `delayMs` from now. */
+  handleStruck(
+    monsterId: string,
+    playerId: number,
+    damage: number,
+    delayMs = 0
+  ) {
     const monster = this.monsters.get(monsterId)
     if (!monster || monster.state === 'dead') return
-    monster.impactDelay = 1
+    monster.impactDelay = Math.max(1, delayMs)
     monster.targetPlayerId = playerId
     monster.isLastHitSuccess = true
     monster.pendingSwordHitSoundUrl = undefined
     if (playerId === get(gameStore).currentPlayer?.id)
       monster.pendingDamageText = {
-        delay: 1 + DAMAGE_TEXT_AFTER_IMPACT_MS,
+        delay: monster.impactDelay + DAMAGE_TEXT_AFTER_IMPACT_MS,
         damage,
         hit: true,
         critical: false,
@@ -700,13 +722,8 @@ class MonsterManager {
     }
   }
 
-  // Dungeon monsters path on their depth's passability floor; surface
-  // monsters use the open overworld (0).
   private pathFloorFor(monster: MonsterData): number {
-    const fl = monster.floorLevel ?? 0
-    return fl < 0 && dungeonManager.active
-      ? dungeonManager.passabilityFloor(-fl)
-      : 0
+    return dungeonManager.passabilityFloorFor(monster.floorLevel ?? 0)
   }
 
   private updateMoveSpeedFromState(monster: MonsterData) {

@@ -60,6 +60,8 @@ export type ServerPlayer = {
   armor?: ArmorEquipment
   /** Carrying the `wet` soaking — drives the footprint trail (doc/DEBUFF.md). */
   wet?: boolean
+  /** Turned to stone by a boss skill (doc/DEBUFF.md `petrifies`). */
+  petrified?: boolean
   /** Shown title id (doc/TITLES.md). */
   title?: string | null
 }
@@ -251,6 +253,12 @@ export type ClientMessage =
     }
   | {
       OpenDungeonProp: { entrance_id: string; depth: number; prop_id: number }
+    }
+  | {
+      MineDungeonProp: { entrance_id: string; depth: number; prop_id: number }
+    }
+  | {
+      PushDungeonCart: { entrance_id: string; depth: number; prop_id: number }
     }
   | {
       ToggleDungeonDoor: {

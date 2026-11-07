@@ -156,7 +156,7 @@ pub fn load(root: &Path, seed: u64) -> Result<Fixtures, Box<dyn Error>> {
                 &mut cache,
                 &def.id,
                 floor.depth,
-                dungeon::floor_passability_cells_full(floor, &[], &[]),
+                dungeon::floor_passability_cells_full(floor, &[], &[], &[]),
             );
         }
     }

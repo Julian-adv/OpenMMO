@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use onlinerpg_shared::dungeon::{
     cell_center, dungeon_origin, floor_world_y, generate_dungeon_for, interior_doors,
-    key_depth_for, locked_depths, locked_door_ids, world_to_cell, FloorLayout, PropKind,
+    key_depth_for, locked_depths, locked_door_ids, world_to_cell, FloorLayout, PropKind, PropSpec,
     ENTRANCE_DOOR_ID, GRID,
 };
 use onlinerpg_shared::inventory::GroundItem;
@@ -121,12 +121,33 @@ pub(super) struct DungeonRuntime {
     /// `toggle_dungeon_door` only admits ids that resolve, so this stays
     /// bounded by the layout. Same lifetime as `broken_props`.
     pub open_doors: HashMap<u8, HashSet<u32>>,
+    /// Rail carts pushed off their spot per depth: prop id → cells moved
+    /// along the rail. Same lifetime as `broken_props`; sunset puts them back.
+    pub cart_offsets: HashMap<u8, HashMap<u32, i32>>,
     /// Key-gated door ids per floor (index = depth - 1); empty on unlocked floors.
     pub locked_doors: Vec<Vec<u32>>,
     /// Which opening each open locked door is on, so the timed close can
     /// tell its own opening from a later one.
     pub locked_door_opens: HashMap<(u8, u32), u64>,
     pub locked_door_generation: u64,
+}
+
+impl DungeonRuntime {
+    /// Floor `depth`'s broken props and pushed carts, as `floor_cells` and
+    /// `cart_push_target` take them.
+    pub(super) fn floor_props(&self, depth: u8) -> (Vec<u32>, Vec<(u32, i32)>) {
+        let broken = self
+            .broken_props
+            .get(&depth)
+            .map(|s| s.iter().copied().collect())
+            .unwrap_or_default();
+        let carts = self
+            .cart_offsets
+            .get(&depth)
+            .map(|m| m.iter().map(|(&id, &offset)| (id, offset)).collect())
+            .unwrap_or_default();
+        (broken, carts)
+    }
 }
 
 pub(super) struct FloorRuntime {
@@ -203,6 +224,40 @@ pub(super) fn door_line_dist_sq(entrance: &Position, seg: [i32; 4], pos: &Positi
     dx * dx + dz * dz
 }
 
+/// The world center of `prop`'s footprint if the player stands on its floor
+/// within `PROP_INTERACT_RANGE` of any of its cells, else a rejection built
+/// from `noun`.
+pub(super) fn check_prop_reach(
+    entrance: &Position,
+    depth: u8,
+    prop: &PropSpec,
+    player: &Position,
+    player_floor: i8,
+    noun: &str,
+) -> Result<Position, String> {
+    if player_floor != -(depth as i8) {
+        return Err(format!("You must be on the {noun}'s floor"));
+    }
+    let centers: Vec<Position> = prop
+        .cells()
+        .map(|cell| cell_center(entrance, depth, cell))
+        .collect();
+    let in_reach = centers.iter().any(|c| {
+        let dx = onlinerpg_shared::shortest_world_delta_x(c.x, player.x);
+        let dz = player.z - c.z;
+        dx * dx + dz * dz <= PROP_INTERACT_RANGE * PROP_INTERACT_RANGE
+    });
+    if !in_reach {
+        return Err(format!("Too far from the {noun}"));
+    }
+    let n = centers.len() as f32;
+    Ok(Position {
+        x: centers.iter().map(|c| c.x).sum::<f32>() / n,
+        y: centers[0].y,
+        z: centers.iter().map(|c| c.z).sum::<f32>() / n,
+    })
+}
+
 impl GameState {
     async fn dungeon_band_population(&self, entrance_id: &str, depth: u8) -> usize {
         let occupants: HashSet<PlayerId> = {
@@ -250,6 +305,7 @@ impl GameState {
                 broken_props: HashMap::new(),
                 opened_props: HashMap::new(),
                 open_doors: HashMap::new(),
+                cart_offsets: HashMap::new(),
                 locked_doors,
                 locked_door_opens: HashMap::new(),
                 locked_door_generation: 0,
@@ -1129,7 +1185,7 @@ impl GameState {
     /// reason built from `noun`. Returns `None` (silent no-op) for a missing
     /// dungeon/prop/player, the wrong prop kind, or an already-claimed prop.
     #[allow(clippy::too_many_arguments)]
-    async fn interact_with_dungeon_prop(
+    pub(super) async fn interact_with_dungeon_prop(
         &self,
         player_id: &PlayerId,
         entrance_id: &str,
@@ -1172,19 +1228,20 @@ impl GameState {
             if !is_kind(prop.kind) {
                 return None;
             }
-            if player_floor != -(depth as i8) {
-                Some(Err(format!("You must be on the {noun}'s floor")))
-            } else {
-                let prop_pos = cell_center(&entrance.position(), depth, (prop.x, prop.z));
-                let dx = onlinerpg_shared::shortest_world_delta_x(prop_pos.x, player_pos.x);
-                let dz = player_pos.z - prop_pos.z;
-                if dx * dx + dz * dz > PROP_INTERACT_RANGE * PROP_INTERACT_RANGE {
-                    Some(Err(format!("Too far from the {noun}")))
-                } else if select_state(rt).entry(depth).or_default().insert(prop_id) {
-                    Some(Ok(prop_pos))
-                } else {
-                    None
-                }
+            match check_prop_reach(
+                &entrance.position(),
+                depth,
+                &prop,
+                &player_pos,
+                player_floor,
+                noun,
+            ) {
+                Err(reason) => Some(Err(reason)),
+                Ok(prop_pos) => select_state(rt)
+                    .entry(depth)
+                    .or_default()
+                    .insert(prop_id)
+                    .then_some(Ok(prop_pos)),
             }
         };
 
@@ -1217,6 +1274,7 @@ impl GameState {
             };
             rt.broken_props.clear();
             rt.opened_props.clear();
+            rt.cart_offsets.clear();
             rt.layouts.clone()
         };
         for layout in &layouts {
@@ -1224,7 +1282,51 @@ impl GameState {
                 .await;
         }
         self.interest_lock()
-            .reset_dungeon_props(entrance_id, &layouts);
+            .reset_dungeon_props(entrance_id, &layouts, PropKind::is_interactive);
+    }
+
+    /// Sunset: mined ore heaps and crystals fill back in and pushed carts
+    /// roll back to their spots.
+    pub(super) async fn restore_mine_props(&self) {
+        let restored: Vec<(String, Vec<FloorLayout>)> = {
+            let mut dungeons = self.dungeons.write().await;
+            dungeons
+                .iter_mut()
+                .filter_map(|(id, rt)| {
+                    let mut depths: HashSet<u8> = rt.cart_offsets.drain().map(|(d, _)| d).collect();
+                    for (depth, ids) in rt.broken_props.iter_mut() {
+                        let Some(layout) = rt.layouts.get((*depth - 1) as usize) else {
+                            continue;
+                        };
+                        let before = ids.len();
+                        ids.retain(|&i| {
+                            !layout
+                                .props
+                                .get(i as usize)
+                                .is_some_and(|p| p.kind.is_minable())
+                        });
+                        if ids.len() != before {
+                            depths.insert(*depth);
+                        }
+                    }
+                    let layouts: Vec<FloorLayout> = depths
+                        .into_iter()
+                        .filter_map(|d| rt.layouts.get((d - 1) as usize).cloned())
+                        .collect();
+                    (!layouts.is_empty()).then(|| (id.clone(), layouts))
+                })
+                .collect()
+        };
+        for (id, layouts) in restored {
+            for layout in &layouts {
+                self.rebuild_dungeon_floor_passability(&id, layout.depth)
+                    .await;
+            }
+            self.interest_lock()
+                .reset_dungeon_props(&id, &layouts, |k| {
+                    k.is_minable() || k == PropKind::MineRailCart
+                });
+        }
     }
 
     /// Track floor occupancy and monster lifecycles across dungeon floor
@@ -1403,7 +1505,8 @@ impl GameState {
         self.reset_dungeons(epoch).await;
     }
 
-    /// Evict occupants before clearing empty floors; props and doors persist.
+    /// Evict occupants before clearing empty floors; props and doors persist
+    /// except mined ore and pushed carts, which are restored.
     async fn reset_dungeons(&self, epoch: i64) {
         let warned: Vec<PlayerId> = {
             let dungeons = self.dungeons.read().await;
@@ -1473,6 +1576,7 @@ impl GameState {
             }
         }
         drop(dungeons);
+        self.restore_mine_props().await;
         self.dungeon_reset.write().await.completed_epoch = Some(epoch);
         info!(
             "Dungeons reset for the new night; {} occupant(s) returned to the surface",

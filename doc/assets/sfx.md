@@ -139,7 +139,8 @@ changes and are attenuated indoors.
   no flesh, no metal ringing, no reverb."
 - sword-leather.ogg, sword-miss3.ogg — predate this file; provenance not
   recorded here. Mapped in `data/material-impact-sounds.json`.
-- sword-flesh4.ogg — sword cutting into a fleshy monster (`metal` → `flesh`:
+- sword-flesh4.ogg — **[미사용]** replaced by sword-flesh5.ogg on 2026-11-07
+  (it sounded like hitting a rubber ball). Sword cutting into a fleshy monster (`metal` → `flesh`:
   ogre, troll, scp939), generated with [ElevenLabs Sound
   Effects](https://elevenlabs.io/sound-effects) via the API on 2026-08-22
   (Starter tier, own generation; original
@@ -149,6 +150,21 @@ changes and are attenuated indoors.
   no music."). Take 5 of a 0.7 s request, kept full length with a 100 ms tail
   fade, peak-normalized to −3 dB, 44.1 kHz mono.
   2026-08-24 오거 타격음이 너무 커서 게인 ×0.9 (−0.9 dB, peak −2.5 dB) — flesh 재질 전부에 걸린다.
+- sword-flesh5.ogg — a fist punching a hanging side of raw beef, used for
+  every `metal` → `flesh` hit (ogre, troll, scp939, the mine's flesh monsters)
+  since 2026-11-07. Generated with [ElevenLabs Sound
+  Effects](https://elevenlabs.io/sound-effects) via the API on 2026-11-07
+  (Starter tier, own generation), `tools/gen-death-sfx.py` `meat_punch`, 0.7 s,
+  prompt_influence 0.6, take 1 of 3; blade words were left out of the prompt
+  because they pulled in a metallic ring. Original kept at
+  `~/assets_original/sfx/sword-flesh5_meat-punch-take1_2026-11-07.mp3` on
+  pc5090. +6 dB into a limiter at −4.4 dB, cut to 0.55 s with a 100 ms tail
+  fade; mean −14.8 dB (sword-flesh4 −14.0 dB), peak −1.7 dB, 44.1 kHz mono ogg
+  q5. Prompt: "A heavy fist punching a hanging side of raw beef in a cold room:
+  one deep, muffled, wet meaty impact with a dense low thump and a slight
+  squish, short and solid. Boxing-movie foley, one hit, under one second. No
+  slap, no clap, no metal, no ring, no rubber, no bounce, no drum, no voice, no
+  grunt, no music, no reverb."
 - sword-stone.ogg — sword striking a stone golem (`metal` → `stone`),
   generated with [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects)
   via the API on 2026-08-22 (Starter tier, own generation; original
@@ -346,6 +362,25 @@ Both were generated and processed exactly like the monster cries above.
   on pc5090; prompt: "The sound of hundreds of gold coins slithering out of a
   treasure chest"). Trimmed to 1.8 s (trailing silence) with a 150 ms tail fade,
   −1.5 dB gain, resampled 48→44.1 kHz.
+- pickaxe-ore.ogg — 곡괭이로 광석을 캐는 소리. 검은맥 광산 채굴 중 스윙마다 재생한다.
+  [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) API로 2026-11-05 직접 생성. Starter 유료 플랜,
+  [유료 플랜 상업 이용 라이선스](https://help.elevenlabs.io/hc/en-us/articles/13313564601361-Can-I-publish-the-content-I-generate-on-the-platform) 적용.
+  1.0초. 첫 프롬프트 `pickaxe_ore`(`prompt_influence=0.5`) 3개는 고음 위주라 껍질이 부서지는 소리 같다는
+  사용자 평으로 미채택. 더 둔탁하게 쓴 `pickaxe_ore_thud`·`pickaxe_ore_chunk`(`prompt_influence=0.6`) 3개씩 중
+  사용자가 `pickaxe_ore_chunk` take 2를 골랐다(처음엔 `pickaxe_ore_thud` take 3을 골랐다가 바꿈). 후보 9개 총 약 90크레딧. 프롬프트는 모두 `tools/gen-death-sfx.py`에 기록.
+  모노 다운믹스, 앞 무음 −40 dB 기준 제거, 끝 무음 −38 dB 기준 트림, 마지막 60 ms 페이드, 피크 −3 dB 정규화,
+  모노 44.1 kHz OGG Vorbis q5, 0.4초. 게임 재생 볼륨 0.5.
+  스윙 시작 600 ms 뒤(`player_anim_timing.csv`의 `mining_swing_impact`, 빌린 `great_sword_slash`의 내려찍는 순간)에 재생.
+  원본과 처리 기록은 `assets/sfx/pickaxe-ore-2026-11-05/`의 `pickaxe-ore_chunk-take2_2026-11-05.mp3` 및 같은 이름의 `.json`에 보관.
+
+- cart-roll.ogg, cart-crash.ogg — 검은맥 광산 철로 수레가 굴러가는 소리와 멈출 때 부딪히는 소리.
+  [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) API로 2026-11-06 직접 생성. Starter 유료 플랜,
+  [유료 플랜 상업 이용 라이선스](https://help.elevenlabs.io/hc/en-us/articles/13313564601361-Can-I-publish-the-content-I-generate-on-the-platform) 적용.
+  `cart_roll`(4초) 3개와 `cart_crash`(1.2초) 3개, 총 약 156크레딧. 사용자가 `cart_roll` take 2를 골랐고,
+  그 끝에 저절로 들어간 충돌음을 부딪히는 소리로 쓴다. 나머지 후보와 `cart_crash` 프롬프트는 지웠다.
+  2.6초에서 잘라 앞부분(2.6초)은 굴러가는 소리, 뒷부분(0.76초)은 충돌음. 모노, 피크 −3 dB, 44.1 kHz OGG Vorbis q5.
+  수레가 움직이기 시작할 때 굴러가는 소리를 틀고(구르는 시간이 2.6초를 넘으면 반복), 도착 순간에 끊으며 충돌음을 낸다.
+  거리 16 m까지 줄어들며 들린다. 원본과 처리 기록은 `assets/sfx/cart-2026-11-06/`.
 
 ## World
 

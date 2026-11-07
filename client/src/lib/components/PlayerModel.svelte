@@ -3,9 +3,6 @@
   import { HOVER_SCALE_IDLE, stickyHoverScale } from '../utils/stickyHover'
   import { FEMALE_BOOTS_PROPERTY } from '../utils/femaleCharacter'
 
-  const HEALTH_BAR_WIDTH = 1.0
-  const HEALTH_BAR_HEIGHT = 0.08
-  const TEMP_HEALTH_COLOR = '#faf089'
   const LOCAL_NAMETAG_RENDER_ORDER = 1000
   const LOCAL_NAMETAG_OFFSET_PX = 8
 
@@ -19,14 +16,6 @@
   )
   const HOVER_MATERIAL = new THREE.MeshBasicMaterial()
   const HOVER_SCALE_STICKY = stickyHoverScale(HOVER_BOX)
-
-  // Shared across all PlayerModel instances — the fill geometry never changes.
-  // Left-anchored via translate so the mesh only needs scale.x to grow/shrink.
-  const healthBarFillGeometry = new THREE.PlaneGeometry(
-    HEALTH_BAR_WIDTH,
-    HEALTH_BAR_HEIGHT
-  )
-  healthBarFillGeometry.translate(HEALTH_BAR_WIDTH / 2, 0, 0)
 
   // Retargeted clips are shared per character profile, so the additive
   // rebuild runs once per source clip instead of once per player.
@@ -87,6 +76,7 @@
   import { titleName } from '../data/titleDefs'
   import { T, useThrelte } from '@threlte/core'
   import TextLabel from './TextLabel.svelte'
+  import ResourceBar, { RESOURCE_BAR_HEIGHT } from './ResourceBar.svelte'
   import type { Vector3 } from 'three'
   import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
   import { onDestroy, onMount, untrack } from 'svelte'
@@ -165,6 +155,13 @@
   } from '../stores/chargeStrikeStore'
   import { PLAYER_ATTACK_IMPACT_DELAY_MS } from '../data/combatTiming'
   import { gameStore } from '../stores/gameStore'
+  import { miningPlayers, PICKAXE_ITEM } from '../stores/miningStore'
+  import {
+    CART_PUSH_CLIP,
+    CART_PUSH_PACK,
+    cartPushes,
+  } from '../stores/cartPushStore'
+  import { currentDungeonId } from '../stores/dungeonStore'
   import { pickRandom } from '../utils/randomUtils'
   import {
     equippedArmor,
@@ -220,7 +217,7 @@
     hoveredPlayerId,
     localInvisible,
   } from '../stores/gameStore'
-  import { SeeThrough } from '../effects/see-through'
+  import { Petrify, SeeThrough } from '../effects/see-through'
   import type { TerrainHeightManager } from '../managers/terrainHeightManager'
   import TargetRing from './TargetRing.svelte'
   import {
@@ -287,6 +284,8 @@
     remotePlayerId?: number
     /** Shown title id, drawn in smaller text above the name. */
     title?: string | null
+    /** Stone: grey and frozen in pose (doc/DEBUFF.md `petrifies`). */
+    petrified?: boolean
     /** Remote player's floor (negative = dungeon depth), for the hover ring. */
     floorLevel?: number
     heightManager?: TerrainHeightManager | null
@@ -337,6 +336,7 @@
     npcPlayerId,
     remotePlayerId,
     title = null,
+    petrified = false,
     floorLevel = 0,
     heightManager = null,
     waterSurfaceAt,
@@ -537,6 +537,8 @@
   const movementRotation = new MovementRotation()
   const seeThrough = new SeeThrough()
   onDestroy(() => seeThrough.restore())
+  const petrify = new Petrify()
+  onDestroy(() => petrify.restore())
   const smoothRotation = $derived(
     isCurrentPlayer &&
       playerState === 'moving' &&
@@ -734,9 +736,13 @@
   })
 
   const equippedMainHandItemId = $derived(
-    isCurrentPlayer
-      ? ($inventoryStore.equipped.main_hand?.item_def_id ?? null)
-      : mainHand
+    $miningPlayers.has(
+      (isCurrentPlayer ? $gameStore.currentPlayer?.id : remotePlayerId) ?? -1
+    )
+      ? PICKAXE_ITEM
+      : isCurrentPlayer
+        ? ($inventoryStore.equipped.main_hand?.item_def_id ?? null)
+        : mainHand
   )
 
   let attachedWeaponItemId: string | null = null
@@ -749,6 +755,29 @@
     const id = modelPlayerId()
     return id === undefined ? undefined : get(daggerSkillCasts).get(id)
   }
+  let cartPushClip: THREE.AnimationClip | undefined
+  /** When this player's cart push was broadcast, while its clip plays. */
+  function cartPushAt() {
+    if (!cartPushClip || riding || playerState !== 'idle') return undefined
+    const id = modelPlayerId()
+    const at = id === undefined ? undefined : $cartPushes.get(id)
+    return at !== undefined && Date.now() - at < cartPushClip.duration * 1000
+      ? at
+      : undefined
+  }
+  $effect(() => {
+    const root = modelRoot
+    if (!root || !$currentDungeonId) return
+    let cancelled = false
+    void loadWeaponAnimations(modelPath, root, { pack: CART_PUSH_PACK })
+      .then((clips) => {
+        if (!cancelled) cartPushClip = clips.get(CART_PUSH_CLIP)
+      })
+      .catch((error) => console.error('Failed to load the cart push', error))
+    return () => {
+      cancelled = true
+    }
+  })
   /** When the charge's dash lands, while the stab around it plays. */
   function chargeStabLandsAt() {
     if (!chargeStabClip || riding) return undefined
@@ -784,10 +813,7 @@
     )
       return
     let cancelled = false
-    void loadWeaponAnimations(modelPath, root, {
-      id: DAGGER_SKILL.weaponType,
-      pack: DAGGER_SKILL.pack,
-    })
+    void loadWeaponAnimations(modelPath, root, { pack: DAGGER_SKILL.pack })
       .then((clips) => {
         const inward = clips.get('dagger_inward')
         const outward = clips.get('dagger_outward')
@@ -1346,6 +1372,13 @@
       )
       return
     }
+    const pushAt = cartPushAt()
+    if (pushAt !== undefined && cartPushClip) {
+      if (currentAction?.getClip() === cartPushClip) return
+      startAction(cartPushClip, true, 0.15)
+      seekCurrentAction((Date.now() - pushAt) / 1000)
+      return
+    }
     if (castClip) {
       // The idle hand-off near a clip's end must not rewind the cast.
       if (currentAction?.getClip() === castClip) return
@@ -1822,13 +1855,16 @@
         (playerState !== 'interact' || interactionAnim === EXCAVATE_EMOTE_ANIM)
     const handsOnOars =
       boating && canRow && (rowing || (boatMount?.rowingWeight ?? 0) >= 0.001)
+    const pushing = cartPushAt() !== undefined
     if (weaponObject) {
       weaponObject.visible =
         !riding &&
         !handsOnOars &&
+        !pushing &&
         (playerState !== 'interact' || fishingInteraction)
     }
-    const offhandVisible = !riding && !handsOnOars && playerState !== 'interact'
+    const offhandVisible =
+      !riding && !handsOnOars && !pushing && playerState !== 'interact'
     if (offhandObject) offhandObject.visible = offhandVisible
     if (torchFireGroup) torchFireGroup.visible = offhandVisible
   }
@@ -1907,6 +1943,7 @@
     const onScreen = !teleportHidden && position.y > OFFSCREEN_Y / 2
     if (capeRig) capeRig.root.visible = onScreen
     if (isCurrentPlayer) seeThrough.update(modelGroup, $localInvisible)
+    petrify.update(modelGroup, petrified)
     const physics = secondaryMotion.next(deltaTime, onScreen, isCurrentPlayer)
     if (!physics) return
     const { deltaTime: dt, reset, step } = physics
@@ -2031,7 +2068,7 @@
 
     // Update mixer with provided deltaTime
     if (currentAction) {
-      mixer.update(deltaTime)
+      mixer.update(petrified ? 0 : deltaTime)
       if (excavationTool?.visible) {
         applyExcavationGrip(excavationGrip)
       }
@@ -2151,6 +2188,7 @@
     // Update animation state
     if (validAnimations.length > 0) {
       const stabLandsAt = chargeStabLandsAt()
+      const pushAt = cartPushAt()
       const stateKey =
         boating && canRow
           ? 'boating'
@@ -2160,17 +2198,19 @@
               ? `interact:${interactionAnim}:${interactionCounter}`
               : stabLandsAt !== undefined
                 ? `charge-stab:${stabLandsAt}`
-                : playerState === 'moving'
-                  ? `moving:${movementMode}`
-                  : castPose && activeCastClip()
-                    ? `cast:${castPose.clip}`
-                    : playerState === 'attack'
-                      ? `attack:${attackCounter}:${daggerCastAt() ?? ''}`
-                      : activeArmorEnchant()
-                        ? 'enchant-armor'
-                        : activeEnchantClip()
-                          ? 'enchant-weapon'
-                          : playerState
+                : pushAt !== undefined
+                  ? `cart-push:${pushAt}`
+                  : playerState === 'moving'
+                    ? `moving:${movementMode}`
+                    : castPose && activeCastClip()
+                      ? `cast:${castPose.clip}`
+                      : playerState === 'attack'
+                        ? `attack:${attackCounter}:${daggerCastAt() ?? ''}`
+                        : activeArmorEnchant()
+                          ? 'enchant-armor'
+                          : activeEnchantClip()
+                            ? 'enchant-weapon'
+                            : playerState
       const animKey = `${equippedMainHandItemId ?? ''}:${stateKey}`
       if (lastAnimKey !== animKey) {
         lastAnimKey = animKey
@@ -2248,61 +2288,6 @@
     <T is={torchFireGroup} />
   {/if}
 
-  {#snippet resourceBar(
-    y: number,
-    ratio: number,
-    color: string,
-    shieldRatio = 0
-  )}
-    <T.Group
-      position.y={y}
-      renderOrder={isCurrentPlayer ? LOCAL_NAMETAG_RENDER_ORDER : 0}
-    >
-      <T.Mesh>
-        <T.PlaneGeometry args={[HEALTH_BAR_WIDTH, HEALTH_BAR_HEIGHT]} />
-        <T.MeshBasicMaterial
-          color="#000000"
-          transparent
-          opacity={0.5}
-          depthTest={!isCurrentPlayer}
-          depthWrite={false}
-        />
-      </T.Mesh>
-      {#if ratio > 0}
-        <T.Mesh
-          position.x={-HEALTH_BAR_WIDTH / 2}
-          position.z={0.001}
-          scale.x={ratio}
-          renderOrder={1}
-        >
-          <T is={healthBarFillGeometry} />
-          <T.MeshBasicMaterial
-            {color}
-            transparent
-            depthTest={!isCurrentPlayer}
-            depthWrite={false}
-          />
-        </T.Mesh>
-      {/if}
-      {#if shieldRatio > 0}
-        <T.Mesh
-          position.x={HEALTH_BAR_WIDTH * (ratio - 0.5)}
-          position.z={0.002}
-          scale.x={shieldRatio}
-          renderOrder={2}
-        >
-          <T is={healthBarFillGeometry} />
-          <T.MeshBasicMaterial
-            color={TEMP_HEALTH_COLOR}
-            transparent
-            depthTest={false}
-            depthWrite={false}
-          />
-        </T.Mesh>
-      {/if}
-    </T.Group>
-  {/snippet}
-
   <!-- Name tag (separate from character to avoid rotation inheritance) -->
   <T.Group
     bind:ref={nametagGroup}
@@ -2334,26 +2319,30 @@
     />
 
     {#if isCurrentPlayer}
-      {@render resourceBar(
-        -0.42 + HEALTH_BAR_HEIGHT,
-        Math.max(0.001, displayedHealthRatio),
-        '#ff0000',
-        tempHealthRatio
-      )}
+      <ResourceBar
+        y={-0.42 + RESOURCE_BAR_HEIGHT}
+        ratio={Math.max(0.001, displayedHealthRatio)}
+        color="#ff0000"
+        shieldRatio={tempHealthRatio}
+        onTop
+        renderOrder={LOCAL_NAMETAG_RENDER_ORDER}
+      />
       {#if $visibleMana}
-        {@render resourceBar(
-          -0.42,
-          $visibleMana.mana / $visibleMana.max_mana,
-          '#4299e1'
-        )}
+        <ResourceBar
+          y={-0.42}
+          ratio={$visibleMana.mana / $visibleMana.max_mana}
+          color="#4299e1"
+          onTop
+          renderOrder={LOCAL_NAMETAG_RENDER_ORDER}
+        />
       {/if}
     {:else if maxHealth > 0 && health > 0}
       <!-- Other players' HP reaches only stethoscope wearers. -->
-      {@render resourceBar(
-        -0.38 + HEALTH_BAR_HEIGHT,
-        Math.max(0.001, displayedHealthRatio),
-        '#ff0000'
-      )}
+      <ResourceBar
+        y={-0.38 + RESOURCE_BAR_HEIGHT}
+        ratio={Math.max(0.001, displayedHealthRatio)}
+        color="#ff0000"
+      />
     {/if}
 
     {#if animDebugInfo}

@@ -58,6 +58,10 @@ export function useAbility(id: string) {
     reportSkillFailure(translate('skillFailure.dead'))
     return
   }
+  if (player.petrified) {
+    reportSkillFailure(translate('skillFailure.petrified'))
+    return
+  }
   if (isMounted(player) && !(id === FISHING.id && player.mount === 'rowboat')) {
     reportSkillFailure(translate('skillFailure.mounted'))
     return

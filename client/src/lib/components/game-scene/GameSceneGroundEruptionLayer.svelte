@@ -36,7 +36,8 @@
       const effect = new GroundEruptionEffect(assets)
       slots.push({ effect, event: null, erupted: false })
       group.add(effect.group)
-      effect.start(1, 1.5, i + 1)
+      // Odd slots warm the crystal shards' shader too.
+      effect.start(1, 1.5, i + 1, 0, i % 2 === 1)
     }
     void (renderer as unknown as WebGPURenderer)
       .compileAsync(group, $camera, scene)
@@ -66,7 +67,13 @@
         )
       slot.event = event
       slot.erupted = false
-      slot.effect.start(event.impactMs, event.radius, seed++, event.lingerMs)
+      slot.effect.start(
+        event.impactMs,
+        event.radius,
+        seed++,
+        event.lingerMs,
+        event.crystal
+      )
     }
     const floor =
       $currentDungeonDepth > 0

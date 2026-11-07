@@ -10,21 +10,6 @@ use crate::pathfinding::{find_and_smooth_path, PassabilityCache};
 /// on each: `(high_cell, low_cell, high_bit, low_bit)`.
 type DoorCellPair = ((i32, i32), (i32, i32), u8, u8);
 
-fn fnv1a64_bytes(h: &mut u64, bytes: &[u8]) {
-    for b in bytes {
-        *h ^= *b as u64;
-        *h = h.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-}
-
-fn layout_hash(floors: &[FloorLayout]) -> u64 {
-    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for f in floors {
-        fnv1a64_bytes(&mut h, &format!("{f:?}").into_bytes());
-    }
-    h
-}
-
 fn test_entrance() -> Position {
     Position {
         x: 100.0,
@@ -228,10 +213,300 @@ fn shadow_guild_has_twenty_five_floors_and_its_own_monsters() {
     assert_eq!(layout_hash(&floors), GOLDEN_SHADOW_GUILD_HASH);
 }
 
+#[test]
+fn blackvein_mine_has_twenty_five_floors_and_its_own_monsters() {
+    let floors = generate_dungeon_for("blackvein_mine");
+    assert_eq!(floors.len(), 25);
+    assert!(!floors[0].up_shaft.along_z && !floors[0].up_shaft.reversed);
+    assert_eq!(
+        locked_depths(floors.len() as u8).collect::<Vec<_>>(),
+        [5, 10, 15, 20, 25]
+    );
+    let (last, rest) = floors.split_last().unwrap();
+    let bosses = bosses_with_allowed_spawns(rest, |depth| match depth {
+        1..=5 => &["mine_remnant"],
+        6..=10 => &["mine_crystal"],
+        11..=15 => &["mine_twisted"],
+        16..=20 => &["mine_veinfused"],
+        _ => &["mine_predator"],
+    });
+    assert!(bosses.is_empty());
+    let alone: Vec<_> = last
+        .spawns
+        .iter()
+        .map(|s| (s.is_boss, s.monster_type.as_str()))
+        .collect();
+    assert_eq!(alone, [(true, "mine_foreman")]);
+    let carts: usize = floors
+        .iter()
+        .flat_map(|f| &f.props)
+        .filter(|p| p.kind == PropKind::MineRailCart)
+        .count();
+    assert!(carts > 0, "no rail carts");
+    assert_eq!(layout_hash(&floors), GOLDEN_BLACKVEIN_MINE_HASH);
+}
+
 // Updated for chest flank and front clearance.
 const GOLDEN_OLD_CRYPT_HASH: u64 = 0x216b_8cee_51ff_2b67;
 const GOLDEN_THIEVES_DEN_HASH: u64 = 0x1d9e_c735_df9d_e607;
 const GOLDEN_SHADOW_GUILD_HASH: u64 = 0x2e1f_1554_a751_5c10;
+const GOLDEN_BLACKVEIN_MINE_HASH: u64 = 0x0b0a_1ba4_a26e_ae61;
+
+/// The client's wasm build checks the same fixture (`dungeonLayouts.test.ts`),
+/// so any draw that differs between wasm32 and native fails one side.
+/// Regenerate with `UPDATE_LAYOUT_FIXTURE=1 cargo test -p onlinerpg-shared layouts_match`.
+#[test]
+fn layouts_match_the_shared_fixture() {
+    const PATH: &str = "src/dungeon/layout_hashes.fixture.json";
+    let actual: serde_json::Value = entrances()
+        .iter()
+        .map(|e| {
+            (
+                e.id.clone(),
+                layout_hash_hex(&generate_dungeon_for(&e.id)).into(),
+            )
+        })
+        .collect::<serde_json::Map<_, _>>()
+        .into();
+    if std::env::var_os("UPDATE_LAYOUT_FIXTURE").is_some() {
+        let text = serde_json::to_string_pretty(&actual).unwrap() + "\n";
+        std::fs::write(format!("{}/{PATH}", env!("CARGO_MANIFEST_DIR")), text).unwrap();
+    }
+    let expected: serde_json::Value =
+        serde_json::from_str(include_str!("layout_hashes.fixture.json")).unwrap();
+    assert_eq!(actual, expected, "{PATH} is stale; see this test's doc");
+}
+
+/// Mine floors never fall back to the single wrap room: plain floors are a
+/// corridor of chambers, and every locked floor but the last forks into three
+/// work rooms with the way down in exactly one.
+#[test]
+fn mine_floors_keep_their_shape_over_many_seeds() {
+    for seed in 0..200u64 {
+        let floors = super::gen::generate_dungeon_with(
+            seed,
+            Some(25),
+            BOSS_MONSTER_TYPE,
+            None,
+            "",
+            super::LayoutStyle::Mine,
+        );
+        assert_eq!(floors.len(), 25, "seed {seed}");
+        for (f, next) in floors.iter().zip(floors.iter().skip(1)) {
+            assert_eq!(next.up_shaft, f.down_shaft.unwrap(), "seed {seed}");
+        }
+        for f in &floors {
+            let at = format!("seed {seed} depth {}", f.depth);
+            for (i, a) in f.rooms.iter().enumerate() {
+                for b in &f.rooms[i + 1..] {
+                    assert!(
+                        !a.expanded(super::gen::mine::ROOM_GAP).intersects(b),
+                        "{at}: rooms touch"
+                    );
+                }
+            }
+            let n = f.rooms.len();
+            let fork = is_locked_depth(f.depth) && f.depth < 25;
+            if fork {
+                assert_eq!(n, 5, "{at}");
+                let down = f.down_shaft.unwrap();
+                let holders = f.rooms[2..]
+                    .iter()
+                    .filter(|r| r.contains(down.x, down.z))
+                    .count();
+                assert_eq!(holders, 1, "{at}");
+            } else {
+                assert!((4..=5).contains(&n), "{at}");
+            }
+            // Corridors never meet outside rooms: one piece per corridor.
+            let links = if fork { 4 } else { n - 1 };
+            assert_eq!(corridor_pieces(f), links, "{at}: corridors meet");
+            // A corridor through a room would open extra mouths in it.
+            let openings = super::doors::wall_openings(f);
+            for room in 0..n {
+                let corridors = match (fork, room) {
+                    (true, 1) => 4,
+                    (false, r) if r > 0 && r < n - 1 => 2,
+                    _ => 1,
+                };
+                let mouths = openings.iter().filter(|o| o.room == room).count();
+                assert!(mouths <= corridors, "{at}: room {room} has {mouths} mouths");
+            }
+            // Support posts stand in corridors with rock behind, in facing
+            // pairs, and none below floor 20.
+            let posts: Vec<_> = f
+                .props
+                .iter()
+                .filter(|p| p.kind == PropKind::MineTimberPost)
+                .collect();
+            assert_eq!(posts.len() % 2, 0, "{at}");
+            if f.depth > 20 {
+                assert!(posts.is_empty(), "{at}");
+            }
+            // Rail pieces lie only in corridors, on floors 6–15.
+            for r in f.props.iter().filter(|p| p.kind == PropKind::MineRail) {
+                assert!(
+                    super::gen::mine::RAIL_DEPTHS.contains(&f.depth),
+                    "{at}: rail"
+                );
+                for (x, z) in r.cells() {
+                    assert!(
+                        super::gen::cell_is_corridor(f, x, z),
+                        "{at}: rail off the corridor"
+                    );
+                }
+            }
+            // Each long enough run carries one cart on its rail, and the
+            // lane beside it stays open.
+            let runs = rail_runs(f);
+            let carts: Vec<_> = f
+                .props
+                .iter()
+                .filter(|p| p.kind == PropKind::MineRailCart)
+                .collect();
+            let long = runs
+                .iter()
+                .filter(|r| r.len() >= super::gen::mine::CART_RUN_MIN)
+                .count();
+            assert!(carts.len() <= long, "{at}: carts");
+            for c in carts {
+                for (x, z) in c.cells() {
+                    assert!(
+                        !f.spawns.iter().any(|s| (s.x, s.z) == (x, z)),
+                        "{at}: monster spawns inside a cart"
+                    );
+                }
+                let run = cart_rail_run(f, c).unwrap_or_else(|| panic!("{at}: cart off its rail"));
+                let (sx, sz) = if run.along_x { (0, 1) } else { (1, 0) };
+                for (x, z) in c.cells() {
+                    let open = [-1, 1].into_iter().any(|k| {
+                        let cell = (x + k * sx, z + k * sz);
+                        super::gen::cell_is_corridor(f, cell.0, cell.1)
+                            && !f
+                                .props
+                                .iter()
+                                .any(|p| p.kind.is_solid() && p.cells().any(|q| q == cell))
+                    });
+                    assert!(open, "{at}: cart blocks both lanes");
+                }
+            }
+            // Fork floors theme their work rooms: a tool store, an ore yard
+            // and a rest area without mine fixtures. Elsewhere each fixture
+            // keeps to its depth bands, all its cells within one room.
+            let fixture = |p: &&PropSpec| {
+                p.kind.is_solid()
+                    && !matches!(
+                        p.kind,
+                        PropKind::Barrel
+                            | PropKind::Crate
+                            | PropKind::Chest
+                            | PropKind::MineRailCart
+                    )
+            };
+            let in_room = |p: &PropSpec, rooms: &[Room]| {
+                rooms
+                    .iter()
+                    .any(|r| p.cells().all(|(x, z)| r.contains(x, z)))
+            };
+            if fork {
+                let mut themes: Vec<_> = f.rooms[2..]
+                    .iter()
+                    .map(|r| {
+                        let kinds: Vec<_> = f
+                            .props
+                            .iter()
+                            .filter(fixture)
+                            .filter(|p| r.contains(p.x, p.z))
+                            .map(|p| p.kind)
+                            .collect();
+                        if kinds.contains(&PropKind::MineToolRack) {
+                            "tools"
+                        } else if kinds.contains(&PropKind::MineOreHeap) {
+                            "ore"
+                        } else {
+                            assert!(kinds.is_empty(), "{at}: rest area {kinds:?}");
+                            "rest"
+                        }
+                    })
+                    .collect();
+                themes.sort();
+                assert_eq!(themes, ["ore", "rest", "tools"], "{at}");
+            }
+            for p in f.props.iter().filter(fixture) {
+                assert!(in_room(p, &f.rooms), "{at}: {:?} off a room", p.kind);
+                let banded = super::gen::mine::FIXTURES
+                    .iter()
+                    .any(|x| x.kind == p.kind && x.depths.contains(&f.depth));
+                assert!(
+                    banded || (fork && in_room(p, &f.rooms[2..])),
+                    "{at}: {:?} out of its depths",
+                    p.kind
+                );
+            }
+            // Tool racks back onto a north or east wall with both cells.
+            for r in f.props.iter().filter(|p| p.kind == PropKind::MineToolRack) {
+                let back = match r.rotation {
+                    0 => (0, -1),
+                    270 => (1, 0),
+                    y => panic!("{at}: rack yaw {y}"),
+                };
+                for (x, z) in r.cells() {
+                    assert!(
+                        !f.is_carved(x + back.0, z + back.1),
+                        "{at}: rack off the wall"
+                    );
+                }
+            }
+            for p in posts {
+                let (bx, bz) = match p.rotation {
+                    0 => (p.x, p.z - 1),
+                    180 => (p.x, p.z + 1),
+                    90 => (p.x - 1, p.z),
+                    270 => (p.x + 1, p.z),
+                    r => panic!("{at}: post yaw {r}"),
+                };
+                assert!(super::gen::cell_is_corridor(f, p.x, p.z), "{at}");
+                assert!(!f.is_carved(bx, bz), "{at}: post off the wall");
+            }
+        }
+        let last = floors.last().unwrap();
+        let (cx, cz) = last.chest.unwrap();
+        assert!(last.rooms.last().unwrap().contains(cx, cz), "seed {seed}");
+    }
+}
+
+/// Connected pieces of carved cells away from every room; corridors may
+/// meet only within `ISOLATION` cells of a room.
+fn corridor_pieces(f: &FloorLayout) -> usize {
+    let near = |x, z| {
+        f.rooms
+            .iter()
+            .any(|r| r.expanded(super::gen::mine::ISOLATION).contains(x, z))
+    };
+    let open = |x: i32, z: i32| f.is_carved(x, z) && !near(x, z);
+    let mut seen = vec![false; (GRID * GRID) as usize];
+    let mut pieces = 0;
+    for start in 0..GRID * GRID {
+        if seen[start as usize] || !open(start % GRID, start / GRID) {
+            continue;
+        }
+        pieces += 1;
+        let mut stack = vec![(start % GRID, start / GRID)];
+        seen[start as usize] = true;
+        while let Some((x, z)) = stack.pop() {
+            for (nx, nz) in DIRS.map(|(dx, dz)| (x + dx, z + dz)) {
+                if (0..GRID).contains(&nx) && (0..GRID).contains(&nz) && open(nx, nz) {
+                    let i = (nx + nz * GRID) as usize;
+                    if !seen[i] {
+                        seen[i] = true;
+                        stack.push((nx, nz));
+                    }
+                }
+            }
+        }
+    }
+    pieces
+}
 
 #[test]
 fn structure_invariants_many_seeds() {
@@ -705,13 +980,15 @@ fn interior_doors_seal_corridor_mouths_until_opened() {
             let doors = interior_doors(layout);
             total += doors.len();
             let base = floor_passability_cells(layout);
-            let sealed = floor_passability_cells_full(layout, &[], &closed_door_segs(layout, None));
+            let sealed =
+                floor_passability_cells_full(layout, &[], &closed_door_segs(layout, None), &[]);
             let all_open: std::collections::HashSet<u32> =
                 doors.iter().map(|d| d.door_id).collect();
             let reopened = floor_passability_cells_full(
                 layout,
                 &[],
                 &closed_door_segs(layout, Some(&all_open)),
+                &[],
             );
             assert_eq!(reopened, base, "seed {seed} depth {}", layout.depth);
 
@@ -990,7 +1267,7 @@ fn props_are_well_placed() {
                     let back = gen::chest_back_delta(layout, p.x, p.z);
                     assert_eq!(
                         p.rotation,
-                        gen::chest_yaw(back),
+                        gen::wall_yaw(back),
                         "seed {seed}: chest rotation is not its back-wall yaw"
                     );
                     // Loot spilled from the opening must not roll down stairs.
@@ -1419,4 +1696,30 @@ fn start_floor_ignores_other_depths_shafts_below() {
         }
     }
     assert!(saw_overlap, "no cross-depth shaft overlap in any test seed");
+}
+
+/// A monster idling on its own spawn cell in a cart's path is struck, not
+/// treated as the empty spawn the cart otherwise stops at.
+#[test]
+fn a_rail_cart_strikes_a_monster_on_its_spawn() {
+    let floors = generate_dungeon_for("blackvein_mine");
+    let (f, id, cart, spawn) = floors
+        .iter()
+        .find_map(|f| {
+            f.props.iter().enumerate().find_map(|(i, c)| {
+                let run = cart_rail_run(f, c).filter(|_| c.kind == PropKind::MineRailCart)?;
+                let along = if c.along_x() { c.x } else { c.z };
+                (along + 2..run.end).find_map(|a| {
+                    let cell = run.cell(a);
+                    f.spawns
+                        .iter()
+                        .any(|s| (s.x, s.z) == cell)
+                        .then_some((f, i as u32, c, cell))
+                })
+            })
+        })
+        .expect("a spawn ahead of some cart");
+    let pushed =
+        cart_push_target(f, id, 0, -1, &[], &[], |c| c == spawn).expect("the push does something");
+    assert_eq!(pushed.struck, Some(spawn), "{cart:?}");
 }

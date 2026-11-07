@@ -39,6 +39,9 @@ pub struct DebuffDef {
     /// Flat change to the player's attack bonus on the hit roll (doc/COMBAT.md).
     #[serde(rename = "hitMod", default)]
     pub hit_mod: i32,
+    /// Turns the player to stone while it lasts (`Player.petrified`).
+    #[serde(default)]
+    pub petrifies: bool,
 }
 
 static DEFS: LazyLock<HashMap<String, DebuffDef>> = LazyLock::new(|| {

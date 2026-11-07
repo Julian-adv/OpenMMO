@@ -29,6 +29,7 @@ import {
   rubble,
   type Rock,
 } from './dormant-wake'
+import { crystalShardMaterial } from './crystal-glow'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type N = any
@@ -203,8 +204,10 @@ export class GroundEruptionAssets {
   readonly rockMaterial = basalt()
   readonly dustMaterial = dustMaterial()
   readonly sparkMaterial = sparkMaterial()
+  readonly crystalMaterial = crystalShardMaterial()
 
   dispose() {
+    this.crystalMaterial.dispose()
     this.markGeometry.dispose()
     this.shardGeometry.dispose()
     this.rockGeometry.dispose()
@@ -223,6 +226,7 @@ export class GroundEruptionEffect {
   private cool = uniform(0)
   private heat = uniform(0)
   private flood = uniform(0)
+  private crystal = uniform(0)
   private markMaterial = new MeshBasicNodeMaterial()
   private mark: THREE.Mesh
   private shardMaterial = basalt(this.heat)
@@ -238,13 +242,14 @@ export class GroundEruptionEffect {
   private sparks: Spark[] = []
   private impactMs = 1
   private lingerMs = 0
+  private sparkless = false
   private dummy = new THREE.Object3D()
   private roll = new THREE.Quaternion()
   private forward = new THREE.Vector3(0, 0, 1)
   private point = new THREE.Vector3()
   private tint = new THREE.Color()
 
-  constructor(assets: GroundEruptionAssets) {
+  constructor(private assets: GroundEruptionAssets) {
     const p = uv().sub(0.5).mul(2)
     const r = p.length()
     const cells = mx_worley_noise_vec2(vec3(p.mul(2.4), 7.1), 0.9)
@@ -276,7 +281,11 @@ export class GroundEruptionEffect {
     const glow = max(this.charge.mul(this.charge), this.heat)
       .mul(flicker)
       .mul(float(1).sub(this.cool))
-    const hot = mix(color('#b81d00'), color('#ffbe5c'), molten.mul(glow))
+    const hot = mix(
+      mix(color('#b81d00'), color('#ffbe5c'), molten.mul(glow)),
+      mix(color('#1d34c8'), color('#a8d4ff'), molten.mul(glow)),
+      this.crystal
+    )
     this.markMaterial.transparent = true
     this.markMaterial.depthWrite = false
     this.markMaterial.toneMapped = false
@@ -330,8 +339,20 @@ export class GroundEruptionEffect {
     this.clear()
   }
 
-  start(impactMs: number, radius: number, seed: number, lingerMs = 0) {
+  /** `crystal` raises glowing black-violet crystal instead of basalt. */
+  start(
+    impactMs: number,
+    radius: number,
+    seed: number,
+    lingerMs = 0,
+    crystal = false
+  ) {
     const rand = createRng(seed)
+    this.crystal.value = crystal ? 1 : 0
+    this.shardMesh.material = crystal
+      ? this.assets.crystalMaterial
+      : this.shardMaterial
+    this.sparkless = crystal
     this.impactMs = Math.max(1, impactMs)
     this.lingerMs = lingerMs
     this.mark.scale.set(radius, radius, 1)
@@ -503,6 +524,7 @@ export class GroundEruptionEffect {
     // Past the tail only a lingering mark is left to animate.
     const particles = since < TAIL_MS
     for (const mesh of this.particleMeshes) mesh.visible = particles
+    this.sparkMesh.visible &&= !this.sparkless
     if (!particles) return true
     this.updateSpikes(since)
     this.updateRocks(elapsedMs, since)

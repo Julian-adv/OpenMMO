@@ -266,6 +266,7 @@ impl SharedState {
             | ServerMessage::GrillStarted
             // Cosmetic: only the browser's footprint trail reads it.
             | ServerMessage::PlayerWetToggled { .. }
+            | ServerMessage::PlayerPetrifiedToggled { .. }
             | ServerMessage::PlayerTradeRequestResult { .. }
             | ServerMessage::PlayerTradeUpdate { .. } => EventUrgency::Noise,
             ServerMessage::PlayerTradeRequested { .. }
@@ -619,13 +620,21 @@ impl SharedState {
                 active,
                 broken,
                 opened,
+                offset,
             } => {
-                self.world_cache.write().unwrap().set_dungeon_prop(
+                let mut cache = self.world_cache.write().unwrap();
+                cache.set_dungeon_prop(
                     entrance_id,
                     *depth,
                     *prop_id,
                     *active && *broken,
                     *active && *opened,
+                );
+                cache.set_dungeon_cart(
+                    entrance_id,
+                    *depth,
+                    *prop_id,
+                    if *active { *offset } else { 0 },
                 );
             }
             ServerMessage::DungeonDoorToggled {
@@ -705,6 +714,20 @@ impl SharedState {
                     entrance_id,
                     *depth,
                     *prop_id,
+                );
+            }
+            ServerMessage::DungeonCartPushed {
+                ref entrance_id,
+                depth,
+                prop_id,
+                offset,
+                ..
+            } => {
+                self.world_cache.write().unwrap().set_dungeon_cart(
+                    entrance_id,
+                    *depth,
+                    *prop_id,
+                    *offset,
                 );
             }
             ServerMessage::BuybackUpdated {
@@ -860,6 +883,17 @@ impl SharedState {
                 }
                 if let Some(me) = self.self_player.as_mut().filter(|me| me.id == *player_id) {
                     me.mount = *mount;
+                }
+            }
+            ServerMessage::PlayerPetrifiedToggled {
+                player_id,
+                petrified,
+            } => {
+                if let Some(p) = self.nearby_players.get_mut(player_id) {
+                    p.petrified = *petrified;
+                }
+                if let Some(me) = self.self_player.as_mut().filter(|me| me.id == *player_id) {
+                    me.petrified = *petrified;
                 }
             }
             ServerMessage::PlayerTitleChanged { player_id, title } => {

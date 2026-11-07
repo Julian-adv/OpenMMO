@@ -10,6 +10,8 @@ import {
   showOperatorNotice,
 } from '../stores/announcementStore'
 import { translate, type MessageKey } from '../i18n'
+import { endMining, noteMiningSwing, setMining } from '../stores/miningStore'
+import { showPropText } from '../effects/prop-text-queue'
 import { isCoinPileJackpot } from './coinPileJackpot'
 import {
   handleAltarStatus,
@@ -87,13 +89,18 @@ import {
   playBattleHymn,
   stopBattleHymn,
 } from '../managers/sfxManager'
-import { FISHING_CAST_SWING_DELAY_MS } from '../data/combatTiming'
+import {
+  FISHING_CAST_SWING_DELAY_MS,
+  MINING_SWING_IMPACT_MS,
+  MINING_SWING_MS,
+} from '../data/combatTiming'
 import { monsterManager } from '../managers/monsterManager'
 import { housingManager } from '../managers/housingManager'
 import { bridgeManager } from '../managers/bridgeManager'
 import { objectManager } from '../managers/objectManager'
 import { groundItemManager } from '../managers/groundItemManager'
-import { dungeonManager } from '../managers/dungeonManager'
+import { cartRollSpeed, dungeonManager } from '../managers/dungeonManager'
+import { recordCartPush } from '../stores/cartPushStore'
 import { queueXpArrival, releaseXpArrival } from '../managers/xpArrival'
 import {
   setInventory,
@@ -334,6 +341,7 @@ function toRemotePlayer(sp: ServerPlayer): RemotePlayer {
     radianceOn: sp.radiance_on ?? false,
     raging: sp.raging ?? false,
     wet: sp.wet ?? false,
+    petrified: sp.petrified ?? false,
     title: sp.title ?? null,
     mainHand: sp.main_hand ?? null,
     armor: sp.armor,
@@ -492,6 +500,7 @@ export type MessageEvents = {
   kicked: NetworkEvent<(reason: string) => void>
   playerRespawned: NetworkEvent<(playerId: number) => void>
   interactionRejected: NetworkEvent<(reason: string) => void>
+  miningEnded: NetworkEvent<(swingLeftMs: number) => void>
   interactionChanged: NetworkEvent<(interaction: PlayerInteraction) => void>
   movePath: NetworkEvent<(path: MovePath) => void>
   moveProgress: NetworkEvent<(progress: MoveProgress) => void>
@@ -1423,6 +1432,14 @@ export function handleServerMessage(
       )
       break
 
+    case 'MonsterHealthUpdate':
+      monsterManager.handleMonsterHealth(
+        data.monster_id,
+        data.health,
+        data.max_health
+      )
+      break
+
     case 'PlayerAttacked': {
       const gameState = get(gameStore)
       const isLocalAttacker = gameState.currentPlayer?.id === data.player_id
@@ -1821,6 +1838,11 @@ export function handleServerMessage(
       break
     }
 
+    case 'PlayerPetrifiedToggled': {
+      updatePlayer(data.player_id, { petrified: data.petrified })
+      break
+    }
+
     case 'PlayerTitleChanged': {
       updatePlayer(data.player_id, { title: data.title ?? null })
       break
@@ -2125,6 +2147,7 @@ export function handleServerMessage(
       // machine codes mapped here (same pattern as PlayerAttackRejected).
       const reasonText: Record<string, string> = {
         occupied: translate('system.occupied'),
+        no_pickaxe: translate('system.noPickaxe'),
       }
       addChatMessage({
         text: reasonText[data.reason] ?? data.reason,
@@ -2173,7 +2196,9 @@ export function handleServerMessage(
         data.depth,
         data.prop_id
       )
-      if (isNew && !selfBreak) playPropSound('break')
+      // Mined ore is heard through the pickaxe swings, not a crate shattering.
+      const mined = dungeonManager.isMinableProp(data.depth, data.prop_id)
+      if (isNew && !selfBreak && !mined) playPropSound('break')
       break
     }
 
@@ -2212,9 +2237,36 @@ export function handleServerMessage(
         data.prop_id,
         data.active,
         data.broken,
-        data.opened
+        data.opened,
+        data.offset
       )
       break
+
+    case 'CartStruckPlayer':
+      reactToMonsterBlow(data.player_id, true, data.damage, data.health, 0)
+      break
+
+    case 'DungeonCartPushed': {
+      recordCartPush(data.pusher_id)
+      const rolled = Math.abs(
+        data.offset - dungeonManager.cartOffset(data.depth, data.prop_id)
+      )
+      dungeonManager.setCartOffset(
+        data.entrance_id,
+        data.depth,
+        data.prop_id,
+        data.offset
+      )
+      const impactMs = (rolled / cartRollSpeed()) * 1000
+      if (data.struck_monster)
+        monsterManager.handleStruck(
+          data.struck_monster,
+          data.pusher_id,
+          data.damage,
+          impactMs
+        )
+      break
+    }
 
     case 'DungeonDiscoveries':
       discoveredDungeonIds.set(new Set(data.entrance_ids as string[]))
@@ -2887,6 +2939,35 @@ export function handleServerMessage(
       grilling.set(true)
       break
 
+    // The miner swings on their own client; others see swings until it ends.
+    case 'MiningStarted':
+      setMining(data.player_id, true)
+      if (!isSelfPlayer(data.player_id)) startRemoteMining(data.player_id)
+      break
+
+    case 'MiningEnded': {
+      const swingLeftMs = endMining(data.player_id)
+      if (isSelfPlayer(data.player_id)) events.miningEnded.emit(swingLeftMs)
+      else stopRemoteMining(data.player_id)
+      const at =
+        data.found &&
+        dungeonManager.propAnchor(
+          get(currentDungeonDepth),
+          data.prop_id,
+          MINED_TEXT_HEIGHT
+        )
+      if (data.found && at) {
+        const [itemId, quantity] = data.found
+        const name = itemDisplayName(itemId)
+        showPropText(
+          quantity > 1 ? `+${name} ×${quantity}` : `+${name}`,
+          MINED_TEXT_COLOR,
+          at
+        )
+      }
+      break
+    }
+
     case 'GrillEnded':
       grilling.set(false)
       if (data.grilled_item_def_id == null) {
@@ -2984,8 +3065,38 @@ export function markMonsterSkillSpots(
       impactMs: marks.impactMs,
       lingerMs: marks.lingerMs,
       sound: marks.sound,
+      crystal: marks.crystal,
     })
   }
+}
+
+/** Mined ore floats up from this far over the heap's floor, in this color. */
+const MINED_TEXT_HEIGHT = 1.2
+const MINED_TEXT_COLOR = '#8fd3ff'
+
+const remoteMiningSwings = new Map<number, ReturnType<typeof setInterval>>()
+
+/** Swing until `MiningEnded`, or until the miner drops out of view and that
+ *  message can no longer reach us. */
+function startRemoteMining(playerId: number) {
+  stopRemoteMining(playerId)
+  const swing = () => {
+    if (remotePlayerManager.players.has(playerId)) {
+      remotePlayerManager.handleAttack(playerId)
+      noteMiningSwing(playerId)
+      playPropSound('pickaxe', MINING_SWING_IMPACT_MS)
+      return
+    }
+    stopRemoteMining(playerId)
+    setMining(playerId, false)
+  }
+  swing()
+  remoteMiningSwings.set(playerId, setInterval(swing, MINING_SWING_MS))
+}
+
+function stopRemoteMining(playerId: number) {
+  clearInterval(remoteMiningSwings.get(playerId))
+  remoteMiningSwings.delete(playerId)
 }
 
 /** Healing Prayer seen nearby; the HP itself arrives in `PlayerHealthUpdate`. */
@@ -2999,7 +3110,7 @@ function handleHealingPrayed(
   const state = get(gameStore)
   const selfId = state.currentPlayer?.id
   if (monsterId) {
-    monsterManager.handlePrayerStruck(monsterId, casterId, amount)
+    monsterManager.handleStruck(monsterId, casterId, amount)
     if (casterId === selfId)
       addCombatMessage({
         text: translate('combat.prayerSeared', { damage: amount }),

@@ -159,7 +159,12 @@ export class DamageTextEmitter {
     this.slots.length = 0
   }
 
-  private spawn(text: string, color: string, yOffset: number) {
+  /** Whether any of its labels is still on screen. */
+  get active(): boolean {
+    return this.slots.length > 0
+  }
+
+  spawn(text: string, color: string, yOffset: number) {
     const slot = damageTextPool.acquire(this)
     const { ctx } = slot
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H)

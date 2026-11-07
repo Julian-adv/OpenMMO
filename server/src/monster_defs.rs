@@ -58,6 +58,9 @@ pub struct MonsterDefinition {
     pub ranged_attack_range: f32,
     #[serde(rename = "staggerImmune", default)]
     pub stagger_immune: bool,
+    /// How long a player must stay in sight before it gives chase.
+    #[serde(rename = "reactionMs", default)]
+    pub reaction_ms: f32,
     #[serde(default)]
     pub boss: bool,
     /// Healing Prayer harms it instead of healing.
@@ -112,6 +115,10 @@ pub struct MonsterDefinition {
     /// Solid body, csv `footprint` "halfWidth|front|back" meters; see `monster_body`.
     #[serde(rename = "footprint", default, deserialize_with = "parse_footprint")]
     pub body: Option<BodyFootprint>,
+    /// csv `bodyRadius` m: players reach the monster this far short of its
+    /// centre, so a long body is struck from outside it.
+    #[serde(rename = "bodyRadius", default)]
+    pub body_radius: f32,
 }
 
 fn parse_footprint<'de, D: serde::Deserializer<'de>>(
@@ -182,6 +189,15 @@ impl MonsterDefs {
         for (id, def) in &defs {
             if let Some(debuff) = &def.hit_debuff {
                 crate::debuff_defs::assert_debuff_exists(debuff, &format!("monster '{id}'"));
+            }
+            let skills = onlinerpg_shared::monster_ai::skills_for(id);
+            for (skill, _) in skills.into_iter().flat_map(|set| set.skills) {
+                if let Some(debuff) = skill.debuff {
+                    crate::debuff_defs::assert_debuff_exists(
+                        debuff,
+                        &format!("monster '{id}' skill"),
+                    );
+                }
             }
             for (item_id, _) in def.drop_entries() {
                 assert!(

@@ -76,6 +76,7 @@ pub enum WeaponType {
     Bow,
     Crossbow,
     Torch,
+    Pickaxe,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -1177,6 +1178,7 @@ mod tests {
             ("bow", WeaponType::Bow),
             ("crossbow", WeaponType::Crossbow),
             ("torch", WeaponType::Torch),
+            ("pickaxe", WeaponType::Pickaxe),
         ];
 
         for (wire, expected) in cases {

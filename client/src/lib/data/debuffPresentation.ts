@@ -84,6 +84,13 @@ const PRESENTATION: Record<
     applied: 'The floor keeps moving. Walking is going to be an adventure.',
     expired: 'You sober up, more or less.',
   },
+  petrified: {
+    labelKey: 'debuff.petrified.name',
+    noteKey: 'debuff.petrified.note',
+    icon: '🪨',
+    applied: 'Crystal creeps over you and you turn to stone!',
+    expired: 'The stone cracks away and you can move again.',
+  },
 }
 
 export function debuffPresentation(

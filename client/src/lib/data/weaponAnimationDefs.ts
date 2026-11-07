@@ -9,7 +9,6 @@ export interface WeaponAnimationDefinition {
   run?: string
   attack?: string
   attackImpactMs?: number
-  gripRotationRadians?: string
   offHandGripReach?: number
 }
 

@@ -384,6 +384,18 @@ pub fn monster_body_engage_point(monster_id: &str, px: f32, pz: f32) -> Option<V
 }
 
 #[wasm_bindgen]
+pub fn monster_radial_point(x: f32, z: f32, radius: f32, px: f32, pz: f32) -> Vec<f32> {
+    let at = Position { x, y: 0.0, z };
+    let toward = Position {
+        x: px,
+        y: 0.0,
+        z: pz,
+    };
+    let p = crate::monster_body::radial_point(at, radius, &toward);
+    vec![p.x, p.z]
+}
+
+#[wasm_bindgen]
 pub fn passability_remove_furniture(key: &str) {
     with_cache_mut(|cache| furniture::remove_passability(cache, key));
 }
@@ -695,6 +707,13 @@ pub fn dungeon_layout(entrance_id: &str) -> Result<JsValue, JsError> {
     to_js(&*dungeon_layouts(entrance_id))
 }
 
+/// Fingerprint of a dungeon's generated layout (`dungeon::layout_hash_hex`),
+/// for checking the wasm build against the native one.
+#[wasm_bindgen]
+pub fn dungeon_layout_hash(entrance_id: &str) -> String {
+    crate::dungeon::layout_hash_hex(&dungeon_layouts(entrance_id))
+}
+
 /// Interior-door specs for one floor: wall side, opening span, wall line and
 /// door id (see `dungeon::doors`).
 #[wasm_bindgen]
@@ -747,6 +766,7 @@ pub fn dungeon_constants() -> Result<JsValue, JsError> {
         landing_cells: f32,
         max_depth: u8,
         path_max_nodes: u32,
+        cart_roll_speed: f32,
     }
     to_js(&DungeonConstants {
         grid: crate::dungeon::GRID,
@@ -758,6 +778,7 @@ pub fn dungeon_constants() -> Result<JsValue, JsError> {
         landing_cells: crate::dungeon::LANDING_CELLS,
         max_depth: crate::dungeon::MAX_FLOORS,
         path_max_nodes: crate::dungeon::DUNGEON_PATH_MAX_NODES as u32,
+        cart_roll_speed: crate::dungeon::CART_ROLL_SPEED,
     })
 }
 
@@ -846,12 +867,29 @@ pub fn dungeon_shaft_run_pos(entrance_id: &str, depth: u8, down: bool, x: f32, z
 /// segments are derived from the layout, same as the server). Both the
 /// broken-prop set and the open-door set route the full current state through
 /// here (on-entry snapshots and live toggles alike), so the two never clobber
-/// each other.
+/// each other. Pushed rail carts come as parallel `cart_ids`/`cart_offsets`.
 #[wasm_bindgen]
-pub fn dungeon_rebuild_floor(entrance_id: &str, depth: u8, broken: &[u32], open_door_ids: &[u32]) {
+pub fn dungeon_rebuild_floor(
+    entrance_id: &str,
+    depth: u8,
+    broken: &[u32],
+    open_door_ids: &[u32],
+    cart_ids: &[u32],
+    cart_offsets: &[i32],
+) {
     let open: HashSet<u32> = open_door_ids.iter().copied().collect();
-    let cells =
-        crate::dungeon::floor_cells(&dungeon_layouts(entrance_id), depth, broken, Some(&open));
+    let carts: Vec<(u32, i32)> = cart_ids
+        .iter()
+        .copied()
+        .zip(cart_offsets.iter().copied())
+        .collect();
+    let cells = crate::dungeon::floor_cells(
+        &dungeon_layouts(entrance_id),
+        depth,
+        broken,
+        Some(&open),
+        &carts,
+    );
     if let Some(cells) = cells {
         with_cache_mut(|c| crate::dungeon::set_floor_cells(c, entrance_id, depth, cells));
     }

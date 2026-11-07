@@ -112,6 +112,10 @@ impl HungerData {
         self.active(now).map(|d| d.def.armor_weight_mult).product()
     }
 
+    fn petrified(&self) -> bool {
+        self.debuffs.iter().any(|d| d.def.petrifies)
+    }
+
     fn carries(&self, id: &str, now: Instant) -> bool {
         self.active(now).any(|d| d.def.id == id)
     }
@@ -194,6 +198,9 @@ impl super::GameState {
         if def.id == WET_DEBUFF_ID {
             self.set_player_wet(player_id, true).await;
         }
+        if def.petrifies {
+            self.turn_to_stone(player_id).await;
+        }
         true
     }
 
@@ -222,7 +229,7 @@ impl super::GameState {
     /// Death drops every debuff, and a Battle Hymn with them.
     pub(crate) async fn clear_debuffs(&self, player_id: &PlayerId) {
         let now = Instant::now();
-        let (msgs, was_wet, hymn) = {
+        let (msgs, was_wet, was_stone, hymn) = {
             let mut hunger = self.hunger.write().await;
             let Some(data) = hunger.get_mut(player_id) else {
                 return;
@@ -234,8 +241,9 @@ impl super::GameState {
                 return;
             }
             let was_wet = data.carries(WET_DEBUFF_ID, now);
+            let was_stone = data.petrified();
             data.debuffs.clear();
-            (data.status_msgs(now), was_wet, hymn)
+            (data.status_msgs(now), was_wet, was_stone, hymn)
         };
         self.wake_player_attack(player_id).await;
         for msg in msgs {
@@ -246,6 +254,9 @@ impl super::GameState {
         }
         if was_wet {
             self.set_player_wet(player_id, false).await;
+        }
+        if was_stone {
+            self.set_player_petrified(player_id, false).await;
         }
     }
 
@@ -275,6 +286,7 @@ impl super::GameState {
         let mut damage: Vec<(PlayerId, u32, String)> = Vec::new();
         let mut updates: Vec<(PlayerId, [ServerMessage; 2])> = Vec::new();
         let mut dried: Vec<PlayerId> = Vec::new();
+        let mut thawed: Vec<PlayerId> = Vec::new();
         let mut unsung: Vec<PlayerId> = Vec::new();
         {
             let mut hunger = self.hunger.write().await;
@@ -296,6 +308,13 @@ impl super::GameState {
                         .any(|d| d.def.id == WET_DEBUFF_ID && d.until <= now)
                     {
                         dried.push(*pid);
+                    }
+                    if data
+                        .debuffs
+                        .iter()
+                        .any(|d| d.def.petrifies && d.until <= now)
+                    {
+                        thawed.push(*pid);
                     }
                     let before = data.debuffs.len();
                     data.debuffs.retain(|d| d.until > now);
@@ -325,6 +344,9 @@ impl super::GameState {
             self.send_buff_update(&pid).await;
         }
         self.clear_wet_flags(dried).await;
+        for pid in thawed {
+            self.set_player_petrified(&pid, false).await;
+        }
         if !damage.is_empty() {
             self.apply_debuff_damage(damage).await;
         }
@@ -406,7 +428,7 @@ impl super::GameState {
     async fn set_player_wet(&self, player_id: &PlayerId, wet: bool) {
         let changed = {
             let mut players = self.players.write().await;
-            Self::flip_wet(&mut players, player_id, wet)
+            Self::flip_flag(&mut players, player_id, |p| &mut p.wet, wet)
         };
         if let Some((position, floor_level)) = changed {
             self.announce_wet(player_id, position, floor_level, wet)
@@ -423,7 +445,12 @@ impl super::GameState {
             let mut players = self.players.write().await;
             player_ids
                 .iter()
-                .filter_map(|pid| Some((*pid, Self::flip_wet(&mut players, pid, false)?)))
+                .filter_map(|pid| {
+                    Some((
+                        *pid,
+                        Self::flip_flag(&mut players, pid, |p| &mut p.wet, false)?,
+                    ))
+                })
                 .collect()
         };
         for (pid, (position, floor_level)) in flipped {
@@ -431,15 +458,16 @@ impl super::GameState {
         }
     }
 
-    /// Set the broadcast flag; the position to announce from when it moved.
-    fn flip_wet(
+    /// Set a broadcast flag; the position to announce from when it moved.
+    fn flip_flag(
         players: &mut std::collections::HashMap<PlayerId, onlinerpg_shared::Player>,
         player_id: &PlayerId,
-        wet: bool,
+        flag: fn(&mut onlinerpg_shared::Player) -> &mut bool,
+        value: bool,
     ) -> Option<(onlinerpg_shared::Position, i8)> {
         let player = players.get_mut(player_id)?;
-        (player.wet != wet).then(|| {
-            player.wet = wet;
+        (*flag(player) != value).then(|| {
+            *flag(player) = value;
             (player.position, player.floor_level)
         })
     }
@@ -463,6 +491,61 @@ impl super::GameState {
             Some(player_id),
         )
         .await;
+    }
+
+    /// A blow broke the player's stone: drop it before the blow lands.
+    pub(crate) async fn shatter_stone(&self, player_id: &PlayerId) {
+        let now = Instant::now();
+        let msgs = {
+            let mut hunger = self.hunger.write().await;
+            let Some(data) = hunger.get_mut(player_id) else {
+                return;
+            };
+            data.debuffs.retain(|d| !d.def.petrifies);
+            data.status_msgs(now)
+        };
+        for msg in msgs {
+            self.send_direct_message(player_id, msg).await;
+        }
+        self.set_player_petrified(player_id, false).await;
+    }
+
+    pub(crate) async fn is_petrified(&self, player_id: &PlayerId) -> bool {
+        self.players
+            .read()
+            .await
+            .get(player_id)
+            .is_some_and(|p| p.petrified)
+    }
+
+    /// Stop whatever the player was doing, then set the stone flag.
+    async fn turn_to_stone(&self, player_id: &PlayerId) {
+        self.stop_player_attack(player_id).await;
+        self.stop_bed_rest(player_id).await;
+        self.clear_player_movement(player_id, "petrified").await;
+        self.cancel_concentration_if_active(player_id).await;
+        self.set_player_petrified(player_id, true).await;
+    }
+
+    /// Mirror `petrifies` onto the broadcast `Player`; unlike `wet` the owner
+    /// hears it too, since it gates their own input.
+    async fn set_player_petrified(&self, player_id: &PlayerId, petrified: bool) {
+        let changed = {
+            let mut players = self.players.write().await;
+            Self::flip_flag(&mut players, player_id, |p| &mut p.petrified, petrified)
+        };
+        if let Some((position, floor_level)) = changed {
+            self.publish_nearby(
+                &position,
+                floor_level,
+                ServerMessage::PlayerPetrifiedToggled {
+                    player_id: *player_id,
+                    petrified,
+                },
+                None,
+            )
+            .await;
+        }
     }
 
     /// Rain feeds `wet` and snow feeds `cold`, each through its own exposure.
@@ -606,7 +689,9 @@ impl super::GameState {
         }
     }
 
-    async fn apply_debuff_damage(&self, damage: Vec<(PlayerId, u32, String)>) {
+    /// Damage outside a monster's blow (debuffs, a rolling cart); `cause`
+    /// names it in the death log.
+    pub(super) async fn apply_debuff_damage(&self, damage: Vec<(PlayerId, u32, String)>) {
         struct Hit {
             pid: PlayerId,
             cause: String,

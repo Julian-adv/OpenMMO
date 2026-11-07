@@ -1,8 +1,9 @@
-id,name,x,y,z,chestDrops,floors,boss,chestTier,entranceDir,keyPrefix,spawnGroup,chestRolls
-old_crypt,Old Crypt,-1450,0.7,4720,leather_helmet;goblin_sword,5,goblin_boss,1,,crypt_key,,
-orc_warrens,Orc Warrens,-1616,1.05,4918,leather_armor;iron_sword,10,orc_boss,2,s,orc_key,,
-ogre_stronghold,Ogre Stronghold,-1785.2,1.4,5072.3,chain_mail;steel_longsword,15,ogre_boss,3,s,ogre_key,,
-skeleton_crypt,Skeleton Crypt,-1064,0.95,4248,breastplate;great_sword,20,skeleton_knight,4,w,skeleton_key,skeleton,
-sundered_bastion,Sundered Bastion,-1950,1.1,5456,,25,barkan,5,s,bastion_key,bastion,rune_blade:0.2;earth_amulet:0.1
-thieves_den,Thieves' Den,-862,1.2,3822,breastplate;cutthroat_dirk,20,thief_king,4,w,den_key,den,
-shadow_guild,Shadow Guild,-2384,1.05,5962,,25,shadow_master,5,s,guild_key,guild,shadowfang:0.2
+id,name,x,y,z,chestDrops,floors,boss,chestTier,entranceDir,keyPrefix,spawnGroup,chestRolls,layoutStyle
+old_crypt,Old Crypt,-1450,0.7,4720,leather_helmet;goblin_sword,5,goblin_boss,1,,crypt_key,,,
+orc_warrens,Orc Warrens,-1616,1.05,4918,leather_armor;iron_sword,10,orc_boss,2,s,orc_key,,,
+ogre_stronghold,Ogre Stronghold,-1785.2,1.4,5072.3,chain_mail;steel_longsword,15,ogre_boss,3,s,ogre_key,,,
+skeleton_crypt,Skeleton Crypt,-1064,0.95,4248,breastplate;great_sword,20,skeleton_knight,4,w,skeleton_key,skeleton,,
+sundered_bastion,Sundered Bastion,-1950,1.1,5456,,25,barkan,5,s,bastion_key,bastion,rune_blade:0.2;earth_amulet:0.1,
+thieves_den,Thieves' Den,-862,1.2,3822,breastplate;cutthroat_dirk,20,thief_king,4,w,den_key,den,,
+shadow_guild,Shadow Guild,-2384,1.05,5962,,25,shadow_master,5,s,guild_key,guild,shadowfang:0.2,
+blackvein_mine,Blackvein Mine,-1884,1.2,6360,,25,mine_foreman,5,w,mine_key,mine,,mine

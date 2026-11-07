@@ -1,5 +1,9 @@
 <script lang="ts">
   import { setupPointShadow } from '../../utils/pointShadow'
+  import {
+    CRYSTAL_GLOW_SPEED,
+    crystalGlowPhase,
+  } from '../../effects/crystal-glow'
   import { T } from '@threlte/core'
   import * as THREE from 'three'
   import { get } from 'svelte/store'
@@ -113,6 +117,8 @@
      *  world-positions (empty when not underground). Pulled fresh each frame —
      *  the array is swapped on floor rebuild, so it must not be cached. */
     wallTorchPositions?: () => THREE.Vector3[]
+    /** Per-frame provider of the dungeon floor's crystal glow positions. */
+    crystalGlowPositions?: () => THREE.Vector3[]
     /** World positions of burning hearth flames (placed furniture). */
     hearthFirePositions?: () => THREE.Vector3[]
     /** Flame world-positions of wall torches placed in houses. */
@@ -155,6 +161,7 @@
     torchLightCastsShadow = true,
     torchShadowMapSize = TORCH_SHADOW_MAP_SIZE,
     wallTorchPositions,
+    crystalGlowPositions,
     hearthFirePositions,
     houseTorchPositions,
   }: Props = $props()
@@ -362,6 +369,19 @@
   const _wallTorchRanking: { idx: number; dist: number }[] = []
   let wallTorchPoolIdle = false
 
+  // Crystal glow pool: shadowless cold-blue lights on the nearest crystal
+  // clusters, always mounted like the wall-torch pool.
+  const CRYSTAL_GLOW_POOL_SIZE = 2
+  const CRYSTAL_GLOW_INTENSITY = 6
+  const CRYSTAL_GLOW_DISTANCE = 7
+  const CRYSTAL_GLOW_RANGE_SQ = 12 * 12
+  const crystalGlowSlots = Array.from({ length: CRYSTAL_GLOW_POOL_SIZE })
+  let crystalGlowLights = $state<(THREE.PointLight | undefined)[]>([])
+  const _crystalRanking: { idx: number; dist: number }[] = []
+  let crystalGlowTime = 0
+  let crystalGlowIdle = false
+  const NO_POSITIONS: THREE.Vector3[] = []
+
   // The bearer's y already resolves house/dungeon floors, so don't resample terrain
   function setTorchTargetFromPose(
     x: number,
@@ -540,20 +560,12 @@
     if (wallTorchLights.length === 0) return
     if (wallPositions.length === 0 && wallTorchPoolIdle) return
     wallTorchPoolIdle = wallPositions.length === 0
-    const playerPos = currentPlayer?.position
-    _wallTorchRanking.length = 0
-    if (playerPos) {
-      for (let i = 0; i < wallPositions.length; i++) {
-        if (i === occupiedIdx) continue
-        const w = wallPositions[i]
-        const dx = w.x - playerPos.x
-        const dz = w.z - playerPos.z
-        const dist = dx * dx + dz * dz
-        if (dist <= WALL_TORCH_POOL_RANGE_SQ)
-          _wallTorchRanking.push({ idx: i, dist })
-      }
-      _wallTorchRanking.sort((a, b) => a.dist - b.dist)
-    }
+    rankNearest(
+      wallPositions,
+      WALL_TORCH_POOL_RANGE_SQ,
+      _wallTorchRanking,
+      occupiedIdx
+    )
     for (let slot = 0; slot < wallTorchLights.length; slot++) {
       const light = wallTorchLights[slot]
       if (!light) continue
@@ -572,6 +584,57 @@
       } else {
         light.intensity = 0
       }
+    }
+  }
+
+  /** Fill `out` with the positions within `rangeSq` of the player, nearest
+   *  first, skipping `skipIdx`. */
+  function rankNearest(
+    positions: THREE.Vector3[],
+    rangeSq: number,
+    out: { idx: number; dist: number }[],
+    skipIdx = -1
+  ) {
+    out.length = 0
+    const playerPos = currentPlayer?.position
+    if (!playerPos) return
+    for (let i = 0; i < positions.length; i++) {
+      if (i === skipIdx) continue
+      const dx = positions[i].x - playerPos.x
+      const dz = positions[i].z - playerPos.z
+      const dist = dx * dx + dz * dz
+      if (dist <= rangeSq) out.push({ idx: i, dist })
+    }
+    out.sort((a, b) => a.dist - b.dist)
+  }
+
+  /** Park the crystal lights on the nearest clusters with a slow pulse like
+   *  their shimmer. */
+  function updateCrystalGlowPool(
+    deltaTime: number,
+    positions: THREE.Vector3[]
+  ) {
+    if (positions.length === 0 && crystalGlowIdle) return
+    crystalGlowIdle = positions.length === 0
+    crystalGlowTime += deltaTime
+    rankNearest(positions, CRYSTAL_GLOW_RANGE_SQ, _crystalRanking)
+    for (let slot = 0; slot < crystalGlowLights.length; slot++) {
+      const light = crystalGlowLights[slot]
+      if (!light) continue
+      const ranked = _crystalRanking[slot]
+      if (!ranked) {
+        light.intensity = 0
+        continue
+      }
+      const p = positions[ranked.idx]
+      light.position.copy(p)
+      light.intensity =
+        CRYSTAL_GLOW_INTENSITY *
+        (0.8 +
+          0.2 *
+            Math.sin(
+              crystalGlowTime * CRYSTAL_GLOW_SPEED + crystalGlowPhase(p)
+            ))
     }
   }
 
@@ -623,6 +686,12 @@
     if (unifiedTorchLight)
       unifiedTorchLight.shadow.autoUpdate = unifiedTorchLight.intensity > 0
     updateWallTorchPool(deltaTime, wallPositions, occupiedWallIdx)
+    updateCrystalGlowPool(
+      deltaTime,
+      isUnderground && !torchEffectsDisabled
+        ? (crystalGlowPositions?.() ?? NO_POSITIONS)
+        : NO_POSITIONS
+    )
   }
 
   export function getUnifiedTorchLight(): THREE.PointLight | undefined {
@@ -714,6 +783,7 @@
     mount={currentPlayer.mount}
     name={currentPlayer.name}
     title={currentPlayer.title}
+    petrified={currentPlayer.petrified}
     isCurrentPlayer={true}
     floorLevel={localFloorLevel}
     playerState={effectivePlayerState}
@@ -780,6 +850,7 @@
         )}
         name={player.name}
         title={player.title}
+        petrified={player.petrified}
         isCurrentPlayer={false}
         playerState={showingCatch ? 'interact' : remotePlayer.state}
         interactionAnim={showingCatch
@@ -854,6 +925,17 @@
         color="#ffcc66"
         intensity={0}
         distance={TORCH_BASE_DISTANCE}
+        decay={TORCH_BASE_DECAY}
+        castShadow={false}
+      />
+    {/each}
+    {#each crystalGlowSlots as _slot, i (i)}
+      <T.PointLight
+        bind:ref={crystalGlowLights[i]}
+        position={[0, 0, 0]}
+        color="#4a78ff"
+        intensity={0}
+        distance={CRYSTAL_GLOW_DISTANCE}
         decay={TORCH_BASE_DECAY}
         castShadow={false}
       />

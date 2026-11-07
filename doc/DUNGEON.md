@@ -63,6 +63,31 @@ node tools/reserve-dungeon-land.mjs --dungeon skeleton_crypt --ownership /tmp/ow
 
 두 입구 모두 80×80m 범위 전체가 입구 높이 − 1m 이상이다(Thieves' Den 0.3–1.75m, Shadow Guild 0.7–1.5m). 2026-11-01 운영 `land_plots` 기준으로 150m 안에 소유지가 없었고, 운영에는 두 지역(`r-01_+03`, `r-03_+05`)의 토지 등급 파일이 없어 등록하면 기본 링이 적용된다. 배포 때 최신 추출로 `--dungeon thieves_den`과 `--dungeon shadow_guild`를 다시 돌린다.
 
+## Blackvein Mine — 티어 5
+
+[제안 이슈 #204](https://github.com/Julian-adv/OpenMMO/issues/204)의 최소판이다. 맵은 기존 생성기를 쓰고, 몬스터는 기존 모델에 제안서의 이름을 붙인 대역이다.
+
+- 입구: `world(-1884, 1.2, 6360)`, 서쪽 도로를 향한다(`entranceDir=w`). Shadow Guild에서 북동쪽으로 약 640m, 동쪽 산맥이 시작되는 기슭이다. 25층, 최종 보스 `mine_foreman`(Rampaging Foreman, 레벨 30·HP 600·guard 36).
+- 80×80m 범위는 0.55–1.95m다. 2026-11-03 운영 `land_plots` 기준 가장 가까운 소유지는 446m 밖이고, 이 범위의 운영 지형 타일은 개발과 같다. 배포 때 최신 추출로 `--dungeon blackvein_mine`을 돌린다.
+- 몬스터는 `mine` 그룹이고 5층마다 한 종이다. 수치는 Sundered Bastion 같은 층 몬스터를 따른다.
+  - 1–5층: Lingering Miner(광부 잔존자, `mine_remnant`). 전용 모델과 곡괭이, Stone Golem 수치.
+  - 6–10층: Crystallized Miner(결정화 광부, `mine_crystal`). Orc 모델, Cyclop 수치.
+  - 11–15층: Twisted Miner(뒤틀린 광부, `mine_twisted`). Troll 모델, Skeleton 수치. 출혈 공격을 유지한다.
+  - 16–20층: Veinfused(광맥 융합체, `mine_veinfused`). Stone Golem 모델, Skeleton Warrior 수치.
+  - 21–24층: Deep Predator(심층 포식자, `mine_predator`). SCP-939 모델, Skeleton Warrior 수치.
+  - 25층: 보스만 나온다. 서버는 마지막 층에 한해 빈 스폰 표를 허용한다.
+  - 보스: Cyclop 모델, Shadow Master 수치.
+- 5·10·15·20·25층 문에 `mine_key_5…25`. 아이콘·모델은 기존 열쇠를 재사용한다.
+- 최종 상자: 확정 보상·전용 롤 없음. 티어 5 확률 보상(`ring_of_protection` 20%)과 하위 티어 장비, 12,500–37,500c.
+- 처치 칭호: `foreman_slayer`, 단독 처치 `foreman_slayer_solo`.
+- 맵은 `layoutStyle=mine` 생성기다(`shared/src/dungeon/gen/mine.rs`). 비어 있으면 기존 방 생성기를 쓴다.
+  - 일반 층: 도착 방에서 작은 방 2–3개를 거쳐 계단 방까지 이어지는 긴 2칸 통로. 이어지는 방의 중심은 맨해튼 거리 18칸 이상 떨어진다.
+  - 5·10·15·20층: 도착 방에서 갈림목 방으로, 갈림목에서 넓은 작업장 셋으로 통로가 갈린다. 내려가는 계단은 그중 한 곳에만 있고, 몬스터가 3마리 더 나온다.
+  - 25층: 일반 층처럼 이어지다 넓은 최심부 작업장에서 끝나며, 보스와 상자가 있다.
+  - 통로는 이어 주는 두 방 말고 다른 방을 지나거나 스치지 않고, 다른 통로와는 둘이 함께 닿는 방 2칸 안에서만 만난다. 그래서 방 사이에 갈림길이 생기지 않는다.
+  - 층 이동은 계단 그대로다. 승강기는 광산 소품 단계에서 계단 자리에 넣는다.
+- 제안서에서 남은 것: 광산 소품(승강기 포함), 전용 몬스터·보스 모델.
+
 ## 리셋과 재접속
 
 - 게임 내 일몰마다 접속 중인 던전 참가자는 경고 후 해당 던전의 지상 입구로 이동한다.

@@ -36,7 +36,9 @@ pub use doors::{
     closed_door_segs, door_position, interior_doors, locked_door_ids, InteriorDoorSpec,
     ENTRANCE_DOOR_ID,
 };
-pub use registry::{entrance, entrance_at, entrances, footprint_contains, DungeonEntranceDef};
+pub use registry::{
+    entrance, entrance_at, entrances, footprint_contains, DungeonEntranceDef, LayoutStyle,
+};
 pub use stairs::{
     entrance_ramp_height_at, floor_height_at, ground_y_for_floor, leg_touches_shaft,
     on_stair_shaft, shaft_run_pos, FLOOR_CHANGE_LEG_MAX, LANDING_CELLS, SHAFT_CHANGE_MARGIN,
@@ -243,13 +245,15 @@ pub struct SpawnSpec {
     pub aggressive: bool,
 }
 
-/// Clutter prop dropped into a room. Every kind but [`PropKind::TorchWall`]
-/// becomes a 1×1 collision pillar in the passability grid (see
+/// How long mining a prop takes.
+pub const MINING_CAST_MS: u64 = 3000;
+
+/// Clutter prop dropped into a room. Every kind but the decor ones
+/// ([`PropKind::is_decor`]) seals its [`PropSpec::cells`] in the passability grid (see
 /// [`floor_passability_cells_full`]), so a mover routes around it and a path
 /// can never end on its cell (the treasure chest is sealed the same way).
-/// Breaking a barrel or crate opens its cell again. The string
-/// variants match the object-catalog ids (`barrel`/`crate`/`chest`/`torch_wall`)
-/// the client loads the GLB for.
+/// Breaking a barrel or crate opens its cell again. The snake_case variant
+/// names are the object-catalog ids the client loads the GLB for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PropKind {
@@ -259,18 +263,69 @@ pub enum PropKind {
     /// Wall-mounted torch: hangs on a room's north or east wall (one per room).
     /// Never spawned by [`PropKind`] clutter rolls — placed by its own pass.
     TorchWall,
+    /// Mine support post standing against a corridor wall, in facing pairs.
+    /// Placed by the mine generator's own pass.
+    MineTimberPost,
+    /// Two-metre mine rail piece down one lane of a corridor, two cells long;
+    /// pieces join end to end into a [`RailRun`].
+    MineRail,
+    /// Ore cart along a mine room wall, two cells long: along Z at yaw 0/180,
+    /// along X at 90/270.
+    MineCart,
+    /// Ore cart on a rail piece, sealing its two cells and leaving the other
+    /// lane free; players push it along its [`RailRun`]. Yaw as for `MineRail`.
+    MineRailCart,
+    /// Miner's tool rack, two cells wide, backed onto a mine room wall; yaw
+    /// faces the room like `MineTimberPost`.
+    MineToolRack,
+    /// Heap of broken ore over 2×2 mine room cells against a wall.
+    MineOreHeap,
+    /// Collapsed rock fall with snapped beams over 2×2 mine room cells.
+    MineRubble,
+    /// Black-violet crystal cluster over 2×2 mine room cells; the client
+    /// grows it with depth.
+    MineCrystalCluster,
 }
 
 impl PropKind {
-    /// Wall torches hang high on the wall, not on the floor; every other kind
-    /// seals its cell.
+    /// Decor: no collision, no break/open state.
+    pub fn is_decor(self) -> bool {
+        matches!(
+            self,
+            PropKind::TorchWall | PropKind::MineTimberPost | PropKind::MineRail
+        )
+    }
+
+    /// Every kind but decor seals its cells.
     pub fn is_solid(self) -> bool {
-        !matches!(self, PropKind::TorchWall)
+        !self.is_decor()
+    }
+
+    /// Breaks, opens, is mined or pushed, so the server tracks its state.
+    pub fn is_interactive(self) -> bool {
+        matches!(
+            self,
+            PropKind::Barrel | PropKind::Crate | PropKind::Chest | PropKind::MineRailCart
+        ) || self.is_minable()
+    }
+
+    /// Mined with a pickaxe; refills at the sunset reset.
+    pub fn is_minable(self) -> bool {
+        matches!(self, PropKind::MineOreHeap | PropKind::MineCrystalCluster)
+    }
+
+    /// Cells covered along X and Z at yaw 0.
+    fn footprint(self) -> (i32, i32) {
+        match self {
+            PropKind::MineCart | PropKind::MineRail | PropKind::MineRailCart => (1, 2),
+            PropKind::MineToolRack => (2, 1),
+            PropKind::MineOreHeap | PropKind::MineRubble | PropKind::MineCrystalCluster => (2, 2),
+            _ => (1, 1),
+        }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PropSpec {
     pub x: i32,
     pub z: i32,
@@ -281,8 +336,215 @@ pub struct PropSpec {
     /// barrel/crate it's a random jitter for variety; for `Chest` it's the
     /// back-wall yaw the client seats the hinge by (N 0, S 180, W 90, E 270);
     /// for `TorchWall` it's the room-facing direction the client mounts it by
-    /// (north wall → 0, east wall → 270).
+    /// (north wall → 0, east wall → 270); for `MineTimberPost` it's the
+    /// corridor-facing direction (wall on −Z → 0, +X → 270, +Z → 180, −X → 90);
+    /// for `MineRail` it's 0 along Z and 90 along X; mine fixtures see their
+    /// [`PropKind`] variants.
     pub rotation: u16,
+}
+
+impl PropSpec {
+    /// Cells covered along X and Z at its yaw.
+    pub fn size(&self) -> (i32, i32) {
+        let (w, d) = self.kind.footprint();
+        if self.rotation % 180 == 90 {
+            (d, w)
+        } else {
+            (w, d)
+        }
+    }
+
+    /// Cells it stands on, from its own toward +X/+Z.
+    pub fn cells(&self) -> impl Iterator<Item = (i32, i32)> {
+        let (w, d) = self.size();
+        let (x, z) = (self.x, self.z);
+        (0..d).flat_map(move |dz| (0..w).map(move |dx| (x + dx, z + dz)))
+    }
+
+    /// Rail pieces and carts run along X at yaw 90/270.
+    pub fn along_x(&self) -> bool {
+        self.rotation % 180 == 90
+    }
+
+    /// This prop moved `offset` cells along its rail axis.
+    pub fn slid(&self, offset: i32) -> PropSpec {
+        let (x, z) = if self.along_x() {
+            (self.x + offset, self.z)
+        } else {
+            (self.x, self.z + offset)
+        };
+        PropSpec { x, z, ..*self }
+    }
+}
+
+/// The farthest one push rolls a rail cart.
+pub const CART_ROLL_MAX_CELLS: i32 = 12;
+/// A pushed cart's average roll speed in m/s: clients speed it up from rest
+/// and stop it dead, and a struck player is hit when it arrives.
+pub const CART_ROLL_SPEED: f32 = 3.6;
+
+/// Joined rail pieces down one lane of a straight corridor stretch: cells
+/// `start..end` along the axis at `lane` across it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RailRun {
+    pub along_x: bool,
+    pub lane: i32,
+    pub start: i32,
+    pub end: i32,
+}
+
+impl RailRun {
+    pub fn len(&self) -> i32 {
+        self.end - self.start
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() <= 0
+    }
+
+    /// The lane cell `along` cells down the axis.
+    pub fn cell(&self, along: i32) -> (i32, i32) {
+        if self.along_x {
+            (along, self.lane)
+        } else {
+            (self.lane, along)
+        }
+    }
+
+    /// Whether the piece at `(x, z)` lies on this run.
+    fn holds(&self, along_x: bool, (x, z): (i32, i32)) -> bool {
+        let (along, across) = if along_x { (x, z) } else { (z, x) };
+        along_x == self.along_x && across == self.lane && (self.start..self.end).contains(&along)
+    }
+}
+
+/// Every straight run of rail pieces on `layout`.
+pub fn rail_runs(layout: &FloorLayout) -> Vec<RailRun> {
+    let mut pieces: Vec<(bool, i32, i32)> = layout
+        .props
+        .iter()
+        .filter(|p| p.kind == PropKind::MineRail)
+        .map(|p| {
+            if p.along_x() {
+                (true, p.z, p.x)
+            } else {
+                (false, p.x, p.z)
+            }
+        })
+        .collect();
+    pieces.sort_unstable();
+    let mut runs: Vec<RailRun> = Vec::new();
+    for (along_x, lane, along) in pieces {
+        match runs.last_mut() {
+            Some(r) if r.along_x == along_x && r.lane == lane && r.end == along => r.end += 2,
+            _ => runs.push(RailRun {
+                along_x,
+                lane,
+                start: along,
+                end: along + 2,
+            }),
+        }
+    }
+    runs
+}
+
+/// The run a rail cart sits on, from its unslid spec.
+pub fn cart_rail_run(layout: &FloorLayout, cart: &PropSpec) -> Option<RailRun> {
+    rail_runs(layout)
+        .into_iter()
+        .find(|r| r.holds(cart.along_x(), (cart.x, cart.z)))
+}
+
+/// What a push does to a rail cart: it rolls `rolled` cells to `to` cells
+/// from its spot and, when a body in its path stopped it, `struck` is that
+/// body's cell.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CartPush {
+    pub to: i32,
+    pub rolled: u32,
+    pub struck: Option<(i32, i32)>,
+}
+
+/// A push from `pusher_side` (−1 behind the cart's low end, +1 past its high
+/// end) on rail cart `prop_id` now at `offset`: it rolls up to
+/// [`CART_ROLL_MAX_CELLS`] away from the pusher, stopping at the run's end, an
+/// unbroken solid prop, a monster spawn (a monster spawning there would be
+/// sealed in) or a body `occupied` reports, which it strikes. `None` when it
+/// neither moves nor strikes.
+pub fn cart_push_target(
+    layout: &FloorLayout,
+    prop_id: u32,
+    offset: i32,
+    pusher_side: i32,
+    broken: &[u32],
+    carts: &[(u32, i32)],
+    occupied: impl Fn((i32, i32)) -> bool,
+) -> Option<CartPush> {
+    let cart = layout.props.get(prop_id as usize)?;
+    if cart.kind != PropKind::MineRailCart {
+        return None;
+    }
+    let run = cart_rail_run(layout, cart)?;
+    let dir = -pusher_side.signum();
+    let solid = |cell: (i32, i32)| {
+        layout.spawns.iter().any(|s| (s.x, s.z) == cell)
+            || layout.props.iter().enumerate().any(|(i, p)| {
+                let i = i as u32;
+                i != prop_id
+                    && p.kind.is_solid()
+                    && !broken.contains(&i)
+                    && current_spec(p, i, carts).cells().any(|c| c == cell)
+            })
+    };
+    let mut at = offset;
+    let mut struck = None;
+    for _ in 0..CART_ROLL_MAX_CELLS {
+        let next = cart.slid(at + dir);
+        let lead = if cart.along_x() { next.x } else { next.z };
+        if lead < run.start || lead + 2 > run.end {
+            break;
+        }
+        // A body first: monsters often idle on their own spawn cell.
+        if let Some(cell) = next.cells().find(|&c| occupied(c)) {
+            struck = Some(cell);
+            break;
+        }
+        if next.cells().any(|c| solid(c)) {
+            break;
+        }
+        at += dir;
+    }
+    (at != offset || struck.is_some()).then_some(CartPush {
+        to: at,
+        rolled: at.abs_diff(offset),
+        struck,
+    })
+}
+
+/// `prop` where it stands now: rail carts slid by their entry in `carts`.
+pub fn current_spec(prop: &PropSpec, prop_id: u32, carts: &[(u32, i32)]) -> PropSpec {
+    match carts.iter().find(|(id, _)| *id == prop_id) {
+        Some(&(_, offset)) => prop.slid(offset),
+        None => *prop,
+    }
+}
+
+/// Also sends [`PropSpec::size`] as `w`/`d`, so the client needs no copy of
+/// the footprints.
+impl Serialize for PropSpec {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let (w, d) = self.size();
+        let mut st = s.serialize_struct("PropSpec", 7)?;
+        st.serialize_field("x", &self.x)?;
+        st.serialize_field("z", &self.z)?;
+        st.serialize_field("kind", &self.kind)?;
+        st.serialize_field("stack", &self.stack)?;
+        st.serialize_field("rotation", &self.rotation)?;
+        st.serialize_field("w", &w)?;
+        st.serialize_field("d", &d)?;
+        st.end()
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -326,7 +588,7 @@ impl FloorLayout {
                     && !self
                         .props
                         .iter()
-                        .any(|p| (p.x, p.z) == (x, z) && p.kind.is_solid())
+                        .any(|p| p.kind.is_solid() && p.cells().any(|c| c == (x, z)))
             })
     }
 
@@ -416,7 +678,7 @@ pub(crate) fn dungeon_depth(seed: u64) -> u8 {
 /// Seed-only generation for property tests; real dungeons use the registry.
 #[cfg(test)]
 pub(crate) fn generate_dungeon(seed: u64) -> Vec<FloorLayout> {
-    gen::generate_dungeon_with(seed, None, BOSS_MONSTER_TYPE, None, "")
+    gen::generate_dungeon_with(seed, None, BOSS_MONSTER_TYPE, None, "", LayoutStyle::Rooms)
 }
 
 /// Generate a dungeon by entrance id: seed derived from the id, floor count,
@@ -429,7 +691,26 @@ pub fn generate_dungeon_for(entrance_id: &str) -> Vec<FloorLayout> {
     let boss = def.map_or(BOSS_MONSTER_TYPE, |d| d.boss.as_str());
     let dir = def.and_then(|d| d.entrance_dir);
     let group = def.map_or("", |d| d.spawn_group.as_str());
-    gen::generate_dungeon_with(dungeon_seed(entrance_id), floors, boss, dir, group)
+    let style = def.map_or(LayoutStyle::Rooms, |d| d.layout_style);
+    gen::generate_dungeon_with(dungeon_seed(entrance_id), floors, boss, dir, group, style)
+}
+
+/// FNV-1a over every floor's `Debug` form: a fingerprint of the whole
+/// layout, the same on wasm and native when generation is deterministic.
+pub fn layout_hash(floors: &[FloorLayout]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for f in floors {
+        for b in format!("{f:?}").bytes() {
+            h ^= u64::from(b);
+            h = h.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    }
+    h
+}
+
+/// [`layout_hash`] as `0x`-prefixed hex; a u64 does not fit a JS number.
+pub fn layout_hash_hex(floors: &[FloorLayout]) -> String {
+    format!("{:#018x}", layout_hash(floors))
 }
 
 pub fn passability_floor_for_depth(depth: u8) -> u8 {
@@ -595,7 +876,7 @@ pub(crate) const EDGE_ALL: u8 = EDGE_N | EDGE_E | EDGE_S | EDGE_W;
 /// Floor edge bits: only this floor's stair landings open to the room.
 /// Ramp sides and the far run-end stay sealed; lengthwise stair movement stays open.
 pub fn floor_passability_cells(layout: &FloorLayout) -> Vec<u8> {
-    floor_passability_cells_inner(layout, &[], &[])
+    floor_passability_cells_inner(layout, &[], &[], &[])
 }
 
 /// OR an edge bit into a floor cell, ignoring out-of-grid coordinates. Shared by
@@ -617,18 +898,21 @@ fn or_edge_bit(cells: &mut [u8], x: i32, z: i32, bit: u8) {
 /// horizontal run (`az == bz`) is a north-wall door; a vertical run
 /// (`ax == bx`) an east-wall door. Used to rebuild a floor's passability so
 /// pathfinding (and thus monster AI) treats a shut door as a wall.
+/// `carts` lists rail carts pushed off their spot as `(prop_id, offset)`.
 pub fn floor_passability_cells_full(
     layout: &FloorLayout,
     broken: &[u32],
     closed_door_segs: &[i32],
+    carts: &[(u32, i32)],
 ) -> Vec<u8> {
-    floor_passability_cells_inner(layout, broken, closed_door_segs)
+    floor_passability_cells_inner(layout, broken, closed_door_segs, carts)
 }
 
 fn floor_passability_cells_inner(
     layout: &FloorLayout,
     broken: &[u32],
     closed_door_segs: &[i32],
+    carts: &[(u32, i32)],
 ) -> Vec<u8> {
     let mut cells = vec![0u8; (GRID * GRID) as usize];
 
@@ -717,7 +1001,9 @@ fn floor_passability_cells_inner(
     // seal applied here) and rejects any prop that would close a route.
     for (i, p) in layout.props.iter().enumerate() {
         if p.kind.is_solid() && !broken.contains(&(i as u32)) {
-            or_edge_bit(&mut cells, p.x, p.z, EDGE_ALL);
+            for (x, z) in current_spec(p, i as u32, carts).cells() {
+                or_edge_bit(&mut cells, x, z, EDGE_ALL);
+            }
         }
     }
 
@@ -795,7 +1081,7 @@ pub fn dungeon_passability(entrance: &Position, layouts: &[FloorLayout]) -> Runt
             depth: GRID as u8,
             y_base: floor_world_y(entrance.y, layout.depth),
             wall_height: DUNGEON_WALL_HEIGHT,
-            cells: floor_passability_cells_full(layout, &[], &closed_door_segs(layout, None)),
+            cells: floor_passability_cells_full(layout, &[], &closed_door_segs(layout, None), &[]),
         })
         .collect();
 
@@ -859,8 +1145,9 @@ pub fn dungeon_passability(entrance: &Position, layouts: &[FloorLayout]) -> Runt
 }
 
 /// One dungeon floor's cells under its current dynamic state: `broken` props
-/// (indices into that floor's `props`) open their cells, and every interior
-/// door not in `open_doors` seals its corridor mouth. `None` when the dungeon
+/// (indices into that floor's `props`) open their cells, every interior
+/// door not in `open_doors` seals its corridor mouth, and pushed `carts`
+/// seal where they now stand. `None` when the dungeon
 /// has no such floor (depth 0 is the cosmetic surface entrance door).
 ///
 /// Both sets go through this one call because the floor is regenerated from
@@ -874,12 +1161,14 @@ pub fn floor_cells(
     depth: u8,
     broken: &[u32],
     open_doors: Option<&HashSet<u32>>,
+    carts: &[(u32, i32)],
 ) -> Option<Vec<u8>> {
     let layout = layouts.get(depth.checked_sub(1)? as usize)?;
     Some(floor_passability_cells_full(
         layout,
         broken,
         &closed_door_segs(layout, open_doors),
+        carts,
     ))
 }
 

@@ -192,8 +192,6 @@ impl GameState {
                 }
             }
             Target::Monster(id, monster) => {
-                self.reveal(player_id).await;
-                self.mark_in_combat(player_id).await;
                 self.publish_nearby(
                     &monster.position,
                     monster.floor_level,
@@ -206,7 +204,7 @@ impl GameState {
                     None,
                 )
                 .await;
-                self.damage_monster(
+                self.strike_monster(
                     player_id,
                     &prayer.caster_name,
                     StruckMonster {

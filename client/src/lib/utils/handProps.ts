@@ -1,69 +1,59 @@
 import * as THREE from 'three'
 import { getItemDef, isRangedWeapon } from '../data/itemDefs'
-import { getWeaponAnimation } from '../data/weaponAnimationDefs'
-import instrumentCarry from '../data/instrumentCarry.json'
+import handFits from '../data/handFits.json'
 import {
   MODULAR_MALE_MODEL_PATH,
   MODULAR_FEMALE_MODEL_PATH,
 } from './modelPaths'
 
-/** Offset from the wrist bone toward the palm, so a prop looks gripped. */
-const HAND_GRIP_OFFSET = new THREE.Vector3(0, 0.08, 0)
+type Fit = { position?: number[]; rotation?: number[] }
+/** Seats by rig ("all", then the rig's own), each keyed `hand:main|off`,
+ *  `item:<id>`, `model:<worldModel>`, `type:<weaponType>` or `category:<c>`. */
+export type HandFits = Record<string, Record<string, Fit>>
 
-type HandFit = { position: THREE.Vector3; rotation?: THREE.Euler }
-
-// Keyed by world model, or by weaponType for a family built to one grip origin.
-export const FEMALE_HAND_FITS: Record<string, HandFit> = {
-  'weapons/sword.glb': {
-    position: new THREE.Vector3(0.0652, 0.0422, -0.0282),
-    rotation: new THREE.Euler(0, 0, 0.2),
-  },
-  'weapons/steel_longsword.glb': {
-    position: new THREE.Vector3(0.0504, 0.1152, 0.0198),
-    rotation: new THREE.Euler(0, 0, 0.2),
-  },
-  // Every dagger model puts its grip origin 6.3 cm behind the guard.
-  dagger: {
-    position: new THREE.Vector3(-0.012, 0.112, 0.02),
-    rotation: new THREE.Euler(0, 0, 0.2),
-  },
-  'weapons/torch.glb': {
-    position: new THREE.Vector3(-0.0072, 0.0882, 0.0162),
-    rotation: new THREE.Euler(0, Math.PI, 0.2),
-  },
-  'armor/shield_wooden.glb': {
-    position: new THREE.Vector3(-0.0072, 0.0558, -0.0144),
-  },
+/** Rigs with their own layer in handFits.json, by name. */
+export const HAND_FIT_RIGS: Record<string, string> = {
+  modular_male: MODULAR_MALE_MODEL_PATH,
+  modular_female: MODULAR_FEMALE_MODEL_PATH,
 }
 
-// Per-rig grips for props that HAND_GRIP_OFFSET does not seat.
-const MODEL_HAND_FITS: Record<string, Record<string, HandFit>> = {
-  [MODULAR_FEMALE_MODEL_PATH]: FEMALE_HAND_FITS,
-  [MODULAR_MALE_MODEL_PATH]: {
-    'weapons/mace.glb': { position: new THREE.Vector3(0.02, 0.12, 0.05) },
-    'weapons/torch.glb': { position: new THREE.Vector3(0.025, 0.08, 0.012) },
-  },
+/** The handFits rig for a character model; female variants (#fragment) share
+ *  the female grips. */
+export const handFitRig = (modelPath?: string) =>
+  Object.keys(HAND_FIT_RIGS).find(
+    (rig) => HAND_FIT_RIGS[rig] === modelPath?.split('#')[0]
+  )
+
+/** Keys a held item answers to, most specific first. */
+export function handFitKeys(itemDefId?: string, worldModel?: string) {
+  const def = itemDefId ? getItemDef(itemDefId) : undefined
+  const model = worldModel ?? def?.worldModel
+  return [
+    itemDefId && `item:${itemDefId}`,
+    model && `model:${model}`,
+    def?.weaponType && `type:${def.weaponType}`,
+    def?.category && `category:${def.category}`,
+  ].filter((key): key is string => !!key)
 }
 
-function fitHandProp(
+/** Every fit in `layer` the keys match, least specific first, so each field
+ *  comes from the most specific fit that sets it. True if any matched. */
+function applyFit(
   prop: THREE.Object3D,
-  worldModel?: string,
-  modelPath?: string,
-  weaponType?: string
+  layer: Record<string, Fit> | undefined,
+  keys: string[]
 ) {
-  // Female variants (#fragment) share the female grips.
-  const fits = modelPath ? MODEL_HAND_FITS[modelPath.split('#')[0]] : undefined
-  const fit =
-    (worldModel ? fits?.[worldModel] : undefined) ??
-    (weaponType ? fits?.[weaponType] : undefined)
-  if (!fit) return
-  prop.position.copy(fit.position)
-  if (fit.rotation) prop.rotation.copy(fit.rotation)
+  let matched = false
+  for (const key of [...keys].reverse()) {
+    const fit = layer?.[key]
+    if (!fit) continue
+    matched = true
+    if (fit.position) prop.position.fromArray(fit.position)
+    if (fit.rotation)
+      prop.rotation.fromArray(fit.rotation as [number, number, number])
+  }
+  return matched
 }
-
-// Seat the model's off-origin handle between the thumb and index finger.
-const FISHING_ROD_POSITION = new THREE.Vector3(0.045, 0.01, 0.06)
-const FISHING_ROD_ROTATION = new THREE.Euler(0, -Math.PI / 6, -Math.PI / 3)
 
 // Fitted in tools/rig-importer against bow_shoot.
 const BOW_POSITION = new THREE.Vector3(0.01, 0.06, 0.04)
@@ -78,32 +68,6 @@ export const MANDOLIN_ITEM_DEF_ID = 'mandolin'
 // Fitted with tools/fit-hand-prop.mjs --tilt 15 --push 0.06 --lift 0.04.
 const MANDOLIN_ROTATION = new THREE.Euler(-2.413, -0.409, -0.353)
 const MANDOLIN_POSITION = new THREE.Vector3(-0.03, 0.103, 0.126)
-export type InstrumentCarry = typeof instrumentCarry
-
-/**
- * Pose a carried instrument: the neck `grip` m from the origin sits in the fist, the body hangs past the
- * fingers, tipped forward by `tilt`° and sideways by `splay`°, turned `twist`° about the neck, then moved
- * `front` m forward (hand +X) and `palm` m into the palm (hand +Z). Tuned in the female preview.
- */
-export function poseInstrumentCarry(
-  prop: THREE.Object3D,
-  carry: InstrumentCarry = instrumentCarry
-) {
-  const degrees = Math.PI / 180
-  const turn = (axis: THREE.Vector3, angle: number) =>
-    new THREE.Quaternion().setFromAxisAngle(axis, angle)
-  const x = new THREE.Vector3(1, 0, 0)
-  const z = new THREE.Vector3(0, 0, 1)
-  prop.quaternion
-    .copy(turn(x, carry.splay * degrees))
-    .multiply(turn(z, -Math.PI / 2 - carry.tilt * degrees))
-    .multiply(turn(x, carry.twist * degrees))
-  prop.position
-    .copy(HAND_GRIP_OFFSET)
-    .add(new THREE.Vector3(carry.front, 0, carry.palm))
-    .sub(new THREE.Vector3(carry.grip, 0, 0).applyQuaternion(prop.quaternion))
-}
-
 /** Pose the mandolin for the `/play_music` strumming clip. */
 export function poseMusicProp(prop: THREE.Object3D) {
   prop.position.copy(MANDOLIN_POSITION)
@@ -122,25 +86,18 @@ export function poseMainHandProp(
   prop: THREE.Object3D,
   itemDefId: string,
   forearm?: number,
-  modelPath?: string
+  modelPath?: string,
+  fits: HandFits = handFits
 ) {
-  prop.position.copy(HAND_GRIP_OFFSET)
-  const rotation = getWeaponAnimation(itemDefId)?.gripRotationRadians
-  if (rotation) {
-    const [x, y, z] = rotation.split('|').map(Number)
-    prop.rotation.set(x, y, z)
-  } else if (itemDefId === 'fishing_rod') {
-    prop.position.copy(FISHING_ROD_POSITION)
-    prop.rotation.copy(FISHING_ROD_ROTATION)
-  } else if (getItemDef(itemDefId)?.category === 'instrument') {
-    poseInstrumentCarry(prop)
-  } else if (isRangedWeapon(itemDefId)) {
+  const keys = handFitKeys(itemDefId)
+  applyFit(prop, fits.all, ['hand:main'])
+  if (!applyFit(prop, fits.all, keys) && isRangedWeapon(itemDefId)) {
     prop.position.copy(BOW_POSITION)
     if (forearm && forearm > 0) prop.position.y = forearm * BOW_FOREARM_RATIO
     prop.rotation.copy(BOW_ROTATION)
   }
-  const def = getItemDef(itemDefId)
-  fitHandProp(prop, def?.worldModel, modelPath, def?.weaponType)
+  const rig = handFitRig(modelPath)
+  if (rig) applyFit(prop, fits[rig], keys)
 }
 
 const forearmCache = new Map<string, number>()
@@ -179,15 +136,14 @@ export function forearmLength(
 export function poseOffHandProp(
   prop: THREE.Object3D,
   worldModel?: string,
-  modelPath?: string
+  modelPath?: string,
+  fits: HandFits = handFits
 ) {
-  prop.position.copy(HAND_GRIP_OFFSET)
-  if (worldModel === 'armor/earth_shield.glb') {
-    prop.rotation.set(0.170659, 0.002636, 1.657126)
-  } else {
-    prop.rotation.set(0, Math.PI, 0)
-  }
-  fitHandProp(prop, worldModel, modelPath)
+  const keys = handFitKeys(undefined, worldModel)
+  applyFit(prop, fits.all, ['hand:off'])
+  applyFit(prop, fits.all, keys)
+  const rig = handFitRig(modelPath)
+  if (rig) applyFit(prop, fits[rig], keys)
 }
 
 /** Where the flame sits on a torch GLB that names no `torch_tip` empty. */
