@@ -4,7 +4,6 @@
   import { getDefaultServerUrl } from '../utils/networkUtils'
   import AnnouncementsPanel from './AnnouncementsPanel.svelte'
   import LoginBackdrop from './LoginBackdrop.svelte'
-  import LoginShowcase from './LoginShowcase.svelte'
 
   const GSI_SRC = 'https://accounts.google.com/gsi/client'
 
@@ -213,8 +212,6 @@
           {/if}
         </div>
       </div>
-
-      <LoginShowcase />
     </div>
 
     <div class="side">
