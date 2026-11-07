@@ -171,13 +171,15 @@ pub(crate) fn parse_notice_command(message: &str) -> Option<Option<&str>> {
 }
 
 /// `/party <name>` invites; bare `/party` reports the roster; `kick`,
-/// `leader` and `leave` are subcommands (reserved as invite names).
+/// `leader`, `loot` and `leave` are subcommands (reserved as invite names).
 #[derive(Debug, PartialEq)]
 pub(crate) enum PartyCommand<'a> {
     Status,
     Invite(&'a str),
     Kick(&'a str),
     Leader(&'a str),
+    /// `None` toggles; `shared`/`priority` set the mode.
+    Loot(Option<bool>),
     Leave,
 }
 
@@ -193,6 +195,7 @@ pub(crate) fn parse_party_command(message: &str) -> Option<PartyCommand<'_>> {
         None => match rest {
             "" => PartyCommand::Status,
             "leave" => PartyCommand::Leave,
+            "loot" => PartyCommand::Loot(None),
             // Bare subcommands still parse, so they draw a usage reply
             // instead of inviting someone named "kick".
             "kick" => PartyCommand::Kick(""),
@@ -201,6 +204,11 @@ pub(crate) fn parse_party_command(message: &str) -> Option<PartyCommand<'_>> {
         },
         Some(("kick", name)) => PartyCommand::Kick(name.trim()),
         Some(("leader", name)) => PartyCommand::Leader(name.trim()),
+        Some(("loot", mode)) => PartyCommand::Loot(match mode.trim() {
+            "shared" => Some(true),
+            "priority" => Some(false),
+            _ => None,
+        }),
         _ => PartyCommand::Invite(rest),
     })
 }
@@ -448,6 +456,7 @@ impl super::GameState {
                     self.send_system_message(player_id, status).await;
                 }
                 PartyCommand::Leave => self.leave_party(player_id).await,
+                PartyCommand::Loot(mode) => self.set_party_loot(player_id, mode).await,
                 PartyCommand::Kick("") => {
                     self.send_system_message(player_id, "Party: /party kick <name>")
                         .await;

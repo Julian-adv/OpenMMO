@@ -46,7 +46,9 @@ async fn invite_and_accept_forms_party() {
     }
     for rx in [&mut alice_rx, &mut bob_rx] {
         match rx.try_recv() {
-            Ok(ServerMessage::PartyState { leader_id, members }) => {
+            Ok(ServerMessage::PartyState {
+                leader_id, members, ..
+            }) => {
                 assert_eq!(leader_id, pid("alice"));
                 let names: Vec<&str> = members.iter().map(|m| m.name.as_str()).collect();
                 assert_eq!(names, ["alice", "bob"]);
@@ -155,7 +157,9 @@ async fn leader_leave_promotes_earliest_member() {
     }
     for rx in [&mut bob_rx, &mut carol_rx] {
         match rx.try_recv() {
-            Ok(ServerMessage::PartyState { leader_id, members }) => {
+            Ok(ServerMessage::PartyState {
+                leader_id, members, ..
+            }) => {
                 assert_eq!(leader_id, pid("bob"));
                 let names: Vec<&str> = members.iter().map(|m| m.name.as_str()).collect();
                 assert_eq!(names, ["bob", "carol"]);
@@ -207,7 +211,9 @@ async fn disconnect_leaves_party() {
     for rx in [&mut alice_rx, &mut carol_rx] {
         let state = loop {
             match rx.try_recv() {
-                Ok(ServerMessage::PartyState { leader_id, members }) => break (leader_id, members),
+                Ok(ServerMessage::PartyState {
+                    leader_id, members, ..
+                }) => break (leader_id, members),
                 Ok(_) => continue,
                 Err(err) => panic!("Expected roster after disconnect, got {:?}", err),
             }
@@ -1452,7 +1458,9 @@ async fn leader_kicks_member_with_notices() {
     }
     for rx in [&mut alice_rx, &mut carol_rx] {
         match rx.try_recv() {
-            Ok(ServerMessage::PartyState { leader_id, members }) => {
+            Ok(ServerMessage::PartyState {
+                leader_id, members, ..
+            }) => {
                 assert_eq!(leader_id, pid("alice"));
                 let names: Vec<&str> = members.iter().map(|m| m.name.as_str()).collect();
                 assert_eq!(names, ["alice", "carol"]);
@@ -1589,7 +1597,9 @@ async fn promote_hands_over_leadership() {
         .await;
     for rx in [&mut alice_rx, &mut bob_rx, &mut carol_rx] {
         match rx.try_recv() {
-            Ok(ServerMessage::PartyState { leader_id, members }) => {
+            Ok(ServerMessage::PartyState {
+                leader_id, members, ..
+            }) => {
                 assert_eq!(leader_id, pid("bob"));
                 // The roster order is untouched by a handover.
                 let names: Vec<&str> = members.iter().map(|m| m.name.as_str()).collect();
@@ -2065,4 +2075,22 @@ async fn level_up_is_celebrated_to_nearby_players_only() {
     ));
     assert!(celebrations(&mut alice_rx).is_empty());
     assert!(celebrations(&mut far_rx).is_empty());
+}
+
+#[tokio::test]
+async fn leader_loot_rule_change_reaches_every_member_roster() {
+    let game_state = make_test_game_state("party_loot_rule");
+    let _alice_rx = add(&game_state, "alice", 0.0).await;
+    let mut bob_rx = add(&game_state, "bob", 0.0).await;
+    form_party(&game_state, "alice", "bob").await;
+
+    game_state.set_party_loot(&pid("bob"), Some(true)).await;
+    game_state.set_party_loot(&pid("alice"), Some(true)).await;
+    let states: Vec<bool> = std::iter::from_fn(|| bob_rx.try_recv().ok())
+        .filter_map(|msg| match msg {
+            ServerMessage::PartyState { loot_shared, .. } => Some(loot_shared),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(states, [false, true]);
 }

@@ -15,7 +15,7 @@
     cancelFishingTargeting,
   } from '../stores/fishingStore'
   import { landscapingMode } from '../stores/landscapingStore'
-  import { partyRoster } from '../stores/partyStore'
+  import { partyRoster, canInviteToParty } from '../stores/partyStore'
   import {
     estateFurnitureEditorActive,
     estateFurniturePlacementMode,
@@ -92,7 +92,11 @@
   import { activeDebuffs } from '../stores/debuffStore'
   import { staggerRadius, staggerTarget } from './player-control/stagger'
   import { tipHatDialog } from '../stores/tipHatStore'
-  import { npcContextMenu, requestChatFocus } from '../stores/npcMenuStore'
+  import {
+    npcContextMenu,
+    requestChatFocus,
+    type NpcMenuEntry,
+  } from '../stores/npcMenuStore'
   import {
     mapEditorMode,
     housingEditorMode,
@@ -1423,13 +1427,18 @@
     else if (refused) refusePickup(refused.item, refused.reason)
   }
 
+  function sharesLootWith(playerId: number): boolean {
+    const roster = get(partyRoster)
+    return !!roster?.lootShared && roster.members.some((m) => m.id === playerId)
+  }
+
   /** Why the server would not hand this item over, or null when it would. */
   function pickupRefusal(item: GroundItemData): string | null {
     const claimedBy = item.claimedBy
     if (
       claimedBy != null &&
       claimedBy !== currentPlayer?.id &&
-      !get(partyRoster)?.members.some((m) => m.id === claimedBy)
+      !sharesLootWith(claimedBy)
     ) {
       const owner = ownerName(claimedBy)
       return owner
@@ -2029,10 +2038,12 @@
       const npc = get(gameStore).otherPlayers.get(intent.playerId)
       if (npc?.isOfficialNpc) {
         const caps = getNpcCapabilities(npc.name)
-        const entries = [{ label: 'Talk', action: () => requestChatFocus() }]
+        const entries = [
+          { label: translate('menu.talk'), action: () => requestChatFocus() },
+        ]
         if (caps.trade) {
           entries.push({
-            label: 'Trade',
+            label: translate('trade.title'),
             action: () => tradeWithNpc(intent),
           })
         }
@@ -2049,17 +2060,26 @@
     const playerId = inputHandler.pickPlayer(event, camera, playerMeshes)
     if (playerId === null) return
     const player = get(gameStore).otherPlayers.get(playerId)
-    if (!player || player.isOfficialNpc || !player.backTexture) return
+    if (!player || player.isOfficialNpc) return
+    const entries: NpcMenuEntry[] = []
+    if (canInviteToParty(get(partyRoster), currentPlayer?.id, playerId)) {
+      entries.push({
+        label: translate('friends.inviteParty'),
+        action: () => networkManager.sendPartyInvite(player.name),
+      })
+    }
+    if (player.backTexture) {
+      entries.push({
+        label: translate('menu.reportCape'),
+        action: () => networkManager.sendReportCapeTexture(playerId),
+      })
+    }
+    if (entries.length === 0) return
     npcContextMenu.set({
       npcName: player.name,
       screenX: event.clientX,
       screenY: event.clientY,
-      entries: [
-        {
-          label: 'Report cape',
-          action: () => networkManager.sendReportCapeTexture(playerId),
-        },
-      ],
+      entries,
     })
   }
 

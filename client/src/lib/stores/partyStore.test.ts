@@ -50,7 +50,11 @@ describe('applyPartyVitals', () => {
   })
 
   beforeEach(() =>
-    partyRoster.set({ leaderId: 1, members: [member(1, 10), member(2, 10)] })
+    partyRoster.set({
+      leaderId: 1,
+      members: [member(1, 10), member(2, 10)],
+      lootShared: false,
+    })
   )
 
   it('updates matching members and keeps the rest', () => {

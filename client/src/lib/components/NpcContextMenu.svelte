@@ -68,7 +68,7 @@
     background: rgba(6, 10, 14, 0.92);
     backdrop-filter: blur(4px);
     color: #e6edf3;
-    font-family: 'Courier New', monospace;
+    font-family: 'Noto Sans KR', sans-serif;
     font-size: 12px;
   }
 

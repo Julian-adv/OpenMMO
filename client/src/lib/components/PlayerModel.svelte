@@ -2296,7 +2296,7 @@
     {#if title}
       <TextLabel
         text={$titleName(title)}
-        fontSize={0.17}
+        fontSize={0.19}
         color="#d6bcfa"
         outlineColor="#000000"
         outlineWidth={7}

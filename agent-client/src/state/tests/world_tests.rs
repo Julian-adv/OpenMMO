@@ -534,6 +534,7 @@ fn party_vitals_keep_member_hp_exact() {
     s.push_event(ServerMessage::PartyState {
         leader_id: me.id,
         members: vec![member(&me, 10), member(&bob, 20)],
+        loot_shared: false,
     });
     let vitals = ServerMessage::PartyVitals {
         members: vec![PartyMemberVitals {

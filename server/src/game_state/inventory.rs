@@ -2296,7 +2296,7 @@ impl super::GameState {
 
     pub async fn pickup_item(&self, player_id: &PlayerId, instance_id: u64) {
         self.bump_action_version(player_id).await;
-        let party = self.other_party_member_ids(player_id).await;
+        let party = self.loot_sharing_mate_ids(player_id).await;
         self.pickup_item_with_range(player_id, instance_id, MAX_PICKUP_DISTANCE, &party)
             .await;
     }
@@ -2306,7 +2306,7 @@ impl super::GameState {
         let Some((position, _, floor_level, _)) = self.player_pose(player_id).await else {
             return;
         };
-        let party = self.other_party_member_ids(player_id).await;
+        let party = self.loot_sharing_mate_ids(player_id).await;
         let mut candidates = {
             let ground_items = self.ground_items.read().await;
             ground_items

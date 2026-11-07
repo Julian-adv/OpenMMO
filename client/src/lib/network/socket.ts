@@ -1142,6 +1142,11 @@ class NetworkManager {
     this.sendMessage({ PartyPromote: { target_id: targetId } })
   }
 
+  /** Leader-only: share claimed loot among mates, or restore the priority. */
+  sendPartySetLoot(shared: boolean) {
+    this.sendMessage({ PartySetLoot: { shared } })
+  }
+
   /** Say something to the whole party, wherever its members are. */
   sendPartyChat(message: string) {
     this.sendMessage({ PartyChat: { message } })

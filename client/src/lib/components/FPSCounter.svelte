@@ -64,6 +64,7 @@
   import { closeTopOverlay } from '../stores/overlayStack'
   import { friendPanelVisible } from '../stores/friendStore'
   import { emotePanelVisible, emoteStopRequest } from '../stores/emoteStore'
+  import { partyPanelVisible, partyHotkeyActive } from '../stores/partyStore'
   import { instrumentPanelVisible } from '../stores/instrumentStore'
 
   function toDegrees(radians: number) {
@@ -115,6 +116,10 @@
     if ((event.key === 'g' || event.key === 'G') && isGameKey(event)) {
       event.preventDefault()
       emotePanelVisible.update((v) => !v)
+    }
+    if (event.code === 'KeyP' && $partyHotkeyActive && isGameKey(event)) {
+      event.preventDefault()
+      partyPanelVisible.update((v) => !v)
     }
   }
 

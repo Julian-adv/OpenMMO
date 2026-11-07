@@ -2624,6 +2624,12 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::PartySetLoot { shared } => {
+            if let Some(id) = &state.player_id {
+                game_state.set_party_loot(id, Some(shared)).await;
+            }
+        }
+
         ClientMessage::PartyChat { message } => {
             if let Some(id) = &state.player_id {
                 game_state.send_party_chat(id, message).await;

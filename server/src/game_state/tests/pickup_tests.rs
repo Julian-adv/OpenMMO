@@ -57,7 +57,7 @@ async fn chest_loot_is_reserved_for_its_opener_then_becomes_public() {
 }
 
 #[tokio::test]
-async fn party_mates_share_the_loot_claim() {
+async fn party_mates_share_the_loot_claim_once_the_leader_turns_it_on() {
     let game = make_test_game_state("party_shares_loot_claim");
     for name in ["owner", "mate", "rival"] {
         game.add_player(make_player(name, 0.0, 0.0)).await;
@@ -69,6 +69,22 @@ async fn party_mates_share_the_loot_claim() {
     game.invite_to_party(&pid("owner"), "mate").await;
     game.respond_to_party_invite(&pid("mate"), &pid("owner"), true)
         .await;
+    game.spawn_ground_item(claimed_item(40, "test_item", 1, "owner"))
+        .await;
+    game.pickup_item(&pid("mate"), 40).await;
+    assert!(game.ground_items.read().await.contains_key(&40));
+    game.end_loot_claim(40).await;
+    game.pickup_item(&pid("mate"), 40).await;
+
+    game.set_party_loot(&pid("mate"), None).await;
+    game.spawn_ground_item(claimed_item(39, "test_item", 1, "owner"))
+        .await;
+    game.pickup_item(&pid("mate"), 39).await;
+    assert!(game.ground_items.read().await.contains_key(&39));
+    game.set_party_loot(&pid("owner"), Some(true)).await;
+    game.set_party_loot(&pid("owner"), Some(true)).await;
+    game.pickup_item(&pid("mate"), 39).await;
+
     for instance_id in [41, 42] {
         game.spawn_ground_item(claimed_item(instance_id, "test_item", 1, "owner"))
             .await;
@@ -82,7 +98,7 @@ async fn party_mates_share_the_loot_claim() {
     game.pickup_item(&pid("mate"), 41).await;
     game.pickup_nearby_items(&pid("mate")).await;
     assert!(game.ground_items.read().await.is_empty());
-    assert_eq!(game.inventories.read().await[&pid("mate")].bag.len(), 2);
+    assert_eq!(game.inventories.read().await[&pid("mate")].bag.len(), 4);
     assert!(is_coin_pile_payout(
         game.get_player_gold(&pid("mate")).await
     ));

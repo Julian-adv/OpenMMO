@@ -930,6 +930,10 @@ pub enum ClientMessage {
     PartyPromote {
         target_id: PlayerId,
     },
+    /// Leader-only: let mates take each other's claimed loot at once.
+    PartySetLoot {
+        shared: bool,
+    },
     /// Say something to the sender's party. Delivered to every online member
     /// wherever they are (no AOI cut), echoed to the sender included.
     PartyChat {
@@ -1346,6 +1350,8 @@ pub enum ServerMessage {
     PartyState {
         leader_id: PlayerId,
         members: Vec<PartyMember>,
+        /// Mates may take each other's claimed loot at once.
+        loot_shared: bool,
     },
     /// The whole friend roster, offline friends included. Sent at login and
     /// re-sent after any change, to both sides of it.

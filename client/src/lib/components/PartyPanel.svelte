@@ -6,17 +6,35 @@
     PARTY_MAX_MEMBERS,
     classIconPath,
     hoveredPartyMemberId,
+    partyPanelVisible,
+    canInviteToParty,
   } from '../stores/partyStore'
   import { gameStore } from '../stores/gameStore'
   import { npcContextMenu, type NpcMenuEntry } from '../stores/npcMenuStore'
   import { networkManager } from '../network/socket'
   import { draggablePanel } from '../actions/draggablePanel'
+  import { t, translate } from '../i18n'
 
   const roster = $derived($partyRoster)
   const selfId = $derived($gameStore.currentPlayer?.id)
   const isLeader = $derived(roster !== null && roster.leaderId === selfId)
 
   let collapsed = $state(false)
+  let inviteName = $state('')
+  const memberCount = $derived(roster?.members.length ?? 0)
+  const canInvite = $derived(canInviteToParty(roster, selfId))
+
+  function submitInvite() {
+    const name = inviteName.trim()
+    if (name) networkManager.sendPartyInvite(name)
+    inviteName = ''
+  }
+
+  function onInviteKeydown(e: KeyboardEvent) {
+    e.stopPropagation()
+    if (e.key === 'Enter') submitInvite()
+    else if (e.key === 'Escape') inviteName = ''
+  }
   let kickTargetId = $state<number | null>(null)
   // Classes whose icon failed to load; they fall back to the letter badge.
   const failedIcons = new SvelteSet<string>()
@@ -43,18 +61,27 @@
   function openMemberMenu(e: MouseEvent, member: { id: number; name: string }) {
     const entries: NpcMenuEntry[] = []
     if (member.id === selfId) {
+      if (isLeader) {
+        const share = !roster?.lootShared
+        entries.push({
+          label: translate(
+            share ? 'party.lootToShared' : 'party.lootToPriority'
+          ),
+          action: () => networkManager.sendPartySetLoot(share),
+        })
+      }
       entries.push({
-        label: 'Leave party',
+        label: translate('party.leave'),
         action: () => networkManager.sendPartyLeave(),
       })
     } else if (isLeader) {
       entries.push(
         {
-          label: 'Promote to leader',
+          label: translate('party.promote'),
           action: () => networkManager.sendPartyPromote(member.id),
         },
         {
-          label: 'Kick from party',
+          label: translate('party.kick'),
           action: () => {
             kickTargetId = member.id
           },
@@ -77,93 +104,131 @@
   }
 </script>
 
-{#if roster}
-  <div class="party-panel" aria-label="Party" use:draggablePanel={'party'}>
+{#if $partyPanelVisible}
+  <div
+    class="party-panel"
+    aria-label={$t('party.title')}
+    use:draggablePanel={'party'}
+  >
     <div class="party-header" data-drag-handle>
       <span class="party-title">
-        PARTY
+        {$t('party.title')}
         <span class="party-count">
-          {roster.members.length}/{PARTY_MAX_MEMBERS}
+          {memberCount}/{PARTY_MAX_MEMBERS}
         </span>
       </span>
       <button
         class="collapse-btn"
-        title={collapsed ? 'Expand party panel' : 'Collapse party panel'}
+        title={collapsed ? $t('party.expand') : $t('party.collapse')}
         aria-expanded={!collapsed}
         onclick={() => (collapsed = !collapsed)}
       >
         {collapsed ? '▸' : '▾'}
       </button>
+      <button
+        class="collapse-btn"
+        title={$t('common.close')}
+        aria-label={$t('common.close')}
+        onclick={() => partyPanelVisible.set(false)}>×</button
+      >
     </div>
     {#if !collapsed}
-      {#each roster.members as member (member.id)}
-        {@const iconPath = classIconPath(member.class)}
-        <div
-          class="member"
-          class:dead={member.hp === 0}
-          role="listitem"
-          oncontextmenu={(e) => openMemberMenu(e, member)}
-          onmouseenter={() => hoveredPartyMemberId.set(member.id)}
-          onmouseleave={() => hoveredPartyMemberId.set(null)}
-        >
-          {#if iconPath && !failedIcons.has(member.class)}
-            <img
-              class="class-icon"
-              src={iconPath}
-              alt={member.class}
-              width="18"
-              height="18"
-              onerror={() => failedIcons.add(member.class)}
-            />
-          {:else}
-            <span
-              class="class-badge"
-              title={member.class}
-              aria-label={member.class}
-            >
-              {member.class.charAt(0).toUpperCase()}
-            </span>
-          {/if}
-          <div class="member-body">
-            <div class="member-row">
+      {#if !roster}
+        <div class="empty">{$t('party.empty')}</div>
+      {:else}
+        {#each roster.members as member (member.id)}
+          {@const iconPath = classIconPath(member.class)}
+          <div
+            class="member"
+            class:dead={member.hp === 0}
+            role="listitem"
+            oncontextmenu={(e) => openMemberMenu(e, member)}
+            onmouseenter={() => hoveredPartyMemberId.set(member.id)}
+            onmouseleave={() => hoveredPartyMemberId.set(null)}
+          >
+            {#if iconPath && !failedIcons.has(member.class)}
+              <img
+                class="class-icon"
+                src={iconPath}
+                alt={member.class}
+                width="18"
+                height="18"
+                onerror={() => failedIcons.add(member.class)}
+              />
+            {:else}
               <span
-                class="member-name"
-                class:self={member.id === selfId}
-                title={member.name}
+                class="class-badge"
+                title={member.class}
+                aria-label={member.class}
               >
-                {member.name}
+                {member.class.charAt(0).toUpperCase()}
               </span>
-              {#if member.id === roster.leaderId}
-                <img
-                  class="leader-crown"
-                  src="/icons/party/leader-crown.svg"
-                  alt="Leader"
-                  title="Leader"
-                  width="16"
-                  height="16"
-                />
-              {/if}
-            </div>
-            <div class="hp-track">
-              <div
-                class="hp-fill"
-                style="width: {hpPercent(member.hp, member.max_hp)}%"
-              ></div>
+            {/if}
+            <div class="member-body">
+              <div class="member-row">
+                <span
+                  class="member-name"
+                  class:self={member.id === selfId}
+                  title={member.name}
+                >
+                  {member.name}
+                </span>
+                {#if member.id === roster.leaderId}
+                  <img
+                    class="leader-crown"
+                    src="/icons/party/leader-crown.svg"
+                    alt={$t('party.leader')}
+                    title={$t('party.leader')}
+                    width="16"
+                    height="16"
+                  />
+                {/if}
+              </div>
+              <div class="hp-track">
+                <div
+                  class="hp-fill"
+                  style="width: {hpPercent(member.hp, member.max_hp)}%"
+                ></div>
+              </div>
             </div>
           </div>
+        {/each}
+        <div class="loot-mode">
+          {$t(roster.lootShared ? 'party.lootShared' : 'party.lootPriority')}
         </div>
-      {/each}
+      {/if}
+      {#if canInvite}
+        <div class="invite-row">
+          <input
+            class="invite-input"
+            placeholder={$t('friends.playerName')}
+            aria-label={$t('friends.playerName')}
+            maxlength="32"
+            bind:value={inviteName}
+            onkeydown={onInviteKeydown}
+          />
+          <button
+            class="invite-btn"
+            title={$t('friends.inviteParty')}
+            onclick={submitInvite}>{$t('party.invite')}</button
+          >
+        </div>
+      {/if}
     {/if}
   </div>
 
   {#if kickTarget}
     <div class="confirm-backdrop" role="presentation">
-      <div class="confirm-box" role="alertdialog" aria-label="Kick from party">
-        <p class="confirm-text">Kick {kickTarget.name} from the party?</p>
+      <div class="confirm-box" role="alertdialog" aria-label={$t('party.kick')}>
+        <p class="confirm-text">
+          {$t('party.kickConfirm', { name: kickTarget.name })}
+        </p>
         <div class="confirm-actions">
-          <button class="confirm-kick" onclick={confirmKick}>Kick</button>
+          <button class="confirm-kick" onclick={confirmKick}
+            >{$t('party.kickButton')}</button
+          >
           <button class="confirm-cancel" onclick={() => (kickTargetId = null)}>
-            Cancel
+            {$t('common.cancel')}
           </button>
         </div>
       </div>
@@ -184,9 +249,62 @@
     border-radius: 8px;
     background: rgba(6, 10, 14, 0.7);
     color: #e6edf3;
-    font-family: 'Courier New', monospace;
+    font-family: 'Noto Sans KR', sans-serif;
     font-size: 12px;
     pointer-events: auto;
+  }
+
+  .empty {
+    padding: 2px 0 4px;
+    color: #9fb2c3;
+  }
+
+  .invite-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .invite-input {
+    flex: 1;
+    min-width: 0;
+    padding: 2px 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 3px;
+    color: #e6edf3;
+    font-family: inherit;
+    font-size: 12px;
+    outline: none;
+  }
+
+  .invite-input:focus {
+    border-color: rgba(126, 200, 255, 0.6);
+  }
+
+  .invite-btn {
+    flex-shrink: 0;
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 3px;
+    color: #7ec8ff;
+    font-family: inherit;
+    font-size: 11px;
+    padding: 3px 6px;
+    cursor: pointer;
+  }
+
+  .invite-btn:hover {
+    border-color: rgba(126, 200, 255, 0.6);
+  }
+
+  .loot-mode {
+    margin-top: 6px;
+    padding-top: 5px;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(230, 237, 243, 0.65);
+    font-size: 11px;
   }
 
   .party-header {
@@ -203,6 +321,7 @@
     color: #f0c040;
     font-weight: 700;
     letter-spacing: 0.5px;
+    text-transform: uppercase;
   }
 
   .party-count {
@@ -312,7 +431,7 @@
     border-radius: 8px;
     background: rgba(6, 10, 14, 0.95);
     color: #e6edf3;
-    font-family: 'Courier New', monospace;
+    font-family: 'Noto Sans KR', sans-serif;
     font-size: 13px;
   }
 

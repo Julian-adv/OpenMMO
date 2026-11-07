@@ -242,6 +242,7 @@ export type ClientMessage =
   | 'PartyLeave'
   | { PartyKick: { target_id: number } }
   | { PartyPromote: { target_id: number } }
+  | { PartySetLoot: { shared: boolean } }
   | { PartyChat: { message: string } }
   | 'RequestPartyPositions'
   | { FriendRespond: { requester_id: number; accept: boolean } }

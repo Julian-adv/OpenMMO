@@ -1835,3 +1835,24 @@ async fn play_music_without_an_instrument_is_refused() {
         Ok(ServerMessage::PlayerInteractionChanged { .. })
     ));
 }
+
+#[test]
+fn party_loot_is_a_subcommand_not_an_invite() {
+    use crate::game_state::chat::{parse_party_command, PartyCommand};
+    assert_eq!(
+        parse_party_command("/party loot"),
+        Some(PartyCommand::Loot(None))
+    );
+    assert_eq!(
+        parse_party_command("/party loot shared"),
+        Some(PartyCommand::Loot(Some(true)))
+    );
+    assert_eq!(
+        parse_party_command("/party loot priority"),
+        Some(PartyCommand::Loot(Some(false)))
+    );
+    assert_eq!(
+        parse_party_command("/party looter"),
+        Some(PartyCommand::Invite("looter"))
+    );
+}

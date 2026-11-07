@@ -359,6 +359,7 @@ it('aims Healing Prayer at a hovered party row, player or undead, else yourself'
   cast([null, 7])
   partyRoster.set({
     leaderId: 8,
+    lootShared: false,
     members: [{ id: 8, name: 'Ann', class: 'knight', hp: 30, max_hp: 30 }],
   })
   hoveredPartyMemberId.set(8)
@@ -371,6 +372,7 @@ it('aims Healing Prayer at a hovered party row, player or undead, else yourself'
   expect(networkManager.sendUseAbility).not.toHaveBeenCalled()
   partyRoster.set({
     leaderId: 8,
+    lootShared: false,
     members: [{ id: 8, name: 'Ann', class: 'knight', hp: 12, max_hp: 30 }],
   })
   cast([null, 8])

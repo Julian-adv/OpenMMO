@@ -1248,6 +1248,7 @@ impl SharedState {
             ServerMessage::PartyState {
                 leader_id,
                 ref members,
+                ..
             } => {
                 self.party_leader = (!members.is_empty()).then_some(*leader_id);
                 self.party_members = members.clone();

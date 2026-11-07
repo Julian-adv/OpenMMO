@@ -180,6 +180,7 @@ import {
 } from '../stores/tradeStore'
 import {
   partyRoster,
+  partyPanelVisible,
   applyPartyPositions,
   applyPartyVitals,
   resetPartyPositions,
@@ -1238,7 +1239,12 @@ export function handleServerMessage(
     case 'PartyState': {
       const members = data.members as PartyMemberEntry[]
       const joined = members.length > 0
-      partyRoster.set(joined ? { leaderId: data.leader_id, members } : null)
+      if (joined !== (get(partyRoster) !== null)) partyPanelVisible.set(joined)
+      partyRoster.set(
+        joined
+          ? { leaderId: data.leader_id, members, lootShared: data.loot_shared }
+          : null
+      )
       if (joined) {
         pendingPartyInvites.set([])
       } else {

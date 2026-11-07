@@ -23,6 +23,18 @@ pub(crate) struct Party {
     pub leader: PlayerId,
     /// Join order; the leader leaving promotes the earliest remaining member.
     pub members: Vec<PlayerId>,
+    /// Mates may take each other's claimed loot at once (`/party loot`).
+    pub loot_shared: bool,
+}
+
+impl Party {
+    fn mates_of(&self, player_id: &PlayerId) -> Vec<PlayerId> {
+        self.members
+            .iter()
+            .filter(|id| *id != player_id)
+            .copied()
+            .collect()
+    }
 }
 
 /// All party state behind one lock, so the membership index can never drift
@@ -46,6 +58,12 @@ impl Parties {
         self.member_of
             .get(player_id)
             .and_then(|id| self.parties.get(id))
+    }
+
+    fn party_of_mut(&mut self, player_id: &PlayerId) -> Option<&mut Party> {
+        self.member_of
+            .get(player_id)
+            .and_then(|id| self.parties.get_mut(id))
     }
 
     fn sweep_expired_summons(&mut self) {
@@ -357,6 +375,7 @@ impl super::GameState {
                     Party {
                         leader: *inviter_id,
                         members: vec![*inviter_id, *invitee_id],
+                        loot_shared: false,
                     },
                 );
                 parties.member_of.insert(*inviter_id, party_id);
@@ -406,14 +425,18 @@ impl super::GameState {
         let parties = self.parties.read().await;
         parties
             .party_of(player_id)
-            .map(|party| {
-                party
-                    .members
-                    .iter()
-                    .filter(|id| *id != player_id)
-                    .copied()
-                    .collect()
-            })
+            .map(|party| party.mates_of(player_id))
+            .unwrap_or_default()
+    }
+
+    /// Mates whose loot claims `player_id` shares; empty unless the party
+    /// shares loot.
+    pub(super) async fn loot_sharing_mate_ids(&self, player_id: &PlayerId) -> Vec<PlayerId> {
+        let parties = self.parties.read().await;
+        parties
+            .party_of(player_id)
+            .filter(|party| party.loot_shared)
+            .map(|party| party.mates_of(player_id))
             .unwrap_or_default()
     }
 
@@ -819,10 +842,10 @@ impl super::GameState {
     }
 
     pub async fn describe_party(&self, player_id: &PlayerId) -> String {
-        let (leader, ids) = {
+        let (leader, ids, loot_shared) = {
             let parties = self.parties.read().await;
             match parties.party_of(player_id) {
-                Some(party) => (party.leader, party.members.clone()),
+                Some(party) => (party.leader, party.members.clone(), party.loot_shared),
                 None => return "Party: you are not in a party. /party <name> invites.".to_string(),
             }
         };
@@ -838,7 +861,8 @@ impl super::GameState {
                 }
             })
             .collect();
-        format!("Party: {}", names.join(", "))
+        let loot = if loot_shared { "shared" } else { "priority" };
+        format!("Party: {} · loot: {loot}", names.join(", "))
     }
 
     /// Answer a map-open snapshot request: where the sender's party is now.
@@ -1031,6 +1055,58 @@ impl super::GameState {
         }
     }
 
+    /// Leader-only switch between the top-damage loot priority and loot
+    /// shared among mates (`None` toggles); a change is announced to the
+    /// whole party, a no-op only to the leader.
+    pub async fn set_party_loot(&self, player_id: &PlayerId, mode: Option<bool>) {
+        let result = {
+            let mut parties = self.parties.write().await;
+            match parties.party_of_mut(player_id) {
+                None => Err("you are not in a party."),
+                Some(party) if party.leader != *player_id => {
+                    Err("only the party leader can change the loot rule.")
+                }
+                Some(party) => {
+                    let shared = mode.unwrap_or(!party.loot_shared);
+                    let changed = shared != party.loot_shared;
+                    party.loot_shared = shared;
+                    Ok((shared, changed.then(|| party.members.clone())))
+                }
+            }
+        };
+        let (shared, changed_members) = match result {
+            Ok(outcome) => outcome,
+            Err(reason) => {
+                self.send_system_message(player_id, format!("Party: {reason}"))
+                    .await;
+                return;
+            }
+        };
+        if let Some(members) = &changed_members {
+            self.broadcast_party_state(*player_id, members).await;
+        }
+        let (key, message) = if shared {
+            (
+                "server.partyLootShared",
+                "Party: loot is shared — members can pick up each other's drops at once.",
+            )
+        } else {
+            (
+                "server.partyLootPriority",
+                "Party: loot priority is on — the top damage dealer gets 30 seconds first.",
+            )
+        };
+        let recipients = changed_members.unwrap_or_else(|| vec![*player_id]);
+        self.send_direct_message_to_players(
+            &recipients,
+            ServerMessage::SystemMessage {
+                localization: Some(LocalizedMessage::new(key)),
+                message: message.to_string(),
+            },
+        )
+        .await;
+    }
+
     /// Resolve a `/party kick|leader <name>` target among online players.
     pub async fn party_target_by_name(&self, sender_id: &PlayerId, name: &str) -> Option<PlayerId> {
         match self.player_id_by_name(name).await {
@@ -1047,6 +1123,12 @@ impl super::GameState {
     }
 
     pub(super) async fn broadcast_party_state(&self, leader_id: PlayerId, member_ids: &[PlayerId]) {
+        let loot_shared = self
+            .parties
+            .read()
+            .await
+            .party_of(&leader_id)
+            .is_some_and(|party| party.loot_shared);
         let members: Vec<PartyMember> = {
             let players = self.players.read().await;
             member_ids
@@ -1062,7 +1144,11 @@ impl super::GameState {
                 })
                 .collect()
         };
-        let msg = ServerMessage::PartyState { leader_id, members };
+        let msg = ServerMessage::PartyState {
+            leader_id,
+            members,
+            loot_shared,
+        };
         self.send_direct_message_to_players(member_ids, msg).await;
         // A reshaped party should not wait a relocation for fresh markers.
         self.party_position_dirty
@@ -1077,6 +1163,7 @@ impl super::GameState {
             ServerMessage::PartyState {
                 leader_id: PlayerId::from(0),
                 members: Vec::new(),
+                loot_shared: false,
             },
         )
         .await;

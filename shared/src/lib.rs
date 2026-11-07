@@ -245,7 +245,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// rail carts (`PushDungeonCart`, `DungeonCartPushed`, `CartStruckPlayer`);
 /// `Player.petrified` + `PlayerPetrifiedToggled` and the `crystal_eruption`
 /// skill.
-pub const PROTOCOL_VERSION: u32 = 137;
+/// v138: `PartyState.loot_shared` and `PartySetLoot` (`/party loot`).
+pub const PROTOCOL_VERSION: u32 = 138;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

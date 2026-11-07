@@ -64,6 +64,7 @@
   import { bubbleLayer } from '../stores/bubbleLayerStore'
   import { friendPanelVisible } from '../stores/friendStore'
   import { emotePanelVisible } from '../stores/emoteStore'
+  import { partyPanelVisible, partyHotkeyActive } from '../stores/partyStore'
   import { mountOverlay } from '../stores/overlayStack'
   import { networkManager, type AccountCharacter } from '../network/socket'
   import { tipHatDialog } from '../stores/tipHatStore'
@@ -378,6 +379,25 @@
               >
               <span class="social-label">{$t('emotes.title')}</span>
               <span class="key-hint">G</span>
+            </button>
+            <button
+              class="social-item"
+              onclick={() => toggleFromSocialMenu(partyPanelVisible)}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="512"
+                height="512"
+                viewBox="0 0 24 24"
+                ><path
+                  fill="currentColor"
+                  d="M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 14.4l-4.8 2.5.9-5.4-3.9-3.8 5.4-.8zM4 19h16v3H4z"
+                /></svg
+              >
+              <span class="social-label">{$t('party.title')}</span>
+              {#if $partyHotkeyActive}
+                <span class="key-hint">P</span>
+              {/if}
             </button>
           </div>
         {/if}

@@ -1,4 +1,5 @@
-import { writable } from 'svelte/store'
+import { derived, writable } from 'svelte/store'
+import { pickupKeyCode } from './pickupSettings'
 import type { CharacterClass } from '../network/networkTypes'
 
 /** One member as listed in ServerMessage::PartyState; hp is kept current
@@ -16,9 +17,14 @@ export interface PartyMemberEntry {
 export interface PartyRoster {
   leaderId: number
   members: PartyMemberEntry[]
+  /** Mates may take each other's claimed loot at once. */
+  lootShared: boolean
 }
 
 export const partyRoster = writable<PartyRoster | null>(null)
+
+/** Opens on joining and closes on leaving; the social menu toggles it. */
+export const partyPanelVisible = writable(false)
 
 /** One member's location from ServerMessage::PartyPositions. */
 export interface PartyMemberPositionEntry {
@@ -77,6 +83,7 @@ export function applyPartyVitals(vitals: PartyMemberVitalsEntry[]) {
 /** Full party reset for session-death paths (logout, reconnect, GameState
  *  snapshot); missing any one store here is how phantom party UI survives. */
 export function resetPartyStores() {
+  partyPanelVisible.set(false)
   partyRoster.set(null)
   resetPartyPositions()
   pendingPartyInvites.set([])
@@ -98,6 +105,27 @@ export const MAX_PENDING_PARTY_INVITES = 3
 
 /** Mirrors the server-side cap (`PARTY_MAX_MEMBERS` in party.rs). */
 export const PARTY_MAX_MEMBERS = 5
+
+/** Mirrors the server: partyless, or the leader of a party with room for
+ *  `targetId` (when given) who is not already in it. */
+export function canInviteToParty(
+  roster: PartyRoster | null,
+  selfId: number | undefined,
+  targetId?: number
+): boolean {
+  if (!roster) return true
+  return (
+    roster.leaderId === selfId &&
+    roster.members.length < PARTY_MAX_MEMBERS &&
+    !roster.members.some((m) => m.id === targetId)
+  )
+}
+
+/** P opens the party panel unless the player bound pickup to P. */
+export const partyHotkeyActive = derived(
+  pickupKeyCode,
+  (code) => code !== 'KeyP'
+)
 
 /** Classes with an icon in /icons/party/; others (agent-created classes,
  *  e.g. samurai) fall back to a letter badge. */
