@@ -1,9 +1,9 @@
 {
-  "date": "2026-11-07",
+  "date": "2026-11-08",
   "sources": [
     {
       "path": "assets/modular_human_female_01/faces/tripo_custom_v1/base_custom.glb",
-      "sha256": "0ec4b7025042d8a9735cfde95a9dbb72b78854bc2904dab6fcdd9aa035f94b59"
+      "sha256": "a4573c39069fa0eb93a2f973cb03e43fc5e8dc15cdfaa9dd20a21d6f25fe2a41"
     },
     {
       "path": "assets/modular_human_female_01/faces/tripo_custom_v1/source.glb",
@@ -15,12 +15,12 @@
     },
     {
       "path": "assets/modular_human_female_01/faces/tripo_custom_v1/face_custom.glb",
-      "sha256": "9d5fb11904676dc421dfff6ab0e78c372cc677f371967838138d5539085430ec"
+      "sha256": "92f99f4cc6c94bcbc9ba55d58a7787c2c660b7daab6f120590017392ca49c674"
     }
   ],
   "bones": 65,
   "seam_vertex_groups": 105,
-  "rigid_face_vertices": 7070,
+  "rigid_face_vertices": 8110,
   "standalone_binding": true,
   "neck_seams": 1,
   "reference_eye_rebuild": false,
@@ -74,7 +74,7 @@
     29704
   ],
   "original_eye_and_eyelash_faces_restored": true,
-  "original_head_alpha_only": true,
+  "original_head_alpha_only": false,
   "protected_eye_source_faces": [
     561,
     9206,
@@ -110,11 +110,233 @@
     29432,
     29439
   ],
+  "original_head_geometry_preserved": false,
+  "lower_eyelid_fit": {
+    "date": "2026-11-08",
+    "drop_mm": 2.8,
+    "baseline_path": "lower_lid_ridge_v2/before/base_custom.glb",
+    "baseline_sha256": "03efe95158369779001cd929daffd47aa0d7070174fc4bf13be6ff5df6c5f7f3",
+    "ridge_x_knots_m": [
+      0.016,
+      0.02,
+      0.0242,
+      0.0277,
+      0.0321,
+      0.0356,
+      0.0391,
+      0.0409,
+      0.0435,
+      0.0462,
+      0.05,
+      0.055
+    ],
+    "ridge_y_knots_m": [
+      1.6813,
+      1.6813,
+      1.6804,
+      1.6804,
+      1.6804,
+      1.6813,
+      1.6822,
+      1.68305,
+      1.6848,
+      1.6857,
+      1.6857,
+      1.6857
+    ],
+    "meshes": {
+      "female_body": {
+        "moved_vertices": 0,
+        "maximum_drop_mm": 0,
+        "minimum_jacobian": 1
+      },
+      "face_female_custom": {
+        "moved_vertices": 702,
+        "maximum_drop_mm": 2.8,
+        "minimum_jacobian": 0.47569084842873044
+      },
+      "eyelashes_female_custom": {
+        "moved_vertices": 231,
+        "maximum_drop_mm": 2.8,
+        "minimum_jacobian": 0.47569084842873044
+      }
+    },
+    "ridge_landmarks": [
+      {
+        "vertex": 1637,
+        "before": [
+          -0.044327110052108765,
+          1.6848070621490479,
+          0.0619237944483757
+        ],
+        "after": [
+          -0.044327110052108765,
+          1.6823487281799316,
+          0.0619237944483757
+        ],
+        "drop_mm": 2.458361410700775
+      },
+      {
+        "vertex": 1800,
+        "before": [
+          -0.04256843775510788,
+          1.6830483675003052,
+          0.06280312687158585
+        ],
+        "after": [
+          -0.04256843775510788,
+          1.6802483797073364,
+          0.06280312687158585
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 1802,
+        "before": [
+          -0.04168910160660744,
+          1.6830483675003052,
+          0.0619237944483757
+        ],
+        "after": [
+          -0.04168910160660744,
+          1.6802483797073364,
+          0.0619237944483757
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 1759,
+        "before": [
+          -0.03993043303489685,
+          1.6821690797805786,
+          0.06368246674537659
+        ],
+        "after": [
+          -0.03993043303489685,
+          1.6793690919876099,
+          0.06368246674537659
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 1747,
+        "before": [
+          -0.03729242458939552,
+          1.680410385131836,
+          0.06632047146558762
+        ],
+        "after": [
+          -0.03729242458939552,
+          1.6776103973388672,
+          0.06632047146558762
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 1780,
+        "before": [
+          -0.03641308844089508,
+          1.6812896728515625,
+          0.06456179916858673
+        ],
+        "after": [
+          -0.03641308844089508,
+          1.6784896850585938,
+          0.06456179916858673
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 1826,
+        "before": [
+          -0.03289574757218361,
+          1.680410385131836,
+          0.06456179916858673
+        ],
+        "after": [
+          -0.03289574757218361,
+          1.6776103973388672,
+          0.06456179916858673
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 1822,
+        "before": [
+          -0.03289574757218361,
+          1.680410385131836,
+          0.06632047146558762
+        ],
+        "after": [
+          -0.03289574757218361,
+          1.6776103973388672,
+          0.06632047146558762
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 2011,
+        "before": [
+          -0.028499068692326546,
+          1.680410385131836,
+          0.06632047146558762
+        ],
+        "after": [
+          -0.028499068692326546,
+          1.6776103973388672,
+          0.06632047146558762
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 2024,
+        "before": [
+          -0.024981725960969925,
+          1.680410385131836,
+          0.06544113904237747
+        ],
+        "after": [
+          -0.024981725960969925,
+          1.6776103973388672,
+          0.06544113904237747
+        ],
+        "drop_mm": 2.8
+      }
+    ],
+    "core_ridge_translation_preserves_curve": true,
+    "new_triangles": 0,
+    "body_and_neck_unchanged": true,
+    "horizontal_and_depth_coordinates_unchanged": true,
+    "triangle_order_winding_uv0_weights_rig_animations_unchanged": true,
+    "original_maps_countershifted_against_mesh_motion": true,
+    "secondary_uv_patches": [
+      {
+        "side": -1,
+        "origin": [
+          590,
+          6
+        ],
+        "size": 512,
+        "triangles": 384
+      },
+      {
+        "side": 1,
+        "origin": [
+          1294,
+          1206
+        ],
+        "size": 512,
+        "triangles": 382
+      }
+    ],
+    "source": "Original user Tripo model, iris cleanup baseline and user red/blue lower eyelid annotation",
+    "license": "Source license not supplied; same source conditions apply. Local geometry and UV baking; no new AI generation."
+  },
   "upper_lash_roots_fitted": false,
   "lower_lash_roots_fitted": false,
-  "head_affine_scope": "Entire source head, including eyes and eyelashes, scalp and neck",
-  "new_head_scale_and_translation_only": true,
-  "maximum_head_affine_error_m": 2.2250491372754983e-16,
+  "head_affine_scope": "Original scale and translation except the explicitly translated lower eyelid ridge",
+  "new_head_scale_and_translation_only": false,
+  "maximum_head_affine_error_m": 0.0028,
   "clips": [
     {
       "name": "idle1",

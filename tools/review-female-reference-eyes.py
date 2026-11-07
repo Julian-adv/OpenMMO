@@ -14,6 +14,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--iteration', required=True)
     parser.add_argument('--model', type=Path)
+    parser.add_argument('--clay', action='store_true')
     args = parser.parse_args()
     directory = WORK / 'review' / args.iteration
     directory.mkdir(parents=True, exist_ok=True)
@@ -29,6 +30,8 @@ def main():
         page.goto('http://127.0.0.1:10124/modular-character-preview.html?character=female-face&face=custom&hair=none&camera=face', wait_until='networkidle')
         page.wait_for_selector('body[data-ready="true"]')
         page.evaluate('r.setAnimationLoop(null);r.setPixelRatio(1)')
+        if args.clay:
+            page.evaluate("""s.traverse(o=>{if(!o.isMesh)return;if(o.name==='eyelashes_female_custom'){o.visible=false;return}const clean=m=>{const a=m.clone();a.map=null;a.normalMap=null;a.roughnessMap=null;a.metalnessMap=null;a.aoMap=null;a.metalness=0;a.roughness=.8;a.color.set('#999999');return a};o.material=Array.isArray(o.material)?o.material.map(clean):clean(o.material)})""")
         views = [
             ('front', [940, 1184], [.001, 1.6821, .813], [.001, 1.6821, 0], 20),
             ('eyes', [1184, 420], [.001, 1.6821, .813], [.001, 1.6821, 0], 3.6),
@@ -50,6 +53,7 @@ def main():
         assert not errors, errors
         model = args.model or WORK.parent / 'base_custom_preview.glb'
         record = {'iteration': args.iteration, 'model_sha256': hashlib.sha256(model.read_bytes()).hexdigest(),
+                  'render_mode': 'clay' if args.clay else 'material',
                   'browser_errors': errors, 'views': [view[0] for view in views],
                   'camera_parameters': {name: {'viewport': size, 'position': position, 'target': target, 'fov': fov}
                                         for name, size, position, target, fov in views}}

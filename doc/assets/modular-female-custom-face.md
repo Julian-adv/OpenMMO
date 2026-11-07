@@ -1,4 +1,4 @@
-# 여성 사용자 제공 얼굴: 목 연결과 원본 속눈썹 살색 알파
+# 여성 사용자 제공 얼굴: 목 연결·속눈썹 알파·아래 눈꺼풀 단차
 
 2026-11-07. 사용자의 요청으로 **눈·속눈썹을 수정하기 전, 원본 머리에 목만 맞춘 버전**으로 복원했다.
 현재 브랜치는 `codex/female-new-face`이며 게임 외형 목록에는 등록하지 않았다.
@@ -6,12 +6,12 @@
 
 ## 현재 상태
 
-사용자 제공 머리 전체에 균일 배율 `1.8008793356130923`과 이동 `[-0.0008, 0, 0.014]m`만 적용했다.
+목 피팅 기준본은 사용자 제공 머리 전체에 균일 배율 `1.8008793356130923`과 이동 `[-0.0008, 0, 0.014]m`만 적용했다.
 눈·눈꺼풀·눈썹 주변·두피·목과 원래 속눈썹 판의 모든 정점 위치·노멀·가중치를 포함한다.
-눈 형상 변형, 새 안구, 생성 속눈썹·뿌리 피팅, 생성 홍채와 눈 UV·재질 보정은 사용하지 않는다.
-피부·안구의 원본 PBR 재질 값과 컬러·노멀·ORM 이미지 바이트를 복원했다.
+이전 눈꺼풀 시안은 복원한 뒤, 아래의 v2 작업에서 실제 단차선을 찾아 곡선을 유지하며 내렸다.
+원본 PBR 재질 값과 노멀맵을 유지한다. 홍채 반사광 116픽셀 보정본을 기준으로, 아래 단차의 컬러·ORM 매핑을 위로 보정했다.
 속눈썹에만 원본 컬러 픽셀을 보존한 RGBA 아틀라스와 알파 재질을 사용한다.
-압축 전 GLB의 머리 좌표는 원본 스케일·이동 결과와 float32 정밀도 안에서 일치한다.
+단차선 주변 밖의 머리 좌표는 원본 스케일·이동 결과를 유지한다.
 
 몸체와 머리는 높이 **1.552m**의 한 경계에서 직접 연결한다. 별도 목 연결면은 없다.
 기존 몸체 목 아래 5cm의 피팅과 목 아래 3.5cm의 피부색 보정은 유지한다.
@@ -20,15 +20,64 @@
 
 현재 미리보기:
 `/modular-character-preview.html?character=female-face&face=custom&hair=none&camera=face`.
-현재 개발 미리보기 조명으로 표시하며, 얼굴 형상과 피부·안구 재질은 원본이다. 속눈썹 살색 알파만 추가했다.
+현재 개발 미리보기 조명으로 표시하며, 아래 눈꺼풀 단차선 주변을 제외한 얼굴 형상과 PBR 재질 값은 원본이다. 속눈썹 살색 알파와 아래의 홍채 반사광 완화를 적용했다.
 [복원된 정면](../images/characters/modular_human_female_01/customization/face-custom-neck-only-restored-front.png),
 [눈 확대](../images/characters/modular_human_female_01/customization/face-custom-neck-only-restored-eyes.png).
+
+## 아래 눈꺼풀 단차선 v2
+
+2026-11-08, 사용자 빨간색·파란색 표시를 기준으로 실제 메시 단차의 앞·뒤 모서리를 찾았다.
+이전 시안은 이 정점들이 대부분 고정된 채 아래쪽 면만 움직였기 때문에 폐기했다.
+이번에는 중앙 단차선 정점 9개를 모두 2.8mm 하향 평행 이동했다. 바깥쪽 정점은 2.458mm 내리고,
+눈꼬리와 주변 피부에 부드럽게 연결한다. 중앙 정점 사이의 상대 좌표를 비교해 기존 곡선 보존을 검사했다.
+원래 윗속눈썹 위치는 고정하며 X·Z 좌표, 몸체·목·리그·가중치·9개 동작을 유지한다.
+
+따라 내려간 텍스처는 기존 색과 ORM을 정면 투영해 반대 방향으로 보정했다. 원래 눈동자 무늬를 유지하며,
+작은 UV 조각이 늘어나는 문제를 피하도록 원본 아틀라스의 사용하지 않는 공간에 512×512 패치 두 개를 배치했다.
+머리의 컬러·ORM에 UV1을 사용하고 원본 UV0·노멀맵은 유지한다. UV 경계의 정점은 복제하지만
+삼각형은 추가하지 않는다. 전체 23,444삼각형, 메시·재질 3개와 텍스처 최대 변 2048을 유지한다.
+속눈썹 RGBA는 그대로다. 새 AI 이미지나 안구 형상은 생성하지 않았다.
+
+텍스처 없는 회색 렌더와 실제 재질 렌더를 정면·사선·측면에서 비교했다.
+33개 안구 불투명 면, 새로 열린 영역의 5시점 표본 검사, 225자세의 목 경계·머리 본 추종,
+압축 전후 정점 속성·삼각형 와인딩·동작과 속눈썹 RGBA 검사를 통과했다.
+표시선에 대한 수동 근사이며 원본의 거친 표면 디테일은 남아 있다.
+
+기준 GLB·압축본·편집본은 `lower_lid_ridge_v2/before/`에 **[미사용: v2 수정 전 비교·재현용]**으로 보존한다.
+사용자 표시와 제어점, 두 UV 패치, 원본 색을 이용한 보정 맵은 `lower_lid_ridge_v2/`에 있다.
+로컬 Python·Three.js·Blender 작업이며 원본 모델과 기존 홍채 보정의 출처·라이선스를 따른다.
+[메시와 재질 전후 비교](../images/characters/modular_human_female_01/customization/face-custom-ridge-v2-comparison.png),
+[검증·출처 기록](modular-female-custom-face-ridge-v2.json).
+
+## 아래 눈꺼풀 시안 [미사용]
+
+2026-11-08 아래 눈꺼풀을 내린 시안은 측면에서 돌출된 경계가 충분히 이동하지 않고
+텍스처만 내려간 것처럼 보여 사용자가 원상복구를 요청했다.
+`lower_lid_fit_v1/before/`의 GLB·미리보기·Blender·피팅 기록을 그대로 복원했다.
+이 복원본을 위 v2 작업의 기준으로 사용한다.
+`tools/fit-female-lower-eyelids.py`와 해당 비교 이미지는 **[미사용]**이다.
+거절한 모델은 `lower_lid_fit_v1/rejected-fitting/`에 보존한다.
+[실험 기록](modular-female-custom-face-lower-lid-fit-v1.json).
+
+## 홍채의 고정 반사광 완화
+
+2026-11-08, 커밋 `f1775cb9`의 눈동자를 기준으로 컬러맵에 그려진 강한 흰 반사 무늬만 줄였다.
+원본 색을 정면 투영해 ImageGen으로 수정한 뒤, 홍채 내부의 밝은 반사광 마스크에만 최대 65% 혼합했다.
+2048×2048 컬러맵에서 바뀐 픽셀은 116개, 채널 최대 변화는 65/255다. 마스크 밖의 픽셀은 동일하다.
+황갈색 무늬·동공·흰자·눈꺼풀·형상·UV·리그·동작과 속눈썹 RGBA를 유지한다.
+노멀·ORM·재질 값은 바꾸지 않아 실제 조명에 의한 반사는 남는다.
+
+보정 입력·출력·마스크·커밋 기준본은 `iris_highlight_cleanup_v1/`에 보존했다.
+기준본은 **[미사용: 보정 전 비교 및 재현용]**이며, 새 원본은 사용자 제공 Tripo 파일이다.
+ImageGen은 **ChatGPT Pro 20x**, 2026-11-08 생성이다. 기존 원본의 출처·라이선스 조건을 따른다.
+[실제 미리보기 전후](../images/characters/modular_human_female_01/customization/face-custom-iris-highlight-cleanup-v1.png),
+[보정·검증 기록](modular-female-custom-face-iris-highlights-v1.json).
 
 ## 원본 속눈썹의 살색 알파
 
 원본 속눈썹 판 475삼각형만 별도 `MASK` 재질로 분리했다. 원본의 어두운 무늬는 남기고,
 밝기와 따뜻한 갈색 차이로 살색·피부 그림자에 투명도를 적용했다. cutoff는 0.5다.
-새 가닥을 그리거나 형상·위치·굵기·방향을 바꾸지 않았다. 원본 UV0도 유지한다.
+새 가닥이나 형상·위치·굵기·방향 보정은 추가하지 않았다. 원본 UV0는 유지한다.
 원래 판의 노멀·ORM과 기타 PBR 값은 그대로 사용한다.
 
 원본 컬러 조각만 256×256 RGBA에 패킹하고 컬러용 UV1을 추가했다. 원본 픽셀 해상도를 유지하며,
@@ -96,6 +145,13 @@ Meshopt 정점 압축, WebP 컬러 품질 94와 JPEG 노멀·ORM을 사용한다
 ```bash
 .venv/bin/python tools/restore-female-neck-fit.py
 .venv/bin/python tools/apply-female-original-lash-alpha.py
+.venv/bin/python tools/clean-female-iris-highlights.py
+.venv/bin/python tools/fit-female-eyelid-ridge.py
+node tools/optimize-modular-part.mjs \
+  assets/modular_human_female_01/faces/tripo_custom_v1/lower_lid_ridge_v2/base_custom.glb \
+  assets/modular_human_female_01/faces/tripo_custom_v1/lower_lid_ridge_v2/base_custom_preview.glb \
+  --body --size=2048 --quality=94 --keep-alpha-png
+.venv/bin/python tools/fit-female-eyelid-ridge.py --activate
 node tools/optimize-modular-part.mjs \
   assets/modular_human_female_01/faces/tripo_custom_v1/base_custom.glb \
   assets/modular_human_female_01/faces/tripo_custom_v1/base_custom_preview.glb \

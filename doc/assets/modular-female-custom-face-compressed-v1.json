@@ -1,17 +1,17 @@
 {
-  "date": "2026-11-07",
+  "date": "2026-11-08",
   "sources": [
     {
       "path": "/home/jake/.codex/worktrees/female-new-face/OnlineRPG/assets/modular_human_female_01/faces/tripo_custom_v1/base_custom.glb",
-      "sha256": "0ec4b7025042d8a9735cfde95a9dbb72b78854bc2904dab6fcdd9aa035f94b59"
+      "sha256": "a4573c39069fa0eb93a2f973cb03e43fc5e8dc15cdfaa9dd20a21d6f25fe2a41"
     },
     {
       "path": "/home/jake/.codex/worktrees/female-new-face/OnlineRPG/assets/modular_human_female_01/faces/tripo_custom_v1/base_custom_preview.glb",
-      "sha256": "33de82b1b5222d235b45c09ec86ce6ce76b4c0c85b4e954590531d97151a6f64"
+      "sha256": "3234e15963d5f7652d992d55d18d9eba13af08f51be44716bdcc40f7b9ca7395"
     }
   ],
-  "source_bytes": 25225152,
-  "output_bytes": 4642656,
+  "source_bytes": 27025716,
+  "output_bytes": 4601212,
   "triangles": 23444,
   "all_vertex_attributes_exact": true,
   "triangle_order_and_winding_preserved": true,

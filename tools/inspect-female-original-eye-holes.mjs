@@ -31,7 +31,12 @@ function interp(x, xs, ys) {
 function interior(p) {
   const x = Math.abs(p.x + .0008), xs = [.016, .020, .026, .033, .040, .047, .052]
   const top = interp(x, xs, [1.6819, 1.6860, 1.6891, 1.6894, 1.6878, 1.6854, 1.6835])
-  const bottom = interp(x, xs, [1.6819, 1.6804, 1.6795, 1.6796, 1.6806, 1.6826, 1.6835])
+  let bottom = interp(x, xs, [1.6819, 1.6804, 1.6795, 1.6796, 1.6806, 1.6826, 1.6835])
+  if (fitting.lower_eyelid_fit?.ridge_x_knots_m) {
+    const t = value => { const q = Math.max(0, Math.min(1, value)); return q * q * (3 - 2 * q) }
+    const ends = t((x - .016) / .005) * (1 - t((x - .042) / .007))
+    bottom = interp(x, fitting.lower_eyelid_fit.ridge_x_knots_m, fitting.lower_eyelid_fit.ridge_y_knots_m) - fitting.lower_eyelid_fit.drop_mm / 1000 * ends
+  }
   return x > .0165 && x < .0515 && p.y > bottom + .0002 && p.y < top - .0002 && p.z > .051
 }
 const { server, load } = await headlessThree()
@@ -42,14 +47,16 @@ try {
     for (let i = 0; i < mesh.geometry.index.count / 3; i++) sourceKeys.set(key(mesh.geometry, i, true), i)
   })
   const { scene } = await load(directory + 'base_custom.glb'), meshes = []
+  const mapping = fitting.lower_eyelid_fit ? (await load(directory + fitting.lower_eyelid_fit.baseline_path)).scene : scene
   scene.traverse(original => {
     if (!original.isSkinnedMesh || original.name === 'female_body') return
+    const mappingGeometry = mapping.getObjectByName(original.name).geometry
     const geometry = original.geometry.clone(), p = geometry.attributes.position, ids = geometry.index.array, indices = [], sourceIds = []
     for (let j = 0; j < ids.length; j += 3) {
       const points = [0, 1, 2].map(k => new THREE.Vector3().fromBufferAttribute(p, ids[j + k]))
-      if (Math.max(...points.map(q => q.y)) < 1.675 || Math.min(...points.map(q => q.y)) > 1.696 || Math.max(...points.map(q => q.z)) < .035) continue
+      if (Math.max(...points.map(q => q.y)) < 1.665 || Math.min(...points.map(q => q.y)) > 1.696 || Math.max(...points.map(q => q.z)) < .035) continue
       indices.push(...ids.slice(j, j + 3))
-      sourceIds.push(sourceKeys.get(key(original.geometry, j / 3)))
+      sourceIds.push(sourceKeys.get(key(mappingGeometry, j / 3)))
     }
     geometry.setIndex(indices)
     geometry.computeBoundingSphere()

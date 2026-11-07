@@ -7,12 +7,21 @@ const directory = 'assets/modular_human_female_01/faces/tripo_custom_v1/'
 const fitting = JSON.parse(readFileSync(new URL('../' + directory + 'fitting.json', import.meta.url), 'utf8'))
 assert.equal(fitting.neck_seams, 1)
 assert.equal(fitting.neck_bridge_triangles, 0)
-assert.equal(fitting.new_head_scale_and_translation_only, true)
-assert.ok(fitting.maximum_head_affine_error_m < 1e-12)
-if (fitting.original_head_alpha_only) {
-  assert.equal(fitting.geometry_rig_and_animations_unchanged, true)
+const lowerLidFit = fitting.lower_eyelid_fit
+if (lowerLidFit) {
+  assert.equal(lowerLidFit.new_triangles, 0)
+  assert.equal(lowerLidFit.body_and_neck_unchanged, true)
+  assert.equal(lowerLidFit.core_ridge_translation_preserves_curve, true)
+} else {
+  assert.equal(fitting.new_head_scale_and_translation_only, true)
+  assert.ok(fitting.maximum_head_affine_error_m < 1e-12)
+}
+const originalGeometry = fitting.original_head_alpha_only || fitting.original_head_geometry_preserved
+const originalTopology = originalGeometry || Boolean(lowerLidFit)
+if (originalTopology) {
+  if (!lowerLidFit) assert.equal(fitting.geometry_rig_and_animations_unchanged, true)
   assert.equal(fitting.original_lash_rgb_preserved, true)
-  assert.equal(fitting.eyelashes.positions_normals_weights_and_triangles_preserved, true)
+  if (!lowerLidFit) assert.equal(fitting.eyelashes.positions_normals_weights_and_triangles_preserved, true)
 } else if (fitting.neck_fit_only) {
   assert.equal(fitting.source_head_material_preserved, true)
   assert.equal(fitting.eye_and_eyelash_edits_applied, false)
@@ -128,17 +137,19 @@ try {
   const original = await load('assets/modular_human_female_01/rig_v1/female-base.glb')
   const standalone = await load(directory + 'face_custom.glb')
   assert.equal(bindModularPart(original.scene, standalone.scene).length, fitting.neck_fit_only ? 1 : 2)
-  const report = { date: '2026-11-07', sources, bones: bones.length, seam_vertex_groups: seams.length,
+  const report = { date: fitting.iris_highlight_cleanup?.date ?? '2026-11-07', sources, bones: bones.length, seam_vertex_groups: seams.length,
     rigid_face_vertices: rigid.length, standalone_binding: true, neck_seams: 1,
     reference_eye_rebuild: Boolean(fitting.reference_eye_rebuild),
     neck_fit_only: Boolean(fitting.neck_fit_only),
     source_lash_faces_absent_from_opaque_head: fitting.neck_fit_only ? [] : [...rearSideFaces, ...upperBackFaces].filter(triangle => !fitting.protected_eye_source_faces?.includes(triangle)),
-    original_eye_and_eyelash_faces_restored: Boolean(fitting.neck_fit_only || fitting.original_head_alpha_only),
+    original_eye_and_eyelash_faces_restored: Boolean(fitting.neck_fit_only || originalTopology),
     original_head_alpha_only: Boolean(fitting.original_head_alpha_only),
     protected_eye_source_faces: fitting.protected_eye_source_faces ?? [],
-    upper_lash_roots_fitted: !fitting.neck_fit_only && !fitting.original_head_alpha_only,
-    lower_lash_roots_fitted: !fitting.neck_fit_only && !fitting.original_head_alpha_only, head_affine_scope: fitting.head_affine_scope,
-    new_head_scale_and_translation_only: true, maximum_head_affine_error_m: fitting.maximum_head_affine_error_m, clips,
+    original_head_geometry_preserved: Boolean(originalGeometry),
+    lower_eyelid_fit: lowerLidFit ?? null,
+    upper_lash_roots_fitted: !fitting.neck_fit_only && !originalTopology,
+    lower_lash_roots_fitted: !fitting.neck_fit_only && !originalTopology, head_affine_scope: fitting.head_affine_scope,
+    new_head_scale_and_translation_only: fitting.new_head_scale_and_translation_only, maximum_head_affine_error_m: fitting.maximum_head_affine_error_m, clips,
     scope: 'Rest binding, normalized weights, finite deformation, rigid head tracking and neck seams. Hair and equipment intersections require visual review.' }
   writeFileSync(new URL('../doc/assets/modular-female-custom-face-animation-v1.json', import.meta.url), JSON.stringify(report, null, 2) + '\n')
   writeFileSync(new URL('../' + directory + 'animation-snapshots.json', import.meta.url), JSON.stringify(snapshots) + '\n')

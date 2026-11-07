@@ -58,7 +58,7 @@ for (const [i, material] of source.listMaterials().entries()) {
   }
 }
 const report = {
-  date: '2026-11-07', sources: inputs.map((input, i) => ({ path: new URL(i ? 'base_custom_preview.glb' : 'base_custom.glb', directory).pathname, sha256: createHash('sha256').update(input).digest('hex') })),
+  date: fitting.iris_highlight_cleanup?.date ?? '2026-11-07', sources: inputs.map((input, i) => ({ path: new URL(i ? 'base_custom_preview.glb' : 'base_custom.glb', directory).pathname, sha256: createHash('sha256').update(input).digest('hex') })),
   source_bytes: inputs[0].length, output_bytes: inputs[1].length, triangles,
   all_vertex_attributes_exact: true, triangle_order_and_winding_preserved: true,
   animations_exact: source.listAnimations().length,
