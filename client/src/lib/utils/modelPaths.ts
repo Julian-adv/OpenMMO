@@ -19,7 +19,6 @@ export function isModularModel(path: string): boolean {
   return path === MODULAR_MALE_MODEL_PATH || isModularFemaleModel(path)
 }
 
-export const KNIGHT_CHARACTER_MODEL_PATH = '/models/characters/knight.glb'
 export const MERCHANT_CHARACTER_MODEL_PATH = '/models/characters/npc_woman.glb'
 export const GUARD_CHARACTER_MODEL_PATH = '/models/characters/guard.glb'
 export const FEMALE_BARD_CHARACTER_MODEL_PATH =
@@ -58,7 +57,7 @@ const CLASS_GENDER_MODELS: Partial<
   Record<CharacterClass, Partial<Record<Gender, string>>>
 > = {
   knight: {
-    male: KNIGHT_CHARACTER_MODEL_PATH,
+    male: MODULAR_MALE_MODEL_PATH,
     female: MODULAR_FEMALE_MODEL_PATH,
   },
   barbarian: {
@@ -155,5 +154,5 @@ export function getCharacterModelPath(
     if (gender && genders[gender]) return genders[gender]
     return Object.values(genders)[0]
   }
-  return KNIGHT_CHARACTER_MODEL_PATH
+  return MODULAR_MALE_MODEL_PATH
 }

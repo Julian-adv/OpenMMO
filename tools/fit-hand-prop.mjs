@@ -37,7 +37,7 @@
  *   node tools/fit-hand-prop.mjs                       # mandolin / guitar_playing
  *   node tools/fit-hand-prop.mjs --tilt 15             # neck up, body to the waist
  *   node tools/fit-hand-prop.mjs --prop weapons/x.glb --clip bowing \
- *        --pack social --char knight.glb
+ *        --pack social --char modular_male/base.glb
  *
  * It prints a rotation and a position for the attach site in PlayerModel.svelte
  * (the position is the plain palm offset only at --tilt 0 --push 0). Re-run it
@@ -88,7 +88,7 @@ const LIFT = Number(opt('lift', 0))
 // spread across these is the check that it does.
 const CHARS = opt(
   'char',
-  'female_bard.glb,knight.glb'
+  'female_bard.glb,modular_male/base.glb'
 ).split(',')
 
 // ── GLB reading (JSON + BIN chunks, no glTF library) ────────────────────────

@@ -387,15 +387,17 @@ tip followed the handle. Other rigs and offhand props kept their previous placem
 
 ## Riding
 
-- `client/public/models/animations/riding.glb` — 기존 `knight.glb` 리그에 Blender에서
-  직접 만든 기승 자세 `ride` (30fps, 4초 반복, 2026-09-08). 다리를 말 양옆으로 벌리고
+- `client/public/models/animations/riding.glb` — Blender에서
+  직접 만든 기승 자세 `ride` (30fps, 4초 반복, 2026-09-08).
+  2026-11-07부터 모듈형 남자 리그(`assets/modular_human_male_01/fitted/base.glb`)에서 만든다.
+  이전 `knight.glb` 리그 결과와 비교해 리타게팅 후 관절 위치 차이는 5mm 이내다. 다리를 말 양옆으로 벌리고
   팔은 고삐를 잡는 방향으로 배치했으며, 엉덩이를 원점으로 옮겨 `RideSeat`에 맞춘다.
 - 같은 날 고정 자세를 호흡 루프로 바꿨다. 척추 3개 본의 앞뒤 기울기 합계 ±2°,
   좌우 흔들림 합계 ±0.8°에 목·머리의 작은 반대 움직임을 더했다. 엉덩이와 다리의
   로컬 자세는 유지한다. 여자 로그의 머리 이동 폭 약 2.2cm, 손 약 2.8cm이며,
   남녀 기사와 함께 리타게팅 후 움직임·엉덩이 고정·루프 연결을 확인했다.
-- 포즈는 자체 제작이며 AI 신규 생성은 없다. 소스 메시·리그는 기존
-  [Knight의 출처 및 라이선스](characters.md#knight)를 따른다.
+- 포즈는 자체 제작이며 AI 신규 생성은 없다. 소스 메시·리그는
+  [모듈형 남자 캐릭터](modular-human-male-01.md)의 출처와 라이선스를 따른다.
   GLB에 리타게팅에 필요한 스킨 메시를 포함하며 재질·텍스처는 제외한다.
 - packed 작업 파일: `assets/horse/rider.blend`.
   재현: `blender -b --python-exit-code 1 -P tools/blender-scripts/prepare_horse_mount.py -- --rider-only`.

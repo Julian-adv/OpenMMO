@@ -188,7 +188,7 @@ def aim(arm, name, direction):
 
 def rider():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    bpy.ops.import_scene.gltf(filepath=str(OUT / 'characters/knight.glb'))
+    bpy.ops.import_scene.gltf(filepath=str(ROOT / 'assets/modular_human_male_01/fitted/base.glb'))
     arm = next(o for o in bpy.context.scene.objects if o.type == 'ARMATURE')
     bpy.context.scene.render.fps = 30
     for obj in list(bpy.context.scene.objects):

@@ -233,10 +233,6 @@
 - 사제 힐 할 때 대미지처럼 +힐량 표시
 - 사제 힐 할 때 사운드 이펙트
 - 도적 던전 보스 재밌게 만들기(스킬 추가, 함정 추가, ...)
-- 말타기 기수 포즈를 모듈형 남자 base 스켈레톤으로 다시 만들기
-  - `tools/blender-scripts/prepare_horse_mount.py`의 `rider()`가 아직 `characters/knight.glb`를 불러온다. knight는 팔 바인드 각도·길이와 손가락 본이 base와 다르다
-  - `--rider-only`로 `animations/riding.glb` 재생성 → 모듈형 남·여 `animations/riding.glb` 팩 재생성 → 게임에서 탑승 자세 확인 → HF 업로드·lock 갱신
-  - 끝나면 `knight.glb`를 lock과 `modelPaths.ts`에서 제거(다른 클래스별 모델은 2026-11-07에 제거됨)
 
 # 폐지
 

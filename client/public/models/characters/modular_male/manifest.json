@@ -26,7 +26,7 @@
     "client/public/models/animations/offhand.glb": "b9dfabc7e57505515da545622ac7b781541d550d035c3351bfb1c532fc2df125",
     "client/public/models/animations/enchant_armor.glb": "77178f2ea299e1ebd73351c290285442347134c8519723e37c07ce722c409568",
     "client/public/models/animations/great_sword.glb": "ff7e995994d4f95298c1dd444e0e16dd5f93b7c6728de1fe6d8077a2624c366d",
-    "client/public/models/animations/riding.glb": "e0d76b9900e0f9bf76425c4165ebba8fd9e350895f9d99779a085af6dc51c9f8",
+    "client/public/models/animations/riding.glb": "8b8e25405558fe2cd782c052c8675d775bf5209848b2d9bfd909ef122be8d6a1",
     "assets/modular_human_male_01/rogue/tripo_v1/top_rogue.glb": "299e5e8d681810315e5f32673f8d3a5f6a57c2a6154e2613c8dabdf1fc08e638",
     "assets/modular_human_male_01/rogue/tripo_pants_v1/pants_rogue.glb": "7178d06a9b2e18953e2c3fb0672df8424b688d6f4ccc47affc856a9084e8e81c",
     "assets/modular_human_male_01/rogue/tripo_wrap_v1/gloves_rogue.glb": "80107110dabfcbd0c6bda685550e52b0133e6c62272c6ab660a6b24f11eb835a",
@@ -152,7 +152,7 @@
       ]
     },
     "animations/riding.glb": {
-      "sha256": "3ee1fb3ebd82051687a5a05256b6535354c69c7d2db5844ddd1f8cb481920741",
+      "sha256": "102efe4849d7ab7adc7530ad91e5f120e03fb3dc7595a89af2ebdfc288282542",
       "clips": ["ride"]
     },
     "top_rogue.glb": "d32623aa4e007c4b406d8450134e8ad7952d5cf04034abf1f0eb6189ce1401ee",
