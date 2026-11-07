@@ -80,19 +80,30 @@
     string,
     { scene: THREE.Group; clips: THREE.AnimationClip[] }
   >()
+  interface FurnitureEntry {
+    chest: EstateChest
+    moving: boolean
+    visual: THREE.Group
+    fire?: FireParticles
+    firePosition?: THREE.Vector3
+    torch: boolean
+    materials: THREE.Material[]
+  }
+
   let lastChests: Map<number, EstateChest> | null = null
   let lastWrapX = Infinity
   let lastFloorLevel = Infinity
   let lastMovingFurnitureId: number | undefined
+  let housesChanged = false
   let placementLayer = $state<GameSceneEstateFurniturePlacementLayer>()
   let disposed = false
   let lastOpened: number | null = null
+  const entries = new SvelteMap<number, FurnitureEntry>()
   const visuals = new SvelteMap<number, THREE.Group>()
   const mixers = new SvelteMap<number, THREE.AnimationMixer>()
   const loadingModels = new SvelteSet<string>()
   const failedModels = new SvelteSet<string>()
   const signTexts = new SvelteMap<string, THREE.Mesh>()
-  const savedPositionMaterials: THREE.Material[] = []
   const fires: FireParticles[] = []
   const firePositions: THREE.Vector3[] = []
   const torchPositions: THREE.Vector3[] = []
@@ -182,24 +193,26 @@
       chest.position.z
     )
     visual.rotation.y = THREE.MathUtils.degToRad(chest.rotation_deg)
+    const entry: FurnitureEntry = {
+      chest,
+      moving,
+      visual,
+      torch: model?.fireKind === 'torch',
+      materials: [],
+    }
     if (model?.fire && !moving) {
-      const fire =
-        model.fireKind === 'torch'
-          ? new TorchFireParticles()
-          : new CampfireFireParticles()
-      const position = new THREE.Vector3(
+      entry.fire = entry.torch
+        ? new TorchFireParticles()
+        : new CampfireFireParticles()
+      entry.firePosition = new THREE.Vector3(
         model.fire.x,
         model.fire.y,
         model.fire.z
       )
         .applyEuler(visual.rotation)
         .add(visual.position)
-      fire.setOrigin(position)
-      group.add(fire.group)
-      fires.push(fire)
-      ;(model.fireKind === 'torch' ? torchPositions : firePositions).push(
-        position
-      )
+      entry.fire.setOrigin(entry.firePosition)
+      group.add(entry.fire.group)
     }
     visual.traverse((object) => {
       if (object instanceof THREE.Mesh) {
@@ -215,7 +228,7 @@
             material.transparent = true
             material.opacity *= 0.35
             material.depthWrite = false
-            savedPositionMaterials.push(material)
+            entry.materials.push(material)
             return material
           })
           object.material = Array.isArray(object.material)
@@ -225,48 +238,79 @@
       }
     })
     chestGroup.add(visual)
+    entries.set(chest.id, entry)
     visuals.set(chest.id, visual)
     if (source.clips.length)
       mixers.set(chest.id, new THREE.AnimationMixer(visual))
   }
 
-  function clearSavedPositionMaterials() {
-    for (const material of savedPositionMaterials) material.dispose()
-    savedPositionMaterials.length = 0
+  function removeVisual(id: number) {
+    const entry = entries.get(id)
+    if (!entry) return
+    chestGroup.remove(entry.visual)
+    disposeObjectTree(entry.visual)
+    for (const material of entry.materials) material.dispose()
+    if (entry.fire) {
+      group.remove(entry.fire.group)
+      entry.fire.dispose()
+    }
+    entries.delete(id)
+    visuals.delete(id)
+    mixers.delete(id)
   }
 
+  function syncFires() {
+    fires.length = 0
+    firePositions.length = 0
+    torchPositions.length = 0
+    for (const entry of entries.values()) {
+      if (!entry.fire || !entry.firePosition) continue
+      fires.push(entry.fire)
+      ;(entry.torch ? torchPositions : firePositions).push(entry.firePosition)
+    }
+  }
+
+  // Only touch changed furniture: recreated meshes skip frames while their pipelines warm up.
   function rebuild() {
     const current = get(estateChests)
     const floorLevel = get(playerVisualFloorLevel)
+    const rewrap = player && Math.abs(player.position.x - lastWrapX) >= 100
     if (
       sources.size === 0 ||
       !player ||
       (current === lastChests &&
         floorLevel === lastFloorLevel &&
         movingFurnitureId === lastMovingFurnitureId &&
-        Math.abs(player.position.x - lastWrapX) < 100)
+        !housesChanged &&
+        !rewrap)
     )
       return
+    const relocate = housesChanged || rewrap
     lastChests = current
     lastWrapX = player.position.x
     lastFloorLevel = floorLevel
     lastMovingFurnitureId = movingFurnitureId
-    for (const visual of chestGroup.children) disposeObjectTree(visual)
-    chestGroup.clear()
-    clearSavedPositionMaterials()
-    for (const fire of fires) {
-      group.remove(fire.group)
-      fire.dispose()
-    }
-    fires.length = 0
-    firePositions.length = 0
-    torchPositions.length = 0
-    visuals.clear()
-    mixers.clear()
+    housesChanged = false
     const houses = housingManager.getAllHouses()
-    for (const chest of current.values()) {
-      if (chest.floor_level === floorLevel) makeVisual(chest, houses)
+    for (const [id, entry] of entries) {
+      const chest = current.get(id)
+      if (
+        !chest ||
+        chest !== entry.chest ||
+        chest.floor_level !== floorLevel ||
+        (id === movingFurnitureId) !== entry.moving ||
+        (relocate &&
+          (entry.visual.position.x !==
+            unwrapWorldXNear(player.position.x, chest.position.x) ||
+            entry.visual.position.y !== estateFurnitureRenderY(chest, houses)))
+      )
+        removeVisual(id)
     }
+    for (const chest of current.values()) {
+      if (chest.floor_level === floorLevel && !entries.has(chest.id))
+        makeVisual(chest, houses)
+    }
+    syncFires()
   }
 
   function place(placement: EstateFurniturePlacement) {
@@ -360,7 +404,7 @@
 
   onMount(() => {
     const unsubscribeHouses = housingManager.onHousesChanged(() => {
-      lastChests = null
+      housesChanged = true
     })
     const canvas = renderer.domElement
     const click = (event: MouseEvent) => {
@@ -432,9 +476,7 @@
       unsubscribeHouses()
       canvas.removeEventListener('mousedown', click, true)
       window.removeEventListener('keydown', escape, true)
-      clearSavedPositionMaterials()
-      for (const visual of chestGroup.children) disposeObjectTree(visual)
-      for (const fire of fires) fire.dispose()
+      for (const id of [...entries.keys()]) removeVisual(id)
       for (const text of signTexts.values()) {
         text.geometry.dispose()
         const materials = Array.isArray(text.material)
