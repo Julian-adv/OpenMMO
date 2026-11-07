@@ -11,6 +11,16 @@ interface Faded {
   castShadow: boolean
 }
 
+const sources = new WeakMap<THREE.Material, THREE.Material>()
+
+/** The material a see-through clone was made from, so material swaps applied
+ *  over a faded mesh tint the real material instead of the ghost. */
+export function seeThroughSource(
+  material: THREE.Material
+): THREE.Material | undefined {
+  return sources.get(material)
+}
+
 function fade(material: THREE.Material): THREE.Material {
   const clone = material.clone()
   clone.transparent = true
@@ -18,14 +28,23 @@ function fade(material: THREE.Material): THREE.Material {
   return clone
 }
 
-function dispose(slot: MaterialSlot) {
-  for (const material of Array.isArray(slot) ? slot : [slot]) material.dispose()
-}
-
 /** Fades a character to a ghost while `on`. Runs per frame so gear loaded or
  *  reskinned later fades too; clones keep materials shared with others solid. */
 export class SeeThrough {
   private meshes = new Map<THREE.Mesh, Faded>()
+  // One clone per source: a fresh clone per swap compiles a new pipeline.
+  private fades = new Map<THREE.Material, THREE.Material>()
+
+  private fadeOf(material: THREE.Material): THREE.Material {
+    if (sources.has(material)) return material
+    let faded = this.fades.get(material)
+    if (!faded) {
+      faded = fade(material)
+      sources.set(faded, material)
+      this.fades.set(material, faded)
+    }
+    return faded
+  }
 
   update(root: THREE.Object3D | undefined, on: boolean) {
     if (!on) return this.restore()
@@ -34,11 +53,10 @@ export class SeeThrough {
       if (!mesh.isMesh) return
       const known = this.meshes.get(mesh)
       if (known?.faded === mesh.material) return
-      if (known) dispose(known.faded)
       const original = mesh.material
       const faded = Array.isArray(original)
-        ? original.map(fade)
-        : fade(original)
+        ? original.map((material) => this.fadeOf(material))
+        : this.fadeOf(original)
       this.meshes.set(mesh, {
         original,
         faded,
@@ -53,8 +71,9 @@ export class SeeThrough {
     for (const [mesh, { original, faded, castShadow }] of this.meshes) {
       if (mesh.material === faded) mesh.material = original
       mesh.castShadow = castShadow
-      dispose(faded)
     }
     this.meshes.clear()
+    for (const faded of this.fades.values()) faded.dispose()
+    this.fades.clear()
   }
 }

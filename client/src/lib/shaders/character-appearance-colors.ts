@@ -20,6 +20,7 @@ import {
   vec2,
   vec4,
 } from 'three/tsl'
+import { seeThroughSource } from '../effects/see-through'
 import type { CharacterAppearance } from '../network/networkTypes'
 import {
   DEFAULT_EYE_COLOR,
@@ -97,7 +98,8 @@ class AppearanceColors {
       const hair = SELECTABLE_HAIR_PARTS.has(id) || femaleHair !== undefined
       const female = !!mesh.userData.female_body
       if (!hair && !female && region(mesh) !== 'head') continue
-      const tint = (current: Material) => {
+      const tint = (worn: Material) => {
+        const current = seeThroughSource(worn) ?? worn
         const source = this.originals.get(current) ?? current
         if (source.userData.appearance_color_fixed) return current
         const node = (source as NodeMaterial).isNodeMaterial

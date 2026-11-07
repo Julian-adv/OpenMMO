@@ -723,8 +723,14 @@
   }
 
   const visibleArmor = $derived(isCurrentPlayer ? $equippedArmor : armor)
+  // Player updates while moving hand in equal but new armor/appearance objects.
+  let appliedArmor: { root: THREE.Object3D; key: string } | undefined
   $effect(() => {
-    if (modelRoot) applyCharacterArmor(modelRoot, visibleArmor, appearance)
+    if (!modelRoot) return
+    const key = JSON.stringify([visibleArmor, appearance])
+    if (appliedArmor?.root === modelRoot && appliedArmor.key === key) return
+    appliedArmor = { root: modelRoot, key }
+    applyCharacterArmor(modelRoot, visibleArmor, appearance)
   })
 
   const equippedMainHandItemId = $derived(
