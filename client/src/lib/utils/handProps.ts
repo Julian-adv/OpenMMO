@@ -5,7 +5,6 @@ import instrumentCarry from '../data/instrumentCarry.json'
 import {
   MODULAR_MALE_MODEL_PATH,
   MODULAR_FEMALE_MODEL_PATH,
-  FEMALE_PRIEST_CHARACTER_MODEL_PATH,
 } from './modelPaths'
 
 /** Offset from the wrist bone toward the palm, so a prop looks gripped. */
@@ -43,9 +42,6 @@ const MODEL_HAND_FITS: Record<string, Record<string, HandFit>> = {
   [MODULAR_MALE_MODEL_PATH]: {
     'weapons/mace.glb': { position: new THREE.Vector3(0.02, 0.12, 0.05) },
     'weapons/torch.glb': { position: new THREE.Vector3(0.025, 0.08, 0.012) },
-  },
-  [FEMALE_PRIEST_CHARACTER_MODEL_PATH]: {
-    'weapons/mace.glb': { position: new THREE.Vector3(0.03, 0.07, 0.03) },
   },
 }
 

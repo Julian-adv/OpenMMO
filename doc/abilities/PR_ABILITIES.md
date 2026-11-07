@@ -83,20 +83,9 @@ Guardian Ward의 방패 조건을 장착 슬롯만으로 판단하지 않도록 
 - 현재 통합 결과의 **프로토콜 버전은 77**입니다. 재접속 시 Double Slash 쿨타임 복원, 대상 지정 요청, 어빌리티 상태, 단검 타격별 이벤트, Radiance 조명 상태, True Aim 전용 표식과 거리 초과 거절 사유를 지원합니다. 서버·클라이언트 WASM·에이전트 클라이언트를 같은 프로토콜로 빌드해야 합니다.
 - 영구 DB 스키마 변경은 없습니다.
 
-## VFX, 아이콘 및 시연 자료
+## VFX와 아이콘
 
 네 어빌리티의 전용 아이콘과 기존 스타일을 재사용할 수 있는 [아이콘 생성 프롬프트](../assets/skill-icon-prompts.md)를 추가합니다. Guardian Ward 발동음은 제공된 ElevenLabs Starter 생성 효과음을 기존 SFX 경로에 맞춰 사용합니다. 출처와 생성 정보는 [UI 에셋](../assets/ui.md), [애니메이션](../assets/animation.md), [효과음](../assets/sfx.md#abilities)에 기록합니다.
-
-기존 프리뷰에서 생성한 GIF는 실제 속도의 연출 시연 자료입니다. 해상도는 768 × 560이며, 모두 반복 재생되고 파일별 10MB 미만입니다. 서버 피해 판정 검증은 아래 테스트 결과를 따릅니다.
-
-| 시연 | 내용 | 길이 |
-| --- | --- | --- |
-| [Guardian Ward GIF](../assets/ability-previews/guardian-ward.gif) | 파티원에게 동시에 나타나는 금빛 방패 문양 | 2.8초 |
-| [Double Slash GIF](../assets/ability-previews/double-slash.gif) | 두 번의 베기와 짧은 칼날 잔상 | 2.4초 |
-| [Radiance GIF](../assets/ability-previews/radiance.gif) | 어둠 → 시전 → 조명 유지 → 수동 토글 해제 | 6.4초 |
-| [True Aim GIF](../assets/ability-previews/true-aim.gif) | 표식 생성 → 맥동 → 해제 | 7.2초 |
-
-Radiance GIF에서 빛이 꺼지는 것은 수동 토글 시연이며, 실제 지속시간은 120초입니다. Guardian Ward 프리뷰는 파티와 문양을 가까이 보여주기 위한 축소 배치이며, 실제 적용 반경은 20 m입니다. [시연 모음과 출처](../assets/ability-previews/README.md).
 
 ## 검증
 

@@ -10,4 +10,4 @@
 - [True Aim](TRUE_AIM.md): Bow 전용 개인 명중 표식.
 - [클래스 기본 스킬 설계](CLASS_SKILLS.md): Barbarian·Caveman·Valkyrie·Priest·Bard용. 광폭화(Barbarian)·야성의 포효(Caveman)·발할라의 돌격(Valkyrie)·치유의 기도(Priest)·전투의 찬가(Bard) 구현됨.
 
-[통합 구현 및 PR 정리](PR_ABILITIES.md) · [시연 GIF](../assets/ability-previews/README.md) · [전투 시스템](../COMBAT.md) · [아이콘 생성 프롬프트](../assets/skill-icon-prompts.md)
+[통합 구현 및 PR 정리](PR_ABILITIES.md) · [전투 시스템](../COMBAT.md) · [아이콘 생성 프롬프트](../assets/skill-icon-prompts.md)

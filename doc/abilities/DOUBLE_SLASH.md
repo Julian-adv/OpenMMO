@@ -27,4 +27,4 @@ Rogue 클래스에 기본 제공되는 Dagger 전용 스킬. 기존·신규 Rogu
   쿨타임은 캐릭터별로 보존하며, 만료 전 요청은 서버가 거절한다. 다른 캐릭터의 쿨타임과 공유하지 않는다.
 - A안의 짧은 청록색 칼날 잔상을 사용하며 타격 결과와 피해 표시는 각각 전달한다.
 
-[전투 계산](../COMBAT.md) · [애니메이션 출처와 재생성](../assets/animation.md#dagger-double-slash-2026-09-13) · [아이콘 출처](../assets/ui.md) · [시연 GIF](../assets/ability-previews/double-slash.gif)
+[전투 계산](../COMBAT.md) · [애니메이션 출처와 재생성](../assets/animation.md#dagger-double-slash-2026-09-13) · [아이콘 출처](../assets/ui.md)

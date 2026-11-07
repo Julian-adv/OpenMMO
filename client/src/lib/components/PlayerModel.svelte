@@ -1615,11 +1615,7 @@
           )
         } else {
           const source =
-            selection.source === 'locomotion'
-              ? 'locomotion.glb'
-              : selection.source === 'combat_melee'
-                ? 'combat_melee.glb'
-                : 'female_knight.glb'
+            selection.source === 'base' ? 'model' : `${selection.source}.glb`
           console.log(`✅ Found animation: ${selection.name} (${source})`)
         }
 

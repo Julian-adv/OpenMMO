@@ -26,7 +26,6 @@ const ROOT = resolve(__dirname, '..')
 const GLB_FILES = [
   'client/public/models/animations/combat_melee.glb',
   'client/public/models/animations/locomotion.glb',
-  'client/public/models/characters/female_knight.glb',
 ]
 
 const OUT_PATH = resolve(ROOT, 'agent-client/data/animation_durations.json')

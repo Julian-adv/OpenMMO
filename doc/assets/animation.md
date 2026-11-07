@@ -91,7 +91,6 @@ tip followed the handle. Other rigs and offhand props kept their previous placem
 - Runtime: `PlayerModel.svelte` loads this separate pack for dagger weapons,
   retargets and grounds it for the active character, and builds the combined
   `dagger_double_slash` clip with `daggerSkillAnimation.ts`.
-  Preview: `client/dagger-skill-preview.html` uses that same combined clip.
   Inward frames 22–36 and outward
   frames 16–29 (zero-based, 24 fps) are timed and blended into 0.82 seconds.
   Server strike times are 0.190s and 0.425s, shared through

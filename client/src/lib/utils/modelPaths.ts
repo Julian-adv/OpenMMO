@@ -20,23 +20,8 @@ export function isModularModel(path: string): boolean {
 }
 
 export const KNIGHT_CHARACTER_MODEL_PATH = '/models/characters/knight.glb'
-export const FEMALE_KNIGHT_CHARACTER_MODEL_PATH =
-  '/models/characters/female_knight.glb'
-export const ROGUE_CHARACTER_MODEL_PATH = '/models/characters/rogue.glb'
-export const FEMALE_ROGUE_CHARACTER_MODEL_PATH =
-  '/models/characters/female_rogue.glb'
 export const MERCHANT_CHARACTER_MODEL_PATH = '/models/characters/npc_woman.glb'
-export const BARBARIAN_CHARACTER_MODEL_PATH = '/models/characters/barbarian.glb'
-export const FEMALE_BARBARIAN_CHARACTER_MODEL_PATH =
-  '/models/characters/female_barbarian.glb'
 export const GUARD_CHARACTER_MODEL_PATH = '/models/characters/guard.glb'
-export const CAVEMAN_CHARACTER_MODEL_PATH = '/models/characters/caveman.glb'
-export const CAVEWOMAN_CHARACTER_MODEL_PATH = '/models/characters/cavewoman.glb'
-export const VALKYRIE_CHARACTER_MODEL_PATH = '/models/characters/valkyrie.glb'
-export const RANGER_CHARACTER_MODEL_PATH = '/models/characters/ranger.glb'
-export const PRIEST_CHARACTER_MODEL_PATH = '/models/characters/priest.glb'
-export const FEMALE_PRIEST_CHARACTER_MODEL_PATH =
-  '/models/characters/female_priest.glb'
 export const FEMALE_BARD_CHARACTER_MODEL_PATH =
   '/models/characters/female_bard.glb'
 export const NIGHT_MERCHANT_CHARACTER_MODEL_PATH =
@@ -74,28 +59,28 @@ const CLASS_GENDER_MODELS: Partial<
 > = {
   knight: {
     male: KNIGHT_CHARACTER_MODEL_PATH,
-    female: FEMALE_KNIGHT_CHARACTER_MODEL_PATH,
+    female: MODULAR_FEMALE_MODEL_PATH,
   },
   barbarian: {
-    male: BARBARIAN_CHARACTER_MODEL_PATH,
-    female: FEMALE_BARBARIAN_CHARACTER_MODEL_PATH,
+    male: MODULAR_MALE_MODEL_PATH,
+    female: MODULAR_FEMALE_MODEL_PATH,
   },
   rogue: {
-    male: ROGUE_CHARACTER_MODEL_PATH,
-    female: FEMALE_ROGUE_CHARACTER_MODEL_PATH,
+    male: MODULAR_MALE_MODEL_PATH,
+    female: MODULAR_FEMALE_MODEL_PATH,
   },
   caveman: {
-    male: CAVEMAN_CHARACTER_MODEL_PATH,
-    female: CAVEWOMAN_CHARACTER_MODEL_PATH,
+    male: MODULAR_MALE_MODEL_PATH,
+    female: MODULAR_FEMALE_MODEL_PATH,
   },
-  valkyrie: { female: VALKYRIE_CHARACTER_MODEL_PATH },
+  valkyrie: { female: MODULAR_VALKYRIE_MODEL_PATH },
   ranger: {
-    male: RANGER_CHARACTER_MODEL_PATH,
+    male: MODULAR_MALE_MODEL_PATH,
     female: MODULAR_FEMALE_RANGER_MODEL_PATH,
   },
   priest: {
-    male: PRIEST_CHARACTER_MODEL_PATH,
-    female: FEMALE_PRIEST_CHARACTER_MODEL_PATH,
+    male: MODULAR_MALE_MODEL_PATH,
+    female: MODULAR_FEMALE_MODEL_PATH,
   },
   bard: {
     female: FEMALE_BARD_CHARACTER_MODEL_PATH,

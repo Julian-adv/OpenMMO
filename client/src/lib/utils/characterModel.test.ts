@@ -74,10 +74,6 @@ describe('male player model selection', () => {
     for (const cls of PLAYER_CLASSES) {
       if (getAvailableGenders(cls).includes('male')) {
         expect(getCharacterModelPath(cls, 'male')).toBe(MODULAR_MALE_MODEL_PATH)
-        if (cls !== 'bard')
-          expect(getCharacterModelPath(cls, 'male', true)).not.toBe(
-            MODULAR_MALE_MODEL_PATH
-          )
       }
       if (getAvailableGenders(cls).includes('female'))
         expect(getCharacterModelPath(cls, 'female')).not.toBe(

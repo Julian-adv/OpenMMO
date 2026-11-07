@@ -123,31 +123,31 @@ describe('female modular starter outfits', () => {
       MODULAR_FEMALE_MODEL_PATH
     )
     expect(getCharacterModelPath('knight', 'female', true)).toBe(
-      '/models/characters/female_knight.glb'
+      MODULAR_FEMALE_MODEL_PATH
     )
     expect(getCharacterModelPath('rogue', 'female')).toBe(
       MODULAR_FEMALE_MODEL_PATH
     )
     expect(getCharacterModelPath('rogue', 'female', true)).toBe(
-      '/models/characters/female_rogue.glb'
+      MODULAR_FEMALE_MODEL_PATH
     )
     expect(getCharacterModelPath('caveman', 'female')).toBe(
       MODULAR_FEMALE_MODEL_PATH
     )
     expect(getCharacterModelPath('caveman', 'female', true)).toBe(
-      '/models/characters/cavewoman.glb'
+      MODULAR_FEMALE_MODEL_PATH
     )
     expect(getCharacterModelPath('priest', 'female')).toBe(
       MODULAR_FEMALE_MODEL_PATH
     )
     expect(getCharacterModelPath('priest', 'female', true)).toBe(
-      '/models/characters/female_priest.glb'
+      MODULAR_FEMALE_MODEL_PATH
     )
     expect(getCharacterModelPath('valkyrie', 'female')).toBe(
       MODULAR_VALKYRIE_MODEL_PATH
     )
     expect(getCharacterModelPath('valkyrie', 'female', true)).toBe(
-      '/models/characters/valkyrie.glb'
+      MODULAR_VALKYRIE_MODEL_PATH
     )
   })
   it.skipIf(!hasAssets)(

@@ -351,7 +351,7 @@
     [제작 기록](mace-model.json). 재현: `blender -b -t 6 --python-exit-code 1 --python tools/blender-scripts/build_mace.py`.
   - 손 장착: 손잡이 중심이 원점이고 지름이 약 5cm로 두 사제의 주먹 구멍(약 2~2.6cm)보다 굵다.
     기본 위치 `(0, 0.08, 0)`에서는 손등으로 나와서, `client/src/lib/utils/handProps.ts`의 모델별 보정으로 손바닥 앞에 둔다.
-    모듈형 남자 `(0.02, 0.12, 0.05)`, `female_priest.glb` `(0.03, 0.07, 0.03)`.
+    모듈형 남자 `(0.02, 0.12, 0.05)`.
     여자 사제의 대기·걷기·달리기 클립은 손을 편 채라 주먹을 쥐지 않는다.
 
 ## Cutthroat Dirk — 칼잡이의 단검 (2026-11-01)
