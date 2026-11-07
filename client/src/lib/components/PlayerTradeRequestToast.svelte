@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n'
   import {
     pendingTradeRequests,
     TRADE_REQUEST_TTL_MS,
@@ -10,15 +11,15 @@
 <QueuedConsentToast
   queue={pendingTradeRequests}
   ttlMs={TRADE_REQUEST_TTL_MS}
-  label="Trade request"
+  label={$t('trade.requestTitle')}
   top="28%"
   accent="#e0c070"
-  acceptLabel="Trade"
-  declineLabel="Decline"
+  acceptLabel={$t('trade.requestAccept')}
+  declineLabel={$t('common.decline')}
   respond={(request, accept) =>
     networkManager.sendPlayerTradeRespond(request.requesterId, accept)}
 >
   {#snippet children(request)}
-    <strong>{request.requesterName}</strong> wants to trade with you
+    {$t('trade.requestMessage', { name: request.requesterName })}
   {/snippet}
 </QueuedConsentToast>

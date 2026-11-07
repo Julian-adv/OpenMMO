@@ -2296,7 +2296,8 @@ impl super::GameState {
 
     pub async fn pickup_item(&self, player_id: &PlayerId, instance_id: u64) {
         self.bump_action_version(player_id).await;
-        self.pickup_item_with_range(player_id, instance_id, MAX_PICKUP_DISTANCE)
+        let party = self.other_party_member_ids(player_id).await;
+        self.pickup_item_with_range(player_id, instance_id, MAX_PICKUP_DISTANCE, &party)
             .await;
     }
 
@@ -2305,13 +2306,14 @@ impl super::GameState {
         let Some((position, _, floor_level, _)) = self.player_pose(player_id).await else {
             return;
         };
+        let party = self.other_party_member_ids(player_id).await;
         let mut candidates = {
             let ground_items = self.ground_items.read().await;
             ground_items
                 .values()
                 .filter_map(|entry| {
                     if entry.item.floor_level != floor_level
-                        || entry.claim_against(player_id).is_some()
+                        || entry.claim_against(player_id, &party).is_some()
                     {
                         return None;
                     }
@@ -2323,7 +2325,7 @@ impl super::GameState {
         };
         candidates.sort_unstable_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
         for (_, instance_id) in candidates {
-            self.pickup_item_with_range(player_id, instance_id, NEARBY_PICKUP_DISTANCE)
+            self.pickup_item_with_range(player_id, instance_id, NEARBY_PICKUP_DISTANCE, &party)
                 .await;
         }
     }
@@ -2333,6 +2335,7 @@ impl super::GameState {
         player_id: &PlayerId,
         instance_id: u64,
         max_distance: f32,
+        party: &[PlayerId],
     ) {
         let (player_pos, player_floor) = {
             let players = self.players.read().await;
@@ -2346,7 +2349,7 @@ impl super::GameState {
             let ground_items = self.ground_items.read().await;
             match ground_items.get(&instance_id) {
                 Some(sgi) => {
-                    if let Some(claim) = sgi.claim_against(player_id) {
+                    if let Some(claim) = sgi.claim_against(player_id, party) {
                         drop(ground_items);
                         self.send_loot_claimed_message(player_id, claim).await;
                         return;
@@ -2382,7 +2385,7 @@ impl super::GameState {
         // The dungeon coin pile is currency, not a bag item: picking it up
         // credits a few copper to the wallet instead of taking inventory space.
         if ground_item.item_def_id == super::COIN_PILE_ITEM_ID {
-            self.pickup_coin_pile(player_id, instance_id, &ground_item, player_floor)
+            self.pickup_coin_pile(player_id, instance_id, &ground_item, player_floor, party)
                 .await;
             return;
         }
@@ -2408,7 +2411,7 @@ impl super::GameState {
                 .await;
                 return;
             };
-            if let Some(claim) = entry.claim_against(player_id) {
+            if let Some(claim) = entry.claim_against(player_id, party) {
                 drop(ground_items);
                 self.send_loot_claimed_message(player_id, claim).await;
                 return;
@@ -2592,6 +2595,7 @@ impl super::GameState {
         instance_id: u64,
         ground_item: &GroundItem,
         player_floor: i8,
+        party: &[PlayerId],
     ) {
         // Claim the pile under the ground-items lock so two players racing for
         // the same pile can't both be paid.
@@ -2599,7 +2603,7 @@ impl super::GameState {
             let mut ground_items = self.ground_items.write().await;
             if let Some(claim) = ground_items
                 .get(&instance_id)
-                .and_then(|entry| entry.claim_against(player_id))
+                .and_then(|entry| entry.claim_against(player_id, party))
             {
                 drop(ground_items);
                 self.send_loot_claimed_message(player_id, claim).await;

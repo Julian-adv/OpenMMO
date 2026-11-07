@@ -32,6 +32,13 @@
   "friends.addHint": "或輸入 /friend add <名字>",
   "friends.requestTitle": "好友申請",
   "friends.requestMessage": "{{name}}請求新增你為好友。",
+  "party.inviteTitle": "組隊邀請",
+  "party.inviteMessage": "{{name}}邀請你加入隊伍。",
+  "party.join": "加入",
+  "party.summonTitle": "隊伍召喚",
+  "party.summonMessage": "{{name}}召喚你到身邊。",
+  "party.summonAnswer": "回應",
+  "party.summonIgnore": "忽略",
   "emotes.title": "表情動作",
   "emotes.loopsHint": "持續循環，移動後停止",
   "emotes.commandHint": "/emote <動作名> · 移動後停止跳舞",
@@ -853,5 +860,8 @@
   "trade.open": "開啟",
   "trade.notNow": "暫時不用",
   "trade.offerMessage": "{{name}}希望與你交易",
+  "trade.requestTitle": "交易請求",
+  "trade.requestMessage": "{{name}}想與你交易。",
+  "trade.requestAccept": "交易",
   "trade.dealNote": "— 已為你保留議價優惠"
 }

@@ -32,6 +32,13 @@
   "friends.addHint": "or /friend add <name>",
   "friends.requestTitle": "Friend request",
   "friends.requestMessage": "{{name}} wants to be friends",
+  "party.inviteTitle": "Party invite",
+  "party.inviteMessage": "{{name}} invites you to a party",
+  "party.join": "Join",
+  "party.summonTitle": "Party summon",
+  "party.summonMessage": "{{name}} calls you to their side",
+  "party.summonAnswer": "Answer",
+  "party.summonIgnore": "Ignore",
   "emotes.title": "Emotes",
   "emotes.loopsHint": "Loops until you move",
   "emotes.commandHint": "/emote <name> · dances stop on move",
@@ -853,5 +860,8 @@
   "trade.open": "Open",
   "trade.notNow": "Not now",
   "trade.offerMessage": "{{name}} wants to trade with you",
+  "trade.requestTitle": "Trade request",
+  "trade.requestMessage": "{{name}} wants to trade with you",
+  "trade.requestAccept": "Trade",
   "trade.dealNote": "— holding a price for you"
 }

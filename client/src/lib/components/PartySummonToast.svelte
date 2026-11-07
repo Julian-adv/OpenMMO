@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n'
   import { pendingPartySummons, SUMMON_TTL_MS } from '../stores/partyStore'
   import { networkManager } from '../network/socket'
   import QueuedConsentToast from './QueuedConsentToast.svelte'
@@ -10,16 +11,16 @@
 <QueuedConsentToast
   queue={pendingPartySummons}
   ttlMs={SUMMON_TTL_MS}
-  label="Party summon"
+  label={$t('party.summonTitle')}
   top="26%"
   accent="#c8a2ff"
-  acceptLabel="Answer"
-  declineLabel="Ignore"
+  acceptLabel={$t('party.summonAnswer')}
+  declineLabel={$t('party.summonIgnore')}
   dismissOnAccept={false}
   respond={(summon, accept) =>
     networkManager.sendPartySummonRespond(summon.casterId, accept)}
 >
   {#snippet children(summon)}
-    <strong>{summon.casterName}</strong> calls you to their side
+    {$t('party.summonMessage', { name: summon.casterName })}
   {/snippet}
 </QueuedConsentToast>

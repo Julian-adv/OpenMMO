@@ -32,6 +32,13 @@
   "friends.addHint": "또는 /friend add <이름>",
   "friends.requestTitle": "친구 요청",
   "friends.requestMessage": "{{name}} 님이 친구 요청을 보냈습니다.",
+  "party.inviteTitle": "파티 초대",
+  "party.inviteMessage": "{{name}} 님이 파티에 초대했습니다.",
+  "party.join": "가입",
+  "party.summonTitle": "파티 소환",
+  "party.summonMessage": "{{name}} 님이 곁으로 부릅니다.",
+  "party.summonAnswer": "응하기",
+  "party.summonIgnore": "무시",
   "emotes.title": "감정 표현",
   "emotes.loopsHint": "이동할 때까지 반복합니다",
   "emotes.commandHint": "/emote <동작> · 이동하면 춤을 멈춥니다",
@@ -853,5 +860,8 @@
   "trade.open": "열기",
   "trade.notNow": "나중에",
   "trade.offerMessage": "{{name}}$이 거래를 제안했습니다",
+  "trade.requestTitle": "거래 요청",
+  "trade.requestMessage": "{{name}} 님이 거래를 요청했습니다.",
+  "trade.requestAccept": "거래",
   "trade.dealNote": "— 흥정한 가격이 적용됩니다"
 }

@@ -15,6 +15,7 @@
     cancelFishingTargeting,
   } from '../stores/fishingStore'
   import { landscapingMode } from '../stores/landscapingStore'
+  import { partyRoster } from '../stores/partyStore'
   import {
     estateFurnitureEditorActive,
     estateFurniturePlacementMode,
@@ -1424,8 +1425,13 @@
 
   /** Why the server would not hand this item over, or null when it would. */
   function pickupRefusal(item: GroundItemData): string | null {
-    if (item.claimedBy != null && item.claimedBy !== currentPlayer?.id) {
-      const owner = ownerName(item.claimedBy)
+    const claimedBy = item.claimedBy
+    if (
+      claimedBy != null &&
+      claimedBy !== currentPlayer?.id &&
+      !get(partyRoster)?.members.some((m) => m.id === claimedBy)
+    ) {
+      const owner = ownerName(claimedBy)
       return owner
         ? translate('server.lootReserved', { name: owner })
         : translate('server.lootReservedAway')

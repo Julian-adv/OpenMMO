@@ -329,9 +329,12 @@ pub(crate) struct ServerGroundItem {
 }
 
 impl ServerGroundItem {
-    /// Someone else's claim that keeps `player_id` waiting.
-    fn claim_against(&self, player_id: &PlayerId) -> Option<PlayerId> {
-        self.item.claimed_by.filter(|owner| owner != player_id)
+    /// Someone else's claim that keeps `player_id` waiting; `party` (the
+    /// picker's party mates) shares the claim.
+    fn claim_against(&self, player_id: &PlayerId, party: &[PlayerId]) -> Option<PlayerId> {
+        self.item
+            .claimed_by
+            .filter(|owner| owner != player_id && !party.contains(owner))
     }
 }
 

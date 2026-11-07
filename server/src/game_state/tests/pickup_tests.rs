@@ -57,6 +57,38 @@ async fn chest_loot_is_reserved_for_its_opener_then_becomes_public() {
 }
 
 #[tokio::test]
+async fn party_mates_share_the_loot_claim() {
+    let game = make_test_game_state("party_shares_loot_claim");
+    for name in ["owner", "mate", "rival"] {
+        game.add_player(make_player(name, 0.0, 0.0)).await;
+        game.inventories
+            .write()
+            .await
+            .insert(pid(name), Default::default());
+    }
+    game.invite_to_party(&pid("owner"), "mate").await;
+    game.respond_to_party_invite(&pid("mate"), &pid("owner"), true)
+        .await;
+    for instance_id in [41, 42] {
+        game.spawn_ground_item(claimed_item(instance_id, "test_item", 1, "owner"))
+            .await;
+    }
+    game.spawn_ground_item(claimed_item(43, COIN_PILE_ITEM_ID, 1, "owner"))
+        .await;
+
+    game.pickup_nearby_items(&pid("rival")).await;
+    assert_eq!(game.ground_items.read().await.len(), 3);
+
+    game.pickup_item(&pid("mate"), 41).await;
+    game.pickup_nearby_items(&pid("mate")).await;
+    assert!(game.ground_items.read().await.is_empty());
+    assert_eq!(game.inventories.read().await[&pid("mate")].bag.len(), 2);
+    assert!(is_coin_pile_payout(
+        game.get_player_gold(&pid("mate")).await
+    ));
+}
+
+#[tokio::test]
 async fn chest_coins_are_reserved_before_any_wallet_is_credited() {
     let game = make_test_game_state("reserved_chest_coins");
     for name in ["opener", "rival"] {
@@ -88,13 +120,13 @@ async fn a_loot_claim_is_announced_and_ends_after_30_seconds() {
         ServerMessage::GroundItemSpawned { item } if item.claimed_by == Some(pid("opener"))
     )));
     assert!(game.ground_items.read().await[&42]
-        .claim_against(&pid("rival"))
+        .claim_against(&pid("rival"), &[])
         .is_some());
 
     tokio::time::sleep(std::time::Duration::from_millis(30_001)).await;
 
     assert!(game.ground_items.read().await[&42]
-        .claim_against(&pid("rival"))
+        .claim_against(&pid("rival"), &[])
         .is_none());
     assert!(drain(&mut rival_rx)
         .iter()
@@ -152,7 +184,9 @@ async fn nearby_pickup_takes_nearest_items_and_leaves_excess_weight_reserved() {
     let ground_items = game.ground_items.read().await;
     assert!(!ground_items.contains_key(&41));
     assert_eq!(ground_items[&42].item.quantity, 10);
-    assert!(ground_items[&42].claim_against(&pid("rival")).is_some());
+    assert!(ground_items[&42]
+        .claim_against(&pid("rival"), &[])
+        .is_some());
     assert_eq!(
         game.inventories.read().await[&pid("picker")].bag[0].quantity,
         500

@@ -32,6 +32,13 @@
   "friends.addHint": "または /friend add <名前>",
   "friends.requestTitle": "フレンド申請",
   "friends.requestMessage": "{{name}}さんからフレンド申請が届きました。",
+  "party.inviteTitle": "パーティー招待",
+  "party.inviteMessage": "{{name}}さんからパーティーに招待されました。",
+  "party.join": "参加",
+  "party.summonTitle": "パーティー召喚",
+  "party.summonMessage": "{{name}}さんがあなたを呼んでいます。",
+  "party.summonAnswer": "応じる",
+  "party.summonIgnore": "無視",
   "emotes.title": "エモート",
   "emotes.loopsHint": "移動するまで繰り返します",
   "emotes.commandHint": "/emote <動作名> · 移動するとダンスを停止",
@@ -853,5 +860,8 @@
   "trade.open": "開く",
   "trade.notNow": "今はやめる",
   "trade.offerMessage": "{{name}}が取引を申し出ています",
+  "trade.requestTitle": "取引申請",
+  "trade.requestMessage": "{{name}}さんから取引の申請が届きました。",
+  "trade.requestAccept": "取引",
   "trade.dealNote": "— 交渉した価格が適用されます"
 }
