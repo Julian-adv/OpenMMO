@@ -57,7 +57,7 @@ secondaryIdx = indices & 0x0F
 
 - **슬롯 해상도: `ATLAS_SLOT_SIZE = 512`** (기존 `.glb`의 1K 소스를 atlas 빌드 시 512로 다운샘플)
   - 근거: 최대 줌인 시 1m 셀이 화면에서 ~256px. 가장 작은 tileScale=4 (눈)도 1m = 512/4 = 128 소스 px로 Nyquist 근방. tileScale ≥ 8인 대부분 레이어는 충분.
-  - 다운샘플은 `canvas.drawImage(img, 0,0, srcW,srcH, slotX+B, slotY+B, 512, 512)` 한 줄. palette 전용 `.glb`는 2026-09-05부터 512로 미리 줄여 배포한다(`tools/repack-material-glbs.py`); 하우징과 공유하는 레이어만 1k.
+  - 다운샘플은 `canvas.drawImage(img, 0,0, srcW,srcH, slotX+B, slotY+B, 512, 512)` 한 줄. `tools/repack-material-glbs.py`가 모든 텍스처 `.glb`를 512로 미리 줄여 배포한다(palette 전용은 2026-09-05, 하우징과 공유하는 레이어 포함 전부는 2026-11-08부터).
 - **슬롯 크기: `512 + 2*ATLAS_BORDER = 528` px**
 - **Atlas 크기: `4 × 528 = 2112` px per axis**
 - **메모리 (3종 합산)**: 2112² × 4 bytes × 3 atlases ≈ **54 MB** (기존 1K/2×2 = 48MB, 1K/4×4 = 192MB 대비 훨씬 양호)

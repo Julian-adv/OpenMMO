@@ -4,14 +4,12 @@
 """Rebuild client/public/textures/**/*.glb from assets/textures-src.
 
 The client reads only the first material's base/normal/MR/AO maps
-(splatLayerLoader.ts), so each GLB becomes those maps as WebP q90 plus one
+(splatLayerLoader.ts), so each GLB becomes those maps as 512px WebP q90 plus one
 placeholder triangle: the loader finds the material by traversing the scene
 for a Mesh, and viewers such as Blender import nothing without one.
 """
 import argparse
 import io
-import json
-import re
 import struct
 from pathlib import Path
 
@@ -23,17 +21,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / 'assets/textures-src'
 OUT = ROOT / 'client/public/textures'
 QUALITY = 90
-SIZE = 1024
-# The terrain atlas packs palette layers at 512 (doc/SPLATMAP_V2.md); layers
-# housing also draws at full size stay 1k.
-PALETTE_SIZE = 512
+# Matches the terrain atlas slot (doc/SPLATMAP_V2.md); houses and dungeons are seen from too far to need more.
+SIZE = 512
 MAP_KEYS = ('baseColorTexture', 'metallicRoughnessTexture', 'normalTexture', 'occlusionTexture')
-
-
-def palette_only():
-    palette = {l['texture'] for l in json.loads((ROOT / 'shared/palette.json').read_text())['layers']}
-    housing = re.findall(r"glb: '([^']+)'", (ROOT / 'client/src/lib/utils/housing-textures.ts').read_text())
-    return palette - set(housing)
 
 
 def encode(image, max_size, alpha):
@@ -100,16 +90,14 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--out', type=Path, default=OUT, help='write here instead (dry run)')
     args = ap.parse_args()
-    small = palette_only()
     before = after = 0
     for path in sorted(SRC.rglob('*.glb')):
         rel = path.relative_to(SRC)
         dst = args.out / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
-        max_size = PALETTE_SIZE if rel.stem in small else SIZE
-        print(f'== {rel} (max {max_size})')
+        print(f'== {rel}')
         gltf, binary = read_glb(path)
-        write_glb(dst, *repack(gltf, binary, max_size))
+        write_glb(dst, *repack(gltf, binary, SIZE))
         a, b = path.stat().st_size, dst.stat().st_size
         before, after = before + a, after + b
         print(f'  {a / 1e6:.2f}MB -> {b / 1e6:.2f}MB')
