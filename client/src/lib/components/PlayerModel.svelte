@@ -158,7 +158,7 @@
   import {
     miningPlayers,
     PICKAXE_ITEM,
-    PICKAXE_ITEMS
+    PICKAXE_ITEMS,
   } from '../stores/miningStore'
   import {
     CART_PUSH_CLIP,
