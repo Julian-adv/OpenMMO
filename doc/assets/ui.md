@@ -85,6 +85,8 @@
 
 - `client/public/portraits/tobin.webp` — 낚시꾼 Tobin의 상점 창 초상화. OpenAI Codex built-in ImageGen 편집, ChatGPT Pro 20x, 2026-09-21. 프로젝트용 생성 이미지이며 OpenAI 서비스 약관의 출력물 이용 조건에 따른다. [기존 토빈 원화](../images/characters/tobin-concept.png)의 얼굴·표정·모자·복장을 유지해 가슴까지의 구도로 다듬고 배경을 제거했다. 원화 출처와 라이선스는 [캐릭터 문서](characters.md#tobin--토빈--강가의-낚시꾼-2026-09-21) 참조. 가장자리 정리 편집을 거친 최종 생성 원본은 [tobin-portrait.png](../images/characters/tobin-portrait.png)(1254² RGBA PNG)로 보관한다. 게임용은 512² WebP q88, alpha와 비율 유지(`scale=512:512:flags=lanczos`). `traderId=tobin`으로 자동 연결. [실제 편집 프롬프트](tobin-portrait-prompt.txt).
 
+- `client/public/portraits/ysolde.webp` — 고고학자 이졸데(Ysolde)의 거래 창 상반신 초상화. OpenAI Codex built-in ImageGen(`codex exec`, codex-cli 0.164.0), **ChatGPT Pro 20x**, 생성 2026-11-08. OpenAI 생성 출력물 이용 조건 적용. [이졸데 원화](../images/characters/ysolde-concept.png)를 얼굴·머리·의상 참조로 사용했다(원화 출처는 [캐릭터 문서](characters.md#ysolde--이졸데--부서진-요새-앞-고고학자-2026-10-24)). 생성 원본은 `../images/characters/ysolde-portrait.png`(1254² RGBA PNG, SHA-256 `bfc25e49…`). 배포본은 원본 상단을 어깨까지 크롭(1254×700)한 512×286 WebP q88, 알파 유지(`crop=1254:700:0:0,scale=512:286:flags=lanczos`, 사용자 요청). `traderId=ysolde`로 자동 연결. [실제 생성 프롬프트](ysolde-portrait-prompt.txt).
+
 세 장 모두 512² WebP q88(알파 유지)로 축소해 배포한다 (2026-08-27) — 비율은 건드리지 않고 크기만 줄인다. `TradeWindow.svelte`가 폭 160px로 그리므로 1122~1210² 원본은 3배 넘게 과했다. 합계 4.8MB → 194KB. 파일명이 곧 `traderId`라 `/portraits/{traderId}.webp` 규칙으로 자동 해석된다 (새 초상화 추가 시 코드 변경 불필요).
 
 ## Skill icons
