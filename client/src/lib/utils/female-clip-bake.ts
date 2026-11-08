@@ -29,7 +29,8 @@ export interface FemaleClipBake {
 /** Asset-pipeline bake (tools/prepare-female-knight.mjs): heel pose, standing foot levelling, ground lift and sword grip. */
 export function bakeFemaleClips(
   scene: THREE.Object3D,
-  clips: THREE.AnimationClip[]
+  clips: THREE.AnimationClip[],
+  grip: Record<string, [number, number, number, number]>
 ): FemaleClipBake[] {
   const rig = clone(scene)
   const meshes = skinnedParts(rig)
@@ -53,13 +54,11 @@ export function bakeFemaleClips(
     finger_poses: {
       sword_grip: {
         clips: gripMotions,
-        quaternions: scene.userData.female_grip,
+        quaternions: grip,
       },
     },
   }
-  const pinned = new Set(
-    Object.keys(scene.userData.female_grip).map((bone) => `${bone}.quaternion`)
-  )
+  const pinned = new Set(Object.keys(grip).map((bone) => `${bone}.quaternion`))
   const mixer = new THREE.AnimationMixer(rig)
   const quaternion = new THREE.Quaternion()
   return clips.map((raw) => {

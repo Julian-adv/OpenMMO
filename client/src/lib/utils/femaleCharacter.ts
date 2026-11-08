@@ -159,19 +159,6 @@ export function assembleFemaleCharacter(
     if (name === 'valkyrie_wings') attachValkyrieWings(scene, meshes)
   }
   for (const mesh of skinnedParts(scene)) mesh.frustumCulled = false
-  scene.userData.female_grip = Object.fromEntries(
-    base.animations
-      .find((clip) => clip.name === 'idle_armed')!
-      .tracks.filter((track) =>
-        /^RightHand(Thumb|Index|Middle|Ring|Pinky)[123]\.quaternion$/.test(
-          track.name
-        )
-      )
-      .map((track) => [
-        track.name.split('.')[0],
-        Array.from(track.values.slice(0, 4)),
-      ])
-  )
   return scene
 }
 

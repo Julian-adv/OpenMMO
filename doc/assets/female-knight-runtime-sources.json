@@ -1,8 +1,8 @@
 {
   "date": "2026-11-03",
   "inputs": {
-    "tools/prepare-female-knight.mjs": "fb21b30f5c216c36a76f685069e9f92359cf4b6e7d898e4586fbaeb4c1cfe0a2",
-    "client/src/lib/utils/female-clip-bake.ts": "ffe7b1e7dbefe8d7877efa81aba171c499bd639061246dbd8fa2c64059b71e7f",
+    "tools/prepare-female-knight.mjs": "494d90e52c844bb3dd59437e8c3cf1dfaf385bf01ede299103835f88ce03ec8a",
+    "client/src/lib/utils/female-clip-bake.ts": "23454f31df35567701ee157dc4e4a7547856524a6b83c14367353a18594287d6",
     "client/src/lib/utils/female-boot-ground.ts": "0cd0b888f399c689ce821ec416660ca2805b12fa3f4c8d780cdc4ad28b61dc80",
     "assets/modular_human_female_01/rig_v1/female-base.glb": "3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5",
     "assets/modular_human_female_01/hair/tripo_knight_bob_v1/fitted_v1/hair_female_knight_bob.glb": "3b2e466b0d7123cf91248c9508cc5adf6c8525850b69def1747b7849178d6373",
@@ -43,7 +43,7 @@
     "tools/lib/female-preview.mjs": "cd8c9ea6ec69cf41b4bc04c05c9ee924e6106f8fe1ece5a1073c106cc24fc909",
     "client/public/models/characters/modular_male/animations/offhand.glb": "d08c28fa24675f87a1f508e45f7d4f82cd990540b75b2c8a038174b10d0059cb",
     "client/src/previews/female-torch.ts": "7521742df790841dc8f1e3ca61f42f112b0716f30ae952e8aae728dce8c20173",
-    "client/src/lib/utils/characterAnimationUtils.ts": "4a19467d294c909868c7136a724c036d54ef4d32caf717c83aa537bc5e21a6f7",
+    "client/src/lib/utils/characterAnimationUtils.ts": "935a6499741f5ac72f67ac42e440b931d68994486cdba774b4eae511f4231e1a",
     "client/src/lib/utils/modularCharacter.ts": "34b0f0e8d11e6d5ad95b3ef8cbc8b3a0df71caa6e5aa7295769991d6b12f8a0d",
     "client/src/lib/utils/frameYield.ts": "309c0686990d6c93d214ef108b746a77e92f5f374ae0272967be440aec5835e4",
     "tools/lib/headless-three.mjs": "faac7bfcb28679a50316a22f7eb5aac2d8732ce721bab6501200a2853e9333d6",
@@ -69,7 +69,7 @@
     "assets/items/valkyrie_boots/fitted_v1/body-occlusion.json": "e5fd12be641d3917f5f152681d25f310bfd7351989605636d6e0530cb75d664c",
     "assets/items/valkyrie_gloves/fitted_v3/body-occlusion.json": "2e67e4b201465d13889f5b6ea64aecfde8e63a2c347074e172c1c4c944a22448",
     "assets/items/valkyrie_helmet/fitted_v2/body-occlusion.json": "319a3f4848040f2cef370435ca95acbbdfa968c8d9544710391860dee620a7a2",
-    "client/src/lib/utils/femaleCharacter.ts": "2d960b1885c1782512a1f3afe99fbb1ec15e70f78bcb16c9dcb131906ee44b79",
+    "client/src/lib/utils/femaleCharacter.ts": "2a4c1118334fbebb21dfe995f21721e3e37dbf0444941388ace994183078ca3f",
     "assets/items/female_caveman_top/tripo_v1/fitted_v7/top_female_caveman.glb": "e447242db6e34cb2ab8b0f67cbb621f4dee14ad036dfee7f193be4f80a78f23f",
     "assets/items/female_caveman_top/tripo_v1/fitted_v7/body-occlusion.json": "95494be44e0f651739bf853c24e783172338fab0dcf2cd79c7a3361195c7dd9f",
     "assets/items/female_caveman_bottom/tripo_v1/fitted_v9/bottom_female_caveman.glb": "ce641e30dcebe965a0c4aac09a5e233c5887d0aa81be2218875bf3866819b6f9",
@@ -112,7 +112,7 @@
     "client/public/models/animations/cart_push.glb": "7f1e3507bd032bd33d98598279bb9b52fffa38be84c6537ffc3c44dfb3af6396"
   },
   "outputs": {
-    "client/public/models/characters/modular_female/base.glb": "a1887a2d633993c69ebe346119a964cb31d557834a4815ac82a998c3dc084ee9",
+    "client/public/models/characters/modular_female/base.glb": "80bc16d771cf2fa945431bcc3a85bce7c94531544889b1fcb113161fbbd37d32",
     "client/public/models/characters/modular_female/hair.glb": "60af2aeff3ef428b4743e79bde3036c238fa44155b8069d12c30825b5b3b6395",
     "client/public/models/characters/modular_female/top.glb": "e191ee0f1c91a8b0dbd9e459080c07ca5116f76a2059be9d57621714ade464ca",
     "client/public/models/characters/modular_female/bottom.glb": "f7ab937c491ecea2d592b2155aead8c2fd5072b2f8bcbb30486535285214340c",

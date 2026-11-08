@@ -196,16 +196,21 @@ async function bakeBootsAndGrip(module, load) {
   const partNames = [...new Set([...female.FEMALE_PARTS, ...female.FEMALE_BOOTS_PARTS])]
   const [base, ...parts] = await Promise.all(['base', ...partNames].map(name => load(`${output}/${name}.glb`)))
   const scene = female.assembleFemaleCharacter(base, parts, partNames)
+  // The baked idle1 matches the source idle_armed, so base.glb ships only idle1.
+  const grip = Object.fromEntries((await load(sources.base)).animations.find(clip => clip.name === 'idle_armed').tracks
+    .filter(track => /^RightHand(Thumb|Index|Middle|Ring|Pinky)[123]\.quaternion$/.test(track.name))
+    .map(track => [track.name.split('.')[0], Array.from(track.values.slice(0, 4))]))
+  assert.equal(Object.keys(grip).length, 15)
   for (const path of [...(selectedPack ? [] : [`${output}/base.glb`]), ...builtPacks.map(name => `${output}/animations/${name}.glb`)]) {
     const gltf = path.endsWith('/base.glb') ? base : await load(path)
-    const bakes = bakeFemaleClips(scene, gltf.animations.filter(clip => !clip.name.includes('|femaleBoots:')))
+    const bakes = bakeFemaleClips(scene, gltf.animations.filter(clip => !clip.name.includes('|femaleBoots:') && clip.name !== 'idle_armed'), grip)
     const doc = await io.read(path)
     const root = doc.getRoot()
     const buffer = root.listBuffers()[0]
     const nodes = new Map(root.listNodes().map(node => [THREE.PropertyBinding.sanitizeNodeName(node.getName()), node]))
     const accessor = (type, array) => doc.createAccessor().setType(type).setArray(array).setBuffer(buffer)
     for (const animation of root.listAnimations())
-      if (animation.getName().includes('|femaleBoots:')) animation.dispose()
+      if (animation.getName().includes('|femaleBoots:') || animation.getName() === 'idle_armed') animation.dispose()
     const animations = root.listAnimations()
     assert.deepEqual(animations.map(a => a.getName()), bakes.map(b => b.name))
     for (const [i, animation] of animations.entries()) {

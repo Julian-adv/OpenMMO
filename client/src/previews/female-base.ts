@@ -291,6 +291,7 @@ export async function showFemaleBase(
       <select id="female-motion">
         <option value="rest">기본 A 포즈</option>
         <option value="idle1">대기</option>
+        <option value="idle_armed">무장 대기 (idle_armed 원본)</option>
         <option value="walk">걷기</option>
         <option value="run">달리기</option>
         <option value="jump">점프</option>
@@ -703,9 +704,13 @@ export async function showFemaleBase(
     pause.textContent = paused ? '재생' : '일시정지'
   }
   const updateStatus = () => {
-    status.textContent = ['idle1', 'walk', 'run', 'combat_idle'].includes(
-      motion.value
-    )
+    status.textContent = [
+      'idle1',
+      'idle_armed',
+      'walk',
+      'run',
+      'combat_idle',
+    ].includes(motion.value)
       ? `${motion.selectedOptions[0].textContent} · ${equipment.selectedOptions[0].textContent}`
       : motion.selectedOptions[0].textContent
   }
@@ -753,8 +758,9 @@ export async function showFemaleBase(
     updateStatus()
     updateStats()
   }
-  motion.onchange = play
-  equipment.onchange = () => {
+  const idleClips = ['idle1', 'idle_armed']
+  let shownMotion = motion.value
+  const replay = () => {
     const fraction = action ? action.time / action.getClip().duration : 0
     const wasPaused = paused
     play()
@@ -766,6 +772,14 @@ export async function showFemaleBase(
     }
     if (select.value.endsWith('-hand')) reset()
   }
+  motion.onchange = () => {
+    const keepTime =
+      idleClips.includes(shownMotion) && idleClips.includes(motion.value)
+    shownMotion = motion.value
+    if (keepTime) replay()
+    else play()
+  }
+  equipment.onchange = replay
   pause.onclick = () => {
     if (action && action.time >= action.getClip().duration) {
       action.reset().play()
@@ -2345,12 +2359,11 @@ export async function showFemaleBase(
       ? 'armed'
       : 'unarmed'
   motion.value =
-    requestedMotion === 'idle_armed'
-      ? 'idle1'
-      : requestedMotion === 'rest' ||
-          animations.some((clip) => clip.name === requestedMotion)
-        ? requestedMotion
-        : 'idle1'
+    requestedMotion === 'rest' ||
+    animations.some((clip) => clip.name === requestedMotion)
+      ? requestedMotion
+      : 'idle1'
+  shownMotion = motion.value
   play()
   const requestedTime = Number(params.get('time'))
   if (params.has('time') && Number.isFinite(requestedTime) && action) {

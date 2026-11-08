@@ -17,6 +17,7 @@
 - 텍스처: Tripo의 base-color·normal·ORM 4096²에 눈·코·입술·눈썹·귀·속옷 자국을 국소 보정해 구웠다.
 - 속눈썹: 곡선 리본 메시 86가닥, 불투명 짙은 갈색 재질. 얼굴 상부와 속눈썹은 Head 본에 고정한다.
 - 동작 9개: `idle1`, `idle_armed`, `walk`(여성 캣워크), `run`, `jump`, `combat_idle`, `slash1`, `dying`, `sit_idle`. 60 Hz 접지 보정을 구웠고, `sit_idle`은 게임 `Chair`(`objects/chair.glb`)와 카탈로그 상호작용 높이에 맞춘다.
+  - 게임용 `base.glb`에는 `idle_armed`를 빼고 8개만 싣는다(2026-11-08). 내보내기가 `idle1`·`walk` 등의 오른손에 `idle_armed`의 장검 파지를 구워 넣어 두 대기 동작이 같아지기 때문이다. 파지 값은 `tools/prepare-female-knight.mjs`가 원본 리그의 `idle_armed`에서 읽는다.
 - 기본 상의 옆면은 피부와 같은 보간 웨이트를 써서 대기 동작에서 피부가 뚫고 나오지 않는다.
 
 ### 피부 텍스처의 속옷 자국 제거 — 2026-10-14

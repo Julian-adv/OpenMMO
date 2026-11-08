@@ -858,13 +858,23 @@ describe('female modular starter outfits', () => {
         for (let v = 0; v <= FEMALE_BOOTS_PARTS.length; v++)
           expect(angle(v)).toBeLessThan(1e-3)
       }
-      for (const [bone, quaternion] of Object.entries(
-        source.scene.userData.female_grip as Record<string, number[]>
-      ))
-        expect(Array.from(track(walk, `${bone}.quaternion`).values)).toEqual([
+      const idle = source.animations.find((clip) => clip.name === 'idle1')!
+      expect(source.animations.some((clip) => clip.name === 'idle_armed')).toBe(
+        false
+      )
+      const fingers = idle.tracks.filter((track) =>
+        /^RightHand(Thumb|Index|Middle|Ring|Pinky)[123]\.quaternion$/.test(
+          track.name
+        )
+      )
+      expect(fingers).toHaveLength(15)
+      for (const finger of fingers) {
+        const quaternion = Array.from(finger.values.slice(0, 4))
+        expect(Array.from(track(walk, finger.name).values)).toEqual([
           ...quaternion,
           ...quaternion,
         ])
+      }
 
       const mixer = new THREE.AnimationMixer(modelRoot)
       mixer.clipAction(walk).play()
