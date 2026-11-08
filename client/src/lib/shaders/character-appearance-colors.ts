@@ -9,7 +9,9 @@ import { StandardNodeLibrary, type Node, type NodeMaterial } from 'three/webgpu'
 import {
   abs,
   convert,
+  float,
   luminance,
+  max,
   materialColor,
   mix,
   positionGeometry,
@@ -39,10 +41,14 @@ type Eye = {
   x: readonly [number, number]
   y: number
   radius: readonly [number, number]
+  lowerRadius?: number
+  edge?: readonly [number, number]
+  upperLid?: readonly (readonly [number, number])[]
   front?: number
-  // Texture redness and luminance ranges faded out of the iris mask.
+  // Color limits exclude skin and sclera.
   redCut?: readonly [number, number]
   detailCut?: readonly [number, number]
+  blueCut?: readonly [number, number]
 }
 const DEFAULT_EYE: Eye = {
   x: [0.034, 0.034],
@@ -68,9 +74,19 @@ const FEMALE_EYE: Eye = {
 const CUSTOM_FEMALE_EYE: Eye = {
   x: [0.0338, 0.0322],
   y: 1.685,
-  radius: [0.0078, 0.0058],
+  radius: [0.0088, 0.0058],
+  lowerRadius: 0.008,
+  edge: [0.95, 1],
   front: 0.052,
-  detailCut: [0.3, 0.5],
+  detailCut: [0.5, 0.7],
+  blueCut: [0.38, 0.5],
+  upperLid: [
+    [0.02, 1.686],
+    [0.026, 1.6891],
+    [0.033, 1.6894],
+    [0.04, 1.6878],
+    [0.047, 1.6854],
+  ],
 }
 // Mean linear luminance of each female hair texture, so the chosen color is the mean albedo.
 const linearLuminance = (hex: string) => {
@@ -155,10 +171,15 @@ class AppearanceColors {
               ),
               positionGeometry.y.sub(eye.y)
             )
-            const radius = point.div(vec2(...eye.radius)).length()
+            const verticalRadius = eye.lowerRadius
+              ? mix(eye.lowerRadius, eye.radius[1], step(0, point.y))
+              : eye.radius[1]
+            const radius = point
+              .div(vec2(eye.radius[0], verticalRadius))
+              .length()
             const pupil = point.div(vec2(...DEFAULT_EYE.radius)).length()
             const detail = luminance(base.rgb)
-            const mask = smoothstep(0.85, 1, radius)
+            const mask = smoothstep(...(eye.edge ?? [0.85, 1]), radius)
               .oneMinus()
               .mul(smoothstep(0.26, 0.48, pupil))
               .mul(step(eye.front ?? 0.07, positionGeometry.z))
@@ -168,14 +189,42 @@ class AppearanceColors {
             const bright = eye.detailCut
               ? smoothstep(...eye.detailCut, detail).oneMinus()
               : 1
-            const irisMask = mask.mul(red).mul(bright)
+            const pigment = eye.blueCut
+              ? smoothstep(
+                  ...eye.blueCut,
+                  base.b.div(max(base.g, 0.001))
+                ).oneMinus()
+              : 1
+            let lidMask: Node<'float'> | number = 1
+            if (eye.upperLid) {
+              const knots = eye.upperLid
+              const x = abs(positionGeometry.x.add((eye.x[0] - eye.x[1]) / 2))
+              const upper = knots
+                .slice(1)
+                .reduce<Node<'float'>>((edge, [stop, y], i) => {
+                  const [start, previous] = knots[i]
+                  return edge.add(
+                    x
+                      .sub(start)
+                      .div(stop - start)
+                      .clamp(0, 1)
+                      .mul(y - previous)
+                  )
+                }, float(knots[0][1]))
+              lidMask = smoothstep(
+                upper.sub(0.0001),
+                upper.add(0.00025),
+                positionGeometry.y
+              ).oneMinus()
+            }
+            const irisMask = mask.mul(red).mul(bright).mul(pigment).mul(lidMask)
             const iris = this.eyes.mul(detail.mul(6).clamp(0.15, 1.2))
             material.colorNode = vec4(
               mix(
                 skin.rgb,
                 iris,
                 irisMask
-                  .mul(customFace ? this.customEyeTint.mul(0.9) : 0.9)
+                  .mul(customFace ? this.customEyeTint : 0.9)
                   .mul(this.eyeTint)
               ),
               skin.a
