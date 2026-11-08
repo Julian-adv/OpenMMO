@@ -63,6 +63,7 @@
     const devLogin = import.meta.env.DEV && import.meta.env.VITE_DEV_LOGIN
     const devAccount = new URLSearchParams(location.search).get('dev_login')
     if (devLogin && devAccount !== null) {
+      if (kickedMessage) return
       // `?dev_login=<account>` signs in as another account; the secret is shared.
       const credential = devAccount
         ? (devLogin as string).replace(/^dev:[^:]*:/, `dev:${devAccount}:`)

@@ -1,0 +1,65 @@
+{
+  "date": "2026-11-08",
+  "sources": [
+    {
+      "path": "/home/jake/.codex/worktrees/female-new-face/OnlineRPG/assets/modular_human_female_01/faces/tripo_custom_v1/base_custom.glb",
+      "sha256": "70983bd903a1a5aabd57198a01f7e95657c613a75bd7c6635440ae3a8cb2cb83"
+    },
+    {
+      "path": "/home/jake/.codex/worktrees/female-new-face/OnlineRPG/assets/modular_human_female_01/faces/tripo_custom_v1/base_custom_preview.glb",
+      "sha256": "e8b23a3b7788e5d6b35957d1a3047ada26f4841976f35b7f12749cd71b47a4e7"
+    }
+  ],
+  "source_bytes": 27135836,
+  "output_bytes": 4673088,
+  "triangles": 23444,
+  "all_vertex_attributes_exact": true,
+  "triangle_order_and_winding_preserved": true,
+  "animations_exact": 9,
+  "compressed_eyelash_rgba_exact": true,
+  "neck_fit_only": false,
+  "meshes": 3,
+  "materials": 3,
+  "texture_sizes": [
+    {
+      "material": "tripo_material_073e85e0-595b-4a12-9030-2dc3e30566e9",
+      "source_size": [
+        4096,
+        4096
+      ],
+      "size": [
+        2048,
+        2048
+      ],
+      "mime": "image/webp",
+      "alpha": "OPAQUE"
+    },
+    {
+      "material": "Female custom face original textures",
+      "source_size": [
+        2048,
+        2048
+      ],
+      "size": [
+        2048,
+        2048
+      ],
+      "mime": "image/webp",
+      "alpha": "OPAQUE"
+    },
+    {
+      "material": "Original eyelashes skin alpha only",
+      "source_size": [
+        256,
+        256
+      ],
+      "size": [
+        256,
+        256
+      ],
+      "mime": "image/png",
+      "alpha": "MASK"
+    }
+  ],
+  "compression": "Meshopt lossless attributes; WebP base color quality 94; lossless PNG/WebP for RGBA; JPEG normal/ORM; maximum dimension 2048"
+}

@@ -1,0 +1,1923 @@
+{
+  "date": "2026-11-07",
+  "status": "Original head and source eyelashes retained; skin alpha with original opaque eye surface restored",
+  "build": {
+    "date": "2026-11-07",
+    "source_model_sha256": "8dbcbcb21d06cd2ed33020a9eef617e1b4396fa4e43292c95748ddbbe3152dce",
+    "baseline_sha256": "a6be2048e01cd1cbddfbeb5c3fe2fcda06e5a8a7ab6efed4e26fcdb6f708c028",
+    "model_sha256": "0ec4b7025042d8a9735cfde95a9dbb72b78854bc2904dab6fcdd9aa035f94b59",
+    "geometry_unchanged": true,
+    "original_color_pixels_preserved": true,
+    "atlas_size": [
+      256,
+      256
+    ],
+    "sampled_original_rgb_maximum_error_8bit": 0.0005061812698841095,
+    "selected_source_faces": [
+      393,
+      427,
+      489,
+      492,
+      495,
+      497,
+      546,
+      547,
+      549,
+      550,
+      552,
+      553,
+      563,
+      565,
+      646,
+      1284,
+      1285,
+      1360,
+      1406,
+      1408,
+      1409,
+      1411,
+      1440,
+      1451,
+      1453,
+      9199,
+      9200,
+      9201,
+      9202,
+      9203,
+      9204,
+      9205,
+      9207,
+      9208,
+      9209,
+      9210,
+      9211,
+      9212,
+      9981,
+      9982,
+      9983,
+      9984,
+      9985,
+      9986,
+      9987,
+      9988,
+      9989,
+      9990,
+      9991,
+      9992,
+      9993,
+      9994,
+      9995,
+      9996,
+      9997,
+      9998,
+      9999,
+      10000,
+      10007,
+      10008,
+      10009,
+      10010,
+      10011,
+      10012,
+      10013,
+      10014,
+      10015,
+      10016,
+      10017,
+      10018,
+      10019,
+      10020,
+      10021,
+      10022,
+      10023,
+      10024,
+      10025,
+      10026,
+      10027,
+      10028,
+      10029,
+      10030,
+      10031,
+      10032,
+      10033,
+      10034,
+      10035,
+      10036,
+      10037,
+      10038,
+      10039,
+      10040,
+      10071,
+      10072,
+      10073,
+      10074,
+      10081,
+      10082,
+      10089,
+      10090,
+      10093,
+      10094,
+      10095,
+      10096,
+      10119,
+      10120,
+      10193,
+      10194,
+      10195,
+      10196,
+      10197,
+      10198,
+      10199,
+      10200,
+      10201,
+      10202,
+      10209,
+      10210,
+      10211,
+      10212,
+      10213,
+      10214,
+      10215,
+      10216,
+      10217,
+      10218,
+      10219,
+      10220,
+      10221,
+      10222,
+      10223,
+      10224,
+      10293,
+      10294,
+      10295,
+      10296,
+      10297,
+      10298,
+      10299,
+      10300,
+      10303,
+      10304,
+      10313,
+      10314,
+      10321,
+      10322,
+      10323,
+      10324,
+      10325,
+      10326,
+      10329,
+      10330,
+      10331,
+      10332,
+      10347,
+      10348,
+      10447,
+      10448,
+      10455,
+      10456,
+      10457,
+      10458,
+      10459,
+      10460,
+      10461,
+      10462,
+      10463,
+      10464,
+      10465,
+      10466,
+      10467,
+      10468,
+      10471,
+      10472,
+      10473,
+      10474,
+      10489,
+      10490,
+      10491,
+      10492,
+      10517,
+      10518,
+      10519,
+      10520,
+      10529,
+      10530,
+      10539,
+      10540,
+      10541,
+      10542,
+      10545,
+      10546,
+      10547,
+      10548,
+      10651,
+      10652,
+      10711,
+      10712,
+      10713,
+      10714,
+      10715,
+      10716,
+      10717,
+      10718,
+      10719,
+      10720,
+      10721,
+      10722,
+      10735,
+      10736,
+      10737,
+      10738,
+      10739,
+      10740,
+      10741,
+      10742,
+      10743,
+      10744,
+      10745,
+      10746,
+      10747,
+      10748,
+      10749,
+      10750,
+      10767,
+      10768,
+      10769,
+      10770,
+      10773,
+      10774,
+      10776,
+      10783,
+      10784,
+      10861,
+      10862,
+      10871,
+      10872,
+      10873,
+      10874,
+      10897,
+      10898,
+      10899,
+      10900,
+      10909,
+      10910,
+      10911,
+      10912,
+      10913,
+      10914,
+      10923,
+      10924,
+      10929,
+      10930,
+      10943,
+      10944,
+      10949,
+      10950,
+      10971,
+      10972,
+      10983,
+      10984,
+      10987,
+      10988,
+      10993,
+      10994,
+      27861,
+      27862,
+      27863,
+      27864,
+      27865,
+      27866,
+      27867,
+      27868,
+      27869,
+      27870,
+      27871,
+      27872,
+      27873,
+      27874,
+      28667,
+      28668,
+      28669,
+      28670,
+      28697,
+      28698,
+      28723,
+      28724,
+      28725,
+      28726,
+      28739,
+      28740,
+      28741,
+      28742,
+      28743,
+      28744,
+      28745,
+      28746,
+      28747,
+      28748,
+      28773,
+      28774,
+      28777,
+      28778,
+      28791,
+      28792,
+      28805,
+      28806,
+      28911,
+      28912,
+      28921,
+      28922,
+      28929,
+      28930,
+      28931,
+      28932,
+      28933,
+      28934,
+      28935,
+      28936,
+      28937,
+      28938,
+      28939,
+      28940,
+      28957,
+      28958,
+      28959,
+      28960,
+      28961,
+      28962,
+      28963,
+      28964,
+      28965,
+      28966,
+      28971,
+      28972,
+      28973,
+      28974,
+      28975,
+      28976,
+      28983,
+      28984,
+      28989,
+      28990,
+      29053,
+      29054,
+      29055,
+      29056,
+      29057,
+      29058,
+      29059,
+      29060,
+      29071,
+      29072,
+      29073,
+      29074,
+      29078,
+      29079,
+      29080,
+      29081,
+      29082,
+      29083,
+      29084,
+      29085,
+      29086,
+      29087,
+      29088,
+      29119,
+      29120,
+      29121,
+      29122,
+      29127,
+      29128,
+      29129,
+      29130,
+      29157,
+      29158,
+      29159,
+      29160,
+      29161,
+      29162,
+      29163,
+      29164,
+      29165,
+      29166,
+      29167,
+      29169,
+      29170,
+      29171,
+      29172,
+      29173,
+      29174,
+      29175,
+      29176,
+      29177,
+      29178,
+      29179,
+      29180,
+      29181,
+      29182,
+      29183,
+      29184,
+      29185,
+      29186,
+      29213,
+      29214,
+      29237,
+      29238,
+      29239,
+      29240,
+      29249,
+      29250,
+      29251,
+      29252,
+      29259,
+      29260,
+      29273,
+      29274,
+      29275,
+      29276,
+      29277,
+      29278,
+      29283,
+      29284,
+      29405,
+      29406,
+      29427,
+      29428,
+      29429,
+      29430,
+      29431,
+      29433,
+      29434,
+      29435,
+      29436,
+      29437,
+      29438,
+      29440,
+      29441,
+      29442,
+      29453,
+      29454,
+      29455,
+      29456,
+      29457,
+      29458,
+      29459,
+      29460,
+      29461,
+      29462,
+      29463,
+      29464,
+      29465,
+      29466,
+      29467,
+      29468,
+      29479,
+      29480,
+      29481,
+      29482,
+      29483,
+      29484,
+      29561,
+      29562,
+      29605,
+      29606,
+      29607,
+      29608,
+      29643,
+      29644,
+      29671,
+      29672,
+      29703,
+      29704,
+      29725,
+      29726
+    ],
+    "protected_eye_source_faces": [
+      561,
+      9206,
+      10475,
+      10476,
+      10477,
+      10478,
+      10483,
+      10484,
+      10505,
+      10506,
+      10537,
+      10538,
+      10563,
+      10564,
+      10609,
+      10610,
+      10611,
+      10612,
+      10771,
+      10772,
+      10775,
+      29075,
+      29076,
+      29077,
+      29105,
+      29106,
+      29117,
+      29118,
+      29168,
+      29215,
+      29216,
+      29432,
+      29439
+    ],
+    "skin_alpha": {
+      "triangles": 475,
+      "alpha_mode": "MASK",
+      "alpha_cutoff": 0.5,
+      "atlas_size": [
+        256,
+        256
+      ],
+      "method": "Original color pixels retained; bright skin tones keyed to transparent alpha",
+      "opaque_luminance_max": 70,
+      "transparent_luminance_min": 115,
+      "warm_skin_shadow_key": {
+        "red_minus_green": [
+          8,
+          20
+        ],
+        "green_minus_blue": [
+          3,
+          13
+        ],
+        "luminance": [
+          30,
+          75
+        ]
+      },
+      "original_uv0_preserved": true,
+      "alpha_color_uv_channel": 1,
+      "positions_normals_weights_and_triangles_preserved": true
+    },
+    "license_and_source": "User-provided Tripo model and its original color texture; same unprovided license as source.glb. Alpha channel and packing produced locally; no AI generation.",
+    "crops": [
+      {
+        "label": 392,
+        "low": [
+          423,
+          1954
+        ],
+        "size": [
+          22,
+          47
+        ],
+        "origin": [
+          23,
+          0
+        ]
+      },
+      {
+        "label": 393,
+        "low": [
+          1070,
+          1733
+        ],
+        "size": [
+          15,
+          27
+        ],
+        "origin": [
+          172,
+          0
+        ]
+      },
+      {
+        "label": 394,
+        "low": [
+          1123,
+          1610
+        ],
+        "size": [
+          16,
+          33
+        ],
+        "origin": [
+          77,
+          0
+        ]
+      },
+      {
+        "label": 395,
+        "low": [
+          2022,
+          1203
+        ],
+        "size": [
+          16,
+          13
+        ],
+        "origin": [
+          46,
+          55
+        ]
+      },
+      {
+        "label": 485,
+        "low": [
+          468,
+          1288
+        ],
+        "size": [
+          17,
+          39
+        ],
+        "origin": [
+          45,
+          0
+        ]
+      },
+      {
+        "label": 486,
+        "low": [
+          958,
+          1227
+        ],
+        "size": [
+          15,
+          26
+        ],
+        "origin": [
+          187,
+          0
+        ]
+      },
+      {
+        "label": 488,
+        "low": [
+          2036,
+          567
+        ],
+        "size": [
+          11,
+          10
+        ],
+        "origin": [
+          126,
+          55
+        ]
+      },
+      {
+        "label": 489,
+        "low": [
+          92,
+          1661
+        ],
+        "size": [
+          13,
+          24
+        ],
+        "origin": [
+          202,
+          0
+        ]
+      },
+      {
+        "label": 499,
+        "low": [
+          2036,
+          489
+        ],
+        "size": [
+          10,
+          10
+        ],
+        "origin": [
+          137,
+          55
+        ]
+      },
+      {
+        "label": 503,
+        "low": [
+          2036,
+          235
+        ],
+        "size": [
+          10,
+          9
+        ],
+        "origin": [
+          215,
+          55
+        ]
+      },
+      {
+        "label": 504,
+        "low": [
+          919,
+          1379
+        ],
+        "size": [
+          11,
+          20
+        ],
+        "origin": [
+          215,
+          0
+        ]
+      },
+      {
+        "label": 522,
+        "low": [
+          1208,
+          1758
+        ],
+        "size": [
+          25,
+          32
+        ],
+        "origin": [
+          93,
+          0
+        ]
+      },
+      {
+        "label": 527,
+        "low": [
+          2036,
+          457
+        ],
+        "size": [
+          10,
+          9
+        ],
+        "origin": [
+          225,
+          55
+        ]
+      },
+      {
+        "label": 538,
+        "low": [
+          2036,
+          532
+        ],
+        "size": [
+          11,
+          10
+        ],
+        "origin": [
+          147,
+          55
+        ]
+      },
+      {
+        "label": 541,
+        "low": [
+          2022,
+          736
+        ],
+        "size": [
+          15,
+          13
+        ],
+        "origin": [
+          62,
+          55
+        ]
+      },
+      {
+        "label": 555,
+        "low": [
+          2036,
+          79
+        ],
+        "size": [
+          10,
+          10
+        ],
+        "origin": [
+          158,
+          55
+        ]
+      },
+      {
+        "label": 556,
+        "low": [
+          2036,
+          637
+        ],
+        "size": [
+          11,
+          10
+        ],
+        "origin": [
+          168,
+          55
+        ]
+      },
+      {
+        "label": 557,
+        "low": [
+          2022,
+          776
+        ],
+        "size": [
+          15,
+          10
+        ],
+        "origin": [
+          179,
+          55
+        ]
+      },
+      {
+        "label": 603,
+        "low": [
+          2036,
+          927
+        ],
+        "size": [
+          11,
+          12
+        ],
+        "origin": [
+          77,
+          55
+        ]
+      },
+      {
+        "label": 1262,
+        "low": [
+          400,
+          1198
+        ],
+        "size": [
+          23,
+          55
+        ],
+        "origin": [
+          0,
+          0
+        ]
+      },
+      {
+        "label": 1263,
+        "low": [
+          1168,
+          1252
+        ],
+        "size": [
+          15,
+          30
+        ],
+        "origin": [
+          118,
+          0
+        ]
+      },
+      {
+        "label": 1375,
+        "low": [
+          358,
+          1194
+        ],
+        "size": [
+          15,
+          37
+        ],
+        "origin": [
+          62,
+          0
+        ]
+      },
+      {
+        "label": 1382,
+        "low": [
+          1274,
+          840
+        ],
+        "size": [
+          25,
+          28
+        ],
+        "origin": [
+          133,
+          0
+        ]
+      },
+      {
+        "label": 1402,
+        "low": [
+          2036,
+          1149
+        ],
+        "size": [
+          12,
+          9
+        ],
+        "origin": [
+          235,
+          55
+        ]
+      },
+      {
+        "label": 1404,
+        "low": [
+          2036,
+          527
+        ],
+        "size": [
+          11,
+          9
+        ],
+        "origin": [
+          0,
+          73
+        ]
+      },
+      {
+        "label": 1405,
+        "low": [
+          1106,
+          1328
+        ],
+        "size": [
+          15,
+          18
+        ],
+        "origin": [
+          0,
+          55
+        ]
+      },
+      {
+        "label": 1416,
+        "low": [
+          2036,
+          495
+        ],
+        "size": [
+          11,
+          10
+        ],
+        "origin": [
+          194,
+          55
+        ]
+      },
+      {
+        "label": 1417,
+        "low": [
+          2036,
+          1305
+        ],
+        "size": [
+          12,
+          11
+        ],
+        "origin": [
+          88,
+          55
+        ]
+      },
+      {
+        "label": 1420,
+        "low": [
+          2022,
+          1504
+        ],
+        "size": [
+          16,
+          16
+        ],
+        "origin": [
+          15,
+          55
+        ]
+      },
+      {
+        "label": 1421,
+        "low": [
+          1093,
+          1122
+        ],
+        "size": [
+          14,
+          28
+        ],
+        "origin": [
+          158,
+          0
+        ]
+      },
+      {
+        "label": 1423,
+        "low": [
+          704,
+          1964
+        ],
+        "size": [
+          16,
+          19
+        ],
+        "origin": [
+          226,
+          0
+        ]
+      },
+      {
+        "label": 1424,
+        "low": [
+          2036,
+          288
+        ],
+        "size": [
+          10,
+          10
+        ],
+        "origin": [
+          205,
+          55
+        ]
+      },
+      {
+        "label": 1428,
+        "low": [
+          2022,
+          868
+        ],
+        "size": [
+          15,
+          11
+        ],
+        "origin": [
+          100,
+          55
+        ]
+      },
+      {
+        "label": 1433,
+        "low": [
+          2036,
+          908
+        ],
+        "size": [
+          11,
+          11
+        ],
+        "origin": [
+          115,
+          55
+        ]
+      },
+      {
+        "label": 1434,
+        "low": [
+          2022,
+          569
+        ],
+        "size": [
+          15,
+          14
+        ],
+        "origin": [
+          31,
+          55
+        ]
+      }
+    ]
+  },
+  "fitting": {
+    "date": "2026-11-07",
+    "neck_fit_only": false,
+    "source_path": "assets/modular_human_female_01/faces/tripo_custom_v1/source.glb",
+    "source_sha256": "8dbcbcb21d06cd2ed33020a9eef617e1b4396fa4e43292c95748ddbbe3152dce",
+    "base_sha256": "3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5",
+    "scale": 1.8008793356130923,
+    "offset_m": [
+      -0.0008,
+      0.0,
+      0.014
+    ],
+    "neck_cut_y_m": 1.552,
+    "neck_seams": 1,
+    "neck_bridge_triangles": 0,
+    "rig_id": "human_female_01_local_v1",
+    "new_head_scale_and_translation_only": true,
+    "head_affine_scope": "Entire source head, including eyes and eyelashes, scalp and neck",
+    "maximum_head_affine_error_m": 2.2250491372754983e-16,
+    "maximum_exported_head_affine_error_m": 5.962628948665306e-08,
+    "source_triangles": 39865,
+    "head_triangles": 7743,
+    "retained_body_triangles": 15701,
+    "assembled_triangles": 23444,
+    "neck_boundary_vertices": 106,
+    "body_neck_fit_maximum_mm": 15.032832384433089,
+    "body_geometry_and_neck_color_match_initial_fit": true,
+    "source_texture_bytes_preserved": true,
+    "source_head_material_preserved": true,
+    "eye_and_eyelash_edits_applied": true,
+    "canonical_bone_nodes_bind_matrices_and_animation_tracks_preserved": true,
+    "meshes": 3,
+    "materials": 3,
+    "preview_texture_limit": 2048,
+    "files": {
+      "base_custom.glb": "0ec4b7025042d8a9735cfde95a9dbb72b78854bc2904dab6fcdd9aa035f94b59",
+      "face_custom.glb": "9d5fb11904676dc421dfff6ab0e78c372cc677f371967838138d5539085430ec",
+      "body-neck-albedo.png": "f4da1c4782b8a4fca22380dd99c55fb2ae080a57249e3621a99f0f23637ff8d5",
+      "lash_skin_alpha_v1/original-lash-skin-alpha.png": "ac2b06eb2af0cb4d631b625a63b8ebb9a55e642a60c589adc90d3d07aa75ea2b"
+    },
+    "status": "Original neck-fitted head; only skin alpha on original eyelash cards is applied",
+    "original_head_alpha_only": true,
+    "geometry_rig_and_animations_unchanged": true,
+    "original_lash_rgb_preserved": true,
+    "eyelashes": {
+      "triangles": 475,
+      "alpha_mode": "MASK",
+      "alpha_cutoff": 0.5,
+      "atlas_size": [
+        256,
+        256
+      ],
+      "method": "Original color pixels retained; bright skin tones keyed to transparent alpha",
+      "opaque_luminance_max": 70,
+      "transparent_luminance_min": 115,
+      "warm_skin_shadow_key": {
+        "red_minus_green": [
+          8,
+          20
+        ],
+        "green_minus_blue": [
+          3,
+          13
+        ],
+        "luminance": [
+          30,
+          75
+        ]
+      },
+      "original_uv0_preserved": true,
+      "alpha_color_uv_channel": 1,
+      "positions_normals_weights_and_triangles_preserved": true
+    },
+    "protected_eye_source_faces": [
+      561,
+      9206,
+      10475,
+      10476,
+      10477,
+      10478,
+      10483,
+      10484,
+      10505,
+      10506,
+      10537,
+      10538,
+      10563,
+      10564,
+      10609,
+      10610,
+      10611,
+      10612,
+      10771,
+      10772,
+      10775,
+      29075,
+      29076,
+      29077,
+      29105,
+      29106,
+      29117,
+      29118,
+      29168,
+      29215,
+      29216,
+      29432,
+      29439
+    ]
+  },
+  "animation_validation": {
+    "date": "2026-11-07",
+    "sources": [
+      {
+        "path": "assets/modular_human_female_01/faces/tripo_custom_v1/base_custom.glb",
+        "sha256": "0ec4b7025042d8a9735cfde95a9dbb72b78854bc2904dab6fcdd9aa035f94b59"
+      },
+      {
+        "path": "assets/modular_human_female_01/faces/tripo_custom_v1/source.glb",
+        "sha256": "8dbcbcb21d06cd2ed33020a9eef617e1b4396fa4e43292c95748ddbbe3152dce"
+      },
+      {
+        "path": "assets/modular_human_female_01/rig_v1/female-base.glb",
+        "sha256": "3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5"
+      },
+      {
+        "path": "assets/modular_human_female_01/faces/tripo_custom_v1/face_custom.glb",
+        "sha256": "9d5fb11904676dc421dfff6ab0e78c372cc677f371967838138d5539085430ec"
+      }
+    ],
+    "bones": 65,
+    "seam_vertex_groups": 105,
+    "rigid_face_vertices": 7070,
+    "standalone_binding": true,
+    "neck_seams": 1,
+    "reference_eye_rebuild": false,
+    "neck_fit_only": false,
+    "source_lash_faces_absent_from_opaque_head": [
+      10013,
+      10014,
+      10021,
+      10023,
+      10071,
+      10072,
+      29166,
+      29179,
+      29213,
+      1451,
+      10093,
+      10094,
+      10095,
+      10096,
+      10119,
+      10120,
+      10871,
+      10872,
+      10873,
+      10874,
+      29169,
+      29170,
+      29171,
+      29172,
+      29173,
+      29174,
+      29237,
+      29238,
+      29239,
+      29240,
+      29259,
+      29260,
+      29441,
+      29442,
+      29561,
+      29562,
+      29605,
+      29606,
+      29607,
+      29608,
+      29643,
+      29644,
+      29671,
+      29672,
+      29703,
+      29704
+    ],
+    "original_eye_and_eyelash_faces_restored": true,
+    "original_head_alpha_only": true,
+    "protected_eye_source_faces": [
+      561,
+      9206,
+      10475,
+      10476,
+      10477,
+      10478,
+      10483,
+      10484,
+      10505,
+      10506,
+      10537,
+      10538,
+      10563,
+      10564,
+      10609,
+      10610,
+      10611,
+      10612,
+      10771,
+      10772,
+      10775,
+      29075,
+      29076,
+      29077,
+      29105,
+      29106,
+      29117,
+      29118,
+      29168,
+      29215,
+      29216,
+      29432,
+      29439
+    ],
+    "upper_lash_roots_fitted": false,
+    "lower_lash_roots_fitted": false,
+    "head_affine_scope": "Entire source head, including eyes and eyelashes, scalp and neck",
+    "new_head_scale_and_translation_only": true,
+    "maximum_head_affine_error_m": 2.2250491372754983e-16,
+    "clips": [
+      {
+        "name": "idle1",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.7240164568819547e-08
+      },
+      {
+        "name": "idle_armed",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.7240164568819547e-08
+      },
+      {
+        "name": "walk",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.724016461117965e-08
+      },
+      {
+        "name": "run",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.724016462637638e-08
+      },
+      {
+        "name": "jump",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.7240164429141878e-08
+      },
+      {
+        "name": "combat_idle",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.7240164562184244e-08
+      },
+      {
+        "name": "slash1",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.7240164480375863e-08
+      },
+      {
+        "name": "dying",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.724016539576966e-08
+      },
+      {
+        "name": "sit_idle",
+        "samples": 25,
+        "maximum_seam_error_m": 0,
+        "maximum_rigid_head_error_m": 2.724016448617025e-08
+      }
+    ],
+    "scope": "Rest binding, normalized weights, finite deformation, rigid head tracking and neck seams. Hair and equipment intersections require visual review."
+  },
+  "compression_validation": {
+    "date": "2026-11-07",
+    "sources": [
+      {
+        "path": "/home/jake/.codex/worktrees/female-new-face/OnlineRPG/assets/modular_human_female_01/faces/tripo_custom_v1/base_custom.glb",
+        "sha256": "0ec4b7025042d8a9735cfde95a9dbb72b78854bc2904dab6fcdd9aa035f94b59"
+      },
+      {
+        "path": "/home/jake/.codex/worktrees/female-new-face/OnlineRPG/assets/modular_human_female_01/faces/tripo_custom_v1/base_custom_preview.glb",
+        "sha256": "33de82b1b5222d235b45c09ec86ce6ce76b4c0c85b4e954590531d97151a6f64"
+      }
+    ],
+    "source_bytes": 25225152,
+    "output_bytes": 4642656,
+    "triangles": 23444,
+    "all_vertex_attributes_exact": true,
+    "triangle_order_and_winding_preserved": true,
+    "animations_exact": 9,
+    "compressed_eyelash_rgba_exact": true,
+    "neck_fit_only": false,
+    "meshes": 3,
+    "materials": 3,
+    "texture_sizes": [
+      {
+        "material": "tripo_material_073e85e0-595b-4a12-9030-2dc3e30566e9",
+        "source_size": [
+          4096,
+          4096
+        ],
+        "size": [
+          2048,
+          2048
+        ],
+        "mime": "image/webp",
+        "alpha": "OPAQUE"
+      },
+      {
+        "material": "Female custom face original textures",
+        "source_size": [
+          2048,
+          2048
+        ],
+        "size": [
+          2048,
+          2048
+        ],
+        "mime": "image/webp",
+        "alpha": "OPAQUE"
+      },
+      {
+        "material": "Original eyelashes skin alpha only",
+        "source_size": [
+          256,
+          256
+        ],
+        "size": [
+          256,
+          256
+        ],
+        "mime": "image/png",
+        "alpha": "MASK"
+      }
+    ],
+    "compression": "Meshopt lossless attributes; WebP base color quality 94; lossless PNG/WebP for RGBA; JPEG normal/ORM; maximum dimension 2048"
+  },
+  "preview_capture": {
+    "iteration": "original-lash-iris-edge-repair",
+    "model_sha256": "33de82b1b5222d235b45c09ec86ce6ce76b4c0c85b4e954590531d97151a6f64",
+    "browser_errors": [],
+    "views": [
+      "front",
+      "eyes",
+      "angle",
+      "other-angle",
+      "profile",
+      "other-profile",
+      "head-profile"
+    ],
+    "camera_parameters": {
+      "front": {
+        "viewport": [
+          940,
+          1184
+        ],
+        "position": [
+          0.001,
+          1.6821,
+          0.813
+        ],
+        "target": [
+          0.001,
+          1.6821,
+          0
+        ],
+        "fov": 20
+      },
+      "eyes": {
+        "viewport": [
+          1184,
+          420
+        ],
+        "position": [
+          0.001,
+          1.6821,
+          0.813
+        ],
+        "target": [
+          0.001,
+          1.6821,
+          0
+        ],
+        "fov": 3.6
+      },
+      "angle": {
+        "viewport": [
+          900,
+          900
+        ],
+        "position": [
+          0.085,
+          1.695,
+          0.155
+        ],
+        "target": [
+          0.035,
+          1.685,
+          0.064
+        ],
+        "fov": 35
+      },
+      "other-angle": {
+        "viewport": [
+          900,
+          900
+        ],
+        "position": [
+          -0.0866,
+          1.695,
+          0.155
+        ],
+        "target": [
+          -0.0366,
+          1.685,
+          0.064
+        ],
+        "fov": 35
+      },
+      "profile": {
+        "viewport": [
+          900,
+          900
+        ],
+        "position": [
+          0.45,
+          1.682,
+          0.06
+        ],
+        "target": [
+          0.033,
+          1.682,
+          0.06
+        ],
+        "fov": 12
+      },
+      "other-profile": {
+        "viewport": [
+          900,
+          900
+        ],
+        "position": [
+          -0.4516,
+          1.682,
+          0.06
+        ],
+        "target": [
+          -0.0346,
+          1.682,
+          0.06
+        ],
+        "fov": 12
+      },
+      "head-profile": {
+        "viewport": [
+          900,
+          1100
+        ],
+        "position": [
+          1,
+          1.67,
+          0.01
+        ],
+        "target": [
+          0,
+          1.67,
+          0.01
+        ],
+        "fov": 22
+      }
+    }
+  },
+  "served_preview_sha256": "33de82b1b5222d235b45c09ec86ce6ce76b4c0c85b4e954590531d97151a6f64",
+  "scope": "Split only original eyelash card triangles to a MASK material; original position, normal, UV0, weights, triangles, face/body materials, rig and motion preserved. Original RGB copied into packed RGBA; only skin alpha generated. No procedural strands, refitting, eye edits or AI generation. Original eye-opening triangles accidentally selected for alpha are restored to their original opaque material.",
+  "license_and_source": "User-provided Tripo model and its original color texture; same unprovided license as source.glb. Alpha channel and packing produced locally; no AI generation.",
+  "outputs": [
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/base_custom.glb",
+      "sha256": "0ec4b7025042d8a9735cfde95a9dbb72b78854bc2904dab6fcdd9aa035f94b59",
+      "bytes": 25225152
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/base_custom_preview.glb",
+      "sha256": "33de82b1b5222d235b45c09ec86ce6ce76b4c0c85b4e954590531d97151a6f64",
+      "bytes": 4642656
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/face_custom.glb",
+      "sha256": "9d5fb11904676dc421dfff6ab0e78c372cc677f371967838138d5539085430ec",
+      "bytes": 5518448
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/custom-face-fitting.blend",
+      "sha256": "0d1d533015d860f1a15653f33bfafd58e8b5e80215a6bcf8477e37b08f3f58ca",
+      "bytes": 37052921
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/lash_skin_alpha_v1/original-lash-skin-alpha.png",
+      "sha256": "ac2b06eb2af0cb4d631b625a63b8ebb9a55e642a60c589adc90d3d07aa75ea2b",
+      "bytes": 28268
+    },
+    {
+      "path": "doc/images/characters/modular_human_female_01/customization/face-custom-original-lash-alpha-eyes.png",
+      "sha256": "bc2baa5341992657c068b18b6fd10ab68c2499c124b7e21ff6073e650a40fcd3",
+      "bytes": 338856
+    },
+    {
+      "path": "doc/images/characters/modular_human_female_01/customization/face-custom-original-lash-alpha-comparison.png",
+      "sha256": "dc1bd629472865f6829047fb69f21daf681541b9c846f330c505f2afe1b1c18b",
+      "bytes": 682328
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/lash_skin_alpha_v1/eye-surface-protection.json",
+      "sha256": "b4522223ab5898d1e6bbcb423374dcc2c4d38ad724381f4f789073c3c4179eef",
+      "bytes": 767
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/lash_skin_alpha_v1/eye-hole-diagnostic.json",
+      "sha256": "76c21b7cb1247d42109538d1e161290cbde2719af49aa9227f2b6f0c7976a719",
+      "bytes": 1093
+    },
+    {
+      "path": "doc/images/characters/modular_human_female_01/customization/face-custom-original-eye-hole-repair-comparison.png",
+      "sha256": "7d5e2e2488bba39251d7ffb683197e3f2aa3fe2f0f2c8e30c768956f75299456",
+      "bytes": 674452
+    },
+    {
+      "path": "doc/images/characters/modular_human_female_01/customization/face-custom-inner-corner-repair-comparison.png",
+      "sha256": "0b4ec5f340b5894145f6459973408f7222ddbbc0027540a5ea749a818d411a84",
+      "bytes": 89302
+    },
+    {
+      "path": "doc/images/characters/modular_human_female_01/customization/face-custom-iris-edge-repair-comparison.png",
+      "sha256": "ba5071a8a08e09ae2cbc8573c0cc87864b8a6bf3b1ae962f28c5bbfcdb87b773",
+      "bytes": 70588
+    }
+  ],
+  "tools": [
+    {
+      "path": "tools/apply-female-original-lash-alpha.py",
+      "sha256": "c6e05c4ad806523683c04dcd36fdd5303d80d3dc90a5be9e426c292c6c8f7e63"
+    },
+    {
+      "path": "tools/optimize-modular-part.mjs",
+      "sha256": "888181e5a4f9ce41008a8add91013c46e339de96cfaf6ccb17d5ff773eae6ace"
+    },
+    {
+      "path": "tools/inspect-female-original-eye-holes.mjs",
+      "sha256": "579bc92a674ccf259ec62a3001a06c5736651a4b13fcc31c8095db1004808f00"
+    },
+    {
+      "path": "tools/validate-female-custom-face.mjs",
+      "sha256": "7f0e74ad9d5cf47a8c1c9d0f2588de0fa12a97e55524e52afeacda16a914b990"
+    }
+  ],
+  "baseline_directory": "assets/modular_human_female_01/faces/tripo_custom_v1/lash_skin_alpha_v1/before",
+  "eye_surface_repair": {
+    "protection": {
+      "source_faces": [
+        561,
+        9206,
+        10475,
+        10476,
+        10477,
+        10478,
+        10483,
+        10484,
+        10505,
+        10506,
+        10537,
+        10538,
+        10563,
+        10564,
+        10609,
+        10610,
+        10611,
+        10612,
+        10771,
+        10772,
+        10775,
+        29075,
+        29076,
+        29077,
+        29105,
+        29106,
+        29117,
+        29118,
+        29168,
+        29215,
+        29216,
+        29432,
+        29439
+      ],
+      "reason": "Original eye-opening and inner-corner/lower-rim surfaces must remain opaque; skin alpha is limited to eyelash cards",
+      "source_model_sha256": "8dbcbcb21d06cd2ed33020a9eef617e1b4396fa4e43292c95748ddbbe3152dce",
+      "inner_corner_faces": [
+        10475,
+        10476,
+        10477,
+        10478,
+        10483,
+        10484,
+        10563,
+        10564
+      ],
+      "iris_edge_faces": [
+        29106
+      ]
+    },
+    "before": {
+      "source_faces": [
+        561,
+        9206,
+        10505,
+        10506,
+        10537,
+        10538,
+        10609,
+        10610,
+        10611,
+        10612,
+        10771,
+        10772,
+        10775,
+        29075,
+        29076,
+        29077,
+        29105,
+        29117,
+        29118,
+        29168,
+        29215,
+        29216,
+        29432,
+        29439
+      ],
+      "hits_by_source_face": [
+        [
+          29118,
+          59
+        ],
+        [
+          10506,
+          7
+        ],
+        [
+          10537,
+          4
+        ],
+        [
+          561,
+          4
+        ],
+        [
+          10505,
+          2
+        ],
+        [
+          10538,
+          1
+        ],
+        [
+          10611,
+          7
+        ],
+        [
+          10612,
+          7
+        ],
+        [
+          10610,
+          7
+        ],
+        [
+          10609,
+          7
+        ],
+        [
+          29439,
+          5
+        ],
+        [
+          29432,
+          2
+        ],
+        [
+          29117,
+          43
+        ],
+        [
+          29216,
+          1
+        ],
+        [
+          29215,
+          4
+        ],
+        [
+          29105,
+          1
+        ],
+        [
+          29168,
+          6
+        ],
+        [
+          29076,
+          6
+        ],
+        [
+          29077,
+          15
+        ],
+        [
+          29075,
+          1
+        ],
+        [
+          10775,
+          4
+        ],
+        [
+          10772,
+          1
+        ],
+        [
+          10771,
+          2
+        ],
+        [
+          9206,
+          5
+        ]
+      ],
+      "views": [
+        {
+          "view": "front",
+          "sampled_hole_pixels": 9
+        },
+        {
+          "view": "angle",
+          "sampled_hole_pixels": 10
+        },
+        {
+          "view": "other-angle",
+          "sampled_hole_pixels": 46
+        },
+        {
+          "view": "profile",
+          "sampled_hole_pixels": 124
+        },
+        {
+          "view": "other-profile",
+          "sampled_hole_pixels": 12
+        }
+      ],
+      "scope": "Three-pixel ray grid within the native eye opening; transparent original faces with no opaque surface within 12mm. This detects local surface loss rather than proving all pixels watertight."
+    },
+    "after": {
+      "source_faces": [],
+      "hits_by_source_face": [],
+      "views": [
+        {
+          "view": "front",
+          "sampled_hole_pixels": 0
+        },
+        {
+          "view": "angle",
+          "sampled_hole_pixels": 0
+        },
+        {
+          "view": "other-angle",
+          "sampled_hole_pixels": 0
+        },
+        {
+          "view": "profile",
+          "sampled_hole_pixels": 0
+        },
+        {
+          "view": "other-profile",
+          "sampled_hole_pixels": 0
+        }
+      ],
+      "protected_eye_faces_opaque": [
+        561,
+        9206,
+        10475,
+        10476,
+        10477,
+        10478,
+        10483,
+        10484,
+        10505,
+        10506,
+        10537,
+        10538,
+        10563,
+        10564,
+        10609,
+        10610,
+        10611,
+        10612,
+        10771,
+        10772,
+        10775,
+        29075,
+        29076,
+        29077,
+        29105,
+        29106,
+        29117,
+        29118,
+        29168,
+        29215,
+        29216,
+        29432,
+        29439
+      ],
+      "scope": "Protected original eye and inner-corner faces checked for opaque material membership regardless of backing depth. Three-pixel ray grid within the native eye opening detects loss without opaque backing within 12mm; it does not detect every eye surface defect."
+    },
+    "previous_alpha_output": "[미사용] assets/modular_human_female_01/faces/tripo_custom_v1/lash_skin_alpha_v1/before-eye-protection",
+    "method": "Restore original opaque material on 24 eye-opening, 8 inner-corner/lower-rim and 1 iris-edge source triangles. All geometry and the original eyelash RGBA remain unchanged.",
+    "previous_partial_repair": "[미사용] assets/modular_human_female_01/faces/tripo_custom_v1/lash_skin_alpha_v1/before-inner-corner-repair",
+    "previous_iris_edge_output": "[미사용] assets/modular_human_female_01/faces/tripo_custom_v1/lash_skin_alpha_v1/before-iris-edge-repair"
+  }
+}

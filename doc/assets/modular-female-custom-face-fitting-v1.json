@@ -1,0 +1,405 @@
+{
+  "date": "2026-11-08",
+  "neck_fit_only": false,
+  "source_path": "assets/modular_human_female_01/faces/tripo_custom_v1/source.glb",
+  "source_sha256": "8dbcbcb21d06cd2ed33020a9eef617e1b4396fa4e43292c95748ddbbe3152dce",
+  "base_sha256": "3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5",
+  "scale": 1.8008793356130923,
+  "offset_m": [
+    -0.0008,
+    0.0,
+    0.014
+  ],
+  "neck_cut_y_m": 1.552,
+  "neck_seams": 1,
+  "neck_bridge_triangles": 0,
+  "rig_id": "human_female_01_local_v1",
+  "new_head_scale_and_translation_only": false,
+  "head_affine_scope": "Original scale and translation except the explicitly translated lower eyelid ridge",
+  "maximum_head_affine_error_m": 0.0028,
+  "maximum_exported_head_affine_error_m": 0.0028,
+  "source_triangles": 39865,
+  "head_triangles": 7743,
+  "retained_body_triangles": 15701,
+  "assembled_triangles": 23444,
+  "neck_boundary_vertices": 106,
+  "body_neck_fit_maximum_mm": 15.032832384433089,
+  "body_geometry_and_neck_color_match_initial_fit": true,
+  "source_texture_bytes_preserved": false,
+  "source_head_material_preserved": false,
+  "eye_and_eyelash_edits_applied": true,
+  "canonical_bone_nodes_bind_matrices_and_animation_tracks_preserved": true,
+  "meshes": 3,
+  "materials": 3,
+  "preview_texture_limit": 2048,
+  "files": {
+    "base_custom.glb": "70983bd903a1a5aabd57198a01f7e95657c613a75bd7c6635440ae3a8cb2cb83",
+    "face_custom.glb": "d35cfe4ad9fb54f365666f70754b4c6273585b3ae3f93357b0d095a91033a1f2",
+    "body-neck-albedo.png": "f4da1c4782b8a4fca22380dd99c55fb2ae080a57249e3621a99f0f23637ff8d5",
+    "lash_skin_alpha_v1/original-lash-skin-alpha.png": "ac2b06eb2af0cb4d631b625a63b8ebb9a55e642a60c589adc90d3d07aa75ea2b"
+  },
+  "status": "Accepted eyelid ridge geometry retained; only iris color texture retouched for coherent pupils and reduced baked reflections",
+  "original_head_alpha_only": false,
+  "geometry_rig_and_animations_unchanged": false,
+  "original_lash_rgb_preserved": true,
+  "eyelashes": {
+    "triangles": 475,
+    "alpha_mode": "MASK",
+    "alpha_cutoff": 0.5,
+    "atlas_size": [
+      256,
+      256
+    ],
+    "method": "Original color pixels retained; bright skin tones keyed to transparent alpha",
+    "opaque_luminance_max": 70,
+    "transparent_luminance_min": 115,
+    "warm_skin_shadow_key": {
+      "red_minus_green": [
+        8,
+        20
+      ],
+      "green_minus_blue": [
+        3,
+        13
+      ],
+      "luminance": [
+        30,
+        75
+      ]
+    },
+    "original_uv0_preserved": true,
+    "alpha_color_uv_channel": 1,
+    "positions_normals_weights_and_triangles_preserved": false,
+    "weights_uv_triangles_and_color_preserved": true,
+    "position_and_normal_change_scope": "Lower eyelid ridge fit; original upper lash positions pinned"
+  },
+  "protected_eye_source_faces": [
+    561,
+    9206,
+    10475,
+    10476,
+    10477,
+    10478,
+    10483,
+    10484,
+    10505,
+    10506,
+    10537,
+    10538,
+    10563,
+    10564,
+    10609,
+    10610,
+    10611,
+    10612,
+    10771,
+    10772,
+    10775,
+    29075,
+    29076,
+    29077,
+    29105,
+    29106,
+    29117,
+    29118,
+    29168,
+    29215,
+    29216,
+    29432,
+    29439
+  ],
+  "original_head_geometry_preserved": false,
+  "iris_highlight_cleanup": {
+    "date": "2026-11-08",
+    "baseline_commit": "f1775cb9",
+    "baseline_sha256": "0ec4b7025042d8a9735cfde95a9dbb72b78854bc2904dab6fcdd9aa035f94b59",
+    "method": "ImageGen highlight retouch blended only into bright existing iris texels; maximum strength .65 and channel delta 65/255",
+    "strength": 0.65,
+    "changed_albedo_pixels": 116,
+    "maximum_channel_change": 65,
+    "geometry_uv_weights_rig_animations_materials_and_lash_alpha_unchanged": true,
+    "outside_highlight_mask_unchanged": true,
+    "normal_and_orm_images_unchanged": true,
+    "source_projection_sha256": "3389998de3e3fde8c4888fabe983eb813d3241eb7f7049dd676f5e28c03b242c",
+    "edited_projection_sha256": "8b3a9a232e14a607dfb0a83c6c6660cb5c7b37f5a1fbb4a2d22c06ca940c414e",
+    "output_albedo_sha256": "93dfb950f8bfd4da737b1cc008ac85b01951088184b4bd5bc5cdcb1b523a3a9d",
+    "mask_sha256": "edaa4bdf7c1c8cf875b602d642fe06677d14c7ab9ce0ad4706c65c3ea38a63af",
+    "generator": "Built-in ImageGen",
+    "subscription": "ChatGPT Pro 20x",
+    "prompt": "Keep existing golden brown irises, pupil shapes, eye shapes, framing and coarse texture detail; reduce only baked bright ivory iris reflections with neighboring brown/gold. Leave sclera, lids and skin unchanged; do not redesign or sharpen.",
+    "license": "User-provided Tripo source; license not supplied. Retouch generated from its projected albedo on 2026-11-08.",
+    "files": {
+      "base_custom.glb": "03efe95158369779001cd929daffd47aa0d7070174fc4bf13be6ff5df6c5f7f3",
+      "face_custom.glb": "19942f8621b058767797a4c253ab7a682a4c4caa3c40c781ec11a5be5acdfe07"
+    }
+  },
+  "lower_eyelid_fit": {
+    "date": "2026-11-08",
+    "drop_mm": 2.8,
+    "baseline_path": "lower_lid_ridge_v2/before/base_custom.glb",
+    "baseline_sha256": "03efe95158369779001cd929daffd47aa0d7070174fc4bf13be6ff5df6c5f7f3",
+    "ridge_x_knots_m": [
+      0.016,
+      0.02,
+      0.0242,
+      0.0277,
+      0.0321,
+      0.0356,
+      0.0391,
+      0.0409,
+      0.0435,
+      0.0462,
+      0.05,
+      0.055
+    ],
+    "ridge_y_knots_m": [
+      1.6813,
+      1.6813,
+      1.6804,
+      1.6804,
+      1.6804,
+      1.6813,
+      1.6822,
+      1.68305,
+      1.6848,
+      1.6857,
+      1.6857,
+      1.6857
+    ],
+    "meshes": {
+      "female_body": {
+        "moved_vertices": 0,
+        "maximum_drop_mm": 0.0,
+        "minimum_jacobian": 1.0
+      },
+      "face_female_custom": {
+        "moved_vertices": 702,
+        "maximum_drop_mm": 2.8,
+        "minimum_jacobian": 0.47569084842873044
+      },
+      "eyelashes_female_custom": {
+        "moved_vertices": 231,
+        "maximum_drop_mm": 2.8,
+        "minimum_jacobian": 0.47569084842873044
+      }
+    },
+    "ridge_landmarks": [
+      {
+        "vertex": 1637,
+        "before": [
+          -0.044327110052108765,
+          1.6848070621490479,
+          0.0619237944483757
+        ],
+        "after": [
+          -0.044327110052108765,
+          1.6823487281799316,
+          0.0619237944483757
+        ],
+        "drop_mm": 2.458361410700775
+      },
+      {
+        "vertex": 1800,
+        "before": [
+          -0.04256843775510788,
+          1.6830483675003052,
+          0.06280312687158585
+        ],
+        "after": [
+          -0.04256843775510788,
+          1.6802483797073364,
+          0.06280312687158585
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 1802,
+        "before": [
+          -0.04168910160660744,
+          1.6830483675003052,
+          0.0619237944483757
+        ],
+        "after": [
+          -0.04168910160660744,
+          1.6802483797073364,
+          0.0619237944483757
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 1759,
+        "before": [
+          -0.03993043303489685,
+          1.6821690797805786,
+          0.06368246674537659
+        ],
+        "after": [
+          -0.03993043303489685,
+          1.6793690919876099,
+          0.06368246674537659
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 1747,
+        "before": [
+          -0.03729242458939552,
+          1.680410385131836,
+          0.06632047146558762
+        ],
+        "after": [
+          -0.03729242458939552,
+          1.6776103973388672,
+          0.06632047146558762
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 1780,
+        "before": [
+          -0.03641308844089508,
+          1.6812896728515625,
+          0.06456179916858673
+        ],
+        "after": [
+          -0.03641308844089508,
+          1.6784896850585938,
+          0.06456179916858673
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 1826,
+        "before": [
+          -0.03289574757218361,
+          1.680410385131836,
+          0.06456179916858673
+        ],
+        "after": [
+          -0.03289574757218361,
+          1.6776103973388672,
+          0.06456179916858673
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 1822,
+        "before": [
+          -0.03289574757218361,
+          1.680410385131836,
+          0.06632047146558762
+        ],
+        "after": [
+          -0.03289574757218361,
+          1.6776103973388672,
+          0.06632047146558762
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 2011,
+        "before": [
+          -0.028499068692326546,
+          1.680410385131836,
+          0.06632047146558762
+        ],
+        "after": [
+          -0.028499068692326546,
+          1.6776103973388672,
+          0.06632047146558762
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 2024,
+        "before": [
+          -0.024981725960969925,
+          1.680410385131836,
+          0.06544113904237747
+        ],
+        "after": [
+          -0.024981725960969925,
+          1.6776103973388672,
+          0.06544113904237747
+        ],
+        "drop_mm": 2.8
+      }
+    ],
+    "core_ridge_translation_preserves_curve": true,
+    "new_triangles": 0,
+    "body_and_neck_unchanged": true,
+    "horizontal_and_depth_coordinates_unchanged": true,
+    "triangle_order_winding_uv0_weights_rig_animations_unchanged": true,
+    "original_maps_countershifted_against_mesh_motion": true,
+    "secondary_uv_patches": [
+      {
+        "side": -1,
+        "origin": [
+          590,
+          6
+        ],
+        "size": 512,
+        "triangles": 384
+      },
+      {
+        "side": 1,
+        "origin": [
+          1294,
+          1206
+        ],
+        "size": 512,
+        "triangles": 382
+      }
+    ],
+    "source": "Original user Tripo model, iris cleanup baseline and user red/blue lower eyelid annotation",
+    "license": "Source license not supplied; same source conditions apply. Local geometry and UV baking; no new AI generation."
+  },
+  "iris_texture_cleanup_v2": {
+    "date": "2026-11-08",
+    "baseline_commit": "9f58038c",
+    "baseline_sha256": "a4573c39069fa0eb93a2f973cb03e43fc5e8dc15cdfaa9dd20a21d6f25fe2a41",
+    "method": "Retouch hazel irises in existing UV1 tiles; include tiny original iris UV fragments and preserve ORM coordinates on UV2",
+    "changed_albedo_texels": 28133,
+    "triangle_positions_normals_uv0_weights_rig_animations_exact": true,
+    "color_uv_mapping": {
+      "remapped_triangles": 530,
+      "duplicated_vertices": 474
+    },
+    "orm_sampling_coordinates_preserved_on_uv2": true,
+    "outside_iris_mask_exact": true,
+    "normal_orm_lash_rgba_bytes_exact": true,
+    "source_projection_sha256": "1101d60f9a4b83a7b1ad85ae96600d035264084c1e58e4301af0973442221a57",
+    "edited_projection_sha256": "0b9bf7df3e7c5f13bc16081011710118ecf259e9e681d2c33253e9f4c2111e55",
+    "albedo_sha256": "76989b4e2f849171515d163471286b3dc7767a18f150b247650be380673d1df7",
+    "mask_sha256": "af1c18874dcc176e007d801201ed0961857c613aba1da344bb0ffa236dcaac87",
+    "pupil_placement": {
+      "input_pupil_centers_px": [
+        [
+          267,
+          217
+        ],
+        [
+          756,
+          213
+        ]
+      ],
+      "sampling_offsets_px": [
+        [
+          -25.317260421577203,
+          10.72597481311874
+        ],
+        [
+          -4.8719646799116845,
+          14.88579838116263
+        ]
+      ]
+    },
+    "tool": "Built-in ImageGen",
+    "subscription": "ChatGPT Pro 20x",
+    "license": "Retouch of the user-provided Tripo texture. Original license not supplied; source conditions apply.",
+    "files": {
+      "base_custom.glb": "70983bd903a1a5aabd57198a01f7e95657c613a75bd7c6635440ae3a8cb2cb83",
+      "face_custom.glb": "d35cfe4ad9fb54f365666f70754b4c6273585b3ae3f93357b0d095a91033a1f2"
+    }
+  }
+}

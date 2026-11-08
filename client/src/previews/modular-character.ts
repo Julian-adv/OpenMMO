@@ -145,6 +145,11 @@ async function main() {
     await showFemaleBase(scene, resources, cleanup, () => disposed)
     return
   }
+  if (new URLSearchParams(location.search).get('character') === 'female-face') {
+    const { showFemaleFace } = await import('./female-face')
+    await showFemaleFace(scene, resources, cleanup, () => disposed)
+    return
+  }
   const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder)
   const params = new URLSearchParams(location.search)
   const requestedFace = params.get('face')

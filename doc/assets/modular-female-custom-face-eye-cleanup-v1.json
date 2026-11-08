@@ -1,0 +1,60 @@
+{
+  "date": "2026-11-07",
+  "model_sha256": "96649329be2fa4eb4a19e64ccdbc0463f42b722f1a54a746a9071f2376007bbc",
+  "before_model_sha256": "4e5e0ecc7ba9e1f068f0f29edd8ba2d6511f3dbb7638d5426d43aa7acee7590a",
+  "eye_texture_repair": {
+    "method": "World-aligned hazel iris and sclera baked into existing UV islands; localized normal and ORM cleanup",
+    "iris_center_abs_x_m": 0.033,
+    "iris_center_y_m": 1.6846,
+    "iris_radius_m": 0.0058,
+    "iris_front_z_range_m": [
+      0.0635,
+      0.0653
+    ],
+    "painted_triangles": 701,
+    "mask_pixels": 98995,
+    "pixels_outside_mask_preserved": true,
+    "albedo_changed_pixels": 98982,
+    "normal_changed_pixels": 97397,
+    "orm_changed_pixels": 98934,
+    "atlas_tiles": [
+      {
+        "side": -1,
+        "pixel_origin": [
+          582,
+          6
+        ],
+        "size": 512,
+        "triangles": 256,
+        "vertices": 276
+      },
+      {
+        "side": 1,
+        "pixel_origin": [
+          1294,
+          1206
+        ],
+        "size": 512,
+        "triangles": 280,
+        "vertices": 297
+      }
+    ],
+    "eye_uv_remapped": true,
+    "geometry_rig_and_lashes_preserved": true,
+    "duplicated_vertices": 573
+  },
+  "geometry_normals_weights_and_triangle_order_preserved": true,
+  "body_and_eyelashes_unchanged": true,
+  "other_face_uv_preserved": true,
+  "color_normal_orm_pixels_outside_mask_preserved": true,
+  "atlas_tiles_did_not_overlap_existing_head_uv": true,
+  "remapped_triangles": 536,
+  "meshes": 3,
+  "materials": 3,
+  "triangles": 23444,
+  "texture_size": [
+    2048,
+    2048
+  ],
+  "generation_record": "doc/assets/modular-female-custom-face-eye-generation-v1.json"
+}

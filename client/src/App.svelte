@@ -76,6 +76,8 @@
   let createAppearance = $state<CharacterAppearance>({
     face: 'default',
     hair: 'crop',
+    hair_color_original: true,
+    eye_color_original: true,
   })
   let createFacePreview = $state(false)
 

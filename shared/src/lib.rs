@@ -246,7 +246,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// `Player.petrified` + `PlayerPetrifiedToggled` and the `crystal_eruption`
 /// skill.
 /// v138: `PartyState.loot_shared` and `PartySetLoot` (`/party loot`).
-pub const PROTOCOL_VERSION: u32 = 138;
+/// v139: custom female face and original hair and eye texture colors.
+pub const PROTOCOL_VERSION: u32 = 139;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

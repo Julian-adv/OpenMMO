@@ -7,6 +7,21 @@ import rangerHair from '../../assets/character-appearance/hair-ranger.png'
 import femaleBob from '../../assets/character-appearance/female-hair-bob.png'
 import femaleLong from '../../assets/character-appearance/female-hair-long.png'
 import femalePonytail from '../../assets/character-appearance/female-hair-ponytail.png'
+import femaleDefaultFace from '../../assets/character-appearance/female-face-default.png'
+import femaleCustomFace from '../../assets/character-appearance/female-face-custom.png'
+
+export const FEMALE_FACE_OPTIONS = [
+  {
+    value: 'default',
+    label: 'characterCreate.faceDefault',
+    thumbnail: femaleDefaultFace,
+  },
+  {
+    value: 'custom',
+    label: 'characterCreate.faceCustom',
+    thumbnail: femaleCustomFace,
+  },
+] as const
 
 export const FACE_OPTIONS = [
   {

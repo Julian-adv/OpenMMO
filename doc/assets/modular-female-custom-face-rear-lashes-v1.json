@@ -1,0 +1,128 @@
+{
+  "date": "2026-11-07",
+  "model_sha256": "f3f9126a5654db0dc521ff95eff6870ca29567f650041727fd9449572b6de233",
+  "compressed_model_sha256": "fa95829eae378231d4849720c76505d8ac3e8cb66c75cc946de78434ae69794c",
+  "source_faces_checked_in_alpha_material": [
+    10013,
+    10014,
+    10021,
+    10023,
+    10071,
+    10072,
+    29166,
+    29168,
+    29179,
+    29213
+  ],
+  "right_camera_position": [
+    0.24,
+    1.684,
+    -0.1
+  ],
+  "right_camera_target": [
+    0.03,
+    1.684,
+    0.065
+  ],
+  "left_camera_position": [
+    -0.24,
+    1.684,
+    -0.1
+  ],
+  "left_camera_target": [
+    -0.0316,
+    1.684,
+    0.065
+  ],
+  "viewport": [
+    1500,
+    1100
+  ],
+  "side_checks": [
+    {
+      "side": "right",
+      "sample_pixels": [
+        [
+          487,
+          436
+        ],
+        [
+          495,
+          425
+        ],
+        [
+          503,
+          420
+        ],
+        [
+          508,
+          415
+        ]
+      ],
+      "opaque_hits": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "side": "left",
+      "sample_pixels": [
+        [
+          585,
+          433
+        ],
+        [
+          579,
+          430
+        ],
+        [
+          573,
+          437
+        ],
+        [
+          587,
+          431
+        ],
+        [
+          590,
+          432
+        ],
+        [
+          593,
+          433
+        ],
+        [
+          578,
+          414
+        ],
+        [
+          580,
+          415
+        ],
+        [
+          582,
+          416
+        ]
+      ],
+      "opaque_hits": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "browser_errors": [],
+  "image": "doc/images/characters/modular_human_female_01/customization/face-custom-lower-lash-rear-v1.png",
+  "upper_lash_roots_fitted": true,
+  "lower_lash_roots_fitted": true,
+  "outer_upper_lashes_swept": true,
+  "eyelash_width_scale": 1.35
+}

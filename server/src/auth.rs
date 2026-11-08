@@ -2572,6 +2572,50 @@ mod tests {
     use crate::test_util::temp_auth;
 
     #[test]
+    fn female_custom_face_survives_save_reload_and_character_listing() {
+        let (auth, db_path) = temp_auth("female_custom_face");
+        let account = auth.login_google("sub-female-custom-face").unwrap();
+        let appearance = CharacterAppearance {
+            face: onlinerpg_shared::FaceStyle::Custom,
+            hair: onlinerpg_shared::HairStyle::Long,
+            hair_color: "#d2bda2".to_string().try_into().unwrap(),
+            eye_color: "#527baa".to_string().try_into().unwrap(),
+            hair_color_original: true,
+            eye_color_original: true,
+        };
+        let created = auth
+            .create_character_with_appearance(
+                &account,
+                "NewFace",
+                &plain_attributes(),
+                10,
+                CharacterClass::Knight,
+                Gender::Female,
+                appearance,
+            )
+            .unwrap();
+        assert_eq!(created.appearance, appearance);
+        drop(auth);
+        let auth = AuthService::new(db_path).unwrap();
+        assert_eq!(
+            auth.get_character_for_account(&account, created.id)
+                .unwrap()
+                .appearance,
+            appearance
+        );
+        let listing = auth.list_characters_with_equipment(&account).unwrap();
+        assert_eq!(
+            listing
+                .iter()
+                .find(|c| c.record.id == created.id)
+                .unwrap()
+                .record
+                .appearance,
+            appearance
+        );
+    }
+
+    #[test]
     fn character_appearance_survives_reload_and_legacy_migration() {
         let (auth, db_path) = temp_auth("appearance_migration");
         let account = auth.login_google("sub-appearance").unwrap();
@@ -2591,6 +2635,8 @@ mod tests {
             hair: onlinerpg_shared::HairStyle::WavyBone,
             hair_color: "#dab378".to_string().try_into().unwrap(),
             eye_color: "#527baa".to_string().try_into().unwrap(),
+            hair_color_original: false,
+            eye_color_original: false,
         };
         let created = auth
             .create_character_with_appearance(

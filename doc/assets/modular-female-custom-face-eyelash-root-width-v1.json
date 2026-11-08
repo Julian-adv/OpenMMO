@@ -1,0 +1,23 @@
+{
+  "date": "2026-11-07",
+  "model_sha256": "4e5e0ecc7ba9e1f068f0f29edd8ba2d6511f3dbb7638d5426d43aa7acee7590a",
+  "width_scale": 1.35,
+  "root_width_scale": 1.8,
+  "root_taper_end": 0.45,
+  "all_geometry_uv_skin_weights_and_animations_unchanged": true,
+  "rgb_unchanged": true,
+  "tip_regions_unchanged": true,
+  "fitting_mask_unchanged": true,
+  "root_checks": [
+    {
+      "row": 0,
+      "opaque_root_pixels_before": 4831,
+      "opaque_root_pixels_after": 7861
+    },
+    {
+      "row": 1,
+      "opaque_root_pixels_before": 2078,
+      "opaque_root_pixels_after": 2954
+    }
+  ]
+}

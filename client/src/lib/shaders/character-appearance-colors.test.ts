@@ -19,6 +19,104 @@ function colorsIn(node: Node): string[] {
 }
 
 describe('character appearance colors', () => {
+  it('restores original eyes independently of hair dye and reuses the iris material', () => {
+    const source = new MeshStandardMaterial({ map: new Texture() })
+    const root = new Group()
+    const head = new SkinnedMesh(undefined, source)
+    head.userData.region = 'head'
+    root.add(head)
+    const appearance = {
+      face: 'default',
+      hair: 'crop',
+      hair_color: '#ff0000',
+      eye_color: '#0000ff',
+    } as const
+    applyAppearanceColors(root, [head], appearance)
+    const material = head.material as unknown as NodeMaterial
+    const version = material.version
+    const weights: number[] = []
+    applyAppearanceColors(root, [head], {
+      ...appearance,
+      eye_color_original: true,
+    })
+    material.colorNode!.traverse((node) => {
+      if (
+        'isUniformNode' in node &&
+        'value' in node &&
+        typeof node.value === 'number'
+      )
+        weights.push(node.value)
+    })
+    expect(weights).toContain(0)
+    expect(head.material).toBe(material)
+    expect(material.version).toBe(version)
+    applyAppearanceColors(root, [head], {
+      ...appearance,
+      eye_color_original: false,
+    })
+    const dyed: number[] = []
+    material.colorNode!.traverse((node) => {
+      if (
+        'isUniformNode' in node &&
+        'value' in node &&
+        typeof node.value === 'number'
+      )
+        dyed.push(node.value)
+    })
+    expect(dyed).toContain(1)
+    disposeAppearanceColors(root)
+    expect(head.material).toBe(source)
+  })
+
+  it('restores original male and female hair without replacing materials or affecting another character', () => {
+    const source = new MeshStandardMaterial({ map: new Texture() })
+    const root = new Group()
+    const male = new SkinnedMesh(undefined, source)
+    male.userData.part_id = 'hair_crop'
+    const female = new SkinnedMesh(undefined, source.clone())
+    female.userData.female_part = 'hair'
+    const other = new SkinnedMesh(undefined, source)
+    root.add(male, female)
+    const appearance = {
+      face: 'default',
+      hair: 'crop',
+      hair_color: '#ff0000',
+    } as const
+    applyAppearanceColors(root, [male, female], appearance)
+    const material = male.material as unknown as NodeMaterial
+    const version = material.version
+    const tintWeights = () => {
+      const weights: number[] = []
+      material.colorNode!.traverse((node) => {
+        if (
+          'isUniformNode' in node &&
+          'value' in node &&
+          typeof node.value === 'number'
+        )
+          weights.push(node.value)
+      })
+      return weights
+    }
+    expect(tintWeights()).toContain(1)
+    applyAppearanceColors(root, [male, female], {
+      ...appearance,
+      hair_color_original: true,
+    })
+    expect(male.material).toBe(material)
+    expect(material.version).toBe(version)
+    expect(tintWeights()).toContain(0)
+    expect(other.material).toBe(source)
+    applyAppearanceColors(root, [male, female], {
+      ...appearance,
+      hair_color: '#00ff00',
+      hair_color_original: false,
+    })
+    expect(tintWeights()).toContain(1)
+    expect(colorsIn(material.colorNode!)).toContain('00ff00')
+    disposeAppearanceColors(root)
+    expect(male.material).toBe(source)
+  })
+
   it('tints ranger hair and irises', () => {
     const skin = new MeshStandardMaterial({ map: new Texture() })
     const hair = new MeshStandardMaterial({ map: new Texture() })

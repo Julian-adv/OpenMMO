@@ -88,9 +88,11 @@ export function loadCharacterModel(
   path: string,
   appearance?: Pick<CharacterAppearance, 'face'>
 ): Promise<GLTF> {
-  if (isModularFemaleModel(path)) return loadFemaleCharacter(path)
+  if (isModularFemaleModel(path))
+    return loadFemaleCharacter(path, appearance?.face)
   if (path !== MODULAR_MALE_MODEL_PATH) return loadGLB(path)
-  const face = appearance?.face ?? 'default'
+  const face =
+    appearance?.face === 'custom' ? 'default' : (appearance?.face ?? 'default')
   let maleModel = maleModels.get(face)
   if (!maleModel) {
     const ids = [...eagerParts]

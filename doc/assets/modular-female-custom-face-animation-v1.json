@@ -1,0 +1,397 @@
+{
+  "date": "2026-11-08",
+  "sources": [
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/base_custom.glb",
+      "sha256": "70983bd903a1a5aabd57198a01f7e95657c613a75bd7c6635440ae3a8cb2cb83"
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/source.glb",
+      "sha256": "8dbcbcb21d06cd2ed33020a9eef617e1b4396fa4e43292c95748ddbbe3152dce"
+    },
+    {
+      "path": "assets/modular_human_female_01/rig_v1/female-base.glb",
+      "sha256": "3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5"
+    },
+    {
+      "path": "assets/modular_human_female_01/faces/tripo_custom_v1/face_custom.glb",
+      "sha256": "d35cfe4ad9fb54f365666f70754b4c6273585b3ae3f93357b0d095a91033a1f2"
+    }
+  ],
+  "bones": 65,
+  "seam_vertex_groups": 105,
+  "rigid_face_vertices": 8584,
+  "standalone_binding": true,
+  "neck_seams": 1,
+  "reference_eye_rebuild": false,
+  "neck_fit_only": false,
+  "source_lash_faces_absent_from_opaque_head": [
+    10013,
+    10014,
+    10021,
+    10023,
+    10071,
+    10072,
+    29166,
+    29179,
+    29213,
+    1451,
+    10093,
+    10094,
+    10095,
+    10096,
+    10119,
+    10120,
+    10871,
+    10872,
+    10873,
+    10874,
+    29169,
+    29170,
+    29171,
+    29172,
+    29173,
+    29174,
+    29237,
+    29238,
+    29239,
+    29240,
+    29259,
+    29260,
+    29441,
+    29442,
+    29561,
+    29562,
+    29605,
+    29606,
+    29607,
+    29608,
+    29643,
+    29644,
+    29671,
+    29672,
+    29703,
+    29704
+  ],
+  "original_eye_and_eyelash_faces_restored": true,
+  "original_head_alpha_only": false,
+  "protected_eye_source_faces": [
+    561,
+    9206,
+    10475,
+    10476,
+    10477,
+    10478,
+    10483,
+    10484,
+    10505,
+    10506,
+    10537,
+    10538,
+    10563,
+    10564,
+    10609,
+    10610,
+    10611,
+    10612,
+    10771,
+    10772,
+    10775,
+    29075,
+    29076,
+    29077,
+    29105,
+    29106,
+    29117,
+    29118,
+    29168,
+    29215,
+    29216,
+    29432,
+    29439
+  ],
+  "original_head_geometry_preserved": false,
+  "lower_eyelid_fit": {
+    "date": "2026-11-08",
+    "drop_mm": 2.8,
+    "baseline_path": "lower_lid_ridge_v2/before/base_custom.glb",
+    "baseline_sha256": "03efe95158369779001cd929daffd47aa0d7070174fc4bf13be6ff5df6c5f7f3",
+    "ridge_x_knots_m": [
+      0.016,
+      0.02,
+      0.0242,
+      0.0277,
+      0.0321,
+      0.0356,
+      0.0391,
+      0.0409,
+      0.0435,
+      0.0462,
+      0.05,
+      0.055
+    ],
+    "ridge_y_knots_m": [
+      1.6813,
+      1.6813,
+      1.6804,
+      1.6804,
+      1.6804,
+      1.6813,
+      1.6822,
+      1.68305,
+      1.6848,
+      1.6857,
+      1.6857,
+      1.6857
+    ],
+    "meshes": {
+      "female_body": {
+        "moved_vertices": 0,
+        "maximum_drop_mm": 0,
+        "minimum_jacobian": 1
+      },
+      "face_female_custom": {
+        "moved_vertices": 702,
+        "maximum_drop_mm": 2.8,
+        "minimum_jacobian": 0.47569084842873044
+      },
+      "eyelashes_female_custom": {
+        "moved_vertices": 231,
+        "maximum_drop_mm": 2.8,
+        "minimum_jacobian": 0.47569084842873044
+      }
+    },
+    "ridge_landmarks": [
+      {
+        "vertex": 1637,
+        "before": [
+          -0.044327110052108765,
+          1.6848070621490479,
+          0.0619237944483757
+        ],
+        "after": [
+          -0.044327110052108765,
+          1.6823487281799316,
+          0.0619237944483757
+        ],
+        "drop_mm": 2.458361410700775
+      },
+      {
+        "vertex": 1800,
+        "before": [
+          -0.04256843775510788,
+          1.6830483675003052,
+          0.06280312687158585
+        ],
+        "after": [
+          -0.04256843775510788,
+          1.6802483797073364,
+          0.06280312687158585
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 1802,
+        "before": [
+          -0.04168910160660744,
+          1.6830483675003052,
+          0.0619237944483757
+        ],
+        "after": [
+          -0.04168910160660744,
+          1.6802483797073364,
+          0.0619237944483757
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 1759,
+        "before": [
+          -0.03993043303489685,
+          1.6821690797805786,
+          0.06368246674537659
+        ],
+        "after": [
+          -0.03993043303489685,
+          1.6793690919876099,
+          0.06368246674537659
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 1747,
+        "before": [
+          -0.03729242458939552,
+          1.680410385131836,
+          0.06632047146558762
+        ],
+        "after": [
+          -0.03729242458939552,
+          1.6776103973388672,
+          0.06632047146558762
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 1780,
+        "before": [
+          -0.03641308844089508,
+          1.6812896728515625,
+          0.06456179916858673
+        ],
+        "after": [
+          -0.03641308844089508,
+          1.6784896850585938,
+          0.06456179916858673
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 1826,
+        "before": [
+          -0.03289574757218361,
+          1.680410385131836,
+          0.06456179916858673
+        ],
+        "after": [
+          -0.03289574757218361,
+          1.6776103973388672,
+          0.06456179916858673
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 1822,
+        "before": [
+          -0.03289574757218361,
+          1.680410385131836,
+          0.06632047146558762
+        ],
+        "after": [
+          -0.03289574757218361,
+          1.6776103973388672,
+          0.06632047146558762
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 2011,
+        "before": [
+          -0.028499068692326546,
+          1.680410385131836,
+          0.06632047146558762
+        ],
+        "after": [
+          -0.028499068692326546,
+          1.6776103973388672,
+          0.06632047146558762
+        ],
+        "drop_mm": 2.8
+      },
+      {
+        "vertex": 2024,
+        "before": [
+          -0.024981725960969925,
+          1.680410385131836,
+          0.06544113904237747
+        ],
+        "after": [
+          -0.024981725960969925,
+          1.6776103973388672,
+          0.06544113904237747
+        ],
+        "drop_mm": 2.8
+      }
+    ],
+    "core_ridge_translation_preserves_curve": true,
+    "new_triangles": 0,
+    "body_and_neck_unchanged": true,
+    "horizontal_and_depth_coordinates_unchanged": true,
+    "triangle_order_winding_uv0_weights_rig_animations_unchanged": true,
+    "original_maps_countershifted_against_mesh_motion": true,
+    "secondary_uv_patches": [
+      {
+        "side": -1,
+        "origin": [
+          590,
+          6
+        ],
+        "size": 512,
+        "triangles": 384
+      },
+      {
+        "side": 1,
+        "origin": [
+          1294,
+          1206
+        ],
+        "size": 512,
+        "triangles": 382
+      }
+    ],
+    "source": "Original user Tripo model, iris cleanup baseline and user red/blue lower eyelid annotation",
+    "license": "Source license not supplied; same source conditions apply. Local geometry and UV baking; no new AI generation."
+  },
+  "upper_lash_roots_fitted": false,
+  "lower_lash_roots_fitted": false,
+  "head_affine_scope": "Original scale and translation except the explicitly translated lower eyelid ridge",
+  "new_head_scale_and_translation_only": false,
+  "maximum_head_affine_error_m": 0.0028,
+  "clips": [
+    {
+      "name": "idle1",
+      "samples": 25,
+      "maximum_seam_error_m": 0,
+      "maximum_rigid_head_error_m": 2.7240164568819547e-8
+    },
+    {
+      "name": "idle_armed",
+      "samples": 25,
+      "maximum_seam_error_m": 0,
+      "maximum_rigid_head_error_m": 2.7240164568819547e-8
+    },
+    {
+      "name": "walk",
+      "samples": 25,
+      "maximum_seam_error_m": 0,
+      "maximum_rigid_head_error_m": 2.724016461117965e-8
+    },
+    {
+      "name": "run",
+      "samples": 25,
+      "maximum_seam_error_m": 0,
+      "maximum_rigid_head_error_m": 2.724016462637638e-8
+    },
+    {
+      "name": "jump",
+      "samples": 25,
+      "maximum_seam_error_m": 0,
+      "maximum_rigid_head_error_m": 2.7240164429141878e-8
+    },
+    {
+      "name": "combat_idle",
+      "samples": 25,
+      "maximum_seam_error_m": 0,
+      "maximum_rigid_head_error_m": 2.7240164562184244e-8
+    },
+    {
+      "name": "slash1",
+      "samples": 25,
+      "maximum_seam_error_m": 0,
+      "maximum_rigid_head_error_m": 2.7240164480375863e-8
+    },
+    {
+      "name": "dying",
+      "samples": 25,
+      "maximum_seam_error_m": 0,
+      "maximum_rigid_head_error_m": 2.724016539576966e-8
+    },
+    {
+      "name": "sit_idle",
+      "samples": 25,
+      "maximum_seam_error_m": 0,
+      "maximum_rigid_head_error_m": 2.724016448617025e-8
+    }
+  ],
+  "scope": "Rest binding, normalized weights, finite deformation, rigid head tracking and neck seams. Hair and equipment intersections require visual review."
+}

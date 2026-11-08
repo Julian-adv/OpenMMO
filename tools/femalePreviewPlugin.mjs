@@ -4,6 +4,7 @@ import { ensureFemalePreview } from './lib/ensure-female-preview.mjs'
 import { valkyriePreviewFit } from './lib/valkyrie-preview-fit.mjs'
 import { outfitPreviewFit } from './lib/outfit-preview-fit.mjs'
 import { helmetHairBrush } from './lib/helmet-hair-brush.mjs'
+import { femaleHairFit } from './lib/female-hair-fit.mjs'
 
 const pending = new Map()
 
@@ -11,7 +12,27 @@ export function femalePreviewPlugin() {
   return {
     name: 'female-preview-assets',
     apply: 'serve',
+    handleHotUpdate({ file }) {
+      if (file.endsWith('/client/src/lib/data/femaleHairFits.json')) return []
+    },
     configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (req.method !== 'GET' || req.url?.split('?')[0] !== '/__female-preview/face-custom.glb') return next()
+        const target = new URL('../assets/modular_human_female_01/faces/tripo_custom_v1/base_custom_preview.glb', import.meta.url)
+        void stat(target).then(async info => {
+          const etag = `W/"${info.size}-${info.mtimeMs}"`
+          res.setHeader('Cache-Control', 'private, no-cache')
+          res.setHeader('ETag', etag)
+          if (req.headers['if-none-match'] === etag) {
+            res.writeHead(304)
+            res.end()
+            return
+          }
+          const bytes = await readFile(target)
+          res.writeHead(200, { 'Content-Type': 'model/gltf-binary', 'Content-Length': bytes.length })
+          res.end(bytes)
+        }).catch(next)
+      })
       server.middlewares.use((req, res, next) => {
         if (req.url !== '/__female-preview/capture-valkyrie-fit') return next()
         if (req.method !== 'POST' || req.headers['sec-fetch-site'] === 'cross-site') {
@@ -26,6 +47,7 @@ export function femalePreviewPlugin() {
       server.middlewares.use(valkyriePreviewFit())
       server.middlewares.use(outfitPreviewFit())
       server.middlewares.use(helmetHairBrush())
+      server.middlewares.use(femaleHairFit())
       server.middlewares.use((req, res, next) => {
         const match = /^\/__female-preview\/(base|bob|warrior|valkyrie)\.glb$|^\/__female-preview\/(animations)\.json$/.exec(req.url?.split('?')[0] ?? '')
         if (req.method !== 'GET' || !match) return next()

@@ -1,6 +1,15 @@
+<script module lang="ts">
+  import { RectAreaLightNode } from 'three/webgpu'
+  import { RectAreaLightTexturesLib } from 'three/addons/lights/RectAreaLightTexturesLib.js'
+
+  RectAreaLightNode.setLTC(RectAreaLightTexturesLib.init())
+</script>
+
 <script lang="ts">
   import { T, useThrelte, useTask } from '@threlte/core'
   import * as THREE from 'three'
+  import { PMREMGenerator, type WebGPURenderer } from 'three/webgpu'
+  import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
   import { onMount } from 'svelte'
   import type {
     CharacterClass,
@@ -143,10 +152,6 @@
   const CHARACTER_Y_OFFSET = PLATFORM_THICKNESS
   const CHARACTER_Z = 2.3
 
-  const AMBIENT_INTENSITY = 0.12
-  const KEY_LIGHT_INTENSITY = 0.05
-  const FILL_LIGHT_INTENSITY = 0.48
-
   const { scene, renderer } = useThrelte()
   let cameraRef = $state<THREE.PerspectiveCamera | undefined>(undefined)
 
@@ -167,25 +172,15 @@
   // CharacterPreview ref managed by bind:this
   let characterPreview: CharacterPreviewInstance | undefined = $state(undefined)
 
-  // Single pair of spotlights — created once via Three.js
-  const spotlightTarget = new THREE.Object3D()
-  spotlightTarget.position.set(0, CHARACTER_Y_OFFSET + 0.9, CHARACTER_Z)
+  const keyLight = new THREE.RectAreaLight('#fff2e3', 3.5, 3, 2.5)
+  keyLight.position.set(-1.8, 2.5, CHARACTER_Z + 3.5)
+  keyLight.lookAt(0, 1.55, CHARACTER_Z)
 
-  const keyLight = new THREE.SpotLight('#ffffff', 9.0, 14, 0.34, 0.22, 1.2)
-  keyLight.position.set(0, CHARACTER_Y_OFFSET + 4.0, CHARACTER_Z + 1.2)
-  keyLight.castShadow = true
-  keyLight.shadow.mapSize.set(2048, 2048)
-  keyLight.shadow.camera.near = 0.5
-  keyLight.shadow.camera.far = 18
-  keyLight.shadow.bias = -0.0002
-  keyLight.shadow.normalBias = 0.02
-  keyLight.target = spotlightTarget
+  const fillLight = new THREE.RectAreaLight('#edf4ff', 1.4, 3, 3)
+  fillLight.position.set(1.8, 1.7, CHARACTER_Z + 3)
+  fillLight.lookAt(0, 1.45, CHARACTER_Z)
 
-  const fillLight = new THREE.SpotLight('#fff2d8', 3.4, 12, 0.52, 0.8, 1.2)
-  fillLight.position.set(0, CHARACTER_Y_OFFSET + 2.5, CHARACTER_Z + 3.1)
-  fillLight.target = spotlightTarget
-
-  let spotlightsAdded = false
+  let portraitLightsAdded = false
 
   $effect(() => {
     if (!cameraRef) return
@@ -220,6 +215,21 @@
 
   onMount(() => {
     scene.background = new THREE.Color('#1a2a40')
+    let mounted = true
+    let environment: THREE.RenderTarget | undefined
+    const previousEnvironment = scene.environment
+    const previousIntensity = scene.environmentIntensity
+    const studioRenderer = renderer as unknown as WebGPURenderer
+    void studioRenderer.init().then(() => {
+      if (!mounted) return
+      const room = new RoomEnvironment()
+      const generator = new PMREMGenerator(studioRenderer)
+      environment = generator.fromScene(room)
+      generator.dispose()
+      room.dispose()
+      scene.environment = environment.texture
+      scene.environmentIntensity = 0.18
+    })
 
     const canvas = renderer.domElement
     canvas.addEventListener('pointerdown', onPointerDown)
@@ -227,14 +237,22 @@
     window.addEventListener('pointerup', onPointerUp)
 
     return () => {
+      mounted = false
       scene.background = null
+      if (scene.environment === environment?.texture) {
+        scene.environment = previousEnvironment
+        scene.environmentIntensity = previousIntensity
+      }
+      environment?.dispose()
       canvas.removeEventListener('pointerdown', onPointerDown)
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
-      if (spotlightsAdded) {
-        scene.remove(keyLight, fillLight, spotlightTarget)
-        spotlightsAdded = false
+      if (portraitLightsAdded) {
+        scene.remove(keyLight, fillLight)
+        portraitLightsAdded = false
       }
+      keyLight.dispose()
+      fillLight.dispose()
     }
   })
 
@@ -244,9 +262,9 @@
 
     if (characterPreview.isGltfReady() && !characterPreview.isSetUp()) {
       characterPreview.setup()
-      if (!spotlightsAdded) {
-        scene.add(spotlightTarget, keyLight, fillLight)
-        spotlightsAdded = true
+      if (!portraitLightsAdded) {
+        scene.add(keyLight, fillLight)
+        portraitLightsAdded = true
       }
     }
 
@@ -263,26 +281,11 @@
   bind:ref={cameraRef}
 />
 
-<T.AmbientLight intensity={AMBIENT_INTENSITY} />
+<T.HemisphereLight args={['#fff3e6', '#9294a0', 0.45]} />
 <T.DirectionalLight
-  position={[5, 8, 5]}
-  intensity={KEY_LIGHT_INTENSITY}
-  castShadow
-  shadow.camera.left={-8}
-  shadow.camera.right={8}
-  shadow.camera.top={8}
-  shadow.camera.bottom={-8}
-  shadow.camera.near={0.5}
-  shadow.camera.far={24}
-  shadow.mapSize.width={1024}
-  shadow.mapSize.height={1024}
-  shadow.bias={-0.00025}
-  shadow.normalBias={0.02}
-/>
-<T.DirectionalLight
-  position={[-3, 6, -2]}
-  intensity={FILL_LIGHT_INTENSITY}
-  color="#8899cc"
+  position={[-3, 3.5, CHARACTER_Z - 3]}
+  intensity={0.6}
+  color="#dbe7ff"
 />
 
 <T.Mesh

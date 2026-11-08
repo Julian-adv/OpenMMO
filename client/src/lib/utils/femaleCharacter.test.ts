@@ -25,7 +25,10 @@ import { updatePeltPhysics } from '../effects/pelt-rig'
 import { attachCapeFit, fitCapeToSkeleton } from '../effects/cape-rig'
 import { robeBaseSkeleton } from '../effects/robe-rig'
 import itemDefs from '../data/itemDefs'
-import type { ArmorEquipment } from '../network/networkTypes'
+import type {
+  ArmorEquipment,
+  CharacterAppearance,
+} from '../network/networkTypes'
 
 vi.mock('./gltfCache', async (importOriginal) => {
   const original = await importOriginal<typeof import('./gltfCache')>()
@@ -62,6 +65,146 @@ const count = (root: THREE.Object3D, part?: string) =>
 const hasAssets = existsSync(
   resolve('public', MODULAR_FEMALE_MODEL_PATH.slice(1))
 )
+
+describe.skipIf(!hasAssets)('female face selection', () => {
+  it('caches faces separately and reuses canonical animations and the fitted rig', async () => {
+    const original = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH)
+    const custom = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH, {
+      face: 'custom',
+    })
+    expect(custom).not.toBe(original)
+    expect(
+      await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH, { face: 'custom' })
+    ).toBe(custom)
+    expect(
+      await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH, { face: 'ranger' })
+    ).toBe(original)
+    expect(original.scene.userData.modular_face).toBe('default')
+    expect(custom.scene.userData.modular_face).toBe('custom')
+    expect(custom.animations.map((clip) => clip.toJSON().tracks)).toEqual(
+      original.animations.map((clip) => clip.toJSON().tracks)
+    )
+    const head = skinnedParts(custom.scene).find(
+      (mesh) => mesh.userData.female_face
+    )!
+    expect(head).toBeDefined()
+    expect(head.geometry.attributes.uv1).toBeDefined()
+    expect(head.geometry.attributes.uv2).toBeDefined()
+    const canonical = skinnedParts(original.scene).find(
+      (mesh) => mesh.userData.female_body
+    )!
+    expect(head.skeleton.bones.map((bone) => bone.name)).toEqual(
+      canonical.skeleton.bones.map((bone) => bone.name)
+    )
+    head.skeleton.boneInverses.forEach((matrix, index) =>
+      expect(matrix.elements).toEqual(
+        canonical.skeleton.boneInverses[index].elements
+      )
+    )
+    for (const path of [
+      MODULAR_VALKYRIE_MODEL_PATH,
+      MODULAR_FEMALE_RANGER_MODEL_PATH,
+    ]) {
+      const variant = await loadCharacterModel(path, { face: 'custom' })
+      expect(variant.scene.userData.modular_face).toBe('custom')
+      expect(variant.scene.userData.female_hair).toBe(
+        path === MODULAR_VALKYRIE_MODEL_PATH ? 'valkyrie_hair' : 'ranger_hair'
+      )
+    }
+  })
+
+  it('keeps the head intact across outfits, hair changes, animations and other players', async () => {
+    const source = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH, {
+      face: 'custom',
+    })
+    const { modelRoot } = createCharacterModelRoot(source.scene)
+    const { modelRoot: other } = createCharacterModelRoot(source.scene)
+    const body = skinnedParts(modelRoot).find(
+      (mesh) => mesh.userData.female_body
+    )!
+    const originalCount = body.geometry.index!.count
+    const head = skinnedParts(modelRoot).find(
+      (mesh) => mesh.userData.female_face
+    )!
+    const headIndices = Array.from(head.geometry.index!.array)
+    const appearance: CharacterAppearance = { face: 'custom', hair: 'bob' }
+    for (const outfit of [
+      armor,
+      barbarian,
+      {
+        chest: 'worn_rogue_top',
+        pants: 'worn_rogue_pants',
+        hands: 'worn_rogue_gloves',
+        boots: 'worn_rogue_boots',
+      },
+      {
+        chest: 'worn_caveman_top',
+        pants: 'worn_caveman_pants',
+        hands: 'worn_caveman_bracers',
+        boots: 'worn_caveman_boots',
+      },
+      ...['valkyrie', 'priest', 'ranger', 'bard'].map((style) => ({
+        chest: `worn_${style}_top`,
+        pants: `worn_${style}_pants`,
+        hands: `worn_${style}_gloves`,
+        boots: `worn_${style}_boots`,
+      })),
+    ]) {
+      await applyCharacterArmor(modelRoot, outfit, appearance)
+      expect(body.geometry.index!.count).toBeLessThan(originalCount)
+      expect(Array.from(head.geometry.index!.array)).toEqual(headIndices)
+      expect(
+        skinnedParts(other).find((mesh) => mesh.userData.female_body)!.geometry
+          .index!.count
+      ).toBe(originalCount)
+    }
+    for (const hair of ['bob', 'long', 'ponytail'] as const) {
+      await applyCharacterArmor(modelRoot, {}, { ...appearance, hair })
+      expect(body.geometry.index!.count).toBe(originalCount)
+      const expected = {
+        bob: 'hair',
+        long: 'valkyrie_hair',
+        ponytail: 'ranger_hair',
+      }[hair]
+      expect(
+        skinnedParts(modelRoot)
+          .filter(
+            (mesh) =>
+              mesh.visible &&
+              ['hair', 'valkyrie_hair', 'ranger_hair'].includes(
+                mesh.userData.female_part
+              )
+          )
+          .every((mesh) => mesh.userData.female_part === expected)
+      ).toBe(true)
+    }
+    const mixer = new THREE.AnimationMixer(modelRoot)
+    for (const clip of source.animations) {
+      mixer.stopAllAction()
+      mixer.clipAction(clip).reset().play()
+      for (const time of [0, clip.duration / 2, clip.duration]) {
+        mixer.setTime(time)
+        modelRoot.updateMatrixWorld(true)
+        for (const vertex of [
+          0,
+          Math.floor(head.geometry.attributes.position.count / 2),
+        ]) {
+          const point = head.applyBoneTransform(
+            vertex,
+            new THREE.Vector3().fromBufferAttribute(
+              head.geometry.attributes.position,
+              vertex
+            )
+          )
+          expect(point.toArray().every(Number.isFinite)).toBe(true)
+        }
+      }
+    }
+    mixer.stopAllAction()
+    disposeCharacterSkeletons(modelRoot)
+    disposeCharacterSkeletons(other)
+  })
+})
 
 describe('female modular starter outfits', () => {
   it.skipIf(!hasAssets)(

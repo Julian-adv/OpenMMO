@@ -509,7 +509,7 @@ pub fn cart_push_target(
             struck = Some(cell);
             break;
         }
-        if next.cells().any(|c| solid(c)) {
+        if next.cells().any(&solid) {
             break;
         }
         at += dir;

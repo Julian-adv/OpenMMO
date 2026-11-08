@@ -18,6 +18,7 @@ pub enum FaceStyle {
     Default,
     Rugged,
     Ranger,
+    Custom,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -97,6 +98,10 @@ pub struct CharacterAppearance {
     pub hair_color: AppearanceColor,
     #[serde(default = "default_eye_color")]
     pub eye_color: AppearanceColor,
+    #[serde(default)]
+    pub hair_color_original: bool,
+    #[serde(default)]
+    pub eye_color_original: bool,
 }
 
 impl Default for CharacterAppearance {
@@ -106,6 +111,8 @@ impl Default for CharacterAppearance {
             hair: HairStyle::default(),
             hair_color: default_hair_color(),
             eye_color: default_eye_color(),
+            hair_color_original: false,
+            eye_color_original: false,
         }
     }
 }
@@ -129,7 +136,12 @@ impl CharacterAppearance {
             } else {
                 self.hair
             };
-            Self { hair, ..self }
+            let face = if self.face == FaceStyle::Custom {
+                FaceStyle::Default
+            } else {
+                self.face
+            };
+            Self { face, hair, ..self }
         } else if gender == Gender::Female
             && matches!(
                 class,
@@ -150,7 +162,11 @@ impl CharacterAppearance {
                 (hair, hair.texture_color())
             };
             Self {
-                face: FaceStyle::Default,
+                face: if self.face == FaceStyle::Custom {
+                    FaceStyle::Custom
+                } else {
+                    FaceStyle::Default
+                },
                 hair,
                 hair_color,
                 ..self
@@ -173,6 +189,8 @@ mod appearance_tests {
         assert_eq!(appearance.hair, HairStyle::None);
         assert_eq!(String::from(appearance.hair_color), "#604332");
         assert_eq!(String::from(appearance.eye_color), "#786545");
+        assert!(!appearance.hair_color_original);
+        assert!(!appearance.eye_color_original);
     }
 
     #[test]
@@ -224,6 +242,47 @@ mod appearance_tests {
     }
 
     #[test]
+    fn original_hair_color_roundtrips_and_survives_style_fitting() {
+        let appearance: CharacterAppearance = serde_json::from_str(
+            r##"{"face":"custom","hair":"bob","hair_color":"#604332","hair_color_original":true,"eye_color_original":true}"##,
+        )
+        .unwrap();
+        assert!(appearance.hair_color_original);
+        assert!(appearance.eye_color_original);
+        let bytes = rmp_serde::to_vec(&appearance).unwrap();
+        assert_eq!(
+            rmp_serde::from_slice::<CharacterAppearance>(&bytes).unwrap(),
+            appearance
+        );
+        assert_eq!(
+            serde_json::from_str::<CharacterAppearance>(
+                &serde_json::to_string(&appearance).unwrap()
+            )
+            .unwrap(),
+            appearance
+        );
+        for class in [
+            CharacterClass::Knight,
+            CharacterClass::Ranger,
+            CharacterClass::Valkyrie,
+        ] {
+            assert!(
+                appearance
+                    .for_character(&class, Gender::Female)
+                    .hair_color_original
+            );
+        }
+        assert!(
+            CharacterAppearance {
+                hair: HairStyle::Crop,
+                ..appearance
+            }
+            .for_character(&CharacterClass::Valkyrie, Gender::Female)
+            .hair_color_original
+        );
+    }
+
+    #[test]
     fn female_hair_is_kept_per_gender() {
         let chosen = CharacterAppearance {
             hair: HairStyle::Ponytail,
@@ -263,6 +322,48 @@ mod appearance_tests {
         assert_eq!(
             rmp_serde::from_slice::<CharacterAppearance>(&bytes).unwrap(),
             appearance
+        );
+    }
+
+    #[test]
+    fn custom_face_survives_protocol_and_female_class_changes() {
+        let appearance: CharacterAppearance = serde_json::from_str(
+            r##"{"face":"custom","hair":"ponytail","hair_color":"#432e26","eye_color":"#527baa"}"##,
+        )
+        .unwrap();
+        assert_eq!(appearance.face, FaceStyle::Custom);
+        let bytes = rmp_serde::to_vec(&appearance).unwrap();
+        assert_eq!(
+            rmp_serde::from_slice::<CharacterAppearance>(&bytes).unwrap(),
+            appearance
+        );
+        for class in [
+            CharacterClass::Knight,
+            CharacterClass::Barbarian,
+            CharacterClass::Rogue,
+            CharacterClass::Caveman,
+            CharacterClass::Valkyrie,
+            CharacterClass::Ranger,
+            CharacterClass::Priest,
+            CharacterClass::Bard,
+        ] {
+            assert_eq!(appearance.for_character(&class, Gender::Female), appearance);
+            assert_eq!(
+                appearance.for_character(&class, Gender::Male).face,
+                FaceStyle::Default
+            );
+        }
+        let legacy_hair = CharacterAppearance {
+            hair: HairStyle::Crop,
+            ..appearance
+        };
+        let fitted = legacy_hair.for_character(&CharacterClass::Valkyrie, Gender::Female);
+        assert_eq!(fitted.face, FaceStyle::Custom);
+        assert_eq!(fitted.hair, HairStyle::Long);
+        assert_eq!(fitted.eye_color, appearance.eye_color);
+        assert_eq!(
+            appearance.for_character(&CharacterClass::Merchant, Gender::Female),
+            CharacterAppearance::default()
         );
     }
 }
