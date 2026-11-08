@@ -27,7 +27,7 @@ def main():
         page.add_init_script("""window.__THREE_DEVTOOLS__=new EventTarget();window.__THREE_DEVTOOLS__.addEventListener('observe',e=>{const r=e.detail;if(!r.isWebGLRenderer)return;window.r=r;const f=r.render.bind(r);r.render=(s,c)=>{window.s=s;window.c=c;return f(s,c)}})""")
         if args.model:
             page.route('**/__female-preview/face-custom.glb', lambda route: route.fulfill(path=str(args.model.resolve()), content_type='model/gltf-binary'))
-        page.goto('http://127.0.0.1:10124/modular-character-preview.html?character=female-face&face=custom&hair=none&camera=face', wait_until='networkidle')
+        page.goto('http://127.0.0.1:10124/modular-character-preview.html?character=female-face&face=custom&hair=none&camera=face&source=preview', wait_until='networkidle')
         page.wait_for_selector('body[data-ready="true"]')
         page.evaluate('r.setAnimationLoop(null);r.setPixelRatio(1)')
         if args.clay:

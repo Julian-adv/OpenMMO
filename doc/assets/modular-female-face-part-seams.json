@@ -1,0 +1,66 @@
+{
+  "date": "2026-11-08",
+  "sources": [
+    {
+      "path": "client/public/models/characters/modular_female/base.glb",
+      "sha256": "80bc16d771cf2fa945431bcc3a85bce7c94531544889b1fcb113161fbbd37d32"
+    },
+    {
+      "path": "client/public/models/characters/modular_female/face_custom.glb",
+      "sha256": "b54f9c2bc8ef3bed28a183e8284d5770eebe9c2867e29830a107b63ddbcc3c7c"
+    }
+  ],
+  "body_seam_vertices": 112,
+  "head_seam_vertices": 117,
+  "clips": [
+    {
+      "name": "idle1",
+      "samples": 25,
+      "maximum_body_seam_error_m": 0,
+      "maximum_head_seam_error_m": 0
+    },
+    {
+      "name": "walk",
+      "samples": 25,
+      "maximum_body_seam_error_m": 0,
+      "maximum_head_seam_error_m": 0
+    },
+    {
+      "name": "run",
+      "samples": 25,
+      "maximum_body_seam_error_m": 0,
+      "maximum_head_seam_error_m": 0
+    },
+    {
+      "name": "jump",
+      "samples": 25,
+      "maximum_body_seam_error_m": 0,
+      "maximum_head_seam_error_m": 0
+    },
+    {
+      "name": "combat_idle",
+      "samples": 25,
+      "maximum_body_seam_error_m": 0,
+      "maximum_head_seam_error_m": 0
+    },
+    {
+      "name": "slash1",
+      "samples": 25,
+      "maximum_body_seam_error_m": 0,
+      "maximum_head_seam_error_m": 0
+    },
+    {
+      "name": "dying",
+      "samples": 25,
+      "maximum_body_seam_error_m": 0,
+      "maximum_head_seam_error_m": 0
+    },
+    {
+      "name": "sit_idle",
+      "samples": 25,
+      "maximum_body_seam_error_m": 0,
+      "maximum_head_seam_error_m": 0
+    }
+  ],
+  "scope": "base.glb with face_custom.glb bound as a part: neck strip to visible body and to head, across the canonical clips."
+}

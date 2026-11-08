@@ -9,10 +9,14 @@
 2026-11-08, 홍채 보정 상태를 `5dfad9e2`에 저장한 뒤 게임에 연결했다.
 여성 플레이어 8개 직업에서 기본 얼굴과 새 얼굴을 선택하며 선택값 `custom`을 서버에 저장한다.
 기존 캐릭터는 기본 얼굴을 유지하며 남성 얼굴 목록은 기존 세 종류다.
-런타임은 `client/public/models/characters/modular_female/base_custom.glb`를 선택 시 불러오고 캐시한다.
-최종 압축 미리보기의 몸·머리·속눈썹·텍스처를 유지하며, 동작과 부츠 보정은 기존 여성 공통 리소스를 재사용한다.
-몸체 인덱스가 달라진 의상 가림·부츠 경계·정점 보정 정보는 원래 UV와 삼각형을 대응시켜 다시 저장했다.
-이 정보는 클라이언트에서 공유해 캐릭터마다 복제하지 않는다.
+런타임은 공통 `base.glb`에 얼굴 파츠 `client/public/models/characters/modular_female/face_custom.glb`(2.88MB)를 붙인다(2026-11-08, 이전 `base_custom.glb` 5.13MB 대체).
+파츠는 머리·속눈썹과 목 띠 632삼각형이다. 목 띠는 몸체에서 y ≥ 1.502m에 닿는 삼각형으로, 목 피팅 위치와 목 색 보정을 그대로 가진다.
+그 아래 몸체 15,069삼각형은 `base.glb` 몸체와 위치·UV·가중치가 같아서 `base.glb` 몸체를 그대로 쓰고, 머리·목 5,730삼각형과 기본 속눈썹은 숨긴다.
+의상 가림은 `base.glb` 기준 한 벌만 쓴다. 목 띠의 각 삼각형이 대신하는 몸체 삼각형 번호를 파츠에 저장해, 의상이 그 몸체 삼각형을 가리면 목 띠도 함께 가린다. 새 의상을 추가해도 얼굴 파츠는 다시 만들 필요가 없다.
+목 띠에는 정점 보정·경계 자르기가 적용되지 않는다. 2026-11-08 현재 이를 쓰는 의상 가림은 목 띠 영역에 닿지 않는다.
+목 띠 텍스처는 몸체 아틀라스 배치를 유지하고, 목 띠가 쓰지 않는 텍셀은 평균색으로 채웠다(색 2048² 61KB, `base.glb`의 노멀·ORM 1024² 각 7KB·5KB).
+몸 노멀·ORM은 이제 `base.glb`의 1024²를 쓴다. 기본 얼굴과 같은 몸 질감이다.
+[조립 상태 이음새 검사](modular-female-face-part-seams.json): 8개 동작 × 25자세에서 목 띠-몸체 112정점, 목 띠-머리 117정점의 오차 0m (`node tools/validate-female-face-part.mjs`).
 기본 눈 색에서는 보정한 홍채 원본을 유지하며 다른 눈 색을 선택하면 홍채 부분만 착색한다.
 생성 메뉴의 여성 얼굴 썸네일 두 장은 기존 Blender 헤어 썸네일 렌더러로 생성했다. 새 AI 생성은 없다.
 출처·라이선스는 아래 사용자 제공 Tripo 원본과 기존 여성 몸체·헤어 기록을 따른다.
@@ -81,6 +85,7 @@ WASM 프로토콜 137에서 해당 생성 요청의 직렬화를 확인했으며
 
 현재 미리보기:
 `/modular-character-preview.html?character=female-face&face=custom&hair=none&camera=face`.
+게임과 같은 `base.glb`와 `face_custom.glb`를 불러온다(2026-11-08). 피팅 원본 `base_custom_preview.glb`를 보려면 `&source=preview`를 붙인다.
 현재 개발 미리보기 조명으로 표시하며, 아래 눈꺼풀 단차선 주변을 제외한 얼굴 형상과 PBR 재질 값은 원본이다. 속눈썹 살색 알파와 아래의 홍채 반사광 완화를 적용했다.
 [복원된 정면](../images/characters/modular_human_female_01/customization/face-custom-neck-only-restored-front.png),
 [눈 확대](../images/characters/modular_human_female_01/customization/face-custom-neck-only-restored-eyes.png).
@@ -195,7 +200,7 @@ ImageGen은 **ChatGPT Pro 20x**, 2026-11-08 생성이다. 기존 원본의 출�
 | 파일 | 현재 용도 |
 | --- | --- |
 | `base_custom.glb` | 원본 머리와 목 피팅 몸체, 동작 9종 |
-| `base_custom_preview.glb` | 실제 미리보기에서 제공하는 2K 압축본 |
+| `base_custom_preview.glb` | 실제 미리보기에서 제공하는 2K 압축본. 게임용 `face_custom.glb`의 입력이다 |
 | `face_custom.glb` | 공통 여성 리그에 붙이는 원본 머리·목 파츠 |
 | `custom-face-fitting.blend` | 복원 상태의 편집본 |
 | `body-neck-albedo.png` | 초기 목 아래 피부색 보정 맵 |

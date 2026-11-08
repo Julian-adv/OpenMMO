@@ -3,7 +3,13 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
-import { bindModularPart } from '../lib/utils/modularCharacter'
+import { bindModularPart, skinnedParts } from '../lib/utils/modularCharacter'
+import {
+  bindFemaleFacePart,
+  FEMALE_FACE_PART_PATH,
+  markFemaleBase,
+} from '../lib/utils/femaleCharacter'
+import { MODULAR_FEMALE_MODEL_PATH } from '../lib/utils/modelPaths'
 import { disposeObjects } from './dispose-objects'
 import { faceHairFitPanel, faceHairFitEditor } from './female-face-hair-fit'
 import type { HairFitFace, HairFitStyle } from '../lib/utils/femaleHairFit'
@@ -74,10 +80,15 @@ export async function showFemaleFace(
     resources.push(asset.scene)
     return asset
   }
-  const [base, hairstyle] = await Promise.all([
+  // ?source=preview shows the fitting source instead of the game's base.glb and face part.
+  const fitting = params.get('source') === 'preview'
+  const [base, facePart, hairstyle] = await Promise.all([
     load(
-      `/__female-preview/${face.value === 'custom' ? 'face-custom' : 'base'}.glb`
+      fitting
+        ? `/__female-preview/${face.value === 'custom' ? 'face-custom' : 'base'}.glb`
+        : MODULAR_FEMALE_MODEL_PATH
     ),
+    face.value === 'custom' && !fitting ? load(FEMALE_FACE_PART_PATH) : null,
     hair.value === 'none'
       ? null
       : load(
@@ -86,6 +97,19 @@ export async function showFemaleFace(
   ])
   if (disposed()) return
   const model = base.scene
+  if (!fitting) markFemaleBase(base, model, !!facePart)
+  if (facePart) {
+    bindFemaleFacePart(model, facePart)
+    const body = skinnedParts(model).find((mesh) => mesh.userData.female_body)!
+    const hidden = new Set<number>(
+      model.userData.female_face_part.hide_triangle_indices
+    )
+    body.geometry.setIndex(
+      Array.from(body.geometry.index!.array).filter(
+        (_, i) => !hidden.has(Math.floor(i / 3))
+      )
+    )
+  }
   const hairMeshes = hairstyle ? bindModularPart(model, hairstyle.scene) : []
   await faceHairFitEditor(
     hairMeshes,
@@ -98,7 +122,7 @@ export async function showFemaleFace(
   let triangles = 0
   const materials = new Set<THREE.Material>()
   model.traverse((object) => {
-    if (!(object instanceof THREE.Mesh)) return
+    if (!(object instanceof THREE.Mesh) || !object.visible) return
     triangles +=
       (object.geometry.index?.count ??
         object.geometry.attributes.position.count) / 3
@@ -202,7 +226,7 @@ export async function showFemaleFace(
     dying: '사망',
     sit_idle: '앉기',
   }
-  for (const clip of base.animations)
+  for (const clip of base.animations.filter((c) => !c.name.includes('|')))
     motion.add(new Option(names[clip.name] ?? clip.name, clip.name))
   motion.onchange = () => {
     mixer.stopAllAction()

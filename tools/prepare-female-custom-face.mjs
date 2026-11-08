@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { readdir, readFile, writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
+import sharp from 'sharp'
 import { NodeIO, PropertyType } from '@gltf-transform/core'
 import { ALL_EXTENSIONS, EXTMeshoptCompression } from '@gltf-transform/extensions'
 import { prune } from '@gltf-transform/functions'
@@ -8,7 +9,7 @@ import { MeshoptDecoder, MeshoptEncoder } from 'meshoptimizer'
 
 const directory = 'client/public/models/characters/modular_female'
 const source = 'assets/modular_human_female_01/faces/tripo_custom_v1/base_custom_preview.glb'
-const output = `${directory}/base_custom.glb`
+const output = `${directory}/face_custom.glb`
 await Promise.all([MeshoptDecoder.ready, MeshoptEncoder.ready])
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({
   'meshopt.decoder': MeshoptDecoder, 'meshopt.encoder': MeshoptEncoder,
@@ -73,40 +74,101 @@ for (let i = 0; i < indices.length; i += 3) {
 const inputs = {}
 const record = async path => { inputs[path] = createHash('sha256').update(await readFile(path)).digest('hex') }
 await Promise.all([source, `${directory}/base.glb`].map(record))
-const masks = {}
-for (const file of (await readdir(directory)).sort()) {
-  if (!file.endsWith('.glb') || file === 'base_custom.glb') continue
-  const path = `${directory}/${file}`
-  const document = await io.read(path)
-  const mask = document.getRoot().listScenes()[0].getExtras().body_mask
-  if (!mask) continue
-  await record(path)
-  assert.equal(mask.primitive_triangles * 3, sourceIndices.length)
-  const hidden = new Set(mask.hide_triangle_indices)
-  const adjustment = new Map((mask.vertex_adjustments ?? []).map(item => [item.vertex, item]))
-  const remapped = {
-    ...mask,
-    primitive_triangles: triangles.length,
-    hide_triangle_indices: triangles.flatMap((id, i) => hidden.has(id) ? [i] : []),
-  }
-  if (mask.vertex_adjustments) remapped.vertex_adjustments = vertices.flatMap((id, i) => adjustment.has(id) ? [{ ...adjustment.get(id), vertex: i }] : [])
-  if (mask.clip_below_y) {
-    const clipped = new Set(mask.clip_below_y.triangle_indices)
-    remapped.clip_below_y = { ...mask.clip_below_y, triangle_indices: triangles.flatMap((id, i) => clipped.has(id) ? [i] : []) }
-  }
-  masks[file.slice(0, -4)] = remapped
+
+// Triangles reaching the neck fit (y >= 1.502 m) ship in the part; the rest match base.glb exactly.
+const stripTriangles = []
+for (let t = 0; t < indices.length / 3; t++)
+  if ([0, 1, 2].some(k => point(body, indices[t * 3 + k])[1] >= 1.502)) stripTriangles.push(t)
+const kept = new Set()
+for (let t = 0; t < indices.length / 3; t++) if (!stripTriangles.includes(t)) kept.add(triangles[t])
+assert.equal(kept.size, indices.length / 3 - stripTriangles.length)
+const hideTriangles = []
+for (let t = 0; t < sourceIndices.length / 3; t++) if (!kept.has(t)) hideTriangles.push(t)
+for (let t = 0; t < sourceIndices.length / 3; t++)
+  assert.equal(!kept.has(t), [0, 1, 2].some(k => point(original, sourceIndices[t * 3 + k])[1] >= 1.502))
+const stripSources = stripTriangles.map(t => triangles[t])
+assert.ok(stripSources.every(t => !kept.has(t)))
+
+const stripVertices = [...new Set(stripTriangles.flatMap(t => [0, 1, 2].map(k => indices[t * 3 + k])))].sort((a, b) => a - b)
+const remap = new Map(stripVertices.map((id, i) => [id, i]))
+for (const id of stripVertices) {
+  if (point(body, id)[1] >= 1.502) continue
+  const s = vertices[id]
+  for (const semantic of ['POSITION', 'TEXCOORD_0', 'WEIGHTS_0'])
+    assert.deepEqual(body.getAttribute(semantic).getElement(id, []), original.getAttribute(semantic).getElement(s, []), semantic)
+  const w = body.getAttribute('WEIGHTS_0').getElement(id, [])
+  const a = body.getAttribute('JOINTS_0').getElement(id, []), b = original.getAttribute('JOINTS_0').getElement(s, [])
+  assert.ok(a.every((joint, k) => joint === b[k] || w[k] === 0))
 }
+const strip = custom.createPrimitive().setMaterial(body.getMaterial().clone().setName('Custom face neck strip'))
+for (const semantic of body.listSemantics()) {
+  const from = body.getAttribute(semantic)
+  const array = new (from.getArray().constructor)(stripVertices.length * from.getElementSize())
+  for (const [i, id] of stripVertices.entries()) array.set(from.getElement(id, []), i * from.getElementSize())
+  strip.setAttribute(semantic, custom.createAccessor().setType(from.getType()).setArray(array).setNormalized(from.getNormalized()).setBuffer(from.getBuffer()))
+}
+strip.setIndices(custom.createAccessor().setType('SCALAR').setBuffer(body.getIndices().getBuffer())
+  .setArray(Uint16Array.from(stripTriangles.flatMap(t => [0, 1, 2].map(k => remap.get(indices[t * 3 + k]))))))
+
+// Keep the atlas layout and flatten every texel the strip never samples, so the textures compress to little.
+async function stripTexture(image, quality) {
+  const { data, info } = await sharp(image).removeAlpha().raw().toBuffer({ resolveWithObject: true })
+  const { width, height } = info
+  let mask = new Uint8Array(width * height)
+  const uvs = strip.getAttribute('TEXCOORD_0'), list = strip.getIndices().getArray()
+  for (let i = 0; i < list.length; i += 3) {
+    const p = [0, 1, 2].map(k => uvs.getElement(list[i + k], []).map((v, axis) => v * (axis ? height : width)))
+    const [x0, x1] = [Math.floor(Math.min(...p.map(q => q[0]))), Math.ceil(Math.max(...p.map(q => q[0])))]
+    const [y0, y1] = [Math.floor(Math.min(...p.map(q => q[1]))), Math.ceil(Math.max(...p.map(q => q[1])))]
+    for (let y = Math.max(0, y0); y <= Math.min(height - 1, y1); y++)
+      for (let x = Math.max(0, x0); x <= Math.min(width - 1, x1); x++) mask[y * width + x] = 1
+  }
+  const pad = Math.round(width / 128)
+  for (let pass = 0; pass < 2; pass++) {
+    const next = new Uint8Array(mask)
+    for (let y = 0; y < height; y++)
+      for (let x = 0; x < width; x++) {
+        if (!mask[y * width + x]) continue
+        for (let d = 1; d <= pad; d++) {
+          const [nx, ny] = pass ? [x, y + d] : [x + d, y]
+          const [mx, my] = pass ? [x, y - d] : [x - d, y]
+          if (nx < width && ny < height) next[ny * width + nx] = 1
+          if (mx >= 0 && my >= 0) next[my * width + mx] = 1
+        }
+      }
+    mask = next
+  }
+  const sum = [0, 0, 0]; let count = 0
+  for (let i = 0; i < mask.length; i++) if (mask[i]) { count++; for (let c = 0; c < 3; c++) sum[c] += data[i * 3 + c] }
+  for (let i = 0; i < mask.length; i++) if (!mask[i]) for (let c = 0; c < 3; c++) data[i * 3 + c] = Math.round(sum[c] / count)
+  return sharp(data, { raw: { width, height, channels: 3 } }).webp(quality).toBuffer()
+}
+const baseMaterial = original.getMaterial()
+const stripMaterial = strip.getMaterial()
+const texture = (image, name) => custom.createTexture(name).setImage(new Uint8Array(image)).setMimeType('image/webp')
+stripMaterial.setBaseColorTexture(texture(await stripTexture(body.getMaterial().getBaseColorTexture().getImage(), { quality: 94, effort: 5 }), 'Neck strip color'))
+stripMaterial.setNormalTexture(texture(await stripTexture(baseMaterial.getNormalTexture().getImage(), { quality: 90, smartSubsample: true, effort: 5 }), 'Neck strip normal'))
+stripMaterial.setMetallicRoughnessTexture(texture(await stripTexture(baseMaterial.getMetallicRoughnessTexture().getImage(), { quality: 90, smartSubsample: true, effort: 5 }), 'Neck strip ORM'))
+for (const slot of ['getBaseColorTextureInfo', 'getNormalTextureInfo', 'getMetallicRoughnessTextureInfo'])
+  assert.equal(stripMaterial[slot]().getTexCoord(), 0)
+
+const bodyMesh = custom.getRoot().listMeshes()[0]
+bodyMesh.setName('neck_female_custom')
+body.dispose()
+bodyMesh.addPrimitive(strip)
 for (const node of custom.getRoot().listNodes()) {
   if (!node.getMesh()) continue
   const name = node.getMesh().getName()
-  node.setExtras({ ...node.getExtras(), female_body: name === 'female_body', female_face: name === 'face_female_custom' })
+  node.setExtras({ ...node.getExtras(), part_id: name, female_face: name === 'face_female_custom', female_neck: name === 'neck_female_custom' })
 }
 for (const material of custom.getRoot().listMaterials())
   if (material.getAlphaMode() !== 'OPAQUE') material.setExtras({ ...material.getExtras(), appearance_color_fixed: true })
 const scene = custom.getRoot().listScenes()[0]
-scene.setExtras({ ...scene.getExtras(), female_face_body_masks: masks })
+scene.setExtras({ ...scene.getExtras(), female_part: 'face_custom', female_face_part: {
+  body_triangles: sourceIndices.length / 3, hide_triangle_indices: hideTriangles, strip_source_triangles: stripSources,
+} })
 for (const animation of custom.getRoot().listAnimations()) animation.dispose()
-await custom.transform(prune({ propertyTypes: [PropertyType.ACCESSOR], keepAttributes: true, keepIndices: true }))
+await custom.transform(prune({ propertyTypes: [PropertyType.ACCESSOR, PropertyType.TEXTURE, PropertyType.MATERIAL], keepAttributes: true, keepIndices: true }))
 custom.createExtension(EXTMeshoptCompression).setRequired(true).setEncoderOptions({ method: EXTMeshoptCompression.EncoderMethod.QUANTIZE })
 await writeFile(output, await io.writeBinary(custom))
 const packed = await io.read(output)
@@ -131,12 +193,16 @@ for (const face of ['default', 'custom']) {
 const report = {
   date: '2026-11-08', source, output, inputs,
   output_sha256: createHash('sha256').update(await readFile(output)).digest('hex'),
-  output_bytes: (await readFile(output)).length, body_triangles: triangles.length,
-  remapped_outfit_masks: Object.keys(masks),
-  geometry_and_texture_bytes_preserved: true,
+  output_bytes: (await readFile(output)).length,
+  base_body_triangles: sourceIndices.length / 3, hidden_base_triangles: hideTriangles.length,
+  neck_strip_triangles: stripTriangles.length, neck_strip_vertices: stripVertices.length,
+  head_and_eyelash_geometry_and_textures_preserved: true,
+  neck_strip: 'Custom body triangles at or above 1.502 m with their fitted positions; the neck-matched color and base.glb normal and ORM, with untouched texels flattened. Seam vertices below 1.502 m match base.glb in position, UV and weights.',
+  outfit_masks: 'base.glb body masks apply unchanged; strip triangles follow the base triangle each one replaces',
   inverse_bind_matrices_match_canonical_body: true,
   thumbnails: { generator: 'Blender 5.2 EEVEE; tools/blender-scripts/render_female_hair_thumbnail.py; 512px render downsampled to 128px', files: thumbnails },
   animations: 'Reuse canonical female base clips, boots companions and animation packs',
+  runtime: 'Bound onto base.glb as a part; base head, neck and default eyelashes hidden',
   appearance: 'Accepted fitted body, head and eyelash geometry and compressed PBR textures preserved',
 }
 await writeFile('doc/assets/modular-female-custom-face-runtime.json', JSON.stringify(report, null, 2) + '\n')

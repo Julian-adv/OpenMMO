@@ -116,7 +116,13 @@ export const femaleBootsClipName = (clip: string, boots: string) =>
 const models = new Map<string, Promise<GLTF>>()
 const packs = new Map<string, Promise<GLTF>>()
 const pairedBaseClips = new WeakMap<GLTF, THREE.AnimationClip[]>()
-let customBodyMasks: Record<string, unknown> | undefined
+const FACE_PART = 'face_custom'
+// Body triangles the custom face replaces, and the body triangle each neck strip triangle stands in for.
+interface FacePart {
+  body_triangles: number
+  hide_triangle_indices: number[]
+  strip_source_triangles: number[]
+}
 
 function baseClips(base: GLTF): THREE.AnimationClip[] {
   let clips = pairedBaseClips.get(base)
@@ -131,20 +137,13 @@ export function assembleFemaleCharacter(
   base: GLTF,
   sources: GLTF[],
   names = FEMALE_PARTS,
-  face: 'default' | 'custom' = 'default'
+  face: 'default' | 'custom' = 'default',
+  facePart?: GLTF
 ): THREE.Group {
   const scene = clone(base.scene) as THREE.Group
   const variant = variantOf(names)
   scene.userData.female_hair = FEMALE_HAIR_PARTS[variant ? variant.hair : 'bob']
-  base.scene.traverse((node) => {
-    const association = base.parser.associations.get(node)
-    if (
-      node instanceof THREE.SkinnedMesh &&
-      association?.meshes === 0 &&
-      association.primitives === 0
-    )
-      scene.getObjectByName(node.name)!.userData.female_body = true
-  })
+  markFemaleBase(base, scene, !!facePart)
   scene.userData.modular_character = true
   scene.userData.modular_face = face
   scene.userData.female_parts = {}
@@ -158,9 +157,35 @@ export function assembleFemaleCharacter(
     }
     if (name === 'valkyrie_wings') attachValkyrieWings(scene, meshes)
   }
+  if (facePart) bindFemaleFacePart(scene, facePart)
   for (const mesh of skinnedParts(scene)) mesh.frustumCulled = false
   return scene
 }
+
+/** Flags the base body in `scene` (a copy of `base.scene`) and hides the default eyelashes for the custom face, which brings its own. */
+export function markFemaleBase(
+  base: GLTF,
+  scene: THREE.Object3D,
+  customFace: boolean
+) {
+  base.scene.traverse((node) => {
+    const association = base.parser.associations.get(node)
+    if (!(node instanceof THREE.SkinnedMesh) || association?.meshes !== 0)
+      return
+    const mesh = scene.getObjectByName(node.name)!
+    if (association.primitives === 0) mesh.userData.female_body = true
+    else mesh.visible = !customFace
+  })
+}
+
+/** Binds the custom face part; `female_face_part` lists the body triangles it replaces. */
+export function bindFemaleFacePart(scene: THREE.Object3D, facePart: GLTF) {
+  scene.userData.female_face_part = facePart.scene.userData.female_face_part
+  for (const mesh of bindModularPart(scene, facePart.scene))
+    mesh.userData.female_part = FACE_PART
+}
+
+export const FEMALE_FACE_PART_PATH = `${MODULAR_FEMALE_DIRECTORY}/${FACE_PART}.glb`
 
 export function loadFemaleCharacter(
   path = MODULAR_FEMALE_MODEL_PATH,
@@ -173,33 +198,24 @@ export function loadFemaleCharacter(
     const names = [...FEMALE_PARTS, ...(VARIANTS[path]?.fixed ?? [])]
     pending = Promise.all([
       loadGLB(MODULAR_FEMALE_MODEL_PATH),
-      custom
-        ? loadGLB(`${MODULAR_FEMALE_DIRECTORY}/base_custom.glb`)
-        : Promise.resolve(null),
+      custom ? loadGLB(FEMALE_FACE_PART_PATH) : Promise.resolve(undefined),
       Promise.all(
         names.map((name) => loadGLB(`${MODULAR_FEMALE_DIRECTORY}/${name}.glb`))
       ),
     ])
-      .then(([canonical, customBase, sources]) => {
-        if (customBase) {
-          customBodyMasks =
-            customBase.parser.json.scenes[0].extras.female_face_body_masks
-          delete customBase.scene.userData.female_face_body_masks
-        }
-        const base = customBase
-          ? { ...customBase, animations: canonical.animations }
-          : canonical
+      .then(([base, facePart, sources]) => {
         const scene = assembleFemaleCharacter(
           base,
           sources,
           names,
-          custom ? 'custom' : 'default'
+          custom ? 'custom' : 'default',
+          facePart
         )
         return {
           ...base,
           scene,
           scenes: [scene],
-          animations: baseClips(canonical),
+          animations: baseClips(base),
         }
       })
       .catch((error) => {
@@ -441,15 +457,39 @@ function registerLazyPart(
   state: FemaleState,
   name: string
 ) {
-  const body = skinnedParts(scene).find((mesh) => mesh.userData.female_body)!
-  state.mask.register(name, bodyMask(scene, name), body)
+  registerBodyMask(scene, state.mask, name)
 }
 
-function bodyMask(scene: THREE.Object3D, name: string) {
-  return (
-    (scene.userData.modular_face === 'custom'
-      ? customBodyMasks?.[name]
-      : undefined) ?? scene.userData.female_parts[name].body_mask
+const neckSlot = (name: string) => `${name}:neck`
+
+/** Registers an outfit's body mask and, on a custom face, the same cut on the neck strip that stands in for those body triangles. */
+function registerBodyMask(
+  scene: THREE.Object3D,
+  mask: FemaleState['mask'],
+  name: string
+) {
+  const meshes = skinnedParts(scene)
+  const value = scene.userData.female_parts[name].body_mask
+  mask.register(
+    name,
+    value,
+    meshes.find((mesh) => mesh.userData.female_body)
+  )
+  const face: FacePart | undefined = scene.userData.female_face_part
+  const neck = meshes.find((mesh) => mesh.userData.female_neck)
+  if (!face || !neck) return
+  const hidden = new Set<number>(value.hide_triangle_indices)
+  mask.register(
+    neckSlot(name),
+    {
+      mesh_index: 0,
+      primitive_index: 0,
+      primitive_triangles: face.strip_source_triangles.length,
+      hide_triangle_indices: face.strip_source_triangles.flatMap((source, i) =>
+        hidden.has(source) ? [i] : []
+      ),
+    },
+    neck
   )
 }
 
@@ -526,8 +566,20 @@ export function applyFemaleArmor(
     for (const style of styles)
       for (const slot of slots) {
         const name = partName(style, slot)
-        if (female_parts[name]) mask.register(name, bodyMask(scene, name), body)
+        if (female_parts[name]) registerBodyMask(scene, mask, name)
       }
+    const face: FacePart | undefined = scene.userData.female_face_part
+    if (face)
+      mask.register(
+        FACE_PART,
+        {
+          mesh_index: 0,
+          primitive_index: 0,
+          primitive_triangles: face.body_triangles,
+          hide_triangle_indices: face.hide_triangle_indices,
+        },
+        body
+      )
     mask.register('sleeves', female_parts.gloves.sleeve_mask, part('top')[0])
     state = {
       mask,
@@ -573,6 +625,12 @@ export function applyFemaleArmor(
   }
   for (const mesh of part('rogue_garters'))
     mesh.visible = equipped.bottom === 'rogue' && equipped.boots === 'rogue'
+  if (scene.userData.female_face_part) {
+    shown[FACE_PART] = true
+    for (const name of Object.keys(shown))
+      if (scene.userData.female_parts[name]?.body_mask)
+        shown[neckSlot(name)] = shown[name]
+  }
   state.mask.setEquippedAll(shown)
   state.underwearColor(
     equipped.bottom === 'rogue',

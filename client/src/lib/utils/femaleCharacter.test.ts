@@ -122,12 +122,31 @@ describe.skipIf(!hasAssets)('female face selection', () => {
     const body = skinnedParts(modelRoot).find(
       (mesh) => mesh.userData.female_body
     )!
-    const originalCount = body.geometry.index!.count
+    const fullCount = body.geometry.index!.count
     const head = skinnedParts(modelRoot).find(
       (mesh) => mesh.userData.female_face
     )!
+    const neck = skinnedParts(modelRoot).find(
+      (mesh) => mesh.userData.female_neck
+    )!
     const headIndices = Array.from(head.geometry.index!.array)
+    const neckCount = neck.geometry.index!.count
     const appearance: CharacterAppearance = { face: 'custom', hair: 'bob' }
+    expect(
+      skinnedParts(modelRoot).filter(
+        (mesh) =>
+          mesh.visible &&
+          !mesh.userData.female_part &&
+          !mesh.userData.female_body
+      )
+    ).toEqual([])
+    await applyCharacterArmor(modelRoot, {}, appearance)
+    const originalCount = body.geometry.index!.count
+    expect(originalCount).toBe(
+      fullCount -
+        source.scene.userData.female_face_part.hide_triangle_indices.length * 3
+    )
+    expect(neck.geometry.index!.count).toBe(neckCount)
     for (const outfit of [
       armor,
       barbarian,
@@ -153,14 +172,16 @@ describe.skipIf(!hasAssets)('female face selection', () => {
       await applyCharacterArmor(modelRoot, outfit, appearance)
       expect(body.geometry.index!.count).toBeLessThan(originalCount)
       expect(Array.from(head.geometry.index!.array)).toEqual(headIndices)
+      expect(neck.geometry.index!.count).toBeLessThan(neckCount)
       expect(
         skinnedParts(other).find((mesh) => mesh.userData.female_body)!.geometry
           .index!.count
-      ).toBe(originalCount)
+      ).toBe(fullCount)
     }
     for (const hair of ['bob', 'long', 'ponytail'] as const) {
       await applyCharacterArmor(modelRoot, {}, { ...appearance, hair })
       expect(body.geometry.index!.count).toBe(originalCount)
+      expect(neck.geometry.index!.count).toBe(neckCount)
       const expected = {
         bob: 'hair',
         long: 'valkyrie_hair',
