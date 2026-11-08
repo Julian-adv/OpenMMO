@@ -6,6 +6,7 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use onlinerpg_shared::dungeon::{PropKind, MINING_CAST_MS};
+use onlinerpg_shared::inventory::PlayerInventory;
 use onlinerpg_shared::messages::ServerMessage;
 use onlinerpg_shared::{PlayerId, Position};
 
@@ -15,8 +16,10 @@ use super::dungeon::check_prop_reach;
 use super::GameState;
 
 pub(crate) const PICKAXE_ITEM: &str = "miner_pickaxe";
-/// Chance a finished cast turns up ore at all.
+pub(crate) const FOREMAN_PICKAXE_ITEM: &str = "foreman_pickaxe";
+/// Chance a finished cast turns up ore at all, by the best pick carried.
 const MINED_ORE_CHANCE: f64 = 0.20;
+const FOREMAN_MINED_ORE_CHANCE: f64 = 0.40;
 
 pub(crate) struct MiningSession {
     pub(super) until: Instant,
@@ -36,7 +39,25 @@ fn mining_yield(kind: PropKind, depth: u8) -> (&'static str, u32) {
     }
 }
 
+fn ore_chance(inv: &PlayerInventory) -> Option<f64> {
+    if inv.has_item(FOREMAN_PICKAXE_ITEM) {
+        Some(FOREMAN_MINED_ORE_CHANCE)
+    } else if inv.has_item(PICKAXE_ITEM) {
+        Some(MINED_ORE_CHANCE)
+    } else {
+        None
+    }
+}
+
 impl GameState {
+    async fn carried_ore_chance(&self, player_id: &PlayerId) -> Option<f64> {
+        self.inventories
+            .read()
+            .await
+            .get(player_id)
+            .and_then(ore_chance)
+    }
+
     /// Start mining a prop next to the player, if they carry a pickaxe.
     pub async fn start_mining(
         &self,
@@ -89,7 +110,7 @@ impl GameState {
             .map(|_| prop.kind)
         };
         let kind = match checked {
-            Ok(kind) if self.holds_item(player_id, PICKAXE_ITEM).await => kind,
+            Ok(kind) if self.carried_ore_chance(player_id).await.is_some() => kind,
             rejected => {
                 let reason = rejected.err().unwrap_or_else(|| "no_pickaxe".into());
                 self.send_direct_message(player_id, ServerMessage::InteractionRejected { reason })
@@ -152,7 +173,8 @@ impl GameState {
         };
 
         for (player_id, s) in due {
-            let mined = self.holds_item(&player_id, PICKAXE_ITEM).await
+            let chance = self.carried_ore_chance(&player_id).await;
+            let mined = chance.is_some()
                 && self
                     .interact_with_dungeon_prop(
                         &player_id,
@@ -170,7 +192,7 @@ impl GameState {
                     )
                     .await
                     .is_some();
-            let found = (mined && rand::thread_rng().gen_bool(MINED_ORE_CHANCE))
+            let found = (mined && rand::thread_rng().gen_bool(chance.unwrap_or(0.0)))
                 .then(|| mining_yield(s.kind, s.depth));
             self.publish_mining_ended(&player_id, &s, found).await;
             if mined {

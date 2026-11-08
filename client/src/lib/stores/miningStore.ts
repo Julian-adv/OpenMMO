@@ -2,6 +2,7 @@ import { writable } from 'svelte/store'
 import { MINING_SWING_MS } from '../data/combatTiming'
 
 export const PICKAXE_ITEM = 'miner_pickaxe'
+export const PICKAXE_ITEMS: readonly string[] = [PICKAXE_ITEM, 'foreman_pickaxe']
 
 /** Players mid-mining cast; they hold a pickaxe until it ends. */
 export const miningPlayers = writable<ReadonlySet<number>>(new Set())

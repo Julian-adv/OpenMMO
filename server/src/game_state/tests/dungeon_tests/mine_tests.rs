@@ -35,7 +35,7 @@ async fn blackvein_mine_floors_spawn_one_kind_per_band() {
 }
 
 #[tokio::test]
-async fn blackvein_mine_spawns_the_foreman_without_signature_rolls() {
+async fn blackvein_mine_rolls_the_foremans_pickaxe() {
     let (boss, items, gold) = open_final_chest("blackvein_mine_rewards", "blackvein_mine").await;
     assert_eq!(boss.monster_type, "mine_foreman");
     assert_eq!(boss.level_override, Some(30));
@@ -48,17 +48,20 @@ async fn blackvein_mine_spawns_the_foreman_without_signature_rolls() {
     let game_state = make_test_game_state("blackvein_mine_table");
     let mine = chest_chances(&game_state, "blackvein_mine");
     assert_eq!(mine["ring_of_protection"], 0.2);
+    assert_eq!(mine["foreman_pickaxe"], 0.2);
     for id in signatures {
         assert!(!mine.contains_key(id), "{id}");
     }
 }
 
-/// A pickaxe in the bag mines an ore heap away, sometimes into ore; sunset
-/// refills it.
-#[tokio::test]
-async fn pickaxe_mines_ore_heaps_until_sunset() {
-    let game_state = make_test_game_state("blackvein_mine_mining");
-    let entrance = game_state.dungeon_defs.get("blackvein_mine").unwrap();
+/// A player standing at an ore heap with an empty bag.
+async fn miner_at_ore_heap(name: &str) -> (GameState, String, u8, u32, PlayerId) {
+    let game_state = make_test_game_state(name);
+    let entrance = game_state
+        .dungeon_defs
+        .get("blackvein_mine")
+        .unwrap()
+        .clone();
     game_state.ensure_dungeon_runtime(&entrance.id).await;
     let (depth, prop_id, at) = {
         let dungeons = game_state.dungeons.read().await;
@@ -84,33 +87,54 @@ async fn pickaxe_mines_ore_heaps_until_sunset() {
     player.floor_level = -(depth as i8);
     let id = player.id;
     game_state.add_player(player).await;
-    let mined = || async {
-        let dungeons = game_state.dungeons.read().await;
-        dungeons[&entrance.id]
-            .broken_props
-            .get(&depth)
-            .is_some_and(|ids| ids.contains(&prop_id))
-    };
-
     give_bag(&game_state, &id, None).await;
-    game_state
-        .start_mining(&id, &entrance.id, depth, prop_id)
-        .await;
-    assert!(game_state.mining_sessions.read().await.is_empty());
+    (game_state, entrance.id, depth, prop_id, id)
+}
 
-    assert!(game_state.give_item(&id, "miner_pickaxe").await);
+/// Start a cast and finish it at once.
+async fn mine_now(
+    game_state: &GameState,
+    id: &PlayerId,
+    entrance_id: &str,
+    depth: u8,
+    prop_id: u32,
+) {
     game_state
-        .start_mining(&id, &entrance.id, depth, prop_id)
+        .start_mining(id, entrance_id, depth, prop_id)
         .await;
     game_state
         .mining_sessions
         .write()
         .await
-        .get_mut(&id)
+        .get_mut(id)
         .expect("a pickaxe starts the cast")
         .until = std::time::Instant::now();
     game_state.tick_mining().await;
-    assert!(mined().await);
+}
+
+async fn heap_mined(game_state: &GameState, entrance_id: &str, depth: u8, prop_id: u32) -> bool {
+    let dungeons = game_state.dungeons.read().await;
+    dungeons[entrance_id]
+        .broken_props
+        .get(&depth)
+        .is_some_and(|ids| ids.contains(&prop_id))
+}
+
+/// A pickaxe in the bag mines an ore heap away, sometimes into ore; sunset
+/// refills it.
+#[tokio::test]
+async fn pickaxe_mines_ore_heaps_until_sunset() {
+    let (game_state, entrance_id, depth, prop_id, id) =
+        miner_at_ore_heap("blackvein_mine_mining").await;
+
+    game_state
+        .start_mining(&id, &entrance_id, depth, prop_id)
+        .await;
+    assert!(game_state.mining_sessions.read().await.is_empty());
+
+    assert!(game_state.give_item(&id, "miner_pickaxe").await);
+    mine_now(&game_state, &id, &entrance_id, depth, prop_id).await;
+    assert!(heap_mined(&game_state, &entrance_id, depth, prop_id).await);
     let ore: u32 = game_state.inventories.read().await[&id]
         .bag
         .iter()
@@ -120,7 +144,17 @@ async fn pickaxe_mines_ore_heaps_until_sunset() {
     assert!(ore == 0 || ore == 2 + u32::from(depth) / 8, "{ore}");
 
     game_state.restore_mine_props().await;
-    assert!(!mined().await);
+    assert!(!heap_mined(&game_state, &entrance_id, depth, prop_id).await);
+}
+
+/// The Foreman's Pickaxe mines on its own, without a common pick.
+#[tokio::test]
+async fn foreman_pickaxe_mines_without_a_common_pick() {
+    let (game_state, entrance_id, depth, prop_id, id) =
+        miner_at_ore_heap("blackvein_mine_foreman_pick").await;
+    assert!(game_state.give_item(&id, "foreman_pickaxe").await);
+    mine_now(&game_state, &id, &entrance_id, depth, prop_id).await;
+    assert!(heap_mined(&game_state, &entrance_id, depth, prop_id).await);
 }
 
 /// A pushed rail cart rolls until a body stops it. A player struck at push

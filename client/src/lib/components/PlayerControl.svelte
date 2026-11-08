@@ -138,7 +138,7 @@
     MINING_SWING_MS,
     PROP_SWING_IMPACT_MS,
   } from '../data/combatTiming'
-  import { noteMiningSwing, PICKAXE_ITEM } from '../stores/miningStore'
+  import { noteMiningSwing, PICKAXE_ITEMS } from '../stores/miningStore'
   import {
     DUNGEON_DOOR_APPROACH,
     HOUSE_DOOR_APPROACH,
@@ -1842,7 +1842,7 @@
   function holdsPickaxe() {
     const inv = get(inventoryStore)
     return [...inv.bag, ...Object.values(inv.equipped)].some(
-      (i) => i?.item_def_id === PICKAXE_ITEM
+      (i) => !!i && PICKAXE_ITEMS.includes(i.item_def_id)
     )
   }
 

@@ -421,6 +421,8 @@
   "worn_valkyrie_top.name": "낡은 발키리 흉갑",
   "miner_pickaxe.description": "물푸레나무 자루에 무거운 쇠머리를 단 곡괭이. 가방에 넣어 두면 검은맥 광산의 광석 더미와 수정 무리를 캘 수 있습니다. 급할 땐 약한 무기로도 씁니다.",
   "miner_pickaxe.name": "광부의 곡괭이",
+  "foreman_pickaxe.description": "폭주한 작업반장이 쓰던 곡괭이. 쇠머리에 검은 수정 맥이 박혀 있습니다. 묵직한 양손 무기이며, 보통 곡괭이보다 광석이 더 자주 나옵니다.",
+  "foreman_pickaxe.name": "작업반장의 곡괭이",
   "blackvein_ore.description": "보랏빛 줄이 박힌 검은 광석 덩어리. 상인들이 무게대로 사 갑니다.",
   "blackvein_ore.name": "검은맥 광석",
   "blackvein_crystal_shard.description": "속에서 푸른빛이 희미하게 도는 차가운 검보라 조각. 수집가들이 값을 잘 쳐 줍니다.",

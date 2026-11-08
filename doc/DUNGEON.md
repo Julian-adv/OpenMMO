@@ -78,7 +78,8 @@ node tools/reserve-dungeon-land.mjs --dungeon skeleton_crypt --ownership /tmp/ow
   - 25층: 보스만 나온다. 서버는 마지막 층에 한해 빈 스폰 표를 허용한다.
   - 보스: Cyclop 모델, Shadow Master 수치.
 - 5·10·15·20·25층 문에 `mine_key_5…25`. 아이콘·모델은 기존 열쇠를 재사용한다.
-- 최종 상자: 확정 보상·전용 롤 없음. 티어 5 확률 보상(`ring_of_protection` 20%)과 하위 티어 장비, 12,500–37,500c.
+- 최종 상자: 확정 보상 없음, 전용 롤 `foreman_pickaxe` 20%, 티어 5 확률 보상(`ring_of_protection` 20%)과 하위 티어 장비, 12,500–37,500c.
+- 채굴: 곡괭이가 가방이나 손에 있으면 광석 더미·수정 무리를 캔다. 캘 때마다 `miner_pickaxe`는 20%, `foreman_pickaxe`는 40% 확률로 광석이 나온다(`server/src/game_state/mining.rs`).
 - 처치 칭호: `foreman_slayer`, 단독 처치 `foreman_slayer_solo`.
 - 맵은 `layoutStyle=mine` 생성기다(`shared/src/dungeon/gen/mine.rs`). 비어 있으면 기존 방 생성기를 쓴다.
   - 일반 층: 도착 방에서 작은 방 2–3개를 거쳐 계단 방까지 이어지는 긴 2칸 통로. 이어지는 방의 중심은 맨해튼 거리 18칸 이상 떨어진다.

@@ -15,7 +15,7 @@
 | 4 | Thieves' Den (20층, thief_king) | 판금 세트 완성 (흉갑 확정·투구·건틀릿 롤) + cutthroat_dirk | 구현 완료, 단검·보스 모델 완료 |
 | 5 | Sundered Bastion (25층, barkan) · [필드 레이드 연계 설계](TIER5_FIELD_RAID.md) | ring_of_protection + rune_blade + 대지의 아뮬렛 (가칭) | 던전 본체·rune_blade·아뮬렛 착용 효과 구현, 봉헌 미구현 |
 | 5 | Shadow Guild (25층, shadow_master) | ring_of_protection + shadowfang | 구현 완료, 단검·보스 모델 완료 |
-| 5 | Blackvein Mine (25층, mine_foreman) | ring_of_protection | 최소판, 전용 롤·모델 없음 |
+| 5 | Blackvein Mine (25층, mine_foreman) | ring_of_protection + foreman_pickaxe | 곡괭이 아이콘·모델은 광부의 곡괭이 재사용 |
 
 특수 망토(투명·보호 등)·셔츠·amulet_of_life_saving·ring_of_regeneration은 던전 풀에 넣지 않는다 — **월드 드랍 전용 희소템**으로 유저 간 거래의 축을 만든다 (아래 참조).
 
@@ -117,6 +117,7 @@ amulet_of_life_saving·ring_of_regeneration은 성능이 강력해 확정 파밍
 | Thieves' Den (T4) | breastplate·cutthroat_dirk | plate_helmet·plate_gauntlets 각 30% | ≈4.7회 |
 | Sundered Bastion (T5) | (시그니처 없음) | ring_of_protection 20%, 전용 rune_blade 20%·earth_amulet 10% | ≈5.0회 (반지 기준) |
 | Shadow Guild (T5) | (시그니처 없음) | ring_of_protection 20%, 전용 shadowfang 20% | ≈5.0회 (반지 기준) |
+| Blackvein Mine (T5) | (시그니처 없음) | ring_of_protection 20%, 전용 foreman_pickaxe 20% | ≈5.0회 (반지 기준) |
 
 확률 상수는 아이템 데이터에 `chestChance`로 명시하고, 완성 기대 횟수는 테스트로 고정(시뮬레이션 또는 닫힌식 검증).
 
@@ -168,6 +169,7 @@ amulet_of_life_saving·ring_of_regeneration은 성능이 강력해 확정 파밍
 | 3 | steel_longsword | 1d10 | 16,000 | 티어 3 던전 무장 몬스터 + Ogre Stronghold 상자 확정 | 있음. 일반 오거는 아직 greatclub(600c) 10% |
 | 4 | great_sword | 2d8 | 28,000 | 티어 4 던전 무장 몬스터 + 상자 확정 | 모델·아이콘 등록; 양손무기; 던전 미구현 |
 | 5 | rune_blade | 2d10 | 50,000 | Sundered Bastion 상자 전용 롤 20% (ring_of_protection과 동일 철학) | 있음. 양손무기, 바르칸도 들고 싸운다 |
+| 5 | foreman_pickaxe | 3d6 | 46,000 | Blackvein Mine 상자 전용 롤 20% | 양손무기. 평균 10.5로 rune_blade보다 0.5 낮고 편차가 작다. 채굴 도구를 겸해 광석 확률 40%(광부의 곡괭이 20%의 2배). 아이콘·모델은 광부의 곡괭이 재사용 |
 
 단검(`weaponType=dagger`, DEX 판정, 한손, 사거리 1.5, 1,200ms)은 별도 사다리다. 상점 단검 뒤로 도적 던전 두 곳에서 한 자루씩 오른다.
 
@@ -177,7 +179,7 @@ amulet_of_life_saving·ring_of_regeneration은 성능이 강력해 확정 파밍
 | 4 | cutthroat_dirk | 1d6 | 11,000 | Thieves' Den 상자 확정, 티어 5 상자 이월 10% | 있음 |
 | 5 | shadowfang | 1d8 | 20,000 | Shadow Guild 상자 전용 롤 20% | 있음 |
 
-- basePrice는 평균 피해당 가격이 티어마다 오르도록 책정했다. iron_sword 2,200, steel_longsword 2,900, great_sword 3,100, rune_blade 4,500c/pt. 단검도 같은 티어의 값을 따른다(cutthroat_dirk 3,100, shadowfang 4,400c/pt). 대검 가격에 맞추면 두 티어 4 던전을 매일 도는 캐릭터의 상자 수입이 크게 늘어서다.
+- basePrice는 평균 피해당 가격이 티어마다 오르도록 책정했다. iron_sword 2,200, steel_longsword 2,900, great_sword 3,100, rune_blade 4,500, foreman_pickaxe 4,400c/pt. 단검도 같은 티어의 값을 따른다(cutthroat_dirk 3,100, shadowfang 4,400c/pt). 대검 가격에 맞추면 두 티어 4 던전을 매일 도는 캐릭터의 상자 수입이 크게 늘어서다.
 - 몬스터가 드랍하는 환금 무기는 **무게당 가격을 동일하게** (티어 1은 1,000c/kg: small_sword 1,500/w1.5, goblin_sword 2,000/w2) — 인벤토리가 무게로 차므로 무게당 가격이 다르면 그 무기를 주는 몬스터만 파밍하게 된다. 단검은 예외다. dagger(2,500/w1)는 상점에서만 팔고, 상위 단검은 상자에서만 나온다.
 - 이름은 전부 가칭. 몬스터 애니메이션이 Sword 계열뿐이라 날붙이 형태로 제한.
 

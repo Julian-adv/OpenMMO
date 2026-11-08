@@ -155,7 +155,11 @@
   } from '../stores/chargeStrikeStore'
   import { PLAYER_ATTACK_IMPACT_DELAY_MS } from '../data/combatTiming'
   import { gameStore } from '../stores/gameStore'
-  import { miningPlayers, PICKAXE_ITEM } from '../stores/miningStore'
+  import {
+    miningPlayers,
+    PICKAXE_ITEM,
+    PICKAXE_ITEMS
+  } from '../stores/miningStore'
   import {
     CART_PUSH_CLIP,
     CART_PUSH_PACK,
@@ -735,14 +739,17 @@
     applyCharacterArmor(modelRoot, visibleArmor, appearance)
   })
 
+  const wornMainHandItemId = $derived(
+    isCurrentPlayer
+      ? ($inventoryStore.equipped.main_hand?.item_def_id ?? null)
+      : mainHand
+  )
   const equippedMainHandItemId = $derived(
     $miningPlayers.has(
       (isCurrentPlayer ? $gameStore.currentPlayer?.id : remotePlayerId) ?? -1
-    )
+    ) && !PICKAXE_ITEMS.includes(wornMainHandItemId ?? '')
       ? PICKAXE_ITEM
-      : isCurrentPlayer
-        ? ($inventoryStore.equipped.main_hand?.item_def_id ?? null)
-        : mainHand
+      : wornMainHandItemId
   )
 
   let attachedWeaponItemId: string | null = null

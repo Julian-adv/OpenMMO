@@ -421,6 +421,8 @@
   "worn_valkyrie_top.name": "破旧的女武神胸甲",
   "miner_pickaxe.description": "白蜡木柄配沉重铁头的镐。放在背包里就能开采黑脉矿坑的矿石堆和水晶簇。情急之下也能当作一件弱武器。",
   "miner_pickaxe.name": "矿工镐",
+  "foreman_pickaxe.description": "失控工头使用过的镐。铁制镐头上嵌着黑色水晶脉。沉重的双手武器，比普通的镐更容易挖出矿石。",
+  "foreman_pickaxe.name": "工头之镐",
   "blackvein_ore.description": "带紫色纹路的黑色矿石块。商人按重量收购。",
   "blackvein_ore.name": "黑脉矿石",
   "blackvein_crystal_shard.description": "核心透着微弱蓝光的冰冷黑紫碎片。收藏家愿出好价钱。",

@@ -421,6 +421,8 @@
   "worn_valkyrie_top.name": "使い古したヴァルキリーの胸当て",
   "miner_pickaxe.description": "トネリコの柄に重い鉄の頭をつけたつるはし。鞄に入れておけば黒脈鉱山の鉱石の山や水晶の群れを掘れます。いざという時は頼りない武器にもなります。",
   "miner_pickaxe.name": "鉱夫のつるはし",
+  "foreman_pickaxe.description": "暴走した作業長が使っていたつるはし。鉄の頭に黒い水晶の脈が走っています。重い両手武器で、普通のつるはしより鉱石がよく出ます。",
+  "foreman_pickaxe.name": "作業長のつるはし",
   "blackvein_ore.description": "紫の筋が走る黒い鉱石の塊。商人が重さで買い取ります。",
   "blackvein_ore.name": "黒脈鉱石",
   "blackvein_crystal_shard.description": "芯にかすかな青い光を宿す冷たい黒紫の欠片。収集家が高く買います。",

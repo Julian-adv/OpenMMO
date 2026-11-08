@@ -6,4 +6,4 @@ skeleton_crypt,Skeleton Crypt,-1064,0.95,4248,breastplate;great_sword,20,skeleto
 sundered_bastion,Sundered Bastion,-1950,1.1,5456,,25,barkan,5,s,bastion_key,bastion,rune_blade:0.2;earth_amulet:0.1,
 thieves_den,Thieves' Den,-862,1.2,3822,breastplate;cutthroat_dirk,20,thief_king,4,w,den_key,den,,
 shadow_guild,Shadow Guild,-2384,1.05,5962,,25,shadow_master,5,s,guild_key,guild,shadowfang:0.2,
-blackvein_mine,Blackvein Mine,-1884,1.2,6360,,25,mine_foreman,5,w,mine_key,mine,,mine
+blackvein_mine,Blackvein Mine,-1884,1.2,6360,,25,mine_foreman,5,w,mine_key,mine,foreman_pickaxe:0.2,mine
