@@ -46,6 +46,27 @@ export function getCapeUploadToken(): string | null {
   return capeUploadToken
 }
 
+/** Uploads a PNG to the cape texture store (capes and notice posters).
+ *  `refused` carries the server's reason; `null` means it could not be sent. */
+export async function uploadCapeTexture(
+  png: Blob
+): Promise<{ hash: string } | { refused: string | null }> {
+  const token = capeUploadToken
+  if (!token) return { refused: null }
+  try {
+    const response = await apiFetch('/api/cape-texture', {
+      method: 'POST',
+      token,
+      headers: { 'Content-Type': 'image/png' },
+      body: png,
+    })
+    if (!response.ok) return { refused: await response.text() }
+    return (await response.json()) as { hash: string }
+  } catch {
+    return { refused: null }
+  }
+}
+
 /** fetch with a bearer credential attached; use for all /api write requests.
  *  Defaults to the admin-checked Google token; `token` overrides it for the
  *  player's own writes, which carry the session credential instead. */

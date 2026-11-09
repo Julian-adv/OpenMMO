@@ -2643,6 +2643,8 @@ fn notice_board_command(action: &AgentAction) -> Result<onlinerpg_shared::Client
             object_id: *board_id,
             title: checked(title, NOTICE_TITLE_MAX_CHARS)?,
             body: checked(body, NOTICE_BODY_MAX_CHARS)?,
+            image: None,
+            position: None,
         },
         AgentAction::CommentPost {
             board_id,

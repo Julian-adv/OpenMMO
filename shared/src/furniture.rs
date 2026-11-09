@@ -34,6 +34,10 @@ pub struct OccupancyRect {
     /// `FURNITURE_BLOCK_HEIGHT` otherwise.
     #[serde(default)]
     pub block_height: Option<f32>,
+    /// Share of a cell this piece must cover to seal it, for long thin pieces
+    /// that never reach `CELL_COVERAGE_THRESHOLD` in any cell.
+    #[serde(default)]
+    pub cell_coverage: Option<f32>,
 }
 
 /// Solid-furniture footprint table, generated from the GLBs by
@@ -263,7 +267,7 @@ pub fn footprint_cells(occ: &OccupancyRect, x: f32, z: f32, rotation_deg: f32) -
                 best_area = area;
                 best_cell = (cx, cz);
             }
-            if area >= CELL_COVERAGE_THRESHOLD {
+            if area >= occ.cell_coverage.unwrap_or(CELL_COVERAGE_THRESHOLD) {
                 cells.push((cx, cz));
             }
         }
@@ -476,6 +480,7 @@ mod tests {
             min_z: -0.25,
             max_z: 0.25,
             block_height: None,
+            cell_coverage: None,
         };
         let cells = footprint_cells(&block, 1.0, 1.0, 0.0);
         assert_eq!(cells.len(), 1, "cells: {cells:?}");
@@ -491,6 +496,7 @@ mod tests {
             min_z: -1.5,
             max_z: 1.5,
             block_height: None,
+            cell_coverage: None,
         };
         let span = |cells: &[(i32, i32)]| {
             let xs: Vec<i32> = cells.iter().map(|c| c.0).collect();
@@ -535,6 +541,13 @@ mod tests {
         assert_eq!(p.rotation_deg, 90.0);
         assert_eq!(p.floor_level, 1);
         assert_eq!(p.x, -1.5);
+    }
+
+    #[test]
+    fn the_procedural_notice_board_blocks() {
+        let occ = solid_occupancy("notice_board").unwrap();
+        let cells = footprint_cells(&occ, -1455.27, 4745.43, 270.0);
+        assert_eq!(cells, [(-1456, 4744), (-1456, 4745), (-1456, 4746)]);
     }
 
     #[test]

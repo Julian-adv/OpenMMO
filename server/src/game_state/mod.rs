@@ -478,6 +478,7 @@ pub struct GameState {
     beds: Arc<std::sync::RwLock<bed_rest::BedIndex>>,
     interaction_furniture: Arc<std::sync::RwLock<player_interaction::FurnitureIndex>>,
     notice_cooldowns: Arc<std::sync::Mutex<notice_board::NoticeCooldowns>>,
+    notice_papers: Arc<std::sync::Mutex<notice_board::NoticePaperCache>>,
     /// The one altar-summoned raid allowed at a time; lost on restart.
     field_raid: Arc<tokio::sync::Mutex<Option<field_raid::FieldRaid>>>,
     field_boss_sites: Arc<std::sync::RwLock<Vec<field_raid::FieldBossSite>>>,
@@ -819,6 +820,7 @@ impl GameState {
             beds: Arc::new(std::sync::RwLock::new(HashMap::new())),
             interaction_furniture: Arc::new(std::sync::RwLock::new(HashMap::new())),
             notice_cooldowns: Arc::default(),
+            notice_papers: Arc::default(),
             field_raid: Arc::new(tokio::sync::Mutex::new(None)),
             field_boss_sites: Arc::new(std::sync::RwLock::new(Vec::new())),
             woken_stand_in: Arc::new(std::sync::RwLock::new(None)),

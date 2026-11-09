@@ -2,7 +2,7 @@
   import { capeTexturePreview } from '../stores/capeTextureStore'
   import { mountOverlay } from '../stores/overlayStack'
   import { PRINT_ASPECT } from '../effects/cape-rig'
-  import { apiFetch, getCapeUploadToken } from '../utils/networkUtils'
+  import { getCapeUploadToken, uploadCapeTexture } from '../utils/networkUtils'
 
   interface Props {
     onConfirm: (textureHash: string) => void
@@ -87,24 +87,11 @@
     if (!chosen || !token || busy) return
     busy = true
     error = null
-    try {
-      const response = await apiFetch('/api/cape-texture', {
-        method: 'POST',
-        token,
-        headers: { 'Content-Type': 'image/png' },
-        body: chosen.blob,
-      })
-      if (!response.ok) {
-        error = (await response.text()) || 'The upload was refused.'
-        return
-      }
-      const { hash } = (await response.json()) as { hash: string }
-      onConfirm(hash)
-    } catch {
-      error = 'The upload could not be sent.'
-    } finally {
-      busy = false
-    }
+    const result = await uploadCapeTexture(chosen.blob)
+    busy = false
+    if ('hash' in result) onConfirm(result.hash)
+    else if (result.refused === null) error = 'The upload could not be sent.'
+    else error = result.refused || 'The upload was refused.'
   }
 </script>
 

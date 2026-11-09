@@ -604,10 +604,25 @@ pub enum ClientMessage {
         object_id: u32,
         post_id: i64,
     },
+    /// Spends one notice paper. `position` is the paper centre (see
+    /// `notice_board::PAPER_SCALE`); without one the server picks a free spot.
     WriteNoticePost {
         object_id: u32,
         title: String,
         body: String,
+        #[serde(default)]
+        image: Option<String>,
+        #[serde(default)]
+        position: Option<(u16, u16)>,
+    },
+    /// Papers on a board in sight, for the board model; answered with
+    /// `NoticeBoardPapers`.
+    PeekNoticeBoard {
+        object_id: u32,
+    },
+    /// Land registrar only: removes posts past their lifetime.
+    TakeDownNotices {
+        object_id: u32,
     },
     WriteNoticeComment {
         object_id: u32,
@@ -1020,6 +1035,7 @@ impl ClientMessage {
             | OfferAtAltar { .. }
             | WriteNoticePost { .. }
             | WriteNoticeComment { .. }
+            | TakeDownNotices { .. }
             | StartInstrument
             | InstrumentNotes { .. }
             | PlaceHouse { .. }
@@ -1850,6 +1866,15 @@ pub enum ServerMessage {
     NoticeBoardRefused {
         reason: crate::notice_board::NoticeBoardRefusal,
     },
+    NoticeBoardPapers {
+        object_id: u32,
+        papers: Vec<crate::notice_board::NoticePaper>,
+    },
+    /// Sent to the registrar after a take-down, then the refreshed `NoticeBoard`.
+    NoticesTakenDown {
+        object_id: u32,
+        count: u32,
+    },
     FieldRaidNotice {
         monster: String,
         outcome: FieldRaidOutcome,
@@ -2495,6 +2520,8 @@ impl ServerMessage {
             | Self::NoticeBoard { .. }
             | Self::NoticePostView { .. }
             | Self::NoticeBoardRefused { .. }
+            | Self::NoticeBoardPapers { .. }
+            | Self::NoticesTakenDown { .. }
             | Self::FieldRaidNotice { .. }
             | Self::FieldBossWaking { .. }
             | Self::FieldBossSleeping { .. }

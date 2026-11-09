@@ -179,6 +179,7 @@ mod movement;
 mod music;
 mod notice_board;
 pub use notice_board::refusal_text as notice_board_refusal_text;
+pub(crate) use notice_board::BOARD_SIGHT_M;
 mod perception;
 mod player_trade;
 mod social;
@@ -251,6 +252,8 @@ pub struct SharedState {
     pub stalls: HashMap<u64, onlinerpg_shared::stall::Stall>,
     pub open_stall: Option<stall::StallPanel>,
     pub open_notice_board: Option<notice_board::NoticeBoardPanel>,
+    /// Boards whose last peek showed an expired paper, for the registrar's notice round.
+    pub boards_with_expired_notices: HashSet<u32>,
     /// Our own bag (from InventoryState/InventoryUpdated), so a trading
     /// NPC knows what it carries.
     pub self_bag: Vec<onlinerpg_shared::inventory::ItemInstance>,
@@ -482,6 +485,7 @@ impl SharedState {
             stalls: HashMap::new(),
             open_stall: None,
             open_notice_board: None,
+            boards_with_expired_notices: HashSet::new(),
             self_bag: Vec::new(),
             self_equipped: HashMap::new(),
             trade_satiated_until: None,

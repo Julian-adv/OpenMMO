@@ -1,10 +1,11 @@
 use super::*;
 use onlinerpg_shared::notice_board::{
-    NoticeBoardRefusal, NoticeComment, NoticePost, NoticePostSummary, NOTICE_TITLE_MAX_CHARS,
+    notice_excerpt, NoticeBoardRefusal, NoticeComment, NoticePost, NoticePostSummary,
+    NOTICE_TITLE_MAX_CHARS,
 };
 
 /// Boards listed in the world state.
-const BOARD_SIGHT_M: f32 = 30.0;
+pub(crate) const BOARD_SIGHT_M: f32 = 30.0;
 /// An open board stays in the prompt only while the agent stands at it.
 const BOARD_PANEL_M: f32 = 6.0;
 const LISTED_POSTS: usize = 10;
@@ -39,6 +40,19 @@ pub fn refusal_text(reason: NoticeBoardRefusal) -> &'static str {
         }
         NoticeBoardRefusal::PostMissing => "that post does not exist on this board",
         NoticeBoardRefusal::CommentsFull => "that post has no room for more comments",
+        NoticeBoardRefusal::NoPaper => {
+            "you have no Notice Paper; buy one from Aldwin the land registrar (2 silver)"
+        }
+        NoticeBoardRefusal::BadImage => "that picture is not available",
+        NoticeBoardRefusal::NotRegistrar => "only the land registrar takes notices down",
+        NoticeBoardRefusal::NothingExpired => "no post on that board has expired",
+        NoticeBoardRefusal::CoversOthers => {
+            "that spot would hide too much of someone else's notice"
+        }
+        NoticeBoardRefusal::BoardFull => "the board has no free space left",
+        NoticeBoardRefusal::TooManyPosts => {
+            "you already have 3 current posts on that board; wait until one expires"
+        }
         NoticeBoardRefusal::ServerError => "the server failed to save it; try later",
     }
 }
@@ -61,6 +75,12 @@ impl SharedState {
         ));
     }
 
+    pub(super) fn on_notices_taken_down(&mut self, object_id: u32, count: u32) {
+        self.push_agent_event(format!(
+            "[Board] Took down {count} expired notices from board [board_id {object_id}]."
+        ));
+    }
+
     pub(super) fn on_notice_post(
         &mut self,
         object_id: u32,
@@ -79,9 +99,15 @@ impl SharedState {
         let summary = NoticePostSummary {
             id: post.id,
             title: post.title.clone(),
+            excerpt: notice_excerpt(&post.body),
             author: post.author.clone(),
             written_at: post.written_at.clone(),
             comment_count: comments.len() as u32,
+            x: post.x,
+            y: post.y,
+            image: post.image.clone(),
+            expired: post.expired,
+            mine: posts.iter().any(|p| p.id == post.id && p.mine),
         };
         match posts.iter().position(|p| p.id == post.id) {
             Some(i) => posts[i] = summary,
@@ -133,12 +159,19 @@ impl SharedState {
         }
         for post in panel.posts.iter().take(LISTED_POSTS) {
             lines.push(format!(
-                "  Post [post_id {}] \"{}\" by {}, {}, {} comments",
+                "  Post [post_id {}] \"{}\" by {}, {}, {} comments{}{}{}",
                 post.id,
                 clip(&post.title, NOTICE_TITLE_MAX_CHARS),
                 post.author,
                 post.written_at,
-                post.comment_count
+                post.comment_count,
+                if post.image.is_some() {
+                    ", with a picture"
+                } else {
+                    ""
+                },
+                if post.mine { ", yours" } else { "" },
+                if post.expired { ", EXPIRED" } else { "" }
             ));
         }
         if panel.posts.len() > LISTED_POSTS {

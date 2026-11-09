@@ -382,6 +382,14 @@
     "id": "notice_board",
     "name": "Notice Board",
     "procedural": "noticeBoard",
-    "noticeBoard": true
+    "noticeBoard": true,
+    "solid": true,
+    "footprint": {
+      "minX": -0.92,
+      "maxX": 0.92,
+      "minZ": -0.4,
+      "maxZ": 0.4,
+      "cellCoverage": 0.15
+    }
   }
 ]

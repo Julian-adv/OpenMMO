@@ -205,6 +205,8 @@ pub struct DriverConfig {
     /// Walk over to guests who sit down on a chair nearby and take their
     /// order. For NPCs that wait tables (the inn maid).
     pub serve_tables: bool,
+    /// Take down expired notices from boards in sight during the day.
+    pub notice_rounds: bool,
     /// Character names of every table-waiting NPC: never anyone's guest.
     pub maid_names: HashSet<String>,
     /// Curated order-taking spots for known chairs.
@@ -392,6 +394,44 @@ fn clear_entry(s: &SharedState, meal: &onlinerpg_shared::meal::Meal) -> Option<S
     ))
 }
 
+const NOTICE_ROUND_EVERY: Duration = Duration::from_secs(300);
+/// Walk to the board, take the papers down, then the schedule walks back.
+const NOTICE_ERRAND_DWELL: Duration = Duration::from_secs(20);
+
+/// During the day shift: peeks every board in sight, and returns a walk to
+/// the first one whose last peek showed an expired paper, with its id.
+async fn notice_round_errand(state: &Arc<Mutex<SharedState>>) -> Option<(ScheduleEntry, u32)> {
+    let mut s = state.lock().await;
+    let on_duty = s.time_context().0 == Some(onlinerpg_shared::schedule::SchedulePeriod::Day);
+    if !on_duty || s.player_trade_in_progress() || s.trade_busy {
+        return None;
+    }
+    let me = s.self_player.clone()?;
+    let boards = s
+        .world_cache
+        .read()
+        .unwrap()
+        .notice_boards_near(&me.position, crate::state::BOARD_SIGHT_M);
+    let due = boards
+        .iter()
+        .map(|(_, b)| b)
+        .find(|b| s.boards_with_expired_notices.contains(&b.id))
+        .cloned();
+    for (_, board) in &boards {
+        let cmd = onlinerpg_shared::ClientMessage::PeekNoticeBoard {
+            object_id: board.id,
+        };
+        if let Err(e) = s.send_command(cmd).await {
+            error!("Failed to peek notice board: {e}");
+        }
+    }
+    let board = due?;
+    s.boards_with_expired_notices.remove(&board.id);
+    let floor = u8::try_from(board.floor_level).ok()?;
+    let entry = chair_flank_entry(&s, board.x, board.z, floor, board.y, "the notice board");
+    Some((entry, board.id))
+}
+
 fn running(handle: &Option<tokio::task::JoinHandle<()>>) -> bool {
     handle.as_ref().is_some_and(|h| !h.is_finished())
 }
@@ -426,6 +466,7 @@ pub async fn llm_driver(
         schedule,
         sickroom,
         serve_tables,
+        notice_rounds,
         maid_names,
         tables,
         claims,
@@ -517,6 +558,7 @@ pub async fn llm_driver(
     // A table walk runs as a background task so the [Guest] prompt's LLM
     // round trip overlaps the walk instead of waiting for arrival.
     let mut visit_walk: Option<tokio::task::JoinHandle<()>> = None;
+    let mut next_notice_round = Instant::now() + NOTICE_ROUND_EVERY;
     // When each abandoned plate was first seen, so the maid gives the guest
     // a moment before clearing; plates served to us and when we ate them.
     let mut abandoned_since: std::collections::HashMap<u64, Instant> =
@@ -1061,6 +1103,32 @@ pub async fn llm_driver(
             active_schedule = (None, None);
         }
 
+        // === Notice round: the registrar takes down expired papers ===
+        if notice_rounds
+            && Instant::now() >= next_notice_round
+            && attack_target.is_none()
+            && visit_until.is_none()
+            && !running(&visit_walk)
+            && !running(&unload_trip)
+        {
+            next_notice_round = Instant::now() + NOTICE_ROUND_EVERY;
+            if let Some((walk, board_id)) = notice_round_errand(&state).await {
+                info!("[{label}] taking down expired notices");
+                movement::stop_current_entry(&state, &schedule, active_schedule.0, &label).await;
+                let walk_state = Arc::clone(&state);
+                visit_walk = Some(tokio::spawn(async move {
+                    movement::execute_schedule_move(&walk_state, &walk).await;
+                    let cmd = onlinerpg_shared::ClientMessage::TakeDownNotices {
+                        object_id: board_id,
+                    };
+                    if let Err(e) = walk_state.lock().await.send_command(cmd).await {
+                        error!("Failed to send take-down: {e}");
+                    }
+                }));
+                visit_until = Some(Instant::now() + NOTICE_ERRAND_DWELL);
+            }
+        }
+
         // === Check schedule transitions ===
         if !schedule.is_empty() && attack_target.is_none() && visit_until.is_none() {
             let due = resolve_due_schedule(&state, &schedule).await;
@@ -1589,6 +1657,7 @@ mod tests {
             schedule: Vec::new(),
             sickroom: Vec::new(),
             serve_tables: false,
+            notice_rounds: false,
             maid_names: HashSet::new(),
             tables: Vec::new(),
             claims: Arc::default(),

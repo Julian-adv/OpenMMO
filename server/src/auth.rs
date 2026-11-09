@@ -27,7 +27,7 @@ mod notice_board;
 use crate::world_config::world_config;
 pub(crate) use land::EstateCleanup;
 pub use land::{LandAccount, OwnedLandPlot};
-pub use notice_board::{BoardKey, PostView};
+pub use notice_board::{BoardKey, NewNoticePost, NoticeClock, PostView, StoredPaper};
 use onlinerpg_shared::inventory::EquipSlot;
 use onlinerpg_shared::messages::FriendEntry;
 use onlinerpg_shared::xp;

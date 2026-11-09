@@ -741,6 +741,7 @@ fn ends_entry_grace(msg: &ClientMessage) -> bool {
             | ClientMessage::ResyncWorld
             | ClientMessage::EnvReport(_)
             | ClientMessage::RequestFriendsOnline
+            | ClientMessage::PeekNoticeBoard { .. }
     )
 }
 
@@ -2002,10 +2003,36 @@ async fn handle_client_message(
             object_id,
             title,
             body,
+            image,
+            position,
         } => {
             if let Some(id) = &state.require_in_game("write notice post") {
                 game_state
-                    .write_notice_post(id, object_id, &title, &body, auth_service)
+                    .write_notice_post(
+                        id,
+                        object_id,
+                        &title,
+                        &body,
+                        image.as_deref(),
+                        position,
+                        auth_service,
+                    )
+                    .await;
+            }
+        }
+
+        ClientMessage::PeekNoticeBoard { object_id } => {
+            if let Some(id) = &state.require_in_game("peek notice board") {
+                game_state
+                    .peek_notice_board(id, object_id, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::TakeDownNotices { object_id } => {
+            if let Some(id) = &state.require_in_game("take down notices") {
+                game_state
+                    .take_down_notices(id, object_id, auth_service)
                     .await;
             }
         }

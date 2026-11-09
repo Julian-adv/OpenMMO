@@ -426,5 +426,7 @@
   "blackvein_ore.description": "紫の筋が走る黒い鉱石の塊。商人が重さで買い取ります。",
   "blackvein_ore.name": "黒脈鉱石",
   "blackvein_crystal_shard.description": "芯にかすかな青い光を宿す冷たい黒紫の欠片。収集家が高く買います。",
-  "blackvein_crystal_shard.name": "黒脈水晶の欠片"
+  "blackvein_crystal_shard.name": "黒脈水晶の欠片",
+  "notice_paper.description": "印紙を押した掲示板用の紙。掲示板に貼るたびに一枚使います。",
+  "notice_paper.name": "掲示用紙"
 }

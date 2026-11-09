@@ -50,11 +50,17 @@ fn boards_nearby_and_an_open_post_reach_the_world_state_clipped() {
             author: "jake5".into(),
             written_at: at(5),
             comment_count: 0,
+            excerpt: String::new(),
+            x: 500,
+            y: 500,
+            image: Some("a".repeat(64)),
+            expired: true,
+            mine: false,
         }],
     });
     let world = state.format_world_state();
     assert!(
-        world.contains("Post [post_id 4] \"Party wanted\" by jake5, 0223-04-13 05:05, 0 comments")
+        world.contains("Post [post_id 4] \"Party wanted\" by jake5, 0223-04-13 05:05, 0 comments, with a picture, EXPIRED")
     );
 
     let comments = (0..12)
@@ -73,6 +79,10 @@ fn boards_nearby_and_an_open_post_reach_the_world_state_clipped() {
             body: "x".repeat(500),
             author: "jake5".into(),
             written_at: at(5),
+            x: 500,
+            y: 500,
+            image: None,
+            expired: false,
         },
         comments,
     });

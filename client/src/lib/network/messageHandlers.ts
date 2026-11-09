@@ -21,6 +21,7 @@ import {
 } from './altarMessages'
 import {
   handleNoticeBoard,
+  handleNoticeBoardPapers,
   handleNoticeBoardRefused,
   handleNoticePostView,
 } from '../stores/noticeBoardStore'
@@ -2150,6 +2151,10 @@ export function handleServerMessage(
 
     case 'NoticeBoardRefused':
       handleNoticeBoardRefused(data.reason)
+      break
+
+    case 'NoticeBoardPapers':
+      handleNoticeBoardPapers(data)
       break
 
     case 'FieldRaidNotice':

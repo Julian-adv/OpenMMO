@@ -560,6 +560,8 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::NoticeBoard { .. } => "NoticeBoard",
         ServerMessage::NoticePostView { .. } => "NoticePostView",
         ServerMessage::NoticeBoardRefused { .. } => "NoticeBoardRefused",
+        ServerMessage::NoticeBoardPapers { .. } => "NoticeBoardPapers",
+        ServerMessage::NoticesTakenDown { .. } => "NoticesTakenDown",
         ServerMessage::FieldRaidNotice { .. } => "FieldRaidNotice",
         ServerMessage::FieldBossWaking { .. } => "FieldBossWaking",
         ServerMessage::FieldBossSleeping { .. } => "FieldBossSleeping",

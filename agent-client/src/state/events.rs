@@ -1110,6 +1110,16 @@ impl SharedState {
                     super::notice_board_refusal_text(*reason)
                 ));
             }
+            ServerMessage::NoticeBoardPapers { object_id, papers } => {
+                if papers.iter().any(|p| p.expired) {
+                    self.boards_with_expired_notices.insert(*object_id);
+                } else {
+                    self.boards_with_expired_notices.remove(object_id);
+                }
+            }
+            ServerMessage::NoticesTakenDown { object_id, count } => {
+                self.on_notices_taken_down(*object_id, *count);
+            }
             ServerMessage::StallState {
                 stall_id,
                 owner_name,

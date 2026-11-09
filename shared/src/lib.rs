@@ -251,7 +251,7 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v140: village notice boards (`OpenNoticeBoard`, `ReadNoticePost`,
 /// `WriteNoticePost`, `WriteNoticeComment`; `NoticeBoard`, `NoticePostView`,
 /// `NoticeBoardRefused`).
-pub const PROTOCOL_VERSION: u32 = 140;
+pub const PROTOCOL_VERSION: u32 = 141;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

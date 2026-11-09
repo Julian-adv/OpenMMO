@@ -426,5 +426,7 @@
   "blackvein_ore.description": "보랏빛 줄이 박힌 검은 광석 덩어리. 상인들이 무게대로 사 갑니다.",
   "blackvein_ore.name": "검은맥 광석",
   "blackvein_crystal_shard.description": "속에서 푸른빛이 희미하게 도는 차가운 검보라 조각. 수집가들이 값을 잘 쳐 줍니다.",
-  "blackvein_crystal_shard.name": "검은맥 수정 조각"
+  "blackvein_crystal_shard.name": "검은맥 수정 조각",
+  "notice_paper.description": "인지가 찍힌 게시판용 종이. 게시판에 글을 붙일 때마다 한 장씩 씁니다.",
+  "notice_paper.name": "게시 용지"
 }

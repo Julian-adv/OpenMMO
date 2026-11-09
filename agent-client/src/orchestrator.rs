@@ -34,6 +34,9 @@ use onlinerpg_shared::schedule::{parse_conditions, ScheduleEntry};
 #[derive(Debug, Deserialize)]
 struct ScheduleFile {
     schedule: Vec<ScheduleEntry>,
+    /// Take down expired notices from boards in sight during the day.
+    #[serde(default)]
+    notice_rounds: bool,
 }
 
 /// Wrapper for deserializing a visit-spot file (sickroom.json, tables.json).
@@ -1144,7 +1147,9 @@ fn spawn_llm_task(
 
     let state = Arc::clone(state);
     let scheduler = scheduler.clone();
-    let schedule = load_json_file::<ScheduleFile>(npc.schedule_file.as_deref(), label)
+    let schedule_file = load_json_file::<ScheduleFile>(npc.schedule_file.as_deref(), label);
+    let notice_rounds = schedule_file.as_ref().is_some_and(|f| f.notice_rounds);
+    let schedule = schedule_file
         .map(|mut f| {
             let errors = parse_conditions(&mut f.schedule);
             for e in &errors {
@@ -1182,6 +1187,7 @@ fn spawn_llm_task(
         schedule,
         sickroom,
         serve_tables: npc.serve_tables.unwrap_or(false),
+        notice_rounds,
         maid_names: shared.maid_names.clone(),
         tables,
         claims: Arc::clone(&shared.claims),

@@ -80,6 +80,8 @@ const FORCE = process.argv.includes("--force");
 
 const catalog = JSON.parse(await readFile(CATALOG_PATH, "utf8"));
 const solidDefs = catalog.filter((d) => d.solid && d.model);
+// Procedural objects have no GLB; their catalog entry gives the footprint.
+const fixedDefs = catalog.filter((d) => d.solid && !d.model && d.footprint);
 
 async function mtimeMs(path) {
   try {
@@ -144,6 +146,7 @@ const io = new NodeIO()
 const round = (v) => +v.toFixed(3);
 
 const out = {};
+for (const def of fixedDefs) out[def.id] = def.footprint;
 for (const def of solidDefs) {
   const b = await measure(io, `${MODELS_DIR}/${def.model}`);
   out[def.id] = {

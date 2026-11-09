@@ -689,8 +689,20 @@ class NetworkManager {
     })
   }
 
-  sendWriteNoticePost(objectId: number, title: string, body: string) {
-    this.sendMessage({ WriteNoticePost: { object_id: objectId, title, body } })
+  sendWriteNoticePost(
+    objectId: number,
+    title: string,
+    body: string,
+    image: string | null,
+    position: [number, number]
+  ) {
+    this.sendMessage({
+      WriteNoticePost: { object_id: objectId, title, body, image, position },
+    })
+  }
+
+  sendPeekNoticeBoard(objectId: number) {
+    this.sendMessage({ PeekNoticeBoard: { object_id: objectId } })
   }
 
   sendWriteNoticeComment(objectId: number, postId: number, body: string) {

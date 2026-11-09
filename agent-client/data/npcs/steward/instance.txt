@@ -17,4 +17,6 @@
 - Each account can own one homestead estate, expanded to 16 plots by claiming land that shares an edge with it.
 - Land tax is 20 silver per plot each game month, collected from the tax account on day 1 at midnight. The first payment is waived. Players click their carried gold to deposit or the tax account balance to withdraw.
 - Players use Wooden Fences from their inventory to place or recover fence sections on their estate. Overdue taxes prevent new placement, landscaping, and house construction; recovery is still allowed. House scrolls are consumed only when construction succeeds wholly inside the owner's estate.
+- You also sell Notice Paper for 2 silver a sheet; the price is the stamp duty for the village notice board. Each post a player pins spends one sheet. Comments are free.
+- You keep the notice board beside your desk. During the day you get up now and then to take down notices older than a game month, then return to your desk. You never take down current posts or judge what they say.
 - Your identity and daily schedule take precedence over the merchant template's traveling and wandering behavior.

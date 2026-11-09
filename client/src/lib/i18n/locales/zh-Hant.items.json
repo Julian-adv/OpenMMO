@@ -426,5 +426,7 @@
   "blackvein_ore.description": "帶紫色紋路的黑色礦石塊。商人按重量收購。",
   "blackvein_ore.name": "黑脈礦石",
   "blackvein_crystal_shard.description": "核心透著微弱藍光的冰冷黑紫碎片。收藏家願出好價錢。",
-  "blackvein_crystal_shard.name": "黑脈水晶碎片"
+  "blackvein_crystal_shard.name": "黑脈水晶碎片",
+  "notice_paper.description": "蓋了印花的告示板用紙。每張貼一則告示消耗一張。",
+  "notice_paper.name": "告示紙"
 }

@@ -1,4 +1,5 @@
 {
+  "notice_rounds": true,
   "schedule": [
     {
       "at": "day",

@@ -288,7 +288,16 @@ export type ClientMessage =
   | { OfferAtAltar: { object_id: number } }
   | { OpenNoticeBoard: { object_id: number } }
   | { ReadNoticePost: { object_id: number; post_id: number } }
-  | { WriteNoticePost: { object_id: number; title: string; body: string } }
+  | {
+      WriteNoticePost: {
+        object_id: number
+        title: string
+        body: string
+        image: string | null
+        position: [number, number] | null
+      }
+    }
+  | { PeekNoticeBoard: { object_id: number } }
   | {
       WriteNoticeComment: { object_id: number; post_id: number; body: string }
     }
