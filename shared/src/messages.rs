@@ -596,6 +596,24 @@ pub enum ClientMessage {
     OfferAtAltar {
         object_id: u32,
     },
+    /// Clicked a notice board; answered with `NoticeBoard`.
+    OpenNoticeBoard {
+        object_id: u32,
+    },
+    ReadNoticePost {
+        object_id: u32,
+        post_id: i64,
+    },
+    WriteNoticePost {
+        object_id: u32,
+        title: String,
+        body: String,
+    },
+    WriteNoticeComment {
+        object_id: u32,
+        post_id: i64,
+        body: String,
+    },
     StartInstrument,
     InstrumentNotes {
         events: Vec<InstrumentNoteEvent>,
@@ -1000,6 +1018,8 @@ impl ClientMessage {
             | InteractObject { .. }
             | InspectAltar { .. }
             | OfferAtAltar { .. }
+            | WriteNoticePost { .. }
+            | WriteNoticeComment { .. }
             | StartInstrument
             | InstrumentNotes { .. }
             | PlaceHouse { .. }
@@ -1818,6 +1838,18 @@ pub enum ServerMessage {
         object_id: u32,
         status: AltarStatus,
     },
+    NoticeBoard {
+        object_id: u32,
+        posts: Vec<crate::notice_board::NoticePostSummary>,
+    },
+    NoticePostView {
+        object_id: u32,
+        post: crate::notice_board::NoticePost,
+        comments: Vec<crate::notice_board::NoticeComment>,
+    },
+    NoticeBoardRefused {
+        reason: crate::notice_board::NoticeBoardRefusal,
+    },
     FieldRaidNotice {
         monster: String,
         outcome: FieldRaidOutcome,
@@ -2460,6 +2492,9 @@ impl ServerMessage {
             | Self::CapeTexturePrompt { .. }
             | Self::InteractionRejected { .. }
             | Self::AltarStatus { .. }
+            | Self::NoticeBoard { .. }
+            | Self::NoticePostView { .. }
+            | Self::NoticeBoardRefused { .. }
             | Self::FieldRaidNotice { .. }
             | Self::FieldBossWaking { .. }
             | Self::FieldBossSleeping { .. }

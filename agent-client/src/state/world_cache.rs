@@ -654,6 +654,53 @@ impl WorldCache {
             .min_by(|a, b| d2(a).total_cmp(&d2(b)))
     }
 
+    fn boards_within<'a>(
+        &'a self,
+        from: &'a Position,
+        max_dist: f32,
+    ) -> impl Iterator<Item = (f32, &'a FurniturePlacement)> + 'a {
+        self.furniture_placements
+            .values()
+            .flatten()
+            .filter(|p| onlinerpg_shared::notice_board::is_notice_board(&p.type_id))
+            .filter_map(move |p| {
+                let at = Position {
+                    x: p.x,
+                    y: p.y,
+                    z: p.z,
+                };
+                let dist = from.dist_xz_sq(&at).sqrt();
+                (dist <= max_dist).then_some((dist, p))
+            })
+    }
+
+    /// Notice boards within `max_dist` of `from` with their distance, nearest first.
+    pub fn notice_boards_near(
+        &self,
+        from: &Position,
+        max_dist: f32,
+    ) -> Vec<(f32, FurniturePlacement)> {
+        let mut boards: Vec<_> = self
+            .boards_within(from, max_dist)
+            .map(|(dist, p)| (dist, p.clone()))
+            .collect();
+        boards.sort_by(|a, b| a.0.total_cmp(&b.0));
+        boards
+    }
+
+    /// Notice board `board_id` nearest `from`, within `max_dist`.
+    pub fn notice_board(
+        &self,
+        board_id: u32,
+        from: &Position,
+        max_dist: f32,
+    ) -> Option<FurniturePlacement> {
+        self.boards_within(from, max_dist)
+            .filter(|(_, p)| p.id == board_id)
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, p)| p.clone())
+    }
+
     pub fn update_door(
         &mut self,
         house_id: &str,

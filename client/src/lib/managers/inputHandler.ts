@@ -125,6 +125,11 @@ export type ClickIntent =
       position: Position
     }
   | {
+      type: 'notice_board'
+      objectId: number
+      position: Position
+    }
+  | {
       /** Clicked someone's tip hat: opens the tip dialog once in range. */
       type: 'tip_hat'
       hatId: number
@@ -592,9 +597,13 @@ class InputHandler {
         let obj: THREE.Object3D | null = objectHit.object
         while (obj) {
           const d = obj.userData
-          if (d && d.objectId != null && d.objectAltar) {
+          if (
+            d &&
+            d.objectId != null &&
+            (d.objectAltar || d.objectNoticeBoard)
+          ) {
             return {
-              type: 'altar',
+              type: d.objectAltar ? 'altar' : 'notice_board',
               objectId: d.objectId as number,
               position: {
                 x: obj.position.x,

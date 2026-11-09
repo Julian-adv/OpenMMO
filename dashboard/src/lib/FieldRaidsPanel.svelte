@@ -55,15 +55,15 @@
         <thead>
           <tr>
             <th scope="col">끝난 시각</th><th scope="col">보스</th><th scope="col">결과</th>
-            <th scope="col" class="num">걸린 시간</th><th scope="col" class="num">남은 HP</th><th scope="col">참가자</th>
+            <th scope="col" class="num">걸린 시간</th><th scope="col" class="num">남은 HP</th><th scope="col" class="fill">참가자</th>
           </tr>
         </thead>
         <tbody>
           {#each raids.recent as raid (`${raid.boss}-${raid.ended_at}-${raid.summoned_at}`)}
             <tr>
-              <td>{formatDateTime(raid.ended_at)} KST</td>
-              <th scope="row" class="name">{raid.name}</th>
-              <td class="strong">{outcomeLabels[raid.outcome]}</td>
+              <td class="nowrap">{formatDateTime(raid.ended_at)} KST</td>
+              <th scope="row" class="name nowrap">{raid.name}</th>
+              <td class="strong nowrap">{outcomeLabels[raid.outcome]}</td>
               <td class="num">{formatCount(raidMinutes(raid))}분</td>
               <td class="num">{formatPercent(bossHealthLeft(raid))}</td>
               <td>
@@ -108,6 +108,8 @@
   .name { font-weight: 500; overflow-wrap: anywhere; }
   .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .strong { font-weight: 600; }
+  .nowrap { white-space: nowrap; }
+  .fill { width: 100%; }
   .sub { display: block; margin-top: 3px; color: #74857d; font-size: 11px; }
   .sub-heading { margin: 0; font-size: 13px; font-weight: 600; }
   .raiders { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }

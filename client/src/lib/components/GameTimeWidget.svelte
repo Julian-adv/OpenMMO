@@ -30,7 +30,7 @@
 <script lang="ts">
   import { MathUtils } from 'three'
   import { t } from '../i18n'
-  import { MONTH_NAME_KEYS } from '../data/gameCalendar'
+  import { formatCalendarDate } from '../data/gameCalendar'
   import { calendarShown } from '../stores/inventoryStore'
   import { currentDungeonDepth, isUnderground } from '../stores/dungeonStore'
   import { getSolarDaylightWindow } from '../utils/celestialSimulation'
@@ -225,12 +225,7 @@
   }
 
   function formatGameDate() {
-    const { year, month, day } = gameTimeState.date
-    const monthKey = MONTH_NAME_KEYS[month - 1]
-    const monthName = monthKey
-      ? $t(monthKey)
-      : $t('calendar.monthNumber', { month })
-    return $t('calendar.date', { year, monthName, day })
+    return formatCalendarDate($t, gameTimeState.date)
   }
 
   function formatGameTime() {

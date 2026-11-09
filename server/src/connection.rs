@@ -1982,6 +1982,46 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::OpenNoticeBoard { object_id } => {
+            if let Some(id) = &state.require_in_game("open notice board") {
+                game_state
+                    .open_notice_board(id, object_id, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::ReadNoticePost { object_id, post_id } => {
+            if let Some(id) = &state.require_in_game("read notice post") {
+                game_state
+                    .read_notice_post(id, object_id, post_id, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::WriteNoticePost {
+            object_id,
+            title,
+            body,
+        } => {
+            if let Some(id) = &state.require_in_game("write notice post") {
+                game_state
+                    .write_notice_post(id, object_id, &title, &body, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::WriteNoticeComment {
+            object_id,
+            post_id,
+            body,
+        } => {
+            if let Some(id) = &state.require_in_game("write notice comment") {
+                game_state
+                    .write_notice_comment(id, object_id, post_id, &body, auth_service)
+                    .await;
+            }
+        }
+
         ClientMessage::InspectAltar { object_id } => {
             if let Some(id) = &state.require_in_game("inspect altar") {
                 game_state.inspect_altar(id, object_id).await;

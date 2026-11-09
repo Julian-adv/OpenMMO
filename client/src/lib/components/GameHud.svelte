@@ -43,6 +43,8 @@
   import HouseDemolitionDialog from './HouseDemolitionDialog.svelte'
   import AltarOfferingDialog from './AltarOfferingDialog.svelte'
   import { altarOffering } from '../stores/altarStore'
+  import NoticeBoardPanel from './NoticeBoardPanel.svelte'
+  import { noticeBoard } from '../stores/noticeBoardStore'
   import { landClaimDialog } from '../stores/landClaimStore'
   import { capeDyeDialog } from '../stores/capeDyeStore'
   import CapeTextureDialog from './CapeTextureDialog.svelte'
@@ -492,6 +494,10 @@
     onConfirm={confirmAltarOffering}
     onCancel={() => altarOffering.set(null)}
   />
+{/if}
+
+{#if $noticeBoard}
+  <NoticeBoardPanel session={$noticeBoard} />
 {/if}
 
 {#if $houseDemolitionConfirmation}

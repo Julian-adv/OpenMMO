@@ -47,6 +47,7 @@ mod monster_ai_tests;
 mod monster_lifecycle_tests;
 mod mount_tests;
 mod movement_tests;
+mod notice_board_tests;
 mod party_tests;
 mod persistence_tests;
 mod petrify_tests;

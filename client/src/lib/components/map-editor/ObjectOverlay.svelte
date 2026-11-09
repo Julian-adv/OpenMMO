@@ -68,6 +68,7 @@
     buildShopSignText,
     getShopSignStyle,
   } from '../../utils/shop-sign'
+  import { buildNoticeBoard } from '../../utils/notice-board'
   import type { Unsubscriber } from 'svelte/store'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import { disposeObjectTree } from '../../utils/disposeObjectTree'
@@ -177,6 +178,7 @@
     if (def.procedural === 'shopSign') {
       return buildShopSignBoard(getShopSignStyle(def.shopSignStyle).board)
     }
+    if (def.procedural === 'noticeBoard') return buildNoticeBoard()
     return null
   }
 
@@ -651,6 +653,7 @@
     }
     if (catDef?.kind) clone.userData.objectKind = catDef.kind
     if (catDef?.altar) clone.userData.objectAltar = true
+    if (catDef?.noticeBoard) clone.userData.objectNoticeBoard = true
     return clone
   }
 

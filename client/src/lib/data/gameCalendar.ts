@@ -1,4 +1,4 @@
-import type { MessageKey } from '../i18n'
+import type { MessageKey, MessageValues } from '../i18n'
 
 export const MONTH_NAME_KEYS = [
   'calendar.month.dawnmere',
@@ -14,3 +14,15 @@ export const MONTH_NAME_KEYS = [
   'calendar.month.frostrest',
   'calendar.month.afterglow',
 ] as const satisfies readonly MessageKey[]
+
+/** "{year} {month name} {day}" in the viewer's language. */
+export function formatCalendarDate(
+  t: (key: MessageKey, values?: MessageValues) => string,
+  { year, month, day }: { year: number; month: number; day: number }
+): string {
+  const monthKey = MONTH_NAME_KEYS[month - 1]
+  const monthName = monthKey
+    ? t(monthKey)
+    : t('calendar.monthNumber', { month })
+  return t('calendar.date', { year, monthName, day })
+}

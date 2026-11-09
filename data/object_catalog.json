@@ -377,5 +377,11 @@
     "model": "objects/terraclash_altar.glb",
     "solid": true,
     "altar": true
+  },
+  {
+    "id": "notice_board",
+    "name": "Notice Board",
+    "procedural": "noticeBoard",
+    "noticeBoard": true
   }
 ]

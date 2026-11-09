@@ -20,6 +20,11 @@ import {
   handleFieldRaidNotice,
 } from './altarMessages'
 import {
+  handleNoticeBoard,
+  handleNoticeBoardRefused,
+  handleNoticePostView,
+} from '../stores/noticeBoardStore'
+import {
   playTeleportEffect,
   finishTeleportArrival,
   resetTeleportEffects,
@@ -2133,6 +2138,18 @@ export function handleServerMessage(
 
     case 'AltarStatus':
       handleAltarStatus(data)
+      break
+
+    case 'NoticeBoard':
+      handleNoticeBoard(data)
+      break
+
+    case 'NoticePostView':
+      handleNoticePostView(data)
+      break
+
+    case 'NoticeBoardRefused':
+      handleNoticeBoardRefused(data.reason)
       break
 
     case 'FieldRaidNotice':

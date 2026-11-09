@@ -103,6 +103,34 @@ fn clear_segment(cache: &PassabilityCache, from: Position, to: Position, floor: 
 }
 
 impl GameState {
+    /// The placement `object_id` within the player's reach that `accept`
+    /// takes, with its region.
+    pub(super) async fn reachable_placement(
+        &self,
+        player_id: &PlayerId,
+        object_id: u32,
+        accept: impl Fn(&FurniturePlacement) -> bool,
+    ) -> Option<((i32, i32), FurniturePlacement)> {
+        let players = self.players.read().await;
+        let player = players.get(player_id)?;
+        let index = self
+            .interaction_furniture
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
+        regions_around(player.position.x, player.position.z).find_map(|region| {
+            index.get(&region)?.iter().find_map(|p| {
+                (p.id == object_id
+                    && accept(p)
+                    && super::bed_rest::within_reach(
+                        player,
+                        placement_position(p),
+                        p.floor_level as i8,
+                    ))
+                .then(|| (region, p.clone()))
+            })
+        })
+    }
+
     pub(super) async fn interaction_placement(
         &self,
         player: &Player,

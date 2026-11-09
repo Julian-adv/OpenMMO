@@ -22,9 +22,12 @@ mod landscaping;
 mod loot_tally;
 #[path = "auth_metrics.rs"]
 mod metrics;
+#[path = "auth_notice_board.rs"]
+mod notice_board;
 use crate::world_config::world_config;
 pub(crate) use land::EstateCleanup;
 pub use land::{LandAccount, OwnedLandPlot};
+pub use notice_board::{BoardKey, PostView};
 use onlinerpg_shared::inventory::EquipSlot;
 use onlinerpg_shared::messages::FriendEntry;
 use onlinerpg_shared::xp;
@@ -990,6 +993,7 @@ impl AuthService {
         Self::ensure_fence_schema(conn)?;
         Self::ensure_landscaping_schema(conn)?;
         Self::ensure_estate_storage_schema(conn)?;
+        Self::ensure_notice_board_schema(conn)?;
 
         // Every inventory read and every save's DELETE filters on character_id;
         // without this SQLite full-scans the table once per character.

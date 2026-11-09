@@ -1251,6 +1251,62 @@ pub(super) async fn handle_response(
             continue;
         }
 
+        if let Some((board_id, sprint)) = action.notice_board() {
+            let cmd = match notice_board_command(action) {
+                Ok(cmd) => cmd,
+                Err(reason) => {
+                    let mut s = state.lock().await;
+                    s.push_agent_event(format!("[BoardFailed] {reason}."));
+                    continue;
+                }
+            };
+            let board = {
+                let s = state.lock().await;
+                s.self_player.as_ref().and_then(|p| {
+                    s.world_cache.read().unwrap().notice_board(
+                        board_id,
+                        &p.position,
+                        BOARD_REACH_SEARCH_M,
+                    )
+                })
+            };
+            let Some(board) = board else {
+                let mut s = state.lock().await;
+                s.push_agent_event(format!(
+                    "[BoardFailed] There is no notice board {board_id} nearby — use a board_id \
+                     the world state lists."
+                ));
+                continue;
+            };
+            let pos = onlinerpg_shared::Position {
+                x: board.x,
+                y: board.y,
+                z: board.z,
+            };
+            match walk_to_point(state, pos, board.floor_level as i8, BOARD_ARRIVE_M, sprint).await {
+                ChaseResult::InRange => {
+                    let mut s = state.lock().await;
+                    if let Err(e) = s.send_command(cmd).await {
+                        error!("Failed to send notice board action: {e}");
+                    }
+                }
+                ChaseResult::Lost(loss) => {
+                    let mut s = state.lock().await;
+                    s.push_agent_event(format!(
+                        "[BoardFailed] You could not get to notice board {board_id} — {}.",
+                        loss.clause()
+                    ));
+                }
+                ChaseResult::Error => {
+                    let mut s = state.lock().await;
+                    s.push_agent_event(format!(
+                        "[BoardFailed] You could not get to notice board {board_id}."
+                    ));
+                }
+            }
+            continue;
+        }
+
         // Smash a breakable prop in our own room: cross to the cell beside it
         // and ask the server, which owns the floor, proximity and kind checks.
         // Only a prop we share a room with counts, the way `open_chest` only
@@ -2550,5 +2606,84 @@ mod tests {
         assert_eq!(req.guest_id, s.self_player_id.unwrap());
         assert_eq!(req.chair_object_id, 41);
         assert_eq!(req.dishes, vec!["chicken_rice".to_string()]);
+    }
+}
+
+/// How far around the agent a `board_id` is looked up.
+const BOARD_REACH_SEARCH_M: f32 = 64.0;
+/// Inside the server's reach of 2.5 m from the board's origin.
+const BOARD_ARRIVE_M: f32 = 1.8;
+
+/// The server message for a notice board action, or why its text would be
+/// refused.
+fn notice_board_command(action: &AgentAction) -> Result<onlinerpg_shared::ClientMessage, String> {
+    use onlinerpg_shared::notice_board::{
+        validate_notice_text, NOTICE_BODY_MAX_CHARS, NOTICE_COMMENT_MAX_CHARS,
+        NOTICE_TITLE_MAX_CHARS,
+    };
+    use onlinerpg_shared::ClientMessage;
+    let checked = |text: &str, max: usize| {
+        validate_notice_text(text, max)
+            .map(str::to_string)
+            .map_err(|r| crate::state::notice_board_refusal_text(r).to_string())
+    };
+    Ok(match action {
+        AgentAction::ReadPost {
+            board_id, post_id, ..
+        } => ClientMessage::ReadNoticePost {
+            object_id: *board_id,
+            post_id: *post_id,
+        },
+        AgentAction::WritePost {
+            board_id,
+            title,
+            body,
+            ..
+        } => ClientMessage::WriteNoticePost {
+            object_id: *board_id,
+            title: checked(title, NOTICE_TITLE_MAX_CHARS)?,
+            body: checked(body, NOTICE_BODY_MAX_CHARS)?,
+        },
+        AgentAction::CommentPost {
+            board_id,
+            post_id,
+            body,
+            ..
+        } => ClientMessage::WriteNoticeComment {
+            object_id: *board_id,
+            post_id: *post_id,
+            body: checked(body, NOTICE_COMMENT_MAX_CHARS)?,
+        },
+        AgentAction::OpenBoard { board_id, .. } => ClientMessage::OpenNoticeBoard {
+            object_id: *board_id,
+        },
+        _ => return Err("not a notice board action".into()),
+    })
+}
+
+#[cfg(test)]
+mod notice_board_command_tests {
+    use super::*;
+    use onlinerpg_shared::ClientMessage;
+
+    #[test]
+    fn writes_are_checked_before_walking_and_trimmed_when_sent() {
+        let write = |title: &str, body: &str| {
+            notice_board_command(&AgentAction::WritePost {
+                board_id: 7,
+                title: title.into(),
+                body: body.into(),
+                sprint: None,
+            })
+        };
+        assert!(write("  ", "body").unwrap_err().contains("empty"));
+        assert!(write("t", &"x".repeat(2001))
+            .unwrap_err()
+            .contains("too long"));
+        assert!(matches!(
+            write(" Party ", "inn"),
+            Ok(ClientMessage::WriteNoticePost { object_id: 7, ref title, .. }) if title == "Party"
+        ));
+        assert!(AgentAction::Wait.notice_board().is_none());
     }
 }

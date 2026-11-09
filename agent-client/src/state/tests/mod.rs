@@ -4,6 +4,7 @@ mod events_tests;
 mod inventory_tests;
 mod movement_tests;
 mod music_tests;
+mod notice_board_tests;
 mod social_tests;
 mod stall_tests;
 mod teleport_tests;

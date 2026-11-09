@@ -286,6 +286,12 @@ export type ClientMessage =
   | { InteractObject: { object_type: string; object_id: number } }
   | { InspectAltar: { object_id: number } }
   | { OfferAtAltar: { object_id: number } }
+  | { OpenNoticeBoard: { object_id: number } }
+  | { ReadNoticePost: { object_id: number; post_id: number } }
+  | { WriteNoticePost: { object_id: number; title: string; body: string } }
+  | {
+      WriteNoticeComment: { object_id: number; post_id: number; body: string }
+    }
   | 'StopInteraction'
   | 'Heartbeat'
   | 'ResyncWorld'

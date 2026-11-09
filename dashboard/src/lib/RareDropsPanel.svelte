@@ -66,10 +66,10 @@
   th, td { padding: 13px 12px; border-bottom: 1px solid #edf1ee; text-align: left; vertical-align: top; }
   thead th { background: #f6f8f7; color: #74857d; font-size: 11px; font-weight: 500; white-space: nowrap; }
   tbody tr:last-child > * { border-bottom: 0; }
-  .name { font-weight: 500; overflow-wrap: anywhere; }
-  .chances span { display: block; color: #4d5d56; white-space: nowrap; }
+  .name { min-width: 9em; font-weight: 500; overflow-wrap: break-word; }
+  .chances span { display: block; color: #4d5d56; }
   .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .strong, .num strong { font-weight: 600; }
-  .sub { display: block; margin-top: 3px; color: #74857d; font-size: 11px; }
+  .sub { display: block; margin-top: 3px; white-space: normal; color: #74857d; font-size: 11px; }
   .chart-empty { min-height: 180px; }
 </style>

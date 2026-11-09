@@ -679,6 +679,26 @@ class NetworkManager {
     this.sendMessage({ OfferAtAltar: { object_id: objectId } })
   }
 
+  sendOpenNoticeBoard(objectId: number) {
+    this.sendMessage({ OpenNoticeBoard: { object_id: objectId } })
+  }
+
+  sendReadNoticePost(objectId: number, postId: number) {
+    this.sendMessage({
+      ReadNoticePost: { object_id: objectId, post_id: postId },
+    })
+  }
+
+  sendWriteNoticePost(objectId: number, title: string, body: string) {
+    this.sendMessage({ WriteNoticePost: { object_id: objectId, title, body } })
+  }
+
+  sendWriteNoticeComment(objectId: number, postId: number, body: string) {
+    this.sendMessage({
+      WriteNoticeComment: { object_id: objectId, post_id: postId, body },
+    })
+  }
+
   sendInteractObject(objectType: string, objectId: number) {
     this.sendMessage({
       InteractObject: {

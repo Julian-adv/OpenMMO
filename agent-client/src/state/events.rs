@@ -391,6 +391,7 @@ impl SharedState {
                     self.campfires.clear();
                     self.stalls.clear();
                     self.open_stall = None;
+                    self.open_notice_board = None;
                     self.tip_hats.clear();
                     self.meals.clear();
                     self.sighted_pois.clear();
@@ -787,6 +788,7 @@ impl SharedState {
                 }
                 self.stalls.clear();
                 self.open_stall = None;
+                self.open_notice_board = None;
                 for stall in stalls {
                     self.stalls.insert(stall.id, stall.clone());
                 }
@@ -1091,6 +1093,22 @@ impl SharedState {
                 if let Some(stall) = self.stalls.get_mut(stall_id) {
                     stall.sign.clone_from(sign);
                 }
+            }
+            ServerMessage::NoticeBoard { object_id, posts } => {
+                self.on_notice_board(*object_id, posts);
+            }
+            ServerMessage::NoticePostView {
+                object_id,
+                post,
+                comments,
+            } => {
+                self.on_notice_post(*object_id, post, comments);
+            }
+            ServerMessage::NoticeBoardRefused { reason } => {
+                self.push_agent_event(format!(
+                    "[BoardFailed] {}.",
+                    super::notice_board_refusal_text(*reason)
+                ));
             }
             ServerMessage::StallState {
                 stall_id,

@@ -1,11 +1,8 @@
 //! Field-boss sites, altar offerings and the raid they open
 //! (doc/TIER5_FIELD_RAID.md).
 
-use super::bed_rest::within_reach;
 use super::inventory::consume_one;
 use super::passability::region_of;
-use super::passability::regions_around;
-use super::player_interaction::placement_position;
 use super::GameState;
 use crate::auth::{unix_now, AuthService};
 use crate::metrics::{outcome_key, FieldRaidRaider, FieldRaidRecord};
@@ -187,23 +184,13 @@ impl GameState {
         player_id: &PlayerId,
         object_id: u32,
     ) -> Option<(FurniturePlacement, &'static FieldBossDef, &'static AltarDef)> {
-        let players = self.players.read().await;
-        let player = players.get(player_id)?;
-        let index = self
-            .interaction_furniture
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
-        regions_around(player.position.x, player.position.z)
-            .filter_map(|key| index.get(&key))
-            .flatten()
-            .find(|p| {
-                p.id == object_id
-                    && within_reach(player, placement_position(p), p.floor_level as i8)
+        let (_, altar) = self
+            .reachable_placement(player_id, object_id, |p| {
+                field_boss_by_altar(p.id).is_some()
             })
-            .and_then(|p| {
-                let (boss, altar) = field_boss_by_altar(p.id)?;
-                Some((p.clone(), boss, altar))
-            })
+            .await?;
+        let (boss, def) = field_boss_by_altar(altar.id)?;
+        Some((altar, boss, def))
     }
 
     /// What the altar would do for the player now, and the bag item it would take.

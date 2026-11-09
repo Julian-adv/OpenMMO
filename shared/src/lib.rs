@@ -33,6 +33,7 @@ pub mod monster_body;
 pub mod moon;
 pub mod mount;
 pub mod mount_movement;
+pub mod notice_board;
 pub mod pathfinding;
 pub mod pricing;
 pub mod reach;
@@ -247,7 +248,10 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// skill.
 /// v138: `PartyState.loot_shared` and `PartySetLoot` (`/party loot`).
 /// v139: custom female face and original hair and eye texture colors.
-pub const PROTOCOL_VERSION: u32 = 139;
+/// v140: village notice boards (`OpenNoticeBoard`, `ReadNoticePost`,
+/// `WriteNoticePost`, `WriteNoticeComment`; `NoticeBoard`, `NoticePostView`,
+/// `NoticeBoardRefused`).
+pub const PROTOCOL_VERSION: u32 = 140;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

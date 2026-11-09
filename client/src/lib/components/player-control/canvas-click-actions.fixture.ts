@@ -20,5 +20,6 @@ export function makeCanvasClickActions() {
     tradeAtStall: vi.fn(),
     eatMeal: vi.fn(),
     inspectAltar: vi.fn(),
+    openNoticeBoard: vi.fn(),
   } satisfies CanvasClickActions
 }

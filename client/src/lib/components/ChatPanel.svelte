@@ -4,6 +4,7 @@
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import { addChatMessage, gameStore } from '../stores/gameStore'
   import { partyRoster } from '../stores/partyStore'
+  import { isTypingTarget } from '../utils/dom'
   import {
     chatChannel,
     shouldBlockNpcTalkForPartyDraft,
@@ -325,6 +326,7 @@
   function handleGlobalKeydown(event: KeyboardEvent) {
     if ($instrumentPanelVisible) return
     if (event.isComposing || event.keyCode === 229) return
+    if (isTypingTarget(event.target)) return
     if (
       shouldFocusChatOnEnter(event, channelMenuOpen) &&
       document.activeElement !== chatInput

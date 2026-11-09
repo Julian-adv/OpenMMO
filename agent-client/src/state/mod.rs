@@ -177,6 +177,8 @@ mod events;
 mod inventory;
 mod movement;
 mod music;
+mod notice_board;
+pub use notice_board::refusal_text as notice_board_refusal_text;
 mod perception;
 mod player_trade;
 mod social;
@@ -248,6 +250,7 @@ pub struct SharedState {
     /// Laid-out stalls in our AOI, so a merchant knows its own is out.
     pub stalls: HashMap<u64, onlinerpg_shared::stall::Stall>,
     pub open_stall: Option<stall::StallPanel>,
+    pub open_notice_board: Option<notice_board::NoticeBoardPanel>,
     /// Our own bag (from InventoryState/InventoryUpdated), so a trading
     /// NPC knows what it carries.
     pub self_bag: Vec<onlinerpg_shared::inventory::ItemInstance>,
@@ -478,6 +481,7 @@ impl SharedState {
             campfires: HashMap::new(),
             stalls: HashMap::new(),
             open_stall: None,
+            open_notice_board: None,
             self_bag: Vec::new(),
             self_equipped: HashMap::new(),
             trade_satiated_until: None,
