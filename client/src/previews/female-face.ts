@@ -32,7 +32,7 @@ export async function showFemaleFace(
     `<fieldset id="face-controls" disabled>
       <legend>얼굴 살펴보기</legend>
       <label for="female-face">얼굴</label>
-      <select id="female-face"><option value="custom">새 얼굴</option><option value="default">기존 얼굴</option></select>
+      <select id="female-face"><option value="custom">새 얼굴</option><option value="ranger">순찰자 얼굴 (실험)</option><option value="default">기존 얼굴</option></select>
       <label for="face-hair">헤어</label>
       <select id="face-hair"><option value="bob">단발</option><option value="long">긴 머리</option><option value="ponytail">묶은 머리</option><option value="none">없음</option></select>
       <label for="face-view">시점</label>
@@ -54,7 +54,11 @@ export async function showFemaleFace(
   const view = select('face-view')
   const motion = select('face-motion')
   const params = new URLSearchParams(location.search)
-  face.value = params.get('face') === 'default' ? 'default' : 'custom'
+  const requestedFace = params.get('face')
+  face.value =
+    requestedFace === 'default' || requestedFace === 'ranger'
+      ? requestedFace
+      : 'custom'
   const requestedHair =
     params.get('hair') === 'warrior' ? 'long' : params.get('hair')
   hair.value =
@@ -81,11 +85,11 @@ export async function showFemaleFace(
     return asset
   }
   // ?source=preview shows the fitting source instead of the game's base.glb and face part.
-  const fitting = params.get('source') === 'preview'
+  const fitting = params.get('source') === 'preview' || face.value === 'ranger'
   const [base, facePart, hairstyle] = await Promise.all([
     load(
       fitting
-        ? `/__female-preview/${face.value === 'custom' ? 'face-custom' : 'base'}.glb`
+        ? `/__female-preview/${face.value === 'default' ? 'base' : `face-${face.value}`}.glb`
         : MODULAR_FEMALE_MODEL_PATH
     ),
     face.value === 'custom' && !fitting ? load(FEMALE_FACE_PART_PATH) : null,
@@ -132,7 +136,7 @@ export async function showFemaleFace(
       materials.add(material)
   })
   document.getElementById('face-stats')!.textContent =
-    `${face.value === 'custom' ? '새 얼굴' : '기존 얼굴'} · ${triangles.toLocaleString()}삼각형`
+    `${face.selectedOptions[0].textContent} · ${triangles.toLocaleString()}삼각형`
   const host = document.getElementById('viewport')!
   const renderer = new THREE.WebGLRenderer({ antialias: true })
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2))

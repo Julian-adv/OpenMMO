@@ -14,7 +14,7 @@ export const HAIR_FIT_DEFAULT = {
   'rotate-z': 0,
 }
 export type HairFit = typeof HAIR_FIT_DEFAULT
-export type HairFitFace = 'default' | 'custom'
+export type HairFitFace = 'default' | 'custom' | 'ranger'
 export type HairFitStyle = 'bob' | 'long' | 'ponytail'
 export type HairFits = Record<
   HairFitFace,

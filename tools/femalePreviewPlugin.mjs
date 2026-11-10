@@ -17,8 +17,13 @@ export function femalePreviewPlugin() {
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        if (req.method !== 'GET' || req.url?.split('?')[0] !== '/__female-preview/face-custom.glb') return next()
-        const target = new URL('../assets/modular_human_female_01/faces/tripo_custom_v1/base_custom_preview.glb', import.meta.url)
+        const faces = {
+          '/__female-preview/face-custom.glb': 'tripo_custom_v1/base_custom_preview.glb',
+          '/__female-preview/face-ranger.glb': 'tripo_ranger_v1/base_ranger.glb',
+        }
+        const face = faces[req.url?.split('?')[0]]
+        if (req.method !== 'GET' || !face) return next()
+        const target = new URL(`../assets/modular_human_female_01/faces/${face}`, import.meta.url)
         void stat(target).then(async info => {
           const etag = `W/"${info.size}-${info.mtimeMs}"`
           res.setHeader('Cache-Control', 'private, no-cache')

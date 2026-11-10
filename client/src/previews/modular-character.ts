@@ -96,6 +96,11 @@ async function main() {
     await showYsoldeTent(scene, resources, cleanup, () => disposed)
     return
   }
+  if (new URLSearchParams(location.search).get('asset') === 'ranger-head') {
+    const { showRangerHead } = await import('./ranger-head')
+    await showRangerHead(scene, resources, cleanup, () => disposed)
+    return
+  }
   if (new URLSearchParams(location.search).get('character') === 'ysolde') {
     const { showYsolde } = await import('./ysolde')
     await showYsolde(scene, resources, cleanup, () => disposed)

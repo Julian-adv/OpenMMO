@@ -8,6 +8,11 @@ NPC 제작 원본과 작업본은 `assets/npcs/<name>/`에 보관한다. 게임�
   겹침·가림·공통 리깅과 다른 세트 간 검증 기준. 2026-10-01 제작 원칙을 정리했다.
 - 3D 기준 테두리·공통 치수 확정과 기존 에셋 적용은 후속 작업이다.
 
+## 여성 순찰자 얼굴 실험 — 얼굴만 따로 생성 (2026-11-10)
+
+- [제작 기록](modular-female-ranger-face.md): 얼굴 클로즈업 원화(ImageGen, **ChatGPT Pro 20x**)로 Tripo API에서 머리만 생성해
+  여성 공통 리그에 연결했다. 2회 생성 각 120크레딧. 제작실 미리보기 전용이며 게임에는 연결하지 않았다.
+
 ## Modular Ranger — 순찰자 얼굴·헤어 (2026-10-08)
 
 - [분리 원화](modular-ranger-head-hair.md): OpenAI Codex built-in ImageGen, **ChatGPT Pro 20x**, 2026-10-07.

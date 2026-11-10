@@ -122,6 +122,14 @@ function modularCharacterPreview(): Plugin {
       '../assets/items/ysolde_camp_bed/ground-mattress.glb',
       import.meta.url
     ),
+    female_ranger_head_old: new URL(
+      '../assets/items/female_ranger_outfit/tripo_segmented_v1/original/model.glb',
+      import.meta.url
+    ),
+    female_ranger_head_new: new URL(
+      '../assets/items/female_ranger_outfit/tripo_head_v1/grafted.glb',
+      import.meta.url
+    ),
     ysolde: new URL('../assets/npcs/ysolde/rig_v1/ysolde.glb', import.meta.url),
     barkan: new URL(
       '../assets/monsters/barkan/rig_v1/barkan.glb',
