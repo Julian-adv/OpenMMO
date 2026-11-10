@@ -177,11 +177,11 @@ for (const node of custom.getRoot().listNodes()) {
 for (const material of custom.getRoot().listMaterials())
   if (material.getAlphaMode() !== 'OPAQUE') material.setExtras({ ...material.getExtras(), appearance_color_fixed: true })
 if (face === 'ranger') {
-  // No iris mask yet: the eyes keep their own colour. Head maps ship at 1024 for close-ups and 512 for the game view (user decision 2026-11-10).
+  // The flat-coloured lashes take no tint. Head maps ship at 1024 for close-ups and 512 for the game view (user decision 2026-11-10).
   for (const mesh of custom.getRoot().listMeshes()) {
     if (mesh === bodyMesh) continue
     const material = mesh.listPrimitives()[0].getMaterial()
-    material.setExtras({ ...material.getExtras(), appearance_color_fixed: true })
+    if (mesh.getName().startsWith('eyelashes')) material.setExtras({ ...material.getExtras(), appearance_color_fixed: true })
     for (const map of [material.getBaseColorTexture(), material.getNormalTexture(), material.getMetallicRoughnessTexture()]) {
       if (!map) continue
       map.setImage(new Uint8Array(await sharp(map.getImage()).resize(size, size, { kernel: 'lanczos3' })

@@ -430,7 +430,7 @@ describe('female modular starter outfits', () => {
       await applyCharacterArmor(first, armor)
       expect(count(first, 'helmet')).toBe(2166)
       expect(count(first, 'hair')).toBe(0)
-      expect(count(first)).toBe(53923)
+      expect(count(first)).toBe(54025)
       expect(count(second)).toBe(original)
       const covered = count(first, 'top')
       await applyCharacterArmor(first, { ...armor, head: null, hands: null })

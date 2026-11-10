@@ -19,6 +19,7 @@ import {
   step,
   texture,
   uniform,
+  uv,
   vec2,
   vec4,
 } from 'three/tsl'
@@ -50,6 +51,8 @@ type Eye = {
   redCut?: readonly [number, number]
   detailCut?: readonly [number, number]
   blueCut?: readonly [number, number]
+  // The mesh marks its eyeballs with uv1.x = 1, keeping the tint off the eyelids in front.
+  eyeballUv?: boolean
 }
 const DEFAULT_EYE: Eye = {
   x: [0.034, 0.034],
@@ -72,22 +75,13 @@ const FEMALE_EYE: Eye = {
   front: 0.05,
   detailCut: [0.12, 0.2],
 }
-const CUSTOM_FEMALE_EYE: Eye = {
-  x: [0.0338, 0.0322],
-  y: 1.685,
-  radius: [0.0088, 0.0058],
-  lowerRadius: 0.008,
-  edge: [0.95, 1],
-  front: 0.052,
-  detailCut: [0.5, 0.7],
-  blueCut: [0.38, 0.5],
-  upperLid: [
-    [0.02, 1.686],
-    [0.026, 1.6891],
-    [0.033, 1.6894],
-    [0.04, 1.6878],
-    [0.047, 1.6854],
-  ],
+// Iris centres and radius from the ranger face fit (fitting.json `irises`).
+const RANGER_FEMALE_EYE: Eye = {
+  x: [0.0319, 0.031],
+  y: 1.6842,
+  radius: [0.0068, 0.0068],
+  front: 0.03,
+  eyeballUv: true,
 }
 // Mean linear luminance of each female hair texture, so the chosen color is the mean albedo.
 const linearLuminance = (hex: string) => {
@@ -163,7 +157,7 @@ class AppearanceColors {
             const faceEye =
               appearance?.face === 'ranger' ? RANGER_EYE : DEFAULT_EYE
             const eye = customFace
-              ? CUSTOM_FEMALE_EYE
+              ? RANGER_FEMALE_EYE
               : female
                 ? FEMALE_EYE
                 : faceEye
@@ -219,7 +213,12 @@ class AppearanceColors {
                 positionGeometry.y
               ).oneMinus()
             }
-            const irisMask = mask.mul(red).mul(bright).mul(pigment).mul(lidMask)
+            const irisMask = mask
+              .mul(red)
+              .mul(bright)
+              .mul(pigment)
+              .mul(lidMask)
+              .mul(eye.eyeballUv ? uv(1).x : 1)
             const iris = this.eyes.mul(detail.mul(6).clamp(0.15, 1.2))
             material.colorNode = vec4(
               mix(

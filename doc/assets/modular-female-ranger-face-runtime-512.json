@@ -4,14 +4,14 @@
   "output": "client/public/models/characters/modular_female/face_ranger_512.glb",
   "inputs": {
     "client/public/models/characters/modular_female/base.glb": "80bc16d771cf2fa945431bcc3a85bce7c94531544889b1fcb113161fbbd37d32",
-    "assets/modular_human_female_01/faces/tripo_ranger_v1/base_ranger.glb": "bf875527884779b196dbcac4bb77c73f32ac4db0942452db73b096eae46e7fac"
+    "assets/modular_human_female_01/faces/tripo_ranger_v1/base_ranger.glb": "bb619f1809162db5843d3cfe0c4dda40a14f82c4920d7a58997a28b90ecd2e0b"
   },
-  "output_sha256": "4eba1b5e160cfc47b48e8fd4d5d6dc0b0bf393456be96dfb999b9d22c4859118",
-  "output_bytes": 1057188,
+  "output_sha256": "08b81e278e30f2024bad64beb87ad62f37815aac6cd1b5573f7a1704079f4dc0",
+  "output_bytes": 1061356,
   "base_body_triangles": 20799,
   "hidden_base_triangles": 5730,
-  "neck_strip_triangles": 662,
-  "neck_strip_vertices": 656,
+  "neck_strip_triangles": 669,
+  "neck_strip_vertices": 663,
   "head_and_eyelash_geometry_and_textures_preserved": false,
   "head_textures": "512 WebP q92",
   "neck_strip": "Custom body triangles at or above 1.502 m with their fitted positions; the neck-matched color and base.glb normal and ORM, with untouched texels flattened. Seam vertices below 1.502 m match base.glb in position, UV and weights.",
