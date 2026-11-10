@@ -24,6 +24,7 @@ import {
   FEMALE_BOOTS_PROPERTY,
   FEMALE_FACE_PART_PATH,
   FEMALE_GAME_FACE_PART_PATH,
+  releaseFemaleCloseup,
 } from './femaleCharacter'
 import { poseMainHandProp } from './handProps'
 import { updatePeltPhysics } from '../effects/pelt-rig'
@@ -125,6 +126,35 @@ describe.skipIf(!hasAssets)('female face selection', () => {
         .filter((mesh) => mesh.userData.female_part === 'face_ranger')
         .map((mesh) => mesh.geometry.index!.count)
     expect(triangles(game)).toEqual(triangles(closeup))
+  })
+
+  it('releases the close-up face part and loads it again on the next close-up', async () => {
+    const game = await loadCharacterModel(
+      MODULAR_FEMALE_MODEL_PATH,
+      undefined,
+      'game'
+    )
+    const closeup = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH)
+    // The headless loader skips images, so the part's geometry stands in for its GPU resources.
+    const buffers = (model: typeof game) =>
+      skinnedParts(model.scene)
+        .filter((mesh) => mesh.userData.female_part === 'face_ranger')
+        .map((mesh) => mesh.geometry)
+    const disposed = new Set<THREE.BufferGeometry>()
+    for (const geometry of [...buffers(closeup), ...buffers(game)])
+      geometry.addEventListener('dispose', () => disposed.add(geometry))
+    expect(buffers(closeup).length).toBeGreaterThan(0)
+    releaseFemaleCloseup()
+    for (const geometry of buffers(closeup))
+      expect(disposed.has(geometry)).toBe(true)
+    for (const geometry of buffers(game))
+      expect(disposed.has(geometry)).toBe(false)
+    expect(
+      await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH, undefined, 'game')
+    ).toBe(game)
+    expect(await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH)).not.toBe(
+      closeup
+    )
   })
 
   it('keeps the head intact across outfits, hair changes, animations and other players', async () => {

@@ -64,6 +64,8 @@
 - 2단 텍스처: `face_ranger.glb`(1024², 1.22MB)는 생성·선택 화면과 감정표현 미리보기처럼 캐릭터를 크게 보여 주는 화면에서,
   `face_ranger_512.glb`(512², 1.06MB)는 게임 화면의 플레이어(`PlayerModel`)에서 불러온다. 형상은 같고 머리·목 띠 텍스처 크기만 다르다.
   `loadCharacterModel`의 세 번째 인자 `'closeup' | 'game'`으로 고르며 단계별로 따로 캐시한다.
+  선택·생성 화면과 게임은 렌더러 하나를 같이 쓰므로, 게임 화면으로 넘어간 다음 프레임에 `releaseFemaleCloseup`이
+  1024² 파츠의 텍스처·지오메트리를 GPU에서 내리고 캐시에서 뺀다. 다음에 크게 보여 줄 때 다시 불러온다.
   `node tools/prepare-female-custom-face.mjs --face ranger --size 512`. [512² 파일 기록](modular-female-ranger-face-runtime-512.json).
 
 ## 남은 일

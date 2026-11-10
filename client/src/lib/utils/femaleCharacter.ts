@@ -6,7 +6,7 @@ import type {
   CharacterAppearance,
 } from '../network/networkTypes'
 import { getItemDef } from '../data/itemDefs'
-import { loadGLB } from './gltfCache'
+import { evictGLB, loadGLB } from './gltfCache'
 import {
   MODULAR_FEMALE_DIRECTORY,
   MODULAR_FEMALE_MODEL_PATH,
@@ -116,6 +116,9 @@ export const femaleBootsClipName = (clip: string, boots: string) =>
 const models = new Map<string, Promise<GLTF>>()
 const packs = new Map<string, Promise<GLTF>>()
 const pairedBaseClips = new WeakMap<GLTF, THREE.AnimationClip[]>()
+// The close-up face part and the assembled scenes holding their own copies of its geometry.
+let closeupFacePart: GLTF | undefined
+const closeupScenes: THREE.Object3D[] = []
 // Every female character wears the ranger face (user decision 2026-11-10); saved `default` and `custom` both show it.
 const FACE_PART = 'face_ranger'
 const FACE = 'ranger'
@@ -218,6 +221,10 @@ export function loadFemaleCharacter(
           FACE,
           facePart
         )
+        if (detail === 'closeup') {
+          closeupFacePart = facePart
+          closeupScenes.push(scene)
+        }
         return {
           ...base,
           scene,
@@ -232,6 +239,33 @@ export function loadFemaleCharacter(
     models.set(key, pending)
   }
   return pending
+}
+
+/**
+ * Frees the close-up face part's GPU memory and cached copies. The selection screen and the game share
+ * one renderer, so without this the 1024 maps stay in VRAM beside the game part's 512 ones.
+ * Call once no close-up character is on screen; the next close-up loads the part again.
+ */
+export function releaseFemaleCloseup(): void {
+  for (const key of models.keys())
+    if (key.endsWith(':closeup')) models.delete(key)
+  evictGLB(FEMALE_FACE_PART_PATH)
+  for (const scene of closeupScenes.splice(0))
+    for (const mesh of skinnedParts(scene))
+      if (mesh.userData.female_part === FACE_PART) mesh.geometry.dispose()
+  closeupFacePart?.scene.traverse((node) => {
+    if (!(node instanceof THREE.Mesh)) return
+    node.geometry.dispose()
+    for (const material of [node.material].flat() as THREE.Material[]) {
+      for (const value of Object.values(material)) {
+        if (!(value instanceof THREE.Texture)) continue
+        value.dispose()
+        ;(value.image as { close?: () => void } | null)?.close?.()
+      }
+      material.dispose()
+    }
+  })
+  closeupFacePart = undefined
 }
 
 export function loadFemaleAnimationPack(path: string): Promise<GLTF> {

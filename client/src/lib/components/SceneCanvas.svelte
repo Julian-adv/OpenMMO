@@ -7,6 +7,7 @@
   import CharacterCreateScene from './CharacterCreateScene.svelte'
   import RenderFrameLimiter from './RenderFrameLimiter.svelte'
   import { createWebGPURenderer } from '../utils/renderer'
+  import { releaseFemaleCloseup } from '../utils/femaleCharacter'
 
   interface Props {
     screen: 'login' | 'character-select' | 'character-create' | 'game'
@@ -30,6 +31,13 @@
     isCurrentPlayerLoading = $bindable(false),
     isSceneCompiling = $bindable(true),
   }: Props = $props()
+
+  // The selection and creation scenes are gone a frame after the game screen takes over.
+  $effect(() => {
+    if (screen !== 'game') return
+    const frame = requestAnimationFrame(releaseFemaleCloseup)
+    return () => cancelAnimationFrame(frame)
+  })
 </script>
 
 <Canvas

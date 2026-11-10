@@ -37,6 +37,11 @@ export function configureGLTFRenderer(renderer: WebGPURenderer): void {
   })
 }
 
+/** Drops a parsed GLB so its next load downloads and parses again; the caller disposes what it held. */
+export function evictGLB(url: string): void {
+  cache.delete(url)
+}
+
 export function loadGLB(url: string): Promise<GLTF> {
   const cached = cache.get(url)
   if (cached) return Promise.resolve(cached)
