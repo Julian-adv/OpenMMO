@@ -957,7 +957,7 @@ impl GameState {
             }
 
             // Validate distance and floor
-            if !is_player_near_door(
+            if let Err(reason) = door_reach(
                 room,
                 &house.origin,
                 wall_dir,
@@ -965,6 +965,19 @@ impl GameState {
                 &player_pos,
                 player_floor,
             ) {
+                warn!(
+                    "toggle_door refused: {} at ({:.1},{:.1},{:.1}) floor {} -> house {} room {} {:?} segment {}: {}",
+                    self.player_name_of(player_id).await,
+                    player_pos.x,
+                    player_pos.y,
+                    player_pos.z,
+                    player_floor,
+                    house_id,
+                    room_index,
+                    wall_dir,
+                    segment_index,
+                    reason
+                );
                 return None;
             }
 
@@ -1120,24 +1133,20 @@ where
 
 const MAX_DOOR_DISTANCE: f32 = 2.0;
 
-/// Check that the player is within range of a door and on the same floor.
-fn is_player_near_door(
+/// Why the player cannot work a door: a different floor, or out of range.
+fn door_reach(
     room: &RoomData,
     house_origin: &Position,
     wall_dir: WallDirection,
     segment_index: u32,
     player_pos: &Position,
     player_floor: i8,
-) -> bool {
+) -> Result<(), String> {
     // Exact floor match. Clients report 0 outdoors (entering a ground
     // floor door is floor 0 on both sides); negative floors are dungeon
     // depths and never match house doors.
     if player_floor != room.floor_level as i8 {
-        warn!(
-            "toggle_door: wrong floor — player floor={} door floor={}",
-            player_floor, room.floor_level
-        );
-        return false;
+        return Err(format!("wrong floor, door floor {}", room.floor_level));
     }
 
     let seg_center = segment_index as f32 + 0.5;
@@ -1161,16 +1170,11 @@ fn is_player_near_door(
     let dz = player_pos.z - world_z;
     let dist_sq = dx * dx + dz * dz;
     if dist_sq > MAX_DOOR_DISTANCE * MAX_DOOR_DISTANCE {
-        warn!(
-            "toggle_door: too far — player ({:.1},{:.1}) door ({:.1},{:.1}) dist={:.2}",
-            player_pos.x,
-            player_pos.z,
-            world_x,
-            world_z,
+        return Err(format!(
+            "too far, door ({world_x:.1},{world_z:.1}) dist {:.2}",
             dist_sq.sqrt()
-        );
-        return false;
+        ));
     }
 
-    true
+    Ok(())
 }

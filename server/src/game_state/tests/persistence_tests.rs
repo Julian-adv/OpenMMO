@@ -192,6 +192,25 @@ fn make_door_test_house() -> onlinerpg_shared::housing::HouseData {
     house
 }
 
+#[test]
+fn door_reach_says_why_a_door_is_out_of_reach() {
+    let house = make_door_test_house();
+    let reach = |x: f32, floor: i8| {
+        let at = onlinerpg_shared::Position { x, y: 0.0, z: 10.5 };
+        crate::game_state::door_reach(
+            &house.rooms[0],
+            &house.origin,
+            WallDirection::North,
+            0,
+            &at,
+            floor,
+        )
+    };
+    assert_eq!(reach(10.5, 0), Ok(()));
+    assert!(reach(10.5, 1).unwrap_err().starts_with("wrong floor"));
+    assert!(reach(14.5, 0).unwrap_err().starts_with("too far"));
+}
+
 #[tokio::test]
 async fn open_door_state_is_stamped_onto_served_house_data() {
     let game_state = make_test_game_state("door_state_stamp");
