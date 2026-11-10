@@ -396,7 +396,8 @@
     getCharacterModelPath(characterClass, gender, npcPlayerId !== undefined)
   const modelPromise = loadCharacterModel(
     modelPath,
-    untrack(() => appearance)
+    untrack(() => appearance),
+    'game'
   ).then((g) => {
     activeGltfData = g
   })

@@ -10,6 +10,7 @@ import {
 } from './modelPaths'
 import {
   loadFemaleCharacter,
+  type CharacterDetail,
   loadFemaleAnimationPack,
   applyFemaleArmorAsync,
   disposeFemaleCharacter,
@@ -86,9 +87,10 @@ const soleOffsets: Record<ModularOutfit['boots'], number> = modularSoleOffsets
 
 export function loadCharacterModel(
   path: string,
-  appearance?: Pick<CharacterAppearance, 'face'>
+  appearance?: Pick<CharacterAppearance, 'face'>,
+  detail: CharacterDetail = 'closeup'
 ): Promise<GLTF> {
-  if (isModularFemaleModel(path)) return loadFemaleCharacter(path)
+  if (isModularFemaleModel(path)) return loadFemaleCharacter(path, detail)
   if (path !== MODULAR_MALE_MODEL_PATH) return loadGLB(path)
   const face =
     appearance?.face === 'custom' ? 'default' : (appearance?.face ?? 'default')

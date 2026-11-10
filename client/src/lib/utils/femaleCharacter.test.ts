@@ -19,7 +19,12 @@ import {
 } from './modelPaths'
 import { skinnedParts } from './modularCharacter'
 import { loadGLB } from './gltfCache'
-import { FEMALE_BOOTS_PARTS, FEMALE_BOOTS_PROPERTY } from './femaleCharacter'
+import {
+  FEMALE_BOOTS_PARTS,
+  FEMALE_BOOTS_PROPERTY,
+  FEMALE_FACE_PART_PATH,
+  FEMALE_GAME_FACE_PART_PATH,
+} from './femaleCharacter'
 import { poseMainHandProp } from './handProps'
 import { updatePeltPhysics } from '../effects/pelt-rig'
 import { attachCapeFit, fitCapeToSkeleton } from '../effects/cape-rig'
@@ -99,6 +104,27 @@ describe.skipIf(!hasAssets)('female face selection', () => {
         path === MODULAR_VALKYRIE_MODEL_PATH ? 'valkyrie_hair' : 'ranger_hair'
       )
     }
+  })
+
+  it('loads the 512 face part for the game view and caches it apart from the close-up one', async () => {
+    const closeup = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH)
+    const game = await loadCharacterModel(
+      MODULAR_FEMALE_MODEL_PATH,
+      undefined,
+      'game'
+    )
+    expect(game).not.toBe(closeup)
+    expect(
+      await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH, undefined, 'game')
+    ).toBe(game)
+    const urls = vi.mocked(loadGLB).mock.calls.map(([url]) => url)
+    expect(urls).toContain(FEMALE_FACE_PART_PATH)
+    expect(urls).toContain(FEMALE_GAME_FACE_PART_PATH)
+    const triangles = (model: typeof game) =>
+      skinnedParts(model.scene)
+        .filter((mesh) => mesh.userData.female_part === 'face_ranger')
+        .map((mesh) => mesh.geometry.index!.count)
+    expect(triangles(game)).toEqual(triangles(closeup))
   })
 
   it('keeps the head intact across outfits, hair changes, animations and other players', async () => {

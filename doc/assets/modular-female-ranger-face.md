@@ -61,14 +61,16 @@
   저장된 눈색 값은 그대로 두며 지금은 표시에 쓰이지 않는다.
 - 헤어 보정은 `femaleHairFits.json`의 `ranger` 값을 쓴다(세 헤어 모두 아래로 1.5cm에서 시작).
 - **[미사용]** `face_custom.glb`와 여성 얼굴 썸네일 `female-face-custom.png`는 게임에서 더 이상 불러오지 않는다. 파일은 남겨 두었다.
-- 2단 텍스처(생성·선택 화면 1024², 게임 512²)는 아직 없다. 지금은 어디서나 1024²다.
+- 2단 텍스처: `face_ranger.glb`(1024², 1.22MB)는 생성·선택 화면과 감정표현 미리보기처럼 캐릭터를 크게 보여 주는 화면에서,
+  `face_ranger_512.glb`(512², 1.06MB)는 게임 화면의 플레이어(`PlayerModel`)에서 불러온다. 형상은 같고 머리·목 띠 텍스처 크기만 다르다.
+  `loadCharacterModel`의 세 번째 인자 `'closeup' | 'game'`으로 고르며 단계별로 따로 캐시한다.
+  `node tools/prepare-female-custom-face.mjs --face ranger --size 512`. [512² 파일 기록](modular-female-ranger-face-runtime-512.json).
 
 ## 남은 일
 
 - 안구 텍스처의 검은 반사 얼룩, 눈꺼풀에 그려진 속눈썹 그림자 띠, 눈색 착색 마스크.
 - 몸(번들거림)과 머리(무광)의 광택 차이, 후면 목의 옅은 색 경계.
-- 게임 화면용 512² 텍스처 단계, 여성 얼굴·헤어 썸네일 다시 렌더.
-- `face_ranger.glb`를 Hugging Face에 올리고 `assets.lock`에 넣어야 배포할 수 있다.
+- 여성 헤어 썸네일 다시 렌더.
 - 브라우저에서는 정면(헤어 없음·묶은 머리)만 확인했다. 나머지 시점·동작은 Blender 렌더로 확인했다.
 
 ```bash

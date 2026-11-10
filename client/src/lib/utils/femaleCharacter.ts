@@ -188,17 +188,24 @@ export function bindFemaleFacePart(scene: THREE.Object3D, facePart: GLTF) {
 }
 
 export const FEMALE_FACE_PART_PATH = `${MODULAR_FEMALE_DIRECTORY}/${FACE_PART}.glb`
+// Same geometry with 512 maps: in the game view a head covers a few dozen pixels.
+export const FEMALE_GAME_FACE_PART_PATH = `${MODULAR_FEMALE_DIRECTORY}/${FACE_PART}_512.glb`
+/** `closeup` for screens that frame the character large, `game` for players in the world. */
+export type CharacterDetail = 'closeup' | 'game'
 
 export function loadFemaleCharacter(
-  path = MODULAR_FEMALE_MODEL_PATH
+  path = MODULAR_FEMALE_MODEL_PATH,
+  detail: CharacterDetail = 'closeup'
 ): Promise<GLTF> {
-  const key = path
+  const key = `${path}:${detail}`
   let pending = models.get(key)
   if (!pending) {
     const names = [...FEMALE_PARTS, ...(VARIANTS[path]?.fixed ?? [])]
     pending = Promise.all([
       loadGLB(MODULAR_FEMALE_MODEL_PATH),
-      loadGLB(FEMALE_FACE_PART_PATH),
+      loadGLB(
+        detail === 'game' ? FEMALE_GAME_FACE_PART_PATH : FEMALE_FACE_PART_PATH
+      ),
       Promise.all(
         names.map((name) => loadGLB(`${MODULAR_FEMALE_DIRECTORY}/${name}.glb`))
       ),

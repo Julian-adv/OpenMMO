@@ -14,7 +14,11 @@ assert.ok(['custom', 'ranger'].includes(face))
 const source = face === 'custom'
   ? 'assets/modular_human_female_01/faces/tripo_custom_v1/base_custom_preview.glb'
   : 'assets/modular_human_female_01/faces/tripo_ranger_v1/base_ranger.glb'
-const output = `${directory}/face_${face}.glb`
+// `--size 512` builds the ranger part the game view loads; 1024 is the close-up part.
+const size = process.argv.includes('--size') ? Number(process.argv[process.argv.indexOf('--size') + 1]) : 1024
+assert.ok(size === 1024 || (face === 'ranger' && size === 512))
+const tier = size === 1024 ? '' : `_${size}`
+const output = `${directory}/face_${face}${tier}.glb`
 await Promise.all([MeshoptDecoder.ready, MeshoptEncoder.ready])
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({
   'meshopt.decoder': MeshoptDecoder, 'meshopt.encoder': MeshoptEncoder,
@@ -147,8 +151,8 @@ async function stripTexture(image, quality) {
   for (let i = 0; i < mask.length; i++) if (mask[i]) { count++; for (let c = 0; c < 3; c++) sum[c] += data[i * 3 + c] }
   for (let i = 0; i < mask.length; i++) if (!mask[i]) for (let c = 0; c < 3; c++) data[i * 3 + c] = Math.round(sum[c] / count)
   const flattened = sharp(data, { raw: { width, height, channels: 3 } })
-  // The ranger fit works on 4096 maps; the strip ships at the body's 1024.
-  return (face === 'ranger' && width > 1024 ? flattened.resize(1024, 1024, { kernel: 'lanczos3' }) : flattened).webp(quality).toBuffer()
+  // The ranger fit works on 4096 maps; the strip ships at the body's 1024, or at the game part's size.
+  return (face === 'ranger' && width > size ? flattened.resize(size, size, { kernel: 'lanczos3' }) : flattened).webp(quality).toBuffer()
 }
 const baseMaterial = original.getMaterial()
 const stripMaterial = strip.getMaterial()
@@ -173,14 +177,14 @@ for (const node of custom.getRoot().listNodes()) {
 for (const material of custom.getRoot().listMaterials())
   if (material.getAlphaMode() !== 'OPAQUE') material.setExtras({ ...material.getExtras(), appearance_color_fixed: true })
 if (face === 'ranger') {
-  // No iris mask yet: the eyes keep their own colour. Head maps ship at 1024 (user decision 2026-11-10).
+  // No iris mask yet: the eyes keep their own colour. Head maps ship at 1024 for close-ups and 512 for the game view (user decision 2026-11-10).
   for (const mesh of custom.getRoot().listMeshes()) {
     if (mesh === bodyMesh) continue
     const material = mesh.listPrimitives()[0].getMaterial()
     material.setExtras({ ...material.getExtras(), appearance_color_fixed: true })
     for (const map of [material.getBaseColorTexture(), material.getNormalTexture(), material.getMetallicRoughnessTexture()]) {
       if (!map) continue
-      map.setImage(new Uint8Array(await sharp(map.getImage()).resize(1024, 1024, { kernel: 'lanczos3' })
+      map.setImage(new Uint8Array(await sharp(map.getImage()).resize(size, size, { kernel: 'lanczos3' })
         .webp({ quality: 92, smartSubsample: true, effort: 5 }).toBuffer())).setMimeType('image/webp')
     }
   }
@@ -219,7 +223,7 @@ const report = {
   base_body_triangles: sourceIndices.length / 3, hidden_base_triangles: hideTriangles.length,
   neck_strip_triangles: stripTriangles.length, neck_strip_vertices: stripVertices.length,
   head_and_eyelash_geometry_and_textures_preserved: face === 'custom',
-  head_textures: face === 'custom' ? 'source images' : '1024 WebP q92',
+  head_textures: face === 'custom' ? 'source images' : `${size} WebP q92`,
   neck_strip: 'Custom body triangles at or above 1.502 m with their fitted positions; the neck-matched color and base.glb normal and ORM, with untouched texels flattened. Seam vertices below 1.502 m match base.glb in position, UV and weights.',
   outfit_masks: 'base.glb body masks apply unchanged; strip triangles follow the base triangle each one replaces',
   inverse_bind_matrices_match_canonical_body: true,
@@ -228,5 +232,5 @@ const report = {
   runtime: 'Bound onto base.glb as a part; base head, neck and default eyelashes hidden',
   appearance: 'Accepted fitted body, head and eyelash geometry and compressed PBR textures preserved',
 }
-await writeFile(`doc/assets/modular-female-${face}-face-runtime.json`, JSON.stringify(report, null, 2) + '\n')
+await writeFile(`doc/assets/modular-female-${face}-face-runtime${tier.replace('_', '-')}.json`, JSON.stringify(report, null, 2) + '\n')
 console.log(JSON.stringify(report))
