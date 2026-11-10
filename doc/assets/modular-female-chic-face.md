@@ -3,12 +3,12 @@
 2026-11-11. [순찰자 얼굴](modular-female-ranger-face.md)과 같은 절차로 만든 두 번째 여성 얼굴이다.
 얼굴만 따로 생성한 민머리 두상을 여성 공통 리그에 붙인다. 게임에 쓰는 것은 2차 시도(`tripo_chic_v2`)다.
 
-## 1차 시도 (`assets/modular_human_female_01/faces/tripo_chic_v1/`) — 미사용
+## 1차 시도 — 미사용, 파일 삭제
 
 사용자가 고른 인상(도도하고 시크한, 청회색 눈)으로 그린 뒤 "더 동안으로" 고친 원화로 생성했다.
 리그에 붙여 보니 순찰자 얼굴과 얼굴형·나이대가 비슷해 눈색 말고는 구별이 어려웠다(사용자 판단, 2026-11-11).
 원화 `face-closeup-v1.png`·`face-closeup-v2.png`·`face-bald-v1.png`(`face-sources.json`), Tripo seed 102033,
-task `25e44ff5-1d9a-45fa-b8da-f0622e7a9c25`, 120크레딧(4240 → 4120). 피팅 결과와 검토 렌더는 폴더에 남겨 두었다.
+task `25e44ff5-1d9a-45fa-b8da-f0622e7a9c25`, 120크레딧(4240 → 4120). 사용자 요청(2026-11-11)으로 작업 폴더 `tripo_chic_v1`은 지웠고 이 기록만 남긴다.
 배운 점: 3D와 작은 화면에서 남는 차이는 얼굴 길이·광대·턱선·눈 모양·눈썹 각도·입술 같은 골격과 화장이다.
 
 ## 원화 (`assets/modular_human_female_01/faces/tripo_chic_v2/`)
@@ -16,7 +16,7 @@ task `25e44ff5-1d9a-45fa-b8da-f0622e7a9c25`, 120크레딧(4240 → 4120). 피팅
 OpenAI Codex built-in ImageGen(`codex exec`, codex-cli 0.164.0), **ChatGPT Pro 20x**, 2026-11-11, OpenAI 생성 출력물 이용 조건 적용.
 프롬프트·해시·참고 이미지는 `face-sources.json`.
 
-- `face-closeup-v3.png`: 성숙하고 날카로운 인상(긴 얼굴, 높은 광대, 각진 턱, 가늘게 올라간 눈, 눈 밑 점). 미사용 — 덜 세게 해 달라는 요청.
+- `face-closeup-v3.png`: 성숙하고 날카로운 인상(긴 얼굴, 높은 광대, 각진 턱, 가늘게 올라간 눈, 눈 밑 점). 미사용 — 덜 세게 해 달라는 요청. 이미지는 지웠고 프롬프트만 `face-sources.json`에 남아 있다.
 - `face-closeup-v4.png`: v3의 미간을 펴고 볼을 채우고 화장을 옅게 한 것. 사용자 승인.
 - `face-bald-v1.png`: v4에서 머리카락과 옷을 지운 Tripo 입력. 순찰자 민머리 원화를 피부 톤 기준으로 같이 넣었다.
 
@@ -45,7 +45,7 @@ task `8a0f1d71-088d-4dae-ad4f-88c10a5ecc1e`, 120크레딧(4120 → 4000). Tripo 
   반지름(5.2mm)을 잰다. 이 투영 도구는 순찰자 얼굴의 기록된 정면 이미지와 같은 틀을 낸다(안구 마스크 IoU 0.998).
   오른쪽 눈 동공이 조금 일그러져 있다. 눈이 가늘어 크게 드러나지 않아 두었다.
 - 결과 `base_chic.glb`(몸체 15,729 + 머리 8,452 + 속눈썹 230 triangles), 기록 `fitting.json`,
-  검토 렌더 `rig-review.png`(위 시크·아래 순찰자), `neck-review.png`(아랫줄은 대기 자세).
+  피팅 도구가 다시 만드는 `face-eye-albedo.png`·`body-neck-*.png`와 검토 렌더는 사용자 요청(2026-11-11)으로 지웠다.
 
 ## 피부 톤
 
