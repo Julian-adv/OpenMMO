@@ -2,6 +2,7 @@ mod dungeon_tests;
 mod estate_storage_tests;
 mod events_tests;
 mod inventory_tests;
+mod mail_tests;
 mod movement_tests;
 mod music_tests;
 mod notice_board_tests;

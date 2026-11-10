@@ -1,7 +1,7 @@
-import { derived, writable } from 'svelte/store'
+import { writable } from 'svelte/store'
 import { translate, type MessageKey } from '../i18n'
 import { addChatMessage } from './gameStore'
-import { inventoryStore } from './inventoryStore'
+import { bagItemCount } from './inventoryStore'
 import type { ServerGameTime } from './timeStore'
 
 /** Mirrors shared/src/notice_board.rs. */
@@ -81,11 +81,7 @@ export function paperTilt(id: number): number {
   return (h / 999 - 0.5) * 0.14
 }
 
-export const noticePaperCount = derived(inventoryStore, (inv) =>
-  inv.bag
-    .filter((item) => item.item_def_id === NOTICE_PAPER_ITEM)
-    .reduce((sum, item) => sum + item.quantity, 0)
-)
+export const noticePaperCount = bagItemCount(NOTICE_PAPER_ITEM)
 
 /** `GameDateTime` in shared/src/world.rs. */
 export type GameDateTime = Omit<ServerGameTime, 'isNight'>

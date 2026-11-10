@@ -428,5 +428,9 @@
   "blackvein_crystal_shard.description": "芯にかすかな青い光を宿す冷たい黒紫の欠片。収集家が高く買います。",
   "blackvein_crystal_shard.name": "黒脈水晶の欠片",
   "notice_paper.description": "印紙を押した掲示板用の紙。掲示板に貼るたびに一枚使います。",
-  "notice_paper.name": "掲示用紙"
+  "notice_paper.name": "掲示用紙",
+  "letter.name": "便箋",
+  "letter.description": "切手代込みの便箋と封筒。どのポストに入れても手紙を一通送れます。",
+  "furniture_mailbox.name": "郵便ポスト",
+  "furniture_mailbox.description": "開封すると自分の領地に郵便ポストを置けます。誰でもこのポストで手紙を出し、受け取れます。"
 }

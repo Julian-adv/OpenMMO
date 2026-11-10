@@ -1731,6 +1731,13 @@
       networkManager.sendOpenNoticeBoard(intent.objectId)
     )
   }
+  function openMailbox(intent: Extract<ClickIntent, { type: 'mailbox' }>) {
+    approachAndAct({ position: intent.position, ...ALTAR_APPROACH }, () =>
+      networkManager.sendOpenMailbox({
+        Village: { object_id: intent.objectId },
+      })
+    )
+  }
 
   /** Step up to the table; the server decides shop front or stall panel. */
   function tradeAtStall(intent: Extract<ClickIntent, { type: 'stall' }>) {
@@ -2230,6 +2237,7 @@
       eatMeal,
       inspectAltar,
       openNoticeBoard,
+      openMailbox,
       breakProp,
       mineProp,
       pushCart,

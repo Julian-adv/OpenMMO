@@ -37,6 +37,14 @@ export const equippedArmor = derived(
 )
 export const itemLockMode = writable(false)
 
+/** Units of `itemDefId` in the bag. */
+export const bagItemCount = (itemDefId: string) =>
+  derived(inventoryStore, (inv) =>
+    inv.bag
+      .filter((item) => item.item_def_id === itemDefId)
+      .reduce((sum, item) => sum + item.quantity, 0)
+  )
+
 /** Mirrors the server's equip-target rule (`EquipSlot::alternate`). */
 const ALTERNATE_SLOT: Partial<Record<EquipSlot, EquipSlot>> = {
   ring: 'ring_left',

@@ -206,6 +206,14 @@
       "displayIds": [
         110
       ]
+    },
+    {
+      "objectType": "mailbox",
+      "itemDefId": "furniture_mailbox",
+      "price": 1500,
+      "displayIds": [
+        115
+      ]
     }
   ]
 }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte'
   import { t, type MessageKey } from '../i18n'
-  import { formatCalendarDate } from '../data/gameCalendar'
+  import { formatGameDateTime } from '../data/gameCalendar'
   import { networkManager } from '../network/socket'
   import { mountOverlay } from '../stores/overlayStack'
   import { capeTextureUrl, uploadCapeTexture } from '../utils/networkUtils'
@@ -98,10 +98,7 @@
     ].join(';')
   }
 
-  function formatTime(at: GameDateTime) {
-    const time = `${String(at.hour).padStart(2, '0')}:${String(at.minute).padStart(2, '0')}`
-    return `${formatCalendarDate($t, at)} ${time}`
-  }
+  const formatTime = (at: GameDateTime) => formatGameDateTime($t, at)
 
   function setView(next: NoticeBoardSession['view']) {
     noticeBoard.update((s) => (s ? { ...s, view: next, refusal: null } : s))

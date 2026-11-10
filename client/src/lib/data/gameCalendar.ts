@@ -26,3 +26,13 @@ export function formatCalendarDate(
     : t('calendar.monthNumber', { month })
   return t('calendar.date', { year, monthName, day })
 }
+
+const pad2 = (n: number) => String(n).padStart(2, '0')
+
+/** Calendar date plus HH:MM. */
+export function formatGameDateTime(
+  t: (key: MessageKey, values?: MessageValues) => string,
+  at: { year: number; month: number; day: number; hour: number; minute: number }
+): string {
+  return `${formatCalendarDate(t, at)} ${pad2(at.hour)}:${pad2(at.minute)}`
+}

@@ -963,7 +963,7 @@
 
   .cart-kind {
     flex-shrink: 0;
-    width: 14px;
+    min-width: 14px;
     font-weight: 700;
     text-align: center;
   }

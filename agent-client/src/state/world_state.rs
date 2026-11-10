@@ -471,6 +471,7 @@ Use the readiness status above. Wait for server success or failure feedback."#,
         }
         self.format_stalls(&mut lines);
         self.format_notice_boards(&mut lines);
+        self.format_mailboxes(&mut lines);
         if !self.self_bag.is_empty() {
             let items: Vec<String> = self
                 .self_bag

@@ -456,6 +456,8 @@
           networkManager.sendStartEstateFurnitureMove(chest.id)
       } else if (definition?.capacityKg)
         networkManager.sendOpenEstateChest(chest.id)
+      else if (getObjectDef(definition?.modelId)?.mailbox)
+        networkManager.sendOpenMailbox({ Estate: { furniture_id: chest.id } })
     }
     const escape = (event: KeyboardEvent) => {
       if (

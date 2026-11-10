@@ -40,6 +40,7 @@ mod inventory_tests;
 mod invisibility_tests;
 mod land_tests;
 mod landscaping_tests;
+mod mail_tests;
 mod mana_tests;
 mod meal_tests;
 mod metrics_tests;

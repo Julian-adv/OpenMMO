@@ -19,7 +19,7 @@ pub struct NoticeBoardPanel {
     pub open_post: Option<(NoticePost, Vec<NoticeComment>)>,
 }
 
-fn clip(text: &str, max_chars: usize) -> String {
+pub(super) fn clip(text: &str, max_chars: usize) -> String {
     let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
     if flat.chars().count() <= max_chars {
         flat

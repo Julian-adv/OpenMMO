@@ -1,3 +1,4 @@
+import type { MailboxRef } from '../stores/mailStore'
 import type { AbilityId } from '../data/abilities'
 import type { MonsterData } from '../types/Monster'
 import type { WallDirection } from '../utils/house-geometry'
@@ -298,6 +299,10 @@ export type ClientMessage =
       }
     }
   | { PeekNoticeBoard: { object_id: number } }
+  | { OpenMailbox: { mailbox: MailboxRef } }
+  | { ReadMail: { mailbox: MailboxRef; letter_id: number } }
+  | { SendMail: { mailbox: MailboxRef; recipient: string; body: string } }
+  | { DeleteMail: { mailbox: MailboxRef; letter_id: number } }
   | {
       WriteNoticeComment: { object_id: number; post_id: number; body: string }
     }

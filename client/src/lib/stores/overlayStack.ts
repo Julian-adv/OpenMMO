@@ -29,6 +29,7 @@ export type OverlayId =
   | 'houseDemolition'
   | 'altarOffering'
   | 'noticeBoard'
+  | 'mailbox'
   | 'capeTexture'
   | 'chatChannelMenu'
   | 'socialMenu'
@@ -65,6 +66,7 @@ const OVERLAYS: Record<OverlayId, { layer: number; close?: () => void }> = {
   houseDemolition: { layer: 3 },
   altarOffering: { layer: 3 },
   noticeBoard: { layer: 3 },
+  mailbox: { layer: 3 },
   capeTexture: { layer: 3 },
   worldMap: { layer: 4 },
   settings: { layer: 5 },

@@ -25,6 +25,7 @@
   import { tileToRegion } from '../../terrain/terrain-constants'
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
   import { objectManager } from '../../managers/objectManager'
+  import type { ObjectClickKind } from '../../managers/inputHandler'
   import { objectDefsById } from '../../data/objectCatalog'
   import { monsterManager } from '../../managers/monsterManager'
   import { shortestWrappedDeltaX } from '../../terrain/world-wrap'
@@ -652,11 +653,15 @@
       clone.userData.objectInteractOffset = catDef.interactOffset
     }
     if (catDef?.kind) clone.userData.objectKind = catDef.kind
-    if (catDef?.altar) clone.userData.objectAltar = true
-    if (catDef?.noticeBoard) {
-      clone.userData.objectNoticeBoard = true
-      mountNoticePapers(clone, p.id)
-    }
+    const clickKind: ObjectClickKind | null = catDef?.altar
+      ? 'altar'
+      : catDef?.noticeBoard
+        ? 'notice_board'
+        : catDef?.mailbox
+          ? 'mailbox'
+          : null
+    if (clickKind) clone.userData.objectClickKind = clickKind
+    if (catDef?.noticeBoard) mountNoticePapers(clone, p.id)
     return clone
   }
 

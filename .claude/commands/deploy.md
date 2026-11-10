@@ -119,6 +119,9 @@ as a backstop in case the deploy hangs and neither the marker nor an error appea
 
 ## 4. Verify it came up
 
+The restarted server deletes letters and notice posts older than 60 days and
+logs `pruned mail and notices older than 60 days` with the counts.
+
 ```bash
 ssh prod 'systemctl is-active openmmo-server openmmo-agent-client'
 ssh prod 'journalctl -u openmmo-server --since "2 min ago" -p err --no-pager -o cat | tail'

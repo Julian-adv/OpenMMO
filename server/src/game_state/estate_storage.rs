@@ -750,7 +750,7 @@ impl GameState {
         Ok(chest)
     }
 
-    async fn accessible_chest(
+    pub(super) async fn reachable_furniture(
         &self,
         player_id: &PlayerId,
         chest_id: i64,
@@ -797,7 +797,7 @@ impl GameState {
     }
 
     pub async fn open_estate_chest(&self, player_id: &PlayerId, chest_id: i64, auth: &AuthService) {
-        if let Err(error) = self.accessible_chest(player_id, chest_id).await {
+        if let Err(error) = self.reachable_furniture(player_id, chest_id).await {
             self.send_direct_message(
                 player_id,
                 ServerMessage::EstateChestState {
@@ -902,7 +902,7 @@ impl GameState {
                 },
             )
             .await;
-            if self.accessible_chest(player_id, chest_id).await.is_err() {
+            if self.reachable_furniture(player_id, chest_id).await.is_err() {
                 return;
             }
         }
@@ -919,7 +919,7 @@ impl GameState {
         expected_revision: u64,
         auth: &AuthService,
     ) -> Result<(), &'static str> {
-        self.accessible_chest(player_id, chest_id).await?;
+        self.reachable_furniture(player_id, chest_id).await?;
         if deposits.is_empty() && withdrawals.is_empty() {
             return Err("Select at least one item.");
         }

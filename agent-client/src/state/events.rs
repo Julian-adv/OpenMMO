@@ -392,6 +392,7 @@ impl SharedState {
                     self.stalls.clear();
                     self.open_stall = None;
                     self.open_notice_board = None;
+                    self.open_mailbox = None;
                     self.tip_hats.clear();
                     self.meals.clear();
                     self.sighted_pois.clear();
@@ -789,6 +790,7 @@ impl SharedState {
                 self.stalls.clear();
                 self.open_stall = None;
                 self.open_notice_board = None;
+                self.open_mailbox = None;
                 for stall in stalls {
                     self.stalls.insert(stall.id, stall.clone());
                 }
@@ -1116,6 +1118,22 @@ impl SharedState {
                 } else {
                     self.boards_with_expired_notices.remove(object_id);
                 }
+            }
+            ServerMessage::Mailbox { mailbox, letters } => self.on_mailbox(*mailbox, letters),
+            ServerMessage::MailLetter { mailbox, letter } => self.on_mail_letter(*mailbox, letter),
+            ServerMessage::MailSent { recipient } => {
+                self.push_agent_event(format!("[Mail] Your letter to {recipient} was sent."));
+            }
+            ServerMessage::MailRefused { reason } => {
+                self.push_agent_event(format!(
+                    "[MailFailed] {}.",
+                    super::mail_refusal_text(*reason)
+                ));
+            }
+            ServerMessage::MailNotice { unread } => {
+                self.push_ambient_event(format!(
+                    "[Mail] {unread} unread letters wait for you; open_mailbox at any mailbox to read them."
+                ));
             }
             ServerMessage::NoticesTakenDown { object_id, count } => {
                 self.on_notices_taken_down(*object_id, *count);

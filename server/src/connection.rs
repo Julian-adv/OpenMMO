@@ -787,6 +787,7 @@ async fn entry_notices(
     game_state: &GameState,
     state: &ConnectionState,
     auth_service: &Arc<AuthService>,
+    character_id: i64,
 ) -> Vec<ServerMessage> {
     let mut notices = Vec::new();
     if let Some(notice) = game_state.server_notice().await {
@@ -796,6 +797,11 @@ async fn entry_notices(
     }
     if state.is_official_npc {
         notices.push(game_state.pricing_notice(auth_service).await);
+    } else if let Some(mail) = game_state
+        .unread_mail_notice(character_id, auth_service)
+        .await
+    {
+        notices.push(mail);
     }
     notices
 }
@@ -1400,7 +1406,8 @@ async fn handle_client_message(
                     is_admin: state.is_admin,
                 }];
                 responses.extend(game_state.owner_state_messages(&id).await);
-                responses.extend(entry_notices(game_state, state, auth_service).await);
+                responses
+                    .extend(entry_notices(game_state, state, auth_service, character_id).await);
                 drop(player_persistence);
                 state.direct_rx = Some(game_state.register_connection_channel(&id).await);
                 game_state.send_resumed_state(&id).await;
@@ -1670,7 +1677,7 @@ async fn handle_client_message(
                 });
             }
             responses.extend(game_state.owner_state_messages(&id).await);
-            responses.extend(entry_notices(game_state, state, auth_service).await);
+            responses.extend(entry_notices(game_state, state, auth_service, character_id).await);
 
             let rejoin_floor = player.floor_level;
             let rejoin_pos = player.position;
@@ -2025,6 +2032,40 @@ async fn handle_client_message(
             if let Some(id) = &state.require_in_game("peek notice board") {
                 game_state
                     .peek_notice_board(id, object_id, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::OpenMailbox { mailbox } => {
+            if let Some(id) = &state.require_in_game("open mailbox") {
+                game_state.open_mailbox(id, mailbox, auth_service).await;
+            }
+        }
+
+        ClientMessage::ReadMail { mailbox, letter_id } => {
+            if let Some(id) = &state.require_in_game("read mail") {
+                game_state
+                    .read_mail(id, mailbox, letter_id, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::SendMail {
+            mailbox,
+            recipient,
+            body,
+        } => {
+            if let Some(id) = &state.require_in_game("send mail") {
+                game_state
+                    .send_mail(id, mailbox, &recipient, &body, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::DeleteMail { mailbox, letter_id } => {
+            if let Some(id) = &state.require_in_game("delete mail") {
+                game_state
+                    .delete_mail(id, mailbox, letter_id, auth_service)
                     .await;
             }
         }

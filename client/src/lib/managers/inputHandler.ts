@@ -82,6 +82,9 @@ const STAIR_CLICK_RAY_OFFSETS = [
   { dx: -10, dy: -10 },
 ]
 
+/** Catalog objects whose click opens a dialog; set as `userData.objectClickKind`. */
+export type ObjectClickKind = 'altar' | 'notice_board' | 'mailbox'
+
 export type ClickIntent =
   | {
       type: 'attack_monster'
@@ -126,6 +129,11 @@ export type ClickIntent =
     }
   | {
       type: 'notice_board'
+      objectId: number
+      position: Position
+    }
+  | {
+      type: 'mailbox'
       objectId: number
       position: Position
     }
@@ -597,13 +605,9 @@ class InputHandler {
         let obj: THREE.Object3D | null = objectHit.object
         while (obj) {
           const d = obj.userData
-          if (
-            d &&
-            d.objectId != null &&
-            (d.objectAltar || d.objectNoticeBoard)
-          ) {
+          if (d && d.objectId != null && d.objectClickKind) {
             return {
-              type: d.objectAltar ? 'altar' : 'notice_board',
+              type: d.objectClickKind as ObjectClickKind,
               objectId: d.objectId as number,
               position: {
                 x: obj.position.x,

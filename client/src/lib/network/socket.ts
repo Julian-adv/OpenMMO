@@ -38,6 +38,7 @@ import { resetLandClaimPreview, type LandClaim } from '../stores/landClaimStore'
 import { resetFences } from '../stores/fenceStore'
 import { resetHousePlacement } from '../stores/housePlacementStore'
 import { resetEstateStorage } from '../stores/estateStorageStore'
+import type { MailboxRef } from '../stores/mailStore'
 import type { FenceEdge } from '../terrain/fenceEdges'
 import type { LandscapingTool } from '../terrain/landscaping'
 import { remotePlayerManager } from '../managers/remotePlayerManager'
@@ -677,6 +678,22 @@ class NetworkManager {
 
   sendOfferAtAltar(objectId: number) {
     this.sendMessage({ OfferAtAltar: { object_id: objectId } })
+  }
+
+  sendOpenMailbox(mailbox: MailboxRef) {
+    this.sendMessage({ OpenMailbox: { mailbox } })
+  }
+
+  sendReadMail(mailbox: MailboxRef, letterId: number) {
+    this.sendMessage({ ReadMail: { mailbox, letter_id: letterId } })
+  }
+
+  sendMail(mailbox: MailboxRef, recipient: string, body: string) {
+    this.sendMessage({ SendMail: { mailbox, recipient, body } })
+  }
+
+  sendDeleteMail(mailbox: MailboxRef, letterId: number) {
+    this.sendMessage({ DeleteMail: { mailbox, letter_id: letterId } })
   }
 
   sendOpenNoticeBoard(objectId: number) {

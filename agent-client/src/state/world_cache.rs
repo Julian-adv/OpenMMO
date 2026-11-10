@@ -1,6 +1,13 @@
 use super::*;
 use onlinerpg_shared::estate_storage::EstateChest;
 
+#[derive(Debug, Clone)]
+pub struct MailboxSpot {
+    pub mailbox: onlinerpg_shared::mail::MailboxRef,
+    pub position: Position,
+    pub floor_level: i8,
+}
+
 mod estate_storage;
 
 /// Versioned world bodies and collision shared by independent NPC views.
@@ -699,6 +706,43 @@ impl WorldCache {
             .filter(|(_, p)| p.id == board_id)
             .min_by(|a, b| a.0.total_cmp(&b.0))
             .map(|(_, p)| p.clone())
+    }
+
+    /// Village and estate mailboxes within `max_dist` of `from`, nearest first.
+    pub fn mailboxes_near(&self, from: &Position, max_dist: f32) -> Vec<(f32, MailboxSpot)> {
+        use onlinerpg_shared::mail::{is_mailbox, is_mailbox_furniture, MailboxRef};
+        let village = self
+            .furniture_placements
+            .values()
+            .flatten()
+            .filter(|p| is_mailbox(&p.type_id))
+            .map(|p| MailboxSpot {
+                mailbox: MailboxRef::Village { object_id: p.id },
+                position: Position {
+                    x: p.x,
+                    y: p.y,
+                    z: p.z,
+                },
+                floor_level: p.floor_level as i8,
+            });
+        let estate = self
+            .estate_chests
+            .values()
+            .filter(|c| is_mailbox_furniture(&c.item_def_id))
+            .map(|c| MailboxSpot {
+                mailbox: MailboxRef::Estate { furniture_id: c.id },
+                position: c.position,
+                floor_level: c.floor_level,
+            });
+        let mut near: Vec<_> = village
+            .chain(estate)
+            .filter_map(|m| {
+                let dist = from.dist_xz_sq(&m.position).sqrt();
+                (dist <= max_dist).then_some((dist, m))
+            })
+            .collect();
+        near.sort_by(|a, b| a.0.total_cmp(&b.0));
+        near
     }
 
     pub fn update_door(

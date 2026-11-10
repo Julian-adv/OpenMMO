@@ -624,6 +624,24 @@ pub enum ClientMessage {
     TakeDownNotices {
         object_id: u32,
     },
+    /// Answered with `Mailbox`: the reader's own letters.
+    OpenMailbox {
+        mailbox: crate::mail::MailboxRef,
+    },
+    ReadMail {
+        mailbox: crate::mail::MailboxRef,
+        letter_id: i64,
+    },
+    /// Spends one letter paper.
+    SendMail {
+        mailbox: crate::mail::MailboxRef,
+        recipient: String,
+        body: String,
+    },
+    DeleteMail {
+        mailbox: crate::mail::MailboxRef,
+        letter_id: i64,
+    },
     WriteNoticeComment {
         object_id: u32,
         post_id: i64,
@@ -1036,6 +1054,7 @@ impl ClientMessage {
             | WriteNoticePost { .. }
             | WriteNoticeComment { .. }
             | TakeDownNotices { .. }
+            | SendMail { .. }
             | StartInstrument
             | InstrumentNotes { .. }
             | PlaceHouse { .. }
@@ -1875,6 +1894,24 @@ pub enum ServerMessage {
         object_id: u32,
         count: u32,
     },
+    Mailbox {
+        mailbox: crate::mail::MailboxRef,
+        letters: Vec<crate::mail::LetterSummary>,
+    },
+    MailLetter {
+        mailbox: crate::mail::MailboxRef,
+        letter: crate::mail::Letter,
+    },
+    MailSent {
+        recipient: String,
+    },
+    MailRefused {
+        reason: crate::mail::MailRefusal,
+    },
+    /// Unread letters waiting; sent on entering the game and when one arrives.
+    MailNotice {
+        unread: u32,
+    },
     FieldRaidNotice {
         monster: String,
         outcome: FieldRaidOutcome,
@@ -2522,6 +2559,11 @@ impl ServerMessage {
             | Self::NoticeBoardRefused { .. }
             | Self::NoticeBoardPapers { .. }
             | Self::NoticesTakenDown { .. }
+            | Self::Mailbox { .. }
+            | Self::MailLetter { .. }
+            | Self::MailSent { .. }
+            | Self::MailRefused { .. }
+            | Self::MailNotice { .. }
             | Self::FieldRaidNotice { .. }
             | Self::FieldBossWaking { .. }
             | Self::FieldBossSleeping { .. }

@@ -428,5 +428,9 @@
   "blackvein_crystal_shard.description": "속에서 푸른빛이 희미하게 도는 차가운 검보라 조각. 수집가들이 값을 잘 쳐 줍니다.",
   "blackvein_crystal_shard.name": "검은맥 수정 조각",
   "notice_paper.description": "인지가 찍힌 게시판용 종이. 게시판에 글을 붙일 때마다 한 장씩 씁니다.",
-  "notice_paper.name": "게시 용지"
+  "notice_paper.name": "게시 용지",
+  "letter.name": "편지지",
+  "letter.description": "우표값이 붙은 편지지와 봉투. 아무 우체통에 넣으면 편지 한 통을 보냅니다.",
+  "furniture_mailbox.name": "우체통",
+  "furniture_mailbox.description": "포장을 풀어 자신의 영지에 우체통을 놓습니다. 누구나 이 우체통에서 편지를 보내고 받을 수 있습니다."
 }

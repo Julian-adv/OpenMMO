@@ -1283,27 +1283,49 @@ pub(super) async fn handle_response(
                 y: board.y,
                 z: board.z,
             };
-            match walk_to_point(state, pos, board.floor_level as i8, BOARD_ARRIVE_M, sprint).await {
-                ChaseResult::InRange => {
+            let failure = format!("[BoardFailed] You could not get to notice board {board_id}");
+            walk_then_send(state, pos, board.floor_level as i8, sprint, cmd, &failure).await;
+            continue;
+        }
+
+        if let Some(sprint) = action.mail() {
+            let mailbox = {
+                let s = state.lock().await;
+                s.self_player.as_ref().and_then(|p| {
+                    s.world_cache
+                        .read()
+                        .unwrap()
+                        .mailboxes_near(&p.position, BOARD_REACH_SEARCH_M)
+                        .into_iter()
+                        .next()
+                        .map(|(_, m)| m)
+                })
+            };
+            let Some(mailbox) = mailbox else {
+                let mut s = state.lock().await;
+                s.push_agent_event(
+                    "[MailFailed] There is no mailbox nearby — go to one the world state lists."
+                        .to_string(),
+                );
+                continue;
+            };
+            let cmd = match mail_command(action, mailbox.mailbox) {
+                Ok(cmd) => cmd,
+                Err(reason) => {
                     let mut s = state.lock().await;
-                    if let Err(e) = s.send_command(cmd).await {
-                        error!("Failed to send notice board action: {e}");
-                    }
+                    s.push_agent_event(format!("[MailFailed] {reason}."));
+                    continue;
                 }
-                ChaseResult::Lost(loss) => {
-                    let mut s = state.lock().await;
-                    s.push_agent_event(format!(
-                        "[BoardFailed] You could not get to notice board {board_id} — {}.",
-                        loss.clause()
-                    ));
-                }
-                ChaseResult::Error => {
-                    let mut s = state.lock().await;
-                    s.push_agent_event(format!(
-                        "[BoardFailed] You could not get to notice board {board_id}."
-                    ));
-                }
-            }
+            };
+            walk_then_send(
+                state,
+                mailbox.position,
+                mailbox.floor_level,
+                sprint,
+                cmd,
+                "[MailFailed] You could not get to the mailbox",
+            )
+            .await;
             continue;
         }
 
@@ -2609,10 +2631,32 @@ mod tests {
     }
 }
 
-/// How far around the agent a `board_id` is looked up.
+/// How far around the agent a notice board or mailbox is looked up.
 const BOARD_REACH_SEARCH_M: f32 = 64.0;
 /// Inside the server's reach of 2.5 m from the board's origin.
 const BOARD_ARRIVE_M: f32 = 1.8;
+
+/// Walks to a board or mailbox and sends `cmd`; `failure` starts the event when it cannot.
+async fn walk_then_send(
+    state: &Arc<Mutex<SharedState>>,
+    pos: onlinerpg_shared::Position,
+    floor_level: i8,
+    sprint: Option<bool>,
+    cmd: onlinerpg_shared::ClientMessage,
+    failure: &str,
+) {
+    let event = match walk_to_point(state, pos, floor_level, BOARD_ARRIVE_M, sprint).await {
+        ChaseResult::InRange => {
+            if let Err(e) = state.lock().await.send_command(cmd).await {
+                error!("Failed to send board or mail action: {e}");
+            }
+            return;
+        }
+        ChaseResult::Lost(loss) => format!("{failure} — {}.", loss.clause()),
+        ChaseResult::Error => format!("{failure}."),
+    };
+    state.lock().await.push_agent_event(event);
+}
 
 /// The server message for a notice board action, or why its text would be
 /// refused.
@@ -2661,6 +2705,70 @@ fn notice_board_command(action: &AgentAction) -> Result<onlinerpg_shared::Client
         },
         _ => return Err("not a notice board action".into()),
     })
+}
+
+/// The server message for a mail action at `mailbox`, or why it would be refused.
+fn mail_command(
+    action: &AgentAction,
+    mailbox: onlinerpg_shared::mail::MailboxRef,
+) -> Result<onlinerpg_shared::ClientMessage, String> {
+    use onlinerpg_shared::mail::{validate_letter_body, MailRefusal};
+    use onlinerpg_shared::ClientMessage;
+    let refused = crate::state::mail_refusal_text;
+    Ok(match action {
+        AgentAction::OpenMailbox { .. } => ClientMessage::OpenMailbox { mailbox },
+        AgentAction::ReadLetter { letter_id, .. } => ClientMessage::ReadMail {
+            mailbox,
+            letter_id: *letter_id,
+        },
+        AgentAction::DeleteLetter { letter_id, .. } => ClientMessage::DeleteMail {
+            mailbox,
+            letter_id: *letter_id,
+        },
+        AgentAction::SendLetter {
+            recipient, body, ..
+        } => {
+            let recipient = recipient.trim();
+            if recipient.is_empty() {
+                return Err(refused(MailRefusal::NoSuchRecipient));
+            }
+            ClientMessage::SendMail {
+                mailbox,
+                recipient: recipient.to_string(),
+                body: validate_letter_body(body).map_err(refused)?.to_string(),
+            }
+        }
+        _ => return Err("not a mail action".into()),
+    })
+}
+
+#[cfg(test)]
+mod mail_command_tests {
+    use super::*;
+    use onlinerpg_shared::mail::MailboxRef;
+    use onlinerpg_shared::ClientMessage;
+
+    #[test]
+    fn a_letter_is_checked_before_the_walk() {
+        let send = |body: String| {
+            mail_command(
+                &AgentAction::SendLetter {
+                    recipient: " jake5 ".into(),
+                    body,
+                    sprint: None,
+                },
+                MailboxRef::Estate { furniture_id: 3 },
+            )
+        };
+        assert!(matches!(
+            send(" Meet at dusk ".into()),
+            Ok(ClientMessage::SendMail { ref recipient, ref body, mailbox: MailboxRef::Estate { furniture_id: 3 } })
+                if recipient == "jake5" && body == "Meet at dusk"
+        ));
+        assert!(send("a".repeat(1001)).unwrap_err().contains("too long"));
+        assert!(send("  ".into()).unwrap_err().contains("empty"));
+        assert!(AgentAction::Wait.mail().is_none());
+    }
 }
 
 #[cfg(test)]

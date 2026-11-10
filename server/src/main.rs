@@ -461,6 +461,17 @@ async fn main() -> ExitCode {
         }
     };
 
+    let prune_auth = Arc::clone(&auth_service);
+    tokio::spawn(async move {
+        let cutoff = auth::unix_now() - auth::MESSAGE_RETENTION_SECS;
+        match game_state::auth_db(move || prune_auth.prune_old_messages(cutoff)).await {
+            Ok((letters, posts)) => {
+                info!(letters, posts, "pruned mail and notices older than 60 days")
+            }
+            Err(error) => warn!("Failed to prune old mail and notices: {error}"),
+        }
+    });
+
     let start_auth = Arc::clone(&auth_service);
     if let Err(error) = game_state::auth_db(move || {
         start_auth.record_server_start(auth::unix_now(), env!("GIT_HASH"))

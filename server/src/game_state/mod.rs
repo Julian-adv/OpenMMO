@@ -230,6 +230,7 @@ mod inventory;
 mod land;
 mod landscaping;
 mod localization;
+mod mail;
 mod mana;
 mod metrics;
 mod monster;
@@ -478,6 +479,7 @@ pub struct GameState {
     beds: Arc<std::sync::RwLock<bed_rest::BedIndex>>,
     interaction_furniture: Arc<std::sync::RwLock<player_interaction::FurnitureIndex>>,
     notice_cooldowns: Arc<std::sync::Mutex<notice_board::NoticeCooldowns>>,
+    mail_cooldowns: Arc<std::sync::Mutex<mail::MailCooldowns>>,
     notice_papers: Arc<std::sync::Mutex<notice_board::NoticePaperCache>>,
     /// The one altar-summoned raid allowed at a time; lost on restart.
     field_raid: Arc<tokio::sync::Mutex<Option<field_raid::FieldRaid>>>,
@@ -820,6 +822,7 @@ impl GameState {
             beds: Arc::new(std::sync::RwLock::new(HashMap::new())),
             interaction_furniture: Arc::new(std::sync::RwLock::new(HashMap::new())),
             notice_cooldowns: Arc::default(),
+            mail_cooldowns: Arc::default(),
             notice_papers: Arc::default(),
             field_raid: Arc::new(tokio::sync::Mutex::new(None)),
             field_boss_sites: Arc::new(std::sync::RwLock::new(Vec::new())),

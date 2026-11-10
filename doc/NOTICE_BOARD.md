@@ -38,7 +38,7 @@ A village object where players post notices and comment on them.
 
 ## Storage
 
-`notice_posts` and `notice_comments` in the game database (`server/src/auth_notice_board.rs`). `notice_posts` gained `pos_x`, `pos_y`, `image` and `removed_at`; rows from before have no position and get one derived from their id. There is no moderation command yet; operators set `removed_at` by SQL.
+`notice_posts` and `notice_comments` in the game database (`server/src/auth_notice_board.rs`). `notice_posts` gained `pos_x`, `pos_y`, `image` and `removed_at`; rows from before have no position and get one derived from their id. There is no moderation command yet; operators set `removed_at` by SQL. Posts written more than 60 real days ago are deleted with their comments when the server starts, so every deploy clears them.
 
 ## Board model
 

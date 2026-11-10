@@ -175,6 +175,8 @@ mod commands;
 mod dungeon;
 mod events;
 mod inventory;
+mod mail;
+pub use mail::refusal_text as mail_refusal_text;
 mod movement;
 mod music;
 mod notice_board;
@@ -252,6 +254,7 @@ pub struct SharedState {
     pub stalls: HashMap<u64, onlinerpg_shared::stall::Stall>,
     pub open_stall: Option<stall::StallPanel>,
     pub open_notice_board: Option<notice_board::NoticeBoardPanel>,
+    pub open_mailbox: Option<mail::MailboxPanel>,
     /// Boards whose last peek showed an expired paper, for the registrar's notice round.
     pub boards_with_expired_notices: HashSet<u32>,
     /// Our own bag (from InventoryState/InventoryUpdated), so a trading
@@ -485,6 +488,7 @@ impl SharedState {
             stalls: HashMap::new(),
             open_stall: None,
             open_notice_board: None,
+            open_mailbox: None,
             boards_with_expired_notices: HashSet::new(),
             self_bag: Vec::new(),
             self_equipped: HashMap::new(),

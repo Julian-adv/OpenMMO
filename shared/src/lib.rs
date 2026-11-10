@@ -25,6 +25,7 @@ pub mod interest;
 pub mod inventory;
 pub mod land;
 pub mod landscaping;
+pub mod mail;
 pub mod mana;
 pub mod meal;
 pub mod messages;
@@ -251,7 +252,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v140: village notice boards (`OpenNoticeBoard`, `ReadNoticePost`,
 /// `WriteNoticePost`, `WriteNoticeComment`; `NoticeBoard`, `NoticePostView`,
 /// `NoticeBoardRefused`).
-pub const PROTOCOL_VERSION: u32 = 141;
+/// v142: mail (`OpenMailbox`, `ReadMail`, `SendMail`, `DeleteMail`; `Mailbox`,
+/// `MailLetter`, `MailSent`, `MailRefused`, `MailNotice`).
+pub const PROTOCOL_VERSION: u32 = 142;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

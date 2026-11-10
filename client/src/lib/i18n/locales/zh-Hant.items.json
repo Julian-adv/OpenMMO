@@ -428,5 +428,9 @@
   "blackvein_crystal_shard.description": "核心透著微弱藍光的冰冷黑紫碎片。收藏家願出好價錢。",
   "blackvein_crystal_shard.name": "黑脈水晶碎片",
   "notice_paper.description": "蓋了印花的告示板用紙。每張貼一則告示消耗一張。",
-  "notice_paper.name": "告示紙"
+  "notice_paper.name": "告示紙",
+  "letter.name": "信紙",
+  "letter.description": "已付郵資的信紙和信封。投進任意郵筒即可寄出一封信。",
+  "furniture_mailbox.name": "郵筒",
+  "furniture_mailbox.description": "拆封後可在自己的領地放置郵筒。任何人都能在這裡寄信和收信。"
 }

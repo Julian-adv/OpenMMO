@@ -161,6 +161,7 @@ export interface ObjectDef {
   /** Offering altar; which boss it wakes is in data-src/field_bosses.csv. */
   altar?: boolean
   noticeBoard?: boolean
+  mailbox?: boolean
   /** Absolute world Y to spawn new placements at, overriding the terrain-based
    *  default (e.g. a shop sign that hangs above a door). Fine-tune per placement
    *  with the editor's Y slider. */

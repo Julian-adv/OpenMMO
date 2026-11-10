@@ -1875,3 +1875,54 @@ async fn overweight_recovery_turns_the_empty_chest_into_a_ground_item() {
     assert_eq!(dropped.item.floor_level, chest.floor_level);
     assert_eq!(dropped.item.dropped_by, Some(pid("HeavyKeeper")));
 }
+
+#[tokio::test]
+async fn an_estate_mailbox_opens_the_inbox_within_reach() {
+    use onlinerpg_shared::mail::{MailRefusal, MailboxRef};
+    let game = make_flat_world_game_state("estate_mailbox");
+    let auth = make_test_auth("estate_mailbox");
+    let account = auth.login_google("Postie").unwrap();
+    let bag = vec![
+        bag_item(1, "land_deed", 1),
+        bag_item(2, "furniture_mailbox", 1),
+        bag_item(3, "storage_chest", 1),
+    ];
+    estate_owner(&game, &auth, &account, "Postie", pos3(1.5, 5.05, 1.5), bag).await;
+    claim_plot_at(&game, &auth, "Postie", 1.5, 1.5).await;
+    let id = pid("Postie");
+    game.place_estate_chest(&id, 2, pos3(2.5, 5.0, 2.5), 0.0, 0, &auth)
+        .await;
+    game.place_estate_chest(&id, 3, pos3(2.5, 5.0, 0.5), 0.0, 0, &auth)
+        .await;
+    let placed = auth.load_estate_chests().unwrap();
+    let furniture = |kind: &str| placed.iter().find(|c| c.item_def_id == kind).unwrap().id;
+    let mailbox = MailboxRef::Estate {
+        furniture_id: furniture("furniture_mailbox"),
+    };
+    let chest = MailboxRef::Estate {
+        furniture_id: furniture("storage_chest"),
+    };
+    let mut rx = game.register_direct_channel(&id).await;
+
+    game.open_mailbox(&id, mailbox, &auth).await;
+    assert!(drain(&mut rx)
+        .iter()
+        .any(|m| matches!(m, ServerMessage::Mailbox { letters, .. } if letters.is_empty())));
+
+    game.open_mailbox(&id, chest, &auth).await;
+    let refused = |msgs: Vec<ServerMessage>| {
+        msgs.iter().any(|m| {
+            matches!(
+                m,
+                ServerMessage::MailRefused {
+                    reason: MailRefusal::OutOfReach
+                }
+            )
+        })
+    };
+    assert!(refused(drain(&mut rx)));
+
+    game.players.write().await.get_mut(&id).unwrap().position.x = 12.0;
+    game.open_mailbox(&id, mailbox, &auth).await;
+    assert!(refused(drain(&mut rx)));
+}

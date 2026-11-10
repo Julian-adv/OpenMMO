@@ -26,6 +26,13 @@ import {
   handleNoticePostView,
 } from '../stores/noticeBoardStore'
 import {
+  handleMailbox,
+  handleMailLetter,
+  handleMailNotice,
+  handleMailRefused,
+  handleMailSent,
+} from '../stores/mailStore'
+import {
   playTeleportEffect,
   finishTeleportArrival,
   resetTeleportEffects,
@@ -2155,6 +2162,26 @@ export function handleServerMessage(
 
     case 'NoticeBoardPapers':
       handleNoticeBoardPapers(data)
+      break
+
+    case 'Mailbox':
+      handleMailbox(data)
+      break
+
+    case 'MailLetter':
+      handleMailLetter(data)
+      break
+
+    case 'MailSent':
+      handleMailSent(data.recipient)
+      break
+
+    case 'MailRefused':
+      handleMailRefused(data.reason)
+      break
+
+    case 'MailNotice':
+      handleMailNotice(data.unread)
       break
 
     case 'FieldRaidNotice':

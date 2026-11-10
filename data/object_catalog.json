@@ -391,5 +391,12 @@
       "maxZ": 0.4,
       "cellCoverage": 0.15
     }
+  },
+  {
+    "id": "mailbox",
+    "name": "Mailbox",
+    "model": "objects/mailbox.glb",
+    "mailbox": true,
+    "solid": true
   }
 ]

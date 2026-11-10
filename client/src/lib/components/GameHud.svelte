@@ -45,6 +45,12 @@
   import { altarOffering } from '../stores/altarStore'
   import NoticeBoardPanel from './NoticeBoardPanel.svelte'
   import { noticeBoard } from '../stores/noticeBoardStore'
+  import MailPanel from './MailPanel.svelte'
+  import {
+    mailSession,
+    pendingMailNotice,
+    showPendingMailNotice,
+  } from '../stores/mailStore'
   import { landClaimDialog } from '../stores/landClaimStore'
   import { capeDyeDialog } from '../stores/capeDyeStore'
   import CapeTextureDialog from './CapeTextureDialog.svelte'
@@ -111,6 +117,20 @@
   }: Props = $props()
 
   let clusterWidth = $state(0)
+
+  $effect(() => {
+    if (
+      $pendingMailNotice !== null &&
+      !isSceneCompiling &&
+      !isCurrentPlayerLoading &&
+      !$teleportLoading
+    )
+      showPendingMailNotice()
+  })
+  $effect(() => () => {
+    pendingMailNotice.set(null)
+    mailSession.set(null)
+  })
 
   const playerLevel = $derived(
     currentPlayerLevel ?? selectedCharacter?.level ?? 1
@@ -498,6 +518,10 @@
 
 {#if $noticeBoard}
   <NoticeBoardPanel session={$noticeBoard} />
+{/if}
+
+{#if $mailSession}
+  <MailPanel session={$mailSession} />
 {/if}
 
 {#if $houseDemolitionConfirmation}
