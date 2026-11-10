@@ -192,6 +192,38 @@ mod tests {
     }
 
     #[test]
+    fn a_long_partial_path_over_open_ground_smooths_to_one_leg() {
+        let (key, mut rp) = make_rect_room(3, 3);
+        rp.house_origin_x = -150.0;
+        (rp.min_x, rp.max_x) = (-150.0, -147.0);
+        let cache = PassabilityCache::from([(key, rp)]);
+        let path = find_and_smooth_path(40.5, 11.5, 0, -151.5, 11.5, 0, &cache, 150);
+        assert_eq!(path.termination, PathTermination::NodeLimit);
+        assert_eq!(path.waypoints.len(), 1);
+        assert!(path.waypoints[0].x < -100.0);
+    }
+
+    #[test]
+    fn long_segments_are_blocked_only_where_they_cross_the_grid() {
+        let (key, rp) = make_simple_house();
+        let cache = PassabilityCache::from([(key, rp)]);
+        let blocked =
+            |a: (f32, f32), b: (f32, f32)| is_movement_blocked(&cache, a.0, a.1, b.0, b.1, 0, None);
+        for (a, b, expected) in [
+            ((-200.5, 11.5), (200.5, 11.5), true),
+            ((11.5, -200.5), (11.5, 200.5), true),
+            ((-200.5, -200.0), (200.5, 201.0), true),
+            ((11.5, 11.5), (200.5, 11.5), true),
+            ((-200.5, 11.5), (9.5, 11.5), false),
+            ((-200.5, 20.5), (200.5, 20.5), false),
+            ((-200.5, 11.5), (-20.5, 11.5), false),
+        ] {
+            assert_eq!(blocked(a, b), expected, "{a:?} -> {b:?}");
+            assert_eq!(blocked(b, a), expected, "{b:?} -> {a:?}");
+        }
+    }
+
+    #[test]
     fn exhausted_search_differs_from_a_node_limit() {
         let (id, room) = make_simple_house();
         let cache = PassabilityCache::from([(id, room)]);

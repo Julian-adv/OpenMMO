@@ -32,14 +32,25 @@ fn smooth_path(
             anchor > 0 && waypoints[anchor].floor != waypoints[anchor - 1].floor;
 
         if !is_floor_transition {
-            for probe in anchor + 2..waypoints.len() {
-                if waypoints[probe].floor != waypoints[anchor].floor {
-                    break;
-                }
-                if line_passable_avoiding(&waypoints[anchor], &waypoints[probe], cache, blocked) {
-                    farthest = probe;
-                } else {
-                    break;
+            let from = &waypoints[anchor];
+            let last = (anchor + 2..waypoints.len())
+                .find(|&probe| waypoints[probe].floor != from.floor)
+                .unwrap_or(waypoints.len())
+                - 1;
+            let passable =
+                |probe: usize| line_passable_avoiding(from, &waypoints[probe], cache, blocked);
+            // Far end first, then bisect to a visibility boundary.
+            if last > farthest && passable(last) {
+                farthest = last;
+            } else {
+                let mut blocked_at = last;
+                while blocked_at - farthest > 1 {
+                    let mid = farthest + (blocked_at - farthest) / 2;
+                    if passable(mid) {
+                        farthest = mid;
+                    } else {
+                        blocked_at = mid;
+                    }
                 }
             }
         }

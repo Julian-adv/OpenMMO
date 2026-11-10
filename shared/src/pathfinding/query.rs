@@ -642,38 +642,29 @@ fn edge_blocks_axis(
         }
     };
 
-    let step: i32 = if to_cell > from_cell { 1 } else { -1 };
-    let (leave_bit, enter_bit) = match (x_axis, step > 0) {
-        (true, true) => (EDGE_E, EDGE_W),
-        (true, false) => (EDGE_W, EDGE_E),
-        (false, true) => (EDGE_S, EDGE_N),
-        (false, false) => (EDGE_N, EDGE_S),
-    };
-
     // Loop-invariant: skip the whole sweep if the parametric denominator is
     // numerically zero (would otherwise produce NaN `t` values inside).
     let denom = to_a - from_a;
     if denom.abs() <= f32::EPSILON {
         return false;
     }
-    let mut cell = from_cell;
-    while cell != to_cell {
-        let edge_coord = if step > 0 { cell + 1 } else { cell };
-        let next_cell = cell + step;
-        let t = (edge_coord as f32 - from_a) / denom;
+    let (low_bit, high_bit) = if x_axis {
+        (EDGE_E, EDGE_W)
+    } else {
+        (EDGE_S, EDGE_N)
+    };
+    // Clamp to the grid so cost follows its span, not the segment's length.
+    let first = (from_cell.min(to_cell) + 1).max(0);
+    let last = from_cell.max(to_cell).min(size_a);
+    for edge in first..=last {
+        let t = (edge as f32 - from_a) / denom;
         let cell_b = (from_b + t * (to_b - from_b)).floor() as i32;
-        if cell_b >= 0 && cell_b < size_b {
-            if cell >= 0 && cell < size_a && floor.cells[idx(cell, cell_b)] & leave_bit != 0 {
-                return true;
-            }
-            if next_cell >= 0
-                && next_cell < size_a
-                && floor.cells[idx(next_cell, cell_b)] & enter_bit != 0
-            {
-                return true;
-            }
+        if (0..size_b).contains(&cell_b)
+            && (edge > 0 && floor.cells[idx(edge - 1, cell_b)] & low_bit != 0
+                || edge < size_a && floor.cells[idx(edge, cell_b)] & high_bit != 0)
+        {
+            return true;
         }
-        cell += step;
     }
     false
 }
