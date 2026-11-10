@@ -306,6 +306,7 @@ export type ClientMessage =
   | {
       WriteNoticeComment: { object_id: number; post_id: number; body: string }
     }
+  | { RemoveNoticePost: { object_id: number; post_id: number } }
   | 'StopInteraction'
   | 'Heartbeat'
   | 'ResyncWorld'

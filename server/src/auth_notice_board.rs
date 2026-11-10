@@ -314,6 +314,38 @@ impl AuthService {
         Ok(count as u32)
     }
 
+    /// Marks the writer's own post as removed, or says why not.
+    pub fn remove_notice_post(
+        &self,
+        board: BoardKey,
+        post_id: i64,
+        character_id: i64,
+        hidden_at: i64,
+    ) -> Result<Result<(), NoticeBoardRefusal>, AuthError> {
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let writer: Option<i64> = tx
+            .prepare_cached(
+                "SELECT character_id FROM notice_posts
+                 WHERE id = ?1 AND region_x = ?2 AND region_z = ?3 AND object_id = ?4
+                   AND removed_at IS NULL AND game_seconds > ?5",
+            )?
+            .query_row(
+                params![post_id, board.rx, board.rz, board.object_id, hidden_at],
+                |row| row.get(0),
+            )
+            .optional()?;
+        match writer {
+            None => return Ok(Err(NoticeBoardRefusal::PostMissing)),
+            Some(id) if id != character_id => return Ok(Err(NoticeBoardRefusal::NotYours)),
+            Some(_) => {}
+        }
+        tx.prepare_cached("UPDATE notice_posts SET removed_at = ?2 WHERE id = ?1")?
+            .execute(params![post_id, unix_now()])?;
+        tx.commit()?;
+        Ok(Ok(()))
+    }
+
     /// The post with the new comment, or why it was refused.
     #[allow(clippy::too_many_arguments)]
     pub fn add_notice_comment(

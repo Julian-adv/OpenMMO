@@ -2090,6 +2090,14 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::RemoveNoticePost { object_id, post_id } => {
+            if let Some(id) = &state.require_in_game("remove notice post") {
+                game_state
+                    .remove_notice_post(id, object_id, post_id, auth_service)
+                    .await;
+            }
+        }
+
         ClientMessage::InspectAltar { object_id } => {
             if let Some(id) = &state.require_in_game("inspect altar") {
                 game_state.inspect_altar(id, object_id).await;

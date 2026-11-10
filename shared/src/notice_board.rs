@@ -165,6 +165,8 @@ pub enum NoticeBoardRefusal {
     BoardFull,
     /// The writer already has `NOTICE_POSTS_PER_WRITER` current posts here.
     TooManyPosts,
+    /// Only the writer removes a post.
+    NotYours,
     ServerError,
 }
 

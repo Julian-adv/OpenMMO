@@ -562,6 +562,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::NoticeBoardRefused { .. } => "NoticeBoardRefused",
         ServerMessage::NoticeBoardPapers { .. } => "NoticeBoardPapers",
         ServerMessage::NoticesTakenDown { .. } => "NoticesTakenDown",
+        ServerMessage::NoticePostRemoved { .. } => "NoticePostRemoved",
         ServerMessage::Mailbox { .. } => "Mailbox",
         ServerMessage::MailLetter { .. } => "MailLetter",
         ServerMessage::MailSent { .. } => "MailSent",

@@ -647,6 +647,12 @@ pub enum ClientMessage {
         post_id: i64,
         body: String,
     },
+    /// Writer only; the paper is not returned. Answered with
+    /// `NoticePostRemoved`, then the refreshed `NoticeBoard`.
+    RemoveNoticePost {
+        object_id: u32,
+        post_id: i64,
+    },
     StartInstrument,
     InstrumentNotes {
         events: Vec<InstrumentNoteEvent>,
@@ -1053,6 +1059,7 @@ impl ClientMessage {
             | OfferAtAltar { .. }
             | WriteNoticePost { .. }
             | WriteNoticeComment { .. }
+            | RemoveNoticePost { .. }
             | TakeDownNotices { .. }
             | SendMail { .. }
             | StartInstrument
@@ -1894,6 +1901,10 @@ pub enum ServerMessage {
         object_id: u32,
         count: u32,
     },
+    NoticePostRemoved {
+        object_id: u32,
+        post_id: i64,
+    },
     Mailbox {
         mailbox: crate::mail::MailboxRef,
         letters: Vec<crate::mail::LetterSummary>,
@@ -2559,6 +2570,7 @@ impl ServerMessage {
             | Self::NoticeBoardRefused { .. }
             | Self::NoticeBoardPapers { .. }
             | Self::NoticesTakenDown { .. }
+            | Self::NoticePostRemoved { .. }
             | Self::Mailbox { .. }
             | Self::MailLetter { .. }
             | Self::MailSent { .. }

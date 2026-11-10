@@ -254,7 +254,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// `NoticeBoardRefused`).
 /// v142: mail (`OpenMailbox`, `ReadMail`, `SendMail`, `DeleteMail`; `Mailbox`,
 /// `MailLetter`, `MailSent`, `MailRefused`, `MailNotice`).
-pub const PROTOCOL_VERSION: u32 = 142;
+/// v143: writers remove their own notices (`RemoveNoticePost`,
+/// `NoticePostRemoved`, refusal `not_yours`).
+pub const PROTOCOL_VERSION: u32 = 143;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

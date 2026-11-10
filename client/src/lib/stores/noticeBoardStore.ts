@@ -142,6 +142,7 @@ export type NoticeBoardRefusal =
   | 'covers_others'
   | 'board_full'
   | 'too_many_posts'
+  | 'not_yours'
   | 'server_error'
 
 export type NoticeBoardView =

@@ -46,6 +46,7 @@
   let uploading = $state(false)
   let spot = $state<[number, number] | null>(null)
   let dragging = $state(false)
+  let confirmingRemove = $state(false)
 
   const view = $derived(session.view)
   /** Other writers' current papers, which a new one may barely cover. */
@@ -74,6 +75,10 @@
       $noticePaperCount > 0 &&
       title.trim() !== '' &&
       (body.trim() !== '' || picture !== null)
+  )
+  const viewedIsMine = $derived(
+    view.kind === 'post' &&
+      session.posts.some((p) => p.id === view.post.id && p.mine)
   )
   const pinned = $derived([...session.posts].sort((a, b) => a.id - b.id))
 
@@ -195,6 +200,12 @@
     networkManager.sendWriteNoticeComment(session.objectId, postId, comment)
   }
 
+  function removePost(postId: number) {
+    if (session.pending) return
+    markPending()
+    networkManager.sendRemoveNoticePost(session.objectId, postId)
+  }
+
   function placeAt(event: PointerEvent) {
     if (!cork) return
     const rect = cork.getBoundingClientRect()
@@ -235,6 +246,7 @@
         comment = ''
       }
     }
+    if (view !== lastView) confirmingRemove = false
     lastView = view
   })
 </script>
@@ -346,6 +358,30 @@
         </div>
         {#if view.post.body}
           <p class="body">{view.post.body}</p>
+        {/if}
+        {#if viewedIsMine}
+          <div class="remove-row">
+            {#if confirmingRemove}
+              <span class="muted">{$t('noticeBoard.removeConfirm')}</span>
+              <button
+                class="danger"
+                disabled={session.pending}
+                onclick={() => removePost(view.post.id)}
+                >{$t('noticeBoard.remove')}</button
+              >
+              <button
+                class="secondary"
+                onclick={() => (confirmingRemove = false)}
+                >{$t('noticeBoard.removeCancel')}</button
+              >
+            {:else}
+              <button
+                class="secondary"
+                onclick={() => (confirmingRemove = true)}
+                >{$t('noticeBoard.remove')}</button
+              >
+            {/if}
+          </div>
         {/if}
       </article>
       <section class="comments">
@@ -493,6 +529,49 @@
     color: #efe3cc;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
     font-family: 'Noto Sans KR', sans-serif;
+  }
+  .board-dialog,
+  textarea {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(171, 147, 103, 0.5) transparent;
+  }
+  @supports selector(::-webkit-scrollbar) {
+    .board-dialog,
+    textarea {
+      scrollbar-width: auto;
+      scrollbar-color: auto;
+    }
+    .board-dialog::-webkit-scrollbar,
+    textarea::-webkit-scrollbar {
+      width: 12px;
+    }
+    .board-dialog::-webkit-scrollbar-track,
+    textarea::-webkit-scrollbar-track {
+      margin: 8px 0;
+      background: transparent;
+    }
+    textarea::-webkit-scrollbar-track {
+      margin: 4px 0;
+    }
+    .board-dialog::-webkit-scrollbar-thumb,
+    textarea::-webkit-scrollbar-thumb {
+      border: 3px solid transparent;
+      border-radius: 999px;
+      background: rgba(171, 147, 103, 0.5);
+      background-clip: padding-box;
+    }
+    .board-dialog::-webkit-scrollbar-thumb:hover,
+    textarea::-webkit-scrollbar-thumb:hover {
+      background: rgba(205, 185, 143, 0.75);
+      background-clip: padding-box;
+    }
+    .board-dialog::-webkit-scrollbar-button,
+    textarea::-webkit-scrollbar-button {
+      display: none;
+    }
+    textarea::-webkit-scrollbar-corner {
+      background: transparent;
+    }
   }
   header {
     display: flex;
@@ -758,8 +837,21 @@
     justify-content: space-between;
     gap: 8px;
   }
+  .remove-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  button.danger {
+    border: 1px solid #b95749;
+    background: #6e2a20;
+    color: #ffe9e2;
+  }
   button.primary,
-  button.secondary {
+  button.secondary,
+  button.danger {
     padding: 6px 12px;
     border-radius: 6px;
     font-size: 12px;

@@ -53,6 +53,7 @@ pub fn refusal_text(reason: NoticeBoardRefusal) -> &'static str {
         NoticeBoardRefusal::TooManyPosts => {
             "you already have 3 current posts on that board; wait until one expires"
         }
+        NoticeBoardRefusal::NotYours => "only the writer may remove a post",
         NoticeBoardRefusal::ServerError => "the server failed to save it; try later",
     }
 }
@@ -63,7 +64,8 @@ impl SharedState {
             .open_notice_board
             .take()
             .filter(|panel| panel.object_id == object_id)
-            .and_then(|panel| panel.open_post);
+            .and_then(|panel| panel.open_post)
+            .filter(|(open, _)| posts.iter().any(|p| p.id == open.id));
         self.open_notice_board = Some(NoticeBoardPanel {
             object_id,
             posts: posts.to_vec(),
@@ -78,6 +80,12 @@ impl SharedState {
     pub(super) fn on_notices_taken_down(&mut self, object_id: u32, count: u32) {
         self.push_agent_event(format!(
             "[Board] Took down {count} expired notices from board [board_id {object_id}]."
+        ));
+    }
+
+    pub(super) fn on_notice_post_removed(&mut self, object_id: u32, post_id: i64) {
+        self.push_agent_event(format!(
+            "[Board] Removed your post [post_id {post_id}] from board [board_id {object_id}]."
         ));
     }
 

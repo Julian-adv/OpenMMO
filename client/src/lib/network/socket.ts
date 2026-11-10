@@ -722,6 +722,12 @@ class NetworkManager {
     this.sendMessage({ PeekNoticeBoard: { object_id: objectId } })
   }
 
+  sendRemoveNoticePost(objectId: number, postId: number) {
+    this.sendMessage({
+      RemoveNoticePost: { object_id: objectId, post_id: postId },
+    })
+  }
+
   sendWriteNoticeComment(objectId: number, postId: number, body: string) {
     this.sendMessage({
       WriteNoticeComment: { object_id: objectId, post_id: postId, body },

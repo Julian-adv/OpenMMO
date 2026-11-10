@@ -28,6 +28,12 @@ A village object where players post notices and comment on them.
 - Aldwin takes them down. His schedule (`agent-client/data/npcs/steward/schedule.json`, `notice_rounds`) makes his driver peek boards within 30 m every 5 minutes during the day shift; when one shows an expired paper he leaves his desk, walks to the board, sends `TakeDownNotices`, and the schedule walks him back. Only the land registrar may take notices down, and only expired ones.
 - If he misses them, posts older than 31 game days are hidden anyway. Taken-down posts keep their rows with `removed_at` set.
 
+## Removal
+
+- Posts cannot be edited. The writer may take down their own post, current or expired, while standing at the board (`RemoveNoticePost`); anyone else is refused with `not_yours`.
+- The paper is not returned, and the post's comments stop being shown with it. The row keeps its content with `removed_at` set, as for a take-down.
+- A removed post no longer counts toward the 3-post limit.
+
 ## Rules
 
 - Opening, reading and writing all require standing within reach of the board (same check as the altar).
@@ -42,17 +48,17 @@ A village object where players post notices and comment on them.
 
 ## Board model
 
-The 3D board shows the real papers as blank sheets (posters with a dark block for the picture; no picture textures load in the world). Each placed board sends `PeekNoticeBoard` when it is built and every 60 s while it stays loaded; the server answers from an in-memory cache per board, cleared on every post and take-down, and only to players within 80 m.
+The 3D board shows the real papers as blank sheets (posters with a dark block for the picture; no picture textures load in the world). Each placed board sends `PeekNoticeBoard` when it is built and every 60 s while it stays loaded; the server answers from an in-memory cache per board, cleared on every post, removal and take-down, and only to players within 80 m.
 
 ## Agents
 
-agent-client lists notice boards within 30 m in the world state with their `board_id`, and offers `open_board`, `read_post`, `write_post` and `comment_post` (`agent-client/src/driver/action.rs`). Each walks to the board first. Text is checked against the same limits before walking. Agents need Notice Paper to post like players do; the server picks the spot. Listed posts note a picture and EXPIRED.
+agent-client lists notice boards within 30 m in the world state with their `board_id`, and offers `open_board`, `read_post`, `write_post`, `comment_post` and `remove_post` (`agent-client/src/driver/action.rs`). Each walks to the board first. Text is checked against the same limits before walking. Agents need Notice Paper to post like players do; the server picks the spot. Listed posts note a picture and EXPIRED.
 
 - The prompt shows the newest 10 posts, the open post's body cut to 400 characters, and its last 10 comments cut to 150. The open board drops out of the prompt once the agent is more than 6 m away.
 - Server refusals arrive as `[BoardFailed]` events.
 - NPCs pinned in place cannot walk to a board and so cannot use it.
 
-## Protocol (v141)
+## Protocol (v143)
 
-Client: `OpenNoticeBoard`, `ReadNoticePost`, `WriteNoticePost` (with `image` and `position`), `WriteNoticeComment`, `PeekNoticeBoard`, `TakeDownNotices`.
-Server: `NoticeBoard` (post list), `NoticePostView` (post with comments; also the reply to a write), `NoticeBoardRefused`, `NoticeBoardPapers` (papers for the model), `NoticesTakenDown`.
+Client: `OpenNoticeBoard`, `ReadNoticePost`, `WriteNoticePost` (with `image` and `position`), `WriteNoticeComment`, `RemoveNoticePost`, `PeekNoticeBoard`, `TakeDownNotices`.
+Server: `NoticeBoard` (post list; also follows a removal), `NoticePostView` (post with comments; also the reply to a write), `NoticeBoardRefused`, `NoticeBoardPapers` (papers for the model), `NoticesTakenDown`, `NoticePostRemoved`.

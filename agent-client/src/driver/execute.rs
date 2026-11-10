@@ -2700,6 +2700,12 @@ fn notice_board_command(action: &AgentAction) -> Result<onlinerpg_shared::Client
             post_id: *post_id,
             body: checked(body, NOTICE_COMMENT_MAX_CHARS)?,
         },
+        AgentAction::RemovePost {
+            board_id, post_id, ..
+        } => ClientMessage::RemoveNoticePost {
+            object_id: *board_id,
+            post_id: *post_id,
+        },
         AgentAction::OpenBoard { board_id, .. } => ClientMessage::OpenNoticeBoard {
             object_id: *board_id,
         },

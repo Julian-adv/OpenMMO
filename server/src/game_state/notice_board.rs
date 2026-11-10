@@ -479,6 +479,51 @@ impl GameState {
         }
     }
 
+    /// The writer unpins their own post; its paper is not returned.
+    pub async fn remove_notice_post(
+        &self,
+        player_id: &PlayerId,
+        object_id: u32,
+        post_id: i64,
+        auth: &AuthService,
+    ) {
+        let Some(board) = self.notice_board_at(player_id, object_id).await else {
+            return;
+        };
+        let Some(character_id) = self.character_id_of(player_id).await else {
+            return self
+                .refuse_notice(player_id, NoticeBoardRefusal::ServerError)
+                .await;
+        };
+        let hidden_at = self.current_notice_clock().hidden_at;
+        let db = auth.clone();
+        let result =
+            auth_db(move || db.remove_notice_post(board, post_id, character_id, hidden_at)).await;
+        match result {
+            Ok(Ok(())) => {
+                info!(
+                    character_id,
+                    ?board,
+                    post_id,
+                    "notice post removed by writer"
+                );
+                self.forget_notice_papers(board);
+                self.send_direct_message(
+                    player_id,
+                    ServerMessage::NoticePostRemoved { object_id, post_id },
+                )
+                .await;
+                self.open_notice_board(player_id, object_id, auth).await;
+            }
+            Ok(Err(reason)) => self.refuse_notice(player_id, reason).await,
+            Err(err) => {
+                error!("Failed to remove notice post {post_id} on {board:?}: {err}");
+                self.refuse_notice(player_id, NoticeBoardRefusal::ServerError)
+                    .await;
+            }
+        }
+    }
+
     pub async fn write_notice_comment(
         &self,
         player_id: &PlayerId,

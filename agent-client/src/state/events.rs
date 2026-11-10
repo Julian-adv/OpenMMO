@@ -1138,6 +1138,9 @@ impl SharedState {
             ServerMessage::NoticesTakenDown { object_id, count } => {
                 self.on_notices_taken_down(*object_id, *count);
             }
+            ServerMessage::NoticePostRemoved { object_id, post_id } => {
+                self.on_notice_post_removed(*object_id, *post_id);
+            }
             ServerMessage::StallState {
                 stall_id,
                 owner_name,

@@ -364,3 +364,65 @@ async fn papers_may_barely_cover_others_and_writers_get_three_each() {
     );
     assert_eq!(papers_left(&game, "bob").await, 4);
 }
+
+#[tokio::test]
+async fn only_the_writer_removes_a_post_and_the_paper_stays_spent() {
+    let auth = make_test_auth("notice_board_remove");
+    let game = board_game("notice_board_remove");
+    let (alice, bob) = (character(&auth, "alice"), character(&auth, "bob"));
+    let mut alice_rx = enter(&game, &alice, 10.5).await;
+    let mut bob_rx = enter(&game, &bob, 9.5).await;
+    for title in ["a1", "a2", "a3"] {
+        game.notice_cooldowns.lock().unwrap().clear();
+        game.write_notice_post(&pid("alice"), BOARD, title, "b", None, None, &auth)
+            .await;
+    }
+    let (post_id, ..) = last_post(&drain(&mut alice_rx)).unwrap();
+    game.write_notice_comment(&pid("bob"), BOARD, post_id, "hi", &auth)
+        .await;
+    game.peek_notice_board(&pid("bob"), BOARD, &auth).await;
+    drain(&mut bob_rx);
+
+    game.remove_notice_post(&pid("bob"), BOARD, post_id, &auth)
+        .await;
+    game.remove_notice_post(&pid("bob"), BOARD, 9999, &auth)
+        .await;
+    assert_eq!(
+        refusals(&drain(&mut bob_rx)),
+        [
+            NoticeBoardRefusal::NotYours,
+            NoticeBoardRefusal::PostMissing
+        ]
+    );
+
+    game.remove_notice_post(&pid("alice"), BOARD, post_id, &auth)
+        .await;
+    let sent = drain(&mut alice_rx);
+    assert!(sent.iter().any(
+        |m| matches!(m, ServerMessage::NoticePostRemoved { post_id: id, .. } if *id == post_id)
+    ));
+    let posts = listed(sent).unwrap();
+    assert_eq!(posts.len(), 2);
+    assert!(posts.iter().all(|p| p.id != post_id));
+    assert_eq!(papers_left(&game, "alice").await, 2);
+
+    game.peek_notice_board(&pid("bob"), BOARD, &auth).await;
+    game.read_notice_post(&pid("bob"), BOARD, post_id, &auth)
+        .await;
+    game.remove_notice_post(&pid("alice"), BOARD, post_id, &auth)
+        .await;
+    let seen = drain(&mut bob_rx);
+    assert!(seen.iter().any(
+        |m| matches!(m, ServerMessage::NoticeBoardPapers { papers, .. } if papers.len() == 2)
+    ));
+    assert_eq!(refusals(&seen), [NoticeBoardRefusal::PostMissing]);
+    assert_eq!(
+        refusals(&drain(&mut alice_rx)),
+        [NoticeBoardRefusal::PostMissing]
+    );
+
+    game.notice_cooldowns.lock().unwrap().clear();
+    game.write_notice_post(&pid("alice"), BOARD, "a4", "b", None, None, &auth)
+        .await;
+    assert!(refusals(&drain(&mut alice_rx)).is_empty());
+}
