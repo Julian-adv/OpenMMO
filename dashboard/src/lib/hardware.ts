@@ -29,6 +29,7 @@ export interface HardwareSnapshot {
     client: ProcessUsage
     llm: ProcessUsage
   }
+  game_server?: ProcessUsage | null
 }
 
 export interface HardwareStatus extends ChartHistory<HardwareSnapshot> {
@@ -55,10 +56,11 @@ function validSnapshot(sample: HardwareSnapshot): boolean {
     return false
   }
 
-  const agent = sample.agent
   const usage = (value: ProcessUsage) => value && count(value.process_count) && count(value.memory_bytes) &&
     (value.cpu_percent === null || nonnegative(value.cpu_percent)) &&
     (value.process_count > 0 || value.memory_bytes === 0 && (value.cpu_percent === null || value.cpu_percent === 0))
+  if (sample.game_server != null && !usage(sample.game_server)) return false
+  const agent = sample.agent
   if (!agent || !count(agent.instances) || !count(agent.process_count) || agent.instances > agent.process_count ||
     agent.cpu_percent !== null && !nonnegative(agent.cpu_percent) || !count(agent.memory_bytes)) {
     return false

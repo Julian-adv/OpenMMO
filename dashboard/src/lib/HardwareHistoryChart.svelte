@@ -8,10 +8,12 @@
   let metric = $state('process-memory')
   let mount = $state('/')
   const options = [
-    { key: 'process-memory', label: '프로세스 메모리' },
-    { key: 'process-cpu', label: '프로세스 CPU' },
-    { key: 'server-memory', label: '서버 메모리' },
-    { key: 'server-cpu', label: '서버 CPU' },
+    { key: 'process-memory', label: 'NPC 프로세스 메모리 (agent-client · LLM CLI)' },
+    { key: 'process-cpu', label: 'NPC 프로세스 CPU (agent-client · LLM CLI)' },
+    { key: 'game-memory', label: '게임 서버 프로세스 메모리' },
+    { key: 'game-cpu', label: '게임 서버 프로세스 CPU' },
+    { key: 'server-memory', label: '머신 전체 메모리' },
+    { key: 'server-cpu', label: '머신 전체 CPU' },
     { key: 'load', label: '평균 부하' },
     { key: 'disk', label: '디스크 여유 공간' },
   ]
@@ -28,8 +30,10 @@
         { ...client, value: (sample: HardwareSnapshot) => sample.agent.instances ? sample.agent.client.cpu_percent : null },
         { ...llm, value: (sample: HardwareSnapshot) => sample.agent.instances ? sample.agent.llm.cpu_percent : null },
       ]
-      case 'server-memory': return [{ label: '서버 메모리 사용량', color: '#31594f', value: (sample: HardwareSnapshot) => sample.memory_used_bytes }]
-      case 'server-cpu': return [{ label: '서버 CPU', color: '#31594f', value: (sample: HardwareSnapshot) => sample.cpu_percent }]
+      case 'game-memory': return [{ label: '게임 서버 메모리', color: '#31594f', value: (sample: HardwareSnapshot) => sample.game_server?.memory_bytes ?? null }]
+      case 'game-cpu': return [{ label: '게임 서버 CPU', color: '#31594f', value: (sample: HardwareSnapshot) => sample.game_server?.cpu_percent ?? null }]
+      case 'server-memory': return [{ label: '머신 전체 메모리 사용량', color: '#31594f', value: (sample: HardwareSnapshot) => sample.memory_used_bytes }]
+      case 'server-cpu': return [{ label: '머신 전체 CPU', color: '#31594f', value: (sample: HardwareSnapshot) => sample.cpu_percent }]
       case 'load': return ['1분', '5분', '15분'].map((label, index) => ({
         label: `평균 부하 ${label}`, color: ['#31594f', '#7870cf', '#bf7b38'][index],
         value: (sample: HardwareSnapshot) => sample.load_average?.[index] ?? null,

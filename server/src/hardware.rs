@@ -42,6 +42,8 @@ struct Snapshot {
     memory_used_bytes: u64,
     disks: Vec<DiskSample>,
     agent: AgentSample,
+    #[serde(default)]
+    game_server: Option<ProcessUsage>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -242,6 +244,16 @@ impl Collector {
                 memory_bytes: process.memory(),
             })
             .collect();
+        let game_server = sysinfo::get_current_pid()
+            .ok()
+            .and_then(|pid| self.system.process(pid))
+            .map(|process| ProcessUsage {
+                process_count: 1,
+                cpu_percent: self
+                    .primed
+                    .then(|| process.cpu_usage() / cpu_count.max(1) as f32),
+                memory_bytes: process.memory(),
+            });
         let mut disks: Vec<_> = self
             .disks
             .list()
@@ -272,6 +284,7 @@ impl Collector {
             memory_used_bytes: total.saturating_sub(self.system.available_memory()),
             disks,
             agent: aggregate_agents(&processes, cpu_ready),
+            game_server,
         })
     }
 }
@@ -420,7 +433,21 @@ mod tests {
                 ],
                 true,
             ),
+            game_server: Some(ProcessUsage {
+                process_count: 1,
+                cpu_percent: Some(3.0),
+                memory_bytes: 4096,
+            }),
         }
+    }
+
+    #[test]
+    fn samples_saved_before_game_server_usage_still_load() {
+        let mut json = serde_json::to_value(sample(1)).unwrap();
+        json.as_object_mut().unwrap().remove("game_server");
+        let old: Snapshot = serde_json::from_value(json).unwrap();
+        assert_eq!(old.game_server, None);
+        assert_eq!(old.agent, sample(1).agent);
     }
 
     #[test]
@@ -549,6 +576,9 @@ mod tests {
         let sample = collector.sample().unwrap();
         assert_eq!(sample.cpu_percent, None);
         assert_eq!(sample.agent.cpu_percent, None);
+        let own = sample.game_server.as_ref().unwrap();
+        assert_eq!((own.process_count, own.cpu_percent), (1, None));
+        assert!(own.memory_bytes > 0);
         assert!(sample.memory_used_bytes <= sample.memory_total_bytes);
         let now = sample.timestamp;
         *metrics.latest.write().unwrap() = Some(sample);
@@ -565,5 +595,6 @@ mod tests {
             .cpu_percent
             .is_some_and(|cpu| (0.0..=100.0).contains(&cpu)));
         assert!(sample.agent.cpu_percent.is_some());
+        assert!(sample.game_server.unwrap().cpu_percent.is_some());
     }
 }

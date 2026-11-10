@@ -17,6 +17,7 @@ const fixture = (): HardwareStatus => {
       client: { process_count: 1, cpu_percent: 3, memory_bytes: 24 * 1024 ** 2 },
       llm: { process_count: 2, cpu_percent: 9.5, memory_bytes: 232 * 1024 ** 2 },
     },
+    game_server: { process_count: 1, cpu_percent: 4.5, memory_bytes: 208 * 1024 ** 2 },
   }
   return {
     from: 2000000 - 86400, until: 2000000, sample_interval_seconds: 60,
@@ -34,7 +35,7 @@ describe('hardware metrics', () => {
     const data = fixture()
     expect(parseHardwareStatus(data)).toEqual(data)
     const html = panel(data)
-    for (const text of ['37.5%', '3%', '9.5%', '3 GiB / 8 GiB', '24 MiB', '232 MiB', '20 GiB', '100 GiB', '1분', '5분', '15분', '7일']) {
+    for (const text of ['37.5%', '3%', '9.5%', '3 GiB / 8 GiB', '24 MiB', '232 MiB', '4.5%', '208 MiB', '20 GiB', '100 GiB', '1분', '5분', '15분', '7일']) {
       expect(html).toContain(text)
     }
     expect(html).toContain('본체 1개 프로세스')
@@ -112,6 +113,13 @@ describe('hardware metrics', () => {
     expect(() => parseHardwareStatus(data, 168)).toThrow('Invalid hardware status')
   })
 
+  it('accepts samples recorded before game server usage was collected', () => {
+    const data = fixture()
+    delete data.latest!.game_server
+    expect(parseHardwareStatus(data)).toEqual(data)
+    expect(panel(data)).toContain('이 기록에는 게임 서버 값이 없습니다')
+  })
+
   it('accepts a fresh observation after a restart within the same minute', () => {
     const data = fixture()
     data.samples = [{ ...data.latest!, timestamp: data.latest!.timestamp - 1 }, data.latest!]
@@ -134,6 +142,7 @@ describe('hardware metrics', () => {
     mutate((sample) => { sample.agent.client.memory_bytes += 1 })
     mutate((sample) => { sample.agent.llm.cpu_percent = null })
     mutate((sample) => { sample.load_average = [0, NaN, 0] })
+    mutate((sample) => { sample.game_server!.memory_bytes = -1 })
     for (const data of invalid) expect(() => parseHardwareStatus(data)).toThrow('Invalid hardware status')
   })
 })

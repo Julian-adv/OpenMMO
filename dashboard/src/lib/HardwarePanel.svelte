@@ -11,6 +11,7 @@
   let { history, loading, refreshing, error, refresh } = $derived(resource)
   let latest = $derived(history?.latest)
   let agent = $derived(latest && latest.agent.instances > 0 ? latest.agent : null)
+  let game = $derived(latest?.game_server ?? null)
   let coreBasis = $derived(latest ? `${latest.cpu_count}개 논리 코어 전체 기준` : null)
   let memoryPercent = $derived(latest ? usagePercent(latest.memory_used_bytes, latest.memory_total_bytes) : null)
   const load = (value: number) => value.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -33,10 +34,21 @@
       {#if latest?.cpu_percent != null}<meter min="0" max="100" value={latest.cpu_percent} aria-label="머신 전체 CPU 사용률"></meter>{/if}
     </div>
     <div>
-      <span>서버 메모리 사용률</span>
+      <span>머신 전체 메모리 사용률</span>
       <strong>{formatPercent(memoryPercent)}</strong>
       <small>{latest ? `${formatBytes(latest.memory_used_bytes)} / ${formatBytes(latest.memory_total_bytes)}` : '수집 대기 중'}</small>
-      {#if memoryPercent != null}<meter min="0" max="100" value={memoryPercent} aria-label="서버 메모리 사용률"></meter>{/if}
+      {#if memoryPercent != null}<meter min="0" max="100" value={memoryPercent} aria-label="머신 전체 메모리 사용률"></meter>{/if}
+    </div>
+    <div>
+      <span>게임 서버 CPU</span>
+      <strong>{formatPercent(game?.cpu_percent)}</strong>
+      <small>{coreBasis ? `게임 서버 프로세스 · ${coreBasis}` : '수집 대기 중'}</small>
+      {#if game?.cpu_percent != null}<meter min="0" max="100" value={game.cpu_percent} aria-label="게임 서버 CPU 사용률"></meter>{/if}
+    </div>
+    <div>
+      <span>게임 서버 메모리</span>
+      <strong>{game ? formatBytes(game.memory_bytes) : '—'}</strong>
+      <small>{game ? '게임 서버 프로세스 RSS' : latest ? '이 기록에는 게임 서버 값이 없습니다' : '수집 대기 중'}</small>
     </div>
     <div>
       <span>agent-client CPU</span>
