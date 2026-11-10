@@ -16,6 +16,8 @@ Follow the [Development Setup](README.md#development-setup) section of the READM
 
 CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs the checks below on every PR; running them locally before pushing saves a round-trip.
 
+`bash tools/pre-push-check.sh` runs the sections touched by unpushed commits (`--all` for everything). Direct pushes to master do not trigger CI, so maintainers call it from `.git/hooks/pre-push`.
+
 Rust, from the repo root:
 
 ```bash

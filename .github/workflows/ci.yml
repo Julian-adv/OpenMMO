@@ -2,17 +2,14 @@ name: CI
 
 on:
   pull_request:
-  push:
-    branches: [master]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
-  # Superseded PR pushes are worth cancelling; a master push is the only
-  # verdict that commit will ever get, so let it finish.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   rust:
