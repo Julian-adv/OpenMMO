@@ -6,15 +6,16 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use onlinerpg_shared::family::{
-    FamilyEstate, FamilyInfo, FamilyMember, FAMILY_CREATE_COST, FAMILY_INVITE_TTL,
-    FAMILY_RENAME_COST, FAMILY_RENAME_INTERVAL_SECS,
+    FamilyEstate, FamilyInfo, FamilyMember, FAMILY_DISSOLVE_STAMPS, FAMILY_FOUND_STAMPS,
+    FAMILY_INVITE_TTL, FAMILY_RENAME_INTERVAL_SECS, FAMILY_RENAME_STAMPS, FAMILY_STAMP_ITEM,
 };
+use onlinerpg_shared::inventory::ItemInstance;
 use tracing::{info, warn};
 
 use super::auth_db;
 use super::consent::{answer_consent, PendingConsent};
-use super::inventory::serialize_inventory;
-use crate::auth::{unix_now, AuthError, AuthService, CharacterSaveData, FamilyRoster, ItemRow};
+use super::inventory::{hold_from_bag, serialize_inventory, BagHold};
+use crate::auth::{unix_now, AuthError, AuthService, FamilyRoster};
 use crate::types::{PlayerId, ServerMessage};
 
 const FAMILY_PENDING_INVITE_CAP: usize = 5;
@@ -62,6 +63,23 @@ impl Families {
         });
         pending
     }
+}
+
+/// Take `count` stamps from however many stacks hold them.
+fn hold_stamps(bag: &mut Vec<ItemInstance>, count: u32) -> Option<BagHold> {
+    let mut remaining = count;
+    let mut lines = Vec::new();
+    for item in bag.iter().filter(|i| i.item_def_id == FAMILY_STAMP_ITEM) {
+        let take = item.quantity.min(remaining);
+        if take > 0 {
+            lines.push((item.instance_id, take));
+            remaining -= take;
+        }
+    }
+    if remaining > 0 {
+        return None;
+    }
+    hold_from_bag(bag, lines)
 }
 
 fn family_info(roster: &FamilyRoster, viewer: i64, online: &[i64], now: i64) -> Option<FamilyInfo> {
@@ -201,60 +219,56 @@ impl super::GameState {
             .await;
     }
 
-    /// Run a DB write that charges `cost`. The gold leaves the live balance
-    /// first and comes back if the write refuses or fails.
-    async fn family_paid_write<F>(
+    /// Run a DB write that spends `stamps` revenue stamps. The stamps leave
+    /// the bag first and return if the write refuses or fails.
+    async fn family_stamped_write<T, F>(
         &self,
         player_id: &PlayerId,
-        cost: i64,
+        stamps: u32,
         write: F,
-    ) -> Result<i64, String>
+    ) -> Result<T, String>
     where
-        F: FnOnce(CharacterSaveData, Vec<ItemRow>) -> Result<Result<i64, &'static str>, AuthError>
-            + Send
-            + 'static,
+        T: Send + 'static,
+        F: FnOnce() -> Result<Result<T, &'static str>, AuthError> + Send + 'static,
     {
-        let _persistence = self.persistence_lock.lock().await;
-        if self.reject_if_trading(player_id, "pay family fees").await {
+        if self
+            .reject_if_trading(player_id, "file family papers")
+            .await
+        {
             return Err("finish your player trade first.".to_string());
         }
-        let mut character = self
-            .get_player_save_data(player_id)
+        let hold = self
+            .inventories
+            .write()
             .await
-            .ok_or(SERVER_ERROR)?;
-        {
-            let mut gold = self.player_gold.write().await;
-            let balance = gold.get_mut(player_id).ok_or(SERVER_ERROR)?;
-            if *balance < cost {
-                return Err(format!("you need {cost} gold."));
-            }
-            *balance -= cost;
-            character.gold = *balance;
-        }
-        let rows = {
-            let inventories = self.inventories.read().await;
-            inventories.get(player_id).map(serialize_inventory)
+            .get_mut(player_id)
+            .and_then(|inv| hold_stamps(&mut inv.bag, stamps));
+        let Some(hold) = hold else {
+            return Err(format!(
+                "you need {stamps} revenue stamp(s); the Land Registrar sells them."
+            ));
         };
-        let outcome = match rows {
-            Some(rows) => auth_db(move || write(character, rows)).await,
-            None => Err(AuthError::Database("inventory not found".to_string())),
-        };
-        match outcome {
-            Ok(Ok(family_id)) => {
-                self.mark_dirty(player_id).await;
-                self.send_gold_update(player_id).await;
-                Ok(family_id)
-            }
-            Ok(Err(reason)) => {
-                self.adjust_gold(player_id, cost).await;
-                Err(reason.to_string())
-            }
+        let outcome = match auth_db(write).await {
+            Ok(Ok(value)) => Ok(value),
+            Ok(Err(reason)) => Err(reason.to_string()),
             Err(err) => {
                 warn!("Family write failed: {err}");
-                self.adjust_gold(player_id, cost).await;
                 Err(SERVER_ERROR.to_string())
             }
+        };
+        let saved = outcome.as_ref().map(|_| ()).map_err(|_| "not saved");
+        if self
+            .finish_bag_write(player_id, hold, &[], saved)
+            .await
+            .is_ok()
+        {
+            self.log_consumed(
+                player_id,
+                std::iter::repeat_n(FAMILY_STAMP_ITEM, stamps as usize),
+            )
+            .await;
         }
+        outcome
     }
 
     pub async fn create_family(
@@ -272,12 +286,15 @@ impl super::GameState {
                 return;
             }
         }
+        let Some(character_id) = self.character_id_of(player_id).await else {
+            return;
+        };
         let name = name.trim().to_string();
         let auth_copy = auth.clone();
         let saved = name.clone();
         let outcome = self
-            .family_paid_write(player_id, FAMILY_CREATE_COST, move |character, rows| {
-                auth_copy.create_family(&character, &rows, &saved)
+            .family_stamped_write(player_id, FAMILY_FOUND_STAMPS, move || {
+                auth_copy.create_family(character_id, &saved)
             })
             .await;
         let family_id = match outcome {
@@ -299,12 +316,15 @@ impl super::GameState {
     }
 
     pub async fn rename_family(&self, player_id: &PlayerId, name: &str, auth: &AuthService) {
+        let Some(character_id) = self.character_id_of(player_id).await else {
+            return;
+        };
         let name = name.trim().to_string();
         let auth_copy = auth.clone();
         let saved = name.clone();
         let outcome = self
-            .family_paid_write(player_id, FAMILY_RENAME_COST, move |character, rows| {
-                auth_copy.rename_family(&character, &rows, &saved)
+            .family_stamped_write(player_id, FAMILY_RENAME_STAMPS, move || {
+                auth_copy.rename_family(character_id, &saved)
             })
             .await;
         let family_id = match outcome {
@@ -512,6 +532,27 @@ impl super::GameState {
         self.refresh_family(family_id, auth).await;
     }
 
+    /// The head, as the last member, dissolves the family at the registrar.
+    pub async fn dissolve_family(
+        &self,
+        player_id: &PlayerId,
+        merchant_id: &PlayerId,
+        auth: &AuthService,
+    ) {
+        match self.validate_trader(player_id, merchant_id).await {
+            Ok(trader) if trader.is_land_registrar() => {
+                self.depart_family(player_id, None, true, auth).await;
+            }
+            _ => {
+                self.family_note(
+                    player_id,
+                    "visit the Land Registrar to dissolve the family.",
+                )
+                .await;
+            }
+        }
+    }
+
     /// Leave, or kick `target_character` when given.
     pub async fn remove_from_family(
         &self,
@@ -519,29 +560,57 @@ impl super::GameState {
         target_character: Option<i64>,
         auth: &AuthService,
     ) {
+        self.depart_family(player_id, target_character, false, auth)
+            .await;
+    }
+
+    async fn depart_family(
+        &self,
+        player_id: &PlayerId,
+        target_character: Option<i64>,
+        dissolve: bool,
+        auth: &AuthService,
+    ) {
         let Some(actor) = self.character_id_of(player_id).await else {
             return;
         };
         let target = target_character.unwrap_or(actor);
         let auth_copy = auth.clone();
-        let departure = match auth_db(move || {
-            let names = auth_copy.character_names(&[target])?;
-            Ok((auth_copy.remove_family_member(actor, target)?, names))
-        })
-        .await
-        {
-            Ok((Ok(departure), names)) => (departure, names),
-            Ok((Err(reason), _)) => {
-                self.family_note(player_id, reason).await;
-                return;
+        let (departure, names) = if dissolve {
+            let outcome = self
+                .family_stamped_write(player_id, FAMILY_DISSOLVE_STAMPS, move || {
+                    let names = auth_copy.character_names(&[target])?;
+                    Ok(auth_copy
+                        .dissolve_family(actor)?
+                        .map(|departure| (departure, names)))
+                })
+                .await;
+            match outcome {
+                Ok(departed) => departed,
+                Err(reason) => {
+                    self.family_note(player_id, reason).await;
+                    return;
+                }
             }
-            Err(err) => {
-                warn!("Failed to remove family member: {err}");
-                self.family_note(player_id, SERVER_ERROR).await;
-                return;
+        } else {
+            match auth_db(move || {
+                let names = auth_copy.character_names(&[target])?;
+                Ok((auth_copy.remove_family_member(actor, target)?, names))
+            })
+            .await
+            {
+                Ok((Ok(departure), names)) => (departure, names),
+                Ok((Err(reason), _)) => {
+                    self.family_note(player_id, reason).await;
+                    return;
+                }
+                Err(err) => {
+                    warn!("Failed to remove family member: {err}");
+                    self.family_note(player_id, SERVER_ERROR).await;
+                    return;
+                }
             }
         };
-        let (departure, names) = departure;
         let target_name = names
             .into_iter()
             .next()

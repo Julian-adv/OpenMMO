@@ -1050,6 +1050,11 @@ pub enum ClientMessage {
         accept: bool,
     },
     LeaveFamily,
+    /// The head, as the last member, dissolves the family at the land
+    /// registrar.
+    DissolveFamily {
+        merchant_player_id: PlayerId,
+    },
     KickFamilyMember {
         character_id: i64,
     },

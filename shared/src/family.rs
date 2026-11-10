@@ -6,8 +6,11 @@ use serde::{Deserialize, Serialize};
 use crate::character::CharacterClass;
 
 pub const FAMILY_MAX_MEMBERS: usize = 30;
-pub const FAMILY_CREATE_COST: i64 = 10_000;
-pub const FAMILY_RENAME_COST: i64 = FAMILY_CREATE_COST;
+/// The land registrar's fee stamp, spent on family filings.
+pub const FAMILY_STAMP_ITEM: &str = "revenue_stamp";
+pub const FAMILY_FOUND_STAMPS: u32 = 10;
+pub const FAMILY_RENAME_STAMPS: u32 = 10;
+pub const FAMILY_DISSOLVE_STAMPS: u32 = 1;
 pub const FAMILY_RENAME_INTERVAL_SECS: i64 = 30 * 24 * 60 * 60;
 /// How long a dissolved or renamed-away family name stays unusable.
 pub const FAMILY_NAME_RETIRE_SECS: i64 = 30 * 24 * 60 * 60;

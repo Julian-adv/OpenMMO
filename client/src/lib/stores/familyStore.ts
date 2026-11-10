@@ -1,11 +1,14 @@
 import { derived, writable } from 'svelte/store'
+import { bagItemCount } from './inventoryStore'
 import { pickupKeyCode } from './pickupSettings'
 import type { CharacterClass } from '../network/networkTypes'
 
 // Limits, ranks and permission bits mirror shared/src/family.rs.
 export const FAMILY_MAX_MEMBERS = 30
-export const FAMILY_CREATE_COST = 10_000
-export const FAMILY_RENAME_COST = FAMILY_CREATE_COST
+export const FAMILY_STAMP_ITEM = 'revenue_stamp'
+export const FAMILY_FOUND_STAMPS = 10
+export const FAMILY_RENAME_STAMPS = 10
+export const FAMILY_DISSOLVE_STAMPS = 1
 export const FAMILY_REJOIN_COOLDOWN_HOURS = 24
 export const FAMILY_RANK_LABEL_MAX_CHARS = 12
 export const FAMILY_INVITE_TTL_MS = 120_000
@@ -102,6 +105,7 @@ export interface PendingFamilyInvite {
 export const familyInfo = writable<FamilyInfo | null>(null)
 export const pendingFamilyInvites = writable<PendingFamilyInvite[]>([])
 export const familyPanelVisible = writable(false)
+export const familyStampCount = bagItemCount(FAMILY_STAMP_ITEM)
 
 /** H opens the family panel unless the player bound pickup to H. */
 export const familyHotkeyActive = derived(

@@ -256,6 +256,7 @@ export type ClientMessage =
   | { InviteToFamily: { name: string } }
   | { RespondFamilyInvite: { inviter_id: number; accept: boolean } }
   | 'LeaveFamily'
+  | { DissolveFamily: { merchant_player_id: number } }
   | { KickFamilyMember: { character_id: number } }
   | { SetFamilyMemberRank: { character_id: number; rank: number } }
   | { TransferFamilyHead: { character_id: number } }

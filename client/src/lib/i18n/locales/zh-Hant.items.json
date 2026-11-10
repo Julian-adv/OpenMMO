@@ -432,5 +432,7 @@
   "letter.name": "信紙",
   "letter.description": "已付郵資的信紙和信封。投進任意郵筒即可寄出一封信。",
   "furniture_mailbox.name": "郵筒",
-  "furniture_mailbox.description": "拆封後可在自己的領地放置郵筒。任何人都能在這裡寄信和收信。"
+  "furniture_mailbox.description": "拆封後可在自己的領地放置郵筒。任何人都能在這裡寄信和收信。",
+  "revenue_stamp.description": "土地登記官出售的手續費印花。用於家族文書：創立和改名各需十張，解散需一張。",
+  "revenue_stamp.name": "印花票"
 }

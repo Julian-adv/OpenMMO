@@ -432,5 +432,7 @@
   "letter.name": "편지지",
   "letter.description": "우표값이 붙은 편지지와 봉투. 아무 우체통에 넣으면 편지 한 통을 보냅니다.",
   "furniture_mailbox.name": "우체통",
-  "furniture_mailbox.description": "포장을 풀어 자신의 영지에 우체통을 놓습니다. 누구나 이 우체통에서 편지를 보내고 받을 수 있습니다."
+  "furniture_mailbox.description": "포장을 풀어 자신의 영지에 우체통을 놓습니다. 누구나 이 우체통에서 편지를 보내고 받을 수 있습니다.",
+  "revenue_stamp.description": "토지 등기관이 파는 수수료 인지. 가문 서류에 씁니다. 가문 창설과 개명에 열 장, 해산에 한 장이 듭니다.",
+  "revenue_stamp.name": "인지"
 }

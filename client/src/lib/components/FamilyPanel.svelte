@@ -10,8 +10,9 @@
     FAMILY_EDITABLE_PERMISSIONS,
     FAMILY_MAX_MEMBERS,
     FAMILY_PERMISSION,
-    FAMILY_CREATE_COST,
-    FAMILY_RENAME_COST,
+    familyStampCount,
+    FAMILY_FOUND_STAMPS,
+    FAMILY_RENAME_STAMPS,
     FAMILY_REJOIN_COOLDOWN_HOURS,
     FAMILY_RANK_HEAD,
     FAMILY_RANK_GUEST,
@@ -104,13 +105,12 @@
 
   function askLeave() {
     if (!family) return
-    const dissolves = isHead && family.members.length === 1
     confirm = {
-      text: $t(dissolves ? 'family.dissolveConfirm' : 'family.leaveConfirm', {
+      text: $t('family.leaveConfirm', {
         family: family.name,
         hours: FAMILY_REJOIN_COOLDOWN_HOURS,
       }),
-      label: $t(dissolves ? 'family.dissolve' : 'family.leave'),
+      label: $t('family.leave'),
       run: () => networkManager.sendLeaveFamily(),
     }
   }
@@ -187,7 +187,10 @@
     const name = renameText.trim()
     if (!name) return
     confirm = {
-      text: $t('family.renameConfirm', { name, cost: FAMILY_RENAME_COST }),
+      text: $t('family.renameConfirm', {
+        name,
+        count: FAMILY_RENAME_STAMPS,
+      }),
       label: $t('family.rename'),
       run: () => {
         networkManager.sendRenameFamily(name)
@@ -218,7 +221,7 @@
 
     {#if !family}
       <p class="note">
-        {$t('family.noneFound', { cost: FAMILY_CREATE_COST })}
+        {$t('family.noneFound', { count: FAMILY_FOUND_STAMPS })}
       </p>
       <p class="note">{$t('family.noneJoin')}</p>
     {:else}
@@ -442,12 +445,15 @@
               <button
                 class="text-btn"
                 disabled={!renameText.trim() ||
-                  $playerGold < FAMILY_RENAME_COST}
+                  $familyStampCount < FAMILY_RENAME_STAMPS}
                 onclick={askRename}>{$t('family.rename')}</button
               >
             </div>
             <div class="dim small">
-              {$t('family.renameCost', { cost: FAMILY_RENAME_COST })}
+              {$t('family.renameCost', { count: FAMILY_RENAME_STAMPS })}
+              {#if $familyStampCount < FAMILY_RENAME_STAMPS}
+                {$t('family.renameNeedsStamps')}
+              {/if}
             </div>
           {:else}
             <div class="dim">
@@ -461,16 +467,17 @@
         {/if}
 
         <div class="leave-row">
-          <button
-            class="text-btn danger"
-            disabled={isHead && family.members.length > 1}
-            onclick={askLeave}
-            >{isHead && family.members.length === 1
-              ? $t('family.dissolve')
-              : $t('family.leave')}</button
+          <button class="text-btn danger" disabled={isHead} onclick={askLeave}
+            >{$t('family.leave')}</button
           >
-          {#if isHead && family.members.length > 1}
-            <span class="dim small">{$t('family.headCannotLeave')}</span>
+          {#if isHead}
+            <span class="dim small"
+              >{$t(
+                family.members.length > 1
+                  ? 'family.headCannotLeave'
+                  : 'family.dissolveAtRegistrar'
+              )}</span
+            >
           {/if}
         </div>
       </div>

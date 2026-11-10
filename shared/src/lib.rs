@@ -258,7 +258,7 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v143: writers remove their own notices (`RemoveNoticePost`,
 /// `NoticePostRemoved`, refusal `not_yours`).
 /// v144: families (`CreateFamily`, `InviteToFamily`, `RespondFamilyInvite`,
-/// `LeaveFamily`, `KickFamilyMember`, `SetFamilyMemberRank`,
+/// `LeaveFamily`, `DissolveFamily`, `KickFamilyMember`, `SetFamilyMemberRank`,
 /// `TransferFamilyHead`, `ClaimFamilyHead`, `SetFamilyRank`, `RenameFamily`,
 /// `AttachEstateToFamily`, `DepositFamilyEstate`; `FamilyState`,
 /// `FamilyInviteReceived`, `PlayerFamilyChanged`), `Player.family` and

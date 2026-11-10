@@ -1244,6 +1244,12 @@ class NetworkManager {
     this.sendMessage('LeaveFamily')
   }
 
+  sendDissolveFamily(merchantPlayerId: number) {
+    this.sendMessage({
+      DissolveFamily: { merchant_player_id: merchantPlayerId },
+    })
+  }
+
   sendKickFamilyMember(characterId: number) {
     this.sendMessage({ KickFamilyMember: { character_id: characterId } })
   }

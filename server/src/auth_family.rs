@@ -6,13 +6,12 @@ use super::{
     class_from_row, unix_now, valid_character_name, valid_name_char, AuthError, AuthService,
     CharacterSaveData, ItemRow,
 };
-use crate::metrics::{GoldSink, GoldSinkRecord};
 use onlinerpg_shared::character::CharacterClass;
 use onlinerpg_shared::family::{
-    default_rank_label, default_rank_permissions, permission, FamilyRank, FAMILY_CREATE_COST,
+    default_rank_label, default_rank_permissions, permission, FamilyRank,
     FAMILY_HEAD_INACTIVE_SECS, FAMILY_MAX_MEMBERS, FAMILY_NAME_RETIRE_SECS, FAMILY_RANK_COUNT,
     FAMILY_RANK_ELDER, FAMILY_RANK_HEAD, FAMILY_RANK_LABEL_MAX_CHARS, FAMILY_RANK_MEMBER,
-    FAMILY_REJOIN_COOLDOWN_SECS, FAMILY_RENAME_COST, FAMILY_RENAME_INTERVAL_SECS,
+    FAMILY_REJOIN_COOLDOWN_SECS, FAMILY_RENAME_INTERVAL_SECS,
 };
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 
@@ -190,15 +189,6 @@ fn settle_family(conn: &Connection, family_id: i64) -> Result<bool, rusqlite::Er
 fn valid_rank_label(label: &str) -> bool {
     let chars = label.chars().count();
     (1..=FAMILY_RANK_LABEL_MAX_CHARS).contains(&chars) && label.chars().all(valid_name_char)
-}
-
-fn founding_sink(sink: GoldSink, gold: i64) -> GoldSinkRecord {
-    GoldSinkRecord {
-        timestamp: unix_now(),
-        sink,
-        quantity: 1,
-        gold,
-    }
 }
 
 impl AuthService {
@@ -409,16 +399,9 @@ impl AuthService {
         }))
     }
 
-    /// `character` carries the gold left after the founding cost.
-    pub fn create_family(
-        &self,
-        character: &CharacterSaveData,
-        inventory: &[ItemRow],
-        name: &str,
-    ) -> Verdict<i64> {
+    pub fn create_family(&self, id: i64, name: &str) -> Verdict<i64> {
         let mut conn = self.open_connection()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let id = character.character_id;
         if membership(&tx, id)?.is_some() {
             return Ok(Err("You already belong to a family."));
         }
@@ -475,12 +458,6 @@ impl AuthService {
             "UPDATE land_estates SET family_id=?1 WHERE account_name=?2",
             params![family_id, account],
         )?;
-        Self::write_gold_sinks(
-            &tx,
-            &[founding_sink(GoldSink::FamilyFounding, FAMILY_CREATE_COST)],
-        )?;
-        Self::write_character_states(&tx, std::slice::from_ref(character))?;
-        Self::replace_inventories(&tx, [(id, inventory)])?;
         tx.commit()?;
         Ok(Ok(family_id))
     }
@@ -543,8 +520,23 @@ impl AuthService {
         Ok(Ok(name))
     }
 
-    /// Leave (`actor_id == target_id`) or kick.
+    /// Leave (`actor_id == target_id`) or kick. The head never leaves this
+    /// way: they hand the family over, or dissolve it at the registrar.
     pub fn remove_family_member(&self, actor_id: i64, target_id: i64) -> Verdict<FamilyDeparture> {
+        self.depart_family(actor_id, target_id, false)
+    }
+
+    /// The head, as the last member, ends the family.
+    pub fn dissolve_family(&self, actor_id: i64) -> Verdict<FamilyDeparture> {
+        self.depart_family(actor_id, actor_id, true)
+    }
+
+    fn depart_family(
+        &self,
+        actor_id: i64,
+        target_id: i64,
+        dissolve: bool,
+    ) -> Verdict<FamilyDeparture> {
         let mut conn = self.open_connection()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let Some(target) = membership(&tx, target_id)? else {
@@ -556,8 +548,18 @@ impl AuthService {
                 [target.family_id],
                 |row| row.get(0),
             )?;
-            if target.rank == FAMILY_RANK_HEAD && members > 1 {
-                return Ok(Err("Hand the family to another member before leaving."));
+            let head = target.rank == FAMILY_RANK_HEAD;
+            let refusal = match (dissolve, head, members > 1) {
+                (true, false, _) => Some("Only the head can dissolve the family."),
+                (true, true, true) => {
+                    Some("Remove every other member before dissolving the family.")
+                }
+                (false, true, true) => Some("Hand the family to another member before leaving."),
+                (false, true, false) => Some("Visit the Land Registrar to dissolve the family."),
+                _ => None,
+            };
+            if let Some(reason) = refusal {
+                return Ok(Err(reason));
             }
         } else {
             let allowed = membership(&tx, actor_id)?.is_some_and(|actor| {
@@ -749,16 +751,9 @@ impl AuthService {
         Ok(Ok(actor.family_id))
     }
 
-    /// `character` carries the gold left after the rename cost.
-    pub fn rename_family(
-        &self,
-        character: &CharacterSaveData,
-        inventory: &[ItemRow],
-        name: &str,
-    ) -> Verdict<i64> {
+    pub fn rename_family(&self, id: i64, name: &str) -> Verdict<i64> {
         let mut conn = self.open_connection()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let id = character.character_id;
         let Some(actor) = membership(&tx, id)? else {
             return Ok(Err("You do not belong to a family."));
         };
@@ -794,12 +789,6 @@ impl AuthService {
         if !old_name.eq_ignore_ascii_case(name) {
             retire_name(&tx, &old_name)?;
         }
-        Self::write_gold_sinks(
-            &tx,
-            &[founding_sink(GoldSink::FamilyRename, FAMILY_RENAME_COST)],
-        )?;
-        Self::write_character_states(&tx, std::slice::from_ref(character))?;
-        Self::replace_inventories(&tx, [(id, inventory)])?;
         tx.commit()?;
         Ok(Ok(actor.family_id))
     }

@@ -1,8 +1,8 @@
 use super::*;
 use crate::auth::AuthService;
 use onlinerpg_shared::family::{
-    permission, FamilyInfo, FAMILY_CREATE_COST, FAMILY_RANK_ELDER, FAMILY_RANK_GUEST,
-    FAMILY_RANK_HEAD, FAMILY_RANK_MEMBER,
+    permission, FamilyInfo, FAMILY_FOUND_STAMPS, FAMILY_RANK_ELDER, FAMILY_RANK_GUEST,
+    FAMILY_RANK_HEAD, FAMILY_RANK_MEMBER, FAMILY_STAMP_ITEM,
 };
 
 const REGISTRAR: &str = "npc_registrar";
@@ -18,12 +18,24 @@ async fn setup(tag: &str) -> (GameState, AuthService, PlayerId) {
 }
 
 /// A character in the game on its own account, standing by the registrar.
-async fn enter(game: &GameState, auth: &AuthService, name: &str, gold: i64) -> (i64, DirectRx) {
+async fn enter(game: &GameState, auth: &AuthService, name: &str, stamps: u32) -> (i64, DirectRx) {
     let account = auth.login_google(&format!("family-{name}")).unwrap();
-    let deeds = vec![bag_item(1, "land_deed", 1)];
-    let id = estate_owner(game, auth, &account, name, pos3(1.0, 0.0, 1.0), deeds).await;
-    game.player_gold.write().await.insert(pid(name), gold);
+    let mut bag = vec![bag_item(1, "land_deed", 1)];
+    if stamps > 0 {
+        bag.push(bag_item(2, FAMILY_STAMP_ITEM, stamps));
+    }
+    let id = estate_owner(game, auth, &account, name, pos3(1.0, 0.0, 1.0), bag).await;
+    game.player_gold.write().await.insert(pid(name), 500);
     (id, game.register_direct_channel(&pid(name)).await)
+}
+
+async fn stamps(game: &GameState, name: &str) -> u32 {
+    game.inventories.read().await[&pid(name)]
+        .bag
+        .iter()
+        .filter(|item| item.item_def_id == FAMILY_STAMP_ITEM)
+        .map(|item| item.quantity)
+        .sum()
 }
 
 /// Claims the 32 m plot at column `plot` of row 0, then walks back.
@@ -82,31 +94,22 @@ async fn shown_family(game: &GameState, name: &str) -> Option<String> {
 #[tokio::test]
 async fn founding_needs_an_estate_and_the_fee_and_a_free_name() {
     let (game, auth, registrar) = setup("family_founding").await;
-    let (_, mut rx) = enter(&game, &auth, "Landless", FAMILY_CREATE_COST).await;
+    let (_, mut rx) = enter(&game, &auth, "Landless", FAMILY_FOUND_STAMPS).await;
     game.create_family(&pid("Landless"), &registrar, "Ironwood", &auth)
         .await;
     assert!(has_line(&drain(&mut rx), "Own an estate"));
-    assert_eq!(
-        game.player_gold.read().await[&pid("Landless")],
-        FAMILY_CREATE_COST
-    );
+    assert_eq!(stamps(&game, "Landless").await, FAMILY_FOUND_STAMPS);
 
-    let (owner, mut rx) = enter(&game, &auth, "Owner", FAMILY_CREATE_COST - 1).await;
+    let (owner, mut rx) = enter(&game, &auth, "Owner", FAMILY_FOUND_STAMPS - 1).await;
     claim(&game, &auth, "Owner", 0).await;
     game.create_family(&pid("Owner"), &registrar, "Ironwood", &auth)
         .await;
-    assert!(has_line(&drain(&mut rx), "you need 10000 gold"));
-    game.player_gold
-        .write()
-        .await
-        .insert(pid("Owner"), FAMILY_CREATE_COST + 5);
+    assert!(has_line(&drain(&mut rx), "you need 10 revenue stamp"));
+    give(&game, &pid("Owner"), bag_item(3, FAMILY_STAMP_ITEM, 3)).await;
     game.create_family(&pid("Owner"), &registrar, "Landless", &auth)
         .await;
     assert!(has_line(&drain(&mut rx), "A character has that name"));
-    assert_eq!(
-        game.player_gold.read().await[&pid("Owner")],
-        FAMILY_CREATE_COST + 5
-    );
+    assert_eq!(stamps(&game, "Owner").await, FAMILY_FOUND_STAMPS + 2);
 
     game.create_family(&pid("Owner"), &registrar, "Ironwood", &auth)
         .await;
@@ -116,7 +119,7 @@ async fn founding_needs_an_estate_and_the_fee_and_a_free_name() {
     assert_eq!(family.my_permissions(), permission::ALL);
     assert_eq!(family.estates.len(), 1);
     assert!(family.estates[0].mine);
-    assert_eq!(game.player_gold.read().await[&pid("Owner")], 5);
+    assert_eq!(stamps(&game, "Owner").await, 2);
     assert_eq!(
         shown_family(&game, "Owner").await.as_deref(),
         Some("Ironwood")
@@ -129,7 +132,7 @@ async fn founding_needs_an_estate_and_the_fee_and_a_free_name() {
     let listed = auth.list_characters_with_equipment(&account).unwrap();
     assert_eq!(listed[0].family.as_deref(), Some("Ironwood"));
 
-    let (_, mut rx) = enter(&game, &auth, "Rival", FAMILY_CREATE_COST).await;
+    let (_, mut rx) = enter(&game, &auth, "Rival", FAMILY_FOUND_STAMPS + 1).await;
     claim(&game, &auth, "Rival", 1).await;
     game.create_family(&pid("Rival"), &registrar, "ironwood", &auth)
         .await;
@@ -151,7 +154,7 @@ async fn founding_needs_an_estate_and_the_fee_and_a_free_name() {
 #[tokio::test]
 async fn invites_add_members_who_share_the_name_and_leaving_starts_a_cooldown() {
     let (game, auth, registrar) = setup("family_invite").await;
-    let (_, mut head_rx) = enter(&game, &auth, "Head", FAMILY_CREATE_COST).await;
+    let (_, mut head_rx) = enter(&game, &auth, "Head", FAMILY_FOUND_STAMPS + 1).await;
     claim(&game, &auth, "Head", 0).await;
     found(&game, &auth, &registrar, "Head", "Ironwood").await;
     let (_, mut guest_rx) = enter(&game, &auth, "Guest", 0).await;
@@ -194,7 +197,7 @@ async fn invites_add_members_who_share_the_name_and_leaving_starts_a_cooldown() 
 #[tokio::test]
 async fn rank_permissions_open_the_family_estate_and_no_further() {
     let (game, auth, registrar) = setup("family_permissions").await;
-    let (head, _head_rx) = enter(&game, &auth, "Head", FAMILY_CREATE_COST).await;
+    let (head, _head_rx) = enter(&game, &auth, "Head", FAMILY_FOUND_STAMPS + 1).await;
     claim(&game, &auth, "Head", 0).await;
     found(&game, &auth, &registrar, "Head", "Ironwood").await;
     let (member, mut member_rx) = enter(&game, &auth, "Member", 0).await;
@@ -259,10 +262,10 @@ async fn rank_permissions_open_the_family_estate_and_no_further() {
 #[tokio::test]
 async fn a_members_estate_joins_the_family_and_leaves_with_them() {
     let (game, auth, registrar) = setup("family_estates").await;
-    let (_, mut head_rx) = enter(&game, &auth, "Head", FAMILY_CREATE_COST).await;
+    let (_, mut head_rx) = enter(&game, &auth, "Head", FAMILY_FOUND_STAMPS + 1).await;
     claim(&game, &auth, "Head", 0).await;
     found(&game, &auth, &registrar, "Head", "Ironwood").await;
-    let (member, mut member_rx) = enter(&game, &auth, "Member", 500).await;
+    let (member, mut member_rx) = enter(&game, &auth, "Member", 0).await;
     claim(&game, &auth, "Member", 1).await;
     join(&game, &auth, "Head", "Member").await;
     let family = family_state(&drain(&mut member_rx)).flatten().unwrap();
@@ -298,7 +301,7 @@ async fn a_members_estate_joins_the_family_and_leaves_with_them() {
 #[tokio::test]
 async fn a_family_outlives_its_head_and_dissolves_with_its_last_member() {
     let (game, auth, registrar) = setup("family_succession").await;
-    let (head, _) = enter(&game, &auth, "Head", FAMILY_CREATE_COST).await;
+    let (head, _) = enter(&game, &auth, "Head", FAMILY_FOUND_STAMPS + 1).await;
     claim(&game, &auth, "Head", 0).await;
     found(&game, &auth, &registrar, "Head", "Ironwood").await;
     let (_, mut elder_rx) = enter(&game, &auth, "Elder", 0).await;
@@ -320,10 +323,19 @@ async fn a_family_outlives_its_head_and_dissolves_with_its_last_member() {
 
     game.remove_from_family(&pid("Later"), None, &auth).await;
     game.remove_from_family(&pid("Elder"), None, &auth).await;
+    assert!(has_line(&drain(&mut elder_rx), "Visit the Land Registrar"));
+    game.dissolve_family(&pid("Elder"), &pid("Later"), &auth)
+        .await;
+    assert!(has_line(&drain(&mut elder_rx), "visit the Land Registrar"));
+    game.dissolve_family(&pid("Elder"), &registrar, &auth).await;
+    assert!(has_line(&drain(&mut elder_rx), "you need 1 revenue stamp"));
+    give(&game, &pid("Elder"), bag_item(9, FAMILY_STAMP_ITEM, 2)).await;
+    game.dissolve_family(&pid("Elder"), &registrar, &auth).await;
     assert!(has_line(&drain(&mut elder_rx), "dissolved"));
+    assert_eq!(stamps(&game, "Elder").await, 1);
     assert_eq!(shown_family(&game, "Elder").await, None);
 
-    let (_, mut rx) = enter(&game, &auth, "Next", FAMILY_CREATE_COST).await;
+    let (_, mut rx) = enter(&game, &auth, "Next", FAMILY_FOUND_STAMPS + 1).await;
     claim(&game, &auth, "Next", 2).await;
     game.create_family(&pid("Next"), &registrar, "Ironwood", &auth)
         .await;

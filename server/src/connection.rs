@@ -2583,6 +2583,14 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::DissolveFamily { merchant_player_id } => {
+            if let Some(id) = &state.require_in_game("dissolve family") {
+                game_state
+                    .dissolve_family(id, &merchant_player_id, auth_service)
+                    .await;
+            }
+        }
+
         ClientMessage::KickFamilyMember { character_id } => {
             if let Some(id) = &state.require_in_game("kick family member") {
                 game_state

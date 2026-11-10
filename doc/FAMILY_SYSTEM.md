@@ -46,15 +46,16 @@
 
 - 조건: 체납 없는(`missed = 0`) 영지를 가진 계정의 캐릭터, 가문 미소속.
 - 창설자가 가주가 되고, 창설자 계정의 영지가 가문 영지로 연결된다. 그 영지가 이미 다른 가문에 연결되어 있으면(같은 계정의 다른 캐릭터가 연결) 창설할 수 없다.
-- 창설 비용: 10,000c (영지 문서 50,000c의 1/5).
 - 창설 장소: Aldwin(토지 등기관)과의 대화. 영지 문서를 파는 NPC와 같다.
+- 창설 비용: 인지 10장. 인지(`revenue_stamp`)는 Aldwin이 한 장 1,000c에 판다. 합계 10,000c로 영지 문서 50,000c의 1/5이다.
+- 인지는 가방에서 소모된다. 서류가 거절되면 돌려받는다. 게시 용지·편지지와 같은 흐름이다.
 
 ## 3. 가문 이름
 
 - 규칙은 캐릭터 이름과 같다 (`auth.rs`의 이름 검증: ASCII 영숫자, `_`, 한글, 가나, 한자. 숫자·`_`로 시작 불가. 길이도 같다). `banned_names.txt`를 함께 적용한다.
 - 대소문자 무시 유일.
 - 캐릭터 이름과 겹칠 수 없다. 가문 창설 때 캐릭터 이름을 확인하고, 캐릭터 생성·개명 때 가문 이름과 버려진 가문 이름을 확인한다.
-- 개명: 가주만, 현실 시간 30일에 한 번. 비용은 창설 비용과 같다.
+- 개명: 가주만, 현실 시간 30일에 한 번. 인지 10장. 가문 창에서 한다.
 - 합병으로 버려진 이름은 다른 가문이 쓸 수 없다. 나중에 가문 분리가 생기면 원래 가문이 되찾는다.
 - 해산된 가문의 이름과 개명 전 이름은 30일 뒤 누구나 다시 쓸 수 있다.
 
@@ -65,7 +66,8 @@
 - 탈퇴: 가주 외에는 언제든 가능.
 - 추방: 추방 권한이 있고 대상보다 계급이 높은 가문원.
 - 재가입 대기: 탈퇴·추방 후 24시간 동안 다른 가문에 가입 불가 (공유 창고 털고 옮기기 억제).
-- 가주는 승계 후에만 탈퇴한다. 혼자 남은 가주가 탈퇴하면 가문이 해산된다.
+- 가주는 승계 후에만 탈퇴한다.
+- 해산: 가문원이 가주 혼자일 때, Aldwin에게 가서 인지 1장을 내고 한다. 가문 창에서는 해산할 수 없다. 해산하면 이름이 30일 묶이고 가주에게도 24시간 재가입 대기가 걸린다.
 - 캐릭터 삭제 시 탈퇴로 처리한다. 가주였다면 6절의 승계 순서로 자동 승계된다.
 
 ## 5. 영지 공유
@@ -274,7 +276,7 @@ CREATE INDEX IF NOT EXISTS idx_family_storage_log_family ON family_storage_log(f
 
 가주는 단계 0인 가문원이다. 따로 저장하지 않는다. 캐릭터·계정 삭제로 가문원 행이 연쇄 삭제되면 `settle_families`가 가주 없는 가문에 다음 순서를 올리고, 가문원 없는 가문을 해산하고, 계정 가문원이 없는 영지를 뗀다.
 
-창설·개명 비용은 `gold_sink_samples`에 `family_founding`·`family_rename`으로 기록한다. 이 테이블의 CHECK 제약에 두 값을 넣기 위해 시작 때 한 번 테이블을 다시 만든다.
+창설·개명·해산 수수료는 인지 구매로 낸다. 골드 소모 기록에는 기존 `item_purchase`(`revenue_stamp`)로 잡힌다.
 
 `family_retired_names.successor_id`는 합병으로 그 이름을 흡수한 가문이다. 해산·개명이면 NULL. `reusable_at`은 다시 쓸 수 있는 시각이고, 합병이면 NULL(재사용 불가)이다. 지난 행은 창설·개명 때 지운다.
 
@@ -291,6 +293,7 @@ CREATE INDEX IF NOT EXISTS idx_family_storage_log_family ON family_storage_log(f
 - `CreateFamily { merchant_player_id, name }`: 토지 등기관 앞에서
 - `InviteToFamily { name }`, `RespondFamilyInvite { inviter_id, accept }`
 - `LeaveFamily`, `KickFamilyMember { character_id }`
+- `DissolveFamily { merchant_player_id }`: 토지 등기관 앞에서
 - `SetFamilyMemberRank { character_id, rank }`, `TransferFamilyHead { character_id }`, `ClaimFamilyHead`
 - `SetFamilyRank { rank, label, permissions }`
 - `RenameFamily { name }`

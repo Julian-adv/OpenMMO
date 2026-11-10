@@ -142,7 +142,10 @@ async fn steward_sells_land_deeds_and_burns_the_purchase_gold() {
     game_state.open_shop(&buyer, &steward, true).await;
     match buyer_rx.try_recv().unwrap() {
         ServerMessage::ShopState { catalog, .. } => {
-            assert_eq!(catalog, vec!["land_deed", "notice_paper", "letter"]);
+            assert_eq!(
+                catalog,
+                vec!["land_deed", "notice_paper", "letter", "revenue_stamp"]
+            );
         }
         other => panic!("Expected Aldwin's shop, got {other:?}"),
     }
