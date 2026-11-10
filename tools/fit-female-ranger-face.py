@@ -1,8 +1,9 @@
-"""Fit the bald Tripo ranger head to the female base rig with one neck seam.
+"""Fit a bald Tripo head (--face) to the female base rig with one neck seam.
 
 Reuses the seam, weight and neck colour steps of fit-female-custom-face.py.
 The head only gets a rotation, a uniform scale and a translation.
 """
+import argparse
 import copy
 import io
 import importlib.util
@@ -25,13 +26,28 @@ custom = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(custom)
 
 BASE = custom.BASE
-OUT = ROOT / 'assets/modular_human_female_01/faces/tripo_ranger_v1'
-SOURCE = OUT / 'model_url.glb'
-custom.OUT = OUT
+# Per face: uniform scale and offset of the head, and the frontal projection its retouched eye images were
+# made in (Tripo frame, +X front; see iris_cleanup_v1/sources.json): scale, size, centre y, centre z per side.
+FACES = {
+    # Chin 4 mm above the base face's (1.578 m), which every collar was fitted to; the crown ends 3 mm below the base head's.
+    'ranger': {'date': '2026-11-10', 'scale': 0.293, 'offset': [-0.002, 1.6506, -0.008],
+               'iris': (4600, (640, 400), .1155, {'L': .0928, 'R': -.107})},
+    'chic': {'date': '2026-11-11', 'folder': 'tripo_chic_v2', 'scale': 0.293, 'offset': [0, 1.6506, 0.008],
+             'iris': (4600, (640, 400), .1195, {'L': .0967, 'R': -.1006}), 'retouched_irises': False,
+             'lashes_on_lids': True, 'ease_seam_weights': True},
+}
+FACE = OUT = SOURCE = SCALE = OFFSET = IRIS = IRIS_SCALE = IRIS_SIZE = IRIS_Y = IRIS_Z = None
 
-SCALE = 0.293
-# Chin 4 mm above the base face's (1.578 m), which every collar was fitted to; the crown ends 3 mm below the base head's.
-OFFSET = np.array([-0.002, 1.6506, -0.008])
+
+def configure(face):
+    global FACE, OUT, SOURCE, SCALE, OFFSET, IRIS, IRIS_SCALE, IRIS_SIZE, IRIS_Y, IRIS_Z
+    FACE = face
+    OUT = custom.OUT = ROOT / f"assets/modular_human_female_01/faces/{FACES[face].get('folder', f'tripo_{face}_v1')}"
+    SOURCE, IRIS = OUT / 'model_url.glb', OUT / 'iris_cleanup_v1'
+    SCALE, OFFSET = FACES[face]['scale'], np.array(FACES[face]['offset'])
+    IRIS_SCALE, IRIS_SIZE, IRIS_Y, IRIS_Z = FACES[face]['iris']
+
+
 NECK_Y = 1.552
 # The body's colour and ORM maps matched to this face's skin (tools/match-female-body-skin.py).
 BODY_SKIN = ROOT / 'assets/modular_human_female_01/rig_v1/skin_tone_v1'
@@ -105,6 +121,24 @@ def angular_seam(body, body_faces, head, head_faces):
     return body, body_faces, head, head_faces, len(destination), float(np.linalg.norm(body['POSITION'] - original, axis=1).max() * 1000)
 
 
+def ease_seam_weights(head, reach=.025):
+    """Blend head weights just above the seam from the ring's own, so a slim neck has no weight step there.
+
+    Weights sampled from the nearest body surface jump where the head's neck stands off the body's.
+    """
+    points = head['POSITION']
+    turn = np.arctan2(points[:, 0], points[:, 2] - NECK_AXIS_Z)
+    ring = np.flatnonzero(np.abs(points[:, 1] - NECK_Y) < 1e-7)
+    order = ring[np.argsort(turn[ring])]
+    near = np.flatnonzero((points[:, 1] > NECK_Y + 1e-7) & (points[:, 1] < NECK_Y + reach))
+    anchor = np.column_stack([np.interp(turn[near], turn[order], head['dense'][order, joint], period=2 * np.pi)
+                              for joint in range(head['dense'].shape[1])])
+    keep = custom.smoothstep((points[near, 1] - NECK_Y) / reach)[:, None]
+    mixed = anchor * (1 - keep) + head['dense'][near] * keep
+    head['dense'][near] = mixed / mixed.sum(1, keepdims=True)
+    return len(near)
+
+
 def smooth_seam(body, body_faces, head, head_faces):
     """Smooth the neck radius along its height in a band around the seam, so the outline has no ridge there.
 
@@ -173,9 +207,39 @@ def smooth_seam(body, body_faces, head, head_faces):
             'head_maximum_mm': float(np.abs(delta[split:]).max() * 1000)}
 
 
-IRIS = OUT / 'iris_cleanup_v1'
-# Frontal projection the retouched eye images were made in (Tripo frame, +X front): see iris_cleanup_v1/sources.json.
-IRIS_SCALE, IRIS_SIZE, IRIS_Y, IRIS_Z = 4600, (640, 400), .1155, {'L': .0928, 'R': -.107}
+def iris_circle(image):
+    """Pupil centre (row, column) and iris radius in pixels of a retouched frontal eye image."""
+    step = image.shape[1] / IRIS_SIZE[0]
+    dark = np.argwhere(image.max(2) < .16)
+    centre = dark[np.linalg.norm(dark - np.median(dark, axis=0), axis=1) < 60 * step].mean(0)
+    row = image[int(round(centre[0]))]
+    white = (row.mean(1) > .6) & (row.max(1) - row.min(1) < .25)
+    left, right = np.flatnonzero(white[:int(centre[1])]), np.flatnonzero(white[int(centre[1]):])
+    radius = float(np.mean([centre[1] - left.max(), right.min()]))
+    assert .12 < radius / image.shape[1] < .22, radius
+    return centre, radius
+
+
+def fitted_iris_circle(image, visible):
+    """Centre (row, column) and radius of the iris of a generated eye, from its unlit front view.
+
+    The iris is measured where it ends against the white of the eye on both sides; the lids hide its top and bottom.
+    """
+    white = visible & (image.mean(2) >= .45)
+    dark = np.argwhere(visible & (image.max(2) < .16))
+    seed = np.median(dark, axis=0).astype(int)
+    chords = []
+    for row in range(image.shape[0]):
+        left, right = np.flatnonzero(white[row, :seed[1]]), np.flatnonzero(white[row, seed[1]:])
+        if len(left) and len(right) and seed[1] + right.min() - left.max() > .18 * image.shape[1]:
+            chords.append([row, left.max() + .5, seed[1] + right.min() - .5])
+    rows, left, right = np.array(chords).T
+    column = np.median((left + right) / 2)
+    widest = (right - left).max() / 2
+    row = np.median(dark[np.abs(dark[:, 1] - column) < .3 * widest, 0])
+    radius = float(np.median(np.hypot((right - left) / 2, rows - row)))
+    assert .1 < radius / image.shape[1] < .22, radius
+    return np.array([row, column]), radius
 
 
 def clean_iris(side):
@@ -183,13 +247,7 @@ def clean_iris(side):
     retouched = np.asarray(Image.open(IRIS / f'retouched-{side}.png').convert('RGB'), dtype=np.float32) / 255
     visible = np.asarray(Image.open(IRIS / f'visible-{side}.png')) == 255
     step = retouched.shape[1] / IRIS_SIZE[0]
-    dark = np.argwhere(retouched.max(2) < .16)
-    centre = dark[np.linalg.norm(dark - np.median(dark, axis=0), axis=1) < 60 * step].mean(0)
-    row = retouched[int(round(centre[0]))]
-    white = (row.mean(1) > .6) & (row.max(1) - row.min(1) < .25)
-    left, right = np.flatnonzero(white[:int(centre[1])]), np.flatnonzero(white[int(centre[1]):])
-    radius = float(np.mean([centre[1] - left.max(), right.min()]))
-    assert .12 < radius / retouched.shape[1] < .22, radius
+    centre, radius = iris_circle(retouched)
     radii, angles = np.arange(0, int(radius * 1.08)), np.radians(np.arange(360))
     y = centre[0] - np.outer(radii, np.sin(angles))
     x = centre[1] + np.outer(radii, np.cos(angles))
@@ -207,13 +265,29 @@ def clean_iris(side):
     return polar, centre / step - [13, 0], radius / step
 
 
+def iris_record(centre, radius, side, **more):
+    z = IRIS_Z[side] + (centre[1] - IRIS_SIZE[0] / 2) / IRIS_SCALE
+    y = IRIS_Y + (IRIS_SIZE[1] / 2 - centre[0]) / IRIS_SCALE
+    return {'iris_centre_front_px': centre[::-1].tolist(), 'iris_radius_front_px': radius, **more,
+            'iris_centre_fitted_m': [-z * SCALE + OFFSET[0], y * SCALE + OFFSET[1]],
+            'iris_radius_fitted_m': radius / IRIS_SCALE * SCALE}
+
+
 def repair_irises(points, faces, uvs, image):
-    """Paint the retouched irises onto the front of both eyeballs; the rest of the colour map is untouched."""
+    """Paint the retouched irises onto the front of both eyeballs; the rest of the colour map is untouched.
+
+    A face whose generated irises need no retouch only has them measured (tools/project-female-face-eyes.py).
+    """
     pixels = image.copy()
     height, width = pixels.shape[:2]
     balls, _, ball_faces = eye_parts(points, faces, 200)
     record = {}
     for side, sign in (('L', 1), ('R', -1)):
+        if not FACES[FACE].get('retouched_irises', True):
+            front = np.asarray(Image.open(IRIS / f'front-{side}.png').convert('RGB'), dtype=np.float32) / 255
+            visible = np.asarray(Image.open(IRIS / f'visible-{side}.png')) == 255
+            record[side] = iris_record(*fitted_iris_circle(front, visible), side)
+            continue
         polar, centre, radius = clean_iris(side)
         ball = balls[sign]
         painted = 0
@@ -251,11 +325,7 @@ def repair_irises(points, faces, uvs, image):
             px, py = samples[inside][keep].T
             pixels[py, px] = pixels[py, px] * (1 - fade) + color * fade
             painted += int(keep.sum())
-        z = IRIS_Z[side] + (centre[1] - IRIS_SIZE[0] / 2) / IRIS_SCALE
-        y = IRIS_Y + (IRIS_SIZE[1] / 2 - centre[0]) / IRIS_SCALE
-        record[side] = {'iris_centre_front_px': centre[::-1].tolist(), 'iris_radius_front_px': radius, 'texels': painted,
-                        'iris_centre_fitted_m': [-z * SCALE + OFFSET[0], y * SCALE + OFFSET[1]],
-                        'iris_radius_fitted_m': radius / IRIS_SCALE * SCALE}
+        record[side] = iris_record(centre, radius, side, texels=painted)
     Image.fromarray(np.round(np.clip(pixels, 0, 1) * 255).astype(np.uint8)).save(OUT / 'face-eye-albedo.png')
     return record
 
@@ -324,6 +394,70 @@ def eye_parts(points, faces, largest):
     return balls, {side: np.concatenate(groups) if groups else empty for side, groups in lashes.items()}, ball_faces
 
 
+def lid_margins(points, faces, skip, ball):
+    """Upper and lower rims of one eye opening seen from the front, as (z, y, x) rows in Tripo's frame."""
+    keep = np.ones(len(faces), dtype=bool)
+    keep[skip] = False
+    eye = np.zeros(len(faces), dtype=bool)
+    eye[ball] = True
+    mesh = trimesh.Trimesh(points, faces[keep], process=False)
+    corners = points[faces[ball]].reshape(-1, 3)
+    zs = np.arange(corners[:, 2].min() - .03, corners[:, 2].max() + .03, .001)
+    ys = np.arange(corners[:, 1].min() - .01, corners[:, 1].max() + .01, .0004)
+    z, y = [grid.ravel() for grid in np.meshgrid(zs, ys, indexing='ij')]
+    origins = np.column_stack([np.ones_like(z), y, z])
+    hits, rays, triangles = mesh.ray.intersects_location(origins, np.tile([-1., 0, 0], (len(z), 1)), multiple_hits=False)
+    depth = np.full(len(z), np.nan)
+    depth[rays] = hits[:, 0]
+    open_ = np.zeros(len(z), dtype=bool)
+    open_[rays] = eye[keep][triangles]
+    depth, open_ = depth.reshape(len(zs), len(ys)), open_.reshape(len(zs), len(ys))
+    upper, lower = [], []
+    for column in np.flatnonzero(open_.sum(1) > 2):
+        seen = np.flatnonzero(open_[column])
+        top, bottom = min(seen[-1] + 1, len(ys) - 1), max(seen[0] - 1, 0)
+        upper.append([zs[column], ys[top], depth[column, top]])
+        lower.append([zs[column], ys[bottom], depth[column, bottom]])
+    return np.array(upper), np.array(lower)
+
+
+def lid_point(rim, fraction):
+    """A rim point and the rim's slope there, by fraction of the opening's width."""
+    z = rim[0, 0] + np.clip(fraction, 0, 1) * (rim[-1, 0] - rim[0, 0])
+    smooth = np.column_stack([rim[:, 0], gaussian_filter1d(rim[:, 1], 3), gaussian_filter1d(rim[:, 2], 3)])
+    point = np.array([np.interp(z, smooth[:, 0], smooth[:, 2]), np.interp(z, smooth[:, 0], smooth[:, 1]), z])
+    return point, float(np.interp(z, smooth[:, 0], np.gradient(smooth[:, 1], smooth[:, 0])))
+
+
+def lashes_on_lids(points, faces, donor_lashes, donor_balls, donor_skip, head_points, head_faces, own_lashes, own_balls):
+    """Each donor strand moved onto this head's lid rim: one rotation in the face plane, a uniform scale and a translation.
+
+    A strand keeps its place along the opening's width and its scaled offset from the rim.
+    """
+    moved, record = points.copy(), {}
+    donor_surface = np.ones(len(faces), dtype=bool)
+    donor_surface[donor_skip] = False
+    skin = trimesh.Trimesh(points, faces[donor_surface], process=False)
+    for side in (1, -1):
+        source = lid_margins(points, faces, donor_skip, donor_balls[side])
+        target = lid_margins(head_points, head_faces, own_lashes, own_balls[side])
+        scale = float(np.ptp(target[0][:, 0]) / np.ptp(source[0][:, 0]))
+        strands = [group for group, _ in components(points, faces[donor_lashes[side]])]
+        for strand in strands:
+            ids = np.unique(faces[donor_lashes[side]][strand])
+            root = points[ids[np.argmin(trimesh.proximity.closest_point(skin, points[ids])[1])]]
+            fraction = (root[2] - source[0][0, 0]) / np.ptp(source[0][:, 0])
+            rim = int(np.argmin([abs(lid_point(source[k], fraction)[0][1] - root[1]) for k in (0, 1)]))
+            (start, slope), (end, new_slope) = lid_point(source[rim], fraction), lid_point(target[rim], fraction)
+            angle = np.arctan(new_slope) - np.arctan(slope)
+            cos, sin = np.cos(angle), np.sin(angle)
+            offset = points[ids] - start
+            turned = np.column_stack([offset[:, 0], offset[:, 1] * cos + offset[:, 2] * sin, offset[:, 2] * cos - offset[:, 1] * sin])
+            moved[ids] = end + turned * scale
+        record['left' if side > 0 else 'right'] = {'strands': len(strands), 'uniform_scale': scale}
+    return moved, record
+
+
 def transplant_lashes(head_points, head_faces):
     """Strand lashes of the first head, moved per eye by one uniform scale and a translation.
 
@@ -333,7 +467,12 @@ def transplant_lashes(head_points, head_faces):
     attrs, faces = custom.geometry(donor, donor_raw, donor['meshes'][0]['primitives'][0])
     points = attrs['POSITION'].astype(np.float64)
     donor_balls, donor_lashes, _ = eye_parts(points, faces, 16)
-    own_balls, own_lashes, _ = eye_parts(head_points, head_faces, 200)
+    own_balls, own_lashes, own_ball_faces = eye_parts(head_points, head_faces, 200)
+    if FACES[FACE].get('lashes_on_lids'):
+        _, _, donor_ball_faces = eye_parts(points, faces, 16)
+        loose = np.concatenate([group for group, corners in components(points, faces) if len(group) <= 16])
+        fitted, lid_record = lashes_on_lids(points, faces, donor_lashes, donor_ball_faces, loose,
+                                            head_points, head_faces, np.concatenate(list(own_lashes.values())), own_ball_faces)
     scale = float(np.mean([np.ptp(own_balls[side][:, 2]) / np.ptp(donor_balls[side][:, 2]) for side in (1, -1)]))
     surface = np.ones(len(head_faces), dtype=bool)
     surface[np.concatenate(list(own_lashes.values()))] = False
@@ -345,11 +484,14 @@ def transplant_lashes(head_points, head_faces):
         source, target = anchor(donor_balls[side]), anchor(own_balls[side])
         ids = np.unique(faces[donor_lashes[side]])
         moved[ids] = (points[ids] - source) * scale + target
+        if FACES[FACE].get('lashes_on_lids'):
+            moved[ids] = fitted[ids]
         picked.append(donor_lashes[side])
         distance = trimesh.proximity.closest_point(skin, moved[ids])[1]
         record['left' if side > 0 else 'right'] = {
             'strand_triangles': int(len(donor_lashes[side])), 'replaced_own_triangles': int(len(own_lashes[side])),
-            'translation_source_units': (target - source * scale).tolist(),
+            **(lid_record['left' if side > 0 else 'right'] if FACES[FACE].get('lashes_on_lids')
+               else {'translation_source_units': (target - source * scale).tolist()}),
             'nearest_skin_distance_mm': {'min': float(distance.min() * SCALE * 1000),
                                          'median': float(np.median(distance) * SCALE * 1000),
                                          'max': float(distance.max() * SCALE * 1000)}}
@@ -366,14 +508,18 @@ def main():
     source_attrs, source_faces = custom.geometry(source, source_raw, source['meshes'][0]['primitives'][0])
     source_attrs = {key: source_attrs[key].astype(np.float64) for key in ['POSITION', 'NORMAL', 'TEXCOORD_0']}
     surface, lash, lash_faces, (donor, donor_raw), lash_record = transplant_lashes(source_attrs['POSITION'], source_faces)
-    source_faces = source_faces[surface]
+    own_lashes = FACES[FACE].get('own_lashes', False)
+    if own_lashes:
+        lash_record = {'method': 'The generated strand lashes are kept as part of the head'}
+    else:
+        source_faces = source_faces[surface]
     head_color = source['materials'][0]['pbrMetallicRoughness']['baseColorTexture']
     # UV1.x marks the eyeballs, so the game's eye colour tint cannot reach the eyelids in front of them.
     eyeball = np.zeros((len(source_attrs['POSITION']), 2))
     for group in eye_parts(source_attrs['POSITION'], source_faces, 200)[2].values():
         eyeball[np.unique(source_faces[group]), 0] = 1
     source_attrs['TEXCOORD_1'] = eyeball
-    iris_record = repair_irises(source_attrs['POSITION'], source_faces, source_attrs['TEXCOORD_0'],
+    irises = repair_irises(source_attrs['POSITION'], source_faces, source_attrs['TEXCOORD_0'],
                                 material_image(source, source_raw, head_color))
     # Tripo's face looks along +X; the rig looks along +Z.
     turn = lambda v: np.stack([-v[:, 2], v[:, 1], v[:, 0]], axis=1)
@@ -390,6 +536,7 @@ def main():
     body, kept_faces = custom.clip(original_body, body_faces, NECK_Y, False)
     body, kept_faces, head, head_faces, seam_count, body_displacement = angular_seam(body, kept_faces, head, head_faces)
     assert float(np.linalg.norm(head['POSITION'] - head['reference'], axis=1).max()) < 1e-7
+    eased = ease_seam_weights(head) if FACES[FACE].get('ease_seam_weights') else 0
     smoothing = smooth_seam(body, kept_faces, head, head_faces)
     reference = head.pop('reference')
     untouched = reference[:, 1] > NECK_Y + SMOOTH_ABOVE
@@ -408,7 +555,7 @@ def main():
 
     doc, raw = copy.deepcopy(base), bytearray(base_raw)
     face_material = custom.add_material(doc, raw, source, source_raw)
-    doc['materials'][face_material]['name'] = 'Female ranger face'
+    doc['materials'][face_material]['name'] = f'Female {FACE} face'
     image_data = (OUT / 'face-eye-albedo.png').read_bytes()
     raw.extend(b'\0' * (-len(raw) % 4))
     doc['bufferViews'].append({'buffer': 0, 'byteOffset': len(raw), 'byteLength': len(image_data)})
@@ -433,7 +580,7 @@ def main():
     dark = samples.sum(1) <= np.median(samples.sum(1))
     lash_color = samples[dark].mean(0) ** 2.2
     lash_record['flat_linear_color'] = lash_color.tolist()
-    doc['materials'].append({'name': 'Female ranger eyelashes', 'doubleSided': True,
+    doc['materials'].append({'name': f'Female {FACE} eyelashes', 'doubleSided': True,
                              'pbrMetallicRoughness': {'baseColorFactor': [*lash_color.tolist(), 1],
                                                       'metallicFactor': 0, 'roughnessFactor': .9}})
     lash_material = len(doc['materials']) - 1
@@ -441,41 +588,50 @@ def main():
     lash['dense'] = np.zeros((len(lash['POSITION']), head['dense'].shape[1]))
     lash['dense'][:, head_joint] = 1
     primitives = [custom.add_geometry(doc, raw, body, kept_faces, body_material),
-                  custom.add_geometry(doc, raw, head, head_faces, face_material),
-                  custom.add_geometry(doc, raw, lash, lash_faces, lash_material)]
+                  custom.add_geometry(doc, raw, head, head_faces, face_material)]
     doc['meshes'] = [{'name': 'female_body', 'primitives': [primitives[0]]},
-                     {'name': 'face_female_ranger', 'primitives': [primitives[1]]},
-                     {'name': 'eyelashes_female_ranger', 'primitives': [primitives[2]]}]
-    doc['nodes'].append({'name': 'eyelashes_female_ranger', 'mesh': 2, 'skin': 0,
-                         'extras': {'rig_id': 'human_female_01_local_v1', 'part_id': 'eyelashes_female_ranger'}})
-    doc['scenes'][0]['nodes'].append(len(doc['nodes']) - 1)
+                     {'name': f'face_female_{FACE}', 'primitives': [primitives[1]]}]
+    if not own_lashes:
+        doc['meshes'].append({'name': f'eyelashes_female_{FACE}',
+                              'primitives': [custom.add_geometry(doc, raw, lash, lash_faces, lash_material)]})
+        doc['nodes'].append({'name': f'eyelashes_female_{FACE}', 'mesh': 2, 'skin': 0,
+                             'extras': {'rig_id': 'human_female_01_local_v1', 'part_id': f'eyelashes_female_{FACE}'}})
+        doc['scenes'][0]['nodes'].append(len(doc['nodes']) - 1)
     doc['nodes'][0]['mesh'] = 0
-    doc['nodes'].append({'name': 'face_female_ranger', 'mesh': 1, 'skin': 0,
-                         'extras': {'rig_id': 'human_female_01_local_v1', 'part_id': 'face_female_ranger'}})
+    doc['nodes'].append({'name': f'face_female_{FACE}', 'mesh': 1, 'skin': 0,
+                         'extras': {'rig_id': 'human_female_01_local_v1', 'part_id': f'face_female_{FACE}'}})
     doc['scenes'][0]['nodes'].append(len(doc['nodes']) - 1)
-    assembled = OUT / 'base_ranger.glb'
+    assembled = OUT / f'base_{FACE}.glb'
     write_glb(assembled, doc, custom.compact(doc, raw))
     check, check_raw = read_glb(assembled)
     assert check['nodes'][:len(base['nodes'])] == base['nodes']
     assert np.array_equal(accessor(base, base_raw, base['skins'][0]['inverseBindMatrices']),
                           accessor(check, check_raw, check['skins'][0]['inverseBindMatrices']))
-    report = {'date': '2026-11-10', 'source_path': str(SOURCE.relative_to(ROOT)), 'source_sha256': custom.digest(SOURCE),
+    report = {'date': FACES[FACE]['date'], 'source_path': str(SOURCE.relative_to(ROOT)), 'source_sha256': custom.digest(SOURCE),
               'base_sha256': custom.digest(BASE), 'rotation': 'Tripo +X front to rig +Z front',
               'scale': SCALE, 'offset_m': OFFSET.tolist(), 'neck_cut_y_m': NECK_Y,
               'head_affine_scope': 'Rotation, uniform scale and translation above the seam smoothing band',
               'maximum_head_affine_error_m': affine_error, 'seam_smoothing': smoothing,
               'source_triangles': len(source_faces), 'head_triangles': len(head_faces),
               'retained_body_triangles': len(kept_faces), 'neck_boundary_vertices': seam_count,
-              'body_neck_fit_maximum_mm': body_displacement, 'body_neck_recolored_pixels': recolored,
+              'body_neck_fit_maximum_mm': body_displacement, **({'seam_weight_eased_vertices': eased} if eased else {}), 'body_neck_recolored_pixels': recolored,
               'rig_id': 'human_female_01_local_v1',
-              'irises': {'sources': str((IRIS / 'sources.json').relative_to(ROOT)),
-                         'method': 'Retouched frontal iris images painted onto the front of each eyeball; other texels unchanged', **iris_record},
-              'eyelashes': {'source_path': str(LASH_SOURCE.relative_to(ROOT)), 'source_sha256': custom.digest(LASH_SOURCE),
-                            'method': 'Strand lashes of the first head replace the bald head\'s lash plates', **lash_record},
-              'files': {name: custom.digest(OUT / name) for name in ['base_ranger.glb', 'face-eye-albedo.png', 'body-neck-albedo.png', 'body-neck-orm.png']}}
+              'irises': {**({'sources': str((IRIS / 'sources.json').relative_to(ROOT)),
+                             'method': 'Retouched frontal iris images painted onto the front of each eyeball; other texels unchanged'}
+                            if FACES[FACE].get('retouched_irises', True) else
+                            {'method': 'Generated irises kept; circles measured on the unlit front views in iris_cleanup_v1'}),
+                         **irises},
+              'eyelashes': lash_record if own_lashes else {
+                  'source_path': str(LASH_SOURCE.relative_to(ROOT)), 'source_sha256': custom.digest(LASH_SOURCE),
+                  'method': 'Strand lashes of the first head replace the bald head\'s lash plates'
+                  + (', each strand moved onto the lid rim' if FACES[FACE].get('lashes_on_lids') else ''), **lash_record},
+              'files': {name: custom.digest(OUT / name) for name in [f'base_{FACE}.glb', 'face-eye-albedo.png', 'body-neck-albedo.png', 'body-neck-orm.png']}}
     (OUT / 'fitting.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report, indent=2))
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--face', choices=list(FACES), default='ranger')
+    configure(parser.parse_args().face)
     main()

@@ -116,12 +116,13 @@ export const femaleBootsClipName = (clip: string, boots: string) =>
 const models = new Map<string, Promise<GLTF>>()
 const packs = new Map<string, Promise<GLTF>>()
 const pairedBaseClips = new WeakMap<GLTF, THREE.AnimationClip[]>()
-// The close-up face part and the assembled scenes holding their own copies of its geometry.
-let closeupFacePart: GLTF | undefined
+// The close-up face parts and the assembled scenes holding their own copies of their geometry.
+const closeupFaceParts = new Map<string, GLTF>()
 const closeupScenes: THREE.Object3D[] = []
-// Every female character wears the ranger face (user decision 2026-11-10); saved `default` and `custom` both show it.
-const FACE_PART = 'face_ranger'
-const FACE = 'ranger'
+export type FemaleFace = 'ranger' | 'chic'
+/** A saved `custom` shows the chic face and every other value the ranger face (user decision 2026-11-11). */
+export const femaleFace = (face?: string): FemaleFace =>
+  face === 'custom' ? 'chic' : 'ranger'
 // Body triangles the face part replaces, and the body triangle each neck strip triangle stands in for.
 interface FacePart {
   body_triangles: number
@@ -142,7 +143,7 @@ export function assembleFemaleCharacter(
   base: GLTF,
   sources: GLTF[],
   names = FEMALE_PARTS,
-  face: 'default' | 'custom' | 'ranger' = 'default',
+  face: 'default' | 'custom' | FemaleFace = 'default',
   facePart?: GLTF
 ): THREE.Group {
   const scene = clone(base.scene) as THREE.Group
@@ -183,32 +184,37 @@ export function markFemaleBase(
   })
 }
 
-/** Binds the custom face part; `female_face_part` lists the body triangles it replaces. */
+/** Binds a face part; `female_face_part` lists the body triangles it replaces. */
 export function bindFemaleFacePart(scene: THREE.Object3D, facePart: GLTF) {
+  const name: string = facePart.scene.userData.female_part
+  scene.userData.female_face_name = name
   scene.userData.female_face_part = facePart.scene.userData.female_face_part
   for (const mesh of bindModularPart(scene, facePart.scene))
-    mesh.userData.female_part = FACE_PART
+    mesh.userData.female_part = name
 }
 
-export const FEMALE_FACE_PART_PATH = `${MODULAR_FEMALE_DIRECTORY}/${FACE_PART}.glb`
-// Same geometry with 512 maps: in the game view a head covers a few dozen pixels.
-export const FEMALE_GAME_FACE_PART_PATH = `${MODULAR_FEMALE_DIRECTORY}/${FACE_PART}_512.glb`
 /** `closeup` for screens that frame the character large, `game` for players in the world. */
 export type CharacterDetail = 'closeup' | 'game'
+/** The game part has the same geometry with 512 maps: in the game view a head covers a few dozen pixels. */
+export const femaleFacePartPath = (
+  face: FemaleFace = 'ranger',
+  detail: CharacterDetail = 'closeup'
+) =>
+  `${MODULAR_FEMALE_DIRECTORY}/face_${face}${detail === 'game' ? '_512' : ''}.glb`
 
 export function loadFemaleCharacter(
   path = MODULAR_FEMALE_MODEL_PATH,
-  detail: CharacterDetail = 'closeup'
+  detail: CharacterDetail = 'closeup',
+  face: FemaleFace = 'ranger'
 ): Promise<GLTF> {
-  const key = `${path}:${detail}`
+  const key = `${path}:${face}:${detail}`
   let pending = models.get(key)
   if (!pending) {
     const names = [...FEMALE_PARTS, ...(VARIANTS[path]?.fixed ?? [])]
+    const facePath = femaleFacePartPath(face, detail)
     pending = Promise.all([
       loadGLB(MODULAR_FEMALE_MODEL_PATH),
-      loadGLB(
-        detail === 'game' ? FEMALE_GAME_FACE_PART_PATH : FEMALE_FACE_PART_PATH
-      ),
+      loadGLB(facePath),
       Promise.all(
         names.map((name) => loadGLB(`${MODULAR_FEMALE_DIRECTORY}/${name}.glb`))
       ),
@@ -218,11 +224,11 @@ export function loadFemaleCharacter(
           base,
           sources,
           names,
-          FACE,
+          face,
           facePart
         )
         if (detail === 'closeup') {
-          closeupFacePart = facePart
+          closeupFaceParts.set(facePath, facePart)
           closeupScenes.push(scene)
         }
         return {
@@ -242,30 +248,33 @@ export function loadFemaleCharacter(
 }
 
 /**
- * Frees the close-up face part's GPU memory and cached copies. The selection screen and the game share
- * one renderer, so without this the 1024 maps stay in VRAM beside the game part's 512 ones.
- * Call once no close-up character is on screen; the next close-up loads the part again.
+ * Frees the close-up face parts' GPU memory and cached copies. The selection screen and the game share
+ * one renderer, so without this the 1024 maps stay in VRAM beside the game parts' 512 ones.
+ * Call once no close-up character is on screen; the next close-up loads its part again.
  */
 export function releaseFemaleCloseup(): void {
   for (const key of models.keys())
     if (key.endsWith(':closeup')) models.delete(key)
-  evictGLB(FEMALE_FACE_PART_PATH)
   for (const scene of closeupScenes.splice(0))
     for (const mesh of skinnedParts(scene))
-      if (mesh.userData.female_part === FACE_PART) mesh.geometry.dispose()
-  closeupFacePart?.scene.traverse((node) => {
-    if (!(node instanceof THREE.Mesh)) return
-    node.geometry.dispose()
-    for (const material of [node.material].flat() as THREE.Material[]) {
-      for (const value of Object.values(material)) {
-        if (!(value instanceof THREE.Texture)) continue
-        value.dispose()
-        ;(value.image as { close?: () => void } | null)?.close?.()
+      if (mesh.userData.female_part === scene.userData.female_face_name)
+        mesh.geometry.dispose()
+  for (const [path, facePart] of closeupFaceParts) {
+    evictGLB(path)
+    facePart.scene.traverse((node) => {
+      if (!(node instanceof THREE.Mesh)) return
+      node.geometry.dispose()
+      for (const material of [node.material].flat() as THREE.Material[]) {
+        for (const value of Object.values(material)) {
+          if (!(value instanceof THREE.Texture)) continue
+          value.dispose()
+          ;(value.image as { close?: () => void } | null)?.close?.()
+        }
+        material.dispose()
       }
-      material.dispose()
-    }
-  })
-  closeupFacePart = undefined
+    })
+  }
+  closeupFaceParts.clear()
 }
 
 export function loadFemaleAnimationPack(path: string): Promise<GLTF> {
@@ -612,7 +621,7 @@ export function applyFemaleArmor(
     const face: FacePart | undefined = scene.userData.female_face_part
     if (face)
       mask.register(
-        FACE_PART,
+        scene.userData.female_face_name,
         {
           mesh_index: 0,
           primitive_index: 0,
@@ -667,7 +676,7 @@ export function applyFemaleArmor(
   for (const mesh of part('rogue_garters'))
     mesh.visible = equipped.bottom === 'rogue' && equipped.boots === 'rogue'
   if (scene.userData.female_face_part) {
-    shown[FACE_PART] = true
+    shown[scene.userData.female_face_name] = true
     for (const name of Object.keys(shown))
       if (scene.userData.female_parts[name]?.body_mask)
         shown[neckSlot(name)] = shown[name]

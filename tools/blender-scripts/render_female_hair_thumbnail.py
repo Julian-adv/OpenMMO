@@ -1,6 +1,8 @@
 """Render a female hair over the bind-pose base for a character-creation thumbnail (512², downscale to 128²).
 
 blender -b --python tools/blender-scripts/render_female_hair_thumbnail.py -- --hair <hair.glb> --out bob.png
+A face thumbnail passes the fitted face as --body and its hair fit as --hair-move (metres) and --hair-scale
+(factors about the head bone), both as right, up, front.
 """
 import argparse
 import math
@@ -13,12 +15,24 @@ ROOT = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser()
 parser.add_argument('--body', default=str(ROOT / 'assets/modular_human_female_01/rig_v1/female-base.glb'))
 parser.add_argument('--hair', required=True)
+parser.add_argument('--hair-move', type=float, nargs=3, default=[0, 0, 0])
+parser.add_argument('--hair-scale', type=float, nargs=3, default=[1, 1, 1])
 parser.add_argument('--out', required=True)
 args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:])
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
-for path in (args.body, args.hair):
-    bpy.ops.import_scene.gltf(filepath=path)
+bpy.ops.import_scene.gltf(filepath=args.body)
+body = set(bpy.data.objects)
+bpy.ops.import_scene.gltf(filepath=args.hair)
+# The game's hair fit pivots on the head bone's bind position (femaleHairPivot).
+PIVOT = (0, 1.6218, -0.0144)
+for obj in set(bpy.data.objects) - body:
+    if obj.type != 'MESH':
+        continue
+    for axis, source in ((0, 0), (2, 1), (1, 2)):
+        sign = -1 if axis == 1 else 1
+        obj.scale[axis] *= args.hair_scale[source]
+        obj.location[axis] += sign * (PIVOT[source] * (1 - args.hair_scale[source]) + args.hair_move[source])
 for action in list(bpy.data.actions):
     bpy.data.actions.remove(action)
 for obj in bpy.data.objects:

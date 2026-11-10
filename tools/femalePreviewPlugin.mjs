@@ -20,6 +20,7 @@ export function femalePreviewPlugin() {
         const faces = {
           '/__female-preview/face-custom.glb': 'tripo_custom_v1/base_custom_preview.glb',
           '/__female-preview/face-ranger.glb': 'tripo_ranger_v1/base_ranger.glb',
+          '/__female-preview/face-chic.glb': 'tripo_chic_v2/base_chic.glb',
         }
         const face = faces[req.url?.split('?')[0]]
         if (req.method !== 'GET' || !face) return next()

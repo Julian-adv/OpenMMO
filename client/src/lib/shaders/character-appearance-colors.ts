@@ -83,6 +83,18 @@ const RANGER_FEMALE_EYE: Eye = {
   front: 0.03,
   eyeballUv: true,
 }
+// Iris centres and radius from the chic face fit (fitting.json `irises`); its narrow lids hide the rest.
+const CHIC_FEMALE_EYE: Eye = {
+  x: [0.0295, 0.0297],
+  y: 1.6848,
+  radius: [0.0054, 0.0054],
+  front: 0.03,
+  eyeballUv: true,
+}
+const FEMALE_FACE_EYES: Record<string, Eye> = {
+  face_ranger: RANGER_FEMALE_EYE,
+  face_chic: CHIC_FEMALE_EYE,
+}
 // Mean linear luminance of each female hair texture, so the chosen color is the mean albedo.
 const linearLuminance = (hex: string) => {
   const { r, g, b } = new Color(hex)
@@ -157,7 +169,8 @@ class AppearanceColors {
             const faceEye =
               appearance?.face === 'ranger' ? RANGER_EYE : DEFAULT_EYE
             const eye = customFace
-              ? RANGER_FEMALE_EYE
+              ? (FEMALE_FACE_EYES[mesh.userData.female_part] ??
+                RANGER_FEMALE_EYE)
               : female
                 ? FEMALE_EYE
                 : faceEye

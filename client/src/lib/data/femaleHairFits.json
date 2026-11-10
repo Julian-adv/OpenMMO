@@ -63,5 +63,43 @@
       "rotate-y": 0,
       "rotate-z": 0
     }
+  },
+  "chic": {
+    "bob": {
+      "move-x": 0,
+      "move-y": 0.05,
+      "move-z": 0.65,
+      "scale": 99.5,
+      "scale-x": 98.5,
+      "scale-y": 100,
+      "scale-z": 100,
+      "rotate-x": 0,
+      "rotate-y": 0,
+      "rotate-z": 0
+    },
+    "long": {
+      "move-x": 0,
+      "move-y": 0.16,
+      "move-z": 1.25,
+      "scale": 96.6,
+      "scale-x": 100,
+      "scale-y": 100,
+      "scale-z": 100,
+      "rotate-x": 0,
+      "rotate-y": 0,
+      "rotate-z": 0
+    },
+    "ponytail": {
+      "move-x": 0,
+      "move-y": 0.16,
+      "move-z": 1.25,
+      "scale": 96.6,
+      "scale-x": 97,
+      "scale-y": 100,
+      "scale-z": 100,
+      "rotate-x": 0,
+      "rotate-y": 0,
+      "rotate-z": 0
+    }
   }
 }

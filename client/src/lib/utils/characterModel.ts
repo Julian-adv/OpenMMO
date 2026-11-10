@@ -9,6 +9,7 @@ import {
   isModularFemaleModel,
 } from './modelPaths'
 import {
+  femaleFace,
   loadFemaleCharacter,
   type CharacterDetail,
   loadFemaleAnimationPack,
@@ -90,7 +91,8 @@ export function loadCharacterModel(
   appearance?: Pick<CharacterAppearance, 'face'>,
   detail: CharacterDetail = 'closeup'
 ): Promise<GLTF> {
-  if (isModularFemaleModel(path)) return loadFemaleCharacter(path, detail)
+  if (isModularFemaleModel(path))
+    return loadFemaleCharacter(path, detail, femaleFace(appearance?.face))
   if (path !== MODULAR_MALE_MODEL_PATH) return loadGLB(path)
   const face =
     appearance?.face === 'custom' ? 'default' : (appearance?.face ?? 'default')

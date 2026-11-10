@@ -6,12 +6,13 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { bindModularPart, skinnedParts } from '../lib/utils/modularCharacter'
 import {
   bindFemaleFacePart,
-  FEMALE_FACE_PART_PATH,
+  femaleFacePartPath,
   markFemaleBase,
 } from '../lib/utils/femaleCharacter'
 import { MODULAR_FEMALE_MODEL_PATH } from '../lib/utils/modelPaths'
 import { disposeObjects } from './dispose-objects'
 import { faceHairFitPanel, faceHairFitEditor } from './female-face-hair-fit'
+import type { FemaleFace } from '../lib/utils/femaleCharacter'
 import type { HairFitFace, HairFitStyle } from '../lib/utils/femaleHairFit'
 
 export async function showFemaleFace(
@@ -32,7 +33,7 @@ export async function showFemaleFace(
     `<fieldset id="face-controls" disabled>
       <legend>얼굴 살펴보기</legend>
       <label for="female-face">얼굴</label>
-      <select id="female-face"><option value="ranger">순찰자 얼굴 (게임)</option><option value="custom">이전 새 얼굴</option><option value="default">기존 얼굴</option></select>
+      <select id="female-face"><option value="ranger">순찰자 얼굴 (게임 기본)</option><option value="chic">시크 얼굴 (게임 새 얼굴)</option><option value="custom">이전 새 얼굴</option><option value="default">기존 얼굴</option></select>
       <label for="face-hair">헤어</label>
       <select id="face-hair"><option value="bob">단발</option><option value="long">긴 머리</option><option value="ponytail">묶은 머리</option><option value="none">없음</option></select>
       <label for="face-view">시점</label>
@@ -56,7 +57,7 @@ export async function showFemaleFace(
   const params = new URLSearchParams(location.search)
   const requestedFace = params.get('face')
   face.value =
-    requestedFace === 'default' || requestedFace === 'custom'
+    requestedFace && ['default', 'custom', 'chic'].includes(requestedFace)
       ? requestedFace
       : 'ranger'
   const requestedHair =
@@ -85,15 +86,16 @@ export async function showFemaleFace(
     return asset
   }
   // ?source=preview shows the fitting source instead of the game's base.glb and face part.
-  // The game only ships the ranger face part; the older faces load from their fitting sources.
-  const fitting = params.get('source') === 'preview' || face.value !== 'ranger'
+  // The game ships the ranger and chic face parts; the older faces load from their fitting sources.
+  const shipped = face.value === 'ranger' || face.value === 'chic'
+  const fitting = params.get('source') === 'preview' || !shipped
   const [base, facePart, hairstyle] = await Promise.all([
     load(
       fitting
         ? `/__female-preview/${face.value === 'default' ? 'base' : `face-${face.value}`}.glb`
         : MODULAR_FEMALE_MODEL_PATH
     ),
-    fitting ? null : load(FEMALE_FACE_PART_PATH),
+    fitting ? null : load(femaleFacePartPath(face.value as FemaleFace)),
     hair.value === 'none'
       ? null
       : load(

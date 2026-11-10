@@ -8,15 +8,18 @@ import { prune } from '@gltf-transform/functions'
 import { MeshoptDecoder, MeshoptEncoder } from 'meshoptimizer'
 
 const directory = 'client/public/models/characters/modular_female'
-// `--face ranger` builds the ranger face part; the default is the custom face.
+// `--face ranger|chic` builds a bald-head face part; the default is the older custom face.
 const face = process.argv.includes('--face') ? process.argv[process.argv.indexOf('--face') + 1] : 'custom'
-assert.ok(['custom', 'ranger'].includes(face))
-const source = face === 'custom'
-  ? 'assets/modular_human_female_01/faces/tripo_custom_v1/base_custom_preview.glb'
-  : 'assets/modular_human_female_01/faces/tripo_ranger_v1/base_ranger.glb'
-// `--size 512` builds the ranger part the game view loads; 1024 is the close-up part.
+const dates = { custom: '2026-11-08', ranger: '2026-11-10', chic: '2026-11-11' }
+assert.ok(Object.hasOwn(dates, face))
+const bald = face !== 'custom'
+const folders = { chic: 'tripo_chic_v2' }
+const source = bald
+  ? `assets/modular_human_female_01/faces/${folders[face] ?? `tripo_${face}_v1`}/base_${face}.glb`
+  : 'assets/modular_human_female_01/faces/tripo_custom_v1/base_custom_preview.glb'
+// `--size 512` builds the part the game view loads; 1024 is the close-up part.
 const size = process.argv.includes('--size') ? Number(process.argv[process.argv.indexOf('--size') + 1]) : 1024
-assert.ok(size === 1024 || (face === 'ranger' && size === 512))
+assert.ok(size === 1024 || (bald && size === 512))
 const tier = size === 1024 ? '' : `_${size}`
 const output = `${directory}/face_${face}${tier}.glb`
 await Promise.all([MeshoptDecoder.ready, MeshoptEncoder.ready])
@@ -151,16 +154,16 @@ async function stripTexture(image, quality) {
   for (let i = 0; i < mask.length; i++) if (mask[i]) { count++; for (let c = 0; c < 3; c++) sum[c] += data[i * 3 + c] }
   for (let i = 0; i < mask.length; i++) if (!mask[i]) for (let c = 0; c < 3; c++) data[i * 3 + c] = Math.round(sum[c] / count)
   const flattened = sharp(data, { raw: { width, height, channels: 3 } })
-  // The ranger fit works on 4096 maps; the strip ships at the body's 1024, or at the game part's size.
-  return (face === 'ranger' && width > size ? flattened.resize(size, size, { kernel: 'lanczos3' }) : flattened).webp(quality).toBuffer()
+  // The bald-head fits work on 4096 maps; the strip ships at the body's 1024, or at the game part's size.
+  return (bald && width > size ? flattened.resize(size, size, { kernel: 'lanczos3' }) : flattened).webp(quality).toBuffer()
 }
 const baseMaterial = original.getMaterial()
 const stripMaterial = strip.getMaterial()
 const texture = (image, name) => custom.createTexture(name).setImage(new Uint8Array(image)).setMimeType('image/webp')
 stripMaterial.setBaseColorTexture(texture(await stripTexture(body.getMaterial().getBaseColorTexture().getImage(), { quality: 94, effort: 5 }), 'Neck strip color'))
 stripMaterial.setNormalTexture(texture(await stripTexture(baseMaterial.getNormalTexture().getImage(), { quality: 90, smartSubsample: true, effort: 5 }), 'Neck strip normal'))
-// The ranger fit blends the body's roughness toward the head's near the seam.
-const stripOrm = face === 'custom' ? baseMaterial : body.getMaterial()
+// The bald-head fits blend the body's roughness toward the head's near the seam.
+const stripOrm = bald ? body.getMaterial() : baseMaterial
 stripMaterial.setMetallicRoughnessTexture(texture(await stripTexture(stripOrm.getMetallicRoughnessTexture().getImage(), { quality: 90, smartSubsample: true, effort: 5 }), 'Neck strip ORM'))
 for (const slot of ['getBaseColorTextureInfo', 'getNormalTextureInfo', 'getMetallicRoughnessTextureInfo'])
   assert.equal(stripMaterial[slot]().getTexCoord(), 0)
@@ -176,7 +179,7 @@ for (const node of custom.getRoot().listNodes()) {
 }
 for (const material of custom.getRoot().listMaterials())
   if (material.getAlphaMode() !== 'OPAQUE') material.setExtras({ ...material.getExtras(), appearance_color_fixed: true })
-if (face === 'ranger') {
+if (bald) {
   // The flat-coloured lashes take no tint. Head maps ship at 1024 for close-ups and 512 for the game view (user decision 2026-11-10).
   for (const mesh of custom.getRoot().listMeshes()) {
     if (mesh === bodyMesh) continue
@@ -212,18 +215,18 @@ for (const [i, texture] of custom.getRoot().listTextures().entries())
   assert.deepEqual(packed.getRoot().listTextures()[i].getImage(), texture.getImage())
 assert.deepEqual(custom.getRoot().listSkins()[0].getInverseBindMatrices().getArray(), base.getRoot().listSkins()[0].getInverseBindMatrices().getArray())
 const thumbnails = {}
-for (const name of face === 'custom' ? ['default', 'custom'] : []) {
+for (const name of bald ? [] : ['default', 'custom']) {
   const path = `client/src/assets/character-appearance/female-face-${name}.png`
   thumbnails[path] = createHash('sha256').update(await readFile(path)).digest('hex')
 }
 const report = {
-  date: face === 'custom' ? '2026-11-08' : '2026-11-10', source, output, inputs,
+  date: dates[face], source, output, inputs,
   output_sha256: createHash('sha256').update(await readFile(output)).digest('hex'),
   output_bytes: (await readFile(output)).length,
   base_body_triangles: sourceIndices.length / 3, hidden_base_triangles: hideTriangles.length,
   neck_strip_triangles: stripTriangles.length, neck_strip_vertices: stripVertices.length,
-  head_and_eyelash_geometry_and_textures_preserved: face === 'custom',
-  head_textures: face === 'custom' ? 'source images' : `${size} WebP q92`,
+  head_and_eyelash_geometry_and_textures_preserved: !bald,
+  head_textures: bald ? `${size} WebP q92` : 'source images',
   neck_strip: 'Custom body triangles at or above 1.502 m with their fitted positions; the neck-matched color and base.glb normal and ORM, with untouched texels flattened. Seam vertices below 1.502 m match base.glb in position, UV and weights.',
   outfit_masks: 'base.glb body masks apply unchanged; strip triangles follow the base triangle each one replaces',
   inverse_bind_matrices_match_canonical_body: true,

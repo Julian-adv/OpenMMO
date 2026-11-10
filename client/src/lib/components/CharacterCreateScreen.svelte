@@ -105,7 +105,7 @@
       value: appearance.face,
       options: female ? FEMALE_FACE_OPTIONS : FACE_OPTIONS,
     }
-    return female ? [hair] : [face, hair]
+    return [face, hair]
   })
   let colorFields = $derived([
     {

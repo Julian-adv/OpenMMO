@@ -22,8 +22,7 @@ import { loadGLB } from './gltfCache'
 import {
   FEMALE_BOOTS_PARTS,
   FEMALE_BOOTS_PROPERTY,
-  FEMALE_FACE_PART_PATH,
-  FEMALE_GAME_FACE_PART_PATH,
+  femaleFacePartPath,
   releaseFemaleCloseup,
 } from './femaleCharacter'
 import { poseMainHandProp } from './handProps'
@@ -73,34 +72,43 @@ const hasAssets = existsSync(
 )
 
 describe.skipIf(!hasAssets)('female face selection', () => {
-  it('shows the ranger face for every saved face and reuses canonical animations and the fitted rig', async () => {
+  it('shows the chic face for a saved custom face and the ranger face otherwise, on the canonical rig', async () => {
     const original = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH)
-    for (const face of ['custom', 'ranger'] as const)
+    for (const face of ['default', 'ranger'] as const)
       expect(
         await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH, { face })
       ).toBe(original)
-    expect(original.scene.userData.modular_face).toBe('ranger')
-    const head = skinnedParts(original.scene).find(
-      (mesh) => mesh.userData.female_face
-    )!
-    expect(head).toBeDefined()
-    const canonical = skinnedParts(original.scene).find(
-      (mesh) => mesh.userData.female_body
-    )!
-    expect(head.skeleton.bones.map((bone) => bone.name)).toEqual(
-      canonical.skeleton.bones.map((bone) => bone.name)
-    )
-    head.skeleton.boneInverses.forEach((matrix, index) =>
-      expect(matrix.elements).toEqual(
-        canonical.skeleton.boneInverses[index].elements
+    const chic = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH, {
+      face: 'custom',
+    })
+    expect(chic).not.toBe(original)
+    for (const [model, face] of [
+      [original, 'ranger'],
+      [chic, 'chic'],
+    ] as const) {
+      expect(model.scene.userData.modular_face).toBe(face)
+      const head = skinnedParts(model.scene).find(
+        (mesh) => mesh.userData.female_face
+      )!
+      expect(head.userData.female_part).toBe(`face_${face}`)
+      const canonical = skinnedParts(model.scene).find(
+        (mesh) => mesh.userData.female_body
+      )!
+      expect(head.skeleton.bones.map((bone) => bone.name)).toEqual(
+        canonical.skeleton.bones.map((bone) => bone.name)
       )
-    )
+      head.skeleton.boneInverses.forEach((matrix, index) =>
+        expect(matrix.elements).toEqual(
+          canonical.skeleton.boneInverses[index].elements
+        )
+      )
+    }
     for (const path of [
       MODULAR_VALKYRIE_MODEL_PATH,
       MODULAR_FEMALE_RANGER_MODEL_PATH,
     ]) {
       const variant = await loadCharacterModel(path, { face: 'custom' })
-      expect(variant.scene.userData.modular_face).toBe('ranger')
+      expect(variant.scene.userData.modular_face).toBe('chic')
       expect(variant.scene.userData.female_hair).toBe(
         path === MODULAR_VALKYRIE_MODEL_PATH ? 'valkyrie_hair' : 'ranger_hair'
       )
@@ -119,8 +127,8 @@ describe.skipIf(!hasAssets)('female face selection', () => {
       await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH, undefined, 'game')
     ).toBe(game)
     const urls = vi.mocked(loadGLB).mock.calls.map(([url]) => url)
-    expect(urls).toContain(FEMALE_FACE_PART_PATH)
-    expect(urls).toContain(FEMALE_GAME_FACE_PART_PATH)
+    expect(urls).toContain(femaleFacePartPath('ranger'))
+    expect(urls).toContain(femaleFacePartPath('ranger', 'game'))
     const triangles = (model: typeof game) =>
       skinnedParts(model.scene)
         .filter((mesh) => mesh.userData.female_part === 'face_ranger')
@@ -128,34 +136,42 @@ describe.skipIf(!hasAssets)('female face selection', () => {
     expect(triangles(game)).toEqual(triangles(closeup))
   })
 
-  it('releases the close-up face part and loads it again on the next close-up', async () => {
-    const game = await loadCharacterModel(
-      MODULAR_FEMALE_MODEL_PATH,
-      undefined,
-      'game'
-    )
-    const closeup = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH)
-    // The headless loader skips images, so the part's geometry stands in for its GPU resources.
-    const buffers = (model: typeof game) =>
-      skinnedParts(model.scene)
-        .filter((mesh) => mesh.userData.female_part === 'face_ranger')
-        .map((mesh) => mesh.geometry)
-    const disposed = new Set<THREE.BufferGeometry>()
-    for (const geometry of [...buffers(closeup), ...buffers(game)])
-      geometry.addEventListener('dispose', () => disposed.add(geometry))
-    expect(buffers(closeup).length).toBeGreaterThan(0)
-    releaseFemaleCloseup()
-    for (const geometry of buffers(closeup))
-      expect(disposed.has(geometry)).toBe(true)
-    for (const geometry of buffers(game))
-      expect(disposed.has(geometry)).toBe(false)
-    expect(
-      await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH, undefined, 'game')
-    ).toBe(game)
-    expect(await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH)).not.toBe(
-      closeup
-    )
-  })
+  it.each([
+    ['default', 'face_ranger'],
+    ['custom', 'face_chic'],
+  ] as const)(
+    'releases the close-up %s face part and loads it again on the next close-up',
+    async (face, part) => {
+      const game = await loadCharacterModel(
+        MODULAR_FEMALE_MODEL_PATH,
+        { face },
+        'game'
+      )
+      const closeup = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH, {
+        face,
+      })
+      // The headless loader skips images, so the part's geometry stands in for its GPU resources.
+      const buffers = (model: typeof game) =>
+        skinnedParts(model.scene)
+          .filter((mesh) => mesh.userData.female_part === part)
+          .map((mesh) => mesh.geometry)
+      const disposed = new Set<THREE.BufferGeometry>()
+      for (const geometry of [...buffers(closeup), ...buffers(game)])
+        geometry.addEventListener('dispose', () => disposed.add(geometry))
+      expect(buffers(closeup).length).toBeGreaterThan(0)
+      releaseFemaleCloseup()
+      for (const geometry of buffers(closeup))
+        expect(disposed.has(geometry)).toBe(true)
+      for (const geometry of buffers(game))
+        expect(disposed.has(geometry)).toBe(false)
+      expect(
+        await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH, { face }, 'game')
+      ).toBe(game)
+      expect(
+        await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH, { face })
+      ).not.toBe(closeup)
+    }
+  )
 
   it('keeps the head intact across outfits, hair changes, animations and other players', async () => {
     const source = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH, {

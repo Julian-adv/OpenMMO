@@ -52,6 +52,8 @@
 
 ## 게임 연결 (2026-11-10)
 
+2026-11-11부터 저장된 `custom`은 [시크 얼굴](modular-female-chic-face.md)로 표시하고 얼굴 선택도 다시 살렸다. 아래는 그 전의 기록이다.
+
 사용자 결정: 기존 여성 얼굴 두 종류(기존 얼굴·새 얼굴)를 이 얼굴로 바꾼다. 저장된 `face` 값이 `default`든 `custom`이든
 여성 캐릭터는 모두 이 얼굴로 표시한다. 서버·프로토콜·저장 데이터는 바꾸지 않았다.
 
@@ -103,5 +105,5 @@
 
 ```bash
 .venv/bin/python tools/outfits/tripo.py submit assets/modular_human_female_01/faces/tripo_ranger_v1/build.json
-cd tools && ../.venv/bin/python fit-female-ranger-face.py
+cd tools && ../.venv/bin/python fit-female-ranger-face.py --face ranger
 ```
