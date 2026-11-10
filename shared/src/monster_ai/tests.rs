@@ -761,6 +761,41 @@ fn catch_up_ends_at_the_leg_not_past_it() {
     assert!(d <= DEFAULT_ATTACK_RANGE, "overran the target to {d}m");
 }
 
+/// The server sweeps one line between two reported poses, so a bend walked
+/// past between ticks turns a legal path into a chord through the corner.
+#[test]
+fn catch_up_waits_at_a_bend_the_server_has_not_seen() {
+    let (mut brain, _) = chasing_brain();
+    let start = brain.position;
+    let bend = PathWaypoint {
+        x: start.x + 1.0,
+        z: start.z,
+        floor: 0,
+    };
+    brain.install_path(vec![
+        bend.clone(),
+        PathWaypoint {
+            x: bend.x,
+            z: bend.z + 5.0,
+            floor: 0,
+        },
+    ]);
+    brain.pending_bend_sync = false;
+
+    for _ in 0..3 {
+        brain.catch_up(200.0);
+    }
+
+    assert!(brain.pending_bend_sync);
+    assert_eq!((brain.position.x, brain.position.z), (bend.x, bend.z));
+
+    let commands = brain.handle_hit_with_behavior_tree(&1.into(), true, 1);
+    assert!(matches!(
+        commands.as_slice(),
+        [AiCommand::Move { position, .. }] if (position.x, position.z) == (bend.x, bend.z)
+    ));
+}
+
 #[test]
 fn attack_chases_nearby_player() {
     let mut brain = make_brain();

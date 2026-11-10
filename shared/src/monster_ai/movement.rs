@@ -397,10 +397,11 @@ impl MonsterBrain {
 
     /// Let `elapsed_ms` pass outside a tick — timers and the current leg, no
     /// decisions — so a pose read or emitted between ticks is where the
-    /// monster is now, not where the last tick left it.
+    /// monster is now, not where the last tick left it. Waits at a pose the
+    /// next step must not precede, like a tick does.
     pub fn catch_up(&mut self, elapsed_ms: f32) {
         self.advance_timers(elapsed_ms);
-        if !self.state.is_on_the_move() {
+        if !self.state.is_on_the_move() || self.sync_due_before_step() {
             return;
         }
         if self.state == AiState::Chase {
