@@ -3,11 +3,11 @@
   "source": "assets/modular_human_female_01/faces/tripo_ranger_v1/base_ranger.glb",
   "output": "client/public/models/characters/modular_female/face_ranger.glb",
   "inputs": {
-    "client/public/models/characters/modular_female/base.glb": "80bc16d771cf2fa945431bcc3a85bce7c94531544889b1fcb113161fbbd37d32",
-    "assets/modular_human_female_01/faces/tripo_ranger_v1/base_ranger.glb": "bb619f1809162db5843d3cfe0c4dda40a14f82c4920d7a58997a28b90ecd2e0b"
+    "client/public/models/characters/modular_female/base.glb": "4ffaa3622719890b9ed447ab32676dccdadde041fa6986e4a7577ce2876ecfbb",
+    "assets/modular_human_female_01/faces/tripo_ranger_v1/base_ranger.glb": "8d69f9f79258bcdb92442686df3546afe181f7e07e66fde471d17aa93772e081"
   },
-  "output_sha256": "e01ac129534219947984e2f4c2f880f5368f178e61351ab9b3619a777d705595",
-  "output_bytes": 1223760,
+  "output_sha256": "eb024c0580cd5493817a8f36617ac3133fde50d59ee961fd7c064edef889bae8",
+  "output_bytes": 1229884,
   "base_body_triangles": 20799,
   "hidden_base_triangles": 5730,
   "neck_strip_triangles": 669,

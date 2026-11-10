@@ -33,6 +33,8 @@ SCALE = 0.293
 # Chin 4 mm above the base face's (1.578 m), which every collar was fitted to; the crown ends 3 mm below the base head's.
 OFFSET = np.array([-0.002, 1.6506, -0.008])
 NECK_Y = 1.552
+# The body's colour and ORM maps matched to this face's skin (tools/match-female-body-skin.py).
+BODY_SKIN = ROOT / 'assets/modular_human_female_01/rig_v1/skin_tone_v1'
 LASH_SOURCE = ROOT / 'assets/items/female_ranger_outfit/tripo_head_v1/model_url.glb'
 BLEND_BAND = 0.05
 SMOOTH_BELOW, SMOOTH_ABOVE = 0.04, 0.02
@@ -121,33 +123,50 @@ def smooth_seam(body, body_faces, head, head_faces):
     field = np.zeros(len(origins))
     np.maximum.at(field, ray_ids, np.einsum('ij,ij->i', hits - origins[ray_ids], rays[ray_ids]))
     field = field.reshape(len(heights), len(angles))
-    column = ((field > 0) & (field < SMOOTH_RADIUS + .008)).astype(np.float64)
+    column_grid = ((field > 0) & (field < SMOOTH_RADIUS + .008)).astype(np.float64)
     sigma = SMOOTH_SIGMA / .002
-    blurred = gaussian_filter1d(field * column, sigma, axis=0, mode='nearest')
-    blurred /= np.maximum(gaussian_filter1d(column, sigma, axis=0, mode='nearest'), 1e-6)
-    change = np.where(column > 0, blurred - field, 0)
+    blurred = gaussian_filter1d(field * column_grid, sigma, axis=0, mode='nearest')
+    blurred /= np.maximum(gaussian_filter1d(column_grid, sigma, axis=0, mode='nearest'), 1e-6)
+    change = np.where(column_grid > 0, blurred - field, 0)
     change = gaussian_filter1d(change, 1.5, axis=1, mode='wrap')
 
     offset = points - axis
     radius = np.hypot(offset[:, 0], offset[:, 2])
-    y = points[:, 1]
-    weight = np.where(y < NECK_Y, custom.smoothstep((y - NECK_Y + SMOOTH_BELOW) / SMOOTH_BELOW),
-                      custom.smoothstep((NECK_Y + SMOOTH_ABOVE - y) / SMOOTH_ABOVE))
+    turn = np.degrees(np.arctan2(offset[:, 0], offset[:, 2])) % 360
     # Only the neck column: the shoulders and the underside of the jaw stay as they are.
-    weight *= 1 - custom.smoothstep((radius - SMOOTH_RADIUS) / .008)
-    row = np.clip((y - heights[0]) / .002, 0, len(heights) - 1.001)
-    turn = (np.degrees(np.arctan2(offset[:, 0], offset[:, 2])) % 360) / 3
-    r0, c0 = np.floor(row).astype(int), np.floor(turn).astype(int) % len(angles)
-    fr, fc, c1 = row - r0, turn - np.floor(turn), (c0 + 1) % len(angles)
-    delta = ((change[r0, c0] * (1 - fc) + change[r0, c1] * fc) * (1 - fr) +
-             (change[r0 + 1, c0] * (1 - fc) + change[r0 + 1, c1] * fc) * fr) * weight
+    column = 1 - custom.smoothstep((radius - SMOOTH_RADIUS) / .008)
+
+    def band(y):
+        return np.where(y < NECK_Y, custom.smoothstep((y - NECK_Y + SMOOTH_BELOW) / SMOOTH_BELOW),
+                        custom.smoothstep((NECK_Y + SMOOTH_ABOVE - y) / SMOOTH_ABOVE))
+
+    def at(grid, turn, y):
+        """A (height, angle) grid sampled at angles in degrees and heights."""
+        row = np.clip((y - heights[0]) / .002, 0, len(heights) - 1.001)
+        col = (turn % 360) / 3
+        r0, c0 = np.floor(row).astype(int), np.floor(col).astype(int) % len(angles)
+        fr, fc, c1 = row - r0, col - np.floor(col), (c0 + 1) % len(angles)
+        return ((grid[r0, c0] * (1 - fc) + grid[r0, c1] * fc) * (1 - fr) +
+                (grid[r0 + 1, c0] * (1 - fc) + grid[r0 + 1, c1] * fc) * fr)
+
+    y = points[:, 1]
+    weight = band(y) * column
+    delta = at(change, turn, y) * weight
     outward = np.stack([offset[:, 0], np.zeros(len(points)), offset[:, 2]], axis=1) / np.maximum(radius, 1e-9)[:, None]
     moved = points + outward * delta[:, None]
-
-    # Normals stay as they are. Rebuilding them from the faces gave every vertex added on a straight ring
-    # edge that edge's flat normal, which showed as a row of teeth along the seam.
+    # Normals in the band come from the smoothed radius field itself. Rebuilding them from the faces gave every
+    # vertex added on a straight ring edge that edge's flat normal (a row of teeth along the seam); keeping the
+    # old ones left the seam lit as if its ridge were still there (a pale band above the seam).
+    smooth = gaussian_filter1d(np.where(column_grid > 0, blurred, np.nan_to_num(blurred)), 3, axis=1, mode='wrap')
+    rise = at(np.gradient(smooth, .002, axis=0), turn, y)
+    sweep = at(np.gradient(smooth, np.radians(3), axis=1), turn, y) / np.maximum(at(smooth, turn, y), 1e-3)
+    around = np.stack([outward[:, 2], np.zeros(len(points)), -outward[:, 0]], axis=1)
+    surface = custom.unit(outward - rise[:, None] * [0, 1, 0] - sweep[:, None] * around)
+    old = np.concatenate([body['NORMAL'], head['NORMAL']])
+    mixed = custom.unit(old * (1 - weight[:, None]) + surface * weight[:, None])
     split = len(body['POSITION'])
     body['POSITION'], head['POSITION'] = moved[:split], moved[split:]
+    body['NORMAL'], head['NORMAL'] = mixed[:split], mixed[split:]
     return {'band_m': [NECK_Y - SMOOTH_BELOW, NECK_Y + SMOOTH_ABOVE], 'height_sigma_m': SMOOTH_SIGMA,
             'vertices': int(np.count_nonzero(weight > 0)),
             'body_maximum_mm': float(np.abs(delta[:split]).max() * 1000),
@@ -377,14 +396,14 @@ def main():
     affine_error = float(np.linalg.norm(head['POSITION'] - reference, axis=1)[untouched].max())
     assert affine_error < 1e-7
     body_material = base['meshes'][0]['primitives'][0]['material']
-    body_maps, head_maps = base['materials'][body_material], source['materials'][0]
+    head_maps = source['materials'][0]
     recolored = bake_body_neck(
         body, kept_faces, source_attrs, source_faces,
-        material_image(base, base_raw, body_maps['pbrMetallicRoughness']['baseColorTexture']),
+        np.asarray(Image.open(BODY_SKIN / 'body-albedo.png'), dtype=np.float32) / 255,
         np.asarray(Image.open(OUT / 'face-eye-albedo.png'), dtype=np.float32) / 255, 'body-neck-albedo.png')
     bake_body_neck(
         body, kept_faces, source_attrs, source_faces,
-        material_image(base, base_raw, body_maps['pbrMetallicRoughness']['metallicRoughnessTexture']),
+        np.asarray(Image.open(BODY_SKIN / 'body-orm.png'), dtype=np.float32) / 255,
         material_image(source, source_raw, head_maps['pbrMetallicRoughness']['metallicRoughnessTexture']), 'body-neck-orm.png')
 
     doc, raw = copy.deepcopy(base), bytearray(base_raw)

@@ -54,10 +54,11 @@ export function femaleUnderwearColor(mesh: THREE.SkinnedMesh) {
   const enabled = uniform(0)
   const skinTint = uniform(0)
   const skinColor = uniform(
+    // The body's skin after tools/match-female-body-skin.py (was 194, 151, 125).
     new THREE.Color().setRGB(
-      194 / 255,
-      151 / 255,
-      125 / 255,
+      226 / 255,
+      157 / 255,
+      117 / 255,
       THREE.SRGBColorSpace
     )
   )

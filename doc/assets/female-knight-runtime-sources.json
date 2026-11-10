@@ -1,7 +1,7 @@
 {
   "date": "2026-11-03",
   "inputs": {
-    "tools/prepare-female-knight.mjs": "494d90e52c844bb3dd59437e8c3cf1dfaf385bf01ede299103835f88ce03ec8a",
+    "tools/prepare-female-knight.mjs": "e11df7bd0751263ada1f811c5e2a44077762931f4f047132c4f644658558625f",
     "client/src/lib/utils/female-clip-bake.ts": "23454f31df35567701ee157dc4e4a7547856524a6b83c14367353a18594287d6",
     "client/src/lib/utils/female-boot-ground.ts": "0cd0b888f399c689ce821ec416660ca2805b12fa3f4c8d780cdc4ad28b61dc80",
     "assets/modular_human_female_01/rig_v1/female-base.glb": "3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5",
@@ -69,7 +69,7 @@
     "assets/items/valkyrie_boots/fitted_v1/body-occlusion.json": "e5fd12be641d3917f5f152681d25f310bfd7351989605636d6e0530cb75d664c",
     "assets/items/valkyrie_gloves/fitted_v3/body-occlusion.json": "2e67e4b201465d13889f5b6ea64aecfde8e63a2c347074e172c1c4c944a22448",
     "assets/items/valkyrie_helmet/fitted_v2/body-occlusion.json": "319a3f4848040f2cef370435ca95acbbdfa968c8d9544710391860dee620a7a2",
-    "client/src/lib/utils/femaleCharacter.ts": "2a4c1118334fbebb21dfe995f21721e3e37dbf0444941388ace994183078ca3f",
+    "client/src/lib/utils/femaleCharacter.ts": "6e20b405bb74441c5ca284c05ad8c3561e3a61d35ff498c0ab52b04c82fd6495",
     "assets/items/female_caveman_top/tripo_v1/fitted_v7/top_female_caveman.glb": "e447242db6e34cb2ab8b0f67cbb621f4dee14ad036dfee7f193be4f80a78f23f",
     "assets/items/female_caveman_top/tripo_v1/fitted_v7/body-occlusion.json": "95494be44e0f651739bf853c24e783172338fab0dcf2cd79c7a3361195c7dd9f",
     "assets/items/female_caveman_bottom/tripo_v1/fitted_v9/bottom_female_caveman.glb": "ce641e30dcebe965a0c4aac09a5e233c5887d0aa81be2218875bf3866819b6f9",
@@ -109,10 +109,12 @@
     "assets/items/female_bard_outfit/helmet/fitted_v1/helmet_female_bard.glb": "b5916215655e0a687ea43c395d874e50706f2cd8e6217b12d732a867f3d8afaa",
     "assets/items/female_bard_outfit/helmet/fitted_v1/body-occlusion.json": "5992a27880ab27e6c943e0b7f4246fdf573273300d3eac94d28ede3e9c0dd4c7",
     "doc/assets/female-helmet-hair-brush.json": "6b8356886b3fdfc1c85b6d03aecdb25179edf07fccf1e5a9866ead550f4e4250",
-    "client/public/models/animations/cart_push.glb": "7f1e3507bd032bd33d98598279bb9b52fffa38be84c6537ffc3c44dfb3af6396"
+    "client/public/models/animations/cart_push.glb": "7f1e3507bd032bd33d98598279bb9b52fffa38be84c6537ffc3c44dfb3af6396",
+    "assets/modular_human_female_01/rig_v1/skin_tone_v1/body-albedo.png": "cd032e527bb7d996fc871ae41d6cd3dd9510cca9b249823ad8c85ca6dfde584e",
+    "assets/modular_human_female_01/rig_v1/skin_tone_v1/body-orm.png": "70ee02d4029aef1e2dc805c0cb4fcbbeaa80d7ac4eccc742cb10aea6476f7c99"
   },
   "outputs": {
-    "client/public/models/characters/modular_female/base.glb": "80bc16d771cf2fa945431bcc3a85bce7c94531544889b1fcb113161fbbd37d32",
+    "client/public/models/characters/modular_female/base.glb": "4ffaa3622719890b9ed447ab32676dccdadde041fa6986e4a7577ce2876ecfbb",
     "client/public/models/characters/modular_female/hair.glb": "60af2aeff3ef428b4743e79bde3036c238fa44155b8069d12c30825b5b3b6395",
     "client/public/models/characters/modular_female/top.glb": "e191ee0f1c91a8b0dbd9e459080c07ca5116f76a2059be9d57621714ade464ca",
     "client/public/models/characters/modular_female/bottom.glb": "f7ab937c491ecea2d592b2155aead8c2fd5072b2f8bcbb30486535285214340c",

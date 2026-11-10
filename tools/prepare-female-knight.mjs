@@ -81,6 +81,13 @@ const sources = {
   valkyrie_helmet: 'assets/items/valkyrie_helmet/fitted_v2/helmet_female_valkyrie.glb',
   brilliance_helmet: 'assets/items/helm_of_brilliance/tripo_v2/fitted_v3/female/helmet_brilliance.glb',
 }
+// Body colour and ORM maps matched to the face's skin (tools/match-female-body-skin.py); female-base.glb keeps its own.
+const bodySkin = { color: 'assets/modular_human_female_01/rig_v1/skin_tone_v1/body-albedo.png', orm: 'assets/modular_human_female_01/rig_v1/skin_tone_v1/body-orm.png' }
+function matchBodySkin(doc) {
+  const material = doc.getRoot().listMeshes()[0].listPrimitives()[0].getMaterial()
+  material.getBaseColorTexture().setImage(readFileSync(bodySkin.color)).setMimeType('image/png')
+  material.getMetallicRoughnessTexture().setImage(readFileSync(bodySkin.orm)).setMimeType('image/png')
+}
 const packs = ['locomotion', 'combat_melee', 'social', 'fishing', 'combat_ranged', 'offhand', 'enchant_armor', 'great_sword', 'riding', 'dagger_preview', 'cart_push']
 const bakeExisting = process.argv.includes('--bake-existing')
 const packFlag = process.argv.indexOf('--pack')
@@ -132,6 +139,25 @@ async function write(path, doc, pack = false) {
 }
 sharp.cache(false)
 sharp.concurrency(2)
+// --base-textures swaps only the body's colour and ORM maps in the built base.glb, with the full build's
+// sizes and encoding; geometry, rig and baked clips stay byte-for-value the same.
+if (process.argv.includes('--base-textures')) {
+  const path = `${output}/base.glb`
+  const doc = await io.read(path)
+  for (const source of Object.values(bodySkin)) record(source)
+  matchBodySkin(doc)
+  const material = doc.getRoot().listMeshes()[0].listPrimitives()[0].getMaterial()
+  for (const [texture, size, options] of [[material.getBaseColorTexture(), 2048, { quality: 94, effort: 5 }],
+                                          [material.getMetallicRoughnessTexture(), 1024, { quality: 90, smartSubsample: true, effort: 5 }]])
+    texture.setImage(await sharp(texture.getImage()).resize({ width: size, height: size, fit: 'inside', withoutEnlargement: true })
+      .webp(options).toBuffer()).setMimeType('image/webp')
+  await write(path, doc)
+  report.outputs[path] = hash(path)
+  const previous = JSON.parse(readFileSync(reportPath))
+  writeFileSync(reportPath, JSON.stringify({ ...previous, inputs: { ...previous.inputs, ...report.inputs }, outputs: { ...previous.outputs, ...report.outputs } }, null, 2) + '\n')
+  console.log(path)
+  process.exit(0)
+}
 for (const [name, source] of Object.entries(sources)) {
   record(source)
   if (bakeExisting || selectedPack || (selectedPart && name !== selectedPart)) continue
@@ -171,6 +197,10 @@ for (const [name, source] of Object.entries(sources)) {
       for (let i = 0; i < indices.length; i++) if (weights.getArray()[i] === 0) indices[i] = 0
       joints.setArray(indices)
     }
+  }
+  if (name === 'base') {
+    for (const path of Object.values(bodySkin)) record(path)
+    matchBodySkin(doc)
   }
   const colors = new Set(doc.getRoot().listMaterials().map(m => m.getBaseColorTexture()))
   for (const texture of doc.getRoot().listTextures()) {
