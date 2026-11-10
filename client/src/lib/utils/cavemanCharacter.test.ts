@@ -92,7 +92,11 @@ describe.skipIf(!hasAssets)('female caveman runtime outfit', () => {
     expect(shown(first, 'caveman_top')).toBe(false)
     expect(shown(first, 'caveman_bottom')).toBe(true)
     await applyCharacterArmor(first, {})
-    expect(body(first).geometry.index!.count).toBe(original.index!.count)
+    // Bare, the body still gives up the base head the face part replaces.
+    expect(body(first).geometry.index!.count).toBe(
+      original.index!.count -
+        source.scene.userData.female_face_part.hide_triangle_indices.length * 3
+    )
     for (const name of names)
       expect(shown(first, `caveman_${name}`)).toBe(false)
     disposeCharacterSkeletons(first)
@@ -103,6 +107,7 @@ describe.skipIf(!hasAssets)('female caveman runtime outfit', () => {
   it('keeps skin visible on a failed load, retries and ignores an outdated selection', async () => {
     const source = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH)
     const { modelRoot } = createCharacterModelRoot(source.scene)
+    await applyCharacterArmor(modelRoot, {})
     const triangles = body(modelRoot).geometry.index!.count
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.mocked(loadGLB).mockRejectedValueOnce(new Error('unavailable'))

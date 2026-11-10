@@ -8,18 +8,13 @@ import femaleBob from '../../assets/character-appearance/female-hair-bob.png'
 import femaleLong from '../../assets/character-appearance/female-hair-long.png'
 import femalePonytail from '../../assets/character-appearance/female-hair-ponytail.png'
 import femaleDefaultFace from '../../assets/character-appearance/female-face-default.png'
-import femaleCustomFace from '../../assets/character-appearance/female-face-custom.png'
 
+// One female face for now, so the creation screen offers no choice.
 export const FEMALE_FACE_OPTIONS = [
   {
     value: 'default',
     label: 'characterCreate.faceDefault',
     thumbnail: femaleDefaultFace,
-  },
-  {
-    value: 'custom',
-    label: 'characterCreate.faceCustom',
-    thumbnail: femaleCustomFace,
   },
 ] as const
 

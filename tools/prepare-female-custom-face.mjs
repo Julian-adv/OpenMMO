@@ -8,8 +8,13 @@ import { prune } from '@gltf-transform/functions'
 import { MeshoptDecoder, MeshoptEncoder } from 'meshoptimizer'
 
 const directory = 'client/public/models/characters/modular_female'
-const source = 'assets/modular_human_female_01/faces/tripo_custom_v1/base_custom_preview.glb'
-const output = `${directory}/face_custom.glb`
+// `--face ranger` builds the ranger face part; the default is the custom face.
+const face = process.argv.includes('--face') ? process.argv[process.argv.indexOf('--face') + 1] : 'custom'
+assert.ok(['custom', 'ranger'].includes(face))
+const source = face === 'custom'
+  ? 'assets/modular_human_female_01/faces/tripo_custom_v1/base_custom_preview.glb'
+  : 'assets/modular_human_female_01/faces/tripo_ranger_v1/base_ranger.glb'
+const output = `${directory}/face_${face}.glb`
 await Promise.all([MeshoptDecoder.ready, MeshoptEncoder.ready])
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({
   'meshopt.decoder': MeshoptDecoder, 'meshopt.encoder': MeshoptEncoder,
@@ -141,30 +146,47 @@ async function stripTexture(image, quality) {
   const sum = [0, 0, 0]; let count = 0
   for (let i = 0; i < mask.length; i++) if (mask[i]) { count++; for (let c = 0; c < 3; c++) sum[c] += data[i * 3 + c] }
   for (let i = 0; i < mask.length; i++) if (!mask[i]) for (let c = 0; c < 3; c++) data[i * 3 + c] = Math.round(sum[c] / count)
-  return sharp(data, { raw: { width, height, channels: 3 } }).webp(quality).toBuffer()
+  const flattened = sharp(data, { raw: { width, height, channels: 3 } })
+  // The ranger fit works on 4096 maps; the strip ships at the body's 1024.
+  return (face === 'ranger' && width > 1024 ? flattened.resize(1024, 1024, { kernel: 'lanczos3' }) : flattened).webp(quality).toBuffer()
 }
 const baseMaterial = original.getMaterial()
 const stripMaterial = strip.getMaterial()
 const texture = (image, name) => custom.createTexture(name).setImage(new Uint8Array(image)).setMimeType('image/webp')
 stripMaterial.setBaseColorTexture(texture(await stripTexture(body.getMaterial().getBaseColorTexture().getImage(), { quality: 94, effort: 5 }), 'Neck strip color'))
 stripMaterial.setNormalTexture(texture(await stripTexture(baseMaterial.getNormalTexture().getImage(), { quality: 90, smartSubsample: true, effort: 5 }), 'Neck strip normal'))
-stripMaterial.setMetallicRoughnessTexture(texture(await stripTexture(baseMaterial.getMetallicRoughnessTexture().getImage(), { quality: 90, smartSubsample: true, effort: 5 }), 'Neck strip ORM'))
+// The ranger fit blends the body's roughness toward the head's near the seam.
+const stripOrm = face === 'custom' ? baseMaterial : body.getMaterial()
+stripMaterial.setMetallicRoughnessTexture(texture(await stripTexture(stripOrm.getMetallicRoughnessTexture().getImage(), { quality: 90, smartSubsample: true, effort: 5 }), 'Neck strip ORM'))
 for (const slot of ['getBaseColorTextureInfo', 'getNormalTextureInfo', 'getMetallicRoughnessTextureInfo'])
   assert.equal(stripMaterial[slot]().getTexCoord(), 0)
 
 const bodyMesh = custom.getRoot().listMeshes()[0]
-bodyMesh.setName('neck_female_custom')
+bodyMesh.setName(`neck_female_${face}`)
 body.dispose()
 bodyMesh.addPrimitive(strip)
 for (const node of custom.getRoot().listNodes()) {
   if (!node.getMesh()) continue
   const name = node.getMesh().getName()
-  node.setExtras({ ...node.getExtras(), part_id: name, female_face: name === 'face_female_custom', female_neck: name === 'neck_female_custom' })
+  node.setExtras({ ...node.getExtras(), part_id: name, female_face: name === `face_female_${face}`, female_neck: name === `neck_female_${face}` })
 }
 for (const material of custom.getRoot().listMaterials())
   if (material.getAlphaMode() !== 'OPAQUE') material.setExtras({ ...material.getExtras(), appearance_color_fixed: true })
+if (face === 'ranger') {
+  // No iris mask yet: the eyes keep their own colour. Head maps ship at 1024 (user decision 2026-11-10).
+  for (const mesh of custom.getRoot().listMeshes()) {
+    if (mesh === bodyMesh) continue
+    const material = mesh.listPrimitives()[0].getMaterial()
+    material.setExtras({ ...material.getExtras(), appearance_color_fixed: true })
+    for (const map of [material.getBaseColorTexture(), material.getNormalTexture(), material.getMetallicRoughnessTexture()]) {
+      if (!map) continue
+      map.setImage(new Uint8Array(await sharp(map.getImage()).resize(1024, 1024, { kernel: 'lanczos3' })
+        .webp({ quality: 92, smartSubsample: true, effort: 5 }).toBuffer())).setMimeType('image/webp')
+    }
+  }
+}
 const scene = custom.getRoot().listScenes()[0]
-scene.setExtras({ ...scene.getExtras(), female_part: 'face_custom', female_face_part: {
+scene.setExtras({ ...scene.getExtras(), female_part: `face_${face}`, female_face_part: {
   body_triangles: sourceIndices.length / 3, hide_triangle_indices: hideTriangles, strip_source_triangles: stripSources,
 } })
 for (const animation of custom.getRoot().listAnimations()) animation.dispose()
@@ -186,17 +208,18 @@ for (const [i, texture] of custom.getRoot().listTextures().entries())
   assert.deepEqual(packed.getRoot().listTextures()[i].getImage(), texture.getImage())
 assert.deepEqual(custom.getRoot().listSkins()[0].getInverseBindMatrices().getArray(), base.getRoot().listSkins()[0].getInverseBindMatrices().getArray())
 const thumbnails = {}
-for (const face of ['default', 'custom']) {
-  const path = `client/src/assets/character-appearance/female-face-${face}.png`
+for (const name of face === 'custom' ? ['default', 'custom'] : []) {
+  const path = `client/src/assets/character-appearance/female-face-${name}.png`
   thumbnails[path] = createHash('sha256').update(await readFile(path)).digest('hex')
 }
 const report = {
-  date: '2026-11-08', source, output, inputs,
+  date: face === 'custom' ? '2026-11-08' : '2026-11-10', source, output, inputs,
   output_sha256: createHash('sha256').update(await readFile(output)).digest('hex'),
   output_bytes: (await readFile(output)).length,
   base_body_triangles: sourceIndices.length / 3, hidden_base_triangles: hideTriangles.length,
   neck_strip_triangles: stripTriangles.length, neck_strip_vertices: stripVertices.length,
-  head_and_eyelash_geometry_and_textures_preserved: true,
+  head_and_eyelash_geometry_and_textures_preserved: face === 'custom',
+  head_textures: face === 'custom' ? 'source images' : '1024 WebP q92',
   neck_strip: 'Custom body triangles at or above 1.502 m with their fitted positions; the neck-matched color and base.glb normal and ORM, with untouched texels flattened. Seam vertices below 1.502 m match base.glb in position, UV and weights.',
   outfit_masks: 'base.glb body masks apply unchanged; strip triangles follow the base triangle each one replaces',
   inverse_bind_matrices_match_canonical_body: true,
@@ -205,5 +228,5 @@ const report = {
   runtime: 'Bound onto base.glb as a part; base head, neck and default eyelashes hidden',
   appearance: 'Accepted fitted body, head and eyelash geometry and compressed PBR textures preserved',
 }
-await writeFile('doc/assets/modular-female-custom-face-runtime.json', JSON.stringify(report, null, 2) + '\n')
+await writeFile(`doc/assets/modular-female-${face}-face-runtime.json`, JSON.stringify(report, null, 2) + '\n')
 console.log(JSON.stringify(report))

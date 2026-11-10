@@ -47,11 +47,28 @@
 - 미리보기: `/modular-character-preview.html?character=female-face&face=ranger`. 이 얼굴의 헤어 보정은
   `client/src/lib/data/femaleHairFits.json`의 `ranger`에 따로 저장하며 초기값은 세 헤어 모두 아래로 1.5cm다.
 
+## 게임 연결 (2026-11-10)
+
+사용자 결정: 기존 여성 얼굴 두 종류(기존 얼굴·새 얼굴)를 이 얼굴로 바꾼다. 저장된 `face` 값이 `default`든 `custom`이든
+여성 캐릭터는 모두 이 얼굴로 표시한다. 서버·프로토콜·저장 데이터는 바꾸지 않았다.
+
+- 게임용 파츠 `client/public/models/characters/modular_female/face_ranger.glb`(1.22MB):
+  `node tools/prepare-female-custom-face.mjs --face ranger`. 머리 8,599·속눈썹 230·목 띠 662 triangles,
+  머리 색·노멀·ORM과 목 띠 색·ORM은 1024² WebP다. 공통 `base.glb`에 붙이고 몸체의 머리·목과 기본 속눈썹은 숨긴다.
+  [게임용 파일 기록](modular-female-ranger-face-runtime.json).
+- 속눈썹은 1차 머리 텍스처에서 어두운 절반의 평균색 하나로 칠한다(텍스처 없음).
+- 눈색: 홍채 마스크가 아직 없어 얼굴·속눈썹 재질을 착색 대상에서 뺐다. 생성 화면에서 여성은 얼굴 선택과 눈색 항목을 숨긴다.
+  저장된 눈색 값은 그대로 두며 지금은 표시에 쓰이지 않는다.
+- 헤어 보정은 `femaleHairFits.json`의 `ranger` 값을 쓴다(세 헤어 모두 아래로 1.5cm에서 시작).
+- **[미사용]** `face_custom.glb`와 여성 얼굴 썸네일 `female-face-custom.png`는 게임에서 더 이상 불러오지 않는다. 파일은 남겨 두었다.
+- 2단 텍스처(생성·선택 화면 1024², 게임 512²)는 아직 없다. 지금은 어디서나 1024²다.
+
 ## 남은 일
 
 - 안구 텍스처의 검은 반사 얼룩, 눈꺼풀에 그려진 속눈썹 그림자 띠, 눈색 착색 마스크.
 - 몸(번들거림)과 머리(무광)의 광택 차이, 후면 목의 옅은 색 경계.
-- 게임용 파츠(`face_ranger.glb`, 압축, 속눈썹 전용 아틀라스, 1024²/512² 텍스처)와 게임 연결.
+- 게임 화면용 512² 텍스처 단계, 여성 얼굴·헤어 썸네일 다시 렌더.
+- `face_ranger.glb`를 Hugging Face에 올리고 `assets.lock`에 넣어야 배포할 수 있다.
 - 브라우저에서는 정면(헤어 없음·묶은 머리)만 확인했다. 나머지 시점·동작은 Blender 렌더로 확인했다.
 
 ```bash

@@ -122,7 +122,12 @@ describe('Valkyrie base appearance', () => {
         expect(shown(modelRoot, 'barbarian_hair')).toBe(false)
       }
       await applyCharacterArmor(modelRoot, {})
-      expect(body.geometry.index!.count).toBe(original.index!.count)
+      // Bare, the body still gives up the base head the face part replaces.
+      expect(body.geometry.index!.count).toBe(
+        original.index!.count -
+          source.scene.userData.female_face_part.hide_triangle_indices.length *
+            3
+      )
       const normal = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH)
       expect(parts(normal.scene, 'valkyrie_wings')).toHaveLength(0)
       expect(parts(normal.scene, 'valkyrie_hair')).toHaveLength(0)

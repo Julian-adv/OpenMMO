@@ -304,10 +304,18 @@ def main():
         doc['images'].append({'bufferView': len(doc['bufferViews']) - 1, 'mimeType': 'image/png', 'name': name})
         doc['textures'].append({'source': len(doc['images']) - 1})
         slot['index'] = len(doc['textures']) - 1
-    lash_material = custom.add_material(doc, raw, donor, donor_raw)
-    color = doc['materials'][lash_material]['pbrMetallicRoughness']['baseColorTexture']
-    doc['materials'][lash_material] = {'name': 'Female ranger eyelashes', 'doubleSided': True,
-                                       'pbrMetallicRoughness': {'baseColorTexture': color, 'metallicFactor': 0, 'roughnessFactor': .9}}
+    # The strands are a few dark texels each in the donor's 4096 atlas; one flat colour stands in for it.
+    donor_color = material_image(donor, donor_raw, donor['materials'][0]['pbrMetallicRoughness']['baseColorTexture'])
+    samples = custom.texture_sample(donor_color, lash['TEXCOORD_0'])
+    # Strand corners also catch skin texels, so only the darker half counts.
+    dark = samples.sum(1) <= np.median(samples.sum(1))
+    lash_color = samples[dark].mean(0) ** 2.2
+    lash_record['flat_linear_color'] = lash_color.tolist()
+    doc['materials'].append({'name': 'Female ranger eyelashes', 'doubleSided': True,
+                             'pbrMetallicRoughness': {'baseColorFactor': [*lash_color.tolist(), 1],
+                                                      'metallicFactor': 0, 'roughnessFactor': .9}})
+    lash_material = len(doc['materials']) - 1
+    del lash['TEXCOORD_0']
     lash['dense'] = np.zeros((len(lash['POSITION']), head['dense'].shape[1]))
     lash['dense'][:, head_joint] = 1
     primitives = [custom.add_geometry(doc, raw, body, kept_faces, body_material),

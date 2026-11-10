@@ -105,30 +105,35 @@
       value: appearance.face,
       options: female ? FEMALE_FACE_OPTIONS : FACE_OPTIONS,
     }
-    return [face, hair]
+    return female ? [hair] : [face, hair]
   })
-  let colorFields = $derived([
-    {
-      key: 'hair_color' as const,
-      label: 'characterCreate.hairColor' as const,
-      value: appearance.hair_color_original
-        ? originalHairColor(appearance.hair)
-        : (appearance.hair_color ?? DEFAULT_HAIR_COLOR),
-      original: appearance.hair_color_original ?? false,
-      options: HAIR_COLORS,
-      disabled: appearance.hair === 'none',
-      zoomFace: false,
-    },
-    {
-      key: 'eye_color' as const,
-      label: 'characterCreate.eyeColor' as const,
-      value: appearance.eye_color ?? DEFAULT_EYE_COLOR,
-      original: appearance.eye_color_original ?? false,
-      options: EYE_COLORS,
-      disabled: false,
-      zoomFace: true,
-    },
-  ])
+  // The female face has no iris mask yet, so its eyes keep their own colour.
+  let colorFields = $derived(
+    [
+      {
+        key: 'hair_color' as const,
+        label: 'characterCreate.hairColor' as const,
+        value: appearance.hair_color_original
+          ? originalHairColor(appearance.hair)
+          : (appearance.hair_color ?? DEFAULT_HAIR_COLOR),
+        original: appearance.hair_color_original ?? false,
+        options: HAIR_COLORS,
+        disabled: appearance.hair === 'none',
+        zoomFace: false,
+      },
+      {
+        key: 'eye_color' as const,
+        label: 'characterCreate.eyeColor' as const,
+        value: appearance.eye_color ?? DEFAULT_EYE_COLOR,
+        original: appearance.eye_color_original ?? false,
+        options: EYE_COLORS,
+        disabled: false,
+        zoomFace: true,
+      },
+    ].filter(
+      (field) => field.key !== 'eye_color' || selectedGender !== 'female'
+    )
+  )
   let createCharacterName = $state('')
   let rolledStats = $state<CharacterRollResult | null>(null)
   let isCreating = $state(false)

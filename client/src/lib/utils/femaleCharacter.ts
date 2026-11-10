@@ -116,8 +116,10 @@ export const femaleBootsClipName = (clip: string, boots: string) =>
 const models = new Map<string, Promise<GLTF>>()
 const packs = new Map<string, Promise<GLTF>>()
 const pairedBaseClips = new WeakMap<GLTF, THREE.AnimationClip[]>()
-const FACE_PART = 'face_custom'
-// Body triangles the custom face replaces, and the body triangle each neck strip triangle stands in for.
+// Every female character wears the ranger face (user decision 2026-11-10); saved `default` and `custom` both show it.
+const FACE_PART = 'face_ranger'
+const FACE = 'ranger'
+// Body triangles the face part replaces, and the body triangle each neck strip triangle stands in for.
 interface FacePart {
   body_triangles: number
   hide_triangle_indices: number[]
@@ -137,7 +139,7 @@ export function assembleFemaleCharacter(
   base: GLTF,
   sources: GLTF[],
   names = FEMALE_PARTS,
-  face: 'default' | 'custom' = 'default',
+  face: 'default' | 'custom' | 'ranger' = 'default',
   facePart?: GLTF
 ): THREE.Group {
   const scene = clone(base.scene) as THREE.Group
@@ -188,17 +190,15 @@ export function bindFemaleFacePart(scene: THREE.Object3D, facePart: GLTF) {
 export const FEMALE_FACE_PART_PATH = `${MODULAR_FEMALE_DIRECTORY}/${FACE_PART}.glb`
 
 export function loadFemaleCharacter(
-  path = MODULAR_FEMALE_MODEL_PATH,
-  face?: CharacterAppearance['face']
+  path = MODULAR_FEMALE_MODEL_PATH
 ): Promise<GLTF> {
-  const custom = face === 'custom'
-  const key = `${path}:${custom ? 'custom' : 'default'}`
+  const key = path
   let pending = models.get(key)
   if (!pending) {
     const names = [...FEMALE_PARTS, ...(VARIANTS[path]?.fixed ?? [])]
     pending = Promise.all([
       loadGLB(MODULAR_FEMALE_MODEL_PATH),
-      custom ? loadGLB(FEMALE_FACE_PART_PATH) : Promise.resolve(undefined),
+      loadGLB(FEMALE_FACE_PART_PATH),
       Promise.all(
         names.map((name) => loadGLB(`${MODULAR_FEMALE_DIRECTORY}/${name}.glb`))
       ),
@@ -208,7 +208,7 @@ export function loadFemaleCharacter(
           base,
           sources,
           names,
-          custom ? 'custom' : 'default',
+          FACE,
           facePart
         )
         return {

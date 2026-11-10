@@ -67,29 +67,17 @@ const hasAssets = existsSync(
 )
 
 describe.skipIf(!hasAssets)('female face selection', () => {
-  it('caches faces separately and reuses canonical animations and the fitted rig', async () => {
+  it('shows the ranger face for every saved face and reuses canonical animations and the fitted rig', async () => {
     const original = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH)
-    const custom = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH, {
-      face: 'custom',
-    })
-    expect(custom).not.toBe(original)
-    expect(
-      await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH, { face: 'custom' })
-    ).toBe(custom)
-    expect(
-      await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH, { face: 'ranger' })
-    ).toBe(original)
-    expect(original.scene.userData.modular_face).toBe('default')
-    expect(custom.scene.userData.modular_face).toBe('custom')
-    expect(custom.animations.map((clip) => clip.toJSON().tracks)).toEqual(
-      original.animations.map((clip) => clip.toJSON().tracks)
-    )
-    const head = skinnedParts(custom.scene).find(
+    for (const face of ['custom', 'ranger'] as const)
+      expect(
+        await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH, { face })
+      ).toBe(original)
+    expect(original.scene.userData.modular_face).toBe('ranger')
+    const head = skinnedParts(original.scene).find(
       (mesh) => mesh.userData.female_face
     )!
     expect(head).toBeDefined()
-    expect(head.geometry.attributes.uv1).toBeDefined()
-    expect(head.geometry.attributes.uv2).toBeDefined()
     const canonical = skinnedParts(original.scene).find(
       (mesh) => mesh.userData.female_body
     )!
@@ -106,7 +94,7 @@ describe.skipIf(!hasAssets)('female face selection', () => {
       MODULAR_FEMALE_RANGER_MODEL_PATH,
     ]) {
       const variant = await loadCharacterModel(path, { face: 'custom' })
-      expect(variant.scene.userData.modular_face).toBe('custom')
+      expect(variant.scene.userData.modular_face).toBe('ranger')
       expect(variant.scene.userData.female_hair).toBe(
         path === MODULAR_VALKYRIE_MODEL_PATH ? 'valkyrie_hair' : 'ranger_hair'
       )
@@ -386,7 +374,7 @@ describe('female modular starter outfits', () => {
       await applyCharacterArmor(first, armor)
       expect(count(first, 'helmet')).toBe(2166)
       expect(count(first, 'hair')).toBe(0)
-      expect(count(first)).toBe(51538)
+      expect(count(first)).toBe(53923)
       expect(count(second)).toBe(original)
       const covered = count(first, 'top')
       await applyCharacterArmor(first, { ...armor, head: null, hands: null })
@@ -395,7 +383,11 @@ describe('female modular starter outfits', () => {
       expect(count(first, 'gloves')).toBe(0)
       expect(count(first, 'top')).toBe(covered + 720)
       await applyCharacterArmor(first, {})
-      expect(count(first)).toBe(original)
+      // Bare, the body still gives up the base head the face part replaces.
+      expect(count(first)).toBe(
+        original -
+          source.scene.userData.female_face_part.hide_triangle_indices.length
+      )
       disposeCharacterSkeletons(first)
       disposeCharacterSkeletons(second)
     }
@@ -591,6 +583,9 @@ describe('female modular starter outfits', () => {
       const body = (root: THREE.Object3D) =>
         skinnedParts(root).find((mesh) => mesh.userData.female_body)!
       const originalGeometry = body(first).geometry
+      // The face part always hides the base head, so the bare count is below the full geometry's.
+      await applyCharacterArmor(first, {})
+      const bare = body(first).geometry.index!.count
       const rogue = {
         chest: 'worn_rogue_top',
         pants: 'worn_rogue_pants',
@@ -602,9 +597,7 @@ describe('female modular starter outfits', () => {
         expect(count(first, `rogue_${part}`)).toBeGreaterThan(0)
       expect(count(first, 'rogue_garters')).toBe(768)
       expect(count(first, 'hair')).toBeGreaterThan(0)
-      expect(body(first).geometry.index!.count).toBeLessThan(
-        originalGeometry.index!.count
-      )
+      expect(body(first).geometry.index!.count).toBeLessThan(bare)
       expect(body(second).geometry).toBe(originalGeometry)
       expect(
         body(second).geometry.getAttribute('rogueUnderwear')
@@ -617,9 +610,7 @@ describe('female modular starter outfits', () => {
       await applyCharacterArmor(first, rogue)
       expect(count(first, 'rogue_garters')).toBe(768)
       await applyCharacterArmor(first, {})
-      expect(body(first).geometry.index!.count).toBe(
-        originalGeometry.index!.count
-      )
+      expect(body(first).geometry.index!.count).toBe(bare)
       for (const part of ['top', 'bottom', 'gloves', 'boots', 'garters'])
         expect(count(first, `rogue_${part}`)).toBe(0)
       disposeCharacterSkeletons(first)
@@ -646,6 +637,7 @@ describe('female modular starter outfits', () => {
     async () => {
       const source = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH)
       const { modelRoot } = createCharacterModelRoot(source.scene)
+      await applyCharacterArmor(modelRoot, {})
       const original = count(modelRoot)
       await applyCharacterArmor(modelRoot, barbarian)
       for (const part of ['top', 'bottom', 'boots', 'gloves', 'helmet']) {

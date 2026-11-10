@@ -69,9 +69,9 @@ export function fitFemaleHair(
 ) {
   const style = styles[part]
   if (!style) return
-  const fit = (saved as HairFits)[face === 'custom' ? 'custom' : 'default'][
-    style
-  ]
+  const fit = (saved as HairFits)[
+    face in saved ? (face as HairFitFace) : 'default'
+  ][style]
   if (
     !fit ||
     Object.entries(HAIR_FIT_DEFAULT).every(
