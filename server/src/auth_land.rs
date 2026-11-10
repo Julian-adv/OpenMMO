@@ -85,23 +85,59 @@ impl AuthService {
         Ok(plots)
     }
 
-    fn read_land_account(conn: &Connection, character_id: i64) -> Result<LandAccount, AuthError> {
+    fn homestead_id(conn: &Connection, character_id: i64) -> Result<Option<i64>, AuthError> {
+        Ok(conn
+            .query_row(
+                "SELECT id FROM land_estates
+                 WHERE account_name=(SELECT account_name FROM characters WHERE id=?1) AND grade=1",
+                [character_id],
+                |row| row.get(0),
+            )
+            .optional()?)
+    }
+
+    fn read_estate_account(conn: &Connection, estate_id: i64) -> Result<LandAccount, AuthError> {
         Ok(conn.query_row(
             "SELECT treasury, missed, free_months, (SELECT COUNT(*) FROM land_plots WHERE estate_id=e.id)
-             FROM land_estates e
-             WHERE account_name=(SELECT account_name FROM characters WHERE id=?1) AND grade=1",
-            [character_id],
+             FROM land_estates e WHERE id=?1",
+            [estate_id],
             |row| Ok(LandAccount { treasury: row.get(0)?, missed: row.get(1)?, free_months: row.get(2)?, plots: row.get(3)? }),
         ).optional()?.unwrap_or_default())
     }
 
     pub fn land_account(&self, character_id: i64) -> Result<LandAccount, AuthError> {
         let conn = self.open_connection()?;
-        Self::read_land_account(&conn, character_id)
+        match Self::homestead_id(&conn, character_id)? {
+            Some(estate_id) => Self::read_estate_account(&conn, estate_id),
+            None => Ok(LandAccount::default()),
+        }
     }
 
     pub fn transfer_land_gold(
         &self,
+        character: CharacterSaveData,
+        inventory: &[ItemRow],
+        amount: i64,
+        deposit: bool,
+    ) -> Result<Result<(i64, LandAccount), &'static str>, AuthError> {
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let Some(estate_id) = Self::homestead_id(&tx, character.character_id)? else {
+            return Ok(Err("Claim a homestead before using its tax account."));
+        };
+        let outcome =
+            Self::transfer_estate_gold(&tx, estate_id, character, inventory, amount, deposit)?;
+        if outcome.is_ok() {
+            tx.commit()?;
+        }
+        Ok(outcome)
+    }
+
+    /// Move gold between `character` and one estate's tax account inside the
+    /// caller's transaction; the caller commits on `Ok(Ok(_))`.
+    pub(super) fn transfer_estate_gold(
+        tx: &Connection,
+        estate_id: i64,
         mut character: CharacterSaveData,
         inventory: &[ItemRow],
         amount: i64,
@@ -110,9 +146,7 @@ impl AuthService {
         if amount <= 0 {
             return Ok(Err("Enter a positive amount."));
         }
-        let mut conn = self.open_connection()?;
-        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let mut account = Self::read_land_account(&tx, character.character_id)?;
+        let mut account = Self::read_estate_account(tx, estate_id)?;
         if account.plots == 0 {
             return Ok(Err("Claim a homestead before using its tax account."));
         }
@@ -144,7 +178,7 @@ impl AuthService {
             let cost = account.recovery_cost();
             account.treasury -= cost;
             Self::write_gold_sinks(
-                &tx,
+                tx,
                 &[GoldSinkRecord {
                     timestamp: super::unix_now(),
                     sink: GoldSink::LandRecovery,
@@ -156,19 +190,17 @@ impl AuthService {
             account.free_months = 1;
         }
         tx.execute(
-            "UPDATE land_estates SET treasury=?2, missed=?3, free_months=?4
-            WHERE account_name=(SELECT account_name FROM characters WHERE id=?1) AND grade=1",
+            "UPDATE land_estates SET treasury=?2, missed=?3, free_months=?4 WHERE id=?1",
             params![
-                character.character_id,
+                estate_id,
                 account.treasury,
                 account.missed,
                 account.free_months
             ],
         )?;
         character.gold = gold;
-        Self::write_character_states(&tx, std::slice::from_ref(&character))?;
-        Self::replace_inventories(&tx, [(character.character_id, inventory)])?;
-        tx.commit()?;
+        Self::write_character_states(tx, std::slice::from_ref(&character))?;
+        Self::replace_inventories(tx, [(character.character_id, inventory)])?;
         Ok(Ok((gold, account)))
     }
 

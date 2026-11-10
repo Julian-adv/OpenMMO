@@ -7,6 +7,7 @@ use crate::{
     auth::AuthService,
     types::{PlayerId, ServerMessage},
 };
+use onlinerpg_shared::family::permission;
 use onlinerpg_shared::fence::FencePlot;
 use onlinerpg_shared::landscaping::{
     self, LandscapingStroke, LandscapingTile, LandscapingTool, CLEARED_BYTES, TOOLBOX_ITEM,
@@ -115,11 +116,22 @@ impl GameState {
                     .any(|item| item.item_def_id == TOOLBOX_ITEM && item.quantity > 0)
             });
         let auth = auth.clone();
-        let (plots, palette, owned_character_ids) = auth_db(move || {
+        // The toolbox also opens for members who may only build or demolish;
+        // `plots` still bounds what this tool itself may touch.
+        let (tool_bit, entry_bits) = match tool {
+            LandscapingTool::House => (permission::BUILD_HOUSE, permission::BUILD_HOUSE),
+            LandscapingTool::Fence => (permission::LANDSCAPE, permission::LANDSCAPE),
+            LandscapingTool::Ground | LandscapingTool::Road => (
+                permission::LANDSCAPE,
+                permission::LANDSCAPE | permission::BUILD_HOUSE | permission::DEMOLISH_HOUSE,
+            ),
+        };
+        let (plots, entry_plots, palette, owned_character_ids) = auth_db(move || {
             Ok((
-                auth.fence_plots(owner_id)?,
+                auth.fence_plots(owner_id, tool_bit)?,
+                auth.fence_plots(owner_id, entry_bits)?,
                 auth.landscaping_palette(owner_id)?,
-                auth.account_character_ids(owner_id)?,
+                auth.landscaping_owner_ids(owner_id)?,
             ))
         })
         .await
@@ -137,7 +149,7 @@ impl GameState {
                 return Err("Carry a Landscaper's Toolbox to paint your estate.");
             }
             if !is_admin
-                && !landscaping::owns_position(&plots, player.position.x, player.position.z)
+                && !landscaping::owns_position(&entry_plots, player.position.x, player.position.z)
             {
                 return Err("Use the toolbox inside your own estate with no overdue taxes.");
             }
@@ -292,13 +304,17 @@ impl GameState {
             return Err("Carry a Landscaper's Toolbox to paint your estate.");
         }
         let auth = auth.clone();
-        let (plots, palette) =
-            auth_db(move || Ok((auth.fence_plots(owner)?, auth.landscaping_palette(owner)?)))
-                .await
-                .map_err(|error| {
-                    tracing::warn!(%error, "Failed to load landscaping permissions");
-                    "Estate editing is temporarily unavailable."
-                })?;
+        let (plots, palette) = auth_db(move || {
+            Ok((
+                auth.fence_plots(owner, permission::LANDSCAPE)?,
+                auth.landscaping_palette(owner)?,
+            ))
+        })
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "Failed to load landscaping permissions");
+            "Estate editing is temporarily unavailable."
+        })?;
         if !palette.contains(&stroke.palette) {
             return Err("Learn this palette before using it.");
         }

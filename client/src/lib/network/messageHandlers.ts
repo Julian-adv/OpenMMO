@@ -221,6 +221,12 @@ import {
   resetFriendStores,
   MAX_PENDING_FRIEND_REQUESTS,
 } from '../stores/friendStore'
+import {
+  applyFamilyState,
+  pendingFamilyInvites,
+  MAX_PENDING_FAMILY_INVITES,
+  type FamilyInfo,
+} from '../stores/familyStore'
 import { enqueueConsent } from '../stores/consentQueue'
 import {
   editorHeightManager,
@@ -357,6 +363,7 @@ function toRemotePlayer(sp: ServerPlayer): RemotePlayer {
     wet: sp.wet ?? false,
     petrified: sp.petrified ?? false,
     title: sp.title ?? null,
+    family: sp.family ?? null,
     mainHand: sp.main_hand ?? null,
     armor: sp.armor,
     back: sp.back ?? null,
@@ -467,6 +474,7 @@ function logSpokenLine(playerId: number, text: string) {
     text,
     sender: isLocal ? 'local' : 'remote',
     name: speaker?.name ?? translate('chat.unknown'),
+    family: speaker?.family ?? null,
   })
 }
 
@@ -1323,6 +1331,24 @@ export function handleServerMessage(
       )
       break
 
+    case 'FamilyState':
+      applyFamilyState((data.family as FamilyInfo | null) ?? null)
+      break
+
+    case 'FamilyInviteReceived':
+      enqueueConsent(
+        pendingFamilyInvites,
+        MAX_PENDING_FAMILY_INVITES,
+        (invite) => invite.inviterId === data.inviter_id,
+        {
+          inviterId: data.inviter_id,
+          inviterName: data.inviter_name,
+          familyName: data.family_name,
+          offeredAt: Date.now(),
+        }
+      )
+      break
+
     case 'PartyPositions':
       applyPartyPositions(
         data.members as PartyMemberPositionEntry[],
@@ -1864,6 +1890,11 @@ export function handleServerMessage(
 
     case 'PlayerTitleChanged': {
       updatePlayer(data.player_id, { title: data.title ?? null })
+      break
+    }
+
+    case 'PlayerFamilyChanged': {
+      updatePlayer(data.player_id, { family: data.family ?? null })
       break
     }
 

@@ -608,6 +608,9 @@ Use the readiness status above. Wait for server success or failure feedback."#,
                     crate::title_defs::title_name(title)
                 ));
             }
+            if let Some(family) = p.family.as_deref() {
+                lines.push(format!("  Family: {family}"));
+            }
             if p.is_official_npc {
                 if let Some(shop) = crate::shop_info::shop_line_for(&p.name, index) {
                     lines.push(shop);

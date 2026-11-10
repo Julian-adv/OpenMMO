@@ -152,6 +152,7 @@ pub(crate) fn test_player(x: f32, z: f32) -> Player {
         wet: false,
         petrified: false,
         title: None,
+        family: None,
     }
 }
 

@@ -29,6 +29,7 @@ mod combat_tests;
 mod dungeon_tests;
 mod enchant_tests;
 mod estate_storage_tests;
+mod family_tests;
 mod fence_tests;
 mod field_raid_tests;
 mod fishing_tests;
@@ -150,6 +151,7 @@ pub(super) fn make_player(id: &str, x: f32, z: f32) -> Player {
         wet: false,
         petrified: false,
         title: None,
+        family: None,
         floor_level: 0,
         object_type: None,
         main_hand: None,

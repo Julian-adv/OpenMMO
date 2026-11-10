@@ -24,7 +24,15 @@
 </script>
 
 <span class="character-summary" class:compact>
-  <span class="name" title={character.name}>{character.name}</span>
+  <span
+    class="name"
+    title={character.family
+      ? `${character.name} ${character.family}`
+      : character.name}
+    >{character.name}{#if character.family}<span class="family"
+        >{character.family}</span
+      >{/if}</span
+  >
   {#if !compact}
     <span class="title" title={activeTitle || undefined}>{activeTitle}</span>
     <span class="meta">
@@ -62,6 +70,11 @@
     font-weight: 600;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .family {
+    margin-left: 0.3em;
+    color: #cdeec4;
   }
 
   .title {

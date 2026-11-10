@@ -6,6 +6,7 @@ export const PANEL_IDS = [
   'character',
   'inventory',
   'friends',
+  'family',
   'party',
   'emotes',
   'trade',

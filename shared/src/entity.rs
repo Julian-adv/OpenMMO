@@ -112,6 +112,9 @@ pub struct Player {
     pub armor: crate::character::ArmorEquipment,
     #[serde(default)]
     pub appearance: crate::character::CharacterAppearance,
+    /// Family name shown after `name` (doc/FAMILY_SYSTEM.md).
+    #[serde(default)]
+    pub family: Option<String>,
     #[serde(skip)]
     pub last_combat_at: u64,
     /// Unix ms of the last healing potion drunk; raid bosses notice it.
@@ -357,6 +360,7 @@ mod tests {
             wet: false,
             petrified: false,
             title: None,
+            family: None,
         };
         player.set_base_max_health(94);
         assert_eq!((player.max_health, player.base_max_health()), (107, 94));
@@ -415,6 +419,7 @@ mod tests {
             wet: false,
             petrified: false,
             title: None,
+            family: None,
         };
         // rmp_serde writes the struct as a positional array, so `id` is the
         // first element — and 42 fits msgpack's single-byte positive fixint.
@@ -480,6 +485,7 @@ mod tests {
             wet: false,
             petrified: false,
             title: None,
+            family: None,
         };
         let bytes = rmp_serde::to_vec(&player).unwrap();
         let decoded: Player = rmp_serde::from_slice(&bytes).unwrap();

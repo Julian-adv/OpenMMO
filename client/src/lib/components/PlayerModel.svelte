@@ -288,6 +288,7 @@
     remotePlayerId?: number
     /** Shown title id, drawn in smaller text above the name. */
     title?: string | null
+    family?: string | null
     /** Stone: grey and frozen in pose (doc/DEBUFF.md `petrifies`). */
     petrified?: boolean
     /** Remote player's floor (negative = dungeon depth), for the hover ring. */
@@ -340,6 +341,7 @@
     npcPlayerId,
     remotePlayerId,
     title = null,
+    family = null,
     petrified = false,
     floorLevel = 0,
     heightManager = null,
@@ -2316,6 +2318,8 @@
     {/if}
     <TextLabel
       text={name}
+      suffix={family}
+      suffixColor={isCurrentPlayer ? '#56bfc4' : '#cdeec4'}
       position={[0, isCurrentPlayer ? -0.04 : 0, 0]}
       fontSize={0.3}
       color={isCurrentPlayer ? '#4299e1' : '#ffffff'}

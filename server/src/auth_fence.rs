@@ -1,4 +1,6 @@
+use super::family::estate_access_sql;
 use super::{AuthError, AuthService, CharacterSaveData, ItemRow};
+use onlinerpg_shared::family::permission;
 use onlinerpg_shared::fence::{Fence, FenceAxis, FenceEdge, FencePlot};
 use onlinerpg_terrain::land::plot_addr;
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
@@ -86,13 +88,20 @@ impl AuthService {
         Ok(fences)
     }
 
-    pub fn fence_plots(&self, character_id: i64) -> Result<Vec<FencePlot>, AuthError> {
+    /// Plots of active estates `character_id` may use: their account's, and
+    /// family estates where their rank holds `permission`.
+    pub fn fence_plots(
+        &self,
+        character_id: i64,
+        permission: u32,
+    ) -> Result<Vec<FencePlot>, AuthError> {
         let conn = self.open_connection()?;
-        let mut stmt = conn.prepare(
+        let mut stmt = conn.prepare(&format!(
             "SELECT p.tile_x, p.tile_z, p.quadrant FROM land_plots p
              JOIN land_estates e ON e.id=p.estate_id
-             WHERE e.account_name=(SELECT account_name FROM characters WHERE id=?1) AND e.missed=0",
-        )?;
+             WHERE {} AND e.missed=0",
+            estate_access_sql("?1", permission)
+        ))?;
         let plots = stmt
             .query_map([character_id], |row| {
                 let tx: i32 = row.get(0)?;
@@ -118,13 +127,15 @@ impl AuthService {
         let mut conn = self.open_connection()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let edge = fence.edge;
+        let access = estate_access_sql("?4", permission::LANDSCAPE);
         let existing: Option<bool> = tx
             .query_row(
-                "SELECT CASE WHEN e.id IS NULL THEN f.installer_id=?4
-                         ELSE e.account_name=(SELECT account_name FROM characters WHERE id=?4) END
-                 FROM land_fences f
-                 LEFT JOIN land_estates e ON e.id=f.estate_id
-                 WHERE f.x=?1 AND f.z=?2 AND f.axis=?3",
+                &format!(
+                    "SELECT CASE WHEN e.id IS NULL THEN f.installer_id=?4 ELSE {access} END
+                     FROM land_fences f
+                     LEFT JOIN land_estates e ON e.id=f.estate_id
+                     WHERE f.x=?1 AND f.z=?2 AND f.axis=?3"
+                ),
                 params![edge.x, edge.z, axis_id(edge.axis), character.character_id],
                 |row| row.get(0),
             )
@@ -139,12 +150,17 @@ impl AuthService {
                 let tile = (addr.index / 4) as i32;
                 let tx_coord = addr.rx * 16 + tile % 16;
                 let tz_coord = addr.rz * 16 + tile / 16;
-                estate = tx.query_row(
-                    "SELECT e.id FROM land_plots p JOIN land_estates e ON e.id=p.estate_id
-                     WHERE p.tile_x=?1 AND p.tile_z=?2 AND p.quadrant=?3
-                       AND e.account_name=(SELECT account_name FROM characters WHERE id=?4) AND e.missed=0",
-                    params![tx_coord, tz_coord, addr.index % 4, character.character_id], |row| row.get::<_, i64>(0)
-                ).optional()?;
+                estate = tx
+                    .query_row(
+                        &format!(
+                            "SELECT e.id FROM land_plots p JOIN land_estates e ON e.id=p.estate_id
+                         WHERE p.tile_x=?1 AND p.tile_z=?2 AND p.quadrant=?3
+                           AND {access} AND e.missed=0"
+                        ),
+                        params![tx_coord, tz_coord, addr.index % 4, character.character_id],
+                        |row| row.get::<_, i64>(0),
+                    )
+                    .optional()?;
                 if estate.is_some() {
                     break;
                 }

@@ -31,6 +31,8 @@
   import PartyPanel from './PartyPanel.svelte'
   import FriendRequestToast from './FriendRequestToast.svelte'
   import FriendPanel from './FriendPanel.svelte'
+  import FamilyPanel from './FamilyPanel.svelte'
+  import FamilyInviteToast from './FamilyInviteToast.svelte'
   import EmotePanel from './EmotePanel.svelte'
   import InstrumentPanel from './InstrumentPanel.svelte'
   import NpcContextMenu from './NpcContextMenu.svelte'
@@ -71,6 +73,7 @@
   import { minimapEnabled } from '../stores/minimapStore'
   import { bubbleLayer } from '../stores/bubbleLayerStore'
   import { friendPanelVisible } from '../stores/friendStore'
+  import { familyPanelVisible, familyHotkeyActive } from '../stores/familyStore'
   import { emotePanelVisible } from '../stores/emoteStore'
   import { partyPanelVisible, partyHotkeyActive } from '../stores/partyStore'
   import { mountOverlay } from '../stores/overlayStack'
@@ -273,6 +276,8 @@
     <!-- Always mounted: it drives the presence poll, whose answers feed the
          online notice whether or not the list is on screen. -->
     <FriendPanel />
+    <FamilyInviteToast />
+    <FamilyPanel />
     <EmotePanel />
     <InstrumentPanel />
     <NpcContextMenu />
@@ -384,6 +389,25 @@
               >
               <span class="social-label">{$t('friends.title')}</span>
               <span class="key-hint">F</span>
+            </button>
+            <button
+              class="social-item"
+              onclick={() => toggleFromSocialMenu(familyPanelVisible)}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="512"
+                height="512"
+                viewBox="0 0 24 24"
+                ><path
+                  fill="currentColor"
+                  d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5zm0 2.2 6 2.2V11c0 3.9-2.5 7.4-6 8.8-3.5-1.4-6-4.9-6-8.8V6.4z"
+                /></svg
+              >
+              <span class="social-label">{$t('family.title')}</span>
+              {#if $familyHotkeyActive}
+                <span class="key-hint">H</span>
+              {/if}
             </button>
             <button
               class="social-item"

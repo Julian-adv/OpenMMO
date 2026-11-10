@@ -116,6 +116,8 @@ pub enum GoldSink {
     StallTax,
     LandTax,
     LandRecovery,
+    FamilyFounding,
+    FamilyRename,
 }
 
 impl GoldSink {
@@ -126,6 +128,8 @@ impl GoldSink {
             Self::StallTax => ("stall_tax", ""),
             Self::LandTax => ("land_tax", ""),
             Self::LandRecovery => ("land_recovery", ""),
+            Self::FamilyFounding => ("family_founding", ""),
+            Self::FamilyRename => ("family_rename", ""),
         }
     }
 }

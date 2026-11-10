@@ -221,6 +221,7 @@ impl super::GameState {
         }
         self.remove_player_blocks(player_id).await;
         self.remove_player_friends(player_id).await;
+        self.forget_player_family(player_id).await;
         self.remove_player_titles(player_id).await;
         self.forget_whisper_partner(player_id).await;
         self.forget_player_skills(player_id).await;
@@ -504,6 +505,7 @@ impl super::GameState {
         self.remove_character_stall(character_id).await;
         self.discard_pending_discovery_saves(character_id).await;
         drop(_persistence);
+        self.settle_families(auth).await;
         if let Err(error) = self.refresh_fence_owners(auth).await {
             tracing::warn!(%error, account = account_name, character_id, "Failed to refresh fences after character deletion");
         }
@@ -570,6 +572,7 @@ impl super::GameState {
         self.cancel_concentration_if_active(player_id).await;
         self.persist_and_detach_player(player_id, auth).await;
         self.unregister_connection_channel(player_id).await;
+        self.player_left_family(player_id, auth).await;
         self.unregister_player_character(player_id).await;
         self.remove_player(player_id).await;
     }

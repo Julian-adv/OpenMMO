@@ -572,4 +572,7 @@ pub struct Character {
     pub active_title: Option<String>,
     #[serde(default)]
     pub appearance: CharacterAppearance,
+    /// Family name (doc/FAMILY_SYSTEM.md).
+    #[serde(default)]
+    pub family: Option<String>,
 }

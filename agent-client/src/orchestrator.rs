@@ -1385,6 +1385,7 @@ pub(crate) mod tests {
             equipment: Default::default(),
             titles: Vec::new(),
             active_title: None,
+            family: None,
         }
     }
 

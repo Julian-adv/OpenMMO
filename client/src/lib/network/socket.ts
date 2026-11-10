@@ -33,6 +33,7 @@ import {
 } from '../stores/teleportEffectStore'
 import { resetPartyStores } from '../stores/partyStore'
 import { resetFriendStores } from '../stores/friendStore'
+import { resetFamilyStores } from '../stores/familyStore'
 import { resetPlayerTrade } from '../stores/playerTradeStore'
 import { resetLandClaimPreview, type LandClaim } from '../stores/landClaimStore'
 import { resetFences } from '../stores/fenceStore'
@@ -379,6 +380,7 @@ class NetworkManager {
       resetPartyStores()
       // Refresh the friend roster and presence after rejoining.
       resetFriendStores()
+      resetFamilyStores()
       // Disconnect cancels any open trade.
       resetPlayerTrade()
       this.connect()
@@ -1220,6 +1222,62 @@ class NetworkManager {
   /** Drop a friendship, both directions. */
   sendFriendRemove(name: string) {
     this.sendMessage({ FriendRemove: { name } })
+  }
+
+  sendCreateFamily(merchantPlayerId: number, name: string) {
+    this.sendMessage({
+      CreateFamily: { merchant_player_id: merchantPlayerId, name },
+    })
+  }
+
+  sendInviteToFamily(name: string) {
+    this.sendMessage({ InviteToFamily: { name } })
+  }
+
+  sendRespondFamilyInvite(inviterId: number, accept: boolean) {
+    this.sendMessage({
+      RespondFamilyInvite: { inviter_id: inviterId, accept },
+    })
+  }
+
+  sendLeaveFamily() {
+    this.sendMessage('LeaveFamily')
+  }
+
+  sendKickFamilyMember(characterId: number) {
+    this.sendMessage({ KickFamilyMember: { character_id: characterId } })
+  }
+
+  sendSetFamilyMemberRank(characterId: number, rank: number) {
+    this.sendMessage({
+      SetFamilyMemberRank: { character_id: characterId, rank },
+    })
+  }
+
+  sendTransferFamilyHead(characterId: number) {
+    this.sendMessage({ TransferFamilyHead: { character_id: characterId } })
+  }
+
+  sendClaimFamilyHead() {
+    this.sendMessage('ClaimFamilyHead')
+  }
+
+  sendSetFamilyRank(rank: number, label: string, permissions: number) {
+    this.sendMessage({ SetFamilyRank: { rank, label, permissions } })
+  }
+
+  sendRenameFamily(name: string) {
+    this.sendMessage({ RenameFamily: { name } })
+  }
+
+  sendAttachEstateToFamily(attach: boolean) {
+    this.sendMessage({ AttachEstateToFamily: { attach } })
+  }
+
+  sendDepositFamilyEstate(estateId: number, amount: number) {
+    this.sendMessage({
+      DepositFamilyEstate: { estate_id: estateId, amount },
+    })
   }
 
   /** Poll which friends are online; there is no presence push. */

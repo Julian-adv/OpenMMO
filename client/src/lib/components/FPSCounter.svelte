@@ -63,6 +63,7 @@
   import { isAdminUser } from '../stores/gameStore'
   import { closeTopOverlay } from '../stores/overlayStack'
   import { friendPanelVisible } from '../stores/friendStore'
+  import { familyPanelVisible, familyHotkeyActive } from '../stores/familyStore'
   import { emotePanelVisible, emoteStopRequest } from '../stores/emoteStore'
   import { partyPanelVisible, partyHotkeyActive } from '../stores/partyStore'
   import { instrumentPanelVisible } from '../stores/instrumentStore'
@@ -116,6 +117,10 @@
     if ((event.key === 'g' || event.key === 'G') && isGameKey(event)) {
       event.preventDefault()
       emotePanelVisible.update((v) => !v)
+    }
+    if (event.code === 'KeyH' && $familyHotkeyActive && isGameKey(event)) {
+      event.preventDefault()
+      familyPanelVisible.update((v) => !v)
     }
     if (event.code === 'KeyP' && $partyHotkeyActive && isGameKey(event)) {
       event.preventDefault()

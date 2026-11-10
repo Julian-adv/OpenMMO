@@ -8,6 +8,7 @@ use crate::{
     housing::{next_house_id, validate_house, validate_house_neighbors, world_to_chunk},
     types::{PlayerId, Position, ServerMessage},
 };
+use onlinerpg_shared::family::permission;
 use onlinerpg_shared::{
     fence::FencePlot,
     housing::{HouseData, RoofRidgeDir, RoomType},
@@ -600,11 +601,15 @@ impl GameState {
             .ok_or("That house no longer exists.")?;
         let auth_copy = auth.clone();
         let owner_id = house.owner_id.parse::<i64>().unwrap_or_default();
-        let shares_account =
-            auth_db(move || auth_copy.characters_share_account(character_id, owner_id))
-                .await
-                .map_err(|_| "House demolition is temporarily unavailable.".to_string())?;
-        if !shares_account {
+        let (shares_account, plots) = auth_db(move || {
+            Ok((
+                auth_copy.characters_share_account(character_id, owner_id)?,
+                auth_copy.fence_plots(character_id, permission::DEMOLISH_HOUSE)?,
+            ))
+        })
+        .await
+        .map_err(|_| "House demolition is temporarily unavailable.".to_string())?;
+        if !shares_account && !foundation_inside_estate(&house, &plots) {
             return Err("You can only demolish your own house.".to_string());
         }
         if distance_to_house(&house, &player_position) > PLACEMENT_REACH_M {
@@ -761,7 +766,7 @@ impl GameState {
         house.origin.x = x;
         house.origin.z = z;
         let auth_copy = auth.clone();
-        let plots = auth_db(move || auth_copy.fence_plots(character_id))
+        let plots = auth_db(move || auth_copy.fence_plots(character_id, permission::BUILD_HOUSE))
             .await
             .map_err(|error| {
                 tracing::warn!(%error, "Failed to load house placement permissions");

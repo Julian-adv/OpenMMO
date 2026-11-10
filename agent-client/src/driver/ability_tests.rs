@@ -545,6 +545,7 @@ async fn healing_prayer_prompt_shows_targets_range_roll_and_undead() {
             equipment: Default::default(),
             titles: Vec::new(),
             active_title: None,
+            family: None,
             appearance: Default::default(),
         });
     assert!(state.format_world_state().contains("restores 2d6+6 HP"));

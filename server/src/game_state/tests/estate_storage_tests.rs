@@ -45,13 +45,19 @@ async fn shared_estate_storage_allows_siblings_and_rejects_other_accounts() {
                 .unwrap()
                 .can_deposit
         );
-        assert!(!auth.estate_storage_plots(id).unwrap().is_empty());
+        assert!(!auth
+            .estate_storage_plots(id, "storage_chest")
+            .unwrap()
+            .is_empty());
     }
     assert!(auth
         .estate_chest_state(chest.id, outsider)
         .unwrap()
         .is_err());
-    assert!(auth.estate_storage_plots(outsider).unwrap().is_empty());
+    assert!(auth
+        .estate_storage_plots(outsider, "storage_chest")
+        .unwrap()
+        .is_empty());
     assert!(!auth
         .set_estate_furniture_text(chest.id, outsider, "intruder")
         .unwrap());

@@ -14,6 +14,9 @@
 
   interface Props {
     text: string
+    /** Drawn after a single-line `text`, one space apart, in `suffixColor`. */
+    suffix?: string | null
+    suffixColor?: string
     fontSize?: number
     color?: string
     outlineColor?: string
@@ -32,6 +35,8 @@
 
   let {
     text,
+    suffix = null,
+    suffixColor = '#ffffff',
     fontSize = 0.3,
     color = '#ffffff',
     outlineColor,
@@ -81,6 +86,11 @@
     const lineHeight = pxFont * 1.2
 
     const widths = lines.map((line) => measureCtx.measureText(line).width)
+    const suffixText = suffix && lines.length === 1 ? suffix : null
+    const suffixX = suffixText ? measureCtx.measureText(`${text} `).width : 0
+    if (suffixText) {
+      widths[0] = suffixX + measureCtx.measureText(suffixText).width
+    }
     const maxLineWidth = Math.max(...widths)
 
     const totalTextHeight = lines.length * lineHeight
@@ -111,8 +121,15 @@
         ctx.lineWidth = outlineWidth
         ctx.strokeText(lines[i], x, pad + i * lineHeight)
       }
+      if (suffixText && outlineColor && outlineWidth > 0) {
+        ctx.strokeText(suffixText, x + suffixX, pad)
+      }
       ctx.fillStyle = color
       ctx.fillText(lines[i], x, pad + i * lineHeight)
+      if (suffixText) {
+        ctx.fillStyle = suffixColor
+        ctx.fillText(suffixText, x + suffixX, pad)
+      }
     }
 
     texture.needsUpdate = true

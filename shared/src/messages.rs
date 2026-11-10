@@ -1035,6 +1035,51 @@ pub enum ClientMessage {
         #[serde(default)]
         target_player_id: Option<PlayerId>,
     },
+    /// Found a family at the land registrar (doc/FAMILY_SYSTEM.md). Failures
+    /// come back as a system message; success as `FamilyState`.
+    CreateFamily {
+        merchant_player_id: PlayerId,
+        name: String,
+    },
+    /// Invite an online character without a family.
+    InviteToFamily {
+        name: String,
+    },
+    RespondFamilyInvite {
+        inviter_id: PlayerId,
+        accept: bool,
+    },
+    LeaveFamily,
+    KickFamilyMember {
+        character_id: i64,
+    },
+    SetFamilyMemberRank {
+        character_id: i64,
+        rank: u8,
+    },
+    TransferFamilyHead {
+        character_id: i64,
+    },
+    /// Succeed a head who has been away `FAMILY_HEAD_INACTIVE_SECS`.
+    ClaimFamilyHead,
+    /// Change a rank's label and permission bits.
+    SetFamilyRank {
+        rank: u8,
+        label: String,
+        permissions: u32,
+    },
+    RenameFamily {
+        name: String,
+    },
+    /// Attach the sender's account's estate to their family, or detach it.
+    AttachEstateToFamily {
+        attach: bool,
+    },
+    /// Pay into a family estate's tax account.
+    DepositFamilyEstate {
+        estate_id: i64,
+        amount: i64,
+    },
 }
 
 impl ClientMessage {
@@ -2316,6 +2361,22 @@ pub enum ServerMessage {
     InvisibilityChanged {
         invisible: bool,
     },
+    /// The recipient's family, or `None` when they have none. Sent on entry
+    /// and after every change (doc/FAMILY_SYSTEM.md).
+    FamilyState {
+        family: Option<crate::family::FamilyInfo>,
+    },
+    /// Direct to the target: an invite to answer with `RespondFamilyInvite`.
+    FamilyInviteReceived {
+        inviter_id: PlayerId,
+        inviter_name: String,
+        family_name: String,
+    },
+    /// A nearby player's family name changed.
+    PlayerFamilyChanged {
+        player_id: PlayerId,
+        family: Option<String>,
+    },
 }
 
 pub use crate::entity::PlayerId;
@@ -2442,6 +2503,7 @@ impl ServerMessage {
             | Self::PlayerWetToggled { .. }
             | Self::PlayerPetrifiedToggled { .. }
             | Self::PlayerTitleChanged { .. }
+            | Self::PlayerFamilyChanged { .. }
             | Self::FenceVisibility { .. }
             | Self::EstateChestVisibility { .. }
             | Self::PlayerMainHandChanged { .. }
@@ -2533,6 +2595,8 @@ impl ServerMessage {
             | Self::FriendList { .. }
             | Self::FriendsOnline { .. }
             | Self::FriendRequestReceived { .. }
+            | Self::FamilyState { .. }
+            | Self::FamilyInviteReceived { .. }
             | Self::PartyPositions { .. }
             | Self::PartyVitals { .. }
             | Self::PricingNotice(..)

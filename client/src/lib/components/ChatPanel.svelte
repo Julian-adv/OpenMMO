@@ -494,7 +494,9 @@
             class="name"
             class:local={entry.sender === 'local'}
             class:remote={entry.sender === 'remote'}
-            >{chatEntryName(entry, $locale)}:</span
+            >{chatEntryName(entry, $locale)}{#if entry.family}<span
+                class="family">{entry.family}</span
+              >{/if}:</span
           >
           {displayText(entry)}
         {:else}
@@ -840,6 +842,12 @@
   .name.remote {
     color: #f6e05e;
     font-weight: 600;
+  }
+
+  .name .family {
+    margin-left: 0.3em;
+    color: #c8b88a;
+    font-weight: 400;
   }
 
   .system {

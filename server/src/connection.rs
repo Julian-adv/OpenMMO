@@ -1443,18 +1443,19 @@ async fn handle_client_message(
             // Skills and dungeon history load before any registration: a failed
             // read must refuse the session, or an empty fallback would overwrite
             // trained skills on save and re-grant already-opened chest rewards.
-            let (skill_rows, chest_opens, discovered_dungeons, titles) = {
+            let (skill_rows, chest_opens, discovered_dungeons, titles, family_name) = {
                 let auth = Arc::clone(auth_service);
                 let loaded = crate::game_state::auth_db(move || {
                     Ok((
                         auth.load_skills(character_id)?,
                         auth.load_dungeon_history(character_id)?,
                         auth.load_titles(character_id)?,
+                        auth.family_name_of(character_id)?,
                     ))
                 })
                 .await;
                 match loaded {
-                    Ok((rows, (opens, ids), titles)) => (rows, opens, ids, titles),
+                    Ok((rows, (opens, ids), titles, family)) => (rows, opens, ids, titles, family),
                     Err(err) => {
                         warn!(
                             "Failed to load required state for character {}: {} — refusing session",
@@ -1501,6 +1502,7 @@ async fn handle_client_message(
             );
             player.appearance = selected_character.appearance;
             player.title = titles.1.clone();
+            player.family = family_name;
             player.invulnerable = state.is_admin;
 
             // Health is restored once gear sets max HP, below.
@@ -1603,6 +1605,7 @@ async fn handle_client_message(
             game_state.set_chest_opens(character_id, chest_opens).await;
             game_state.set_player_titles(&id, titles.0).await;
             game_state.send_player_titles(&id).await;
+            game_state.player_entered_family(&id, auth_service).await;
             game_state
                 .set_dungeon_discoveries(&id, discovered_dungeons)
                 .await;
@@ -2549,6 +2552,101 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::CreateFamily {
+            merchant_player_id,
+            name,
+        } => {
+            if let Some(id) = &state.require_in_game("found family") {
+                game_state
+                    .create_family(id, &merchant_player_id, &name, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::InviteToFamily { name } => {
+            if let Some(id) = &state.require_in_game("invite to family") {
+                game_state.invite_to_family(id, &name, auth_service).await;
+            }
+        }
+
+        ClientMessage::RespondFamilyInvite { inviter_id, accept } => {
+            if let Some(id) = &state.require_in_game("answer family invite") {
+                game_state
+                    .respond_to_family_invite(id, &inviter_id, accept, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::LeaveFamily => {
+            if let Some(id) = &state.require_in_game("leave family") {
+                game_state.remove_from_family(id, None, auth_service).await;
+            }
+        }
+
+        ClientMessage::KickFamilyMember { character_id } => {
+            if let Some(id) = &state.require_in_game("kick family member") {
+                game_state
+                    .remove_from_family(id, Some(character_id), auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::SetFamilyMemberRank { character_id, rank } => {
+            if let Some(id) = &state.require_in_game("set family member rank") {
+                game_state
+                    .set_family_member_rank(id, character_id, rank, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::TransferFamilyHead { character_id } => {
+            if let Some(id) = &state.require_in_game("transfer family head") {
+                game_state
+                    .transfer_family_head(id, character_id, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::ClaimFamilyHead => {
+            if let Some(id) = &state.require_in_game("claim family head") {
+                game_state.claim_family_head(id, auth_service).await;
+            }
+        }
+
+        ClientMessage::SetFamilyRank {
+            rank,
+            label,
+            permissions,
+        } => {
+            if let Some(id) = &state.require_in_game("set family rank") {
+                game_state
+                    .set_family_rank(id, rank, label, permissions, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::RenameFamily { name } => {
+            if let Some(id) = &state.require_in_game("rename family") {
+                game_state.rename_family(id, &name, auth_service).await;
+            }
+        }
+
+        ClientMessage::AttachEstateToFamily { attach } => {
+            if let Some(id) = &state.require_in_game("attach estate to family") {
+                game_state
+                    .attach_estate_to_family(id, attach, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::DepositFamilyEstate { estate_id, amount } => {
+            if let Some(id) = &state.require_in_game("pay family estate taxes") {
+                game_state
+                    .deposit_family_estate(id, estate_id, amount, auth_service)
+                    .await;
+            }
+        }
+
         ClientMessage::SetActiveTitle { title } => {
             if let Some(id) = &state.player_id {
                 game_state
@@ -2895,6 +2993,7 @@ fn character_listing_to_shared(listing: crate::auth::CharacterListing) -> Charac
         worn,
         titles,
         active_title,
+        family,
     } = listing;
     Character {
         id: record.id,
@@ -2911,6 +3010,7 @@ fn character_listing_to_shared(listing: crate::auth::CharacterListing) -> Charac
         equipment: worn,
         titles,
         active_title,
+        family,
     }
 }
 

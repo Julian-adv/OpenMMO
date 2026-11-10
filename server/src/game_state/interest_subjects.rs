@@ -203,6 +203,7 @@ impl Interest {
             | ServerMessage::PlayerPetrifiedToggled { player_id, .. }
             | ServerMessage::PlayerMountChanged { player_id, .. }
             | ServerMessage::PlayerTitleChanged { player_id, .. }
+            | ServerMessage::PlayerFamilyChanged { player_id, .. }
             | ServerMessage::PlayerMainHandChanged { player_id, .. }
             | ServerMessage::PlayerBackChanged { player_id, .. }
             | ServerMessage::PlayerArmorChanged { player_id, .. }
@@ -220,6 +221,7 @@ impl Interest {
                                 ServerMessage::PlayerPetrifiedToggled { petrified, .. } => { player.petrified = *petrified; },
                                 ServerMessage::PlayerMountChanged { mount, .. } => { player.mount = *mount; },
                                 ServerMessage::PlayerTitleChanged { title, .. } => { player.title = title.clone(); },
+                                ServerMessage::PlayerFamilyChanged { family, .. } => { player.family = family.clone(); },
                                 ServerMessage::PlayerMainHandChanged { item_def_id, .. } => { player.main_hand = item_def_id.clone(); },
                                 ServerMessage::PlayerArmorChanged { armor, .. } => { player.armor = armor.clone(); },
                                 ServerMessage::PlayerBackChanged { item_def_id, cape_color, cape_texture, .. } => { player.back = item_def_id.clone(); player.back_color = cape_color.clone(); player.back_texture = cape_texture.clone(); },

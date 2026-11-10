@@ -188,7 +188,8 @@ impl GameState {
                 .await
                 .ok_or("Character not found.")?;
             let auth = auth.clone();
-            let plots = auth_db(move || auth.estate_storage_plots(owner_id))
+            let def_id = furniture.item_def_id.clone();
+            let plots = auth_db(move || auth.estate_storage_plots(owner_id, &def_id))
                 .await
                 .map_err(|_| "Furniture editing is temporarily unavailable.")?;
             Ok::<_, &'static str>(ServerMessage::EstateFurnitureMoveMode { furniture, plots })
@@ -445,7 +446,8 @@ impl GameState {
             return true;
         };
         let auth = auth.clone();
-        match auth_db(move || auth.estate_storage_plots(owner_id)).await {
+        let def_id = item_def_id.clone();
+        match auth_db(move || auth.estate_storage_plots(owner_id, &def_id)).await {
             Ok(plots) if !plots.is_empty() => {
                 self.send_direct_message(
                     player_id,

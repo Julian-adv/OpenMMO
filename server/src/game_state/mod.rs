@@ -216,6 +216,7 @@ mod bed_rest;
 mod fence;
 mod field_raid;
 pub(crate) use field_raid::FIELD_RAID_TICK;
+mod family;
 mod friends;
 mod furniture_shop;
 mod goal_movement;
@@ -343,8 +344,9 @@ impl ServerGroundItem {
 /// Lock order for guards held together, outermost first:
 /// `character_session_lock` → `persistence_lock` → `lingering_bodies` → `players` →
 /// `player_characters` → `stalls`/`fences` → `player_gold` → `hunger` →
-/// `field_raid` → `inventories` → `mana`. tokio's fair `RwLock` turns one
-/// inversion into a server-wide stall.
+/// `field_raid` → `inventories` → `mana`. `families` is a leaf: nothing else
+/// is taken while it is held. tokio's fair `RwLock` turns one inversion into
+/// a server-wide stall.
 #[derive(Clone)]
 pub struct GameState {
     interest: Arc<std::sync::Mutex<interest::Interest>>,
@@ -541,6 +543,9 @@ pub struct GameState {
     /// Per-session friend snapshots (DB-backed) and pending friend requests
     /// (in-memory, both sides online). Seeded at login, dropped on logout.
     friends: Arc<RwLock<friends::Friends>>,
+    /// Online members per family and pending invites (doc/FAMILY_SYSTEM.md);
+    /// membership itself lives in the DB.
+    families: Arc<RwLock<family::Families>>,
     /// player_id → the character name `/r` replies to (last whisper sent or
     /// received). In-memory only, dropped on logout.
     whisper_partners: Arc<RwLock<HashMap<PlayerId, String>>>,
@@ -851,6 +856,7 @@ impl GameState {
             buybacks: Arc::new(RwLock::new(HashMap::new())),
             blocked_names: Arc::new(RwLock::new(HashMap::new())),
             friends: Arc::new(RwLock::new(friends::Friends::default())),
+            families: Arc::new(RwLock::new(family::Families::default())),
             whisper_partners: Arc::new(RwLock::new(HashMap::new())),
             muted_until: Arc::new(RwLock::new(HashMap::new())),
             chest_opens: Arc::new(RwLock::new(HashMap::new())),

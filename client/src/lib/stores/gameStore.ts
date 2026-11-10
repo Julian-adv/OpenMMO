@@ -24,6 +24,7 @@ import { resetSkillsStore } from './skillsStore'
 import { resetDaggerSkill } from './daggerSkillStore'
 import { resetPartyStores } from './partyStore'
 import { resetFriendStores } from './friendStore'
+import { resetFamilyStores } from './familyStore'
 import { clearArrows } from './arrowStore'
 import { resetFishingStore } from './fishingStore'
 import { resetDiscoveredDungeons } from './dungeonStore'
@@ -76,6 +77,8 @@ interface PlayerBase {
   petrified?: boolean
   /** Shown title id (doc/TITLES.md). */
   title?: string | null
+  /** Family name drawn after the name (doc/FAMILY_SYSTEM.md). */
+  family?: string | null
   mainHand?: string | null
   armor?: ArmorEquipment
   back?: string | null
@@ -113,6 +116,7 @@ export interface ChatEntry {
   text: string
   sender: ChatSender
   name?: string
+  family?: string | null
   hit?: boolean
   whisperDirection?: 'incoming' | 'outgoing'
   localization?: LocalizedMessage | null
@@ -238,6 +242,7 @@ export const resetGameStore = () => {
   clearArrows()
   resetPartyStores()
   resetFriendStores()
+  resetFamilyStores()
   resetDiscoveredDungeons()
   resetHungerStore()
   resetDebuffStore()

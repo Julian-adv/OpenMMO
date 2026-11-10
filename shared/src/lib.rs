@@ -12,6 +12,7 @@ pub mod debuff;
 pub mod dungeon;
 pub mod entity;
 pub mod estate_storage;
+pub mod family;
 pub mod fence;
 pub mod field_boss;
 pub mod fishing;
@@ -256,7 +257,13 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// `MailLetter`, `MailSent`, `MailRefused`, `MailNotice`).
 /// v143: writers remove their own notices (`RemoveNoticePost`,
 /// `NoticePostRemoved`, refusal `not_yours`).
-pub const PROTOCOL_VERSION: u32 = 143;
+/// v144: families (`CreateFamily`, `InviteToFamily`, `RespondFamilyInvite`,
+/// `LeaveFamily`, `KickFamilyMember`, `SetFamilyMemberRank`,
+/// `TransferFamilyHead`, `ClaimFamilyHead`, `SetFamilyRank`, `RenameFamily`,
+/// `AttachEstateToFamily`, `DepositFamilyEstate`; `FamilyState`,
+/// `FamilyInviteReceived`, `PlayerFamilyChanged`), `Player.family` and
+/// `Character.family`.
+pub const PROTOCOL_VERSION: u32 = 144;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from
@@ -602,6 +609,7 @@ mod tests {
             wet: false,
             petrified: false,
             title: None,
+            family: None,
         }];
         // A monster with every Option None guards the wire format itself:
         // rmp_serde encodes structs as positional arrays, so any field that

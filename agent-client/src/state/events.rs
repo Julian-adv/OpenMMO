@@ -178,6 +178,7 @@ impl SharedState {
             | ServerMessage::PlayerArmorChanged { .. }
             | ServerMessage::PlayerMountChanged { .. }
             | ServerMessage::PlayerTitleChanged { .. }
+            | ServerMessage::PlayerFamilyChanged { .. }
             | ServerMessage::TitleEarned { .. }
             | ServerMessage::PlayerTitles { .. } => EventUrgency::Routine,
 
@@ -906,6 +907,14 @@ impl SharedState {
                 }
                 if let Some(me) = self.self_player.as_mut().filter(|me| me.id == *player_id) {
                     me.title = title.clone();
+                }
+            }
+            ServerMessage::PlayerFamilyChanged { player_id, family } => {
+                if let Some(p) = self.nearby_players.get_mut(player_id) {
+                    p.family = family.clone();
+                }
+                if let Some(me) = self.self_player.as_mut().filter(|me| me.id == *player_id) {
+                    me.family = family.clone();
                 }
             }
             ServerMessage::PlayerTitles { titles, active } => {

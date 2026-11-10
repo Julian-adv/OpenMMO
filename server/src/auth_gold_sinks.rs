@@ -4,24 +4,45 @@ use rusqlite::{params, Connection};
 
 impl AuthService {
     pub(super) fn ensure_gold_sinks_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        let samples = |name: &str| {
+            format!(
+                "CREATE TABLE IF NOT EXISTS {name} (
+                    timestamp INTEGER NOT NULL,
+                    sink TEXT NOT NULL,
+                    item_def_id TEXT NOT NULL,
+                    quantity INTEGER NOT NULL CHECK (quantity > 0),
+                    gold INTEGER NOT NULL CHECK (gold >= 0),
+                    PRIMARY KEY (timestamp, sink, item_def_id),
+                    CHECK ((sink IN ('item_purchase', 'item_buyback') AND item_def_id != '') OR
+                           (sink IN ('stall_tax', 'land_tax', 'land_recovery',
+                                     'family_founding', 'family_rename') AND item_def_id = ''))
+                 );"
+            )
+        };
         let transaction = conn.unchecked_transaction()?;
-        transaction.execute_batch(
+        transaction.execute_batch(&format!(
             "CREATE TABLE IF NOT EXISTS gold_sink_collection (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 started_at INTEGER NOT NULL
              );
              INSERT OR IGNORE INTO gold_sink_collection (id, started_at) VALUES (1, unixepoch());
-             CREATE TABLE IF NOT EXISTS gold_sink_samples (
-                timestamp INTEGER NOT NULL,
-                sink TEXT NOT NULL,
-                item_def_id TEXT NOT NULL,
-                quantity INTEGER NOT NULL CHECK (quantity > 0),
-                gold INTEGER NOT NULL CHECK (gold >= 0),
-                PRIMARY KEY (timestamp, sink, item_def_id),
-                CHECK ((sink IN ('item_purchase', 'item_buyback') AND item_def_id != '') OR
-                       (sink IN ('stall_tax', 'land_tax', 'land_recovery') AND item_def_id = ''))
-             );",
+             {}",
+            samples("gold_sink_samples")
+        ))?;
+        let schema: String = transaction.query_row(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='gold_sink_samples'",
+            [],
+            |row| row.get(0),
         )?;
+        if !schema.contains("family_founding") {
+            transaction.execute_batch(&format!(
+                "{}
+                 INSERT INTO gold_sink_samples_new SELECT * FROM gold_sink_samples;
+                 DROP TABLE gold_sink_samples;
+                 ALTER TABLE gold_sink_samples_new RENAME TO gold_sink_samples;",
+                samples("gold_sink_samples_new")
+            ))?;
+        }
         transaction.commit()
     }
 
@@ -94,6 +115,8 @@ impl AuthService {
                     "stall_tax" => (GoldSink::StallTax, "가판 판매 수수료".into()),
                     "land_tax" => (GoldSink::LandTax, "토지세".into()),
                     "land_recovery" => (GoldSink::LandRecovery, "토지 체납 복구 비용".into()),
+                    "family_founding" => (GoldSink::FamilyFounding, "가문 창설 비용".into()),
+                    "family_rename" => (GoldSink::FamilyRename, "가문 개명 비용".into()),
                     _ => return Err(rusqlite::Error::InvalidQuery),
                 };
                 Ok(GoldSinkEntry {
@@ -193,5 +216,37 @@ mod tests {
         let empty = reopened.gold_sinks(14400, 1).unwrap();
         assert_eq!(empty.total_gold, 0);
         assert!(empty.entries.is_empty());
+    }
+
+    #[test]
+    fn an_older_samples_table_gains_the_family_sinks_and_keeps_its_rows() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE gold_sink_samples (
+                timestamp INTEGER NOT NULL,
+                sink TEXT NOT NULL,
+                item_def_id TEXT NOT NULL,
+                quantity INTEGER NOT NULL CHECK (quantity > 0),
+                gold INTEGER NOT NULL CHECK (gold >= 0),
+                PRIMARY KEY (timestamp, sink, item_def_id),
+                CHECK ((sink IN ('item_purchase', 'item_buyback') AND item_def_id != '') OR
+                       (sink IN ('stall_tax', 'land_tax', 'land_recovery') AND item_def_id = ''))
+             );
+             INSERT INTO gold_sink_samples VALUES (1, 'land_tax', '', 2, 4000);",
+        )
+        .unwrap();
+        AuthService::ensure_gold_sinks_schema(&conn).unwrap();
+        AuthService::ensure_gold_sinks_schema(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO gold_sink_samples VALUES (2, 'family_founding', '', 1, 10000)",
+            [],
+        )
+        .unwrap();
+        let gold: i64 = conn
+            .query_row("SELECT SUM(gold) FROM gold_sink_samples", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(gold, 14_000);
     }
 }

@@ -7,9 +7,12 @@ mod dungeon_population;
 mod enchant_failures;
 #[path = "auth_estate_storage.rs"]
 mod estate_storage;
+#[path = "auth_family.rs"]
+mod family;
 #[path = "auth_field_raids.rs"]
 mod field_raids;
 pub(crate) use estate_storage::EstateDeposit;
+pub(crate) use family::FamilyRoster;
 #[path = "auth_fence.rs"]
 mod fence;
 #[path = "auth_gold_sinks.rs"]
@@ -306,6 +309,7 @@ pub struct CharacterListing {
     pub worn: VisibleEquipment,
     pub titles: Vec<String>,
     pub active_title: Option<String>,
+    pub family: Option<String>,
 }
 
 impl CharacterListing {
@@ -316,6 +320,7 @@ impl CharacterListing {
             worn,
             titles: Vec::new(),
             active_title: None,
+            family: None,
         }
     }
 }
@@ -906,7 +911,7 @@ impl AuthService {
                 |row| row.get(0),
             )
             .optional()?;
-        if taken.is_some() {
+        if taken.is_some() || Self::family_name_in_use(conn, name)? {
             return Err(AuthError::CharacterNameAlreadyExists);
         }
         Ok(())
@@ -996,6 +1001,7 @@ impl AuthService {
         Self::ensure_fence_schema(conn)?;
         Self::ensure_landscaping_schema(conn)?;
         Self::ensure_estate_storage_schema(conn)?;
+        Self::ensure_family_schema(conn)?;
         Self::ensure_notice_board_schema(conn)?;
         Self::ensure_mail_schema(conn)?;
 
@@ -1853,16 +1859,19 @@ impl AuthService {
         let ids = characters.iter().map(|c| c.id).collect::<Vec<_>>();
         let mut equipment = read_visible_equipment(&conn, &ids)?;
         let mut titles = read_titles(&conn, &ids)?;
+        let mut families = family::read_family_names(&conn, account_name)?;
         Ok(characters
             .into_iter()
             .map(|record| {
                 let worn = equipment.remove(&record.id).unwrap_or_default();
                 let (titles, active_title) = titles.remove(&record.id).unwrap_or_default();
+                let family = families.remove(&record.id);
                 CharacterListing {
                     record,
                     worn,
                     titles,
                     active_title,
+                    family,
                 }
             })
             .collect())

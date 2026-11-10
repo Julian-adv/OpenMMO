@@ -67,6 +67,7 @@ export type ServerPlayer = {
   petrified?: boolean
   /** Shown title id (doc/TITLES.md). */
   title?: string | null
+  family?: string | null
 }
 
 export type ServerMonster = {
@@ -99,6 +100,7 @@ export type AccountCharacter = {
   equipment?: VisibleEquipment
   titles?: string[]
   active_title?: string | null
+  family?: string | null
 }
 
 export type ArmorEquipment = Partial<
@@ -250,6 +252,18 @@ export type ClientMessage =
   | 'RequestPartyPositions'
   | { FriendRespond: { requester_id: number; accept: boolean } }
   | { FriendRemove: { name: string } }
+  | { CreateFamily: { merchant_player_id: number; name: string } }
+  | { InviteToFamily: { name: string } }
+  | { RespondFamilyInvite: { inviter_id: number; accept: boolean } }
+  | 'LeaveFamily'
+  | { KickFamilyMember: { character_id: number } }
+  | { SetFamilyMemberRank: { character_id: number; rank: number } }
+  | { TransferFamilyHead: { character_id: number } }
+  | 'ClaimFamilyHead'
+  | { SetFamilyRank: { rank: number; label: string; permissions: number } }
+  | { RenameFamily: { name: string } }
+  | { AttachEstateToFamily: { attach: boolean } }
+  | { DepositFamilyEstate: { estate_id: number; amount: number } }
   | 'RequestFriendsOnline'
   | { OpenDungeonChest: { entrance_id: string } }
   | {

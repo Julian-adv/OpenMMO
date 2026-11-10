@@ -45,6 +45,7 @@
   import TradeAmount from './TradeAmount.svelte'
   import LandTaxDetails from './LandTaxDetails.svelte'
   import LandGoldDialog from './LandGoldDialog.svelte'
+  import FamilyFoundSection from './FamilyFoundSection.svelte'
   import {
     landAccount,
     landAccountError,
@@ -663,6 +664,9 @@
         </div>
         {#if isRegistrar}<LandTaxDetails
             onwithdraw={() => (transfer = 'withdraw')}
+          />{/if}
+        {#if isRegistrar && session}<FamilyFoundSection
+            merchantPlayerId={session.merchantPlayerId}
           />{/if}
       </div>
 

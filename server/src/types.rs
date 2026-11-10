@@ -50,6 +50,7 @@ pub fn new_player(
         wet: false,
         petrified: false,
         title: None,
+        family: None,
         floor_level: 0,
         object_type: None,
         main_hand: None,

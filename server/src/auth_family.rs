@@ -1,0 +1,903 @@
+//! Family persistence (doc/FAMILY_SYSTEM.md). The DB is the only copy of
+//! membership, ranks and estate links; every rule is re-checked inside the
+//! write transaction.
+
+use super::{
+    class_from_row, unix_now, valid_character_name, valid_name_char, AuthError, AuthService,
+    CharacterSaveData, ItemRow,
+};
+use crate::metrics::{GoldSink, GoldSinkRecord};
+use onlinerpg_shared::character::CharacterClass;
+use onlinerpg_shared::family::{
+    default_rank_label, default_rank_permissions, permission, FamilyRank, FAMILY_CREATE_COST,
+    FAMILY_HEAD_INACTIVE_SECS, FAMILY_MAX_MEMBERS, FAMILY_NAME_RETIRE_SECS, FAMILY_RANK_COUNT,
+    FAMILY_RANK_ELDER, FAMILY_RANK_HEAD, FAMILY_RANK_LABEL_MAX_CHARS, FAMILY_RANK_MEMBER,
+    FAMILY_REJOIN_COOLDOWN_SECS, FAMILY_RENAME_COST, FAMILY_RENAME_INTERVAL_SECS,
+};
+use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
+
+type Verdict<T> = Result<Result<T, &'static str>, AuthError>;
+
+pub struct FamilyMemberRow {
+    pub character_id: i64,
+    pub account_name: String,
+    pub name: String,
+    pub level: u32,
+    pub class: CharacterClass,
+    pub rank: u8,
+    pub last_seen_at: i64,
+}
+
+pub struct FamilyEstateRow {
+    pub estate_id: i64,
+    pub account_name: String,
+    pub owner_name: String,
+    pub plots: u32,
+    pub missed: u32,
+}
+
+pub struct FamilyRoster {
+    pub name: String,
+    pub ranks: Vec<FamilyRank>,
+    /// Succession order.
+    pub members: Vec<FamilyMemberRow>,
+    pub estates: Vec<FamilyEstateRow>,
+    /// Member accounts holding an estate no family has.
+    pub unattached_accounts: Vec<String>,
+    pub renamed_at: Option<i64>,
+}
+
+impl FamilyRoster {
+    /// Who may take over from a head unseen for `FAMILY_HEAD_INACTIVE_SECS`:
+    /// the first member in line who is not just as absent. `online` members
+    /// count as seen now.
+    pub fn successor(&self, now: i64, online: &[i64]) -> Option<i64> {
+        let cutoff = now - FAMILY_HEAD_INACTIVE_SECS;
+        let seen =
+            |m: &FamilyMemberRow| m.last_seen_at >= cutoff || online.contains(&m.character_id);
+        let head = self.members.iter().find(|m| m.rank == FAMILY_RANK_HEAD)?;
+        if seen(head) {
+            return None;
+        }
+        self.members
+            .iter()
+            .find(|m| m.rank != FAMILY_RANK_HEAD && seen(m))
+            .map(|m| m.character_id)
+    }
+}
+
+pub struct FamilyDeparture {
+    pub family_id: i64,
+    pub family_name: String,
+    pub dissolved: bool,
+}
+
+/// SQL predicate: character `param` may use estate `e` — their account owns
+/// it, or it is attached to their family and their rank holds `bit`.
+pub(super) fn estate_access_sql(param: &str, bit: u32) -> String {
+    format!(
+        "(e.account_name=(SELECT account_name FROM characters WHERE id={param})
+          OR EXISTS(SELECT 1 FROM family_members fm
+                    JOIN family_ranks fr ON fr.family_id=fm.family_id AND fr.rank=fm.rank
+                    WHERE fm.character_id={param} AND fm.family_id=e.family_id
+                      AND fr.permissions & {bit} != 0))"
+    )
+}
+
+/// Family name per character of `account_name`, for the character list.
+pub(super) fn read_family_names(
+    conn: &Connection,
+    account_name: &str,
+) -> Result<std::collections::HashMap<i64, String>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT c.id, f.name FROM characters c
+         JOIN family_members m ON m.character_id=c.id JOIN families f ON f.id=m.family_id
+         WHERE c.account_name=?1",
+    )?;
+    let names = stmt
+        .query_map([account_name], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect();
+    names
+}
+
+struct Membership {
+    family_id: i64,
+    rank: u8,
+    permissions: u32,
+}
+
+fn membership(conn: &Connection, character_id: i64) -> Result<Option<Membership>, rusqlite::Error> {
+    conn.query_row(
+        "SELECT m.family_id, m.rank, r.permissions FROM family_members m
+         JOIN family_ranks r ON r.family_id=m.family_id AND r.rank=m.rank
+         WHERE m.character_id=?1",
+        [character_id],
+        |row| {
+            Ok(Membership {
+                family_id: row.get(0)?,
+                rank: row.get(1)?,
+                permissions: row.get(2)?,
+            })
+        },
+    )
+    .optional()
+}
+
+fn in_cooldown(conn: &Connection, character_id: i64) -> Result<bool, rusqlite::Error> {
+    let left_at: Option<i64> = conn
+        .query_row(
+            "SELECT left_at FROM family_leave_cooldowns WHERE character_id=?1",
+            [character_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(left_at.is_some_and(|at| unix_now() - at < FAMILY_REJOIN_COOLDOWN_SECS))
+}
+
+fn retire_name(conn: &Connection, name: &str) -> Result<(), rusqlite::Error> {
+    let now = unix_now();
+    conn.execute(
+        "INSERT OR REPLACE INTO family_retired_names (name, successor_id, retired_at, reusable_at)
+         VALUES (?1, NULL, ?2, ?3)",
+        params![name, now, now + FAMILY_NAME_RETIRE_SECS],
+    )?;
+    Ok(())
+}
+
+/// Bring one family back to its invariants after members left by any route:
+/// no members dissolves it, a missing head is succeeded, and estates whose
+/// account has no member left are let go. True when it was dissolved.
+fn settle_family(conn: &Connection, family_id: i64) -> Result<bool, rusqlite::Error> {
+    let members: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM family_members WHERE family_id=?1",
+        [family_id],
+        |row| row.get(0),
+    )?;
+    if members == 0 {
+        let name: Option<String> = conn
+            .query_row(
+                "SELECT name FROM families WHERE id=?1",
+                [family_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        conn.execute(
+            "UPDATE land_estates SET family_id=NULL WHERE family_id=?1",
+            [family_id],
+        )?;
+        conn.execute("DELETE FROM families WHERE id=?1", [family_id])?;
+        if let Some(name) = name {
+            retire_name(conn, &name)?;
+        }
+        return Ok(true);
+    }
+    conn.execute(
+        "UPDATE family_members SET rank=?2 WHERE character_id=(
+            SELECT character_id FROM family_members WHERE family_id=?1
+            ORDER BY rank, joined_at, character_id LIMIT 1)
+         AND NOT EXISTS(SELECT 1 FROM family_members WHERE family_id=?1 AND rank=?2)",
+        params![family_id, FAMILY_RANK_HEAD],
+    )?;
+    conn.execute(
+        "UPDATE land_estates SET family_id=NULL WHERE family_id=?1 AND account_name NOT IN (
+            SELECT c.account_name FROM family_members m JOIN characters c ON c.id=m.character_id
+            WHERE m.family_id=?1)",
+        [family_id],
+    )?;
+    Ok(false)
+}
+
+fn valid_rank_label(label: &str) -> bool {
+    let chars = label.chars().count();
+    (1..=FAMILY_RANK_LABEL_MAX_CHARS).contains(&chars) && label.chars().all(valid_name_char)
+}
+
+fn founding_sink(sink: GoldSink, gold: i64) -> GoldSinkRecord {
+    GoldSinkRecord {
+        timestamp: unix_now(),
+        sink,
+        quantity: 1,
+        gold,
+    }
+}
+
+impl AuthService {
+    pub(super) fn ensure_family_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS families (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                emblem_texture TEXT,
+                emblem_color TEXT,
+                renamed_at INTEGER,
+                created_at INTEGER NOT NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_families_name_nocase
+                ON families(name COLLATE NOCASE);
+            CREATE TABLE IF NOT EXISTS family_members (
+                character_id INTEGER PRIMARY KEY REFERENCES characters(id) ON DELETE CASCADE,
+                family_id INTEGER NOT NULL REFERENCES families(id) ON DELETE CASCADE,
+                rank INTEGER NOT NULL,
+                joined_at INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_family_members_family ON family_members(family_id);
+            CREATE TABLE IF NOT EXISTS family_ranks (
+                family_id INTEGER NOT NULL REFERENCES families(id) ON DELETE CASCADE,
+                rank INTEGER NOT NULL,
+                label TEXT NOT NULL,
+                permissions INTEGER NOT NULL,
+                PRIMARY KEY (family_id, rank)
+            );
+            CREATE TABLE IF NOT EXISTS family_retired_names (
+                name TEXT PRIMARY KEY COLLATE NOCASE,
+                successor_id INTEGER REFERENCES families(id) ON DELETE SET NULL,
+                retired_at INTEGER NOT NULL,
+                reusable_at INTEGER
+            );
+            CREATE TABLE IF NOT EXISTS family_leave_cooldowns (
+                character_id INTEGER PRIMARY KEY REFERENCES characters(id) ON DELETE CASCADE,
+                left_at INTEGER NOT NULL
+            );",
+        )?;
+        if !Self::table_columns(conn, "land_estates")?.contains("family_id") {
+            conn.execute(
+                "ALTER TABLE land_estates
+                 ADD COLUMN family_id INTEGER REFERENCES families(id) ON DELETE SET NULL",
+                [],
+            )?;
+        }
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_land_estates_family
+             ON land_estates(family_id) WHERE family_id IS NOT NULL",
+            [],
+        )?;
+        Ok(())
+    }
+
+    /// A live family or a name still held back keeps characters off it.
+    pub(super) fn family_name_in_use(
+        conn: &Connection,
+        name: &str,
+    ) -> Result<bool, rusqlite::Error> {
+        conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM families WHERE name=?1 COLLATE NOCASE)
+                 OR EXISTS(SELECT 1 FROM family_retired_names
+                           WHERE name=?1 AND (reusable_at IS NULL OR reusable_at>?2))",
+            params![name, unix_now()],
+            |row| row.get(0),
+        )
+    }
+
+    fn family_name_refusal(
+        &self,
+        conn: &Connection,
+        account_name: &str,
+        name: &str,
+        own_family: Option<i64>,
+    ) -> Result<Option<&'static str>, rusqlite::Error> {
+        if !valid_character_name(name) {
+            return Ok(Some(
+                "Family names follow the character name rules: letters and digits, starting with a letter.",
+            ));
+        }
+        if self.is_name_banned_for(account_name, name) {
+            return Ok(Some("That family name is not allowed."));
+        }
+        let taken: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM families WHERE name=?1 COLLATE NOCASE AND id IS NOT ?2)",
+            params![name, own_family],
+            |row| row.get(0),
+        )?;
+        if taken {
+            return Ok(Some("Another family has that name."));
+        }
+        let character: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM characters WHERE character_name=?1 COLLATE NOCASE)",
+            [name],
+            |row| row.get(0),
+        )?;
+        if character {
+            return Ok(Some("A character has that name."));
+        }
+        let held: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM family_retired_names
+                           WHERE name=?1 AND (reusable_at IS NULL OR reusable_at>?2))",
+            params![name, unix_now()],
+            |row| row.get(0),
+        )?;
+        if held {
+            return Ok(Some(
+                "That family name was in use recently and is held back.",
+            ));
+        }
+        conn.execute("DELETE FROM family_retired_names WHERE name=?1", [name])?;
+        Ok(None)
+    }
+
+    pub fn family_name_of(&self, character_id: i64) -> Result<Option<String>, AuthError> {
+        let conn = self.open_connection()?;
+        Ok(conn
+            .query_row(
+                "SELECT f.name FROM family_members m JOIN families f ON f.id=m.family_id
+                 WHERE m.character_id=?1",
+                [character_id],
+                |row| row.get(0),
+            )
+            .optional()?)
+    }
+
+    pub fn family_id_of(&self, character_id: i64) -> Result<Option<i64>, AuthError> {
+        let conn = self.open_connection()?;
+        Ok(membership(&conn, character_id)?.map(|m| m.family_id))
+    }
+
+    pub fn family_roster(&self, family_id: i64) -> Result<Option<FamilyRoster>, AuthError> {
+        let conn = self.open_connection()?;
+        let head: Option<(String, Option<i64>)> = conn
+            .query_row(
+                "SELECT name, renamed_at FROM families WHERE id=?1",
+                [family_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?;
+        let Some((name, renamed_at)) = head else {
+            return Ok(None);
+        };
+        let mut stmt = conn.prepare(
+            "SELECT label, permissions FROM family_ranks WHERE family_id=?1 ORDER BY rank",
+        )?;
+        let ranks = stmt
+            .query_map([family_id], |row| {
+                Ok(FamilyRank {
+                    label: row.get(0)?,
+                    permissions: row.get(1)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut stmt = conn.prepare(
+            "SELECT c.id, c.account_name, c.character_name, c.level, c.class, m.rank,
+                    COALESCE(c.last_seen_at, c.created_at)
+             FROM family_members m JOIN characters c ON c.id=m.character_id
+             WHERE m.family_id=?1 ORDER BY m.rank, m.joined_at, m.character_id",
+        )?;
+        let members = stmt
+            .query_map([family_id], |row| {
+                Ok(FamilyMemberRow {
+                    character_id: row.get(0)?,
+                    account_name: row.get(1)?,
+                    name: row.get(2)?,
+                    level: row.get(3)?,
+                    class: class_from_row(row, 4)?,
+                    rank: row.get(5)?,
+                    last_seen_at: row.get(6)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut stmt = conn.prepare(
+            "SELECT e.id, e.account_name, c.character_name, e.missed,
+                    (SELECT COUNT(*) FROM land_plots WHERE estate_id=e.id)
+             FROM land_estates e JOIN characters c ON c.id=e.owner_id
+             WHERE e.family_id=?1 ORDER BY e.id",
+        )?;
+        let estates = stmt
+            .query_map([family_id], |row| {
+                Ok(FamilyEstateRow {
+                    estate_id: row.get(0)?,
+                    account_name: row.get(1)?,
+                    owner_name: row.get(2)?,
+                    missed: row.get(3)?,
+                    plots: row.get(4)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut stmt = conn.prepare(
+            "SELECT DISTINCT e.account_name FROM land_estates e
+             WHERE e.family_id IS NULL AND e.account_name IN (
+                SELECT c.account_name FROM family_members m JOIN characters c ON c.id=m.character_id
+                WHERE m.family_id=?1)",
+        )?;
+        let unattached_accounts = stmt
+            .query_map([family_id], |row| row.get(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Some(FamilyRoster {
+            name,
+            ranks,
+            members,
+            estates,
+            unattached_accounts,
+            renamed_at,
+        }))
+    }
+
+    /// `character` carries the gold left after the founding cost.
+    pub fn create_family(
+        &self,
+        character: &CharacterSaveData,
+        inventory: &[ItemRow],
+        name: &str,
+    ) -> Verdict<i64> {
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let id = character.character_id;
+        if membership(&tx, id)?.is_some() {
+            return Ok(Err("You already belong to a family."));
+        }
+        if in_cooldown(&tx, id)? {
+            return Ok(Err("You left a family less than a day ago."));
+        }
+        let account: String = tx.query_row(
+            "SELECT account_name FROM characters WHERE id=?1",
+            [id],
+            |row| row.get(0),
+        )?;
+        let mut stmt = tx.prepare(
+            "SELECT id, family_id FROM land_estates WHERE account_name=?1 AND missed=0 ORDER BY grade",
+        )?;
+        let estates = stmt
+            .query_map([&account], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, Option<i64>>(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        drop(stmt);
+        if estates.is_empty() {
+            return Ok(Err(
+                "Own an estate with no overdue taxes to found a family.",
+            ));
+        }
+        if estates.iter().any(|(_, family)| family.is_some()) {
+            return Ok(Err("Your estate already belongs to another family."));
+        }
+        if let Some(reason) = self.family_name_refusal(&tx, &account, name, None)? {
+            return Ok(Err(reason));
+        }
+        let now = unix_now();
+        tx.execute(
+            "INSERT INTO families (name, created_at) VALUES (?1, ?2)",
+            params![name, now],
+        )?;
+        let family_id = tx.last_insert_rowid();
+        for rank in 0..FAMILY_RANK_COUNT {
+            tx.execute(
+                "INSERT INTO family_ranks (family_id, rank, label, permissions) VALUES (?1,?2,?3,?4)",
+                params![
+                    family_id,
+                    rank,
+                    default_rank_label(rank),
+                    default_rank_permissions(rank)
+                ],
+            )?;
+        }
+        tx.execute(
+            "INSERT INTO family_members (character_id, family_id, rank, joined_at) VALUES (?1,?2,?3,?4)",
+            params![id, family_id, FAMILY_RANK_HEAD, now],
+        )?;
+        tx.execute(
+            "UPDATE land_estates SET family_id=?1 WHERE account_name=?2",
+            params![family_id, account],
+        )?;
+        Self::write_gold_sinks(
+            &tx,
+            &[founding_sink(GoldSink::FamilyFounding, FAMILY_CREATE_COST)],
+        )?;
+        Self::write_character_states(&tx, std::slice::from_ref(character))?;
+        Self::replace_inventories(&tx, [(id, inventory)])?;
+        tx.commit()?;
+        Ok(Ok(family_id))
+    }
+
+    pub fn join_family(&self, inviter_id: i64, target_id: i64) -> Verdict<i64> {
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let Some(inviter) = membership(&tx, inviter_id)? else {
+            return Ok(Err("The inviter no longer belongs to a family."));
+        };
+        if inviter.permissions & permission::INVITE == 0 {
+            return Ok(Err("The inviter may no longer invite."));
+        }
+        if membership(&tx, target_id)?.is_some() {
+            return Ok(Err("They already belong to a family."));
+        }
+        if in_cooldown(&tx, target_id)? {
+            return Ok(Err("They left a family less than a day ago."));
+        }
+        let members: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM family_members WHERE family_id=?1",
+            [inviter.family_id],
+            |row| row.get(0),
+        )?;
+        if members as usize >= FAMILY_MAX_MEMBERS {
+            return Ok(Err("The family is full."));
+        }
+        tx.execute(
+            "INSERT INTO family_members (character_id, family_id, rank, joined_at) VALUES (?1,?2,?3,?4)",
+            params![target_id, inviter.family_id, FAMILY_RANK_MEMBER, unix_now()],
+        )?;
+        tx.commit()?;
+        Ok(Ok(inviter.family_id))
+    }
+
+    /// Whether `inviter_id` could add `target_id` right now, without adding.
+    pub fn check_family_invite(&self, inviter_id: i64, target_id: i64) -> Verdict<String> {
+        let conn = self.open_connection()?;
+        let Some(inviter) = membership(&conn, inviter_id)? else {
+            return Ok(Err("You do not belong to a family."));
+        };
+        if inviter.permissions & permission::INVITE == 0 {
+            return Ok(Err("Your rank may not invite."));
+        }
+        if membership(&conn, target_id)?.is_some() {
+            return Ok(Err("They already belong to a family."));
+        }
+        if in_cooldown(&conn, target_id)? {
+            return Ok(Err("They left a family less than a day ago."));
+        }
+        let (name, members): (String, i64) = conn.query_row(
+            "SELECT name, (SELECT COUNT(*) FROM family_members WHERE family_id=f.id)
+             FROM families f WHERE id=?1",
+            [inviter.family_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        if members as usize >= FAMILY_MAX_MEMBERS {
+            return Ok(Err("Your family is full."));
+        }
+        Ok(Ok(name))
+    }
+
+    /// Leave (`actor_id == target_id`) or kick.
+    pub fn remove_family_member(&self, actor_id: i64, target_id: i64) -> Verdict<FamilyDeparture> {
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let Some(target) = membership(&tx, target_id)? else {
+            return Ok(Err("Not a member of a family."));
+        };
+        if actor_id == target_id {
+            let members: i64 = tx.query_row(
+                "SELECT COUNT(*) FROM family_members WHERE family_id=?1",
+                [target.family_id],
+                |row| row.get(0),
+            )?;
+            if target.rank == FAMILY_RANK_HEAD && members > 1 {
+                return Ok(Err("Hand the family to another member before leaving."));
+            }
+        } else {
+            let allowed = membership(&tx, actor_id)?.is_some_and(|actor| {
+                actor.family_id == target.family_id
+                    && actor.permissions & permission::KICK != 0
+                    && actor.rank < target.rank
+            });
+            if !allowed {
+                return Ok(Err("Your rank may not remove that member."));
+            }
+        }
+        let family_name: String = tx.query_row(
+            "SELECT name FROM families WHERE id=?1",
+            [target.family_id],
+            |row| row.get(0),
+        )?;
+        tx.execute(
+            "DELETE FROM family_members WHERE character_id=?1",
+            [target_id],
+        )?;
+        tx.execute(
+            "INSERT OR REPLACE INTO family_leave_cooldowns (character_id, left_at) VALUES (?1, ?2)",
+            params![target_id, unix_now()],
+        )?;
+        let dissolved = settle_family(&tx, target.family_id)?;
+        tx.commit()?;
+        Ok(Ok(FamilyDeparture {
+            family_id: target.family_id,
+            family_name,
+            dissolved,
+        }))
+    }
+
+    /// Repair every family a cascade left without members or a head (character
+    /// or account deletion). Returns the surviving families that changed.
+    pub fn settle_families(&self) -> Result<Vec<i64>, AuthError> {
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let mut stmt = tx.prepare(
+            "SELECT f.id FROM families f WHERE NOT EXISTS(
+                SELECT 1 FROM family_members m WHERE m.family_id=f.id AND m.rank=?1)
+             UNION
+             SELECT e.family_id FROM land_estates e WHERE e.family_id IS NOT NULL
+               AND e.account_name NOT IN (
+                SELECT c.account_name FROM family_members m JOIN characters c ON c.id=m.character_id
+                WHERE m.family_id=e.family_id)",
+        )?;
+        let ids = stmt
+            .query_map([FAMILY_RANK_HEAD], |row| row.get::<_, i64>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        drop(stmt);
+        let mut changed = Vec::new();
+        for id in ids {
+            if !settle_family(&tx, id)? {
+                changed.push(id);
+            }
+        }
+        tx.commit()?;
+        Ok(changed)
+    }
+
+    pub fn set_family_member_rank(&self, actor_id: i64, target_id: i64, rank: u8) -> Verdict<i64> {
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let (Some(actor), Some(target)) = (membership(&tx, actor_id)?, membership(&tx, target_id)?)
+        else {
+            return Ok(Err("Not a member of your family."));
+        };
+        if actor.family_id != target.family_id {
+            return Ok(Err("Not a member of your family."));
+        }
+        if actor.permissions & permission::EDIT_RANKS == 0 {
+            return Ok(Err("Your rank may not change ranks."));
+        }
+        if rank == FAMILY_RANK_HEAD || rank >= FAMILY_RANK_COUNT {
+            return Ok(Err("No such rank."));
+        }
+        if actor.rank >= target.rank || actor.rank >= rank {
+            return Ok(Err("You can only change ranks below your own."));
+        }
+        tx.execute(
+            "UPDATE family_members SET rank=?2 WHERE character_id=?1",
+            params![target_id, rank],
+        )?;
+        tx.commit()?;
+        Ok(Ok(actor.family_id))
+    }
+
+    fn swap_head(conn: &Connection, family_id: i64, new_head: i64) -> Result<(), rusqlite::Error> {
+        conn.execute(
+            "UPDATE family_members SET rank=?2 WHERE family_id=?1 AND rank=?3",
+            params![family_id, FAMILY_RANK_ELDER, FAMILY_RANK_HEAD],
+        )?;
+        conn.execute(
+            "UPDATE family_members SET rank=?2 WHERE character_id=?1",
+            params![new_head, FAMILY_RANK_HEAD],
+        )?;
+        Ok(())
+    }
+
+    pub fn transfer_family_head(&self, actor_id: i64, target_id: i64) -> Verdict<i64> {
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let (Some(actor), Some(target)) = (membership(&tx, actor_id)?, membership(&tx, target_id)?)
+        else {
+            return Ok(Err("Not a member of your family."));
+        };
+        if actor.family_id != target.family_id || actor_id == target_id {
+            return Ok(Err("Not a member of your family."));
+        }
+        if actor.rank != FAMILY_RANK_HEAD {
+            return Ok(Err("Only the head can hand the family over."));
+        }
+        Self::swap_head(&tx, actor.family_id, target_id)?;
+        tx.commit()?;
+        Ok(Ok(actor.family_id))
+    }
+
+    pub fn claim_family_head(&self, actor_id: i64, online: &[i64]) -> Verdict<i64> {
+        let Some(family_id) = self.family_id_of(actor_id)? else {
+            return Ok(Err("You do not belong to a family."));
+        };
+        let Some(roster) = self.family_roster(family_id)? else {
+            return Ok(Err("You do not belong to a family."));
+        };
+        if roster.successor(unix_now(), online) != Some(actor_id) {
+            return Ok(Err(
+                "The head has not been away long enough, or another member is ahead of you.",
+            ));
+        }
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if membership(&tx, actor_id)?.is_none_or(|m| m.family_id != family_id) {
+            return Ok(Err("You do not belong to a family."));
+        }
+        Self::swap_head(&tx, family_id, actor_id)?;
+        tx.commit()?;
+        Ok(Ok(family_id))
+    }
+
+    pub fn set_family_rank(
+        &self,
+        actor_id: i64,
+        rank: u8,
+        label: &str,
+        permissions: u32,
+    ) -> Verdict<i64> {
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let Some(actor) = membership(&tx, actor_id)? else {
+            return Ok(Err("You do not belong to a family."));
+        };
+        if actor.permissions & permission::EDIT_RANKS == 0 {
+            return Ok(Err("Your rank may not change ranks."));
+        }
+        if rank >= FAMILY_RANK_COUNT {
+            return Ok(Err("No such rank."));
+        }
+        if !valid_rank_label(label) {
+            return Ok(Err(
+                "Rank names are 1 to 12 letters or digits, without spaces.",
+            ));
+        }
+        let permissions = if rank == FAMILY_RANK_HEAD {
+            if actor.rank != FAMILY_RANK_HEAD {
+                return Ok(Err("You can only change ranks below your own."));
+            }
+            permission::ALL
+        } else {
+            if actor.rank >= rank {
+                return Ok(Err("You can only change ranks below your own."));
+            }
+            let current: u32 = tx.query_row(
+                "SELECT permissions FROM family_ranks WHERE family_id=?1 AND rank=?2",
+                params![actor.family_id, rank],
+                |row| row.get(0),
+            )?;
+            let permissions = permissions & permission::ALL;
+            if (permissions ^ current) & !actor.permissions != 0 {
+                return Ok(Err("You cannot change a permission you do not hold."));
+            }
+            permissions
+        };
+        tx.execute(
+            "UPDATE family_ranks SET label=?3, permissions=?4 WHERE family_id=?1 AND rank=?2",
+            params![actor.family_id, rank, label, permissions],
+        )?;
+        tx.commit()?;
+        Ok(Ok(actor.family_id))
+    }
+
+    /// `character` carries the gold left after the rename cost.
+    pub fn rename_family(
+        &self,
+        character: &CharacterSaveData,
+        inventory: &[ItemRow],
+        name: &str,
+    ) -> Verdict<i64> {
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let id = character.character_id;
+        let Some(actor) = membership(&tx, id)? else {
+            return Ok(Err("You do not belong to a family."));
+        };
+        if actor.rank != FAMILY_RANK_HEAD {
+            return Ok(Err("Only the head can rename the family."));
+        }
+        let (old_name, renamed_at): (String, Option<i64>) = tx.query_row(
+            "SELECT name, renamed_at FROM families WHERE id=?1",
+            [actor.family_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        let now = unix_now();
+        if renamed_at.is_some_and(|at| now - at < FAMILY_RENAME_INTERVAL_SECS) {
+            return Ok(Err("A family can be renamed once every 30 days."));
+        }
+        if old_name == name {
+            return Ok(Err("That is already the family's name."));
+        }
+        let account: String = tx.query_row(
+            "SELECT account_name FROM characters WHERE id=?1",
+            [id],
+            |row| row.get(0),
+        )?;
+        if let Some(reason) =
+            self.family_name_refusal(&tx, &account, name, Some(actor.family_id))?
+        {
+            return Ok(Err(reason));
+        }
+        tx.execute(
+            "UPDATE families SET name=?2, renamed_at=?3 WHERE id=?1",
+            params![actor.family_id, name, now],
+        )?;
+        if !old_name.eq_ignore_ascii_case(name) {
+            retire_name(&tx, &old_name)?;
+        }
+        Self::write_gold_sinks(
+            &tx,
+            &[founding_sink(GoldSink::FamilyRename, FAMILY_RENAME_COST)],
+        )?;
+        Self::write_character_states(&tx, std::slice::from_ref(character))?;
+        Self::replace_inventories(&tx, [(id, inventory)])?;
+        tx.commit()?;
+        Ok(Ok(actor.family_id))
+    }
+
+    pub fn attach_family_estate(&self, character_id: i64, attach: bool) -> Verdict<i64> {
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let Some(member) = membership(&tx, character_id)? else {
+            return Ok(Err("You do not belong to a family."));
+        };
+        let account: String = tx.query_row(
+            "SELECT account_name FROM characters WHERE id=?1",
+            [character_id],
+            |row| row.get(0),
+        )?;
+        let changed = if attach {
+            let elsewhere: bool = tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM land_estates WHERE account_name=?1
+                               AND family_id IS NOT NULL AND family_id!=?2)",
+                params![account, member.family_id],
+                |row| row.get(0),
+            )?;
+            if elsewhere {
+                return Ok(Err(
+                    "Your estate belongs to another family. Detach it there first.",
+                ));
+            }
+            tx.execute(
+                "UPDATE land_estates SET family_id=?2 WHERE account_name=?1 AND family_id IS NULL",
+                params![account, member.family_id],
+            )?
+        } else {
+            tx.execute(
+                "UPDATE land_estates SET family_id=NULL WHERE account_name=?1 AND family_id=?2",
+                params![account, member.family_id],
+            )?
+        };
+        if changed == 0 {
+            return Ok(Err(if attach {
+                "You have no estate to attach."
+            } else {
+                "Your estate is not attached to this family."
+            }));
+        }
+        tx.commit()?;
+        Ok(Ok(member.family_id))
+    }
+
+    /// `character.gold` is the balance before the deposit.
+    pub fn deposit_family_estate(
+        &self,
+        character: CharacterSaveData,
+        inventory: &[ItemRow],
+        estate_id: i64,
+        amount: i64,
+    ) -> Verdict<(i64, i64)> {
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let Some(member) = membership(&tx, character.character_id)? else {
+            return Ok(Err("You do not belong to a family."));
+        };
+        if member.permissions & permission::TREASURY_DEPOSIT == 0 {
+            return Ok(Err("Your rank may not pay into estate tax accounts."));
+        }
+        let attached: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM land_estates WHERE id=?1 AND family_id=?2)",
+            params![estate_id, member.family_id],
+            |row| row.get(0),
+        )?;
+        if !attached {
+            return Ok(Err("That estate is not attached to your family."));
+        }
+        let outcome =
+            Self::transfer_estate_gold(&tx, estate_id, character, inventory, amount, true)?;
+        let Ok((gold, _)) = outcome else {
+            return Ok(outcome.map(|_| (0, 0)));
+        };
+        tx.commit()?;
+        Ok(Ok((gold, member.family_id)))
+    }
+
+    /// Owner ids the client treats as "mine" when offering to remove a fence
+    /// or demolish a house: the account's characters, the family's members,
+    /// and the owners of family estates. A hint only; each edit is re-checked.
+    pub fn landscaping_owner_ids(&self, character_id: i64) -> Result<Vec<i64>, AuthError> {
+        let conn = self.open_connection()?;
+        let mut stmt = conn.prepare(
+            "SELECT id FROM characters
+             WHERE account_name=(SELECT account_name FROM characters WHERE id=?1)
+             UNION SELECT other.character_id FROM family_members me
+                   JOIN family_members other ON other.family_id=me.family_id
+                   WHERE me.character_id=?1
+             UNION SELECT e.owner_id FROM family_members me
+                   JOIN land_estates e ON e.family_id=me.family_id
+                   WHERE me.character_id=?1
+             ORDER BY 1",
+        )?;
+        let ids = stmt.query_map([character_id], |row| row.get(0))?;
+        Ok(ids.collect::<Result<Vec<_>, _>>()?)
+    }
+}
