@@ -427,8 +427,14 @@ async fn notice_round_errand(state: &Arc<Mutex<SharedState>>) -> Option<(Schedul
     }
     let board = due?;
     s.boards_with_expired_notices.remove(&board.id);
-    let floor = u8::try_from(board.floor_level).ok()?;
-    let entry = chair_flank_entry(&s, board.x, board.z, floor, board.y, "the notice board");
+    let entry = chair_flank_entry(
+        &s,
+        board.x,
+        board.z,
+        board.floor_level,
+        board.y,
+        "the notice board",
+    );
     Some((entry, board.id))
 }
 
