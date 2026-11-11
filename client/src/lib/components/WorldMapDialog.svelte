@@ -119,6 +119,7 @@
   } from '../terrain/landPlots'
   import { regionKey } from '../terrain/terrain-constants'
   import { buildLandOwnerColors } from '../utils/landPlotColors'
+  import { familyInfo } from '../stores/familyStore'
   import { getTerrainApiUrl } from '../utils/networkUtils'
   import SelfMarker from './SelfMarker.svelte'
 
@@ -138,6 +139,7 @@
   let playerZ = $derived($gameStore.currentPlayer?.position.z ?? 0)
   let playerHeading = $derived($gameStore.currentPlayer?.rotation ?? 0)
   const currentPlayerName = $derived($gameStore.currentPlayer?.name ?? null)
+  const familyName = $derived($familyInfo?.name ?? null)
 
   // --- Camera state (world coordinates of view center) ---
   let camX = $state(0)
@@ -290,7 +292,9 @@
     const landGrid = $landPlotsVisible
     const ownership = ownersByRegion
     const ownerColors = landOwnerColors
-    const playerName = currentPlayerName
+    const ownLabels = [currentPlayerName, familyName].filter(
+      (name): name is string => !!name
+    )
     void $landGradeVersion
     const cw = containerW
     const ch = containerH
@@ -441,7 +445,7 @@
           gradeRegions,
           atlasTransform,
           ownerColors,
-          playerName
+          ownLabels
         )
         drawLandPlotGrid(atlasCtx, expandedViewWorldSize, atlasTransform)
       }

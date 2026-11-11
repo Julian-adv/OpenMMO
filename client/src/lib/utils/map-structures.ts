@@ -74,7 +74,7 @@ export function drawLandPlotCells(
   regions: LandGradeRegion[],
   transform: MapCanvasTransform,
   ownerColors: ReadonlyMap<string, string>,
-  playerName: string | null = null
+  ownLabels: readonly string[] = []
 ) {
   if (!plotsLegible(transform.scale)) return
   const cellPx = LAND_PLOT_SIZE * transform.scale
@@ -89,7 +89,7 @@ export function drawLandPlotCells(
       let fill = region.grades ? PLOT_GRADE_FILL[region.grades[i]] : null
       if (owner !== undefined) {
         fill =
-          owner === playerName
+          ownLabels.includes(owner)
             ? OWN_LAND_COLOR
             : (ownerColors.get(owner) ?? null)
       }

@@ -121,7 +121,7 @@ describe('drawLandPlotGrid', () => {
       ],
       transform,
       ownerColors,
-      'Alice'
+      ['Alice']
     )
     expect(fills).toEqual([
       OWN_LAND_COLOR,

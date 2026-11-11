@@ -344,10 +344,11 @@ impl AuthService {
     pub fn owned_land_plots(&self) -> Result<Vec<OwnedLandPlot>, AuthError> {
         let conn = self.open_connection()?;
         let mut stmt = conn.prepare(
-            "SELECT p.tile_x, p.tile_z, p.quadrant, c.character_name
+            "SELECT p.tile_x, p.tile_z, p.quadrant, COALESCE(f.name, c.character_name)
              FROM land_plots p
              JOIN land_estates e ON e.id=p.estate_id
-             JOIN characters c ON c.id=e.owner_id",
+             JOIN characters c ON c.id=e.owner_id
+             LEFT JOIN families f ON f.id=e.family_id",
         )?;
         let plots = stmt.query_map([], |row| {
             let tx: i32 = row.get(0)?;

@@ -294,6 +294,11 @@ async fn a_members_estate_joins_the_family_and_leaves_with_them() {
     let family = family_state(&drain(&mut member_rx)).flatten().unwrap();
     assert!(!family.can_attach_estate);
     assert_eq!(family.estates.len(), 2);
+    assert!(auth
+        .owned_land_plots()
+        .unwrap()
+        .iter()
+        .all(|p| p.owner_name == "Ironwood"));
     let head_estate = family.estates.iter().find(|e| !e.mine).unwrap().estate_id;
 
     game.deposit_family_estate(&pid("Member"), head_estate, 300, &auth)
@@ -313,6 +318,14 @@ async fn a_members_estate_joins_the_family_and_leaves_with_them() {
     assert_eq!(family.estates.len(), 1);
     assert_eq!(family.members.len(), 1);
     assert_eq!(auth.fence_plots(member, None).unwrap().len(), 1);
+    let mut labels: Vec<_> = auth
+        .owned_land_plots()
+        .unwrap()
+        .into_iter()
+        .map(|p| p.owner_name)
+        .collect();
+    labels.sort();
+    assert_eq!(labels, ["Ironwood", "Member"]);
 }
 
 #[tokio::test]
