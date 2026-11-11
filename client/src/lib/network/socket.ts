@@ -1272,8 +1272,10 @@ class NetworkManager {
     this.sendMessage({ SetFamilyRank: { rank, label, permissions } })
   }
 
-  sendRenameFamily(name: string) {
-    this.sendMessage({ RenameFamily: { name } })
+  sendRenameFamily(merchantPlayerId: number, name: string) {
+    this.sendMessage({
+      RenameFamily: { merchant_player_id: merchantPlayerId, name },
+    })
   }
 
   sendAttachEstateToFamily(attach: boolean) {

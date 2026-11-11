@@ -3,7 +3,7 @@ use super::{
     inventory::{hold_one, serialize_inventory},
     GameState,
 };
-use crate::auth::AuthService;
+use crate::auth::{AuthError, AuthService, CharacterSaveData, ItemRow};
 use crate::types::{Player, PlayerId, ServerMessage};
 use onlinerpg_shared::land::LAND_CLAIM_MIN_LEVEL;
 use onlinerpg_terrain::land::{plot_addr, LandGrade, PlotAddr};
@@ -113,11 +113,7 @@ impl GameState {
         transfer: Option<(i64, bool)>,
         auth: &AuthService,
     ) -> Result<crate::auth::LandAccount, &'static str> {
-        if !self
-            .validate_trader(player_id, merchant_id)
-            .await?
-            .is_land_registrar()
-        {
+        if !self.at_land_registrar(player_id, merchant_id).await {
             return Err("Visit the Land Registrar to manage your tax account.");
         }
         self.tick_land_taxes(auth).await;
@@ -137,6 +133,37 @@ impl GameState {
                     "Tax account is temporarily unavailable."
                 });
         };
+        // A deposit is held before the write; a withdrawal lands after it.
+        let (held, credit) = if deposit {
+            (amount.max(0), 0)
+        } else {
+            (0, amount)
+        };
+        self.estate_gold_write(player_id, held, credit, move |character, rows| {
+            Ok(auth
+                .transfer_land_gold(character, &rows, amount, deposit)?
+                .map(|(_, account)| account))
+        })
+        .await
+    }
+
+    /// Move gold between a player and an estate tax account. `held` leaves
+    /// the live balance before `write` and returns if it refuses or fails;
+    /// `credit` lands once it succeeds. `write` is handed the balance from
+    /// before the hold, which the DB re-checks the amount against.
+    pub(super) async fn estate_gold_write<T, F>(
+        &self,
+        player_id: &PlayerId,
+        held: i64,
+        credit: i64,
+        write: F,
+    ) -> Result<T, &'static str>
+    where
+        T: Send + 'static,
+        F: FnOnce(CharacterSaveData, Vec<ItemRow>) -> Result<Result<T, &'static str>, AuthError>
+            + Send
+            + 'static,
+    {
         let _persistence = self.persistence_lock.lock().await;
         if self
             .reject_if_trading(player_id, "transfer tax funds")
@@ -148,10 +175,10 @@ impl GameState {
             .get_player_save_data(player_id)
             .await
             .ok_or("Character not found.")?;
-        // A deposit leaves the live balance before the write and is refunded
-        // if the write fails; a withdrawal lands after it. The DB re-checks
-        // the amount against the pre-deposit balance it is handed.
-        let held = if deposit && amount > 0 { amount } else { 0 };
+        let rows = {
+            let inventories = self.inventories.read().await;
+            serialize_inventory(inventories.get(player_id).ok_or("Inventory not found.")?)
+        };
         {
             let mut gold = self.player_gold.write().await;
             let balance = gold.get_mut(player_id).ok_or("Gold balance not found.")?;
@@ -161,30 +188,25 @@ impl GameState {
             character.gold = *balance;
             *balance -= held;
         }
-        let rows = {
-            let inventories = self.inventories.read().await;
-            serialize_inventory(inventories.get(player_id).ok_or("Inventory not found.")?)
-        };
-        let outcome = auth_db(move || auth.transfer_land_gold(character, &rows, amount, deposit))
+        let outcome = auth_db(move || write(character, rows))
             .await
             .map_err(|error| {
-                tracing::warn!(%error, "Failed to transfer land gold");
+                tracing::warn!(%error, "Failed to transfer estate gold");
                 "Transfer could not be saved. Your gold was not moved."
             })
             .flatten();
-        let account = match outcome {
-            Ok((_, account)) => account,
+        match outcome {
+            Ok(value) => {
+                self.adjust_gold(player_id, credit).await;
+                self.mark_dirty(player_id).await;
+                self.send_gold_update(player_id).await;
+                Ok(value)
+            }
             Err(error) => {
                 self.adjust_gold(player_id, held).await;
-                return Err(error);
+                Err(error)
             }
-        };
-        if !deposit {
-            self.adjust_gold(player_id, amount).await;
         }
-        self.mark_dirty(player_id).await;
-        self.send_gold_update(player_id).await;
-        Ok(account)
     }
 
     pub async fn try_preview_land_claim(

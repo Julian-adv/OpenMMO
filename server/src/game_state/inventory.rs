@@ -402,6 +402,27 @@ pub(super) fn hold_from_bag(
     Some(hold)
 }
 
+/// Take `count` units of `item_def_id` from however many stacks hold them.
+pub(super) fn hold_by_def(
+    bag: &mut Vec<ItemInstance>,
+    item_def_id: &str,
+    count: u32,
+) -> Option<BagHold> {
+    let mut remaining = count;
+    let mut lines = Vec::new();
+    for item in bag.iter().filter(|item| item.item_def_id == item_def_id) {
+        let take = item.quantity.min(remaining);
+        if take > 0 {
+            lines.push((item.instance_id, take));
+            remaining -= take;
+        }
+    }
+    if remaining > 0 {
+        return None;
+    }
+    hold_from_bag(bag, lines)
+}
+
 pub(super) fn hold_one(
     bag: &mut Vec<ItemInstance>,
     matches: impl Fn(&ItemInstance) -> bool,

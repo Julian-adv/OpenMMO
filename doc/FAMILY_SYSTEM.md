@@ -46,7 +46,7 @@
 
 - 조건: 체납 없는(`missed = 0`) 영지를 가진 계정의 캐릭터, 가문 미소속.
 - 창설자가 가주가 되고, 창설자 계정의 영지가 가문 영지로 연결된다. 그 영지가 이미 다른 가문에 연결되어 있으면(같은 계정의 다른 캐릭터가 연결) 창설할 수 없다.
-- 창설 장소: Aldwin(토지 등기관)과의 대화. 영지 문서를 파는 NPC와 같다.
+- 창설 장소: Aldwin(토지 등기관)과의 대화. 영지 문서를 파는 NPC와 같다. Aldwin 창의 "가문 업무"에 창설·개명·해산 메뉴가 있다. 가문이 없으면 창설, 가주면 개명과 해산이 보인다. Aldwin이 자는 동안은 할 수 없다.
 - 창설 비용: 인지 10장. 인지(`revenue_stamp`)는 Aldwin이 한 장 1,000c에 판다. 합계 10,000c로 영지 문서 50,000c의 1/5이다.
 - 인지는 가방에서 소모된다. 서류가 거절되면 돌려받는다. 게시 용지·편지지와 같은 흐름이다.
 
@@ -55,7 +55,7 @@
 - 규칙은 캐릭터 이름과 같다 (`auth.rs`의 이름 검증: ASCII 영숫자, `_`, 한글, 가나, 한자. 숫자·`_`로 시작 불가. 길이도 같다). `banned_names.txt`를 함께 적용한다.
 - 대소문자 무시 유일.
 - 캐릭터 이름과 겹칠 수 없다. 가문 창설 때 캐릭터 이름을 확인하고, 캐릭터 생성·개명 때 가문 이름과 버려진 가문 이름을 확인한다.
-- 개명: 가주만, 현실 시간 30일에 한 번. 인지 10장. 가문 창에서 한다.
+- 개명: 가주만, 현실 시간 30일에 한 번. 인지 10장. Aldwin에게서 한다.
 - 합병으로 버려진 이름은 다른 가문이 쓸 수 없다. 나중에 가문 분리가 생기면 원래 가문이 되찾는다.
 - 해산된 가문의 이름과 개명 전 이름은 30일 뒤 누구나 다시 쓸 수 있다.
 
@@ -94,7 +94,7 @@
 | 보관 궤짝 배치·열기·회수 | 같은 곳 | 같은 계정 | 변경 없음 |
 | 울타리·조경 | `fence_plots`, `save_fence_edit`, `landscaping.rs` | 같은 계정 | + 권한 `LANDSCAPE` |
 
-- 모든 검사는 SQL 조건 하나(`estate_access_sql`, `auth_family.rs`)를 쓴다: 계정 소유이거나, 영지의 `family_id`가 내 가문이고 내 단계가 해당 비트를 가진다.
+- 모든 검사는 SQL 조건 하나(`estate_access_sql`, `auth_family.rs`)를 쓴다: 계정 소유이거나, 영지의 `family_id`가 내 가문이고 내 단계가 해당 비트를 가진다. 두 조건 모두 상수와 비교하므로 계정 인덱스와 `idx_land_estates_family`를 쓴다. 가문 권한이 없는 대상(보관 궤짝)은 비트 대신 `None`을 넘겨 계정 조건만 쓴다.
 - 보관 궤짝은 영지 소유 계정만 놓고 연다. 궤짝 접근이 영지 계정 기준이라, 가문원이 남의 영지에 놓으면 내용물이 영지 주인 것이 되기 때문이다. 공유 보관은 2차의 가문 창고로 한다.
 - 영지 주인은 자기 영지 위에 가문원이 지은 집을 철거할 수 있다.
 - 도구 상자 모드는 `LANDSCAPE`·`BUILD_HOUSE`·`DEMOLISH_HOUSE` 중 하나라도 있으면 그 영지에서 열린다. 칠하기는 `LANDSCAPE` 구획으로만 제한된다.
@@ -296,7 +296,7 @@ CREATE INDEX IF NOT EXISTS idx_family_storage_log_family ON family_storage_log(f
 - `DissolveFamily { merchant_player_id }`: 토지 등기관 앞에서
 - `SetFamilyMemberRank { character_id, rank }`, `TransferFamilyHead { character_id }`, `ClaimFamilyHead`
 - `SetFamilyRank { rank, label, permissions }`
-- `RenameFamily { name }`
+- `RenameFamily { merchant_player_id, name }`: 토지 등기관 앞에서
 - `AttachEstateToFamily { attach }`
 - `DepositFamilyEstate { estate_id, amount }`
 
@@ -343,11 +343,12 @@ CREATE INDEX IF NOT EXISTS idx_family_storage_log_family ON family_storage_log(f
 
 코드: `shared/src/family.rs`, `server/src/auth_family.rs`, `server/src/game_state/family.rs`, 클라이언트 `familyStore.ts`·`FamilyPanel.svelte`·`FamilyInviteToast.svelte`·`FamilyFoundSection.svelte`. 테스트: `server/src/game_state/tests/family_tests.rs`.
 
+가문 창은 H 키나 소셜 메뉴의 친구 아래 버튼으로 연다. 줍기 키를 H로 바꾼 경우 단축키는 꺼진다.
+
 1차에 없는 것:
 
 - agent-client는 주변 플레이어의 가문 이름을 인지하지만 초대에 답하지 못한다.
 - 귓속말·파티 채팅 줄과 친구 목록에는 가문 이름이 붙지 않는다. 주변 채팅 줄과 파티 창에는 붙는다.
-- 가문 창 단축키 없음. 소셜 메뉴의 친구 아래 버튼으로 연다.
 
 ### 2차
 

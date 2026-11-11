@@ -89,18 +89,18 @@ impl AuthService {
     }
 
     /// Plots of active estates `character_id` may use: their account's, and
-    /// family estates where their rank holds `permission`.
+    /// family estates where their rank holds one of `family_bits`.
     pub fn fence_plots(
         &self,
         character_id: i64,
-        permission: u32,
+        family_bits: Option<u32>,
     ) -> Result<Vec<FencePlot>, AuthError> {
         let conn = self.open_connection()?;
         let mut stmt = conn.prepare(&format!(
             "SELECT p.tile_x, p.tile_z, p.quadrant FROM land_plots p
              JOIN land_estates e ON e.id=p.estate_id
              WHERE {} AND e.missed=0",
-            estate_access_sql("?1", permission)
+            estate_access_sql("?1", family_bits)
         ))?;
         let plots = stmt
             .query_map([character_id], |row| {
@@ -127,7 +127,7 @@ impl AuthService {
         let mut conn = self.open_connection()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let edge = fence.edge;
-        let access = estate_access_sql("?4", permission::LANDSCAPE);
+        let access = estate_access_sql("?4", Some(permission::LANDSCAPE));
         let existing: Option<bool> = tx
             .query_row(
                 &format!(

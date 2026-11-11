@@ -403,7 +403,7 @@
 
   .member-family {
     margin-left: 0.3em;
-    color: #c8b88a;
+    color: #cdeec4;
   }
 
   .leader-crown {

@@ -122,11 +122,3 @@ pub struct FamilyInfo {
     /// Unix seconds from which the head may rename the family; 0 = now.
     pub rename_at: i64,
 }
-
-impl FamilyInfo {
-    pub fn my_permissions(&self) -> u32 {
-        self.ranks
-            .get(usize::from(self.my_rank))
-            .map_or(0, |rank| rank.permissions)
-    }
-}

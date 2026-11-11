@@ -12,7 +12,7 @@ mod family;
 #[path = "auth_field_raids.rs"]
 mod field_raids;
 pub(crate) use estate_storage::EstateDeposit;
-pub(crate) use family::FamilyRoster;
+pub(crate) use family::{FamilyDeparture, FamilyRoster};
 #[path = "auth_fence.rs"]
 mod fence;
 #[path = "auth_gold_sinks.rs"]

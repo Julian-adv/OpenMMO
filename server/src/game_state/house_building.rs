@@ -601,15 +601,19 @@ impl GameState {
             .ok_or("That house no longer exists.")?;
         let auth_copy = auth.clone();
         let owner_id = house.owner_id.parse::<i64>().unwrap_or_default();
-        let (shares_account, plots) = auth_db(move || {
-            Ok((
-                auth_copy.characters_share_account(character_id, owner_id)?,
-                auth_copy.fence_plots(character_id, permission::DEMOLISH_HOUSE)?,
-            ))
+        // Own house, or any house standing wholly on an estate the player may
+        // demolish on (their account's, or a family estate by rank).
+        let allowed = auth_db(move || {
+            if auth_copy.characters_share_account(character_id, owner_id)? {
+                return Ok(None);
+            }
+            auth_copy
+                .fence_plots(character_id, Some(permission::DEMOLISH_HOUSE))
+                .map(Some)
         })
         .await
         .map_err(|_| "House demolition is temporarily unavailable.".to_string())?;
-        if !shares_account && !foundation_inside_estate(&house, &plots) {
+        if allowed.is_some_and(|plots| !foundation_inside_estate(&house, &plots)) {
             return Err("You can only demolish your own house.".to_string());
         }
         if distance_to_house(&house, &player_position) > PLACEMENT_REACH_M {
@@ -766,12 +770,13 @@ impl GameState {
         house.origin.x = x;
         house.origin.z = z;
         let auth_copy = auth.clone();
-        let plots = auth_db(move || auth_copy.fence_plots(character_id, permission::BUILD_HOUSE))
-            .await
-            .map_err(|error| {
-                tracing::warn!(%error, "Failed to load house placement permissions");
-                "House placement is temporarily unavailable.".to_string()
-            })?;
+        let plots =
+            auth_db(move || auth_copy.fence_plots(character_id, Some(permission::BUILD_HOUSE)))
+                .await
+                .map_err(|error| {
+                    tracing::warn!(%error, "Failed to load house placement permissions");
+                    "House placement is temporarily unavailable.".to_string()
+                })?;
         if !foundation_inside_estate(&house, &plots) {
             return Err("The whole house must fit inside your estate.".to_string());
         }

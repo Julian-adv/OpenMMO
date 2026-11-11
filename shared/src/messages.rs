@@ -1073,7 +1073,9 @@ pub enum ClientMessage {
         label: String,
         permissions: u32,
     },
+    /// The head renames the family at the land registrar.
     RenameFamily {
+        merchant_player_id: PlayerId,
         name: String,
     },
     /// Attach the sender's account's estate to their family, or detach it.

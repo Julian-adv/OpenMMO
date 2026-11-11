@@ -270,7 +270,7 @@ export type ClientMessage =
   | { TransferFamilyHead: { character_id: number } }
   | 'ClaimFamilyHead'
   | { SetFamilyRank: { rank: number; label: string; permissions: number } }
-  | { RenameFamily: { name: string } }
+  | { RenameFamily: { merchant_player_id: number; name: string } }
   | { AttachEstateToFamily: { attach: boolean } }
   | { DepositFamilyEstate: { estate_id: number; amount: number } }
   | 'RequestFriendsOnline'

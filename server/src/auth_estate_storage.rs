@@ -27,17 +27,16 @@ fn plot_key(x: f32, z: f32) -> (i32, i32, u8) {
     )
 }
 
-/// Family permission that covers a furnishing. Storage chests stay with the
-/// estate's own account: their contents are personal.
-fn family_bit(definition: &EstateStorageDefinition) -> u32 {
-    if definition.capacity_kg > 0.0 {
-        0
-    } else {
-        permission::PLACE_FURNITURE
-    }
+/// Family permission that covers a furnishing. Storage chests have none:
+/// their contents are personal, so they stay with the estate's own account.
+fn family_use(definition: &EstateStorageDefinition) -> Option<u32> {
+    (definition.capacity_kg == 0.0).then_some(permission::PLACE_FURNITURE)
 }
 
-fn furniture_family_bit(conn: &Connection, furniture_id: i64) -> Result<u32, rusqlite::Error> {
+fn furniture_family_use(
+    conn: &Connection,
+    furniture_id: i64,
+) -> Result<Option<u32>, rusqlite::Error> {
     let item_def_id: Option<String> = conn
         .query_row(
             "SELECT item_def_id FROM estate_chests WHERE id=?1",
@@ -48,7 +47,7 @@ fn furniture_family_bit(conn: &Connection, furniture_id: i64) -> Result<u32, rus
     Ok(item_def_id
         .as_deref()
         .and_then(estate_storage_def)
-        .map_or(0, family_bit))
+        .and_then(family_use))
 }
 
 fn active_estate_at(
@@ -56,14 +55,14 @@ fn active_estate_at(
     owner_id: i64,
     x: f32,
     z: f32,
-    bit: u32,
+    family_bits: Option<u32>,
 ) -> Result<Option<i64>, rusqlite::Error> {
     let (tile_x, tile_z, quadrant) = plot_key(x, z);
     tx.query_row(
         &format!(
             "SELECT e.id FROM land_plots p JOIN land_estates e ON e.id=p.estate_id
              WHERE p.tile_x=?1 AND p.tile_z=?2 AND p.quadrant=?3 AND {} AND e.missed=0",
-            estate_access_sql("?4", bit)
+            estate_access_sql("?4", family_bits)
         ),
         params![tile_x, tile_z, quadrant, owner_id],
         |row| row.get(0),
@@ -93,7 +92,7 @@ fn placement_estate(
             owner_id,
             position.x + dx * radians.cos() + dz * radians.sin(),
             position.z - dx * radians.sin() + dz * radians.cos(),
-            family_bit(definition),
+            family_use(definition),
         )?;
         if found.is_none() || estate_id.is_some_and(|id| Some(id) != found) {
             return Ok(None);
@@ -103,24 +102,24 @@ fn placement_estate(
     Ok(estate_id)
 }
 
-/// Revision and whether the estate is active, when `character_id` may handle
-/// the furnishing: their account's estate, an abandoned one, or a family
-/// estate where their rank holds `bit`.
+/// Revision, whether the estate is active, and the item def, when
+/// `character_id` may handle the furnishing: their account's estate, an
+/// abandoned one, or a family estate where their rank holds `family_bits`.
 fn chest_access(
     conn: &Connection,
     chest_id: i64,
     character_id: i64,
-    bit: u32,
-) -> Result<Option<(u64, bool)>, rusqlite::Error> {
+    family_bits: Option<u32>,
+) -> Result<Option<(u64, bool, String)>, rusqlite::Error> {
     conn.query_row(
         &format!(
-            "SELECT c.revision, COALESCE(e.missed, 1)=0
+            "SELECT c.revision, COALESCE(e.missed, 1)=0, c.item_def_id
              FROM estate_chests c LEFT JOIN land_estates e ON e.id=c.estate_id
              WHERE c.id=?1 AND ({} OR e.id IS NULL)",
-            estate_access_sql("?2", bit)
+            estate_access_sql("?2", family_bits)
         ),
         params![chest_id, character_id],
-        |row| Ok((row.get::<_, i64>(0)? as u64, row.get(1)?)),
+        |row| Ok((row.get::<_, i64>(0)? as u64, row.get(1)?, row.get(2)?)),
     )
     .optional()
 }
@@ -153,8 +152,8 @@ impl AuthService {
         character_id: i64,
     ) -> Result<Option<bool>, AuthError> {
         let conn = self.open_connection()?;
-        let bit = furniture_family_bit(&conn, furniture_id)?;
-        Ok(chest_access(&conn, furniture_id, character_id, bit)?.map(|(_, active)| active))
+        let family = furniture_family_use(&conn, furniture_id)?;
+        Ok(chest_access(&conn, furniture_id, character_id, family)?.map(|(_, active, _)| active))
     }
 
     pub(super) fn ensure_estate_storage_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
@@ -331,7 +330,7 @@ impl AuthService {
     ) -> Result<Vec<FencePlot>, AuthError> {
         self.fence_plots(
             character_id,
-            estate_storage_def(item_def_id).map_or(0, family_bit),
+            estate_storage_def(item_def_id).and_then(family_use),
         )
     }
 
@@ -405,18 +404,15 @@ impl AuthService {
     ) -> Result<Result<i64, &'static str>, AuthError> {
         let mut conn = self.open_connection()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let bit = furniture_family_bit(&tx, furniture_id)?;
-        let Some((revision, true)) = chest_access(&tx, furniture_id, owner_id, bit)? else {
+        let family = furniture_family_use(&tx, furniture_id)?;
+        let Some((revision, true, item_def_id)) =
+            chest_access(&tx, furniture_id, owner_id, family)?
+        else {
             return Ok(Err("You can only move furniture on your active estate."));
         };
         if revision != expected_revision {
             return Ok(Err("The furniture changed. Select it again."));
         }
-        let item_def_id: String = tx.query_row(
-            "SELECT item_def_id FROM estate_chests WHERE id=?1",
-            [furniture_id],
-            |row| row.get(0),
-        )?;
         let Some(definition) = estate_storage_def(&item_def_id) else {
             return Ok(Err("This furniture has an unknown type."));
         };
@@ -450,13 +446,13 @@ impl AuthService {
         text: &str,
     ) -> Result<bool, AuthError> {
         let conn = self.open_connection()?;
-        let bit = furniture_family_bit(&conn, furniture_id)?;
+        let family = furniture_family_use(&conn, furniture_id)?;
         Ok(conn.execute(
             &format!(
                 "UPDATE estate_chests SET text=?1,revision=revision+1
                  WHERE id=?2 AND estate_id IN
                  (SELECT e.id FROM land_estates e WHERE {} AND e.missed=0)",
-                estate_access_sql("?3", bit)
+                estate_access_sql("?3", family)
             ),
             params![text, furniture_id, owner_id],
         )? == 1)
@@ -468,18 +464,9 @@ impl AuthService {
         character_id: i64,
     ) -> Result<Result<EstateChestState, &'static str>, AuthError> {
         let conn = self.open_connection()?;
-        let access: Option<(u64, bool, String)> = conn
-            .query_row(
-                "SELECT c.revision,COALESCE(e.missed,1)=0,c.item_def_id
-                 FROM estate_chests c
-                 LEFT JOIN land_estates e ON e.id=c.estate_id
-                 WHERE c.id=?1 AND
-                   (e.account_name=(SELECT account_name FROM characters WHERE id=?2) OR e.id IS NULL)",
-                params![chest_id, character_id],
-                |row| Ok((row.get::<_, i64>(0)? as u64, row.get(1)?, row.get(2)?)),
-            )
-            .optional()?;
-        let Some((revision, can_deposit, item_def_id)) = access else {
+        let Some((revision, can_deposit, item_def_id)) =
+            chest_access(&conn, chest_id, character_id, None)?
+        else {
             return Ok(Err(
                 "You do not own this storage chest, and it is not abandoned.",
             ));
@@ -511,7 +498,8 @@ impl AuthService {
     ) -> Result<Result<u64, &'static str>, AuthError> {
         let mut conn = self.open_connection()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let Some((revision, active)) = chest_access(&tx, chest_id, character.character_id, 0)?
+        let Some((revision, active, _)) =
+            chest_access(&tx, chest_id, character.character_id, None)?
         else {
             return Ok(Err(
                 "You do not own this storage chest, and it is not abandoned.",
@@ -616,8 +604,8 @@ impl AuthService {
     ) -> Result<Result<(), &'static str>, AuthError> {
         let mut conn = self.open_connection()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let bit = furniture_family_bit(&tx, chest_id)?;
-        if chest_access(&tx, chest_id, character.character_id, bit)?.is_none() {
+        let family = furniture_family_use(&tx, chest_id)?;
+        if chest_access(&tx, chest_id, character.character_id, family)?.is_none() {
             return Ok(Err(
                 "You can only recover your own or an abandoned storage chest.",
             ));

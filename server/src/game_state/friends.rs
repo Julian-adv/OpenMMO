@@ -1,12 +1,11 @@
 use super::auth_db;
-use super::consent::{answer_consent, PendingConsent};
+use super::consent::{answer_consent, sweep_and_count, PendingConsent};
 use crate::auth::AuthService;
 use crate::types::{PlayerId, ServerMessage};
 use onlinerpg_shared::character::CharacterClass;
 use onlinerpg_shared::messages::{FriendEntry, OnlineFriend, FRIEND_REQUEST_TTL};
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
 use tracing::{error, info, warn};
 
 /// Upper bound on one character's friend list, so the per-session snapshot and
@@ -55,20 +54,6 @@ impl Friends {
         if let Some(list) = self.lists.get_mut(player_id) {
             list.retain(|f| f.character_id != character_id);
         }
-    }
-
-    /// Drop expired entries and count what `requester` still has out.
-    fn sweep_and_count(&mut self, requester: &PlayerId) -> usize {
-        let now = Instant::now();
-        let mut pending = 0;
-        self.requests.retain(|(from, _), request| {
-            let keep = request.expires_at > now;
-            if keep && from == requester {
-                pending += 1;
-            }
-            keep
-        });
-        pending
     }
 }
 
@@ -341,7 +326,7 @@ impl super::GameState {
         }
         let outcome = {
             let mut state = self.friends.write().await;
-            let pending = state.sweep_and_count(requester_id);
+            let pending = sweep_and_count(&mut state.requests, requester_id);
             // Live entries only — the sweep just dropped the expired ones.
             // `Some(true)` is a decline still inside its window.
             let outstanding = state

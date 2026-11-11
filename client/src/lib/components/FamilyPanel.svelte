@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { t, locale } from '../i18n'
+  import { t } from '../i18n'
   import {
     familyInfo,
     familyPanelVisible,
@@ -7,12 +7,10 @@
     familyDefaultLabelKey,
     validFamilyRankLabel,
     FAMILY_DEFAULT_LABELS,
-    FAMILY_EDITABLE_PERMISSIONS,
+    type FamilyPermissionKey,
     FAMILY_MAX_MEMBERS,
     FAMILY_PERMISSION,
-    familyStampCount,
     FAMILY_FOUND_STAMPS,
-    FAMILY_RENAME_STAMPS,
     FAMILY_REJOIN_COOLDOWN_HOURS,
     FAMILY_RANK_HEAD,
     FAMILY_RANK_GUEST,
@@ -39,9 +37,6 @@
   )
   const selfName = $derived($gameStore.currentPlayer?.name)
   const full = $derived((family?.members.length ?? 0) >= FAMILY_MAX_MEMBERS)
-  const renameOpen = $derived(
-    family !== null && family.rename_at * 1000 <= Date.now()
-  )
 
   const rankLabel = (label: string) => {
     const key = familyDefaultLabelKey(label)
@@ -61,9 +56,15 @@
     label: string
     run: () => void
   } | null>(null)
-  // Any roster change may invalidate what the confirm describes.
+  // A change of members or ranks may invalidate what the confirm describes;
+  // a member merely coming online does not.
+  const rosterKey = $derived(
+    family
+      ? family.members.map((m) => `${m.character_id}:${m.rank}`).join(',')
+      : ''
+  )
   $effect(() => {
-    void $familyInfo
+    void rosterKey
     confirm = null
   })
 
@@ -180,23 +181,6 @@
     if (amount === null) return
     networkManager.sendDepositFamilyEstate(estate.estate_id, amount)
     depositText[estate.estate_id] = ''
-  }
-
-  let renameText = $state('')
-  function askRename() {
-    const name = renameText.trim()
-    if (!name) return
-    confirm = {
-      text: $t('family.renameConfirm', {
-        name,
-        count: FAMILY_RENAME_STAMPS,
-      }),
-      label: $t('family.rename'),
-      run: () => {
-        networkManager.sendRenameFamily(name)
-        renameText = ''
-      },
-    }
   }
 </script>
 
@@ -354,7 +338,7 @@
                   {/if}
                   {#if index !== FAMILY_RANK_HEAD}
                     <div class="perm-grid">
-                      {#each FAMILY_EDITABLE_PERMISSIONS as key (key)}
+                      {#each Object.keys(FAMILY_PERMISSION) as FamilyPermissionKey[] as key (key)}
                         {@const bit = FAMILY_PERMISSION[key]}
                         <label class="perm" class:locked={(perms & bit) === 0}>
                           <input
@@ -430,56 +414,17 @@
           >
         {/if}
 
-        {#if isHead}
-          <div class="section-title">{$t('family.rename')}</div>
-          {#if renameOpen}
-            <div class="input-row">
-              <input
-                class="text-input"
-                placeholder={$t('family.namePlaceholder')}
-                aria-label={$t('family.rename')}
-                maxlength="24"
-                bind:value={renameText}
-                onkeydown={(event) => inputKeydown(event, askRename)}
-              />
-              <button
-                class="text-btn"
-                disabled={!renameText.trim() ||
-                  $familyStampCount < FAMILY_RENAME_STAMPS}
-                onclick={askRename}>{$t('family.rename')}</button
-              >
-            </div>
-            <div class="dim small">
-              {$t('family.renameCost', { count: FAMILY_RENAME_STAMPS })}
-              {#if $familyStampCount < FAMILY_RENAME_STAMPS}
-                {$t('family.renameNeedsStamps')}
-              {/if}
-            </div>
-          {:else}
-            <div class="dim">
-              {$t('family.renameAt', {
-                date: new Date(family.rename_at * 1000).toLocaleDateString(
-                  $locale
-                ),
-              })}
-            </div>
-          {/if}
-        {/if}
-
         <div class="leave-row">
           <button class="text-btn danger" disabled={isHead} onclick={askLeave}
             >{$t('family.leave')}</button
           >
-          {#if isHead}
-            <span class="dim small"
-              >{$t(
-                family.members.length > 1
-                  ? 'family.headCannotLeave'
-                  : 'family.dissolveAtRegistrar'
-              )}</span
-            >
+          {#if isHead && family.members.length > 1}
+            <span class="dim small">{$t('family.headCannotLeave')}</span>
           {/if}
         </div>
+        {#if isHead}
+          <div class="dim small">{$t('family.registrarHint')}</div>
+        {/if}
       </div>
     {/if}
   </div>

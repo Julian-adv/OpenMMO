@@ -1443,14 +1443,14 @@ async fn handle_client_message(
             // Skills and dungeon history load before any registration: a failed
             // read must refuse the session, or an empty fallback would overwrite
             // trained skills on save and re-grant already-opened chest rewards.
-            let (skill_rows, chest_opens, discovered_dungeons, titles, family_name) = {
+            let (skill_rows, chest_opens, discovered_dungeons, titles, family) = {
                 let auth = Arc::clone(auth_service);
                 let loaded = crate::game_state::auth_db(move || {
                     Ok((
                         auth.load_skills(character_id)?,
                         auth.load_dungeon_history(character_id)?,
                         auth.load_titles(character_id)?,
-                        auth.family_name_of(character_id)?,
+                        auth.family_of(character_id)?,
                     ))
                 })
                 .await;
@@ -1502,7 +1502,8 @@ async fn handle_client_message(
             );
             player.appearance = selected_character.appearance;
             player.title = titles.1.clone();
-            player.family = family_name;
+            let family_id = family.as_ref().map(|(id, _)| *id);
+            player.family = family.map(|(_, name)| name);
             player.invulnerable = state.is_admin;
 
             // Health is restored once gear sets max HP, below.
@@ -1605,7 +1606,9 @@ async fn handle_client_message(
             game_state.set_chest_opens(character_id, chest_opens).await;
             game_state.set_player_titles(&id, titles.0).await;
             game_state.send_player_titles(&id).await;
-            game_state.player_entered_family(&id, auth_service).await;
+            game_state
+                .player_entered_family(&id, family_id, auth_service)
+                .await;
             game_state
                 .set_dungeon_discoveries(&id, discovered_dungeons)
                 .await;
@@ -2633,9 +2636,14 @@ async fn handle_client_message(
             }
         }
 
-        ClientMessage::RenameFamily { name } => {
+        ClientMessage::RenameFamily {
+            merchant_player_id,
+            name,
+        } => {
             if let Some(id) = &state.require_in_game("rename family") {
-                game_state.rename_family(id, &name, auth_service).await;
+                game_state
+                    .rename_family(id, &merchant_player_id, &name, auth_service)
+                    .await;
             }
         }
 

@@ -221,7 +221,6 @@ impl super::GameState {
         }
         self.remove_player_blocks(player_id).await;
         self.remove_player_friends(player_id).await;
-        self.forget_player_family(player_id).await;
         self.remove_player_titles(player_id).await;
         self.forget_whisper_partner(player_id).await;
         self.forget_player_skills(player_id).await;

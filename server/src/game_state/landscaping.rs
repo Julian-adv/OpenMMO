@@ -127,9 +127,15 @@ impl GameState {
             ),
         };
         let (plots, entry_plots, palette, owned_character_ids) = auth_db(move || {
+            let plots = auth.fence_plots(owner_id, Some(tool_bit))?;
+            let entry_plots = if entry_bits == tool_bit {
+                plots.clone()
+            } else {
+                auth.fence_plots(owner_id, Some(entry_bits))?
+            };
             Ok((
-                auth.fence_plots(owner_id, tool_bit)?,
-                auth.fence_plots(owner_id, entry_bits)?,
+                plots,
+                entry_plots,
                 auth.landscaping_palette(owner_id)?,
                 auth.landscaping_owner_ids(owner_id)?,
             ))
@@ -306,7 +312,7 @@ impl GameState {
         let auth = auth.clone();
         let (plots, palette) = auth_db(move || {
             Ok((
-                auth.fence_plots(owner, permission::LANDSCAPE)?,
+                auth.fence_plots(owner, Some(permission::LANDSCAPE))?,
                 auth.landscaping_palette(owner)?,
             ))
         })

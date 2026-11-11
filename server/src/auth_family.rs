@@ -68,19 +68,57 @@ impl FamilyRoster {
 pub struct FamilyDeparture {
     pub family_id: i64,
     pub family_name: String,
+    pub target_name: String,
     pub dissolved: bool,
 }
 
+/// Why an invite cannot go through, worded for whoever is told.
+#[derive(Clone, Copy)]
+pub enum InviteBlock {
+    InviterNotMember,
+    InviterMayNotInvite,
+    TargetInFamily,
+    TargetCoolingDown,
+    Full,
+}
+
+impl InviteBlock {
+    pub fn to_inviter(self) -> &'static str {
+        match self {
+            Self::InviterNotMember => "You do not belong to a family.",
+            Self::InviterMayNotInvite => "Your rank may not invite.",
+            Self::TargetInFamily => "They already belong to a family.",
+            Self::TargetCoolingDown => "They left a family less than a day ago.",
+            Self::Full => "Your family is full.",
+        }
+    }
+
+    pub fn to_target(self) -> &'static str {
+        match self {
+            Self::InviterNotMember => "The inviter no longer belongs to a family.",
+            Self::InviterMayNotInvite => "The inviter may no longer invite.",
+            Self::TargetInFamily => "You already belong to a family.",
+            Self::TargetCoolingDown => "You left a family less than a day ago.",
+            Self::Full => "The family is full.",
+        }
+    }
+}
+
 /// SQL predicate: character `param` may use estate `e` — their account owns
-/// it, or it is attached to their family and their rank holds `bit`.
-pub(super) fn estate_access_sql(param: &str, bit: u32) -> String {
-    format!(
-        "(e.account_name=(SELECT account_name FROM characters WHERE id={param})
-          OR EXISTS(SELECT 1 FROM family_members fm
-                    JOIN family_ranks fr ON fr.family_id=fm.family_id AND fr.rank=fm.rank
-                    WHERE fm.character_id={param} AND fm.family_id=e.family_id
-                      AND fr.permissions & {bit} != 0))"
-    )
+/// it, or (with `family_bits`) it is attached to their family and their rank
+/// holds one of the bits. `None` keeps the estate to its own account. Both
+/// arms compare against a constant, so each keeps its index.
+pub(super) fn estate_access_sql(param: &str, family_bits: Option<u32>) -> String {
+    let account = format!("e.account_name=(SELECT account_name FROM characters WHERE id={param})");
+    match family_bits {
+        None => account,
+        Some(bits) => format!(
+            "({account} OR e.family_id=(
+                SELECT fm.family_id FROM family_members fm
+                JOIN family_ranks fr ON fr.family_id=fm.family_id AND fr.rank=fm.rank
+                WHERE fm.character_id={param} AND fr.permissions & {bits} != 0))"
+        ),
+    }
 }
 
 /// Family name per character of `account_name`, for the character list.
@@ -131,6 +169,36 @@ fn in_cooldown(conn: &Connection, character_id: i64) -> Result<bool, rusqlite::E
         )
         .optional()?;
     Ok(left_at.is_some_and(|at| unix_now() - at < FAMILY_REJOIN_COOLDOWN_SECS))
+}
+
+/// The inviter's family (id and name) when `target_id` may join it now.
+fn invite_target(
+    conn: &Connection,
+    inviter_id: i64,
+    target_id: i64,
+) -> Result<Result<(i64, String), InviteBlock>, rusqlite::Error> {
+    let Some(inviter) = membership(conn, inviter_id)? else {
+        return Ok(Err(InviteBlock::InviterNotMember));
+    };
+    if inviter.permissions & permission::INVITE == 0 {
+        return Ok(Err(InviteBlock::InviterMayNotInvite));
+    }
+    if membership(conn, target_id)?.is_some() {
+        return Ok(Err(InviteBlock::TargetInFamily));
+    }
+    if in_cooldown(conn, target_id)? {
+        return Ok(Err(InviteBlock::TargetCoolingDown));
+    }
+    let (name, members): (String, i64) = conn.query_row(
+        "SELECT name, (SELECT COUNT(*) FROM family_members WHERE family_id=f.id)
+         FROM families f WHERE id=?1",
+        [inviter.family_id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+    if members as usize >= FAMILY_MAX_MEMBERS {
+        return Ok(Err(InviteBlock::Full));
+    }
+    Ok(Ok((inviter.family_id, name)))
 }
 
 fn retire_name(conn: &Connection, name: &str) -> Result<(), rusqlite::Error> {
@@ -289,13 +357,7 @@ impl AuthService {
         if character {
             return Ok(Some("A character has that name."));
         }
-        let held: bool = conn.query_row(
-            "SELECT EXISTS(SELECT 1 FROM family_retired_names
-                           WHERE name=?1 AND (reusable_at IS NULL OR reusable_at>?2))",
-            params![name, unix_now()],
-            |row| row.get(0),
-        )?;
-        if held {
+        if Self::family_name_in_use(conn, name)? {
             return Ok(Some(
                 "That family name was in use recently and is held back.",
             ));
@@ -304,21 +366,17 @@ impl AuthService {
         Ok(None)
     }
 
-    pub fn family_name_of(&self, character_id: i64) -> Result<Option<String>, AuthError> {
+    /// The character's family as (id, name).
+    pub fn family_of(&self, character_id: i64) -> Result<Option<(i64, String)>, AuthError> {
         let conn = self.open_connection()?;
         Ok(conn
             .query_row(
-                "SELECT f.name FROM family_members m JOIN families f ON f.id=m.family_id
+                "SELECT f.id, f.name FROM family_members m JOIN families f ON f.id=m.family_id
                  WHERE m.character_id=?1",
                 [character_id],
-                |row| row.get(0),
+                |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .optional()?)
-    }
-
-    pub fn family_id_of(&self, character_id: i64) -> Result<Option<i64>, AuthError> {
-        let conn = self.open_connection()?;
-        Ok(membership(&conn, character_id)?.map(|m| m.family_id))
     }
 
     pub fn family_roster(&self, family_id: i64) -> Result<Option<FamilyRoster>, AuthError> {
@@ -413,21 +471,18 @@ impl AuthService {
             [id],
             |row| row.get(0),
         )?;
-        let mut stmt = tx.prepare(
-            "SELECT id, family_id FROM land_estates WHERE account_name=?1 AND missed=0 ORDER BY grade",
+        let (estates, attached): (i64, i64) = tx.query_row(
+            "SELECT COUNT(*), COUNT(family_id) FROM land_estates
+             WHERE account_name=?1 AND missed=0",
+            [&account],
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )?;
-        let estates = stmt
-            .query_map([&account], |row| {
-                Ok((row.get::<_, i64>(0)?, row.get::<_, Option<i64>>(1)?))
-            })?
-            .collect::<Result<Vec<_>, _>>()?;
-        drop(stmt);
-        if estates.is_empty() {
+        if estates == 0 {
             return Ok(Err(
                 "Own an estate with no overdue taxes to found a family.",
             ));
         }
-        if estates.iter().any(|(_, family)| family.is_some()) {
+        if attached > 0 {
             return Ok(Err("Your estate already belongs to another family."));
         }
         if let Some(reason) = self.family_name_refusal(&tx, &account, name, None)? {
@@ -462,62 +517,34 @@ impl AuthService {
         Ok(Ok(family_id))
     }
 
-    pub fn join_family(&self, inviter_id: i64, target_id: i64) -> Verdict<i64> {
+    /// Add `target_id` to the inviter's family; returns its id and name.
+    pub fn join_family(
+        &self,
+        inviter_id: i64,
+        target_id: i64,
+    ) -> Result<Result<(i64, String), InviteBlock>, AuthError> {
         let mut conn = self.open_connection()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let Some(inviter) = membership(&tx, inviter_id)? else {
-            return Ok(Err("The inviter no longer belongs to a family."));
+        let (family_id, name) = match invite_target(&tx, inviter_id, target_id)? {
+            Ok(family) => family,
+            Err(block) => return Ok(Err(block)),
         };
-        if inviter.permissions & permission::INVITE == 0 {
-            return Ok(Err("The inviter may no longer invite."));
-        }
-        if membership(&tx, target_id)?.is_some() {
-            return Ok(Err("They already belong to a family."));
-        }
-        if in_cooldown(&tx, target_id)? {
-            return Ok(Err("They left a family less than a day ago."));
-        }
-        let members: i64 = tx.query_row(
-            "SELECT COUNT(*) FROM family_members WHERE family_id=?1",
-            [inviter.family_id],
-            |row| row.get(0),
-        )?;
-        if members as usize >= FAMILY_MAX_MEMBERS {
-            return Ok(Err("The family is full."));
-        }
         tx.execute(
             "INSERT INTO family_members (character_id, family_id, rank, joined_at) VALUES (?1,?2,?3,?4)",
-            params![target_id, inviter.family_id, FAMILY_RANK_MEMBER, unix_now()],
+            params![target_id, family_id, FAMILY_RANK_MEMBER, unix_now()],
         )?;
         tx.commit()?;
-        Ok(Ok(inviter.family_id))
+        Ok(Ok((family_id, name)))
     }
 
-    /// Whether `inviter_id` could add `target_id` right now, without adding.
-    pub fn check_family_invite(&self, inviter_id: i64, target_id: i64) -> Verdict<String> {
+    /// The family name `inviter_id` could add `target_id` to right now.
+    pub fn check_family_invite(
+        &self,
+        inviter_id: i64,
+        target_id: i64,
+    ) -> Result<Result<String, InviteBlock>, AuthError> {
         let conn = self.open_connection()?;
-        let Some(inviter) = membership(&conn, inviter_id)? else {
-            return Ok(Err("You do not belong to a family."));
-        };
-        if inviter.permissions & permission::INVITE == 0 {
-            return Ok(Err("Your rank may not invite."));
-        }
-        if membership(&conn, target_id)?.is_some() {
-            return Ok(Err("They already belong to a family."));
-        }
-        if in_cooldown(&conn, target_id)? {
-            return Ok(Err("They left a family less than a day ago."));
-        }
-        let (name, members): (String, i64) = conn.query_row(
-            "SELECT name, (SELECT COUNT(*) FROM family_members WHERE family_id=f.id)
-             FROM families f WHERE id=?1",
-            [inviter.family_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )?;
-        if members as usize >= FAMILY_MAX_MEMBERS {
-            return Ok(Err("Your family is full."));
-        }
-        Ok(Ok(name))
+        Ok(invite_target(&conn, inviter_id, target_id)?.map(|(_, name)| name))
     }
 
     /// Leave (`actor_id == target_id`) or kick. The head never leaves this
@@ -571,10 +598,11 @@ impl AuthService {
                 return Ok(Err("Your rank may not remove that member."));
             }
         }
-        let family_name: String = tx.query_row(
-            "SELECT name FROM families WHERE id=?1",
-            [target.family_id],
-            |row| row.get(0),
+        let (family_name, target_name): (String, String) = tx.query_row(
+            "SELECT (SELECT name FROM families WHERE id=?1),
+                    (SELECT character_name FROM characters WHERE id=?2)",
+            params![target.family_id, target_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )?;
         tx.execute(
             "DELETE FROM family_members WHERE character_id=?1",
@@ -589,6 +617,7 @@ impl AuthService {
         Ok(Ok(FamilyDeparture {
             family_id: target.family_id,
             family_name,
+            target_name,
             dissolved,
         }))
     }
@@ -678,10 +707,7 @@ impl AuthService {
         Ok(Ok(actor.family_id))
     }
 
-    pub fn claim_family_head(&self, actor_id: i64, online: &[i64]) -> Verdict<i64> {
-        let Some(family_id) = self.family_id_of(actor_id)? else {
-            return Ok(Err("You do not belong to a family."));
-        };
+    pub fn claim_family_head(&self, actor_id: i64, family_id: i64, online: &[i64]) -> Verdict<i64> {
         let Some(roster) = self.family_roster(family_id)? else {
             return Ok(Err("You do not belong to a family."));
         };
@@ -844,7 +870,7 @@ impl AuthService {
         inventory: &[ItemRow],
         estate_id: i64,
         amount: i64,
-    ) -> Verdict<(i64, i64)> {
+    ) -> Verdict<i64> {
         let mut conn = self.open_connection()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let Some(member) = membership(&tx, character.character_id)? else {
@@ -861,13 +887,13 @@ impl AuthService {
         if !attached {
             return Ok(Err("That estate is not attached to your family."));
         }
-        let outcome =
-            Self::transfer_estate_gold(&tx, estate_id, character, inventory, amount, true)?;
-        let Ok((gold, _)) = outcome else {
-            return Ok(outcome.map(|_| (0, 0)));
-        };
+        if let Err(reason) =
+            Self::transfer_estate_gold(&tx, estate_id, character, inventory, amount, true)?
+        {
+            return Ok(Err(reason));
+        }
         tx.commit()?;
-        Ok(Ok((gold, member.family_id)))
+        Ok(Ok(member.family_id))
     }
 
     /// Owner ids the client treats as "mine" when offering to remove a fence

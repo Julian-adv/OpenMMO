@@ -30,11 +30,6 @@ export const FAMILY_PERMISSION = {
 
 export type FamilyPermissionKey = keyof typeof FAMILY_PERMISSION
 
-/** Bits the rank editor lists; the rest do nothing until later phases. */
-export const FAMILY_EDITABLE_PERMISSIONS = Object.keys(
-  FAMILY_PERMISSION
-) as FamilyPermissionKey[]
-
 /** Server-stored default labels, by rank; shown localized instead. */
 export const FAMILY_DEFAULT_LABELS = ['Head', 'Elder', 'Family', 'Guest']
 const DEFAULT_LABEL_KEYS = [

@@ -41,3 +41,20 @@ pub(crate) fn answer_consent(
     }
     usable
 }
+
+/// Drop expired requests and count what `requester` still has out.
+pub(crate) fn sweep_and_count(
+    requests: &mut HashMap<(PlayerId, PlayerId), PendingConsent>,
+    requester: &PlayerId,
+) -> usize {
+    let now = Instant::now();
+    let mut pending = 0;
+    requests.retain(|(from, _), request| {
+        let keep = request.expires_at > now;
+        if keep && from == requester {
+            pending += 1;
+        }
+        keep
+    });
+    pending
+}

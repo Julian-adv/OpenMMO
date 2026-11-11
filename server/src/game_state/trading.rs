@@ -207,6 +207,17 @@ impl super::GameState {
         .await;
     }
 
+    /// Whether `npc_player_id` is an awake land registrar within range.
+    pub(super) async fn at_land_registrar(
+        &self,
+        player_id: &PlayerId,
+        npc_player_id: &PlayerId,
+    ) -> bool {
+        self.validate_trader(player_id, npc_player_id)
+            .await
+            .is_ok_and(|trader| trader.is_land_registrar())
+    }
+
     /// Validate that `npc_player_id` is a trading NPC within range of the
     /// player. Returns the trader definition on success.
     pub(super) async fn validate_trader(

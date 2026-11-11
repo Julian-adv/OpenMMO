@@ -30,12 +30,7 @@ async fn enter(game: &GameState, auth: &AuthService, name: &str, stamps: u32) ->
 }
 
 async fn stamps(game: &GameState, name: &str) -> u32 {
-    game.inventories.read().await[&pid(name)]
-        .bag
-        .iter()
-        .filter(|item| item.item_def_id == FAMILY_STAMP_ITEM)
-        .map(|item| item.quantity)
-        .sum()
+    bag_count(game, &pid(name), FAMILY_STAMP_ITEM).await
 }
 
 /// Claims the 32 m plot at column `plot` of row 0, then walks back.
@@ -65,7 +60,6 @@ async fn found(
 ) {
     game.create_family(&pid(name), registrar, family, auth)
         .await;
-    game.player_entered_family(&pid(name), auth).await;
 }
 
 async fn join(game: &GameState, auth: &AuthService, inviter: &str, target: &str) {
@@ -116,7 +110,7 @@ async fn founding_needs_an_estate_and_the_fee_and_a_free_name() {
     let family = family_state(&drain(&mut rx)).flatten().expect("roster");
     assert_eq!(family.name, "Ironwood");
     assert_eq!(family.my_rank, FAMILY_RANK_HEAD);
-    assert_eq!(family.my_permissions(), permission::ALL);
+    assert_eq!(family.ranks[0].permissions, permission::ALL);
     assert_eq!(family.estates.len(), 1);
     assert!(family.estates[0].mine);
     assert_eq!(stamps(&game, "Owner").await, 2);
@@ -125,16 +119,39 @@ async fn founding_needs_an_estate_and_the_fee_and_a_free_name() {
         Some("Ironwood")
     );
     assert_eq!(
-        auth.family_name_of(owner).unwrap().as_deref(),
+        auth.family_of(owner)
+            .unwrap()
+            .map(|(_, name)| name)
+            .as_deref(),
         Some("Ironwood")
     );
     let account = auth.login_google("family-Owner").unwrap();
     let listed = auth.list_characters_with_equipment(&account).unwrap();
     assert_eq!(listed[0].family.as_deref(), Some("Ironwood"));
 
+    game.rename_family(&pid("Owner"), &registrar, "Oakheart", &auth)
+        .await;
+    assert!(has_line(&drain(&mut rx), "you need 10 revenue stamp"));
+    give(&game, &pid("Owner"), bag_item(4, FAMILY_STAMP_ITEM, 8)).await;
+    game.rename_family(&pid("Owner"), &pid("Landless"), "Oakheart", &auth)
+        .await;
+    assert!(has_line(&drain(&mut rx), "with the Land Registrar"));
+    game.rename_family(&pid("Owner"), &registrar, "Oakheart", &auth)
+        .await;
+    assert_eq!(
+        shown_family(&game, "Owner").await.as_deref(),
+        Some("Oakheart")
+    );
+    assert_eq!(stamps(&game, "Owner").await, 0);
+    give(&game, &pid("Owner"), bag_item(5, FAMILY_STAMP_ITEM, 10)).await;
+    game.rename_family(&pid("Owner"), &registrar, "Elmwood", &auth)
+        .await;
+    assert!(has_line(&drain(&mut rx), "once every 30 days"));
+    assert_eq!(stamps(&game, "Owner").await, 10);
+
     let (_, mut rx) = enter(&game, &auth, "Rival", FAMILY_FOUND_STAMPS + 1).await;
     claim(&game, &auth, "Rival", 1).await;
-    game.create_family(&pid("Rival"), &registrar, "ironwood", &auth)
+    game.create_family(&pid("Rival"), &registrar, "oakheart", &auth)
         .await;
     assert!(has_line(&drain(&mut rx), "Another family has that name"));
 
@@ -204,7 +221,7 @@ async fn rank_permissions_open_the_family_estate_and_no_further() {
     let (stranger, _) = enter(&game, &auth, "Stranger", 0).await;
     join(&game, &auth, "Head", "Member").await;
 
-    let plots = |id, bit| auth.fence_plots(id, bit).unwrap().len();
+    let plots = |id, bit| auth.fence_plots(id, Some(bit)).unwrap().len();
     assert_eq!(plots(head, permission::BUILD_HOUSE), 1);
     assert_eq!(plots(member, permission::PLACE_FURNITURE), 1);
     assert_eq!(plots(member, permission::BUILD_HOUSE), 0);
@@ -295,7 +312,7 @@ async fn a_members_estate_joins_the_family_and_leaves_with_them() {
     let family = family_state(&drain(&mut head_rx)).flatten().unwrap();
     assert_eq!(family.estates.len(), 1);
     assert_eq!(family.members.len(), 1);
-    assert_eq!(auth.fence_plots(member, 0).unwrap().len(), 1);
+    assert_eq!(auth.fence_plots(member, None).unwrap().len(), 1);
 }
 
 #[tokio::test]
@@ -326,7 +343,7 @@ async fn a_family_outlives_its_head_and_dissolves_with_its_last_member() {
     assert!(has_line(&drain(&mut elder_rx), "Visit the Land Registrar"));
     game.dissolve_family(&pid("Elder"), &pid("Later"), &auth)
         .await;
-    assert!(has_line(&drain(&mut elder_rx), "visit the Land Registrar"));
+    assert!(has_line(&drain(&mut elder_rx), "with the Land Registrar"));
     game.dissolve_family(&pid("Elder"), &registrar, &auth).await;
     assert!(has_line(&drain(&mut elder_rx), "you need 1 revenue stamp"));
     give(&game, &pid("Elder"), bag_item(9, FAMILY_STAMP_ITEM, 2)).await;
