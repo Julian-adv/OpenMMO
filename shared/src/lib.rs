@@ -263,7 +263,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// `AttachEstateToFamily`, `DepositFamilyEstate`; `FamilyState`,
 /// `FamilyInviteReceived`, `PlayerFamilyChanged`), `Player.family` and
 /// `Character.family`.
-pub const PROTOCOL_VERSION: u32 = 144;
+/// v145: female `HairStyle::LongBangs`.
+pub const PROTOCOL_VERSION: u32 = 145;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

@@ -1,6 +1,6 @@
 # 여성 투구 헤어 브러시
 
-투구를 써도 고른 헤어(단발 `hair`, 긴 생머리 `valkyrie_hair`, 포니테일 `ranger_hair`)가 그대로 보인다. 단발만 뿔 투구에서 투구용 단발, 기사·광휘 투구에서 숨김이다(2026-11-06 사용자 결정으로 포니테일을 단발로 바꾸던 규칙을 없앰).
+투구를 써도 고른 헤어(단발 `hair`, 긴 생머리 `valkyrie_hair`, 긴 생머리 · 앞머리 `long_bangs_hair`, 포니테일 `ranger_hair`)가 그대로 보인다. 단발만 뿔 투구에서 투구용 단발, 기사·광휘 투구에서 숨김이다(2026-11-06 사용자 결정으로 포니테일을 단발로 바꾸던 규칙을 없앰).
 투구 밖으로 삐져나온 헤어는 사용자가 여성 미리보기에서 클릭으로 지운다(사용자 결정: 자동 계산보다 손으로 고르는 편이 낫다).
 
 ## 쓰는 법
@@ -28,6 +28,6 @@ node tools/prepare-female-knight.mjs --part brilliance_helmet
 | `bard_helmet` | `hair` (단발) | 38 | 2026-11-06 |
 | `brilliance_helmet` | `ranger_hair` (포니테일) | 713 | 2026-11-06 |
 | `helmet` (은빛 기사 투구) | `ranger_hair` (포니테일) | 152 | 2026-11-06 |
-| `helmet` (은빛 기사 투구) | `valkyrie_hair` (긴 생머리) | 222 | 2026-11-06 |
-| `barbarian_helmet` (뿔 투구) | `valkyrie_hair` (긴 생머리) | 289 | 2026-11-06 |
 | `barbarian_helmet` (뿔 투구) | `ranger_hair` (포니테일) | 555 | 2026-11-06 |
+
+2026-11-11 긴 생머리를 [새 메시](modular-female-long-straight-hair.md)로 바꾸면서 `valkyrie_hair` 기록 두 건(은빛 기사 투구 222, 뿔 투구 289)을 지웠다. 삼각형 번호가 새 메시와 맞지 않는다. 새 긴 생머리 두 종은 아직 브러시 기록이 없다.

@@ -23,6 +23,7 @@ vi.mock('../data/femaleHairFits.json', () => ({
 
 import {
   HAIR_FIT_DEFAULT,
+  applyFemaleHairFit,
   femaleHairFitMatrix,
   femaleHairPivot,
   fitFemaleHair,
@@ -89,5 +90,23 @@ describe('female hair fits', () => {
     const trimmed = hair(source)
     fitFemaleHair(trimmed, 'custom', 'barbarian_hair')
     expect(trimmed.geometry).toBe(first.geometry)
+  })
+
+  it('fits long hair at the head and leaves it on the body below the shoulders', () => {
+    const source = new THREE.BufferGeometry().setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute([0, 1.7, 0, 0, 1.53, 0, 0, 1.3, 0], 3)
+    )
+    const fit = { ...HAIR_FIT_DEFAULT, 'move-z': 2 }
+    const pivot = new THREE.Vector3(0, 1.62, 0)
+    const z = (style: 'long' | 'bob') =>
+      Array.from(
+        applyFemaleHairFit(source, fit, pivot, style).attributes.position.array
+      ).filter((_, i) => i % 3 === 2)
+    expect(z('bob')).toEqual([0.02, 0.02, 0.02].map(Math.fround))
+    const [head, neck, chest] = z('long')
+    expect(head).toBeCloseTo(0.02)
+    expect(neck).toBeCloseTo(0.01)
+    expect(chest).toBe(0)
   })
 })

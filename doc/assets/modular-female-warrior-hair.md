@@ -1,5 +1,7 @@
 # 여성 전사 긴 헤어 제작·미리보기 도구
 
+**[미사용]** 2026-11-11 사용자 결정으로 게임의 긴 머리(`long`, `valkyrie_hair`)를 [옆 가르마 긴 생머리](modular-female-long-straight-hair.md)로 바꿨다. 아래는 이전 헤어의 기록이며 파일은 보관한다.
+
 사용자가 제공한 `assets/fantasy warrior 3d model (1).glb`의 `tripo_part_1`을
 여성 공통 몸체 `rig_v1/female-base.glb`에 맞춘 긴 헤어다. 완성본은 게임에서 발키리의
 고정 기본 헤어로 사용한다. 이 문서는 제작 도구와 미리보기 피팅 기능을 기록한다.

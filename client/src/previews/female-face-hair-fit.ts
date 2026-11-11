@@ -1,7 +1,7 @@
 import type { SkinnedMesh } from 'three'
 import {
   HAIR_FIT_DEFAULT,
-  femaleHairFitMatrix,
+  applyFemaleHairFit,
   femaleHairPivot,
   type HairFit,
   type HairFitFace,
@@ -160,7 +160,7 @@ export async function faceHairFitEditor(
         ({ key }) => fit[key] === HAIR_FIT_DEFAULT[key]
       )
         ? geometry
-        : geometry.clone().applyMatrix4(femaleHairFitMatrix(fit, pivot))
+        : applyFemaleHairFit(geometry, fit, pivot, hair)
       if (previous !== geometry) previous.dispose()
     }
     remember()

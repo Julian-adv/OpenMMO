@@ -15,7 +15,7 @@ export const HAIR_FIT_DEFAULT = {
 }
 export type HairFit = typeof HAIR_FIT_DEFAULT
 export type HairFitFace = 'default' | 'custom' | 'ranger' | 'chic'
-export type HairFitStyle = 'bob' | 'long' | 'ponytail'
+export type HairFitStyle = 'bob' | 'long' | 'ponytail' | 'long_bangs'
 export type HairFits = Record<
   HairFitFace,
   Partial<Record<HairFitStyle, HairFit>>
@@ -25,6 +25,7 @@ const styles: Record<string, HairFitStyle> = {
   barbarian_hair: 'bob',
   valkyrie_hair: 'long',
   ranger_hair: 'ponytail',
+  long_bangs_hair: 'long_bangs',
 }
 const geometries = new WeakMap<
   THREE.BufferGeometry,
@@ -62,6 +63,42 @@ export function femaleHairFitMatrix(fit: HairFit, pivot: THREE.Vector3) {
     .multiply(new THREE.Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z))
 }
 
+// Hair that hangs past the shoulders rests on the body, which every face shares: the fit applies in full at
+// head height and fades to nothing between these heights (metres, bind pose).
+const BODY_HELD: ReadonlySet<HairFitStyle> = new Set(['long', 'long_bangs'])
+const HELD_BELOW = 1.46
+const FITTED_ABOVE = 1.6
+
+export function applyFemaleHairFit(
+  source: THREE.BufferGeometry,
+  fit: HairFit,
+  pivot: THREE.Vector3,
+  style: HairFitStyle
+): THREE.BufferGeometry {
+  const geometry = source.clone().applyMatrix4(femaleHairFitMatrix(fit, pivot))
+  if (!BODY_HELD.has(style)) return geometry
+  const rest = source.attributes.position
+  const fitted = geometry.attributes.position
+  for (let i = 0; i < rest.count; i++) {
+    const weight = THREE.MathUtils.smoothstep(
+      rest.getY(i),
+      HELD_BELOW,
+      FITTED_ABOVE
+    )
+    if (weight === 1) continue
+    fitted.setXYZ(
+      i,
+      THREE.MathUtils.lerp(rest.getX(i), fitted.getX(i), weight),
+      THREE.MathUtils.lerp(rest.getY(i), fitted.getY(i), weight),
+      THREE.MathUtils.lerp(rest.getZ(i), fitted.getZ(i), weight)
+    )
+  }
+  fitted.needsUpdate = true
+  if (geometry.boundingBox) geometry.computeBoundingBox()
+  if (geometry.boundingSphere) geometry.computeBoundingSphere()
+  return geometry
+}
+
 export function fitFemaleHair(
   mesh: THREE.SkinnedMesh,
   face: string,
@@ -81,12 +118,12 @@ export function fitFemaleHair(
     return
   const source = mesh.geometry
   const pivot = femaleHairPivot(mesh)
-  const key = JSON.stringify([fit, pivot.toArray()])
+  const key = JSON.stringify([fit, pivot.toArray(), style])
   let cache = geometries.get(source)
   if (!cache) geometries.set(source, (cache = new Map()))
   let geometry = cache.get(key)
   if (!geometry) {
-    geometry = source.clone().applyMatrix4(femaleHairFitMatrix(fit, pivot))
+    geometry = applyFemaleHairFit(source, fit, pivot, style)
     cache.set(key, geometry)
   }
   mesh.geometry = geometry

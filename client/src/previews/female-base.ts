@@ -70,7 +70,8 @@ export async function showFemaleBase(
       <select id="female-hair">
         <option value="bob">금발 단발</option>
         <option value="none">없음</option>
-        <option value="warrior">전사 긴 헤어 (피팅 검수 중)</option>
+        <option value="warrior">긴 생머리 · 옆 가르마</option>
+        <option value="long_bangs">긴 생머리 · 앞머리</option>
         <option value="ranger">순찰자 갈색 포니테일 (피팅 검수 중)</option>
       </select>
       <div id="warrior-hair-fit" hidden>
@@ -345,7 +346,7 @@ export async function showFemaleBase(
   const requestedHair = new URLSearchParams(location.search).get('hair')
   hairSelect.value =
     requestedHair &&
-    ['bob', 'warrior', 'ranger', 'none'].includes(requestedHair)
+    ['bob', 'warrior', 'long_bangs', 'ranger', 'none'].includes(requestedHair)
       ? requestedHair
       : 'bob'
   const initialHair = hairSelect.value
@@ -2223,6 +2224,7 @@ export async function showFemaleBase(
   const hairParts: Record<string, string> = {
     bob: 'hair',
     warrior: 'valkyrie_hair',
+    long_bangs: 'long_bangs_hair',
     ranger: 'ranger_hair',
   }
   let hairBrushPaused = false

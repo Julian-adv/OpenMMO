@@ -129,7 +129,8 @@ PIL LANCZOS로 128²로 줄였다. 같은 명령으로 픽셀까지 같은 PNG�
 | 파일 | 헤어 원본 |
 | --- | --- |
 | `female-hair-bob.png` | `assets/modular_human_female_01/hair/tripo_knight_bob_v1/fitted_v1/hair_female_knight_bob.glb` |
-| `female-hair-long.png` | `assets/modular_human_female_01/hair/tripo_warrior_v1/fitted_v1/hair_female_warrior.glb` |
+| `female-hair-long.png` | `assets/modular_human_female_01/hair/tripo_long_side_v3/fitted_v1/hair_female_long_side.glb` (2026-11-11 교체) |
+| `female-hair-long-bangs.png` | `assets/modular_human_female_01/hair/tripo_long_bangs_v2/fitted_v1/hair_female_long_bangs.glb` (2026-11-11) |
 | `female-hair-ponytail.png` | `assets/items/female_ranger_outfit/hair/fitted_v1/hair_female_ranger.glb` |
 
 출처·라이선스는 [여성 몸체](modular-human-female-01.md)와 각 헤어 기록을 따른다. 별도 AI 생성이나 유료 호출은 없다.

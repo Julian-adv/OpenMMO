@@ -59,7 +59,7 @@ blender -b -t 6 --python-exit-code 1 --python tools/blender-scripts/review_femal
 - 측면은 정면을, 후면은 정면·측면을 참고해 생성했다. 시점 간 직교 기하 일치는 보장하지 않는다.
 
 메시: Tripo API, 유료 API 크레딧, [Tripo 이용 조건](https://developers.tripo3d.ai/en/terms).
-[다중 시점 API](https://developers.tripo3d.ai/en/docs/generation-multiview-to-model/p)의 `front`/`right`/`back` 슬롯(화면 왼쪽을 보는 측면 = `right`),
+[다중 시점 API](https://developers.tripo3d.ai/en/docs/generation-multiview-to-model/p)의 `front`/`right`/`back` 슬롯(화면 왼쪽을 보는 측면을 `right`에 넣었다. 2026-11-11 확인: 그 그림은 `left` 칸이 맞다. [긴 생머리 기록](modular-female-long-straight-hair.md) 참조),
 `P2-20260801`, `v3.5-20260815`, PBR detailed 텍스처.
 
 | | 단발 | 긴 헤어 |

@@ -3,7 +3,7 @@ import { readFile, writeFile, rename } from 'node:fs/promises'
 // Hair triangles hidden under each female helmet, brushed in the female preview; prepare-female-knight.mjs bakes them in.
 const helmetHairBrushPath = new URL('../../doc/assets/female-helmet-hair-brush.json', import.meta.url)
 const brushableHelmets = ['helmet', 'barbarian_helmet', 'valkyrie_helmet', 'priest_helmet', 'bard_helmet', 'brilliance_helmet']
-const brushableHair = ['hair', 'valkyrie_hair', 'ranger_hair']
+const brushableHair = ['hair', 'valkyrie_hair', 'ranger_hair', 'long_bangs_hair']
 const route = '/__female-preview/helmet-hair.json'
 
 export async function loadHelmetHairBrush() {

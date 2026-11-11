@@ -5,7 +5,8 @@ export const directory = new URL('assets/modular_human_female_01/preview/', root
 export const sources = {
   base: 'assets/modular_human_female_01/rig_v1/female-base.glb',
   bob: 'assets/modular_human_female_01/hair/tripo_knight_bob_v1/fitted_v1/hair_female_knight_bob.glb',
-  warrior: 'assets/modular_human_female_01/hair/tripo_warrior_v1/fitted_v1/hair_female_warrior.glb',
+  warrior: 'assets/modular_human_female_01/hair/tripo_long_side_v3/fitted_v1/hair_female_long_side.glb',
+  long_bangs: 'assets/modular_human_female_01/hair/tripo_long_bangs_v2/fitted_v1/hair_female_long_bangs.glb',
   valkyrie: 'assets/items/valkyrie_boots/fitted_v1/boots_female_valkyrie.glb',
   animations: 'assets/modular_human_female_01/rig_v1/female-base.glb',
 }

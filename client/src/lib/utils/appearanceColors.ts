@@ -4,8 +4,9 @@ export const DEFAULT_EYE_COLOR = '#786545'
 // Mean albedo of each female hair texture (matches the server).
 export const FEMALE_HAIR_COLORS = {
   bob: '#ceb294',
-  long: '#d2bda2',
+  long: '#cbac91',
   ponytail: '#432e26',
+  long_bangs: '#dbb99d',
 } as const
 export const originalHairColor = (hair: string) =>
   FEMALE_HAIR_COLORS[hair as keyof typeof FEMALE_HAIR_COLORS] ??

@@ -72,7 +72,8 @@ const sources = {
     [`ranger_${slot}`, `assets/items/female_ranger_outfit/${slot}/fitted_v1/${slot}_female_ranger.glb`])),
   ...Object.fromEntries(['top', 'bottom', 'boots', 'gloves', 'helmet'].map(slot =>
     [`bard_${slot}`, `assets/items/female_bard_outfit/${slot}/fitted_v1/${slot}_female_bard.glb`])),
-  valkyrie_hair: 'assets/modular_human_female_01/hair/tripo_warrior_v1/fitted_v1/hair_female_warrior.glb',
+  valkyrie_hair: 'assets/modular_human_female_01/hair/tripo_long_side_v3/fitted_v1/hair_female_long_side.glb',
+  long_bangs_hair: 'assets/modular_human_female_01/hair/tripo_long_bangs_v2/fitted_v1/hair_female_long_bangs.glb',
   valkyrie_wings: 'assets/items/valkyrie_starter/tripo_wing_v1/fitted_patch_v3/wings-armor-fit.glb',
   valkyrie_top: 'assets/items/valkyrie_starter/tripo_top_v1/fitted_v11/top_female_valkyrie.glb',
   valkyrie_bottom: 'assets/items/valkyrie_starter/tripo_bottom_v1/fitted_v8/bottom_female_valkyrie.glb',
@@ -164,7 +165,7 @@ for (const [name, source] of Object.entries(sources)) {
   const doc = await io.read(source)
   const scene = doc.getRoot().listScenes()[0]
   const metadata = { ...scene.getExtras(), female_part: name }
-  if (!/^(base|((barbarian|valkyrie)_)?hair|valkyrie_wings|rogue_garters)$/.test(name)) {
+  if (!/^(base|((barbarian|valkyrie|long_bangs)_)?hair|valkyrie_wings|rogue_garters)$/.test(name)) {
     const path = name === 'valkyrie_top' ? source.replace('fitted_v11/top_female_valkyrie.glb', 'fitted_v8/body-occlusion.json') : source.replace(/[^/]+$/, 'body-occlusion.json')
     record(path)
     metadata.body_mask = JSON.parse(readFileSync(path))

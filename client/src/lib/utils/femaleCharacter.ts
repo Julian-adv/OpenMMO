@@ -46,12 +46,13 @@ type Helmet = Exclude<Style, 'rogue' | 'caveman' | 'ranger'> | 'brilliance'
 const LAZY_HELMET = 'brilliance_helmet'
 export type FemaleHair = Extract<
   CharacterAppearance['hair'],
-  'bob' | 'long' | 'ponytail'
+  'bob' | 'long' | 'ponytail' | 'long_bangs'
 >
 export const FEMALE_HAIR_PARTS: Record<FemaleHair, string> = {
   bob: 'hair',
   long: 'valkyrie_hair',
   ponytail: 'ranger_hair',
+  long_bangs: 'long_bangs_hair',
 }
 const HAIR_PART_NAMES = new Set([
   ...Object.values(FEMALE_HAIR_PARTS),

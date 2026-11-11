@@ -32,11 +32,15 @@ pub enum HairStyle {
     Bob,
     Long,
     Ponytail,
+    LongBangs,
 }
 
 impl HairStyle {
     fn is_female(self) -> bool {
-        matches!(self, Self::Bob | Self::Long | Self::Ponytail)
+        matches!(
+            self,
+            Self::Bob | Self::Long | Self::Ponytail | Self::LongBangs
+        )
     }
 
     fn female_default(class: &CharacterClass) -> Self {
@@ -50,8 +54,9 @@ impl HairStyle {
     /// Mean albedo of the female hair texture, so legacy rows keep their original look.
     fn texture_color(self) -> AppearanceColor {
         AppearanceColor(match self {
-            Self::Long => 0xd2bda2,
+            Self::Long => 0xcbac91,
             Self::Ponytail => 0x432e26,
+            Self::LongBangs => 0xdbb99d,
             _ => 0xceb294,
         })
     }

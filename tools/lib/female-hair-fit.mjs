@@ -27,7 +27,7 @@ export function femaleHairFit(file = target) {
       }
       let input
       try { input = JSON.parse(raw) } catch { return reply(400, { error: '저장값을 읽을 수 없습니다.' }) }
-      if (!['default', 'custom', 'ranger', 'chic'].includes(input?.face) || !['bob', 'long', 'ponytail'].includes(input?.hair))
+      if (!['default', 'custom', 'ranger', 'chic'].includes(input?.face) || !['bob', 'long', 'ponytail', 'long_bangs'].includes(input?.hair))
         return reply(400, { error: '얼굴과 헤어를 확인하세요.' })
       const fit = {}
       for (const [key, [min, max]] of Object.entries(ranges)) {
