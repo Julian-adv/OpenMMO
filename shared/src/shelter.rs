@@ -225,6 +225,41 @@ mod tests {
     }
 
     #[test]
+    fn union_hall_walls_block_and_portal_opens() {
+        let p = FurniturePlacement {
+            id: 121,
+            type_id: "union_hall".into(),
+            x: -1445.0658,
+            y: 1.0128,
+            z: 4797.3719,
+            rotation_deg: 270.0,
+            floor_level: 0,
+        };
+        let cache = cache(&p);
+        for (ax, az, bx, bz) in [
+            (5.0, 0.0, 7.0, 0.0),
+            (-5.0, 3.0, -7.0, 3.0),
+            (0.0, -7.5, 0.0, -9.5),
+            (4.0, 7.5, 4.0, 9.5),
+        ] {
+            let (x0, z0) = world(&p, ax, az);
+            let (x1, z1) = world(&p, bx, bz);
+            assert!(
+                is_movement_blocked(&cache, x0, z0, x1, z1, 0, Some(p.y)),
+                "out {ax},{az}"
+            );
+            assert!(
+                is_movement_blocked(&cache, x1, z1, x0, z0, 0, Some(p.y)),
+                "in {ax},{az}"
+            );
+        }
+        let (x0, z0) = world(&p, 0.0, 7.5);
+        let (x1, z1) = world(&p, 0.0, 9.5);
+        assert!(!is_movement_blocked(&cache, x0, z0, x1, z1, 0, Some(p.y)));
+        assert!(!is_movement_blocked(&cache, x1, z1, x0, z0, 0, Some(p.y)));
+    }
+
+    #[test]
     fn pathfinding_detours_through_front_instead_of_cutting_through_canvas() {
         for yaw in [0.0, 90.0, 180.0, 270.0, 45.0] {
             let p = tent(-1881.977, 5517.6353, yaw);
