@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { disposeObjects } from './dispose-objects'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { femaleSeat, femaleSeatOffset } from './female-seat'
@@ -8,6 +9,13 @@ import { femaleUnderwearColor } from './female-underwear-color'
 import { femaleTorchMotions, mirroredSwordGrip } from './female-torch'
 import { poseMainHandProp, poseOffHandProp } from '../lib/utils/handProps'
 import { MODULAR_FEMALE_MODEL_PATH } from '../lib/utils/modelPaths'
+import {
+  bindFemaleFacePart,
+  femaleFacePartPath,
+  markFemaleBase,
+  type FemaleFace,
+} from '../lib/utils/femaleCharacter'
+import { fitFemaleHair } from '../lib/utils/femaleHairFit'
 import { bindModularPart, skinnedParts } from '../lib/utils/modularCharacter'
 import { updateModularPoseCorrectives } from '../lib/utils/modularPoseCorrectives'
 import { femaleOutfitMask } from '../lib/utils/female-outfit-mask'
@@ -66,6 +74,11 @@ export async function showFemaleBase(
     `
     <fieldset id="female-controls" disabled>
       <legend>모델 살펴보기</legend>
+      <label for="female-face">얼굴</label>
+      <select id="female-face">
+        <option value="ranger">기본 얼굴</option>
+        <option value="chic">새 얼굴 (custom)</option>
+      </select>
       <label for="female-hair">헤어</label>
       <select id="female-hair">
         <option value="bob">금발 단발</option>
@@ -341,7 +354,15 @@ export async function showFemaleBase(
     <p class="details">투구·상의·하의·장갑·신발·헤어를 바꿔 착용 상태와 동작을 확인할 수 있습니다.</p>`
   )
   status.textContent = '미리보기 에셋을 준비하는 중…'
-  const loader = new GLTFLoader(new THREE.LoadingManager())
+  const loader = new GLTFLoader(new THREE.LoadingManager()).setMeshoptDecoder(
+    MeshoptDecoder
+  )
+  const faceSelect = document.getElementById('female-face') as HTMLSelectElement
+  const face: FemaleFace =
+    new URLSearchParams(location.search).get('face') === 'chic'
+      ? 'chic'
+      : 'ranger'
+  faceSelect.value = face
   const hairSelect = document.getElementById('female-hair') as HTMLSelectElement
   const requestedHair = new URLSearchParams(location.search).get('hair')
   hairSelect.value =
@@ -367,6 +388,7 @@ export async function showFemaleBase(
     { scene: shield },
     prepared,
     initialHairAsset,
+    facePart,
   ] = await Promise.all([
     loader.loadAsync('/__female-preview/base.glb'),
     loader.loadAsync('/models/weapons/steel_longsword.glb'),
@@ -380,6 +402,7 @@ export async function showFemaleBase(
       }
     }),
     initialHair === 'none' ? null : loader.loadAsync(hairUrl(initialHair)),
+    loader.loadAsync(femaleFacePartPath(face)),
   ])
   const { scene: model, animations } = base
   loader.manager.onProgress = () => {}
@@ -389,12 +412,26 @@ export async function showFemaleBase(
     if (index === -1) animations.push(clip)
     else animations[index] = clip
   }
+  markFemaleBase(base, model, true)
+  bindFemaleFacePart(model, facePart)
   const hairOptions: Record<string, THREE.SkinnedMesh[]> = { none: [] }
   let helmetOutfit = 'none'
   const hairKey = (name: string, helmet = helmetOutfit) =>
     helmet === 'barbarian' && name === 'bob' ? 'barbarian-bob' : name
+  const runtimeHair: Record<string, string> = {
+    bob: 'hair',
+    'barbarian-bob': 'barbarian_hair',
+    warrior: 'valkyrie_hair',
+    long_bangs: 'long_bangs_hair',
+    ranger: 'ranger_hair',
+  }
+  const bindHair = (key: string, source: THREE.Object3D) => {
+    const meshes = bindModularPart(model, source)
+    for (const mesh of meshes) fitFemaleHair(mesh, face, runtimeHair[key])
+    return meshes
+  }
   if (initialHairAsset)
-    hairOptions[initialHair] = bindModularPart(model, initialHairAsset.scene)
+    hairOptions[initialHair] = bindHair(initialHair, initialHairAsset.scene)
   const hairFitControls = document.getElementById('warrior-hair-fit')!
   const hairScale = document.getElementById(
     'warrior-hair-scale'
@@ -513,7 +550,7 @@ export async function showFemaleBase(
           disposeObjects([source])
           return []
         }
-        const meshes = bindModularPart(model, source)
+        const meshes = bindHair(key, source)
         for (const mesh of meshes) mesh.visible = false
         hairOptions[key] = meshes
         if (key === 'warrior') updateHairFit()
@@ -868,6 +905,19 @@ export async function showFemaleBase(
   }
   const underwearColor = femaleUnderwearColor(base)
   const outfitMask = femaleOutfitMask(base)
+  const { female_face_part: facePartMask, female_face_name: faceName } =
+    model.userData
+  outfitMask.register(
+    faceName,
+    {
+      mesh_index: 0,
+      primitive_index: 0,
+      primitive_triangles: facePartMask.body_triangles,
+      hide_triangle_indices: facePartMask.hide_triangle_indices,
+    },
+    skinnedParts(model).find((mesh) => mesh.userData.female_body)
+  )
+  outfitMask.setEquipped(faceName, true)
   let knightGlovesEquipped = false
   let sleeveMaskRegistered = false
   const updateGround = () => {
@@ -2093,6 +2143,19 @@ export async function showFemaleBase(
     })
     document.getElementById('female-stats')!.textContent =
       `${triangles.toLocaleString()}삼각형 · ${bones.length}개 본 · ${animations.length}가지 동작`
+  }
+  faceSelect.onchange = () => {
+    const query = new URLSearchParams(location.search)
+    query.set('face', faceSelect.value)
+    query.set('hair', hairSelect.value)
+    for (const slot of outfitSlots) {
+      const value = (
+        document.getElementById(`female-${slot}`) as HTMLSelectElement
+      ).value
+      if (value === 'none') query.delete(slot)
+      else query.set(slot, value)
+    }
+    location.search = query.toString()
   }
   let appliedHair = hairSelect.value
   hairSelect.onchange = async () => {

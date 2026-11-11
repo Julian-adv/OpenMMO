@@ -29,5 +29,11 @@ node tools/prepare-female-knight.mjs --part brilliance_helmet
 | `brilliance_helmet` | `ranger_hair` (포니테일) | 713 | 2026-11-06 |
 | `helmet` (은빛 기사 투구) | `ranger_hair` (포니테일) | 152 | 2026-11-06 |
 | `barbarian_helmet` (뿔 투구) | `ranger_hair` (포니테일) | 555 | 2026-11-06 |
+| `helmet` (은빛 기사 투구) | `valkyrie_hair` (긴 생머리 · 옆 가르마) | 330 | 2026-11-11 |
+| `helmet` (은빛 기사 투구) | `long_bangs_hair` (긴 생머리 · 앞머리) | 115 | 2026-11-11 |
+| `barbarian_helmet` (뿔 투구) | `valkyrie_hair` (긴 생머리 · 옆 가르마) | 482 | 2026-11-11 |
+| `barbarian_helmet` (뿔 투구) | `long_bangs_hair` (긴 생머리 · 앞머리) | 117 | 2026-11-11 |
 
-2026-11-11 긴 생머리를 [새 메시](modular-female-long-straight-hair.md)로 바꾸면서 `valkyrie_hair` 기록 두 건(은빛 기사 투구 222, 뿔 투구 289)을 지웠다. 삼각형 번호가 새 메시와 맞지 않는다. 새 긴 생머리 두 종은 아직 브러시 기록이 없다.
+2026-11-11 긴 생머리를 [새 메시](modular-female-long-straight-hair.md)로 바꾸면서 옛 `valkyrie_hair` 기록 두 건(은빛 기사 투구 222, 뿔 투구 289)을 지우고 새 메시로 다시 칠했다. 발키리 날개 투구는 두 긴 생머리 모두 가릴 곳이 없었다.
+
+삼각형 단위라 투구 경계에서 지우면 너무 많이 가려지고 되살리면 뚫고 나온다. 폴리곤 자르기나 헤어 밀어 넣기는 TODO에 있다.

@@ -85,7 +85,7 @@ blender -b --python-exit-code 1 --python tools/blender-scripts/review_female_lon
 - 클라이언트: `FEMALE_HAIR_PARTS`, `femaleHairFit.ts`, `appearanceColors.ts`, 생성 화면 선택지와 5개 언어 라벨.
 - 썸네일 `female-hair-long.png`·`female-hair-long-bangs.png`: `render_female_hair_thumbnail.py`로 512² 렌더 후 128²,
   순찰자 얼굴 보정값을 `--hair-move`·`--hair-scale`로 넘겼다. 로컬 렌더이며 새 생성은 없다.
-- 투구 헤어 마스크: 기존 긴 머리용 마스크 두 건은 메시가 달라져 지웠다. [투구 헤어 브러시](female-helmet-hair-brush.md) 참조.
+- 투구 헤어 마스크: 기존 긴 머리용 마스크 두 건은 메시가 달라져 지우고, 은빛 기사 투구와 뿔 투구에 두 긴 생머리 마스크를 새로 칠했다(2026-11-11). [투구 헤어 브러시](female-helmet-hair-brush.md) 참조.
 
 ## 검사와 남은 점
 

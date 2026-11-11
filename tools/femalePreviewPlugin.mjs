@@ -55,7 +55,7 @@ export function femalePreviewPlugin() {
       server.middlewares.use(helmetHairBrush())
       server.middlewares.use(femaleHairFit())
       server.middlewares.use((req, res, next) => {
-        const match = /^\/__female-preview\/(base|bob|warrior|valkyrie)\.glb$|^\/__female-preview\/(animations)\.json$/.exec(req.url?.split('?')[0] ?? '')
+        const match = /^\/__female-preview\/(base|bob|warrior|long_bangs|valkyrie)\.glb$|^\/__female-preview\/(animations)\.json$/.exec(req.url?.split('?')[0] ?? '')
         if (req.method !== 'GET' || !match) return next()
         const name = match[1] ?? match[2]
         if (!Object.hasOwn(sources, name)) return next()

@@ -63,9 +63,8 @@ export async function showFemaleFace(
   const requestedHair =
     params.get('hair') === 'warrior' ? 'long' : params.get('hair')
   hair.value =
-    requestedHair && ['bob', 'long', 'ponytail', 'long_bangs', 'none'].includes(
-      requestedHair
-    )
+    requestedHair &&
+    ['bob', 'long', 'ponytail', 'long_bangs', 'none'].includes(requestedHair)
       ? requestedHair
       : 'bob'
   const reload = () => {
