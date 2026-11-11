@@ -241,6 +241,13 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             }
             Some(format!("[Party] {from}: {message}"))
         }
+        ServerMessage::FamilyChatMessage { from, message } => {
+            let self_name = state.self_player.as_ref().map(|p| p.name.as_str());
+            if Some(from.as_str()) == self_name {
+                return None;
+            }
+            Some(format!("[Family] {from}: {message}"))
+        }
         ServerMessage::SystemMessage { message, .. } => Some(format!("[System] {message}")),
         ServerMessage::ServerAnnouncement { message } => Some(format!("[Announcement] {message}")),
         ServerMessage::ServerNotice { message } => {

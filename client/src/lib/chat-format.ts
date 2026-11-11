@@ -48,6 +48,10 @@ export function partyChatEntry(from: string, message: string): ChatEntry {
   return { text: message, sender: 'party', name: from }
 }
 
+export function familyChatEntry(from: string, message: string): ChatEntry {
+  return { text: message, sender: 'family', name: from }
+}
+
 /** Count unread party lines by stable id, even after older rows are evicted. */
 export function unreadPartyCount(
   entries: Pick<StoredChatEntry, 'sender' | 'name' | 'id'>[],

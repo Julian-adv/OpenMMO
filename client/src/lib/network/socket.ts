@@ -40,6 +40,7 @@ import { resetFences } from '../stores/fenceStore'
 import { resetHousePlacement } from '../stores/housePlacementStore'
 import { resetEstateStorage } from '../stores/estateStorageStore'
 import type { MailboxRef } from '../stores/mailStore'
+import type { NoticeBoardRef } from '../stores/noticeBoardStore'
 import type { FenceEdge } from '../terrain/fenceEdges'
 import type { LandscapingTool } from '../terrain/landscaping'
 import { remotePlayerManager } from '../managers/remotePlayerManager'
@@ -698,42 +699,36 @@ class NetworkManager {
     this.sendMessage({ DeleteMail: { mailbox, letter_id: letterId } })
   }
 
-  sendOpenNoticeBoard(objectId: number) {
-    this.sendMessage({ OpenNoticeBoard: { object_id: objectId } })
+  sendOpenNoticeBoard(board: NoticeBoardRef) {
+    this.sendMessage({ OpenNoticeBoard: { board } })
   }
 
-  sendReadNoticePost(objectId: number, postId: number) {
-    this.sendMessage({
-      ReadNoticePost: { object_id: objectId, post_id: postId },
-    })
+  sendReadNoticePost(board: NoticeBoardRef, postId: number) {
+    this.sendMessage({ ReadNoticePost: { board, post_id: postId } })
   }
 
   sendWriteNoticePost(
-    objectId: number,
+    board: NoticeBoardRef,
     title: string,
     body: string,
     image: string | null,
     position: [number, number]
   ) {
     this.sendMessage({
-      WriteNoticePost: { object_id: objectId, title, body, image, position },
+      WriteNoticePost: { board, title, body, image, position },
     })
   }
 
-  sendPeekNoticeBoard(objectId: number) {
-    this.sendMessage({ PeekNoticeBoard: { object_id: objectId } })
+  sendPeekNoticeBoard(board: NoticeBoardRef) {
+    this.sendMessage({ PeekNoticeBoard: { board } })
   }
 
-  sendRemoveNoticePost(objectId: number, postId: number) {
-    this.sendMessage({
-      RemoveNoticePost: { object_id: objectId, post_id: postId },
-    })
+  sendRemoveNoticePost(board: NoticeBoardRef, postId: number) {
+    this.sendMessage({ RemoveNoticePost: { board, post_id: postId } })
   }
 
-  sendWriteNoticeComment(objectId: number, postId: number, body: string) {
-    this.sendMessage({
-      WriteNoticeComment: { object_id: objectId, post_id: postId, body },
-    })
+  sendWriteNoticeComment(board: NoticeBoardRef, postId: number, body: string) {
+    this.sendMessage({ WriteNoticeComment: { board, post_id: postId, body } })
   }
 
   sendInteractObject(objectType: string, objectId: number) {
@@ -1207,6 +1202,14 @@ class NetworkManager {
   /** Say something to the whole party, wherever its members are. */
   sendPartyChat(message: string) {
     this.sendMessage({ PartyChat: { message } })
+  }
+
+  sendFamilyChat(message: string) {
+    this.sendMessage({ FamilyChat: { message } })
+  }
+
+  sendRequestFamilyStorageLog() {
+    this.sendMessage('RequestFamilyStorageLog')
   }
 
   /** One-shot party-position snapshot for a just-opened map. */

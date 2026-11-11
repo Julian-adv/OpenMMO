@@ -1,7 +1,7 @@
 use super::*;
 use onlinerpg_shared::furniture::FurniturePlacement;
 use onlinerpg_shared::notice_board::{
-    NoticeBoardRefusal, NoticeComment, NoticePost, NoticePostSummary,
+    NoticeBoardRef, NoticeBoardRefusal, NoticeComment, NoticePost, NoticePostSummary,
 };
 use onlinerpg_shared::world::GameDateTime;
 
@@ -43,7 +43,7 @@ fn boards_nearby_and_an_open_post_reach_the_world_state_clipped() {
         .contains("Notice board [board_id 7] at (2.0, 0.0), 2.0m away"));
 
     state.push_event(ServerMessage::NoticeBoard {
-        object_id: 7,
+        board: NoticeBoardRef::Village { object_id: 7 },
         posts: vec![NoticePostSummary {
             id: 4,
             title: "Party wanted".into(),
@@ -72,7 +72,7 @@ fn boards_nearby_and_an_open_post_reach_the_world_state_clipped() {
         })
         .collect::<Vec<_>>();
     state.push_event(ServerMessage::NoticePostView {
-        object_id: 7,
+        board: NoticeBoardRef::Village { object_id: 7 },
         post: NoticePost {
             id: 4,
             title: "Party wanted".into(),

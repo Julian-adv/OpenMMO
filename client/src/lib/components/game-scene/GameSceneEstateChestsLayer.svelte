@@ -12,6 +12,7 @@
     estateFurnitureRenderY,
   } from '../../utils/estateFurnitureModels'
   import { buildShopSignText, getShopSignStyle } from '../../utils/shop-sign'
+  import { mountNoticePapers } from '../../utils/notice-board'
   import { createSelectionBox } from '../../utils/objectSelectionBox'
   import {
     estateFurnitureSelectionMode,
@@ -185,6 +186,8 @@
     }
     if (chest.text && model?.procedural !== 'shopSign')
       visual.userData.objectText = chest.text
+    if (model?.noticeBoard && !moving)
+      mountNoticePapers(visual, { Estate: { furniture_id: chest.id } })
     visual.userData.estateChestId = chest.id
     Object.assign(visual.userData, estateFurnitureInteractionData(chest))
     visual.position.set(
@@ -458,6 +461,10 @@
         networkManager.sendOpenEstateChest(chest.id)
       else if (getObjectDef(definition?.modelId)?.mailbox)
         networkManager.sendOpenMailbox({ Estate: { furniture_id: chest.id } })
+      else if (getObjectDef(definition?.modelId)?.noticeBoard)
+        networkManager.sendOpenNoticeBoard({
+          Estate: { furniture_id: chest.id },
+        })
     }
     const escape = (event: KeyboardEvent) => {
       if (

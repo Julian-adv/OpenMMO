@@ -143,6 +143,13 @@ pub struct NoticeComment {
     pub written_at: GameDateTime,
 }
 
+/// A village board (map editor object) or a family board placed on an estate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum NoticeBoardRef {
+    Village { object_id: u32 },
+    Estate { furniture_id: i64 },
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NoticeBoardRefusal {
@@ -167,6 +174,10 @@ pub enum NoticeBoardRefusal {
     TooManyPosts,
     /// Only the writer removes a post.
     NotYours,
+    /// A family board is for members of the estate's family only.
+    NotFamily,
+    /// The reader's family rank does not allow this on a family board.
+    NoFamilyRank,
     ServerError,
 }
 

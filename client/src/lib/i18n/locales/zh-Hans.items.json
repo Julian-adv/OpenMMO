@@ -434,5 +434,9 @@
   "furniture_mailbox.name": "邮筒",
   "furniture_mailbox.description": "拆封后可在自己的领地放置邮筒。任何人都能在这里寄信和收信。",
   "revenue_stamp.description": "土地登记官出售的手续费印花。用于家族文书：创立和改名各需十张，解散需一张。",
-  "revenue_stamp.name": "印花票"
+  "revenue_stamp.name": "印花票",
+  "family_chest.name": "家族仓库",
+  "family_chest.description": "为家族储存最多200 kg物品的大箱子。放在家族领地上，成员按阶级存取。",
+  "family_board.name": "家族公告板",
+  "family_board.description": "放在家族领地上的公告板。只有该家族的成员可以阅读和发帖。"
 }

@@ -959,7 +959,14 @@ impl GameState {
             return Err("The chest changed. Its contents were refreshed.");
         }
         if !deposits.is_empty() && !state.can_deposit {
-            return Err("Overdue estates can withdraw items but cannot store new ones.");
+            return Err(if state.family {
+                "You cannot store items in this family chest."
+            } else {
+                "Overdue estates can withdraw items but cannot store new ones."
+            });
+        }
+        if !withdrawals.is_empty() && !state.can_withdraw {
+            return Err("Your family rank cannot take items from this chest.");
         }
         let mut character = self
             .get_player_save_data(player_id)
@@ -1105,6 +1112,7 @@ impl GameState {
         let rows = rows_with_inserts(inventory, &inserts);
         drop(inventories);
         let auth = auth.clone();
+        let logged = (deposit_plans.len(), withdrawals.len());
         let deposits = deposit_plans;
         let withdrawals = withdrawals.to_vec();
         let outcome = auth_db(move || {
@@ -1126,6 +1134,16 @@ impl GameState {
         let revision = self
             .finish_bag_write(player_id, hold, &inserts, outcome)
             .await?;
+        if state.family {
+            let player = self.player_name_of(player_id).await;
+            tracing::info!(
+                %player,
+                chest_id,
+                deposits = logged.0,
+                withdrawals = logged.1,
+                "family chest transfer"
+            );
+        }
         let furniture = {
             let mut chests = self.estate_chests.write().await;
             chests.by_id.get_mut(&chest_id).map(|chest| {

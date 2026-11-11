@@ -143,6 +143,8 @@ export type NoticeBoardRefusal =
   | 'board_full'
   | 'too_many_posts'
   | 'not_yours'
+  | 'not_family'
+  | 'no_family_rank'
   | 'server_error'
 
 export type NoticeBoardView =
@@ -150,8 +152,22 @@ export type NoticeBoardView =
   | { kind: 'post'; post: NoticePost; comments: NoticeComment[] }
   | { kind: 'write' }
 
+/** A village board (map editor object) or a family board on an estate. */
+export type NoticeBoardRef =
+  | { Village: { object_id: number } }
+  | { Estate: { furniture_id: number } }
+
+/** Stable map key for a board reference. */
+export function noticeBoardKey(board: NoticeBoardRef): string {
+  return 'Village' in board
+    ? `village:${board.Village.object_id}`
+    : `estate:${board.Estate.furniture_id}`
+}
+
+export const isFamilyBoard = (board: NoticeBoardRef) => 'Estate' in board
+
 export interface NoticeBoardSession {
-  objectId: number
+  board: NoticeBoardRef
   view: NoticeBoardView
   posts: NoticePostSummary[]
   refusal: NoticeBoardRefusal | null
@@ -161,8 +177,8 @@ export interface NoticeBoardSession {
 
 export const noticeBoard = writable<NoticeBoardSession | null>(null)
 
-/** Papers per board object id, for the board model. */
-export const noticeBoardPapers = writable<Map<number, NoticePaper[]>>(new Map())
+/** Papers per board (`noticeBoardKey`), for the board model. */
+export const noticeBoardPapers = writable<Map<string, NoticePaper[]>>(new Map())
 
 const samePaper = (a: NoticePaper, b: NoticePaper) =>
   a.id === b.id &&
@@ -172,15 +188,16 @@ const samePaper = (a: NoticePaper, b: NoticePaper) =>
   a.expired === b.expired
 
 /** Keeps the old list when nothing changed, so the board model is not rebuilt. */
-function setPapers(objectId: number, papers: NoticePaper[]) {
+function setPapers(board: NoticeBoardRef, papers: NoticePaper[]) {
+  const key = noticeBoardKey(board)
   noticeBoardPapers.update((all) => {
-    const old = all.get(objectId)
+    const old = all.get(key)
     if (
       old?.length === papers.length &&
       old.every((p, i) => samePaper(p, papers[i]))
     )
       return all
-    return new Map(all).set(objectId, papers)
+    return new Map(all).set(key, papers)
   })
 }
 
@@ -197,35 +214,39 @@ function papersOf(posts: NoticePostSummary[]): NoticePaper[] {
 }
 
 export const handleNoticeBoardPapers = (data: {
-  object_id: number
+  board: NoticeBoardRef
   papers: NoticePaper[]
-}) => setPapers(data.object_id, data.papers)
+}) => setPapers(data.board, data.papers)
 
 export function closeNoticeBoard() {
   noticeBoard.set(null)
 }
 
 export function handleNoticeBoard(data: {
-  object_id: number
+  board: NoticeBoardRef
   posts: NoticePostSummary[]
 }) {
   noticeBoard.set({
-    objectId: data.object_id,
+    board: data.board,
     view: { kind: 'list' },
     posts: data.posts,
     refusal: null,
     pending: false,
   })
-  setPapers(data.object_id, papersOf(data.posts))
+  setPapers(data.board, papersOf(data.posts))
 }
 
 export function handleNoticePostView(data: {
-  object_id: number
+  board: NoticeBoardRef
   post: NoticePost
   comments: NoticeComment[]
 }) {
   noticeBoard.update((session) => {
-    if (!session || session.objectId !== data.object_id) return session
+    if (
+      !session ||
+      noticeBoardKey(session.board) !== noticeBoardKey(data.board)
+    )
+      return session
     const { id, title, author, written_at, x, y, image, expired } = data.post
     const summary: NoticePostSummary = {
       id,
@@ -246,7 +267,7 @@ export function handleNoticePostView(data: {
     const index = posts.findIndex((p) => p.id === id)
     if (index >= 0) posts[index] = summary
     else posts.unshift(summary)
-    setPapers(session.objectId, papersOf(posts))
+    setPapers(session.board, papersOf(posts))
     return {
       ...session,
       view: { kind: 'post', post: data.post, comments: data.comments },

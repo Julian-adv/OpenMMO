@@ -3,7 +3,10 @@ use super::{AuthError, AuthService, CharacterSaveData, ItemRow};
 use onlinerpg_shared::estate_storage::{
     estate_storage_def, EstateChest, EstateChestState, EstateStorageDefinition,
 };
-use onlinerpg_shared::family::permission;
+use onlinerpg_shared::family::{
+    is_family_furniture, permission, FamilyStorageEntry, FAMILY_BOARD_ITEM, FAMILY_CHEST_ITEM,
+    FAMILY_CHEST_LIMIT, FAMILY_STORAGE_LOG_KEPT, FAMILY_STORAGE_LOG_SHOWN,
+};
 use onlinerpg_shared::fence::FencePlot;
 use onlinerpg_shared::inventory::ItemInstance;
 use onlinerpg_shared::messages::BagLineItem;
@@ -27,10 +30,140 @@ fn plot_key(x: f32, z: f32) -> (i32, i32, u8) {
     )
 }
 
-/// Family permission that covers a furnishing. Storage chests have none:
-/// their contents are personal, so they stay with the estate's own account.
+/// Family permission that covers placing and moving a furnishing. Storage
+/// chests have none: their contents are personal, so they stay with the
+/// estate's own account.
 fn family_use(definition: &EstateStorageDefinition) -> Option<u32> {
-    (definition.capacity_kg == 0.0).then_some(permission::PLACE_FURNITURE)
+    (definition.capacity_kg == 0.0 || is_family_furniture(&definition.id))
+        .then_some(permission::PLACE_FURNITURE)
+}
+
+/// What a character may do with a storage chest.
+struct StorageAccess {
+    revision: u64,
+    item_def_id: String,
+    can_deposit: bool,
+    can_withdraw: bool,
+    family_id: Option<i64>,
+}
+
+/// A family chest's contents belong to its family: members use it by rank,
+/// deposits only while it stands on an active estate of that family. Once the
+/// family is dissolved, only `owner_id` (its last head) may empty it.
+fn family_chest_access(
+    conn: &Connection,
+    chest_id: i64,
+    character_id: i64,
+) -> Result<Option<StorageAccess>, rusqlite::Error> {
+    let row = conn
+        .query_row(
+            "SELECT c.revision, c.item_def_id, c.family_id, c.owner_id,
+                    e.family_id IS c.family_id AND COALESCE(e.missed, 1)=0,
+                    (SELECT r.permissions FROM family_members m
+                     JOIN family_ranks r ON r.family_id=m.family_id AND r.rank=m.rank
+                     WHERE m.character_id=?2 AND m.family_id=c.family_id)
+             FROM estate_chests c LEFT JOIN land_estates e ON e.id=c.estate_id
+             WHERE c.id=?1",
+            params![chest_id, character_id],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)? as u64,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<i64>>(2)?,
+                    row.get::<_, i64>(3)?,
+                    row.get::<_, bool>(4)?,
+                    row.get::<_, Option<u32>>(5)?,
+                ))
+            },
+        )
+        .optional()?;
+    let Some((revision, item_def_id, family_id, owner_id, attached, permissions)) = row else {
+        return Ok(None);
+    };
+    let (can_deposit, can_withdraw) = match (family_id, permissions) {
+        (None, _) if owner_id == character_id => (false, true),
+        (Some(_), Some(bits)) => (
+            attached && bits & permission::STORAGE_DEPOSIT != 0,
+            bits & permission::STORAGE_WITHDRAW != 0,
+        ),
+        _ => return Ok(None),
+    };
+    Ok(Some(StorageAccess {
+        revision,
+        item_def_id,
+        can_deposit,
+        can_withdraw,
+        family_id,
+    }))
+}
+
+fn storage_access(
+    conn: &Connection,
+    chest_id: i64,
+    character_id: i64,
+) -> Result<Option<StorageAccess>, rusqlite::Error> {
+    let item_def_id: Option<String> = conn
+        .query_row(
+            "SELECT item_def_id FROM estate_chests WHERE id=?1",
+            [chest_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if item_def_id.as_deref() == Some(FAMILY_CHEST_ITEM) {
+        return family_chest_access(conn, chest_id, character_id);
+    }
+    Ok(
+        chest_access(conn, chest_id, character_id, None)?.map(|(revision, active, item_def_id)| {
+            StorageAccess {
+                revision,
+                item_def_id,
+                can_deposit: active,
+                can_withdraw: true,
+                family_id: None,
+            }
+        }),
+    )
+}
+
+/// The family that family furniture placed at `estate_id` by `character_id`
+/// joins, or why it cannot go there.
+fn family_furniture_home(
+    tx: &Transaction<'_>,
+    estate_id: i64,
+    character_id: i64,
+    item_def_id: &str,
+) -> Result<Result<(i64, i64), &'static str>, rusqlite::Error> {
+    let estate: (Option<i64>, i64) = tx.query_row(
+        "SELECT family_id, owner_id FROM land_estates WHERE id=?1",
+        [estate_id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+    let member_of: Option<i64> = tx
+        .query_row(
+            "SELECT family_id FROM family_members WHERE character_id=?1",
+            [character_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let (Some(family_id), estate_owner) = estate else {
+        return Ok(Err(
+            "Family furniture goes on an estate attached to a family.",
+        ));
+    };
+    if member_of != Some(family_id) {
+        return Ok(Err("Only members of the estate's family may place this."));
+    }
+    if item_def_id == FAMILY_CHEST_ITEM {
+        let chests: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM estate_chests WHERE family_id=?1 AND item_def_id=?2",
+            params![family_id, FAMILY_CHEST_ITEM],
+            |row| row.get(0),
+        )?;
+        if chests >= FAMILY_CHEST_LIMIT {
+            return Ok(Err("Your family already has four family chests."));
+        }
+    }
+    Ok(Ok((family_id, estate_owner)))
 }
 
 fn furniture_family_use(
@@ -122,6 +255,38 @@ fn chest_access(
         |row| Ok((row.get::<_, i64>(0)? as u64, row.get(1)?, row.get(2)?)),
     )
     .optional()
+}
+
+fn log_family_storage(
+    tx: &Transaction<'_>,
+    family_id: i64,
+    chest_id: i64,
+    character: &CharacterSaveData,
+    lines: &[(String, i64)],
+) -> Result<(), rusqlite::Error> {
+    let at = super::unix_now();
+    let mut insert = tx.prepare_cached(
+        "INSERT INTO family_storage_log
+         (family_id, chest_id, character_id, character_name, item_def_id, quantity, at)
+         VALUES (?1, ?2, ?3, (SELECT character_name FROM characters WHERE id=?3), ?4, ?5, ?6)",
+    )?;
+    for (item_def_id, quantity) in lines {
+        insert.execute(params![
+            family_id,
+            chest_id,
+            character.character_id,
+            item_def_id,
+            quantity,
+            at
+        ])?;
+    }
+    tx.execute(
+        "DELETE FROM family_storage_log WHERE family_id=?1 AND id <= (
+            SELECT id FROM family_storage_log WHERE family_id=?1
+            ORDER BY id DESC LIMIT 1 OFFSET ?2)",
+        params![family_id, FAMILY_STORAGE_LOG_KEPT],
+    )?;
+    Ok(())
 }
 
 fn read_items(conn: &Connection, chest_id: i64) -> Result<Vec<ItemInstance>, rusqlite::Error> {
@@ -249,7 +414,80 @@ impl AuthService {
         if !Self::table_columns(conn, "estate_chests")?.contains("text") {
             conn.execute("ALTER TABLE estate_chests ADD COLUMN text TEXT", [])?;
         }
+        if !Self::table_columns(conn, "estate_chests")?.contains("family_id") {
+            conn.execute("ALTER TABLE estate_chests ADD COLUMN family_id INTEGER", [])?;
+        }
+        conn.execute_batch(
+            "CREATE INDEX IF NOT EXISTS idx_estate_chests_family
+                ON estate_chests(family_id) WHERE family_id IS NOT NULL;
+             CREATE TABLE IF NOT EXISTS family_storage_log (
+                id INTEGER PRIMARY KEY,
+                family_id INTEGER NOT NULL,
+                chest_id INTEGER NOT NULL,
+                character_id INTEGER NOT NULL,
+                character_name TEXT NOT NULL,
+                item_def_id TEXT NOT NULL,
+                quantity INTEGER NOT NULL,
+                at INTEGER NOT NULL
+             );
+             CREATE INDEX IF NOT EXISTS idx_family_storage_log_family
+                ON family_storage_log(family_id, id);",
+        )?;
         Ok(())
+    }
+
+    /// The rank permissions of `character_id` at a family board, when they
+    /// belong to its family and the board stands on that family's estate.
+    pub fn family_board_permissions(
+        &self,
+        furniture_id: i64,
+        character_id: i64,
+    ) -> Result<Option<u32>, AuthError> {
+        let conn = self.open_connection()?;
+        Ok(conn
+            .query_row(
+                "SELECT r.permissions FROM estate_chests c
+                 JOIN land_estates e ON e.id=c.estate_id AND e.family_id=c.family_id
+                 JOIN family_members m ON m.family_id=c.family_id AND m.character_id=?2
+                 JOIN family_ranks r ON r.family_id=m.family_id AND r.rank=m.rank
+                 WHERE c.id=?1 AND c.item_def_id=?3",
+                params![furniture_id, character_id, FAMILY_BOARD_ITEM],
+                |row| row.get(0),
+            )
+            .optional()?)
+    }
+
+    /// The newest family chest movements, for a member of the family.
+    pub fn family_storage_log(
+        &self,
+        character_id: i64,
+    ) -> Result<Option<Vec<FamilyStorageEntry>>, AuthError> {
+        let conn = self.open_connection()?;
+        let family_id: Option<i64> = conn
+            .query_row(
+                "SELECT family_id FROM family_members WHERE character_id=?1",
+                [character_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let Some(family_id) = family_id else {
+            return Ok(None);
+        };
+        let mut stmt = conn.prepare_cached(
+            "SELECT character_name, item_def_id, quantity, at FROM family_storage_log
+             WHERE family_id=?1 ORDER BY id DESC LIMIT ?2",
+        )?;
+        let entries = stmt
+            .query_map(params![family_id, FAMILY_STORAGE_LOG_SHOWN as i64], |row| {
+                Ok(FamilyStorageEntry {
+                    character_name: row.get(0)?,
+                    item_def_id: row.get(1)?,
+                    quantity: row.get(2)?,
+                    at: row.get(3)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Some(entries))
     }
 
     pub(crate) fn estate_furniture_ids_for_owner(
@@ -360,19 +598,30 @@ impl AuthService {
                 "The whole furnishing must be inside your active estate.",
             ));
         };
+        // Family furniture belongs to the estate's owner, so it outlives the
+        // member who placed it.
+        let (family_id, owner_id) = if is_family_furniture(&item_def_id) {
+            match family_furniture_home(&tx, estate_id, character.character_id, &item_def_id)? {
+                Ok((family, owner)) => (Some(family), owner),
+                Err(reason) => return Ok(Err(reason)),
+            }
+        } else {
+            (None, character.character_id)
+        };
         tx.execute(
             "INSERT INTO estate_chests
-             (estate_id,owner_id,item_def_id,x,y,z,rotation_deg,floor_level)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
+             (estate_id,owner_id,item_def_id,x,y,z,rotation_deg,floor_level,family_id)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
             params![
                 estate_id,
-                character.character_id,
+                owner_id,
                 item_def_id,
                 position.x,
                 position.y,
                 position.z,
                 rotation_deg,
-                floor_level
+                floor_level,
+                family_id
             ],
         )?;
         let id = tx.last_insert_rowid();
@@ -382,7 +631,7 @@ impl AuthService {
         Ok(Ok(EstateChest {
             id,
             estate_id,
-            owner_id: character.character_id,
+            owner_id,
             item_def_id,
             position,
             rotation_deg,
@@ -422,6 +671,15 @@ impl AuthService {
                 "The whole furnishing must be inside your active estate.",
             ));
         };
+        let stays_with_family: bool = tx.query_row(
+            "SELECT c.family_id IS NULL OR c.family_id IS e.family_id
+             FROM estate_chests c, land_estates e WHERE c.id=?1 AND e.id=?2",
+            params![furniture_id, estate_id],
+            |row| row.get(0),
+        )?;
+        if !stays_with_family {
+            return Ok(Err("Family furniture stays on its family's estates."));
+        }
         tx.execute(
             "UPDATE estate_chests SET estate_id=?2,x=?3,y=?4,z=?5,rotation_deg=?6,
              floor_level=?7,revision=revision+1 WHERE id=?1",
@@ -464,13 +722,12 @@ impl AuthService {
         character_id: i64,
     ) -> Result<Result<EstateChestState, &'static str>, AuthError> {
         let conn = self.open_connection()?;
-        let Some((revision, can_deposit, item_def_id)) =
-            chest_access(&conn, chest_id, character_id, None)?
-        else {
+        let Some(access) = storage_access(&conn, chest_id, character_id)? else {
             return Ok(Err(
                 "You do not own this storage chest, and it is not abandoned.",
             ));
         };
+        let item_def_id = access.item_def_id;
         let Some(definition) = estate_storage_def(&item_def_id) else {
             return Ok(Err("This storage chest has an unknown type."));
         };
@@ -479,10 +736,12 @@ impl AuthService {
         }
         Ok(Ok(EstateChestState {
             chest_id,
+            family: item_def_id == FAMILY_CHEST_ITEM,
             item_def_id,
-            revision,
+            revision: access.revision,
             max_weight: definition.max_weight(),
-            can_deposit,
+            can_deposit: access.can_deposit,
+            can_withdraw: access.can_withdraw,
             items: read_items(&conn, chest_id)?,
         }))
     }
@@ -498,32 +757,38 @@ impl AuthService {
     ) -> Result<Result<u64, &'static str>, AuthError> {
         let mut conn = self.open_connection()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let Some((revision, active, _)) =
-            chest_access(&tx, chest_id, character.character_id, None)?
-        else {
+        let Some(access) = storage_access(&tx, chest_id, character.character_id)? else {
             return Ok(Err(
                 "You do not own this storage chest, and it is not abandoned.",
             ));
         };
-        if !deposits.is_empty() && !active {
-            return Ok(Err(
-                "Overdue estates can withdraw items but cannot store new ones.",
-            ));
+        if !deposits.is_empty() && !access.can_deposit {
+            return Ok(Err(if access.family_id.is_some() {
+                "You cannot store items in this family chest."
+            } else {
+                "Overdue estates can withdraw items but cannot store new ones."
+            }));
         }
+        if !withdrawals.is_empty() && !access.can_withdraw {
+            return Ok(Err("Your family rank cannot take items from this chest."));
+        }
+        let revision = access.revision;
+        let mut log: Vec<(String, i64)> = Vec::new();
         if revision != expected_revision {
             return Ok(Err("The chest changed. Its contents were refreshed."));
         }
         for withdrawal in withdrawals {
-            let stored: Option<u32> = tx
+            let stored: Option<(u32, String)> = tx
                 .query_row(
-                    "SELECT quantity FROM estate_chest_items WHERE id=?1 AND chest_id=?2",
+                    "SELECT quantity, item_def_id FROM estate_chest_items WHERE id=?1 AND chest_id=?2",
                     params![withdrawal.instance_id as i64, chest_id],
-                    |row| Ok(row.get::<_, i64>(0)? as u32),
+                    |row| Ok((row.get::<_, i64>(0)? as u32, row.get(1)?)),
                 )
                 .optional()?;
-            let Some(stored) = stored else {
+            let Some((stored, item_def_id)) = stored else {
                 return Ok(Err("An item is no longer in the chest."));
             };
+            log.push((item_def_id, -i64::from(withdrawal.qty)));
             if withdrawal.qty == 0 || withdrawal.qty > stored {
                 return Ok(Err("Invalid storage quantity."));
             }
@@ -541,6 +806,7 @@ impl AuthService {
         }
         for deposit in deposits {
             let item = &deposit.item;
+            log.push((item.item_def_id.clone(), i64::from(deposit.quantity)));
             let matching: Option<i64> = if deposit.stackable {
                 tx.query_row(
                     "SELECT id FROM estate_chest_items WHERE chest_id=?1 AND item_def_id=?2
@@ -590,6 +856,9 @@ impl AuthService {
             "UPDATE estate_chests SET revision=?2 WHERE id=?1",
             params![chest_id, next],
         )?;
+        if let Some(family_id) = access.family_id {
+            log_family_storage(&tx, family_id, chest_id, character, &log)?;
+        }
         Self::write_character_states(&tx, std::slice::from_ref(character))?;
         Self::replace_inventories(&tx, [(character.character_id, inventory)])?;
         tx.commit()?;

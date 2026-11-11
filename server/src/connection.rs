@@ -1996,24 +1996,22 @@ async fn handle_client_message(
             }
         }
 
-        ClientMessage::OpenNoticeBoard { object_id } => {
+        ClientMessage::OpenNoticeBoard { board } => {
             if let Some(id) = &state.require_in_game("open notice board") {
-                game_state
-                    .open_notice_board(id, object_id, auth_service)
-                    .await;
+                game_state.open_notice_board(id, board, auth_service).await;
             }
         }
 
-        ClientMessage::ReadNoticePost { object_id, post_id } => {
+        ClientMessage::ReadNoticePost { board, post_id } => {
             if let Some(id) = &state.require_in_game("read notice post") {
                 game_state
-                    .read_notice_post(id, object_id, post_id, auth_service)
+                    .read_notice_post(id, board, post_id, auth_service)
                     .await;
             }
         }
 
         ClientMessage::WriteNoticePost {
-            object_id,
+            board,
             title,
             body,
             image,
@@ -2023,7 +2021,7 @@ async fn handle_client_message(
                 game_state
                     .write_notice_post(
                         id,
-                        object_id,
+                        board,
                         &title,
                         &body,
                         image.as_deref(),
@@ -2034,11 +2032,9 @@ async fn handle_client_message(
             }
         }
 
-        ClientMessage::PeekNoticeBoard { object_id } => {
+        ClientMessage::PeekNoticeBoard { board } => {
             if let Some(id) = &state.require_in_game("peek notice board") {
-                game_state
-                    .peek_notice_board(id, object_id, auth_service)
-                    .await;
+                game_state.peek_notice_board(id, board, auth_service).await;
             }
         }
 
@@ -2085,21 +2081,21 @@ async fn handle_client_message(
         }
 
         ClientMessage::WriteNoticeComment {
-            object_id,
+            board,
             post_id,
             body,
         } => {
             if let Some(id) = &state.require_in_game("write notice comment") {
                 game_state
-                    .write_notice_comment(id, object_id, post_id, &body, auth_service)
+                    .write_notice_comment(id, board, post_id, &body, auth_service)
                     .await;
             }
         }
 
-        ClientMessage::RemoveNoticePost { object_id, post_id } => {
+        ClientMessage::RemoveNoticePost { board, post_id } => {
             if let Some(id) = &state.require_in_game("remove notice post") {
                 game_state
-                    .remove_notice_post(id, object_id, post_id, auth_service)
+                    .remove_notice_post(id, board, post_id, auth_service)
                     .await;
             }
         }
@@ -2857,6 +2853,18 @@ async fn handle_client_message(
         ClientMessage::PartySetLoot { shared } => {
             if let Some(id) = &state.player_id {
                 game_state.set_party_loot(id, Some(shared)).await;
+            }
+        }
+
+        ClientMessage::RequestFamilyStorageLog => {
+            if let Some(id) = &state.player_id {
+                game_state.send_family_storage_log(id, auth_service).await;
+            }
+        }
+
+        ClientMessage::FamilyChat { message } => {
+            if let Some(id) = &state.player_id {
+                game_state.send_family_chat(id, message).await;
             }
         }
 

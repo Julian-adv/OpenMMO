@@ -1,6 +1,6 @@
 # 가문 시스템
 
-> 상태: 1차(가문 기본·영지 공유) 구현됨, 프로토콜 144 (2026-11-10). 미배포. 2차·3차는 구현 전.
+> 상태: 1차(가문 기본·영지 공유) 구현됨, 프로토콜 144 (2026-11-10). 2차(채팅·창고·게시판) 구현됨, 프로토콜 146 (2026-11-11), 미배포. 3차는 구현 전.
 
 영지를 가진 플레이어가 가문을 세우고, 다른 플레이어를 받아들여 이름·영지·문장·채팅·게시판·창고를 함께 쓴다.
 
@@ -175,7 +175,8 @@
 
 마을 은행이 없으므로 영지 궤짝 체계에 얹는다.
 
-- `estate_storage.csv`에 `family_chest`를 추가한다. 가문 영지에만 놓을 수 있다.
+- `estate_storage.csv`에 `family_chest`를 추가한다. 가문 영지에만 놓을 수 있다. 가구 상점에는 진열대가 필요해서 Aldwin이 판다 (6,000c).
+- 놓을 때 영지의 `family_id`를 `estate_chests.family_id`에 적고, 소유자(`owner_id`)는 놓은 가문원이 아니라 영지 소유 캐릭터로 둔다. 놓은 사람이 탈퇴·삭제돼도 창고가 남는다. 가문 가구는 같은 가문의 영지 안에서만 옮긴다.
 - 용량: 200kg (`storage_chest`는 50kg). 개수는 가문당 4개.
 - 열기: 3m 이내, 해당 가문원. 넣기 `STORAGE_DEPOSIT`, 꺼내기 `STORAGE_WITHDRAW`.
 - 입출고 기록을 남긴다 (`family_storage_log`). 가문원이 창에서 최근 200건을 본다. 서버 로그에도 한 줄 남긴다.
@@ -183,7 +184,7 @@
 - 가문 창고의 내용물은 가문 것이다. 영지 소유자라도 가문 권한 없이는 꺼낼 수 없다.
 - 영지 소유자는 그 영지의 가문 창고가 모두 비어 있어야 영지를 가문에서 뗄 수 있다.
 - 추방·압류로 영지가 떨어지면 그 영지의 가문 창고는 꺼내기 전용이 된다. `STORAGE_WITHDRAW` 권한이 있는 가문원이 찾아가 꺼낸다. 비면 영지 소유자가 회수한다.
-- 가문이 해산되면 남은 내용물은 마지막 가주 캐릭터만 꺼낼 수 있다.
+- 가문이 해산되면 남은 내용물은 마지막 가주 캐릭터만 꺼낼 수 있다 (`family_id`를 비우고 `owner_id`를 가주로). 캐릭터 삭제로 가문원이 모두 사라져 해산되면 영지 소유 캐릭터가 꺼낸다.
 - 영지가 사라진 궤짝을 누구나 여는 기존 규칙은 가문 창고에 적용하지 않는다.
 
 ## 10. 가문 채팅
@@ -195,8 +196,9 @@
 
 ## 11. 가문 게시판
 
-- 기존 게시판은 맵 에디터가 놓는 지역 오브젝트(`BoardKey { rx, rz, object_id }`)다. 가문 게시판은 플레이어가 놓는 가구(`family_board`)로 추가한다.
-- 게시판 식별자에 가구 id 변형을 추가하고 `notice_posts`/`notice_comments`를 그대로 쓴다.
+- 기존 게시판은 맵 에디터가 놓는 지역 오브젝트(`BoardKey { rx, rz, object_id }`)다. 가문 게시판은 플레이어가 놓는 가구(`family_board`, Aldwin 2,000c)로 추가한다.
+- 게시판 식별자는 `NoticeBoardRef { Village | Estate }`다. 저장은 `notice_posts`/`notice_comments`를 그대로 쓰고, 가문 게시판은 `BoardKey::estate(furniture_id)`(어느 지역 파일도 쓰지 않는 `rx = i32::MIN`) 아래 둔다.
+- 글쓰기에 게시 용지가 들지 않는다.
 - 읽기·쓰기·댓글은 그 영지의 가문원만. 서버가 목록 요청 단계에서 거른다.
 - 글 내리기: 글쓴이, `BOARD_MODERATE`.
 - 한도는 `shared/src/notice_board.rs` 값을 쓴다. 가문 게시판은 30일 만료가 없고, 게시판당 50건에서 오래된 글부터 밀린다.
@@ -263,15 +265,19 @@ CREATE INDEX IF NOT EXISTS idx_land_estates_family ON land_estates(family_id) WH
 
 ```sql
 CREATE TABLE IF NOT EXISTS family_storage_log (
-    id            INTEGER PRIMARY KEY,
-    family_id     INTEGER NOT NULL,
-    chest_id      INTEGER NOT NULL,
-    character_id  INTEGER NOT NULL,
-    item_id       TEXT NOT NULL,
-    quantity      INTEGER NOT NULL,
-    at            INTEGER NOT NULL
+    id              INTEGER PRIMARY KEY,
+    family_id       INTEGER NOT NULL,
+    chest_id        INTEGER NOT NULL,
+    character_id    INTEGER NOT NULL,
+    character_name  TEXT NOT NULL,
+    item_def_id     TEXT NOT NULL,
+    quantity        INTEGER NOT NULL,
+    at              INTEGER NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_family_storage_log_family ON family_storage_log(family_id, at);
+CREATE INDEX IF NOT EXISTS idx_family_storage_log_family ON family_storage_log(family_id, id);
+
+ALTER TABLE estate_chests ADD COLUMN family_id INTEGER;
+CREATE INDEX IF NOT EXISTS idx_estate_chests_family ON estate_chests(family_id) WHERE family_id IS NOT NULL;
 ```
 
 가주는 단계 0인 가문원이다. 따로 저장하지 않는다. 캐릭터·계정 삭제로 가문원 행이 연쇄 삭제되면 `settle_families`가 가주 없는 가문에 다음 순서를 올리고, 가문원 없는 가문을 해산하고, 계정 가문원이 없는 영지를 뗀다.
@@ -311,11 +317,15 @@ CREATE INDEX IF NOT EXISTS idx_family_storage_log_family ON family_storage_log(f
 
 - `Player` 끝에 `family` 필드 추가.
 
-### 2차·3차 (예정)
+### 2차 (v146, 구현됨)
 
 - `FamilyChat { message }` → `FamilyChatMessage { from, message }`
-- `RequestFamilyStorageLog { before }` → `FamilyStorageLog { entries }`
-- 게시판 메시지의 게시판 식별자에 가구 id 변형 추가.
+- `RequestFamilyStorageLog` → `FamilyStorageLog { entries }` (최근 200건, 페이지 없음)
+- `EstateChestState`에 `can_withdraw`, `family`.
+- 게시판 메시지의 `object_id`를 `board: NoticeBoardRef`로 바꿈 (`TakeDownNotices` 제외). 거절 사유 `not_family`, `no_family_rank`.
+
+### 3차 (예정)
+
 - `SetFamilyEmblem { texture, color }`
 - `ProposeFamilyMerge { head_name, keep_name, keep_emblem, keep_head }`, `RespondFamilyMerge { accept }` → `FamilyMergeProposal { ... }`
 - 가구 스폰 메시지에 깃발용 문장 해시·색 추가.
@@ -350,11 +360,18 @@ CREATE INDEX IF NOT EXISTS idx_family_storage_log_family ON family_storage_log(f
 - agent-client는 주변 플레이어의 가문 이름을 인지하지만 초대에 답하지 못한다.
 - 귓속말·파티 채팅 줄과 친구 목록에는 가문 이름이 붙지 않는다. 주변 채팅 줄과 파티 창에는 붙는다.
 
-### 2차
+### 2차 (**구현됨**, 미배포)
 
-3. **가문 채팅**: `/g`, 접속 알림.
-4. **가문 창고**: `family_chest`, 입출고 기록.
+3. **가문 채팅**: `/g`, 채팅 채널 메뉴, 접속·퇴장 알림.
+4. **가문 창고**: `family_chest`, 입출고 기록 (가문 창의 "가문 창고 기록").
 5. **가문 게시판**: `family_board`.
+
+코드: `game_state/family.rs`(채팅·기록), `auth_estate_storage.rs`(`family_chest_access`, `family_board_permissions`), `game_state/notice_board.rs`(`Board`). 테스트: `family_tests.rs`.
+
+2차에 없는 것:
+
+- agent-client는 가문 채팅을 읽지만 말하지 못하고, 가문 게시판·창고를 쓰지 않는다.
+- 가문 창고·게시판 아이콘은 기존 보관함·게시 용지 아이콘을 쓴다.
 
 ### 3차
 

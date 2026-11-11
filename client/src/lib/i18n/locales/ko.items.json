@@ -434,5 +434,9 @@
   "furniture_mailbox.name": "우체통",
   "furniture_mailbox.description": "포장을 풀어 자신의 영지에 우체통을 놓습니다. 누구나 이 우체통에서 편지를 보내고 받을 수 있습니다.",
   "revenue_stamp.description": "토지 등기관이 파는 수수료 인지. 가문 서류에 씁니다. 가문 창설과 개명에 열 장, 해산에 한 장이 듭니다.",
-  "revenue_stamp.name": "인지"
+  "revenue_stamp.name": "인지",
+  "family_chest.name": "가문 창고",
+  "family_chest.description": "가문을 위해 최대 200 kg을 보관하는 큰 상자. 가문 영지에 놓으며, 가문원은 계급에 따라 넣고 꺼냅니다.",
+  "family_board.name": "가문 게시판",
+  "family_board.description": "가문 영지에 놓는 게시판. 그 가문의 가문원만 읽고 씁니다."
 }

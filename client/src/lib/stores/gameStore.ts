@@ -110,7 +110,13 @@ export interface ChatBubble {
   duration: number
 }
 
-export type ChatSender = 'local' | 'remote' | 'system' | 'whisper' | 'party'
+export type ChatSender =
+  | 'local'
+  | 'remote'
+  | 'system'
+  | 'whisper'
+  | 'party'
+  | 'family'
 
 export interface ChatEntry {
   text: string

@@ -24,6 +24,10 @@ export const FAMILY_PERMISSION = {
   DEMOLISH_HOUSE: 1 << 3,
   PLACE_FURNITURE: 1 << 4,
   LANDSCAPE: 1 << 5,
+  STORAGE_DEPOSIT: 1 << 6,
+  STORAGE_WITHDRAW: 1 << 7,
+  BOARD_WRITE: 1 << 8,
+  BOARD_MODERATE: 1 << 9,
   TREASURY_DEPOSIT: 1 << 10,
   EDIT_RANKS: 1 << 12,
 } as const
@@ -89,6 +93,15 @@ export interface FamilyInfo {
   rename_at: number
 }
 
+export interface FamilyStorageEntry {
+  character_name: string
+  item_def_id: string
+  /** Positive for a deposit. */
+  quantity: number
+  /** Unix seconds. */
+  at: number
+}
+
 export interface PendingFamilyInvite {
   inviterId: number
   inviterName: string
@@ -100,6 +113,8 @@ export interface PendingFamilyInvite {
 export const familyInfo = writable<FamilyInfo | null>(null)
 export const pendingFamilyInvites = writable<PendingFamilyInvite[]>([])
 export const familyPanelVisible = writable(false)
+/** null until requested from the family panel. */
+export const familyStorageLog = writable<FamilyStorageEntry[] | null>(null)
 export const familyStampCount = bagItemCount(FAMILY_STAMP_ITEM)
 
 /** H opens the family panel unless the player bound pickup to H. */
@@ -130,6 +145,7 @@ export function resetFamilyStores() {
   familyInfo.set(null)
   pendingFamilyInvites.set([])
   familyPanelVisible.set(false)
+  familyStorageLog.set(null)
 }
 
 export function familyPermissions(family: FamilyInfo): number {

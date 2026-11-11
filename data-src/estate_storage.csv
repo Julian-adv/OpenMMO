@@ -25,3 +25,5 @@ furniture_goblin_sword,goblin_sword,0,0.05,15,0.2,0.2,0,3,0,0,0,3,false
 furniture_small_sword,small_sword,0,0.05,15,0.2,0.2,0,3,0,0,0,3,false
 furniture_shop_sign_weathered,shop_sign_weathered,0,0.05,90,0.2,0.2,0,3,0,0,0,3,true
 furniture_mailbox,mailbox,0,0.05,90,0.462,0.38,0,3,0,0.15,0.2,0,false
+family_chest,chest_animated,200,0.05,90,1.476,0.616,0,3,0.1,0.28,0.55,0,false
+family_board,notice_board,0,0.05,15,1.84,0.8,0,3,0,0.4,0.5,0,false

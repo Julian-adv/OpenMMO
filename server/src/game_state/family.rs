@@ -104,14 +104,88 @@ impl super::GameState {
     ) {
         if let Some(family_id) = family_id {
             self.families.write().await.enter(*player_id, family_id);
+            self.announce_to_family(family_id, player_id, "is online.")
+                .await;
             self.refresh_family(family_id, auth).await;
         }
     }
 
     pub(super) async fn player_left_family(&self, player_id: &PlayerId, auth: &AuthService) {
         if let Some(family_id) = self.forget_player_family(player_id).await {
+            self.announce_to_family(family_id, player_id, "went offline.")
+                .await;
             self.refresh_family(family_id, auth).await;
         }
+    }
+
+    /// Tell the other online members that `player_id` did something.
+    async fn announce_to_family(&self, family_id: i64, player_id: &PlayerId, what: &str) {
+        let name = self.player_name_of(player_id).await;
+        let others: Vec<PlayerId> = self.families.read().await.online(family_id);
+        for member in others.iter().filter(|id| *id != player_id) {
+            self.family_note(member, format!("{name} {what}")).await;
+        }
+    }
+
+    pub async fn send_family_storage_log(&self, player_id: &PlayerId, auth: &AuthService) {
+        let Some(character_id) = self.character_id_of(player_id).await else {
+            return;
+        };
+        let auth = auth.clone();
+        match auth_db(move || auth.family_storage_log(character_id)).await {
+            Ok(Some(entries)) => {
+                self.send_direct_message(player_id, ServerMessage::FamilyStorageLog { entries })
+                    .await
+            }
+            Ok(None) => {
+                self.family_note(player_id, "you do not belong to a family.")
+                    .await
+            }
+            Err(err) => {
+                warn!("Failed to read family storage log: {err}");
+                self.family_note(player_id, SERVER_ERROR).await;
+            }
+        }
+    }
+
+    pub async fn send_family_chat(&self, player_id: &PlayerId, message: String) {
+        if message.trim().is_empty() {
+            return;
+        }
+        let Some(sender_name) = ({
+            let players = self.players.read().await;
+            players.get(player_id).map(|p| p.name.clone())
+        }) else {
+            return;
+        };
+        if self.refuse_if_muted(player_id, &sender_name, "chat").await {
+            return;
+        }
+        let members = {
+            let families = self.families.read().await;
+            families
+                .of_player
+                .get(player_id)
+                .map(|id| families.online(*id))
+                .unwrap_or_default()
+        };
+        if members.is_empty() {
+            self.family_note(player_id, "you do not belong to a family.")
+                .await;
+            return;
+        }
+        let recipients = self
+            .unblocked_recipients(player_id, &sender_name, members)
+            .await;
+        info!(from = %sender_name, len = message.len(), "family chat");
+        self.send_direct_message_to_players(
+            &recipients,
+            ServerMessage::FamilyChatMessage {
+                from: sender_name,
+                message,
+            },
+        )
+        .await;
     }
 
     pub(super) async fn forget_player_family(&self, player_id: &PlayerId) -> Option<i64> {

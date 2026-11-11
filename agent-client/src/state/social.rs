@@ -127,6 +127,7 @@ impl SharedState {
             ServerMessage::ChatMessage { .. }
                 | ServerMessage::WhisperMessage { .. }
                 | ServerMessage::PartyChatMessage { .. }
+                | ServerMessage::FamilyChatMessage { .. }
                 | ServerMessage::PlayerMusicStarted { .. }
         ) {
             return;

@@ -666,7 +666,8 @@
           ? 'mailbox'
           : null
     if (clickKind) clone.userData.objectClickKind = clickKind
-    if (catDef?.noticeBoard) mountNoticePapers(clone, p.id)
+    if (catDef?.noticeBoard)
+      mountNoticePapers(clone, { Village: { object_id: p.id } })
     return clone
   }
 

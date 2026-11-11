@@ -58,7 +58,13 @@ agent-client lists notice boards within 30 m in the world state with their `boar
 - Server refusals arrive as `[BoardFailed]` events.
 - NPCs pinned in place cannot walk to a board and so cannot use it.
 
-## Protocol (v143)
+## Family boards
+
+`family_board` is estate furniture (Aldwin, 2,000c) that only goes on an estate attached to a family (doc/FAMILY_SYSTEM.md §11). It uses the same tables under `BoardKey::estate(furniture_id)`. Only members of the board's family read it, and only while it stands on that family's estate. Writing and commenting need `BOARD_WRITE`; `BOARD_MODERATE` takes down anyone's post. Posts need no Notice Paper and never expire; the newest 50 are listed. The registrar does not take them down. Agents use village boards only.
+
+## Protocol (v146)
+
+Every message names its board with `NoticeBoardRef`: `Village { object_id }` or `Estate { furniture_id }` (since v146; `TakeDownNotices` keeps `object_id`).
 
 Client: `OpenNoticeBoard`, `ReadNoticePost`, `WriteNoticePost` (with `image` and `position`), `WriteNoticeComment`, `RemoveNoticePost`, `PeekNoticeBoard`, `TakeDownNotices`.
 Server: `NoticeBoard` (post list; also follows a removal), `NoticePostView` (post with comments; also the reply to a write), `NoticeBoardRefused`, `NoticeBoardPapers` (papers for the model), `NoticesTakenDown`, `NoticePostRemoved`.

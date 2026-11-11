@@ -19,6 +19,17 @@ pub const FAMILY_REJOIN_COOLDOWN_SECS: i64 = 24 * 60 * 60;
 pub const FAMILY_HEAD_INACTIVE_SECS: i64 = 30 * 24 * 60 * 60;
 pub const FAMILY_RANK_LABEL_MAX_CHARS: usize = 12;
 pub const FAMILY_INVITE_TTL: std::time::Duration = std::time::Duration::from_secs(120);
+/// Estate furniture that belongs to the family the estate is attached to.
+pub const FAMILY_CHEST_ITEM: &str = "family_chest";
+pub const FAMILY_BOARD_ITEM: &str = "family_board";
+pub const FAMILY_CHEST_LIMIT: i64 = 4;
+/// Storage log entries a member is shown, and kept per family.
+pub const FAMILY_STORAGE_LOG_SHOWN: usize = 200;
+pub const FAMILY_STORAGE_LOG_KEPT: i64 = 2000;
+
+pub fn is_family_furniture(item_def_id: &str) -> bool {
+    item_def_id == FAMILY_CHEST_ITEM || item_def_id == FAMILY_BOARD_ITEM
+}
 
 pub const FAMILY_RANK_HEAD: u8 = 0;
 pub const FAMILY_RANK_ELDER: u8 = 1;
@@ -104,6 +115,16 @@ pub struct FamilyEstate {
     pub plots: u32,
     pub missed: u32,
     pub mine: bool,
+}
+
+/// One family chest movement; `quantity` is positive for a deposit.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FamilyStorageEntry {
+    pub character_name: String,
+    pub item_def_id: String,
+    pub quantity: i64,
+    /// Unix seconds.
+    pub at: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

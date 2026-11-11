@@ -9,11 +9,13 @@ use crate::auth::{
     AuthError, AuthService, BoardKey, NewNoticePost, NoticeClock, PostView, StoredPaper,
 };
 use crate::types::PlayerId;
+use onlinerpg_shared::family::{permission, FAMILY_BOARD_ITEM};
 use onlinerpg_shared::notice_board::{
     clamp_paper_position, free_paper_spot, is_notice_board, spot_allowed, validate_notice_text,
-    NoticeBoardRefusal, NoticePaper, NOTICE_BODY_MAX_CHARS, NOTICE_COMMENT_COOLDOWN_SECS,
-    NOTICE_COMMENT_MAX_CHARS, NOTICE_GRACE_DAYS, NOTICE_LIFETIME_DAYS, NOTICE_PAPER_ITEM,
-    NOTICE_POSTS_PER_WRITER, NOTICE_POST_COOLDOWN_SECS, NOTICE_TITLE_MAX_CHARS,
+    NoticeBoardRef, NoticeBoardRefusal, NoticePaper, NOTICE_BODY_MAX_CHARS,
+    NOTICE_COMMENT_COOLDOWN_SECS, NOTICE_COMMENT_MAX_CHARS, NOTICE_GRACE_DAYS,
+    NOTICE_LIFETIME_DAYS, NOTICE_PAPER_ITEM, NOTICE_POSTS_PER_WRITER, NOTICE_POST_COOLDOWN_SECS,
+    NOTICE_TITLE_MAX_CHARS,
 };
 use onlinerpg_shared::ServerMessage;
 use std::collections::HashMap;
@@ -77,6 +79,31 @@ impl NoticeCooldowns {
     }
 }
 
+/// A board the player may use: its storage key and, for a family board, the
+/// reader's rank permissions there.
+#[derive(Debug, Clone, Copy)]
+struct Board {
+    key: BoardKey,
+    family: Option<u32>,
+}
+
+impl Board {
+    /// Family boards keep their posts until they are pushed off the list.
+    fn clock(&self, village: NoticeClock) -> NoticeClock {
+        match self.family {
+            Some(_) => NoticeClock {
+                expired_at: i64::MIN,
+                hidden_at: i64::MIN,
+            },
+            None => village,
+        }
+    }
+
+    fn may(&self, bit: u32) -> bool {
+        self.family.is_none_or(|bits| bits & bit != 0)
+    }
+}
+
 struct Writer {
     character_id: i64,
     name: String,
@@ -95,6 +122,10 @@ impl GameState {
         notice_clock(self.current_total_game_seconds())
     }
 
+    fn board_clock(&self, board: &Board) -> NoticeClock {
+        board.clock(self.current_notice_clock())
+    }
+
     fn forget_notice_papers(&self, board: BoardKey) {
         self.notice_papers
             .lock()
@@ -106,6 +137,7 @@ impl GameState {
     async fn stored_notice_papers(
         &self,
         board: BoardKey,
+        hidden_at: i64,
         auth: &AuthService,
     ) -> Result<Arc<Vec<StoredPaper>>, AuthError> {
         if let Some(papers) = self
@@ -117,7 +149,6 @@ impl GameState {
         {
             return Ok(Arc::clone(papers));
         }
-        let hidden_at = self.current_notice_clock().hidden_at;
         let auth = auth.clone();
         let papers = Arc::new(auth_db(move || auth.notice_papers(board, hidden_at)).await?);
         self.notice_papers
@@ -128,8 +159,7 @@ impl GameState {
         Ok(papers)
     }
 
-    fn visible_papers(&self, stored: &[StoredPaper]) -> Vec<NoticePaper> {
-        let clock = self.current_notice_clock();
+    fn visible_papers(stored: &[StoredPaper], clock: NoticeClock) -> Vec<NoticePaper> {
         stored
             .iter()
             .rev()
@@ -149,7 +179,7 @@ impl GameState {
     async fn pin_spot(
         &self,
         player_id: &PlayerId,
-        board: BoardKey,
+        board: Board,
         position: Option<(u16, u16)>,
         auth: &AuthService,
     ) -> Result<(u16, u16), NoticeBoardRefusal> {
@@ -157,14 +187,14 @@ impl GameState {
             .character_id_of(player_id)
             .await
             .ok_or(NoticeBoardRefusal::ServerError)?;
+        let clock = self.board_clock(&board);
         let stored = self
-            .stored_notice_papers(board, auth)
+            .stored_notice_papers(board.key, clock.hidden_at, auth)
             .await
             .map_err(|err| {
                 error!("Failed to load notice papers {board:?}: {err}");
                 NoticeBoardRefusal::ServerError
             })?;
-        let clock = self.current_notice_clock();
         let shown: Vec<_> = stored
             .iter()
             .filter(|p| p.game_seconds > clock.hidden_at)
@@ -195,40 +225,94 @@ impl GameState {
     async fn notice_board_in_sight(
         &self,
         player_id: &PlayerId,
-        object_id: u32,
-    ) -> Option<BoardKey> {
-        let players = self.players.read().await;
-        let player = players.get(player_id)?;
+        board: NoticeBoardRef,
+        auth: &AuthService,
+    ) -> Option<Board> {
+        let (position, object_id) = {
+            let players = self.players.read().await;
+            let position = players.get(player_id)?.position;
+            match board {
+                NoticeBoardRef::Village { object_id } => (position, object_id),
+                NoticeBoardRef::Estate { furniture_id } => {
+                    drop(players);
+                    let near = self
+                        .estate_chests
+                        .read()
+                        .await
+                        .get(furniture_id)
+                        .is_some_and(|f| {
+                            f.item_def_id == FAMILY_BOARD_ITEM
+                                && f.position.dist_xz_sq(&position) <= PEEK_RANGE_M * PEEK_RANGE_M
+                        });
+                    if !near {
+                        return None;
+                    }
+                    return self.family_board(player_id, furniture_id, auth).await;
+                }
+            }
+        };
         let index = self
             .interaction_furniture
             .read()
             .unwrap_or_else(|e| e.into_inner());
-        regions_around(player.position.x, player.position.z).find_map(|(rx, rz)| {
+        regions_around(position.x, position.z).find_map(|(rx, rz)| {
             index.get(&(rx, rz))?.iter().find_map(|p| {
                 if p.id != object_id || !is_notice_board(&p.type_id) {
                     return None;
                 }
-                (placement_position(p).dist_xz_sq(&player.position) <= PEEK_RANGE_M * PEEK_RANGE_M)
-                    .then_some(BoardKey { rx, rz, object_id })
+                (placement_position(p).dist_xz_sq(&position) <= PEEK_RANGE_M * PEEK_RANGE_M)
+                    .then_some(Board {
+                        key: BoardKey { rx, rz, object_id },
+                        family: None,
+                    })
             })
         })
+    }
+
+    /// The family board, when the player belongs to the family it serves.
+    async fn family_board(
+        &self,
+        player_id: &PlayerId,
+        furniture_id: i64,
+        auth: &AuthService,
+    ) -> Option<Board> {
+        let character_id = self.character_id_of(player_id).await?;
+        let auth = auth.clone();
+        match auth_db(move || auth.family_board_permissions(furniture_id, character_id)).await {
+            Ok(Some(bits)) => Some(Board {
+                key: BoardKey::estate(furniture_id),
+                family: Some(bits),
+            }),
+            Ok(None) => None,
+            Err(err) => {
+                error!("Failed to check family board {furniture_id}: {err}");
+                None
+            }
+        }
     }
 
     pub async fn peek_notice_board(
         &self,
         player_id: &PlayerId,
-        object_id: u32,
+        board_ref: NoticeBoardRef,
         auth: &AuthService,
     ) {
-        let Some(board) = self.notice_board_in_sight(player_id, object_id).await else {
+        let Some(board) = self.notice_board_in_sight(player_id, board_ref, auth).await else {
             return;
         };
-        match self.stored_notice_papers(board, auth).await {
+        let clock = self.board_clock(&board);
+        match self
+            .stored_notice_papers(board.key, clock.hidden_at, auth)
+            .await
+        {
             Ok(stored) => {
-                let papers = self.visible_papers(&stored);
+                let papers = Self::visible_papers(&stored, clock);
                 self.send_direct_message(
                     player_id,
-                    ServerMessage::NoticeBoardPapers { object_id, papers },
+                    ServerMessage::NoticeBoardPapers {
+                        board: board_ref,
+                        papers,
+                    },
                 )
                 .await;
             }
@@ -236,17 +320,43 @@ impl GameState {
         }
     }
 
-    /// The board `object_id` the player stands at, keyed by its region file.
-    async fn notice_board_at(&self, player_id: &PlayerId, object_id: u32) -> Option<BoardKey> {
-        let Some(((rx, rz), _)) = self
-            .reachable_placement(player_id, object_id, |p| is_notice_board(&p.type_id))
-            .await
-        else {
-            self.refuse_notice(player_id, NoticeBoardRefusal::OutOfReach)
-                .await;
-            return None;
+    /// The board the player stands at; a refusal has been sent when `None`.
+    async fn notice_board_at(
+        &self,
+        player_id: &PlayerId,
+        board: NoticeBoardRef,
+        auth: &AuthService,
+    ) -> Option<Board> {
+        let found = match board {
+            NoticeBoardRef::Village { object_id } => self
+                .reachable_placement(player_id, object_id, |p| is_notice_board(&p.type_id))
+                .await
+                .map(|((rx, rz), _)| Board {
+                    key: BoardKey { rx, rz, object_id },
+                    family: None,
+                })
+                .ok_or(NoticeBoardRefusal::OutOfReach),
+            NoticeBoardRef::Estate { furniture_id } => {
+                let reached = self
+                    .reachable_furniture(player_id, furniture_id)
+                    .await
+                    .is_ok_and(|f| f.item_def_id == FAMILY_BOARD_ITEM);
+                if reached {
+                    self.family_board(player_id, furniture_id, auth)
+                        .await
+                        .ok_or(NoticeBoardRefusal::NotFamily)
+                } else {
+                    Err(NoticeBoardRefusal::OutOfReach)
+                }
+            }
         };
-        Some(BoardKey { rx, rz, object_id })
+        match found {
+            Ok(board) => Some(board),
+            Err(reason) => {
+                self.refuse_notice(player_id, reason).await;
+                None
+            }
+        }
     }
 
     async fn refuse_notice(&self, player_id: &PlayerId, reason: NoticeBoardRefusal) {
@@ -281,7 +391,7 @@ impl GameState {
     async fn reply_post(
         &self,
         player_id: &PlayerId,
-        board: BoardKey,
+        board: NoticeBoardRef,
         result: Result<Result<PostView, NoticeBoardRefusal>, AuthError>,
     ) {
         match result {
@@ -289,7 +399,7 @@ impl GameState {
                 self.send_direct_message(
                     player_id,
                     ServerMessage::NoticePostView {
-                        object_id: board.object_id,
+                        board,
                         post,
                         comments,
                     },
@@ -308,19 +418,26 @@ impl GameState {
     pub async fn open_notice_board(
         &self,
         player_id: &PlayerId,
-        object_id: u32,
+        board_ref: NoticeBoardRef,
         auth: &AuthService,
     ) {
-        let Some(board) = self.notice_board_at(player_id, object_id).await else {
+        let Some(board) = self.notice_board_at(player_id, board_ref, auth).await else {
             return;
         };
-        let clock = self.current_notice_clock();
+        let clock = self.board_clock(&board);
         let viewer = self.character_id_of(player_id).await.unwrap_or(0);
         let auth = auth.clone();
-        match auth_db(move || auth.notice_posts(board, clock, viewer)).await {
+        let key = board.key;
+        match auth_db(move || auth.notice_posts(key, clock, viewer)).await {
             Ok(posts) => {
-                self.send_direct_message(player_id, ServerMessage::NoticeBoard { object_id, posts })
-                    .await
+                self.send_direct_message(
+                    player_id,
+                    ServerMessage::NoticeBoard {
+                        board: board_ref,
+                        posts,
+                    },
+                )
+                .await
             }
             Err(err) => {
                 error!("Failed to load notice board {board:?}: {err}");
@@ -333,25 +450,25 @@ impl GameState {
     pub async fn read_notice_post(
         &self,
         player_id: &PlayerId,
-        object_id: u32,
+        board_ref: NoticeBoardRef,
         post_id: i64,
         auth: &AuthService,
     ) {
-        let Some(board) = self.notice_board_at(player_id, object_id).await else {
+        let Some(board) = self.notice_board_at(player_id, board_ref, auth).await else {
             return;
         };
-        let clock = self.current_notice_clock();
+        let clock = self.board_clock(&board);
         let auth = auth.clone();
-        let result = auth_db(move || auth.notice_post(board, post_id, clock)).await;
+        let result = auth_db(move || auth.notice_post(board.key, post_id, clock)).await;
         let result = result.map(|post| post.ok_or(NoticeBoardRefusal::PostMissing));
-        self.reply_post(player_id, board, result).await;
+        self.reply_post(player_id, board_ref, result).await;
     }
 
     #[allow(clippy::too_many_arguments)]
     pub async fn write_notice_post(
         &self,
         player_id: &PlayerId,
-        object_id: u32,
+        board_ref: NoticeBoardRef,
         title: &str,
         body: &str,
         image: Option<&str>,
@@ -374,10 +491,17 @@ impl GameState {
                     .await;
             }
         }
-        let Some(board) = self.notice_board_at(player_id, object_id).await else {
+        let Some(board) = self.notice_board_at(player_id, board_ref, auth).await else {
             return;
         };
-        if !self.holds_item(player_id, NOTICE_PAPER_ITEM).await {
+        if !board.may(permission::BOARD_WRITE) {
+            return self
+                .refuse_notice(player_id, NoticeBoardRefusal::NoFamilyRank)
+                .await;
+        }
+        // Village boards charge a notice paper; family boards are free.
+        let paid = board.family.is_none();
+        if paid && !self.holds_item(player_id, NOTICE_PAPER_ITEM).await {
             return self
                 .refuse_notice(player_id, NoticeBoardRefusal::NoPaper)
                 .await;
@@ -389,23 +513,29 @@ impl GameState {
         let Some(w) = self.notice_writer(player_id, Write::Post).await else {
             return;
         };
-        let hold = self
-            .inventories
-            .write()
-            .await
-            .get_mut(player_id)
-            .and_then(|inv| hold_one(&mut inv.bag, |i| i.item_def_id == NOTICE_PAPER_ITEM));
-        let Some(hold) = hold else {
-            return self
-                .refuse_notice(player_id, NoticeBoardRefusal::NoPaper)
-                .await;
+        let hold = if paid {
+            let hold = self
+                .inventories
+                .write()
+                .await
+                .get_mut(player_id)
+                .and_then(|inv| hold_one(&mut inv.bag, |i| i.item_def_id == NOTICE_PAPER_ITEM));
+            let Some(hold) = hold else {
+                return self
+                    .refuse_notice(player_id, NoticeBoardRefusal::NoPaper)
+                    .await;
+            };
+            Some(hold)
+        } else {
+            None
         };
         info!(author = %w.name, ?board, poster = image.is_some(), "notice post");
         let image = image.map(str::to_string);
         let auth = auth.clone();
+        let key = board.key;
         let result = auth_db(move || {
             auth.add_notice_post(
-                board,
+                key,
                 &NewNoticePost {
                     character_id: w.character_id,
                     author: &w.name,
@@ -418,20 +548,26 @@ impl GameState {
             )
         })
         .await;
-        let saved = result
-            .as_ref()
-            .map(|_| ())
-            .map_err(|_| "notice post not saved");
-        if self
-            .finish_bag_write(player_id, hold, &[], saved)
-            .await
-            .is_ok()
-        {
-            self.log_consumed(player_id, [NOTICE_PAPER_ITEM]).await;
+        if let Some(hold) = hold {
+            let saved = result
+                .as_ref()
+                .map(|_| ())
+                .map_err(|_| "notice post not saved");
+            if self
+                .finish_bag_write(player_id, hold, &[], saved)
+                .await
+                .is_ok()
+            {
+                self.log_consumed(player_id, [NOTICE_PAPER_ITEM]).await;
+            }
         }
-        self.forget_notice_papers(board);
-        self.reply_post(player_id, board, result.map(|post| Ok((post, Vec::new()))))
-            .await;
+        self.forget_notice_papers(key);
+        self.reply_post(
+            player_id,
+            board_ref,
+            result.map(|post| Ok((post, Vec::new()))),
+        )
+        .await;
     }
 
     /// The land registrar takes down every post past its lifetime.
@@ -451,25 +587,27 @@ impl GameState {
                 .refuse_notice(player_id, NoticeBoardRefusal::NotRegistrar)
                 .await;
         }
-        let Some(board) = self.notice_board_at(player_id, object_id).await else {
+        let board_ref = NoticeBoardRef::Village { object_id };
+        let Some(board) = self.notice_board_at(player_id, board_ref, auth).await else {
             return;
         };
         let expired_at = self.current_notice_clock().expired_at;
         let db = auth.clone();
-        match auth_db(move || db.take_down_notices(board, expired_at)).await {
+        let key = board.key;
+        match auth_db(move || db.take_down_notices(key, expired_at)).await {
             Ok(0) => {
                 self.refuse_notice(player_id, NoticeBoardRefusal::NothingExpired)
                     .await
             }
             Ok(count) => {
                 info!(?board, count, "notices taken down");
-                self.forget_notice_papers(board);
+                self.forget_notice_papers(key);
                 self.send_direct_message(
                     player_id,
                     ServerMessage::NoticesTakenDown { object_id, count },
                 )
                 .await;
-                self.open_notice_board(player_id, object_id, auth).await;
+                self.open_notice_board(player_id, board_ref, auth).await;
             }
             Err(err) => {
                 error!("Failed to take down notices {board:?}: {err}");
@@ -479,15 +617,16 @@ impl GameState {
         }
     }
 
-    /// The writer unpins their own post; its paper is not returned.
+    /// The writer unpins their own post, or a family moderator any post; the
+    /// paper is not returned.
     pub async fn remove_notice_post(
         &self,
         player_id: &PlayerId,
-        object_id: u32,
+        board_ref: NoticeBoardRef,
         post_id: i64,
         auth: &AuthService,
     ) {
-        let Some(board) = self.notice_board_at(player_id, object_id).await else {
+        let Some(board) = self.notice_board_at(player_id, board_ref, auth).await else {
             return;
         };
         let Some(character_id) = self.character_id_of(player_id).await else {
@@ -495,25 +634,29 @@ impl GameState {
                 .refuse_notice(player_id, NoticeBoardRefusal::ServerError)
                 .await;
         };
-        let hidden_at = self.current_notice_clock().hidden_at;
+        let moderator = board
+            .family
+            .is_some_and(|bits| bits & permission::BOARD_MODERATE != 0);
+        let hidden_at = self.board_clock(&board).hidden_at;
         let db = auth.clone();
-        let result =
-            auth_db(move || db.remove_notice_post(board, post_id, character_id, hidden_at)).await;
+        let key = board.key;
+        let result = auth_db(move || {
+            db.remove_notice_post(key, post_id, character_id, moderator, hidden_at)
+        })
+        .await;
         match result {
             Ok(Ok(())) => {
-                info!(
-                    character_id,
-                    ?board,
-                    post_id,
-                    "notice post removed by writer"
-                );
-                self.forget_notice_papers(board);
+                info!(character_id, ?board, post_id, "notice post removed");
+                self.forget_notice_papers(key);
                 self.send_direct_message(
                     player_id,
-                    ServerMessage::NoticePostRemoved { object_id, post_id },
+                    ServerMessage::NoticePostRemoved {
+                        board: board_ref,
+                        post_id,
+                    },
                 )
                 .await;
-                self.open_notice_board(player_id, object_id, auth).await;
+                self.open_notice_board(player_id, board_ref, auth).await;
             }
             Ok(Err(reason)) => self.refuse_notice(player_id, reason).await,
             Err(err) => {
@@ -527,7 +670,7 @@ impl GameState {
     pub async fn write_notice_comment(
         &self,
         player_id: &PlayerId,
-        object_id: u32,
+        board_ref: NoticeBoardRef,
         post_id: i64,
         body: &str,
         auth: &AuthService,
@@ -536,18 +679,23 @@ impl GameState {
             Ok(b) => b.to_string(),
             Err(reason) => return self.refuse_notice(player_id, reason).await,
         };
-        let Some(board) = self.notice_board_at(player_id, object_id).await else {
+        let Some(board) = self.notice_board_at(player_id, board_ref, auth).await else {
             return;
         };
+        if !board.may(permission::BOARD_WRITE) {
+            return self
+                .refuse_notice(player_id, NoticeBoardRefusal::NoFamilyRank)
+                .await;
+        }
         let Some(w) = self.notice_writer(player_id, Write::Comment).await else {
             return;
         };
         info!(author = %w.name, post_id, "notice comment");
-        let clock = self.current_notice_clock();
+        let clock = self.board_clock(&board);
         let auth = auth.clone();
         let result = auth_db(move || {
             auth.add_notice_comment(
-                board,
+                board.key,
                 post_id,
                 w.character_id,
                 &w.name,
@@ -557,7 +705,7 @@ impl GameState {
             )
         })
         .await;
-        self.reply_post(player_id, board, result).await;
+        self.reply_post(player_id, board_ref, result).await;
     }
 }
 

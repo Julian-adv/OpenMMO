@@ -14,6 +14,18 @@ pub struct BoardKey {
     pub object_id: u32,
 }
 
+impl BoardKey {
+    /// Family boards on estates share the post tables under a region no
+    /// village file uses.
+    pub fn estate(furniture_id: i64) -> Self {
+        Self {
+            rx: i32::MIN,
+            rz: (furniture_id >> 32) as i32,
+            object_id: furniture_id as u32,
+        }
+    }
+}
+
 pub type PostView = (NoticePost, Vec<NoticeComment>);
 
 /// Game-second limits a query is answered against.
@@ -314,12 +326,14 @@ impl AuthService {
         Ok(count as u32)
     }
 
-    /// Marks the writer's own post as removed, or says why not.
+    /// Marks the writer's own post as removed, or any post for a
+    /// `moderator`, or says why not.
     pub fn remove_notice_post(
         &self,
         board: BoardKey,
         post_id: i64,
         character_id: i64,
+        moderator: bool,
         hidden_at: i64,
     ) -> Result<Result<(), NoticeBoardRefusal>, AuthError> {
         let mut conn = self.open_connection()?;
@@ -337,7 +351,9 @@ impl AuthService {
             .optional()?;
         match writer {
             None => return Ok(Err(NoticeBoardRefusal::PostMissing)),
-            Some(id) if id != character_id => return Ok(Err(NoticeBoardRefusal::NotYours)),
+            Some(id) if id != character_id && !moderator => {
+                return Ok(Err(NoticeBoardRefusal::NotYours))
+            }
             Some(_) => {}
         }
         tx.prepare_cached("UPDATE notice_posts SET removed_at = ?2 WHERE id = ?1")?

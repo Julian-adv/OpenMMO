@@ -4,10 +4,11 @@
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import { addChatMessage, gameStore } from '../stores/gameStore'
   import { partyRoster } from '../stores/partyStore'
+  import { familyInfo } from '../stores/familyStore'
   import { isTypingTarget } from '../utils/dom'
   import {
     chatChannel,
-    shouldBlockNpcTalkForPartyDraft,
+    shouldBlockNpcTalkForPrivateDraft,
     shouldRevertToSay,
     type ChatChannel,
   } from '../stores/chatChannelStore'
@@ -43,6 +44,16 @@
   import { instrumentPanelVisible } from '../stores/instrumentStore'
 
   type Tab = 'all' | 'party' | 'combat'
+  const CHANNEL_LABELS = {
+    say: 'chat.say',
+    party: 'chat.party',
+    family: 'chat.family',
+  } as const
+  const CHANNEL_PLACEHOLDERS = {
+    say: 'chat.placeholder',
+    party: 'chat.partyPlaceholder',
+    family: 'chat.familyPlaceholder',
+  } as const
   const TRANSCRIPT_FADE_DELAY_MS = 20_000
 
   const languageNames = $derived(
@@ -56,6 +67,7 @@
   let combatMessages = $derived($gameStore.combatMessages)
   let isConnected = $derived($gameStore.isConnected)
   let inParty = $derived($partyRoster !== null)
+  let inFamily = $derived($familyInfo !== null)
 
   // Seed read markers on mount; only opening the Party tab reads that channel.
   let seenChatId = $state($gameStore.chatMessages.at(-1)?.id ?? 0)
@@ -83,9 +95,10 @@
     }
   })
 
-  // Keep party drafts private until sent or cleared, even after leaving the party.
+  // Keep private drafts private until sent or cleared, even after leaving.
   $effect(() => {
-    if (shouldRevertToSay(inParty, $chatChannel, messageInput)) {
+    const open = $chatChannel === 'family' ? inFamily : inParty
+    if (shouldRevertToSay(open, $chatChannel, messageInput)) {
       chatChannel.set('say')
     }
   })
@@ -261,6 +274,8 @@
       if (!isConnected) return
       if ($chatChannel === 'party' && !trimmed.startsWith('/')) {
         networkManager.sendPartyChat(trimmed)
+      } else if ($chatChannel === 'family' && !trimmed.startsWith('/')) {
+        networkManager.sendFamilyChat(trimmed)
       } else {
         networkManager.sendChatMessage(trimmed)
       }
@@ -352,7 +367,7 @@
   function focusForLocalInput() {
     activeTab = 'all'
     channelMenuOpen = false
-    if (shouldBlockNpcTalkForPartyDraft($chatChannel, messageInput)) {
+    if (shouldBlockNpcTalkForPrivateDraft($chatChannel, messageInput)) {
       addChatMessage({
         text: translate('chat.partyDraft'),
         sender: 'system',
@@ -485,10 +500,13 @@
         class="message"
         class:whisper={entry.sender === 'whisper'}
         class:party={entry.sender === 'party'}
+        class:family={entry.sender === 'family'}
       >
         {#if entry.name}
           {#if entry.sender === 'party'}
             <span class="party-tag">[{$t('chat.party')}]</span>
+          {:else if entry.sender === 'family'}
+            <span class="family-tag">[{$t('chat.family')}]</span>
           {/if}
           <span
             class="name"
@@ -565,6 +583,17 @@
             {$t('chat.party')}
             {#if $chatChannel === 'party'}<span class="check">✓</span>{/if}
           </button>
+          <button
+            class="channel-item"
+            role="menuitemradio"
+            aria-checked={$chatChannel === 'family'}
+            disabled={!inFamily}
+            title={inFamily ? undefined : $t('chat.joinFamily')}
+            onclick={() => selectChannel('family')}
+          >
+            {$t('chat.family')}
+            {#if $chatChannel === 'family'}<span class="check">✓</span>{/if}
+          </button>
         </div>
       {/if}
       <button
@@ -577,7 +606,7 @@
           channelMenuOpen = !channelMenuOpen
         }}
       >
-        {$chatChannel === 'party' ? $t('chat.party') : $t('chat.say')}
+        {$t(CHANNEL_LABELS[$chatChannel])}
         <span class="caret" aria-hidden="true">▴</span>
       </button>
     </div>
@@ -602,9 +631,7 @@
           inputFocused = false
           restoreViewportAfterKeyboard()
         }}
-        placeholder={$chatChannel === 'party'
-          ? $t('chat.partyPlaceholder')
-          : $t('chat.placeholder')}
+        placeholder={$t(CHANNEL_PLACEHOLDERS[$chatChannel])}
         disabled={!isConnected}
       />
     </div>
@@ -884,6 +911,21 @@
 
   .party-tag {
     color: #7ec8ff;
+    font-weight: 700;
+  }
+
+  /* Family channel: the green of family names. */
+  .message.family {
+    color: #cdeec4;
+  }
+
+  .message.family .name {
+    color: #9fdc95;
+    font-weight: 600;
+  }
+
+  .family-tag {
+    color: #9fdc95;
     font-weight: 700;
   }
 

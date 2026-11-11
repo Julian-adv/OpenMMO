@@ -11,6 +11,7 @@ import type * as THREE from 'three'
 import type { EstateChest } from '../network/networkTypes'
 import { getEstateStorageDef } from '../data/estateFurnitureDefs'
 import { getObjectDef } from '../data/objectCatalog'
+import { buildNoticeBoard } from './notice-board'
 
 export function estateFurnitureRenderY(
   chest: EstateChest,
@@ -61,7 +62,9 @@ export function loadEstateFurnitureModel(
             ),
             animations: [],
           })
-        : loadGLB(definition.modelUrl)
+        : model?.procedural === 'noticeBoard'
+          ? Promise.resolve({ scene: buildNoticeBoard(), animations: [] })
+          : loadGLB(definition.modelUrl)
     models.set(key, pending)
     void pending.catch(() => models.delete(key))
   }

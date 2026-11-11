@@ -6,11 +6,13 @@ import { networkManager } from '../network/socket'
 import {
   BOARD_FACE_H,
   BOARD_FACE_W,
+  noticeBoardKey,
   noticeBoardPapers,
   paperTilt,
   PAPER_SCALE,
   PAPER_H,
   PAPER_W,
+  type NoticeBoardRef,
   type NoticePaper,
 } from '../stores/noticeBoardStore'
 
@@ -115,9 +117,11 @@ function buildPapers(papers: NoticePaper[]): THREE.Group {
 }
 
 /** Placed boards showing papers, by object id. */
-const mounted = new Map<number, Set<THREE.Object3D>>()
-const lastPeek = new Map<number, number>()
-let latest = new Map<number, NoticePaper[]>()
+/** Keyed by `noticeBoardKey`; `refs` keeps what to peek for each key. */
+const mounted = new Map<string, Set<THREE.Object3D>>()
+const refs = new Map<string, NoticeBoardRef>()
+const lastPeek = new Map<string, number>()
+let latest = new Map<string, NoticePaper[]>()
 let peekTimer: ReturnType<typeof setInterval> | null = null
 
 function showPapers(root: THREE.Object3D, papers: NoticePaper[]) {
@@ -129,11 +133,13 @@ function showPapers(root: THREE.Object3D, papers: NoticePaper[]) {
   root.add(buildPapers(papers))
 }
 
-function peek(objectId: number, force = false) {
+function peek(key: string, force = false) {
+  const board = refs.get(key)
   const now = Date.now()
-  if (!force && now - (lastPeek.get(objectId) ?? 0) < PEEK_EVERY_MS) return
-  lastPeek.set(objectId, now)
-  networkManager.sendPeekNoticeBoard(objectId)
+  if (!board || (!force && now - (lastPeek.get(key) ?? 0) < PEEK_EVERY_MS))
+    return
+  lastPeek.set(key, now)
+  networkManager.sendPeekNoticeBoard(board)
 }
 
 noticeBoardPapers.subscribe((all) => {
@@ -146,15 +152,20 @@ noticeBoardPapers.subscribe((all) => {
 
 /** Shows the board's real papers on a placed clone and keeps them current
  *  while the clone lives. */
-export function mountNoticePapers(root: THREE.Object3D, objectId: number) {
-  let roots = mounted.get(objectId)
-  if (!roots) mounted.set(objectId, (roots = new Set()))
+export function mountNoticePapers(root: THREE.Object3D, board: NoticeBoardRef) {
+  const key = noticeBoardKey(board)
+  let roots = mounted.get(key)
+  if (!roots) mounted.set(key, (roots = new Set()))
+  refs.set(key, board)
   roots.add(root)
-  showPapers(root, latest.get(objectId) ?? [])
-  peek(objectId, !latest.has(objectId))
+  showPapers(root, latest.get(key) ?? [])
+  peek(key, !latest.has(key))
   root.addEventListener('dispose', () => {
     roots.delete(root)
-    if (roots.size === 0) mounted.delete(objectId)
+    if (roots.size === 0) {
+      mounted.delete(key)
+      refs.delete(key)
+    }
   })
   peekTimer ??= setInterval(() => {
     for (const id of mounted.keys()) peek(id)

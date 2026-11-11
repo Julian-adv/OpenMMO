@@ -15,6 +15,7 @@ pub enum EventUrgency {
 use onlinerpg_shared::fishing::{
     auto_stance, FishingAction, FishingOutcome, HOOK_REACTION_MS, STANCE_REACTION_MS,
 };
+use onlinerpg_shared::notice_board::NoticeBoardRef;
 use std::ops::RangeInclusive;
 use std::time::Duration;
 
@@ -95,7 +96,8 @@ impl SharedState {
             }
             // Party chat is addressed to our group, so it wakes us like a
             // whisper; the own-echo Noise rule is the same.
-            ServerMessage::PartyChatMessage { from, .. } => {
+            ServerMessage::PartyChatMessage { from, .. }
+            | ServerMessage::FamilyChatMessage { from, .. } => {
                 let self_name = self.self_player.as_ref().map(|p| p.name.as_str());
                 if Some(from.as_str()) == self_name {
                     EventUrgency::Noise
@@ -1105,11 +1107,15 @@ impl SharedState {
                     stall.sign.clone_from(sign);
                 }
             }
-            ServerMessage::NoticeBoard { object_id, posts } => {
+            // Agents use village boards only; family boards are skipped.
+            ServerMessage::NoticeBoard {
+                board: NoticeBoardRef::Village { object_id },
+                posts,
+            } => {
                 self.on_notice_board(*object_id, posts);
             }
             ServerMessage::NoticePostView {
-                object_id,
+                board: NoticeBoardRef::Village { object_id },
                 post,
                 comments,
             } => {
@@ -1121,7 +1127,10 @@ impl SharedState {
                     super::notice_board_refusal_text(*reason)
                 ));
             }
-            ServerMessage::NoticeBoardPapers { object_id, papers } => {
+            ServerMessage::NoticeBoardPapers {
+                board: NoticeBoardRef::Village { object_id },
+                papers,
+            } => {
                 if papers.iter().any(|p| p.expired) {
                     self.boards_with_expired_notices.insert(*object_id);
                 } else {
@@ -1147,7 +1156,10 @@ impl SharedState {
             ServerMessage::NoticesTakenDown { object_id, count } => {
                 self.on_notices_taken_down(*object_id, *count);
             }
-            ServerMessage::NoticePostRemoved { object_id, post_id } => {
+            ServerMessage::NoticePostRemoved {
+                board: NoticeBoardRef::Village { object_id },
+                post_id,
+            } => {
                 self.on_notice_post_removed(*object_id, *post_id);
             }
             ServerMessage::StallState {

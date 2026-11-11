@@ -434,5 +434,9 @@
   "furniture_mailbox.name": "郵便ポスト",
   "furniture_mailbox.description": "開封すると自分の領地に郵便ポストを置けます。誰でもこのポストで手紙を出し、受け取れます。",
   "revenue_stamp.description": "土地登記官が売る手数料の印紙。家門の届け出に使います。創設と改名に十枚、解散に一枚かかります。",
-  "revenue_stamp.name": "収入印紙"
+  "revenue_stamp.name": "収入印紙",
+  "family_chest.name": "家門の倉庫",
+  "family_chest.description": "家門のために最大200 kgを保管する大きな箱。家門の領地に置き、家門員は階級に応じて出し入れします。",
+  "family_board.name": "家門の掲示板",
+  "family_board.description": "家門の領地に置く掲示板。その家門の家門員だけが読み書きできます。"
 }

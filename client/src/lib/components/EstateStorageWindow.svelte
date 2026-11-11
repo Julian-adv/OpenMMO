@@ -108,6 +108,13 @@
     return total
   }
 
+  const depositNotice = $derived(
+    $openEstateChest?.family
+      ? 'Family chest: your rank or this estate does not allow storing'
+      : 'Tax overdue: withdrawal only'
+  )
+  const withdrawNotice = 'Family chest: your rank does not allow taking items'
+
   function isBlockedDeposit(item: ItemInstance) {
     const def = getItemDef(item.item_def_id)
     return isEstateStorageItem(item.item_def_id) || def?.untradeable === true
@@ -127,6 +134,7 @@
       )
     }
 
+    if (!$openEstateChest?.can_withdraw) return 0
     const unit = carriedUnitWeight(item)
     if (unit <= 0) return item.quantity
     return Math.min(
@@ -185,11 +193,12 @@
     if (direction === 'deposit') {
       if (isBlockedDeposit(item))
         return 'Bound, untradeable, and storage chest items cannot be stored'
-      if (!$openEstateChest?.can_deposit) return 'Tax overdue: withdrawal only'
+      if (!$openEstateChest?.can_deposit) return depositNotice
       if (maxSelectable(direction, item) < 1)
         return 'No storage weight remains for this item'
       return `Select ${itemDisplayName(item.item_def_id, item.enchant, $locale)} to store`
     }
+    if (!$openEstateChest?.can_withdraw) return withdrawNotice
     if (maxSelectable(direction, item) < 1)
       return 'No bag weight remains for this item'
     return `Select ${itemDisplayName(item.item_def_id, item.enchant, $locale)} to take`
@@ -250,7 +259,10 @@
     </header>
 
     {#if !$openEstateChest.can_deposit}
-      <p class="notice">Tax overdue: withdrawal only.</p>
+      <p class="notice">{depositNotice}.</p>
+    {/if}
+    {#if !$openEstateChest.can_withdraw}
+      <p class="notice">{withdrawNotice}.</p>
     {/if}
     {#if $estateChestError}<p class="error">{$estateChestError}</p>{/if}
 

@@ -125,6 +125,9 @@ pub struct EstateChestState {
     pub revision: u64,
     pub max_weight: f32,
     pub can_deposit: bool,
+    pub can_withdraw: bool,
+    /// A family chest: deposits and withdrawals follow the viewer's rank.
+    pub family: bool,
     pub items: Vec<ItemInstance>,
 }
 

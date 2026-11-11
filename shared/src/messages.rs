@@ -598,16 +598,16 @@ pub enum ClientMessage {
     },
     /// Clicked a notice board; answered with `NoticeBoard`.
     OpenNoticeBoard {
-        object_id: u32,
+        board: crate::notice_board::NoticeBoardRef,
     },
     ReadNoticePost {
-        object_id: u32,
+        board: crate::notice_board::NoticeBoardRef,
         post_id: i64,
     },
     /// Spends one notice paper. `position` is the paper centre (see
     /// `notice_board::PAPER_SCALE`); without one the server picks a free spot.
     WriteNoticePost {
-        object_id: u32,
+        board: crate::notice_board::NoticeBoardRef,
         title: String,
         body: String,
         #[serde(default)]
@@ -618,7 +618,7 @@ pub enum ClientMessage {
     /// Papers on a board in sight, for the board model; answered with
     /// `NoticeBoardPapers`.
     PeekNoticeBoard {
-        object_id: u32,
+        board: crate::notice_board::NoticeBoardRef,
     },
     /// Land registrar only: removes posts past their lifetime.
     TakeDownNotices {
@@ -643,14 +643,14 @@ pub enum ClientMessage {
         letter_id: i64,
     },
     WriteNoticeComment {
-        object_id: u32,
+        board: crate::notice_board::NoticeBoardRef,
         post_id: i64,
         body: String,
     },
     /// Writer only; the paper is not returned. Answered with
     /// `NoticePostRemoved`, then the refreshed `NoticeBoard`.
     RemoveNoticePost {
-        object_id: u32,
+        board: crate::notice_board::NoticeBoardRef,
         post_id: i64,
     },
     StartInstrument,
@@ -1087,6 +1087,12 @@ pub enum ClientMessage {
         estate_id: i64,
         amount: i64,
     },
+    /// Say something to every online member of the sender's family.
+    FamilyChat {
+        message: String,
+    },
+    /// Answered with `FamilyStorageLog`.
+    RequestFamilyStorageLog,
 }
 
 impl ClientMessage {
@@ -1933,11 +1939,11 @@ pub enum ServerMessage {
         status: AltarStatus,
     },
     NoticeBoard {
-        object_id: u32,
+        board: crate::notice_board::NoticeBoardRef,
         posts: Vec<crate::notice_board::NoticePostSummary>,
     },
     NoticePostView {
-        object_id: u32,
+        board: crate::notice_board::NoticeBoardRef,
         post: crate::notice_board::NoticePost,
         comments: Vec<crate::notice_board::NoticeComment>,
     },
@@ -1945,7 +1951,7 @@ pub enum ServerMessage {
         reason: crate::notice_board::NoticeBoardRefusal,
     },
     NoticeBoardPapers {
-        object_id: u32,
+        board: crate::notice_board::NoticeBoardRef,
         papers: Vec<crate::notice_board::NoticePaper>,
     },
     /// Sent to the registrar after a take-down, then the refreshed `NoticeBoard`.
@@ -1954,7 +1960,7 @@ pub enum ServerMessage {
         count: u32,
     },
     NoticePostRemoved {
-        object_id: u32,
+        board: crate::notice_board::NoticeBoardRef,
         post_id: i64,
     },
     Mailbox {
@@ -2384,6 +2390,15 @@ pub enum ServerMessage {
         player_id: PlayerId,
         family: Option<String>,
     },
+    /// A family-channel line, sent to every online member, the sender included.
+    FamilyChatMessage {
+        from: String,
+        message: String,
+    },
+    /// The family's newest chest movements, newest first.
+    FamilyStorageLog {
+        entries: Vec<crate::family::FamilyStorageEntry>,
+    },
 }
 
 pub use crate::entity::PlayerId;
@@ -2590,6 +2605,7 @@ impl ServerMessage {
             | Self::OperatorNotice { .. }
             | Self::SongRequested { .. }
             | Self::PartyChatMessage { .. }
+            | Self::FamilyChatMessage { .. }
             | Self::PartyInviteReceived { .. }
             | Self::PartyInviteResult { .. }
             | Self::PlayerTradeRequested { .. }
@@ -2603,6 +2619,7 @@ impl ServerMessage {
             | Self::FriendsOnline { .. }
             | Self::FriendRequestReceived { .. }
             | Self::FamilyState { .. }
+            | Self::FamilyStorageLog { .. }
             | Self::FamilyInviteReceived { .. }
             | Self::PartyPositions { .. }
             | Self::PartyVitals { .. }

@@ -197,6 +197,8 @@ describe('estate storage visibility', () => {
       revision: 0,
       max_weight: 500,
       can_deposit: true,
+      can_withdraw: true,
+      family: false,
       items: [],
     })
     vi.mocked(passability_set_furniture).mockClear()

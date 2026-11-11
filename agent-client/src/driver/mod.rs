@@ -419,7 +419,9 @@ async fn notice_round_errand(state: &Arc<Mutex<SharedState>>) -> Option<(Schedul
         .cloned();
     for (_, board) in &boards {
         let cmd = onlinerpg_shared::ClientMessage::PeekNoticeBoard {
-            object_id: board.id,
+            board: onlinerpg_shared::notice_board::NoticeBoardRef::Village {
+                object_id: board.id,
+            },
         };
         if let Err(e) = s.send_command(cmd).await {
             error!("Failed to peek notice board: {e}");

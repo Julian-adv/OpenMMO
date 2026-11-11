@@ -741,18 +741,9 @@ impl super::GameState {
                 .await;
             return;
         }
-        let recipients: Vec<PlayerId> = {
-            let blocked = self.blocked_names.read().await;
-            member_ids
-                .into_iter()
-                .filter(|id| {
-                    id == player_id
-                        || !blocked
-                            .get(id)
-                            .is_some_and(|names| names.contains(&sender_name))
-                })
-                .collect()
-        };
+        let recipients = self
+            .unblocked_recipients(player_id, &sender_name, member_ids)
+            .await;
         // Content stays out of logs like local chat (privacy, F-012).
         info!(from = %sender_name, len = message.len(), "party chat");
         self.send_direct_message_to_players(
@@ -763,6 +754,24 @@ impl super::GameState {
             },
         )
         .await;
+    }
+
+    /// `ids` minus those who blocked `sender_name`; the sender always stays.
+    pub(super) async fn unblocked_recipients(
+        &self,
+        sender: &PlayerId,
+        sender_name: &str,
+        ids: Vec<PlayerId>,
+    ) -> Vec<PlayerId> {
+        let blocked = self.blocked_names.read().await;
+        ids.into_iter()
+            .filter(|id| {
+                id == sender
+                    || !blocked
+                        .get(id)
+                        .is_some_and(|names| names.contains(sender_name))
+            })
+            .collect()
     }
 
     pub async fn leave_party(&self, player_id: &PlayerId) {

@@ -1,9 +1,13 @@
 use super::*;
 use crate::auth::{AuthService, CharacterRecord};
 use onlinerpg_shared::furniture::FurniturePlacement;
-use onlinerpg_shared::notice_board::{NoticeBoardRefusal, NOTICE_PAPER_ITEM};
+use onlinerpg_shared::notice_board::{NoticeBoardRef, NoticeBoardRefusal, NOTICE_PAPER_ITEM};
 
 const BOARD: u32 = 7;
+const AT: NoticeBoardRef = NoticeBoardRef::Village { object_id: BOARD };
+const ELSEWHERE: NoticeBoardRef = NoticeBoardRef::Village {
+    object_id: BOARD + 1,
+};
 
 fn character(auth: &AuthService, name: &str) -> CharacterRecord {
     let account = auth.login_npc(&format!("npc_{name}")).unwrap();
@@ -109,7 +113,7 @@ async fn players_post_read_and_comment_at_a_board() {
     game.debug_set_datetime(&stamp);
     game.write_notice_post(
         &pid("alice"),
-        BOARD,
+        AT,
         " 파티 구함 ",
         "고블린 동굴",
         None,
@@ -127,7 +131,7 @@ async fn players_post_read_and_comment_at_a_board() {
     assert_eq!((title.as_str(), comments.len()), ("파티 구함", 0));
     assert_eq!(papers_left(&game, "alice").await, 4);
 
-    game.open_notice_board(&pid("bob"), BOARD, &auth).await;
+    game.open_notice_board(&pid("bob"), AT, &auth).await;
     let listed = listed(drain(&mut bob_rx)).unwrap();
     assert_eq!(listed.len(), 1);
     assert_eq!(
@@ -139,12 +143,12 @@ async fn players_post_read_and_comment_at_a_board() {
         onlinerpg_shared::notice_board::clamp_paper_position(0, 990)
     );
 
-    game.write_notice_comment(&pid("bob"), BOARD, post_id, "저요", &auth)
+    game.write_notice_comment(&pid("bob"), AT, post_id, "저요", &auth)
         .await;
     let (_, _, comments) = last_post(&drain(&mut bob_rx)).unwrap();
     assert_eq!(comments, ["bob: 저요"]);
 
-    game.read_notice_post(&pid("alice"), BOARD, post_id, &auth)
+    game.read_notice_post(&pid("alice"), AT, post_id, &auth)
         .await;
     assert_eq!(last_post(&drain(&mut alice_rx)).unwrap().2, ["bob: 저요"]);
 }
@@ -157,30 +161,22 @@ async fn boards_refuse_distant_empty_long_rapid_and_unknown_writes() {
     let mut near_rx = enter(&game, &near, 10.5).await;
     let mut far_rx = enter(&game, &far, 30.0).await;
 
-    game.open_notice_board(&pid("far"), BOARD, &auth).await;
-    game.open_notice_board(&pid("near"), BOARD + 1, &auth).await;
+    game.open_notice_board(&pid("far"), AT, &auth).await;
+    game.open_notice_board(&pid("near"), ELSEWHERE, &auth).await;
     assert_eq!(
         refusals(&drain(&mut far_rx)),
         [NoticeBoardRefusal::OutOfReach]
     );
 
-    game.write_notice_post(&pid("near"), BOARD, "  ", "body", None, None, &auth)
+    game.write_notice_post(&pid("near"), AT, "  ", "body", None, None, &auth)
         .await;
-    game.write_notice_post(
-        &pid("near"),
-        BOARD,
-        "t",
-        &"x".repeat(2001),
-        None,
-        None,
-        &auth,
-    )
-    .await;
-    game.write_notice_comment(&pid("near"), BOARD, 999, "hi", &auth)
+    game.write_notice_post(&pid("near"), AT, "t", &"x".repeat(2001), None, None, &auth)
         .await;
-    game.write_notice_post(&pid("near"), BOARD, "t", "b", None, None, &auth)
+    game.write_notice_comment(&pid("near"), AT, 999, "hi", &auth)
         .await;
-    game.write_notice_post(&pid("near"), BOARD, "t2", "b2", None, None, &auth)
+    game.write_notice_post(&pid("near"), AT, "t", "b", None, None, &auth)
+        .await;
+    game.write_notice_post(&pid("near"), AT, "t2", "b2", None, None, &auth)
         .await;
     assert_eq!(
         refusals(&drain(&mut near_rx)),
@@ -215,11 +211,11 @@ async fn posting_needs_paper_and_a_stored_picture() {
     let poor = character(&auth, "poor");
     let mut rx = enter_with_paper(&game, &poor, 10.5, 0).await;
 
-    game.write_notice_post(&pid("poor"), BOARD, "t", "b", None, None, &auth)
+    game.write_notice_post(&pid("poor"), AT, "t", "b", None, None, &auth)
         .await;
     game.write_notice_post(
         &pid("poor"),
-        BOARD,
+        AT,
         "t",
         "",
         Some(&"a".repeat(64)),
@@ -247,10 +243,10 @@ async fn peeking_shows_papers_and_the_registrar_takes_down_expired_ones() {
         minute: 0,
     };
     game.debug_set_datetime(&start);
-    game.write_notice_post(&pid("writer"), BOARD, "old", "b", None, None, &auth)
+    game.write_notice_post(&pid("writer"), AT, "old", "b", None, None, &auth)
         .await;
 
-    game.peek_notice_board(&pid("writer"), BOARD, &auth).await;
+    game.peek_notice_board(&pid("writer"), AT, &auth).await;
     let papers = drain(&mut writer_rx).into_iter().find_map(|m| match m {
         ServerMessage::NoticeBoardPapers { papers, .. } => Some(papers),
         _ => None,
@@ -292,7 +288,7 @@ async fn peeking_shows_papers_and_the_registrar_takes_down_expired_ones() {
         ..start
     };
     game.debug_set_datetime(&later);
-    game.open_notice_board(&pid("writer"), BOARD, &auth).await;
+    game.open_notice_board(&pid("writer"), AT, &auth).await;
     let posts = listed(drain(&mut writer_rx)).unwrap();
     assert!(posts[0].expired);
 
@@ -319,7 +315,7 @@ async fn posts_past_the_grace_period_are_hidden_without_a_take_down() {
         minute: 0,
     };
     game.debug_set_datetime(&start);
-    game.write_notice_post(&pid("writer"), BOARD, "old", "b", None, None, &auth)
+    game.write_notice_post(&pid("writer"), AT, "old", "b", None, None, &auth)
         .await;
     game.debug_set_datetime(&onlinerpg_shared::world::GameDateTime {
         month: 2,
@@ -327,7 +323,7 @@ async fn posts_past_the_grace_period_are_hidden_without_a_take_down() {
         hour: 9,
         ..start
     });
-    game.open_notice_board(&pid("writer"), BOARD, &auth).await;
+    game.open_notice_board(&pid("writer"), AT, &auth).await;
     assert_eq!(listed(drain(&mut rx)).map(|p| p.len()), Some(0));
 }
 
@@ -343,7 +339,7 @@ async fn papers_may_barely_cover_others_and_writers_get_three_each() {
         let auth = &auth;
         async move {
             game.notice_cooldowns.lock().unwrap().clear();
-            game.write_notice_post(&pid(who), BOARD, title, "b", None, at, auth)
+            game.write_notice_post(&pid(who), AT, title, "b", None, at, auth)
                 .await;
         }
     };
@@ -374,19 +370,18 @@ async fn only_the_writer_removes_a_post_and_the_paper_stays_spent() {
     let mut bob_rx = enter(&game, &bob, 9.5).await;
     for title in ["a1", "a2", "a3"] {
         game.notice_cooldowns.lock().unwrap().clear();
-        game.write_notice_post(&pid("alice"), BOARD, title, "b", None, None, &auth)
+        game.write_notice_post(&pid("alice"), AT, title, "b", None, None, &auth)
             .await;
     }
     let (post_id, ..) = last_post(&drain(&mut alice_rx)).unwrap();
-    game.write_notice_comment(&pid("bob"), BOARD, post_id, "hi", &auth)
+    game.write_notice_comment(&pid("bob"), AT, post_id, "hi", &auth)
         .await;
-    game.peek_notice_board(&pid("bob"), BOARD, &auth).await;
+    game.peek_notice_board(&pid("bob"), AT, &auth).await;
     drain(&mut bob_rx);
 
-    game.remove_notice_post(&pid("bob"), BOARD, post_id, &auth)
+    game.remove_notice_post(&pid("bob"), AT, post_id, &auth)
         .await;
-    game.remove_notice_post(&pid("bob"), BOARD, 9999, &auth)
-        .await;
+    game.remove_notice_post(&pid("bob"), AT, 9999, &auth).await;
     assert_eq!(
         refusals(&drain(&mut bob_rx)),
         [
@@ -395,7 +390,7 @@ async fn only_the_writer_removes_a_post_and_the_paper_stays_spent() {
         ]
     );
 
-    game.remove_notice_post(&pid("alice"), BOARD, post_id, &auth)
+    game.remove_notice_post(&pid("alice"), AT, post_id, &auth)
         .await;
     let sent = drain(&mut alice_rx);
     assert!(sent.iter().any(
@@ -406,10 +401,9 @@ async fn only_the_writer_removes_a_post_and_the_paper_stays_spent() {
     assert!(posts.iter().all(|p| p.id != post_id));
     assert_eq!(papers_left(&game, "alice").await, 2);
 
-    game.peek_notice_board(&pid("bob"), BOARD, &auth).await;
-    game.read_notice_post(&pid("bob"), BOARD, post_id, &auth)
-        .await;
-    game.remove_notice_post(&pid("alice"), BOARD, post_id, &auth)
+    game.peek_notice_board(&pid("bob"), AT, &auth).await;
+    game.read_notice_post(&pid("bob"), AT, post_id, &auth).await;
+    game.remove_notice_post(&pid("alice"), AT, post_id, &auth)
         .await;
     let seen = drain(&mut bob_rx);
     assert!(seen.iter().any(
@@ -422,7 +416,7 @@ async fn only_the_writer_removes_a_post_and_the_paper_stays_spent() {
     );
 
     game.notice_cooldowns.lock().unwrap().clear();
-    game.write_notice_post(&pid("alice"), BOARD, "a4", "b", None, None, &auth)
+    game.write_notice_post(&pid("alice"), AT, "a4", "b", None, None, &auth)
         .await;
     assert!(refusals(&drain(&mut alice_rx)).is_empty());
 }

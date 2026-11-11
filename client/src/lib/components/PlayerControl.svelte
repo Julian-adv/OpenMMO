@@ -1728,7 +1728,9 @@
     intent: Extract<ClickIntent, { type: 'notice_board' }>
   ) {
     approachAndAct({ position: intent.position, ...ALTAR_APPROACH }, () =>
-      networkManager.sendOpenNoticeBoard(intent.objectId)
+      networkManager.sendOpenNoticeBoard({
+        Village: { object_id: intent.objectId },
+      })
     )
   }
   function openMailbox(intent: Extract<ClickIntent, { type: 'mailbox' }>) {

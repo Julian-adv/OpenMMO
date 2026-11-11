@@ -15,6 +15,7 @@ use crate::state::{
     SharedState,
 };
 use onlinerpg_shared::messages::BagLineItem;
+use onlinerpg_shared::notice_board::NoticeBoardRef;
 
 use super::action::{
     action_to_command, asks_for_great_chest, parse_turn_tolerant, resolve_move_goal, AgentAbility,
@@ -2675,7 +2676,9 @@ fn notice_board_command(action: &AgentAction) -> Result<onlinerpg_shared::Client
         AgentAction::ReadPost {
             board_id, post_id, ..
         } => ClientMessage::ReadNoticePost {
-            object_id: *board_id,
+            board: NoticeBoardRef::Village {
+                object_id: *board_id,
+            },
             post_id: *post_id,
         },
         AgentAction::WritePost {
@@ -2684,7 +2687,9 @@ fn notice_board_command(action: &AgentAction) -> Result<onlinerpg_shared::Client
             body,
             ..
         } => ClientMessage::WriteNoticePost {
-            object_id: *board_id,
+            board: NoticeBoardRef::Village {
+                object_id: *board_id,
+            },
             title: checked(title, NOTICE_TITLE_MAX_CHARS)?,
             body: checked(body, NOTICE_BODY_MAX_CHARS)?,
             image: None,
@@ -2696,18 +2701,24 @@ fn notice_board_command(action: &AgentAction) -> Result<onlinerpg_shared::Client
             body,
             ..
         } => ClientMessage::WriteNoticeComment {
-            object_id: *board_id,
+            board: NoticeBoardRef::Village {
+                object_id: *board_id,
+            },
             post_id: *post_id,
             body: checked(body, NOTICE_COMMENT_MAX_CHARS)?,
         },
         AgentAction::RemovePost {
             board_id, post_id, ..
         } => ClientMessage::RemoveNoticePost {
-            object_id: *board_id,
+            board: NoticeBoardRef::Village {
+                object_id: *board_id,
+            },
             post_id: *post_id,
         },
         AgentAction::OpenBoard { board_id, .. } => ClientMessage::OpenNoticeBoard {
-            object_id: *board_id,
+            board: NoticeBoardRef::Village {
+                object_id: *board_id,
+            },
         },
         _ => return Err("not a notice board action".into()),
     })
@@ -2798,7 +2809,7 @@ mod notice_board_command_tests {
             .contains("too long"));
         assert!(matches!(
             write(" Party ", "inn"),
-            Ok(ClientMessage::WriteNoticePost { object_id: 7, ref title, .. }) if title == "Party"
+            Ok(ClientMessage::WriteNoticePost { board: NoticeBoardRef::Village { object_id: 7 }, ref title, .. }) if title == "Party"
         ));
         assert!(AgentAction::Wait.notice_board().is_none());
     }

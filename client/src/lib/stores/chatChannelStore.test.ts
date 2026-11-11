@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  shouldBlockNpcTalkForPartyDraft,
+  shouldBlockNpcTalkForPrivateDraft,
   shouldRevertToSay,
 } from './chatChannelStore'
 
@@ -22,17 +22,23 @@ describe('shouldRevertToSay', () => {
     expect(shouldRevertToSay(true, 'party', '')).toBe(false)
     expect(shouldRevertToSay(false, 'say', '')).toBe(false)
   })
+
+  it('reverts the family channel the same way', () => {
+    expect(shouldRevertToSay(false, 'family', '')).toBe(true)
+    expect(shouldRevertToSay(false, 'family', 'see you at home')).toBe(false)
+  })
 })
 
-describe('shouldBlockNpcTalkForPartyDraft', () => {
+describe('shouldBlockNpcTalkForPrivateDraft', () => {
   it('blocks retargeting a party draft to NPC talk', () => {
     expect(
-      shouldBlockNpcTalkForPartyDraft('party', 'keep this in the party')
+      shouldBlockNpcTalkForPrivateDraft('party', 'keep this in the party')
     ).toBe(true)
   })
 
   it('allows NPC talk when no party draft would be exposed', () => {
-    expect(shouldBlockNpcTalkForPartyDraft('party', '   ')).toBe(false)
-    expect(shouldBlockNpcTalkForPartyDraft('say', 'hello')).toBe(false)
+    expect(shouldBlockNpcTalkForPrivateDraft('party', '   ')).toBe(false)
+    expect(shouldBlockNpcTalkForPrivateDraft('say', 'hello')).toBe(false)
+    expect(shouldBlockNpcTalkForPrivateDraft('family', 'hello')).toBe(true)
   })
 })

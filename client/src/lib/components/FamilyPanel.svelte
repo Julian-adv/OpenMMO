@@ -1,7 +1,9 @@
 <script lang="ts">
-  import { t } from '../i18n'
+  import { t, locale } from '../i18n'
+  import { itemDisplayName } from '../data/itemDefs'
   import {
     familyInfo,
+    familyStorageLog,
     familyPanelVisible,
     familyPermissions,
     familyDefaultLabelKey,
@@ -123,6 +125,19 @@
       run: () => networkManager.sendAttachEstateToFamily(false),
     }
   }
+
+  let logOpen = $state(false)
+  function toggleLog() {
+    logOpen = !logOpen
+    if (logOpen) networkManager.sendRequestFamilyStorageLog()
+  }
+  const logTime = (at: number) =>
+    new Date(at * 1000).toLocaleString($locale, {
+      month: 'numeric',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
 
   let ranksOpen = $state(false)
   let drafts = $state<{ label: string; permissions: number }[]>([])
@@ -414,6 +429,37 @@
           >
         {/if}
 
+        <button
+          class="section-title toggle"
+          aria-expanded={logOpen}
+          onclick={toggleLog}
+          >{logOpen ? '▾' : '▸'} {$t('family.storageLog')}</button
+        >
+        {#if logOpen}
+          {#if !$familyStorageLog}
+            <div class="dim small">{$t('family.loading')}</div>
+          {:else if $familyStorageLog.length === 0}
+            <div class="dim small">{$t('family.storageLogEmpty')}</div>
+          {:else}
+            <div class="storage-log">
+              {#each $familyStorageLog as entry, index (index)}
+                <div class="log-row">
+                  <span class="dim small">{logTime(entry.at)}</span>
+                  <span class="member-name">{entry.character_name}</span>
+                  <span class:take={entry.quantity < 0}
+                    >{entry.quantity > 0 ? '+' : '−'}{Math.abs(
+                      entry.quantity
+                    )}</span
+                  >
+                  <span class="log-item"
+                    >{itemDisplayName(entry.item_def_id, 0, $locale)}</span
+                  >
+                </div>
+              {/each}
+            </div>
+          {/if}
+        {/if}
+
         <div class="leave-row">
           <button class="text-btn danger" disabled={isHead} onclick={askLeave}
             >{$t('family.leave')}</button
@@ -564,6 +610,29 @@
 
   .section-title.toggle {
     cursor: pointer;
+  }
+
+  .storage-log {
+    max-height: 180px;
+    overflow-y: auto;
+  }
+
+  .log-row {
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+    font-size: 11px;
+    padding: 1px 0;
+  }
+
+  .log-row .take {
+    color: #f6ad55;
+  }
+
+  .log-item {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .status-dot {

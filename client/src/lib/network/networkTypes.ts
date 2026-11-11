@@ -1,4 +1,5 @@
 import type { MailboxRef } from '../stores/mailStore'
+import type { NoticeBoardRef } from '../stores/noticeBoardStore'
 import type { AbilityId } from '../data/abilities'
 import type { MonsterData } from '../types/Monster'
 import type { WallDirection } from '../utils/house-geometry'
@@ -257,6 +258,8 @@ export type ClientMessage =
   | { PartyPromote: { target_id: number } }
   | { PartySetLoot: { shared: boolean } }
   | { PartyChat: { message: string } }
+  | { FamilyChat: { message: string } }
+  | 'RequestFamilyStorageLog'
   | 'RequestPartyPositions'
   | { FriendRespond: { requester_id: number; accept: boolean } }
   | { FriendRemove: { name: string } }
@@ -310,26 +313,30 @@ export type ClientMessage =
   | { InteractObject: { object_type: string; object_id: number } }
   | { InspectAltar: { object_id: number } }
   | { OfferAtAltar: { object_id: number } }
-  | { OpenNoticeBoard: { object_id: number } }
-  | { ReadNoticePost: { object_id: number; post_id: number } }
+  | { OpenNoticeBoard: { board: NoticeBoardRef } }
+  | { ReadNoticePost: { board: NoticeBoardRef; post_id: number } }
   | {
       WriteNoticePost: {
-        object_id: number
+        board: NoticeBoardRef
         title: string
         body: string
         image: string | null
         position: [number, number] | null
       }
     }
-  | { PeekNoticeBoard: { object_id: number } }
+  | { PeekNoticeBoard: { board: NoticeBoardRef } }
   | { OpenMailbox: { mailbox: MailboxRef } }
   | { ReadMail: { mailbox: MailboxRef; letter_id: number } }
   | { SendMail: { mailbox: MailboxRef; recipient: string; body: string } }
   | { DeleteMail: { mailbox: MailboxRef; letter_id: number } }
   | {
-      WriteNoticeComment: { object_id: number; post_id: number; body: string }
+      WriteNoticeComment: {
+        board: NoticeBoardRef
+        post_id: number
+        body: string
+      }
     }
-  | { RemoveNoticePost: { object_id: number; post_id: number } }
+  | { RemoveNoticePost: { board: NoticeBoardRef; post_id: number } }
   | 'StopInteraction'
   | 'Heartbeat'
   | 'ResyncWorld'
@@ -499,6 +506,9 @@ export type EstateChestState = {
   revision: number
   max_weight: number
   can_deposit: boolean
+  can_withdraw: boolean
+  /** A family chest: deposits and withdrawals follow the viewer's rank. */
+  family: boolean
   items: ItemInstance[]
 }
 

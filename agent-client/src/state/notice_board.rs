@@ -54,6 +54,8 @@ pub fn refusal_text(reason: NoticeBoardRefusal) -> &'static str {
             "you already have 3 current posts on that board; wait until one expires"
         }
         NoticeBoardRefusal::NotYours => "only the writer may remove a post",
+        NoticeBoardRefusal::NotFamily => "only members of its family use that board",
+        NoticeBoardRefusal::NoFamilyRank => "your family rank does not allow that",
         NoticeBoardRefusal::ServerError => "the server failed to save it; try later",
     }
 }

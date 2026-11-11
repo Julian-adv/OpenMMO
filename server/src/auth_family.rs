@@ -214,7 +214,11 @@ fn retire_name(conn: &Connection, name: &str) -> Result<(), rusqlite::Error> {
 /// Bring one family back to its invariants after members left by any route:
 /// no members dissolves it, a missing head is succeeded, and estates whose
 /// account has no member left are let go. True when it was dissolved.
-fn settle_family(conn: &Connection, family_id: i64) -> Result<bool, rusqlite::Error> {
+fn settle_family(
+    conn: &Connection,
+    family_id: i64,
+    last_head: Option<i64>,
+) -> Result<bool, rusqlite::Error> {
     let members: i64 = conn.query_row(
         "SELECT COUNT(*) FROM family_members WHERE family_id=?1",
         [family_id],
@@ -231,6 +235,12 @@ fn settle_family(conn: &Connection, family_id: i64) -> Result<bool, rusqlite::Er
         conn.execute(
             "UPDATE land_estates SET family_id=NULL WHERE family_id=?1",
             [family_id],
+        )?;
+        // What is left in the family's chests goes to its last head.
+        conn.execute(
+            "UPDATE estate_chests SET family_id=NULL, owner_id=COALESCE(?2, owner_id)
+             WHERE family_id=?1",
+            params![family_id, last_head],
         )?;
         conn.execute("DELETE FROM families WHERE id=?1", [family_id])?;
         if let Some(name) = name {
@@ -612,7 +622,7 @@ impl AuthService {
             "INSERT OR REPLACE INTO family_leave_cooldowns (character_id, left_at) VALUES (?1, ?2)",
             params![target_id, unix_now()],
         )?;
-        let dissolved = settle_family(&tx, target.family_id)?;
+        let dissolved = settle_family(&tx, target.family_id, Some(target_id))?;
         tx.commit()?;
         Ok(Ok(FamilyDeparture {
             family_id: target.family_id,
@@ -642,7 +652,7 @@ impl AuthService {
         drop(stmt);
         let mut changed = Vec::new();
         for id in ids {
-            if !settle_family(&tx, id)? {
+            if !settle_family(&tx, id, None)? {
                 changed.push(id);
             }
         }
@@ -847,6 +857,19 @@ impl AuthService {
                 params![account, member.family_id],
             )?
         } else {
+            let stocked: bool = tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM estate_chests c
+                    JOIN land_estates e ON e.id=c.estate_id
+                    JOIN estate_chest_items i ON i.chest_id=c.id
+                    WHERE e.account_name=?1 AND c.family_id=?2)",
+                params![account, member.family_id],
+                |row| row.get(0),
+            )?;
+            if stocked {
+                return Ok(Err(
+                    "Empty the family chests on your estate before detaching it.",
+                ));
+            }
             tx.execute(
                 "UPDATE land_estates SET family_id=NULL WHERE account_name=?1 AND family_id=?2",
                 params![account, member.family_id],

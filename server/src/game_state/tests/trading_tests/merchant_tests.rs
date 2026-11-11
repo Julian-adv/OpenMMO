@@ -144,7 +144,14 @@ async fn steward_sells_land_deeds_and_burns_the_purchase_gold() {
         ServerMessage::ShopState { catalog, .. } => {
             assert_eq!(
                 catalog,
-                vec!["land_deed", "notice_paper", "letter", "revenue_stamp"]
+                vec![
+                    "land_deed",
+                    "notice_paper",
+                    "letter",
+                    "revenue_stamp",
+                    "family_chest",
+                    "family_board"
+                ]
             );
         }
         other => panic!("Expected Aldwin's shop, got {other:?}"),

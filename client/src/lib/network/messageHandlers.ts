@@ -223,6 +223,8 @@ import {
 } from '../stores/friendStore'
 import {
   applyFamilyState,
+  familyStorageLog,
+  type FamilyStorageEntry,
   pendingFamilyInvites,
   MAX_PENDING_FAMILY_INVITES,
   type FamilyInfo,
@@ -269,7 +271,11 @@ import {
   stopInstrumentPerformer,
 } from '../managers/instrumentAudio'
 import { shortestWrappedDeltaX } from '../terrain/world-wrap'
-import { whisperChatEntry, partyChatEntry } from '../chat-format'
+import {
+  whisperChatEntry,
+  partyChatEntry,
+  familyChatEntry,
+} from '../chat-format'
 import {
   battle_hymn_stats,
   fishing_cast_ms,
@@ -1163,6 +1169,20 @@ export function handleServerMessage(
     case 'PartyChatMessage':
       // No chat bubble — the party channel is private to the party.
       addChatMessage(partyChatEntry(data.from, data.message))
+      break
+
+    case 'FamilyStorageLog':
+      familyStorageLog.set(
+        (data.entries as FamilyStorageEntry[]).map((entry) => ({
+          ...entry,
+          quantity: Number(entry.quantity),
+          at: Number(entry.at),
+        }))
+      )
+      break
+
+    case 'FamilyChatMessage':
+      addChatMessage(familyChatEntry(data.from, data.message))
       break
 
     case 'SystemMessage':

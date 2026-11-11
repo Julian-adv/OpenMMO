@@ -26,7 +26,13 @@
     noticeExcerpt,
     type NoticeBoardRefusal,
     type NoticeBoardSession,
+    isFamilyBoard,
   } from '../stores/noticeBoardStore'
+  import {
+    familyInfo,
+    familyPermissions,
+    FAMILY_PERMISSION,
+  } from '../stores/familyStore'
 
   let { session }: { session: NoticeBoardSession } = $props()
 
@@ -49,6 +55,16 @@
   let confirmingRemove = $state(false)
 
   const view = $derived(session.view)
+  /** Family boards are free to post on and follow the reader's rank. */
+  const family = $derived(isFamilyBoard(session.board))
+  const familyBits = $derived($familyInfo ? familyPermissions($familyInfo) : 0)
+  const canWrite = $derived(
+    !family || (familyBits & FAMILY_PERMISSION.BOARD_WRITE) !== 0
+  )
+  const moderator = $derived(
+    family && (familyBits & FAMILY_PERMISSION.BOARD_MODERATE) !== 0
+  )
+  const hasPaper = $derived(family || $noticePaperCount > 0)
   /** Other writers' current papers, which a new one may barely cover. */
   const protectedSpots = $derived(
     session.posts
@@ -72,7 +88,7 @@
     !session.pending &&
       !uploading &&
       ghostAllowed &&
-      $noticePaperCount > 0 &&
+      hasPaper &&
       title.trim() !== '' &&
       (body.trim() !== '' || picture !== null)
   )
@@ -113,7 +129,8 @@
   function startWriting() {
     const refuse = (refusal: NoticeBoardRefusal) =>
       noticeBoard.update((s) => (s ? { ...s, refusal } : s))
-    if ($noticePaperCount === 0) return refuse('no_paper')
+    if (!canWrite) return refuse('no_family_rank')
+    if (!hasPaper) return refuse('no_paper')
     if (ownCurrent >= NOTICE_POSTS_PER_WRITER) return refuse('too_many_posts')
     if (freeSpot === null) return refuse('board_full')
     setView({ kind: 'write' })
@@ -125,7 +142,7 @@
 
   function openPost(postId: number) {
     markPending()
-    networkManager.sendReadNoticePost(session.objectId, postId)
+    networkManager.sendReadNoticePost(session.board, postId)
   }
 
   async function toPicturePng(file: File): Promise<Blob> {
@@ -184,26 +201,20 @@
     const image = await pictureHash()
     if (image === undefined) return
     markPending()
-    networkManager.sendWriteNoticePost(
-      session.objectId,
-      title,
-      body,
-      image,
-      ghost
-    )
+    networkManager.sendWriteNoticePost(session.board, title, body, image, ghost)
   }
 
   function submitComment(event: Event, postId: number) {
     event.preventDefault()
     if (!comment.trim() || session.pending) return
     markPending()
-    networkManager.sendWriteNoticeComment(session.objectId, postId, comment)
+    networkManager.sendWriteNoticeComment(session.board, postId, comment)
   }
 
   function removePost(postId: number) {
     if (session.pending) return
     markPending()
-    networkManager.sendRemoveNoticePost(session.objectId, postId)
+    networkManager.sendRemoveNoticePost(session.board, postId)
   }
 
   function placeAt(event: PointerEvent) {
@@ -261,11 +272,15 @@
     bind:this={dialog}
   >
     <header>
-      <h2 id="board-title">{$t('noticeBoard.title')}</h2>
+      <h2 id="board-title">
+        {family ? $t('noticeBoard.familyTitle') : $t('noticeBoard.title')}
+      </h2>
       <div class="header-actions">
-        <span class="paper-count" title={$t('noticeBoard.paperHint')}>
-          {$t('noticeBoard.papers', { count: $noticePaperCount })}
-        </span>
+        {#if !family}
+          <span class="paper-count" title={$t('noticeBoard.paperHint')}>
+            {$t('noticeBoard.papers', { count: $noticePaperCount })}
+          </span>
+        {/if}
         {#if view.kind === 'list'}
           <button class="primary" onclick={startWriting}
             >{$t('noticeBoard.write')}</button
@@ -359,7 +374,7 @@
         {#if view.post.body}
           <p class="body">{view.post.body}</p>
         {/if}
-        {#if viewedIsMine}
+        {#if viewedIsMine || moderator}
           <div class="remove-row">
             {#if confirmingRemove}
               <span class="muted">{$t('noticeBoard.removeConfirm')}</span>
@@ -486,7 +501,7 @@
       {#if view.kind === 'write'}
         <div class="row-end">
           <span class="muted">
-            {#if $noticePaperCount === 0}
+            {#if !hasPaper}
               {$t('noticeBoard.paperHint')}
             {/if}
           </span>

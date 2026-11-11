@@ -264,7 +264,11 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// `FamilyInviteReceived`, `PlayerFamilyChanged`), `Player.family` and
 /// `Character.family`.
 /// v145: female `HairStyle::LongBangs`.
-pub const PROTOCOL_VERSION: u32 = 145;
+/// v146: family chat (`FamilyChat`, `FamilyChatMessage`), family chests
+/// (`EstateChestState.can_withdraw`/`family`, `RequestFamilyStorageLog`,
+/// `FamilyStorageLog`) and family boards (`NoticeBoardRef` replaces the
+/// notice messages' `object_id`; refusals `not_family`, `no_family_rank`).
+pub const PROTOCOL_VERSION: u32 = 146;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

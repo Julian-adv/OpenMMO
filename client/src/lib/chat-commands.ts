@@ -35,6 +35,7 @@ import { DUNGEON_ENTRANCES } from './data/dungeonDefs'
 import { dungeonManager } from './managers/dungeonManager'
 import { chatChannel } from './stores/chatChannelStore'
 import { partyRoster } from './stores/partyStore'
+import { familyInfo } from './stores/familyStore'
 import { EMOTE_LIST } from './emote-meta'
 import { DEBUG_ANIM_NAMES, emoteRequest } from './stores/emoteStore'
 
@@ -115,6 +116,21 @@ const COMMANDS: Record<string, Command> = {
       }
       chatChannel.set('party')
       if (message) networkManager.sendPartyChat(message)
+    },
+  },
+  '/g': {
+    desc: 'command.help.g',
+    run: (args) => {
+      const message = args.trim()
+      if (!get(familyInfo)) {
+        addChatMessage({
+          text: translate('chat.notInFamily'),
+          sender: 'system',
+        })
+        return
+      }
+      chatChannel.set('family')
+      if (message) networkManager.sendFamilyChat(message)
     },
   },
   '/s': {
