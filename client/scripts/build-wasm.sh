@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
+# Usage: build-wasm.sh [--release]. Without --release, wasm-opt is skipped:
+# it takes minutes and dev builds do not need the smaller binary.
 set -euo pipefail
+
+opt=(--no-opt)
+if [ "${1:-}" = "--release" ]; then
+    opt=()
+fi
 
 client_dir=$(cd "$(dirname "$0")/.." && pwd)
 mkdir -p "$client_dir/node_modules/.cache"
@@ -35,4 +42,4 @@ npm run generate:monster-clips
 npm run generate:animations
 rm -rf src/lib/wasm
 cd ../shared
-wasm-pack build --target web --out-dir ../client/src/lib/wasm
+wasm-pack build --target web "${opt[@]}" --out-dir ../client/src/lib/wasm

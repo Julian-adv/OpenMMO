@@ -8,6 +8,7 @@
     furniturePurchasePending,
   } from '../stores/furnitureShopStore'
   import { itemDisplayName, getItemDef } from '../data/itemDefs'
+  import { itemTooltip } from '../actions/itemTooltip'
   import GoldAmount from './GoldAmount.svelte'
 </script>
 
@@ -18,9 +19,16 @@
       {@const product = displayProduct(line.displayId)!}
       {@const name = itemDisplayName(product.itemDefId, 0, $locale)}
       {@const removeLabel = $t('furnitureShop.removeOne', { name })}
+      {@const def = getItemDef(product.itemDefId)}
       <div class="line">
-        <img src="/items/{getItemDef(product.itemDefId)?.icon}" alt="" />
-        <span>{name} ×{line.quantity}</span>
+        <img
+          src="/items/{def?.icon}"
+          alt=""
+          use:itemTooltip={def ? { def, side: 'right' } : null}
+        />
+        <span use:itemTooltip={def ? { def, side: 'right' } : null}
+          >{name} ×{line.quantity}</span
+        >
         <GoldAmount copper={product.price * line.quantity} />
         <button
           disabled={$furniturePurchasePending}

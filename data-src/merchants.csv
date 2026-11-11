@@ -5,6 +5,6 @@ tobin,Tobin,40,fishing_rod;miner_pickaxe,,,,
 wick,Wick,30,torch;healing_potion;greater_healing_potion;supreme_healing_potion;campfire_kit;bread;jerky;scroll_of_return;scroll_of_estate_return;scroll_of_family_return,,,,
 miriel,Miriel,35,apple;bread;cheese;jerky;lembas_wafer;grilled_minnow;grilled_perch;grilled_trout,,,,
 cocoly,Cocoly,35,apple;bread;cheese;jerky;lembas_wafer;grilled_minnow;grilled_perch;grilled_trout,,,,
-steward,Aldwin,40,land_deed;notice_paper;letter;revenue_stamp;family_chest;family_board;family_banner;family_pennant,,,,
+steward,Aldwin,40,land_deed;notice_paper;letter;revenue_stamp,,,,
 estate_architect,Rowan,40,wooden_fence;landscaping_toolbox;landscaping_palette_sand;landscaping_palette_red_soil;landscaping_palette_gravel;landscaping_palette_pebbles;landscaping_palette_stone_path;landscaping_palette_paving;scroll_of_medium_two_story_house;scroll_of_small_house;scroll_of_small_two_story_house;scroll_of_large_two_story_house;scroll_of_medium_house,,,,
 ysolde,Ysolde,0,earth_shield;rift_ring,terraclash_token,earth_shield:30;rift_ring:30,30,8

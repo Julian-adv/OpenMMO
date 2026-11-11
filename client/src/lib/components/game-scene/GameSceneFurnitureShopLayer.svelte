@@ -18,7 +18,6 @@
     addFurnitureToBasket,
     clearFurnitureBasket,
   } from '../../stores/furnitureShopStore'
-  import { playerVisualFloorLevel } from '../../stores/housingStore'
   import { currentDungeonDepth } from '../../stores/dungeonStore'
   import { networkManager } from '../../network/socket'
 
@@ -40,9 +39,6 @@
       player.position.x <= furnitureShop.bounds[2] + 3 &&
       player.position.z >= furnitureShop.bounds[1] - 3 &&
       player.position.z <= furnitureShop.bounds[3] + 3 &&
-      player.position.y >= 0 &&
-      player.position.y <= 4 &&
-      get(playerVisualFloorLevel) === 0 &&
       get(currentDungeonDepth) < 1 &&
       !get(mapEditorMode) &&
       !get(housingEditorMode)
@@ -76,6 +72,8 @@
           world.x <= furnitureShop.bounds[2] &&
           world.z >= furnitureShop.bounds[1] &&
           world.z <= furnitureShop.bounds[3] &&
+          // Same floor as the shopper, as the server's DISPLAY_REACH_HEIGHT.
+          Math.abs(world.y - player.position.y) <= 2.5 &&
           Math.hypot(
             player.position.x - world.x,
             player.position.z - world.z

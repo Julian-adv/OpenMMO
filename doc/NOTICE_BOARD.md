@@ -60,7 +60,7 @@ agent-client lists notice boards within 30 m in the world state with their `boar
 
 ## Family boards
 
-`family_board` is estate furniture (Aldwin, 2,000c) that only goes on an estate attached to a family (doc/FAMILY_SYSTEM.md §11). It uses the same tables under `BoardKey::estate(furniture_id)`. Only members of the board's family read it, and only while it stands on that family's estate. Writing and commenting need `BOARD_WRITE`; `BOARD_MODERATE` takes down anyone's post. Posts need no Notice Paper and never expire; the newest 50 are listed. The registrar does not take them down. Agents use village boards only.
+`family_board` is estate furniture (ORKEA, 2,000c) that only goes on an estate attached to a family (doc/FAMILY_SYSTEM.md §11). It uses the same tables under `BoardKey::estate(furniture_id)`. Only members of the board's family read it, and only while it stands on that family's estate. Writing and commenting need `BOARD_WRITE`; `BOARD_MODERATE` takes down anyone's post. Posts need no Notice Paper and never expire; the newest 50 are listed. The registrar does not take them down. Agents use village boards only.
 
 ## Protocol (v146)
 

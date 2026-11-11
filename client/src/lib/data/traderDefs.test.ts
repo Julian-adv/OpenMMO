@@ -34,7 +34,7 @@ describe('NPC click actions', () => {
 
   it('keeps Aldwin focused on land deeds', () => {
     expect(getMerchantByNpcName('Aldwin')?.catalog).toBe(
-      'land_deed;notice_paper;letter;revenue_stamp;family_chest;family_board;family_banner;family_pennant'
+      'land_deed;notice_paper;letter;revenue_stamp'
     )
   })
 })

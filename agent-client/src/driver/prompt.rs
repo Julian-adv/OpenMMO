@@ -748,7 +748,7 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             use onlinerpg_shared::furniture_shop::FurnitureTip;
             let advice = match FurnitureTip::for_item(item_def_id)? {
                 FurnitureTip::StorageChest =>
-                    "The Wooden Storage Chest must be placed on the customer's own estate \
+                    "The Estate Chest must be placed on the customer's own estate \
                      before it can be used; it holds up to 50 kg.",
                 FurnitureTip::Bed =>
                     "Sleeping in a bed for a full 16 seconds doubles natural HP and mana recovery. \

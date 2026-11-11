@@ -21,7 +21,9 @@ MOCK
 cat > "$work/bin/wasm-pack" <<'MOCK'
 #!/usr/bin/env bash
 set -euo pipefail
-[[ "$*" == 'build --target web --out-dir ../client/src/lib/wasm' ]]
+echo "$*" >> "$TEST_WASM_WORK/args"
+[[ "$*" == 'build --target web --no-opt --out-dir ../client/src/lib/wasm' ||
+   "$*" == 'build --target web --out-dir ../client/src/lib/wasm' ]]
 [[ ! -e ../client/src/lib/wasm/package.json ]]
 mkdir -p ../client/src/lib/wasm
 printf '{"files":["game.wasm"]}\n' > ../client/src/lib/wasm/package.json
@@ -52,4 +54,7 @@ else
     [[ $? == 7 ]]
 fi
 bash "$work/repo/client/scripts/build-wasm.sh"
-echo "WASM build serialization and failure recovery passed."
+[[ "$(tail -n 1 "$work/args")" == *'--no-opt'* ]]
+bash "$work/repo/client/scripts/build-wasm.sh" --release
+[[ "$(tail -n 1 "$work/args")" != *'--no-opt'* ]]
+echo "WASM build serialization, failure recovery and release flag passed."

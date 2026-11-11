@@ -12,6 +12,10 @@ use onlinerpg_shared::furniture_shop::{
     quote, FurnitureOrderLine, FurnitureProduct, FurnitureTip, SHOP,
 };
 
+/// How far above or below a display the shopper may stand, so a wall
+/// display raised up a floor still counts.
+const DISPLAY_REACH_HEIGHT: f32 = 2.5;
+
 fn find_display<'a>(
     displays: &'a [FurniturePlacement],
     display_id: u32,
@@ -20,7 +24,6 @@ fn find_display<'a>(
     displays.iter().find(|display| {
         display.id == display_id
             && display.type_id == product.object_type
-            && display.floor_level == 0
             && (SHOP.bounds[0]..=SHOP.bounds[2]).contains(&display.x)
             && (SHOP.bounds[1]..=SHOP.bounds[3]).contains(&display.z)
     })
@@ -52,10 +55,11 @@ impl GameState {
             let Some(player) = players.get(player_id) else {
                 return false;
             };
+            // Displays stand on any floor; the shopper must be on the same one.
             if player.is_official_npc
                 || player.health == 0
-                || player.floor_level != 0
-                || !(0.0..=4.0).contains(&player.position.y)
+                || i16::from(player.floor_level) != i16::from(display.floor_level)
+                || (player.position.y - display.y).abs() > DISPLAY_REACH_HEIGHT
                 || (player.position.x - display.x).hypot(player.position.z - display.z) > 3.5
             {
                 return false;
@@ -234,5 +238,30 @@ impl GameState {
             .await;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn displays_upstairs_are_for_sale() {
+        let product = SHOP
+            .products
+            .iter()
+            .find(|p| p.item_def_id == "family_banner")
+            .unwrap();
+        let display = FurniturePlacement {
+            id: product.display_ids[0],
+            type_id: product.object_type.clone(),
+            x: (SHOP.bounds[0] + SHOP.bounds[2]) / 2.0,
+            y: 4.05,
+            z: (SHOP.bounds[1] + SHOP.bounds[3]) / 2.0,
+            rotation_deg: 0.0,
+            floor_level: 1,
+        };
+        let displays = [display];
+        assert!(find_display(&displays, product.display_ids[0], product).is_some());
     }
 }

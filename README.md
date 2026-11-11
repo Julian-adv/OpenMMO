@@ -232,8 +232,9 @@ To have Rust code changes in the `shared` library reflected in the browser immed
 cargo watch -w shared -s "npm run build:wasm --prefix client"
 ```
 
-`build:wasm` serializes data generation, output cleanup, and packaging with a
-per-checkout lock. Manual builds and the watcher can run together; a second build
+`build:wasm` skips `wasm-opt`, which takes minutes; `npm run build` passes
+`--release` so deployed builds are still optimized. It serializes data
+generation, output cleanup, and packaging with a per-checkout lock. Manual builds and the watcher can run together; a second build
 waits for the first to finish before touching the generated files.
 
 ### 8. Running the GLB Editor

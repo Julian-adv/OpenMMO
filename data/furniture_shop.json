@@ -212,7 +212,40 @@
       "itemDefId": "furniture_mailbox",
       "price": 1500,
       "displayIds": [
-        115
+        115,
+        117
+      ]
+    },
+    {
+      "objectType": "notice_board",
+      "itemDefId": "family_board",
+      "price": 2000,
+      "displayIds": [
+        116
+      ]
+    },
+    {
+      "objectType": "family_banner",
+      "itemDefId": "family_banner",
+      "price": 3000,
+      "displayIds": [
+        118
+      ]
+    },
+    {
+      "objectType": "family_pennant",
+      "itemDefId": "family_pennant",
+      "price": 1500,
+      "displayIds": [
+        119
+      ]
+    },
+    {
+      "objectType": "chest_animated",
+      "itemDefId": "family_chest",
+      "price": 6000,
+      "displayIds": [
+        120
       ]
     }
   ]

@@ -6,7 +6,7 @@
   "scripts": {
     "build:wasm": "bash scripts/build-wasm.sh",
     "dev": "npm run build:wasm && vite",
-    "build": "npm run build:wasm && vite build && npm run keep:asset-times && npm run hash:assets && npm run compress:assets",
+    "build": "bash scripts/build-wasm.sh --release && vite build && npm run keep:asset-times && npm run hash:assets && npm run compress:assets",
     "hash:assets": "node scripts/hash-assets.mjs",
     "compress:assets": "node scripts/compress-assets.mjs",
     "keep:asset-times": "cp -a public/. dist/",

@@ -172,7 +172,7 @@
 
 ### 깃발·휘장
 
-- `data-src/estate_storage.csv`에 가구로 추가한다: `family_banner`(세우는 깃발, 3,000c), `family_pennant`(벽걸이 휘장, 1,500c). Aldwin이 판다. 휘장은 벽 장식 칼처럼 높이를 올려 벽에 건다.
+- `data-src/estate_storage.csv`에 가구로 추가한다: `family_banner`(세우는 깃발, 3,000c), `family_pennant`(벽걸이 휘장, 1,500c). ORKEA 2층 전시물(118, 119)로 판다. 휘장은 벽 장식 칼처럼 높이를 올려 벽에 건다.
 - 가문 영지에만 놓을 수 있다. 권한은 `PLACE_FURNITURE`.
 - 그림은 `EstateChest.emblem`으로 서버가 채워 보낸다: 가구의 `family_id`가 영지의 `family_id`와 같을 때 그 가문 문장. 가구 행에는 저장하지 않는다.
 - 문장 변경, 영지 연결·분리, 탈퇴, 해산, 합병 때 그 가문 가구를 다시 읽어 바뀐 것만 알린다 (`refresh_family_furniture`).
@@ -183,7 +183,7 @@
 
 마을 은행이 없으므로 영지 궤짝 체계에 얹는다.
 
-- `estate_storage.csv`에 `family_chest`를 추가한다. 가문 영지에만 놓을 수 있다. 가구 상점에는 진열대가 필요해서 Aldwin이 판다 (6,000c).
+- `estate_storage.csv`에 `family_chest`를 추가한다. 가문 영지에만 놓을 수 있다. ORKEA 2층 전시물(120)로 판다 (6,000c).
 - 놓을 때 영지의 `family_id`를 `estate_chests.family_id`에 적고, 소유자(`owner_id`)는 놓은 가문원이 아니라 영지 소유 캐릭터로 둔다. 놓은 사람이 탈퇴·삭제돼도 창고가 남는다. 가문 가구는 같은 가문의 영지 안에서만 옮긴다.
 - 용량: 200kg (`storage_chest`는 50kg). 개수는 가문당 4개.
 - 열기: 3m 이내, 해당 가문원. 넣기 `STORAGE_DEPOSIT`, 꺼내기 `STORAGE_WITHDRAW`.
@@ -204,7 +204,7 @@
 
 ## 11. 가문 게시판
 
-- 기존 게시판은 맵 에디터가 놓는 지역 오브젝트(`BoardKey { rx, rz, object_id }`)다. 가문 게시판은 플레이어가 놓는 가구(`family_board`, Aldwin 2,000c)로 추가한다.
+- 기존 게시판은 맵 에디터가 놓는 지역 오브젝트(`BoardKey { rx, rz, object_id }`)다. 가문 게시판은 플레이어가 놓는 가구(`family_board`, ORKEA 2층 전시물 116, 2,000c)로 추가한다.
 - 게시판 식별자는 `NoticeBoardRef { Village | Estate }`다. 저장은 `notice_posts`/`notice_comments`를 그대로 쓰고, 가문 게시판은 `BoardKey::estate(furniture_id)`(어느 지역 파일도 쓰지 않는 `rx = i32::MIN`) 아래 둔다.
 - 글쓰기에 게시 용지가 들지 않는다.
 - 읽기·쓰기·댓글은 그 영지의 가문원만. 서버가 목록 요청 단계에서 거른다.

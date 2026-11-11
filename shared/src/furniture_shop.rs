@@ -80,7 +80,7 @@ mod tests {
     #[test]
     fn all_displays_sell_placeable_furniture() {
         let mut displays = std::collections::HashSet::new();
-        assert_eq!(SHOP.products.len(), 25);
+        assert_eq!(SHOP.products.len(), 29);
         for product in &SHOP.products {
             let definition =
                 crate::estate_storage::estate_storage_def(&product.item_def_id).unwrap();
@@ -89,6 +89,8 @@ mod tests {
                 definition.capacity_kg,
                 if product.item_def_id == "storage_chest" {
                     50.0
+                } else if product.item_def_id == "family_chest" {
+                    200.0
                 } else {
                     0.0
                 }
@@ -98,7 +100,7 @@ mod tests {
                 assert!(displays.insert(id));
             }
         }
-        assert_eq!(displays.len(), 27);
+        assert_eq!(displays.len(), 32);
         assert!(!displays.contains(&84));
     }
 
