@@ -32,7 +32,7 @@ impl GameState {
                 matches!(
                     def.use_effect(),
                     Some(UseEffect::TeleportTown | UseEffect::TeleportRandom)
-                ) || def.authenticated_use_action == Some(AuthenticatedUseAction::EstateReturn)
+                ) || AuthenticatedUseAction::returns_to_estate(def.authenticated_use_action)
             })
     }
 

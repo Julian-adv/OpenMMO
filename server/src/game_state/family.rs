@@ -28,6 +28,8 @@ pub(crate) struct Families {
     invites: HashMap<(PlayerId, PlayerId), PendingConsent>,
     /// Emblems of families with a member online.
     emblems: HashMap<i64, FamilyEmblem>,
+    /// Online members who keep their own cape print.
+    own_capes: std::collections::HashSet<PlayerId>,
     /// Merge offers by (proposer, target head), with their terms.
     merges: HashMap<(PlayerId, PlayerId), PendingConsent>,
     merge_terms: HashMap<(PlayerId, PlayerId), FamilyMergeTerms>,
@@ -41,6 +43,7 @@ impl Families {
     }
 
     fn leave(&mut self, player_id: &PlayerId) -> Option<i64> {
+        self.own_capes.remove(player_id);
         let family_id = self.of_player.remove(player_id)?;
         if let Some(list) = self.online.get_mut(&family_id) {
             list.retain(|id| id != player_id);
@@ -57,6 +60,9 @@ impl Families {
     }
 
     fn emblem_of(&self, player_id: &PlayerId) -> Option<FamilyEmblem> {
+        if self.own_capes.contains(player_id) {
+            return None;
+        }
         let family_id = self.of_player.get(player_id)?;
         self.emblems.get(family_id).filter(|e| e.is_set()).cloned()
     }
@@ -118,6 +124,8 @@ fn family_info(
             .map_or(0, |at| at + FAMILY_RENAME_INTERVAL_SECS),
         emblem_texture: roster.emblem.texture.clone(),
         emblem_color: roster.emblem.color.clone(),
+        my_cape_emblem: me.cape_emblem,
+        seat_estate_id: roster.seat_estate_id,
     })
 }
 
@@ -156,6 +164,29 @@ impl super::GameState {
             if let Some(inventory) = self.get_player_inventory(player_id).await {
                 self.set_player_gear(player_id, &inventory).await;
             }
+        }
+    }
+
+    pub async fn set_family_seat(&self, player_id: &PlayerId, estate_id: i64, auth: &AuthService) {
+        self.family_change(player_id, auth, move |auth, actor| {
+            auth.set_family_seat(actor, estate_id)
+        })
+        .await;
+    }
+
+    pub async fn set_family_cape_emblem(
+        &self,
+        player_id: &PlayerId,
+        show: bool,
+        auth: &AuthService,
+    ) {
+        let changed = self
+            .family_change(player_id, auth, move |auth, actor| {
+                auth.set_family_cape_emblem(actor, show)
+            })
+            .await;
+        if changed {
+            self.refresh_family_capes(&[*player_id]).await;
         }
     }
 
@@ -317,11 +348,21 @@ impl super::GameState {
                 emblem.texture = None;
             }
         }
-        self.families
-            .write()
-            .await
-            .emblems
-            .insert(family_id, emblem);
+        {
+            let mut families = self.families.write().await;
+            families.emblems.insert(family_id, emblem);
+            for (player_id, character_id) in &members {
+                let own = roster
+                    .members
+                    .iter()
+                    .any(|m| m.character_id == *character_id && !m.cape_emblem);
+                if own {
+                    families.own_capes.insert(*player_id);
+                } else {
+                    families.own_capes.remove(player_id);
+                }
+            }
+        }
         let online: Vec<i64> = members.iter().map(|(_, id)| *id).collect();
         let successor = roster.successor(unix_now(), &online);
         for (player_id, character_id) in &members {

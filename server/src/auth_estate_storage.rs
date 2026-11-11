@@ -450,6 +450,8 @@ impl AuthService {
         conn.execute_batch(
             "CREATE INDEX IF NOT EXISTS idx_estate_chests_family
                 ON estate_chests(family_id) WHERE family_id IS NOT NULL;
+             CREATE INDEX IF NOT EXISTS idx_estate_chests_estate
+                ON estate_chests(estate_id, item_def_id);
              CREATE TABLE IF NOT EXISTS family_storage_log (
                 id INTEGER PRIMARY KEY,
                 family_id INTEGER NOT NULL,
@@ -592,34 +594,6 @@ impl AuthService {
             }
         }
         Ok(rows)
-    }
-
-    pub fn estate_return_rugs(
-        &self,
-        character_id: i64,
-    ) -> Result<Vec<(Position, f32, i8)>, AuthError> {
-        let conn = self.open_connection()?;
-        let mut stmt = conn.prepare(
-            "SELECT c.x,c.y,c.z,c.rotation_deg,c.floor_level
-             FROM estate_chests c JOIN land_estates e ON e.id=c.estate_id
-             WHERE e.account_name=(SELECT account_name FROM characters WHERE id=?1)
-               AND e.grade=1 AND c.item_def_id='furniture_hearthbound_rug'
-             ORDER BY c.id",
-        )?;
-        let rugs = stmt
-            .query_map([character_id], |row| {
-                Ok((
-                    Position {
-                        x: row.get::<_, f64>(0)? as f32,
-                        y: row.get::<_, f64>(1)? as f32,
-                        z: row.get::<_, f64>(2)? as f32,
-                    },
-                    row.get::<_, f64>(3)? as f32,
-                    row.get::<_, i64>(4)? as i8,
-                ))
-            })?
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(rugs)
     }
 
     /// Where `character_id` may place `item_def_id`.

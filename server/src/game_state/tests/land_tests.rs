@@ -210,7 +210,11 @@ async fn estate_return_rug_follows_moves_and_recovery_restores_outdoor_return() 
     game.use_estate_return_scroll(&id, 100, &auth).await;
     assert_eq!(game.players.read().await[&id].position, target);
     game.recover_estate_chest(&id, rug.id, &auth).await;
-    assert!(auth.estate_return_rugs(rug.owner_id).unwrap().is_empty());
+    assert!(auth
+        .homestead_destination(rug.owner_id)
+        .unwrap()
+        .1
+        .is_empty());
     game.use_estate_return_scroll(&id, 100, &auth).await;
     assert_ne!(game.players.read().await[&id].position, target);
     assert_eq!(estate_return_quantity(&game, "Settler").await, 0);
@@ -254,8 +258,8 @@ async fn estate_return_rug_ignores_other_accounts() {
     let outsider = auth.login_google("foreign-rug-outsider").unwrap();
     let (other, _) = land_owner(&game, &auth, &outsider, "Outsider").await;
     claim_at(&game, &auth, "Outsider", 1, 33.0, 1.0).await;
-    assert_eq!(auth.estate_return_rugs(owner).unwrap().len(), 1);
-    assert!(auth.estate_return_rugs(other).unwrap().is_empty());
+    assert_eq!(auth.homestead_destination(owner).unwrap().1.len(), 1);
+    assert!(auth.homestead_destination(other).unwrap().1.is_empty());
     add_estate_return_scroll(&game, "Outsider").await;
     game.use_estate_return_scroll(&pid("Outsider"), 100, &auth)
         .await;

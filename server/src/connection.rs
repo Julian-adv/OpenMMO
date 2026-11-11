@@ -2260,9 +2260,9 @@ async fn handle_client_message(
                 if game_state.teleports_on_use(id, instance_id).await {
                     let (id, auth_service) = (*id, Arc::clone(auth_service));
                     game_state.depart_then(id, move |game| async move {
-                        if game.authenticated_use_action(&id, instance_id).await
-                            == Some(AuthenticatedUseAction::EstateReturn)
-                        {
+                        if AuthenticatedUseAction::returns_to_estate(
+                            game.authenticated_use_action(&id, instance_id).await,
+                        ) {
                             game.use_estate_return_scroll(&id, instance_id, &auth_service)
                                 .await;
                         } else {
@@ -2272,7 +2272,9 @@ async fn handle_client_message(
                     return Ok(vec![]);
                 }
                 match game_state.authenticated_use_action(id, instance_id).await {
-                    Some(AuthenticatedUseAction::EstateReturn) => {
+                    Some(
+                        AuthenticatedUseAction::EstateReturn | AuthenticatedUseAction::FamilyReturn,
+                    ) => {
                         game_state
                             .use_estate_return_scroll(id, instance_id, auth_service)
                             .await;
@@ -2865,6 +2867,22 @@ async fn handle_client_message(
             if let Some(id) = &state.require_in_game("set family emblem") {
                 game_state
                     .set_family_emblem(id, texture, color, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::SetFamilySeat { estate_id } => {
+            if let Some(id) = &state.require_in_game("choose family seat") {
+                game_state
+                    .set_family_seat(id, estate_id, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::SetFamilyCapeEmblem { show } => {
+            if let Some(id) = &state.require_in_game("choose family cape") {
+                game_state
+                    .set_family_cape_emblem(id, show, auth_service)
                     .await;
             }
         }

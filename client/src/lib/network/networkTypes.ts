@@ -263,6 +263,8 @@ export type ClientMessage =
   | { FamilyChat: { message: string } }
   | 'RequestFamilyStorageLog'
   | { SetFamilyEmblem: { texture: string | null; color: string | null } }
+  | { SetFamilyCapeEmblem: { show: boolean } }
+  | { SetFamilySeat: { estate_id: number } }
   | {
       ProposeFamilyMerge: {
         head_name: string

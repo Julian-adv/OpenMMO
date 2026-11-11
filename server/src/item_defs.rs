@@ -92,6 +92,14 @@ pub enum AuthenticatedUseAction {
     EstateFence,
     LandClaim,
     EstateReturn,
+    FamilyReturn,
+}
+
+impl AuthenticatedUseAction {
+    /// The return scrolls that land on an estate.
+    pub fn returns_to_estate(action: Option<Self>) -> bool {
+        matches!(action, Some(Self::EstateReturn | Self::FamilyReturn))
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -95,6 +95,10 @@ export interface FamilyInfo {
   /** Cape texture hash and `#rrggbb` colour members' capes show. */
   emblem_texture: string | null
   emblem_color: string | null
+  /** My cape shows the emblem rather than my own print. */
+  my_cape_emblem: boolean
+  /** Where a Scroll of Family Return lands. */
+  seat_estate_id: number | null
 }
 
 export type MergeSide = 'proposer' | 'target'
@@ -138,8 +142,9 @@ export interface PendingFamilyInvite {
 export const familyInfo = writable<FamilyInfo | null>(null)
 export const pendingFamilyInvites = writable<PendingFamilyInvite[]>([])
 export const familyPanelVisible = writable(false)
-/** null until requested from the family panel. */
+/** null until requested from the log window. */
 export const familyStorageLog = writable<FamilyStorageEntry[] | null>(null)
+export const familyStorageLogVisible = writable(false)
 export const familyStampCount = bagItemCount(FAMILY_STAMP_ITEM)
 
 /** H opens the family panel unless the player bound pickup to H. */
@@ -161,6 +166,8 @@ export function applyFamilyState(family: FamilyInfo | null) {
         ...estate,
         estate_id: Number(estate.estate_id),
       })),
+      seat_estate_id:
+        family.seat_estate_id === null ? null : Number(family.seat_estate_id),
     }
   )
   if (family) pendingFamilyInvites.set([])
@@ -171,7 +178,15 @@ export function resetFamilyStores() {
   pendingFamilyInvites.set([])
   familyPanelVisible.set(false)
   familyStorageLog.set(null)
+  familyStorageLogVisible.set(false)
   pendingFamilyMerges.set([])
+}
+
+/** Server `Emblem::is_set`: the family shows a picture or a colour. */
+export function hasFamilyEmblem(family: FamilyInfo | null): boolean {
+  return (
+    !!family && (family.emblem_texture !== null || family.emblem_color !== null)
+  )
 }
 
 export function familyPermissions(family: FamilyInfo): number {

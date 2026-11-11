@@ -7,6 +7,7 @@ export const PANEL_IDS = [
   'inventory',
   'friends',
   'family',
+  'familyLog',
   'party',
   'emotes',
   'trade',

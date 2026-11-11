@@ -442,5 +442,7 @@
   "family_banner.name": "家門の旗",
   "family_banner.description": "家門の紋章を掲げる立て旗。家門の領地に置きます。",
   "family_pennant.name": "家門の垂れ幕",
-  "family_pennant.description": "家門の紋章を掲げる垂れ幕。家門の領地の壁に高く掛けます。"
+  "family_pennant.description": "家門の紋章を掲げる垂れ幕。家門の領地の壁に高く掛けます。",
+  "scroll_of_family_return.name": "家門帰還の巻物",
+  "scroll_of_family_return.description": "ルーンを読むと家門の本家に戻ります。本家の帰郷のラグの上か、安全な屋外に着きます。領地のある家門に属している必要があります。"
 }

@@ -442,5 +442,7 @@
   "family_banner.name": "家族旗幟",
   "family_banner.description": "展示家族紋章的立式旗幟。放在家族領地上。",
   "family_pennant.name": "家族掛旗",
-  "family_pennant.description": "展示家族紋章的掛旗。在家族領地上升高掛在牆上。"
+  "family_pennant.description": "展示家族紋章的掛旗。在家族領地上升高掛在牆上。",
+  "scroll_of_family_return.name": "家族傳送卷軸",
+  "scroll_of_family_return.description": "誦讀符文即可回到家族的本家：落在本家的歸鄉地毯上或安全的戶外地面。需要屬於擁有領地的家族。"
 }

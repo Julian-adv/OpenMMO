@@ -5,7 +5,7 @@ import {
   weatherRadarVisible,
 } from './debugStore'
 import { friendPanelVisible } from './friendStore'
-import { familyPanelVisible } from './familyStore'
+import { familyPanelVisible, familyStorageLogVisible } from './familyStore'
 import { emotePanelVisible } from './emoteStore'
 import { shopSession } from './tradeStore'
 import { closeStallPanel } from './stallStore'
@@ -16,6 +16,7 @@ export type OverlayId =
   | 'character'
   | 'friends'
   | 'family'
+  | 'familyLog'
   | 'emotes'
   | 'instrument'
   | 'inventory'
@@ -54,6 +55,7 @@ const OVERLAYS: Record<OverlayId, { layer: number; close?: () => void }> = {
   inventory: { layer: 0, close: () => inventoryVisible.set(false) },
   friends: { layer: 0, close: () => friendPanelVisible.set(false) },
   family: { layer: 0, close: () => familyPanelVisible.set(false) },
+  familyLog: { layer: 0, close: () => familyStorageLogVisible.set(false) },
   emotes: { layer: 0, close: () => emotePanelVisible.set(false) },
   instrument: { layer: 1 },
   trade: { layer: 1, close: () => shopSession.set(null) },
@@ -104,6 +106,7 @@ characterPanelVisible.subscribe((open) => track('character', open))
 inventoryVisible.subscribe((open) => track('inventory', open))
 friendPanelVisible.subscribe((open) => track('friends', open))
 familyPanelVisible.subscribe((open) => track('family', open))
+familyStorageLogVisible.subscribe((open) => track('familyLog', open))
 emotePanelVisible.subscribe((open) => track('emotes', open))
 shopSession.subscribe((session) => track('trade', session !== null))
 

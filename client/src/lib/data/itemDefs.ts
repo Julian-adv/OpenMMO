@@ -32,6 +32,7 @@ export type AuthenticatedUseAction =
   | 'estate_fence'
   | 'land_claim'
   | 'estate_return'
+  | 'family_return'
 
 export interface ItemDefinition {
   id: string

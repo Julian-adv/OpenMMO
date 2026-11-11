@@ -569,7 +569,7 @@ fn read_visible_equipment(
                      ELSE f.emblem_texture END
          FROM character_items i
          LEFT JOIN family_members m ON m.character_id=i.character_id
-         LEFT JOIN families f ON f.id=m.family_id
+         LEFT JOIN families f ON f.id=m.family_id AND m.cape_emblem=1
          WHERE i.character_id IN ({})
            AND i.equip_slot IN ({})",
         vec!["?"; character_ids.len()].join(","),

@@ -34,6 +34,7 @@
   import FamilyPanel from './FamilyPanel.svelte'
   import FamilyInviteToast from './FamilyInviteToast.svelte'
   import FamilyMergeToast from './FamilyMergeToast.svelte'
+  import FamilyStorageLogPanel from './FamilyStorageLogPanel.svelte'
   import EmotePanel from './EmotePanel.svelte'
   import InstrumentPanel from './InstrumentPanel.svelte'
   import NpcContextMenu from './NpcContextMenu.svelte'
@@ -280,6 +281,7 @@
     <FamilyInviteToast />
     <FamilyMergeToast />
     <FamilyPanel />
+    <FamilyStorageLogPanel />
     <EmotePanel />
     <InstrumentPanel />
     <NpcContextMenu />

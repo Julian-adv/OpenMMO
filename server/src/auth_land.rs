@@ -85,6 +85,19 @@ impl AuthService {
         Ok(plots)
     }
 
+    /// Where a Scroll of Estate Return lands: the account's homestead plots
+    /// and its hearthbound rugs; empty when the account owns no homestead.
+    pub fn homestead_destination(
+        &self,
+        character_id: i64,
+    ) -> Result<super::family::EstateDestination, AuthError> {
+        let conn = self.open_connection()?;
+        Ok(match Self::homestead_id(&conn, character_id)? {
+            Some(estate_id) => super::family::estate_destination(&conn, estate_id)?,
+            None => Default::default(),
+        })
+    }
+
     fn homestead_id(conn: &Connection, character_id: i64) -> Result<Option<i64>, AuthError> {
         Ok(conn
             .query_row(

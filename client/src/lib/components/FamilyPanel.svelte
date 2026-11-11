@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { t, locale } from '../i18n'
-  import { itemDisplayName } from '../data/itemDefs'
+  import { t } from '../i18n'
   import {
     familyInfo,
-    familyStorageLog,
+    familyStorageLogVisible,
+    hasFamilyEmblem,
     familyPanelVisible,
     familyPermissions,
     familyDefaultLabelKey,
@@ -25,6 +25,7 @@
   import { classIconPath } from '../stores/partyStore'
   import { networkManager } from '../network/socket'
   import { draggablePanel } from '../actions/draggablePanel'
+  import { hintTooltip } from '../actions/hintTooltip'
   import { parseGold } from '../utils/currency'
   import { capeTextureUrl } from '../utils/networkUtils'
   import CapeTextureDialog from './CapeTextureDialog.svelte'
@@ -41,9 +42,7 @@
     (perms & FAMILY_PERMISSION.TREASURY_DEPOSIT) !== 0
   )
   const canEditEmblem = $derived((perms & FAMILY_PERMISSION.EDIT_EMBLEM) !== 0)
-  const hasEmblem = $derived(
-    !!family && (family.emblem_texture !== null || family.emblem_color !== null)
-  )
+  const hasEmblem = $derived(hasFamilyEmblem(family))
   let choosingPicture = $state(false)
   function setEmblem(texture: string | null, color: string | null) {
     networkManager.sendSetFamilyEmblem(texture, color)
@@ -155,19 +154,6 @@
     }
   }
 
-  let logOpen = $state(false)
-  function toggleLog() {
-    logOpen = !logOpen
-    if (logOpen) networkManager.sendRequestFamilyStorageLog()
-  }
-  const logTime = (at: number) =>
-    new Date(at * 1000).toLocaleString($locale, {
-      month: 'numeric',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-
   let ranksOpen = $state(false)
   let drafts = $state<{ label: string; permissions: number }[]>([])
   const ranksKey = $derived(JSON.stringify(family?.ranks ?? []))
@@ -241,7 +227,7 @@
       {/if}
       <button
         class="close-btn"
-        title={$t('common.close')}
+        use:hintTooltip={$t('common.close')}
         aria-label={$t('common.close')}
         onclick={() => familyPanelVisible.set(false)}>×</button
       >
@@ -262,7 +248,8 @@
           <button
             class="text-btn wide"
             onclick={() => networkManager.sendClaimFamilyHead()}
-            title={$t('family.claimHeadHint')}>{$t('family.claimHead')}</button
+            use:hintTooltip={$t('family.claimHeadHint')}
+            >{$t('family.claimHead')}</button
           >
         {/if}
 
@@ -272,7 +259,7 @@
             <span
               class="status-dot"
               class:on={member.online}
-              title={member.online
+              use:hintTooltip={member.online
                 ? $t('friends.online')
                 : $t('friends.offline')}
             ></span>
@@ -281,18 +268,20 @@
                 class="class-icon"
                 src={classIconPath(member.class)}
                 alt={$t(`class.${member.class}`)}
-                title={$t(`class.${member.class}`)}
+                use:hintTooltip={$t(`class.${member.class}`)}
                 width="14"
                 height="14"
               />
             {/if}
-            <span class="member-name" title={member.name}>{member.name}</span>
+            <span class="member-name" use:hintTooltip={member.name}
+              >{member.name}</span
+            >
             <span class="dim small">{$t('stat.level')} {member.level}</span>
             {#if canEditRanks && outranks(member) && assignableRanks.length > 0}
               <select
                 class="rank-select"
                 aria-label={$t('family.changeRank')}
-                title={$t('family.changeRank')}
+                use:hintTooltip={$t('family.changeRank')}
                 value={member.rank}
                 onchange={(event) =>
                   networkManager.sendSetFamilyMemberRank(
@@ -310,7 +299,7 @@
             {#if isHead && member.name !== selfName}
               <button
                 class="row-btn"
-                title={$t('family.transfer')}
+                use:hintTooltip={$t('family.transfer')}
                 aria-label={$t('family.transfer')}
                 onclick={() => askTransfer(member)}>♛</button
               >
@@ -318,7 +307,7 @@
             {#if canKick && outranks(member)}
               <button
                 class="row-btn danger"
-                title={$t('family.kick')}
+                use:hintTooltip={$t('family.kick')}
                 aria-label={$t('family.kick')}
                 onclick={() => askKick(member)}>×</button
               >
@@ -361,6 +350,7 @@
                       class="text-input"
                       class:invalid={!draftLabelValid(index)}
                       aria-label={$t('family.rankLabel')}
+                      use:hintTooltip={$t('family.rankLabelHint')}
                       placeholder={$t(
                         familyDefaultLabelKey(FAMILY_DEFAULT_LABELS[index]) ??
                           'family.rankLabel'
@@ -417,6 +407,21 @@
               <span class="dim small"
                 >{$t('family.plots', { n: estate.plots })}</span
               >
+              {#if estate.estate_id === family.seat_estate_id}
+                <span
+                  class="seat-tag small"
+                  use:hintTooltip={$t('family.seatHint')}
+                  >{$t('family.seat')}</span
+                >
+              {:else if isHead}
+                <button
+                  class="text-btn"
+                  use:hintTooltip={$t('family.seatHint')}
+                  onclick={() =>
+                    networkManager.sendSetFamilySeat(estate.estate_id)}
+                  >{$t('family.makeSeat')}</button
+                >
+              {/if}
               {#if estate.missed > 0}
                 <span class="warn small"
                   >{$t('family.overdue', { n: estate.missed })}</span
@@ -434,6 +439,7 @@
                   class="text-input"
                   placeholder="1g 20s 30c"
                   aria-label={$t('family.deposit')}
+                  use:hintTooltip={$t('family.depositHint')}
                   autocomplete="off"
                   bind:value={depositText[estate.estate_id]}
                   onkeydown={(event) =>
@@ -442,7 +448,7 @@
                 <button
                   class="text-btn"
                   disabled={depositAmount(estate) === null}
-                  title={$t('family.depositHint')}
+                  use:hintTooltip={$t('family.depositHint')}
                   onclick={() => submitDeposit(estate)}
                   >{$t('family.deposit')}</button
                 >
@@ -471,20 +477,36 @@
             <span
               class="emblem-swatch"
               style="background:{family.emblem_color}"
-              title={family.emblem_color}
+              use:hintTooltip={family.emblem_color}
             ></span>
           {/if}
           {#if !hasEmblem}
             <span class="dim small">{$t('family.noEmblem')}</span>
           {/if}
         </div>
+        {#if hasEmblem}
+          <label
+            class="perm cape-toggle"
+            use:hintTooltip={$t('family.capeEmblemHint')}
+          >
+            <input
+              type="checkbox"
+              checked={family.my_cape_emblem}
+              onchange={(event) =>
+                networkManager.sendSetFamilyCapeEmblem(
+                  event.currentTarget.checked
+                )}
+            />
+            {$t('family.capeEmblem')}
+          </label>
+        {/if}
         {#if canEditEmblem}
           <div class="input-row">
             <input
               type="color"
               class="emblem-color"
               aria-label={$t('family.emblemColor')}
-              title={$t('family.emblemColor')}
+              use:hintTooltip={$t('family.emblemColor')}
               value={family.emblem_color ?? '#6d1720'}
               onchange={(event) =>
                 setEmblem(family.emblem_texture, event.currentTarget.value)}
@@ -550,35 +572,10 @@
         {/if}
 
         <button
-          class="section-title toggle"
-          aria-expanded={logOpen}
-          onclick={toggleLog}
-          >{logOpen ? '▾' : '▸'} {$t('family.storageLog')}</button
+          class="text-btn wide"
+          onclick={() => familyStorageLogVisible.update((open) => !open)}
+          >{$t('family.storageLog')}</button
         >
-        {#if logOpen}
-          {#if !$familyStorageLog}
-            <div class="dim small">{$t('family.loading')}</div>
-          {:else if $familyStorageLog.length === 0}
-            <div class="dim small">{$t('family.storageLogEmpty')}</div>
-          {:else}
-            <div class="storage-log">
-              {#each $familyStorageLog as entry, index (index)}
-                <div class="log-row">
-                  <span class="dim small">{logTime(entry.at)}</span>
-                  <span class="member-name">{entry.character_name}</span>
-                  <span class:take={entry.quantity < 0}
-                    >{entry.quantity > 0 ? '+' : '−'}{Math.abs(
-                      entry.quantity
-                    )}</span
-                  >
-                  <span class="log-item"
-                    >{itemDisplayName(entry.item_def_id, 0, $locale)}</span
-                  >
-                </div>
-              {/each}
-            </div>
-          {/if}
-        {/if}
 
         <div class="leave-row">
           <button class="text-btn danger" disabled={isHead} onclick={askLeave}
@@ -701,6 +698,25 @@
 
   .body {
     overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(113, 128, 150, 0.5) transparent;
+  }
+
+  .body::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .body::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .body::-webkit-scrollbar-thumb {
+    background: rgba(113, 128, 150, 0.5);
+    border-radius: 999px;
+  }
+
+  .body::-webkit-scrollbar-thumb:hover {
+    background: rgba(160, 174, 192, 0.7);
   }
 
   .line,
@@ -745,6 +761,17 @@
     cursor: pointer;
   }
 
+  .section-title.toggle:focus {
+    outline: none;
+  }
+
+  /* Keyboard focus only, drawn inside so the scroll area does not clip it. */
+  .section-title.toggle:focus-visible {
+    outline: 1px solid rgba(200, 184, 138, 0.6);
+    outline-offset: -2px;
+    border-radius: 4px;
+  }
+
   .emblem-thumb {
     width: 28px;
     height: 44px;
@@ -780,29 +807,6 @@
     align-items: center;
     gap: 6px;
     font-size: 11px;
-  }
-
-  .storage-log {
-    max-height: 180px;
-    overflow-y: auto;
-  }
-
-  .log-row {
-    display: flex;
-    gap: 6px;
-    align-items: baseline;
-    font-size: 11px;
-    padding: 1px 0;
-  }
-
-  .log-row .take {
-    color: #f6ad55;
-  }
-
-  .log-item {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .status-dot {
@@ -933,6 +937,15 @@
     gap: 4px;
     color: #c5d0da;
     font-size: 11px;
+  }
+
+  .seat-tag {
+    color: #c8b88a;
+    font-weight: 700;
+  }
+
+  .cape-toggle {
+    margin: 4px 0;
   }
 
   .perm.locked {

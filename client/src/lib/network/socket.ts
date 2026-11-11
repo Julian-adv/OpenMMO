@@ -1213,6 +1213,14 @@ class NetworkManager {
     this.sendMessage({ SetFamilyEmblem: { texture, color } })
   }
 
+  sendSetFamilySeat(estateId: number) {
+    this.sendMessage({ SetFamilySeat: { estate_id: estateId } })
+  }
+
+  sendSetFamilyCapeEmblem(show: boolean) {
+    this.sendMessage({ SetFamilyCapeEmblem: { show } })
+  }
+
   sendProposeFamilyMerge(headName: string, terms: FamilyMergeTerms) {
     this.sendMessage({ ProposeFamilyMerge: { head_name: headName, terms } })
   }

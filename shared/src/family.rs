@@ -199,4 +199,8 @@ pub struct FamilyInfo {
     /// Cape texture hash and `#rrggbb` colour members' capes show.
     pub emblem_texture: Option<String>,
     pub emblem_color: Option<String>,
+    /// The recipient's cape shows the emblem rather than their own print.
+    pub my_cape_emblem: bool,
+    /// Where a Scroll of Family Return lands.
+    pub seat_estate_id: Option<i64>,
 }

@@ -25,6 +25,8 @@ pub struct FamilyMemberRow {
     pub class: CharacterClass,
     pub rank: u8,
     pub last_seen_at: i64,
+    /// Their cape shows the family emblem rather than their own print.
+    pub cape_emblem: bool,
 }
 
 pub struct FamilyEstateRow {
@@ -45,6 +47,7 @@ pub struct FamilyRoster {
     pub unattached_accounts: Vec<String>,
     pub renamed_at: Option<i64>,
     pub emblem: FamilyEmblem,
+    pub seat_estate_id: Option<i64>,
 }
 
 impl FamilyRoster {
@@ -139,6 +142,67 @@ pub(super) fn read_family_names(
 }
 
 pub use onlinerpg_shared::family::Emblem as FamilyEmblem;
+
+/// Furniture a return scroll lands on.
+const ESTATE_RETURN_RUG: &str = "furniture_hearthbound_rug";
+
+/// An estate's plots and the hearthbound rugs on it (position, rotation in
+/// degrees, floor).
+pub type EstateDestination = (
+    Vec<(i32, i32, u8)>,
+    Vec<(onlinerpg_shared::Position, f32, i8)>,
+);
+
+/// The family seat: the estate the head chose while it stays attached, else
+/// the head's attached homestead, else the earliest attached estate.
+pub(super) fn family_seat(
+    conn: &Connection,
+    family_id: i64,
+) -> Result<Option<i64>, rusqlite::Error> {
+    conn.query_row(
+        "SELECT COALESCE(
+            (SELECT e.id FROM families f JOIN land_estates e
+                ON e.id=f.seat_estate_id AND e.family_id=f.id WHERE f.id=?1),
+            (SELECT e.id FROM family_members m JOIN characters c ON c.id=m.character_id
+                JOIN land_estates e ON e.account_name=c.account_name AND e.family_id=?1
+                WHERE m.family_id=?1 AND m.rank=?2 ORDER BY e.grade LIMIT 1),
+            (SELECT id FROM land_estates WHERE family_id=?1 ORDER BY id LIMIT 1))",
+        params![family_id, FAMILY_RANK_HEAD],
+        |row| row.get(0),
+    )
+}
+
+pub(super) fn estate_destination(
+    conn: &Connection,
+    estate_id: i64,
+) -> Result<EstateDestination, rusqlite::Error> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT tile_x, tile_z, quadrant FROM land_plots WHERE estate_id=?1 ORDER BY rowid",
+    )?;
+    let plots = stmt
+        .query_map([estate_id], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut stmt = conn.prepare_cached(
+        "SELECT x, y, z, rotation_deg, floor_level FROM estate_chests
+         WHERE estate_id=?1 AND item_def_id=?2 ORDER BY id",
+    )?;
+    let rugs = stmt
+        .query_map(params![estate_id, ESTATE_RETURN_RUG], |row| {
+            Ok((
+                onlinerpg_shared::Position {
+                    x: row.get::<_, f64>(0)? as f32,
+                    y: row.get::<_, f64>(1)? as f32,
+                    z: row.get::<_, f64>(2)? as f32,
+                },
+                row.get::<_, f64>(3)? as f32,
+                row.get::<_, i64>(4)? as i8,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok((plots, rugs))
+}
 
 struct Membership {
     family_id: i64,
@@ -322,7 +386,70 @@ impl AuthService {
              ON land_estates(family_id) WHERE family_id IS NOT NULL",
             [],
         )?;
+        if !Self::table_columns(conn, "families")?.contains("seat_estate_id") {
+            conn.execute("ALTER TABLE families ADD COLUMN seat_estate_id INTEGER", [])?;
+        }
+        if !Self::table_columns(conn, "family_members")?.contains("cape_emblem") {
+            conn.execute(
+                "ALTER TABLE family_members ADD COLUMN cape_emblem INTEGER NOT NULL DEFAULT 1",
+                [],
+            )?;
+        }
         Ok(())
+    }
+
+    /// The head names which attached estate is the family seat.
+    pub fn set_family_seat(&self, character_id: i64, estate_id: i64) -> Verdict<i64> {
+        let conn = self.open_connection()?;
+        let Some(member) = membership(&conn, character_id)? else {
+            return Ok(Err("You do not belong to a family."));
+        };
+        if member.rank != FAMILY_RANK_HEAD {
+            return Ok(Err("Only the head chooses the family seat."));
+        }
+        let changed = conn.execute(
+            "UPDATE families SET seat_estate_id=?2 WHERE id=?1
+             AND EXISTS(SELECT 1 FROM land_estates WHERE id=?2 AND family_id=?1)",
+            params![member.family_id, estate_id],
+        )?;
+        if changed == 0 {
+            return Ok(Err("That estate is not attached to the family."));
+        }
+        Ok(Ok(member.family_id))
+    }
+
+    /// Where a Scroll of Family Return lands: the seat's plots and its
+    /// hearthbound rugs, or why there is nowhere to go.
+    pub fn family_return_destination(&self, character_id: i64) -> Verdict<EstateDestination> {
+        let conn = self.open_connection()?;
+        let Some(member) = membership(&conn, character_id)? else {
+            return Ok(Err("You do not belong to a family."));
+        };
+        let Some(seat) = family_seat(&conn, member.family_id)? else {
+            return Ok(Err("Your family has no estate to return to."));
+        };
+        let missed: i64 = conn.query_row(
+            "SELECT missed FROM land_estates WHERE id=?1",
+            [seat],
+            |row| row.get(0),
+        )?;
+        if missed > 0 {
+            return Ok(Err("The family seat has overdue taxes."));
+        }
+        Ok(Ok(estate_destination(&conn, seat)?))
+    }
+
+    /// Whether the member's cape shows the family emblem or their own print.
+    pub fn set_family_cape_emblem(&self, character_id: i64, show: bool) -> Verdict<i64> {
+        let conn = self.open_connection()?;
+        let Some(member) = membership(&conn, character_id)? else {
+            return Ok(Err("You do not belong to a family."));
+        };
+        conn.execute(
+            "UPDATE family_members SET cape_emblem=?2 WHERE character_id=?1",
+            params![character_id, show],
+        )?;
+        Ok(Ok(member.family_id))
     }
 
     /// A live family or a name still held back keeps characters off it.
@@ -426,7 +553,7 @@ impl AuthService {
             .collect::<Result<Vec<_>, _>>()?;
         let mut stmt = conn.prepare(
             "SELECT c.id, c.account_name, c.character_name, c.level, c.class, m.rank,
-                    COALESCE(c.last_seen_at, c.created_at)
+                    COALESCE(c.last_seen_at, c.created_at), m.cape_emblem
              FROM family_members m JOIN characters c ON c.id=m.character_id
              WHERE m.family_id=?1 ORDER BY m.rank, m.joined_at, m.character_id",
         )?;
@@ -440,13 +567,20 @@ impl AuthService {
                     class: class_from_row(row, 4)?,
                     rank: row.get(5)?,
                     last_seen_at: row.get(6)?,
+                    cape_emblem: row.get(7)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
         let mut stmt = conn.prepare(
-            "SELECT e.id, e.account_name, c.character_name, e.missed,
-                    (SELECT COUNT(*) FROM land_plots WHERE estate_id=e.id)
-             FROM land_estates e JOIN characters c ON c.id=e.owner_id
+            // Named after the account's character in this family, so the
+            // roster never ties a member to another character on their account.
+            "SELECT e.id, e.account_name,
+                    COALESCE((SELECT c.character_name FROM family_members m
+                              JOIN characters c ON c.id=m.character_id
+                              WHERE m.family_id=?1 AND c.account_name=e.account_name
+                              ORDER BY m.rank, m.joined_at LIMIT 1), ''),
+                    e.missed, (SELECT COUNT(*) FROM land_plots WHERE estate_id=e.id)
+             FROM land_estates e
              WHERE e.family_id=?1 ORDER BY e.id",
         )?;
         let estates = stmt
@@ -477,6 +611,7 @@ impl AuthService {
             unattached_accounts,
             renamed_at,
             emblem,
+            seat_estate_id: family_seat(&conn, family_id)?,
         }))
     }
 

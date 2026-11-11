@@ -185,6 +185,7 @@
   } from '../utils/twoHandedGrip'
   import { capeDyePreview } from '../stores/capeDyeStore'
   import { capeTexturePreview } from '../stores/capeTextureStore'
+  import { familyInfo, hasFamilyEmblem } from '../stores/familyStore'
   import { capeTextureUrl } from '../utils/networkUtils'
   import { capeCollarBiasOverride, capeEnabled } from '../stores/debugStore'
   import { localPlayerRightHand } from '../stores/playerHandRegistry'
@@ -959,11 +960,24 @@
       : back
   )
 
-  /** The dye on that cape: the picker's live try-on first, then the worn
-   *  instance's own colour — remote wearers carry theirs on the broadcast. */
+  /** The family emblem covering my own cape, as the server shows it to
+   *  others (`family::shown_cape`); remote wearers arrive already covered. */
+  const ownEmblem = $derived(
+    isCurrentPlayer &&
+      $familyInfo?.my_cape_emblem &&
+      hasFamilyEmblem($familyInfo)
+      ? $familyInfo
+      : null
+  )
+
+  /** The dye on that cape: the picker's live try-on first, then the family
+   *  emblem, then the worn instance's own colour. */
   const equippedBackDye = $derived(
     isCurrentPlayer
-      ? ($capeDyePreview ?? $inventoryStore.equipped.back?.cape_color ?? null)
+      ? ($capeDyePreview ??
+          ownEmblem?.emblem_color ??
+          $inventoryStore.equipped.back?.cape_color ??
+          null)
       : backColor
   )
 
@@ -979,7 +993,11 @@
   const capePrint = $derived(
     isCurrentPlayer
       ? ($capeTexturePreview ??
-          capeTextureUrl($inventoryStore.equipped.back?.cape_texture))
+          capeTextureUrl(
+            ownEmblem
+              ? ownEmblem.emblem_texture
+              : $inventoryStore.equipped.back?.cape_texture
+          ))
       : capeTextureUrl(backTexture)
   )
 

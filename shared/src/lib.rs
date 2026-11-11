@@ -268,7 +268,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// (`EstateChestState.can_withdraw`/`family`, `RequestFamilyStorageLog`,
 /// `FamilyStorageLog`) and family boards (`NoticeBoardRef` replaces the
 /// notice messages' `object_id`; refusals `not_family`, `no_family_rank`).
-/// v147: family emblems (`SetFamilyEmblem`, `FamilyInfo.emblem_*`,
+/// v147: family seats (`SetFamilySeat`, `FamilyInfo.seat_estate_id`, the
+/// Scroll of Family Return), family emblems (`SetFamilyEmblem`, `SetFamilyCapeEmblem`,
+/// `FamilyInfo.emblem_*`/`my_cape_emblem`,
 /// `EstateChest.family_id`/`emblem`) and merges (`ProposeFamilyMerge`,
 /// `RespondFamilyMerge`, `FamilyMergeProposal`).
 pub const PROTOCOL_VERSION: u32 = 147;

@@ -35,14 +35,15 @@ impl GameState {
         }
     }
 
+    /// Estate and family return scrolls, told apart by their use action.
     async fn try_estate_return(
         &self,
         player_id: &PlayerId,
         instance_id: u64,
         auth: &AuthService,
     ) -> bool {
-        if self.authenticated_use_action(player_id, instance_id).await
-            != Some(AuthenticatedUseAction::EstateReturn)
+        let action = self.authenticated_use_action(player_id, instance_id).await;
+        if !AuthenticatedUseAction::returns_to_estate(action)
             || self
                 .reject_if_trade_reserved(player_id, instance_id, "use")
                 .await
@@ -56,15 +57,21 @@ impl GameState {
             return false;
         };
         let auth = auth.clone();
-        let (plots, rugs) = match auth_db(move || {
-            Ok::<_, crate::auth::AuthError>((
-                auth.homestead_plots(character_id)?,
-                auth.estate_return_rugs(character_id)?,
-            ))
+        let family = action == Some(AuthenticatedUseAction::FamilyReturn);
+        let destination = auth_db(move || {
+            if family {
+                auth.family_return_destination(character_id)
+            } else {
+                Ok(Ok(auth.homestead_destination(character_id)?))
+            }
         })
-        .await
-        {
-            Ok(destination) => destination,
+        .await;
+        let (plots, rugs) = match destination {
+            Ok(Ok(destination)) => destination,
+            Ok(Err(reason)) => {
+                self.send_system_message(player_id, reason).await;
+                return false;
+            }
             Err(error) => {
                 tracing::warn!(%error, "Failed to load estate return destination");
                 self.send_system_message(player_id, "Estate return is temporarily unavailable.")
@@ -87,7 +94,7 @@ impl GameState {
         let Some((position, rotation, floor_level)) = destination else {
             self.send_system_message(
                 player_id,
-                "No safe outdoor arrival spot was found on your estate.",
+                "No safe outdoor arrival spot was found on the estate.",
             )
             .await;
             return false;
@@ -109,9 +116,10 @@ impl GameState {
             if !inv.bag.iter().any(|item| {
                 item.instance_id == instance_id
                     && item.quantity > 0
-                    && self.item_defs.get(&item.item_def_id).is_some_and(|def| {
-                        def.authenticated_use_action == Some(AuthenticatedUseAction::EstateReturn)
-                    })
+                    && self
+                        .item_defs
+                        .get(&item.item_def_id)
+                        .is_some_and(|def| def.authenticated_use_action == action)
             }) {
                 return false;
             }

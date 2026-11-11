@@ -1098,6 +1098,14 @@ pub enum ClientMessage {
         texture: Option<String>,
         color: Option<String>,
     },
+    /// The head picks which attached estate a Scroll of Family Return reaches.
+    SetFamilySeat {
+        estate_id: i64,
+    },
+    /// Show the family emblem on the sender's own cape, or their own print.
+    SetFamilyCapeEmblem {
+        show: bool,
+    },
     /// A head offers to merge with the family `head_name` leads.
     ProposeFamilyMerge {
         head_name: String,

@@ -60,6 +60,17 @@ type Command = {
   run?: (args: string) => void
 }
 
+/** `/g` and `/h`: switch to the family channel and say `args`, if any. */
+function familyChat(args: string) {
+  const message = args.trim()
+  if (!get(familyInfo)) {
+    addChatMessage({ text: translate('chat.notInFamily'), sender: 'system' })
+    return
+  }
+  chatChannel.set('family')
+  if (message) networkManager.sendFamilyChat(message)
+}
+
 const COMMANDS: Record<string, Command> = {
   '/help': {
     desc: 'command.help.help',
@@ -118,21 +129,8 @@ const COMMANDS: Record<string, Command> = {
       if (message) networkManager.sendPartyChat(message)
     },
   },
-  '/g': {
-    desc: 'command.help.g',
-    run: (args) => {
-      const message = args.trim()
-      if (!get(familyInfo)) {
-        addChatMessage({
-          text: translate('chat.notInFamily'),
-          sender: 'system',
-        })
-        return
-      }
-      chatChannel.set('family')
-      if (message) networkManager.sendFamilyChat(message)
-    },
-  },
+  '/g': { desc: 'command.help.g', run: familyChat },
+  '/h': { desc: 'command.help.h', run: familyChat },
   '/s': {
     desc: 'command.help.s',
     run: (args) => {

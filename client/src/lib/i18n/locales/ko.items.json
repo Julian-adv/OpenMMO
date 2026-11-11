@@ -442,5 +442,7 @@
   "family_banner.name": "가문 깃발",
   "family_banner.description": "가문 문장을 보여 주는 세우는 깃발. 가문 영지에 놓습니다.",
   "family_pennant.name": "가문 휘장",
-  "family_pennant.description": "가문 문장을 보여 주는 휘장. 가문 영지의 벽에 높여 겁니다."
+  "family_pennant.description": "가문 문장을 보여 주는 휘장. 가문 영지의 벽에 높여 겁니다.",
+  "scroll_of_family_return.name": "가문 귀환 주문서",
+  "scroll_of_family_return.description": "룬을 읽으면 가문의 본가로 돌아갑니다. 본가에 놓인 귀향의 깔개 위나 안전한 바깥 땅에 도착합니다. 영지가 있는 가문에 속해야 합니다."
 }

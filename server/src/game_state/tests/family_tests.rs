@@ -628,7 +628,7 @@ async fn shown_cape_color(game: &GameState, name: &str) -> Option<String> {
 #[tokio::test]
 async fn the_family_emblem_covers_members_capes_until_they_leave() {
     let (game, auth, registrar) = setup("family_emblem").await;
-    let (_, _) = enter(&game, &auth, "Head", FAMILY_FOUND_STAMPS).await;
+    enter(&game, &auth, "Head", FAMILY_FOUND_STAMPS).await;
     claim(&game, &auth, "Head", 0).await;
     found(&game, &auth, &registrar, "Head", "Ironwood").await;
     let (member, mut member_rx) = enter(&game, &auth, "Member", 0).await;
@@ -653,6 +653,26 @@ async fn the_family_emblem_covers_members_capes_until_they_leave() {
     );
     let family = family_state(&drain(&mut member_rx)).flatten().unwrap();
     assert_eq!(family.emblem_color.as_deref(), Some("#aa0000"));
+    assert!(family.my_cape_emblem);
+
+    game.set_family_cape_emblem(&pid("Member"), false, &auth)
+        .await;
+    assert_eq!(
+        shown_cape_color(&game, "Member").await.as_deref(),
+        Some("#112233")
+    );
+    assert!(
+        !family_state(&drain(&mut member_rx))
+            .flatten()
+            .unwrap()
+            .my_cape_emblem
+    );
+    game.set_family_cape_emblem(&pid("Member"), true, &auth)
+        .await;
+    assert_eq!(
+        shown_cape_color(&game, "Member").await.as_deref(),
+        Some("#aa0000")
+    );
 
     game.remove_from_family(&pid("Head"), Some(member), &auth)
         .await;
@@ -759,4 +779,82 @@ async fn banners_show_the_emblem_while_their_estate_stays_with_the_family() {
         .await;
     assert!(family_state(&drain(&mut head_rx)).is_some());
     assert_eq!(shown(&game), None);
+}
+
+#[tokio::test]
+async fn family_return_scrolls_go_to_the_seat_the_head_chose() {
+    let (game, auth, registrar) = flat_setup("family_return").await;
+    let (_, mut head_rx) = enter(&game, &auth, "Head", FAMILY_FOUND_STAMPS).await;
+    claim(&game, &auth, "Head", 0).await;
+    found(&game, &auth, &registrar, "Head", "Ironwood").await;
+    enter(&game, &auth, "Member", 0).await;
+    claim(&game, &auth, "Member", 4).await;
+    join(&game, &auth, "Head", "Member").await;
+    game.attach_estate_to_family(&pid("Member"), true, &auth)
+        .await;
+    let (_, mut guest_rx) = enter(&game, &auth, "Guest", 0).await;
+    join(&game, &auth, "Head", "Guest").await;
+    let (_, mut outsider_rx) = enter(&game, &auth, "Outsider", 0).await;
+    for name in ["Guest", "Outsider"] {
+        give(
+            &game,
+            &pid(name),
+            bag_item(100, "scroll_of_family_return", 3),
+        )
+        .await;
+    }
+    let read = |name: &'static str| {
+        let game = &game;
+        let auth = &auth;
+        async move {
+            stand_at(game, name, 500.0, 500.0).await;
+            game.use_estate_return_scroll(&pid(name), 100, auth).await;
+            game.players.read().await[&pid(name)].position.x
+        }
+    };
+
+    let x = read("Guest").await;
+    assert!((0.0..32.0).contains(&x), "landed at {x}");
+    let family = family_state(&drain(&mut guest_rx)).flatten().unwrap();
+    let member_estate = family
+        .estates
+        .iter()
+        .find(|e| Some(e.estate_id) != family.seat_estate_id);
+    let member_estate = member_estate.unwrap().estate_id;
+
+    game.set_family_seat(&pid("Guest"), member_estate, &auth)
+        .await;
+    assert!(has_line(&drain(&mut guest_rx), "Only the head"));
+    game.set_family_seat(&pid("Head"), member_estate, &auth)
+        .await;
+    let family = family_state(&drain(&mut head_rx)).flatten().unwrap();
+    assert_eq!(family.seat_estate_id, Some(member_estate));
+    let x = read("Guest").await;
+    assert!((128.0..160.0).contains(&x), "landed at {x}");
+    assert_eq!(
+        bag_count(&game, &pid("Guest"), "scroll_of_family_return").await,
+        1
+    );
+
+    read("Outsider").await;
+    assert!(has_line(&drain(&mut outsider_rx), "do not belong"));
+    assert_eq!(
+        bag_count(&game, &pid("Outsider"), "scroll_of_family_return").await,
+        3
+    );
+}
+
+#[tokio::test]
+async fn the_roster_names_estates_after_the_member_not_the_claimant() {
+    let (game, auth, registrar) = setup("family_estate_names").await;
+    enter(&game, &auth, "Claimant", 0).await;
+    claim(&game, &auth, "Claimant", 0).await;
+    let account = auth.login_google("family-Claimant").unwrap();
+    let bag = vec![bag_item(2, FAMILY_STAMP_ITEM, FAMILY_FOUND_STAMPS)];
+    estate_owner(&game, &auth, &account, "Alt", pos3(1.0, 0.0, 1.0), bag).await;
+    let mut alt_rx = game.register_direct_channel(&pid("Alt")).await;
+    found(&game, &auth, &registrar, "Alt", "Ironwood").await;
+    let family = family_state(&drain(&mut alt_rx)).flatten().unwrap();
+    assert_eq!(family.estates.len(), 1);
+    assert_eq!(family.estates[0].owner_name, "Alt");
 }
