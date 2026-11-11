@@ -174,6 +174,7 @@
     { center: THREE.Vector3; size: THREE.Vector3 }
   >()
   const loadingModels = new SvelteSet<string>()
+  const failedModels = new SvelteSet<string>()
 
   function buildProceduralModel(def: ObjectDef): THREE.Group | null {
     if (def.procedural === 'shopSign') {
@@ -201,7 +202,7 @@
 
   async function getModel(objectId: string): Promise<THREE.Group | null> {
     if (modelCache.has(objectId)) return modelCache.get(objectId)!
-    if (loadingModels.has(objectId)) return null
+    if (loadingModels.has(objectId) || failedModels.has(objectId)) return null
 
     const def = objectDefsById.get(objectId)
     if (!def) return null
@@ -244,6 +245,10 @@
       // otherwise the cursor stays empty until the mouse moves again.
       if (selectedType === objectId) updatePreview()
       return model
+    } catch (error) {
+      failedModels.add(objectId)
+      console.error(`Failed to load object model ${objectId}:`, error)
+      return null
     } finally {
       loadingModels.delete(objectId)
     }
