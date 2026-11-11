@@ -29,6 +29,7 @@ export const FAMILY_PERMISSION = {
   BOARD_WRITE: 1 << 8,
   BOARD_MODERATE: 1 << 9,
   TREASURY_DEPOSIT: 1 << 10,
+  EDIT_EMBLEM: 1 << 11,
   EDIT_RANKS: 1 << 12,
 } as const
 
@@ -91,7 +92,31 @@ export interface FamilyInfo {
   can_claim_head: boolean
   /** Unix seconds; 0 = renaming is open. */
   rename_at: number
+  /** Cape texture hash and `#rrggbb` colour members' capes show. */
+  emblem_texture: string | null
+  emblem_color: string | null
 }
+
+export type MergeSide = 'proposer' | 'target'
+
+export interface FamilyMergeTerms {
+  keep_name: MergeSide
+  keep_emblem: MergeSide
+  keep_head: MergeSide
+}
+
+export interface PendingFamilyMerge {
+  proposerId: number
+  proposerName: string
+  proposerFamily: string
+  targetFamily: string
+  terms: FamilyMergeTerms
+  members: number
+  offeredAt: number
+}
+
+export const FAMILY_MERGE_TTL_MS = 120_000
+export const pendingFamilyMerges = writable<PendingFamilyMerge[]>([])
 
 export interface FamilyStorageEntry {
   character_name: string
@@ -146,6 +171,7 @@ export function resetFamilyStores() {
   pendingFamilyInvites.set([])
   familyPanelVisible.set(false)
   familyStorageLog.set(null)
+  pendingFamilyMerges.set([])
 }
 
 export function familyPermissions(family: FamilyInfo): number {

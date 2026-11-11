@@ -224,6 +224,8 @@ import {
 import {
   applyFamilyState,
   familyStorageLog,
+  pendingFamilyMerges,
+  type FamilyMergeTerms,
   type FamilyStorageEntry,
   pendingFamilyInvites,
   MAX_PENDING_FAMILY_INVITES,
@@ -1170,6 +1172,25 @@ export function handleServerMessage(
       // No chat bubble — the party channel is private to the party.
       addChatMessage(partyChatEntry(data.from, data.message))
       break
+
+    case 'FamilyMergeProposal': {
+      const proposal = data.proposal
+      enqueueConsent(
+        pendingFamilyMerges,
+        3,
+        (offer) => offer.proposerId === proposal.proposer_id,
+        {
+          proposerId: proposal.proposer_id,
+          proposerName: proposal.proposer_name,
+          proposerFamily: proposal.proposer_family,
+          targetFamily: proposal.target_family,
+          terms: proposal.terms as FamilyMergeTerms,
+          members: proposal.members,
+          offeredAt: Date.now(),
+        }
+      )
+      break
+    }
 
     case 'FamilyStorageLog':
       familyStorageLog.set(

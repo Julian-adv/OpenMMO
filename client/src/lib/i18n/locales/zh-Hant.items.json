@@ -438,5 +438,9 @@
   "family_chest.name": "家族倉庫",
   "family_chest.description": "為家族儲存最多200 kg物品的大箱子。放在家族領地上，成員依階級存取。",
   "family_board.name": "家族公告板",
-  "family_board.description": "放在家族領地上的公告板。只有該家族的成員可以閱讀和發文。"
+  "family_board.description": "放在家族領地上的公告板。只有該家族的成員可以閱讀和發文。",
+  "family_banner.name": "家族旗幟",
+  "family_banner.description": "展示家族紋章的立式旗幟。放在家族領地上。",
+  "family_pennant.name": "家族掛旗",
+  "family_pennant.description": "展示家族紋章的掛旗。在家族領地上升高掛在牆上。"
 }

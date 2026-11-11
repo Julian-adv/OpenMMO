@@ -4,8 +4,9 @@ use onlinerpg_shared::estate_storage::{
     estate_storage_def, EstateChest, EstateChestState, EstateStorageDefinition,
 };
 use onlinerpg_shared::family::{
-    is_family_furniture, permission, FamilyStorageEntry, FAMILY_BOARD_ITEM, FAMILY_CHEST_ITEM,
-    FAMILY_CHEST_LIMIT, FAMILY_STORAGE_LOG_KEPT, FAMILY_STORAGE_LOG_SHOWN,
+    is_family_furniture, permission, shows_family_emblem, Emblem, FamilyStorageEntry,
+    FAMILY_BOARD_ITEM, FAMILY_CHEST_ITEM, FAMILY_CHEST_LIMIT, FAMILY_STORAGE_LOG_KEPT,
+    FAMILY_STORAGE_LOG_SHOWN,
 };
 use onlinerpg_shared::fence::FencePlot;
 use onlinerpg_shared::inventory::ItemInstance;
@@ -257,6 +258,35 @@ fn chest_access(
     .optional()
 }
 
+/// A furnishing's id, family and shown emblem.
+pub(crate) type FurnitureFamily = (i64, Option<i64>, Option<Emblem>);
+
+/// Columns `furniture_family` reads, after `FURNITURE_FAMILY_JOIN`.
+const FURNITURE_FAMILY_COLUMNS: &str =
+    "c.family_id, c.item_def_id, f.id, f.emblem_texture, f.emblem_color";
+/// The family whose emblem shows: the furnishing's, while its estate stays
+/// attached to that family.
+const FURNITURE_FAMILY_JOIN: &str =
+    "LEFT JOIN families f ON f.id=c.family_id AND e.family_id=c.family_id";
+
+fn furniture_family(
+    row: &rusqlite::Row,
+    at: usize,
+) -> rusqlite::Result<(Option<i64>, Option<Emblem>)> {
+    let family_id: Option<i64> = row.get(at)?;
+    let item_def_id: String = row.get(at + 1)?;
+    let attached: Option<i64> = row.get(at + 2)?;
+    let emblem = (shows_family_emblem(&item_def_id) && attached.is_some())
+        .then(|| -> rusqlite::Result<Emblem> {
+            Ok(Emblem {
+                texture: row.get(at + 3)?,
+                color: row.get(at + 4)?,
+            })
+        })
+        .transpose()?;
+    Ok((family_id, emblem))
+}
+
 fn log_family_storage(
     tx: &Transaction<'_>,
     family_id: i64,
@@ -505,12 +535,16 @@ impl AuthService {
     pub fn load_estate_chests(&self) -> Result<Vec<EstateChest>, AuthError> {
         let conn = self.open_connection()?;
         let mut stmt = conn.prepare(
-            "SELECT c.id,c.estate_id,c.owner_id,c.item_def_id,c.x,c.y,c.z,c.rotation_deg,c.floor_level,
-                    COALESCE(e.missed,1)>0,c.revision,c.text
-             FROM estate_chests c LEFT JOIN land_estates e ON e.id=c.estate_id",
+            &format!(
+                "SELECT c.id,c.estate_id,c.owner_id,c.item_def_id,c.x,c.y,c.z,c.rotation_deg,
+                        c.floor_level,COALESCE(e.missed,1)>0,c.revision,c.text,{FURNITURE_FAMILY_COLUMNS}
+                 FROM estate_chests c LEFT JOIN land_estates e ON e.id=c.estate_id
+                 {FURNITURE_FAMILY_JOIN}"
+            ),
         )?;
         let chests = stmt
             .query_map([], |row| {
+                let (family_id, emblem) = furniture_family(row, 12)?;
                 Ok(EstateChest {
                     id: row.get(0)?,
                     estate_id: row.get(1)?,
@@ -526,10 +560,38 @@ impl AuthService {
                     overdue: row.get(9)?,
                     revision: row.get::<_, i64>(10)? as u64,
                     text: row.get(11)?,
+                    family_id,
+                    emblem,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(chests)
+    }
+
+    /// The family and shown emblem of each listed furnishing still placed.
+    pub fn estate_furniture_families(
+        &self,
+        ids: &[i64],
+    ) -> Result<Vec<FurnitureFamily>, AuthError> {
+        let conn = self.open_connection()?;
+        let mut stmt = conn.prepare_cached(&format!(
+            "SELECT c.id, {FURNITURE_FAMILY_COLUMNS}
+             FROM estate_chests c LEFT JOIN land_estates e ON e.id=c.estate_id
+             {FURNITURE_FAMILY_JOIN} WHERE c.id=?1"
+        ))?;
+        let mut rows = Vec::with_capacity(ids.len());
+        for id in ids {
+            if let Some(row) = stmt
+                .query_row([id], |row| {
+                    let (family_id, emblem) = furniture_family(row, 1)?;
+                    Ok((row.get(0)?, family_id, emblem))
+                })
+                .optional()?
+            {
+                rows.push(row);
+            }
+        }
+        Ok(rows)
     }
 
     pub fn estate_return_rugs(
@@ -625,6 +687,19 @@ impl AuthService {
             ],
         )?;
         let id = tx.last_insert_rowid();
+        let emblem = match family_id {
+            Some(family) if shows_family_emblem(&item_def_id) => Some(tx.query_row(
+                "SELECT emblem_texture, emblem_color FROM families WHERE id=?1",
+                [family],
+                |row| {
+                    Ok(Emblem {
+                        texture: row.get(0)?,
+                        color: row.get(1)?,
+                    })
+                },
+            )?),
+            _ => None,
+        };
         Self::write_character_states(&tx, std::slice::from_ref(character))?;
         Self::replace_inventories(&tx, [(character.character_id, inventory)])?;
         tx.commit()?;
@@ -639,6 +714,8 @@ impl AuthService {
             overdue: false,
             revision: 0,
             text: None,
+            family_id,
+            emblem,
         }))
     }
 

@@ -5,15 +5,16 @@
 use std::collections::HashMap;
 
 use onlinerpg_shared::family::{
-    FamilyEstate, FamilyInfo, FamilyMember, FAMILY_DISSOLVE_STAMPS, FAMILY_FOUND_STAMPS,
-    FAMILY_INVITE_TTL, FAMILY_RENAME_INTERVAL_SECS, FAMILY_RENAME_STAMPS, FAMILY_STAMP_ITEM,
+    FamilyEstate, FamilyInfo, FamilyMember, FamilyMergeProposal, FamilyMergeTerms,
+    FAMILY_DISSOLVE_STAMPS, FAMILY_FOUND_STAMPS, FAMILY_INVITE_TTL, FAMILY_MERGE_TTL,
+    FAMILY_RENAME_INTERVAL_SECS, FAMILY_RENAME_STAMPS, FAMILY_STAMP_ITEM,
 };
 use tracing::{info, warn};
 
 use super::auth_db;
 use super::consent::{answer_consent, sweep_and_count, PendingConsent};
 use super::inventory::hold_by_def;
-use crate::auth::{unix_now, AuthError, AuthService, FamilyDeparture, FamilyRoster};
+use crate::auth::{unix_now, AuthError, AuthService, FamilyDeparture, FamilyEmblem, FamilyRoster};
 use crate::types::{PlayerId, ServerMessage};
 
 const FAMILY_PENDING_INVITE_CAP: usize = 5;
@@ -25,6 +26,11 @@ pub(crate) struct Families {
     online: HashMap<i64, Vec<PlayerId>>,
     of_player: HashMap<PlayerId, i64>,
     invites: HashMap<(PlayerId, PlayerId), PendingConsent>,
+    /// Emblems of families with a member online.
+    emblems: HashMap<i64, FamilyEmblem>,
+    /// Merge offers by (proposer, target head), with their terms.
+    merges: HashMap<(PlayerId, PlayerId), PendingConsent>,
+    merge_terms: HashMap<(PlayerId, PlayerId), FamilyMergeTerms>,
 }
 
 impl Families {
@@ -40,6 +46,7 @@ impl Families {
             list.retain(|id| id != player_id);
             if list.is_empty() {
                 self.online.remove(&family_id);
+                self.emblems.remove(&family_id);
             }
         }
         Some(family_id)
@@ -47,6 +54,25 @@ impl Families {
 
     fn online(&self, family_id: i64) -> Vec<PlayerId> {
         self.online.get(&family_id).cloned().unwrap_or_default()
+    }
+
+    fn emblem_of(&self, player_id: &PlayerId) -> Option<FamilyEmblem> {
+        let family_id = self.of_player.get(player_id)?;
+        self.emblems.get(family_id).filter(|e| e.is_set()).cloned()
+    }
+}
+
+/// The cape colour and texture a player shows: their family's emblem
+/// covers whatever cape they wear.
+pub(crate) fn shown_cape(
+    back: Option<&str>,
+    color: Option<String>,
+    texture: Option<String>,
+    emblem: Option<&FamilyEmblem>,
+) -> (Option<String>, Option<String>) {
+    match (back, emblem) {
+        (Some(_), Some(emblem)) => (emblem.color.clone().or(color), emblem.texture.clone()),
+        _ => (color, texture),
     }
 }
 
@@ -90,6 +116,8 @@ fn family_info(
         rename_at: roster
             .renamed_at
             .map_or(0, |at| at + FAMILY_RENAME_INTERVAL_SECS),
+        emblem_texture: roster.emblem.texture.clone(),
+        emblem_color: roster.emblem.color.clone(),
     })
 }
 
@@ -116,6 +144,62 @@ impl super::GameState {
                 .await;
             self.refresh_family(family_id, auth).await;
         }
+    }
+
+    pub(crate) async fn family_emblem_of(&self, player_id: &PlayerId) -> Option<FamilyEmblem> {
+        self.families.read().await.emblem_of(player_id)
+    }
+
+    /// Re-send the players' worn capes after their family emblem changed.
+    async fn refresh_family_capes(&self, players: &[PlayerId]) {
+        for player_id in players {
+            if let Some(inventory) = self.get_player_inventory(player_id).await {
+                self.set_player_gear(player_id, &inventory).await;
+            }
+        }
+    }
+
+    pub async fn set_family_emblem(
+        &self,
+        player_id: &PlayerId,
+        texture: Option<String>,
+        color: Option<String>,
+        auth: &AuthService,
+    ) {
+        let color = match color.as_deref().map(super::inventory::normalize_hex_color) {
+            Some(None) => {
+                self.family_note(player_id, "that is not a colour.").await;
+                return;
+            }
+            other => other.flatten(),
+        };
+        if let Some(hash) = &texture {
+            if !self.cape_textures.is_wearable(hash).await {
+                self.family_note(player_id, "that picture is no longer available.")
+                    .await;
+                return;
+            }
+        }
+        let emblem = FamilyEmblem { texture, color };
+        let saved = emblem.clone();
+        let changed = self
+            .family_change(player_id, auth, move |auth, actor| {
+                auth.set_family_emblem(actor, &saved)
+            })
+            .await;
+        if !changed {
+            return;
+        }
+        let Some(family_id) = self.families.read().await.of_player.get(player_id).copied() else {
+            return;
+        };
+        info!(
+            "Player {} set the emblem of family {family_id}: {emblem:?}",
+            self.player_name_of(player_id).await
+        );
+        let members = self.families.read().await.online(family_id);
+        self.refresh_family_capes(&members).await;
+        self.refresh_family_furniture(family_id, auth).await;
     }
 
     /// Tell the other online members that `player_id` did something.
@@ -193,6 +277,12 @@ impl super::GameState {
         families
             .invites
             .retain(|(from, to), _| from != player_id && to != player_id);
+        families
+            .merges
+            .retain(|(from, to), _| from != player_id && to != player_id);
+        families
+            .merge_terms
+            .retain(|(from, to), _| from != player_id && to != player_id);
         families.leave(player_id)
     }
 
@@ -221,6 +311,17 @@ impl super::GameState {
                 return;
             }
         };
+        let mut emblem = roster.emblem.clone();
+        if let Some(hash) = &emblem.texture {
+            if self.cape_textures.is_blocked(hash).await {
+                emblem.texture = None;
+            }
+        }
+        self.families
+            .write()
+            .await
+            .emblems
+            .insert(family_id, emblem);
         let online: Vec<i64> = members.iter().map(|(_, id)| *id).collect();
         let successor = roster.successor(unix_now(), &online);
         for (player_id, character_id) in &members {
@@ -560,6 +661,8 @@ impl super::GameState {
         self.families.write().await.enter(*target_id, family_id);
         self.show_family_name(target_id, Some(family_name.clone()))
             .await;
+        self.refresh_family(family_id, auth).await;
+        self.refresh_family_capes(&[*target_id]).await;
         for (member, _) in self.online_family_members(family_id).await {
             self.family_note(
                 &member,
@@ -636,6 +739,7 @@ impl super::GameState {
         );
         if let Some(target_player) = self.player_id_of_character(target).await {
             self.forget_player_family(&target_player).await;
+            self.refresh_family_capes(&[target_player]).await;
             self.show_family_name(&target_player, None).await;
             self.send_direct_message(&target_player, ServerMessage::FamilyState { family: None })
                 .await;
@@ -646,6 +750,7 @@ impl super::GameState {
             };
             self.family_note(&target_player, note).await;
         }
+        self.refresh_family_furniture(family_id, auth).await;
         if dissolved {
             return;
         }
@@ -764,10 +869,16 @@ impl super::GameState {
         auth: &AuthService,
     ) {
         self.tick_land_taxes(auth).await;
-        self.family_change(player_id, auth, move |auth, actor| {
-            auth.attach_family_estate(actor, attach)
-        })
-        .await;
+        let changed = self
+            .family_change(player_id, auth, move |auth, actor| {
+                auth.attach_family_estate(actor, attach)
+            })
+            .await;
+        if changed {
+            if let Some(family_id) = self.families.read().await.of_player.get(player_id).copied() {
+                self.refresh_family_furniture(family_id, auth).await;
+            }
+        }
     }
 
     pub async fn deposit_family_estate(
@@ -802,6 +913,168 @@ impl super::GameState {
         }
     }
 
+    pub async fn propose_family_merge(
+        &self,
+        player_id: &PlayerId,
+        head_name: &str,
+        terms: FamilyMergeTerms,
+        auth: &AuthService,
+    ) {
+        let Some(target_id) = self.player_id_by_name(head_name.trim()).await else {
+            self.family_note(player_id, format!("no one called {head_name} is online."))
+                .await;
+            return;
+        };
+        let (Some(proposer), Some(target)) = (
+            self.character_id_of(player_id).await,
+            self.character_id_of(&target_id).await,
+        ) else {
+            self.family_note(player_id, SERVER_ERROR).await;
+            return;
+        };
+        let auth = auth.clone();
+        let (proposer_family, target_family, members) =
+            match auth_db(move || auth.check_family_merge(proposer, target)).await {
+                Ok(Ok(check)) => check,
+                Ok(Err(reason)) => {
+                    self.family_note(player_id, reason).await;
+                    return;
+                }
+                Err(err) => {
+                    warn!("Failed to check family merge: {err}");
+                    self.family_note(player_id, SERVER_ERROR).await;
+                    return;
+                }
+            };
+        let proposer_name = self.player_name_of(player_id).await;
+        let target_name = self.player_name_of(&target_id).await;
+        let refusal = {
+            let mut families = self.families.write().await;
+            let key = (*player_id, target_id);
+            let open = families
+                .merges
+                .get(&key)
+                .filter(|offer| offer.expires_at > std::time::Instant::now())
+                .map(|offer| offer.answered);
+            match open {
+                Some(true) => Some(format!(
+                    "{target_name} declined; you can ask again in a couple of minutes."
+                )),
+                Some(false) => Some(format!("{target_name} is still considering your offer.")),
+                None => {
+                    families
+                        .merges
+                        .insert(key, PendingConsent::new(FAMILY_MERGE_TTL));
+                    families.merge_terms.insert(key, terms);
+                    None
+                }
+            }
+        };
+        if let Some(reason) = refusal {
+            self.family_note(player_id, reason).await;
+            return;
+        }
+        let suppressed = self.has_blocked(&target_id, &proposer_name).await;
+        if !suppressed {
+            self.send_direct_message(
+                &target_id,
+                ServerMessage::FamilyMergeProposal {
+                    proposal: FamilyMergeProposal {
+                        proposer_id: *player_id,
+                        proposer_name,
+                        proposer_family,
+                        target_family,
+                        terms,
+                        members,
+                    },
+                },
+            )
+            .await;
+        }
+        self.family_note(player_id, format!("offered {target_name} a merge."))
+            .await;
+    }
+
+    pub async fn respond_to_family_merge(
+        &self,
+        target_id: &PlayerId,
+        proposer_id: &PlayerId,
+        accept: bool,
+        auth: &AuthService,
+    ) {
+        let key = (*proposer_id, *target_id);
+        let terms = {
+            let mut families = self.families.write().await;
+            let usable = answer_consent(&mut families.merges, key, accept);
+            let terms = families.merge_terms.get(&key).copied();
+            if accept {
+                families.merge_terms.remove(&key);
+            }
+            terms.filter(|_| usable)
+        };
+        let Some(terms) = terms else {
+            self.family_note(target_id, "that merge offer has expired.")
+                .await;
+            return;
+        };
+        let target_name = self.player_name_of(target_id).await;
+        if !accept {
+            self.family_note(proposer_id, format!("{target_name} declined the merge."))
+                .await;
+            return;
+        }
+        let (Some(proposer), Some(target)) = (
+            self.character_id_of(proposer_id).await,
+            self.character_id_of(target_id).await,
+        ) else {
+            self.family_note(target_id, "that merge offer is no longer valid.")
+                .await;
+            return;
+        };
+        let auth_copy = auth.clone();
+        let merged = auth_db(move || auth_copy.merge_families(proposer, target, terms)).await;
+        let (survivor, absorbed) = match merged {
+            Ok(Ok(ids)) => ids,
+            Ok(Err(reason)) => {
+                self.family_note(target_id, reason).await;
+                self.family_note(proposer_id, reason).await;
+                return;
+            }
+            Err(err) => {
+                warn!("Family merge failed: {err}");
+                self.family_note(target_id, SERVER_ERROR).await;
+                return;
+            }
+        };
+        let moved = {
+            let mut families = self.families.write().await;
+            let moved = families.online(absorbed);
+            for member in &moved {
+                families.enter(*member, survivor);
+            }
+            families.emblems.remove(&absorbed);
+            moved
+        };
+        let auth_copy = auth.clone();
+        let name = match auth_db(move || auth_copy.family_roster(survivor)).await {
+            Ok(Some(roster)) => roster.name,
+            _ => String::new(),
+        };
+        info!("Family {absorbed} merged into family {survivor} '{name}'");
+        for member in &moved {
+            self.show_family_name(member, Some(name.clone())).await;
+        }
+        self.refresh_family(survivor, auth).await;
+        let members = self.families.read().await.online(survivor);
+        for member in &members {
+            self.family_note(member, format!("the families are merged as {name}."))
+                .await;
+        }
+        self.refresh_family_capes(&members).await;
+        self.refresh_family_furniture(absorbed, auth).await;
+        self.refresh_family_furniture(survivor, auth).await;
+    }
+
     /// After characters were deleted: repair the families they left and
     /// refresh the members still online.
     pub(super) async fn settle_families(&self, auth: &AuthService) {
@@ -810,6 +1083,7 @@ impl super::GameState {
             Ok(changed) => {
                 for family_id in changed {
                     self.refresh_family(family_id, auth).await;
+                    self.refresh_family_furniture(family_id, auth).await;
                 }
             }
             Err(err) => warn!("Failed to settle families: {err}"),

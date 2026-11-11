@@ -1644,10 +1644,15 @@ async fn handle_client_message(
             player.back = inventory
                 .as_ref()
                 .and_then(|inv| inv.equipped_def_id(EquipSlot::Back));
-            player.back_color = inventory.as_ref().and_then(|inv| inv.equipped_cape_color());
-            player.back_texture = inventory
-                .as_ref()
-                .and_then(|inv| inv.equipped_cape_texture());
+            let emblem = game_state.family_emblem_of(&id).await;
+            (player.back_color, player.back_texture) = crate::game_state::shown_cape(
+                player.back.as_deref(),
+                inventory.as_ref().and_then(|inv| inv.equipped_cape_color()),
+                inventory
+                    .as_ref()
+                    .and_then(|inv| inv.equipped_cape_texture()),
+                emblem.as_ref(),
+            );
             player.max_health_per_level = inventory
                 .as_ref()
                 .map_or(0, |inv| game_state.equipped_max_health_per_level(inv));
@@ -2853,6 +2858,33 @@ async fn handle_client_message(
         ClientMessage::PartySetLoot { shared } => {
             if let Some(id) = &state.player_id {
                 game_state.set_party_loot(id, Some(shared)).await;
+            }
+        }
+
+        ClientMessage::SetFamilyEmblem { texture, color } => {
+            if let Some(id) = &state.require_in_game("set family emblem") {
+                game_state
+                    .set_family_emblem(id, texture, color, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::ProposeFamilyMerge { head_name, terms } => {
+            if let Some(id) = &state.require_in_game("propose family merge") {
+                game_state
+                    .propose_family_merge(id, &head_name, terms, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::RespondFamilyMerge {
+            proposer_id,
+            accept,
+        } => {
+            if let Some(id) = &state.require_in_game("answer family merge") {
+                game_state
+                    .respond_to_family_merge(id, &proposer_id, accept, auth_service)
+                    .await;
             }
         }
 

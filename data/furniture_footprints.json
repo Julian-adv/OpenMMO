@@ -102,5 +102,11 @@
     "maxX": 0.232,
     "minZ": -0.19,
     "maxZ": 0.19
+  },
+  "family_banner": {
+    "minX": -0.487,
+    "maxX": 0.487,
+    "minZ": -0.31,
+    "maxZ": 0.31
   }
 }

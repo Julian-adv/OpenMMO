@@ -21,6 +21,9 @@
   머티리얼은 색 문자열을 키로 한 전역 캐시에 공유된다.
 - 남에게 보이는 경로는 def id 하나뿐이다: `Player.back`,
   `ServerMessage::PlayerBackChanged`, 캐릭터 선택의 `VisibleEquipment.back`.
+- 가문 문장이 있으면 세 경로 모두 인스턴스 색·그림 대신 문장을 싣는다
+  (`game_state::family::shown_cape`, 캐릭터 선택 쿼리). 인스턴스는 그대로다
+  (FAMILY_SYSTEM.md 8절).
 
 즉 지금은 **아이템 종류당 색 하나**다. 인스턴스별 색이 들어가려면 저 세 경로가
 전부 색을 함께 실어야 한다.

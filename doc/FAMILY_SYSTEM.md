@@ -1,6 +1,6 @@
 # 가문 시스템
 
-> 상태: 1차(가문 기본·영지 공유) 구현됨, 프로토콜 144 (2026-11-10). 2차(채팅·창고·게시판) 구현됨, 프로토콜 146 (2026-11-11), 미배포. 3차는 구현 전.
+> 상태: 1차(가문 기본·영지 공유) 구현됨, 프로토콜 144 (2026-11-10). 2차(채팅·창고·게시판) 구현됨, 프로토콜 146, 3차(문장·깃발·합병) 구현됨, 프로토콜 147 (2026-11-11). 2·3차 미배포.
 
 영지를 가진 플레이어가 가문을 세우고, 다른 플레이어를 받아들여 이름·영지·문장·채팅·게시판·창고를 함께 쓴다.
 
@@ -152,24 +152,24 @@
 ### 문장
 
 - 가문은 `emblem_texture`(sha256 해시)와 `emblem_color`를 가진다.
-- 등록은 기존 망토 그림 경로를 쓴다: `POST /api/cape-texture` 업로드 후 `SetFamilyEmblem { texture, color }`. 320×512, 업로드 제한, 신고·해시 차단이 그대로 적용된다 (CAPE_CUSTOMIZATION.md).
-- 차단된 해시가 문장이면 문장 없음으로 되돌린다.
+- 등록은 기존 망토 그림 경로를 쓴다: `POST /api/cape-texture` 업로드 후 `SetFamilyEmblem { texture, color }`. 320×512, 업로드 제한, 신고·해시 차단이 그대로 적용된다 (CAPE_CUSTOMIZATION.md). 가문 창의 "문장"에서 색과 그림을 고른다. 비용은 없다.
+- 차단된 해시가 문장이면 그림 없이 색만 보인다. 서버는 가문 명부를 읽을 때 차단된 그림을 뺀다.
 
 ### 망토
 
 - 가문 문장이 있으면 가문원이 두른 망토는 가문 문장과 색으로 보인다.
-- 아이템 인스턴스의 `cape_texture`/`cape_color`는 바꾸지 않는다. 서버가 `Player.back_texture`/`back_color`와 `PlayerBackChanged`를 만들 때 가문 문장으로 덮어쓴다. 탈퇴하면 원래 그림이 다시 보인다.
+- 아이템 인스턴스의 `cape_texture`/`cape_color`는 바꾸지 않는다. 서버가 `Player.back_texture`/`back_color`와 `PlayerBackChanged`를 만들 때 가문 문장으로 덮어쓴다 (`family::shown_cape`). 문장 색이 없으면 망토 자기 색을 쓰고, 그림은 문장 그림으로 바꾼다(없으면 지운다). 탈퇴하면 원래 그림이 다시 보인다. 캐릭터 선택 화면도 같은 규칙이다.
 - 문장이 없는 가문은 덮어쓰지 않는다.
 - 개인별 끄기 옵션은 없다 (요구사항이 "통일").
 
 ### 깃발·휘장
 
-- `data-src/estate_storage.csv`에 가구로 추가한다: `family_banner`(세우는 깃발), `family_pennant`(벽걸이 휘장). 가구 상점에서 판다.
+- `data-src/estate_storage.csv`에 가구로 추가한다: `family_banner`(세우는 깃발, 3,000c), `family_pennant`(벽걸이 휘장, 1,500c). Aldwin이 판다. 휘장은 벽 장식 칼처럼 높이를 올려 벽에 건다.
 - 가문 영지에만 놓을 수 있다. 권한은 `PLACE_FURNITURE`.
-- 그림은 영지의 `family_id` → 가문 문장으로 서버가 채워 보낸다. 가구 행에는 저장하지 않는다.
-- 문장이 바뀌면 가문 영지의 깃발이 있는 구역에 갱신을 보낸다.
-- 영지가 가문에서 떨어지면 깃발은 문장 없는 무지 깃발로 보인다.
-- 모델은 새로 만들어야 한다. 깃발·휘장 애셋이 지금은 없다 (doc/assets/creation-guidelines.md).
+- 그림은 `EstateChest.emblem`으로 서버가 채워 보낸다: 가구의 `family_id`가 영지의 `family_id`와 같을 때 그 가문 문장. 가구 행에는 저장하지 않는다.
+- 문장 변경, 영지 연결·분리, 탈퇴, 해산, 합병 때 그 가문 가구를 다시 읽어 바뀐 것만 알린다 (`refresh_family_furniture`).
+- 영지가 가문에서 떨어지면 깃발은 문장 없는 무지(리넨색) 깃발로 보인다.
+- 모델: `tools/blender-scripts/build_family_banner.py`. 천은 `emblem_cloth` 메시이고, 클라이언트(`utils/familyEmblem.ts`)가 망토처럼 앞면에만 그림을 색 위에 얹는다.
 
 ## 9. 가문 창고
 
@@ -206,7 +206,8 @@
 
 ## 12. 합병
 
-- A 가주가 B 가주에게 제안한다. 제안에 남길 이름(A 또는 B), 남길 문장(A 또는 B), 남을 가주를 담는다. B 가주가 수락하면 성립한다. 두 가주 모두 접속 중이어야 한다.
+- A 가주가 B 가주에게 제안한다. 제안에 남길 이름(A 또는 B), 남길 문장(A 또는 B), 남을 가주를 담는다. B 가주가 수락하면 성립한다. 두 가주 모두 접속 중이어야 한다. 제안은 120초 뒤 만료되고, 거절된 제안은 만료 전까지 다시 보낼 수 없다.
+- 이름이 남는 쪽이 남는 가문이다. 다른 가문의 가문원·영지·가구·창고 기록을 옮기고 그 가문 행을 지운다.
 - 합친 인원이 정원을 넘으면 거절된다.
 - 흡수되는 쪽 가주는 단계 1(원로)이 된다. 나머지는 단계를 유지한다.
 - 단계 호칭과 권한은 남는 가문 것을 쓴다.
@@ -324,11 +325,11 @@ CREATE INDEX IF NOT EXISTS idx_estate_chests_family ON estate_chests(family_id) 
 - `EstateChestState`에 `can_withdraw`, `family`.
 - 게시판 메시지의 `object_id`를 `board: NoticeBoardRef`로 바꿈 (`TakeDownNotices` 제외). 거절 사유 `not_family`, `no_family_rank`.
 
-### 3차 (예정)
+### 3차 (v147, 구현됨)
 
 - `SetFamilyEmblem { texture, color }`
-- `ProposeFamilyMerge { head_name, keep_name, keep_emblem, keep_head }`, `RespondFamilyMerge { accept }` → `FamilyMergeProposal { ... }`
-- 가구 스폰 메시지에 깃발용 문장 해시·색 추가.
+- `ProposeFamilyMerge { head_name, terms: { keep_name, keep_emblem, keep_head } }`, `RespondFamilyMerge { proposer_id, accept }` → `FamilyMergeProposal { proposal }`
+- `FamilyInfo`에 `emblem_texture`, `emblem_color`. `EstateChest`에 `family_id`, `emblem`.
 
 `shared/src/dungeon/`, `data-src/dungeons.csv`, `dungeon_spawns.csv`, `shared/src/housing.rs`는 건드리지 않는다 (레이아웃 지문).
 
@@ -373,10 +374,16 @@ CREATE INDEX IF NOT EXISTS idx_estate_chests_family ON estate_chests(family_id) 
 - agent-client는 가문 채팅을 읽지만 말하지 못하고, 가문 게시판·창고를 쓰지 않는다.
 - 가문 창고·게시판 아이콘은 기존 보관함·게시 용지 아이콘을 쓴다.
 
-### 3차
+### 3차 (**구현됨**, 미배포)
 
 6. **문장**: 문장 등록, 망토 덮어쓰기, 깃발·휘장 애셋과 가구.
-7. **합병**.
+7. **합병**: 가문 창의 "다른 가문과 합병"(가주), 상대 가주에게 수락 창.
+
+테스트: `family_tests.rs`의 문장·깃발·합병 테스트.
+
+3차에 없는 것:
+
+- agent-client는 문장·합병을 다루지 않는다.
 
 ## 구현 시 함께 고칠 문서
 

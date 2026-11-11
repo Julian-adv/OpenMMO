@@ -105,6 +105,8 @@ fn an_estate_mailbox_is_listed_by_distance() {
             overdue: false,
             revision: 1,
             text: None,
+            family_id: None,
+            emblem: None,
         }],
         &[],
     );

@@ -398,5 +398,16 @@
     "model": "objects/mailbox.glb",
     "mailbox": true,
     "solid": true
+  },
+  {
+    "id": "family_banner",
+    "name": "Family Banner",
+    "model": "objects/family_banner.glb",
+    "solid": true
+  },
+  {
+    "id": "family_pennant",
+    "name": "Family Pennant",
+    "model": "objects/family_pennant.glb"
   }
 ]

@@ -438,5 +438,9 @@
   "family_chest.name": "家門の倉庫",
   "family_chest.description": "家門のために最大200 kgを保管する大きな箱。家門の領地に置き、家門員は階級に応じて出し入れします。",
   "family_board.name": "家門の掲示板",
-  "family_board.description": "家門の領地に置く掲示板。その家門の家門員だけが読み書きできます。"
+  "family_board.description": "家門の領地に置く掲示板。その家門の家門員だけが読み書きできます。",
+  "family_banner.name": "家門の旗",
+  "family_banner.description": "家門の紋章を掲げる立て旗。家門の領地に置きます。",
+  "family_pennant.name": "家門の垂れ幕",
+  "family_pennant.description": "家門の紋章を掲げる垂れ幕。家門の領地の壁に高く掛けます。"
 }

@@ -33,6 +33,7 @@
   import FriendPanel from './FriendPanel.svelte'
   import FamilyPanel from './FamilyPanel.svelte'
   import FamilyInviteToast from './FamilyInviteToast.svelte'
+  import FamilyMergeToast from './FamilyMergeToast.svelte'
   import EmotePanel from './EmotePanel.svelte'
   import InstrumentPanel from './InstrumentPanel.svelte'
   import NpcContextMenu from './NpcContextMenu.svelte'
@@ -277,6 +278,7 @@
          online notice whether or not the list is on screen. -->
     <FriendPanel />
     <FamilyInviteToast />
+    <FamilyMergeToast />
     <FamilyPanel />
     <EmotePanel />
     <InstrumentPanel />

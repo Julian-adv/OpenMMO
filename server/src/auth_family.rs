@@ -8,10 +8,10 @@ use super::{
 };
 use onlinerpg_shared::character::CharacterClass;
 use onlinerpg_shared::family::{
-    default_rank_label, default_rank_permissions, permission, FamilyRank,
-    FAMILY_HEAD_INACTIVE_SECS, FAMILY_MAX_MEMBERS, FAMILY_NAME_RETIRE_SECS, FAMILY_RANK_COUNT,
-    FAMILY_RANK_ELDER, FAMILY_RANK_HEAD, FAMILY_RANK_LABEL_MAX_CHARS, FAMILY_RANK_MEMBER,
-    FAMILY_REJOIN_COOLDOWN_SECS, FAMILY_RENAME_INTERVAL_SECS,
+    default_rank_label, default_rank_permissions, permission, FamilyMergeTerms, FamilyRank,
+    MergeSide, FAMILY_HEAD_INACTIVE_SECS, FAMILY_MAX_MEMBERS, FAMILY_NAME_RETIRE_SECS,
+    FAMILY_RANK_COUNT, FAMILY_RANK_ELDER, FAMILY_RANK_HEAD, FAMILY_RANK_LABEL_MAX_CHARS,
+    FAMILY_RANK_MEMBER, FAMILY_REJOIN_COOLDOWN_SECS, FAMILY_RENAME_INTERVAL_SECS,
 };
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 
@@ -44,6 +44,7 @@ pub struct FamilyRoster {
     /// Member accounts holding an estate no family has.
     pub unattached_accounts: Vec<String>,
     pub renamed_at: Option<i64>,
+    pub emblem: FamilyEmblem,
 }
 
 impl FamilyRoster {
@@ -136,6 +137,8 @@ pub(super) fn read_family_names(
         .collect();
     names
 }
+
+pub use onlinerpg_shared::family::Emblem as FamilyEmblem;
 
 struct Membership {
     family_id: i64,
@@ -391,14 +394,23 @@ impl AuthService {
 
     pub fn family_roster(&self, family_id: i64) -> Result<Option<FamilyRoster>, AuthError> {
         let conn = self.open_connection()?;
-        let head: Option<(String, Option<i64>)> = conn
+        let head: Option<(String, Option<i64>, FamilyEmblem)> = conn
             .query_row(
-                "SELECT name, renamed_at FROM families WHERE id=?1",
+                "SELECT name, renamed_at, emblem_texture, emblem_color FROM families WHERE id=?1",
                 [family_id],
-                |row| Ok((row.get(0)?, row.get(1)?)),
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        FamilyEmblem {
+                            texture: row.get(2)?,
+                            color: row.get(3)?,
+                        },
+                    ))
+                },
             )
             .optional()?;
-        let Some((name, renamed_at)) = head else {
+        let Some((name, renamed_at, emblem)) = head else {
             return Ok(None);
         };
         let mut stmt = conn.prepare(
@@ -464,7 +476,127 @@ impl AuthService {
             estates,
             unattached_accounts,
             renamed_at,
+            emblem,
         }))
+    }
+
+    /// Both characters head different families that fit together: their
+    /// family names and the merged member count.
+    pub fn check_family_merge(&self, proposer: i64, target: i64) -> Verdict<(String, String, u32)> {
+        let conn = self.open_connection()?;
+        Self::merge_pair(&conn, proposer, target)
+    }
+
+    fn merge_pair(conn: &Connection, proposer: i64, target: i64) -> Verdict<(String, String, u32)> {
+        let (Some(a), Some(b)) = (membership(conn, proposer)?, membership(conn, target)?) else {
+            return Ok(Err("Both sides must lead a family."));
+        };
+        if a.rank != FAMILY_RANK_HEAD || b.rank != FAMILY_RANK_HEAD {
+            return Ok(Err("Only heads of families can agree a merge."));
+        }
+        if a.family_id == b.family_id {
+            return Ok(Err("That is your own family."));
+        }
+        let (name_a, name_b, members): (String, String, u32) = conn.query_row(
+            "SELECT (SELECT name FROM families WHERE id=?1), (SELECT name FROM families WHERE id=?2),
+                    (SELECT COUNT(*) FROM family_members WHERE family_id IN (?1, ?2))",
+            params![a.family_id, b.family_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )?;
+        if members as usize > FAMILY_MAX_MEMBERS {
+            return Ok(Err(
+                "Together the families would have more than 30 members.",
+            ));
+        }
+        Ok(Ok((name_a, name_b, members)))
+    }
+
+    /// Fold one family into the other on the agreed terms. Returns the
+    /// surviving and the absorbed family ids.
+    pub fn merge_families(
+        &self,
+        proposer: i64,
+        target: i64,
+        terms: FamilyMergeTerms,
+    ) -> Verdict<(i64, i64)> {
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if let Err(reason) = Self::merge_pair(&tx, proposer, target)? {
+            return Ok(Err(reason));
+        }
+        let family = |id: i64| -> Result<i64, rusqlite::Error> {
+            tx.query_row(
+                "SELECT family_id FROM family_members WHERE character_id=?1",
+                [id],
+                |row| row.get(0),
+            )
+        };
+        let side = |which: MergeSide| match which {
+            MergeSide::Proposer => proposer,
+            MergeSide::Target => target,
+        };
+        let (survivor_head, absorbed_head) = match terms.keep_name {
+            MergeSide::Proposer => (proposer, target),
+            MergeSide::Target => (target, proposer),
+        };
+        let survivor = family(survivor_head)?;
+        let absorbed = family(absorbed_head)?;
+        if side(terms.keep_emblem) == absorbed_head {
+            tx.execute(
+                "UPDATE families SET (emblem_texture, emblem_color) =
+                    (SELECT emblem_texture, emblem_color FROM families WHERE id=?2)
+                 WHERE id=?1",
+                params![survivor, absorbed],
+            )?;
+        }
+        let stepping_down = if side(terms.keep_head) == survivor_head {
+            absorbed_head
+        } else {
+            survivor_head
+        };
+        tx.execute(
+            "UPDATE family_members SET rank=?2 WHERE character_id=?1",
+            params![stepping_down, FAMILY_RANK_ELDER],
+        )?;
+        for table in [
+            "family_members",
+            "land_estates",
+            "estate_chests",
+            "family_storage_log",
+        ] {
+            tx.execute(
+                &format!("UPDATE {table} SET family_id=?1 WHERE family_id=?2"),
+                params![survivor, absorbed],
+            )?;
+        }
+        let absorbed_name: String =
+            tx.query_row("SELECT name FROM families WHERE id=?1", [absorbed], |row| {
+                row.get(0)
+            })?;
+        tx.execute("DELETE FROM families WHERE id=?1", [absorbed])?;
+        tx.execute(
+            "INSERT OR REPLACE INTO family_retired_names (name, successor_id, retired_at, reusable_at)
+             VALUES (?1, ?2, ?3, NULL)",
+            params![absorbed_name, survivor, unix_now()],
+        )?;
+        tx.commit()?;
+        Ok(Ok((survivor, absorbed)))
+    }
+
+    /// Set or clear the family emblem; needs `EDIT_EMBLEM`.
+    pub fn set_family_emblem(&self, character_id: i64, emblem: &FamilyEmblem) -> Verdict<i64> {
+        let conn = self.open_connection()?;
+        let Some(member) = membership(&conn, character_id)? else {
+            return Ok(Err("You do not belong to a family."));
+        };
+        if member.permissions & permission::EDIT_EMBLEM == 0 {
+            return Ok(Err("Your rank may not change the emblem."));
+        }
+        conn.execute(
+            "UPDATE families SET emblem_texture=?2, emblem_color=?3 WHERE id=?1",
+            params![member.family_id, emblem.texture, emblem.color],
+        )?;
+        Ok(Ok(member.family_id))
     }
 
     pub fn create_family(&self, id: i64, name: &str) -> Verdict<i64> {

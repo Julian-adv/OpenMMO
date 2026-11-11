@@ -150,7 +150,9 @@ async fn steward_sells_land_deeds_and_burns_the_purchase_gold() {
                     "letter",
                     "revenue_stamp",
                     "family_chest",
-                    "family_board"
+                    "family_board",
+                    "family_banner",
+                    "family_pennant"
                 ]
             );
         }

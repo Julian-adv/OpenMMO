@@ -1428,8 +1428,13 @@ impl super::GameState {
     pub async fn set_player_gear(&self, player_id: &PlayerId, inventory: &PlayerInventory) {
         let main_hand = inventory.equipped_def_id(EquipSlot::MainHand);
         let back = inventory.equipped_def_id(EquipSlot::Back);
-        let back_color = inventory.equipped_cape_color();
-        let back_texture = inventory.equipped_cape_texture();
+        let emblem = self.family_emblem_of(player_id).await;
+        let (back_color, back_texture) = super::family::shown_cape(
+            back.as_deref(),
+            inventory.equipped_cape_color(),
+            inventory.equipped_cape_texture(),
+            emblem.as_ref(),
+        );
         let armor = inventory.equipped_armor();
         let max_hp_per_level = self.equipped_max_health_per_level(inventory);
         let cloaked = self.wears_invisibility(inventory);

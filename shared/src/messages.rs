@@ -1093,6 +1093,20 @@ pub enum ClientMessage {
     },
     /// Answered with `FamilyStorageLog`.
     RequestFamilyStorageLog,
+    /// Needs `EDIT_EMBLEM`. `texture` is an uploaded cape texture hash.
+    SetFamilyEmblem {
+        texture: Option<String>,
+        color: Option<String>,
+    },
+    /// A head offers to merge with the family `head_name` leads.
+    ProposeFamilyMerge {
+        head_name: String,
+        terms: crate::family::FamilyMergeTerms,
+    },
+    RespondFamilyMerge {
+        proposer_id: PlayerId,
+        accept: bool,
+    },
 }
 
 impl ClientMessage {
@@ -2399,6 +2413,10 @@ pub enum ServerMessage {
     FamilyStorageLog {
         entries: Vec<crate::family::FamilyStorageEntry>,
     },
+    /// Direct to a head: a merge offer to answer with `RespondFamilyMerge`.
+    FamilyMergeProposal {
+        proposal: crate::family::FamilyMergeProposal,
+    },
 }
 
 pub use crate::entity::PlayerId;
@@ -2620,6 +2638,7 @@ impl ServerMessage {
             | Self::FriendRequestReceived { .. }
             | Self::FamilyState { .. }
             | Self::FamilyStorageLog { .. }
+            | Self::FamilyMergeProposal { .. }
             | Self::FamilyInviteReceived { .. }
             | Self::PartyPositions { .. }
             | Self::PartyVitals { .. }

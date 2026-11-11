@@ -28,7 +28,9 @@ pub const FAMILY_STORAGE_LOG_SHOWN: usize = 200;
 pub const FAMILY_STORAGE_LOG_KEPT: i64 = 2000;
 
 pub fn is_family_furniture(item_def_id: &str) -> bool {
-    item_def_id == FAMILY_CHEST_ITEM || item_def_id == FAMILY_BOARD_ITEM
+    item_def_id == FAMILY_CHEST_ITEM
+        || item_def_id == FAMILY_BOARD_ITEM
+        || shows_family_emblem(item_def_id)
 }
 
 pub const FAMILY_RANK_HEAD: u8 = 0;
@@ -117,6 +119,58 @@ pub struct FamilyEstate {
     pub mine: bool,
 }
 
+pub const FAMILY_BANNER_ITEM: &str = "family_banner";
+pub const FAMILY_PENNANT_ITEM: &str = "family_pennant";
+
+/// Furniture that shows the family emblem.
+pub fn shows_family_emblem(item_def_id: &str) -> bool {
+    item_def_id == FAMILY_BANNER_ITEM || item_def_id == FAMILY_PENNANT_ITEM
+}
+
+/// A family emblem as furniture shows it: a cape texture hash and a colour.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Emblem {
+    pub texture: Option<String>,
+    pub color: Option<String>,
+}
+
+impl Emblem {
+    pub fn is_set(&self) -> bool {
+        self.texture.is_some() || self.color.is_some()
+    }
+}
+
+/// Which of the two families a merge term keeps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MergeSide {
+    Proposer,
+    Target,
+}
+
+/// What survives a merge. The family whose name is kept absorbs the other
+/// and keeps its ranks; the other head becomes an elder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FamilyMergeTerms {
+    pub keep_name: MergeSide,
+    pub keep_emblem: MergeSide,
+    pub keep_head: MergeSide,
+}
+
+/// A merge offer as its target head sees it, with the outcome spelled out.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FamilyMergeProposal {
+    pub proposer_id: crate::entity::PlayerId,
+    pub proposer_name: String,
+    pub proposer_family: String,
+    pub target_family: String,
+    pub terms: FamilyMergeTerms,
+    /// Members of the merged family.
+    pub members: u32,
+}
+
+pub const FAMILY_MERGE_TTL: std::time::Duration = std::time::Duration::from_secs(120);
+
 /// One family chest movement; `quantity` is positive for a deposit.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FamilyStorageEntry {
@@ -142,4 +196,7 @@ pub struct FamilyInfo {
     pub can_claim_head: bool,
     /// Unix seconds from which the head may rename the family; 0 = now.
     pub rename_at: i64,
+    /// Cape texture hash and `#rrggbb` colour members' capes show.
+    pub emblem_texture: Option<String>,
+    pub emblem_color: Option<String>,
 }

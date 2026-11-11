@@ -26,6 +26,9 @@
   import { networkManager } from '../network/socket'
   import { draggablePanel } from '../actions/draggablePanel'
   import { parseGold } from '../utils/currency'
+  import { capeTextureUrl } from '../utils/networkUtils'
+  import CapeTextureDialog from './CapeTextureDialog.svelte'
+  import type { FamilyMergeTerms } from '../stores/familyStore'
 
   const family = $derived($familyInfo)
   const myRank = $derived(family?.my_rank ?? FAMILY_RANK_GUEST)
@@ -37,6 +40,32 @@
   const canDeposit = $derived(
     (perms & FAMILY_PERMISSION.TREASURY_DEPOSIT) !== 0
   )
+  const canEditEmblem = $derived((perms & FAMILY_PERMISSION.EDIT_EMBLEM) !== 0)
+  const hasEmblem = $derived(
+    !!family && (family.emblem_texture !== null || family.emblem_color !== null)
+  )
+  let choosingPicture = $state(false)
+  function setEmblem(texture: string | null, color: string | null) {
+    networkManager.sendSetFamilyEmblem(texture, color)
+  }
+
+  let mergeOpen = $state(false)
+  let mergeHead = $state('')
+  let mergeTerms = $state<FamilyMergeTerms>({
+    keep_name: 'proposer',
+    keep_emblem: 'proposer',
+    keep_head: 'proposer',
+  })
+  function askMerge() {
+    const head = mergeHead.trim()
+    if (!head) return
+    const terms = { ...mergeTerms }
+    confirm = {
+      text: $t('family.mergeConfirm', { name: head }),
+      label: $t('family.mergeOffer'),
+      run: () => networkManager.sendProposeFamilyMerge(head, terms),
+    }
+  }
   const selfName = $derived($gameStore.currentPlayer?.name)
   const full = $derived((family?.members.length ?? 0) >= FAMILY_MAX_MEMBERS)
 
@@ -429,6 +458,97 @@
           >
         {/if}
 
+        <div class="section-title">{$t('family.emblem')}</div>
+        <div class="line">
+          {#if family.emblem_texture}
+            <img
+              class="emblem-thumb"
+              src={capeTextureUrl(family.emblem_texture)}
+              alt={$t('family.emblem')}
+            />
+          {/if}
+          {#if family.emblem_color}
+            <span
+              class="emblem-swatch"
+              style="background:{family.emblem_color}"
+              title={family.emblem_color}
+            ></span>
+          {/if}
+          {#if !hasEmblem}
+            <span class="dim small">{$t('family.noEmblem')}</span>
+          {/if}
+        </div>
+        {#if canEditEmblem}
+          <div class="input-row">
+            <input
+              type="color"
+              class="emblem-color"
+              aria-label={$t('family.emblemColor')}
+              title={$t('family.emblemColor')}
+              value={family.emblem_color ?? '#6d1720'}
+              onchange={(event) =>
+                setEmblem(family.emblem_texture, event.currentTarget.value)}
+            />
+            <button class="text-btn" onclick={() => (choosingPicture = true)}
+              >{$t('family.emblemPicture')}</button
+            >
+            {#if hasEmblem}
+              <button class="text-btn" onclick={() => setEmblem(null, null)}
+                >{$t('family.emblemClear')}</button
+              >
+            {/if}
+          </div>
+          <div class="dim small">{$t('family.emblemHint')}</div>
+        {/if}
+
+        {#if isHead}
+          <button
+            class="section-title toggle"
+            aria-expanded={mergeOpen}
+            onclick={() => (mergeOpen = !mergeOpen)}
+            >{mergeOpen ? '▾' : '▸'} {$t('family.merge')}</button
+          >
+          {#if mergeOpen}
+            <div class="merge-form">
+              <input
+                class="text-input"
+                placeholder={$t('family.mergeHeadName')}
+                aria-label={$t('family.mergeHeadName')}
+                maxlength="32"
+                bind:value={mergeHead}
+                onkeydown={(event) => inputKeydown(event, askMerge)}
+              />
+              <label class="merge-term"
+                >{$t('family.mergeKeepName')}
+                <select bind:value={mergeTerms.keep_name}>
+                  <option value="proposer">{family.name}</option>
+                  <option value="target">{$t('family.mergeTheirs')}</option>
+                </select>
+              </label>
+              <label class="merge-term"
+                >{$t('family.mergeKeepEmblem')}
+                <select bind:value={mergeTerms.keep_emblem}>
+                  <option value="proposer">{$t('family.mergeOurs')}</option>
+                  <option value="target">{$t('family.mergeTheirs')}</option>
+                </select>
+              </label>
+              <label class="merge-term"
+                >{$t('family.mergeKeepHead')}
+                <select bind:value={mergeTerms.keep_head}>
+                  <option value="proposer">{$t('family.mergeMe')}</option>
+                  <option value="target">{$t('family.mergeThem')}</option>
+                </select>
+              </label>
+              <button
+                class="text-btn wide"
+                disabled={!mergeHead.trim()}
+                onclick={askMerge}>{$t('family.mergeOffer')}</button
+              >
+              <div class="dim small">{$t('family.mergeHint')}</div>
+            </div>
+          {/if}
+        {/if}
+
         <button
           class="section-title toggle"
           aria-expanded={logOpen}
@@ -474,6 +594,19 @@
       </div>
     {/if}
   </div>
+
+  {#if choosingPicture && family}
+    <CapeTextureDialog
+      title={$t('family.emblemPictureTitle')}
+      intro={$t('family.emblemPictureIntro')}
+      confirmLabel={$t('family.save')}
+      onConfirm={(hash) => {
+        setEmblem(hash, family.emblem_color)
+        choosingPicture = false
+      }}
+      onCancel={() => (choosingPicture = false)}
+    />
+  {/if}
 
   {#if confirm}
     <div class="confirm-backdrop" role="presentation">
@@ -610,6 +743,43 @@
 
   .section-title.toggle {
     cursor: pointer;
+  }
+
+  .emblem-thumb {
+    width: 28px;
+    height: 44px;
+    object-fit: cover;
+    border-radius: 2px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .emblem-swatch {
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+  }
+
+  .emblem-color {
+    width: 32px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    background: none;
+  }
+
+  .merge-form {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .merge-term {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
   }
 
   .storage-log {

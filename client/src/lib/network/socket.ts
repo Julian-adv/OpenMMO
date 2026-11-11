@@ -41,6 +41,7 @@ import { resetHousePlacement } from '../stores/housePlacementStore'
 import { resetEstateStorage } from '../stores/estateStorageStore'
 import type { MailboxRef } from '../stores/mailStore'
 import type { NoticeBoardRef } from '../stores/noticeBoardStore'
+import type { FamilyMergeTerms } from '../stores/familyStore'
 import type { FenceEdge } from '../terrain/fenceEdges'
 import type { LandscapingTool } from '../terrain/landscaping'
 import { remotePlayerManager } from '../managers/remotePlayerManager'
@@ -1206,6 +1207,20 @@ class NetworkManager {
 
   sendFamilyChat(message: string) {
     this.sendMessage({ FamilyChat: { message } })
+  }
+
+  sendSetFamilyEmblem(texture: string | null, color: string | null) {
+    this.sendMessage({ SetFamilyEmblem: { texture, color } })
+  }
+
+  sendProposeFamilyMerge(headName: string, terms: FamilyMergeTerms) {
+    this.sendMessage({ ProposeFamilyMerge: { head_name: headName, terms } })
+  }
+
+  sendRespondFamilyMerge(proposerId: number, accept: boolean) {
+    this.sendMessage({
+      RespondFamilyMerge: { proposer_id: proposerId, accept },
+    })
   }
 
   sendRequestFamilyStorageLog() {

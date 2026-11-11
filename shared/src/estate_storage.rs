@@ -116,6 +116,13 @@ pub struct EstateChest {
     pub revision: u64,
     #[serde(default)]
     pub text: Option<String>,
+    /// The family that family furniture belongs to.
+    #[serde(default)]
+    pub family_id: Option<i64>,
+    /// What a family banner shows: its family's emblem while it stands on
+    /// that family's estate.
+    #[serde(default)]
+    pub emblem: Option<crate::family::Emblem>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

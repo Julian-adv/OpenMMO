@@ -217,6 +217,7 @@ mod fence;
 mod field_raid;
 pub(crate) use field_raid::FIELD_RAID_TICK;
 mod family;
+pub(crate) use family::shown_cape;
 mod friends;
 mod furniture_shop;
 mod goal_movement;

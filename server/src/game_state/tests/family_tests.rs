@@ -401,7 +401,10 @@ async fn family_chat_reaches_members_only_and_honours_blocks() {
     game.send_family_chat(&pid("Head"), "supper at the hall".into())
         .await;
     let line = ("Head".to_string(), "supper at the hall".to_string());
-    assert_eq!(family_lines(&drain(&mut head_rx)), std::slice::from_ref(&line));
+    assert_eq!(
+        family_lines(&drain(&mut head_rx)),
+        std::slice::from_ref(&line)
+    );
     assert_eq!(family_lines(&drain(&mut member_rx)), [line]);
     assert!(family_lines(&drain(&mut outsider_rx)).is_empty());
 
@@ -604,4 +607,156 @@ async fn family_boards_are_for_members_and_free_to_post() {
     game.remove_notice_post(&pid("Head"), board, post_id, &auth)
         .await;
     assert_eq!(board_posts(&drain(&mut head_rx)), Some(vec![]));
+}
+
+async fn wear_cape(game: &GameState, name: &str, color: &str) {
+    let mut cape = bag_item(900, "wool_cape", 1);
+    cape.cape_color = Some(color.into());
+    let inventory = {
+        let mut inventories = game.inventories.write().await;
+        let inventory = inventories.get_mut(&pid(name)).unwrap();
+        inventory.equipped.insert(EquipSlot::Back, cape);
+        inventory.clone()
+    };
+    game.set_player_gear(&pid(name), &inventory).await;
+}
+
+async fn shown_cape_color(game: &GameState, name: &str) -> Option<String> {
+    game.players.read().await[&pid(name)].back_color.clone()
+}
+
+#[tokio::test]
+async fn the_family_emblem_covers_members_capes_until_they_leave() {
+    let (game, auth, registrar) = setup("family_emblem").await;
+    let (_, _) = enter(&game, &auth, "Head", FAMILY_FOUND_STAMPS).await;
+    claim(&game, &auth, "Head", 0).await;
+    found(&game, &auth, &registrar, "Head", "Ironwood").await;
+    let (member, mut member_rx) = enter(&game, &auth, "Member", 0).await;
+    join(&game, &auth, "Head", "Member").await;
+    wear_cape(&game, "Member", "#112233").await;
+    assert_eq!(
+        shown_cape_color(&game, "Member").await.as_deref(),
+        Some("#112233")
+    );
+
+    game.set_family_emblem(&pid("Member"), None, Some("#aa0000".into()), &auth)
+        .await;
+    assert!(has_line(
+        &drain(&mut member_rx),
+        "may not change the emblem"
+    ));
+    game.set_family_emblem(&pid("Head"), None, Some("#AA0000".into()), &auth)
+        .await;
+    assert_eq!(
+        shown_cape_color(&game, "Member").await.as_deref(),
+        Some("#aa0000")
+    );
+    let family = family_state(&drain(&mut member_rx)).flatten().unwrap();
+    assert_eq!(family.emblem_color.as_deref(), Some("#aa0000"));
+
+    game.remove_from_family(&pid("Head"), Some(member), &auth)
+        .await;
+    assert_eq!(
+        shown_cape_color(&game, "Member").await.as_deref(),
+        Some("#112233")
+    );
+}
+
+#[tokio::test]
+async fn merging_folds_the_absorbed_family_into_the_kept_name() {
+    use onlinerpg_shared::family::{FamilyMergeTerms, MergeSide};
+    let (game, auth, registrar) = setup("family_merge").await;
+    let (head_a, mut a_rx) = enter(&game, &auth, "HeadA", FAMILY_FOUND_STAMPS).await;
+    claim(&game, &auth, "HeadA", 0).await;
+    found(&game, &auth, &registrar, "HeadA", "Ironwood").await;
+    let (head_b, mut b_rx) = enter(&game, &auth, "HeadB", FAMILY_FOUND_STAMPS).await;
+    claim(&game, &auth, "HeadB", 2).await;
+    found(&game, &auth, &registrar, "HeadB", "Oakshield").await;
+    let (member_b, mut member_rx) = enter(&game, &auth, "MemberB", 0).await;
+    join(&game, &auth, "HeadB", "MemberB").await;
+    game.set_family_emblem(&pid("HeadB"), None, Some("#00aa00".into()), &auth)
+        .await;
+
+    let terms = FamilyMergeTerms {
+        keep_name: MergeSide::Proposer,
+        keep_emblem: MergeSide::Target,
+        keep_head: MergeSide::Target,
+    };
+    game.propose_family_merge(&pid("HeadA"), "HeadB", terms, &auth)
+        .await;
+    let proposal = drain(&mut b_rx).into_iter().find_map(|msg| match msg {
+        ServerMessage::FamilyMergeProposal { proposal } => Some(proposal),
+        _ => None,
+    });
+    let proposal = proposal.expect("offer");
+    assert_eq!(proposal.members, 3);
+    assert_eq!(proposal.target_family, "Oakshield");
+
+    game.respond_to_family_merge(&pid("HeadB"), &pid("HeadA"), true, &auth)
+        .await;
+    drain(&mut a_rx);
+    let family = family_state(&drain(&mut member_rx)).flatten().unwrap();
+    assert_eq!(family.name, "Ironwood");
+    assert_eq!(family.members.len(), 3);
+    assert_eq!(family.estates.len(), 2);
+    assert_eq!(family.emblem_color.as_deref(), Some("#00aa00"));
+    let rank = |id| {
+        family
+            .members
+            .iter()
+            .find(|m| m.character_id == id)
+            .unwrap()
+            .rank
+    };
+    assert_eq!(rank(head_b), FAMILY_RANK_HEAD);
+    assert_eq!(rank(head_a), FAMILY_RANK_ELDER);
+    assert_eq!(rank(member_b), FAMILY_RANK_MEMBER);
+    assert_eq!(
+        shown_family(&game, "MemberB").await.as_deref(),
+        Some("Ironwood")
+    );
+
+    let (_, mut new_rx) = enter(&game, &auth, "Latecomer", FAMILY_FOUND_STAMPS).await;
+    claim(&game, &auth, "Latecomer", 4).await;
+    found(&game, &auth, &registrar, "Latecomer", "Oakshield").await;
+    assert!(has_line(&drain(&mut new_rx), "held back"));
+}
+
+#[tokio::test]
+async fn banners_show_the_emblem_while_their_estate_stays_with_the_family() {
+    use onlinerpg_shared::family::{Emblem, FAMILY_BANNER_ITEM};
+    let (game, auth, registrar) = flat_setup("family_banner").await;
+    let (_, mut head_rx) = enter(&game, &auth, "Head", FAMILY_FOUND_STAMPS).await;
+    claim(&game, &auth, "Head", 0).await;
+    found(&game, &auth, &registrar, "Head", "Ironwood").await;
+    game.set_family_emblem(&pid("Head"), None, Some("#123456".into()), &auth)
+        .await;
+    give(&game, &pid("Head"), bag_item(10, FAMILY_BANNER_ITEM, 1)).await;
+    stand_at(&game, "Head", 4.0, 4.0).await;
+    game.place_estate_chest(&pid("Head"), 10, pos3(4.0, 5.0, 2.5), 0.0, 0, &auth)
+        .await;
+    let banner = auth.load_estate_chests().unwrap().remove(0);
+    let emblem = Some(Emblem {
+        texture: None,
+        color: Some("#123456".into()),
+    });
+    assert_eq!(banner.emblem, emblem);
+    game.load_estate_chests(&auth).await.unwrap();
+
+    game.set_family_emblem(&pid("Head"), None, Some("#654321".into()), &auth)
+        .await;
+    let shown = |game: &GameState| {
+        let game = game.estate_chests.try_read().unwrap();
+        game.get(banner.id).unwrap().emblem.clone()
+    };
+    assert_eq!(
+        shown(&game).and_then(|e| e.color).as_deref(),
+        Some("#654321")
+    );
+
+    drain(&mut head_rx);
+    game.attach_estate_to_family(&pid("Head"), false, &auth)
+        .await;
+    assert!(family_state(&drain(&mut head_rx)).is_some());
+    assert_eq!(shown(&game), None);
 }

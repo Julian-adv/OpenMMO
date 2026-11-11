@@ -7,9 +7,18 @@
   interface Props {
     onConfirm: (textureHash: string) => void
     onCancel: () => void
+    title?: string
+    intro?: string
+    confirmLabel?: string
   }
 
-  let { onConfirm, onCancel }: Props = $props()
+  let {
+    onConfirm,
+    onCancel,
+    title = 'Print your cape',
+    intro = 'Pick a picture. Transparent parts keep the colour your cape is dyed, so a crest on a clear background sits on the cloth as it is.',
+    confirmLabel = 'Print',
+  }: Props = $props()
 
   /** What the server accepts; the picture is fitted to this before upload so
    *  the round trip never carries a camera-sized file. */
@@ -95,17 +104,9 @@
   }
 </script>
 
-<div
-  class="print-dialog"
-  role="dialog"
-  aria-label="Print on cape"
-  tabindex="-1"
->
-  <h2>Print your cape</h2>
-  <p>
-    Pick a picture. Transparent parts keep the colour your cape is dyed, so a
-    crest on a clear background sits on the cloth as it is.
-  </p>
+<div class="print-dialog" role="dialog" aria-label={title} tabindex="-1">
+  <h2>{title}</h2>
+  <p>{intro}</p>
 
   <input
     bind:this={fileInput}
@@ -129,7 +130,7 @@
 
   <div class="print-actions">
     <button class="primary" disabled={!chosen || busy} onclick={upload}>
-      {busy ? 'Printing…' : 'Print'}
+      {busy ? 'Printing…' : confirmLabel}
     </button>
     <button class="secondary" onclick={onCancel}>Cancel</button>
   </div>

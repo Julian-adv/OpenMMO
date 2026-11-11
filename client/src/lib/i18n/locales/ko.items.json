@@ -438,5 +438,9 @@
   "family_chest.name": "가문 창고",
   "family_chest.description": "가문을 위해 최대 200 kg을 보관하는 큰 상자. 가문 영지에 놓으며, 가문원은 계급에 따라 넣고 꺼냅니다.",
   "family_board.name": "가문 게시판",
-  "family_board.description": "가문 영지에 놓는 게시판. 그 가문의 가문원만 읽고 씁니다."
+  "family_board.description": "가문 영지에 놓는 게시판. 그 가문의 가문원만 읽고 씁니다.",
+  "family_banner.name": "가문 깃발",
+  "family_banner.description": "가문 문장을 보여 주는 세우는 깃발. 가문 영지에 놓습니다.",
+  "family_pennant.name": "가문 휘장",
+  "family_pennant.description": "가문 문장을 보여 주는 휘장. 가문 영지의 벽에 높여 겁니다."
 }

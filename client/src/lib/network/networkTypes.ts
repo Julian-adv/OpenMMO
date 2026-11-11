@@ -1,5 +1,7 @@
 import type { MailboxRef } from '../stores/mailStore'
 import type { NoticeBoardRef } from '../stores/noticeBoardStore'
+import type { FamilyMergeTerms } from '../stores/familyStore'
+import type { Emblem } from '../utils/familyEmblem'
 import type { AbilityId } from '../data/abilities'
 import type { MonsterData } from '../types/Monster'
 import type { WallDirection } from '../utils/house-geometry'
@@ -260,6 +262,14 @@ export type ClientMessage =
   | { PartyChat: { message: string } }
   | { FamilyChat: { message: string } }
   | 'RequestFamilyStorageLog'
+  | { SetFamilyEmblem: { texture: string | null; color: string | null } }
+  | {
+      ProposeFamilyMerge: {
+        head_name: string
+        terms: FamilyMergeTerms
+      }
+    }
+  | { RespondFamilyMerge: { proposer_id: number; accept: boolean } }
   | 'RequestPartyPositions'
   | { FriendRespond: { requester_id: number; accept: boolean } }
   | { FriendRemove: { name: string } }
@@ -498,6 +508,10 @@ export type EstateChest = {
   overdue: boolean
   revision: number
   text?: string | null
+  /** The family that family furniture belongs to. */
+  family_id?: number | null
+  /** What a family banner shows while its estate stays with its family. */
+  emblem?: Emblem | null
 }
 
 export type EstateChestState = {

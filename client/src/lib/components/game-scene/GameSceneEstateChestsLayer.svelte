@@ -13,6 +13,7 @@
   } from '../../utils/estateFurnitureModels'
   import { buildShopSignText, getShopSignStyle } from '../../utils/shop-sign'
   import { mountNoticePapers } from '../../utils/notice-board'
+  import { emblemClothMaterial } from '../../utils/familyEmblem'
   import { createSelectionBox } from '../../utils/objectSelectionBox'
   import {
     estateFurnitureSelectionMode,
@@ -218,6 +219,10 @@
       group.add(entry.fire.group)
     }
     visual.traverse((object) => {
+      if (object instanceof THREE.Mesh && object.name === 'emblem_cloth') {
+        object.material = emblemClothMaterial(chest.emblem)
+        entry.materials.push(object.material)
+      }
       if (object instanceof THREE.Mesh) {
         const shadows = !moving && !object.userData.isSignText
         object.castShadow = shadows

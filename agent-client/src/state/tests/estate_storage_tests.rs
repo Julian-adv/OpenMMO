@@ -14,6 +14,8 @@ fn chest(x: f32, z: f32) -> EstateChest {
         overdue: false,
         revision: 0,
         text: None,
+        family_id: None,
+        emblem: None,
     }
 }
 

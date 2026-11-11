@@ -12,7 +12,7 @@ mod family;
 #[path = "auth_field_raids.rs"]
 mod field_raids;
 pub(crate) use estate_storage::EstateDeposit;
-pub(crate) use family::{FamilyDeparture, FamilyRoster};
+pub(crate) use family::{FamilyDeparture, FamilyEmblem, FamilyRoster};
 #[path = "auth_fence.rs"]
 mod fence;
 #[path = "auth_gold_sinks.rs"]
@@ -560,11 +560,18 @@ fn read_visible_equipment(
     }
 
     let slots = PREVIEW_EQUIP_SLOTS.map(|slot| format!("'{}'", slot.as_str()));
+    // A family emblem covers the worn cape, as in the world.
     let mut stmt = conn.prepare(&format!(
-        "SELECT character_id, equip_slot, item_def_id, cape_color, cape_texture
-         FROM character_items
-         WHERE character_id IN ({})
-           AND equip_slot IN ({})",
+        "SELECT i.character_id, i.equip_slot, i.item_def_id,
+                CASE WHEN f.emblem_texture IS NULL AND f.emblem_color IS NULL THEN i.cape_color
+                     ELSE COALESCE(f.emblem_color, i.cape_color) END,
+                CASE WHEN f.emblem_texture IS NULL AND f.emblem_color IS NULL THEN i.cape_texture
+                     ELSE f.emblem_texture END
+         FROM character_items i
+         LEFT JOIN family_members m ON m.character_id=i.character_id
+         LEFT JOIN families f ON f.id=m.family_id
+         WHERE i.character_id IN ({})
+           AND i.equip_slot IN ({})",
         vec!["?"; character_ids.len()].join(","),
         slots.join(",")
     ))?;

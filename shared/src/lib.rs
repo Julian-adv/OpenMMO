@@ -268,7 +268,10 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// (`EstateChestState.can_withdraw`/`family`, `RequestFamilyStorageLog`,
 /// `FamilyStorageLog`) and family boards (`NoticeBoardRef` replaces the
 /// notice messages' `object_id`; refusals `not_family`, `no_family_rank`).
-pub const PROTOCOL_VERSION: u32 = 146;
+/// v147: family emblems (`SetFamilyEmblem`, `FamilyInfo.emblem_*`,
+/// `EstateChest.family_id`/`emblem`) and merges (`ProposeFamilyMerge`,
+/// `RespondFamilyMerge`, `FamilyMergeProposal`).
+pub const PROTOCOL_VERSION: u32 = 147;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

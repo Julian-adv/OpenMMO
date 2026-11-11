@@ -329,6 +329,51 @@ impl GameState {
         }
     }
 
+    /// Re-read the family and emblem of a family's furniture after the family,
+    /// its emblem or its estates changed, and show the result.
+    pub(super) async fn refresh_family_furniture(&self, family_id: i64, auth: &AuthService) {
+        let ids: Vec<i64> = self
+            .estate_chests
+            .read()
+            .await
+            .by_id
+            .values()
+            .filter(|chest| chest.family_id == Some(family_id))
+            .map(|chest| chest.id)
+            .collect();
+        if ids.is_empty() {
+            return;
+        }
+        let auth = auth.clone();
+        let rows = match auth_db(move || auth.estate_furniture_families(&ids)).await {
+            Ok(rows) => rows,
+            Err(error) => {
+                tracing::warn!(%error, family_id, "Failed to refresh family furniture");
+                return;
+            }
+        };
+        let mut index = self.estate_chests.write().await;
+        let added: Vec<EstateChest> = rows
+            .into_iter()
+            .filter_map(|(id, family, emblem)| {
+                let chest = index.by_id.get_mut(&id)?;
+                if chest.family_id == family && chest.emblem == emblem {
+                    return None;
+                }
+                chest.family_id = family;
+                chest.emblem = emblem;
+                Some(chest.clone())
+            })
+            .collect();
+        drop(index);
+        if !added.is_empty() {
+            self.publish_subject_change(ServerMessage::EstateChestVisibility {
+                added,
+                removed: vec![],
+            });
+        }
+    }
+
     pub(super) async fn reassign_estate_furniture_owner(&self, previous: i64, replacement: i64) {
         let mut index = self.estate_chests.write().await;
         let mut added = Vec::new();
@@ -1273,6 +1318,8 @@ mod index_tests {
             overdue: false,
             revision: 0,
             text: None,
+            family_id: None,
+            emblem: None,
         }
     }
 
