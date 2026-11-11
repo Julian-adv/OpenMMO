@@ -94,6 +94,8 @@
   let selectedType = $state<string | null>(null)
   let debugInfo = $state<PlayerDebugInfo | null>(null)
   let openDoorIds = $state<ReadonlySet<string>>(new Set())
+  /** Placement ids in the loaded region whose door is open. */
+  let openHere: Set<number> = new Set()
   let isEditorMode = $state(false)
   let currentFloor = $state(0)
   let currentHouseId = $state<string | null>(null)
@@ -576,8 +578,6 @@
 
   /** A woken stand-in is not solid, so only the boss body blocks. */
   let unsolidIds: Set<number> = new Set()
-  /** Placement ids in the loaded region whose door is open. */
-  let openHere: Set<number> = new Set()
   function refreshOpenHere(): boolean {
     const { rx, rz } = lastLoadedRegion
     const next = new Set(

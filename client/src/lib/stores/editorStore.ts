@@ -167,6 +167,8 @@ export interface ObjectDef {
     entranceWidth: number
     /** Height of a built floor above the placement; characters stand on it. */
     floor?: number
+    /** Solid band outside the walkable area, in metres. */
+    wall?: number
   }
   /** Procedural builder id (e.g. "shopSign"). When set, geometry is generated
    *  in code instead of loaded from a GLB. */

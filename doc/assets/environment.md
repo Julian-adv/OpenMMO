@@ -99,7 +99,7 @@ white-cloud.jpg도 같은 폴더의 원본(5964px)을 2048px q85로 줄인 것.
 - 시야 가림(2026-11-12): 플레이어가 건물 뒤(북·동쪽)에 서서 가려지면 집과 같은 광선 판정으로 건물을 숨기고 `ground`로 지정한 바닥 메시(`hall_back__flagstone`)만 남긴다. 종탑 자리에도 같은 메시의 바닥판을 깔았다. 판정 상자는 `perimeter`에 `roofHeight`를 준 것과 높이를 적은 `blocks`다.
 - 설교대와 제단부(2026-11-12): 제단부 단 위, 아치 바로 안쪽에 참나무 설교대를 건물 메시(`hall_back`)에 넣었고 사제 마엘리스가 그 뒤에 선다. 제단부는 `object_catalog.json`의 `annexes`로 걸을 수 있는 구역이 됐다. 폭 6m 아치로 본당과 이어지고 나머지 가장자리는 벽으로 막힌다. 바닥 높이는 집처럼 건물이 직접 갖는다. `perimeter.floor`가 있으면 캐릭터가 지형 대신 그 바닥(본당 0m, 제단부 `annexes[].floor` 0.45m) 위에 선다. 지형은 `flattenBuryDepth` −0.04로 바닥보다 4cm 낮게 고른다.
 - 배치 제약: 입구는 서향(회전 270) 전용이며 남향으로 놓으려면 좌우를 뒤집은 모델이 필요하다. 걸을 수 있는 곳은 본당 12×17m(`perimeter`)와 제단부 8×5.6m(`annexes`)다. 노드는 `hall_back`·`hall_tower`(실내 유지)와 `hall_front`(숨김)이다.
-- 설치 상태(2026-11-11): `client/public/models/objects/union_hall.glb`(로컬, HF·`assets.lock` 미등록), `object_catalog.json`의 `union_hall`(foundation 23×30m, perimeter 12×17×9m·입구 3.8m, cutaway `hall_front`). 개발 월드 가구점 옆에 배치해 재질과 실내 숨김을 확인했다. 벽 충돌은 서버 재시작 뒤 정상이고 프레임 저하는 없었다. 종탑은 `object_catalog.json`의 `blocks`(걸을 수 있는 영역 밖의 막힌 직사각형)로 막는다. 버트레스에는 충돌이 없다.
+- 설치 상태(2026-11-11): `client/public/models/objects/union_hall.glb`(로컬, HF·`assets.lock` 미등록), `object_catalog.json`의 `union_hall`(foundation 23×30m, perimeter 12×17×9m·입구 3.8m, cutaway `hall_front`). 개발 월드 가구점 옆에 배치해 재질과 실내 숨김을 확인했다. 벽 충돌은 서버 재시작 뒤 정상이고 프레임 저하는 없었다. 종탑은 `object_catalog.json`의 `blocks`(걸을 수 있는 영역 밖의 막힌 직사각형)로 막는다. 벽은 `perimeter.wall` 1m로 걸을 수 있는 구역 바깥 한 칸을 막아 캐릭터가 벽 속에 서지 못한다(정문 앞은 열려 있다). 버트레스는 기둥마다 1m 칸 하나씩 `blocks`로 막는다.
 
 ## Ysolde's Excavation Tent / 이졸데의 발굴 야영 텐트 (2026-10-24)
 

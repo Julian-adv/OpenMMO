@@ -16,6 +16,9 @@ struct Perimeter {
     /// instead of the terrain.
     #[serde(default)]
     floor: Option<f32>,
+    /// Solid band outside the walkable rectangles, so no one stands in the wall.
+    #[serde(default)]
+    wall: f32,
     #[serde(skip)]
     door: bool,
     #[serde(skip)]
@@ -134,7 +137,9 @@ fn grid(placement: &FurniturePlacement, perimeter: &Perimeter) -> Option<Runtime
         z0 = z0.min(z[0]);
         z1 = z1.max(z[1]);
     }
-    let (wx0, wx1, wz0, wz1) = world_aabb(placement, [x0, x1], [z0, z1]);
+    let wall = perimeter.wall;
+    let (wx0, wx1, wz0, wz1) =
+        world_aabb(placement, [x0 - wall, x1 + wall], [z0 - wall, z1 + wall]);
     let min_x = wx0.floor() as i32 - 1;
     let min_z = wz0.floor() as i32 - 1;
     let width = wx1.ceil() as i32 + 1 - min_x;
@@ -158,6 +163,22 @@ fn grid(placement: &FurniturePlacement, perimeter: &Perimeter) -> Option<Runtime
             .iter()
             .find(|a| x > a.x[0] && x < a.x[1] && z > a.z[0] && z < a.z[1])
     };
+    let half_entrance = perimeter.entrance_width / 2.0;
+    let solid = |x: f32, z: f32| {
+        blocked(x, z)
+            || (wall > 0.0
+                && !inside(x, z)
+                && annex(x, z).is_none()
+                && ((x.abs() < hw + wall
+                    && z.abs() < hd + wall
+                    && !(z > 0.0 && x.abs() < half_entrance))
+                    || annexes.iter().any(|a| {
+                        x > a.x[0] - wall
+                            && x < a.x[1] + wall
+                            && z > a.z[0] - wall
+                            && z < a.z[1] + wall
+                    })))
+    };
     let through_opening = |a: &Annex, x: f32| (x - (a.x[0] + a.x[1]) / 2.0).abs() < a.opening / 2.0;
     const NEIGHBOURS: [(i32, i32, u8, u8); 4] = [
         (1, 0, EDGE_E, EDGE_W),
@@ -171,7 +192,7 @@ fn grid(placement: &FurniturePlacement, perimeter: &Perimeter) -> Option<Runtime
             let (lx, lz) = local(min_x + x, min_z + z);
             let in_nave = inside(lx, lz);
             let in_annex = if in_nave { None } else { annex(lx, lz) };
-            if !in_nave && in_annex.is_none() && !blocked(lx, lz) {
+            if !in_nave && in_annex.is_none() && !solid(lx, lz) {
                 continue;
             }
             for (dx, dz, edge, opposite) in NEIGHBOURS {
@@ -197,7 +218,7 @@ fn grid(placement: &FurniturePlacement, perimeter: &Perimeter) -> Option<Runtime
                         let entrance_x = lx + front_t * (nx - lx);
                         front_t <= 1.0
                             && front_t < side_t
-                            && entrance_x.abs() < perimeter.entrance_width / 2.0
+                            && entrance_x.abs() < half_entrance
                             && (!perimeter.door || placement.door_open)
                     }
                 } else if let Some(a) = in_annex {
@@ -207,7 +228,7 @@ fn grid(placement: &FurniturePlacement, perimeter: &Perimeter) -> Option<Runtime
                         annex(nx, nz).is_some()
                     }
                 } else {
-                    blocked(nx, nz)
+                    solid(nx, nz)
                 };
                 if !open {
                     cells[(x + z * width) as usize] |= edge;
@@ -537,6 +558,34 @@ mod tests {
             assert!(
                 !crosses((-3.0, -10.0), (3.0, -13.0)),
                 "inside the chancel, yaw {yaw}"
+            );
+            assert!(
+                crosses((8.5, 0.0), (6.2, 0.0)),
+                "into the south wall, yaw {yaw}"
+            );
+            assert!(
+                crosses((4.0, 11.0), (4.0, 8.7)),
+                "into the facade, yaw {yaw}"
+            );
+            assert!(
+                crosses((6.5, -12.0), (4.2, -12.0)),
+                "into the chancel wall, yaw {yaw}"
+            );
+            assert!(
+                !crosses((0.0, 11.0), (0.0, 9.0)),
+                "up to the doors, yaw {yaw}"
+            );
+            assert!(
+                !crosses((8.5, -3.0), (8.5, 3.0)),
+                "along the south wall, yaw {yaw}"
+            );
+            assert!(
+                crosses((9.5, 1.7), (7.3, 1.7)),
+                "into a buttress, yaw {yaw}"
+            );
+            assert!(
+                !crosses((9.5, 0.0), (7.6, 0.0)),
+                "between buttresses, yaw {yaw}"
             );
             assert!(
                 !crosses((-13.0, 7.0), (-13.0, 2.0)),
