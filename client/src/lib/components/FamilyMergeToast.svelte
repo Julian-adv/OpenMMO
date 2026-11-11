@@ -6,10 +6,13 @@
     type PendingFamilyMerge,
   } from '../stores/familyStore'
   import { networkManager } from '../network/socket'
+  import { gameStore } from '../stores/gameStore'
   import QueuedConsentToast from './QueuedConsentToast.svelte'
 
   const pick = (offer: PendingFamilyMerge, side: 'proposer' | 'target') =>
     side === 'proposer' ? offer.proposerFamily : offer.targetFamily
+  const own = (offer: PendingFamilyMerge) =>
+    $gameStore.currentPlayer?.id === offer.proposerId
 </script>
 
 <QueuedConsentToast
@@ -19,23 +22,30 @@
   top="38%"
   accent="#c8b88a"
   acceptLabel={$t('family.mergeAccept')}
-  declineLabel={$t('common.decline')}
+  declineLabel={$t('family.mergeDecline')}
   respond={(offer, accept) =>
-    networkManager.sendRespondFamilyMerge(offer.proposerId, accept)}
+    own(offer)
+      ? networkManager.sendConfirmFamilyMerge(accept)
+      : networkManager.sendRespondFamilyMerge(offer.proposerId, accept)}
 >
   {#snippet children(offer)}
     <div>
-      {$t('family.mergeMessage', {
-        name: offer.proposerName,
-        family: offer.proposerFamily,
-      })}
+      {own(offer)
+        ? $t('family.mergeAskOwn', { family: offer.targetFamily })
+        : $t('family.mergeMessage', {
+            name: offer.proposerName,
+            family: offer.proposerFamily,
+          })}
     </div>
     <div>
       {$t('family.mergeOutcome', {
         name: pick(offer, offer.terms.keep_name),
         emblem: pick(offer, offer.terms.keep_emblem),
-        head:
-          offer.terms.keep_head === 'proposer'
+        head: own(offer)
+          ? offer.terms.keep_head === 'proposer'
+            ? $t('family.mergeYou')
+            : $t('family.mergeOtherHead', { family: offer.targetFamily })
+          : offer.terms.keep_head === 'proposer'
             ? offer.proposerName
             : $t('family.mergeYou'),
         count: offer.members,

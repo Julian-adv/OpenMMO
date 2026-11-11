@@ -2,6 +2,7 @@ import { wrapWorldX } from '../terrain/world-wrap'
 import { bridgeManager } from './bridgeManager'
 import { dungeonManager } from './dungeonManager'
 import { housingManager } from './housingManager'
+import { passability_storey_ground_y } from '../wasm/onlinerpg_shared'
 import type { TerrainHeightManager } from './terrainHeightManager'
 import { FLOOR_THICKNESS } from '../utils/house-dimensions'
 
@@ -48,6 +49,8 @@ export function entityGroundY(
   if (rampY !== null) return rampY
   const houseY = housingManager.floorHeightAt(0, wx, z)
   if (houseY !== null) return houseY
+  const builtY = passability_storey_ground_y(0, wx, z, fallbackY)
+  if (!Number.isNaN(builtY)) return builtY
   const deckY = bridgeManager.findDeckYAt(wx, z, bridgeReferenceY)
   if (deckY !== null) return deckY
 

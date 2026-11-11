@@ -63,12 +63,9 @@
   } from '../../stores/fieldBossWakeStore'
   import { getObjectModelPath } from '../../utils/modelPaths'
   import { createSelectionBox } from '../../utils/objectSelectionBox'
-  import {
-    boxesOccludePoint,
-    doorwayOf,
-    isInsideShelter,
-    type OccluderBox,
-  } from '../../utils/shelter'
+  import { doorwayOf, isInsideShelter } from '../../utils/shelter'
+  import { isoCameraOccludesPlayer } from '../../utils/iso-occlusion'
+  import { rotatedRectAabb } from '../../utils/objectFootprint'
   import {
     objectDoorId,
     openDoors,
@@ -124,7 +121,7 @@
     playerDebugInfo.subscribe((v) => (debugInfo = v)),
     openDoors.subscribe((v) => {
       openDoorIds = v
-      syncFurniture(placements)
+      if (refreshOpenHere()) syncFurniture(placements)
     }),
     mapEditorMode.subscribe((v) => (isEditorMode = v)),
     playerVisualFloorLevel.subscribe((v) => (currentFloor = v)),
@@ -311,12 +308,59 @@
   /** objectId → its placement clone in `group`, so the transform-only fast path
    *  can move an existing clone instead of tearing the whole region down. */
   const cloneById = new SvelteMap<number, THREE.Object3D>()
-  const shelters = $derived(
+  /** Walled objects that hide their near side while the viewer is inside,
+   *  and all but `ground` while they stand between viewer and camera. */
+  const structures = $derived(
     placements.flatMap((placement) => {
       const def = objectDefsById.get(placement.type)
-      if (!def?.cutaway || !def.perimeter) return []
-      const panel = cloneById.get(placement.id)?.getObjectByName(def.cutaway)
-      return panel ? [{ placement, perimeter: def.perimeter, panel }] : []
+      const clone = cloneById.get(placement.id)
+      const perimeter = def?.perimeter
+      if (!def || !perimeter || !clone) return []
+      const panel = def.cutaway ? clone.getObjectByName(def.cutaway) : undefined
+      if (!panel && !def.ground) return []
+      const yaw = (placement.rotation * Math.PI) / 180
+      const box = (
+        x: [number, number],
+        z: [number, number],
+        height: number
+      ) => {
+        const b = rotatedRectAabb(x[0], x[1], z[0], z[1], yaw)
+        return new THREE.Box3(
+          new THREE.Vector3(
+            placement.x + b.minX,
+            placement.y,
+            placement.z + b.minZ
+          ),
+          new THREE.Vector3(
+            placement.x + b.maxX,
+            placement.y + height,
+            placement.z + b.maxZ
+          )
+        )
+      }
+      const boxes = def.ground
+        ? [
+            box(
+              [-perimeter.width / 2, perimeter.width / 2],
+              [-perimeter.depth / 2, perimeter.depth / 2],
+              def.roofHeight ?? perimeter.height
+            ),
+            ...[...(def.blocks ?? []), ...(def.annexes ?? [])].map((b) =>
+              box(b.x, b.z, b.height ?? perimeter.height)
+            ),
+          ]
+        : []
+      return [
+        {
+          placement,
+          perimeter,
+          annexes: def.annexes,
+          panel,
+          clone,
+          ground: def.ground,
+          boxes,
+        },
+      ]
     })
   )
   const swingDoors = $derived(
@@ -350,35 +394,7 @@
   })
   /** Radians per second; tall leaves swing slower than house doors. */
   const DOOR_SWING_SPEED = 2
-  const occluders = $derived(
-    placements.flatMap((placement) => {
-      const def = objectDefsById.get(placement.type)
-      const clone = cloneById.get(placement.id)
-      if (!def?.ground || !def.perimeter || !clone) return []
-      const { width, depth, height } = def.perimeter
-      const boxes: OccluderBox[] = [
-        {
-          x: [-width / 2, width / 2],
-          z: [-depth / 2, depth / 2],
-          height: def.roofHeight ?? height,
-        },
-        ...(def.blocks ?? []).map((b) => ({
-          x: b.x,
-          z: b.z,
-          height: b.height ?? height,
-        })),
-      ]
-      return [
-        {
-          placement,
-          perimeter: def.perimeter,
-          boxes,
-          clone,
-          ground: def.ground,
-        },
-      ]
-    })
-  )
+  const VIEW_BLOCK_DEPTH = 0.9
   const isEditing = () => isEditorMode && tool === 'object'
 
   // Keep shared fire materials outside the model group's rebuild/disposal sweep.
@@ -451,16 +467,26 @@
   }
 
   export function update(deltaTime: number, camera: THREE.Camera | undefined) {
-    for (const { placement, perimeter, panel } of shelters) {
-      panel.visible =
-        !debugInfo || !isInsideShelter(debugInfo.position, placement, perimeter)
-    }
-    for (const { placement, perimeter, boxes, clone, ground } of occluders) {
+    const viewer = debugInfo?.position
+    for (const structure of structures) {
+      const { placement, perimeter, annexes, panel, clone, ground } = structure
+      const inside =
+        !!viewer && isInsideShelter(viewer, placement, perimeter, annexes)
+      if (panel) panel.visible = !inside
+      if (!ground) continue
       const hidden =
-        !!debugInfo &&
+        !!viewer &&
+        !inside &&
         !isEditing() &&
-        !isInsideShelter(debugInfo.position, placement, perimeter) &&
-        boxesOccludePoint(debugInfo.position, placement, boxes)
+        structure.boxes.some((box) =>
+          isoCameraOccludesPlayer(
+            box,
+            viewer.x,
+            viewer.y,
+            viewer.z,
+            VIEW_BLOCK_DEPTH
+          )
+        )
       if (hidden === (clone.userData.viewBlocked ?? false)) continue
       clone.userData.viewBlocked = hidden
       clone.traverse((child) => {
@@ -469,9 +495,7 @@
       })
     }
     for (const { id, leaves } of swingDoors) {
-      const open = openDoorIds.has(
-        objectDoorId(lastLoadedRegion.rx, lastLoadedRegion.rz, id)
-      )
+      const open = openHere.has(id)
       const step = (DOOR_SWING_SPEED * deltaTime) / 1000
       for (const leaf of leaves) {
         const target = open ? leaf.open : 0
@@ -552,20 +576,33 @@
 
   /** A woken stand-in is not solid, so only the boss body blocks. */
   let unsolidIds: Set<number> = new Set()
+  /** Placement ids in the loaded region whose door is open. */
+  let openHere: Set<number> = new Set()
+  function refreshOpenHere(): boolean {
+    const { rx, rz } = lastLoadedRegion
+    const next = new Set(
+      placements
+        .filter((p) => openDoorIds.has(objectDoorId(rx, rz, p.id)))
+        .map((p) => p.id)
+    )
+    const changed =
+      next.size !== openHere.size || [...next].some((id) => !openHere.has(id))
+    if (changed) openHere = next
+    return changed
+  }
   function syncFurniture(all: ObjectPlacement[]) {
     const { rx, rz } = lastLoadedRegion
     if (Number.isNaN(rx)) return
     const solid = unsolidIds.size
       ? all.filter((p) => !unsolidIds.has(p.id))
       : all
+    refreshOpenHere()
     furnitureManager.syncRegion(
       rx,
       rz,
-      solid.map((p) =>
-        openDoorIds.has(objectDoorId(rx, rz, p.id))
-          ? { ...p, doorOpen: true }
-          : p
-      )
+      openHere.size
+        ? solid.map((p) => (openHere.has(p.id) ? { ...p, doorOpen: true } : p))
+        : solid
     )
   }
   $effect(() => {

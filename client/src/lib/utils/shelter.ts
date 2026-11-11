@@ -24,54 +24,11 @@ export function doorwayOf(
   }
 }
 
-export interface OccluderBox {
-  x: [number, number]
-  z: [number, number]
-  height: number
-}
-
-/** Whether a local box stands between `point` and the fixed south-west camera,
- *  by the same ray test houses use. */
-export function boxesOccludePoint(
-  point: Position,
-  placement: ObjectPlacement,
-  boxes: OccluderBox[],
-  minDepth = 0.9
-): boolean {
-  const yaw = (placement.rotation * Math.PI) / 180
-  const cos = Math.cos(yaw)
-  const sin = Math.sin(yaw)
-  const px = shortestWrappedDeltaX(placement.x, point.x)
-  const pz = point.z - placement.z
-  const py = point.y - placement.y
-  for (const box of boxes) {
-    const sHigh = box.height - py
-    if (sHigh <= 0) continue
-    let minX = Infinity
-    let maxX = -Infinity
-    let minZ = Infinity
-    let maxZ = -Infinity
-    for (const x of box.x) {
-      for (const z of box.z) {
-        const wx = x * cos + z * sin
-        const wz = -x * sin + z * cos
-        minX = Math.min(minX, wx)
-        maxX = Math.max(maxX, wx)
-        minZ = Math.min(minZ, wz)
-        maxZ = Math.max(maxZ, wz)
-      }
-    }
-    const sMin = Math.max(px - maxX, minZ - pz, Math.max(-py, 0))
-    const sMax = Math.min(px - minX, maxZ - pz, sHigh)
-    if (sMax - sMin > minDepth) return true
-  }
-  return false
-}
-
 export function isInsideShelter(
   point: Position,
   placement: ObjectPlacement,
-  perimeter: NonNullable<ObjectDef['perimeter']>
+  perimeter: NonNullable<ObjectDef['perimeter']>,
+  annexes: NonNullable<ObjectDef['annexes']> = []
 ): boolean {
   const yaw = (placement.rotation * Math.PI) / 180
   const dx = shortestWrappedDeltaX(placement.x, point.x)
@@ -79,10 +36,18 @@ export function isInsideShelter(
   const x = dx * Math.cos(yaw) - dz * Math.sin(yaw)
   const z = dx * Math.sin(yaw) + dz * Math.cos(yaw)
   const y = point.y - placement.y
+  if (y <= -0.3) return false
   return (
-    Math.abs(x) < perimeter.width / 2 &&
-    Math.abs(z) < perimeter.depth / 2 &&
-    y > -0.3 &&
-    y < perimeter.height
+    (Math.abs(x) < perimeter.width / 2 &&
+      Math.abs(z) < perimeter.depth / 2 &&
+      y < perimeter.height) ||
+    annexes.some(
+      (a) =>
+        x > a.x[0] &&
+        x < a.x[1] &&
+        z > a.z[0] &&
+        z < a.z[1] &&
+        y < (a.height ?? perimeter.height)
+    )
   )
 }

@@ -649,17 +649,9 @@ impl WorldCache {
 
     /// `door` is a `DoorState` id; only `object:{rx}:{rz}:{id}` is handled.
     pub fn set_door(&mut self, door: &str, is_open: bool) {
-        let mut parts = door.split(':');
-        let (Some("object"), Some(rx), Some(rz), Some(id), None) = (
-            parts.next(),
-            parts.next().and_then(|v| v.parse().ok()),
-            parts.next().and_then(|v| v.parse().ok()),
-            parts.next().and_then(|v| v.parse().ok()),
-            parts.next(),
-        ) else {
+        let Some(key @ (rx, rz, _)) = onlinerpg_shared::shelter::parse_door_id(door) else {
             return;
         };
-        let key: (i32, i32, u32) = (rx, rz, id);
         let changed = if is_open {
             self.object_doors.insert(key)
         } else {
@@ -668,7 +660,7 @@ impl WorldCache {
         if !changed {
             return;
         }
-        if let Some(placements) = self.furniture_placements.get(&(rx, rz)).cloned() {
+        if let Some(placements) = self.furniture_placements.remove(&(rx, rz)) {
             self.sync_furniture(rx, rz, placements);
             self.collision_revision = self.collision_revision.wrapping_add(1);
         }

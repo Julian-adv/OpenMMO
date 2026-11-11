@@ -1,6 +1,7 @@
 //! Doors on placed region objects (`swingDoor` in the object catalog).
 //! State is in memory only: every door is shut after a restart.
 
+use super::goal_movement::doors::segment_distance;
 use super::passability::regions_around;
 use super::*;
 use onlinerpg_shared::interest::SubjectArea;
@@ -12,16 +13,7 @@ const DOOR_REACH: f32 = 2.0;
 type DoorKey = (i32, i32, u32);
 
 fn door_id((rx, rz, id): DoorKey) -> String {
-    format!("object:{rx}:{rz}:{id}")
-}
-
-fn segment_distance([ax, az, bx, bz]: [f32; 4], pos: &Position) -> f32 {
-    let dx = shortest_world_delta_x(ax, pos.x);
-    let dz = pos.z - az;
-    let vx = shortest_world_delta_x(ax, bx);
-    let vz = bz - az;
-    let t = ((dx * vx + dz * vz) / (vx * vx + vz * vz).max(1e-6)).clamp(0.0, 1.0);
-    (dx - vx * t).hypot(dz - vz * t)
+    shelter::door_id(rx, rz, id)
 }
 
 impl GameState {
@@ -53,6 +45,22 @@ impl GameState {
                 p
             })
             .collect()
+    }
+
+    /// Only the walls change when a door moves; furniture and floors stay.
+    fn rebuild_region_shelter_walls(&self, rx: i32, rz: i32) {
+        let walls = {
+            let index = self
+                .interaction_furniture
+                .read()
+                .unwrap_or_else(|e| e.into_inner());
+            let placements = index.get(&(rx, rz)).map_or(&[][..], Vec::as_slice);
+            let placements =
+                self.with_object_door_state(rx, rz, self.without_woken_stand_in(placements));
+            shelter::build_passability(&placements)
+        };
+        let key = onlinerpg_shared::furniture::region_cache_key(rx, rz);
+        onlinerpg_shared::furniture::sync_shelter_walls(&mut self.passability_write(), &key, walls);
     }
 
     /// Forget doors whose object the editor removed from the region.
@@ -132,14 +140,7 @@ impl GameState {
                     open.insert(key);
                 }
             }
-            let placements = self
-                .interaction_furniture
-                .read()
-                .unwrap_or_else(|e| e.into_inner())
-                .get(&region)
-                .cloned()
-                .unwrap_or_default();
-            self.rebuild_region_furniture_passability(region.0, region.1, &placements);
+            self.rebuild_region_shelter_walls(region.0, region.1);
             let state = |is_open| ServerMessage::DoorState {
                 door: door_id(key),
                 is_open,

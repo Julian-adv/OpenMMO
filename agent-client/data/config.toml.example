@@ -243,3 +243,10 @@ id = "ysolde"
 account = "npc_ysolde"
 gender = "female"
 llm = "codex"
+
+# Keeper of the Two Moons Chapel; officiates family mergers.
+[[npcs]]
+id = "maelis"
+account = "npc_maelis"
+gender = "female"
+llm = "codex"

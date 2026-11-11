@@ -899,9 +899,13 @@ pub(super) async fn handle_response(
                 continue;
             };
             let merge = s.pending_family_merges.remove(idx);
-            let cmd = onlinerpg_shared::ClientMessage::RespondFamilyMerge {
-                proposer_id: merge.proposal.proposer_id,
-                accept,
+            let cmd = if Some(merge.proposal.proposer_id) == s.self_player_id {
+                onlinerpg_shared::ClientMessage::ConfirmFamilyMerge { accept }
+            } else {
+                onlinerpg_shared::ClientMessage::RespondFamilyMerge {
+                    proposer_id: merge.proposal.proposer_id,
+                    accept,
+                }
             };
             if let Err(e) = s.send_command(cmd).await {
                 error!("Failed to send family merge response: {e}");

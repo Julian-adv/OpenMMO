@@ -143,6 +143,15 @@ export interface ObjectDef {
   cutaway?: string
   /** Solid local rectangles outside `perimeter`; collision reads them in shared Rust. */
   blocks?: { x: [number, number]; z: [number, number]; height?: number }[]
+  /** Walkable local rectangles joined to `perimeter` by an opening `opening`
+   *  metres wide; `floor` is its height above the perimeter floor. */
+  annexes?: {
+    x: [number, number]
+    z: [number, number]
+    opening: number
+    floor?: number
+    height?: number
+  }[]
   /** Mesh kept while the object hides for blocking the view of the player;
    *  `roofHeight` is the height of the `perimeter` volume for that test. */
   ground?: string
@@ -156,6 +165,8 @@ export interface ObjectDef {
     depth: number
     height: number
     entranceWidth: number
+    /** Height of a built floor above the placement; characters stand on it. */
+    floor?: number
   }
   /** Procedural builder id (e.g. "shopSign"). When set, geometry is generated
    *  in code instead of loaded from a GLB. */

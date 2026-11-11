@@ -9,6 +9,12 @@ import { collectFloorGeometry } from '../utils/house-geo-floor'
 import { makeRoom } from '../utils/house-room.fixture'
 import type { HouseData } from '../types/housing'
 import * as terrainFiles from '../network/terrainFileSource'
+import { passability_storey_ground_y } from '../wasm/onlinerpg_shared'
+
+vi.mock('../wasm/onlinerpg_shared', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  passability_storey_ground_y: vi.fn(() => NaN),
+}))
 
 function fakeHeightManager(
   loaded: boolean,
@@ -24,6 +30,12 @@ describe('entityGroundY', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+  })
+
+  it('stands on a built object floor before falling back to terrain', () => {
+    vi.mocked(passability_storey_ground_y).mockReturnValueOnce(1.48)
+    expect(entityGroundY(fakeHeightManager(true, 1.0), 0, 5, 5, 0)).toBe(1.48)
+    expect(entityGroundY(fakeHeightManager(true, 1.0), 0, 5, 5, 0)).toBe(1.0)
   })
 
   it('renders authoritative house floor centers on the actual slab surface', () => {

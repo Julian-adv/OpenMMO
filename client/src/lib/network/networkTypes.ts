@@ -272,6 +272,8 @@ export type ClientMessage =
       }
     }
   | { RespondFamilyMerge: { proposer_id: number; accept: boolean } }
+  | { ConfirmFamilyMerge: { accept: boolean } }
+  | { ToggleObjectDoor: { object_id: number } }
   | 'RequestPartyPositions'
   | { FriendRespond: { requester_id: number; accept: boolean } }
   | { FriendRemove: { name: string } }

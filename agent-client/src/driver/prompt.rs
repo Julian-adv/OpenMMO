@@ -737,6 +737,7 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
              at {applied_modifier_pct}% — {message}",
             if *accepted { "GRANTED" } else { "REJECTED" }
         )),
+        ServerMessage::MergerRiteCue { cue } => Some(format!("[Rite] {cue}")),
         ServerMessage::FurnitureSelectionNotice {
             player_id,
             player_name,

@@ -19,6 +19,14 @@ use crate::types::{PlayerId, ServerMessage};
 
 const FAMILY_PENDING_INVITE_CAP: usize = 5;
 const SERVER_ERROR: &str = "server error, try again.";
+/// The priest who presides over family mergers (`data-src/npcs.csv`).
+const OFFICIANT_NPC: &str = "Maelis";
+const RITE_REACH: f32 = 8.0;
+const RITE_OPENING_PAUSE: std::time::Duration = std::time::Duration::from_secs(8);
+const RITE_TURN_PAUSE: std::time::Duration = std::time::Duration::from_secs(6);
+const RITE_LEFT: &str = "someone left the altar.";
+const RITE_AWAY: &str =
+    "a merger is sworn before Maelis at the Two Moons Chapel; both heads must stand before her while she keeps the altar.";
 
 /// Never held while taking another `GameState` lock.
 #[derive(Default)]
@@ -32,7 +40,13 @@ pub(crate) struct Families {
     own_capes: std::collections::HashSet<PlayerId>,
     /// Merge offers by (proposer, target head), with their terms.
     merges: HashMap<(PlayerId, PlayerId), PendingConsent>,
-    merge_terms: HashMap<(PlayerId, PlayerId), FamilyMergeTerms>,
+    merge_offers: HashMap<(PlayerId, PlayerId), MergeOffer>,
+}
+
+struct MergeOffer {
+    proposal: FamilyMergeProposal,
+    /// The rite asks the proposing head first.
+    awaiting_proposer: bool,
 }
 
 impl Families {
@@ -319,7 +333,7 @@ impl super::GameState {
             .merges
             .retain(|(from, to), _| from != player_id && to != player_id);
         families
-            .merge_terms
+            .merge_offers
             .retain(|(from, to), _| from != player_id && to != player_id);
         families.leave(player_id)
     }
@@ -961,6 +975,50 @@ impl super::GameState {
         }
     }
 
+    /// The officiant, if she is at her post with both heads standing before her.
+    async fn merger_officiant(&self, first: &PlayerId, second: &PlayerId) -> Option<PlayerId> {
+        if self.is_npc_asleep(OFFICIANT_NPC) {
+            return None;
+        }
+        let id = self.player_id_by_name(OFFICIANT_NPC).await?;
+        let players = self.players.read().await;
+        let priest = players.get(&id).filter(|p| p.is_official_npc)?;
+        let near = |head: &PlayerId| {
+            players.get(head).is_some_and(|p| {
+                p.health > 0
+                    && p.floor_level == priest.floor_level
+                    && p.position.dist_xz_sq(&priest.position) <= RITE_REACH * RITE_REACH
+            })
+        };
+        (priest.health > 0 && priest.object_id.is_none() && near(first) && near(second))
+            .then_some(id)
+    }
+
+    /// Tell the officiant what just happened; her client turns it into a line.
+    async fn rite_cue(&self, officiant: &PlayerId, cue: String) {
+        self.send_direct_message(officiant, ServerMessage::MergerRiteCue { cue })
+            .await;
+    }
+
+    /// Drop a rite that cannot go on. A refusal keeps its consent entry as the
+    /// brake on asking again.
+    async fn end_rite(&self, key: (PlayerId, PlayerId), reason: &str, refused: bool) {
+        {
+            let mut families = self.families.write().await;
+            families.merge_offers.remove(&key);
+            if !refused {
+                families.merges.remove(&key);
+            }
+        }
+        if let Some(officiant) = self.player_id_by_name(OFFICIANT_NPC).await {
+            self.rite_cue(
+                &officiant,
+                format!("The rite ends without a merger: {reason} Close it gently, without blame."),
+            )
+            .await;
+        }
+    }
+
     pub async fn propose_family_merge(
         &self,
         player_id: &PlayerId,
@@ -996,6 +1054,18 @@ impl super::GameState {
             };
         let proposer_name = self.player_name_of(player_id).await;
         let target_name = self.player_name_of(&target_id).await;
+        let Some(officiant) = self.merger_officiant(player_id, &target_id).await else {
+            self.family_note(player_id, RITE_AWAY).await;
+            return;
+        };
+        let proposal = FamilyMergeProposal {
+            proposer_id: *player_id,
+            proposer_name: proposer_name.clone(),
+            proposer_family: proposer_family.clone(),
+            target_family: target_family.clone(),
+            terms,
+            members,
+        };
         let refusal = {
             let mut families = self.families.write().await;
             let key = (*player_id, target_id);
@@ -1013,7 +1083,13 @@ impl super::GameState {
                     families
                         .merges
                         .insert(key, PendingConsent::new(FAMILY_MERGE_TTL));
-                    families.merge_terms.insert(key, terms);
+                    families.merge_offers.insert(
+                        key,
+                        MergeOffer {
+                            proposal: proposal.clone(),
+                            awaiting_proposer: true,
+                        },
+                    );
                     None
                 }
             }
@@ -1022,25 +1098,119 @@ impl super::GameState {
             self.family_note(player_id, reason).await;
             return;
         }
-        let suppressed = self.has_blocked(&target_id, &proposer_name).await;
-        if !suppressed {
-            self.send_direct_message(
-                &target_id,
-                ServerMessage::FamilyMergeProposal {
-                    proposal: FamilyMergeProposal {
-                        proposer_id: *player_id,
-                        proposer_name,
-                        proposer_family,
-                        target_family,
-                        terms,
-                        members,
-                    },
-                },
+        let side = |side: onlinerpg_shared::family::MergeSide| match side {
+            onlinerpg_shared::family::MergeSide::Proposer => (&proposer_family, &proposer_name),
+            onlinerpg_shared::family::MergeSide::Target => (&target_family, &target_name),
+        };
+        self.rite_cue(
+            &officiant,
+            format!(
+                "A merger rite begins. {proposer_name}, head of family {proposer_family}, and {target_name}, head of family {target_family}, stand before you to merge their families. Terms: the family keeps the name {}, the emblem of {}, and {} leads it; {members} members in all. A merger cannot be undone. Open the rite and state these terms plainly. Do not ask for anyone's consent yet.",
+                side(terms.keep_name).0,
+                side(terms.keep_emblem).0,
+                side(terms.keep_head).1,
+            ),
+        )
+        .await;
+        for head in [player_id, &target_id] {
+            self.family_note(head, format!("{OFFICIANT_NPC} opens the rite of merger."))
+                .await;
+        }
+        let game = self.clone();
+        let proposer_id = *player_id;
+        tokio::spawn(async move {
+            tokio::time::sleep(RITE_OPENING_PAUSE).await;
+            let waiting = game
+                .families
+                .read()
+                .await
+                .merge_offers
+                .get(&(proposer_id, target_id))
+                .is_some_and(|offer| offer.awaiting_proposer);
+            if !waiting {
+                return;
+            }
+            let Some(officiant) = game.merger_officiant(&proposer_id, &target_id).await else {
+                game.end_rite((proposer_id, target_id), RITE_LEFT, false)
+                    .await;
+                return;
+            };
+            game.rite_cue(
+                &officiant,
+                format!("Ask {proposer_name} of family {} whether they agree to the merger on these terms. One short question.", proposal.proposer_family),
             )
             .await;
-        }
-        self.family_note(player_id, format!("offered {target_name} a merge."))
+            game.send_direct_message(
+                &proposer_id,
+                ServerMessage::FamilyMergeProposal { proposal },
+            )
             .await;
+        });
+    }
+
+    /// The proposing head answers first; a yes passes the question to the other head.
+    pub async fn confirm_family_merge(&self, proposer_id: &PlayerId, accept: bool) {
+        let pending = self
+            .families
+            .write()
+            .await
+            .merge_offers
+            .iter_mut()
+            .find(|((from, _), offer)| from == proposer_id && offer.awaiting_proposer)
+            .map(|(key, offer)| {
+                offer.awaiting_proposer = false;
+                (*key, offer.proposal.clone())
+            });
+        let Some((key, proposal)) = pending else {
+            self.family_note(proposer_id, "that merge offer has expired.")
+                .await;
+            return;
+        };
+        let target_id = key.1;
+        if !accept {
+            self.end_rite(key, &format!("{} withdrew.", proposal.proposer_name), false)
+                .await;
+            self.family_note(
+                &target_id,
+                format!("{} withdrew the merger.", proposal.proposer_name),
+            )
+            .await;
+            return;
+        }
+        let Some(officiant) = self.merger_officiant(proposer_id, &target_id).await else {
+            self.end_rite(key, RITE_LEFT, false).await;
+            return;
+        };
+        let target_name = self.player_name_of(&target_id).await;
+        self.rite_cue(
+            &officiant,
+            format!(
+                "{} agreed. Now ask {target_name} of family {} whether they agree to the merger on the same terms. One short question.",
+                proposal.proposer_name, proposal.target_family
+            ),
+        )
+        .await;
+        let game = self.clone();
+        let proposer_id = *proposer_id;
+        tokio::spawn(async move {
+            tokio::time::sleep(RITE_TURN_PAUSE).await;
+            if game.has_blocked(&target_id, &proposal.proposer_name).await {
+                return;
+            }
+            let open = game
+                .families
+                .read()
+                .await
+                .merges
+                .contains_key(&(proposer_id, target_id));
+            if open {
+                game.send_direct_message(
+                    &target_id,
+                    ServerMessage::FamilyMergeProposal { proposal },
+                )
+                .await;
+            }
+        });
     }
 
     pub async fn respond_to_family_merge(
@@ -1051,15 +1221,28 @@ impl super::GameState {
         auth: &AuthService,
     ) {
         let key = (*proposer_id, *target_id);
-        let terms = {
+        let (awaiting_proposer, terms) = {
             let mut families = self.families.write().await;
-            let usable = answer_consent(&mut families.merges, key, accept);
-            let terms = families.merge_terms.get(&key).copied();
-            if accept {
-                families.merge_terms.remove(&key);
+            if families
+                .merge_offers
+                .get(&key)
+                .is_some_and(|offer| offer.awaiting_proposer)
+            {
+                (true, None)
+            } else {
+                let usable = answer_consent(&mut families.merges, key, accept);
+                let terms = families
+                    .merge_offers
+                    .remove(&key)
+                    .map(|offer| offer.proposal.terms);
+                (false, terms.filter(|_| usable))
             }
-            terms.filter(|_| usable)
         };
+        if awaiting_proposer {
+            self.family_note(target_id, "the rite has not reached you yet.")
+                .await;
+            return;
+        }
         let Some(terms) = terms else {
             self.family_note(target_id, "that merge offer has expired.")
                 .await;
@@ -1069,8 +1252,16 @@ impl super::GameState {
         if !accept {
             self.family_note(proposer_id, format!("{target_name} declined the merge."))
                 .await;
+            self.end_rite(key, &format!("{target_name} declined."), true)
+                .await;
             return;
         }
+        let Some(officiant) = self.merger_officiant(proposer_id, target_id).await else {
+            self.family_note(target_id, RITE_AWAY).await;
+            self.family_note(proposer_id, RITE_AWAY).await;
+            self.end_rite(key, RITE_LEFT, false).await;
+            return;
+        };
         let (Some(proposer), Some(target)) = (
             self.character_id_of(proposer_id).await,
             self.character_id_of(target_id).await,
@@ -1118,6 +1309,17 @@ impl super::GameState {
             self.family_note(member, format!("the families are merged as {name}."))
                 .await;
         }
+        let proposer_name = self.player_name_of(proposer_id).await;
+        self.rite_cue(
+            &officiant,
+            format!("{target_name} agreed. The merger is done: the families of {proposer_name} and {target_name} are now one family, {name}. Declare it in one or two sentences."),
+        )
+        .await;
+        self.broadcast(ServerMessage::ServerAnnouncement {
+            message: format!(
+                "The families of {proposer_name} and {target_name} have merged as the {name} family at the Two Moons Chapel."
+            ),
+        });
         self.refresh_family_capes(&members).await;
         self.refresh_family_furniture(absorbed, auth).await;
         self.refresh_family_furniture(survivor, auth).await;

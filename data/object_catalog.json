@@ -14,21 +14,29 @@
   },
   {
     "id": "union_hall",
-    "name": "가문 혼약 예식장",
+    "name": "두 달 교회",
     "model": "objects/union_hall.glb",
     "foundation": { "width": 23, "depth": 30 },
+    "flattenBuryDepth": -0.04,
     "perimeter": {
       "width": 12,
       "depth": 17,
       "height": 9,
-      "entranceWidth": 3.8
+      "entranceWidth": 3.8,
+      "floor": 0
     },
     "cutaway": "hall_front",
     "ground": "hall_back__flagstone",
     "roofHeight": 13,
-    "blocks": [
-      { "x": [-11.1, -6.6], "z": [4.6, 9.1], "height": 26 },
-      { "x": [-4.6, 4.6], "z": [-14.7, -9.1], "height": 9.5 }
+    "blocks": [{ "x": [-11.1, -6.6], "z": [4.6, 9.1], "height": 26 }],
+    "annexes": [
+      {
+        "x": [-4, 4],
+        "z": [-14.1, -8.5],
+        "opening": 6,
+        "floor": 0.45,
+        "height": 9.5
+      }
     ],
     "swingDoor": {
       "leaves": [

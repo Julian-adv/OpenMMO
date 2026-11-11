@@ -702,19 +702,48 @@ async fn merging_folds_the_absorbed_family_into_the_kept_name() {
         keep_emblem: MergeSide::Target,
         keep_head: MergeSide::Target,
     };
+    let asked = |msgs: Vec<ServerMessage>| {
+        msgs.into_iter().find_map(|msg| match msg {
+            ServerMessage::FamilyMergeProposal { proposal } => Some(proposal),
+            _ => None,
+        })
+    };
     game.propose_family_merge(&pid("HeadA"), "HeadB", terms, &auth)
         .await;
-    let proposal = drain(&mut b_rx).into_iter().find_map(|msg| match msg {
-        ServerMessage::FamilyMergeProposal { proposal } => Some(proposal),
-        _ => None,
-    });
-    let proposal = proposal.expect("offer");
+    assert!(has_line(&drain(&mut a_rx), "Two Moons Chapel"));
+    assert!(asked(drain(&mut b_rx)).is_none());
+
+    let mut priest = make_player("Maelis", 2.0, 1.0);
+    priest.is_official_npc = true;
+    let mut priest_rx = game.register_direct_channel(&priest.id).await;
+    game.add_player(priest).await;
+    tokio::time::pause();
+    game.propose_family_merge(&pid("HeadA"), "HeadB", terms, &auth)
+        .await;
+    let cued = |msgs: Vec<ServerMessage>, needle: &str| {
+        msgs.iter()
+            .any(|msg| matches!(msg, ServerMessage::MergerRiteCue { cue } if cue.contains(needle)))
+    };
+    assert!(cued(drain(&mut priest_rx), "A merger rite begins"));
+    assert!(asked(drain(&mut a_rx)).is_none());
+    game.respond_to_family_merge(&pid("HeadB"), &pid("HeadA"), true, &auth)
+        .await;
+    assert!(has_line(&drain(&mut b_rx), "has not reached you"));
+
+    tokio::time::sleep(std::time::Duration::from_secs(9)).await;
+    assert_eq!(asked(drain(&mut a_rx)).expect("own word").members, 3);
+    assert!(asked(drain(&mut b_rx)).is_none());
+    game.confirm_family_merge(&pid("HeadA"), true).await;
+    tokio::time::sleep(std::time::Duration::from_secs(7)).await;
+    let proposal = asked(drain(&mut b_rx)).expect("offer");
     assert_eq!(proposal.members, 3);
     assert_eq!(proposal.target_family, "Oakshield");
+    tokio::time::resume();
 
     game.respond_to_family_merge(&pid("HeadB"), &pid("HeadA"), true, &auth)
         .await;
     drain(&mut a_rx);
+    assert!(cued(drain(&mut priest_rx), "The merger is done"));
     let family = family_state(&drain(&mut member_rx)).flatten().unwrap();
     assert_eq!(family.name, "Ironwood");
     assert_eq!(family.members.len(), 3);

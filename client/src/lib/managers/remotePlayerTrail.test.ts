@@ -1,5 +1,10 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { remotePlayerManager } from './remotePlayerManager'
+
+vi.mock('../wasm/onlinerpg_shared', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  passability_storey_ground_y: () => NaN,
+}))
 
 const ID = 1
 

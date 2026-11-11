@@ -38,7 +38,7 @@ export function setObjectDoorways(next: ObjectDoorway[]) {
   doorways = next
 }
 
-export function doorwayDistance(point: Position, door: ObjectDoorway): number {
+function doorwayDistance(point: Position, door: ObjectDoorway): number {
   if (Math.abs(point.y - door.y) > 3) return Infinity
   const dx = shortestWrappedDeltaX(door.ax, point.x)
   const dz = point.z - door.az

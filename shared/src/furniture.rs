@@ -394,7 +394,25 @@ pub fn sync_passability(
         key,
         build_furniture_passability_for_placements(placements),
         crate::shelter::build_passability(placements),
+        crate::shelter::build_ground(placements),
     )
+}
+
+/// Rebuild only the shelter walls of a region, as when a door moves.
+pub fn sync_shelter_walls(
+    cache: &mut crate::pathfinding::PassabilityCache,
+    key: &str,
+    walls: Option<RuntimePassability>,
+) {
+    let key = format!("{key}:perimeter");
+    match walls {
+        Some(walls) => {
+            cache.insert(key, walls);
+        }
+        None => {
+            cache.remove(&key);
+        }
+    }
 }
 
 pub fn store_passability(
@@ -402,10 +420,12 @@ pub fn store_passability(
     key: &str,
     solid: Option<RuntimePassability>,
     perimeter: Option<RuntimePassability>,
+    ground: Option<RuntimePassability>,
 ) -> bool {
     let entries = [
         (key.to_owned(), solid),
         (format!("{key}:perimeter"), perimeter),
+        (format!("{key}:ground"), ground),
     ];
     let mut present = false;
     for (key, entry) in entries {
@@ -422,6 +442,7 @@ pub fn store_passability(
 pub fn remove_passability(cache: &mut crate::pathfinding::PassabilityCache, key: &str) {
     cache.remove(key);
     cache.remove(&format!("{key}:perimeter"));
+    cache.remove(&format!("{key}:ground"));
 }
 
 #[cfg(test)]

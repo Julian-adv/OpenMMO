@@ -1231,6 +1231,14 @@ class NetworkManager {
     })
   }
 
+  sendConfirmFamilyMerge(accept: boolean) {
+    this.sendMessage({ ConfirmFamilyMerge: { accept } })
+  }
+
+  sendToggleObjectDoor(objectId: number) {
+    this.sendMessage({ ToggleObjectDoor: { object_id: objectId } })
+  }
+
   sendRequestFamilyStorageLog() {
     this.sendMessage('RequestFamilyStorageLog')
   }

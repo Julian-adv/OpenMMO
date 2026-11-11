@@ -320,8 +320,9 @@ pub fn passability_set_furniture(key: &str, val: JsValue) -> Result<JsValue, JsE
         });
     }
     let solid = pathfinding::build_furniture_passability(&pieces);
+    let ground = crate::shelter::build_ground(&placements);
     with_cache_mut(|cache| {
-        furniture::store_passability(cache, key, solid, perimeter);
+        furniture::store_passability(cache, key, solid, perimeter, ground);
     });
     to_js(&debug)
 }
@@ -824,6 +825,13 @@ fn dungeon_geometry(
         return f32::NAN;
     };
     query(&def.position(), &dungeon_layouts(entrance_id)).unwrap_or(f32::NAN)
+}
+
+/// Built floor height on house storey `floor` at (x, z), houses and floored
+/// objects alike, or `NaN` on open terrain. `hint` breaks ties.
+#[wasm_bindgen]
+pub fn passability_storey_ground_y(floor: u8, x: f32, z: f32, hint: f32) -> f32 {
+    with_cache(|cache| pathfinding::storey_ground_y(cache, floor, x, z, hint)).unwrap_or(f32::NAN)
 }
 
 /// Ground height on dungeon floor `depth` at (x, z), stair ramps included, or

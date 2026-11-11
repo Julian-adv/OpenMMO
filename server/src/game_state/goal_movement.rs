@@ -958,7 +958,7 @@ pub(super) fn swept_blocked(
 }
 
 mod direction;
-mod doors;
+pub(super) mod doors;
 mod route;
 pub(super) mod synchronization;
 

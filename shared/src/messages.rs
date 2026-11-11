@@ -577,6 +577,10 @@ pub enum ClientMessage {
         depth: u8,
         door_id: u32,
     },
+    /// Open or shut the door of a placed object within reach.
+    ToggleObjectDoor {
+        object_id: u32,
+    },
     DebugTeleport {
         position: Position,
     },
@@ -1121,6 +1125,10 @@ pub enum ClientMessage {
         proposer_id: PlayerId,
         accept: bool,
     },
+    /// The proposing head's own answer when the officiant asks them first.
+    ConfirmFamilyMerge {
+        accept: bool,
+    },
 }
 
 impl ClientMessage {
@@ -1140,6 +1148,7 @@ impl ClientMessage {
             | PushDungeonCart { .. }
             | OpenDungeonProp { .. }
             | ToggleDungeonDoor { .. }
+            | ToggleObjectDoor { .. }
             | InteractObject { .. }
             | InspectAltar { .. }
             | OfferAtAltar { .. }
@@ -2204,6 +2213,10 @@ pub enum ServerMessage {
     TradeBusy {
         busy: bool,
     },
+    /// A step of a family merger rite, delivered only to the officiant NPC.
+    MergerRiteCue {
+        cue: String,
+    },
     /// An unpaid showroom selection, delivered only to the clerk.
     FurnitureSelectionNotice {
         player_id: PlayerId,
@@ -2728,6 +2741,7 @@ impl ServerMessage {
             | Self::TradeBusy { .. }
             | Self::TradeNotice { .. }
             | Self::FurnitureSelectionNotice { .. }
+            | Self::MergerRiteCue { .. }
             | Self::TradeDeclined { .. }
             | Self::DealResult { .. }
             | Self::PlayerMovePath { .. }

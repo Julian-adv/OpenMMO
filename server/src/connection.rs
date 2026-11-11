@@ -1953,6 +1953,12 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::ToggleObjectDoor { object_id } => {
+            if let Some(id) = &state.require_in_game("toggle object door") {
+                game_state.toggle_object_door(id, object_id).await;
+            }
+        }
+
         ClientMessage::ToggleDungeonDoor {
             entrance_id,
             depth,
@@ -1995,13 +2001,9 @@ async fn handle_client_message(
             object_id,
         } => {
             if let Some(id) = &state.require_in_game("interact object") {
-                if object_type == "door" {
-                    game_state.toggle_object_door(id, object_id).await;
-                } else {
-                    game_state
-                        .set_player_interaction(id, Some(object_type), Some(object_id))
-                        .await;
-                }
+                game_state
+                    .set_player_interaction(id, Some(object_type), Some(object_id))
+                    .await;
             }
         }
 
@@ -2907,6 +2909,12 @@ async fn handle_client_message(
                 game_state
                     .respond_to_family_merge(id, &proposer_id, accept, auth_service)
                     .await;
+            }
+        }
+
+        ClientMessage::ConfirmFamilyMerge { accept } => {
+            if let Some(id) = &state.require_in_game("confirm family merge") {
+                game_state.confirm_family_merge(id, accept).await;
             }
         }
 

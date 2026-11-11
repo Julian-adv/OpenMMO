@@ -887,7 +887,7 @@
       toggleNearestObjectDoor: (position, range) => {
         const objectId = findNearestObjectDoor(position, range)
         if (objectId == null) return false
-        networkManager.sendInteractObject('door', objectId)
+        networkManager.sendToggleObjectDoor(objectId)
         return true
       },
       sendToggleDoor: (houseId, roomIndex, wallDir, segmentIndex) =>
@@ -1745,7 +1745,7 @@
     intent: Extract<ClickIntent, { type: 'object_door' }>
   ) {
     approachAndAct({ position: intent.position, ...OBJECT_DOOR_APPROACH }, () =>
-      networkManager.sendInteractObject('door', intent.objectId)
+      networkManager.sendToggleObjectDoor(intent.objectId)
     )
   }
   function openMailbox(intent: Extract<ClickIntent, { type: 'mailbox' }>) {

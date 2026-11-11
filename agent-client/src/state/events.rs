@@ -141,6 +141,7 @@ impl SharedState {
             // both deserve an in-character reaction.
             ServerMessage::TradeNotice { .. }
             | ServerMessage::FurnitureSelectionNotice { .. }
+            | ServerMessage::MergerRiteCue { .. }
             | ServerMessage::TradeError { .. } => EventUrgency::Urgent,
 
             // State-only: tracked on SharedState, shown in the world state.

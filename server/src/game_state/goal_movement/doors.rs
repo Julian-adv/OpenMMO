@@ -1,5 +1,14 @@
 use super::*;
 
+pub(in crate::game_state) fn segment_distance([ax, az, bx, bz]: [f32; 4], pos: &Position) -> f32 {
+    let dx = shortest_world_delta_x(ax, pos.x);
+    let dz = pos.z - az;
+    let vx = shortest_world_delta_x(ax, bx);
+    let vz = bz - az;
+    let t = ((dx * vx + dz * vz) / (vx * vx + vz * vz).max(1e-6)).clamp(0.0, 1.0);
+    (dx - vx * t).hypot(dz - vz * t)
+}
+
 impl GameState {
     pub(in crate::game_state) async fn settle_movement_near(
         &self,
@@ -29,14 +38,9 @@ impl GameState {
         self.players.read().await.values().any(|player| {
             player.health > 0
                 && player.floor_level == floor
-                && segments.iter().any(|&[ax, az, bx, bz]| {
-                    let dx = shortest_world_delta_x(ax, player.position.x);
-                    let dz = player.position.z - az;
-                    let vx = shortest_world_delta_x(ax, bx);
-                    let vz = bz - az;
-                    let t = ((dx * vx + dz * vz) / (vx * vx + vz * vz).max(1e-6)).clamp(0.0, 1.0);
-                    (dx - vx * t).hypot(dz - vz * t) <= 0.31
-                })
+                && segments
+                    .iter()
+                    .any(|&segment| segment_distance(segment, &player.position) <= 0.31)
         })
     }
 
