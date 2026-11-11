@@ -104,6 +104,7 @@ async fn request_and_accept_forms_friendship_on_both_sides() {
             name: "bob".to_string(),
             level: 1,
             class: bob.class.clone(),
+            family: None,
         }]
     );
     assert_eq!(
@@ -113,6 +114,7 @@ async fn request_and_accept_forms_friendship_on_both_sides() {
             name: "alice".to_string(),
             level: 1,
             class: alice.class.clone(),
+            family: None,
         }]
     );
 }
@@ -348,6 +350,7 @@ async fn requests_are_capped_and_a_full_list_refuses() {
             name: format!("filler{i}"),
             level: 1,
             class: CharacterClass::Knight,
+            family: None,
         })
         .collect();
     game_state.set_player_friends(&pid("alice"), filler).await;

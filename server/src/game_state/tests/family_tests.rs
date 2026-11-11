@@ -858,3 +858,100 @@ async fn the_roster_names_estates_after_the_member_not_the_claimant() {
     assert_eq!(family.estates.len(), 1);
     assert_eq!(family.estates[0].owner_name, "Alt");
 }
+
+fn friend_families(message: ServerMessage) -> Vec<Option<String>> {
+    match message {
+        ServerMessage::FriendList { friends } => friends.into_iter().map(|f| f.family).collect(),
+        other => panic!("expected FriendList, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn friends_are_listed_with_their_family_online_and_offline() {
+    let (game, auth, registrar) = setup("family_friends").await;
+    let (head_id, _head_rx) = enter(&game, &auth, "Head", FAMILY_FOUND_STAMPS).await;
+    let (friend_id, mut friend_rx) = enter(&game, &auth, "Friend", 0).await;
+    auth.add_friend(head_id, friend_id).unwrap();
+    game.set_player_friends(&pid("Friend"), auth.load_friends(friend_id).unwrap())
+        .await;
+    claim(&game, &auth, "Head", 0).await;
+    found(&game, &auth, &registrar, "Head", "Ironwood").await;
+    assert_eq!(
+        auth.load_friends(friend_id).unwrap()[0].family.as_deref(),
+        Some("Ironwood")
+    );
+
+    // The snapshot predates the founding; Head's live family wins while online.
+    assert_eq!(
+        friend_families(game.friend_list_message(&pid("Friend")).await),
+        [Some("Ironwood".to_string())]
+    );
+    drain(&mut friend_rx);
+    game.send_friends_online(&pid("Friend")).await;
+    assert!(drain(&mut friend_rx).iter().any(|msg| matches!(msg,
+        ServerMessage::FriendsOnline { friends }
+            if friends.len() == 1 && friends[0].family.as_deref() == Some("Ironwood"))));
+
+    game.remove_player(&pid("Head")).await;
+    game.set_player_friends(&pid("Friend"), auth.load_friends(friend_id).unwrap())
+        .await;
+    assert_eq!(
+        friend_families(game.friend_list_message(&pid("Friend")).await),
+        [Some("Ironwood".to_string())]
+    );
+    assert_eq!(
+        auth.load_friends(head_id).unwrap()[0].family,
+        None,
+        "Friend has no family"
+    );
+}
+
+#[tokio::test]
+async fn whispers_and_party_lines_carry_family_names() {
+    let (game, auth, registrar) = setup("family_whisper").await;
+    let (_, mut head_rx) = enter(&game, &auth, "Head", FAMILY_FOUND_STAMPS).await;
+    claim(&game, &auth, "Head", 0).await;
+    found(&game, &auth, &registrar, "Head", "Ironwood").await;
+    let (_, mut guest_rx) = enter(&game, &auth, "Guest", 0).await;
+    drain(&mut head_rx);
+
+    game.send_chat_message(&pid("Head"), "/w Guest psst".into(), &auth)
+        .await;
+    for rx in [&mut guest_rx, &mut head_rx] {
+        assert!(drain(rx).iter().any(|msg| matches!(msg,
+            ServerMessage::WhisperMessage { from, from_family, to_family, .. }
+                if from == "Head" && from_family.as_deref() == Some("Ironwood")
+                    && to_family.is_none())));
+    }
+    game.send_chat_message(&pid("Guest"), "/w Head hi".into(), &auth)
+        .await;
+    assert!(drain(&mut head_rx).iter().any(|msg| matches!(msg,
+        ServerMessage::WhisperMessage { from_family, to_family, .. }
+            if from_family.is_none() && to_family.as_deref() == Some("Ironwood"))));
+
+    game.invite_to_party(&pid("Head"), "Guest").await;
+    game.respond_to_party_invite(&pid("Guest"), &pid("Head"), true)
+        .await;
+    assert!(drain(&mut guest_rx).iter().any(|msg| matches!(msg,
+        ServerMessage::PartyState { members, .. }
+            if members.iter().any(|m| m.name == "Head"
+                && m.family.as_deref() == Some("Ironwood")))));
+    game.send_party_chat(&pid("Head"), "this way".into()).await;
+    assert!(drain(&mut guest_rx).iter().any(|msg| matches!(msg,
+        ServerMessage::PartyChatMessage { from, from_family, .. }
+            if from == "Head" && from_family.as_deref() == Some("Ironwood"))));
+}
+
+#[tokio::test]
+async fn the_login_notice_names_a_member_not_yet_in_the_world() {
+    let (game, auth, registrar) = setup("family_login_notice").await;
+    let (_, mut head_rx) = enter(&game, &auth, "Head", FAMILY_FOUND_STAMPS).await;
+    claim(&game, &auth, "Head", 0).await;
+    found(&game, &auth, &registrar, "Head", "Ironwood").await;
+    drain(&mut head_rx);
+
+    game.player_entered_family(&pid("Newcomer"), "Newcomer", Some(1), &auth)
+        .await;
+    assert!(drain(&mut head_rx).iter().any(|msg| matches!(msg,
+        ServerMessage::SystemMessage { message, .. } if message == "Family: Newcomer is online.")));
+}

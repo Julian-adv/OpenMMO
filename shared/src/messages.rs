@@ -227,6 +227,8 @@ pub struct PartyMember {
     pub hp: u32,
     pub max_hp: u32,
     pub class: crate::character::CharacterClass,
+    #[serde(default)]
+    pub family: Option<String>,
 }
 
 /// One member's health as listed in `PartyVitals`. No name or class: the
@@ -269,15 +271,19 @@ pub struct FriendEntry {
     pub name: String,
     pub level: u32,
     pub class: crate::character::CharacterClass,
+    #[serde(default)]
+    pub family: Option<String>,
 }
 
 /// One online friend as listed in `FriendsOnline`. No name — `FriendList`
-/// already carries it — but the level rides along, so a friend's level-ups
-/// show without re-sending the whole roster.
+/// already carries it — but the level and family ride along, so changes show
+/// without re-sending the whole roster.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OnlineFriend {
     pub character_id: i64,
     pub level: u32,
+    #[serde(default)]
+    pub family: Option<String>,
 }
 
 /// How long a friend request stays answerable. Four times
@@ -1413,6 +1419,10 @@ pub enum ServerMessage {
         from: String,
         to: String,
         message: String,
+        #[serde(default)]
+        from_family: Option<String>,
+        #[serde(default)]
+        to_family: Option<String>,
     },
     /// Private server reply to the player's own command (`/who`, `/escape`,
     /// whisper errors). Not `ChatMessage`: clients must render it as a system
@@ -1428,6 +1438,8 @@ pub enum ServerMessage {
     PartyChatMessage {
         from: String,
         message: String,
+        #[serde(default)]
+        from_family: Option<String>,
     },
     /// One verse of a recital, paced over a song. `logged` (`/recite`) puts
     /// it in the chat log as well as the bubble — the first pass of a lyric;

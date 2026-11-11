@@ -315,7 +315,9 @@ async fn reply_targets_the_last_whisper_partner() {
         .send_chat_message(&target_id, "/r back at you".to_string(), &auth)
         .await;
     match sender_rx.try_recv() {
-        Ok(ServerMessage::WhisperMessage { from, to, message }) => {
+        Ok(ServerMessage::WhisperMessage {
+            from, to, message, ..
+        }) => {
             assert_eq!(from, "Rica");
             assert_eq!(to, "sender");
             assert_eq!(message, "back at you");
@@ -352,7 +354,9 @@ async fn whisper_reaches_only_the_target_regardless_of_distance() {
 
     for rx in [&mut target_rx, &mut sender_rx] {
         match rx.try_recv() {
-            Ok(ServerMessage::WhisperMessage { from, to, message }) => {
+            Ok(ServerMessage::WhisperMessage {
+                from, to, message, ..
+            }) => {
                 assert_eq!(from, "sender");
                 assert_eq!(to, "far_target");
                 assert_eq!(message, "psst");
@@ -546,7 +550,9 @@ async fn blocked_senders_whisper_is_suppressed_but_still_echoed() {
     }
     // The echo hides the block from the sender.
     match sender_rx.try_recv() {
-        Ok(ServerMessage::WhisperMessage { from, to, message }) => {
+        Ok(ServerMessage::WhisperMessage {
+            from, to, message, ..
+        }) => {
             assert_eq!(from, "sender");
             assert_eq!(to, "blocker");
             assert_eq!(message, "psst");
@@ -591,7 +597,9 @@ async fn blocked_sender_does_not_become_the_reply_target() {
         .send_chat_message(&blocker_id, "/r still you".to_string(), &auth)
         .await;
     match friend_rx.try_recv() {
-        Ok(ServerMessage::WhisperMessage { from, to, message }) => {
+        Ok(ServerMessage::WhisperMessage {
+            from, to, message, ..
+        }) => {
             assert_eq!(from, "blocker");
             assert_eq!(to, "friend");
             assert_eq!(message, "still you");

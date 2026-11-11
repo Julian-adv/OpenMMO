@@ -4,7 +4,9 @@ import {
   unreadChatCount,
   unreadPartyCount,
   whisperChatEntry,
+  partyChatEntry,
   chatEntryName,
+  chatEntryNameParts,
   chatEntryText,
   shouldTranslateChatEntry,
 } from './chat-format'
@@ -39,6 +41,7 @@ describe('whisperChatEntry', () => {
       text: 'psst',
       sender: 'whisper',
       name: 'Rica',
+      family: null,
       whisperDirection: 'outgoing',
     })
   })
@@ -48,8 +51,67 @@ describe('whisperChatEntry', () => {
       text: 'psst',
       sender: 'whisper',
       name: 'Miru',
+      family: null,
       whisperDirection: 'incoming',
     })
+  })
+
+  it('carries the family of the other party', () => {
+    expect(
+      whisperChatEntry('Miru', 'Rica', 'psst', 'Rica', 'Ironwood', 'Ash').family
+    ).toBe('Ironwood')
+    expect(
+      whisperChatEntry('Miru', 'Rica', 'psst', 'Miru', 'Ironwood', 'Ash').family
+    ).toBe('Ash')
+    expect(
+      whisperChatEntry('Miru', 'Rica', 'psst', 'Miru', 'Ironwood').family
+    ).toBeNull()
+  })
+
+  it('splits the label so the family sits right after the name', () => {
+    const incoming = whisperChatEntry(
+      'Miru',
+      'Rica',
+      'psst',
+      'Rica',
+      'Ironwood'
+    )
+    const outgoing = whisperChatEntry(
+      'Rica',
+      'Miru',
+      'psst',
+      'Rica',
+      null,
+      'Ironwood'
+    )
+    expect(chatEntryNameParts(incoming, 'en')).toEqual({
+      before: 'From ',
+      name: 'Miru',
+      after: '',
+    })
+    expect(chatEntryNameParts(outgoing, 'ko')).toEqual({
+      before: '',
+      name: 'Miru',
+      after: '에게',
+    })
+    expect(chatEntryNameParts(incoming, 'ja')).toEqual({
+      before: '',
+      name: 'Miru',
+      after: 'から',
+    })
+    expect(chatEntryNameParts(outgoing, 'zh-Hans')).toEqual({
+      before: '发送给',
+      name: 'Miru',
+      after: '',
+    })
+    expect(chatEntryNameParts(incoming, 'zh-Hant')).toEqual({
+      before: '來自',
+      name: 'Miru',
+      after: '',
+    })
+    expect(
+      chatEntryNameParts({ sender: 'remote', text: 'hi', name: 'Miru' }, 'ko')
+    ).toEqual({ before: '', name: 'Miru', after: '' })
   })
 
   it('treats an unknown own name as incoming', () => {
@@ -73,6 +135,18 @@ describe('whisperChatEntry', () => {
     expect(chatEntryName(incoming, 'zh-Hans')).toBe('来自To <b>Rica</b>')
     expect(chatEntryText(incoming, 'ko')).toBe('hello')
     expect(unreadChatCount([outgoing, incoming], 0, 'Miru')).toBe(1)
+  })
+})
+
+describe('partyChatEntry', () => {
+  it('carries the sender family and keeps the name bare', () => {
+    expect(partyChatEntry('Rica', 'this way', 'Ironwood')).toEqual({
+      text: 'this way',
+      sender: 'party',
+      name: 'Rica',
+      family: 'Ironwood',
+    })
+    expect(partyChatEntry('Rica', 'this way').family).toBeNull()
   })
 })
 

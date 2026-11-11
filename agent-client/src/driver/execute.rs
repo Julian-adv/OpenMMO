@@ -2777,6 +2777,7 @@ mod tests {
             name: "jake1".to_string(),
             level: 3,
             class: onlinerpg_shared::character::CharacterClass::Knight,
+            family: None,
         }];
         let state = Arc::new(Mutex::new(s));
         handle_response(

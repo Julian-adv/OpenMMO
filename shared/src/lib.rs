@@ -273,7 +273,11 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// `FamilyInfo.emblem_*`/`my_cape_emblem`,
 /// `EstateChest.family_id`/`emblem`) and merges (`ProposeFamilyMerge`,
 /// `RespondFamilyMerge`, `FamilyMergeProposal`).
-pub const PROTOCOL_VERSION: u32 = 147;
+/// v148: family names on whispers (`WhisperMessage.from_family`/`to_family`),
+/// party chat (`PartyChatMessage.from_family`), party rosters
+/// (`PartyMember.family`) and friends
+/// (`FriendEntry.family`, `OnlineFriend.family`).
+pub const PROTOCOL_VERSION: u32 = 148;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

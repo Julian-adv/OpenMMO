@@ -15,6 +15,7 @@
   import { networkManager } from '../network/socket'
   import {
     chatEntryName,
+    chatEntryNameParts,
     chatEntryText,
     shouldTranslateChatEntry,
     isPartyTabLine,
@@ -508,13 +509,14 @@
           {:else if entry.sender === 'family'}
             <span class="family-tag">[{$t('chat.family')}]</span>
           {/if}
+          {@const label = chatEntryNameParts(entry, $locale)}
           <span
             class="name"
             class:local={entry.sender === 'local'}
             class:remote={entry.sender === 'remote'}
-            >{chatEntryName(entry, $locale)}{#if entry.family}<span
-                class="family">{entry.family}</span
-              >{/if}:</span
+            >{label.before}{label.name}{#if entry.family}<span class="family"
+                >{entry.family}</span
+              >{/if}{label.after}:</span
           >
           {displayText(entry)}
         {:else}

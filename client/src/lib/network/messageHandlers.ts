@@ -215,6 +215,7 @@ import {
 import {
   applyFriendList,
   applyFriendsOnline,
+  type OnlineFriendWire,
   friendList,
   friendOnlineNoticeEnabled,
   pendingFriendRequests,
@@ -1164,13 +1165,24 @@ export function handleServerMessage(
     case 'WhisperMessage': {
       // No chat bubble — a whisper is private.
       const own = get(gameStore).currentPlayer?.name
-      addChatMessage(whisperChatEntry(data.from, data.to, data.message, own))
+      addChatMessage(
+        whisperChatEntry(
+          data.from,
+          data.to,
+          data.message,
+          own,
+          data.from_family ?? null,
+          data.to_family ?? null
+        )
+      )
       break
     }
 
     case 'PartyChatMessage':
       // No chat bubble — the party channel is private to the party.
-      addChatMessage(partyChatEntry(data.from, data.message))
+      addChatMessage(
+        partyChatEntry(data.from, data.message, data.from_family ?? null)
+      )
       break
 
     case 'FamilyMergeProposal': {
@@ -1333,19 +1345,21 @@ export function handleServerMessage(
             name: string
             level: number
             class: CharacterClass
+            family?: string | null
           }[]
         ).map((f) => ({
           characterId: f.character_id,
           name: f.name,
           level: f.level,
           class: f.class,
+          family: f.family ?? null,
         }))
       )
       break
 
     case 'FriendsOnline': {
       const announced = applyFriendsOnline(
-        data.friends as { character_id: number; level: number }[],
+        data.friends as OnlineFriendWire[],
         get(friendList)
       )
       if (get(friendOnlineNoticeEnabled)) {

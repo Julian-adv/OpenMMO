@@ -27,6 +27,9 @@ pub(crate) struct FriendSnapshot {
     /// it — an online friend's live level rides `FriendsOnline`.
     level: u32,
     class: CharacterClass,
+    /// Family as of login or befriending; online friends' live family rides
+    /// `FriendsOnline` and overrides it in `FriendList`.
+    family: Option<String>,
 }
 
 /// All friend state behind one lock. The lists are per-session snapshots of
@@ -64,6 +67,7 @@ struct FriendParty {
     name: String,
     level: u32,
     class: CharacterClass,
+    family: Option<String>,
 }
 
 impl FriendParty {
@@ -74,6 +78,7 @@ impl FriendParty {
             lower_name: self.name.to_ascii_lowercase().into(),
             level: self.level,
             class: self.class.clone(),
+            family: self.family.clone(),
         }
     }
 }
@@ -94,6 +99,7 @@ impl super::GameState {
                 name: f.name,
                 level: f.level,
                 class: f.class,
+                family: f.family,
             })
             .collect();
         self.friends.write().await.lists.insert(*player_id, list);
@@ -110,22 +116,44 @@ impl super::GameState {
     }
 
     /// The whole roster, offline friends included. Goes out with the login
-    /// batch and again after every change.
+    /// batch and again after every change. Online friends carry their live
+    /// family, offline ones the snapshot's.
     pub async fn friend_list_message(&self, player_id: &PlayerId) -> ServerMessage {
-        let friends: Vec<FriendEntry> = {
+        let mut friends: Vec<(FriendEntry, Arc<str>)> = {
             let state = self.friends.read().await;
             state
                 .list(player_id)
                 .iter()
-                .map(|f| FriendEntry {
-                    character_id: f.character_id,
-                    name: f.name.clone(),
-                    level: f.level,
-                    class: f.class.clone(),
+                .map(|f| {
+                    let entry = FriendEntry {
+                        character_id: f.character_id,
+                        name: f.name.clone(),
+                        level: f.level,
+                        class: f.class.clone(),
+                        family: f.family.clone(),
+                    };
+                    (entry, f.lower_name.clone())
                 })
                 .collect()
         };
-        ServerMessage::FriendList { friends }
+        let online: Vec<Option<PlayerId>> = {
+            let names = self.player_ids_by_name.read().await;
+            friends
+                .iter()
+                .map(|(_, lower)| names.get(lower.as_ref()).copied())
+                .collect()
+        };
+        if online.iter().any(Option::is_some) {
+            let players = self.players.read().await;
+            for ((entry, _), id) in friends.iter_mut().zip(&online) {
+                if let Some(player) = id.and_then(|id| players.get(&id)) {
+                    entry.family = player.family.clone();
+                }
+            }
+        }
+        ServerMessage::FriendList {
+            friends: friends.into_iter().map(|(entry, _)| entry).collect(),
+        }
     }
 
     pub async fn send_friend_list(&self, player_id: &PlayerId) {
@@ -167,6 +195,7 @@ impl super::GameState {
                     players.get(&id).map(|p| OnlineFriend {
                         character_id,
                         level: p.level,
+                        family: p.family.clone(),
                     })
                 })
                 .collect()
@@ -230,9 +259,15 @@ impl super::GameState {
         let target_id = self.player_id_by_name(target_name).await;
         let (requester, target) = {
             let players = self.players.read().await;
-            let requester = players
-                .get(requester_id)
-                .map(|p| (p.name.clone(), p.level, p.class.clone(), p.is_official_npc));
+            let requester = players.get(requester_id).map(|p| {
+                (
+                    p.name.clone(),
+                    p.level,
+                    p.class.clone(),
+                    p.is_official_npc,
+                    p.family.clone(),
+                )
+            });
             let target = target_id.and_then(|id| {
                 players.get(&id).map(|p| {
                     (
@@ -241,12 +276,19 @@ impl super::GameState {
                         p.level,
                         p.class.clone(),
                         p.is_official_npc,
+                        p.family.clone(),
                     )
                 })
             });
             (requester, target)
         };
-        let Some((requester_name, requester_level, requester_class, requester_is_npc)) = requester
+        let Some((
+            requester_name,
+            requester_level,
+            requester_class,
+            requester_is_npc,
+            requester_family,
+        )) = requester
         else {
             return;
         };
@@ -255,7 +297,14 @@ impl super::GameState {
                 .await;
             return;
         }
-        let Some((target_id, target_name, target_level, target_class, target_is_npc)) = target
+        let Some((
+            target_id,
+            target_name,
+            target_level,
+            target_class,
+            target_is_npc,
+            target_family,
+        )) = target
         else {
             self.send_system_message(
                 requester_id,
@@ -293,6 +342,7 @@ impl super::GameState {
                 requester_name.clone(),
                 requester_level,
                 requester_class,
+                requester_family,
             )
             .await
         else {
@@ -302,7 +352,13 @@ impl super::GameState {
             return;
         };
         let Some(target_party) = self
-            .friend_party(&target_id, target_name.clone(), target_level, target_class)
+            .friend_party(
+                &target_id,
+                target_name.clone(),
+                target_level,
+                target_class,
+                target_family,
+            )
             .await
         else {
             self.send_system_message(requester_id, "Friend: server error, try again.")
@@ -432,16 +488,17 @@ impl super::GameState {
             let players = self.players.read().await;
             let requester = players
                 .get(requester_id)
-                .map(|p| (p.name.clone(), p.level, p.class.clone()));
+                .map(|p| (p.name.clone(), p.level, p.class.clone(), p.family.clone()));
             let target = players
                 .get(target_id)
-                .map(|p| (p.name.clone(), p.level, p.class.clone()));
+                .map(|p| (p.name.clone(), p.level, p.class.clone(), p.family.clone()));
             (requester, target)
         };
-        let Some((target_name, target_level, target_class)) = target else {
+        let Some((target_name, target_level, target_class, target_family)) = target else {
             return;
         };
-        let Some((requester_name, requester_level, requester_class)) = requester else {
+        let Some((requester_name, requester_level, requester_class, requester_family)) = requester
+        else {
             self.send_system_message(target_id, "Friend: that request is no longer valid.")
                 .await;
             return;
@@ -460,6 +517,7 @@ impl super::GameState {
                 requester_name,
                 requester_level,
                 requester_class,
+                requester_family,
             )
             .await
         else {
@@ -468,7 +526,13 @@ impl super::GameState {
             return;
         };
         let Some(target_party) = self
-            .friend_party(target_id, target_name, target_level, target_class)
+            .friend_party(
+                target_id,
+                target_name,
+                target_level,
+                target_class,
+                target_family,
+            )
             .await
         else {
             self.send_system_message(target_id, "Friend: server error, try again.")
@@ -655,6 +719,7 @@ impl super::GameState {
         name: String,
         level: u32,
         class: CharacterClass,
+        family: Option<String>,
     ) -> Option<FriendParty> {
         Some(FriendParty {
             player_id: *player_id,
@@ -662,6 +727,7 @@ impl super::GameState {
             name,
             level,
             class,
+            family,
         })
     }
 }

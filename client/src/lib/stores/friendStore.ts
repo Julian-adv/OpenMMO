@@ -9,6 +9,14 @@ export interface FriendEntry {
   name: string
   level: number
   class: CharacterClass
+  family?: string | null
+}
+
+/** One entry of ServerMessage::FriendsOnline. */
+export interface OnlineFriendWire {
+  character_id: number
+  level: number
+  family?: string | null
 }
 
 /** A friend request the player hasn't answered yet. */
@@ -59,9 +67,10 @@ export const friendOnlineNoticeEnabled = persistedBoolean(
 let lastOnlineIds: Set<number> | null = null
 
 /** Apply a poll answer and return the names to announce: friends online now
- *  that were absent from the previous answer. */
+ *  that were absent from the previous answer. A live family is written into
+ *  the roster, so it stays after the friend logs off. */
 export function applyFriendsOnline(
-  entries: { character_id: number; level: number }[],
+  entries: OnlineFriendWire[],
   roster: FriendEntry[]
 ): string[] {
   const announced: string[] = []
@@ -76,6 +85,24 @@ export function applyFriendsOnline(
   }
   lastOnlineIds = new Set(entries.map((e) => e.character_id))
   onlineFriends.set(new Map(entries.map((e) => [e.character_id, e.level])))
+  const liveFamily = new Map(
+    entries.map((e) => [e.character_id, e.family ?? null])
+  )
+  if (
+    roster.some(
+      (f) =>
+        liveFamily.has(f.characterId) &&
+        liveFamily.get(f.characterId) !== (f.family ?? null)
+    )
+  ) {
+    friendList.update((list) =>
+      list.map((f) =>
+        liveFamily.has(f.characterId)
+          ? { ...f, family: liveFamily.get(f.characterId) ?? null }
+          : f
+      )
+    )
+  }
   return announced
 }
 

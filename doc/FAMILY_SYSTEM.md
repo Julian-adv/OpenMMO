@@ -1,6 +1,6 @@
 # 가문 시스템
 
-> 상태: 1차(가문 기본·영지 공유) 구현됨, 프로토콜 144 (2026-11-10). 2차(채팅·창고·게시판) 구현됨, 프로토콜 146, 3차(문장·깃발·합병) 구현됨, 프로토콜 147 (2026-11-11). 2·3차 미배포.
+> 상태: 1차(가문 기본·영지 공유) 프로토콜 144, 2026-11-11 배포됨. 2차(채팅·창고·게시판) 구현됨, 프로토콜 146, 3차(문장·깃발·합병) 구현됨, 프로토콜 147, 4차(귓속말·파티 채팅·친구 목록의 가문 이름) 구현됨, 프로토콜 148 (2026-11-11). 2·3·4차 미배포.
 
 영지를 가진 플레이어가 가문을 세우고, 다른 플레이어를 받아들여 이름·영지·문장·채팅·게시판·창고를 함께 쓴다.
 
@@ -339,6 +339,14 @@ CREATE INDEX IF NOT EXISTS idx_estate_chests_family ON estate_chests(family_id) 
 - `ProposeFamilyMerge { head_name, terms: { keep_name, keep_emblem, keep_head } }`, `RespondFamilyMerge { proposer_id, accept }` → `FamilyMergeProposal { proposal }`
 - `FamilyInfo`에 `emblem_texture`, `emblem_color`. `EstateChest`에 `family_id`, `emblem`.
 
+### 4차 (v148, 구현됨)
+
+- `WhisperMessage` 끝에 `from_family`, `to_family`. 받은 줄은 보낸 사람, 내 귓속말 메아리는 받는 사람의 가문을 붙인다.
+- `PartyChatMessage` 끝에 `from_family`.
+- `PartyMember` 끝에 `family`. 파티 창은 주변에 있는 파티원은 실시간 가문을, 멀리 있는 파티원은 명부의 가문을 쓴다.
+- `FriendEntry`, `OnlineFriend` 끝에 `family`. 친구 명부 쿼리가 가문을 조인해 접속하지 않은 친구도 가문이 보인다. 접속 중인 친구는 `FriendsOnline` 응답과 `FriendList`에 실시간 가문이 실리고, 웹 클라이언트는 그 값을 친구 목록에 남긴다. 접속하지 않은 친구의 가문은 내 접속 때 값이라, 그 사이 바뀌면 다음 접속에 맞춰진다.
+- 서버는 메모리의 `Player.family`를 읽는다. 채팅 줄마다 DB를 읽지 않는다.
+
 `shared/src/dungeon/`, `data-src/dungeons.csv`, `dungeon_spawns.csv`, `shared/src/housing.rs`는 건드리지 않는다 (레이아웃 지문).
 
 ## 15. 성능
@@ -353,9 +361,9 @@ CREATE INDEX IF NOT EXISTS idx_estate_chests_family ON estate_chests(family_id) 
 
 ## 16. 구현 단계
 
-세 번에 나눠 배포한다. 배포마다 프로토콜을 올린다.
+세 번에 나눠 배포하고, 이름 표시 보완을 4차(v148)로 더했다. 배포마다 프로토콜을 올린다.
 
-### 1차 (**구현됨**, 미배포)
+### 1차 (**배포됨**, 2026-11-11)
 
 1. **가문 기본**: 테이블, 창설, 초대·탈퇴·추방, 단계와 권한, 승계, 개명, 이름 표시, 가문 창.
 2. **영지 공유**: `land_estates.family_id`, 5절의 권한 검사 변경, 금고 입금.
@@ -367,7 +375,7 @@ CREATE INDEX IF NOT EXISTS idx_estate_chests_family ON estate_chests(family_id) 
 1차에 없는 것:
 
 - agent-client는 주변 플레이어의 가문 이름을 인지하고, 자기 가문(계급·권한·접속 가문원·영지)을 월드 상태에 보인다. 초대를 보내고(`family_invite`) 받은 초대에 답한다(`family_accept`·`family_decline`). 탈퇴·추방·계급 관리·창설·해산은 하지 않는다.
-- 귓속말·파티 채팅 줄과 친구 목록에는 가문 이름이 붙지 않는다. 주변 채팅 줄과 파티 창에는 붙는다.
+- 귓속말·파티 채팅 줄과 친구 목록의 가문 이름은 4차(v148)에서 붙였다 (14절).
 
 ### 2차 (**구현됨**, 미배포)
 

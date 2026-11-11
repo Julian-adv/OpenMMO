@@ -18,10 +18,10 @@
   const roster = $derived($partyRoster)
   const selfId = $derived($gameStore.currentPlayer?.id)
   const isLeader = $derived(roster !== null && roster.leaderId === selfId)
-  const familyOf = (id: number) =>
-    id === selfId
+  const familyOf = (member: { id: number; family?: string | null }) =>
+    member.id === selfId
       ? $gameStore.currentPlayer?.family
-      : $gameStore.otherPlayers.get(id)?.family
+      : ($gameStore.otherPlayers.get(member.id)?.family ?? member.family)
 
   let collapsed = $state(false)
   let inviteName = $state('')
@@ -175,8 +175,8 @@
                   class:self={member.id === selfId}
                   title={member.name}
                 >
-                  {member.name}{#if familyOf(member.id)}<span
-                      class="member-family">{familyOf(member.id)}</span
+                  {member.name}{#if familyOf(member)}<span
+                      class="member-family">{familyOf(member)}</span
                     >{/if}
                 </span>
                 {#if member.id === roster.leaderId}

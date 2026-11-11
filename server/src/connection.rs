@@ -1607,7 +1607,7 @@ async fn handle_client_message(
             game_state.set_player_titles(&id, titles.0).await;
             game_state.send_player_titles(&id).await;
             game_state
-                .player_entered_family(&id, family_id, auth_service)
+                .player_entered_family(&id, &player.name, family_id, auth_service)
                 .await;
             game_state
                 .set_dungeon_discoveries(&id, discovered_dungeons)

@@ -686,24 +686,26 @@ impl super::GameState {
         }
 
         let target_id = self.player_id_by_name(target_name).await;
-        let (sender_name, target) = {
+        let (sender, target) = {
             let players = self.players.read().await;
-            let sender_name = players.get(player_id).map(|player| player.name.clone());
+            let sender = players
+                .get(player_id)
+                .map(|player| (player.name.clone(), player.family.clone()));
             let target = target_id
                 .and_then(|id| players.get(&id))
-                .map(|player| (player.id, player.name.clone()))
+                .map(|player| (player.id, player.name.clone(), player.family.clone()))
                 .ok_or_else(|| format!("Whisper: no one called {target_name} is here."));
-            (sender_name, target)
+            (sender, target)
         };
 
-        let Some(from) = sender_name else {
+        let Some((from, from_family)) = sender else {
             warn!("Whisper from non-existent player: {}", player_id);
             return;
         };
         if self.refuse_if_muted(player_id, &from, "whisper").await {
             return;
         }
-        let (target_id, to) = match target {
+        let (target_id, to, to_family) = match target {
             Ok(target) => target,
             Err(message) => {
                 self.send_system_message(player_id, message).await;
@@ -736,6 +738,8 @@ impl super::GameState {
             from,
             to,
             message: message.to_string(),
+            from_family,
+            to_family,
         };
         // A blocked sender still gets the normal echo, so the block is
         // invisible to them.

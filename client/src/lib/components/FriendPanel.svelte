@@ -100,7 +100,11 @@
                 height="14"
               />
             {/if}
-            <span class="friend-name">{friend.name}</span>
+            <span class="friend-name"
+              >{friend.name}{#if friend.family}<span class="family"
+                  >{friend.family}</span
+                >{/if}</span
+            >
             <span class="friend-level"
               >{$t('stat.level')} {levelOf(friend)}</span
             >
@@ -318,6 +322,15 @@
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .friend-name .family {
+    margin-left: 0.3em;
+    color: #cdeec4;
+  }
+
+  .friend-row.offline .family {
+    opacity: 0.6;
   }
 
   .friend-level {

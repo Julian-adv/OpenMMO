@@ -135,12 +135,13 @@ impl super::GameState {
     pub async fn player_entered_family(
         &self,
         player_id: &PlayerId,
+        name: &str,
         family_id: Option<i64>,
         auth: &AuthService,
     ) {
         if let Some(family_id) = family_id {
             self.families.write().await.enter(*player_id, family_id);
-            self.announce_to_family(family_id, player_id, "is online.")
+            self.announce_to_family(family_id, player_id, name, "is online.")
                 .await;
             self.refresh_family(family_id, auth).await;
         }
@@ -148,7 +149,8 @@ impl super::GameState {
 
     pub(super) async fn player_left_family(&self, player_id: &PlayerId, auth: &AuthService) {
         if let Some(family_id) = self.forget_player_family(player_id).await {
-            self.announce_to_family(family_id, player_id, "went offline.")
+            let name = self.player_name_of(player_id).await;
+            self.announce_to_family(family_id, player_id, &name, "went offline.")
                 .await;
             self.refresh_family(family_id, auth).await;
         }
@@ -234,8 +236,13 @@ impl super::GameState {
     }
 
     /// Tell the other online members that `player_id` did something.
-    async fn announce_to_family(&self, family_id: i64, player_id: &PlayerId, what: &str) {
-        let name = self.player_name_of(player_id).await;
+    async fn announce_to_family(
+        &self,
+        family_id: i64,
+        player_id: &PlayerId,
+        name: &str,
+        what: &str,
+    ) {
         let others: Vec<PlayerId> = self.families.read().await.online(family_id);
         for member in others.iter().filter(|id| *id != player_id) {
             self.family_note(member, format!("{name} {what}")).await;

@@ -530,6 +530,7 @@ fn party_vitals_keep_member_hp_exact() {
         hp,
         max_hp: 20,
         class: player.class.clone(),
+        family: None,
     };
     s.push_event(ServerMessage::PartyState {
         leader_id: me.id,

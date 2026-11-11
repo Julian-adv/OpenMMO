@@ -1927,14 +1927,17 @@ impl AuthService {
         Ok(found)
     }
 
-    /// One character's friends as (id, name, level). The join is what makes
-    /// storing ids affordable: offline friends still have a name to show.
+    /// One character's friends as (id, name, level, class, family). The join
+    /// is what makes storing ids affordable: offline friends still have a
+    /// name and family to show.
     pub fn load_friends(&self, character_id: i64) -> Result<Vec<FriendEntry>, AuthError> {
         let conn = self.open_connection()?;
         let mut stmt = conn.prepare(
-            "SELECT c.id, c.character_name, c.level, c.class
+            "SELECT c.id, c.character_name, c.level, c.class, fam.name
              FROM character_friends f
              JOIN characters c ON c.id = f.friend_id
+             LEFT JOIN family_members m ON m.character_id = c.id
+             LEFT JOIN families fam ON fam.id = m.family_id
              WHERE f.character_id = ?1",
         )?;
         let friends = stmt
@@ -1944,6 +1947,7 @@ impl AuthService {
                     name: row.get(1)?,
                     level: row.get(2)?,
                     class: class_from_row(row, 3)?,
+                    family: row.get(4)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;

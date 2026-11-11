@@ -10,6 +10,7 @@ export interface PartyMemberEntry {
   hp: number
   max_hp: number
   class: CharacterClass
+  family?: string | null
 }
 
 /** The player's party roster, driven by PartyState snapshots; null when not

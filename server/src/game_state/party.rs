@@ -719,9 +719,11 @@ impl super::GameState {
         if message.trim().is_empty() {
             return;
         }
-        let Some(sender_name) = ({
+        let Some((sender_name, from_family)) = ({
             let players = self.players.read().await;
-            players.get(player_id).map(|p| p.name.clone())
+            players
+                .get(player_id)
+                .map(|p| (p.name.clone(), p.family.clone()))
         }) else {
             warn!("Party chat from non-existent player: {}", player_id);
             return;
@@ -751,6 +753,7 @@ impl super::GameState {
             ServerMessage::PartyChatMessage {
                 from: sender_name,
                 message,
+                from_family,
             },
         )
         .await;
@@ -1149,6 +1152,7 @@ impl super::GameState {
                         hp: p.health,
                         max_hp: p.max_health,
                         class: p.class.clone(),
+                        family: p.family.clone(),
                     })
                 })
                 .collect()

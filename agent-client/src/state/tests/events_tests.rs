@@ -594,6 +594,8 @@ fn whispers_stay_urgent_and_background_chat_wakes_as_routine() {
         from: "Guest".into(),
         to: "Miriel".into(),
         message: "Two please".into(),
+        from_family: None,
+        to_family: None,
     });
     assert_eq!(s.take_wake_urgency(), EventUrgency::Urgent);
     assert!(s

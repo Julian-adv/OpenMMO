@@ -1282,7 +1282,7 @@ async fn party_chat_reaches_every_member_with_sender_echo() {
         .await;
     for rx in [&mut alice_rx, &mut bob_rx, &mut carol_rx] {
         match rx.try_recv() {
-            Ok(ServerMessage::PartyChatMessage { from, message }) => {
+            Ok(ServerMessage::PartyChatMessage { from, message, .. }) => {
                 assert_eq!(from, "bob");
                 assert_eq!(message, "to the dungeon!");
             }
@@ -1399,7 +1399,7 @@ async fn typed_party_chat_routes_to_the_party_and_not_to_a_bystander() {
         .await;
     for rx in [&mut alice_rx, &mut bob_rx] {
         match rx.try_recv() {
-            Ok(ServerMessage::PartyChatMessage { from, message }) => {
+            Ok(ServerMessage::PartyChatMessage { from, message, .. }) => {
                 assert_eq!(from, "bob");
                 assert_eq!(message, "meet at the west gate");
             }

@@ -46,6 +46,36 @@ describe('applyFriendsOnline', () => {
     expect(get(onlineFriends).get(1)).toBe(15)
   })
 
+  it('writes the live family into the roster, where it stays after logoff', () => {
+    applyFriendList([
+      { ...roster[0], family: 'Ironwood' },
+      { ...roster[1], family: 'Ash' },
+    ])
+    applyFriendsOnline(
+      [
+        { character_id: 1, level: 12, family: 'Oakheart' },
+        { character_id: 2, level: 8, family: null },
+      ],
+      get(friendList)
+    )
+    expect(get(friendList).map((f) => f.family)).toEqual(['Oakheart', null])
+    applyFriendsOnline([], get(friendList))
+    expect(get(friendList).map((f) => f.family)).toEqual(['Oakheart', null])
+  })
+
+  it('leaves the roster untouched when no family changed', () => {
+    applyFriendList([{ ...roster[0], family: 'Ironwood' }, roster[1]])
+    const before = get(friendList)
+    applyFriendsOnline(
+      [
+        { character_id: 1, level: 13, family: 'Ironwood' },
+        { character_id: 2, level: 8 },
+      ],
+      before
+    )
+    expect(get(friendList)).toBe(before)
+  })
+
   it('treats absence as offline', () => {
     applyFriendsOnline([{ character_id: 1, level: 12 }], roster)
     applyFriendsOnline([], roster)
