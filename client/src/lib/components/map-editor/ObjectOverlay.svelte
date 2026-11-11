@@ -63,7 +63,12 @@
   } from '../../stores/fieldBossWakeStore'
   import { getObjectModelPath } from '../../utils/modelPaths'
   import { createSelectionBox } from '../../utils/objectSelectionBox'
-  import { doorwayOf, isInsideShelter } from '../../utils/shelter'
+  import {
+    boxesOccludePoint,
+    doorwayOf,
+    isInsideShelter,
+    type OccluderBox,
+  } from '../../utils/shelter'
   import {
     objectDoorId,
     openDoors,
@@ -345,6 +350,35 @@
   })
   /** Radians per second; tall leaves swing slower than house doors. */
   const DOOR_SWING_SPEED = 2
+  const occluders = $derived(
+    placements.flatMap((placement) => {
+      const def = objectDefsById.get(placement.type)
+      const clone = cloneById.get(placement.id)
+      if (!def?.ground || !def.perimeter || !clone) return []
+      const { width, depth, height } = def.perimeter
+      const boxes: OccluderBox[] = [
+        {
+          x: [-width / 2, width / 2],
+          z: [-depth / 2, depth / 2],
+          height: def.roofHeight ?? height,
+        },
+        ...(def.blocks ?? []).map((b) => ({
+          x: b.x,
+          z: b.z,
+          height: b.height ?? height,
+        })),
+      ]
+      return [
+        {
+          placement,
+          perimeter: def.perimeter,
+          boxes,
+          clone,
+          ground: def.ground,
+        },
+      ]
+    })
+  )
   const isEditing = () => isEditorMode && tool === 'object'
 
   // Keep shared fire materials outside the model group's rebuild/disposal sweep.
@@ -420,6 +454,19 @@
     for (const { placement, perimeter, panel } of shelters) {
       panel.visible =
         !debugInfo || !isInsideShelter(debugInfo.position, placement, perimeter)
+    }
+    for (const { placement, perimeter, boxes, clone, ground } of occluders) {
+      const hidden =
+        !!debugInfo &&
+        !isEditing() &&
+        !isInsideShelter(debugInfo.position, placement, perimeter) &&
+        boxesOccludePoint(debugInfo.position, placement, boxes)
+      if (hidden === (clone.userData.viewBlocked ?? false)) continue
+      clone.userData.viewBlocked = hidden
+      clone.traverse((child) => {
+        if (child instanceof THREE.Mesh)
+          child.visible = !hidden || child.name === ground
+      })
     }
     for (const { id, leaves } of swingDoors) {
       const open = openDoorIds.has(

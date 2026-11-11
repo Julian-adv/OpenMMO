@@ -24,9 +24,11 @@
       "entranceWidth": 3.8
     },
     "cutaway": "hall_front",
+    "ground": "hall_back__flagstone",
+    "roofHeight": 13,
     "blocks": [
-      { "x": [-11.1, -6.6], "z": [4.6, 9.1] },
-      { "x": [-4.6, 4.6], "z": [-14.7, -9.1] }
+      { "x": [-11.1, -6.6], "z": [4.6, 9.1], "height": 26 },
+      { "x": [-4.6, 4.6], "z": [-14.7, -9.1], "height": 9.5 }
     ],
     "swingDoor": {
       "leaves": [

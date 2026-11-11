@@ -142,7 +142,11 @@ export interface ObjectDef {
   /** Node hidden while the viewer stands inside `perimeter`. */
   cutaway?: string
   /** Solid local rectangles outside `perimeter`; collision reads them in shared Rust. */
-  blocks?: { x: [number, number]; z: [number, number] }[]
+  blocks?: { x: [number, number]; z: [number, number]; height?: number }[]
+  /** Mesh kept while the object hides for blocking the view of the player;
+   *  `roofHeight` is the height of the `perimeter` volume for that test. */
+  ground?: string
+  roofHeight?: number
   /** Leaves of a door across the `perimeter` entrance; the server holds its state. */
   swingDoor?: { leaves: { node: string; openDeg: number }[] }
   /** Ground support area, leveled at local Y=0 on ground-floor placement. */
