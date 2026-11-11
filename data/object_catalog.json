@@ -13,6 +13,19 @@
     "cutaway": "tent_front"
   },
   {
+    "id": "union_hall",
+    "name": "가문 혼약 예식장",
+    "model": "objects/union_hall.glb",
+    "foundation": { "width": 23, "depth": 30 },
+    "perimeter": {
+      "width": 12,
+      "depth": 17,
+      "height": 9,
+      "entranceWidth": 3.8
+    },
+    "cutaway": "hall_front"
+  },
+  {
     "id": "ysolde_field_cot",
     "name": "낮은 야전침대",
     "model": "objects/ysolde_field_cot.glb",

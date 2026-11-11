@@ -89,6 +89,15 @@ white-cloud.jpg도 같은 폴더의 원본(5964px)을 2048px q85로 줄인 것.
 - sea foam https://www.filterforge.com/filters/13843.html — 수면 및 나룻배의 항적·노 물보라에 사용 (`textures/13843.png`, water-foam-gen.ts, effects/boat-water.ts)
 - waternormals (Three.js examples) https://github.com/mrdoob/three.js/tree/dev/examples/textures — 물 표면 노멀맵으로 사용 중 (`textures/waternormals.jpg`, scene-init.ts)
 
+## Union Hall / 가문 혼약 예식장 (2026-11-11)
+
+- 원화: [union-hall-concept-v2.png](../images/props/union-hall-concept-v2.png), 1536×1024 PNG. 가문 합병 의식용 건물이며 사용자 확정 2026-11-11. OpenAI Codex built-in ImageGen, **ChatGPT Pro 20x**, 생성 2026-11-11. 외부 참조 이미지 없이 생성했으며 OpenAI 생성 출력물 이용 조건 적용. 밝은 석회암 벽, 슬레이트 박공지붕, 버트레스 5구간, 4단 석조 종탑. 장미창과 첨탑 끝의 맞물린 두 고리는 두 가문의 결합을 뜻한다. 목표 크기는 폭 12m·깊이 22m·처마 9m·용마루 15m·종탑 26m. [프롬프트·해시](../../assets/props/union-hall/concept-source-v2.json).
+- 분리 구성: 텐트와 같은 `perimeter`·`cutaway` 방식. 실내에서 남는 후면부는 바닥·먼 쪽 긴 벽 안쪽 면·제단부 끝벽, 숨는 전면부는 지붕·정면 박공·가까운 쪽 긴 벽이다. 좌석·제단·깃발은 별도 오브젝트로 둔다.
+- 후면부 원화: [union-hall-back-concept-v1.png](../images/props/union-hall-back-concept-v1.png), 1536×1024 PNG. v2 원화를 참조로 붙여 같은 내장 ImageGen·**ChatGPT Pro 20x**로 생성, 같은 이용 조건. 전면부는 v2 외관을 디자인으로 쓴다. [프롬프트·해시·파트 구성](../../assets/props/union-hall/split-concepts-v1.json).
+- 직접 모델링 v1(2026-11-11, 사용자 결정): Tripo 대신 Blender 5.2 Python 형상에 타일링 재질을 입혔다. 생성형 3D 도구는 쓰지 않았다. 본당 12×17m·처마 9m·용마루 15m, 제단부 8×5m, 종탑 4.5m 각·첨탑 끝 26m, 정문 폭 3.8m·높이 5.7m. 삼각형 10,154개(`hall_back` 3,448·`hall_front` 4,696·`hall_tower` 2,010), GLB 1,026,288바이트. 재질은 기존 하우징의 Poly Haven CC0 텍스처(marble_01·medieval_blocks_03·grey_roof_tiles_02·dark_wooden_planks)와 직접 만든 납틀 유리 텍스처다. marble_01·grey_roof_tiles_02는 ORM의 금속 채널이 0.5라 고정 거칠기·금속 0으로 바꿨다. 렌더: [외관](../images/props/union-hall-model/exterior.png)·[기본 확대 실내](../images/props/union-hall-model/game-zoom1-indoors.png). [소스·해시·남은 문제](../../assets/props/union-hall/model/sources.json).
+- 배치 제약: 입구는 서향(회전 270) 전용이며 남향으로 놓으려면 좌우를 뒤집은 모델이 필요하다. `perimeter`가 평평한 직사각형 하나라 본당 12×17m만 걸을 수 있고 제단부는 배경이다. 노드는 `hall_back`·`hall_tower`(실내 유지)와 `hall_front`(숨김)이다.
+- 설치 상태(2026-11-11): `client/public/models/objects/union_hall.glb`(로컬, HF·`assets.lock` 미등록), `object_catalog.json`의 `union_hall`(foundation 23×30m, perimeter 12×17×9m·입구 3.8m, cutaway `hall_front`). 개발 월드 가구점 옆에 배치해 재질과 실내 숨김을 확인했다. 벽 통과와 프레임 저하가 남아 있다.
+
 ## Ysolde's Excavation Tent / 이졸데의 발굴 야영 텐트 (2026-10-24)
 
 - 원화 초안: [ysolde-tent-concept.png](../images/props/ysolde-tent-concept.png), 1536×1024 PNG. 이졸데의 현재 위치 근처에 놓을 소형 거주 텐트의 초기 디자인 검토용이다.
