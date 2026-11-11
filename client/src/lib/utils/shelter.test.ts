@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Vector3 } from 'three'
-import { isInsideShelter, normalizeYaw } from './shelter'
+import { doorwayOf, isInsideShelter, normalizeYaw } from './shelter'
 import type { ObjectPlacement } from '../stores/editorStore'
 import { WORLD_WIDTH_X } from '../terrain/world-wrap'
 
@@ -58,5 +58,29 @@ describe('rotated tent cutaway', () => {
         perimeter
       )
     ).toBe(true)
+  })
+})
+
+describe('object doorway', () => {
+  it('spans the entrance of a west-facing hall', () => {
+    const hall: ObjectPlacement = {
+      id: 121,
+      type: 'union_hall',
+      x: -1445,
+      y: 1,
+      z: 4797,
+      rotation: 270,
+      floorLevel: 0,
+    }
+    const door = doorwayOf(hall, {
+      width: 12,
+      depth: 17,
+      height: 9,
+      entranceWidth: 3.8,
+    })
+    expect((door.ax + door.bx) / 2).toBeCloseTo(-1453.5)
+    expect((door.az + door.bz) / 2).toBeCloseTo(4797)
+    expect(Math.abs(door.az - door.bz)).toBeCloseTo(3.8)
+    expect(door.ax).toBeCloseTo(door.bx)
   })
 })

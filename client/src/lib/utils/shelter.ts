@@ -6,6 +6,24 @@ export function normalizeYaw(yaw: number): number {
   return ((yaw % 360) + 360) % 360
 }
 
+/** World segment across the entrance, as the server's `shelter::doorway`. */
+export function doorwayOf(
+  placement: ObjectPlacement,
+  perimeter: NonNullable<ObjectDef['perimeter']>
+): { ax: number; az: number; bx: number; bz: number } {
+  const yaw = (placement.rotation * Math.PI) / 180
+  const cos = Math.cos(yaw)
+  const sin = Math.sin(yaw)
+  const hw = perimeter.entranceWidth / 2
+  const hd = perimeter.depth / 2
+  return {
+    ax: placement.x - hw * cos + hd * sin,
+    az: placement.z + hw * sin + hd * cos,
+    bx: placement.x + hw * cos + hd * sin,
+    bz: placement.z - hw * sin + hd * cos,
+  }
+}
+
 export function isInsideShelter(
   point: Position,
   placement: ObjectPlacement,

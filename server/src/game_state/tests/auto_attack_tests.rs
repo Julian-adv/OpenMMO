@@ -516,6 +516,7 @@ async fn standing_up_from_a_bed_to_attack_keeps_the_auto_attack() {
             z: bed.z,
             rotation_deg: 0.0,
             floor_level: 0,
+            door_open: false,
         }],
     );
     tokio::time::advance(std::time::Duration::from_secs(26)).await;

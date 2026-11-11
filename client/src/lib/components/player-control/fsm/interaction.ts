@@ -186,6 +186,8 @@ interface HandleInteractKeyInput {
     y: number,
     range: number
   ) => DoorToggleTarget | null
+  /** Placed-object door within reach, tried when no house door is. */
+  toggleNearestObjectDoor?: (position: Position, range: number) => boolean
   sendToggleDoor: (
     houseId: string,
     roomIndex: number,
@@ -199,6 +201,7 @@ export function handleInteractKey({
   consumeInteract,
   findNearestDoor,
   sendToggleDoor,
+  toggleNearestObjectDoor,
 }: HandleInteractKeyInput): boolean {
   if (!currentPlayer || currentPlayer.health <= 0) return false
   if (!consumeInteract()) return false
@@ -209,7 +212,9 @@ export function handleInteractKey({
     currentPlayer.position.y,
     2.0
   )
-  if (!door) return false
+  if (!door) {
+    return toggleNearestObjectDoor?.(currentPlayer.position, 2.0) ?? false
+  }
 
   sendToggleDoor(door.houseId, door.roomIndex, door.wallDir, door.segmentIndex)
   return true

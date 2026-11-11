@@ -141,6 +141,10 @@ export interface ObjectDef {
   model?: string
   /** Node hidden while the viewer stands inside `perimeter`. */
   cutaway?: string
+  /** Solid local rectangles outside `perimeter`; collision reads them in shared Rust. */
+  blocks?: { x: [number, number]; z: [number, number] }[]
+  /** Leaves of a door across the `perimeter` entrance; the server holds its state. */
+  swingDoor?: { leaves: { node: string; openDeg: number }[] }
   /** Ground support area, leveled at local Y=0 on ground-floor placement. */
   foundation?: { width: number; depth: number }
   perimeter?: {
@@ -200,6 +204,8 @@ export interface ObjectPlacement {
   floorLevel: number
   /** Per-instance text shown as a speech bubble on hover (textLabel objects). */
   text?: string
+  /** Live `swingDoor` state for collision; never saved. */
+  doorOpen?: boolean
   /** Placed by the server from data-src/field_bosses.csv; not editable. */
   fixed?: boolean
 }

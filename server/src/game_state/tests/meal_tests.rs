@@ -15,6 +15,7 @@ fn placement(id: u32, type_id: &str, x: f32, z: f32, rotation_deg: f32) -> Furni
         z,
         rotation_deg,
         floor_level: 0,
+        door_open: false,
     }
 }
 

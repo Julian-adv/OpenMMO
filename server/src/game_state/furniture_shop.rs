@@ -260,6 +260,7 @@ mod tests {
             z: (SHOP.bounds[1] + SHOP.bounds[3]) / 2.0,
             rotation_deg: 0.0,
             floor_level: 1,
+            door_open: false,
         };
         let displays = [display];
         assert!(find_display(&displays, product.display_ids[0], product).is_some());

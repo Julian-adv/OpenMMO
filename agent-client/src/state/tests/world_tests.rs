@@ -79,6 +79,7 @@ fn walkable_near_steps_off_sealed_furniture() {
         z: 10.5,
         rotation_deg: 0.0,
         floor_level: 0,
+        door_open: false,
     };
     s.world_cache
         .write()

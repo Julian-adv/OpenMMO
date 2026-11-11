@@ -239,6 +239,7 @@ mod monster;
 mod monster_ai;
 mod mounts;
 mod notice_board;
+mod object_door;
 mod party;
 mod passability;
 mod passability_snapshot;
@@ -481,6 +482,9 @@ pub struct GameState {
     respawn_beds: Arc<std::sync::RwLock<Vec<onlinerpg_shared::furniture::FurniturePlacement>>>,
     beds: Arc<std::sync::RwLock<bed_rest::BedIndex>>,
     interaction_furniture: Arc<std::sync::RwLock<player_interaction::FurnitureIndex>>,
+    /// Open `swingDoor` objects by (region x, region z, placement id). A leaf:
+    /// never held across an await or together with another lock.
+    open_object_doors: Arc<std::sync::RwLock<HashSet<(i32, i32, u32)>>>,
     notice_cooldowns: Arc<std::sync::Mutex<notice_board::NoticeCooldowns>>,
     mail_cooldowns: Arc<std::sync::Mutex<mail::MailCooldowns>>,
     notice_papers: Arc<std::sync::Mutex<notice_board::NoticePaperCache>>,
@@ -827,6 +831,7 @@ impl GameState {
             respawn_beds: Arc::new(std::sync::RwLock::new(Vec::new())),
             beds: Arc::new(std::sync::RwLock::new(HashMap::new())),
             interaction_furniture: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            open_object_doors: Arc::new(std::sync::RwLock::new(HashSet::new())),
             notice_cooldowns: Arc::default(),
             mail_cooldowns: Arc::default(),
             notice_papers: Arc::default(),

@@ -2078,6 +2078,12 @@ pub enum ServerMessage {
         segment_index: u32,
         is_open: bool,
     },
+    /// Live state of a door addressed by one id; `object:{rx}:{rz}:{id}` for
+    /// a placed object. Shut until told otherwise.
+    DoorState {
+        door: String,
+        is_open: bool,
+    },
     /// Sent once on join: full inventory state.
     InventoryState {
         inventory: inventory::PlayerInventory,
@@ -2532,6 +2538,7 @@ impl ServerMessage {
     pub fn delivery_class(&self) -> DeliveryClass {
         match self {
             Self::DungeonDoorState { .. }
+            | Self::DoorState { .. }
             | Self::DungeonPropState { .. }
             | Self::PlayerJoined { .. }
             | Self::PlayerLeft { .. }

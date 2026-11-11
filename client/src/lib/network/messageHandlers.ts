@@ -113,6 +113,7 @@ import { bridgeManager } from '../managers/bridgeManager'
 import { objectManager } from '../managers/objectManager'
 import { groundItemManager } from '../managers/groundItemManager'
 import { cartRollSpeed, dungeonManager } from '../managers/dungeonManager'
+import { setDoorState } from '../stores/objectDoorStore'
 import { recordCartPush } from '../stores/cartPushStore'
 import { queueXpArrival, releaseXpArrival } from '../managers/xpArrival'
 import {
@@ -2360,6 +2361,10 @@ export function handleServerMessage(
         data.door_id,
         data.is_open
       )
+      break
+
+    case 'DoorState':
+      setDoorState(data.door, data.is_open)
       break
 
     case 'DungeonDoorState':

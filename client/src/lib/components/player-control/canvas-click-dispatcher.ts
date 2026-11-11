@@ -17,6 +17,7 @@ type MealIntent = Extract<ClickIntent, { type: 'meal' }>
 type AltarIntent = Extract<ClickIntent, { type: 'altar' }>
 type NoticeBoardIntent = Extract<ClickIntent, { type: 'notice_board' }>
 type MailboxIntent = Extract<ClickIntent, { type: 'mailbox' }>
+type ObjectDoorIntent = Extract<ClickIntent, { type: 'object_door' }>
 
 export interface CanvasClickActions {
   /** Player is within the weapon's reach — attack immediately. */
@@ -59,6 +60,7 @@ export interface CanvasClickActions {
   inspectAltar(intent: AltarIntent): void
   openNoticeBoard(intent: NoticeBoardIntent): void
   openMailbox(intent: MailboxIntent): void
+  toggleObjectDoor(intent: ObjectDoorIntent): void
 }
 
 /** `attackRange` is the equipped weapon's reach (`weaponRangeMeters`), so a
@@ -133,6 +135,9 @@ export function dispatchCanvasClickIntent(
       return
     case 'mailbox':
       actions.openMailbox(intent)
+      return
+    case 'object_door':
+      actions.toggleObjectDoor(intent)
       return
     case 'none':
       return

@@ -195,6 +195,9 @@ pub struct FurniturePlacement {
     pub rotation_deg: f32,
     #[serde(default)]
     pub floor_level: u8,
+    /// Live state of a `swingDoor` object; region files never hold it.
+    #[serde(default)]
+    pub door_open: bool,
 }
 
 pub fn placements_overlap(first: &FurniturePlacement, second: &FurniturePlacement) -> bool {
@@ -445,6 +448,7 @@ mod tests {
             z: 3.0,
             rotation_deg,
             floor_level,
+            door_open: false,
         };
         let placed = chest(1, 3.0, 0.0, 0);
 

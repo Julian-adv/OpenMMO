@@ -83,7 +83,11 @@ const STAIR_CLICK_RAY_OFFSETS = [
 ]
 
 /** Catalog objects whose click opens a dialog; set as `userData.objectClickKind`. */
-export type ObjectClickKind = 'altar' | 'notice_board' | 'mailbox'
+export type ObjectClickKind =
+  | 'altar'
+  | 'notice_board'
+  | 'mailbox'
+  | 'object_door'
 
 export type ClickIntent =
   | {
@@ -134,6 +138,11 @@ export type ClickIntent =
     }
   | {
       type: 'mailbox'
+      objectId: number
+      position: Position
+    }
+  | {
+      type: 'object_door'
       objectId: number
       position: Position
     }
@@ -609,7 +618,7 @@ class InputHandler {
             return {
               type: d.objectClickKind as ObjectClickKind,
               objectId: d.objectId as number,
-              position: {
+              position: (d.clickPosition as Position | undefined) ?? {
                 x: obj.position.x,
                 y: obj.position.y,
                 z: obj.position.z,

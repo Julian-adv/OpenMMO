@@ -415,6 +415,7 @@ impl super::GameState {
                 index.insert((rx, rz), placements.to_vec());
             }
         }
+        self.prune_object_doors(rx, rz, placements);
         self.sync_region_bridges(rx, rz, placements);
         self.sync_respawn_beds(rx, rz, placements);
         self.sync_beds(rx, rz, placements);
@@ -430,7 +431,7 @@ impl super::GameState {
         placements: &[FurniturePlacement],
     ) -> bool {
         let key = furniture::region_cache_key(rx, rz);
-        let solid = self.without_woken_stand_in(placements);
+        let solid = self.with_object_door_state(rx, rz, self.without_woken_stand_in(placements));
         let mut cache = self.passability_write();
         furniture::sync_passability(&mut cache, &key, &solid)
     }

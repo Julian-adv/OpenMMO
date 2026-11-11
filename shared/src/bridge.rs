@@ -163,6 +163,7 @@ mod tests {
             z,
             rotation_deg,
             floor_level: 0,
+            door_open: false,
         }
     }
 

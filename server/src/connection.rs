@@ -1995,9 +1995,13 @@ async fn handle_client_message(
             object_id,
         } => {
             if let Some(id) = &state.require_in_game("interact object") {
-                game_state
-                    .set_player_interaction(id, Some(object_type), Some(object_id))
-                    .await;
+                if object_type == "door" {
+                    game_state.toggle_object_door(id, object_id).await;
+                } else {
+                    game_state
+                        .set_player_interaction(id, Some(object_type), Some(object_id))
+                        .await;
+                }
             }
         }
 

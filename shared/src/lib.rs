@@ -277,7 +277,7 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// party chat (`PartyChatMessage.from_family`), party rosters
 /// (`PartyMember.family`) and friends
 /// (`FriendEntry.family`, `OnlineFriend.family`).
-pub const PROTOCOL_VERSION: u32 = 148;
+pub const PROTOCOL_VERSION: u32 = 149;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

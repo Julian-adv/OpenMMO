@@ -60,3 +60,8 @@ export const STALL_TRADE_APPROACH = reach(STALL_TRADE_RANGE_METERS)
 /** Inside INTERACTION_RANGE + 0.5 (field_raid.rs), measured from the altar's
  *  centre; stops clear of its 0.8 m half-width. */
 export const ALTAR_APPROACH: ApproachRange = { range: 2.5, stopShort: 1.7 }
+/** Measured to the doorway centre; the server allows 2 m to its span. */
+export const OBJECT_DOOR_APPROACH: ApproachRange = {
+  range: 1.9,
+  stopShort: 1.2,
+}

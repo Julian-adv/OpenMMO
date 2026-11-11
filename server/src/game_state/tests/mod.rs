@@ -50,6 +50,7 @@ mod monster_lifecycle_tests;
 mod mount_tests;
 mod movement_tests;
 mod notice_board_tests;
+mod object_door_tests;
 mod party_tests;
 mod persistence_tests;
 mod petrify_tests;
@@ -397,6 +398,7 @@ fn stone_bridge(x: f32, y: f32, z: f32) -> onlinerpg_shared::furniture::Furnitur
         z,
         rotation_deg: 90.0,
         floor_level: 0,
+        door_open: false,
     }
 }
 
@@ -409,6 +411,7 @@ fn table_placement(x: f32, z: f32) -> onlinerpg_shared::furniture::FurniturePlac
         z,
         rotation_deg: 0.0,
         floor_level: 0,
+        door_open: false,
     }
 }
 

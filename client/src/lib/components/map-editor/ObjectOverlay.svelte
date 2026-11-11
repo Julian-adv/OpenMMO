@@ -63,7 +63,13 @@
   } from '../../stores/fieldBossWakeStore'
   import { getObjectModelPath } from '../../utils/modelPaths'
   import { createSelectionBox } from '../../utils/objectSelectionBox'
-  import { isInsideShelter } from '../../utils/shelter'
+  import { doorwayOf, isInsideShelter } from '../../utils/shelter'
+  import {
+    objectDoorId,
+    openDoors,
+    resetDoorStates,
+    setObjectDoorways,
+  } from '../../stores/objectDoorStore'
   import {
     buildShopSignBoard,
     buildShopSignText,
@@ -85,6 +91,7 @@
   let rotation = $state(0)
   let selectedType = $state<string | null>(null)
   let debugInfo = $state<PlayerDebugInfo | null>(null)
+  let openDoorIds = $state<ReadonlySet<string>>(new Set())
   let isEditorMode = $state(false)
   let currentFloor = $state(0)
   let currentHouseId = $state<string | null>(null)
@@ -110,6 +117,10 @@
     objectRotation.subscribe((v) => (rotation = v)),
     selectedObjectType.subscribe((v) => (selectedType = v)),
     playerDebugInfo.subscribe((v) => (debugInfo = v)),
+    openDoors.subscribe((v) => {
+      openDoorIds = v
+      syncFurniture(placements)
+    }),
     mapEditorMode.subscribe((v) => (isEditorMode = v)),
     playerVisualFloorLevel.subscribe((v) => (currentFloor = v)),
     playerInsideHouseId.subscribe((v) => (currentHouseId = v)),
@@ -125,6 +136,7 @@
       lastLoadedRegion = { rx: NaN, rz: NaN }
       furnitureManager.reset()
       bridgeManager.reset()
+      resetDoorStates()
       currentObjectData.set({ placements: [] })
       if (Number.isFinite(rx)) void loadRegionObject(rx, rz)
     }),
@@ -302,6 +314,37 @@
       return panel ? [{ placement, perimeter: def.perimeter, panel }] : []
     })
   )
+  const swingDoors = $derived(
+    placements.flatMap((placement) => {
+      const door = objectDefsById.get(placement.type)?.swingDoor
+      const clone = door && cloneById.get(placement.id)
+      if (!door || !clone) return []
+      const leaves = door.leaves.flatMap((leaf) => {
+        const node = clone.getObjectByName(leaf.node)
+        return node
+          ? [{ node, open: THREE.MathUtils.degToRad(leaf.openDeg) }]
+          : []
+      })
+      return leaves.length > 0 ? [{ id: placement.id, leaves }] : []
+    })
+  )
+  $effect(() => {
+    setObjectDoorways(
+      placements.flatMap((placement) => {
+        const def = objectDefsById.get(placement.type)
+        if (!def?.swingDoor || !def.perimeter) return []
+        return [
+          {
+            objectId: placement.id,
+            y: placement.y,
+            ...doorwayOf(placement, def.perimeter),
+          },
+        ]
+      })
+    )
+  })
+  /** Radians per second; tall leaves swing slower than house doors. */
+  const DOOR_SWING_SPEED = 2
   const isEditing = () => isEditorMode && tool === 'object'
 
   // Keep shared fire materials outside the model group's rebuild/disposal sweep.
@@ -377,6 +420,20 @@
     for (const { placement, perimeter, panel } of shelters) {
       panel.visible =
         !debugInfo || !isInsideShelter(debugInfo.position, placement, perimeter)
+    }
+    for (const { id, leaves } of swingDoors) {
+      const open = openDoorIds.has(
+        objectDoorId(lastLoadedRegion.rx, lastLoadedRegion.rz, id)
+      )
+      const step = (DOOR_SWING_SPEED * deltaTime) / 1000
+      for (const leaf of leaves) {
+        const target = open ? leaf.open : 0
+        const current = leaf.node.rotation.y
+        leaf.node.rotation.y =
+          current < target
+            ? Math.min(current + step, target)
+            : Math.max(current - step, target)
+      }
     }
     for (const w of takeFieldBossWakes()) startWake(w)
     for (const s of takeFieldBossSleeps()) startSleep(s)
@@ -454,7 +511,15 @@
     const solid = unsolidIds.size
       ? all.filter((p) => !unsolidIds.has(p.id))
       : all
-    furnitureManager.syncRegion(rx, rz, solid)
+    furnitureManager.syncRegion(
+      rx,
+      rz,
+      solid.map((p) =>
+        openDoorIds.has(objectDoorId(rx, rz, p.id))
+          ? { ...p, doorOpen: true }
+          : p
+      )
+    )
   }
   $effect(() => {
     const ids = wokenIds
@@ -666,6 +731,24 @@
           ? 'mailbox'
           : null
     if (clickKind) clone.userData.objectClickKind = clickKind
+    if (catDef?.swingDoor && catDef.perimeter) {
+      const door = doorwayOf(p, catDef.perimeter)
+      const clickPosition = {
+        x: (door.ax + door.bx) / 2,
+        y: p.y,
+        z: (door.az + door.bz) / 2,
+      }
+      for (const leaf of catDef.swingDoor.leaves) {
+        const node = clone.getObjectByName(leaf.node)
+        if (!node) continue
+        node.userData = {
+          ...node.userData,
+          objectId: p.id,
+          objectClickKind: 'object_door' satisfies ObjectClickKind,
+          clickPosition,
+        }
+      }
+    }
     if (catDef?.noticeBoard)
       mountNoticePapers(clone, { Village: { object_id: p.id } })
     return clone

@@ -651,6 +651,9 @@ impl SharedState {
                     if *active { *offset } else { 0 },
                 );
             }
+            ServerMessage::DoorState { ref door, is_open } => {
+                self.world_cache.write().unwrap().set_door(door, *is_open);
+            }
             ServerMessage::DungeonDoorToggled {
                 ref entrance_id,
                 depth,

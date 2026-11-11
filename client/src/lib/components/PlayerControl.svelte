@@ -128,6 +128,7 @@
     type PendingPropAction,
   } from '../managers/dungeonManager'
   import { housingManager } from '../managers/housingManager'
+  import { findNearestObjectDoor } from '../stores/objectDoorStore'
   import {
     shouldIgnoreImplicitHouseFloorChange,
     wallApproachPositions,
@@ -148,6 +149,7 @@
     PROP_APPROACH,
     CART_PUSH_APPROACH,
     ALTAR_APPROACH,
+    OBJECT_DOOR_APPROACH,
     STALL_TRADE_APPROACH,
     TIP_HAT_APPROACH,
   } from '../data/approachRanges'
@@ -882,6 +884,12 @@
       },
       findNearestDoor: (x, z, y, range) =>
         housingManager.findNearestDoor(x, z, y, range),
+      toggleNearestObjectDoor: (position, range) => {
+        const objectId = findNearestObjectDoor(position, range)
+        if (objectId == null) return false
+        networkManager.sendInteractObject('door', objectId)
+        return true
+      },
       sendToggleDoor: (houseId, roomIndex, wallDir, segmentIndex) =>
         networkManager.sendToggleDoor(
           houseId,
@@ -1733,6 +1741,13 @@
       })
     )
   }
+  function toggleObjectDoor(
+    intent: Extract<ClickIntent, { type: 'object_door' }>
+  ) {
+    approachAndAct({ position: intent.position, ...OBJECT_DOOR_APPROACH }, () =>
+      networkManager.sendInteractObject('door', intent.objectId)
+    )
+  }
   function openMailbox(intent: Extract<ClickIntent, { type: 'mailbox' }>) {
     approachAndAct({ position: intent.position, ...ALTAR_APPROACH }, () =>
       networkManager.sendOpenMailbox({
@@ -2240,6 +2255,7 @@
       inspectAltar,
       openNoticeBoard,
       openMailbox,
+      toggleObjectDoor,
       breakProp,
       mineProp,
       pushCart,

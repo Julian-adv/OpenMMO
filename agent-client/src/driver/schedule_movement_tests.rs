@@ -438,6 +438,7 @@ async fn furniture_schedule_requests_the_authored_goal_and_uses_the_server_stop(
                 z: 0.5,
                 rotation_deg: 0.0,
                 floor_level: 0,
+                door_open: false,
             }],
         );
     let task = spawn_move(

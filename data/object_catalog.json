@@ -23,7 +23,17 @@
       "height": 9,
       "entranceWidth": 3.8
     },
-    "cutaway": "hall_front"
+    "cutaway": "hall_front",
+    "blocks": [
+      { "x": [-11.1, -6.6], "z": [4.6, 9.1] },
+      { "x": [-4.6, 4.6], "z": [-14.7, -9.1] }
+    ],
+    "swingDoor": {
+      "leaves": [
+        { "node": "hall_door_l", "openDeg": 95 },
+        { "node": "hall_door_r", "openDeg": -95 }
+      ]
+    }
   },
   {
     "id": "ysolde_field_cot",

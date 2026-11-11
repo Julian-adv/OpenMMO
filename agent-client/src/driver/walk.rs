@@ -568,5 +568,17 @@ fn closed_doors_on_our_floor(s: &SharedState) -> Vec<DoorCandidate> {
             }
         }
     }
+    for (object_id, [ax, az, bx, bz]) in world.closed_object_doors(floor) {
+        let (mx, mz) = ((ax + bx) * 0.5, (az + bz) * 0.5);
+        let len = (bx - ax).hypot(bz - az).max(1e-3);
+        let (nx, nz) = ((bz - az) / len * 0.8, (ax - bx) / len * 0.8);
+        out.push(DoorCandidate {
+            toggle: ClientMessage::InteractObject {
+                object_type: "door".into(),
+                object_id,
+            },
+            sides: [(mx + nx, mz + nz), (mx - nx, mz - nz)],
+        });
+    }
     out
 }

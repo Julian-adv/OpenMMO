@@ -129,6 +129,7 @@ async fn rica_can_use_her_inn_chair_and_return_home() {
             z: 4750.187,
             rotation_deg: 0.0,
             floor_level: 0,
+            door_open: false,
         },
         FurniturePlacement {
             id: 30,
@@ -138,6 +139,7 @@ async fn rica_can_use_her_inn_chair_and_return_home() {
             z: 4753.4224,
             rotation_deg: 0.0,
             floor_level: 0,
+            door_open: false,
         },
         FurniturePlacement {
             id: 40,
@@ -147,6 +149,7 @@ async fn rica_can_use_her_inn_chair_and_return_home() {
             z: 4753.35,
             rotation_deg: 270.0,
             floor_level: 0,
+            door_open: false,
         },
         FurniturePlacement {
             id: 41,
@@ -156,6 +159,7 @@ async fn rica_can_use_her_inn_chair_and_return_home() {
             z: 4754.6,
             rotation_deg: 180.0,
             floor_level: 0,
+            door_open: false,
         },
     ];
     game.sync_region_furniture(-2, 4, &placements);
@@ -353,6 +357,7 @@ async fn a_bed_goal_stops_beside_the_bed_and_can_interact_without_relocation() {
         z: 1.5,
         rotation_deg: 90.0,
         floor_level: 0,
+        door_open: false,
     };
     game.sync_region_furniture(0, 0, std::slice::from_ref(&bed));
     let mut player = make_player("bed_walker", 1.5, 1.5);

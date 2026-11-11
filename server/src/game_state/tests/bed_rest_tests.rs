@@ -22,6 +22,7 @@ async fn sleeper(game: &GameState, kind: &str) -> PlayerId {
             z: 50.0,
             rotation_deg: 0.0,
             floor_level: 0,
+            door_open: false,
         }],
     );
     advance(Duration::from_secs(26)).await;

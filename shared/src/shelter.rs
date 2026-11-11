@@ -12,12 +12,27 @@ struct Perimeter {
     depth: f32,
     height: f32,
     entrance_width: f32,
+    #[serde(skip)]
+    door: bool,
+    #[serde(skip)]
+    blocks: Vec<Block>,
+}
+
+/// Solid local rectangle outside the perimeter, such as a tower.
+#[derive(serde::Deserialize)]
+struct Block {
+    x: [f32; 2],
+    z: [f32; 2],
 }
 
 #[derive(serde::Deserialize)]
 struct Entry {
     id: String,
     perimeter: Option<Perimeter>,
+    #[serde(rename = "swingDoor")]
+    swing_door: Option<serde::de::IgnoredAny>,
+    #[serde(default)]
+    blocks: Vec<Block>,
 }
 
 fn perimeters() -> &'static HashMap<String, Perimeter> {
@@ -26,7 +41,12 @@ fn perimeters() -> &'static HashMap<String, Perimeter> {
         serde_json::from_str::<Vec<Entry>>(include_str!("../../data/object_catalog.json"))
             .expect("object_catalog.json is malformed")
             .into_iter()
-            .filter_map(|entry| Some((entry.id, entry.perimeter?)))
+            .filter_map(|entry| {
+                let mut perimeter = entry.perimeter?;
+                perimeter.door = entry.swing_door.is_some();
+                perimeter.blocks = entry.blocks;
+                Some((entry.id, perimeter))
+            })
             .collect()
     })
 }
@@ -42,12 +62,32 @@ fn grid(placement: &FurniturePlacement, perimeter: &Perimeter) -> Option<Runtime
         return None;
     }
     let (sin, cos) = placement.rotation_deg.to_radians().sin_cos();
-    let ex = hw * cos.abs() + hd * sin.abs();
-    let ez = hw * sin.abs() + hd * cos.abs();
-    let min_x = (placement.x - ex).floor() as i32 - 1;
-    let min_z = (placement.z - ez).floor() as i32 - 1;
-    let width = (placement.x + ex).ceil() as i32 + 1 - min_x;
-    let depth = (placement.z + ez).ceil() as i32 + 1 - min_z;
+    let blocks = &perimeter.blocks;
+    let (mut x0, mut x1, mut z0, mut z1) = (-hw, hw, -hd, hd);
+    for block in blocks {
+        x0 = x0.min(block.x[0]);
+        x1 = x1.max(block.x[1]);
+        z0 = z0.min(block.z[0]);
+        z1 = z1.max(block.z[1]);
+    }
+    let corners = [(x0, z0), (x0, z1), (x1, z0), (x1, z1)].map(|(x, z)| {
+        (
+            placement.x + x * cos + z * sin,
+            placement.z - x * sin + z * cos,
+        )
+    });
+    let span = |pick: fn(&(f32, f32)) -> f32| {
+        let values = corners.iter().map(pick);
+        (
+            values.clone().fold(f32::INFINITY, f32::min),
+            values.fold(f32::NEG_INFINITY, f32::max),
+        )
+    };
+    let ((wx0, wx1), (wz0, wz1)) = (span(|c| c.0), span(|c| c.1));
+    let min_x = wx0.floor() as i32 - 1;
+    let min_z = wz0.floor() as i32 - 1;
+    let width = wx1.ceil() as i32 + 1 - min_x;
+    let depth = wz1.ceil() as i32 + 1 - min_z;
     if width <= 0 || depth <= 0 || width > 255 || depth > 255 {
         return None;
     }
@@ -57,11 +97,30 @@ fn grid(placement: &FurniturePlacement, perimeter: &Perimeter) -> Option<Runtime
         (dx * cos - dz * sin, dx * sin + dz * cos)
     };
     let inside = |x: f32, z: f32| x.abs() < hw && z.abs() < hd;
+    let blocked = |x: f32, z: f32| {
+        blocks
+            .iter()
+            .any(|b| x > b.x[0] && x < b.x[1] && z > b.z[0] && z < b.z[1])
+    };
     let mut cells = vec![0; (width * depth) as usize];
     for z in 1..depth - 1 {
         for x in 1..width - 1 {
             let (lx, lz) = local(min_x + x, min_z + z);
             if !inside(lx, lz) {
+                if blocked(lx, lz) {
+                    for (dx, dz, edge, opposite) in [
+                        (1, 0, EDGE_E, EDGE_W),
+                        (-1, 0, EDGE_W, EDGE_E),
+                        (0, 1, EDGE_S, EDGE_N),
+                        (0, -1, EDGE_N, EDGE_S),
+                    ] {
+                        let (nx, nz) = local(min_x + x + dx, min_z + z + dz);
+                        if !blocked(nx, nz) {
+                            cells[(x + z * width) as usize] |= edge;
+                            cells[(x + dx + (z + dz) * width) as usize] |= opposite;
+                        }
+                    }
+                }
                 continue;
             }
             for (dx, dz, edge, opposite) in [
@@ -90,6 +149,7 @@ fn grid(placement: &FurniturePlacement, perimeter: &Perimeter) -> Option<Runtime
                 if front_t <= 1.0
                     && front_t < side_t
                     && entrance_x.abs() < perimeter.entrance_width / 2.0
+                    && (!perimeter.door || placement.door_open)
                 {
                     continue;
                 }
@@ -108,6 +168,21 @@ fn grid(placement: &FurniturePlacement, perimeter: &Perimeter) -> Option<Runtime
         wall_height: perimeter.height,
         cells,
     })
+}
+
+/// World segment `[ax, az, bx, bz]` across the entrance of a door object.
+pub fn doorway(placement: &FurniturePlacement) -> Option<[f32; 4]> {
+    let perimeter = perimeters().get(&placement.type_id).filter(|p| p.door)?;
+    let (sin, cos) = placement.rotation_deg.to_radians().sin_cos();
+    let (hw, hd) = (perimeter.entrance_width / 2.0, perimeter.depth / 2.0);
+    let world = |x: f32| {
+        (
+            placement.x + x * cos + hd * sin,
+            placement.z - x * sin + hd * cos,
+        )
+    };
+    let ((ax, az), (bx, bz)) = (world(-hw), world(hw));
+    Some([ax, az, bx, bz])
 }
 
 pub fn build_passability(placements: &[FurniturePlacement]) -> Option<RuntimePassability> {
@@ -164,6 +239,7 @@ mod tests {
             z,
             rotation_deg: yaw,
             floor_level: 0,
+            door_open: false,
         }
     }
 
@@ -225,15 +301,29 @@ mod tests {
     }
 
     #[test]
-    fn union_hall_walls_block_and_portal_opens() {
+    fn union_hall_walls_block_and_door_gates_the_portal() {
         let p = FurniturePlacement {
             id: 121,
             type_id: "union_hall".into(),
             x: -1445.0658,
             y: 1.0128,
-            z: 4797.3719,
+            z: 4797.372,
             rotation_deg: 270.0,
             floor_level: 0,
+            door_open: false,
+        };
+        let (x0, z0) = world(&p, 0.0, 7.5);
+        let (x1, z1) = world(&p, 0.0, 9.5);
+        let shut = cache(&p);
+        assert!(is_movement_blocked(&shut, x0, z0, x1, z1, 0, Some(p.y)));
+        assert!(is_movement_blocked(&shut, x1, z1, x0, z0, 0, Some(p.y)));
+        let [ax, az, bx, bz] = doorway(&p).unwrap();
+        let (mx, mz) = world(&p, 0.0, 8.5);
+        assert!(((ax + bx) / 2.0 - mx).abs() < 1e-3 && ((az + bz) / 2.0 - mz).abs() < 1e-3);
+        assert!(((ax - bx).hypot(az - bz) - 3.8).abs() < 1e-3);
+        let p = FurniturePlacement {
+            door_open: true,
+            ..p
         };
         let cache = cache(&p);
         for (ax, az, bx, bz) in [
@@ -253,10 +343,55 @@ mod tests {
                 "in {ax},{az}"
             );
         }
-        let (x0, z0) = world(&p, 0.0, 7.5);
-        let (x1, z1) = world(&p, 0.0, 9.5);
         assert!(!is_movement_blocked(&cache, x0, z0, x1, z1, 0, Some(p.y)));
         assert!(!is_movement_blocked(&cache, x1, z1, x0, z0, 0, Some(p.y)));
+    }
+
+    #[test]
+    fn union_hall_tower_and_chancel_are_solid() {
+        for yaw in [0.0, 90.0, 270.0] {
+            let p = FurniturePlacement {
+                id: 121,
+                type_id: "union_hall".into(),
+                x: -1445.0658,
+                y: 1.0128,
+                z: 4797.372,
+                rotation_deg: yaw,
+                floor_level: 0,
+                door_open: false,
+            };
+            let cache = cache(&p);
+            let crosses = |a: (f32, f32), b: (f32, f32)| {
+                let (x0, z0) = world(&p, a.0, a.1);
+                let (x1, z1) = world(&p, b.0, b.1);
+                is_movement_blocked(&cache, x0, z0, x1, z1, 0, Some(p.y))
+            };
+            assert!(crosses((-13.0, 7.0), (-9.0, 7.0)), "into tower, yaw {yaw}");
+            assert!(
+                crosses((-9.0, 11.0), (-9.0, 7.0)),
+                "into tower front, yaw {yaw}"
+            );
+            assert!(
+                crosses((0.0, -17.0), (0.0, -12.0)),
+                "into chancel, yaw {yaw}"
+            );
+            assert!(
+                crosses((7.0, -12.0), (2.0, -12.0)),
+                "into chancel side, yaw {yaw}"
+            );
+            assert!(
+                !crosses((-13.0, 7.0), (-13.0, 2.0)),
+                "past tower, yaw {yaw}"
+            );
+            assert!(
+                !crosses((-9.0, 11.5), (-13.0, 11.5)),
+                "before tower, yaw {yaw}"
+            );
+            assert!(
+                !crosses((7.0, -16.5), (-7.0, -16.5)),
+                "behind chancel, yaw {yaw}"
+            );
+        }
     }
 
     #[test]

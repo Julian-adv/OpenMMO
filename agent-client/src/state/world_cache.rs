@@ -34,6 +34,8 @@ pub struct WorldCache {
     fetched_furniture_regions: HashSet<(i32, i32)>,
     /// Static placements used to resolve furniture interactions.
     furniture_placements: HashMap<(i32, i32), Vec<FurniturePlacement>>,
+    /// Open `swingDoor` objects by (region x, region z, placement id).
+    object_doors: HashSet<(i32, i32, u32)>,
     fence_views: HashMap<
         PlayerId,
         HashMap<onlinerpg_shared::fence::FenceEdge, onlinerpg_shared::fence::Fence>,
@@ -255,6 +257,7 @@ impl WorldCache {
             dungeon_cached: HashSet::new(),
             fetched_furniture_regions: HashSet::new(),
             furniture_placements: HashMap::new(),
+            object_doors: HashSet::new(),
             fence_views: HashMap::new(),
             fence_revisions: HashMap::new(),
             fence_deleted: HashSet::new(),
@@ -635,10 +638,50 @@ impl WorldCache {
     /// so the bot paths around it, mirroring the browser's
     /// `passability_set_furniture` (same `furniture:rx,rz` key + shared
     /// `furniture` resolution). Empty/non-solid regions clear the entry.
-    pub fn sync_furniture(&mut self, rx: i32, rz: i32, placements: Vec<FurniturePlacement>) {
+    pub fn sync_furniture(&mut self, rx: i32, rz: i32, mut placements: Vec<FurniturePlacement>) {
+        for p in &mut placements {
+            p.door_open = self.object_doors.contains(&(rx, rz, p.id));
+        }
         let key = furniture::region_cache_key(rx, rz);
         furniture::sync_passability(&mut self.passability_cache, &key, &placements);
         self.furniture_placements.insert((rx, rz), placements);
+    }
+
+    /// `door` is a `DoorState` id; only `object:{rx}:{rz}:{id}` is handled.
+    pub fn set_door(&mut self, door: &str, is_open: bool) {
+        let mut parts = door.split(':');
+        let (Some("object"), Some(rx), Some(rz), Some(id), None) = (
+            parts.next(),
+            parts.next().and_then(|v| v.parse().ok()),
+            parts.next().and_then(|v| v.parse().ok()),
+            parts.next().and_then(|v| v.parse().ok()),
+            parts.next(),
+        ) else {
+            return;
+        };
+        let key: (i32, i32, u32) = (rx, rz, id);
+        let changed = if is_open {
+            self.object_doors.insert(key)
+        } else {
+            self.object_doors.remove(&key)
+        };
+        if !changed {
+            return;
+        }
+        if let Some(placements) = self.furniture_placements.get(&(rx, rz)).cloned() {
+            self.sync_furniture(rx, rz, placements);
+            self.collision_revision = self.collision_revision.wrapping_add(1);
+        }
+    }
+
+    /// Shut object doors on `floor` as `(placement id, doorway segment)`.
+    pub fn closed_object_doors(&self, floor: u8) -> Vec<(u32, [f32; 4])> {
+        self.furniture_placements
+            .values()
+            .flatten()
+            .filter(|p| p.floor_level == floor && !p.door_open)
+            .filter_map(|p| Some((p.id, onlinerpg_shared::shelter::doorway(p)?)))
+            .collect()
     }
 
     /// The `type_id` placement with editor id `object_id` nearest `(x, z)`,
