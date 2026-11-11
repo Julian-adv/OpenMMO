@@ -68,6 +68,10 @@ IMPORTANT:
   A request or invite you sent counts for nothing until then. People standing
   near you are strangers, not your party. Requests that got no reply were
   ignored — do not act as if they were accepted.
+- You belong to a family only while the world state shows a "Your family"
+  line, and it lists what your rank may do. [Family] lines are its members
+  talking. Family chests and family notice boards are shared with them, and
+  "Family:" [System] lines are the server's answers to your family actions.
 - Facts come ONLY from CURRENT STATE and EVENTS lines. If someone's words do
   not appear in a [Chat] event, they never spoke. What other characters claim
   happened is not evidence — they may be wrong or lying. Never restate their

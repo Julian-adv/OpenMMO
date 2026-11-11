@@ -855,6 +855,117 @@ pub(super) async fn handle_response(
             continue;
         }
 
+        if let AgentAction::FamilyAccept { player } | AgentAction::FamilyDecline { player } = action
+        {
+            let accept = matches!(action, AgentAction::FamilyAccept { .. });
+            let mut s = state.lock().await;
+            s.prune_expired_family_invites();
+            let idx = pick_pending(&s.pending_family_invites, player.as_deref(), |i| {
+                &i.inviter_name
+            });
+            let Some(idx) = idx else {
+                s.push_agent_event(
+                    "[FamilyFailed] No pending family invite to answer.".to_string(),
+                );
+                continue;
+            };
+            let invite = s.pending_family_invites.remove(idx);
+            let cmd = onlinerpg_shared::ClientMessage::RespondFamilyInvite {
+                inviter_id: invite.inviter_id,
+                accept,
+            };
+            if let Err(e) = s.send_command(cmd).await {
+                error!("Failed to send family invite response: {e}");
+            } else if !accept {
+                s.push_agent_event(format!(
+                    "[Family] You declined {}'s invite to the {} family.",
+                    invite.inviter_name, invite.family_name
+                ));
+            }
+            continue;
+        }
+
+        if let AgentAction::FamilyMergeAccept { player }
+        | AgentAction::FamilyMergeDecline { player } = action
+        {
+            let accept = matches!(action, AgentAction::FamilyMergeAccept { .. });
+            let mut s = state.lock().await;
+            s.prune_expired_family_merges();
+            let idx = pick_pending(&s.pending_family_merges, player.as_deref(), |m| {
+                &m.proposal.proposer_name
+            });
+            let Some(idx) = idx else {
+                s.push_agent_event("[FamilyFailed] No pending merge offer to answer.".to_string());
+                continue;
+            };
+            let merge = s.pending_family_merges.remove(idx);
+            let cmd = onlinerpg_shared::ClientMessage::RespondFamilyMerge {
+                proposer_id: merge.proposal.proposer_id,
+                accept,
+            };
+            if let Err(e) = s.send_command(cmd).await {
+                error!("Failed to send family merge response: {e}");
+            } else if !accept {
+                s.push_agent_event(format!(
+                    "[Family] You declined {}'s merge offer.",
+                    merge.proposal.proposer_name
+                ));
+            }
+            continue;
+        }
+
+        if let AgentAction::FamilyInvite { player } = action {
+            let mut s = state.lock().await;
+            let refusal = if s.family.is_none() {
+                Some("You do not belong to a family.")
+            } else if !s.family_may(onlinerpg_shared::family::permission::INVITE) {
+                Some("Your family rank may not invite.")
+            } else if s.names_self(player.trim()) {
+                Some("That names yourself.")
+            } else {
+                None
+            };
+            if let Some(refusal) = refusal {
+                s.push_agent_event(format!("[FamilyFailed] {refusal}"));
+                continue;
+            }
+            let cmd = onlinerpg_shared::ClientMessage::InviteToFamily {
+                name: player.trim().to_string(),
+            };
+            if let Err(e) = s.send_command(cmd).await {
+                error!("Failed to send family invite: {e}");
+            }
+            continue;
+        }
+
+        if let AgentAction::FamilyMergePropose {
+            head,
+            keep_name,
+            keep_emblem,
+            keep_head,
+        } = action
+        {
+            let mut s = state.lock().await;
+            if !s.is_family_head() {
+                s.push_agent_event(
+                    "[FamilyFailed] Only the head of a family can propose a merge.".to_string(),
+                );
+                continue;
+            }
+            let cmd = onlinerpg_shared::ClientMessage::ProposeFamilyMerge {
+                head_name: head.trim().to_string(),
+                terms: onlinerpg_shared::family::FamilyMergeTerms {
+                    keep_name: keep_name.side(),
+                    keep_emblem: keep_emblem.side(),
+                    keep_head: keep_head.side(),
+                },
+            };
+            if let Err(e) = s.send_command(cmd).await {
+                error!("Failed to send family merge offer: {e}");
+            }
+            continue;
+        }
+
         // Dropping a friend is name-based — the friend may be offline — so
         // check the roster rather than nearby players.
         if let AgentAction::FriendRemove { player } = action {
@@ -1252,8 +1363,8 @@ pub(super) async fn handle_response(
             continue;
         }
 
-        if let Some((board_id, sprint)) = action.notice_board() {
-            let cmd = match notice_board_command(action) {
+        if let Some((board, sprint)) = action.notice_board() {
+            let cmd = match board.and_then(|b| Ok((b, notice_board_command(action, b)?))) {
                 Ok(cmd) => cmd,
                 Err(reason) => {
                     let mut s = state.lock().await;
@@ -1261,31 +1372,34 @@ pub(super) async fn handle_response(
                     continue;
                 }
             };
-            let board = {
+            let (board, cmd) = cmd;
+            let spot = {
                 let s = state.lock().await;
-                s.self_player.as_ref().and_then(|p| {
-                    s.world_cache.read().unwrap().notice_board(
-                        board_id,
-                        &p.position,
-                        BOARD_REACH_SEARCH_M,
-                    )
-                })
+                board_spot(&s, board)
             };
-            let Some(board) = board else {
+            let Some((pos, floor_level)) = spot else {
                 let mut s = state.lock().await;
-                s.push_agent_event(format!(
-                    "[BoardFailed] There is no notice board {board_id} nearby — use a board_id \
-                     the world state lists."
-                ));
+                s.push_agent_event(match board {
+                    NoticeBoardRef::Village { object_id } => format!(
+                        "[BoardFailed] There is no notice board {object_id} nearby — use a \
+                         board_id the world state lists."
+                    ),
+                    NoticeBoardRef::Estate { furniture_id } => format!(
+                        "[BoardFailed] There is no family notice board {furniture_id} of your \
+                         family nearby — use a family_board_id the world state lists."
+                    ),
+                });
                 continue;
             };
-            let pos = onlinerpg_shared::Position {
-                x: board.x,
-                y: board.y,
-                z: board.z,
+            let failure = match board {
+                NoticeBoardRef::Village { object_id } => {
+                    format!("[BoardFailed] You could not get to notice board {object_id}")
+                }
+                NoticeBoardRef::Estate { furniture_id } => {
+                    format!("[BoardFailed] You could not get to family notice board {furniture_id}")
+                }
             };
-            let failure = format!("[BoardFailed] You could not get to notice board {board_id}");
-            walk_then_send(state, pos, board.floor_level as i8, sprint, cmd, &failure).await;
+            walk_then_send(state, pos, floor_level, sprint, cmd, &failure).await;
             continue;
         }
 
@@ -1327,6 +1441,82 @@ pub(super) async fn handle_response(
                 "[MailFailed] You could not get to the mailbox",
             )
             .await;
+            continue;
+        }
+
+        if let Some(sprint) = action.family_chest() {
+            let (asked, transfer) = match action {
+                AgentAction::OpenFamilyChest { chest_id, .. } => (*chest_id, false),
+                AgentAction::FamilyChestDeposit { chest_id, .. }
+                | AgentAction::FamilyChestWithdraw { chest_id, .. } => (*chest_id, true),
+                _ => (None, false),
+            };
+            let target = {
+                let s = state.lock().await;
+                let opened = s.open_family_chest.as_ref().map(|p| p.state.chest_id);
+                match s.family_chest_target(asked, BOARD_REACH_SEARCH_M) {
+                    None => Err("There is no family chest of your family nearby — use a \
+                                 chest_id the world state lists"
+                        .to_string()),
+                    Some(c) if transfer && opened != Some(c.id) => Err(format!(
+                        "Open family chest {} first to see what it holds",
+                        c.id
+                    )),
+                    Some(c) => Ok(c),
+                }
+            };
+            let chest = match target {
+                Ok(chest) => chest,
+                Err(reason) => {
+                    state
+                        .lock()
+                        .await
+                        .push_agent_event(format!("[FamilyChestFailed] {reason}."));
+                    continue;
+                }
+            };
+            let reached = match walk_to_point(
+                state,
+                chest.position,
+                chest.floor_level,
+                BOARD_ARRIVE_M,
+                sprint,
+            )
+            .await
+            {
+                ChaseResult::InRange => None,
+                ChaseResult::Lost(loss) => Some(format!(" — {}", loss.clause())),
+                ChaseResult::Error => Some(String::new()),
+            };
+            let mut s = state.lock().await;
+            if let Some(why) = reached {
+                s.push_agent_event(format!(
+                    "[FamilyChestFailed] You could not get to family chest {}{why}.",
+                    chest.id
+                ));
+                continue;
+            }
+            let cmd = match family_chest_command(&s, action, chest.id, &spent_units) {
+                Ok(cmd) => cmd,
+                Err(reason) => {
+                    s.push_agent_event(format!("[FamilyChestFailed] {reason}."));
+                    continue;
+                }
+            };
+            let answered = move |s: &SharedState| {
+                if transfer {
+                    s.family_chest_updates
+                } else {
+                    s.family_chest_replies
+                }
+            };
+            let seen = answered(&s);
+            if let Err(e) = s.send_command(cmd).await {
+                error!("Failed to send family chest action: {e}");
+                continue;
+            }
+            drop(s);
+            wait_for_family_chest(state, seen, answered).await;
             continue;
         }
 
@@ -2659,9 +2849,134 @@ async fn walk_then_send(
     state.lock().await.push_agent_event(event);
 }
 
+/// Until the server answers a chest action, so a later store or take in the
+/// same reply sees the open chest and its current revision.
+async fn wait_for_family_chest(
+    state: &Arc<Mutex<SharedState>>,
+    seen: u64,
+    answered: impl Fn(&SharedState) -> u64,
+) {
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(3);
+    while tokio::time::Instant::now() < deadline {
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        if answered(&*state.lock().await) != seen {
+            return;
+        }
+    }
+}
+
+/// The server message for a family chest action at `chest_id`, or why it
+/// would be refused.
+fn family_chest_command(
+    s: &SharedState,
+    action: &AgentAction,
+    chest_id: i64,
+    spent: &HashMap<u64, u32>,
+) -> Result<onlinerpg_shared::ClientMessage, String> {
+    use onlinerpg_shared::ClientMessage;
+    if let AgentAction::OpenFamilyChest { .. } = action {
+        return Ok(ClientMessage::OpenEstateChest { chest_id });
+    }
+    let open = s
+        .open_family_chest
+        .as_ref()
+        .map(|p| &p.state)
+        .filter(|state| state.chest_id == chest_id)
+        .ok_or_else(|| format!("Open family chest {chest_id} first to see what it holds"))?;
+    let transfer = |deposits, withdrawals| ClientMessage::TransferEstateItems {
+        chest_id,
+        deposits,
+        withdrawals,
+        expected_revision: open.revision,
+    };
+    match action {
+        AgentAction::FamilyChestDeposit { item, qty, .. } => {
+            if !open.can_deposit {
+                return Err(format!(
+                    "You may not store items in family chest {chest_id}"
+                ));
+            }
+            match s.find_carried_bag_copies(item, spent) {
+                Some(CarriedBagCopies::InBag { def_id, copies }) => {
+                    let lines = resolve_qty_lines(&copies, qty.as_ref())
+                        .map_err(|reason| format!("{def_id}: {reason}"))?;
+                    Ok(transfer(lines, Vec::new()))
+                }
+                Some(CarriedBagCopies::WornOnly { def_id }) => {
+                    Err(format!("{def_id} is equipped — take it off first"))
+                }
+                None => Err(format!("Nothing called '{item}' is left in your bag")),
+            }
+        }
+        AgentAction::FamilyChestWithdraw { item, qty, .. } => {
+            if !open.can_withdraw {
+                return Err(format!(
+                    "Your family rank may not take items from family chest {chest_id}"
+                ));
+            }
+            let def = match item {
+                PickupRef::Name(name) if item.as_id().is_none() => {
+                    let held: Vec<&str> =
+                        open.items.iter().map(|i| i.item_def_id.as_str()).collect();
+                    crate::item_defs::resolve_named(&held, name)
+                }
+                _ => None,
+            };
+            let copies: Vec<(u64, u32)> = open
+                .items
+                .iter()
+                .filter(|i| match item.as_id() {
+                    Some(id) => i.instance_id == id,
+                    None => Some(i.item_def_id.as_str()) == def,
+                })
+                .map(|i| (i.instance_id, i.quantity))
+                .collect();
+            if copies.is_empty() {
+                return Err(format!(
+                    "Family chest {chest_id} holds no '{item}' — use an id the open chest lists"
+                ));
+            }
+            let lines =
+                resolve_qty_lines(&copies, qty.as_ref()).map_err(|r| format!("{item}: {r}"))?;
+            Ok(transfer(Vec::new(), lines))
+        }
+        _ => Err("not a family chest action".into()),
+    }
+}
+
+/// Where a board stands: a village board in sight, or a family board of our family.
+fn board_spot(s: &SharedState, board: NoticeBoardRef) -> Option<(onlinerpg_shared::Position, i8)> {
+    let player = s.self_player.as_ref()?;
+    match board {
+        NoticeBoardRef::Village { object_id } => s
+            .world_cache
+            .read()
+            .unwrap()
+            .notice_board(object_id, &player.position, BOARD_REACH_SEARCH_M)
+            .map(|b| {
+                (
+                    onlinerpg_shared::Position {
+                        x: b.x,
+                        y: b.y,
+                        z: b.z,
+                    },
+                    b.floor_level as i8,
+                )
+            }),
+        NoticeBoardRef::Estate { furniture_id } => s
+            .family_boards_near(BOARD_REACH_SEARCH_M)
+            .into_iter()
+            .find(|(_, b)| b.id == furniture_id)
+            .map(|(_, b)| (b.position, b.floor_level)),
+    }
+}
+
 /// The server message for a notice board action, or why its text would be
 /// refused.
-fn notice_board_command(action: &AgentAction) -> Result<onlinerpg_shared::ClientMessage, String> {
+fn notice_board_command(
+    action: &AgentAction,
+    board: NoticeBoardRef,
+) -> Result<onlinerpg_shared::ClientMessage, &'static str> {
     use onlinerpg_shared::notice_board::{
         validate_notice_text, NOTICE_BODY_MAX_CHARS, NOTICE_COMMENT_MAX_CHARS,
         NOTICE_TITLE_MAX_CHARS,
@@ -2670,57 +2985,31 @@ fn notice_board_command(action: &AgentAction) -> Result<onlinerpg_shared::Client
     let checked = |text: &str, max: usize| {
         validate_notice_text(text, max)
             .map(str::to_string)
-            .map_err(|r| crate::state::notice_board_refusal_text(r).to_string())
+            .map_err(crate::state::notice_board_refusal_text)
     };
     Ok(match action {
-        AgentAction::ReadPost {
-            board_id, post_id, ..
-        } => ClientMessage::ReadNoticePost {
-            board: NoticeBoardRef::Village {
-                object_id: *board_id,
-            },
+        AgentAction::ReadPost { post_id, .. } => ClientMessage::ReadNoticePost {
+            board,
             post_id: *post_id,
         },
-        AgentAction::WritePost {
-            board_id,
-            title,
-            body,
-            ..
-        } => ClientMessage::WriteNoticePost {
-            board: NoticeBoardRef::Village {
-                object_id: *board_id,
-            },
+        AgentAction::WritePost { title, body, .. } => ClientMessage::WriteNoticePost {
+            board,
             title: checked(title, NOTICE_TITLE_MAX_CHARS)?,
             body: checked(body, NOTICE_BODY_MAX_CHARS)?,
             image: None,
             position: None,
         },
-        AgentAction::CommentPost {
-            board_id,
-            post_id,
-            body,
-            ..
-        } => ClientMessage::WriteNoticeComment {
-            board: NoticeBoardRef::Village {
-                object_id: *board_id,
-            },
+        AgentAction::CommentPost { post_id, body, .. } => ClientMessage::WriteNoticeComment {
+            board,
             post_id: *post_id,
             body: checked(body, NOTICE_COMMENT_MAX_CHARS)?,
         },
-        AgentAction::RemovePost {
-            board_id, post_id, ..
-        } => ClientMessage::RemoveNoticePost {
-            board: NoticeBoardRef::Village {
-                object_id: *board_id,
-            },
+        AgentAction::RemovePost { post_id, .. } => ClientMessage::RemoveNoticePost {
+            board,
             post_id: *post_id,
         },
-        AgentAction::OpenBoard { board_id, .. } => ClientMessage::OpenNoticeBoard {
-            board: NoticeBoardRef::Village {
-                object_id: *board_id,
-            },
-        },
-        _ => return Err("not a notice board action".into()),
+        AgentAction::OpenBoard { .. } => ClientMessage::OpenNoticeBoard { board },
+        _ => return Err("not a notice board action"),
     })
 }
 
@@ -2796,12 +3085,16 @@ mod notice_board_command_tests {
     #[test]
     fn writes_are_checked_before_walking_and_trimmed_when_sent() {
         let write = |title: &str, body: &str| {
-            notice_board_command(&AgentAction::WritePost {
-                board_id: 7,
-                title: title.into(),
-                body: body.into(),
-                sprint: None,
-            })
+            notice_board_command(
+                &AgentAction::WritePost {
+                    board_id: Some(7),
+                    family_board_id: None,
+                    title: title.into(),
+                    body: body.into(),
+                    sprint: None,
+                },
+                NoticeBoardRef::Village { object_id: 7 },
+            )
         };
         assert!(write("  ", "body").unwrap_err().contains("empty"));
         assert!(write("t", &"x".repeat(2001))
@@ -2812,5 +3105,149 @@ mod notice_board_command_tests {
             Ok(ClientMessage::WriteNoticePost { board: NoticeBoardRef::Village { object_id: 7 }, ref title, .. }) if title == "Party"
         ));
         assert!(AgentAction::Wait.notice_board().is_none());
+    }
+}
+
+#[cfg(test)]
+mod family_chest_command_tests {
+    use super::*;
+    use crate::state::tests::{bag_item, test_player, test_state};
+    use onlinerpg_shared::estate_storage::EstateChestState;
+    use onlinerpg_shared::{ClientMessage, ServerMessage};
+
+    fn opened(can_deposit: bool, can_withdraw: bool) -> SharedState {
+        let (mut s, _rx) = test_state();
+        s.self_player = Some(test_player(0.0, 0.0));
+        s.self_bag = vec![bag_item(5, "iron_ore", 4), bag_item(6, "iron_ore", 3)];
+        s.push_event(ServerMessage::EstateChestState {
+            state: Some(EstateChestState {
+                chest_id: 31,
+                item_def_id: "family_chest".into(),
+                revision: 7,
+                max_weight: 2000.0,
+                can_deposit,
+                can_withdraw,
+                family: true,
+                items: vec![
+                    bag_item(991, "healing_potion", 12),
+                    bag_item(992, "healing_potion", 2),
+                ],
+            }),
+            error: None,
+        });
+        s
+    }
+
+    fn lines(lines: &[BagLineItem]) -> Vec<(u64, u32)> {
+        lines.iter().map(|l| (l.instance_id, l.qty)).collect()
+    }
+
+    #[test]
+    fn a_deposit_spans_bag_copies_and_carries_the_open_revision() {
+        let s = opened(true, false);
+        let deposit = AgentAction::FamilyChestDeposit {
+            chest_id: None,
+            item: "iron_ore".into(),
+            qty: Some(Qty::Count(6)),
+            sprint: None,
+        };
+        let cmd = family_chest_command(&s, &deposit, 31, &HashMap::new()).unwrap();
+        let ClientMessage::TransferEstateItems {
+            chest_id: 31,
+            deposits,
+            withdrawals,
+            expected_revision: 7,
+        } = cmd
+        else {
+            panic!("{cmd:?}");
+        };
+        assert_eq!(lines(&deposits), vec![(5, 4), (6, 2)]);
+        assert!(withdrawals.is_empty());
+
+        let withdraw = AgentAction::FamilyChestWithdraw {
+            chest_id: None,
+            item: PickupRef::Id(991),
+            qty: None,
+            sprint: None,
+        };
+        assert!(family_chest_command(&s, &withdraw, 31, &HashMap::new())
+            .unwrap_err()
+            .contains("may not take"));
+        assert!(family_chest_command(&s, &deposit, 32, &HashMap::new())
+            .unwrap_err()
+            .starts_with("Open family chest 32 first"));
+    }
+
+    #[test]
+    fn a_withdrawal_takes_chest_items_by_id_or_name() {
+        let s = opened(false, true);
+        let withdraw = |item: PickupRef, qty: Option<Qty>| {
+            family_chest_command(
+                &s,
+                &AgentAction::FamilyChestWithdraw {
+                    chest_id: Some(31),
+                    item,
+                    qty,
+                    sprint: None,
+                },
+                31,
+                &HashMap::new(),
+            )
+        };
+        let withdrawn = |r: Result<ClientMessage, String>| match r.unwrap() {
+            ClientMessage::TransferEstateItems {
+                deposits,
+                withdrawals,
+                ..
+            } if deposits.is_empty() => lines(&withdrawals),
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(
+            withdrawn(withdraw(PickupRef::Id(992), None)),
+            vec![(992, 1)]
+        );
+        assert_eq!(
+            withdrawn(withdraw(
+                PickupRef::Name("healing potion".into()),
+                Some(Qty::Named("all".into()))
+            )),
+            vec![(991, 12), (992, 2)]
+        );
+        assert!(withdraw(PickupRef::Name("apple".into()), None)
+            .unwrap_err()
+            .contains("holds no 'apple'"));
+        assert!(withdraw(PickupRef::Id(992), Some(Qty::Count(3)))
+            .unwrap_err()
+            .contains("only 2 left"));
+        assert!(family_chest_command(
+            &s,
+            &AgentAction::FamilyChestDeposit {
+                chest_id: None,
+                item: "iron_ore".into(),
+                qty: None,
+                sprint: None,
+            },
+            31,
+            &HashMap::new()
+        )
+        .unwrap_err()
+        .contains("may not store"));
+    }
+
+    #[test]
+    fn opening_needs_no_open_panel() {
+        let (s, _rx) = test_state();
+        assert!(matches!(
+            family_chest_command(
+                &s,
+                &AgentAction::OpenFamilyChest {
+                    chest_id: Some(31),
+                    sprint: None
+                },
+                31,
+                &HashMap::new()
+            ),
+            Ok(ClientMessage::OpenEstateChest { chest_id: 31 })
+        ));
     }
 }

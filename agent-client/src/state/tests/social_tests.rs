@@ -276,3 +276,223 @@ fn a_pushed_trade_window_lapses_and_the_next_one_is_new() {
     s.clear_pushed_trade(&merchant);
     assert!(!s.format_world_state().contains("trade window is open"));
 }
+
+pub(crate) fn family_info(my_rank: u8) -> onlinerpg_shared::family::FamilyInfo {
+    use onlinerpg_shared::family::*;
+    let member = |id: i64, name: &str, rank: u8, online: bool| FamilyMember {
+        character_id: id,
+        name: name.to_string(),
+        level: 10,
+        class: onlinerpg_shared::CharacterClass::Rogue,
+        rank,
+        online,
+    };
+    FamilyInfo {
+        name: "Stark".to_string(),
+        ranks: (0..FAMILY_RANK_COUNT)
+            .map(|rank| FamilyRank {
+                label: default_rank_label(rank).to_string(),
+                permissions: default_rank_permissions(rank),
+            })
+            .collect(),
+        members: vec![
+            member(1, "Ned", 0, true),
+            member(2, "Me", my_rank, true),
+            member(3, "Arya", 2, true),
+            member(4, "Bran", 2, false),
+        ],
+        estates: vec![
+            FamilyEstate {
+                estate_id: 11,
+                owner_name: "Ned".to_string(),
+                plots: 4,
+                missed: 0,
+                mine: false,
+            },
+            FamilyEstate {
+                estate_id: 12,
+                owner_name: "Me".to_string(),
+                plots: 1,
+                missed: 1,
+                mine: true,
+            },
+        ],
+        my_rank,
+        can_attach_estate: false,
+        can_claim_head: false,
+        rename_at: 0,
+        emblem_texture: None,
+        emblem_color: Some("#aa2233".to_string()),
+        my_cape_emblem: true,
+        seat_estate_id: None,
+    }
+}
+
+#[test]
+fn the_family_block_names_rank_powers_and_who_is_online() {
+    let (mut s, _rx) = test_state();
+    s.self_player = Some(test_player(0.0, 0.0));
+    s.push_event(ServerMessage::FamilyState {
+        family: Some(family_info(onlinerpg_shared::family::FAMILY_RANK_MEMBER)),
+    });
+    let world = s.format_world_state();
+    assert!(
+        world.contains(
+            "Your family: Stark — you are Family (rank 2); you may store in family chests, \
+             take from family chests, post on family boards"
+        ),
+        "{world}"
+    );
+    assert!(
+        world.contains("  4 members; online besides you: Ned, Arya\n"),
+        "{world}"
+    );
+    assert!(
+        world.contains("  Family estates: Ned's, yours (overdue)"),
+        "{world}"
+    );
+    assert!(
+        world.contains("Your cape shows the family emblem"),
+        "{world}"
+    );
+    assert!(!s.family_may(onlinerpg_shared::family::permission::INVITE));
+
+    s.push_event(ServerMessage::FamilyState {
+        family: Some(family_info(onlinerpg_shared::family::FAMILY_RANK_HEAD)),
+    });
+    assert!(s.is_family_head());
+    assert!(s
+        .format_world_state()
+        .contains("you may invite, store in family chests"));
+
+    s.push_event(ServerMessage::FamilyState { family: None });
+    assert!(!s.format_world_state().contains("Your family"));
+}
+
+#[test]
+fn family_invites_queue_like_party_invites_and_joining_settles_them() {
+    let (mut s, _rx) = test_state();
+    s.self_player = Some(test_player(0.0, 0.0));
+    let invite = |i: u64| ServerMessage::FamilyInviteReceived {
+        inviter_id: PlayerId::from(i),
+        inviter_name: format!("head{i}"),
+        family_name: format!("House{i}"),
+    };
+    assert_eq!(s.classify_event(&invite(2)), EventUrgency::Urgent);
+    assert_eq!(
+        crate::driver::format_event(&s, &invite(2)).as_deref(),
+        Some(
+            "[FamilyInvite] head2 invited you to join the House2 family. Accept with \
+             {\"type\":\"family_accept\"} or decline with family_decline."
+        )
+    );
+    for i in 2..8 {
+        s.push_event(invite(i));
+    }
+    s.push_event(invite(2));
+    assert_eq!(
+        s.pending_family_invites.len(),
+        family::MAX_PENDING_FAMILY_INVITES
+    );
+    assert!(s.format_world_state().contains(
+        "Pending family invite from head2 to join the House2 family — answer with family_accept"
+    ));
+
+    s.pending_family_invites[0].expires_at =
+        std::time::Instant::now() - std::time::Duration::from_secs(1);
+    assert!(!s.format_world_state().contains("from head2"));
+    assert_eq!(s.live_family_invites().count(), 2);
+
+    s.push_event(ServerMessage::FamilyState {
+        family: Some(family_info(2)),
+    });
+    assert!(s.pending_family_invites.is_empty());
+    assert_eq!(
+        s.classify_event(&ServerMessage::FamilyState { family: None }),
+        EventUrgency::Noise
+    );
+}
+
+#[test]
+fn a_merge_offer_spells_out_the_outcome_and_waits_for_the_head() {
+    use onlinerpg_shared::family::{FamilyMergeProposal, FamilyMergeTerms, MergeSide};
+    let (mut s, _rx) = test_state();
+    s.self_player = Some(test_player(0.0, 0.0));
+    s.push_event(ServerMessage::FamilyState {
+        family: Some(family_info(0)),
+    });
+    let offer = |proposer: u64, keep_name| ServerMessage::FamilyMergeProposal {
+        proposal: FamilyMergeProposal {
+            proposer_id: PlayerId::from(proposer),
+            proposer_name: "Robert".to_string(),
+            proposer_family: "Baratheon".to_string(),
+            target_family: "Stark".to_string(),
+            terms: FamilyMergeTerms {
+                keep_name,
+                keep_emblem: MergeSide::Target,
+                keep_head: MergeSide::Proposer,
+            },
+            members: 12,
+        },
+    };
+    let msg = offer(5, MergeSide::Proposer);
+    assert_eq!(s.classify_event(&msg), EventUrgency::Urgent);
+    let line = crate::driver::format_event(&s, &msg).unwrap();
+    assert!(
+        line.starts_with(
+            "[FamilyMerge] Robert, head of Baratheon, offers to merge with your Stark: the \
+             merged family is named Baratheon, shows your emblem, is led by Robert, and has \
+             12 members. A merge cannot be undone."
+        ),
+        "{line}"
+    );
+    s.push_event(msg);
+    s.push_event(offer(5, MergeSide::Target));
+    assert_eq!(s.pending_family_merges.len(), 1, "one offer per proposer");
+    let world = s.format_world_state();
+    assert!(
+        world.contains(
+            "Merge offer from Robert, head of Baratheon: the merged family is named Stark"
+        ),
+        "{world}"
+    );
+
+    s.push_event(ServerMessage::FamilyState {
+        family: Some(family_info(1)),
+    });
+    assert!(
+        s.pending_family_merges.is_empty(),
+        "only a head answers a merge"
+    );
+}
+
+#[test]
+fn family_chat_from_others_wakes_but_our_echo_is_dropped() {
+    let (mut s, _rx) = test_state();
+    s.self_player = Some(test_player(0.0, 0.0));
+    let line = |from: &str| ServerMessage::FamilyChatMessage {
+        from: from.to_string(),
+        message: "hunt?".to_string(),
+    };
+    assert_eq!(s.classify_event(&line("Arya")), EventUrgency::Urgent);
+    assert_eq!(
+        crate::driver::format_event(&s, &line("Arya")).as_deref(),
+        Some("[Family] Arya: hunt?")
+    );
+    assert_eq!(s.classify_event(&line("Me")), EventUrgency::Noise);
+    assert_eq!(crate::driver::format_event(&s, &line("Me")), None);
+}
+
+#[test]
+fn a_family_refusal_reaches_the_model_as_a_system_line() {
+    let (s, _rx) = test_state();
+    let refusal = ServerMessage::SystemMessage {
+        message: "Family: no one called jake9 is online.".to_string(),
+        localization: None,
+    };
+    assert_eq!(s.classify_event(&refusal), EventUrgency::Routine);
+    assert_eq!(
+        crate::driver::format_event(&s, &refusal).as_deref(),
+        Some("[System] Family: no one called jake9 is online.")
+    );
+}

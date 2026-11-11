@@ -791,6 +791,23 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
              {{\"type\":\"party_accept\"}} or decline with party_decline."
         )),
         ServerMessage::PartyInviteResult { message, .. } => Some(format!("[Party] {message}")),
+        ServerMessage::FamilyInviteReceived {
+            inviter_name,
+            family_name,
+            ..
+        } => Some(format!(
+            "[FamilyInvite] {inviter_name} invited you to join the {family_name} family. \
+             Accept with {{\"type\":\"family_accept\"}} or decline with family_decline."
+        )),
+        ServerMessage::FamilyMergeProposal { proposal } => Some(format!(
+            "[FamilyMerge] {}, head of {}, offers to merge with your {}: {}. A merge cannot \
+             be undone. Accept with {{\"type\":\"family_merge_accept\"}} or decline with \
+             family_merge_decline.",
+            proposal.proposer_name,
+            proposal.proposer_family,
+            proposal.target_family,
+            crate::state::merge_outcome(proposal)
+        )),
         ServerMessage::PartySummonReceived { caster_name, .. } => Some(format!(
             "[PartySummon] {caster_name} calls you to their side (summoning scroll). Accept \
              with {{\"type\":\"summon_accept\"}} or decline with summon_decline."

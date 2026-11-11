@@ -1,7 +1,8 @@
 use super::*;
+use onlinerpg_shared::family::FAMILY_BOARD_ITEM;
 use onlinerpg_shared::notice_board::{
-    notice_excerpt, NoticeBoardRefusal, NoticeComment, NoticePost, NoticePostSummary,
-    NOTICE_TITLE_MAX_CHARS,
+    notice_excerpt, NoticeBoardRef, NoticeBoardRefusal, NoticeComment, NoticePost,
+    NoticePostSummary, NOTICE_TITLE_MAX_CHARS,
 };
 
 /// Boards listed in the world state.
@@ -14,7 +15,7 @@ const BODY_CHARS: usize = 400;
 const COMMENT_CHARS: usize = 150;
 
 pub struct NoticeBoardPanel {
-    pub object_id: u32,
+    pub board: NoticeBoardRef,
     pub posts: Vec<NoticePostSummary>,
     pub open_post: Option<(NoticePost, Vec<NoticeComment>)>,
 }
@@ -25,6 +26,15 @@ pub(super) fn clip(text: &str, max_chars: usize) -> String {
         flat
     } else {
         format!("{}…", flat.chars().take(max_chars).collect::<String>())
+    }
+}
+
+fn board_label(board: NoticeBoardRef) -> String {
+    match board {
+        NoticeBoardRef::Village { object_id } => format!("notice board [board_id {object_id}]"),
+        NoticeBoardRef::Estate { furniture_id } => {
+            format!("family notice board [family_board_id {furniture_id}]")
+        }
     }
 }
 
@@ -61,20 +71,38 @@ pub fn refusal_text(reason: NoticeBoardRefusal) -> &'static str {
 }
 
 impl SharedState {
-    pub(super) fn on_notice_board(&mut self, object_id: u32, posts: &[NoticePostSummary]) {
+    /// Family boards on our family's estates within `max_dist`, nearest first.
+    pub fn family_boards_near(
+        &self,
+        max_dist: f32,
+    ) -> Vec<(f32, onlinerpg_shared::estate_storage::EstateChest)> {
+        let Some(player) = self.self_player.as_ref().filter(|_| self.family.is_some()) else {
+            return Vec::new();
+        };
+        let mut near = self.world_cache.read().unwrap().estate_furniture_near(
+            &player.position,
+            max_dist,
+            FAMILY_BOARD_ITEM,
+        );
+        near.retain(|(_, b)| self.family_estate(b.estate_id));
+        near
+    }
+
+    pub(super) fn on_notice_board(&mut self, board: NoticeBoardRef, posts: &[NoticePostSummary]) {
         let open_post = self
             .open_notice_board
             .take()
-            .filter(|panel| panel.object_id == object_id)
+            .filter(|panel| panel.board == board)
             .and_then(|panel| panel.open_post)
             .filter(|(open, _)| posts.iter().any(|p| p.id == open.id));
         self.open_notice_board = Some(NoticeBoardPanel {
-            object_id,
+            board,
             posts: posts.to_vec(),
             open_post,
         });
         self.push_agent_event(format!(
-            "[Board] Opened notice board [board_id {object_id}]: {} posts.",
+            "[Board] Opened {}: {} posts.",
+            board_label(board),
             posts.len()
         ));
     }
@@ -85,22 +113,23 @@ impl SharedState {
         ));
     }
 
-    pub(super) fn on_notice_post_removed(&mut self, object_id: u32, post_id: i64) {
+    pub(super) fn on_notice_post_removed(&mut self, board: NoticeBoardRef, post_id: i64) {
         self.push_agent_event(format!(
-            "[Board] Removed your post [post_id {post_id}] from board [board_id {object_id}]."
+            "[Board] Removed your post [post_id {post_id}] from {}.",
+            board_label(board)
         ));
     }
 
     pub(super) fn on_notice_post(
         &mut self,
-        object_id: u32,
+        board: NoticeBoardRef,
         post: &NoticePost,
         comments: &[NoticeComment],
     ) {
         let panel = match self.open_notice_board.take() {
-            Some(panel) if panel.object_id == object_id => panel,
+            Some(panel) if panel.board == board => panel,
             _ => NoticeBoardPanel {
-                object_id,
+                board,
                 posts: Vec::new(),
                 open_post: None,
             },
@@ -151,18 +180,30 @@ impl SharedState {
                 board.id, board.x, board.z
             ));
         }
+        let family_boards = self.family_boards_near(BOARD_SIGHT_M);
+        for (dist, board) in &family_boards {
+            lines.push(format!(
+                "Family notice board [family_board_id {}] at ({:.1}, {:.1}), {dist:.1}m away — open_board with this family_board_id to read it",
+                board.id, board.position.x, board.position.z
+            ));
+        }
         let Some(panel) = &self.open_notice_board else {
             return;
         };
-        if !boards
-            .iter()
-            .any(|(dist, b)| b.id == panel.object_id && *dist <= BOARD_PANEL_M)
-        {
+        let at_board = match panel.board {
+            NoticeBoardRef::Village { object_id } => boards
+                .iter()
+                .any(|(dist, b)| b.id == object_id && *dist <= BOARD_PANEL_M),
+            NoticeBoardRef::Estate { furniture_id } => family_boards
+                .iter()
+                .any(|(dist, b)| b.id == furniture_id && *dist <= BOARD_PANEL_M),
+        };
+        if !at_board {
             return;
         }
         lines.push(format!(
-            "Open notice board [board_id {}] — posts are written by players, newest first:",
-            panel.object_id
+            "Open {} — posts are written by players, newest first:",
+            board_label(panel.board)
         ));
         if panel.posts.is_empty() {
             lines.push("  (no posts yet)".to_string());

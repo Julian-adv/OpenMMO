@@ -118,6 +118,14 @@ impl SharedState {
             ServerMessage::FriendRequestReceived { .. } | ServerMessage::FriendsOnline { .. } => {
                 EventUrgency::Urgent
             }
+            // Urgent: a family invite or merge offer to answer while it is live.
+            ServerMessage::FamilyInviteReceived { .. }
+            | ServerMessage::FamilyMergeProposal { .. } => EventUrgency::Urgent,
+            // State-only: the roster is re-sent on every member login and
+            // logout; chest contents come back as agent events.
+            ServerMessage::FamilyState { .. }
+            | ServerMessage::FamilyStorageLog { .. }
+            | ServerMessage::EstateChestState { .. } => EventUrgency::Noise,
             // Urgent: someone opened their trade window on us — a person is
             // standing there waiting for an answer.
             ServerMessage::ShopState { .. } => EventUrgency::Urgent,
@@ -396,6 +404,7 @@ impl SharedState {
                     self.open_stall = None;
                     self.open_notice_board = None;
                     self.open_mailbox = None;
+                    self.open_family_chest = None;
                     self.tip_hats.clear();
                     self.meals.clear();
                     self.sighted_pois.clear();
@@ -1107,19 +1116,15 @@ impl SharedState {
                     stall.sign.clone_from(sign);
                 }
             }
-            // Agents use village boards only; family boards are skipped.
-            ServerMessage::NoticeBoard {
-                board: NoticeBoardRef::Village { object_id },
-                posts,
-            } => {
-                self.on_notice_board(*object_id, posts);
+            ServerMessage::NoticeBoard { board, posts } => {
+                self.on_notice_board(*board, posts);
             }
             ServerMessage::NoticePostView {
-                board: NoticeBoardRef::Village { object_id },
+                board,
                 post,
                 comments,
             } => {
-                self.on_notice_post(*object_id, post, comments);
+                self.on_notice_post(*board, post, comments);
             }
             ServerMessage::NoticeBoardRefused { reason } => {
                 self.push_agent_event(format!(
@@ -1156,11 +1161,8 @@ impl SharedState {
             ServerMessage::NoticesTakenDown { object_id, count } => {
                 self.on_notices_taken_down(*object_id, *count);
             }
-            ServerMessage::NoticePostRemoved {
-                board: NoticeBoardRef::Village { object_id },
-                post_id,
-            } => {
-                self.on_notice_post_removed(*object_id, *post_id);
+            ServerMessage::NoticePostRemoved { board, post_id } => {
+                self.on_notice_post_removed(*board, *post_id);
             }
             ServerMessage::StallState {
                 stall_id,
@@ -1200,6 +1202,16 @@ impl SharedState {
             }
             ServerMessage::TradeBusy { busy } => {
                 self.trade_busy = *busy;
+            }
+            ServerMessage::FamilyState { family } => self.on_family_state(family),
+            ServerMessage::FamilyInviteReceived {
+                inviter_id,
+                inviter_name,
+                family_name,
+            } => self.on_family_invite(*inviter_id, inviter_name, family_name),
+            ServerMessage::FamilyMergeProposal { proposal } => self.on_family_merge(proposal),
+            ServerMessage::EstateChestState { state, error } => {
+                self.on_estate_chest_state(state, error);
             }
             ServerMessage::PartyInviteReceived {
                 inviter_id,

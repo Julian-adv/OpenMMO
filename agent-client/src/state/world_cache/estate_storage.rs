@@ -14,10 +14,10 @@ impl WorldCache {
                 && old.rotation_deg == chest.rotation_deg
                 && old.floor_level == chest.floor_level
         });
+        self.estate_chests.insert(chest.id, chest.clone());
         if unchanged {
             return;
         }
-        self.estate_chests.insert(chest.id, chest.clone());
         let runtime = estate_storage_def(&chest.item_def_id).and_then(|definition| {
             furniture::build_furniture_passability_for_placements(&[FurniturePlacement {
                 id: chest.id as u32,
@@ -70,6 +70,30 @@ impl WorldCache {
         {
             self.remove_estate_chest(id);
         }
+    }
+
+    pub fn estate_furniture(&self, id: i64) -> Option<&EstateChest> {
+        self.estate_chests.get(&id)
+    }
+
+    /// Estate furniture of one kind within `max_dist` of `from`, nearest first.
+    pub fn estate_furniture_near(
+        &self,
+        from: &Position,
+        max_dist: f32,
+        item_def_id: &str,
+    ) -> Vec<(f32, EstateChest)> {
+        let mut near: Vec<_> = self
+            .estate_chests
+            .values()
+            .filter(|c| c.item_def_id == item_def_id)
+            .filter_map(|c| {
+                let dist = from.dist_xz_sq(&c.position).sqrt();
+                (dist <= max_dist).then(|| (dist, c.clone()))
+            })
+            .collect();
+        near.sort_by(|a, b| a.0.total_cmp(&b.0));
+        near
     }
 
     pub fn remove_estate_chest_view(&mut self, viewer: PlayerId) {

@@ -366,7 +366,7 @@ CREATE INDEX IF NOT EXISTS idx_estate_chests_family ON estate_chests(family_id) 
 
 1차에 없는 것:
 
-- agent-client는 주변 플레이어의 가문 이름을 인지하지만 초대에 답하지 못한다.
+- agent-client는 주변 플레이어의 가문 이름을 인지하고, 자기 가문(계급·권한·접속 가문원·영지)을 월드 상태에 보인다. 초대를 보내고(`family_invite`) 받은 초대에 답한다(`family_accept`·`family_decline`). 탈퇴·추방·계급 관리·창설·해산은 하지 않는다.
 - 귓속말·파티 채팅 줄과 친구 목록에는 가문 이름이 붙지 않는다. 주변 채팅 줄과 파티 창에는 붙는다.
 
 ### 2차 (**구현됨**, 미배포)
@@ -379,7 +379,7 @@ CREATE INDEX IF NOT EXISTS idx_estate_chests_family ON estate_chests(family_id) 
 
 2차에 없는 것:
 
-- agent-client는 가문 채팅을 읽지만 말하지 못하고, 가문 게시판·창고를 쓰지 않는다.
+- agent-client는 가문 채팅을 읽고 말한다(`family_say`). 자기 가문 영지의 가문 게시판을 기존 게시판 행동에 `family_board_id`를 줘서 읽고 쓴다. 가문 창고를 열고 넣고 꺼낸다(`open_family_chest`·`family_chest_deposit`·`family_chest_withdraw`). 가문에서 떨어진 영지의 창고는 목록에 없고 `chest_id`를 직접 줄 때만 연다. 개인 보관 궤짝과 입출고 기록은 다루지 않는다.
 - 가문 창고·게시판 아이콘은 기존 보관함·게시 용지 아이콘을 쓴다.
 
 ### 3차 (**구현됨**, 미배포)
@@ -391,7 +391,7 @@ CREATE INDEX IF NOT EXISTS idx_estate_chests_family ON estate_chests(family_id) 
 
 3차에 없는 것:
 
-- agent-client는 문장·합병을 다루지 않는다.
+- agent-client는 망토의 가문 문장 표시를 켜고 끄고(`family_cape_emblem`), 합병을 제안하고 답한다(`family_merge_propose`·`family_merge_accept`·`family_merge_decline`). 문장 등록은 하지 않는다. 그림 업로드 경로가 없고, `SetFamilyEmblem`은 그림과 색을 함께 덮어써 색만 보내면 그림이 지워진다.
 
 ## 구현 시 함께 고칠 문서
 

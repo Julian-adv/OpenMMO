@@ -344,3 +344,134 @@ fn estate_chest_metadata_updates_do_not_invalidate_routes() {
     );
     assert!(occupied(&state, 10.5, 10.5, 0));
 }
+
+fn family_chest(id: i64, estate_id: i64, x: f32) -> EstateChest {
+    EstateChest {
+        id,
+        estate_id,
+        item_def_id: "family_chest".into(),
+        family_id: Some(4),
+        ..chest(x, 10.5)
+    }
+}
+
+fn chest_contents(
+    chest_id: i64,
+    can_withdraw: bool,
+) -> onlinerpg_shared::estate_storage::EstateChestState {
+    onlinerpg_shared::estate_storage::EstateChestState {
+        chest_id,
+        item_def_id: "family_chest".into(),
+        revision: 7,
+        max_weight: 2000.0,
+        can_deposit: true,
+        can_withdraw,
+        family: true,
+        items: vec![
+            bag_item(991, "iron_ore", 12),
+            bag_item(992, "iron_sword", 1),
+        ],
+    }
+}
+
+#[test]
+fn family_chests_of_our_family_are_listed_and_an_open_one_shows_its_contents() {
+    let mut state = state(1);
+    state.push_event(ServerMessage::EstateChestVisibility {
+        added: vec![
+            family_chest(31, 11, 7.5),
+            family_chest(32, 99, 8.5),
+            EstateChest {
+                id: 33,
+                estate_id: 11,
+                ..chest(6.5, 10.5)
+            },
+        ],
+        removed: vec![],
+    });
+    assert!(!state.format_world_state().contains("Family chest"));
+
+    state.push_event(ServerMessage::FamilyState {
+        family: Some(super::social_tests::family_info(3)),
+    });
+    let world = state.format_world_state();
+    assert!(
+        world.contains("Family chest [chest_id 31] at (7.5, 10.5), 2.0m away — open_family_chest"),
+        "{world}"
+    );
+    assert!(
+        !world.contains("[chest_id 32]"),
+        "another family's: {world}"
+    );
+    assert!(
+        !world.contains("[chest_id 33]"),
+        "a personal chest: {world}"
+    );
+    assert_eq!(
+        state.family_chest_target(None, 64.0).map(|c| c.id),
+        Some(31)
+    );
+    assert_eq!(
+        state.family_chest_target(Some(32), 64.0).map(|c| c.id),
+        Some(32),
+        "a chest named by id is left to the server to judge"
+    );
+    assert_eq!(
+        state.family_chest_target(Some(33), 64.0).map(|c| c.id),
+        None
+    );
+
+    state.push_event(ServerMessage::EstateChestState {
+        state: Some(chest_contents(31, false)),
+        error: None,
+    });
+    assert_eq!(state.family_chest_updates, 1);
+    assert!(state.drain_agent_events().iter().any(|e| e
+        == "[FamilyChest] Family chest [chest_id 31] holds 2 stacks; you may store items but not take them."));
+    let world = state.format_world_state();
+    assert!(
+        world.contains(
+            "Open family chest [chest_id 31] — you may store items but not take them:\n  iron_ore x12 [id 991]\n  iron_sword [id 992]"
+        ),
+        "{world}"
+    );
+
+    state.push_event(ServerMessage::EstateChestState {
+        state: None,
+        error: Some("The chest changed. Its contents were refreshed.".into()),
+    });
+    assert!(state
+        .drain_agent_events()
+        .iter()
+        .any(|e| e == "[FamilyChestFailed] The chest changed. Its contents were refreshed."));
+    assert!(
+        state.open_family_chest.is_some(),
+        "a refusal keeps the panel"
+    );
+    assert_eq!(state.family_chest_updates, 1);
+    assert_eq!(state.family_chest_replies, 2);
+
+    state.self_player.as_mut().unwrap().position = p(30.0, 0.0, 10.5);
+    assert!(!state.format_world_state().contains("Open family chest"));
+}
+
+#[test]
+fn a_metadata_only_update_keeps_family_furniture_fresh() {
+    let mut state = state(1);
+    let mut chest = family_chest(31, 99, 7.5);
+    state.push_event(ServerMessage::EstateChestVisibility {
+        added: vec![chest.clone()],
+        removed: vec![],
+    });
+    state.push_event(ServerMessage::FamilyState {
+        family: Some(super::social_tests::family_info(2)),
+    });
+    assert!(state.family_chests_near(30.0).is_empty());
+    chest.estate_id = 11;
+    chest.revision += 1;
+    state.push_event(ServerMessage::EstateChestVisibility {
+        added: vec![chest],
+        removed: vec![],
+    });
+    assert_eq!(state.family_chests_near(30.0).len(), 1);
+}

@@ -472,6 +472,7 @@ Use the readiness status above. Wait for server success or failure feedback."#,
         self.format_stalls(&mut lines);
         self.format_notice_boards(&mut lines);
         self.format_mailboxes(&mut lines);
+        self.format_family_chests(&mut lines);
         if !self.self_bag.is_empty() {
             let items: Vec<String> = self
                 .self_bag
@@ -574,6 +575,7 @@ Use the readiness status above. Wait for server success or failure feedback."#,
             let names: Vec<&str> = self.friends.iter().map(|f| f.name.as_str()).collect();
             lines.push(format!("Your friends: {}", names.join(", ")));
         }
+        self.format_family(&mut lines);
         if let Some(offer) = self.pushed_trade.as_ref().filter(|t| t.is_live()) {
             let name = &offer.merchant_name;
             lines.push(format!(

@@ -174,6 +174,8 @@ fn compass(dx: f32, dz: f32) -> &'static str {
 mod commands;
 mod dungeon;
 mod events;
+mod family;
+mod family_chest;
 mod inventory;
 mod mail;
 pub use mail::refusal_text as mail_refusal_text;
@@ -194,6 +196,7 @@ mod world_state;
 
 pub use commands::ActionProgress;
 pub use events::EventUrgency;
+pub use family::{merge_outcome, PendingFamilyInvite, PendingFamilyMerge};
 pub use inventory::{Carried, CarriedBagCopies};
 pub use movement::{MoveTarget, MoveTargetError};
 pub(crate) use player_trade::{PlayerTradePrice, PlayerTradeTerms};
@@ -317,6 +320,17 @@ pub struct SharedState {
     /// Current party roster from `PartyState`; empty = not in a party.
     pub party_members: Vec<onlinerpg_shared::messages::PartyMember>,
     pub party_leader: Option<PlayerId>,
+    /// Our family from `FamilyState`; `None` outside one.
+    pub family: Option<onlinerpg_shared::family::FamilyInfo>,
+    /// Unanswered family invites, same queue discipline as party invites.
+    pub pending_family_invites: Vec<PendingFamilyInvite>,
+    /// Unanswered merge offers (heads only), one per proposer.
+    pub pending_family_merges: Vec<PendingFamilyMerge>,
+    pub open_family_chest: Option<family_chest::FamilyChestPanel>,
+    /// Counts chest contents received, so a transfer can wait for its refresh.
+    pub family_chest_updates: u64,
+    /// Counts every chest answer, refusals included, so an open can wait for it.
+    pub family_chest_replies: u64,
     /// Known nearby players
     pub nearby_players: HashMap<PlayerId, Player>,
     /// Per-merchant list of units we sold this session, repurchasable at the
@@ -511,6 +525,12 @@ impl SharedState {
             pushed_trade: None,
             party_members: Vec::new(),
             party_leader: None,
+            family: None,
+            pending_family_invites: Vec::new(),
+            pending_family_merges: Vec::new(),
+            open_family_chest: None,
+            family_chest_updates: 0,
+            family_chest_replies: 0,
             nearby_players: HashMap::new(),
             merchant_buyback: HashMap::new(),
             nearby_monsters: HashMap::new(),
