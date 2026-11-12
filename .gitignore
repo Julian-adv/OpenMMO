@@ -74,6 +74,7 @@ __pycache__/
 
 # Generated data files
 data/*.db
+data/*.db-journal
 data/network_metrics.db-shm
 data/network_metrics.db-wal
 data/hardware_metrics.db-shm
