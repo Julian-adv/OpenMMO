@@ -643,6 +643,7 @@
     return (
       def?.defaultY ??
       foundation ??
+      housingManager.floorHeightAt(floor, x, z) ??
       terrainY + floorYBase(floor, DEFAULT_WALL_HEIGHT)
     )
   }
