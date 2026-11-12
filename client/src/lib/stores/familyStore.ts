@@ -121,6 +121,9 @@ export interface PendingFamilyMerge {
 
 export const FAMILY_MERGE_TTL_MS = 120_000
 export const pendingFamilyMerges = writable<PendingFamilyMerge[]>([])
+/** Officiant of family mergers; mirrors `OFFICIANT_NPC` on the server. */
+export const MERGER_OFFICIANT = 'Maelis'
+export const mergerPledgeOpen = writable(false)
 
 export interface FamilyStorageEntry {
   character_name: string
@@ -180,6 +183,7 @@ export function resetFamilyStores() {
   familyStorageLog.set(null)
   familyStorageLogVisible.set(false)
   pendingFamilyMerges.set([])
+  mergerPledgeOpen.set(false)
 }
 
 /** Server `Emblem::is_set`: the family shows a picture or a colour. */

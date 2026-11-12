@@ -742,7 +742,9 @@ async fn merging_folds_the_absorbed_family_into_the_kept_name() {
 
     game.respond_to_family_merge(&pid("HeadB"), &pid("HeadA"), true, &auth)
         .await;
-    drain(&mut a_rx);
+    assert!(drain(&mut a_rx)
+        .iter()
+        .any(|msg| matches!(msg, ServerMessage::MergerCelebrated { .. })));
     assert!(cued(drain(&mut priest_rx), "The merger is done"));
     let family = family_state(&drain(&mut member_rx)).flatten().unwrap();
     assert_eq!(family.name, "Ironwood");
@@ -769,6 +771,64 @@ async fn merging_folds_the_absorbed_family_into_the_kept_name() {
     claim(&game, &auth, "Latecomer", 4).await;
     found(&game, &auth, &registrar, "Latecomer", "Oakshield").await;
     assert!(has_line(&drain(&mut new_rx), "held back"));
+}
+
+#[tokio::test]
+async fn a_rite_holds_the_altar_until_it_times_out() {
+    use onlinerpg_shared::family::{FamilyMergeTerms, MergeSide, FAMILY_MERGE_TTL};
+    let (game, auth, registrar) = setup("family_rite_timeout").await;
+    let mut rx = Vec::new();
+    for (i, (head, family)) in [
+        ("HeadA", "Ironwood"),
+        ("HeadB", "Oakshield"),
+        ("HeadC", "Ashgrove"),
+        ("HeadD", "Elmhurst"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        rx.push(enter(&game, &auth, head, FAMILY_FOUND_STAMPS).await.1);
+        claim(&game, &auth, head, i as u8).await;
+        found(&game, &auth, &registrar, head, family).await;
+    }
+    let mut priest = make_player("Maelis", 2.0, 1.0);
+    priest.is_official_npc = true;
+    let mut priest_rx = game.register_direct_channel(&priest.id).await;
+    game.add_player(priest).await;
+    let terms = FamilyMergeTerms {
+        keep_name: MergeSide::Proposer,
+        keep_emblem: MergeSide::Proposer,
+        keep_head: MergeSide::Proposer,
+    };
+    let cues = |msgs: Vec<ServerMessage>, needle: &str| {
+        msgs.iter()
+            .filter(
+                |msg| matches!(msg, ServerMessage::MergerRiteCue { cue } if cue.contains(needle)),
+            )
+            .count()
+    };
+
+    tokio::time::pause();
+    game.propose_family_merge(&pid("HeadA"), "HeadB", terms, &auth)
+        .await;
+    game.propose_family_merge(&pid("HeadC"), "HeadD", terms, &auth)
+        .await;
+    assert!(has_line(&drain(&mut rx[2]), "another merger"));
+    assert_eq!(cues(drain(&mut priest_rx), "A merger rite begins"), 1);
+
+    tokio::time::sleep(FAMILY_MERGE_TTL + std::time::Duration::from_secs(1)).await;
+    assert_eq!(cues(drain(&mut priest_rx), "no answer came in time"), 1);
+    assert!(has_line(&drain(&mut rx[0]), "ended without an answer"));
+    assert!(has_line(&drain(&mut rx[1]), "ended without an answer"));
+
+    game.propose_family_merge(&pid("HeadC"), "HeadD", terms, &auth)
+        .await;
+    assert_eq!(cues(drain(&mut priest_rx), "A merger rite begins"), 1);
+    drain(&mut rx[2]);
+    game.forget_player_family(&pid("HeadD")).await;
+    assert_eq!(cues(drain(&mut priest_rx), "someone left the altar"), 1);
+    assert!(has_line(&drain(&mut rx[2]), "rite of merger ended"));
+    tokio::time::resume();
 }
 
 #[tokio::test]

@@ -124,6 +124,7 @@ import {
 } from '../stores/inventoryStore'
 import { queueEnchantSuccess } from '../stores/enchantSuccessStore'
 import { queueLevelUp } from '../stores/levelUpEffectStore'
+import { queueMergerCelebration } from '../stores/mergerCelebrationStore'
 import { capeDyeDialog } from '../stores/capeDyeStore'
 import {
   applyFenceVisibility,
@@ -2496,6 +2497,10 @@ export function handleServerMessage(
 
     case 'PlayerLeveledUp':
       queueLevelUp(data.player_id)
+      break
+
+    case 'MergerCelebrated':
+      queueMergerCelebration(data.position)
       break
 
     case 'InventoryState':

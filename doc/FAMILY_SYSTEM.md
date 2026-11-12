@@ -216,12 +216,15 @@
 
 합병은 두 달 교회의 사제 마엘리스 앞에서 올리는 `가문 합병식`으로만 성립한다 (2026-11-12, 미배포).
 
+- 시작: 가주가 마엘리스를 오른쪽 클릭해 "합병 서약서 내기"를 고르고, 상대 가주 이름과 조건(남길 이름·문장·가주)을 적어 낸다. 가문 창에는 합병 양식이 없고 안내 한 줄만 있다.
 - 조건: 마엘리스가 깨어 있고 앉아 있지 않으며, 두 가주가 모두 같은 층에서 그녀로부터 8m 안에 있어야 한다. 아니면 제안이 거절된다.
 - 순서는 서버가 진행한다. 제안 → 마엘리스가 조건을 읽으며 식을 엶 → 8초 뒤 제안한 가주에게 동의 창 → 동의하면 6초 뒤 상대 가주에게 동의 창 → 동의하면 합병 처리와 서버 공지. 제안한 가주는 `ConfirmFamilyMerge`로, 상대 가주는 `RespondFamilyMerge`로 답한다.
-- 누가 거절하거나, 답하기 전에 자리를 뜨거나, 120초가 지나면 식이 끝난다.
+- 누가 거절하거나, 답하기 전에 자리를 뜨거나, 제안에서 120초가 지나면 식이 끝난다. DB 합병이 거절되거나 실패해도 식을 닫는다. 끝날 때마다 마엘리스는 닫는 큐를 받는다.
+- 식은 한 번에 하나만 열린다. 진행 중이면 다른 제안은 거절된다.
 - 마엘리스의 대사는 LLM이 만든다. 서버가 단계마다 `MergerRiteCue`를 그녀에게만 보내고, agent-client는 이를 긴급 이벤트로 올린다. 성립 판정은 서버만 한다.
 - 대사와 공지는 성별을 가리지 않으며 혼인이라 부르지 않는다.
-- 꽃잎·종소리 연출은 아직 없다.
+- 성립하면 서버가 두 가주 사이 지점에서 `MergerCelebrated`를 주변에 보낸다 (v152). 받은 클라이언트는 교회 바닥 전체에(건물 밖이면 반경 4.5m) 7m 높이에서 꽃잎을 13초 동안 뿌리고 세 종의 타종을 무작위 순서와 1~2초 간격으로 겹쳐 울린다 (`effects/merger-petals.ts`, `GameSceneMergerLayer.svelte`, `merger-bells-1~3.ogg`). 근처에 있던 양가 가문원이 하객이 된다.
+- 예복은 아직 없다.
 
 아래는 제안에 담는 조건과 성립 뒤의 처리다.
 
@@ -358,6 +361,11 @@ CREATE INDEX IF NOT EXISTS idx_estate_chests_family ON estate_chests(family_id) 
 - `FriendEntry`, `OnlineFriend` 끝에 `family`. 친구 명부 쿼리가 가문을 조인해 접속하지 않은 친구도 가문이 보인다. 접속 중인 친구는 `FriendsOnline` 응답과 `FriendList`에 실시간 가문이 실리고, 웹 클라이언트는 그 값을 친구 목록에 남긴다. 접속하지 않은 친구의 가문은 내 접속 때 값이라, 그 사이 바뀌면 다음 접속에 맞춰진다.
 - 서버는 메모리의 `Player.family`를 읽는다. 채팅 줄마다 DB를 읽지 않는다.
 
+### 5차 (v149·v152, 구현됨)
+
+- v149: `ConfirmFamilyMerge { accept }`(제안한 가주의 동의), `MergerRiteCue { cue }`(주례에게만).
+- v152: `MergerCelebrated { position, floor_level }`. 성립 때 주변 전달(`NearbyEffect`).
+
 `shared/src/dungeon/`, `data-src/dungeons.csv`, `dungeon_spawns.csv`, `shared/src/housing.rs`는 건드리지 않는다 (레이아웃 지문).
 
 ## 15. 성능
@@ -404,7 +412,7 @@ CREATE INDEX IF NOT EXISTS idx_estate_chests_family ON estate_chests(family_id) 
 ### 3차 (**구현됨**, 미배포)
 
 6. **문장**: 문장 등록, 망토 덮어쓰기, 깃발·휘장 애셋과 가구.
-7. **합병**: 가문 창의 "다른 가문과 합병"(가주), 상대 가주에게 수락 창.
+7. **합병**: 처음엔 가문 창의 양식이었고, 지금은 12절의 합병식으로만 한다.
 
 테스트: `family_tests.rs`의 문장·깃발·합병 테스트.
 

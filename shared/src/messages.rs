@@ -2179,6 +2179,11 @@ pub enum ServerMessage {
     MergerRiteCue {
         cue: String,
     },
+    /// A merger was sworn at the altar: petals and bells for everyone nearby.
+    MergerCelebrated {
+        position: Position,
+        floor_level: i8,
+    },
     /// An unpaid showroom selection, delivered only to the clerk.
     FurnitureSelectionNotice {
         player_id: PlayerId,
@@ -2592,6 +2597,7 @@ impl ServerMessage {
             | Self::DaggerDoubleSlashSkipped { .. }
             | Self::EquipmentEnchantSucceeded { .. }
             | Self::PlayerLeveledUp { .. }
+            | Self::MergerCelebrated { .. }
             | Self::MonsterSkillStarted { .. }
             | Self::MonsterSkillStruck { .. }
             | Self::MonsterGroundStrike { .. }

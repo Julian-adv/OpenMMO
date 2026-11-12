@@ -46,6 +46,8 @@
   import LandClaimDialog from './LandClaimDialog.svelte'
   import HouseDemolitionDialog from './HouseDemolitionDialog.svelte'
   import AltarOfferingDialog from './AltarOfferingDialog.svelte'
+  import MergerPledgeDialog from './MergerPledgeDialog.svelte'
+  import { mergerPledgeOpen } from '../stores/familyStore'
   import { altarOffering } from '../stores/altarStore'
   import NoticeBoardPanel from './NoticeBoardPanel.svelte'
   import { noticeBoard } from '../stores/noticeBoardStore'
@@ -534,6 +536,10 @@
 
 {#if $landClaimDialog}
   <LandClaimDialog />
+{/if}
+
+{#if $mergerPledgeOpen}
+  <MergerPledgeDialog />
 {/if}
 
 {#if $altarOffering}

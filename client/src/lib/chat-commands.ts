@@ -36,6 +36,7 @@ import { dungeonManager } from './managers/dungeonManager'
 import { chatChannel } from './stores/chatChannelStore'
 import { partyRoster } from './stores/partyStore'
 import { familyInfo } from './stores/familyStore'
+import { queueMergerCelebration } from './stores/mergerCelebrationStore'
 import { EMOTE_LIST } from './emote-meta'
 import { DEBUG_ANIM_NAMES, emoteRequest } from './stores/emoteStore'
 
@@ -359,6 +360,15 @@ const COMMANDS: Record<string, Command> = {
         text: translate('command.drop', { item: itemDefId }),
         sender: 'system',
       })
+    },
+  },
+
+  '/bell': {
+    desc: 'command.help.bell',
+    admin: true,
+    run: () => {
+      const player = get(gameStore).currentPlayer
+      if (player) queueMergerCelebration(player.position)
     },
   },
 

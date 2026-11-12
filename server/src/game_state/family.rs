@@ -25,6 +25,8 @@ const RITE_REACH: f32 = 8.0;
 const RITE_OPENING_PAUSE: std::time::Duration = std::time::Duration::from_secs(8);
 const RITE_TURN_PAUSE: std::time::Duration = std::time::Duration::from_secs(6);
 const RITE_LEFT: &str = "someone left the altar.";
+const RITE_TIMED_OUT: &str = "no answer came in time.";
+const RITE_FAILED: &str = "the family records could not be joined.";
 const RITE_AWAY: &str =
     "a merger is sworn before Maelis at the Two Moons Chapel; both heads must stand before her while she keeps the altar.";
 
@@ -47,6 +49,7 @@ struct MergeOffer {
     proposal: FamilyMergeProposal,
     /// The rite asks the proposing head first.
     awaiting_proposer: bool,
+    started: std::time::Instant,
 }
 
 impl Families {
@@ -325,17 +328,28 @@ impl super::GameState {
     }
 
     pub(super) async fn forget_player_family(&self, player_id: &PlayerId) -> Option<i64> {
-        let mut families = self.families.write().await;
-        families
-            .invites
-            .retain(|(from, to), _| from != player_id && to != player_id);
-        families
-            .merges
-            .retain(|(from, to), _| from != player_id && to != player_id);
-        families
-            .merge_offers
-            .retain(|(from, to), _| from != player_id && to != player_id);
-        families.leave(player_id)
+        let (family, broken_rites) = {
+            let mut families = self.families.write().await;
+            families
+                .invites
+                .retain(|(from, to), _| from != player_id && to != player_id);
+            families
+                .merges
+                .retain(|(from, to), _| from != player_id && to != player_id);
+            let broken: Vec<_> = families
+                .merge_offers
+                .keys()
+                .filter(|(from, to)| from == player_id || to == player_id)
+                .copied()
+                .collect();
+            (families.leave(player_id), broken)
+        };
+        for key in broken_rites {
+            self.end_rite(key, RITE_LEFT, false).await;
+            let other = if key.0 == *player_id { key.1 } else { key.0 };
+            self.family_note(&other, "the rite of merger ended.").await;
+        }
+        family
     }
 
     /// Online members with their character ids.
@@ -1066,19 +1080,23 @@ impl super::GameState {
             terms,
             members,
         };
+        let started = std::time::Instant::now();
         let refusal = {
             let mut families = self.families.write().await;
             let key = (*player_id, target_id);
             let open = families
                 .merges
                 .get(&key)
-                .filter(|offer| offer.expires_at > std::time::Instant::now())
+                .filter(|offer| offer.expires_at > started)
                 .map(|offer| offer.answered);
             match open {
                 Some(true) => Some(format!(
                     "{target_name} declined; you can ask again in a couple of minutes."
                 )),
                 Some(false) => Some(format!("{target_name} is still considering your offer.")),
+                None if !families.merge_offers.is_empty() => Some(format!(
+                    "{OFFICIANT_NPC} is presiding over another merger; wait until it ends."
+                )),
                 None => {
                     families
                         .merges
@@ -1088,6 +1106,7 @@ impl super::GameState {
                         MergeOffer {
                             proposal: proposal.clone(),
                             awaiting_proposer: true,
+                            started,
                         },
                     );
                     None
@@ -1118,6 +1137,25 @@ impl super::GameState {
         }
         let game = self.clone();
         let proposer_id = *player_id;
+        tokio::spawn(async move {
+            tokio::time::sleep(FAMILY_MERGE_TTL).await;
+            let key = (proposer_id, target_id);
+            let open = game
+                .families
+                .read()
+                .await
+                .merge_offers
+                .get(&key)
+                .is_some_and(|offer| offer.started == started);
+            if open {
+                game.end_rite(key, RITE_TIMED_OUT, false).await;
+                for head in [&proposer_id, &target_id] {
+                    game.family_note(head, "the rite of merger ended without an answer.")
+                        .await;
+                }
+            }
+        });
+        let game = self.clone();
         tokio::spawn(async move {
             tokio::time::sleep(RITE_OPENING_PAUSE).await;
             let waiting = game
@@ -1194,22 +1232,23 @@ impl super::GameState {
         let proposer_id = *proposer_id;
         tokio::spawn(async move {
             tokio::time::sleep(RITE_TURN_PAUSE).await;
-            if game.has_blocked(&target_id, &proposal.proposer_name).await {
+            let key = (proposer_id, target_id);
+            if !game.families.read().await.merge_offers.contains_key(&key) {
                 return;
             }
-            let open = game
-                .families
-                .read()
-                .await
-                .merges
-                .contains_key(&(proposer_id, target_id));
-            if open {
-                game.send_direct_message(
-                    &target_id,
-                    ServerMessage::FamilyMergeProposal { proposal },
-                )
-                .await;
+            if game.has_blocked(&target_id, &proposal.proposer_name).await
+                || game
+                    .merger_officiant(&proposer_id, &target_id)
+                    .await
+                    .is_none()
+            {
+                game.end_rite(key, RITE_LEFT, false).await;
+                game.family_note(&proposer_id, "the rite of merger ended.")
+                    .await;
+                return;
             }
+            game.send_direct_message(&target_id, ServerMessage::FamilyMergeProposal { proposal })
+                .await;
         });
     }
 
@@ -1268,6 +1307,7 @@ impl super::GameState {
         ) else {
             self.family_note(target_id, "that merge offer is no longer valid.")
                 .await;
+            self.end_rite(key, RITE_FAILED, false).await;
             return;
         };
         let auth_copy = auth.clone();
@@ -1277,11 +1317,14 @@ impl super::GameState {
             Ok(Err(reason)) => {
                 self.family_note(target_id, reason).await;
                 self.family_note(proposer_id, reason).await;
+                self.end_rite(key, RITE_FAILED, false).await;
                 return;
             }
             Err(err) => {
                 warn!("Family merge failed: {err}");
                 self.family_note(target_id, SERVER_ERROR).await;
+                self.family_note(proposer_id, SERVER_ERROR).await;
+                self.end_rite(key, RITE_FAILED, false).await;
                 return;
             }
         };
@@ -1320,6 +1363,31 @@ impl super::GameState {
                 "The families of {proposer_name} and {target_name} have merged as the {name} family at the Two Moons Chapel."
             ),
         });
+        let between = {
+            let players = self.players.read().await;
+            players
+                .get(proposer_id)
+                .zip(players.get(target_id))
+                .map(|(a, b)| {
+                    let mut position = a.position;
+                    position.x +=
+                        onlinerpg_shared::shortest_world_delta_x(a.position.x, b.position.x) / 2.0;
+                    position.z = (a.position.z + b.position.z) / 2.0;
+                    (position.wrapped_x(), a.floor_level)
+                })
+        };
+        if let Some((position, floor_level)) = between {
+            self.publish_nearby(
+                &position,
+                floor_level,
+                ServerMessage::MergerCelebrated {
+                    position,
+                    floor_level,
+                },
+                None,
+            )
+            .await;
+        }
         self.refresh_family_capes(&members).await;
         self.refresh_family_furniture(absorbed, auth).await;
         self.refresh_family_furniture(survivor, auth).await;

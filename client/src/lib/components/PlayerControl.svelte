@@ -224,6 +224,12 @@
   import { createLocalPlayerControlMachine } from './player-control/fsm/state-definitions'
   import { shortestWrappedDeltaX, wrapWorldX } from '../terrain/world-wrap'
   import {
+    familyInfo,
+    FAMILY_RANK_HEAD,
+    MERGER_OFFICIANT,
+    mergerPledgeOpen,
+  } from '../stores/familyStore'
+  import {
     emoteRequest,
     emoteStopRequest,
     localEmoteAnim,
@@ -2083,6 +2089,19 @@
           entries.push({
             label: translate('trade.title'),
             action: () => tradeWithNpc(intent),
+          })
+        }
+        if (
+          npc.name === MERGER_OFFICIANT &&
+          get(familyInfo)?.my_rank === FAMILY_RANK_HEAD
+        ) {
+          entries.push({
+            label: translate('family.pledge'),
+            action: () =>
+              approachAndAct(
+                { position: intent.position, ...NPC_TRADE_APPROACH },
+                () => mergerPledgeOpen.set(true)
+              ),
           })
         }
         npcContextMenu.set({

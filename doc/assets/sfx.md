@@ -512,3 +512,16 @@ Starter 유료 플랜(API 구독 조회로 확인),
   서버 `AbilityUsed` 이벤트로 게임 VFX가 시작될 때 시전당 한 번 재생한다.
   같은 층에서 시전자 20 m 이내의 클라이언트가 듣는다. 파티원 수만큼 중복 재생하지 않으며,
   장착 조건·쿨타임으로 거절된 사용 요청이나 버프 타이머 갱신만으로 재생하지 않는다.
+
+## Family merger
+
+- merger-bells-1.ogg, merger-bells-2.ogg, merger-bells-3.ogg — 가문 합병식 성립 종소리.
+  `MergerCelebrated`를 받은 주변 플레이어에게 세 타종을 무작위 순서로, 앞 타종 시작 1~2초 뒤에 다음 타종을 겹쳐 재생한다
+  (`playMergerBells`, 사용자 결정 2026-11-12).
+  [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) API로 2026-11-12 직접 생성. Starter 유료 플랜,
+  유료 플랜 상업 이용 라이선스 적용. `tools/gen-death-sfx.py`의 `merger_bell_strike` 프롬프트(큰 청동 교회 탑 종을
+  한 번 치는 소리, 6초, influence 0.6)로 후보 3개를 만들어 take 1·2·3을 각각 1·2·3번 파일에 쓴다.
+  `tools/gen-merger-bells.py`가 타종 하나마다 1.35초 간격 6번의 느린 타종을 만든다(짝수 번째는 장3도 낮춘 종).
+  각 11.5초, 모노 44.1 kHz OGG Vorbis q5, −18 LUFS, 게임 재생 볼륨 0.45.
+  원본과 기록은 `assets/sfx/merger-bells-2026-11-12/`. 가산 합성본, 여러 종을 한 번에 생성한 후보 9개,
+  세 타종을 1초 시차로 미리 섞은 파일은 미채택.

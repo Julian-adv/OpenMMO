@@ -12,6 +12,7 @@
   import GameSceneAbilitiesLayer from './GameSceneAbilitiesLayer.svelte'
   import GameSceneEnchantSuccessLayer from './GameSceneEnchantSuccessLayer.svelte'
   import GameSceneLevelUpLayer from './GameSceneLevelUpLayer.svelte'
+  import GameSceneMergerLayer from './GameSceneMergerLayer.svelte'
   import GameSceneRageAuraLayer from './GameSceneRageAuraLayer.svelte'
   import GameSceneTeleportLayer from './GameSceneTeleportLayer.svelte'
   import GameSceneGroundEruptionLayer from './GameSceneGroundEruptionLayer.svelte'
@@ -314,6 +315,7 @@
 
   let enchantLayer: GameSceneEnchantSuccessLayer | undefined
   let levelUpLayer: GameSceneLevelUpLayer | undefined
+  let mergerLayer: GameSceneMergerLayer | undefined
   let rageAuraLayer: GameSceneRageAuraLayer | undefined
   let teleportLayer: GameSceneTeleportLayer | undefined
   let groundEruptionLayer: GameSceneGroundEruptionLayer | undefined
@@ -643,6 +645,7 @@
     groundEruptionLayer?.update()
     enchantLayer?.update()
     levelUpLayer?.update()
+    mergerLayer?.update()
     rageAuraLayer?.update(deltaTime)
     if (currentPlayer) updateRadianceStrength(currentPlayer, deltaTime)
     for (const player of otherPlayers.values())
@@ -713,6 +716,7 @@
   getAnchor={(id, target) => getAbilityAnchor(id, false, target)}
   setPose={(id, until) => modelFor(id)?.setLevelUpPoseUntil(until)}
 />
+<GameSceneMergerLayer bind:this={mergerLayer} {currentPlayer} />
 <GameSceneRageAuraLayer
   bind:this={rageAuraLayer}
   {currentPlayer}

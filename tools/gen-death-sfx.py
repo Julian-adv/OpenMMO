@@ -13,6 +13,14 @@ missing; edit it between a --plan-only run and the real one.
 import argparse, json, os, pathlib, sys, time, urllib.error, urllib.request
 
 PROMPTS = {
+    "merger_bell_strike": (
+        "One single strike of a large bronze church tower bell, then nothing "
+        "else. A full, round, resonant bong with a clear, pure, bright singing "
+        "tone and a long smooth ring-out that fades naturally to silence. Clean "
+        "close recording of a real cast bell, no distortion, no rattle, no "
+        "noise. Only one strike. No second strike, no other bells, no chimes, "
+        "no synthesizer, no music, no voices, no wind."
+    ),
     "dungeon_drip": (
         "One isolated water droplet falling into a still shallow puddle of water. "
         "Close-up realistic water foley: a distinct small wet plip, a tiny liquid "

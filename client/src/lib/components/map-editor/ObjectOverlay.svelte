@@ -27,6 +27,7 @@
   import { objectManager } from '../../managers/objectManager'
   import type { ObjectClickKind } from '../../managers/inputHandler'
   import { objectDefsById } from '../../data/objectCatalog'
+  import { setShelterFootprints } from '../../utils/shelterFootprints'
   import { monsterManager } from '../../managers/monsterManager'
   import { shortestWrappedDeltaX } from '../../terrain/world-wrap'
   import { worldView } from '../../network/worldView'
@@ -469,6 +470,12 @@
       fireSystems.delete(id)
     }
   }
+
+  const footprintOwner = {}
+  $effect(() => {
+    setShelterFootprints(footprintOwner, structures)
+    return () => setShelterFootprints(footprintOwner, null)
+  })
 
   export function update(deltaTime: number, camera: THREE.Camera | undefined) {
     const viewer = debugInfo?.position

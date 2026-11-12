@@ -29,7 +29,6 @@
   import { parseGold } from '../utils/currency'
   import { capeTextureUrl } from '../utils/networkUtils'
   import CapeTextureDialog from './CapeTextureDialog.svelte'
-  import type { FamilyMergeTerms } from '../stores/familyStore'
 
   const family = $derived($familyInfo)
   const myRank = $derived(family?.my_rank ?? FAMILY_RANK_GUEST)
@@ -48,25 +47,6 @@
     networkManager.sendSetFamilyEmblem(texture, color)
   }
 
-  // Off until the merger rite ships.
-  const MERGE_ENABLED: boolean = false
-  let mergeOpen = $state(false)
-  let mergeHead = $state('')
-  let mergeTerms = $state<FamilyMergeTerms>({
-    keep_name: 'proposer',
-    keep_emblem: 'proposer',
-    keep_head: 'proposer',
-  })
-  function askMerge() {
-    const head = mergeHead.trim()
-    if (!head) return
-    const terms = { ...mergeTerms }
-    confirm = {
-      text: $t('family.mergeConfirm', { name: head }),
-      label: $t('family.mergeOffer'),
-      run: () => networkManager.sendProposeFamilyMerge(head, terms),
-    }
-  }
   const selfName = $derived($gameStore.currentPlayer?.name)
   const full = $derived((family?.members.length ?? 0) >= FAMILY_MAX_MEMBERS)
 
@@ -525,52 +505,8 @@
           <div class="dim small">{$t('family.emblemHint')}</div>
         {/if}
 
-        {#if MERGE_ENABLED && isHead}
-          <button
-            class="section-title toggle"
-            aria-expanded={mergeOpen}
-            onclick={() => (mergeOpen = !mergeOpen)}
-            >{mergeOpen ? '▾' : '▸'} {$t('family.merge')}</button
-          >
-          {#if mergeOpen}
-            <div class="merge-form">
-              <input
-                class="text-input"
-                placeholder={$t('family.mergeHeadName')}
-                aria-label={$t('family.mergeHeadName')}
-                maxlength="32"
-                bind:value={mergeHead}
-                onkeydown={(event) => inputKeydown(event, askMerge)}
-              />
-              <label class="merge-term"
-                >{$t('family.mergeKeepName')}
-                <select bind:value={mergeTerms.keep_name}>
-                  <option value="proposer">{family.name}</option>
-                  <option value="target">{$t('family.mergeTheirs')}</option>
-                </select>
-              </label>
-              <label class="merge-term"
-                >{$t('family.mergeKeepEmblem')}
-                <select bind:value={mergeTerms.keep_emblem}>
-                  <option value="proposer">{$t('family.mergeOurs')}</option>
-                  <option value="target">{$t('family.mergeTheirs')}</option>
-                </select>
-              </label>
-              <label class="merge-term"
-                >{$t('family.mergeKeepHead')}
-                <select bind:value={mergeTerms.keep_head}>
-                  <option value="proposer">{$t('family.mergeMe')}</option>
-                  <option value="target">{$t('family.mergeThem')}</option>
-                </select>
-              </label>
-              <button
-                class="text-btn wide"
-                disabled={!mergeHead.trim()}
-                onclick={askMerge}>{$t('family.mergeOffer')}</button
-              >
-              <div class="dim small">{$t('family.mergeHint')}</div>
-            </div>
-          {/if}
+        {#if isHead}
+          <div class="dim small">{$t('family.mergeAtChapel')}</div>
         {/if}
 
         <button
@@ -795,20 +731,6 @@
     padding: 0;
     border: none;
     background: none;
-  }
-
-  .merge-form {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .merge-term {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
   }
 
   .status-dot {

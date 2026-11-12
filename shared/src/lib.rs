@@ -284,7 +284,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// house, dungeon and object doors, addressed by `door::DoorId`; replaces
 /// `ToggleDungeonDoor`, `ToggleObjectDoor`, `DungeonDoorState`,
 /// `DungeonDoorToggled` and `DoorToggled`.
-pub const PROTOCOL_VERSION: u32 = 151;
+/// v152: `MergerCelebrated`, the nearby petals and bells of a sworn merger.
+pub const PROTOCOL_VERSION: u32 = 152;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

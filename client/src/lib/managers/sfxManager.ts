@@ -111,6 +111,12 @@ const LEVEL_UP_SOUND: SoundSpec = {
   pool: 2,
 }
 
+const MERGER_BELL_SOUNDS: SoundSpec[] = [1, 2, 3].map((n) => ({
+  url: `/sounds/merger-bells-${n}.ogg`,
+  volume: 0.45,
+  pool: 1,
+}))
+
 const STORAGE_KEY_VOLUME = 'onlinerpg_sfxVolume'
 const STORAGE_KEY_MUTED = 'onlinerpg_sfxMuted'
 const DEFAULT_SFX_VOLUME = 0.5
@@ -477,6 +483,16 @@ export function playLevelUpSound(gain = 1) {
   if (!canUseAudio()) return
   const { url, volume, pool } = LEVEL_UP_SOUND
   playAudioFromPool(url, volume * gain, pool)
+}
+
+/** The three peals in random order, each starting 1-2 s after the last. */
+export function playMergerBells() {
+  const peals = [...MERGER_BELL_SOUNDS].sort(() => Math.random() - 0.5)
+  let delay = 0
+  for (const peal of peals) {
+    window.setTimeout(() => playSound(peal), delay)
+    delay += 1000 + Math.random() * 1000
+  }
 }
 
 export function preloadBowSounds() {
