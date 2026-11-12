@@ -64,7 +64,7 @@
   } from '../../stores/fieldBossWakeStore'
   import { getObjectModelPath } from '../../utils/modelPaths'
   import { createSelectionBox } from '../../utils/objectSelectionBox'
-  import { doorwayOf, isInsideShelter } from '../../utils/shelter'
+  import { doorwaysOf, isInsideShelter } from '../../utils/shelter'
   import { isoCameraOccludesPlayer } from '../../utils/iso-occlusion'
   import { rotatedRectAabb } from '../../utils/objectFootprint'
   import { objectDoorId } from '../../network/doorId'
@@ -95,8 +95,8 @@
   let selectedType = $state<string | null>(null)
   let debugInfo = $state<PlayerDebugInfo | null>(null)
   let openDoorIds = $state<ReadonlySet<string>>(new Set())
-  /** Placement ids in the loaded region whose door is open. */
-  let openHere: Set<number> = new Set()
+  /** Open-door bits of the loaded region's placements, by placement id. */
+  let openHere: Map<number, number> = new Map()
   let isEditorMode = $state(false)
   let currentFloor = $state(0)
   let currentHouseId = $state<string | null>(null)
@@ -368,16 +368,20 @@
   )
   const swingDoors = $derived(
     placements.flatMap((placement) => {
-      const door = objectDefsById.get(placement.type)?.swingDoor
-      const clone = door && cloneById.get(placement.id)
-      if (!door || !clone) return []
-      const leaves = door.leaves.flatMap((leaf) => {
-        const node = clone.getObjectByName(leaf.node)
-        return node
-          ? [{ node, open: THREE.MathUtils.degToRad(leaf.openDeg) }]
+      const def = objectDefsById.get(placement.type)
+      const clone = def && cloneById.get(placement.id)
+      if (!clone) return []
+      return doorwaysOf(placement, def).flatMap(({ door, leaves }) => {
+        const nodes = leaves.flatMap((leaf) => {
+          const node = clone.getObjectByName(leaf.node)
+          return node
+            ? [{ node, open: THREE.MathUtils.degToRad(leaf.openDeg) }]
+            : []
+        })
+        return nodes.length > 0
+          ? [{ id: placement.id, door, leaves: nodes }]
           : []
       })
-      return leaves.length > 0 ? [{ id: placement.id, leaves }] : []
     })
   )
   $effect(() => {
@@ -385,15 +389,17 @@
     setObjectDoorways(
       placements.flatMap((placement) => {
         const def = objectDefsById.get(placement.type)
-        if (!def?.swingDoor || !def.perimeter) return []
-        return [
-          {
-            objectId: placement.id,
-            door: objectDoorId(rx, rz, placement.id),
-            y: placement.y,
-            ...doorwayOf(placement, def.perimeter),
-          },
-        ]
+        if (!def) return []
+        return doorwaysOf(placement, def).map(({ door, ax, az, bx, bz }) => ({
+          objectId: placement.id,
+          index: door,
+          door: objectDoorId(rx, rz, placement.id, door),
+          y: placement.y,
+          ax,
+          az,
+          bx,
+          bz,
+        }))
       })
     )
   })
@@ -505,8 +511,8 @@
           child.visible = !hidden || child.name === ground
       })
     }
-    for (const { id, leaves } of swingDoors) {
-      const open = openHere.has(id)
+    for (const { id, door, leaves } of swingDoors) {
+      const open = ((openHere.get(id) ?? 0) >> door) & 1
       const step = (DOOR_SWING_SPEED * deltaTime) / 1000
       for (const leaf of leaves) {
         const target = open ? leaf.open : 0
@@ -589,13 +595,24 @@
   let unsolidIds: Set<number> = new Set()
   function refreshOpenHere(): boolean {
     const { rx, rz } = lastLoadedRegion
-    const next = new Set(
-      placements
-        .filter((p) => openDoorIds.has(objectDoorId(rx, rz, p.id)))
-        .map((p) => p.id)
+    const bitsOf = (id: number) =>
+      [0, 1, 2, 3, 4, 5, 6, 7].reduce(
+        (bits, door) =>
+          openDoorIds.has(objectDoorId(rx, rz, id, door))
+            ? bits | (1 << door)
+            : bits,
+        0
+      )
+    const next = new Map(
+      openDoorIds.size > 0
+        ? placements
+            .map((p) => [p.id, bitsOf(p.id)] as const)
+            .filter(([, bits]) => bits !== 0)
+        : []
     )
     const changed =
-      next.size !== openHere.size || [...next].some((id) => !openHere.has(id))
+      next.size !== openHere.size ||
+      [...next].some(([id, bits]) => openHere.get(id) !== bits)
     if (changed) openHere = next
     return changed
   }
@@ -610,7 +627,9 @@
       rx,
       rz,
       openHere.size
-        ? solid.map((p) => (openHere.has(p.id) ? { ...p, doorOpen: true } : p))
+        ? solid.map((p) =>
+            openHere.has(p.id) ? { ...p, openDoors: openHere.get(p.id) } : p
+          )
         : solid
     )
   }
@@ -824,21 +843,22 @@
           ? 'mailbox'
           : null
     if (clickKind) clone.userData.objectClickKind = clickKind
-    if (catDef?.swingDoor && catDef.perimeter) {
-      const door = doorwayOf(p, catDef.perimeter)
-      const clickPosition = {
-        x: (door.ax + door.bx) / 2,
-        y: p.y,
-        z: (door.az + door.bz) / 2,
-      }
-      for (const leaf of catDef.swingDoor.leaves) {
-        const node = clone.getObjectByName(leaf.node)
-        if (!node) continue
-        node.userData = {
-          ...node.userData,
-          objectId: p.id,
-          objectClickKind: 'object_door' satisfies ObjectClickKind,
-          clickPosition,
+    if (catDef) {
+      for (const door of doorwaysOf(p, catDef)) {
+        const clickPosition = {
+          x: (door.ax + door.bx) / 2,
+          y: p.y,
+          z: (door.az + door.bz) / 2,
+        }
+        for (const leaf of door.leaves) {
+          const node = clone.getObjectByName(leaf.node)
+          if (!node) continue
+          node.userData = {
+            ...node.userData,
+            objectId: p.id,
+            objectDoor: door.door,
+            clickPosition,
+          }
         }
       }
     }

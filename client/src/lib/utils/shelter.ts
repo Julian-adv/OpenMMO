@@ -6,22 +6,46 @@ export function normalizeYaw(yaw: number): number {
   return ((yaw % 360) + 360) % 360
 }
 
-/** World segment across the entrance, as the server's `shelter::doorway`. */
-export function doorwayOf(
+export interface Doorway {
+  /** Door index: 0 is the entrance, side doors follow. */
+  door: number
+  leaves: { node: string; openDeg: number }[]
+  ax: number
+  az: number
+  bx: number
+  bz: number
+}
+
+/** World segments of an object's doors, as the server's `shelter::doorways`. */
+export function doorwaysOf(
   placement: ObjectPlacement,
-  perimeter: NonNullable<ObjectDef['perimeter']>
-): { ax: number; az: number; bx: number; bz: number } {
+  def: Pick<ObjectDef, 'perimeter' | 'swingDoor' | 'sideDoors'>
+): Doorway[] {
+  const perimeter = def.perimeter
+  if (!perimeter) return []
   const yaw = (placement.rotation * Math.PI) / 180
   const cos = Math.cos(yaw)
   const sin = Math.sin(yaw)
   const hw = perimeter.entranceWidth / 2
   const hd = perimeter.depth / 2
-  return {
-    ax: placement.x - hw * cos + hd * sin,
-    az: placement.z + hw * sin + hd * cos,
-    bx: placement.x + hw * cos + hd * sin,
-    bz: placement.z - hw * sin + hd * cos,
-  }
+  const doors = [
+    ...(def.swingDoor
+      ? [{ door: 0, segment: [-hw, hd, hw, hd], leaves: def.swingDoor.leaves }]
+      : []),
+    ...(def.sideDoors ?? []).map((side, index) => ({
+      door: index + 1,
+      segment: side.segment,
+      leaves: side.leaves,
+    })),
+  ]
+  return doors.map(({ door, segment: [ax, az, bx, bz], leaves }) => ({
+    door,
+    leaves,
+    ax: placement.x + ax * cos + az * sin,
+    az: placement.z - ax * sin + az * cos,
+    bx: placement.x + bx * cos + bz * sin,
+    bz: placement.z - bx * sin + bz * cos,
+  }))
 }
 
 export function isInsideShelter(

@@ -1,6 +1,6 @@
 //! One id for every door a player can open, as carried by `ToggleDoor` and
 //! `DoorState`: `house:{house}:{room}:{dir}:{segment}`,
-//! `dungeon:{entrance}:{depth}:{door}`, `object:{rx}:{rz}:{object}`.
+//! `dungeon:{entrance}:{depth}:{door}`, `object:{rx}:{rz}:{object}:{door}`.
 
 use crate::housing::WallDirection;
 use crate::{ClientMessage, ServerMessage};
@@ -21,8 +21,14 @@ pub enum DoorId {
         depth: u8,
         door_id: u32,
     },
-    /// The `swingDoor` of a placed object in region `(rx, rz)`.
-    Object { rx: i32, rz: i32, object_id: u32 },
+    /// A door of a placed object in region `(rx, rz)`: 0 is its entrance
+    /// `swingDoor`, `sideDoors` follow.
+    Object {
+        rx: i32,
+        rz: i32,
+        object_id: u32,
+        door: u8,
+    },
 }
 
 impl DoorId {
@@ -43,8 +49,13 @@ impl DoorId {
         }
     }
 
-    pub fn object(rx: i32, rz: i32, object_id: u32) -> Self {
-        Self::Object { rx, rz, object_id }
+    pub fn object(rx: i32, rz: i32, object_id: u32, door: u8) -> Self {
+        Self::Object {
+            rx,
+            rz,
+            object_id,
+            door,
+        }
     }
 
     /// House and entrance ids are free text, so the numbers are read from the right.
@@ -71,10 +82,11 @@ impl DoorId {
                 let rx = parts.next()?.parse().ok()?;
                 let rz = parts.next()?.parse().ok()?;
                 let object_id = parts.next()?.parse().ok()?;
+                let door = parts.next()?.parse().ok()?;
                 parts
                     .next()
                     .is_none()
-                    .then(|| Self::object(rx, rz, object_id))
+                    .then(|| Self::object(rx, rz, object_id, door))
             }
             _ => None,
         }
@@ -113,7 +125,12 @@ impl fmt::Display for DoorId {
                 depth,
                 door_id,
             } => write!(f, "dungeon:{entrance_id}:{depth}:{door_id}"),
-            Self::Object { rx, rz, object_id } => write!(f, "object:{rx}:{rz}:{object_id}"),
+            Self::Object {
+                rx,
+                rz,
+                object_id,
+                door,
+            } => write!(f, "object:{rx}:{rz}:{object_id}:{door}"),
         }
     }
 }
@@ -129,7 +146,7 @@ mod tests {
             DoorId::house("odd:id", 0, WallDirection::North, 0),
             DoorId::dungeon("old_crypt", 0, 0),
             DoorId::dungeon("odd:id", 3, 4_000_000_000),
-            DoorId::object(-23, 74, 9),
+            DoorId::object(-23, 74, 9, 1),
         ] {
             assert_eq!(DoorId::parse(&door.to_string()), Some(door));
         }
@@ -143,8 +160,9 @@ mod tests {
     fn malformed_ids_are_refused() {
         for door in [
             "",
-            "object:1:2",
-            "object:1:2:3:4",
+            "object:1:2:3",
+            "object:1:2:3:4:5",
+            "object:1:2:3:300",
             "object:a:2:3",
             "dungeon::1:2",
             "dungeon:crypt:300:2",

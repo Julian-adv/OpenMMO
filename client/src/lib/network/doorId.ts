@@ -11,7 +11,7 @@ export type DoorAddress =
       segmentIndex: number
     }
   | { kind: 'dungeon'; entranceId: string; depth: number; doorId: number }
-  | { kind: 'object'; rx: number; rz: number; objectId: number }
+  | { kind: 'object'; rx: number; rz: number; objectId: number; door: number }
 
 export function houseDoorId(
   houseId: string,
@@ -30,8 +30,14 @@ export function dungeonDoorId(
   return `dungeon:${entranceId}:${depth}:${doorId}`
 }
 
-export function objectDoorId(rx: number, rz: number, id: number): string {
-  return `object:${rx}:${rz}:${id}`
+/** `door` 0 is the object's entrance; side doors follow. */
+export function objectDoorId(
+  rx: number,
+  rz: number,
+  id: number,
+  door: number
+): string {
+  return `object:${rx}:${rz}:${id}:${door}`
 }
 
 function int(text: string | undefined): number | null {
@@ -43,10 +49,10 @@ export function parseDoorId(door: string): DoorAddress | null {
   const parts = door.split(':')
   const kind = parts.shift()
   if (kind === 'object') {
-    const [rx, rz, objectId] = parts.map(int)
-    if (parts.length !== 3 || rx == null || rz == null || objectId == null)
-      return null
-    return objectId < 0 ? null : { kind, rx, rz, objectId }
+    const [rx, rz, objectId, door] = parts.map(int)
+    if (parts.length !== 4 || rx == null || rz == null) return null
+    if (objectId == null || door == null || objectId < 0) return null
+    return door < 0 || door > 7 ? null : { kind, rx, rz, objectId, door }
   }
   if (kind === 'dungeon') {
     const doorId = int(parts.pop())

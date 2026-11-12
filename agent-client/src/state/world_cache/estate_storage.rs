@@ -27,7 +27,7 @@ impl WorldCache {
                 z: chest.position.z,
                 rotation_deg: chest.rotation_deg,
                 floor_level: u8::try_from(chest.floor_level).ok()?,
-                door_open: false,
+                open_doors: 0,
             }])
         });
         let key = cache_key(chest.id);

@@ -1168,7 +1168,7 @@ async fn auscultation_preserves_seated_and_resting_player_poses() {
                 z: player.position.z,
                 rotation_deg: 0.0,
                 floor_level: player.floor_level as u8,
-                door_open: false,
+                open_doors: 0,
             }],
         );
         gs.players

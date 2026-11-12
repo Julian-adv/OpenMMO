@@ -36,7 +36,7 @@ pub struct WorldCache {
     /// Static placements used to resolve furniture interactions.
     furniture_placements: HashMap<(i32, i32), Vec<FurniturePlacement>>,
     /// Open `swingDoor` objects by (region x, region z, placement id).
-    object_doors: HashSet<(i32, i32, u32)>,
+    object_doors: HashSet<(i32, i32, u32, u8)>,
     fence_views: HashMap<
         PlayerId,
         HashMap<onlinerpg_shared::fence::FenceEdge, onlinerpg_shared::fence::Fence>,
@@ -667,7 +667,13 @@ impl WorldCache {
     /// `furniture` resolution). Empty/non-solid regions clear the entry.
     pub fn sync_furniture(&mut self, rx: i32, rz: i32, mut placements: Vec<FurniturePlacement>) {
         for p in &mut placements {
-            p.door_open = self.object_doors.contains(&(rx, rz, p.id));
+            p.open_doors = self
+                .object_doors
+                .iter()
+                .filter(|&&(x, z, id, _)| (x, z, id) == (rx, rz, p.id))
+                .fold(0, |mask, &(.., door)| {
+                    mask | 1u8.checked_shl(door.into()).unwrap_or(0)
+                });
         }
         let key = furniture::region_cache_key(rx, rz);
         furniture::sync_passability(&mut self.passability_cache, &key, &placements);
@@ -695,14 +701,29 @@ impl WorldCache {
                 depth,
                 door_id,
             }) => self.set_dungeon_door(&entrance_id, depth, door_id, is_open),
-            Some(DoorId::Object { rx, rz, object_id }) => {
-                self.set_object_door((rx, rz, object_id), is_open)
-            }
+            Some(DoorId::Object {
+                rx,
+                rz,
+                object_id,
+                door,
+            }) => self.set_object_door((rx, rz, object_id, door), is_open),
             None => {}
         }
     }
 
-    fn set_object_door(&mut self, key @ (rx, rz, _): (i32, i32, u32), is_open: bool) {
+    /// Run `f` on the passability a shut door would leave if it stood open.
+    pub fn with_door_open<R>(
+        &mut self,
+        door: &str,
+        f: impl FnOnce(&pathfinding::PassabilityCache) -> R,
+    ) -> R {
+        self.set_door(door, Some(true));
+        let result = f(&self.passability_cache);
+        self.set_door(door, Some(false));
+        result
+    }
+
+    fn set_object_door(&mut self, key @ (rx, rz, ..): (i32, i32, u32, u8), is_open: bool) {
         let changed = if is_open {
             self.object_doors.insert(key)
         } else {
@@ -722,12 +743,12 @@ impl WorldCache {
         self.furniture_placements
             .iter()
             .flat_map(|(&(rx, rz), group)| group.iter().map(move |p| (rx, rz, p)))
-            .filter(|(_, _, p)| p.floor_level == floor && !p.door_open)
-            .filter_map(|(rx, rz, p)| {
-                Some((
-                    DoorId::object(rx, rz, p.id),
-                    onlinerpg_shared::shelter::doorway(p)?,
-                ))
+            .filter(|(_, _, p)| p.floor_level == floor)
+            .flat_map(|(rx, rz, p)| {
+                onlinerpg_shared::shelter::doorways(p)
+                    .into_iter()
+                    .filter(|(door, _)| p.open_doors >> door & 1 == 0)
+                    .map(move |(door, segment)| (DoorId::object(rx, rz, p.id, door), segment))
             })
             .collect()
     }
@@ -1125,16 +1146,19 @@ mod interest_tests {
             z: 100.0,
             rotation_deg: 0.0,
             floor_level: 0,
-            door_open: false,
+            open_doors: 0,
         };
         let mut cache = WorldCache::new();
         assert!(cache.ensure_world_epoch("first"));
         cache.sync_furniture(0, 0, vec![hall.clone()]);
-        cache.set_door("object:0:0:121", Some(true));
+        cache.set_door("object:0:0:121:0", Some(true));
+        cache.set_door("object:0:0:121:1", Some(true));
         assert!(cache.closed_object_doors(0).is_empty());
+        cache.set_door("object:0:0:121:0", Some(false));
+        assert_eq!(cache.closed_object_doors(0).len(), 1);
 
         assert!(cache.ensure_world_epoch("second"));
         cache.sync_furniture(0, 0, vec![hall]);
-        assert_eq!(cache.closed_object_doors(0).len(), 1);
+        assert_eq!(cache.closed_object_doors(0).len(), 2);
     }
 }

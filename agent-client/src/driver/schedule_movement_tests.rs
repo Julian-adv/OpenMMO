@@ -434,7 +434,7 @@ async fn furniture_schedule_requests_the_authored_goal_and_uses_the_server_stop(
                 z: 0.5,
                 rotation_deg: 0.0,
                 floor_level: 0,
-                door_open: false,
+                open_doors: 0,
             }],
         );
     let task = spawn_move(
@@ -691,6 +691,7 @@ async fn opens_a_door_from_behind_its_building(
     state: Arc<Mutex<SharedState>>,
     mut rx: mpsc::Receiver<ClientMessage>,
     start: (f32, f32),
+    stalled: (f32, f32),
     target: (f32, f32),
     outside: (f32, f32),
     door: DoorId,
@@ -712,7 +713,7 @@ async fn opens_a_door_from_behind_its_building(
     state
         .lock()
         .await
-        .push_event(progress_at(id, start.0, start.1, MoveStatus::NodeLimit));
+        .push_event(progress_at(id, stalled.0, stalled.1, MoveStatus::Partial));
     let (id, x, z) = goal(&mut rx).await;
     assert!(
         (x - outside.0).abs() < 0.01 && (z - outside.1).abs() < 0.01,
@@ -748,12 +749,12 @@ async fn walker_by_the_chapel() -> (Arc<Mutex<SharedState>>, mpsc::Receiver<Clie
             vec![FurniturePlacement {
                 id: 121,
                 type_id: "union_hall".into(),
-                x: -1444.7807,
+                x: -1444.781,
                 y: 1.0343,
-                z: 4798.4668,
+                z: 4798.467,
                 rotation_deg: 270.0,
                 floor_level: 0,
-                door_open: false,
+                open_doors: 0,
             }],
         );
     (state, rx)
@@ -776,14 +777,14 @@ async fn a_door_side_the_server_refuses_gives_way_to_the_other_side() {
         .lock()
         .await
         .push_event(progress_at(id, start.0, start.1, MoveStatus::NodeLimit));
-    let (id, x, _) = goal(&mut rx).await;
-    assert!((x + 1454.0807).abs() < 0.01, "approached {x}");
+    let (id, _, z) = goal(&mut rx).await;
+    assert!((z - 4803.537).abs() < 0.01, "approached {z}");
     state
         .lock()
         .await
         .push_event(progress_at(id, start.0, start.1, MoveStatus::Partial));
     let (id, x, z) = goal(&mut rx).await;
-    assert!((x + 1452.4807).abs() < 0.01, "approached {x}");
+    assert!((z - 4801.937).abs() < 0.01, "approached {z}");
     state
         .lock()
         .await
@@ -796,15 +797,80 @@ async fn a_door_side_the_server_refuses_gives_way_to_the_other_side() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_chapel_door_is_opened_from_outside_when_approached_from_the_chancel_end() {
+async fn a_shut_door_is_opened_when_it_saves_most_of_an_open_way_round() {
+    let (state, mut rx) = walker_by_the_chapel().await;
+    {
+        let mut s = state.lock().await;
+        s.self_player.as_mut().unwrap().position = p(-1425.5, 1.3, 4801.5);
+        s.world_cache
+            .write()
+            .unwrap()
+            .set_door(&DoorId::object(-2, 4, 121, 0).to_string(), Some(true));
+    }
+    let task = spawn_move(
+        &state,
+        ScheduleEntry {
+            pos: [-1434.33, 1.3, 4798.47],
+            ..Default::default()
+        },
+    );
+    let (id, x, z) = goal(&mut rx).await;
+    assert!(
+        (x + 1431.581).abs() < 0.01 && (z - 4803.537).abs() < 0.01,
+        "approached ({x}, {z})"
+    );
+    state
+        .lock()
+        .await
+        .push_event(progress_at(id, x, z, MoveStatus::Arrived));
+    let command = timeout(Duration::from_secs(1), rx.recv()).await;
+    assert!(matches!(
+        command,
+        Ok(Some(ClientMessage::ToggleDoor { door })) if door == "object:-2:4:121:1"
+    ));
+    state
+        .lock()
+        .await
+        .push_event(DoorId::object(-2, 4, 121, 1).state(Some(true)));
+    let (_, x, z) = goal(&mut rx).await;
+    assert_eq!((x, z), (-1434.33, 4798.47));
+    task.abort();
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_open_way_round_is_kept_when_no_shut_door_saves_much() {
+    let (state, mut rx) = walker_by_the_chapel().await;
+    {
+        let mut s = state.lock().await;
+        s.self_player.as_mut().unwrap().position = p(-1434.33, 1.3, 4798.47);
+        s.world_cache
+            .write()
+            .unwrap()
+            .set_door(&DoorId::object(-2, 4, 121, 0).to_string(), Some(true));
+    }
+    let task = spawn_move(
+        &state,
+        ScheduleEntry {
+            pos: [-1470.5, 1.3, 4798.5],
+            ..Default::default()
+        },
+    );
+    let (_, x, z) = goal(&mut rx).await;
+    assert_eq!((x, z), (-1470.5, 4798.5));
+    task.abort();
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_priest_door_is_opened_from_outside_when_approached_from_the_rectory() {
     let (state, rx) = walker_by_the_chapel().await;
     opens_a_door_from_behind_its_building(
         state,
         rx,
         (-1425.5, 4798.5),
+        (-1425.5, 4798.5),
         (-1434.33, 4798.47),
-        (-1454.0807, 4798.4668),
-        DoorId::object(-2, 4, 121),
+        (-1431.581, 4803.537),
+        DoorId::object(-2, 4, 121, 1),
     )
     .await;
 }
@@ -857,11 +923,40 @@ async fn a_house_door_is_opened_from_outside_when_approached_from_behind() {
         state,
         rx,
         (-1416.5, 4802.5),
+        (-1418.5, 4804.5),
         (-1418.9, 4802.6),
         (-1424.5, 4801.5),
         DoorId::house("rectory", 0, WallDirection::West, 1),
     )
     .await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_leg_that_stops_beside_a_far_target_completes_the_schedule() {
+    let (state, mut rx) = walker();
+    let task = spawn_move(
+        &state,
+        ScheduleEntry {
+            pos: [50.0, 0.0, 0.5],
+            action: Some("bed".into()),
+            object_id: Some(23),
+            ..Default::default()
+        },
+    );
+    let (id, x, _) = goal(&mut rx).await;
+    assert!(x < 49.0, "first leg {x}");
+    state
+        .lock()
+        .await
+        .push_event(progress(id, 48.4, MoveStatus::Partial));
+    timeout(Duration::from_secs(1), task)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(ClientMessage::PlayerFace { .. })
+    ));
 }
 
 #[tokio::test(start_paused = true)]

@@ -21,6 +21,8 @@ export function resetDoorStates() {
 
 export interface ObjectDoorway {
   objectId: number
+  /** 0 is the object's entrance; side doors follow. */
+  index: number
   /** `DoorState` id. */
   door: string
   y: number
@@ -29,6 +31,9 @@ export interface ObjectDoorway {
   bx: number
   bz: number
 }
+
+/** As the agent's door approach in `agent-client/src/driver/walk.rs`. */
+const DOORWAY_SIDE_OFFSET = 0.8
 
 let doorways: ObjectDoorway[] = []
 
@@ -49,9 +54,35 @@ function doorwayDistance(point: Position, door: ObjectDoorway): number {
   return Math.hypot(dx - vx * t, dz - vz * t)
 }
 
-/** Door id of a clicked object among the loaded doorways. */
-export function objectDoorOf(objectId: number): string | null {
-  return doorways.find((door) => door.objectId === objectId)?.door ?? null
+/** Doorway of a clicked leaf among the loaded ones. */
+export function objectDoorwayOf(
+  objectId: number,
+  index: number
+): ObjectDoorway | null {
+  return (
+    doorways.find(
+      (door) => door.objectId === objectId && door.index === index
+    ) ?? null
+  )
+}
+
+/** Standing points either side of a doorway, nearest to `from` first. */
+export function doorwaySides(door: ObjectDoorway, from: Position): Position[] {
+  const vx = shortestWrappedDeltaX(door.ax, door.bx)
+  const vz = door.bz - door.az
+  const length = Math.max(Math.hypot(vx, vz), 1e-3)
+  const reach = DOORWAY_SIDE_OFFSET / length
+  const x = door.ax + vx / 2
+  const z = (door.az + door.bz) / 2
+  const distance = (p: Position) =>
+    Math.hypot(shortestWrappedDeltaX(from.x, p.x), p.z - from.z)
+  return [1, -1]
+    .map((sign) => ({
+      x: x + sign * vz * reach,
+      y: door.y,
+      z: z - sign * vx * reach,
+    }))
+    .sort((a, b) => distance(a) - distance(b))
 }
 
 export function findNearestObjectDoor(

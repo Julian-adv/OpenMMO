@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Vector3 } from 'three'
-import { doorwayOf, isInsideShelter, normalizeYaw } from './shelter'
+import { doorwaysOf, isInsideShelter, normalizeYaw } from './shelter'
 import type { ObjectPlacement } from '../stores/editorStore'
 import { WORLD_WIDTH_X } from '../terrain/world-wrap'
 
@@ -72,15 +72,19 @@ describe('object doorway', () => {
       rotation: 270,
       floorLevel: 0,
     }
-    const door = doorwayOf(hall, {
-      width: 12,
-      depth: 17,
-      height: 9,
-      entranceWidth: 3.8,
+    const [door, side] = doorwaysOf(hall, {
+      perimeter: { width: 12, depth: 17, height: 9, entranceWidth: 3.8 },
+      swingDoor: { leaves: [] },
+      sideDoors: [{ segment: [4.27, -13.75, 4.27, -12.65], leaves: [] }],
     })
+    expect(door.door).toBe(0)
     expect((door.ax + door.bx) / 2).toBeCloseTo(-1453.5)
     expect((door.az + door.bz) / 2).toBeCloseTo(4797)
     expect(Math.abs(door.az - door.bz)).toBeCloseTo(3.8)
     expect(door.ax).toBeCloseTo(door.bx)
+    expect(side.door).toBe(1)
+    expect((side.ax + side.bx) / 2).toBeCloseTo(-1431.8)
+    expect(side.az).toBeCloseTo(4801.27)
+    expect(side.bz).toBeCloseTo(4801.27)
   })
 })

@@ -158,6 +158,11 @@ export interface ObjectDef {
   roofHeight?: number
   /** Leaves of a door across the `perimeter` entrance; the server holds its state. */
   swingDoor?: { leaves: { node: string; openDeg: number }[] }
+  /** Doors in other walls: `segment` is the leaf plane `[ax, az, bx, bz]` in local metres. */
+  sideDoors?: {
+    segment: [number, number, number, number]
+    leaves: { node: string; openDeg: number }[]
+  }[]
   /** Ground support area, leveled at local Y=0 on ground-floor placement. */
   foundation?: { width: number; depth: number }
   perimeter?: {
@@ -221,8 +226,8 @@ export interface ObjectPlacement {
   floorLevel: number
   /** Per-instance text shown as a speech bubble on hover (textLabel objects). */
   text?: string
-  /** Live `swingDoor` state for collision; never saved. */
-  doorOpen?: boolean
+  /** Open doors by bit for collision (0 is the entrance, side doors follow); never saved. */
+  openDoors?: number
   /** Placed by the server from data-src/field_bosses.csv; not editable. */
   fixed?: boolean
 }

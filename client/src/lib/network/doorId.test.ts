@@ -19,20 +19,22 @@ describe('door ids', () => {
       depth: 1,
       doorId: 7,
     })
-    expect(parseDoorId(objectDoorId(-23, 74, 9))).toEqual({
+    expect(parseDoorId(objectDoorId(-23, 74, 9, 1))).toEqual({
       kind: 'object',
       rx: -23,
       rz: 74,
       objectId: 9,
+      door: 1,
     })
   })
 
   it('refuses malformed ids', () => {
     for (const door of [
       '',
-      'object:1:2',
-      'object:1:2:3:4',
-      'object:a:2:3',
+      'object:1:2:3',
+      'object:1:2:3:4:5',
+      'object:1:2:3:8',
+      'object:a:2:3:0',
       'dungeon::1:2',
       'house:h:0:up:1',
       'house::0:north:1',

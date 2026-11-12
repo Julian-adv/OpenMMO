@@ -240,7 +240,7 @@ impl FieldBossDef {
             z: a.z,
             rotation_deg: a.rotation,
             floor_level: 0,
-            door_open: false,
+            open_doors: 0,
         });
         let dormant = self.dormant.as_ref().map(|d| FurniturePlacement {
             id: self.dormant_placement_id(),
@@ -250,7 +250,7 @@ impl FieldBossDef {
             z: self.z,
             rotation_deg: self.rotation,
             floor_level: 0,
-            door_open: false,
+            open_doors: 0,
         });
         altar.into_iter().chain(dormant).collect()
     }

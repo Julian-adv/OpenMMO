@@ -2128,7 +2128,7 @@ mod tests {
             z: 4749.05,
             rotation_deg: 0.0,
             floor_level: 0,
-            door_open: false,
+            open_doors: 0,
         };
         s.world_cache
             .write()

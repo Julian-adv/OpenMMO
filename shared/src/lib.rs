@@ -285,7 +285,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// `ToggleDungeonDoor`, `ToggleObjectDoor`, `DungeonDoorState`,
 /// `DungeonDoorToggled` and `DoorToggled`.
 /// v152: `MergerCelebrated`, the nearby petals and bells of a sworn merger.
-pub const PROTOCOL_VERSION: u32 = 152;
+/// v153: object door ids carry a door index (`object:{rx}:{rz}:{object}:{door}`)
+/// so one object can have side doors besides its entrance.
+pub const PROTOCOL_VERSION: u32 = 153;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

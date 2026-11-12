@@ -83,11 +83,7 @@ const STAIR_CLICK_RAY_OFFSETS = [
 ]
 
 /** Catalog objects whose click opens a dialog; set as `userData.objectClickKind`. */
-export type ObjectClickKind =
-  | 'altar'
-  | 'notice_board'
-  | 'mailbox'
-  | 'object_door'
+export type ObjectClickKind = 'altar' | 'notice_board' | 'mailbox'
 
 export type ClickIntent =
   | {
@@ -144,6 +140,8 @@ export type ClickIntent =
   | {
       type: 'object_door'
       objectId: number
+      /** Door index of the clicked leaf: 0 is the entrance, side doors follow. */
+      door: number
       position: Position
     }
   | {
@@ -614,6 +612,14 @@ class InputHandler {
         let obj: THREE.Object3D | null = objectHit.object
         while (obj) {
           const d = obj.userData
+          if (d && d.objectId != null && d.objectDoor != null) {
+            return {
+              type: 'object_door',
+              objectId: d.objectId as number,
+              door: d.objectDoor as number,
+              position: d.clickPosition as Position,
+            }
+          }
           if (d && d.objectId != null && d.objectClickKind) {
             return {
               type: d.objectClickKind as ObjectClickKind,

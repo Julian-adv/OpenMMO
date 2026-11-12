@@ -30,7 +30,7 @@ fn board_state() -> SharedState {
             z: 0.0,
             rotation_deg: 0.0,
             floor_level: 0,
-            door_open: false,
+            open_doors: 0,
         }],
     );
     state

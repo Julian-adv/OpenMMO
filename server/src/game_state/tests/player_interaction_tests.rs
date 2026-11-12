@@ -36,7 +36,7 @@ fn chair() -> FurniturePlacement {
         z: 50.5,
         rotation_deg: 0.0,
         floor_level: 0,
-        door_open: false,
+        open_doors: 0,
     }
 }
 
@@ -197,7 +197,7 @@ async fn ysolde_camp_routine_lights_the_fire_sleeps_and_patrols() {
         z: 5517.6353,
         rotation_deg: 270.0,
         floor_level: 0,
-        door_open: false,
+        open_doors: 0,
     };
     let cot = FurniturePlacement {
         id: 2,

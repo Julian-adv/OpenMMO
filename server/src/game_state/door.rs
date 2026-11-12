@@ -22,8 +22,13 @@ impl GameState {
                 self.toggle_dungeon_door(player_id, &entrance_id, depth, door_id)
                     .await
             }
-            DoorId::Object { rx, rz, object_id } => {
-                self.toggle_object_door(player_id, (rx, rz), object_id)
+            DoorId::Object {
+                rx,
+                rz,
+                object_id,
+                door,
+            } => {
+                self.toggle_object_door(player_id, (rx, rz), object_id, door)
                     .await
             }
         }

@@ -46,6 +46,14 @@ const MAX_DOOR_PROBES: usize = 6;
 
 const MAX_DOOR_SEARCH_DIST: f32 = 40.0;
 
+/// A shut door is opened as a shortcut when the walk through it is this
+/// fraction of the open route or less, and shorter by `SHORTCUT_MIN_SAVING`.
+const SHORTCUT_RATIO: f32 = 0.6;
+
+const SHORTCUT_MIN_SAVING: f32 = 15.0;
+
+const MAX_SHORTCUT_DOORS: usize = 3;
+
 pub(super) enum WalkTo<'a> {
     Monster(&'a str),
     Character(&'a PlayerId),
@@ -242,12 +250,37 @@ async fn walk_inner(
     let mut request_is_final = false;
     let mut sent_at = Instant::now();
     let mut doors_opened = 0;
+    let mut shortcut_checked = false;
     let mut long_route = LongRoute::default();
     let mut request_is_planned = false;
     let relocations = state.lock().await.relocations;
     loop {
         if started.elapsed().as_secs_f32() > tuning.max_secs {
             return Walked::Lost(LostReason::Timeout);
+        }
+        if schedule && request_id.is_none() && !shortcut_checked {
+            shortcut_checked = true;
+            let target = {
+                let s = state.lock().await;
+                (s.passability_floor() == to.floor(&s) && !s.schedule_combat_active())
+                    .then(|| to.position(&s))
+                    .flatten()
+            };
+            if let Some(target) = target {
+                if doors_opened < tuning.max_doors
+                    && open_shortcut_door(
+                        state,
+                        (target.x, target.z),
+                        background,
+                        sprint,
+                        owned_request,
+                    )
+                    .await
+                {
+                    doors_opened += 1;
+                }
+                continue;
+            }
         }
         let mut s = state.lock().await;
         if s.relocations != relocations {
@@ -302,11 +335,12 @@ async fn walk_inner(
         }
         let terminal = status
             .is_some_and(|status| !matches!(status, MoveStatus::Moving | MoveStatus::Searching));
+        // A leg of a long walk can stop beside the target itself.
         if schedule
             && terminal
-            && request_is_final
             && delta.dist <= SCHEDULE_ARRIVAL_RADIUS
             && s.passability_floor() == target_floor
+            && !house_wall_between(&s, &me.position, &target)
             && matches!(
                 status,
                 Some(MoveStatus::Arrived | MoveStatus::Partial | MoveStatus::Blocked)
@@ -368,6 +402,7 @@ async fn walk_inner(
                     && open_blocking_door(state, background, sprint, owned_request).await
                 {
                     doors_opened += 1;
+                    shortcut_checked = false;
                     long_route = LongRoute::default();
                     request_id = None;
                     last_goal = None;
@@ -405,6 +440,29 @@ async fn walk_inner(
     }
 }
 
+/// A spot within arrival radius can still be the wrong side of a house wall.
+fn house_wall_between(s: &SharedState, from: &Position, to: &Position) -> bool {
+    if s.self_floor_level < 0 {
+        return false;
+    }
+    let floor = s.self_floor_level as u8;
+    let Some(viewer) = s.self_player_id else {
+        return false;
+    };
+    s.world_cache
+        .read()
+        .unwrap()
+        .houses_for(viewer)
+        .any(|house| {
+            let inside = |p: &Position| {
+                house.rooms.iter().any(|room| {
+                    room.floor_level == floor && room.contains_xz(&house.origin, p.x, p.z)
+                })
+            };
+            inside(from) != inside(to)
+        })
+}
+
 struct DoorCandidate {
     toggle: ClientMessage,
     sides: [(f32, f32); 2],
@@ -438,74 +496,11 @@ async fn open_blocking_door(
     };
     let mut tried = Vec::new();
     for (_, door) in candidates.drain(..).take(MAX_DOOR_PROBES) {
-        let ClientMessage::ToggleDoor { door: door_id } = &door.toggle else {
-            continue;
-        };
-        let door_id = door_id.clone();
-        // The straight-line nearer side may lie beyond the wall the door is in.
-        let sides = {
-            let s = state.lock().await;
-            let Some(player) = s.self_player.as_ref() else {
-                return false;
-            };
-            let floor = s.passability_floor();
-            let mut sides = door.sides.map(|(x, z)| {
-                (
-                    !s.find_path_to(x, z, floor).found,
-                    PlanarDelta::to_xz(&player.position, x, z).dist,
-                    (x, z),
-                )
-            });
-            sides.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)));
-            sides
-        };
-        for (_, _, side) in sides {
-            let id = {
-                let mut s = state.lock().await;
-                let Ok(id) = s.request_move(side.0, side.1, background, sprint).await else {
-                    return false;
-                };
-                *owned_request = Some(id);
-                id
-            };
-            let mut outcome = None;
-            for _ in 0..300 {
-                tokio::time::sleep(Duration::from_millis(50)).await;
-                let mut s = state.lock().await;
-                if s.move_request_id != id {
-                    return false;
-                }
-                match s.move_status {
-                    Some(MoveStatus::Arrived) => {
-                        if s.send_flagged_command(door.toggle, background)
-                            .await
-                            .is_err()
-                        {
-                            return false;
-                        }
-                        tracing::info!(
-                            npc = s.self_player.as_ref().map(|p| p.name.as_str()),
-                            door = door_id,
-                            x = side.0,
-                            z = side.1,
-                            failed = ?tried,
-                            "Toggled a door in the way"
-                        );
-                        drop(s);
-                        tokio::time::sleep(DOOR_TOGGLE_WAIT).await;
-                        return true;
-                    }
-                    Some(MoveStatus::Moving | MoveStatus::Searching) | None => {}
-                    status => {
-                        outcome = status;
-                        break;
-                    }
-                }
-            }
-            tried.push(format!(
-                "{door_id}@({:.1},{:.1}):{outcome:?}",
-                side.0, side.1
-            ));
+        match approach_and_toggle(state, door, background, sprint, owned_request, &mut tried).await
+        {
+            Probe::Toggled => return true,
+            Probe::Aborted => return false,
+            Probe::Unreached => {}
         }
     }
     if !tried.is_empty() {
@@ -517,6 +512,194 @@ async fn open_blocking_door(
         );
     }
     false
+}
+
+enum Probe {
+    Toggled,
+    Unreached,
+    Aborted,
+}
+
+async fn approach_and_toggle(
+    state: &Arc<Mutex<SharedState>>,
+    door: DoorCandidate,
+    background: bool,
+    sprint: Option<bool>,
+    owned_request: &mut Option<u32>,
+    tried: &mut Vec<String>,
+) -> Probe {
+    let ClientMessage::ToggleDoor { door: door_id } = &door.toggle else {
+        return Probe::Unreached;
+    };
+    let door_id = door_id.clone();
+    // The straight-line nearer side may lie beyond the wall the door is in.
+    let sides = {
+        let s = state.lock().await;
+        let Some(player) = s.self_player.as_ref() else {
+            return Probe::Aborted;
+        };
+        let floor = s.passability_floor();
+        let from = (player.position.x, player.position.z);
+        let world = s.world_cache.read().unwrap();
+        let mut sides = door.sides.map(|side| {
+            let (length, gap) = route_length(world.passability_cache(), from, side, floor);
+            (gap > 0.5, length, side)
+        });
+        sides.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)));
+        sides
+    };
+    for (_, _, side) in sides {
+        let id = {
+            let mut s = state.lock().await;
+            let Ok(id) = s.request_move(side.0, side.1, background, sprint).await else {
+                return Probe::Aborted;
+            };
+            *owned_request = Some(id);
+            id
+        };
+        let mut outcome = None;
+        for _ in 0..300 {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            let mut s = state.lock().await;
+            if s.move_request_id != id {
+                return Probe::Aborted;
+            }
+            match s.move_status {
+                Some(MoveStatus::Arrived) => {
+                    if s.send_flagged_command(door.toggle, background)
+                        .await
+                        .is_err()
+                    {
+                        return Probe::Aborted;
+                    }
+                    tracing::info!(
+                        npc = s.self_player.as_ref().map(|p| p.name.as_str()),
+                        door = door_id,
+                        x = side.0,
+                        z = side.1,
+                        failed = ?tried,
+                        "Toggled a door in the way"
+                    );
+                    drop(s);
+                    tokio::time::sleep(DOOR_TOGGLE_WAIT).await;
+                    return Probe::Toggled;
+                }
+                Some(MoveStatus::Moving | MoveStatus::Searching) | None => {}
+                status => {
+                    outcome = status;
+                    break;
+                }
+            }
+        }
+        tried.push(format!(
+            "{door_id}@({:.1},{:.1}):{outcome:?}",
+            side.0, side.1
+        ));
+    }
+    Probe::Unreached
+}
+
+/// Walked length of the local route and how far short of `to` it ends.
+fn route_length(
+    cache: &pathfinding::PassabilityCache,
+    from: (f32, f32),
+    to: (f32, f32),
+    floor: u8,
+) -> (f32, f32) {
+    let route = pathfinding::find_and_smooth_path(
+        from.0,
+        from.1,
+        floor,
+        to.0,
+        to.1,
+        floor,
+        cache,
+        onlinerpg_shared::dungeon::path_max_nodes(floor, floor),
+    );
+    let mut at = from;
+    let mut length = 0.0;
+    for point in &route.waypoints {
+        length += PlanarDelta::xz(at.0, at.1, point.x, point.z).dist;
+        at = (point.x, point.z);
+    }
+    (length, PlanarDelta::xz(at.0, at.1, to.0, to.1).dist)
+}
+
+/// The server only routes through open doors, so a walker with an open way
+/// round never meets a shut door that would save most of the walk. Open it.
+async fn open_shortcut_door(
+    state: &Arc<Mutex<SharedState>>,
+    target: (f32, f32),
+    background: bool,
+    sprint: Option<bool>,
+    owned_request: &mut Option<u32>,
+) -> bool {
+    let door = {
+        let s = state.lock().await;
+        let Some(me) = s.self_player.as_ref().map(|p| p.position) else {
+            return false;
+        };
+        if s.self_floor_level < 0 {
+            return false;
+        }
+        let floor = s.passability_floor();
+        let from = (me.x, me.z);
+        let (length, gap) = route_length(
+            s.world_cache.read().unwrap().passability_cache(),
+            from,
+            target,
+            floor,
+        );
+        let straight = PlanarDelta::to_xz(&me, target.0, target.1).dist;
+        if length < straight + SHORTCUT_MIN_SAVING {
+            return false;
+        }
+        let mut doors: Vec<_> = closed_doors_on_our_floor(&s)
+            .into_iter()
+            .filter_map(|door| {
+                let [a, b] = door.sides;
+                let mid = ((a.0 + b.0) / 2.0, (a.1 + b.1) / 2.0);
+                let via = PlanarDelta::to_xz(&me, mid.0, mid.1).dist
+                    + PlanarDelta::xz(mid.0, mid.1, target.0, target.1).dist;
+                (via < length * SHORTCUT_RATIO).then_some((via, door))
+            })
+            .collect();
+        doors.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mut world = s.world_cache.write().unwrap();
+        doors
+            .into_iter()
+            .take(MAX_SHORTCUT_DOORS)
+            .filter_map(|(_, door)| {
+                let ClientMessage::ToggleDoor { door: id } = &door.toggle else {
+                    return None;
+                };
+                let (through, short) =
+                    world.with_door_open(id, |cache| route_length(cache, from, target, floor));
+                (short <= gap + 1.0
+                    && through < length * SHORTCUT_RATIO
+                    && through + SHORTCUT_MIN_SAVING < length)
+                    .then_some((through, door))
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, door)| door)
+    };
+    let Some(door) = door else {
+        return false;
+    };
+    let mut tried = Vec::new();
+    let toggled = matches!(
+        approach_and_toggle(state, door, background, sprint, owned_request, &mut tried).await,
+        Probe::Toggled
+    );
+    if !toggled {
+        let s = state.lock().await;
+        tracing::info!(
+            npc = s.self_player.as_ref().map(|p| p.name.as_str()),
+            failed = ?tried,
+            "A shortcut door could not be reached"
+        );
+    }
+    toggled
 }
 
 fn dungeon_doors_here(s: &SharedState) -> Option<(Arc<Dungeon>, u8, Vec<DoorApproach>, bool)> {

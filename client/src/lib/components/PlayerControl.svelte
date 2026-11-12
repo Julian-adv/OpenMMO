@@ -129,8 +129,9 @@
   } from '../managers/dungeonManager'
   import { housingManager } from '../managers/housingManager'
   import {
+    doorwaySides,
     findNearestObjectDoor,
-    objectDoorOf,
+    objectDoorwayOf,
   } from '../stores/objectDoorStore'
   import { dungeonDoorId, houseDoorId } from '../network/doorId'
   import {
@@ -1752,12 +1753,14 @@
   function toggleObjectDoor(
     intent: Extract<ClickIntent, { type: 'object_door' }>
   ) {
-    approachAndAct(
-      { position: intent.position, ...OBJECT_DOOR_APPROACH },
-      () => {
-        const door = objectDoorOf(intent.objectId)
-        if (door) networkManager.sendToggleDoor(door)
-      }
+    const door = objectDoorwayOf(intent.objectId, intent.door)
+    if (!door || !currentPlayer) return
+    // The nearer side may lie beyond the wall the door is in.
+    const sides = doorwaySides(door, currentPlayer.position)
+    const position =
+      sides.find((side) => routeQuality(side) === 'found') ?? sides[0]
+    approachAndAct({ position, ...OBJECT_DOOR_APPROACH }, () =>
+      networkManager.sendToggleDoor(door.door)
     )
   }
   function openMailbox(intent: Extract<ClickIntent, { type: 'mailbox' }>) {

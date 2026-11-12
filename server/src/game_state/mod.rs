@@ -487,7 +487,7 @@ pub struct GameState {
     interaction_furniture: Arc<std::sync::RwLock<player_interaction::FurnitureIndex>>,
     /// Open `swingDoor` objects by (region x, region z, placement id). A leaf:
     /// never held across an await or together with another lock.
-    open_object_doors: Arc<std::sync::RwLock<HashSet<(i32, i32, u32)>>>,
+    open_object_doors: Arc<std::sync::RwLock<HashSet<object_door::DoorKey>>>,
     notice_cooldowns: Arc<std::sync::Mutex<notice_board::NoticeCooldowns>>,
     mail_cooldowns: Arc<std::sync::Mutex<mail::MailCooldowns>>,
     notice_papers: Arc<std::sync::Mutex<notice_board::NoticePaperCache>>,

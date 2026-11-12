@@ -56,7 +56,15 @@
         { "node": "hall_door_l", "openDeg": 95 },
         { "node": "hall_door_r", "openDeg": -95 }
       ]
-    }
+    },
+    "sideDoors": [
+      {
+        "segment": [4.27, -13.75, 4.27, -12.65],
+        "depth": 0.27,
+        "floor": 0.45,
+        "leaves": [{ "node": "hall_door_back", "openDeg": -95 }]
+      }
+    ]
   },
   {
     "id": "ysolde_field_cot",

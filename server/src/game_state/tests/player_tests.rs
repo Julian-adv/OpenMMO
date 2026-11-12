@@ -427,7 +427,7 @@ fn respawn_bed(id: u32, x: f32) -> onlinerpg_shared::furniture::FurniturePlaceme
         z: respawn.z,
         rotation_deg: 180.0,
         floor_level: respawn.floor_level as u8,
-        door_open: false,
+        open_doors: 0,
     }
 }
 

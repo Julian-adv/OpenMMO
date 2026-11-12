@@ -134,7 +134,7 @@ pub(super) fn placement(chest: &EstateChest) -> FurniturePlacement {
         z: chest.position.z,
         rotation_deg: chest.rotation_deg,
         floor_level: chest.floor_level as u8,
-        door_open: false,
+        open_doors: 0,
     }
 }
 
@@ -723,7 +723,7 @@ impl GameState {
             z: position.z,
             rotation_deg: snapped_rotation,
             floor_level: floor,
-            door_open: false,
+            open_doors: 0,
         };
         if self
             .estate_chests

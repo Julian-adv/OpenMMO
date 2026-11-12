@@ -398,7 +398,7 @@ fn stone_bridge(x: f32, y: f32, z: f32) -> onlinerpg_shared::furniture::Furnitur
         z,
         rotation_deg: 90.0,
         floor_level: 0,
-        door_open: false,
+        open_doors: 0,
     }
 }
 
@@ -411,7 +411,7 @@ fn table_placement(x: f32, z: f32) -> onlinerpg_shared::furniture::FurniturePlac
         z,
         rotation_deg: 0.0,
         floor_level: 0,
-        door_open: false,
+        open_doors: 0,
     }
 }
 
