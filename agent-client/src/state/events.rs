@@ -263,8 +263,7 @@ impl SharedState {
             | ServerMessage::HouseSpawned { .. }
             | ServerMessage::HousesInArea { .. }
             | ServerMessage::HouseUpdated { .. }
-            | ServerMessage::HouseRemoved { .. }
-            | ServerMessage::DoorToggled { .. } => EventUrgency::Noise,
+            | ServerMessage::HouseRemoved { .. } => EventUrgency::Noise,
 
             // A refused interaction should reach the LLM at poll priority, not
             // sink to the idle queue behind everything else.
@@ -623,19 +622,6 @@ impl SharedState {
                 }
                 self.latest_player_moves.remove(&player.id);
             }
-            ServerMessage::DungeonDoorState {
-                entrance_id,
-                depth,
-                door_id,
-                is_open,
-            } => {
-                self.world_cache.write().unwrap().set_dungeon_door(
-                    entrance_id,
-                    *depth,
-                    *door_id,
-                    is_open.unwrap_or(false),
-                );
-            }
             ServerMessage::DungeonPropState {
                 entrance_id,
                 depth,
@@ -661,20 +647,10 @@ impl SharedState {
                 );
             }
             ServerMessage::DoorState { ref door, is_open } => {
-                self.world_cache.write().unwrap().set_door(door, *is_open);
-            }
-            ServerMessage::DungeonDoorToggled {
-                ref entrance_id,
-                depth,
-                door_id,
-                is_open,
-            } => {
-                self.world_cache.write().unwrap().set_dungeon_door(
-                    entrance_id,
-                    *depth,
-                    *door_id,
-                    *is_open,
-                );
+                self.world_cache
+                    .write()
+                    .unwrap()
+                    .set_door(door, is_open.unwrap_or(false));
             }
             ServerMessage::DungeonPropsState {
                 ref entrance_id,
@@ -1449,21 +1425,6 @@ impl SharedState {
             }
             ServerMessage::DaggerDoubleSlashRejected { cooldown_ms, .. } if *cooldown_ms > 0 => {
                 self.update_ability_cooldown(AbilityId::DaggerDoubleSlash, *cooldown_ms);
-            }
-            ServerMessage::DoorToggled {
-                ref house_id,
-                room_index,
-                ref wall_dir,
-                segment_index,
-                is_open,
-            } => {
-                self.world_cache.write().unwrap().update_door(
-                    house_id,
-                    *room_index,
-                    *wall_dir,
-                    *segment_index as usize,
-                    *is_open,
-                );
             }
             // Fishing reflexes use the same reaction delays as human players.
             ServerMessage::FishingCasted { player_id, .. }

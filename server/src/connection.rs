@@ -1953,24 +1953,6 @@ async fn handle_client_message(
             }
         }
 
-        ClientMessage::ToggleObjectDoor { object_id } => {
-            if let Some(id) = &state.require_in_game("toggle object door") {
-                game_state.toggle_object_door(id, object_id).await;
-            }
-        }
-
-        ClientMessage::ToggleDungeonDoor {
-            entrance_id,
-            depth,
-            door_id,
-        } => {
-            if let Some(id) = &state.require_in_game("debug teleport") {
-                game_state
-                    .toggle_dungeon_door(id, &entrance_id, depth, door_id)
-                    .await;
-            }
-        }
-
         ClientMessage::DebugTeleport { position } => {
             if let Some(id) = &state.player_id {
                 game_state.debug_teleport_player(id, position).await;
@@ -2198,16 +2180,9 @@ async fn handle_client_message(
             }
         }
 
-        ClientMessage::ToggleDoor {
-            house_id,
-            room_index,
-            wall_dir,
-            segment_index,
-        } => {
-            if let Some(ref pid) = state.player_id {
-                game_state
-                    .toggle_door(pid, &house_id, room_index, wall_dir, segment_index)
-                    .await;
+        ClientMessage::ToggleDoor { door } => {
+            if let Some(id) = &state.require_in_game("toggle door") {
+                game_state.toggle_door(id, &door).await;
             }
         }
 

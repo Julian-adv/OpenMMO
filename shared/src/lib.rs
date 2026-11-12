@@ -9,6 +9,7 @@ pub mod bridge;
 pub mod celestial;
 pub mod character;
 pub mod debuff;
+pub mod door;
 pub mod dungeon;
 pub mod entity;
 pub mod estate_storage;
@@ -279,7 +280,11 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// (`FriendEntry.family`, `OnlineFriend.family`).
 /// v150: `DungeonLayoutVariants` names the maze each nightly-redrawn dungeon
 /// currently has (doc/DUNGEON.md).
-pub const PROTOCOL_VERSION: u32 = 150;
+/// v151: one `ToggleDoor { door }` and one `DoorState { door, is_open }` for
+/// house, dungeon and object doors, addressed by `door::DoorId`; replaces
+/// `ToggleDungeonDoor`, `ToggleObjectDoor`, `DungeonDoorState`,
+/// `DungeonDoorToggled` and `DoorToggled`.
+pub const PROTOCOL_VERSION: u32 = 151;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

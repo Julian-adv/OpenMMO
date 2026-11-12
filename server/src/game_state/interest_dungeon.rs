@@ -1,3 +1,4 @@
+use onlinerpg_shared::door::DoorId;
 use onlinerpg_shared::dungeon::{
     cart_rail_run, cell_center, door_position, interior_doors, FloorLayout, PropKind,
 };
@@ -21,12 +22,7 @@ fn area(id: &str, depth: u8, bounds: Bounds) -> SubjectArea {
 }
 
 fn door_gone(id: &str, depth: u8, door_id: u32) -> ServerMessage {
-    ServerMessage::DungeonDoorState {
-        entrance_id: id.to_owned(),
-        depth,
-        door_id,
-        is_open: None,
-    }
+    DoorId::dungeon(id, depth, door_id).state(None)
 }
 
 fn prop_gone(id: &str, depth: u8, prop_id: u32) -> ServerMessage {
@@ -110,12 +106,7 @@ impl Interest {
             let Some(position) = door_position(entrance, layouts, depth, door_id) else {
                 continue;
             };
-            let state = ServerMessage::DungeonDoorState {
-                entrance_id: id.to_owned(),
-                depth,
-                door_id,
-                is_open: Some(false),
-            };
+            let state = DoorId::dungeon(id, depth, door_id).state(Some(false));
             self.publish(
                 key,
                 vec![area(id, depth, Bounds::Point(position))],
@@ -170,23 +161,21 @@ impl Interest {
 
     pub(super) fn update_dungeon(&mut self, message: &ServerMessage) -> bool {
         match message {
-            ServerMessage::DungeonDoorToggled {
-                entrance_id,
-                depth,
-                door_id,
-                is_open,
-            } => self.update_snapshot(
-                &format!("door:{entrance_id}:{depth}:{door_id}"),
-                message.clone(),
-                |snapshot| {
-                    *snapshot = vec![ServerMessage::DungeonDoorState {
-                        entrance_id: entrance_id.clone(),
-                        depth: *depth,
-                        door_id: *door_id,
-                        is_open: Some(*is_open),
-                    }];
-                },
-            ),
+            ServerMessage::DoorState { door, .. } => {
+                let Some(DoorId::Dungeon {
+                    entrance_id,
+                    depth,
+                    door_id,
+                }) = DoorId::parse(door)
+                else {
+                    return false;
+                };
+                self.update_snapshot(
+                    &format!("door:{entrance_id}:{depth}:{door_id}"),
+                    message.clone(),
+                    |snapshot| *snapshot = vec![message.clone()],
+                )
+            }
             ServerMessage::DungeonPropBroken {
                 entrance_id,
                 depth,

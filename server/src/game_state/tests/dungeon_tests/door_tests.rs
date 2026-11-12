@@ -84,6 +84,11 @@ pub(super) async fn add_delver(
     pid(name)
 }
 
+fn is_door_state(message: &ServerMessage, id: &DoorId, open: bool) -> bool {
+    matches!(message, ServerMessage::DoorState { door, is_open }
+        if *door == id.to_string() && *is_open == Some(open))
+}
+
 #[tokio::test]
 async fn cross_floor_dungeon_door_toggle_is_rejected() {
     let game_state = make_test_game_state("dungeon_door_cross_floor");
@@ -335,31 +340,22 @@ async fn dungeon_door_toggle_delivery_uses_actual_door_positions_and_spaces() {
     let mut near = game.register_direct_channel(&pid("near")).await;
     let mut far = game.register_direct_channel(&pid("far")).await;
     let mut delver = game.register_direct_channel(&pid("delver")).await;
-    game.publish_subject_change(ServerMessage::DungeonDoorToggled {
-        entrance_id: entrance.id.clone(),
-        depth: 0,
-        door_id: 0,
-        is_open: true,
-    });
-    assert!(matches!(
-        near.try_recv(),
-        Ok(ServerMessage::DungeonDoorToggled {
-            depth: 0,
-            is_open: true,
-            ..
-        })
+    let surface_door = DoorId::dungeon(&entrance.id, 0, 0);
+    game.publish_subject_change(surface_door.state(Some(true)));
+    assert!(is_door_state(
+        &near.try_recv().unwrap(),
+        &surface_door,
+        true
     ));
     assert!(far.try_recv().is_err());
     assert!(delver.try_recv().is_err());
-    game.publish_subject_change(ServerMessage::DungeonDoorToggled {
-        entrance_id: entrance.id.clone(),
-        depth,
-        door_id: door.door_id,
-        is_open: true,
-    });
-    assert!(
-        matches!(delver.try_recv(), Ok(ServerMessage::DungeonDoorToggled { depth: d, is_open: true, .. }) if d == depth)
-    );
+    let interior_door = DoorId::dungeon(&entrance.id, depth, door.door_id);
+    game.publish_subject_change(interior_door.state(Some(true)));
+    assert!(is_door_state(
+        &delver.try_recv().unwrap(),
+        &interior_door,
+        true
+    ));
     assert!(near.try_recv().is_err());
     assert!(far.try_recv().is_err());
 }
@@ -421,7 +417,7 @@ async fn dungeon_door_blocks_movement_until_opened() {
 }
 
 /// Arriving on a dungeon floor must push the full open-door snapshot: the
-/// live DungeonDoorToggled broadcast is floor- and radius-gated, so a player
+/// live DoorState broadcast is floor- and radius-gated, so a player
 /// who registered the dungeon before someone else toggled a door (or who was
 /// on another floor at the time) would otherwise render it stale.
 #[tokio::test]
@@ -448,9 +444,10 @@ async fn floor_entry_pushes_open_door_snapshot() {
     game_state
         .teleport_player(&player_id, at_door, 0.0, -(depth as i8))
         .await;
-    assert!(drain(&mut direct_rx).iter().any(|message| matches!(message,
-        ServerMessage::DungeonDoorState { entrance_id, depth: d, door_id, is_open: Some(true) }
-        if entrance_id == &entrance.id && *d == depth && *door_id == door.door_id)));
+    let id = DoorId::dungeon(&entrance.id, depth, door.door_id);
+    assert!(drain(&mut direct_rx)
+        .iter()
+        .any(|message| is_door_state(message, &id, true)));
 }
 
 /// Blows obey the same seal movement does: neither side of a shut door can
@@ -690,9 +687,10 @@ async fn locked_door_shuts_itself_again() {
     }
     assert!(!is_open(&game_state).await, "it locks itself again");
     assert!(
-        drain(&mut rx).iter().any(|m| matches!(
+        drain(&mut rx).iter().any(|m| is_door_state(
             m,
-            ServerMessage::DungeonDoorToggled { is_open: false, door_id: id, .. } if *id == door.door_id
+            &DoorId::dungeon(&entrance.id, depth, door.door_id),
+            false
         )),
         "the floor hears it shut"
     );

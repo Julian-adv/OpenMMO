@@ -114,6 +114,7 @@ import { objectManager } from '../managers/objectManager'
 import { groundItemManager } from '../managers/groundItemManager'
 import { cartRollSpeed, dungeonManager } from '../managers/dungeonManager'
 import { setDoorState } from '../stores/objectDoorStore'
+import { parseDoorId } from './doorId'
 import { recordCartPush } from '../stores/cartPushStore'
 import { queueXpArrival, releaseXpArrival } from '../managers/xpArrival'
 import {
@@ -311,6 +312,27 @@ const RECITAL_BUBBLE_MS = 12000
 // cry on PlayerDead alone.
 const DEATH_CRY_WINDOW_MS = 2000
 const deathCriedAt = new Map<number, number>()
+
+/** `null` means the door left view or no longer exists. */
+function applyDoorState(door: string, isOpen: boolean | null) {
+  const ref = parseDoorId(door)
+  if (ref?.kind === 'house')
+    housingManager.handleDoorToggled(
+      ref.houseId,
+      ref.roomIndex,
+      ref.wallDir,
+      ref.segmentIndex,
+      isOpen ?? false
+    )
+  else if (ref?.kind === 'dungeon')
+    dungeonManager.applySubjectDoor(
+      ref.entranceId,
+      ref.depth,
+      ref.doorId,
+      isOpen
+    )
+  else if (ref) setDoorState(door, isOpen ?? false)
+}
 
 function claimPlayerDeath(playerId: number) {
   const now = performance.now()
@@ -2354,26 +2376,8 @@ export function handleServerMessage(
       break
     }
 
-    case 'DungeonDoorToggled':
-      dungeonManager.applyDoorToggle(
-        data.entrance_id,
-        data.depth,
-        data.door_id,
-        data.is_open
-      )
-      break
-
     case 'DoorState':
-      setDoorState(data.door, data.is_open)
-      break
-
-    case 'DungeonDoorState':
-      dungeonManager.applySubjectDoor(
-        data.entrance_id,
-        data.depth,
-        data.door_id,
-        data.is_open
-      )
+      applyDoorState(data.door, data.is_open ?? null)
       break
 
     case 'DungeonPropState':
@@ -2484,16 +2488,6 @@ export function handleServerMessage(
 
     case 'HousesInArea':
       housingManager.handleRemoteHousesBatch(data.houses)
-      break
-
-    case 'DoorToggled':
-      housingManager.handleDoorToggled(
-        data.house_id,
-        data.room_index,
-        data.wall_dir,
-        data.segment_index,
-        data.is_open
-      )
       break
 
     case 'EquipmentEnchantSucceeded':

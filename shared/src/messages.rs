@@ -567,20 +567,6 @@ pub enum ClientMessage {
         depth: u8,
         prop_id: u32,
     },
-    /// Toggle a dungeon door's open state. `depth` 0 is the surface entrance
-    /// door; ≥1 is an interior room door. `door_id` is the client's opaque
-    /// door key (derived from the door's geometry). The server flips the
-    /// stored state for (entrance, depth, door_id) and broadcasts nearby
-    /// (surface floor for depth 0, the toggler's floor for interior doors).
-    ToggleDungeonDoor {
-        entrance_id: String,
-        depth: u8,
-        door_id: u32,
-    },
-    /// Open or shut the door of a placed object within reach.
-    ToggleObjectDoor {
-        object_id: u32,
-    },
     DebugTeleport {
         position: Position,
     },
@@ -677,11 +663,9 @@ pub enum ClientMessage {
     RemoveHouse {
         house_id: String,
     },
+    /// Open or shut the door named by a `door::DoorId` within reach.
     ToggleDoor {
-        house_id: String,
-        room_index: u32,
-        wall_dir: housing::WallDirection,
-        segment_index: u32,
+        door: String,
     },
     EquipItem {
         instance_id: u64,
@@ -1147,8 +1131,6 @@ impl ClientMessage {
             | MineDungeonProp { .. }
             | PushDungeonCart { .. }
             | OpenDungeonProp { .. }
-            | ToggleDungeonDoor { .. }
-            | ToggleObjectDoor { .. }
             | InteractObject { .. }
             | InspectAltar { .. }
             | OfferAtAltar { .. }
@@ -1206,12 +1188,6 @@ impl ClientMessage {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerMessage {
-    DungeonDoorState {
-        entrance_id: String,
-        depth: u8,
-        door_id: u32,
-        is_open: Option<bool>,
-    },
     DungeonPropState {
         entrance_id: String,
         depth: u8,
@@ -1401,13 +1377,6 @@ pub enum ServerMessage {
         depth: u8,
         broken: Vec<u32>,
         opened: Vec<u32>,
-    },
-    /// A door toggle delivered to nearby players on the door's floor.
-    DungeonDoorToggled {
-        entrance_id: String,
-        depth: u8,
-        door_id: u32,
-        is_open: bool,
     },
     /// Every dungeon entrance this character has discovered (world-map
     /// markers): full snapshot at join and after each new discovery. Only
@@ -2080,18 +2049,11 @@ pub enum ServerMessage {
     HousesInArea {
         houses: Vec<housing::HouseData>,
     },
-    DoorToggled {
-        house_id: String,
-        room_index: u32,
-        wall_dir: housing::WallDirection,
-        segment_index: u32,
-        is_open: bool,
-    },
-    /// Live state of a door addressed by one id; `object:{rx}:{rz}:{id}` for
-    /// a placed object. Shut until told otherwise.
+    /// Live state of the door named by a `door::DoorId`; `None` once it is
+    /// out of view or gone. Doors are shut until told otherwise.
     DoorState {
         door: String,
-        is_open: bool,
+        is_open: Option<bool>,
     },
     /// Sent once on join: full inventory state.
     InventoryState {
@@ -2556,8 +2518,7 @@ impl ServerMessage {
 
     pub fn delivery_class(&self) -> DeliveryClass {
         match self {
-            Self::DungeonDoorState { .. }
-            | Self::DoorState { .. }
+            Self::DoorState { .. }
             | Self::DungeonPropState { .. }
             | Self::PlayerJoined { .. }
             | Self::PlayerLeft { .. }
@@ -2570,7 +2531,6 @@ impl ServerMessage {
             | Self::DungeonCartPushed { .. }
             | Self::DungeonPropOpened { .. }
             | Self::DungeonPropsState { .. }
-            | Self::DungeonDoorToggled { .. }
             | Self::GameState { .. }
             | Self::MonsterSpawned { .. }
             | Self::MonsterMoved { .. }
@@ -2602,7 +2562,6 @@ impl ServerMessage {
             | Self::HouseUpdated { .. }
             | Self::HouseRemoved { .. }
             | Self::HousesInArea { .. }
-            | Self::DoorToggled { .. }
             | Self::GroundItemSpawned { .. }
             | Self::GroundItemAppeared { .. }
             | Self::GroundItemRemoved { .. }

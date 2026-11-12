@@ -12,8 +12,8 @@ const DOOR_REACH: f32 = 2.0;
 
 type DoorKey = (i32, i32, u32);
 
-fn door_id((rx, rz, id): DoorKey) -> String {
-    shelter::door_id(rx, rz, id)
+fn door_id((rx, rz, object_id): DoorKey) -> DoorId {
+    DoorId::Object { rx, rz, object_id }
 }
 
 impl GameState {
@@ -76,29 +76,38 @@ impl GameState {
             });
     }
 
-    fn object_door_near(
+    /// The doorway segment and floor height, if the region is near `pos`.
+    fn object_doorway(
         &self,
         pos: &Position,
         floor: i8,
+        region: (i32, i32),
         object_id: u32,
-    ) -> Option<((i32, i32), [f32; 4], f32)> {
+    ) -> Option<([f32; 4], f32)> {
+        if !regions_around(pos.x, pos.z).any(|key| key == region) {
+            return None;
+        }
         let index = self
             .interaction_furniture
             .read()
             .unwrap_or_else(|e| e.into_inner());
-        regions_around(pos.x, pos.z)
-            .filter_map(|key| index.get(&key).map(|group| (key, group)))
-            .flat_map(|(key, group)| group.iter().map(move |p| (key, p)))
-            .filter(|(_, p)| p.id == object_id && p.floor_level as i8 == floor)
-            .filter_map(|(key, p)| Some((key, shelter::doorway(p)?, p.y)))
-            .min_by(|a, b| segment_distance(a.1, pos).total_cmp(&segment_distance(b.1, pos)))
+        index
+            .get(&region)?
+            .iter()
+            .filter(|p| p.id == object_id && p.floor_level as i8 == floor)
+            .find_map(|p| Some((shelter::doorway(p)?, p.y)))
     }
 
     /// `Some(is_open)` once the request is valid; closing onto someone in the
     /// doorway leaves it open.
-    pub async fn toggle_object_door(&self, player_id: &PlayerId, object_id: u32) -> Option<bool> {
+    pub async fn toggle_object_door(
+        &self,
+        player_id: &PlayerId,
+        region: (i32, i32),
+        object_id: u32,
+    ) -> Option<bool> {
         let (pos, _, floor, _) = self.player_pose(player_id).await?;
-        let (region, segment, y) = self.object_door_near(&pos, floor, object_id)?;
+        let (segment, y) = self.object_doorway(&pos, floor, region, object_id)?;
         let end = |x: f32, z: f32| Position { x, y, z };
         let center = end(
             segment[0] + shortest_world_delta_x(segment[0], segment[2]) * 0.5,
@@ -113,10 +122,7 @@ impl GameState {
         let _edit = self.world_edit_guard().await;
         let result = async {
             let (pos, _, floor, name) = self.player_pose(player_id).await?;
-            let (current, segment, _) = self.object_door_near(&pos, floor, object_id)?;
-            if current != region {
-                return None;
-            }
+            let (segment, _) = self.object_doorway(&pos, floor, region, object_id)?;
             let distance = segment_distance(segment, &pos);
             if distance > DOOR_REACH {
                 warn!(
@@ -141,16 +147,13 @@ impl GameState {
                 }
             }
             self.rebuild_region_shelter_walls(region.0, region.1);
-            let state = |is_open| ServerMessage::DoorState {
-                door: door_id(key),
-                is_open,
-            };
+            let door = door_id(key);
             self.interest_lock().publish(
-                door_id(key),
+                door.to_string(),
                 vec![SubjectArea::point(center, floor)],
-                vec![state(!was_open)],
-                vec![state(false)],
-                vec![state(!was_open)],
+                vec![door.state(Some(!was_open))],
+                vec![door.state(None)],
+                vec![door.state(Some(!was_open))],
             );
             Some(!was_open)
         }

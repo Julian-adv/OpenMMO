@@ -1075,7 +1075,7 @@ class DungeonManager {
     this.setPropsState(entranceId, depth, [...brokenSet], [...openedSet])
   }
 
-  applyDoorToggle(
+  private applyDoorToggle(
     entranceId: string,
     depth: number,
     doorId: number,

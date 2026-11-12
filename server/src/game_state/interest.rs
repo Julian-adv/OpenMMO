@@ -988,6 +988,30 @@ impl super::GameState {
         );
     }
 
+    /// Viewers already watching the house get the door changes alone; the
+    /// snapshot for later arrivals is the house with those doors applied.
+    pub(crate) fn publish_house_doors(
+        &self,
+        house: &onlinerpg_shared::housing::HouseData,
+        changes: Vec<ServerMessage>,
+    ) {
+        let id = format!("house:{}", house.id);
+        let mut interest = self.interest_lock();
+        if !interest.has_subject(&id) {
+            drop(interest);
+            return self.publish_house(house);
+        }
+        interest.republish(
+            &id,
+            |snapshot| {
+                *snapshot = vec![ServerMessage::HouseUpdated {
+                    house: house.clone(),
+                }]
+            },
+            changes,
+        );
+    }
+
     pub(crate) fn remove_house_subject(&self, house_id: &str) {
         self.interest_lock().remove(
             &format!("house:{house_id}"),

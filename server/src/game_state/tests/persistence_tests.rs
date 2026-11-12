@@ -211,6 +211,10 @@ fn door_reach_says_why_a_door_is_out_of_reach() {
     assert!(reach(14.5, 0).unwrap_err().starts_with("too far"));
 }
 
+fn north_door(house: &HouseData) -> String {
+    DoorId::house(&house.id, 0, WallDirection::North, 0).to_string()
+}
+
 #[tokio::test]
 async fn open_door_state_is_stamped_onto_served_house_data() {
     let game_state = make_test_game_state("door_state_stamp");
@@ -223,9 +227,7 @@ async fn open_door_state_is_stamped_onto_served_house_data() {
         .add_player(make_player("toggler", 10.5, 10.5))
         .await;
 
-    let toggled = game_state
-        .toggle_door(&toggler, &house.id, 0, WallDirection::North, 0)
-        .await;
+    let toggled = game_state.toggle_door(&toggler, &north_door(&house)).await;
     assert_eq!(toggled, Some(true));
 
     // A reconnecting client re-fetches the house from disk (is_open false there);
@@ -235,21 +237,59 @@ async fn open_door_state_is_stamped_onto_served_house_data() {
     assert!(served[0].rooms[0].wall_north[0].is_open);
 
     // Closing the door clears the stamp.
-    game_state
-        .toggle_door(&toggler, &house.id, 0, WallDirection::North, 0)
-        .await;
+    game_state.toggle_door(&toggler, &north_door(&house)).await;
     let mut served = vec![house.clone()];
     game_state.apply_open_door_state(&mut served).await;
     assert!(!served[0].rooms[0].wall_north[0].is_open);
 
     // A house edit re-seeds door state from the file (closed there).
-    game_state
-        .toggle_door(&toggler, &house.id, 0, WallDirection::North, 0)
-        .await;
+    game_state.toggle_door(&toggler, &north_door(&house)).await;
     game_state.passability_add_house(&house).await;
     let mut served = vec![house.clone()];
     game_state.apply_open_door_state(&mut served).await;
     assert!(!served[0].rooms[0].wall_north[0].is_open);
+}
+
+/// Watchers hear only the door; a later arrival gets the house with it open.
+#[tokio::test]
+async fn house_door_toggle_reaches_watchers_as_door_state() {
+    let game_state = make_test_game_state("door_state_broadcast");
+    let house = make_door_test_house();
+    game_state.housing_io.write_house(&house).await.unwrap();
+    game_state.passability_add_house(&house).await;
+
+    let toggler = pid("toggler");
+    game_state
+        .add_player(make_player("toggler", 10.5, 10.5))
+        .await;
+    game_state
+        .add_player(make_player("late", 500.0, 500.0))
+        .await;
+    let mut watcher = game_state.register_direct_channel(&toggler).await;
+    let mut late = game_state.register_direct_channel(&pid("late")).await;
+
+    assert_eq!(
+        game_state.toggle_door(&toggler, &north_door(&house)).await,
+        Some(true)
+    );
+    let heard = drain(&mut watcher);
+    assert!(heard.iter().any(|m| matches!(m,
+        ServerMessage::DoorState { door, is_open: Some(true) } if *door == north_door(&house))));
+    assert!(!heard
+        .iter()
+        .any(|m| matches!(m, ServerMessage::HouseUpdated { .. })));
+    assert!(drain(&mut late).is_empty());
+
+    let at_door = onlinerpg_shared::Position {
+        x: 10.5,
+        y: 0.0,
+        z: 10.5,
+    };
+    game_state
+        .teleport_player(&pid("late"), at_door, 0.0, 0)
+        .await;
+    assert!(drain(&mut late).iter().any(|m| matches!(m,
+        ServerMessage::HouseUpdated { house } if house.rooms[0].wall_north[0].is_open)));
 }
 
 #[tokio::test]
@@ -268,9 +308,7 @@ async fn door_saved_open_is_served_open_and_first_toggle_closes_it() {
     game_state
         .add_player(make_player("toggler", 10.5, 10.5))
         .await;
-    let toggled = game_state
-        .toggle_door(&toggler, &house.id, 0, WallDirection::North, 0)
-        .await;
+    let toggled = game_state.toggle_door(&toggler, &north_door(&house)).await;
     assert_eq!(toggled, Some(false));
 
     // The file still says open; a client fetching it must see the live state.

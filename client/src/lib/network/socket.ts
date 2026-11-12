@@ -14,7 +14,6 @@ import type {
   TradeLineItem,
 } from './networkTypes'
 import { hmrSingleton } from '../utils/hmr'
-import type { WallDirection } from '../utils/house-geometry'
 import {
   gameStore,
   localHeldInPlace,
@@ -654,18 +653,6 @@ class NetworkManager {
     })
   }
 
-  /** Toggle a dungeon door (entrance at depth 0, or an interior room door at
-   *  depth ≥1). The server flips and broadcasts the authoritative state. */
-  sendToggleDungeonDoor(entranceId: string, depth: number, doorId: number) {
-    this.sendMessage({
-      ToggleDungeonDoor: {
-        entrance_id: entranceId,
-        depth,
-        door_id: doorId,
-      },
-    })
-  }
-
   sendSetActiveTitle(title: string | null) {
     this.sendMessage({ SetActiveTitle: { title } })
   }
@@ -749,20 +736,9 @@ class NetworkManager {
     this.sendMessage({ ChatMessage: { message } })
   }
 
-  sendToggleDoor(
-    houseId: string,
-    roomIndex: number,
-    wallDir: WallDirection,
-    segmentIndex: number
-  ) {
-    this.sendMessage({
-      ToggleDoor: {
-        house_id: houseId,
-        room_index: roomIndex,
-        wall_dir: wallDir,
-        segment_index: segmentIndex,
-      },
-    })
+  /** Open or shut a door by its `doorId.ts` id. */
+  sendToggleDoor(door: string) {
+    this.sendMessage({ ToggleDoor: { door } })
   }
 
   /** Draw from this pile from now on; `null` goes back to the strongest. */
@@ -1233,10 +1209,6 @@ class NetworkManager {
 
   sendConfirmFamilyMerge(accept: boolean) {
     this.sendMessage({ ConfirmFamilyMerge: { accept } })
-  }
-
-  sendToggleObjectDoor(objectId: number) {
-    this.sendMessage({ ToggleObjectDoor: { object_id: objectId } })
   }
 
   sendRequestFamilyStorageLog() {

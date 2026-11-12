@@ -3,6 +3,7 @@ use crate::item_defs::ItemDefs;
 use crate::monster_defs::MonsterDefs;
 use crate::types::{CharacterAttributes, Player, PlayerId, ServerMessage};
 use bytes::Bytes;
+use onlinerpg_shared::door::DoorId;
 use onlinerpg_shared::housing::{HouseData, RoomData, WallDirection};
 use onlinerpg_shared::inventory::PlayerInventory;
 use onlinerpg_shared::messages::BuybackEntry;
@@ -201,6 +202,7 @@ mod combat_logout;
 mod consent;
 mod deals;
 mod debuff;
+mod door;
 pub(crate) mod fishing;
 pub(crate) use deals::band_invariant_holds;
 /// Only the tests name the id from outside; the logic lives in debuff.rs.
@@ -940,7 +942,7 @@ impl GameState {
 
     /// Toggle a door's is_open state (in-memory only, no disk I/O).
     /// Validates that the player is within 1.5m (XZ) and on the same floor.
-    pub async fn toggle_door(
+    pub async fn toggle_house_door(
         &self,
         player_id: &PlayerId,
         house_id: &str,
@@ -1065,9 +1067,16 @@ impl GameState {
                 }
             }
 
+            let changes = refs
+                .into_iter()
+                .flatten()
+                .map(|(r, s)| {
+                    DoorId::house(house_id, r as u32, wall_dir, s as u32).state(Some(is_open))
+                })
+                .collect();
             let mut houses = vec![house];
             self.apply_open_door_state(&mut houses).await;
-            self.publish_house(&houses[0]);
+            self.publish_house_doors(&houses[0], changes);
             Some(is_open)
         }
         .await;

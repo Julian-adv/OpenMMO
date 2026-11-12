@@ -255,9 +255,7 @@ fn world_state_caps_the_ground_item_list() {
 /// that was already open and the agent toggled it shut again.
 #[test]
 fn door_toggle_keeps_house_walls_in_step_with_the_edges() {
-    use onlinerpg_shared::housing::{
-        PassabilityGrid, RoomType, WallConfig, WallDirection, WallVariant,
-    };
+    use onlinerpg_shared::housing::{PassabilityGrid, RoomType, WallConfig, WallVariant};
 
     let wall = |variant| WallConfig {
         variant,
@@ -292,16 +290,37 @@ fn door_toggle_keeps_house_walls_in_step_with_the_edges() {
     };
     assert!(door_blocked(&world), "the north door starts shut");
 
-    world.update_door("h", 0, WallDirection::North, 0, true);
+    world.set_door("house:h:0:north:0", true);
     assert!(
         world.houses()["h"].rooms[0].wall_north[0].is_open,
         "HouseData must track the open"
     );
     assert!(!door_blocked(&world), "the edge must open with the door");
 
-    world.update_door("h", 0, WallDirection::North, 0, false);
+    world.set_door("house:h:0:north:0", false);
     assert!(!world.houses()["h"].rooms[0].wall_north[0].is_open);
     assert!(door_blocked(&world), "the edge must seal again");
+
+    let viewer = onlinerpg_shared::PlayerId::from(1);
+    let revision = world.collision_revision;
+    world.apply_house_event(
+        viewer,
+        "epoch",
+        &onlinerpg_shared::interest::WorldEvent {
+            subject: "house:h".into(),
+            revision: 2,
+            change: onlinerpg_shared::interest::InterestChange::Update,
+            messages: vec![ServerMessage::DoorState {
+                door: "house:h:0:north:0".into(),
+                is_open: Some(true),
+            }],
+        },
+    );
+    assert!(
+        !door_blocked(&world),
+        "a house subject update opens the door"
+    );
+    assert_ne!(world.collision_revision, revision, "routes must replan");
 }
 
 /// Splat tiles that paint one road cell and one river cell near origin,

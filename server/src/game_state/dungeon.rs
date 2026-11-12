@@ -4,6 +4,7 @@
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
+use onlinerpg_shared::door::DoorId;
 use onlinerpg_shared::dungeon::{
     cell_center, dungeon_origin, floor_world_y, generate_dungeon_variant, interior_doors,
     key_depth_for, locked_depths, locked_door_ids, world_to_cell, FloorLayout, PropKind, PropSpec,
@@ -462,12 +463,9 @@ impl GameState {
                 if locked && !is_open {
                     rt.locked_door_opens.remove(&(depth, door_id));
                 }
-                self.publish_subject_change(ServerMessage::DungeonDoorToggled {
-                    entrance_id: entrance_id.to_owned(),
-                    depth,
-                    door_id,
-                    is_open,
-                });
+                self.publish_subject_change(
+                    DoorId::dungeon(entrance_id, depth, door_id).state(Some(is_open)),
+                );
                 (is_open, opening)
             };
             if let Some(opening) = opening {
@@ -573,12 +571,9 @@ impl GameState {
                 self.rebuild_dungeon_floor_passability(entrance_id, depth)
                     .await;
                 info!("'{entrance_id}' depth {depth} door {door_id} locked itself again");
-                self.publish_subject_change(ServerMessage::DungeonDoorToggled {
-                    entrance_id: entrance_id.to_string(),
-                    depth,
-                    door_id,
-                    is_open: false,
-                });
+                self.publish_subject_change(
+                    DoorId::dungeon(entrance_id, depth, door_id).state(Some(false)),
+                );
                 true
             }
             .await;

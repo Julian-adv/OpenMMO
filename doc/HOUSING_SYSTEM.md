@@ -154,9 +154,9 @@ segW = (wallSpan - WALL_THICKNESS) / numSegs
 ### 열기/닫기 흐름
 
 1. E키 → 플레이어 근처(2m) 문 또는 창문 탐색 (`findNearestDoor`)
-2. 서버에 `ToggleDoor` 전송 (낙관적 토글 없음)
+2. 서버에 `ToggleDoor { door }` 전송 (낙관적 토글 없음)
 3. 서버가 `WithDoor` 또는 `WithWindow` variant 검증 후 토글
-4. **모든 플레이어**에게 `DoorToggled` 브로드캐스트 — 서버 권위적 상태
+4. 그 집을 보고 있는 플레이어에게 `DoorState { door, is_open }` 전달 — 서버 권위적 상태. 양문은 짝마다 하나씩 보낸다. 나중에 시야에 들어온 플레이어는 문 상태가 반영된 `HouseUpdated`를 받는다
 5. 클라이언트: `handleDoorToggled`로 서버 상태 적용
    - **문**: passability edge 비트도 업데이트 (열린 문 = 통과 가능)
    - **창문**: passability 업데이트 없음 (열려도 통과 불가)
@@ -383,10 +383,10 @@ floorYBase(level) = level × (wallHeight + FLOOR_THICKNESS)
 ### ClientMessage
 
 ```rust
-ToggleDoor { house_id, room_index, wall_dir, segment_index }
+ToggleDoor { door }  // "house:{house_id}:{room_index}:{wall_dir}:{segment_index}"
 ```
 
-문과 창문 모두 동일 메시지 사용 (서버에서 variant 검증).
+문과 창문 모두 동일 메시지 사용 (서버에서 variant 검증). 던전 문(`dungeon:{entrance}:{depth}:{door}`)과 배치 오브젝트 문(`object:{rx}:{rz}:{id}`)도 같은 메시지를 쓴다. 아이디 형식은 [door.rs](../shared/src/door.rs)의 `DoorId`.
 
 ### ServerMessage
 
@@ -395,7 +395,7 @@ HouseSpawned { house: HouseData },
 HouseUpdated { house: HouseData },
 HouseRemoved { house_id: String },
 HousesInArea { houses: Vec<HouseData> },  // 청크 진입 시 전송
-DoorToggled { house_id, room_index, wall_dir, segment_index, is_open }
+DoorState { door, is_open }  // is_open: None = 시야에서 벗어났거나 사라진 문
 ```
 
 ## Server Storage

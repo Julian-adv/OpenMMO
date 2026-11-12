@@ -1,5 +1,6 @@
 use super::*;
 use crate::state::tests::{house, p, room, test_player, test_state};
+use onlinerpg_shared::door::DoorId;
 use onlinerpg_shared::housing::{WallConfig, WallDirection, WallVariant};
 use onlinerpg_shared::interest::{InterestChange, WorldEvent};
 use onlinerpg_shared::messages::MoveStatus;
@@ -279,12 +280,7 @@ async fn next_door_toggle(rx: &mut mpsc::Receiver<ClientMessage>) {
         .expect("open command channel");
     assert!(matches!(
         command,
-        ClientMessage::ToggleDoor {
-            house_id,
-            room_index: 0,
-            wall_dir: WallDirection::East,
-            segment_index: 0,
-        } if house_id == "door-house"
+        ClientMessage::ToggleDoor { door } if door == "house:door-house:0:east:0"
     ));
 }
 
@@ -641,13 +637,9 @@ async fn blocked_schedule_opens_a_door_and_resumes_the_target() {
                 MoveStatus::Arrived,
             ));
             next_door_toggle(&mut rx).await;
-            state.lock().await.push_event(ServerMessage::DoorToggled {
-                house_id: "door-house".into(),
-                room_index: 0,
-                wall_dir: WallDirection::East,
-                segment_index: 0,
-                is_open: true,
-            });
+            state.lock().await.push_event(
+                DoorId::house("door-house", 0, WallDirection::East, 0).state(Some(true)),
+            );
             let mut id = next_goal(&mut rx, target_x.min(49.5)).await;
             if target_x > 49.5 {
                 state

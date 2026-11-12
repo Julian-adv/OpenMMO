@@ -98,21 +98,6 @@ fn world_aabb(placement: &FurniturePlacement, x: [f32; 2], z: [f32; 2]) -> (f32,
     bounds
 }
 
-/// `DoorState` id of a placed object's door.
-pub fn door_id(rx: i32, rz: i32, object_id: u32) -> String {
-    format!("object:{rx}:{rz}:{object_id}")
-}
-
-pub fn parse_door_id(door: &str) -> Option<(i32, i32, u32)> {
-    let mut parts = door.strip_prefix("object:")?.split(':');
-    let key = (
-        parts.next()?.parse().ok()?,
-        parts.next()?.parse().ok()?,
-        parts.next()?.parse().ok()?,
-    );
-    parts.next().is_none().then_some(key)
-}
-
 fn grid(placement: &FurniturePlacement, perimeter: &Perimeter) -> Option<RuntimeFloorGrid> {
     let (hw, hd) = (perimeter.width / 2.0, perimeter.depth / 2.0);
     if !(hw > 0.0

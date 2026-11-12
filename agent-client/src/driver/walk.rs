@@ -6,6 +6,7 @@ use std::sync::Arc;
 const WALK_SEGMENT_DISTANCE: f32 = 27.0;
 use std::time::{Duration, Instant};
 
+use onlinerpg_shared::door::DoorId;
 use onlinerpg_shared::housing::{WallDirection, WallVariant};
 use onlinerpg_shared::messages::MoveStatus;
 use onlinerpg_shared::pathfinding;
@@ -514,11 +515,7 @@ fn closed_doors_on_our_floor(s: &SharedState) -> Vec<DoorCandidate> {
             .into_iter()
             .filter(|d| !d.locked || has_key)
             .map(|d| DoorCandidate {
-                toggle: ClientMessage::ToggleDungeonDoor {
-                    entrance_id: dungeon.id.clone(),
-                    depth,
-                    door_id: d.door_id,
-                },
+                toggle: DoorId::dungeon(&dungeon.id, depth, d.door_id).toggle(),
                 sides: d.sides,
             })
             .collect();
@@ -553,12 +550,8 @@ fn closed_doors_on_our_floor(s: &SharedState) -> Vec<DoorCandidate> {
                     let ((dx, dz, _), (adx, adz, _)) = pathfinding::door_cells(room, dir, seg);
                     let (rx, rz) = (ox + room.local_x, oz + room.local_z);
                     out.push(DoorCandidate {
-                        toggle: ClientMessage::ToggleDoor {
-                            house_id: house.id.clone(),
-                            room_index: room_index as u32,
-                            wall_dir: dir,
-                            segment_index: seg as u32,
-                        },
+                        toggle: DoorId::house(&house.id, room_index as u32, dir, seg as u32)
+                            .toggle(),
                         sides: [
                             ((rx + dx) as f32 + 0.5, (rz + dz) as f32 + 0.5),
                             ((rx + adx) as f32 + 0.5, (rz + adz) as f32 + 0.5),
@@ -568,12 +561,12 @@ fn closed_doors_on_our_floor(s: &SharedState) -> Vec<DoorCandidate> {
             }
         }
     }
-    for (object_id, [ax, az, bx, bz]) in world.closed_object_doors(floor) {
+    for (door, [ax, az, bx, bz]) in world.closed_object_doors(floor) {
         let (mx, mz) = ((ax + bx) * 0.5, (az + bz) * 0.5);
         let len = (bx - ax).hypot(bz - az).max(1e-3);
         let (nx, nz) = ((bz - az) / len * 0.8, (ax - bx) / len * 0.8);
         out.push(DoorCandidate {
-            toggle: ClientMessage::ToggleObjectDoor { object_id },
+            toggle: door.toggle(),
             sides: [(mx + nx, mz + nz), (mx - nx, mz - nz)],
         });
     }

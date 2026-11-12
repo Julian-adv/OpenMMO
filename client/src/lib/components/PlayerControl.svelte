@@ -128,7 +128,11 @@
     type PendingPropAction,
   } from '../managers/dungeonManager'
   import { housingManager } from '../managers/housingManager'
-  import { findNearestObjectDoor } from '../stores/objectDoorStore'
+  import {
+    findNearestObjectDoor,
+    objectDoorOf,
+  } from '../stores/objectDoorStore'
+  import { dungeonDoorId, houseDoorId } from '../network/doorId'
   import {
     shouldIgnoreImplicitHouseFloorChange,
     wallApproachPositions,
@@ -885,17 +889,14 @@
       findNearestDoor: (x, z, y, range) =>
         housingManager.findNearestDoor(x, z, y, range),
       toggleNearestObjectDoor: (position, range) => {
-        const objectId = findNearestObjectDoor(position, range)
-        if (objectId == null) return false
-        networkManager.sendToggleObjectDoor(objectId)
+        const door = findNearestObjectDoor(position, range)
+        if (door == null) return false
+        networkManager.sendToggleDoor(door)
         return true
       },
       sendToggleDoor: (houseId, roomIndex, wallDir, segmentIndex) =>
         networkManager.sendToggleDoor(
-          houseId,
-          roomIndex,
-          wallDir,
-          segmentIndex
+          houseDoorId(houseId, roomIndex, wallDir, segmentIndex)
         ),
     })
   }
@@ -1565,10 +1566,7 @@
   function openDoorThenRetry(door: ClosedHouseDoor, retryAction: () => void) {
     clearDoorInteractionRetry()
     networkManager.sendToggleDoor(
-      door.houseId,
-      door.roomIndex,
-      door.wallDir,
-      door.segmentIndex
+      houseDoorId(door.houseId, door.roomIndex, door.wallDir, door.segmentIndex)
     )
 
     let attempts = 0
@@ -1641,10 +1639,12 @@
   function toggleDoor(intent: Extract<ClickIntent, { type: 'toggle_door' }>) {
     const toggle = () =>
       networkManager.sendToggleDoor(
-        intent.houseId,
-        intent.roomIndex,
-        intent.wallDir,
-        intent.segmentIndex
+        houseDoorId(
+          intent.houseId,
+          intent.roomIndex,
+          intent.wallDir,
+          intent.segmentIndex
+        )
       )
     if (intent.isWindow && currentPlayer) {
       const player = currentPlayer
@@ -1693,7 +1693,9 @@
       () => {
         const id = dungeonManager.dungeonId
         if (id) {
-          networkManager.sendToggleDungeonDoor(id, intent.depth, intent.doorId)
+          networkManager.sendToggleDoor(
+            dungeonDoorId(id, intent.depth, intent.doorId)
+          )
         }
       }
     )
@@ -1744,8 +1746,12 @@
   function toggleObjectDoor(
     intent: Extract<ClickIntent, { type: 'object_door' }>
   ) {
-    approachAndAct({ position: intent.position, ...OBJECT_DOOR_APPROACH }, () =>
-      networkManager.sendToggleObjectDoor(intent.objectId)
+    approachAndAct(
+      { position: intent.position, ...OBJECT_DOOR_APPROACH },
+      () => {
+        const door = objectDoorOf(intent.objectId)
+        if (door) networkManager.sendToggleDoor(door)
+      }
     )
   }
   function openMailbox(intent: Extract<ClickIntent, { type: 'mailbox' }>) {

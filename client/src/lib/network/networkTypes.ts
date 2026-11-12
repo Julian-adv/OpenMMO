@@ -4,7 +4,6 @@ import type { FamilyMergeTerms } from '../stores/familyStore'
 import type { Emblem } from '../utils/familyEmblem'
 import type { AbilityId } from '../data/abilities'
 import type { MonsterData } from '../types/Monster'
-import type { WallDirection } from '../utils/house-geometry'
 import type { ClientEnvReport } from '../utils/clientEnvReport'
 import type { FenceEdge } from '../terrain/fenceEdges'
 import type { LandscapingTool } from '../terrain/landscaping'
@@ -273,7 +272,6 @@ export type ClientMessage =
     }
   | { RespondFamilyMerge: { proposer_id: number; accept: boolean } }
   | { ConfirmFamilyMerge: { accept: boolean } }
-  | { ToggleObjectDoor: { object_id: number } }
   | 'RequestPartyPositions'
   | { FriendRespond: { requester_id: number; accept: boolean } }
   | { FriendRemove: { name: string } }
@@ -304,26 +302,12 @@ export type ClientMessage =
   | {
       PushDungeonCart: { entrance_id: string; depth: number; prop_id: number }
     }
-  | {
-      ToggleDungeonDoor: {
-        entrance_id: string
-        depth: number
-        door_id: number
-      }
-    }
   | { DebugTeleport: { position: Position } }
   | { DebugDropItem: { item_def_id: string } }
   | { DebugSetTime: { hour: number; minute: number } }
   | { DebugResetDungeonProps: { entrance_id: string } }
   | { SetActiveTitle: { title: string | null } }
-  | {
-      ToggleDoor: {
-        house_id: string
-        room_index: number
-        wall_dir: WallDirection
-        segment_index: number
-      }
-    }
+  | { ToggleDoor: { door: string } }
   | { InteractObject: { object_type: string; object_id: number } }
   | { InspectAltar: { object_id: number } }
   | { OfferAtAltar: { object_id: number } }

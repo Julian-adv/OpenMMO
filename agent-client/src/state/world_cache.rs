@@ -1,4 +1,5 @@
 use super::*;
+use onlinerpg_shared::door::DoorId;
 use onlinerpg_shared::estate_storage::EstateChest;
 
 #[derive(Debug, Clone)]
@@ -641,10 +642,13 @@ impl WorldCache {
                 self.house_revisions.insert(id.to_owned(), event.revision);
                 self.house_deleted.remove(id);
                 for message in &event.messages {
-                    if let ServerMessage::HouseUpdated { house }
-                    | ServerMessage::HouseSpawned { house } = message
-                    {
-                        self.add_house(house.clone());
+                    match message {
+                        ServerMessage::HouseUpdated { house }
+                        | ServerMessage::HouseSpawned { house } => self.add_house(house.clone()),
+                        ServerMessage::DoorState { door, is_open } => {
+                            self.set_door(door, is_open.unwrap_or(false))
+                        }
+                        _ => {}
                     }
                 }
             }
@@ -672,11 +676,34 @@ impl WorldCache {
         self.furniture_placements.insert((rx, rz), placements);
     }
 
-    /// `door` is a `DoorState` id; only `object:{rx}:{rz}:{id}` is handled.
+    /// Apply a `DoorState`; a door that left view counts as shut.
     pub fn set_door(&mut self, door: &str, is_open: bool) {
-        let Some(key @ (rx, rz, _)) = onlinerpg_shared::shelter::parse_door_id(door) else {
-            return;
-        };
+        match DoorId::parse(door) {
+            Some(DoorId::House {
+                house_id,
+                room_index,
+                wall_dir,
+                segment_index,
+            }) => self.update_door(
+                &house_id,
+                room_index,
+                wall_dir,
+                segment_index as usize,
+                is_open,
+            ),
+            Some(DoorId::Dungeon {
+                entrance_id,
+                depth,
+                door_id,
+            }) => self.set_dungeon_door(&entrance_id, depth, door_id, is_open),
+            Some(DoorId::Object { rx, rz, object_id }) => {
+                self.set_object_door((rx, rz, object_id), is_open)
+            }
+            None => {}
+        }
+    }
+
+    fn set_object_door(&mut self, key @ (rx, rz, _): (i32, i32, u32), is_open: bool) {
         let changed = if is_open {
             self.object_doors.insert(key)
         } else {
@@ -691,13 +718,19 @@ impl WorldCache {
         }
     }
 
-    /// Shut object doors on `floor` as `(placement id, doorway segment)`.
-    pub fn closed_object_doors(&self, floor: u8) -> Vec<(u32, [f32; 4])> {
+    /// Shut object doors on `floor` with their doorway segments.
+    pub fn closed_object_doors(&self, floor: u8) -> Vec<(DoorId, [f32; 4])> {
         self.furniture_placements
-            .values()
-            .flatten()
-            .filter(|p| p.floor_level == floor && !p.door_open)
-            .filter_map(|p| Some((p.id, onlinerpg_shared::shelter::doorway(p)?)))
+            .iter()
+            .flat_map(|(&(rx, rz), group)| group.iter().map(move |p| (rx, rz, p)))
+            .filter(|(_, _, p)| p.floor_level == floor && !p.door_open)
+            .filter_map(|(rx, rz, p)| {
+                let object_id = p.id;
+                Some((
+                    DoorId::Object { rx, rz, object_id },
+                    onlinerpg_shared::shelter::doorway(p)?,
+                ))
+            })
             .collect()
     }
 
@@ -805,7 +838,7 @@ impl WorldCache {
         near
     }
 
-    pub fn update_door(
+    fn update_door(
         &mut self,
         house_id: &str,
         room_index: u32,
@@ -818,6 +851,9 @@ impl WorldCache {
                 // The wall is the source of truth (door hunting reads
                 // `is_open` off it); the edge is derived from it.
                 if let Some(wall) = room.wall_mut(wall_dir).get_mut(segment_index) {
+                    if wall.is_open != is_open {
+                        self.collision_revision = self.collision_revision.wrapping_add(1);
+                    }
                     wall.is_open = is_open;
                     pathfinding::update_door_edge(
                         &mut self.passability_cache,

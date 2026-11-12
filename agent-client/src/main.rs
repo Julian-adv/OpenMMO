@@ -447,7 +447,6 @@ fn resolve_from_registry(npc: &mut NpcConfig) -> anyhow::Result<()> {
 pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
     use onlinerpg_shared::ServerMessage;
     match msg {
-        ServerMessage::DungeonDoorState { .. } => "DungeonDoorState",
         ServerMessage::DungeonPropState { .. } => "DungeonPropState",
         ServerMessage::TerrainTileVersion { .. } => "TerrainTileVersion",
         ServerMessage::WorldUpdate { .. } => "WorldUpdate",
@@ -477,7 +476,6 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::CartStruckPlayer { .. } => "CartStruckPlayer",
         ServerMessage::DungeonPropOpened { .. } => "DungeonPropOpened",
         ServerMessage::DungeonPropsState { .. } => "DungeonPropsState",
-        ServerMessage::DungeonDoorToggled { .. } => "DungeonDoorToggled",
         ServerMessage::DoorState { .. } => "DoorState",
         ServerMessage::DungeonDiscoveries { .. } => "DungeonDiscoveries",
         ServerMessage::ChatMessage { .. } => "ChatMessage",
@@ -551,7 +549,6 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::GrassTilesInvalidated { .. } => "GrassTilesInvalidated",
         ServerMessage::HouseRemoved { .. } => "HouseRemoved",
         ServerMessage::HousesInArea { .. } => "HousesInArea",
-        ServerMessage::DoorToggled { .. } => "DoorToggled",
         ServerMessage::PlayerInteractionChanged { .. } => "PlayerInteractionChanged",
         ServerMessage::PlayerMusicStarted { .. } => "PlayerMusicStarted",
         ServerMessage::PlayerInstrumentStarted { .. } => "PlayerInstrumentStarted",

@@ -66,8 +66,8 @@
   import { doorwayOf, isInsideShelter } from '../../utils/shelter'
   import { isoCameraOccludesPlayer } from '../../utils/iso-occlusion'
   import { rotatedRectAabb } from '../../utils/objectFootprint'
+  import { objectDoorId } from '../../network/doorId'
   import {
-    objectDoorId,
     openDoors,
     resetDoorStates,
     setObjectDoorways,
@@ -380,6 +380,7 @@
     })
   )
   $effect(() => {
+    const { rx, rz } = lastLoadedRegion
     setObjectDoorways(
       placements.flatMap((placement) => {
         const def = objectDefsById.get(placement.type)
@@ -387,6 +388,7 @@
         return [
           {
             objectId: placement.id,
+            door: objectDoorId(rx, rz, placement.id),
             y: placement.y,
             ...doorwayOf(placement, def.perimeter),
           },

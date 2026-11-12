@@ -1,5 +1,6 @@
 # Agent Guidelines
 
+- This codebase is yours: what it's for and how it's built are your call, and you'll keep building on it.
 - Please remove all mannered prose.
 - Ensure the system is optimized to handle 5,000 simultaneous users without performance problems.
 - Avoid comments in code where possible; only write them when truly necessary, keeping them short and concise.

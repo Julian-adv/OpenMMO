@@ -2,12 +2,8 @@ import { writable } from 'svelte/store'
 import type { Position } from '../network/networkTypes'
 import { shortestWrappedDeltaX } from '../terrain/world-wrap'
 
-/** Ids of open doors as sent in `DoorState`; every other door is shut. */
+/** Ids of open object doors as sent in `DoorState`; every other one is shut. */
 export const openDoors = writable<ReadonlySet<string>>(new Set())
-
-export function objectDoorId(rx: number, rz: number, id: number): string {
-  return `object:${rx}:${rz}:${id}`
-}
 
 export function setDoorState(door: string, isOpen: boolean) {
   openDoors.update((doors) => {
@@ -25,6 +21,8 @@ export function resetDoorStates() {
 
 export interface ObjectDoorway {
   objectId: number
+  /** `DoorState` id. */
+  door: string
   y: number
   ax: number
   az: number
@@ -51,17 +49,22 @@ function doorwayDistance(point: Position, door: ObjectDoorway): number {
   return Math.hypot(dx - vx * t, dz - vz * t)
 }
 
+/** Door id of a clicked object among the loaded doorways. */
+export function objectDoorOf(objectId: number): string | null {
+  return doorways.find((door) => door.objectId === objectId)?.door ?? null
+}
+
 export function findNearestObjectDoor(
   point: Position,
   range: number
-): number | null {
-  let best: number | null = null
+): string | null {
+  let best: string | null = null
   let bestDistance = range
   for (const door of doorways) {
     const distance = doorwayDistance(point, door)
     if (distance <= bestDistance) {
       bestDistance = distance
-      best = door.objectId
+      best = door.door
     }
   }
   return best
