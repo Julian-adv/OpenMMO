@@ -424,66 +424,97 @@ async fn open_blocking_door(
         let mut doors: Vec<_> = closed_doors_on_our_floor(&s)
             .into_iter()
             .map(|door| {
-                let side = door
+                let distance = door
                     .sides
-                    .into_iter()
-                    .min_by(|a, b| {
-                        player
-                            .position
-                            .dist_xz_sq(&Position {
-                                x: a.0,
-                                y: 0.0,
-                                z: a.1,
-                            })
-                            .total_cmp(&player.position.dist_xz_sq(&Position {
-                                x: b.0,
-                                y: 0.0,
-                                z: b.1,
-                            }))
-                    })
-                    .unwrap();
-                (
-                    PlanarDelta::to_xz(&player.position, side.0, side.1).dist,
-                    door,
-                    side,
-                )
+                    .iter()
+                    .map(|side| PlanarDelta::to_xz(&player.position, side.0, side.1).dist)
+                    .fold(f32::INFINITY, f32::min);
+                (distance, door)
             })
-            .filter(|(distance, _, _)| *distance <= MAX_DOOR_SEARCH_DIST)
+            .filter(|(distance, _)| *distance <= MAX_DOOR_SEARCH_DIST)
             .collect();
         doors.sort_by(|a, b| a.0.total_cmp(&b.0));
         doors
     };
-    for (_, door, side) in candidates.drain(..).take(MAX_DOOR_PROBES) {
-        let id = {
-            let mut s = state.lock().await;
-            let Ok(id) = s.request_move(side.0, side.1, background, sprint).await else {
+    let mut tried = Vec::new();
+    for (_, door) in candidates.drain(..).take(MAX_DOOR_PROBES) {
+        let ClientMessage::ToggleDoor { door: door_id } = &door.toggle else {
+            continue;
+        };
+        let door_id = door_id.clone();
+        // The straight-line nearer side may lie beyond the wall the door is in.
+        let sides = {
+            let s = state.lock().await;
+            let Some(player) = s.self_player.as_ref() else {
                 return false;
             };
-            *owned_request = Some(id);
-            id
+            let floor = s.passability_floor();
+            let mut sides = door.sides.map(|(x, z)| {
+                (
+                    !s.find_path_to(x, z, floor).found,
+                    PlanarDelta::to_xz(&player.position, x, z).dist,
+                    (x, z),
+                )
+            });
+            sides.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)));
+            sides
         };
-        for _ in 0..300 {
-            tokio::time::sleep(Duration::from_millis(50)).await;
-            let mut s = state.lock().await;
-            if s.move_request_id != id {
-                return false;
-            }
-            match s.move_status {
-                Some(MoveStatus::Arrived) => {
-                    if s.send_flagged_command(door.toggle, background)
-                        .await
-                        .is_err()
-                    {
-                        return false;
-                    }
-                    drop(s);
-                    tokio::time::sleep(DOOR_TOGGLE_WAIT).await;
-                    return true;
+        for (_, _, side) in sides {
+            let id = {
+                let mut s = state.lock().await;
+                let Ok(id) = s.request_move(side.0, side.1, background, sprint).await else {
+                    return false;
+                };
+                *owned_request = Some(id);
+                id
+            };
+            let mut outcome = None;
+            for _ in 0..300 {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                let mut s = state.lock().await;
+                if s.move_request_id != id {
+                    return false;
                 }
-                Some(MoveStatus::Moving | MoveStatus::Searching) | None => {}
-                _ => break,
+                match s.move_status {
+                    Some(MoveStatus::Arrived) => {
+                        if s.send_flagged_command(door.toggle, background)
+                            .await
+                            .is_err()
+                        {
+                            return false;
+                        }
+                        tracing::info!(
+                            npc = s.self_player.as_ref().map(|p| p.name.as_str()),
+                            door = door_id,
+                            x = side.0,
+                            z = side.1,
+                            failed = ?tried,
+                            "Toggled a door in the way"
+                        );
+                        drop(s);
+                        tokio::time::sleep(DOOR_TOGGLE_WAIT).await;
+                        return true;
+                    }
+                    Some(MoveStatus::Moving | MoveStatus::Searching) | None => {}
+                    status => {
+                        outcome = status;
+                        break;
+                    }
+                }
             }
+            tried.push(format!(
+                "{door_id}@({:.1},{:.1}):{outcome:?}",
+                side.0, side.1
+            ));
         }
+    }
+    if !tried.is_empty() {
+        let s = state.lock().await;
+        tracing::info!(
+            npc = s.self_player.as_ref().map(|p| p.name.as_str()),
+            failed = ?tried,
+            "No door in the way could be reached"
+        );
     }
     false
 }

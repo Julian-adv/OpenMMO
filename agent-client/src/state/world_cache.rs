@@ -94,6 +94,7 @@ impl WorldCache {
         }
         self.furniture_placements.clear();
         self.fetched_furniture_regions.clear();
+        self.object_doors.clear();
         self.fence_revisions.clear();
         self.fence_deleted.clear();
         self.fence_bodies.clear();
@@ -1112,5 +1113,28 @@ mod interest_tests {
             layout_hash(&generate_dungeon_for("old_crypt"))
         );
         assert_eq!(cells(&cache), fixed_cells);
+    }
+
+    #[test]
+    fn a_new_world_epoch_shuts_object_doors() {
+        let hall = FurniturePlacement {
+            id: 121,
+            type_id: "union_hall".into(),
+            x: 100.0,
+            y: 0.0,
+            z: 100.0,
+            rotation_deg: 0.0,
+            floor_level: 0,
+            door_open: false,
+        };
+        let mut cache = WorldCache::new();
+        assert!(cache.ensure_world_epoch("first"));
+        cache.sync_furniture(0, 0, vec![hall.clone()]);
+        cache.set_door("object:0:0:121", Some(true));
+        assert!(cache.closed_object_doors(0).is_empty());
+
+        assert!(cache.ensure_world_epoch("second"));
+        cache.sync_furniture(0, 0, vec![hall]);
+        assert_eq!(cache.closed_object_doors(0).len(), 1);
     }
 }

@@ -672,6 +672,198 @@ async fn blocked_schedule_opens_a_door_and_resumes_the_target() {
     }
 }
 
+fn progress_at(request_id: u32, x: f32, z: f32, status: MoveStatus) -> ServerMessage {
+    ServerMessage::PlayerMoveProgress {
+        request_id,
+        server_time_ms: 1,
+        position: p(x, 1.3, z),
+        rotation: 0.0,
+        floor_level: 0,
+        next_waypoint: 1,
+        speed: 0.0,
+        status,
+    }
+}
+
+/// The door stands on the far side of the building, so its inner side is the
+/// nearer one in a straight line.
+async fn opens_a_door_from_behind_its_building(
+    state: Arc<Mutex<SharedState>>,
+    mut rx: mpsc::Receiver<ClientMessage>,
+    start: (f32, f32),
+    target: (f32, f32),
+    outside: (f32, f32),
+    door: DoorId,
+) {
+    {
+        let mut s = state.lock().await;
+        let me = s.self_player.as_mut().unwrap();
+        me.position = p(start.0, 1.3, start.1);
+    }
+    let task = spawn_move(
+        &state,
+        ScheduleEntry {
+            pos: [target.0, 1.3, target.1],
+            ..Default::default()
+        },
+    );
+    let (id, x, z) = goal(&mut rx).await;
+    assert_eq!((x, z), target);
+    state
+        .lock()
+        .await
+        .push_event(progress_at(id, start.0, start.1, MoveStatus::NodeLimit));
+    let (id, x, z) = goal(&mut rx).await;
+    assert!(
+        (x - outside.0).abs() < 0.01 && (z - outside.1).abs() < 0.01,
+        "approached ({x}, {z})"
+    );
+    state
+        .lock()
+        .await
+        .push_event(progress_at(id, x, z, MoveStatus::Arrived));
+    let command = timeout(Duration::from_secs(1), rx.recv())
+        .await
+        .expect("door toggle")
+        .expect("open command channel");
+    assert!(matches!(
+        command,
+        ClientMessage::ToggleDoor { door: toggled } if toggled == door.to_string()
+    ));
+    task.abort();
+}
+
+async fn walker_by_the_chapel() -> (Arc<Mutex<SharedState>>, mpsc::Receiver<ClientMessage>) {
+    use onlinerpg_shared::furniture::FurniturePlacement;
+    let (state, rx) = walker();
+    state
+        .lock()
+        .await
+        .world_cache
+        .write()
+        .unwrap()
+        .sync_furniture(
+            -2,
+            4,
+            vec![FurniturePlacement {
+                id: 121,
+                type_id: "union_hall".into(),
+                x: -1444.7807,
+                y: 1.0343,
+                z: 4798.4668,
+                rotation_deg: 270.0,
+                floor_level: 0,
+                door_open: false,
+            }],
+        );
+    (state, rx)
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_door_side_the_server_refuses_gives_way_to_the_other_side() {
+    let (state, mut rx) = walker_by_the_chapel().await;
+    let start = (-1425.5, 4798.5);
+    state.lock().await.self_player.as_mut().unwrap().position = p(start.0, 1.3, start.1);
+    let task = spawn_move(
+        &state,
+        ScheduleEntry {
+            pos: [-1434.33, 1.3, 4798.47],
+            ..Default::default()
+        },
+    );
+    let (id, ..) = goal(&mut rx).await;
+    state
+        .lock()
+        .await
+        .push_event(progress_at(id, start.0, start.1, MoveStatus::NodeLimit));
+    let (id, x, _) = goal(&mut rx).await;
+    assert!((x + 1454.0807).abs() < 0.01, "approached {x}");
+    state
+        .lock()
+        .await
+        .push_event(progress_at(id, start.0, start.1, MoveStatus::Partial));
+    let (id, x, z) = goal(&mut rx).await;
+    assert!((x + 1452.4807).abs() < 0.01, "approached {x}");
+    state
+        .lock()
+        .await
+        .push_event(progress_at(id, x, z, MoveStatus::Arrived));
+    assert!(matches!(
+        timeout(Duration::from_secs(1), rx.recv()).await,
+        Ok(Some(ClientMessage::ToggleDoor { .. }))
+    ));
+    task.abort();
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_chapel_door_is_opened_from_outside_when_approached_from_the_chancel_end() {
+    let (state, rx) = walker_by_the_chapel().await;
+    opens_a_door_from_behind_its_building(
+        state,
+        rx,
+        (-1425.5, 4798.5),
+        (-1434.33, 4798.47),
+        (-1454.0807, 4798.4668),
+        DoorId::object(-2, 4, 121),
+    )
+    .await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_house_door_is_opened_from_outside_when_approached_from_behind() {
+    let (state, rx) = walker();
+    {
+        let s = state.lock().await;
+        let wall = |variant, len| {
+            vec![
+                WallConfig {
+                    variant,
+                    texture: 0,
+                    is_open: false,
+                };
+                len
+            ]
+        };
+        let mut room = room(0, 0, Default::default());
+        room.size_x = 6;
+        room.wall_north = wall(WallVariant::Solid, 6);
+        room.wall_south = wall(WallVariant::Solid, 6);
+        room.wall_east = wall(WallVariant::Solid, 4);
+        room.wall_west = wall(WallVariant::Solid, 4);
+        room.wall_west[1].variant = WallVariant::WithDoor;
+        let mut rectory = house("rectory", p(-1424.0, 1.3, 4800.0), vec![room]);
+        rectory.passability = vec![onlinerpg_shared::housing::PassabilityGrid {
+            floor_level: 0,
+            origin_x: 0,
+            origin_z: 0,
+            width: 6,
+            depth: 4,
+            cells: vec![
+                9, 1, 1, 1, 1, 3, 8, 0, 0, 0, 0, 2, 8, 0, 0, 0, 0, 2, 12, 4, 4, 4, 4, 6,
+            ],
+        }];
+        s.world_cache.write().unwrap().apply_house_event(
+            s.self_player_id.unwrap(),
+            "test",
+            &WorldEvent {
+                subject: "house:rectory".into(),
+                revision: 1,
+                change: InterestChange::Enter,
+                messages: vec![ServerMessage::HouseUpdated { house: rectory }],
+            },
+        );
+    }
+    opens_a_door_from_behind_its_building(
+        state,
+        rx,
+        (-1416.5, 4802.5),
+        (-1418.9, 4802.6),
+        (-1424.5, 4801.5),
+        DoorId::house("rectory", 0, WallDirection::West, 1),
+    )
+    .await;
+}
+
 #[tokio::test(start_paused = true)]
 async fn schedule_door_retries_are_bounded_when_the_door_stays_closed() {
     let (state, mut rx) = walker();
