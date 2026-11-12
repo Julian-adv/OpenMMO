@@ -151,6 +151,8 @@ export interface ObjectDef {
     opening: number
     floor?: number
     height?: number
+    /** Node hidden while the viewer stands in this annex. */
+    cutaway?: string
   }[]
   /** Mesh kept while the object hides for blocking the view of the player;
    *  `roofHeight` is the height of the `perimeter` volume for that test. */
@@ -158,7 +160,8 @@ export interface ObjectDef {
   roofHeight?: number
   /** Leaves of a door across the `perimeter` entrance; the server holds its state. */
   swingDoor?: { leaves: { node: string; openDeg: number }[] }
-  /** Doors in other walls: `segment` is the leaf plane `[ax, az, bx, bz]` in local metres. */
+  /** Doors in other walls: `segment` is the leaf plane `[ax, az, bx, bz]` in
+   *  local metres; `depth`, `floor` and `steps` are read by collision in shared Rust. */
   sideDoors?: {
     segment: [number, number, number, number]
     leaves: { node: string; openDeg: number }[]

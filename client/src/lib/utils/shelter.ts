@@ -48,30 +48,42 @@ export function doorwaysOf(
   }))
 }
 
-export function isInsideShelter(
+/** Where a point lies in a shelter: the perimeter, an annex by index, or outside. */
+export function shelterRoomAt(
   point: Position,
   placement: ObjectPlacement,
   perimeter: NonNullable<ObjectDef['perimeter']>,
   annexes: NonNullable<ObjectDef['annexes']> = []
-): boolean {
+): 'perimeter' | number | null {
   const yaw = (placement.rotation * Math.PI) / 180
   const dx = shortestWrappedDeltaX(placement.x, point.x)
   const dz = point.z - placement.z
   const x = dx * Math.cos(yaw) - dz * Math.sin(yaw)
   const z = dx * Math.sin(yaw) + dz * Math.cos(yaw)
   const y = point.y - placement.y
-  if (y <= -0.3) return false
-  return (
-    (Math.abs(x) < perimeter.width / 2 &&
-      Math.abs(z) < perimeter.depth / 2 &&
-      y < perimeter.height) ||
-    annexes.some(
-      (a) =>
-        x > a.x[0] &&
-        x < a.x[1] &&
-        z > a.z[0] &&
-        z < a.z[1] &&
-        y < (a.height ?? perimeter.height)
-    )
+  if (y <= -0.3) return null
+  if (
+    Math.abs(x) < perimeter.width / 2 &&
+    Math.abs(z) < perimeter.depth / 2 &&
+    y < perimeter.height
   )
+    return 'perimeter'
+  const annex = annexes.findIndex(
+    (a) =>
+      x > a.x[0] &&
+      x < a.x[1] &&
+      z > a.z[0] &&
+      z < a.z[1] &&
+      y < (a.height ?? perimeter.height)
+  )
+  return annex < 0 ? null : annex
+}
+
+export function isInsideShelter(
+  point: Position,
+  placement: ObjectPlacement,
+  perimeter: NonNullable<ObjectDef['perimeter']>,
+  annexes: NonNullable<ObjectDef['annexes']> = []
+): boolean {
+  return shelterRoomAt(point, placement, perimeter, annexes) !== null
 }

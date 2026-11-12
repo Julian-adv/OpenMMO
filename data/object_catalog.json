@@ -48,7 +48,8 @@
         "z": [-14.1, -8.5],
         "opening": 6,
         "floor": 0.45,
-        "height": 9.5
+        "height": 9.5,
+        "cutaway": "hall_arch"
       }
     ],
     "swingDoor": {
@@ -62,6 +63,7 @@
         "segment": [4.27, -13.75, 4.27, -12.65],
         "depth": 0.27,
         "floor": 0.45,
+        "steps": { "depth": 1.68, "floor": 0.3 },
         "leaves": [{ "node": "hall_door_back", "openDeg": -95 }]
       }
     ]

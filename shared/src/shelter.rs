@@ -39,6 +39,15 @@ struct SideDoor {
     depth: f32,
     #[serde(default)]
     floor: f32,
+    steps: Option<Steps>,
+}
+
+/// Steps outside a side door, reaching `depth` metres out from the leaf; a
+/// walker on them stands at the one height `floor`.
+#[derive(serde::Deserialize)]
+struct Steps {
+    depth: f32,
+    floor: f32,
 }
 
 impl Perimeter {
@@ -473,15 +482,21 @@ pub fn build_ground(placements: &[FurniturePlacement]) -> Option<RuntimePassabil
         for door in &perimeter.side_doors {
             let [ax, az, bx, bz] = door.segment;
             let len = (bx - ax).hypot(bz - az).max(1e-3);
-            let reach = door.depth * perimeter.room_sign(door);
-            let (ox, oz) = ((bz - az) / len * reach, -(bx - ax) / len * reach);
-            floors.extend(floor_grid(
-                placement,
-                [ax.min(bx).min(ax + ox), ax.max(bx).max(bx + ox)],
-                [az.min(bz).min(az + oz), az.max(bz).max(bz + oz)],
-                placement.y + floor + door.floor,
-                perimeter.height,
-            ));
+            let sign = perimeter.room_sign(door);
+            let mut strip = |reach: f32, height: f32| {
+                let (ox, oz) = ((bz - az) / len * reach, -(bx - ax) / len * reach);
+                floors.extend(floor_grid(
+                    placement,
+                    [ax.min(bx).min(ax + ox), ax.max(bx).max(bx + ox)],
+                    [az.min(bz).min(az + oz), az.max(bz).max(bz + oz)],
+                    placement.y + floor + height,
+                    perimeter.height,
+                ));
+            };
+            strip(door.depth * sign, door.floor);
+            if let Some(steps) = &door.steps {
+                strip(-steps.depth * sign, steps.floor);
+            }
         }
     }
     if floors.is_empty() {
@@ -790,6 +805,8 @@ mod tests {
             assert!(near(ground(0.0, 0.0), p.y), "nave, yaw {yaw}");
             assert!(near(ground(4.0, 6.0), p.y), "nave corner, yaw {yaw}");
             assert!(near(ground(0.0, -11.0), p.y + 0.45), "dais, yaw {yaw}");
+            assert!(near(ground(5.1, -13.2), p.y + 0.3), "steps, yaw {yaw}");
+            assert!(ground(6.6, -13.2).is_none(), "past the steps, yaw {yaw}");
             assert!(ground(9.0, 0.0).is_none(), "outside, yaw {yaw}");
             assert!(ground(-9.0, 7.0).is_none(), "tower, yaw {yaw}");
         }

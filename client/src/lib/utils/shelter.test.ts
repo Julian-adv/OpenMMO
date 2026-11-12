@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { Vector3 } from 'three'
-import { doorwaysOf, isInsideShelter, normalizeYaw } from './shelter'
+import {
+  doorwaysOf,
+  isInsideShelter,
+  normalizeYaw,
+  shelterRoomAt,
+} from './shelter'
 import type { ObjectPlacement } from '../stores/editorStore'
 import { WORLD_WIDTH_X } from '../terrain/world-wrap'
 
@@ -58,6 +63,33 @@ describe('rotated tent cutaway', () => {
         perimeter
       )
     ).toBe(true)
+  })
+})
+
+describe('shelter room', () => {
+  it('tells the perimeter from an annex', () => {
+    const hall: ObjectPlacement = {
+      id: 121,
+      type: 'union_hall',
+      x: 100,
+      y: 0,
+      z: 100,
+      rotation: 0,
+      floorLevel: 0,
+    }
+    const perimeter = { width: 12, depth: 17, height: 9, entranceWidth: 3.8 }
+    const annexes = [
+      {
+        x: [-4, 4] as [number, number],
+        z: [-14.1, -8.5] as [number, number],
+        opening: 6,
+      },
+    ]
+    const at = (x: number, z: number) =>
+      shelterRoomAt({ x, y: 0.5, z }, hall, perimeter, annexes)
+    expect(at(100, 100)).toBe('perimeter')
+    expect(at(100, 89)).toBe(0)
+    expect(at(105, 89)).toBeNull()
   })
 })
 

@@ -64,7 +64,7 @@
   } from '../../stores/fieldBossWakeStore'
   import { getObjectModelPath } from '../../utils/modelPaths'
   import { createSelectionBox } from '../../utils/objectSelectionBox'
-  import { doorwaysOf, isInsideShelter } from '../../utils/shelter'
+  import { doorwaysOf, shelterRoomAt } from '../../utils/shelter'
   import { isoCameraOccludesPlayer } from '../../utils/iso-occlusion'
   import { rotatedRectAabb } from '../../utils/objectFootprint'
   import { objectDoorId } from '../../network/doorId'
@@ -320,6 +320,9 @@
       const perimeter = def?.perimeter
       if (!def || !perimeter || !clone) return []
       const panel = def.cutaway ? clone.getObjectByName(def.cutaway) : undefined
+      const annexPanels = (def.annexes ?? []).map((annex) =>
+        annex.cutaway ? clone.getObjectByName(annex.cutaway) : undefined
+      )
       if (!panel && !def.ground) return []
       const yaw = (placement.rotation * Math.PI) / 180
       const box = (
@@ -359,6 +362,7 @@
           perimeter,
           annexes: def.annexes,
           panel,
+          annexPanels,
           clone,
           ground: def.ground,
           boxes,
@@ -487,9 +491,14 @@
     const viewer = debugInfo?.position
     for (const structure of structures) {
       const { placement, perimeter, annexes, panel, clone, ground } = structure
-      const inside =
-        !!viewer && isInsideShelter(viewer, placement, perimeter, annexes)
+      const room = viewer
+        ? shelterRoomAt(viewer, placement, perimeter, annexes)
+        : null
+      const inside = room !== null
       if (panel) panel.visible = !inside
+      structure.annexPanels.forEach((annexPanel, index) => {
+        if (annexPanel) annexPanel.visible = room !== index
+      })
       if (!ground) continue
       const hidden =
         !!viewer &&
