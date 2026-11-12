@@ -48,6 +48,8 @@
     networkManager.sendSetFamilyEmblem(texture, color)
   }
 
+  // Off until the merger rite ships.
+  const MERGE_ENABLED: boolean = false
   let mergeOpen = $state(false)
   let mergeHead = $state('')
   let mergeTerms = $state<FamilyMergeTerms>({
@@ -523,7 +525,7 @@
           <div class="dim small">{$t('family.emblemHint')}</div>
         {/if}
 
-        {#if isHead}
+        {#if MERGE_ENABLED && isHead}
           <button
             class="section-title toggle"
             aria-expanded={mergeOpen}
