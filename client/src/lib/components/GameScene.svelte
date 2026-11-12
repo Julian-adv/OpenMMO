@@ -1,5 +1,6 @@
 <script lang="ts">
   import { setupPointShadow } from '../utils/pointShadow'
+  import { deferShaderBuilds } from '../utils/deferredShaderBuild'
   import { T, useTask, useThrelte } from '@threlte/core'
   import { OrbitControls } from '@threlte/extras'
   import * as THREE from 'three'
@@ -481,6 +482,12 @@
   $effect(() => {
     applyGraphicsPreset(renderer, graphicsPreset, directionalLight)
   })
+
+  let shaderBuildsDeferred = false
+  $effect(() => {
+    shaderBuildsDeferred = !isSceneCompiling && !$teleportLoading
+  })
+  deferShaderBuilds(renderer, () => shaderBuildsDeferred)
 
   const calendarSystem = createCalendarSystem({
     onDateChanged: setGameDate,

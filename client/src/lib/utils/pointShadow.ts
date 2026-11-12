@@ -27,11 +27,32 @@ import {
   viewZToReversedPerspectiveDepth,
   vogelDiskSample as vogelDiskSampleTyped,
 } from 'three/tsl'
-import { PointShadowNode, type NodeBuilder } from 'three/webgpu'
+import { Material, PointShadowNode, type NodeBuilder } from 'three/webgpu'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type N = any // TSL node
 const vogelDiskSample: N = vogelDiskSampleTyped
+
+// three@0.186.1 copies every caster's alphaTest onto the one shadow material
+// of a light, and the setter bumps `version` on each switch between cut-out
+// and opaque casters. Every shadow render object then recomputed its material
+// cache key each frame (a quarter of the frame at night). Those objects are
+// built with their own caster's state, so the bump tells them nothing.
+// Re-check on three upgrades.
+const alphaTest = Object.getOwnPropertyDescriptor(
+  Material.prototype,
+  'alphaTest'
+)!
+Object.defineProperty(Material.prototype, 'alphaTest', {
+  ...alphaTest,
+  set(
+    this: Material & { _alphaTest: number; isShadowPassMaterial?: boolean },
+    value: number
+  ) {
+    if (this.isShadowPassMaterial) this._alphaTest = value
+    else alphaTest.set!.call(this, value)
+  },
+})
 
 type ShadowTarget = { shadowMap: RenderTarget; depthTexture: DepthTexture }
 type TargetFactory = (shadow: LightShadow, builder: NodeBuilder) => ShadowTarget

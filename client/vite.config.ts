@@ -536,6 +536,8 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       https,
       hmr,
+      // Lets a dev page sample itself with the JS Self-Profiling API.
+      headers: { 'Document-Policy': 'js-profiling' },
       // No global Cache-Control here: it only ever applied to transformed
       // source modules (proxied /api responses bypass server.headers), where
       // an hour of max-age serves stale modules after HMR/scp churn — wasm
