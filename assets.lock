@@ -1,5 +1,5 @@
 repo jake-song-openmmo/onlinerpg-assets
-revision 47fc238776df00d699f5f9afba6f47e821251efe
+revision d98d38ee75e3b864b426b528de4557973685ae21
 file 74b7a9f450eb4c14e99f037b1cfe735eabdc64b3a94023418dabb24b6889e6f7 assets/all_animation.blend
 file 1043a18aae65ebfcca9aeb7ba70acd97be2886d2b9f51c608624372f2417ba86 assets/animations/Annoyed Head Shake.fbx
 file 5edac6dfec09f450747fa2d9ad9dc64b10e717f2fa5a01729f0d4ebc00396cdd assets/animations/Clapping.fbx
@@ -1828,6 +1828,10 @@ file 3337aa679a60eab163fc5b07922e759f40a1e4a5f4ed8c2df10845cc014c207f assets/sfx
 file 463378beb26124792d325e16e8deb7fb2112793fc6e4c75937e5ee0f508a5107 assets/sfx/dungeon-drip-ocons-2026-09-18/ocons_6gEs_tJpkIY_68.932-69.332.wav
 file 850978c55ede655a426eeb49329e84c36b548a42d353fddc282fa0fa63570018 assets/sfx/healing-prayer-2026-10-30/healing-prayer_glow-take1_2026-10-30.json
 file 82e127541f85ca2109febd61863ac9b9efaa49eea7b36867bc4a12587469128b assets/sfx/healing-prayer-2026-10-30/healing-prayer_glow-take1_2026-10-30.mp3
+file 6b17ce64160926707ab59be877a15dad99eacc675c341cb2699a8be9a8ca3bf9 assets/sfx/merger-bells-2026-11-12/merger-bell-strike_2026-11-12.json
+file 68dffbe2cb4bb58c1042b3ce8073f6fb0d5752afd5015dc4f7f38fc4dc036de8 assets/sfx/merger-bells-2026-11-12/merger-bell-strike_take1_2026-11-12.mp3
+file e28c41e93baaf4004491c971d589fdcfdb10d98effe1ecd6e44c56227d13b27e assets/sfx/merger-bells-2026-11-12/merger-bell-strike_take2_2026-11-12.mp3
+file 9bbbf1293af39611524121f5d63fcdeb2377867fca100787e38ccf6f17d902ac assets/sfx/merger-bells-2026-11-12/merger-bell-strike_take3_2026-11-12.mp3
 file 5e4c04cc0d1622045ca2af04e887351def87bd1fce59e17a30acebb4047d5065 assets/sfx/pickaxe-ore-2026-11-05/pickaxe-ore_chunk-take2_2026-11-05.json
 file 70f0cce77fe1491818c74012d04a2b5eb4c37fed75057e4eb67999beae5d691f assets/sfx/pickaxe-ore-2026-11-05/pickaxe-ore_chunk-take2_2026-11-05.mp3
 file cb3a18d3e35432475cb20db89879c54aff18e4141d9190dbead1f25c3f944747 assets/sfx/primal-roar-2026-10-29/primal-roar-female_take1_2026-10-29.json
