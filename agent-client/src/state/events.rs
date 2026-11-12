@@ -245,6 +245,14 @@ impl SharedState {
             | ServerMessage::FishingBite { .. }
             | ServerMessage::FishingFight { .. } => EventUrgency::Noise,
 
+            ServerMessage::DungeonLayoutVariants { variants } => {
+                self.world_cache
+                    .write()
+                    .unwrap()
+                    .set_dungeon_variants(variants);
+                EventUrgency::Noise
+            }
+
             // Noise: high-frequency, irrelevant, or housing updates
             ServerMessage::PlayerMoved { .. }
             | ServerMessage::MonsterMoved { .. }

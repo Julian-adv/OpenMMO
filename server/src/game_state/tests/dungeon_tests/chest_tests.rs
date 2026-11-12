@@ -546,13 +546,9 @@ async fn dungeon_reset_evicts_occupants_and_wakes_the_guardian() {
     drop(players);
 
     let dungeons = game_state.dungeons.read().await;
-    let floor = dungeons
-        .get(CRYPT_ID)
-        .and_then(|rt| rt.floors.get(&deepest))
-        .expect("staged floor");
     assert!(
-        floor.slots.iter().all(|s| s.respawn_at_ms == 0),
-        "the guardian rises with the new night"
+        dungeons[CRYPT_ID].floors.is_empty(),
+        "the nightly redraw drops every floor, guardian timer included"
     );
 }
 
@@ -580,17 +576,9 @@ async fn dungeon_reset_sweeps_a_floor_someone_walked_into() {
     advance_one_night(&game_state).await;
 
     let dungeons = game_state.dungeons.read().await;
-    let floor = dungeons
-        .get(CRYPT_ID)
-        .and_then(|rt| rt.floors.get(&deepest))
-        .expect("staged floor");
     assert!(
-        floor.players.is_empty(),
-        "the second sweep pass evicts a latecomer it can still see"
-    );
-    assert!(
-        floor.slots.iter().all(|s| s.respawn_at_ms == 0),
-        "an emptied floor is reset like any other"
+        dungeons[CRYPT_ID].floors.is_empty(),
+        "the second sweep pass evicts the latecomer, so the redraw goes ahead"
     );
 }
 

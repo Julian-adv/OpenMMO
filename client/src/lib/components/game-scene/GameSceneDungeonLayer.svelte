@@ -8,6 +8,7 @@
   import {
     currentDungeonDepth,
     currentDungeonId,
+    dungeonLayoutRevision,
     dungeonPropsResetRevision,
     dungeonPropsRevision,
   } from '../../stores/dungeonStore'
@@ -245,6 +246,7 @@
    *  can reconcile the door visual to the store on the hidden→shown edge. */
   let entranceVisible = false
   let builtKey = ''
+  let builtLayoutRevision = 0
   let entranceKey = ''
   let lastPropsResetRevision = 0
 
@@ -1159,7 +1161,10 @@
     const id = $currentDungeonId
     const depth = $currentDungeonDepth
     const key = id && depth >= 1 ? `${id}:${depth}` : ''
-    if (key === builtKey) return
+    const layoutRevision = $dungeonLayoutRevision
+    if (layoutRevision !== builtLayoutRevision)
+      builtLayoutRevision = layoutRevision
+    else if (key === builtKey) return
     builtKey = key
     clearGroup()
     if (!key) return

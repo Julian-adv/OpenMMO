@@ -345,7 +345,7 @@ impl super::GameState {
     /// The owner's own state on entering the game, read from what is
     /// registered for `id`; a resumed body sends its live values.
     pub(crate) async fn owner_state_messages(&self, id: &PlayerId) -> Vec<ServerMessage> {
-        let mut messages = Vec::new();
+        let mut messages = vec![self.dungeon_layout_variants_message()];
         let mana = self.mana.read().await.get(id).map(|mana| mana.message());
         messages.extend(mana);
         let datetime = self.current_game_datetime();

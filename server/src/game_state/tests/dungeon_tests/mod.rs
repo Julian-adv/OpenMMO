@@ -7,6 +7,7 @@ mod den_tests;
 mod discovery_tests;
 mod door_tests;
 mod guild_tests;
+mod layout_tests;
 mod mine_tests;
 mod monster_tests;
 mod population_tests;

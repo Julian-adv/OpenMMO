@@ -40,3 +40,6 @@ export const dungeonPropsRevision = writable(0)
  * backwards in place.
  */
 export const dungeonPropsResetRevision = writable(0)
+
+/** Bumped when the entered dungeon's maze is redrawn. */
+export const dungeonLayoutRevision = writable(0)

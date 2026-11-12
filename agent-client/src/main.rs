@@ -649,6 +649,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::PlayerTradeEnded { .. } => "PlayerTradeEnded",
         ServerMessage::PlayerTradeError { .. } => "PlayerTradeError",
         ServerMessage::DungeonReset => "DungeonReset",
+        ServerMessage::DungeonLayoutVariants { .. } => "DungeonLayoutVariants",
         ServerMessage::CharacterRenameRequired { .. } => "CharacterRenameRequired",
         ServerMessage::CharacterRenamed { .. } => "CharacterRenamed",
         ServerMessage::EstateChestMode { .. } => "EstateChestMode",

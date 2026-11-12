@@ -3127,6 +3127,10 @@ export function handleServerMessage(
     case 'DungeonReset':
       playDungeonSound('reset')
       break
+
+    case 'DungeonLayoutVariants':
+      dungeonManager.applyLayoutVariants(data.variants)
+      break
   }
 }
 

@@ -683,9 +683,43 @@ thread_local! {
         RefCell::new(HashMap::new());
 }
 
-/// Layouts are deterministic per entrance id, so generate once and memoize —
-/// regeneration costs milliseconds in wasm and several exports need them per
-/// floor transition. The registry is tiny, so entries are never evicted.
+thread_local! {
+    static DUNGEON_VARIANTS: RefCell<HashMap<String, u32>> = RefCell::new(HashMap::new());
+}
+
+/// Adopt the server's `DungeonLayoutVariants` (parallel arrays; unlisted =
+/// variant 0). Returns the ids whose maze changed; the caller re-adds their
+/// passability.
+#[wasm_bindgen]
+pub fn dungeon_set_layout_variants(ids: Vec<String>, variants: Vec<u32>) -> Vec<String> {
+    let next: HashMap<String, u32> = ids
+        .into_iter()
+        .zip(variants)
+        .filter(|(_, variant)| *variant != 0)
+        .collect();
+    let changed: Vec<String> = DUNGEON_VARIANTS.with(|c| {
+        let mut current = c.borrow_mut();
+        let changed = current
+            .iter()
+            .filter(|(id, variant)| next.get(*id) != Some(*variant))
+            .map(|(id, _)| id)
+            .chain(next.keys().filter(|id| !current.contains_key(*id)))
+            .cloned()
+            .collect();
+        *current = next;
+        changed
+    });
+    DUNGEON_LAYOUTS.with(|c| {
+        let mut layouts = c.borrow_mut();
+        for id in &changed {
+            layouts.remove(id);
+        }
+    });
+    changed
+}
+
+/// Layouts are deterministic per entrance id and variant, so generate once
+/// and memoize; entries drop only when a variant changes.
 ///
 /// The hit path allocates nothing: the height queries below run per entity per
 /// frame, and `entry()` would key every one of them with a fresh `String`.
@@ -694,15 +728,19 @@ fn dungeon_layouts(entrance_id: &str) -> Rc<Vec<crate::dungeon::FloorLayout>> {
         if let Some(layouts) = c.borrow().get(entrance_id) {
             return layouts.clone();
         }
-        let layouts = Rc::new(crate::dungeon::generate_dungeon_for(entrance_id));
+        let variant = DUNGEON_VARIANTS.with(|v| v.borrow().get(entrance_id).copied().unwrap_or(0));
+        let layouts = Rc::new(crate::dungeon::generate_dungeon_variant(
+            entrance_id,
+            variant,
+        ));
         c.borrow_mut()
             .insert(entrance_id.to_string(), layouts.clone());
         layouts
     })
 }
 
-/// Full layout of every floor of a dungeon, generated from the entrance
-/// id. Identical to what the server generates natively from the same id.
+/// Full layout of every floor of a dungeon, generated from the entrance id
+/// and its current variant. Identical to what the server generates natively.
 #[wasm_bindgen]
 pub fn dungeon_layout(entrance_id: &str) -> Result<JsValue, JsError> {
     to_js(&*dungeon_layouts(entrance_id))

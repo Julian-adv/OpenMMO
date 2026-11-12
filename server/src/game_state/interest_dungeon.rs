@@ -20,6 +20,27 @@ fn area(id: &str, depth: u8, bounds: Bounds) -> SubjectArea {
     }
 }
 
+fn door_gone(id: &str, depth: u8, door_id: u32) -> ServerMessage {
+    ServerMessage::DungeonDoorState {
+        entrance_id: id.to_owned(),
+        depth,
+        door_id,
+        is_open: None,
+    }
+}
+
+fn prop_gone(id: &str, depth: u8, prop_id: u32) -> ServerMessage {
+    ServerMessage::DungeonPropState {
+        entrance_id: id.to_owned(),
+        depth,
+        prop_id,
+        active: false,
+        broken: false,
+        opened: false,
+        offset: 0,
+    }
+}
+
 impl Interest {
     pub(super) fn reset_dungeon_props(
         &mut self,
@@ -50,6 +71,31 @@ impl Interest {
         }
     }
 
+    /// Drop the interior door and prop subjects of a maze being replaced.
+    pub(super) fn remove_dungeon_floors(&mut self, id: &str, layouts: &[FloorLayout]) {
+        for layout in layouts {
+            let depth = layout.depth;
+            for door in interior_doors(layout) {
+                let door_id = door.door_id;
+                self.remove(
+                    &format!("door:{id}:{depth}:{door_id}"),
+                    vec![door_gone(id, depth, door_id)],
+                );
+            }
+            for (index, _) in layout
+                .props
+                .iter()
+                .enumerate()
+                .filter(|(_, prop)| prop.kind.is_interactive())
+            {
+                self.remove(
+                    &format!("prop:{id}:{depth}:{index}"),
+                    vec![prop_gone(id, depth, index as u32)],
+                );
+            }
+        }
+    }
+
     pub(super) fn seed_dungeon(&mut self, id: &str, entrance: &Position, layouts: &[FloorLayout]) {
         let doors = std::iter::once((0, 0)).chain(layouts.iter().flat_map(|layout| {
             interior_doors(layout)
@@ -74,12 +120,7 @@ impl Interest {
                 key,
                 vec![area(id, depth, Bounds::Point(position))],
                 vec![state.clone()],
-                vec![ServerMessage::DungeonDoorState {
-                    entrance_id: id.to_owned(),
-                    depth,
-                    door_id,
-                    is_open: None,
-                }],
+                vec![door_gone(id, depth, door_id)],
                 vec![state],
             );
         }
@@ -120,15 +161,7 @@ impl Interest {
                     key,
                     vec![area(id, depth, bounds)],
                     vec![state.clone()],
-                    vec![ServerMessage::DungeonPropState {
-                        entrance_id: id.to_owned(),
-                        depth,
-                        prop_id,
-                        active: false,
-                        broken: false,
-                        opened: false,
-                        offset: 0,
-                    }],
+                    vec![prop_gone(id, depth, prop_id)],
                     vec![state],
                 );
             }

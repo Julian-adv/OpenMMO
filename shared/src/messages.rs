@@ -2351,6 +2351,12 @@ pub enum ServerMessage {
     },
     /// Direct to each dungeon occupant before the sunset reset puts them out.
     DungeonReset,
+    /// `(entrance id, variant)` for `dungeon::generate_dungeon_variant`. Sent
+    /// in full on join and to everyone when a sunset reset redraws a maze;
+    /// an unlisted dungeon keeps variant 0.
+    DungeonLayoutVariants {
+        variants: Vec<(String, u32)>,
+    },
     /// Nearby: a player began mining a prop. The mined prop arrives as
     /// `DungeonPropBroken`; `MiningEnded` stops the swing either way.
     MiningStarted {
@@ -2758,6 +2764,7 @@ impl ServerMessage {
             | Self::InspectionResult { .. }
             | Self::BowMarkUpdate { .. } => DeliveryClass::Participants,
             Self::GameTimeSync { .. }
+            | Self::DungeonLayoutVariants { .. }
             | Self::WeatherSync { .. }
             | Self::ServerNotice { .. }
             | Self::ServerAnnouncement { .. } => DeliveryClass::Global,

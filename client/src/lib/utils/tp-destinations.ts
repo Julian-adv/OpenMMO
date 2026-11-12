@@ -45,11 +45,7 @@ const STATIC_DESTINATIONS: TpDestination[] = [
 
 const CITY_KINDS = new Set<MapLabelKind>(['capital', 'city', 'town'])
 
-let cached: TpDestination[] | null = null
-
 export function tpDestinations(): TpDestination[] {
-  if (cached) return cached
-
   const out = [...STATIC_DESTINATIONS]
 
   const shortNames = dungeonShortNames(DUNGEON_ENTRANCES.map((e) => e.id))
@@ -105,7 +101,6 @@ export function tpDestinations(): TpDestination[] {
     })
   }
 
-  cached = out
   return out
 }
 

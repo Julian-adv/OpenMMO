@@ -8,7 +8,7 @@
 
 use crate::terrain::io::TerrainIO;
 use onlinerpg_shared::dungeon::{
-    dungeon_cache_key, dungeon_passability, floor_cells, generate_dungeon_for, set_floor_cells,
+    dungeon_cache_key, dungeon_passability, floor_cells, generate_dungeon_variant, set_floor_cells,
 };
 use onlinerpg_shared::furniture::{self, FurniturePlacement};
 use onlinerpg_shared::housing::HouseData;
@@ -246,7 +246,7 @@ impl super::GameState {
         let regions = self.load_region_furniture(terrain_io).await?;
         let mut dungeons = 0usize;
         for def in self.dungeon_defs.all() {
-            let layouts = generate_dungeon_for(&def.id);
+            let layouts = generate_dungeon_variant(&def.id, self.dungeon_variant(&def.id));
             self.interest_lock()
                 .seed_dungeon(&def.id, &def.position(), &layouts);
             let rp = dungeon_passability(&def.position(), &layouts);

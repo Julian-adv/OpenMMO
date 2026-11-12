@@ -625,6 +625,7 @@ async fn main() -> ExitCode {
     }
     // Server-side collision data for the movement sim: houses, solid
     // furniture and dungeon layouts, mirroring what clients build.
+    game_state.init_dungeon_variants();
     if let Err(err) = game_state.init_passability(&terrain_io).await {
         error!(
             "Failed to build passability cache; refusing to start: {}",

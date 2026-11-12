@@ -285,6 +285,7 @@ fn mine_floors_keep_their_shape_over_many_seeds() {
     for seed in 0..200u64 {
         let floors = super::gen::generate_dungeon_with(
             seed,
+            seed,
             Some(25),
             BOSS_MONSTER_TYPE,
             None,
@@ -652,20 +653,6 @@ fn shaft_footprint(s: &StairShaft) -> Vec<(i32, i32)> {
         }
     }
     cells
-}
-
-/// `dungeon_passability` grids with every interior door open. Reachability
-/// tests verify layout connectivity: doors default shut in the shipped grids
-/// but are player-openable, so they never wall anything off permanently.
-fn passability_with_doors_open(entrance: &Position, floors: &[FloorLayout]) -> RuntimePassability {
-    let mut rp = dungeon_passability(entrance, floors);
-    for f in floors {
-        let fl = passability_floor_for_depth(f.depth);
-        if let Some(g) = rp.floors.iter_mut().find(|g| g.floor_level == fl) {
-            g.cells = floor_passability_cells(f);
-        }
-    }
-    rp
 }
 
 /// The runtime twin of `shaft_opens_to_room_only_at_its_landing`: the rule has
@@ -1722,4 +1709,51 @@ fn a_rail_cart_strikes_a_monster_on_its_spawn() {
     let pushed =
         cart_push_target(f, id, 0, -1, &[], &[], |c| c == spawn).expect("the push does something");
     assert_eq!(pushed.struck, Some(spawn), "{cart:?}");
+}
+
+#[test]
+fn variants_redraw_the_floors_behind_the_same_entrance() {
+    let mut usable = 0;
+    for def in entrances() {
+        let fixed = generate_dungeon_for(&def.id);
+        assert_eq!(
+            layout_hash(&fixed),
+            layout_hash(&generate_dungeon_variant(&def.id, 0)),
+            "{}: variant 0 is the fixed layout",
+            def.id
+        );
+        assert!(
+            layout_is_traversable(&def.position(), &fixed),
+            "{}: fixed layout",
+            def.id
+        );
+        for variant in 1..=12u32 {
+            let floors = generate_dungeon_variant(&def.id, variant);
+            assert_eq!(
+                format!("{:?}", floors[0].up_shaft),
+                format!("{:?}", fixed[0].up_shaft),
+                "{} variant {variant}: entrance shaft moved",
+                def.id
+            );
+            assert_ne!(
+                layout_hash(&floors),
+                layout_hash(&fixed),
+                "{} variant {variant}",
+                def.id
+            );
+            assert_eq!(
+                layout_hash(&floors),
+                layout_hash(&generate_dungeon_variant(&def.id, variant)),
+                "{} variant {variant}: not deterministic",
+                def.id
+            );
+            if floors.len() == fixed.len() && layout_is_traversable(&def.position(), &floors) {
+                usable += 1;
+            }
+        }
+    }
+    assert!(
+        usable >= entrances().len() * 10,
+        "only {usable} usable variants"
+    );
 }

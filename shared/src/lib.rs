@@ -277,7 +277,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// party chat (`PartyChatMessage.from_family`), party rosters
 /// (`PartyMember.family`) and friends
 /// (`FriendEntry.family`, `OnlineFriend.family`).
-pub const PROTOCOL_VERSION: u32 = 149;
+/// v150: `DungeonLayoutVariants` names the maze each nightly-redrawn dungeon
+/// currently has (doc/DUNGEON.md).
+pub const PROTOCOL_VERSION: u32 = 150;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

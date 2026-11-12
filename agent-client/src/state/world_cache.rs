@@ -282,6 +282,31 @@ impl WorldCache {
         }
     }
 
+    /// Adopt the server's maze variants (unlisted = 0). A changed dungeon
+    /// loses its overlays; the surface door keeps its state.
+    pub fn set_dungeon_variants(&mut self, variants: &[(String, u32)]) {
+        for slot in &mut self.dungeons {
+            let variant = variants
+                .iter()
+                .find(|(id, _)| *id == slot.id)
+                .map_or(0, |(_, variant)| *variant);
+            if slot.variant == variant {
+                continue;
+            }
+            let dungeon = slot.redrawn(variant);
+            let id = dungeon.id.clone();
+            self.passability_cache
+                .insert(dungeon_cache_key(&id), dungeon.passability());
+            *slot = Arc::new(dungeon);
+            self.dungeon_doors
+                .retain(|(d, depth), _| *d != id || *depth == 0);
+            self.dungeon_broken_props.retain(|(d, _), _| *d != id);
+            self.dungeon_cart_offsets.retain(|(d, _), _| *d != id);
+            self.dungeon_opened_props.retain(|(d, _), _| *d != id);
+            self.collision_revision = self.collision_revision.wrapping_add(1);
+        }
+    }
+
     /// Dungeon whose footprint covers (x, z), by the shared registry's
     /// footprint test — the same one the server admits us underground by.
     pub fn dungeon_at(&self, x: f32, z: f32) -> Option<Arc<Dungeon>> {
@@ -997,5 +1022,62 @@ mod interest_tests {
         assert!(cache.open_dungeon_doors("old_crypt", 1).contains(&7));
         cache.remove_dungeon_view(b);
         assert!(!cache.open_dungeon_doors("old_crypt", 1).contains(&7));
+    }
+
+    #[test]
+    fn a_named_variant_redraws_the_dungeon_and_an_empty_list_restores_it() {
+        use onlinerpg_shared::dungeon::{
+            generate_dungeon_for, generate_dungeon_variant, layout_hash,
+        };
+        let mut cache = WorldCache::new();
+        cache.register_dungeons();
+        let cells = |cache: &WorldCache| {
+            cache
+                .passability_cache()
+                .get(&dungeon_cache_key("old_crypt"))
+                .unwrap()
+                .floors
+                .iter()
+                .map(|f| f.cells.clone())
+                .collect::<Vec<_>>()
+        };
+        let fixed_cells = cells(&cache);
+        cache.set_dungeon_door("old_crypt", 0, 0, true);
+        cache.set_dungeon_door("old_crypt", 1, 7, true);
+        cache.add_dungeon_broken_prop("old_crypt", 1, 0);
+        let revision = cache.collision_revision;
+
+        cache.set_dungeon_variants(&[("old_crypt".to_string(), 7)]);
+        let crypt = cache.dungeon_by_id("old_crypt").unwrap();
+        assert_eq!(
+            layout_hash(crypt.layouts()),
+            layout_hash(&generate_dungeon_variant("old_crypt", 7))
+        );
+        assert_eq!(
+            cells(&cache),
+            crypt
+                .passability()
+                .floors
+                .iter()
+                .map(|f| f.cells.clone())
+                .collect::<Vec<_>>()
+        );
+        assert_ne!(cells(&cache), fixed_cells);
+        assert_ne!(cache.collision_revision, revision);
+        assert!(cache.open_dungeon_doors("old_crypt", 0).contains(&0));
+        assert!(cache.open_dungeon_doors("old_crypt", 1).is_empty());
+        assert!(cache.dungeon_broken_props("old_crypt", 1).is_empty());
+        let orc = cache.dungeon_by_id("orc_warrens").unwrap();
+        assert_eq!(
+            layout_hash(orc.layouts()),
+            layout_hash(&generate_dungeon_for("orc_warrens"))
+        );
+
+        cache.set_dungeon_variants(&[]);
+        assert_eq!(
+            layout_hash(cache.dungeon_by_id("old_crypt").unwrap().layouts()),
+            layout_hash(&generate_dungeon_for("old_crypt"))
+        );
+        assert_eq!(cells(&cache), fixed_cells);
     }
 }

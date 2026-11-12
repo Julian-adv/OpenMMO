@@ -678,21 +678,97 @@ pub(crate) fn dungeon_depth(seed: u64) -> u8 {
 /// Seed-only generation for property tests; real dungeons use the registry.
 #[cfg(test)]
 pub(crate) fn generate_dungeon(seed: u64) -> Vec<FloorLayout> {
-    gen::generate_dungeon_with(seed, None, BOSS_MONSTER_TYPE, None, "", LayoutStyle::Rooms)
+    gen::generate_dungeon_with(
+        seed,
+        seed,
+        None,
+        BOSS_MONSTER_TYPE,
+        None,
+        "",
+        LayoutStyle::Rooms,
+    )
 }
 
-/// Generate a dungeon by entrance id: seed derived from the id, floor count,
-/// boss and entrance orientation from the registry. This is what both the
-/// server and the wasm client use for real dungeons; `generate_dungeon` stays
-/// seed-only for property tests over arbitrary seeds.
+/// Generate a dungeon's fixed layout by entrance id: seed derived from the
+/// id, floor count, boss and entrance orientation from the registry.
 pub fn generate_dungeon_for(entrance_id: &str) -> Vec<FloorLayout> {
+    generate_dungeon_variant(entrance_id, 0)
+}
+
+/// Variant 0 is the fixed layout. Any other variant redraws the floors
+/// behind the same entrance; the server picks it and tells every client
+/// (`ServerMessage::DungeonLayoutVariants`).
+pub fn generate_dungeon_variant(entrance_id: &str, variant: u32) -> Vec<FloorLayout> {
     let def = entrance(entrance_id);
     let floors = def.and_then(|d| d.floors);
     let boss = def.map_or(BOSS_MONSTER_TYPE, |d| d.boss.as_str());
     let dir = def.and_then(|d| d.entrance_dir);
     let group = def.map_or("", |d| d.spawn_group.as_str());
     let style = def.map_or(LayoutStyle::Rooms, |d| d.layout_style);
-    gen::generate_dungeon_with(dungeon_seed(entrance_id), floors, boss, dir, group, style)
+    let seed = dungeon_seed(entrance_id);
+    let layout_seed = match variant {
+        0 => seed,
+        v => crate::fnv::fnv1a64(seed, v.to_le_bytes()),
+    };
+    gen::generate_dungeon_with(seed, layout_seed, floors, boss, dir, group, style)
+}
+
+/// `dungeon_passability` with every interior door open: doors ship shut but
+/// are player-openable, so connectivity is judged without them.
+fn passability_with_doors_open(entrance: &Position, floors: &[FloorLayout]) -> RuntimePassability {
+    let mut rp = dungeon_passability(entrance, floors);
+    for f in floors {
+        let fl = passability_floor_for_depth(f.depth);
+        if let Some(g) = rp.floors.iter_mut().find(|g| g.floor_level == fl) {
+            g.cells = floor_passability_cells(f);
+        }
+    }
+    rp
+}
+
+/// Whether the descent from the surface to the chest is walkable with every
+/// interior door open.
+pub fn layout_is_traversable(entrance: &Position, floors: &[FloorLayout]) -> bool {
+    let Some(first) = floors.first() else {
+        return false;
+    };
+    let mut cache = PassabilityCache::new();
+    cache.insert(
+        dungeon_cache_key("traversal"),
+        passability_with_doors_open(entrance, floors),
+    );
+    let reachable = |from: Position, from_floor: u8, to: Position, to_floor: u8| {
+        crate::pathfinding::find_and_smooth_path(
+            from.x,
+            from.z,
+            from_floor,
+            to.x,
+            to.z,
+            to_floor,
+            &cache,
+            DUNGEON_PATH_MAX_NODES,
+        )
+        .found
+    };
+    let surface = cell_center(entrance, 0, first.up_shaft.entry_cell());
+    let arrival = cell_center(entrance, 1, first.up_shaft.exit_cell());
+    if !reachable(surface, 0, arrival, passability_floor_for_depth(1)) {
+        return false;
+    }
+    floors.iter().all(|f| {
+        let goal = match (&f.down_shaft, f.chest) {
+            (Some(down), _) => down.entry_cell(),
+            (None, Some(chest)) => f.stand_cell(chest),
+            (None, None) => return false,
+        };
+        let floor = passability_floor_for_depth(f.depth);
+        reachable(
+            cell_center(entrance, f.depth, f.up_shaft.exit_cell()),
+            floor,
+            cell_center(entrance, f.depth, goal),
+            floor,
+        )
+    })
 }
 
 /// FNV-1a over every floor's `Debug` form: a fingerprint of the whole

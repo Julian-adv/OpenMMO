@@ -13,7 +13,7 @@
 use std::collections::HashSet;
 
 use onlinerpg_shared::dungeon::{
-    cell_center, dungeon_origin, dungeon_passability, entrances, generate_dungeon_for,
+    cell_center, dungeon_origin, dungeon_passability, entrances, generate_dungeon_variant,
     interior_doors, passability_floor_for_depth, world_to_cell, DungeonEntranceDef, FloorLayout,
     InteriorDoorSpec, PropKind, Room,
 };
@@ -27,6 +27,7 @@ pub struct Dungeon {
     pub entrance: Position,
     layouts: Vec<FloorLayout>,
     def: DungeonEntranceDef,
+    pub variant: u32,
 }
 
 /// A shut interior door standing between the agent and where it wants to go,
@@ -74,14 +75,20 @@ pub struct BreakableSighting {
 }
 
 impl Dungeon {
-    fn new(def: &DungeonEntranceDef) -> Self {
+    /// The maze the server named in `DungeonLayoutVariants`; 0 is the fixed one.
+    pub fn with_variant(def: &DungeonEntranceDef, variant: u32) -> Self {
         Self {
             id: def.id.clone(),
             name: def.name.clone(),
             entrance: def.position(),
-            layouts: generate_dungeon_for(&def.id),
+            layouts: generate_dungeon_variant(&def.id, variant),
             def: def.clone(),
+            variant,
         }
+    }
+
+    pub fn redrawn(&self, variant: u32) -> Self {
+        Self::with_variant(&self.def, variant)
     }
 
     pub fn key_item_id(&self, depth: u8) -> String {
@@ -277,7 +284,10 @@ impl Dungeon {
 /// to build once at startup and share across all agent connections, which is
 /// also what the server does with its own copy.
 pub fn build_all() -> Vec<Dungeon> {
-    entrances().iter().map(Dungeon::new).collect()
+    entrances()
+        .iter()
+        .map(|def| Dungeon::with_variant(def, 0))
+        .collect()
 }
 
 #[cfg(test)]

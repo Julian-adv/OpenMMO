@@ -53,6 +53,8 @@ pub struct DungeonEntranceDef {
     pub chest_rolls: Vec<(String, f32)>,
     /// Floor plan generator; blank = [`LayoutStyle::Rooms`].
     pub layout_style: LayoutStyle,
+    /// Redraw the maze at every sunset reset (doc/DUNGEON.md).
+    pub nightly_layout: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -184,6 +186,11 @@ fn parse_entrances(csv: &str) -> Vec<DungeonEntranceDef> {
                     "mine" => LayoutStyle::Mine,
                     l => panic!("dungeon '{id}' has an invalid layoutStyle '{l}'"),
                 },
+                nightly_layout: match field("nightlyLayout") {
+                    "" | "false" => false,
+                    "true" => true,
+                    n => panic!("dungeon '{id}' has an invalid nightlyLayout '{n}'"),
+                },
             })
         })
         .collect()
@@ -210,9 +217,9 @@ mod tests {
     #[test]
     fn parses_drops_lists_and_optional_floor_override() {
         let csv =
-            "id,name,x,y,z,chestDrops,floors,boss,chestTier,entranceDir,keyPrefix,spawnGroup,chestRolls,layoutStyle\n\
-                   a,A Place,-1450,0.7,4720,shield;armor,5,orc_boss,2,s,a_key,skeleton,ring:0.2; amulet:0.1,mine\n\
-                   b,B Place,10,0,20,,,,,,,,,\n";
+            "id,name,x,y,z,chestDrops,floors,boss,chestTier,entranceDir,keyPrefix,spawnGroup,chestRolls,layoutStyle,nightlyLayout\n\
+                   a,A Place,-1450,0.7,4720,shield;armor,5,orc_boss,2,s,a_key,skeleton,ring:0.2; amulet:0.1,mine,true\n\
+                   b,B Place,10,0,20,,,,,,,,,,\n";
         let defs = parse_entrances(csv);
         assert_eq!(defs.len(), 2);
         assert_eq!(defs[0].chest_drops, ["shield", "armor"]);
@@ -223,6 +230,7 @@ mod tests {
         assert_eq!(defs[0].key_item_id(5), "a_key_5");
         assert_eq!(defs[0].spawn_group, "skeleton");
         assert!(defs[1].spawn_group.is_empty());
+        assert!(defs[0].nightly_layout && !defs[1].nightly_layout);
         assert_eq!(
             defs[0].chest_rolls,
             [("ring".to_string(), 0.2), ("amulet".to_string(), 0.1)]

@@ -208,6 +208,7 @@ pub(crate) use deals::band_invariant_holds;
 pub(crate) use debuff::{COLD_DEBUFF_ID, WET_DEBUFF_ID};
 mod abilities;
 mod dungeon;
+mod dungeon_layout;
 mod estate_return;
 mod estate_storage;
 pub(crate) use estate_storage::EstateFurnitureMove;
@@ -522,6 +523,9 @@ pub struct GameState {
     dungeon_defs: crate::dungeon_defs::DungeonDefs,
     /// Live dungeon runtimes, keyed by entrance id. Created lazily.
     dungeons: Arc<RwLock<HashMap<String, dungeon::DungeonRuntime>>>,
+    /// Maze variant per `nightlyLayout` dungeon; absent = the fixed layout.
+    /// Written only under the `dungeons` write lock.
+    dungeon_variants: Arc<std::sync::RwLock<HashMap<String, u32>>>,
     /// monster_id → dungeon spawn slot, for respawn bookkeeping on death.
     dungeon_monsters: Arc<RwLock<HashMap<String, dungeon::DungeonMonsterRef>>>,
     /// merchant_player_id → (customer player_id → ticks of hold remaining). A
@@ -855,6 +859,7 @@ impl GameState {
             dungeon_reset: Arc::new(RwLock::new(Default::default())),
             dungeon_defs,
             dungeons: Arc::new(RwLock::new(HashMap::new())),
+            dungeon_variants: Arc::default(),
             dungeon_monsters: Arc::new(RwLock::new(HashMap::new())),
             open_shops: Arc::new(RwLock::new(HashMap::new())),
             parties: Arc::new(RwLock::new(party::Parties::default())),

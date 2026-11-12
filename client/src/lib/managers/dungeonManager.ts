@@ -14,6 +14,7 @@ import { get } from 'svelte/store'
 import { preloadDungeonSounds } from './sfxManager'
 import {
   dungeon_layout,
+  dungeon_set_layout_variants,
   dungeon_constants,
   world_constants,
   dungeon_add_passability,
@@ -30,6 +31,7 @@ import {
 import {
   currentDungeonDepth,
   currentDungeonId,
+  dungeonLayoutRevision,
   dungeonPropsResetRevision,
   dungeonPropsRevision,
 } from '../stores/dungeonStore'
@@ -647,6 +649,10 @@ class DungeonManager {
     if (this.id === id) return
     preloadDungeonSounds()
     if (this.id) this.exit()
+    this.load(id, entrance)
+  }
+
+  private load(id: string, entrance: DungeonEntrance) {
     this.layouts = dungeon_layout(id) as DungeonFloorLayout[]
     dungeon_add_passability(id, entrance.x, entrance.y, entrance.z)
     this.brokenProps.clear()
@@ -674,6 +680,22 @@ class DungeonManager {
           prop.offset
         )
     }
+  }
+
+  /** Adopt the server's maze variants; reload the entered dungeon in place
+   *  if its maze changed. */
+  applyLayoutVariants(variants: [string, number][]) {
+    const changed = dungeon_set_layout_variants(
+      variants.map(([id]) => id),
+      Uint32Array.from(variants, ([, variant]) => variant)
+    )
+    const id = this.id
+    const entrance = this.entrance
+    if (!id || !entrance || !changed.includes(id)) return
+    dungeon_remove_passability(id)
+    this.pendingPropState = null
+    this.load(id, entrance)
+    dungeonLayoutRevision.update((n) => n + 1)
   }
 
   /** Drop dungeon state (passability included). Depth resets to surface. */

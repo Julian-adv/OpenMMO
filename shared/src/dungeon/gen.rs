@@ -49,8 +49,11 @@ pub fn dungeon_depth(seed: u64) -> u8 {
     rng.gen_range(MIN_DRAWN_FLOORS..=MAX_DRAWN_FLOORS)
 }
 
+/// `seed` fixes the entrance shaft and drawn depth; `layout_seed` draws the
+/// floors, so a rotated maze keeps its surface door.
 pub fn generate_dungeon_with(
     seed: u64,
+    layout_seed: u64,
     floors_override: Option<u8>,
     boss: &str,
     entrance_dir: Option<WallDirection>,
@@ -97,7 +100,7 @@ pub fn generate_dungeon_with(
     let mut up = entrance_shaft;
     for depth in 1..=total {
         let table = super::spawn_table_for(spawn_group, depth);
-        let layout = generate_floor(seed, depth, total, up, table, style);
+        let layout = generate_floor(layout_seed, depth, total, up, table, style);
         let dead_end = layout.down_shaft.is_none();
         if let Some(down) = layout.down_shaft {
             up = down;

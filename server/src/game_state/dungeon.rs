@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use onlinerpg_shared::dungeon::{
-    cell_center, dungeon_origin, floor_world_y, generate_dungeon_for, interior_doors,
+    cell_center, dungeon_origin, floor_world_y, generate_dungeon_variant, interior_doors,
     key_depth_for, locked_depths, locked_door_ids, world_to_cell, FloorLayout, PropKind, PropSpec,
     ENTRANCE_DOOR_ID, GRID,
 };
@@ -133,6 +133,20 @@ pub(super) struct DungeonRuntime {
 }
 
 impl DungeonRuntime {
+    fn new(layouts: Vec<FloorLayout>) -> Self {
+        Self {
+            locked_doors: layouts.iter().map(locked_door_ids).collect(),
+            layouts,
+            floors: HashMap::new(),
+            broken_props: HashMap::new(),
+            opened_props: HashMap::new(),
+            open_doors: HashMap::new(),
+            cart_offsets: HashMap::new(),
+            locked_door_opens: HashMap::new(),
+            locked_door_generation: 0,
+        }
+    }
+
     /// Floor `depth`'s broken props and pushed carts, as `floor_cells` and
     /// `cart_push_target` take them.
     pub(super) fn floor_props(&self, depth: u8) -> (Vec<u32>, Vec<(u32, i32)>) {
@@ -147,6 +161,19 @@ impl DungeonRuntime {
             .map(|m| m.iter().map(|(&id, &offset)| (id, offset)).collect())
             .unwrap_or_default();
         (broken, carts)
+    }
+
+    pub(super) fn occupied(&self) -> bool {
+        self.floors.values().any(|fr| !fr.players.is_empty())
+    }
+
+    /// Swap in a new maze and drop everything keyed to the old one; the
+    /// surface door keeps its state. Returns the old layouts.
+    pub(super) fn redraw(&mut self, layouts: Vec<FloorLayout>) -> Vec<FloorLayout> {
+        let mut old = std::mem::replace(self, Self::new(layouts));
+        self.open_doors.extend(old.open_doors.remove_entry(&0));
+        self.locked_door_generation = old.locked_door_generation;
+        old.layouts
     }
 }
 
@@ -279,37 +306,32 @@ impl GameState {
 
     /// Lazily generate and cache the layouts for a dungeon.
     pub(super) async fn ensure_dungeon_runtime(&self, entrance_id: &str) {
-        {
-            let dungeons = self.dungeons.read().await;
+        loop {
+            if self.dungeons.read().await.contains_key(entrance_id) {
+                return;
+            }
+            let variant = self.dungeon_variant(entrance_id);
+            let layouts = generate_dungeon_variant(entrance_id, variant);
+            let mut dungeons = self.dungeons.write().await;
+            // A sunset redraw swaps the variant under this lock.
+            if self.dungeon_variant(entrance_id) != variant {
+                continue;
+            }
             if dungeons.contains_key(entrance_id) {
                 return;
             }
+            if let Some(entrance) = self.dungeon_defs.get(entrance_id) {
+                self.interest_lock()
+                    .seed_dungeon(entrance_id, &entrance.position(), &layouts);
+            }
+            info!(
+                "Dungeon '{}' runtime created ({} floors, variant {variant})",
+                entrance_id,
+                layouts.len()
+            );
+            dungeons.insert(entrance_id.to_string(), DungeonRuntime::new(layouts));
+            return;
         }
-        let layouts = generate_dungeon_for(entrance_id);
-        if let Some(entrance) = self.dungeon_defs.get(entrance_id) {
-            self.interest_lock()
-                .seed_dungeon(entrance_id, &entrance.position(), &layouts);
-        }
-        let locked_doors = layouts.iter().map(locked_door_ids).collect();
-        info!(
-            "Dungeon '{}' runtime created ({} floors)",
-            entrance_id,
-            layouts.len()
-        );
-        let mut dungeons = self.dungeons.write().await;
-        dungeons
-            .entry(entrance_id.to_string())
-            .or_insert(DungeonRuntime {
-                layouts,
-                floors: HashMap::new(),
-                broken_props: HashMap::new(),
-                opened_props: HashMap::new(),
-                open_doors: HashMap::new(),
-                cart_offsets: HashMap::new(),
-                locked_doors,
-                locked_door_opens: HashMap::new(),
-                locked_door_generation: 0,
-            });
     }
 
     /// Validate access, update collision, and publish the door under its runtime lock.
@@ -1577,6 +1599,7 @@ impl GameState {
         }
         drop(dungeons);
         self.restore_mine_props().await;
+        self.redraw_nightly_dungeons(epoch).await;
         self.dungeon_reset.write().await.completed_epoch = Some(epoch);
         info!(
             "Dungeons reset for the new night; {} occupant(s) returned to the surface",
