@@ -175,8 +175,8 @@
                   class:self={member.id === selfId}
                   title={member.name}
                 >
-                  {member.name}{#if familyOf(member)}<span
-                      class="member-family">{familyOf(member)}</span
+                  {member.name}{#if familyOf(member)}<span class="member-family"
+                      >{familyOf(member)}</span
                     >{/if}
                 </span>
                 {#if member.id === roster.leaderId}

@@ -88,10 +88,9 @@ export function drawLandPlotCells(
       const owner = region.owners?.get(i)
       let fill = region.grades ? PLOT_GRADE_FILL[region.grades[i]] : null
       if (owner !== undefined) {
-        fill =
-          ownLabels.includes(owner)
-            ? OWN_LAND_COLOR
-            : (ownerColors.get(owner) ?? null)
+        fill = ownLabels.includes(owner)
+          ? OWN_LAND_COLOR
+          : (ownerColors.get(owner) ?? null)
       }
       if (!fill) continue
       if (fill !== fillStyle) ctx.fillStyle = fillStyle = fill
