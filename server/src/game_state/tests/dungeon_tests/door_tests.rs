@@ -84,11 +84,6 @@ pub(super) async fn add_delver(
     pid(name)
 }
 
-fn is_door_state(message: &ServerMessage, id: &DoorId, open: bool) -> bool {
-    matches!(message, ServerMessage::DoorState { door, is_open }
-        if *door == id.to_string() && *is_open == Some(open))
-}
-
 #[tokio::test]
 async fn cross_floor_dungeon_door_toggle_is_rejected() {
     let game_state = make_test_game_state("dungeon_door_cross_floor");

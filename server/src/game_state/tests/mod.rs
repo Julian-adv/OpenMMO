@@ -494,6 +494,11 @@ async fn join_snapshot(game: &GameState, player: Player) -> Vec<ServerMessage> {
     drain(&mut rx)
 }
 
+fn is_door_state(message: &ServerMessage, id: &DoorId, open: bool) -> bool {
+    matches!(message, ServerMessage::DoorState { door, is_open }
+        if *door == id.to_string() && *is_open == Some(open))
+}
+
 fn drain(rx: &mut DirectRx) -> Vec<ServerMessage> {
     let mut msgs = Vec::new();
     while let Ok(msg) = rx.try_recv() {

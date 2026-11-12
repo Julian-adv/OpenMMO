@@ -21,10 +21,6 @@ fn area(id: &str, depth: u8, bounds: Bounds) -> SubjectArea {
     }
 }
 
-fn door_gone(id: &str, depth: u8, door_id: u32) -> ServerMessage {
-    DoorId::dungeon(id, depth, door_id).state(None)
-}
-
 fn prop_gone(id: &str, depth: u8, prop_id: u32) -> ServerMessage {
     ServerMessage::DungeonPropState {
         entrance_id: id.to_owned(),
@@ -72,11 +68,8 @@ impl Interest {
         for layout in layouts {
             let depth = layout.depth;
             for door in interior_doors(layout) {
-                let door_id = door.door_id;
-                self.remove(
-                    &format!("door:{id}:{depth}:{door_id}"),
-                    vec![door_gone(id, depth, door_id)],
-                );
+                let door = DoorId::dungeon(id, depth, door.door_id);
+                self.remove(&door.to_string(), vec![door.state(None)]);
             }
             for (index, _) in layout
                 .props
@@ -99,19 +92,20 @@ impl Interest {
                 .map(move |door| (layout.depth, door.door_id))
         }));
         for (depth, door_id) in doors {
-            let key = format!("door:{id}:{depth}:{door_id}");
+            let door = DoorId::dungeon(id, depth, door_id);
+            let key = door.to_string();
             if self.has_subject(&key) {
                 continue;
             }
             let Some(position) = door_position(entrance, layouts, depth, door_id) else {
                 continue;
             };
-            let state = DoorId::dungeon(id, depth, door_id).state(Some(false));
+            let state = door.state(Some(false));
             self.publish(
                 key,
                 vec![area(id, depth, Bounds::Point(position))],
                 vec![state.clone()],
-                vec![door_gone(id, depth, door_id)],
+                vec![door.state(None)],
                 vec![state],
             );
         }
@@ -161,21 +155,10 @@ impl Interest {
 
     pub(super) fn update_dungeon(&mut self, message: &ServerMessage) -> bool {
         match message {
-            ServerMessage::DoorState { door, .. } => {
-                let Some(DoorId::Dungeon {
-                    entrance_id,
-                    depth,
-                    door_id,
-                }) = DoorId::parse(door)
-                else {
-                    return false;
-                };
-                self.update_snapshot(
-                    &format!("door:{entrance_id}:{depth}:{door_id}"),
-                    message.clone(),
-                    |snapshot| *snapshot = vec![message.clone()],
-                )
-            }
+            ServerMessage::DoorState { door, .. } if door.starts_with("dungeon:") => self
+                .update_snapshot(door, message.clone(), |snapshot| {
+                    *snapshot = vec![message.clone()]
+                }),
             ServerMessage::DungeonPropBroken {
                 entrance_id,
                 depth,

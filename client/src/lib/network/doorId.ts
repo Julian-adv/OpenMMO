@@ -1,7 +1,8 @@
+import { ALL_WALL_DIRS } from '../managers/housing-passability'
 import type { WallDirection } from '../utils/house-geometry'
 
 /** A door as named in `ToggleDoor` and `DoorState` (shared `door::DoorId`). */
-export type DoorRef =
+export type DoorAddress =
   | {
       kind: 'house'
       houseId: string
@@ -11,8 +12,6 @@ export type DoorRef =
     }
   | { kind: 'dungeon'; entranceId: string; depth: number; doorId: number }
   | { kind: 'object'; rx: number; rz: number; objectId: number }
-
-const WALL_DIRS: readonly string[] = ['north', 'south', 'east', 'west']
 
 export function houseDoorId(
   houseId: string,
@@ -40,7 +39,7 @@ function int(text: string | undefined): number | null {
 }
 
 /** House and entrance ids are free text, so the numbers are read from the right. */
-export function parseDoorId(door: string): DoorRef | null {
+export function parseDoorId(door: string): DoorAddress | null {
   const parts = door.split(':')
   const kind = parts.shift()
   if (kind === 'object') {
@@ -58,19 +57,14 @@ export function parseDoorId(door: string): DoorRef | null {
   }
   if (kind === 'house') {
     const segmentIndex = int(parts.pop())
-    const wallDir = parts.pop()
+    const wallDir = ALL_WALL_DIRS.find((dir) => dir === parts.at(-1))
+    parts.pop()
     const roomIndex = int(parts.pop())
     const houseId = parts.join(':')
     if (segmentIndex == null || roomIndex == null) return null
     if (segmentIndex < 0 || roomIndex < 0 || !houseId) return null
-    if (wallDir === undefined || !WALL_DIRS.includes(wallDir)) return null
-    return {
-      kind,
-      houseId,
-      roomIndex,
-      wallDir: wallDir as WallDirection,
-      segmentIndex,
-    }
+    if (!wallDir) return null
+    return { kind, houseId, roomIndex, wallDir, segmentIndex }
   }
   return null
 }

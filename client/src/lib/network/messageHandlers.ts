@@ -317,7 +317,7 @@ const deathCriedAt = new Map<number, number>()
 function applyDoorState(door: string, isOpen: boolean | null) {
   const ref = parseDoorId(door)
   if (ref?.kind === 'house')
-    housingManager.handleDoorToggled(
+    housingManager.setDoorOpen(
       ref.houseId,
       ref.roomIndex,
       ref.wallDir,

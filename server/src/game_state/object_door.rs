@@ -12,10 +12,6 @@ const DOOR_REACH: f32 = 2.0;
 
 type DoorKey = (i32, i32, u32);
 
-fn door_id((rx, rz, object_id): DoorKey) -> DoorId {
-    DoorId::Object { rx, rz, object_id }
-}
-
 impl GameState {
     fn object_door_is_open(&self, key: &DoorKey) -> bool {
         self.open_object_doors
@@ -147,7 +143,7 @@ impl GameState {
                 }
             }
             self.rebuild_region_shelter_walls(region.0, region.1);
-            let door = door_id(key);
+            let door = DoorId::object(region.0, region.1, object_id);
             self.interest_lock().publish(
                 door.to_string(),
                 vec![SubjectArea::point(center, floor)],

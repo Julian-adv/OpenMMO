@@ -953,7 +953,7 @@ impl GameState {
         let house = match self.housing_io.find_house(house_id).await {
             Ok(Some(h)) => h,
             _ => {
-                warn!("toggle_door: house {} not found", house_id);
+                warn!("toggle_house_door: house {} not found", house_id);
                 return None;
             }
         };
@@ -985,7 +985,7 @@ impl GameState {
                 player_floor,
             ) {
                 warn!(
-                    "toggle_door refused: {} at ({:.1},{:.1},{:.1}) floor {} -> house {} room {} {:?} segment {}: {}",
+                    "toggle_house_door refused: {} at ({:.1},{:.1},{:.1}) floor {} -> house {} room {} {:?} segment {}: {}",
                     self.player_name_of(player_id).await,
                     player_pos.x,
                     player_pos.y,
@@ -1076,7 +1076,7 @@ impl GameState {
                 .collect();
             let mut houses = vec![house];
             self.apply_open_door_state(&mut houses).await;
-            self.publish_house_doors(&houses[0], changes);
+            self.publish_house_change(&houses[0], changes);
             Some(is_open)
         }
         .await;

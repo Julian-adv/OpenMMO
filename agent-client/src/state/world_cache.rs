@@ -134,7 +134,7 @@ impl WorldCache {
                             .get(&viewer)
                             .is_some_and(|ids| ids.contains(&id))
                 })
-            } else if subject.starts_with("door:") || subject.starts_with("prop:") {
+            } else if subject.starts_with("dungeon:") || subject.starts_with("prop:") {
                 self.dungeon_cached.contains(subject)
                     && self
                         .dungeon_views
@@ -182,17 +182,16 @@ impl WorldCache {
                 continue;
             }
             self.dungeon_cached.remove(&id);
-            let parts: Vec<_> = id.rsplitn(4, ':').collect();
-            if parts.len() != 4 {
+            if id.starts_with("dungeon:") {
+                self.set_door(&id, None);
                 continue;
             }
-            let (Ok(index), Ok(depth)) = (parts[0].parse(), parts[1].parse()) else {
+            let parts: Vec<_> = id.rsplitn(4, ':').collect();
+            let [index, depth, entrance, "prop"] = parts[..] else {
                 continue;
             };
-            match parts[3] {
-                "door" => self.set_dungeon_door(parts[2], depth, index, false),
-                "prop" => self.set_dungeon_prop(parts[2], depth, index, false, false),
-                _ => {}
+            if let (Ok(index), Ok(depth)) = (index.parse(), depth.parse()) {
+                self.set_dungeon_prop(entrance, depth, index, false, false);
             }
         }
     }
@@ -645,9 +644,7 @@ impl WorldCache {
                     match message {
                         ServerMessage::HouseUpdated { house }
                         | ServerMessage::HouseSpawned { house } => self.add_house(house.clone()),
-                        ServerMessage::DoorState { door, is_open } => {
-                            self.set_door(door, is_open.unwrap_or(false))
-                        }
+                        ServerMessage::DoorState { door, is_open } => self.set_door(door, *is_open),
                         _ => {}
                     }
                 }
@@ -677,14 +674,15 @@ impl WorldCache {
     }
 
     /// Apply a `DoorState`; a door that left view counts as shut.
-    pub fn set_door(&mut self, door: &str, is_open: bool) {
+    pub fn set_door(&mut self, door: &str, is_open: Option<bool>) {
+        let is_open = is_open.unwrap_or(false);
         match DoorId::parse(door) {
             Some(DoorId::House {
                 house_id,
                 room_index,
                 wall_dir,
                 segment_index,
-            }) => self.update_door(
+            }) => self.set_house_door(
                 &house_id,
                 room_index,
                 wall_dir,
@@ -725,9 +723,8 @@ impl WorldCache {
             .flat_map(|(&(rx, rz), group)| group.iter().map(move |p| (rx, rz, p)))
             .filter(|(_, _, p)| p.floor_level == floor && !p.door_open)
             .filter_map(|(rx, rz, p)| {
-                let object_id = p.id;
                 Some((
-                    DoorId::Object { rx, rz, object_id },
+                    DoorId::object(rx, rz, p.id),
                     onlinerpg_shared::shelter::doorway(p)?,
                 ))
             })
@@ -838,7 +835,7 @@ impl WorldCache {
         near
     }
 
-    fn update_door(
+    fn set_house_door(
         &mut self,
         house_id: &str,
         room_index: u32,
@@ -1009,7 +1006,7 @@ mod interest_tests {
         assert!(cache.view_complete(viewer, &view));
 
         let mut door = WorldEvent {
-            subject: "door:old_crypt:1:7".into(),
+            subject: "dungeon:old_crypt:1:7".into(),
             revision: 8,
             change: InterestChange::Enter,
             messages: vec![],
@@ -1045,7 +1042,7 @@ mod interest_tests {
         let mut cache = WorldCache::new();
         let (a, b) = (PlayerId::from(1), PlayerId::from(2));
         let mut event = WorldEvent {
-            subject: "door:old_crypt:1:7".into(),
+            subject: "dungeon:old_crypt:1:7".into(),
             revision: 5,
             change: InterestChange::Enter,
             messages: vec![],

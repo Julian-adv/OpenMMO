@@ -66,6 +66,20 @@ impl WallDirection {
         WallDirection::East,
         WallDirection::West,
     ];
+
+    /// The serde name, for text ids.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            WallDirection::North => "north",
+            WallDirection::South => "south",
+            WallDirection::East => "east",
+            WallDirection::West => "west",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|dir| dir.as_str() == name)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

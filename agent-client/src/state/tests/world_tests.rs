@@ -249,7 +249,7 @@ fn world_state_caps_the_ground_item_list() {
     assert!(world.contains("(and 3 more items further away)"), "{world}");
 }
 
-/// A `DoorToggled` must land on both faces of the door: the passability
+/// A house `DoorState` must land on both faces of the door: the passability
 /// edge A* walks and the `HouseData` wall the door hunt reads. With only
 /// the edge updated, `closed_doors_on_our_floor` kept re-listing a door
 /// that was already open and the agent toggled it shut again.
@@ -290,14 +290,14 @@ fn door_toggle_keeps_house_walls_in_step_with_the_edges() {
     };
     assert!(door_blocked(&world), "the north door starts shut");
 
-    world.set_door("house:h:0:north:0", true);
+    world.set_door("house:h:0:north:0", Some(true));
     assert!(
         world.houses()["h"].rooms[0].wall_north[0].is_open,
         "HouseData must track the open"
     );
     assert!(!door_blocked(&world), "the edge must open with the door");
 
-    world.set_door("house:h:0:north:0", false);
+    world.set_door("house:h:0:north:0", Some(false));
     assert!(!world.houses()["h"].rooms[0].wall_north[0].is_open);
     assert!(door_blocked(&world), "the edge must seal again");
 

@@ -157,7 +157,7 @@ segW = (wallSpan - WALL_THICKNESS) / numSegs
 2. 서버에 `ToggleDoor { door }` 전송 (낙관적 토글 없음)
 3. 서버가 `WithDoor` 또는 `WithWindow` variant 검증 후 토글
 4. 그 집을 보고 있는 플레이어에게 `DoorState { door, is_open }` 전달 — 서버 권위적 상태. 양문은 짝마다 하나씩 보낸다. 나중에 시야에 들어온 플레이어는 문 상태가 반영된 `HouseUpdated`를 받는다
-5. 클라이언트: `handleDoorToggled`로 서버 상태 적용
+5. 클라이언트: `housingManager.setDoorOpen`으로 서버 상태 적용
    - **문**: passability edge 비트도 업데이트 (열린 문 = 통과 가능)
    - **창문**: passability 업데이트 없음 (열려도 통과 불가)
 6. 애니메이션: 게임 루프에서 피벗 rotation.y를 `closedAngle ↔ openAngle` lerp

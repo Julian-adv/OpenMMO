@@ -27,7 +27,7 @@ async fn hall(test: &str) -> GameState {
 
 async fn toggle(game: &GameState, name: &str, object_id: u32) -> Option<bool> {
     let (rx, rz) = passability::region_of(100.0, 100.0);
-    let door = DoorId::Object { rx, rz, object_id };
+    let door = DoorId::object(rx, rz, object_id);
     game.toggle_door(&pid(name), &door.to_string()).await
 }
 

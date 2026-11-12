@@ -44,7 +44,7 @@ async fn sunset_redraws_only_the_nightly_dungeon() {
             .flat_map(|l| {
                 interior_doors(l)
                     .into_iter()
-                    .map(move |d| format!("door:{NIGHTLY}:{}:{}", l.depth, d.door_id))
+                    .map(move |d| format!("dungeon:{NIGHTLY}:{}:{}", l.depth, d.door_id))
             })
             .collect::<std::collections::HashSet<_>>()
     };
@@ -143,7 +143,7 @@ async fn sunset_redraws_only_the_nightly_dungeon() {
         assert!(old_doors
             .difference(&new_doors)
             .all(|key| !interest.has_subject(key)));
-        assert!(interest.has_subject(&format!("door:{NIGHTLY}:0:0")));
+        assert!(interest.has_subject(&format!("dungeon:{NIGHTLY}:0:0")));
     }
 
     // The new maze is live: floor 1 spawns from its slots.

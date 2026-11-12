@@ -421,7 +421,7 @@ impl SharedState {
                     crate::terrain_http::set_world_epoch(world_epoch);
                 }
                 for event in events {
-                    if (event.subject.starts_with("door:") || event.subject.starts_with("prop:"))
+                    if (event.subject.starts_with("dungeon:") || event.subject.starts_with("prop:"))
                         && !self
                             .world_cache
                             .write()
@@ -647,10 +647,7 @@ impl SharedState {
                 );
             }
             ServerMessage::DoorState { ref door, is_open } => {
-                self.world_cache
-                    .write()
-                    .unwrap()
-                    .set_door(door, is_open.unwrap_or(false));
+                self.world_cache.write().unwrap().set_door(door, *is_open);
             }
             ServerMessage::DungeonPropsState {
                 ref entrance_id,

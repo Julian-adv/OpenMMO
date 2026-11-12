@@ -212,7 +212,11 @@ fn door_reach_says_why_a_door_is_out_of_reach() {
 }
 
 fn north_door(house: &HouseData) -> String {
-    DoorId::house(&house.id, 0, WallDirection::North, 0).to_string()
+    north_door_id(house).to_string()
+}
+
+fn north_door_id(house: &HouseData) -> DoorId {
+    DoorId::house(&house.id, 0, WallDirection::North, 0)
 }
 
 #[tokio::test]
@@ -273,8 +277,9 @@ async fn house_door_toggle_reaches_watchers_as_door_state() {
         Some(true)
     );
     let heard = drain(&mut watcher);
-    assert!(heard.iter().any(|m| matches!(m,
-        ServerMessage::DoorState { door, is_open: Some(true) } if *door == north_door(&house))));
+    assert!(heard
+        .iter()
+        .any(|m| is_door_state(m, &north_door_id(&house), true)));
     assert!(!heard
         .iter()
         .any(|m| matches!(m, ServerMessage::HouseUpdated { .. })));

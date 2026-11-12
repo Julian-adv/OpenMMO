@@ -7,7 +7,6 @@ import {
   ALL_WALL_DIRS,
   buildPassability,
   buildRuntimePassability,
-  doorPartnerRef,
   getWallByDir,
   isDoorVariant,
   updateDoorEdge,
@@ -173,8 +172,8 @@ export class HousingManager {
     this.notifyChanged()
   }
 
-  /** Handle a door toggle from the server (authoritative state). */
-  handleDoorToggled(
+  /** Apply the server's state for one door or shutter segment. */
+  setDoorOpen(
     houseId: string,
     roomIndex: number,
     wallDir: WallDirection,
@@ -186,25 +185,12 @@ export class HousingManager {
     const room = house.rooms[roomIndex]
     if (!room) return
 
-    const wall = getWallByDir(room, wallDir)
-    if (!wall[segmentIndex]) return
-
-    const refs = [{ roomIndex, segmentIndex }]
-    const partner = doorPartnerRef(
-      house.rooms,
-      roomIndex,
-      wallDir,
-      segmentIndex
-    )
-    if (partner) refs.push(partner)
-    for (const ref of refs) {
-      const r = house.rooms[ref.roomIndex]
-      const seg = getWallByDir(r, wallDir)[ref.segmentIndex]
-      seg.isOpen = isOpen
-      // Windows stay blocking when open
-      if (isDoorVariant(seg.variant)) {
-        passability_update_door(houseId, r, wallDir, ref.segmentIndex, isOpen)
-      }
+    const seg = getWallByDir(room, wallDir)[segmentIndex]
+    if (!seg) return
+    seg.isOpen = isOpen
+    // Windows stay blocking when open
+    if (isDoorVariant(seg.variant)) {
+      passability_update_door(houseId, room, wallDir, segmentIndex, isOpen)
     }
     this.notifyChanged(false)
   }
