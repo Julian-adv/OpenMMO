@@ -864,11 +864,24 @@ impl super::GameState {
             is_movement_blocked(&cache, from.x, from.z, to_x, position.z, floor, None)
         };
         if blocked {
-            warn!(
-                "Refused wall-crossing brain move for {monster_id} on floor {floor_level}: {from:?} -> {position:?}"
-            );
             let mut brains = self.monster_brains.lock().await;
-            if let Some(entry) = brains.entries.get_mut(monster_id) {
+            let entry = brains.entries.get_mut(monster_id);
+            let trace = entry.as_ref().map(|e| {
+                format!(
+                    "brain_pos=({:.3},{:.3}) since_tick_ms={:.0} {}",
+                    e.brain.position.x,
+                    e.brain.position.z,
+                    e.last_tick.elapsed().as_secs_f32() * 1000.0,
+                    e.brain.move_trace()
+                )
+            });
+            warn!(
+                "Refused wall-crossing brain move for {monster_id} on floor {floor_level}: {from:?} -> {position:?} sent_state={state:?} sent_target=({:.2},{:.2}) {}",
+                target_position.x,
+                target_position.z,
+                trace.as_deref().unwrap_or("brain=none")
+            );
+            if let Some(entry) = entry {
                 entry.brain.apply_authoritative_position(from);
             }
             return;
@@ -1159,6 +1172,62 @@ mod tests {
             "{logs}"
         );
         assert!(logs.contains("floor_level=0"), "{logs}");
+    }
+
+    /// The spot prod logged on 11/09 and 11/11: the wall north of a room door
+    /// on thieves_den depth 17.
+    #[tokio::test]
+    async fn a_refused_wall_crossing_logs_what_the_brain_was_doing() {
+        use onlinerpg_shared::dungeon::{
+            dungeon_cache_key, dungeon_passability, generate_dungeon_for,
+        };
+        let game = super::super::tests::make_test_game_state("refused_move_trace");
+        let den = game.dungeon_defs.get("thieves_den").unwrap();
+        game.passability_write().insert(
+            dungeon_cache_key(&den.id),
+            dungeon_passability(&den.position(), &generate_dungeon_for(&den.id)),
+        );
+        let at = |x, z| Position { x, y: -66.8, z };
+        let from = at(-867.1074, 3818.5679);
+        let mut player = super::super::tests::make_player("prey", -871.6, 3818.6);
+        player.position.y = from.y;
+        player.floor_level = -17;
+        game.add_player(player).await;
+        let monster = game
+            .spawn_monster(
+                "bugbear_enforcer".into(),
+                from,
+                0.0,
+                -17,
+                crate::types::MonsterLifecycle::DungeonSlot,
+                None,
+                true,
+            )
+            .await
+            .unwrap();
+        game.tick_monster_ai_by(1.0).await;
+        let from = game.monsters.read().await[&monster.id].position;
+
+        let (subscriber, buffer) = crate::test_util::capture_logs();
+        let guard = tracing::subscriber::set_default(subscriber);
+        let to = at(-868.5, 3817.5);
+        game.apply_ai_move(&monster.id, -17, to, 0.0, MonsterState::Run, to, None)
+            .await;
+        drop(guard);
+        let logs = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
+        for field in [
+            "Refused wall-crossing brain move",
+            "sent_state=Run",
+            "sent_target=(-868.50,3817.50)",
+            "brain_pos=(",
+            "since_tick_ms=",
+            "bend_pending=",
+            "waypoints_left=",
+            "goal_cell=",
+        ] {
+            assert!(logs.contains(field), "{logs}");
+        }
+        assert_eq!(game.monsters.read().await[&monster.id].position, from);
     }
 
     #[test]

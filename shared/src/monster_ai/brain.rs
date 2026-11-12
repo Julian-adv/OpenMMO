@@ -240,6 +240,35 @@ impl MonsterBrain {
         self.retry_chase();
     }
 
+    /// What the brain was doing, for the log line of a move the server refused.
+    pub fn move_trace(&self) -> String {
+        let left = &self.waypoints[self.current_waypoint_idx.min(self.waypoints.len())..];
+        let legs: Vec<String> = left
+            .iter()
+            .take(4)
+            .map(|w| format!("({:.2},{:.2})", w.x, w.z))
+            .collect();
+        format!(
+            "state={:?} synced_state={:?} bend_pending={} sync_ms={:.0} path_ms={:.0} waypoints_left={} next=[{}] goal_cell={:?} detour={:?} target={:?} target_seen={:?} occupied={} yield={} reslotting={} stagger_ms={:.0} speed={:.2}",
+            self.state,
+            self.last_synced_state,
+            self.pending_bend_sync,
+            self.sync_elapsed_ms,
+            self.path_elapsed_ms,
+            left.len(),
+            legs.join(" "),
+            self.chase_goal_cell,
+            self.detour_goal,
+            self.target_player_id,
+            self.last_known_target_pos.map(|p| (p.x, p.z)),
+            self.occupied_cells.len(),
+            self.cell_yield,
+            self.reslotting,
+            self.stagger_left_ms,
+            self.move_speed,
+        )
+    }
+
     pub fn retry_chase(&mut self) {
         self.clear_chase_backoff();
         self.last_known_target_pos = None;
