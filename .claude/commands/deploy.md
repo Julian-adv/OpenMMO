@@ -70,6 +70,11 @@ the planned restart; the script does not discover or transfer village data.
   - Prepare backups and verify the production baseline again before applying.
     Apply file-based changes in the planned maintenance window, or use supported
     edit APIs and explicitly refresh dependent caches and terrain versions.
+  - A terrain file patch needs the services stopped, and the full
+    `terrain-manifests` pass takes about four minutes. Hook the stop after
+    the script's `==> prepare terrain file hashes` step, apply the patch, then
+    refresh only the patched tiles:
+    `target/release/terrain-manifests "$TERRAIN_DIR" -23,75 -22,75`.
   Record why no village transfer is needed when the inventory finds none.
 
 ## 2. Launch the deploy, detached

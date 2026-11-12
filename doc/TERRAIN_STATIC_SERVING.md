@@ -36,6 +36,8 @@ cargo run --release -p onlinerpg-terrain --bin terrain-manifests -- data/terrain
 
 `tools/deploy-prod.sh`는 `terrain-manifests`를 빌드하고 `${TERRAIN_DIR:-$REPO/data/terrain}`의 목록을 준비한다. 실패하면 웹 게시와 서비스 재시작을 진행하지 않는다. 서버의 실제 `--terrain-dir`와 같은 경로를 지정한다.
 
+타일을 `X,Z`로 덧붙이면 그 타일의 목록만 다시 만든다(`terrain-manifests data/terrain -23,75 -22,75`). 서비스 정지 중에 지형 파일을 직접 교체할 때는 전체 준비를 정지 전에 마치고, 정지 뒤에는 교체한 타일만 갱신해 정지 시간을 줄인다.
+
 운영 nginx는 수동 관리다. `/etc/nginx/sites-available/openmmo`의 `server`에 아래 경로를 반영한다. 이전 snapshot location은 제거한다. 경로는 서버가 사용하는 terrain 디렉터리의 절대 경로다.
 
 ```nginx
