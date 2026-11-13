@@ -496,12 +496,7 @@ impl GameState {
                     );
                 }
             } else if player.floor_level >= 0 {
-                player.floor_level = pathfinding::get_floor_at_position(
-                    &self.passability_read(),
-                    next.x,
-                    next.z,
-                    next.y,
-                ) as i8;
+                player.floor_level = passability::storey_at(&self.passability_read(), &next);
             }
             points.push(MoveWaypoint {
                 position: next,

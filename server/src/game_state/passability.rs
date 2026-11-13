@@ -11,7 +11,7 @@ use onlinerpg_shared::dungeon::{
     dungeon_cache_key, dungeon_passability, floor_cells, generate_dungeon_variant, set_floor_cells,
 };
 use onlinerpg_shared::furniture::{self, FurniturePlacement};
-use onlinerpg_shared::housing::HouseData;
+use onlinerpg_shared::housing::{HouseData, MAX_FLOOR_LEVEL};
 use onlinerpg_shared::pathfinding;
 use onlinerpg_shared::{WORLD_MAX_X, WORLD_MIN_X, WORLD_WIDTH_X};
 use onlinerpg_terrain::coords::{tile_to_region, world_to_tile};
@@ -141,6 +141,17 @@ pub(super) fn authoritative_floor(
     position: &crate::types::Position,
 ) -> u8 {
     pathfinding::get_floor_at_position(cache, position.x, position.z, position.y)
+}
+
+/// Above ground only: depth changes belong to the stair shafts.
+pub(super) fn storey_at(
+    cache: &pathfinding::PassabilityCache,
+    position: &crate::types::Position,
+) -> i8 {
+    match authoritative_floor(cache, position) {
+        floor if floor <= MAX_FLOOR_LEVEL => floor as i8,
+        _ => 0,
+    }
 }
 
 impl super::GameState {
@@ -475,11 +486,29 @@ impl super::GameState {
 
 #[cfg(test)]
 mod tests {
-    use super::{collision_y, wrapped_block_info};
+    use super::{collision_y, storey_at, wrapped_block_info};
+    use onlinerpg_shared::dungeon::{
+        dungeon_cache_key, dungeon_passability, entrance, generate_dungeon_for,
+        DUNGEON_FLOOR_HEIGHT,
+    };
     use onlinerpg_shared::pathfinding::{
         build_furniture_passability, FurniturePiece, PassabilityCache, RuntimeFloorGrid,
         RuntimePassability, StairwellInfo,
     };
+
+    #[test]
+    fn a_surface_walker_nearer_the_first_depth_stays_on_the_surface() {
+        let def = entrance("old_crypt").unwrap();
+        let mut cache = PassabilityCache::new();
+        cache.insert(
+            dungeon_cache_key(&def.id),
+            dungeon_passability(&def.position(), &generate_dungeon_for(&def.id)),
+        );
+        let mut position = def.position();
+        assert_eq!(storey_at(&cache, &position), 0);
+        position.y -= DUNGEON_FLOOR_HEIGHT * 0.75;
+        assert_eq!(storey_at(&cache, &position), 0);
+    }
 
     /// One storey at y_base 0 over cells x 0..2, z 0..4, with a stairwell up to
     /// a second storey at 3.1 occupying x 0..1.

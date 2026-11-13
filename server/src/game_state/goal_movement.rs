@@ -887,12 +887,7 @@ fn advance_plan(
             player.rotation = dx.atan2(dz);
         }
         if player.floor_level >= 0 && waypoint.floor_level >= 0 {
-            player.floor_level = pathfinding::get_floor_at_position(
-                cache,
-                player.position.x,
-                player.position.z,
-                player.position.y,
-            ) as i8;
+            player.floor_level = passability::storey_at(cache, &player.position);
         }
         travelled += length * safe;
         settle(player);
