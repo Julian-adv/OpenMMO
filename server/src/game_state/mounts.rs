@@ -19,12 +19,21 @@ impl GameState {
                 && player.position.z >= entry.min_z
                 && player.position.z <= entry.max_z
         });
+        if inside {
+            return false;
+        }
         let (min_depth, max_depth) = kind.water_depth_band();
-        !inside
-            && self
-                .water_depth_at(player.position.x, player.position.z)
-                .await
-                .is_some_and(|depth| depth >= min_depth && depth <= max_depth)
+        let at = player.position;
+        let wx = onlinerpg_shared::wrap_world_x(at.x);
+        let Some(depth) = self.water_depth_at(wx, at.z).await else {
+            return false;
+        };
+        (depth >= min_depth && depth <= max_depth)
+            // A horse on a deck is over the water, not in it.
+            || (!kind.floats()
+                && depth > max_depth
+                && super::passability::bridge_deck_y(&self.bridge_decks_read(), wx, at.z, at.y)
+                    .is_some())
     }
 
     pub(super) async fn toggle_mount(&self, player_id: &PlayerId, kind: MountKind) {

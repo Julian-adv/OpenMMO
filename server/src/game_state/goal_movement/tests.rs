@@ -1,4 +1,6 @@
-use super::super::tests::{make_flat_world_game_state, make_player, make_test_game_state};
+use super::super::tests::{
+    make_flat_world_game_state, make_game_state_with, make_player, make_test_game_state,
+};
 use super::*;
 use onlinerpg_shared::pathfinding::{RuntimeFloorGrid, RuntimePassability};
 
@@ -1995,4 +1997,78 @@ async fn a_dead_click_mover_receives_stopped_without_changing_position() {
             ..
         }
     ));
+}
+
+#[tokio::test]
+async fn a_rider_already_facing_the_goal_is_routed_in_metre_steps() {
+    use onlinerpg_shared::mount::MountKind;
+    let game = make_test_game_state("goal_mounted_straight");
+    let mut player = make_player("rider", 100.5, 10.5);
+    player.position.y = 5.0;
+    let route = [PathWaypoint {
+        x: 100.5,
+        z: 60.5,
+        floor: 0,
+    }];
+    let (points, termination) = game.mount_route(&player, &route, MountKind::Horse).await;
+    assert_eq!(termination, None);
+    assert_eq!(points.len(), 50);
+    let seconds: f32 = points.iter().filter_map(|p| p.travel_seconds).sum();
+    let speed = PLAYER_MOVE_SPEED * MountKind::Horse.speed_mult();
+    assert!((seconds - 50.0 / speed).abs() < 1e-3, "{seconds}");
+}
+
+/// Timing of mounted route building on the real terrain along the north road.
+/// Run: cargo test -p onlinerpg-server --release mounted_route_build_timing -- --ignored --nocapture
+#[tokio::test]
+#[ignore]
+async fn mounted_route_build_timing() {
+    use onlinerpg_shared::mount::MountKind;
+    let terrain = || {
+        onlinerpg_terrain::io::TerrainIO::new(
+            concat!(env!("CARGO_MANIFEST_DIR"), "/../data/terrain").into(),
+        )
+    };
+    let game = make_game_state_with("mount_route_timing", terrain(), terrain());
+    let file: crate::npc_schedule::ScheduleFile = serde_json::from_str(include_str!(
+        "../../../../agent-client/data/npcs/garrick/schedule.json"
+    ))
+    .unwrap();
+    let road = &file
+        .schedule
+        .iter()
+        .find(|e| e.waypoints.len() > 10)
+        .unwrap()
+        .waypoints;
+    let mut player = make_player("rider", road[0][0], road[0][2]);
+    player.position.y = game.surface_ground_y(0, &player.position, 1.0, None).await;
+    for metres in [100.0_f32, 400.0, 1100.0] {
+        let mut route = Vec::new();
+        let mut length = 0.0;
+        for pair in road.windows(2) {
+            if length >= metres {
+                break;
+            }
+            length += (pair[1][0] - pair[0][0]).hypot(pair[1][2] - pair[0][2]);
+            route.push(PathWaypoint {
+                x: pair[1][0],
+                z: pair[1][2],
+                floor: 0,
+            });
+        }
+        let started = std::time::Instant::now();
+        let (points, termination) = game.mount_route(&player, &route, MountKind::Horse).await;
+        let cold = started.elapsed();
+        let runs = 20;
+        let started = std::time::Instant::now();
+        for _ in 0..runs {
+            game.mount_route(&player, &route, MountKind::Horse).await;
+        }
+        let warm = started.elapsed() / runs;
+        let seconds: f32 = points.iter().filter_map(|p| p.travel_seconds).sum();
+        eprintln!(
+            "route {length:>6.0} m: {:>5} points, ride {seconds:>6.1} s, end {termination:?}, build cold {cold:>9.2?} warm {warm:>9.2?}",
+            points.len()
+        );
+    }
 }

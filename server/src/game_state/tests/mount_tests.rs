@@ -285,3 +285,76 @@ async fn boarding_lifts_the_rider_to_the_surface() {
     let ashore = game.players.read().await[&id].position.y;
     assert!((ashore - bed).abs() < 1e-3, "leaving sets them back down");
 }
+
+#[tokio::test]
+async fn a_horse_stays_mounted_on_a_bridge_deck_and_not_in_the_water_under_it() {
+    let game = make_test_game_state("horse_bridge");
+    let id = rider(&game).await;
+    game.sync_region_furniture(-1, 0, &[stone_bridge(-100.0, 3.0, 50.0)]);
+    assert!(game.water_depth_at(-100.0, 50.0).await.unwrap() > 0.6);
+    game.use_item(&id, 1).await;
+    assert!(game.players.read().await[&id].is_mounted());
+
+    let stand = |y: f32| Position {
+        x: -100.0,
+        y,
+        z: 50.0,
+    };
+    let deck = game
+        .surface_ground_y(0, &stand(5.0), 5.0, Some(MountKind::Horse))
+        .await;
+    assert!(deck > 5.0, "{deck}");
+    game.players.write().await.get_mut(&id).unwrap().position = stand(deck);
+    game.advance_test_movement(0.2).await;
+    assert!(game.players.read().await[&id].is_mounted());
+
+    game.players.write().await.get_mut(&id).unwrap().position = stand(-5.0);
+    game.advance_test_movement(0.2).await;
+    assert!(!game.players.read().await[&id].is_mounted());
+}
+
+/// The long wooden bridge's deck stands a step above its banks.
+#[tokio::test]
+async fn a_rider_steps_up_onto_a_bridge_deck_and_crosses() {
+    let game = make_test_game_state("horse_deck_lip");
+    let id = rider(&game).await;
+    game.sync_region_furniture(
+        0,
+        0,
+        &[onlinerpg_shared::furniture::FurniturePlacement {
+            type_id: "bridge_wood_long".into(),
+            rotation_deg: 135.0,
+            ..stone_bridge(100.0, 5.0, 52.0)
+        }],
+    );
+    let k = std::f32::consts::FRAC_1_SQRT_2;
+    let bank = |d: f32| Position {
+        x: 100.0 + d * k,
+        y: 5.0,
+        z: 52.0 - d * k,
+    };
+    game.players.write().await.get_mut(&id).unwrap().position = bank(14.0);
+    game.use_item(&id, 1).await;
+    assert!(game.players.read().await[&id].is_mounted());
+
+    for (d, y) in [(0.0, 5.35), (-14.0, 5.0)] {
+        let goal = bank(d);
+        game.request_test_move(
+            &id,
+            TestMove {
+                position: goal,
+                sprinting: false,
+            },
+            false,
+        )
+        .await;
+        game.advance_test_movement(60.0).await;
+        let player = game.players.read().await[&id].clone();
+        assert!(player.is_mounted());
+        assert!(
+            player.position.dist_xz_sq(&goal) < 0.01 && (player.position.y - y).abs() < 1e-3,
+            "{:?}",
+            player.position
+        );
+    }
+}

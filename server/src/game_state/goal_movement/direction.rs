@@ -475,10 +475,7 @@ impl GameState {
             let blocked = {
                 let cache = self.passability_read();
                 swept_blocked(&cache, from, dx, dz, floor)
-                    || (next.y - from.y > dx.hypot(dz) * 50_f32.to_radians().tan() + 0.01
-                        && !pathfinding::in_stairwell_span(&cache, from.x, from.z, from.y)
-                        && pathfinding::storey_ground_y(&cache, floor, from.x, from.z, from.y)
-                            .is_none())
+                    || passability::too_steep(&cache, &self.bridge_decks, floor, &from, &next)
             };
             if blocked {
                 input.speed = 0.0;

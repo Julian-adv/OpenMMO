@@ -372,6 +372,33 @@ pub(super) fn bridge_deck_y(index: &BridgeDeckIndex, wx: f32, z: f32, ref_y: f32
         .find_map(|d| d.stand_y(wx, z, ref_y))
 }
 
+/// Tallest lip a mover steps up from the bank onto a deck end.
+const DECK_STEP_M: f32 = 0.6;
+
+/// Open ground rising more than 50° stops a mover; stairs, storeys and the
+/// lip of a bridge deck do not.
+pub(super) fn too_steep(
+    cache: &pathfinding::PassabilityCache,
+    decks: &std::sync::RwLock<BridgeDeckIndex>,
+    floor: u8,
+    from: &crate::types::Position,
+    to: &crate::types::Position,
+) -> bool {
+    let rise = to.y - from.y;
+    let run = onlinerpg_shared::shortest_world_delta_x(from.x, to.x).hypot(to.z - from.z);
+    rise > run * 50_f32.to_radians().tan() + 0.01
+        && !pathfinding::in_stairwell_span(cache, from.x, from.z, from.y)
+        && pathfinding::storey_ground_y(cache, floor, from.x, from.z, from.y).is_none()
+        && !(rise <= DECK_STEP_M
+            && bridge_deck_y(
+                &decks.read().unwrap_or_else(|e| e.into_inner()),
+                onlinerpg_shared::wrap_world_x(to.x),
+                to.z,
+                to.y,
+            )
+            .is_some_and(|deck| (deck - to.y).abs() < 0.01))
+}
+
 impl super::GameState {
     /// Insert or replace a house's cache entry: base grids plus the door
     /// overlays persisted in its data. The house's live door state is re-seeded

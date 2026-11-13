@@ -669,31 +669,39 @@ impl GameState {
                 (MoveStatus::Stopped, 0.0)
             } else {
                 let cache = self.passability_read();
-                advance_plan(&mut player, plan, &cache, speed * dt, |player| {
-                    if let Some(entrance) = self
-                        .dungeon_defs
-                        .entrance_at(player.position.x, player.position.z)
-                    {
-                        if let Some(runtime) = dungeons.get(&entrance.id) {
-                            let floor = dungeon::passability_floor_for_level(player.floor_level);
-                            if let Some(y) = dungeon::ground_y_for_floor(
-                                &entrance.position(),
-                                &runtime.layouts,
-                                floor,
-                                player.position.x,
-                                player.position.z,
-                            ) {
-                                player.position.y = y;
+                advance_plan(
+                    &mut player,
+                    plan,
+                    &cache,
+                    &self.bridge_decks,
+                    speed * dt,
+                    |player| {
+                        if let Some(entrance) = self
+                            .dungeon_defs
+                            .entrance_at(player.position.x, player.position.z)
+                        {
+                            if let Some(runtime) = dungeons.get(&entrance.id) {
+                                let floor =
+                                    dungeon::passability_floor_for_level(player.floor_level);
+                                if let Some(y) = dungeon::ground_y_for_floor(
+                                    &entrance.position(),
+                                    &runtime.layouts,
+                                    floor,
+                                    player.position.x,
+                                    player.position.z,
+                                ) {
+                                    player.position.y = y;
+                                }
+                                player.floor_level = dungeon_floor_after_step(
+                                    player.floor_level,
+                                    &entrance.position(),
+                                    &runtime.layouts,
+                                    player.position,
+                                );
                             }
-                            player.floor_level = dungeon_floor_after_step(
-                                player.floor_level,
-                                &entrance.position(),
-                                &runtime.layouts,
-                                player.position,
-                            );
                         }
-                    }
-                })
+                    },
+                )
             };
             {
                 let mut players = self.players.write().await;
@@ -831,6 +839,7 @@ fn advance_plan(
     player: &mut Player,
     plan: &mut Plan,
     cache: &PassabilityCache,
+    decks: &std::sync::RwLock<passability::BridgeDeckIndex>,
     mut distance: f32,
     mut settle: impl FnMut(&mut Player),
 ) -> (MoveStatus, f32) {
@@ -852,11 +861,7 @@ fn advance_plan(
             (distance / cost).min(1.0)
         };
         let floor = pathfinding::start_floor_at(cache, from.x, from.z, from.y);
-        if floor == 0
-            && waypoint.position.y - from.y > length * 50_f32.to_radians().tan()
-            && !pathfinding::in_stairwell_span(cache, from.x, from.z, from.y)
-            && pathfinding::storey_ground_y(cache, floor, from.x, from.z, from.y).is_none()
-        {
+        if floor == 0 && passability::too_steep(cache, decks, floor, &from, &waypoint.position) {
             return (MoveStatus::Blocked, travelled);
         }
         let blocked = |t: f32| swept_blocked(cache, from, dx * t, dz * t, floor);

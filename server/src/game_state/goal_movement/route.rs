@@ -8,6 +8,8 @@ const MIN_PIVOT_SECONDS: f32 = 0.5;
 const PIVOT_LOOKAHEAD: usize = 8;
 const MIN_PIVOT_ANGLE: f32 = 10_f32.to_radians();
 const MAX_MOUNT_SAMPLES: usize = 8192;
+const STRAIGHT_STEP_M: f32 = 1.0;
+const ALIGNED_ANGLE: f32 = 5_f32.to_radians();
 
 pub(super) fn line_points(
     from: Position,
@@ -195,7 +197,7 @@ impl GameState {
         route: &[PathWaypoint],
         mount: MountKind,
     ) -> (Vec<MoveWaypoint>, Option<PathTermination>) {
-        use onlinerpg_shared::mount_movement::{arc_step, STEP_SECONDS};
+        use onlinerpg_shared::mount_movement::{angle_delta, arc_step, STEP_SECONDS};
         let mut position = player.position;
         let mut rotation = player.rotation;
         let speed = PLAYER_MOVE_SPEED * mount.speed_mult();
@@ -214,14 +216,27 @@ impl GameState {
                 if points.len() >= MAX_MOUNT_SAMPLES {
                     return (points, Some(PathTermination::NodeLimit));
                 }
-                let seconds = STEP_SECONDS.min(distance / speed);
-                let (ax, az, facing) = arc_step(
-                    rotation,
-                    dx.atan2(dz),
-                    speed,
-                    seconds,
-                    mount.turn_radius().min(distance / 4.0),
-                );
+                let heading = dx.atan2(dz);
+                // A horse facing its waypoint rides straight, sampled like a walker.
+                let aligned = angle_delta(rotation, heading).abs() < ALIGNED_ANGLE;
+                let reach = if aligned {
+                    STRAIGHT_STEP_M
+                } else {
+                    STEP_SECONDS * speed
+                };
+                let seconds = reach.min(distance) / speed;
+                let (ax, az, facing) = if aligned {
+                    let scale = seconds * speed / distance;
+                    (dx * scale, dz * scale, heading)
+                } else {
+                    arc_step(
+                        rotation,
+                        heading,
+                        speed,
+                        seconds,
+                        mount.turn_radius().min(distance / 4.0),
+                    )
+                };
                 if swept_blocked(&self.passability_read(), position, ax, az, 0) {
                     return (points, Some(PathTermination::Unreachable));
                 }

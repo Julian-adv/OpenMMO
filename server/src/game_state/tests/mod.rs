@@ -664,7 +664,7 @@ impl onlinerpg_terrain::splat::SplatTiles for GrassSplat {
     }
 }
 
-fn make_game_state_with(
+pub(crate) fn make_game_state_with(
     test_name: &str,
     height: impl onlinerpg_terrain::height::HeightTiles + 'static,
     water: impl onlinerpg_terrain::water::WaterTiles + 'static,
