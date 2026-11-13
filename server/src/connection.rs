@@ -2328,6 +2328,16 @@ async fn handle_client_message(
                 game_state.patrol_sweep(id, patrol_id, auth_service).await;
             }
         }
+        ClientMessage::PatrolScout => {
+            if let Some(id) = &state.player_id {
+                game_state.patrol_scout(id, auth_service).await;
+            }
+        }
+        ClientMessage::PatrolStrike => {
+            if let Some(id) = &state.player_id {
+                game_state.patrol_strike(id).await;
+            }
+        }
         ClientMessage::ImpoundQuery { npc_player_id } => {
             if let Some(id) = &state.player_id {
                 game_state

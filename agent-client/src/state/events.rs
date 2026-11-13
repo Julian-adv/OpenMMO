@@ -1163,20 +1163,13 @@ impl SharedState {
                     owner_name, stall_id
                 ));
             }
+            ServerMessage::PatrolScouted { target, warned } => {
+                self.patrol_target = *target;
+                self.patrol_scouts += 1;
+                self.note_patrol_warnings(warned);
+            }
             ServerMessage::PatrolSweepResult { warned, seized } => {
-                let warned: Vec<String> = warned
-                    .iter()
-                    .filter(|owner| self.patrol_warned.insert((*owner).clone()))
-                    .cloned()
-                    .collect();
-                if !warned.is_empty() {
-                    self.push_ambient_event(format!(
-                        "[Patrol] Fences belonging to {} stand on the public road here. \
-                         Enforcement has not begun: leave them, but warn anyone nearby that \
-                         the patrol will soon pull down whatever blocks the road.",
-                        warned.join(", ")
-                    ));
-                }
+                self.note_patrol_warnings(warned);
                 for seizure in seized {
                     let fate = if seizure.forfeited {
                         "A repeat offence: they are forfeit."
@@ -1697,6 +1690,23 @@ impl SharedState {
     /// it as the concurrent action's result and rob a dud of its [NoResult].
     pub fn push_ambient_event(&mut self, event: String) {
         self.push_agent_event_inner(event, true, true);
+    }
+
+    /// Tell the guard once per lap about each owner whose fences only earn a warning.
+    fn note_patrol_warnings(&mut self, owners: &[String]) {
+        let warned: Vec<String> = owners
+            .iter()
+            .filter(|owner| self.patrol_warned.insert((*owner).clone()))
+            .cloned()
+            .collect();
+        if !warned.is_empty() {
+            self.push_ambient_event(format!(
+                "[Patrol] Fences belonging to {} stand on the public road here. \
+                 Enforcement has not begun: leave them, but warn anyone nearby that \
+                 the patrol will soon pull down whatever blocks the road.",
+                warned.join(", ")
+            ));
+        }
     }
 
     /// Ambient and quiet: rides along with the next prompt.

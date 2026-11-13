@@ -58,6 +58,7 @@
 - `server/src/auth_road_patrol.rs`: `guard_offences`(계정별 횟수·마지막 순찰), `guard_impounds`(계정·아이템별 수량), `road_patrol_state`.
 - `shared/src/schedule.rs`: 일정 항목의 `patrol { partner, sweeps, lap_minutes }`. `waypoints`는 편도 경로다.
 - 일정 항목의 `cue`: 도착 직후 `check_schedule_transition`이 `[Duty] {cue}`를 넣는다.
+- 철거 동작(프로토콜 158): 철거를 맡은 경비병이 경유지마다 `PatrolScout`를 보낸다. 서버는 경고 기간이면 경고할 주인 목록을, 집행 중이면 가장 가까운 대상 목책 위치를 답한다(`sweep_plan`). 위치가 오면 1.3m 앞까지 걸어가 무기를 꺼내고 `PatrolStrike`를 세 번 보낸 뒤(`PlayerSwung`으로 주변에 공격 동작이 보인다) `PatrolSweep`으로 주변 24m를 한꺼번에 철거한다(`clear_road`).
 - `agent-client/src/driver/movement.rs::run_patrol_lap`: 경유지마다 철거 요청, 짝이 6m 안에 올 때까지 최대 20초 대기, 걷기. 백그라운드 작업이라 걷는 중에도 LLM이 말한다.
 - `PatrolSweepResult`는 `[Patrol]` 이벤트로 LLM에 전달된다. 판정은 서버가 하고 LLM은 대사만 맡는다.
 - 웹 클라이언트: Karl 우클릭 → 압수품 찾기(`ImpoundDialog.svelte`).

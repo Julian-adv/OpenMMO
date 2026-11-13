@@ -806,7 +806,10 @@ pub async fn llm_driver(
         if weapon_checked_at.elapsed() >= Duration::from_secs(2) {
             weapon_checked_at = Instant::now();
             let mut s = state.lock().await;
-            let armed = attack_target.is_some() || s.schedule_combat_active();
+            let striking = s
+                .patrol_strike_until
+                .is_some_and(|until| until > tokio::time::Instant::now());
+            let armed = attack_target.is_some() || s.schedule_combat_active() || striking;
             if let Some(cmd) = s.protects().then(|| s.weapon_command(armed)).flatten() {
                 if let Err(e) = s.send_background_command(cmd).await {
                     error!("[{label}] Failed to change weapon: {e}");

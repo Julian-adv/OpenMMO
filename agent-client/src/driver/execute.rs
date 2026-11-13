@@ -1542,7 +1542,9 @@ pub(super) async fn handle_response(
                 continue;
             }
             drop(s);
-            wait_for_family_chest(state, seen, answered).await;
+            // A later store or take in the same reply must see the open chest
+            // and its current revision.
+            wait_for_answer(state, seen, answered).await;
             continue;
         }
 
@@ -2876,9 +2878,8 @@ async fn walk_then_send(
     state.lock().await.push_agent_event(event);
 }
 
-/// Until the server answers a chest action, so a later store or take in the
-/// same reply sees the open chest and its current revision.
-async fn wait_for_family_chest(
+/// Until a server answer moves the `answered` counter off `seen`, or 3 s pass.
+pub(super) async fn wait_for_answer(
     state: &Arc<Mutex<SharedState>>,
     seen: u64,
     answered: impl Fn(&SharedState) -> u64,

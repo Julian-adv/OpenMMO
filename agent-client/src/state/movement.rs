@@ -526,7 +526,7 @@ impl SharedState {
     }
 
     /// Position-sync at the current location, rotated to face `target_pos`.
-    fn face_position_command(&self, target_pos: Position) -> Option<ClientMessage> {
+    pub(crate) fn face_position_command(&self, target_pos: Position) -> Option<ClientMessage> {
         let self_player = self.self_player.as_ref()?;
         let to_target = crate::geom::PlanarDelta::between(&self_player.position, &target_pos);
         Some(ClientMessage::PlayerFace {

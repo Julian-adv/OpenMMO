@@ -258,3 +258,38 @@ async fn only_the_captain_opens_the_reclaim_window_and_only_for_someone_close() 
         ServerMessage::SystemMessage { message, .. } if message.starts_with("[Impound]")
     )));
 }
+
+#[tokio::test]
+async fn a_scout_warns_before_enforcement_and_names_the_nearest_road_fence_after() {
+    let (game, auth, mut owner_rx, mut guard_rx) = setup("patrol_scout").await;
+    build(&game, &auth).await;
+    let scouted = |rx: &mut DirectRx| {
+        drain(rx)
+            .into_iter()
+            .find_map(|message| match message {
+                ServerMessage::PatrolScouted { target, warned } => Some((target, warned)),
+                _ => None,
+            })
+            .expect("scout answer")
+    };
+
+    game.patrol_scout(&pid("Karl"), &auth).await;
+    assert_eq!(scouted(&mut guard_rx), (None, vec!["Builder".to_string()]));
+
+    auth.set_road_patrol_enforce_from(0).unwrap();
+    game.patrol_scout(&pid("Karl"), &auth).await;
+    let (target, warned) = scouted(&mut guard_rx);
+    assert!(warned.is_empty());
+    let target = target.expect("a fence stands on the road");
+    let karl = game.players.read().await[&pid("Karl")].position;
+    assert!(karl.dist_xz_sq(&target) <= 4.0, "{target:?}");
+    assert_eq!(auth.load_fences().unwrap().len(), 4);
+
+    game.patrol_strike(&pid("Builder")).await;
+    game.patrol_strike(&pid("Karl")).await;
+    let swings = drain(&mut owner_rx)
+        .into_iter()
+        .filter(|message| matches!(message, ServerMessage::PlayerSwung { .. }))
+        .count();
+    assert_eq!(swings, 1);
+}

@@ -286,6 +286,11 @@ pub struct SharedState {
     pub patrol_warned: std::collections::HashSet<String>,
     /// Waypoints behind us on the current lap; a lap broken off by a fight resumes there.
     pub patrol_reached: usize,
+    /// The fence the last scout found, and how many scouts were answered.
+    pub patrol_target: Option<onlinerpg_shared::Position>,
+    pub patrol_scouts: u64,
+    /// Keeps the weapon out while a fence is struck; lapses if the lap is cut short.
+    pub patrol_strike_until: Option<tokio::time::Instant>,
     /// Pending cast acknowledgement or a pause between attempts.
     fishing_retry_at: Option<tokio::time::Instant>,
     /// A recital began this turn; the driver takes it to move tonight's
@@ -517,6 +522,9 @@ impl SharedState {
             self_fishing: false,
             patrol_warned: Default::default(),
             patrol_reached: 0,
+            patrol_target: None,
+            patrol_scouts: 0,
+            patrol_strike_until: None,
             fishing_retry_at: None,
             recited_this_turn: false,
             fishing_stance: None,

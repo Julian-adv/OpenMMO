@@ -729,6 +729,10 @@ pub enum ClientMessage {
     PatrolSweep {
         patrol_id: i64,
     },
+    /// Guard NPC only: asks for the nearest fence a sweep would pull down.
+    PatrolScout,
+    /// Guard NPC only: one swing at the fence, shown to those nearby.
+    PatrolStrike,
     ImpoundQuery {
         npc_player_id: PlayerId,
     },
@@ -1194,6 +1198,8 @@ impl ClientMessage {
             | UseLandDocument { .. }
             | EditFence { .. }
             | PatrolSweep { .. }
+            | PatrolScout
+            | PatrolStrike
             | ImpoundReclaim { .. }
             | StartLandscapingMode { .. }
             | EditLandscape { .. }
@@ -1884,6 +1890,16 @@ pub enum ServerMessage {
         /// Owners with fences on the road while enforcement has not begun.
         warned: Vec<String>,
         seized: Vec<PatrolSeizure>,
+    },
+    /// Answer to `PatrolScout`: the nearest fence a sweep would pull down, or
+    /// the owners it would only warn while enforcement has not begun.
+    PatrolScouted {
+        target: Option<Position>,
+        warned: Vec<String>,
+    },
+    /// Nearby: a swing with no monster on the other end.
+    PlayerSwung {
+        player_id: PlayerId,
     },
     ImpoundState {
         npc_player_id: PlayerId,
@@ -2657,6 +2673,7 @@ impl ServerMessage {
             | Self::ChatMessage { .. }
             | Self::Recital { .. }
             | Self::PlayerAttacked { .. }
+            | Self::PlayerSwung { .. }
             | Self::DaggerDoubleSlashStarted { .. }
             | Self::DaggerDoubleSlashSkipped { .. }
             | Self::EquipmentEnchantSucceeded { .. }
@@ -2737,6 +2754,7 @@ impl ServerMessage {
             | Self::LandscapeEditResult { .. }
             | Self::FenceEditResult { .. }
             | Self::PatrolSweepResult { .. }
+            | Self::PatrolScouted { .. }
             | Self::ImpoundState { .. }
             | Self::EstateChestMode { .. }
             | Self::EstateFurnitureMoveMode { .. }

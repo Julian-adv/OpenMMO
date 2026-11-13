@@ -181,6 +181,53 @@ async fn wait_for_partner(state: &Arc<Mutex<SharedState>>, partner: &str, x: f32
     }
 }
 
+const STRIKE_STANDOFF_M: f32 = 1.3;
+const STRIKES: u32 = 3;
+const STRIKE_EVERY: std::time::Duration = std::time::Duration::from_millis(1100);
+/// Longer than any walk-up and strike, so an aborted lap still lets go of the weapon.
+const STRIKE_HOLD: std::time::Duration = std::time::Duration::from_secs(40);
+
+async fn send_patrol(state: &Arc<Mutex<SharedState>>, msg: ClientMessage) {
+    if let Err(e) = state.lock().await.send_background_command(msg).await {
+        error!("Failed to send patrol command: {e}");
+    }
+}
+
+/// Scout the road here; the answer carries any warnings. A fence due to come
+/// down is walked up to and struck, then a sweep clears every such fence around.
+async fn clear_road(state: &Arc<Mutex<SharedState>>, patrol_id: i64, floor: u8) {
+    let seen = state.lock().await.patrol_scouts;
+    send_patrol(state, ClientMessage::PatrolScout).await;
+    super::execute::wait_for_answer(state, seen, |s| s.patrol_scouts).await;
+    let fence = {
+        let mut s = state.lock().await;
+        let fence = (s.patrol_scouts != seen)
+            .then(|| s.patrol_target.take())
+            .flatten();
+        if fence.is_some() {
+            s.patrol_strike_until = Some(tokio::time::Instant::now() + STRIKE_HOLD);
+        }
+        fence
+    };
+    let Some(fence) = fence else {
+        return;
+    };
+    super::combat::walk_to_point(state, fence, floor as i8, STRIKE_STANDOFF_M, Some(false)).await;
+    let (face, draw) = {
+        let s = state.lock().await;
+        (s.face_position_command(fence), s.weapon_command(true))
+    };
+    for msg in face.into_iter().chain(draw) {
+        send_patrol(state, msg).await;
+    }
+    for _ in 0..STRIKES {
+        send_patrol(state, ClientMessage::PatrolStrike).await;
+        tokio::time::sleep(STRIKE_EVERY).await;
+    }
+    send_patrol(state, ClientMessage::PatrolSweep { patrol_id }).await;
+    state.lock().await.patrol_strike_until = None;
+}
+
 /// One road-patrol lap: out along the entry's waypoints and back to `pos`.
 /// Resumes at `SharedState::patrol_reached`.
 pub(super) async fn run_patrol_lap(state: Arc<Mutex<SharedState>>, entry: ScheduleEntry) {
@@ -221,11 +268,7 @@ pub(super) async fn run_patrol_lap(state: Arc<Mutex<SharedState>>, entry: Schedu
         };
         for attempt in 0..2 {
             if patrol.sweeps {
-                let sweep = ClientMessage::PatrolSweep { patrol_id };
-                if let Err(e) = state.lock().await.send_background_command(sweep).await {
-                    error!("Failed to send patrol sweep: {e}");
-                }
-                tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+                clear_road(&state, patrol_id, entry.floor_level).await;
             }
             match execute_walk(&state, &to, Some(false)).await {
                 MoveResult::Arrived => break,

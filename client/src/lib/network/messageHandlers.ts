@@ -1610,6 +1610,10 @@ export function handleServerMessage(
       break
     }
 
+    case 'PlayerSwung':
+      remotePlayerManager.handleAttack(data.player_id)
+      break
+
     case 'DaggerDoubleSlashStarted': {
       const local = get(gameStore).currentPlayer?.id === data.player_id
       playDaggerSkill(data.player_id)

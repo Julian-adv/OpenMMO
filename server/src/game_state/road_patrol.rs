@@ -12,7 +12,7 @@ use crate::auth::{unix_now, AuthService, ImpoundedStack, NewLetter, RoadSeizure}
 use crate::metrics::GoldSink;
 use crate::npc_defs::npc_defs;
 use crate::road_index::RoadIndex;
-use crate::types::{PlayerId, ServerMessage};
+use crate::types::{PlayerId, Position, ServerMessage};
 use onlinerpg_shared::fence::{self, FenceEdge};
 use onlinerpg_shared::messages::{ImpoundedItem, PatrolSeizure};
 
@@ -45,6 +45,8 @@ fn seizure_letter(seizure: &RoadSeizure, captain: &str) -> String {
     }
 }
 
+const RECORDS_UNAVAILABLE: &str = "Patrol records are unavailable.";
+
 fn is_guard_captain(npc: &crate::types::Player) -> bool {
     npc.is_official_npc
         && npc_defs()
@@ -57,35 +59,105 @@ impl GameState {
         let _ = self.roads.set(roads);
     }
 
-    async fn road_fences_near(&self, player_id: &PlayerId) -> Result<Vec<FenceEdge>, &'static str> {
-        let position = {
-            let players = self.players.read().await;
-            let guard = players.get(player_id).ok_or("Character not found.")?;
-            let is_guard = guard.is_official_npc
-                && npc_defs()
-                    .get_by_npc_name(&guard.name)
-                    .is_some_and(|def| def.class == GUARD_CLASS);
-            if !is_guard {
-                return Err("Only the guard clears the road.");
-            }
-            if guard.health == 0 || guard.floor_level != 0 {
-                return Err("Stand on the road to clear it.");
-            }
-            guard.position
-        };
+    async fn guard_on_road(&self, player_id: &PlayerId) -> Result<Position, &'static str> {
+        let players = self.players.read().await;
+        let guard = players.get(player_id).ok_or("Character not found.")?;
+        let is_guard = guard.is_official_npc
+            && npc_defs()
+                .get_by_npc_name(&guard.name)
+                .is_some_and(|def| def.class == GUARD_CLASS);
+        if !is_guard {
+            return Err("Only the guard clears the road.");
+        }
+        if guard.health == 0 || guard.floor_level != 0 {
+            return Err("Stand on the road to clear it.");
+        }
+        Ok(guard.position)
+    }
+
+    /// Where the guard stands, the road fences a sweep from there covers,
+    /// and whether enforcement has begun.
+    async fn sweep_plan(
+        &self,
+        player_id: &PlayerId,
+        auth: &AuthService,
+    ) -> Result<(Position, Vec<FenceEdge>, bool), &'static str> {
+        let guard = self.guard_on_road(player_id).await?;
         let Some(roads) = self.roads.get() else {
-            return Ok(Vec::new());
+            return Ok((guard, Vec::new(), false));
         };
-        let fences = self.fences.read().await;
-        Ok(fences
-            .within(&position, SWEEP_RADIUS_M)
+        let edges: Vec<FenceEdge> = self
+            .fences
+            .read()
+            .await
+            .within(&guard, SWEEP_RADIUS_M)
             .into_iter()
             .filter(|fence| {
                 let centre = fence.edge.center(0.0);
                 roads.on_road(centre.x, centre.z)
             })
             .map(|fence| fence.edge)
-            .collect())
+            .collect();
+        if edges.is_empty() {
+            return Ok((guard, edges, false));
+        }
+        let db = auth.clone();
+        let enforce_from = auth_db(move || db.road_patrol_enforce_from())
+            .await
+            .map_err(|_| RECORDS_UNAVAILABLE)?;
+        Ok((guard, edges, unix_now() >= enforce_from))
+    }
+
+    async fn fence_owners(
+        auth: &AuthService,
+        edges: Vec<FenceEdge>,
+    ) -> Result<Vec<String>, &'static str> {
+        let db = auth.clone();
+        auth_db(move || db.road_fence_owners(&edges))
+            .await
+            .map_err(|_| RECORDS_UNAVAILABLE)
+    }
+
+    /// What a sweep from here would do: the owners it would warn, or the
+    /// nearest fence it would pull down.
+    pub async fn patrol_scout(&self, player_id: &PlayerId, auth: &AuthService) {
+        let (target, warned) = self
+            .try_patrol_scout(player_id, auth)
+            .await
+            .unwrap_or_default();
+        self.send_direct_message(player_id, ServerMessage::PatrolScouted { target, warned })
+            .await;
+    }
+
+    async fn try_patrol_scout(
+        &self,
+        player_id: &PlayerId,
+        auth: &AuthService,
+    ) -> Result<(Option<Position>, Vec<String>), &'static str> {
+        let (guard, edges, enforcing) = self.sweep_plan(player_id, auth).await?;
+        if !enforcing {
+            let warned = if edges.is_empty() {
+                Vec::new()
+            } else {
+                Self::fence_owners(auth, edges).await?
+            };
+            return Ok((None, warned));
+        }
+        let nearest = edges
+            .into_iter()
+            .map(|edge| edge.center(guard.y))
+            .min_by(|a, b| guard.dist_xz_sq(a).total_cmp(&guard.dist_xz_sq(b)));
+        Ok((nearest, Vec::new()))
+    }
+
+    pub async fn patrol_strike(&self, player_id: &PlayerId) {
+        let Ok(position) = self.guard_on_road(player_id).await else {
+            return;
+        };
+        let swung = ServerMessage::PlayerSwung {
+            player_id: *player_id,
+        };
+        self.publish_nearby(&position, 0, swung, None).await;
     }
 
     pub async fn patrol_sweep(&self, player_id: &PlayerId, patrol_id: i64, auth: &AuthService) {
@@ -109,27 +181,20 @@ impl GameState {
         patrol_id: i64,
         auth: &AuthService,
     ) -> Result<(Vec<String>, Vec<PatrolSeizure>), &'static str> {
-        let edges = self.road_fences_near(player_id).await?;
+        let (_, edges, enforcing) = self.sweep_plan(player_id, auth).await?;
         if edges.is_empty() {
             return Ok(Default::default());
         }
-        let db = auth.clone();
-        let enforce_from = auth_db(move || db.road_patrol_enforce_from())
-            .await
-            .map_err(|_| "Patrol records are unavailable.")?;
-        let db = auth.clone();
-        if unix_now() < enforce_from {
-            let warned = auth_db(move || db.road_fence_owners(&edges))
-                .await
-                .map_err(|_| "Patrol records are unavailable.")?;
-            return Ok((warned, Vec::new()));
+        if !enforcing {
+            return Ok((Self::fence_owners(auth, edges).await?, Vec::new()));
         }
+        let db = auth.clone();
         let _persistence = self.persistence_lock.lock().await;
         let seizures = auth_db(move || db.seize_road_fences(&edges, patrol_id))
             .await
             .map_err(|error| {
                 tracing::warn!(%error, "Failed to seize road fences");
-                "Patrol records are unavailable."
+                RECORDS_UNAVAILABLE
             })?;
         let removed: Vec<FenceEdge> = seizures
             .iter()
