@@ -5,7 +5,7 @@
   import MetricsError from './MetricsError.svelte'
   import PeriodFilter from './PeriodFilter.svelte'
   import { formatCount, formatDateTime, uniquePeriods, type GoldHours } from './metrics'
-  import { goldSinkKey, type GoldSinks } from './goldSinks'
+  import { goldSinkKey, itemSinkLabels, type GoldSinks } from './goldSinks'
 
   let { hours = $bindable(), resource }: {
     hours: GoldHours
@@ -19,7 +19,7 @@
   <div class="chart-heading">
     <div>
       <h2 id="gold-sinks-title">골드 소모 순위</h2>
-      <p>상인 구매·재매입·가판 수수료·토지세 · 소모 골드 내림차순</p>
+      <p>상인 구매·재매입·가판 수수료·토지세·압수품 반환 · 소모 골드 내림차순</p>
     </div>
     <PeriodFilter bind:hours options={uniquePeriods} label="골드 소모 집계 기간" />
   </div>
@@ -27,7 +27,7 @@
   <div class="metric-summary">
     <span>완료된 최근 {period.label} 소모된 골드{error ? ' · 갱신 중단' : ''}</span>
     <strong>{#if sinks}<GoldAmount copper={sinks.total_gold} />{:else}—{/if}</strong>
-    <p>상인 구매·재매입은 아이템별 실제 지불액을, 가판 판매는 수수료만 합산합니다. 토지세와 체납 복구 비용도 포함합니다.</p>
+    <p>상인 구매·재매입은 아이템별 실제 지불액을, 가판 판매는 수수료만 합산합니다. 토지세와 체납 복구 비용, 압수품 반환 비용도 포함합니다.</p>
   </div>
   {#if sinks && sinks.collection_started_at > sinks.from}
     <p class="chart-notice">{formatDateTime(sinks.collection_started_at)} KST부터 수집한 기록만 포함합니다.</p>
@@ -35,7 +35,7 @@
   {#if sinks && sinks.entries.length > 0}
     <GoldRankingTable entries={sinks.entries} totalGold={sinks.total_gold}
       titleId="gold-sinks-title" label="골드 소모 순위 표" entryHeading="골드 소모 항목" goldHeading="소모 골드"
-      entryKey={goldSinkKey} category={(entry) => entry.sink === 'item_purchase' ? '상인 구매' : entry.sink === 'item_buyback' ? '상인 재매입' : ''}
+      entryKey={goldSinkKey} category={(entry) => 'item_def_id' in entry && entry.item_def_id ? itemSinkLabels[entry.sink as keyof typeof itemSinkLabels] : ''}
       quantityUnit={(entry) => entry.item_def_id !== undefined ? '개' : '회'} />
   {:else}
     <div class="chart-empty" role="status">

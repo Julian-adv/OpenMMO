@@ -116,6 +116,7 @@ pub struct ItemGoldSources {
 pub enum GoldSink {
     ItemPurchase { item_def_id: String },
     ItemBuyback { item_def_id: String },
+    ImpoundFee { item_def_id: String },
     StallTax,
     LandTax,
     LandRecovery,
@@ -126,6 +127,7 @@ impl GoldSink {
         match self {
             Self::ItemPurchase { item_def_id } => ("item_purchase", item_def_id),
             Self::ItemBuyback { item_def_id } => ("item_buyback", item_def_id),
+            Self::ImpoundFee { item_def_id } => ("impound_fee", item_def_id),
             Self::StallTax => ("stall_tax", ""),
             Self::LandTax => ("land_tax", ""),
             Self::LandRecovery => ("land_recovery", ""),

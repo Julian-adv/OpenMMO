@@ -9,6 +9,7 @@ use super::{
     GameState,
 };
 use crate::auth::{unix_now, AuthService, ImpoundedStack, NewLetter, RoadSeizure};
+use crate::metrics::GoldSink;
 use crate::npc_defs::npc_defs;
 use crate::road_index::RoadIndex;
 use crate::types::{PlayerId, ServerMessage};
@@ -340,6 +341,16 @@ impl GameState {
         }
         self.finish_bag_write(player_id, BagHold::default(), &inserts, outcome)
             .await?;
+        for item in items {
+            self.record_gold_sink(
+                GoldSink::ImpoundFee {
+                    item_def_id: item.item_def_id,
+                },
+                item.quantity,
+                item.fee,
+            )
+            .await;
+        }
         self.mark_dirty(player_id).await;
         self.send_gold_update(player_id).await;
         tracing::info!(?player_id, fee, "impound reclaimed");

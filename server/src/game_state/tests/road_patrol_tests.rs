@@ -145,6 +145,15 @@ async fn first_offence_is_impounded_and_bought_back_at_half_price() {
     assert_eq!(impound_state(&mut owner_rx), (vec![], true, None));
     assert_eq!(fences(&game, "Builder").await, 99);
     assert_eq!(game.get_player_gold(&owner).await, 50);
+    assert_gold_consumption(
+        &game,
+        GoldSink::ImpoundFee {
+            item_def_id: "wooden_fence".into(),
+        },
+        3,
+        150,
+    )
+    .await;
     game.impound_action(&owner, &pid("Karl"), true, &auth).await;
     assert!(impound_state(&mut owner_rx).2.is_some());
     assert_eq!(game.get_player_gold(&owner).await, 50);

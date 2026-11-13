@@ -324,9 +324,9 @@ GET /api/metrics/item-gold-sources?hours=24
 GET /api/metrics/gold-sinks?hours=24
 ```
 
-`hours`는 `1 / 24 / 168 / 720 / 4320 / 8760`이며 기본값은 `24`입니다. 잘못된 값은 HTTP 400, DB 오류는 HTTP 503이고 성공·DB 오류 응답은 `Cache-Control: no-store`입니다. 응답은 `from`, `until`, `collection_started_at`, `total_gold`, `entries`입니다. 각 행은 `{ sink, name, quantity, gold }`이며 `sink`는 `item_purchase / item_buyback / stall_tax / land_tax / land_recovery`입니다. 구매·재매입에만 `item_def_id`를 포함하고 이름은 현재 아이템 정의, 정의가 없으면 ID를 사용합니다. 금액은 코퍼 단위이며 총액은 모든 행의 합계입니다. 계정·캐릭터 정보는 반환하지 않습니다.
+`hours`는 `1 / 24 / 168 / 720 / 4320 / 8760`이며 기본값은 `24`입니다. 잘못된 값은 HTTP 400, DB 오류는 HTTP 503이고 성공·DB 오류 응답은 `Cache-Control: no-store`입니다. 응답은 `from`, `until`, `collection_started_at`, `total_gold`, `entries`입니다. 각 행은 `{ sink, name, quantity, gold }`이며 `sink`는 `item_purchase / item_buyback / impound_fee / stall_tax / land_tax / land_recovery`입니다. 구매·재매입·압수품 반환(`impound_fee`, [도로 순찰대](ROAD_PATROL.md))에만 `item_def_id`를 포함하고 이름은 현재 아이템 정의, 정의가 없으면 ID를 사용합니다. 금액은 코퍼 단위이며 총액은 모든 행의 합계입니다. 계정·캐릭터 정보는 반환하지 않습니다.
 
-조회 범위는 정각으로 내린 현재 시각 `until`과 `from = until - hours × 3600`의 `[from, until)`입니다. 완료된 시간대만 표시하고 기록이 없으면 빈 목록과 0을 반환합니다. `gold_sink_samples`에 시간·항목·아이템별로 저장하고, `gold_sink_collection`의 수집 시작 시각은 재시작 후에도 유지합니다. 과거 기록을 소급 생성하지 않으며 수집 시작 전을 포함한 기간은 화면에 안내합니다.
+조회 범위는 정각으로 내린 현재 시각 `until`과 `from = until - hours × 3600`의 `[from, until)`입니다. 완료된 시간대만 표시하고 기록이 없으면 빈 목록과 0을 반환합니다. `gold_sink_samples`에 시간·항목·아이템별로 저장하고(항목 이름 제약은 없으며, 코드가 모르는 항목은 조회에서 건너뛴다), `gold_sink_collection`의 수집 시작 시각은 재시작 후에도 유지합니다. 과거 기록을 소급 생성하지 않으며 수집 시작 전을 포함한 기간은 화면에 안내합니다.
 
 구매·재매입·가판 수수료는 메모리에 합산해 다음 정각에 저장합니다. 저장 실패 시 복원해 재시도하며 로그아웃 후에도 유지하고 정상 종료 시 진행 중인 시간대도 저장합니다. 비정상 종료 시 미저장 통계는 유실될 수 있습니다. 토지세·복구 비용은 실제 차감과 같은 DB 트랜잭션에 저장합니다. 밀린 토지세도 실제 징수한 시각에 기록하며 같은 납부를 재집계하지 않습니다.
 
