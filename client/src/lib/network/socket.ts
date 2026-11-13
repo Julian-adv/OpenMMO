@@ -557,9 +557,11 @@ class NetworkManager {
     return this.moveRequestId
   }
 
-  sendMoveGoal(goal: MoveGoal) {
+  sendMoveGoal(goal: MoveGoal, clientPosition: [number, number] | null) {
     if (get(localHeldInPlace)) return
-    this.sendMessage({ PlayerMoveGoal: goal })
+    this.sendMessage({
+      PlayerMoveGoal: { ...goal, client_position: clientPosition },
+    })
   }
 
   sendMoveStop(requestId: number) {

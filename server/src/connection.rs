@@ -1746,6 +1746,7 @@ async fn handle_client_message(
             z,
             sprinting,
             stop_at_entrance,
+            client_position,
         } => {
             if let Some(id) = state.player_id {
                 game_state
@@ -1756,6 +1757,7 @@ async fn handle_client_message(
                         z,
                         sprinting,
                         stop_at_entrance,
+                        client_position,
                     )
                     .await;
             }

@@ -289,7 +289,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// so one object can have side doors besides its entrance.
 /// v154: `OfferMergerPledge`/`MergerPledgeOffered`, `InspectFamilyEmblem`/
 /// `FamilyEmblemShown`, and the kept emblem and target head in `FamilyMergeProposal`.
-pub const PROTOCOL_VERSION: u32 = 154;
+/// v155: `PlayerMoveGoal.client_position`, where the sender believes it stands (x, z).
+pub const PROTOCOL_VERSION: u32 = 155;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from
@@ -384,6 +385,7 @@ mod tests {
             z: 3.0,
             sprinting: true,
             stop_at_entrance: true,
+            client_position: Some([0.5, 2.5]),
         };
         let bytes = serialize_client_msg(&msg).unwrap();
         let decoded = deserialize_client_msg(&bytes).unwrap();
@@ -394,7 +396,8 @@ mod tests {
                 x: 1.0,
                 z: 3.0,
                 sprinting: true,
-                stop_at_entrance: true
+                stop_at_entrance: true,
+                client_position: Some([0.5, 2.5]),
             }
         ));
     }

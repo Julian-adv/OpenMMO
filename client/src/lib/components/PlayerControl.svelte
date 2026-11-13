@@ -293,7 +293,13 @@
   let officialPosition: Position | null = null
   const serverMovement = new ServerMovement(
     () => networkManager.nextMoveRequestId(),
-    (goal) => networkManager.sendMoveGoal(goal),
+    (goal) =>
+      networkManager.sendMoveGoal(
+        goal,
+        currentPlayer
+          ? [currentPlayer.position.x, currentPlayer.position.z]
+          : null
+      ),
     (requestId) => networkManager.sendMoveStop(requestId),
     (input) => networkManager.sendMoveDirection(input)
   )

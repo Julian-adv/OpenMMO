@@ -260,6 +260,7 @@ impl SharedState {
                 z,
                 sprinting: self.sprint_allowed(sprint),
                 stop_at_entrance: false,
+                client_position: None,
             },
             background,
         )

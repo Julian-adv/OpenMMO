@@ -157,7 +157,9 @@ export type RollCharacterStatsResult =
 
 // Serde externally tagged enum shapes
 export type ClientMessage =
-  | { PlayerMoveGoal: MoveGoal }
+  | {
+      PlayerMoveGoal: MoveGoal & { client_position: [number, number] | null }
+    }
   | { PlayerMoveStop: { request_id: number } }
   | { PlayerMoveDirection: MoveDirection }
   | { PlayerFace: { rotation: number } }

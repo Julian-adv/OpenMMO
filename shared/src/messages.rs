@@ -498,6 +498,7 @@ pub enum ClientMessage {
         sprinting: bool,
         #[serde(default)]
         stop_at_entrance: bool,
+        client_position: Option<[f32; 2]>,
     },
     PlayerMoveStop {
         request_id: u32,

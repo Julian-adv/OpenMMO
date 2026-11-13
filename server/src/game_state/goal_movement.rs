@@ -6,6 +6,7 @@ use onlinerpg_shared::{
     dungeon, shortest_world_delta_x, wrap_world_x, MAX_MOVE_TARGET_DISTANCE, PLAYER_MOVE_SPEED,
 };
 use std::collections::HashMap;
+use std::fmt::Write;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::Instant;
@@ -150,7 +151,7 @@ impl GameState {
         z: f32,
         sprinting: bool,
     ) {
-        self.request_move_goal_with_entrance(id, request_id, x, z, sprinting, false)
+        self.request_move_goal_with_entrance(id, request_id, x, z, sprinting, false, None)
             .await;
     }
 
@@ -162,6 +163,7 @@ impl GameState {
         z: f32,
         sprinting: bool,
         stop_at_entrance: bool,
+        client_position: Option<[f32; 2]>,
     ) {
         if !x.is_finite() || !z.is_finite() {
             self.reject_move_input(id, request_id, "coordinates", None)
@@ -173,13 +175,23 @@ impl GameState {
         let invalid = match self.players.read().await.get(&id) {
             None => Some("no player".to_string()),
             Some(player) => {
-                let distance =
-                    shortest_world_delta_x(player.position.x, x).hypot(z - player.position.z);
+                let distance_to = |tx: f32, tz: f32| {
+                    shortest_world_delta_x(player.position.x, tx).hypot(tz - player.position.z)
+                };
+                let distance = distance_to(x, z);
                 (player.health == 0 || distance > MAX_MOVE_TARGET_DISTANCE).then(|| {
-                    format!(
+                    let mut detail = format!(
                         "goal=({x:.1},{z:.1}) player=({:.1},{:.1}) floor={} distance={distance:.1} health={}",
                         player.position.x, player.position.z, player.floor_level, player.health
-                    )
+                    );
+                    if let Some([cx, cz]) = client_position {
+                        let _ = write!(
+                            detail,
+                            " client=({cx:.1},{cz:.1}) drift={:.1}",
+                            distance_to(cx, cz)
+                        );
+                    }
+                    detail
                 })
             }
         };

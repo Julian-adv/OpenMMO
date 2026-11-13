@@ -170,6 +170,10 @@ impl SharedState {
                     z,
                     sprinting,
                     stop_at_entrance,
+                    client_position: self
+                        .self_player
+                        .as_ref()
+                        .map(|p| [p.position.x, p.position.z]),
                 }
             }
             ClientMessage::PlayerMoveStop { .. } => {

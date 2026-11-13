@@ -136,13 +136,15 @@ describe('movement during teleport', () => {
       sprinting: false,
     }
     localTeleportActive.set(true)
-    networkManager.sendMoveGoal(goal)
+    networkManager.sendMoveGoal(goal, [1, 2])
     networkManager.sendMoveDirection(direction)
     expect(TestWebSocket.current.send).not.toHaveBeenCalled()
 
     networkManager.sendMoveStop(3)
     localTeleportActive.set(false)
-    networkManager.sendMoveGoal({ ...goal, request_id: 4, x: 500, z: 600 })
+    networkManager.sendMoveGoal({ ...goal, request_id: 4, x: 500, z: 600 }, [
+      490, 590,
+    ])
     networkManager.sendMoveDirection({ ...direction, request_id: 5 })
 
     const sent = TestWebSocket.current.send.mock.calls.map(([bytes]) =>
@@ -151,7 +153,15 @@ describe('movement during teleport', () => {
     expect(sent).toEqual([
       { ClientInfo: expect.any(Object) },
       { PlayerMoveStop: { request_id: 3 } },
-      { PlayerMoveGoal: { ...goal, request_id: 4, x: 500, z: 600 } },
+      {
+        PlayerMoveGoal: {
+          ...goal,
+          request_id: 4,
+          x: 500,
+          z: 600,
+          client_position: [490, 590],
+        },
+      },
       { PlayerMoveDirection: { ...direction, request_id: 5 } },
     ])
   })

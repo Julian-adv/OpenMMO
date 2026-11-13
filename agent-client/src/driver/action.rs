@@ -2055,6 +2055,7 @@ pub(super) fn action_to_command(
                 z: gz,
                 sprinting: false,
                 stop_at_entrance: false,
+                client_position: None,
             })
         }
         AgentAction::Respawn => Some(ClientMessage::RequestRespawn),
