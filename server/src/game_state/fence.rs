@@ -30,6 +30,19 @@ impl FenceIndex {
         (edge.x.div_euclid(32), edge.z.div_euclid(32))
     }
 
+    /// Remove `edges`; returns each touched bucket's key and remaining fences.
+    pub(super) fn drop_edges(&mut self, edges: &[FenceEdge]) -> Vec<(String, Vec<Fence>)> {
+        let mut touched: HashMap<String, FenceEdge> = HashMap::new();
+        for edge in edges {
+            self.remove(edge);
+            touched.insert(edge.cache_key(), *edge);
+        }
+        touched
+            .into_iter()
+            .map(|(key, edge)| (key, self.group(edge)))
+            .collect()
+    }
+
     fn get(&self, edge: &FenceEdge) -> Option<&Fence> {
         self.buckets.get(&Self::bucket(*edge))?.get(edge)
     }
@@ -60,7 +73,10 @@ impl FenceIndex {
 
     #[cfg(test)]
     pub(super) fn nearby(&self, position: &crate::types::Position) -> Vec<&Fence> {
-        let radius = super::EVENT_DELIVERY_RADIUS;
+        self.within(position, super::EVENT_DELIVERY_RADIUS)
+    }
+
+    pub(super) fn within(&self, position: &crate::types::Position, radius: f32) -> Vec<&Fence> {
         let mut nearby = Vec::new();
         let min_z = ((position.z - radius) / 32.0).floor() as i32;
         let max_z = ((position.z + radius) / 32.0).floor() as i32;

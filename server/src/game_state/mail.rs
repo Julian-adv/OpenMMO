@@ -250,7 +250,7 @@ impl GameState {
     }
 
     /// Tells `character_id`, when online, how many letters wait unread.
-    async fn notify_unread_mail(&self, character_id: i64, auth: &AuthService) {
+    pub(super) async fn notify_unread_mail(&self, character_id: i64, auth: &AuthService) {
         let Some(player_id) = self.player_id_of_character(character_id).await else {
             return;
         };

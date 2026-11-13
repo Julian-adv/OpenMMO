@@ -1169,6 +1169,35 @@ impl SharedState {
                     owner_name, stall_id
                 ));
             }
+            ServerMessage::PatrolSweepResult { warned, seized } => {
+                let warned: Vec<String> = warned
+                    .iter()
+                    .filter(|owner| self.patrol_warned.insert((*owner).clone()))
+                    .cloned()
+                    .collect();
+                if !warned.is_empty() {
+                    self.push_ambient_event(format!(
+                        "[Patrol] Fences belonging to {} stand on the public road here. \
+                         Enforcement has not begun: leave them, but warn anyone nearby that \
+                         the patrol will soon pull down whatever blocks the road.",
+                        warned.join(", ")
+                    ));
+                }
+                for seizure in seized {
+                    let fate = if seizure.forfeited {
+                        "A repeat offence: they are forfeit."
+                    } else {
+                        "A first offence: Captain Karl holds them at his post in Aldermark, \
+                         and the owner may buy them back from him at half price."
+                    };
+                    self.push_ambient_event(format!(
+                        "[Patrol] You and your partner pulled {} of {}'s fences off the \
+                         public road. {fate} The owner has been sent a letter. Say so aloud \
+                         if anyone is near.",
+                        seizure.fences, seizure.owner
+                    ));
+                }
+            }
             ServerMessage::FenceVisibility { added, removed } => {
                 if let Some(id) = self.self_player_id {
                     self.world_cache

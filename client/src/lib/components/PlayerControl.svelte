@@ -4,6 +4,7 @@
   import { syncOwnFloor, ownPlayerFloor } from '../network/ownFloor'
   import { translate } from '../i18n'
   import { onDestroy, onMount } from 'svelte'
+  import { GUARD_CAPTAIN, openImpound } from '../stores/impoundStore'
   import {
     inspectionTargeting,
     cancelInspection,
@@ -2110,6 +2111,16 @@
               approachAndAct(
                 { position: intent.position, ...NPC_TRADE_APPROACH },
                 () => mergerPledgeOpen.set(true)
+              ),
+          })
+        }
+        if (npc.name === GUARD_CAPTAIN) {
+          entries.push({
+            label: translate('impound.menu'),
+            action: () =>
+              approachAndAct(
+                { position: intent.position, ...NPC_TRADE_APPROACH },
+                () => openImpound(intent.playerId)
               ),
           })
         }

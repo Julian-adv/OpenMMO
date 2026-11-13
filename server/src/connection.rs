@@ -2322,6 +2322,25 @@ async fn handle_client_message(
                     .await;
             }
         }
+        ClientMessage::PatrolSweep { patrol_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.patrol_sweep(id, patrol_id, auth_service).await;
+            }
+        }
+        ClientMessage::ImpoundQuery { npc_player_id } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .impound_action(id, &npc_player_id, false, auth_service)
+                    .await;
+            }
+        }
+        ClientMessage::ImpoundReclaim { npc_player_id } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .impound_action(id, &npc_player_id, true, auth_service)
+                    .await;
+            }
+        }
         ClientMessage::StartLandscapingMode { tool } => {
             if let Some(id) = &state.player_id {
                 game_state

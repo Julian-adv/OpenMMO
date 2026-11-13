@@ -407,6 +407,8 @@ export type ClientMessage =
     }
   | { RecoverEstateChest: { chest_id: number } }
   | { LandAccount: { merchant_player_id: number } }
+  | { ImpoundQuery: { npc_player_id: number } }
+  | { ImpoundReclaim: { npc_player_id: number } }
   | { LandDeposit: { merchant_player_id: number; amount: number } }
   | { LandWithdraw: { merchant_player_id: number; amount: number } }
   | {

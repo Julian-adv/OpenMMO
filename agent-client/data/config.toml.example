@@ -179,6 +179,30 @@ llm = "codex"
 # activity_window_secs = 30
 # always_active = false                      # registry NPCs default to this
 
+# Road patrol (doc/ROAD_PATROL.md): two pairs walk the north road in day and
+# night watches and clear fences off it. Each guard needs its own account.
+[[npcs]]
+id = "garrick"
+account = "npc_guard_garrick"
+llm = "codex"
+
+[[npcs]]
+id = "brenna"
+account = "npc_guard_brenna"
+gender = "female"
+llm = "codex"
+
+[[npcs]]
+id = "osric"
+account = "npc_guard_osric"
+llm = "codex"
+
+[[npcs]]
+id = "halda"
+account = "npc_guard_halda"
+gender = "female"
+llm = "codex"
+
 [[npcs]]
 id = "rica"
 account = "npc_merchant"

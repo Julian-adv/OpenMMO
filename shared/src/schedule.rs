@@ -28,6 +28,19 @@ fn full_probability() -> f32 {
     1.0
 }
 
+/// Road patrol: `waypoints` are walked out and back as laps (doc/ROAD_PATROL.md).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct RoadPatrol {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub partner: Option<String>,
+    /// Clears fences off the road; one of a pair.
+    #[serde(default)]
+    pub sweeps: bool,
+    /// Game minutes per lap.
+    #[serde(default)]
+    pub lap_minutes: u32,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SchedulePeriod {
     Day,
@@ -95,12 +108,28 @@ pub struct ScheduleEntry {
     pub waypoints: Vec<[f32; 3]>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub waypoint_activities: Vec<WaypointActivity>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub patrol: Option<RoadPatrol>,
     /// Parsed condition (set after deserialization).
     #[serde(skip)]
     pub condition: Option<ScheduleCondition>,
 }
 
 impl ScheduleEntry {
+    /// Whether a patrol lap started at `hour:minute` ends inside this entry.
+    pub fn patrol_lap_fits(&self, hour: u32, minute: u32) -> bool {
+        let Some(patrol) = &self.patrol else {
+            return false;
+        };
+        match self.condition {
+            Some(ScheduleCondition::TimeRange { end_minute, .. }) => {
+                let now = (hour * 60 + minute) as i32;
+                (end_minute as i32 - now).rem_euclid(24 * 60) >= patrol.lap_minutes as i32
+            }
+            _ => true,
+        }
+    }
+
     pub fn is_sleeping(&self) -> bool {
         matches!(
             self.action.as_deref(),
@@ -344,6 +373,24 @@ mod tests {
         };
         e.parse_condition().unwrap();
         e
+    }
+
+    #[test]
+    fn a_patrol_lap_starts_only_with_room_left_in_the_entry() {
+        let mut day = entry("06:00-17:00");
+        assert!(!day.patrol_lap_fits(6, 0));
+        day.patrol = Some(RoadPatrol {
+            lap_minutes: 120,
+            ..Default::default()
+        });
+        assert!(day.patrol_lap_fits(6, 0));
+        assert!(day.patrol_lap_fits(15, 0));
+        assert!(!day.patrol_lap_fits(15, 1));
+        let mut night = entry("18:30-05:00");
+        night.patrol = day.patrol.clone();
+        assert!(night.patrol_lap_fits(23, 30));
+        assert!(night.patrol_lap_fits(3, 0));
+        assert!(!night.patrol_lap_fits(4, 0));
     }
 
     #[test]

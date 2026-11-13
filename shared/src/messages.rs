@@ -17,6 +17,20 @@ use crate::entity::{Monster, MonsterState, Player};
 use crate::world::{GameDateTime, Position};
 use crate::{fishing, housing, inventory, skills};
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PatrolSeizure {
+    pub owner: String,
+    pub fences: u32,
+    pub forfeited: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImpoundedItem {
+    pub item_def_id: String,
+    pub quantity: u32,
+    pub fee: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MoveWaypoint {
     pub position: Position,
@@ -711,6 +725,16 @@ pub enum ClientMessage {
         edge: crate::fence::FenceEdge,
         place: bool,
     },
+    /// Guard NPC only. One `patrol_id` is one offence per owner.
+    PatrolSweep {
+        patrol_id: i64,
+    },
+    ImpoundQuery {
+        npc_player_id: PlayerId,
+    },
+    ImpoundReclaim {
+        npc_player_id: PlayerId,
+    },
     StartLandscapingMode {
         tool: crate::landscaping::LandscapingTool,
     },
@@ -1164,6 +1188,8 @@ impl ClientMessage {
             | UseItem { .. }
             | UseLandDocument { .. }
             | EditFence { .. }
+            | PatrolSweep { .. }
+            | ImpoundReclaim { .. }
             | StartLandscapingMode { .. }
             | EditLandscape { .. }
             | PlaceEstateChest { .. }
@@ -1847,6 +1873,17 @@ pub enum ServerMessage {
         removed: Vec<crate::fence::FenceEdge>,
     },
     FenceEditResult {
+        error: Option<String>,
+    },
+    PatrolSweepResult {
+        /// Owners with fences on the road while enforcement has not begun.
+        warned: Vec<String>,
+        seized: Vec<PatrolSeizure>,
+    },
+    ImpoundState {
+        npc_player_id: PlayerId,
+        items: Vec<ImpoundedItem>,
+        reclaimed: bool,
         error: Option<String>,
     },
     EstateChestMode {
@@ -2690,6 +2727,8 @@ impl ServerMessage {
             | Self::LandscapingPaletteUnlocked { .. }
             | Self::LandscapeEditResult { .. }
             | Self::FenceEditResult { .. }
+            | Self::PatrolSweepResult { .. }
+            | Self::ImpoundState { .. }
             | Self::EstateChestMode { .. }
             | Self::EstateFurnitureMoveMode { .. }
             | Self::EstateChestEditResult { .. }

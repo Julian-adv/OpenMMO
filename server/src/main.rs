@@ -24,6 +24,7 @@ mod metrics;
 mod monster_defs;
 mod npc_defs;
 mod npc_schedule;
+mod road_index;
 mod semicolon_list;
 mod terrain;
 #[cfg(test)]
@@ -157,6 +158,7 @@ async fn time_sync_tick(game_state: &GameState, auth_service: &Arc<AuthService>,
     game_state.tick_npc_salaries().await;
     game_state.tick_land_taxes(auth_service).await;
     game_state.tick_character_deletions(auth_service).await;
+    game_state.tick_guard_notices(auth_service).await;
     game_state.evacuate_estate_occupants().await;
 
     // Merchants' price meeting on Serin's dark evening (doc/PRICING.md).
@@ -622,6 +624,10 @@ async fn main() -> ExitCode {
     if let Err(err) = game_state.load_fences(&auth_service).await {
         error!("Failed to load fences: {}", err);
         return ExitCode::FAILURE;
+    }
+    match road_index::RoadIndex::load(std::path::Path::new(&args.terrain_dir)) {
+        Ok(roads) => game_state.set_roads(roads),
+        Err(err) => warn!("Road patrols have no roads to clear: {}", err),
     }
     // Server-side collision data for the movement sim: houses, solid
     // furniture and dungeon layouts, mirroring what clients build.

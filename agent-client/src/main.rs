@@ -535,6 +535,8 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::LandscapeEditResult { .. } => "LandscapeEditResult",
         ServerMessage::FenceVisibility { .. } => "FenceVisibility",
         ServerMessage::FenceEditResult { .. } => "FenceEditResult",
+        ServerMessage::PatrolSweepResult { .. } => "PatrolSweepResult",
+        ServerMessage::ImpoundState { .. } => "ImpoundState",
         ServerMessage::LandClaimed { .. } => "LandClaimed",
         ServerMessage::LandRejected { .. } => "LandRejected",
         ServerMessage::LandAccountState { .. } => "LandAccountState",

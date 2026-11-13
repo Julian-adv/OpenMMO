@@ -282,6 +282,8 @@ pub struct SharedState {
     /// movement (like `trade_busy`) and adds a stay-put prompt line;
     /// `stop_fishing` stays the deliberate exit.
     pub self_fishing: bool,
+    /// Owners already warned on this patrol lap.
+    pub patrol_warned: std::collections::HashSet<String>,
     /// Pending cast acknowledgement or a pause between attempts.
     fishing_retry_at: Option<tokio::time::Instant>,
     /// A recital began this turn; the driver takes it to move tonight's
@@ -511,6 +513,7 @@ impl SharedState {
             player_trade: Default::default(),
             trade_declined_until: HashMap::new(),
             self_fishing: false,
+            patrol_warned: Default::default(),
             fishing_retry_at: None,
             recited_this_turn: false,
             fishing_stance: None,

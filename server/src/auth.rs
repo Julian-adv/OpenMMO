@@ -21,6 +21,9 @@ mod fence;
 mod gold_sinks;
 #[path = "auth_land.rs"]
 mod land;
+#[path = "auth_road_patrol.rs"]
+mod road_patrol;
+pub(crate) use road_patrol::{ImpoundedStack, RoadSeizure};
 #[path = "auth_landscaping.rs"]
 mod landscaping;
 #[path = "auth_loot_tally.rs"]
@@ -1013,6 +1016,7 @@ impl AuthService {
         Self::ensure_family_schema(conn)?;
         Self::ensure_notice_board_schema(conn)?;
         Self::ensure_mail_schema(conn)?;
+        Self::ensure_road_patrol_schema(conn)?;
 
         // Every inventory read and every save's DELETE filters on character_id;
         // without this SQLite full-scans the table once per character.

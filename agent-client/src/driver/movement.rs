@@ -160,13 +160,83 @@ pub(super) async fn maintain_scheduled_fishing(
     }
 }
 
+const PARTNER_LAG_M: f32 = 6.0;
+const PARTNER_WAIT: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// Hold while the partner trails us toward `(x, z)`; whoever leads waits.
+async fn wait_for_partner(state: &Arc<Mutex<SharedState>>, partner: &str, x: f32, z: f32) {
+    let deadline = tokio::time::Instant::now() + PARTNER_WAIT;
+    while tokio::time::Instant::now() < deadline {
+        match state.lock().await.lag_of_named(partner, x, z) {
+            Some(lag) if lag > PARTNER_LAG_M => {}
+            _ => return,
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
+}
+
+/// One road-patrol lap: out along the entry's waypoints and back to `pos`.
+pub(super) async fn run_patrol_lap(state: Arc<Mutex<SharedState>>, entry: ScheduleEntry) {
+    let Some(patrol) = &entry.patrol else {
+        return;
+    };
+    state.lock().await.patrol_warned.clear();
+    let patrol_id = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_secs() as i64);
+    let home = [entry.pos];
+    let route = entry
+        .waypoints
+        .iter()
+        .chain(entry.waypoints.iter().rev().skip(1))
+        .chain(home.iter());
+    for wp in route {
+        while state.lock().await.schedule_combat_active() {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        }
+        if let Some(partner) = &patrol.partner {
+            wait_for_partner(&state, partner, wp[0], wp[2]).await;
+        }
+        if state.lock().await.is_dead() {
+            return;
+        }
+        let to = walk::WalkTo::Schedule {
+            x: wp[0],
+            z: wp[2],
+            floor: entry.floor_level,
+        };
+        for attempt in 0..2 {
+            if patrol.sweeps {
+                let sweep = ClientMessage::PatrolSweep { patrol_id };
+                if let Err(e) = state.lock().await.send_background_command(sweep).await {
+                    error!("Failed to send patrol sweep: {e}");
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+            }
+            match execute_walk(&state, &to, Some(false)).await {
+                MoveResult::Arrived => break,
+                MoveResult::Died => return,
+                MoveResult::Blocked | MoveResult::Error if attempt == 0 => {}
+                MoveResult::Blocked | MoveResult::Error => {
+                    warn!("Patrol waypoint unreachable ({:.1}, {:.1})", wp[0], wp[2]);
+                }
+            }
+        }
+    }
+}
+
 pub(super) async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry: &ScheduleEntry) {
-    for (i, wp) in entry.waypoints.iter().enumerate() {
+    let waypoints: &[[f32; 3]] = if entry.patrol.is_some() {
+        &[]
+    } else {
+        &entry.waypoints
+    };
+    for (i, wp) in waypoints.iter().enumerate() {
         let (wx, wz) = (wp[0], wp[2]);
         debug!(
             "Patrol waypoint {}/{}: ({:.1}, {:.1})",
             i + 1,
-            entry.waypoints.len(),
+            waypoints.len(),
             wx,
             wz
         );

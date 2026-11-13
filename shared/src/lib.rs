@@ -290,7 +290,7 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v154: `OfferMergerPledge`/`MergerPledgeOffered`, `InspectFamilyEmblem`/
 /// `FamilyEmblemShown`, and the kept emblem and target head in `FamilyMergeProposal`.
 /// v155: `PlayerMoveGoal.client_position`, where the sender believes it stands (x, z).
-pub const PROTOCOL_VERSION: u32 = 155;
+pub const PROTOCOL_VERSION: u32 = 156;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

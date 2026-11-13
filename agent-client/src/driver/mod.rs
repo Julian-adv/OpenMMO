@@ -443,6 +443,8 @@ async fn notice_round_errand(state: &Arc<Mutex<SharedState>>) -> Option<(Schedul
     Some((entry, board.id))
 }
 
+const PATROL_LAP_PAUSE: Duration = Duration::from_secs(20);
+
 fn running(handle: &Option<tokio::task::JoinHandle<()>>) -> bool {
     handle.as_ref().is_some_and(|h| !h.is_finished())
 }
@@ -569,6 +571,9 @@ pub async fn llm_driver(
     // A table walk runs as a background task so the [Guest] prompt's LLM
     // round trip overlaps the walk instead of waiting for arrival.
     let mut visit_walk: Option<tokio::task::JoinHandle<()>> = None;
+    // A road-patrol lap walks in the background so the guard can talk on the way.
+    let mut patrol_walk: Option<tokio::task::JoinHandle<()>> = None;
+    let mut next_lap_at = Instant::now();
     let mut next_notice_round = Instant::now() + NOTICE_ROUND_EVERY;
     // When each abandoned plate was first seen, so the maid gives the guest
     // a moment before clearing; plates served to us and when we ate them.
@@ -882,6 +887,7 @@ pub async fn llm_driver(
             // Any routine walk still in flight would fight this one for the body.
             stop(&mut visit_walk);
             stop(&mut unload_trip);
+            stop(&mut patrol_walk);
             // The same leave-taking a schedule transition does: a visit
             // must not walk off mid-follow or leave a stall behind.
             movement::stop_current_entry(&state, &schedule, active_schedule.0, &label).await;
@@ -1141,7 +1147,12 @@ pub async fn llm_driver(
         }
 
         // === Check schedule transitions ===
-        if !schedule.is_empty() && attack_target.is_none() && visit_until.is_none() {
+        // A lap in flight finishes before the next entry takes the body.
+        if !schedule.is_empty()
+            && attack_target.is_none()
+            && visit_until.is_none()
+            && !running(&patrol_walk)
+        {
             let due = resolve_due_schedule(&state, &schedule).await;
             if due == active_schedule {
                 wrapup = None;
@@ -1187,6 +1198,39 @@ pub async fn llm_driver(
                 }
             }
         }
+        // === Road patrol: start the next lap ===
+        if patrol_walk.as_ref().is_some_and(|h| h.is_finished()) {
+            patrol_walk = None;
+            next_lap_at = Instant::now() + PATROL_LAP_PAUSE;
+        }
+        if patrol_walk.is_none()
+            && attack_target.is_none()
+            && visit_until.is_none()
+            && Instant::now() >= next_lap_at
+        {
+            if let Some(entry) = active_schedule
+                .0
+                .map(|i| &schedule[i])
+                .filter(|entry| entry.patrol.is_some())
+            {
+                let fits = {
+                    let s = state.lock().await;
+                    let (_, hour, minute, _) = s.time_context();
+                    !s.is_dead()
+                        && hour
+                            .zip(minute)
+                            .is_some_and(|(h, m)| entry.patrol_lap_fits(h, m))
+                };
+                if fits {
+                    info!("[{label}] Road patrol: starting a lap");
+                    patrol_walk = Some(tokio::spawn(movement::run_patrol_lap(
+                        Arc::clone(&state),
+                        entry.clone(),
+                    )));
+                }
+            }
+        }
+
         let is_sleeping = active_schedule.0.is_some_and(|i| schedule[i].is_sleeping());
         let has_scheduled_action = active_schedule
             .0
@@ -1246,7 +1290,8 @@ pub async fn llm_driver(
             if let Some(response) = await_llm_response(handle, &label, &mut prompt_backoff).await {
                 // A live visit walk or catch trip owns the body; the LLM turn
                 // may talk but not move.
-                let routine_walk = running(&visit_walk) || running(&unload_trip);
+                let routine_walk =
+                    running(&visit_walk) || running(&unload_trip) || running(&patrol_walk);
                 let skip_movement = {
                     let s = state.lock().await;
                     has_scheduled_action

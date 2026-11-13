@@ -48,6 +48,8 @@
   import AltarOfferingDialog from './AltarOfferingDialog.svelte'
   import MergerPledgeDialog from './MergerPledgeDialog.svelte'
   import { mergerPledgeOpen } from '../stores/familyStore'
+  import ImpoundDialog from './ImpoundDialog.svelte'
+  import { impoundSession } from '../stores/impoundStore'
   import { altarOffering } from '../stores/altarStore'
   import NoticeBoardPanel from './NoticeBoardPanel.svelte'
   import { noticeBoard } from '../stores/noticeBoardStore'
@@ -540,6 +542,10 @@
 
 {#if $mergerPledgeOpen}
   <MergerPledgeDialog />
+{/if}
+
+{#if $impoundSession}
+  <ImpoundDialog />
 {/if}
 
 {#if $altarOffering}

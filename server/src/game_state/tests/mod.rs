@@ -58,6 +58,7 @@ mod pickup_tests;
 mod player_interaction_tests;
 mod player_tests;
 mod player_trade_tests;
+mod road_patrol_tests;
 mod skills_tests;
 mod spawn_scale_tests;
 mod spawn_soak_tests;

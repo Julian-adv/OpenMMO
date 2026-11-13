@@ -10,7 +10,7 @@ pub struct FenceRecord {
     pub owner_id: i64,
 }
 
-fn axis_id(axis: FenceAxis) -> u8 {
+pub(super) fn axis_id(axis: FenceAxis) -> u8 {
     match axis {
         FenceAxis::X => 0,
         FenceAxis::Z => 1,

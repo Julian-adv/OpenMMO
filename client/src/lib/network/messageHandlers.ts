@@ -225,6 +225,7 @@ import {
   resetFriendStores,
   MAX_PENDING_FRIEND_REQUESTS,
 } from '../stores/friendStore'
+import { applyImpoundState } from '../stores/impoundStore'
 import {
   applyFamilyState,
   familyStorageLog,
@@ -2064,6 +2065,9 @@ export function handleServerMessage(
       break
     case 'FenceVisibility':
       applyFenceVisibility(data.added, data.removed)
+      break
+    case 'ImpoundState':
+      applyImpoundState(data)
       break
     case 'FenceEditResult':
       fencePending.set(false)

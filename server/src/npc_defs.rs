@@ -9,6 +9,8 @@ use tracing::info;
 #[allow(dead_code)]
 pub struct NpcDefinition {
     pub id: String,
+    #[serde(default)]
+    pub class: String,
     #[serde(rename = "npcName")]
     pub npc_name: String,
     #[serde(rename = "spawnAtSchedule", default)]

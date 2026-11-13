@@ -982,6 +982,14 @@ class NetworkManager {
     this.sendMessage({ RecoverEstateChest: { chest_id: chestId } })
   }
 
+  sendImpoundQuery(npcPlayerId: number) {
+    this.sendMessage({ ImpoundQuery: { npc_player_id: npcPlayerId } })
+  }
+
+  sendImpoundReclaim(npcPlayerId: number) {
+    this.sendMessage({ ImpoundReclaim: { npc_player_id: npcPlayerId } })
+  }
+
   sendLandAccount(merchantPlayerId: number) {
     this.sendMessage({ LandAccount: { merchant_player_id: merchantPlayerId } })
   }

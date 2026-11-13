@@ -307,6 +307,79 @@ impl AuthService {
         })
     }
 
+    /// Post each notice under `author` unless a copy written after `stale_at`
+    /// is still up; an older copy is taken down. Returns how many were posted.
+    pub fn renew_standing_notices(
+        &self,
+        board: BoardKey,
+        author: &str,
+        notices: &[crate::game_state::StandingNotice],
+        now: i64,
+        stale_at: i64,
+    ) -> Result<u32, AuthError> {
+        let Some((character_id, author)) = self.resolve_character_brief(author)? else {
+            return Ok(0);
+        };
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction()?;
+        let mut posted = 0;
+        for notice in notices {
+            let fresh: bool = tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM notice_posts
+                 WHERE region_x=?1 AND region_z=?2 AND object_id=?3 AND character_id=?4
+                   AND title=?5 AND body=?6 AND removed_at IS NULL AND game_seconds > ?7)",
+                params![
+                    board.rx,
+                    board.rz,
+                    board.object_id,
+                    character_id,
+                    notice.title,
+                    notice.body,
+                    stale_at
+                ],
+                |row| row.get(0),
+            )?;
+            if fresh {
+                continue;
+            }
+            tx.execute(
+                "UPDATE notice_posts SET removed_at=?6
+                 WHERE region_x=?1 AND region_z=?2 AND object_id=?3 AND character_id=?4
+                   AND title=?5 AND removed_at IS NULL",
+                params![
+                    board.rx,
+                    board.rz,
+                    board.object_id,
+                    character_id,
+                    notice.title,
+                    unix_now()
+                ],
+            )?;
+            tx.execute(
+                "INSERT INTO notice_posts
+                    (region_x, region_z, object_id, character_id, author, title, body,
+                     created_at, game_seconds, pos_x, pos_y)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                params![
+                    board.rx,
+                    board.rz,
+                    board.object_id,
+                    character_id,
+                    author,
+                    notice.title,
+                    notice.body,
+                    unix_now(),
+                    now,
+                    notice.position.0,
+                    notice.position.1
+                ],
+            )?;
+            posted += 1;
+        }
+        tx.commit()?;
+        Ok(posted)
+    }
+
     /// Marks posts written at or before `expired_at` as removed; returns how many.
     pub fn take_down_notices(&self, board: BoardKey, expired_at: i64) -> Result<u32, AuthError> {
         let conn = self.open_connection()?;

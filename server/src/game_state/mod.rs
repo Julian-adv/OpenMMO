@@ -224,6 +224,8 @@ pub(crate) use family::shown_cape;
 mod friends;
 mod furniture_shop;
 mod goal_movement;
+pub(crate) mod guard_notices;
+pub(crate) use guard_notices::StandingNotice;
 mod healing_prayer;
 mod house_building;
 pub(crate) mod hunger;
@@ -251,6 +253,7 @@ mod player;
 mod player_interaction;
 mod player_trade;
 mod pricing;
+mod road_patrol;
 pub(crate) use player::restored_floor_level;
 mod salary;
 mod skills;
@@ -518,6 +521,8 @@ pub struct GameState {
     estate_chests: Arc<RwLock<estate_storage::EstateChestIndex>>,
     pending_estate_evictions: Arc<RwLock<HashSet<PlayerId>>>,
     fences: Arc<RwLock<fence::FenceIndex>>,
+    roads: Arc<std::sync::OnceLock<crate::road_index::RoadIndex>>,
+    guard_notices_checked: Arc<std::sync::atomic::AtomicI64>,
     /// Price index + meeting bookkeeping (doc/PRICING.md), mirrored in DB.
     pricing: Arc<RwLock<crate::auth::PricingState>>,
     dungeon_reset: Arc<RwLock<dungeon::DungeonResetState>>,
@@ -857,6 +862,8 @@ impl GameState {
             estate_chests: Arc::new(RwLock::new(estate_storage::EstateChestIndex::default())),
             pending_estate_evictions: Arc::new(RwLock::new(HashSet::new())),
             fences: Arc::new(RwLock::new(fence::FenceIndex::default())),
+            roads: Arc::new(std::sync::OnceLock::new()),
+            guard_notices_checked: Arc::default(),
             pricing: Arc::new(RwLock::new(Default::default())),
             dungeon_reset: Arc::new(RwLock::new(Default::default())),
             dungeon_defs,

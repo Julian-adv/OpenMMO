@@ -11,3 +11,7 @@ grida,Grida,merchant,,,,,,,그리다,,,,,,,,,
 tobin,Tobin,merchant,,,,,,fishing_rod,토빈,,,,,,,,,
 ysolde,Ysolde,merchant,,,,,,,이졸데,true,30,360,24,4d8,true,true,1.1,true
 maelis,Maelis,priest,,,,,,worn_priest_helmet;worn_priest_top;worn_priest_pants;worn_priest_boots;worn_priest_gloves,마엘리스,true,,,,,true,,,true
+garrick,Garrick,guard,,,,,,rune_blade;breastplate;plate_helmet;plate_greaves;plate_boots;plate_gauntlets,개릭,true,50,700,24,,true,true,,
+brenna,Brenna,guard,,,,,,rune_blade;breastplate;plate_helmet;plate_greaves;plate_boots;plate_gauntlets,브레나,true,50,700,24,,true,true,,
+osric,Osric,guard,,,,,,rune_blade;breastplate;plate_helmet;plate_greaves;plate_boots;plate_gauntlets,오스릭,true,50,700,24,,true,true,,
+halda,Halda,guard,,,,,,rune_blade;breastplate;plate_helmet;plate_greaves;plate_boots;plate_gauntlets,할다,true,50,700,24,,true,true,,
