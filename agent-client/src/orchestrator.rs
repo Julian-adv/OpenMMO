@@ -690,6 +690,8 @@ async fn run_npc_session(
     if let Some(t) = llm_task {
         t.abort();
     }
+    // The follow loop holds the state, so nothing else would end it.
+    state.lock().await.cancel_follow();
     if let Some(w) = &watch {
         w.set_disconnected();
     }

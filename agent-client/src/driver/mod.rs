@@ -445,14 +445,28 @@ async fn notice_round_errand(state: &Arc<Mutex<SharedState>>) -> Option<(Schedul
 
 const PATROL_LAP_PAUSE: Duration = Duration::from_secs(20);
 
-fn running(handle: &Option<tokio::task::JoinHandle<()>>) -> bool {
-    handle.as_ref().is_some_and(|h| !h.is_finished())
+/// A task the driver started. Dropping it aborts it, so it cannot outlive
+/// the session the driver belongs to.
+struct Spawned<T>(tokio::task::JoinHandle<T>);
+
+impl<T: Send + 'static> Spawned<T> {
+    fn spawn(task: impl std::future::Future<Output = T> + Send + 'static) -> Self {
+        Self(tokio::spawn(task))
+    }
+
+    fn is_finished(&self) -> bool {
+        self.0.is_finished()
+    }
 }
 
-fn stop(handle: &mut Option<tokio::task::JoinHandle<()>>) {
-    if let Some(h) = handle.take() {
-        h.abort();
+impl<T> Drop for Spawned<T> {
+    fn drop(&mut self) {
+        self.0.abort();
     }
+}
+
+fn running(task: &Option<Spawned<()>>) -> bool {
+    task.as_ref().is_some_and(|t| !t.is_finished())
 }
 
 /// The main LLM agent driver loop. Runs as a tokio task.
@@ -543,7 +557,7 @@ pub async fn llm_driver(
     let mut prompt_backoff = PromptBackoff::default();
     // The relocation count at targeting time; a teleport since drops the target.
     let mut attack_target: Option<(String, Option<bool>, u32)> = None;
-    let mut llm_in_flight: Option<tokio::task::JoinHandle<anyhow::Result<String>>> = None;
+    let mut llm_in_flight: Option<Spawned<anyhow::Result<String>>> = None;
     let mut prompt_pending_since: Option<Instant> = None;
     // Track last chat/combat activity to decide polling interval
     let mut last_activity_at = Instant::now() - idle_interval;
@@ -553,7 +567,7 @@ pub async fn llm_driver(
     let mut last_fishing_check = Instant::now();
     let mut campfire_meal: Option<(usize, campfire_meal::ScheduledCampfire)> = None;
     // A trip to sell the catch; it owns the body until it finishes.
-    let mut unload_trip: Option<tokio::task::JoinHandle<()>> = None;
+    let mut unload_trip: Option<Spawned<()>> = None;
     let mut unload_retry_at: Option<Instant> = None;
     let mut tales = crate::tales::SetTales::default();
     // Our song count when the pending prompt offered a tale, so the gap is
@@ -570,9 +584,9 @@ pub async fn llm_driver(
     let mut force_prompt = false;
     // A table walk runs as a background task so the [Guest] prompt's LLM
     // round trip overlaps the walk instead of waiting for arrival.
-    let mut visit_walk: Option<tokio::task::JoinHandle<()>> = None;
+    let mut visit_walk: Option<Spawned<()>> = None;
     // A road-patrol lap walks in the background so the guard can talk on the way.
-    let mut patrol_walk: Option<tokio::task::JoinHandle<()>> = None;
+    let mut patrol_walk: Option<Spawned<()>> = None;
     let mut weapon_checked_at = Instant::now();
     let mut next_lap_at = Instant::now();
     let mut next_notice_round = Instant::now() + NOTICE_ROUND_EVERY;
@@ -799,7 +813,7 @@ pub async fn llm_driver(
             if let Some(monster_id) = target {
                 info!("[{label}] Joining the fight against {monster_id}");
                 attack_target = Some((monster_id, Some(true), state.lock().await.relocations));
-                stop(&mut patrol_walk);
+                patrol_walk = None;
             }
         }
         // Protectors walk with the weapon put away and draw it for a fight.
@@ -908,9 +922,9 @@ pub async fn llm_driver(
         }
         if let Some((event, entry)) = visit {
             // Any routine walk still in flight would fight this one for the body.
-            stop(&mut visit_walk);
-            stop(&mut unload_trip);
-            stop(&mut patrol_walk);
+            drop(visit_walk.take());
+            unload_trip = None;
+            patrol_walk = None;
             // The same leave-taking a schedule transition does: a visit
             // must not walk off mid-follow or leave a stall behind.
             movement::stop_current_entry(&state, &schedule, active_schedule.0, &label).await;
@@ -921,7 +935,7 @@ pub async fn llm_driver(
             force_prompt = true;
             last_activity_at = Instant::now();
             let walk_state = Arc::clone(&state);
-            visit_walk = Some(tokio::spawn(async move {
+            visit_walk = Some(Spawned::spawn(async move {
                 movement::execute_schedule_move(&walk_state, &entry).await;
             }));
             visit_until = Some(Instant::now() + VISIT_DWELL);
@@ -1007,12 +1021,12 @@ pub async fn llm_driver(
                     .map(|i| &schedule[i])
                     .filter(|e| e.action.is_none())
                     .cloned();
-                stop(&mut visit_walk);
-                stop(&mut unload_trip);
+                drop(visit_walk.take());
+                unload_trip = None;
                 movement::stop_current_entry(&state, &schedule, active_schedule.0, &label).await;
                 let walk_state = Arc::clone(&state);
                 let log_label = label.clone();
-                visit_walk = Some(tokio::spawn(async move {
+                visit_walk = Some(Spawned::spawn(async move {
                     if let Some(kitchen) = kitchen {
                         movement::execute_schedule_move(&walk_state, &kitchen).await;
                     }
@@ -1072,11 +1086,11 @@ pub async fn llm_driver(
             };
             if let Some((meal_id, dish, entry)) = clear {
                 info!("[{label}] clearing the {dish} plate {meal_id}");
-                stop(&mut visit_walk);
-                stop(&mut unload_trip);
+                drop(visit_walk.take());
+                unload_trip = None;
                 movement::stop_current_entry(&state, &schedule, active_schedule.0, &label).await;
                 let walk_state = Arc::clone(&state);
-                visit_walk = Some(tokio::spawn(async move {
+                visit_walk = Some(Spawned::spawn(async move {
                     movement::execute_schedule_move(&walk_state, &entry).await;
                     let mut s = walk_state.lock().await;
                     let cmd = onlinerpg_shared::ClientMessage::ClearMeal { meal_id };
@@ -1139,7 +1153,7 @@ pub async fn llm_driver(
             // Visit over: forget the active entry so the schedule walks
             // us back to our regular post.
             visit_until = None;
-            stop(&mut visit_walk);
+            visit_walk = None;
             active_schedule = (None, None);
         }
 
@@ -1156,7 +1170,7 @@ pub async fn llm_driver(
                 info!("[{label}] taking down expired notices");
                 movement::stop_current_entry(&state, &schedule, active_schedule.0, &label).await;
                 let walk_state = Arc::clone(&state);
-                visit_walk = Some(tokio::spawn(async move {
+                visit_walk = Some(Spawned::spawn(async move {
                     movement::execute_schedule_move(&walk_state, &walk).await;
                     let cmd = onlinerpg_shared::ClientMessage::TakeDownNotices {
                         object_id: board_id,
@@ -1212,7 +1226,7 @@ pub async fn llm_driver(
                 };
                 if transition_now {
                     wrapup = None;
-                    stop(&mut unload_trip);
+                    unload_trip = None;
                     state.lock().await.patrol_reached = 0;
                     active_schedule =
                         check_schedule_transition(&state, &schedule, active_schedule, due, &label)
@@ -1223,7 +1237,7 @@ pub async fn llm_driver(
             }
         }
         // === Road patrol: start the next lap ===
-        if patrol_walk.as_ref().is_some_and(|h| h.is_finished()) {
+        if patrol_walk.as_ref().is_some_and(Spawned::is_finished) {
             patrol_walk = None;
             next_lap_at = Instant::now() + PATROL_LAP_PAUSE;
         }
@@ -1248,7 +1262,7 @@ pub async fn llm_driver(
                 };
                 if fits {
                     info!("[{label}] Road patrol: starting a lap");
-                    patrol_walk = Some(tokio::spawn(movement::run_patrol_lap(
+                    patrol_walk = Some(Spawned::spawn(movement::run_patrol_lap(
                         Arc::clone(&state),
                         entry.clone(),
                     )));
@@ -1289,7 +1303,7 @@ pub async fn llm_driver(
                         && unload_catch::is_due(&*state.lock().await)
                     {
                         unload_retry_at = Some(Instant::now() + unload_catch::RETRY);
-                        unload_trip = Some(tokio::spawn(unload_catch::run(
+                        unload_trip = Some(Spawned::spawn(unload_catch::run(
                             Arc::clone(&state),
                             label.to_string(),
                         )));
@@ -1301,7 +1315,7 @@ pub async fn llm_driver(
         }
 
         // === Check if LLM response arrived ===
-        if llm_in_flight.as_ref().is_some_and(|h| h.is_finished()) {
+        if llm_in_flight.as_ref().is_some_and(Spawned::is_finished) {
             let handle = llm_in_flight.take().unwrap();
             last_prompt_at = Instant::now();
             {
@@ -1422,7 +1436,7 @@ pub async fn llm_driver(
             label.clone(),
         );
         let lbl = label.clone();
-        llm_in_flight = Some(tokio::spawn(async move {
+        llm_in_flight = Some(Spawned::spawn(async move {
             sched.submit_deferred(&lbl, priority, run).await
         }));
         if let Some((_, prompted)) = &mut wrapup {
@@ -1658,11 +1672,14 @@ fn load_memory_tail(memory_file: &Option<String>) -> Option<String> {
 
 /// Record the finished request and apply backoff on backend or task errors.
 async fn await_llm_response(
-    handle: tokio::task::JoinHandle<anyhow::Result<String>>,
+    mut handle: Spawned<anyhow::Result<String>>,
     label: &str,
     backoff: &mut PromptBackoff,
 ) -> Option<String> {
-    let result = handle.await.map_err(anyhow::Error::from).and_then(|r| r);
+    let result = (&mut handle.0)
+        .await
+        .map_err(anyhow::Error::from)
+        .and_then(|r| r);
     backoff.record_result(&result, label);
     match result {
         Ok(response) => Some(response),
@@ -1972,6 +1989,22 @@ mod tests {
     #[tokio::test]
     async fn idle_poll_calls_the_llm_without_new_events() {
         check_idle_driver(false).await;
+    }
+
+    #[tokio::test]
+    async fn a_spawned_task_stops_when_dropped() {
+        let alive = Arc::new(());
+        let held = Arc::clone(&alive);
+        let task = Spawned::spawn(async move {
+            let _held = held;
+            std::future::pending::<()>().await;
+        });
+        assert!(!task.is_finished());
+        drop(task);
+        for _ in 0..10 {
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(Arc::strong_count(&alive), 1);
     }
 
     #[tokio::test]
