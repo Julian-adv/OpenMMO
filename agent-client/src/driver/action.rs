@@ -593,39 +593,29 @@ impl MergeKeep {
     }
 }
 
-/// A role whose actions only its holders are taught.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Role {
-    /// NPCs that can push trade windows.
-    Trader,
-    /// The priest of family mergers.
-    Officiant,
-    /// NPCs that serve the inn's tables.
-    InnStaff,
-}
-
 /// The roles of the agent a prompt is built for.
 #[derive(Clone, Copy, Default)]
 pub(crate) struct Roles {
-    trader: bool,
-    officiant: bool,
-    inn_staff: bool,
+    /// Can push trade windows.
+    pub(crate) trader: bool,
+    /// Presides over family mergers.
+    pub(crate) officiant: bool,
+    /// Serves the inn's tables.
+    pub(crate) inn_staff: bool,
+    /// Plays music.
+    pub(crate) bard: bool,
 }
 
 impl Roles {
-    pub(crate) fn of(character_name: Option<&str>, serves_tables: bool) -> Self {
-        Self {
-            trader: character_name.is_some_and(crate::shop_info::trades),
-            officiant: character_name == Some(onlinerpg_shared::family::MERGER_OFFICIANT),
-            inn_staff: serves_tables,
-        }
-    }
-
-    fn has(&self, role: Role) -> bool {
-        match role {
-            Role::Trader => self.trader,
-            Role::Officiant => self.officiant,
-            Role::InnStaff => self.inn_staff,
+    /// Whether a role's action is taught to this agent; `None` for the
+    /// actions everyone is taught.
+    fn teaches(&self, action: &str) -> Option<bool> {
+        match action {
+            "offer_deal" | "open_trade" => Some(self.trader),
+            "offer_pledge" => Some(self.officiant),
+            "serve" => Some(self.inn_staff),
+            "recite" => Some(self.bard),
+            _ => None,
         }
     }
 }
@@ -642,17 +632,6 @@ pub(super) struct ActionSpec {
     pub(super) aliases: &'static [&'static str],
     /// Verbatim prompt text: usage prose with example JSON lines.
     pub(super) doc: &'static str,
-}
-
-impl ActionSpec {
-    fn role(&self) -> Option<Role> {
-        match self.names[0] {
-            "offer_deal" | "open_trade" => Some(Role::Trader),
-            "offer_pledge" => Some(Role::Officiant),
-            "serve" => Some(Role::InnStaff),
-            _ => None,
-        }
-    }
 }
 
 pub(super) const ACTION_SPECS: &[ActionSpec] = &[
@@ -694,7 +673,7 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
     ActionSpec {
         names: &["recite"],
         aliases: &[],
-        doc: r#"- Recite verses (bards): shown one at a time above your head, paced to
+        doc: r#"- Recite verses: shown one at a time above your head, paced to
   the song you play next; the chat log gets each verse once, repeats do
   not flood it:
   {"type": "recite", "verses": ["first line", "second line", "third line"]}
@@ -1211,10 +1190,7 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
 fn docs(roles: &Roles, role_only: bool) -> Vec<&'static str> {
     ACTION_SPECS
         .iter()
-        .filter(|spec| match spec.role() {
-            Some(role) => roles.has(role),
-            None => !role_only,
-        })
+        .filter(|spec| roles.teaches(spec.names[0]).unwrap_or(!role_only))
         .map(|spec| spec.doc.trim_end())
         .collect()
 }
@@ -3309,6 +3285,7 @@ mod tests {
                         trader: true,
                         officiant: true,
                         inn_staff: true,
+                        bard: true,
                     }),
                 );
             let text = if name.ends_with(".rs") {
@@ -3388,6 +3365,10 @@ mod tests {
             inn_staff: true,
             ..player
         };
+        let bard = Roles {
+            bard: true,
+            ..player
+        };
         assert!(shown(player, "move"));
         assert!(!shown(player, "open_trade") && !shown(player, "offer_pledge"));
         assert!(shown(trader, "open_trade") && shown(trader, "offer_deal"));
@@ -3395,6 +3376,7 @@ mod tests {
         assert!(shown(officiant, "offer_pledge") && !shown(officiant, "open_trade"));
         assert!(shown(inn_staff, "serve") && !shown(player, "serve"));
         assert!(!shown(inn_staff, "open_trade"));
+        assert!(shown(bard, "recite") && !shown(player, "recite"));
 
         let added = role_action_reference(&officiant);
         assert!(added.contains("offer_pledge") && !added.contains(r#""type": "move""#));

@@ -163,6 +163,17 @@ impl NpcConfig {
         self.serve_tables.unwrap_or(false)
     }
 
+    /// What this agent's prompt may teach beyond the common actions.
+    fn roles(&self) -> driver::Roles {
+        let name = self.character_name.as_deref();
+        driver::Roles {
+            trader: name.is_some_and(crate::shop_info::trades),
+            officiant: name == Some(onlinerpg_shared::family::MERGER_OFFICIANT),
+            inn_staff: self.serves_tables(),
+            bard: self.plays_music(),
+        }
+    }
+
     /// Log label: the account when there is one, else the character it plays.
     pub fn label(&self) -> &str {
         self.account
@@ -172,8 +183,8 @@ impl NpcConfig {
     }
 
     /// Whether this agent busks. The one gate for everything bard: the
-    /// songbook and tip prompt sections, and the `[Tip]` events in state —
-    /// so an agent is never instructed about tips it will not receive.
+    /// songbook, tip and recite prompt sections, and the `[Tip]` events in
+    /// state — so an agent is never instructed about tips it will not receive.
     pub fn plays_music(&self) -> bool {
         self.character_class.as_deref() == Some("bard")
             || self
@@ -1015,7 +1026,7 @@ fn build_system_prompt(npc: &NpcConfig) -> anyhow::Result<String> {
         });
         (npc.system_prompt_file(), role)
     };
-    let roles = driver::Roles::of(npc.character_name.as_deref(), npc.serves_tables());
+    let roles = npc.roles();
     let files: Vec<&str> = base
         .into_iter()
         .chain(role)
