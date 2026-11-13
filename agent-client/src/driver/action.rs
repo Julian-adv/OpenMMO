@@ -593,6 +593,38 @@ impl MergeKeep {
     }
 }
 
+/// A role whose actions only its holders are taught.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Role {
+    /// NPCs that can push trade windows.
+    Trader,
+    /// The priest of family mergers.
+    Officiant,
+}
+
+/// The roles of the agent a prompt is built for.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct Roles {
+    trader: bool,
+    officiant: bool,
+}
+
+impl Roles {
+    pub(crate) fn of(character_name: Option<&str>) -> Self {
+        Self {
+            trader: character_name.is_some_and(crate::shop_info::trades),
+            officiant: character_name == Some(onlinerpg_shared::family::MERGER_OFFICIANT),
+        }
+    }
+
+    fn has(&self, role: Role) -> bool {
+        match role {
+            Role::Trader => self.trader,
+            Role::Officiant => self.officiant,
+        }
+    }
+}
+
 /// Action documentation rendered into `{{ACTIONS}}`; tests verify tags and examples.
 pub(super) struct ActionSpec {
     /// serde tag(s) this block documents — the enum `rename` values.
@@ -605,6 +637,16 @@ pub(super) struct ActionSpec {
     pub(super) aliases: &'static [&'static str],
     /// Verbatim prompt text: usage prose with example JSON lines.
     pub(super) doc: &'static str,
+}
+
+impl ActionSpec {
+    fn role(&self) -> Option<Role> {
+        match self.names[0] {
+            "offer_deal" | "open_trade" => Some(Role::Trader),
+            "offer_pledge" => Some(Role::Officiant),
+            _ => None,
+        }
+    }
 }
 
 pub(super) const ACTION_SPECS: &[ActionSpec] = &[
@@ -855,7 +897,7 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
     ActionSpec {
         names: &["offer_deal"],
         aliases: &[],
-        doc: r#"- (merchants only) Offer a nearby player a private price on one item — a
+        doc: r#"- Offer a nearby player a private price on one item — a
   haggle. "kind" is "buy" (they buy from you, the default) or "sell" (they
   sell to you). Which sign favors the player depends on "kind": on a "buy",
   negative is their discount; on a "sell", *positive* is the bonus you pay
@@ -865,14 +907,14 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
     ActionSpec {
         names: &["open_trade"],
         aliases: &["trade"],
-        doc: r#"- (merchants only) Open your trade window on a nearby player's screen —
+        doc: r#"- Open your trade window on a nearby player's screen —
   how you move from talk to an actual trade:
   {"type": "open_trade", "target": "darkcocoa"}"#,
     },
     ActionSpec {
         names: &["offer_pledge"],
         aliases: &[],
-        doc: r#"- (the merger officiant only) Open the merger pledge form on a nearby family
+        doc: r#"- Open the merger pledge form on a nearby family
   head's screen when they ask in words to merge families:
   {"type": "offer_pledge", "target": "darkcocoa"}"#,
     },
@@ -1160,16 +1202,25 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
     },
 ];
 
-/// The "=== ACTIONS ===" section of the system prompt, rendered from
-/// `ACTION_SPECS`. Fills the `{{ACTIONS}}` slot in `load_system_prompt`.
-pub(super) fn action_reference() -> String {
-    let mut out = String::from("=== ACTIONS ===\n");
-    for spec in ACTION_SPECS {
-        out.push('\n');
-        out.push_str(spec.doc.trim_end());
-        out.push('\n');
-    }
-    out
+fn docs(roles: &Roles, role_only: bool) -> Vec<&'static str> {
+    ACTION_SPECS
+        .iter()
+        .filter(|spec| match spec.role() {
+            Some(role) => roles.has(role),
+            None => !role_only,
+        })
+        .map(|spec| spec.doc.trim_end())
+        .collect()
+}
+
+/// Fills `{{ACTIONS}}`: every action the agent's roles allow.
+pub(super) fn action_reference(roles: &Roles) -> String {
+    format!("=== ACTIONS ===\n\n{}\n", docs(roles, false).join("\n\n"))
+}
+
+/// Fills `{{ROLE_ACTIONS}}`: only what the agent's roles add.
+pub(super) fn role_action_reference(roles: &Roles) -> String {
+    docs(roles, true).join("\n")
 }
 
 impl AgentAction {
@@ -2270,7 +2321,7 @@ mod tests {
     /// time against the food it costs.
     #[test]
     fn the_action_reference_explains_the_default_movement_speed() {
-        let reference = action_reference();
+        let reference = action_reference(&Roles::default());
         assert!(reference.contains("sprint by default"), "{reference}");
         assert!(reference.contains(r#""sprint": false"#), "{reference}");
     }
@@ -3246,7 +3297,13 @@ mod tests {
                 .unwrap()
                 // Check what the model reads: the {{ACTIONS}} slot filled,
                 // exactly as load_system_prompt fills it.
-                .replace("{{ACTIONS}}", &action_reference());
+                .replace(
+                    "{{ACTIONS}}",
+                    &action_reference(&Roles {
+                        trader: true,
+                        officiant: true,
+                    }),
+                );
             let text = if name.ends_with(".rs") {
                 unescape_rust_literals(&raw)
             } else {
@@ -3304,6 +3361,31 @@ mod tests {
             parser, documented,
             "ACTION_SPECS drifted from the AgentAction enum"
         );
+    }
+
+    #[test]
+    fn role_actions_are_documented_only_for_their_role() {
+        let shown = |roles: Roles, action: &str| {
+            action_reference(&roles).contains(&format!(r#""type": "{action}""#))
+        };
+        let player = Roles::default();
+        let trader = Roles {
+            trader: true,
+            ..player
+        };
+        let officiant = Roles {
+            officiant: true,
+            ..player
+        };
+        assert!(shown(player, "move"));
+        assert!(!shown(player, "open_trade") && !shown(player, "offer_pledge"));
+        assert!(shown(trader, "open_trade") && shown(trader, "offer_deal"));
+        assert!(!shown(trader, "offer_pledge"));
+        assert!(shown(officiant, "offer_pledge") && !shown(officiant, "open_trade"));
+
+        let added = role_action_reference(&officiant);
+        assert!(added.contains("offer_pledge") && !added.contains(r#""type": "move""#));
+        assert!(role_action_reference(&player).is_empty());
     }
 
     /// Every example line in the docs parses with the real parser and sits

@@ -26,9 +26,8 @@
 ## Handing Over the Pledge
 - When a visitor tells you in their own words that they want to join their
   family with another (병합, 합병, 가문을 합치고 싶다, and also 혼인 or 결혼,
-  which here can only mean a merger), hand them the pledge form with this
-  action, naming them as the current state does:
-  {"type":"offer_pledge","target":"PlayerName"}
+  which here can only mean a merger), hand them the pledge form with the
+  offer_pledge action, naming them as the current state does.
 - Say one short line with it, such as telling them to write the other head's
   name and the terms. Do not use the action for questions about how a merger
   works.

@@ -55,6 +55,7 @@ use onlinerpg_shared::schedule::ScheduleEntry;
 use onlinerpg_shared::ClientMessage;
 
 pub(crate) use action::wants_reroll;
+pub(crate) use action::Roles;
 use backoff::PromptBackoff;
 use combat::{defend_self, load_attack_cooldown, tick_combat};
 use execute::{append_memory, handle_response};
@@ -74,10 +75,12 @@ pub trait LlmBackend: Send + Sync {
 /// the action reference rendered from the parser's own spec table
 /// (`action::ACTION_SPECS`), so the documented actions cannot drift from what
 /// the parser accepts.
-pub fn load_system_prompt(path: &str) -> anyhow::Result<String> {
+pub fn load_system_prompt(path: &str, roles: &Roles) -> anyhow::Result<String> {
     let text = std::fs::read_to_string(path)
         .map_err(|e| anyhow::anyhow!("Failed to read system prompt from {path}: {e}"))?;
-    Ok(text.replace("{{ACTIONS}}", &action::action_reference()))
+    Ok(text
+        .replace("{{ACTIONS}}", &action::action_reference(roles))
+        .replace("{{ROLE_ACTIONS}}", &action::role_action_reference(roles)))
 }
 
 /// Render the surface-terrain summary without holding the state lock: a tile

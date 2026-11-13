@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use onlinerpg_shared::family::{
     FamilyEstate, FamilyInfo, FamilyMember, FamilyMergeProposal, FamilyMergeTerms,
     FAMILY_DISSOLVE_STAMPS, FAMILY_FOUND_STAMPS, FAMILY_INVITE_TTL, FAMILY_MERGE_TTL,
-    FAMILY_RENAME_INTERVAL_SECS, FAMILY_RENAME_STAMPS, FAMILY_STAMP_ITEM,
+    FAMILY_RENAME_INTERVAL_SECS, FAMILY_RENAME_STAMPS, FAMILY_STAMP_ITEM, MERGER_OFFICIANT,
 };
 use tracing::{info, warn};
 
@@ -19,8 +19,6 @@ use crate::types::{PlayerId, ServerMessage};
 
 const FAMILY_PENDING_INVITE_CAP: usize = 5;
 const SERVER_ERROR: &str = "server error, try again.";
-/// The priest who presides over family mergers (`data-src/npcs.csv`).
-const OFFICIANT_NPC: &str = "Maelis";
 const RITE_REACH: f32 = 8.0;
 const RITE_OPENING_PAUSE: std::time::Duration = std::time::Duration::from_secs(8);
 const RITE_TURN_PAUSE: std::time::Duration = std::time::Duration::from_secs(6);
@@ -1003,10 +1001,10 @@ impl super::GameState {
 
     /// The officiant, if she is at her post with both heads standing before her.
     async fn merger_officiant(&self, first: &PlayerId, second: &PlayerId) -> Option<PlayerId> {
-        if self.is_npc_asleep(OFFICIANT_NPC) {
+        if self.is_npc_asleep(MERGER_OFFICIANT) {
             return None;
         }
-        let id = self.player_id_by_name(OFFICIANT_NPC).await?;
+        let id = self.player_id_by_name(MERGER_OFFICIANT).await?;
         let players = self.players.read().await;
         let priest = players.get(&id).filter(|p| p.is_official_npc)?;
         let near = |head: &PlayerId| players.get(head).is_some_and(|p| stands_before(priest, p));
@@ -1030,7 +1028,7 @@ impl super::GameState {
                 families.merges.remove(&key);
             }
         }
-        if let Some(officiant) = self.player_id_by_name(OFFICIANT_NPC).await {
+        if let Some(officiant) = self.player_id_by_name(MERGER_OFFICIANT).await {
             self.rite_cue(
                 &officiant,
                 format!("The rite ends without a merger: {reason} Close it gently, without blame."),
@@ -1069,7 +1067,7 @@ impl super::GameState {
             let players = self.players.read().await;
             let Some(priest) = players
                 .get(officiant_id)
-                .filter(|p| p.is_official_npc && p.name == OFFICIANT_NPC)
+                .filter(|p| p.is_official_npc && p.name == MERGER_OFFICIANT)
             else {
                 return;
             };
@@ -1190,7 +1188,7 @@ impl super::GameState {
                 )),
                 Some(false) => Some(format!("{target_name} is still considering your offer.")),
                 None if !families.merge_offers.is_empty() => Some(format!(
-                    "{OFFICIANT_NPC} is presiding over another merger; wait until it ends."
+                    "{MERGER_OFFICIANT} is presiding over another merger; wait until it ends."
                 )),
                 None => {
                     families
@@ -1227,8 +1225,11 @@ impl super::GameState {
         )
         .await;
         for head in [player_id, &target_id] {
-            self.family_note(head, format!("{OFFICIANT_NPC} opens the rite of merger."))
-                .await;
+            self.family_note(
+                head,
+                format!("{MERGER_OFFICIANT} opens the rite of merger."),
+            )
+            .await;
         }
         let game = self.clone();
         let proposer_id = *player_id;

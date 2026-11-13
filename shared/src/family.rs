@@ -8,6 +8,8 @@ use crate::character::CharacterClass;
 pub const FAMILY_MAX_MEMBERS: usize = 30;
 /// The land registrar's fee stamp, spent on family filings.
 pub const FAMILY_STAMP_ITEM: &str = "revenue_stamp";
+/// The priest who presides over family mergers (`data-src/npcs.csv`).
+pub const MERGER_OFFICIANT: &str = "Maelis";
 pub const FAMILY_FOUND_STAMPS: u32 = 10;
 pub const FAMILY_RENAME_STAMPS: u32 = 10;
 pub const FAMILY_DISSOLVE_STAMPS: u32 = 1;

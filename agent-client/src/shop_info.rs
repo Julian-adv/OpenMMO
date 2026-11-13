@@ -106,6 +106,16 @@ fn npc_by_name(npc_name: &str) -> Option<&'static NpcRow> {
     npcs().values().find(|row| row.npc_name == npc_name)
 }
 
+/// Whether this NPC can push trade windows: a shopkeeper, or a resident
+/// with a wishlist or keepsakes (the server's `trader_def_by_name`).
+pub fn trades(npc_name: &str) -> bool {
+    merchants()
+        .values()
+        .any(|m| m.npc_name.eq_ignore_ascii_case(npc_name))
+        || npc_by_name(npc_name)
+            .is_some_and(|row| !row.wishlist.is_empty() || !row.keepsakes.is_empty())
+}
+
 pub fn dialogue_only(npc_name: &str) -> bool {
     npc_by_name(npc_name).is_some_and(|row| row.dialogue_only)
 }

@@ -1011,6 +1011,7 @@ fn build_system_prompt(npc: &NpcConfig) -> anyhow::Result<String> {
         });
         (npc.system_prompt_file(), role)
     };
+    let roles = driver::Roles::of(npc.character_name.as_deref());
     let files: Vec<&str> = base
         .into_iter()
         .chain(role)
@@ -1019,7 +1020,7 @@ fn build_system_prompt(npc: &NpcConfig) -> anyhow::Result<String> {
 
     let mut parts = files
         .iter()
-        .map(|path| driver::load_system_prompt(path))
+        .map(|path| driver::load_system_prompt(path, &roles))
         .collect::<anyhow::Result<Vec<_>>>()?;
 
     // Resident wishlists are added per turn.
@@ -1202,6 +1203,18 @@ fn spawn_llm_task(
 pub(crate) mod tests {
     use super::*;
     use onlinerpg_shared::CharacterAttributes;
+
+    #[test]
+    fn maelis_is_taught_the_pledge_and_no_trade_window() {
+        let npc: NpcConfig = toml::from_str(
+            "character_name = 'Maelis'\ninstance_prompt = 'data/npcs/maelis/instance.txt'",
+        )
+        .unwrap();
+        let prompt = build_system_prompt(&npc).unwrap();
+        assert!(prompt.contains(r#""type": "offer_pledge""#), "{prompt}");
+        assert!(!prompt.contains("open_trade") && !prompt.contains("offer_deal"));
+        assert!(!prompt.contains("{{"), "{prompt}");
+    }
 
     #[test]
     fn ysolde_dialogue_prompt_contains_research_and_exchange_instructions() {
