@@ -228,6 +228,8 @@ import {
 import {
   applyFamilyState,
   familyStorageLog,
+  mergerPledgeOpen,
+  showFamilyEmblem,
   pendingFamilyMerges,
   type FamilyMergeTerms,
   type FamilyStorageEntry,
@@ -1219,8 +1221,10 @@ export function handleServerMessage(
           proposerId: proposal.proposer_id,
           proposerName: proposal.proposer_name,
           proposerFamily: proposal.proposer_family,
+          targetName: proposal.target_name,
           targetFamily: proposal.target_family,
           terms: proposal.terms as FamilyMergeTerms,
+          emblem: proposal.emblem ?? { texture: null, color: null },
           members: proposal.members,
           offeredAt: Date.now(),
         }
@@ -2501,6 +2505,14 @@ export function handleServerMessage(
 
     case 'MergerCelebrated':
       queueMergerCelebration(data.position)
+      break
+
+    case 'MergerPledgeOffered':
+      mergerPledgeOpen.set(true)
+      break
+
+    case 'FamilyEmblemShown':
+      showFamilyEmblem(data.player_name, data.emblem)
       break
 
     case 'InventoryState':

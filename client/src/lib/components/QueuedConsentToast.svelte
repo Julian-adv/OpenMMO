@@ -17,6 +17,8 @@
     declineLabel,
     respond,
     dismissOnAccept = true,
+    width,
+    gauge = true,
     children,
   }: {
     queue: Writable<T[]>
@@ -29,6 +31,9 @@
     /** Sends the answer; dismissal is handled here. */
     respond: (entry: T, accept: boolean) => void
     dismissOnAccept?: boolean
+    width?: string
+    /** Show the time left as a draining bar. */
+    gauge?: boolean
     children: Snippet<[T]>
   } = $props()
 
@@ -64,8 +69,9 @@
     onaccept={() => answer(entry, true)}
     ondecline={() => answer(entry, false)}
     {queued}
-    gaugeDurationMs={ttlMs}
+    gaugeDurationMs={gauge ? ttlMs : 0}
     gaugeStartAt={entry.offeredAt}
+    {width}
   >
     {@render children(entry)}
   </ConsentToast>

@@ -14,6 +14,7 @@
     queued = 0,
     gaugeDurationMs = 0,
     gaugeStartAt = 0,
+    width,
     children,
   }: {
     label: string
@@ -26,6 +27,8 @@
     queued?: number
     gaugeDurationMs?: number
     gaugeStartAt?: number
+    /** Fixed width for a long message: the text wraps and the buttons sit below it. */
+    width?: string
     children: Snippet
   } = $props()
 </script>
@@ -33,9 +36,12 @@
 <div
   class="consent-toast"
   class:with-gauge={gaugeDurationMs > 0}
+  class:stacked={!!width}
   role="alertdialog"
   aria-label={label}
-  style="top: {top}; --accent: {accent}; z-index: {PANEL_Z_CEILING}"
+  style="top: {top}; --accent: {accent}; z-index: {PANEL_Z_CEILING}{width
+    ? `; width: min(${width}, calc(100vw - 24px))`
+    : ''}"
 >
   <div class="toast-row">
     <span class="toast-text">
@@ -44,8 +50,10 @@
           >{$t('consent.waiting', { count: queued })}</span
         >{/if}
     </span>
-    <button class="accept-btn" onclick={onaccept}>{acceptLabel}</button>
-    <button class="decline-btn" onclick={ondecline}>{declineLabel}</button>
+    <span class="toast-actions">
+      <button class="accept-btn" onclick={onaccept}>{acceptLabel}</button>
+      <button class="decline-btn" onclick={ondecline}>{declineLabel}</button>
+    </span>
   </div>
   {#if gaugeDurationMs > 0}
     <div class="gauge">
@@ -87,6 +95,26 @@
     gap: 10px;
   }
 
+  .toast-actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: 10px;
+  }
+
+  .stacked {
+    box-sizing: border-box;
+    padding: 12px 14px;
+  }
+
+  .stacked .toast-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .stacked .toast-actions {
+    justify-content: flex-end;
+  }
+
   .toast-text :global(strong) {
     color: var(--accent);
   }
@@ -102,6 +130,7 @@
     font-family: inherit;
     font-size: 12px;
     font-weight: 700;
+    white-space: nowrap;
     cursor: pointer;
     transition:
       background 150ms ease,

@@ -2,6 +2,7 @@ import { derived, writable } from 'svelte/store'
 import { bagItemCount } from './inventoryStore'
 import { pickupKeyCode } from './pickupSettings'
 import type { CharacterClass } from '../network/networkTypes'
+import type { Emblem } from '../utils/familyEmblem'
 
 // Limits, ranks and permission bits mirror shared/src/family.rs.
 export const FAMILY_MAX_MEMBERS = 30
@@ -113,8 +114,11 @@ export interface PendingFamilyMerge {
   proposerId: number
   proposerName: string
   proposerFamily: string
+  targetName: string
   targetFamily: string
   terms: FamilyMergeTerms
+  /** The emblem the merged family keeps. */
+  emblem: Emblem
   members: number
   offeredAt: number
 }
@@ -124,6 +128,16 @@ export const pendingFamilyMerges = writable<PendingFamilyMerge[]>([])
 /** Officiant of family mergers; mirrors `OFFICIANT_NPC` on the server. */
 export const MERGER_OFFICIANT = 'Maelis'
 export const mergerPledgeOpen = writable(false)
+/** Emblems of other families shown on the pledge form, by lower-cased player name. */
+export const shownFamilyEmblems = writable<ReadonlyMap<string, Emblem>>(
+  new Map()
+)
+
+export function showFamilyEmblem(playerName: string, emblem: Emblem) {
+  shownFamilyEmblems.update((shown) =>
+    new Map(shown).set(playerName.toLowerCase(), emblem)
+  )
+}
 
 export interface FamilyStorageEntry {
   character_name: string
@@ -184,6 +198,7 @@ export function resetFamilyStores() {
   familyStorageLogVisible.set(false)
   pendingFamilyMerges.set([])
   mergerPledgeOpen.set(false)
+  shownFamilyEmblems.set(new Map())
 }
 
 /** Server `Emblem::is_set`: the family shows a picture or a colour. */

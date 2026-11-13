@@ -2876,6 +2876,20 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::InspectFamilyEmblem { player_name } => {
+            if let Some(id) = &state.require_in_game("inspect family emblem") {
+                game_state.show_family_emblem(id, &player_name).await;
+            }
+        }
+
+        ClientMessage::OfferMergerPledge { target_player_id } => {
+            if let Some(id) = &state.require_in_game("offer merger pledge") {
+                game_state
+                    .offer_merger_pledge(id, &target_player_id, auth_service)
+                    .await;
+            }
+        }
+
         ClientMessage::RespondFamilyMerge {
             proposer_id,
             accept,

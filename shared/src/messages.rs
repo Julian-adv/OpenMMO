@@ -1113,6 +1113,16 @@ pub enum ClientMessage {
     ConfirmFamilyMerge {
         accept: bool,
     },
+    /// Ask for the emblem of a named online player's family, for the pledge
+    /// form; answered with `FamilyEmblemShown` when they have a family.
+    InspectFamilyEmblem {
+        player_name: String,
+    },
+    /// NPC-only: the merger officiant hands a nearby family head the pledge
+    /// form, the spoken way into `ProposeFamilyMerge`.
+    OfferMergerPledge {
+        target_player_id: PlayerId,
+    },
 }
 
 impl ClientMessage {
@@ -2179,6 +2189,15 @@ pub enum ServerMessage {
     MergerRiteCue {
         cue: String,
     },
+    /// Direct to a family head: the officiant holds out the pledge form.
+    MergerPledgeOffered {
+        officiant: String,
+    },
+    /// Answer to `InspectFamilyEmblem`.
+    FamilyEmblemShown {
+        player_name: String,
+        emblem: crate::family::Emblem,
+    },
     /// A merger was sworn at the altar: petals and bells for everyone nearby.
     MergerCelebrated {
         position: Position,
@@ -2713,6 +2732,8 @@ impl ServerMessage {
             | Self::TradeNotice { .. }
             | Self::FurnitureSelectionNotice { .. }
             | Self::MergerRiteCue { .. }
+            | Self::MergerPledgeOffered { .. }
+            | Self::FamilyEmblemShown { .. }
             | Self::TradeDeclined { .. }
             | Self::DealResult { .. }
             | Self::PlayerMovePath { .. }

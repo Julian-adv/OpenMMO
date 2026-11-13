@@ -1033,6 +1033,103 @@ impl super::GameState {
         }
     }
 
+    /// Show a player the emblem of a named online player's family.
+    pub async fn show_family_emblem(&self, player_id: &PlayerId, player_name: &str) {
+        let Some(target) = self.player_id_by_name(player_name.trim()).await else {
+            return;
+        };
+        let emblem = {
+            let families = self.families.read().await;
+            let Some(family_id) = families.of_player.get(&target) else {
+                return;
+            };
+            families.emblems.get(family_id).cloned().unwrap_or_default()
+        };
+        let player_name = self.player_name_of(&target).await;
+        self.send_direct_message(
+            player_id,
+            ServerMessage::FamilyEmblemShown {
+                player_name,
+                emblem,
+            },
+        )
+        .await;
+    }
+
+    /// The officiant answers a head who asked for a merger in words: the
+    /// pledge form opens on their screen. A refusal goes back to her as a cue.
+    pub async fn offer_merger_pledge(
+        &self,
+        officiant_id: &PlayerId,
+        target_id: &PlayerId,
+        auth: &AuthService,
+    ) {
+        let verdict = {
+            let players = self.players.read().await;
+            let Some(priest) = players
+                .get(officiant_id)
+                .filter(|p| p.is_official_npc && p.name == OFFICIANT_NPC)
+            else {
+                return;
+            };
+            match players.get(target_id) {
+                None => Err("that visitor is no longer here.".to_string()),
+                Some(target) if target.is_official_npc => {
+                    Err(format!("{} cannot lead a merger.", target.name))
+                }
+                Some(target)
+                    if target.health == 0
+                        || target.floor_level != priest.floor_level
+                        || target.position.dist_xz_sq(&priest.position)
+                            > RITE_REACH * RITE_REACH =>
+                {
+                    Err(format!(
+                        "{} is not standing before you; ask them to come closer first.",
+                        target.name
+                    ))
+                }
+                Some(target) => Ok(target.name.clone()),
+            }
+        };
+        let name = match verdict {
+            Ok(name) => name,
+            Err(reason) => {
+                self.rite_cue(
+                    officiant_id,
+                    format!("No pledge form was handed over: {reason}"),
+                )
+                .await;
+                return;
+            }
+        };
+        let Some(character_id) = self.character_id_of(target_id).await else {
+            return;
+        };
+        let auth = auth.clone();
+        let cue = match auth_db(move || auth.leads_family(character_id)).await {
+            Ok(true) => {
+                self.send_direct_message(
+                    target_id,
+                    ServerMessage::MergerPledgeOffered {
+                        officiant: OFFICIANT_NPC.to_string(),
+                    },
+                )
+                .await;
+                format!(
+                    "The pledge form is now open before {name}. They may put it away; hand it over again whenever they ask."
+                )
+            }
+            Ok(false) => format!(
+                "No pledge form was handed over: {name} does not lead a family, and only a family's head can propose a merger. Tell them so kindly."
+            ),
+            Err(err) => {
+                warn!("Failed to check family head for a pledge: {err}");
+                "No pledge form was handed over: the family records could not be read. Ask them to try again.".to_string()
+            }
+        };
+        self.rite_cue(officiant_id, cue).await;
+    }
+
     pub async fn propose_family_merge(
         &self,
         player_id: &PlayerId,
@@ -1072,12 +1169,27 @@ impl super::GameState {
             self.family_note(player_id, RITE_AWAY).await;
             return;
         };
+        let emblem = {
+            let kept = match terms.keep_emblem {
+                onlinerpg_shared::family::MergeSide::Proposer => player_id,
+                onlinerpg_shared::family::MergeSide::Target => &target_id,
+            };
+            let families = self.families.read().await;
+            families
+                .of_player
+                .get(kept)
+                .and_then(|family_id| families.emblems.get(family_id))
+                .cloned()
+                .unwrap_or_default()
+        };
         let proposal = FamilyMergeProposal {
             proposer_id: *player_id,
             proposer_name: proposer_name.clone(),
             proposer_family: proposer_family.clone(),
+            target_name: target_name.clone(),
             target_family: target_family.clone(),
             terms,
+            emblem,
             members,
         };
         let started = std::time::Instant::now();

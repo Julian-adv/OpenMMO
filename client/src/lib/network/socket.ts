@@ -1201,6 +1201,10 @@ class NetworkManager {
     this.sendMessage({ ProposeFamilyMerge: { head_name: headName, terms } })
   }
 
+  sendInspectFamilyEmblem(playerName: string) {
+    this.sendMessage({ InspectFamilyEmblem: { player_name: playerName } })
+  }
+
   sendRespondFamilyMerge(proposerId: number, accept: boolean) {
     this.sendMessage({
       RespondFamilyMerge: { proposer_id: proposerId, accept },

@@ -287,7 +287,11 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v152: `MergerCelebrated`, the nearby petals and bells of a sworn merger.
 /// v153: object door ids carry a door index (`object:{rx}:{rz}:{object}:{door}`)
 /// so one object can have side doors besides its entrance.
-pub const PROTOCOL_VERSION: u32 = 153;
+/// v154: `OfferMergerPledge` and `MergerPledgeOffered`: the merger officiant
+/// opens the pledge form for a head who asks in words. `InspectFamilyEmblem`
+/// and `FamilyEmblemShown` show the other family's emblem on that form, and
+/// `FamilyMergeProposal` carries the emblem the merged family keeps.
+pub const PROTOCOL_VERSION: u32 = 154;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

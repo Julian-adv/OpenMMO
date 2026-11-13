@@ -737,6 +737,8 @@ async fn merging_folds_the_absorbed_family_into_the_kept_name() {
     tokio::time::sleep(std::time::Duration::from_secs(7)).await;
     let proposal = asked(drain(&mut b_rx)).expect("offer");
     assert_eq!(proposal.members, 3);
+    assert_eq!(proposal.emblem.color.as_deref(), Some("#00aa00"));
+    assert_eq!(proposal.target_name, "HeadB");
     assert_eq!(proposal.target_family, "Oakshield");
     tokio::time::resume();
 
@@ -771,6 +773,65 @@ async fn merging_folds_the_absorbed_family_into_the_kept_name() {
     claim(&game, &auth, "Latecomer", 4).await;
     found(&game, &auth, &registrar, "Latecomer", "Oakshield").await;
     assert!(has_line(&drain(&mut new_rx), "held back"));
+}
+
+#[tokio::test]
+async fn the_officiant_hands_the_pledge_form_to_a_head_who_stands_before_her() {
+    let (game, auth, registrar) = setup("pledge_form").await;
+    let (_, mut head_rx) = enter(&game, &auth, "HeadA", FAMILY_FOUND_STAMPS).await;
+    claim(&game, &auth, "HeadA", 0).await;
+    found(&game, &auth, &registrar, "HeadA", "Ironwood").await;
+    let (_, mut member_rx) = enter(&game, &auth, "MemberA", 0).await;
+    join(&game, &auth, "HeadA", "MemberA").await;
+    let mut priest = make_player("Maelis", 2.0, 1.0);
+    priest.is_official_npc = true;
+    let priest_id = priest.id;
+    let mut priest_rx = game.register_direct_channel(&priest_id).await;
+    game.add_player(priest).await;
+    drain(&mut head_rx);
+    drain(&mut member_rx);
+    let offered = |msgs: Vec<ServerMessage>| {
+        msgs.iter()
+            .any(|msg| matches!(msg, ServerMessage::MergerPledgeOffered { .. }))
+    };
+    let cued = |msgs: Vec<ServerMessage>, needle: &str| {
+        msgs.iter()
+            .any(|msg| matches!(msg, ServerMessage::MergerRiteCue { cue } if cue.contains(needle)))
+    };
+
+    game.offer_merger_pledge(&pid("MemberA"), &pid("HeadA"), &auth)
+        .await;
+    assert!(!offered(drain(&mut head_rx)));
+
+    game.offer_merger_pledge(&priest_id, &pid("MemberA"), &auth)
+        .await;
+    assert!(!offered(drain(&mut member_rx)));
+    assert!(cued(drain(&mut priest_rx), "does not lead a family"));
+
+    game.offer_merger_pledge(&priest_id, &pid("HeadA"), &auth)
+        .await;
+    assert!(offered(drain(&mut head_rx)));
+    assert!(cued(drain(&mut priest_rx), "now open before HeadA"));
+
+    stand_at(&game, "HeadA", 40.0, 40.0).await;
+    game.offer_merger_pledge(&priest_id, &pid("HeadA"), &auth)
+        .await;
+    assert!(!offered(drain(&mut head_rx)));
+    assert!(cued(drain(&mut priest_rx), "come closer"));
+
+    game.set_family_emblem(&pid("HeadA"), None, Some("#00aa00".into()), &auth)
+        .await;
+    drain(&mut priest_rx);
+    game.show_family_emblem(&priest_id, "heada").await;
+    assert!(drain(&mut priest_rx).iter().any(|msg| matches!(
+        msg,
+        ServerMessage::FamilyEmblemShown { player_name, emblem }
+            if player_name == "HeadA" && emblem.color.as_deref() == Some("#00aa00")
+    )));
+    game.show_family_emblem(&pid("HeadA"), "Maelis").await;
+    assert!(!drain(&mut head_rx)
+        .iter()
+        .any(|msg| matches!(msg, ServerMessage::FamilyEmblemShown { .. })));
 }
 
 #[tokio::test]

@@ -426,12 +426,14 @@ fn a_merge_offer_spells_out_the_outcome_and_waits_for_the_head() {
             proposer_id: PlayerId::from(proposer),
             proposer_name: "Robert".to_string(),
             proposer_family: "Baratheon".to_string(),
+            target_name: "Eddard".to_string(),
             target_family: "Stark".to_string(),
             terms: FamilyMergeTerms {
                 keep_name,
                 keep_emblem: MergeSide::Target,
                 keep_head: MergeSide::Proposer,
             },
+            emblem: Default::default(),
             members: 12,
         },
     };

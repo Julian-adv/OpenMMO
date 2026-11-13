@@ -615,6 +615,11 @@ impl AuthService {
         }))
     }
 
+    pub fn leads_family(&self, character_id: i64) -> Result<bool, AuthError> {
+        let conn = self.open_connection()?;
+        Ok(membership(&conn, character_id)?.is_some_and(|m| m.rank == FAMILY_RANK_HEAD))
+    }
+
     /// Both characters head different families that fit together: their
     /// family names and the merged member count.
     pub fn check_family_merge(&self, proposer: i64, target: i64) -> Verdict<(String, String, u32)> {

@@ -4,11 +4,15 @@
   import {
     familyInfo,
     mergerPledgeOpen,
+    shownFamilyEmblems,
+    type MergeSide,
     type FamilyMergeTerms,
   } from '../stores/familyStore'
   import { gameStore } from '../stores/gameStore'
   import { networkManager } from '../network/socket'
   import { mountOverlay } from '../stores/overlayStack'
+  import { capeTextureUrl } from '../utils/networkUtils'
+  import type { Emblem } from '../utils/familyEmblem'
 
   let dialog = $state<HTMLFormElement>()
   let head = $state('')
@@ -18,11 +22,64 @@
     keep_head: 'proposer',
   })
   const family = $derived($familyInfo)
-  const nearby = $derived(
-    [...$gameStore.otherPlayers.values()]
-      .filter((p) => !p.isOfficialNpc && p.family && p.family !== family?.name)
-      .map((p) => p.name)
+  const others = $derived(
+    [...$gameStore.otherPlayers.values()].filter(
+      (p) => !p.isOfficialNpc && p.family && p.family !== family?.name
+    )
   )
+  const nearby = $derived(others.map((p) => p.name))
+  /** The head typed so far, once it names someone nearby. */
+  const them = $derived(
+    others.find((p) => p.name.toLowerCase() === head.trim().toLowerCase())
+  )
+  type Choice = { side: MergeSide; label: string; emblem?: Emblem }
+  const rows = $derived<
+    { term: keyof FamilyMergeTerms; label: string; choices: Choice[] }[]
+  >([
+    {
+      term: 'keep_name',
+      label: $t('family.mergeKeepName'),
+      choices: [
+        { side: 'proposer', label: family?.name ?? $t('family.mergeOurs') },
+        { side: 'target', label: them?.family ?? $t('family.mergeTheirs') },
+      ],
+    },
+    {
+      term: 'keep_emblem',
+      label: $t('family.mergeKeepEmblem'),
+      choices: [
+        {
+          side: 'proposer',
+          label: $t('family.mergeOurs'),
+          emblem: family
+            ? { texture: family.emblem_texture, color: family.emblem_color }
+            : undefined,
+        },
+        {
+          side: 'target',
+          label: them?.family ?? $t('family.mergeTheirs'),
+          emblem: them && $shownFamilyEmblems.get(them.name.toLowerCase()),
+        },
+      ],
+    },
+    {
+      term: 'keep_head',
+      label: $t('family.mergeKeepHead'),
+      choices: [
+        {
+          side: 'proposer',
+          label: $gameStore.currentPlayer?.name ?? $t('family.mergeMe'),
+        },
+        { side: 'target', label: them?.name ?? $t('family.mergeThem') },
+      ],
+    },
+  ])
+  let asked = ''
+  $effect(() => {
+    if (!them || asked === them.name) return
+    asked = them.name
+    networkManager.sendInspectFamilyEmblem(them.name)
+  })
   const close = () => mergerPledgeOpen.set(false)
 
   $effect(() => mountOverlay('mergerPledge', close))
@@ -62,27 +119,32 @@
         <option value={name}></option>
       {/each}
     </datalist>
-    <label
-      >{$t('family.mergeKeepName')}
-      <select bind:value={terms.keep_name}>
-        <option value="proposer">{family?.name}</option>
-        <option value="target">{$t('family.mergeTheirs')}</option>
-      </select>
-    </label>
-    <label
-      >{$t('family.mergeKeepEmblem')}
-      <select bind:value={terms.keep_emblem}>
-        <option value="proposer">{$t('family.mergeOurs')}</option>
-        <option value="target">{$t('family.mergeTheirs')}</option>
-      </select>
-    </label>
-    <label
-      >{$t('family.mergeKeepHead')}
-      <select bind:value={terms.keep_head}>
-        <option value="proposer">{$t('family.mergeMe')}</option>
-        <option value="target">{$t('family.mergeThem')}</option>
-      </select>
-    </label>
+    {#each rows as row (row.term)}
+      <div class="row" role="radiogroup" aria-label={row.label}>
+        <span>{row.label}</span>
+        <span class="choices">
+          {#each row.choices as choice (choice.side)}
+            <button
+              type="button"
+              role="radio"
+              class="choice"
+              class:chosen={terms[row.term] === choice.side}
+              aria-checked={terms[row.term] === choice.side}
+              onclick={() => (terms[row.term] = choice.side)}
+            >
+              {#if choice.emblem?.color}
+                <span class="swatch" style="background:{choice.emblem.color}"
+                ></span>
+              {/if}
+              {#if choice.emblem?.texture}
+                <img src={capeTextureUrl(choice.emblem.texture)} alt="" />
+              {/if}
+              {choice.label}
+            </button>
+          {/each}
+        </span>
+      </div>
+    {/each}
     <p class="hint">{$t('family.mergeHint')}</p>
     <div class="actions">
       <button type="button" class="secondary" onclick={close}
@@ -136,14 +198,37 @@
     color: #a99f8c;
     font-size: 11px;
   }
-  label {
+  .choices {
+    display: flex;
+    gap: 6px;
+  }
+  .choice {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-color: #675b4e;
+    background: #0f0d09;
+    font-weight: 400;
+  }
+  .choice.chosen {
+    border-color: #c8b88a;
+    background: #3a321c;
+  }
+  .choice img,
+  .swatch {
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    object-fit: cover;
+  }
+  .row {
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 8px;
   }
-  input,
-  select {
+  input {
     padding: 6px 8px;
     border: 1px solid #675b4e;
     border-radius: 6px;

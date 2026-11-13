@@ -126,6 +126,12 @@ pub(super) enum AgentAction {
         #[serde(alias = "target", alias = "player_name", alias = "target_player")]
         player: String,
     },
+    /// Hand a nearby family head the merger pledge form (the officiant only).
+    #[serde(rename = "offer_pledge")]
+    OfferPledge {
+        #[serde(alias = "target", alias = "player_name", alias = "target_player")]
+        player: String,
+    },
     #[serde(rename = "buy_from_player")]
     BuyFromPlayer {
         player: String,
@@ -864,6 +870,13 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
   {"type": "open_trade", "target": "darkcocoa"}"#,
     },
     ActionSpec {
+        names: &["offer_pledge"],
+        aliases: &[],
+        doc: r#"- (the merger officiant only) Open the merger pledge form on a nearby family
+  head's screen when they ask in words to merge families:
+  {"type": "offer_pledge", "target": "darkcocoa"}"#,
+    },
+    ActionSpec {
         names: &[
             "open_stall",
             "close_stall",
@@ -1211,6 +1224,7 @@ impl AgentAction {
             | Self::StopFishing
             | Self::OfferDeal { .. }
             | Self::OpenTrade { .. }
+            | Self::OfferPledge { .. }
             | Self::PartyInvite { .. }
             | Self::PartyAccept { .. }
             | Self::PartyDecline { .. }
@@ -1386,6 +1400,7 @@ impl AgentAction {
             | Self::Respawn
             | Self::OfferDeal { .. }
             | Self::OpenTrade { .. }
+            | Self::OfferPledge { .. }
             | Self::PartyInvite { .. }
             | Self::PartyAccept { .. }
             | Self::PartyDecline { .. }
@@ -1434,6 +1449,7 @@ impl AgentAction {
             Self::StopFishing => "stop_fishing",
             Self::OfferDeal { .. } => "offer_deal",
             Self::OpenTrade { .. } => "open_trade",
+            Self::OfferPledge { .. } => "offer_pledge",
             Self::OpenStall { .. } => "open_stall",
             Self::CloseStall => "close_stall",
             Self::BuyFromStall { .. } => "buy_from_stall",
@@ -2069,6 +2085,7 @@ pub(super) fn action_to_command(
         // `execute::handle_response`, not here.
         AgentAction::OfferDeal { .. } => None,
         AgentAction::OpenTrade { .. } => None,
+        AgentAction::OfferPledge { .. } => None,
         // Needs the bag and worn gear from SharedState; likewise handled there.
         AgentAction::Use { .. } => None,
         AgentAction::Sell { .. } => None,

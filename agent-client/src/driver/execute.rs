@@ -701,6 +701,23 @@ pub(super) async fn handle_response(
             continue;
         }
 
+        if let AgentAction::OfferPledge { player } = action {
+            let mut s = state.lock().await;
+            let Some((target_id, _)) = s.resolve_nearby_player(player) else {
+                s.push_agent_event(format!(
+                    "[Rite] No one named '{player}' is nearby; no pledge form was handed over."
+                ));
+                continue;
+            };
+            let cmd = onlinerpg_shared::ClientMessage::OfferMergerPledge {
+                target_player_id: target_id,
+            };
+            if let Err(e) = s.send_command(cmd).await {
+                error!("Failed to send offer_pledge: {e}");
+            }
+            continue;
+        }
+
         // Party answers need the stored invite: the inviter may be outside
         // the AOI, where name resolution finds nobody.
         if let AgentAction::PartyAccept { player } | AgentAction::PartyDecline { player } = action {
