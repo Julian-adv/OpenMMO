@@ -284,6 +284,8 @@ pub struct SharedState {
     pub self_fishing: bool,
     /// Owners already warned on this patrol lap.
     pub patrol_warned: std::collections::HashSet<String>,
+    /// Waypoints behind us on the current lap; a lap broken off by a fight resumes there.
+    pub patrol_reached: usize,
     /// Pending cast acknowledgement or a pause between attempts.
     fishing_retry_at: Option<tokio::time::Instant>,
     /// A recital began this turn; the driver takes it to move tonight's
@@ -514,6 +516,7 @@ impl SharedState {
             trade_declined_until: HashMap::new(),
             self_fishing: false,
             patrol_warned: Default::default(),
+            patrol_reached: 0,
             fishing_retry_at: None,
             recited_this_turn: false,
             fishing_stance: None,

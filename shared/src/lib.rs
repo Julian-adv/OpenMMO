@@ -290,7 +290,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v154: `OfferMergerPledge`/`MergerPledgeOffered`, `InspectFamilyEmblem`/
 /// `FamilyEmblemShown`, and the kept emblem and target head in `FamilyMergeProposal`.
 /// v155: `PlayerMoveGoal.client_position`, where the sender believes it stands (x, z).
-pub const PROTOCOL_VERSION: u32 = 156;
+/// v157: `Player.rank`, an official NPC's rank shown after its name;
+/// `OfferImpound`/`ImpoundOffered`, the guard captain opening the reclaim window.
+pub const PROTOCOL_VERSION: u32 = 157;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from
@@ -639,6 +641,7 @@ mod tests {
             petrified: false,
             title: None,
             family: None,
+            rank: None,
         }];
         // A monster with every Option None guards the wire format itself:
         // rmp_serde encodes structs as positional arrays, so any field that

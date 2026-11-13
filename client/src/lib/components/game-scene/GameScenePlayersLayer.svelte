@@ -856,6 +856,7 @@
         name={player.name}
         title={player.title}
         family={player.family}
+        rank={player.rank}
         petrified={player.petrified}
         isCurrentPlayer={false}
         playerState={showingCatch ? 'interact' : remotePlayer.state}

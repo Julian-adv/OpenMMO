@@ -86,12 +86,16 @@ const CLASS_GENDER_MODELS: Partial<
     male: MODULAR_MALE_MODEL_PATH,
   },
   merchant: { female: MERCHANT_CHARACTER_MODEL_PATH },
-  guard: { male: GUARD_CHARACTER_MODEL_PATH },
+  guard: {
+    male: MODULAR_MALE_MODEL_PATH,
+    female: MODULAR_FEMALE_MODEL_PATH,
+  },
   maid: { female: MAID_CHARACTER_MODEL_PATH },
 }
 
 /** Named NPC models override their class model. */
 const NPC_MODEL_OVERRIDES: Record<string, string> = {
+  Karl: GUARD_CHARACTER_MODEL_PATH,
   Wick: NIGHT_MERCHANT_CHARACTER_MODEL_PATH,
   Cocoly: PINK_MAID_CHARACTER_MODEL_PATH,
   Aldwin: STEWARD_CHARACTER_MODEL_PATH,

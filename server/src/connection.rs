@@ -1504,6 +1504,7 @@ async fn handle_client_message(
             player.title = titles.1.clone();
             let family_id = family.as_ref().map(|(id, _)| *id);
             player.family = family.map(|(_, name)| name);
+            player.rank = npc_def.and_then(|def| def.rank.clone());
             player.invulnerable = state.is_admin;
 
             // Health is restored once gear sets max HP, below.
@@ -2332,6 +2333,11 @@ async fn handle_client_message(
                 game_state
                     .impound_action(id, &npc_player_id, false, auth_service)
                     .await;
+            }
+        }
+        ClientMessage::OfferImpound { target_player_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.offer_impound(id, &target_player_id).await;
             }
         }
         ClientMessage::ImpoundReclaim { npc_player_id } => {

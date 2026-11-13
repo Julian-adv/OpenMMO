@@ -75,6 +75,8 @@ pub struct NpcRow {
     #[serde(rename = "selfDefense", default)]
     self_defense: bool,
     #[serde(default)]
+    protects: bool,
+    #[serde(default)]
     wishlist: String,
     #[serde(rename = "wishlistRatePercent", default)]
     wishlist_rate_percent: u32,
@@ -123,6 +125,12 @@ pub fn dialogue_only(npc_name: &str) -> bool {
 /// Whether this NPC strikes back at monsters that hit it, without an LLM turn.
 pub fn self_defense(npc_name: &str) -> bool {
     npc_by_name(npc_name).is_some_and(|row| row.self_defense)
+}
+
+/// Whether this NPC joins the fights of those around it and walks with its
+/// weapon put away.
+pub fn protects(npc_name: &str) -> bool {
+    npc_by_name(npc_name).is_some_and(|row| row.protects)
 }
 
 pub fn chat_mentions(npc_name: &str, message: &str) -> bool {

@@ -1064,3 +1064,67 @@ async fn a_straight_leg_into_an_unseen_obstacle_is_replanned_not_abandoned() {
     assert!(!task.is_finished());
     task.abort();
 }
+
+fn guard_schedule(json: &str) -> Vec<ScheduleEntry> {
+    #[derive(serde::Deserialize)]
+    struct File {
+        schedule: Vec<ScheduleEntry>,
+    }
+    let mut schedule = serde_json::from_str::<File>(json).unwrap().schedule;
+    assert!(onlinerpg_shared::schedule::parse_conditions(&mut schedule).is_empty());
+    schedule
+}
+
+#[test]
+fn the_guard_watches_hand_over_without_sharing_a_bunk_or_a_seat() {
+    let guards = [
+        include_str!("../../data/npcs/karl/schedule.json"),
+        include_str!("../../data/npcs/garrick/schedule.json"),
+        include_str!("../../data/npcs/brenna/schedule.json"),
+        include_str!("../../data/npcs/osric/schedule.json"),
+        include_str!("../../data/npcs/halda/schedule.json"),
+    ]
+    .map(guard_schedule);
+    let at = |guard: usize, minute: u32| {
+        let (i, _) = resolve_active_schedule(
+            &guards[guard],
+            None,
+            Some(minute / 60),
+            Some(minute % 60),
+            None,
+        );
+        &guards[guard][i.expect("every minute has an entry")]
+    };
+    let label = |guard: usize, minute: u32| at(guard, minute).display_label().to_string();
+    let mut reports = 0;
+    for minute in 0..24 * 60 {
+        let mut used = HashSet::new();
+        for guard in 0..guards.len() {
+            if let Some(id) = at(guard, minute).object_id {
+                assert!(used.insert(id), "object {id} shared at minute {minute}");
+            }
+        }
+        for guard in 1..5 {
+            if label(guard, minute).starts_with("reporting") {
+                reports += 1;
+                assert!(
+                    label(0, minute).starts_with("at your post"),
+                    "minute {minute}"
+                );
+            }
+        }
+        for (night, day) in [(3, 1), (4, 2)] {
+            if label(night, minute).starts_with("getting up") {
+                assert!(
+                    label(day, minute - 5).starts_with("waking"),
+                    "minute {minute}"
+                );
+            }
+        }
+    }
+    assert_eq!(reports, 4 * 20);
+    for guard in 0..5 {
+        let asleep = (0..24 * 60).filter(|m| at(guard, *m).is_sleeping()).count();
+        assert!(asleep >= 9 * 60, "guard {guard} sleeps {asleep} minutes");
+    }
+}

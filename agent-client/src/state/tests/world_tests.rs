@@ -604,3 +604,65 @@ fn self_defense_targets_the_nearest_monster_that_struck_within_reach() {
     s.self_player.as_mut().unwrap().name = "Rica".into();
     assert_eq!(s.self_defense_target(), None);
 }
+
+#[test]
+fn a_protector_takes_up_nearby_fights_and_draws_only_to_fight() {
+    use onlinerpg_shared::inventory::{EquipSlot, ItemInstance};
+    use onlinerpg_shared::ClientMessage;
+    let (mut s, _rx) = test_state();
+    let mut me = test_player(0.0, 0.0);
+    me.name = "Garrick".into();
+    me.is_official_npc = true;
+    s.self_player_id = Some(me.id);
+    s.self_player = Some(me.clone());
+    let mut near = test_player(8.0, 0.0);
+    near.id = onlinerpg_shared::PlayerId::from(2);
+    let mut far = test_player(60.0, 0.0);
+    far.id = onlinerpg_shared::PlayerId::from(3);
+    for (id, x, victim) in [("m1", 9.0, &near), ("m2", 61.0, &far)] {
+        let mut m = monster(id);
+        m.position = p(x, 0.0, 0.0);
+        s.nearby_monsters.insert(id.into(), m);
+        s.nearby_players.insert(victim.id, victim.clone());
+        s.push_event(ServerMessage::MonsterAttackedPlayer {
+            monster_id: id.into(),
+            player_id: victim.id,
+            hit: true,
+            roll: 15,
+            damage: 1,
+            current_health: victim.health,
+            ranged: false,
+        });
+    }
+    assert_eq!(s.self_defense_target(), None);
+    assert_eq!(s.assist_target().as_deref(), Some("m1"));
+    assert!(s.schedule_combat_active());
+
+    let blade = ItemInstance {
+        locked: false,
+        instance_id: 7,
+        item_def_id: "rune_blade".into(),
+        quantity: 1,
+        enchant: 0,
+        cape_color: None,
+        cape_texture: None,
+    };
+    s.self_bag = vec![blade.clone()];
+    assert!(matches!(
+        s.weapon_command(true),
+        Some(ClientMessage::EquipItem { instance_id: 7 })
+    ));
+    assert!(s.weapon_command(false).is_none());
+    s.self_bag.clear();
+    s.self_equipped.insert(EquipSlot::MainHand, blade);
+    assert!(s.weapon_command(true).is_none());
+    assert!(matches!(
+        s.weapon_command(false),
+        Some(ClientMessage::UnequipItem {
+            slot: EquipSlot::MainHand
+        })
+    ));
+
+    s.self_player.as_mut().unwrap().name = "Karl".into();
+    assert_eq!(s.assist_target(), None);
+}

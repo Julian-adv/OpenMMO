@@ -154,6 +154,7 @@ pub(super) fn make_player(id: &str, x: f32, z: f32) -> Player {
         petrified: false,
         title: None,
         family: None,
+        rank: None,
         floor_level: 0,
         object_type: None,
         main_hand: None,

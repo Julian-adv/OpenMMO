@@ -573,6 +573,7 @@ pub async fn llm_driver(
     let mut visit_walk: Option<tokio::task::JoinHandle<()>> = None;
     // A road-patrol lap walks in the background so the guard can talk on the way.
     let mut patrol_walk: Option<tokio::task::JoinHandle<()>> = None;
+    let mut weapon_checked_at = Instant::now();
     let mut next_lap_at = Instant::now();
     let mut next_notice_round = Instant::now() + NOTICE_ROUND_EVERY;
     // When each abandoned plate was first seen, so the maid gives the guest
@@ -788,10 +789,29 @@ pub async fn llm_driver(
                 )
             };
             if relocated || (attack_ready && !tick_combat(&state, &monster_id, sprint).await) {
+                state.lock().await.forget_combat(&monster_id);
                 attack_target = None;
             }
         } else {
             defend_self(&state).await;
+            // A protector runs to a fight that is out of reach.
+            let target = state.lock().await.assist_target();
+            if let Some(monster_id) = target {
+                info!("[{label}] Joining the fight against {monster_id}");
+                attack_target = Some((monster_id, Some(true), state.lock().await.relocations));
+                stop(&mut patrol_walk);
+            }
+        }
+        // Protectors walk with the weapon put away and draw it for a fight.
+        if weapon_checked_at.elapsed() >= Duration::from_secs(2) {
+            weapon_checked_at = Instant::now();
+            let mut s = state.lock().await;
+            let armed = attack_target.is_some() || s.schedule_combat_active();
+            if let Some(cmd) = s.protects().then(|| s.weapon_command(armed)).flatten() {
+                if let Err(e) = s.send_background_command(cmd).await {
+                    error!("[{label}] Failed to change weapon: {e}");
+                }
+            }
         }
 
         let sleeping_now = active_schedule.0.is_some_and(|i| schedule[i].is_sleeping());
@@ -1190,6 +1210,7 @@ pub async fn llm_driver(
                 if transition_now {
                     wrapup = None;
                     stop(&mut unload_trip);
+                    state.lock().await.patrol_reached = 0;
                     active_schedule =
                         check_schedule_transition(&state, &schedule, active_schedule, due, &label)
                             .await;
@@ -1217,9 +1238,10 @@ pub async fn llm_driver(
                     let s = state.lock().await;
                     let (_, hour, minute, _) = s.time_context();
                     !s.is_dead()
-                        && hour
-                            .zip(minute)
-                            .is_some_and(|(h, m)| entry.patrol_lap_fits(h, m))
+                        && (s.patrol_reached > 0
+                            || hour
+                                .zip(minute)
+                                .is_some_and(|(h, m)| entry.patrol_lap_fits(h, m)))
                 };
                 if fits {
                     info!("[{label}] Road patrol: starting a lap");

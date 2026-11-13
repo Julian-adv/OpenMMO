@@ -21,7 +21,7 @@ pub async fn atomic_write(path: &Path, data: &[u8]) -> std::io::Result<()> {
         .map_err(std::io::Error::other)?
 }
 
-pub(crate) fn atomic_write_sync(path: &Path, data: &[u8]) -> std::io::Result<()> {
+pub fn atomic_write_sync(path: &Path, data: &[u8]) -> std::io::Result<()> {
     let existing_permissions = match std::fs::metadata(path) {
         Ok(metadata) => Some(metadata.permissions()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,

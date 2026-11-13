@@ -15,6 +15,7 @@ import {
   getAvailableGenders,
   getCharacterModelPath,
   getNpcModelPath,
+  MODULAR_FEMALE_MODEL_PATH,
   MODULAR_MALE_MODEL_PATH,
   PLAYER_CLASSES,
 } from './modelPaths'
@@ -80,8 +81,9 @@ describe('male player model selection', () => {
           MODULAR_MALE_MODEL_PATH
         )
     }
-    expect(getCharacterModelPath('guard', 'male')).toBe(
-      '/models/characters/guard.glb'
+    expect(getNpcModelPath('Karl')).toBe('/models/characters/guard.glb')
+    expect(getCharacterModelPath('guard', 'female', true)).toBe(
+      MODULAR_FEMALE_MODEL_PATH
     )
     expect(getNpcModelPath('Tobin')).toBe('/models/characters/tobin.glb')
   })

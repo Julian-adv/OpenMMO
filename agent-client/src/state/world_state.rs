@@ -134,7 +134,7 @@ impl SharedState {
             .and_then(|item| crate::item_defs::get(&item.item_def_id))
     }
 
-    fn main_hand_weapon(&self) -> Option<&'static crate::item_defs::ItemDef> {
+    pub(super) fn main_hand_weapon(&self) -> Option<&'static crate::item_defs::ItemDef> {
         self.main_hand_def()
             .filter(|def| def.category.as_deref() == Some("weapon"))
     }

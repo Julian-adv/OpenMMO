@@ -225,7 +225,7 @@ import {
   resetFriendStores,
   MAX_PENDING_FRIEND_REQUESTS,
 } from '../stores/friendStore'
-import { applyImpoundState } from '../stores/impoundStore'
+import { applyImpoundState, openImpound } from '../stores/impoundStore'
 import {
   applyFamilyState,
   familyStorageLog,
@@ -400,6 +400,7 @@ function toRemotePlayer(sp: ServerPlayer): RemotePlayer {
     petrified: sp.petrified ?? false,
     title: sp.title ?? null,
     family: sp.family ?? null,
+    rank: sp.rank ?? null,
     mainHand: sp.main_hand ?? null,
     armor: sp.armor,
     back: sp.back ?? null,
@@ -2065,6 +2066,9 @@ export function handleServerMessage(
       break
     case 'FenceVisibility':
       applyFenceVisibility(data.added, data.removed)
+      break
+    case 'ImpoundOffered':
+      openImpound(data.npc_player_id)
       break
     case 'ImpoundState':
       applyImpoundState(data)

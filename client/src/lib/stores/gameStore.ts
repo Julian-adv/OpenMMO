@@ -79,6 +79,7 @@ interface PlayerBase {
   title?: string | null
   /** Family name drawn after the name (doc/FAMILY_SYSTEM.md). */
   family?: string | null
+  rank?: string | null
   mainHand?: string | null
   armor?: ArmorEquipment
   back?: string | null

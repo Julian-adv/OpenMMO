@@ -83,6 +83,12 @@ pub(super) async fn check_schedule_transition(
                 info!("[{label}] Follow of {name} cancelled by a schedule transition");
             }
             execute_schedule_move(state, entry).await;
+            if let Some(cue) = &entry.cue {
+                state
+                    .lock()
+                    .await
+                    .push_ambient_event(format!("[Duty] {cue}"));
+            }
             // Nothing else wakes an NPC at the meeting; the idle poll is an hour away.
             if meeting.is_some() {
                 state
@@ -176,11 +182,18 @@ async fn wait_for_partner(state: &Arc<Mutex<SharedState>>, partner: &str, x: f32
 }
 
 /// One road-patrol lap: out along the entry's waypoints and back to `pos`.
+/// Resumes at `SharedState::patrol_reached`.
 pub(super) async fn run_patrol_lap(state: Arc<Mutex<SharedState>>, entry: ScheduleEntry) {
     let Some(patrol) = &entry.patrol else {
         return;
     };
-    state.lock().await.patrol_warned.clear();
+    let start = {
+        let mut s = state.lock().await;
+        if s.patrol_reached == 0 {
+            s.patrol_warned.clear();
+        }
+        s.patrol_reached
+    };
     let patrol_id = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_secs() as i64);
@@ -189,8 +202,9 @@ pub(super) async fn run_patrol_lap(state: Arc<Mutex<SharedState>>, entry: Schedu
         .waypoints
         .iter()
         .chain(entry.waypoints.iter().rev().skip(1))
-        .chain(home.iter());
-    for wp in route {
+        .chain(home.iter())
+        .skip(start);
+    'lap: for wp in route {
         while state.lock().await.schedule_combat_active() {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
@@ -198,7 +212,7 @@ pub(super) async fn run_patrol_lap(state: Arc<Mutex<SharedState>>, entry: Schedu
             wait_for_partner(&state, partner, wp[0], wp[2]).await;
         }
         if state.lock().await.is_dead() {
-            return;
+            break;
         }
         let to = walk::WalkTo::Schedule {
             x: wp[0],
@@ -215,14 +229,16 @@ pub(super) async fn run_patrol_lap(state: Arc<Mutex<SharedState>>, entry: Schedu
             }
             match execute_walk(&state, &to, Some(false)).await {
                 MoveResult::Arrived => break,
-                MoveResult::Died => return,
+                MoveResult::Died => break 'lap,
                 MoveResult::Blocked | MoveResult::Error if attempt == 0 => {}
                 MoveResult::Blocked | MoveResult::Error => {
                     warn!("Patrol waypoint unreachable ({:.1}, {:.1})", wp[0], wp[2]);
                 }
             }
         }
+        state.lock().await.patrol_reached += 1;
     }
+    state.lock().await.patrol_reached = 0;
 }
 
 pub(super) async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry: &ScheduleEntry) {

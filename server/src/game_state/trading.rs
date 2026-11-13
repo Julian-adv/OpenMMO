@@ -2,7 +2,6 @@ use super::localization::{localized, PlayerMessage};
 use crate::merchant_defs::{merchant_defs, MerchantDefinition};
 use crate::npc_defs::{npc_defs, NpcDefinition};
 use crate::types::{PlayerId, ServerMessage};
-use onlinerpg_shared::inventory::ItemInstance;
 use onlinerpg_shared::messages::{
     ActiveDeal, BagLineItem, BuybackEntry, DealKind, StockEntry, TradeLineItem,
 };
@@ -534,24 +533,81 @@ impl super::GameState {
         let Some(def) = npc_defs().get_trader_by_npc_name(npc_name) else {
             return;
         };
-        self.seed_npc_items(npc_player_id, &def.keepsakes, false)
-            .await;
+        self.seed_npc_items(npc_player_id, &def.keepsakes).await;
     }
 
-    /// Grant an official NPC's registry loadout on join: missing items are
-    /// created and worn (free slots first, bag otherwise). Also covers a
-    /// fresh character's first join — creation writes no loadout rows.
+    /// Grant and wear an official NPC's registry loadout on join. Also covers
+    /// a fresh character's first join — creation writes no loadout rows.
     pub async fn seed_npc_loadout(&self, npc_player_id: &PlayerId, npc_name: &str) {
         let Some(def) = npc_defs().get_by_npc_name(npc_name) else {
             return;
         };
-        self.seed_npc_items(npc_player_id, &def.loadout, true).await;
+        self.seed_npc_items(npc_player_id, &def.loadout).await;
+        self.dress_npc(npc_player_id, def).await;
     }
 
-    /// Grant whichever of `wanted` the NPC no longer carries, worn or
-    /// bagged. `wear` puts an item into its free equip slot (loadout);
-    /// otherwise everything lands in the bag (keepsakes).
-    async fn seed_npc_items(&self, npc_player_id: &PlayerId, wanted: &[String], wear: bool) {
+    /// Wear every loadout piece, moving whatever held its slot to the bag,
+    /// and print the NPC's crest on its cape.
+    async fn dress_npc(&self, npc_player_id: &PlayerId, def: &crate::npc_defs::NpcDefinition) {
+        let crest = def
+            .cape_crest
+            .as_deref()
+            .and_then(|name| self.cape_textures.crest(name));
+        let mut changed = false;
+        {
+            let mut inventories = self.inventories.write().await;
+            let Some(inv) = inventories.get_mut(npc_player_id) else {
+                return;
+            };
+            for item_def_id in &def.loadout {
+                let Some(slot) = self.item_defs.get(item_def_id).and_then(|d| d.equip_slot) else {
+                    continue;
+                };
+                if inv
+                    .equipped
+                    .get(&slot)
+                    .is_some_and(|worn| def.in_loadout(&worn.item_def_id))
+                {
+                    continue;
+                }
+                let Some(i) = inv
+                    .bag
+                    .iter()
+                    .position(|item| &item.item_def_id == item_def_id)
+                else {
+                    continue;
+                };
+                let piece = inv.bag.remove(i);
+                if let Some(old) = inv.equipped.insert(slot, piece) {
+                    inv.bag.push(old);
+                }
+                changed = true;
+            }
+            if let Some(crest) = crest {
+                for item in inv.equipped.values_mut().filter(|item| {
+                    def.in_loadout(&item.item_def_id)
+                        && self
+                            .item_defs
+                            .get(&item.item_def_id)
+                            .is_some_and(|d| d.is_cape())
+                }) {
+                    if item.cape_texture.as_deref() != Some(crest.texture.as_str())
+                        || item.cape_color.as_deref() != Some(crest.color)
+                    {
+                        item.cape_texture = Some(crest.texture.clone());
+                        item.cape_color = Some(crest.color.to_string());
+                        changed = true;
+                    }
+                }
+            }
+        }
+        if changed {
+            self.mark_inventory_dirty(npc_player_id).await;
+        }
+    }
+
+    /// Put whichever of `wanted` the NPC no longer carries into its bag.
+    async fn seed_npc_items(&self, npc_player_id: &PlayerId, wanted: &[String]) {
         let missing: Vec<&String> = {
             let inventories = self.inventories.read().await;
             let Some(inv) = inventories.get(npc_player_id) else {
@@ -569,39 +625,12 @@ impl super::GameState {
                 return;
             };
             for item_def_id in missing {
-                let free_slot = if wear {
-                    self.item_defs
-                        .get(item_def_id)
-                        .and_then(|d| d.equip_slot)
-                        .filter(|slot| !inv.equipped.contains_key(slot))
-                } else {
-                    None
-                };
-                match free_slot {
-                    Some(slot) => {
-                        inv.equipped.insert(
-                            slot,
-                            ItemInstance {
-                                locked: false,
-                                instance_id: next_id,
-                                item_def_id: item_def_id.clone(),
-                                quantity: 1,
-                                enchant: 0,
-                                cape_color: None,
-                                cape_texture: None,
-                            },
-                        );
-                        next_id += 1;
-                    }
-                    None => {
-                        let stackable = self.item_defs.stackable(item_def_id);
-                        next_id += stack_into_bag(
-                            &mut inv.bag,
-                            BagInsert::one(stackable, item_def_id, 0, next_id),
-                        )
-                        .ids_used;
-                    }
-                }
+                let stackable = self.item_defs.stackable(item_def_id);
+                next_id += stack_into_bag(
+                    &mut inv.bag,
+                    BagInsert::one(stackable, item_def_id, 0, next_id),
+                )
+                .ids_used;
             }
         }
         self.mark_inventory_dirty(npc_player_id).await;

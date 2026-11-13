@@ -46,7 +46,7 @@
   import { updatePeltPhysics } from '../effects/pelt-rig'
   import { updateValkyrieWings } from '../effects/valkyrie-wings'
   import { createSecondaryMotionScheduler } from '../effects/secondary-motion-scheduler'
-  import { translate } from '../i18n'
+  import { t, translate, type MessageKey } from '../i18n'
   import { visibleMana } from '../stores/gameStore'
   import { playPrimalRoarSound } from '../managers/sfxManager'
   import {
@@ -290,6 +290,7 @@
     /** Shown title id, drawn in smaller text above the name. */
     title?: string | null
     family?: string | null
+    rank?: string | null
     /** Stone: grey and frozen in pose (doc/DEBUFF.md `petrifies`). */
     petrified?: boolean
     /** Remote player's floor (negative = dungeon depth), for the hover ring. */
@@ -343,6 +344,7 @@
     remotePlayerId,
     title = null,
     family = null,
+    rank = null,
     petrified = false,
     floorLevel = 0,
     heightManager = null,
@@ -2336,7 +2338,7 @@
     {/if}
     <TextLabel
       text={name}
-      suffix={family}
+      suffix={family ?? (rank ? $t(`rank.${rank}` as MessageKey) : null)}
       suffixColor={isCurrentPlayer ? '#56bfc4' : '#cdeec4'}
       position={[0, isCurrentPlayer ? -0.04 : 0, 0]}
       fontSize={0.3}

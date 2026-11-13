@@ -134,6 +134,7 @@ impl CharacterAppearance {
                     | CharacterClass::Ranger
                     | CharacterClass::Priest
                     | CharacterClass::Bard
+                    | CharacterClass::Guard
             )
         {
             let hair = if self.hair.is_female() {
@@ -158,6 +159,7 @@ impl CharacterAppearance {
                     | CharacterClass::Ranger
                     | CharacterClass::Priest
                     | CharacterClass::Bard
+                    | CharacterClass::Guard
             )
         {
             let (hair, hair_color) = if self.hair.is_female() {

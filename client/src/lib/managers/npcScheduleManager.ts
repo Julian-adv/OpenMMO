@@ -17,6 +17,7 @@ export interface NpcScheduleEntry {
     radius?: number
     probability?: number
   }[]
+  cue?: string
 }
 
 export interface NpcScheduleData {

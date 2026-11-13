@@ -1148,6 +1148,11 @@ pub enum ClientMessage {
     OfferMergerPledge {
         target_player_id: PlayerId,
     },
+    /// NPC-only: the guard captain opens the reclaim window for a nearby
+    /// player, the spoken way into `ImpoundQuery`.
+    OfferImpound {
+        target_player_id: PlayerId,
+    },
 }
 
 impl ClientMessage {
@@ -2229,6 +2234,10 @@ pub enum ServerMessage {
     },
     /// Direct to a family head: the officiant holds out the pledge form.
     MergerPledgeOffered,
+    /// Direct to a player: the guard captain opens the reclaim window.
+    ImpoundOffered {
+        npc_player_id: PlayerId,
+    },
     /// Answer to `InspectFamilyEmblem`.
     FamilyEmblemShown {
         player_name: String,
@@ -2771,6 +2780,7 @@ impl ServerMessage {
             | Self::FurnitureSelectionNotice { .. }
             | Self::MergerRiteCue { .. }
             | Self::MergerPledgeOffered
+            | Self::ImpoundOffered { .. }
             | Self::FamilyEmblemShown { .. }
             | Self::TradeDeclined { .. }
             | Self::DealResult { .. }

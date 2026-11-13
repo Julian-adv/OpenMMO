@@ -51,6 +51,7 @@ pub fn new_player(
         petrified: false,
         title: None,
         family: None,
+        rank: None,
         floor_level: 0,
         object_type: None,
         main_hand: None,

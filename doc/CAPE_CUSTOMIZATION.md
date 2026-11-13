@@ -354,3 +354,11 @@ material.colorNode = mix(color(dye), print.rgb, print.a.mul(float(frontFacing)))
    천 머티리얼 → 신고·차단.
 
 1~4가 그 자체로 완결이다. 2단계는 1단계 위에 텍스처 필드만 얹는다.
+
+## 내장 문장
+
+- 게임이 직접 싣는 문장은 `server/crests/*.png`에 두고 `cape_texture.rs`의 `BUILTIN_CRESTS`에 이름·천 색과 함께 등록한다. 서버가 시작할 때 업로드와 같은 재인코딩을 거쳐 `cape-textures/`에 넣으므로 배포 때 파일을 따로 옮기지 않는다.
+- `GET /api/cape-texture/<이름>`은 해시 대신 문장 이름도 받는다.
+- 알데마크 문장(`aldermark`, 천 색 `#1f4a34`): 방패 안에 오리나무, 강 물결 세 줄, 두 달. `tools/crests/build_aldermark_crest.py`가 Pillow로 그린다(2026-11-13, AI 생성 도구 미사용, 자체 제작).
+- 쓰는 곳: 공식 NPC 망토(`npcs.csv`의 `capeCrest`), 운영자가 지역 파일에 놓은 가문 깃발·휘장의 `emblem.texture`.
+

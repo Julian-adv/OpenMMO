@@ -1,4 +1,5 @@
 import { writable } from 'svelte/store'
+import { networkManager } from '../network/socket'
 
 export interface ImpoundedItem {
   item_def_id: string
@@ -20,6 +21,7 @@ export interface ImpoundSession {
 export const impoundSession = writable<ImpoundSession | null>(null)
 
 export function openImpound(npcPlayerId: number) {
+  networkManager.sendImpoundQuery(npcPlayerId)
   impoundSession.set({
     npcPlayerId,
     items: null,

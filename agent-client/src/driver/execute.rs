@@ -701,19 +701,24 @@ pub(super) async fn handle_response(
             continue;
         }
 
-        if let AgentAction::OfferPledge { player } = action {
+        if let AgentAction::OfferPledge { player } | AgentAction::OpenImpound { player } = action {
+            let pledge = matches!(action, AgentAction::OfferPledge { .. });
             let mut s = state.lock().await;
-            let Some((target_id, _)) = s.resolve_nearby_player(player) else {
-                s.push_agent_event(format!(
-                    "[Rite] No one named '{player}' is nearby; no pledge form was handed over."
-                ));
+            let Some((target_player_id, _)) = s.resolve_nearby_player(player) else {
+                s.push_agent_event(if pledge {
+                    format!("[Rite] No one named '{player}' is nearby; no pledge form was handed over.")
+                } else {
+                    format!("[Impound] No one named '{player}' is nearby; no reclaim window was opened.")
+                });
                 continue;
             };
-            let cmd = onlinerpg_shared::ClientMessage::OfferMergerPledge {
-                target_player_id: target_id,
+            let cmd = if pledge {
+                onlinerpg_shared::ClientMessage::OfferMergerPledge { target_player_id }
+            } else {
+                onlinerpg_shared::ClientMessage::OfferImpound { target_player_id }
             };
             if let Err(e) = s.send_command(cmd).await {
-                error!("Failed to send offer_pledge: {e}");
+                error!("Failed to send {}: {e}", action.label());
             }
             continue;
         }

@@ -78,6 +78,8 @@ export type ServerPlayer = {
   /** Shown title id (doc/TITLES.md). */
   title?: string | null
   family?: string | null
+  /** An official NPC's rank id (`rank.<id>`), shown where a family name would be. */
+  rank?: string | null
 }
 
 export type ServerMonster = {

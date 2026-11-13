@@ -13,10 +13,6 @@
   const close = () => impoundSession.set(null)
 
   $effect(() => mountOverlay('impound', close))
-  const npcId = $derived($impoundSession?.npcPlayerId)
-  $effect(() => {
-    if (npcId !== undefined) networkManager.sendImpoundQuery(npcId)
-  })
 
   function reclaim() {
     if (!session) return

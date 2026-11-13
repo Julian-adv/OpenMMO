@@ -41,6 +41,34 @@ const UPLOAD_WINDOW: Duration = Duration::from_secs(600);
 /// emblem's edge as a dark halo.
 const ALPHA_BLEED_PASSES: u32 = 4;
 
+/// A crest the game itself ships.
+pub struct Crest {
+    pub texture: String,
+    pub color: &'static str,
+}
+
+const BUILTIN_CRESTS: &[(&str, &[u8], &str)] = &[(
+    "aldermark",
+    include_bytes!("../crests/aldermark.png"),
+    "#1f4a34",
+)];
+
+/// Each built-in crest as stored: name, PNG, content hash, cloth colour.
+fn builtin_crests() -> &'static [(&'static str, Vec<u8>, String, &'static str)] {
+    static CRESTS: std::sync::OnceLock<Vec<(&str, Vec<u8>, String, &str)>> =
+        std::sync::OnceLock::new();
+    CRESTS.get_or_init(|| {
+        BUILTIN_CRESTS
+            .iter()
+            .map(|(name, bytes, color)| {
+                let png = reencode(bytes).expect("built-in crest is a valid PNG");
+                let hash = hex_digest(&png);
+                (*name, png, hash, *color)
+            })
+            .collect()
+    })
+}
+
 #[derive(Debug)]
 pub enum UploadError {
     NotSignedIn,
@@ -83,6 +111,7 @@ pub struct CapeTextureStore {
     sessions: RwLock<HashMap<String, String>>,
     /// Account → recent upload times, trimmed on every check.
     uploads: RwLock<HashMap<String, Vec<Instant>>>,
+    crests: HashMap<&'static str, Crest>,
 }
 
 impl CapeTextureStore {
@@ -99,7 +128,17 @@ impl CapeTextureStore {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => HashSet::new(),
             Err(e) => return Err(e),
         };
+        let mut crests = HashMap::new();
+        for (name, png, texture, color) in builtin_crests() {
+            let path = dir.join(format!("{texture}.png"));
+            if !path.exists() {
+                onlinerpg_terrain::io::atomic_write_sync(&path, png)?;
+            }
+            let texture = texture.clone();
+            crests.insert(*name, Crest { texture, color });
+        }
         Ok(Self {
+            crests,
             reports_path: dir.join("reports.jsonl"),
             dir,
             blocked_path,
@@ -149,6 +188,10 @@ impl CapeTextureStore {
     /// "is it there" half, rather than stat-ing the file it is about to open.
     pub async fn may_serve(&self, hash: &str) -> bool {
         is_texture_hash(hash) && !self.is_blocked(hash).await
+    }
+
+    pub fn crest(&self, name: &str) -> Option<&Crest> {
+        self.crests.get(name)
     }
 
     pub fn path(&self, hash: &str) -> PathBuf {
@@ -490,7 +533,7 @@ mod tests {
                     .is_ok_and(|e| e.path().extension().is_some_and(|ext| ext == "png"))
             })
             .count();
-        assert_eq!(files, 1);
+        assert_eq!(files, 1 + BUILTIN_CRESTS.len());
     }
 
     #[tokio::test]

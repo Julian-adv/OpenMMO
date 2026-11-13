@@ -83,8 +83,8 @@ async fn upload_texture(
     }
 }
 
-/// Cached hard but not forever. The name is the content, so a copy can never
-/// be *wrong* — `immutable` and a year would be free correctness-wise. But a
+/// Cached hard but not forever. A hash names its content (a crest name
+/// resolves to one), so a copy can never be *wrong* — `immutable` and a year would be free correctness-wise. But a
 /// blocked print has to leave the viewers who already have it, and `immutable`
 /// means a browser never asks again. A day keeps the crowd's fan-out off the
 /// origin while bounding how long a blocked picture survives on screens.
@@ -92,6 +92,9 @@ async fn get_texture(
     State(store): State<Arc<CapeTextureStore>>,
     Path(hash): Path<String>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    let hash = store
+        .crest(&hash)
+        .map_or(hash, |crest| crest.texture.clone());
     // No stat first: the read is the existence check, and this is the one
     // route every nearby client hits.
     if !store.may_serve(&hash).await {

@@ -28,6 +28,9 @@ fn full_probability() -> f32 {
     1.0
 }
 
+/// Registry id of the guard captain, who holds impounded goods.
+pub const GUARD_CAPTAIN: &str = "karl";
+
 /// Road patrol: `waypoints` are walked out and back as laps (doc/ROAD_PATROL.md).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct RoadPatrol {
@@ -110,6 +113,9 @@ pub struct ScheduleEntry {
     pub waypoint_activities: Vec<WaypointActivity>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub patrol: Option<RoadPatrol>,
+    /// Told to the NPC on arrival, to prompt a spoken line.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cue: Option<String>,
     /// Parsed condition (set after deserialization).
     #[serde(skip)]
     pub condition: Option<ScheduleCondition>,

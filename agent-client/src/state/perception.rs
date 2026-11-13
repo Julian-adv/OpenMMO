@@ -1,6 +1,7 @@
 use super::*;
 
 const COMBAT_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+const ASSIST_RANGE_M: f32 = 20.0;
 
 impl SharedState {
     pub(crate) fn dialogue_only(&self) -> bool {
@@ -33,7 +34,7 @@ impl SharedState {
             )
     }
 
-    pub(super) fn record_self_combat(&mut self, monster_id: &str) {
+    fn record_self_combat(&mut self, monster_id: &str) {
         self.combat_monsters
             .retain(|_, at| at.elapsed() < COMBAT_IDLE_TIMEOUT);
         self.combat_monsters
@@ -43,26 +44,90 @@ impl SharedState {
     /// The nearest live monster that recently struck a self-defending
     /// official NPC and is still within weapon reach on its floor.
     pub(crate) fn self_defense_target(&self) -> Option<String> {
-        let player = self.self_player.as_ref().filter(|p| {
-            p.is_official_npc && p.health > 0 && crate::shop_info::self_defense(&p.name)
-        })?;
+        let player = self
+            .live_official_npc()
+            .filter(|p| crate::shop_info::self_defense(&p.name))?;
         let reach = self.attack_approach_range() + onlinerpg_shared::reach::REACH_SLACK_METERS;
+        self.nearest_recent_combat(player, reach)
+    }
+
+    /// Whether we join the fights of those around us and stow our weapon.
+    pub(crate) fn protects(&self) -> bool {
+        self.live_official_npc()
+            .is_some_and(|p| crate::shop_info::protects(&p.name))
+    }
+
+    /// The nearest monster in a recent fight a protector should run to.
+    pub(crate) fn assist_target(&self) -> Option<String> {
+        let player = self.live_official_npc().filter(|_| self.protects())?;
+        self.nearest_recent_combat(player, ASSIST_RANGE_M)
+    }
+
+    fn live_official_npc(&self) -> Option<&Player> {
+        self.self_player
+            .as_ref()
+            .filter(|p| p.is_official_npc && p.health > 0)
+    }
+
+    fn nearest_recent_combat(&self, player: &Player, range: f32) -> Option<String> {
         self.recent_combat_monsters()
             .filter_map(|(id, monster)| {
                 let monster = monster.filter(|m| live_on_floor(m, player.floor_level))?;
                 let dist_sq = player.position.dist_xz_sq(&monster.position);
-                (dist_sq <= reach.powi(2)).then_some((dist_sq, id))
+                (dist_sq <= range.powi(2)).then_some((dist_sq, id))
             })
             .min_by(|a, b| a.0.total_cmp(&b.0))
             .map(|(_, id)| id.clone())
     }
 
+    /// A blow traded with `player_id`: ours always counts, and a protector
+    /// takes up the fight of anyone within `ASSIST_RANGE_M`.
+    pub(super) fn record_combat(&mut self, monster_id: &str, player_id: &PlayerId) {
+        let mine = self.self_player_id.as_ref() == Some(player_id);
+        let near = || {
+            let me = self.live_official_npc()?;
+            let other = self.nearby_players.get(player_id)?;
+            Some(
+                other.floor_level == me.floor_level
+                    && other.position.dist_xz_sq(&me.position) <= ASSIST_RANGE_M.powi(2),
+            )
+        };
+        if mine || (self.protects() && near() == Some(true)) {
+            self.record_self_combat(monster_id);
+        }
+    }
+
+    /// A chase that failed leaves the monster alone until it strikes again.
+    pub(crate) fn forget_combat(&mut self, monster_id: &str) {
+        self.combat_monsters.remove(monster_id);
+    }
+
+    /// Draw or put away the main-hand weapon; `None` when already so.
+    pub(crate) fn weapon_command(&self, armed: bool) -> Option<onlinerpg_shared::ClientMessage> {
+        use onlinerpg_shared::inventory::EquipSlot;
+        if armed == self.main_hand_weapon().is_some() {
+            return None;
+        }
+        if !armed {
+            return Some(onlinerpg_shared::ClientMessage::UnequipItem {
+                slot: EquipSlot::MainHand,
+            });
+        }
+        self.self_bag
+            .iter()
+            .find(|item| {
+                crate::item_defs::get(&item.item_def_id).is_some_and(|def| {
+                    def.equip_slot == Some(EquipSlot::MainHand)
+                        && def.category.as_deref() == Some("weapon")
+                })
+            })
+            .map(|item| onlinerpg_shared::ClientMessage::EquipItem {
+                instance_id: item.instance_id,
+            })
+    }
+
     pub(crate) fn schedule_combat_active(&self) -> bool {
-        let Some(player) = self
-            .self_player
-            .as_ref()
-            .filter(|player| player.is_official_npc && player.health > 0)
-        else {
+        let Some(player) = self.live_official_npc() else {
             return false;
         };
         self.recent_combat_monsters()

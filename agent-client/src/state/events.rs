@@ -830,9 +830,7 @@ impl SharedState {
                 ..
             } => {
                 self.set_player_health(player_id, *current_health);
-                if self.self_player_id.as_ref() == Some(player_id) {
-                    self.record_self_combat(monster_id);
-                }
+                self.record_combat(monster_id, player_id);
             }
             ServerMessage::MonsterSkillStruck {
                 monster_id,
@@ -841,18 +839,14 @@ impl SharedState {
             } => {
                 for v in victims {
                     self.set_player_health(&v.player_id, v.current_health);
-                    if self.self_player_id == Some(v.player_id) {
-                        self.record_self_combat(monster_id);
-                    }
+                    self.record_combat(monster_id, &v.player_id);
                 }
             }
             ServerMessage::PlayerAttacked {
                 player_id,
                 monster_id,
                 ..
-            } if self.self_player_id.as_ref() == Some(player_id) => {
-                self.record_self_combat(monster_id);
-            }
+            } => self.record_combat(monster_id, player_id),
             ServerMessage::PlayerDead { player_id } => {
                 self.set_player_health(player_id, 0);
             }

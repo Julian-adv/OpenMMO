@@ -171,6 +171,7 @@ impl NpcConfig {
             officiant: name == Some(onlinerpg_shared::family::MERGER_OFFICIANT),
             inn_staff: self.serves_tables(),
             bard: self.plays_music(),
+            guard_captain: self.id.as_deref() == Some(onlinerpg_shared::schedule::GUARD_CAPTAIN),
         }
     }
 

@@ -132,6 +132,12 @@ pub(super) enum AgentAction {
         #[serde(alias = "target", alias = "player_name", alias = "target_player")]
         player: String,
     },
+    /// Open the reclaim window for a nearby player (the guard captain only).
+    #[serde(rename = "open_impound")]
+    OpenImpound {
+        #[serde(alias = "target", alias = "player_name", alias = "target_player")]
+        player: String,
+    },
     #[serde(rename = "buy_from_player")]
     BuyFromPlayer {
         player: String,
@@ -604,6 +610,8 @@ pub(crate) struct Roles {
     pub(crate) inn_staff: bool,
     /// Plays music.
     pub(crate) bard: bool,
+    /// Holds impounded goods for buy-back.
+    pub(crate) guard_captain: bool,
 }
 
 impl Roles {
@@ -613,6 +621,7 @@ impl Roles {
         match action {
             "offer_deal" | "open_trade" => Some(self.trader),
             "offer_pledge" => Some(self.officiant),
+            "open_impound" => Some(self.guard_captain),
             "serve" => Some(self.inn_staff),
             "recite" => Some(self.bard),
             _ => None,
@@ -902,6 +911,13 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
         doc: r#"- Open the merger pledge form on a nearby family
   head's screen when they ask in words to merge families:
   {"type": "offer_pledge", "target": "darkcocoa"}"#,
+    },
+    ActionSpec {
+        names: &["open_impound"],
+        aliases: &[],
+        doc: r#"- Open the reclaim window on a nearby player's screen
+  when they say they have come for their seized goods:
+  {"type": "open_impound", "target": "darkcocoa"}"#,
     },
     ActionSpec {
         names: &[
@@ -1258,6 +1274,7 @@ impl AgentAction {
             | Self::OfferDeal { .. }
             | Self::OpenTrade { .. }
             | Self::OfferPledge { .. }
+            | Self::OpenImpound { .. }
             | Self::PartyInvite { .. }
             | Self::PartyAccept { .. }
             | Self::PartyDecline { .. }
@@ -1434,6 +1451,7 @@ impl AgentAction {
             | Self::OfferDeal { .. }
             | Self::OpenTrade { .. }
             | Self::OfferPledge { .. }
+            | Self::OpenImpound { .. }
             | Self::PartyInvite { .. }
             | Self::PartyAccept { .. }
             | Self::PartyDecline { .. }
@@ -1483,6 +1501,7 @@ impl AgentAction {
             Self::OfferDeal { .. } => "offer_deal",
             Self::OpenTrade { .. } => "open_trade",
             Self::OfferPledge { .. } => "offer_pledge",
+            Self::OpenImpound { .. } => "open_impound",
             Self::OpenStall { .. } => "open_stall",
             Self::CloseStall => "close_stall",
             Self::BuyFromStall { .. } => "buy_from_stall",
@@ -2120,6 +2139,7 @@ pub(super) fn action_to_command(
         AgentAction::OfferDeal { .. } => None,
         AgentAction::OpenTrade { .. } => None,
         AgentAction::OfferPledge { .. } => None,
+        AgentAction::OpenImpound { .. } => None,
         // Needs the bag and worn gear from SharedState; likewise handled there.
         AgentAction::Use { .. } => None,
         AgentAction::Sell { .. } => None,
@@ -3287,6 +3307,7 @@ mod tests {
                         officiant: true,
                         inn_staff: true,
                         bard: true,
+                        guard_captain: true,
                     }),
                 );
             let text = if name.ends_with(".rs") {

@@ -227,3 +227,34 @@ async fn the_captain_keeps_both_standing_notices_posted_and_renews_stale_ones() 
         0
     );
 }
+
+#[tokio::test]
+async fn only_the_captain_opens_the_reclaim_window_and_only_for_someone_close() {
+    let (game, _auth, mut owner_rx, mut guard_rx) = setup("offer_impound").await;
+    let (owner, karl) = (pid("Builder"), pid("Karl"));
+    let offered = |rx: &mut DirectRx| {
+        drain(rx)
+            .iter()
+            .any(|message| matches!(message, ServerMessage::ImpoundOffered { .. }))
+    };
+
+    game.offer_impound(&karl, &owner).await;
+    assert!(offered(&mut owner_rx));
+
+    game.offer_impound(&owner, &karl).await;
+    assert!(!offered(&mut guard_rx));
+
+    game.players
+        .write()
+        .await
+        .get_mut(&owner)
+        .unwrap()
+        .position
+        .x = 60.0;
+    game.offer_impound(&karl, &owner).await;
+    assert!(!offered(&mut owner_rx));
+    assert!(drain(&mut guard_rx).iter().any(|message| matches!(
+        message,
+        ServerMessage::SystemMessage { message, .. } if message.starts_with("[Impound]")
+    )));
+}

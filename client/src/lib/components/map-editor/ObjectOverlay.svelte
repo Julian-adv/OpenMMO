@@ -82,6 +82,7 @@
   import type { Unsubscriber } from 'svelte/store'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import { disposeObjectTree } from '../../utils/disposeObjectTree'
+  import { emblemClothMaterial } from '../../utils/familyEmblem'
   import { translucentClone } from '../../utils/translucentMaterial'
 
   const PREVIEW_OPACITY = 0.5
@@ -810,7 +811,8 @@
    *  where it sits). A changed key means teardown + re-clone of that one. */
   function structKeyOf(p: ObjectPlacement): string {
     const sel = isEditing() && p.id === selectedId ? 'S' : ''
-    return `${p.type}:${p.text ?? ''}:${sel}`
+    const emblem = p.emblem ? `${p.emblem.texture}/${p.emblem.color}` : ''
+    return `${p.type}:${p.text ?? ''}:${emblem}:${sel}`
   }
 
   function buildClone(
@@ -828,6 +830,14 @@
     if (p.fixed) clone.userData.objectFixed = true
     clone.userData.objectType = p.type
     clone.userData.structKey = structKey
+    if (p.emblem) {
+      clone.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.name === 'emblem_cloth') {
+          child.material = emblemClothMaterial(p.emblem)
+          child.userData.ownsMaterial = true
+        }
+      })
+    }
     const catDef = objectDefsById.get(p.type)
     if (p.text) {
       if (catDef?.procedural === 'shopSign') {

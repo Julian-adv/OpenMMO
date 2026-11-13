@@ -652,6 +652,52 @@ async fn a_registry_loadout_is_granted_and_worn_on_join() {
 }
 
 #[tokio::test]
+async fn a_changed_loadout_redresses_the_npc_and_prints_its_crest() {
+    let game_state = make_test_game_state("loadout_redress");
+    setup_resident_trade(&game_state, 0, vec![], vec![]).await;
+    let npc = pid("npc_karl");
+    let chest = game_state
+        .item_defs
+        .get("breastplate")
+        .unwrap()
+        .equip_slot
+        .unwrap();
+    {
+        let mut inventories = game_state.inventories.write().await;
+        let mut old = bag_item(900, "breastplate", 1);
+        old.locked = false;
+        inventories
+            .get_mut(&npc)
+            .unwrap()
+            .equipped
+            .insert(chest, old);
+    }
+
+    game_state.seed_npc_loadout(&npc, "Brenna").await;
+    game_state.seed_npc_loadout(&npc, "Brenna").await;
+
+    let crest = game_state.cape_textures.crest("aldermark").unwrap();
+    let inventories = game_state.inventories.read().await;
+    let inv = &inventories[&npc];
+    assert_eq!(inv.equipped[&chest].item_def_id, "worn_valkyrie_top");
+    assert_eq!(
+        inv.bag
+            .iter()
+            .filter(|item| item.item_def_id == "breastplate")
+            .count(),
+        1
+    );
+    let cape = inv
+        .equipped
+        .values()
+        .find(|item| item.item_def_id == "wool_cape")
+        .unwrap();
+    assert_eq!(cape.cape_texture.as_deref(), Some(crest.texture.as_str()));
+    assert_eq!(cape.cape_color.as_deref(), Some(crest.color));
+    assert!(game_state.cape_textures.is_wearable(&crest.texture).await);
+}
+
+#[tokio::test]
 async fn loadout_gear_is_not_for_sale_even_from_the_bag() {
     let game_state = make_test_game_state("loadout_stock");
     setup_resident_trade(

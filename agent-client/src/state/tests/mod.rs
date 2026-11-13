@@ -153,6 +153,7 @@ pub(crate) fn test_player(x: f32, z: f32) -> Player {
         petrified: false,
         title: None,
         family: None,
+        rank: None,
     }
 }
 

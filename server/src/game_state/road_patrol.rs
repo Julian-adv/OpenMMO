@@ -19,7 +19,7 @@ use onlinerpg_shared::messages::{ImpoundedItem, PatrolSeizure};
 /// How far around a guard one sweep reaches.
 const SWEEP_RADIUS_M: f32 = 24.0;
 const GUARD_CLASS: &str = "guard";
-pub(crate) const GUARD_CAPTAIN: &str = "karl";
+pub(crate) use onlinerpg_shared::schedule::GUARD_CAPTAIN;
 
 fn reclaim_fee(base_price: i64, quantity: u32) -> i64 {
     base_price * i64::from(quantity) / 2
@@ -43,6 +43,13 @@ fn seizure_letter(seizure: &RoadSeizure, captain: &str) -> String {
              — {captain}, Captain of the Guard"
         )
     }
+}
+
+fn is_guard_captain(npc: &crate::types::Player) -> bool {
+    npc.is_official_npc
+        && npc_defs()
+            .get_by_npc_name(&npc.name)
+            .is_some_and(|def| def.id == GUARD_CAPTAIN)
 }
 
 impl GameState {
@@ -201,10 +208,7 @@ impl GameState {
         let (Some(player), Some(npc)) = (players.get(player_id), players.get(npc_player_id)) else {
             return false;
         };
-        npc.is_official_npc
-            && npc_defs()
-                .get_by_npc_name(&npc.name)
-                .is_some_and(|def| def.id == GUARD_CAPTAIN)
+        is_guard_captain(npc)
             && reachable_dist_sq(
                 player.position,
                 player.floor_level,
@@ -230,6 +234,37 @@ impl GameState {
                 ),
             })
             .collect()
+    }
+
+    /// The captain opens the reclaim window for a player standing with him.
+    pub async fn offer_impound(&self, npc_player_id: &PlayerId, target_id: &PlayerId) {
+        let target_name = {
+            let players = self.players.read().await;
+            if !players.get(npc_player_id).is_some_and(is_guard_captain) {
+                return;
+            }
+            players.get(target_id).map(|target| target.name.clone())
+        };
+        let (to, message) = if self.at_guard_captain(target_id, npc_player_id).await {
+            let npc_player_id = *npc_player_id;
+            (target_id, ServerMessage::ImpoundOffered { npc_player_id })
+        } else {
+            let message = match target_name {
+                Some(name) => format!(
+                    "[Impound] {name} is not standing with you; ask them to come closer first."
+                ),
+                None => "[Impound] That visitor is no longer here.".to_string(),
+            };
+            let localization = None;
+            (
+                npc_player_id,
+                ServerMessage::SystemMessage {
+                    message,
+                    localization,
+                },
+            )
+        };
+        self.send_direct_message(to, message).await;
     }
 
     pub async fn impound_action(

@@ -52,6 +52,12 @@ pub struct NpcDefinition {
     /// into free slots. Never sellable, unlike keepsakes.
     #[serde(default, deserialize_with = "crate::semicolon_list::deserialize")]
     pub loadout: Vec<String>,
+    /// Built-in crest printed on the cape in the loadout.
+    #[serde(rename = "capeCrest", default)]
+    pub cape_crest: Option<String>,
+    /// Shown after the name; the client translates `rank.<id>`.
+    #[serde(default)]
+    pub rank: Option<String>,
 }
 
 impl NpcDefinition {
