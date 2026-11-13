@@ -446,6 +446,10 @@ const monthFormatter = new Intl.DateTimeFormat('ko-KR', {
   timeZone: 'Asia/Seoul', year: '2-digit', month: 'numeric',
 })
 
+const shortDayFormatter = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric' })
+
+export const formatDay = (timestamp: number) => dayFormatter.format(timestamp * 1000)
+export const formatShortDay = (timestamp: number) => shortDayFormatter.format(timestamp * 1000)
 export const formatTime = (timestamp: number) => timeFormatter.format(timestamp * 1000)
 export const formatCount = (value: number) => value.toLocaleString('ko-KR', { maximumFractionDigits: 1 })
 export const formatPercent = (value: number | null | undefined) => value == null

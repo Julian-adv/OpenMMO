@@ -15,6 +15,8 @@ use tracing::warn;
 mod combat_audit;
 #[path = "metrics_dungeon_population.rs"]
 mod dungeon_population;
+#[path = "metrics_families.rs"]
+mod families;
 #[path = "metrics_field_raids.rs"]
 mod field_raids;
 #[path = "metrics_heroic_tales.rs"]
@@ -23,6 +25,7 @@ mod heroic_tales;
 mod rare_drops;
 
 pub use dungeon_population::{DungeonBandCount, DungeonFloorCount, DungeonPopulationSample};
+pub use families::{FamilyDayCounts, FamilyEventCounts, FamilyMetrics, TopFamily};
 pub use field_raids::{
     outcome_from_key, outcome_key, FieldRaidEvent, FieldRaidRaider, FieldRaidRecord, FieldRaidTally,
 };
@@ -531,6 +534,7 @@ fn metrics_routes(game: Arc<GameState>, auth: Arc<AuthService>) -> Router {
         )
         .route("/api/metrics/rare-drops", get(rare_drops::rare_drops))
         .route("/api/metrics/field-raids", get(field_raids::field_raids))
+        .route("/api/metrics/families", get(families::families))
         .route(
             "/api/metrics/dungeon-population",
             get(dungeon_population::dungeon_population),

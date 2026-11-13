@@ -9,6 +9,8 @@ mod enchant_failures;
 mod estate_storage;
 #[path = "auth_family.rs"]
 mod family;
+#[path = "auth_family_metrics.rs"]
+mod family_metrics;
 #[path = "auth_field_raids.rs"]
 mod field_raids;
 pub(crate) use estate_storage::EstateDeposit;

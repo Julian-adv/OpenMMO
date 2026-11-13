@@ -1106,3 +1106,78 @@ async fn the_login_notice_names_a_member_not_yet_in_the_world() {
     assert!(drain(&mut head_rx).iter().any(|msg| matches!(msg,
         ServerMessage::SystemMessage { message, .. } if message == "Family: Newcomer is online.")));
 }
+
+#[tokio::test]
+async fn family_metrics_count_foundings_mergers_and_dissolutions() {
+    use onlinerpg_shared::family::{FamilyMergeTerms, MergeSide};
+    let game = make_test_game_state("family_metrics");
+    let (auth, path) = make_test_auth_with_path("family_metrics");
+    let mut npc = make_player(REGISTRAR, 1.0, 1.0);
+    npc.name = "Aldwin".into();
+    npc.is_official_npc = true;
+    game.add_player(npc).await;
+    let registrar = pid(REGISTRAR);
+    let mut heads = Vec::new();
+    for (plot, (head, family)) in [
+        ("HeadA", "Ironwood"),
+        ("HeadB", "Oakshield"),
+        ("HeadC", "Lonely"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let (id, _) = enter(&game, &auth, head, FAMILY_FOUND_STAMPS).await;
+        claim(&game, &auth, head, plot as u8 * 2).await;
+        found(&game, &auth, &registrar, head, family).await;
+        heads.push(id);
+    }
+    let (_, _member_rx) = enter(&game, &auth, "MemberB", 0).await;
+    join(&game, &auth, "HeadB", "MemberB").await;
+    let terms = FamilyMergeTerms {
+        keep_name: MergeSide::Proposer,
+        keep_emblem: MergeSide::Proposer,
+        keep_head: MergeSide::Target,
+    };
+    auth.merge_families(heads[0], heads[1], terms)
+        .unwrap()
+        .unwrap();
+    auth.dissolve_family(heads[2]).unwrap().unwrap();
+
+    let reopened = AuthService::new(path).unwrap();
+    let now = crate::auth::unix_now();
+    let metrics = reopened.family_metrics(now, 7, 10).unwrap();
+    assert_eq!((metrics.active, metrics.members), (1, 3));
+    assert_eq!(
+        metrics.total,
+        crate::metrics::FamilyEventCounts {
+            founded: 3,
+            merged: 1,
+            dissolved: 1
+        },
+        "reopening the DB seeds nothing twice"
+    );
+    assert_eq!(metrics.daily.len(), 7);
+    assert_eq!(metrics.daily[6].counts, metrics.total);
+    assert_eq!(
+        metrics.daily[6].day_start,
+        crate::metrics::kst_day_start(now)
+    );
+    assert!(metrics.daily[..6].iter().all(|d| d.counts.founded == 0));
+    let later = reopened
+        .family_metrics(now + crate::metrics::DAY_SECONDS, 7, 10)
+        .unwrap();
+    assert_eq!(later.daily[5].counts, metrics.total);
+    let past = reopened
+        .family_metrics(now + 8 * crate::metrics::DAY_SECONDS, 7, 10)
+        .unwrap();
+    assert_eq!(past.total, metrics.total);
+    assert!(past.daily.iter().all(|d| d.counts.founded == 0));
+
+    let [top] = metrics.top.as_slice() else {
+        panic!("one family left: {:?}", metrics.top);
+    };
+    assert_eq!(top.name, "Ironwood");
+    assert_eq!(top.head.as_deref(), Some("HeadB"));
+    assert_eq!(top.elders, ["HeadA"]);
+    assert_eq!((top.members, top.estates), (3, 2));
+}

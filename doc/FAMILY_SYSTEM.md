@@ -307,6 +307,8 @@ CREATE INDEX IF NOT EXISTS idx_estate_chests_family ON estate_chests(family_id) 
 
 창설·개명·해산 수수료는 인지 구매로 낸다. 골드 소모 기록에는 기존 `item_purchase`(`revenue_stamp`)로 잡힌다.
 
+`family_events`(시각, 가문 ID, 당시 이름, `founded`/`merged`/`dissolved`, 흡수한 가문 ID)는 대시보드 집계용 기록이다. 가문 행이 지워진 뒤에도 남도록 외래 키를 두지 않는다([운영 지표](METRICS.md#가문)).
+
 `family_retired_names.successor_id`는 합병으로 그 이름을 흡수한 가문이다. 해산·개명이면 NULL. `reusable_at`은 다시 쓸 수 있는 시각이고, 합병이면 NULL(재사용 불가)이다. 지난 행은 창설·개명 때 지운다.
 
 `family_storage_log.quantity`는 넣기 양수, 꺼내기 음수. 가문당 2,000건을 넘으면 오래된 것부터 지운다.

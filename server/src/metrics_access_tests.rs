@@ -19,6 +19,7 @@ const ENDPOINTS: &[&str] = &[
     "armor-enchant-leaderboard",
     "gold-per-account",
     "heroic-tales",
+    "families",
     "combat-audit-targets",
     "network",
     "asset-traffic",

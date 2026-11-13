@@ -268,6 +268,33 @@ fn invite_target(
     Ok(Ok((inviter.family_id, name)))
 }
 
+#[derive(Clone, Copy)]
+enum FamilyEvent {
+    Founded,
+    /// Absorbed into the family with this id.
+    Merged(i64),
+    Dissolved,
+}
+
+fn record_family_event(
+    conn: &Connection,
+    family_id: i64,
+    name: &str,
+    event: FamilyEvent,
+) -> Result<(), rusqlite::Error> {
+    let (event, into_family_id) = match event {
+        FamilyEvent::Founded => ("founded", None),
+        FamilyEvent::Merged(survivor) => ("merged", Some(survivor)),
+        FamilyEvent::Dissolved => ("dissolved", None),
+    };
+    conn.execute(
+        "INSERT INTO family_events (timestamp, family_id, name, event, into_family_id)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![unix_now(), family_id, name, event, into_family_id],
+    )?;
+    Ok(())
+}
+
 fn retire_name(conn: &Connection, name: &str) -> Result<(), rusqlite::Error> {
     let now = unix_now();
     conn.execute(
@@ -312,6 +339,7 @@ fn settle_family(
         conn.execute("DELETE FROM families WHERE id=?1", [family_id])?;
         if let Some(name) = name {
             retire_name(conn, &name)?;
+            record_family_event(conn, family_id, &name, FamilyEvent::Dissolved)?;
         }
         return Ok(true);
     }
@@ -395,7 +423,7 @@ impl AuthService {
                 [],
             )?;
         }
-        Ok(())
+        Self::ensure_family_events_schema(conn)
     }
 
     /// The head names which attached estate is the family seat.
@@ -714,6 +742,7 @@ impl AuthService {
                 row.get(0)
             })?;
         tx.execute("DELETE FROM families WHERE id=?1", [absorbed])?;
+        record_family_event(&tx, absorbed, &absorbed_name, FamilyEvent::Merged(survivor))?;
         tx.execute(
             "INSERT OR REPLACE INTO family_retired_names (name, successor_id, retired_at, reusable_at)
              VALUES (?1, ?2, ?3, NULL)",
@@ -776,6 +805,7 @@ impl AuthService {
             params![name, now],
         )?;
         let family_id = tx.last_insert_rowid();
+        record_family_event(&tx, family_id, name, FamilyEvent::Founded)?;
         for rank in 0..FAMILY_RANK_COUNT {
             tx.execute(
                 "INSERT INTO family_ranks (family_id, rank, label, permissions) VALUES (?1,?2,?3,?4)",

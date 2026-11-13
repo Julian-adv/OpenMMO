@@ -14,6 +14,8 @@
   import { parseWeaponEnchantFailures } from './lib/weaponEnchantFailures'
   import RareDropsPanel from './lib/RareDropsPanel.svelte'
   import { parseRareDrops } from './lib/rareDrops'
+  import FamiliesPanel from './lib/FamiliesPanel.svelte'
+  import { parseFamilies } from './lib/families'
   import FieldRaidsPanel from './lib/FieldRaidsPanel.svelte'
   import { parseFieldRaids } from './lib/fieldRaids'
   import HeroicTalesPanel from './lib/HeroicTalesPanel.svelte'
@@ -77,6 +79,7 @@
   let landHours = $state<LeaderboardHours>(168)
   const landLeaderboard = createMetricsResource(() => landHours, 'land-leaderboard', parseLandLeaderboard, '영지 보유 현황')
   const serverStarts = createMetricsResource(() => 8760, 'server-starts', parseServerStarts, '배포 기록')
+  const families = createMetricsResource(() => undefined, 'families', parseFamilies, '가문 현황')
   const heroicTales = createMetricsResource(() => undefined, 'heroic-tales', parseHeroicTales, '영웅담 원장')
   let countryHours = $state<UniqueHours>(24)
   const countries = createMetricsResource(() => countryHours, 'countries', parseCountryStats, '국가별 접속 계정', () => ({}), 300000)
@@ -84,7 +87,7 @@
   const dungeonPopulation = createMetricsResource(() => dungeonHours, 'dungeon-population', parseDungeonPopulation, '던전 층별 인원', () => ({}), 60000)
   const combatAuditTargets = createMetricsResource(() => undefined, 'combat-audit-targets', parseCombatAuditTargets, '전투 기록 추적 대상', () => ({}), 60000)
   let markers = $derived(deployMarkers(serverStarts.history?.starts ?? []))
-  const resources = [concurrent, hardware, network, assetTraffic, unique, gold, perAccountGold, priceIndex, serverStarts, itemGoldSources, goldSinks, leaderboard, goldLeaderboard, weaponEnchantLeaderboard, weaponEnchantFailures, armorEnchantLeaderboard, rareDrops, fieldRaids, landLeaderboard, heroicTales, combatAuditTargets, countries, dungeonPopulation]
+  const resources = [concurrent, hardware, network, assetTraffic, unique, gold, perAccountGold, priceIndex, serverStarts, itemGoldSources, goldSinks, leaderboard, goldLeaderboard, weaponEnchantLeaderboard, weaponEnchantFailures, armorEnchantLeaderboard, rareDrops, fieldRaids, landLeaderboard, families, heroicTales, combatAuditTargets, countries, dungeonPopulation]
   let history = $derived(concurrent.history)
   let refreshing = $derived(resources.some((resource) => resource.refreshing))
   let anyError = $derived(resources.some((resource) => resource.error))
@@ -250,6 +253,8 @@
   <FieldRaidsPanel resource={fieldRaids} />
 
   <LeaderboardSection metric="land_plots" bind:hours={landHours} resource={landLeaderboard} />
+
+  <FamiliesPanel resource={families} />
 
   <HeroicTalesPanel resource={heroicTales} />
 
