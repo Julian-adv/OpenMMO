@@ -658,7 +658,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::FurnitureSelectionNotice { .. } => "FurnitureSelectionNotice",
         ServerMessage::MergerRiteCue { .. } => "MergerRiteCue",
         ServerMessage::MergerCelebrated { .. } => "MergerCelebrated",
-        ServerMessage::MergerPledgeOffered { .. } => "MergerPledgeOffered",
+        ServerMessage::MergerPledgeOffered => "MergerPledgeOffered",
         ServerMessage::FamilyEmblemShown { .. } => "FamilyEmblemShown",
     }
 }

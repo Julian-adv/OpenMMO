@@ -1224,7 +1224,7 @@ export function handleServerMessage(
           targetName: proposal.target_name,
           targetFamily: proposal.target_family,
           terms: proposal.terms as FamilyMergeTerms,
-          emblem: proposal.emblem ?? { texture: null, color: null },
+          emblem: proposal.emblem,
           members: proposal.members,
           offeredAt: Date.now(),
         }

@@ -14,7 +14,7 @@
     queued = 0,
     gaugeDurationMs = 0,
     gaugeStartAt = 0,
-    width,
+    stacked = false,
     children,
   }: {
     label: string
@@ -27,8 +27,8 @@
     queued?: number
     gaugeDurationMs?: number
     gaugeStartAt?: number
-    /** Fixed width for a long message: the text wraps and the buttons sit below it. */
-    width?: string
+    /** For a long message: fixed width with the buttons below the text. */
+    stacked?: boolean
     children: Snippet
   } = $props()
 </script>
@@ -36,12 +36,10 @@
 <div
   class="consent-toast"
   class:with-gauge={gaugeDurationMs > 0}
-  class:stacked={!!width}
+  class:stacked
   role="alertdialog"
   aria-label={label}
-  style="top: {top}; --accent: {accent}; z-index: {PANEL_Z_CEILING}{width
-    ? `; width: min(${width}, calc(100vw - 24px))`
-    : ''}"
+  style="top: {top}; --accent: {accent}; z-index: {PANEL_Z_CEILING}"
 >
   <div class="toast-row">
     <span class="toast-text">
@@ -103,6 +101,7 @@
 
   .stacked {
     box-sizing: border-box;
+    width: min(340px, calc(100vw - 24px));
     padding: 12px 14px;
   }
 

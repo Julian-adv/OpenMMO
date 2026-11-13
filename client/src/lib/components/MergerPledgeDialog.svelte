@@ -11,8 +11,8 @@
   import { gameStore } from '../stores/gameStore'
   import { networkManager } from '../network/socket'
   import { mountOverlay } from '../stores/overlayStack'
-  import { capeTextureUrl } from '../utils/networkUtils'
   import type { Emblem } from '../utils/familyEmblem'
+  import EmblemChip from './EmblemChip.svelte'
 
   let dialog = $state<HTMLFormElement>()
   let head = $state('')
@@ -28,10 +28,12 @@
     )
   )
   const nearby = $derived(others.map((p) => p.name))
+  const typed = $derived(head.trim().toLowerCase())
   /** The head typed so far, once it names someone nearby. */
-  const them = $derived(
-    others.find((p) => p.name.toLowerCase() === head.trim().toLowerCase())
-  )
+  const them = $derived(others.find((p) => p.name.toLowerCase() === typed))
+  const theirName = $derived(them?.name)
+  const theirFamily = $derived(them?.family)
+  const myName = $derived($gameStore.currentPlayer?.name)
   type Choice = { side: MergeSide; label: string; emblem?: Emblem }
   const rows = $derived<
     { term: keyof FamilyMergeTerms; label: string; choices: Choice[] }[]
@@ -41,7 +43,7 @@
       label: $t('family.mergeKeepName'),
       choices: [
         { side: 'proposer', label: family?.name ?? $t('family.mergeOurs') },
-        { side: 'target', label: them?.family ?? $t('family.mergeTheirs') },
+        { side: 'target', label: theirFamily ?? $t('family.mergeTheirs') },
       ],
     },
     {
@@ -57,8 +59,8 @@
         },
         {
           side: 'target',
-          label: them?.family ?? $t('family.mergeTheirs'),
-          emblem: them && $shownFamilyEmblems.get(them.name.toLowerCase()),
+          label: theirFamily ?? $t('family.mergeTheirs'),
+          emblem: theirName ? $shownFamilyEmblems.get(typed) : undefined,
         },
       ],
     },
@@ -66,19 +68,13 @@
       term: 'keep_head',
       label: $t('family.mergeKeepHead'),
       choices: [
-        {
-          side: 'proposer',
-          label: $gameStore.currentPlayer?.name ?? $t('family.mergeMe'),
-        },
-        { side: 'target', label: them?.name ?? $t('family.mergeThem') },
+        { side: 'proposer', label: myName ?? $t('family.mergeMe') },
+        { side: 'target', label: theirName ?? $t('family.mergeThem') },
       ],
     },
   ])
-  let asked = ''
   $effect(() => {
-    if (!them || asked === them.name) return
-    asked = them.name
-    networkManager.sendInspectFamilyEmblem(them.name)
+    if (theirName) networkManager.sendInspectFamilyEmblem(theirName)
   })
   const close = () => mergerPledgeOpen.set(false)
 
@@ -132,13 +128,7 @@
               aria-checked={terms[row.term] === choice.side}
               onclick={() => (terms[row.term] = choice.side)}
             >
-              {#if choice.emblem?.color}
-                <span class="swatch" style="background:{choice.emblem.color}"
-                ></span>
-              {/if}
-              {#if choice.emblem?.texture}
-                <img src={capeTextureUrl(choice.emblem.texture)} alt="" />
-              {/if}
+              <EmblemChip emblem={choice.emblem} />
               {choice.label}
             </button>
           {/each}
@@ -214,13 +204,6 @@
   .choice.chosen {
     border-color: #c8b88a;
     background: #3a321c;
-  }
-  .choice img,
-  .swatch {
-    width: 22px;
-    height: 22px;
-    border-radius: 4px;
-    object-fit: cover;
   }
   .row {
     display: flex;

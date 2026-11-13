@@ -2190,9 +2190,7 @@ pub enum ServerMessage {
         cue: String,
     },
     /// Direct to a family head: the officiant holds out the pledge form.
-    MergerPledgeOffered {
-        officiant: String,
-    },
+    MergerPledgeOffered,
     /// Answer to `InspectFamilyEmblem`.
     FamilyEmblemShown {
         player_name: String,
@@ -2732,7 +2730,7 @@ impl ServerMessage {
             | Self::TradeNotice { .. }
             | Self::FurnitureSelectionNotice { .. }
             | Self::MergerRiteCue { .. }
-            | Self::MergerPledgeOffered { .. }
+            | Self::MergerPledgeOffered
             | Self::FamilyEmblemShown { .. }
             | Self::TradeDeclined { .. }
             | Self::DealResult { .. }

@@ -792,7 +792,7 @@ async fn the_officiant_hands_the_pledge_form_to_a_head_who_stands_before_her() {
     drain(&mut member_rx);
     let offered = |msgs: Vec<ServerMessage>| {
         msgs.iter()
-            .any(|msg| matches!(msg, ServerMessage::MergerPledgeOffered { .. }))
+            .any(|msg| matches!(msg, ServerMessage::MergerPledgeOffered))
     };
     let cued = |msgs: Vec<ServerMessage>, needle: &str| {
         msgs.iter()
@@ -822,13 +822,14 @@ async fn the_officiant_hands_the_pledge_form_to_a_head_who_stands_before_her() {
     game.set_family_emblem(&pid("HeadA"), None, Some("#00aa00".into()), &auth)
         .await;
     drain(&mut priest_rx);
-    game.show_family_emblem(&priest_id, "heada").await;
+    game.show_family_emblem(&priest_id, "heada".into()).await;
     assert!(drain(&mut priest_rx).iter().any(|msg| matches!(
         msg,
         ServerMessage::FamilyEmblemShown { player_name, emblem }
-            if player_name == "HeadA" && emblem.color.as_deref() == Some("#00aa00")
+            if player_name == "heada" && emblem.color.as_deref() == Some("#00aa00")
     )));
-    game.show_family_emblem(&pid("HeadA"), "Maelis").await;
+    game.show_family_emblem(&pid("HeadA"), "Maelis".into())
+        .await;
     assert!(!drain(&mut head_rx)
         .iter()
         .any(|msg| matches!(msg, ServerMessage::FamilyEmblemShown { .. })));

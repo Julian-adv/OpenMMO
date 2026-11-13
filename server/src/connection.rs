@@ -2878,7 +2878,7 @@ async fn handle_client_message(
 
         ClientMessage::InspectFamilyEmblem { player_name } => {
             if let Some(id) = &state.require_in_game("inspect family emblem") {
-                game_state.show_family_emblem(id, &player_name).await;
+                game_state.show_family_emblem(id, player_name).await;
             }
         }
 

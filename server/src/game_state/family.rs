@@ -76,12 +76,18 @@ impl Families {
         self.online.get(&family_id).cloned().unwrap_or_default()
     }
 
+    /// The emblem of a player's family, set or not.
+    fn family_emblem(&self, player_id: &PlayerId) -> Option<&FamilyEmblem> {
+        self.emblems.get(self.of_player.get(player_id)?)
+    }
+
     fn emblem_of(&self, player_id: &PlayerId) -> Option<FamilyEmblem> {
         if self.own_capes.contains(player_id) {
             return None;
         }
-        let family_id = self.of_player.get(player_id)?;
-        self.emblems.get(family_id).filter(|e| e.is_set()).cloned()
+        self.family_emblem(player_id)
+            .filter(|e| e.is_set())
+            .cloned()
     }
 }
 
@@ -100,6 +106,12 @@ pub(crate) fn shown_cape(
 }
 
 /// `successor` is who may take over from an absent head, if anyone.
+fn stands_before(priest: &crate::types::Player, visitor: &crate::types::Player) -> bool {
+    visitor.health > 0
+        && visitor.floor_level == priest.floor_level
+        && visitor.position.dist_xz_sq(&priest.position) <= RITE_REACH * RITE_REACH
+}
+
 fn family_info(
     roster: &FamilyRoster,
     viewer: i64,
@@ -997,13 +1009,7 @@ impl super::GameState {
         let id = self.player_id_by_name(OFFICIANT_NPC).await?;
         let players = self.players.read().await;
         let priest = players.get(&id).filter(|p| p.is_official_npc)?;
-        let near = |head: &PlayerId| {
-            players.get(head).is_some_and(|p| {
-                p.health > 0
-                    && p.floor_level == priest.floor_level
-                    && p.position.dist_xz_sq(&priest.position) <= RITE_REACH * RITE_REACH
-            })
-        };
+        let near = |head: &PlayerId| players.get(head).is_some_and(|p| stands_before(priest, p));
         (priest.health > 0 && priest.object_id.is_none() && near(first) && near(second))
             .then_some(id)
     }
@@ -1034,18 +1040,13 @@ impl super::GameState {
     }
 
     /// Show a player the emblem of a named online player's family.
-    pub async fn show_family_emblem(&self, player_id: &PlayerId, player_name: &str) {
+    pub async fn show_family_emblem(&self, player_id: &PlayerId, player_name: String) {
         let Some(target) = self.player_id_by_name(player_name.trim()).await else {
             return;
         };
-        let emblem = {
-            let families = self.families.read().await;
-            let Some(family_id) = families.of_player.get(&target) else {
-                return;
-            };
-            families.emblems.get(family_id).cloned().unwrap_or_default()
+        let Some(emblem) = self.families.read().await.family_emblem(&target).cloned() else {
+            return;
         };
-        let player_name = self.player_name_of(&target).await;
         self.send_direct_message(
             player_id,
             ServerMessage::FamilyEmblemShown {
@@ -1064,7 +1065,7 @@ impl super::GameState {
         target_id: &PlayerId,
         auth: &AuthService,
     ) {
-        let verdict = {
+        let standing = {
             let players = self.players.read().await;
             let Some(priest) = players
                 .get(officiant_id)
@@ -1077,55 +1078,42 @@ impl super::GameState {
                 Some(target) if target.is_official_npc => {
                     Err(format!("{} cannot lead a merger.", target.name))
                 }
-                Some(target)
-                    if target.health == 0
-                        || target.floor_level != priest.floor_level
-                        || target.position.dist_xz_sq(&priest.position)
-                            > RITE_REACH * RITE_REACH =>
-                {
-                    Err(format!(
-                        "{} is not standing before you; ask them to come closer first.",
-                        target.name
-                    ))
-                }
+                Some(target) if !stands_before(priest, target) => Err(format!(
+                    "{} is not standing before you; ask them to come closer first.",
+                    target.name
+                )),
                 Some(target) => Ok(target.name.clone()),
             }
         };
-        let name = match verdict {
-            Ok(name) => name,
-            Err(reason) => {
-                self.rite_cue(
-                    officiant_id,
-                    format!("No pledge form was handed over: {reason}"),
-                )
-                .await;
-                return;
+        let handed = match standing {
+            Err(reason) => Err(reason),
+            Ok(name) => {
+                let Some(character_id) = self.character_id_of(target_id).await else {
+                    return;
+                };
+                let auth = auth.clone();
+                match auth_db(move || auth.leads_family(character_id)).await {
+                    Ok(true) => Ok(name),
+                    Ok(false) => Err(format!(
+                        "{name} does not lead a family, and only a family's head can propose a merger. Tell them so kindly."
+                    )),
+                    Err(err) => {
+                        warn!("Failed to check family head for a pledge: {err}");
+                        Err("the family records could not be read. Ask them to try again."
+                            .to_string())
+                    }
+                }
             }
         };
-        let Some(character_id) = self.character_id_of(target_id).await else {
-            return;
-        };
-        let auth = auth.clone();
-        let cue = match auth_db(move || auth.leads_family(character_id)).await {
-            Ok(true) => {
-                self.send_direct_message(
-                    target_id,
-                    ServerMessage::MergerPledgeOffered {
-                        officiant: OFFICIANT_NPC.to_string(),
-                    },
-                )
-                .await;
+        let cue = match handed {
+            Ok(name) => {
+                self.send_direct_message(target_id, ServerMessage::MergerPledgeOffered)
+                    .await;
                 format!(
                     "The pledge form is now open before {name}. They may put it away; hand it over again whenever they ask."
                 )
             }
-            Ok(false) => format!(
-                "No pledge form was handed over: {name} does not lead a family, and only a family's head can propose a merger. Tell them so kindly."
-            ),
-            Err(err) => {
-                warn!("Failed to check family head for a pledge: {err}");
-                "No pledge form was handed over: the family records could not be read. Ask them to try again.".to_string()
-            }
+            Err(reason) => format!("No pledge form was handed over: {reason}"),
         };
         self.rite_cue(officiant_id, cue).await;
     }
@@ -1175,12 +1163,7 @@ impl super::GameState {
                 onlinerpg_shared::family::MergeSide::Target => &target_id,
             };
             let families = self.families.read().await;
-            families
-                .of_player
-                .get(kept)
-                .and_then(|family_id| families.emblems.get(family_id))
-                .cloned()
-                .unwrap_or_default()
+            families.family_emblem(kept).cloned().unwrap_or_default()
         };
         let proposal = FamilyMergeProposal {
             proposer_id: *player_id,

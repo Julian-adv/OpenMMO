@@ -163,12 +163,10 @@ pub struct FamilyMergeProposal {
     pub proposer_id: crate::entity::PlayerId,
     pub proposer_name: String,
     pub proposer_family: String,
-    #[serde(default)]
     pub target_name: String,
     pub target_family: String,
     pub terms: FamilyMergeTerms,
     /// The emblem `terms.keep_emblem` leaves the merged family.
-    #[serde(default)]
     pub emblem: Emblem,
     /// Members of the merged family.
     pub members: u32,

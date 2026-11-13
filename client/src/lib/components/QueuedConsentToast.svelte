@@ -17,7 +17,7 @@
     declineLabel,
     respond,
     dismissOnAccept = true,
-    width,
+    stacked = false,
     gauge = true,
     children,
   }: {
@@ -31,7 +31,7 @@
     /** Sends the answer; dismissal is handled here. */
     respond: (entry: T, accept: boolean) => void
     dismissOnAccept?: boolean
-    width?: string
+    stacked?: boolean
     /** Show the time left as a draining bar. */
     gauge?: boolean
     children: Snippet<[T]>
@@ -71,7 +71,7 @@
     {queued}
     gaugeDurationMs={gauge ? ttlMs : 0}
     gaugeStartAt={entry.offeredAt}
-    {width}
+    {stacked}
   >
     {@render children(entry)}
   </ConsentToast>

@@ -8,7 +8,7 @@
   import { networkManager } from '../network/socket'
   import { gameStore } from '../stores/gameStore'
   import QueuedConsentToast from './QueuedConsentToast.svelte'
-  import { capeTextureUrl } from '../utils/networkUtils'
+  import EmblemChip from './EmblemChip.svelte'
 
   const pick = (offer: PendingFamilyMerge, side: 'proposer' | 'target') =>
     side === 'proposer' ? offer.proposerFamily : offer.targetFamily
@@ -22,7 +22,7 @@
   label={$t('family.mergeTitle')}
   top="38%"
   accent="#c8b88a"
-  width="340px"
+  stacked
   gauge={false}
   acceptLabel={$t('family.mergeAccept')}
   declineLabel={$t('family.mergeDecline')}
@@ -45,12 +45,7 @@
       <dd>{pick(offer, offer.terms.keep_name)}</dd>
       <dt>{$t('family.mergeKeepEmblem')}</dt>
       <dd class="emblem">
-        {#if offer.emblem.color}
-          <span class="swatch" style="background:{offer.emblem.color}"></span>
-        {/if}
-        {#if offer.emblem.texture}
-          <img src={capeTextureUrl(offer.emblem.texture)} alt="" />
-        {/if}
+        <EmblemChip emblem={offer.emblem} size={28} />
         {pick(offer, offer.terms.keep_emblem)}
       </dd>
       <dt>{$t('family.mergeKeepHead')}</dt>
@@ -96,13 +91,6 @@
     display: flex;
     align-items: center;
     gap: 6px;
-  }
-  .emblem img,
-  .swatch {
-    width: 28px;
-    height: 28px;
-    border-radius: 4px;
-    object-fit: cover;
   }
   .final {
     color: #9fb2c3;
