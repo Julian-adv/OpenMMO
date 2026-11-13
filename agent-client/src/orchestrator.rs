@@ -159,6 +159,10 @@ impl NpcConfig {
         self.always_sprint.unwrap_or(self.id.is_none())
     }
 
+    pub fn serves_tables(&self) -> bool {
+        self.serve_tables.unwrap_or(false)
+    }
+
     /// Log label: the account when there is one, else the character it plays.
     pub fn label(&self) -> &str {
         self.account
@@ -1011,7 +1015,7 @@ fn build_system_prompt(npc: &NpcConfig) -> anyhow::Result<String> {
         });
         (npc.system_prompt_file(), role)
     };
-    let roles = driver::Roles::of(npc.character_name.as_deref());
+    let roles = driver::Roles::of(npc.character_name.as_deref(), npc.serves_tables());
     let files: Vec<&str> = base
         .into_iter()
         .chain(role)
@@ -1187,7 +1191,7 @@ fn spawn_llm_task(
         always_active: npc.always_active(),
         schedule,
         sickroom,
-        serve_tables: npc.serve_tables.unwrap_or(false),
+        serve_tables: npc.serves_tables(),
         notice_rounds,
         maid_names: shared.maid_names.clone(),
         tables,

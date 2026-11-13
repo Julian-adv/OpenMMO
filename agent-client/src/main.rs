@@ -302,7 +302,7 @@ async fn main() -> anyhow::Result<()> {
 
     let maid_names = npcs
         .iter()
-        .filter(|n| n.serve_tables.unwrap_or(false))
+        .filter(|n| n.serves_tables())
         .filter_map(|n| n.character_name.clone())
         .collect();
     let shared = Arc::new(SharedResources {

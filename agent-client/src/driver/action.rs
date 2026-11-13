@@ -600,6 +600,8 @@ enum Role {
     Trader,
     /// The priest of family mergers.
     Officiant,
+    /// NPCs that serve the inn's tables.
+    InnStaff,
 }
 
 /// The roles of the agent a prompt is built for.
@@ -607,13 +609,15 @@ enum Role {
 pub(crate) struct Roles {
     trader: bool,
     officiant: bool,
+    inn_staff: bool,
 }
 
 impl Roles {
-    pub(crate) fn of(character_name: Option<&str>) -> Self {
+    pub(crate) fn of(character_name: Option<&str>, serves_tables: bool) -> Self {
         Self {
             trader: character_name.is_some_and(crate::shop_info::trades),
             officiant: character_name == Some(onlinerpg_shared::family::MERGER_OFFICIANT),
+            inn_staff: serves_tables,
         }
     }
 
@@ -621,6 +625,7 @@ impl Roles {
         match role {
             Role::Trader => self.trader,
             Role::Officiant => self.officiant,
+            Role::InnStaff => self.inn_staff,
         }
     }
 }
@@ -644,6 +649,7 @@ impl ActionSpec {
         match self.names[0] {
             "offer_deal" | "open_trade" => Some(Role::Trader),
             "offer_pledge" => Some(Role::Officiant),
+            "serve" => Some(Role::InnStaff),
             _ => None,
         }
     }
@@ -1174,7 +1180,7 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
     ActionSpec {
         names: &["serve"],
         aliases: &["serve_meal", "bring_food"],
-        doc: r#"- Inn staff only: a seated guest ordered food — fetch it from the kitchen
+        doc: r#"- A seated guest ordered food — fetch it from the kitchen
   and set it on the table in front of them. You walk the round trip
   yourself, no move action needed; say something when it lands. The
   kitchen's plates: chicken_rice, chicken_curry, fried_rice,
@@ -3302,6 +3308,7 @@ mod tests {
                     &action_reference(&Roles {
                         trader: true,
                         officiant: true,
+                        inn_staff: true,
                     }),
                 );
             let text = if name.ends_with(".rs") {
@@ -3377,11 +3384,17 @@ mod tests {
             officiant: true,
             ..player
         };
+        let inn_staff = Roles {
+            inn_staff: true,
+            ..player
+        };
         assert!(shown(player, "move"));
         assert!(!shown(player, "open_trade") && !shown(player, "offer_pledge"));
         assert!(shown(trader, "open_trade") && shown(trader, "offer_deal"));
         assert!(!shown(trader, "offer_pledge"));
         assert!(shown(officiant, "offer_pledge") && !shown(officiant, "open_trade"));
+        assert!(shown(inn_staff, "serve") && !shown(player, "serve"));
+        assert!(!shown(inn_staff, "open_trade"));
 
         let added = role_action_reference(&officiant);
         assert!(added.contains("offer_pledge") && !added.contains(r#""type": "move""#));
