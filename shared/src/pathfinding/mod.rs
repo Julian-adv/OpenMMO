@@ -25,14 +25,14 @@ mod stair;
 pub use astar::{find_path, segment_enters_cells, SearchExtent, DEFAULT_MAX_NODES};
 pub use cache::{
     apply_door_overlays, build_furniture_passability, build_runtime_passability, door_cells,
-    update_door_edge, FurniturePiece,
+    dungeon_floor_cells, dungeon_passability_with_doorways, update_door_edge, FurniturePiece,
 };
 pub(crate) use query::ramp_fraction;
 pub use query::segment_touches_box;
 pub use query::{
     attack_line_blocked, attack_line_blocked_in, blocking_entry_for_mover, get_floor_at_position,
     get_floor_y_base, in_stairwell_span, is_cardinal_move_blocked, is_cell_sealed,
-    is_circle_blocked_by_passability, is_circle_blocked_on_floor, is_movement_blocked,
+    is_circle_blocked_by_passability, is_circle_blocked_on_floor, is_doorway, is_movement_blocked,
     is_movement_blocked_for_mover, leg_touches_stairwell, ranged_attack_line_blocked,
     snap_goal_into_floor, start_floor_at, storey_ground_y, supporting_floor_y, BlockInfo,
 };
@@ -50,6 +50,8 @@ pub(super) const EDGE_N: u8 = 1; // -Z edge
 pub(super) const EDGE_E: u8 = 2; // +X edge
 pub(super) const EDGE_S: u8 = 4; // +Z edge
 pub(super) const EDGE_W: u8 = 8; // -X edge
+/// An edge bit shifted this far marks that edge as a doorway, open or shut.
+pub(super) const DOORWAY_SHIFT: u8 = 4;
 
 #[derive(Debug, Clone)]
 pub struct RuntimeFloorGrid {

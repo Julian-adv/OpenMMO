@@ -8,7 +8,9 @@
 use std::cmp::{Ordering, Reverse};
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
-use super::query::{is_cardinal_move_blocked, is_movement_blocked_for_mover, snap_goal_into_floor};
+use super::query::{
+    is_cardinal_move_blocked, is_doorway, is_movement_blocked_for_mover, snap_goal_into_floor,
+};
 use super::stair::{
     build_stair_cells, floor_to_key, is_regular_key, key_to_floor, AStarKey, StairCellExpansion,
 };
@@ -322,11 +324,11 @@ impl<'a> Moves<'a> {
     }
 
     /// Where a walker stands to be at a sealed `pocket`: beside furniture,
-    /// which seals only its own cell, or failing that anywhere along the wall.
-    fn rim_of(&self, pocket: &HashSet<(i32, i32)>, fk: u16) -> Vec<AStarKey> {
+    /// which seals only its own cell, else at its doors, else anywhere along
+    /// the wall. Doors are all tried at once, so the nearest one to walk to wins.
+    fn rim_of(&self, pocket: &HashSet<(i32, i32)>, fk: u16) -> (Vec<AStarKey>, bool) {
         let floor = key_to_floor(fk);
-        let mut beside = Vec::new();
-        let mut along = Vec::new();
+        let (mut beside, mut doors, mut along) = (Vec::new(), Vec::new(), Vec::new());
         for &(x, z) in pocket {
             for &(dx, dz) in &DIRS {
                 let cell = (x + dx, z + dz, fk);
@@ -338,15 +340,19 @@ impl<'a> Moves<'a> {
                 }
                 if self.steps_out(x, z, dx, dz, floor) {
                     beside.push(cell);
+                } else if is_doorway(self.cache, x, z, dx, dz, floor) {
+                    doors.push(cell);
                 } else {
                     along.push(cell);
                 }
             }
         }
-        if beside.is_empty() {
-            along
+        if !beside.is_empty() {
+            (beside, false)
+        } else if !doors.is_empty() {
+            (doors, true)
         } else {
-            beside
+            (along, false)
         }
     }
 }
@@ -437,6 +443,7 @@ pub(super) fn find_path_avoiding_counted(
     let mut pocket: HashSet<(i32, i32)> = HashSet::new();
     let mut rim: Vec<AStarKey> = Vec::new();
     let mut rim_distance = 0;
+    let mut rim_together = false;
     let mut backward_done = false;
     let mut neighbors = Vec::with_capacity(6);
 
@@ -445,15 +452,18 @@ pub(super) fn find_path_avoiding_counted(
             pocket.extend(backward.seen.keys().map(|key| (key.0, key.1)));
             backward.seen.clear();
             if rim.is_empty() && moves.confine_to_floor && pocket.len() <= SEALED_MAX_CELLS {
-                rim = moves.rim_of(&pocket, goal_key.2);
+                (rim, rim_together) = moves.rim_of(&pocket, goal_key.2);
                 rim.sort_unstable_by_key(|&cell| Reverse((to_goal(cell), cell)));
                 rim.dedup();
             }
             rim.retain(|cell| !pocket.contains(&(cell.0, cell.1)));
-            match rim.last() {
-                Some(&nearest) => {
-                    rim_distance = to_goal(nearest);
-                    while let Some(cell) = rim.pop_if(|cell| to_goal(*cell) == rim_distance) {
+            match (rim.first(), rim.last()) {
+                (Some(&farthest), Some(&nearest)) => {
+                    let tried = if rim_together { farthest } else { nearest };
+                    rim_distance = to_goal(tried);
+                    while let Some(cell) =
+                        rim.pop_if(|cell| rim_together || to_goal(*cell) == rim_distance)
+                    {
                         extent.include(cell.0, cell.1, goal_floor);
                         backward.reach(cell, cell, 0, to_start(cell));
                         if let Some(from_start) = forward.seen.get(&cell) {
@@ -461,7 +471,7 @@ pub(super) fn find_path_avoiding_counted(
                         }
                     }
                 }
-                None => backward_done = true,
+                _ => backward_done = true,
             }
         }
 
@@ -597,13 +607,16 @@ fn waypoints_along(keys: &[AStarKey], goal: Option<(f32, f32)>) -> Vec<PathWaypo
 mod tests {
     use super::*;
     use crate::pathfinding::tests::perimeter_walls;
-    use crate::pathfinding::{PathTermination, RuntimeFloorGrid, RuntimePassability, EDGE_S};
+    use crate::pathfinding::{
+        PathTermination, RuntimeFloorGrid, RuntimePassability, DOORWAY_SHIFT, EDGE_S,
+    };
     use rand::{rngs::SmallRng, Rng, SeedableRng};
 
     /// Prod house r-30_+81_7, a 6×4 room whose door is the +Z wall's fourth
     /// segment; a monster waited outside it on 10/26 for a player shut inside.
     fn house(door_open: bool) -> PassabilityCache {
         let mut cells = perimeter_walls(6, 4);
+        cells[3 * 6 + 3] |= EDGE_S << DOORWAY_SHIFT;
         if door_open {
             cells[3 * 6 + 3] &= !EDGE_S;
         }
@@ -659,26 +672,28 @@ mod tests {
     }
 
     #[test]
-    fn a_closed_house_goal_stops_early_at_the_wall() {
+    fn a_closed_house_goal_stops_early_at_its_door() {
         let cache = house(false);
-        for start in [(-1878.5, 5216.5), (-1878.5, 5240.5)] {
+        for start in [(-1876.5, 5216.5), (-1878.5, 5240.5)] {
             let (result, extent) = path_into_house(&cache, start, &[]);
             assert!(!result.found);
             assert_eq!(result.termination, PathTermination::Unreachable);
             assert!(extent.expanded < 300, "expanded {}", extent.expanded);
-            let last = result.waypoints.last().expect("a leg to the wall");
-            assert_eq!((last.x, last.z), (-1876.5, 5216.5));
+            let last = result.waypoints.last().expect("a leg to the door");
+            assert_eq!((last.x, last.z), (-1878.5, 5216.5));
             assert!(extent.min.1 <= 5212 && extent.max.0 >= -1877);
         }
+        let (at_the_door, _) = path_into_house(&cache, (-1878.5, 5216.5), &[]);
+        assert!(at_the_door.waypoints.is_empty());
     }
 
     #[test]
-    fn a_monster_in_the_doorway_is_not_the_cell_to_approach() {
-        let (result, extent) = path_into_house(&house(false), (-1878.5, 5240.5), &[(-1877, 5216)]);
+    fn a_monster_in_the_doorway_sends_the_walker_to_the_wall() {
+        let (result, extent) = path_into_house(&house(false), (-1878.5, 5240.5), &[(-1879, 5216)]);
         assert_eq!(result.termination, PathTermination::Unreachable);
         assert!(extent.expanded < 300, "expanded {}", extent.expanded);
         let last = result.waypoints.last().unwrap();
-        assert_ne!((last.x, last.z), (-1876.5, 5216.5));
+        assert_eq!((last.x, last.z), (-1876.5, 5216.5));
     }
 
     /// Prod 10/29: a fence pen walled off the nearest outside cells.

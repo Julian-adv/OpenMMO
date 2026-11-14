@@ -13,9 +13,9 @@
 use std::collections::HashSet;
 
 use onlinerpg_shared::dungeon::{
-    cell_center, dungeon_origin, dungeon_passability, entrances, generate_dungeon_variant,
-    interior_doors, passability_floor_for_depth, world_to_cell, DungeonEntranceDef, FloorLayout,
-    InteriorDoorSpec, PropKind, Room,
+    cell_center, dungeon_origin, entrances, generate_dungeon_variant, interior_doors,
+    passability_floor_for_depth, world_to_cell, DungeonEntranceDef, FloorLayout, InteriorDoorSpec,
+    PropKind, Room,
 };
 use onlinerpg_shared::pathfinding::RuntimePassability;
 use onlinerpg_shared::Position;
@@ -114,7 +114,10 @@ impl Dungeon {
     }
 
     pub fn passability(&self) -> RuntimePassability {
-        dungeon_passability(&self.entrance, &self.layouts)
+        onlinerpg_shared::pathfinding::dungeon_passability_with_doorways(
+            &self.entrance,
+            &self.layouts,
+        )
     }
 
     /// Where a descent to `depth` lands: the exit landing of the shaft that

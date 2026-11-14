@@ -832,7 +832,7 @@ pub fn dungeon_add_passability(
     entrance_y: f32,
     entrance_z: f32,
 ) {
-    let rp = crate::dungeon::dungeon_passability(
+    let rp = pathfinding::dungeon_passability_with_doorways(
         &Position {
             x: entrance_x,
             y: entrance_y,
@@ -929,7 +929,7 @@ pub fn dungeon_rebuild_floor(
         .copied()
         .zip(cart_offsets.iter().copied())
         .collect();
-    let cells = crate::dungeon::floor_cells(
+    let cells = pathfinding::dungeon_floor_cells(
         &dungeon_layouts(entrance_id),
         depth,
         broken,

@@ -6,7 +6,8 @@
 
 use super::stair::{stair_dims, stair_step};
 use super::{
-    PassabilityCache, RuntimeFloorGrid, RuntimePassability, EDGE_E, EDGE_N, EDGE_S, EDGE_W,
+    PassabilityCache, RuntimeFloorGrid, RuntimePassability, DOORWAY_SHIFT, EDGE_E, EDGE_N, EDGE_S,
+    EDGE_W,
 };
 use crate::housing::{FLOOR_OVERHANG_PER_LEVEL, MAX_FLOOR_LEVEL};
 
@@ -25,6 +26,32 @@ pub fn is_cardinal_move_blocked(
     dz: i32,
     floor_level: u8,
 ) -> bool {
+    edge_marked(cache, cell_x, cell_z, dx, dz, floor_level, 0)
+}
+
+/// Whether the edge a cardinal step crosses is a doorway, open or shut.
+pub fn is_doorway(
+    cache: &PassabilityCache,
+    cell_x: i32,
+    cell_z: i32,
+    dx: i32,
+    dz: i32,
+    floor_level: u8,
+) -> bool {
+    edge_marked(cache, cell_x, cell_z, dx, dz, floor_level, DOORWAY_SHIFT)
+}
+
+/// Whether either cell of a cardinal step carries the step's edge bit, `shift` up.
+#[inline]
+fn edge_marked(
+    cache: &PassabilityCache,
+    cell_x: i32,
+    cell_z: i32,
+    dx: i32,
+    dz: i32,
+    floor_level: u8,
+    shift: u8,
+) -> bool {
     let nx = cell_x + dx;
     let nz = cell_z + dz;
     let (leave_bit, enter_bit) = match (dx, dz) {
@@ -34,6 +61,7 @@ pub fn is_cardinal_move_blocked(
         (0, -1) => (EDGE_N, EDGE_S),
         _ => return false,
     };
+    let (leave_bit, enter_bit) = (leave_bit << shift, enter_bit << shift);
 
     let cx_f = cell_x as f32;
     let nxf = nx as f32;

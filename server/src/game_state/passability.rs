@@ -7,12 +7,11 @@
 //! renders, and every toggle rebuilds the floor's cells.
 
 use crate::terrain::io::TerrainIO;
-use onlinerpg_shared::dungeon::{
-    dungeon_cache_key, dungeon_passability, floor_cells, generate_dungeon_variant, set_floor_cells,
-};
+use onlinerpg_shared::dungeon::{dungeon_cache_key, generate_dungeon_variant, set_floor_cells};
 use onlinerpg_shared::furniture::{self, FurniturePlacement};
 use onlinerpg_shared::housing::{HouseData, MAX_FLOOR_LEVEL};
 use onlinerpg_shared::pathfinding;
+use onlinerpg_shared::pathfinding::{dungeon_floor_cells, dungeon_passability_with_doorways};
 use onlinerpg_shared::{WORLD_MAX_X, WORLD_MIN_X, WORLD_WIDTH_X};
 use onlinerpg_terrain::coords::{tile_to_region, world_to_tile};
 use serde::Deserialize;
@@ -260,7 +259,7 @@ impl super::GameState {
             let layouts = generate_dungeon_variant(&def.id, self.dungeon_variant(&def.id));
             self.interest_lock()
                 .seed_dungeon(&def.id, &def.position(), &layouts);
-            let rp = dungeon_passability(&def.position(), &layouts);
+            let rp = dungeon_passability_with_doorways(&def.position(), &layouts);
             self.passability_write()
                 .insert(dungeon_cache_key(&def.id), rp);
             dungeons += 1;
@@ -496,7 +495,7 @@ impl super::GameState {
                 return;
             };
             let (broken, carts) = rt.floor_props(depth);
-            floor_cells(
+            dungeon_floor_cells(
                 &rt.layouts,
                 depth,
                 &broken,

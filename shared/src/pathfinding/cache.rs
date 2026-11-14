@@ -6,8 +6,8 @@
 use crate::housing::{HouseData, RoomData, RoomType, WallDirection, FLOOR_THICKNESS};
 
 use super::{
-    PassabilityCache, RuntimeFloorGrid, RuntimePassability, StairwellInfo, EDGE_E, EDGE_N, EDGE_S,
-    EDGE_W,
+    PassabilityCache, RuntimeFloorGrid, RuntimePassability, StairwellInfo, DOORWAY_SHIFT, EDGE_E,
+    EDGE_N, EDGE_S, EDGE_W,
 };
 
 const DEFAULT_WALL_HEIGHT: f32 = 3.0;
@@ -28,7 +28,7 @@ pub fn build_runtime_passability(house: &HouseData) -> RuntimePassability {
     let mut min_z = f32::INFINITY;
     let mut max_z = f32::NEG_INFINITY;
 
-    let floors: Vec<RuntimeFloorGrid> = grids
+    let mut floors: Vec<RuntimeFloorGrid> = grids
         .iter()
         .map(|g| {
             let world_min_x = house.origin.x + g.origin_x as f32;
@@ -63,10 +63,33 @@ pub fn build_runtime_passability(house: &HouseData) -> RuntimePassability {
                 depth: g.depth,
                 y_base,
                 wall_height,
-                cells: g.cells.clone(),
+                // Stored cells hold edge bits only; the upper bits are ours to mark.
+                cells: g
+                    .cells
+                    .iter()
+                    .map(|cell| cell & (EDGE_N | EDGE_E | EDGE_S | EDGE_W))
+                    .collect(),
             }
         })
         .collect();
+
+    for room in &house.rooms {
+        let Some(floor) = floors
+            .iter_mut()
+            .find(|f| f.floor_level == room.floor_level)
+        else {
+            continue;
+        };
+        for dir in WallDirection::ALL {
+            for (i, seg) in room.wall(dir).iter().enumerate() {
+                if seg.variant.is_door() {
+                    for (index, bit) in door_cell_bits(floor, room, dir, i) {
+                        floor.cells[index] |= bit << DOORWAY_SHIFT;
+                    }
+                }
+            }
+        }
+    }
 
     let mut stairwells = Vec::new();
     for room in &house.rooms {
@@ -157,30 +180,85 @@ pub fn update_door_edge(
         None => return,
     };
 
+    for (index, bit) in door_cell_bits(floor, room, wall_dir, segment_index) {
+        if is_open {
+            floor.cells[index] &= !bit;
+        } else {
+            floor.cells[index] |= bit;
+        }
+    }
+}
+
+/// Index into `floor.cells` and edge bit of each cell a door segment
+/// separates, for the cells the grid holds.
+fn door_cell_bits(
+    floor: &RuntimeFloorGrid,
+    room: &RoomData,
+    wall_dir: WallDirection,
+    segment_index: usize,
+) -> impl Iterator<Item = (usize, u8)> {
     let rx = room.local_x - floor.origin_x;
     let rz = room.local_z - floor.origin_z;
+    let (w, d) = (floor.width as i32, floor.depth as i32);
+    let (near, far) = door_cells(room, wall_dir, segment_index);
+    [near, far].into_iter().filter_map(move |(dx, dz, bit)| {
+        let (gx, gz) = (rx + dx, rz + dz);
+        ((0..w).contains(&gx) && (0..d).contains(&gz)).then(|| ((gx + gz * w) as usize, bit))
+    })
+}
 
-    let ((dx, dz, edge), (adj_dx, adj_dz, adj_edge)) = door_cells(room, wall_dir, segment_index);
-    let (cx, cz) = (rx + dx, rz + dz);
-    let (adj_cx, adj_cz) = (rx + adj_dx, rz + adj_dz);
-
-    let w = floor.width as i32;
-    let d = floor.depth as i32;
-
-    let set_or_clear = |cells: &mut Vec<u8>, gx: i32, gz: i32, bit: u8| {
-        if gx < 0 || gx >= w || gz < 0 || gz >= d {
-            return;
-        }
-        let idx = (gx + gz * w) as usize;
-        if is_open {
-            cells[idx] &= !bit;
-        } else {
-            cells[idx] |= bit;
+/// Mark every interior door of one dungeon floor's cells as a doorway. The
+/// dungeon generator's own grids carry only what blocks.
+fn mark_dungeon_doorways(cells: &mut [u8], layout: &crate::dungeon::FloorLayout) {
+    let grid = crate::dungeon::GRID;
+    let mut mark = |x: i32, z: i32, bit: u8| {
+        if (0..grid).contains(&x) && (0..grid).contains(&z) {
+            cells[(x + z * grid) as usize] |= bit << DOORWAY_SHIFT;
         }
     };
+    for door in crate::dungeon::interior_doors(layout) {
+        let [ax, az, bx, bz] = door.seg();
+        if door.spans_x() {
+            for x in ax..bx {
+                mark(x, az - 1, EDGE_S);
+                mark(x, az, EDGE_N);
+            }
+        } else {
+            for z in az..bz {
+                mark(ax - 1, z, EDGE_E);
+                mark(ax, z, EDGE_W);
+            }
+        }
+    }
+}
 
-    set_or_clear(&mut floor.cells, cx, cz, edge);
-    set_or_clear(&mut floor.cells, adj_cx, adj_cz, adj_edge);
+/// `dungeon::dungeon_passability` with every floor's doorways marked.
+pub fn dungeon_passability_with_doorways(
+    entrance: &crate::Position,
+    layouts: &[crate::dungeon::FloorLayout],
+) -> RuntimePassability {
+    let mut rp = crate::dungeon::dungeon_passability(entrance, layouts);
+    for layout in layouts {
+        let level = crate::dungeon::passability_floor_for_depth(layout.depth);
+        if let Some(floor) = rp.floors.iter_mut().find(|f| f.floor_level == level) {
+            mark_dungeon_doorways(&mut floor.cells, layout);
+        }
+    }
+    rp
+}
+
+/// `dungeon::floor_cells` with the floor's doorways marked, ready for
+/// `dungeon::set_floor_cells`.
+pub fn dungeon_floor_cells(
+    layouts: &[crate::dungeon::FloorLayout],
+    depth: u8,
+    broken: &[u32],
+    open_doors: Option<&std::collections::HashSet<u32>>,
+    carts: &[(u32, i32)],
+) -> Option<Vec<u8>> {
+    let mut cells = crate::dungeon::floor_cells(layouts, depth, broken, open_doors, carts)?;
+    mark_dungeon_doorways(&mut cells, layouts.get(usize::from(depth) - 1)?);
+    Some(cells)
 }
 
 /// One solid furniture piece: the world grid cells it occupies plus the floor
@@ -350,5 +428,71 @@ mod tests {
             !south_edge_open(&cache, 1),
             "open window shutter still blocks"
         );
+    }
+    #[test]
+    fn a_door_is_a_doorway_open_or_shut_and_a_window_is_not() {
+        use crate::pathfinding::is_doorway;
+        let house = house_with_door_and_window();
+        let mut cache = PassabilityCache::new();
+        cache.insert(house.id.clone(), build_runtime_passability(&house));
+        for open in [true, false] {
+            update_door_edge(
+                &mut cache,
+                "h",
+                &house.rooms[0],
+                WallDirection::South,
+                0,
+                open,
+            );
+            assert!(is_doorway(&cache, 0, 1, 0, 1, 0));
+            assert!(is_doorway(&cache, 0, 2, 0, -1, 0));
+            assert!(!is_doorway(&cache, 1, 1, 0, 1, 0));
+            assert!(!is_doorway(&cache, 0, 1, -1, 0, 0));
+        }
+    }
+
+    #[test]
+    fn dungeon_doors_stay_doorways_when_a_floor_is_rebuilt() {
+        use crate::dungeon::{
+            dungeon_origin, entrances, generate_dungeon_for, interior_doors,
+            passability_floor_for_depth,
+        };
+        use crate::pathfinding::is_doorway;
+        let entrance = entrances()
+            .into_iter()
+            .find(|e| e.id == "thieves_den")
+            .unwrap();
+        let position = crate::Position {
+            x: entrance.x,
+            y: entrance.y,
+            z: entrance.z,
+        };
+        let layouts = generate_dungeon_for(&entrance.id);
+        let layout = &layouts[16];
+        let mut cache = PassabilityCache::new();
+        cache.insert(
+            crate::dungeon::dungeon_cache_key(&entrance.id),
+            dungeon_passability_with_doorways(&position, &layouts),
+        );
+        let (ox, oz) = dungeon_origin(position.x, position.z);
+        let floor = passability_floor_for_depth(layout.depth);
+        let doors = interior_doors(layout);
+        assert!(!doors.is_empty());
+        let marked = |cache: &PassabilityCache| {
+            doors.iter().all(|door| {
+                let [ax, az, _, _] = door.seg();
+                let (x, z) = (ox as i32 + ax, oz as i32 + az);
+                if door.spans_x() {
+                    is_doorway(cache, x, z, 0, -1, floor)
+                } else {
+                    is_doorway(cache, x, z, -1, 0, floor)
+                }
+            })
+        };
+        assert!(marked(&cache));
+        let open = doors.iter().map(|door| door.door_id).collect();
+        let cells = dungeon_floor_cells(&layouts, layout.depth, &[], Some(&open), &[]).unwrap();
+        crate::dungeon::set_floor_cells(&mut cache, &entrance.id, layout.depth, cells);
+        assert!(marked(&cache));
     }
 }

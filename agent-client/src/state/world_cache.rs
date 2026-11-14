@@ -437,8 +437,13 @@ impl WorldCache {
             .get(&(id.to_string(), depth))
             .map(|m| m.iter().map(|(&id, &o)| (id, o)).collect())
             .unwrap_or_default();
-        let Some(cells) = floor_cells(dungeon.layouts(), depth, &broken, Some(&open), &carts)
-        else {
+        let Some(cells) = onlinerpg_shared::pathfinding::dungeon_floor_cells(
+            dungeon.layouts(),
+            depth,
+            &broken,
+            Some(&open),
+            &carts,
+        ) else {
             return;
         };
         set_floor_cells(&mut self.passability_cache, id, depth, cells);

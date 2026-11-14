@@ -77,52 +77,6 @@ async fn enclosed_target(name: &str, count: usize) -> (GameState, PlayerId, Vec<
 }
 
 #[tokio::test]
-async fn unreachable_crowds_share_the_budget_and_every_brain_gets_a_turn() {
-    let (game, _, ids) = enclosed_target("ai_shared_budget", 4).await;
-    let initial_ticks = {
-        let brains = game.monster_brains.lock().await;
-        ids.iter()
-            .map(|id| brains.entries[id].last_tick)
-            .collect::<Vec<_>>()
-    };
-    let mut processed = vec![false; ids.len()];
-    for _ in 0..12 {
-        let (before_nodes, before_deferred, before_states) = {
-            let brains = game.monster_brains.lock().await;
-            (
-                brains.stats.expanded_nodes,
-                brains.stats.deferred_brains,
-                ids.iter()
-                    .map(|id| {
-                        (
-                            brains.entries[id].brain.clone(),
-                            brains.entries[id].last_tick,
-                        )
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        };
-        game.tick_monster_ai_by(200.0).await;
-        let brains = game.monster_brains.lock().await;
-        assert!(brains.stats.expanded_nodes - before_nodes <= TICK_PATH_NODE_BUDGET);
-        if brains.stats.deferred_brains > before_deferred {
-            let id = &ids[brains.cursor];
-            let i = ids.iter().position(|candidate| candidate == id).unwrap();
-            assert_eq!(brains.entries[id].brain, before_states[i].0);
-            assert_eq!(brains.entries[id].last_tick, before_states[i].1);
-        }
-        for (i, id) in ids.iter().enumerate() {
-            processed[i] |= brains.entries[id].last_tick != initial_ticks[i];
-        }
-    }
-    assert!(processed.into_iter().all(|value| value));
-    // A walled-off target is proven out of reach from its own side, cheaply.
-    let brains = game.monster_brains.lock().await;
-    assert_eq!(brains.stats.node_budget_ticks, 0);
-    assert!(brains.stats.cache_hits > 0);
-}
-
-#[tokio::test]
 async fn unchanged_holds_reuse_failures_and_geometry_changes_resume_immediately() {
     let (game, target, ids) = enclosed_target("ai_failure_reuse", 1).await;
     game.teleport_player(

@@ -1,8 +1,8 @@
 //! Nightly maze redraw for `nightlyLayout` dungeons (doc/DUNGEON.md).
 
 use onlinerpg_shared::dungeon::{
-    dungeon_cache_key, dungeon_passability, generate_dungeon_for, generate_dungeon_variant,
-    layout_is_traversable, FloorLayout,
+    dungeon_cache_key, generate_dungeon_for, generate_dungeon_variant, layout_is_traversable,
+    FloorLayout,
 };
 use onlinerpg_shared::fnv::{fnv1a64, FNV_OFFSET};
 use onlinerpg_shared::ServerMessage;
@@ -121,7 +121,10 @@ impl GameState {
             };
             let old_layouts =
                 old_layouts.unwrap_or_else(|| generate_dungeon_variant(&def.id, old_variant));
-            let passability = dungeon_passability(&def.position(), &layouts);
+            let passability = onlinerpg_shared::pathfinding::dungeon_passability_with_doorways(
+                &def.position(),
+                &layouts,
+            );
             {
                 let mut interest = self.interest_lock();
                 interest.remove_dungeon_floors(&def.id, &old_layouts);

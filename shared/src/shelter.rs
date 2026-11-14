@@ -2,7 +2,9 @@ use std::{collections::HashMap, sync::OnceLock};
 
 use crate::{
     furniture::FurniturePlacement,
-    pathfinding::{RuntimeFloorGrid, RuntimePassability, EDGE_E, EDGE_N, EDGE_S, EDGE_W},
+    pathfinding::{
+        RuntimeFloorGrid, RuntimePassability, DOORWAY_SHIFT, EDGE_E, EDGE_N, EDGE_S, EDGE_W,
+    },
 };
 
 #[derive(serde::Deserialize)]
@@ -249,12 +251,15 @@ fn grid(placement: &FurniturePlacement, perimeter: &Perimeter) -> Option<Runtime
     let annex = |x: f32, z: f32| perimeter.annex_at(x, z);
     let porch =
         |x: f32, z: f32| !inside(x, z) && annex(x, z).is_none() && perimeter.porch(x, z).is_some();
-    let side_door_open =
-        |from: (f32, f32), to: (f32, f32)| {
-            perimeter.side_doors.iter().enumerate().any(|(i, door)| {
-                placement.open_doors >> (i + 1) & 1 == 1 && door.crossed_by(from, to)
-            })
-        };
+    let side_door = |from: (f32, f32), to: (f32, f32)| {
+        perimeter
+            .side_doors
+            .iter()
+            .position(|door| door.crossed_by(from, to))
+    };
+    let side_door_open = |from: (f32, f32), to: (f32, f32)| {
+        side_door(from, to).is_some_and(|i| placement.open_doors >> (i + 1) & 1 == 1)
+    };
     let half_entrance = perimeter.entrance_width / 2.0;
     let solid = |x: f32, z: f32| {
         blocked(x, z)
@@ -274,6 +279,23 @@ fn grid(placement: &FurniturePlacement, perimeter: &Perimeter) -> Option<Runtime
                     })))
     };
     let through_opening = |a: &Annex, x: f32| (x - (a.x[0] + a.x[1]) / 2.0).abs() < a.opening / 2.0;
+    // A step out of the nave that crosses its front within the entrance width.
+    let through_entrance = |(lx, lz): (f32, f32), (nx, nz): (f32, f32)| {
+        let front_t = if nz > lz {
+            (hd - lz) / (nz - lz)
+        } else {
+            f32::INFINITY
+        };
+        let side_t = if nx > lx {
+            (hw - lx) / (nx - lx)
+        } else if nx < lx {
+            (-hw - lx) / (nx - lx)
+        } else {
+            f32::INFINITY
+        };
+        let entrance_x = lx + front_t * (nx - lx);
+        front_t <= 1.0 && front_t < side_t && entrance_x.abs() < half_entrance
+    };
     const NEIGHBOURS: [(i32, i32, u8, u8); 4] = [
         (1, 0, EDGE_E, EDGE_W),
         (-1, 0, EDGE_W, EDGE_E),
@@ -307,22 +329,7 @@ fn grid(placement: &FurniturePlacement, perimeter: &Perimeter) -> Option<Runtime
                     } else if side_door_open((lx, lz), (nx, nz)) {
                         true
                     } else {
-                        let front_t = if nz > lz {
-                            (hd - lz) / (nz - lz)
-                        } else {
-                            f32::INFINITY
-                        };
-                        let side_t = if nx > lx {
-                            (hw - lx) / (nx - lx)
-                        } else if nx < lx {
-                            (-hw - lx) / (nx - lx)
-                        } else {
-                            f32::INFINITY
-                        };
-                        let entrance_x = lx + front_t * (nx - lx);
-                        front_t <= 1.0
-                            && front_t < side_t
-                            && entrance_x.abs() < half_entrance
+                        through_entrance((lx, lz), (nx, nz))
                             && (!perimeter.door || placement.open_doors & 1 == 1)
                     }
                 } else if let Some(a) = in_annex {
@@ -337,6 +344,15 @@ fn grid(placement: &FurniturePlacement, perimeter: &Perimeter) -> Option<Runtime
                 if !open {
                     cells[(x + z * width) as usize] |= edge;
                     cells[(x + dx + (z + dz) * width) as usize] |= opposite;
+                }
+                let swing_door = perimeter.door
+                    && in_nave
+                    && !inside(nx, nz)
+                    && annex(nx, nz).is_none()
+                    && through_entrance((lx, lz), (nx, nz));
+                if swing_door || side_door((lx, lz), (nx, nz)).is_some() {
+                    cells[(x + z * width) as usize] |= edge << DOORWAY_SHIFT;
+                    cells[(x + dx + (z + dz) * width) as usize] |= opposite << DOORWAY_SHIFT;
                 }
             }
         }
@@ -644,6 +660,32 @@ mod tests {
         }
         assert!(!is_movement_blocked(&cache, x0, z0, x1, z1, 0, Some(p.y)));
         assert!(!is_movement_blocked(&cache, x1, z1, x0, z0, 0, Some(p.y)));
+    }
+
+    #[test]
+    fn a_walker_bound_for_the_shut_union_hall_stops_at_a_door() {
+        let p = FurniturePlacement {
+            id: 121,
+            type_id: "union_hall".into(),
+            x: -1445.0658,
+            y: 1.0128,
+            z: 4797.372,
+            rotation_deg: 270.0,
+            floor_level: 0,
+            open_doors: 0,
+        };
+        let cache = cache(&p);
+        let (gx, gz) = world(&p, 0.0, 0.0);
+        // Front of the hall, then beside the priest's door, then the far side.
+        for (from, door) in [((0.0, 30.0), 0), ((30.0, -13.0), 1), ((-30.0, 0.0), 0)] {
+            let (sx, sz) = world(&p, from.0, from.1);
+            let path = crate::pathfinding::find_path(sx, sz, 0, gx, gz, 0, &cache, 2000);
+            assert!(!path.found, "from {from:?}");
+            let end = path.waypoints.last().unwrap();
+            let [ax, az, bx, bz] = doorway(&p, door).unwrap();
+            let off = (end.x - (ax + bx) / 2.0).hypot(end.z - (az + bz) / 2.0);
+            assert!(off < 2.5, "from {from:?} ended at ({}, {})", end.x, end.z);
+        }
     }
 
     #[test]

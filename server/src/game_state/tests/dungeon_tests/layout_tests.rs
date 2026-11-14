@@ -1,8 +1,8 @@
 use super::*;
 use crate::game_state::dungeon_layout::night_variant;
 use onlinerpg_shared::dungeon::{
-    dungeon_cache_key, dungeon_passability, generate_dungeon_for, generate_dungeon_variant,
-    interior_doors, layout_hash, layout_is_traversable,
+    dungeon_cache_key, generate_dungeon_for, generate_dungeon_variant, interior_doors, layout_hash,
+    layout_is_traversable,
 };
 use onlinerpg_shared::ServerMessage;
 
@@ -133,7 +133,9 @@ async fn sunset_redraws_only_the_nightly_dungeon() {
                 .get(&dungeon_cache_key(NIGHTLY))
                 .unwrap()
         ),
-        cells(&dungeon_passability(&entrance, &layouts))
+        cells(
+            &onlinerpg_shared::pathfinding::dungeon_passability_with_doorways(&entrance, &layouts)
+        )
     );
     let new_doors = door_subjects(&layouts);
     assert!(old_doors.difference(&new_doors).count() > 0);
