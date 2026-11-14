@@ -142,9 +142,10 @@ describe('movement during teleport', () => {
 
     networkManager.sendMoveStop(3)
     localTeleportActive.set(false)
-    networkManager.sendMoveGoal({ ...goal, request_id: 4, x: 500, z: 600 }, [
-      490, 590,
-    ])
+    networkManager.sendMoveGoal(
+      { ...goal, request_id: 4, x: 500, z: 600 },
+      [490, 590]
+    )
     networkManager.sendMoveDirection({ ...direction, request_id: 5 })
 
     const sent = TestWebSocket.current.send.mock.calls.map(([bytes]) =>
