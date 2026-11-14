@@ -1556,6 +1556,69 @@ fn a_two_wide_corridor_seats_both_lanes() {
     assert_distinct_cells(&[&b1, &b2, &b3], "one per cell");
 }
 
+/// The server sweeps one line between two reported poses. A sidestep that
+/// replaces the leg being walked turns there, so the turn must be reported.
+#[test]
+fn a_sidestep_reports_the_turn_it_makes() {
+    let open = FnPath {
+        reach: |_, _| true,
+        blocked: |_, _, _, _| false,
+    };
+    let tree = chase_attack_tree();
+    let players = attacker_at(15.5, 13.5);
+    for stander_x in 11..15 {
+        for stander_z in 10..14 {
+            let stander = vec![NearbyMonster {
+                id: "stander".into(),
+                position: Position {
+                    x: stander_x as f32 + 0.5,
+                    y: 0.0,
+                    z: stander_z as f32 + 0.5,
+                },
+                state: MonsterState::Idle,
+                path_floor: 0,
+            }];
+            let mut brain = brain_at("m1", 10.5, 10.5);
+            let mut rng = SmallRng::seed_from_u64(42);
+            let mut reported = brain.position;
+            let mut walked: Vec<Position> = Vec::new();
+            for _ in 0..60 {
+                let commands = brain
+                    .tick_with_behavior_tree(100.0, &players, &stander, &tree, &open, &mut rng);
+                for command in commands {
+                    let AiCommand::Move { position, .. } = command else {
+                        continue;
+                    };
+                    let (dx, dz) = (position.x - reported.x, position.z - reported.z);
+                    let len = (dx * dx + dz * dz).sqrt();
+                    for p in &walked {
+                        let off = if len < 1e-4 {
+                            p.dist_xz_sq(&reported).sqrt()
+                        } else {
+                            ((p.x - reported.x) * dz - (p.z - reported.z) * dx).abs() / len
+                        };
+                        assert!(
+                            off < 0.02,
+                            "stander in ({stander_x},{stander_z}): walked through ({:.2},{:.2}), \
+                             {off:.2}m off the line the server sweeps from ({:.2},{:.2}) to \
+                             ({:.2},{:.2})",
+                            p.x,
+                            p.z,
+                            reported.x,
+                            reported.z,
+                            position.x,
+                            position.z
+                        );
+                    }
+                    reported = position;
+                    walked.clear();
+                }
+                walked.push(brain.position);
+            }
+        }
+    }
+}
+
 #[test]
 fn a_walled_target_is_chased_to_its_own_position_not_a_nearby_cell() {
     let mut brain = brain_at("m1", 14.0, 10.5);

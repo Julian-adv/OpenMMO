@@ -681,8 +681,12 @@ impl MonsterBrain {
             }
             // Deliberately not `compute_path`: the repath timer keeps running
             // so the interrupted goal is re-tried on its normal cadence.
+            let turned_mid_leg = self.current_waypoint_idx < self.waypoints.len();
             self.waypoints = result.waypoints;
             self.current_waypoint_idx = 0;
+            if turned_mid_leg {
+                self.mark_path_bend();
+            }
             self.face_first_waypoint();
             return true;
         }
