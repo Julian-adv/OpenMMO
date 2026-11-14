@@ -53,17 +53,27 @@ const BUILTIN_CRESTS: &[(&str, &[u8], &str)] = &[(
     "#1f4a34",
 )];
 
-/// Each built-in crest as stored: name, PNG, content hash, cloth colour.
-fn builtin_crests() -> &'static [(&'static str, Vec<u8>, String, &'static str)] {
-    static CRESTS: std::sync::OnceLock<Vec<(&str, Vec<u8>, String, &str)>> =
-        std::sync::OnceLock::new();
+struct BuiltinCrest {
+    name: &'static str,
+    png: Vec<u8>,
+    hash: String,
+    color: &'static str,
+}
+
+fn builtin_crests() -> &'static [BuiltinCrest] {
+    static CRESTS: std::sync::OnceLock<Vec<BuiltinCrest>> = std::sync::OnceLock::new();
     CRESTS.get_or_init(|| {
         BUILTIN_CRESTS
             .iter()
-            .map(|(name, bytes, color)| {
+            .map(|&(name, bytes, color)| {
                 let png = reencode(bytes).expect("built-in crest is a valid PNG");
                 let hash = hex_digest(&png);
-                (*name, png, hash, *color)
+                BuiltinCrest {
+                    name,
+                    png,
+                    hash,
+                    color,
+                }
             })
             .collect()
     })
@@ -129,13 +139,18 @@ impl CapeTextureStore {
             Err(e) => return Err(e),
         };
         let mut crests = HashMap::new();
-        for (name, png, texture, color) in builtin_crests() {
-            let path = dir.join(format!("{texture}.png"));
+        for crest in builtin_crests() {
+            let path = dir.join(format!("{}.png", crest.hash));
             if !path.exists() {
-                onlinerpg_terrain::io::atomic_write_sync(&path, png)?;
+                onlinerpg_terrain::io::atomic_write_sync(&path, &crest.png)?;
             }
-            let texture = texture.clone();
-            crests.insert(*name, Crest { texture, color });
+            crests.insert(
+                crest.name,
+                Crest {
+                    texture: crest.hash.clone(),
+                    color: crest.color,
+                },
+            );
         }
         Ok(Self {
             crests,

@@ -1650,7 +1650,7 @@ async fn a_house_click_can_stop_inside_the_entrance_without_truncating_interacti
     let id = player.id;
     game.add_player(player).await;
     let mut rx = game.register_connection_channel(&id).await;
-    game.request_move_goal_with_entrance(id, 1, 16.5, 12.5, false, true, None)
+    game.request_move_goal_with_entrance(id, 1, [16.5, 12.5], false, true, None)
         .await;
     next_path(&mut rx).await;
     advance(&game, id, 5.0).await;

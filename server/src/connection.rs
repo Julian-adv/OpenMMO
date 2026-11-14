@@ -1754,8 +1754,7 @@ async fn handle_client_message(
                     .request_move_goal_with_entrance(
                         id,
                         request_id,
-                        x,
-                        z,
+                        [x, z],
                         sprinting,
                         stop_at_entrance,
                         client_position,

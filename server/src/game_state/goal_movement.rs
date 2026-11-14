@@ -151,7 +151,7 @@ impl GameState {
         z: f32,
         sprinting: bool,
     ) {
-        self.request_move_goal_with_entrance(id, request_id, x, z, sprinting, false, None)
+        self.request_move_goal_with_entrance(id, request_id, [x, z], sprinting, false, None)
             .await;
     }
 
@@ -159,8 +159,7 @@ impl GameState {
         &self,
         id: PlayerId,
         request_id: u32,
-        x: f32,
-        z: f32,
+        [x, z]: [f32; 2],
         sprinting: bool,
         stop_at_entrance: bool,
         client_position: Option<[f32; 2]>,
