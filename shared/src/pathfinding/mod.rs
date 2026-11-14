@@ -748,7 +748,7 @@ mod tests {
     ///   floor 1 (upper): world cells (0..3, z=3)
     ///   stairwell: x=0, z=0..4, connecting lower landing (0,0) to upper (0,3).
     /// House origin is (0,0); both rows are open in X with perimeter walls.
-    fn make_two_floor_stairwell() -> (String, RuntimePassability) {
+    pub(super) fn make_two_floor_stairwell() -> (String, RuntimePassability) {
         // 3x1 open row walled on its rim: [W|N|S, N|S, E|N|S].
         let row = || perimeter_walls(3, 1);
         let rp = RuntimePassability {
@@ -1024,8 +1024,9 @@ mod tests {
         let (id, rp) = make_two_floor_stairwell();
         let cache = PassabilityCache::from([(id, rp)]);
 
-        for search in [find_path, find_and_smooth_path] {
-            let result = search(2.5, 0.5, 0, 0.5, 2.3, 0, &cache, 3);
+        // Someone on the goal step leaves the search only its start side.
+        for search in [astar::find_path_avoiding, find_and_smooth_path_avoiding] {
+            let result = search(2.5, 0.5, 0, 0.5, 2.3, 0, &cache, 3, &[(0, 2)]);
             assert!(!result.found);
             assert_eq!(result.termination, PathTermination::NodeLimit);
             assert!(result.waypoints.contains(&PathWaypoint {

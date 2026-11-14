@@ -321,6 +321,23 @@ mod tests {
         PassabilityCache::from([("obstacle".into(), furniture_piece(0, 0, 0))])
     }
 
+    /// The obstacle behind a long fence of furniture, so a query for it spends
+    /// every node it is allowed before the two sides of the search can meet.
+    fn walled_off() -> PassabilityCache {
+        let mut cache = obstacle();
+        let wall = onlinerpg_shared::pathfinding::FurniturePiece {
+            cells: (-40..=40).map(|z| (5, z)).collect(),
+            floor_level: 0,
+            y_base: 0.0,
+            wall_height: 3.0,
+        };
+        cache.extend(
+            onlinerpg_shared::pathfinding::build_furniture_passability(&[wall])
+                .map(|wall| ("wall".into(), wall)),
+        );
+        cache
+    }
+
     fn query(path: &CountingPath<'_>, limit: usize) -> PathResult {
         path.find_path_avoiding(10.5, 0.5, 0, 0.5, 0.5, 0, &[], limit)
     }
@@ -360,7 +377,7 @@ mod tests {
 
     #[test]
     fn unchanged_failures_reuse_partial_paths_until_the_original_expiry() {
-        let cache = obstacle();
+        let cache = walled_off();
         let failures = RefCell::default();
         let budget = Cell::new(100);
         let now = Instant::now();
@@ -485,7 +502,7 @@ mod tests {
 
     #[test]
     fn brains_share_a_tick_budget_without_caching_deferred_queries() {
-        let cache = obstacle();
+        let cache = walled_off();
         let first_failures = RefCell::default();
         let second_failures = RefCell::default();
         let budget = Cell::new(30);
@@ -508,7 +525,7 @@ mod tests {
 
     #[test]
     fn a_short_search_runs_on_what_the_tick_has_left() {
-        let cache = obstacle();
+        let cache = walled_off();
         let failures = RefCell::default();
         let budget = Cell::new(35);
         let now = Instant::now();
@@ -517,12 +534,12 @@ mod tests {
         let path = CountingPath::new(&cache, &budget, &failures, now);
         assert!(path.find_path(-1.5, 0.5, 0, 2.5, 0.5, 0).found);
         assert!(!path.diagnostics.get().deferred);
-        assert_eq!(budget.get(), 2);
+        assert!(budget.get() < 15);
     }
 
     #[test]
     fn a_brain_budget_truncated_failure_does_not_poison_a_full_search() {
-        let cache = obstacle();
+        let cache = walled_off();
         let failures = RefCell::default();
         let budget = Cell::new(100);
         let now = Instant::now();

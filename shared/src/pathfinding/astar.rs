@@ -1,4 +1,4 @@
-//! A* search over the virtual 1m world grid with floor-level awareness.
+//! Two-ended A* search over the virtual 1m world grid with floor-level awareness.
 //! Combines two cell types: regular floor cells (cardinal expansion via
 //! the cell-edge mask) and stairwell intermediate cells (axis-only
 //! expansion via the precomputed stair map). The goal is reachable at
@@ -9,19 +9,24 @@ use std::cmp::{Ordering, Reverse};
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use super::query::{is_cardinal_move_blocked, is_movement_blocked_for_mover, snap_goal_into_floor};
-use super::stair::{build_stair_cells, floor_to_key, is_regular_key, key_to_floor, AStarKey};
+use super::stair::{
+    build_stair_cells, floor_to_key, is_regular_key, key_to_floor, AStarKey, StairCellExpansion,
+};
 use super::{PassabilityCache, PathResult, PathWaypoint, DIRS};
 use crate::world::wrap_world_x;
 
-/// Default max nodes for A* expansion. Sized for multi-floor house traversal.
+/// Default max nodes for each direction of the search. Sized for multi-floor
+/// house traversal.
 pub const DEFAULT_MAX_NODES: usize = 2000;
-/// A search that comes within `SEALED_NEAR_H` of a goal under an overlay and
-/// then spends `SEALED_STALL_NODES` more without reaching it checks whether the
-/// goal sits in a small sealed pocket (a closed house) before spending the rest.
-/// A pocket of `SEALED_MAX_CELLS` keeps its walls within `SEALED_NEAR_H`.
-const SEALED_NEAR_H: u32 = 4;
-const SEALED_STALL_NODES: usize = 32;
-const SEALED_MAX_CELLS: usize = 64;
+/// Largest sealed pocket around a goal whose rim the search still aims for:
+/// room for a shut building, not for a dungeon wing.
+const SEALED_MAX_CELLS: usize = 1024;
+/// With the goal proven out of reach, the walker stops where this many more
+/// nodes bring it no closer.
+const UNREACHABLE_STALL_NODES: usize = 256;
+/// A short search still gets this long after its sides meet to find the
+/// shortest join.
+const MIN_NODES_PAST_MEETING: usize = 64;
 
 #[derive(Clone)]
 struct AStarNode {
@@ -167,11 +172,188 @@ pub fn find_path_avoiding(
         goal_floor,
         cache,
         max_nodes,
+        max_nodes.saturating_mul(2),
         blocked,
         &mut SearchExtent::default(),
     )
 }
 
+/// One direction of the search: its frontier and the best cost found per key.
+#[derive(Default)]
+struct Side {
+    open: BinaryHeap<Reverse<AStarNode>>,
+    seen: HashMap<AStarKey, ClosedEntry>,
+    expanded: usize,
+}
+
+impl Side {
+    fn min_f(&self) -> Option<u32> {
+        self.open.peek().map(|Reverse(node)| node.f)
+    }
+
+    /// Record `key` at cost `g` unless a cheaper way to it is already known.
+    fn reach(&mut self, key: AStarKey, parent: AStarKey, g: u32, h: u32) -> bool {
+        if self.seen.get(&key).is_some_and(|known| known.g <= g) {
+            return false;
+        }
+        self.seen.insert(key, ClosedEntry { g, parent });
+        self.open.push(Reverse(AStarNode {
+            x: key.0,
+            z: key.1,
+            fk: key.2,
+            g,
+            f: g + h,
+        }));
+        true
+    }
+
+    /// Take the next node to expand, charged to `extent`; `None` for one a
+    /// cheaper way has since replaced.
+    fn pop(&mut self, extent: &mut SearchExtent) -> Option<(AStarKey, u32)> {
+        let Reverse(node) = self.open.pop()?;
+        self.expanded += 1;
+        extent.expanded += 1;
+        extent.include(node.x, node.z, key_to_floor(node.fk));
+        let key = (node.x, node.z, node.fk);
+        (self.seen.get(&key)?.g >= node.g).then_some((key, node.g))
+    }
+}
+
+/// The moves of one search, read in either direction.
+struct Moves<'a> {
+    cache: &'a PassabilityCache,
+    stair_cells: HashMap<AStarKey, StairCellExpansion>,
+    stair_positions: HashSet<(i32, i32, u8)>,
+    blocked: &'a [(i32, i32)],
+    confine_to_floor: bool,
+    start_key: AStarKey,
+}
+
+impl<'a> Moves<'a> {
+    fn new(
+        cache: &'a PassabilityCache,
+        start_key: AStarKey,
+        goal_key: AStarKey,
+        blocked: &'a [(i32, i32)],
+    ) -> Self {
+        let stair_cells = build_stair_cells(cache);
+        let stair_positions = stair_cells
+            .keys()
+            .map(|&(x, z, fk)| (x, z, key_to_floor(fk)))
+            .collect();
+        let mut moves = Self {
+            cache,
+            stair_cells,
+            stair_positions,
+            blocked,
+            confine_to_floor: false,
+            start_key,
+        };
+        // A same-floor goal never needs the stairs, unless either end stands
+        // in a stairwell: mid-stair cells are keyed to the shallower floor.
+        moves.confine_to_floor = start_key.2 == goal_key.2
+            && !moves.stair_interior(start_key)
+            && !moves.on_stairs(goal_key);
+        moves
+    }
+
+    fn on_stairs(&self, key: AStarKey) -> bool {
+        self.stair_positions
+            .contains(&(key.0, key.1, key_to_floor(key.2)))
+    }
+
+    /// A stairwell cell that is not a landing at this key.
+    fn stair_interior(&self, key: AStarKey) -> bool {
+        self.on_stairs(key) && !self.stair_cells.contains_key(&key)
+    }
+
+    /// Whether a mover may come to stand here. Nobody enters the start cell,
+    /// so it is never refused.
+    fn enterable(&self, x: i32, z: i32) -> bool {
+        (x, z) == (self.start_key.0, self.start_key.1) || !cell_blocked(self.blocked, x, z)
+    }
+
+    /// A mover parked on furniture steps out of its sealed start cell the way
+    /// the movement validator lets it; walls never yield.
+    fn step_open(&self, from: AStarKey, dx: i32, dz: i32) -> bool {
+        let floor = key_to_floor(from.2);
+        !is_cardinal_move_blocked(self.cache, from.0, from.1, dx, dz, floor)
+            || (from == self.start_key && self.steps_out(from.0, from.1, dx, dz, floor))
+    }
+
+    fn steps_out(&self, x: i32, z: i32, dx: i32, dz: i32, floor: u8) -> bool {
+        let (cx, cz) = (x as f32 + 0.5, z as f32 + 0.5);
+        let (tx, tz) = (cx + dx as f32, cz + dz as f32);
+        !is_movement_blocked_for_mover(self.cache, cx, cz, tx, tz, floor, None)
+    }
+
+    /// Keys one move after `cur`, or with `back` the keys one move before it.
+    fn neighbors(&self, cur: AStarKey, back: bool, out: &mut Vec<AStarKey>) {
+        out.clear();
+        if !self.enterable(cur.0, cur.1) {
+            return;
+        }
+        if is_regular_key(cur.2) && !self.stair_interior(cur) {
+            for &(dx, dz) in &DIRS {
+                let other = if back {
+                    (cur.0 - dx, cur.1 - dz, cur.2)
+                } else {
+                    (cur.0 + dx, cur.1 + dz, cur.2)
+                };
+                let from = if back { other } else { cur };
+                if self.enterable(other.0, other.1)
+                    && !self.stair_interior(other)
+                    && self.step_open(from, dx, dz)
+                {
+                    out.push(other);
+                }
+            }
+        }
+        if !self.confine_to_floor {
+            // Stair links are mutual, so they read the same both ways.
+            if let Some(stair) = self.stair_cells.get(&cur) {
+                for link in [&stair.prev, &stair.next].into_iter().flatten() {
+                    if self.enterable(link.x, link.z) {
+                        out.push((link.x, link.z, link.fk));
+                    }
+                }
+            }
+        }
+    }
+
+    /// Where a walker stands to be at a sealed `pocket`: beside furniture,
+    /// which seals only its own cell, or failing that anywhere along the wall.
+    fn rim_of(&self, pocket: &HashSet<(i32, i32)>, fk: u16) -> Vec<AStarKey> {
+        let floor = key_to_floor(fk);
+        let mut beside = Vec::new();
+        let mut along = Vec::new();
+        for &(x, z) in pocket {
+            for &(dx, dz) in &DIRS {
+                let cell = (x + dx, z + dz, fk);
+                if pocket.contains(&(cell.0, cell.1))
+                    || !self.enterable(cell.0, cell.1)
+                    || self.stair_interior(cell)
+                {
+                    continue;
+                }
+                if self.steps_out(x, z, dx, dz, floor) {
+                    beside.push(cell);
+                } else {
+                    along.push(cell);
+                }
+            }
+        }
+        if beside.is_empty() {
+            along
+        } else {
+            beside
+        }
+    }
+}
+
+/// Searches from the start and from the goal at once and joins them where they
+/// meet. `max_nodes` bounds each direction, `total_nodes` the two together.
+/// A goal nobody can stand on ends the path at the nearest cell of its rim.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn find_path_avoiding_counted(
     start_x: f32,
@@ -182,18 +364,27 @@ pub(super) fn find_path_avoiding_counted(
     goal_floor: u8,
     cache: &PassabilityCache,
     max_nodes: usize,
+    total_nodes: usize,
     blocked: &[(i32, i32)],
     extent: &mut SearchExtent,
 ) -> PathResult {
-    let (goal_x, goal_z) = snap_goal_into_floor(cache, goal_x, goal_z, goal_floor);
-    let sx = start_x.floor() as i32;
-    let sz = start_z.floor() as i32;
-    let gx = goal_x.floor() as i32;
-    let gz = goal_z.floor() as i32;
-    *extent = SearchExtent::at(sx, sz, start_floor);
-    extent.include(gx, gz, goal_floor);
+    use crate::pathfinding::PathTermination;
 
-    if sx == gx && sz == gz && start_floor == goal_floor {
+    let (goal_x, goal_z) = snap_goal_into_floor(cache, goal_x, goal_z, goal_floor);
+    let start_key: AStarKey = (
+        start_x.floor() as i32,
+        start_z.floor() as i32,
+        floor_to_key(start_floor),
+    );
+    let goal_key: AStarKey = (
+        goal_x.floor() as i32,
+        goal_z.floor() as i32,
+        floor_to_key(goal_floor),
+    );
+    *extent = SearchExtent::at(start_key.0, start_key.1, start_floor);
+    extent.include(goal_key.0, goal_key.1, goal_floor);
+
+    if start_key == goal_key {
         return PathResult {
             waypoints: vec![PathWaypoint {
                 x: goal_x,
@@ -201,365 +392,205 @@ pub(super) fn find_path_avoiding_counted(
                 floor: goal_floor,
             }],
             found: true,
-            termination: crate::pathfinding::PathTermination::Reached,
+            termination: PathTermination::Reached,
         };
     }
 
-    let stair_cells = build_stair_cells(cache);
-
-    // Build set of (x, z, real_floor) for stairwell cells.
-    // Used to block regular-floor cardinal moves into stairwell interior cells,
-    // but only for floors that the stairwell actually connects.
-    let mut stair_positions: HashSet<(i32, i32, u8)> = HashSet::new();
-    for &(x, z, fk) in stair_cells.keys() {
-        stair_positions.insert((x, z, key_to_floor(fk)));
-    }
-
-    // Confine the search to a single floor when start and goal share it: a
-    // same-floor room goal is always reachable without leaving the floor, so the
-    // stairwell is never a legitimate shortcut. The exception is a click whose
-    // target is the stairwell itself. Intermediate stair cells are keyed to the
-    // shallower connected floor, so a landing→mid-stair click may have equal
-    // start/goal floor numbers but still needs stair-axis expansion.
-    let start_regular_key = (sx, sz, floor_to_key(start_floor));
-    let start_is_stair_interior = stair_positions.contains(&(sx, sz, start_floor))
-        && !stair_cells.contains_key(&start_regular_key);
-    let goal_is_stair_position = stair_positions.contains(&(gx, gz, goal_floor));
-    let confine_to_floor =
-        start_floor == goal_floor && !start_is_stair_interior && !goal_is_stair_position;
-
-    let start_fk = floor_to_key(start_floor);
-
-    let mut open = BinaryHeap::new();
-    let mut closed: HashMap<AStarKey, ClosedEntry> = HashMap::new();
-
-    let h = |x: i32, z: i32, fk: u16| -> u32 {
-        let real_f = key_to_floor(fk) as i32;
-        let goal_f = goal_floor as i32;
-        (x - gx).unsigned_abs() + (z - gz).unsigned_abs() + (real_f - goal_f).unsigned_abs() * 2
+    let moves = Moves::new(cache, start_key, goal_key, blocked);
+    let distance = |a: AStarKey, b: AStarKey| -> u32 {
+        (a.0 - b.0).unsigned_abs()
+            + (a.1 - b.1).unsigned_abs()
+            + (i32::from(key_to_floor(a.2)) - i32::from(key_to_floor(b.2))).unsigned_abs() * 2
     };
+    let to_goal = |key: AStarKey| distance(key, goal_key);
+    let to_start = |key: AStarKey| distance(key, start_key);
 
-    let start_h = h(sx, sz, start_fk);
-    let start_key: AStarKey = (sx, sz, start_fk);
-    open.push(Reverse(AStarNode {
-        x: sx,
-        z: sz,
-        fk: start_fk,
-        g: 0,
-        f: start_h,
-    }));
-    closed.insert(
-        start_key,
-        ClosedEntry {
-            g: 0,
-            parent: start_key,
-        },
-    );
-
-    // If start is on a stairwell intermediate cell, also seed that key
-    // so the player doesn't have to walk back to entry landing first.
-    // Skipped under floor confinement: those seeds only exist to start a
-    // cross-floor climb/descent.
-    if !confine_to_floor {
-        for &key in stair_cells.keys() {
-            let (kx, kz, kfk) = key;
-            if kx == sx && kz == sz && key_to_floor(kfk) == start_floor && kfk != start_fk {
-                let sh = h(sx, sz, kfk);
-                open.push(Reverse(AStarNode {
-                    x: sx,
-                    z: sz,
-                    fk: kfk,
-                    g: 0,
-                    f: sh,
-                }));
-                closed.insert(
-                    key,
-                    ClosedEntry {
-                        g: 0,
-                        parent: start_key,
-                    },
-                );
+    let mut forward = Side::default();
+    let mut backward = Side::default();
+    forward.reach(start_key, start_key, 0, to_goal(start_key));
+    backward.reach(goal_key, goal_key, 0, to_start(goal_key));
+    // A stair cell holds a key per step, and either end may stand on any of them.
+    if !moves.confine_to_floor {
+        for &key in moves.stair_cells.keys() {
+            if (key.0, key.1) == (start_key.0, start_key.1) && key_to_floor(key.2) == start_floor {
+                forward.reach(key, key, 0, to_goal(key));
+            }
+            if (key.0, key.1) == (goal_key.0, goal_key.1) && key_to_floor(key.2) == goal_floor {
+                backward.reach(key, key, 0, to_start(key));
             }
         }
     }
 
-    // A mover parked on furniture (a bed seals its own footprint) gets the same
-    // one-step waiver the movement validator grants: out of a fully sealed start
-    // cell across a `yields_to_trapped_mover` obstacle. Walls never yield, so a
-    // sealed start opens only its furniture sides — never a route through a wall.
-    // Consulted lazily, only for start-cell edges the cheap check refused.
-    let (scx, scz) = (sx as f32 + 0.5, sz as f32 + 0.5);
-    let start_escapes = |dx: i32, dz: i32| {
-        !is_movement_blocked_for_mover(
-            cache,
-            scx,
-            scz,
-            scx + dx as f32,
-            scz + dz as f32,
-            start_floor,
-            None,
-        )
+    // Cheapest known join of the two sides, and the nodes spent finding the first.
+    let mut meeting: Option<(u32, AStarKey)> = None;
+    let mut met_at: Option<usize> = None;
+    let join = |meeting: &mut Option<(u32, AStarKey)>, key: AStarKey, cost: u32| {
+        if meeting.is_none_or(|(best, _)| cost < best) {
+            *meeting = Some((cost, key));
+        }
     };
+    // The start side's nearest key to the goal, and its nodes spent finding it.
+    let mut closest = (to_goal(start_key), start_key);
+    let mut closest_at = 0;
+    // The goal's sealed pocket once its side has run dry, the rim cells not yet
+    // tried (farthest from the goal first) and how far the ones being tried stand.
+    let mut pocket: HashSet<(i32, i32)> = HashSet::new();
+    let mut rim: Vec<AStarKey> = Vec::new();
+    let mut rim_distance = 0;
+    let mut backward_done = false;
+    let mut neighbors = Vec::with_capacity(6);
 
-    let mut best_h = start_h;
-    let mut best_key = start_key;
-    let mut termination = crate::pathfinding::PathTermination::Unreachable;
-    let check_sealed = confine_to_floor
-        && cache.values().any(|rp| {
-            (rp.min_x..rp.max_x).contains(&(gx as f32))
-                && (rp.min_z..rp.max_z).contains(&(gz as f32))
-        });
-    let mut stall_deadline = (start_h <= SEALED_NEAR_H).then_some(SEALED_STALL_NODES);
-
-    while let Some(Reverse(cur)) = open.pop() {
-        if extent.expanded >= max_nodes {
-            termination = crate::pathfinding::PathTermination::NodeLimit;
-            break;
-        }
-        extent.expanded += 1;
-        extent.include(cur.x, cur.z, key_to_floor(cur.fk));
-
-        let cur_key: AStarKey = (cur.x, cur.z, cur.fk);
-
-        // Accept goal at exact fk or any intermediate stair fk on the same floor.
-        // This handles clicking mid-stairwell where the cell is only reachable
-        // via stair expansion with an intermediate fk, not the regular floor fk.
-        if cur.x == gx && cur.z == gz && key_to_floor(cur.fk) == goal_floor {
-            return PathResult {
-                waypoints: reconstruct_path_vf(&closed, start_key, cur_key, goal_x, goal_z),
-                found: true,
-                termination: crate::pathfinding::PathTermination::Reached,
-            };
-        }
-
-        if check_sealed
-            && stall_deadline == Some(extent.expanded)
-            && goal_pocket_sealed(
-                cache,
-                &stair_positions,
-                (sx, sz),
-                (gx, gz),
-                goal_floor,
-                &start_escapes,
-                extent,
-            )
-        {
-            break;
-        }
-
-        if let Some(entry) = closed.get(&cur_key) {
-            if cur.g > entry.g {
-                continue;
+    let termination = loop {
+        if backward.open.is_empty() && !backward_done && meeting.is_none() {
+            pocket.extend(backward.seen.keys().map(|key| (key.0, key.1)));
+            backward.seen.clear();
+            if rim.is_empty() && moves.confine_to_floor && pocket.len() <= SEALED_MAX_CELLS {
+                rim = moves.rim_of(&pocket, goal_key.2);
+                rim.sort_unstable_by_key(|&cell| Reverse((to_goal(cell), cell)));
+                rim.dedup();
             }
-        }
-
-        let on_regular = is_regular_key(cur.fk);
-        let cur_floor = key_to_floor(cur.fk);
-
-        // --- Regular floor expansion (cardinal neighbors) ---
-        // Skip stairwell interior cells that aren't landings on this regular floor
-        let is_stair_interior = stair_positions.contains(&(cur.x, cur.z, cur_floor))
-            && !stair_cells.contains_key(&cur_key);
-        if on_regular && !is_stair_interior {
-            for &(dx, dz) in &DIRS {
-                let nx = cur.x + dx;
-                let nz = cur.z + dz;
-                let new_g = cur.g + 1;
-
-                if cell_blocked(blocked, nx, nz)
-                    || (is_cardinal_move_blocked(cache, cur.x, cur.z, dx, dz, cur_floor)
-                        && !(cur_key == start_key && start_escapes(dx, dz)))
-                {
-                    continue;
-                }
-
-                // Block moves into stairwell interior cells on regular floor.
-                // A cell (nx, nz) is a stairwell interior if it belongs to a
-                // stairwell but has no stair_cells entry at the current fk
-                // (only landings match regular floor keys).
-                if stair_positions.contains(&(nx, nz, cur_floor))
-                    && !stair_cells.contains_key(&(nx, nz, cur.fk))
-                {
-                    continue;
-                }
-
-                let nkey: AStarKey = (nx, nz, cur.fk);
-                if let Some(existing) = closed.get(&nkey) {
-                    if existing.g <= new_g {
-                        continue;
-                    }
-                }
-
-                closed.insert(
-                    nkey,
-                    ClosedEntry {
-                        g: new_g,
-                        parent: cur_key,
-                    },
-                );
-                let nh = h(nx, nz, cur.fk);
-                open.push(Reverse(AStarNode {
-                    x: nx,
-                    z: nz,
-                    fk: cur.fk,
-                    g: new_g,
-                    f: new_g + nh,
-                }));
-                if nh < best_h {
-                    best_h = nh;
-                    best_key = nkey;
-                    if nh <= SEALED_NEAR_H {
-                        stall_deadline.get_or_insert(extent.expanded + SEALED_STALL_NODES);
-                    }
-                }
-            }
-        }
-
-        // --- Stairwell axis expansion (prev/next along stairwell) ---
-        // Disabled under floor confinement so the search never leaves
-        // start_floor via the stairs; the bool short-circuits the per-node
-        // stair-cell lookup on that (dungeon-monster) hot path.
-        if !confine_to_floor {
-            if let Some(sc) = stair_cells.get(&cur_key) {
-                for neighbor in [&sc.prev, &sc.next].into_iter().flatten() {
-                    if cell_blocked(blocked, neighbor.x, neighbor.z) {
-                        continue;
-                    }
-                    let new_g = cur.g + 1;
-                    let nkey: AStarKey = (neighbor.x, neighbor.z, neighbor.fk);
-                    if let Some(existing) = closed.get(&nkey) {
-                        if existing.g <= new_g {
-                            continue;
+            rim.retain(|cell| !pocket.contains(&(cell.0, cell.1)));
+            match rim.last() {
+                Some(&nearest) => {
+                    rim_distance = to_goal(nearest);
+                    while let Some(cell) = rim.pop_if(|cell| to_goal(*cell) == rim_distance) {
+                        extent.include(cell.0, cell.1, goal_floor);
+                        backward.reach(cell, cell, 0, to_start(cell));
+                        if let Some(from_start) = forward.seen.get(&cell) {
+                            join(&mut meeting, cell, from_start.g);
                         }
                     }
-                    closed.insert(
-                        nkey,
-                        ClosedEntry {
-                            g: new_g,
-                            parent: cur_key,
-                        },
-                    );
-                    let nh = h(neighbor.x, neighbor.z, neighbor.fk);
-                    open.push(Reverse(AStarNode {
-                        x: neighbor.x,
-                        z: neighbor.z,
-                        fk: neighbor.fk,
-                        g: new_g,
-                        f: new_g + nh,
-                    }));
-                    if nh < best_h {
-                        best_h = nh;
-                        best_key = nkey;
-                    }
+                }
+                None => backward_done = true,
+            }
+        }
+
+        let spent = extent.expanded >= total_nodes;
+        let forward_live = !spent && !forward.open.is_empty() && forward.expanded < max_nodes;
+        let backward_live = !spent && !backward.open.is_empty() && backward.expanded < max_nodes;
+        if let Some((cost, _)) = meeting {
+            // No cheaper join remains once either frontier's best is no better.
+            // The start side estimates to the goal, `rim_distance` past the rim.
+            let bound = |live: bool, side: &Side, slack: u32| match side.min_f() {
+                Some(f) if live => f.saturating_sub(slack),
+                _ => u32::MAX,
+            };
+            let ahead = bound(forward_live, &forward, rim_distance);
+            // Proving a join shortest costs as much as a one-sided search, so
+            // look only as long again for a shorter one.
+            let met = *met_at.get_or_insert(extent.expanded);
+            if ahead.max(bound(backward_live, &backward, 0)) >= cost
+                || extent.expanded - met >= met.max(MIN_NODES_PAST_MEETING)
+            {
+                break PathTermination::Reached;
+            }
+        }
+        // A start side run dry has seen every cell the walker can reach.
+        if forward.open.is_empty() {
+            break PathTermination::Unreachable;
+        }
+        if !forward_live && !backward_live {
+            break PathTermination::NodeLimit;
+        }
+        if backward_done
+            && meeting.is_none()
+            && forward.expanded - closest_at >= UNREACHABLE_STALL_NODES
+        {
+            break PathTermination::Unreachable;
+        }
+
+        if forward_live && (!backward_live || forward.open.len() <= backward.open.len()) {
+            let Some((cur, g)) = forward.pop(extent) else {
+                continue;
+            };
+            moves.neighbors(cur, false, &mut neighbors);
+            for &next in &neighbors {
+                let h = to_goal(next);
+                if !forward.reach(next, cur, g + 1, h) {
+                    continue;
+                }
+                if h < closest.0 {
+                    closest = (h, next);
+                    closest_at = forward.expanded;
+                }
+                if let Some(to_end) = backward.seen.get(&next) {
+                    join(&mut meeting, next, g + 1 + to_end.g);
+                }
+            }
+        } else {
+            let Some((cur, g)) = backward.pop(extent) else {
+                continue;
+            };
+            moves.neighbors(cur, true, &mut neighbors);
+            for &prev in &neighbors {
+                if !backward.reach(prev, cur, g + 1, to_start(prev)) {
+                    continue;
+                }
+                if let Some(from_start) = forward.seen.get(&prev) {
+                    join(&mut meeting, prev, from_start.g + g + 1);
                 }
             }
         }
-    }
+    };
 
-    // Partial path to closest node
-    let (bx, bz, _) = best_key;
-    if best_key != start_key {
+    let Some((_, key)) = meeting else {
+        let mut keys = chain(&forward.seen, closest.1);
+        keys.reverse();
         return PathResult {
-            waypoints: reconstruct_path_vf(
-                &closed,
-                start_key,
-                best_key,
-                bx as f32 + 0.5,
-                bz as f32 + 0.5,
-            ),
+            waypoints: waypoints_along(&keys, None),
             found: false,
             termination,
         };
-    }
-
-    PathResult {
-        waypoints: Vec::new(),
-        found: false,
-        termination,
-    }
-}
-
-/// Whether the goal's pocket is sealed off from `start`; false when it leaks
-/// (outgrows `SEALED_MAX_CELLS`, touches stairs, or `start` enters it through
-/// an open edge or the furniture waiver). Walks the reverse moves, so a one-way
-/// edge counts the way A* would cross it. Every cell read is charged to `extent`.
-fn goal_pocket_sealed(
-    cache: &PassabilityCache,
-    stair_positions: &HashSet<(i32, i32, u8)>,
-    start: (i32, i32),
-    goal: (i32, i32),
-    floor: u8,
-    start_escapes: &impl Fn(i32, i32) -> bool,
-    extent: &mut SearchExtent,
-) -> bool {
-    let mut pocket = vec![goal];
-    let sealed = 'fill: {
-        let mut next = 0;
-        while let Some(&(x, z)) = pocket.get(next) {
-            next += 1;
-            for &(dx, dz) in &DIRS {
-                let n = (x + dx, z + dz);
-                if pocket.contains(&n) {
-                    continue;
-                }
-                let walls = is_cardinal_move_blocked(cache, n.0, n.1, -dx, -dz, floor);
-                if n == start && (!walls || start_escapes(-dx, -dz)) {
-                    break 'fill false;
-                }
-                if walls {
-                    continue;
-                }
-                if stair_positions.contains(&(n.0, n.1, floor)) || pocket.len() >= SEALED_MAX_CELLS
-                {
-                    break 'fill false;
-                }
-                pocket.push(n);
-            }
-        }
-        true
     };
-    for &(x, z) in &pocket {
-        extent.include(x, z, floor);
+    let mut keys = chain(&forward.seen, key);
+    keys.reverse();
+    keys.extend(chain(&backward.seen, key).into_iter().skip(1));
+    // A join found around a sealed pocket ends at its rim, not at the goal.
+    let reached = pocket.is_empty();
+    PathResult {
+        waypoints: waypoints_along(&keys, reached.then_some((goal_x, goal_z))),
+        found: reached,
+        termination: if reached {
+            PathTermination::Reached
+        } else {
+            PathTermination::Unreachable
+        },
     }
-    extent.expanded += pocket.len();
-    sealed
 }
 
-fn reconstruct_path_vf(
-    closed: &HashMap<AStarKey, ClosedEntry>,
-    start: AStarKey,
-    end: AStarKey,
-    final_x: f32,
-    final_z: f32,
-) -> Vec<PathWaypoint> {
-    let mut path = Vec::new();
-    let mut key = end;
-
-    while key != start {
-        let (cx, cz, fk) = key;
-        // Stair steps are interpolated client-side; keep only landings and the endpoint.
-        if key == end {
-            path.push(PathWaypoint {
-                x: final_x,
-                z: final_z,
-                floor: key_to_floor(fk),
-            });
-        } else if is_regular_key(fk) {
-            path.push(PathWaypoint {
-                x: cx as f32 + 0.5,
-                z: cz as f32 + 0.5,
-                floor: key_to_floor(fk),
-            });
+/// `from` and then each parent up to the root of its side.
+fn chain(seen: &HashMap<AStarKey, ClosedEntry>, from: AStarKey) -> Vec<AStarKey> {
+    let mut keys = vec![from];
+    while let Some(entry) = seen.get(keys.last().unwrap_or(&from)) {
+        if keys.last() == Some(&entry.parent) {
+            break;
         }
-        let entry = match closed.get(&key) {
-            Some(e) => e,
-            None => break,
-        };
-        key = entry.parent;
+        keys.push(entry.parent);
     }
+    keys
+}
 
-    path.reverse();
-    path
+/// Waypoints for the keys after the first, which is where the walker stands,
+/// ending at `goal` or else the last cell's centre. Stair steps are
+/// interpolated client-side; keep only landings and the endpoint.
+fn waypoints_along(keys: &[AStarKey], goal: Option<(f32, f32)>) -> Vec<PathWaypoint> {
+    let last = keys.len().saturating_sub(1);
+    keys.iter()
+        .enumerate()
+        .skip(1)
+        .filter(|&(index, key)| index == last || is_regular_key(key.2))
+        .map(|(index, &(x, z, fk))| {
+            let (x, z) = match goal {
+                Some(goal) if index == last => goal,
+                _ => (x as f32 + 0.5, z as f32 + 0.5),
+            };
+            PathWaypoint {
+                x,
+                z,
+                floor: key_to_floor(fk),
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -567,6 +598,7 @@ mod tests {
     use super::*;
     use crate::pathfinding::tests::perimeter_walls;
     use crate::pathfinding::{PathTermination, RuntimeFloorGrid, RuntimePassability, EDGE_S};
+    use rand::{rngs::SmallRng, Rng, SeedableRng};
 
     /// Prod house r-30_+81_7, a 6×4 room whose door is the +Z wall's fourth
     /// segment; a monster waited outside it on 10/26 for a player shut inside.
@@ -619,6 +651,7 @@ mod tests {
             0,
             cache,
             DEFAULT_MAX_NODES,
+            DEFAULT_MAX_NODES * 2,
             blocked,
             &mut extent,
         );
@@ -672,6 +705,250 @@ mod tests {
         assert!(extent.expanded < 300, "expanded {}", extent.expanded);
         let last = result.waypoints.last().unwrap();
         assert_eq!((last.x, last.z), (-1876.5, 5211.5));
+    }
+
+    /// A walled arena with random inner edges, sealed furniture cells and
+    /// standers, so every search ends by exhaustion.
+    fn arena(seed: u64, size: u8) -> (PassabilityCache, Vec<(i32, i32)>, SmallRng) {
+        use crate::pathfinding::{build_furniture_passability, FurniturePiece};
+        let mut rng = SmallRng::seed_from_u64(seed);
+        let side = i32::from(size);
+        let mut cells = perimeter_walls(size, size);
+        for cell in &mut cells {
+            if rng.gen_ratio(55, 100) {
+                *cell |= (1 << rng.gen_range(0..4)) | (1 << rng.gen_range(0..4));
+            }
+        }
+        let mut cache = PassabilityCache::new();
+        cache.insert(
+            "arena".into(),
+            RuntimePassability {
+                house_origin_x: 0.0,
+                house_origin_z: 0.0,
+                min_x: 0.0,
+                max_x: f32::from(size),
+                min_z: 0.0,
+                max_z: f32::from(size),
+                floors: vec![RuntimeFloorGrid {
+                    floor_level: 0,
+                    origin_x: 0,
+                    origin_z: 0,
+                    width: size,
+                    depth: size,
+                    y_base: 0.0,
+                    wall_height: 3.0,
+                    cells,
+                }],
+                stairwells: vec![],
+                yields_to_trapped_mover: false,
+                allows_projectiles: false,
+                is_ground: true,
+            },
+        );
+        let pieces: Vec<FurniturePiece> = (0..rng.gen_range(0..14))
+            .map(|_| FurniturePiece {
+                cells: vec![(rng.gen_range(0..side), rng.gen_range(0..side))],
+                floor_level: 0,
+                y_base: 0.0,
+                wall_height: 1.0,
+            })
+            .collect();
+        if let Some(furniture) = build_furniture_passability(&pieces) {
+            cache.insert("furniture".into(), furniture);
+        }
+        let standers = (0..rng.gen_range(0..4))
+            .map(|_| (rng.gen_range(0..side), rng.gen_range(0..side)))
+            .collect();
+        (cache, standers, rng)
+    }
+
+    /// Steps of the shortest way by plain breadth-first search over the
+    /// forward moves, or `None` when `cap` keys hold no way.
+    fn shortest(
+        cache: &PassabilityCache,
+        start: (i32, i32, u8),
+        goal: (i32, i32, u8),
+        standers: &[(i32, i32)],
+        cap: usize,
+    ) -> Option<usize> {
+        let start_key = (start.0, start.1, floor_to_key(start.2));
+        let goal_key = (goal.0, goal.1, floor_to_key(goal.2));
+        if start == goal {
+            return Some(1);
+        }
+        let moves = Moves::new(cache, start_key, goal_key, standers);
+        let mut steps: HashMap<AStarKey, usize> = HashMap::from([(start_key, 0)]);
+        if !moves.confine_to_floor {
+            for &key in moves.stair_cells.keys() {
+                if (key.0, key.1, key_to_floor(key.2)) == start {
+                    steps.insert(key, 0);
+                }
+            }
+        }
+        let mut queue: std::collections::VecDeque<AStarKey> = steps.keys().copied().collect();
+        let mut next = Vec::new();
+        while let Some(cur) = queue.pop_front() {
+            if (cur.0, cur.1, key_to_floor(cur.2)) == goal {
+                return Some(steps[&cur]);
+            }
+            if steps.len() > cap {
+                return None;
+            }
+            moves.neighbors(cur, false, &mut next);
+            for &key in &next {
+                if !steps.contains_key(&key) {
+                    steps.insert(key, steps[&cur] + 1);
+                    queue.push_back(key);
+                }
+            }
+        }
+        None
+    }
+
+    /// Every step of `path` from `start` is one the movement rules allow.
+    fn assert_walkable(
+        cache: &PassabilityCache,
+        start: (i32, i32),
+        path: &[PathWaypoint],
+        standers: &[(i32, i32)],
+        case: u64,
+    ) {
+        use crate::pathfinding::query::{is_cardinal_move_blocked, is_movement_blocked_for_mover};
+        let mut at = start;
+        for waypoint in path {
+            let to = (waypoint.x.floor() as i32, waypoint.z.floor() as i32);
+            let (dx, dz) = (to.0 - at.0, to.1 - at.1);
+            if to == start && path.len() == 1 {
+                return;
+            }
+            assert_eq!(dx.abs() + dz.abs(), 1, "case {case}: {at:?} -> {to:?}");
+            assert!(
+                !cell_blocked(standers, to.0, to.1),
+                "case {case}: stander at {to:?}"
+            );
+            let (cx, cz) = (at.0 as f32 + 0.5, at.1 as f32 + 0.5);
+            let (tx, tz) = (cx + dx as f32, cz + dz as f32);
+            let open = !is_cardinal_move_blocked(cache, at.0, at.1, dx, dz, 0)
+                || (at == start && !is_movement_blocked_for_mover(cache, cx, cz, tx, tz, 0, None));
+            assert!(open, "case {case}: wall between {at:?} and {to:?}");
+            at = to;
+        }
+    }
+
+    fn search(
+        cache: &PassabilityCache,
+        start: (i32, i32, u8),
+        goal: (i32, i32, u8),
+        standers: &[(i32, i32)],
+        max_nodes: usize,
+    ) -> (PathResult, SearchExtent) {
+        let mut extent = SearchExtent::default();
+        let result = find_path_avoiding_counted(
+            start.0 as f32 + 0.5,
+            start.1 as f32 + 0.5,
+            start.2,
+            goal.0 as f32 + 0.5,
+            goal.1 as f32 + 0.5,
+            goal.2,
+            cache,
+            max_nodes,
+            max_nodes * 2,
+            standers,
+            &mut extent,
+        );
+        (result, extent)
+    }
+
+    #[test]
+    fn it_finds_the_shortest_way_wherever_there_is_one() {
+        let (mut reached, mut refused) = (0, 0);
+        for case in 0..600u64 {
+            let (cache, standers, mut rng) = arena(case, 12);
+            let mut point = || (rng.gen_range(0..12), rng.gen_range(0..12), 0);
+            let (start, goal) = (point(), point());
+            let steps = shortest(&cache, start, goal, &standers, usize::MAX);
+            let (path, extent) = search(&cache, start, goal, &standers, 100_000);
+            assert_eq!(
+                path.found,
+                steps.is_some(),
+                "case {case}: {start:?} -> {goal:?}"
+            );
+            assert_walkable(&cache, (start.0, start.1), &path.waypoints, &standers, case);
+            match steps {
+                Some(steps) => {
+                    reached += 1;
+                    assert_eq!(path.waypoints.len(), steps, "case {case}");
+                    assert_eq!(path.termination, PathTermination::Reached);
+                    let last = path.waypoints.last().unwrap();
+                    assert_eq!((last.x, last.z), (goal.0 as f32 + 0.5, goal.1 as f32 + 0.5));
+                }
+                None => {
+                    refused += 1;
+                    assert_eq!(
+                        path.termination,
+                        PathTermination::Unreachable,
+                        "case {case}"
+                    );
+                }
+            }
+            for waypoint in &path.waypoints {
+                let (x, z) = (waypoint.x.floor() as i32, waypoint.z.floor() as i32);
+                assert!(
+                    (extent.min.0..=extent.max.0).contains(&x)
+                        && (extent.min.1..=extent.max.1).contains(&z),
+                    "case {case}: the extent misses a cell on the path"
+                );
+            }
+        }
+        assert!(
+            reached > 150 && refused > 150,
+            "{reached} reached, {refused} refused"
+        );
+    }
+
+    /// Past the point where the search stops looking for a shorter join.
+    #[test]
+    fn a_long_way_round_is_rarely_longer_than_the_shortest() {
+        let (mut compared, mut longer) = (0, 0);
+        for case in 0..200u64 {
+            let (cache, _, mut rng) = arena(case, 48);
+            let mut point = || (rng.gen_range(0..48), rng.gen_range(0..48), 0);
+            let (start, goal) = (point(), point());
+            let steps = shortest(&cache, start, goal, &[], usize::MAX);
+            let (path, _) = search(&cache, start, goal, &[], 100_000);
+            assert_eq!(path.found, steps.is_some(), "case {case}");
+            assert_walkable(&cache, (start.0, start.1), &path.waypoints, &[], case);
+            let Some(steps) = steps else {
+                continue;
+            };
+            compared += 1;
+            let taken = path.waypoints.len();
+            assert!(taken >= steps, "case {case}: {taken} < {steps}");
+            assert!(
+                taken <= steps + steps / 8 + 1,
+                "case {case}: {taken} for {steps}"
+            );
+            longer += usize::from(taken > steps);
+        }
+        assert!(compared > 80, "{compared} compared");
+        assert!(longer * 20 <= compared, "{longer} of {compared} longer");
+    }
+
+    #[test]
+    fn it_finds_every_way_across_a_stairwell() {
+        use crate::pathfinding::tests::make_two_floor_stairwell;
+        let (id, rp) = make_two_floor_stairwell();
+        let cache = PassabilityCache::from([(id, rp)]);
+        let spots = |floor: u8| (0..3).flat_map(move |x| (0..4).map(move |z| (x, z, floor)));
+        for start in spots(0).chain(spots(1)) {
+            for goal in spots(0).chain(spots(1)) {
+                // Outside the house the ground is open without end.
+                if shortest(&cache, start, goal, &[], 400).is_some() {
+                    let (path, _) = search(&cache, start, goal, &[], 400);
+                    assert!(path.found, "{start:?} -> {goal:?}");
+                }
+            }
+        }
     }
 
     #[test]

@@ -116,8 +116,9 @@ async fn unreachable_crowds_share_the_budget_and_every_brain_gets_a_turn() {
         }
     }
     assert!(processed.into_iter().all(|value| value));
+    // A walled-off target is proven out of reach from its own side, cheaply.
     let brains = game.monster_brains.lock().await;
-    assert!(brains.stats.node_budget_ticks > 0);
+    assert_eq!(brains.stats.node_budget_ticks, 0);
     assert!(brains.stats.cache_hits > 0);
 }
 

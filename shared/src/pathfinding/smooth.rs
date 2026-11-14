@@ -264,7 +264,8 @@ pub fn find_and_smooth_path_avoiding(
     max_nodes: usize,
     blocked: &[(i32, i32)],
 ) -> PathResult {
-    find_and_smooth_path_avoiding_with_budget(
+    let both_sides = max_nodes.saturating_mul(2);
+    search_and_smooth(
         start_x,
         start_z,
         start_floor,
@@ -273,12 +274,15 @@ pub fn find_and_smooth_path_avoiding(
         goal_floor,
         cache,
         max_nodes,
+        both_sides,
         blocked,
-        &std::cell::Cell::new(max_nodes),
+        &std::cell::Cell::new(both_sides),
         &mut SearchExtent::default(),
     )
 }
 
+/// Spends at most `max_nodes`, and no more than `remaining` holds, over both
+/// directions of the search: a caller's node budget is a hard total.
 #[allow(clippy::too_many_arguments)]
 pub fn find_and_smooth_path_avoiding_with_budget(
     start_x: f32,
@@ -289,6 +293,37 @@ pub fn find_and_smooth_path_avoiding_with_budget(
     goal_floor: u8,
     cache: &PassabilityCache,
     max_nodes: usize,
+    blocked: &[(i32, i32)],
+    remaining: &std::cell::Cell<usize>,
+    extent: &mut SearchExtent,
+) -> PathResult {
+    search_and_smooth(
+        start_x,
+        start_z,
+        start_floor,
+        goal_x,
+        goal_z,
+        goal_floor,
+        cache,
+        max_nodes,
+        max_nodes,
+        blocked,
+        remaining,
+        extent,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn search_and_smooth(
+    start_x: f32,
+    start_z: f32,
+    start_floor: u8,
+    goal_x: f32,
+    goal_z: f32,
+    goal_floor: u8,
+    cache: &PassabilityCache,
+    max_nodes: usize,
+    total_nodes: usize,
     blocked: &[(i32, i32)],
     remaining: &std::cell::Cell<usize>,
     extent: &mut SearchExtent,
@@ -331,7 +366,8 @@ pub fn find_and_smooth_path_avoiding_with_budget(
         goal_z,
         goal_floor,
         cache,
-        max_nodes.min(remaining.get()),
+        max_nodes,
+        total_nodes.min(remaining.get()),
         blocked,
         extent,
     );
