@@ -294,8 +294,16 @@ pub(super) struct DaggerAttack {
     started: tokio::time::Instant,
 }
 
+/// Longer than one basic-attack interval, shorter than two.
+const FRESH_CORPSE_MS: u64 = 2_000;
+
+pub(super) fn corpse_is_fresh(dead_for_ms: u64) -> bool {
+    dead_for_ms <= FRESH_CORPSE_MS
+}
+
 struct PlayerAttackTarget {
     state: MonsterState,
+    dead_for_ms: Option<u64>,
     monster_type: String,
     position: Position,
     rotation: f32,
@@ -655,10 +663,12 @@ impl super::GameState {
         player_id: &PlayerId,
         monster_id: &str,
     ) -> Result<PlayerAttackContext, (AttackRejectReason, String)> {
+        let now = Self::now_ms();
         let monster = {
             let monsters = self.monsters.read().await;
             monsters.get(monster_id).map(|monster| PlayerAttackTarget {
                 state: monster.state,
+                dead_for_ms: monsters.dead_for_ms(monster_id, now),
                 monster_type: monster.monster_type.clone(),
                 position: monster.position,
                 rotation: monster.rotation,
@@ -673,15 +683,18 @@ impl super::GameState {
             ));
         };
         if monster.state == MonsterState::Dead {
+            let age = monster
+                .dead_for_ms
+                .map(|ms| format!(", dead {:.1}s", ms as f32 / 1000.0))
+                .unwrap_or_default();
             return Err((
                 AttackRejectReason::InvalidTarget,
                 format!(
-                    "corpse ({}, floor {})",
+                    "corpse ({}, floor {}{age})",
                     monster.monster_type, monster.floor_level
                 ),
             ));
         }
-        let now = Self::now_ms();
         let player_snapshot = {
             let players = self.players.read().await;
             players
@@ -813,6 +826,15 @@ impl super::GameState {
         })
     }
 
+    /// One more swing can already be in flight when the target dies.
+    pub(super) async fn is_fresh_corpse(&self, monster_id: &str) -> bool {
+        self.monsters
+            .read()
+            .await
+            .dead_for_ms(monster_id, Self::now_ms())
+            .is_some_and(corpse_is_fresh)
+    }
+
     #[cfg(test)]
     pub async fn broadcast_player_attack(&self, player_id: &PlayerId, monster_id: String) {
         self.player_attack(player_id, monster_id, None).await;
@@ -831,10 +853,16 @@ impl super::GameState {
         let context = match self.validate_player_attack(player_id, &monster_id).await {
             Ok(ctx) => ctx,
             Err((reason, detail)) => {
-                warn!(
-                    "Rejected player attack: {} -> {} ({:?}: {})",
-                    player_id, monster_id, reason, detail
+                let message = format!(
+                    "Rejected player attack: {player_id} -> {monster_id} ({reason:?}: {detail})"
                 );
+                if matches!(reason, AttackRejectReason::InvalidTarget)
+                    && self.is_fresh_corpse(&monster_id).await
+                {
+                    info!("{message}");
+                } else {
+                    warn!("{message}");
+                }
                 if let Some(audit) = audit {
                     audit.finish(reason.to_string(), Some(detail), None);
                 }

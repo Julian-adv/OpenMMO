@@ -26,7 +26,7 @@ description: Investigate OpenMMO production warnings, errors, suspicious behavio
 
 - 안정성: panic, OOM, 비정상 종료, DB 잠금·저장 실패, 디스크 부족, 로그 유실, 지연·큐 포화. 플레이어명이나 대화에 포함된 단어를 실제 장애와 혼동하지 않는다.
 - 이동: `Blocked move`, 울타리·집 충돌, 계단 밖 층 변경, `Waypoint queue full`, 강제 이동 종료. 같은 플레이어·위치의 연속성, 여러 플레이어의 동일 지점 실패, 분당 피크와 직후 이벤트를 본다. 큐 초과 뒤 사망만으로 스팸 클릭을 단정하지 않는다. `Waypoint queue full`이 반복되면 같은 플레이어의 `movement_audit` 타깃 WARN `Waypoint overflow trace`(30초당 1회)에서 요청 수신 간격·`raw.sprinting`·`received_pose.mounted`와 틱의 `speed`·`hunger_mult`·`sprint_allowed`를 대조해 클라이언트와 서버의 속도 불일치 원인을 확인한다.
-- 공격: `Rejected player attack`의 reason과 상세(대상 소멸·시체·층·거리), 동일 공격자/대상의 반복 기간과 허용 공격을 대조한다. 고정 빈도나 낮은 초당 요청 수만으로 정상·어뷰즈를 판정하지 않는다. 필요한 경우 `data/combat-audit/*.jsonl`의 HP 수지·요청 간격·허용/거절·`history_overflow`·`dropped_events`를 확인한다. 감사 대상 밖까지 결과를 일반화하지 않는다.
+- 공격: `Rejected player attack`의 reason과 상세(대상 소멸·시체·층·거리), 동일 공격자/대상의 반복 기간과 허용 공격을 대조한다. 고정 빈도나 낮은 초당 요청 수만으로 정상·어뷰즈를 판정하지 않는다. 죽은 지 2초 안의 시체 공격 거절은 INFO로 찍히고 상세에 `dead N.Ns`가 붙는다(2026-11-14 이후 배포분). WARN으로 남는 시체 공격은 2초를 넘긴 것이다. 필요한 경우 `data/combat-audit/*.jsonl`의 HP 수지·요청 간격·허용/거절·`history_overflow`·`dropped_events`를 확인한다. 감사 대상 밖까지 결과를 일반화하지 않는다.
 - 접속: 프로토콜 거부, 세션 교체, heartbeat, reset, 인증 실패. 배포 전환 중 일시 실패와 정상화 후 지속 실패를 나눈다. `[+N more in the last 60s]`는 억제분이며 로그 줄 수와 요청 수를 구분한다. `PROTOCOL_REFUSAL_LOG`의 억제 카운터는 전역이므로 해당 행의 IP·버전에 전부 귀속하지 않는다. 같은 IP나 /24만으로 다중 계정·프록시·부정행위를 확정하지 않는다.
 - NPC: LLM 인증·용량·타임아웃, 응답 파싱 실패, 긴 대기, 행동 실패 루프, 상점/여관 고착, 원장 형식 오류. `llm turn ... error`와 `LLM prompt failed`처럼 한 사건의 중복 로그를 구분한다. 서비스 active나 NPC 입장만으로 LLM 정상이라고 판단하지 않는다.
 - Nginx: 모든 5xx, 반복되는 실제 리소스 404, 예상 밖 API 인증 응답과 공격성 요청을 확인한다. 없는 타일의 `/api/terrain/water-field`·`height-original` 404와 스캐너 요청은 실제 플레이 장애와 구분한다. 캐시·재다운로드·전송 폭증은 이상 징후가 있을 때만 상세 분석한다. 바이너리·비정상 요청줄 때문에 조용히 집계에서 누락되지 않게 한다.
@@ -72,4 +72,6 @@ description: Investigate OpenMMO production warnings, errors, suspicious behavio
 
 - unattended-upgrades·needrestart의 서비스 자동 재시작(nginx 등)은 현재 설정대로 둔다. 10/24(zlib → needrestart), 10/27(nginx 패키지 갱신) 새벽 nginx 재시작으로 WS가 일괄 끊긴 뒤 수 초 안에 재접속한 것까지 확인한 판단이다.
 - 자동 재시작이 반복돼도 needrestart 예외·패키지 제외·실행 시각 변경을 다시 제안하지 않는다. 조사 창 안의 재시작 시각·끊긴 연결 수만 짧게 적는다.
-- 게임 서버·NPC가 자동 재시작되거나 재접속이 실패하는 등 영향이 커지면 재검토한다.
+- **게임 서버·NPC의 자동 재시작도 그대로 둔다(2026-11-14).** 보안 업데이트가 우선이고 게임 서버 재시작은 문제가 아니다. 11/14 06:07 libc6 갱신 때 needrestart가 nginx·게임 서버·NPC를 함께 재시작한 것을 확인한 뒤의 판단이다. needrestart 대상에서 빼자고 제안하거나 결정을 다시 묻지 않는다.
+- 창 안의 자동 재시작은 시각·끊긴 연결 수만 적고 이상 징후 표에 올리지 않는다. 재시작으로 창이 두 실행으로 나뉘면 id 기준 집계를 실행별로 한다.
+- 재시작 뒤 서비스가 올라오지 않거나 저장이 실패하거나 클라이언트가 복귀하지 못하는 것은 별개의 결함으로 조사한다.

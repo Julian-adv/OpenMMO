@@ -487,6 +487,34 @@ async fn stale_monster_attack_is_rejected_as_invalid_target() {
     }
 }
 
+#[tokio::test]
+async fn only_a_just_killed_monster_is_a_fresh_corpse() {
+    use crate::game_state::combat::corpse_is_fresh;
+
+    assert!(corpse_is_fresh(1_640));
+    assert!(corpse_is_fresh(2_000));
+    assert!(!corpse_is_fresh(2_001));
+    assert!(!corpse_is_fresh(3_200));
+
+    let game_state = make_test_game_state("fresh_corpse");
+    {
+        let mut monsters = game_state.monsters.write().await;
+        monsters.insert("killed".to_string(), make_monster("killed", pos(1.0), 0));
+        monsters.mark_dead("killed");
+        let mut unrecorded = make_monster("unrecorded", pos(2.0), 0);
+        unrecorded.state = MonsterState::Dead;
+        monsters.insert("unrecorded".to_string(), unrecorded);
+        monsters.insert("alive".to_string(), make_monster("alive", pos(3.0), 0));
+    }
+    assert!(game_state.is_fresh_corpse("killed").await);
+    assert!(!game_state.is_fresh_corpse("unrecorded").await);
+    assert!(!game_state.is_fresh_corpse("alive").await);
+    assert!(!game_state.is_fresh_corpse("absent").await);
+
+    game_state.monsters.write().await.remove("killed");
+    assert!(!game_state.is_fresh_corpse("killed").await);
+}
+
 // --- Ranged attacks (doc/COMBAT.md 원거리 전투) ---
 
 /// An archer at the origin: `weapon` in hand, a full quiver, and the given

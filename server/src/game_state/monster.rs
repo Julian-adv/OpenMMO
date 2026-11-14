@@ -13,6 +13,7 @@ pub(crate) struct MonsterRegistry {
     /// Damage per player, in first-hit order, for the kill XP split. Kept off
     /// `Monster` so its frequent clones don't copy it.
     damage: std::collections::HashMap<String, Vec<(PlayerId, u32)>>,
+    died_at: std::collections::HashMap<String, u64>,
 }
 
 impl MonsterRegistry {
@@ -42,6 +43,7 @@ impl MonsterRegistry {
     pub(crate) fn remove(&mut self, id: &str) -> Option<crate::types::Monster> {
         let removed = self.monsters.remove(id);
         self.damage.remove(id);
+        self.died_at.remove(id);
         if let Some(monster) = &removed {
             self.cells.remove(id, &monster.position);
         }
@@ -85,7 +87,15 @@ impl MonsterRegistry {
     pub(crate) fn mark_dead(&mut self, id: &str) {
         if let Some(monster) = self.monsters.get_mut(id) {
             monster.state = MonsterState::Dead;
+            self.died_at
+                .entry(id.to_string())
+                .or_insert_with(super::GameState::now_ms);
         }
+    }
+
+    /// `None` for a corpse that never went through `mark_dead`.
+    pub(crate) fn dead_for_ms(&self, id: &str, now: u64) -> Option<u64> {
+        self.died_at.get(id).map(|at| now.saturating_sub(*at))
     }
 
     pub(crate) fn record_damage(&mut self, id: &str, player_id: PlayerId, dealt: u32) {
