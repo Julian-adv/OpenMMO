@@ -170,15 +170,49 @@ const PARTNER_LAG_M: f32 = 6.0;
 const PARTNER_WAIT: std::time::Duration = std::time::Duration::from_secs(20);
 
 /// Hold while the partner trails us toward `(x, z)`; whoever leads waits.
-async fn wait_for_partner(state: &Arc<Mutex<SharedState>>, partner: &str, x: f32, z: f32) {
-    let deadline = tokio::time::Instant::now() + PARTNER_WAIT;
-    while tokio::time::Instant::now() < deadline {
+/// On the way out the wait lasts as long as the partner is in sight, and is
+/// false once they have been out of sight for `PARTNER_WAIT`.
+async fn wait_for_partner(
+    state: &Arc<Mutex<SharedState>>,
+    partner: &str,
+    [x, z]: [f32; 2],
+    outbound: bool,
+) -> bool {
+    let mut deadline = tokio::time::Instant::now() + PARTNER_WAIT;
+    loop {
         match state.lock().await.lag_of_named(partner, x, z) {
-            Some(lag) if lag > PARTNER_LAG_M => {}
-            _ => return,
+            Some(lag) if lag <= PARTNER_LAG_M => return true,
+            Some(_) if outbound => deadline = tokio::time::Instant::now() + PARTNER_WAIT,
+            Some(_) => {}
+            None if outbound => {}
+            None => return true,
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return false;
         }
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     }
+}
+
+/// Stops on a lap: each waypoint out, back through all but the last, then home.
+fn lap_stops(waypoints: usize) -> usize {
+    (2 * waypoints).max(1)
+}
+
+fn lap_stop(entry: &ScheduleEntry, stop: usize) -> [f32; 3] {
+    let n = entry.waypoints.len();
+    if stop < n {
+        entry.waypoints[stop]
+    } else if stop + 1 < lap_stops(n) {
+        entry.waypoints[2 * n - 2 - stop]
+    } else {
+        entry.pos
+    }
+}
+
+/// The stop that heads home from outbound `stop` without reaching it.
+fn turn_back(stop: usize, waypoints: usize) -> usize {
+    2 * waypoints - 1 - stop
 }
 
 const STRIKE_STANDOFF_M: f32 = 1.3;
@@ -244,42 +278,55 @@ pub(super) async fn run_patrol_lap(state: Arc<Mutex<SharedState>>, entry: Schedu
     let patrol_id = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_secs() as i64);
-    let home = [entry.pos];
-    let route = entry
-        .waypoints
-        .iter()
-        .chain(entry.waypoints.iter().rev().skip(1))
-        .chain(home.iter())
-        .skip(start);
-    'lap: for wp in route {
+    let outbound_stops = entry.waypoints.len();
+    let mut stop = start;
+    'lap: while stop < lap_stops(outbound_stops) {
         while state.lock().await.schedule_combat_active() {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
-        if let Some(partner) = &patrol.partner {
-            wait_for_partner(&state, partner, wp[0], wp[2]).await;
-        }
+        let wp = lap_stop(&entry, stop);
+        let outbound = stop < outbound_stops;
+        let mut go_on = match &patrol.partner {
+            Some(partner) => {
+                wait_for_partner(&state, partner, [wp[0], wp[2]], outbound).await || !outbound
+            }
+            None => true,
+        };
         if state.lock().await.is_dead() {
             break;
         }
-        let to = walk::WalkTo::Schedule {
-            x: wp[0],
-            z: wp[2],
-            floor: entry.floor_level,
-        };
-        for attempt in 0..2 {
-            if patrol.sweeps {
-                clear_road(&state, patrol_id, entry.floor_level).await;
-            }
-            match execute_walk(&state, &to, Some(false)).await {
-                MoveResult::Arrived => break,
-                MoveResult::Died => break 'lap,
-                MoveResult::Blocked | MoveResult::Error if attempt == 0 => {}
-                MoveResult::Blocked | MoveResult::Error => {
-                    warn!("Patrol waypoint unreachable ({:.1}, {:.1})", wp[0], wp[2]);
+        if !go_on {
+            info!("Patrol partner fell behind; turning back");
+        } else {
+            let to = walk::WalkTo::Schedule {
+                x: wp[0],
+                z: wp[2],
+                floor: entry.floor_level,
+            };
+            go_on = false;
+            for _ in 0..2 {
+                if patrol.sweeps {
+                    clear_road(&state, patrol_id, entry.floor_level).await;
+                }
+                match execute_walk(&state, &to, Some(false)).await {
+                    MoveResult::Arrived => {
+                        go_on = true;
+                        break;
+                    }
+                    MoveResult::Died => break 'lap,
+                    MoveResult::Blocked | MoveResult::Error => {}
                 }
             }
+            if !go_on {
+                warn!("Patrol waypoint unreachable ({:.1}, {:.1})", wp[0], wp[2]);
+            }
         }
-        state.lock().await.patrol_reached += 1;
+        stop = if outbound && !go_on {
+            turn_back(stop, outbound_stops)
+        } else {
+            stop + 1
+        };
+        state.lock().await.patrol_reached = stop;
     }
     state.lock().await.patrol_reached = 0;
 }
@@ -567,6 +614,41 @@ pub(super) async fn fetch_furniture_around(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lap_runs_out_back_and_home() {
+        let entry = ScheduleEntry {
+            pos: [9.0, 0.0, 9.0],
+            waypoints: vec![[1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [3.0, 0.0, 0.0]],
+            ..Default::default()
+        };
+        let xs: Vec<f32> = (0..lap_stops(3))
+            .map(|stop| lap_stop(&entry, stop)[0])
+            .collect();
+        assert_eq!(xs, [1.0, 2.0, 3.0, 2.0, 1.0, 9.0]);
+        assert_eq!(lap_stops(0), 1);
+        assert_eq!(
+            lap_stop(
+                &ScheduleEntry {
+                    waypoints: Vec::new(),
+                    ..entry.clone()
+                },
+                0
+            )[0],
+            9.0
+        );
+    }
+
+    #[test]
+    fn turning_back_heads_for_the_last_stop_reached() {
+        let entry = ScheduleEntry {
+            pos: [9.0, 0.0, 9.0],
+            waypoints: vec![[1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [3.0, 0.0, 0.0]],
+            ..Default::default()
+        };
+        let next = |stop| lap_stop(&entry, turn_back(stop, 3))[0];
+        assert_eq!([next(0), next(1), next(2)], [9.0, 1.0, 2.0]);
+    }
     use crate::state::tests::{bag_item, test_player, test_state};
     use onlinerpg_shared::fishing::{FishState, FishingAction, FishingOutcome};
     use onlinerpg_shared::inventory::EquipSlot;

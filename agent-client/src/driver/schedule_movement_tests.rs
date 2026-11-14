@@ -1128,3 +1128,38 @@ fn the_guard_watches_hand_over_without_sharing_a_bunk_or_a_seat() {
         assert!(asleep >= 9 * 60, "guard {guard} sleeps {asleep} minutes");
     }
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_patrol_waits_for_a_partner_in_sight_and_gives_up_on_one_out_of_sight() {
+    let (state, _rx) = walker();
+    let wait = |outbound| wait_for_partner(&state, "Brenna", [5.0, 5.0], outbound);
+    assert!(wait(false).await);
+    let waited = tokio::time::Instant::now();
+    assert!(!wait(true).await);
+    assert!(waited.elapsed() >= PARTNER_WAIT);
+
+    let mut partner = test_player(0.5, 0.5);
+    partner.id = onlinerpg_shared::PlayerId::from(2);
+    partner.name = "Brenna".into();
+    let place = |partner: &onlinerpg_shared::Player| {
+        let (state, partner) = (Arc::clone(&state), partner.clone());
+        async move {
+            state
+                .lock()
+                .await
+                .nearby_players
+                .insert(partner.id, partner);
+        }
+    };
+    place(&partner).await;
+    assert!(wait(true).await);
+
+    partner.position.x = -40.0;
+    place(&partner).await;
+    assert!(timeout(PARTNER_WAIT * 3, wait(true)).await.is_err());
+    assert!(!wait(false).await);
+
+    partner.health = 0;
+    place(&partner).await;
+    assert!(!wait(true).await);
+}

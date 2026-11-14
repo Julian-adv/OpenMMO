@@ -143,13 +143,13 @@ impl SharedState {
             .map(|(id, _)| (id, self.nearby_monsters.get(id)))
     }
 
-    /// How much farther than us a named player in sight stands from `(x, z)`.
+    /// How much farther than us a living named player in sight stands from `(x, z)`.
     pub(crate) fn lag_of_named(&self, name: &str, x: f32, z: f32) -> Option<f32> {
         let me = self.self_player.as_ref()?.position;
         let target = onlinerpg_shared::Position { x, y: me.y, z };
         self.players_on_my_floor()
             .map(|(_, player)| player)
-            .find(|player| player.name == name)
+            .find(|player| player.name == name && player.health > 0)
             .map(|player| {
                 player.position.dist_xz_sq(&target).sqrt() - me.dist_xz_sq(&target).sqrt()
             })
