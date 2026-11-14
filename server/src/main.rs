@@ -627,7 +627,7 @@ async fn main() -> ExitCode {
     }
     match road_index::RoadIndex::load(std::path::Path::new(&args.terrain_dir)) {
         Ok(roads) => game_state.set_roads(roads),
-        Err(err) => warn!("Road patrols have no roads to clear: {}", err),
+        Err(err) => warn!("No worldgen roads loaded: {}", err),
     }
     // Server-side collision data for the movement sim: houses, solid
     // furniture and dungeon layouts, mirroring what clients build.

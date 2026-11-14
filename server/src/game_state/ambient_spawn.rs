@@ -84,6 +84,13 @@ impl super::GameState {
             if !rand::thread_rng().gen_bool(chance) {
                 continue;
             }
+            if self
+                .roads
+                .get()
+                .is_some_and(|roads| roads.near_road(step.to.x, step.to.z))
+            {
+                continue;
+            }
             self.spawn_ahead_of(step, dx, dz).await;
         }
     }

@@ -265,3 +265,27 @@ async fn a_teleport_is_not_a_walk() {
         "50 teleports of a kilometre each must earn nothing"
     );
 }
+
+#[tokio::test]
+async fn walking_a_road_draws_nothing_and_walking_beside_it_does() {
+    let game_state = make_flat_world_game_state("ambient_road_quiet");
+    let road = [[200.0, -100.0], [200.0, 100.0]];
+    game_state.set_roads(crate::road_index::RoadIndex::from_polylines([
+        road.as_slice()
+    ]));
+    let traveller = pid("traveller");
+    let hunter = pid("hunter");
+    game_state
+        .add_player(make_player("traveller", 205.0, 0.0))
+        .await;
+    game_state
+        .add_player(make_player("hunter", 400.0, 0.0))
+        .await;
+    game_state.enable_ambient_spawns();
+
+    pace_player(&game_state, &traveller, 205.0, 0.0, 60).await;
+    assert_eq!(nearby_monster_count(&game_state, &traveller).await, 0);
+
+    pace_player(&game_state, &hunter, 400.0, 0.0, 60).await;
+    assert!(nearby_monster_count(&game_state, &hunter).await > 0);
+}
