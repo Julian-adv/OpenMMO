@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "parts": {
+    "helmet": {
+      "saved_at": "2026-11-13T18:10:22.902Z",
+      "brush": {
+        "hide": [],
+        "show": []
+      },
+      "baked": [
+        {
+          "move-x": 0,
+          "move-y": 0,
+          "move-z": 0,
+          "scale": 107,
+          "scale-x": 100,
+          "scale-y": 100,
+          "scale-z": 100,
+          "rotate-x": 0,
+          "rotate-y": 0,
+          "rotate-z": 0,
+          "baked_at": "2026-11-13T18:11:17.548548+00:00"
+        }
+      ]
+    },
+    "gloves": {
+      "saved_at": "2026-11-14T01:11:27.848Z",
+      "brush": {
+        "hide": [],
+        "show": []
+      },
+      "baked": [
+        {
+          "left": {
+            "move-x": 0,
+            "move-y": 0,
+            "move-z": 0,
+            "scale": 100,
+            "scale-x": 100,
+            "scale-y": 100,
+            "scale-z": 100,
+            "rotate-x": 6.5,
+            "rotate-y": 0,
+            "rotate-z": 1.5,
+            "frame": "forearm"
+          },
+          "right": {
+            "move-x": 0,
+            "move-y": 0,
+            "move-z": 0,
+            "scale": 100,
+            "scale-x": 100,
+            "scale-y": 100,
+            "scale-z": 100,
+            "rotate-x": 6.5,
+            "rotate-y": 0,
+            "rotate-z": 1.5,
+            "frame": "forearm"
+          },
+          "baked_at": "2026-11-14T01:12:46.530775+00:00"
+        }
+      ]
+    },
+    "top": {
+      "brush": {
+        "hide": [],
+        "show": []
+      },
+      "saved_at": "2026-11-14T01:45:40.392931Z",
+      "baked": [
+        {
+          "move-x": 0,
+          "move-y": 0,
+          "move-z": -0.8,
+          "scale": 100,
+          "scale-x": 100,
+          "scale-y": 100,
+          "scale-z": 100,
+          "rotate-x": 6.0,
+          "rotate-y": 0,
+          "rotate-z": 0,
+          "baked_at": "2026-11-14T01:45:42.055671+00:00"
+        }
+      ]
+    }
+  }
+}

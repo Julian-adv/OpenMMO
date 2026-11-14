@@ -14,7 +14,8 @@ ROOT = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser()
 parser.add_argument('--body', default=str(ROOT / 'assets/modular_human_female_01/rig_v1/female-base.glb'))
 parser.add_argument('--out', required=True)
-parser.add_argument('--view', choices=['front', 'side'], default='front')
+parser.add_argument('--view', choices=['front', 'side', 'back'], default='front')
+parser.add_argument('--mannequin', action='store_true', help='Matte blue body, so a generated copy can be told from the outfit by colour')
 parser.add_argument('--heel', type=float, default=30, help='Foot pitch of the shared boot heel_pose, degrees')
 args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else [])
 
@@ -95,9 +96,22 @@ scene.collection.objects.link(camera_obj)
 scene.camera = camera_obj
 if args.view == 'front':
     camera_obj.location, camera_obj.rotation_euler = (0, -5, .9), (math.radians(90), 0, 0)
+elif args.view == 'back':
+    camera_obj.location, camera_obj.rotation_euler = (0, 5, .9), (math.radians(90), 0, math.radians(180))
 else:
     camera_obj.location, camera_obj.rotation_euler = (5, 0, .9), (math.radians(90), 0, math.radians(90))
-for location, energy in [((-2, -4, 3), 300), ((2.5, -3, 2), 150), ((0, 4, 3), 150)]:
+if args.mannequin:
+    blue = bpy.data.materials.new('mannequin')
+    blue.use_nodes = True
+    shader = blue.node_tree.nodes['Principled BSDF']
+    shader.inputs['Base Color'].default_value = (.13, .29, .5, 1)
+    shader.inputs['Roughness'].default_value = 1
+    for obj in bpy.data.objects:
+        if obj.type == 'MESH':
+            obj.data.materials.clear()
+            obj.data.materials.append(blue)
+back = -1 if args.view == 'back' else 1
+for location, energy in [((-2, -4 * back, 3), 300), ((2.5, -3 * back, 2), 150), ((0, 4 * back, 3), 150)]:
     light = bpy.data.lights.new('light', 'AREA')
     light.energy, light.size = energy, 3
     light_obj = bpy.data.objects.new('light', light)

@@ -108,6 +108,7 @@ export async function showFemaleBase(
         <option value="brilliance">광휘의 투구</option>
         <option value="priest">사제관 (피팅 검수 중)</option>
         <option value="bard">바드 깃털 모자 (피팅 검수 중)</option>
+        <option value="ceremony">예복 베일 (피팅 검수 중)</option>
       </select>
       <p class="details">긴 헤어와 포니테일은 모든 투구 아래 그대로 보입니다. 단발은 뿔 투구에서 투구용 단발로, 기사·광휘 투구에서는 숨깁니다.</p>
       <div id="helmet-hair-brush" hidden>
@@ -135,6 +136,7 @@ export async function showFemaleBase(
         <option value="priest">사제 상의 (피팅 검수 중)</option>
         <option value="ranger">순찰자 조끼와 셔츠 (피팅 검수 중)</option>
         <option value="bard">바드 코르셋과 망토 (피팅 검수 중)</option>
+        <option value="ceremony">예복 보디스 (피팅 검수 중)</option>
         <option value="rogue">로그 가죽 코르셋</option>
       </select>
       <label for="female-bottom">하의</label>
@@ -147,6 +149,7 @@ export async function showFemaleBase(
         <option value="priest">사제 치마 (피팅 검수 중)</option>
         <option value="ranger">순찰자 가죽 치마 (피팅 검수 중)</option>
         <option value="bard">바드 주름치마 (피팅 검수 중)</option>
+        <option value="ceremony">예복 종 모양 치마 (피팅 검수 중)</option>
         <option value="rogue">로그 벨트 미니스커트</option>
       </select>
       <label for="female-boots">신발</label>
@@ -157,6 +160,7 @@ export async function showFemaleBase(
         <option value="priest">사제 하이힐 장화 (피팅 검수 중)</option>
         <option value="ranger">순찰자 스틸레토 부츠 (피팅 검수 중)</option>
         <option value="bard">바드 스틸레토 부츠 (피팅 검수 중)</option>
+        <option value="ceremony">예복 스타킹과 구두 (피팅 검수 중)</option>
         <option value="rogue">로그 빨간 밑창 가죽 부츠</option>
         <option value="barbarian">야만전사 가죽 하이힐 샌들</option>
         <option value="valkyrie">발키리 부츠 (초기 피팅 검수 중)</option>
@@ -173,12 +177,14 @@ export async function showFemaleBase(
         <option value="priest">사제 장갑 (피팅 검수 중)</option>
         <option value="ranger">순찰자 반장갑 (피팅 검수 중)</option>
         <option value="bard">바드 반장갑과 팔 보호대 (피팅 검수 중)</option>
+        <option value="ceremony">예복 긴 장갑 (피팅 검수 중)</option>
         <option value="rogue">로그 검은 가죽 반장갑</option>
       </select>
       <div id="outfit-fit" hidden>
         <p><strong>복장 피팅 조절</strong></p>
         <label for="outfit-fit-part">조절할 부위</label>
         <select id="outfit-fit-part"></select>
+        <p id="outfit-fit-helmet-note" class="details" hidden>투구는 지금 고른 헤어용으로 따로 저장됩니다.</p>
         <div id="outfit-fit-side-row" hidden>
           <label for="outfit-fit-side">조절할 쪽</label>
           <select id="outfit-fit-side">
@@ -754,6 +760,7 @@ export async function showFemaleBase(
   }
   const play = () => {
     bootGround?.restore()
+    plateGround?.restore()
     mixer.stopAllAction()
     chair.visible = motion.value === 'sit_idle'
     model.position.y = chair.visible ? femaleSeatOffset : 0
@@ -1171,6 +1178,7 @@ export async function showFemaleBase(
     priest: '사제',
     ranger: '순찰자',
     bard: '바드',
+    ceremony: '예복',
   }
   const fitSlotNames: Record<string, string> = {
     helmet: '투구',
@@ -1200,11 +1208,24 @@ export async function showFemaleBase(
     ...defaultPartFit(),
     ...(partSlot(part) === 'gloves' && { frame: 'forearm' as const }),
   })
+  // A helmet keeps one fit per hair on top of its fitted shape; the game applies it when that hair shows.
+  const helmetHairStyles: Record<string, string> = {
+    bob: 'bob',
+    warrior: 'long',
+    long_bangs: 'long_bangs',
+    ranger: 'ponytail',
+  }
+  const helmetHair = () => helmetHairStyles[hairSelect.value]
+  const helmetFitKey = (part: string, hair: string | undefined) =>
+    `${part}@${hair ?? 'none'}`
+  const fitKey = (part: string) =>
+    partSlot(part) === 'helmet' ? helmetFitKey(part, helmetHair()) : part
   const sidesOf = (part: string) => {
-    let sides = partFits.get(part)
+    const key = fitKey(part)
+    let sides = partFits.get(key)
     if (!sides) {
       sides = { 1: newPartFit(part), [-1]: newPartFit(part) }
-      partFits.set(part, sides)
+      partFits.set(key, sides)
     }
     return sides
   }
@@ -1262,6 +1283,8 @@ export async function showFemaleBase(
           sleeveEndsOf(fitPart.value)[side][key]
         )
     fitSideRow.hidden = !pairedSlots.includes(partSlot(fitPart.value))
+    document.getElementById('outfit-fit-helmet-note')!.hidden =
+      partSlot(fitPart.value) !== 'helmet'
     showSkinToggle.checked = skinShown.has(fitPart.value)
     const painter = solePainters.get(fitPart.value)
     document.getElementById('sole-paint-row')!.hidden = !painter
@@ -1323,6 +1346,20 @@ export async function showFemaleBase(
     )
   }
   const fitUrl = (outfit: string) => `/__female-preview/${outfit}-fit.json`
+  const helmetFitUrl = '/__female-preview/helmet-fit.json'
+  const savedHelmetFits = fetch(helmetFitUrl)
+    .then((response) => (response.ok ? response.json() : {}))
+    .then((saved: Record<string, Record<string, PartFit>>) => {
+      for (const outfit of Object.keys(fittableOutfits))
+        for (const [hair, fit] of Object.entries(
+          saved[`${outfit}_helmet`] ?? {}
+        ))
+          partFits.set(helmetFitKey(`helmet-${outfit}`, hair), {
+            1: { ...defaultPartFit(), ...fit },
+            [-1]: { ...defaultPartFit(), ...fit },
+          })
+    })
+    .catch(() => undefined)
   const savedFits = Promise.all(
     Object.keys(fittableOutfits).map((outfit) =>
       fetch(fitUrl(outfit))
@@ -1415,6 +1452,31 @@ export async function showFemaleBase(
   document.getElementById('outfit-fit-save')!.onclick = async () => {
     const part = fitPart.value
     fitStatus.textContent = '저장하는 중…'
+    if (partSlot(part) === 'helmet') {
+      const hair = helmetHair()
+      if (!hair) {
+        fitStatus.textContent = '헤어를 고른 뒤 저장하세요.'
+        return
+      }
+      try {
+        const response = await fetch(helmetFitUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            helmet: `${partOutfit(part)}_helmet`,
+            hair,
+            fit: sidesOf(part)[1],
+          }),
+        })
+        const result = (await response.json()) as { error?: string }
+        fitStatus.textContent = response.ok
+          ? `${partName(part)} 피팅을 이 헤어용으로 저장했습니다.`
+          : (result.error ?? '저장하지 못했습니다.')
+      } catch {
+        fitStatus.textContent = '저장하지 못했습니다.'
+      }
+      return
+    }
     try {
       const response = await fetch(fitUrl(partOutfit(part)), {
         method: 'POST',
@@ -1854,6 +1916,7 @@ export async function showFemaleBase(
           const part = maskName(outfit)
           if (fittable) {
             await savedFits
+            await savedHelmetFits
             if (disposed()) return
             fitMasks.set(part, mask as { hide_triangle_indices: number[] })
             outfitMask.register(part, brushedMask(part))
@@ -2169,6 +2232,9 @@ export async function showFemaleBase(
       appliedHair = requested
       hairFitControls.hidden = requested !== 'warrior'
       updateHair()
+      for (const part of fitters.keys())
+        if (partSlot(part) === 'helmet') applyFit(part)
+      if (fitPart.value) showFit()
       updateStats()
       updateStatus()
     } catch {
@@ -2282,6 +2348,7 @@ export async function showFemaleBase(
     valkyrie: 'valkyrie_helmet',
     priest: 'priest_helmet',
     bard: 'bard_helmet',
+    ceremony: 'ceremony_helmet',
     brilliance: 'brilliance_helmet',
   }
   const hairParts: Record<string, string> = {

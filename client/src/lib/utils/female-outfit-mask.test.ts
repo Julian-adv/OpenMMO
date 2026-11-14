@@ -13,6 +13,53 @@ const earFit = {
 }
 
 describe('femaleOutfitMask vertex fitting', () => {
+  it('cuts the skin along a slanted plane and keeps the side its normal faces', () => {
+    const geometry = new THREE.PlaneGeometry()
+    geometry.setAttribute(
+      'skinIndex',
+      new THREE.Uint16BufferAttribute(new Array(16).fill(0), 4)
+    )
+    geometry.setAttribute(
+      'skinWeight',
+      new THREE.Float32BufferAttribute(
+        [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
+        4
+      )
+    )
+    const mesh = new THREE.Mesh(geometry)
+    const masks = femaleOutfitMask()
+    const normal = new THREE.Vector3(1, 1, 0).normalize()
+    masks.register(
+      'gloves',
+      {
+        mesh_index: 0,
+        primitive_index: 0,
+        primitive_triangles: 2,
+        hide_triangle_indices: [],
+        clip_planes: [
+          {
+            point: [0.1, 0, 0],
+            normal: normal.toArray(),
+            triangle_indices: [0, 1],
+          },
+        ],
+      },
+      mesh
+    )
+    masks.setEquipped('gloves', true)
+    const positions = mesh.geometry.attributes.position
+    const indices = mesh.geometry.index!
+    expect(indices.count).toBeGreaterThan(0)
+    const point = new THREE.Vector3()
+    for (let i = 0; i < indices.count; i++) {
+      point.fromBufferAttribute(positions, indices.getX(i))
+      expect(point.x - 0.1 + point.y).toBeGreaterThanOrEqual(-1e-5)
+    }
+    expect(positions.count).toBeGreaterThan(geometry.attributes.position.count)
+    masks.setEquipped('gloves', false)
+    expect(mesh.geometry).toBe(geometry)
+  })
+
   it('splits the skin at the cut, blends skin weights, and restores on removal', () => {
     const geometry = new THREE.PlaneGeometry()
     geometry.setAttribute(

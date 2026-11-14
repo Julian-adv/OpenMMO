@@ -19,6 +19,7 @@ import { femaleOutfitMask } from './female-outfit-mask'
 import { modularOutfitForArmor } from './modularEquipment'
 import { attachValkyrieWings } from '../effects/valkyrie-wings'
 import { fitFemaleHair } from './femaleHairFit'
+import { fitFemaleHelmet } from './femaleHelmetFit'
 
 const slots = ['top', 'bottom', 'boots', 'gloves', 'helmet'] as const
 type Slot = (typeof slots)[number]
@@ -31,6 +32,7 @@ type Style =
   | 'priest'
   | 'ranger'
   | 'bard'
+  | 'ceremony'
 const prefixes: Record<Style, string> = {
   plate: '',
   barbarian: 'barbarian_',
@@ -40,6 +42,7 @@ const prefixes: Record<Style, string> = {
   priest: 'priest_',
   ranger: 'ranger_',
   bard: 'bard_',
+  ceremony: 'ceremony_',
 }
 const styles = Object.keys(prefixes) as Style[]
 type Helmet = Exclude<Style, 'rogue' | 'caveman' | 'ranger'> | 'brilliance'
@@ -83,6 +86,7 @@ const LAZY_STYLES: Partial<Record<Style, readonly Slot[]>> = {
   priest: slots,
   ranger: slots.filter((slot) => slot !== 'helmet'),
   bard: slots,
+  ceremony: slots,
 }
 const partName = (style: Style, slot: Slot | 'hair') =>
   `${prefixes[style]}${slot}`
@@ -388,6 +392,7 @@ const HELMET_HAIR: Record<Helmet, string | null> = {
   valkyrie: 'hair',
   priest: 'hair',
   bard: 'hair',
+  ceremony: 'hair',
 }
 const hairPart = (scene: THREE.Object3D, hair?: FemaleHair): string =>
   hair ? FEMALE_HAIR_PARTS[hair] : scene.userData.female_hair
@@ -454,6 +459,7 @@ const femaleStyle = (itemId: string | null | undefined): Style | null => {
   if (model.startsWith('armor/priest_')) return 'priest'
   if (model.startsWith('armor/ranger_')) return 'ranger'
   if (model.startsWith('armor/bard_')) return 'bard'
+  if (model.startsWith('armor/ceremony_')) return 'ceremony'
   if (model.startsWith('armor/rogue_') || ROGUE_LEATHER_MODELS.has(model))
     return 'rogue'
   return item?.material === 'leather' || model.startsWith('armor/barbarian_')
@@ -656,6 +662,9 @@ export function applyFemaleArmor(
     helmetName &&
     shownHair &&
     scene.userData.female_parts[helmetName]?.hair_masks?.[shownHair]
+  if (helmetName)
+    for (const mesh of part(helmetName))
+      fitFemaleHelmet(mesh, helmetName, shownHair)
   const hairKey = hairMask && `${helmetName}:${shownHair}`
   const [hairMesh] = shownHair ? part(shownHair) : []
   if (hairKey && hairMesh && !state.hairMasks.has(hairKey)) {

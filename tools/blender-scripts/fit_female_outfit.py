@@ -30,6 +30,8 @@ RIG_ID = 'human_female_01_local_v1'
 ARMS = ('LeftArm', 'LeftForeArm', 'RightArm', 'RightForeArm')
 LEGS = ('LeftLeg', 'LeftFoot', 'LeftToe', 'RightLeg', 'RightFoot', 'RightToe')
 FEET = ('LeftFoot', 'LeftToe', 'RightFoot', 'RightToe')
+CEREMONY_V2 = dict(source='tripo_multiview_v2/segmented.glb',
+                   sha256='f6272edd9cf5c614d715172d4b472ec6dc583e5471a63636524b07786e56b2ee', scale=1)
 OUTFITS = {
     'priest': dict(
         source='tripo_segmented_v1/segmented.glb',
@@ -90,6 +92,39 @@ OUTFITS = {
                           extend_heel={'left': .0029, 'right': .0048, 'share': .5, 'upright': .09, 'lean': .005},
                           sole_colour=(.72, .55, .22)),
         }),
+    # Generated on a blue mannequin of the heel-posed body and aligned to it by tools/split-female-ceremony-outfit.py.
+    # The veil hid the bodice back in v1, so the bodice comes from v2, generated without the veil. v2's skirt
+    # came out fused to the stockings with scraps under the hem, so the skirt stays v1's; the v2 bodice ends 9 mm
+    # below the v1 skirt's top edge and tucks under its belt.
+    'ceremony': dict(
+        source='tripo_multiview_v1/segmented.glb',
+        sha256='8aeecaa1c8e03c08c7529a7f72c1d5a443c0fb83c0d165f11f19ca21fc5fea58',
+        scale=1, on_heels=True, snug_cover=True,
+        parts={
+            'gloves': dict(nodes=['left_glove', 'right_glove'], version='fitted_v1', hide_bones=('LeftHand', 'RightHand'),
+                           # Cut at the rim itself: skin left inside it showed through a dip in the gold band.
+                           clip_cuff=0),
+            # Off the shoulder: the arms stay bare between the sleeve bands and the gloves, and the bra straps go too.
+            'top': dict(nodes=['top'], version='fitted_v1', hide_underwear=(1.15, 1.7), restore_visible=True,
+                        clip_hem=dict(keep='below', within=.25), clip_edge=dict(above=1.3, within=.14),
+                        model=CEREMONY_V2),
+            # A petticoat bell: it hangs from the hips and its hem lifts only to clear the legs.
+            'bottom': dict(nodes=['skirt'], version='fitted_v1', hide_underwear=(.8, 1.12),
+                           robe=dict(waist_height_m=1.2, hem_height_m=.43, center_z_m=-.02, waist_radii_m=[.14, .11],
+                                     driven_below_m=1.19, blend_m=.08, lift=1, max_angle=1.2,
+                                     colliders=[dict(bone=side + bone, center=[sign * x, y, z], radii=radii)
+                                                for side, sign in (('Left', 1), ('Right', -1))
+                                                for bone, (x, y, z), radii in (
+                                                    ('UpLeg', (.137, .785, -.04), [.095, .225, .105]),
+                                                    ('Leg', (.2, .34, -.045), [.075, .265, .085]))])),
+            # Thigh-high stockings and pumps in one piece.
+            # The pump's sole was generated 1.55 cm above the plate boots' sole, whose lift every heel shares, and its
+            # heel tip another 1.7 cm short: the shoe is lowered as one piece and both heels stretched by the same
+            # 0.85 cm, half of that, so the heel does not land before the ball of the foot (user decision 2026-11-14).
+            'boots': dict(nodes=['left_boots', 'right_boots'], version='fitted_v1', hide_bones=LEGS, rigid_post=.075,
+                          lower_shoe=.0155, extend_heel={'gap': .0085}, clip_hem=dict(keep='above', within=.4)),
+            'helmet': dict(nodes=['helmet'], version='fitted_v1'),
+        }),
 }
 COVER_RAY = .06
 # Sleeve alignment fades in over this distance from the shoulder joint, leaving the shoulder pads in place.
@@ -118,6 +153,10 @@ HEEL_POST_RADIUS = .012
 # No part is pushed out of the skin (user decision 2026-11-04): skin up to this deep outside a garment is hidden instead.
 POKE_DEPTH = .04
 SNUG_COVER = .003
+# `clip_edge` cuts skin triangles within EDGE_REACH of the edge, leaving skin EDGE_OVERLAP inside it.
+EDGE_REACH = .025
+EDGE_OVERLAP = .002
+EDGE_CLEARANCE = .004
 
 argv = sys.argv[sys.argv.index('--') + 1:]
 OUTFIT = argv[argv.index('--outfit') + 1]
@@ -643,12 +682,38 @@ def extend_heels(posed, extra):
                 posed[vertex] = pivot + offset * np.cos(a) + np.cross(turn, offset) * np.sin(a) + turn * (turn @ offset) * (1 - np.cos(a))
             record[side].update(upright_degrees=float(np.degrees(angle)), upright_vertices=len(post))
         sole, tip = posed[foot, 2].min(), posed[back, 2].min()
-        gap = (tip - sole + extra[side]) * extra.get('share', 1)
+        # `gap` stretches both heels by the same length instead of each to its own sole.
+        gap = extra['gap'] if 'gap' in extra else (tip - sole + extra[side]) * extra.get('share', 1)
         if gap > 0:
             weight = np.clip(1 - (posed[back, 2] - tip) / HEEL_POST, 0, 1)
             posed[back, 2] -= weight * gap
             record[side].update(gap_m=float(gap), stretched_vertices=int((weight > 0).sum()))
     return posed, record
+
+
+def rigid_posts(posed, order, values, height):
+    """Give each stiletto, up to `height` above its tip, the weights of its top ring so it moves as one piece.
+    The tip's nearest skin is the ankle, whose shin weight bent the tip away from the post."""
+    dense = np.zeros((len(posed), len(names)))
+    np.add.at(dense, (np.arange(len(posed))[:, None], order), values)
+    count = 0
+    for sign in (1, -1):
+        foot = np.flatnonzero(np.sign(posed[:, 0]) == sign)
+        y = posed[foot, 1]
+        back = foot[y > y.max() - HEEL_BACK * (y.max() - y.min())]
+        rise = posed[back, 2] - posed[back, 2].min()
+        tip = posed[back[rise < .004]].mean(0)
+        near = np.linalg.norm(posed[back, :2] - tip[:2], axis=1) < .03
+        post = back[near & (rise < height)]
+        ring = back[near & (rise > height - .015) & (rise < height)]
+        dense[post] = dense[ring].mean(0)
+        count += len(post)
+    order = np.argsort(dense, axis=1)[:, -4:][:, ::-1]
+    values = np.take_along_axis(dense, order, axis=1)
+    values[values < .01] = 0
+    values /= values.sum(1, keepdims=True)
+    order[values == 0] = 0
+    return order, values, count
 
 
 def paint_sole(posed, bind, colour):
@@ -711,7 +776,13 @@ hem_cut = hem_height = None
 if heel:
     # Boots are skinned in the heel pose, then returned to bind space where preview adjustments apply.
     order, values = skin_weights(points)
+    if 'rigid_post' in SPEC:
+        order, values, rigid_post_vertices = rigid_posts(points, order, values, SPEC['rigid_post'])
     skinning = np.einsum('nk,nkij->nij', values, joint_matrices[order])
+    if 'lower_shoe' in SPEC:
+        # As with a flat-posed boot, the shoe below the ankle band moves as one piece and the tube inside the band stretches.
+        band = np.array(ANKLE_BAND) - foot_shift
+        points[:, 2] -= SPEC['lower_shoe'] * (1 - smoothstep((points[:, 2] - band[0]) / (band[1] - band[0])))
     points = np.linalg.solve(skinning, np.c_[points, np.ones(len(points))][..., None])[:, :3, 0]
     points, preview_fits = bake(PREVIEW_FIT, PART, points, paired, keep_pending=keep_pending, arms=arms)
     if SPEC.get('extend_heel'):
@@ -904,6 +975,100 @@ for side, cut in sleeve_cut.items():
     # Arm skin only: the plane also passes the hips, and a side test bared the lower torso there.
     arm = bw[:, forearm_hand_columns(side)].sum(1)[bf].min(1) > .5
     hidden[past & arm] = False
+cuff_clips = []
+if 'clip_cuff' in SPEC:
+    # A full glove ends in a flat rim: arm skin is cut along the rim's plane, `clip_cuff` metres inside it, instead of by
+    # whole triangles, which left notches above the rim and slivers below it. After the motion pokes, which
+    # hid skin just outside the rim again.
+    for side, sign in (('Left', 1), ('Right', -1)):
+        centre, normal, _ = cuff_plane(points[points[:, 0] * sign > 0], side)
+        origin = centre + normal * SPEC['clip_cuff']
+        depth = (rest_points - origin) @ normal
+        arm = (bw[:, forearm_hand_columns(side)].sum(1) > .5)[bf].all(1)
+        inside = (depth > 0)[bf]
+        hidden[arm & inside.all(1)] = True
+        hidden[arm & ~inside.all(1)] = False
+        cuff_clips.append({'point': (origin @ TO_GLTF.T).round(5).tolist(), 'normal': (-normal @ TO_GLTF.T).round(5).tolist(),
+                           'triangle_indices': np.flatnonzero(arm & inside.any(1) & ~inside.all(1)).tolist()})
+if 'clip_hem' in SPEC:
+    # A level hem or top edge: skin is cut at its height instead of by whole triangles, whose corners showed as
+    # teeth over the cloth. `keep` is the bare side, `within` the half width (m) of the body the edge goes round.
+    up = 1 if SPEC['clip_hem']['keep'] == 'above' else -1
+    height = points[:, 2].max() if up == 1 else points[:, 2].min()
+    depth = (rest_points[:, 2] - height) * up
+    kept = (depth > 0)[bf]
+    near = (np.abs(rest_points[:, 0]) < SPEC['clip_hem']['within'])[bf].all(1)
+    if 'hide_underwear' in SPEC:
+        near &= (islands[bf] == skin_island).all(1)
+    straddling = near & kept.any(1) & ~kept.all(1)
+    hidden[straddling | (near & kept.all(1) & (depth[bf].max(1) < .03))] = False
+    cuff_clips.append({'point': (np.array([0, 0, height]) @ TO_GLTF.T).round(5).tolist(),
+                       'normal': (np.array([0, 0, up]) @ TO_GLTF.T).tolist(),
+                       'triangle_indices': np.flatnonzero(straddling).tolist()})
+if 'clip_edge' in SPEC:
+    # A curved open edge such as a neckline: each skin triangle it crosses is cut by the plane through its nearest
+    # edge segment, square to the cloth there. `above` and `within` (m) pick the edge; skin stays EDGE_OVERLAP inside it.
+    spec = SPEC['clip_edge']
+    garment_ids = np.unique(np.round(points, 5), axis=0, return_inverse=True)[1].ravel()
+    garment_points = np.zeros((garment_ids.max() + 1, 3))
+    garment_points[garment_ids] = points
+    users = {}
+    for face in garment_ids[faces]:
+        for i in range(3):
+            users.setdefault(tuple(sorted((face[i], face[(i + 1) % 3]))), []).append(face[(i + 2) % 3])
+    middles, outward = [], []
+    for (a, b), opposite in users.items():
+        if len(opposite) != 1:
+            continue
+        middle = (garment_points[a] + garment_points[b]) / 2
+        along = garment_points[b] - garment_points[a]
+        along /= np.linalg.norm(along)
+        inward = garment_points[opposite[0]] - middle
+        inward -= (inward @ along) * along
+        # Only rims that open upward: a sleeve band's lower rim bared the skin under the cloth beside it.
+        if (middle[2] > spec['above'] and abs(middle[0]) < spec['within'] and np.linalg.norm(inward) > 1e-6
+                and -inward[2] / np.linalg.norm(inward) > .3):
+            middles.append(middle)
+            outward.append(-inward / np.linalg.norm(inward))
+    middles, outward = np.array(middles), np.array(outward)
+    centres = rest_points[bf].mean(1)
+    near = np.flatnonzero((islands[bf] == skin_island).all(1) & (centres[:, 2] > spec['above'] - EDGE_REACH)
+                          & (np.abs(centres[:, 0]) < spec['within'] + EDGE_REACH))
+    # A large triangle's centre can lie far from an edge its corner crosses, so its corners count too.
+    samples = np.concatenate([centres[near][:, None], rest_points[bf[near]]], axis=1)
+    distance = np.linalg.norm(samples[:, :, None] - middles[None, None], axis=3).min(1)
+    crossed = {}
+    for f, edge in zip(near[distance.min(1) < EDGE_REACH], distance.argmin(1)[distance.min(1) < EDGE_REACH]):
+        bare = (rest_points[bf[f]] - middles[edge]) @ outward[edge] > -EDGE_OVERLAP
+        if bare.any():
+            hidden[f] = False
+            if not bare.all():
+                crossed.setdefault(int(edge), []).append(int(f))
+        elif hidden[f]:
+            # Where the cloth stands off the body the skin just inside the rim shows from above: it stays unless
+            # it lies outside the cloth or against it.
+            normal = rest_normals[bf[f]].mean(0)
+            normal /= np.linalg.norm(normal)
+            behind, facing, _, _ = garment.ray_cast(Vector(centres[f]), Vector(-normal), POKE_DEPTH)
+            if not (behind is not None and np.dot(np.array(facing), normal) > 0) and \
+                    garment.ray_cast(Vector(centres[f] + normal * .0005), Vector(normal), EDGE_CLEARANCE)[0] is None:
+                hidden[f] = False
+    # A hidden triangle with bare skin on two sides is a notch in the bare skin and joins it.
+    shared = {}
+    for f in near:
+        for i in range(3):
+            shared.setdefault(tuple(sorted((welded_body[bf[f, i]], welded_body[bf[f, (i + 1) % 3]]))), []).append(f)
+    beside = {f: [] for f in near}
+    for group in shared.values():
+        for f in group:
+            beside[f] += [other for other in group if other != f]
+    for _ in range(2):
+        for f in near[hidden[near]]:
+            if sum(not hidden[other] for other in beside[f]) >= 2:
+                hidden[f] = False
+    for edge, triangles in crossed.items():
+        cuff_clips.append({'point': ((middles[edge] - outward[edge] * EDGE_OVERLAP) @ TO_GLTF.T).round(5).tolist(),
+                           'normal': (outward[edge] @ TO_GLTF.T).round(5).tolist(), 'triangle_indices': triangles})
 brush = json.loads(PREVIEW_FIT.read_text())['parts'].get(PART, {}).get('brush', {}) if PREVIEW_FIT.exists() else {}
 hidden[brush.get('hide', [])] = True
 hidden[brush.get('show', [])] = False
@@ -930,7 +1095,8 @@ for node in doc['nodes']:
         node['children'] = [remap[i] for i in node['children'] if i in remap]
 children = {i for node in doc['nodes'] for i in node.get('children', [])}
 doc['nodes'].append({'name': 'Armature', 'children': [i for i in range(len(ids)) if i not in children]})
-doc['nodes'].append({'name': PART_ID, 'mesh': 0, 'skin': 0, 'extras': {'rig_id': RIG_ID, 'part_id': PART_ID}})
+doc['nodes'].append({'name': PART_ID, 'mesh': 0, 'skin': 0, 'extras': {'rig_id': RIG_ID, 'part_id': PART_ID,
+                                                                         **({'robe_physics': SPEC['robe']} if SPEC.get('robe') else {})}})
 skin = copy.deepcopy(base['skins'][0])
 skin['joints'] = list(range(len(ids)))
 if 'skeleton' in skin:
@@ -950,6 +1116,8 @@ mask = {'body': str(BODY.relative_to(ROOT)), 'body_sha256': body_sha256, 'mesh_i
         'primitive_triangles': len(bf), 'hide_triangle_indices': np.flatnonzero(hidden).tolist(),
         'scope': f'Body triangles whose vertices all hit the {PART} within {COVER_RAY * 100:.0f} cm along their normals or lie within {POKE_DEPTH * 100:.0f} cm outside it, corners and centre'
                  + (f', plus triangles weighted over half to {", ".join(SPEC["hide_bones"])} bones.' if hide_columns else '.')}
+if cuff_clips:
+    mask['clip_planes'] = cuff_clips
 (OUTPUT / 'body-occlusion.json').write_text(json.dumps(mask, indent=2) + '\n')
 
 mesh_obj.modifiers.new('Female rig', 'ARMATURE').object = rig
@@ -989,6 +1157,7 @@ report = {'date': date.today().isoformat(), 'outfit': OUTFIT, 'part': PART, 'sou
           **({'sleeve_cut': sleeve_cut} if sleeve_cut else {}),
           **({'hem_cut': hem_cut} if hem_cut else {}),
           **({'heel_extension': heel_extension} if heel_extension else {}),
+          **({'rigid_post_vertices': rigid_post_vertices} if 'rigid_post' in SPEC else {}),
           **({'sole_faces': sole_faces, 'sole_colour_srgb': [round(c, 4) for c in sole_colour]} if sole_faces else {}),
           'method': f'Uniform {SCALE} scale' + (', lowered by the heel pose lift' if CONFIG['on_heels'] else '') + ', forearm rotation about the elbow and rigid hand ICP from the generated body pose, '
                     'no push-out (covered and poking skin is hidden), barycentric skin weights from the nearest base skin smoothed over welded neighbours.',

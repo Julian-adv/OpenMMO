@@ -5,6 +5,7 @@ import { valkyriePreviewFit } from './lib/valkyrie-preview-fit.mjs'
 import { outfitPreviewFit } from './lib/outfit-preview-fit.mjs'
 import { helmetHairBrush } from './lib/helmet-hair-brush.mjs'
 import { femaleHairFit } from './lib/female-hair-fit.mjs'
+import { femaleHelmetFit } from './lib/female-helmet-fit.mjs'
 
 const pending = new Map()
 
@@ -13,7 +14,7 @@ export function femalePreviewPlugin() {
     name: 'female-preview-assets',
     apply: 'serve',
     handleHotUpdate({ file }) {
-      if (file.endsWith('/client/src/lib/data/femaleHairFits.json')) return []
+      if (/\/client\/src\/lib\/data\/female(Hair|Helmet)Fits\.json$/.test(file)) return []
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
@@ -54,6 +55,7 @@ export function femalePreviewPlugin() {
       server.middlewares.use(outfitPreviewFit())
       server.middlewares.use(helmetHairBrush())
       server.middlewares.use(femaleHairFit())
+      server.middlewares.use(femaleHelmetFit())
       server.middlewares.use((req, res, next) => {
         const match = /^\/__female-preview\/(base|bob|warrior|long_bangs|valkyrie)\.glb$|^\/__female-preview\/(animations)\.json$/.exec(req.url?.split('?')[0] ?? '')
         if (req.method !== 'GET' || !match) return next()

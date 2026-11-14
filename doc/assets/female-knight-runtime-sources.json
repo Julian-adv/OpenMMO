@@ -1,7 +1,7 @@
 {
   "date": "2026-11-03",
   "inputs": {
-    "tools/prepare-female-knight.mjs": "c0f9503845d1b8709570f59523e47f1f2a47dfa249a3879928d39901cc15bc77",
+    "tools/prepare-female-knight.mjs": "3f79ad952e0f704c40fbcf8ba3a35ff63d9c174213c9cb9bf36617ed62acfcdd",
     "client/src/lib/utils/female-clip-bake.ts": "23454f31df35567701ee157dc4e4a7547856524a6b83c14367353a18594287d6",
     "client/src/lib/utils/female-boot-ground.ts": "0cd0b888f399c689ce821ec416660ca2805b12fa3f4c8d780cdc4ad28b61dc80",
     "assets/modular_human_female_01/rig_v1/female-base.glb": "3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5",
@@ -69,7 +69,7 @@
     "assets/items/valkyrie_boots/fitted_v1/body-occlusion.json": "e5fd12be641d3917f5f152681d25f310bfd7351989605636d6e0530cb75d664c",
     "assets/items/valkyrie_gloves/fitted_v3/body-occlusion.json": "2e67e4b201465d13889f5b6ea64aecfde8e63a2c347074e172c1c4c944a22448",
     "assets/items/valkyrie_helmet/fitted_v2/body-occlusion.json": "319a3f4848040f2cef370435ca95acbbdfa968c8d9544710391860dee620a7a2",
-    "client/src/lib/utils/femaleCharacter.ts": "55f7720fcfc5974be351a51188a15c6c28279f1fc08a161797d56284761f6405",
+    "client/src/lib/utils/femaleCharacter.ts": "4696e9bae5ed9ca020867f53b0469c192558d2577ac46e29662f21ff771cbc09",
     "assets/items/female_caveman_top/tripo_v1/fitted_v7/top_female_caveman.glb": "e447242db6e34cb2ab8b0f67cbb621f4dee14ad036dfee7f193be4f80a78f23f",
     "assets/items/female_caveman_top/tripo_v1/fitted_v7/body-occlusion.json": "95494be44e0f651739bf853c24e783172338fab0dcf2cd79c7a3361195c7dd9f",
     "assets/items/female_caveman_bottom/tripo_v1/fitted_v9/bottom_female_caveman.glb": "ce641e30dcebe965a0c4aac09a5e233c5887d0aa81be2218875bf3866819b6f9",
@@ -114,7 +114,17 @@
     "assets/modular_human_female_01/rig_v1/skin_tone_v1/body-orm.png": "70ee02d4029aef1e2dc805c0cb4fcbbeaa80d7ac4eccc742cb10aea6476f7c99",
     "assets/modular_human_female_01/hair/tripo_long_side_v1/fitted_v1/hair_female_long_side.glb": "9317d9081bc6769671fb643344e13b0eb1626eea368345eb869f42d5bcaaca2a",
     "assets/modular_human_female_01/hair/tripo_long_side_v3/fitted_v1/hair_female_long_side.glb": "0952ff2bc17f313dc0bcb8487d73c63bed71c5ea460d3480564ef29a4ae953d4",
-    "assets/modular_human_female_01/hair/tripo_long_bangs_v2/fitted_v1/hair_female_long_bangs.glb": "aa3a1e7b1491c0d490fb5eba07c25067de56ad6f46249b6921446c0af9fdb6aa"
+    "assets/modular_human_female_01/hair/tripo_long_bangs_v2/fitted_v1/hair_female_long_bangs.glb": "aa3a1e7b1491c0d490fb5eba07c25067de56ad6f46249b6921446c0af9fdb6aa",
+    "assets/items/female_ceremony_outfit/top/fitted_v1/top_female_ceremony.glb": "9b9c2b1ccb25a58f44d2c2189349110cde5fe89e1919302483f55ce837e3d21d",
+    "assets/items/female_ceremony_outfit/top/fitted_v1/body-occlusion.json": "b8b4cdccca6b49f9eba289886f5c51653b97e2044b43ae0f236afed9ddff6f53",
+    "assets/items/female_ceremony_outfit/bottom/fitted_v1/bottom_female_ceremony.glb": "244cbb5b7d4b523d85f3e689b583b677979e62040d46f2346f598729c6ebeb28",
+    "assets/items/female_ceremony_outfit/boots/fitted_v1/boots_female_ceremony.glb": "7a5fa37b0bbc9ec93340a44238fca8758416584071e26b6ebea2473c0384697f",
+    "assets/items/female_ceremony_outfit/gloves/fitted_v1/gloves_female_ceremony.glb": "524235e873075fc85bfc42c77daf76d08f64ca664cddbe565ff36b883a35aacb",
+    "assets/items/female_ceremony_outfit/helmet/fitted_v1/helmet_female_ceremony.glb": "04a94cb4d116442d6a5aa31c4a77eccef77abf181d3ed9cc9d70aa7ba24f7b26",
+    "assets/items/female_ceremony_outfit/bottom/fitted_v1/body-occlusion.json": "31e5da4ca8487bfb156f739759ac336cad6fbb74b8ad1f9c8de052ce5c260948",
+    "assets/items/female_ceremony_outfit/boots/fitted_v1/body-occlusion.json": "5d70bba2d558a985ca1c4b6b4bc0574ed2116602414e595a38534caae8ebdafa",
+    "assets/items/female_ceremony_outfit/gloves/fitted_v1/body-occlusion.json": "90aa6c48b84be45c53e54f4003ffe0abcca0e512b08e6c029319dceb1b2605c7",
+    "assets/items/female_ceremony_outfit/helmet/fitted_v1/body-occlusion.json": "06e0aa9de1ee016c6d69501a57fa0f892fa48afd835aba1609babced868d3539"
   },
   "outputs": {
     "client/public/models/characters/modular_female/base.glb": "4ffaa3622719890b9ed447ab32676dccdadde041fa6986e4a7577ce2876ecfbb",
@@ -173,7 +183,12 @@
     "client/public/models/characters/modular_female/animations/riding.glb": "0b197aed6ffc046565095c650360c83a715b644e1b2e66b0fd38c73b32b752b2",
     "client/public/models/characters/modular_female/animations/dagger_preview.glb": "99725f4f9c3d3f23ce4d5399a4c7141ca983e1b6438e5e62b9e142c6a125dcd9",
     "client/public/models/characters/modular_female/animations/cart_push.glb": "b36b56428b109cf3394f393fba115c0688b7bf3533c5d763328084deb44852ce",
-    "client/public/models/characters/modular_female/long_bangs_hair.glb": "6a6c4a3cd83bae0853619441286b950b6dc3963beafc09d956dcebf4f7d15600"
+    "client/public/models/characters/modular_female/long_bangs_hair.glb": "6a6c4a3cd83bae0853619441286b950b6dc3963beafc09d956dcebf4f7d15600",
+    "client/public/models/characters/modular_female/ceremony_top.glb": "a152e1342ed8c58717c2d6d246689b288fac1db618e182c50e28a40dee56e243",
+    "client/public/models/characters/modular_female/ceremony_bottom.glb": "b3965544ce2296e4b9b4292b41fe8635213582725356e637acf7cff0d0061947",
+    "client/public/models/characters/modular_female/ceremony_boots.glb": "adde3c2c940f53c99445b8e0ae692e6686aff24d1d43a4f5e3e39a79608fc8a0",
+    "client/public/models/characters/modular_female/ceremony_gloves.glb": "ef573b761907885013996fa3088fdccac4af1e2cb60cb794aa2eb80fab6b3303",
+    "client/public/models/characters/modular_female/ceremony_helmet.glb": "1bfb6b9e5c5e115f790bfc39224524f51ae03f2a7bb9f486dd04cdc3981387a0"
   },
   "underwear_weight_patch": {
     "date": "2026-10-15",

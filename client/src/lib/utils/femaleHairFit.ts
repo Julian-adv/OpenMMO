@@ -27,6 +27,8 @@ const styles: Record<string, HairFitStyle> = {
   ranger_hair: 'ponytail',
   long_bangs_hair: 'long_bangs',
 }
+export const femaleHairStyle = (part: string): HairFitStyle | undefined =>
+  styles[part]
 const geometries = new WeakMap<
   THREE.BufferGeometry,
   Map<string, THREE.BufferGeometry>

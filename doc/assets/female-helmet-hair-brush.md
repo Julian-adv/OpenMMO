@@ -37,3 +37,12 @@ node tools/prepare-female-knight.mjs --part brilliance_helmet
 2026-11-11 긴 생머리를 [새 메시](modular-female-long-straight-hair.md)로 바꾸면서 옛 `valkyrie_hair` 기록 두 건(은빛 기사 투구 222, 뿔 투구 289)을 지우고 새 메시로 다시 칠했다. 발키리 날개 투구는 두 긴 생머리 모두 가릴 곳이 없었다.
 
 삼각형 단위라 투구 경계에서 지우면 너무 많이 가려지고 되살리면 뚫고 나온다. 폴리곤 자르기나 헤어 밀어 넣기는 TODO에 있다.
+
+## 헤어별 투구 피팅 — 2026-11-14
+
+헤어마다 머리 부피가 달라 투구 하나의 크기로는 맞지 않는 조합이 있다(예복 베일의 금관). 사제·순찰자·바드·예복 투구는 헤어별 조절값을 따로 둔다(사용자 요청).
+
+- 여성 미리보기의 `복장 피팅 조절`에서 부위가 투구이면 슬라이더가 지금 고른 헤어용 값을 고친다. 헤어를 바꾸면 그 헤어의 값으로 바뀐다. `이 부위 피팅 저장`은 [femaleHelmetFits.json](../../client/src/lib/data/femaleHelmetFits.json)에 투구 런타임 파츠·헤어 스타일(`bob`, `long`, `long_bangs`, `ponytail`)별로 쓴다. 기본값으로 저장하면 그 항목을 지운다.
+- 값은 블렌더 피팅으로 구운 투구 위에 더해진다. 베이크나 런타임 파츠 재생성은 필요 없다.
+- 게임(`femaleHelmetFit.ts`)은 투구와 보이는 헤어가 바뀔 때 투구 지오메트리를 그 값으로 한 번 변환해 쓴다. 변환 중심은 투구 경계 상자의 중심으로 미리보기와 같다.
+- 미리보기 서버 경로: `/__female-preview/helmet-fit.json`(`tools/lib/female-helmet-fit.mjs`).

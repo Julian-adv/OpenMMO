@@ -14,7 +14,7 @@ import { loadHelmetHairBrush } from './lib/helmet-hair-brush.mjs'
 
 const output = 'client/public/models/characters/modular_female'
 // Parts the client loads on first equip: packed separately with 1024 px colour textures.
-const separatePart = name => /^(caveman|priest|ranger|bard)_/.test(name)
+const separatePart = name => /^(caveman|priest|ranger|bard|ceremony)_/.test(name)
 // Fur panels share the waist rig and colliders.
 function bakeSkirtRobe(doc) {
   const panels = doc.getRoot().listNodes().filter(node => node.getExtras().pelt_physics)
@@ -72,6 +72,8 @@ const sources = {
     [`ranger_${slot}`, `assets/items/female_ranger_outfit/${slot}/fitted_v1/${slot}_female_ranger.glb`])),
   ...Object.fromEntries(['top', 'bottom', 'boots', 'gloves', 'helmet'].map(slot =>
     [`bard_${slot}`, `assets/items/female_bard_outfit/${slot}/fitted_v1/${slot}_female_bard.glb`])),
+  ...Object.fromEntries(['top', 'bottom', 'boots', 'gloves', 'helmet'].map(slot =>
+    [`ceremony_${slot}`, `assets/items/female_ceremony_outfit/${slot}/fitted_v1/${slot}_female_ceremony.glb`])),
   valkyrie_hair: 'assets/modular_human_female_01/hair/tripo_long_side_v3/fitted_v1/hair_female_long_side.glb',
   long_bangs_hair: 'assets/modular_human_female_01/hair/tripo_long_bangs_v2/fitted_v1/hair_female_long_bangs.glb',
   valkyrie_wings: 'assets/items/valkyrie_starter/tripo_wing_v1/fitted_patch_v3/wings-armor-fit.glb',

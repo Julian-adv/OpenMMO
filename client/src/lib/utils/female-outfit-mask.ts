@@ -8,6 +8,8 @@ interface OutfitMask {
   hide_triangle_indices: number[]
   vertex_adjustments?: VertexAdjustment[]
   clip_below_y?: TriangleClip
+  // Skin kept on the side each plane's normal points to, e.g. up to a glove's cuff.
+  clip_planes?: PlaneClip[]
 }
 
 interface VertexAdjustment {
@@ -23,9 +25,17 @@ interface TriangleClip {
   triangle_indices: number[]
 }
 
+interface PlaneClip {
+  point: [number, number, number]
+  normal: [number, number, number]
+  triangle_indices: number[]
+}
+
+type Clip = TriangleClip | PlaneClip
+
 function clipTriangles(
   geometry: THREE.BufferGeometry,
-  clips: TriangleClip[],
+  clips: Clip[],
   hidden: Set<number>
 ) {
   const index = geometry.index!
@@ -34,33 +44,32 @@ function clipTriangles(
   const edges = new Map<string, number>()
   const appended: number[] = []
   const clipped = new Set<number>()
-  const distance = (x: number, y: number, clip: TriangleClip) =>
-    y -
-    clip.height -
-    Math.max(0, Math.abs(x) - (clip.outer_start ?? Infinity)) *
-      (clip.outer_slope ?? 0)
-  const crossing = (a: number, b: number, clip: TriangleClip) => {
-    const key = `${Math.min(a, b)}:${Math.max(a, b)}:${clip.height}:${clip.outer_start}:${clip.outer_slope}`
+  const distance = (p: THREE.Vector3, clip: Clip) =>
+    'normal' in clip
+      ? (p.x - clip.point[0]) * clip.normal[0] +
+        (p.y - clip.point[1]) * clip.normal[1] +
+        (p.z - clip.point[2]) * clip.normal[2]
+      : p.y -
+        clip.height -
+        Math.max(0, Math.abs(p.x) - (clip.outer_start ?? Infinity)) *
+          (clip.outer_slope ?? 0)
+  const from = new THREE.Vector3()
+  const to = new THREE.Vector3()
+  const between = new THREE.Vector3()
+  const inside = (vertex: number, clip: Clip) =>
+    distance(from.fromBufferAttribute(position, vertex), clip) >= 0
+  const crossing = (a: number, b: number, clip: Clip) => {
+    const key = `${Math.min(a, b)}:${Math.max(a, b)}:${clips.indexOf(clip)}`
     const existing = edges.get(key)
     if (existing !== undefined) return existing
-    const ax = position.getX(a),
-      ay = position.getY(a)
-    const bx = position.getX(b),
-      by = position.getY(b)
+    from.fromBufferAttribute(position, a)
+    to.fromBufferAttribute(position, b)
     let low = 0,
       high = 1
-    const insideA = distance(ax, ay, clip) >= 0
+    const insideA = distance(from, clip) >= 0
     for (let i = 0; i < 24; i++) {
       const t = (low + high) / 2
-      if (
-        distance(
-          THREE.MathUtils.lerp(ax, bx, t),
-          THREE.MathUtils.lerp(ay, by, t),
-          clip
-        ) >=
-          0 ===
-        insideA
-      )
+      if (distance(between.lerpVectors(from, to, t), clip) >= 0 === insideA)
         low = t
       else high = t
     }
@@ -79,8 +88,8 @@ function clipTriangles(
       for (let i = 0; i < 3; i++) {
         const a = vertices[i],
           b = vertices[(i + 1) % 3]
-        const insideA = distance(position.getX(a), position.getY(a), clip) >= 0
-        const insideB = distance(position.getX(b), position.getY(b), clip) >= 0
+        const insideA = inside(a, clip)
+        const insideB = inside(b, clip)
         if (insideA) polygon.push(a)
         if (insideA !== insideB) polygon.push(crossing(a, b, clip))
       }
@@ -172,7 +181,7 @@ export function femaleOutfitMask(base?: GLTF) {
       mesh: THREE.Mesh
       hidden: Set<number>
       adjustments: VertexAdjustment[]
-      clip?: TriangleClip
+      clips: Clip[]
     }
   >()
   const equipped = new Set<string>()
@@ -180,14 +189,14 @@ export function femaleOutfitMask(base?: GLTF) {
     for (const [mesh, state] of states) {
       const hidden = new Set<number>()
       const adjustments = new Map<number, VertexAdjustment>()
-      const clips: TriangleClip[] = []
+      const clips: Clip[] = []
       for (const name of equipped) {
         const slot = slots.get(name)!
         if (slot.mesh === mesh) {
           for (const index of slot.hidden) hidden.add(index)
           for (const item of slot.adjustments)
             adjustments.set(item.vertex, item)
-          if (slot.clip) clips.push(slot.clip)
+          clips.push(...slot.clips)
         }
       }
       mesh.geometry = state.original
@@ -306,12 +315,34 @@ export function femaleOutfitMask(base?: GLTF) {
           !original.attributes.skinWeight)
       )
         throw new Error('의상 경계 정보가 올바르지 않습니다.')
+      const planes = mask.clip_planes ?? []
+      const vector = (value: unknown) =>
+        Array.isArray(value) &&
+        value.length === 3 &&
+        value.every(Number.isFinite)
+      if (
+        !Array.isArray(planes) ||
+        planes.some(
+          (plane) =>
+            !plane ||
+            !vector(plane.point) ||
+            !vector(plane.normal) ||
+            !Array.isArray(plane.triangle_indices) ||
+            plane.triangle_indices.some(
+              (i) =>
+                !Number.isInteger(i) || i < 0 || i >= mask.primitive_triangles
+            )
+        ) ||
+        (planes.length > 0 &&
+          (!original.attributes.skinIndex || !original.attributes.skinWeight))
+      )
+        throw new Error('의상 경계 정보가 올바르지 않습니다.')
       if (!states.has(body)) states.set(body, { original })
       slots.set(name, {
         mesh: body,
         hidden: new Set(mask.hide_triangle_indices),
         adjustments,
-        clip,
+        clips: [...(clip ? [clip] : []), ...planes],
       })
     },
     setEquipped(name: string, enabled: boolean) {
