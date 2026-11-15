@@ -13,7 +13,7 @@
 
 ![정면 원화](../../assets/items/male_ceremony_tuxedo/concepts/front-v1.png)
 
-마네킹: `tools/blender-scripts/render_concept_base.py --character male --mannequin --view front|side|back`로 남성 몸체를 파란 무광으로 렌더했다(Blender 5.2 Cycles, 생성 아님). 스크립트는 여성용이던 것을 남녀 공용으로 바꿨고, 여성 정면 렌더는 이전 파일과 화소 단위로 같다. 남성은 `body_boot_ankles`를 빼고 바닥 높이를 모든 메시에서 잰다.
+마네킹: `tools/blender-scripts/render_concept_base.py --character male --mannequin --view front|side`로 남성 몸체를 파란 무광으로 렌더했다(Blender 5.2 Cycles, 생성 아님). 스크립트는 여성용이던 것을 남녀 공용으로 바꿨고, 여성 정면 렌더는 이전 파일과 화소 단위로 같다. 남성은 `body_boot_ankles`를 빼고 바닥 높이를 모든 메시에서 잰다.
 
 원화: OpenAI Codex built-in ImageGen(`codex exec`, codex-cli 0.164.0), **ChatGPT Pro 20x**, 2026-11-15. OpenAI 생성 출력물 이용 조건을 따른다. 정면·옆 마네킹을 참조로 주고 정면 한 장을 받았다. 파일은 `assets/items/male_ceremony_tuxedo/concepts/`, 프롬프트는 `front-v1-prompt.txt`.
 
@@ -21,7 +21,6 @@
 | --- | --- | --- |
 | `mannequin-front.png` | `11e59acf…f870` | 마네킹 정면 |
 | `mannequin-side.png` | `3b196d4e…f20e` | 마네킹 옆 |
-| `mannequin-back.png` | `830c4939…c511` | 마네킹 뒤 (미사용) |
 | `front-v1.png` | `c6d05f46…dd0f` | 정면 채택본, 손보지 않음 |
 
 원화의 손은 마네킹보다 조금 안쪽이다. 다리와 발 위치는 맞는다.
@@ -35,7 +34,7 @@
 
 ## 마네킹 분리
 
-`tools/split-male-tuxedo.py`가 `tripo_front_v1/segmented.glb`(SHA-256 `969191f3…0e2b`)와 `split.json`을 만든다. 색 판정·연결 성분·정렬·자르기·기록은 `tools/outfits/mannequin.py`에 모았고 여성 예복 분리 스크립트도 이 모듈을 쓴다. 옮긴 뒤 여성 v2 `segmented.glb`는 기록된 해시 그대로이고, v1은 옮기기 전 스크립트의 출력과 같다(v1 보관본은 이전 판 스크립트로 만든 것이라 다시 만들지 않았다).
+`tools/split-male-tuxedo.py`가 `tripo_front_v1/segmented.glb`(SHA-256 `969191f3…0e2b`)와 `split.json`을 만든다. 둘은 보관하지 않으므로(사용자 결정 2026-11-15) 피팅을 다시 돌리기 전에 이 스크립트를 먼저 돌린다. 같은 해시가 나온다. Tripo가 함께 준 미리보기 그림과 쓰지 않은 뒤쪽 마네킹 렌더도 지웠다. 색 판정·연결 성분·정렬·자르기·기록은 `tools/outfits/mannequin.py`에 모았고 여성 예복 분리 스크립트도 이 모듈을 쓴다. 옮긴 뒤 여성 v2 `segmented.glb`는 기록된 해시 그대로이고, v1은 옮기기 전 스크립트의 출력과 같다(v1 보관본은 이전 판 스크립트로 만든 것이라 다시 만들지 않았다).
 
 - 파란 면 4,487개를 버린다. 옷이 몸을 다 덮어 파란 부분은 머리와 목뿐이다.
 - 머리만으로 맞추면 2.3° 기울고 밑창이 바닥에서 3.7cm 떴다. 머리와 장갑을 함께 쓰고 수직축 회전만 허용한다(배율 1.907, 밑창 −0.3cm, 좌우 대칭).
