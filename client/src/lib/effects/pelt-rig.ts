@@ -503,13 +503,7 @@ export function setPeltPhysicsEnabled(
   }
 }
 
-export function updatePeltPhysics(
-  root: THREE.Object3D,
-  dt: number,
-  wind: WindSample | null = null,
-  step = STEP,
-  reset = false
-) {
+function riggedMeshes(root: THREE.Object3D) {
   const meshes: THREE.SkinnedMesh[] = []
   root.traverse((node) => {
     if (
@@ -520,19 +514,41 @@ export function updatePeltPhysics(
     )
       meshes.push(node)
   })
-  if (!meshes.length) return
+  if (!meshes.length) return meshes
   root.updateWorldMatrix(true, false)
   root.updateMatrixWorld(true)
   for (const node of meshes) {
-    let rig = rigs.get(node)
-    if (!rig && node.visible) {
-      rig = node.userData.robe_physics
+    if (rigs.has(node) || !node.visible) continue
+    rigs.set(
+      node,
+      node.userData.robe_physics
         ? createRobeRig(node, node.userData.robe_physics as RobePhysics, () =>
             rigs.delete(node)
           )
         : createPeltRig(node, node.userData.pelt_physics as PeltPhysics, false)
-      rigs.set(node, rig)
-    }
+    )
+  }
+  return meshes
+}
+
+/**
+ * Rigs newly shown meshes before they are first drawn. A robe rig adds bones, and a mesh drawn once
+ * with the base skeleton left its shader build to finish after the change: the build was cached for
+ * the old bone count, and a like mesh on the base skeleton then drew with a bone buffer too small.
+ */
+export function preparePeltPhysics(root: THREE.Object3D) {
+  riggedMeshes(root)
+}
+
+export function updatePeltPhysics(
+  root: THREE.Object3D,
+  dt: number,
+  wind: WindSample | null = null,
+  step = STEP,
+  reset = false
+) {
+  for (const node of riggedMeshes(root)) {
+    const rig = rigs.get(node)
     if (reset) rig?.reset()
     rig?.update(dt, wind, step)
   }

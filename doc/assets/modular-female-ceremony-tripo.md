@@ -112,3 +112,25 @@ v1은 베일이 등을 덮은 채 생성돼 보디스 등판이 톱니 모양으
 - 왼쪽 스타킹 윗단의 피부 조각: 윗단 높이에 꼭짓점 하나만 걸친 허벅지 삼각형 2개가 잘리지도 가려지지도 않았다. `clip_hem`이 덮인 쪽에서 가장자리에 닿은 삼각형을 가린다. 같은 규칙으로 상의 아랫단에서 1개가 더 가려진다.
 - 상의 아랫단과 허리 사이 틈: 미리보기 피팅(앞뒤 6° 기울임)으로 아랫단이 뒤쪽이 2cm 높게 기울었는데, 피부는 가장 낮은 앞쪽 높이에서 수평으로 잘렸다. `clip_hem`이 가장자리에 평면을 맞춰 그 평면으로 자른다(`HEM_BAND`). 스타킹 윗단은 수평이라 그대로다.
 - 남은 일: 소매 이음새 옆 톱니는 그대로다.
+
+## 아이템 등록 — 2026-11-15
+
+| 아이템 | 칸 | 무게 | 여성 파츠 |
+| --- | --- | ---: | --- |
+| `ceremony_helmet` 예복 베일 | head | 0.5 | `ceremony_helmet` |
+| `ceremony_top` 예복 보디스 | chest | 2 | `ceremony_top` |
+| `ceremony_pants` 예복 종 모양 치마 | pants | 3 | `ceremony_bottom` |
+| `ceremony_gloves` 예복 긴 장갑 | hands | 0.5 | `ceremony_gloves` |
+| `ceremony_boots` 예복 스타킹과 구두 | boots | 2 | `ceremony_boots` |
+
+- 모두 천, guard 1, 가격 없음, 거래 가능. 판매처와 가격은 미정이라 지금은 `/give`로만 얻는다.
+- 외형은 `worldModel`의 `armor/ceremony_` 접두어로 고른다(`femaleStyle`). 남성은 전용 모델이 없어 천 재질의 기본 외형으로 보인다.
+- 바닥 모델과 128px 아이콘은 피팅된 파츠에서 만들었다(새 생성 요청 없음, 출처는 위 Tripo 기록). 바닥 모델은 텍스처를 512px로 줄였다.
+
+```sh
+blender -b --python-exit-code 1 --python tools/blender-scripts/export_outfit_items.py -- --outfit ceremony --texture-size 512
+```
+
+- 확인: 개발 서버에서 `/give ceremony_*` 다섯 개가 지급되고 가방에 아이콘이 보인다. 착용 모습은 게임에서 확인하지 않았다.
+- 남은 일: 판매처·가격, 거래 가능 여부, 남성 착용 시 표시, 팔 벌린 대기 자세, 치마 전용 본.
+

@@ -26,7 +26,7 @@ import {
   releaseFemaleCloseup,
 } from './femaleCharacter'
 import { poseMainHandProp } from './handProps'
-import { updatePeltPhysics } from '../effects/pelt-rig'
+import { disposePeltPhysics, updatePeltPhysics } from '../effects/pelt-rig'
 import { attachCapeFit, fitCapeToSkeleton } from '../effects/cape-rig'
 import { robeBaseSkeleton } from '../effects/robe-rig'
 import itemDefs from '../data/itemDefs'
@@ -488,26 +488,29 @@ describe('female modular starter outfits', () => {
         const priest = item.worldModel?.startsWith('armor/priest_')
         const ranger = item.worldModel?.startsWith('armor/ranger_')
         const bard = item.worldModel?.startsWith('armor/bard_')
+        const ceremony = item.worldModel?.startsWith('armor/ceremony_')
         const rogueStyle =
           item.worldModel?.startsWith('armor/rogue_') ||
           ['leather_armor', 'leather_gloves', 'leather_boots'].includes(id)
-        const [shown, hidden] = bard
-          ? [`bard_${part}`, part]
-          : priest
-            ? [`priest_${part}`, part]
-            : ranger
-              ? [`ranger_${part}`, `barbarian_${part}`]
-              : caveman
-                ? [`caveman_${part}`, part]
-                : valkyrie
-                  ? [`valkyrie_${part}`, part]
-                  : rogueStyle
-                    ? [`rogue_${part}`, part]
-                    : brilliance
-                      ? ['brilliance_helmet', part]
-                      : barbarianStyle
-                        ? [`barbarian_${part}`, part]
-                        : [part, `barbarian_${part}`]
+        const [shown, hidden] = ceremony
+          ? [`ceremony_${part}`, part]
+          : bard
+            ? [`bard_${part}`, part]
+            : priest
+              ? [`priest_${part}`, part]
+              : ranger
+                ? [`ranger_${part}`, `barbarian_${part}`]
+                : caveman
+                  ? [`caveman_${part}`, part]
+                  : valkyrie
+                    ? [`valkyrie_${part}`, part]
+                    : rogueStyle
+                      ? [`rogue_${part}`, part]
+                      : brilliance
+                        ? ['brilliance_helmet', part]
+                        : barbarianStyle
+                          ? [`barbarian_${part}`, part]
+                          : [part, `barbarian_${part}`]
         await applyCharacterArmor(modelRoot, { [slot]: id } as ArmorEquipment)
         expect(count(modelRoot, shown), id).toBeGreaterThan(0)
         expect(count(modelRoot, hidden), id).toBe(0)
@@ -517,7 +520,7 @@ describe('female modular starter outfits', () => {
             barbarianStyle && !bard
           )
           expect(count(modelRoot, 'hair') > 0, id).toBe(
-            valkyrie || priest || !!bard
+            valkyrie || priest || !!bard || !!ceremony
           )
         }
       }
@@ -758,6 +761,8 @@ describe('female modular starter outfits', () => {
       for (let i = 0; i < 10; i++) {
         const { modelRoot } = createCharacterModelRoot(source.scene)
         await applyCharacterArmor(modelRoot, barbarian)
+        // Equipping rigs the panels at once; drop the rigs to read the unrigged geometry and skeleton.
+        disposePeltPhysics(modelRoot)
         const panels = skinnedParts(modelRoot).filter(
           (mesh) => mesh.userData.pelt_physics
         )

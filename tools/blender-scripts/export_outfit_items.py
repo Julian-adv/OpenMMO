@@ -33,6 +33,10 @@ OUTFITS = {
     },
     # Only the gloves are new; the other bard items keep their male models.
     "bard": {"gloves": "female_bard_outfit/gloves/fitted_v1/gloves_female_bard.glb"},
+    "ceremony": {
+        item: f"female_ceremony_outfit/{part}/fitted_v1/{part}_female_ceremony.glb"
+        for item, part in (("helmet", "helmet"), ("top", "top"), ("pants", "bottom"), ("gloves", "gloves"), ("boots", "boots"))
+    },
 }
 parser = argparse.ArgumentParser()
 parser.add_argument("--outfit", choices=OUTFITS, default="valkyrie")
@@ -41,6 +45,8 @@ parser.add_argument("--icons-only", action="store_true")
 parser.add_argument("--icon-rotation", nargs=3, type=float, default=(-65, 0, -8))
 # Degrees about the item's vertical axis before the shot; the sign sets which way it faces.
 parser.add_argument("--turn", type=float, default=30)
+# Longest texture side of the ground models; the ceremony parts carry their 4096 px source textures.
+parser.add_argument("--texture-size", type=int)
 parser.add_argument("--parts", nargs="+", choices=sorted({part for parts in OUTFITS.values() for part in parts}))
 args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
 SOURCES = OUTFITS[args.outfit]
@@ -116,6 +122,11 @@ for part, source in SOURCES.items():
     for obj in meshes:
         obj.data.transform(Matrix.Translation(-center))
     model = ROOT / f"client/public/models/armor/{args.outfit}_{part}.glb"
+    if args.texture_size:
+        for image in bpy.data.images:
+            if max(image.size) > args.texture_size:
+                factor = args.texture_size / max(image.size)
+                image.scale(round(image.size[0] * factor), round(image.size[1] * factor))
     if not args.icons_only:
         export_glb(meshes, str(model))
     if part in {"gloves", "boots"}:

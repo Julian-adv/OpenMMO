@@ -22,7 +22,7 @@ import type {
   CharacterAppearance,
 } from '../network/networkTypes'
 import { modularOutfitForArmor } from './modularEquipment'
-import { disposePeltPhysics } from '../effects/pelt-rig'
+import { disposePeltPhysics, preparePeltPhysics } from '../effects/pelt-rig'
 import { disposeValkyrieWings } from '../effects/valkyrie-wings'
 import { separateWavyHairMaterials } from './wavyHairMaterials'
 import { femaleOutfitMask } from './female-outfit-mask'
@@ -197,6 +197,15 @@ function registerBodyMask(
 
 /** Keep the current outfit until the latest selection loads. */
 export async function applyCharacterArmor(
+  root: THREE.Object3D,
+  armor?: ArmorEquipment,
+  appearance?: CharacterAppearance
+): Promise<void> {
+  await applyArmor(root, armor, appearance)
+  preparePeltPhysics(root)
+}
+
+async function applyArmor(
   root: THREE.Object3D,
   armor?: ArmorEquipment,
   appearance?: CharacterAppearance
